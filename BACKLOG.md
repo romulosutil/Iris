@@ -685,15 +685,15 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
       Inserida antes da Fase 1 por decisão de sequenciamento (10/07/2026, ver
       seção D) — a Fase 1 já constrói UI real (cadastro, agenda) e não
       deveria nascer sem tokens definidos.
-    - **Progresso (10/07/2026, PR #1 `fase-0.5-design-system`):** entregue
-      Next 16 + Tailwind v4 (tokens CSS-first em `globals.css`, não
-      `tailwind.config.ts`); Storybook 10 com `nextjs-vite` + `addon-a11y`;
-      4 componentes (Botão, Card, Alerta, **Logo**); favicon; home distintiva
-      enraizada no logo (3 anéis = 3 camadas de governança). A11y elevada a 1ª
-      classe: contraste AAA, forced-colors, prefers-contrast, gate axe
-      (`pnpm test`, 7/7). Taste-skill adotado seletivamente. **Falta:** publicar
-      o Storybook (depende do VPS) e, opcionalmente, gate de contraste em
-      browser-mode. Aguarda validação do designer de produto (PR #1).
+  - **Progresso (10/07/2026, PR #1 `fase-0.5-design-system`):** entregue
+    Next 16 + Tailwind v4 (tokens CSS-first em `globals.css`, não
+    `tailwind.config.ts`); Storybook 10 com `nextjs-vite` + `addon-a11y`;
+    4 componentes (Botão, Card, Alerta, **Logo**); favicon; home distintiva
+    enraizada no logo (3 anéis = 3 camadas de governança). A11y elevada a 1ª
+    classe: contraste AAA, forced-colors, prefers-contrast, gate axe
+    (`pnpm test`, 7/7). Taste-skill adotado seletivamente. **Falta:** publicar
+    o Storybook (depende do VPS) e, opcionalmente, gate de contraste em
+    browser-mode. Aguarda validação do designer de produto (PR #1).
 - [ ] Fase 1 — Pacientes (ficha clínica + consentimento LGPD) + agenda mínima + check-in.
 - [ ] Fase 2 — Metas (ciclo de vida + critério de domínio) + diário por texto + fila de pendências.
 - [ ] Fase 3 — Extração (agente R1-R19) + tela de revisão do terapeuta.
@@ -731,30 +731,25 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
         `schedule`).** Sem verba p/ 4º project → decisão: **nestar os serviços
         do Iris dentro do project `espectro-mvp`** (divisão de espaço com outro
         site), com **prefixo `iris-`** nos serviços, PROVISÓRIO até validar o
-        MVP e liberar orçamento p/ project isolado. Criados:
-        - `iris-postgres` (Postgres puro, template Easypanel) — db `iris`,
-          user `iris`, senha random gerada, imagem oficial. **Rodando.** Host
-          interno p/ o app: `iris-postgres:5432`. Isolado do MySQL do espectro
-          (banco próprio, não compartilha — dado de menor/LGPD).
-        - `iris-app` (Aplicativo) — source GitHub `romulosutil/Iris`@`main`,
-          build **Dockerfile** `infra/Dockerfile`, domínio `irisclinica.ia.br`
-          → porta **3000** (HTTPS/Let's Encrypt). **NÃO implantado** de
-          propósito: repo na Fase 0.5 sem `infra/Dockerfile`/scaffold Next —
-          deploy é 1 clique no bootstrap quando o Dockerfile existir.
-        - **Env do `iris-app` pendente p/ bootstrap** (não setado p/ não manusear
-          a senha do DB): `DATABASE_URL=postgres://iris:<senha>@iris-postgres:5432/iris`,
-          `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://irisclinica.ia.br`.
-        - **Domínio `irisclinica.ia.br` (registro.br, comprado, exp. 09/07/2027):**
-          DNS via registro.br (não aceita `@` nem `*`/wildcard). Bind no
-          Easypanel feito. **Registros A pendentes (Rômulo adiciona):**
-          `irisclinica.ia.br`→`31.97.170.105` e `www`→`31.97.170.105`. Zona
-          ficou travada ~2h por transição de servidores (switch p/ modo
-          avançado); subdomínios futuros (`storybook.`/`staging.`) = A
-          individuais (sem wildcard).
-        - **Flag DevOps:** VPS real é **2 vCPU / 7.8 GB** (não o KVM4/16GB do
-          plano §1; ~38% RAM já usada por aladdin+espectro+schedule). Fase 0.5
-          cabe folgado; reavaliar RAM antes da Fase 3 (LLM/extração) e do
-          GlitchTip self-host.
+        MVP e liberar orçamento p/ project isolado. Criados: - `iris-postgres` (Postgres puro, template Easypanel) — db `iris`,
+        user `iris`, senha random gerada, imagem oficial. **Rodando.** Host
+        interno p/ o app: `iris-postgres:5432`. Isolado do MySQL do espectro
+        (banco próprio, não compartilha — dado de menor/LGPD). - `iris-app` (Aplicativo) — source GitHub `romulosutil/Iris`@`main`,
+        build **Dockerfile** `infra/Dockerfile`, domínio `irisclinica.ia.br`
+        → porta **3000** (HTTPS/Let's Encrypt). **NÃO implantado** de
+        propósito: repo na Fase 0.5 sem `infra/Dockerfile`/scaffold Next —
+        deploy é 1 clique no bootstrap quando o Dockerfile existir. - **Env do `iris-app` pendente p/ bootstrap** (não setado p/ não manusear
+        a senha do DB): `DATABASE_URL=postgres://iris:<senha>@iris-postgres:5432/iris`,
+        `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://irisclinica.ia.br`. - **Domínio `irisclinica.ia.br` (registro.br, comprado, exp. 09/07/2027):**
+        DNS via registro.br (não aceita `@` nem `*`/wildcard). Bind no
+        Easypanel feito. **Registros A pendentes (Rômulo adiciona):**
+        `irisclinica.ia.br`→`31.97.170.105` e `www`→`31.97.170.105`. Zona
+        ficou travada ~2h por transição de servidores (switch p/ modo
+        avançado); subdomínios futuros (`storybook.`/`staging.`) = A
+        individuais (sem wildcard). - **Flag DevOps:** VPS real é **2 vCPU / 7.8 GB** (não o KVM4/16GB do
+        plano §1; ~38% RAM já usada por aladdin+espectro+schedule). Fase 0.5
+        cabe folgado; reavaliar RAM antes da Fase 3 (LLM/extração) e do
+        GlitchTip self-host.
   - [ ] **PENDENTE (não bloqueia bootstrap/DS):** backup/restore agora é nosso —
         `pg_dump` agendado + destino em BR + restore testado (item LGPD, antes
         do dado real na Fase 1+). Easypanel tem "Cópias de segurança" nativo no
