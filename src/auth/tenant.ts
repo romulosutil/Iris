@@ -71,6 +71,23 @@ export async function resolveTenant(
 }
 
 /**
+ * Clínicas em que o usuário tem ao menos um papel (dedup por clínica). Usado
+ * pelo shell para montar o switcher sem re-derivar papéis. Bootstrap via
+ * `iris_auth` (pré-GUC), igual a `resolveTenant`.
+ */
+export async function listarClinicasDoUsuario(
+  userId: string,
+): Promise<{ clinicId: string; nome: string }[]> {
+  const vinculos = await authDb
+    .select({ clinicId: userRole.clinicId, nome: clinic.nome })
+    .from(userRole)
+    .innerJoin(clinic, eq(clinic.id, userRole.clinicId))
+    .where(eq(userRole.userId, userId));
+  const nomePorId = new Map(vinculos.map((v) => [v.clinicId, v.nome]));
+  return [...nomePorId].map(([clinicId, nome]) => ({ clinicId, nome }));
+}
+
+/**
  * Açúcar server-only p/ pages/actions: resolve e redireciona conforme o status.
  * Retorna sempre um TenantContext válido (ou nunca retorna — redireciona).
  */
