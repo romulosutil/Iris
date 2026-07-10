@@ -725,9 +725,41 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
         `.claudeignore`.
   - [x] Convenções: commits pt-BR, pnpm/corepack, TS strict, ESLint+Prettier+
         Husky+lint-staged, Vitest+Playwright+pgTAP — todas confirmadas.
+  - [x] **Provisionamento executado no Easypanel (10/07/2026, sessão DevOps):**
+        VPS `31.97.170.105`, Easypanel v2.31.0. **Restrição de verba: só 3
+        projects (cap do plano atual), já usados (`aladdin`, `espectro-mvp`,
+        `schedule`).** Sem verba p/ 4º project → decisão: **nestar os serviços
+        do Iris dentro do project `espectro-mvp`** (divisão de espaço com outro
+        site), com **prefixo `iris-`** nos serviços, PROVISÓRIO até validar o
+        MVP e liberar orçamento p/ project isolado. Criados:
+        - `iris-postgres` (Postgres puro, template Easypanel) — db `iris`,
+          user `iris`, senha random gerada, imagem oficial. **Rodando.** Host
+          interno p/ o app: `iris-postgres:5432`. Isolado do MySQL do espectro
+          (banco próprio, não compartilha — dado de menor/LGPD).
+        - `iris-app` (Aplicativo) — source GitHub `romulosutil/Iris`@`main`,
+          build **Dockerfile** `infra/Dockerfile`, domínio `irisclinica.ia.br`
+          → porta **3000** (HTTPS/Let's Encrypt). **NÃO implantado** de
+          propósito: repo na Fase 0.5 sem `infra/Dockerfile`/scaffold Next —
+          deploy é 1 clique no bootstrap quando o Dockerfile existir.
+        - **Env do `iris-app` pendente p/ bootstrap** (não setado p/ não manusear
+          a senha do DB): `DATABASE_URL=postgres://iris:<senha>@iris-postgres:5432/iris`,
+          `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://irisclinica.ia.br`.
+        - **Domínio `irisclinica.ia.br` (registro.br, comprado, exp. 09/07/2027):**
+          DNS via registro.br (não aceita `@` nem `*`/wildcard). Bind no
+          Easypanel feito. **Registros A pendentes (Rômulo adiciona):**
+          `irisclinica.ia.br`→`31.97.170.105` e `www`→`31.97.170.105`. Zona
+          ficou travada ~2h por transição de servidores (switch p/ modo
+          avançado); subdomínios futuros (`storybook.`/`staging.`) = A
+          individuais (sem wildcard).
+        - **Flag DevOps:** VPS real é **2 vCPU / 7.8 GB** (não o KVM4/16GB do
+          plano §1; ~38% RAM já usada por aladdin+espectro+schedule). Fase 0.5
+          cabe folgado; reavaliar RAM antes da Fase 3 (LLM/extração) e do
+          GlitchTip self-host.
   - [ ] **PENDENTE (não bloqueia bootstrap/DS):** backup/restore agora é nosso —
         `pg_dump` agendado + destino em BR + restore testado (item LGPD, antes
-        do dado real na Fase 1+). DPA Hostinger + DPA Anthropic a assinar.
+        do dado real na Fase 1+). Easypanel tem "Cópias de segurança" nativo no
+        `iris-postgres` — configurar cron + destino BR ali. DPA Hostinger + DPA
+        Anthropic a assinar.
         **Bootstrap 100% especificado — sem decisões abertas para começar a Fase 0.5.**
 - [x] Estrutura do modelo de negócio → `docs/produto/modelo-de-negocio.md`:
       preço POR PACIENTE ATIVO/mês (norma da categoria, validada por mercado),
