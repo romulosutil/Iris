@@ -685,6 +685,15 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
       Inserida antes da Fase 1 por decisão de sequenciamento (10/07/2026, ver
       seção D) — a Fase 1 já constrói UI real (cadastro, agenda) e não
       deveria nascer sem tokens definidos.
+    - **Progresso (10/07/2026, PR #1 `fase-0.5-design-system`):** entregue
+      Next 16 + Tailwind v4 (tokens CSS-first em `globals.css`, não
+      `tailwind.config.ts`); Storybook 10 com `nextjs-vite` + `addon-a11y`;
+      4 componentes (Botão, Card, Alerta, **Logo**); favicon; home distintiva
+      enraizada no logo (3 anéis = 3 camadas de governança). A11y elevada a 1ª
+      classe: contraste AAA, forced-colors, prefers-contrast, gate axe
+      (`pnpm test`, 7/7). Taste-skill adotado seletivamente. **Falta:** publicar
+      o Storybook (depende do VPS) e, opcionalmente, gate de contraste em
+      browser-mode. Aguarda validação do designer de produto (PR #1).
 - [ ] Fase 1 — Pacientes (ficha clínica + consentimento LGPD) + agenda mínima + check-in.
 - [ ] Fase 2 — Metas (ciclo de vida + critério de domínio) + diário por texto + fila de pendências.
 - [ ] Fase 3 — Extração (agente R1-R19) + tela de revisão do terapeuta.
