@@ -1,0 +1,48 @@
+# Dev local com paridade de produção: Postgres + MinIO.
+# O app roda fora do compose (`pnpm dev`) apontando para estes serviços.
+# Subir: docker compose -f infra/docker-compose.yml up -d
+#
+# .env local correspondente:
+#   DATABASE_URL=postgres://iris:iris@localhost:5432/iris
+#   S3_ENDPOINT=http://localhost:9000
+#   S3_ACCESS_KEY=iris
+#   S3_SECRET_KEY=iris123456
+#   S3_BUCKET=iris-audio
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: iris
+      POSTGRES_PASSWORD: iris
+      POSTGRES_DB: iris
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iris -d iris"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: iris
+      MINIO_ROOT_PASSWORD: iris123456
+    ports:
+      - "9000:9000" # API S3
+      - "9001:9001" # Console web
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  miniodata:
