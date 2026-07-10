@@ -34,11 +34,38 @@ pnpm dev
    (80/443/SSH), `unattended-upgrades`, `pg_dump` agendado + restore testado
    (item LGPD antes de dado real).
 
+## Banco — role de runtime (CRÍTICO para o RLS)
+
+O RLS **só se aplica a roles não-superuser e não-donos da tabela**. Um superuser
+(o usuário default do Postgres do Easypanel) **bypassa o RLS silenciosamente**.
+
+- **Migrations** rodam como o dono/superuser (via `MIGRATION_DATABASE_URL`).
+  A migração cria `app_role` como role de **privilégio, NOLOGIN** (alvo das
+  policies + grants).
+- **O app** deve conectar via `DATABASE_URL` com um **usuário de login dedicado,
+  membro de `app_role`, NÃO superuser**. Criar uma vez, por ambiente:
+
+  ```sql
+  CREATE ROLE iris_app LOGIN PASSWORD '<senha forte>' IN ROLE app_role;
+  ```
+
+  Depois `DATABASE_URL=postgres://iris_app:<senha>@<host>:5432/iris`. Conferir
+  que ele NÃO tem `SUPERUSER`/`BYPASSRLS` (`\du iris_app`), senão o isolamento
+  multi-tenant não vale.
+
+## Migrations e seed
+
+```bash
+pnpm db:generate   # gera SQL a partir de src/db/schema.ts (offline)
+pnpm db:migrate    # aplica em db/migrations (usa MIGRATION_DATABASE_URL)
+pnpm test:rls      # prova o isolamento contra o Postgres (5 casos por papel)
+```
+
 ## Notas
 
 - O `Dockerfile` usa Next standalone (`output: "standalone"` em `next.config.ts`)
   → imagem enxuta. `outputFileTracingRoot` fixa a raiz do trace.
 - Storybook publica-se como serviço estático separado no Easypanel (`pnpm
-  build-storybook` → `storybook-static/`), com Password Protection.
+build-storybook` → `storybook-static/`), com Password Protection.
 - Migrations (Drizzle) rodam manualmente contra o Postgres via `DATABASE_URL`,
   nunca automáticas no deploy (dado clínico não migra sozinho).
