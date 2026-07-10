@@ -61,15 +61,29 @@ CREATE POLICY patient_select ON patient FOR SELECT TO app_role USING (
   )
 );
 --> statement-breakpoint
+-- Escrita de cadastro é administrativa: recepção e coordenador. Terapeuta não
+-- cria/edita/deleta paciente.
 CREATE POLICY patient_insert ON patient FOR INSERT TO app_role
-  WITH CHECK (clinic_id = current_setting('app.clinic_id')::uuid);
+  WITH CHECK (
+    clinic_id = current_setting('app.clinic_id')::uuid
+    AND current_setting('app.user_role') IN ('admin_recepcao', 'coordenador')
+  );
 --> statement-breakpoint
 CREATE POLICY patient_update ON patient FOR UPDATE TO app_role
-  USING (clinic_id = current_setting('app.clinic_id')::uuid)
-  WITH CHECK (clinic_id = current_setting('app.clinic_id')::uuid);
+  USING (
+    clinic_id = current_setting('app.clinic_id')::uuid
+    AND current_setting('app.user_role') IN ('admin_recepcao', 'coordenador')
+  )
+  WITH CHECK (
+    clinic_id = current_setting('app.clinic_id')::uuid
+    AND current_setting('app.user_role') IN ('admin_recepcao', 'coordenador')
+  );
 --> statement-breakpoint
 CREATE POLICY patient_delete ON patient FOR DELETE TO app_role
-  USING (clinic_id = current_setting('app.clinic_id')::uuid);
+  USING (
+    clinic_id = current_setting('app.clinic_id')::uuid
+    AND current_setting('app.user_role') = 'coordenador'
+  );
 --> statement-breakpoint
 
 -- ─── patient_clinical_profile (CLÍNICA — admin_recepcao BLOQUEADO) ───────────
@@ -86,6 +100,7 @@ CREATE POLICY pcp_access ON patient_clinical_profile FOR ALL TO app_role
   WITH CHECK (
     current_setting('app.user_role') <> 'admin_recepcao'
     AND app_patient_in_clinic(patient_id)
+    AND (current_setting('app.user_role') = 'coordenador' OR app_is_on_team(patient_id))
   );
 --> statement-breakpoint
 
@@ -141,8 +156,12 @@ ALTER TABLE consent FORCE ROW LEVEL SECURITY;
 CREATE POLICY consent_read ON consent FOR SELECT TO app_role
   USING (app_patient_in_clinic(patient_id));
 --> statement-breakpoint
+-- Coleta de consentimento é ato administrativo (LGPD): recepção e coordenador.
 CREATE POLICY consent_insert ON consent FOR INSERT TO app_role
-  WITH CHECK (app_patient_in_clinic(patient_id));
+  WITH CHECK (
+    app_patient_in_clinic(patient_id)
+    AND current_setting('app.user_role') IN ('admin_recepcao', 'coordenador')
+  );
 --> statement-breakpoint
 
 -- ─── protocol (tenant simples) ──────────────────────────────────────────────
@@ -150,9 +169,20 @@ ALTER TABLE protocol ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 ALTER TABLE protocol FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
-CREATE POLICY protocol_all ON protocol FOR ALL TO app_role
-  USING (clinic_id = current_setting('app.clinic_id')::uuid)
-  WITH CHECK (clinic_id = current_setting('app.clinic_id')::uuid);
+-- Leitura do catálogo de protocolos: todos da clínica. Escrita (gerenciar
+-- templates) é ato clínico-administrativo restrito ao coordenador.
+CREATE POLICY protocol_read ON protocol FOR SELECT TO app_role
+  USING (clinic_id = current_setting('app.clinic_id')::uuid);
+--> statement-breakpoint
+CREATE POLICY protocol_write ON protocol FOR ALL TO app_role
+  USING (
+    clinic_id = current_setting('app.clinic_id')::uuid
+    AND current_setting('app.user_role') = 'coordenador'
+  )
+  WITH CHECK (
+    clinic_id = current_setting('app.clinic_id')::uuid
+    AND current_setting('app.user_role') = 'coordenador'
+  );
 --> statement-breakpoint
 
 -- ─── Seed do catálogo de famílias de protocolo ──────────────────────────────

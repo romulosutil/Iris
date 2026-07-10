@@ -22,6 +22,13 @@ export async function withTenant<T>(
   ctx: TenantContext,
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T> {
+  // Falha rápido: strings vazias/undefined viram `invalid input syntax for
+  // type uuid` obscuro lá no Postgres. Melhor estourar aqui, no ponto de erro.
+  if (!ctx.clinicId || !ctx.userId || !ctx.role) {
+    throw new Error(
+      "withTenant: contexto de tenant incompleto (clinicId, userId e role são obrigatórios)",
+    );
+  }
   return db.transaction(async (tx) => {
     // is_local = true → equivalente a SET LOCAL (vale só nesta transação).
     await tx.execute(sql`select

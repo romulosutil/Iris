@@ -25,6 +25,7 @@ const U_ADMIN = "a0000000-0000-0000-0000-000000000004";
 const P1 = "b0000000-0000-0000-0000-000000000001"; // clinic A, equipe = TERA
 const P2 = "b0000000-0000-0000-0000-000000000002"; // clinic A, sem equipe p/ TERA
 const P3 = "b0000000-0000-0000-0000-000000000003"; // clinic B
+const P4 = "b0000000-0000-0000-0000-000000000004"; // clinic A, sem profile, sem equipe
 
 const ctx = (
   role: TenantContext["role"],
@@ -48,7 +49,8 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${P1}, ${CLINIC_A}, 'Paciente 1'),
       (${P2}, ${CLINIC_A}, 'Paciente 2'),
-      (${P3}, ${CLINIC_B}, 'Paciente 3')`;
+      (${P3}, ${CLINIC_B}, 'Paciente 3'),
+      (${P4}, ${CLINIC_A}, 'Paciente 4')`;
     await owner`INSERT INTO patient_clinical_profile (patient_id, diagnostico) VALUES
       (${P1}, 'hipótese TEA'), (${P2}, 'em avaliação')`;
     // TERA está na equipe vigente de P1; TERA2 não; nenhum vínculo p/ P2.
@@ -65,7 +67,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
     const pacientes = await withTenant(ctx("admin_recepcao", U_ADMIN), (db) =>
       db.select().from(patient),
     );
-    expect(pacientes.map((p) => p.id).sort()).toEqual([P1, P2].sort());
+    expect(pacientes.map((p) => p.id).sort()).toEqual([P1, P2, P4].sort());
 
     const clinico = await withTenant(ctx("admin_recepcao", U_ADMIN), (db) =>
       db.select().from(patientClinicalProfile),
@@ -92,7 +94,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       db.select().from(patient),
     );
     const ids = pacientes.map((p) => p.id).sort();
-    expect(ids).toEqual([P1, P2].sort());
+    expect(ids).toEqual([P1, P2, P4].sort());
     expect(ids).not.toContain(P3); // isolamento cross-clinic
   });
 
@@ -102,6 +104,18 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
         db
           .insert(patientClinicalProfile)
           .values({ patientId: P1, diagnostico: "hack" }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("terapeuta fora da equipe NÃO insere perfil clínico do paciente (RLS write)", async () => {
+    // P4 não tem profile (isola do unique constraint) e TERA2 não está na sua
+    // equipe → o WITH CHECK de pcp_access deve barrar a inserção.
+    await expect(
+      withTenant(ctx("terapeuta", U_TERA2), (db) =>
+        db
+          .insert(patientClinicalProfile)
+          .values({ patientId: P4, diagnostico: "hack" }),
       ),
     ).rejects.toThrow();
   });

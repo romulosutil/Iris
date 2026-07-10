@@ -695,6 +695,22 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
     o Storybook (depende do VPS) e, opcionalmente, gate de contraste em
     browser-mode. Aguarda validação do designer de produto (PR #1).
 - [ ] Fase 1 — Pacientes (ficha clínica + consentimento LGPD) + agenda mínima + check-in.
+  - **Progresso (10/07/2026, PR #3 `fase-1a-fundacao-dados`):** fundação de
+    dados — schema Drizzle (13 tabelas), Better-Auth com `app_user` como tabela
+    `user`, RLS multi-tenant via session GUC + `withTenant` (gargalo único), 6
+    testes de integração RLS contra Postgres real.
+  - **Hardening pós-review Jules (10/07/2026):** a 1ª rodada de RLS restringia
+    só leitura por papel/equipe e deixava a escrita frouxa. Fechados:
+    (1) `patient` insert/update/delete agora exige papel administrativo
+    (recepção/coordenador; delete só coordenador); (2) `pcp_access` replica a
+    checagem de equipe no `WITH CHECK` (terapeuta fora da equipe não sobrescreve
+    perfil clínico); (3) `consent_insert` restrito a recepção/coordenador (ato
+    administrativo LGPD); (4) `protocol` split em `protocol_read` (todos) vs.
+    `protocol_write` (só coordenador); (5) teste de escrita não-autorizada
+    (terapeuta fora da equipe) adicionado; (6) `withTenant` falha rápido com
+    contexto de tenant incompleto. **Lição:** toda policy `FOR ALL` ou com
+    `USING` restrito precisa do `WITH CHECK` espelhado — `USING` filtra leitura,
+    não barra escrita.
 - [ ] Fase 2 — Metas (ciclo de vida + critério de domínio) + diário por texto + fila de pendências.
 - [ ] Fase 3 — Extração (agente R1-R19) + tela de revisão do terapeuta.
 - [ ] Fase 4 — Evidências acumuladas + gráfico do protocolo + linha do tempo + briefing pré-sessão + perfil de reforçadores.
