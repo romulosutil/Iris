@@ -6,6 +6,9 @@ import { Button } from "./button";
 import { Card } from "./card";
 import { Alert } from "./alert";
 import { Logo } from "./logo";
+import { Input } from "./input";
+import { Field } from "./field";
+import { Form } from "./form";
 
 afterEach(cleanup);
 
@@ -76,4 +79,59 @@ test("Alert info — sem violações axe", async () => {
 
 test("Logo — sem violações axe", async () => {
   await semViolacoes(<Logo variante="completo" />);
+});
+
+test("Input — sem violações axe", async () => {
+  await semViolacoes(
+    <Input aria-label="E-mail" placeholder="nome@clinica.com.br" />,
+  );
+});
+
+test("Input desabilitado — sem violações axe", async () => {
+  await semViolacoes(<Input aria-label="E-mail" disabled />);
+});
+
+test("Field sem erro — sem violações axe", async () => {
+  await semViolacoes(
+    <Field label="E-mail" htmlFor="email">
+      <Input id="email" type="email" />
+    </Field>,
+  );
+});
+
+test("Field com erro — sem violações axe", async () => {
+  await semViolacoes(
+    <Field
+      label="E-mail"
+      htmlFor="email-erro"
+      error="Informe um e-mail válido."
+    >
+      <Input
+        id="email-erro"
+        type="email"
+        aria-invalid
+        aria-describedby="email-erro-error"
+      />
+    </Field>,
+  );
+});
+
+test("Form — sem violações axe", async () => {
+  await semViolacoes(
+    <Form onSubmit={(event) => event.preventDefault()}>
+      <Field label="E-mail" htmlFor="email-form">
+        <Input id="email-form" type="email" />
+      </Field>
+    </Form>,
+  );
+});
+
+test("Form com erro — sem violações axe", async () => {
+  await semViolacoes(
+    <Form error="Sessão expirada, entre novamente.">
+      <Field label="E-mail" htmlFor="email-form-erro">
+        <Input id="email-form-erro" type="email" />
+      </Field>
+    </Form>,
+  );
 });
