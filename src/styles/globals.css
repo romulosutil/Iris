@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+/*
+  Design System "Espectro Brutal" — fonte única dos tokens (Tailwind v4 @theme).
+  Raiz cromática neurodiversidade-afirmativa: ouro (infinito do autismo) como
+  primária; espectro arco-íris só como assinatura de marca, nunca chrome de UI.
+  Ver docs/ux/design-system-espectro-brutal.md.
+*/
+
+@theme {
+  /* Superfícies */
+  --color-canvas: #f8f9fa;
+  --color-surface: #ffffff;
+
+  /* Tinta e bordas — hierarquia, não uniformidade */
+  --color-ink: #1a1a1a;
+  --color-ink-anchor: #000000;
+  --color-graphite: #2b2b2b;
+
+  /* Primária / marca / ação — infinito dourado (autismo, Au) */
+  --color-gold: #f2b705;
+  --color-gold-pressed: #d29e04;
+
+  /* Acentos funcionais de estado do dado (sempre com ícone+texto redundante) */
+  --color-mint: #b2dfdb; /* sucesso / "conquistado" */
+  --color-blue: #90caf9; /* informação */
+  --color-terracotta: #ef9a9a; /* alerta (soft red deliberado) */
+
+  /* Espectro (assinatura de marca — SÓ brand mark / régua fina) */
+  --color-spectrum-red: #e4572e;
+  --color-spectrum-orange: #f2a71b;
+  --color-spectrum-yellow: #f2b705;
+  --color-spectrum-green: #3fa34d;
+  --color-spectrum-blue: #2274a5;
+  --color-spectrum-violet: #6a4c93;
+
+  /* Tipografia — display geométrica pesada + body legível sob pressa */
+  --font-display:
+    var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+  --font-body: var(--font-jakarta), "Plus Jakarta Sans", system-ui, sans-serif;
+
+  /* Sombras brutalistas sem blur */
+  --shadow-brutal: 4px 4px 0 0 var(--color-ink-anchor);
+  --shadow-brutal-sm: 2px 2px 0 0 var(--color-ink-anchor);
+
+  /* Anel de foco ortogonal — cor constante, nunca fundido com hover/active */
+  --color-focus: #2274a5;
+}
+
+/*
+  Modos = mesmo conjunto de tokens, dois perfis de "temperatura".
+  Clínico (terapeuta/coordenador): impacto cheio. Família (futuro): reduzido.
+  Alternável via [data-mode] (addon-themes no Storybook, sem rebuild).
+*/
+:root,
+[data-mode="clinico"] {
+  --ds-shadow: var(--shadow-brutal);
+  --ds-offset: 4px;
+}
+
+[data-mode="familia"] {
+  --ds-shadow: var(--shadow-brutal-sm);
+  --ds-offset: 2px;
+}
+
+html {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  /* letter-spacing levemente aumentado ajuda leitura apressada */
+  letter-spacing: 0.01em;
+}
+
+/* Logo — anéis da marca entram em cascata (ativado por .iris-animado). */
+@keyframes iris-ring-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.iris-animado .iris-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: iris-ring-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.iris-animado .iris-ring-2 {
+  animation-delay: 90ms;
+}
+.iris-animado .iris-ring-3 {
+  animation-delay: 180ms;
+}
+
+/* prefers-reduced-motion: deslocamento no clique vira troca instantânea */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
