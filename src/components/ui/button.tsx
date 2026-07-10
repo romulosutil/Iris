@@ -39,8 +39,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           "font-display text-base font-semibold",
           "border-ink-anchor border-2 shadow-[var(--ds-shadow)]",
           "transition-[transform,box-shadow] duration-100 ease-out",
-          // anel de foco ortogonal — independente de hover/active
-          "focus-visible:outline-focus outline-none focus-visible:outline-2 focus-visible:outline-offset-2",
+          // hover: afordância distinta do press — aproxima 1px (abre folga na sombra)
+          "hover:-translate-x-px hover:-translate-y-px",
+          // anel de foco ortogonal — independente de hover/active, largura por token
+          "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
           // desabilitado: sem sombra, sem interação
           "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
           "disabled:active:translate-x-0 disabled:active:translate-y-0",

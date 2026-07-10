@@ -43,8 +43,11 @@
   --shadow-brutal: 4px 4px 0 0 var(--color-ink-anchor);
   --shadow-brutal-sm: 2px 2px 0 0 var(--color-ink-anchor);
 
-  /* Anel de foco ortogonal — cor constante, nunca fundido com hover/active */
+  /* Anel de foco ortogonal — cor constante, nunca fundido com hover/active.
+     Azul escuro do espectro: 4.4:1 sobre o canvas (passa WCAG 2.4.11/1.4.11). */
   --color-focus: #2274a5;
+  --ring-width: 3px;
+  --ring-offset: 2px;
 }
 
 /*
@@ -102,5 +105,28 @@ html {
   *::after {
     transition-duration: 0.001ms !important;
     animation-duration: 0.001ms !important;
+  }
+}
+
+/*
+  prefers-contrast: more — sobe todas as bordas grafite para preto puro e
+  engrossa o anel de foco. Reforça hierarquia para quem pede mais contraste.
+*/
+@media (prefers-contrast: more) {
+  :root {
+    --color-graphite: #000000;
+    --ring-width: 4px;
+  }
+}
+
+/*
+  forced-colors (Windows High Contrast): o fill semântico (ouro/menta/azul)
+  vira cor de sistema — o significado NÃO se perde porque todo estado carrega
+  ícone+texto. O foco usa outline real (não box-shadow), então sobrevive ao
+  modo com a cor de sistema Highlight automaticamente.
+*/
+@media (forced-colors: active) {
+  :where(button, [role="button"]):focus-visible {
+    outline-color: Highlight;
   }
 }
