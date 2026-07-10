@@ -202,15 +202,31 @@ deveria fazer, independente de quem está olhando. Usar barra sólida de cor
 
 ## 5. Critérios de aceite (antes de aprovar tokens/código)
 
-- Contraste AA validado em todos os pares texto/fundo e ícone/fundo.
-- Simulação de daltonismo sem colisão entre os 3 acentos.
+> **Acessibilidade é compromisso de 1ª classe do Iris** (decisão 10/07/2026),
+> não caixinha de conformidade — coerente com a marca neurodiversidade-
+> afirmativa. Alvo **WCAG 2.2 AA mínimo, AAA onde viável**. Isso não é
+> alegação de acessibilidade sensorial clínica (§6): é a11y universal de
+> qualidade para quem opera (profissional) e, no futuro, para a família.
+
+- Contraste **AAA atingido** nos pares principais (texto/borda preta sobre
+  ouro/menta/azul/terracota = 8–11:1; ink sobre canvas = 16:1). AA é o piso.
+- Simulação de daltonismo sem colisão entre os 3 acentos + redundância
+  ícone+texto obrigatória (o significado nunca depende só de cor).
 - Alvo de toque ≥44×44px em todo componente interativo do Modo Clínico.
 - Zoom 200% sem quebra de layout.
-- `prefers-reduced-motion` implementado e testado.
-- Estado Focus visualmente distinto de Hover/Pressed em todos os
-  componentes.
+- `prefers-reduced-motion` implementado e testado (deslocamento e animação
+  do logo viram troca instantânea).
+- **`prefers-contrast: more`**: bordas grafite sobem para preto puro, anel de
+  foco engrossa.
+- **`forced-colors: active`** (Windows High Contrast): significado preservado
+  via ícone+texto; foco usa `outline` real (sobrevive ao modo).
+- Estado Focus (anel ortogonal, largura por token `--ring-width`) visualmente
+  distinto de Hover (aproxima 1px) e Pressed (desloca + remove sombra).
 - Nenhum padrão repetitivo de alto contraste (listras, xadrez) em nenhum
   componente.
+- **Gate a11y automatizado**: `pnpm test` roda axe (WCAG 2.x A/AA) sobre todos
+  os componentes; zero violação é condição de merge. Complementa o painel
+  `addon-a11y` manual do Storybook (contraste, que o jsdom não computa).
 - Métrica de validação de produto definida antes de gerar código final:
   recomenda-se medir tempo até "aprovação sem edição" na tela de revisão
   do terapeuta antes/depois do novo sistema visual — é o número que já
@@ -218,8 +234,10 @@ deveria fazer, independente de quem está olhando. Usar barra sólida de cor
 
 ## 5.1 Implementação e entrega
 
-Tokens e componentes desta seção são implementados como `tailwind.config.ts`
-(fonte única, sem duplicar valores em outro lugar) e entregues como catálogo
+Tokens e componentes desta seção são implementados como **fonte única em CSS**
+(`src/styles/globals.css`, bloco `@theme` do Tailwind v4 — a decisão original
+citava `tailwind.config.ts`, mas o Tailwind v4 é config CSS-first; o princípio
+"fonte única, sem duplicar valores" se mantém) e entregues como catálogo
 Storybook publicado — decisão de ferramenta, ordem de execução e escopo
 exato da Fase 0.5 estão em `docs/arquitetura/stack-e-plano-de-construcao.md`
 (não duplicado aqui para não divergir).

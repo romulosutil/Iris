@@ -254,7 +254,7 @@ Estado da revisão (atualizado 09/07/2026):
 **Convenções — TODAS RESOLVIDAS:**
 
 - [x] Commits: **Conventional Commits em português** (`feat: adiciona cadastro
-  de paciente`).
+de paciente`).
 - [x] Estrutura de pastas — feature-first (seção 4).
 - [x] **pnpm via corepack.**
 - [x] **TypeScript strict + ESLint + Prettier + Husky + lint-staged.**
