@@ -23,10 +23,14 @@ export async function withTenant<T>(
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T> {
   // Falha rápido: strings vazias/undefined viram `invalid input syntax for
-  // type uuid` obscuro lá no Postgres. Melhor estourar aqui, no ponto de erro.
-  if (!ctx.clinicId || !ctx.userId || !ctx.role) {
+  // type uuid` obscuro lá no Postgres. Melhor estourar aqui, no ponto de erro,
+  // nomeando exatamente a propriedade ausente pra facilitar o debug da rota.
+  const faltando = (["clinicId", "userId", "role"] as const).filter(
+    (k) => !ctx[k],
+  );
+  if (faltando.length > 0) {
     throw new Error(
-      "withTenant: contexto de tenant incompleto (clinicId, userId e role são obrigatórios)",
+      `withTenant: contexto de tenant incompleto — faltando: ${faltando.join(", ")}`,
     );
   }
   return db.transaction(async (tx) => {

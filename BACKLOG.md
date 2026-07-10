@@ -711,6 +711,31 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
     contexto de tenant incompleto. **Lição:** toda policy `FOR ALL` ou com
     `USING` restrito precisa do `WITH CHECK` espelhado — `USING` filtra leitura,
     não barra escrita.
+  - **2ª rodada Jules (10/07/2026, VERDICT: comment — não-bloqueante):**
+    aplicados os 2 WARN de policy + o NIT, DIFERIDO 1 WARN por falta de contexto
+    do revisor:
+    - (aplicado) `patient_clinical_profile`: `pcp_access FOR ALL` desmembrado em
+      `pcp_read/insert/update` (coordenador ou terapeuta da equipe) + `pcp_delete`
+      **só coordenador** — apagar dado de saúde é destrutivo demais p/ terapeuta;
+      não há fluxo legítimo de terapeuta deletar perfil (é 1:1, atualiza-se).
+    - (aplicado, **decisão de produto — Rômulo pode vetar**) `ctm_read` passou de
+      "só a própria linha" para `app_is_on_team(patient_id)`: terapeuta da equipe
+      enxerga a EQUIPE INTEIRA do paciente (colaboração interdisciplinar), igual
+      às demais tabelas clínicas.
+    - (aplicado) NIT: `withTenant` agora nomeia qual prop do contexto faltou.
+    - (**DIFERIDO — Jules sem contexto**) "faltam RLS em `clinic`, `app_user`,
+      `user_role`". **Não aplicável como RLS tenant ingênuo:** o Better-Auth usa o
+      client cru (sem tenant) e consulta `app_user`/auth tables por email/token
+      NO LOGIN, antes de qualquer GUC; `user_role` é lido no bootstrap da sessão
+      p/ MONTAR o `TenantContext` (também pré-GUC). RLS tenant-scoped nessas
+      tabelas quebraria login e bootstrap; `app_user` nem tem `clinic_id`. A
+      preocupação de fundo (global sem RLS → vazamento se rota esquecer filtro) é
+      legítima, mas a mitigação certa é arquitetural (role de auth com BYPASSRLS
+      dedicada, ou gargalo controlado de leitura dessas tabelas) e pertence à fase
+      em que o fluxo de sessão/resolução de tenant for construído — não à Fase 1a.
+      **Decisão aberta p/ Rômulo.** Ver `AGENTS.md` (RLS+auth = plan mode).
+  - Testes RLS: 9 cenários (add. equipe-inteira, update legítimo por terapeuta
+    de equipe, DELETE barrado p/ terapeuta e permitido p/ coordenador).
 - [ ] Fase 2 — Metas (ciclo de vida + critério de domínio) + diário por texto + fila de pendências.
 - [ ] Fase 3 — Extração (agente R1-R19) + tela de revisão do terapeuta.
 - [ ] Fase 4 — Evidências acumuladas + gráfico do protocolo + linha do tempo + briefing pré-sessão + perfil de reforçadores.

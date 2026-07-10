@@ -7,8 +7,13 @@
  * à recepção.
  */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { eq } from "drizzle-orm";
 import postgres from "postgres";
-import { patient, patientClinicalProfile } from "./schema";
+import {
+  careTeamMembership,
+  patient,
+  patientClinicalProfile,
+} from "./schema";
 import { withTenant, type TenantContext } from "./rls";
 import { sql as appSql } from "./client";
 
@@ -22,6 +27,7 @@ const U_COORD = "a0000000-0000-0000-0000-000000000001";
 const U_TERA = "a0000000-0000-0000-0000-000000000002"; // na equipe de P1
 const U_TERA2 = "a0000000-0000-0000-0000-000000000003"; // sem equipe
 const U_ADMIN = "a0000000-0000-0000-0000-000000000004";
+const U_TERA3 = "a0000000-0000-0000-0000-000000000005"; // também na equipe de P1
 const P1 = "b0000000-0000-0000-0000-000000000001"; // clinic A, equipe = TERA
 const P2 = "b0000000-0000-0000-0000-000000000002"; // clinic A, sem equipe p/ TERA
 const P3 = "b0000000-0000-0000-0000-000000000003"; // clinic B
@@ -45,7 +51,8 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       (${U_COORD}, 'Coord', 'coord@a.test'),
       (${U_TERA}, 'Tera', 'tera@a.test'),
       (${U_TERA2}, 'Tera2', 'tera2@a.test'),
-      (${U_ADMIN}, 'Admin', 'admin@a.test')`;
+      (${U_ADMIN}, 'Admin', 'admin@a.test'),
+      (${U_TERA3}, 'Tera3', 'tera3@a.test')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${P1}, ${CLINIC_A}, 'Paciente 1'),
       (${P2}, ${CLINIC_A}, 'Paciente 2'),
@@ -53,9 +60,10 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       (${P4}, ${CLINIC_A}, 'Paciente 4')`;
     await owner`INSERT INTO patient_clinical_profile (patient_id, diagnostico) VALUES
       (${P1}, 'hipótese TEA'), (${P2}, 'em avaliação')`;
-    // TERA está na equipe vigente de P1; TERA2 não; nenhum vínculo p/ P2.
+    // TERA e TERA3 na equipe vigente de P1; TERA2 não; nenhum vínculo p/ P2.
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe) VALUES
-      (${P1}, ${U_TERA}, 'ABA', 'terapeuta_referencia')`;
+      (${P1}, ${U_TERA}, 'ABA', 'terapeuta_referencia'),
+      (${P1}, ${U_TERA3}, 'Fono', 'terapeuta_referencia')`;
   });
 
   afterAll(async () => {
@@ -118,5 +126,64 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
           .values({ patientId: P4, diagnostico: "hack" }),
       ),
     ).rejects.toThrow();
+  });
+
+  test("terapeuta da equipe vê a EQUIPE INTEIRA do paciente, não só a própria linha", async () => {
+    // TERA está na equipe de P1 → deve enxergar também o colega TERA3 (W2).
+    const equipe = await withTenant(ctx("terapeuta", U_TERA), (db) =>
+      db
+        .select()
+        .from(careTeamMembership)
+        .where(eq(careTeamMembership.patientId, P1)),
+    );
+    const membros = equipe.map((m) => m.userId).sort();
+    expect(membros).toEqual([U_TERA, U_TERA3].sort());
+  });
+
+  test("terapeuta da equipe ATUALIZA perfil clínico (split não quebrou escrita legítima)", async () => {
+    await withTenant(ctx("terapeuta", U_TERA), (db) =>
+      db
+        .update(patientClinicalProfile)
+        .set({ diagnostico: "TEA confirmado" })
+        .where(eq(patientClinicalProfile.patientId, P1)),
+    );
+    const [perfil] = await withTenant(ctx("terapeuta", U_TERA), (db) =>
+      db
+        .select()
+        .from(patientClinicalProfile)
+        .where(eq(patientClinicalProfile.patientId, P1)),
+    );
+    expect(perfil?.diagnostico).toBe("TEA confirmado");
+  });
+
+  test("DELETE de perfil clínico: terapeuta da equipe é barrado, coordenador não", async () => {
+    // Terapeuta (mesmo da equipe) não deve deletar dado de saúde: DELETE só tem
+    // política p/ coordenador → 0 linhas afetadas, perfil permanece (W1).
+    await withTenant(ctx("terapeuta", U_TERA), (db) =>
+      db
+        .delete(patientClinicalProfile)
+        .where(eq(patientClinicalProfile.patientId, P1)),
+    );
+    const aindaExiste = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db
+        .select()
+        .from(patientClinicalProfile)
+        .where(eq(patientClinicalProfile.patientId, P1)),
+    );
+    expect(aindaExiste).toHaveLength(1);
+
+    // Coordenador deleta de fato.
+    await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db
+        .delete(patientClinicalProfile)
+        .where(eq(patientClinicalProfile.patientId, P1)),
+    );
+    const removido = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db
+        .select()
+        .from(patientClinicalProfile)
+        .where(eq(patientClinicalProfile.patientId, P1)),
+    );
+    expect(removido).toHaveLength(0);
   });
 });

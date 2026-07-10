@@ -91,7 +91,24 @@ ALTER TABLE patient_clinical_profile ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 ALTER TABLE patient_clinical_profile FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
-CREATE POLICY pcp_access ON patient_clinical_profile FOR ALL TO app_role
+-- Leitura/escrita clínica: coordenador ou terapeuta da equipe (admin bloqueado).
+-- DELETE separado e restrito ao coordenador — apagar dado de saúde é destrutivo
+-- demais para ficar na mão do terapeuta (mesmo o de equipe).
+CREATE POLICY pcp_read ON patient_clinical_profile FOR SELECT TO app_role
+  USING (
+    current_setting('app.user_role') <> 'admin_recepcao'
+    AND app_patient_in_clinic(patient_id)
+    AND (current_setting('app.user_role') = 'coordenador' OR app_is_on_team(patient_id))
+  );
+--> statement-breakpoint
+CREATE POLICY pcp_insert ON patient_clinical_profile FOR INSERT TO app_role
+  WITH CHECK (
+    current_setting('app.user_role') <> 'admin_recepcao'
+    AND app_patient_in_clinic(patient_id)
+    AND (current_setting('app.user_role') = 'coordenador' OR app_is_on_team(patient_id))
+  );
+--> statement-breakpoint
+CREATE POLICY pcp_update ON patient_clinical_profile FOR UPDATE TO app_role
   USING (
     current_setting('app.user_role') <> 'admin_recepcao'
     AND app_patient_in_clinic(patient_id)
@@ -101,6 +118,12 @@ CREATE POLICY pcp_access ON patient_clinical_profile FOR ALL TO app_role
     current_setting('app.user_role') <> 'admin_recepcao'
     AND app_patient_in_clinic(patient_id)
     AND (current_setting('app.user_role') = 'coordenador' OR app_is_on_team(patient_id))
+  );
+--> statement-breakpoint
+CREATE POLICY pcp_delete ON patient_clinical_profile FOR DELETE TO app_role
+  USING (
+    current_setting('app.user_role') = 'coordenador'
+    AND app_patient_in_clinic(patient_id)
   );
 --> statement-breakpoint
 
@@ -131,10 +154,13 @@ ALTER TABLE care_team_membership ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 ALTER TABLE care_team_membership FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
+-- Terapeuta da equipe enxerga a EQUIPE INTEIRA do paciente (colaboração
+-- interdisciplinar), não só a própria linha — via app_is_on_team, igual às
+-- demais tabelas clínicas.
 CREATE POLICY ctm_read ON care_team_membership FOR SELECT TO app_role USING (
   current_setting('app.user_role') <> 'admin_recepcao'
   AND app_patient_in_clinic(patient_id)
-  AND (current_setting('app.user_role') = 'coordenador' OR user_id = current_setting('app.user_id')::uuid)
+  AND (current_setting('app.user_role') = 'coordenador' OR app_is_on_team(patient_id))
 );
 --> statement-breakpoint
 CREATE POLICY ctm_write ON care_team_membership FOR ALL TO app_role
