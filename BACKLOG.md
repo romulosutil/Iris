@@ -285,53 +285,53 @@ aberto de propósito como referência cruzada. Próximo passo real: seção B.
       Resultado por instrumento, todo já corrigido em `protocolos-e-agente.md`
       seção 1 (com fontes citadas inline):
   - **VB-MAPP**: todos os números confirmados (170 marcos, 24 barreiras, 18
-        áreas de transição); 1 nuance corrigida — o domínio "vocalizações" SAI
-        no Nível 2 (não é só adição de novos domínios), total de 16 áreas de
-        habilidade distintas nos 3 níveis.
+    áreas de transição); 1 nuance corrigida — o domínio "vocalizações" SAI
+    no Nível 2 (não é só adição de novos domínios), total de 16 áreas de
+    habilidade distintas nos 3 níveis.
   - **ABLLS-R**: 544 tarefas confirmado; nomenclatura corrigida — são 25
-        repertórios de **A a Z pulando o O** (não "A-Y" como estava escrito).
+    repertórios de **A a Z pulando o O** (não "A-Y" como estava escrito).
   - **AFLS**: catálogo estava incompleto — faltava o módulo **Vocacional**
-        (são 6 módulos, não 5) e o total real é ~1.900 habilidades (a versão
-        2012 original tinha só 3 módulos/~735 habilidades; School, Vocational
-        e Independent Living foram adicionados depois).
+    (são 6 módulos, não 5) e o total real é ~1.900 habilidades (a versão
+    2012 original tinha só 3 módulos/~735 habilidades; School, Vocational
+    e Independent Living foram adicionados depois).
   - **Denver/ESDM**: 4 níveis confirmados, mas o total é **480 itens** e o
-        catálogo tinha só 7 domínios onde o Curriculum Checklist real tem
-        **11** — faltava o domínio "comportamento". Faixa etária "12-48m" é a
-        nuclear oficial, mas o modelo é usado informalmente fora dela; ciclo de
-        ~12 semanas confirmado.
+    catálogo tinha só 7 domínios onde o Curriculum Checklist real tem
+    **11** — faltava o domínio "comportamento". Faixa etária "12-48m" é a
+    nuclear oficial, mas o modelo é usado informalmente fora dela; ciclo de
+    ~12 semanas confirmado.
   - **PROC — correção adicional (2ª rodada, 09/07/2026):** o total que eu
-        tinha registrado aqui (70/60/70/200) estava ERRADO — confirmado contra
-        o formulário real (artigo de validação, cruzado em 2 fontes
-        independentes, SciELO e Redalyc, mesma tabela): os blocos são
-        **60/40/50, total 150**, com subitens detalhados por bloco (ver
-        `protocolos-e-agente.md` 1.5). Também a faixa etária
-        do catálogo ("1-6 anos") não tem respaldo nas fontes — corrigida para
-        "~1 a 4-4,5 anos, confirmar no manual 2021". Pontuação por subitem
-        (dentro de cada bloco) tem fontes secundárias inconsistentes — fica
-        como pendência de checagem no manual físico antes de codificar a
-        rubrica fina.
+    tinha registrado aqui (70/60/70/200) estava ERRADO — confirmado contra
+    o formulário real (artigo de validação, cruzado em 2 fontes
+    independentes, SciELO e Redalyc, mesma tabela): os blocos são
+    **60/40/50, total 150**, com subitens detalhados por bloco (ver
+    `protocolos-e-agente.md` 1.5). Também a faixa etária
+    do catálogo ("1-6 anos") não tem respaldo nas fontes — corrigida para
+    "~1 a 4-4,5 anos, confirmar no manual 2021". Pontuação por subitem
+    (dentro de cada bloco) tem fontes secundárias inconsistentes — fica
+    como pendência de checagem no manual físico antes de codificar a
+    rubrica fina.
   - **ABFW**: as 4 áreas do catálogo confirmadas com mais detalhe (ROLPP para
-        pragmática, %DG/%DTF para fluência).
+    pragmática, %DG/%DTF para fluência).
   - **MBGR**: autores corrigidos (Marchesan, Berretin-Felix, Genaro, Rehder —
-        não estava claro antes) e estrutura ampliada (faltavam postura
-        corporal, medidas faciais, exame extra/intraoral, sensibilidade à
-        palpação).
+    não estava claro antes) e estrutura ampliada (faltavam postura
+    corporal, medidas faciais, exame extra/intraoral, sensibilidade à
+    palpação).
   - **PEDI — achado mais importante desta rodada**: o catálogo descrevia SÓ o
-        domínio de Autocuidado, passando a impressão errada de instrumento
-        monodominial. O PEDI real tem **3 domínios em ambas as escalas**
-        (Autocuidado/Mobilidade/Função Social: 73/59/65 itens na Escala de
-        Habilidades Funcionais, 8/7/5 atividades na Escala de Assistência do
-        Cuidador) + uma 3ª escala (Modificações) não modelada ainda. Corrigido
-        por completo em `protocolos-e-agente.md` 1.8 — isso muda o que o
-        agente deveria extrair para TO (mobilidade e função social, não só
-        autocuidado).
+    domínio de Autocuidado, passando a impressão errada de instrumento
+    monodominial. O PEDI real tem **3 domínios em ambas as escalas**
+    (Autocuidado/Mobilidade/Função Social: 73/59/65 itens na Escala de
+    Habilidades Funcionais, 8/7/5 atividades na Escala de Assistência do
+    Cuidador) + uma 3ª escala (Modificações) não modelada ainda. Corrigido
+    por completo em `protocolos-e-agente.md` 1.8 — isso muda o que o
+    agente deveria extrair para TO (mobilidade e função social, não só
+    autocuidado).
   - **DCDQ**: 15 itens/escala 1-5/total 15-75 confirmado sem alteração.
   - **Perfil Sensorial 2**: faixa etária confirmada (3:0-14:11); a contagem de
-        86 itens ~~NÃO foi confirmada contra o manual primário~~ **— checkbox
-        desatualizado, corrigido na revisão de 09/07/2026**: a validação
-        especialista (3ª rodada, ver mais abaixo) promoveu essa contagem de
-        "não confirmada" para CONFIRMADA (2 fontes secundárias independentes e
-        coerentes, sem nenhuma fonte contraditória) — não é mais pendência.
+    86 itens ~~NÃO foi confirmada contra o manual primário~~ **— checkbox
+    desatualizado, corrigido na revisão de 09/07/2026**: a validação
+    especialista (3ª rodada, ver mais abaixo) promoveu essa contagem de
+    "não confirmada" para CONFIRMADA (2 fontes secundárias independentes e
+    coerentes, sem nenhuma fonte contraditória) — não é mais pendência.
 - [x] **Definir a fonte do conteúdo dos marcos — resolvido (09/07/2026)**: a
       mesma pesquisa cobriu o status de licenciamento de cada instrumento.
       Conclusão: os instrumentos AMERICANOS/fechados (VB-MAPP, ABLLS-R, AFLS,
@@ -629,7 +629,7 @@ aberto de propósito como referência cruzada. Próximo passo real: seção B.
   - [x] **Decisão de produto fechada (09/07/2026)** — os 5 achados de cobertura
         de maior prioridade viraram extensão formal do contrato, em
         `protocolos-e-agente.md` nova seção 2.1 (`### 2.1 Extensões de contrato
-        resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
+resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
         `eixos_avaliacao` por domínio (capacidade vs. assistência do cuidador),
         com o agente marcando `eixo_protocolo` (novo campo em
         `output-schema.json`) por extração — generaliza para qualquer protocolo
@@ -663,8 +663,7 @@ aberto de propósito como referência cruzada. Próximo passo real: seção B.
         harness ainda gerava o arquivo só com os 9 casos originais mesmo os
         Casos 10-17 já existindo em `casos-de-teste.md` desde a validação
         especialista — bastou rodar `parse_cases.py` de novo (o parser já era
-        genérico o bastante, sem mudança de código) para produzir os 17 casos
-        + golden; `--dry-run` completo (3 modelos × 18 entradas, 0 erros de
+        genérico o bastante, sem mudança de código) para produzir os 17 casos + golden; `--dry-run` completo (3 modelos × 18 entradas, 0 erros de
         schema) confirma que o pipeline aguenta o volume novo. `README.md` e
         `run_bakeoff.py` corrigidos de "9 casos" para "17 casos" (só
         comentário/docstring, sem mudança de lógica). **Rodar de verdade não é
@@ -686,6 +685,15 @@ aberto de propósito como referência cruzada. Próximo passo real: seção B.
       Inserida antes da Fase 1 por decisão de sequenciamento (10/07/2026, ver
       seção D) — a Fase 1 já constrói UI real (cadastro, agenda) e não
       deveria nascer sem tokens definidos.
+    - **Progresso (10/07/2026, PR #1 `fase-0.5-design-system`):** entregue
+      Next 16 + Tailwind v4 (tokens CSS-first em `globals.css`, não
+      `tailwind.config.ts`); Storybook 10 com `nextjs-vite` + `addon-a11y`;
+      4 componentes (Botão, Card, Alerta, **Logo**); favicon; home distintiva
+      enraizada no logo (3 anéis = 3 camadas de governança). A11y elevada a 1ª
+      classe: contraste AAA, forced-colors, prefers-contrast, gate axe
+      (`pnpm test`, 7/7). Taste-skill adotado seletivamente. **Falta:** publicar
+      o Storybook (depende do VPS) e, opcionalmente, gate de contraste em
+      browser-mode. Aguarda validação do designer de produto (PR #1).
 - [ ] Fase 1 — Pacientes (ficha clínica + consentimento LGPD) + agenda mínima + check-in.
 - [ ] Fase 2 — Metas (ciclo de vida + critério de domínio) + diário por texto + fila de pendências.
 - [ ] Fase 3 — Extração (agente R1-R19) + tela de revisão do terapeuta.
@@ -695,6 +703,32 @@ aberto de propósito como referência cruzada. Próximo passo real: seção B.
 
 ## D. Decisões de produto/negócio pendentes
 
+- [ ] **Pivô de hospedagem: Vercel + Supabase gerenciado → VPS Hostinger +
+      Easypanel + Supabase self-hosted (ABERTO, 09/07/2026).** Nova premissa do
+      Rômulo. Proposta de tech lead completa em
+      `docs/arquitetura/plano-bootstrap-e-stack-vps.md`. Decisões que dependem
+      de confirmação antes da Fase 0.5/1:
+  - [x] VPS Hostinger **região São Paulo** — CONFIRMADO (residência LGPD ok).
+  - [x] Banco: **Postgres puro** (não Supabase) — decidido 09/07/2026. Iris é
+        monólito Next (navegador não fala com o DB direto), então PostgREST/
+        GoTrue/Realtime do Supabase são peso morto. RLS via session GUC
+        (`app.user_id`) em vez de `auth.uid()`; greenfield, custo zero.
+  - [x] Commits: **Conventional Commits em português** — decidido.
+  - [x] Estrutura de pastas: **feature-first** (`src/features`, `db/`,
+        `infra/`, `components/ui`) — ver plano §4.
+  - [x] Auth: **Better-Auth** (MFA/2FA + multi-tenant in-app, adapter Postgres).
+  - [x] Migrations/ORM: **Drizzle** (schema TS + migrações SQL; RLS em SQL cru).
+  - [x] Tier do VPS: **KVM 4 (16 GB)** confortável; piso KVM 2 (8 GB).
+  - [x] Observabilidade: **GlitchTip self-host** (LGPD); preview-per-PR: aceitar
+        perda no MVP (staging fixo só se necessário).
+  - [x] Docker no escopo: Dockerfile Next standalone + `.dockerignore` +
+        `.claudeignore`.
+  - [x] Convenções: commits pt-BR, pnpm/corepack, TS strict, ESLint+Prettier+
+        Husky+lint-staged, Vitest+Playwright+pgTAP — todas confirmadas.
+  - [ ] **PENDENTE (não bloqueia bootstrap/DS):** backup/restore agora é nosso —
+        `pg_dump` agendado + destino em BR + restore testado (item LGPD, antes
+        do dado real na Fase 1+). DPA Hostinger + DPA Anthropic a assinar.
+        **Bootstrap 100% especificado — sem decisões abertas para começar a Fase 0.5.**
 - [x] Estrutura do modelo de negócio → `docs/produto/modelo-de-negocio.md`:
       preço POR PACIENTE ATIVO/mês (norma da categoria, validada por mercado),
       3 tiers (Diário/Clínica/Convênio) mapeados às fases, GTM com 1-2 clínicas
@@ -757,34 +791,34 @@ aberto de propósito como referência cruzada. Próximo passo real: seção B.
       (e por quê) estão em `modelo-de-negocio.md` seção 4 e
       `stack-e-plano-de-construcao.md` seção 3 (Fase 5). Resumo executivo:
   - **Por que só este item**: é o único dos 10 que (a) é a dor que já valida
-        pagamento no tier Convênio mais caro (linha 15 da tabela de validação,
-        §1 de `modelo-de-negocio.md`), (b) reaproveita quase 100% de
-        infraestrutura JÁ prevista na Fase 5 (o "segundo agente" — gerar
-        rascunho com IA → coordenador edita/aprova → exporta PDF — já existe
-        para o relatório da família; `Report.tipo='convenio_narrativo'` já
-        tem DDL própria desde a correção do split `convenio_bruto`/
-        `convenio_narrativo`), então o custo marginal é essencialmente um novo
-        prompt/rascunho de regras + um template de PDF, não uma arquitetura
-        nova, e (c) sem ele o tier Convênio (o mais caro, R$ 99-119/paciente)
-        fica sem o artefato que justifica o preço até um fast-follow
-        indefinido — inaceitável agora que existe cliente concreto pedindo.
+    pagamento no tier Convênio mais caro (linha 15 da tabela de validação,
+    §1 de `modelo-de-negocio.md`), (b) reaproveita quase 100% de
+    infraestrutura JÁ prevista na Fase 5 (o "segundo agente" — gerar
+    rascunho com IA → coordenador edita/aprova → exporta PDF — já existe
+    para o relatório da família; `Report.tipo='convenio_narrativo'` já
+    tem DDL própria desde a correção do split `convenio_bruto`/
+    `convenio_narrativo`), então o custo marginal é essencialmente um novo
+    prompt/rascunho de regras + um template de PDF, não uma arquitetura
+    nova, e (c) sem ele o tier Convênio (o mais caro, R$ 99-119/paciente)
+    fica sem o artefato que justifica o preço até um fast-follow
+    indefinido — inaceitável agora que existe cliente concreto pedindo.
   - **Por que os outros 9 ficam pós-MVP**: nenhum tem o mesmo combo
-        "reaproveita infraestrutura já planejada + dor já validada com cliente
-        real". Avaliação formal assistida e relatório avaliativo
-        interdisciplinar exigem UI/lógica nova (janela de pontuação, síntese
-        cross-protocolo) sem sinal de cliente pedindo isso especificamente
-        agora — promover os três junto diluiria o foco da Fase 5 sem receita
-        adicional comprovada. Anamnese estruturada é jornada de Admissão
-        (Fase 1), não de relatório — fora do pedido literal de "relatórios"
-        das clínicas. Os demais (2º protocolo, relatório escolar, transição/
-        alta, reunião interdisciplinar, treino parental, dataset de
-        divergência) não têm pedido de cliente nem urgência de receita
-        identificados nesta rodada.
+    "reaproveita infraestrutura já planejada + dor já validada com cliente
+    real". Avaliação formal assistida e relatório avaliativo
+    interdisciplinar exigem UI/lógica nova (janela de pontuação, síntese
+    cross-protocolo) sem sinal de cliente pedindo isso especificamente
+    agora — promover os três junto diluiria o foco da Fase 5 sem receita
+    adicional comprovada. Anamnese estruturada é jornada de Admissão
+    (Fase 1), não de relatório — fora do pedido literal de "relatórios"
+    das clínicas. Os demais (2º protocolo, relatório escolar, transição/
+    alta, reunião interdisciplinar, treino parental, dataset de
+    divergência) não têm pedido de cliente nem urgência de receita
+    identificados nesta rodada.
   - **Reversibilidade**: se as clínicas-piloto, ao serem apresentadas ao MVP
-        com o narrativo incluído, sinalizarem que TAMBÉM precisam de avaliação
-        formal assistida ou do relatório interdisciplinar antes de assinar,
-        a mesma análise se aplica a eles — não é uma decisão fechada para
-        sempre, é a leitura de produto+vendas com o sinal de hoje.
+    com o narrativo incluído, sinalizarem que TAMBÉM precisam de avaliação
+    formal assistida ou do relatório interdisciplinar antes de assinar,
+    a mesma análise se aplica a eles — não é uma decisão fechada para
+    sempre, é a leitura de produto+vendas com o sinal de hoje.
 - [x] **Nome/marca e domínio decididos por Rômulo (10/07/2026): Iris,
       domínio `irisclinica.ia.br` já comprado.** Rebranding de "Xpect" para
       "Iris" já aplicado em toda a documentação (README, BACKLOG, modelo de

@@ -35,11 +35,11 @@ Cada conselho profissional define um prazo mínimo diferente para o registro
 do SEU profissional (detalhe e fontes em `validacao-legal-prontuario.md`,
 seção 2):
 
-| Conselho | Prazo mínimo |
-|---|---|
-| CFP (Psicologia) | 5 anos do último registro; recomendação do próprio Manual Orientativo: manter até a criança/adolescente completar 18 anos |
-| COFFITO (Terapia Ocupacional) | 5 anos do último registro |
-| CFFa (Fonoaudiologia) | 10 anos a partir da alta/suspensão/abandono |
+| Conselho                      | Prazo mínimo                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| CFP (Psicologia)              | 5 anos do último registro; recomendação do próprio Manual Orientativo: manter até a criança/adolescente completar 18 anos |
+| COFFITO (Terapia Ocupacional) | 5 anos do último registro                                                                                                 |
+| CFFa (Fonoaudiologia)         | 10 anos a partir da alta/suspensão/abandono                                                                               |
 
 Como o Iris é um prontuário UNIFICADO multidisciplinar, não existe uma norma
 única que resolva o conflito entre os três prazos. **Default do produto,

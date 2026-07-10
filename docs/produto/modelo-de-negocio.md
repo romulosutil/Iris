@@ -10,11 +10,11 @@ executado já; o que é HIPÓTESE tem número e vai para o Roteiro C da pesquisa
 
 Três dores, três bolsos, um só dossiê de evidências:
 
-| Dor | Quem sente | Quem paga | Intensidade |
-|---|---|---|---|
-| Relatório de convênio (autorização de continuidade) consome dias do dono a cada trimestre | Dono/coordenador de clínica pequena (Diego) | Ele mesmo — "têm meu cartão de crédito hoje" | Analgésico puro: sem relatório, a clínica não fatura |
-| Supervisão sem visibilidade: descobrir estagnação tarde, montar pacote de supervisão na mão | Coordenador (Fernanda) | Clínica | "Só isso já paga a assinatura" |
-| 20 min/sessão de planilha, registro de memória no fim do dia | Terapeuta (Aline) | Não paga — mas decide a ADOÇÃO | Dor diária; sem ela resolvida, ninguém renova |
+| Dor                                                                                         | Quem sente                                  | Quem paga                                    | Intensidade                                          |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------- | ---------------------------------------------------- |
+| Relatório de convênio (autorização de continuidade) consome dias do dono a cada trimestre   | Dono/coordenador de clínica pequena (Diego) | Ele mesmo — "têm meu cartão de crédito hoje" | Analgésico puro: sem relatório, a clínica não fatura |
+| Supervisão sem visibilidade: descobrir estagnação tarde, montar pacote de supervisão na mão | Coordenador (Fernanda)                      | Clínica                                      | "Só isso já paga a assinatura"                       |
+| 20 min/sessão de planilha, registro de memória no fim do dia                                | Terapeuta (Aline)                           | Não paga — mas decide a ADOÇÃO               | Dor diária; sem ela resolvida, ninguém renova        |
 
 Lógica do funil de valor: **o terapeuta adota porque registra em <5 min; o
 coordenador renova porque supervisiona por exceção; o dono paga porque o
@@ -26,13 +26,13 @@ vendido pela dor do dono, adotado pela dor do terapeuta.
 O mercado brasileiro de software para clínica ABA/TEA **existe, é ativo e já
 pratica preço por paciente**:
 
-| Player | Modelo | Preço público | Proposta |
-|---|---|---|---|
-| [ComportaTUDO](https://www.comportatudo.com.br/) | Por paciente ativo/mês, mín. 10 pacientes | R$ 59,90 / 79,90 / 99,90 | Gestão completa + "relatórios com IA" + transcrição automática com IA (Whisper) + sugestões PIC automáticas + portal do familiar + módulo financeiro completo |
-| [Neoaba](https://www.neoaba.com.br/) | Tiers por nº de pacientes ABA (20/40/100, custom acima); trial grátis 5 dias | sob consulta | PEI gerado por IA a partir das avaliações + analytics preditivo (paciente em risco) + import de protocolo via IA (upload de até 20 PDFs) + assinatura digital ICP-Brasil + faturamento com convênio |
-| [BlueSmiles](https://bluesmiles.com.br/) | Planos flexíveis, "pague só pelo que usar" | sob consulta (via WhatsApp) | Gerador de PEI com IA + gráficos automáticos + **relatórios para convênios e planos de saúde** (já anunciado, não fast-follow) + registro de sessão <2min + planilha digital com cálculo automático de % |
-| [ABA Digital](https://abadigital.com.br/) | Por Nº de terapeutas (não por paciente): R$ 147 (3 terap.) / 247 (5) / 387 (20), pacientes/avaliações ilimitados | R$ 147-387 | 6 protocolos centralizados (ABLLS-R, M-CHAT-R/F, Portage, VB-MAPP, Denver II, PROC) + PEI gerado por IA + chat IA especialista via WhatsApp + relatórios PDF/DOCX automáticos |
-| [ABA+](https://abamais.com/) | — | — | Coleta e gráficos ABA |
+| Player                                           | Modelo                                                                                                           | Preço público               | Proposta                                                                                                                                                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ComportaTUDO](https://www.comportatudo.com.br/) | Por paciente ativo/mês, mín. 10 pacientes                                                                        | R$ 59,90 / 79,90 / 99,90    | Gestão completa + "relatórios com IA" + transcrição automática com IA (Whisper) + sugestões PIC automáticas + portal do familiar + módulo financeiro completo                                            |
+| [Neoaba](https://www.neoaba.com.br/)             | Tiers por nº de pacientes ABA (20/40/100, custom acima); trial grátis 5 dias                                     | sob consulta                | PEI gerado por IA a partir das avaliações + analytics preditivo (paciente em risco) + import de protocolo via IA (upload de até 20 PDFs) + assinatura digital ICP-Brasil + faturamento com convênio      |
+| [BlueSmiles](https://bluesmiles.com.br/)         | Planos flexíveis, "pague só pelo que usar"                                                                       | sob consulta (via WhatsApp) | Gerador de PEI com IA + gráficos automáticos + **relatórios para convênios e planos de saúde** (já anunciado, não fast-follow) + registro de sessão <2min + planilha digital com cálculo automático de % |
+| [ABA Digital](https://abadigital.com.br/)        | Por Nº de terapeutas (não por paciente): R$ 147 (3 terap.) / 247 (5) / 387 (20), pacientes/avaliações ilimitados | R$ 147-387                  | 6 protocolos centralizados (ABLLS-R, M-CHAT-R/F, Portage, VB-MAPP, Denver II, PROC) + PEI gerado por IA + chat IA especialista via WhatsApp + relatórios PDF/DOCX automáticos                            |
+| [ABA+](https://abamais.com/)                     | —                                                                                                                | —                           | Coleta e gráficos ABA                                                                                                                                                                                    |
 
 **Investigação pública direta (09/07/2026)** — visitei os 4 sites (não é
 trial/cadastro, só o que está público). Achado que muda o quadro: **"IA no
@@ -75,7 +75,7 @@ O que isso muda:
 ### Posicionamento contra a categoria
 
 Os concorrentes digitalizaram a planilha: formulários de coleta por tentativa,
-protocolos clicáveis, relatório gerado por IA *no fim*. O Iris inverte a
+protocolos clicáveis, relatório gerado por IA _no fim_. O Iris inverte a
 captura: **linguagem natural primeiro, estrutura derivada e rastreável depois,
 com governança clínica em 3 camadas**. A frase de posicionamento:
 
@@ -166,11 +166,11 @@ clínicas muito pequenas.
 
 ## 4. Empacotamento: 3 tiers mapeados às fases do MVP
 
-| Tier | Para quem | O que entrega | Fases | Preço (HIPÓTESE) |
-|---|---|---|---|---|
-| **Diário** | Terapeuta autônomo / clínica que quer começar | Ficha+consentimento, agenda mínima, diário 2 tempos, extração+revisão, metas/PEI, linha do tempo, briefing pré-sessão, perfil de reforçadores, **dossiê bruto de auditoria de convênio** (escopado aos próprios pacientes do profissional) | 1–4 | R$ 39–49 /paciente |
-| **Clínica** | Clínica com supervisão | + módulo coordenador: exceções, pacote de supervisão, fila de validação/reclassificação, revisão de ciclo de metas, relatório da família (PDF), métricas transparentes | 5 | R$ 69–79 /paciente |
-| **Convênio** | Clínica que vive de operadora | + relatório de convênio NARRATIVO (síntese com IA + revisão do coordenador, pronto para autorização de continuidade) — **agora Fase 5 (MVP)**; avaliação formal assistida (janela de pontuação com dossiê), série de reavaliações, relatório avaliativo interdisciplinar continuam fast-follows | **5** (narrativo) + fast-follows (resto) | R$ 99–119 /paciente |
+| Tier         | Para quem                                     | O que entrega                                                                                                                                                                                                                                                                                   | Fases                                    | Preço (HIPÓTESE)    |
+| ------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------- |
+| **Diário**   | Terapeuta autônomo / clínica que quer começar | Ficha+consentimento, agenda mínima, diário 2 tempos, extração+revisão, metas/PEI, linha do tempo, briefing pré-sessão, perfil de reforçadores, **dossiê bruto de auditoria de convênio** (escopado aos próprios pacientes do profissional)                                                      | 1–4                                      | R$ 39–49 /paciente  |
+| **Clínica**  | Clínica com supervisão                        | + módulo coordenador: exceções, pacote de supervisão, fila de validação/reclassificação, revisão de ciclo de metas, relatório da família (PDF), métricas transparentes                                                                                                                          | 5                                        | R$ 69–79 /paciente  |
+| **Convênio** | Clínica que vive de operadora                 | + relatório de convênio NARRATIVO (síntese com IA + revisão do coordenador, pronto para autorização de continuidade) — **agora Fase 5 (MVP)**; avaliação formal assistida (janela de pontuação com dossiê), série de reavaliações, relatório avaliativo interdisciplinar continuam fast-follows | **5** (narrativo) + fast-follows (resto) | R$ 99–119 /paciente |
 
 **Decisão confirmada por Rômulo (09/07/2026):** o dossiê bruto de auditoria
 entra no MVP (Fase 5), não fica preso ao tier Convênio. Motivo: risco de

@@ -51,6 +51,7 @@ texto desses instrumentos.
 ## 4. Uso aceitável
 
 A clínica-contratante concorda em:
+
 - Obter o consentimento LGPD apropriado do responsável legal do paciente antes
   de inserir qualquer dado no sistema (Art. 14, ver `Consent`).
 - Não usar o Iris para automatizar decisão clínica sem revisão humana — a

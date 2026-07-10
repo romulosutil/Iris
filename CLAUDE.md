@@ -51,7 +51,7 @@ ler o documento — não pedir para o Rômulo reexplicar.
 ## Permissões — o que rodar livremente vs. o que confirmar antes
 
 **Rodar livremente:** lint, testes, build local, Storybook, criar branch,
-rodar/ler migrations locais via Supabase CLI, `pnpm install`.
+rodar/ler migrations locais (Drizzle/dbmate contra Postgres local), `pnpm install`.
 
 **Confirmar com o Rômulo antes:** `supabase db push` contra o projeto
 remoto; qualquer DDL que altere tabela que já tenha dado (mesmo que seja
@@ -61,17 +61,23 @@ chamada real à API da Anthropic/Google antes da Fase 3; renomear a
 pasta/repositório (`xpect` → `iris`) ou criar os projetos
 Supabase/Vercel — são decisões de infraestrutura de uma via só.
 
+> ⚠️ **Pivô de infra em avaliação (09/07/2026):** a hospedagem pode migrar de
+> Vercel/Supabase gerenciado para **VPS Hostinger + Easypanel + Postgres puro**
+> (não Supabase; auth in-app + MinIO). Antes de qualquer ação de infra, ler
+> `docs/arquitetura/plano-bootstrap-e-stack-vps.md` (proposta). "Provisionar
+> VPS + Easypanel" entra na mesma categoria "confirmar antes / via única".
+
 ## Onde procurar o quê (atalho — mapa completo está em README.md)
 
-| Preciso de... | Arquivo |
-|---|---|
-| Escopo exato da fase atual | `HANDOFF-FASE1.md` |
-| DDL / modelo de dados (25 entidades) | `docs/dados/modelo-de-dados.md` |
-| Telas e wireframes da fase | `docs/ux/fluxos-e-wireframes.md` |
-| Tokens e os 3 componentes do design system | `docs/ux/design-system-espectro-brutal.md` |
-| Regras do agente de extração (R1-R19) | `docs/agente/system-instructions.md`, `docs/agente/output-schema.json` |
-| Regras do agente de relatório à família (F1-F9) | `docs/agente/agente-2-relatorio-familia.md` |
-| Regras de validação/reclassificação do coordenador (V1-V5) | `docs/governanca/validacao-coordenador.md` |
-| O que ainda falta / decisões abertas | `BACKLOG.md` |
-| Convenções de código (proposta, a confirmar) | `docs/arquitetura/convencoes-de-codigo.md` |
-| Variáveis de ambiente | `.env.example` |
+| Preciso de...                                              | Arquivo                                                                |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Escopo exato da fase atual                                 | `HANDOFF-FASE1.md`                                                     |
+| DDL / modelo de dados (25 entidades)                       | `docs/dados/modelo-de-dados.md`                                        |
+| Telas e wireframes da fase                                 | `docs/ux/fluxos-e-wireframes.md`                                       |
+| Tokens e os 3 componentes do design system                 | `docs/ux/design-system-espectro-brutal.md`                             |
+| Regras do agente de extração (R1-R19)                      | `docs/agente/system-instructions.md`, `docs/agente/output-schema.json` |
+| Regras do agente de relatório à família (F1-F9)            | `docs/agente/agente-2-relatorio-familia.md`                            |
+| Regras de validação/reclassificação do coordenador (V1-V5) | `docs/governanca/validacao-coordenador.md`                             |
+| O que ainda falta / decisões abertas                       | `BACKLOG.md`                                                           |
+| Convenções de código (proposta, a confirmar)               | `docs/arquitetura/convencoes-de-codigo.md`                             |
+| Variáveis de ambiente                                      | `.env.example`                                                         |

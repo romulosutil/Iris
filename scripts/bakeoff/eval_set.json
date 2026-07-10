@@ -29,11 +29,7 @@
           "nome": "VB-MAPP",
           "tipo_coleta": "evidencia_por_dominio",
           "escala_formal": {
-            "valores": [
-              0,
-              0.5,
-              1
-            ],
+            "valores": [0, 0.5, 1],
             "quem_pontua": "terapeuta_em_avaliacao"
           },
           "taxonomia_ajuda": [
@@ -50,20 +46,13 @@
               "dominio_id": "mando",
               "nome": "Mando",
               "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta",
-              "sinais_no_texto": [
-                "pediu",
-                "puxou a mão",
-                "apontou querendo"
-              ]
+              "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"]
             },
             {
               "dominio_id": "tato",
               "nome": "Tato",
               "definicao_funcional": "nomeação diante de estímulo não-verbal presente",
-              "sinais_no_texto": [
-                "nomeou",
-                "respondeu 'o que é isso?'"
-              ]
+              "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"]
             },
             {
               "dominio_id": "ouvinte",
@@ -98,10 +87,7 @@
               "dominio_id": "imitacao",
               "nome": "Imitação motora",
               "definicao_funcional": "reproduz ação motora modelada pelo adulto ('faz igual')",
-              "sinais_no_texto": [
-                "imitou o gesto",
-                "fez igual"
-              ]
+              "sinais_no_texto": ["imitou o gesto", "fez igual"]
             },
             {
               "dominio_id": "social",
@@ -117,29 +103,20 @@
               "dominio_id": "percepcao_visual",
               "nome": "Percepção/pareamento visual",
               "definicao_funcional": "pareamento ou discriminação de estímulos visuais (cores, formas, figuras idênticas)",
-              "sinais_no_texto": [
-                "pareou",
-                "combinou as cores/formas"
-              ]
+              "sinais_no_texto": ["pareou", "combinou as cores/formas"]
             },
             {
               "dominio_id": "brincar",
               "nome": "Brincar",
               "definicao_funcional": "uso funcional ou simbólico de brinquedos, imitação de brincar",
-              "sinais_no_texto": [
-                "brincou de",
-                "deu função ao brinquedo"
-              ]
+              "sinais_no_texto": ["brincou de", "deu função ao brinquedo"]
             }
           ],
           "componentes_extras": [
             {
               "id": "barreiras",
               "tipo_coleta": "registro_abc",
-              "categorias": [
-                "comportamental",
-                "sensorial"
-              ]
+              "categorias": ["comportamental", "sensorial"]
             }
           ]
         }
@@ -385,11 +362,7 @@
           "nome": "VB-MAPP",
           "tipo_coleta": "evidencia_por_dominio",
           "escala_formal": {
-            "valores": [
-              0,
-              0.5,
-              1
-            ],
+            "valores": [0, 0.5, 1],
             "quem_pontua": "terapeuta_em_avaliacao"
           },
           "taxonomia_ajuda": [
@@ -406,20 +379,13 @@
               "dominio_id": "mando",
               "nome": "Mando",
               "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta",
-              "sinais_no_texto": [
-                "pediu",
-                "puxou a mão",
-                "apontou querendo"
-              ]
+              "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"]
             },
             {
               "dominio_id": "tato",
               "nome": "Tato",
               "definicao_funcional": "nomeação diante de estímulo não-verbal presente",
-              "sinais_no_texto": [
-                "nomeou",
-                "respondeu 'o que é isso?'"
-              ]
+              "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"]
             },
             {
               "dominio_id": "ouvinte",
@@ -454,10 +420,7 @@
               "dominio_id": "imitacao",
               "nome": "Imitação motora",
               "definicao_funcional": "reproduz ação motora modelada pelo adulto ('faz igual')",
-              "sinais_no_texto": [
-                "imitou o gesto",
-                "fez igual"
-              ]
+              "sinais_no_texto": ["imitou o gesto", "fez igual"]
             },
             {
               "dominio_id": "social",
@@ -473,29 +436,20 @@
               "dominio_id": "percepcao_visual",
               "nome": "Percepção/pareamento visual",
               "definicao_funcional": "pareamento ou discriminação de estímulos visuais (cores, formas, figuras idênticas)",
-              "sinais_no_texto": [
-                "pareou",
-                "combinou as cores/formas"
-              ]
+              "sinais_no_texto": ["pareou", "combinou as cores/formas"]
             },
             {
               "dominio_id": "brincar",
               "nome": "Brincar",
               "definicao_funcional": "uso funcional ou simbólico de brinquedos, imitação de brincar",
-              "sinais_no_texto": [
-                "brincou de",
-                "deu função ao brinquedo"
-              ]
+              "sinais_no_texto": ["brincou de", "deu função ao brinquedo"]
             }
           ],
           "componentes_extras": [
             {
               "id": "barreiras",
               "tipo_coleta": "registro_abc",
-              "categorias": [
-                "comportamental",
-                "sensorial"
-              ]
+              "categorias": ["comportamental", "sensorial"]
             }
           ]
         }
@@ -644,11 +598,7 @@
           "nome": "VB-MAPP",
           "tipo_coleta": "evidencia_por_dominio",
           "escala_formal": {
-            "valores": [
-              0,
-              0.5,
-              1
-            ],
+            "valores": [0, 0.5, 1],
             "quem_pontua": "terapeuta_em_avaliacao"
           },
           "taxonomia_ajuda": [
@@ -665,20 +615,13 @@
               "dominio_id": "mando",
               "nome": "Mando",
               "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta",
-              "sinais_no_texto": [
-                "pediu",
-                "puxou a mão",
-                "apontou querendo"
-              ]
+              "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"]
             },
             {
               "dominio_id": "tato",
               "nome": "Tato",
               "definicao_funcional": "nomeação diante de estímulo não-verbal presente",
-              "sinais_no_texto": [
-                "nomeou",
-                "respondeu 'o que é isso?'"
-              ]
+              "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"]
             },
             {
               "dominio_id": "ouvinte",
@@ -713,10 +656,7 @@
               "dominio_id": "imitacao",
               "nome": "Imitação motora",
               "definicao_funcional": "reproduz ação motora modelada pelo adulto ('faz igual')",
-              "sinais_no_texto": [
-                "imitou o gesto",
-                "fez igual"
-              ]
+              "sinais_no_texto": ["imitou o gesto", "fez igual"]
             },
             {
               "dominio_id": "social",
@@ -732,29 +672,20 @@
               "dominio_id": "percepcao_visual",
               "nome": "Percepção/pareamento visual",
               "definicao_funcional": "pareamento ou discriminação de estímulos visuais (cores, formas, figuras idênticas)",
-              "sinais_no_texto": [
-                "pareou",
-                "combinou as cores/formas"
-              ]
+              "sinais_no_texto": ["pareou", "combinou as cores/formas"]
             },
             {
               "dominio_id": "brincar",
               "nome": "Brincar",
               "definicao_funcional": "uso funcional ou simbólico de brinquedos, imitação de brincar",
-              "sinais_no_texto": [
-                "brincou de",
-                "deu função ao brinquedo"
-              ]
+              "sinais_no_texto": ["brincou de", "deu função ao brinquedo"]
             }
           ],
           "componentes_extras": [
             {
               "id": "barreiras",
               "tipo_coleta": "registro_abc",
-              "categorias": [
-                "comportamental",
-                "sensorial"
-              ]
+              "categorias": ["comportamental", "sensorial"]
             }
           ]
         }
@@ -902,11 +833,7 @@
           "nome": "VB-MAPP",
           "tipo_coleta": "evidencia_por_dominio",
           "escala_formal": {
-            "valores": [
-              0,
-              0.5,
-              1
-            ],
+            "valores": [0, 0.5, 1],
             "quem_pontua": "terapeuta_em_avaliacao"
           },
           "taxonomia_ajuda": [
@@ -923,20 +850,13 @@
               "dominio_id": "mando",
               "nome": "Mando",
               "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta",
-              "sinais_no_texto": [
-                "pediu",
-                "puxou a mão",
-                "apontou querendo"
-              ]
+              "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"]
             },
             {
               "dominio_id": "tato",
               "nome": "Tato",
               "definicao_funcional": "nomeação diante de estímulo não-verbal presente",
-              "sinais_no_texto": [
-                "nomeou",
-                "respondeu 'o que é isso?'"
-              ]
+              "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"]
             },
             {
               "dominio_id": "ouvinte",
@@ -971,10 +891,7 @@
               "dominio_id": "imitacao",
               "nome": "Imitação motora",
               "definicao_funcional": "reproduz ação motora modelada pelo adulto ('faz igual')",
-              "sinais_no_texto": [
-                "imitou o gesto",
-                "fez igual"
-              ]
+              "sinais_no_texto": ["imitou o gesto", "fez igual"]
             },
             {
               "dominio_id": "social",
@@ -990,29 +907,20 @@
               "dominio_id": "percepcao_visual",
               "nome": "Percepção/pareamento visual",
               "definicao_funcional": "pareamento ou discriminação de estímulos visuais (cores, formas, figuras idênticas)",
-              "sinais_no_texto": [
-                "pareou",
-                "combinou as cores/formas"
-              ]
+              "sinais_no_texto": ["pareou", "combinou as cores/formas"]
             },
             {
               "dominio_id": "brincar",
               "nome": "Brincar",
               "definicao_funcional": "uso funcional ou simbólico de brinquedos, imitação de brincar",
-              "sinais_no_texto": [
-                "brincou de",
-                "deu função ao brinquedo"
-              ]
+              "sinais_no_texto": ["brincou de", "deu função ao brinquedo"]
             }
           ],
           "componentes_extras": [
             {
               "id": "barreiras",
               "tipo_coleta": "registro_abc",
-              "categorias": [
-                "comportamental",
-                "sensorial"
-              ]
+              "categorias": ["comportamental", "sensorial"]
             }
           ]
         }
@@ -1183,11 +1091,7 @@
           "nome": "VB-MAPP",
           "tipo_coleta": "evidencia_por_dominio",
           "escala_formal": {
-            "valores": [
-              0,
-              0.5,
-              1
-            ],
+            "valores": [0, 0.5, 1],
             "quem_pontua": "terapeuta_em_avaliacao"
           },
           "taxonomia_ajuda": [
@@ -1204,20 +1108,13 @@
               "dominio_id": "mando",
               "nome": "Mando",
               "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta",
-              "sinais_no_texto": [
-                "pediu",
-                "puxou a mão",
-                "apontou querendo"
-              ]
+              "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"]
             },
             {
               "dominio_id": "tato",
               "nome": "Tato",
               "definicao_funcional": "nomeação diante de estímulo não-verbal presente",
-              "sinais_no_texto": [
-                "nomeou",
-                "respondeu 'o que é isso?'"
-              ]
+              "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"]
             },
             {
               "dominio_id": "ouvinte",
@@ -1252,10 +1149,7 @@
               "dominio_id": "imitacao",
               "nome": "Imitação motora",
               "definicao_funcional": "reproduz ação motora modelada pelo adulto ('faz igual')",
-              "sinais_no_texto": [
-                "imitou o gesto",
-                "fez igual"
-              ]
+              "sinais_no_texto": ["imitou o gesto", "fez igual"]
             },
             {
               "dominio_id": "social",
@@ -1271,29 +1165,20 @@
               "dominio_id": "percepcao_visual",
               "nome": "Percepção/pareamento visual",
               "definicao_funcional": "pareamento ou discriminação de estímulos visuais (cores, formas, figuras idênticas)",
-              "sinais_no_texto": [
-                "pareou",
-                "combinou as cores/formas"
-              ]
+              "sinais_no_texto": ["pareou", "combinou as cores/formas"]
             },
             {
               "dominio_id": "brincar",
               "nome": "Brincar",
               "definicao_funcional": "uso funcional ou simbólico de brinquedos, imitação de brincar",
-              "sinais_no_texto": [
-                "brincou de",
-                "deu função ao brinquedo"
-              ]
+              "sinais_no_texto": ["brincou de", "deu função ao brinquedo"]
             }
           ],
           "componentes_extras": [
             {
               "id": "barreiras",
               "tipo_coleta": "registro_abc",
-              "categorias": [
-                "comportamental",
-                "sensorial"
-              ]
+              "categorias": ["comportamental", "sensorial"]
             }
           ]
         }
@@ -1347,11 +1232,7 @@
           "nome": "VB-MAPP",
           "tipo_coleta": "evidencia_por_dominio",
           "escala_formal": {
-            "valores": [
-              0,
-              0.5,
-              1
-            ],
+            "valores": [0, 0.5, 1],
             "quem_pontua": "terapeuta_em_avaliacao"
           },
           "taxonomia_ajuda": [
@@ -1368,20 +1249,13 @@
               "dominio_id": "mando",
               "nome": "Mando",
               "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta",
-              "sinais_no_texto": [
-                "pediu",
-                "puxou a mão",
-                "apontou querendo"
-              ]
+              "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"]
             },
             {
               "dominio_id": "tato",
               "nome": "Tato",
               "definicao_funcional": "nomeação diante de estímulo não-verbal presente",
-              "sinais_no_texto": [
-                "nomeou",
-                "respondeu 'o que é isso?'"
-              ]
+              "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"]
             },
             {
               "dominio_id": "ouvinte",
@@ -1416,10 +1290,7 @@
               "dominio_id": "imitacao",
               "nome": "Imitação motora",
               "definicao_funcional": "reproduz ação motora modelada pelo adulto ('faz igual')",
-              "sinais_no_texto": [
-                "imitou o gesto",
-                "fez igual"
-              ]
+              "sinais_no_texto": ["imitou o gesto", "fez igual"]
             },
             {
               "dominio_id": "social",
@@ -1435,29 +1306,20 @@
               "dominio_id": "percepcao_visual",
               "nome": "Percepção/pareamento visual",
               "definicao_funcional": "pareamento ou discriminação de estímulos visuais (cores, formas, figuras idênticas)",
-              "sinais_no_texto": [
-                "pareou",
-                "combinou as cores/formas"
-              ]
+              "sinais_no_texto": ["pareou", "combinou as cores/formas"]
             },
             {
               "dominio_id": "brincar",
               "nome": "Brincar",
               "definicao_funcional": "uso funcional ou simbólico de brinquedos, imitação de brincar",
-              "sinais_no_texto": [
-                "brincou de",
-                "deu função ao brinquedo"
-              ]
+              "sinais_no_texto": ["brincou de", "deu função ao brinquedo"]
             }
           ],
           "componentes_extras": [
             {
               "id": "barreiras",
               "tipo_coleta": "registro_abc",
-              "categorias": [
-                "comportamental",
-                "sensorial"
-              ]
+              "categorias": ["comportamental", "sensorial"]
             }
           ]
         }
@@ -1575,11 +1437,7 @@
           "nome": "VB-MAPP",
           "tipo_coleta": "evidencia_por_dominio",
           "escala_formal": {
-            "valores": [
-              0,
-              0.5,
-              1
-            ],
+            "valores": [0, 0.5, 1],
             "quem_pontua": "terapeuta_em_avaliacao"
           },
           "taxonomia_ajuda": [
@@ -1596,20 +1454,13 @@
               "dominio_id": "mando",
               "nome": "Mando",
               "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta",
-              "sinais_no_texto": [
-                "pediu",
-                "puxou a mão",
-                "apontou querendo"
-              ]
+              "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"]
             },
             {
               "dominio_id": "tato",
               "nome": "Tato",
               "definicao_funcional": "nomeação diante de estímulo não-verbal presente",
-              "sinais_no_texto": [
-                "nomeou",
-                "respondeu 'o que é isso?'"
-              ]
+              "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"]
             },
             {
               "dominio_id": "ouvinte",
@@ -1644,10 +1495,7 @@
               "dominio_id": "imitacao",
               "nome": "Imitação motora",
               "definicao_funcional": "reproduz ação motora modelada pelo adulto ('faz igual')",
-              "sinais_no_texto": [
-                "imitou o gesto",
-                "fez igual"
-              ]
+              "sinais_no_texto": ["imitou o gesto", "fez igual"]
             },
             {
               "dominio_id": "social",
@@ -1663,29 +1511,20 @@
               "dominio_id": "percepcao_visual",
               "nome": "Percepção/pareamento visual",
               "definicao_funcional": "pareamento ou discriminação de estímulos visuais (cores, formas, figuras idênticas)",
-              "sinais_no_texto": [
-                "pareou",
-                "combinou as cores/formas"
-              ]
+              "sinais_no_texto": ["pareou", "combinou as cores/formas"]
             },
             {
               "dominio_id": "brincar",
               "nome": "Brincar",
               "definicao_funcional": "uso funcional ou simbólico de brinquedos, imitação de brincar",
-              "sinais_no_texto": [
-                "brincou de",
-                "deu função ao brinquedo"
-              ]
+              "sinais_no_texto": ["brincou de", "deu função ao brinquedo"]
             }
           ],
           "componentes_extras": [
             {
               "id": "barreiras",
               "tipo_coleta": "registro_abc",
-              "categorias": [
-                "comportamental",
-                "sensorial"
-              ]
+              "categorias": ["comportamental", "sensorial"]
             }
           ]
         }
@@ -1802,11 +1641,7 @@
           "nome": "VB-MAPP",
           "tipo_coleta": "evidencia_por_dominio",
           "escala_formal": {
-            "valores": [
-              0,
-              0.5,
-              1
-            ],
+            "valores": [0, 0.5, 1],
             "quem_pontua": "terapeuta_em_avaliacao"
           },
           "taxonomia_ajuda": [
@@ -1823,20 +1658,13 @@
               "dominio_id": "mando",
               "nome": "Mando",
               "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta",
-              "sinais_no_texto": [
-                "pediu",
-                "puxou a mão",
-                "apontou querendo"
-              ]
+              "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"]
             },
             {
               "dominio_id": "tato",
               "nome": "Tato",
               "definicao_funcional": "nomeação diante de estímulo não-verbal presente",
-              "sinais_no_texto": [
-                "nomeou",
-                "respondeu 'o que é isso?'"
-              ]
+              "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"]
             },
             {
               "dominio_id": "ouvinte",
@@ -1871,10 +1699,7 @@
               "dominio_id": "imitacao",
               "nome": "Imitação motora",
               "definicao_funcional": "reproduz ação motora modelada pelo adulto ('faz igual')",
-              "sinais_no_texto": [
-                "imitou o gesto",
-                "fez igual"
-              ]
+              "sinais_no_texto": ["imitou o gesto", "fez igual"]
             },
             {
               "dominio_id": "social",
@@ -1890,29 +1715,20 @@
               "dominio_id": "percepcao_visual",
               "nome": "Percepção/pareamento visual",
               "definicao_funcional": "pareamento ou discriminação de estímulos visuais (cores, formas, figuras idênticas)",
-              "sinais_no_texto": [
-                "pareou",
-                "combinou as cores/formas"
-              ]
+              "sinais_no_texto": ["pareou", "combinou as cores/formas"]
             },
             {
               "dominio_id": "brincar",
               "nome": "Brincar",
               "definicao_funcional": "uso funcional ou simbólico de brinquedos, imitação de brincar",
-              "sinais_no_texto": [
-                "brincou de",
-                "deu função ao brinquedo"
-              ]
+              "sinais_no_texto": ["brincou de", "deu função ao brinquedo"]
             }
           ],
           "componentes_extras": [
             {
               "id": "barreiras",
               "tipo_coleta": "registro_abc",
-              "categorias": [
-                "comportamental",
-                "sensorial"
-              ]
+              "categorias": ["comportamental", "sensorial"]
             }
           ]
         }
@@ -3419,9 +3235,7 @@
             {
               "id": "perfil_sensorial_2",
               "tipo_coleta": "registro_abc",
-              "categorias": [
-                "sensorial"
-              ]
+              "categorias": ["sensorial"]
             }
           ]
         }

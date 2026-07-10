@@ -1,0 +1,49 @@
+# dependências
+/node_modules
+.pnp
+.pnp.*
+
+# builds
+/.next/
+/out/
+/build
+/dist
+next-env.d.ts
+/storybook-static
+
+# testes
+/coverage
+/playwright-report
+/test-results
+/blob-report
+/.playwright
+
+# ambiente (segredos nunca commitados)
+.env
+.env.*
+!.env.example
+
+# banco / infra local
+/db/backups
+*.dump
+*.sql.gz
+
+# logs / OS / editor
+*.log
+npm-debug.log*
+yarn-debug.log*
+.DS_Store
+*.pem
+
+# backups do caveman-compress
+*.original.md
+
+# tokensave / headroom (locais)
+/.tokensave
+/.headroom
+
+# playwright MCP artifacts
+/.playwright-mcp
+
+# ts build info
+*.tsbuildinfo

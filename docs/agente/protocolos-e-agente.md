@@ -72,6 +72,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
 ## Parte 1 — Catálogo de protocolos
 
 ### 1.1 VB-MAPP (Verbal Behavior Milestones Assessment and Placement Program)
+
 - **O que é:** avaliação de repertório verbal e habilidades relacionadas, base
   skinneriana. Adaptação pt-BR: Martone (2017). Primeira instância do sistema.
 - **Componentes:**
@@ -153,6 +154,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   topo do documento).
 
 ### 1.2 ABLLS-R (Assessment of Basic Language and Learning Skills — Revised)
+
 - **O que é:** avaliação/currículo de **544 tarefas em 25 repertórios** (letras
   **A a Z, pulando o O** — não "A-Y" como versão anterior deste documento dizia:
   A-Cooperação, B-Desempenho Visual, C-Linguagem Receptiva, D-Imitação, E-Imitação
@@ -190,6 +192,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   nativamente no seu software. Confirma o modelo "clínica cadastra" para o Iris.
 
 ### 1.3 Denver / ESDM (Early Start Denver Model)
+
 - **O que é:** modelo naturalista para intervenção precoce, faixa etária nuclear
   **12-48 meses**, com extensão informal sustentada por fontes até **~60 meses**
   quando o nível de desenvolvimento ainda é pré-verbal/inicial (a extensão até
@@ -263,6 +266,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   o modelo "clínica cadastra".
 
 ### 1.4 AFLS (Assessment of Functional Living Skills)
+
 - **O que é:** irmão do ABLLS-R para vida funcional (autores Partington &amp; Mueller,
   2012); **6 módulos** — Habilidades Básicas de Vida (Basic Living Skills), Casa
   (Home), Participação Comunitária (Community Participation), Escola (School),
@@ -306,6 +310,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   do detentor, não licença B2B replicável). Confirma o modelo "clínica cadastra".
 
 ### 1.5 PROC (Protocolo de Observação Comportamental — Zorzi & Hage)
+
 - **O que é:** observação fonoaudiológica de linguagem e aspectos cognitivos.
   Autores: Jaime Luiz Zorzi e Simone Rocha de Vasconcellos Hage (USP-Bauru),
   publicado pela Pulso Editorial. **Faixa etária corrigida 09/07/2026:** o claim
@@ -382,6 +387,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   adquirir o manual — mantém "clínica cadastra" por ora.
 
 ### 1.6 ABFW (Teste de Linguagem Infantil)
+
 - **O que é:** teste fonoaudiológico em **4 áreas confirmadas 09/07/2026**
   (Andrade/Befi-Lopes/Fernandes/Wertzner, FMUSP/FFCLRP): fonologia (produção
   fonética de palavras-alvo, transcrição fonética/IPA, Processos de Simplificação
@@ -421,8 +427,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   comunicativos** (verbal/VE, vocal/VO, gestual/G), analisados por ato
   comunicativo a partir de amostra filmada (~15 min). Status atualizado: de "sem
   formulário real localizado / não validada" para **"parcialmente validada via
-  literatura acadêmica secundária"** (tese USP/Abe referenciando Andrade et al.
-  2004) — ainda sem o scan literal da ficha física, mas a estrutura é citável.
+  literatura acadêmica secundária"** (tese USP/Abe referenciando Andrade et al. 2004) — ainda sem o scan literal da ficha física, mas a estrutura é citável.
   Segundo achado: a `definicao_funcional` de fonologia descreve só a Nomeação
   ("diante de figura") — a Imitação (39 vocábulos, com modelo do examinador) é
   estruturalmente diferente e clinicamente relevante (erro na Nomeação mas
@@ -444,6 +449,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   pontuação (~R$447, Pró-Fono). Mantém "clínica cadastra".
 
 ### 1.7 MBGR (Protocolo de Avaliação Miofuncional Orofacial)
+
 - **O que é:** autores corrigidos 09/07/2026 — sigla vem de **M**archesan, **B**erretin-Felix,
   **G**enaro, **R**ehder (Rev. CEFAC, 2009). Exame miofuncional orofacial.
   **Estrutura EXATA confirmada 09/07/2026 contra o PDF integral real** (2 fontes
@@ -498,6 +504,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   dos itens nativamente, sem necessidade de a clínica cadastrar o conteúdo.
 
 ### 1.8 PEDI (Inventário de Avaliação Pediátrica de Incapacidade)
+
 - **CORREÇÃO IMPORTANTE (09/07/2026):** a versão anterior deste documento descrevia
   só o domínio de Autocuidado, dando a impressão errada de que o PEDI é
   monodominial. O PEDI (Haley et al., 1992; adaptação brasileira por Marisa Cotta
@@ -563,6 +570,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   com a UFMG/editora do manual antes de embutir o texto literal em produção".
 
 ### 1.9 DCDQ (Questionário de Transtorno do Desenvolvimento da Coordenação)
+
 - **O que é:** versão DCDQ'07 (a padrão de uso atual), questionário respondido
   pelos PAIS, **15 itens** em 3 fatores (controle durante o movimento, motricidade
   fina/escrita, coordenação geral), escala 1-5 por item, **total 15-75**, faixas
@@ -605,6 +613,7 @@ produto (zero fricção de cadastro nesses 2); os outros 8 seguem o modelo
   texto literal é viável sem risco de licenciamento.
 
 ### 1.10 Perfil Sensorial 2
+
 - **O que é:** questionário de processamento sensorial, formulário Criança
   confirmado 09/07/2026 na faixa **3:0 a 14:11** (3 a 14 anos e 11 meses — bate
   com "3-14"); **86 itens — CONFIRMADO (correção 09/07/2026, validação
@@ -734,6 +743,7 @@ Avaliação inicial (instrumentos formais, por disciplina)
       → Reavaliação formal (série 1º-4º teste) → relatório interdisciplinar
       → novo plano de cuidados / novas metas → ciclo recomeça
 ```
+
 O agente atua exclusivamente na seta sessão→evidência. Tudo acima e abaixo é ato
 clínico humano que o dossiê abastece.
 
@@ -756,7 +766,9 @@ itens abertos, para caber no contexto):
         "goal_id": "g_01",
         "descricao": "Emitir mando vocal para 5 itens diferentes sem dica ecoica",
         "disciplina": "ABA",
-        "mapeamentos": [{ "protocol_id": "vbmapp", "dominio_id": "mando", "nivel": 1 }]
+        "mapeamentos": [
+          { "protocol_id": "vbmapp", "dominio_id": "mando", "nivel": 1 }
+        ]
       }
     ]
   },
@@ -765,24 +777,53 @@ itens abertos, para caber no contexto):
       "protocol_id": "vbmapp",
       "nome": "VB-MAPP",
       "tipo_coleta": "evidencia_por_dominio",
-      "escala_formal": { "valores": [0, 0.5, 1], "quem_pontua": "terapeuta_em_avaliacao" },
-      "taxonomia_ajuda": ["independente", "dica_verbal", "dica_ecoica", "dica_gestual", "dica_entonacao", "modelacao", "dica_fisica"],
+      "escala_formal": {
+        "valores": [0, 0.5, 1],
+        "quem_pontua": "terapeuta_em_avaliacao"
+      },
+      "taxonomia_ajuda": [
+        "independente",
+        "dica_verbal",
+        "dica_ecoica",
+        "dica_gestual",
+        "dica_entonacao",
+        "modelacao",
+        "dica_fisica"
+      ],
       "dominios": [
-        { "dominio_id": "mando", "nome": "Mando", "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta", "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"] },
-        { "dominio_id": "tato", "nome": "Tato", "definicao_funcional": "nomeação diante de estímulo não-verbal presente", "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"] }
+        {
+          "dominio_id": "mando",
+          "nome": "Mando",
+          "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta",
+          "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"]
+        },
+        {
+          "dominio_id": "tato",
+          "nome": "Tato",
+          "definicao_funcional": "nomeação diante de estímulo não-verbal presente",
+          "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"]
+        }
       ],
       "componentes_extras": [
-        { "id": "barreiras", "tipo_coleta": "registro_abc", "categorias": ["comportamental", "sensorial"] }
+        {
+          "id": "barreiras",
+          "tipo_coleta": "registro_abc",
+          "categorias": ["comportamental", "sensorial"]
+        }
       ]
     }
   ],
   "historico_relevante": [
-    { "dominio_id": "tato", "resumo": "nunca emitiu tato sem dica ecoica (últimas 20 sessões)" }
+    {
+      "dominio_id": "tato",
+      "resumo": "nunca emitiu tato sem dica ecoica (últimas 20 sessões)"
+    }
   ]
 }
 ```
 
 Regras do formato:
+
 - `definicao_funcional` e `sinais_no_texto` são cadastrados pela clínica (conteúdo
   licenciado fica no banco dela, não no prompt do produto).
 - `taxonomia_ajuda` é POR PROTOCOLO: VB-MAPP usa dicas ABA; PEDI usa níveis de
@@ -811,26 +852,65 @@ mesma cena respondendo a mais de uma pergunta formal). O agente usa o novo
 campo `eixo_protocolo` do `output-schema.json` (ver Parte 4) para marcar a
 qual eixo aquela evidência pertence — gerando 2 extrações quando o texto
 sustenta os dois eixos, nunca uma extração combinada:
+
 ```json
 {
   "protocol_id": "pedi",
   "nome": "PEDI",
   "tipo_coleta": "evidencia_por_dominio",
-  "taxonomia_ajuda": ["independente", "supervisao", "assistencia_minima", "assistencia_moderada", "assistencia_maxima", "assistencia_total"],
+  "taxonomia_ajuda": [
+    "independente",
+    "supervisao",
+    "assistencia_minima",
+    "assistencia_moderada",
+    "assistencia_maxima",
+    "assistencia_total"
+  ],
   "dominios": [
     {
-      "dominio_id": "pedi_autocuidado", "nome": "Autocuidado",
+      "dominio_id": "pedi_autocuidado",
+      "nome": "Autocuidado",
       "eixos_avaliacao": [
-        { "eixo_id": "capacidade", "nome": "Escala de Habilidades Funcionais (Parte I)", "escala": ["capaz", "nao_capaz"], "quem_pontua": "terapeuta_em_avaliacao_formal" },
-        { "eixo_id": "assistencia_cuidador", "nome": "Escala de Assistência do Cuidador (Parte II)", "escala": ["independente", "supervisao", "assistencia_minima", "assistencia_moderada", "assistencia_maxima", "assistencia_total"], "quem_pontua": "terapeuta_em_avaliacao_formal" }
+        {
+          "eixo_id": "capacidade",
+          "nome": "Escala de Habilidades Funcionais (Parte I)",
+          "escala": ["capaz", "nao_capaz"],
+          "quem_pontua": "terapeuta_em_avaliacao_formal"
+        },
+        {
+          "eixo_id": "assistencia_cuidador",
+          "nome": "Escala de Assistência do Cuidador (Parte II)",
+          "escala": [
+            "independente",
+            "supervisao",
+            "assistencia_minima",
+            "assistencia_moderada",
+            "assistencia_maxima",
+            "assistencia_total"
+          ],
+          "quem_pontua": "terapeuta_em_avaliacao_formal"
+        }
       ],
-      "sinais_no_texto": ["comeu sozinha", "precisou de ajuda para", "fez sem supervisão"]
+      "sinais_no_texto": [
+        "comeu sozinha",
+        "precisou de ajuda para",
+        "fez sem supervisão"
+      ]
     },
-    { "dominio_id": "pedi_mobilidade", "nome": "Mobilidade", "eixos_avaliacao": "mesma estrutura de pedi_autocuidado" },
-    { "dominio_id": "pedi_funcao_social", "nome": "Função Social", "eixos_avaliacao": "mesma estrutura de pedi_autocuidado" }
+    {
+      "dominio_id": "pedi_mobilidade",
+      "nome": "Mobilidade",
+      "eixos_avaliacao": "mesma estrutura de pedi_autocuidado"
+    },
+    {
+      "dominio_id": "pedi_funcao_social",
+      "nome": "Função Social",
+      "eixos_avaliacao": "mesma estrutura de pedi_autocuidado"
+    }
   ]
 }
 ```
+
 Uma mesma cena ("comeu sozinha o lanche") pode gerar 1 extração no eixo
 `capacidade` (capaz) e, se o texto informar o contexto de supervisão, outra no
 eixo `assistencia_cuidador` — nunca fundidas. A Escala de Modificações (Parte
@@ -842,6 +922,7 @@ funções do Bloco 1b (14 dos 60 pontos do Bloco 1) num único domínio — a re
 "classifica função pelo ANTECEDENTE" já desenhada para R3 se aplica ao campo
 `funcao` (já existente no `output-schema.json`, reaproveitado sem mudança de
 schema):
+
 ```json
 {
   "dominio_id": "funcao_comunicativa", "nome": "Função Comunicativa (PROC Bloco 1b)",
@@ -852,6 +933,7 @@ schema):
 { "dominio_id": "manipulacao_objetos", "nome": "Manipulação de Objetos (PROC Bloco 3a)" },
 { "dominio_id": "organizacao_brinquedo", "nome": "Organização do Brinquedo (PROC Bloco 3c)" }
 ```
+
 `contextualizacao_linguagem` (Bloco 1d, 15 pts) fica registrado como domínio
 de baixa prioridade — mais difícil de capturar via diário livre, não
 implementado nesta rodada.
@@ -861,11 +943,33 @@ TEA).** Reaproveita `funcao` (mesmo campo do PROC acima, ~20 categorias em vez
 de 7) e `topografia` (já existente — cobre os 3 meios comunicativos VE/VO/G
 sem precisar de campo novo: `vocal_articulado`≈VE, `vocal_nao_articulado`≈VO,
 `gestual_simbolico`/`gestual_elementar`≈G):
+
 ```json
 {
-  "dominio_id": "pragmatica", "nome": "Pragmática (ABFW)",
+  "dominio_id": "pragmatica",
+  "nome": "Pragmática (ABFW)",
   "definicao_funcional": "ato comunicativo por função (pedido, protesto, comentário, jogo compartilhado...) e meio (verbal/vocal/gestual) — NÃO confundir com ROLPP, protocolo Pró-Fono separado",
-  "valores_funcao": ["pedido_objeto", "pedido_acao", "pedido_rotina_social", "pedido_consentimento", "pedido_informacao", "protesto", "reconhecimento_outro", "exibicao", "comentario", "auto_regulatorio", "nomeacao", "performativo", "exclamativo", "reativo", "nao_focalizada", "jogo", "exploratoria", "narrativa", "jogo_compartilhado"]
+  "valores_funcao": [
+    "pedido_objeto",
+    "pedido_acao",
+    "pedido_rotina_social",
+    "pedido_consentimento",
+    "pedido_informacao",
+    "protesto",
+    "reconhecimento_outro",
+    "exibicao",
+    "comentario",
+    "auto_regulatorio",
+    "nomeacao",
+    "performativo",
+    "exclamativo",
+    "reativo",
+    "nao_focalizada",
+    "jogo",
+    "exploratoria",
+    "narrativa",
+    "jogo_compartilhado"
+  ]
 }
 ```
 
@@ -1029,7 +1133,15 @@ R19. AGNOSTICISMO: nenhuma regra acima depende de um protocolo específico. Os
         "type": "object",
         "required": ["tipo", "trecho_fonte", "confianca"],
         "properties": {
-          "tipo": { "enum": ["evidencia", "registro_abc", "ausencia_comportamento", "cadeia", "preferencia_reforcador"] },
+          "tipo": {
+            "enum": [
+              "evidencia",
+              "registro_abc",
+              "ausencia_comportamento",
+              "cadeia",
+              "preferencia_reforcador"
+            ]
+          },
           "trecho_fonte": { "type": "string" },
           "confianca": { "enum": ["alta", "media", "baixa"] },
           "justificativa_confianca": { "type": "string" },
@@ -1042,34 +1154,76 @@ R19. AGNOSTICISMO: nenhuma regra acima depende de um protocolo específico. Os
               "polaridade": { "enum": ["positiva", "negativa"] },
               "funcao": { "type": "string" },
               "funcao_indefinida": { "type": "boolean" },
-              "alvos": { "type": "array", "items": { "type": "object", "properties": {
-                "goal_id": { "type": ["string", "null"] },
-                "protocol_id": { "type": ["string", "null"] },
-                "dominio_id": { "type": ["string", "null"] } } } },
+              "alvos": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "goal_id": { "type": ["string", "null"] },
+                    "protocol_id": { "type": ["string", "null"] },
+                    "dominio_id": { "type": ["string", "null"] }
+                  }
+                }
+              },
               "nivel_ajuda": { "type": "string" },
-              "resultado": { "enum": ["acerto", "erro", "acerto_apos_dica", "nao_aplicavel"] },
-              "tentativas": { "type": "object", "properties": {
-                "informado": { "type": "boolean" }, "total": { "type": ["integer", "null"] },
-                "acertos": { "type": ["integer", "null"] } } },
-              "topografia": { "enum": ["vocal_articulado", "vocal_nao_articulado", "gestual_simbolico", "gestual_elementar", "fisico", "nao_informado"] },
+              "resultado": {
+                "enum": ["acerto", "erro", "acerto_apos_dica", "nao_aplicavel"]
+              },
+              "tentativas": {
+                "type": "object",
+                "properties": {
+                  "informado": { "type": "boolean" },
+                  "total": { "type": ["integer", "null"] },
+                  "acertos": { "type": ["integer", "null"] }
+                }
+              },
+              "topografia": {
+                "enum": [
+                  "vocal_articulado",
+                  "vocal_nao_articulado",
+                  "gestual_simbolico",
+                  "gestual_elementar",
+                  "fisico",
+                  "nao_informado"
+                ]
+              },
               "producao_literal": { "type": ["string", "null"] },
               "alvo_producao": { "type": ["string", "null"] },
-              "ambiente": { "enum": ["estruturado", "natural", "nao_informado"] },
-              "frequencia": { "type": "object", "properties": {
-                "informada": { "type": "boolean" }, "valor": { "type": ["number", "null"] },
-                "unidade": { "type": ["string", "null"] } } },
-              "dimensoes_qualidade": { "type": "object", "properties": {
-                "variabilidade": { "type": ["string", "null"] },
-                "generalizacao": { "type": ["string", "null"] },
-                "restricao_preferencia": { "type": ["string", "null"] } } }
+              "ambiente": {
+                "enum": ["estruturado", "natural", "nao_informado"]
+              },
+              "frequencia": {
+                "type": "object",
+                "properties": {
+                  "informada": { "type": "boolean" },
+                  "valor": { "type": ["number", "null"] },
+                  "unidade": { "type": ["string", "null"] }
+                }
+              },
+              "dimensoes_qualidade": {
+                "type": "object",
+                "properties": {
+                  "variabilidade": { "type": ["string", "null"] },
+                  "generalizacao": { "type": ["string", "null"] },
+                  "restricao_preferencia": { "type": ["string", "null"] }
+                }
+              }
             }
           },
           "cadeia": {
             "type": "object",
             "properties": {
               "nome": { "type": "string" },
-              "etapas": { "type": "array", "items": { "type": "object", "properties": {
-                "descricao": { "type": "string" }, "nivel_ajuda": { "type": "string" } } } }
+              "etapas": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "descricao": { "type": "string" },
+                    "nivel_ajuda": { "type": "string" }
+                  }
+                }
+              }
             }
           },
           "registro_abc": {
@@ -1086,7 +1240,10 @@ R19. AGNOSTICISMO: nenhuma regra acima depende de um protocolo específico. Os
           },
           "ausencia_comportamento": {
             "type": "object",
-            "properties": { "comportamento": { "type": "string" }, "contexto": { "type": "string" } }
+            "properties": {
+              "comportamento": { "type": "string" },
+              "contexto": { "type": "string" }
+            }
           },
           "preferencia_reforcador": {
             "type": "object",
@@ -1099,9 +1256,22 @@ R19. AGNOSTICISMO: nenhuma regra acima depende de um protocolo específico. Os
       }
     },
     "resumo_sessao": { "type": "string" },
-    "sinalizacoes": { "type": "array", "items": { "type": "object", "properties": {
-      "tipo": { "enum": ["inconsistencia_historico", "possivel_erro_transcricao", "texto_ambiguo"] },
-      "detalhe": { "type": "string" } } } }
+    "sinalizacoes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tipo": {
+            "enum": [
+              "inconsistencia_historico",
+              "possivel_erro_transcricao",
+              "texto_ambiguo"
+            ]
+          },
+          "detalhe": { "type": "string" }
+        }
+      }
+    }
   }
 }
 ```
@@ -1121,67 +1291,160 @@ explícitos) e sinaliza a divergência só via `inconsistente_com_historico` +
 ```json
 {
   "extracoes": [
-    { "tipo": "preferencia_reforcador", "trecho_fonte": "Ele estava muito motivado pela pista de carrinhos",
+    {
+      "tipo": "preferencia_reforcador",
+      "trecho_fonte": "Ele estava muito motivado pela pista de carrinhos",
       "confianca": "alta",
-      "preferencia_reforcador": { "item_atividade": "pista de carrinhos", "valencia": "alta" } },
-    { "tipo": "evidencia", "trecho_fonte": "Quando o carrinho travou, ele olhou para mim, fez contato visual espontâneo e disse 'ajuda'",
+      "preferencia_reforcador": {
+        "item_atividade": "pista de carrinhos",
+        "valencia": "alta"
+      }
+    },
+    {
+      "tipo": "evidencia",
+      "trecho_fonte": "Quando o carrinho travou, ele olhou para mim, fez contato visual espontâneo e disse 'ajuda'",
       "confianca": "alta",
-      "evidencia": { "descricao": "Mando vocal espontâneo ('ajuda') diante de motivação clara (carrinho travado)", "polaridade": "positiva",
-        "funcao": "mando", "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "mando" }],
-        "nivel_ajuda": "independente", "resultado": "acerto", "topografia": "vocal_articulado",
-        "producao_literal": "ajuda", "ambiente": "natural" } },
-    { "tipo": "evidencia", "trecho_fonte": "ele olhou para mim, fez contato visual espontâneo",
+      "evidencia": {
+        "descricao": "Mando vocal espontâneo ('ajuda') diante de motivação clara (carrinho travado)",
+        "polaridade": "positiva",
+        "funcao": "mando",
+        "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "mando" }],
+        "nivel_ajuda": "independente",
+        "resultado": "acerto",
+        "topografia": "vocal_articulado",
+        "producao_literal": "ajuda",
+        "ambiente": "natural"
+      }
+    },
+    {
+      "tipo": "evidencia",
+      "trecho_fonte": "ele olhou para mim, fez contato visual espontâneo",
       "confianca": "alta",
-      "evidencia": { "descricao": "Contato visual espontâneo dirigido ao adulto durante solicitação", "polaridade": "positiva",
-        "funcao": "comunicacao_social", "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "social" }],
-        "nivel_ajuda": "independente", "resultado": "acerto", "topografia": "gestual_elementar", "ambiente": "natural" } },
-    { "tipo": "evidencia", "trecho_fonte": "perguntei 'O que é isso?'. Ele respondeu claramente 'cachorro'",
+      "evidencia": {
+        "descricao": "Contato visual espontâneo dirigido ao adulto durante solicitação",
+        "polaridade": "positiva",
+        "funcao": "comunicacao_social",
+        "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "social" }],
+        "nivel_ajuda": "independente",
+        "resultado": "acerto",
+        "topografia": "gestual_elementar",
+        "ambiente": "natural"
+      }
+    },
+    {
+      "tipo": "evidencia",
+      "trecho_fonte": "perguntei 'O que é isso?'. Ele respondeu claramente 'cachorro'",
       "confianca": "alta",
       "inconsistente_com_historico": true,
       "justificativa_confianca": "Tato emitido de forma independente (antecedente, comportamento e nível de ajuda todos explícitos no texto), mas o histórico_relevante registra que o paciente nunca emitiu tato sem dica ecoica nas últimas 20 sessões — possível avanço real ou erro de observação/registro (R14, direção 'bom demais para ser verdade'). A confiança na EXTRAÇÃO em si permanece alta (o texto é claro); a divergência é sinalizada separadamente via inconsistente_com_historico, não pela confiança.",
-      "evidencia": { "descricao": "Tato do item 'cachorro' diante do estímulo presente e pergunta", "polaridade": "positiva",
-        "funcao": "tato", "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "tato" }],
-        "nivel_ajuda": "independente", "resultado": "acerto", "topografia": "vocal_articulado",
-        "producao_literal": "cachorro", "ambiente": "estruturado" } },
-    { "tipo": "evidencia", "trecho_fonte": "Pedi para ele: 'Leo, bate palma', e ele bateu",
+      "evidencia": {
+        "descricao": "Tato do item 'cachorro' diante do estímulo presente e pergunta",
+        "polaridade": "positiva",
+        "funcao": "tato",
+        "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "tato" }],
+        "nivel_ajuda": "independente",
+        "resultado": "acerto",
+        "topografia": "vocal_articulado",
+        "producao_literal": "cachorro",
+        "ambiente": "estruturado"
+      }
+    },
+    {
+      "tipo": "evidencia",
+      "trecho_fonte": "Pedi para ele: 'Leo, bate palma', e ele bateu",
       "confianca": "alta",
-      "evidencia": { "descricao": "Seguiu instrução motora simples", "polaridade": "positiva",
-        "funcao": "ouvinte", "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "ouvinte" }],
-        "nivel_ajuda": "independente", "resultado": "acerto", "ambiente": "estruturado" } },
-    { "tipo": "evidencia", "trecho_fonte": "eu disse 'faz igual' e toquei no nariz, e ele imitou perfeitamente",
+      "evidencia": {
+        "descricao": "Seguiu instrução motora simples",
+        "polaridade": "positiva",
+        "funcao": "ouvinte",
+        "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "ouvinte" }],
+        "nivel_ajuda": "independente",
+        "resultado": "acerto",
+        "ambiente": "estruturado"
+      }
+    },
+    {
+      "tipo": "evidencia",
+      "trecho_fonte": "eu disse 'faz igual' e toquei no nariz, e ele imitou perfeitamente",
       "confianca": "alta",
-      "evidencia": { "descricao": "Imitação motora sob instrução 'faz igual'", "polaridade": "positiva",
-        "funcao": "imitacao_motora", "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "imitacao" }],
-        "nivel_ajuda": "independente", "resultado": "acerto", "ambiente": "estruturado" } },
-    { "tipo": "evidencia", "trecho_fonte": "pedi 'pega a bola', mas ele pegou o sapato. Tentei de novo apontando de leve para a bola, e aí ele acertou",
+      "evidencia": {
+        "descricao": "Imitação motora sob instrução 'faz igual'",
+        "polaridade": "positiva",
+        "funcao": "imitacao_motora",
+        "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "imitacao" }],
+        "nivel_ajuda": "independente",
+        "resultado": "acerto",
+        "ambiente": "estruturado"
+      }
+    },
+    {
+      "tipo": "evidencia",
+      "trecho_fonte": "pedi 'pega a bola', mas ele pegou o sapato. Tentei de novo apontando de leve para a bola, e aí ele acertou",
       "confianca": "alta",
-      "evidencia": { "descricao": "Seleção por instrução: erro na 1ª tentativa, acerto com dica gestual (apontamento)", "polaridade": "positiva",
-        "funcao": "ouvinte", "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "ouvinte" }],
-        "nivel_ajuda": "dica_gestual", "resultado": "acerto_apos_dica",
-        "tentativas": { "informado": true, "total": 2, "acertos": 1 }, "ambiente": "estruturado" } },
-    { "tipo": "evidencia", "trecho_fonte": "dei a dica verbal dizendo 'biscoito'. Ele repetiu 'bito' e eu entreguei na mesma hora",
+      "evidencia": {
+        "descricao": "Seleção por instrução: erro na 1ª tentativa, acerto com dica gestual (apontamento)",
+        "polaridade": "positiva",
+        "funcao": "ouvinte",
+        "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "ouvinte" }],
+        "nivel_ajuda": "dica_gestual",
+        "resultado": "acerto_apos_dica",
+        "tentativas": { "informado": true, "total": 2, "acertos": 1 },
+        "ambiente": "estruturado"
+      }
+    },
+    {
+      "tipo": "evidencia",
+      "trecho_fonte": "dei a dica verbal dizendo 'biscoito'. Ele repetiu 'bito' e eu entreguei na mesma hora",
       "confianca": "alta",
-      "evidencia": { "descricao": "Ecoico com dica: repetiu aproximação fonética do modelo para obter item", "polaridade": "positiva",
-        "funcao": "ecoico", "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "ecoico" }],
-        "nivel_ajuda": "dica_ecoica", "resultado": "acerto_apos_dica", "topografia": "vocal_articulado",
-        "producao_literal": "bito", "alvo_producao": "biscoito", "ambiente": "natural" } },
-    { "tipo": "evidencia", "trecho_fonte": "Cantei 'cada coisa no seu...' e fiz uma pausa, e ele completou cantando 'lugar!'",
+      "evidencia": {
+        "descricao": "Ecoico com dica: repetiu aproximação fonética do modelo para obter item",
+        "polaridade": "positiva",
+        "funcao": "ecoico",
+        "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "ecoico" }],
+        "nivel_ajuda": "dica_ecoica",
+        "resultado": "acerto_apos_dica",
+        "topografia": "vocal_articulado",
+        "producao_literal": "bito",
+        "alvo_producao": "biscoito",
+        "ambiente": "natural"
+      }
+    },
+    {
+      "tipo": "evidencia",
+      "trecho_fonte": "Cantei 'cada coisa no seu...' e fiz uma pausa, e ele completou cantando 'lugar!'",
       "confianca": "alta",
-      "evidencia": { "descricao": "Intraverbal: completou frase de música após pausa", "polaridade": "positiva",
-        "funcao": "intraverbal", "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "intraverbal" }],
-        "nivel_ajuda": "independente", "resultado": "acerto", "topografia": "vocal_articulado",
-        "producao_literal": "lugar", "ambiente": "natural" } },
-    { "tipo": "registro_abc", "trecho_fonte": "Quando avisei que a sessão estava acabando e comecei a guardar a massinha, ele jogou um pedaço no chão e gritou, choramingando por uns 40 segundos",
+      "evidencia": {
+        "descricao": "Intraverbal: completou frase de música após pausa",
+        "polaridade": "positiva",
+        "funcao": "intraverbal",
+        "alvos": [{ "protocol_id": "vbmapp", "dominio_id": "intraverbal" }],
+        "nivel_ajuda": "independente",
+        "resultado": "acerto",
+        "topografia": "vocal_articulado",
+        "producao_literal": "lugar",
+        "ambiente": "natural"
+      }
+    },
+    {
+      "tipo": "registro_abc",
+      "trecho_fonte": "Quando avisei que a sessão estava acabando e comecei a guardar a massinha, ele jogou um pedaço no chão e gritou, choramingando por uns 40 segundos",
       "confianca": "alta",
-      "registro_abc": { "antecedente": "Aviso de fim de sessão + início da guarda da massinha (transição)",
+      "registro_abc": {
+        "antecedente": "Aviso de fim de sessão + início da guarda da massinha (transição)",
         "comportamento": "Jogou massinha no chão, gritou e choramingou",
         "duracao_segundos": 40,
         "consequencia_regulacao": "Espera pela regulação + redirecionamento com música de guardar brinquedos",
-        "categoria": "comportamental", "subcategoria_sensorial": null } }
+        "categoria": "comportamental",
+        "subcategoria_sensorial": null
+      }
+    }
   ],
   "resumo_sessao": "Sessão com evidências positivas em mando, tato, ouvinte, imitação, ecoico e intraverbal; forte motivação por 'pista de carrinhos' (reforçador); 1 episódio breve de comportamento em transição, regulado com música. Tato independente sinalizado para revisão por inconsistência com o histórico recente.",
   "sinalizacoes": [
-    { "tipo": "inconsistencia_historico", "detalhe": "Tato de 'cachorro' emitido de forma independente (sem dica ecoica); histórico das últimas 20 sessões registra que o paciente nunca emitiu tato sem dica ecoica." }
+    {
+      "tipo": "inconsistencia_historico",
+      "detalhe": "Tato de 'cachorro' emitido de forma independente (sem dica ecoica); histórico das últimas 20 sessões registra que o paciente nunca emitiu tato sem dica ecoica."
+    }
   ]
 }
 ```
@@ -1217,7 +1480,7 @@ ela obedece a 5 regras:
 (c) amostra aleatória configurável (ex.: 5-10%) para auditoria de qualidade;
 (d) período de calibração: 100% das primeiras N sessões de terapeuta novo;
 (e) revisão pré-avaliação formal: TODO o dossiê de um marco "candidato a
-    avaliação" antes da janela de pontuação (este é o momento de maior valor);
+avaliação" antes da janela de pontuação (este é o momento de maior valor);
 (f) evidências que o próprio terapeuta encaminhou com dúvida.
 
 **V2 — Reclassificar exige justificativa; ambiguidade devolve, não adivinha.**
@@ -1248,6 +1511,7 @@ produto para evoluir a IA.
 ### Checklists de validação por protocolo (os erros clássicos que o coordenador caça)
 
 **VB-MAPP (operantes verbais) — confusões de função:**
+
 - Mando vs. tato: havia MOTIVAÇÃO (queria o item) ou só o estímulo presente?
   "Disse 'bola' vendo a bola" sem querer a bola = tato, não mando.
 - Tato vs. ecoico: houve modelo vocal do adulto imediatamente antes? Se repetiu,
@@ -1261,6 +1525,7 @@ produto para evoluir a IA.
   devolver ao terapeuta.
 
 **ABLLS-R / AFLS (cadeias e rubricas):**
+
 - Nível de ajuda POR ETAPA, não da cadeia inteira ("lavou as mãos com ajuda" não
   serve; qual etapa teve ajuda?).
 - AFLS é 6 protocolos separados por módulo/ambiente (não 1 instrumento com campo
@@ -1271,12 +1536,14 @@ produto para evoluir a IA.
   administração do módulo correto.
 
 **ESDM / Denver (objetivos de ciclo):**
+
 - A evidência aponta para o OBJETIVO certo do ciclo de 12 semanas e o passo de
   aprendizagem correto — não para o domínio genérico.
 - Contexto naturalista: evidência obtida em tentativa massificada de mesa num
   programa naturalista merece nota, não celebração.
 
 **PROC / ABFW (fono):**
+
 - Função comunicativa correta: choro/grito pode ser PROTESTO (função válida) —
   o erro clássico é registrar só como comportamento inadequado e perder o dado
   de pragmática. O inverso também: nem todo choro tem função comunicativa.
@@ -1286,11 +1553,13 @@ produto para evoluir a IA.
   inferido além do texto.
 
 **PEDI (funcionalidade):**
+
 - Taxonomia certa: nível de ASSISTÊNCIA (independente→total), não dica ABA.
   "Comeu com dica verbal" em contexto PEDI = supervisão/assistência mínima.
 - Autocuidado observado na clínica ≠ desempenho em casa — marcar contexto.
 
 **Perfil Sensorial 2 (eventos sensoriais):**
+
 - Categoria sensorial correta (a sirene é auditivo; jogar-se no chão pode ser
   vestibular/proprioceptivo ou comportamental — o antecedente decide).
 - Padrão correto: ESQUIVA (afasta-se ativamente) ≠ SENSIBILIDADE (incomoda-se e

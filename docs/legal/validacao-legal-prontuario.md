@@ -55,12 +55,12 @@ O Iris é multidisciplinar (Psicologia/ABA + Fono + TO no mesmo prontuário
 unificado), e cada conselho profissional define um prazo mínimo próprio para
 os registros de SEU profissional:
 
-| Conselho | Norma | Prazo mínimo | Fonte |
-|---|---|---|---|
-| CFP (Psicologia) | Resolução CFP nº 01/2009 + Manual Orientativo (2025) | 5 anos do último registro; **recomendação do próprio manual: manter até a criança/adolescente completar 18 anos**, por entendimento do ECA | [Manual Orientativo de Registro e Elaboração de Documentos Psicológicos](https://site.cfp.org.br/wp-content/uploads/2025/11/Manual_Orientativo.pdf) · [Transparência CFP — Registro Documental](https://transparencia.cfp.org.br/crp12/pergunta-frequente/registro-documental/) |
-| COFFITO (Terapia Ocupacional) | Resolução COFFITO nº 415/2012 | 5 anos do último registro | [Resolução 415/2012 (texto)](https://www.normasbrasil.com.br/norma/?id=240931) |
-| CFFa (Fonoaudiologia) | Resolução CFFa nº 415/2012 | **10 anos a partir da alta, suspensão ou abandono do tratamento** | [Resolução CFFa nº 415/2012](https://www.fonoaudiologia.org.br/resolucoes/resolucoes_html/CFFa_N_415_12.htm) |
-| Federal, setor saúde em geral | Lei nº 13.787/2018 (digitalização de prontuários) | Elimina-se só após 20 anos do último registro | [Lei 13.787/2018](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13787.htm) |
+| Conselho                      | Norma                                                | Prazo mínimo                                                                                                                               | Fonte                                                                                                                                                                                                                                                                           |
+| ----------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CFP (Psicologia)              | Resolução CFP nº 01/2009 + Manual Orientativo (2025) | 5 anos do último registro; **recomendação do próprio manual: manter até a criança/adolescente completar 18 anos**, por entendimento do ECA | [Manual Orientativo de Registro e Elaboração de Documentos Psicológicos](https://site.cfp.org.br/wp-content/uploads/2025/11/Manual_Orientativo.pdf) · [Transparência CFP — Registro Documental](https://transparencia.cfp.org.br/crp12/pergunta-frequente/registro-documental/) |
+| COFFITO (Terapia Ocupacional) | Resolução COFFITO nº 415/2012                        | 5 anos do último registro                                                                                                                  | [Resolução 415/2012 (texto)](https://www.normasbrasil.com.br/norma/?id=240931)                                                                                                                                                                                                  |
+| CFFa (Fonoaudiologia)         | Resolução CFFa nº 415/2012                           | **10 anos a partir da alta, suspensão ou abandono do tratamento**                                                                          | [Resolução CFFa nº 415/2012](https://www.fonoaudiologia.org.br/resolucoes/resolucoes_html/CFFa_N_415_12.htm)                                                                                                                                                                    |
+| Federal, setor saúde em geral | Lei nº 13.787/2018 (digitalização de prontuários)    | Elimina-se só após 20 anos do último registro                                                                                              | [Lei 13.787/2018](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13787.htm)                                                                                                                                                                                      |
 
 **Não há uma norma única que resolva isso para um prontuário unificado.** A
 Lei 13.787/2018 fala de "prontuário de paciente" em sentido amplo (20 anos) mas
@@ -76,26 +76,27 @@ guarda é o profissional/clínica (o controlador dos dados), não o Iris — cad
 clínica tem uma composição diferente de disciplinas (só ABA? ABA+Fono+TO?) e
 portanto um prazo mínimo diferente. O Iris entra com um **default sugerido
 conservador** = `MAX(paciente completa 18 anos, alta + 10 anos)` (cobre CFP
-+ CFFa + COFFITO simultaneamente, abaixo do teto de 20 anos da Lei
-13.787/2018), mas permite a clínica ajustar via configuração, com o próprio
-termo de responsabilidade da clínica assumindo a adequação ao conselho do seu
-profissional — o Iris não decide isso sozinho pelo cliente. **Isso é uma
-síntese minha para cobrir o pior caso entre as normas encontradas — não é uma
-regra escrita em lugar nenhum. Precisa de confirmação jurídica antes do
-piloto**, especialmente porque não achei nenhuma norma tratando
-explicitamente de prontuário UNIFICADO multidisciplinar (o CFP reconhece a
-categoria "prontuário único" mas não resolve o conflito de prazos entre
-conselhos).
+
+- CFFa + COFFITO simultaneamente, abaixo do teto de 20 anos da Lei
+  13.787/2018), mas permite a clínica ajustar via configuração, com o próprio
+  termo de responsabilidade da clínica assumindo a adequação ao conselho do seu
+  profissional — o Iris não decide isso sozinho pelo cliente. **Isso é uma
+  síntese minha para cobrir o pior caso entre as normas encontradas — não é uma
+  regra escrita em lugar nenhum. Precisa de confirmação jurídica antes do
+  piloto**, especialmente porque não achei nenhuma norma tratando
+  explicitamente de prontuário UNIFICADO multidisciplinar (o CFP reconhece a
+  categoria "prontuário único" mas não resolve o conflito de prazos entre
+  conselhos).
 
 ---
 
 ## 3. Assinatura no registro — nenhum conselho exige certificação ICP-Brasil
 
-| Conselho | O que exige | Prontuário eletrônico permitido? |
-|---|---|---|
-| CFP | Nome, CRP e assinatura da psicóloga; para eletrônico, "assinatura eletrônica ou outros tipos de permissões que validem" o registro. Assinatura ICP-Brasil é citada como válida e suficiente, mas não como a ÚNICA forma aceita | Sim, com controle de acesso, senha e segurança de dados |
-| COFFITO (TO) | Assinatura + carimbo com nome completo e nº de registro no CREFITO | Sim, "a critério da instituição" |
-| CFFa (Fono) | Carimbo/nome legível + nº de registro ao fim de cada atendimento | Sim, desde que segurança/confidencialidade sejam garantidas; profissional (consultório privado) ou instituição (ambiente institucional) responde pela certificação digital usada |
+| Conselho     | O que exige                                                                                                                                                                                                                    | Prontuário eletrônico permitido?                                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CFP          | Nome, CRP e assinatura da psicóloga; para eletrônico, "assinatura eletrônica ou outros tipos de permissões que validem" o registro. Assinatura ICP-Brasil é citada como válida e suficiente, mas não como a ÚNICA forma aceita | Sim, com controle de acesso, senha e segurança de dados                                                                                                                          |
+| COFFITO (TO) | Assinatura + carimbo com nome completo e nº de registro no CREFITO                                                                                                                                                             | Sim, "a critério da instituição"                                                                                                                                                 |
+| CFFa (Fono)  | Carimbo/nome legível + nº de registro ao fim de cada atendimento                                                                                                                                                               | Sim, desde que segurança/confidencialidade sejam garantidas; profissional (consultório privado) ou instituição (ambiente institucional) responde pela certificação digital usada |
 
 **Certeza alta:** nenhuma das três normas pesquisadas EXIGE especificamente
 certificado ICP-Brasil (MP 2.200-2/2001) para validar o registro eletrônico —
@@ -108,7 +109,7 @@ ao prontuário privado, embora seja usada como referência doutrinária.
 auditoria imutável por ação (já modelada em `AuditLog` e na imutabilidade de
 `Evidence`) é um piso juridicamente defensável — o que cada `EvidenceRevision`
 e `MilestoneAssessment` já registra (autor, timestamp, ação) cumpre a função
-de "identificar quem assinou". Certificado ICP-Brasil fica como *upgrade* de
+de "identificar quem assinou". Certificado ICP-Brasil fica como _upgrade_ de
 robustez jurídica (maior presunção de autenticidade em disputa), não como
 bloqueador do MVP.
 
@@ -228,7 +229,7 @@ avaliação" de forma mais proeminente (ficar de olho em não deslizar a
 comunicação de marketing para linguagem de "diagnóstico" ou "avaliação
 automatizada").
 
-Fontes: [Wiki CNES — Cadastro Nacional de Estabelecimentos de Saúde](https://wiki.saude.gov.br/cnes/index.php/Cadastro_Nacional_de_Estabelecimentos_de_Sa%C3%BAde_(CNES)) · [Portaria GM/MS nº 1.646/2015](https://bvsms.saude.gov.br/bvs/saudelegis/gm/2015/prt1646_02_10_2015.html) · [ANVISA — Perguntas & Respostas RDC nº 657/2022 (Software como Dispositivo Médico)](https://www.gov.br/anvisa/pt-br/assuntos/noticias-anvisa/2022/software-como-dispositivo-medico-perguntas-e-respostas/perguntas-respostas-rdc-657-de-2022-v1-01-09-2022.pdf)
+Fontes: [Wiki CNES — Cadastro Nacional de Estabelecimentos de Saúde](<https://wiki.saude.gov.br/cnes/index.php/Cadastro_Nacional_de_Estabelecimentos_de_Sa%C3%BAde_(CNES)>) · [Portaria GM/MS nº 1.646/2015](https://bvsms.saude.gov.br/bvs/saudelegis/gm/2015/prt1646_02_10_2015.html) · [ANVISA — Perguntas & Respostas RDC nº 657/2022 (Software como Dispositivo Médico)](https://www.gov.br/anvisa/pt-br/assuntos/noticias-anvisa/2022/software-como-dispositivo-medico-perguntas-e-respostas/perguntas-respostas-rdc-657-de-2022-v1-01-09-2022.pdf)
 
 ---
 
@@ -248,6 +249,7 @@ Fontes: [Wiki CNES — Cadastro Nacional de Estabelecimentos de Saúde](https://
 ## 8. Resumo — o que marco com certeza absoluta no BACKLOG
 
 ✅ **Pode marcar como pesquisado/documentado com certeza:**
+
 - LGPD Art. 11/14/15/16/33 lidos na fonte primária — o modelo de `Consent` já
   atende ao Art. 14.
 - ABA não é profissão regulamentada hoje; psicólogo é o responsável técnico —
@@ -263,6 +265,7 @@ Fontes: [Wiki CNES — Cadastro Nacional de Estabelecimentos de Saúde](https://
 
 🔶 **Fica pendente de parecer jurídico especializado antes do piloto com dados
 reais** (não é possível ter certeza absoluta só com pesquisa documental):
+
 - Prazo de guarda DEFAULT sugerido pelo produto (MAX(18 anos, alta+10 anos) é
   síntese de risco minha, não regra escrita) — mas agora é config, não
   bloqueador, então o risco de errar caiu bastante.

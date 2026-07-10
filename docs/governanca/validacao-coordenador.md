@@ -21,7 +21,7 @@ ela obedece a 5 regras:
 (c) amostra aleatória configurável (ex.: 5-10%) para auditoria de qualidade;
 (d) período de calibração: 100% das primeiras N sessões de terapeuta novo;
 (e) revisão pré-avaliação formal: TODO o dossiê de um marco "candidato a
-    avaliação" antes da janela de pontuação (este é o momento de maior valor);
+avaliação" antes da janela de pontuação (este é o momento de maior valor);
 (f) evidências que o próprio terapeuta encaminhou com dúvida.
 
 **V2 — Reclassificar exige justificativa; ambiguidade devolve, não adivinha.**
@@ -52,6 +52,7 @@ produto para evoluir a IA.
 ### Checklists de validação por protocolo (os erros clássicos que o coordenador caça)
 
 **VB-MAPP (operantes verbais) — confusões de função:**
+
 - Mando vs. tato: havia MOTIVAÇÃO (queria o item) ou só o estímulo presente?
   "Disse 'bola' vendo a bola" sem querer a bola = tato, não mando.
 - Tato vs. ecoico: houve modelo vocal do adulto imediatamente antes? Se repetiu,
@@ -65,18 +66,21 @@ produto para evoluir a IA.
   devolver ao terapeuta.
 
 **ABLLS-R / AFLS (cadeias e rubricas):**
+
 - Nível de ajuda POR ETAPA, não da cadeia inteira ("lavou as mãos com ajuda" não
   serve; qual etapa teve ajuda?).
 - Generalização: a habilidade ocorreu fora do contexto treinado? (AFLS vive disso
   — casa vs. clínica vs. comunidade.)
 
 **ESDM / Denver (objetivos de ciclo):**
+
 - A evidência aponta para o OBJETIVO certo do ciclo de 12 semanas e o passo de
   aprendizagem correto — não para o domínio genérico.
 - Contexto naturalista: evidência obtida em tentativa massificada de mesa num
   programa naturalista merece nota, não celebração.
 
 **PROC / ABFW (fono):**
+
 - Função comunicativa correta: choro/grito pode ser PROTESTO (função válida) —
   o erro clássico é registrar só como comportamento inadequado e perder o dado
   de pragmática. O inverso também: nem todo choro tem função comunicativa.
@@ -86,11 +90,13 @@ produto para evoluir a IA.
   inferido além do texto.
 
 **PEDI (funcionalidade):**
+
 - Taxonomia certa: nível de ASSISTÊNCIA (independente→total), não dica ABA.
   "Comeu com dica verbal" em contexto PEDI = supervisão/assistência mínima.
 - Autocuidado observado na clínica ≠ desempenho em casa — marcar contexto.
 
 **Perfil Sensorial 2 (eventos sensoriais):**
+
 - Categoria sensorial correta (a sirene é auditivo; jogar-se no chão pode ser
   vestibular/proprioceptivo ou comportamental — o antecedente decide).
 - Padrão correto: ESQUIVA (afasta-se ativamente) ≠ SENSIBILIDADE (incomoda-se e

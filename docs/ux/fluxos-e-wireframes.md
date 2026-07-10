@@ -11,8 +11,7 @@ sobre exportar para convênio) e CONFIRMADO para o MVP, Fase 5, tier Clínica
 (distinto do relatório de convênio NARRATIVO, que segue fast-follow do tier
 Convênio — ver `modelo-de-negocio.md` seção 4 e `modelo-de-dados.md` seção 5).
 
-Contexto de uso assumido: 7-8 atendimentos/dia, intervalos de ~10 min que viram
-3. Mobile-first para o terapeuta; desktop aceitável para o coordenador. Registro
+Contexto de uso assumido: 7-8 atendimentos/dia, intervalos de ~10 min que viram 3. Mobile-first para o terapeuta; desktop aceitável para o coordenador. Registro
 em dois tempos: captura rápida (corredor, texto ou áudio) + consolidação no fim
 do dia. Não desenhado aqui: portal/login da família (fora do escopo, ver
 "Não fazer" do Prompt 3).
@@ -140,6 +139,7 @@ nunca editado), à direita a sugestão da IA como CARTÃO editável.
 ```
 
 Comportamento:
+
 - **Alta confiança**: botão de aprovação em lote no rodapé, some da lista uma a
   uma conforme aprovadas individualmente também é possível.
 - **Baixa confiança / inconsistente**: SEM botão de aprovação direta — o
@@ -303,12 +303,12 @@ que foi realmente dito.
 
 ## 3. Estados de confiança na UI
 
-| Estado | Cor/ícone | Comportamento de aprovação | Por quê |
-|---|---|---|---|
-| **Alta confiança** | 🟢 verde, cartão compacto | Aprovação em lote habilitada + aprovação individual | Baixo risco de erro; lote existe para não represar o dia do terapeuta |
-| **Baixa confiança** | 🟡 amarelo, cartão expandido por padrão | SEM lote; exige abrir "Revisar →" e confirmar nível de ajuda antes de aprovar | Fricção deliberada — evita que "baixa confiança" vire sinônimo de "aprova igual" |
-| **Inconsistente com histórico** | 🔴 vermelho, cartão expandido + ícone de alerta | Mesma fricção da baixa confiança + trecho do histórico anterior exibido lado a lado para comparação direta | É o cenário de maior risco de erro silencioso (regressão real vs. erro de extração) — merece o maior atrito |
-| **Candidato a avaliação/dominada** | 🔷 azul pontilhado (nunca sólido) | Não é "aprovável" — é um flag informativo até a ação humana (agendar avaliação / decidir domínio) | Preserva o princípio "candidato ≠ conquistado" (seção 0) |
+| Estado                             | Cor/ícone                                       | Comportamento de aprovação                                                                                 | Por quê                                                                                                     |
+| ---------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Alta confiança**                 | 🟢 verde, cartão compacto                       | Aprovação em lote habilitada + aprovação individual                                                        | Baixo risco de erro; lote existe para não represar o dia do terapeuta                                       |
+| **Baixa confiança**                | 🟡 amarelo, cartão expandido por padrão         | SEM lote; exige abrir "Revisar →" e confirmar nível de ajuda antes de aprovar                              | Fricção deliberada — evita que "baixa confiança" vire sinônimo de "aprova igual"                            |
+| **Inconsistente com histórico**    | 🔴 vermelho, cartão expandido + ícone de alerta | Mesma fricção da baixa confiança + trecho do histórico anterior exibido lado a lado para comparação direta | É o cenário de maior risco de erro silencioso (regressão real vs. erro de extração) — merece o maior atrito |
+| **Candidato a avaliação/dominada** | 🔷 azul pontilhado (nunca sólido)               | Não é "aprovável" — é um flag informativo até a ação humana (agendar avaliação / decidir domínio)          | Preserva o princípio "candidato ≠ conquistado" (seção 0)                                                    |
 
 Regra anti-rubber-stamping: se um terapeuta aprovar em lote 3 sessões seguidas
 SEM nunca abrir um cartão individual (mesmo de alta confiança), a próxima
@@ -514,10 +514,11 @@ time, não erro pessoal.
 
 **Decisão confirmada (09/07/2026):** os dois caminhos ficam no MVP (Fase 5),
 mas são artefatos DIFERENTES — o relatório da família é narrativo (IA sintetiza
-+ coordenador edita); o dossiê de convênio é uma LISTAGEM bruta do período,
-sem síntese de IA, porque o consumidor é um auditor de operadora, não a
-família — ele quer verificar que o que foi cobrado bate com o que foi
-registrado, não uma história de progresso.
+
+- coordenador edita); o dossiê de convênio é uma LISTAGEM bruta do período,
+  sem síntese de IA, porque o consumidor é um auditor de operadora, não a
+  família — ele quer verificar que o que foi cobrado bate com o que foi
+  registrado, não uma história de progresso.
 
 **Acesso por tier (revisado 09/07/2026):** o **dossiê para convênio** também
 é visível no tier Diário — quem abre a tela de Exportar ali é o próprio
@@ -551,6 +552,7 @@ flowchart TD
 ```
 
 Tela **Exportar** — tier Clínica (as duas opções):
+
 ```
 ┌───────────────────────────────────────────┐
 │ Exportar · Miguel S.                         │
@@ -567,6 +569,7 @@ Tela **Exportar** — tier Clínica (as duas opções):
 
 Tela **Exportar** — tier Diário (só o dossiê, sem o relatório da família,
 que depende do módulo coordenador):
+
 ```
 ┌───────────────────────────────────────────┐
 │ Exportar · Miguel S.                         │
@@ -640,8 +643,8 @@ dos ajustes desta rodada:
 5. **Gráfico do protocolo** (terapeuta/coordenador) — ver 1.3
 6. **Lista de exceções do coordenador** — ver 4.2
 7. **Revisão do relatório da família** — ver 4.6
-8. *(adicional)* Cadastro clínico + protocolo — ver 4.1
-9. *(adicional)* Fila de validação do coordenador — ver 4.5
+8. _(adicional)_ Cadastro clínico + protocolo — ver 4.1
+9. _(adicional)_ Fila de validação do coordenador — ver 4.5
 
 ### 5.1 Grade do dia
 
@@ -724,41 +727,49 @@ como estado corrigível.
 ## 6. Microcopy em pt-BR dos momentos críticos
 
 **Estado vazio (sem evidência na sessão):**
+
 > "Não identificamos evidências estruturadas neste diário. Isso é normal em
 > sessões de observação livre, manejo comportamental ou dias mais difíceis.
 > Se você percebeu um avanço que não apareceu aqui, pode registrar
 > manualmente."
 
 **Confirmação de aprovação (individual):**
+
 > "Evidência aprovada e registrada no histórico de Miguel."
-> *(sem "sucesso!" nem excesso de celebração — é registro clínico, não gamificação)*
+> _(sem "sucesso!" nem excesso de celebração — é registro clínico, não gamificação)_
 
 **Confirmação de aprovação em lote:**
+
 > "3 evidências de alta confiança aprovadas. Elas entram no histórico de
 > Miguel exatamente como você revisou."
 
 **Erro do pipeline de extração:**
+
 > "Seu diário está salvo e seguro. A leitura automática das evidências está
 > demorando mais que o normal — vamos tentar de novo em segundo plano, sem
 > que você precise fazer nada."
 
 **Aviso de que sugestões de IA exigem validação profissional (primeira vez
 que o terapeuta abre a tela de Revisão):**
+
 > "As sugestões abaixo foram geradas automaticamente a partir do seu diário.
 > Nenhuma delas vira parte do histórico clínico do paciente até você
 > confirmar. Você pode aprovar, editar ou rejeitar cada uma."
 
 **Confirmação de exportação (relatório da família):**
+
 > "Relatório exportado em PDF. Lembrete: este documento contém dados de saúde
 > de um menor — use apenas os canais autorizados pela família para envio
 > (ex.: WhatsApp do responsável cadastrado). A exportação foi registrada no
 > log de auditoria."
 
 **Preview do dossiê de convênio (antes de gerar):**
+
 > "Este dossiê é um documento factual — sem interpretação ou narrativa — pronto
 > para auditoria. Confira o período antes de gerar."
 
 **Confirmação de exportação (dossiê de convênio):**
+
 > "Dossiê exportado em PDF. Documento factual, sem síntese de IA — cada item
 > remete à sessão ou evidência de origem. A exportação foi registrada no log
 > de auditoria."
@@ -767,18 +778,18 @@ que o terapeuta abre a tela de Revisão):**
 
 ## 7. Tabela consolidada de estados de UI
 
-| Tela | Estados possíveis | Transição principal |
-|---|---|---|
-| Briefing pré-sessão | normal · sem sessão anterior (paciente novo) · sessão substituta (banner "você está substituindo") | → Check-in |
-| Captura | vazio · rascunho salvo localmente · upload pendente · upload confirmado · upload falhou (fila de reenvio) | → Consolidação |
-| Fila de pendências | vazio (dia limpo) · com capturas a consolidar · com revisões pendentes · com extração falha | → Revisão / Consolidação |
-| Revisão | sem sugestões (estado vazio 2.1) · alta confiança pendente · baixa confiança pendente · inconsistente pendente · tudo revisado | → Gráfico do protocolo |
-| Gráfico do protocolo | vazio (sem protocolo ainda — pré 4.1) · vazio (protocolo definido, sem evidência ainda) · em progresso · candidato a avaliação · marco confirmado | → Linha do tempo |
-| Linha do tempo | presente · visualizando passado (scrubber ativo) · comparando 2 pontos | → Gráfico / Perfil |
-| Lista de exceções (coordenador) | vazia (sem exceções — estado raro, celebrar brevemente) · com itens · item já tratado por outro coordenador | → Pacote de supervisão |
-| Fila de validação | com itens por categoria · vazia | → Notificação ao terapeuta |
-| Exportação — relatório da família | rascunho gerado · editado · exportado | → PDF + AuditLog |
-| Exportação — dossiê de convênio | seleção de período · preview factual · exportado | → PDF + AuditLog |
+| Tela                              | Estados possíveis                                                                                                                                 | Transição principal        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Briefing pré-sessão               | normal · sem sessão anterior (paciente novo) · sessão substituta (banner "você está substituindo")                                                | → Check-in                 |
+| Captura                           | vazio · rascunho salvo localmente · upload pendente · upload confirmado · upload falhou (fila de reenvio)                                         | → Consolidação             |
+| Fila de pendências                | vazio (dia limpo) · com capturas a consolidar · com revisões pendentes · com extração falha                                                       | → Revisão / Consolidação   |
+| Revisão                           | sem sugestões (estado vazio 2.1) · alta confiança pendente · baixa confiança pendente · inconsistente pendente · tudo revisado                    | → Gráfico do protocolo     |
+| Gráfico do protocolo              | vazio (sem protocolo ainda — pré 4.1) · vazio (protocolo definido, sem evidência ainda) · em progresso · candidato a avaliação · marco confirmado | → Linha do tempo           |
+| Linha do tempo                    | presente · visualizando passado (scrubber ativo) · comparando 2 pontos                                                                            | → Gráfico / Perfil         |
+| Lista de exceções (coordenador)   | vazia (sem exceções — estado raro, celebrar brevemente) · com itens · item já tratado por outro coordenador                                       | → Pacote de supervisão     |
+| Fila de validação                 | com itens por categoria · vazia                                                                                                                   | → Notificação ao terapeuta |
+| Exportação — relatório da família | rascunho gerado · editado · exportado                                                                                                             | → PDF + AuditLog           |
+| Exportação — dossiê de convênio   | seleção de período · preview factual · exportado                                                                                                  | → PDF + AuditLog           |
 
 ---
 

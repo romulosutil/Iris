@@ -1,0 +1,35 @@
+# Imagem enxuta — só o runtime da app (Next standalone).
+node_modules
+.next
+storybook-static
+out
+build
+dist
+coverage
+playwright-report
+test-results
+
+# não vai pra imagem
+.git
+.github
+.claude
+.headroom
+.tokensave
+docs
+db/tests
+db/backups
+tests
+.storybook
+**/*.stories.tsx
+**/*.test.ts
+**/*.test.tsx
+
+# markdown / config de dev
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+.vscode
+.idea
+.DS_Store
