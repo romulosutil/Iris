@@ -1,0 +1,34 @@
+{
+  "paciente": {
+    "id": "pt_123",
+    "idade_meses": 60,
+    "resumo_repertorio": "Comunicação predominantemente não-verbal; mandos vocais emergentes ('ba'); pareamento visual sólido; hipersensibilidade auditiva.",
+    "metas_ativas": [
+      {
+        "goal_id": "g_01",
+        "descricao": "Emitir mando vocal para 5 itens diferentes sem dica ecoica",
+        "disciplina": "ABA",
+        "mapeamentos": [{ "protocol_id": "vbmapp", "dominio_id": "mando", "nivel": 1 }]
+      }
+    ]
+  },
+  "protocolos_ativos": [
+    {
+      "protocol_id": "vbmapp",
+      "nome": "VB-MAPP",
+      "tipo_coleta": "evidencia_por_dominio",
+      "escala_formal": { "valores": [0, 0.5, 1], "quem_pontua": "terapeuta_em_avaliacao" },
+      "taxonomia_ajuda": ["independente", "dica_verbal", "dica_ecoica", "dica_gestual", "dica_entonacao", "modelacao", "dica_fisica"],
+      "dominios": [
+        { "dominio_id": "mando", "nome": "Mando", "definicao_funcional": "pedido motivado por necessidade/desejo; antecedente = motivação, não pergunta", "sinais_no_texto": ["pediu", "puxou a mão", "apontou querendo"] },
+        { "dominio_id": "tato", "nome": "Tato", "definicao_funcional": "nomeação diante de estímulo não-verbal presente", "sinais_no_texto": ["nomeou", "respondeu 'o que é isso?'"] }
+      ],
+      "componentes_extras": [
+        { "id": "barreiras", "tipo_coleta": "registro_abc", "categorias": ["comportamental", "sensorial"] }
+      ]
+    }
+  ],
+  "historico_relevante": [
+    { "dominio_id": "tato", "resumo": "nunca emitiu tato sem dica ecoica (últimas 20 sessões)" }
+  ]
+}
