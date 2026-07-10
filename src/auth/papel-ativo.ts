@@ -12,6 +12,6 @@ export type PapelResolvido = { papel: Papel } | { needsSelection: Papel[] };
 export function papelAtivo(papeis: Papel[]): PapelResolvido {
   const unicos = [...new Set(papeis)];
   if (unicos.includes("coordenador")) return { papel: "coordenador" };
-  if (unicos.length === 1) return { papel: unicos[0] };
+  if (unicos.length === 1) return { papel: unicos[0]! };
   return { needsSelection: unicos };
 }
