@@ -133,7 +133,7 @@ CREATE TABLE "user_role" (
 	"user_id" uuid NOT NULL,
 	"clinic_id" uuid NOT NULL,
 	"papel" "user_role_tipo" NOT NULL,
-	CONSTRAINT "user_role_user_id_papel_pk" PRIMARY KEY("user_id","papel")
+	CONSTRAINT "user_role_user_id_clinic_id_papel_pk" PRIMARY KEY("user_id","clinic_id","papel")
 );
 --> statement-breakpoint
 ALTER TABLE "auth_account" ADD CONSTRAINT "auth_account_user_id_app_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."app_user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

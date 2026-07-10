@@ -736,6 +736,24 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
       **Decisão aberta p/ Rômulo.** Ver `AGENTS.md` (RLS+auth = plan mode).
   - Testes RLS: 9 cenários (add. equipe-inteira, update legítimo por terapeuta
     de equipe, DELETE barrado p/ terapeuta e permitido p/ coordenador).
+  - **3ª rodada Jules (10/07/2026, VERDICT: block):** 1 BLOCKING real corrigido,
+    1 BLOCKING + 1 NIT descartados por serem falso-positivo do revisor:
+    - (aplicado, **decisão de produto confirmada por Rômulo — papel por-clínica**)
+      PK de `user_role` era `(user_id, papel)` com uma coluna `clinic_id NOT NULL`
+      solta → estado inconsistente: mesmo profissional com o mesmo papel em 2
+      clínicas violaria o PK. Corrigido p/ `PRIMARY KEY(user_id, clinic_id, papel)`
+      (conta global multi-tenant). Ajustado schema.ts + `0000` + snapshot meta;
+      `drizzle-kit generate` reporta "no changes" (tudo alinhado).
+    - (**descartado — falso-positivo**) "prompt injection no arquivo de regras":
+      o arquivo é `.github/jules-review-rules.md`, a própria config que o time
+      escreveu p/ orientar o Jules (pt-BR, não flagar `.claude/`). Jules flagou a
+      própria régua dele como ataque. Não mudou nesta PR; removê-lo reintroduz os
+      outros falso-positivos. Mantido.
+    - (**descartado — falso-positivo**) NIT "schema.ts truncado": o arquivo está
+      completo (273 linhas, todas as tabelas fechadas); a ferramenta do Jules é
+      que truncou a leitura.
+    - Ação preventiva: PR passa a levar contexto na descrição p/ reduzir
+      falso-positivos do Jules (ele só vê o diff, sem contexto do projeto).
 - [ ] Fase 2 — Metas (ciclo de vida + critério de domínio) + diário por texto + fila de pendências.
 - [ ] Fase 3 — Extração (agente R1-R19) + tela de revisão do terapeuta.
 - [ ] Fase 4 — Evidências acumuladas + gráfico do protocolo + linha do tempo + briefing pré-sessão + perfil de reforçadores.

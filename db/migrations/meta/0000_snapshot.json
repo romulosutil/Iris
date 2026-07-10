@@ -1006,9 +1006,9 @@
         }
       },
       "compositePrimaryKeys": {
-        "user_role_user_id_papel_pk": {
-          "name": "user_role_user_id_papel_pk",
-          "columns": ["user_id", "papel"]
+        "user_role_user_id_clinic_id_papel_pk": {
+          "name": "user_role_user_id_clinic_id_papel_pk",
+          "columns": ["user_id", "clinic_id", "papel"]
         }
       },
       "uniqueConstraints": {},

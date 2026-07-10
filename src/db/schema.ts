@@ -128,7 +128,9 @@ export const userRole = pgTable(
       .references(() => clinic.id, { onDelete: "cascade" }),
     papel: userRoleTipo("papel").notNull(),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.papel] })],
+  // PK inclui clinic_id: a mesma pessoa pode ter o mesmo papel em clínicas
+  // diferentes (conta global multi-tenant). PK(user_id, papel) violaria isso.
+  (t) => [primaryKey({ columns: [t.userId, t.clinicId, t.papel] })],
 );
 
 // ─── Paciente (administrativo) + perfil clínico (bloqueado p/ recepção) ──────
