@@ -754,6 +754,18 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
       que truncou a leitura.
     - Ação preventiva: PR passa a levar contexto na descrição p/ reduzir
       falso-positivos do Jules (ele só vê o diff, sem contexto do projeto).
+  - **Config do Jules reformulada p/ matar o falso-positivo na raiz (10/07/2026):**
+    o `.github/workflows/pr-review.yml` passava a régua por `rules_file:
+    .github/jules-review-rules.md` — e o revisor lia a própria régua como
+    "arquivo de regras não confiável", marcando os imperativos dirigidos à IA
+    ("Escreva TODO o output", "NÃO classifique") como prompt injection. Fix:
+    removido o `rules_file` e o arquivo `.github/jules-review-rules.md`; todo o
+    contexto migrou para `extra_instructions` (canal de config confiável — o
+    Jules já obedecia o pt-BR por ali). De quebra, o `extra_instructions` foi
+    ENRIQUECIDO com contexto de arquitetura (RLS via GUC + `withTenant`;
+    Better-Auth consulta `app_user`/`auth_*`/`user_role` pré-GUC → não sugerir
+    RLS tenant ali; construção em fases) para o revisor parar de gerar findings
+    cegos ao contexto (como o W3 da 2ª rodada).
 - [ ] Fase 2 — Metas (ciclo de vida + critério de domínio) + diário por texto + fila de pendências.
 - [ ] Fase 3 — Extração (agente R1-R19) + tela de revisão do terapeuta.
 - [ ] Fase 4 — Evidências acumuladas + gráfico do protocolo + linha do tempo + briefing pré-sessão + perfil de reforçadores.
