@@ -257,10 +257,10 @@ meta).
 **Trade-off avaliado:** recomputar o fold de eventos sob demanda vs.
 materializar um snapshot por sessão.
 
-| Alternativa | Prós | Contras |
-|---|---|---|
-| Recomputar sob demanda | Sem tabela extra, sempre consistente | Lento para pacientes com centenas de sessões; briefing pré-sessão e scrubber da linha do tempo são acessados com alta frequência — não pode ter latência de recomputar 500 eventos toda vez |
-| **Materializar `SessionSnapshot` (recomendado)** | Leitura O(1) para "estado na sessão N"; barato de invalidar (só recomputa do ponto editado em diante) | Precisa de job de materialização após cada aprovação de Evidence; leve risco de estar "um evento atrasado" entre aprovação e materialização (aceitável — UI mostra "processando") |
+| Alternativa                                      | Prós                                                                                                  | Contras                                                                                                                                                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recomputar sob demanda                           | Sem tabela extra, sempre consistente                                                                  | Lento para pacientes com centenas de sessões; briefing pré-sessão e scrubber da linha do tempo são acessados com alta frequência — não pode ter latência de recomputar 500 eventos toda vez |
+| **Materializar `SessionSnapshot` (recomendado)** | Leitura O(1) para "estado na sessão N"; barato de invalidar (só recomputa do ponto editado em diante) | Precisa de job de materialização após cada aprovação de Evidence; leve risco de estar "um evento atrasado" entre aprovação e materialização (aceitável — UI mostra "processando")           |
 
 **Recomendação:** materializar. `SessionSnapshot(patient_id, session_numero)`
 guarda `repertorio_state` (JSONB, por goal/milestone: nível de ajuda mais
@@ -287,10 +287,10 @@ a partir do snapshot anterior + as Evidences daquela sessão.
     do agente, AGNOSTICISMO, já exigia isso do lado da extração; esta correção
     alinha o cálculo determinístico da linha do tempo à mesma regra). Exemplo:
     ABA/VB-MAPP usa `independente(0) < dica_verbal/dica_entonacao(1) <
-    dica_gestual/dica_ecoica(2) < modelacao(3) < dica_fisica(4)`; PEDI (TO) usa
+dica_gestual/dica_ecoica(2) < modelacao(3) < dica_fisica(4)`; PEDI (TO) usa
     sua própria escala de assistência do cuidador,
     `independente(0) < supervisao(1) < assistencia_minima(2) <
-    assistencia_moderada(3) < assistencia_maxima(4)`; Fono e demais famílias
+assistencia_moderada(3) < assistencia_maxima(4)`; Fono e demais famílias
     definem a sua ao cadastrar o protocolo. **Nunca comparar ordinals de
     protocolos/famílias diferentes na mesma conta de evolução/estagnação/
     regressão** — as 4 famílias reais confirmadas (decisão 2.10) e o
@@ -302,7 +302,7 @@ a partir do snapshot anterior + as Evidences daquela sessão.
     segmentação roda **uma vez por família presente nas Evidences daquele
     goal**, e `SessionSnapshot.segmentacao` guarda o resultado por
     `protocol_id` (`{goal_id: {protocol_id: 'evolucao'|'estagnacao'|
-    'regressao'}}`), nunca uma leitura única fundida — a linha do tempo exibe
+'regressao'}}`), nunca uma leitura única fundida — a linha do tempo exibe
     a leitura de cada família lado a lado quando aplicável, em vez de uma
     média ou "pior caso" que esconderia de qual protocolo veio a evolução ou a
     regressão. Caso de teste que exercita isso: `casos-de-teste.md`, Caso 9
@@ -329,10 +329,10 @@ a partir do snapshot anterior + as Evidences daquela sessão.
 
 **Trade-off avaliado:** JSONB flexível vs. tabelas normalizadas por protocolo.
 
-| Alternativa | Prós | Contras |
-|---|---|---|
-| Tabelas normalizadas por protocolo | Constraints fortes, queries simples por instrumento | Explode em N tabelas conforme cresce o catálogo (VB-MAPP com Barreiras 0-4 ≠ ABLLS-R domínios+tarefas ≠ PEDI escore bruto/normativo/contínuo ≠ Perfil Sensorial 2 faixas normativas); quebra o princípio "protocolo é dado, não código" — cadastrar o 2º protocolo exigiria migração |
-| **JSONB com "descritor de forma" (recomendado)** | Um novo protocolo é um INSERT, não uma migração; UI/Prompt 3 renderiza genericamente a partir de `tipo_estrutura`; agente nunca lê a estrutura diretamente (R19 — só os rótulos vêm via contexto) | Constraints de integridade complexas ficam na camada de aplicação, não no banco; queries por atributo interno exigem operadores `jsonb ->>` + índice GIN |
+| Alternativa                                      | Prós                                                                                                                                                                                              | Contras                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tabelas normalizadas por protocolo               | Constraints fortes, queries simples por instrumento                                                                                                                                               | Explode em N tabelas conforme cresce o catálogo (VB-MAPP com Barreiras 0-4 ≠ ABLLS-R domínios+tarefas ≠ PEDI escore bruto/normativo/contínuo ≠ Perfil Sensorial 2 faixas normativas); quebra o princípio "protocolo é dado, não código" — cadastrar o 2º protocolo exigiria migração |
+| **JSONB com "descritor de forma" (recomendado)** | Um novo protocolo é um INSERT, não uma migração; UI/Prompt 3 renderiza genericamente a partir de `tipo_estrutura`; agente nunca lê a estrutura diretamente (R19 — só os rótulos vêm via contexto) | Constraints de integridade complexas ficam na camada de aplicação, não no banco; queries por atributo interno exigem operadores `jsonb ->>` + índice GIN                                                                                                                             |
 
 **Recomendação:** JSONB. `Milestone.estrutura` + `Milestone.tipo_estrutura`
 (`marco_simples` | `marco_com_barreira` | `escore_composto` | `faixa_normativa`)

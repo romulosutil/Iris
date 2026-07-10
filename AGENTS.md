@@ -5,6 +5,13 @@
 > ferramenta — o que é específico de sessões Claude Code está em
 > `CLAUDE.md`, que referencia este arquivo em vez de duplicá-lo.
 
+> ⚠️ **Pivô de hospedagem em avaliação (09/07/2026, não travado):** referências
+> a Vercel/Supabase gerenciado e ao checklist LGPD dependente deles (§8) podem
+> mudar para **VPS Hostinger + Easypanel + Postgres puro** (decidido: não
+> Supabase; auth in-app + MinIO). Fonte única
+> da proposta: `docs/arquitetura/plano-bootstrap-e-stack-vps.md`. Modelo de
+> dados, RLS e plano de fases não mudam.
+
 ## 1. O produto em 3 frases
 
 Iris é um SaaS B2B para clínicas de terapia infantil (ABA, Fonoaudiologia,
@@ -32,7 +39,7 @@ específica:
 - O schema de saída do Agent 1 (`docs/agente/output-schema.json`) **não
   tem campo de nota/pontuação**. Nunca adicionar um.
 - `Evidence` é imutável no nível de privilégio do banco (`REVOKE UPDATE,
-  DELETE`) — correções são sempre novas linhas em `EvidenceRevision`,
+DELETE`) — correções são sempre novas linhas em `EvidenceRevision`,
   nunca `UPDATE` em `Evidence`.
 - `MilestoneAssessment` completo nunca é alterado — dispara nova
   reavaliação em vez de editar.
@@ -93,16 +100,16 @@ Convenções completas e racional em `docs/arquitetura/convencoes-de-codigo.md`
 — **proposta pendente de confirmação do Rômulo**, nenhuma dessas decisões
 existia em nenhum documento de especificação anterior. Resumo:
 
-| O quê | Escolha proposta |
-|---|---|
-| Gerenciador de pacotes | pnpm |
-| Linguagem | TypeScript, modo strict |
-| Lint / format | ESLint (`eslint-config-next`) + Prettier, pre-commit via Husky + lint-staged |
-| Testes unitários / componente | Vitest |
-| Testes E2E | Playwright |
-| Testes de RLS | pgTAP via `supabase test db` |
-| Commits | Conventional Commits em inglês |
-| Deploy | `git push` → Vercel (automático); migrations via Supabase CLI |
+| O quê                         | Escolha proposta                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| Gerenciador de pacotes        | pnpm                                                                         |
+| Linguagem                     | TypeScript, modo strict                                                      |
+| Lint / format                 | ESLint (`eslint-config-next`) + Prettier, pre-commit via Husky + lint-staged |
+| Testes unitários / componente | Vitest                                                                       |
+| Testes E2E                    | Playwright                                                                   |
+| Testes de RLS                 | pgTAP via `supabase test db`                                                 |
+| Commits                       | Conventional Commits em inglês                                               |
+| Deploy                        | `git push` → Vercel (automático); migrations via Supabase CLI                |
 
 Comandos esperados uma vez o projeto inicializado (ajustar ao `package.json`
 real quando existir):

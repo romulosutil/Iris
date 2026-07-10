@@ -84,12 +84,12 @@ sensibilidade sensorial):**
 Não são dois design systems — é o mesmo conjunto de tokens com dois perfis
 de "temperatura":
 
-| | Modo Clínico (terapeuta/coordenador) | Modo Família (responsável, futuro) |
-|---|---|---|
-| Densidade | Alta, otimizada para velocidade | Baixa, otimizada para leitura calma |
-| Peso de sombra/deslocamento | Cheio (4px, conforme seção 3.C) | Reduzido (2px) — menos "impacto" visual |
-| Acento dominante | Funcional (estado do dado) | Emocional/positivo (conquista em destaque) |
-| Tom de copy | Direto, técnico, sem eufemismo | Direto, mas nunca clínico-frio (ver seção 4.C) |
+|                             | Modo Clínico (terapeuta/coordenador) | Modo Família (responsável, futuro)             |
+| --------------------------- | ------------------------------------ | ---------------------------------------------- |
+| Densidade                   | Alta, otimizada para velocidade      | Baixa, otimizada para leitura calma            |
+| Peso de sombra/deslocamento | Cheio (4px, conforme seção 3.C)      | Reduzido (2px) — menos "impacto" visual        |
+| Acento dominante            | Funcional (estado do dado)           | Emocional/positivo (conquista em destaque)     |
+| Tom de copy                 | Direto, técnico, sem eufemismo       | Direto, mas nunca clínico-frio (ver seção 4.C) |
 
 O objetivo do Modo Família não é "acessibilidade TEA" — é calibrar aspereza
 para o público certo. Quando o portal da família sair do backlog (seção F),
@@ -99,16 +99,36 @@ este modo já existe como variante de tema, não como retrabalho.
 
 ### A. Paleta de cores
 
+> **Atualização 10/07/2026 — raiz cromática neurodiversidade-afirmativa.**
+> A cor primária/de marca passa a ser inspirada nos símbolos da comunidade:
+> **infinito dourado** (autismo, Au = ouro) como acento primário e **infinito
+> arco-íris** (neurodivergência) como _assinatura de marca_ (brand mark / régua
+> fina), **nunca** como chrome de UI. Evitados de propósito: a peça de
+> quebra-cabeça (rejeitada pela comunidade) e o vermelho-alarme dela.
+>
+> **Ressalva (ver §6):** o símbolo é declaração de **valores** (produto alinhado
+> ao movimento neurodiversidade-afirmativa), **não** alegação de que o software
+> é sensorialmente acessível para autistas — quem opera é profissional
+> neurotípico. Marketing não pode fundir as duas coisas.
+
+- **Primária / marca / ação:** **Ouro** `#F2B705` ≈ `oklch(0.80 0.14 85)` —
+  preenchimento sólido com **texto e borda pretos** (padrão neobrutalista:
+  garante 4.5:1). Substitui a menta como acento de ação.
+- **Espectro (assinatura de marca):** 6 stops arco-íris (vermelho→violeta),
+  usados só no brand mark / régua fina de identidade — jamais em componentes
+  funcionais (mataria a hierarquia e viraria "rainbow slop").
 - **Canvas:** `#F8F9FA` (off-white, evita branco puro — reduz glare em tela
   de celular ao ar livre/corredor, relevante para o terapeuta, não é
   "acomodação sensorial").
 - **Bordas/texto — hierarquia, não uniformidade:** preto puro `#000000`
   reservado a no máximo 1-2 elementos-âncora por tela (ação primária,
   título); demais bordas em grafite `#1A1A1A`/`#2B2B2B`. Bordas pretas em
-  *todo* elemento criam ruído visual e competem com o próprio objetivo de
+  _todo_ elemento criam ruído visual e competem com o próprio objetivo de
   hierarquia que o neobrutalismo deveria estar servindo.
-- **Acento Sucesso/Ação:** Menta `#B2DFDB`. **Informação:** Azul `#90CAF9`.
-  **Alerta:** Terracota `#EF9A9A`.
+- **Acentos funcionais de estado do dado** (secundários à marca, sempre com
+  ícone+texto redundante): **Sucesso/"conquistado":** Menta `#B2DFDB`.
+  **Informação:** Azul `#90CAF9`. **Alerta:** Terracota `#EF9A9A` (soft red
+  deliberado, não o vermelho-puzzle).
 - **Obrigatório:** validar contraste (WCAG AA — 4.5:1 texto, 3:1 UI/bordas)
   de cada par cor-de-fundo + texto/ícone antes de aprovar o token, e checar
   simulação de daltonismo entre os três acentos (protanopia/deuteranopia) —
@@ -136,8 +156,8 @@ este modo já existe como variante de tema, não como retrabalho.
   Clínico) / `2px 2px 0px #000000` (Modo Família).
 - **Estados — binário de verdade, corrigindo a ambiguidade da v1:**
   - **Default → Pressed:** o par que usa a metáfora "brutal" (deslocamento
-    + redução de sombra ao clique). Peso do deslocamento escala com risco
-    da ação (princípio 2 da seção 1).
+    - redução de sombra ao clique). Peso do deslocamento escala com risco
+      da ação (princípio 2 da seção 1).
   - **Focus:** anel de foco ortogonal, cor constante, **nunca** fundido com
     hover ou active — é o único jeito de navegação por teclado ter um
     indicador confiável. Fundir focus com o clique "brutal" (como a v1
@@ -153,16 +173,19 @@ este modo já existe como variante de tema, não como retrabalho.
 ## 4. Guia de componentes
 
 ### A. Botão Primário
+
 Sombra rígida com deslocamento no clique (estado Pressed), anel de foco
 ortogonal independente. Peso do deslocamento (curto/longo) reflete o risco
 da ação que ele dispara, conforme princípio 2.
 
 ### B. Content Card
+
 Bordas grossas, fundo sólido, sem gradiente/opacidade. Cards que exibem
 "candidato" usam o par de tokens da seção 3.C — nunca o mesmo visual de um
 card de fato consolidado.
 
 ### C. Alerta de Erro Redundante
+
 Ícone + texto sempre obrigatórios (não depende só de cor). **Correção
 importante da v1:** descartar o padrão de listras pretas na borda como
 "marca de segurança" — padrões repetitivos de alto contraste são gatilho
@@ -170,11 +193,12 @@ conhecido de estresse visual/efeito moiré e, para uma fração pequena mas
 real de qualquer população, risco fotossensível; é o oposto do que um
 componente de erro (que já aparece em momento de estresse do usuário)
 deveria fazer, independente de quem está olhando. Usar barra sólida de cor
-+ ícone único estático. Copy do erro segue tom literal e sem culpa ("o
-áudio não foi enviado — toque para tentar de novo", nunca "algo deu
-errado!" com exclamação) — vale tanto para o terapeuta apressado quanto
-para o responsável lendo um relatório, é prática de UX writing sob estresse,
-não requisito TEA.
+
+- ícone único estático. Copy do erro segue tom literal e sem culpa ("o
+  áudio não foi enviado — toque para tentar de novo", nunca "algo deu
+  errado!" com exclamação) — vale tanto para o terapeuta apressado quanto
+  para o responsável lendo um relatório, é prática de UX writing sob estresse,
+  não requisito TEA.
 
 ## 5. Critérios de aceite (antes de aprovar tokens/código)
 

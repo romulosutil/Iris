@@ -7,6 +7,14 @@ desta. Objetivo: uma sessão nova de Claude Code CLI, sem nenhuma memória desta
 conversa, consegue começar a codar a Fase 1 só lendo este arquivo + os
 documentos que ele referencia — sem precisar que o Rômulo reexplique nada.
 
+> ⚠️ **Pivô de infra em avaliação (09/07/2026):** o setup de infra deste
+> handoff (criar projetos Supabase/Vercel gerenciados) está sob revisão — nova
+> premissa é **VPS Hostinger + Easypanel + Postgres puro** (não Supabase). Antes de
+> executar o checklist de setup abaixo, ler
+> [`docs/arquitetura/plano-bootstrap-e-stack-vps.md`](docs/arquitetura/plano-bootstrap-e-stack-vps.md).
+> A Fase 0.5 (design system) **não é afetada** — não depende de banco e pode
+> ser construída local em paralelo ao provisionamento do VPS.
+
 **Pré-requisito adicionado em 10/07/2026 — rodar a Fase 0.5 antes desta.**
 Antes de codar qualquer tela da Fase 1 (cadastro, agenda), implementar os
 tokens (`tailwind.config.ts`, fonte única, 2 modos Clínico/Família) e os 3
@@ -88,17 +96,17 @@ não repetidos aqui para não divergir; leia o README primeiro.
 
 ## 3. Decisões de arquitetura já travadas (não redebater)
 
-| Decisão | Escolha | Onde está detalhado |
-|---|---|---|
-| Framework web | Next.js (App Router), monólito modular | `docs/arquitetura/stack-e-plano-de-construcao.md` §1-2 |
-| Banco de dados | Postgres via Supabase (RLS nativo + Auth + Storage) | idem, e DDL completa em `docs/dados/modelo-de-dados.md` |
-| Hospedagem | Vercel `gru1` + Supabase `sa-east-1` (região São Paulo) | idem §1 |
-| Processamento de extração | Job assíncrono simples (webhook + retry), sem fila dedicada | idem §1 |
-| API de LLM (extração) | Claude API como baseline; escolha final Claude vs. Gemini só na Fase 3 (bake-off) | `BACKLOG.md` seção D |
-| O que NÃO usar agora | Kubernetes, microsserviços, vector DB dedicado, filas distribuídas, multi-região, OpenRouter em produção | `stack-e-plano-de-construcao.md` §2 |
-| Modelo de dados | 25 entidades, RLS por papel, `Evidence` imutável + `EvidenceRevision`, `Protocol`/`Milestone` heterogêneo via JSONB (protocolo é dado, não código), `PatientProtocol` M:N com vigência | `docs/dados/modelo-de-dados.md` (documento inteiro) |
-| Agente de extração | Regras R1-R19, `output-schema.json`, testado 8/8 e 10/10 em validação cega + especialista | `docs/agente/protocolos-e-agente.md`, `docs/agente/system-instructions.md` |
-| Design system | Tokens + 3 componentes base (Botão, Card, Alerta), codinome interno "Espectro Brutal", entregue em Storybook (`@storybook/nextjs` + `addon-a11y`) publicado no Vercel — implementar na Fase 0.5, antes desta | `docs/ux/design-system-espectro-brutal.md`, `stack-e-plano-de-construcao.md` seção "Fase 0.5" |
+| Decisão                   | Escolha                                                                                                                                                                                                      | Onde está detalhado                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Framework web             | Next.js (App Router), monólito modular                                                                                                                                                                       | `docs/arquitetura/stack-e-plano-de-construcao.md` §1-2                                        |
+| Banco de dados            | Postgres via Supabase (RLS nativo + Auth + Storage)                                                                                                                                                          | idem, e DDL completa em `docs/dados/modelo-de-dados.md`                                       |
+| Hospedagem                | Vercel `gru1` + Supabase `sa-east-1` (região São Paulo)                                                                                                                                                      | idem §1                                                                                       |
+| Processamento de extração | Job assíncrono simples (webhook + retry), sem fila dedicada                                                                                                                                                  | idem §1                                                                                       |
+| API de LLM (extração)     | Claude API como baseline; escolha final Claude vs. Gemini só na Fase 3 (bake-off)                                                                                                                            | `BACKLOG.md` seção D                                                                          |
+| O que NÃO usar agora      | Kubernetes, microsserviços, vector DB dedicado, filas distribuídas, multi-região, OpenRouter em produção                                                                                                     | `stack-e-plano-de-construcao.md` §2                                                           |
+| Modelo de dados           | 25 entidades, RLS por papel, `Evidence` imutável + `EvidenceRevision`, `Protocol`/`Milestone` heterogêneo via JSONB (protocolo é dado, não código), `PatientProtocol` M:N com vigência                       | `docs/dados/modelo-de-dados.md` (documento inteiro)                                           |
+| Agente de extração        | Regras R1-R19, `output-schema.json`, testado 8/8 e 10/10 em validação cega + especialista                                                                                                                    | `docs/agente/protocolos-e-agente.md`, `docs/agente/system-instructions.md`                    |
+| Design system             | Tokens + 3 componentes base (Botão, Card, Alerta), codinome interno "Espectro Brutal", entregue em Storybook (`@storybook/nextjs` + `addon-a11y`) publicado no Vercel — implementar na Fase 0.5, antes desta | `docs/ux/design-system-espectro-brutal.md`, `stack-e-plano-de-construcao.md` seção "Fase 0.5" |
 
 ## 4. Escopo exato da Fase 1 (o que codar agora)
 

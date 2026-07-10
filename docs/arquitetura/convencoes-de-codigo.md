@@ -1,7 +1,9 @@
 # Convenções de código
 
-Status: **proposto por Claude em 10/07/2026, pendente de confirmação do
-Rômulo antes de iniciar a Fase 0.5.** Nenhuma destas decisões existia nos
+Status: **CONFIRMADAS pelo Rômulo em 09/07/2026** (commits em pt-BR; pnpm/
+corepack, TS strict, ESLint+Prettier+Husky, Vitest+Playwright+pgTAP). Estrutura
+de pastas e camada de deploy/dados foram substituídas pelo
+`plano-bootstrap-e-stack-vps.md` (feature-first + Postgres puro + Easypanel). Nenhuma destas decisões existia nos
 4 documentos de especificação — `stack-e-plano-de-construcao.md` cobre
 arquitetura de sistema (framework, banco, hospedagem, o que não usar), não
 convenções de código no dia a dia (gerenciador de pacotes, lint, testes,
@@ -12,6 +14,14 @@ tomar essas decisões sozinha no meio do caminho.
 Qualquer item aqui pode ser trocado por decisão do Rômulo sem precisar de
 justificativa adicional — são convenções, não princípios inegociáveis do
 produto (esses estão em `README.md`).
+
+> ⚠️ **Atualização 09/07/2026:** o pivô de hospedagem para **VPS/Easypanel**
+> (ver [`plano-bootstrap-e-stack-vps.md`](plano-bootstrap-e-stack-vps.md))
+> **adiciona Docker ao escopo** e uma pasta `infra/` (Dockerfile,
+> docker-compose, `.dockerignore`) + `.claudeignore` à estrutura de pastas
+> proposta aqui. Deploy deixa de ser Vercel-automático e passa a Easypanel
+> (GitHub source + Dockerfile builder). Esses ajustes ainda estão **pendentes
+> de confirmação** junto com o resto desta proposta.
 
 ## Gerenciador de pacotes
 
@@ -54,15 +64,12 @@ lint-staged, para nunca commitar código quebrando lint.
 
 ## Commits
 
-**Conventional Commits em inglês** (`feat:`, `fix:`, `docs:`, `chore:`,
-`refactor:`, `test:`) — convenção amplamente suportada por tooling
-(changelog automático, integração com agentes de código). O corpo do
-commit pode ser em português quando o contexto for de produto/negócio, já
-que toda a documentação do projeto é pt-BR.
-
-**Esta é a decisão menos óbvia deste documento — confirmar ou trocar
-explicitamente antes da Fase 0.5** (ex.: trocar para português se fizer
-mais sentido para um projeto solo com toda a documentação em pt-BR).
+**Conventional Commits em português** (decidido 09/07/2026). Prefixos padrão
+mantidos (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`) pela
+compatibilidade com tooling (changelog automático), mas o texto é em pt-BR —
+alinhado com toda a documentação do projeto e com o dono solo.
+Ex.: `feat: adiciona cadastro clínico de paciente`,
+`fix: corrige política RLS de acesso do coordenador`.
 
 ## Branches
 
@@ -74,17 +81,27 @@ deste projeto vai ser gerado por agentes de código, não só escrito à mão.
 
 ## Estrutura de pastas (sugestão inicial, não travada)
 
-Ponto de partida razoável para um Next.js App Router, a ajustar livremente
-na Fase 0.5:
+> ⚠️ **SUPERSEDED (09/07/2026):** esta estrutura flat foi substituída pela
+> estrutura **feature-first** de `plano-bootstrap-e-stack-vps.md` §4 (com
+> `src/`, `features/`, `db/`, `infra/`, e `components/ui/` para o design
+> system). Não há mais `supabase/` nem "clientes Supabase" — é Postgres puro
+> (§2 daquele plano). Use a estrutura do plano como fonte.
+
+Estrutura antiga (histórica), substituída:
 
 ```
 app/                    # rotas (App Router)
-components/              # design system (Espectro Brutal) + componentes específicos de tela
-lib/                     # clientes Supabase, utils, helpers de RLS
-supabase/migrations/     # DDL versionado (fonte: docs/dados/modelo-de-dados.md)
+components/              # design system + componentes de tela
+lib/                     # utils, helpers de RLS
+supabase/migrations/     # (obsoleto — ver db/migrations no plano)
 ```
 
 ## Deploy
+
+> ⚠️ **SUPERSEDED (09/07/2026):** não é mais Vercel/Supabase CLI. Deploy passa a
+> ser **Easypanel** (GitHub source + Dockerfile builder) e migrations via
+> Drizzle/dbmate contra o Postgres do VPS. Fonte: `plano-bootstrap-e-stack-vps.md`
+> §5. Texto antigo abaixo mantido só como histórico.
 
 `git push` para `main` → deploy automático no Vercel (`gru1`). Migrations
 de banco via Supabase CLI contra o projeto em `sa-east-1`. Sem CI/CD

@@ -13,11 +13,13 @@ Painel: 2 especialistas em protocolos, 4 terapeutas (AT/ABA, Fono, TO, superviso
 ### E1 · "Dra. Camila" — BCBA-D, 15 anos, supervisora certificada, aplica VB-MAPP há uma década
 
 **Sobre a extração automática a partir do diário:**
+
 > "O conceito está certo, mas tem um erro conceitual perigoso na sua lógica: anotação de sessão **não pontua marco**. O VB-MAPP tem critérios formais — o Mando nível 1-M2, por exemplo, exige X mandos diferentes em condições específicas, sem dica além de 'o que você quer?'. Uma criança pedir 'ajuda' uma vez numa terça-feira é **evidência a favor** do marco, não o marco atingido. Se o seu gráfico pintar o marco porque a IA viu uma frase, vocês vão gerar avaliações infladas e perder toda a credibilidade clínica."
 
 > "O fluxo certo: a IA acumula evidências por marco, com data e nível de ajuda. Quando o acúmulo sugere que o critério formal pode ter sido atingido, ela sinaliza 'candidato a avaliação'. Aí o terapeuta — na janela de avaliação formal, que costuma ser semestral — testa e pontua. O que muda no dia a dia é que ele chega na avaliação com o dossiê pronto, em vez de começar do zero."
 
 **Sobre o que validar na saída da IA:**
+
 > "O nível de ajuda que vocês modelaram está correto e é o que separa produto sério de brinquedo. Acrescentaria: registrar se a resposta foi em ambiente estruturado (mesa, tentativa discreta) ou natural (NET) — o VB-MAPP diferencia isso em vários marcos. E o Barriers do VB-MAPP é um instrumento próprio com 24 barreiras pontuadas de 0-4; seus registros ABC alimentam essa avaliação, não a substituem. Mesma lógica: evidência acumula, avaliação é formal."
 
 > "Uma coisa que narrativa não captura bem: **frequência**. 'Fez vários mandos' não serve para taxa de mando/hora, que é um dado clássico. Não tentem extrair número de texto vago — marquem como 'frequência não informada' e deixem o terapeuta preencher se quiser. Pior que dado ausente é dado inventado."
@@ -28,7 +30,7 @@ Painel: 2 especialistas em protocolos, 4 terapeutas (AT/ABA, Fono, TO, superviso
 
 > "Isso resolve seu problema multidisciplinar de graça: a TO e a fono podem ter metas no mesmo plano da criança, mesmo sem protocolo VB-MAPP. O diário e a extração funcionam contra metas; o mapeamento para protocolo é uma camada a mais quando existir."
 
-**Validação dos outputs dos cenários de exemplo:** ambos os especialistas confirmaram as extrações esperadas (Leo, Sofia, Lucas, Miguel) como corretas, com duas correções: (1) no cenário do Leo, "ajuda" espontâneo é evidência de mando *e* de comunicação social — a dupla contagem é desejável; (2) no cenário da Sofia, a resposta ao nome na 3ª tentativa deve registrar as duas falhas anteriores como parte da evidência (latência de resposta importa), não só o acerto.
+**Validação dos outputs dos cenários de exemplo:** ambos os especialistas confirmaram as extrações esperadas (Leo, Sofia, Lucas, Miguel) como corretas, com duas correções: (1) no cenário do Leo, "ajuda" espontâneo é evidência de mando _e_ de comunicação social — a dupla contagem é desejável; (2) no cenário da Sofia, a resposta ao nome na 3ª tentativa deve registrar as duas falhas anteriores como parte da evidência (latência de resposta importa), não só o acerto.
 
 ---
 
@@ -137,7 +139,7 @@ Além de confiança da extração, comparar com o padrão histórico: sugestão 
 5. Coordenador: lista de exceções + pacote de supervisão
 6. Relatório da família (PDF exportável)
 7. Ditado por voz (captura rápida) + polish + LGPD hardening
-Fast-follow pós-MVP: relatório de convênio; avaliação formal assistida (janela de pontuação com dossiê).
+   Fast-follow pós-MVP: relatório de convênio; avaliação formal assistida (janela de pontuação com dossiê).
 
 ---
 
@@ -146,6 +148,7 @@ Fast-follow pós-MVP: relatório de convênio; avaliação formal assistida (jan
 Regras gerais: 45-60 min, gravadas com consentimento, 5-8 participantes por grupo. Nunca pergunte "você usaria?" — pergunte sobre comportamento passado e observe reação a protótipo. Priorize validar os temas de confiança média (6, 9) e os pressupostos de disposição a pagar.
 
 ### Roteiro A — Especialista em protocolos (validar outputs da IA)
+
 Aquecimento: trajetória, protocolos que aplica, papel nas avaliações.
 Contexto: como é hoje uma janela de avaliação formal? Quanto tempo consome? O que você consulta para pontuar?
 Mergulho: mostre 3 diários reais anonimizados + a extração da IA. Peça para corrigir item a item ("o que está errado aqui? o que falta?"). Anote taxa de concordância por operante. Pergunte: "com que evidência acumulada você se sentiria confortável em ver um marco marcado como 'candidato'?"
@@ -153,6 +156,7 @@ Reação: mostre o gráfico de protocolo com marcos "candidatos". "O que esse vi
 Encerramento: "o que faria você recomendar contra esse produto para uma clínica?"
 
 ### Roteiro B — Terapeutas (jornada, agenda, áudio)
+
 Aquecimento: rotina de um dia típico, nº de atendimentos, intervalos reais.
 Contexto: "me mostra (ou descreve) o último registro de sessão que você fez. Quando fez? Quanto demorou? O que você deixou de fora por falta de tempo?"
 Mergulho: reconstitua o dia de ontem hora a hora — onde o registro realmente aconteceu. Explore áudio: "você gravaria um áudio de 1 min após a sessão? Onde estaria fisicamente? Quem estaria por perto?" Explore agenda: quem monta a grade, como fica sabendo de mudanças.
@@ -160,6 +164,7 @@ Reação: teste de usabilidade da tela de revisão com extração real de um di�
 Encerramento: "se esse app sumisse depois de um mês de uso, o que você sentiria falta?"
 
 ### Roteiro C — Coordenadores (insights, supervisão, disposição a pagar)
+
 Aquecimento: tamanho da equipe, carteira, rotina de coordenação.
 Contexto: "como você descobriu o último paciente que estava estagnado? Quanto tempo levou entre o fato e você saber?"
 Mergulho: reunião de supervisão — o que você prepara, quanto tempo leva, o que sempre falta. Relatórios de convênio: quais operadoras, formato exigido, quem escreve, quanto tempo por trimestre (validar Tema 6 com números).
@@ -167,6 +172,7 @@ Reação: mostre a lista de exceções priorizada e o pacote de supervisão. "O 
 Encerramento: "quem além de você decidiria a compra?"
 
 ### Roteiro D — Pais/responsáveis (recepção de resultados)
+
 Recrutamento: variar escolaridade e familiaridade digital; incluir ao menos 1 responsável não-pai/mãe. Cuidado ético: tema sensível, deixar claro que não é avaliação da criança.
 Aquecimento: rotina de terapias da criança (quantas horas/semana, há quanto tempo).
 Contexto: "qual foi a última informação que a clínica te deu sobre a evolução? Como chegou? O que você fez com ela?"

@@ -28,29 +28,30 @@ clínica humana.
 
 ## Estrutura da documentação
 
-| Caminho | Conteúdo |
-|---|---|
-| `docs/prompts/serie-de-prompts.md` | Contexto do projeto (Bloco 0) + série de 4 prompts encadeados para gerar: modelo de dados, agente, UX flows e stack/plano. **Comece por aqui.** |
-| `docs/agente/protocolos-e-agente.md` | Documento completo: catálogo dos 10 protocolos, formato canônico de contexto, instruções, schema, golden example e validação |
-| `docs/agente/system-instructions.md` | System prompt do agente de extração (R1-R19), pronto para uso |
-| `docs/agente/output-schema.json` | JSON Schema de saída (structured outputs) |
-| `docs/agente/contexto-exemplo.json` | Exemplo do contexto por paciente que o backend monta para o agente |
-| `docs/agente/golden-example-output.json` | Saída esperada do diário-exemplo (caso de teste nº 1) |
-| `docs/agente/casos-de-teste.md` | Casos de teste 2-8 (cenários A-C formalizados em JSON + 4 casos novos: sem evidências, ambíguo, regressão, erro de transcrição) + pipeline de extração |
-| `docs/agente/agente-2-relatorio-familia.md` | Segundo agente: gerador do relatório para a família — regras de tom, schema, casos de teste |
-| `docs/dados/modelo-de-dados.md` | Modelo de domínio, diagrama ER, DDL PostgreSQL das tabelas críticas, RLS multi-tenant e event-sourcing da linha do tempo |
-| `docs/legal/validacao-legal-prontuario.md` | Pesquisa de requisitos legais (CFP/COFFITO/CFFa, LGPD, hospedagem): o que tem certeza documental vs. o que precisa de parecer jurídico |
-| `docs/governanca/validacao-coordenador.md` | Regras V1-V5 de reclassificação + checklists de erro clássico por protocolo |
-| `docs/pesquisa/pesquisa-simulada.md` | Painel simulado (11 personas), 10 temas com confiança, roteiros para pesquisa real pós-MVP |
-| `docs/produto/mapa-jornadas-gaps.md` | Cobertura do ciclo de vida completo, auditoria do dia terapêutico e gaps com destino |
-| `docs/produto/modelo-de-negocio.md` | Modelo de negócio: preço por paciente ativo, 3 tiers, concorrência real (jul/2026), GTM e métricas |
-| `docs/ux/fluxos-e-wireframes.md` | User flows (Mermaid), wireframes, estados de UI e microcopy pt-BR da jornada do terapeuta e do coordenador |
-| `docs/arquitetura/stack-e-plano-de-construcao.md` | Stack justificada, o que não usar ainda, plano de construção (Fase 0.5 + Fases 1-6) e checklist de LGPD mínimo viável |
-| `docs/ux/design-system-espectro-brutal.md` | Design system (codinome interno "Espectro Brutal"): tokens, princípios e os 3 componentes base — implementado na Fase 0.5, antes da Fase 1 |
-| `docs/ux/inventario-componentes.md` | Componentes de UI previstos por fase (levantados de `fluxos-e-wireframes.md`) — consultar antes de estilizar algo novo em qualquer fase; regra de nunca hardcodear componente está em `HANDOFF-FASE1.md` seção 0 |
-| `BACKLOG.md` | O que ainda falta ser feito |
-| `HANDOFF-FASE1.md` | Briefing de início de construção para a sessão de Claude Code CLI que vai codar a Fase 1 |
-| `docs/legal/briefing-para-advogado.md` | Consolidado de pontos jurídicos em aberto, formatado para revisão informal por advogado |
+| Caminho                                           | Conteúdo                                                                                                                                                                                                                                  |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/prompts/serie-de-prompts.md`                | Contexto do projeto (Bloco 0) + série de 4 prompts encadeados para gerar: modelo de dados, agente, UX flows e stack/plano. **Comece por aqui.**                                                                                           |
+| `docs/agente/protocolos-e-agente.md`              | Documento completo: catálogo dos 10 protocolos, formato canônico de contexto, instruções, schema, golden example e validação                                                                                                              |
+| `docs/agente/system-instructions.md`              | System prompt do agente de extração (R1-R19), pronto para uso                                                                                                                                                                             |
+| `docs/agente/output-schema.json`                  | JSON Schema de saída (structured outputs)                                                                                                                                                                                                 |
+| `docs/agente/contexto-exemplo.json`               | Exemplo do contexto por paciente que o backend monta para o agente                                                                                                                                                                        |
+| `docs/agente/golden-example-output.json`          | Saída esperada do diário-exemplo (caso de teste nº 1)                                                                                                                                                                                     |
+| `docs/agente/casos-de-teste.md`                   | Casos de teste 2-8 (cenários A-C formalizados em JSON + 4 casos novos: sem evidências, ambíguo, regressão, erro de transcrição) + pipeline de extração                                                                                    |
+| `docs/agente/agente-2-relatorio-familia.md`       | Segundo agente: gerador do relatório para a família — regras de tom, schema, casos de teste                                                                                                                                               |
+| `docs/dados/modelo-de-dados.md`                   | Modelo de domínio, diagrama ER, DDL PostgreSQL das tabelas críticas, RLS multi-tenant e event-sourcing da linha do tempo                                                                                                                  |
+| `docs/legal/validacao-legal-prontuario.md`        | Pesquisa de requisitos legais (CFP/COFFITO/CFFa, LGPD, hospedagem): o que tem certeza documental vs. o que precisa de parecer jurídico                                                                                                    |
+| `docs/governanca/validacao-coordenador.md`        | Regras V1-V5 de reclassificação + checklists de erro clássico por protocolo                                                                                                                                                               |
+| `docs/pesquisa/pesquisa-simulada.md`              | Painel simulado (11 personas), 10 temas com confiança, roteiros para pesquisa real pós-MVP                                                                                                                                                |
+| `docs/produto/mapa-jornadas-gaps.md`              | Cobertura do ciclo de vida completo, auditoria do dia terapêutico e gaps com destino                                                                                                                                                      |
+| `docs/produto/modelo-de-negocio.md`               | Modelo de negócio: preço por paciente ativo, 3 tiers, concorrência real (jul/2026), GTM e métricas                                                                                                                                        |
+| `docs/ux/fluxos-e-wireframes.md`                  | User flows (Mermaid), wireframes, estados de UI e microcopy pt-BR da jornada do terapeuta e do coordenador                                                                                                                                |
+| `docs/arquitetura/stack-e-plano-de-construcao.md` | Stack justificada, o que não usar ainda, plano de construção (Fase 0.5 + Fases 1-6) e checklist de LGPD mínimo viável                                                                                                                     |
+| `docs/arquitetura/plano-bootstrap-e-stack-vps.md` | Pivô de hospedagem para VPS Hostinger + Easypanel + **Postgres puro** (não Supabase); redefine deploy/Docker/LGPD, estrutura de pastas feature-first e a sequência de bootstrap até a Fase 0.5. **Ler antes de qualquer setup de infra.** |
+| `docs/ux/design-system-espectro-brutal.md`        | Design system (codinome interno "Espectro Brutal"): tokens, princípios e os 3 componentes base — implementado na Fase 0.5, antes da Fase 1                                                                                                |
+| `docs/ux/inventario-componentes.md`               | Componentes de UI previstos por fase (levantados de `fluxos-e-wireframes.md`) — consultar antes de estilizar algo novo em qualquer fase; regra de nunca hardcodear componente está em `HANDOFF-FASE1.md` seção 0                          |
+| `BACKLOG.md`                                      | O que ainda falta ser feito                                                                                                                                                                                                               |
+| `HANDOFF-FASE1.md`                                | Briefing de início de construção para a sessão de Claude Code CLI que vai codar a Fase 1                                                                                                                                                  |
+| `docs/legal/briefing-para-advogado.md`            | Consolidado de pontos jurídicos em aberto, formatado para revisão informal por advogado                                                                                                                                                   |
 
 ## Como usar a série de prompts
 
@@ -58,6 +59,12 @@ Cole o Bloco 0 de `docs/prompts/serie-de-prompts.md` no início de cada sessão 
 trabalho com o Claude, depois rode os Prompts 1→4 em ordem, encadeando os outputs.
 O Prompt 2 já tem implementação de referência em `docs/agente/` — critique e
 refine, não recomece.
+
+> ⚠️ **Pivô de hospedagem em avaliação (09/07/2026):** a stack de deploy
+> (Vercel + Supabase gerenciado) migra para **VPS Hostinger + Easypanel +
+> Postgres puro** (não Supabase; auth in-app + MinIO) — ver
+> `docs/arquitetura/plano-bootstrap-e-stack-vps.md`.
+> Produto, modelo de dados, RLS e plano de fases não mudam.
 
 ## Estado atual (atualizado 09/07/2026)
 

@@ -15,7 +15,9 @@ Legenda: ✅ coberto · 🟡 parcial · 🔴 ausente. Cada gap tem destino recom
 ```
 
 ### 1. Admissão do paciente — 🔴 AUSENTE (crítico, promover ao MVP)
+
 O paciente hoje "aparece" cadastrado no sistema. Falta a jornada de entrada:
+
 - Ficha clínica essencial: diagnóstico/hipótese, medicações, alergias, restrições,
   convulsões, contatos de emergência, escola.
 - Anamnese (entrevista com responsáveis) — documento rico que alimenta o resumo
@@ -23,18 +25,21 @@ O paciente hoje "aparece" cadastrado no sistema. Falta a jornada de entrada:
 - CONSENTIMENTO LGPD específico: tratamento de dados de menor + uso de IA no
   processamento + termo de ciência sobre exportação de relatórios. Sem isso, o
   produto não pode operar com dados reais.
-→ Destino: versão mínima (ficha + consentimento) na Fase 1; anamnese estruturada
+  → Destino: versão mínima (ficha + consentimento) na Fase 1; anamnese estruturada
   como fast-follow.
 
 ### 2. Avaliação inicial — ✅ coberto como processo, 🟡 como jornada
+
 O catálogo de protocolos e a MilestoneAssessment em série cobrem o dado. A
 JORNADA de aplicar a avaliação (agendar bateria, registrar por instrumento,
 gerar o relatório interdisciplinar) é fast-follow declarado ("avaliação formal
 assistida"). Sem mudança — já priorizado corretamente.
 
 ### 3. Plano de cuidados e metas (PEI) — 🔴 GAP MAIS GRAVE (promover ao MVP)
+
 A meta é a "unidade central" do sistema, mas nenhum prompt desenha o CICLO DE
 VIDA DA META:
+
 - Quem cria: coordenador/supervisor (com o terapeuta), a partir da avaliação e
   do dossiê. Hoje o sistema recebe "metas ativas" como se caíssem do céu.
 - Estados: rascunho → ativa → dominada → pausada → descontinuada.
@@ -42,10 +47,11 @@ VIDA DA META:
   acerto independente") — é ele que transforma o acúmulo de evidências em
   candidata a dominada; sem critério, o "candidato a avaliação" não tem régua.
 - Ciclos de revisão (8-12 semanas, estilo ESDM): revisar metas com o dossiê.
-→ Destino: MVP. Sem meta criada não há alvo de extração — é pré-requisito lógico
+  → Destino: MVP. Sem meta criada não há alvo de extração — é pré-requisito lógico
   da Fase 3.
 
 ### 4. Ciclo de sessões
+
 - **Pré-sessão — 🔴 AUSENTE (alto valor, custo baixo):** o terapeuta chega e
   trabalha o quê? Falta o BRIEFING DE SESSÃO: resumo da última sessão, metas
   ativas priorizadas, alertas ("evite transição abrupta com massinha"),
@@ -66,6 +72,7 @@ VIDA DA META:
   notificação (Fase 5).
 
 ### 5. Supervisão e qualidade — ✅ coberto
+
 Exceções, pacote de supervisão, fila de validação/reclassificação, métricas
 transparentes. Único 🟡: REUNIÃO INTERDISCIPLINAR (fono + ABA + TO discutindo o
 mesmo caso) — o pacote de supervisão é coordenador↔terapeuta; falta a visão
@@ -75,6 +82,7 @@ mesmo caso) — o pacote de supervisão é coordenador↔terapeuta; falta a vis�
 ### 6. Reavaliação — ✅ coberto (série 1º-4º teste, dossiê, candidatos). Fast-follow.
 
 ### 7. Comunicação externa
+
 - Família (relatório PDF) — ✅ coberto.
 - Convênio — ✅ fast-follow declarado.
 - **ESCOLA — 🔴 ausente:** relatório para professores/AT escolar e orientações de
@@ -87,6 +95,7 @@ mesmo caso) — o pacote de supervisão é coordenador↔terapeuta; falta a vis�
   (exigiria o portal da família, decisão já tomada de adiar).
 
 ### 8. Transição e alta — 🔴 ausente (aceitável adiar, mas nomear)
+
 O VB-MAPP tem componente de Transição (18 áreas) exatamente para isso: prontidão
 para ambientes menos restritivos, redução de carga, alta. Relatório de alta é
 obrigação clínica. → Destino: backlog pós-MVP, apoiado pelo dossiê + série de
@@ -96,12 +105,12 @@ avaliações (a infraestrutura já serve).
 
 ## Gaps por persona (resumo)
 
-| Persona | Coberto | Gaps |
-|---|---|---|
-| Terapeuta | agenda, captura, revisão, linha do tempo | 🔴 briefing pré-sessão · 🟡 reforçadores · 🔴 participação na criação de metas |
-| Coordenador | exceções, supervisão, validação, exports | 🔴 criação/revisão de metas · 🟡 assiduidade · 🟡 reunião interdisciplinar · 🟡 incidente grave |
-| Família | relatório PDF | 🟡 treino parental · 🔴 consentimento na admissão (é jornada DELES) |
-| Clínica/dono | (herda coordenador) | 🟡 admissão do paciente · backlog: escola, alta |
+| Persona      | Coberto                                  | Gaps                                                                                            |
+| ------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Terapeuta    | agenda, captura, revisão, linha do tempo | 🔴 briefing pré-sessão · 🟡 reforçadores · 🔴 participação na criação de metas                  |
+| Coordenador  | exceções, supervisão, validação, exports | 🔴 criação/revisão de metas · 🟡 assiduidade · 🟡 reunião interdisciplinar · 🟡 incidente grave |
+| Família      | relatório PDF                            | 🟡 treino parental · 🔴 consentimento na admissão (é jornada DELES)                             |
+| Clínica/dono | (herda coordenador)                      | 🟡 admissão do paciente · backlog: escola, alta                                                 |
 
 ## Auditoria do dia terapêutico (hora a hora) — jul/2026
 

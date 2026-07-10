@@ -99,7 +99,15 @@ internacional (Art. 33) com salvaguardas: Cláusulas-Padrão Contratuais
 titular para aquela transferência.
 
 **O que o produto decidiu fazer:** hospedar banco de dados e aplicação em
-região Brasil (Supabase `sa-east-1`, Vercel `gru1`) para reduzir a superfície
+região Brasil (originalmente Supabase `sa-east-1` + Vercel `gru1`; **decisão
+09/07/2026** de pivô para **VPS Hostinger região São Paulo (confirmada) +
+Easypanel + Postgres puro self-hosted** — o requisito "dados em território
+brasileiro" NÃO muda, só o provedor; ver
+`docs/arquitetura/plano-bootstrap-e-stack-vps.md`. Efeito jurídico relevante:
+some a Supabase como sub-processadora — banco e armazenamento (MinIO) passam a
+ser operados pela própria clínica/Iris na VPS, e o backup/retenção passa a ser
+responsabilidade da própria operação, não de um provedor gerenciado) para
+reduzir a superfície
 de transferência internacional ao mínimo possível (só a chamada de IA em si),
 e citar essa transferência explicitamente no termo de consentimento. Falta
 confirmar/assinar o DPA (Data Processing Agreement) formal com o provedor de
