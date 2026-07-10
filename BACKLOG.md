@@ -685,16 +685,109 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
       Inserida antes da Fase 1 por decisão de sequenciamento (10/07/2026, ver
       seção D) — a Fase 1 já constrói UI real (cadastro, agenda) e não
       deveria nascer sem tokens definidos.
-    - **Progresso (10/07/2026, PR #1 `fase-0.5-design-system`):** entregue
-      Next 16 + Tailwind v4 (tokens CSS-first em `globals.css`, não
-      `tailwind.config.ts`); Storybook 10 com `nextjs-vite` + `addon-a11y`;
-      4 componentes (Botão, Card, Alerta, **Logo**); favicon; home distintiva
-      enraizada no logo (3 anéis = 3 camadas de governança). A11y elevada a 1ª
-      classe: contraste AAA, forced-colors, prefers-contrast, gate axe
-      (`pnpm test`, 7/7). Taste-skill adotado seletivamente. **Falta:** publicar
-      o Storybook (depende do VPS) e, opcionalmente, gate de contraste em
-      browser-mode. Aguarda validação do designer de produto (PR #1).
+  - **Progresso (10/07/2026, PR #1 `fase-0.5-design-system`):** entregue
+    Next 16 + Tailwind v4 (tokens CSS-first em `globals.css`, não
+    `tailwind.config.ts`); Storybook 10 com `nextjs-vite` + `addon-a11y`;
+    4 componentes (Botão, Card, Alerta, **Logo**); favicon; home distintiva
+    enraizada no logo (3 anéis = 3 camadas de governança). A11y elevada a 1ª
+    classe: contraste AAA, forced-colors, prefers-contrast, gate axe
+    (`pnpm test`, 7/7). Taste-skill adotado seletivamente. **Falta:** publicar
+    o Storybook (depende do VPS) e, opcionalmente, gate de contraste em
+    browser-mode. Aguarda validação do designer de produto (PR #1).
 - [ ] Fase 1 — Pacientes (ficha clínica + consentimento LGPD) + agenda mínima + check-in.
+  - **Progresso (10/07/2026, PR #3 `fase-1a-fundacao-dados`):** fundação de
+    dados — schema Drizzle (13 tabelas), Better-Auth com `app_user` como tabela
+    `user`, RLS multi-tenant via session GUC + `withTenant` (gargalo único), 6
+    testes de integração RLS contra Postgres real.
+  - **Hardening pós-review Jules (10/07/2026):** a 1ª rodada de RLS restringia
+    só leitura por papel/equipe e deixava a escrita frouxa. Fechados:
+    (1) `patient` insert/update/delete agora exige papel administrativo
+    (recepção/coordenador; delete só coordenador); (2) `pcp_access` replica a
+    checagem de equipe no `WITH CHECK` (terapeuta fora da equipe não sobrescreve
+    perfil clínico); (3) `consent_insert` restrito a recepção/coordenador (ato
+    administrativo LGPD); (4) `protocol` split em `protocol_read` (todos) vs.
+    `protocol_write` (só coordenador); (5) teste de escrita não-autorizada
+    (terapeuta fora da equipe) adicionado; (6) `withTenant` falha rápido com
+    contexto de tenant incompleto. **Lição:** toda policy `FOR ALL` ou com
+    `USING` restrito precisa do `WITH CHECK` espelhado — `USING` filtra leitura,
+    não barra escrita.
+  - **2ª rodada Jules (10/07/2026, VERDICT: comment — não-bloqueante):**
+    aplicados os 2 WARN de policy + o NIT, DIFERIDO 1 WARN por falta de contexto
+    do revisor:
+    - (aplicado) `patient_clinical_profile`: `pcp_access FOR ALL` desmembrado em
+      `pcp_read/insert/update` (coordenador ou terapeuta da equipe) + `pcp_delete`
+      **só coordenador** — apagar dado de saúde é destrutivo demais p/ terapeuta;
+      não há fluxo legítimo de terapeuta deletar perfil (é 1:1, atualiza-se).
+    - (aplicado, **decisão de produto — Rômulo pode vetar**) `ctm_read` passou de
+      "só a própria linha" para `app_is_on_team(patient_id)`: terapeuta da equipe
+      enxerga a EQUIPE INTEIRA do paciente (colaboração interdisciplinar), igual
+      às demais tabelas clínicas.
+    - (aplicado) NIT: `withTenant` agora nomeia qual prop do contexto faltou.
+    - (**DIFERIDO — Jules sem contexto**) "faltam RLS em `clinic`, `app_user`,
+      `user_role`". **Não aplicável como RLS tenant ingênuo:** o Better-Auth usa o
+      client cru (sem tenant) e consulta `app_user`/auth tables por email/token
+      NO LOGIN, antes de qualquer GUC; `user_role` é lido no bootstrap da sessão
+      p/ MONTAR o `TenantContext` (também pré-GUC). RLS tenant-scoped nessas
+      tabelas quebraria login e bootstrap; `app_user` nem tem `clinic_id`. A
+      preocupação de fundo (global sem RLS → vazamento se rota esquecer filtro) é
+      legítima, mas a mitigação certa é arquitetural (role de auth com BYPASSRLS
+      dedicada, ou gargalo controlado de leitura dessas tabelas) e pertence à fase
+      em que o fluxo de sessão/resolução de tenant for construído — não à Fase 1a.
+      **Decisão aberta p/ Rômulo.** Ver `AGENTS.md` (RLS+auth = plan mode).
+  - Testes RLS: 9 cenários (add. equipe-inteira, update legítimo por terapeuta
+    de equipe, DELETE barrado p/ terapeuta e permitido p/ coordenador).
+  - **3ª rodada Jules (10/07/2026, VERDICT: block):** 1 BLOCKING real corrigido,
+    1 BLOCKING + 1 NIT descartados por serem falso-positivo do revisor:
+    - (aplicado, **decisão de produto confirmada por Rômulo — papel por-clínica**)
+      PK de `user_role` era `(user_id, papel)` com uma coluna `clinic_id NOT NULL`
+      solta → estado inconsistente: mesmo profissional com o mesmo papel em 2
+      clínicas violaria o PK. Corrigido p/ `PRIMARY KEY(user_id, clinic_id, papel)`
+      (conta global multi-tenant). Ajustado schema.ts + `0000` + snapshot meta;
+      `drizzle-kit generate` reporta "no changes" (tudo alinhado).
+    - (**descartado — falso-positivo**) "prompt injection no arquivo de regras":
+      o arquivo é `.github/jules-review-rules.md`, a própria config que o time
+      escreveu p/ orientar o Jules (pt-BR, não flagar `.claude/`). Jules flagou a
+      própria régua dele como ataque. Não mudou nesta PR; removê-lo reintroduz os
+      outros falso-positivos. Mantido.
+    - (**descartado — falso-positivo**) NIT "schema.ts truncado": o arquivo está
+      completo (273 linhas, todas as tabelas fechadas); a ferramenta do Jules é
+      que truncou a leitura.
+    - Ação preventiva: PR passa a levar contexto na descrição p/ reduzir
+      falso-positivos do Jules (ele só vê o diff, sem contexto do projeto).
+  - **Config do Jules reformulada p/ matar o falso-positivo na raiz (10/07/2026):**
+    o `.github/workflows/pr-review.yml` passava a régua por `rules_file:
+    .github/jules-review-rules.md` — e o revisor lia a própria régua como
+    "arquivo de regras não confiável", marcando os imperativos dirigidos à IA
+    ("Escreva TODO o output", "NÃO classifique") como prompt injection. Fix:
+    removido o `rules_file` e o arquivo `.github/jules-review-rules.md`; todo o
+    contexto migrou para `extra_instructions` (canal de config confiável — o
+    Jules já obedecia o pt-BR por ali). De quebra, o `extra_instructions` foi
+    ENRIQUECIDO com contexto de arquitetura (RLS via GUC + `withTenant`;
+    Better-Auth consulta `app_user`/`auth_*`/`user_role` pré-GUC → não sugerir
+    RLS tenant ali; construção em fases) para o revisor parar de gerar findings
+    cegos ao contexto (como o W3 da 2ª rodada).
+  - **4ª rodada Jules (10/07/2026):** 2 WARN de FK-bypass fechados; 1 BLOCKING
+    real vira item aberto; 3 "prompt injection" descartados como ruído estrutural.
+    - (aplicado) `pp_write` e `ctm_write` não validavam o tenant do id da FK
+      (`protocol_id`/`user_id`). Constraint de FK no Postgres roda como dono e
+      BYPASSA RLS → coordenador poderia vincular protocolo de outra clínica ao
+      paciente, ou pôr na equipe um profissional sem papel na clínica. Fechado
+      com helpers SECURITY DEFINER `app_protocol_in_clinic` / `app_user_in_clinic`
+      no WITH CHECK. +4 testes (negativo cross-clinic + positivo mesma-clínica).
+    - (**descartado — ruído estrutural**) 3 findings de "prompt injection" (na
+      descrição da PR, no arquivo de regras já removido, e nas próprias
+      `extra_instructions` do workflow). Esse action flagra QUALQUER texto
+      dirigido ao revisor onde quer que apareça — inclusive as instruções
+      anti-injeção. Não é corrigível escrevendo mais texto; `fail_on: never`
+      torna advisory. Não bloqueia merge de fato.
+    - (**ITEM ABERTO — decisão de arch, deferido**) BLOCKING "`clinic` sem RLS +
+      GRANT ALL a app_role": as tabelas globais (`clinic`, `app_user`, `user_role`,
+      `auth_*`) receberam `GRANT SELECT/INSERT/UPDATE/DELETE ON ALL TABLES` sem RLS.
+      `app_role` pode, via query crua, escrever cross-tenant em `clinic`. Não
+      explorável na Fase 1a (sem rota de app nem dado real), mas é defesa-em-
+      profundidade + LGPD. Fix certo (RLS seletivo + GRANTs least-privilege) amarra
+      no fluxo de auth/provisioning ainda não construído — mesmo item do W3.
+      **Decidir antes de dado real (hardening da Fase 6).**
 - [ ] Fase 2 — Metas (ciclo de vida + critério de domínio) + diário por texto + fila de pendências.
 - [ ] Fase 3 — Extração (agente R1-R19) + tela de revisão do terapeuta.
 - [ ] Fase 4 — Evidências acumuladas + gráfico do protocolo + linha do tempo + briefing pré-sessão + perfil de reforçadores.
@@ -731,30 +824,25 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
         `schedule`).** Sem verba p/ 4º project → decisão: **nestar os serviços
         do Iris dentro do project `espectro-mvp`** (divisão de espaço com outro
         site), com **prefixo `iris-`** nos serviços, PROVISÓRIO até validar o
-        MVP e liberar orçamento p/ project isolado. Criados:
-        - `iris-postgres` (Postgres puro, template Easypanel) — db `iris`,
-          user `iris`, senha random gerada, imagem oficial. **Rodando.** Host
-          interno p/ o app: `iris-postgres:5432`. Isolado do MySQL do espectro
-          (banco próprio, não compartilha — dado de menor/LGPD).
-        - `iris-app` (Aplicativo) — source GitHub `romulosutil/Iris`@`main`,
-          build **Dockerfile** `infra/Dockerfile`, domínio `irisclinica.ia.br`
-          → porta **3000** (HTTPS/Let's Encrypt). **NÃO implantado** de
-          propósito: repo na Fase 0.5 sem `infra/Dockerfile`/scaffold Next —
-          deploy é 1 clique no bootstrap quando o Dockerfile existir.
-        - **Env do `iris-app` pendente p/ bootstrap** (não setado p/ não manusear
-          a senha do DB): `DATABASE_URL=postgres://iris:<senha>@iris-postgres:5432/iris`,
-          `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://irisclinica.ia.br`.
-        - **Domínio `irisclinica.ia.br` (registro.br, comprado, exp. 09/07/2027):**
-          DNS via registro.br (não aceita `@` nem `*`/wildcard). Bind no
-          Easypanel feito. **Registros A pendentes (Rômulo adiciona):**
-          `irisclinica.ia.br`→`31.97.170.105` e `www`→`31.97.170.105`. Zona
-          ficou travada ~2h por transição de servidores (switch p/ modo
-          avançado); subdomínios futuros (`storybook.`/`staging.`) = A
-          individuais (sem wildcard).
-        - **Flag DevOps:** VPS real é **2 vCPU / 7.8 GB** (não o KVM4/16GB do
-          plano §1; ~38% RAM já usada por aladdin+espectro+schedule). Fase 0.5
-          cabe folgado; reavaliar RAM antes da Fase 3 (LLM/extração) e do
-          GlitchTip self-host.
+        MVP e liberar orçamento p/ project isolado. Criados: - `iris-postgres` (Postgres puro, template Easypanel) — db `iris`,
+        user `iris`, senha random gerada, imagem oficial. **Rodando.** Host
+        interno p/ o app: `iris-postgres:5432`. Isolado do MySQL do espectro
+        (banco próprio, não compartilha — dado de menor/LGPD). - `iris-app` (Aplicativo) — source GitHub `romulosutil/Iris`@`main`,
+        build **Dockerfile** `infra/Dockerfile`, domínio `irisclinica.ia.br`
+        → porta **3000** (HTTPS/Let's Encrypt). **NÃO implantado** de
+        propósito: repo na Fase 0.5 sem `infra/Dockerfile`/scaffold Next —
+        deploy é 1 clique no bootstrap quando o Dockerfile existir. - **Env do `iris-app` pendente p/ bootstrap** (não setado p/ não manusear
+        a senha do DB): `DATABASE_URL=postgres://iris:<senha>@iris-postgres:5432/iris`,
+        `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://irisclinica.ia.br`. - **Domínio `irisclinica.ia.br` (registro.br, comprado, exp. 09/07/2027):**
+        DNS via registro.br (não aceita `@` nem `*`/wildcard). Bind no
+        Easypanel feito. **Registros A pendentes (Rômulo adiciona):**
+        `irisclinica.ia.br`→`31.97.170.105` e `www`→`31.97.170.105`. Zona
+        ficou travada ~2h por transição de servidores (switch p/ modo
+        avançado); subdomínios futuros (`storybook.`/`staging.`) = A
+        individuais (sem wildcard). - **Flag DevOps:** VPS real é **2 vCPU / 7.8 GB** (não o KVM4/16GB do
+        plano §1; ~38% RAM já usada por aladdin+espectro+schedule). Fase 0.5
+        cabe folgado; reavaliar RAM antes da Fase 3 (LLM/extração) e do
+        GlitchTip self-host.
   - [ ] **PENDENTE (não bloqueia bootstrap/DS):** backup/restore agora é nosso —
         `pg_dump` agendado + destino em BR + restore testado (item LGPD, antes
         do dado real na Fase 1+). Easypanel tem "Cópias de segurança" nativo no

@@ -3,7 +3,7 @@
 # Subir: docker compose -f infra/docker-compose.yml up -d
 #
 # .env local correspondente:
-#   DATABASE_URL=postgres://iris:iris@localhost:5432/iris
+#   DATABASE_URL=postgres://iris:iris@localhost:5433/iris
 #   S3_ENDPOINT=http://localhost:9000
 #   S3_ACCESS_KEY=iris
 #   S3_SECRET_KEY=iris123456
@@ -17,7 +17,7 @@ services:
       POSTGRES_PASSWORD: iris
       POSTGRES_DB: iris
     ports:
-      - "5432:5432"
+      - "5433:5432" # host 5433 evita conflito com outros Postgres locais
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

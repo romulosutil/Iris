@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "comment": "typecheck do código-fonte via `tsc`; exclui .next (o next build valida as rotas geradas).",
+  "exclude": ["node_modules", ".next"]
+}

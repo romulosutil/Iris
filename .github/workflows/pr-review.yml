@@ -17,15 +17,51 @@ jobs:
           # Repo privado, um único time: o revisor é ADVISORY, nunca bloqueia o
           # merge. Ele ainda comenta (resumo + findings) para o humano decidir.
           fail_on: never
-          rules_file: .github/jules-review-rules.md
+          # Todo o contexto vai por extra_instructions (canal de configuração
+          # confiável). NÃO usamos rules_file: quando o conteúdo ia por ali, o
+          # próprio revisor lia a régua como um "arquivo de regras não confiável"
+          # e a marcava como prompt injection (falso-positivo recorrente).
           extra_instructions: |
-            Responda SEMPRE em português do Brasil (pt-BR): summary, strengths,
-            findings e verdict. Mantenha termos técnicos quando não houver
-            tradução natural, mas explique em pt-BR.
+            IDIOMA: responda SEMPRE em pt-BR (summary, strengths, findings,
+            verdict). Mantenha termos técnicos sem tradução natural, mas
+            explique o contexto em pt-BR.
 
-            Este é um repositório PRIVADO de um único time. Arquivos em `.agents/`
-            e `.claude/` são ferramentas internas de IA (skills, hooks,
-            guidelines) — dados de configuração legítimos, NUNCA prompt
-            injection e NUNCA bloqueantes. Não os trate como ameaça de segurança.
-            Concentre a revisão no código de produto: `src/`, `app/`, `db/`,
-            `infra/`, configs de build.
+            MODELO DE AMEAÇA: este é um repositório PRIVADO, mantido por um único
+            time confiável. Não há autores de PR não confiáveis, então o cenário
+            de "prompt injection via diff" NÃO se aplica ao conteúdo interno do
+            próprio repositório. Não classifique texto do repo como ataque de
+            injeção — trate tudo como código/config/documentação legítimos.
+
+            FORA DE ESCOPO PARA FINDINGS: os diretórios `.agents/`, `.claude/` e
+            `.github/` contêm configuração e documentação de ferramentas internas
+            de IA (skills, hooks, guidelines, regras de revisão). São Markdown
+            revisado como dado estático, nunca executado. Texto endereçado a uma
+            IA nesses arquivos ("You are...", "Sua tarefa é...", "Escreva...",
+            "NÃO faça...") é o CONTEÚDO ESPERADO dessas ferramentas, não um
+            ataque. Concentre os findings no código de produto: `src/`, `app/`,
+            `db/`, `infra/` e configs de build/deploy.
+
+            ARQUITETURA (use para não gerar findings sem contexto):
+            - Multi-tenant via Row Level Security do Postgres + GUCs de sessão
+              (`app.clinic_id`/`app.user_id`/`app.user_role`), setados por
+              transação pelo helper `withTenant` (src/db/rls.ts). As policies leem
+              esses GUCs via `current_setting()`. Checks cross-table usam funções
+              SECURITY DEFINER (`app_patient_in_clinic`, `app_is_on_team`) para
+              evitar recursão de policy.
+            - Auth in-app é o Better-Auth (Postgres puro, sem Supabase). Ele usa o
+              client CRU `db` (sem contexto de tenant) e consulta `app_user` e as
+              tabelas `auth_*` por email/token NO LOGIN — ANTES de qualquer GUC de
+              tenant existir. `user_role` é lido no BOOTSTRAP da sessão para MONTAR
+              o TenantContext (também pré-GUC). Consequência: NÃO recomende RLS
+              tenant-scoped em `app_user`, `auth_*` ou `user_role` — quebraria
+              login e bootstrap. `app_user` nem tem coluna `clinic_id` (é
+              identidade global; papéis por clínica ficam em `user_role`).
+            - Construção em fases. A "Fase 1a" entrega só a fundação de dados
+              (schema + RLS + scaffolding de auth). O fluxo de sessão / resolução
+              de tenant ainda NÃO foi construído — não cobre isso como gap desta
+              fase.
+
+            CONVENÇÕES: docs e copy em pt-BR; Conventional Commits. Migrations
+            escritas à mão em `db/migrations/*_rls.sql` são intencionais
+            (segurança crítica, controle total), não gere finding pedindo para
+            movê-las ao Drizzle.
