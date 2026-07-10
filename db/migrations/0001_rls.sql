@@ -45,7 +45,31 @@ CREATE OR REPLACE FUNCTION app_is_on_team(p_patient uuid)
   );
 $$;
 --> statement-breakpoint
-GRANT EXECUTE ON FUNCTION app_patient_in_clinic(uuid), app_is_on_team(uuid) TO app_role;
+-- Validação de tenant p/ FKs que o RLS não cobre: constraint de FK roda como
+-- dono da tabela e BYPASSA RLS, então um id de outra clínica passaria batido no
+-- WITH CHECK se a policy só olhasse o patient_id. Estes helpers fecham isso.
+CREATE OR REPLACE FUNCTION app_protocol_in_clinic(p_protocol uuid)
+  RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE
+  SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM protocol p
+    WHERE p.id = p_protocol
+      AND p.clinic_id = current_setting('app.clinic_id')::uuid
+  );
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION app_user_in_clinic(p_user uuid)
+  RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE
+  SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM user_role r
+    WHERE r.user_id = p_user
+      AND r.clinic_id = current_setting('app.clinic_id')::uuid
+  );
+$$;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app_patient_in_clinic(uuid), app_is_on_team(uuid),
+  app_protocol_in_clinic(uuid), app_user_in_clinic(uuid) TO app_role;
 --> statement-breakpoint
 
 -- ─── patient (administrativo; escopo de leitura por papel) ───────────────────
@@ -146,6 +170,8 @@ CREATE POLICY pp_write ON patient_protocol FOR ALL TO app_role
   WITH CHECK (
     current_setting('app.user_role') = 'coordenador'
     AND app_patient_in_clinic(patient_id)
+    -- protocol_id tem que ser da MESMA clínica (FK bypassa RLS)
+    AND app_protocol_in_clinic(protocol_id)
   );
 --> statement-breakpoint
 
@@ -171,6 +197,9 @@ CREATE POLICY ctm_write ON care_team_membership FOR ALL TO app_role
   WITH CHECK (
     current_setting('app.user_role') = 'coordenador'
     AND app_patient_in_clinic(patient_id)
+    -- o profissional adicionado tem que ter papel na MESMA clínica (FK bypassa
+    -- RLS; app_user é identidade global, o vínculo à clínica vem de user_role)
+    AND app_user_in_clinic(user_id)
   );
 --> statement-breakpoint
 

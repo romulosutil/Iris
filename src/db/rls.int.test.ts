@@ -13,6 +13,7 @@ import {
   careTeamMembership,
   patient,
   patientClinicalProfile,
+  patientProtocol,
 } from "./schema";
 import { withTenant, type TenantContext } from "./rls";
 import { sql as appSql } from "./client";
@@ -28,10 +29,13 @@ const U_TERA = "a0000000-0000-0000-0000-000000000002"; // na equipe de P1
 const U_TERA2 = "a0000000-0000-0000-0000-000000000003"; // sem equipe
 const U_ADMIN = "a0000000-0000-0000-0000-000000000004";
 const U_TERA3 = "a0000000-0000-0000-0000-000000000005"; // também na equipe de P1
+const U_EXT = "a0000000-0000-0000-0000-000000000006"; // papel só na clínica B
 const P1 = "b0000000-0000-0000-0000-000000000001"; // clinic A, equipe = TERA
 const P2 = "b0000000-0000-0000-0000-000000000002"; // clinic A, sem equipe p/ TERA
 const P3 = "b0000000-0000-0000-0000-000000000003"; // clinic B
 const P4 = "b0000000-0000-0000-0000-000000000004"; // clinic A, sem profile, sem equipe
+const PROT_A = "c0000000-0000-0000-0000-000000000001"; // protocolo da clínica A
+const PROT_B = "c0000000-0000-0000-0000-000000000002"; // protocolo da clínica B
 
 const ctx = (
   role: TenantContext["role"],
@@ -45,14 +49,24 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
   beforeAll(async () => {
     // Seed como superuser (iris) — bypassa RLS.
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
-    await owner`TRUNCATE clinic, app_user, patient, patient_clinical_profile, care_team_membership RESTART IDENTITY CASCADE`;
+    await owner`TRUNCATE clinic, app_user, user_role, patient, patient_clinical_profile, care_team_membership, protocol, patient_protocol RESTART IDENTITY CASCADE`;
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'Clínica A'), (${CLINIC_B}, 'Clínica B')`;
     await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD}, 'Coord', 'coord@a.test'),
       (${U_TERA}, 'Tera', 'tera@a.test'),
       (${U_TERA2}, 'Tera2', 'tera2@a.test'),
       (${U_ADMIN}, 'Admin', 'admin@a.test'),
-      (${U_TERA3}, 'Tera3', 'tera3@a.test')`;
+      (${U_TERA3}, 'Tera3', 'tera3@a.test'),
+      (${U_EXT}, 'Ext', 'ext@b.test')`;
+    // Papéis por clínica (user_role): TERA3 é da clínica A; U_EXT só da B.
+    await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
+      (${U_COORD}, ${CLINIC_A}, 'coordenador'),
+      (${U_TERA3}, ${CLINIC_A}, 'terapeuta'),
+      (${U_EXT}, ${CLINIC_B}, 'terapeuta')`;
+    // Protocolos por clínica (família do catálogo semeado pela migração).
+    await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
+      (${PROT_A}, ${CLINIC_A}, 'Proto A', 'Fono', 'fonoaudiologia'),
+      (${PROT_B}, ${CLINIC_B}, 'Proto B', 'Fono', 'fonoaudiologia')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${P1}, ${CLINIC_A}, 'Paciente 1'),
       (${P2}, ${CLINIC_A}, 'Paciente 2'),
@@ -154,6 +168,69 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
         .where(eq(patientClinicalProfile.patientId, P1)),
     );
     expect(perfil?.diagnostico).toBe("TEA confirmado");
+  });
+
+  test("pp_write: coordenador NÃO vincula protocolo de OUTRA clínica ao paciente", async () => {
+    // FK não valida tenant → sem app_protocol_in_clinic, PROT_B (clínica B)
+    // entraria num paciente da clínica A. WITH CHECK deve barrar.
+    await expect(
+      withTenant(ctx("coordenador", U_COORD), (db) =>
+        db.insert(patientProtocol).values({
+          patientId: P2,
+          protocolId: PROT_B,
+          ativadoPor: U_COORD,
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("pp_write: coordenador vincula protocolo da PRÓPRIA clínica (não superbloqueia)", async () => {
+    await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.insert(patientProtocol).values({
+        patientId: P2,
+        protocolId: PROT_A,
+        ativadoPor: U_COORD,
+      }),
+    );
+    const vinculos = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db
+        .select()
+        .from(patientProtocol)
+        .where(eq(patientProtocol.patientId, P2)),
+    );
+    expect(vinculos).toHaveLength(1);
+  });
+
+  test("ctm_write: coordenador NÃO adiciona profissional de OUTRA clínica à equipe", async () => {
+    // U_EXT só tem papel na clínica B → app_user_in_clinic(U_EXT) é falso em A.
+    await expect(
+      withTenant(ctx("coordenador", U_COORD), (db) =>
+        db.insert(careTeamMembership).values({
+          patientId: P2,
+          userId: U_EXT,
+          disciplina: "ABA",
+          papelNaEquipe: "terapeuta_referencia",
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("ctm_write: coordenador adiciona profissional da PRÓPRIA clínica (não superbloqueia)", async () => {
+    await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.insert(careTeamMembership).values({
+        patientId: P2,
+        userId: U_TERA3,
+        disciplina: "Fono",
+        papelNaEquipe: "terapeuta_referencia",
+      }),
+    );
+    const equipe = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db
+        .select()
+        .from(careTeamMembership)
+        .where(eq(careTeamMembership.patientId, P2)),
+    );
+    expect(equipe.map((m) => m.userId)).toContain(U_TERA3);
   });
 
   test("DELETE de perfil clínico: terapeuta da equipe é barrado, coordenador não", async () => {

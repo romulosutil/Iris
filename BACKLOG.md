@@ -766,6 +766,28 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
     Better-Auth consulta `app_user`/`auth_*`/`user_role` pré-GUC → não sugerir
     RLS tenant ali; construção em fases) para o revisor parar de gerar findings
     cegos ao contexto (como o W3 da 2ª rodada).
+  - **4ª rodada Jules (10/07/2026):** 2 WARN de FK-bypass fechados; 1 BLOCKING
+    real vira item aberto; 3 "prompt injection" descartados como ruído estrutural.
+    - (aplicado) `pp_write` e `ctm_write` não validavam o tenant do id da FK
+      (`protocol_id`/`user_id`). Constraint de FK no Postgres roda como dono e
+      BYPASSA RLS → coordenador poderia vincular protocolo de outra clínica ao
+      paciente, ou pôr na equipe um profissional sem papel na clínica. Fechado
+      com helpers SECURITY DEFINER `app_protocol_in_clinic` / `app_user_in_clinic`
+      no WITH CHECK. +4 testes (negativo cross-clinic + positivo mesma-clínica).
+    - (**descartado — ruído estrutural**) 3 findings de "prompt injection" (na
+      descrição da PR, no arquivo de regras já removido, e nas próprias
+      `extra_instructions` do workflow). Esse action flagra QUALQUER texto
+      dirigido ao revisor onde quer que apareça — inclusive as instruções
+      anti-injeção. Não é corrigível escrevendo mais texto; `fail_on: never`
+      torna advisory. Não bloqueia merge de fato.
+    - (**ITEM ABERTO — decisão de arch, deferido**) BLOCKING "`clinic` sem RLS +
+      GRANT ALL a app_role": as tabelas globais (`clinic`, `app_user`, `user_role`,
+      `auth_*`) receberam `GRANT SELECT/INSERT/UPDATE/DELETE ON ALL TABLES` sem RLS.
+      `app_role` pode, via query crua, escrever cross-tenant em `clinic`. Não
+      explorável na Fase 1a (sem rota de app nem dado real), mas é defesa-em-
+      profundidade + LGPD. Fix certo (RLS seletivo + GRANTs least-privilege) amarra
+      no fluxo de auth/provisioning ainda não construído — mesmo item do W3.
+      **Decidir antes de dado real (hardening da Fase 6).**
 - [ ] Fase 2 — Metas (ciclo de vida + critério de domínio) + diário por texto + fila de pendências.
 - [ ] Fase 3 — Extração (agente R1-R19) + tela de revisão do terapeuta.
 - [ ] Fase 4 — Evidências acumuladas + gráfico do protocolo + linha do tempo + briefing pré-sessão + perfil de reforçadores.
