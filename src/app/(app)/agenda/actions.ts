@@ -6,6 +6,7 @@ import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { appUser, patient, session, sessionEstado } from "@/db/schema";
+import { FUSO_CLINICA_OFFSET } from "./fuso";
 
 export type SessionEstado = (typeof sessionEstado.enumValues)[number];
 
@@ -25,9 +26,6 @@ const agendarSchema = z.object({
   terapeutaId: z.string().uuid("Selecione um profissional válido."),
   agendadaPara: z.string().min(1, "Data e hora são obrigatórias."),
 });
-
-// América/São_Paulo é UTC-3 o ano todo (sem horário de verão desde 2019).
-const FUSO_CLINICA_OFFSET = "-03:00";
 
 /**
  * O `<input type="datetime-local">` envia uma string SEM fuso ("2026-07-11T12:00").

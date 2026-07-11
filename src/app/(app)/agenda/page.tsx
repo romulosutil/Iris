@@ -4,8 +4,7 @@ import { listarSessoesDoDia } from "./actions";
 import { EstadoBadge } from "./estado-badge";
 import { CheckInButton } from "./checkin-button";
 import { AgendarForm } from "./agendar-form";
-
-const FUSO_CLINICA = "America/Sao_Paulo";
+import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "./fuso";
 
 // Data de hoje (YYYY-MM-DD) no fuso da clínica — base da grade do dia.
 function hojeNaClinica(): string {
@@ -28,7 +27,7 @@ function dataPorExtenso(diaISO: string): string {
     weekday: "long",
     day: "2-digit",
     month: "long",
-  }).format(new Date(`${diaISO}T12:00:00-03:00`));
+  }).format(new Date(`${diaISO}T12:00:00${FUSO_CLINICA_OFFSET}`));
 }
 
 export default async function AgendaPage() {
