@@ -12,6 +12,13 @@ import { Form } from "./form";
 import { StatusBadge, StatusDot } from "./status-badge";
 import { Chip, ChipGroup } from "./chip";
 import { Stack, Cluster, Split } from "./layout";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "./accordion";
+import { Checkbox } from "./checkbox";
 
 afterEach(cleanup);
 
@@ -194,4 +201,23 @@ test("Layout (Stack/Cluster/Split composto) — sem violações axe", async () =
       </Cluster>
     </Stack>,
   );
+});
+
+test("Accordion — sem violações axe", async () => {
+  await semViolacoes(
+    <Accordion type="single" collapsible defaultValue="a">
+      <AccordionItem value="a">
+        <AccordionTrigger>Dados administrativos</AccordionTrigger>
+        <AccordionContent>Nome e responsável.</AccordionContent>
+      </AccordionItem>
+    </Accordion>,
+  );
+});
+
+test("Checkbox — sem violações axe", async () => {
+  await semViolacoes(<Checkbox label="Consentimento coletado" />);
+});
+
+test("Checkbox marcado — sem violações axe", async () => {
+  await semViolacoes(<Checkbox label="Reavaliar" defaultChecked />);
 });
