@@ -74,8 +74,10 @@ export const Split = React.forwardRef<HTMLElement, SplitProps>(function Split(
     <Como
       ref={ref}
       className={cn(
-        "flex flex-col justify-between min-[40rem]:flex-row",
-        alinha === "center" ? "min-[40rem]:items-center" : "items-start",
+        // items-start no empilhado evita que filhos (ex.: um selo inline)
+        // estiquem full-width; no modo linha, centraliza se pedido.
+        "flex flex-col items-start justify-between min-[40rem]:flex-row",
+        alinha === "center" && "min-[40rem]:items-center",
         gapClasse[gap],
         className,
       )}
