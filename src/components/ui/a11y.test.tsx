@@ -9,6 +9,8 @@ import { Logo } from "./logo";
 import { Input } from "./input";
 import { Field } from "./field";
 import { Form } from "./form";
+import { StatusBadge, StatusDot } from "./status-badge";
+import { Chip, ChipGroup } from "./chip";
 
 afterEach(cleanup);
 
@@ -133,5 +135,47 @@ test("Form com erro — sem violações axe", async () => {
         <Input id="email-form-erro" type="email" />
       </Field>
     </Form>,
+  );
+});
+
+test.each(["sugerida", "aprovada", "reclassificada", "devolvida"] as const)(
+  "StatusBadge %s — sem violações axe",
+  async (estado) => {
+    await semViolacoes(<StatusBadge estado={estado} />);
+  },
+);
+
+test("StatusDot — sem violações axe", async () => {
+  await semViolacoes(<StatusDot estado="sugerida" />);
+});
+
+test("Chip estático — sem violações axe", async () => {
+  await semViolacoes(<Chip>ABA</Chip>);
+});
+
+test("Chip selecionável — sem violações axe", async () => {
+  await semViolacoes(
+    <Chip selecionado onSelecionar={() => {}}>
+      ABA
+    </Chip>,
+  );
+});
+
+test("Chip removível — sem violações axe", async () => {
+  await semViolacoes(
+    <Chip onRemover={() => {}} rotuloRemover="Remover ABA">
+      ABA
+    </Chip>,
+  );
+});
+
+test("ChipGroup — sem violações axe", async () => {
+  await semViolacoes(
+    <ChipGroup rotulo="Filtrar por protocolo">
+      <Chip selecionado onSelecionar={() => {}}>
+        ABA
+      </Chip>
+      <Chip onSelecionar={() => {}}>Fono</Chip>
+    </ChipGroup>,
   );
 });
