@@ -12,7 +12,9 @@
 | :--- | :--- | :---: | :--- |
 | **0.5** | Design System (Espectro Brutal) | 🔄 Em Revisão | PR #1 |
 | **1** | Fundação de Dados & Auth (Fase 1a) | 🔄 Em Revisão | PR #3 |
-| **1b** | Cadastro Clínico + Agenda Mínima | 🚀 Ativo | Issue #4 |
+| **1b** | Fundação Auth + Multi-tenancy | 🔄 Em Revisão | PR #10 |
+| **1c** | Cadastro Clínico (ficha + protocolos + equipe) | 📅 Pendente | Issue #4 |
+| **1d** | Agenda Mínima + Check-in | 📅 Pendente | Issue #11 |
 | **2** | Metas & Diário por Texto | 📅 Pendente | Issue #5 |
 | **3** | Extração de Evidências (IA) | 📅 Pendente | Issue #6 |
 | **4** | Evidências Acumuladas & Gráficos | 📅 Pendente | Issue #7 |
@@ -21,13 +23,9 @@
 
 ---
 
-## 🎯 Entregas Ativas (Fase 1b em andamento)
+## 🎯 Entregas Ativas (Fase 1 — sub-blocos)
 
-### [Fase 1b] Cadastro Clínico, Agenda e Check-in
-* **Escopo**: Ficha clínica do paciente, associação de protocolos ativos (`PatientProtocol`), equipe de cuidado, agenda mínima semanal de sessões e fluxo de check-in.
-* **Gargalo Atual**: ~~Validação de policies RLS de tabelas globais durante login e bootstrap de sessão~~ → **RESOLVIDO** no sub-bloco de fundação abaixo.
-
-#### Progresso (Fase 1b — fundação auth/tenant) ✅
+### [Fase 1b] Fundação Auth + Multi-tenancy — ✅ entregue (PR #10)
 Base de acesso e isolamento multi-tenant concluída (13 tasks, branch `fase-1b-fundacao-auth-tenant`):
 * **Duas conexões / roles**: `iris_app` (app, sujeita a RLS) + `iris_auth` (bootstrap de sessão, `NOBYPASSRLS` — vê `user_role`/`clinic` pré-GUC mas **não** bypassa policies clínicas). Resolve o item aberto de RLS global das 4 rodadas do Jules (agora **FECHADO**).
 * **RLS das tabelas globais**: `auth_*` com `REVOKE`; `app_user`/`clinic`/`user_role` com policies escopadas `TO iris_auth`; teste de não-recursão incluído.
@@ -38,8 +36,8 @@ Base de acesso e isolamento multi-tenant concluída (13 tasks, branch `fase-1b-f
 * **Testes**: RLS globais, `resolveTenant` (A1), `provisionUser` (A6), `papelAtivo` (unit), gate a11y (axe), E2E de login (Playwright — requer DB+seed para rodar).
 
 **Fica para depois (não regressão, escopo deliberado):**
-* **Convite de usuário (UI) + cadastro de paciente → Fase 1c.**
-* **Agenda + check-in (tabela `session`) → Fase 1d.**
+* **Convite de usuário (UI) + cadastro de paciente → Fase 1c (Issue #4).**
+* **Agenda + check-in (tabela `session`) → Fase 1d (Issue #11).**
 
 ---
 
