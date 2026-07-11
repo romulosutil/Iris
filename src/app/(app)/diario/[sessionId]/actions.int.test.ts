@@ -7,8 +7,11 @@ const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
 const U_T1 = "00000000-0000-0000-0000-0000000071a1";
 const U_T2 = "00000000-0000-0000-0000-0000000072a1";
 const PAC = "00000000-0000-0000-0000-0000000ac1a1";
+const PAC2 = "00000000-0000-0000-0000-0000000ac2a1";
 const PROTO = "00000000-0000-0000-0000-00000070c0a1";
 const SESS = "00000000-0000-0000-0000-00000005e1a1"; // terapeuta = U_T1
+const GOAL_PAC = "00000000-0000-0000-0000-00000006a1a1";
+const GOAL_PAC2 = "00000000-0000-0000-0000-00000006a2a1";
 const ctxT1 = { clinicId: CLINIC_A, userId: U_T1, role: "terapeuta" } as const;
 const ctxT2 = { clinicId: CLINIC_A, userId: U_T2, role: "terapeuta" } as const;
 
@@ -23,7 +26,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, protocol, session,
-      session_note, session_protocol_scope, audio_capture, care_team_membership
+      session_note, session_protocol_scope, audio_capture, care_team_membership, goal
       RESTART IDENTITY CASCADE`;
     await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES ('aba_marcos_desenvolvimento', 'Marcos de desenvolvimento (ABA)') ON CONFLICT DO NOTHING`;
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A')`;
@@ -31,7 +34,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       (${U_T1}, 't1@x.com', 'T1'), (${U_T2}, 't2@x.com', 'T2')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_T1}, ${CLINIC_A}, 'terapeuta'), (${U_T2}, ${CLINIC_A}, 'terapeuta')`;
-    await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC}, ${CLINIC_A}, 'P')`;
+    await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
+      (${PAC}, ${CLINIC_A}, 'P'), (${PAC2}, ${CLINIC_A}, 'P2')`;
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
       (${PROTO}, ${CLINIC_A}, 'VB-MAPP', 'ABA', 'aba_marcos_desenvolvimento')`;
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado)
@@ -79,6 +83,28 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
     expect(ex.length).toBeGreaterThanOrEqual(1);
     expect(ex.every((e) => e.estado === "sugerida")).toBe(true);
+    await owner`UPDATE clinic SET is_demo = false WHERE id = ${CLINIC_A}`;
+  });
+
+  test("consolidar anexa apenas metas ativas do paciente da sessão", async () => {
+    await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
+    await owner`DELETE FROM goal`;
+    await owner`INSERT INTO goal (id, patient_id, clinic_id, descricao, criterio_dominio, criado_por) VALUES
+      (${GOAL_PAC}, ${PAC}, ${CLINIC_A}, 'Pedir água sozinho', '{"tipo":"frequencia","valor":3}', ${U_T1}),
+      (${GOAL_PAC2}, ${PAC2}, ${CLINIC_A}, 'Meta de outro paciente', '{"tipo":"frequencia","valor":3}', ${U_T1})`;
+    await owner`UPDATE goal SET estado = 'ativa' WHERE id IN (${GOAL_PAC}, ${GOAL_PAC2})`;
+
+    await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
+    const { consolidarSessao } = await import("./actions");
+    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Pediu água. Falou 'á' sozinho." });
+    const ex = await owner`SELECT payload FROM extraction WHERE session_id = ${SESS}`;
+    expect(ex.length).toBeGreaterThanOrEqual(1);
+    const goalIdsReferenciados = ex.flatMap(
+      (e) => (e.payload as { alvos?: Array<{ goal_id: string }> }).alvos?.map((a) => a.goal_id) ?? [],
+    );
+    expect(goalIdsReferenciados.length).toBeGreaterThan(0);
+    expect(goalIdsReferenciados.every((id) => id === GOAL_PAC)).toBe(true);
+    expect(goalIdsReferenciados).not.toContain(GOAL_PAC2);
     await owner`UPDATE clinic SET is_demo = false WHERE id = ${CLINIC_A}`;
   });
 

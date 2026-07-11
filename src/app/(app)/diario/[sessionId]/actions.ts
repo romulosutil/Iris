@@ -202,7 +202,13 @@ export async function consolidarSessao(
       const metas = await tx
         .select({ id: goal.id, descricao: goal.descricao })
         .from(goal)
-        .where(and(eq(goal.clinicId, ctx.clinicId), eq(goal.estado, "ativa")));
+        .where(
+          and(
+            eq(goal.clinicId, ctx.clinicId),
+            eq(goal.patientId, sess!.patientId),
+            eq(goal.estado, "ativa"),
+          ),
+        );
       const provider = resolveProvider({ isDemo: cl!.isDemo });
       const drafts = await provider.extrair({
         sessionId: parsed.data.sessionId,
