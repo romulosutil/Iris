@@ -1,9 +1,9 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
-import { requireRole } from "@/auth/require-role";
+import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { appUser, patient, session, sessionEstado, userRole } from "@/db/schema";
 import { FUSO_CLINICA_OFFSET } from "./fuso";
@@ -100,8 +100,12 @@ export async function agendarSessao(
       return nova!.id;
     });
     return { id };
-  } catch {
-    // WITH CHECK do RLS barra paciente/profissional de outra clínica.
+  } catch (err) {
+    // O caminho esperado aqui é o WITH CHECK do RLS barrando paciente/
+    // profissional de outra clínica. Mas um erro sistêmico (banco fora, bug)
+    // cairia no mesmo catch e ficaria escondido sob a mensagem amigável —
+    // logamos o erro real para não perder o diagnóstico.
+    console.error("agendarSessao: insert falhou", err);
     return {
       error: "Não foi possível agendar: paciente ou profissional inválido.",
     };
@@ -142,6 +146,16 @@ export async function listarSessoesDoDia(
   ctx: TenantContext,
   diaISO: string,
 ): Promise<SessaoDoDia[]> {
+  // Recorte do dia como INTERVALO no fuso da clínica em vez de cast por linha
+  // (`AT TIME ZONE ...::date = diaISO`). A comparação de igualdade sobre a
+  // coluna transformada é non-sargable e ignora `idx_session_clinic_dia`; um
+  // range `>= início AND < fim` sobre a coluna crua usa o índice. Brasil não
+  // tem horário de verão desde 2019 → o dia local tem 24h exatas, então
+  // início + 24h fecha o dia sem borda de DST.
+  const inicioDia = new Date(`${diaISO}T00:00:00${FUSO_CLINICA_OFFSET}`);
+  if (Number.isNaN(inicioDia.getTime())) return [];
+  const fimDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000);
+
   return withTenant(ctx, (tx) =>
     tx
       .select({
@@ -156,7 +170,10 @@ export async function listarSessoesDoDia(
       .leftJoin(patient, eq(patient.id, session.patientId))
       .leftJoin(appUser, eq(appUser.id, session.terapeutaId))
       .where(
-        sql`(${session.agendadaPara} AT TIME ZONE 'America/Sao_Paulo')::date = ${diaISO}::date`,
+        and(
+          gte(session.agendadaPara, inicioDia),
+          lt(session.agendadaPara, fimDia),
+        ),
       )
       .orderBy(asc(session.agendadaPara)),
   );
@@ -174,11 +191,16 @@ export async function agendarSessaoAction(
     if (resultado.error) return { error: resultado.error };
     revalidatePath("/agenda");
     return {};
-  } catch {
-    // `requireRole` lança em papel não autorizado. Sem este catch, a Server
-    // Action estoura 500 e cai no ErrorBoundary — capturamos e devolvemos a
-    // mensagem ao `useActionState` para exibir na tela.
-    return { error: "Você não tem permissão para agendar sessões." };
+  } catch (err) {
+    // `requireRole` lança `RoleError` em papel não autorizado — mensagem
+    // específica. Qualquer outro erro (ex.: banco fora na query de terapeuta)
+    // NÃO é falta de permissão: logamos e devolvemos mensagem genérica em vez
+    // de mentir "sem permissão". Em ambos os casos evitamos o 500 no boundary.
+    if (err instanceof RoleError) {
+      return { error: "Você não tem permissão para agendar sessões." };
+    }
+    console.error("agendarSessaoAction: erro inesperado", err);
+    return { error: "Não foi possível agendar a sessão. Tente novamente." };
   }
 }
 
@@ -192,7 +214,8 @@ export async function checkInAction(
     const resultado = await checkInSessao(ctx, sessionId);
     if (!resultado.error) revalidatePath("/agenda");
     return resultado;
-  } catch {
+  } catch (err) {
+    console.error("checkInAction: erro inesperado", err);
     return { error: "Não foi possível registrar o check-in." };
   }
 }

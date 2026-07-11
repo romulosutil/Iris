@@ -316,11 +316,10 @@ export const session = pgTable(
       .defaultNow(),
   },
   (t) => [
-    // Índices por clínica/terapeuta + horário. A grade do dia filtra a data no
-    // fuso da clínica (`agendada_para AT TIME ZONE …`::date), então o prefixo
-    // (clinic/terapeuta) é usado mas o recorte de data não é totalmente
-    // indexado. OK no volume atual; se crescer, avaliar índice funcional
-    // (requer wrapper IMMUTABLE — `AT TIME ZONE` é STABLE).
+    // Índices por clínica/terapeuta + horário. A grade do dia filtra por
+    // INTERVALO na coluna crua (`agendada_para >= início AND < fim`, ver
+    // listarSessoesDoDia), que é sargable e usa estes índices — em vez de um
+    // cast por linha (`AT TIME ZONE …`::date), que seria non-sargable.
     index("idx_session_clinic_dia").on(t.clinicId, t.agendadaPara),
     index("idx_session_terapeuta_dia").on(t.terapeutaId, t.agendadaPara),
   ],
