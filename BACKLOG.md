@@ -10,9 +10,9 @@
 
 | Fase | Tópico Principal | Status | GitHub Milestone / Issue |
 | :--- | :--- | :---: | :--- |
-| **0.5** | Design System (Espectro Brutal) | 🔄 Em Revisão | PR #1 |
-| **1** | Fundação de Dados & Auth (Fase 1a) | 🔄 Em Revisão | PR #3 |
-| **1b** | Fundação Auth + Multi-tenancy | 🔄 Em Revisão | PR #10 |
+| **0.5** | Design System (Espectro Brutal) | ✅ Concluído | PR #1 |
+| **1** | Fundação de Dados & Auth (Fase 1a) | ✅ Concluído | PR #3 |
+| **1b** | Fundação Auth + Multi-tenancy | ✅ Concluído | PR #10 |
 | **1c** | Cadastro Clínico (ficha + protocolos + equipe) | 📅 Pendente | Issue #4 |
 | **1d** | Agenda Mínima + Check-in | 📅 Pendente | Issue #11 |
 | **2** | Metas & Diário por Texto | 📅 Pendente | Issue #5 |
