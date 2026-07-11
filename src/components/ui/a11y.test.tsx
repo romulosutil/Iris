@@ -9,6 +9,34 @@ import { Logo } from "./logo";
 import { Input } from "./input";
 import { Field } from "./field";
 import { Form } from "./form";
+import { StatusBadge, StatusDot } from "./status-badge";
+import { Chip, ChipGroup } from "./chip";
+import { Stack, Cluster, Split } from "./layout";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "./accordion";
+import { Checkbox } from "./checkbox";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "./select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "./dialog";
+import { Slider } from "./slider";
+import { Progress } from "./progress";
+import { Avatar, AvatarFallback, AvatarGroup } from "./avatar";
+import { Stat } from "./stat";
 
 afterEach(cleanup);
 
@@ -133,5 +161,171 @@ test("Form com erro — sem violações axe", async () => {
         <Input id="email-form-erro" type="email" />
       </Field>
     </Form>,
+  );
+});
+
+test.each(["sugerida", "aprovada", "reclassificada", "devolvida"] as const)(
+  "StatusBadge %s — sem violações axe",
+  async (estado) => {
+    await semViolacoes(<StatusBadge estado={estado} />);
+  },
+);
+
+test("StatusDot — sem violações axe", async () => {
+  await semViolacoes(<StatusDot estado="sugerida" />);
+});
+
+test("Chip estático — sem violações axe", async () => {
+  await semViolacoes(<Chip>ABA</Chip>);
+});
+
+test("Chip selecionável — sem violações axe", async () => {
+  await semViolacoes(
+    <Chip selecionado onSelecionar={() => {}}>
+      ABA
+    </Chip>,
+  );
+});
+
+test("Chip removível — sem violações axe", async () => {
+  await semViolacoes(
+    <Chip onRemover={() => {}} rotuloRemover="Remover ABA">
+      ABA
+    </Chip>,
+  );
+});
+
+test("ChipGroup — sem violações axe", async () => {
+  await semViolacoes(
+    <ChipGroup rotulo="Filtrar por protocolo">
+      <Chip selecionado onSelecionar={() => {}}>
+        ABA
+      </Chip>
+      <Chip onSelecionar={() => {}}>Fono</Chip>
+    </ChipGroup>,
+  );
+});
+
+test("Layout (Stack/Cluster/Split composto) — sem violações axe", async () => {
+  await semViolacoes(
+    <Stack>
+      <Split como="section">
+        <h3>Sessão</h3>
+        <StatusBadge estado="aprovada" />
+      </Split>
+      <Cluster>
+        <Chip>ABA</Chip>
+        <Chip>Fono</Chip>
+      </Cluster>
+    </Stack>,
+  );
+});
+
+test("Accordion — sem violações axe", async () => {
+  await semViolacoes(
+    <Accordion type="single" collapsible defaultValue="a">
+      <AccordionItem value="a">
+        <AccordionTrigger>Dados administrativos</AccordionTrigger>
+        <AccordionContent>Nome e responsável.</AccordionContent>
+      </AccordionItem>
+    </Accordion>,
+  );
+});
+
+test("Checkbox — sem violações axe", async () => {
+  await semViolacoes(<Checkbox label="Consentimento coletado" />);
+});
+
+test("Checkbox marcado — sem violações axe", async () => {
+  await semViolacoes(<Checkbox label="Reavaliar" defaultChecked />);
+});
+
+test("Select (trigger) — sem violações axe", async () => {
+  await semViolacoes(
+    <Field label="Família do protocolo" htmlFor="protocolo">
+      <Select>
+        <SelectTrigger id="protocolo">
+          <SelectValue placeholder="Selecione…" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="aba">ABA</SelectItem>
+        </SelectContent>
+      </Select>
+    </Field>,
+  );
+});
+
+test("Tabs — sem violações axe", async () => {
+  await semViolacoes(
+    <Tabs defaultValue="fila">
+      <TabsList>
+        <TabsTrigger value="fila">Fila</TabsTrigger>
+        <TabsTrigger value="perfil">Perfil</TabsTrigger>
+      </TabsList>
+      <TabsContent value="fila">12 evidências.</TabsContent>
+      <TabsContent value="perfil">Dados.</TabsContent>
+    </Tabs>,
+  );
+});
+
+test("Dialog aberto — sem violações axe", async () => {
+  // Conteúdo do Dialog é portaled para document.body; roda o axe nele.
+  render(
+    <Dialog open>
+      <DialogContent>
+        <DialogTitle>Reclassificar esta evidência?</DialogTitle>
+        <DialogDescription>Cria uma nova versão.</DialogDescription>
+      </DialogContent>
+    </Dialog>,
+  );
+  const resultado = await axe.run(document.body, {
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
+    rules: {
+      region: { enabled: false },
+      "landmark-one-main": { enabled: false },
+      "page-has-heading-one": { enabled: false },
+      "color-contrast": { enabled: false },
+    },
+  });
+  expect(resultado.violations).toEqual([]);
+});
+
+test("Slider — sem violações axe", async () => {
+  await semViolacoes(
+    <Slider defaultValue={[40]} max={100} step={1} aria-label="Confiança" />,
+  );
+});
+
+test("Progress — sem violações axe", async () => {
+  await semViolacoes(<Progress value={60} aria-label="Progresso do dossiê" />);
+});
+
+test("Avatar (fallback) — sem violações axe", async () => {
+  await semViolacoes(
+    <Avatar>
+      <AvatarFallback>RS</AvatarFallback>
+    </Avatar>,
+  );
+});
+
+test("AvatarGroup — sem violações axe", async () => {
+  await semViolacoes(
+    <AvatarGroup rotulo="Equipe de cuidado">
+      <Avatar>
+        <AvatarFallback>RS</AvatarFallback>
+      </Avatar>
+      <Avatar>
+        <AvatarFallback>MC</AvatarFallback>
+      </Avatar>
+    </AvatarGroup>,
+  );
+});
+
+test("Stat — sem violações axe", async () => {
+  await semViolacoes(
+    <Stat rotulo="Aguardando revisão" valor="12" descricao="Fila do dia" />,
   );
 });

@@ -38,6 +38,12 @@ Base de acesso e isolamento multi-tenant concluída (13 tasks, branch `fase-1b-f
 **Fica para depois (não regressão, escopo deliberado):**
 * **Agenda + check-in (tabela `session`) → Fase 1d (Issue #11).**
 
+### [Melhoria] Enriquecimento do Design System — ✅ entregue (branch `melhoria-design-system`)
+Novos componentes + tokens no conceito Espectro Brutal, inspirados em ng-brutalism (Angular) mas **rejeitando** o que colide com o produto (paleta punchy, dark mode como core, radius 0, cream field-bg, Toast, Marquee/Halftone). **Decisão travada**: Radix headless para os widgets a11y-críticos — WAI-ARIA/teclado/focus-trap de graça, visual 100% nosso; cumpre "zero axe = merge" com baixo risco.
+* **Achados/tokens**: `--color-suggested` (4º acento funcional violeta para o estado "sugerido pela IA", que não tinha cor; **validado sob protanopia/deuteranopia — minΔE=39, zero colisão**); sombra reversa `--shadow-brutal-inset` ("sugerido afunda" vs "aprovado levanta"); `--border-brutal`, escala `--control-*` (piso 44px). Fix: Storybook carrega as fontes do app (a tipografia divergia do site).
+* **Componentes (15, todos com stories + gate axe — 38 testes verde)**: StatusBadge/StatusDot, Chip/ChipGroup; Stack/Cluster/Split; Accordion, Checkbox, Select, Tabs, Dialog, Slider, Progress, Avatar/AvatarGroup, Stat.
+* **Proposta pendente**: formalizar `--color-suggested` no doc do DS (`docs/ux/design-system-espectro-brutal.md` §3) após revisão visual do Rômulo.
+
 ---
 
 ### [Fase 1c] Cadastro Clínico (ficha + protocolos + equipe) — ✅ entregue (branch `fase-1c-cadastro-clinico`)

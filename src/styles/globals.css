@@ -26,6 +26,16 @@
   --color-blue: #90caf9; /* informação */
   --color-terracotta: #ef9a9a; /* alerta (soft red deliberado) */
 
+  /* Estado "sugerido pela IA" — 4º acento funcional (como menta/azul/terracota),
+     no matiz violeta da marca. NÃO é uso da rampa espectral (essa é só brand
+     mark, §8): é um acento semântico próprio para "candidato/tentativo".
+     Usado como borda/texto/dot (segue o padrão do Card: candidato = contorno,
+     não fill sólido); texto branco só em selo sólido pequeno.
+     Validado sob protanopia/deuteranopia: minΔE=39 vs menta/azul/terracota/ouro
+     (script de simulação CVD) — nenhuma colisão. Nunca cor sozinha (ícone+texto). */
+  --color-suggested: #6a4c93; /* violeta funcional (borda/texto/dot) */
+  --color-suggested-ink: #ffffff; /* texto sobre selo sólido violeta (6.85:1 AA) */
+
   /* Espectro (assinatura de marca — SÓ brand mark / régua fina) */
   --color-spectrum-red: #e4572e;
   --color-spectrum-orange: #f2a71b;
@@ -43,6 +53,24 @@
   --shadow-brutal: 4px 4px 0 0 var(--color-ink-anchor);
   --shadow-brutal-sm: 2px 2px 0 0 var(--color-ink-anchor);
 
+  /* Sombra reversa (offset negativo) — "sugerido pela IA afunda na
+     superfície" (tentativo) vs "aprovado levanta". Par estrutural, não cor. */
+  --shadow-brutal-inset: -4px -4px 0 0 var(--color-ink-anchor);
+  --shadow-brutal-inset-sm: -2px -2px 0 0 var(--color-ink-anchor);
+
+  /* Largura de borda tokenizada (antes hardcoded como border-2 nos componentes). */
+  --border-brutal: 2px;
+
+  /* Escala de altura de controle — piso 44px (alvo de toque do Modo Clínico). */
+  --control-sm: 2.75rem; /* 44px */
+  --control-md: 3rem; /* 48px */
+  --control-lg: 3.5rem; /* 56px */
+
+  /* Animações de abrir/fechar (Radix Accordion). Duração curta de produto
+     (150-250ms); o prefers-reduced-motion abaixo zera a duração. */
+  --animate-accordion-down: accordion-down 200ms ease-out;
+  --animate-accordion-up: accordion-up 200ms ease-out;
+
   /* Anel de foco ortogonal — cor constante, nunca fundido com hover/active.
      Azul escuro do espectro: 4.4:1 sobre o canvas (passa WCAG 2.4.11/1.4.11). */
   --color-focus: #2274a5;
@@ -58,11 +86,13 @@
 :root,
 [data-mode="clinico"] {
   --ds-shadow: var(--shadow-brutal);
+  --ds-shadow-inset: var(--shadow-brutal-inset);
   --ds-offset: 4px;
 }
 
 [data-mode="familia"] {
   --ds-shadow: var(--shadow-brutal-sm);
+  --ds-shadow-inset: var(--shadow-brutal-inset-sm);
   --ds-offset: 2px;
 }
 
@@ -72,6 +102,24 @@ html {
   font-family: var(--font-body);
   /* letter-spacing levemente aumentado ajuda leitura apressada */
   letter-spacing: 0.01em;
+}
+
+/* Accordion (Radix) — abre/fecha por altura medida (--radix-accordion-content-height). */
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
 }
 
 /* Logo — anéis da marca entram em cascata (ativado por .iris-animado). */
