@@ -8,10 +8,12 @@ import { registrarAudioLocalAction } from "./actions";
 type Estado = "vazio" | "gravando" | "gravado" | "enviando";
 
 /**
- * Gravador de áudio local do diário. O blob só existe no IndexedDB do
- * dispositivo (`iris-audio-rascunho`) até o terapeuta confirmar — antes
- * disso, "Descartar" apaga tudo e "Regravar" reinicia sem deixar resíduo.
- * Ninguém além do terapeuta ouve o áudio antes da consolidação.
+ * Gravador de áudio local do diário. O blob é persistido no IndexedDB do
+ * dispositivo (`iris-audio-rascunho`) assim que a gravação termina —
+ * persist-on-record — então mesmo um reload antes de "Confirmar" não perde
+ * o áudio. "Descartar" apaga o rascunho local de verdade e "Regravar" apaga
+ * o anterior antes de iniciar uma nova gravação. Ninguém além do terapeuta
+ * ouve o áudio antes da consolidação.
  */
 export function AudioLocal({
   sessionId,
@@ -29,14 +31,28 @@ export function AudioLocal({
   const streamRef = useRef<MediaStream | null>(null);
   const blobRef = useRef<Blob | null>(null);
   const inicioRef = useRef<number>(0);
+  const idLocalRef = useRef<string>("");
+  const contadorIdRef = useRef(0);
+  const audioUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    audioUrlRef.current = audioUrl;
+  }, [audioUrl]);
 
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const gerarIdLocal = useCallback((): string => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    contadorIdRef.current += 1;
+    return `${sessionId}-${Date.now()}-${contadorIdRef.current}`;
+  }, [sessionId]);
 
   const iniciarGravacao = useCallback(async () => {
     setErro(null);
@@ -44,18 +60,27 @@ export function AudioLocal({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       chunksRef.current = [];
+      idLocalRef.current = gerarIdLocal();
       const recorder = new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         blobRef.current = blob;
         setAudioUrl(URL.createObjectURL(blob));
         setEstado("gravado");
         stream.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
+        try {
+          // persist-on-record: o áudio sobrevive a um reload antes de confirmar
+          await salvarAudioLocal(idLocalRef.current, blob);
+        } catch {
+          setErro(
+            "Não foi possível salvar o áudio neste dispositivo. Evite recarregar a página antes de confirmar.",
+          );
+        }
       };
       inicioRef.current = Date.now();
       recorder.start();
@@ -65,7 +90,7 @@ export function AudioLocal({
         "Não foi possível acessar o microfone — verifique a permissão do navegador. O texto do diário continua salvo normalmente.",
       );
     }
-  }, []);
+  }, [gerarIdLocal]);
 
   const pararGravacao = useCallback(() => {
     mediaRecorderRef.current?.stop();
@@ -73,6 +98,14 @@ export function AudioLocal({
 
   const descartar = useCallback(async () => {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
+    if (idLocalRef.current) {
+      try {
+        await apagarAudioLocal(idLocalRef.current);
+      } catch {
+        // best-effort — o rascunho pode já não existir mais
+      }
+      idLocalRef.current = "";
+    }
     blobRef.current = null;
     setAudioUrl(null);
     setEstado("vazio");
@@ -100,7 +133,19 @@ export function AudioLocal({
         setEstado("gravado");
         return;
       }
+      // re-salva o blob sob o id definitivo do audio_capture e apaga o
+      // rascunho local — a partir daqui a chave no IndexedDB é a mesma do
+      // registro no banco, sem mapeamento adicional a manter.
       await salvarAudioLocal(resultado.id, blob);
+      const idLocalAnterior = idLocalRef.current;
+      if (idLocalAnterior && idLocalAnterior !== resultado.id) {
+        try {
+          await apagarAudioLocal(idLocalAnterior);
+        } catch {
+          // best-effort — não bloqueia a confirmação
+        }
+      }
+      idLocalRef.current = "";
       if (audioUrl) URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);
       blobRef.current = null;
