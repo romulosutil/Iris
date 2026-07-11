@@ -451,7 +451,9 @@ export const milestone = pgTable(
     ordem: integer("ordem"),
   },
   (t) => [
-    unique("uq_milestone_protocol_dominio_nivel").on(t.protocolId, t.dominioId, t.nivel),
+    unique("uq_milestone_protocol_dominio_nivel")
+      .on(t.protocolId, t.dominioId, t.nivel)
+      .nullsNotDistinct(),
     index("idx_milestone_protocol_dominio").on(t.protocolId, t.dominioId),
   ],
 );
@@ -498,7 +500,7 @@ export const goalCandidacy = pgTable("goal_candidacy", {
     .primaryKey()
     .references(() => goal.id, { onDelete: "cascade" }),
   isCandidateDominada: boolean("is_candidate_dominada").notNull().default(false),
-  since: timestamp("since", { withTimezone: true }),
+  candidacySince: timestamp("candidacy_since", { withTimezone: true }),
 });
 
 export const milestoneCandidacy = pgTable(

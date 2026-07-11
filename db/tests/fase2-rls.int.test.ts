@@ -327,6 +327,16 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     expect(lidasB.map((m) => m.id)).toContain(MILE_B);
   });
 
+  // ---------- J5: unique de milestone com NULLS NOT DISTINCT ----------
+  test("J5 · dois marcos com mesmo (protocol_id, dominio_id) e nivel NULL colidem no unique", async () => {
+    await owner`INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+      VALUES (${PROTO_A}, 'tato-j5', 'Nomear objeto (J5-1)', 'marco_simples', ${owner.json({ escala: [] })})`;
+    await expect(
+      owner`INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+        VALUES (${PROTO_A}, 'tato-j5', 'Nomear objeto (J5-2 duplicado)', 'marco_simples', ${owner.json({ escala: [] })})`,
+    ).rejects.toThrow();
+  });
+
   // ---------- candidatura dormente ----------
   test("tabelas de candidatura existem e respeitam escopo (dormentes)", async () => {
     const [g] = await withTenant(ctxCoordA, (tx) =>

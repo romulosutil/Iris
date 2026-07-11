@@ -999,8 +999,8 @@
           "notNull": true,
           "default": false
         },
-        "since": {
-          "name": "since",
+        "candidacy_since": {
+          "name": "candidacy_since",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -1185,7 +1185,7 @@
       "uniqueConstraints": {
         "uq_milestone_protocol_dominio_nivel": {
           "name": "uq_milestone_protocol_dominio_nivel",
-          "nullsNotDistinct": false,
+          "nullsNotDistinct": true,
           "columns": [
             "protocol_id",
             "dominio_id",

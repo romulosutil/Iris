@@ -46,7 +46,7 @@ CREATE TABLE "goal" (
 CREATE TABLE "goal_candidacy" (
 	"goal_id" uuid PRIMARY KEY NOT NULL,
 	"is_candidate_dominada" boolean DEFAULT false NOT NULL,
-	"since" timestamp with time zone
+	"candidacy_since" timestamp with time zone
 );
 --> statement-breakpoint
 CREATE TABLE "goal_milestone_mapping" (
@@ -64,7 +64,7 @@ CREATE TABLE "milestone" (
 	"tipo_estrutura" "milestone_tipo_estrutura" NOT NULL,
 	"estrutura" jsonb NOT NULL,
 	"ordem" integer,
-	CONSTRAINT "uq_milestone_protocol_dominio_nivel" UNIQUE("protocol_id","dominio_id","nivel")
+	CONSTRAINT "uq_milestone_protocol_dominio_nivel" UNIQUE NULLS NOT DISTINCT("protocol_id","dominio_id","nivel")
 );
 --> statement-breakpoint
 CREATE TABLE "milestone_candidacy" (
