@@ -225,4 +225,38 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     const lidas = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.extraction));
     expect(lidas.length).toBe(0);
   });
+
+  // ---------- milestone (catálogo) ----------
+  test("qualquer papel da clínica lê o catálogo de marcos do protocolo", async () => {
+    const lidasT1 = await withTenant(ctxT1A, (tx) => tx.select().from(schema.milestone));
+    expect(lidasT1.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("terapeuta não insere marco no catálogo (só coordenador)", async () => {
+    await expect(
+      withTenant(ctxT1A, (tx) =>
+        tx.insert(schema.milestone).values({
+          protocolId: PROTO_A, dominioId: "tato", nome: "nomear objeto",
+          tipoEstrutura: "marco_simples", estrutura: { escala: [] },
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("marco de protocolo de outra clínica não é visível (cross-tenant)", async () => {
+    const lidasB = await withTenant(ctxT1B, (tx) => tx.select().from(schema.milestone));
+    expect(lidasB.length).toBe(0);
+  });
+
+  // ---------- candidatura dormente ----------
+  test("tabelas de candidatura existem e respeitam escopo (dormentes)", async () => {
+    const [g] = await withTenant(ctxCoordA, (tx) =>
+      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+    );
+    await withTenant(ctxCoordA, (tx) =>
+      tx.insert(schema.goalCandidacy).values({ goalId: g!.id, isCandidateDominada: false }),
+    );
+    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goalCandidacy));
+    expect(lidas.length).toBe(1);
+  });
 });
