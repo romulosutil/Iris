@@ -147,8 +147,7 @@ CREATE POLICY extraction_select ON extraction FOR SELECT TO app_role USING (
   AND app_session_clinica_visivel(session_id)
 );
 --> statement-breakpoint
--- Escrita por qualquer papel clínico da clínica (o provider roda no contexto do
--- terapeuta que consolida; recepção não consolida). Fecha via terapeuta da sessão.
+-- Escrita pelo terapeuta dono da sessão (quem consolida). Recepção não consolida.
 CREATE POLICY extraction_insert ON extraction FOR INSERT TO app_role WITH CHECK (
   clinic_id = current_setting('app.clinic_id')::uuid
   AND app_session_terapeuta_id(session_id) = current_setting('app.user_id')::uuid
@@ -159,7 +158,10 @@ CREATE POLICY extraction_update ON extraction FOR UPDATE TO app_role
     clinic_id = current_setting('app.clinic_id')::uuid
     AND app_session_clinica_visivel(session_id)
   )
-  WITH CHECK (clinic_id = current_setting('app.clinic_id')::uuid);
+  WITH CHECK (
+    clinic_id = current_setting('app.clinic_id')::uuid
+    AND app_session_clinica_visivel(session_id)
+  );
 --> statement-breakpoint
 CREATE POLICY extraction_delete ON extraction FOR DELETE TO app_role USING (
   clinic_id = current_setting('app.clinic_id')::uuid
@@ -218,6 +220,7 @@ CREATE POLICY gmm_select ON goal_milestone_mapping FOR SELECT TO app_role USING 
 --> statement-breakpoint
 CREATE POLICY gmm_insert ON goal_milestone_mapping FOR INSERT TO app_role WITH CHECK (
   EXISTS (SELECT 1 FROM goal g WHERE g.id = goal_id)
+  AND app_milestone_in_clinic(milestone_id)
 );
 --> statement-breakpoint
 CREATE POLICY gmm_delete ON goal_milestone_mapping FOR DELETE TO app_role USING (
@@ -273,8 +276,19 @@ ALTER TABLE milestone_candidacy FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
 CREATE POLICY milestone_candidacy_select ON milestone_candidacy FOR SELECT TO app_role USING (
   app_patient_in_clinic(patient_id)
+  AND (
+    current_setting('app.user_role') = 'coordenador'
+    OR app_is_on_team(patient_id)
+  )
 );
 --> statement-breakpoint
 CREATE POLICY milestone_candidacy_write ON milestone_candidacy FOR ALL TO app_role
-  USING (app_patient_in_clinic(patient_id))
-  WITH CHECK (app_patient_in_clinic(patient_id) AND app_milestone_in_clinic(milestone_id));
+  USING (
+    current_setting('app.user_role') = 'coordenador'
+    AND app_patient_in_clinic(patient_id)
+  )
+  WITH CHECK (
+    current_setting('app.user_role') = 'coordenador'
+    AND app_patient_in_clinic(patient_id)
+    AND app_milestone_in_clinic(milestone_id)
+  );
