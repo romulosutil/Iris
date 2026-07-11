@@ -43,6 +43,13 @@
       "when": 1783781216193,
       "tag": "0005_square_ravenous",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783781316193,
+      "tag": "0006_fase2_rls",
+      "breakpoints": true
     }
   ]
 }
