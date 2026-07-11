@@ -144,6 +144,40 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     ).rejects.toThrow();
   });
 
+  // ---------- J9: session_note imutabilidade por grant-de-coluna ----------
+  // Reusa a nota criada no 1º teste (tipo "captura_rapida" em SESS_A1) — o
+  // enum session_note_tipo só tem 2 valores e (session_id, tipo) é único,
+  // então evita inserir outra linha para o mesmo par.
+  test("J9 · terapeuta dono NÃO consegue reatribuir autor_id da própria nota", async () => {
+    const [nota] = await withTenant(ctxT1A, (tx) =>
+      tx.select({ id: schema.sessionNote.id })
+        .from(schema.sessionNote)
+        .where(eq(schema.sessionNote.tipo, "captura_rapida")),
+    );
+    await expect(
+      withTenant(ctxT1A, (tx) =>
+        tx.update(schema.sessionNote)
+          .set({ autorId: U_T2_A })
+          .where(eq(schema.sessionNote.id, nota!.id)),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("J9 · terapeuta dono consegue atualizar o texto da própria nota", async () => {
+    const [nota] = await withTenant(ctxT1A, (tx) =>
+      tx.select({ id: schema.sessionNote.id })
+        .from(schema.sessionNote)
+        .where(eq(schema.sessionNote.tipo, "captura_rapida")),
+    );
+    const alterados = await withTenant(ctxT1A, (tx) =>
+      tx.update(schema.sessionNote)
+        .set({ texto: "texto revisado pelo dono" })
+        .where(eq(schema.sessionNote.id, nota!.id))
+        .returning({ id: schema.sessionNote.id }),
+    );
+    expect(alterados.length).toBe(1);
+  });
+
   // ---------- goal ----------
   test("coordenador cria meta; terapeuta da equipe lê", async () => {
     const [g] = await withTenant(ctxCoordA, (tx) =>

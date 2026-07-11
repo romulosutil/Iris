@@ -50,7 +50,12 @@ GRANT EXECUTE ON FUNCTION app_milestone_in_clinic(uuid) TO app_role;
 --> statement-breakpoint
 
 -- ============================ session_note ============================
-GRANT SELECT, INSERT, UPDATE ON session_note TO app_role;
+-- id/session_id/clinic_id/autor_id/tipo/criado_em imutáveis por app_role:
+-- travados via GRANT por coluna (mesmo idioma de `goal`) — evita forja de
+-- autoria ou reatribuição da nota a outra sessão via UPDATE.
+GRANT SELECT, INSERT ON session_note TO app_role;
+--> statement-breakpoint
+GRANT UPDATE (texto, atualizado_em) ON session_note TO app_role;
 --> statement-breakpoint
 ALTER TABLE session_note ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -80,7 +85,11 @@ CREATE POLICY session_note_update ON session_note FOR UPDATE TO app_role
 --> statement-breakpoint
 
 -- ==================== session_protocol_scope ====================
-GRANT SELECT, INSERT, UPDATE, DELETE ON session_protocol_scope TO app_role;
+-- id/session_id/protocol_id imutáveis por app_role: travados via GRANT por
+-- coluna (mesmo idioma de `goal`).
+GRANT SELECT, INSERT, DELETE ON session_protocol_scope TO app_role;
+--> statement-breakpoint
+GRANT UPDATE (origem, ajustado_por) ON session_protocol_scope TO app_role;
 --> statement-breakpoint
 ALTER TABLE session_protocol_scope ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -110,7 +119,11 @@ CREATE POLICY sps_delete ON session_protocol_scope FOR DELETE TO app_role USING 
 --> statement-breakpoint
 
 -- ============================ audio_capture ============================
-GRANT SELECT, INSERT, UPDATE ON audio_capture TO app_role;
+-- id/session_id/clinic_id/criado_em imutáveis por app_role: travados via
+-- GRANT por coluna (mesmo idioma de `goal`).
+GRANT SELECT, INSERT ON audio_capture TO app_role;
+--> statement-breakpoint
+GRANT UPDATE (status_upload, objeto_ref, duracao_segundos) ON audio_capture TO app_role;
 --> statement-breakpoint
 ALTER TABLE audio_capture ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -138,7 +151,12 @@ CREATE POLICY audio_update ON audio_capture FOR UPDATE TO app_role
 --> statement-breakpoint
 
 -- ============================ extraction ============================
-GRANT SELECT, INSERT, UPDATE, DELETE ON extraction TO app_role;
+-- Conteúdo da extração é imutável por design (auditoria da sugestão da IA);
+-- só `estado` é mutável (fluxo de validação/reclassificação). Travado via
+-- GRANT por coluna (mesmo idioma de `goal`).
+GRANT SELECT, INSERT, DELETE ON extraction TO app_role;
+--> statement-breakpoint
+GRANT UPDATE (estado) ON extraction TO app_role;
 --> statement-breakpoint
 ALTER TABLE extraction ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -215,7 +233,9 @@ CREATE POLICY goal_update ON goal FOR UPDATE TO app_role
 --> statement-breakpoint
 
 -- ==================== goal_milestone_mapping ====================
-GRANT SELECT, INSERT, UPDATE, DELETE ON goal_milestone_mapping TO app_role;
+-- Junção pura (PK composta goal_id/milestone_id, sem coluna atualizável) —
+-- UPDATE não faz sentido aqui; remove do grant.
+GRANT SELECT, INSERT, DELETE ON goal_milestone_mapping TO app_role;
 --> statement-breakpoint
 ALTER TABLE goal_milestone_mapping ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -303,6 +323,7 @@ CREATE POLICY milestone_candidacy_write ON milestone_candidacy FOR ALL TO app_ro
   USING (
     current_setting('app.user_role') = 'coordenador'
     AND app_patient_in_clinic(patient_id)
+    AND app_milestone_in_clinic(milestone_id)
   )
   WITH CHECK (
     current_setting('app.user_role') = 'coordenador'
