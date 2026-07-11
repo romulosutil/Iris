@@ -53,6 +53,24 @@ O RLS **só se aplica a roles não-superuser e não-donos da tabela**. Um superu
   que ele NÃO tem `SUPERUSER`/`BYPASSRLS` (`\du iris_app`), senão o isolamento
   multi-tenant não vale.
 
+## Roles de banco (Fase 1b)
+
+Além de `iris_app` (acima), a Fase 1b introduz a role de privilégio `iris_auth`
+(criada pela migração `0002`, NOBYPASSRLS) para isolar o acesso do Better-Auth
+e do bootstrap de identidade das tabelas de dado de paciente. Depois de aplicar
+a migração `0002`, criar **uma vez** por ambiente, como superuser, o usuário de
+login membro dela:
+
+```sql
+-- Cria o usuário de LOGIN membro de iris_auth (senha por ambiente, nunca versionada).
+CREATE ROLE iris_auth_login LOGIN PASSWORD :'authpwd' IN ROLE iris_auth;
+-- O usuário de app_role (app_login) já existe desde a Fase 1a; mesma receita.
+```
+
+Em dev local (docker-compose) o superuser é `iris`; rodar o SQL acima com
+`psql` apontando pro container. Em produção (Easypanel `iris-postgres`), idem
+via console SQL do serviço.
+
 ## Migrations e seed
 
 ```bash

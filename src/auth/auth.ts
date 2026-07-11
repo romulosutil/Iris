@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "@/db/client";
+import { authDb } from "@/db/client";
 import {
   appUser,
   authAccount,
@@ -20,7 +20,7 @@ export const auth = betterAuth({
   emailAndPassword: { enabled: true },
   // DB gera o id (uuid default) — não deixar o Better-Auth gerar string.
   advanced: { database: { generateId: false } },
-  database: drizzleAdapter(db, {
+  database: drizzleAdapter(authDb, {
     provider: "pg",
     schema: {
       user: appUser,
