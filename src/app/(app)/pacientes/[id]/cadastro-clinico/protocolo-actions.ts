@@ -1,5 +1,5 @@
 "use server";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
@@ -33,7 +33,9 @@ export async function desativarProtocolo(
   await withTenant(ctx, (tx) =>
     tx
       .update(patientProtocol)
-      .set({ desativadoEm: new Date().toISOString().slice(0, 10) })
+      // Data no fuso do Brasil, resolvida pelo Postgres — evita que uma ação à
+      // noite (UTC-3) grave o dia seguinte por causa do UTC (Jules WARN).
+      .set({ desativadoEm: sql`(now() AT TIME ZONE 'America/Sao_Paulo')::date` })
       .where(eq(patientProtocol.id, patientProtocolId)),
   );
   return {};

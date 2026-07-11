@@ -1,5 +1,5 @@
 "use server";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
@@ -59,7 +59,9 @@ export async function encerrarVinculoEquipe(
   await withTenant(ctx, (tx) =>
     tx
       .update(careTeamMembership)
-      .set({ vigenciaFim: new Date().toISOString().slice(0, 10) })
+      // Data no fuso do Brasil, resolvida pelo Postgres — evita off-by-one por
+      // UTC em encerramentos feitos à noite (UTC-3) (Jules WARN).
+      .set({ vigenciaFim: sql`(now() AT TIME ZONE 'America/Sao_Paulo')::date` })
       .where(eq(careTeamMembership.id, membershipId)),
   );
   return {};

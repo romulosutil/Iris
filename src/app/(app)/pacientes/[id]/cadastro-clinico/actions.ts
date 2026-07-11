@@ -35,12 +35,6 @@ export async function salvarFichaClinica(
       };
     }
 
-    const [existente] = await tx
-      .select({ id: patientClinicalProfile.id })
-      .from(patientClinicalProfile)
-      .where(eq(patientClinicalProfile.patientId, patientId))
-      .limit(1);
-
     const valores = {
       diagnostico: campo("diagnostico"),
       medicacoes: campo("medicacoes"),
@@ -49,14 +43,15 @@ export async function salvarFichaClinica(
       contatosEmergencia: campo("contatosEmergencia"),
     };
 
-    if (existente) {
-      await tx
-        .update(patientClinicalProfile)
-        .set(valores)
-        .where(eq(patientClinicalProfile.patientId, patientId));
-    } else {
-      await tx.insert(patientClinicalProfile).values({ patientId, ...valores });
-    }
+    // UPSERT atômico numa só ida ao banco pela chave única patientId
+    // (Jules NIT — dispensa o select prévio + ramificação update/insert).
+    await tx
+      .insert(patientClinicalProfile)
+      .values({ patientId, ...valores })
+      .onConflictDoUpdate({
+        target: patientClinicalProfile.patientId,
+        set: valores,
+      });
     return {};
   });
 }
