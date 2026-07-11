@@ -1,0 +1,124 @@
+import postgres from "postgres";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+
+// IDs fixos do seed — reusados pelas Tasks 4-8.
+const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
+const CLINIC_B = "00000000-0000-0000-0000-0000000000b1";
+const U_COORD_A = "00000000-0000-0000-0000-00000000c0a1";
+const U_T1_A = "00000000-0000-0000-0000-0000000071a1";
+const U_T2_A = "00000000-0000-0000-0000-0000000072a1";
+const U_RECEP_A = "00000000-0000-0000-0000-0000000052a1";
+const U_T1_B = "00000000-0000-0000-0000-0000000071b1";
+const PAC_A1 = "00000000-0000-0000-0000-00000000ac1a";
+const PROTO_A = "00000000-0000-0000-0000-00000070c0a1";
+const SESS_A1 = "00000000-0000-0000-0000-00000005e1a1"; // terapeuta = T1
+const MILE_A = "00000000-0000-0000-0000-00000000d1a1";
+const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
+
+const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
+const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
+const ctxT2A = { clinicId: CLINIC_A, userId: U_T2_A, role: "terapeuta" } as const;
+const ctxRecepA = { clinicId: CLINIC_A, userId: U_RECEP_A, role: "admin_recepcao" } as const;
+const ctxT1B = { clinicId: CLINIC_B, userId: U_T1_B, role: "terapeuta" } as const;
+
+let owner: ReturnType<typeof postgres>;
+let withTenant: typeof import("@/db/rls").withTenant;
+let appSql: typeof import("@/db/client").sql;
+let schema: typeof import("@/db/schema");
+
+describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
+  beforeAll(async () => {
+    ({ withTenant } = await import("@/db/rls"));
+    ({ sql: appSql } = await import("@/db/client"));
+    schema = await import("@/db/schema");
+    owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
+
+    await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
+      protocol, session, session_note, session_protocol_scope, audio_capture, extraction,
+      goal, goal_milestone_mapping, milestone, goal_candidacy, milestone_candidacy
+      RESTART IDENTITY CASCADE`;
+
+    // Catálogo de família de protocolo (FK obrigatória de `protocol.familia`) —
+    // idempotente pois não é truncado (catálogo global, não por tenant).
+    await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES
+      (${PROTOCOL_FAMILIA}, 'Marcos de desenvolvimento (ABA)')
+      ON CONFLICT (id) DO NOTHING`;
+
+    await owner`INSERT INTO clinic (id, nome, is_demo) VALUES
+      (${CLINIC_A}, 'Clínica A', false), (${CLINIC_B}, 'Clínica B', false)`;
+    // app_user usa `name` (tabela `user` do Better-Auth), não `nome`.
+    await owner`INSERT INTO app_user (id, name, email) VALUES
+      (${U_COORD_A}, 'Coord A', 'coord.a@t.com'),
+      (${U_T1_A}, 'Terapeuta 1 A', 't1.a@t.com'),
+      (${U_T2_A}, 'Terapeuta 2 A', 't2.a@t.com'),
+      (${U_RECEP_A}, 'Recepção A', 'recep.a@t.com'),
+      (${U_T1_B}, 'Terapeuta 1 B', 't1.b@t.com')`;
+    await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
+      (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
+      (${U_T1_A}, ${CLINIC_A}, 'terapeuta'),
+      (${U_T2_A}, ${CLINIC_A}, 'terapeuta'),
+      (${U_RECEP_A}, ${CLINIC_A}, 'admin_recepcao'),
+      (${U_T1_B}, ${CLINIC_B}, 'terapeuta')`;
+    await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
+      (${PAC_A1}, ${CLINIC_A}, 'Paciente A1')`;
+    await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
+      (${PROTO_A}, ${CLINIC_A}, 'VB-MAPP demo', 'ABA', ${PROTOCOL_FAMILIA})`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
+      (${SESS_A1}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'presente')`;
+    // T1 está na equipe do paciente A1 (para app_is_on_team). care_team_membership
+    // não tem clinic_id — só patient_id/user_id/disciplina/papel_na_equipe/vigência —
+    // e `papel_na_equipe` é restrito por CHECK a terapeuta_referencia|coordenador_referencia|substituto.
+    await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
+      VALUES (${PAC_A1}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
+  });
+
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
+
+  // ---------- session_note ----------
+  test("terapeuta dono escreve e lê a própria nota da sessão", async () => {
+    const [nota] = await withTenant(ctxT1A, (tx) =>
+      tx.insert(schema.sessionNote).values({
+        sessionId: SESS_A1, clinicId: CLINIC_A, tipo: "captura_rapida",
+        texto: "Pediu água e apontou", autorId: U_T1_A,
+      }).returning({ id: schema.sessionNote.id }),
+    );
+    expect(nota?.id).toBeTruthy();
+
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.sessionNote),
+    );
+    expect(lidas.length).toBe(1);
+  });
+
+  test("recepção NÃO lê nota clínica (guardrail #1)", async () => {
+    const lidas = await withTenant(ctxRecepA, (tx) =>
+      tx.select().from(schema.sessionNote),
+    );
+    expect(lidas.length).toBe(0);
+  });
+
+  test("terapeuta de outra clínica não vê a nota (cross-tenant)", async () => {
+    const lidas = await withTenant(ctxT1B, (tx) =>
+      tx.select().from(schema.sessionNote),
+    );
+    expect(lidas.length).toBe(0);
+  });
+
+  test("terapeuta que não é dono da sessão não escreve a nota", async () => {
+    await expect(
+      withTenant(ctxT2A, (tx) =>
+        tx.insert(schema.sessionNote).values({
+          sessionId: SESS_A1, clinicId: CLINIC_A, tipo: "nota_consolidada",
+          texto: "tentativa indevida", autorId: U_T2_A,
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+});
