@@ -2,17 +2,21 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { getTenantContext, listarClinicasDoUsuario } from "@/auth/tenant";
 import { ClinicSwitcher } from "@/components/app/clinic-switcher";
+import { listarPendencias } from "./pendencias/queries";
 import { SignOutButton } from "./sign-out-button";
 
 /**
  * Shell protegido. `getTenantContext` resolve tenant e redireciona sozinho
  * (login / seleção / sem-acesso) quando o status não é "ok" — nenhuma página
  * dentro de (app) precisa repetir a guarda. Header traz clínica ativa +
- * switcher + sair.
+ * switcher + sair. O link de Pendências mostra a contagem total (N) — o RLS já
+ * escopa `listarPendencias` por papel/tenant, então N reflete só o que este
+ * usuário pode ver.
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getTenantContext();
   const clinicas = await listarClinicasDoUsuario(ctx.userId);
+  const { total: totalPendencias } = await listarPendencias(ctx);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -24,6 +28,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             className="font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline"
           >
             Agenda
+          </Link>
+          <Link
+            href="/pendencias"
+            className="font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline"
+          >
+            Pendências ({totalPendencias})
           </Link>
           <SignOutButton />
         </nav>
