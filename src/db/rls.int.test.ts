@@ -263,4 +263,37 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
     );
     expect(removido).toHaveLength(0);
   });
+
+  test("admin_recepcao NUNCA lê nem escreve patient_protocol ou care_team_membership (guardrail 1c)", async () => {
+    // Minimização LGPD: recepção não toca protocolo nem equipe de cuidado.
+    // RLS já barra desde 1a/1b — esta é a prova documental do guardrail #1.
+    const protocolos = await withTenant(ctx("admin_recepcao", U_ADMIN), (db) =>
+      db.select().from(patientProtocol),
+    );
+    expect(protocolos).toHaveLength(0);
+
+    const equipe = await withTenant(ctx("admin_recepcao", U_ADMIN), (db) =>
+      db.select().from(careTeamMembership),
+    );
+    expect(equipe).toHaveLength(0);
+
+    await expect(
+      withTenant(ctx("admin_recepcao", U_ADMIN), (db) =>
+        db
+          .insert(patientProtocol)
+          .values({ patientId: P1, protocolId: PROT_A, ativadoPor: U_ADMIN }),
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      withTenant(ctx("admin_recepcao", U_ADMIN), (db) =>
+        db.insert(careTeamMembership).values({
+          patientId: P1,
+          userId: U_ADMIN,
+          disciplina: "ABA",
+          papelNaEquipe: "substituto",
+        }),
+      ),
+    ).rejects.toThrow();
+  });
 });
