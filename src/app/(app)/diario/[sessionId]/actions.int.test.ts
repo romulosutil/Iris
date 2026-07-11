@@ -59,4 +59,35 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(rows[0]!.origem).toBe("ajustado_manualmente");
     expect(rows[0]!.ajustado_por).toBe(U_T1);
   });
+
+  test("consolidar grava nota, popula numero_sequencial e é idempotente", async () => {
+    const { consolidarSessao } = await import("./actions");
+    const r1 = await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota final revisada da sessão." });
+    expect(r1.error).toBeUndefined();
+    expect(r1.numeroSequencial).toBe(1);
+    // reconsolidar NÃO incrementa o sequencial
+    const r2 = await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota final corrigida." });
+    expect(r2.numeroSequencial).toBe(1);
+    const s = await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${SESS}`;
+    expect(s[0]!.numero_sequencial_paciente).toBe(1);
+  });
+
+  test("clínica demo gera extrações sugeridas ao consolidar", async () => {
+    await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
+    const { consolidarSessao } = await import("./actions");
+    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Pediu água. Falou 'á' sozinho. Não respondeu depois." });
+    const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
+    expect(ex.length).toBeGreaterThanOrEqual(1);
+    expect(ex.every((e) => e.estado === "sugerida")).toBe(true);
+    await owner`UPDATE clinic SET is_demo = false WHERE id = ${CLINIC_A}`;
+  });
+
+  test("clínica de produção fica pendente de reprocessamento (sem LLM)", async () => {
+    // limpa extrações da sessão do caso anterior
+    await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
+    const { consolidarSessao } = await import("./actions");
+    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota de produção." });
+    const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
+    expect(ex.some((e) => e.estado === "pendente_reprocessamento")).toBe(true);
+  });
 });

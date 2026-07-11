@@ -1,8 +1,20 @@
 "use server";
+import { revalidatePath } from "next/cache";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { requireRole } from "@/auth/require-role";
+import { getTenantContext } from "@/auth/tenant";
+import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { audioCapture, sessionNote, sessionProtocolScope } from "@/db/schema";
+import {
+  audioCapture,
+  clinic,
+  extraction,
+  goal,
+  session,
+  sessionNote,
+  sessionProtocolScope,
+} from "@/db/schema";
+import { resolveProvider } from "@/lib/extraction/provider";
 
 const capturaSchema = z.object({
   sessionId: z.string().uuid(),
@@ -121,5 +133,198 @@ export async function registrarAudioLocal(
   } catch (err) {
     console.error("registrarAudioLocal:", err);
     return { error: "Não foi possível registrar o áudio." };
+  }
+}
+
+const consolidarSchema = z.object({
+  sessionId: z.string().uuid(),
+  texto: z.string().trim().min(1, "A nota consolidada não pode ficar vazia."),
+});
+
+/**
+ * Consolida a sessão: grava a nota final, popula `numero_sequencial_paciente`
+ * (só na primeira consolidação — reconsolidar não incrementa) e dispara a
+ * costura de extração (`ExtractionProvider`: stub demo gera 'sugerida',
+ * produção fica 'pendente_reprocessamento' até a Fase 3 ligar o LLM real).
+ *
+ * Roda no contexto do terapeuta dono da sessão — `extraction_insert` e
+ * `extraction_delete` (RLS) exigem `app_session_terapeuta_id(session_id) =
+ * app.user_id`, então `requireRole` sozinho não bastaria sem essa condição.
+ */
+export async function consolidarSessao(
+  ctx: TenantContext,
+  input: { sessionId: string; texto: string },
+): Promise<{ error?: string; numeroSequencial?: number }> {
+  requireRole(ctx, "terapeuta");
+  const parsed = consolidarSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]!.message };
+
+  try {
+    return await withTenant(ctx, async (tx) => {
+      // 1) grava/atualiza a nota consolidada (upsert na chave única sessão+tipo)
+      await tx
+        .insert(sessionNote)
+        .values({
+          sessionId: parsed.data.sessionId,
+          clinicId: ctx.clinicId,
+          tipo: "nota_consolidada",
+          texto: parsed.data.texto,
+          autorId: ctx.userId,
+        })
+        .onConflictDoUpdate({
+          target: [sessionNote.sessionId, sessionNote.tipo],
+          set: { texto: parsed.data.texto, atualizadoEm: new Date() },
+        });
+
+      // 2) popula numero_sequencial_paciente só se ainda nulo (idempotente):
+      //    próximo inteiro por paciente, resolvido no banco.
+      const [sess] = await tx
+        .select({ patientId: session.patientId, numero: session.numeroSequencialPaciente })
+        .from(session)
+        .where(eq(session.id, parsed.data.sessionId));
+      let numero = sess!.numero ?? null;
+      if (numero === null) {
+        const upd = await tx.execute(sql`
+          UPDATE session SET numero_sequencial_paciente = (
+            COALESCE((SELECT MAX(numero_sequencial_paciente) FROM session
+                      WHERE patient_id = ${sess!.patientId}), 0) + 1)
+          WHERE id = ${parsed.data.sessionId} AND numero_sequencial_paciente IS NULL
+          RETURNING numero_sequencial_paciente AS numero`);
+        const row = (upd as unknown as Array<{ numero: number }>)[0];
+        numero = row?.numero ?? sess!.numero ?? null;
+      }
+
+      // 3) dispara a extração via costura (stub demo / null produção).
+      const [cl] = await tx
+        .select({ isDemo: clinic.isDemo })
+        .from(clinic)
+        .where(eq(clinic.id, ctx.clinicId));
+      const metas = await tx
+        .select({ id: goal.id, descricao: goal.descricao })
+        .from(goal)
+        .where(and(eq(goal.clinicId, ctx.clinicId), eq(goal.estado, "ativa")));
+      const provider = resolveProvider({ isDemo: cl!.isDemo });
+      const drafts = await provider.extrair({
+        sessionId: parsed.data.sessionId,
+        clinicId: ctx.clinicId,
+        notaConsolidada: parsed.data.texto,
+        metasAtivas: metas,
+      });
+      // regrava extrações desta sessão (consolidação re-roda o provider)
+      await tx.delete(extraction).where(eq(extraction.sessionId, parsed.data.sessionId));
+      if (drafts.length > 0) {
+        await tx.insert(extraction).values(
+          drafts.map((d) => ({
+            sessionId: parsed.data.sessionId,
+            clinicId: ctx.clinicId,
+            estado: d.estado,
+            subtipo: d.subtipo,
+            trechoFonte: d.trechoFonte,
+            confianca: d.confianca,
+            justificativaConfianca: d.justificativaConfianca,
+            inconsistenteComHistorico: d.inconsistenteComHistorico,
+            parContrasteId: d.parContrasteId,
+            payload: d.payload as object,
+          })),
+        );
+      }
+      return { numeroSequencial: numero ?? undefined };
+    });
+  } catch (err) {
+    console.error("consolidarSessao:", err);
+    return { error: "Não foi possível consolidar a sessão." };
+  }
+}
+
+// ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
+
+export type CapturarDiarioState = { error?: string; id?: string };
+export async function capturarDiarioAction(
+  _prev: CapturarDiarioState,
+  formData: FormData,
+): Promise<CapturarDiarioState> {
+  const ctx = await getTenantContext();
+  try {
+    const r = await capturarDiario(ctx, {
+      sessionId: String(formData.get("sessionId") ?? ""),
+      texto: String(formData.get("texto") ?? ""),
+    });
+    if (r.error) return { error: r.error };
+    revalidatePath(`/diario/${formData.get("sessionId")}`);
+    return { id: r.id };
+  } catch (err) {
+    if (err instanceof RoleError) return { error: "Só o terapeuta da sessão registra a captura." };
+    console.error("capturarDiarioAction:", err);
+    return { error: "Não foi possível salvar a captura." };
+  }
+}
+
+export type CorrigirEscopoState = { error?: string; ok?: boolean };
+export async function corrigirEscopoProtocoloAction(
+  _prev: CorrigirEscopoState,
+  formData: FormData,
+): Promise<CorrigirEscopoState> {
+  const ctx = await getTenantContext();
+  try {
+    const protocolIds = formData.getAll("protocolIds").map(String);
+    const r = await corrigirEscopoProtocolo(ctx, {
+      sessionId: String(formData.get("sessionId") ?? ""),
+      protocolIds,
+    });
+    if (r.error) return { error: r.error };
+    revalidatePath(`/diario/${formData.get("sessionId")}`);
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof RoleError) return { error: "Só o terapeuta da sessão ajusta os protocolos." };
+    console.error("corrigirEscopoProtocoloAction:", err);
+    return { error: "Não foi possível ajustar os protocolos." };
+  }
+}
+
+export type RegistrarAudioState = { error?: string; id?: string };
+export async function registrarAudioLocalAction(
+  _prev: RegistrarAudioState,
+  formData: FormData,
+): Promise<RegistrarAudioState> {
+  const ctx = await getTenantContext();
+  try {
+    const duracaoRaw = formData.get("duracaoSegundos");
+    const duracaoSegundos = duracaoRaw ? Number(duracaoRaw) : undefined;
+    const r = await registrarAudioLocal(ctx, {
+      sessionId: String(formData.get("sessionId") ?? ""),
+      duracaoSegundos:
+        duracaoSegundos !== undefined && Number.isFinite(duracaoSegundos)
+          ? duracaoSegundos
+          : undefined,
+    });
+    if (r.error) return { error: r.error };
+    revalidatePath(`/diario/${formData.get("sessionId")}`);
+    return { id: r.id };
+  } catch (err) {
+    if (err instanceof RoleError) return { error: "Só o terapeuta da sessão registra o áudio." };
+    console.error("registrarAudioLocalAction:", err);
+    return { error: "Não foi possível registrar o áudio." };
+  }
+}
+
+export type ConsolidarState = { error?: string; ok?: boolean; numero?: number };
+export async function consolidarSessaoAction(
+  _prev: ConsolidarState,
+  formData: FormData,
+): Promise<ConsolidarState> {
+  const ctx = await getTenantContext();
+  try {
+    const r = await consolidarSessao(ctx, {
+      sessionId: String(formData.get("sessionId") ?? ""),
+      texto: String(formData.get("texto") ?? ""),
+    });
+    if (r.error) return { error: r.error };
+    revalidatePath("/pendencias");
+    revalidatePath(`/diario/${formData.get("sessionId")}`);
+    return { ok: true, numero: r.numeroSequencial };
+  } catch (err) {
+    if (err instanceof RoleError) return { error: "Só o terapeuta da sessão consolida." };
+    console.error("consolidarSessaoAction:", err);
+    return { error: "Não foi possível consolidar." };
   }
 }
