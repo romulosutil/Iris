@@ -33,6 +33,10 @@ import {
   DialogTitle,
   DialogDescription,
 } from "./dialog";
+import { Slider } from "./slider";
+import { Progress } from "./progress";
+import { Avatar, AvatarFallback, AvatarGroup } from "./avatar";
+import { Stat } from "./stat";
 
 afterEach(cleanup);
 
@@ -287,4 +291,41 @@ test("Dialog aberto — sem violações axe", async () => {
     },
   });
   expect(resultado.violations).toEqual([]);
+});
+
+test("Slider — sem violações axe", async () => {
+  await semViolacoes(
+    <Slider defaultValue={[40]} max={100} step={1} aria-label="Confiança" />,
+  );
+});
+
+test("Progress — sem violações axe", async () => {
+  await semViolacoes(<Progress value={60} aria-label="Progresso do dossiê" />);
+});
+
+test("Avatar (fallback) — sem violações axe", async () => {
+  await semViolacoes(
+    <Avatar>
+      <AvatarFallback>RS</AvatarFallback>
+    </Avatar>,
+  );
+});
+
+test("AvatarGroup — sem violações axe", async () => {
+  await semViolacoes(
+    <AvatarGroup rotulo="Equipe de cuidado">
+      <Avatar>
+        <AvatarFallback>RS</AvatarFallback>
+      </Avatar>
+      <Avatar>
+        <AvatarFallback>MC</AvatarFallback>
+      </Avatar>
+    </AvatarGroup>,
+  );
+});
+
+test("Stat — sem violações axe", async () => {
+  await semViolacoes(
+    <Stat rotulo="Aguardando revisão" valor="12" descricao="Fila do dia" />,
+  );
 });
