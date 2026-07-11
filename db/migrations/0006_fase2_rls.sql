@@ -261,7 +261,12 @@ CREATE POLICY gmm_delete ON goal_milestone_mapping FOR DELETE TO app_role USING 
 -- ============================ milestone ============================
 -- Catálogo: leitura por qualquer papel da clínica dona do protocolo; escrita
 -- pelo seed/coordenador (INSERT restrito ao protocolo da clínica ativa).
-GRANT SELECT, INSERT, UPDATE, DELETE ON milestone TO app_role;
+-- Sem policy de DELETE (evitaria falha silenciosa); id/protocol_id/dominio_id
+-- imutáveis por app_role: travados via GRANT por coluna (mesmo idioma de
+-- `goal`) — protocol_id é o FK-pai, dominio_id é a chave estável do agente.
+GRANT SELECT, INSERT ON milestone TO app_role;
+--> statement-breakpoint
+GRANT UPDATE (nome, nivel, tipo_estrutura, estrutura, ordem) ON milestone TO app_role;
 --> statement-breakpoint
 ALTER TABLE milestone ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -282,7 +287,11 @@ CREATE POLICY milestone_update ON milestone FOR UPDATE TO app_role
 --> statement-breakpoint
 
 -- ============================ goal_candidacy (dormente) ============================
-GRANT SELECT, INSERT, UPDATE, DELETE ON goal_candidacy TO app_role;
+-- goal_id (PK/FK) imutável por app_role: travado via GRANT por coluna (mesmo
+-- idioma de `goal`). DELETE mantido — coberto pela policy FOR ALL abaixo.
+GRANT SELECT, INSERT, DELETE ON goal_candidacy TO app_role;
+--> statement-breakpoint
+GRANT UPDATE (is_candidate_dominada, candidacy_since) ON goal_candidacy TO app_role;
 --> statement-breakpoint
 ALTER TABLE goal_candidacy ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -305,7 +314,12 @@ CREATE POLICY goal_candidacy_write ON goal_candidacy FOR ALL TO app_role
 --> statement-breakpoint
 
 -- ==================== milestone_candidacy (dormente) ====================
-GRANT SELECT, INSERT, UPDATE, DELETE ON milestone_candidacy TO app_role;
+-- patient_id/milestone_id (PK/FKs) imutáveis por app_role: travados via GRANT
+-- por coluna (mesmo idioma de `goal`). DELETE mantido — coberto pela policy
+-- FOR ALL abaixo.
+GRANT SELECT, INSERT, DELETE ON milestone_candidacy TO app_role;
+--> statement-breakpoint
+GRANT UPDATE (is_candidate, candidacy_since, evidence_count, distinct_sessions) ON milestone_candidacy TO app_role;
 --> statement-breakpoint
 ALTER TABLE milestone_candidacy ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint

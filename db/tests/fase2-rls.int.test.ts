@@ -396,6 +396,35 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     ).rejects.toThrow();
   });
 
+  // ---------- auditoria RLS: milestone imutabilidade de protocol_id + DELETE barrado ----------
+  test("coordenador NÃO consegue reatribuir protocol_id do marco a outro protocolo (grant por coluna)", async () => {
+    await expect(
+      withTenant(ctxCoordA, (tx) =>
+        tx.update(schema.milestone)
+          .set({ protocolId: PROTO_A2 })
+          .where(eq(schema.milestone.id, MILE_A)),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("coordenador consegue atualizar coluna mutável (nome) do marco", async () => {
+    const alterados = await withTenant(ctxCoordA, (tx) =>
+      tx.update(schema.milestone)
+        .set({ nome: "Pedir item preferido (revisado)" })
+        .where(eq(schema.milestone.id, MILE_A))
+        .returning({ id: schema.milestone.id }),
+    );
+    expect(alterados.length).toBe(1);
+  });
+
+  test("coordenador NÃO consegue apagar marco (sem privilégio DELETE)", async () => {
+    await expect(
+      withTenant(ctxCoordA, (tx) =>
+        tx.delete(schema.milestone).where(eq(schema.milestone.id, MILE_A)),
+      ),
+    ).rejects.toThrow();
+  });
+
   // ---------- candidatura dormente ----------
   test("tabelas de candidatura existem e respeitam escopo (dormentes)", async () => {
     const [g] = await withTenant(ctxCoordA, (tx) =>
