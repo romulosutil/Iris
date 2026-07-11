@@ -1,5 +1,6 @@
 "use server";
 import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
@@ -67,5 +68,9 @@ export async function salvarFichaClinicaAction(
   formData: FormData,
 ): Promise<FichaClinicaState> {
   const ctx = await getTenantContext();
-  return salvarFichaClinica(ctx, patientId, formData);
+  const resultado = await salvarFichaClinica(ctx, patientId, formData);
+  if (!resultado.error) {
+    revalidatePath(`/pacientes/${patientId}/cadastro-clinico`);
+  }
+  return resultado;
 }

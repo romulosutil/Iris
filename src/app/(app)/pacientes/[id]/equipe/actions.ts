@@ -70,7 +70,13 @@ export async function adicionarMembroEquipeAction(
   _prev: { error?: string },
   formData: FormData,
 ) {
-  return adicionarMembroEquipe(await getTenantContext(), patientId, formData);
+  const resultado = await adicionarMembroEquipe(
+    await getTenantContext(),
+    patientId,
+    formData,
+  );
+  if (!resultado.error) revalidatePath(`/pacientes/${patientId}/equipe`);
+  return resultado;
 }
 
 // Usada como `action` de <form> nativo → retorna void e revalida a rota da equipe.
