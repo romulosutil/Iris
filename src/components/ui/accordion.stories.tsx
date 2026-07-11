@@ -16,6 +16,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const CadastroClinico: Story = {
+  // `type` é a prop discriminante obrigatória do Accordion (single|multiple);
+  // o render ignora args, mas o binding `satisfies Meta` exige o discriminante.
+  args: { type: "single" },
   render: () => (
     <Accordion
       type="single"
@@ -52,6 +55,7 @@ export const CadastroClinico: Story = {
 };
 
 export const Multiplo: Story = {
+  args: { type: "multiple" },
   render: () => (
     <Accordion type="multiple" className="flex max-w-xl flex-col gap-3">
       <AccordionItem value="a">

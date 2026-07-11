@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { getTenantContext, listarClinicasDoUsuario } from "@/auth/tenant";
 import { ClinicSwitcher } from "@/components/app/clinic-switcher";
 import { SignOutButton } from "./sign-out-button";
@@ -17,7 +18,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-dvh flex-col">
       <header className="border-ink-anchor flex flex-wrap items-center justify-between gap-4 border-b-2 px-6 py-4">
         <ClinicSwitcher clinicas={clinicas} ativaId={ctx.clinicId} />
-        <SignOutButton />
+        <nav aria-label="Navegação principal" className="flex items-center gap-4">
+          <Link
+            href="/agenda"
+            className="font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline"
+          >
+            Agenda
+          </Link>
+          <SignOutButton />
+        </nav>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
         {children}
