@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { appUser, patient, session, sessionEstado } from "@/db/schema";
+import { appUser, patient, session, sessionEstado, userRole } from "@/db/schema";
 import { FUSO_CLINICA_OFFSET } from "./fuso";
 
 export type SessionEstado = (typeof sessionEstado.enumValues)[number];
@@ -61,6 +61,30 @@ export async function agendarSessao(
 
   const quando = new Date(ancorarNoFusoDaClinica(parsed.data.agendadaPara));
   if (Number.isNaN(quando.getTime())) return { error: "Data e hora inválidas." };
+
+  // O RLS garante que o profissional é da clínica, mas não que ele é TERAPEUTA
+  // — sem isto, um erro de digitação vincularia a sessão a um coordenador ou à
+  // recepção. Exige uma role `terapeuta` na clínica ativa (quem coordena e
+  // também atende tem as duas roles em `user_role`). O `user_role_read` do RLS
+  // já escopa por clínica, então isto também barra id de outra clínica.
+  const ehTerapeuta = await withTenant(ctx, (tx) =>
+    tx
+      .select({ papel: userRole.papel })
+      .from(userRole)
+      .where(
+        and(
+          eq(userRole.userId, parsed.data.terapeutaId),
+          eq(userRole.clinicId, ctx.clinicId),
+          eq(userRole.papel, "terapeuta"),
+        ),
+      )
+      .limit(1),
+  );
+  if (ehTerapeuta.length === 0) {
+    return {
+      error: "O profissional selecionado não é um terapeuta desta clínica.",
+    };
+  }
 
   try {
     const id = await withTenant(ctx, async (tx) => {

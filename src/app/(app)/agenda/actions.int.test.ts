@@ -161,6 +161,15 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     expect(r.id).toBeUndefined();
   });
 
+  test("não vincula sessão a quem não é terapeuta (coordenador sem role terapeuta)", async () => {
+    const r = await agendarSessao(
+      ctxAdmin,
+      form({ patientId: PATIENT_P, terapeutaId: U_COORD, agendadaPara: AGENDADA_PARA }),
+    );
+    expect(r.error).toMatch(/terapeuta/i);
+    expect(r.id).toBeUndefined();
+  });
+
   test("UPDATE não reaponta a sessão para paciente/profissional de outra clínica", async () => {
     const r = await agendarSessao(
       ctxAdmin,
