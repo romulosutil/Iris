@@ -38,15 +38,21 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES ('aba_marcos_desenvolvimento', 'Marcos de desenvolvimento (ABA)') ON CONFLICT DO NOTHING`;
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A')`;
     await owner`INSERT INTO app_user (id, email, name) VALUES
-      (${U_T1}, 't1@x.com', 'T1'), (${U_T2}, 't2@x.com', 'T2')`;
+      (${U_T1}, 't1@x.com', 'T1'), (${U_T2}, 't2@x.com', 'T2'),
+      (${U_COBERTURA}, 'cob@x.com', 'Cobertura')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
-      (${U_T1}, ${CLINIC_A}, 'terapeuta'), (${U_T2}, ${CLINIC_A}, 'terapeuta')`;
+      (${U_T1}, ${CLINIC_A}, 'terapeuta'), (${U_T2}, ${CLINIC_A}, 'terapeuta'),
+      (${U_COBERTURA}, ${CLINIC_A}, 'terapeuta')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${PAC}, ${CLINIC_A}, 'P'), (${PAC2}, ${CLINIC_A}, 'P2')`;
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
       (${PROTO}, ${CLINIC_A}, 'VB-MAPP', 'ABA', 'aba_marcos_desenvolvimento')`;
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado)
-      VALUES (${SESS}, ${CLINIC_A}, ${PAC}, ${U_T1}, now(), 'presente')`;
+    // SESS: de U_T1 (na equipe de PAC). SESS_COBERTURA: mesmo paciente PAC,
+    // mas de U_COBERTURA, que NÃO está na care team — é o cenário do bug de
+    // numeração sob RLS.
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
+      (${SESS}, ${CLINIC_A}, ${PAC}, ${U_T1}, now(), 'presente'),
+      (${SESS_COBERTURA}, ${CLINIC_A}, ${PAC}, ${U_COBERTURA}, now(), 'presente')`;
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA')`;
   });
@@ -122,5 +128,23 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota de produção." });
     const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
     expect(ex.some((e) => e.estado === "pendente_reprocessamento")).toBe(true);
+  });
+
+  test("terapeuta de cobertura (fora da equipe) recebe o próximo número correto, não duplica", async () => {
+    // SESS (de U_T1, na equipe) já foi consolidada com numero 1 nos testes acima
+    // e permanece 1 (idempotente). U_COBERTURA é dono de SESS_COBERTURA do MESMO
+    // paciente, mas NÃO está na care team: sob a RLS antiga o MAX() só veria as
+    // sessões visíveis a ele (subestimado → daria 1, duplicando). O helper
+    // SECURITY DEFINER enxerga todas as sessões do paciente → deve dar 2.
+    await owner`DELETE FROM extraction WHERE session_id = ${SESS_COBERTURA}`;
+    const { consolidarSessao } = await import("./actions");
+    const r = await consolidarSessao(ctxCobertura, {
+      sessionId: SESS_COBERTURA,
+      texto: "Sessão de cobertura consolidada.",
+    });
+    expect(r.error).toBeUndefined();
+    expect(r.numeroSequencial).toBe(2);
+    const s = await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${SESS_COBERTURA}`;
+    expect(s[0]!.numero_sequencial_paciente).toBe(2);
   });
 });
