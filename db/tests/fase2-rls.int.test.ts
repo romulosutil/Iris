@@ -171,4 +171,58 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     const maps = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goalMilestoneMapping));
     expect(maps.length).toBe(1);
   });
+
+  // ---------- session_protocol_scope ----------
+  test("terapeuta dono grava e lê escopo de protocolo da sessão", async () => {
+    await withTenant(ctxT1A, (tx) =>
+      tx.insert(schema.sessionProtocolScope).values({
+        sessionId: SESS_A1, protocolId: PROTO_A, origem: "inferido_disciplina",
+      }),
+    );
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.sessionProtocolScope),
+    );
+    expect(lidas.length).toBe(1);
+  });
+
+  test("recepção não vê escopo de protocolo (dado clínico)", async () => {
+    const lidas = await withTenant(ctxRecepA, (tx) =>
+      tx.select().from(schema.sessionProtocolScope),
+    );
+    expect(lidas.length).toBe(0);
+  });
+
+  // ---------- audio_capture ----------
+  test("terapeuta dono grava rascunho local de áudio e lê", async () => {
+    await withTenant(ctxT1A, (tx) =>
+      tx.insert(schema.audioCapture).values({
+        sessionId: SESS_A1, clinicId: CLINIC_A, statusUpload: "rascunho_local",
+      }),
+    );
+    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.audioCapture));
+    expect(lidas.length).toBe(1);
+  });
+
+  test("terapeuta de outra clínica não vê áudio (cross-tenant)", async () => {
+    const lidas = await withTenant(ctxT1B, (tx) => tx.select().from(schema.audioCapture));
+    expect(lidas.length).toBe(0);
+  });
+
+  // ---------- extraction ----------
+  test("extração gravada no contexto do terapeuta da sessão é lida por ele", async () => {
+    await withTenant(ctxT1A, (tx) =>
+      tx.insert(schema.extraction).values({
+        sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
+        subtipo: "evidencia", trechoFonte: "falou á sozinho", confianca: "alta",
+        payload: { alvos: [] },
+      }),
+    );
+    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.extraction));
+    expect(lidas.length).toBe(1);
+  });
+
+  test("recepção não vê extração (dado clínico)", async () => {
+    const lidas = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.extraction));
+    expect(lidas.length).toBe(0);
+  });
 });
