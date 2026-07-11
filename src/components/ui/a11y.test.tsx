@@ -11,6 +11,7 @@ import { Field } from "./field";
 import { Form } from "./form";
 import { StatusBadge, StatusDot } from "./status-badge";
 import { Chip, ChipGroup } from "./chip";
+import { Stack, Cluster, Split } from "./layout";
 
 afterEach(cleanup);
 
@@ -177,5 +178,20 @@ test("ChipGroup — sem violações axe", async () => {
       </Chip>
       <Chip onSelecionar={() => {}}>Fono</Chip>
     </ChipGroup>,
+  );
+});
+
+test("Layout (Stack/Cluster/Split composto) — sem violações axe", async () => {
+  await semViolacoes(
+    <Stack>
+      <Split como="section">
+        <h3>Sessão</h3>
+        <StatusBadge estado="aprovada" />
+      </Split>
+      <Cluster>
+        <Chip>ABA</Chip>
+        <Chip>Fono</Chip>
+      </Cluster>
+    </Stack>,
   );
 });
