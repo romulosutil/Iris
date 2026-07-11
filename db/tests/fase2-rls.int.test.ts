@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
@@ -17,6 +18,10 @@ const PAC_A1 = "00000000-0000-0000-0000-00000000ac1a";
 const PROTO_A = "00000000-0000-0000-0000-00000070c0a1";
 const SESS_A1 = "00000000-0000-0000-0000-00000005e1a1"; // terapeuta = T1
 const MILE_A = "00000000-0000-0000-0000-00000000d1a1";
+const PAC_B1 = "00000000-0000-0000-0000-00000000ac1b";
+const PROTO_B = "00000000-0000-0000-0000-00000070c0b1";
+const MILE_B = "00000000-0000-0000-0000-00000000d1b1";
+const SESS_B1 = "00000000-0000-0000-0000-00000005e1b1"; // terapeuta = T1B, clínica B
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
 const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
@@ -77,6 +82,18 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
 
     await owner`INSERT INTO milestone (id, protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
       VALUES (${MILE_A}, ${PROTO_A}, 'mando', 'Pedir item preferido', 'marco_simples', ${owner.json({ escala: [] })})`;
+
+    // Fixtures da clínica B — para testes I1/I2/I3 (cross-tenant / policies novas).
+    await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
+      (${PAC_B1}, ${CLINIC_B}, 'Paciente B1')`;
+    await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
+      (${PROTO_B}, ${CLINIC_B}, 'VB-MAPP demo B', 'ABA', ${PROTOCOL_FAMILIA})`;
+    await owner`INSERT INTO milestone (id, protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+      VALUES (${MILE_B}, ${PROTO_B}, 'mando', 'Pedir item preferido (B)', 'marco_simples', ${owner.json({ escala: [] })})`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
+      (${SESS_B1}, ${CLINIC_B}, ${PAC_B1}, ${U_T1_B}, now(), 'presente')`;
+    await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
+      VALUES (${PAC_B1}, ${U_T1_B}, 'ABA', 'terapeuta_referencia')`;
   });
 
   afterAll(async () => {
@@ -244,8 +261,12 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   });
 
   test("marco de protocolo de outra clínica não é visível (cross-tenant)", async () => {
+    // ctxT1B enxerga só o marco da própria clínica (MILE_B); MILE_A (clínica A)
+    // não aparece — checagem por id em vez de length, pois a clínica B já tem
+    // seu próprio marco de catálogo (fixture PROTO_B/MILE_B).
     const lidasB = await withTenant(ctxT1B, (tx) => tx.select().from(schema.milestone));
-    expect(lidasB.length).toBe(0);
+    expect(lidasB.map((m) => m.id)).not.toContain(MILE_A);
+    expect(lidasB.map((m) => m.id)).toContain(MILE_B);
   });
 
   // ---------- candidatura dormente ----------
@@ -258,5 +279,119 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     );
     const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goalCandidacy));
     expect(lidas.length).toBe(1);
+  });
+
+  // ---------- I2: gmm_insert fecha FK do marco cross-tenant ----------
+  test("mapear meta a marco de outra clínica é barrado (fecha FK do marco cross-tenant)", async () => {
+    const [g] = await withTenant(ctxCoordA, (tx) =>
+      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+    );
+    await expect(
+      withTenant(ctxCoordA, (tx) =>
+        tx.insert(schema.goalMilestoneMapping).values({ goalId: g!.id, milestoneId: MILE_B }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  // ---------- I3: extraction_update ----------
+  describe("I3 · extraction_update", () => {
+    test("terapeuta dono atualiza o estado da própria extração e a mudança persiste", async () => {
+      const [ext] = await withTenant(ctxT1A, (tx) =>
+        tx.insert(schema.extraction).values({
+          sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
+          subtipo: "evidencia", trechoFonte: "trecho para update", confianca: "alta",
+          payload: { alvos: [] },
+        }).returning({ id: schema.extraction.id }),
+      );
+      await withTenant(ctxT1A, (tx) =>
+        tx.update(schema.extraction)
+          .set({ estado: "pendente_reprocessamento" })
+          .where(eq(schema.extraction.id, ext!.id)),
+      );
+      const [lida] = await withTenant(ctxT1A, (tx) =>
+        tx.select({ estado: schema.extraction.estado })
+          .from(schema.extraction)
+          .where(eq(schema.extraction.id, ext!.id)),
+      );
+      expect(lida?.estado).toBe("pendente_reprocessamento");
+    });
+
+    test("recepção NÃO consegue atualizar extração (USING esconde a linha)", async () => {
+      const [ext] = await withTenant(ctxT1A, (tx) =>
+        tx.insert(schema.extraction).values({
+          sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
+          subtipo: "evidencia", trechoFonte: "trecho recepção", confianca: "alta",
+          payload: { alvos: [] },
+        }).returning({ id: schema.extraction.id }),
+      );
+      const alterados = await withTenant(ctxRecepA, (tx) =>
+        tx.update(schema.extraction)
+          .set({ estado: "pendente_reprocessamento" })
+          .where(eq(schema.extraction.id, ext!.id))
+          .returning({ id: schema.extraction.id }),
+      );
+      expect(alterados.length).toBe(0);
+
+      const [lida] = await withTenant(ctxT1A, (tx) =>
+        tx.select({ estado: schema.extraction.estado })
+          .from(schema.extraction)
+          .where(eq(schema.extraction.id, ext!.id)),
+      );
+      expect(lida?.estado).toBe("sugerida");
+    });
+
+    test("terapeuta dono não pode fazer swap cross-tenant da sessão da extração (WITH CHECK)", async () => {
+      const [ext] = await withTenant(ctxT1A, (tx) =>
+        tx.insert(schema.extraction).values({
+          sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
+          subtipo: "evidencia", trechoFonte: "trecho swap", confianca: "alta",
+          payload: { alvos: [] },
+        }).returning({ id: schema.extraction.id }),
+      );
+      await expect(
+        withTenant(ctxT1A, (tx) =>
+          tx.update(schema.extraction)
+            .set({ sessionId: SESS_B1 })
+            .where(eq(schema.extraction.id, ext!.id)),
+        ),
+      ).rejects.toThrow();
+    });
+  });
+
+  // ---------- I1: milestone_candidacy (dormente, mas policy corrigida) ----------
+  describe("I1 · milestone_candidacy", () => {
+    test("coordenador insere milestone_candidacy", async () => {
+      const inseridos = await withTenant(ctxCoordA, (tx) =>
+        tx.insert(schema.milestoneCandidacy).values({
+          patientId: PAC_A1, milestoneId: MILE_A, isCandidate: true,
+        }).returning({ patientId: schema.milestoneCandidacy.patientId }),
+      );
+      expect(inseridos.length).toBe(1);
+    });
+
+    test("recepção não vê milestone_candidacy (guardrail #1)", async () => {
+      const lidas = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.milestoneCandidacy));
+      expect(lidas.length).toBe(0);
+    });
+
+    test("terapeuta da equipe vê milestone_candidacy do paciente", async () => {
+      const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.milestoneCandidacy));
+      expect(lidas.length).toBe(1);
+    });
+
+    test("terapeuta fora da equipe não vê milestone_candidacy", async () => {
+      const lidas = await withTenant(ctxT2A, (tx) => tx.select().from(schema.milestoneCandidacy));
+      expect(lidas.length).toBe(0);
+    });
+
+    test("terapeuta não insere milestone_candidacy (só coordenador escreve)", async () => {
+      await expect(
+        withTenant(ctxT1A, (tx) =>
+          tx.insert(schema.milestoneCandidacy).values({
+            patientId: PAC_A1, milestoneId: MILE_A, isCandidate: true,
+          }),
+        ),
+      ).rejects.toThrow();
+    });
   });
 });
