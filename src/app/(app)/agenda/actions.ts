@@ -26,6 +26,22 @@ const agendarSchema = z.object({
   agendadaPara: z.string().min(1, "Data e hora são obrigatórias."),
 });
 
+// América/São_Paulo é UTC-3 o ano todo (sem horário de verão desde 2019).
+const FUSO_CLINICA_OFFSET = "-03:00";
+
+/**
+ * O `<input type="datetime-local">` envia uma string SEM fuso ("2026-07-11T12:00").
+ * `new Date()` sobre ela assume o fuso do servidor (UTC no VPS) — a sessão
+ * marcada às 12:00 viraria 09:00 ao exibir em São Paulo. Ancoramos a string
+ * naive no fuso da clínica antes de instanciar. Strings que já trazem fuso
+ * (`Z` ou `±HH:MM`) passam intactas.
+ */
+function ancorarNoFusoDaClinica(local: string): string {
+  if (/(Z|[+-]\d{2}:\d{2})$/.test(local)) return local;
+  const comSegundos = /T\d{2}:\d{2}$/.test(local) ? `${local}:00` : local;
+  return `${comSegundos}${FUSO_CLINICA_OFFSET}`;
+}
+
 /**
  * Núcleo testável do agendamento. Marcar sessão é ato administrativo da agenda —
  * recepção e coordenação. O RLS ainda fecha o tenant (paciente e profissional
@@ -45,7 +61,7 @@ export async function agendarSessao(
   });
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
 
-  const quando = new Date(parsed.data.agendadaPara);
+  const quando = new Date(ancorarNoFusoDaClinica(parsed.data.agendadaPara));
   if (Number.isNaN(quando.getTime())) return { error: "Data e hora inválidas." };
 
   try {
@@ -131,10 +147,17 @@ export async function agendarSessaoAction(
   formData: FormData,
 ): Promise<AgendarState> {
   const ctx = await getTenantContext();
-  const resultado = await agendarSessao(ctx, formData);
-  if (resultado.error) return { error: resultado.error };
-  revalidatePath("/agenda");
-  return {};
+  try {
+    const resultado = await agendarSessao(ctx, formData);
+    if (resultado.error) return { error: resultado.error };
+    revalidatePath("/agenda");
+    return {};
+  } catch {
+    // `requireRole` lança em papel não autorizado. Sem este catch, a Server
+    // Action estoura 500 e cai no ErrorBoundary — capturamos e devolvemos a
+    // mensagem ao `useActionState` para exibir na tela.
+    return { error: "Você não tem permissão para agendar sessões." };
+  }
 }
 
 export async function checkInAction(
@@ -143,7 +166,11 @@ export async function checkInAction(
 ): Promise<{ error?: string }> {
   const ctx = await getTenantContext();
   const sessionId = String(formData.get("sessionId") ?? "").trim();
-  const resultado = await checkInSessao(ctx, sessionId);
-  if (!resultado.error) revalidatePath("/agenda");
-  return resultado;
+  try {
+    const resultado = await checkInSessao(ctx, sessionId);
+    if (!resultado.error) revalidatePath("/agenda");
+    return resultado;
+  } catch {
+    return { error: "Não foi possível registrar o check-in." };
+  }
 }

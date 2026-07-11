@@ -127,6 +127,22 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     expect(denovo.error).toMatch(/já iniciada|não encontrada/i);
   });
 
+  test("datetime-local sem fuso é ancorado no fuso da clínica (não no do servidor)", async () => {
+    // Entrada crua do <input type="datetime-local"> — sem offset.
+    const r = await agendarSessao(
+      ctxAdmin,
+      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: "2026-07-11T09:00" }),
+    );
+    expect(r.error).toBeUndefined();
+
+    const grade = await listarSessoesDoDia(ctxCoord, DIA);
+    const linha = grade.find((s) => s.id === r.id);
+    expect(linha).toBeDefined();
+    // 09:00 em São Paulo (UTC-3) = 12:00 UTC — resultado fixo, seja qual for o
+    // fuso do ambiente que roda o teste/servidor.
+    expect(linha!.agendadaPara.toISOString()).toBe("2026-07-11T12:00:00.000Z");
+  });
+
   test("cross-tenant: recepção não agenda paciente de outra clínica", async () => {
     const r = await agendarSessao(
       ctxAdmin,
