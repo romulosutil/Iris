@@ -19,6 +19,20 @@ import {
   AccordionContent,
 } from "./accordion";
 import { Checkbox } from "./checkbox";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "./select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "./dialog";
 
 afterEach(cleanup);
 
@@ -220,4 +234,57 @@ test("Checkbox — sem violações axe", async () => {
 
 test("Checkbox marcado — sem violações axe", async () => {
   await semViolacoes(<Checkbox label="Reavaliar" defaultChecked />);
+});
+
+test("Select (trigger) — sem violações axe", async () => {
+  await semViolacoes(
+    <Field label="Família do protocolo" htmlFor="protocolo">
+      <Select>
+        <SelectTrigger id="protocolo">
+          <SelectValue placeholder="Selecione…" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="aba">ABA</SelectItem>
+        </SelectContent>
+      </Select>
+    </Field>,
+  );
+});
+
+test("Tabs — sem violações axe", async () => {
+  await semViolacoes(
+    <Tabs defaultValue="fila">
+      <TabsList>
+        <TabsTrigger value="fila">Fila</TabsTrigger>
+        <TabsTrigger value="perfil">Perfil</TabsTrigger>
+      </TabsList>
+      <TabsContent value="fila">12 evidências.</TabsContent>
+      <TabsContent value="perfil">Dados.</TabsContent>
+    </Tabs>,
+  );
+});
+
+test("Dialog aberto — sem violações axe", async () => {
+  // Conteúdo do Dialog é portaled para document.body; roda o axe nele.
+  render(
+    <Dialog open>
+      <DialogContent>
+        <DialogTitle>Reclassificar esta evidência?</DialogTitle>
+        <DialogDescription>Cria uma nova versão.</DialogDescription>
+      </DialogContent>
+    </Dialog>,
+  );
+  const resultado = await axe.run(document.body, {
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
+    rules: {
+      region: { enabled: false },
+      "landmark-one-main": { enabled: false },
+      "page-has-heading-one": { enabled: false },
+      "color-contrast": { enabled: false },
+    },
+  });
+  expect(resultado.violations).toEqual([]);
 });
