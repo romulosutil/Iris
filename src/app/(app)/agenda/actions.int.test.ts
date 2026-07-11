@@ -160,4 +160,33 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     expect(r.error).toBeDefined();
     expect(r.id).toBeUndefined();
   });
+
+  test("UPDATE não reaponta a sessão para paciente/profissional de outra clínica", async () => {
+    const r = await agendarSessao(
+      ctxAdmin,
+      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_PARA }),
+    );
+    expect(r.id).toBeDefined();
+
+    // Reapontar patient_id para paciente da clínica B, mantendo clinic_id local:
+    // o WITH CHECK (app_patient_in_clinic) precisa barrar — FK bypassa RLS.
+    await expect(
+      withTenant(ctxCoord, (tx) =>
+        tx
+          .update(session)
+          .set({ patientId: PATIENT_B })
+          .where(eq(session.id, r.id!)),
+      ),
+    ).rejects.toThrow();
+
+    // Idem para terapeuta_id de outra clínica (app_user_in_clinic).
+    await expect(
+      withTenant(ctxCoord, (tx) =>
+        tx
+          .update(session)
+          .set({ terapeutaId: U_B })
+          .where(eq(session.id, r.id!)),
+      ),
+    ).rejects.toThrow();
+  });
 });

@@ -62,6 +62,11 @@ CREATE POLICY session_update ON session FOR UPDATE TO app_role
       current_setting('app.user_role') IN ('coordenador', 'admin_recepcao')
       OR terapeuta_id = current_setting('app.user_id')::uuid
     )
+    -- Isolamento incondicional: os FKs bypassam RLS, então um UPDATE não pode
+    -- reapontar a sessão para paciente/profissional de outra clínica mantendo
+    -- clinic_id local. Espelha o session_insert.
+    AND app_patient_in_clinic(patient_id)
+    AND app_user_in_clinic(terapeuta_id)
   );
 --> statement-breakpoint
 
