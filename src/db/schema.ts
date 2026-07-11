@@ -33,6 +33,18 @@ export const consentTipo = pgEnum("consent_tipo", [
   "exportacao_relatorios",
 ]);
 
+// Estados de check-in de uma sessão (Fase 1d). Ciclo mínimo: `agendada` →
+// (check-in do terapeuta) `presente` → `realizada`; `falta`/`cancelada` são
+// desfechos alternativos. Não é máquina de estados completa — só o esqueleto
+// da agenda ("agenda não é módulo completo", modelo-de-dados §1.3).
+export const sessionEstado = pgEnum("session_estado", [
+  "agendada",
+  "presente",
+  "realizada",
+  "falta",
+  "cancelada",
+]);
+
 // ─── Auth (Better-Auth) — `app_user` é a tabela `user` do Better-Auth ────────
 // Chaves em camelCase = o que o Better-Auth espera; colunas em snake_case.
 export const appUser = pgTable("app_user", {
@@ -270,5 +282,45 @@ export const careTeamMembership = pgTable(
     index("idx_ctm_user_vigente")
       .on(t.userId)
       .where(sql`${t.vigenciaFim} IS NULL`),
+  ],
+);
+
+// ─── Agenda mínima + check-in (Fase 1d) ──────────────────────────────────────
+// `session` = ocorrência (realizada/falta/cancelada) de atendimento. Carrega o
+// esqueleto mínimo da agenda: quem, qual paciente, quando, estado de check-in.
+// Recorrência (`appointment`) e o texto da sessão (`session_note`) ficam para
+// fases futuras (2/3). RLS à mão em db/migrations (segurança crítica).
+export const session = pgTable(
+  "session",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "restrict" }),
+    // Profissional que conduz a sessão (referência global; o vínculo à clínica
+    // vem de user_role, validado no WITH CHECK do RLS via app_user_in_clinic).
+    terapeutaId: uuid("terapeuta_id")
+      .notNull()
+      .references(() => appUser.id),
+    agendadaPara: timestamp("agendada_para", { withTimezone: true }).notNull(),
+    estado: sessionEstado("estado").notNull().default("agendada"),
+    checkInEm: timestamp("check_in_em", { withTimezone: true }),
+    // Base numérica da linha do tempo ("sessão 45"). Só é populado na
+    // consolidação da sessão (Fase 2/3) — nullable de propósito na 1d.
+    numeroSequencialPaciente: integer("numero_sequencial_paciente"),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Índices por clínica/terapeuta + horário. A grade do dia filtra por
+    // INTERVALO na coluna crua (`agendada_para >= início AND < fim`, ver
+    // listarSessoesDoDia), que é sargable e usa estes índices — em vez de um
+    // cast por linha (`AT TIME ZONE …`::date), que seria non-sargable.
+    index("idx_session_clinic_dia").on(t.clinicId, t.agendadaPara),
+    index("idx_session_terapeuta_dia").on(t.terapeutaId, t.agendadaPara),
   ],
 );
