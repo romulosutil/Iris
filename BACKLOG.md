@@ -13,7 +13,7 @@
 | **0.5** | Design System (Espectro Brutal) | ✅ Concluído | PR #1 |
 | **1** | Fundação de Dados & Auth (Fase 1a) | ✅ Concluído | PR #3 |
 | **1b** | Fundação Auth + Multi-tenancy | ✅ Concluído | PR #10 |
-| **1c** | Cadastro Clínico (ficha + protocolos + equipe) | 📅 Pendente | Issue #4 |
+| **1c** | Cadastro Clínico (ficha + protocolos + equipe) | ✅ Concluído | Issue #4 |
 | **1d** | Agenda Mínima + Check-in | 📅 Pendente | Issue #11 |
 | **2** | Metas & Diário por Texto | 📅 Pendente | Issue #5 |
 | **3** | Extração de Evidências (IA) | 📅 Pendente | Issue #6 |
@@ -36,8 +36,23 @@ Base de acesso e isolamento multi-tenant concluída (13 tasks, branch `fase-1b-f
 * **Testes**: RLS globais, `resolveTenant` (A1), `provisionUser` (A6), `papelAtivo` (unit), gate a11y (axe), E2E de login (Playwright — requer DB+seed para rodar).
 
 **Fica para depois (não regressão, escopo deliberado):**
-* **Convite de usuário (UI) + cadastro de paciente → Fase 1c (Issue #4).**
 * **Agenda + check-in (tabela `session`) → Fase 1d (Issue #11).**
+
+---
+
+### [Fase 1c] Cadastro Clínico (ficha + protocolos + equipe) — ✅ entregue (branch `fase-1c-cadastro-clinico`)
+Separação administrativo↔clínico, protocolos, equipe de cuidado e convite — **100% na camada de aplicação, sem migração SQL nova** (toda a base de tabelas/RLS já veio na 1b).
+* **`requireRole` (novo)**: primeiro guard de autorização em nível de app (`src/auth/require-role.ts`). RLS isola por tenant/dado; `requireRole` restringe a AÇÃO por papel. Páginas coordenador-only → `notFound()` no catch.
+* **Cadastro administrativo**: `criarPacienteEConsent` grava `patient` + `Consent` LGPD na **mesma transação** (consent antes de qualquer dado clínico). Recepção e coordenação podem.
+* **Cadastro clínico (coordenador-only)**: `salvarFichaClinica` (upsert de `patient_clinical_profile`, bloqueia sem consent prévio); `ativar/desativarProtocolo` (vínculo append-only — desativar marca data, nunca deleta).
+* **Equipe de cuidado**: `adicionar/encerrarVinculoEquipe`; validações de app espelham os CHECKs `ctm_papel` e `ctm_nao_auto_supervisao`; encerrar marca `vigencia_fim` (histórico).
+* **Convite de usuário (coordenador-only)**: reusa `provisionUser`/`authDb`/`iris_auth` — **sem nova policy RLS** (`user_role` é tabela de identidade, boundary `authDb` já cobre; autorização é de app via `requireRole`). Só terapeuta/recepção por esta tela.
+* **UI**: 4 rotas com o Design System — `/pacientes/novo`, `/pacientes/[id]/cadastro-clinico`, `/pacientes/[id]/equipe`, `/equipe/convidar`.
+* **Testes**: `requireRole` (unit); integração de cada action contra Postgres com RLS; **prova documental do guardrail #1** (admin_recepcao barrado de `patient_protocol` e `care_team_membership`); E2E do fluxo completo do coordenador (Playwright, verificado contra server real). Suíte de integração: 36/36 verdes.
+
+**Decisões registradas (pendências de escopo):**
+* **Sem provedor de e-mail no MVP**: o convite exibe a senha temporária **uma única vez** na tela para o coordenador repassar manualmente. Fluxo de "esqueci a senha" / e-mail transacional fica para fase futura.
+* Formulário de equipe usa `userId` cru por ora — seletor de profissional (busca por nome) é polimento de UX pós-1c.
 
 ---
 
