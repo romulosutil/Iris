@@ -428,7 +428,7 @@ export const extraction = pgTable(
     confianca: text("confianca").notNull(),        // alta | media | baixa
     justificativaConfianca: text("justificativa_confianca"),
     inconsistenteComHistorico: boolean("inconsistente_com_historico").notNull().default(false),
-    parContrasteId: uuid("par_contraste_id"),
+    parContrasteId: text("par_contraste_id"),
     payload: jsonb("payload").notNull(),           // a forma do subtipo (output-schema.json)
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },

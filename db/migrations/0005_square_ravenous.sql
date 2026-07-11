@@ -24,7 +24,7 @@ CREATE TABLE "extraction" (
 	"confianca" text NOT NULL,
 	"justificativa_confianca" text,
 	"inconsistente_com_historico" boolean DEFAULT false NOT NULL,
-	"par_contraste_id" uuid,
+	"par_contraste_id" text,
 	"payload" jsonb NOT NULL,
 	"criado_em" timestamp with time zone DEFAULT now() NOT NULL
 );
