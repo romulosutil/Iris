@@ -1,5 +1,6 @@
 "use server";
 import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
@@ -72,6 +73,10 @@ export async function adicionarMembroEquipeAction(
   return adicionarMembroEquipe(await getTenantContext(), patientId, formData);
 }
 
-export async function encerrarVinculoAction(membershipId: string) {
-  return encerrarVinculoEquipe(await getTenantContext(), membershipId);
+// Usada como `action` de <form> nativo → retorna void e revalida a rota da equipe.
+export async function encerrarVinculoAction(
+  membershipId: string,
+): Promise<void> {
+  await encerrarVinculoEquipe(await getTenantContext(), membershipId);
+  revalidatePath("/pacientes/[id]/equipe", "page");
 }

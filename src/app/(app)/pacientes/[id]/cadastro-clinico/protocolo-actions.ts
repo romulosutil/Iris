@@ -1,5 +1,6 @@
 "use server";
 import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
@@ -38,13 +39,19 @@ export async function desativarProtocolo(
   return {};
 }
 
+// Usadas como `action` de <form> nativo (fire-and-refresh) → retornam void e
+// revalidam a rota do cadastro clínico para refletir o novo estado do vínculo.
 export async function ativarProtocoloAction(
   patientId: string,
   protocolId: string,
-) {
-  return ativarProtocolo(await getTenantContext(), patientId, protocolId);
+): Promise<void> {
+  await ativarProtocolo(await getTenantContext(), patientId, protocolId);
+  revalidatePath(`/pacientes/${patientId}/cadastro-clinico`);
 }
 
-export async function desativarProtocoloAction(patientProtocolId: string) {
-  return desativarProtocolo(await getTenantContext(), patientProtocolId);
+export async function desativarProtocoloAction(
+  patientProtocolId: string,
+): Promise<void> {
+  await desativarProtocolo(await getTenantContext(), patientProtocolId);
+  revalidatePath("/pacientes/[id]/cadastro-clinico", "page");
 }
