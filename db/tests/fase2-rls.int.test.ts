@@ -16,6 +16,7 @@ const U_RECEP_A = "00000000-0000-0000-0000-0000000052a1";
 const U_T1_B = "00000000-0000-0000-0000-0000000071b1";
 const PAC_A1 = "00000000-0000-0000-0000-00000000ac1a";
 const PROTO_A = "00000000-0000-0000-0000-00000070c0a1";
+const PROTO_A2 = "00000000-0000-0000-0000-00000070c0a2"; // usado só p/ J4 (evita choque com uq_session_protocol_scope)
 const SESS_A1 = "00000000-0000-0000-0000-00000005e1a1"; // terapeuta = T1
 const MILE_A = "00000000-0000-0000-0000-00000000d1a1";
 const PAC_B1 = "00000000-0000-0000-0000-00000000ac1b";
@@ -71,7 +72,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${PAC_A1}, ${CLINIC_A}, 'Paciente A1')`;
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
-      (${PROTO_A}, ${CLINIC_A}, 'VB-MAPP demo', 'ABA', ${PROTOCOL_FAMILIA})`;
+      (${PROTO_A}, ${CLINIC_A}, 'VB-MAPP demo', 'ABA', ${PROTOCOL_FAMILIA}),
+      (${PROTO_A2}, ${CLINIC_A}, 'VB-MAPP demo 2 (J4)', 'ABA', ${PROTOCOL_FAMILIA})`;
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
       (${SESS_A1}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'presente')`;
     // T1 está na equipe do paciente A1 (para app_is_on_team). care_team_membership
@@ -178,6 +180,40 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     ).rejects.toThrow();
   });
 
+  // ---------- J1: goal_insert/goal_update fecham authz de equipe ----------
+  test("J1 · terapeuta fora da equipe do paciente NÃO cria meta (write-IDOR intra-tenant)", async () => {
+    // ctxT2A é terapeuta da clínica A mas não está na equipe de PAC_A1 (só T1A está).
+    await expect(
+      withTenant(ctxT2A, (tx) =>
+        tx.insert(schema.goal).values({
+          patientId: PAC_A1, clinicId: CLINIC_A, descricao: "meta indevida (fora da equipe)",
+          criterioDominio: { tipo: "sessoes_consecutivas_independente", valor: 3 },
+          criadoPor: U_T2_A,
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("J1 · terapeuta fora da equipe do paciente NÃO atualiza meta existente", async () => {
+    const [g] = await withTenant(ctxCoordA, (tx) =>
+      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+    );
+    // USING já bloqueia a visibilidade da linha para quem está fora da equipe —
+    // 0 linhas afetadas prova o mesmo gate de authz (sem exceção do driver).
+    const alterados = await withTenant(ctxT2A, (tx) =>
+      tx.update(schema.goal)
+        .set({ descricao: "alteração indevida" })
+        .where(eq(schema.goal.id, g!.id))
+        .returning({ id: schema.goal.id }),
+    );
+    expect(alterados.length).toBe(0);
+
+    const [lida] = await withTenant(ctxCoordA, (tx) =>
+      tx.select({ descricao: schema.goal.descricao }).from(schema.goal).where(eq(schema.goal.id, g!.id)),
+    );
+    expect(lida?.descricao).not.toBe("alteração indevida");
+  });
+
   test("mapear meta a marco e ler o mapeamento", async () => {
     const [g] = await withTenant(ctxCoordA, (tx) =>
       tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
@@ -207,6 +243,28 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       tx.select().from(schema.sessionProtocolScope),
     );
     expect(lidas.length).toBe(0);
+  });
+
+  // ---------- J4: sps_insert/sps_update travam ajustado_por (anti-forja) ----------
+  test("J4 · terapeuta NÃO grava escopo com ajustado_por de outro usuário (forja de auditoria)", async () => {
+    await expect(
+      withTenant(ctxT1A, (tx) =>
+        tx.insert(schema.sessionProtocolScope).values({
+          sessionId: SESS_A1, protocolId: PROTO_A2, origem: "ajustado_manualmente",
+          ajustadoPor: U_T2_A, // != app.user_id — forja
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("J4 · terapeuta grava escopo com ajustado_por = próprio id (caso positivo)", async () => {
+    const [criado] = await withTenant(ctxT1A, (tx) =>
+      tx.insert(schema.sessionProtocolScope).values({
+        sessionId: SESS_A1, protocolId: PROTO_A2, origem: "ajustado_manualmente",
+        ajustadoPor: U_T1_A,
+      }).returning({ id: schema.sessionProtocolScope.id }),
+    );
+    expect(criado?.id).toBeTruthy();
   });
 
   // ---------- audio_capture ----------
@@ -355,6 +413,32 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
             .where(eq(schema.extraction.id, ext!.id)),
         ),
       ).rejects.toThrow();
+    });
+
+    test("J2 · terapeuta da equipe que NÃO é dono da sessão NÃO atualiza extração (authz apertado ao dono)", async () => {
+      // Coloca T2A na equipe de PAC_A1 (papel substituto) só p/ este caso — prova
+      // que app_session_clinica_visivel (equipe) já não basta para UPDATE; precisa
+      // ser o terapeuta dono (app_session_terapeuta_id).
+      await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
+        VALUES (${PAC_A1}, ${U_T2_A}, 'ABA', 'substituto')`;
+      try {
+        const [ext] = await withTenant(ctxT1A, (tx) =>
+          tx.insert(schema.extraction).values({
+            sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
+            subtipo: "evidencia", trechoFonte: "trecho J2", confianca: "alta",
+            payload: { alvos: [] },
+          }).returning({ id: schema.extraction.id }),
+        );
+        const alterados = await withTenant(ctxT2A, (tx) =>
+          tx.update(schema.extraction)
+            .set({ estado: "pendente_reprocessamento" })
+            .where(eq(schema.extraction.id, ext!.id))
+            .returning({ id: schema.extraction.id }),
+        );
+        expect(alterados.length).toBe(0);
+      } finally {
+        await owner`DELETE FROM care_team_membership WHERE patient_id = ${PAC_A1} AND user_id = ${U_T2_A}`;
+      }
     });
   });
 

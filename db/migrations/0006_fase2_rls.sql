@@ -50,7 +50,7 @@ GRANT EXECUTE ON FUNCTION app_milestone_in_clinic(uuid) TO app_role;
 --> statement-breakpoint
 
 -- ============================ session_note ============================
-GRANT SELECT, INSERT, UPDATE, DELETE ON session_note TO app_role;
+GRANT SELECT, INSERT, UPDATE ON session_note TO app_role;
 --> statement-breakpoint
 ALTER TABLE session_note ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -93,6 +93,7 @@ CREATE POLICY sps_select ON session_protocol_scope FOR SELECT TO app_role USING 
 CREATE POLICY sps_insert ON session_protocol_scope FOR INSERT TO app_role WITH CHECK (
   app_session_terapeuta_id(session_id) = current_setting('app.user_id')::uuid
   AND app_protocol_in_clinic(protocol_id)
+  AND (ajustado_por IS NULL OR ajustado_por = current_setting('app.user_id')::uuid)
 );
 --> statement-breakpoint
 CREATE POLICY sps_update ON session_protocol_scope FOR UPDATE TO app_role
@@ -100,6 +101,7 @@ CREATE POLICY sps_update ON session_protocol_scope FOR UPDATE TO app_role
   WITH CHECK (
     app_session_terapeuta_id(session_id) = current_setting('app.user_id')::uuid
     AND app_protocol_in_clinic(protocol_id)
+    AND (ajustado_por IS NULL OR ajustado_por = current_setting('app.user_id')::uuid)
   );
 --> statement-breakpoint
 CREATE POLICY sps_delete ON session_protocol_scope FOR DELETE TO app_role USING (
@@ -108,7 +110,7 @@ CREATE POLICY sps_delete ON session_protocol_scope FOR DELETE TO app_role USING 
 --> statement-breakpoint
 
 -- ============================ audio_capture ============================
-GRANT SELECT, INSERT, UPDATE, DELETE ON audio_capture TO app_role;
+GRANT SELECT, INSERT, UPDATE ON audio_capture TO app_role;
 --> statement-breakpoint
 ALTER TABLE audio_capture ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -156,11 +158,11 @@ CREATE POLICY extraction_insert ON extraction FOR INSERT TO app_role WITH CHECK 
 CREATE POLICY extraction_update ON extraction FOR UPDATE TO app_role
   USING (
     clinic_id = current_setting('app.clinic_id')::uuid
-    AND app_session_clinica_visivel(session_id)
+    AND app_session_terapeuta_id(session_id) = current_setting('app.user_id')::uuid
   )
   WITH CHECK (
     clinic_id = current_setting('app.clinic_id')::uuid
-    AND app_session_clinica_visivel(session_id)
+    AND app_session_terapeuta_id(session_id) = current_setting('app.user_id')::uuid
   );
 --> statement-breakpoint
 CREATE POLICY extraction_delete ON extraction FOR DELETE TO app_role USING (
@@ -170,7 +172,7 @@ CREATE POLICY extraction_delete ON extraction FOR DELETE TO app_role USING (
 --> statement-breakpoint
 
 -- ============================ goal ============================
-GRANT SELECT, INSERT, UPDATE, DELETE ON goal TO app_role;
+GRANT SELECT, INSERT, UPDATE ON goal TO app_role;
 --> statement-breakpoint
 ALTER TABLE goal ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -191,6 +193,7 @@ CREATE POLICY goal_insert ON goal FOR INSERT TO app_role WITH CHECK (
   AND current_setting('app.user_role') IN ('coordenador', 'terapeuta')
   AND app_patient_in_clinic(patient_id)
   AND criado_por = current_setting('app.user_id')::uuid
+  AND (current_setting('app.user_role') = 'coordenador' OR app_is_on_team(patient_id))
 );
 --> statement-breakpoint
 CREATE POLICY goal_update ON goal FOR UPDATE TO app_role
@@ -201,6 +204,7 @@ CREATE POLICY goal_update ON goal FOR UPDATE TO app_role
   WITH CHECK (
     clinic_id = current_setting('app.clinic_id')::uuid
     AND app_patient_in_clinic(patient_id)
+    AND (current_setting('app.user_role') = 'coordenador' OR app_is_on_team(patient_id))
   );
 --> statement-breakpoint
 
