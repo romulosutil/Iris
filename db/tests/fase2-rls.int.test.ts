@@ -74,6 +74,9 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     // e `papel_na_equipe` é restrito por CHECK a terapeuta_referencia|coordenador_referencia|substituto.
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
       VALUES (${PAC_A1}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
+
+    await owner`INSERT INTO milestone (id, protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+      VALUES (${MILE_A}, ${PROTO_A}, 'mando', 'Pedir item preferido', 'marco_simples', ${owner.json({ escala: [] })})`;
   });
 
   afterAll(async () => {
@@ -120,5 +123,52 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
         }),
       ),
     ).rejects.toThrow();
+  });
+
+  // ---------- goal ----------
+  test("coordenador cria meta; terapeuta da equipe lê", async () => {
+    const [g] = await withTenant(ctxCoordA, (tx) =>
+      tx.insert(schema.goal).values({
+        patientId: PAC_A1, clinicId: CLINIC_A, descricao: "Pedir água sozinho",
+        criterioDominio: { tipo: "sessoes_consecutivas_independente", valor: 3 },
+        criadoPor: U_COORD_A,
+      }).returning({ id: schema.goal.id }),
+    );
+    expect(g?.id).toBeTruthy();
+
+    const lidasT1 = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goal));
+    expect(lidasT1.length).toBe(1);
+  });
+
+  test("recepção não vê meta (dado clínico)", async () => {
+    const lidas = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.goal));
+    expect(lidas.length).toBe(0);
+  });
+
+  test("terapeuta de outra clínica não vê meta (cross-tenant)", async () => {
+    const lidas = await withTenant(ctxT1B, (tx) => tx.select().from(schema.goal));
+    expect(lidas.length).toBe(0);
+  });
+
+  test("insert de meta com criado_por falsificado é barrado pelo WITH CHECK", async () => {
+    await expect(
+      withTenant(ctxT1A, (tx) =>
+        tx.insert(schema.goal).values({
+          patientId: PAC_A1, clinicId: CLINIC_A, descricao: "meta forjada",
+          criterioDominio: { tipo: "x", valor: 1 }, criadoPor: U_COORD_A, // != app.user_id
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("mapear meta a marco e ler o mapeamento", async () => {
+    const [g] = await withTenant(ctxCoordA, (tx) =>
+      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+    );
+    await withTenant(ctxCoordA, (tx) =>
+      tx.insert(schema.goalMilestoneMapping).values({ goalId: g!.id, milestoneId: MILE_A }),
+    );
+    const maps = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goalMilestoneMapping));
+    expect(maps.length).toBe(1);
   });
 });
