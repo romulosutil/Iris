@@ -75,6 +75,15 @@ export default async function DiarioPage({
 
   if (!dados) notFound();
 
+  // Defesa em profundidade: a PHI já é protegida por RLS (session_select), mas
+  // a página só deve renderizar para o terapeuta DONO da sessão ou coordenação
+  // — recepção e terapeutas não relacionados (que enxergam a sessão via RLS
+  // por estarem na equipe do paciente, sem serem donos) não devem ver o
+  // diário desta sessão específica.
+  const podeVer =
+    ctx.role === "coordenador" || dados.sess.terapeutaId === ctx.userId;
+  if (!podeVer) notFound();
+
   // Pré-seleção: protocolos da disciplina do terapeuta; se nenhum casar
   // (disciplina desconhecida ou sem protocolo correspondente), cai para
   // "todos os protocolos ativos" — nunca deixa o chip vazio à toa.

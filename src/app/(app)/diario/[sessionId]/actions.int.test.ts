@@ -6,14 +6,21 @@ const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
 const U_T1 = "00000000-0000-0000-0000-0000000071a1";
 const U_T2 = "00000000-0000-0000-0000-0000000072a1";
+const U_COBERTURA = "00000000-0000-0000-0000-0000000073a1";
 const PAC = "00000000-0000-0000-0000-0000000ac1a1";
 const PAC2 = "00000000-0000-0000-0000-0000000ac2a1";
 const PROTO = "00000000-0000-0000-0000-00000070c0a1";
 const SESS = "00000000-0000-0000-0000-00000005e1a1"; // terapeuta = U_T1
+const SESS_COBERTURA = "00000000-0000-0000-0000-00000005e2a1"; // terapeuta = U_COBERTURA
 const GOAL_PAC = "00000000-0000-0000-0000-00000006a1a1";
 const GOAL_PAC2 = "00000000-0000-0000-0000-00000006a2a1";
 const ctxT1 = { clinicId: CLINIC_A, userId: U_T1, role: "terapeuta" } as const;
 const ctxT2 = { clinicId: CLINIC_A, userId: U_T2, role: "terapeuta" } as const;
+const ctxCobertura = {
+  clinicId: CLINIC_A,
+  userId: U_COBERTURA,
+  role: "terapeuta",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let capturarDiario: typeof import("./actions").capturarDiario;

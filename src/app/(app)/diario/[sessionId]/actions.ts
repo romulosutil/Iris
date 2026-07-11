@@ -177,21 +177,46 @@ export async function consolidarSessao(
         });
 
       // 2) popula numero_sequencial_paciente só se ainda nulo (idempotente):
-      //    próximo inteiro por paciente, resolvido no banco.
+      //    próximo inteiro por paciente, resolvido via helper SECURITY DEFINER
+      //    (app_proximo_numero_sequencial) — precisa enxergar TODAS as sessões
+      //    do paciente na clínica, não só as que o RLS deixa este terapeuta
+      //    ver (um terapeuta de cobertura, fora da equipe, subestimaria o
+      //    MAX() se calculado sob o próprio RLS). O índice único
+      //    `uq_session_numero_por_paciente` fecha a corrida remanescente
+      //    entre duas consolidações concorrentes: se o UPDATE colidir, relemos
+      //    o número já gravado pela outra transação (idempotente).
       const [sess] = await tx
         .select({ patientId: session.patientId, numero: session.numeroSequencialPaciente })
         .from(session)
         .where(eq(session.id, parsed.data.sessionId));
       let numero = sess!.numero ?? null;
       if (numero === null) {
-        const upd = await tx.execute(sql`
-          UPDATE session SET numero_sequencial_paciente = (
-            COALESCE((SELECT MAX(numero_sequencial_paciente) FROM session
-                      WHERE patient_id = ${sess!.patientId}), 0) + 1)
-          WHERE id = ${parsed.data.sessionId} AND numero_sequencial_paciente IS NULL
-          RETURNING numero_sequencial_paciente AS numero`);
-        const row = (upd as unknown as Array<{ numero: number }>)[0];
-        numero = row?.numero ?? sess!.numero ?? null;
+        try {
+          const upd = await tx.execute(sql`
+            UPDATE session SET numero_sequencial_paciente =
+              app_proximo_numero_sequencial(${sess!.patientId})
+            WHERE id = ${parsed.data.sessionId} AND numero_sequencial_paciente IS NULL
+            RETURNING numero_sequencial_paciente AS numero`);
+          const row = (upd as unknown as Array<{ numero: number }>)[0];
+          numero = row?.numero ?? sess!.numero ?? null;
+        } catch (err) {
+          // Corrida: outra consolidação concorrente já gravou o número
+          // (violação de uq_session_numero_por_paciente). Relemos o valor
+          // já persistido — mantém a operação idempotente.
+          if (
+            err instanceof Error &&
+            "code" in err &&
+            (err as { code?: string }).code === "23505"
+          ) {
+            const [atual] = await tx
+              .select({ numero: session.numeroSequencialPaciente })
+              .from(session)
+              .where(eq(session.id, parsed.data.sessionId));
+            numero = atual?.numero ?? null;
+          } else {
+            throw err;
+          }
+        }
       }
 
       // 3) dispara a extração via costura (stub demo / null produção).
