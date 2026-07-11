@@ -1,0 +1,19 @@
+name: Guard PR base branch
+
+# Impede que um PR de fase seja mergeado na base errada (ex.: 1d foi para
+# `melhoria-design-system` em vez de `main` no PR #16). Todo PR deve mirar
+# `main`. O workflow que roda num evento `pull_request` é sempre a versão
+# do arquivo na branch base — por isso este guard precisa viver em `main`.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  base-must-be-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Base branch precisa ser main
+        if: github.base_ref != 'main'
+        run: |
+          echo "::error title=Base errada::PR mira '${{ github.base_ref }}', mas todo PR deve mirar 'main'. Reabra o PR com base 'main' (Edit → base branch)."
+          exit 1
