@@ -172,7 +172,13 @@ CREATE POLICY extraction_delete ON extraction FOR DELETE TO app_role USING (
 --> statement-breakpoint
 
 -- ============================ goal ============================
-GRANT SELECT, INSERT, UPDATE ON goal TO app_role;
+-- patient_id (e demais colunas de identidade) imutáveis por app_role: RLS
+-- WITH CHECK não compara OLD vs NEW, então travamos via GRANT por coluna
+-- (mesmo idioma do REVOKE UPDATE ON consent da 0001) — evita reatribuição
+-- de meta a outro paciente via UPDATE.
+GRANT SELECT, INSERT ON goal TO app_role;
+--> statement-breakpoint
+GRANT UPDATE (descricao, estado, criterio_dominio, ciclo_revisao_semanas, proxima_revisao_em, atualizado_em) ON goal TO app_role;
 --> statement-breakpoint
 ALTER TABLE goal ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -266,9 +272,16 @@ CREATE POLICY goal_candidacy_select ON goal_candidacy FOR SELECT TO app_role USI
   EXISTS (SELECT 1 FROM goal g WHERE g.id = goal_id)
 );
 --> statement-breakpoint
+-- Escrita restrita a coordenador (simetria com milestone_candidacy_write).
 CREATE POLICY goal_candidacy_write ON goal_candidacy FOR ALL TO app_role
-  USING (EXISTS (SELECT 1 FROM goal g WHERE g.id = goal_id))
-  WITH CHECK (EXISTS (SELECT 1 FROM goal g WHERE g.id = goal_id));
+  USING (
+    current_setting('app.user_role') = 'coordenador'
+    AND EXISTS (SELECT 1 FROM goal g WHERE g.id = goal_id)
+  )
+  WITH CHECK (
+    current_setting('app.user_role') = 'coordenador'
+    AND EXISTS (SELECT 1 FROM goal g WHERE g.id = goal_id)
+  );
 --> statement-breakpoint
 
 -- ==================== milestone_candidacy (dormente) ====================

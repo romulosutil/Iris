@@ -214,6 +214,31 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     expect(lida?.descricao).not.toBe("alteração indevida");
   });
 
+  // ---------- J7: patient_id de goal é imutável (grant por coluna) ----------
+  test("J7 · terapeuta dono NÃO consegue reatribuir patient_id da meta a outro paciente", async () => {
+    const [g] = await withTenant(ctxCoordA, (tx) =>
+      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+    );
+    await expect(
+      withTenant(ctxT1A, (tx) =>
+        tx.update(schema.goal).set({ patientId: PAC_B1 }).where(eq(schema.goal.id, g!.id)),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("J7 · terapeuta dono consegue atualizar colunas mutáveis (descricao/estado) da própria meta", async () => {
+    const [g] = await withTenant(ctxCoordA, (tx) =>
+      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+    );
+    const alterados = await withTenant(ctxT1A, (tx) =>
+      tx.update(schema.goal)
+        .set({ descricao: "meta revisada pelo terapeuta dono" })
+        .where(eq(schema.goal.id, g!.id))
+        .returning({ id: schema.goal.id }),
+    );
+    expect(alterados.length).toBe(1);
+  });
+
   test("mapear meta a marco e ler o mapeamento", async () => {
     const [g] = await withTenant(ctxCoordA, (tx) =>
       tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
@@ -347,6 +372,35 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     );
     const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goalCandidacy));
     expect(lidas.length).toBe(1);
+  });
+
+  // ---------- J8: goal_candidacy_write restrita a coordenador ----------
+  test("J8 · terapeuta NÃO escreve goal_candidacy (só coordenador)", async () => {
+    const [g] = await withTenant(ctxCoordA, (tx) =>
+      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+    );
+    // USING já esconde a linha para quem não é coordenador — 0 linhas afetadas
+    // prova o gate de authz (sem exceção do driver, mesmo mecanismo do J1).
+    const alterados = await withTenant(ctxT1A, (tx) =>
+      tx.update(schema.goalCandidacy)
+        .set({ isCandidateDominada: true })
+        .where(eq(schema.goalCandidacy.goalId, g!.id))
+        .returning({ goalId: schema.goalCandidacy.goalId }),
+    );
+    expect(alterados.length).toBe(0);
+  });
+
+  test("J8 · coordenador escreve (atualiza) goal_candidacy normalmente", async () => {
+    const [g] = await withTenant(ctxCoordA, (tx) =>
+      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+    );
+    const alterados = await withTenant(ctxCoordA, (tx) =>
+      tx.update(schema.goalCandidacy)
+        .set({ isCandidateDominada: true })
+        .where(eq(schema.goalCandidacy.goalId, g!.id))
+        .returning({ goalId: schema.goalCandidacy.goalId }),
+    );
+    expect(alterados.length).toBe(1);
   });
 
   // ---------- I2: gmm_insert fecha FK do marco cross-tenant ----------
