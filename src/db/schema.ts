@@ -17,6 +17,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -43,6 +44,30 @@ export const sessionEstado = pgEnum("session_estado", [
   "realizada",
   "falta",
   "cancelada",
+]);
+
+export const goalEstado = pgEnum("goal_estado", [
+  "rascunho", "ativa", "dominada", "pausada", "descontinuada",
+]);
+
+export const sessionProtocolScopeOrigem = pgEnum("session_protocol_scope_origem", [
+  "inferido_disciplina", "ajustado_manualmente",
+]);
+
+export const sessionNoteTipo = pgEnum("session_note_tipo", [
+  "captura_rapida", "nota_consolidada",
+]);
+
+export const audioStatusUpload = pgEnum("audio_status_upload", [
+  "rascunho_local", "pendente", "confirmado", "falhou",
+]);
+
+export const extractionEstado = pgEnum("extraction_estado", [
+  "sugerida", "pendente_reprocessamento",
+]);
+
+export const milestoneTipoEstrutura = pgEnum("milestone_tipo_estrutura", [
+  "marco_simples", "marco_com_barreira", "escore_composto", "faixa_normativa",
 ]);
 
 // ─── Auth (Better-Auth) — `app_user` é a tabela `user` do Better-Auth ────────
@@ -124,6 +149,7 @@ export const clinic = pgTable("clinic", {
   responsavelContaId: uuid("responsavel_conta_id").references(() => appUser.id),
   politicaRetencaoMeses: integer("politica_retencao_meses"),
   politicaRetencaoConfig: jsonb("politica_retencao_config"),
+  isDemo: boolean("is_demo").notNull().default(false),
   criadoEm: timestamp("criado_em", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -323,4 +349,171 @@ export const session = pgTable(
     index("idx_session_clinic_dia").on(t.clinicId, t.agendadaPara),
     index("idx_session_terapeuta_dia").on(t.terapeutaId, t.agendadaPara),
   ],
+);
+
+// ─── Diário de sessão + captura de áudio + extração (Fase 2) ────────────────
+export const sessionNote = pgTable(
+  "session_note",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => session.id, { onDelete: "restrict" }),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    tipo: sessionNoteTipo("tipo").notNull(),
+    texto: text("texto").notNull(),
+    autorId: uuid("autor_id")
+      .notNull()
+      .references(() => appUser.id),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // 1 captura_rapida + 1 nota_consolidada por sessão
+    unique("uq_session_note_tipo").on(t.sessionId, t.tipo),
+    index("idx_session_note_session").on(t.sessionId),
+  ],
+);
+
+export const sessionProtocolScope = pgTable(
+  "session_protocol_scope",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => session.id, { onDelete: "cascade" }),
+    protocolId: uuid("protocol_id")
+      .notNull()
+      .references(() => protocol.id, { onDelete: "restrict" }),
+    origem: sessionProtocolScopeOrigem("origem").notNull().default("inferido_disciplina"),
+    ajustadoPor: uuid("ajustado_por").references(() => appUser.id),
+  },
+  (t) => [unique("uq_session_protocol_scope").on(t.sessionId, t.protocolId)],
+);
+
+export const audioCapture = pgTable(
+  "audio_capture",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => session.id, { onDelete: "restrict" }),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    statusUpload: audioStatusUpload("status_upload").notNull().default("rascunho_local"),
+    // Referência ao objeto no storage — nulo enquanto o áudio vive só local (Fase 2).
+    objetoRef: text("objeto_ref"),
+    duracaoSegundos: integer("duracao_segundos"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_audio_capture_session").on(t.sessionId)],
+);
+
+export const extraction = pgTable(
+  "extraction",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => session.id, { onDelete: "restrict" }),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    estado: extractionEstado("estado").notNull().default("sugerida"),
+    subtipo: text("subtipo").notNull(),          // evidencia | registro_abc | ...
+    trechoFonte: text("trecho_fonte").notNull(),
+    confianca: text("confianca").notNull(),        // alta | media | baixa
+    justificativaConfianca: text("justificativa_confianca"),
+    inconsistenteComHistorico: boolean("inconsistente_com_historico").notNull().default(false),
+    parContrasteId: uuid("par_contraste_id"),
+    payload: jsonb("payload").notNull(),           // a forma do subtipo (output-schema.json)
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_extraction_session").on(t.sessionId)],
+);
+
+// ─── Metas + marcos (Fase 2) ─────────────────────────────────────────────────
+export const milestone = pgTable(
+  "milestone",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    protocolId: uuid("protocol_id")
+      .notNull()
+      .references(() => protocol.id, { onDelete: "cascade" }),
+    dominioId: text("dominio_id").notNull(),       // 'mando','tato',... chave estável do agente
+    nome: text("nome").notNull(),
+    nivel: text("nivel"),
+    tipoEstrutura: milestoneTipoEstrutura("tipo_estrutura").notNull(),
+    estrutura: jsonb("estrutura").notNull(),       // escala/critério formal/componentes
+    ordem: integer("ordem"),
+  },
+  (t) => [
+    unique("uq_milestone_protocol_dominio_nivel").on(t.protocolId, t.dominioId, t.nivel),
+    index("idx_milestone_protocol_dominio").on(t.protocolId, t.dominioId),
+  ],
+);
+
+export const goal = pgTable(
+  "goal",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "restrict" }),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    descricao: text("descricao").notNull(),        // linguagem simples (família também vê)
+    estado: goalEstado("estado").notNull().default("rascunho"),
+    criterioDominio: jsonb("criterio_dominio").notNull(), // {"tipo":"...","valor":3}
+    cicloRevisaoSemanas: integer("ciclo_revisao_semanas").notNull().default(10),
+    proximaRevisaoEm: date("proxima_revisao_em"),
+    criadoPor: uuid("criado_por")
+      .notNull()
+      .references(() => appUser.id),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_goal_patient_estado").on(t.patientId, t.estado)],
+);
+
+export const goalMilestoneMapping = pgTable(
+  "goal_milestone_mapping",
+  {
+    goalId: uuid("goal_id")
+      .notNull()
+      .references(() => goal.id, { onDelete: "cascade" }),
+    milestoneId: uuid("milestone_id")
+      .notNull()
+      .references(() => milestone.id, { onDelete: "restrict" }),
+  },
+  (t) => [primaryKey({ columns: [t.goalId, t.milestoneId] })],
+);
+
+export const goalCandidacy = pgTable("goal_candidacy", {
+  goalId: uuid("goal_id")
+    .primaryKey()
+    .references(() => goal.id, { onDelete: "cascade" }),
+  isCandidateDominada: boolean("is_candidate_dominada").notNull().default(false),
+  since: timestamp("since", { withTimezone: true }),
+});
+
+export const milestoneCandidacy = pgTable(
+  "milestone_candidacy",
+  {
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "cascade" }),
+    milestoneId: uuid("milestone_id")
+      .notNull()
+      .references(() => milestone.id, { onDelete: "cascade" }),
+    isCandidate: boolean("is_candidate").notNull().default(false),
+    candidacySince: timestamp("candidacy_since", { withTimezone: true }),
+    evidenceCount: integer("evidence_count").notNull().default(0),
+    distinctSessions: integer("distinct_sessions").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.patientId, t.milestoneId] })],
 );
