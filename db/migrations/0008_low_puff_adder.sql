@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uq_session_numero_por_paciente" ON "session" USING btree ("patient_id","numero_sequencial_paciente") WHERE "session"."numero_sequencial_paciente" IS NOT NULL;

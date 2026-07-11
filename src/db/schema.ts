@@ -18,6 +18,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -348,6 +349,11 @@ export const session = pgTable(
     // cast por linha (`AT TIME ZONE …`::date), que seria non-sargable.
     index("idx_session_clinic_dia").on(t.clinicId, t.agendadaPara),
     index("idx_session_terapeuta_dia").on(t.terapeutaId, t.agendadaPara),
+    // Rede contra corrida no cálculo de numero_sequencial_paciente (ver
+    // db/migrations/0007_session_numero_seq.sql) — nunca duplica por paciente.
+    uniqueIndex("uq_session_numero_por_paciente")
+      .on(t.patientId, t.numeroSequencialPaciente)
+      .where(sql`${t.numeroSequencialPaciente} IS NOT NULL`),
   ],
 );
 

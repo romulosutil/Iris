@@ -14,7 +14,10 @@ const U_T1_A = "00000000-0000-0000-0000-0000000071a1";
 const U_T2_A = "00000000-0000-0000-0000-0000000072a1";
 const U_RECEP_A = "00000000-0000-0000-0000-0000000052a1";
 const U_T1_B = "00000000-0000-0000-0000-0000000071b1";
+const U_T3_A = "00000000-0000-0000-0000-0000000073a1"; // dedicado ao J2 (isolado, sem acoplar PAC_A1)
 const PAC_A1 = "00000000-0000-0000-0000-00000000ac1a";
+const PAC_A2 = "00000000-0000-0000-0000-00000000ac2a"; // dedicado ao J2
+const SESS_A2 = "00000000-0000-0000-0000-00000005e2a1"; // dedicado ao J2 (terapeuta dono = T1)
 const PROTO_A = "00000000-0000-0000-0000-00000070c0a1";
 const PROTO_A2 = "00000000-0000-0000-0000-00000070c0a2"; // usado só p/ J4 (evita choque com uq_session_protocol_scope)
 const SESS_A1 = "00000000-0000-0000-0000-00000005e1a1"; // terapeuta = T1
@@ -30,6 +33,7 @@ const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as cons
 const ctxT2A = { clinicId: CLINIC_A, userId: U_T2_A, role: "terapeuta" } as const;
 const ctxRecepA = { clinicId: CLINIC_A, userId: U_RECEP_A, role: "admin_recepcao" } as const;
 const ctxT1B = { clinicId: CLINIC_B, userId: U_T1_B, role: "terapeuta" } as const;
+const ctxT3A = { clinicId: CLINIC_A, userId: U_T3_A, role: "terapeuta" } as const;
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;
@@ -62,15 +66,18 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       (${U_T1_A}, 'Terapeuta 1 A', 't1.a@t.com'),
       (${U_T2_A}, 'Terapeuta 2 A', 't2.a@t.com'),
       (${U_RECEP_A}, 'Recepção A', 'recep.a@t.com'),
-      (${U_T1_B}, 'Terapeuta 1 B', 't1.b@t.com')`;
+      (${U_T1_B}, 'Terapeuta 1 B', 't1.b@t.com'),
+      (${U_T3_A}, 'Terapeuta 3 A', 't3.a@t.com')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
       (${U_T1_A}, ${CLINIC_A}, 'terapeuta'),
       (${U_T2_A}, ${CLINIC_A}, 'terapeuta'),
       (${U_RECEP_A}, ${CLINIC_A}, 'admin_recepcao'),
-      (${U_T1_B}, ${CLINIC_B}, 'terapeuta')`;
+      (${U_T1_B}, ${CLINIC_B}, 'terapeuta'),
+      (${U_T3_A}, ${CLINIC_A}, 'terapeuta')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
-      (${PAC_A1}, ${CLINIC_A}, 'Paciente A1')`;
+      (${PAC_A1}, ${CLINIC_A}, 'Paciente A1'),
+      (${PAC_A2}, ${CLINIC_A}, 'Paciente A2 (dedicado J2)')`;
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
       (${PROTO_A}, ${CLINIC_A}, 'VB-MAPP demo', 'ABA', ${PROTOCOL_FAMILIA}),
       (${PROTO_A2}, ${CLINIC_A}, 'VB-MAPP demo 2 (J4)', 'ABA', ${PROTOCOL_FAMILIA})`;
@@ -81,6 +88,17 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     // e `papel_na_equipe` é restrito por CHECK a terapeuta_referencia|coordenador_referencia|substituto.
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
       VALUES (${PAC_A1}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
+
+    // Fixtures dedicadas ao J2 (isoladas de PAC_A1 — sem acoplamento de ordem
+    // com os testes que mutam care_team_membership de PAC_A1/T1A/T2A).
+    // T1A é o terapeuta dono de SESS_A2; T3A está na equipe (substituto) mas
+    // não é o dono — prova que app_session_clinica_visivel (equipe) não basta
+    // para UPDATE de extraction, precisa ser o app_session_terapeuta_id.
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
+      (${SESS_A2}, ${CLINIC_A}, ${PAC_A2}, ${U_T1_A}, now(), 'presente')`;
+    await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe) VALUES
+      (${PAC_A2}, ${U_T1_A}, 'ABA', 'terapeuta_referencia'),
+      (${PAC_A2}, ${U_T3_A}, 'ABA', 'substituto')`;
 
     await owner`INSERT INTO milestone (id, protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
       VALUES (${MILE_A}, ${PROTO_A}, 'mando', 'Pedir item preferido', 'marco_simples', ${owner.json({ escala: [] })})`;
@@ -362,8 +380,16 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
 
   // ---------- milestone (catálogo) ----------
   test("qualquer papel da clínica lê o catálogo de marcos do protocolo", async () => {
+    // M-c: milestone_select é role-agnóstico — terapeuta, coordenador e
+    // recepção leem igualmente o catálogo (dado não-clínico, escopado só por tenant).
     const lidasT1 = await withTenant(ctxT1A, (tx) => tx.select().from(schema.milestone));
     expect(lidasT1.length).toBeGreaterThanOrEqual(1);
+
+    const lidasCoord = await withTenant(ctxCoordA, (tx) => tx.select().from(schema.milestone));
+    expect(lidasCoord.length).toBeGreaterThanOrEqual(1);
+
+    const lidasRecep = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.milestone));
+    expect(lidasRecep.length).toBeGreaterThanOrEqual(1);
   });
 
   test("terapeuta não insere marco no catálogo (só coordenador)", async () => {
@@ -543,29 +569,24 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     });
 
     test("J2 · terapeuta da equipe que NÃO é dono da sessão NÃO atualiza extração (authz apertado ao dono)", async () => {
-      // Coloca T2A na equipe de PAC_A1 (papel substituto) só p/ este caso — prova
-      // que app_session_clinica_visivel (equipe) já não basta para UPDATE; precisa
-      // ser o terapeuta dono (app_session_terapeuta_id).
-      await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
-        VALUES (${PAC_A1}, ${U_T2_A}, 'ABA', 'substituto')`;
-      try {
-        const [ext] = await withTenant(ctxT1A, (tx) =>
-          tx.insert(schema.extraction).values({
-            sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
-            subtipo: "evidencia", trechoFonte: "trecho J2", confianca: "alta",
-            payload: { alvos: [] },
-          }).returning({ id: schema.extraction.id }),
-        );
-        const alterados = await withTenant(ctxT2A, (tx) =>
-          tx.update(schema.extraction)
-            .set({ estado: "pendente_reprocessamento" })
-            .where(eq(schema.extraction.id, ext!.id))
-            .returning({ id: schema.extraction.id }),
-        );
-        expect(alterados.length).toBe(0);
-      } finally {
-        await owner`DELETE FROM care_team_membership WHERE patient_id = ${PAC_A1} AND user_id = ${U_T2_A}`;
-      }
+      // Usa fixtures dedicadas (PAC_A2/SESS_A2/U_T3_A), semeadas no beforeAll,
+      // isoladas de PAC_A1 — T3A está na equipe de PAC_A2 (papel substituto) mas
+      // não é o dono da sessão. Prova que app_session_clinica_visivel (equipe) já
+      // não basta para UPDATE; precisa ser o terapeuta dono (app_session_terapeuta_id).
+      const [ext] = await withTenant(ctxT1A, (tx) =>
+        tx.insert(schema.extraction).values({
+          sessionId: SESS_A2, clinicId: CLINIC_A, estado: "sugerida",
+          subtipo: "evidencia", trechoFonte: "trecho J2", confianca: "alta",
+          payload: { alvos: [] },
+        }).returning({ id: schema.extraction.id }),
+      );
+      const alterados = await withTenant(ctxT3A, (tx) =>
+        tx.update(schema.extraction)
+          .set({ estado: "pendente_reprocessamento" })
+          .where(eq(schema.extraction.id, ext!.id))
+          .returning({ id: schema.extraction.id }),
+      );
+      expect(alterados.length).toBe(0);
     });
   });
 
