@@ -161,7 +161,7 @@ describe.skipIf(!hasDb)("metas · CRUD + transições", () => {
 
 describe("schemas - validação unitária", () => {
   test("criarSchema deduplica milestoneIds repetidos", async () => {
-    const { criarSchema } = await import("./actions");
+    const { criarSchema } = await import("./schemas");
     const id1 = "00000000-0000-0000-0000-000000000001";
     const id2 = "00000000-0000-0000-0000-000000000002";
 
@@ -181,7 +181,7 @@ describe("schemas - validação unitária", () => {
   });
 
   test("atualizarSchema aceita disciplina null ou undefined", async () => {
-    const { atualizarSchema } = await import("./actions");
+    const { atualizarSchema } = await import("./schemas");
 
     const payloadWithNull = {
       goalId: "00000000-0000-0000-0000-000000000001",

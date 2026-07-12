@@ -6,25 +6,12 @@ import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { goal, goalMilestoneMapping } from "@/db/schema";
-
-/**
- * Critério de domínio estruturado — "N acertos independentes em M sessões
- * consecutivas". Formulário, NÃO texto livre (wireframe 4.4): é o que a máquina
- * de "candidata a dominada" (decisão 2.4 do modelo de dados) precisa avaliar
- * deterministicamente. `tipo` fixo por ora; abre espaço p/ outros critérios
- * (ex.: percentual) sem quebrar o payload já gravado.
- */
-export const criterioDominioSchema = z.object({
-  tipo: z.literal("n_acertos_m_sessoes"),
-  n: z.number().int().min(1).max(99),
-  m: z.number().int().min(1).max(99),
-});
-export type CriterioDominio = z.infer<typeof criterioDominioSchema>;
-
-const DISCIPLINAS = ["ABA", "Fono", "TO"] as const;
-
-// Ciclo de revisão estilo ESDM: 8-12 semanas (modelo de dados §1.4).
-const cicloSchema = z.number().int().min(8).max(12);
+import {
+  atualizarSchema,
+  criarSchema,
+  DISCIPLINAS,
+  type CriterioDominio,
+} from "./schemas";
 
 /**
  * `proxima_revisao_em` é uma coluna `date` — Drizzle espera string YYYY-MM-DD.
@@ -36,18 +23,6 @@ function proximaRevisaoISO(semanas: number): string {
   d.setUTCDate(d.getUTCDate() + semanas * 7);
   return d.toISOString().slice(0, 10);
 }
-
-export const criarSchema = z.object({
-  patientId: z.string().uuid(),
-  descricao: z.string().trim().min(1, "Descreva a meta em linguagem simples."),
-  disciplina: z.enum(DISCIPLINAS).optional(),
-  criterioDominio: criterioDominioSchema,
-  cicloRevisaoSemanas: cicloSchema,
-  milestoneIds: z
-    .array(z.string().uuid())
-    .default([])
-    .transform((ids) => [...new Set(ids)]),
-});
 
 /**
  * Cria a meta já em `ativa` (wireframe: formulário do critério → "Meta ativa";
@@ -92,14 +67,6 @@ export async function criarMeta(
     return { error: "Não foi possível criar a meta." };
   }
 }
-
-export const atualizarSchema = z.object({
-  goalId: z.string().uuid(),
-  descricao: z.string().trim().min(1, "Descreva a meta em linguagem simples."),
-  disciplina: z.enum(DISCIPLINAS).nullable().optional(),
-  criterioDominio: criterioDominioSchema,
-  cicloRevisaoSemanas: cicloSchema,
-});
 
 /**
  * Edita o conteúdo clínico da meta (descrição, disciplina, critério, ciclo).

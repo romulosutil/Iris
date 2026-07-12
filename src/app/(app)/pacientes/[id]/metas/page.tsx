@@ -11,8 +11,8 @@ import {
   manterMetaAtivaAction,
   marcarDominadaAction,
   transicionarEstadoMetaAction,
-  type CriterioDominio,
 } from "./actions";
+import type { CriterioDominio } from "./schemas";
 
 const ESTADO_ROTULO: Record<string, string> = {
   rascunho: "Rascunho",
