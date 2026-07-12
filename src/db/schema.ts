@@ -475,6 +475,7 @@ export const goal = pgTable(
       .notNull()
       .references(() => clinic.id, { onDelete: "restrict" }),
     descricao: text("descricao").notNull(),        // linguagem simples (família também vê)
+    disciplina: text("disciplina"),                // 'ABA'|'Fono'|'TO' — nullable: meta pode não mapear marco (wireframe 4.4)
     estado: goalEstado("estado").notNull().default("rascunho"),
     criterioDominio: jsonb("criterio_dominio").notNull(), // {"tipo":"...","valor":3}
     cicloRevisaoSemanas: integer("ciclo_revisao_semanas").notNull().default(10),
