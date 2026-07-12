@@ -8,8 +8,16 @@ export type ExtractionContext = {
   contextoCanonico?: unknown;
 };
 
+export type ExtractionSubtipo =
+  | "evidencia"
+  | "registro_abc"
+  | "ausencia_comportamento"
+  | "cadeia"
+  | "preferencia_reforcador"
+  | "pendente"; // sentinela do NullProvider (pendente de reprocessamento)
+
 export type ExtractionDraft = {
-  subtipo: string;
+  subtipo: ExtractionSubtipo;
   trechoFonte: string;
   confianca: "alta" | "media" | "baixa";
   justificativaConfianca?: string;

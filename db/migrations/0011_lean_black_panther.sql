@@ -1,0 +1,1 @@
+ALTER TABLE "extraction" ADD COLUMN "payload_editado" jsonb;

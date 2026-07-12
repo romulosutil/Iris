@@ -65,6 +65,21 @@ export const audioStatusUpload = pgEnum("audio_status_upload", [
 
 export const extractionEstado = pgEnum("extraction_estado", [
   "sugerida", "pendente_reprocessamento",
+  // estados de revisão humana (Fase 3 Plano 2): a extração aprovada É o registro
+  // oficial (tabela `evidence` dedicada adiada p/ Fase 4).
+  "aprovada", "editada", "descartada",
+]);
+
+// subtipo/confianca text→enum agora que o contrato do agente estabilizou (dívida
+// registrada na Fase 2). "pendente" entra no enum de subtipo porque o
+// NullProvider já gravou linhas assim em produção (não quebrar dado existente).
+export const extractionSubtipo = pgEnum("extraction_subtipo", [
+  "evidencia", "registro_abc", "ausencia_comportamento", "cadeia",
+  "preferencia_reforcador", "pendente",
+]);
+
+export const extractionConfianca = pgEnum("extraction_confianca", [
+  "alta", "media", "baixa",
 ]);
 
 export const milestoneTipoEstrutura = pgEnum("milestone_tipo_estrutura", [
@@ -429,14 +444,20 @@ export const extraction = pgTable(
       .notNull()
       .references(() => clinic.id, { onDelete: "restrict" }),
     estado: extractionEstado("estado").notNull().default("sugerida"),
-    subtipo: text("subtipo").notNull(),          // evidencia | registro_abc | ...
+    subtipo: extractionSubtipo("subtipo").notNull(),
     trechoFonte: text("trecho_fonte").notNull(),
-    confianca: text("confianca").notNull(),        // alta | media | baixa
+    confianca: extractionConfianca("confianca").notNull(),
     justificativaConfianca: text("justificativa_confianca"),
     inconsistenteComHistorico: boolean("inconsistente_com_historico").notNull().default(false),
     parContrasteId: text("par_contraste_id"),
-    payload: jsonb("payload").notNull(),           // a forma do subtipo (output-schema.json)
+    payload: jsonb("payload").notNull(),           // sugestão ORIGINAL da IA — imutável (auditoria Camada 1)
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    // revisão humana: conteúdo editado pelo terapeuta (null = aprovado sem
+    // edição); conteúdo efetivo = payloadEditado ?? payload. Preserva a
+    // distinção "o que a IA sugeriu" vs "o que o humano aprovou".
+    payloadEditado: jsonb("payload_editado"),
+    revisadoPor: uuid("revisado_por").references(() => appUser.id),
+    revisadoEm: timestamp("revisado_em", { withTimezone: true }),
   },
   (t) => [index("idx_extraction_session").on(t.sessionId)],
 );
