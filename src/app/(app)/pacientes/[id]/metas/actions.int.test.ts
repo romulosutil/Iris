@@ -159,8 +159,8 @@ describe.skipIf(!hasDb)("metas · CRUD + transições", () => {
   });
 });
 
-describe("criarSchema - validação unitária", () => {
-  test("deduplica milestoneIds repetidos", async () => {
+describe("schemas - validação unitária", () => {
+  test("criarSchema deduplica milestoneIds repetidos", async () => {
     const { criarSchema } = await import("./actions");
     const id1 = "00000000-0000-0000-0000-000000000001";
     const id2 = "00000000-0000-0000-0000-000000000002";
@@ -177,6 +177,37 @@ describe("criarSchema - validação unitária", () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.milestoneIds).toEqual([id1, id2]);
+    }
+  });
+
+  test("atualizarSchema aceita disciplina null ou undefined", async () => {
+    const { atualizarSchema } = await import("./actions");
+
+    const payloadWithNull = {
+      goalId: "00000000-0000-0000-0000-000000000001",
+      descricao: "Aprender a apontar",
+      disciplina: null,
+      criterioDominio: { tipo: "n_acertos_m_sessoes", n: 3, m: 3 },
+      cicloRevisaoSemanas: 10,
+    };
+
+    const parsedNull = atualizarSchema.safeParse(payloadWithNull);
+    expect(parsedNull.success).toBe(true);
+    if (parsedNull.success) {
+      expect(parsedNull.data.disciplina).toBeNull();
+    }
+
+    const payloadWithUndefined = {
+      goalId: "00000000-0000-0000-0000-000000000001",
+      descricao: "Aprender a apontar",
+      criterioDominio: { tipo: "n_acertos_m_sessoes", n: 3, m: 3 },
+      cicloRevisaoSemanas: 10,
+    };
+
+    const parsedUndefined = atualizarSchema.safeParse(payloadWithUndefined);
+    expect(parsedUndefined.success).toBe(true);
+    if (parsedUndefined.success) {
+      expect(parsedUndefined.data.disciplina).toBeUndefined();
     }
   });
 });

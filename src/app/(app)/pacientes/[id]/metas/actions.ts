@@ -93,10 +93,10 @@ export async function criarMeta(
   }
 }
 
-const atualizarSchema = z.object({
+export const atualizarSchema = z.object({
   goalId: z.string().uuid(),
   descricao: z.string().trim().min(1, "Descreva a meta em linguagem simples."),
-  disciplina: z.enum(DISCIPLINAS).optional(),
+  disciplina: z.enum(DISCIPLINAS).nullable().optional(),
   criterioDominio: criterioDominioSchema,
   cicloRevisaoSemanas: cicloSchema,
 });
