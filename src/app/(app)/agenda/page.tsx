@@ -1,10 +1,25 @@
+import Link from "next/link";
 import { getTenantContext } from "@/auth/tenant";
 import { Stack, Split, Cluster } from "@/components/ui/layout";
+import { cn } from "@/lib/cn";
 import { listarSessoesDoDia } from "./actions";
 import { EstadoBadge } from "./estado-badge";
 import { CheckInButton } from "./checkin-button";
 import { AgendarForm } from "./agendar-form";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "./fuso";
+
+// Link de navegação para o diário da sessão — mesma superfície visual do
+// `Button` neutro, mas como `<a>` (a ação é ir para a tela, não disparar uma
+// Server Action). Espelha o `acaoClasses` da Fila de Pendências.
+const abrirSessaoClasses = cn(
+  "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-5 py-2.5",
+  "font-display text-base font-semibold",
+  "border-ink-anchor bg-surface text-ink-anchor border-2 shadow-[var(--ds-shadow)]",
+  "transition-[transform,box-shadow] duration-100 ease-out",
+  "hover:-translate-x-px hover:-translate-y-px",
+  "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+  "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
+);
 
 // Data de hoje (YYYY-MM-DD) no fuso da clínica — base da grade do dia.
 function hojeNaClinica(): string {
@@ -74,9 +89,16 @@ export default async function AgendaPage() {
                   ) : null}
                 </span>
               </Stack>
-              {s.estado === "agendada" ? (
-                <CheckInButton sessionId={s.id} />
-              ) : null}
+              <Cluster gap="sm">
+                {ctx.role === "coordenador" || s.terapeutaId === ctx.userId ? (
+                  <Link href={`/diario/${s.id}`} className={abrirSessaoClasses}>
+                    Abrir sessão
+                  </Link>
+                ) : null}
+                {s.estado === "agendada" ? (
+                  <CheckInButton sessionId={s.id} />
+                ) : null}
+              </Cluster>
             </Split>
           ))}
         </Stack>
