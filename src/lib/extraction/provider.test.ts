@@ -1,5 +1,6 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { resolveProvider } from "./provider";
+import { ClaudeProvider } from "./claude-provider";
 import { DemoStubProvider } from "./demo-stub-provider";
 import { NullProvider } from "./null-provider";
 
@@ -10,11 +11,31 @@ const ctx = {
 };
 
 describe("resolveProvider", () => {
+  afterEach(() => {
+    delete process.env.EXTRACTION_LLM_ENABLED;
+  });
+
   test("clínica demo usa o DemoStubProvider", () => {
     expect(resolveProvider({ isDemo: true })).toBeInstanceOf(DemoStubProvider);
   });
-  test("clínica de produção usa o NullProvider", () => {
+
+  test("produção SEM a flag de DPA/LLM habilitada usa o NullProvider (guardrail)", () => {
+    delete process.env.EXTRACTION_LLM_ENABLED;
     expect(resolveProvider({ isDemo: false })).toBeInstanceOf(NullProvider);
+  });
+
+  test("produção COM flag + chave habilitada usa o ClaudeProvider real", () => {
+    process.env.EXTRACTION_LLM_ENABLED = "true";
+    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    expect(resolveProvider({ isDemo: false })).toBeInstanceOf(ClaudeProvider);
+  });
+
+  test("flag ligada mas SEM chave cai no NullProvider (não chama LLM sem credencial)", () => {
+    process.env.EXTRACTION_LLM_ENABLED = "true";
+    const keySalva = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    expect(resolveProvider({ isDemo: false })).toBeInstanceOf(NullProvider);
+    if (keySalva) process.env.ANTHROPIC_API_KEY = keySalva;
   });
 });
 
