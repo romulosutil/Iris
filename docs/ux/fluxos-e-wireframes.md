@@ -1,39 +1,38 @@
 # User Flows e UX — Jornada do Terapeuta e do Coordenador (Prompt 3)
 
-Resultado da execução do Prompt 3 (`docs/prompts/serie-de-prompts.md`), com
-ajustes incorporados antes/durante a execução (ver `BACKLOG.md`, seção A): (1)
-cadastro clínico do paciente + configuração de `PatientProtocol` pelo
-coordenador — gap identificado em revisão com Rômulo, resolvido no modelo em
-`modelo-de-dados.md` seção 2.9; (2) dossiê BRUTO de auditoria de convênio
-(sessões/evidências/presença de um período, sem síntese de IA) — validado por
-sinal de campo (primeira pergunta de uma terapeuta ao ver o protótipo foi
-sobre exportar para convênio) e CONFIRMADO para o MVP, Fase 5, tier Clínica
-(distinto do relatório de convênio NARRATIVO, que segue fast-follow do tier
+Resultado do Prompt 3 (`docs/prompts/serie-de-prompts.md`), com ajustes
+incorporados antes/durante execução (ver `BACKLOG.md`, seção A): (1) cadastro
+clínico do paciente + config de `PatientProtocol` pelo coordenador — gap achado
+em revisão com Rômulo, resolvido em `modelo-de-dados.md` seção 2.9; (2) dossiê
+BRUTO de auditoria de convênio (sessões/evidências/presença de período, sem
+síntese IA) — validado por sinal de campo (1ª pergunta de terapeuta ao ver
+protótipo foi sobre exportar p/ convênio), CONFIRMADO p/ MVP, Fase 5, tier
+Clínica (distinto do relatório de convênio NARRATIVO, fast-follow do tier
 Convênio — ver `modelo-de-negocio.md` seção 4 e `modelo-de-dados.md` seção 5).
 
-Contexto de uso assumido: 7-8 atendimentos/dia, intervalos de ~10 min que viram 3. Mobile-first para o terapeuta; desktop aceitável para o coordenador. Registro
-em dois tempos: captura rápida (corredor, texto ou áudio) + consolidação no fim
-do dia. Não desenhado aqui: portal/login da família (fora do escopo, ver
-"Não fazer" do Prompt 3).
+Contexto de uso: 7-8 atendimentos/dia, intervalos ~10 min que viram 3.
+Mobile-first p/ terapeuta; desktop OK p/ coordenador. Registro em 2 tempos:
+captura rápida (corredor, texto ou áudio) + consolidação no fim do dia. Fora do
+escopo aqui: portal/login da família (ver "Não fazer" do Prompt 3).
 
 ---
 
 ## 0. Princípios de design que atravessam todos os flows
 
-1. **A IA nunca decide sozinha** — toda sugestão (`Extraction`) nasce em estado
-   `sugerida`; vira `Evidence` só com ação humana. A UI nunca deixa isso
-   ambíguo: cor, texto e posição sempre marcam "isto ainda não é fato".
-2. **Fricção é uma ferramenta, não um bug** — em baixa confiança ou inconsistência
-   com o histórico, o produto DEVE ficar mais lento de propósito. Aprovação em
-   lote existe só onde o risco de rubber-stamping é baixo (alta confiança).
+1. **A IA nunca decide sozinha** — toda sugestão (`Extraction`) nasce
+   `sugerida`; vira `Evidence` só com ação humana. UI nunca deixa ambíguo: cor,
+   texto e posição marcam "isto ainda não é fato".
+2. **Fricção é ferramenta, não bug** — em baixa confiança ou inconsistência com
+   histórico, produto DEVE ficar mais lento de propósito. Aprovação em lote só
+   onde risco de rubber-stamping é baixo (alta confiança).
 3. **O diário nunca se perde** — captura local antes de qualquer confirmação de
-   rede; se a extração falhar, o texto/áudio já está salvo e visível.
+   rede; se extração falhar, texto/áudio já está salvo e visível.
 4. **"Candidato" ≠ "conquistado"** — todo estado provisório (candidato a
    avaliação, candidata a dominada) tem tratamento visual DELIBERADAMENTE
-   diferente de um marco/meta efetivamente fechado, para não criar falsa
-   sensação de progresso automático.
-5. **Transparência sem vigilância** — o terapeuta sempre sabe o que o
-   coordenador vê dele; nada de métrica oculta.
+   diferente de marco/meta fechado, p/ não criar falsa sensação de progresso
+   automático.
+5. **Transparência sem vigilância** — terapeuta sempre sabe o que coordenador vê
+   dele; nada de métrica oculta.
 
 ---
 
@@ -66,14 +65,13 @@ flowchart TD
     S --> B
 ```
 
-**Justificativa:** o loop fecha na grade do dia de propósito — o terapeuta não
-"sai" do app para revisar em outro lugar; revisão e consolidação são estações
-do mesmo fluxo circular do dia, não uma tarefa administrativa à parte.
+**Justificativa:** loop fecha na grade do dia de propósito — terapeuta não "sai"
+do app p/ revisar em outro lugar; revisão e consolidação são estações do mesmo
+fluxo circular do dia, não tarefa administrativa à parte.
 
 ### 1.1 Briefing pré-sessão
 
-Uma tela, escaneável em 30 segundos, pensada para ser lida em pé, no corredor,
-com a criança ao lado.
+Uma tela, escaneável em 30s, p/ ler em pé, no corredor, com a criança ao lado.
 
 ```
 ┌─────────────────────────────────┐
@@ -103,13 +101,13 @@ com a criança ao lado.
 ```
 
 **Justificativa:** 3 linhas por seção, sem scroll em telas pequenas comuns;
-o alerta de manejo fica isolado visualmente (não misturado ao histórico) porque
-é a informação que evita o pior desfecho da sessão, não só contexto.
+alerta de manejo fica isolado visualmente (não misturado ao histórico) porque é
+a info que evita o pior desfecho da sessão, não só contexto.
 
 ### 1.2 A tela de Revisão — o coração do produto
 
-Layout lado a lado: à esquerda o trecho literal do diário (fonte da verdade,
-nunca editado), à direita a sugestão da IA como CARTÃO editável.
+Layout lado a lado: esquerda o trecho literal do diário (fonte da verdade, nunca
+editado), direita a sugestão da IA como CARTÃO editável.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -140,16 +138,15 @@ nunca editado), à direita a sugestão da IA como CARTÃO editável.
 
 Comportamento:
 
-- **Alta confiança**: botão de aprovação em lote no rodapé, some da lista uma a
-  uma conforme aprovadas individualmente também é possível.
-- **Baixa confiança / inconsistente**: SEM botão de aprovação direta — o
-  terapeuta precisa abrir ("Revisar →") e passar por uma tela de confirmação
-  com um campo obrigatório de "nível de ajuda observado" antes de poder
-  aprovar. É fricção deliberada (princípio 2).
-- **Editar/discordar**: o terapeuta pode trocar o alvo sugerido (ex.: a IA
-  sugeriu "tato" e ele marca "mando") — a Evidence salva carrega
-  `sugestao_original` + `classificacao_final`, preservando as duas (dataset de
-  divergência, seção F do backlog).
+- **Alta confiança**: botão de aprovação em lote no rodapé; some da lista uma a
+  uma conforme aprovadas individualmente também possível.
+- **Baixa confiança / inconsistente**: SEM aprovação direta — terapeuta abre
+  ("Revisar →") e passa por tela de confirmação com campo obrigatório de "nível
+  de ajuda observado" antes de aprovar. Fricção deliberada (princípio 2).
+- **Editar/discordar**: terapeuta troca alvo sugerido (ex.: IA sugeriu "tato",
+  ele marca "mando") — Evidence salva carrega `sugestao_original` +
+  `classificacao_final`, preservando as duas (dataset de divergência, seção F do
+  backlog).
 
 ### 1.3 Gráfico do protocolo — "candidato" sem parecer conquistado
 
@@ -168,8 +165,8 @@ Comportamento:
 
 **Justificativa:** losango pontilhado azul ("candidato") é visualmente distinto
 do preenchimento sólido verde (marco confirmado por `MilestoneAssessment`) —
-mesma gramática de cor usada na tela de Revisão (nunca reutilizar "verde
-aprovado" para "provável").
+mesma gramática de cor da tela de Revisão (nunca reutilizar "verde aprovado" p/
+"provável").
 
 ---
 
@@ -190,23 +187,23 @@ flowchart LR
     K --> L[Evidências que explicam\naquele período]
 ```
 
-- **Scrubber**: um slider horizontal com marcadores de sessão; ao arrastar, o
-  gráfico do protocolo inteiro "volta no tempo" para o `SessionSnapshot`
-  daquele número. Um banner fixo no topo ("📍 Vendo sessão 45 de 120 —
-  [Voltar ao presente]") evita que alguém confunda passado com estado atual.
+- **Scrubber**: slider horizontal com marcadores de sessão; ao arrastar, gráfico
+  do protocolo inteiro "volta no tempo" p/ o `SessionSnapshot` daquele número.
+  Banner fixo no topo ("📍 Vendo sessão 45 de 120 — [Voltar ao presente]") evita
+  confundir passado com estado atual.
 - **Delta da sessão**: painel lateral compacto — "Sessão 45 acrescentou: 1
   evidência nova (mando independente), 1 primeiro acerto independente (tato
   cachorro), 0 episódios ABC."
-- **Trajetória**: uma faixa horizontal por meta/domínio, colorida por trecho
-  (verde=evolução, cinza=estagnação, laranja=regressão), clicável — clicar
-  abre a lista de Evidences daquele trecho, nunca um julgamento textual da IA
-  (a segmentação é cálculo determinístico, decisão 2.5 do modelo de dados).
-- **Comparação**: duas colunas lado a lado (sessão 45 | sessão 120) por
-  meta/domínio, com a diferença de nível de ajuda destacada.
+- **Trajetória**: faixa horizontal por meta/domínio, colorida por trecho
+  (verde=evolução, cinza=estagnação, laranja=regressão), clicável — clique abre
+  lista de Evidences daquele trecho, nunca julgamento textual da IA (segmentação
+  é cálculo determinístico, decisão 2.5 do modelo de dados).
+- **Comparação**: 2 colunas lado a lado (sessão 45 | sessão 120) por
+  meta/domínio, com diferença de nível de ajuda destacada.
 
-**Justificativa:** o scrubber existe porque "me mostra a sessão 45" é uma
-pergunta literal que coordenador e supervisor fazem em reunião de caso — a UI
-precisa responder isso em um gesto, não uma consulta.
+**Justificativa:** scrubber existe porque "me mostra a sessão 45" é pergunta
+literal que coordenador e supervisor fazem em reunião de caso — UI precisa
+responder em um gesto, não uma consulta.
 
 ---
 
@@ -225,10 +222,9 @@ flowchart TD
     F -->|Não, sei que teve avanço| H[Adiciona nota livre\n'não capturado pela IA'\n+ opção de registrar\nevidência manual]
 ```
 
-**Justificativa:** ausência de evidência é tratada como estado normal, não
-como falha — muitas sessões são legitimamente de manejo/observação. O caminho
-manual existe para não deixar o terapeuta sem saída quando sabe que houve
-progresso e a IA não capturou.
+**Justificativa:** ausência de evidência é estado normal, não falha — muitas
+sessões são legitimamente de manejo/observação. Caminho manual existe p/ não
+deixar terapeuta sem saída quando sabe que houve progresso e IA não capturou.
 
 ### 2.2 IA sugeriu marco errado e o terapeuta corrige
 
@@ -242,8 +238,8 @@ flowchart TD
     F --> G[Contribui ao dataset\nde divergência\n(fast-follow F)]
 ```
 
-**Justificativa:** a correção nunca apaga a sugestão original — ela vira dado
-de calibração do agente, não é descartada.
+**Justificativa:** correção nunca apaga sugestão original — vira dado de
+calibração do agente, não é descartada.
 
 ### 2.3 Terapeuta abandona a revisão no meio
 
@@ -260,8 +256,8 @@ flowchart TD
 ```
 
 **Justificativa:** não existe "perder o lugar" — cada aprovação é atômica e
-persistida; o sistema cobra de volta via lembrete, e escala ao coordenador só
-se o padrão se repetir (não pune uma única distração).
+persistida; sistema cobra de volta via lembrete, escala ao coordenador só se
+padrão se repetir (não pune uma única distração).
 
 ### 2.4 Falha do pipeline de IA
 
@@ -277,9 +273,9 @@ flowchart TD
     G -->|Não, 3 tentativas| I[Alerta ao coordenador:\n'sessão sem extração\nhá X horas']
 ```
 
-**Justificativa:** a garantia "o diário nunca se perde" é literal aqui — a nota
-já está salva ANTES da tentativa de extração; a falha é só de uma etapa
-posterior e opcional (a IA é conveniência, o registro clínico não depende dela).
+**Justificativa:** garantia "o diário nunca se perde" é literal aqui — nota já
+salva ANTES da tentativa de extração; falha é só de etapa posterior e opcional
+(IA é conveniência, registro clínico não depende dela).
 
 ### 2.5 Ditado por voz com transcrição ruim
 
@@ -295,9 +291,9 @@ flowchart TD
     H --> F
 ```
 
-**Justificativa:** o áudio bruto nunca desaparece mesmo depois de corrigido o
-texto — é a fonte de verdade final se um dia houver questionamento sobre o
-que foi realmente dito.
+**Justificativa:** áudio bruto nunca desaparece mesmo depois de corrigido o
+texto — é a fonte de verdade final se um dia houver questionamento sobre o que
+foi realmente dito.
 
 ---
 
@@ -310,10 +306,10 @@ que foi realmente dito.
 | **Inconsistente com histórico**    | 🔴 vermelho, cartão expandido + ícone de alerta | Mesma fricção da baixa confiança + trecho do histórico anterior exibido lado a lado para comparação direta | É o cenário de maior risco de erro silencioso (regressão real vs. erro de extração) — merece o maior atrito |
 | **Candidato a avaliação/dominada** | 🔷 azul pontilhado (nunca sólido)               | Não é "aprovável" — é um flag informativo até a ação humana (agendar avaliação / decidir domínio)          | Preserva o princípio "candidato ≠ conquistado" (seção 0)                                                    |
 
-Regra anti-rubber-stamping: se um terapeuta aprovar em lote 3 sessões seguidas
-SEM nunca abrir um cartão individual (mesmo de alta confiança), a próxima
-sessão força a expansão de pelo menos 1 cartão aleatório antes de liberar o
-lote — fricção estatística leve, não bloqueio.
+Regra anti-rubber-stamping: se terapeuta aprovar em lote 3 sessões seguidas SEM
+abrir cartão individual (mesmo de alta confiança), próxima sessão força expansão
+de ao menos 1 cartão aleatório antes de liberar o lote — fricção estatística
+leve, não bloqueio.
 
 ---
 
@@ -338,8 +334,8 @@ flowchart TD
 
 **Justificativa:** separar administrativo de clínico não é burocracia — é a
 mesma fronteira que a RLS já impõe (`admin_recepcao` nunca vê dado clínico);
-o fluxo de cadastro só torna essa fronteira visível como dois atos, dois
-donos, dois momentos.
+fluxo de cadastro só torna essa fronteira visível como dois atos, dois donos,
+dois momentos.
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -390,9 +386,9 @@ flowchart TD
 └───────────────────────────────────────────┘
 ```
 
-**Justificativa:** o dashboard fica deliberadamente em segundo plano — a
-entrada por exceções é a que corresponde ao trabalho real do coordenador
-("quem precisa de mim agora"), não a visão panorâmica.
+**Justificativa:** dashboard fica deliberadamente em segundo plano — entrada por
+exceções corresponde ao trabalho real do coordenador ("quem precisa de mim
+agora"), não à visão panorâmica.
 
 ### 4.3 Equipe de cuidado visível no perfil do paciente
 
@@ -451,9 +447,9 @@ flowchart TD
 └───────────────────────────────────────────┘
 ```
 
-**Justificativa:** critério de domínio é formulário, não texto livre, porque
-é ele que a máquina de "candidata a dominada" (decisão 2.4 do modelo de
-dados) precisa avaliar deterministicamente — texto livre quebraria isso.
+**Justificativa:** critério de domínio é formulário, não texto livre, porque é
+ele que a máquina de "candidata a dominada" (decisão 2.4 do modelo de dados)
+precisa avaliar deterministicamente — texto livre quebraria isso.
 
 ### 4.5 Fila de validação do coordenador
 
@@ -506,30 +502,30 @@ Notificação ao terapeuta (reclassificação):
    [Ver evidência]
 ```
 
-**Justificativa:** o tom é explicitamente de formação ("ótima observação
-registrada") mesmo ao corrigir — reclassificação é dado de calibração do
-time, não erro pessoal.
+**Justificativa:** tom é explicitamente de formação ("ótima observação
+registrada") mesmo ao corrigir — reclassificação é dado de calibração do time,
+não erro pessoal.
 
 ### 4.6 Exportação: relatório da família (narrativo) e dossiê de convênio (bruto)
 
-**Decisão confirmada (09/07/2026):** os dois caminhos ficam no MVP (Fase 5),
-mas são artefatos DIFERENTES — o relatório da família é narrativo (IA sintetiza
+**Decisão confirmada (09/07/2026):** os dois caminhos ficam no MVP (Fase 5), mas
+são artefatos DIFERENTES — relatório da família é narrativo (IA sintetiza
 
-- coordenador edita); o dossiê de convênio é uma LISTAGEM bruta do período,
-  sem síntese de IA, porque o consumidor é um auditor de operadora, não a
-  família — ele quer verificar que o que foi cobrado bate com o que foi
-  registrado, não uma história de progresso.
+- coordenador edita); dossiê de convênio é LISTAGEM bruta do período, sem
+  síntese de IA, porque o consumidor é auditor de operadora, não a família — ele
+  quer verificar que o cobrado bate com o registrado, não uma história de
+  progresso.
 
-**Acesso por tier (revisado 09/07/2026):** o **dossiê para convênio** também
-é visível no tier Diário — quem abre a tela de Exportar ali é o próprio
-profissional (não um "coordenador" formal; no freelancer/autônomo é a mesma
-pessoa, ver `Clinic.responsavel_conta_id` em `modelo-de-dados.md` decisão
-2.11), e só o tile "Dossiê para convênio" aparece, escopado aos próprios
-pacientes. O **relatório da família** continua exclusivo do tier Clínica
-(depende do módulo coordenador). Nos wireframes abaixo, "Coordenador" no
-fluxo do dossiê deve ser lido como "profissional com acesso de exportação"
-(coordenador no tier Clínica, o próprio terapeuta no tier Diário) — o
-relatório da família mantém "Coordenador" estrito.
+**Acesso por tier (revisado 09/07/2026):** **dossiê para convênio** também é
+visível no tier Diário — quem abre a tela de Exportar ali é o próprio
+profissional (não "coordenador" formal; no freelancer/autônomo é a mesma pessoa,
+ver `Clinic.responsavel_conta_id` em `modelo-de-dados.md` decisão 2.11), e só o
+tile "Dossiê para convênio" aparece, escopado aos próprios pacientes.
+**Relatório da família** continua exclusivo do tier Clínica (depende do módulo
+coordenador). Nos wireframes abaixo, "Coordenador" no fluxo do dossiê deve ser
+lido como "profissional com acesso de exportação" (coordenador no tier Clínica,
+o próprio terapeuta no tier Diário) — relatório da família mantém "Coordenador"
+estrito.
 
 ```mermaid
 flowchart TD
@@ -599,13 +595,13 @@ que depende do módulo coordenador):
 └───────────────────────────────────────────┘
 ```
 
-**Justificativa:** o preview antes de gerar existe porque exportar dado
-clínico de um menor é ato sensível (mesmo princípio do `AuditLog` obrigatório)
-— o coordenador precisa ver exatamente o recorte antes de confirmar, não só
-depois. Separar visualmente "narrativo" de "factual" evita que o auditor da
-operadora receba por engano um documento com linguagem de progresso emocional
-em vez de registro objetivo (risco real: convênios podem exigir "folha de
-registro fria", ver `modelo-de-negocio.md` seção sobre non-goals).
+**Justificativa:** preview antes de gerar existe porque exportar dado clínico de
+menor é ato sensível (mesmo princípio do `AuditLog` obrigatório) — coordenador
+precisa ver exatamente o recorte antes de confirmar, não só depois. Separar
+visualmente "narrativo" de "factual" evita que auditor da operadora receba por
+engano documento com linguagem de progresso emocional em vez de registro
+objetivo (risco real: convênios podem exigir "folha de registro fria", ver
+`modelo-de-negocio.md` seção sobre non-goals).
 
 ### 4.7 Transparência anti-vigilância
 
@@ -624,17 +620,17 @@ registro fria", ver `modelo-de-negocio.md` seção sobre non-goals).
 ```
 
 **Justificativa:** mostrar ao terapeuta exatamente o que o coordenador enxerga
-(mesmo texto, mesmo número) é o que transforma a métrica de "vigilância velada"
-em "regra do jogo conhecida" — validação já apontada pela pesquisa simulada
-(Tema 8) e pelo non-goal de coleta trial-by-trial.
+(mesmo texto, mesmo número) transforma a métrica de "vigilância velada" em
+"regra do jogo conhecida" — validação já apontada pela pesquisa simulada (Tema
+8) e pelo non-goal de coleta trial-by-trial.
 
 ---
 
 ## 5. Wireframes das telas principais (texto/ASCII)
 
-As telas 1.1, 1.2, 1.3, 4.1, 4.2, 4.5 e 4.6 já foram desenhadas acima, em
-contexto. Consolidando as 7 exigidas pelo prompt + 2 adicionais que surgiram
-dos ajustes desta rodada:
+Telas 1.1, 1.2, 1.3, 4.1, 4.2, 4.5 e 4.6 já desenhadas acima, em contexto.
+Consolidando as 7 exigidas pelo prompt + 2 adicionais surgidas dos ajustes desta
+rodada:
 
 1. **Grade do dia** (terapeuta)
 2. **Diário/captura** (terapeuta)
@@ -665,8 +661,8 @@ dos ajustes desta rodada:
 └─────────────────────────────────┘
 ```
 
-**Justificativa:** o banner de pendências fica sempre visível no topo da grade
-— é o "não deixa esquecer" do flow 2.3 (abandono no meio da revisão).
+**Justificativa:** banner de pendências fica sempre visível no topo da grade — é
+o "não deixa esquecer" do flow 2.3 (abandono no meio da revisão).
 
 ### 5.2 Diário/captura
 
@@ -692,16 +688,15 @@ dos ajustes desta rodada:
 └─────────────────────────────────┘
 ```
 
-**Justificativa:** a nota de privacidade do áudio ("ninguém ouve exceto você")
-existe porque a captura acontece no corredor com outras pessoas por perto —
-reduz a hesitação em gravar (Tema 4, persona Aline). O chip de protocolo
-(decisão 2.10 de `modelo-de-dados.md`) vem PRÉ-PREENCHIDO pela disciplina do
-profissional daquela sessão — na maioria das vezes o terapeuta nem repara
-nele. Só fica relevante quando o mesmo profissional alterna entre famílias
-diferentes com o mesmo paciente (ex.: sessão estruturada vs. sessão
-naturalista/Denver) — aí o toque pra trocar evita que a IA tente encaixar o
-relato numa família errada. Nunca aparece como pergunta obrigatória, sempre
-como estado corrigível.
+**Justificativa:** nota de privacidade do áudio ("ninguém ouve exceto você")
+existe porque captura acontece no corredor com outras pessoas por perto — reduz
+hesitação em gravar (Tema 4, persona Aline). Chip de protocolo (decisão 2.10 de
+`modelo-de-dados.md`) vem PRÉ-PREENCHIDO pela disciplina do profissional daquela
+sessão — na maioria das vezes terapeuta nem repara. Só fica relevante quando o
+mesmo profissional alterna entre famílias diferentes com o mesmo paciente (ex.:
+sessão estruturada vs. naturalista/Denver) — aí o toque pra trocar evita que a
+IA encaixe o relato numa família errada. Nunca aparece como pergunta
+obrigatória, sempre como estado corrigível.
 
 ### 5.3 Fila de pendências
 
@@ -798,5 +793,5 @@ que o terapeuta abre a tela de Revisão):**
 - Job assíncrono de extração e retry (flow 2.4) — desenho técnico da fila/retry.
 - Persistência local da captura de áudio antes do upload confirmado (NFR já
   registrada no backlog) — estratégia de armazenamento no device.
-- Alocar o dossiê de auditoria de convênio à Fase 5 no plano de fases
-  (decisão confirmada — ver `BACKLOG.md` e `modelo-de-negocio.md` seção 4).
+- Alocar o dossiê de auditoria de convênio à Fase 5 no plano de fases (decisão
+  confirmada — ver `BACKLOG.md` e `modelo-de-negocio.md` seção 4).

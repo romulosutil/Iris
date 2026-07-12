@@ -126,12 +126,14 @@ este modo já existe como variante de tema, não como retrabalho.
   _todo_ elemento criam ruído visual e competem com o próprio objetivo de
   hierarquia que o neobrutalismo deveria estar servindo.
 - **Acentos funcionais de estado do dado** (secundários à marca, sempre com
-  ícone+texto redundante): **Sucesso/"conquistado":** Menta `#B2DFDB`.
-  **Informação:** Azul `#90CAF9`. **Alerta:** Terracota `#EF9A9A` (soft red
-  deliberado, não o vermelho-puzzle).
+  ícone+texto redundante):
+  - **Sucesso/"conquistado":** Menta `#B2DFDB`.
+  - **Sugerido (IA):** Violeta `#6A4C93` (ink: `#FFFFFF`). Usado para estados "candidato/tentativo" sugeridos pela IA. Validado sob protanopia/deuteranopia com minΔE=39 vs outros acentos para zero colisão.
+  - **Informação:** Azul `#90CAF9`.
+  - **Alerta:** Terracota `#EF9A9A` (soft red deliberado, não o vermelho-puzzle).
 - **Obrigatório:** validar contraste (WCAG AA — 4.5:1 texto, 3:1 UI/bordas)
   de cada par cor-de-fundo + texto/ícone antes de aprovar o token, e checar
-  simulação de daltonismo entre os três acentos (protanopia/deuteranopia) —
+  simulação de daltonismo entre os quatro acentos (protanopia/deuteranopia) —
   "acessível" é um número, não uma alegação de paleta pastel.
 
 ### B. Tipografia
@@ -151,18 +153,16 @@ este modo já existe como variante de tema, não como retrabalho.
 
 ### C. Estrutura e elevação (hard shadows)
 
-- Borda fixa 2-3px conforme hierarquia da seção A.
+- Borda tokenizada `--border-brutal: 2px` (hierarquia grafite/preto conforme seção A).
+- Escala de altura de controle: `--control-sm: 2.75rem` (piso 44px para alvo de toque), `--control-md: 3rem` (48px), `--control-lg: 3.5rem` (56px).
 - Sombra brutalista sem blur: `box-shadow: 4px 4px 0px #000000` (Modo
   Clínico) / `2px 2px 0px #000000` (Modo Família).
+- **Sombra reversa (offset negativo):** `--shadow-brutal-inset: -4px -4px 0 0 #000000` (Modo Clínico) / `-2px -2px 0 0 #000000` (Modo Família). Representa o estado "afundado/sugerido pela IA" (tentativo) vs "aprovado/apresentado" (levantado).
 - **Estados — binário de verdade, corrigindo a ambiguidade da v1:**
   - **Default → Pressed:** o par que usa a metáfora "brutal" (deslocamento
     - redução de sombra ao clique). Peso do deslocamento escala com risco
       da ação (princípio 2 da seção 1).
-  - **Focus:** anel de foco ortogonal, cor constante, **nunca** fundido com
-    hover ou active — é o único jeito de navegação por teclado ter um
-    indicador confiável. Fundir focus com o clique "brutal" (como a v1
-    pedia implicitamente ao listar 4 estados soltos) quebra a
-    hiperprevisibilidade que o próprio sistema promete.
+  - **Focus:** anel de foco ortogonal `--color-focus: #2274a5` (ring width 3px, offset 2px), cor constante, **nunca** fundido com hover ou active — é o único jeito de se ter um indicador de foco acessível e confiável na navegação por teclado (fundir focus com o clique "brutal" quebra a hiperprevisibilidade).
 - Par de tokens dedicado para "candidato" vs. "conquistado" (princípio 4):
   preenchimento sólido + borda cheia (conquistado) vs. contorno + hachura
   leve, nunca cor sozinha (candidato).

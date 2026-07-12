@@ -1,9 +1,8 @@
 # Plano de Bootstrap + Redefinição de Stack (VPS/Easypanel)
 
-> **STATUS: PROPOSTA — pendente de confirmação do Rômulo.** Este documento
+> **STATUS: CONFIRMADO & EXECUTADO.** Este documento
 > redefine decisões de infraestrutura a partir da mudança de premissa
 > "VPS no Easypanel (Hostinger)" no lugar de Vercel + Supabase gerenciado.
-> Nada aqui está travado até a seção 6 (checklist de revisão) ser respondida.
 > Não substitui `stack-e-plano-de-construcao.md`; **corrige** a camada de
 > hospedagem/deploy dele. As fatias verticais (Fases 0.5→6) e o modelo de
 > dados permanecem intactos.

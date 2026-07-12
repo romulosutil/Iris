@@ -15,13 +15,12 @@ Qualquer item aqui pode ser trocado por decisão do Rômulo sem precisar de
 justificativa adicional — são convenções, não princípios inegociáveis do
 produto (esses estão em `README.md`).
 
-> ⚠️ **Atualização 09/07/2026:** o pivô de hospedagem para **VPS/Easypanel**
+> ⚠️ **Atualização 09/07/2026 (CONFIRMADA & INCORPORADA):** o pivô de hospedagem para **VPS/Easypanel**
 > (ver [`plano-bootstrap-e-stack-vps.md`](plano-bootstrap-e-stack-vps.md))
 > **adiciona Docker ao escopo** e uma pasta `infra/` (Dockerfile,
 > docker-compose, `.dockerignore`) + `.claudeignore` à estrutura de pastas
-> proposta aqui. Deploy deixa de ser Vercel-automático e passa a Easypanel
-> (GitHub source + Dockerfile builder). Esses ajustes ainda estão **pendentes
-> de confirmação** junto com o resto desta proposta.
+> implementada. Deploy deixa de ser Vercel-automático e passa a Easypanel
+> (GitHub source + Dockerfile builder).
 
 ## Gerenciador de pacotes
 

@@ -66,24 +66,13 @@ refine, não recomece.
 > `docs/arquitetura/plano-bootstrap-e-stack-vps.md`.
 > Produto, modelo de dados, RLS e plano de fases não mudam.
 
-## Estado atual (atualizado 09/07/2026)
+## Estado atual (atualizado 11/07/2026)
 
-Especificação (4 prompts) e validações (seção B do `BACKLOG.md`) estão
-essencialmente fechadas — três rodadas de validação de protocolo (estrutural,
-teste cego 8/8, especialista 10/10) e decisões de produto/negócio/dados
-resolvidas (retenção configurável por clínica, `responsavel_tecnico_id`,
-`Protocol.familia` como catálogo extensível, relatório de convênio narrativo
-promovido para MVP/Fase 5). Rascunhos de termos de uso/privacidade/retenção
-escritos e um briefing jurídico consolidado preparado para revisão informal
-por advogado (`docs/legal/briefing-para-advogado.md`) — nenhum bloqueia começar
-a codar. O bake-off pago (Claude vs. Gemini) foi deliberadamente adiado para o
-início da Fase 3 (não é falta de chave de API, é decisão de timing — ver
-`BACKLOG.md` seção D).
+O projeto está com a construção em andamento, com as fases de infraestrutura, auth, multi-tenancy e o cadastro clínico executadas com sucesso (até a Fase 1c):
 
-**Nenhuma linha de código de produto foi escrita ainda. Próximo passo: Fase
-0.5 (design system — tokens + 3 componentes base, ver
-`docs/ux/design-system-espectro-brutal.md`), inserida em 10/07/2026 antes da
-Fase 1 para que a primeira UI real já nasça com tokens definidos, seguida da
-Fase 1 da construção. Ambas passam a acontecer em sessões de Claude Code CLI
-(não mais nesta sessão de especificação/Cowork) — ver `HANDOFF-FASE1.md` na
-raiz do repositório para o briefing completo de início de construção.**
+* **Fase 0.5 (Design System)**: Componentes base (Botão, Card, Alerta) implementados no Storybook sob o conceito Espectro Brutal com testes de acessibilidade (axe) e temas.
+* **Fase 1a & 1b (Fundação de Dados, Auth & Multi-tenancy)**: Isolamento multi-tenant robusto com duas conexões no Postgres (`iris_app` sob RLS e `iris_auth` para session bootstrap), login via Better-Auth, e políticas de RLS testadas contra recursão e vazamento de dados.
+* **Fase 1c (Cadastro Clínico)**: Implementação da separação entre cadastro administrativo e clínico (coordenador-only, sob a nova action `criarPacienteEConsent` com LGPD atômico), vinculação de protocolos, equipe de cuidado (vigência histórica) e convite de equipe por senha temporária em tela.
+* **Melhorias**: Enriquecimento do Design System com 12 novos componentes (Radix headless para WAI-ARIA) no branch `melhoria-design-system`.
+
+**Próximo passo:** Fase 1d (Agenda Mínima + Check-in, sob a Issue #11).
