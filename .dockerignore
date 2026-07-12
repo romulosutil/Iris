@@ -1,35 +1,51 @@
-# Imagem enxuta — só o runtime da app (Next standalone).
+# Iris — Docker Ignore Policy
+# Purpose: Build a slim production image by ignoring dev/test dependencies and agentic noise.
+
+# --- Node / Frontend / Next / Storybook ---
 node_modules
 .next
 storybook-static
 out
 build
 dist
+**/*.stories.tsx
+
+# --- Tests ---
 coverage
 playwright-report
 test-results
-
-# não vai pra imagem
-.git
-.github
-.claude
-.headroom
-.tokensave
-docs
-db/tests
-db/backups
 tests
-.storybook
-**/*.stories.tsx
 **/*.test.ts
 **/*.test.tsx
 
-# markdown / config de dev
-*.md
-!README.md
+# --- Environment & Secrets ---
 .env
 .env.*
 !.env.example
+
+# --- IDEs & OS ---
 .vscode
 .idea
 .DS_Store
+
+# --- Version Control ---
+.git
+.github
+.husky
+
+# --- Agentic Noise & Tooling ---
+.claude
+.superpowers
+.tokensave
+.headroom
+.playwright-mcp
+graphify-out
+skills-lock.json
+.vercel
+
+# --- Database & Documentation ---
+db/tests
+db/backups
+docs
+*.md
+!README.md

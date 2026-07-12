@@ -1,21 +1,12 @@
-# Iris — Git Ignore Policy
-# Purpose: Prevent committing local data, logs, secrets, and agent artifacts.
+# Iris — Gemini Ignore Policy
+# Purpose: Reduce token usage and prevent agent hallucinations by ignoring build, environment, log, and database folders.
 
 # --- Environment & Secrets ---
-.env
-.env.local
-.env.production
-.env.staging
-.env.development
-.env.test
-.env.*
-!.env.example
+.env*
 *.pem
 *.key
-*.p12
-*.pfx
 
-# --- Node / Frontend / Next / Storybook ---
+# --- Dependencies & Build ---
 node_modules/
 **/node_modules/
 .next/
@@ -28,6 +19,7 @@ storybook-static/
 .eslintcache
 **/.eslintcache
 next-env.d.ts
+pnpm-lock.yaml
 
 # --- Tests & Playwright ---
 coverage/
@@ -42,34 +34,27 @@ blob-report/
 # --- Version Control ---
 .git/
 **/.git/
+.github/
 
 # --- IDEs & OS ---
 .vscode/
 .idea/
-*.swp
-*.swo
 .DS_Store
-Thumbs.db
-Desktop.ini
 
 # --- Logs & Temporaries ---
 *.log
 **/*.log
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
 *.dump
 *.sql.gz
-
-# --- Database & Local Infra ---
-/db/backups
-*.original.md
 *.tsbuildinfo
+*.original.md
 
-# --- Scratch / throwaway ---
-scratch/
+# --- Database & Local backups ---
+db/backups/
+db/migrations/meta/
+db/migrations/**/*.json
 
-# --- Agentic Noise & Tooling ---
+# --- Agentic Noise & Local Tooling ---
 .claude/
 .superpowers/
 .tokensave/
@@ -78,3 +63,12 @@ scratch/
 graphify-out/
 skills-lock.json
 .vercel/
+
+# --- Voluminous Non-Code Documents (Token Waste) ---
+THIRD-PARTY-NOTICES.md
+LICENSE.md
+LICENSE
+CHANGELOG.md
+GRAPH_REPORT.md
+docs/archive/
+!docs/archive/handoff-fase1.md

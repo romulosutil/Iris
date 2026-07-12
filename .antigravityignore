@@ -1,7 +1,7 @@
-# Iris — Claude Ignore Policy
-# Purpose: Maintain token-efficiency by preventing Claude from indexing build folders, logs, local caches, and agent logs.
+# Iris — Antigravity Ignore Policy
+# Purpose: Reduce token usage and improve response speed by preventing Antigravity from reading build directories, logs, caches, and database files.
 
-# --- Node / Frontend / Next / Storybook ---
+# --- Dependencies & Build Artifacts ---
 node_modules/
 **/node_modules/
 .next/
@@ -13,6 +13,7 @@ build/
 storybook-static/
 .eslintcache
 **/.eslintcache
+next-env.d.ts
 pnpm-lock.yaml
 
 # --- Tests & Playwright ---
@@ -22,6 +23,8 @@ playwright-report/
 **/playwright-report/
 test-results/
 **/test-results/
+blob-report/
+.playwright/
 
 # --- Version Control ---
 .git/

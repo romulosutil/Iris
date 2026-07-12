@@ -2,9 +2,25 @@ name: Jules PR Review
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.claude/**'
+      - '.agents/**'
+      - '.github/workflows/**'
+      - '.gitignore'
+      - '.dockerignore'
+      - '.claudeignore'
+      - '.antigravityignore'
+      - '.geminiignore'
+      - '.codexignore'
+      - '.ignore'
+      - 'LICENSE*'
+      - 'THIRD-PARTY-NOTICES.md'
 jobs:
   review:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
     permissions:
       pull-requests: write
       contents: read
@@ -56,10 +72,10 @@ jobs:
               tenant-scoped em `app_user`, `auth_*` ou `user_role` — quebraria
               login e bootstrap. `app_user` nem tem coluna `clinic_id` (é
               identidade global; papéis por clínica ficam em `user_role`).
-            - Construção em fases. A "Fase 1a" entrega só a fundação de dados
-              (schema + RLS + scaffolding de auth). O fluxo de sessão / resolução
-              de tenant ainda NÃO foi construído — não cobre isso como gap desta
-              fase.
+            - Construção em fases. O repositório está na Fase 1b (fundação de auth e
+              tenant). O fluxo básico de resolução de tenant (`resolveTenant`,
+              `getTenantContext` via cookie) e o provisionamento de usuários por
+              email já estão implementados ou em andamento.
 
             CONVENÇÕES: docs e copy em pt-BR; Conventional Commits. Migrations
             escritas à mão em `db/migrations/*_rls.sql` são intencionais
