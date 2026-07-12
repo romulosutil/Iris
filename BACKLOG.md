@@ -121,6 +121,7 @@ Novos componentes + tokens no conceito Espectro Brutal, inspirados em ng-brutali
   - [ ] Configurar cron de backup automático (`pg_dump`) no Easypanel para armazenamento nacional e testar restore.
   - [ ] Assinar os DPAs (Data Processing Agreement) da Hostinger e Anthropic/Google.
   - [ ] Configurar os apontamentos DNS (Registro A) do domínio principal (`irisclinica.ia.br`) no Registro.br.
+  - [x] `output:"standalone"` quebrava `pnpm build` local no Windows (EPERM ao copiar symlinks). Gated por `process.platform` — Linux (CI + deploy Docker/Easypanel) mantém standalone; build local Windows desliga. Validar que a imagem Docker segue enxuta no deploy.
 * **Negócio / Produto**:
   - [ ] Confirmar com a contadora a inserção do CNAE secundário de desenvolvimento/licenciamento de SaaS na ME.
   - [ ] Testar trial/demo dos concorrentes direto (logado).
