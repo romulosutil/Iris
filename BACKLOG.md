@@ -15,7 +15,7 @@
 | **1b** | Fundação Auth + Multi-tenancy | ✅ Concluído | PR #10 |
 | **1c** | Cadastro Clínico (ficha + protocolos + equipe) | ✅ Concluído | Issue #4 |
 | **1d** | Agenda Mínima + Check-in | ✅ Concluído | Issue #11 |
-| **2** | Metas & Diário por Texto | 🚧 Planos 1-3 ✅ (falta Plano 4: seed demo) | Issue #5 |
+| **2** | Metas & Diário por Texto | ✅ Concluído (Planos 1-4) | Issue #5 |
 | **3** | Extração de Evidências (IA) | 📅 Pendente | Issue #6 |
 | **4** | Evidências Acumuladas & Gráficos | 📅 Pendente | Issue #7 |
 | **5** | Relatórios de Convênio & Supervisão | 📅 Pendente | Issue #8 |
@@ -86,13 +86,13 @@ Novos componentes + tokens no conceito Espectro Brutal, inspirados em ng-brutali
 ### [Fase 2] Metas e Diário Clínico (Issue #5)
 * Ciclo de vida de metas e critérios de domínio ( Denver, VB-MAPP, PROC etc. combinados).
 * Tela de diário em texto livre (terapeuta) e fila de pendências de diários não estruturados.
-* **Plano 1 (dados) ✅** PR #18 · **Plano 2 (diário/fila) ✅** PR #19 · **Plano 3 (Metas) ✅** (branch `fase-2-plano3-metas`).
+* **Plano 1 (dados) ✅** PR #18 · **Plano 2 (diário/fila) ✅** PR #19 · **Plano 3 (Metas) ✅** PR #20 · **Plano 4 (seed demo) ✅** PR #23.
 * **Plano 3 entregue**: CRUD de metas (criar/editar/pausar/reativar/descontinuar), critério de domínio N/M estruturado (`{tipo:'n_acertos_m_sessoes',n,m}`, não texto livre), ciclo de revisão 8–12 sem (reancora `proxima_revisao_em`), transição `dominada` **coordenador-only** (gate na ação; RLS isola tenant/equipe), banner de revisão vencida. Coluna `goal.disciplina` (text nullable, migração `0009`). RLS/authz 108/108 int tests.
 * **Dívida registrada (Plano 3, não bloqueia)**:
   - Sem nav para `/pacientes/[id]/metas` (não existe landing `pacientes/[id]/page.tsx` — mesmo estado de `equipe`/`cadastro-clinico`; resolver quando houver perfil do paciente).
   - Máquina de "candidata a dominada" (`goal_candidacy`) segue **dormente** — coordenador domina manualmente; ligar na Fase 4 (depende de `MilestoneAssessment`).
   - Picker de marcos no form limita-se aos protocolos ATIVOS do paciente; sem edição de mapeamento pós-criação (só na criação).
-  - **Plano 4 pendente**: seed de demonstração (4 famílias + clínica `is_demo`), destrava E2E do diário hoje em `skip`.
+  - **Plano 4 entregue (PR #23)**: seed de demonstração (`pnpm seed:demo` — clínica `is_demo`, coordenador + terapeuta demo, 4 famílias + equipe + protocolo + sessão de hoje) via `withTenant`(coordenador); link "Abrir sessão" na agenda → `/diario/[id]`; E2E `diario-demo.spec.ts` reabilitado e **verde** contra build de produção. Junto veio o `fix(metas)` de build quebrado (`"use server"` exportando schemas Zod — regressão do Plano 3), isolado na **PR #22**.
   - Dívida herdada (do Plano 1): `extraction.subtipo/confianca` text→pgEnum quando o contrato do agente estabilizar (Fase 3).
 
 ### [Fase 3] Agente de Extração IA (Issue #6)
