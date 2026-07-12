@@ -158,3 +158,25 @@ describe.skipIf(!hasDb)("metas · CRUD + transições", () => {
     expect(row!.estado).toBe("ativa");
   });
 });
+
+describe("criarSchema - validação unitária", () => {
+  test("deduplica milestoneIds repetidos", async () => {
+    const { criarSchema } = await import("./actions");
+    const id1 = "00000000-0000-0000-0000-000000000001";
+    const id2 = "00000000-0000-0000-0000-000000000002";
+
+    const parsed = criarSchema.safeParse({
+      patientId: "00000000-0000-0000-0000-0000000ac1a1",
+      descricao: "Aprender a apontar",
+      disciplina: "ABA",
+      criterioDominio: { tipo: "n_acertos_m_sessoes", n: 3, m: 3 },
+      cicloRevisaoSemanas: 10,
+      milestoneIds: [id1, id2, id1, id2],
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.milestoneIds).toEqual([id1, id2]);
+    }
+  });
+});

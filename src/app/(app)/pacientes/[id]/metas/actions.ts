@@ -37,13 +37,16 @@ function proximaRevisaoISO(semanas: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-const criarSchema = z.object({
+export const criarSchema = z.object({
   patientId: z.string().uuid(),
   descricao: z.string().trim().min(1, "Descreva a meta em linguagem simples."),
   disciplina: z.enum(DISCIPLINAS).optional(),
   criterioDominio: criterioDominioSchema,
   cicloRevisaoSemanas: cicloSchema,
-  milestoneIds: z.array(z.string().uuid()).default([]),
+  milestoneIds: z
+    .array(z.string().uuid())
+    .default([])
+    .transform((ids) => [...new Set(ids)]),
 });
 
 /**
