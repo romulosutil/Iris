@@ -112,9 +112,9 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
   - Hardening injection: texto do usuário em bloco delimitado marcado como DADO; R1-R19 só no system. Teste de payload.
   - **CI ≠ LLM vivo:** unit do provider = SDK mockado; eval vivo (golden+17) = bake-off Python manual/nightly, fora do gate de PR.
 * **Plano 2 — Tela de revisão + estados de fricção:**
-  - Schema: `extraction_estado` += aprovada/editada/descartada; `subtipo`/`confianca` text→pgEnum (dívida da Fase 2, contrato agora estável); RLS à mão em `extraction`.
-  - Actions aprovar/editar/descartar/lote; **aprovar incrementa `goalCandidacy`/`milestoneCandidacy.evidenceCount`** (seam da Fase 4).
-  - UI `/revisao/[sessionId]` + fila; fricção §3 (alta=lote; baixa=expandir+confirmar; inconsistente=vermelho+histórico lado a lado — **persistir snapshot do histórico usado**, não só boolean; candidato=azul pontilhado). Anti-rubber-stamp (1 cartão aleatório após 3 lotes).
+  - **Schema ✅** (commit `b…` fase-3): `extraction_estado` += aprovada/editada/descartada; `subtipo`/`confianca` text→pgEnum (dívida da Fase 2 quitada); `payload` imutável + `payload_editado` + `revisado_por`/`revisado_em`; migrações 0010-0012 (0012 RLS à mão: GRANT por coluna). Validado contra PG16.
+  - **Actions ✅**: aprovar/editar/descartar/aprovar-lote (`review-policy.avaliarFriccao` = fonte única da fricção §3). RLS (terapeuta dono) + requireRole. Editar preserva a sugestão original (auditoria). **6 testes de integração** contra Postgres+RLS. **Candidatura (`goalCandidacy`/`milestoneCandidacy`) NÃO tocada** — corrigido do plano inicial: a máquina é dormente até a Fase 4 (decisão da Fase 2); ligar lá.
+  - **UI — PENDENTE** (próximo): `/revisao/[sessionId]` + fila; fricção §3 (alta=lote; baixa=expandir+confirmar; inconsistente=vermelho+histórico lado a lado — **persistir snapshot do histórico usado**, não só boolean; candidato=azul pontilhado). Anti-rubber-stamp (1 cartão aleatório após 3 lotes). Precisa do DS Espectro Brutal + gate axe + E2E. **Nota dev**: o ledger de migração do Postgres LOCAL está defasado (drift de `push` antigo — pré-existente); `db:migrate` local falha ao re-aplicar 0008/0009. Prod tem ledger limpo (não afetado). Fix local = resetar o DB de dev e re-migrar.
 * **Plano 3 — Falha/retry + polimento:** badge "extração pendente" + reprocessar manual (flow 2.4); painel de exceções do coordenador; `graphify update .` + docs.
 
 ### [Fase 4] Acúmulo de Evidências e Linha do Tempo (Issue #7)
