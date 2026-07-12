@@ -122,6 +122,7 @@ Novos componentes + tokens no conceito Espectro Brutal, inspirados em ng-brutali
   - [ ] Assinar os DPAs (Data Processing Agreement) da Hostinger e Anthropic/Google.
   - [ ] Configurar os apontamentos DNS (Registro A) do domínio principal (`irisclinica.ia.br`) no Registro.br.
   - [x] `output:"standalone"` quebrava `pnpm build` local no Windows (EPERM ao copiar symlinks). Gated por `process.platform` — Linux (CI + deploy Docker/Easypanel) mantém standalone; build local Windows desliga. Validar que a imagem Docker segue enxuta no deploy.
+  - [x] **Docker build (Easypanel) quebrava** em `Failed to collect page data for /api/auth/[...all]` — `src/db/client.ts` fazia throw de `DATABASE_URL`/`AUTH_DATABASE_URL` no topo do módulo (import time), e o estágio `build` do Docker não tem env de runtime (`.env` está no `.dockerignore`). Corrigido com **lazy-init via Proxy** (`db`/`sql`/`authDb`/`authSql`): módulo importa sem env, conexão/throw só na 1ª request/teste real. Provado com `pnpm build` local com `.env` fora do caminho (mesma condição do Docker) → verde, rota vira `ƒ` dinâmica.
 * **Negócio / Produto**:
   - [ ] Confirmar com a contadora a inserção do CNAE secundário de desenvolvimento/licenciamento de SaaS na ME.
   - [ ] Testar trial/demo dos concorrentes direto (logado).
