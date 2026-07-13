@@ -149,10 +149,13 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
   });
 
   test("carregarComparacao calcula delta de comparação entre 2 pontos e retorna guard G7", async () => {
-    const res = await carregarComparacao(ctxCoordA, PAC_A1, 1, 2);
+    // Passamos invertido (2, 1) para provar que a API reordena e garante determinismo cronológico
+    const res = await carregarComparacao(ctxCoordA, PAC_A1, 2, 1);
     expect(res).toBeTruthy();
     expect(res!.protocoloMudou).toBe(false); // mesmo protocolo (timeline)
     expect(res!.delta.evidenciasNovas).toBe(6);
+    expect(res!.snapAntigo.sessionNumero).toBe(1);
+    expect(res!.snapNovo.sessionNumero).toBe(2);
   });
 
   test("carregarEvidenciasPorTrecho busca evidências e limita quantidade", async () => {

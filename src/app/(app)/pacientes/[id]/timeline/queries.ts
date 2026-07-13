@@ -138,6 +138,32 @@ export async function carregarTimeline(
 }
 
 /**
+ * Helper interno para obter o snapshot de uma sessão sem iniciar uma nova transação / withTenant.
+ */
+async function obterSnapshotAsOf(
+  tx: any,
+  patientId: string,
+  sessionNumero: number
+) {
+  const [snap] = await tx
+    .select({
+      sessionNumero: sessionSnapshot.sessionNumero,
+      repertorioState: sessionSnapshot.repertorioState,
+      segmentacao: sessionSnapshot.segmentacao,
+      geradoEm: sessionSnapshot.geradoEm,
+    })
+    .from(sessionSnapshot)
+    .where(
+      and(
+        eq(sessionSnapshot.patientId, patientId),
+        eq(sessionSnapshot.sessionNumero, sessionNumero)
+      )
+    )
+    .limit(1);
+  return snap || null;
+}
+
+/**
  * Carrega o snapshot de uma sessão específica.
  */
 export async function carregarSnapshotAsOf(
@@ -146,22 +172,7 @@ export async function carregarSnapshotAsOf(
   sessionNumero: number
 ) {
   return withTenant(ctx, async (tx) => {
-    const [snap] = await tx
-      .select({
-        sessionNumero: sessionSnapshot.sessionNumero,
-        repertorioState: sessionSnapshot.repertorioState,
-        segmentacao: sessionSnapshot.segmentacao,
-        geradoEm: sessionSnapshot.geradoEm,
-      })
-      .from(sessionSnapshot)
-      .where(
-        and(
-          eq(sessionSnapshot.patientId, patientId),
-          eq(sessionSnapshot.sessionNumero, sessionNumero)
-        )
-      )
-      .limit(1);
-    return snap || null;
+    return obterSnapshotAsOf(tx, patientId, sessionNumero);
   });
 }
 
@@ -199,10 +210,10 @@ export async function carregarDeltaSessao(
   sessionNumero: number
 ) {
   return withTenant(ctx, async (tx) => {
-    const snapB = await carregarSnapshotAsOf(ctx, patientId, sessionNumero);
+    const snapB = await obterSnapshotAsOf(tx, patientId, sessionNumero);
     const snapA =
       sessionNumero > 1
-        ? await carregarSnapshotAsOf(ctx, patientId, sessionNumero - 1)
+        ? await obterSnapshotAsOf(tx, patientId, sessionNumero - 1)
         : null;
 
     const stateA = snapA ? snapA.repertorioState : null;
@@ -235,15 +246,15 @@ export async function carregarComparacao(
     const sessaoMenor = Math.min(sessaoN, sessaoM);
     const sessaoMaior = Math.max(sessaoN, sessaoM);
 
-    const snapN = await carregarSnapshotAsOf(ctx, patientId, sessaoMenor);
-    const snapM = await carregarSnapshotAsOf(ctx, patientId, sessaoMaior);
+    const snapAntigo = await obterSnapshotAsOf(tx, patientId, sessaoMenor);
+    const snapNovo = await obterSnapshotAsOf(tx, patientId, sessaoMaior);
 
-    if (!snapN || !snapM) {
+    if (!snapAntigo || !snapNovo) {
       return null;
     }
 
-    const delta = calcularDelta(snapN.repertorioState, snapM.repertorioState);
-    const protocoloMudou = verificarProtocoloMudou(snapN.segmentacao, snapM.segmentacao);
+    const delta = calcularDelta(snapAntigo.repertorioState, snapNovo.repertorioState);
+    const protocoloMudou = verificarProtocoloMudou(snapAntigo.segmentacao, snapNovo.segmentacao);
 
     const goalIds = delta.itens.map((i) => i.id);
     const { metas, milestones } = await resolverMetasEMilestones(tx, goalIds);
@@ -251,8 +262,8 @@ export async function carregarComparacao(
     return {
       delta,
       protocoloMudou,
-      snapN,
-      snapM,
+      snapAntigo,
+      snapNovo,
       metas,
       milestones,
     };
@@ -304,7 +315,7 @@ export async function carregarEvidenciasPorTrecho(
           lte(evidence.sessionNumero, sessaoFim)
         )
       )
-      .orderBy(desc(evidence.sessionNumero))
+      .orderBy(desc(evidence.sessionNumero), desc(evidence.id)) // Ordenação determinística com ID de desempate
       .limit(15); // limite rígido de performance (Revisão Adversarial 5)
 
     return rows.map((r) => {
