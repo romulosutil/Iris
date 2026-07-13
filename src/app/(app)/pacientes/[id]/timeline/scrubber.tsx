@@ -17,12 +17,22 @@ export function Scrubber({
   dataSessaoSelecionada,
   onSelecionarSessao,
 }: ScrubberProps) {
-  if (sessoesDisponiveis.length === 0) return null;
-
   // Encontra o index da sessão selecionada na lista
   const indexAtual = sessoesDisponiveis.indexOf(sessaoSelecionada);
-  const indexValido = indexAtual !== -1 ? indexAtual : sessoesDisponiveis.length - 1;
-  const sessaoAtual = sessoesDisponiveis[indexValido] ?? sessaoSelecionada;
+  const indexValido =
+    indexAtual !== -1 ? indexAtual : Math.max(0, sessoesDisponiveis.length - 1);
+
+  // Estado local para controle do drag visual do slider
+  const [dragState, setDragState] = React.useState({
+    committedIndex: indexValido,
+    valor: indexValido,
+  });
+  const valorVisual =
+    dragState.committedIndex === indexValido ? dragState.valor : indexValido;
+
+  if (sessoesDisponiveis.length === 0) return null;
+
+  const sessaoVisual = sessoesDisponiveis[valorVisual] ?? sessaoSelecionada;
 
   const temAnterior = indexValido > 0;
   const temProximo = indexValido < sessoesDisponiveis.length - 1;
@@ -51,16 +61,17 @@ export function Scrubber({
   };
 
   // Se a sessão selecionada não for a última da lista (a mais recente), ela é considerada passada
-  const ultimaSessaoDisponivel = sessoesDisponiveis[sessoesDisponiveis.length - 1];
-  const isSessaoPassada = sessaoAtual !== ultimaSessaoDisponivel;
+  const ultimaSessaoDisponivel =
+    sessoesDisponiveis[sessoesDisponiveis.length - 1];
+  const isSessaoPassada = sessaoVisual !== ultimaSessaoDisponivel;
 
   return (
     <div className="bg-canvas border-ink-anchor flex flex-col gap-4 border-2 p-4">
       {/* Banner de Sessão Passada */}
       {isSessaoPassada && (
-        <div className="bg-gold text-ink-anchor border-ink-anchor border-b-2 -mx-4 -mt-4 p-2 text-center text-sm font-bold flex items-center justify-center gap-2">
+        <div className="bg-gold text-ink-anchor border-ink-anchor -mx-4 -mt-4 flex items-center justify-center gap-2 border-b-2 p-2 text-center text-sm font-bold">
           <span>⚠️</span>
-          <span>Visualizando histórico passado: Sessão {sessaoAtual}</span>
+          <span>Visualizando histórico passado: Sessão {sessaoVisual}</span>
         </div>
       )}
 
@@ -79,11 +90,11 @@ export function Scrubber({
         </Button>
 
         <div className="text-center">
-          <div className="text-lg font-black text-ink">
-            Sessão {sessaoAtual}
+          <div className="text-ink text-lg font-black">
+            Sessão {sessaoVisual}
           </div>
           {dataSessaoSelecionada && (
-            <div className="text-xs text-muted">
+            <div className="text-muted text-xs">
               {formatarData(dataSessaoSelecionada)}
             </div>
           )}
@@ -112,11 +123,14 @@ export function Scrubber({
           min={0}
           max={sessoesDisponiveis.length - 1}
           step={1}
-          value={[indexValido]}
-          onValueChange={handleSliderChange}
+          value={[valorVisual]}
+          onValueChange={(values) =>
+            setDragState({ committedIndex: indexValido, valor: values[0] ?? 0 })
+          }
+          onValueCommit={handleSliderChange}
           aria-label="Selecionar sessão histórica"
         />
-        <div className="mt-1 flex justify-between text-xs text-muted">
+        <div className="text-muted mt-1 flex justify-between text-xs">
           <span>Início (Sessão {sessoesDisponiveis[0]})</span>
           <span>Atual (Sessão {ultimaSessaoDisponivel})</span>
         </div>

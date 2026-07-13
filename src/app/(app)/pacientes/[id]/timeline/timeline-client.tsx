@@ -8,6 +8,16 @@ import type { TimelineSnapshot, TimelineData } from "./queries";
 import type { DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
 
+type DeltaMeta = { id: string; descricao: string; disciplina: string | null };
+type DeltaMilestone = { id: string; nome: string; dominioId: string };
+
+interface ComparacaoData {
+  delta: DeltaSessaoType | null;
+  protocoloMudou: boolean;
+  metas: DeltaMeta[];
+  milestones: DeltaMilestone[];
+}
+
 interface TimelineClientProps {
   patientId: string;
   pacienteNome: string;
@@ -28,7 +38,7 @@ export function TimelineClient({
 
   // Sessão atual selecionada no Scrubber (inicia na mais recente)
   const [sessaoAtiva, setSessaoAtiva] = useState<number>(
-    sessoesDisponiveis[sessoesDisponiveis.length - 1] ?? 1
+    sessoesDisponiveis[sessoesDisponiveis.length - 1] ?? 1,
   );
 
   // Estados do Comparador
@@ -37,60 +47,95 @@ export function TimelineClient({
 
   // Dados carregados dinamicamente
   const [deltaSessao, setDeltaSessao] = useState<DeltaSessaoType | null>(null);
-  const [deltaMetas, setDeltaMetas] = useState<any[]>([]);
-  const [deltaMilestones, setDeltaMilestones] = useState<any[]>([]);
+  const [deltaMetas, setDeltaMetas] = useState<DeltaMeta[]>([]);
+  const [deltaMilestones, setDeltaMilestones] = useState<DeltaMilestone[]>([]);
 
-  const [comparacaoData, setComparacaoData] = useState<{
-    delta: DeltaSessaoType;
-    protocoloMudou: boolean;
-    metas: any[];
-    milestones: any[];
-  } | null>(null);
+  const [comparacaoData, setComparacaoData] = useState<ComparacaoData | null>(
+    null,
+  );
 
   const [isPending, startTransition] = useTransition();
+  const sessaoCompararValida =
+    sessaoComparar !== sessaoAtiva ? sessaoComparar : null;
+
+  const handleSelecionarSessao = (numero: number) => {
+    setSessaoAtiva(numero);
+    setSessaoComparar((atual) => (atual === numero ? null : atual));
+    setComparacaoData(null);
+  };
+
+  const handleCompararAtivoChange = (ativo: boolean) => {
+    setCompararAtivo(ativo);
+    if (!ativo) setComparacaoData(null);
+  };
+
+  const handleSelecionarSessaoComparar = (numero: number) => {
+    setSessaoComparar(numero === sessaoAtiva ? null : numero);
+    setComparacaoData(null);
+  };
 
   // Encontra o snapshot selecionado
-  const snapSelecionado = snapshots.find((s) => s.sessionNumero === sessaoAtiva) ?? null;
+  const snapSelecionado =
+    snapshots.find((s) => s.sessionNumero === sessaoAtiva) ?? null;
 
   // Carrega o delta da sessão selecionada
   useEffect(() => {
     if (!sessaoAtiva) return;
 
+    let active = true;
+
     startTransition(async () => {
       try {
         const res = await carregarDeltaSessaoAction(patientId, sessaoAtiva);
+        if (!active) return;
+
         setDeltaSessao(res.delta);
         setDeltaMetas(res.metas);
         setDeltaMilestones(res.milestones);
       } catch (err) {
+        if (!active) return;
         console.error("Erro ao carregar delta da sessão:", err);
       }
     });
+
+    return () => {
+      active = false;
+    };
   }, [sessaoAtiva, patientId]);
 
   // Carrega dados da comparação
   useEffect(() => {
-    if (!compararAtivo || sessaoComparar === null) {
-      setComparacaoData(null);
+    if (!compararAtivo || sessaoCompararValida === null) {
       return;
     }
 
+    let active = true;
+
     startTransition(async () => {
       try {
-        const res = await carregarComparacaoAction(patientId, sessaoAtiva, sessaoComparar);
-        if (res) {
+        const res = await carregarComparacaoAction(
+          patientId,
+          sessaoAtiva,
+          sessaoCompararValida,
+        );
+        if (active && res) {
           setComparacaoData({
-            delta: res.delta,
+            delta: res.delta ?? null,
             protocoloMudou: res.protocoloMudou,
             metas: res.metas,
             milestones: res.milestones,
           });
         }
       } catch (err) {
+        if (!active) return;
         console.error("Erro ao carregar comparação:", err);
       }
     });
-  }, [compararAtivo, sessaoAtiva, sessaoComparar, patientId]);
+
+    return () => {
+      active = false;
+    };
+  }, [compararAtivo, sessaoAtiva, sessaoCompararValida, patientId]);
 
   // Lógica de Renderização do Hexágono "Espectro" SVG
   const renderEspectroRadar = () => {
@@ -116,7 +161,9 @@ export function TimelineClient({
         yMax,
         xValor,
         yValor,
-        label: e.eixo.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        label: e.eixo
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase()),
       };
     });
 
@@ -134,16 +181,18 @@ export function TimelineClient({
     });
 
     // Polígono de evolução do paciente naquela sessão
-    const pontosEvolucao = eixosHex.map((e) => `${e.xValor},${e.yValor}`).join(" ");
+    const pontosEvolucao = eixosHex
+      .map((e) => `${e.xValor},${e.yValor}`)
+      .join(" ");
 
     return (
-      <div className="bg-canvas border-ink-anchor border-2 p-6 flex flex-col items-center">
-        <h3 className="text-lg font-black text-ink mb-2">
+      <div className="bg-canvas border-ink-anchor flex flex-col items-center border-2 p-6">
+        <h3 className="text-ink mb-2 text-lg font-black">
           Gráfico de Espectro Clínico
         </h3>
 
         {/* SVG do Radar Chart */}
-        <div className="relative w-[300px] h-[300px]" aria-hidden="true">
+        <div className="relative h-[300px] w-[300px]" aria-hidden="true">
           <svg width="300" height="300" className="overflow-visible">
             {/* Linhas de grade da teia */}
             {caminhosTeia.map((caminho, i) => (
@@ -208,7 +257,7 @@ export function TimelineClient({
                   x={tx}
                   y={ty}
                   textAnchor={textAnchor}
-                  className="font-display font-bold fill-ink"
+                  className="font-display fill-ink font-bold"
                   style={{ fontSize: "9px" }}
                 >
                   {e.label} ({e.valor}%)
@@ -241,7 +290,10 @@ export function TimelineClient({
 
         {/* Link visível para abrir os dados em tabela */}
         <div className="mt-4 text-center">
-          <Button variante="secundaria" onClick={() => alert(JSON.stringify(data, null, 2))}>
+          <Button
+            variante="secundaria"
+            onClick={() => alert(JSON.stringify(data, null, 2))}
+          >
             Visualizar Dados em Formato Tabela
           </Button>
         </div>
@@ -250,31 +302,33 @@ export function TimelineClient({
   };
 
   return (
-    <div className="flex flex-col gap-6 w-full">
+    <div className="flex w-full flex-col gap-6">
       {/* Linha do tempo interativa (Scrubber) */}
       <Scrubber
         sessoesDisponiveis={sessoesDisponiveis}
         sessaoSelecionada={sessaoAtiva}
         dataSessaoSelecionada={snapSelecionado?.geradoEm}
-        onSelecionarSessao={setSessaoAtiva}
+        onSelecionarSessao={handleSelecionarSessao}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {/* Coluna Principal: Gráficos */}
-        <div className="md:col-span-2 flex flex-col gap-6">
+        <div className="flex flex-col gap-6 md:col-span-2">
           {/* Radar Chart Espectro */}
           {renderEspectroRadar()}
 
           {/* Espaço de Trajetórias (Parte 3) */}
           <div className="bg-canvas border-ink-anchor border-2 p-6">
-            <h3 className="text-lg font-black text-ink mb-2">
+            <h3 className="text-ink mb-2 text-lg font-black">
               Trajetória Clínica de Metas
             </h3>
-            <p className="text-sm text-muted">
-              Visualize as faixas e marcações clínicas de evolução de marcos e conquistas ao longo das sessões.
+            <p className="text-muted text-sm">
+              Visualize as faixas e marcações clínicas de evolução de marcos e
+              conquistas ao longo das sessões.
             </p>
-            <div className="h-24 border border-ink-anchor border-dashed mt-4 flex items-center justify-center text-xs text-muted">
-              Componentes de faixas e losangos serão renderizados aqui na Parte 3.
+            <div className="border-ink-anchor text-muted mt-4 flex h-24 items-center justify-center border border-dashed text-xs">
+              Componentes de faixas e losangos serão renderizados aqui na Parte
+              3.
             </div>
           </div>
         </div>
@@ -290,9 +344,9 @@ export function TimelineClient({
           />
 
           {/* Comparador de 2 Pontos Temporais */}
-          <div className="bg-canvas border-ink-anchor border-2 p-4 flex flex-col gap-4">
+          <div className="bg-canvas border-ink-anchor flex flex-col gap-4 border-2 p-4">
             <div className="border-ink-anchor border-b-2 pb-2">
-              <h3 className="text-base font-black text-ink">
+              <h3 className="text-ink text-base font-black">
                 Comparar Pontos Temporais
               </h3>
               <p className="text-xxs text-muted mt-0.5">
@@ -305,10 +359,13 @@ export function TimelineClient({
                 id="checkbox-comparar"
                 type="checkbox"
                 checked={compararAtivo}
-                onChange={(e) => setCompararAtivo(e.target.checked)}
-                className="size-4 border-2 border-ink-anchor accent-gold cursor-pointer"
+                onChange={(e) => handleCompararAtivoChange(e.target.checked)}
+                className="border-ink-anchor accent-gold size-4 cursor-pointer border-2"
               />
-              <label htmlFor="checkbox-comparar" className="text-sm font-bold text-ink cursor-pointer">
+              <label
+                htmlFor="checkbox-comparar"
+                className="text-ink cursor-pointer text-sm font-bold"
+              >
                 Ativar Comparador Temporal
               </label>
             </div>
@@ -316,53 +373,81 @@ export function TimelineClient({
             {compararAtivo && (
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="select-sessao-comparar" className="text-xs font-bold text-ink">
+                  <label
+                    htmlFor="select-sessao-comparar"
+                    className="text-ink text-xs font-bold"
+                  >
                     Comparar Sessão {sessaoAtiva} com a Sessão:
                   </label>
                   <select
                     id="select-sessao-comparar"
-                    value={sessaoComparar ?? ""}
-                    onChange={(e) => setSessaoComparar(Number(e.target.value))}
-                    className="border-2 border-ink-anchor bg-canvas text-ink text-sm p-1.5 focus:outline-none"
+                    value={sessaoCompararValida ?? ""}
+                    onChange={(e) =>
+                      handleSelecionarSessaoComparar(Number(e.target.value))
+                    }
+                    className="border-ink-anchor bg-canvas text-ink border-2 p-1.5 text-sm focus:outline-none"
                   >
-                    <option value="" disabled>Selecione...</option>
+                    <option value="" disabled>
+                      Selecione...
+                    </option>
                     {sessoesDisponiveis
                       .filter((n) => n !== sessaoAtiva)
                       .map((n) => (
-                        <option key={n} value={n}>Sessão {n}</option>
+                        <option key={n} value={n}>
+                          Sessão {n}
+                        </option>
                       ))}
                   </select>
                 </div>
 
                 {isPending && (
-                  <div className="text-xs text-muted animate-pulse">Carregando comparação...</div>
+                  <div className="text-muted animate-pulse text-xs">
+                    Carregando comparação...
+                  </div>
                 )}
 
                 {/* Exibição do Delta de Comparação */}
                 {comparacaoData && (
-                  <div className="flex flex-col gap-3 border-t-2 border-ink-anchor pt-3">
+                  <div className="border-ink-anchor flex flex-col gap-3 border-t-2 pt-3">
                     {/* Alerta Clínico Guard G7 */}
                     {comparacaoData.protocoloMudou ? (
-                      <div className="bg-red-50 border-red-600 border-2 p-2 text-xs text-red-900 font-bold flex items-start gap-2">
+                      <div className="flex items-start gap-2 border-2 border-red-600 bg-red-50 p-2 text-xs font-bold text-red-900">
                         <span>⚠️</span>
                         <div>
-                          <strong>Guard G7 Ativado:</strong> Houve mudança nos protocolos ativos entre a Sessão {Math.min(sessaoAtiva, sessaoComparar ?? 0)} e a Sessão {Math.max(sessaoAtiva, sessaoComparar ?? 0)}. Os deltas de nível de ajuda foram suspensos devido a desalinhamento de escalas clínicas.
+                          <strong>Guard G7 Ativado:</strong> Houve mudança nos
+                          protocolos ativos entre a Sessão{" "}
+                          {Math.min(sessaoAtiva, sessaoCompararValida ?? 0)} e a
+                          Sessão{" "}
+                          {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)}. Os
+                          deltas de nível de ajuda foram suspensos devido a
+                          desalinhamento de escalas clínicas.
                         </div>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-2">
-                        <div className="text-xs font-bold text-ink bg-gold p-1 text-center border border-ink-anchor">
+                        <div className="text-ink bg-gold border-ink-anchor border p-1 text-center text-xs font-bold">
                           Resultados da Comparação
                         </div>
                         <div className="text-xxs text-muted">
-                          Evolução da Sessão {Math.min(sessaoAtiva, sessaoComparar ?? 0)} para a {Math.max(sessaoAtiva, sessaoComparar ?? 0)}:
+                          Evolução da Sessão{" "}
+                          {Math.min(sessaoAtiva, sessaoCompararValida ?? 0)}{" "}
+                          para a{" "}
+                          {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)}:
                         </div>
                         <div className="grid grid-cols-2 gap-1 text-center text-xs">
-                          <div className="border border-ink-anchor p-1 bg-green-50 text-green-900 font-bold">
-                            +{comparacaoData.delta.itens.filter(i => i.tipo === "evolucao" || i.tipo === "novo").length} Avanços
+                          <div className="border-ink-anchor border bg-green-50 p-1 font-bold text-green-900">
+                            +
+                            {comparacaoData.delta?.itens?.filter(
+                              (i) => i.tipo === "evolucao" || i.tipo === "novo",
+                            ).length ?? 0}{" "}
+                            Avanços
                           </div>
-                          <div className="border border-ink-anchor p-1 bg-red-50 text-red-900 font-bold">
-                            +{comparacaoData.delta.itens.filter(i => i.tipo === "regressao").length} Recuos
+                          <div className="border-ink-anchor border bg-red-50 p-1 font-bold text-red-900">
+                            +
+                            {comparacaoData.delta?.itens?.filter(
+                              (i) => i.tipo === "regressao",
+                            ).length ?? 0}{" "}
+                            Recuos
                           </div>
                         </div>
                       </div>
