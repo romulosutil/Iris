@@ -164,7 +164,15 @@ test("Form com erro — sem violações axe", async () => {
   );
 });
 
-test.each(["sugerida", "aprovada", "reclassificada", "devolvida"] as const)(
+test.each([
+  "sugerida",
+  "aprovada",
+  "editada",
+  "descartada",
+  "pendente",
+  "reclassificada",
+  "devolvida",
+] as const)(
   "StatusBadge %s — sem violações axe",
   async (estado) => {
     await semViolacoes(<StatusBadge estado={estado} />);

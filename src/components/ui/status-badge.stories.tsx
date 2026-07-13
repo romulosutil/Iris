@@ -4,6 +4,9 @@ import { StatusBadge, StatusDot, type EstadoDado } from "./status-badge";
 const estados: EstadoDado[] = [
   "sugerida",
   "aprovada",
+  "editada",
+  "descartada",
+  "pendente",
   "reclassificada",
   "devolvida",
 ];
