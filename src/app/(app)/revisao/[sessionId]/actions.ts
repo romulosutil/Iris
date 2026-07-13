@@ -1,11 +1,107 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql as dsql } from "drizzle-orm";
 import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { extraction } from "@/db/schema";
+import { evidence, extraction, session } from "@/db/schema";
+import { type Alvo, drizzleResolverQueries, resolverAlvoParaFks } from "@/lib/evidence/resolver";
+
+// ─── Inserção de `evidence` on-approve (Fase 4 · §4 da spec de resolução
+// slug→UUID) ───────────────────────────────────────────────────────────────
+// Até a Fase 4, só `scripts/backfill-evidence.ts` gravava `evidence`. Agora a
+// própria aprovação/edição grava — 1 linha por alvo de `alvos[]`, no grão de
+// alvo (`alvo_ordinal` = posição no array), reaproveitando o resolvedor
+// compartilhado. Roda DENTRO da mesma transação da revisão (RLS de
+// `evidence_insert` já libera terapeuta dono + coordenador da equipe — ver
+// db/migrations/0016_fase4_session_snapshot_rls.sql).
+
+type EvidenciaConteudo = {
+  alvos?: Alvo[];
+  [key: string]: unknown;
+};
+
+type ExtracaoAprovadaRow = {
+  id: string;
+  sessionId: string;
+  subtipo: string;
+  payload: unknown;
+  payloadEditado: unknown;
+};
+
+async function inserirEvidenciasOnApprove(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  ctx: TenantContext,
+  row: ExtracaoAprovadaRow,
+): Promise<void> {
+  if (row.subtipo !== "evidencia") return;
+
+  const conteudo = (row.payloadEditado ?? row.payload) as { evidencia?: EvidenciaConteudo | null };
+  const evidenciaObj = conteudo?.evidencia;
+  const alvos = Array.isArray(evidenciaObj?.alvos) ? evidenciaObj!.alvos! : [];
+  if (alvos.length === 0) return;
+
+  const [sess] = await tx
+    .select({ patientId: session.patientId, numero: session.numeroSequencialPaciente })
+    .from(session)
+    .where(eq(session.id, row.sessionId));
+  if (!sess) return;
+
+  if (sess.numero == null) {
+    // TODO(Fase 4): sessão ainda não consolidada (numero_sequencial_paciente
+    // nulo) — `evidence.session_numero` é NOT NULL, não dá pra inserir agora.
+    // A aprovação pode acontecer antes da consolidação da sessão (revisão
+    // assíncrona); quando a sessão for consolidada depois, o backfill
+    // (scripts/backfill-evidence.ts) cobre a lacuna retroativamente. Não
+    // falha a aprovação por causa disso — só registra e segue.
+    console.warn(
+      `evidence: extração ${row.id} aprovada, mas sessão ${row.sessionId} ainda sem numero_sequencial_paciente — evidence NÃO inserida agora (backfill cobre depois).`,
+    );
+    return;
+  }
+
+  const resolverQueries = drizzleResolverQueries(tx);
+  const { alvos: _omit, ...evidenciaSemAlvos } = evidenciaObj ?? {};
+
+  for (let ordinal = 0; ordinal < alvos.length; ordinal++) {
+    const alvo = alvos[ordinal]!;
+    const { protocolId, goalId, milestoneId, protocolSlug, dominioId, goalRef } =
+      await resolverAlvoParaFks(
+        resolverQueries,
+        { clinicId: ctx.clinicId, patientId: sess.patientId },
+        alvo,
+      );
+    // classificacao_original: cópia congelada do alvo aprovado, mesclada com o
+    // conteúdo clínico de `evidencia` (sem o array `alvos` completo, que não é
+    // escopo desta linha) — mesmo padrão do backfill.
+    const classificacaoOriginal = { ...evidenciaSemAlvos, alvo };
+
+    await tx
+      .insert(evidence)
+      .values({
+        extractionId: row.id,
+        patientId: sess.patientId,
+        sessionId: row.sessionId,
+        sessionNumero: sess.numero,
+        alvoOrdinal: ordinal,
+        protocolSlug,
+        dominioId,
+        goalRef,
+        protocolId,
+        goalId,
+        milestoneId,
+        classificacaoOriginal,
+        aprovadoPor: ctx.userId,
+      })
+      // idempotente: (extraction_id, alvo_ordinal) é a chave — re-aprovar (ou
+      // reprocessar) não duplica.
+      .onConflictDoNothing({ target: [evidence.extractionId, evidence.alvoOrdinal] });
+  }
+
+  // Esqueleto (skeleton) por ora — só emite NOTICE, sem lógica ainda (4B).
+  await tx.execute(dsql`SELECT app_materializar_snapshot(${sess.patientId}, ${sess.numero})`);
+}
 
 // Revisão humana das extrações sugeridas pela IA (Fase 3 Plano 2). Cada ação
 // transiciona uma extração `sugerida` para um desfecho de revisão. RLS
@@ -26,14 +122,25 @@ async function transicionar(
 ): Promise<ReviewResult> {
   requireRole(ctx, "terapeuta");
   try {
-    const rows = await withTenant(ctx, (tx) =>
-      tx
+    const rows = await withTenant(ctx, async (tx) => {
+      const updated = await tx
         .update(extraction)
         .set({ ...set, revisadoPor: ctx.userId, revisadoEm: new Date() })
         // só extrações ainda sugeridas são revisáveis (não pendentes/já revisadas)
         .where(and(eq(extraction.id, extractionId), eq(extraction.estado, "sugerida")))
-        .returning({ id: extraction.id }),
-    );
+        .returning({
+          id: extraction.id,
+          sessionId: extraction.sessionId,
+          subtipo: extraction.subtipo,
+          payload: extraction.payload,
+          payloadEditado: extraction.payloadEditado,
+        });
+      const novoEstado = set.estado;
+      if (updated.length > 0 && (novoEstado === "aprovada" || novoEstado === "editada")) {
+        await inserirEvidenciasOnApprove(tx, ctx, updated[0]!);
+      }
+      return updated;
+    });
     return { ok: rows.length > 0 };
   } catch (err) {
     console.error("revisão extração:", err);

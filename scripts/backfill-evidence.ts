@@ -13,11 +13,13 @@
  * ⚠️ DESVIO CONHECIDO (revisão do tech lead, decisão do Rômulo): o contrato
  * atual do agente (`docs/agente/output-schema.json` / `agent-output-schema.ts`)
  * NÃO grava `milestone_id` no alvo — só `goal_id`, `protocol_id` e `dominio_id`,
- * e esses dois primeiros são STRINGS livres do agente (ex.: "vbmapp"), não UUIDs
- * de `protocol`/`goal`. Preservamos os refs CRUS como o agente os emitiu
+ * e os dois últimos são STRINGS livres do agente (ex.: "vbmapp"), não UUIDs de
+ * `protocol`/`goal`. Preservamos os refs CRUS como o agente os emitiu
  * (`protocol_slug` = protocol_id bruto, `dominio_id`, `goal_ref` = goal_id
- * bruto) para a futura camada de resolução slug→UUID. Os UUIDs resolvidos são
- * best-effort agora (`resolverAlvo`); ids que não resolvem viram `null`.
+ * bruto) para a futura camada de resolução slug→UUID. Os UUIDs resolvidos usam
+ * o resolvedor compartilhado `resolverAlvoParaFks`
+ * (`src/lib/evidence/resolver.ts` — mesmo usado na aprovação on-approve);
+ * ids que não resolvem viram `null` (nunca adivinha).
  *
  * A CHAVE DE IDEMPOTÊNCIA é `(extraction_id, alvo_ordinal)` — a POSIÇÃO do alvo
  * em `alvos[]` (base 0), NÃO os FKs resolvidos. Sem isso, com slugs não
@@ -42,10 +44,12 @@
  * Uso:  pnpm backfill:evidence
  */
 import postgres from "postgres";
+import { type Alvo, postgresResolverQueries, resolverAlvoParaFks } from "@/lib/evidence/resolver";
 
 type ExtractionRow = {
   id: string;
   session_id: string;
+  clinic_id: string;
   estado: "aprovada" | "editada";
   subtipo: string;
   payload: unknown;
@@ -59,61 +63,10 @@ type SessionRow = {
   numero_sequencial_paciente: number | null;
 };
 
-type Alvo = {
-  goal_id?: string | null;
-  protocol_id?: string | null;
-  dominio_id?: string | null;
-};
-
 type Evidencia = {
   alvos?: Alvo[];
   [key: string]: unknown;
 };
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isUuid(v: unknown): v is string {
-  return typeof v === "string" && UUID_RE.test(v);
-}
-
-/**
- * Melhor esforço para resolver os IDs de catálogo do alvo em UUIDs de banco.
- * Retorna null para qualquer campo que não resolva com segurança (ambíguo ou
- * inexistente) — nunca adivinha.
- */
-async function resolverAlvo(
-  sql: postgres.Sql,
-  alvo: Alvo,
-): Promise<{ protocolId: string | null; goalId: string | null; milestoneId: string | null }> {
-  // protocol_id / goal_id só são aceitos se já vierem como UUID válido E
-  // existirem no banco — hoje o agente normalmente grava slug de catálogo
-  // (ex. "vbmapp"), que não bate com nenhuma linha; nesse caso fica null.
-  let protocolId: string | null = null;
-  if (isUuid(alvo.protocol_id)) {
-    const rows = await sql`SELECT id FROM protocol WHERE id = ${alvo.protocol_id}`;
-    if (rows.length > 0) protocolId = alvo.protocol_id;
-  }
-
-  let goalId: string | null = null;
-  if (isUuid(alvo.goal_id)) {
-    const rows = await sql`SELECT id FROM goal WHERE id = ${alvo.goal_id}`;
-    if (rows.length > 0) goalId = alvo.goal_id;
-  }
-
-  // milestone_id não existe no alvo — só dá pra tentar via (protocol_id
-  // resolvido, dominio_id), e só se a combinação for INEQUÍVOCA (1 marco só).
-  let milestoneId: string | null = null;
-  if (protocolId && alvo.dominio_id) {
-    const rows = await sql`
-      SELECT id FROM milestone
-      WHERE protocol_id = ${protocolId} AND dominio_id = ${alvo.dominio_id}
-    `;
-    if (rows.length === 1) milestoneId = rows[0]!.id as string;
-  }
-
-  return { protocolId, goalId, milestoneId };
-}
 
 async function main() {
   const url = process.env.MIGRATION_DATABASE_URL;
@@ -123,7 +76,7 @@ async function main() {
   const sql = postgres(url, { max: 1 });
 
   const extracoes = await sql<ExtractionRow[]>`
-    SELECT id, session_id, estado, subtipo, payload, payload_editado, revisado_por
+    SELECT id, session_id, clinic_id, estado, subtipo, payload, payload_editado, revisado_por
     FROM extraction
     WHERE estado IN ('aprovada', 'editada')
     ORDER BY criado_em ASC
@@ -176,15 +129,16 @@ async function main() {
       continue;
     }
 
+    const resolverQueries = postgresResolverQueries(sql);
+
     for (let ordinal = 0; ordinal < alvos.length; ordinal++) {
       const alvo = alvos[ordinal]!;
-      const { protocolId, goalId, milestoneId } = await resolverAlvo(sql, alvo);
-      // Refs crus do agente, preservados para a resolução futura slug→UUID.
-      const protocolSlug =
-        typeof alvo.protocol_id === "string" ? alvo.protocol_id : null;
-      const dominioId =
-        typeof alvo.dominio_id === "string" ? alvo.dominio_id : null;
-      const goalRef = typeof alvo.goal_id === "string" ? alvo.goal_id : null;
+      const { protocolId, goalId, milestoneId, protocolSlug, dominioId, goalRef } =
+        await resolverAlvoParaFks(
+          resolverQueries,
+          { clinicId: ext.clinic_id, patientId: sessao.patient_id },
+          alvo,
+        );
       // classificacao_original: cópia congelada do alvo aprovado, mesclada com
       // o conteúdo clínico de `evidencia` (sem o array `alvos` completo, que
       // não é escopo desta linha) — ver nota de desvio no topo do arquivo.
