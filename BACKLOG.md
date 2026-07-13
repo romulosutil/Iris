@@ -201,7 +201,20 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
   = TODO explícito (Milestone sem campo de critério — não fabricado). materializar int 9/9 (inclui 2
   de guard cross-tenant). Design: `docs/superpowers/specs/2026-07-13-fase-4-compute-segmentacao.md`.
   **4B completo.**
-* ⬜ 4C (ReinforcerProfile + Briefing), 4D (Timeline/Gráficos) — pendentes.
+* ✅ **4C parte 1 (reinforcer_profile backend) — feito** (commit `1a08d0b`). DDL `0018`
+  (`reinforcer_profile`, enum `reinforcer_valencia` alta|baixa|saciado, UNIQUE (extraction_id,
+  item_atividade), índice (patient_id, session_numero DESC) p/ recência). RLS `0019` (REVOKE
+  UPDATE/DELETE, policies clínica/equipe espelhando `evidence`). On-approve: aprovação de
+  `preferencia_reforcador` grava 1 linha na mesma tx do evidence; idempotente. 138 unit, 14 int
+  novos (RLS cross-tenant, idempotência, on-approve, skips).
+* ✅ **4C parte 2 (Briefing Pré-Sessão — UI) — feito** (commit `5f6046e`). Rota
+  `/pacientes/[id]/briefing` (Server Component, requireRole coord/terapeuta): 5 seções
+  escaneáveis em 30s (§1.1). Lê `session_snapshot` materializado (nunca recomputa);
+  `reforcadoresAtuaisDe` (R17 recência, saciado demove); `alertasGraveDe` (registro_abc
+  grave, payloadEditado vence); metas ativas; próxima sessão. Lógica pura em `logic.ts`
+  (testável sem banco). Componentes DS (Card, Stack, Banner, Chip/ChipGroup). 152 unit+a11y
+  (6 axe briefing: 0 violações); typecheck 0; build verde. **4C completo.**
+* ⬜ 4D (Timeline/Scrubber + Gráficos + Comparação) — pendente.
 * ⚠️ **Nota de ambiente:** o Postgres local de dev estava com o tracking do drizzle
   dessincronizado (8 migrações rastreadas, schema real em 0012) → `db:migrate` falha ao
   re-CREATE. Schema real está completo; 0013/0014 foram aplicadas à mão p/ validar. Docker
