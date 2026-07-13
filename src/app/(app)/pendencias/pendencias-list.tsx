@@ -88,9 +88,9 @@ export function PendenciasList({
   }
  
   return (
-    <Stack gap="lg" className="animate-fade-in-up animate-delay-75">
+    <Stack gap="lg">
       {capturasAConsolidar.length > 0 ? (
-        <Stack gap="md" como="section" aria-labelledby="capturas-titulo" className="animate-fade-in-up animate-delay-75">
+        <Stack gap="md" como="section" aria-labelledby="capturas-titulo">
           <h2
             id="capturas-titulo"
             className="font-display text-ink-anchor text-2xl font-bold"
@@ -120,7 +120,7 @@ export function PendenciasList({
           gap="md"
           como="section"
           aria-labelledby="extracao-titulo"
-          className="animate-fade-in-up animate-delay-150 pt-6 border-t-2 border-dashed border-graphite"
+          className="pt-6 border-t-2 border-dashed border-graphite"
         >
           <h2
             id="extracao-titulo"
@@ -151,7 +151,7 @@ export function PendenciasList({
           gap="md"
           como="section"
           aria-labelledby="sugestoes-titulo"
-          className="animate-fade-in-up animate-delay-225 pt-6 border-t-2 border-dashed border-graphite"
+          className="pt-6 border-t-2 border-dashed border-graphite"
         >
           <h2
             id="sugestoes-titulo"

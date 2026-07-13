@@ -72,7 +72,7 @@ export default async function AgendaPage() {
           </Alert>
         </Stack>
       ) : (
-        <Stack gap="md" como="ul" className="animate-fade-in-up animate-delay-75">
+        <Stack gap="md" como="ul">
           {sessoes.map((s, index) => (
             <Split
               key={s.id}

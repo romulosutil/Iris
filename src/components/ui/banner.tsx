@@ -40,9 +40,9 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(function Ban
     >
       <div className={cn("absolute top-0 inset-x-0 h-2", bar)} />
       {titulo ? (
-        <h4 className="font-display text-base font-bold uppercase tracking-wider">
+        <div className="font-display text-base font-bold uppercase tracking-wider">
           {titulo}
-        </h4>
+        </div>
       ) : null}
       <div className="text-sm font-medium leading-relaxed">{children}</div>
     </div>

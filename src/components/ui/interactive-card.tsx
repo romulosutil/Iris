@@ -38,9 +38,9 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
     ) : null;
 
     const titleHeading = titulo ? (
-      <h3 className="font-display text-text-heading text-lg font-semibold">
+      <div className="font-display text-text-heading text-lg font-semibold">
         {titulo}
-      </h3>
+      </div>
     ) : null;
 
     if (asChild && React.isValidElement(children)) {
