@@ -29,6 +29,15 @@ export const Candidato: Story = {
   },
 };
 
+export const Destacado: Story = {
+  args: {
+    estado: "conquistado",
+    destacado: true,
+    titulo: "Captura rápida pendente de nota",
+    children: "Sotaque dourado do /sobre para chamar atenção prioritária.",
+  },
+};
+
 // Lado a lado: a diferença é estrutural (borda, fundo, hachura, selo), não só cor.
 export const CandidatoVsConquistado: Story = {
   render: () => (

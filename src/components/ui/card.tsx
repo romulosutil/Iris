@@ -17,10 +17,12 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   estado?: Estado;
   /** Título do cartão; recebe tratamento display. */
   titulo?: React.ReactNode;
+  /** Injeta a barra dourada superior e altera o padding superior */
+  destacado?: boolean;
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
-  { className, estado = "conquistado", titulo, children, ...props },
+  { className, estado = "conquistado", titulo, destacado = false, children, ...props },
   ref,
 ) {
   const candidato = estado === "candidato";
@@ -28,16 +30,26 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
     <div
       ref={ref}
       data-estado={estado}
+      data-destacado={destacado}
       className={cn(
-        "text-ink flex flex-col gap-2 p-5",
-        candidato ? surface("candidata", "bg-canvas") : surface("solida", "bg-surface"),
+        "text-text-body flex flex-col gap-2 p-5",
+        destacado && "relative pt-8",
+        candidato
+          ? surface("candidata", "bg-bg-canvas")
+          : surface("solida", "bg-bg-surface"),
         className,
       )}
       {...props}
     >
+      {destacado ? (
+        <span
+          aria-hidden
+          className="bg-brand-primary absolute inset-x-0 top-0 h-2"
+        />
+      ) : null}
       <div className="flex items-center justify-between gap-3">
         {titulo ? (
-          <h3 className="font-display text-ink-anchor text-lg font-semibold">
+          <h3 className="font-display text-text-heading text-lg font-semibold">
             {titulo}
           </h3>
         ) : null}
@@ -45,14 +57,14 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
           className={cn(
             "shrink-0 border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase",
             candidato
-              ? "border-[color:var(--color-blue)] bg-canvas text-ink"
-              : "border-ink-anchor bg-mint text-ink-anchor",
+              ? "border-status-info-bg bg-bg-canvas text-text-body"
+              : "border-border-brutal bg-status-success-bg text-status-success-text",
           )}
         >
           {candidato ? "Candidato" : "Conquistado"}
         </span>
       </div>
-      {children ? <div className="text-ink">{children}</div> : null}
+      {children ? <div className="text-text-body">{children}</div> : null}
     </div>
   );
 });

@@ -18,11 +18,11 @@ export type SurfaceVariante =
   | "candidata"; // candidato a marco (Fase 4) — pontilhado azul + afunda
 
 const variantes: Record<SurfaceVariante, string> = {
-  solida: "border-ink-anchor border-2 shadow-[var(--ds-shadow)]",
+  solida: "border-border-brutal border-2 shadow-[var(--ds-shadow)]",
   sugerida:
-    "border-2 border-dashed border-[color:var(--color-suggested)] shadow-[var(--ds-shadow-inset)]",
+    "border-2 border-dashed border-status-ia-border shadow-[var(--ds-shadow-inset)]",
   candidata:
-    "border-2 border-dotted border-[color:var(--color-blue)] shadow-[var(--ds-shadow-inset)]",
+    "border-2 border-dotted border-status-info-bg shadow-[var(--ds-shadow-inset)]",
 };
 
 export function surface(variante: SurfaceVariante = "solida", className?: string) {

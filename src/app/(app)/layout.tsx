@@ -32,20 +32,20 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         <Cluster como="nav" gap="md" aria-label="Navegação principal">
           <Link
             href="/agenda"
-            className="font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline"
+            className="inline-block font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline transition-transform duration-100 ease-out hover:-translate-y-0.5"
           >
             Agenda
           </Link>
           <Link
             href="/pendencias"
-            className="font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline"
+            className="inline-block font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline transition-transform duration-100 ease-out hover:-translate-y-0.5"
           >
             Pendências ({totalPendencias})
           </Link>
           {ctx.role === "coordenador" ? (
             <Link
               href="/excecoes"
-              className="font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline"
+              className="inline-block font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline transition-transform duration-100 ease-out hover:-translate-y-0.5"
             >
               Exceções
             </Link>

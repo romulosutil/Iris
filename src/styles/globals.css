@@ -8,33 +8,84 @@
 */
 
 @theme {
-  /* Superfícies */
-  --color-canvas: #f8f9fa;
-  --color-surface: #ffffff;
+  /* ==========================================================================
+     1. Primitivas (Rampa Enxuta de Cores Brutalistas)
+     ========================================================================== */
+  --color-raw-gold-100: #fff9e6;
+  --color-raw-gold-500: #f2b705;
+  --color-raw-gold-700: #d29e04;
+  --color-raw-gold-900: #664d00;
 
-  /* Tinta e bordas — hierarquia, não uniformidade */
-  --color-ink: #1a1a1a;
-  --color-ink-anchor: #000000;
-  --color-graphite: #2b2b2b;
+  --color-raw-mint-100: #e0f2f1;
+  --color-raw-mint-500: #b2dfdb;
+  --color-raw-mint-700: #80cbc4;
+  --color-raw-mint-900: #004d40;
 
-  /* Primária / marca / ação — infinito dourado (autismo, Au) */
-  --color-gold: #f2b705;
-  --color-gold-pressed: #d29e04;
+  --color-raw-blue-100: #e3f2fd;
+  --color-raw-blue-500: #90caf9;
+  --color-raw-blue-700: #2274a5;
+  --color-raw-blue-900: #0d47a1;
 
-  /* Acentos funcionais de estado do dado (sempre com ícone+texto redundante) */
-  --color-mint: #b2dfdb; /* sucesso / "conquistado" */
-  --color-blue: #90caf9; /* informação */
-  --color-terracotta: #ef9a9a; /* alerta (soft red deliberado) */
+  --color-raw-violet-100: #f3e5f5;
+  --color-raw-violet-500: #6a4c93;
+  --color-raw-violet-900: #4a148c;
 
-  /* Estado "sugerido pela IA" — 4º acento funcional (como menta/azul/terracota),
-     no matiz violeta da marca. NÃO é uso da rampa espectral (essa é só brand
-     mark, §8): é um acento semântico próprio para "candidato/tentativo".
-     Usado como borda/texto/dot (segue o padrão do Card: candidato = contorno,
-     não fill sólido); texto branco só em selo sólido pequeno.
-     Validado sob protanopia/deuteranopia: minΔE=39 vs menta/azul/terracota/ouro
-     (script de simulação CVD) — nenhuma colisão. Nunca cor sozinha (ícone+texto). */
-  --color-suggested: #6a4c93; /* violeta funcional (borda/texto/dot) */
-  --color-suggested-ink: #ffffff; /* texto sobre selo sólido violeta (6.85:1 AA) */
+  --color-raw-terracotta-100: #ffebee;
+  --color-raw-terracotta-500: #ef9a9a;
+  --color-raw-terracotta-900: #b71c1c;
+
+  --color-raw-gray-50: #f8f9fa;
+  --color-raw-gray-100: #f1f3f5;
+  --color-raw-gray-800: #2b2b2b;
+  --color-raw-gray-900: #1a1a1a;
+  --color-raw-gray-950: #000000;
+
+  /* ==========================================================================
+     2. Semânticas (Papéis de Sistema)
+     ========================================================================== */
+  /* Marca e Ação */
+  --color-brand-primary: var(--color-raw-gold-500);
+  --color-brand-primary-hover: var(--color-raw-gold-700);
+  --color-brand-primary-text: var(--color-raw-gray-950);
+
+  /* Superfícies e Bordas */
+  --color-bg-canvas: var(--color-raw-gray-50);
+  --color-bg-surface: #ffffff;
+  --color-border-brutal: var(--color-raw-gray-900);
+  
+  /* Textos */
+  --color-text-body: var(--color-raw-gray-800);
+  --color-text-heading: var(--color-raw-gray-950);
+
+  /* Status / Evidências */
+  --color-status-success-bg: var(--color-raw-mint-500);
+  --color-status-success-text: var(--color-raw-mint-900);
+  --color-status-ia-bg: var(--color-raw-violet-100);
+  --color-status-ia-border: var(--color-raw-violet-500);
+  --color-status-ia-text: var(--color-raw-violet-900);
+  --color-status-info-bg: var(--color-raw-blue-100);
+  --color-status-info-text: var(--color-raw-blue-900);
+  --color-status-error-bg: var(--color-raw-terracotta-500);
+  --color-status-error-text: var(--color-raw-terracotta-900);
+
+  /* Foco */
+  --color-focus-ring: var(--color-raw-blue-700);
+
+  /* ==========================================================================
+     3. Aliases de Legado (Compatibilidade com Páginas Existentes)
+     ========================================================================== */
+  --color-canvas: var(--color-bg-canvas);
+  --color-surface: var(--color-bg-surface);
+  --color-ink: var(--color-text-body);
+  --color-ink-anchor: var(--color-text-heading);
+  --color-graphite: var(--color-raw-gray-800);
+  --color-gold: var(--color-brand-primary);
+  --color-gold-pressed: var(--color-brand-primary-hover);
+  --color-mint: var(--color-status-success-bg);
+  --color-blue: var(--color-status-info-bg);
+  --color-terracotta: var(--color-status-error-bg);
+  --color-suggested: var(--color-status-ia-border);
+  --color-suggested-ink: #ffffff;
 
   /* Espectro (assinatura de marca — SÓ brand mark / régua fina) */
   --color-spectrum-red: #e4572e;
@@ -51,7 +102,9 @@
 
   /* Sombras brutalistas sem blur */
   --shadow-brutal: 4px 4px 0 0 var(--color-ink-anchor);
+  --shadow-brutal-hover: 6px 6px 0 0 var(--color-ink-anchor);
   --shadow-brutal-sm: 2px 2px 0 0 var(--color-ink-anchor);
+  --shadow-brutal-xs: 1px 1px 0 0 var(--color-ink-anchor);
 
   /* Sombra reversa (offset negativo) — "sugerido pela IA afunda na
      superfície" (tentativo) vs "aprovado levanta". Par estrutural, não cor. */
@@ -177,4 +230,29 @@ html {
   :where(button, [role="button"]):focus-visible {
     outline-color: Highlight;
   }
+}
+
+/* Staggered entry animation (Neo-brutalist editorial flow) */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-delay-75 {
+  animation-delay: 75ms;
+}
+.animate-delay-150 {
+  animation-delay: 150ms;
+}
+.animate-delay-225 {
+  animation-delay: 225ms;
 }

@@ -4,6 +4,9 @@ import { cleanup, render } from "@testing-library/react";
 import axe from "axe-core";
 import { Button } from "./button";
 import { Card } from "./card";
+import { Banner } from "./banner";
+import { InteractiveCard } from "./interactive-card";
+import { Indicator } from "./indicator";
 import { Alert } from "./alert";
 import { Logo } from "./logo";
 import { Input } from "./input";
@@ -336,4 +339,24 @@ test("Stat — sem violações axe", async () => {
   await semViolacoes(
     <Stat rotulo="Aguardando revisão" valor="12" descricao="Fila do dia" />,
   );
+});
+
+test("Banner — sem violações axe", async () => {
+  await semViolacoes(
+    <Banner variant="info" titulo="Aviso importante">
+      Mensagem de aviso institucional.
+    </Banner>,
+  );
+});
+
+test("InteractiveCard — sem violações axe", async () => {
+  await semViolacoes(
+    <InteractiveCard titulo="Card Interativo" href="https://example.com">
+      Conteúdo do card clicável.
+    </InteractiveCard>,
+  );
+});
+
+test("Indicator — sem violações axe", async () => {
+  await semViolacoes(<Indicator variant="conquistado" />);
 });

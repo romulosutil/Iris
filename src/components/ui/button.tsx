@@ -2,8 +2,6 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { control, surface } from "./primitives/surface";
 
-type Risco = "baixo" | "alto";
-
 /**
  * Escala de ênfase (Espectro Brutal). O PESO é o antídoto contra "wireframe":
  * primária e secundária carregam a superfície sólida com sombra dura que
@@ -19,40 +17,29 @@ type Variante =
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variante?: Variante;
-  /**
-   * Peso do deslocamento no clique escala com o risco da ação (princípio 2:
-   * "fricção é ferramenta"). Só afeta as variantes com superfície (primária/
-   * secundária); a terciária não tem sombra para colapsar.
-   */
-  risco?: Risco;
+  /** @deprecated O peso do botão agora é uniforme; esta prop não altera o visual. */
+  risco?: "baixo" | "alto";
 }
-
-// Deslocamento no press: curto (risco baixo) vs longo (risco alto). Só nas
-// variantes com peso (a sombra colapsa dando o feedback tátil de "afundou").
-const desloca: Record<Risco, string> = {
-  baixo: "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
-  alto: "active:translate-x-[4px] active:translate-y-[4px] active:shadow-none",
-};
 
 // Cada tier: classes de fill/superfície. `temPeso` liga o deslocamento no press.
 function estiloVariante(v: Variante): { classes: string; temPeso: boolean } {
   switch (v) {
     case "primaria":
       return {
-        classes: cn(surface("solida"), "bg-gold text-ink-anchor active:bg-gold-pressed"),
+        classes: cn(surface("solida"), "bg-brand-primary text-brand-primary-text active:bg-brand-primary-hover"),
         temPeso: true,
       };
     case "terciaria":
       return {
         classes:
-          "border-2 border-transparent bg-transparent text-ink hover:bg-canvas hover:underline hover:underline-offset-4 disabled:hover:bg-transparent disabled:hover:no-underline",
+          "border-2 border-transparent bg-transparent text-text-body hover:bg-bg-canvas hover:underline hover:underline-offset-4 disabled:hover:bg-transparent disabled:hover:no-underline",
         temPeso: false,
       };
     case "secundaria":
     case "neutra":
     default:
       return {
-        classes: cn(surface("solida"), "bg-surface text-ink"),
+        classes: cn(surface("solida"), "bg-bg-surface text-text-body"),
         temPeso: true,
       };
   }
@@ -60,7 +47,7 @@ function estiloVariante(v: Variante): { classes: string; temPeso: boolean } {
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
-    { className, variante = "primaria", risco = "baixo", type, ...props },
+    { className, variante = "primaria", type, risco, ...props },
     ref,
   ) {
     const { classes, temPeso } = estiloVariante(variante);
@@ -81,8 +68,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           "disabled:active:translate-x-0 disabled:active:translate-y-0",
           classes,
           // hover/press só nas variantes com peso (a leve não "afunda")
-          temPeso && "hover:-translate-x-px hover:-translate-y-px",
-          temPeso && desloca[risco],
+          temPeso && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
+          temPeso && "active:translate-x-0 active:translate-y-0 active:shadow-none",
           className,
         )}
         {...props}

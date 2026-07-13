@@ -13,14 +13,16 @@ type Severidade = "erro" | "info" | "sucesso";
 export interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
   severidade?: Severidade;
   titulo?: React.ReactNode;
+  /** Se true, aplica bordas mais espessas, sombra tridimensional e padding generoso (para empty states) */
+  destacado?: boolean;
 }
 
-const estilo: Record<Severidade, { fundo: string; rotulo: string }> = {
-  erro: { fundo: "bg-terracotta", rotulo: "Erro" },
-  info: { fundo: "bg-blue", rotulo: "Informação" },
-  sucesso: { fundo: "bg-mint", rotulo: "Sucesso" },
+const estilo: Record<Severidade, { fundo: string; texto: string; rotulo: string }> = {
+  erro: { fundo: "bg-status-error-bg", texto: "text-status-error-text", rotulo: "Erro" },
+  info: { fundo: "bg-status-info-bg", texto: "text-status-info-text", rotulo: "Informação" },
+  sucesso: { fundo: "bg-status-success-bg", texto: "text-status-success-text", rotulo: "Sucesso" },
 };
-
+ 
 function Icone({ severidade }: { severidade: Severidade }) {
   const comum = {
     width: 20,
@@ -70,25 +72,29 @@ function Icone({ severidade }: { severidade: Severidade }) {
     </svg>
   );
 }
-
+ 
 export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
   function Alert(
-    { className, severidade = "erro", titulo, children, ...props },
+    { className, severidade = "erro", titulo, destacado = false, children, ...props },
     ref,
   ) {
-    const { fundo, rotulo } = estilo[severidade];
+    const { fundo, texto, rotulo } = estilo[severidade];
     return (
       <div
         ref={ref}
         role={severidade === "erro" ? "alert" : "status"}
         className={cn(
-          "border-ink-anchor text-ink-anchor flex items-start gap-3 border-2 p-4",
+          "border-border-brutal flex items-start gap-3",
+          destacado
+            ? "border-4 shadow-[var(--ds-shadow)] p-8 md:p-12 text-lg font-medium"
+            : "border-2 p-4",
           fundo,
+          texto,
           className,
         )}
         {...props}
       >
-        <span className="text-ink-anchor mt-0.5 shrink-0">
+        <span className="mt-0.5 shrink-0">
           <Icone severidade={severidade} />
         </span>
         <div className="flex flex-col gap-0.5">

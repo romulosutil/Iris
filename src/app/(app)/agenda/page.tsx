@@ -19,8 +19,8 @@ const abrirSessaoClasses = cn(
   "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
   "bg-surface text-ink-anchor font-display text-base font-semibold",
   "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-  "hover:-translate-x-px hover:-translate-y-px",
-  "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+  "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
+  "active:translate-x-0 active:translate-y-0 active:shadow-none",
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
 );
  
@@ -55,9 +55,9 @@ export default async function AgendaPage() {
   const podeAgendar = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
  
   return (
-    <Stack gap="lg">
-      <Stack gap="sm">
-        <h1 className="font-display text-ink-anchor text-3xl font-bold">
+    <Stack gap="lg" className="pt-4 md:pt-8">
+      <Stack gap="sm" className="animate-fade-in-up pb-2 md:pb-4">
+        <h1 className="font-display text-ink-anchor text-4xl font-bold tracking-tight md:text-5xl">
           Agenda do dia
         </h1>
         <p className="text-ink text-lg first-letter:uppercase">
@@ -66,15 +66,25 @@ export default async function AgendaPage() {
       </Stack>
  
       {sessoes.length === 0 ? (
-        <Alert severidade="info">Nenhuma sessão na grade de hoje.</Alert>
+        <Stack className="animate-fade-in-up animate-delay-75 py-4 md:py-8">
+          <Alert severidade="info" destacado>
+            Nenhuma sessão na grade de hoje.
+          </Alert>
+        </Stack>
       ) : (
         <Stack gap="md" como="ul">
-          {sessoes.map((s) => (
+          {sessoes.map((s, index) => (
             <Split
               key={s.id}
               como="li"
               alinha="center"
-              className={cn("bg-surface border-2 p-4", surface("solida"))}
+              className={cn(
+                "bg-surface p-4 animate-fade-in-up",
+                surface("solida"),
+                index === 0 && "animate-delay-75",
+                index === 1 && "animate-delay-150",
+                index >= 2 && "animate-delay-225"
+              )}
             >
               <Stack gap="sm">
                 <Cluster gap="sm">
@@ -106,7 +116,12 @@ export default async function AgendaPage() {
       )}
  
       {podeAgendar ? (
-        <Stack gap="md" como="section" aria-labelledby="agendar-titulo">
+        <Stack
+          gap="md"
+          como="section"
+          aria-labelledby="agendar-titulo"
+          className="animate-fade-in-up animate-delay-225 pt-6 border-t-2 border-dashed border-graphite"
+        >
           <h2
             id="agendar-titulo"
             className="font-display text-ink-anchor text-2xl font-bold"

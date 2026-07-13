@@ -6,6 +6,7 @@ import { Split, Cluster, Stack } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { cn } from "@/lib/cn";
+import { control, surface } from "@/components/ui/primitives/surface";
 import {
   reprocessarExtracaoAction,
   type ReprocessarState,
@@ -13,11 +14,13 @@ import {
 import type { ExtracaoPendente } from "./queries";
 
 const linkClasses = cn(
-  "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-5 py-2.5",
-  "font-display text-base font-semibold",
-  "border-ink-anchor bg-surface text-ink border-2 shadow-[var(--ds-shadow)]",
-  "transition-[transform,box-shadow] duration-100 ease-out",
-  "hover:-translate-x-px hover:-translate-y-px",
+  control("sm"),
+  surface("solida"),
+  "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
+  "bg-bg-surface text-text-body font-display text-base font-semibold",
+  "transition-[transform,box-shadow,background-color] duration-100 ease-out",
+  "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
+  "active:translate-x-0 active:translate-y-0 active:shadow-none",
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
 );
 
@@ -35,10 +38,20 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
   );
 
   return (
-    <div className="border-ink-anchor bg-surface flex flex-col gap-3 border-2 p-5 shadow-[var(--ds-shadow)]">
+    <Stack
+      gap="md"
+      className={cn(
+        "bg-bg-surface relative p-5 pt-8",
+        surface("solida")
+      )}
+    >
+      <span
+        aria-hidden
+        className="bg-brand-primary absolute inset-x-0 top-0 h-2"
+      />
       <Split alinha="start">
         <Stack gap="sm">
-          <span className="border-ink-anchor bg-gold text-ink-anchor inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
+          <span className="border-ink-anchor bg-brand-primary text-ink-anchor inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
             Extração pendente
           </span>
           <span className="text-ink text-base">
@@ -63,6 +76,6 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
           Reprocessamento disparado. Se a extração vier, aparece em Sugestões da IA.
         </Alert>
       ) : null}
-    </div>
+    </Stack>
   );
 }
