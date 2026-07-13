@@ -47,7 +47,7 @@ function estiloVariante(v: Variante): { classes: string; temPeso: boolean } {
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
-    { className, variante = "primaria", type, ...props },
+    { className, variante = "primaria", type, risco, ...props },
     ref,
   ) {
     const { classes, temPeso } = estiloVariante(variante);
