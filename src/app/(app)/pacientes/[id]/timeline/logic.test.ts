@@ -64,6 +64,28 @@ describe("timeline/logic.ts (calcularDelta)", () => {
     expect(delta.evidenciasNovas).toBe(2); // +1 em evolucao, +1 em estavel
     expect(delta.metasCandidatasNovas).toBe(1);
   });
+
+  test("detecta itens removidos/arquivados como regressão", () => {
+    const snapA = {
+      "item-removido": { nivel_ajuda_recente: 2, contagem: 4, is_candidata: false },
+      "item-permanece": { nivel_ajuda_recente: 1, contagem: 3, is_candidata: false },
+    };
+    const snapB = {
+      "item-permanece": { nivel_ajuda_recente: 1, contagem: 3, is_candidata: false },
+    };
+
+    const delta = calcularDelta(snapA, snapB);
+
+    expect(delta.itens).toHaveLength(1);
+    expect(delta.itens[0]).toEqual({
+      id: "item-removido",
+      tipo: "regressao",
+      nivelAnterior: 2,
+      nivelNovo: null,
+      contagemDelta: 0,
+      virouCandidata: false,
+    });
+  });
 });
 
 describe("timeline/logic.ts (verificarProtocoloMudou)", () => {

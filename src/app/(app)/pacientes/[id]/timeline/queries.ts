@@ -95,7 +95,7 @@ export async function carregarTimeline(
       mapeamentoMilestones[m.id] = {
         dominioId: m.dominioId,
         protocolId: m.protocolId,
-        tipoEstrutura: m.tipoEstrutura as any,
+        tipoEstrutura: m.tipoEstrutura as MilestoneMetadata["tipoEstrutura"],
         totalNiveisAjuda: Math.max(0, taxonomia.length - 1),
       };
     }
@@ -166,6 +166,31 @@ export async function carregarSnapshotAsOf(
 }
 
 /**
+ * Helper interno para resolver descrições e nomes legíveis de metas e marcos
+ * a partir de seus IDs obtidos do snapshot/delta.
+ */
+async function resolverMetasEMilestones(tx: any, goalIds: string[]) {
+  if (!goalIds.length) {
+    return { metas: [], milestones: [] };
+  }
+
+  const metasResolvidas = await tx
+    .select({ id: goal.id, descricao: goal.descricao, disciplina: goal.disciplina })
+    .from(goal)
+    .where(inArray(goal.id, goalIds));
+
+  const milestonesResolvidos = await tx
+    .select({ id: milestone.id, nome: milestone.nome, dominioId: milestone.dominioId })
+    .from(milestone)
+    .where(inArray(milestone.id, goalIds));
+
+  return {
+    metas: metasResolvidas,
+    milestones: milestonesResolvidos,
+  };
+}
+
+/**
  * Carrega e calcula o delta da sessão N com a sessão anterior N-1.
  */
 export async function carregarDeltaSessao(
@@ -185,33 +210,20 @@ export async function carregarDeltaSessao(
 
     const delta = calcularDelta(stateA, stateB);
 
-    // Resolve as descrições de metas e milestones no delta para que a UI exiba textos legíveis
     const goalIds = delta.itens.map((i) => i.id);
-    
-    const metasResolvidas = goalIds.length
-      ? await tx
-          .select({ id: goal.id, descricao: goal.descricao, disciplina: goal.disciplina })
-          .from(goal)
-          .where(inArray(goal.id, goalIds))
-      : [];
-
-    const milestonesResolvidos = goalIds.length
-      ? await tx
-          .select({ id: milestone.id, nome: milestone.nome, dominioId: milestone.dominioId })
-          .from(milestone)
-          .where(inArray(milestone.id, goalIds))
-      : [];
+    const { metas, milestones } = await resolverMetasEMilestones(tx, goalIds);
 
     return {
       delta,
-      metas: metasResolvidas,
-      milestones: milestonesResolvidos,
+      metas,
+      milestones,
     };
   });
 }
 
 /**
  * Carrega a comparação detalhada de duas sessões com o guard G7.
+ * Enforça a comparação cronológica (menor -> maior) para evitar reversão de deltas.
  */
 export async function carregarComparacao(
   ctx: TenantContext,
@@ -220,8 +232,11 @@ export async function carregarComparacao(
   sessaoM: number
 ) {
   return withTenant(ctx, async (tx) => {
-    const snapN = await carregarSnapshotAsOf(ctx, patientId, sessaoN);
-    const snapM = await carregarSnapshotAsOf(ctx, patientId, sessaoM);
+    const sessaoMenor = Math.min(sessaoN, sessaoM);
+    const sessaoMaior = Math.max(sessaoN, sessaoM);
+
+    const snapN = await carregarSnapshotAsOf(ctx, patientId, sessaoMenor);
+    const snapM = await carregarSnapshotAsOf(ctx, patientId, sessaoMaior);
 
     if (!snapN || !snapM) {
       return null;
@@ -231,28 +246,15 @@ export async function carregarComparacao(
     const protocoloMudou = verificarProtocoloMudou(snapN.segmentacao, snapM.segmentacao);
 
     const goalIds = delta.itens.map((i) => i.id);
-
-    const metasResolvidas = goalIds.length
-      ? await tx
-          .select({ id: goal.id, descricao: goal.descricao, disciplina: goal.disciplina })
-          .from(goal)
-          .where(inArray(goal.id, goalIds))
-      : [];
-
-    const milestonesResolvidos = goalIds.length
-      ? await tx
-          .select({ id: milestone.id, nome: milestone.nome, dominioId: milestone.dominioId })
-          .from(milestone)
-          .where(inArray(milestone.id, goalIds))
-      : [];
+    const { metas, milestones } = await resolverMetasEMilestones(tx, goalIds);
 
     return {
       delta,
       protocoloMudou,
       snapN,
       snapM,
-      metas: metasResolvidas,
-      milestones: milestonesResolvidos,
+      metas,
+      milestones,
     };
   });
 }
@@ -290,7 +292,7 @@ export async function carregarEvidenciasPorTrecho(
       })
       .from(evidence)
       .innerJoin(session, eq(evidence.sessionId, session.id))
-      .innerJoin(appUser, eq(evidence.aprovadoPor, appUser.id))
+      .leftJoin(appUser, eq(evidence.aprovadoPor, appUser.id))
       .where(
         and(
           eq(evidence.patientId, patientId),
@@ -311,7 +313,7 @@ export async function carregarEvidenciasPorTrecho(
         id: r.id,
         sessionNumero: r.sessionNumero,
         dataSessao: r.dataSessao,
-        aprovadorNome: r.aprovadorNome,
+        aprovadorNome: r.aprovadorNome || "Em Revisão",
         descricao: classif.descricao || "Evidência de sessão",
         polaridade: classif.polaridade || "positiva",
         nivelAjuda: classif.nivel_ajuda || null,

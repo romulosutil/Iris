@@ -36,11 +36,13 @@ export function calcularDelta(
   const stateA = snapA || {};
   const stateB = snapB || {};
 
-  // Analisa todos os itens presentes em B (estado mais recente)
-  for (const [id, itemB] of Object.entries(stateB)) {
-    const itemA = stateA[id];
+  const todasChaves = new Set([...Object.keys(stateA), ...Object.keys(stateB)]);
 
-    if (!itemA) {
+  for (const id of todasChaves) {
+    const itemA = stateA[id];
+    const itemB = stateB[id];
+
+    if (!itemA && itemB) {
       // Item novo (não existia no snapshot anterior)
       const virouCandidata = !!itemB.is_candidata;
       if (virouCandidata) metasCandidatasNovas += 1;
@@ -54,7 +56,18 @@ export function calcularDelta(
         contagemDelta: itemB.contagem,
         virouCandidata,
       });
-    } else {
+    } else if (itemA && !itemB) {
+      // Item removido/arquivado (existia no anterior mas sumiu no recente)
+      const nivelAnterior = itemA.nivel_ajuda_recente ?? null;
+      itens.push({
+        id,
+        tipo: "regressao",
+        nivelAnterior,
+        nivelNovo: null,
+        contagemDelta: 0,
+        virouCandidata: false,
+      });
+    } else if (itemA && itemB) {
       // Item já existia, compara alterações
       const contagemDelta = Math.max(0, itemB.contagem - itemA.contagem);
       evidenciasNovas += contagemDelta;
