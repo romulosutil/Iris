@@ -43,6 +43,7 @@ entregues e no `main`; o Painel de Fases acima reflete ✅.
   podadas → repo com só `main`; **`deleteBranchOnMerge` ligado no GitHub** (mata
   o sprawl de branch na origem). `infra-deploy` (branch morta) deletada — prod
   builda do `main:infra/Dockerfile` via Easypanel.
+* **Evolução Visual (Neo-brutalismo)**: Refatoração das rotas internas `/agenda` e `/pendencias` para quebrar a simetria de wireframe e adicionar dinamismo analógico (física Neo-brutalista). Inclui a propriedade configurável `destacado` no componente `Card` e no container do `ItemPendente` (com barra amarela superior estilo `/sobre`), estados vazios tridimensionais com borda preta espessa e sombra sólida para os `<Alerts>`, transições de hover com pop-out e active mecânico com reset de transform/sombra nos botões/links interativos, e efeito de entrada animada (stagger) para carregar os elementos de forma fluida.
 
 **🔭 Validação pendente (ASAP) — percorrer a jornada completa em produção:**
 Re-rodar `pnpm seed:demo` contra prod (a sessão demo é **datada** — a de 12/07 já
