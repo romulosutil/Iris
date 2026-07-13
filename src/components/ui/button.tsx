@@ -2,8 +2,6 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { control, surface } from "./primitives/surface";
 
-type Risco = "baixo" | "alto";
-
 /**
  * Escala de ênfase (Espectro Brutal). O PESO é o antídoto contra "wireframe":
  * primária e secundária carregam a superfície sólida com sombra dura que
@@ -19,12 +17,8 @@ type Variante =
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variante?: Variante;
-  /**
-   * Peso do deslocamento no clique escala com o risco da ação (princípio 2:
-   * "fricção é ferramenta"). Só afeta as variantes com superfície (primária/
-   * secundária); a terciária não tem sombra para colapsar.
-   */
-  risco?: Risco;
+  /** @deprecated O peso do botão agora é uniforme; esta prop não altera o visual. */
+  risco?: "baixo" | "alto";
 }
 
 // Cada tier: classes de fill/superfície. `temPeso` liga o deslocamento no press.
@@ -53,7 +47,7 @@ function estiloVariante(v: Variante): { classes: string; temPeso: boolean } {
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
-    { className, variante = "primaria", risco = "baixo", type, ...props },
+    { className, variante = "primaria", type, ...props },
     ref,
   ) {
     const { classes, temPeso } = estiloVariante(variante);

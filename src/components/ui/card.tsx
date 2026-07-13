@@ -33,11 +33,10 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
       data-destacado={destacado}
       className={cn(
         "text-text-body flex flex-col gap-2 p-5",
-        destacado
-          ? cn("relative pt-8", surface("solida", "bg-bg-surface"))
-          : candidato
-            ? surface("candidata", "bg-bg-canvas")
-            : surface("solida", "bg-bg-surface"),
+        destacado && "relative pt-8",
+        candidato
+          ? surface("candidata", "bg-bg-canvas")
+          : surface("solida", "bg-bg-surface"),
         className,
       )}
       {...props}

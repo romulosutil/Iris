@@ -8,15 +8,18 @@ export interface BannerProps extends React.HTMLAttributes<HTMLDivElement> {
   titulo?: React.ReactNode;
 }
 
-const estiloBanner: Record<BannerVariant, { container: string }> = {
+const estiloBanner: Record<BannerVariant, { container: string; bar: string }> = {
   info: {
     container: "bg-status-info-bg text-status-info-text",
+    bar: "bg-status-info-text",
   },
   alerta: {
     container: "bg-status-error-bg text-status-error-text",
+    bar: "bg-status-error-text",
   },
   sucesso: {
     container: "bg-status-success-bg text-status-success-text",
+    bar: "bg-status-success-text",
   },
 };
 
@@ -24,7 +27,7 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(function Ban
   { className, variant = "info", titulo, children, ...props },
   ref,
 ) {
-  const { container } = estiloBanner[variant];
+  const { container, bar } = estiloBanner[variant];
   return (
     <div
       ref={ref}
@@ -35,7 +38,7 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(function Ban
       )}
       {...props}
     >
-      <div className="absolute top-0 inset-x-0 h-2 bg-border-brutal" />
+      <div className={cn("absolute top-0 inset-x-0 h-2", bar)} />
       {titulo ? (
         <h4 className="font-display text-base font-bold uppercase tracking-wider">
           {titulo}

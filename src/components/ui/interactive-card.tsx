@@ -6,48 +6,73 @@ export interface InteractiveCardProps
   extends React.HTMLAttributes<HTMLElement> {
   titulo?: React.ReactNode;
   destacado?: boolean;
+  asChild?: boolean;
   href?: string;
-  onClick?: React.MouseEventHandler<HTMLElement>;
+  target?: string;
+  rel?: string;
+  disabled?: boolean;
 }
 
 export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProps>(
   function InteractiveCard(
-    { className, titulo, destacado = false, href, onClick, children, ...props },
+    { className, titulo, destacado = false, asChild = false, children, ...props },
     ref,
   ) {
-    const Component = href ? "a" : "button";
-    const componentProps = href
-      ? { href, onClick }
-      : { onClick, type: "button" as const };
+    const cardClasses = cn(
+      "text-text-body flex flex-col gap-2 p-5 text-left outline-none cursor-pointer select-none w-full",
+      "transition-[transform,box-shadow,background-color] duration-100 ease-out",
+      "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
+      "active:translate-x-0 active:translate-y-0 active:shadow-none",
+      "focus-visible:outline-focus-ring focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
+      destacado
+        ? cn("relative pt-8", surface("solida", "bg-bg-surface"))
+        : surface("solida", "bg-bg-surface"),
+      className,
+    );
+
+    const accentBar = destacado ? (
+      <span
+        aria-hidden
+        className="bg-brand-primary absolute inset-x-0 top-0 h-2"
+      />
+    ) : null;
+
+    const titleHeading = titulo ? (
+      <h3 className="font-display text-text-heading text-lg font-semibold">
+        {titulo}
+      </h3>
+    ) : null;
+
+    if (asChild && React.isValidElement(children)) {
+      const child = children as React.ReactElement<any>;
+      return React.cloneElement(child, {
+        ref,
+        className: cn(cardClasses, child.props.className),
+        ...props,
+        children: (
+          <>
+            {accentBar}
+            {titleHeading}
+            {child.props.children}
+          </>
+        ),
+      });
+    }
+
+    const Component = props.href ? "a" : "button";
+    const componentProps = props.href
+      ? {}
+      : { type: "button" as const };
 
     return (
       <Component
         ref={ref as any}
-        className={cn(
-          "text-text-body flex flex-col gap-2 p-5 text-left outline-none cursor-pointer select-none w-full",
-          "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-          "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
-          "active:translate-x-0 active:translate-y-0 active:shadow-none",
-          "focus-visible:outline-focus-ring focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
-          destacado
-            ? cn("relative pt-8", surface("solida", "bg-bg-surface"))
-            : surface("solida", "bg-bg-surface"),
-          className,
-        )}
+        className={cardClasses}
         {...componentProps}
         {...props}
       >
-        {destacado ? (
-          <span
-            aria-hidden
-            className="bg-brand-primary absolute inset-x-0 top-0 h-2"
-          />
-        ) : null}
-        {titulo ? (
-          <h3 className="font-display text-text-heading text-lg font-semibold">
-            {titulo}
-          </h3>
-        ) : null}
+        {accentBar}
+        {titleHeading}
         {children ? <div className="text-text-body w-full">{children}</div> : null}
       </Component>
     );
