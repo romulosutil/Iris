@@ -94,7 +94,7 @@ export function Scrubber({
             Sessão {sessaoVisual}
           </div>
           {dataSessaoSelecionada && (
-            <div className="text-muted text-xs">
+            <div className="text-muted text-xs" suppressHydrationWarning>
               {formatarData(dataSessaoSelecionada)}
             </div>
           )}
