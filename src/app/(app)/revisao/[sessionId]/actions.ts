@@ -1,11 +1,12 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { and, eq, sql as dsql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { evidence, extraction, session } from "@/db/schema";
+import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
 import { type Alvo, drizzleResolverQueries, resolverAlvoParaFks } from "@/lib/evidence/resolver";
 
 // ─── Inserção de `evidence` on-approve (Fase 4 · §4 da spec de resolução
@@ -99,8 +100,11 @@ async function inserirEvidenciasOnApprove(
       .onConflictDoNothing({ target: [evidence.extractionId, evidence.alvoOrdinal] });
   }
 
-  // Esqueleto (skeleton) por ora — só emite NOTICE, sem lógica ainda (4B).
-  await tx.execute(dsql`SELECT app_materializar_snapshot(${sess.patientId}, ${sess.numero})`);
+  // Materialização real (4B — segmentação/repertório em TS puro, ver
+  // src/lib/evidence/materializar.ts). Recompute a partir de `sess.numero`
+  // (a sessão recém-aprovada) em diante, na mesma transação da inserção de
+  // evidence acima.
+  await materializarSnapshot(drizzleMaterializarQueries(tx), sess.patientId, sess.numero);
 }
 
 // Revisão humana das extrações sugeridas pela IA (Fase 3 Plano 2). Cada ação
