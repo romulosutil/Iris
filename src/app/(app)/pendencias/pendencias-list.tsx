@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Stack, Split } from "@/components/ui/layout";
 import { Card } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
+import { control, surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
 import { ItemPendente } from "./item-pendente";
 import type {
@@ -9,21 +11,22 @@ import type {
   ListaPendencias,
   SugestaoDemo,
 } from "./queries";
-
+ 
 // Mesma superfície visual do `Button` (variante primária, risco baixo), mas
 // como link de navegação — a ação aqui é ir para a tela da sessão, não
 // disparar uma Server Action, então um `<a>` é o elemento semanticamente
 // correto (evita botão aninhado dentro de âncora).
 const acaoClasses = cn(
-  "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-5 py-2.5",
-  "font-display text-base font-semibold",
-  "border-ink-anchor bg-gold text-ink-anchor border-2 shadow-[var(--ds-shadow)]",
-  "transition-[transform,box-shadow] duration-100 ease-out",
+  control("sm"),
+  surface("solida"),
+  "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
+  "bg-gold text-ink-anchor font-display text-base font-semibold",
+  "transition-[transform,box-shadow,background-color] duration-100 ease-out",
   "hover:-translate-x-px hover:-translate-y-px",
   "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
 );
-
+ 
 function ItemCaptura({ item }: { item: CapturaAConsolidar }) {
   return (
     <Card estado="conquistado" titulo="Captura rápida sem nota consolidada">
@@ -38,7 +41,7 @@ function ItemCaptura({ item }: { item: CapturaAConsolidar }) {
     </Card>
   );
 }
-
+ 
 function ItemExtracao({
   item,
   titulo,
@@ -65,7 +68,7 @@ function ItemExtracao({
     </Card>
   );
 }
-
+ 
 /**
  * Componente puramente apresentacional — recebe o resultado já pronto de
  * `listarPendencias` e desenha a fila. Nenhum acesso a banco aqui (mantém a
@@ -79,9 +82,9 @@ export function PendenciasList({
 }: ListaPendencias) {
   if (total === 0) {
     return (
-      <p className="text-ink border-ink-anchor bg-surface border-2 border-dashed p-6">
+      <Alert severidade="info">
         Dia limpo — nenhuma captura, extração ou sugestão pendente.
-      </p>
+      </Alert>
     );
   }
 

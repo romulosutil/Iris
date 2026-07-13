@@ -3,9 +3,10 @@ import Link from "next/link";
 import { getTenantContext, listarClinicasDoUsuario } from "@/auth/tenant";
 import { ClinicSwitcher } from "@/components/app/clinic-switcher";
 import { Logo } from "@/components/ui/logo";
+import { Split, Cluster } from "@/components/ui/layout";
 import { listarPendencias } from "./pendencias/queries";
 import { SignOutButton } from "./sign-out-button";
-
+ 
 /**
  * Shell protegido. `getTenantContext` resolve tenant e redireciona sozinho
  * (login / seleção / sem-acesso) quando o status não é "ok" — nenhuma página
@@ -18,17 +19,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getTenantContext();
   const clinicas = await listarClinicasDoUsuario(ctx.userId);
   const { total: totalPendencias } = await listarPendencias(ctx);
-
+ 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="border-ink-anchor flex flex-wrap items-center justify-between gap-4 border-b-2 px-6 py-4">
-        <div className="flex items-center gap-3">
+      <Split como="header" className="border-ink-anchor border-b-2 px-6 py-4">
+        <Cluster gap="sm">
           <Link href="/agenda" aria-label="Iris — início" className="shrink-0">
             <Logo variante="completo" altura={28} />
           </Link>
           <ClinicSwitcher clinicas={clinicas} ativaId={ctx.clinicId} />
-        </div>
-        <nav aria-label="Navegação principal" className="flex items-center gap-4">
+        </Cluster>
+        <Cluster como="nav" gap="md" aria-label="Navegação principal">
           <Link
             href="/agenda"
             className="font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline"
@@ -50,8 +51,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             </Link>
           ) : null}
           <SignOutButton />
-        </nav>
-      </header>
+        </Cluster>
+      </Split>
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
         {children}
       </main>
