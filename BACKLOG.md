@@ -192,11 +192,15 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
   resolvedor determinístico (goal identidade; protocol família→ativo; milestone single-only-else-null,
   **decisão C**); aprovação passa a gravar `evidence` on-approve. 122/122 unit, 5/5 int.
   Pendência: disambiguação humana de milestone ambíguo = evolução (Fase 4/5).
-* ⏳ **4B parte 3 (compute: segmentação + candidatura)** — em impl. **Decisão de escopo:** 4B
-  segmenta só o **eixo de nível-de-ajuda** (goal + `marco_simples`); barreira/composto/normativo =
-  "aguardando avaliação formal (Fase 5)" (o evidence do agente não carrega escore formal — vem de
-  `MilestoneAssessment`, deferido). Segmentação computa em **TS puro** (testável), escrita via definer
-  fino. Design: `docs/superpowers/specs/2026-07-13-fase-4-compute-segmentacao.md`.
+* ✅ **4B parte 3 (compute: segmentação + candidatura) — feito** (commit `71f2458`). Segmentação
+  em TS puro (16 unit) do **eixo de nível-de-ajuda** (goal + `marco_simples`); barreira/composto/
+  normativo = "aguardando avaliação formal (Fase 5)" — nunca número fabricado (o evidence do agente
+  não carrega escore formal; vem de `MilestoneAssessment`, deferido). `materializar.ts` +
+  `0017` (definer fino `app_aplicar_snapshot`/`app_aplicar_candidatura` com **guard multi-tenant**
+  `app_patient_in_clinic` + advisory lock). goal_candidacy por `criterio_dominio`; milestone_candidacy
+  = TODO explícito (Milestone sem campo de critério — não fabricado). materializar int 9/9 (inclui 2
+  de guard cross-tenant). Design: `docs/superpowers/specs/2026-07-13-fase-4-compute-segmentacao.md`.
+  **4B completo.**
 * ⬜ 4C (ReinforcerProfile + Briefing), 4D (Timeline/Gráficos) — pendentes.
 * ⚠️ **Nota de ambiente:** o Postgres local de dev estava com o tracking do drizzle
   dessincronizado (8 migrações rastreadas, schema real em 0012) → `db:migrate` falha ao
