@@ -102,6 +102,9 @@ export function TimelineClient({
         setDeltaMilestones(res.milestones);
       } catch (err) {
         if (!active) return;
+        setDeltaSessao(null);
+        setDeltaMetas([]);
+        setDeltaMilestones([]);
         console.error("Erro ao carregar delta da sessão:", err);
       }
     });
@@ -136,6 +139,7 @@ export function TimelineClient({
         }
       } catch (err) {
         if (!active) return;
+        setComparacaoData(null);
         console.error("Erro ao carregar comparação:", err);
       }
     });
