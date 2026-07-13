@@ -32,20 +32,20 @@ function estiloVariante(v: Variante): { classes: string; temPeso: boolean } {
   switch (v) {
     case "primaria":
       return {
-        classes: cn(surface("solida"), "bg-gold text-ink-anchor active:bg-gold-pressed"),
+        classes: cn(surface("solida"), "bg-brand-primary text-brand-primary-text active:bg-brand-primary-hover"),
         temPeso: true,
       };
     case "terciaria":
       return {
         classes:
-          "border-2 border-transparent bg-transparent text-ink hover:bg-canvas hover:underline hover:underline-offset-4 disabled:hover:bg-transparent disabled:hover:no-underline",
+          "border-2 border-transparent bg-transparent text-text-body hover:bg-bg-canvas hover:underline hover:underline-offset-4 disabled:hover:bg-transparent disabled:hover:no-underline",
         temPeso: false,
       };
     case "secundaria":
     case "neutra":
     default:
       return {
-        classes: cn(surface("solida"), "bg-surface text-ink"),
+        classes: cn(surface("solida"), "bg-bg-surface text-text-body"),
         temPeso: true,
       };
   }
