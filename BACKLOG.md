@@ -186,8 +186,18 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
   (11/11, inclui cross-tenant via view e anti-colapso de alvos). **Pendência ligada:** a
   resolução slug→UUID (agente emite slug, sem `milestone_id`, aprovação não persiste
   vínculo) fica p/ o fluxo de aprovação — hoje backfill resolve best-effort.
-* ⏳ 4B (SessionSnapshot & candidatura), 4C (ReinforcerProfile + Briefing), 4D (Timeline/
-  Gráficos) — pendentes.
+* ✅ **4B parte 1 (DDL) — feito** (commit `62cb2b9`): `session_snapshot` + RLS SELECT-only +
+  função `SECURITY DEFINER` `app_materializar_snapshot` (esqueleto) com advisory lock. 7/7 RLS.
+* ✅ **4B parte 2 (resolução slug→UUID + evidence on-approve) — feito** (commit `c766c09`):
+  resolvedor determinístico (goal identidade; protocol família→ativo; milestone single-only-else-null,
+  **decisão C**); aprovação passa a gravar `evidence` on-approve. 122/122 unit, 5/5 int.
+  Pendência: disambiguação humana de milestone ambíguo = evolução (Fase 4/5).
+* ⏳ **4B parte 3 (compute: segmentação + candidatura)** — em impl. **Decisão de escopo:** 4B
+  segmenta só o **eixo de nível-de-ajuda** (goal + `marco_simples`); barreira/composto/normativo =
+  "aguardando avaliação formal (Fase 5)" (o evidence do agente não carrega escore formal — vem de
+  `MilestoneAssessment`, deferido). Segmentação computa em **TS puro** (testável), escrita via definer
+  fino. Design: `docs/superpowers/specs/2026-07-13-fase-4-compute-segmentacao.md`.
+* ⬜ 4C (ReinforcerProfile + Briefing), 4D (Timeline/Gráficos) — pendentes.
 * ⚠️ **Nota de ambiente:** o Postgres local de dev estava com o tracking do drizzle
   dessincronizado (8 migrações rastreadas, schema real em 0012) → `db:migrate` falha ao
   re-CREATE. Schema real está completo; 0013/0014 foram aplicadas à mão p/ validar. Docker
