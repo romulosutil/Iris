@@ -92,6 +92,13 @@ export const evidenceRevisionAcao = pgEnum("evidence_revision_acao", [
   "confirmar", "reclassificar", "invalidar",
 ]);
 
+// Fase 4 (4C.1) — valência de reforçador/preferência observada (R17,
+// preferencia_reforcador). `saciado` é first-class: precisa poder DEMOVER um
+// item que já foi visto como reforçador forte (série, não conjunto flat).
+export const reinforcerValencia = pgEnum("reinforcer_valencia", [
+  "alta", "baixa", "saciado",
+]);
+
 // ─── Auth (Better-Auth) — `app_user` é a tabela `user` do Better-Auth ────────
 // Chaves em camelCase = o que o Better-Auth espera; colunas em snake_case.
 export const appUser = pgTable("app_user", {
@@ -655,6 +662,47 @@ export const evidenceQuery = pgTable("evidence_query", {
     .defaultNow(),
   respondidoEm: timestamp("respondido_em", { withTimezone: true }),
 });
+
+// `reinforcer_profile` (Fase 4 · 4C.1) — perfil vivo do que reforça o
+// paciente (modelo-de-dados.md §1.4). Preserva RECÊNCIA + VALÊNCIA como
+// SÉRIE (1 linha por observação), não conjunto flat: `saciado` precisa poder
+// demover um item visto antes como reforçador forte, e o Briefing lê o
+// most-recent-per-item — por isso é append-per-observation, igual a
+// `evidence` (grão de alvo), não upsert-por-item.
+export const reinforcerProfile = pgTable(
+  "reinforcer_profile",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    extractionId: uuid("extraction_id")
+      .notNull()
+      .references(() => extraction.id),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => session.id),
+    // número sequencial do paciente; base da recência (most-recent-per-item)
+    sessionNumero: integer("session_numero").notNull(),
+    itemAtividade: text("item_atividade").notNull(),
+    valencia: reinforcerValencia("valencia").notNull(),
+    registradoEm: timestamp("registrado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("idx_reinforcer_profile_patient_session").on(
+      t.patientId,
+      t.sessionNumero.desc(),
+    ),
+    // idempotência: 1 extração só pode gerar 1 observação por item — re-aprovar
+    // (ou reprocessar) não duplica, mesmo padrão de uq_evidence_alvo.
+    unique("uq_reinforcer_profile_extraction_item").on(
+      t.extractionId,
+      t.itemAtividade,
+    ),
+  ],
+);
 
 // ─── SessionSnapshot (Fase 4 · 4B) ───────────────────────────────────────────
 // Materialização do estado do repertório do paciente ao fim de cada sessão

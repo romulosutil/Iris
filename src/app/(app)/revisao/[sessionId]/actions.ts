@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { evidence, extraction, session } from "@/db/schema";
+import { evidence, extraction, reinforcerProfile, session } from "@/db/schema";
 import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
 import { type Alvo, drizzleResolverQueries, resolverAlvoParaFks } from "@/lib/evidence/resolver";
 
@@ -31,18 +31,61 @@ type ExtracaoAprovadaRow = {
   payloadEditado: unknown;
 };
 
+// ─── Inserção de `reinforcer_profile` on-approve (Fase 4 · 4C.1) ───────────
+// Perfil vivo de reforçadores (modelo-de-dados.md §1.4): 1 linha por
+// OBSERVAÇÃO (append-per-observation), nunca upsert-por-item — preserva
+// recência + valência como série, para que `saciado` possa demover um item
+// visto antes como reforçador forte. O Briefing lê most-recent-per-item
+// depois. Mesmo padrão de idempotência de `evidence` (chave estável,
+// discriminador de re-aprovação), aqui `(extraction_id, item_atividade)`.
+type ReinforcerValencia = "alta" | "baixa" | "saciado";
+const REINFORCER_VALENCIAS: readonly ReinforcerValencia[] = ["alta", "baixa", "saciado"];
+type PreferenciaReforcadorConteudo =
+  | { item_atividade?: string; valencia?: string }
+  | null
+  | undefined;
+
+async function inserirReforcadoresOnApprove(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  ctx: TenantContext,
+  row: ExtracaoAprovadaRow,
+  sess: { patientId: string; numero: number | null },
+): Promise<void> {
+  if (row.subtipo !== "preferencia_reforcador") return;
+  if (sess.numero == null) return; // mesma trava de session ainda não consolidada (ver evidence acima)
+
+  const conteudo = (row.payloadEditado ?? row.payload) as {
+    preferencia_reforcador?: PreferenciaReforcadorConteudo;
+  };
+  const pref = conteudo?.preferencia_reforcador;
+  const itemAtividade = pref?.item_atividade?.trim();
+  const valenciaBruta = pref?.valencia;
+  if (!itemAtividade || !valenciaBruta) return;
+  if (!REINFORCER_VALENCIAS.includes(valenciaBruta as ReinforcerValencia)) return;
+  const valencia = valenciaBruta as ReinforcerValencia;
+
+  await tx
+    .insert(reinforcerProfile)
+    .values({
+      extractionId: row.id,
+      patientId: sess.patientId,
+      sessionId: row.sessionId,
+      sessionNumero: sess.numero,
+      itemAtividade,
+      valencia,
+    })
+    // idempotente: (extraction_id, item_atividade) é a chave — re-aprovar (ou
+    // reprocessar) não duplica.
+    .onConflictDoNothing({
+      target: [reinforcerProfile.extractionId, reinforcerProfile.itemAtividade],
+    });
+}
+
 async function inserirEvidenciasOnApprove(
   tx: Parameters<Parameters<typeof withTenant>[1]>[0],
   ctx: TenantContext,
   row: ExtracaoAprovadaRow,
 ): Promise<void> {
-  if (row.subtipo !== "evidencia") return;
-
-  const conteudo = (row.payloadEditado ?? row.payload) as { evidencia?: EvidenciaConteudo | null };
-  const evidenciaObj = conteudo?.evidencia;
-  const alvos = Array.isArray(evidenciaObj?.alvos) ? evidenciaObj!.alvos! : [];
-  if (alvos.length === 0) return;
-
   const [sess] = await tx
     .select({ patientId: session.patientId, numero: session.numeroSequencialPaciente })
     .from(session)
@@ -57,10 +100,19 @@ async function inserirEvidenciasOnApprove(
     // (scripts/backfill-evidence.ts) cobre a lacuna retroativamente. Não
     // falha a aprovação por causa disso — só registra e segue.
     console.warn(
-      `evidence: extração ${row.id} aprovada, mas sessão ${row.sessionId} ainda sem numero_sequencial_paciente — evidence NÃO inserida agora (backfill cobre depois).`,
+      `evidence: extração ${row.id} aprovada, mas sessão ${row.sessionId} ainda sem numero_sequencial_paciente — evidence/reinforcer_profile NÃO inseridos agora (backfill cobre evidence depois).`,
     );
     return;
   }
+
+  await inserirReforcadoresOnApprove(tx, ctx, row, sess);
+
+  if (row.subtipo !== "evidencia") return;
+
+  const conteudo = (row.payloadEditado ?? row.payload) as { evidencia?: EvidenciaConteudo | null };
+  const evidenciaObj = conteudo?.evidencia;
+  const alvos = Array.isArray(evidenciaObj?.alvos) ? evidenciaObj!.alvos! : [];
+  if (alvos.length === 0) return;
 
   const resolverQueries = drizzleResolverQueries(tx);
   const { alvos: _omit, ...evidenciaSemAlvos } = evidenciaObj ?? {};

@@ -127,6 +127,20 @@
       "when": 1783956212273,
       "tag": "0017_fase4_materializar",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783960420785,
+      "tag": "0018_fase4_reinforcer_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783960420795,
+      "tag": "0019_fase4_reinforcer_profile_rls",
+      "breakpoints": true
     }
   ]
 }
