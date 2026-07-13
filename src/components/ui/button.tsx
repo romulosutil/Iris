@@ -27,13 +27,6 @@ export interface ButtonProps
   risco?: Risco;
 }
 
-// Deslocamento no press: curto (risco baixo) vs longo (risco alto). Só nas
-// variantes com peso (a sombra colapsa dando o feedback tátil de "afundou").
-const desloca: Record<Risco, string> = {
-  baixo: "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
-  alto: "active:translate-x-[4px] active:translate-y-[4px] active:shadow-none",
-};
-
 // Cada tier: classes de fill/superfície. `temPeso` liga o deslocamento no press.
 function estiloVariante(v: Variante): { classes: string; temPeso: boolean } {
   switch (v) {
@@ -81,8 +74,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           "disabled:active:translate-x-0 disabled:active:translate-y-0",
           classes,
           // hover/press só nas variantes com peso (a leve não "afunda")
-          temPeso && "hover:-translate-x-px hover:-translate-y-px",
-          temPeso && desloca[risco],
+          temPeso && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]",
+          temPeso && "active:translate-x-0 active:translate-y-0 active:shadow-none",
           className,
         )}
         {...props}

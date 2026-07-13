@@ -17,10 +17,12 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   estado?: Estado;
   /** Título do cartão; recebe tratamento display. */
   titulo?: React.ReactNode;
+  /** Injeta a barra dourada superior e altera o padding superior */
+  destacado?: boolean;
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
-  { className, estado = "conquistado", titulo, children, ...props },
+  { className, estado = "conquistado", titulo, destacado = false, children, ...props },
   ref,
 ) {
   const candidato = estado === "candidato";
@@ -28,13 +30,24 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
     <div
       ref={ref}
       data-estado={estado}
+      data-destacado={destacado}
       className={cn(
         "text-ink flex flex-col gap-2 p-5",
-        candidato ? surface("candidata", "bg-canvas") : surface("solida", "bg-surface"),
+        destacado
+          ? cn("relative pt-8", surface("solida", "bg-surface"))
+          : candidato
+            ? surface("candidata", "bg-canvas")
+            : surface("solida", "bg-surface"),
         className,
       )}
       {...props}
     >
+      {destacado ? (
+        <span
+          aria-hidden
+          className="bg-gold absolute inset-x-0 top-0 h-2"
+        />
+      ) : null}
       <div className="flex items-center justify-between gap-3">
         {titulo ? (
           <h3 className="font-display text-ink-anchor text-lg font-semibold">

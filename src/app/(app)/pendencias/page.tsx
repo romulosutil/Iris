@@ -14,9 +14,9 @@ export default async function PendenciasPage() {
   const pendencias = await listarPendencias(ctx);
 
   return (
-    <Stack gap="lg">
-      <Stack gap="sm">
-        <h1 className="font-display text-ink-anchor text-3xl font-bold">
+    <Stack gap="lg" className="pt-4 md:pt-8">
+      <Stack gap="sm" className="animate-fade-in-up pb-2 md:pb-4">
+        <h1 className="font-display text-ink-anchor text-4xl font-bold tracking-tight md:text-5xl">
           Pendências
         </h1>
         <p className="text-ink text-lg">

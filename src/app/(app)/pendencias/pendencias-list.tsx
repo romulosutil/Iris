@@ -12,9 +12,6 @@ import type {
   SugestaoDemo,
 } from "./queries";
  
-// Mesma superfície visual do `Button` (variante primária, risco baixo), mas
-// como link de navegação — a ação aqui é ir para a tela da sessão, não
-// disparar uma Server Action, então um `<a>` é o elemento semanticamente
 // correto (evita botão aninhado dentro de âncora).
 const acaoClasses = cn(
   control("sm"),
@@ -22,14 +19,14 @@ const acaoClasses = cn(
   "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
   "bg-gold text-ink-anchor font-display text-base font-semibold",
   "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-  "hover:-translate-x-px hover:-translate-y-px",
-  "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+  "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]",
+  "active:translate-x-0 active:translate-y-0 active:shadow-none",
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
 );
  
 function ItemCaptura({ item }: { item: CapturaAConsolidar }) {
   return (
-    <Card estado="conquistado" titulo="Captura rápida sem nota consolidada">
+    <Card estado="conquistado" destacado={true} titulo="Captura rápida sem nota consolidada">
       <Split alinha="center">
         <span className="text-ink text-base">
           {item.pacienteNome ?? "Paciente (acesso restrito)"}
@@ -82,16 +79,21 @@ export function PendenciasList({
 }: ListaPendencias) {
   if (total === 0) {
     return (
-      <Alert severidade="info">
-        Dia limpo — nenhuma captura, extração ou sugestão pendente.
-      </Alert>
+      <Stack className="animate-fade-in-up animate-delay-75 py-4 md:py-8">
+        <Alert
+          severidade="info"
+          className="border-4 border-ink-anchor shadow-[var(--ds-shadow)] p-8 md:p-12 text-lg font-medium"
+        >
+          Dia limpo — nenhuma captura, extração ou sugestão pendente.
+        </Alert>
+      </Stack>
     );
   }
-
+ 
   return (
-    <>
+    <Stack gap="lg" className="animate-fade-in-up animate-delay-75">
       {capturasAConsolidar.length > 0 ? (
-        <Stack gap="md" como="section" aria-labelledby="capturas-titulo">
+        <Stack gap="md" como="section" aria-labelledby="capturas-titulo" className="animate-fade-in-up animate-delay-75">
           <h2
             id="capturas-titulo"
             className="font-display text-ink-anchor text-2xl font-bold"
@@ -99,17 +101,30 @@ export function PendenciasList({
             Capturas a consolidar
           </h2>
           <Stack gap="md" como="ul">
-            {capturasAConsolidar.map((item) => (
-              <li key={item.sessionId}>
+            {capturasAConsolidar.map((item, idx) => (
+              <li
+                key={item.sessionId}
+                className={cn(
+                  "animate-fade-in-up",
+                  idx === 0 && "animate-delay-75",
+                  idx === 1 && "animate-delay-150",
+                  idx >= 2 && "animate-delay-225"
+                )}
+              >
                 <ItemCaptura item={item} />
               </li>
             ))}
           </Stack>
         </Stack>
       ) : null}
-
+ 
       {extracaoPendente.length > 0 ? (
-        <Stack gap="md" como="section" aria-labelledby="extracao-titulo">
+        <Stack
+          gap="md"
+          como="section"
+          aria-labelledby="extracao-titulo"
+          className="animate-fade-in-up animate-delay-150 pt-6 border-t-2 border-dashed border-graphite"
+        >
           <h2
             id="extracao-titulo"
             className="font-display text-ink-anchor text-2xl font-bold"
@@ -117,17 +132,30 @@ export function PendenciasList({
             Extração pendente de reprocessamento
           </h2>
           <Stack gap="md" como="ul">
-            {extracaoPendente.map((item) => (
-              <li key={item.id}>
+            {extracaoPendente.map((item, idx) => (
+              <li
+                key={item.id}
+                className={cn(
+                  "animate-fade-in-up",
+                  idx === 0 && "animate-delay-75",
+                  idx === 1 && "animate-delay-150",
+                  idx >= 2 && "animate-delay-225"
+                )}
+              >
                 <ItemPendente item={item} />
               </li>
             ))}
           </Stack>
         </Stack>
       ) : null}
-
+ 
       {sugestoesDemo.length > 0 ? (
-        <Stack gap="md" como="section" aria-labelledby="sugestoes-titulo">
+        <Stack
+          gap="md"
+          como="section"
+          aria-labelledby="sugestoes-titulo"
+          className="animate-fade-in-up animate-delay-225 pt-6 border-t-2 border-dashed border-graphite"
+        >
           <h2
             id="sugestoes-titulo"
             className="font-display text-ink-anchor text-2xl font-bold"
@@ -135,8 +163,16 @@ export function PendenciasList({
             Sugestões da IA (candidatas)
           </h2>
           <Stack gap="md" como="ul">
-            {sugestoesDemo.map((item) => (
-              <li key={item.id}>
+            {sugestoesDemo.map((item, idx) => (
+              <li
+                key={item.id}
+                className={cn(
+                  "animate-fade-in-up",
+                  idx === 0 && "animate-delay-75",
+                  idx === 1 && "animate-delay-150",
+                  idx >= 2 && "animate-delay-225"
+                )}
+              >
                 <ItemExtracao
                   item={item}
                   titulo="Sugestão da IA — a confirmar"
@@ -148,6 +184,6 @@ export function PendenciasList({
           </Stack>
         </Stack>
       ) : null}
-    </>
+    </Stack>
   );
 }
