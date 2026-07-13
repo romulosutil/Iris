@@ -1,8 +1,15 @@
 import type { ReactElement } from "react";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import axe from "axe-core";
-import { PendenciasList } from "./pendencias-list";
+
+// PendenciasList → ItemPendente → reprocessarExtracaoAction ("use server") →
+// getTenantContext → @/db/client (conexão no load). No jsdom só renderizamos
+// (a action nunca é invocada), então neutralizamos server-only e o db.
+vi.mock("server-only", () => ({}));
+vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
+
+const { PendenciasList } = await import("./pendencias-list");
 import type { ListaPendencias } from "./queries";
 
 afterEach(cleanup);

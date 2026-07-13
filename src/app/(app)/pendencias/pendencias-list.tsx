@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Stack, Split } from "@/components/ui/layout";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
+import { ItemPendente } from "./item-pendente";
 import type {
   CapturaAConsolidar,
   ExtracaoPendente,
@@ -115,12 +116,7 @@ export function PendenciasList({
           <Stack gap="md" como="ul">
             {extracaoPendente.map((item) => (
               <li key={item.id}>
-                <ItemExtracao
-                  item={item}
-                  titulo="Extração pendente de reprocessamento"
-                  estado="conquistado"
-                  destino="diario"
-                />
+                <ItemPendente item={item} />
               </li>
             ))}
           </Stack>

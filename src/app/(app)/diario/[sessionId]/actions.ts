@@ -438,3 +438,47 @@ export async function consolidarSessaoAction(
     return { error: "Não foi possível consolidar." };
   }
 }
+
+// Reprocessamento manual da extração (Fase 3 Plano 3, flow 2.4). Quando o
+// pipeline de IA falhou, a nota consolidada permanece salva e uma linha
+// `pendente_reprocessamento` sinaliza a falha. Reprocessar = re-disparar a
+// extração sobre o MESMO texto já salvo (o terapeuta não redigita nada):
+// carregamos a nota e reusamos `consolidarSessao` — como o texto não mudou mas
+// há pendência, `deveReextrair` retorna true, então re-chama o provider e
+// PRESERVA as linhas já revisadas (mesma Fase C idempotente). Sem novo caminho
+// de escrita: reprocessar herda P0, hardening e o gate de provider.
+export type ReprocessarState = { error?: string; ok?: boolean };
+export async function reprocessarExtracaoAction(
+  _prev: ReprocessarState,
+  formData: FormData,
+): Promise<ReprocessarState> {
+  const ctx = await getTenantContext();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  try {
+    const [nota] = await withTenant(ctx, (tx) =>
+      tx
+        .select({ texto: sessionNote.texto })
+        .from(sessionNote)
+        .where(
+          and(
+            eq(sessionNote.sessionId, sessionId),
+            eq(sessionNote.tipo, "nota_consolidada"),
+          ),
+        ),
+    );
+    if (!nota?.texto) {
+      return { error: "Não há nota consolidada para reprocessar." };
+    }
+    const r = await consolidarSessao(ctx, { sessionId, texto: nota.texto });
+    if (r.error) return { error: r.error };
+    revalidatePath("/pendencias");
+    revalidatePath("/excecoes");
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof RoleError) {
+      return { error: "Só o terapeuta da sessão reprocessa a extração." };
+    }
+    console.error("reprocessarExtracaoAction:", err);
+    return { error: "Não foi possível reprocessar a extração." };
+  }
+}
