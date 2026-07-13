@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <header className="border-ink-anchor flex flex-wrap items-center justify-between gap-4 border-b-2 px-6 py-4">
         <div className="flex items-center gap-3">
           <Link href="/agenda" aria-label="Iris — início" className="shrink-0">
-            <Logo variante="marca" altura={28} />
+            <Logo variante="completo" altura={28} />
           </Link>
           <ClinicSwitcher clinicas={clinicas} ativaId={ctx.clinicId} />
         </div>
