@@ -655,3 +655,33 @@ export const evidenceQuery = pgTable("evidence_query", {
     .defaultNow(),
   respondidoEm: timestamp("respondido_em", { withTimezone: true }),
 });
+
+// ─── SessionSnapshot (Fase 4 · 4B) ───────────────────────────────────────────
+// Materialização do estado do repertório do paciente ao fim de cada sessão
+// (decisão "b4", modelo-de-dados.md §2.5). Espelha o padrão FK-a-paciente de
+// `milestone_candidacy` (sem clinic_id direto). Escrita só via função
+// SECURITY DEFINER `app_materializar_snapshot` (0016) — app_role tem GRANT
+// SELECT apenas.
+export const sessionSnapshot = pgTable(
+  "session_snapshot",
+  {
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id),
+    sessionNumero: integer("session_numero").notNull(),
+    // ESTRITAMENTE numérico/enum — nunca texto livre nem narrativa ABC (LGPD:
+    // tabela de alto tráfego lida em todo briefing/scrubber). A narrativa ABC
+    // é lida de `evidence` no render, não materializada aqui.
+    repertorioState: jsonb("repertorio_state").notNull(), // {goal_id/milestone_id: {metrica_recente, contagem, is_candidata}}
+    // Chaveado por (goal_id, protocol_id) e carregando a métrica-por-tipo —
+    // nunca eixo único de nivel_ajuda (reconciliação 13/07/2026, Fase 4):
+    segmentacao: jsonb("segmentacao").notNull(), // {goal_id: {protocol_id: {tipo_estrutura, metrica, rotulo}}}
+    geradoEm: timestamp("gerado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.patientId, t.sessionNumero] }),
+    index("idx_session_snapshot_patient").on(t.patientId, t.sessionNumero.desc()),
+  ],
+);
