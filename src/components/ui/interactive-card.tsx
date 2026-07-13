@@ -15,7 +15,17 @@ export interface InteractiveCardProps
 
 export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProps>(
   function InteractiveCard(
-    { className, titulo, destacado = false, asChild = false, children, ...props },
+    {
+      className,
+      titulo,
+      destacado = false,
+      asChild = false,
+      children,
+      href,
+      onClick,
+      disabled,
+      ...props
+    },
     ref,
   ) {
     const cardClasses = cn(
@@ -43,37 +53,84 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
       </div>
     ) : null;
 
+    const isLink = !!href;
+    const isDisabled = disabled;
+
     if (asChild && React.isValidElement(children)) {
       const child = children as React.ReactElement<any>;
+      const childProps = isLink
+        ? {
+            href: isDisabled ? undefined : href,
+            "aria-disabled": isDisabled ? "true" : undefined,
+            tabIndex: isDisabled ? -1 : undefined,
+            onClick: (e: React.MouseEvent<any>) => {
+              if (isDisabled) {
+                e.preventDefault();
+                return;
+              }
+              child.props.onClick?.(e);
+              onClick?.(e as any);
+            },
+          }
+        : {
+            disabled: isDisabled,
+            onClick: (e: React.MouseEvent<any>) => {
+              child.props.onClick?.(e);
+              onClick?.(e as any);
+            },
+          };
+
       return React.cloneElement(child, {
         ref,
         className: cn(cardClasses, child.props.className),
         ...props,
+        ...childProps,
         children: (
           <>
             {accentBar}
             {titleHeading}
-            {child.props.children}
+            {child.props.children ? (
+              <span className="block text-text-body w-full">
+                {child.props.children}
+              </span>
+            ) : null}
           </>
         ),
       });
     }
 
-    const Component = props.href ? "a" : "button";
-    const componentProps = props.href
-      ? {}
-      : { type: "button" as const };
+    const Component = isLink ? "a" : "button";
+    const componentProps = isLink
+      ? {
+          href: isDisabled ? undefined : href,
+          "aria-disabled": isDisabled ? ("true" as const) : undefined,
+          tabIndex: isDisabled ? -1 : undefined,
+          onClick: (e: React.MouseEvent<HTMLAnchorElement>) => {
+            if (isDisabled) {
+              e.preventDefault();
+              return;
+            }
+            (onClick as React.MouseEventHandler<HTMLAnchorElement> | undefined)?.(e);
+          },
+        }
+      : {
+          type: "button" as const,
+          disabled: isDisabled,
+          onClick: onClick as React.MouseEventHandler<HTMLButtonElement> | undefined,
+        };
 
     return (
       <Component
         ref={ref as any}
         className={cardClasses}
-        {...componentProps}
+        {...componentProps as any}
         {...props}
       >
         {accentBar}
         {titleHeading}
-        {children ? <div className="text-text-body w-full">{children}</div> : null}
+        {children ? (
+          <span className="block text-text-body w-full">{children}</span>
+        ) : null}
       </Component>
     );
   },
