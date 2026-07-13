@@ -3,6 +3,7 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/cn";
+import { surface } from "./primitives/surface";
 
 /**
  * Dialog sobre Radix (focus-trap, scroll-lock, Esc, restauração de foco de
@@ -38,7 +39,8 @@ export const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "border-ink-anchor bg-surface fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 border-2 p-6 shadow-[var(--ds-shadow)]",
+          "fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 p-6",
+          surface("solida", "bg-surface"),
           "focus-visible:outline-none",
           className,
         )}
@@ -48,7 +50,7 @@ export const DialogContent = React.forwardRef<
         <DialogPrimitive.Close
           aria-label={rotuloFechar}
           className={cn(
-            "text-ink-anchor absolute top-3 right-3 grid size-9 place-items-center",
+            "text-ink-anchor absolute top-3 right-3 grid size-11 place-items-center",
             "hover:bg-ink-anchor/10",
             "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
           )}

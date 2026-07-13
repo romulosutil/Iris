@@ -55,6 +55,9 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
         onClick={onSelecionar}
         className={cn(
           base,
+          // alvo de toque ≥44px TAMBÉM em largura — um toggle curto ("ABA")
+          // não pode furar o piso de 44px (achado Casey da crítica /impeccable).
+          "min-w-11 justify-center",
           fundo(selecionado),
           foco,
           "transition-transform duration-100 ease-out hover:-translate-x-px hover:-translate-y-px",
