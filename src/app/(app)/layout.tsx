@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { getTenantContext, listarClinicasDoUsuario } from "@/auth/tenant";
 import { ClinicSwitcher } from "@/components/app/clinic-switcher";
+import { Logo } from "@/components/ui/logo";
 import { listarPendencias } from "./pendencias/queries";
 import { SignOutButton } from "./sign-out-button";
 
@@ -21,7 +22,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="border-ink-anchor flex flex-wrap items-center justify-between gap-4 border-b-2 px-6 py-4">
-        <ClinicSwitcher clinicas={clinicas} ativaId={ctx.clinicId} />
+        <div className="flex items-center gap-3">
+          <Link href="/agenda" aria-label="Iris — início" className="shrink-0">
+            <Logo variante="marca" altura={28} />
+          </Link>
+          <ClinicSwitcher clinicas={clinicas} ativaId={ctx.clinicId} />
+        </div>
         <nav aria-label="Navegação principal" className="flex items-center gap-4">
           <Link
             href="/agenda"
