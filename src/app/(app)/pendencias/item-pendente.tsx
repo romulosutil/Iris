@@ -6,6 +6,7 @@ import { Split, Cluster, Stack } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { cn } from "@/lib/cn";
+import { control, surface } from "@/components/ui/primitives/surface";
 import {
   reprocessarExtracaoAction,
   type ReprocessarState,
@@ -13,9 +14,10 @@ import {
 import type { ExtracaoPendente } from "./queries";
 
 const linkClasses = cn(
-  "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-5 py-2.5",
-  "font-display text-base font-semibold",
-  "border-ink-anchor bg-surface text-ink border-2 shadow-[var(--ds-shadow)]",
+  control("sm"),
+  surface("solida"),
+  "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
+  "bg-surface text-ink font-display text-base font-semibold",
   "transition-[transform,box-shadow,background-color] duration-100 ease-out",
   "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]",
   "active:translate-x-0 active:translate-y-0 active:shadow-none",
@@ -36,7 +38,13 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
   );
 
   return (
-    <div className="border-ink-anchor bg-surface relative flex flex-col gap-3 border-2 p-5 pt-8 shadow-[var(--ds-shadow)]">
+    <Stack
+      gap="md"
+      className={cn(
+        "bg-surface relative p-5 pt-8",
+        surface("solida")
+      )}
+    >
       <span
         aria-hidden
         className="bg-gold absolute inset-x-0 top-0 h-2"
@@ -68,6 +76,6 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
           Reprocessamento disparado. Se a extração vier, aparece em Sugestões da IA.
         </Alert>
       ) : null}
-    </div>
+    </Stack>
   );
 }

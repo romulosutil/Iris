@@ -80,10 +80,7 @@ export function PendenciasList({
   if (total === 0) {
     return (
       <Stack className="animate-fade-in-up animate-delay-75 py-4 md:py-8">
-        <Alert
-          severidade="info"
-          className="border-4 border-ink-anchor shadow-[var(--ds-shadow)] p-8 md:p-12 text-lg font-medium"
-        >
+        <Alert severidade="info" destacado>
           Dia limpo — nenhuma captura, extração ou sugestão pendente.
         </Alert>
       </Stack>

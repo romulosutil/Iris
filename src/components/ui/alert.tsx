@@ -13,6 +13,8 @@ type Severidade = "erro" | "info" | "sucesso";
 export interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
   severidade?: Severidade;
   titulo?: React.ReactNode;
+  /** Se true, aplica bordas mais espessas, sombra tridimensional e padding generoso (para empty states) */
+  destacado?: boolean;
 }
 
 const estilo: Record<Severidade, { fundo: string; rotulo: string }> = {
@@ -73,7 +75,7 @@ function Icone({ severidade }: { severidade: Severidade }) {
 
 export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
   function Alert(
-    { className, severidade = "erro", titulo, children, ...props },
+    { className, severidade = "erro", titulo, destacado = false, children, ...props },
     ref,
   ) {
     const { fundo, rotulo } = estilo[severidade];
@@ -82,7 +84,10 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         ref={ref}
         role={severidade === "erro" ? "alert" : "status"}
         className={cn(
-          "border-ink-anchor text-ink-anchor flex items-start gap-3 border-2 p-4",
+          "border-ink-anchor text-ink-anchor flex items-start gap-3",
+          destacado
+            ? "border-4 shadow-[var(--ds-shadow)] p-8 md:p-12 text-lg font-medium"
+            : "border-2 p-4",
           fundo,
           className,
         )}

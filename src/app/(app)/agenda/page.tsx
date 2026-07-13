@@ -67,10 +67,7 @@ export default async function AgendaPage() {
  
       {sessoes.length === 0 ? (
         <Stack className="animate-fade-in-up animate-delay-75 py-4 md:py-8">
-          <Alert
-            severidade="info"
-            className="border-4 border-ink-anchor shadow-[var(--ds-shadow)] p-8 md:p-12 text-lg font-medium"
-          >
+          <Alert severidade="info" destacado>
             Nenhuma sessão na grade de hoje.
           </Alert>
         </Stack>
@@ -82,7 +79,7 @@ export default async function AgendaPage() {
               como="li"
               alinha="center"
               className={cn(
-                "bg-surface border-2 p-4 animate-fade-in-up",
+                "bg-surface p-4 animate-fade-in-up",
                 surface("solida"),
                 index === 0 && "animate-delay-75",
                 index === 1 && "animate-delay-150",
