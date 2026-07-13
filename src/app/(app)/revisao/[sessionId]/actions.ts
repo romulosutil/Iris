@@ -1,11 +1,11 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { requireRole } from "@/auth/require-role";
+import { getTenantContext } from "@/auth/tenant";
+import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { extraction } from "@/db/schema";
-import { avaliarFriccao } from "@/lib/extraction/review-policy";
 
 // Revisão humana das extrações sugeridas pela IA (Fase 3 Plano 2). Cada ação
 // transiciona uma extração `sugerida` para um desfecho de revisão. RLS
@@ -76,62 +76,78 @@ export async function editarExtracao(
   });
 }
 
-const loteSchema = z.object({
-  extractionIds: z.array(z.string().uuid()).min(1),
-});
+// NOTA (decisão de produto 12/07/2026): NÃO existe aprovação em lote. A regra
+// §3 ("alta confiança → lote") foi SUPERSEDIDA por um invariante mais forte de
+// Camada 1: aprovar exige abrir o cartão (o botão só existe no estado expandido
+// na UI). O ato de abrir é o lastro — "o conteúdo foi exibido por inteiro e a
+// aprovação exigiu abri-lo". Isso dissolve a regra estatística anti-rubber-stamp
+// (contador de "3 lotes seguidos") — não há lote a contar. Cada aprovação segue
+// individual, com nome+timestamp (revisado_por/revisado_em) como registro.
 
-// Aprovação em lote — SÓ extrações elegíveis (alta confiança, sem inconsistência
-// com histórico; §3). As inelegíveis são ignoradas (exigem revisão individual
-// com fricção), nunca aprovadas em massa silenciosamente.
-export async function aprovarLote(
-  ctx: TenantContext,
-  input: { extractionIds: string[] },
-): Promise<{ error?: string; aprovadas?: number; ignoradas?: number }> {
-  requireRole(ctx, "terapeuta");
-  const p = loteSchema.safeParse(input);
-  if (!p.success) return { error: p.error.issues[0]!.message };
+// ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
+// O CORE acima recebe `ctx` (testável); estes wrappers re-derivam o tenant do
+// request via getTenantContext — o cliente NUNCA fornece o contexto (não pode
+// forjar clínica/papel/usuário).
 
+export type RevisaoState = { error?: string; ok?: boolean };
+
+async function comCtx(
+  formData: FormData,
+  fn: (ctx: TenantContext, extractionId: string) => Promise<ReviewResult>,
+): Promise<RevisaoState> {
+  const ctx = await getTenantContext();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const extractionId = String(formData.get("extractionId") ?? "");
   try {
-    return await withTenant(ctx, async (tx) => {
-      const linhas = await tx
-        .select({
-          id: extraction.id,
-          confianca: extraction.confianca,
-          inconsistente: extraction.inconsistenteComHistorico,
-        })
-        .from(extraction)
-        .where(
-          and(
-            inArray(extraction.id, p.data.extractionIds),
-            eq(extraction.estado, "sugerida"),
-          ),
-        );
-      const elegiveis = linhas
-        .filter((l) =>
-          avaliarFriccao({
-            confianca: l.confianca,
-            inconsistenteComHistorico: l.inconsistente,
-          }).podeLote,
-        )
-        .map((l) => l.id);
-
-      if (elegiveis.length > 0) {
-        await tx
-          .update(extraction)
-          .set({ estado: "aprovada", revisadoPor: ctx.userId, revisadoEm: new Date() })
-          .where(inArray(extraction.id, elegiveis));
-      }
-      return {
-        aprovadas: elegiveis.length,
-        ignoradas: p.data.extractionIds.length - elegiveis.length,
-      };
-    });
+    const r = await fn(ctx, extractionId);
+    if (r.error) return { error: r.error };
+    if (!r.ok) return { error: "Extração não encontrada ou já revisada." };
+    if (sessionId) revalidatePath(`/revisao/${sessionId}`);
+    return { ok: true };
   } catch (err) {
-    console.error("aprovar lote:", err);
-    return { error: "Não foi possível aprovar o lote." };
+    if (err instanceof RoleError) {
+      return { error: "Só o terapeuta da sessão revisa as extrações." };
+    }
+    console.error("wrapper revisão:", err);
+    return { error: "Não foi possível registrar a revisão." };
   }
 }
 
-export function revalidarRevisao(sessionId: string) {
-  revalidatePath(`/revisao/${sessionId}`);
+export async function aprovarExtracaoAction(
+  _prev: RevisaoState,
+  formData: FormData,
+): Promise<RevisaoState> {
+  return comCtx(formData, (ctx, id) => aprovarExtracao(ctx, { extractionId: id }));
+}
+
+export async function descartarExtracaoAction(
+  _prev: RevisaoState,
+  formData: FormData,
+): Promise<RevisaoState> {
+  return comCtx(formData, (ctx, id) => descartarExtracao(ctx, { extractionId: id }));
+}
+
+export async function editarExtracaoAction(
+  _prev: RevisaoState,
+  formData: FormData,
+): Promise<RevisaoState> {
+  // payloadEditado = payload ORIGINAL (JSON no hidden) com os campos corrigidos
+  // sobrepostos. Preserva o resto do conteúdo que o terapeuta não tocou; o
+  // original imutável fica em `payload` (auditoria — a action core não o toca).
+  let base: Record<string, unknown> = {};
+  try {
+    const raw = String(formData.get("payloadOriginal") ?? "{}");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") base = parsed as Record<string, unknown>;
+  } catch {
+    base = {};
+  }
+  const editado: Record<string, unknown> = { ...base };
+  for (const campo of ["funcao", "nivel_ajuda", "resultado"] as const) {
+    const v = formData.get(campo);
+    if (typeof v === "string" && v.trim() !== "") editado[campo] = v.trim();
+  }
+  return comCtx(formData, (ctx, id) =>
+    editarExtracao(ctx, { extractionId: id, payloadEditado: editado }),
+  );
 }

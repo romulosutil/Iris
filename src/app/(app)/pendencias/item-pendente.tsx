@@ -1,0 +1,68 @@
+"use client";
+
+import Link from "next/link";
+import { useActionState } from "react";
+import { Split, Cluster, Stack } from "@/components/ui/layout";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
+import { cn } from "@/lib/cn";
+import {
+  reprocessarExtracaoAction,
+  type ReprocessarState,
+} from "../diario/[sessionId]/actions";
+import type { ExtracaoPendente } from "./queries";
+
+const linkClasses = cn(
+  "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-5 py-2.5",
+  "font-display text-base font-semibold",
+  "border-ink-anchor bg-surface text-ink border-2 shadow-[var(--ds-shadow)]",
+  "transition-[transform,box-shadow] duration-100 ease-out",
+  "hover:-translate-x-px hover:-translate-y-px",
+  "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
+);
+
+/**
+ * Item da fila para uma extração que FALHOU (estado
+ * `pendente_reprocessamento`). A nota consolidada continua salva (o diário nunca
+ * se perde — flow 2.4); aqui o terapeuta re-dispara a extração sobre o mesmo
+ * texto. O selo é deliberadamente distinto de "Conquistado"/"Candidato" — falha
+ * de etapa não é dado clínico, é estado de pipeline.
+ */
+export function ItemPendente({ item }: { item: ExtracaoPendente }) {
+  const [state, formAction, pending] = useActionState<ReprocessarState, FormData>(
+    reprocessarExtracaoAction,
+    {},
+  );
+
+  return (
+    <div className="border-ink-anchor bg-surface flex flex-col gap-3 border-2 p-5 shadow-[var(--ds-shadow)]">
+      <Split alinha="start">
+        <Stack gap="sm">
+          <span className="border-ink-anchor bg-gold text-ink-anchor inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
+            Extração pendente
+          </span>
+          <span className="text-ink text-base">
+            {item.pacienteNome ?? "Paciente (acesso restrito)"}
+          </span>
+        </Stack>
+        <Cluster gap="sm">
+          <Link href={`/diario/${item.sessionId}`} className={linkClasses}>
+            Abrir diário
+          </Link>
+          <form action={formAction} className="contents">
+            <input type="hidden" name="sessionId" value={item.sessionId} />
+            <Button type="submit" risco="alto" disabled={pending}>
+              {pending ? "Reprocessando…" : "Reprocessar"}
+            </Button>
+          </form>
+        </Cluster>
+      </Split>
+      {state.error ? <Alert severidade="erro">{state.error}</Alert> : null}
+      {state.ok ? (
+        <Alert severidade="sucesso">
+          Reprocessamento disparado. Se a extração vier, aparece em Sugestões da IA.
+        </Alert>
+      ) : null}
+    </div>
+  );
+}

@@ -87,17 +87,4 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
     const [row] = await owner`SELECT estado FROM extraction WHERE id = ${EX_ALTA}`;
     expect(row!.estado).toBe("sugerida");
   });
-
-  test("aprovar lote só aprova elegíveis (alta, sem inconsistência); ignora o resto", async () => {
-    const r = await A.aprovarLote(ctxT1, {
-      extractionIds: [EX_ALTA, EX_BAIXA, EX_INCONS],
-    });
-    expect(r.aprovadas).toBe(1); // só EX_ALTA
-    expect(r.ignoradas).toBe(2); // baixa + inconsistente exigem revisão individual
-    const rows = await owner`SELECT id, estado FROM extraction WHERE id IN (${EX_ALTA}, ${EX_BAIXA}, ${EX_INCONS})`;
-    const byId = Object.fromEntries(rows.map((r) => [r.id, r.estado]));
-    expect(byId[EX_ALTA]).toBe("aprovada");
-    expect(byId[EX_BAIXA]).toBe("sugerida");
-    expect(byId[EX_INCONS]).toBe("sugerida");
-  });
 });

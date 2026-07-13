@@ -35,6 +35,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           >
             Pendências ({totalPendencias})
           </Link>
+          {ctx.role === "coordenador" ? (
+            <Link
+              href="/excecoes"
+              className="font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline"
+            >
+              Exceções
+            </Link>
+          ) : null}
           <SignOutButton />
         </nav>
       </header>
