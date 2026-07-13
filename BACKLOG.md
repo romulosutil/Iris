@@ -178,6 +178,21 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
 * **D3 — EvidenceQuery UI:** tabela nasce em 4A; fila de validação do coordenador fica na Fase 5.
 * **D4 — MilestoneAssessment:** **deferir p/ Fase 5** (ambas revisões convergem); 4B acende candidatura por evidência sem a série formal.
 
+**Progresso:**
+* ✅ **4A (Evidence layer) — feito e validado** (commit `f556df2`). Tabelas `evidence`
+  (grão de alvo, discriminador `alvo_ordinal`, refs crus + UUIDs resolvidos nullable),
+  `evidence_revision`, `evidence_query` + view `evidence_current` (`security_invoker`).
+  Migrações `0013`/`0014`, backfill idempotente, RLS testado contra Postgres real
+  (11/11, inclui cross-tenant via view e anti-colapso de alvos). **Pendência ligada:** a
+  resolução slug→UUID (agente emite slug, sem `milestone_id`, aprovação não persiste
+  vínculo) fica p/ o fluxo de aprovação — hoje backfill resolve best-effort.
+* ⏳ 4B (SessionSnapshot & candidatura), 4C (ReinforcerProfile + Briefing), 4D (Timeline/
+  Gráficos) — pendentes.
+* ⚠️ **Nota de ambiente:** o Postgres local de dev estava com o tracking do drizzle
+  dessincronizado (8 migrações rastreadas, schema real em 0012) → `db:migrate` falha ao
+  re-CREATE. Schema real está completo; 0013/0014 foram aplicadas à mão p/ validar. Docker
+  Desktop precisa estar rodando (`infra/docker-compose.yml`, Postgres :5433, user `iris`).
+
 **Achados de revisão que travam DDL (reconciliar `modelo-de-dados.md` primeiro):**
 * Segmentação é clinicamente **errada para 3 dos 4 `tipo_estrutura`** se usar só ordinal de ajuda — `marco_com_barreira` (direção invertida), `escore_composto` (mede escore, não ajuda), `faixa_normativa`/Denver (idade-equiv. relativa). Função de segmentação tem de despachar por tipo lendo `Milestone.estrutura`.
 * `evidence` **não tem `protocol_id`** (vive no JSONB `alvos[]`); fold opera em grão de alvo; `segmentacao` chaveada por `(goal_id, protocol_id)` — a DDL canônica (`modelo:746`) está no formato antigo (só `goal_id`) e precisa ser reconciliada.
