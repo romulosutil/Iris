@@ -1,33 +1,36 @@
 import Link from "next/link";
 import { getTenantContext } from "@/auth/tenant";
 import { Stack, Split, Cluster } from "@/components/ui/layout";
+import { Alert } from "@/components/ui/alert";
+import { control, surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
 import { listarSessoesDoDia } from "./actions";
 import { EstadoBadge } from "./estado-badge";
 import { CheckInButton } from "./checkin-button";
 import { AgendarForm } from "./agendar-form";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "./fuso";
-
+ 
 // Link de navegação para o diário da sessão — mesma superfície visual do
 // `Button` neutro, mas como `<a>` (a ação é ir para a tela, não disparar uma
 // Server Action). Espelha o `acaoClasses` da Fila de Pendências.
 const abrirSessaoClasses = cn(
-  "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-5 py-2.5",
-  "font-display text-base font-semibold",
-  "border-ink-anchor bg-surface text-ink-anchor border-2 shadow-[var(--ds-shadow)]",
-  "transition-[transform,box-shadow] duration-100 ease-out",
+  control("sm"),
+  surface("solida"),
+  "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
+  "bg-surface text-ink-anchor font-display text-base font-semibold",
+  "transition-[transform,box-shadow,background-color] duration-100 ease-out",
   "hover:-translate-x-px hover:-translate-y-px",
   "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
 );
-
+ 
 // Data de hoje (YYYY-MM-DD) no fuso da clínica — base da grade do dia.
 function hojeNaClinica(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: FUSO_CLINICA }).format(
     new Date(),
   );
 }
-
+ 
 function horaDaSessao(quando: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
     timeZone: FUSO_CLINICA,
@@ -35,7 +38,7 @@ function horaDaSessao(quando: Date): string {
     minute: "2-digit",
   }).format(quando);
 }
-
+ 
 function dataPorExtenso(diaISO: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
     timeZone: FUSO_CLINICA,
@@ -44,13 +47,13 @@ function dataPorExtenso(diaISO: string): string {
     month: "long",
   }).format(new Date(`${diaISO}T12:00:00${FUSO_CLINICA_OFFSET}`));
 }
-
+ 
 export default async function AgendaPage() {
   const ctx = await getTenantContext();
   const dia = hojeNaClinica();
   const sessoes = await listarSessoesDoDia(ctx, dia);
   const podeAgendar = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
-
+ 
   return (
     <Stack gap="lg">
       <Stack gap="sm">
@@ -61,11 +64,9 @@ export default async function AgendaPage() {
           {dataPorExtenso(dia)}
         </p>
       </Stack>
-
+ 
       {sessoes.length === 0 ? (
-        <p className="text-ink border-ink-anchor bg-surface border-2 border-dashed p-6">
-          Nenhuma sessão na grade de hoje.
-        </p>
+        <Alert severidade="info">Nenhuma sessão na grade de hoje.</Alert>
       ) : (
         <Stack gap="md" como="ul">
           {sessoes.map((s) => (
@@ -73,7 +74,7 @@ export default async function AgendaPage() {
               key={s.id}
               como="li"
               alinha="center"
-              className="border-ink-anchor bg-surface border-2 p-4 shadow-[var(--ds-shadow)]"
+              className={cn("bg-surface border-2 p-4", surface("solida"))}
             >
               <Stack gap="sm">
                 <Cluster gap="sm">
@@ -103,7 +104,7 @@ export default async function AgendaPage() {
           ))}
         </Stack>
       )}
-
+ 
       {podeAgendar ? (
         <Stack gap="md" como="section" aria-labelledby="agendar-titulo">
           <h2
