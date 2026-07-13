@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { control } from "./primitives/surface";
 
 /**
  * Chip: tag de protocolo/família ou filtro selecionável na fila do coordenador.
@@ -10,8 +11,10 @@ import { cn } from "@/lib/cn";
  *  - removível (`onRemover`): ganha um botão × dedicado.
  * Alvo de toque ≥44px no Modo Clínico via min-h-11.
  */
-const base =
-  "inline-flex min-h-11 items-center gap-2 border-ink-anchor border-2 px-3 font-body text-sm";
+const base = cn(
+  "inline-flex items-center gap-2 border-ink-anchor border-2 px-3 font-body text-sm",
+  control("sm"),
+);
 
 const fundo = (selecionado: boolean) =>
   selecionado ? "bg-gold text-ink-anchor font-semibold" : "bg-surface text-ink";
@@ -57,7 +60,7 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
           base,
           // alvo de toque ≥44px TAMBÉM em largura — um toggle curto ("ABA")
           // não pode furar o piso de 44px (achado Casey da crítica /impeccable).
-          "min-w-11 justify-center",
+          "justify-center",
           fundo(selecionado),
           foco,
           "transition-transform duration-100 ease-out hover:-translate-x-px hover:-translate-y-px",

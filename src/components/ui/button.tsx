@@ -45,7 +45,7 @@ function estiloVariante(v: Variante): { classes: string; temPeso: boolean } {
     case "terciaria":
       return {
         classes:
-          "border-2 border-transparent bg-transparent text-ink hover:bg-canvas hover:underline hover:underline-offset-4",
+          "border-2 border-transparent bg-transparent text-ink hover:bg-canvas hover:underline hover:underline-offset-4 disabled:hover:bg-transparent disabled:hover:no-underline",
         temPeso: false,
       };
     case "secundaria":
@@ -71,7 +71,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           // base: alvo de toque (piso 44×44 — Casey), tipografia display, layout
           control("sm"),
-          "inline-flex min-w-11 items-center justify-center px-5 py-2.5",
+          "inline-flex items-center justify-center px-5 py-2.5",
           "font-display text-base font-semibold",
           "transition-[transform,box-shadow,background-color] duration-100 ease-out",
           // anel de foco ortogonal — independente de hover/active

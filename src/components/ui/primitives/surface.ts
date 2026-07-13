@@ -38,9 +38,9 @@ export function surface(variante: SurfaceVariante = "solida", className?: string
 export type ControlTam = "sm" | "md" | "lg";
 
 const alturas: Record<ControlTam, string> = {
-  sm: "min-h-11", // 44px
-  md: "min-h-12", // 48px
-  lg: "min-h-14", // 56px
+  sm: "min-h-11 min-w-11", // 44px
+  md: "min-h-12 min-w-12", // 48px
+  lg: "min-h-14 min-w-14", // 56px
 };
 
 export function control(tam: ControlTam = "sm", className?: string) {
