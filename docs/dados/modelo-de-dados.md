@@ -308,22 +308,48 @@ assistencia_moderada(3) < assistencia_maxima(4)`; Fono e demais famílias
     regressão. Caso de teste que exercita isso: `casos-de-teste.md`, Caso 9
     (VB-MAPP + PEDI simultâneos, `SessionProtocolScope` escopando a sessão de
     TO só ao PEDI).
+  - **A métrica-alvo da segmentação despacha por `Milestone.tipo_estrutura`
+    (correção 13/07/2026 — Fase 4).** O ordinal de `nivel_ajuda` é a métrica
+    correta **apenas** para `marco_simples`. Para os demais tipos a função de
+    segmentação lê `Milestone.estrutura` (JSONB) e usa a métrica e a direção
+    corretas — usar o ordinal de ajuda para todos produziria gráfico
+    clinicamente errado em 3 dos 4 tipos:
+    - `marco_simples` → ordinal de `nivel_ajuda` (regra abaixo, como está).
+    - `marco_com_barreira` (VB-MAPP Barreiras 0-4) → **escore de barreira, com
+      direção INVERTIDA** (menor = melhor; cair de 4→1 é EVOLUÇÃO). Não há
+      `nivel_ajuda` aqui.
+    - `escore_composto` (marco com sub-escores, ex. 0/0,5/1) → o **escore
+      composto** sobe = EVOLUÇÃO, independentemente do `nivel_ajuda`.
+    - `faixa_normativa` (Denver/ESDM idade-equivalente; Perfil Sensorial) →
+      **delta de idade-equivalente relativo à idade cronológica**; ESTAGNAÇÃO =
+      ganho equivalente < passagem de tempo; abertura de gap = REGRESSÃO
+      relativa. Muitas vezes `nivel_ajuda` nem é coletado.
+    As três definições abaixo usam "melhora/piora na **métrica-alvo do tipo**"
+    onde antes liam "ordinal de `nivel_ajuda`".
   - **EVOLUÇÃO**: nova Evidence positiva para um goal/domínio que representa
-    primeira ocorrência OU melhora no ordinal de `nivel_ajuda` — sempre dentro
-    da taxonomia do PRÓPRIO protocolo de origem daquela Evidence — em relação
-    ao snapshot anterior NAQUELE protocolo.
+    primeira ocorrência OU melhora na **métrica-alvo do tipo** (ver acima) —
+    sempre dentro da taxonomia/estrutura do PRÓPRIO protocolo de origem daquela
+    Evidence — em relação ao snapshot anterior NAQUELE protocolo.
   - **ESTAGNAÇÃO**: janela deslizante de W sessões (default W=5) tocando aquele
     goal/domínio, dentro da MESMA família de protocolo, sem NENHUMA evidência
-    nova (nem melhora de ordinal, nem novo domínio) — repetir o mesmo nível
-    não conta como evolução nem regressão.
+    nova (nem melhora na métrica-alvo, nem novo domínio) — repetir o mesmo nível
+    não conta como evolução nem regressão. (`faixa_normativa`: ganho de
+    idade-equivalente abaixo da passagem de tempo cronológico conta como
+    estagnação, não platô neutro.)
   - **REGRESSÃO**: piora sustentada (≥2 sessões consecutivas, não 1 evento
-    isolado) no ordinal de `nivel_ajuda` — dentro da taxonomia do mesmo
-    protocolo — para um goal/domínio que já havia atingido um ordinal melhor
+    isolado) na **métrica-alvo do tipo** — dentro da taxonomia/estrutura do
+    mesmo protocolo — para um goal/domínio que já havia atingido um valor melhor
     NAQUELE protocolo, OU evidência negativa em habilidade antes independente.
-    Esta é a mesma condição que aciona `inconsistente_com_historico` no
-    agente (R14, corrigida no Prompt 2) — o flag do agente é o alerta em
-    tempo real na revisão; a segmentação da linha do tempo é o cálculo
-    definitivo, sobre dado já aprovado.
+  - **A segmentação NÃO é o mesmo sinal que `inconsistente_com_historico`
+    (R14) — correção 13/07/2026.** R14 é bidirecional (regressão **e**
+    "bom demais": independência súbita nunca antes exibida) e dispara em
+    **evento único**; a REGRESSÃO da segmentação exige ≥2 sessões e só cobre a
+    direção de piora. O agente consome como `historico_relevante` a **linha de
+    base as-of** (`SessionSnapshot.repertorio_state`: nível mais recente + o que
+    já foi dominado por goal/milestone), **não** o rótulo de `segmentacao`. A
+    segmentação é o cálculo definitivo de trajetória sobre dado já aprovado; R14
+    é o alerta em tempo real na revisão. São sinais distintos que se alimentam
+    do mesmo `repertorio_state`, não o mesmo cálculo.
 
 ### 2.6 (c) Protocol/Milestone heterogêneo sem tabela por protocolo
 
@@ -679,15 +705,21 @@ CREATE INDEX idx_extraction_payload_gin ON extraction USING GIN (payload);
 -- ============================================================
 -- Evidence — evento imutável + revisão versionada (decisão 2.2)
 -- ============================================================
+-- GRÃO: uma linha de `evidence` = UM alvo (`alvos[]`) de uma extração aprovada.
+-- Uma extração com N alvos (possivelmente em protocolos diferentes) gera N
+-- linhas. Por isso `protocol_id` é coluna explícita (o alvo carrega seu
+-- protocolo) — o cálculo de ordinal/segmentação lê a coluna, sem escavar o
+-- JSONB. (Reconciliação 13/07/2026, Fase 4.)
 CREATE TABLE evidence (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   extraction_id UUID NOT NULL REFERENCES extraction(id),
   patient_id UUID NOT NULL REFERENCES patient(id),
   session_id UUID NOT NULL REFERENCES session(id),
   session_numero INTEGER NOT NULL,           -- número sequencial do paciente; base da linha do tempo
+  protocol_id UUID REFERENCES protocol(id),  -- protocolo do alvo; base do isolamento de ordinal (G5)
   goal_id UUID REFERENCES goal(id),
   milestone_id UUID REFERENCES milestone(id),
-  classificacao_original JSONB NOT NULL,     -- cópia congelada do payload no momento da aprovação
+  classificacao_original JSONB NOT NULL,     -- cópia congelada do alvo aprovado (payloadEditado ?? payload)
   aprovado_por UUID NOT NULL REFERENCES app_user(id),
   aprovado_em TIMESTAMPTZ NOT NULL DEFAULT now()
   -- Sem coluna de UPDATE prevista: a linha nunca muda após o insert.
@@ -695,6 +727,12 @@ CREATE TABLE evidence (
 CREATE INDEX idx_evidence_patient_session ON evidence (patient_id, session_numero);
 CREATE INDEX idx_evidence_goal ON evidence (goal_id) WHERE goal_id IS NOT NULL;
 CREATE INDEX idx_evidence_milestone ON evidence (milestone_id) WHERE milestone_id IS NOT NULL;
+-- Idempotência do backfill e do insert por alvo: um alvo (extraction, goal,
+-- milestone) não pode virar duas evidências. NULLS NOT DISTINCT (PG15+) trata
+-- goal/milestone nulos como iguais, senão duplicatas escapariam.
+ALTER TABLE evidence
+  ADD CONSTRAINT uq_evidence_alvo
+  UNIQUE NULLS NOT DISTINCT (extraction_id, goal_id, milestone_id);
 -- Imutabilidade aplicada em nível de PRIVILÉGIO, não só de convenção:
 REVOKE UPDATE, DELETE ON evidence FROM app_role;
 
@@ -722,7 +760,10 @@ CREATE TABLE evidence_query (                -- "devolver com dúvida" (governan
 );
 
 -- "Classificação atual" = última reclassificação, ou a original se nunca reclassificada.
-CREATE VIEW evidence_current AS
+-- security_invoker=true é OBRIGATÓRIO: sem ele a view roda com os direitos do
+-- dono e IGNORA o RLS de `evidence`, vazando entre clínicas (reconciliação
+-- 13/07/2026, Fase 4). security_barrier impede vazamento por predicado.
+CREATE VIEW evidence_current WITH (security_invoker = true, security_barrier = true) AS
 SELECT e.*,
   COALESCE(
     (SELECT er.classificacao_nova FROM evidence_revision er
@@ -742,8 +783,13 @@ FROM evidence e;
 CREATE TABLE session_snapshot (
   patient_id UUID NOT NULL REFERENCES patient(id),
   session_numero INTEGER NOT NULL,
-  repertorio_state JSONB NOT NULL,   -- {goal_id/milestone_id: {nivel_ajuda_recente, contagem, is_candidata}}
-  segmentacao JSONB NOT NULL,        -- {goal_id: 'evolucao'|'estagnacao'|'regressao'}
+  -- ESTRITAMENTE numérico/enum — nunca texto livre nem narrativa ABC (LGPD:
+  -- tabela de alto tráfego lida em todo briefing/scrubber). A narrativa ABC é
+  -- lida de `evidence` no render, não materializada aqui.
+  repertorio_state JSONB NOT NULL,   -- {goal_id/milestone_id: {metrica_recente, contagem, is_candidata}}
+  -- Chaveado por (goal_id, protocol_id) e carregando a métrica-por-tipo — nunca
+  -- eixo único de nivel_ajuda (reconciliação 13/07/2026, Fase 4):
+  segmentacao JSONB NOT NULL,        -- {goal_id: {protocol_id: {tipo_estrutura, metrica, rotulo}}}
   gerado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (patient_id, session_numero)
 );
