@@ -1,4 +1,4 @@
-﻿export interface RepertorioItem {
+export interface RepertorioItem {
   nivel_ajuda_recente: number | null;
   contagem: number;
   is_candidata?: boolean;
@@ -109,19 +109,20 @@ export function verificarProtocoloMudou(
   segA: Record<string, Record<string, any>> | null,
   segB: Record<string, Record<string, any>> | null
 ): boolean {
-  if (!segA || !segB) return false;
+  const safeA = segA || {};
+  const safeB = segB || {};
 
   // Coleta os IDs de protocolo presentes em A e B
   const protocolosA = new Set<string>();
   const protocolosB = new Set<string>();
 
-  for (const goalsMap of Object.values(segA)) {
+  for (const goalsMap of Object.values(safeA)) {
     for (const protocolId of Object.keys(goalsMap)) {
       protocolosA.add(protocolId);
     }
   }
 
-  for (const goalsMap of Object.values(segB)) {
+  for (const goalsMap of Object.values(safeB)) {
     for (const protocolId of Object.keys(goalsMap)) {
       protocolosB.add(protocolId);
     }

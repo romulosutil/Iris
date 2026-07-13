@@ -1,4 +1,4 @@
-﻿import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { calcularDelta, verificarProtocoloMudou } from "./logic";
 
 describe("timeline/logic.ts (calcularDelta)", () => {
@@ -90,5 +90,17 @@ describe("timeline/logic.ts (verificarProtocoloMudou)", () => {
       "goal-1": { "protocol-x": {}, "protocol-y": {} },
     };
     expect(verificarProtocoloMudou(segA, segC)).toBe(true);
+  });
+
+  test("retorna true se transicionar de nulo para populado (G7)", () => {
+    const segB = {
+      "goal-1": { "protocol-x": {} },
+    };
+    expect(verificarProtocoloMudou(null, segB)).toBe(true);
+    expect(verificarProtocoloMudou(segB, null)).toBe(true);
+  });
+
+  test("retorna false se ambos forem nulos", () => {
+    expect(verificarProtocoloMudou(null, null)).toBe(false);
   });
 });

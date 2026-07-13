@@ -1,5 +1,5 @@
-﻿import "server-only";
-import { and, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
+import "server-only";
+import { and, desc, eq, gte, lte, inArray, or, isNull, sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 import {
   sessionSnapshot,
@@ -49,32 +49,29 @@ export async function carregarTimeline(
       .where(eq(sessionSnapshot.patientId, patientId))
       .orderBy(desc(sessionSnapshot.sessionNumero));
 
-    // 2. Carrega as metas ativas
+    // 2. Carrega TODAS as metas do paciente (ativas e concluídas) p/ recálculo histórico preciso
     const metas = await tx
       .select({
         id: goal.id,
         descricao: goal.descricao,
         disciplina: goal.disciplina,
+        estado: goal.estado,
       })
       .from(goal)
-      .where(and(eq(goal.patientId, patientId), eq(goal.estado, "ativa")));
+      .where(eq(goal.patientId, patientId));
 
-    // 3. Carrega os protocolos ativos e seus milestones
+    // 3. Carrega TODOS os protocolos (ativos e antigos) e seus milestones
     const PP = await tx
       .select({
         id: protocol.id,
         nome: protocol.nome,
         disciplina: protocol.disciplina,
         taxonomiaAjuda: protocol.taxonomiaAjuda,
+        desativadoEm: patientProtocol.desativadoEm,
       })
       .from(patientProtocol)
       .innerJoin(protocol, eq(patientProtocol.protocolId, protocol.id))
-      .where(
-        and(
-          eq(patientProtocol.patientId, patientId),
-          sql`${patientProtocol.desativadoEm} IS NULL`
-        )
-      );
+      .where(eq(patientProtocol.patientId, patientId));
 
     const protocolIds = PP.map((p) => p.id);
     const milestones = protocolIds.length
@@ -123,14 +120,19 @@ export async function carregarTimeline(
       };
     });
 
+    // Filtra em memória para o retorno dos eixos que estão ATIVOS HOJE
+    const metasAtivas = metas
+      .filter((m) => m.estado === "ativa")
+      .map((m) => ({ id: m.id, descricao: m.descricao, disciplina: m.disciplina }));
+
+    const protocolosAtivos = PP
+      .filter((p) => p.desativadoEm === null)
+      .map((p) => ({ id: p.id, nome: p.nome, disciplina: p.disciplina }));
+
     return {
       snapshots,
-      metasAtivas: metas,
-      protocolosAtivos: PP.map((p) => ({
-        id: p.id,
-        nome: p.nome,
-        disciplina: p.disciplina,
-      })),
+      metasAtivas,
+      protocolosAtivos,
     };
   });
 }
@@ -292,7 +294,10 @@ export async function carregarEvidenciasPorTrecho(
       .where(
         and(
           eq(evidence.patientId, patientId),
-          sql`${evidence.goalId} = ${goalOrMilestoneId} OR ${evidence.milestoneId} = ${goalOrMilestoneId}`,
+          or(
+            eq(evidence.goalId, goalOrMilestoneId),
+            eq(evidence.milestoneId, goalOrMilestoneId)
+          ),
           gte(evidence.sessionNumero, sessaoInicio),
           lte(evidence.sessionNumero, sessaoFim)
         )
