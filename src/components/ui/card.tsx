@@ -1,11 +1,15 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { surface } from "./primitives/surface";
 
 /**
- * "Candidato" (sugerido pela IA) NUNCA tem a mesma aparência de "conquistado"
- * (fato consolidado) — princípio 4. A diferença é estrutural, não só cor:
- * preenchimento sólido + borda cheia vs. contorno tracejado + hachura leve +
- * selo de estado textual (redundante, nunca cor sozinha).
+ * "Candidato" (a marco, Fase 4) NUNCA tem a mesma aparência de "conquistado"
+ * (fato consolidado) — princípio 4. A diferença é ESTRUTURAL: conquistado tem
+ * fill sólido + borda cheia + sombra que LEVANTA; candidato usa a superfície
+ * que AFUNDA (sombra inset, pontilhado azul) — o dado ainda-não-fato recua
+ * fisicamente sob um scan cansado. Selo textual redundante, nunca cor sozinha.
+ * (Refactor pós-crítica /impeccable: antes graphite+hachura, agora o eixo de
+ * profundidade compartilhado — ver docs/ux/refactor-design-system.md D3.)
  */
 type Estado = "conquistado" | "candidato";
 
@@ -14,11 +18,6 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Título do cartão; recebe tratamento display. */
   titulo?: React.ReactNode;
 }
-
-// Hachura DELIBERADAMENTE de baixo contraste (aceite: nenhum padrão repetitivo
-// de alto contraste). Sinaliza "candidato" junto do selo textual e da borda.
-const hachuraCandidato =
-  "bg-[repeating-linear-gradient(135deg,transparent,transparent_7px,color-mix(in_oklch,var(--color-ink)_8%,transparent)_7px,color-mix(in_oklch,var(--color-ink)_8%,transparent)_8px)]";
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
   { className, estado = "conquistado", titulo, children, ...props },
@@ -31,12 +30,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
       data-estado={estado}
       className={cn(
         "text-ink flex flex-col gap-2 p-5",
-        candidato
-          ? cn(
-              "border-graphite bg-canvas border-2 border-dashed",
-              hachuraCandidato,
-            )
-          : "border-ink-anchor bg-surface border-2 shadow-[var(--ds-shadow)]",
+        candidato ? surface("candidata", "bg-canvas") : surface("solida", "bg-surface"),
         className,
       )}
       {...props}
@@ -49,9 +43,9 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
         ) : null}
         <span
           className={cn(
-            "shrink-0 border px-2 py-0.5 text-xs font-semibold tracking-wide uppercase",
+            "shrink-0 border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase",
             candidato
-              ? "border-graphite bg-canvas text-graphite"
+              ? "border-[color:var(--color-blue)] bg-canvas text-ink"
               : "border-ink-anchor bg-mint text-ink-anchor",
           )}
         >

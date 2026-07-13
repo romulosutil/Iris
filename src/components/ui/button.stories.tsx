@@ -7,7 +7,10 @@ const meta = {
   parameters: { layout: "centered" },
   args: { children: "Aprovar sessão" },
   argTypes: {
-    variante: { control: "inline-radio", options: ["primaria", "neutra"] },
+    variante: {
+      control: "inline-radio",
+      options: ["primaria", "secundaria", "terciaria"],
+    },
     risco: { control: "inline-radio", options: ["baixo", "alto"] },
     disabled: { control: "boolean" },
   },
@@ -18,7 +21,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Primaria: Story = {};
 
-export const Neutra: Story = { args: { variante: "neutra" } };
+export const Secundaria: Story = { args: { variante: "secundaria", children: "Editar" } };
+
+export const Terciaria: Story = { args: { variante: "terciaria", children: "Cancelar" } };
 
 export const RiscoAlto: Story = {
   args: { risco: "alto", children: "Reclassificar evidência" },
@@ -34,17 +39,17 @@ export const RiscoAlto: Story = {
 
 export const Desabilitado: Story = { args: { disabled: true } };
 
-// Matriz de estados numa story só — clique para ver o Pressed; Tab para o Focus.
-export const MatrizDeEstados: Story = {
+// Escala de ênfase numa story só: primária (fill ouro, peso) → secundária
+// (fill branco, mesmo peso) → terciária (leve, sem sombra). Clique = Pressed.
+export const EscalaDeEnfase: Story = {
   render: () => (
     <div className="flex flex-wrap items-center gap-4">
-      <Button variante="primaria" risco="baixo">
-        Primária · risco baixo
-      </Button>
+      <Button variante="primaria">Aprovar</Button>
+      <Button variante="secundaria">Editar</Button>
+      <Button variante="terciaria">Cancelar</Button>
       <Button variante="primaria" risco="alto">
-        Primária · risco alto
+        Reclassificar
       </Button>
-      <Button variante="neutra">Neutra</Button>
       <Button disabled>Desabilitada</Button>
     </div>
   ),

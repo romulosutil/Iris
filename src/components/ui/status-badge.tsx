@@ -3,14 +3,23 @@ import { cn } from "@/lib/cn";
 
 /**
  * Selo persistente do estado do dado clínico (princípio 1: honestidade visual =
- * honestidade epistêmica). "Sugerida" NUNCA se parece com "aprovada": a diferença
+ * honestidade epistêmica). "Sugerida" NUNCA se parece com um fato: a diferença
  * é estrutural (contorno tracejado sem fill vs fill sólido), reforçada por ícone
  * e texto — nunca cor sozinha (§4C). Selo sempre visível, nunca só um matiz.
+ *
+ * Vocabulário ÚNICO (D4 do refactor): alinhado a `extraction_estado` da Fase 3
+ * (sugerida/aprovada/editada/descartada/pendente) + estados de governança da
+ * Fase 5 (reclassificada/devolvida). Antes o Card falava outro vocabulário
+ * (conquistado/candidato) — agora Card = candidatura de marco (Fase 4), Badge =
+ * desfecho de revisão. Sem mais dois dicionários para "a IA sugeriu isto".
  */
 export type EstadoDado =
   | "sugerida" // candidato da IA — tentativo, ainda não é evidência
-  | "aprovada" // terapeuta aprovou — virou evidência (conquistado)
-  | "reclassificada" // coordenador criou nova versão (governança)
+  | "aprovada" // terapeuta aprovou — virou fato
+  | "editada" // terapeuta editou e aprovou — fato, com ajuste humano
+  | "descartada" // terapeuta rejeitou — não vira registro
+  | "pendente" // extração pendente de reprocessamento (falha do pipeline, flow 2.4)
+  | "reclassificada" // coordenador criou nova versão (governança, Fase 5)
   | "devolvida"; // coordenador devolveu ao terapeuta — pede ação
 
 type Config = {
@@ -55,11 +64,35 @@ function IconeUndo() {
     </svg>
   );
 }
+function IconePencil() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 16 16" fill="none" aria-hidden focusable="false">
+      <path d="M10.5 2.5l3 3L6 13l-3.5.5L3 10l7.5-7.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IconeSlash() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 16 16" fill="none" aria-hidden focusable="false">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M4 4l8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+    </svg>
+  );
+}
+function IconeClock() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 16 16" fill="none" aria-hidden focusable="false">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 5v3.2l2.2 1.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 const config: Record<EstadoDado, Config> = {
   sugerida: {
     rotulo: "Sugerida",
-    // Contorno tracejado violeta, SEM fill sólido — mesmo padrão do Card candidato.
+    // Contorno tracejado violeta, SEM fill sólido — o "ainda-não-fato" da IA.
+    // (A profundidade "afunda" mora no Card/ConfidenceCard; o selo é rótulo.)
     selo: "border-dashed border-[color:var(--color-suggested)] bg-canvas text-[color:var(--color-suggested)]",
     dot: "bg-[color:var(--color-suggested)]",
     Icone: IconeSparkle,
@@ -69,6 +102,27 @@ const config: Record<EstadoDado, Config> = {
     selo: "border-ink-anchor bg-mint text-ink-anchor",
     dot: "bg-mint",
     Icone: IconeCheck,
+  },
+  editada: {
+    rotulo: "Editada",
+    // Fato, com ajuste humano — mesmo fill de "aprovada" (é fato), ícone lápis.
+    selo: "border-ink-anchor bg-mint text-ink-anchor",
+    dot: "bg-mint",
+    Icone: IconePencil,
+  },
+  descartada: {
+    rotulo: "Descartada",
+    // Rejeitada — baixa ênfase, sem fill forte (não é fato, saiu do fluxo).
+    selo: "border-graphite bg-canvas text-graphite",
+    dot: "bg-graphite",
+    Icone: IconeSlash,
+  },
+  pendente: {
+    rotulo: "Pendente",
+    // Extração pendente de reprocessamento (falha do pipeline) — pede atenção.
+    selo: "border-ink-anchor bg-terracotta text-ink-anchor",
+    dot: "bg-terracotta",
+    Icone: IconeClock,
   },
   reclassificada: {
     rotulo: "Reclassificada",
