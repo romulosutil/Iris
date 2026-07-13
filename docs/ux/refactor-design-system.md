@@ -35,19 +35,30 @@ duplicação**:
   StatusBadge, e os novos cartões de revisão.
 Sem churn de renomear tudo — mover só o que ganha clareza.
 
-**D2 — `Surface` é a fonte única da superfície brutalista.** Um primitivo com
-`variante`: `solida` (fill + borda âncora + sombra dura) | `sugerida` (violeta
-tracejado, sem fill) | `candidata` (azul pontilhado). Button/Card/Badge/Input
-compõem `Surface`, não recopiam classes.
+**D2 — `Surface`/`control` são o MECANISMO de enforcement (P1/Q3 da crítica).**
+Evidência: `--border-brutal` e `--control-md/lg` têm **0 consumidores**; 17×
+`border-2` + 9× `min-h-11` crus furam os tokens; e Tailwind v4 `@theme` **não
+emite** `--border-*`/control como utilitário → o token é comentário, não
+constraint. Logo a "fonte única" tem que ser um **util TS**: `surface(variante)`
+(solida-levanta | sugerida-afunda | candidata-afunda) + `control(sm|md|lg)`. Os
+componentes COMPÕEM esses utils; o review vê a composição, não classe recopiada —
+é isso que impede o próximo `border-2` cru.
 
-**D3 — Duas linguagens "tentativas" distintas, cada uma com fonte única**
-(são conceitos de domínio diferentes, a distinção é intencional):
-- **Sugerido pela IA** = **violeta tracejado** (`--color-suggested`, já validado
-  sob protanopia/deuteranopia). Usado por extração `sugerida` na tela de revisão.
-- **Candidato a marco/dominada** = **azul pontilhado** (alinha ao wireframe §3;
-  `Card` migra de graphite→azul). Conceito da Fase 4 (candidatura de goal/marco).
-A hachura do Card candidato é **removida** (redundância visual desnecessária;
-tracejado + selo textual já bastam).
+**D3 (revisado pós-crítica `/impeccable`, 35/40) — UM eixo ESTRUTURAL de estado,
+tipo por hue+ícone+label.** A crítica alertou: formalizar dois tipos de
+"ainda-não-fato" (violeta vs azul) pode reabrir a ambiguidade que o produto
+existe pra fechar. Decisão melhor:
+- **Fato (aprovado)** = fill sólido + borda cheia + **sombra que LEVANTA** (`--ds-shadow`).
+- **Ainda-não-fato** = sem fill + tracejado + **sombra INSET que AFUNDA** (`--ds-shadow-inset`).
+O eixo profundidade (levanta/afunda) é o aprendizado ÚNICO e daltônico-seguro. O
+*tipo* de não-fato é leitura secundária: **IA-sugerido = violeta + Sparkle**;
+**marco-candidato = azul + Layers**. Hachura do Card removida (o inset já carrega
+"tentativo"). Isto resolve P0 (fork) + P1 (sink vaporware) juntos.
+
+**D3b — Construir o "sink" (P1 da crítica).** `--shadow-brutal-inset`
+("sugerido afunda / aprovado levanta", `globals.css:56-59`) hoje tem **0
+consumidores** — é a codificação mais literal do princípio e não existe em pixel.
+Vira saída de primeira classe do `surface()`.
 
 **D4 — Vocabulário de estado único.** `StatusBadge.EstadoDado` alinha ao domínio
 real (`extraction_estado`: sugerida/aprovada/editada/descartada + pendente) +
@@ -70,12 +81,26 @@ construídas dos primitivos:
 - **typecheck + lint 0**.
 - **Um PR** revisável; commits por incremento.
 
-## Plano de incrementos
+## Bugs de a11y achados pela crítica (corrigir no refactor)
+- **[P2] Casey** — `Chip` (`chip.tsx:14`) tem `min-h-11` mas **sem `min-w-11`** →
+  toggle curto fura 44px em largura. `Dialog` close (`dialog.tsx:51`) = 36px no
+  canto hostil ao polegar → ≥44px + reconsiderar posição p/ uma mão.
+- **[P3] Sam** — Chip removível+selecionável: dois `<button>` aninhados em `<span>`
+  sem rótulo de grupo → SR anuncia dois botões ambíguos. Agrupar/rotular.
+- **Gate**: `a11y.test.tsx` roda axe mas **desliga `color-contrast`** (jsdom não
+  renderiza cor) → contraste NÃO é gated automaticamente. Registrar como dívida
+  (validação de contraste é manual/CVD-script hoje).
 
-1. `Surface` + `Pill` primitivos (+ stories + axe). Migrar Button/Card para compor.
-2. Unificar linguagem tentativa (D3): Card candidato graphite→azul; remover hachura.
-3. `StatusBadge` vocabulário único (D4); Card usa Pill/StatusBadge.
-4. Reorganizar pastas (primitives/ patterns/) — só movimentação + reexports.
-5. Peças de revisão (D5): ConfidenceCard, CompareRow, BatchBar (já prontas p/ a UI da Fase 3).
+## Plano de incrementos (revisado pós-crítica)
+
+1. **`surface(variante)` + `control(tam)` utils** (fonte única + enforcement) +
+   `Pill`. Migrar Button/Card/Input/Dialog/etc. para compor — **de-dup
+   behavior-preserving**, zero mudança visual. Gates automáticos (typecheck/axe).
+2. **Construir o eixo de profundidade (D3+D3b)** — `surface("sugerida")` afunda
+   (inset), `solida` levanta; Card candidato graphite→azul+inset, remove hachura.
+   **Mudança visual — revisar no Storybook (olho do Rômulo)**.
+3. `StatusBadge` vocabulário único (D4) alinhado a `extraction_estado`; Card usa Pill.
+4. Fixes a11y (Casey/Sam acima) + reorganizar pastas (primitives/ patterns/).
+5. Peças de revisão (D5): ConfidenceCard, CompareRow, BatchBar — aceleração da UI da Fase 3.
 
 Depois deste refactor: PR da UI de revisão (Plano 2 UI da Fase 3) sobre o DS novo.
