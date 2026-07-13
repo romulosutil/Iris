@@ -3,10 +3,21 @@ export type ExtractionContext = {
   clinicId: string;
   notaConsolidada: string;
   metasAtivas: Array<{ id: string; descricao: string }>;
+  // Contrato canônico montado pelo assembler (protocolos-e-agente.md Parte 2).
+  // Opcional: stubs demo/null ignoram; o ClaudeProvider real o envia ao LLM.
+  contextoCanonico?: unknown;
 };
 
+export type ExtractionSubtipo =
+  | "evidencia"
+  | "registro_abc"
+  | "ausencia_comportamento"
+  | "cadeia"
+  | "preferencia_reforcador"
+  | "pendente"; // sentinela do NullProvider (pendente de reprocessamento)
+
 export type ExtractionDraft = {
-  subtipo: string;
+  subtipo: ExtractionSubtipo;
   trechoFonte: string;
   confianca: "alta" | "media" | "baixa";
   justificativaConfianca?: string;
@@ -22,9 +33,21 @@ export interface ExtractionProvider {
 
 import { DemoStubProvider } from "./demo-stub-provider";
 import { NullProvider } from "./null-provider";
+import { ClaudeProvider, createAnthropicInvoker } from "./claude-provider";
 
-// Roteamento por flag de clínica. Fase 3 troca o ramo de produção pelo
-// ClaudeProvider real (R1-R19 + hardening prompt-injection) — mudança de 1 linha.
+// Roteamento do provider de extração:
+// - clínica demo → stub determinístico (dado fictício, sem LLM).
+// - produção → ClaudeProvider real SÓ com a flag EXTRACTION_LLM_ENABLED=true E
+//   ANTHROPIC_API_KEY presente. O gate é o guardrail LGPD/DPA: nenhum texto de
+//   paciente real sai para a Anthropic enquanto o DPA + zero-data-retention não
+//   estiverem confirmados (a flag só é ligada no Easypanel depois disso).
+//   Sem a flag/chave → NullProvider (marca pendente, não chama LLM).
 export function resolveProvider(clinic: { isDemo: boolean }): ExtractionProvider {
-  return clinic.isDemo ? new DemoStubProvider() : new NullProvider();
+  if (clinic.isDemo) return new DemoStubProvider();
+  const llmHabilitado =
+    process.env.EXTRACTION_LLM_ENABLED === "true" &&
+    !!process.env.ANTHROPIC_API_KEY;
+  return llmHabilitado
+    ? new ClaudeProvider(createAnthropicInvoker())
+    : new NullProvider();
 }

@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
@@ -15,6 +15,21 @@ import {
   sessionProtocolScope,
 } from "@/db/schema";
 import { resolveProvider } from "@/lib/extraction/provider";
+import type { ExtractionDraft } from "@/lib/extraction/provider";
+import { loadCanonicalContext } from "@/lib/extraction/context-loader";
+import { deveReextrair } from "@/lib/extraction/reextraction-policy";
+
+// Draft de fallback quando a extração (LLM) falha: mantém a nota salva e marca
+// pendente de reprocessamento (flow 2.4 dos wireframes) — nunca perde o diário.
+const PENDENTE_DRAFT: ExtractionDraft = {
+  subtipo: "pendente",
+  trechoFonte: "",
+  confianca: "baixa",
+  inconsistenteComHistorico: false,
+  parContrasteId: null,
+  payload: { motivo: "extracao_falhou_retry" },
+  estado: "pendente_reprocessamento",
+};
 
 const capturaSchema = z.object({
   sessionId: z.string().uuid(),
@@ -159,21 +174,38 @@ export async function consolidarSessao(
   const parsed = consolidarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
 
+  const novoTexto = parsed.data.texto;
+  const sid = parsed.data.sessionId;
+
   try {
-    return await withTenant(ctx, async (tx) => {
+    // ── Fase A (transação): grava nota + número, coleta o estado necessário
+    //    para decidir a re-extração e monta o contexto canônico do agente.
+    const prep = await withTenant(ctx, async (tx) => {
+      // texto anterior (antes do upsert) → sabemos se o diário mudou
+      const [notaAntiga] = await tx
+        .select({ texto: sessionNote.texto })
+        .from(sessionNote)
+        .where(
+          and(
+            eq(sessionNote.sessionId, sid),
+            eq(sessionNote.tipo, "nota_consolidada"),
+          ),
+        );
+      const textoMudou = (notaAntiga?.texto ?? null) !== novoTexto;
+
       // 1) grava/atualiza a nota consolidada (upsert na chave única sessão+tipo)
       await tx
         .insert(sessionNote)
         .values({
-          sessionId: parsed.data.sessionId,
+          sessionId: sid,
           clinicId: ctx.clinicId,
           tipo: "nota_consolidada",
-          texto: parsed.data.texto,
+          texto: novoTexto,
           autorId: ctx.userId,
         })
         .onConflictDoUpdate({
           target: [sessionNote.sessionId, sessionNote.tipo],
-          set: { texto: parsed.data.texto, atualizadoEm: new Date() },
+          set: { texto: novoTexto, atualizadoEm: new Date() },
         });
 
       // 2) popula numero_sequencial_paciente só se ainda nulo (idempotente):
@@ -188,14 +220,14 @@ export async function consolidarSessao(
       const [sess] = await tx
         .select({ patientId: session.patientId, numero: session.numeroSequencialPaciente })
         .from(session)
-        .where(eq(session.id, parsed.data.sessionId));
+        .where(eq(session.id, sid));
       let numero = sess!.numero ?? null;
       if (numero === null) {
         try {
           const upd = await tx.execute(sql`
             UPDATE session SET numero_sequencial_paciente =
               app_proximo_numero_sequencial(${sess!.patientId})
-            WHERE id = ${parsed.data.sessionId} AND numero_sequencial_paciente IS NULL
+            WHERE id = ${sid} AND numero_sequencial_paciente IS NULL
             RETURNING numero_sequencial_paciente AS numero`);
           const row = (upd as unknown as Array<{ numero: number }>)[0];
           numero = row?.numero ?? sess!.numero ?? null;
@@ -211,7 +243,7 @@ export async function consolidarSessao(
             const [atual] = await tx
               .select({ numero: session.numeroSequencialPaciente })
               .from(session)
-              .where(eq(session.id, parsed.data.sessionId));
+              .where(eq(session.id, sid));
             numero = atual?.numero ?? null;
           } else {
             throw err;
@@ -219,7 +251,18 @@ export async function consolidarSessao(
         }
       }
 
-      // 3) dispara a extração via costura (stub demo / null produção).
+      // 3) política de re-extração (P0): não re-chama o LLM nem apaga extrações
+      //    já revisadas quando o texto não mudou (e não há pendência).
+      const exEstados = await tx
+        .select({ estado: extraction.estado })
+        .from(extraction)
+        .where(eq(extraction.sessionId, sid));
+      const reextrair = deveReextrair({
+        textoMudou,
+        temExtracoes: exEstados.length > 0,
+        temPendente: exEstados.some((e) => e.estado === "pendente_reprocessamento"),
+      });
+
       const [cl] = await tx
         .select({ isDemo: clinic.isDemo })
         .from(clinic)
@@ -234,19 +277,54 @@ export async function consolidarSessao(
             eq(goal.estado, "ativa"),
           ),
         );
-      const provider = resolveProvider({ isDemo: cl!.isDemo });
-      const drafts = await provider.extrair({
-        sessionId: parsed.data.sessionId,
+
+      // Monta o contrato canônico do agente só se formos re-extrair.
+      const contexto = reextrair
+        ? await loadCanonicalContext(tx, {
+            sessionId: sid,
+            patientId: sess!.patientId,
+            clinicId: ctx.clinicId,
+          })
+        : null;
+
+      return { numero, reextrair, isDemo: cl!.isDemo, metas, contexto };
+    });
+
+    // Texto inalterado (e sem pendência) → não chama LLM, não apaga nada.
+    if (!prep.reextrair) {
+      return { numeroSequencial: prep.numero ?? undefined };
+    }
+
+    // ── Fase B: chama o provider (LLM) FORA da transação — não segura conexão
+    //    nem locks durante a chamada de vários segundos.
+    const provider = resolveProvider({ isDemo: prep.isDemo });
+    let drafts: ExtractionDraft[];
+    try {
+      drafts = await provider.extrair({
+        sessionId: sid,
         clinicId: ctx.clinicId,
-        notaConsolidada: parsed.data.texto,
-        metasAtivas: metas,
+        notaConsolidada: novoTexto,
+        metasAtivas: prep.metas,
+        contextoCanonico: prep.contexto,
       });
-      // regrava extrações desta sessão (consolidação re-roda o provider)
-      await tx.delete(extraction).where(eq(extraction.sessionId, parsed.data.sessionId));
+    } catch (err) {
+      console.error("extração falhou (marcando pendente):", err);
+      drafts = [PENDENTE_DRAFT];
+    }
+
+    // ── Fase C: regrava só sugestões/pendências; PRESERVA linhas já revisadas
+    //    (aprovada/editada/descartada, quando existirem — Plano 2).
+    await withTenant(ctx, async (tx) => {
+      await tx.delete(extraction).where(
+        and(
+          eq(extraction.sessionId, sid),
+          inArray(extraction.estado, ["sugerida", "pendente_reprocessamento"]),
+        ),
+      );
       if (drafts.length > 0) {
         await tx.insert(extraction).values(
           drafts.map((d) => ({
-            sessionId: parsed.data.sessionId,
+            sessionId: sid,
             clinicId: ctx.clinicId,
             estado: d.estado,
             subtipo: d.subtipo,
@@ -259,8 +337,9 @@ export async function consolidarSessao(
           })),
         );
       }
-      return { numeroSequencial: numero ?? undefined };
     });
+
+    return { numeroSequencial: prep.numero ?? undefined };
   } catch (err) {
     console.error("consolidarSessao:", err);
     return { error: "Não foi possível consolidar a sessão." };
