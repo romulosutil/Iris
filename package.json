@@ -24,6 +24,7 @@
     "db:migrate": "drizzle-kit migrate",
     "seed:clinic": "tsx --conditions=react-server --env-file=.env scripts/seed-clinic.ts",
     "seed:demo": "tsx --conditions=react-server --env-file=.env scripts/seed-demo.ts",
+    "backfill:evidence": "tsx --conditions=react-server --env-file=.env scripts/backfill-evidence.ts",
     "prepare": "husky"
   },
   "dependencies": {

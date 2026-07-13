@@ -705,17 +705,29 @@ CREATE INDEX idx_extraction_payload_gin ON extraction USING GIN (payload);
 -- ============================================================
 -- Evidence — evento imutável + revisão versionada (decisão 2.2)
 -- ============================================================
--- GRÃO: uma linha de `evidence` = UM alvo (`alvos[]`) de uma extração aprovada.
--- Uma extração com N alvos (possivelmente em protocolos diferentes) gera N
--- linhas. Por isso `protocol_id` é coluna explícita (o alvo carrega seu
--- protocolo) — o cálculo de ordinal/segmentação lê a coluna, sem escavar o
--- JSONB. (Reconciliação 13/07/2026, Fase 4.)
+-- GRÃO: uma linha de `evidence` = UM alvo (`alvos[]`) de uma extração aprovada,
+-- identificado pela sua POSIÇÃO no array (`alvo_ordinal`, base 0). Uma extração
+-- com N alvos (possivelmente em protocolos diferentes) gera N linhas.
+-- O agente emite refs CRUS de catálogo (`protocol_slug`, `dominio_id`,
+-- `goal_ref`) — texto livre, não garantidamente UUID. Preservamos esses refs
+-- crus como o agente os emitiu; os UUIDs resolvidos (`protocol_id`, `goal_id`,
+-- `milestone_id`) são preenchidos best-effort agora e pela futura camada de
+-- resolução slug→UUID depois — por isso são NULLABLE. (Reconciliação
+-- 13/07/2026 + revisão tech lead: chave de idempotência por ordinal, não por
+-- FKs que podem não resolver ainda.)
 CREATE TABLE evidence (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   extraction_id UUID NOT NULL REFERENCES extraction(id),
   patient_id UUID NOT NULL REFERENCES patient(id),
   session_id UUID NOT NULL REFERENCES session(id),
   session_numero INTEGER NOT NULL,           -- número sequencial do paciente; base da linha do tempo
+  alvo_ordinal INTEGER NOT NULL,             -- posição do alvo em alvos[] (base 0); discriminador de idempotência
+  -- Refs CRUS do agente (o que ele realmente emitiu; texto livre, preservado
+  -- para a futura camada de resolução slug→UUID):
+  protocol_slug TEXT,                        -- ex.: "vbmapp", "pedi" (slug de catálogo, não UUID)
+  dominio_id TEXT,                           -- domínio do alvo, como o agente emitiu
+  goal_ref TEXT,                             -- referência de meta bruta do agente
+  -- UUIDs RESOLVIDOS (best-effort agora, resolução completa depois; NULLABLE):
   protocol_id UUID REFERENCES protocol(id),  -- protocolo do alvo; base do isolamento de ordinal (G5)
   goal_id UUID REFERENCES goal(id),
   milestone_id UUID REFERENCES milestone(id),
@@ -727,12 +739,14 @@ CREATE TABLE evidence (
 CREATE INDEX idx_evidence_patient_session ON evidence (patient_id, session_numero);
 CREATE INDEX idx_evidence_goal ON evidence (goal_id) WHERE goal_id IS NOT NULL;
 CREATE INDEX idx_evidence_milestone ON evidence (milestone_id) WHERE milestone_id IS NOT NULL;
--- Idempotência do backfill e do insert por alvo: um alvo (extraction, goal,
--- milestone) não pode virar duas evidências. NULLS NOT DISTINCT (PG15+) trata
--- goal/milestone nulos como iguais, senão duplicatas escapariam.
+-- Idempotência do backfill e do insert por alvo: o DISCRIMINADOR é o ORDINAL do
+-- alvo dentro da extração, NÃO os FKs (que podem estar nulos até a resolução
+-- slug→UUID rodar). Antes, `(extraction_id, goal_id, milestone_id)` com NULLS
+-- NOT DISTINCT colapsava todos os alvos de refs não-resolvidos em `(id, null,
+-- null)` → só um sobrevivia. `(extraction_id, alvo_ordinal)` é estável e único.
 ALTER TABLE evidence
   ADD CONSTRAINT uq_evidence_alvo
-  UNIQUE NULLS NOT DISTINCT (extraction_id, goal_id, milestone_id);
+  UNIQUE (extraction_id, alvo_ordinal);
 -- Imutabilidade aplicada em nível de PRIVILÉGIO, não só de convenção:
 REVOKE UPDATE, DELETE ON evidence FROM app_role;
 

@@ -86,6 +86,12 @@ export const milestoneTipoEstrutura = pgEnum("milestone_tipo_estrutura", [
   "marco_simples", "marco_com_barreira", "escore_composto", "faixa_normativa",
 ]);
 
+// Fase 4 (4A — Evidence layer). Ação de revisão do coordenador sobre uma
+// evidência já gravada (log append-only, nunca sobrescreve a linha original).
+export const evidenceRevisionAcao = pgEnum("evidence_revision_acao", [
+  "confirmar", "reclassificar", "invalidar",
+]);
+
 // ─── Auth (Better-Auth) — `app_user` é a tabela `user` do Better-Auth ────────
 // Chaves em camelCase = o que o Better-Auth espera; colunas em snake_case.
 export const appUser = pgTable("app_user", {
@@ -547,3 +553,105 @@ export const milestoneCandidacy = pgTable(
   },
   (t) => [primaryKey({ columns: [t.patientId, t.milestoneId] })],
 );
+
+// ─── Evidence layer (Fase 4 · 4A) ────────────────────────────────────────────
+// `evidence` — grão de ALVO (1 linha = 1 item de `alvos[]` da extração
+// aprovada/editada), identificado pela POSIÇÃO no array (`alvoOrdinal`, base 0).
+// Append-only por design (sem coluna de UPDATE prevista; UPDATE/DELETE
+// revogados de app_role na migração de RLS). O agente emite refs CRUS de
+// catálogo (`protocolSlug`/`dominioId`/`goalRef`, texto livre); os UUIDs
+// resolvidos (`protocolId`/`goalId`/`milestoneId`) são best-effort agora e
+// preenchidos pela resolução slug→UUID depois — por isso nullable.
+export const evidence = pgTable(
+  "evidence",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    extractionId: uuid("extraction_id")
+      .notNull()
+      .references(() => extraction.id),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => session.id),
+    // número sequencial do paciente; base da linha do tempo
+    sessionNumero: integer("session_numero").notNull(),
+    // posição do alvo em alvos[] (base 0); discriminador de idempotência
+    alvoOrdinal: integer("alvo_ordinal").notNull(),
+    // refs CRUS do agente (texto livre, preservados para a resolução futura)
+    protocolSlug: text("protocol_slug"),
+    dominioId: text("dominio_id"),
+    goalRef: text("goal_ref"),
+    // UUIDs resolvidos (best-effort agora, resolução completa depois)
+    protocolId: uuid("protocol_id").references(() => protocol.id),
+    goalId: uuid("goal_id").references(() => goal.id),
+    milestoneId: uuid("milestone_id").references(() => milestone.id),
+    // cópia congelada do alvo aprovado (payloadEditado ?? payload)
+    classificacaoOriginal: jsonb("classificacao_original").notNull(),
+    aprovadoPor: uuid("aprovado_por")
+      .notNull()
+      .references(() => appUser.id),
+    aprovadoEm: timestamp("aprovado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("idx_evidence_patient_session").on(t.patientId, t.sessionNumero),
+    index("idx_evidence_goal").on(t.goalId).where(sql`${t.goalId} IS NOT NULL`),
+    index("idx_evidence_milestone")
+      .on(t.milestoneId)
+      .where(sql`${t.milestoneId} IS NOT NULL`),
+    // Idempotência do backfill e do insert por alvo: o discriminador é o ORDINAL
+    // do alvo na extração, NÃO os FKs (que podem estar nulos até a resolução
+    // slug→UUID rodar). `(extraction_id, alvo_ordinal)` é estável e único.
+    unique("uq_evidence_alvo").on(t.extractionId, t.alvoOrdinal),
+  ],
+);
+
+// `evidence_revision` — log append-only de reclassificação/invalidação pelo
+// coordenador (governança V1/V2). `autor_id` é sempre coordenador — a
+// aplicação garante, RLS reforça.
+export const evidenceRevision = pgTable(
+  "evidence_revision",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    evidenceId: uuid("evidence_id")
+      .notNull()
+      .references(() => evidence.id),
+    acao: evidenceRevisionAcao("acao").notNull(),
+    classificacaoAnterior: jsonb("classificacao_anterior").notNull(),
+    classificacaoNova: jsonb("classificacao_nova"), // NULL quando acao = 'invalidar'
+    justificativa: text("justificativa").notNull(),
+    autorId: uuid("autor_id")
+      .notNull()
+      .references(() => appUser.id),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("idx_evidence_revision_evidence").on(t.evidenceId, t.criadoEm.desc()),
+  ],
+);
+
+// `evidence_query` — "devolver com dúvida" (governança V2): coordenador pede
+// esclarecimento ao terapeuta sobre uma evidência antes de decidir.
+export const evidenceQuery = pgTable("evidence_query", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  evidenceId: uuid("evidence_id")
+    .notNull()
+    .references(() => evidence.id),
+  coordenadorId: uuid("coordenador_id")
+    .notNull()
+    .references(() => appUser.id),
+  pergunta: text("pergunta").notNull(),
+  respostaTexto: text("resposta_texto"),
+  resultanteEvidenceRevisionId: uuid(
+    "resultante_evidence_revision_id",
+  ).references(() => evidenceRevision.id),
+  criadoEm: timestamp("criado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  respondidoEm: timestamp("respondido_em", { withTimezone: true }),
+});
