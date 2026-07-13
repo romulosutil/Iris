@@ -1,0 +1,317 @@
+/**
+ * Fase 4 (4B) — materialização real (segmentação/repertório/candidatura).
+ * Mesmo harness de db/tests/fase4-evidence-rls.int.test.ts.
+ *
+ * Cobre o DoD da spec (2026-07-13-fase-4-compute-segmentacao.md §5):
+ *  - marco_simples: EVOLUÇÃO (1ª positiva + melhora) e REGRESSÃO (2 pioras
+ *    consecutivas) aparecem em `session_snapshot.segmentacao`.
+ *  - marco_com_barreira: rótulo SEMPRE `aguardando_avaliacao_formal` (nunca
+ *    número fabricado).
+ *  - `goal_candidacy` acende quando `Goal.criterio_dominio` é satisfeito.
+ *  - recompute retroativo: reclassificar uma evidência antiga e recomputar a
+ *    partir daquele `session_numero` NÃO reescreve o snapshot de uma sessão
+ *    anterior ao ponto de recompute.
+ */
+import { sql as dsql } from "drizzle-orm";
+import postgres from "postgres";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+
+const CLINIC_A = "00000000-0000-0000-0000-0000000000d1";
+const U_COORD_A = "00000000-0000-0000-0000-00000000c0d1";
+const U_T1_A = "00000000-0000-0000-0000-0000000071d1";
+const PAC_A1 = "00000000-0000-0000-0000-00000000acd1";
+const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
+
+// Clínica B (isolamento) — paciente de outra clínica para o teste de guard.
+const CLINIC_B = "00000000-0000-0000-0000-0000000000d2";
+const U_COORD_B = "00000000-0000-0000-0000-00000000c0d2";
+const PAC_B1 = "00000000-0000-0000-0000-00000000acd2";
+
+const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
+
+let owner: ReturnType<typeof postgres>;
+let withTenant: typeof import("@/db/rls").withTenant;
+let appSql: typeof import("@/db/client").sql;
+let materializarSnapshot: typeof import("@/lib/evidence/materializar").materializarSnapshot;
+let drizzleMaterializarQueries: typeof import("@/lib/evidence/materializar").drizzleMaterializarQueries;
+
+let PROTOCOL_ID: string;
+let MARCO_SIMPLES_ID: string;
+let MARCO_BARREIRA_ID: string;
+let GOAL_EVOLUCAO_ID: string; // testa evolução + candidatura
+let GOAL_REGRESSAO_ID: string; // testa regressão
+let GOAL_BARREIRA_ID: string; // testa aguardando_avaliacao_formal
+
+const sessionIds: Record<number, string> = {};
+
+async function inserirSessao(numero: number) {
+  const id = crypto.randomUUID();
+  await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente)
+    VALUES (${id}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', ${numero})`;
+  sessionIds[numero] = id;
+  return id;
+}
+
+async function inserirEvidence(opts: {
+  sessionNumero: number;
+  goalId: string;
+  milestoneId: string | null;
+  nivelAjuda: string | null;
+  polaridade: "positiva" | "negativa";
+}) {
+  const sessId = sessionIds[opts.sessionNumero]!;
+  const [ext] = await owner`INSERT INTO extraction
+      (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload, revisado_por)
+    VALUES (${sessId}, ${CLINIC_A}, 'aprovada', 'evidencia', 'trecho de teste', 'alta',
+      ${owner.json({ evidencia: { alvos: [{ goal_id: opts.goalId }] } })}, ${U_T1_A})
+    RETURNING id`;
+  const classificacao = {
+    nivel_ajuda: opts.nivelAjuda,
+    polaridade: opts.polaridade,
+    alvo: { goal_id: opts.goalId },
+  };
+  await owner`INSERT INTO evidence
+      (extraction_id, patient_id, session_id, session_numero, alvo_ordinal,
+       protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
+    VALUES (${ext!.id}, ${PAC_A1}, ${sessId}, ${opts.sessionNumero}, 0,
+      ${PROTOCOL_ID}, ${opts.goalId}, ${opts.milestoneId}, ${owner.json(classificacao)}, ${U_T1_A})`;
+}
+
+describe.skipIf(!hasDb)("Fase 4 (4B) · materializarSnapshot (segmentação real)", () => {
+  beforeAll(async () => {
+    ({ withTenant } = await import("@/db/rls"));
+    ({ sql: appSql } = await import("@/db/client"));
+    ({ materializarSnapshot, drizzleMaterializarQueries } = await import(
+      "@/lib/evidence/materializar"
+    ));
+    owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
+
+    await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
+      session, extraction, evidence, evidence_revision, evidence_query,
+      protocol, milestone, goal, goal_candidacy, milestone_candidacy, session_snapshot
+      RESTART IDENTITY CASCADE`;
+
+    await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES
+      (${PROTOCOL_FAMILIA}, 'Marcos de desenvolvimento (ABA)')
+      ON CONFLICT (id) DO NOTHING`;
+    await owner`INSERT INTO clinic (id, nome, is_demo) VALUES (${CLINIC_A}, 'Clínica A (materializar)', false)`;
+    await owner`INSERT INTO app_user (id, name, email) VALUES
+      (${U_COORD_A}, 'Coord A', 'coord.a.mat@t.com'),
+      (${U_T1_A}, 'Terapeuta 1 A', 't1.a.mat@t.com')`;
+    await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
+      (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
+      (${U_T1_A}, ${CLINIC_A}, 'terapeuta')`;
+    await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC_A1}, ${CLINIC_A}, 'Paciente A1 (materializar)')`;
+    await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
+      VALUES (${PAC_A1}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
+
+    // Clínica B — paciente de OUTRA clínica, para o teste de guard multi-tenant.
+    await owner`INSERT INTO clinic (id, nome, is_demo) VALUES (${CLINIC_B}, 'Clínica B (isolamento)', false)`;
+    await owner`INSERT INTO app_user (id, name, email) VALUES (${U_COORD_B}, 'Coord B', 'coord.b.mat@t.com')`;
+    await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_COORD_B}, ${CLINIC_B}, 'coordenador')`;
+    await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC_B1}, ${CLINIC_B}, 'Paciente B1 (outra clínica)')`;
+
+    const [protocolo] = await owner`INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
+      VALUES (${CLINIC_A}, 'VB-MAPP (teste)', 'ABA', ${PROTOCOL_FAMILIA},
+        ${owner.json(["independente", "dica_verbal", "dica_gestual", "modelacao", "dica_fisica"])})
+      RETURNING id`;
+    PROTOCOL_ID = protocolo!.id as string;
+
+    const [marcoSimples] = await owner`INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+      VALUES (${PROTOCOL_ID}, 'mando', 'Mando nível 1', 'marco_simples', ${owner.json({})})
+      RETURNING id`;
+    MARCO_SIMPLES_ID = marcoSimples!.id as string;
+
+    const [marcoBarreira] = await owner`INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+      VALUES (${PROTOCOL_ID}, 'barreiras', 'Barreira comportamental', 'marco_com_barreira', ${owner.json({ escala: [0, 1, 2, 3, 4] })})
+      RETURNING id`;
+    MARCO_BARREIRA_ID = marcoBarreira!.id as string;
+
+    const [goalEvolucao] = await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+      VALUES (${PAC_A1}, ${CLINIC_A}, 'Pedir água de forma independente', 'ativa',
+        ${owner.json({ tipo: "sessoes_consecutivas_independente", valor: 2 })}, ${U_COORD_A})
+      RETURNING id`;
+    GOAL_EVOLUCAO_ID = goalEvolucao!.id as string;
+
+    const [goalRegressao] = await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+      VALUES (${PAC_A1}, ${CLINIC_A}, 'Nomear objetos (regressão)', 'ativa',
+        ${owner.json({ tipo: "sessoes_consecutivas_independente", valor: 3 })}, ${U_COORD_A})
+      RETURNING id`;
+    GOAL_REGRESSAO_ID = goalRegressao!.id as string;
+
+    const [goalBarreira] = await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+      VALUES (${PAC_A1}, ${CLINIC_A}, 'Reduzir comportamento-barreira', 'ativa',
+        ${owner.json({ tipo: "sessoes_consecutivas_independente", valor: 99 })}, ${U_COORD_A})
+      RETURNING id`;
+    GOAL_BARREIRA_ID = goalBarreira!.id as string;
+
+    for (let n = 1; n <= 4; n++) await inserirSessao(n);
+
+    // GOAL_EVOLUCAO: s1 dica_gestual(+) evolucao, s2 dica_verbal(+) evolucao,
+    // s3 independente(+) evolucao, s4 independente(+) repete (candidatura acende: 2 últimas independentes+positivas)
+    await inserirEvidence({ sessionNumero: 1, goalId: GOAL_EVOLUCAO_ID, milestoneId: MARCO_SIMPLES_ID, nivelAjuda: "dica_gestual", polaridade: "positiva" });
+    await inserirEvidence({ sessionNumero: 2, goalId: GOAL_EVOLUCAO_ID, milestoneId: MARCO_SIMPLES_ID, nivelAjuda: "dica_verbal", polaridade: "positiva" });
+    await inserirEvidence({ sessionNumero: 3, goalId: GOAL_EVOLUCAO_ID, milestoneId: MARCO_SIMPLES_ID, nivelAjuda: "independente", polaridade: "positiva" });
+    await inserirEvidence({ sessionNumero: 4, goalId: GOAL_EVOLUCAO_ID, milestoneId: MARCO_SIMPLES_ID, nivelAjuda: "independente", polaridade: "positiva" });
+
+    // GOAL_REGRESSAO: s1 dica_verbal(+) evolucao, s2 dica_gestual(-) piora 1x,
+    // s3 modelacao(-) piora 2x consecutivas → regressão
+    await inserirEvidence({ sessionNumero: 1, goalId: GOAL_REGRESSAO_ID, milestoneId: MARCO_SIMPLES_ID, nivelAjuda: "dica_verbal", polaridade: "positiva" });
+    await inserirEvidence({ sessionNumero: 2, goalId: GOAL_REGRESSAO_ID, milestoneId: MARCO_SIMPLES_ID, nivelAjuda: "dica_gestual", polaridade: "negativa" });
+    await inserirEvidence({ sessionNumero: 3, goalId: GOAL_REGRESSAO_ID, milestoneId: MARCO_SIMPLES_ID, nivelAjuda: "modelacao", polaridade: "negativa" });
+
+    // GOAL_BARREIRA: marco_com_barreira — nunca deve virar número
+    await inserirEvidence({ sessionNumero: 1, goalId: GOAL_BARREIRA_ID, milestoneId: MARCO_BARREIRA_ID, nivelAjuda: null, polaridade: "negativa" });
+
+    await withTenant(ctxCoordA, (tx) =>
+      materializarSnapshot(drizzleMaterializarQueries(tx), PAC_A1, 1),
+    );
+  });
+
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
+
+  async function lerSnapshot(numero: number) {
+    const [row] = await owner`
+      SELECT repertorio_state, segmentacao FROM session_snapshot
+      WHERE patient_id = ${PAC_A1} AND session_numero = ${numero}
+    `;
+    return row as { repertorio_state: any; segmentacao: any } | undefined;
+  }
+
+  test("marco_simples: 1ª positiva na sessão 1 é evolução", async () => {
+    const snap = await lerSnapshot(1);
+    const seg = snap!.segmentacao[GOAL_EVOLUCAO_ID][PROTOCOL_ID];
+    expect(seg.rotulo).toBe("evolucao");
+    expect(seg.tipo_estrutura).toBe("marco_simples");
+  });
+
+  test("marco_simples: melhora de ordinal em sessões seguintes continua evolução", async () => {
+    const snap3 = await lerSnapshot(3);
+    const seg3 = snap3!.segmentacao[GOAL_EVOLUCAO_ID][PROTOCOL_ID];
+    expect(seg3.rotulo).toBe("evolucao");
+    expect(seg3.metrica.ordinalRecente).toBe(0); // "independente"
+  });
+
+  test("regressão: 2 pioras consecutivas disparam rótulo regressao na sessão 3", async () => {
+    const snap3 = await lerSnapshot(3);
+    const seg3 = snap3!.segmentacao[GOAL_REGRESSAO_ID][PROTOCOL_ID];
+    expect(seg3.rotulo).toBe("regressao");
+    const snap2 = await lerSnapshot(2);
+    const seg2 = snap2!.segmentacao[GOAL_REGRESSAO_ID][PROTOCOL_ID];
+    expect(seg2.rotulo).not.toBe("regressao"); // só 1 piora ainda
+  });
+
+  test("marco_com_barreira NUNCA vira número — sempre aguardando_avaliacao_formal", async () => {
+    const snap1 = await lerSnapshot(1);
+    const segBarreira = snap1!.segmentacao[GOAL_BARREIRA_ID][PROTOCOL_ID];
+    expect(segBarreira.rotulo).toBe("aguardando_avaliacao_formal");
+    expect(segBarreira.metrica).toBeNull();
+  });
+
+  test("goal_candidacy acende quando criterio_dominio é satisfeito (2 sessões consecutivas independente)", async () => {
+    const [row] = await owner`
+      SELECT is_candidate_dominada, candidacy_since FROM goal_candidacy WHERE goal_id = ${GOAL_EVOLUCAO_ID}
+    `;
+    expect(row?.is_candidate_dominada).toBe(true);
+    expect(row?.candidacy_since).toBeTruthy();
+  });
+
+  test("goal_candidacy NÃO acende para o goal de regressão (critério de 3 não satisfeito)", async () => {
+    const [row] = await owner`
+      SELECT is_candidate_dominada FROM goal_candidacy WHERE goal_id = ${GOAL_REGRESSAO_ID}
+    `;
+    expect(row?.is_candidate_dominada ?? false).toBe(false);
+  });
+
+  describe("isolamento multi-tenant no definer (SECURITY DEFINER bypassa RLS)", () => {
+    // Drizzle embrulha o erro do Postgres ("Failed query: ..."); a mensagem do
+    // RAISE EXCEPTION do guard fica em `error.cause.message`. Capturamos e
+    // inspecionamos a cadeia toda.
+    async function capturarErro(fn: () => Promise<unknown>): Promise<string> {
+      try {
+        await fn();
+      } catch (e) {
+        const err = e as { message?: string; cause?: { message?: string } };
+        return `${err.message ?? ""} ${err.cause?.message ?? ""}`;
+      }
+      throw new Error("esperava exceção, mas a chamada resolveu");
+    }
+
+    test("app_aplicar_snapshot com patient de OUTRA clínica (ctx clínica A) levanta exceção e não escreve", async () => {
+      const msg = await capturarErro(() =>
+        withTenant(ctxCoordA, (tx) =>
+          tx.execute(
+            dsql`SELECT app_aplicar_snapshot(${PAC_B1}::uuid, 1, '{}'::jsonb, '{}'::jsonb)`,
+          ),
+        ),
+      );
+      expect(msg).toMatch(/isolamento multi-tenant/);
+
+      const [row] = await owner`
+        SELECT 1 FROM session_snapshot WHERE patient_id = ${PAC_B1}
+      `;
+      expect(row).toBeUndefined();
+    });
+
+    test("app_aplicar_candidatura com patient de OUTRA clínica (ctx clínica A) levanta exceção", async () => {
+      const msg = await capturarErro(() =>
+        withTenant(ctxCoordA, (tx) =>
+          tx.execute(
+            dsql`SELECT app_aplicar_candidatura(${PAC_B1}::uuid, NULL, NULL, true, NULL, NULL, NULL)`,
+          ),
+        ),
+      );
+      expect(msg).toMatch(/isolamento multi-tenant/);
+    });
+
+    test("app_aplicar_candidatura com goal de outro paciente levanta exceção (isolamento violado)", async () => {
+      const fakeGoalId = crypto.randomUUID();
+      const msg = await capturarErro(() =>
+        withTenant(ctxCoordA, (tx) =>
+          tx.execute(
+            dsql`SELECT app_aplicar_candidatura(${PAC_A1}::uuid, NULL, ${fakeGoalId}::uuid, true, NULL, NULL, NULL)`,
+          ),
+        ),
+      );
+      expect(msg).toMatch(/isolamento violado/);
+    });
+  });
+
+  describe("recompute retroativo", () => {
+    test("reclassificar evidência da sessão 2 e recomputar DESDE 2 não reescreve o snapshot da sessão 1", async () => {
+      const snap1Antes = await lerSnapshot(1);
+
+      // reclassifica a evidência de GOAL_REGRESSAO na sessão 2: nível de ajuda
+      // muda de dica_gestual para dica_verbal (menos pior) via evidence_revision.
+      const [ev] = await owner`
+        SELECT id, classificacao_original FROM evidence
+        WHERE patient_id = ${PAC_A1} AND goal_id = ${GOAL_REGRESSAO_ID} AND session_numero = 2
+      `;
+      const novaClassificacao = { ...(ev!.classificacao_original as object), nivel_ajuda: "dica_verbal" };
+      await owner`INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
+        VALUES (${ev!.id}, 'reclassificar', ${owner.json(ev!.classificacao_original)}, ${owner.json(novaClassificacao)}, 'ajuste de teste', ${U_COORD_A})`;
+
+      await withTenant(ctxCoordA, (tx) =>
+        materializarSnapshot(drizzleMaterializarQueries(tx), PAC_A1, 2),
+      );
+
+      const snap1Depois = await lerSnapshot(1);
+      expect(snap1Depois!.segmentacao).toEqual(snap1Antes!.segmentacao);
+      expect(snap1Depois!.repertorio_state).toEqual(snap1Antes!.repertorio_state);
+
+      // sessão 2 em diante reflete a reclassificação: agora dica_verbal (ordinal 1)
+      // não é pior que o ordinal 1 da sessão 1 → deixa de contar como piora,
+      // então a sessão 3 (modelacao=3, negativa) some sozinha como 1ª piora, não regressão.
+      const snap3Depois = await lerSnapshot(3);
+      const seg3 = snap3Depois!.segmentacao[GOAL_REGRESSAO_ID][PROTOCOL_ID];
+      expect(seg3.rotulo).not.toBe("regressao");
+    });
+  });
+});

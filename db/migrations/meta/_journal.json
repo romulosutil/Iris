@@ -92,6 +92,55 @@
       "when": 1783899499113,
       "tag": "0012_fase3_extraction_review_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783955351923,
+      "tag": "0013_fase4_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783955351933,
+      "tag": "0014_fase4_evidence_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1783956212253,
+      "tag": "0015_fase4_session_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1783956212263,
+      "tag": "0016_fase4_session_snapshot_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783956212273,
+      "tag": "0017_fase4_materializar",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783960420785,
+      "tag": "0018_fase4_reinforcer_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783960420795,
+      "tag": "0019_fase4_reinforcer_profile_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -170,6 +170,69 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
 * Linha do tempo estruturada do paciente com scrubber temporal.
 * Gráfico de progresso de marcos do protocolo com comparador de 2 pontos.
 
+**Planejamento 13/07/2026** — spec mestre em `docs/superpowers/specs/2026-07-13-fase-4-evidencias-e-graficos-design.md` (branch `feat/fase-4-evidencias-graficos`, cortada da main após merge do PR #31). Decomposta em 4 sub-projetos: **4A** Evidence layer (`evidence`/`evidence_revision`/`evidence_query` + view `evidence_current`) → **4B** SessionSnapshot & candidatura (segmentação determinística) → **4C** ReinforcerProfile + Briefing → **4D** Timeline/Scrubber + Gráficos + Comparação. Revisada por 2 passes Opus (tech-lead adversarial + especialista de protocolos).
+
+**Decisões ABERTAS (gate de modelo de dados — precisam do Rômulo antes de qualquer DDL):**
+* **D1 — infra de materialização:** síncrona inline **não funciona** (candidatura é RLS-`coordenador`-only; tx do terapeuta é filtrada). Materialização tem de rodar via função `SECURITY DEFINER` ("escrita de sistema"). Recomendação: definer síncrona + `pg_advisory_xact_lock(patient_id)` no recompute. Stack é Postgres puro (VPS/Easypanel) — sem fila externa.
+* **D2 — backfill de `evidence`:** migrar extrações aprovadas existentes (há dado de demo em prod) → `classificacao_original = payloadEditado ?? payload`, 1 evidência por alvo, `UNIQUE(extraction_id, goal_id, milestone_id)`. Toca dado existente → "confirmar antes".
+* **D3 — EvidenceQuery UI:** tabela nasce em 4A; fila de validação do coordenador fica na Fase 5.
+* **D4 — MilestoneAssessment:** **deferir p/ Fase 5** (ambas revisões convergem); 4B acende candidatura por evidência sem a série formal.
+
+**Progresso:**
+* ✅ **4A (Evidence layer) — feito e validado** (commit `f556df2`). Tabelas `evidence`
+  (grão de alvo, discriminador `alvo_ordinal`, refs crus + UUIDs resolvidos nullable),
+  `evidence_revision`, `evidence_query` + view `evidence_current` (`security_invoker`).
+  Migrações `0013`/`0014`, backfill idempotente, RLS testado contra Postgres real
+  (11/11, inclui cross-tenant via view e anti-colapso de alvos). **Segurança (13/07/2026):**
+  RLS de `evidence_insert` e `evidence_revision_insert` blindado para exigir
+  `aprovado_por`/`autor_id` idênticos ao `app.user_id` da sessão (impede falsificação de autoria).
+  **Pendência ligada:** a resolução slug→UUID (agente emite slug, sem `milestone_id`, aprovação
+  não persiste vínculo) fica p/ o fluxo de aprovação — hoje backfill resolve best-effort.
+* ✅ **4B parte 1 (DDL) — feito** (commit `62cb2b9`): `session_snapshot` + RLS SELECT-only +
+  função `SECURITY DEFINER` `app_materializar_snapshot` (esqueleto) com advisory lock. 7/7 RLS.
+* ✅ **4B parte 2 (resolução slug→UUID + evidence on-approve) — feito** (commit `c766c09`):
+  resolvedor determinístico (goal identidade; protocol família→ativo; milestone single-only-else-null,
+  **decisão C**); aprovação passa a gravar `evidence` on-approve. 122/122 unit, 5/5 int.
+  Pendência: disambiguação humana de milestone ambíguo = evolução (Fase 4/5).
+* ✅ **4B parte 3 (compute: segmentação + candidatura) — feito** (commit `71f2458`). Segmentação
+  em TS puro (16 unit) do **eixo de nível-de-ajuda** (goal + `marco_simples`); barreira/composto/
+  normativo = "aguardando avaliação formal (Fase 5)" — nunca número fabricado (o evidence do agente
+  não carrega escore formal; vem de `MilestoneAssessment`, deferido). `materializar.ts` +
+  `0017` (definer fino `app_aplicar_snapshot`/`app_aplicar_candidatura` com **guard multi-tenant**
+  `app_patient_in_clinic` + advisory lock). goal_candidacy por `criterio_dominio`; milestone_candidacy
+  = TODO explícito (Milestone sem campo de critério — não fabricado). materializar int 9/9 (inclui 2
+  de guard cross-tenant). **Segurança (13/07/2026):** `app_aplicar_candidatura` blindada para exigir
+  que `p_goal` pertença a `p_patient` antes de upserts na tabela `goal_candidacy`, impedindo
+  vulnerabilidades de IDOR/elevação de privilégio. Design:
+  `docs/superpowers/specs/2026-07-13-fase-4-compute-segmentacao.md`. **4B completo.**
+* ✅ **4C parte 1 (reinforcer_profile backend) — feito** (commit `1a08d0b`). DDL `0018`
+  (`reinforcer_profile`, enum `reinforcer_valencia` alta|baixa|saciado, UNIQUE (extraction_id,
+  item_atividade), índice (patient_id, session_numero DESC) p/ recência). RLS `0019` (REVOKE
+  UPDATE/DELETE, policies clínica/equipe espelhando `evidence`). On-approve: aprovação de
+  `preferencia_reforcador` grava 1 linha na mesma tx do evidence; idempotente. 138 unit, 14 int
+  novos (RLS cross-tenant, idempotência, on-approve, skips).
+* ✅ **4C parte 2 (Briefing Pré-Sessão — UI) — feito** (commit `5f6046e`). Rota
+  `/pacientes/[id]/briefing` (Server Component, requireRole coord/terapeuta): 5 seções
+  escaneáveis em 30s (§1.1). Lê `session_snapshot` materializado (nunca recomputa);
+  `reforcadoresAtuaisDe` (R17 recência, saciado demove); `alertasGraveDe` (registro_abc
+  grave, payloadEditado vence); metas ativas; próxima sessão. Lógica pura em `logic.ts`
+  (testável sem banco). Componentes DS (Card, Stack, Banner, Chip/ChipGroup). 152 unit+a11y
+  (6 axe briefing: 0 violações); typecheck 0; build verde. **4C completo.**
+* ⬜ 4D (Timeline/Scrubber + Gráficos + Comparação) — pendente.
+* ⚠️ **Nota de ambiente:** o Postgres local de dev estava com o tracking do drizzle
+  dessincronizado (8 migrações rastreadas, schema real em 0012) → `db:migrate` falha ao
+  re-CREATE. Schema real está completo; 0013/0014 foram aplicadas à mão p/ validar. Docker
+  Desktop precisa estar rodando (`infra/docker-compose.yml`, Postgres :5433, user `iris`).
+
+**Achados de revisão que travam DDL (reconciliar `modelo-de-dados.md` primeiro):**
+* Segmentação é clinicamente **errada para 3 dos 4 `tipo_estrutura`** se usar só ordinal de ajuda — `marco_com_barreira` (direção invertida), `escore_composto` (mede escore, não ajuda), `faixa_normativa`/Denver (idade-equiv. relativa). Função de segmentação tem de despachar por tipo lendo `Milestone.estrutura`.
+* `evidence` **não tem `protocol_id`** (vive no JSONB `alvos[]`); fold opera em grão de alvo; `segmentacao` chaveada por `(goal_id, protocol_id)` — a DDL canônica (`modelo:746`) está no formato antigo (só `goal_id`) e precisa ser reconciliada.
+* `evidence_current` (view) precisa `WITH (security_invoker=true, security_barrier=true)` senão vaza entre clínicas.
+* R14 `historico_relevante` ← `repertorio_state` (baseline), **não** `segmentacao` (sinais diferentes: R14 é bidirecional e de evento único).
+* Comparação/delta só dentro do mesmo `protocol_id`; desabilitar diff quando protocolo muda entre sessões.
+* `reinforcer_profile` = série por recência + `valencia` (`saciado` rebaixa), não conjunto plano de favoritos.
+* Candidatura por Milestone/família (não `N=3/M=2` global); PROC/observação fora da candidatura por acúmulo; excluir evidência com query aberta.
+
 ### [Fase 5] Coordenador e Relatórios (Issue #8)
 * Fila de reclassificação/validação com justificativa para o coordenador.
 * Exportação de Relatório de Família (pt-BR calibrado) e Dossiê de Auditoria de Convênio factual.
