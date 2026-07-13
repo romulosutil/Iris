@@ -72,6 +72,12 @@ BEGIN
     RAISE EXCEPTION 'app_aplicar_candidatura: paciente % fora da clínica do chamador (isolamento multi-tenant)', p_patient;
   END IF;
 
+  IF p_goal IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM goal WHERE id = p_goal AND patient_id = p_patient
+  ) THEN
+    RAISE EXCEPTION 'app_aplicar_candidatura: meta % nao pertence ao paciente % (isolamento violado)', p_goal, p_patient;
+  END IF;
+
   IF p_milestone IS NOT NULL THEN
     INSERT INTO milestone_candidacy (
       patient_id, milestone_id, is_candidate, candidacy_since, evidence_count, distinct_sessions

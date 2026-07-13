@@ -270,6 +270,18 @@ describe.skipIf(!hasDb)("Fase 4 (4B) · materializarSnapshot (segmentação real
       );
       expect(msg).toMatch(/isolamento multi-tenant/);
     });
+
+    test("app_aplicar_candidatura com goal de outro paciente levanta exceção (isolamento violado)", async () => {
+      const fakeGoalId = crypto.randomUUID();
+      const msg = await capturarErro(() =>
+        withTenant(ctxCoordA, (tx) =>
+          tx.execute(
+            dsql`SELECT app_aplicar_candidatura(${PAC_A1}::uuid, NULL, ${fakeGoalId}::uuid, true, NULL, NULL, NULL)`,
+          ),
+        ),
+      );
+      expect(msg).toMatch(/isolamento violado/);
+    });
   });
 
   describe("recompute retroativo", () => {

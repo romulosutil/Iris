@@ -24,13 +24,14 @@ CREATE POLICY evidence_select ON evidence FOR SELECT TO app_role USING (
 -- coordenador (mesmo escopo de escrita de extraction_insert, 0006).
 CREATE POLICY evidence_insert ON evidence FOR INSERT TO app_role WITH CHECK (
   app_patient_in_clinic(patient_id)
+  AND aprovado_por = current_setting('app.user_id')::uuid
   AND (current_setting('app.user_role') = 'coordenador' OR app_is_on_team(patient_id))
 );
 --> statement-breakpoint
 
 -- ==================== evidence_revision ====================
 -- Log append-only de reclassificação/invalidação (governança V1): assim como
--- `evidence`, imutável em nível de PRIVILÉGIO — trava UPDATE/DELETE mesmo para
+-- `evidence`, imutável in nível de PRIVILÉGIO — trava UPDATE/DELETE mesmo para
 -- app_role (torna explícito o que hoje só dependia de "nunca concedido").
 REVOKE UPDATE, DELETE ON evidence_revision FROM app_role;
 --> statement-breakpoint
@@ -58,7 +59,8 @@ CREATE POLICY evidence_revision_select ON evidence_revision FOR SELECT TO app_ro
 -- que existe uma pergunta ABERTA (respondido_em IS NULL) apontando pra essa
 -- evidência e que o autor está na equipe do paciente.
 CREATE POLICY evidence_revision_insert ON evidence_revision FOR INSERT TO app_role WITH CHECK (
-  EXISTS (
+  autor_id = current_setting('app.user_id')::uuid
+  AND EXISTS (
     SELECT 1 FROM evidence e
     WHERE e.id = evidence_id AND app_patient_in_clinic(e.patient_id)
   )

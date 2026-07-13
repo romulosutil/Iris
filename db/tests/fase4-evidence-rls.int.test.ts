@@ -244,5 +244,41 @@ describe.skipIf(!hasDb)("Fase 4 (4A) · RLS da Evidence layer", () => {
       );
       expect(rev?.id).toBeTruthy();
     });
+
+    test("tentativa de falsificar aprovado_por no insert de evidence levanta exceção RLS", async () => {
+      await expect(
+        withTenant(ctxT1A, (tx) =>
+          tx.insert(schema.evidence).values({
+            extractionId,
+            patientId: PAC_A1,
+            sessionId: SESS_A1,
+            sessionNumero: 1,
+            alvoOrdinal: 99, // ordinal diferente p/ evitar unique key constraint
+            protocolSlug: "vbmapp",
+            dominioId: "mando",
+            classificacaoOriginal: { descricao: "tentativa de hack" },
+            aprovadoPor: U_COORD_A, // impersonating coordinator
+          }),
+        ),
+      ).rejects.toThrow();
+    });
+
+    test("tentativa de falsificar autor_id no insert de evidence_revision levanta exceção RLS", async () => {
+      const [ev] = await withTenant(ctxCoordA, (tx) =>
+        tx.select({ id: schema.evidence.id }).from(schema.evidence).limit(1),
+      );
+      await expect(
+        withTenant(ctxCoordA, (tx) =>
+          tx.insert(schema.evidenceRevision).values({
+            evidenceId: ev!.id,
+            acao: "reclassificar",
+            classificacaoAnterior: { descricao: "pediu água" },
+            classificacaoNova: { descricao: "hacked" },
+            justificativa: "hack",
+            autorId: U_T1_A, // impersonating therapist
+          }),
+        ),
+      ).rejects.toThrow();
+    });
   });
 });
