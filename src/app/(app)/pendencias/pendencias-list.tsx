@@ -42,10 +42,13 @@ function ItemExtracao({
   item,
   titulo,
   estado,
+  destino,
 }: {
   item: ExtracaoPendente | SugestaoDemo;
   titulo: string;
   estado: "conquistado" | "candidato";
+  /** Rota da ação: sugestões vão para a revisão; pendências, para o diário. */
+  destino: "revisao" | "diario";
 }) {
   return (
     <Card estado={estado} titulo={titulo}>
@@ -54,7 +57,7 @@ function ItemExtracao({
           {item.pacienteNome ?? "Paciente (acesso restrito)"} ·{" "}
           <span className="text-graphite">{item.subtipo}</span>
         </span>
-        <Link href={`/diario/${item.sessionId}`} className={acaoClasses}>
+        <Link href={`/${destino}/${item.sessionId}`} className={acaoClasses}>
           Revisar →
         </Link>
       </Split>
@@ -116,6 +119,7 @@ export function PendenciasList({
                   item={item}
                   titulo="Extração pendente de reprocessamento"
                   estado="conquistado"
+                  destino="diario"
                 />
               </li>
             ))}
@@ -138,6 +142,7 @@ export function PendenciasList({
                   item={item}
                   titulo="Sugestão da IA — a confirmar"
                   estado="candidato"
+                  destino="revisao"
                 />
               </li>
             ))}

@@ -311,6 +311,20 @@ abrir cartão individual (mesmo de alta confiança), próxima sessão força exp
 de ao menos 1 cartão aleatório antes de liberar o lote — fricção estatística
 leve, não bloqueio.
 
+> **Atualização (12/07/2026 — decisão de produto, Rômulo · SUPERSEDE o parágrafo
+> acima e a coluna "aprovação em lote" da tabela).** A fricção anti-rubber-stamp
+> deixou de ser estatística e passou a ser um **invariante estrutural de lastro**:
+> **aprovar exige abrir o cartão** — o botão "Aprovar" só existe no estado
+> expandido, em qualquer nível de confiança. **Não há aprovação em lote**; toda
+> aprovação é individual e passa pela exibição integral do conteúdo. O ato de
+> abrir é o lastro ("o conteúdo foi exibido por inteiro e a aprovação exigiu
+> abri-lo") — a decisão de não ler é do terapeuta, registrada em
+> `revisado_por`/`revisado_em`. Isso reforça a Camada 1 e dispensa o contador de
+> "3 lotes seguidos" (a regra virou sem estado, por cartão). Nos níveis baixa
+> confiança e inconsistente, a expansão ainda pede confirmação explícita do nível
+> de ajuda (checkbox) antes de liberar o "Aprovar". Implementado na Fase 3 Plano 2
+> (`/revisao/[sessionId]`).
+
 ---
 
 ## 4. Jornada do coordenador (versão mínima)
