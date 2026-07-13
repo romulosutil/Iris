@@ -170,6 +170,23 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
 * Linha do tempo estruturada do paciente com scrubber temporal.
 * Gráfico de progresso de marcos do protocolo com comparador de 2 pontos.
 
+**Planejamento 13/07/2026** — spec mestre em `docs/superpowers/specs/2026-07-13-fase-4-evidencias-e-graficos-design.md` (branch `feat/fase-4-evidencias-graficos`, cortada da main após merge do PR #31). Decomposta em 4 sub-projetos: **4A** Evidence layer (`evidence`/`evidence_revision`/`evidence_query` + view `evidence_current`) → **4B** SessionSnapshot & candidatura (segmentação determinística) → **4C** ReinforcerProfile + Briefing → **4D** Timeline/Scrubber + Gráficos + Comparação. Revisada por 2 passes Opus (tech-lead adversarial + especialista de protocolos).
+
+**Decisões ABERTAS (gate de modelo de dados — precisam do Rômulo antes de qualquer DDL):**
+* **D1 — infra de materialização:** síncrona inline **não funciona** (candidatura é RLS-`coordenador`-only; tx do terapeuta é filtrada). Materialização tem de rodar via função `SECURITY DEFINER` ("escrita de sistema"). Recomendação: definer síncrona + `pg_advisory_xact_lock(patient_id)` no recompute. Stack é Postgres puro (VPS/Easypanel) — sem fila externa.
+* **D2 — backfill de `evidence`:** migrar extrações aprovadas existentes (há dado de demo em prod) → `classificacao_original = payloadEditado ?? payload`, 1 evidência por alvo, `UNIQUE(extraction_id, goal_id, milestone_id)`. Toca dado existente → "confirmar antes".
+* **D3 — EvidenceQuery UI:** tabela nasce em 4A; fila de validação do coordenador fica na Fase 5.
+* **D4 — MilestoneAssessment:** **deferir p/ Fase 5** (ambas revisões convergem); 4B acende candidatura por evidência sem a série formal.
+
+**Achados de revisão que travam DDL (reconciliar `modelo-de-dados.md` primeiro):**
+* Segmentação é clinicamente **errada para 3 dos 4 `tipo_estrutura`** se usar só ordinal de ajuda — `marco_com_barreira` (direção invertida), `escore_composto` (mede escore, não ajuda), `faixa_normativa`/Denver (idade-equiv. relativa). Função de segmentação tem de despachar por tipo lendo `Milestone.estrutura`.
+* `evidence` **não tem `protocol_id`** (vive no JSONB `alvos[]`); fold opera em grão de alvo; `segmentacao` chaveada por `(goal_id, protocol_id)` — a DDL canônica (`modelo:746`) está no formato antigo (só `goal_id`) e precisa ser reconciliada.
+* `evidence_current` (view) precisa `WITH (security_invoker=true, security_barrier=true)` senão vaza entre clínicas.
+* R14 `historico_relevante` ← `repertorio_state` (baseline), **não** `segmentacao` (sinais diferentes: R14 é bidirecional e de evento único).
+* Comparação/delta só dentro do mesmo `protocol_id`; desabilitar diff quando protocolo muda entre sessões.
+* `reinforcer_profile` = série por recência + `valencia` (`saciado` rebaixa), não conjunto plano de favoritos.
+* Candidatura por Milestone/família (não `N=3/M=2` global); PROC/observação fora da candidatura por acúmulo; excluir evidência com query aberta.
+
 ### [Fase 5] Coordenador e Relatórios (Issue #8)
 * Fila de reclassificação/validação com justificativa para o coordenador.
 * Exportação de Relatório de Família (pt-BR calibrado) e Dossiê de Auditoria de Convênio factual.
