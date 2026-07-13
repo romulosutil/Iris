@@ -17,9 +17,9 @@ const linkClasses = cn(
   control("sm"),
   surface("solida"),
   "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
-  "bg-surface text-ink font-display text-base font-semibold",
+  "bg-bg-surface text-text-body font-display text-base font-semibold",
   "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-  "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]",
+  "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
   "active:translate-x-0 active:translate-y-0 active:shadow-none",
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
 );
@@ -41,17 +41,17 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
     <Stack
       gap="md"
       className={cn(
-        "bg-surface relative p-5 pt-8",
+        "bg-bg-surface relative p-5 pt-8",
         surface("solida")
       )}
     >
       <span
         aria-hidden
-        className="bg-gold absolute inset-x-0 top-0 h-2"
+        className="bg-brand-primary absolute inset-x-0 top-0 h-2"
       />
       <Split alinha="start">
         <Stack gap="sm">
-          <span className="border-ink-anchor bg-gold text-ink-anchor inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
+          <span className="border-ink-anchor bg-brand-primary text-ink-anchor inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
             Extração pendente
           </span>
           <span className="text-ink text-base">

@@ -102,7 +102,9 @@
 
   /* Sombras brutalistas sem blur */
   --shadow-brutal: 4px 4px 0 0 var(--color-ink-anchor);
+  --shadow-brutal-hover: 6px 6px 0 0 var(--color-ink-anchor);
   --shadow-brutal-sm: 2px 2px 0 0 var(--color-ink-anchor);
+  --shadow-brutal-xs: 1px 1px 0 0 var(--color-ink-anchor);
 
   /* Sombra reversa (offset negativo) — "sugerido pela IA afunda na
      superfície" (tentativo) vs "aprovado levanta". Par estrutural, não cor. */

@@ -17,9 +17,9 @@ const acaoClasses = cn(
   control("sm"),
   surface("solida"),
   "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
-  "bg-gold text-ink-anchor font-display text-base font-semibold",
+  "bg-brand-primary text-ink-anchor font-display text-base font-semibold",
   "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-  "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]",
+  "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
   "active:translate-x-0 active:translate-y-0 active:shadow-none",
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
 );

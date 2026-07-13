@@ -26,7 +26,7 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
         className={cn(
           "text-text-body flex flex-col gap-2 p-5 text-left outline-none cursor-pointer select-none w-full",
           "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-          "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]",
+          "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
           "active:translate-x-0 active:translate-y-0 active:shadow-none",
           "focus-visible:outline-focus-ring focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
           destacado
