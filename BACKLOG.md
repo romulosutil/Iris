@@ -183,9 +183,11 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
   (grão de alvo, discriminador `alvo_ordinal`, refs crus + UUIDs resolvidos nullable),
   `evidence_revision`, `evidence_query` + view `evidence_current` (`security_invoker`).
   Migrações `0013`/`0014`, backfill idempotente, RLS testado contra Postgres real
-  (11/11, inclui cross-tenant via view e anti-colapso de alvos). **Pendência ligada:** a
-  resolução slug→UUID (agente emite slug, sem `milestone_id`, aprovação não persiste
-  vínculo) fica p/ o fluxo de aprovação — hoje backfill resolve best-effort.
+  (11/11, inclui cross-tenant via view e anti-colapso de alvos). **Segurança (13/07/2026):**
+  RLS de `evidence_insert` e `evidence_revision_insert` blindado para exigir
+  `aprovado_por`/`autor_id` idênticos ao `app.user_id` da sessão (impede falsificação de autoria).
+  **Pendência ligada:** a resolução slug→UUID (agente emite slug, sem `milestone_id`, aprovação
+  não persiste vínculo) fica p/ o fluxo de aprovação — hoje backfill resolve best-effort.
 * ✅ **4B parte 1 (DDL) — feito** (commit `62cb2b9`): `session_snapshot` + RLS SELECT-only +
   função `SECURITY DEFINER` `app_materializar_snapshot` (esqueleto) com advisory lock. 7/7 RLS.
 * ✅ **4B parte 2 (resolução slug→UUID + evidence on-approve) — feito** (commit `c766c09`):
@@ -199,8 +201,10 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
   `0017` (definer fino `app_aplicar_snapshot`/`app_aplicar_candidatura` com **guard multi-tenant**
   `app_patient_in_clinic` + advisory lock). goal_candidacy por `criterio_dominio`; milestone_candidacy
   = TODO explícito (Milestone sem campo de critério — não fabricado). materializar int 9/9 (inclui 2
-  de guard cross-tenant). Design: `docs/superpowers/specs/2026-07-13-fase-4-compute-segmentacao.md`.
-  **4B completo.**
+  de guard cross-tenant). **Segurança (13/07/2026):** `app_aplicar_candidatura` blindada para exigir
+  que `p_goal` pertença a `p_patient` antes de upserts na tabela `goal_candidacy`, impedindo
+  vulnerabilidades de IDOR/elevação de privilégio. Design:
+  `docs/superpowers/specs/2026-07-13-fase-4-compute-segmentacao.md`. **4B completo.**
 * ✅ **4C parte 1 (reinforcer_profile backend) — feito** (commit `1a08d0b`). DDL `0018`
   (`reinforcer_profile`, enum `reinforcer_valencia` alta|baixa|saciado, UNIQUE (extraction_id,
   item_atividade), índice (patient_id, session_numero DESC) p/ recência). RLS `0019` (REVOKE
