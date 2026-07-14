@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useTransition } from "react";
 import { Scrubber } from "./scrubber";
 import { DeltaSessaoLateral } from "./delta-sessao";
-import { carregarDeltaSessaoAction, carregarComparacaoAction } from "./actions";
+import { carregarDeltaSessaoAction, carregarComparacaoAction, carregarEvidenciasAction } from "./actions";
 import type { TimelineSnapshot, TimelineData } from "./queries";
 import type { DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,143 @@ export function TimelineClient({
   pacienteNome,
   initialData,
 }: TimelineClientProps) {
-  const { snapshots } = initialData;
+  const { snapshots, metasAtivas, milestonesAtivos } = initialData;
+
+  // Estado para a trajetória selecionada
+  const [trajetoriaAlvoId, setTrajetoriaAlvoId] = useState<string>("");
+
+  // Estados do Modal de Evidências (Drilldown)
+  const [drilldownOpen, setDrilldownOpen] = useState(false);
+  const [drilldownChunk, setDrilldownChunk] = useState<{
+    inicio: number;
+    fim: number;
+    targetId: string;
+    targetNome: string;
+  } | null>(null);
+  const [drilldownEvidencias, setDrilldownEvidencias] = useState<any[]>([]);
+  const [carregandoEvidencias, setCarregandoEvidencias] = useState(false);
+
+  // Mapeia milestones ativos agrupados por domínio
+  const milestonesPorDominio = React.useMemo(() => {
+    const grupos: Record<string, typeof initialData.milestonesAtivos> = {};
+    for (const m of initialData.milestonesAtivos ?? []) {
+      if (!grupos[m.dominioId]) {
+        grupos[m.dominioId] = [];
+      }
+      grupos[m.dominioId].push(m);
+    }
+    // Ordena por nível/ordem
+    for (const dom of Object.keys(grupos)) {
+      grupos[dom]!.sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+    }
+    return grupos;
+  }, [initialData.milestonesAtivos]);
+
+  // Estatísticas de conquistas e candidatos na sessão atual
+  const estatisticasDominio = React.useMemo(() => {
+    const stats: Record<string, { total: number; conquistados: number; candidatos: number }> = {};
+    for (const [dom, items] of Object.entries(milestonesPorDominio)) {
+      let conquistados = 0;
+      let candidatos = 0;
+      for (const m of items) {
+        const entry = snapSelecionado?.repertorioState?.[m.id];
+        if (entry) {
+          if (entry.nivelAjudaRecente === 0) {
+            conquistados++;
+          } else if (entry.isCandidata) {
+            candidatos++;
+          }
+        }
+      }
+      stats[dom] = {
+        total: items.length,
+        conquistados,
+        candidatos,
+      };
+    }
+    return stats;
+  }, [milestonesPorDominio, snapSelecionado]);
+
+  const handleAbrirDrilldown = async (
+    chunk: { inicio: number; fim: number },
+    targetId: string,
+    targetNome: string,
+  ) => {
+    setDrilldownChunk({
+      inicio: chunk.inicio,
+      fim: chunk.fim,
+      targetId,
+      targetNome,
+    });
+    setDrilldownOpen(true);
+    setCarregandoEvidencias(true);
+    setDrilldownEvidencias([]);
+    try {
+      const res = await carregarEvidenciasAction(
+        patientId,
+        targetId,
+        chunk.inicio,
+        chunk.fim,
+      );
+      setDrilldownEvidencias(res);
+    } catch (err) {
+      console.error("Erro ao buscar evidências por trecho:", err);
+    } finally {
+      setCarregandoEvidencias(false);
+    }
+  };
+
+  const getTargetNome = (id: string) => {
+    const g = initialData.metasAtivas.find((m) => m.id === id);
+    if (g) return `Meta: ${g.descricao}`;
+    const m = initialData.milestonesAtivos.find((mi) => mi.id === id);
+    if (m) return `Marco: ${m.nome} (${m.dominioId.toUpperCase()}${m.nivel ? ` - ${m.nivel}` : ""})`;
+    return "Alvo Clínico";
+  };
+
+  const getTrajetoriaChunks = (targetId: string) => {
+    if (!targetId) return [];
+
+    const trajetoriaSessoes = snapshots
+      .map((s) => {
+        const seg = (s.segmentacao ?? {}) as Record<string, any>;
+        const resSessao = seg[targetId]; // ResultadoSessao
+        return {
+          sessionNumero: s.sessionNumero,
+          rotulo: resSessao?.rotulo ?? "sem_dado",
+          nivel: resSessao?.metrica?.ordinalRecente ?? null,
+        };
+      })
+      .sort((a, b) => a.sessionNumero - b.sessionNumero);
+
+    if (trajetoriaSessoes.length === 0) return [];
+
+    const chunks: Array<{
+      inicio: number;
+      fim: number;
+      rotulo: string;
+      nivel: number | null;
+      sessoes: number[];
+    }> = [];
+
+    for (const sessao of trajetoriaSessoes) {
+      const ultimoTrecho = chunks[chunks.length - 1];
+      if (ultimoTrecho && ultimoTrecho.rotulo === sessao.rotulo && ultimoTrecho.nivel === sessao.nivel) {
+        ultimoTrecho.fim = sessao.sessionNumero;
+        ultimoTrecho.sessoes.push(sessao.sessionNumero);
+      } else {
+        chunks.push({
+          inicio: sessao.sessionNumero,
+          fim: sessao.sessionNumero,
+          rotulo: sessao.rotulo,
+          nivel: sessao.nivel,
+          sessoes: [sessao.sessionNumero],
+        });
+      }
+    }
+
+    return chunks;
+  };
 
   // Lista ordenada crescente de números de sessões disponíveis
   const sessoesDisponiveis = [...snapshots]
@@ -365,6 +501,239 @@ export function TimelineClient({
     );
   };
 
+  const renderTrajetoriaMetas = () => {
+    const chunks = getTrajetoriaChunks(trajetoriaAlvoId);
+    const targetNome = getTargetNome(trajetoriaAlvoId);
+
+    const deparaTraducaoRotulo: Record<string, string> = {
+      evolucao: "Evolução",
+      regressao: "Regressão",
+      estagnacao: "Estagnação",
+      aguardando_avaliacao_formal: "Avaliação pendente",
+      sem_dado: "Sem dados",
+    };
+
+    return (
+      <div className="bg-canvas border-ink-anchor flex flex-col border-2 p-6">
+        <div className="border-ink-anchor border-b-2 pb-4">
+          <h3 className="text-ink text-lg font-black font-display">
+            Trajetória Clínica de Metas
+          </h3>
+          <p className="text-muted text-sm mt-1">
+            Selecione uma meta ou marco para visualizar o andamento clínico e
+            explorar evidências do trecho.
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <label
+              htmlFor="select-trajetoria-alvo"
+              className="text-ink text-xs font-black"
+            >
+              Meta / Marco de Referência:
+            </label>
+            <select
+              id="select-trajetoria-alvo"
+              value={trajetoriaAlvoId}
+              onChange={(e) => setTrajetoriaAlvoId(e.target.value)}
+              className="border-ink-anchor bg-canvas text-ink flex-1 border-2 p-2 text-sm focus:outline-none"
+            >
+              <option value="">Selecione...</option>
+              <optgroup label="Metas Ativas">
+                {metasAtivas.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.descricao} {m.disciplina ? `(${m.disciplina})` : ""}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Marcos Ativos">
+                {milestonesAtivos.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    [{m.dominioId.toUpperCase()}] {m.nome}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+        </div>
+
+        {!trajetoriaAlvoId ? (
+          <div className="border-ink-anchor text-muted mt-6 flex h-24 items-center justify-center border border-dashed text-xs">
+            Selecione uma meta ou marco acima para visualizar a trajetória clínica.
+          </div>
+        ) : chunks.length === 0 ? (
+          <div className="border-ink-anchor text-muted mt-6 flex h-24 items-center justify-center border border-dashed text-xs">
+            Nenhum dado histórico registrado para este alvo.
+          </div>
+        ) : (
+          <div className="mt-6 flex flex-col gap-4">
+            <div className="text-ink border-ink-anchor border bg-bg-canvas px-3 py-2 text-sm font-bold">
+              Trajetória: {targetNome}
+            </div>
+            {/* Visualização de Chunks como linha temporal */}
+            <div className="flex flex-col gap-3">
+              {chunks.map((chunk, idx) => {
+                let colorClass = "bg-gray-100 border-dashed border-gray-400 text-gray-600 shadow-[2px_2px_0px_#000000]";
+                if (chunk.rotulo === "evolucao") {
+                  colorClass = "bg-[#B2DFDB] border-black text-black shadow-[4px_4px_0px_#000000]";
+                } else if (chunk.rotulo === "regressao") {
+                  colorClass = "bg-[#EF9A9A] border-black text-black shadow-[4px_4px_0px_#000000]";
+                } else if (chunk.rotulo === "estagnacao") {
+                  colorClass = "bg-gray-200 border-black text-black shadow-[4px_4px_0px_#000000]";
+                }
+
+                return (
+                  <button
+                    key={idx}
+                    onClick={() =>
+                      handleAbrirDrilldown(chunk, trajetoriaAlvoId, targetNome)
+                    }
+                    className={`border-2 p-4 text-left transition-all duration-75 active:translate-y-0.5 active:shadow-[1px_1px_0px_#000000] focus:outline-none flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${colorClass}`}
+                  >
+                    <div>
+                      <span className="font-display font-black text-base uppercase tracking-tight">
+                        {deparaTraducaoRotulo[chunk.rotulo] || chunk.rotulo}
+                      </span>
+                      <div className="text-xs font-bold mt-1">
+                        Sessão {chunk.inicio} {chunk.fim !== chunk.inicio ? `até a Sessão ${chunk.fim}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {chunk.nivel !== null && (
+                        <span className="border border-black bg-white px-2 py-0.5 text-xs font-black rounded">
+                          Nível {chunk.nivel}
+                        </span>
+                      )}
+                      <span className="text-xs font-black underline">
+                        Ver {chunk.sessoes.length} {chunk.sessoes.length === 1 ? "sessão" : "sessões"} →
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderGraficoProtocolo = () => {
+    if (!snapSelecionado) return null;
+
+    return (
+      <div className="bg-canvas border-ink-anchor flex flex-col border-2 p-6">
+        <div className="border-ink-anchor border-b-2 pb-4">
+          <h3 className="text-ink text-lg font-black font-display">
+            Acompanhamento de Marcos e Protocolos
+          </h3>
+          <p className="text-muted text-sm mt-1">
+            Estatísticas e progresso de marcos por domínio do protocolo ativo na Sessão {sessaoAtiva}.
+          </p>
+        </div>
+
+        {Object.keys(milestonesPorDominio).length === 0 ? (
+          <div className="border-ink-anchor text-muted mt-6 flex h-24 items-center justify-center border border-dashed text-xs">
+            Nenhum protocolo ou marco ativo associado a este paciente.
+          </div>
+        ) : (
+          <div className="mt-6 flex flex-col gap-6">
+            {Object.entries(milestonesPorDominio).map(([dom, items]) => {
+              const stats = estatisticasDominio[dom] ?? { total: 0, conquistados: 0, candidatos: 0 };
+              const percConquistados = stats.total > 0 ? (stats.conquistados / stats.total) * 100 : 0;
+              const percCandidatos = stats.total > 0 ? (stats.candidatos / stats.total) * 100 : 0;
+
+              return (
+                <div key={dom} className="border-ink-anchor border-2 bg-bg-canvas p-4 shadow-[4px_4px_0px_#000000]">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-black pb-2 mb-4">
+                    <div>
+                      <span className="font-display font-black text-sm uppercase tracking-tight">
+                        Domínio: {dom.toUpperCase()}
+                      </span>
+                      <div className="text-xxs text-muted mt-0.5">
+                        {stats.total} {stats.total === 1 ? "marco catalogado" : "marcos catalogados"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-black">
+                      <span className="text-green-800 bg-[#B2DFDB] px-1.5 py-0.5 rounded border border-black">
+                        Conquistados: {stats.conquistados}
+                      </span>
+                      <span className="text-blue-800 bg-[#90CAF9] px-1.5 py-0.5 rounded border border-black">
+                        Candidatos: {stats.candidatos}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Barra de Progresso Neobrutalista Stacked */}
+                  <div className="border-2 border-black h-4 bg-gray-200 flex overflow-hidden mb-4 rounded-sm">
+                    {percConquistados > 0 && (
+                      <div
+                        style={{ width: `${percConquistados}%` }}
+                        className="bg-[#B2DFDB] h-full border-r border-black"
+                        title={`${percConquistados.toFixed(0)}% Conquistados`}
+                      />
+                    )}
+                    {percCandidatos > 0 && (
+                      <div
+                        style={{ width: `${percCandidatos}%` }}
+                        className="bg-[#90CAF9] h-full border-r border-black"
+                        title={`${percCandidatos.toFixed(0)}% Candidatos`}
+                      />
+                    )}
+                  </div>
+
+                  {/* Grid de Milestones */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                    {items.map((m) => {
+                      const entry = snapSelecionado.repertorioState?.[m.id];
+                      let status: "conquistado" | "candidato" | "nao_atingido" = "nao_atingido";
+                      if (entry) {
+                        if (entry.nivelAjudaRecente === 0) {
+                          status = "conquistado";
+                        } else if (entry.isCandidata) {
+                          status = "candidato";
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={m.id}
+                          className="border-ink-anchor border bg-canvas p-2 flex flex-col items-center justify-between text-center gap-2 group relative cursor-help"
+                          title={`${m.nome} ${m.nivel ? `(Nível ${m.nivel})` : ""}`}
+                        >
+                          <span className="text-xxs font-black line-clamp-1">
+                            {m.nivel ? `Nível ${m.nivel}` : "Marco"}
+                          </span>
+                          
+                          {/* Indicador Visual do Milestone */}
+                          {status === "conquistado" ? (
+                            <div className="w-8 h-8 rounded-full bg-[#B2DFDB] border-2 border-black flex items-center justify-center font-black text-xs text-black" title="Conquistado">
+                              ✓
+                            </div>
+                          ) : status === "candidato" ? (
+                            <div className="w-8 h-8 bg-[#90CAF9] border-2 border-dashed border-black flex items-center justify-center font-black text-xs text-black transform rotate-45" title="Candidato">
+                              <span className="transform -rotate-45 block">★</span>
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gray-100 border-2 border-dashed border-gray-400 flex items-center justify-center text-gray-400 font-bold text-xs" title="Não Atingido">
+                              ○
+                            </div>
+                          )}
+
+                          <span className="text-[10px] text-muted line-clamp-2 leading-tight">
+                            {m.nome}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex w-full flex-col gap-6">
       {/* Linha do tempo interativa (Scrubber) */}
@@ -381,20 +750,11 @@ export function TimelineClient({
           {/* Radar Chart Espectro */}
           {renderEspectroRadar()}
 
-          {/* Espaço de Trajetórias (Parte 3) */}
-          <div className="bg-canvas border-ink-anchor border-2 p-6">
-            <h3 className="text-ink mb-2 text-lg font-black">
-              Trajetória Clínica de Metas
-            </h3>
-            <p className="text-muted text-sm">
-              Visualize as faixas e marcações clínicas de evolução de marcos e
-              conquistas ao longo das sessões.
-            </p>
-            <div className="border-ink-anchor text-muted mt-4 flex h-24 items-center justify-center border border-dashed text-xs">
-              Componentes de faixas e losangos serão renderizados aqui na Parte
-              3.
-            </div>
-          </div>
+          {/* Trajetória de Metas (Parte 3) */}
+          {renderTrajetoriaMetas()}
+
+          {/* Acompanhamento de Protocolo (Parte 3) */}
+          {renderGraficoProtocolo()}
         </div>
 
         {/* Coluna Lateral: Delta de Sessão & Comparador */}
@@ -526,6 +886,73 @@ export function TimelineClient({
           )}
         </div>
       </div>
+
+      {/* Dialog de Drilldown de Evidências por Trecho */}
+      <Dialog open={drilldownOpen} onOpenChange={setDrilldownOpen}>
+        <DialogContent className="max-w-2xl bg-canvas border-4 border-black shadow-[8px_8px_0px_#000000]">
+          <DialogTitle className="font-display font-black text-xl text-black">
+            Evidências Clínicas do Trecho
+          </DialogTitle>
+          <DialogDescription className="text-sm font-bold text-gray-700">
+            Sessões {drilldownChunk?.inicio} até {drilldownChunk?.fim} para {drilldownChunk?.targetNome}
+          </DialogDescription>
+
+          <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2 flex flex-col gap-4">
+            {carregandoEvidencias ? (
+              <div className="py-8 text-center text-sm font-black text-gray-600 animate-pulse">
+                Buscando evidências no histórico do paciente...
+              </div>
+            ) : drilldownEvidencias.length === 0 ? (
+              <div className="py-8 text-center text-sm font-bold text-gray-500 border-2 border-dashed border-gray-400 bg-gray-50">
+                Nenhuma evidência registrada para este trecho nas sessões selecionadas.
+              </div>
+            ) : (
+              drilldownEvidencias.map((ev: any) => (
+                <div
+                  key={ev.id}
+                  className={`border-2 border-black p-4 bg-white shadow-[4px_4px_0px_#000000] flex flex-col gap-2 ${
+                    ev.polaridade === "positiva" ? "border-green-800" : "border-red-800"
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-gray-200 pb-1 text-xs">
+                    <span className="font-black text-black">
+                      Sessão {ev.sessionNumero} • {ev.dataSessao ? new Date(ev.dataSessao).toLocaleDateString("pt-BR") : "Sem data"}
+                    </span>
+                    <span className="text-muted font-bold">
+                      Aprovado por: {ev.aprovadorNome}
+                    </span>
+                  </div>
+                  <p className="text-sm text-black leading-relaxed font-medium">
+                    {ev.descricao}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded border border-black ${
+                      ev.polaridade === "positiva"
+                        ? "bg-[#B2DFDB] text-green-900"
+                        : "bg-[#EF9A9A] text-red-900"
+                    }`}>
+                      {ev.polaridade === "positiva" ? "Evolução" : "Dificuldade"}
+                    </span>
+                    {ev.nivelAjuda && (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded border border-black bg-gray-100 text-gray-800">
+                        Nível de Ajuda: {ev.nivelAjuda}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button
+              onClick={() => setDrilldownOpen(false)}
+              className="border-2 border-black bg-[#F2B705] text-black font-black hover:bg-[#d19c00] active:translate-y-0.5 active:shadow-[1px_1px_0px_#000000] px-4 py-2"
+            >
+              Fechar Painel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

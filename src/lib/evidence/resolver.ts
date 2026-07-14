@@ -78,6 +78,8 @@ export function drizzleResolverQueries(tx: any): ResolverQueries {
       return rows.length > 0;
     },
     async protocolosAtivos(clinicId, patientId, familia) {
+      // 🔒 SEGURANÇA: Escopo duplo obrigatório (clinicId + patientId) e validação temporal ativa (desativado_em IS NULL)
+      // Garante que o protocolo pertence à clínica e está atualmente ativo e associado ao paciente informado.
       const rows = await tx
         .select({ id: protocol.id })
         .from(protocol)
@@ -113,6 +115,8 @@ export function postgresResolverQueries(sql: postgres.Sql): ResolverQueries {
       return rows.length > 0;
     },
     async protocolosAtivos(clinicId, patientId, familia) {
+      // 🔒 SEGURANÇA: Escopo duplo obrigatório (clinicId + patientId) e validação temporal ativa (desativado_em IS NULL)
+      // Garante que o protocolo pertence à clínica e está atualmente ativo e associado ao paciente informado.
       const rows = await sql`
         SELECT p.id FROM protocol p
         JOIN patient_protocol pp ON pp.protocol_id = p.id

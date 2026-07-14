@@ -26,6 +26,15 @@ export interface TimelineData {
   snapshots: TimelineSnapshot[];
   metasAtivas: Array<{ id: string; descricao: string; disciplina: string | null }>;
   protocolosAtivos: Array<{ id: string; nome: string; disciplina: string }>;
+  milestonesAtivos: Array<{
+    id: string;
+    protocolId: string;
+    dominioId: string;
+    nome: string;
+    nivel: string | null;
+    tipoEstrutura: string;
+    ordem: number | null;
+  }>;
 }
 
 /**
@@ -81,6 +90,9 @@ export async function carregarTimeline(
             protocolId: milestone.protocolId,
             dominioId: milestone.dominioId,
             tipoEstrutura: milestone.tipoEstrutura,
+            nome: milestone.nome,
+            nivel: milestone.nivel,
+            ordem: milestone.ordem,
           })
           .from(milestone)
           .where(inArray(milestone.protocolId, protocolIds))
@@ -125,14 +137,31 @@ export async function carregarTimeline(
       .filter((m) => m.estado === "ativa")
       .map((m) => ({ id: m.id, descricao: m.descricao, disciplina: m.disciplina }));
 
+    const activeProtocolIds = PP
+      .filter((p) => p.desativadoEm === null)
+      .map((p) => p.id);
+
     const protocolosAtivos = PP
       .filter((p) => p.desativadoEm === null)
       .map((p) => ({ id: p.id, nome: p.nome, disciplina: p.disciplina }));
+
+    const milestonesAtivos = milestones
+      .filter((m) => activeProtocolIds.includes(m.protocolId))
+      .map((m) => ({
+        id: m.id,
+        protocolId: m.protocolId,
+        dominioId: m.dominioId,
+        nome: m.nome,
+        nivel: m.nivel,
+        tipoEstrutura: m.tipoEstrutura,
+        ordem: m.ordem,
+      }));
 
     return {
       snapshots,
       metasAtivas,
       protocolosAtivos,
+      milestonesAtivos,
     };
   });
 }

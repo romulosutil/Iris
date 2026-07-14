@@ -67,7 +67,7 @@ export const extractionEstado = pgEnum("extraction_estado", [
   "sugerida", "pendente_reprocessamento",
   // estados de revisão humana (Fase 3 Plano 2): a extração aprovada É o registro
   // oficial (tabela `evidence` dedicada adiada p/ Fase 4).
-  "aprovada", "editada", "descartada",
+  "aprovada", "editada", "descartada", "erro_validacao",
 ]);
 
 // subtipo/confianca text→enum agora que o contrato do agente estabilizou (dívida
@@ -471,6 +471,7 @@ export const extraction = pgTable(
     payloadEditado: jsonb("payload_editado"),
     revisadoPor: uuid("revisado_por").references(() => appUser.id),
     revisadoEm: timestamp("revisado_em", { withTimezone: true }),
+    versao: integer("versao").notNull().default(1),
   },
   (t) => [index("idx_extraction_session").on(t.sessionId)],
 );
