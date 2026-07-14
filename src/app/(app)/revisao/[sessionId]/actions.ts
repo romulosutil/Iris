@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
@@ -92,6 +92,10 @@ async function inserirEvidenciasOnApprove(
     .where(eq(session.id, row.sessionId));
   if (!sess) return;
 
+  // ⚠️ BLINDAGEM DE ADVISORY LOCK: Lock por paciente para serializar recomputações concorrentes de snapshot.
+  // Nenhuma chamada externa lenta (como APIs de IA ou rede) pode ocorrer após a aquisição deste lock.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${sess.patientId}::text, 0))`);
+
   if (sess.numero == null) {
     // TODO(Fase 4): sessão ainda não consolidada (numero_sequencial_paciente
     // nulo) — `evidence.session_numero` é NOT NULL, não dá pra inserir agora.
@@ -160,7 +164,7 @@ async function inserirEvidenciasOnApprove(
 }
 
 // Revisão humana das extrações sugeridas pela IA (Fase 3 Plano 2). Cada ação
-// transiciona uma extração `sugerida` para um desfecho de revisão. RLS
+// transiciona uma extração `sugerida` ou `erro_validacao` para um desfecho de revisão. RLS
 // (extraction_update, 0006) restringe ao terapeuta dono da sessão; requireRole
 // barra recepção/coordenação (quem revisa é o terapeuta que conduziu).
 // A sugestão ORIGINAL da IA (payload) nunca é sobrescrita — edições vão em
@@ -174,16 +178,31 @@ type ReviewResult = { error?: string; ok?: boolean };
 async function transicionar(
   ctx: TenantContext,
   extractionId: string,
+  versaoCliente: number,
   set: Record<string, unknown>,
 ): Promise<ReviewResult> {
-  requireRole(ctx, "terapeuta");
+  requireRole(ctx, "terapeuta", "coordenador");
+  let success = false;
+  let errorMsg = "";
+
   try {
     const rows = await withTenant(ctx, async (tx) => {
+      // ⚠️ OCC: A query de mutação incrementa a versão de forma atômica e confere com a versão vista pelo cliente
       const updated = await tx
         .update(extraction)
-        .set({ ...set, revisadoPor: ctx.userId, revisadoEm: new Date() })
-        // só extrações ainda sugeridas são revisáveis (não pendentes/já revisadas)
-        .where(and(eq(extraction.id, extractionId), eq(extraction.estado, "sugerida")))
+        .set({
+          ...set,
+          revisadoPor: ctx.userId,
+          revisadoEm: new Date(),
+          versao: sql`${extraction.versao} + 1`,
+        })
+        .where(
+          and(
+            eq(extraction.id, extractionId),
+            eq(extraction.versao, versaoCliente),
+            sql`${extraction.estado} IN ('sugerida', 'erro_validacao')`,
+          ),
+        )
         .returning({
           id: extraction.id,
           sessionId: extraction.sessionId,
@@ -191,49 +210,78 @@ async function transicionar(
           payload: extraction.payload,
           payloadEditado: extraction.payloadEditado,
         });
+
+      if (updated.length === 0) {
+        return [];
+      }
+
       const novoEstado = set.estado;
-      if (updated.length > 0 && (novoEstado === "aprovada" || novoEstado === "editada")) {
+      if (novoEstado === "aprovada" || novoEstado === "editada") {
         await inserirEvidenciasOnApprove(tx, ctx, updated[0]!);
       }
+      success = true;
       return updated;
     });
-    return { ok: rows.length > 0 };
-  } catch (err) {
-    console.error("revisão extração:", err);
-    return { error: "Não foi possível registrar a revisão." };
+
+    if (!success) {
+      return { ok: false, error: "CONCURRENCY_ERROR" };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    console.error("Erro na transição da extração:", err);
+    errorMsg = err instanceof Error ? err.message : String(err);
+
+    // DLQ / Dead-Letter State: Se o pipeline quebrar, movemos a extração para 'erro_validacao' de forma autônoma
+    try {
+      await withTenant(ctx, async (tx) => {
+        await tx
+          .update(extraction)
+          .set({
+            estado: "erro_validacao",
+            payloadEditado: { error: errorMsg },
+            versao: sql`${extraction.versao} + 1`,
+          })
+          .where(eq(extraction.id, extractionId));
+      });
+    } catch (dbErr) {
+      console.error("Falha ao persistir erro de validação (DLQ):", dbErr);
+    }
+
+    return { error: `Erro de validação clínica: ${errorMsg}` };
   }
 }
 
 export async function aprovarExtracao(
   ctx: TenantContext,
-  input: { extractionId: string },
+  input: { extractionId: string; versao: number },
 ): Promise<ReviewResult> {
-  const p = idSchema.safeParse(input);
+  const p = z.object({ extractionId: z.string().uuid(), versao: z.number() }).safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
-  return transicionar(ctx, p.data.extractionId, { estado: "aprovada" });
+  return transicionar(ctx, p.data.extractionId, p.data.versao, { estado: "aprovada" });
 }
 
 export async function descartarExtracao(
   ctx: TenantContext,
-  input: { extractionId: string },
+  input: { extractionId: string; versao: number },
 ): Promise<ReviewResult> {
-  const p = idSchema.safeParse(input);
+  const p = z.object({ extractionId: z.string().uuid(), versao: z.number() }).safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
-  return transicionar(ctx, p.data.extractionId, { estado: "descartada" });
+  return transicionar(ctx, p.data.extractionId, p.data.versao, { estado: "descartada" });
 }
 
 const editarSchema = z.object({
   extractionId: z.string().uuid(),
   payloadEditado: z.record(z.unknown()),
+  versao: z.number(),
 });
 
 export async function editarExtracao(
   ctx: TenantContext,
-  input: { extractionId: string; payloadEditado: Record<string, unknown> },
+  input: { extractionId: string; payloadEditado: Record<string, unknown>; versao: number },
 ): Promise<ReviewResult> {
   const p = editarSchema.safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
-  return transicionar(ctx, p.data.extractionId, {
+  return transicionar(ctx, p.data.extractionId, p.data.versao, {
     estado: "editada",
     payloadEditado: p.data.payloadEditado,
   });
@@ -244,7 +292,7 @@ export async function editarExtracao(
 // Camada 1: aprovar exige abrir o cartão (o botão só existe no estado expandido
 // na UI). O ato de abrir é o lastro — "o conteúdo foi exibido por inteiro e a
 // aprovação exigiu abri-lo". Isso dissolve a regra estatística anti-rubber-stamp
-// (contador de "3 lotes seguidos") — não há lote a contar. Cada aprovação segue
+// (contador de "3 lotes seguidos") — não há lote a conta. Cada aprovação segue
 // individual, com nome+timestamp (revisado_por/revisado_em) como registro.
 
 // ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
@@ -256,14 +304,20 @@ export type RevisaoState = { error?: string; ok?: boolean };
 
 async function comCtx(
   formData: FormData,
-  fn: (ctx: TenantContext, extractionId: string) => Promise<ReviewResult>,
+  fn: (ctx: TenantContext, extractionId: string, versao: number) => Promise<ReviewResult>,
 ): Promise<RevisaoState> {
   const ctx = await getTenantContext();
   const sessionId = String(formData.get("sessionId") ?? "");
   const extractionId = String(formData.get("extractionId") ?? "");
+  const versao = Number(formData.get("versao") ?? "1");
   try {
-    const r = await fn(ctx, extractionId);
-    if (r.error) return { error: r.error };
+    const r = await fn(ctx, extractionId, versao);
+    if (r.error) {
+      if (r.error === "CONCURRENCY_ERROR") {
+        return { error: "CONCURRENCY_ERROR" };
+      }
+      return { error: r.error };
+    }
     if (!r.ok) return { error: "Extração não encontrada ou já revisada." };
     if (sessionId) revalidatePath(`/revisao/${sessionId}`);
     return { ok: true };
@@ -280,14 +334,14 @@ export async function aprovarExtracaoAction(
   _prev: RevisaoState,
   formData: FormData,
 ): Promise<RevisaoState> {
-  return comCtx(formData, (ctx, id) => aprovarExtracao(ctx, { extractionId: id }));
+  return comCtx(formData, (ctx, id, versao) => aprovarExtracao(ctx, { extractionId: id, versao }));
 }
 
 export async function descartarExtracaoAction(
   _prev: RevisaoState,
   formData: FormData,
 ): Promise<RevisaoState> {
-  return comCtx(formData, (ctx, id) => descartarExtracao(ctx, { extractionId: id }));
+  return comCtx(formData, (ctx, id, versao) => descartarExtracao(ctx, { extractionId: id, versao }));
 }
 
 export async function editarExtracaoAction(
@@ -310,7 +364,7 @@ export async function editarExtracaoAction(
     const v = formData.get(campo);
     if (typeof v === "string" && v.trim() !== "") editado[campo] = v.trim();
   }
-  return comCtx(formData, (ctx, id) =>
-    editarExtracao(ctx, { extractionId: id, payloadEditado: editado }),
+  return comCtx(formData, (ctx, id, versao) =>
+    editarExtracao(ctx, { extractionId: id, payloadEditado: editado, versao }),
   );
 }

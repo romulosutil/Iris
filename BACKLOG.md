@@ -17,7 +17,7 @@
 | **1d** | Agenda Mínima + Check-in | ✅ Concluído | Issue #11 |
 | **2** | Metas & Diário por Texto | ✅ Concluído (Planos 1-4) | Issue #5 |
 | **3** | Extração de Evidências (IA) | ✅ Concluído | Issue #6 (fechada 13/07) |
-| **4** | Evidências Acumuladas & Gráficos | 📅 Pendente | Issue #7 |
+| **4** | Evidências Acumuladas & Gráficos | ✅ Concluído | Issue #7 |
 | **5** | Relatórios de Convênio & Supervisão | 📅 Pendente | Issue #8 |
 | **6** | Ditado de Voz & Hardening LGPD | 📅 Pendente | Issue #9 |
 
@@ -218,7 +218,7 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
   grave, payloadEditado vence); metas ativas; próxima sessão. Lógica pura em `logic.ts`
   (testável sem banco). Componentes DS (Card, Stack, Banner, Chip/ChipGroup). 152 unit+a11y
   (6 axe briefing: 0 violações); typecheck 0; build verde. **4C completo.**
-* ⬜ 4D (Timeline/Scrubber + Gráficos + Comparação) — pendente.
+* ✅ 4D (Timeline/Scrubber + Gráficos + Comparação) — Concluído.
 * ⚠️ **Nota de ambiente:** o Postgres local de dev estava com o tracking do drizzle
   dessincronizado (8 migrações rastreadas, schema real em 0012) → `db:migrate` falha ao
   re-CREATE. Schema real está completo; 0013/0014 foram aplicadas à mão p/ validar. Docker
