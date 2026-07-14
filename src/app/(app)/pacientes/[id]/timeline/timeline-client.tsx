@@ -38,6 +38,20 @@ export function TimelineClient({
 }: TimelineClientProps) {
   const { snapshots, metasAtivas, milestonesAtivos } = initialData;
 
+  // Lista ordenada crescente de números de sessões disponíveis
+  const sessoesDisponiveis = [...snapshots]
+    .map((s) => s.sessionNumero)
+    .sort((a, b) => a - b);
+
+  // Sessão atual selecionada no Scrubber (inicia na mais recente)
+  const [sessaoAtiva, setSessaoAtiva] = useState<number>(
+    sessoesDisponiveis[sessoesDisponiveis.length - 1] ?? 1,
+  );
+
+  // Encontra o snapshot selecionado
+  const snapSelecionado =
+    snapshots.find((s) => s.sessionNumero === sessaoAtiva) ?? null;
+
   // Estado para a trajetória selecionada
   const [trajetoriaAlvoId, setTrajetoriaAlvoId] = useState<string>("");
 
@@ -56,10 +70,12 @@ export function TimelineClient({
   const milestonesPorDominio = React.useMemo(() => {
     const grupos: Record<string, typeof initialData.milestonesAtivos> = {};
     for (const m of initialData.milestonesAtivos ?? []) {
-      if (!grupos[m.dominioId]) {
-        grupos[m.dominioId] = [];
+      let grupo = grupos[m.dominioId];
+      if (!grupo) {
+        grupo = [];
+        grupos[m.dominioId] = grupo;
       }
-      grupos[m.dominioId].push(m);
+      grupo.push(m);
     }
     // Ordena por nível/ordem
     for (const dom of Object.keys(grupos)) {
@@ -174,16 +190,6 @@ export function TimelineClient({
     return chunks;
   };
 
-  // Lista ordenada crescente de números de sessões disponíveis
-  const sessoesDisponiveis = [...snapshots]
-    .map((s) => s.sessionNumero)
-    .sort((a, b) => a - b);
-
-  // Sessão atual selecionada no Scrubber (inicia na mais recente)
-  const [sessaoAtiva, setSessaoAtiva] = useState<number>(
-    sessoesDisponiveis[sessoesDisponiveis.length - 1] ?? 1,
-  );
-
   // Estados do Comparador
   const [compararAtivo, setCompararAtivo] = useState(false);
   const [sessaoComparar, setSessaoComparar] = useState<number | null>(null);
@@ -217,10 +223,6 @@ export function TimelineClient({
     setSessaoComparar(numero === sessaoAtiva ? null : numero);
     setComparacaoData(null);
   };
-
-  // Encontra o snapshot selecionado
-  const snapSelecionado =
-    snapshots.find((s) => s.sessionNumero === sessaoAtiva) ?? null;
 
   // Carrega o delta da sessão selecionada
   useEffect(() => {
