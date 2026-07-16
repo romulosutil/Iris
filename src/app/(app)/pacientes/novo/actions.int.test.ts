@@ -77,4 +77,46 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     );
     expect(encontrados).toHaveLength(0);
   });
+
+  test("grava paciente + consent + alvo na mesma transação", async () => {
+    const fd = new FormData();
+    fd.set("nome", "Bruna");
+    fd.set("responsavelSignatario", "Mãe da Bruna");
+    fd.append("alvoDisciplina", "aba");
+    fd.append("alvoHorasSemana", "12.0");
+    const res = await criarPacienteEConsent(ctx, fd);
+    expect(res.error).toBeUndefined();
+    expect(res.id).toBeTruthy();
+    const alvos = await owner`
+      SELECT disciplina, horas_alvo_semana, vigencia_inicio, vigencia_fim
+      FROM patient_alvo_disciplina WHERE patient_id = ${res.id!}`;
+    expect(alvos).toHaveLength(1);
+    expect(alvos[0]!.disciplina).toBe("aba");
+    expect(alvos[0]!.horas_alvo_semana).toBe("12.0");
+    expect(alvos[0]!.vigencia_fim).toBeNull();
+  });
+
+  test("sem alvo informado grava paciente + consent + 0 alvos", async () => {
+    const res = await criarPacienteEConsent(
+      ctx,
+      form({ nome: "Sem Alvo", responsavelSignatario: "Pai" }),
+    );
+    expect(res.error).toBeUndefined();
+    const alvos = await owner`
+      SELECT 1 FROM patient_alvo_disciplina WHERE patient_id = ${res.id!}`;
+    expect(alvos).toHaveLength(0);
+  });
+
+  test("par de alvo inválido (horas não numéricas) reverte tudo (rollback)", async () => {
+    const fd = new FormData();
+    fd.set("nome", "Rollback Teste");
+    fd.set("responsavelSignatario", "Mãe");
+    fd.append("alvoDisciplina", "aba");
+    fd.append("alvoHorasSemana", "abc"); // inválido
+    const res = await criarPacienteEConsent(ctx, fd);
+    expect(res.error).toBeTruthy();
+    const encontrados = await owner`
+      SELECT 1 FROM patient WHERE nome = 'Rollback Teste'`;
+    expect(encontrados).toHaveLength(0); // paciente também não persiste
+  });
 });
