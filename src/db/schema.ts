@@ -389,6 +389,32 @@ export const patientAlvoDisciplina = pgTable(
   ],
 );
 
+// ─── Agenda 2.0 (Etapa A) — disponibilidade recorrente do terapeuta ──────────
+// Várias faixas por dia permitidas (manhã + tarde). Exceções finas (feriado/
+// férias) NÃO vivem aqui — vão em `bloqueio`. terapeuta_id é FK global a
+// app_user; o vínculo à clínica é validado no RLS por app_user_in_clinic.
+export const janelaTrabalho = pgTable(
+  "janela_trabalho",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    terapeutaId: uuid("terapeuta_id")
+      .notNull()
+      .references(() => appUser.id),
+    diaSemana: smallint("dia_semana").notNull(),
+    horaInicio: time("hora_inicio").notNull(),
+    horaFim: time("hora_fim").notNull(),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("janela_trabalho_dia_semana", sql`${t.diaSemana} BETWEEN 0 AND 6`),
+    check("janela_trabalho_faixa", sql`${t.horaFim} > ${t.horaInicio}`),
+    index("idx_janela_terapeuta").on(t.terapeutaId, t.diaSemana),
+  ],
+);
+
 // ─── Agenda mínima + check-in (Fase 1d) ──────────────────────────────────────
 // `session` = ocorrência (realizada/falta/cancelada) de atendimento. Carrega o
 // esqueleto mínimo da agenda: quem, qual paciente, quando, estado de check-in.

@@ -183,6 +183,20 @@
       "when": 1784226957741,
       "tag": "0025_agenda2_patient_alvo_disciplina_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784228340814,
+      "tag": "0026_woozy_cardiac",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1784228341814,
+      "tag": "0027_agenda2_janela_trabalho_rls",
+      "breakpoints": true
     }
   ]
 }
