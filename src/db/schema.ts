@@ -415,6 +415,46 @@ export const janelaTrabalho = pgTable(
   ],
 );
 
+export const bloqueioEscopo = pgEnum("bloqueio_escopo", [
+  "clinica", "terapeuta", "paciente",
+]);
+
+// ─── Agenda 2.0 (Etapa A) — bloqueio de agenda (feriado/férias/afastamento) ──
+// Polimórfico por escopo. Bloqueio de PACIENTE é obrigatório na v1: sem ele a
+// criança viajando 3 semanas gera "falta" fantasma. A materialização (Etapa D)
+// pula datas bloqueadas do escopo aplicável.
+export const bloqueio = pgTable(
+  "bloqueio",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    escopo: bloqueioEscopo("escopo").notNull(),
+    terapeutaId: uuid("terapeuta_id").references(() => appUser.id),
+    patientId: uuid("patient_id"),
+    dataInicio: date("data_inicio").notNull(),
+    dataFim: date("data_fim").notNull(),
+    motivo: text("motivo").notNull(),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.patientId, t.clinicId],
+      foreignColumns: [patient.id, patient.clinicId],
+      name: "bloqueio_patient_fk",
+    }).onDelete("cascade"),
+    check("bloqueio_intervalo", sql`${t.dataFim} >= ${t.dataInicio}`),
+    check(
+      "bloqueio_escopo_alvo",
+      sql`(${t.escopo} = 'clinica'   AND ${t.terapeutaId} IS NULL AND ${t.patientId} IS NULL)
+       OR (${t.escopo} = 'terapeuta' AND ${t.terapeutaId} IS NOT NULL AND ${t.patientId} IS NULL)
+       OR (${t.escopo} = 'paciente'  AND ${t.patientId} IS NOT NULL AND ${t.terapeutaId} IS NULL)`,
+    ),
+    index("idx_bloqueio_clinic_periodo").on(t.clinicId, t.dataInicio, t.dataFim),
+  ],
+);
+
 // ─── Agenda mínima + check-in (Fase 1d) ──────────────────────────────────────
 // `session` = ocorrência (realizada/falta/cancelada) de atendimento. Carrega o
 // esqueleto mínimo da agenda: quem, qual paciente, quando, estado de check-in.

@@ -197,6 +197,20 @@
       "when": 1784228341814,
       "tag": "0027_agenda2_janela_trabalho_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1784228469514,
+      "tag": "0028_aromatic_red_shift",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1784228470514,
+      "tag": "0029_agenda2_bloqueio_rls",
+      "breakpoints": true
     }
   ]
 }
