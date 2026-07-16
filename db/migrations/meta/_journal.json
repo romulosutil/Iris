@@ -211,6 +211,20 @@
       "when": 1784228470514,
       "tag": "0029_agenda2_bloqueio_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1784228602007,
+      "tag": "0030_third_risque",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1784228603007,
+      "tag": "0031_agenda2_agendamento_recorrente_rls",
+      "breakpoints": true
     }
   ]
 }

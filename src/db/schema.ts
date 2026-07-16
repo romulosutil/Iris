@@ -455,6 +455,55 @@ export const bloqueio = pgTable(
   ],
 );
 
+export const agendamentoRecorrenteStatus = pgEnum("agendamento_recorrente_status", [
+  "ativo", "encerrado",
+]);
+
+// ─── Agenda 2.0 (Etapa A) — regra recorrente standing ────────────────────────
+// Um paciente tem N regras (uma por disciplina/terapeuta/horário) — é assim que
+// a criança de 3 terapeutas é representada. As `session` são geradas a partir
+// dela (Etapa D). Editar horário no meio do tratamento = encerrar+abrir nova.
+export const agendamentoRecorrente = pgTable(
+  "agendamento_recorrente",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    patientId: uuid("patient_id").notNull(),
+    terapeutaId: uuid("terapeuta_id")
+      .notNull()
+      .references(() => appUser.id),
+    disciplina: text("disciplina").notNull(),
+    diaSemana: smallint("dia_semana").notNull(),
+    horaInicio: time("hora_inicio").notNull(),
+    duracaoMin: integer("duracao_min").notNull(),
+    vigenciaInicio: date("vigencia_inicio").notNull(),
+    vigenciaFim: date("vigencia_fim"),
+    status: agendamentoRecorrenteStatus("status").notNull().default("ativo"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.patientId, t.clinicId],
+      foreignColumns: [patient.id, patient.clinicId],
+      name: "agendamento_recorrente_patient_fk",
+    }).onDelete("cascade"),
+    check("agendamento_recorrente_dia_semana", sql`${t.diaSemana} BETWEEN 0 AND 6`),
+    check("agendamento_recorrente_duracao", sql`${t.duracaoMin} > 0`),
+    check(
+      "agendamento_recorrente_vigencia",
+      sql`${t.vigenciaFim} IS NULL OR ${t.vigenciaFim} >= ${t.vigenciaInicio}`,
+    ),
+    index("idx_agrecorrente_terapeuta_ativo")
+      .on(t.terapeutaId, t.diaSemana)
+      .where(sql`${t.status} = 'ativo'`),
+    index("idx_agrecorrente_patient_ativo")
+      .on(t.patientId, t.disciplina)
+      .where(sql`${t.status} = 'ativo'`),
+  ],
+);
+
 // ─── Agenda mínima + check-in (Fase 1d) ──────────────────────────────────────
 // `session` = ocorrência (realizada/falta/cancelada) de atendimento. Carrega o
 // esqueleto mínimo da agenda: quem, qual paciente, quando, estado de check-in.
