@@ -20,6 +20,43 @@
 | **4** | Evidências Acumuladas & Gráficos | ✅ Concluído | Issue #7 |
 | **5** | Relatórios de Convênio & Supervisão | 📅 Pendente | Issue #8 |
 | **6** | Ditado de Voz & Hardening LGPD | 📅 Pendente | Issue #9 |
+| **7** | Self-Service & Growth (onboarding + pagamento autônomo) | 📅 Pós-MVP | Issue #36 |
+
+---
+
+## 🧭 Sessão 16/07/2026 — Agenda 2.0 (design disciplina-aware)
+
+**Review de 4C/4D:** entregues e no `main`, mas `typecheck` estava vermelho —
+3 test files de integração (`revisao/[sessionId]`) sem o campo `versao` do OCC
+adicionado em 4D. Corrigido em `fix/typecheck-occ-versao-drift` → **PR #37**.
+
+**Redesign da criação de agenda** (fluxo atual pede UUID cru): spec aprovada em
+[`docs/superpowers/specs/2026-07-16-agenda-2.0-disciplina-aware-design.md`].
+Passou por revisão adversarial (Tech Lead + Coordenador de terapias) — o pivô
+foi tornar o modelo **disciplina-aware** (duração por disciplina, alvo por
+disciplina, sessão com estado, visão por paciente), alinhado ao
+`care_team_membership.disciplina` que já existe.
+
+**Posicionamento:** Agenda 2.0 é **fase nova**, não a Fase 5 (Relatórios de
+Convênio, Issue #8). Candidata a **pré-requisito da Fase 5** (relatórios
+dependem de horas prescritas vs. realizadas por disciplina). Número/ordem
+oficial a confirmar com o Rômulo.
+
+**Dívida técnica aceita conscientemente (fora da v1):**
+* **Grupo / co-terapia** — v1 é 1 sessão = 1 paciente = 1 terapeuta; a clínica
+  faz *raramente*. Quando entrar, exige junções `session_participante` /
+  `session_terapeuta` + recálculo de métricas (migração aceita).
+* **Lista de espera / encaixe** de vagas que abrem.
+* **Cron automático de materialização** — v1 é on-demand ("estender").
+* **Exceções de janela finas** além de bloqueio-por-data.
+* **Regras de faturamento** (competência/prazo de reposição, glosa por falta
+  não justificada): o *dado* é modelado na v1 (`justificada`, `repostaDe`); a
+  *lógica* fica para a fase de Relatórios/Convênio.
+* **Migração de `session.estado`:** enum atual (`agendada`/`presente`/…) →
+  novo enum precisa de mapeamento na migration (definir no plano).
+* **Extensão `btree_gist`** (para o EXCLUDE anti-overbook): confirmar
+  disponibilidade no Postgres de prod (relevante se o pivô de infra VPS
+  ocorrer — ver `docs/arquitetura/plano-bootstrap-e-stack-vps.md`).
 
 ---
 
@@ -241,6 +278,35 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
 ### [Fase 6] Hardening e Ditado de Voz (Issue #9)
 * Integração de ASR (ditado por voz) com preservação do áudio original local.
 * Hardening final de segurança LGPD (MFA, testes RLS exaustivos, auditoria de exports).
+
+### [Fase 7] Self-Service & Growth — 📅 Pós-MVP (não construir antes do gatilho)
+
+**Decisão registrada (14/07/2026):** a fase de self-service — onde uma clínica ou profissional autônomo se cadastra, configura e paga **sem intervenção manual do fundador** — é uma fase legítima e necessária, mas **deliberadamente adiada** enquanto o padrão de onboarding não estiver validado nas clínicas fundadoras.
+
+**Por que não construir agora:**
+O modelo de negócio (§6) prevê o onboarding manual do fundador *como instrumento de pesquisa real* (Roteiros A–C), não como limitação técnica temporária. Encapsular o onboarding em código antes de repetir o processo manual ≥3–5 vezes com clínicas reais significa automatizar um processo que ainda pode estar errado.
+
+Além disso, há hard-blockers técnicos que precisariam ser resolvidos antes do self-service ser possível:
+* **Email transacional** ausente hoje — convites usam senha temporária exibida uma única vez na tela (decisão explícita da Fase 1c). Sem isso, nenhum fluxo de "crie sua conta" funciona.
+* **Provisioning automático de tenant** hoje é manual (seed do fundador); precisaria virar um fluxo guiado e auditável.
+* **Pagamento** não existe — toda cobrança hoje é manual/fora do sistema.
+
+**Gatilho para priorizar:**
+≥3 clínicas ativas e o onboarding manual do fundador virar gargalo no seu tempo. Antes disso, self-service não desbloqueia receita — só adiciona complexidade de infra.
+
+**Componentes quando chegar a hora:**
+
+| Componente | Descrição | Complexidade |
+|---|---|---|
+| Email transacional | Convite de terapeutas, confirmação de conta, recuperação de senha | Alta |
+| Signup público | Formulário de criação de clínica/profissional sem convite prévio | Baixa |
+| Provisioning automático | Criar tenant + 1º coordenador sem intervenção do fundador | Média |
+| Wizard de onboarding in-app | Guia passo a passo: protocolo → 1º paciente → 1ª sessão | Alta |
+| Integração de pagamento | Stripe ou Abacatepay; billing por paciente ativo/mês | Alta |
+| Trial configurável | X dias / Y pacientes grátis (parâmetro a decidir no piloto) | Média |
+| Portal de assinatura | Self-service de upgrade/downgrade de tier, histórico de faturas | Média |
+
+**Nota de produto:** o tier inicial a suportar no self-service é o **Diário** (profissional autônomo, R$ 39–49/paciente). O tier Clínica e Convênio têm ciclo de venda mais longo e provavelmente continuam com onboarding assistido por mais tempo.
 
 ---
 
