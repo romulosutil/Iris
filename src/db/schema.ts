@@ -500,6 +500,11 @@ export const agendamentoRecorrente = pgTable(
   ],
 );
 
+export const sessionModalidade = pgEnum("session_modalidade", ["presencial", "online"]);
+export const sessionTipo = pgEnum("session_tipo", [
+  "terapia", "avaliacao", "devolutiva", "reuniao_pais", "outro",
+]);
+
 // ─── Agenda mínima + check-in (Fase 1d) ──────────────────────────────────────
 // `session` = ocorrência (realizada/falta/cancelada) de atendimento. Carrega o
 // esqueleto mínimo da agenda: quem, qual paciente, quando, estado de check-in.
@@ -526,6 +531,17 @@ export const session = pgTable(
     // Base numérica da linha do tempo ("sessão 45"). Só é populado na
     // consolidação da sessão (Fase 2/3) — nullable de propósito na 1d.
     numeroSequencialPaciente: integer("numero_sequencial_paciente"),
+    // Agenda 2.0 (Etapa A): enriquecimento disciplina-aware. A FK de
+    // `recorrente_id → agendamento_recorrente` é criada na migration à mão 0034
+    // (evita reordenar o arquivo / ciclo de import); aqui declara-se só a coluna.
+    recorrenteId: uuid("recorrente_id"), // null = avulsa
+    disciplina: text("disciplina"),
+    duracaoMin: integer("duracao_min").notNull().default(60),
+    justificada: boolean("justificada"), // só relevante em falta_*
+    modalidade: sessionModalidade("modalidade").notNull().default("presencial"),
+    tipo: sessionTipo("tipo").notNull().default("terapia"),
+    atendidoPorId: uuid("atendido_por_id").references(() => appUser.id), // substituto
+    repostaDe: uuid("reposta_de"), // self-FK: esta sessão repõe outra
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -542,6 +558,17 @@ export const session = pgTable(
     uniqueIndex("uq_session_numero_por_paciente")
       .on(t.patientId, t.numeroSequencialPaciente)
       .where(sql`${t.numeroSequencialPaciente} IS NOT NULL`),
+    foreignKey({
+      columns: [t.repostaDe],
+      foreignColumns: [t.id],
+      name: "session_reposta_de_fk",
+    }).onDelete("set null"),
+    // Materialização idempotente: a mesma regra não gera 2 ocorrências no mesmo
+    // instante (retry não duplica). Parcial: sessões avulsas (recorrente_id null)
+    // não colidem entre si.
+    uniqueIndex("uq_session_recorrente_agendada")
+      .on(t.recorrenteId, t.agendadaPara)
+      .where(sql`${t.recorrenteId} IS NOT NULL`),
   ],
 );
 
