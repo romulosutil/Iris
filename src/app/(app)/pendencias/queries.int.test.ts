@@ -56,10 +56,10 @@ describe.skipIf(!hasDb)("Fila de pendências · queries", () => {
       VALUES (${PAC_A1}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
 
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
-      (${SESS_CAPTURA}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'presente'),
-      (${SESS_CONSOLIDADA}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'presente'),
-      (${SESS_EXTRACAO_PEND}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'presente'),
-      (${SESS_EXTRACAO_SUG}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'presente')`;
+      (${SESS_CAPTURA}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada'),
+      (${SESS_CONSOLIDADA}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada'),
+      (${SESS_EXTRACAO_PEND}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada'),
+      (${SESS_EXTRACAO_SUG}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada')`;
 
     // Sessão com captura_rapida SEM nota_consolidada → deve aparecer.
     await owner`INSERT INTO session_note (session_id, clinic_id, tipo, texto, autor_id) VALUES

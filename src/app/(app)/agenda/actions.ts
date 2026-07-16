@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
 import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
@@ -114,8 +114,10 @@ export async function agendarSessao(
 
 /**
  * Check-in: o terapeuta (ou recepção/coordenação) marca o início da sessão ao
- * receber o paciente. Só transiciona a partir de `agendada` — chamada repetida
- * é no-op segura. O RLS garante que só quem pode tocar a sessão a atualiza.
+ * receber o paciente. Presença é registrada em `checkInEm` — o estado NÃO muda
+ * (segue `agendada` até a consolidação em `realizada`, Agenda 2.0). Só marca uma
+ * vez: a guarda `checkInEm IS NULL` torna a chamada repetida um no-op seguro. O
+ * RLS garante que só quem pode tocar a sessão a atualiza.
  */
 export async function checkInSessao(
   ctx: TenantContext,
@@ -125,8 +127,8 @@ export async function checkInSessao(
   const atualizadas = await withTenant(ctx, (tx) =>
     tx
       .update(session)
-      .set({ estado: "presente", checkInEm: new Date() })
-      .where(and(eq(session.id, sessionId), eq(session.estado, "agendada")))
+      .set({ checkInEm: new Date() })
+      .where(and(eq(session.id, sessionId), isNull(session.checkInEm)))
       .returning({ id: session.id }),
   );
   if (atualizadas.length === 0) {

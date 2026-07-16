@@ -39,16 +39,12 @@ export const consentTipo = pgEnum("consent_tipo", [
   "exportacao_relatorios",
 ]);
 
-// Estados de check-in de uma sessão (Fase 1d). Ciclo mínimo: `agendada` →
-// (check-in do terapeuta) `presente` → `realizada`; `falta`/`cancelada` são
-// desfechos alternativos. Não é máquina de estados completa — só o esqueleto
-// da agenda ("agenda não é módulo completo", modelo-de-dados §1.3).
+// Estados de sessão (Agenda 2.0, Etapa A). Expande/substitui o enum da Fase 1d.
+// O check-in não é mais um estado: presença é registrada por `checkInEm` e o
+// estado permanece `agendada` até a consolidação (`realizada`). Migração de
+// dados: presente→realizada, falta→falta_paciente (ver 0032).
 export const sessionEstado = pgEnum("session_estado", [
-  "agendada",
-  "presente",
-  "realizada",
-  "falta",
-  "cancelada",
+  "agendada", "realizada", "falta_paciente", "falta_terapeuta", "cancelada",
 ]);
 
 export const goalEstado = pgEnum("goal_estado", [

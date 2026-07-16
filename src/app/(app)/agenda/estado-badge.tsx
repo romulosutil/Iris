@@ -9,9 +9,9 @@ import type { SessionEstado } from "./actions";
  */
 const config: Record<SessionEstado, { rotulo: string; classe: string }> = {
   agendada: { rotulo: "Agendada", classe: "bg-surface text-ink" },
-  presente: { rotulo: "Presente", classe: "bg-mint text-ink-anchor" },
   realizada: { rotulo: "Realizada", classe: "bg-blue text-ink-anchor" },
-  falta: { rotulo: "Falta", classe: "bg-terracotta text-ink-anchor" },
+  falta_paciente: { rotulo: "Falta (paciente)", classe: "bg-terracotta text-ink-anchor" },
+  falta_terapeuta: { rotulo: "Falta (terapeuta)", classe: "bg-terracotta text-ink-anchor" },
   cancelada: {
     rotulo: "Cancelada",
     classe: "bg-surface text-graphite line-through",

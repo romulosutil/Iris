@@ -106,7 +106,7 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     ).rejects.toThrow(/terapeuta/);
   });
 
-  test("check-in transiciona agendada → presente e é idempotente-seguro", async () => {
+  test("check-in registra presença (checkInEm) sem mudar estado e é idempotente-seguro", async () => {
     const r = await agendarSessao(
       ctxAdmin,
       form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_PARA }),
@@ -119,7 +119,7 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     const [depois] = await withTenant(ctxCoord, (tx) =>
       tx.select().from(session).where(eq(session.id, r.id!)),
     );
-    expect(depois!.estado).toBe("presente");
+    expect(depois!.estado).toBe("agendada");
     expect(depois!.checkInEm).not.toBeNull();
 
     // Segundo check-in não encontra mais uma sessão 'agendada' → no-op seguro.

@@ -80,7 +80,8 @@ export async function carregarBriefing(
 
     // Próxima sessão relevante deste paciente (hoje ou futura, ainda não
     // encerrada) — base do header e do "Iniciar sessão". Assunção: a mais
-    // próxima no tempo, incluindo já em "presente" (check-in feito).
+    // próxima no tempo. Uma sessão com check-in feito segue `agendada`
+    // (presença é registrada em checkInEm, Agenda 2.0), então continua incluída.
     const [proxima] = await tx
       .select({
         id: session.id,
@@ -89,9 +90,7 @@ export async function carregarBriefing(
         numeroSequencial: session.numeroSequencialPaciente,
       })
       .from(session)
-      .where(
-        and(eq(session.patientId, patientId), inArray(session.estado, ["agendada", "presente"])),
-      )
+      .where(and(eq(session.patientId, patientId), eq(session.estado, "agendada")))
       .orderBy(session.agendadaPara)
       .limit(1);
 
