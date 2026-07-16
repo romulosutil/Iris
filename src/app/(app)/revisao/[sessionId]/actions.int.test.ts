@@ -47,7 +47,7 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
   beforeEach(seedExtracoes);
 
   test("terapeuta dono aprova uma sugerida → estado aprovada + revisado_por", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_ALTA });
+    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_ALTA, versao: 1 });
     expect(r.ok).toBe(true);
     const [row] = await owner`SELECT estado, revisado_por, revisado_em FROM extraction WHERE id = ${EX_ALTA}`;
     expect(row!.estado).toBe("aprovada");
@@ -56,7 +56,7 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
   });
 
   test("descartar → estado descartada", async () => {
-    const r = await A.descartarExtracao(ctxT1, { extractionId: EX_BAIXA });
+    const r = await A.descartarExtracao(ctxT1, { extractionId: EX_BAIXA, versao: 1 });
     expect(r.ok).toBe(true);
     const [row] = await owner`SELECT estado FROM extraction WHERE id = ${EX_BAIXA}`;
     expect(row!.estado).toBe("descartada");
@@ -66,6 +66,7 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
     const r = await A.editarExtracao(ctxT1, {
       extractionId: EX_INCONS,
       payloadEditado: { funcao: "mando", nivel_ajuda: "dica_fisica" },
+      versao: 1,
     });
     expect(r.ok).toBe(true);
     const [row] = await owner`SELECT estado, payload, payload_editado FROM extraction WHERE id = ${EX_INCONS}`;
@@ -75,14 +76,14 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
   });
 
   test("não age em extração pendente de reprocessamento (só sugerida é revisável)", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_PEND });
+    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_PEND, versao: 1 });
     expect(r.ok).toBe(false);
     const [row] = await owner`SELECT estado FROM extraction WHERE id = ${EX_PEND}`;
     expect(row!.estado).toBe("pendente_reprocessamento");
   });
 
   test("terapeuta que não é dono da sessão é barrado pelo RLS (nada muda)", async () => {
-    const r = await A.aprovarExtracao(ctxT2, { extractionId: EX_ALTA });
+    const r = await A.aprovarExtracao(ctxT2, { extractionId: EX_ALTA, versao: 1 });
     expect(r.ok).toBe(false); // RLS USING filtra a linha → 0 updates
     const [row] = await owner`SELECT estado FROM extraction WHERE id = ${EX_ALTA}`;
     expect(row!.estado).toBe("sugerida");

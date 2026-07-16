@@ -94,7 +94,7 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
   beforeEach(seed);
 
   test("aprovar extração com domínio AMBÍGUO (2 marcos): resolve goal+protocol, milestoneId fica null", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_AMBIGUO });
+    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_AMBIGUO, versao: 1 });
     expect(r.ok).toBe(true);
 
     const rows = await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_AMBIGUO}`;
@@ -112,7 +112,7 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
   });
 
   test("aprovar extração com domínio COM 1 MARCO SÓ: milestoneId resolve", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_UNICO });
+    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_UNICO, versao: 1 });
     expect(r.ok).toBe(true);
 
     const [ev] = await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_UNICO}`;
@@ -122,12 +122,12 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
   });
 
   test("idempotente: re-aprovar (2ª chamada) não duplica evidence", async () => {
-    const r1 = await A.aprovarExtracao(ctxT1, { extractionId: EX_AMBIGUO });
+    const r1 = await A.aprovarExtracao(ctxT1, { extractionId: EX_AMBIGUO, versao: 1 });
     expect(r1.ok).toBe(true);
 
     // 2ª chamada: extração já não está mais 'sugerida' → transicionar não acha
     // a linha, não reexecuta a inserção de evidence.
-    const r2 = await A.aprovarExtracao(ctxT1, { extractionId: EX_AMBIGUO });
+    const r2 = await A.aprovarExtracao(ctxT1, { extractionId: EX_AMBIGUO, versao: 1 });
     expect(r2.ok).toBe(false);
 
     const rows = await owner`SELECT id FROM evidence WHERE extraction_id = ${EX_AMBIGUO}`;
@@ -144,6 +144,7 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
           alvos: [{ goal_id: null, protocol_id: "vbmapp", dominio_id: "tato" }],
         },
       },
+      versao: 1,
     });
     expect(r.ok).toBe(true);
 
@@ -164,7 +165,7 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
       (${EX_SEM_NUMERO}, ${SESS_SEM_NUMERO}, ${CLINIC}, 'sugerida', 'evidencia', 'pediu suco', 'alta',
         ${owner.json({ evidencia: { alvos: [{ protocol_id: "vbmapp", dominio_id: "tato" }] } })})`;
 
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_SEM_NUMERO });
+    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_SEM_NUMERO, versao: 1 });
     expect(r.ok).toBe(true); // a revisão em si não falha
 
     const rows = await owner`SELECT id FROM evidence WHERE extraction_id = ${EX_SEM_NUMERO}`;

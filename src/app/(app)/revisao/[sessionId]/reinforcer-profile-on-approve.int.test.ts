@@ -55,7 +55,7 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
   beforeEach(seed);
 
   test("aprovar extração preferencia_reforcador grava 1 reinforcer_profile", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_PREF });
+    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_PREF, versao: 1 });
     expect(r.ok).toBe(true);
 
     const rows = await owner`SELECT * FROM reinforcer_profile WHERE extraction_id = ${EX_PREF}`;
@@ -68,12 +68,12 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
   });
 
   test("idempotente: re-aprovar (2ª chamada) não duplica reinforcer_profile", async () => {
-    const r1 = await A.aprovarExtracao(ctxT1, { extractionId: EX_PREF });
+    const r1 = await A.aprovarExtracao(ctxT1, { extractionId: EX_PREF, versao: 1 });
     expect(r1.ok).toBe(true);
 
     // 2ª chamada: extração já não está mais 'sugerida' → transicionar não acha
     // a linha, não reexecuta a inserção.
-    const r2 = await A.aprovarExtracao(ctxT1, { extractionId: EX_PREF });
+    const r2 = await A.aprovarExtracao(ctxT1, { extractionId: EX_PREF, versao: 1 });
     expect(r2.ok).toBe(false);
 
     const rows = await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_PREF}`;
@@ -86,6 +86,7 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
       payloadEditado: {
         preferencia_reforcador: { item_atividade: "bolha de sabão", valencia: "saciado" },
       },
+      versao: 1,
     });
     expect(r.ok).toBe(true);
 
@@ -101,7 +102,7 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
       (${EX_VAZIO}, ${SESS}, ${CLINIC}, 'sugerida', 'preferencia_reforcador', 'sem item claro', 'baixa',
         ${owner.json({ preferencia_reforcador: { item_atividade: "", valencia: "alta" } })})`;
 
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_VAZIO });
+    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_VAZIO, versao: 1 });
     expect(r.ok).toBe(true);
 
     const rows = await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_VAZIO}`;
@@ -118,7 +119,7 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
       (${EX_SEM_NUMERO}, ${SESS_SEM_NUMERO}, ${CLINIC}, 'sugerida', 'preferencia_reforcador', 'adorou música', 'alta',
         ${owner.json({ preferencia_reforcador: { item_atividade: "música", valencia: "alta" } })})`;
 
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_SEM_NUMERO });
+    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_SEM_NUMERO, versao: 1 });
     expect(r.ok).toBe(true); // a revisão em si não falha
 
     const rows = await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_SEM_NUMERO}`;
