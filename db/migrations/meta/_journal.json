@@ -246,6 +246,13 @@
       "when": 1784229602545,
       "tag": "0034_agenda2_session_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1784229603545,
+      "tag": "0035_agenda2_session_exclude_overbook",
+      "breakpoints": true
     }
   ]
 }
