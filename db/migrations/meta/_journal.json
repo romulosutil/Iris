@@ -169,6 +169,20 @@
       "when": 1784226723344,
       "tag": "0023_boring_photon",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784226956741,
+      "tag": "0024_smart_kulan_gath",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784226957741,
+      "tag": "0025_agenda2_patient_alvo_disciplina_rls",
+      "breakpoints": true
     }
   ]
 }

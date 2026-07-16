@@ -355,6 +355,40 @@ export const careTeamMembership = pgTable(
   ],
 );
 
+// ─── Agenda 2.0 (Etapa A) — alvo de carga por disciplina, com vigência ───────
+// Alvo CONTRATADO auditável: prescrição muda no meio do tratamento (2h→4h de
+// ABA) e o convênio audita o alvo DA ÉPOCA. Vigência aberta (vigenciaFim null)
+// = alvo vigente. FK composta (patient_id, clinic_id) impede IDOR cross-tenant.
+export const patientAlvoDisciplina = pgTable(
+  "patient_alvo_disciplina",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    patientId: uuid("patient_id").notNull(),
+    disciplina: text("disciplina").notNull(),
+    horasAlvoSemana: numeric("horas_alvo_semana", { precision: 4, scale: 1 }).notNull(),
+    vigenciaInicio: date("vigencia_inicio").notNull(),
+    vigenciaFim: date("vigencia_fim"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.patientId, t.clinicId],
+      foreignColumns: [patient.id, patient.clinicId],
+      name: "patient_alvo_disciplina_patient_fk",
+    }).onDelete("cascade"),
+    check(
+      "patient_alvo_disciplina_vigencia",
+      sql`${t.vigenciaFim} IS NULL OR ${t.vigenciaFim} >= ${t.vigenciaInicio}`,
+    ),
+    index("idx_patient_alvo_vigente")
+      .on(t.patientId, t.disciplina)
+      .where(sql`${t.vigenciaFim} IS NULL`),
+  ],
+);
+
 // ─── Agenda mínima + check-in (Fase 1d) ──────────────────────────────────────
 // `session` = ocorrência (realizada/falta/cancelada) de atendimento. Carrega o
 // esqueleto mínimo da agenda: quem, qual paciente, quando, estado de check-in.
