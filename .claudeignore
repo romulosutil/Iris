@@ -1,6 +1,12 @@
 # Iris — Claude Ignore Policy
 # Purpose: Maintain token-efficiency by preventing Claude from indexing build folders, logs, local caches, and agent logs.
 
+# --- Environment & Secrets ---
+.env
+.env.*
+*.pem
+*.key
+
 # --- Node / Frontend / Next / Storybook ---
 node_modules/
 **/node_modules/

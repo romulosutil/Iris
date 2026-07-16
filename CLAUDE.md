@@ -5,6 +5,35 @@
 > pronto por fase, quando parar e perguntar). Este arquivo cobre só o que
 > é específico de sessões Claude Code — não duplica o que já está lá.
 
+## Stack Tecnológica & Comandos
+
+### Stack do Projeto
+- **Framework**: Next.js 16 (App Router)
+- **Runtime & UI**: Node.js >= 22, React 19, React DOM 19, TypeScript
+- **Estilização**: Tailwind CSS v4, PostCSS
+- **Banco de Dados**: Postgres, Drizzle ORM, drizzle-kit
+- **Autenticação**: Better Auth
+- **Qualidade & Testes**: ESLint, Prettier, Vitest, Playwright (E2E), Storybook
+
+### Comandos de Desenvolvimento e Build
+- Servidor de Desenvolvimento: `pnpm dev`
+- Storybook local: `pnpm storybook`
+- Formatar código: `pnpm format`
+- Build do projeto: `pnpm build`
+
+### Comandos de Testes e Linting
+- Rodar ESLint: `pnpm lint`
+- Rodar Typecheck: `pnpm typecheck`
+- Rodar Testes unitários/integração: `pnpm test`
+- Rodar Testes RLS: `pnpm test:rls`
+- Rodar Testes E2E (Playwright): `pnpm test:e2e`
+
+### Comandos de Banco de Dados
+- Gerar migrações: `pnpm db:generate`
+- Aplicar migrações locais: `pnpm db:migrate`
+- Seed de dados clínicos: `pnpm seed:clinic`
+- Seed de dados de demo: `pnpm seed:demo`
+
 ## Onboarding de uma sessão nova (sem memória desta conversa)
 
 Ordem de leitura recomendada para uma sessão Claude Code CLI começando do

@@ -9,13 +9,17 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
+  time,
   timestamp,
   unique,
   uniqueIndex,
@@ -217,7 +221,12 @@ export const patient = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("idx_patient_clinic").on(t.clinicId)],
+  (t) => [
+    index("idx_patient_clinic").on(t.clinicId),
+    // Alvo das FKs compostas (patient_id, clinic_id) das tabelas da Agenda 2.0
+    // (anti-IDOR em nível de banco). PK só em `id` não satisfaz FK de 2 colunas.
+    unique("uq_patient_id_clinic").on(t.id, t.clinicId),
+  ],
 );
 
 export const patientClinicalProfile = pgTable("patient_clinical_profile", {
