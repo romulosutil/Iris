@@ -162,6 +162,13 @@
       "when": 1784226374869,
       "tag": "0022_keen_pandemic",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784226723344,
+      "tag": "0023_boring_photon",
+      "breakpoints": true
     }
   ]
 }

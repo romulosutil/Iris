@@ -27,4 +27,12 @@ describe.skipIf(!hasDb)("Agenda 2.0 · Etapa A · fundação de dados", () => {
       WHERE conname = 'uq_patient_id_clinic' AND contype = 'u'`;
     expect(rows.length).toBe(1);
   });
+
+  test("clinic tem timezone, passo_grade_min e duracao_disciplina", async () => {
+    const cols = await owner`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'clinic'
+        AND column_name IN ('timezone','passo_grade_min','duracao_disciplina')`;
+    expect(cols.length).toBe(3);
+  });
 });
