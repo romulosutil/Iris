@@ -115,8 +115,11 @@ bloqueios), aba **Ausências** no paciente, `/clinica/feriados`. unit+a11y
 **Decisões desta sessão (registrar):**
 * **D3-revisada:** editor de disponibilidade = **grade visual** (não os selects
   travados na D3 original). Justificada por a11y real: grade operável por
-  teclado (setas/Enter/Espaço/Shift) + touch. Contraste re-habilitado no axe da
-  grade. Rômulo testa com touch+teclado.
+  teclado (setas/Enter/Espaço/Shift) + touch. Rômulo testa com touch+teclado.
+  (Tentativa de re-habilitar `color-contrast` no axe da grade foi **revertida** —
+  axe mede contraste via canvas, que o jsdom não implementa → teste flaky; o
+  contraste da grade fica p/ a passada manual/browser-real, alinhado ao harness
+  do repo que desliga `color-contrast` em todo lugar.)
 * **"Disponibilidade oferecida/sem"** (não "capacidade/carga"): hora do terapeuta
   é relação com a empresa (RH), fora do escopo do Iris — o Iris só oferece o
   espaço. Teto de 40h/sem é do **paciente** → métrica da Etapa F.
