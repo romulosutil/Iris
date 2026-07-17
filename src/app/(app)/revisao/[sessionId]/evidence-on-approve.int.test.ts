@@ -159,7 +159,7 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
     const SESS_SEM_NUMERO = "00000000-0000-0000-0000-00000005e1f2";
     const EX_SEM_NUMERO = "00000000-0000-0000-0000-00000e0a0003";
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
-      (${SESS_SEM_NUMERO}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'presente')`;
+      (${SESS_SEM_NUMERO}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'realizada')`;
     await owner`INSERT INTO extraction
         (id, session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload) VALUES
       (${EX_SEM_NUMERO}, ${SESS_SEM_NUMERO}, ${CLINIC}, 'sugerida', 'evidencia', 'pediu suco', 'alta',

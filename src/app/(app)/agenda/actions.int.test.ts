@@ -27,6 +27,12 @@ const PATIENT_B = "dddddddd-0000-0000-0000-000000000001"; // clínica B
 
 // Instante determinístico (offset explícito) — 12:00 em São Paulo, 11/07/2026.
 const AGENDADA_PARA = "2026-07-11T12:00:00-03:00";
+// Slots distintos para os testes que PERSISTEM uma sessão do mesmo terapeuta
+// (U_T1): o EXCLUDE anti-overbook (Agenda 2.0) barra duas 'agendada' do mesmo
+// terapeuta em horários sobrepostos. Faixas de 1h não se sobrepõem (range
+// meia-aberto), então 13:00 e 14:00 convivem com a de 12:00.
+const AGENDADA_CHECKIN = "2026-07-11T13:00:00-03:00";
+const AGENDADA_UPDATE = "2026-07-11T14:00:00-03:00";
 const DIA = "2026-07-11";
 
 let owner: ReturnType<typeof postgres>;
@@ -106,10 +112,10 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     ).rejects.toThrow(/terapeuta/);
   });
 
-  test("check-in transiciona agendada → presente e é idempotente-seguro", async () => {
+  test("check-in registra presença (checkInEm) sem mudar estado e é idempotente-seguro", async () => {
     const r = await agendarSessao(
       ctxAdmin,
-      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_PARA }),
+      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_CHECKIN }),
     );
     expect(r.id).toBeDefined();
 
@@ -119,7 +125,7 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     const [depois] = await withTenant(ctxCoord, (tx) =>
       tx.select().from(session).where(eq(session.id, r.id!)),
     );
-    expect(depois!.estado).toBe("presente");
+    expect(depois!.estado).toBe("agendada");
     expect(depois!.checkInEm).not.toBeNull();
 
     // Segundo check-in não encontra mais uma sessão 'agendada' → no-op seguro.
@@ -173,7 +179,7 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
   test("UPDATE não reaponta a sessão para paciente/profissional de outra clínica", async () => {
     const r = await agendarSessao(
       ctxAdmin,
-      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_PARA }),
+      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_UPDATE }),
     );
     expect(r.id).toBeDefined();
 

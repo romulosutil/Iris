@@ -31,6 +31,26 @@ export function NovoPacienteForm() {
       <Field label="Convênio" htmlFor="convenio">
         <Input id="convenio" name="convenio" />
       </Field>
+      {/* Alvo de carga por disciplina (Agenda 2.0) — opcional na v1: uma linha.
+          Campos vazios são ignorados pela action; repetição dinâmica de linhas
+          fica para a UI da Etapa B. */}
+      <Field label="Disciplina do alvo de carga (opcional)" htmlFor="alvoDisciplina">
+        <Input
+          id="alvoDisciplina"
+          name="alvoDisciplina"
+          placeholder="ex.: aba, fono, to"
+        />
+      </Field>
+      <Field label="Horas-alvo por semana" htmlFor="alvoHorasSemana">
+        <Input
+          id="alvoHorasSemana"
+          name="alvoHorasSemana"
+          type="number"
+          min="0"
+          step="0.5"
+          inputMode="decimal"
+        />
+      </Field>
       <Field
         label="Responsável que assina o Consentimento LGPD"
         htmlFor="responsavelSignatario"

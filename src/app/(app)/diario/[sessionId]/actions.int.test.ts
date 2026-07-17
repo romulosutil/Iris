@@ -51,8 +51,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     // mas de U_COBERTURA, que NÃO está na care team — é o cenário do bug de
     // numeração sob RLS.
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
-      (${SESS}, ${CLINIC_A}, ${PAC}, ${U_T1}, now(), 'presente'),
-      (${SESS_COBERTURA}, ${CLINIC_A}, ${PAC}, ${U_COBERTURA}, now(), 'presente')`;
+      (${SESS}, ${CLINIC_A}, ${PAC}, ${U_T1}, now(), 'realizada'),
+      (${SESS_COBERTURA}, ${CLINIC_A}, ${PAC}, ${U_COBERTURA}, now(), 'realizada')`;
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA')`;
   });

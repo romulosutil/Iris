@@ -63,6 +63,12 @@ export default async function PacientePage({ params }: PacientePageProps) {
             >
               Briefing
             </Link>
+            <Link
+              href={`/pacientes/${paciente.id}/ausencias`}
+              className="font-display text-ink hover:text-ink-anchor hover:bg-gold/10 -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
+            >
+              Ausências
+            </Link>
           </div>
         </div>
 

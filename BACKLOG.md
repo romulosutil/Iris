@@ -58,6 +58,105 @@ oficial a confirmar com o Rômulo.
   disponibilidade no Postgres de prod (relevante se o pivô de infra VPS
   ocorrer — ver `docs/arquitetura/plano-bootstrap-e-stack-vps.md`).
 
+### ✅ Etapa A (fundação de dados) — CONCLUÍDA (16/07/2026)
+
+Plano `docs/superpowers/plans/2026-07-16-agenda-2.0-etapa-a-fundacao-dados.md`
+executado (migrations `0021`–`0035`). Entregue: extensão `btree_gist`; `UNIQUE
+(id, clinic_id)` em `patient`; `clinic` + `timezone/passo_grade_min/
+duracao_disciplina`; tabelas `patient_alvo_disciplina`, `janela_trabalho`,
+`bloqueio`, `agendamento_recorrente` com RLS multi-tenant + testes de IDOR/
+cross-tenant; recreate do enum `session_estado`; enriquecimento de `session`
+(recorrência, disciplina, duração, reposição, substituto, modalidade, tipo) +
+`UNIQUE` de materialização + `EXCLUDE` anti-overbook; cadastro de paciente grava
+alvo-por-disciplina na mesma transação. 41 testes de integração Agenda 2.0
+verdes; unit 166/166.
+
+**Decisões desta sessão (registrar):**
+* **Check-in deixou de ser estado** (confirmado com o Rômulo): o novo
+  `session_estado` = `agendada/realizada/falta_paciente/falta_terapeuta/
+  cancelada`. Presença passa a ser registrada por `checkInEm` (estado segue
+  `agendada` até consolidar em `realizada`). Migração de dados legados:
+  `presente→realizada`, `falta→falta_paciente`. `checkInSessao`, `estado-badge`
+  e a query de briefing foram ajustados.
+* **EXCLUDE anti-overbook usa helper `session_fim()` `IMMUTABLE`** (não a
+  expressão inline do plano): `timestamptz + interval` é só `STABLE` e o Postgres
+  recusa expressão não-`IMMUTABLE` em índice; somar minutos a um instante
+  absoluto é determinístico, então o wrapper `IMMUTABLE` é correto. O fallback de
+  coluna gerada do plano cairia no mesmo problema.
+* **Ordenação de migrations à mão:** o `when` no `_journal.json` de toda
+  migration à mão precisa ser **maior** que o da migration gerada anterior,
+  senão `db:migrate` a pula silenciosamente (os placeholders do plano eram
+  menores). Regra: `preceding_when + 1000`.
+
+**Dívida / pendência herdada (NÃO é da Etapa A):**
+* **15 falhas de integração pré-existentes** em `revisao/[sessionId]/*`
+  (`evidence-on-approve`, `reinforcer-profile-on-approve`, `actions`): caminho de
+  aprovação de extração falha com `permission denied for table extraction` /
+  OCC `extraction.versao`. Presente no `main` antes da Etapa A (relacionado ao
+  `fix/typecheck-occ-versao-drift` / PR #37). **A resolver** — bloqueia a meta
+  de "suíte de integração 100% verde".
+
+**Deferidos que permanecem** (Etapa A não abordou): grupo/co-terapia (D11), cron
+de materialização, regras de faturamento — ver lista de dívida acima.
+
+### ✅ Etapa B (disponibilidade + bloqueio + perfil do terapeuta) — CONCLUÍDA (17/07/2026)
+
+Design `docs/superpowers/specs/2026-07-17-agenda-2.0-etapa-b-disponibilidade-design.md`
++ plano `docs/superpowers/plans/2026-07-17-agenda-2.0-etapa-b-disponibilidade.md`
+executados (10 tasks TDD via subagentes, sem DDL — só camada de app). Entregue:
+lógica pura em `src/lib/agenda/` (fusão de faixas I-B1, matemática da grade I-B3,
+validação de bloqueio I-B5); server actions (`equipe/[id]` janela; `agenda`
+bloqueio — **uma engrenagem escopo-discriminada**); grade semanal **a11y-first**
+(roving tabindex + setas + Shift-pinta + drag touch/mouse); rotas `/equipe`
+(lista) e `/equipe/[id]` (perfil: **disponibilidade oferecida/sem** + editor +
+bloqueios), aba **Ausências** no paciente, `/clinica/feriados`. unit+a11y
+198/198; integração agenda janela 4/4 + bloqueio 3/3.
+
+**Decisões desta sessão (registrar):**
+* **D3-revisada:** editor de disponibilidade = **grade visual** (não os selects
+  travados na D3 original). Justificada por a11y real: grade operável por
+  teclado (setas/Enter/Espaço/Shift) + touch. Rômulo testa com touch+teclado.
+  (Tentativa de re-habilitar `color-contrast` no axe da grade foi **revertida** —
+  axe mede contraste via canvas, que o jsdom não implementa → teste flaky; o
+  contraste da grade fica p/ a passada manual/browser-real, alinhado ao harness
+  do repo que desliga `color-contrast` em todo lugar.)
+* **"Disponibilidade oferecida/sem"** (não "capacidade/carga"): hora do terapeuta
+  é relação com a empresa (RH), fora do escopo do Iris — o Iris só oferece o
+  espaço. Teto de 40h/sem é do **paciente** → métrica da Etapa F.
+* **Segurança (review final):** helpers que recebem `ctx` (`listarTerapeutas`,
+  `carregarDisponibilidade`, `salvarJanelas`, `listarBloqueios`) movidos de
+  `actions.ts` (`"use server"`) para `queries.ts` — export em `"use server"` é
+  endpoint RPC candidato e `ctx` forjável = bypass de RLS cross-tenant. Padrão
+  alinhado a `excecoes/queries.ts`.
+* **B não lê `clinic.timezone`** (janelas são hora crua); a unificação de fuso
+  (fonte única) é responsabilidade da **Etapa D** (materialização).
+
+**Follow-ups (não bloqueiam merge, do review final):**
+* Substituir a serialização célula→faixa via `onSubmit`+hidden por
+  `<input type="hidden" value={JSON.stringify(...)}>` controlado (remove
+  dependência de ordem síncrona).
+* `removerBloqueioAction` existe mas nenhuma UI tem botão de remover — fiar um
+  controle de exclusão nas 3 listas de bloqueio.
+* Janela da grade fixa 07:00–20:00 — parametrizar quando o horário de
+  funcionamento da clínica virar configurável (senão janela fora da faixa é
+  truncada no próximo save).
+* `pacientes/[id]/ausencias/page.tsx` usa `requireRole` sem `try→notFound()`
+  (as outras 3 páginas usam) — 500 em vez de 404 p/ papel não autorizado.
+* Gaps de teste de lógica pura: faixa duplicada/contida, passo não-divisível,
+  datas iguais no bloqueio.
+* Extrair um `<BloqueioForm>` das 3 formas quase-duplicadas (equipe/ausências/
+  feriados) — opcional, cada uma ~20 linhas, divergem em hidden/labels.
+
+**Pré-existentes reconfirmados** (NÃO são da Etapa B, seguem abertos): as 15
+falhas `revisao/[sessionId]/*` (`permission denied for table extraction`) e a
+`fase2-rls` (semeia enum `'presente'` removido pela recriação da Etapa A) —
+mesma dívida documentada no bloco da Etapa A acima. Bloqueiam a meta "suíte de
+integração 100% verde".
+
+**Deferidos que permanecem** (Etapa B não abordou): calendário/alocação (Etapa
+C), materialização IANA (Etapa D), ciclo de vida da sessão/substituto/reposição
+(Etapa E), métricas alocado-vago + alerta de defasagem (Etapa F), grupo/co-terapia (D11).
+
 ---
 
 ## 🧭 Sessão 13/07/2026 — Fase 3 fechada + polimento & validação de prod

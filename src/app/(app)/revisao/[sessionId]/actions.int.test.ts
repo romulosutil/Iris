@@ -41,7 +41,7 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_T1},${CLINIC},'terapeuta'),(${U_T2},${CLINIC},'terapeuta')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC}, ${CLINIC}, 'P')`;
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
-      (${SESS}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'presente')`;
+      (${SESS}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'realizada')`;
   });
   afterAll(async () => { await owner?.end(); await appSql?.end(); });
   beforeEach(seedExtracoes);

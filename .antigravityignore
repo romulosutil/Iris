@@ -1,6 +1,12 @@
 # Iris — Antigravity Ignore Policy
 # Purpose: Reduce token usage and improve response speed by preventing Antigravity from reading build directories, logs, caches, and database files.
 
+# --- Environment & Secrets ---
+.env
+.env.*
+*.pem
+*.key
+
 # --- Dependencies & Build Artifacts ---
 node_modules/
 **/node_modules/

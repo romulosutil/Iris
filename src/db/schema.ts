@@ -9,13 +9,17 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
+  time,
   timestamp,
   unique,
   uniqueIndex,
@@ -35,16 +39,12 @@ export const consentTipo = pgEnum("consent_tipo", [
   "exportacao_relatorios",
 ]);
 
-// Estados de check-in de uma sessão (Fase 1d). Ciclo mínimo: `agendada` →
-// (check-in do terapeuta) `presente` → `realizada`; `falta`/`cancelada` são
-// desfechos alternativos. Não é máquina de estados completa — só o esqueleto
-// da agenda ("agenda não é módulo completo", modelo-de-dados §1.3).
+// Estados de sessão (Agenda 2.0, Etapa A). Expande/substitui o enum da Fase 1d.
+// O check-in não é mais um estado: presença é registrada por `checkInEm` e o
+// estado permanece `agendada` até a consolidação (`realizada`). Migração de
+// dados: presente→realizada, falta→falta_paciente (ver 0032).
 export const sessionEstado = pgEnum("session_estado", [
-  "agendada",
-  "presente",
-  "realizada",
-  "falta",
-  "cancelada",
+  "agendada", "realizada", "falta_paciente", "falta_terapeuta", "cancelada",
 ]);
 
 export const goalEstado = pgEnum("goal_estado", [
@@ -179,6 +179,12 @@ export const clinic = pgTable("clinic", {
   politicaRetencaoMeses: integer("politica_retencao_meses"),
   politicaRetencaoConfig: jsonb("politica_retencao_config"),
   isDemo: boolean("is_demo").notNull().default(false),
+  // Agenda 2.0: zona IANA da clínica (materialização/DST corretos).
+  timezone: text("timezone").notNull().default("America/Sao_Paulo"),
+  // granularidade visual do calendário semanal (minutos).
+  passoGradeMin: integer("passo_grade_min").notNull().default(30),
+  // default de duração por disciplina, ex {"aba":60,"fono":30,"to":50}.
+  duracaoDisciplina: jsonb("duracao_disciplina").notNull().default({}),
   criadoEm: timestamp("criado_em", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -217,7 +223,12 @@ export const patient = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("idx_patient_clinic").on(t.clinicId)],
+  (t) => [
+    index("idx_patient_clinic").on(t.clinicId),
+    // Alvo das FKs compostas (patient_id, clinic_id) das tabelas da Agenda 2.0
+    // (anti-IDOR em nível de banco). PK só em `id` não satisfaz FK de 2 colunas.
+    unique("uq_patient_id_clinic").on(t.id, t.clinicId),
+  ],
 );
 
 export const patientClinicalProfile = pgTable("patient_clinical_profile", {
@@ -340,6 +351,160 @@ export const careTeamMembership = pgTable(
   ],
 );
 
+// ─── Agenda 2.0 (Etapa A) — alvo de carga por disciplina, com vigência ───────
+// Alvo CONTRATADO auditável: prescrição muda no meio do tratamento (2h→4h de
+// ABA) e o convênio audita o alvo DA ÉPOCA. Vigência aberta (vigenciaFim null)
+// = alvo vigente. FK composta (patient_id, clinic_id) impede IDOR cross-tenant.
+export const patientAlvoDisciplina = pgTable(
+  "patient_alvo_disciplina",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    patientId: uuid("patient_id").notNull(),
+    disciplina: text("disciplina").notNull(),
+    horasAlvoSemana: numeric("horas_alvo_semana", { precision: 4, scale: 1 }).notNull(),
+    vigenciaInicio: date("vigencia_inicio").notNull(),
+    vigenciaFim: date("vigencia_fim"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.patientId, t.clinicId],
+      foreignColumns: [patient.id, patient.clinicId],
+      name: "patient_alvo_disciplina_patient_fk",
+    }).onDelete("cascade"),
+    check(
+      "patient_alvo_disciplina_vigencia",
+      sql`${t.vigenciaFim} IS NULL OR ${t.vigenciaFim} >= ${t.vigenciaInicio}`,
+    ),
+    index("idx_patient_alvo_vigente")
+      .on(t.patientId, t.disciplina)
+      .where(sql`${t.vigenciaFim} IS NULL`),
+  ],
+);
+
+// ─── Agenda 2.0 (Etapa A) — disponibilidade recorrente do terapeuta ──────────
+// Várias faixas por dia permitidas (manhã + tarde). Exceções finas (feriado/
+// férias) NÃO vivem aqui — vão em `bloqueio`. terapeuta_id é FK global a
+// app_user; o vínculo à clínica é validado no RLS por app_user_in_clinic.
+export const janelaTrabalho = pgTable(
+  "janela_trabalho",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    terapeutaId: uuid("terapeuta_id")
+      .notNull()
+      .references(() => appUser.id),
+    diaSemana: smallint("dia_semana").notNull(),
+    horaInicio: time("hora_inicio").notNull(),
+    horaFim: time("hora_fim").notNull(),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("janela_trabalho_dia_semana", sql`${t.diaSemana} BETWEEN 0 AND 6`),
+    check("janela_trabalho_faixa", sql`${t.horaFim} > ${t.horaInicio}`),
+    index("idx_janela_terapeuta").on(t.terapeutaId, t.diaSemana),
+  ],
+);
+
+export const bloqueioEscopo = pgEnum("bloqueio_escopo", [
+  "clinica", "terapeuta", "paciente",
+]);
+
+// ─── Agenda 2.0 (Etapa A) — bloqueio de agenda (feriado/férias/afastamento) ──
+// Polimórfico por escopo. Bloqueio de PACIENTE é obrigatório na v1: sem ele a
+// criança viajando 3 semanas gera "falta" fantasma. A materialização (Etapa D)
+// pula datas bloqueadas do escopo aplicável.
+export const bloqueio = pgTable(
+  "bloqueio",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    escopo: bloqueioEscopo("escopo").notNull(),
+    terapeutaId: uuid("terapeuta_id").references(() => appUser.id),
+    patientId: uuid("patient_id"),
+    dataInicio: date("data_inicio").notNull(),
+    dataFim: date("data_fim").notNull(),
+    motivo: text("motivo").notNull(),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.patientId, t.clinicId],
+      foreignColumns: [patient.id, patient.clinicId],
+      name: "bloqueio_patient_fk",
+    }).onDelete("cascade"),
+    check("bloqueio_intervalo", sql`${t.dataFim} >= ${t.dataInicio}`),
+    check(
+      "bloqueio_escopo_alvo",
+      sql`(${t.escopo} = 'clinica'   AND ${t.terapeutaId} IS NULL AND ${t.patientId} IS NULL)
+       OR (${t.escopo} = 'terapeuta' AND ${t.terapeutaId} IS NOT NULL AND ${t.patientId} IS NULL)
+       OR (${t.escopo} = 'paciente'  AND ${t.patientId} IS NOT NULL AND ${t.terapeutaId} IS NULL)`,
+    ),
+    index("idx_bloqueio_clinic_periodo").on(t.clinicId, t.dataInicio, t.dataFim),
+  ],
+);
+
+export const agendamentoRecorrenteStatus = pgEnum("agendamento_recorrente_status", [
+  "ativo", "encerrado",
+]);
+
+// ─── Agenda 2.0 (Etapa A) — regra recorrente standing ────────────────────────
+// Um paciente tem N regras (uma por disciplina/terapeuta/horário) — é assim que
+// a criança de 3 terapeutas é representada. As `session` são geradas a partir
+// dela (Etapa D). Editar horário no meio do tratamento = encerrar+abrir nova.
+export const agendamentoRecorrente = pgTable(
+  "agendamento_recorrente",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    patientId: uuid("patient_id").notNull(),
+    terapeutaId: uuid("terapeuta_id")
+      .notNull()
+      .references(() => appUser.id),
+    disciplina: text("disciplina").notNull(),
+    diaSemana: smallint("dia_semana").notNull(),
+    horaInicio: time("hora_inicio").notNull(),
+    duracaoMin: integer("duracao_min").notNull(),
+    vigenciaInicio: date("vigencia_inicio").notNull(),
+    vigenciaFim: date("vigencia_fim"),
+    status: agendamentoRecorrenteStatus("status").notNull().default("ativo"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.patientId, t.clinicId],
+      foreignColumns: [patient.id, patient.clinicId],
+      name: "agendamento_recorrente_patient_fk",
+    }).onDelete("cascade"),
+    check("agendamento_recorrente_dia_semana", sql`${t.diaSemana} BETWEEN 0 AND 6`),
+    check("agendamento_recorrente_duracao", sql`${t.duracaoMin} > 0`),
+    check(
+      "agendamento_recorrente_vigencia",
+      sql`${t.vigenciaFim} IS NULL OR ${t.vigenciaFim} >= ${t.vigenciaInicio}`,
+    ),
+    index("idx_agrecorrente_terapeuta_ativo")
+      .on(t.terapeutaId, t.diaSemana)
+      .where(sql`${t.status} = 'ativo'`),
+    index("idx_agrecorrente_patient_ativo")
+      .on(t.patientId, t.disciplina)
+      .where(sql`${t.status} = 'ativo'`),
+  ],
+);
+
+export const sessionModalidade = pgEnum("session_modalidade", ["presencial", "online"]);
+export const sessionTipo = pgEnum("session_tipo", [
+  "terapia", "avaliacao", "devolutiva", "reuniao_pais", "outro",
+]);
+
 // ─── Agenda mínima + check-in (Fase 1d) ──────────────────────────────────────
 // `session` = ocorrência (realizada/falta/cancelada) de atendimento. Carrega o
 // esqueleto mínimo da agenda: quem, qual paciente, quando, estado de check-in.
@@ -366,6 +531,17 @@ export const session = pgTable(
     // Base numérica da linha do tempo ("sessão 45"). Só é populado na
     // consolidação da sessão (Fase 2/3) — nullable de propósito na 1d.
     numeroSequencialPaciente: integer("numero_sequencial_paciente"),
+    // Agenda 2.0 (Etapa A): enriquecimento disciplina-aware. A FK de
+    // `recorrente_id → agendamento_recorrente` é criada na migration à mão 0034
+    // (evita reordenar o arquivo / ciclo de import); aqui declara-se só a coluna.
+    recorrenteId: uuid("recorrente_id"), // null = avulsa
+    disciplina: text("disciplina"),
+    duracaoMin: integer("duracao_min").notNull().default(60),
+    justificada: boolean("justificada"), // só relevante em falta_*
+    modalidade: sessionModalidade("modalidade").notNull().default("presencial"),
+    tipo: sessionTipo("tipo").notNull().default("terapia"),
+    atendidoPorId: uuid("atendido_por_id").references(() => appUser.id), // substituto
+    repostaDe: uuid("reposta_de"), // self-FK: esta sessão repõe outra
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -382,6 +558,17 @@ export const session = pgTable(
     uniqueIndex("uq_session_numero_por_paciente")
       .on(t.patientId, t.numeroSequencialPaciente)
       .where(sql`${t.numeroSequencialPaciente} IS NOT NULL`),
+    foreignKey({
+      columns: [t.repostaDe],
+      foreignColumns: [t.id],
+      name: "session_reposta_de_fk",
+    }).onDelete("set null"),
+    // Materialização idempotente: a mesma regra não gera 2 ocorrências no mesmo
+    // instante (retry não duplica). Parcial: sessões avulsas (recorrente_id null)
+    // não colidem entre si.
+    uniqueIndex("uq_session_recorrente_agendada")
+      .on(t.recorrenteId, t.agendadaPara)
+      .where(sql`${t.recorrenteId} IS NOT NULL`),
   ],
 );
 

@@ -50,6 +50,22 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               Exceções
             </Link>
           ) : null}
+          {ctx.role === "coordenador" ? (
+            <Link
+              href="/equipe"
+              className="inline-block font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline transition-transform duration-100 ease-out hover:-translate-y-0.5"
+            >
+              Equipe
+            </Link>
+          ) : null}
+          {ctx.role === "coordenador" ? (
+            <Link
+              href="/clinica/feriados"
+              className="inline-block font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline transition-transform duration-100 ease-out hover:-translate-y-0.5"
+            >
+              Feriados
+            </Link>
+          ) : null}
           <SignOutButton />
         </Cluster>
       </Split>
