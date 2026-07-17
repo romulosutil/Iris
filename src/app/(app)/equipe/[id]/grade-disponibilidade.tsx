@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { chaveCelula, colunasDaGrade, copiarDia } from "@/lib/agenda/grade";
 
 const DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-const DIAS_UTEIS = [2, 3, 4, 5]; // destino do "copiar segunda"
-const FOCO = "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]";
+const DIAS_UTEIS = [2, 3, 4, 5]; // segunda (1) é a origem; destinos: terça–sexta
+const FOCO =
+  "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]";
 
 export type GradeProps = {
   passoMin: number;
@@ -14,26 +15,71 @@ export type GradeProps = {
   onChange: (celulas: Set<string>) => void;
 };
 
-export function GradeDisponibilidade({ passoMin, abertura = "07:00", fechamento = "20:00", celulasIniciais, onChange }: GradeProps) {
+export function GradeDisponibilidade({
+  passoMin,
+  abertura = "07:00",
+  fechamento = "20:00",
+  celulasIniciais,
+  onChange,
+}: GradeProps) {
   const cols = colunasDaGrade(passoMin, abertura, fechamento);
   const [celulas, setCelulas] = useState<Set<string>>(new Set(celulasIniciais));
-  const [pintando, setPintando] = useState<null | boolean>(null); // drag: valor a aplicar
+  const [foco, setFoco] = useState<{ dia: number; col: number }>({ dia: 0, col: 0 });
+  const pintandoRef = useRef<null | boolean>(null); // valor sendo pintado no drag
+  const refs = useRef(new Map<string, HTMLButtonElement | null>());
+
+  // Garante reset do drag mesmo que o ponteiro seja solto fora da grade.
+  useEffect(() => {
+    const soltar = () => {
+      pintandoRef.current = null;
+    };
+    window.addEventListener("pointerup", soltar);
+    window.addEventListener("pointercancel", soltar);
+    return () => {
+      window.removeEventListener("pointerup", soltar);
+      window.removeEventListener("pointercancel", soltar);
+    };
+  }, []);
 
   function aplicar(next: Set<string>) {
     setCelulas(next);
     onChange(next);
   }
-  function alternar(dia: number, col: string) {
-    const chave = chaveCelula(dia, col);
-    const next = new Set(celulas);
-    next.has(chave) ? next.delete(chave) : next.add(chave);
-    aplicar(next);
-  }
   function definir(dia: number, col: string, valor: boolean) {
     const chave = chaveCelula(dia, col);
     const next = new Set(celulas);
-    valor ? next.add(chave) : next.delete(chave);
+    if (valor) next.add(chave);
+    else next.delete(chave);
     aplicar(next);
+  }
+  function alternar(dia: number, col: string) {
+    definir(dia, col, !celulas.has(chaveCelula(dia, col)));
+  }
+  function focarCelula(dia: number, colIdx: number): { d: number; c: number } {
+    const d = Math.max(0, Math.min(DIAS.length - 1, dia));
+    const c = Math.max(0, Math.min(cols.length - 1, colIdx));
+    setFoco({ dia: d, col: c });
+    refs.current.get(chaveCelula(d, cols[c]!))?.focus();
+    return { d, c };
+  }
+  function aoTeclar(e: React.KeyboardEvent, dia: number, colIdx: number) {
+    const col = cols[colIdx]!;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      alternar(dia, col);
+      return;
+    }
+    const destinos: Record<string, [number, number]> = {
+      ArrowUp: [dia - 1, colIdx],
+      ArrowDown: [dia + 1, colIdx],
+      ArrowLeft: [dia, colIdx - 1],
+      ArrowRight: [dia, colIdx + 1],
+    };
+    const alvo = destinos[e.key];
+    if (!alvo) return;
+    e.preventDefault();
+    const { d, c } = focarCelula(alvo[0], alvo[1]);
+    if (e.shiftKey) definir(d, cols[c]!, true); // Shift+seta pinta o destino
   }
 
   return (
@@ -61,33 +107,33 @@ export function GradeDisponibilidade({ passoMin, abertura = "07:00", fechamento 
             <div role="rowheader" className="font-display text-ink-anchor flex w-24 shrink-0 items-center text-sm font-bold">
               {nome}
             </div>
-            {cols.map((col) => {
+            {cols.map((col, colIdx) => {
               const selecionada = celulas.has(chaveCelula(dia, col));
+              const ehFoco = foco.dia === dia && foco.col === colIdx;
               return (
                 <button
                   type="button"
                   key={col}
                   role="gridcell"
+                  ref={(el) => {
+                    refs.current.set(chaveCelula(dia, col), el);
+                  }}
+                  tabIndex={ehFoco ? 0 : -1}
                   aria-selected={selecionada}
                   aria-label={`${nome} ${col}: ${selecionada ? "disponível" : "indisponível"}`}
+                  onFocus={() => setFoco({ dia, col: colIdx })}
                   onPointerDown={(e) => {
                     e.preventDefault();
                     const novo = !selecionada;
-                    setPintando(novo);
+                    pintandoRef.current = novo;
                     definir(dia, col, novo);
                   }}
                   onPointerEnter={() => {
-                    if (pintando !== null) definir(dia, col, pintando);
+                    if (pintandoRef.current !== null) definir(dia, col, pintandoRef.current);
                   }}
-                  onPointerUp={() => setPintando(null)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      alternar(dia, col);
-                    }
-                  }}
+                  onKeyDown={(e) => aoTeclar(e, dia, colIdx)}
                   className={`m-px h-9 w-12 shrink-0 border ${FOCO} ${
-                    selecionada ? "bg-gold border-ink-anchor" : "bg-canvas border-ink/20"
+                    selecionada ? "bg-gold border-ink-anchor" : "bg-canvas border-ink/40"
                   }`}
                 />
               );
