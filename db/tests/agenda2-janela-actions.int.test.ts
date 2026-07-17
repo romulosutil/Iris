@@ -11,13 +11,13 @@ const U_T1_A = "aaaa0000-0000-0000-0000-0000000000f1";
 
 describe.skipIf(!hasDb)("janela actions — salvar/carregar/RLS", () => {
   let owner: ReturnType<typeof postgres>;
-  let actions: typeof import("@/app/(app)/equipe/[id]/actions");
+  let actions: typeof import("@/app/(app)/equipe/[id]/queries");
   let appSql: typeof import("@/db/client").sql;
   const ctxCoord = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
   const ctxT1 = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
 
   beforeAll(async () => {
-    actions = await import("@/app/(app)/equipe/[id]/actions");
+    actions = await import("@/app/(app)/equipe/[id]/queries");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, janela_trabalho RESTART IDENTITY CASCADE`;

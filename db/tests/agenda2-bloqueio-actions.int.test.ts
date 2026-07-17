@@ -10,11 +10,13 @@ const PAC_A1 = "bbbb0000-0000-0000-0000-0000000000e1";
 describe.skipIf(!hasDb)("bloqueio actions — validação + persistência", () => {
   let owner: ReturnType<typeof postgres>;
   let actions: typeof import("@/app/(app)/agenda/bloqueio-actions");
+  let queries: typeof import("@/app/(app)/agenda/bloqueio-queries");
   let appSql: typeof import("@/db/client").sql;
   const ctxCoord = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
 
   beforeAll(async () => {
     actions = await import("@/app/(app)/agenda/bloqueio-actions");
+    queries = await import("@/app/(app)/agenda/bloqueio-queries");
     ({ sql: appSql } = await import("@/db/client"));
     // getTenantContext lê cookies; sobrescrevemos para os testes de action:
     const tenant = await import("@/auth/tenant");
@@ -39,7 +41,7 @@ describe.skipIf(!hasDb)("bloqueio actions — validação + persistência", () =
       escopo: "paciente", patientId: PAC_A1, dataInicio: "2026-07-20", dataFim: "2026-08-10", motivo: "Viagem",
     }));
     expect(r.ok).toBe(true);
-    const lista = await actions.listarBloqueios(ctxCoord, { escopo: "paciente", patientId: PAC_A1 });
+    const lista = await queries.listarBloqueios(ctxCoord, { escopo: "paciente", patientId: PAC_A1 });
     expect(lista).toHaveLength(1);
     expect(lista[0]!.terapeutaId).toBeNull(); // I-B5: escopo=paciente zera terapeuta
   });

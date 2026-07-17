@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
-import { listarTerapeutas } from "./[id]/actions";
+import { listarTerapeutas } from "./[id]/queries";
 import { ListaTerapeutas } from "./lista-terapeutas";
 
 export default async function EquipePage() {

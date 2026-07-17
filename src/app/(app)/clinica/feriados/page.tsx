@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
-import { listarBloqueios } from "@/app/(app)/agenda/bloqueio-actions";
+import { listarBloqueios } from "@/app/(app)/agenda/bloqueio-queries";
 import { FeriadosForm } from "./feriados-form";
 
 export default async function FeriadosPage() {
