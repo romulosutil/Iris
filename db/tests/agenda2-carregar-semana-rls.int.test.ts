@@ -49,6 +49,13 @@ describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => 
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 1, '09:00', 60, '2026-07-13', 'ativo')`;
     await owner`INSERT INTO janela_trabalho (clinic_id, terapeuta_id, dia_semana, hora_inicio, hora_fim)
       VALUES (${CLINIC_A}, ${U_T1_A}, 1, '08:00', '12:00')`;
+    // Avulsa (recorrente_id null) — 2026-07-13 (segunda) 23:30 em São Paulo
+    // (UTC-3) = 2026-07-14T02:30:00Z. O dia UTC (terça) difere do dia local
+    // (segunda) — cobre o round-trip driver timestamptz → minutos-locais SP
+    // (C10), que o unit test puro de fuso-min.ts não exercita.
+    await owner`INSERT INTO session
+      (clinic_id, patient_id, terapeuta_id, disciplina, agendada_para, duracao_min, estado, recorrente_id)
+      VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', '2026-07-14T02:30:00Z', 30, 'agendada', NULL)`;
   });
   afterAll(async () => { await owner?.end(); await appSql?.end(); });
 
@@ -56,8 +63,9 @@ describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => 
     const r = await carregarSemana(ctxCoordA, {
       eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
     });
-    expect(r.blocos).toHaveLength(1);
-    expect(r.blocos[0]).toMatchObject({ origem: "previsto", diaSemana: 1, inicioMin: 540, rotulo: "Ana Alfa" });
+    expect(r.blocos).toHaveLength(2);
+    const previsto = r.blocos.find((b) => b.origem === "previsto");
+    expect(previsto).toMatchObject({ origem: "previsto", diaSemana: 1, inicioMin: 540, rotulo: "Ana Alfa" });
     expect(r.janelas).toHaveLength(1);
     expect(r.janelas[0]).toMatchObject({ diaSemana: 1, horaInicio: "08:00:00", horaFim: "12:00:00" });
   });
@@ -66,7 +74,7 @@ describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => 
     const r = await carregarSemana(ctxCoordA, {
       eixo: "paciente", entidadeId: PAC_A1, semanaInicioISO: "2026-07-13",
     });
-    expect(r.blocos).toHaveLength(1);
+    expect(r.blocos).toHaveLength(2);
     expect(r.janelas).toHaveLength(0);
   });
 
@@ -76,6 +84,14 @@ describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => 
     });
     expect(r.blocos).toHaveLength(0);
     expect(r.janelas).toHaveLength(0);
+  });
+
+  test("avulsa (C10): timestamptz do driver vira dia/minuto locais SP corretos", async () => {
+    const r = await carregarSemana(ctxCoordA, {
+      eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
+    });
+    const avulsa = r.blocos.find((b) => b.origem === "concreto");
+    expect(avulsa).toMatchObject({ origem: "concreto", diaSemana: 1, inicioMin: 1410 });
   });
 
   test("disponibilidadeTerapeutaNoDia retorna a janela do dia certo", async () => {
