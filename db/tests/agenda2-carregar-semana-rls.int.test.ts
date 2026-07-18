@@ -56,6 +56,19 @@ describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => 
     await owner`INSERT INTO session
       (clinic_id, patient_id, terapeuta_id, disciplina, agendada_para, duracao_min, estado, recorrente_id)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', '2026-07-14T02:30:00Z', 30, 'agendada', NULL)`;
+    // Regra recorrente materializada (Etapa D): tem linha `session` real com
+    // recorrente_id apontando pra ela — dia_semana=2 (terça), pra não colidir
+    // com a avulsa acima (segunda). carregarSemana deve mostrar só o bloco
+    // "previsto" (projeção da regra), NUNCA um "concreto" pra essa session,
+    // senão duplica a renderização quando Etapa D materializar de verdade.
+    const regrasMaterializadas = await owner`INSERT INTO agendamento_recorrente
+      (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
+      VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 2, '10:00', 60, '2026-07-13', 'ativo')
+      RETURNING id`;
+    const idRegraMaterializada = regrasMaterializadas[0]!.id as string;
+    await owner`INSERT INTO session
+      (clinic_id, patient_id, terapeuta_id, disciplina, agendada_para, duracao_min, estado, recorrente_id)
+      VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', '2026-07-14T13:00:00Z', 60, 'agendada', ${idRegraMaterializada})`;
   });
   afterAll(async () => { await owner?.end(); await appSql?.end(); });
 
@@ -63,8 +76,8 @@ describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => 
     const r = await carregarSemana(ctxCoordA, {
       eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
     });
-    expect(r.blocos).toHaveLength(2);
-    const previsto = r.blocos.find((b) => b.origem === "previsto");
+    expect(r.blocos).toHaveLength(3);
+    const previsto = r.blocos.find((b) => b.origem === "previsto" && b.diaSemana === 1);
     expect(previsto).toMatchObject({ origem: "previsto", diaSemana: 1, inicioMin: 540, rotulo: "Ana Alfa" });
     expect(r.janelas).toHaveLength(1);
     expect(r.janelas[0]).toMatchObject({ diaSemana: 1, horaInicio: "08:00:00", horaFim: "12:00:00" });
@@ -74,7 +87,7 @@ describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => 
     const r = await carregarSemana(ctxCoordA, {
       eixo: "paciente", entidadeId: PAC_A1, semanaInicioISO: "2026-07-13",
     });
-    expect(r.blocos).toHaveLength(2);
+    expect(r.blocos).toHaveLength(3);
     expect(r.janelas).toHaveLength(0);
   });
 
@@ -92,6 +105,23 @@ describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => 
     });
     const avulsa = r.blocos.find((b) => b.origem === "concreto");
     expect(avulsa).toMatchObject({ origem: "concreto", diaSemana: 1, inicioMin: 1410 });
+  });
+
+  test("regra materializada (Etapa D): session com recorrente_id NÃO aparece como bloco concreto", async () => {
+    const r = await carregarSemana(ctxCoordA, {
+      eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
+    });
+    // dia_semana=2 (terça) 10:00 = a regra materializada. Deve haver exatamente
+    // um bloco "previsto" pra esse dia/hora (projeção da regra) e nenhum
+    // "concreto" nela — senão a session materializada duplicaria o bloco.
+    const previstoTerca = r.blocos.filter(
+      (b) => b.origem === "previsto" && b.diaSemana === 2 && b.inicioMin === 600,
+    );
+    expect(previstoTerca).toHaveLength(1);
+    const concretoTerca = r.blocos.filter(
+      (b) => b.origem === "concreto" && b.diaSemana === 2 && b.inicioMin === 600,
+    );
+    expect(concretoTerca).toHaveLength(0);
   });
 
   test("disponibilidadeTerapeutaNoDia retorna a janela do dia certo", async () => {

@@ -115,6 +115,7 @@ export async function carregarSemana(
         and(
           eq(schema.session.clinicId, ctx.clinicId),
           eq(colSessEntidade, entidadeId),
+          isNull(schema.session.recorrenteId),
           gte(
             schema.session.agendadaPara,
             new Date(`${primeiro}T00:00:00${FUSO_CLINICA_OFFSET}`),
