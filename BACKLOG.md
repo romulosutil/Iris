@@ -24,6 +24,37 @@
 
 ---
 
+## 🧭 Sessão 18/07/2026 — Agenda 2.0 Etapa C (design + tech-lead review)
+
+**Design doc:** `docs/superpowers/specs/2026-07-18-agenda-2.0-etapa-c-calendario-alocacao-design.md`
+(aprovado p/ virar plano). Decisões C1-C10. Calendário semanal 2 visões +
+select-first + criar `agendamento_recorrente`/sessão avulsa + detecção de
+conflito. Materialização em lote **não** entra (Etapa D).
+
+**Tech-lead review adversarial (subagent) achou e o doc corrigiu:**
+* **Fuso (C10):** `criarAvulsa` grava `timestamptz` → ancora em `FUSO_CLINICA`
+  (São Paulo hardcoded). É decisão de fuso, **não** "hora crua" — dívida a
+  unificar com `clinic.timezone` na Etapa D. `conflito.ts` converte avulsa→
+  minutos-locais antes de comparar com regra.
+* **Grade (C3):** não é "fork" de `grade-disponibilidade.tsx` — célula-toggle
+  de passo fixo não renderiza `duracaoMin` variável (D2). É **componente novo
+  com overlay absoluto**, reusa só `role=grid`+teclado.
+* **Consent (C-LGPD):** schema `consent` é append-only **sem revogação** →
+  "consent ativo" é sempre-verdadeiro; gate real de `listarPacientes` =
+  role+tenant, não consent. Doc parou de prometer garantia RLS inexistente.
+
+**Dívidas NOVAS abertas nesta sessão:**
+* **Revogação de consent = DDL futuro** (coluna `revogadoEm`/status + política
+  RLS que gate visibilidade). Fora da Etapa C. LGPD real de revogação depende
+  disso.
+* **Unificação de fuso (C10)** rastreada como responsabilidade da Etapa D
+  (fonte única `clinic.timezone`); base de escrita (SP fixo) diverge da
+  projeção (hora crua) — reconciliar em D.
+* **Alocação em semana passada desabilitada** e `vigenciaInicio =
+  max(semana visível, semana atual)` (C7) — interação com materialização de D.
+
+---
+
 ## 🧭 Sessão 16/07/2026 — Agenda 2.0 (design disciplina-aware)
 
 **Review de 4C/4D:** entregues e no `main`, mas `typecheck` estava vermelho —
