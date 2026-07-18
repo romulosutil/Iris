@@ -188,6 +188,43 @@ integração 100% verde".
 C), materialização IANA (Etapa D), ciclo de vida da sessão/substituto/reposição
 (Etapa E), métricas alocado-vago + alerta de defasagem (Etapa F), grupo/co-terapia (D11).
 
+### ✅ Etapa C (calendário semanal + alocação select-first) — CONCLUÍDA (18/07/2026)
+
+Executada subagent-driven (11 tasks TDD, implementer→review por task, review
+whole-branch final no opus). Branch `feat/agenda-2.0-etapa-c`.
+
+**Entregue:** lógica pura (`semana.ts` C7, `conflito.ts` meia-aberto 2-dim,
+`projecao.ts` previsto/concreto, `fuso-min.ts` C10), queries ctx-accepting
+(`listarPacientes`, `carregarSemana`, `disponibilidadeTerapeutaNoDia`,
+`criarRegra`, `criarAvulsa`, `carregarConfigClinica`; `ConflitoError`), server
+actions finas, e UI (`ComboboxEntidade`, `CalendarioSemana` grade+overlay,
+`PopoverAlocar`, rota `/agenda/semana` + shell reativo). DS-only (zero classe
+inventada), a11y ARIA/teclado testada. Conflito regra×avulsa fechado nas 2
+dimensões (pós review final) — `criarRegra` também checa avulsas, `criarAvulsa`
+ganhou pré-check app-level contra regras (gist segue backstop TOCTOU).
+
+**Dívida / follow-up herdado da Etapa C:**
+* **C8 aviso suave por-paciente NÃO consumido na UI**: `disponibilidadeTerapeutaNoDia`
+  existe na camada de query mas nem o aviso inline no popover (fora-da-janela hoje
+  é só tint `bg-gold/10`) nem o alerta de indisponibilidade do terapeuta no eixo
+  por-paciente foram ligados. UX subespecificada — materializar quando definir a
+  forma. §5.4 do design.
+* **Contraste (color-contrast) fica em passada MANUAL**: o axe das telas novas roda
+  com `color-contrast` desligado (jsdom sem canvas = flaky, decisão eea919d) — o
+  plano da Etapa C dizia "religado"; reconciliado a favor da prática do repo.
+  Contraste garantido por tokens do DS; falta passada manual/Storybook nas 3 telas
+  novas (calendário, popover, combobox).
+* **Pré-check de conflito ignora janela de vigência** (`criarRegra`): trata toda
+  regra `ativo` do mesmo dia como candidata, sem olhar `vigenciaInicio/Fim`.
+  Inócuo hoje (sem `vigenciaFim` na v1), vira falso-positivo quando vigências
+  disjuntas coexistirem — revisar na Etapa D/E.
+* **Refactor grade compartilhada**: `grade-disponibilidade.tsx` (Etapa B) e
+  `calendario-semana.tsx` têm base `role="grid"`+roving-tabIndex quase idêntica —
+  extrair primitivo comum (design §8 já sinalizava). `LARGURA_COL_REM` do overlay
+  não está acoplado à classe `w-12` da célula (risco drift) — amarrar no refactor.
+* **Fuso C10** segue rastreado p/ unificação com `clinic.timezone` na Etapa D (já
+  na seção 18/07 acima).
+
 ---
 
 ## 🧭 Sessão 13/07/2026 — Fase 3 fechada + polimento & validação de prod
