@@ -309,6 +309,25 @@ export async function criarAvulsa(
   }
 }
 
+export interface ConfigClinica {
+  disciplinas: string[];
+  duracaoDisciplina: Record<string, number>;
+}
+
+/** Config da clínica p/ pré-preencher o popover de alocação (D2): disciplinas
+ * conhecidas e duração padrão por disciplina (`clinic.duracaoDisciplina`). */
+export async function carregarConfigClinica(ctx: TenantContext): Promise<ConfigClinica> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, async (tx) => {
+    const [row] = await tx
+      .select({ duracaoDisciplina: schema.clinic.duracaoDisciplina })
+      .from(schema.clinic)
+      .where(eq(schema.clinic.id, ctx.clinicId));
+    const duracaoDisciplina = (row?.duracaoDisciplina as Record<string, number> | undefined) ?? {};
+    return { disciplinas: Object.keys(duracaoDisciplina), duracaoDisciplina };
+  });
+}
+
 /** Aviso suave por-paciente (C8): as faixas de trabalho do terapeuta no dia. */
 export async function disponibilidadeTerapeutaNoDia(
   ctx: TenantContext,

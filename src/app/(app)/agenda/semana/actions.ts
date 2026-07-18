@@ -4,11 +4,17 @@ import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { RoleError } from "@/auth/require-role";
 import {
+  carregarConfigClinica,
+  carregarSemana,
   ConflitoError,
   criarAvulsa,
   criarRegra,
+  listarPacientes,
+  type CarregarSemanaParams,
+  type ConfigClinica,
   type NovaAvulsa,
   type NovaRegra,
+  type SemanaCarregada,
 } from "@/app/(app)/agenda/queries";
 
 export type EstadoAcao = { error?: string; ok?: boolean };
@@ -41,6 +47,30 @@ export async function criarRegraAction(
   }
   revalidatePath("/agenda/semana");
   return { ok: true };
+}
+
+/** Leitura reativa fina: o shell client dispara isto no `useEffect` sempre
+ * que eixo/semana/entidade mudam. `carregarSemana` já valida tenant+papel
+ * internamente — esta action só resolve o contexto e repassa. */
+export async function carregarSemanaAction(
+  params: CarregarSemanaParams,
+): Promise<SemanaCarregada> {
+  const ctx = await getTenantContext();
+  return carregarSemana(ctx, params);
+}
+
+/** Leitura fina p/ busca do combobox de pacientes (debounce fica no client). */
+export async function listarPacientesAction(
+  termo: string,
+): Promise<{ id: string; nome: string }[]> {
+  const ctx = await getTenantContext();
+  return listarPacientes(ctx, termo);
+}
+
+/** Leitura fina da config de disciplinas/duração-padrão da clínica (D2). */
+export async function carregarConfigClinicaAction(): Promise<ConfigClinica> {
+  const ctx = await getTenantContext();
+  return carregarConfigClinica(ctx);
 }
 
 export async function criarAvulsaAction(
