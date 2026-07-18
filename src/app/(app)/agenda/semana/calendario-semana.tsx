@@ -8,6 +8,7 @@ import type { BlocoAgenda } from "@/lib/agenda/projecao";
 
 const DIAS_LABEL = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const LARGURA_ROTULO_REM = 6; // w-24
+const LARGURA_COL_REM = 3; // w-12
 const FOCO =
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]";
 
@@ -144,18 +145,21 @@ export function CalendarioSemana({
                 />
               );
             })}
-            {/* Overlay absoluto: blocos proporcionais a duracaoMin (C3/C9). */}
+            {/* Overlay absoluto: blocos posicionados em unidades fixas (mesma unidade
+                das colunas w-12/LARGURA_COL_REM), não em % da linha — a linha
+                inclui o rótulo (6rem) + colunas de 3rem, então % da linha ≠ % das
+                colunas (C3). */}
             {blocos
               .filter((b) => b.diaSemana === diaSemana)
               .map((b) => {
                 const base = horaParaMin(abertura);
-                const larguraColPct = 100 / colunas.length;
-                const left = ((b.inicioMin - base) / passoMin) * larguraColPct;
-                const width = (b.duracaoMin / passoMin) * larguraColPct;
+                const colunasOffset = (b.inicioMin - base) / passoMin;
+                const colunasLargura = b.duracaoMin / passoMin;
                 return (
                   <div
                     key={b.id}
                     aria-hidden="true"
+                    data-testid="bloco-overlay"
                     className={cn(
                       "absolute top-0 h-10 overflow-hidden px-1 text-xs",
                       b.origem === "previsto"
@@ -163,8 +167,8 @@ export function CalendarioSemana({
                         : "border-border-brutal bg-status-success-bg border-2",
                     )}
                     style={{
-                      left: `calc(${LARGURA_ROTULO_REM}rem + ${left}%)`,
-                      width: `${width}%`,
+                      left: `calc(${LARGURA_ROTULO_REM}rem + ${colunasOffset} * ${LARGURA_COL_REM}rem)`,
+                      width: `calc(${colunasLargura} * ${LARGURA_COL_REM}rem)`,
                     }}
                   >
                     {b.rotulo} · {b.disciplina}

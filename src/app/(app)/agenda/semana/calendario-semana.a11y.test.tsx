@@ -88,4 +88,16 @@ describe("CalendarioSemana", () => {
     await userEvent.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}{ArrowRight}{Enter}");
     expect(aoAlocar).toHaveBeenCalledWith(1, 600);
   });
+
+  test("overlay do bloco é posicionado em unidades fixas (rótulo 6rem + colunas de 3rem), não em % da linha (C3)", () => {
+    render(<CalendarioSemana {...base} aoAlocar={() => {}} />);
+    // fixture: abertura=08:00 (480min), passoMin=30, bloco inicioMin=540 duracaoMin=60
+    // deslocamento = (540-480)/30 = 2 colunas; largura = 60/30 = 2 colunas
+    const bloco = screen.getByText(/Ana.*aba/).closest('[data-testid="bloco-overlay"]');
+    expect(bloco).not.toBeNull();
+    // jsdom normaliza a expressão calc() constante para um único valor em rem
+    // (6rem rótulo + 2*3rem colunas = 12rem; largura 2*3rem = 6rem).
+    expect((bloco as HTMLElement).style.left).toBe("calc(12rem)");
+    expect((bloco as HTMLElement).style.width).toBe("calc(6rem)");
+  });
 });
