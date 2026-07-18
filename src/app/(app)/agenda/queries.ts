@@ -3,7 +3,7 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
-import { diasDaSemana } from "@/lib/agenda/semana";
+import { diasDaSemana, vigenciaInicioC7 } from "@/lib/agenda/semana";
 import { paraMinutosLocais } from "@/lib/agenda/fuso-min";
 import {
   projetarSemana,
@@ -11,7 +11,8 @@ import {
   type BlocoAgenda,
   type RegraProjecao,
 } from "@/lib/agenda/projecao";
-import type { FaixaDia } from "@/lib/agenda/janela";
+import { horaParaMin, type FaixaDia } from "@/lib/agenda/janela";
+import { conflita, type Slot } from "@/lib/agenda/conflito";
 
 export async function listarPacientes(
   ctx: TenantContext,
@@ -170,6 +171,85 @@ export async function carregarSemana(
       );
 
     return { blocos: projetarSemana(regras, avulsas), janelas, bloqueios: bloq };
+  });
+}
+
+export class ConflitoError extends Error {
+  constructor(public dimensao: "terapeuta" | "paciente") {
+    super(`Horário em conflito para ${dimensao}.`);
+    this.name = "ConflitoError";
+  }
+}
+
+export interface NovaRegra {
+  patientId: string;
+  terapeutaId: string;
+  disciplina: string;
+  diaSemana: number;
+  horaInicio: string; // "HH:MM"
+  duracaoMin: number;
+  semanaVisivelISO: string;
+  hojeISO: string;
+}
+
+/** C1: cria só a regra recorrente (nenhuma linha `session`). C2/C5: pré-check
+ * de conflito nas 2 dimensões (terapeuta e paciente) antes de gravar. */
+export async function criarRegra(
+  ctx: TenantContext,
+  dados: NovaRegra,
+): Promise<{ id: string }> {
+  requireRole(ctx, "coordenador");
+  const inicioMin = horaParaMin(dados.horaInicio);
+  const novo: Slot = {
+    diaSemana: dados.diaSemana,
+    inicioMin,
+    fimMin: inicioMin + dados.duracaoMin,
+  };
+  const vigenciaInicio = vigenciaInicioC7(dados.semanaVisivelISO, dados.hojeISO);
+
+  return withTenant(ctx, async (tx) => {
+    const ativas = await tx
+      .select({
+        terapeutaId: schema.agendamentoRecorrente.terapeutaId,
+        patientId: schema.agendamentoRecorrente.patientId,
+        diaSemana: schema.agendamentoRecorrente.diaSemana,
+        horaInicio: schema.agendamentoRecorrente.horaInicio,
+        duracaoMin: schema.agendamentoRecorrente.duracaoMin,
+      })
+      .from(schema.agendamentoRecorrente)
+      .where(
+        and(
+          eq(schema.agendamentoRecorrente.clinicId, ctx.clinicId),
+          eq(schema.agendamentoRecorrente.status, "ativo"),
+          eq(schema.agendamentoRecorrente.diaSemana, dados.diaSemana),
+        ),
+      );
+    const paraSlots = (rows: typeof ativas): Slot[] =>
+      rows.map((r) => {
+        const ini = horaParaMin(r.horaInicio);
+        return { diaSemana: r.diaSemana, inicioMin: ini, fimMin: ini + r.duracaoMin };
+      });
+    if (conflita(novo, paraSlots(ativas.filter((r) => r.terapeutaId === dados.terapeutaId)))) {
+      throw new ConflitoError("terapeuta");
+    }
+    if (conflita(novo, paraSlots(ativas.filter((r) => r.patientId === dados.patientId)))) {
+      throw new ConflitoError("paciente");
+    }
+    const [row] = await tx
+      .insert(schema.agendamentoRecorrente)
+      .values({
+        clinicId: ctx.clinicId,
+        patientId: dados.patientId,
+        terapeutaId: dados.terapeutaId,
+        disciplina: dados.disciplina,
+        diaSemana: dados.diaSemana,
+        horaInicio: dados.horaInicio,
+        duracaoMin: dados.duracaoMin,
+        vigenciaInicio,
+        status: "ativo",
+      })
+      .returning({ id: schema.agendamentoRecorrente.id });
+    return row!;
   });
 }
 
