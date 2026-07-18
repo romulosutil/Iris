@@ -68,4 +68,30 @@ describe.skipIf(!hasDb)("criarAvulsa", () => {
       criarAvulsa(ctxCoordA, { ...base, horaInicio: "09:30" }),
     ).rejects.toBeInstanceOf(ConflitoError);
   });
+
+  test("colisão com regra ativa (sem linha session) no mesmo terapeuta/dia é barrada pelo pré-check APP (buraco regra×avulsa) — não pelo gist, que não vê regra", async () => {
+    // 2026-07-13 é segunda-feira (diaSemana=1). Regra ativa 09:00-10:00,
+    // vigência já iniciada — não existe linha `session` para essa regra, então
+    // o EXCLUDE gist não a enxerga; só o pré-check em app pode barrar.
+    await owner`INSERT INTO agendamento_recorrente
+      (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
+      VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 1, '09:00', 60, '2026-07-06', 'ativo')`;
+    await expect(criarAvulsa(ctxCoordA, base)).rejects.toBeInstanceOf(ConflitoError);
+    // confirma que nenhuma session foi criada (rejeitado antes do insert/gist).
+    const sess = await owner`SELECT id FROM session`;
+    expect(sess).toHaveLength(0);
+  });
+
+  test("colisão com regra ativa do mesmo paciente (terapeuta diferente) lança ConflitoError", async () => {
+    const U_T2_A = "00000000-0000-0000-0000-0000000072e1";
+    await owner`INSERT INTO app_user (id, name, email) VALUES (${U_T2_A}, 'T2 A', 't2.a.criaravulsa@t.com')
+      ON CONFLICT (id) DO NOTHING`;
+    await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_T2_A}, ${CLINIC_A}, 'terapeuta')
+      ON CONFLICT DO NOTHING`;
+    await owner`INSERT INTO agendamento_recorrente
+      (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
+      VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T2_A}, 'aba', 1, '09:00', 60, '2026-07-06', 'ativo')`;
+    // base é do U_T1_A (terapeuta livre); só a dimensão paciente deve colidir.
+    await expect(criarAvulsa(ctxCoordA, base)).rejects.toBeInstanceOf(ConflitoError);
+  });
 });

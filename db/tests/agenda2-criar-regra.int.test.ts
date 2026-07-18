@@ -70,4 +70,26 @@ describe.skipIf(!hasDb)("criarRegra", () => {
       ConflitoError,
     );
   });
+
+  test("colisão com avulsa (session recorrenteId null) do mesmo terapeuta/dia lança ConflitoError", async () => {
+    // 2026-07-13 é segunda-feira (diaSemana=1), 09:00-09:30 local (UTC-03:00).
+    await owner`INSERT INTO session
+      (clinic_id, patient_id, terapeuta_id, recorrente_id, disciplina, tipo, agendada_para, duracao_min, estado, modalidade)
+      VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, NULL, 'aba', 'avaliacao', '2026-07-13T09:00:00-03:00', 60, 'agendada', 'presencial')`;
+    await expect(criarRegra(ctxCoordA, base)).rejects.toBeInstanceOf(ConflitoError);
+  });
+
+  test("colisão com avulsa do mesmo paciente (terapeuta diferente) lança ConflitoError", async () => {
+    const U_T2_A = "00000000-0000-0000-0000-0000000072d1";
+    await owner`INSERT INTO app_user (id, name, email) VALUES (${U_T2_A}, 'T2 A', 't2.a.criarregra@t.com')
+      ON CONFLICT (id) DO NOTHING`;
+    await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_T2_A}, ${CLINIC_A}, 'terapeuta')
+      ON CONFLICT DO NOTHING`;
+    // Avulsa é de OUTRO terapeuta (U_T2_A), mesmo paciente (PAC_A1) — só a
+    // dimensão paciente deve colidir; base usa U_T1_A (dimensão terapeuta livre).
+    await owner`INSERT INTO session
+      (clinic_id, patient_id, terapeuta_id, recorrente_id, disciplina, tipo, agendada_para, duracao_min, estado, modalidade)
+      VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T2_A}, NULL, 'aba', 'avaliacao', '2026-07-13T09:00:00-03:00', 60, 'agendada', 'presencial')`;
+    await expect(criarRegra(ctxCoordA, base)).rejects.toBeInstanceOf(ConflitoError);
+  });
 });

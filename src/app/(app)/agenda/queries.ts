@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, ilike, lte } from "drizzle-orm";
+import { and, asc, eq, gte, ilike, isNull, lte } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
@@ -229,10 +229,54 @@ export async function criarRegra(
         const ini = horaParaMin(r.horaInicio);
         return { diaSemana: r.diaSemana, inicioMin: ini, fimMin: ini + r.duracaoMin };
       });
-    if (conflita(novo, paraSlots(ativas.filter((r) => r.terapeutaId === dados.terapeutaId)))) {
+
+    // Avulsas (session recorrenteId null) no mesmo dia-da-semana, agendadas a
+    // partir da vigência da nova regra — a regra não tem linha `session`,
+    // então o EXCLUDE gist não enxerga esse lado do conflito (buraco
+    // regra×avulsa fechado aqui em app-level, nas 2 dimensões).
+    const avulsasRaw = await tx
+      .select({
+        terapeutaId: schema.session.terapeutaId,
+        patientId: schema.session.patientId,
+        agendadaPara: schema.session.agendadaPara,
+        duracaoMin: schema.session.duracaoMin,
+      })
+      .from(schema.session)
+      .where(
+        and(
+          eq(schema.session.clinicId, ctx.clinicId),
+          eq(schema.session.estado, "agendada"),
+          isNull(schema.session.recorrenteId),
+          gte(schema.session.agendadaPara, new Date(`${vigenciaInicio}T00:00:00${FUSO_CLINICA_OFFSET}`)),
+        ),
+      );
+    const avulsasDoDia = avulsasRaw
+      .map((a) => {
+        const { diaSemana, inicioMin } = paraMinutosLocais(a.agendadaPara, FUSO_CLINICA);
+        return { terapeutaId: a.terapeutaId, patientId: a.patientId, diaSemana, inicioMin, duracaoMin: a.duracaoMin };
+      })
+      .filter((a) => a.diaSemana === dados.diaSemana);
+    const paraSlotsAvulsas = (
+      rows: typeof avulsasDoDia,
+    ): Slot[] =>
+      rows.map((r) => ({ diaSemana: r.diaSemana, inicioMin: r.inicioMin, fimMin: r.inicioMin + r.duracaoMin }));
+
+    if (
+      conflita(novo, paraSlots(ativas.filter((r) => r.terapeutaId === dados.terapeutaId))) ||
+      conflita(
+        novo,
+        paraSlotsAvulsas(avulsasDoDia.filter((a) => a.terapeutaId === dados.terapeutaId)),
+      )
+    ) {
       throw new ConflitoError("terapeuta");
     }
-    if (conflita(novo, paraSlots(ativas.filter((r) => r.patientId === dados.patientId)))) {
+    if (
+      conflita(novo, paraSlots(ativas.filter((r) => r.patientId === dados.patientId))) ||
+      conflita(
+        novo,
+        paraSlotsAvulsas(avulsasDoDia.filter((a) => a.patientId === dados.patientId)),
+      )
+    ) {
       throw new ConflitoError("paciente");
     }
     const [row] = await tx
@@ -265,9 +309,12 @@ export interface NovaAvulsa {
 }
 
 /** Cria uma sessão avulsa (`recorrenteId=null`, `estado="agendada"`), ancorada
- * no fuso da clínica (C10). O EXCLUDE gist do banco (`session_no_overbook_*`)
- * é o backstop TOCTOU contra overbook concorrente — a violação (23P01) é
- * capturada aqui e relançada como `ConflitoError`. */
+ * no fuso da clínica (C10). Pré-check app-level contra REGRAS ativas no mesmo
+ * dia-da-semana fecha o buraco regra×avulsa (a regra não tem linha `session`,
+ * então o EXCLUDE gist do banco não a vê). O EXCLUDE gist
+ * (`session_no_overbook_*`) segue como backstop TOCTOU contra overbook
+ * avulsa×avulsa concorrente — a violação (23P01) é capturada aqui e
+ * relançada como `ConflitoError`. */
 export async function criarAvulsa(
   ctx: TenantContext,
   dados: NovaAvulsa,
@@ -276,8 +323,42 @@ export async function criarAvulsa(
   const agendadaPara = new Date(
     `${dados.dataISO}T${dados.horaInicio}:00${FUSO_CLINICA_OFFSET}`,
   );
+  const diaSemana = new Date(`${dados.dataISO}T00:00:00Z`).getUTCDay();
+  const inicioMin = horaParaMin(dados.horaInicio);
+  const novo: Slot = { diaSemana, inicioMin, fimMin: inicioMin + dados.duracaoMin };
   try {
     return await withTenant(ctx, async (tx) => {
+      const regrasAtivas = await tx
+        .select({
+          terapeutaId: schema.agendamentoRecorrente.terapeutaId,
+          patientId: schema.agendamentoRecorrente.patientId,
+          horaInicio: schema.agendamentoRecorrente.horaInicio,
+          duracaoMin: schema.agendamentoRecorrente.duracaoMin,
+        })
+        .from(schema.agendamentoRecorrente)
+        .where(
+          and(
+            eq(schema.agendamentoRecorrente.clinicId, ctx.clinicId),
+            eq(schema.agendamentoRecorrente.status, "ativo"),
+            eq(schema.agendamentoRecorrente.diaSemana, diaSemana),
+            lte(schema.agendamentoRecorrente.vigenciaInicio, dados.dataISO),
+          ),
+        );
+      const paraSlots = (rows: typeof regrasAtivas): Slot[] =>
+        rows.map((r) => {
+          const ini = horaParaMin(r.horaInicio);
+          return { diaSemana, inicioMin: ini, fimMin: ini + r.duracaoMin };
+        });
+      if (
+        conflita(novo, paraSlots(regrasAtivas.filter((r) => r.terapeutaId === dados.terapeutaId)))
+      ) {
+        throw new ConflitoError("terapeuta");
+      }
+      if (
+        conflita(novo, paraSlots(regrasAtivas.filter((r) => r.patientId === dados.patientId)))
+      ) {
+        throw new ConflitoError("paciente");
+      }
       const [row] = await tx
         .insert(schema.session)
         .values({
