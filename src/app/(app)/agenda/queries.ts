@@ -253,6 +253,62 @@ export async function criarRegra(
   });
 }
 
+export interface NovaAvulsa {
+  patientId: string;
+  terapeutaId: string;
+  disciplina: string;
+  tipo: "avaliacao" | "devolutiva" | "reuniao_pais" | "outro";
+  dataISO: string; // "YYYY-MM-DD"
+  horaInicio: string; // "HH:MM"
+  duracaoMin: number;
+  modalidade: "presencial" | "online";
+}
+
+/** Cria uma sessão avulsa (`recorrenteId=null`, `estado="agendada"`), ancorada
+ * no fuso da clínica (C10). O EXCLUDE gist do banco (`session_no_overbook_*`)
+ * é o backstop TOCTOU contra overbook concorrente — a violação (23P01) é
+ * capturada aqui e relançada como `ConflitoError`. */
+export async function criarAvulsa(
+  ctx: TenantContext,
+  dados: NovaAvulsa,
+): Promise<{ id: string }> {
+  requireRole(ctx, "coordenador");
+  const agendadaPara = new Date(
+    `${dados.dataISO}T${dados.horaInicio}:00${FUSO_CLINICA_OFFSET}`,
+  );
+  try {
+    return await withTenant(ctx, async (tx) => {
+      const [row] = await tx
+        .insert(schema.session)
+        .values({
+          clinicId: ctx.clinicId,
+          patientId: dados.patientId,
+          terapeutaId: dados.terapeutaId,
+          recorrenteId: null,
+          disciplina: dados.disciplina,
+          tipo: dados.tipo,
+          agendadaPara,
+          duracaoMin: dados.duracaoMin,
+          estado: "agendada",
+          modalidade: dados.modalidade,
+        })
+        .returning({ id: schema.session.id });
+      return row!;
+    });
+  } catch (e) {
+    // EXCLUDE gist (btree_gist) → SQLSTATE 23P01 exclusion_violation. O driver
+    // postgres-js lança o erro cru; o drizzle-orm o envolve em
+    // DrizzleQueryError com o original em `.cause` — checar os dois.
+    const code =
+      (e as { code?: string } | undefined)?.code ??
+      (e as { cause?: { code?: string } } | undefined)?.cause?.code;
+    if (code === "23P01") {
+      throw new ConflitoError("terapeuta");
+    }
+    throw e;
+  }
+}
+
 /** Aviso suave por-paciente (C8): as faixas de trabalho do terapeuta no dia. */
 export async function disponibilidadeTerapeutaNoDia(
   ctx: TenantContext,
