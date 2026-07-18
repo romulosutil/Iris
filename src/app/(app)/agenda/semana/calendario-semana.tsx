@@ -121,11 +121,21 @@ export function CalendarioSemana({
               const inicioMin = horaParaMin(coluna);
               const ehFoco = foco.linha === linha && foco.col === col;
               const foraJanela = !dentroDaJanela(diaSemana, inicioMin);
+              // Bloco que COMEÇA nesta célula (mesmo dia + mesmo horário de
+              // início) — a ocupação some do overlay (aria-hidden, decorativo)
+              // p/ leitor de tela, então dobra a informação no nome acessível
+              // da célula onde o bloco nasce.
+              const blocoQueComeca = blocos.find(
+                (b) => b.diaSemana === diaSemana && b.inicioMin === inicioMin,
+              );
+              const rotuloCelula = blocoQueComeca
+                ? `${DIAS_LABEL[diaSemana]} ${coluna}, ocupado: ${blocoQueComeca.rotulo}, ${blocoQueComeca.disciplina} (${blocoQueComeca.origem === "previsto" ? "previsto" : "concreto"})`
+                : `${DIAS_LABEL[diaSemana]} ${coluna}`;
               return (
                 <div
                   key={coluna}
                   role="gridcell"
-                  aria-label={`${DIAS_LABEL[diaSemana]} ${coluna}`}
+                  aria-label={rotuloCelula}
                   aria-disabled={bloqueado}
                   tabIndex={ehFoco ? 0 : -1}
                   ref={(el) => {

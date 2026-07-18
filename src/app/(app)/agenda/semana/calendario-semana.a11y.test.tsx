@@ -89,6 +89,18 @@ describe("CalendarioSemana", () => {
     expect(aoAlocar).toHaveBeenCalledWith(1, 600);
   });
 
+  test("célula onde o bloco começa anuncia a ocupação no nome acessível (leitor de tela não enxerga o overlay aria-hidden)", () => {
+    render(<CalendarioSemana {...base} aoAlocar={() => {}} />);
+    // fixture: bloco r1 começa seg (diaSemana=1) inicioMin=540 → "09:00".
+    const celulaOcupada = screen.getByRole("gridcell", {
+      name: /segunda 09:00, ocupado: ana, aba \(previsto\)/i,
+    });
+    expect(celulaOcupada).not.toBeNull();
+    // célula livre vizinha não ganha o sufixo de ocupação.
+    const celulaLivre = screen.getByRole("gridcell", { name: /^segunda 09:30$/i });
+    expect(celulaLivre).not.toBeNull();
+  });
+
   test("overlay do bloco é posicionado em unidades fixas (rótulo 6rem + colunas de 3rem), não em % da linha (C3)", () => {
     render(<CalendarioSemana {...base} aoAlocar={() => {}} />);
     // fixture: abertura=08:00 (480min), passoMin=30, bloco inicioMin=540 duracaoMin=60
