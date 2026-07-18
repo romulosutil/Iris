@@ -4,14 +4,12 @@ import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { RoleError } from "@/auth/require-role";
 import {
-  carregarConfigClinica,
   carregarSemana,
   ConflitoError,
   criarAvulsa,
   criarRegra,
   listarPacientes,
   type CarregarSemanaParams,
-  type ConfigClinica,
   type NovaAvulsa,
   type NovaRegra,
   type SemanaCarregada,
@@ -65,12 +63,6 @@ export async function listarPacientesAction(
 ): Promise<{ id: string; nome: string }[]> {
   const ctx = await getTenantContext();
   return listarPacientes(ctx, termo);
-}
-
-/** Leitura fina da config de disciplinas/duração-padrão da clínica (D2). */
-export async function carregarConfigClinicaAction(): Promise<ConfigClinica> {
-  const ctx = await getTenantContext();
-  return carregarConfigClinica(ctx);
 }
 
 export async function criarAvulsaAction(
