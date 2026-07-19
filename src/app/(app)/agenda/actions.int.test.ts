@@ -5,9 +5,7 @@ import { eq } from "drizzle-orm";
 // actions.ts puxa getTenantContext (next/headers) → server-only. Neutraliza o
 // side-effect e importa o núcleo testável dinamicamente.
 vi.mock("server-only", () => ({}));
-const { agendarSessao, checkInSessao, listarSessoesDoDia } = await import(
-  "./actions"
-);
+const { checkInSessao, listarSessoesDoDia } = await import("./actions");
 const { withTenant } = await import("@/db/rls");
 const { sql: appSql } = await import("@/db/client");
 const { session } = await import("@/db/schema");
@@ -37,14 +35,27 @@ const DIA = "2026-07-11";
 
 let owner: ReturnType<typeof postgres>;
 
-function form(fields: Record<string, string>) {
-  const fd = new FormData();
-  for (const [k, v] of Object.entries(fields)) fd.set(k, v);
-  return fd;
+/**
+ * O form legado de UUID (`agendarSessao`) foi aposentado na etapa E+F — quem
+ * cria sessão hoje é `/agenda/semana` (criarAvulsa/materializarRegra). Aqui só
+ * precisamos de uma sessão persistida para exercitar `listarSessoesDoDia` e
+ * `checkInSessao`; inserimos direto via cliente owner (bypassa RLS, como o
+ * resto do seed deste describe).
+ */
+async function criarSessao(params: {
+  patientId: string;
+  terapeutaId: string;
+  agendadaPara: string;
+}): Promise<string> {
+  const [row] = await owner<{ id: string }[]>`
+    INSERT INTO session (clinic_id, patient_id, terapeuta_id, agendada_para, disciplina)
+    VALUES (${CLINIC_A}, ${params.patientId}, ${params.terapeutaId}, ${params.agendadaPara}, 'psicologia')
+    RETURNING id
+  `;
+  return row!.id;
 }
 
 const ctxCoord = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
-const ctxAdmin = { clinicId: CLINIC_A, userId: U_ADMIN, role: "admin_recepcao" } as const;
 const ctxT1 = { clinicId: CLINIC_A, userId: U_T1, role: "terapeuta" } as const;
 const ctxT2 = { clinicId: CLINIC_A, userId: U_T2, role: "terapeuta" } as const;
 
@@ -78,16 +89,15 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     await appSql.end();
   });
 
-  test("recepção agenda e a coordenação enxerga a sessão na grade do dia", async () => {
-    const r = await agendarSessao(
-      ctxAdmin,
-      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_PARA }),
-    );
-    expect(r.error).toBeUndefined();
-    expect(r.id).toBeDefined();
+  test("coordenação enxerga a sessão na grade do dia", async () => {
+    const id = await criarSessao({
+      patientId: PATIENT_P,
+      terapeutaId: U_T1,
+      agendadaPara: AGENDADA_PARA,
+    });
 
     const grade = await listarSessoesDoDia(ctxCoord, DIA);
-    const linha = grade.find((s) => s.id === r.id);
+    const linha = grade.find((s) => s.id === id);
     expect(linha).toBeDefined();
     expect(linha!.estado).toBe("agendada");
     expect(linha!.pacienteNome).toBe("Paciente P");
@@ -103,85 +113,33 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     expect(gradeT2).toHaveLength(0);
   });
 
-  test("terapeuta não pode agendar (guardrail de papel)", async () => {
-    await expect(
-      agendarSessao(
-        ctxT1,
-        form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_PARA }),
-      ),
-    ).rejects.toThrow(/terapeuta/);
-  });
-
   test("check-in registra presença (checkInEm) sem mudar estado e é idempotente-seguro", async () => {
-    const r = await agendarSessao(
-      ctxAdmin,
-      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_CHECKIN }),
-    );
-    expect(r.id).toBeDefined();
+    const id = await criarSessao({
+      patientId: PATIENT_P,
+      terapeutaId: U_T1,
+      agendadaPara: AGENDADA_CHECKIN,
+    });
 
-    const ok = await checkInSessao(ctxT1, r.id!);
+    const ok = await checkInSessao(ctxT1, id);
     expect(ok.error).toBeUndefined();
 
     const [depois] = await withTenant(ctxCoord, (tx) =>
-      tx.select().from(session).where(eq(session.id, r.id!)),
+      tx.select().from(session).where(eq(session.id, id)),
     );
     expect(depois!.estado).toBe("agendada");
     expect(depois!.checkInEm).not.toBeNull();
 
     // Segundo check-in não encontra mais uma sessão 'agendada' → no-op seguro.
-    const denovo = await checkInSessao(ctxT1, r.id!);
+    const denovo = await checkInSessao(ctxT1, id);
     expect(denovo.error).toMatch(/já iniciada|não encontrada/i);
   });
 
-  test("datetime-local sem fuso é ancorado no fuso da clínica (não no do servidor)", async () => {
-    // Entrada crua do <input type="datetime-local"> — sem offset.
-    const r = await agendarSessao(
-      ctxAdmin,
-      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: "2026-07-11T09:00" }),
-    );
-    expect(r.error).toBeUndefined();
-
-    const grade = await listarSessoesDoDia(ctxCoord, DIA);
-    const linha = grade.find((s) => s.id === r.id);
-    expect(linha).toBeDefined();
-    // 09:00 em São Paulo (UTC-3) = 12:00 UTC — resultado fixo, seja qual for o
-    // fuso do ambiente que roda o teste/servidor.
-    expect(linha!.agendadaPara.toISOString()).toBe("2026-07-11T12:00:00.000Z");
-  });
-
-  test("cross-tenant: recepção não agenda paciente de outra clínica", async () => {
-    const r = await agendarSessao(
-      ctxAdmin,
-      form({ patientId: PATIENT_B, terapeutaId: U_T1, agendadaPara: AGENDADA_PARA }),
-    );
-    expect(r.error).toBeDefined();
-    expect(r.id).toBeUndefined();
-  });
-
-  test("cross-tenant: recepção não agenda com profissional de outra clínica", async () => {
-    const r = await agendarSessao(
-      ctxAdmin,
-      form({ patientId: PATIENT_P, terapeutaId: U_B, agendadaPara: AGENDADA_PARA }),
-    );
-    expect(r.error).toBeDefined();
-    expect(r.id).toBeUndefined();
-  });
-
-  test("não vincula sessão a quem não é terapeuta (coordenador sem role terapeuta)", async () => {
-    const r = await agendarSessao(
-      ctxAdmin,
-      form({ patientId: PATIENT_P, terapeutaId: U_COORD, agendadaPara: AGENDADA_PARA }),
-    );
-    expect(r.error).toMatch(/terapeuta/i);
-    expect(r.id).toBeUndefined();
-  });
-
   test("UPDATE não reaponta a sessão para paciente/profissional de outra clínica", async () => {
-    const r = await agendarSessao(
-      ctxAdmin,
-      form({ patientId: PATIENT_P, terapeutaId: U_T1, agendadaPara: AGENDADA_UPDATE }),
-    );
-    expect(r.id).toBeDefined();
+    const id = await criarSessao({
+      patientId: PATIENT_P,
+      terapeutaId: U_T1,
+      agendadaPara: AGENDADA_UPDATE,
+    });
 
     // Reapontar patient_id para paciente da clínica B, mantendo clinic_id local:
     // o WITH CHECK (app_patient_in_clinic) precisa barrar — FK bypassa RLS.
@@ -190,7 +148,7 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
         tx
           .update(session)
           .set({ patientId: PATIENT_B })
-          .where(eq(session.id, r.id!)),
+          .where(eq(session.id, id)),
       ),
     ).rejects.toThrow();
 
@@ -200,7 +158,7 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
         tx
           .update(session)
           .set({ terapeutaId: U_B })
-          .where(eq(session.id, r.id!)),
+          .where(eq(session.id, id)),
       ),
     ).rejects.toThrow();
   });

@@ -7,7 +7,6 @@ import { cn } from "@/lib/cn";
 import { listarSessoesDoDia } from "./actions";
 import { EstadoBadge } from "./estado-badge";
 import { CheckInButton } from "./checkin-button";
-import { AgendarForm } from "./agendar-form";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "./fuso";
  
 // Link de navegação para o diário da sessão — mesma superfície visual do
@@ -116,20 +115,11 @@ export default async function AgendaPage() {
       )}
  
       {podeAgendar ? (
-        <Stack
-          gap="md"
-          como="section"
-          aria-labelledby="agendar-titulo"
-          className="animate-fade-in-up animate-delay-225 pt-6 border-t-2 border-dashed border-graphite"
-        >
-          <h2
-            id="agendar-titulo"
-            className="font-display text-ink-anchor text-2xl font-bold"
-          >
-            Agendar sessão
-          </h2>
-          <AgendarForm />
-        </Stack>
+        <div className="animate-fade-in-up animate-delay-225 pt-6 border-t-2 border-dashed border-graphite">
+          <Link href="/agenda/semana" className={abrirSessaoClasses}>
+            Agendar no calendário
+          </Link>
+        </div>
       ) : null}
     </Stack>
   );

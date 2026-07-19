@@ -3,15 +3,14 @@ import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import axe from "axe-core";
 
-// AgendarForm/CheckInButton importam ./actions ("use server"), que puxa a
-// cadeia getTenantContext → @/db/client (abre conexão Postgres no load). No
+// CheckInButton importa ./actions ("use server"), que puxa a cadeia
+// getTenantContext → @/db/client (abre conexão Postgres no load). No
 // jsdom só renderizamos os componentes (a action nunca é invocada), então
 // neutralizamos server-only e o client de banco.
 vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
 
 const { EstadoBadge } = await import("./estado-badge");
-const { AgendarForm } = await import("./agendar-form");
 const { CheckInButton } = await import("./checkin-button");
 const { sessionEstado } = await import("@/db/schema");
 const SESSION_ESTADOS = sessionEstado.enumValues;
@@ -37,10 +36,6 @@ async function semViolacoes(ui: ReactElement) {
 
 test.each(SESSION_ESTADOS)("EstadoBadge %s — sem violações axe", async (estado) => {
   await semViolacoes(<EstadoBadge estado={estado} />);
-});
-
-test("AgendarForm — sem violações axe", async () => {
-  await semViolacoes(<AgendarForm />);
 });
 
 test("CheckInButton — sem violações axe", async () => {
