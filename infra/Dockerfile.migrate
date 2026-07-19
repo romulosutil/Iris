@@ -1,0 +1,28 @@
+# Dockerfile dedicado ao JOB de migração (gate de schema no deploy).
+# Existe separado do infra/Dockerfile porque o Easypanel (build Dockerfile)
+# não expõe --target: ele builda sempre o ÚLTIMO stage. Aqui o último stage
+# É o migrate, então o serviço `iris-migrate` roda `node scripts/migrate.mjs`
+# e sai — sem subir servidor. Mesma lógica do stage `migrate` do Dockerfile
+# principal (ver infra/README.md §"Gate de schema no deploy").
+#
+# Build context = raiz do repo; Dockerfile path = infra/Dockerfile.migrate.
+# Env obrigatória do serviço: MIGRATION_DATABASE_URL (role dona/DDL).
+# syntax=docker/dockerfile:1
+
+FROM node:22-alpine AS base
+RUN corepack enable
+WORKDIR /app
+
+# deps: node_modules de produção (drizzle-orm + postgres são deps de prod).
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# migrate: ÚLTIMO stage = job. Aplica db/migrations e sai != 0 se falhar,
+# abortando o deploy (o app velho segue no ar contra o schema velho).
+FROM base AS migrate
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
+COPY scripts/migrate.mjs ./scripts/migrate.mjs
+COPY db/migrations ./db/migrations
+CMD ["node", "scripts/migrate.mjs"]
