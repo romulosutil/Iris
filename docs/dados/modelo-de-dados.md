@@ -828,13 +828,16 @@ CREATE TABLE report (
   periodo_fim DATE NOT NULL,
   status report_status NOT NULL DEFAULT 'rascunho',
   payload JSONB NOT NULL,              -- narrativo: texto gerado+editado; bruto: listagem estruturada (sessões/evidences/presença)
+  payload_versao INTEGER NOT NULL DEFAULT 1,  -- incrementada a cada edição do payload; export faz FOR UPDATE + recheck desta versão (seção Fase 5 F0) — aborta se mudou entre render e commit, nunca congela payload obsoleto
   gerado_por_ia BOOLEAN NOT NULL DEFAULT false,  -- false para convenio_bruto (sem síntese de IA — seção 5)
+  pdf_hash TEXT,                       -- hash do PDF congelado em report_pdf.bytes; espelhado aqui para conferência sem tocar a tabela-filha
+  deletado_em TIMESTAMPTZ,             -- soft-delete (caminho normal); purga física é retenção/erasure via app_purgar_report (seção 4.4)
   revisado_por UUID REFERENCES app_user(id),
   exportado_por UUID REFERENCES app_user(id),
   exportado_em TIMESTAMPTZ,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (periodo_fim >= periodo_inicio),
-  CHECK (status != 'exportado' OR (exportado_por IS NOT NULL AND exportado_em IS NOT NULL)),
+  CHECK (status != 'exportado' OR (exportado_por IS NOT NULL AND exportado_em IS NOT NULL AND pdf_hash IS NOT NULL)),
   -- convenio_bruto pula direto para 'exportado' sem etapa de rascunho/edição (seção 5) —
   -- constraint de aplicação, não de banco: quando tipo='convenio_bruto', o backend nunca
   -- grava status='rascunho'/'revisado' para esta linha.
@@ -845,7 +848,7 @@ CREATE INDEX idx_report_clinic_tipo ON report (clinic_id, tipo);
 
 ALTER TABLE report ENABLE ROW LEVEL SECURITY;
 CREATE POLICY report_scope ON report
-  USING (EXISTS (SELECT 1 FROM patient p WHERE p.id = report.patient_id));
+  USING (EXISTS (SELECT 1 FROM patient p WHERE p.id = report.patient_id) AND deletado_em IS NULL);
 -- admin_recepcao: sem policy própria de bloqueio aqui porque Report é sempre dado
 -- clínico (nasce de Evidence/Session/MilestoneAssessment) — já fora do alcance de
 -- admin_recepcao via ausência de vínculo em care_team_membership com acesso clínico.
@@ -853,6 +856,28 @@ CREATE POLICY report_scope ON report
 -- Toda exportação de Report grava em audit_log (seção 4.4) ANTES de liberar o
 -- download — aplicado na camada de aplicação; trigger abaixo é rede de segurança
 -- (alerta, não bloqueio) para detectar exportado_em preenchido sem log correspondente.
+
+-- **Correção 19/07/2026 (Fase 5, F0 — fundação de relatórios, migração 0038):**
+-- o blob do PDF NÃO fica em `report` (nunca existiu coluna `pdf_bytes` aqui) — vive
+-- isolado na tabela-filha 1:1 `report_pdf`, para manter `report` leve para listagem
+-- (a UI lista relatórios com frequência; não precisa arrastar bytea a cada SELECT) e
+-- para permitir uma política de escrita mais restrita só no blob (write-once).
+CREATE TABLE report_pdf (
+  report_id UUID PRIMARY KEY REFERENCES report(id) ON DELETE CASCADE,
+  bytes BYTEA NOT NULL,
+  hash TEXT NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Write-once: nenhum app_role pode UPDATE/DELETE — um relatório exportado não é
+-- re-renderizado; re-download serve este snapshot congelado (getReportPdf, src/lib/report/).
+REVOKE UPDATE, DELETE ON report_pdf FROM app_role;
+
+ALTER TABLE report_pdf ENABLE ROW LEVEL SECURITY;
+CREATE POLICY report_pdf_scope ON report_pdf
+  USING (app_report_visivel(report_id));
+-- `app_report_visivel(uuid)` (SECURITY DEFINER, migração 0039) encapsula tenant +
+-- equipe + soft-delete do `report` pai num único helper — evita duplicar a lógica de
+-- visibilidade de `report_scope` dentro de `report_pdf_scope` (mesma regra, uma fonte).
 ```
 
 ---
@@ -1019,6 +1044,24 @@ Toda exportação de `Report` grava aqui (`acao='relatorio_exportado'`) ANTES de
 liberar o download — aplicado na camada de aplicação, com um trigger em
 `report.exportado_em` como rede de segurança para detectar exportação sem log
 correspondente (alerta, não bloqueio, para não travar o fluxo do coordenador).
+
+**Correção 19/07/2026 (Fase 5, F0, migração 0039):** `audit_log` é append-only
+a nível de privilégio (`REVOKE UPDATE, DELETE`), não só convenção — mesmo padrão
+de `Evidence` (seção 2.2). A policy de INSERT (`audit_insert`) amarra o autor à
+própria sessão: exige `ator_id = app.user_id` além de `clinic_id = app.clinic_id`
+— um app_role não pode gravar um evento em nome de outro usuário (ator forjado é
+rejeitado pela RLS, não só validado na aplicação). SELECT (`audit_select`) é
+role-gated: só coordenador e admin_recepcao da própria clínica leem a trilha
+(leitor definitivo — DPO como papel à parte — segue em aberto, ver `BACKLOG.md`).
+
+**Purga (retenção/erasure) — `app_purgar_report` (SECURITY DEFINER, migração
+0040):** soft-delete via `report.deletado_em` é o caminho normal (esconde da
+UI/RLS sem apagar); a purga física existe só para retenção/erasure de fato.
+`app_purgar_report(p_report uuid, p_motivo text)` faz o gate (só coordenador,
+isolamento via `app_patient_in_clinic`), grava `audit_log(acao='relatorio_purgado')`
+ANTES do `DELETE` — log-antes-de-delete, para o evento sobreviver mesmo que a
+purga falhe no meio — e então deleta `report`, o que cascateia para `report_pdf`
+via `ON DELETE CASCADE`.
 
 ---
 

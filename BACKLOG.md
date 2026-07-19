@@ -24,6 +24,56 @@
 
 ---
 
+## 🏁 Sessão 19/07/2026 — Fase 5 F0 (fundação de relatórios, Tasks 1-8) — ✅ CONCLUÍDA
+
+Fundação de relatórios da Fase 5: tabela `report` (migração `0038`) com
+`report_pdf` filha 1:1 (blob isolado, write-once, RLS própria via
+`app_report_visivel`) e `audit_log` (append-only, ator amarrado à sessão);
+RLS de tenant+equipe+soft-delete (`0039`); purga rastreável
+`app_purgar_report` (`0040`, log-antes-de-delete); lib de export
+transacional (`src/lib/report/`) com recheck de `payload_versao` sob
+`FOR UPDATE` (aborta se o payload mudou entre render e commit) e
+`getReportPdf` servindo o snapshot congelado sem re-renderizar. Docs
+(`docs/dados/modelo-de-dados.md` §1.6/§4.4) reconciliadas com o estado
+real — ver itens abertos abaixo.
+
+**Adiado deliberadamente (Task 7):** render real de PDF via Chromium. F0
+fechou com `StubPdfRenderer` — o pipeline de export/hash/trilha está pronto
+e testado, mas o renderer real fica para quando a infra de produção
+(VPS/Easypanel vs. gerenciado) estiver decidida, porque a estratégia de
+sandbox (Playwright core no próprio server vs. `@sparticuz/chromium`
+serverless vs. serviço dedicado) depende diretamente de qual ambiente de
+runtime a Iris vai ter.
+
+**Itens abertos registrados (não implementados em F0):**
+* Tier-gating de relatório (família → tier Clínica; narrativo → tier
+  Convênio; bruto → tier Diário) — diferido; falta o modelo de
+  plano/billing para decidir onde esse gate mora (aplicação vs. RLS).
+* Prazo concreto de retenção por `tipo` de relatório — depende de
+  `clinic.politica_retencao_meses`/`politica_retencao_config` (seção 5 de
+  `docs/dados/modelo-de-dados.md`) e da fonte jurídica (`docs/legal/`,
+  CFM/prontuário) ainda não fechada.
+* **Bloqueador jurídico:** uso secundário de dado clínico de menor ("Iris
+  empresa de dados") exige 1 página em `docs/legal/` (base legal +
+  anonimização) ANTES de qualquer pipeline de analytics/treino. F0 não
+  abre nenhum caminho nesse sentido sobre `report`/`report_pdf` — dado
+  fica isolado, sem exportação secundária.
+* Dívida técnica: `bytea` em `report_pdf` — reavaliar vs. storage
+  dedicado (S3/MinIO) se `pg_dump`/replicação incharem com o volume de
+  PDFs.
+* Leitor definitivo da trilha de auditoria (`admin_recepcao` vs. papel de
+  DPO à parte) — a policy `audit_select` hoje cobre coordenador e
+  admin_recepcao da clínica; confirmar se DPO é papel novo ou reaproveita
+  um existente.
+* Infra: estratégia de Chromium em runtime (Task 7, acima) — decidir à
+  luz do pivô VPS/Easypanel (`docs/arquitetura/plano-bootstrap-e-stack-vps.md`).
+* Dívida técnica (herdada, não desta sessão): snapshot Drizzle
+  desincronizado do hand-migration `0036` — toda `db:generate` re-emite um
+  `ALTER session.disciplina SET NOT NULL` no-op (reapareceu na `0038`).
+  Reconciliar o snapshot.
+
+---
+
 ## 🏁 Sessão 19/07/2026 — Agenda 2.0 Etapa F (métricas por disciplina, Tasks 11-13) — ✅ CONCLUÍDA
 
 **Fecha a Agenda 2.0.** Tasks 11-13 (últimas do plano E+F), execução
@@ -615,9 +665,14 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
 * Candidatura por Milestone/família (não `N=3/M=2` global); PROC/observação fora da candidatura por acúmulo; excluir evidência com query aberta.
 
 ### [Fase 5] Coordenador e Relatórios (Issue #8)
+* ✅ F0 (fundação de relatórios) concluída 19/07/2026 — `report`/`report_pdf`/
+  `audit_log`, RLS, purga rastreável, export transacional com
+  `StubPdfRenderer` (ver sessão 19/07/2026 acima).
 * Fila de reclassificação/validação com justificativa para o coordenador.
 * Exportação de Relatório de Família (pt-BR calibrado) e Dossiê de Auditoria de Convênio factual.
 * Relatório narrativo de convênio gerado por IA com revisão humana.
+* Render real de PDF (Chromium) — adiado de F0, ver itens abertos na sessão
+  19/07/2026 acima.
 
 ### [Fase 6] Hardening e Ditado de Voz (Issue #9)
 * Integração de ASR (ditado por voz) com preservação do áudio original local.
