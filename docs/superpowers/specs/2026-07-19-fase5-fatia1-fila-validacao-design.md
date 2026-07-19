@@ -1,6 +1,8 @@
 # Fase 5 — Fatia 1: Fila de Validação do Coordenador (V1-V5)
 
-> Status: **rascunho para aprovação**. Camada 3 do modelo de governança (IA sugere →
+> Status: **rascunho para aprovação** (endurecido por passada adversarial pre-mortem, 19/07/2026 —
+> 5 modos de falha; #1 recompute mid-history verificado seguro, #2 par devolver+responder trazido ao
+> escopo, #3/#4/#5 mitigados ou registrados). Camada 3 do modelo de governança (IA sugere →
 > terapeuta aprova → **coordenador valida por exceção e reclassifica**). Regras-fonte:
 > `docs/governanca/validacao-coordenador.md` (V1-V5), wireframe §4.5 de
 > `docs/ux/fluxos-e-wireframes.md`. Consome a camada de dados da Fase 4 (`evidence`,
@@ -14,10 +16,14 @@
 **Dentro:**
 - Sinais de entrada **V1a** (baixa confiança aprovada) + **V1b** (inconsistente com histórico) — os dois com dado pronto hoje.
 - As 4 ações **V2**: Confirmar · Reclassificar · Devolver com dúvida · Invalidar.
+- **O par completo de "devolver"** — abrir a query (coordenador) **e responder** (terapeuta),
+  porque `evidence_query` está hoje 100% dormente (nenhum código abre nem fecha). Construir só a
+  abertura deixaria a evidência em **limbo permanente** (excluída do cômputo, sem quem feche).
+  Decisão do Rômulo (19/07): construir o par (Approach A do pre-mortem #2).
 - **V3** (versionado, nunca sobrescrito) — já garantido pela camada de dados append-only + recompute.
 - Wiring do **`audit_log`** (reclassificação/invalidação/devolução).
-- Recompute retroativo reusando `materializarSnapshot`.
-- UI (rota dedicada `validacao/`) + superfície **passiva** de V4.
+- Recompute retroativo reusando `materializarSnapshot` (verificado seguro para meio-de-história — ver §4.4).
+- UI (rota dedicada `validacao/`) + superfície **passiva** de V4 + superfície do terapeuta p/ responder queries.
 
 **Fora (adiado → BACKLOG):**
 - Sinais **V1c** (amostra aleatória), **V1d** (calibração de terapeuta novo), **V1e** (dossiê
@@ -98,7 +104,30 @@ Regras:
 - **RLS já cobre o insert:** `evidence_revision_insert` (0014) permite coordenador; `evidence_query_insert`
   exige `app.user_role='coordenador'` + `coordenador_id=app.user_id`. A action só reforça o gate.
 
-### 4.3 V3 — garantido de graça
+### 4.3 Responder à query — lado do terapeuta (fecha o loop de "devolver")
+
+`evidence_query` está hoje **dormente** (nenhum código abre nem fecha — confirmado). Construir só a
+abertura deixaria a evidência excluída do cômputo **para sempre**. Então a Fatia 1 entrega também:
+
+`responderQuery(ctx, {evidenceQueryId, respostaTexto, novaClassificacao?})` — ação do **terapeuta
+da equipe** (a policy `evidence_query_update` só permite enquanto `respondido_em IS NULL`; a policy
+`evidence_revision_insert` já abre a exceção do terapeuta inserir a revisão resultante **quando há
+query aberta** apontando pra evidência). Em 1 tx sob advisory lock:
+1. `UPDATE evidence_query SET resposta_texto=…, respondido_em=now()` (e `resultante_evidence_revision_id` se houver).
+2. Se o terapeuta corrige a classificação ao responder → `INSERT evidence_revision(acao=reclassificar, …, justificativa=resposta)` e liga em `resultante_evidence_revision_id`.
+3. **Recompute:** `materializarSnapshot(tx, patientId, sessionNumeroDaEvidencia)` — a query deixa de estar aberta → a evidência **volta** ao cômputo (ou entra com a nova classificação). Sem este passo a evidência ficaria excluída para sempre (pre-mortem #2).
+- Superfície mínima do terapeuta: lista "dúvidas do coordenador" (queries abertas das suas evidências) com o campo de resposta. Reusa design system.
+
+### 4.4 Recompute de meio-de-história é seguro (verificado)
+
+`materializarSnapshot(queries, patientId, desdeNumero)` **lê a história inteira**, faz o fold do zero,
+e só **escreve** snapshots `>= desdeNumero` — recompute a partir de uma sessão antiga é correto por
+construção, sem depender de `snapshot(desdeNumero-1)` no banco. Provado por teste existente
+(`db/tests/fase4-materializar.int.test.ts:287` — "reclassificar sessão 2, recomputar DESDE 2, sessão 1
+intacta, sessão 3 reflete"). Portanto reclassificar/invalidar/responder passam o `session_numero` da
+evidência afetada (mesmo do meio) com segurança. Nenhuma correção em `materializar` é pré-requisito.
+
+### 4.5 V3 — garantido de graça
 
 `materializarSnapshot` só escreve `session_snapshot` e `goal_candidacy`; nunca toca avaliação de marco
 fechada. Reclassificação retroativa recompõe timeline/snapshots **sem** alterar assessment já realizada
@@ -114,11 +143,16 @@ fechada. Reclassificação retroativa recompõe timeline/snapshots **sem** alter
   - Cabeçalho: paciente · sessão · motivo de entrada (chip "baixa confiança" / "inconsistente c/ histórico").
   - Corpo: **trecho literal do diário** + "Classificado como: `<classificação atual>`".
   - Barra de ações: `[Confirmar] [Reclassificar ▾] [Devolver com dúvida] [Invalidar]`.
-    - **Reclassificar** → form: **picker de alvo** escopado aos protocolos ativos do paciente
-      (query auxiliar `patient_protocol → protocol → goals/milestones`; MVP escopa ao `protocolId` da
-      evidência) + **justificativa obrigatória**.
+    - **Reclassificar** → form: **picker de alvo escopado aos protocolos ATIVOS do paciente**
+      (query auxiliar `patient_protocol → protocol → goals/milestones`) — permite corrigir confusão
+      **cross-protocolo** (pre-mortem #5), não só dentro do protocolo original. **Valida
+      `tipo_estrutura` compatível** antes de gravar (a segmentação despacha por tipo; um alvo
+      incompatível quebraria o recompute). + **justificativa obrigatória**. Como a fila é **tiro-único**
+      no MVP (uma vez tratada, a evidência sai), a ação **pede confirmação** (é irreversível pela fila).
     - **Devolver** → campo `pergunta`. **Invalidar** → campo `motivo`.
   - **Sem ação em lote** — abrir o card é o lastro contra carimbo automático (regra de `revisao`, L290).
+- **Superfície do terapeuta (§4.3):** lista "dúvidas do coordenador" com queries abertas das suas
+  evidências + campo de resposta. Fecha o loop de "devolver". Reusa design system.
 - **Checklist contextual por protocolo: ADIADO** (dívida UX no BACKLOG). MVP reclassifica só com picker + justificativa.
 
 ---
@@ -128,8 +162,13 @@ fechada. Reclassificação retroativa recompõe timeline/snapshots **sem** alter
 A `timeline` do paciente já lê `evidence_revision`. Fatia 1 garante que a superfície do terapeuta
 (timeline da sessão / revisão) exiba a revisão do coordenador **com justificativa + autor** — o tom de
 formação vem por escrito. Se a view já mostra, é quase de graça; se falta o campo, é adição pequena a
-uma view existente. **Não** se constrói sino/push/contador (adiado; dívida de V4 "nunca silenciosa"
-fica parcial até a fatia de notificação). Registrar no BACKLOG.
+uma view existente. **Não** se constrói sino/push/contador.
+
+> ⚠️ **Dívida de _compliance_, não só UX (pre-mortem #4).** V4 exige "notificação **nunca
+> silenciosa**". A superfície passiva é, na prática, silenciosa para o terapeuta que não abre a
+> timeline. Adiar o sinal ativo é aceitável para o MVP, mas fica registrado como dívida de
+> **governança/compliance** (não polimento) — a fatia de notificação deve fechá-la, e uma auditoria
+> "como o terapeuta é avisado?" hoje responde "ele teria que olhar". Registrar no BACKLOG nesse tom.
 
 ---
 
@@ -144,10 +183,13 @@ fica parcial até a fatia de notificação). Registrar no BACKLOG.
 - **Reclassificar** com alvo estruturado → `evidence_current` reflete a nova classificação **e** o
   `session_snapshot` recomputa (snapshot muda). **Invalidar** → evidência sai do cômputo. **Devolver** →
   `evidence_query` aberta + recompute exclui do cômputo.
-- **`novaClassificacao` inválida** (alvo fora dos protocolos do paciente) → rejeita.
+- **`novaClassificacao` inválida** (alvo fora dos protocolos ativos **ou** `tipo_estrutura` incompatível) → rejeita.
+- **Reclassificação cross-protocolo:** alvo de outro protocolo ativo do paciente é aceito e recomputa.
+- **`responderQuery`:** terapeuta fecha a query aberta → `respondido_em` setado, evidência **volta** ao
+  cômputo (snapshot recomputado a re-inclui, ou entra com a nova classificação se corrigida). Sem limbo.
 - **Guarda de concorrência:** 2ª ação sobre item já tratado (mesmo paciente) → `CONCURRENCY_ERROR`,
   sem dupla-inserção.
-- **a11y** da UI da fila.
+- **a11y** da UI da fila e da superfície de responder-query.
 
 ---
 
@@ -155,26 +197,33 @@ fica parcial até a fatia de notificação). Registrar no BACKLOG.
 
 1. Sinais **V1c/V1d/V1e/V1f** — precisam campos/config (amostra %, contagem de sessões + N de
    calibração, detecção de candidatura viva, botão "encaminhar" no fluxo do terapeuta).
-2. **V4 ativa** — subsistema de notificação (sino/push/tom). V4 "nunca silenciosa" fica parcial até lá.
+2. **V4 ativa** — subsistema de notificação (sino/push/tom). **Dívida de compliance** (§6): V4
+   "nunca silenciosa" fica parcial até lá.
 3. **Checklist por protocolo** como dado estruturado na UI de reclassificar.
 4. **V5** — taxa de reclassificação como proxy de IOA + dataset (texto, classe-errada, classe-certa).
-5. **Picker de alvo** — MVP escopa ao `protocolId` da evidência; reavaliar se reclassificação
-   cross-protocolo é necessária (raro; confusões clássicas são intra-protocolo).
+5. **Caminho de correção de reclassificação (pre-mortem #3).** MVP é **tiro-único**: tratada, a
+   evidência sai da fila (`NOT EXISTS revisão`); um erro de reclassificação não é corrigível pela UI.
+   Aceito para o MVP (com confirmação na ação). Futuro: fila inclui evidência cuja **última** revisão
+   foi `reclassificar`, ou tela "minhas revisões recentes" com desfazer — alinha com V3.
 
 ---
 
 ## 9. Definição de Pronto (Fatia 1) — checklist
 
 - [ ] `validacao/queries.ts`: fila V1a/V1b correta; exclui tratada/devolvida/invalidada; cross-tenant → 0.
-- [ ] `validacao/actions.ts`: 4 ações, cada uma em 1 tx sob advisory lock, `requireRole('coordenador')`.
+- [ ] `validacao/actions.ts`: 4 ações do coordenador, cada uma em 1 tx sob advisory lock, `requireRole('coordenador')`.
 - [ ] Reclassificar grava `classificacaoNova` estruturada + `audit_log('reclassificacao')` + recompute.
 - [ ] Invalidar/devolver gravam + `audit_log` + recompute (evidência sai do cômputo).
 - [ ] Confirmar grava revisão sem recompute; justificativa default.
 - [ ] Justificativa/motivo vazio em reclassificar/invalidar → rejeita.
-- [ ] `novaClassificacao` inválida → rejeita.
+- [ ] `novaClassificacao` inválida (alvo fora dos protocolos ativos OU `tipo_estrutura` incompatível) → rejeita.
+- [ ] Picker permite alvo **cross-protocolo** dos protocolos ativos do paciente.
+- [ ] **`responderQuery` (terapeuta):** fecha a query (`respondido_em`), cria revisão resultante se
+      corrige, e **recompute re-inclui** a evidência no cômputo. Sem limbo (pre-mortem #2).
+- [ ] Recompute de meio-de-história correto (reusa `materializarSnapshot`; teste `fase4-materializar:287` já cobre a função).
 - [ ] Guarda de concorrência: dupla-validação → `CONCURRENCY_ERROR`.
-- [ ] UI card "item N de M" com trecho literal, classificação atual, 4 ações; sem lote; design system reusado.
+- [ ] UI card "item N de M" com trecho literal, classificação atual, 4 ações; confirmação em reclassificar; sem lote; design system reusado.
 - [ ] V4 passiva: revisão do coordenador (justificativa+autor) visível na superfície do terapeuta.
-- [ ] Rota coordenador-only.
+- [ ] Rota coordenador-only; superfície de responder-query só p/ terapeuta da equipe.
 - [ ] `pnpm typecheck`/`lint`/`test`/`test:rls` verdes.
 - [ ] BACKLOG atualizado com o escopo adiado (V1c-f, V4 ativa, checklist, V5).
