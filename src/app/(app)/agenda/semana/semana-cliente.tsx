@@ -21,12 +21,24 @@ interface DadosSemana {
 
 const SEM_DADOS: DadosSemana = { blocos: [], janelas: [], bloqueios: [] };
 
+/** Task 8: prefill de reposição (vindo de `/agenda/semana?repor=...` — botão
+ * "Repor" em faltas). `terapeutaId` é o terapeuta PREVISTO da falta original,
+ * editável no calendário (só fixa a entidade inicial do eixo="terapeuta"). */
+export interface Prefill {
+  repostaDe: string;
+  patientId: string;
+  patientNome: string;
+  terapeutaId: string;
+  disciplina: string;
+}
+
 interface Props {
   terapeutas: Opcao[];
   semanaInicialISO: string;
   hojeISO: string;
   disciplinas: string[];
   duracaoPadrao: Record<string, number>;
+  prefill?: Prefill;
 }
 
 function recuarSemana(iso: string): string {
@@ -52,10 +64,26 @@ export function SemanaCliente({
   hojeISO,
   disciplinas,
   duracaoPadrao,
+  prefill,
 }: Props) {
+  // Task 8 (reposição): eixo é sempre "terapeuta" quando há prefill — a
+  // entidade fixa no calendário é o terapeuta PREVISTO da falta (editável
+  // aqui, via combobox), enquanto paciente+disciplina ficam fixados no
+  // popover ao abrir o slot. Trocar de eixo perderia esse contexto, então o
+  // toggle Por terapeuta/Por paciente é escondido nesse fluxo.
   const [eixo, setEixo] = useState<"terapeuta" | "paciente">("terapeuta");
   const [semanaISO, setSemanaISO] = useState(semanaInicialISO);
-  const [entidade, setEntidade] = useState<Opcao | null>(terapeutas[0] ?? null);
+  const [entidade, setEntidade] = useState<Opcao | null>(() => {
+    if (prefill) {
+      return (
+        terapeutas.find((t) => t.id === prefill.terapeutaId) ?? {
+          id: prefill.terapeutaId,
+          nome: "—",
+        }
+      );
+    }
+    return terapeutas[0] ?? null;
+  });
   const [pacientes, setPacientes] = useState<Opcao[]>([]);
   const [slot, setSlot] = useState<{
     diaSemana: number;
@@ -120,19 +148,26 @@ export function SemanaCliente({
   return (
     <section className="space-y-4 p-4">
       <header className="flex flex-wrap items-center gap-3">
-        <Tabs
-          value={eixo}
-          onValueChange={(v) => {
-            const novoEixo = v as typeof eixo;
-            setEixo(novoEixo);
-            setEntidade(novoEixo === "terapeuta" ? (terapeutas[0] ?? null) : null);
-          }}
-        >
-          <TabsList>
-            <TabsTrigger value="terapeuta">Por terapeuta</TabsTrigger>
-            <TabsTrigger value="paciente">Por paciente</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {prefill ? (
+          <p className="text-ink font-body text-sm">
+            Repondo sessão de <strong>{prefill.patientNome}</strong> (
+            {prefill.disciplina.toUpperCase()}) — escolha o novo horário.
+          </p>
+        ) : (
+          <Tabs
+            value={eixo}
+            onValueChange={(v) => {
+              const novoEixo = v as typeof eixo;
+              setEixo(novoEixo);
+              setEntidade(novoEixo === "terapeuta" ? (terapeutas[0] ?? null) : null);
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="terapeuta">Por terapeuta</TabsTrigger>
+              <TabsTrigger value="paciente">Por paciente</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
         <div className="min-w-64">
           <ComboboxEntidade
             label={eixo === "terapeuta" ? "Terapeuta" : "Paciente"}
@@ -197,6 +232,15 @@ export function SemanaCliente({
           disciplinas={disciplinas}
           duracaoPadrao={duracaoPadrao}
           aoBuscarEntidadeVar={eixo === "terapeuta" ? buscarPacientes : undefined}
+          reposicao={
+            prefill
+              ? {
+                  repostaDe: prefill.repostaDe,
+                  pacienteFixo: { id: prefill.patientId, nome: prefill.patientNome },
+                  disciplinaFixa: prefill.disciplina,
+                }
+              : undefined
+          }
         />
       )}
 

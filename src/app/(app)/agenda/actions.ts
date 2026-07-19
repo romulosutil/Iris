@@ -24,6 +24,11 @@ export type SessaoDoDia = {
   terapeutaId: string;
   terapeutaNome: string | null;
   pacienteNome: string | null;
+  // Task 8 (reposição): pré-preenchem `/agenda/semana?repor=...` a partir do
+  // botão "Repor" numa falta — dispensa uma query extra na hora de montar o
+  // link.
+  patientId: string;
+  disciplina: string;
 };
 
 /**
@@ -81,6 +86,8 @@ export async function listarSessoesDoDia(
         terapeutaId: session.terapeutaId,
         terapeutaNome: appUser.name,
         pacienteNome: patient.nome,
+        patientId: session.patientId,
+        disciplina: session.disciplina,
       })
       .from(session)
       .leftJoin(patient, eq(patient.id, session.patientId))

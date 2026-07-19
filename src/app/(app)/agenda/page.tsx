@@ -119,6 +119,15 @@ export default async function AgendaPage() {
                 (podeGerir || s.terapeutaId === ctx.userId) ? (
                   <GerirSessao sessionId={s.id} terapeutas={terapeutas} />
                 ) : null}
+                {(s.estado === "falta_paciente" || s.estado === "falta_terapeuta") &&
+                podeGerir ? (
+                  <Link
+                    href={`/agenda/semana?repor=${s.id}&patientId=${s.patientId}&terapeutaId=${s.terapeutaId}&disciplina=${encodeURIComponent(s.disciplina)}`}
+                    className={abrirSessaoClasses}
+                  >
+                    Repor
+                  </Link>
+                ) : null}
               </Cluster>
             </Split>
           ))}

@@ -4,9 +4,12 @@ import postgres from "postgres";
 // queries.ts é puro (sem next/headers), mas seguimos o mesmo padrão do resto
 // da suíte de integração: mock de server-only + import dinâmico após mocks.
 vi.mock("server-only", () => ({}));
-const { listarPacientes, criarRegra } = await import("../queries");
+const { listarPacientes, criarRegra, criarAvulsa } = await import("../queries");
 const { RoleError } = await import("@/auth/require-role");
 const { sql: appSql } = await import("@/db/client");
+const { withTenant } = await import("@/db/rls");
+const { session } = await import("@/db/schema");
+const { eq } = await import("drizzle-orm");
 
 const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
@@ -15,6 +18,7 @@ const U_COORD = "a0000000-0000-0000-0000-000000000001";
 const U_T1 = "a0000000-0000-0000-0000-000000000002";
 const U_ADMIN = "a0000000-0000-0000-0000-000000000004";
 const PATIENT_P = "cccccccc-0000-0000-0000-000000000001";
+const FALTA_ID = "dddddddd-0000-0000-0000-000000000001";
 
 let owner: ReturnType<typeof postgres>;
 
@@ -37,6 +41,12 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
       (${U_ADMIN}, ${CLINIC_A}, 'admin_recepcao')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${PATIENT_P}, ${CLINIC_A}, 'Paciente P')`;
+    // Sessão falta_paciente (via conexão owner) — a original que a reposição
+    // vai apontar via repostaDe.
+    await owner`INSERT INTO session
+      (id, clinic_id, patient_id, terapeuta_id, disciplina, tipo, agendada_para, duracao_min, estado)
+      VALUES
+      (${FALTA_ID}, ${CLINIC_A}, ${PATIENT_P}, ${U_T1}, 'aba', 'terapia', '2026-07-13T13:00:00Z', 60, 'falta_paciente')`;
   });
 
   afterAll(async () => {
@@ -78,5 +88,28 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
     await expect(
       criarRegra(ctxCoord, { ...regraValida, diaSemana: 2, disciplina: "inexistente" }),
     ).rejects.toThrow(/disciplina/i);
+  });
+
+  const avulsaValida = {
+    patientId: PATIENT_P,
+    terapeutaId: U_T1,
+    disciplina: "aba",
+    tipo: "terapia" as const,
+    dataISO: "2026-07-20",
+    horaInicio: "11:00",
+    duracaoMin: 60,
+    modalidade: "presencial" as const,
+  };
+
+  test("reposição grava repostaDe apontando a falta original", async () => {
+    await criarAvulsa(ctxCoord, { ...avulsaValida, repostaDe: FALTA_ID });
+    const [nova] = await withTenant(ctxCoord, (tx) =>
+      tx
+        .select({ repostaDe: session.repostaDe })
+        .from(session)
+        .where(eq(session.repostaDe, FALTA_ID))
+        .limit(1),
+    );
+    expect(nova?.repostaDe).toBe(FALTA_ID);
   });
 });

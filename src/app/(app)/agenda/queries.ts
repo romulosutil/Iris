@@ -41,6 +41,23 @@ export async function listarPacientes(
   );
 }
 
+/** Task 8: nome do paciente p/ o prefill de reposição em `/agenda/semana`
+ * (a query string só carrega `patientId` — o rótulo é resolvido aqui). */
+export async function pacientePorId(
+  ctx: TenantContext,
+  patientId: string,
+): Promise<{ id: string; nome: string } | null> {
+  requireAgendar(ctx);
+  const [row] = await withTenant(ctx, (tx) =>
+    tx
+      .select({ id: schema.patient.id, nome: schema.patient.nome })
+      .from(schema.patient)
+      .where(and(eq(schema.patient.id, patientId), eq(schema.patient.clinicId, ctx.clinicId)))
+      .limit(1),
+  );
+  return row ?? null;
+}
+
 export interface CarregarSemanaParams {
   eixo: "terapeuta" | "paciente";
   entidadeId: string;
@@ -372,11 +389,16 @@ export interface NovaAvulsa {
   patientId: string;
   terapeutaId: string;
   disciplina: string;
-  tipo: "avaliacao" | "devolutiva" | "reuniao_pais" | "outro";
+  // "terapia": reposição (Task 8) — a avulsa repõe uma sessão de terapia
+  // comum, não é um dos tipos especiais abaixo.
+  tipo: "terapia" | "avaliacao" | "devolutiva" | "reuniao_pais" | "outro";
   dataISO: string; // "YYYY-MM-DD"
   horaInicio: string; // "HH:MM"
   duracaoMin: number;
   modalidade: "presencial" | "online";
+  /** Reposição: quando presente, aponta para a sessão `falta_*` original que
+   * esta avulsa está repondo (self-FK, `ON DELETE SET NULL`). */
+  repostaDe?: string;
 }
 
 /** Cria uma sessão avulsa (`recorrenteId=null`, `estado="agendada"`), ancorada
@@ -453,6 +475,7 @@ export async function criarAvulsa(
           duracaoMin: dados.duracaoMin,
           estado: "agendada",
           modalidade: dados.modalidade,
+          repostaDe: dados.repostaDe ?? null,
         })
         .returning({ id: schema.session.id });
       return row!;

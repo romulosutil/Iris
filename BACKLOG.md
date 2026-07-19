@@ -24,6 +24,39 @@
 
 ---
 
+## 🧭 Sessão 19/07/2026 — Agenda 2.0 Etapa E+F, Task 8 (reposição rastreável) — ✅ CONCLUÍDA
+
+**O quê:** faltas (`falta_paciente`/`falta_terapeuta`) agora geram reposição
+rastreável. Botão **"Repor"** na Agenda do dia (`/agenda`, visível só p/
+coordenador/admin_recepção em sessões de falta) leva a
+`/agenda/semana?repor={faltaId}&patientId=...&terapeutaId=...&disciplina=...`.
+Lá, `SemanaCliente` fixa eixo="terapeuta" (esconde o toggle
+terapeuta/paciente), pré-seleciona o terapeuta PREVISTO da falta (editável no
+calendário) e, ao clicar um slot, `PopoverAlocar` abre com paciente+disciplina
+fixados (read-only) + tipo forçado a `"terapia"` — sempre grava avulsa (nunca
+regra recorrente), com `session.repostaDe` apontando a falta original
+(self-FK já existia, `ON DELETE SET NULL`).
+
+**Onde mexeu:**
+- `agenda/queries.ts`: `NovaAvulsa.repostaDe?`, `NovaAvulsa.tipo` ganhou
+  `"terapia"`, `criarAvulsa` grava `repostaDe`; nova `pacientePorId` (resolve
+  nome do paciente p/ o prefill, já que a query string só carrega o id).
+- `agenda/actions.ts`: `SessaoDoDia`/`listarSessoesDoDia` ganharam
+  `patientId`/`disciplina` (monta o link "Repor" sem query extra).
+- `agenda/page.tsx`: link "Repor" no lugar de `GerirSessao` p/ sessões de
+  falta (GerirSessao só renderiza p/ `estado="agendada"`, wiring da Task 7).
+- `agenda/semana/actions.ts`: `criarAvulsaAction` lê `repostaDe` do formData.
+- `agenda/semana/page.tsx`: lê `searchParams` (Next 16 = Promise), resolve
+  `pacientePorId`, monta `prefill`.
+- `agenda/semana/semana-cliente.tsx` + `popover-alocar.tsx`: prop
+  `prefill`/`reposicao` fim-a-fim.
+
+**Testes:** `semana/actions.int.test.ts` (novo caso: avulsa com `repostaDe`
+grava o vínculo) — 6/6 verde. Suíte de integração completa: só os 3 arquivos
+`revisao/[sessionId]/*` seguem falhando (pré-existente, não relacionado —
+ver heads-up da Task 8). Unitários/a11y: 249/249 verde. `typecheck`/`lint`
+limpos.
+
 ## 🚨 Sessão 19/07/2026 — Incidente de drift em prod + wiring do gate — ✅ RESOLVIDO
 
 **Sintoma:** após merge da Agenda 2.0 (PR #42) + deploy, prod quebrou com
