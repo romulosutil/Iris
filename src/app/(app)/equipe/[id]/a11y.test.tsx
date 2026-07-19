@@ -32,3 +32,36 @@ test("editor de disponibilidade (grade) sem violações de a11y estrutural", asy
     <DisponibilidadeEditor terapeutaId="t1" passoMin={30} celulasIniciais={new Set()} />,
   );
 });
+
+const horasFixture = {
+  capacidade: 40,
+  alocado: 32.5,
+  vago: 7.5,
+  pacientes: [
+    { id: "p1", nome: "Ana" },
+    { id: "p2", nome: "Bruno" },
+  ],
+};
+
+test("bloco de horas do terapeuta sem violações de a11y", async () => {
+  const { HorasTerapeutaBloco } = await import("./horas-terapeuta");
+  await semViolacoes(<HorasTerapeutaBloco horas={horasFixture} />);
+});
+
+test("bloco de horas mostra capacidade/alocado/vago e lista de pacientes", async () => {
+  const { HorasTerapeutaBloco } = await import("./horas-terapeuta");
+  const { getByText, getByRole } = render(<HorasTerapeutaBloco horas={horasFixture} />);
+  expect(getByText("Capacidade")).toBeTruthy();
+  expect(getByText("Alocado")).toBeTruthy();
+  expect(getByText("Vago")).toBeTruthy();
+  const link = getByRole("link", { name: "Ana" });
+  expect(link.getAttribute("href")).toBe("/pacientes/p1/horas");
+});
+
+test("bloco de horas com lista vazia mostra estado vazio discreto", async () => {
+  const { HorasTerapeutaBloco } = await import("./horas-terapeuta");
+  const vazio = { capacidade: 0, alocado: 0, vago: 0, pacientes: [] };
+  const { getByText, queryAllByRole } = render(<HorasTerapeutaBloco horas={vazio} />);
+  expect(getByText("Nenhum paciente fixo")).toBeTruthy();
+  expect(queryAllByRole("listitem")).toHaveLength(0);
+});
