@@ -176,9 +176,12 @@ export function CalendarioSemana({
                 };
                 const classesBloco = cn(
                   "absolute top-0 h-10 overflow-hidden px-1 text-xs",
-                  b.origem === "previsto"
-                    ? "border-status-ia-border bg-status-ia-bg border-2 border-dashed"
-                    : "border-border-brutal bg-status-success-bg border-2",
+                  b.origem === "previsto" &&
+                    "border-status-ia-border bg-status-ia-bg border-2 border-dashed",
+                  b.origem === "conflito" &&
+                    "border-status-error-border bg-status-error-bg border-2 border-dashed",
+                  b.origem === "concreto" &&
+                    "border-border-brutal bg-status-success-bg border-2",
                 );
                 // Bloco de origem recorrente (regra ou sessão materializada
                 // dela) vira acionável — abre o popover de detalhe/ações da
@@ -186,16 +189,24 @@ export function CalendarioSemana({
                 // decorativa p/ leitor de tela (a info já é anunciada na
                 // célula onde o bloco começa, ver rotuloCelula acima).
                 if (b.recorrenteId) {
+                  const ehConflito = b.origem === "conflito";
                   return (
                     <button
                       key={b.id}
                       type="button"
                       data-testid="bloco-overlay"
+                      aria-label={
+                        ehConflito
+                          ? `Conflito: ${b.rotulo} não agendado em ${b.disciplina}. Abrir detalhes da regra.`
+                          : undefined
+                      }
                       onClick={() => aoAbrirRegra?.(b.recorrenteId!, b.rotulo)}
                       className={cn(classesBloco, "text-left", FOCO)}
                       style={estilo}
                     >
-                      {b.rotulo} · {b.disciplina}
+                      {ehConflito
+                        ? `⚠ ${b.rotulo} · não agendado`
+                        : `${b.rotulo} · ${b.disciplina}`}
                     </button>
                   );
                 }

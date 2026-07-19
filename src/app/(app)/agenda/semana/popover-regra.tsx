@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  conflitosAction,
   contarFuturasAction,
   encerrarRegraAction,
   estenderAction,
@@ -53,6 +54,17 @@ export function PopoverRegra({
   );
   const [confirmando, setConfirmando] = useState(false);
   const [futuras, setFuturas] = useState<number | null>(null);
+  const [conflitos, setConflitos] = useState<string[]>([]);
+
+  useEffect(() => {
+    let vivo = true;
+    conflitosAction(regraId).then((ds) => {
+      if (vivo) setConflitos(ds);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [regraId]);
 
   async function abrirConfirmacao() {
     setFuturas(await contarFuturasAction(regraId, hojeISO)); // F5: contagem real
@@ -80,6 +92,21 @@ export function PopoverRegra({
             {estender.geradas} sessões criadas
             {estender.puladas ? `, ${estender.puladas} não criadas por conflito` : ""}.
           </p>
+        )}
+
+        {/* F2: lista persistente das datas puladas por conflito (não é toast) */}
+        {conflitos.length > 0 && (
+          <div role="status" className="mt-2">
+            <p className="text-ink font-body text-sm font-medium">
+              {conflitos.length}{" "}
+              {conflitos.length === 1 ? "data não criada" : "datas não criadas"} por conflito:
+            </p>
+            <ul className="text-ink font-body text-sm">
+              {conflitos.map((d) => (
+                <li key={d}>{formatarBR(d)}</li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {/* F5: encerrar com confirmação de contagem real (não estimativa) */}

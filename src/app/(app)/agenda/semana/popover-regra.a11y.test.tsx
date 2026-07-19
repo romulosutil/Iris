@@ -1,5 +1,5 @@
 import axe from "axe-core";
-import { render, screen, cleanup } from "@testing-library/react";
+import { act, render, screen, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -10,6 +10,7 @@ vi.mock("./actions", () => ({
   encerrarRegraAction: vi.fn(),
   contarFuturasAction: vi.fn(async () => 3),
   proximaSessaoAction: vi.fn(async () => "2026-07-20"),
+  conflitosAction: vi.fn(async () => ["2026-07-20"]),
 }));
 
 const { PopoverRegra } = await import("./popover-regra");
@@ -44,6 +45,11 @@ describe("PopoverRegra a11y", () => {
       />,
     );
     expect(screen.getByRole("dialog")).not.toBeNull();
+    // aguarda o useEffect (conflitosAction) resolver e o setState flush
+    // antes de rodar axe, senão a lista de conflitos ainda não está no DOM.
+    await act(async () => {
+      await Promise.resolve();
+    });
     await semViolacoes(container);
   });
 });
