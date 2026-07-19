@@ -93,9 +93,13 @@ Regras:
 - **`classificacaoAnterior`** = classificação corrente lida da view `evidence_current` no momento da
   ação (não a `classificacaoOriginal` crua, para encadear reclassificações corretamente).
 - **`reclassificar` exige `novaClassificacao` ESTRUTURADA** — um alvo válido dos protocolos ativos do
-  paciente (mesma forma jsonb de `classificacaoOriginal`). Sem isso o recompute via `evidence_current`
-  → `materializarSnapshot` não consegue usar. **Rejeitar** `novaClassificacao` que não resolva para
-  um alvo válido do paciente.
+  paciente. **Rejeitar** o que não resolver para um alvo válido. **Correção de implementação (19/07):**
+  o `materializar` chaveia streams pelas COLUNAS ESTÁTICAS de `evidence_current` (congeladas de
+  `evidence`), não pelo jsonb — então reclassificar o ALVO seria inerte para o cômputo. Por isso
+  `classificacao_nova` persiste as **FKs resolvidas** (`alvo_resolvido: {goal_id, protocol_id,
+  milestone_id}`, do `resolverAlvoParaFks` da validação) e o `materializar` (`rowParaObservacao`)
+  passa a **preferi-las** sobre as colunas estáticas — assim tato→mando **move** a evidência de stream
+  no recompute (decisão do Rômulo: tornar efetivo). Sem migração (mudança na lógica, não no schema).
 - **`justificativa`/`motivo` vazio em reclassificar/invalidar → rejeita** (`VALIDACAO_JUSTIFICATIVA_OBRIGATORIA`).
   Regra de ouro V2: ambiguidade **devolve**, não adivinha.
 - **Recompute** = `materializarSnapshot(drizzleMaterializarQueries(tx), patientId, sessionNumeroDaEvidencia)`

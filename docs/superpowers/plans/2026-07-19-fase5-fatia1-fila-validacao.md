@@ -369,6 +369,80 @@ git commit -m "feat(validacao): reclassificar with structured target validation 
 
 ---
 
+### Task 3b: Reclassificação de ALVO efetiva no recompute — tocar `materializar`
+
+> **Por que existe (achado de implementação, decisão do Rômulo 19/07):** o `materializar` chaveia os
+> streams de segmentação/repertório pelas **colunas estáticas** `evidence_current.goal_id/protocol_id/
+> milestone_id` (congeladas de `evidence`) — do jsonb só lê `nivel_ajuda`/`polaridade`. Logo,
+> reclassificar o ALVO (tato→mando) fica auditável mas **não move** a evidência de stream. Esta task
+> corrige isso: reclassify passa a **persistir as FKs resolvidas** do novo alvo, e o `materializar`
+> passa a **preferi-las** sobre as colunas estáticas. **Sem migração** (mudança na lógica/queries do
+> `materializar` + na montagem de `classificacao_nova`; não altera o schema nem a view).
+
+**Files:**
+- Modify: `src/app/(app)/validacao/alvos.ts` (`montarClassificacaoNova` grava as FKs resolvidas)
+- Modify: `src/lib/evidence/materializar.ts` (`rowParaObservacao` prefere as FKs reclassificadas)
+- Test: `db/tests/fase4-materializar.int.test.ts` (novo caso: reclassificar ALVO move o stream)
+- Test: `src/app/(app)/validacao/actions.int.test.ts` (reclassificar grava as FKs resolvidas)
+
+**Interfaces:**
+- Consumes: `resolverAlvoParaFks` (já usado na Task 3 para validar → devolve `{ goalId, protocolId, milestoneId }`).
+- Produces: `classificacao_nova` passa a conter `alvo_resolvido: { goal_id, protocol_id, milestone_id }` (snake, os FKs resolvidos); `rowParaObservacao` lê `goalId/protocolId/milestoneId` de `classificacao_atual.alvo_resolvido` quando presente, senão das colunas estáticas.
+
+- [ ] **Step 1: Escrever o teste falho (o cenário que hoje é inerte)**
+
+Em `db/tests/fase4-materializar.int.test.ts`, novo caso no bloco de recompute: seed evidência no goal A; grava `evidence_revision(acao=reclassificar)` com `classificacao_nova.alvo_resolvido` apontando para o goal **B** (dos protocolos ativos); chama `materializarSnapshot(..., desdeNumero)`; **assere que o snapshot passa a contar a evidência no stream de B, não de A** (repertório/segmentação de B reflete; A não).
+
+```ts
+test("reclassificar o ALVO (goal A → goal B) move a evidência de stream no recompute", async () => {
+  // seed evidência estática em GOAL_A; revisão reclassificar com alvo_resolvido = GOAL_B
+  await owner!`INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
+    VALUES (${EV}, 'reclassificar', ${JSON.stringify(anterior)}::jsonb,
+            ${JSON.stringify({ ...anterior, alvo_resolvido: { goal_id: GOAL_B, protocol_id: PROT, milestone_id: MS_B } })}::jsonb,
+            'corrige alvo', ${U_COORD})`;
+  await materializarSnapshot(postgresMaterializarQueries(owner!), PAC, 1);
+  const snap = await lerSnapshot(SESS_NUMERO);
+  expect(snap!.segmentacao[GOAL_B]).toBeDefined();   // evidência agora conta em B
+  expect(snap!.segmentacao[GOAL_A]).toBeUndefined();  // não mais em A
+});
+```
+
+- [ ] **Step 2: Rodar e confirmar que falha**
+
+Run: `node_modules/.bin/vitest run --config vitest.integration.config.ts db/tests/fase4-materializar.int.test.ts -t "move a evidência"`
+Expected: FAIL — hoje o stream continua em A (colunas estáticas).
+
+- [ ] **Step 3: Implementar as duas mudanças**
+
+`alvos.ts` — `montarClassificacaoNova(anterior, novoAlvo, fksResolvidas)` inclui `alvo_resolvido: { goal_id, protocol_id, milestone_id }` (as FKs que `resolverAlvoParaFks` já devolveu na validação). Ajustar `reclassificarEvidencia` (Task 3) para passar as FKs resolvidas.
+
+`materializar.ts` `rowParaObservacao` (~L212-228) — preferir o alvo reclassificado:
+```ts
+const alvoRe = (r.classificacaoAtual ?? r.classificacao_atual)?.alvo_resolvido;
+return {
+  // ...
+  goalId: alvoRe?.goal_id ?? (r.goalId ?? r.goal_id) ?? null,
+  milestoneId: alvoRe?.milestone_id ?? (r.milestoneId ?? r.milestone_id) ?? null,
+  protocolId: alvoRe?.protocol_id ?? (r.protocolId ?? r.protocol_id) ?? null,
+  // ...
+};
+```
+Garantir que ambos os adapters (drizzle L234-236, postgres L167-177) tragam `classificacao_atual` no SELECT (o drizzle já traz; confirmar o postgres). `invalidada`/conteúdo permanecem como estão.
+
+- [ ] **Step 4: Rodar e confirmar que passa**
+
+Run: `node_modules/.bin/vitest run --config vitest.integration.config.ts db/tests/fase4-materializar.int.test.ts "src/app/(app)/validacao/actions.int.test.ts"`
+Expected: o novo caso PASS + todos os casos existentes de `fase4-materializar` **continuam verdes** (não regredir o recompute de conteúdo).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add "src/lib/evidence/materializar.ts" "src/app/(app)/validacao/alvos.ts" "src/app/(app)/validacao/actions.ts" db/tests/fase4-materializar.int.test.ts "src/app/(app)/validacao/actions.int.test.ts"
+git commit -m "feat(evidence): recompute honors reclassified target (fase5 fatia1)"
+```
+
+---
+
 ### Task 4: Ação Devolver com dúvida — `validacao/actions.ts`
 
 **Files:**
