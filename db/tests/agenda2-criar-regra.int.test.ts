@@ -56,12 +56,12 @@ describe.skipIf(!hasDb)("criarRegra", () => {
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC_A1}, ${CLINIC_A}, 'Ana')`;
   });
 
-  test("grava só agendamento_recorrente (0 sessions) com vigencia C7", async () => {
+  test("cria regra E materializa o horizonte na mesma tx (D-7, ex-C1)", async () => {
     const { id } = await criarRegra(ctxCoordA, base);
     const [regra] = await owner`SELECT vigencia_inicio::text AS vigencia_inicio FROM agendamento_recorrente WHERE id = ${id}`;
     expect(regra?.vigencia_inicio).toBe("2026-07-13");
-    const sess = await owner`SELECT id FROM session`;
-    expect(sess).toHaveLength(0); // C1
+    const sess = await owner`SELECT count(*)::int AS n FROM session WHERE recorrente_id = ${id}`;
+    expect(sess[0]?.n).toBeGreaterThanOrEqual(12); // ~12-13 segundas em 84 dias
   });
 
   test("colisão de horário no mesmo terapeuta lança ConflitoError (C2/C5)", async () => {

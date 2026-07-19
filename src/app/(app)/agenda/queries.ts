@@ -15,6 +15,7 @@ import { horaParaMin, type FaixaDia } from "@/lib/agenda/janela";
 import { conflita, type Slot } from "@/lib/agenda/conflito";
 import {
   datasDaRegra,
+  horizontePadrao,
   proximoDia,
   resolverInstante,
   type BloqueioPeriodo,
@@ -300,6 +301,36 @@ export async function criarRegra(
         status: "ativo",
       })
       .returning({ id: schema.agendamentoRecorrente.id });
+
+    const fusoRow = await tx
+      .select({ timezone: schema.clinic.timezone })
+      .from(schema.clinic)
+      .where(eq(schema.clinic.id, ctx.clinicId));
+    const bloqueios = await tx
+      .select({ dataInicio: schema.bloqueio.dataInicio, dataFim: schema.bloqueio.dataFim })
+      .from(schema.bloqueio)
+      .where(
+        and(
+          eq(schema.bloqueio.clinicId, ctx.clinicId),
+          or(
+            eq(schema.bloqueio.escopo, "clinica"),
+            and(eq(schema.bloqueio.escopo, "terapeuta"), eq(schema.bloqueio.terapeutaId, dados.terapeutaId)),
+            and(eq(schema.bloqueio.escopo, "paciente"), eq(schema.bloqueio.patientId, dados.patientId)),
+          ),
+        ),
+      );
+    await materializarNaTx(tx, {
+      regra: {
+        id: row!.id, clinicId: ctx.clinicId, patientId: dados.patientId,
+        terapeutaId: dados.terapeutaId, disciplina: dados.disciplina,
+        diaSemana: dados.diaSemana, horaInicio: dados.horaInicio, duracaoMin: dados.duracaoMin,
+        vigenciaInicio, vigenciaFim: null,
+      },
+      bloqueios,
+      fuso: fusoRow[0]?.timezone ?? "America/Sao_Paulo",
+      deISO: vigenciaInicio,
+      ateISO: horizontePadrao(dados.hojeISO),
+    });
     return row!;
   });
 }
