@@ -6,6 +6,8 @@ import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
+import type { Alvo } from "@/lib/evidence/resolver";
+import { montarClassificacaoNova, validarAlvo } from "./alvos";
 
 // Ações "confirmar" e "invalidar" da fila de validação do coordenador (Fase 5
 // · Fatia 1). Espelha o padrão de `revisao/[sessionId]/actions.ts`: core
@@ -141,6 +143,59 @@ export async function invalidarEvidencia(
   });
 }
 
+const alvoSchema = z.object({
+  goal_id: z.string().nullable().optional(),
+  protocol_id: z.string().nullable().optional(),
+  dominio_id: z.string().nullable().optional(),
+});
+
+const reclassificarSchema = z.object({
+  evidenceId: z.string().uuid(),
+  novoAlvo: alvoSchema,
+  justificativa: z.string().trim().min(1, "Justificativa obrigatória."),
+});
+
+export async function reclassificarEvidencia(
+  ctx: TenantContext,
+  input: { evidenceId: string; novoAlvo: Alvo; justificativa: string },
+): Promise<ValidacaoResult> {
+  const p = reclassificarSchema.safeParse(input);
+  if (!p.success) return { error: p.error.issues[0]!.message };
+  try {
+    requireRole(ctx, "coordenador");
+  } catch (err) {
+    if (err instanceof RoleError) return { error: err.message };
+    throw err;
+  }
+
+  return withTenant(ctx, async (tx) => {
+    const e = await lerEvidenciaParaValidar(tx, p.data.evidenceId);
+    if ("erro" in e) {
+      return { error: e.erro === "NAO_ENCONTRADA" ? "Evidência não encontrada." : "CONCURRENCY_ERROR" };
+    }
+
+    const validacao = await validarAlvo(
+      tx,
+      { clinicId: ctx.clinicId, patientId: e.patientId },
+      p.data.novoAlvo,
+    );
+    if (!validacao.ok) return { error: validacao.error };
+
+    const classificacaoNova = montarClassificacaoNova(e.classificacaoAtual, p.data.novoAlvo);
+
+    await tx.execute(sql`
+      INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
+      VALUES (${p.data.evidenceId}, 'reclassificar', ${JSON.stringify(e.classificacaoAtual)}::jsonb, ${JSON.stringify(classificacaoNova)}::jsonb, ${p.data.justificativa}, ${ctx.userId}::uuid)
+    `);
+    await tx.execute(sql`
+      INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
+      VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'reclassificacao', 'evidence', ${p.data.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('de', ${JSON.stringify(e.classificacaoAtual)}::jsonb, 'para', ${JSON.stringify(classificacaoNova)}::jsonb, 'justificativa', ${p.data.justificativa}::text))
+    `);
+    await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
+    return { ok: true };
+  });
+}
+
 // ─── Wrappers para `useActionState` ────────────────────────────────────────
 
 async function comCtx(
@@ -175,6 +230,19 @@ export async function invalidarEvidenciaAction(
     invalidarEvidencia(ctx, {
       evidenceId: String(fd.get("evidenceId") ?? ""),
       motivo: String(fd.get("motivo") ?? ""),
+    }),
+  );
+}
+
+export async function reclassificarEvidenciaAction(
+  _prev: ValidacaoState,
+  fd: FormData,
+): Promise<ValidacaoState> {
+  return comCtx(fd, (ctx) =>
+    reclassificarEvidencia(ctx, {
+      evidenceId: String(fd.get("evidenceId") ?? ""),
+      justificativa: String(fd.get("justificativa") ?? ""),
+      novoAlvo: JSON.parse(String(fd.get("novoAlvo") ?? "{}")) as Alvo,
     }),
   );
 }
