@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  customType,
   date,
   foreignKey,
   index,
@@ -923,4 +924,101 @@ export const sessionSnapshot = pgTable(
     primaryKey({ columns: [t.patientId, t.sessionNumero] }),
     index("idx_session_snapshot_patient").on(t.patientId, t.sessionNumero.desc()),
   ],
+);
+
+// ── Fase 5: relatórios ────────────────────────────────────────────────
+// customType para bytea (não havia binário no banco até aqui). data = Buffer.
+export const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+});
+
+export const reportTipo = pgEnum("report_tipo", [
+  "familia",
+  "convenio_bruto",
+  "convenio_narrativo",
+  "avaliativo_interdisciplinar",
+]);
+
+export const reportStatus = pgEnum("report_status", [
+  "rascunho",
+  "revisado",
+  "exportado",
+]);
+
+export const report = pgTable(
+  "report",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id),
+    tipo: reportTipo("tipo").notNull(),
+    periodoInicio: date("periodo_inicio").notNull(),
+    periodoFim: date("periodo_fim").notNull(),
+    status: reportStatus("status").notNull().default("rascunho"),
+    payload: jsonb("payload").notNull(),
+    // incrementa a cada UPDATE de payload; trava a race de export (spec §5)
+    payloadVersao: integer("payload_versao").notNull().default(1),
+    geradoPorIa: boolean("gerado_por_ia").notNull().default(false),
+    // null até export; sha256 hex dos bytes (bytes ficam em report_pdf)
+    pdfHash: text("pdf_hash"),
+    // null = vigente; soft-delete p/ retenção/erasure LGPD (spec §3.1)
+    deletadoEm: timestamp("deletado_em", { withTimezone: true }),
+    revisadoPor: uuid("revisado_por").references(() => appUser.id),
+    exportadoPor: uuid("exportado_por").references(() => appUser.id),
+    exportadoEm: timestamp("exportado_em", { withTimezone: true }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("report_periodo", sql`${t.periodoFim} >= ${t.periodoInicio}`),
+    check(
+      "report_exportado_congelado",
+      sql`${t.status} <> 'exportado' OR (${t.exportadoPor} IS NOT NULL AND ${t.exportadoEm} IS NOT NULL AND ${t.pdfHash} IS NOT NULL)`,
+    ),
+    check(
+      "report_bruto_sem_ia",
+      sql`${t.tipo} <> 'convenio_bruto' OR ${t.geradoPorIa} = false`,
+    ),
+    index("idx_report_patient").on(t.patientId, t.criadoEm.desc()),
+    index("idx_report_clinic_tipo").on(t.clinicId, t.tipo),
+    index("idx_report_vigente")
+      .on(t.patientId, t.criadoEm.desc())
+      .where(sql`${t.deletadoEm} IS NULL`),
+  ],
+);
+
+// Blob isolado da tabela quente de listagem (spec §1.1). 1:1 com report.
+export const reportPdf = pgTable("report_pdf", {
+  reportId: uuid("report_id")
+    .primaryKey()
+    .references(() => report.id, { onDelete: "cascade" }),
+  bytes: bytea("bytes").notNull(),
+  hash: text("hash").notNull(),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Trilha de auditoria LGPD (spec §2). entidade_id SEM FK — sobrevive ao delete do alvo.
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id),
+    atorId: uuid("ator_id")
+      .notNull()
+      .references(() => appUser.id),
+    acao: text("acao").notNull(),
+    entidade: text("entidade").notNull(),
+    entidadeId: uuid("entidade_id").notNull(),
+    patientId: uuid("patient_id").references(() => patient.id),
+    detalhe: jsonb("detalhe"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_audit_log_patient").on(t.patientId, t.criadoEm.desc())],
 );
