@@ -212,8 +212,8 @@ export async function carregarSemana(
 }
 
 export class ConflitoError extends Error {
-  constructor(public dimensao: "terapeuta" | "paciente") {
-    super(`Horário em conflito para ${dimensao}.`);
+  constructor(public dimensao: "terapeuta" | "paciente" | "disciplina", mensagem?: string) {
+    super(mensagem ?? `Horário em conflito para ${dimensao}.`);
     this.name = "ConflitoError";
   }
 }
@@ -236,6 +236,10 @@ export async function criarRegra(
   dados: NovaRegra,
 ): Promise<{ id: string }> {
   requireAgendar(ctx);
+  const { disciplinas } = await carregarConfigClinica(ctx);
+  if (!disciplinas.includes(dados.disciplina)) {
+    throw new ConflitoError("disciplina", "Disciplina não configurada nesta clínica.");
+  }
   const inicioMin = horaParaMin(dados.horaInicio);
   const novo: Slot = {
     diaSemana: dados.diaSemana,
@@ -387,6 +391,10 @@ export async function criarAvulsa(
   dados: NovaAvulsa,
 ): Promise<{ id: string }> {
   requireAgendar(ctx);
+  const { disciplinas } = await carregarConfigClinica(ctx);
+  if (!disciplinas.includes(dados.disciplina)) {
+    throw new ConflitoError("disciplina", "Disciplina não configurada nesta clínica.");
+  }
   const diaSemana = new Date(`${dados.dataISO}T00:00:00Z`).getUTCDay();
   const inicioMin = horaParaMin(dados.horaInicio);
   const novo: Slot = { diaSemana, inicioMin, fimMin: inicioMin + dados.duracaoMin };

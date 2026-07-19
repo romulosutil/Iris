@@ -23,7 +23,7 @@ describe.skipIf(!hasDb)("criarRegra — atomicidade (F5b)", () => {
   });
   beforeEach(async () => {
     await owner`TRUNCATE clinic, app_user, user_role, patient, agendamento_recorrente, session, bloqueio RESTART IDENTITY CASCADE`;
-    await owner`INSERT INTO clinic (id, nome, timezone) VALUES (${CLINIC_A}, 'A', 'America/Sao_Paulo')`;
+    await owner`INSERT INTO clinic (id, nome, timezone, duracao_disciplina) VALUES (${CLINIC_A}, 'A', 'America/Sao_Paulo', ${owner.json({ aba: 60 })})`;
     await owner`INSERT INTO app_user (id, name, email) VALUES (${U_COORD}, 'C', 'c@d2'), (${U_T1}, 'T', 't@d2')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_COORD}, ${CLINIC_A}, 'coordenador'), (${U_T1}, ${CLINIC_A}, 'terapeuta')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC}, ${CLINIC_A}, 'Ana')`;

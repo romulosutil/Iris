@@ -34,8 +34,8 @@ describe.skipIf(!hasDb)("criarAvulsa", () => {
 
     await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
       agendamento_recorrente, session RESTART IDENTITY CASCADE`;
-    await owner`INSERT INTO clinic (id, nome, is_demo) VALUES
-      (${CLINIC_A}, 'Clínica A (criar-avulsa)', false)`;
+    await owner`INSERT INTO clinic (id, nome, is_demo, duracao_disciplina) VALUES
+      (${CLINIC_A}, 'Clínica A (criar-avulsa)', false, ${owner.json({ aba: 60 })})`;
     await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD_A}, 'Coord A', 'coord.a.criaravulsa@t.com'),
       (${U_T1_A}, 'T1 A', 't1.a.criaravulsa@t.com')`;

@@ -4,7 +4,7 @@ import postgres from "postgres";
 // queries.ts é puro (sem next/headers), mas seguimos o mesmo padrão do resto
 // da suíte de integração: mock de server-only + import dinâmico após mocks.
 vi.mock("server-only", () => ({}));
-const { listarPacientes } = await import("../queries");
+const { listarPacientes, criarRegra } = await import("../queries");
 const { RoleError } = await import("@/auth/require-role");
 const { sql: appSql } = await import("@/db/client");
 
@@ -26,7 +26,7 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
   beforeAll(async () => {
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership, session RESTART IDENTITY CASCADE`;
-    await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'Clínica A')`;
+    await owner`INSERT INTO clinic (id, nome, duracao_disciplina) VALUES (${CLINIC_A}, 'Clínica A', ${owner.json({ aba: 60 })})`;
     await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD}, 'Coord A', 'coord@a.test'),
       (${U_T1}, 'Terapeuta Um', 't1@a.test'),
@@ -56,5 +56,27 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
   test("coordenador continua podendo listar pacientes", async () => {
     const r = await listarPacientes(ctxCoord, "");
     expect(Array.isArray(r)).toBe(true);
+  });
+
+  const regraValida = {
+    patientId: PATIENT_P,
+    terapeutaId: U_T1,
+    disciplina: "aba",
+    diaSemana: 1,
+    horaInicio: "10:00",
+    duracaoMin: 60,
+    semanaVisivelISO: "2026-07-13",
+    hojeISO: "2026-07-19",
+  };
+
+  test("cria regra com disciplina válida (vocabulário da clínica)", async () => {
+    const r = await criarRegra(ctxCoord, regraValida);
+    expect(r.id).toBeTruthy();
+  });
+
+  test("rejeita disciplina fora do vocabulário da clínica", async () => {
+    await expect(
+      criarRegra(ctxCoord, { ...regraValida, diaSemana: 2, disciplina: "inexistente" }),
+    ).rejects.toThrow(/disciplina/i);
   });
 });
