@@ -4,9 +4,11 @@ import { Stack, Split, Cluster } from "@/components/ui/layout";
 import { Alert } from "@/components/ui/alert";
 import { control, surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
+import { listarTerapeutas } from "@/app/(app)/equipe/[id]/queries";
 import { listarSessoesDoDia } from "./actions";
 import { EstadoBadge } from "./estado-badge";
 import { CheckInButton } from "./checkin-button";
+import { GerirSessao } from "./gerir-sessao";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "./fuso";
  
 // Link de navegação para o diário da sessão — mesma superfície visual do
@@ -50,8 +52,13 @@ function dataPorExtenso(diaISO: string): string {
 export default async function AgendaPage() {
   const ctx = await getTenantContext();
   const dia = hojeNaClinica();
-  const sessoes = await listarSessoesDoDia(ctx, dia);
+  const [sessoes, terapeutasRaw] = await Promise.all([
+    listarSessoesDoDia(ctx, dia),
+    listarTerapeutas(ctx),
+  ]);
   const podeAgendar = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
+  const podeGerir = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
+  const terapeutas = terapeutasRaw.map((t) => ({ id: t.id, nome: t.name ?? "—" }));
  
   return (
     <Stack gap="lg" className="pt-4 md:pt-8">
@@ -107,6 +114,10 @@ export default async function AgendaPage() {
                 ) : null}
                 {s.estado === "agendada" ? (
                   <CheckInButton sessionId={s.id} />
+                ) : null}
+                {s.estado === "agendada" &&
+                (podeGerir || s.terapeutaId === ctx.userId) ? (
+                  <GerirSessao sessionId={s.id} terapeutas={terapeutas} />
                 ) : null}
               </Cluster>
             </Split>
