@@ -24,6 +24,94 @@
 
 ---
 
+## 🏁 Sessão 19/07/2026 — Fase 5 F0 (fundação de relatórios, Tasks 1-8) — ✅ CONCLUÍDA
+
+Fundação de relatórios da Fase 5: tabela `report` (migração `0038`) com
+`report_pdf` filha 1:1 (blob isolado, write-once, RLS própria via
+`app_report_visivel`) e `audit_log` (append-only, ator amarrado à sessão);
+RLS de tenant+equipe+soft-delete (`0039`); purga rastreável
+`app_purgar_report` (`0040`, log-antes-de-delete); lib de export
+transacional (`src/lib/report/`) com recheck de `payload_versao` sob
+`FOR UPDATE` (aborta se o payload mudou entre render e commit) e
+`getReportPdf` servindo o snapshot congelado sem re-renderizar. Docs
+(`docs/dados/modelo-de-dados.md` §1.6/§4.4) reconciliadas com o estado
+real — ver itens abertos abaixo.
+
+**Adiado deliberadamente (Task 7):** render real de PDF via Chromium. F0
+fechou com `StubPdfRenderer` — o pipeline de export/hash/trilha está pronto
+e testado, mas o renderer real fica para quando a infra de produção
+(VPS/Easypanel vs. gerenciado) estiver decidida, porque a estratégia de
+sandbox (Playwright core no próprio server vs. `@sparticuz/chromium`
+serverless vs. serviço dedicado) depende diretamente de qual ambiente de
+runtime a Iris vai ter.
+
+> ⚠️ **DoD de segurança que viaja COM este ticket (não foi entregue em F0 —
+> spec §5, red-team #2 SSRF/LFI).** O render de HTML de conteúdo de usuário é
+> vetor de exfiltração (texto livre de terapeuta — ver prompt-injection Fase 3).
+> Quando o renderer real for construído, é **inegociável**: (a) **JavaScript
+> desabilitado** no contexto de render; (b) **rede bloqueada** — abortar TODA
+> requisição do Chromium exceto assets locais (`route.abort()` p/ http/https/
+> `file:`/`data:` externos); (c) `file://` proibido; (d) usar o `escapeHtml`
+> (`src/lib/report/sanitize.ts`, já pronto e testado, hoje **sem uso**) em todo
+> conteúdo interpolado — nada de HTML cru do usuário no template; (e) processo
+> sem acesso à rede de metadata. **Teste de segurança obrigatório no DoD:**
+> payload com `<img src=file:///…>` e `<iframe src=http://169.254.169.254/…>`
+> não dispara nenhuma requisição de saída. Sem isto, o render real NÃO entra em
+> produção.
+
+**Itens abertos registrados (não implementados em F0):**
+* Tier-gating de relatório (família → tier Clínica; narrativo → tier
+  Convênio; bruto → tier Diário) — diferido; falta o modelo de
+  plano/billing para decidir onde esse gate mora (aplicação vs. RLS).
+* Prazo concreto de retenção por `tipo` de relatório — depende de
+  `clinic.politica_retencao_meses`/`politica_retencao_config` (seção 5 de
+  `docs/dados/modelo-de-dados.md`) e da fonte jurídica (`docs/legal/`,
+  CFM/prontuário) ainda não fechada.
+* **Bloqueador jurídico:** uso secundário de dado clínico de menor ("Iris
+  empresa de dados") exige 1 página em `docs/legal/` (base legal +
+  anonimização) ANTES de qualquer pipeline de analytics/treino. F0 não
+  abre nenhum caminho nesse sentido sobre `report`/`report_pdf` — dado
+  fica isolado, sem exportação secundária.
+* Dívida técnica: `bytea` em `report_pdf` — reavaliar vs. storage
+  dedicado (S3/MinIO) se `pg_dump`/replicação incharem com o volume de
+  PDFs.
+* Leitor definitivo da trilha de auditoria (`admin_recepcao` vs. papel de
+  DPO à parte) — a policy `audit_select` hoje cobre coordenador e
+  admin_recepcao da clínica; confirmar se DPO é papel novo ou reaproveita
+  um existente.
+* Infra: estratégia de Chromium em runtime (Task 7, acima) — decidir à
+  luz do pivô VPS/Easypanel (`docs/arquitetura/plano-bootstrap-e-stack-vps.md`).
+* Dívida técnica (herdada, não desta sessão): snapshot Drizzle
+  desincronizado do hand-migration `0036` — toda `db:generate` re-emite um
+  `ALTER session.disciplina SET NOT NULL` no-op (reapareceu na `0038`).
+  Reconciliar o snapshot.
+* Polimento (review final F0): o `detalhe` do `audit_log` no export grava só
+  `{hash}`; a spec §5.5 pedia `{tipo, periodo, hash}`. Completude da trilha —
+  `hash` é a âncora de integridade; `tipo`/`periodo` são deriváveis da linha
+  `report`. Enriquecer quando a fatia de export tocar `exportReport`.
+* Cobertura (review final F0): falta teste negativo de purga cross-tenant
+  (`app_purgar_report` — o gate `app_patient_in_clinic` existe no corpo, só
+  happy-path + terapeuta-bloqueado testados). Adicionar na fatia 1 (governança).
+* Defesa em profundidade (review final F0): `report.clinic_id` usa FK simples a
+  `patient.id`, não a FK composta `(patient_id, clinic_id)` que tabelas irmãs
+  (`bloqueio`, `agendamento_recorrente`) usam p/ impedir `clinic_id` divergir do
+  paciente. Não é furo de isolamento (RLS chaveia em `patient_id`; `audit_insert`
+  re-fixa `clinic_id`), mas alinhar ao padrão do schema.
+* Arquitetura (review final F0): `exportReport` (`src/lib/report/export.ts`)
+  roda `renderer.render()` com a `tx` aberta (trade-off já documentado no
+  topo do arquivo). Sob pooler de transação (PgBouncer), render lento do
+  Chromium pode esgotar o pool. Quando o render real chegar (Task 7),
+  reavaliar: fazer read+render 100% fora da transação, abrir a tx só para o
+  recheck `FOR UPDATE` + escritas (fases 3/4).
+* Segurança (NIT, review final F0 → **PR 46**): `app_purgar_report` (`0040`)
+  usa mensagens de exceção distintas p/ "inexistente" vs. "fora da clínica",
+  criando um oráculo teórico de existência de ID cross-tenant (UUID 128-bit
+  torna inexplorável, mas é má prática). Unificar numa mensagem genérica
+  ("report % não encontrado ou inacessível"). **Via migração nova** com
+  `CREATE OR REPLACE` — não editar `0040` já aplicada.
+
+---
+
 ## 🏁 Sessão 19/07/2026 — Agenda 2.0 Etapa F (métricas por disciplina, Tasks 11-13) — ✅ CONCLUÍDA
 
 **Fecha a Agenda 2.0.** Tasks 11-13 (últimas do plano E+F), execução
@@ -615,9 +703,14 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
 * Candidatura por Milestone/família (não `N=3/M=2` global); PROC/observação fora da candidatura por acúmulo; excluir evidência com query aberta.
 
 ### [Fase 5] Coordenador e Relatórios (Issue #8)
+* ✅ F0 (fundação de relatórios) concluída 19/07/2026 — `report`/`report_pdf`/
+  `audit_log`, RLS, purga rastreável, export transacional com
+  `StubPdfRenderer` (ver sessão 19/07/2026 acima).
 * Fila de reclassificação/validação com justificativa para o coordenador.
 * Exportação de Relatório de Família (pt-BR calibrado) e Dossiê de Auditoria de Convênio factual.
 * Relatório narrativo de convênio gerado por IA com revisão humana.
+* Render real de PDF (Chromium) — adiado de F0, ver itens abertos na sessão
+  19/07/2026 acima.
 
 ### [Fase 6] Hardening e Ditado de Voz (Issue #9)
 * Integração de ASR (ditado por voz) com preservação do áudio original local.

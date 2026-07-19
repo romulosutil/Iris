@@ -267,6 +267,27 @@
       "when": 1784229605545,
       "tag": "0037_fix_extraction_versao_grant",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1784486860555,
+      "tag": "0038_watery_nighthawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1784487860555,
+      "tag": "0039_fase5_report_audit_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1784487861555,
+      "tag": "0040_fase5_purga_rls",
+      "breakpoints": true
     }
   ]
 }
