@@ -24,6 +24,56 @@
 
 ---
 
+## 🏁 Sessão 19/07/2026 — Agenda 2.0 Etapa F (métricas por disciplina, Tasks 11-13) — ✅ CONCLUÍDA
+
+**Fecha a Agenda 2.0.** Tasks 11-13 (últimas do plano E+F), execução
+orquestrada por subagents.
+
+**O quê:**
+- **Task 11** — `agenda/horas-queries.ts` (server, ctx-accepting, fora de
+  `"use server"`): `carregarHorasPaciente` (alvo×agendado×realizado por
+  disciplina) e `carregarHorasTerapeuta` (capacidade×alocado×vago +
+  pacientes fixos). Só busca linhas via `withTenant`; toda a matemática
+  delega às libs puras `lib/agenda/horas.ts` + `janela.ts`. Commit `7b32b83`.
+- **Task 12** — aba **"Horas"** no perfil do paciente
+  (`/pacientes/[id]/horas`): tabela semântica Disciplina|Alvo|Agendado|
+  Realizado + `Alert` quando abaixo do prescrito. Commit `21a9221`.
+- **Task 13** — perfil do terapeuta (`/equipe/[id]`): bloco `<dl>`
+  Capacidade|Alocado|Vago + `<ul>` de pacientes fixos (link p/ `/horas`).
+  Commit `e5fc41c`.
+
+**Decisões/desvios travados:**
+- **`alerta` = "abaixo do prescrito AGORA"**, não "há ≥ 2 semanas". Não há
+  reconstrução barata do histórico semanal de *agendado*; a flag avalia o
+  snapshot atual (fallback autorizado pelo plano). Copy da UI ajustada p/
+  não afirmar duração que o dado não sustenta.
+- **`horasBloqueadas`** ligada de verdade ao `bloqueio` (escopo clínica +
+  terapeuta, semana ISO corrente, granularidade dia). `vago` renderizado
+  honesto (pode ser negativo = overbook, sem clamp).
+- **`Stat` do DS recusado de propósito** p/ os 3 números do terapeuta (o
+  próprio doc do componente desaconselha 3 iguais lado a lado) — usei `<dl>`
+  reusando os tokens do Stat.
+
+**Testes:** `horas-queries.int.test.ts` (2/2) + a11y das duas telas verde.
+Suíte: `typecheck`/`lint` limpos, **268/268 unitários**. Integração: seguem
+**só os 3 `revisao/[sessionId]/*`** falhando — **pré-existente, desync local
+de GRANT (`iris_app`/`app_role` sobre `extraction`), alheio à Agenda 2.0**
+(mesma dívida já registrada nas Etapas D e Task 8). `extraction` não é
+tocada por nenhuma migration E+F; grants vêm de `0006/0012/0019` (Fase 2-4).
+Resolve com rebuild limpo do DB local (drop volume + re-migrate + re-seed) —
+não feito p/ não apagar dado de dev sem confirmação.
+
+**Dívidas registradas (fora da v1 da Agenda 2.0):**
+- **Alerta de defasagem "há ≥ N semanas" real** — exige série temporal de
+  agendado (hoje é snapshot). Limiar por clínica configurável idem.
+- **Regras de faturamento/glosa** (competência, prazo de reposição, falta não
+  justificada) — dado modelado, lógica deferida (D10).
+- **Grupo/co-terapia** (1:N sessão↔paciente/terapeuta) — v1 é 1:1:1 (D11);
+  entrada futura exige `session_participante`/`session_terapeuta` + recálculo.
+- **Cron de consolidação/materialização** — v1 é on-demand.
+- **Higiene:** commit `7b32b83` levou junto 2 `docs/daily-summary/*.md` soltos
+  (efeito do `git add -A` de um subagent) — inócuo, docs legítimos.
+
 ## 🧭 Sessão 19/07/2026 — Agenda 2.0 Etapa E+F, Task 8 (reposição rastreável) — ✅ CONCLUÍDA
 
 **O quê:** faltas (`falta_paciente`/`falta_terapeuta`) agora geram reposição
