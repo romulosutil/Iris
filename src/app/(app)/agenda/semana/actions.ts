@@ -6,14 +6,18 @@ import { RoleError } from "@/auth/require-role";
 import {
   carregarSemana,
   ConflitoError,
+  contarFuturasDaRegra,
   criarAvulsa,
   criarRegra,
+  encerrarRegra,
   listarPacientes,
+  materializarRegra,
   type CarregarSemanaParams,
   type NovaAvulsa,
   type NovaRegra,
   type SemanaCarregada,
 } from "@/app/(app)/agenda/queries";
+import { horizontePadrao } from "@/lib/agenda/materializar";
 
 export type EstadoAcao = { error?: string; ok?: boolean };
 
@@ -87,4 +91,42 @@ export async function criarAvulsaAction(
   }
   revalidatePath("/agenda/semana");
   return { ok: true };
+}
+
+export type EstadoEstender = EstadoAcao & { geradas?: number; puladas?: number };
+
+export async function estenderAction(
+  _prev: EstadoEstender,
+  formData: FormData,
+): Promise<EstadoEstender> {
+  const ctx = await getTenantContext();
+  const regraId = String(formData.get("regraId"));
+  const hojeISO = String(formData.get("hojeISO"));
+  try {
+    const { geradas, puladas } = await materializarRegra(ctx, regraId, horizontePadrao(hojeISO));
+    revalidatePath("/agenda/semana");
+    return { ok: true, geradas, puladas: puladas.length };
+  } catch (e) {
+    return trata(e);
+  }
+}
+
+export async function encerrarRegraAction(
+  _prev: EstadoAcao,
+  formData: FormData,
+): Promise<EstadoAcao> {
+  const ctx = await getTenantContext();
+  try {
+    await encerrarRegra(ctx, String(formData.get("regraId")), String(formData.get("ateFimISO")));
+  } catch (e) {
+    return trata(e);
+  }
+  revalidatePath("/agenda/semana");
+  return { ok: true };
+}
+
+/** Leitura fina p/ a confirmação de encerramento (F5): quantas futuras sairão. */
+export async function contarFuturasAction(regraId: string, ateFimISO: string): Promise<number> {
+  const ctx = await getTenantContext();
+  return contarFuturasDaRegra(ctx, regraId, ateFimISO);
 }
