@@ -9,8 +9,9 @@ export type TenantContext = {
   role: UserRole;
 };
 
-// Transação Drizzle com o schema tipado.
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+// Transação Drizzle com o schema tipado. Exportado p/ ser reusado por
+// serviços que recebem `tx` já aberto (ex.: src/lib/report/export.ts).
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * GARGALO ÚNICO de acesso a dado de paciente. Abre uma transação, seta o
