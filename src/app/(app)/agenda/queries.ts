@@ -358,14 +358,20 @@ export async function criarAvulsa(
   dados: NovaAvulsa,
 ): Promise<{ id: string }> {
   requireRole(ctx, "coordenador");
-  const agendadaPara = new Date(
-    `${dados.dataISO}T${dados.horaInicio}:00${FUSO_CLINICA_OFFSET}`,
-  );
   const diaSemana = new Date(`${dados.dataISO}T00:00:00Z`).getUTCDay();
   const inicioMin = horaParaMin(dados.horaInicio);
   const novo: Slot = { diaSemana, inicioMin, fimMin: inicioMin + dados.duracaoMin };
   try {
     return await withTenant(ctx, async (tx) => {
+      const [clinicRow] = await tx
+        .select({ timezone: schema.clinic.timezone })
+        .from(schema.clinic)
+        .where(eq(schema.clinic.id, ctx.clinicId));
+      const agendadaPara = resolverInstante(
+        dados.dataISO,
+        dados.horaInicio,
+        clinicRow?.timezone ?? "America/Sao_Paulo",
+      );
       const regrasAtivas = await tx
         .select({
           terapeutaId: schema.agendamentoRecorrente.terapeutaId,
@@ -415,13 +421,8 @@ export async function criarAvulsa(
       return row!;
     });
   } catch (e) {
-    // EXCLUDE gist (btree_gist) → SQLSTATE 23P01 exclusion_violation. O driver
-    // postgres-js lança o erro cru; o drizzle-orm o envolve em
-    // DrizzleQueryError com o original em `.cause` — checar os dois.
-    const code =
-      (e as { code?: string } | undefined)?.code ??
-      (e as { cause?: { code?: string } } | undefined)?.cause?.code;
-    if (code === "23P01") {
+    // EXCLUDE gist (btree_gist) → SQLSTATE 23P01 exclusion_violation.
+    if (codigoPg(e) === "23P01") {
       throw new ConflitoError("terapeuta");
     }
     throw e;
