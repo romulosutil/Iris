@@ -18,6 +18,18 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
+# --- migrate: job de deploy, roda ANTES do app (gate de schema) ---------------
+# Easypanel roda esta imagem como serviço/pre-deploy separado, com
+# MIGRATION_DATABASE_URL (role dona/DDL) — NÃO o DATABASE_URL do app (RLS, sem
+# DDL). Sai != 0 se falhar, bloqueando o deploy do app à frente do schema.
+# Precisa de node_modules + scripts + db/migrations (o standalone não os tem).
+FROM base AS migrate
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
+COPY scripts/migrate.mjs ./scripts/migrate.mjs
+COPY db/migrations ./db/migrations
+CMD ["node", "scripts/migrate.mjs"]
+
 # --- runner: imagem final enxuta ---------------------------------------------
 FROM node:22-alpine AS runner
 WORKDIR /app
