@@ -24,6 +24,38 @@
 
 ---
 
+## 🚨 Sessão 19/07/2026 — Incidente de drift em prod + wiring do gate — ✅ RESOLVIDO
+
+**Sintoma:** após merge da Agenda 2.0 (PR #42) + deploy, prod quebrou com
+`42P01 relation "bloqueio" does not exist` e `42703 column "passo_grade_min" does
+not exist` (clínica demo `2f5e7220…`). Causa raiz: o app subiu à frente do schema
+— a leva de migrations `0021→0035` nunca foi aplicada em prod. O gate (PR #43,
+`fix/schema-migrate-gate`) já existia no código mas **nunca tinha sido wired no
+Easypanel**, então não impediu nada.
+
+**Fix (via Claude in Chrome, dirigindo o Easypanel):**
+1. Descoberto que o **build Dockerfile do Easypanel não expõe `--target`** →
+   builda sempre o último stage. O stage `migrate` do `infra/Dockerfile` (não-último)
+   era inalcançável. Criado `infra/Dockerfile.migrate` com o job de migração como
+   último stage (commit `bfbb632`, `main`).
+2. Criado serviço **`iris-migrate`** (App): source `romulosutil/Iris`@`main`,
+   build `infra/Dockerfile.migrate`, env `MIGRATION_DATABASE_URL` = URL interna do
+   owner `iris`@`espectro-mvp_iris-postgres`. Autodeploy DESLIGADO (gate manual).
+3. Implantar → `Migrações aplicadas (db/migrations) — schema em dia.` (0021→0035
+   aplicadas, idempotente). Serviço parado (Stop) — é job, não daemon.
+
+**Ritual de release daqui pra frente (substitui o migrate-do-laptop):** antes de
+promover o app, clicar **Implantar** no `iris-migrate`, esperar "schema em dia",
+depois **Stop**. Ver memória [[deploy-schema-gate]].
+
+**Pendências desta sessão:**
+- [ ] **Validação humana:** logar em prod e abrir agenda/clínica p/ confirmar que
+  as telas que quebravam (conflito/bloqueio) voltaram (Claude não digita senha).
+- [ ] Automatizar o gate de verdade (hoje é manual): fazer o deploy do app
+  depender do sucesso do `iris-migrate` — ex. deploy-hook/token, em vez de 2
+  cliques manuais. Enquanto manual, risco de esquecer a etapa persiste.
+- [ ] Documentar o serviço `iris-migrate` no `infra/README.md` (§Gate de schema).
+
 ## 🧭 Sessão 18-19/07/2026 — Agenda 2.0 Etapa D (materialização IANA) — ✅ CONCLUÍDA
 
 **Design:** `docs/superpowers/specs/2026-07-18-agenda-2.0-etapa-d-materializacao-design.md`
