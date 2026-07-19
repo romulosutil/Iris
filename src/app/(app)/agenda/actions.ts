@@ -2,8 +2,17 @@
 import { revalidatePath } from "next/cache";
 import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
 import { getTenantContext } from "@/auth/tenant";
+import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { appUser, patient, session, sessionEstado } from "@/db/schema";
+import {
+  appUser,
+  patient,
+  session,
+  sessionEstado,
+  sessionModalidade,
+  userRole,
+} from "@/db/schema";
+import { transicaoPermitida, exigeJustificada } from "@/lib/agenda/transicoes";
 import { FUSO_CLINICA_OFFSET } from "./fuso";
 
 export type SessionEstado = (typeof sessionEstado.enumValues)[number];
@@ -84,6 +93,98 @@ export async function listarSessoesDoDia(
       )
       .orderBy(asc(session.agendadaPara)),
   );
+}
+
+export type MarcarEstadoInput = {
+  sessionId: string;
+  estado: SessionEstado;
+  justificada?: boolean;
+  atendidoPorId?: string | null;
+  modalidade?: (typeof sessionModalidade.enumValues)[number];
+};
+
+/**
+ * Transição de estado da sessão (consolidação pós-atendimento). CAS otimista:
+ * o UPDATE só afeta a linha se `estado = 'agendada'` no momento da escrita —
+ * sem versão explícita, isso evita "lost update" quando duas pessoas marcam a
+ * mesma sessão concorrentemente (0 linhas afetadas → erro "já foi
+ * atualizada", em vez de sobrescrever silenciosamente).
+ */
+export async function marcarEstado(
+  ctx: TenantContext,
+  input: MarcarEstadoInput,
+): Promise<{ error?: string; ok?: boolean }> {
+  requireRole(ctx, "coordenador", "admin_recepcao", "terapeuta");
+
+  if (!transicaoPermitida("agendada", input.estado)) {
+    return { error: "Transição de estado inválida." };
+  }
+
+  // Substituto (quem realmente atendeu) tem que ser terapeuta da clínica ativa.
+  if (input.atendidoPorId) {
+    const ok = await withTenant(ctx, (tx) =>
+      tx
+        .select({ id: userRole.userId })
+        .from(userRole)
+        .where(
+          and(
+            eq(userRole.userId, input.atendidoPorId!),
+            eq(userRole.clinicId, ctx.clinicId),
+            eq(userRole.papel, "terapeuta"),
+          ),
+        )
+        .limit(1),
+    );
+    if (ok.length === 0) return { error: "Substituto não é terapeuta desta clínica." };
+  }
+
+  const just = exigeJustificada(input.estado) ? (input.justificada ?? false) : null;
+
+  const rows = await withTenant(ctx, (tx) =>
+    tx
+      .update(session)
+      .set({
+        estado: input.estado,
+        justificada: just,
+        ...(input.atendidoPorId !== undefined ? { atendidoPorId: input.atendidoPorId } : {}),
+        ...(input.modalidade ? { modalidade: input.modalidade } : {}),
+      })
+      .where(
+        and(
+          eq(session.id, input.sessionId),
+          eq(session.estado, "agendada"), // CAS: só transiciona de agendada
+        ),
+      )
+      .returning({ id: session.id }),
+  );
+
+  if (rows.length === 0) {
+    return { error: "Esta sessão já foi atualizada por outra pessoa. Recarregue a página." };
+  }
+  return { ok: true };
+}
+
+export async function marcarEstadoAction(
+  _prev: { error?: string; ok?: boolean },
+  formData: FormData,
+): Promise<{ error?: string; ok?: boolean }> {
+  const ctx = await getTenantContext();
+  const atendido = String(formData.get("atendidoPorId") ?? "").trim();
+  try {
+    const r = await marcarEstado(ctx, {
+      sessionId: String(formData.get("sessionId") ?? "").trim(),
+      estado: formData.get("estado") as SessionEstado,
+      justificada: formData.get("justificada") === "true",
+      atendidoPorId: atendido === "" ? undefined : atendido,
+      modalidade: (formData.get("modalidade") as MarcarEstadoInput["modalidade"]) || undefined,
+    });
+    if (r.ok) revalidatePath("/agenda");
+    return r;
+  } catch (err) {
+    if (err instanceof RoleError) return { error: "Você não tem permissão para atualizar a sessão." };
+    console.error("marcarEstadoAction:", err);
+    return { error: "Não foi possível atualizar a sessão." };
+  }
 }
 
 // ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────

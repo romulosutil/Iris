@@ -5,7 +5,9 @@ import { eq } from "drizzle-orm";
 // actions.ts puxa getTenantContext (next/headers) → server-only. Neutraliza o
 // side-effect e importa o núcleo testável dinamicamente.
 vi.mock("server-only", () => ({}));
-const { checkInSessao, listarSessoesDoDia } = await import("./actions");
+const { checkInSessao, listarSessoesDoDia, marcarEstado } = await import(
+  "./actions"
+);
 const { withTenant } = await import("@/db/rls");
 const { sql: appSql } = await import("@/db/client");
 const { session } = await import("@/db/schema");
@@ -31,6 +33,8 @@ const AGENDADA_PARA = "2026-07-11T12:00:00-03:00";
 // meia-aberto), então 13:00 e 14:00 convivem com a de 12:00.
 const AGENDADA_CHECKIN = "2026-07-11T13:00:00-03:00";
 const AGENDADA_UPDATE = "2026-07-11T14:00:00-03:00";
+const AGENDADA_MARCAR_1 = "2026-07-11T15:00:00-03:00";
+const AGENDADA_MARCAR_2 = "2026-07-11T16:00:00-03:00";
 const DIA = "2026-07-11";
 
 let owner: ReturnType<typeof postgres>;
@@ -46,10 +50,11 @@ async function criarSessao(params: {
   patientId: string;
   terapeutaId: string;
   agendadaPara: string;
+  disciplina?: string;
 }): Promise<string> {
   const [row] = await owner<{ id: string }[]>`
     INSERT INTO session (clinic_id, patient_id, terapeuta_id, agendada_para, disciplina)
-    VALUES (${CLINIC_A}, ${params.patientId}, ${params.terapeutaId}, ${params.agendadaPara}, 'psicologia')
+    VALUES (${CLINIC_A}, ${params.patientId}, ${params.terapeutaId}, ${params.agendadaPara}, ${params.disciplina ?? "psicologia"})
     RETURNING id
   `;
   return row!.id;
@@ -161,5 +166,39 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
           .where(eq(session.id, id)),
       ),
     ).rejects.toThrow();
+  });
+
+  test("marca realizada uma vez; 2ª chamada (estado já mudou) devolve erro", async () => {
+    const id = await criarSessao({
+      patientId: PATIENT_P,
+      terapeutaId: U_T1,
+      agendadaPara: AGENDADA_MARCAR_1,
+      disciplina: "aba",
+    });
+
+    const a = await marcarEstado(ctxCoord, { sessionId: id, estado: "realizada" });
+    expect(a.ok).toBe(true);
+
+    const b = await marcarEstado(ctxCoord, {
+      sessionId: id,
+      estado: "falta_paciente",
+    });
+    expect(b.error).toMatch(/já foi atualizada/i);
+  });
+
+  test("substituto de outra clínica é rejeitado", async () => {
+    const id = await criarSessao({
+      patientId: PATIENT_P,
+      terapeutaId: U_T1,
+      agendadaPara: AGENDADA_MARCAR_2,
+      disciplina: "aba",
+    });
+
+    const r = await marcarEstado(ctxCoord, {
+      sessionId: id,
+      estado: "realizada",
+      atendidoPorId: U_B,
+    });
+    expect(r.error).toMatch(/substitut|terapeuta/i);
   });
 });
