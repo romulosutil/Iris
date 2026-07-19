@@ -79,11 +79,31 @@ pnpm db:migrate    # aplica em db/migrations (usa MIGRATION_DATABASE_URL)
 pnpm test:rls      # prova o isolamento contra o Postgres (5 casos por papel)
 ```
 
+## Gate de schema no deploy (autodeploy on push ligado)
+
+O app faz **autodeploy on push** (§Deploy passo 5), mas migração é gate humano.
+Sem uma barreira, um push que assume schema novo sobe o app à frente do banco e
+quebra em prod — foi o que aconteceu com a Agenda 2.0 (`bloqueio` / `clinic.
+passo_grade_min` inexistentes). A barreira é o stage **`migrate`** do Dockerfile:
+
+- `stage migrate` = job de deploy que roda `node scripts/migrate.mjs` com
+  `MIGRATION_DATABASE_URL` (role dona, DDL) e **sai != 0 se falhar**.
+- **Ordem no Easypanel:** rodar o serviço `migrate` (build target `migrate`) e
+  esperar sucesso **ANTES** de promover o app. Se migrate falhar, abortar o
+  deploy do app — o app velho continua no ar contra o schema velho (consistente),
+  em vez do app novo contra schema velho (quebrado).
+- O migrate usa a role dona (`MIGRATION_DATABASE_URL`), nunca a `DATABASE_URL`
+  do app (app_role não tem DDL) — mesma separação de role do `pnpm db:migrate`.
+
+`MIGRATION_DATABASE_URL` entra como env var do serviço `migrate` (não do app).
+
 ## Notas
 
 - O `Dockerfile` usa Next standalone (`output: "standalone"` em `next.config.ts`)
   → imagem enxuta. `outputFileTracingRoot` fixa a raiz do trace.
 - Storybook publica-se como serviço estático separado no Easypanel (`pnpm
 build-storybook` → `storybook-static/`), com Password Protection.
-- Migrations (Drizzle) rodam manualmente contra o Postgres via `DATABASE_URL`,
-  nunca automáticas no deploy (dado clínico não migra sozinho).
+- Migrations (Drizzle) usam `MIGRATION_DATABASE_URL` (role dona), nunca a
+  `DATABASE_URL` do app (app_role, sem DDL). Não rodam dentro do container do
+  app; rodam no stage `migrate`, gated ANTES do app (ver §Gate de schema). Dado
+  clínico não migra sozinho — o gate é executado por release, não em cada boot.

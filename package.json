@@ -22,6 +22,7 @@
     "build-storybook": "storybook build",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:deploy": "node scripts/migrate.mjs",
     "seed:clinic": "tsx --conditions=react-server --env-file=.env scripts/seed-clinic.ts",
     "seed:demo": "tsx --conditions=react-server --env-file=.env scripts/seed-demo.ts",
     "backfill:evidence": "tsx --conditions=react-server --env-file=.env scripts/backfill-evidence.ts",
