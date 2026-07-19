@@ -77,9 +77,9 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     // Sessão 1 e 2
     SESS_A1_ID = crypto.randomUUID();
     SESS_A2_ID = crypto.randomUUID();
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente) VALUES
-      (${SESS_A1_ID}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-01 10:00:00Z', 'realizada', 1),
-      (${SESS_A2_ID}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-02 10:00:00Z', 'realizada', 2)`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina) VALUES
+      (${SESS_A1_ID}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-01 10:00:00Z', 'realizada', 1, 'aba'),
+      (${SESS_A2_ID}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-02 10:00:00Z', 'realizada', 2, 'aba')`;
 
     // Snapshot Sessão 1
     await owner`INSERT INTO session_snapshot (patient_id, session_numero, repertorio_state, segmentacao) VALUES

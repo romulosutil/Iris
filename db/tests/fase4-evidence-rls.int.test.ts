@@ -72,9 +72,9 @@ describe.skipIf(!hasDb)("Fase 4 (4A) · RLS da Evidence layer", () => {
       (${PAC_B1}, ${CLINIC_B}, 'Paciente B1 (evidence)')`;
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
       VALUES (${PAC_A1}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente) VALUES
-      (${SESS_A1}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', 1),
-      (${SESS_B1}, ${CLINIC_B}, ${PAC_B1}, ${U_T1_B}, now(), 'realizada', 1)`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina) VALUES
+      (${SESS_A1}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', 1, 'aba'),
+      (${SESS_B1}, ${CLINIC_B}, ${PAC_B1}, ${U_T1_B}, now(), 'realizada', 1, 'aba')`;
 
     const [ext] = await owner`INSERT INTO extraction
         (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload, revisado_por)
