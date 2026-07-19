@@ -54,10 +54,10 @@ describe.skipIf(!hasDb)("Agenda 2.0 · RLS de session enriquecida", () => {
     await owner`INSERT INTO agendamento_recorrente
       (id, clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio)
       VALUES (${REC_A1}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 1, '13:00', 60, '2026-07-01')`;
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado)
-      VALUES (${SESS_T1}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-21T13:00:00Z', 'agendada')`;
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado)
-      VALUES (${SESS_B}, ${CLINIC_B}, ${PAC_B1}, ${U_COORD_B}, '2026-07-21T13:00:00Z', 'agendada')`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina)
+      VALUES (${SESS_T1}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-21T13:00:00Z', 'agendada', 'aba')`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina)
+      VALUES (${SESS_B}, ${CLINIC_B}, ${PAC_B1}, ${U_COORD_B}, '2026-07-21T13:00:00Z', 'agendada', 'aba')`;
   });
   afterAll(async () => { await owner?.end(); await appSql?.end(); });
 
@@ -88,6 +88,7 @@ describe.skipIf(!hasDb)("Agenda 2.0 · RLS de session enriquecida", () => {
       tx.insert(schema.session).values({
         clinicId: CLINIC_A, patientId: PAC_A1, terapeutaId: U_T1_A,
         agendadaPara: new Date("2026-07-22T09:00:00Z"), tipo: "avaliacao", duracaoMin: 90,
+        disciplina: "aba",
       }).returning({ id: schema.session.id, tipo: schema.session.tipo }));
     expect(row?.tipo).toBe("avaliacao");
   });

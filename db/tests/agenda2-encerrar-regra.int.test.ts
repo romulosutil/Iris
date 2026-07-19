@@ -28,10 +28,10 @@ describe.skipIf(!hasDb)("encerrarRegra / contarFuturas / proximaSessao", () => {
       (id, clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
       VALUES (${REGRA}, ${CLINIC_A}, ${PAC}, ${U_T1}, 'aba', 1, '09:00', 60, '2026-07-06', 'ativo')`;
     // passado realizada (06/07) + futura agendada (20/07, 27/07)
-    await owner`INSERT INTO session (clinic_id, patient_id, terapeuta_id, recorrente_id, agendada_para, estado, duracao_min, tipo) VALUES
-      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, '2026-07-06T12:00:00Z', 'realizada', 60, 'terapia'),
-      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, '2026-07-20T12:00:00Z', 'agendada', 60, 'terapia'),
-      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, '2026-07-27T12:00:00Z', 'agendada', 60, 'terapia')`;
+    await owner`INSERT INTO session (clinic_id, patient_id, terapeuta_id, recorrente_id, agendada_para, estado, duracao_min, tipo, disciplina) VALUES
+      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, '2026-07-06T12:00:00Z', 'realizada', 60, 'terapia', 'aba'),
+      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, '2026-07-20T12:00:00Z', 'agendada', 60, 'terapia', 'aba'),
+      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, '2026-07-27T12:00:00Z', 'agendada', 60, 'terapia', 'aba')`;
   });
 
   test("contarFuturasDaRegra conta só agendadas a partir de amanhã", async () => {

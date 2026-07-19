@@ -95,6 +95,11 @@ export async function agendarSessao(
           patientId: parsed.data.patientId,
           terapeutaId: parsed.data.terapeutaId,
           agendadaPara: quando,
+          // Este formulário (lista, Fase 1d) é anterior ao seletor de
+          // disciplina do popover de /agenda/semana. Sem campo próprio aqui,
+          // cai no mesmo sentinel do backfill de legado (migration 0036) —
+          // fora de qualquer métrica de disciplina real.
+          disciplina: "desconhecida",
         })
         .returning({ id: session.id });
       return nova!.id;

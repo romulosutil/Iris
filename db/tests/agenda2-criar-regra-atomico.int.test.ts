@@ -42,8 +42,8 @@ describe.skipIf(!hasDb)("criarRegra — atomicidade (F5b)", () => {
     await owner`INSERT INTO agendamento_recorrente
       (id, clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
       VALUES (${OUTRA_REGRA}, ${CLINIC_A}, ${PAC}, ${U_T1}, 'aba', 2, '09:00', 60, '2026-07-13', 'ativo')`;
-    await owner`INSERT INTO session (clinic_id, patient_id, terapeuta_id, recorrente_id, agendada_para, estado, duracao_min, tipo)
-      VALUES (${CLINIC_A}, ${PAC}, ${U_T1}, ${OUTRA_REGRA}, '2026-07-20T12:00:00Z', 'agendada', 60, 'terapia')`;
+    await owner`INSERT INTO session (clinic_id, patient_id, terapeuta_id, recorrente_id, agendada_para, estado, duracao_min, tipo, disciplina)
+      VALUES (${CLINIC_A}, ${PAC}, ${U_T1}, ${OUTRA_REGRA}, '2026-07-20T12:00:00Z', 'agendada', 60, 'terapia', 'aba')`;
     const { id } = await criarRegra(ctx, base);
     const [regraRow] = (await owner`SELECT count(*)::int AS n FROM agendamento_recorrente WHERE id = ${id}`) as { n: number }[];
     expect(regraRow!.n).toBe(1); // regra existe
