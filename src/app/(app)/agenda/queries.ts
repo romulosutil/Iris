@@ -95,16 +95,10 @@ export async function carregarSemana(
           lte(schema.agendamentoRecorrente.vigenciaInicio, ultimo),
         ),
       );
-    const regras: RegraProjecao[] = regrasRaw.map((r) => ({
-      id: r.id,
-      diaSemana: r.diaSemana,
-      horaInicio: r.horaInicio,
-      duracaoMin: r.duracaoMin,
-      disciplina: r.disciplina,
-      rotulo: r.rotulo ?? "—",
-    }));
-
-    // Avulsas (session recorrenteId null) na janela de datas (concreto).
+    // Sessões concretas (avulsas + materializadas, estado="agendada") na
+    // janela de datas. Etapa D (F2): não filtra mais isNull(recorrenteId) —
+    // materializadas também aparecem como bloco "concreto". O de-dup contra
+    // "previsto" é feito via recorrentesConcretos abaixo.
     const colSessEntidade =
       eixo === "terapeuta" ? schema.session.terapeutaId : schema.session.patientId;
     const avulsasRaw = await tx
@@ -114,6 +108,7 @@ export async function carregarSemana(
         duracaoMin: schema.session.duracaoMin,
         disciplina: schema.session.disciplina,
         rotulo: colRotulo,
+        recorrenteId: schema.session.recorrenteId,
       })
       .from(schema.session)
       .innerJoin(schema.patient, eq(schema.session.patientId, schema.patient.id))
@@ -122,7 +117,7 @@ export async function carregarSemana(
         and(
           eq(schema.session.clinicId, ctx.clinicId),
           eq(colSessEntidade, entidadeId),
-          isNull(schema.session.recorrenteId),
+          eq(schema.session.estado, "agendada"),
           gte(
             schema.session.agendadaPara,
             new Date(`${primeiro}T00:00:00${FUSO_CLINICA_OFFSET}`),
@@ -133,6 +128,9 @@ export async function carregarSemana(
           ),
         ),
       );
+    const recorrentesConcretos = new Set(
+      avulsasRaw.filter((a) => a.recorrenteId).map((a) => a.recorrenteId as string),
+    );
     const avulsas: AvulsaProjecao[] = avulsasRaw.map((a) => {
       const { diaSemana, inicioMin } = paraMinutosLocais(a.agendadaPara, FUSO_CLINICA);
       return {
@@ -144,6 +142,20 @@ export async function carregarSemana(
         rotulo: a.rotulo ?? "—",
       };
     });
+
+    // Regra só é projetada como "previsto" se não houver sessão concreta dela
+    // nesta semana (de-dup por recorrenteId) — evita bloco duplicado quando a
+    // regra já foi materializada (F2).
+    const regras: RegraProjecao[] = regrasRaw
+      .filter((r) => !recorrentesConcretos.has(r.id))
+      .map((r) => ({
+        id: r.id,
+        diaSemana: r.diaSemana,
+        horaInicio: r.horaInicio,
+        duracaoMin: r.duracaoMin,
+        disciplina: r.disciplina,
+        rotulo: r.rotulo ?? "—",
+      }));
 
     // Janelas de trabalho (só no eixo terapeuta).
     let janelas: FaixaDia[] = [];
