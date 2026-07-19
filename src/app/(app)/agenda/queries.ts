@@ -1,5 +1,5 @@
 import { and, asc, count, eq, gt, gte, ilike, isNull, lte, max, min, or, sql } from "drizzle-orm";
-import { requireRole } from "@/auth/require-role";
+import { requireAgendar, requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
@@ -25,7 +25,7 @@ export async function listarPacientes(
   ctx: TenantContext,
   termo: string,
 ): Promise<{ id: string; nome: string }[]> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   return withTenant(ctx, (tx) =>
     tx
       .select({ id: schema.patient.id, nome: schema.patient.nome })
@@ -56,7 +56,7 @@ export async function carregarSemana(
   ctx: TenantContext,
   { eixo, entidadeId, semanaInicioISO }: CarregarSemanaParams,
 ): Promise<SemanaCarregada> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   const dias = diasDaSemana(semanaInicioISO);
   const primeiro = dias[0]!;
   const ultimo = dias[6]!;
@@ -235,7 +235,7 @@ export async function criarRegra(
   ctx: TenantContext,
   dados: NovaRegra,
 ): Promise<{ id: string }> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   const inicioMin = horaParaMin(dados.horaInicio);
   const novo: Slot = {
     diaSemana: dados.diaSemana,
@@ -386,7 +386,7 @@ export async function criarAvulsa(
   ctx: TenantContext,
   dados: NovaAvulsa,
 ): Promise<{ id: string }> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   const diaSemana = new Date(`${dados.dataISO}T00:00:00Z`).getUTCDay();
   const inicioMin = horaParaMin(dados.horaInicio);
   const novo: Slot = { diaSemana, inicioMin, fimMin: inicioMin + dados.duracaoMin };
@@ -466,7 +466,7 @@ export interface ConfigClinica {
 /** Config da clínica p/ pré-preencher o popover de alocação (D2): disciplinas
  * conhecidas e duração padrão por disciplina (`clinic.duracaoDisciplina`). */
 export async function carregarConfigClinica(ctx: TenantContext): Promise<ConfigClinica> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   return withTenant(ctx, async (tx) => {
     const [row] = await tx
       .select({ duracaoDisciplina: schema.clinic.duracaoDisciplina })
@@ -630,7 +630,7 @@ export async function materializarRegra(
   regraId: string,
   ateISO: string,
 ): Promise<ResultadoMaterializacao> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   return withTenant(ctx, async (tx) => {
     const [regra] = await tx
       .select()
