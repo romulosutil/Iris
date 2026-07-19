@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, ilike, isNull, lte, max, or } from "drizzle-orm";
+import { and, asc, count, eq, gt, gte, ilike, isNull, lte, max, min, or, sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
@@ -588,6 +588,101 @@ export async function materializarRegra(
       },
       bloqueios, fuso, deISO, ateISO,
     });
+  });
+}
+
+async function cutoffEncerramento(
+  tx: TxMat,
+  clinicId: string,
+  ateFimISO: string,
+): Promise<Date> {
+  const [clinicRow] = await tx
+    .select({ timezone: schema.clinic.timezone })
+    .from(schema.clinic)
+    .where(eq(schema.clinic.id, clinicId));
+  return resolverInstante(
+    proximoDia(ateFimISO),
+    "00:00",
+    clinicRow?.timezone ?? "America/Sao_Paulo",
+  );
+}
+
+/** Etapa D (contagem): quantas sessões `agendada` futuras (a partir do dia
+ * seguinte a `ateFimISO`, F5a "hoje fica, amanhã+ sai") a regra ainda tem. */
+export async function contarFuturasDaRegra(
+  ctx: TenantContext,
+  regraId: string,
+  ateFimISO: string,
+): Promise<number> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, async (tx) => {
+    const cutoff = await cutoffEncerramento(tx, ctx.clinicId, ateFimISO);
+    const [row] = await tx
+      .select({ n: count() })
+      .from(schema.session)
+      .where(
+        and(
+          eq(schema.session.recorrenteId, regraId),
+          eq(schema.session.estado, "agendada"),
+          gte(schema.session.agendadaPara, cutoff),
+        ),
+      );
+    return row?.n ?? 0;
+  });
+}
+
+/** Etapa D (encerrar "esta e futuras"): marca a regra como `encerrado` com
+ * `vigencia_fim=ateFimISO` e remove só as sessões `agendada` futuras (D-5:
+ * preserva `realizada`/`falta`/`cancelada`, inclusive as futuras já lançadas). */
+export async function encerrarRegra(
+  ctx: TenantContext,
+  regraId: string,
+  ateFimISO: string,
+): Promise<{ removidas: number }> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, async (tx) => {
+    const cutoff = await cutoffEncerramento(tx, ctx.clinicId, ateFimISO);
+    await tx
+      .update(schema.agendamentoRecorrente)
+      .set({ status: "encerrado", vigenciaFim: ateFimISO })
+      .where(
+        and(
+          eq(schema.agendamentoRecorrente.id, regraId),
+          eq(schema.agendamentoRecorrente.clinicId, ctx.clinicId),
+        ),
+      );
+    const removidas = await tx
+      .delete(schema.session)
+      .where(
+        and(
+          eq(schema.session.recorrenteId, regraId),
+          eq(schema.session.estado, "agendada"),
+          gte(schema.session.agendadaPara, cutoff),
+        ),
+      )
+      .returning({ id: schema.session.id });
+    return { removidas: removidas.length };
+  });
+}
+
+/** Etapa D: próxima sessão `agendada` futura da regra (`YYYY-MM-DD` ou null). */
+export async function proximaSessaoDaRegra(
+  ctx: TenantContext,
+  regraId: string,
+): Promise<string | null> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, async (tx) => {
+    const [row] = await tx
+      .select({ prox: min(schema.session.agendadaPara) })
+      .from(schema.session)
+      .where(
+        and(
+          eq(schema.session.recorrenteId, regraId),
+          eq(schema.session.estado, "agendada"),
+          gt(schema.session.agendadaPara, sql`now()`),
+        ),
+      );
+    return row?.prox ? new Date(row.prox).toISOString().slice(0, 10) : null;
   });
 }
 
