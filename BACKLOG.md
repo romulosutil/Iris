@@ -45,6 +45,20 @@ sandbox (Playwright core no próprio server vs. `@sparticuz/chromium`
 serverless vs. serviço dedicado) depende diretamente de qual ambiente de
 runtime a Iris vai ter.
 
+> ⚠️ **DoD de segurança que viaja COM este ticket (não foi entregue em F0 —
+> spec §5, red-team #2 SSRF/LFI).** O render de HTML de conteúdo de usuário é
+> vetor de exfiltração (texto livre de terapeuta — ver prompt-injection Fase 3).
+> Quando o renderer real for construído, é **inegociável**: (a) **JavaScript
+> desabilitado** no contexto de render; (b) **rede bloqueada** — abortar TODA
+> requisição do Chromium exceto assets locais (`route.abort()` p/ http/https/
+> `file:`/`data:` externos); (c) `file://` proibido; (d) usar o `escapeHtml`
+> (`src/lib/report/sanitize.ts`, já pronto e testado, hoje **sem uso**) em todo
+> conteúdo interpolado — nada de HTML cru do usuário no template; (e) processo
+> sem acesso à rede de metadata. **Teste de segurança obrigatório no DoD:**
+> payload com `<img src=file:///…>` e `<iframe src=http://169.254.169.254/…>`
+> não dispara nenhuma requisição de saída. Sem isto, o render real NÃO entra em
+> produção.
+
 **Itens abertos registrados (não implementados em F0):**
 * Tier-gating de relatório (família → tier Clínica; narrativo → tier
   Convênio; bruto → tier Diário) — diferido; falta o modelo de
@@ -71,6 +85,18 @@ runtime a Iris vai ter.
   desincronizado do hand-migration `0036` — toda `db:generate` re-emite um
   `ALTER session.disciplina SET NOT NULL` no-op (reapareceu na `0038`).
   Reconciliar o snapshot.
+* Polimento (review final F0): o `detalhe` do `audit_log` no export grava só
+  `{hash}`; a spec §5.5 pedia `{tipo, periodo, hash}`. Completude da trilha —
+  `hash` é a âncora de integridade; `tipo`/`periodo` são deriváveis da linha
+  `report`. Enriquecer quando a fatia de export tocar `exportReport`.
+* Cobertura (review final F0): falta teste negativo de purga cross-tenant
+  (`app_purgar_report` — o gate `app_patient_in_clinic` existe no corpo, só
+  happy-path + terapeuta-bloqueado testados). Adicionar na fatia 1 (governança).
+* Defesa em profundidade (review final F0): `report.clinic_id` usa FK simples a
+  `patient.id`, não a FK composta `(patient_id, clinic_id)` que tabelas irmãs
+  (`bloqueio`, `agendamento_recorrente`) usam p/ impedir `clinic_id` divergir do
+  paciente. Não é furo de isolamento (RLS chaveia em `patient_id`; `audit_insert`
+  re-fixa `clinic_id`), mas alinhar ao padrão do schema.
 
 ---
 
