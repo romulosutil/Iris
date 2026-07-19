@@ -140,6 +140,7 @@ export async function carregarSemana(
         duracaoMin: a.duracaoMin,
         disciplina: a.disciplina ?? "—",
         rotulo: a.rotulo ?? "—",
+        recorrenteId: a.recorrenteId ?? undefined,
       };
     });
 

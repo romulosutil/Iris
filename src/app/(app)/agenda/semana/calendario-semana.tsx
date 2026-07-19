@@ -21,6 +21,10 @@ export interface CalendarioSemanaProps {
   bloqueios: { dataInicio: string; dataFim: string }[];
   blocos: BlocoAgenda[];
   aoAlocar: (diaSemana: number, inicioMin: number) => void;
+  /** Etapa D (F2/F4/F5): abre o popover de detalhe/ações da regra de origem
+   * do bloco. Só chamado para blocos com `recorrenteId` — avulsa pura fica
+   * não-interativa (aria-hidden). */
+  aoAbrirRegra?: (regraId: string, rotulo: string) => void;
 }
 
 export function CalendarioSemana({
@@ -32,6 +36,7 @@ export function CalendarioSemana({
   bloqueios,
   blocos,
   aoAlocar,
+  aoAbrirRegra,
 }: CalendarioSemanaProps) {
   const colunas = colunasDaGrade(passoMin, abertura, fechamento); // "HH:MM" por coluna
   const [foco, setFoco] = useState<{ linha: number; col: number }>({ linha: 0, col: 0 });
@@ -165,21 +170,42 @@ export function CalendarioSemana({
                 const base = horaParaMin(abertura);
                 const colunasOffset = (b.inicioMin - base) / passoMin;
                 const colunasLargura = b.duracaoMin / passoMin;
+                const estilo = {
+                  left: `calc(${LARGURA_ROTULO_REM}rem + ${colunasOffset} * ${LARGURA_COL_REM}rem)`,
+                  width: `calc(${colunasLargura} * ${LARGURA_COL_REM}rem)`,
+                };
+                const classesBloco = cn(
+                  "absolute top-0 h-10 overflow-hidden px-1 text-xs",
+                  b.origem === "previsto"
+                    ? "border-status-ia-border bg-status-ia-bg border-2 border-dashed"
+                    : "border-border-brutal bg-status-success-bg border-2",
+                );
+                // Bloco de origem recorrente (regra ou sessão materializada
+                // dela) vira acionável — abre o popover de detalhe/ações da
+                // regra (F2/F4/F5). Avulsa pura (sem recorrenteId) continua
+                // decorativa p/ leitor de tela (a info já é anunciada na
+                // célula onde o bloco começa, ver rotuloCelula acima).
+                if (b.recorrenteId) {
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      data-testid="bloco-overlay"
+                      onClick={() => aoAbrirRegra?.(b.recorrenteId!, b.rotulo)}
+                      className={cn(classesBloco, "text-left", FOCO)}
+                      style={estilo}
+                    >
+                      {b.rotulo} · {b.disciplina}
+                    </button>
+                  );
+                }
                 return (
                   <div
                     key={b.id}
                     aria-hidden="true"
                     data-testid="bloco-overlay"
-                    className={cn(
-                      "absolute top-0 h-10 overflow-hidden px-1 text-xs",
-                      b.origem === "previsto"
-                        ? "border-status-ia-border bg-status-ia-bg border-2 border-dashed"
-                        : "border-border-brutal bg-status-success-bg border-2",
-                    )}
-                    style={{
-                      left: `calc(${LARGURA_ROTULO_REM}rem + ${colunasOffset} * ${LARGURA_COL_REM}rem)`,
-                      width: `calc(${colunasLargura} * ${LARGURA_COL_REM}rem)`,
-                    }}
+                    className={classesBloco}
+                    style={estilo}
                   >
                     {b.rotulo} · {b.disciplina}
                   </div>

@@ -12,6 +12,7 @@ import {
   encerrarRegra,
   listarPacientes,
   materializarRegra,
+  proximaSessaoDaRegra,
   type CarregarSemanaParams,
   type NovaAvulsa,
   type NovaRegra,
@@ -129,4 +130,10 @@ export async function encerrarRegraAction(
 export async function contarFuturasAction(regraId: string, ateFimISO: string): Promise<number> {
   const ctx = await getTenantContext();
   return contarFuturasDaRegra(ctx, regraId, ateFimISO);
+}
+
+/** Leitura fina p/ o rótulo honesto "próxima sessão" no popover de regra (F4). */
+export async function proximaSessaoAction(regraId: string): Promise<string | null> {
+  const ctx = await getTenantContext();
+  return proximaSessaoDaRegra(ctx, regraId);
 }

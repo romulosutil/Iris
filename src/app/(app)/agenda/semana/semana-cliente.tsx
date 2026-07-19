@@ -7,8 +7,9 @@ import { Alert } from "@/components/ui/alert";
 import { diasDaSemana, segundaDaSemana, semanaEhPassada } from "@/lib/agenda/semana";
 import { CalendarioSemana } from "./calendario-semana";
 import { PopoverAlocar } from "./popover-alocar";
+import { PopoverRegra } from "./popover-regra";
 import { ComboboxEntidade, type Opcao } from "./combobox-entidade";
-import { carregarSemanaAction, listarPacientesAction } from "./actions";
+import { carregarSemanaAction, listarPacientesAction, proximaSessaoAction } from "./actions";
 import type { BlocoAgenda } from "@/lib/agenda/projecao";
 import type { FaixaDia } from "@/lib/agenda/janela";
 
@@ -64,6 +65,11 @@ export function SemanaCliente({
   const [dados, setDados] = useState<DadosSemana>(SEM_DADOS);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, iniciarTransicao] = useTransition();
+  const [regraSelecionada, setRegraSelecionada] = useState<{
+    id: string;
+    rotulo: string;
+    proximaSessaoISO: string | null;
+  } | null>(null);
 
   const dias = diasDaSemana(semanaISO);
   const passada = semanaEhPassada(semanaISO, hojeISO);
@@ -102,6 +108,13 @@ export function SemanaCliente({
       const r = await listarPacientesAction(termo);
       setPacientes(r);
     });
+  }
+
+  // Etapa D (F4): leitura fina no clique — evita inchar SemanaCarregada com
+  // "próxima sessão" pré-carregada por regra.
+  async function abrirRegra(regraId: string, rotulo: string) {
+    const proximaSessaoISO = await proximaSessaoAction(regraId);
+    setRegraSelecionada({ id: regraId, rotulo, proximaSessaoISO });
   }
 
   return (
@@ -165,6 +178,7 @@ export function SemanaCliente({
           const dataISO = dias[diaSemana === 0 ? 6 : diaSemana - 1]!;
           setSlot({ diaSemana, inicioMin, dataISO });
         }}
+        aoAbrirRegra={abrirRegra}
       />
 
       {slot && entidade && (
@@ -183,6 +197,16 @@ export function SemanaCliente({
           disciplinas={disciplinas}
           duracaoPadrao={duracaoPadrao}
           aoBuscarEntidadeVar={eixo === "terapeuta" ? buscarPacientes : undefined}
+        />
+      )}
+
+      {regraSelecionada && (
+        <PopoverRegra
+          regraId={regraSelecionada.id}
+          rotulo={regraSelecionada.rotulo}
+          proximaSessaoISO={regraSelecionada.proximaSessaoISO}
+          hojeISO={hojeISO}
+          onClose={() => setRegraSelecionada(null)}
         />
       )}
     </section>
