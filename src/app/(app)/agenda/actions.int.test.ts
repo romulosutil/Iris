@@ -8,6 +8,9 @@ vi.mock("server-only", () => ({}));
 const { checkInSessao, listarSessoesDoDia, marcarEstado } = await import(
   "./actions"
 );
+const { pendentesDeConsolidacao, reposicoesPendentes } = await import(
+  "./queries"
+);
 const { withTenant } = await import("@/db/rls");
 const { sql: appSql } = await import("@/db/client");
 const { session } = await import("@/db/schema");
@@ -51,10 +54,15 @@ async function criarSessao(params: {
   terapeutaId: string;
   agendadaPara: string;
   disciplina?: string;
+  estado?: string;
+  repostaDe?: string;
 }): Promise<string> {
   const [row] = await owner<{ id: string }[]>`
-    INSERT INTO session (clinic_id, patient_id, terapeuta_id, agendada_para, disciplina)
-    VALUES (${CLINIC_A}, ${params.patientId}, ${params.terapeutaId}, ${params.agendadaPara}, ${params.disciplina ?? "psicologia"})
+    INSERT INTO session (clinic_id, patient_id, terapeuta_id, agendada_para, disciplina, estado, reposta_de)
+    VALUES (
+      ${CLINIC_A}, ${params.patientId}, ${params.terapeutaId}, ${params.agendadaPara},
+      ${params.disciplina ?? "psicologia"}, ${params.estado ?? "agendada"}, ${params.repostaDe ?? null}
+    )
     RETURNING id
   `;
   return row!.id;
@@ -200,5 +208,43 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
       atendidoPorId: U_B,
     });
     expect(r.error).toMatch(/substitut|terapeuta/i);
+  });
+
+  test("sessão agendada no passado aparece em pendentesDeConsolidacao", async () => {
+    const id = await criarSessao({
+      patientId: PATIENT_P,
+      terapeutaId: U_T1,
+      agendadaPara: "2020-01-10T12:00:00-03:00", // bem no passado
+    });
+
+    const pend = await pendentesDeConsolidacao(ctxCoord);
+    expect(pend.map((s) => s.id)).toContain(id);
+  });
+
+  test("falta sem reposição aparece como pendente; com reposição, some", async () => {
+    const semRepor = await criarSessao({
+      patientId: PATIENT_P,
+      terapeutaId: U_T1,
+      agendadaPara: "2026-07-11T17:00:00-03:00",
+      estado: "falta_paciente",
+    });
+    const comRepor = await criarSessao({
+      patientId: PATIENT_P,
+      terapeutaId: U_T1,
+      agendadaPara: "2026-07-11T18:00:00-03:00",
+      estado: "falta_paciente",
+    });
+    await criarSessao({
+      patientId: PATIENT_P,
+      terapeutaId: U_T1,
+      agendadaPara: "2026-07-18T09:00:00-03:00",
+      estado: "agendada",
+      repostaDe: comRepor,
+    });
+
+    const pend = await reposicoesPendentes(ctxCoord);
+    const ids = pend.map((s) => s.id);
+    expect(ids).toContain(semRepor);
+    expect(ids).not.toContain(comRepor);
   });
 });

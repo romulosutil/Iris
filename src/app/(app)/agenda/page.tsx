@@ -5,7 +5,8 @@ import { Alert } from "@/components/ui/alert";
 import { control, surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
 import { listarTerapeutas } from "@/app/(app)/equipe/[id]/queries";
-import { listarSessoesDoDia } from "./actions";
+import { listarSessoesDoDia, type SessaoDoDia } from "./actions";
+import { pendentesDeConsolidacao, reposicoesPendentes } from "./queries";
 import { EstadoBadge } from "./estado-badge";
 import { CheckInButton } from "./checkin-button";
 import { GerirSessao } from "./gerir-sessao";
@@ -48,18 +49,103 @@ function dataPorExtenso(diaISO: string): string {
     month: "long",
   }).format(new Date(`${diaISO}T12:00:00${FUSO_CLINICA_OFFSET}`));
 }
- 
+
+type TipoPendencia = "consolidacao" | "reposicao";
+
+// Card de item de uma lista de pendências — mesma superfície visual do item
+// da grade do dia (Split + surface("solida")), só troca a ação conforme o
+// tipo: consolidação abre o `GerirSessao`, reposição vai pro prefill de
+// `/agenda/semana`. Exportado (não default) só para o teste de a11y
+// exercitar isoladamente — segue local a este arquivo por decisão do Task 9.
+export function ItemPendencia({
+  sessao,
+  tipo,
+  terapeutas,
+}: {
+  sessao: SessaoDoDia;
+  tipo: TipoPendencia;
+  terapeutas: { id: string; nome: string }[];
+}) {
+  return (
+    <Split
+      como="li"
+      alinha="center"
+      className={cn("bg-surface p-4", surface("solida"))}
+    >
+      <Stack gap="sm">
+        <Cluster gap="sm">
+          <span className="font-display text-ink-anchor text-xl font-bold">
+            {horaDaSessao(sessao.agendadaPara)}
+          </span>
+          <EstadoBadge estado={sessao.estado} />
+        </Cluster>
+        <span className="text-ink text-base">
+          {sessao.pacienteNome ?? "Paciente (acesso restrito)"}
+          {sessao.terapeutaNome ? (
+            <span className="text-graphite"> · {sessao.terapeutaNome}</span>
+          ) : null}
+        </span>
+      </Stack>
+      <Cluster gap="sm">
+        {tipo === "consolidacao" ? (
+          <GerirSessao sessionId={sessao.id} terapeutas={terapeutas} />
+        ) : (
+          <Link
+            href={`/agenda/semana?repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
+            className={abrirSessaoClasses}
+          >
+            Repor
+          </Link>
+        )}
+      </Cluster>
+    </Split>
+  );
+}
+
+// Vazio → nada renderizado (sem Alert de "lista vazia" — polui uma grade que
+// já tem seu próprio estado vazio para "Agenda do dia").
+export function SecaoPendencias({
+  tituloId,
+  titulo,
+  itens,
+  tipo,
+  terapeutas,
+}: {
+  tituloId: string;
+  titulo: string;
+  itens: SessaoDoDia[];
+  tipo: TipoPendencia;
+  terapeutas: { id: string; nome: string }[];
+}) {
+  if (itens.length === 0) return null;
+  return (
+    <Stack como="section" gap="sm" aria-labelledby={tituloId} className="animate-fade-in-up">
+      <h2 id={tituloId} className="font-display text-ink-anchor text-2xl font-bold">
+        {titulo}
+      </h2>
+      <Stack gap="md" como="ul">
+        {itens.map((s) => (
+          <ItemPendencia key={s.id} sessao={s} tipo={tipo} terapeutas={terapeutas} />
+        ))}
+      </Stack>
+    </Stack>
+  );
+}
+
 export default async function AgendaPage() {
   const ctx = await getTenantContext();
   const dia = hojeNaClinica();
-  const [sessoes, terapeutasRaw] = await Promise.all([
-    listarSessoesDoDia(ctx, dia),
-    listarTerapeutas(ctx),
-  ]);
   const podeAgendar = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
   const podeGerir = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
+  const [sessoes, terapeutasRaw, pendentesConsolidacao, pendentesReposicao] =
+    await Promise.all([
+      listarSessoesDoDia(ctx, dia),
+      listarTerapeutas(ctx),
+      podeGerir ? pendentesDeConsolidacao(ctx) : Promise.resolve([]),
+      podeGerir ? reposicoesPendentes(ctx) : Promise.resolve([]),
+    ]);
   const terapeutas = terapeutasRaw.map((t) => ({ id: t.id, nome: t.name ?? "—" }));
- 
+
   return (
     <Stack gap="lg" className="pt-4 md:pt-8">
       <Stack gap="sm" className="animate-fade-in-up pb-2 md:pb-4">
@@ -70,7 +156,23 @@ export default async function AgendaPage() {
           {dataPorExtenso(dia)}
         </p>
       </Stack>
- 
+
+      <SecaoPendencias
+        tituloId="pendentes-consolidacao-titulo"
+        titulo="Pendentes de consolidação"
+        itens={pendentesConsolidacao}
+        tipo="consolidacao"
+        terapeutas={terapeutas}
+      />
+
+      <SecaoPendencias
+        tituloId="reposicoes-pendentes-titulo"
+        titulo="Reposições pendentes"
+        itens={pendentesReposicao}
+        tipo="reposicao"
+        terapeutas={terapeutas}
+      />
+
       {sessoes.length === 0 ? (
         <Stack className="animate-fade-in-up animate-delay-75 py-4 md:py-8">
           <Alert severidade="info" destacado>
