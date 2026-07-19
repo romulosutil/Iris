@@ -260,6 +260,13 @@
       "when": 1784229604545,
       "tag": "0036_agenda2_disciplina_notnull",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1784229605545,
+      "tag": "0037_fix_extraction_versao_grant",
+      "breakpoints": true
     }
   ]
 }

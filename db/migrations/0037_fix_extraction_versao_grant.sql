@@ -1,0 +1,15 @@
+-- Fix: `app_role` não tinha UPDATE na coluna `versao` de `extraction`.
+--
+-- A coluna `versao` (controle otimista de concorrência) foi adicionada em
+-- `0020` (Fase 4) e o fluxo de revisão — aprovar/editar extração — passou a
+-- escrever `versao = versao + 1` (commit 6b72843). Mas o GRANT de coluna em
+-- `0012_fase3_extraction_review_rls.sql` só concedeu
+-- `UPDATE (estado, payload_editado, revisado_por, revisado_em)` — nunca
+-- incluiu `versao`. O Postgres nega o UPDATE inteiro quando UMA das colunas
+-- escritas não tem privilégio, surgindo como `permission denied for table
+-- extraction` e quebrando aprovar/editar extração (e, em cascata, os fluxos
+-- evidence/reinforcer on-approve que dependem dessa transição).
+--
+-- Idempotente: re-conceder é no-op. Sem alteração de schema (grant only),
+-- por isso não há snapshot correspondente (padrão das migrations à mão).
+GRANT UPDATE (versao) ON extraction TO app_role;
