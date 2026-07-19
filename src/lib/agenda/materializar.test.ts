@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { horizontePadrao, proximoDia, resolverInstante } from "./materializar";
+import { datasDaRegra, horizontePadrao, proximoDia, resolverInstante } from "./materializar";
 
 describe("resolverInstante (São Paulo, UTC-3 fixo)", () => {
   test("09:00 local vira 12:00Z", () => {
@@ -37,5 +37,33 @@ describe("horizontePadrao / proximoDia", () => {
   });
   test("proximoDia soma 1 dia (cruza mês)", () => {
     expect(proximoDia("2026-07-31")).toBe("2026-08-01");
+  });
+});
+
+describe("datasDaRegra", () => {
+  const regra = { diaSemana: 1, vigenciaInicio: "2026-07-01", vigenciaFim: null }; // segundas
+
+  test("gera as segundas dentro da janela", () => {
+    expect(datasDaRegra(regra, "2026-07-06", "2026-07-27", [])).toEqual([
+      "2026-07-06", "2026-07-13", "2026-07-20", "2026-07-27",
+    ]);
+  });
+  test("respeita vigenciaInicio (não gera antes)", () => {
+    const r = { diaSemana: 1, vigenciaInicio: "2026-07-13", vigenciaFim: null };
+    expect(datasDaRegra(r, "2026-07-01", "2026-07-20", [])).toEqual([
+      "2026-07-13", "2026-07-20",
+    ]);
+  });
+  test("respeita vigenciaFim (não gera depois)", () => {
+    const r = { diaSemana: 1, vigenciaInicio: "2026-07-01", vigenciaFim: "2026-07-13" };
+    expect(datasDaRegra(r, "2026-07-06", "2026-07-27", [])).toEqual([
+      "2026-07-06", "2026-07-13",
+    ]);
+  });
+  test("pula datas cobertas por bloqueio (borda inclusiva)", () => {
+    const bloqueios = [{ dataInicio: "2026-07-13", dataFim: "2026-07-15" }];
+    expect(datasDaRegra(regra, "2026-07-06", "2026-07-27", bloqueios)).toEqual([
+      "2026-07-06", "2026-07-20", "2026-07-27", // 13 pulada
+    ]);
   });
 });

@@ -45,3 +45,42 @@ export function proximoDia(dataISO: string): string {
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 }
+
+export interface RegraDatas {
+  diaSemana: number;
+  vigenciaInicio: string;
+  vigenciaFim: string | null;
+}
+
+export interface BloqueioPeriodo {
+  dataInicio: string;
+  dataFim: string;
+}
+
+function bloqueada(dataISO: string, bloqueios: BloqueioPeriodo[]): boolean {
+  return bloqueios.some((b) => dataISO >= b.dataInicio && dataISO <= b.dataFim);
+}
+
+/** Datas ISO do diaSemana da regra em [de, ate] ∩ vigência, menos bloqueios. */
+export function datasDaRegra(
+  regra: RegraDatas,
+  deISO: string,
+  ateISO: string,
+  bloqueios: BloqueioPeriodo[],
+): string[] {
+  const inicio = deISO > regra.vigenciaInicio ? deISO : regra.vigenciaInicio;
+  const fim = regra.vigenciaFim && regra.vigenciaFim < ateISO ? regra.vigenciaFim : ateISO;
+  const datas: string[] = [];
+  const cur = new Date(`${inicio}T00:00:00Z`);
+  const limite = new Date(`${fim}T00:00:00Z`);
+  // avança até o primeiro diaSemana >= inicio
+  while (cur.getUTCDay() !== regra.diaSemana && cur <= limite) {
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  while (cur <= limite) {
+    const iso = cur.toISOString().slice(0, 10);
+    if (!bloqueada(iso, bloqueios)) datas.push(iso);
+    cur.setUTCDate(cur.getUTCDate() + 7);
+  }
+  return datas;
+}
