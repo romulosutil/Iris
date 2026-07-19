@@ -50,8 +50,8 @@ const sessionIds: Record<number, string> = {};
 
 async function inserirSessao(numero: number) {
   const id = crypto.randomUUID();
-  await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente)
-    VALUES (${id}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', ${numero})`;
+  await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina)
+    VALUES (${id}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', ${numero}, 'aba')`;
   sessionIds[numero] = id;
   return id;
 }

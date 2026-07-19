@@ -55,11 +55,11 @@ describe.skipIf(!hasDb)("Fila de pendências · queries", () => {
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
       VALUES (${PAC_A1}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
 
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
-      (${SESS_CAPTURA}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada'),
-      (${SESS_CONSOLIDADA}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada'),
-      (${SESS_EXTRACAO_PEND}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada'),
-      (${SESS_EXTRACAO_SUG}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada')`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
+      (${SESS_CAPTURA}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', 'aba'),
+      (${SESS_CONSOLIDADA}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', 'aba'),
+      (${SESS_EXTRACAO_PEND}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', 'aba'),
+      (${SESS_EXTRACAO_SUG}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', 'aba')`;
 
     // Sessão com captura_rapida SEM nota_consolidada → deve aparecer.
     await owner`INSERT INTO session_note (session_id, clinic_id, tipo, texto, autor_id) VALUES

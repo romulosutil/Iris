@@ -1,7 +1,9 @@
-import { and, asc, count, eq, gt, gte, ilike, isNull, lte, max, min, or, sql } from "drizzle-orm";
-import { requireRole } from "@/auth/require-role";
+import { and, asc, count, eq, gt, gte, ilike, inArray, isNull, lt, lte, max, min, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { requireAgendar, requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
+import type { SessaoDoDia } from "./actions";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
 import { diasDaSemana, vigenciaInicioC7 } from "@/lib/agenda/semana";
 import { paraDataLocal, paraMinutosLocais } from "@/lib/agenda/fuso-min";
@@ -25,7 +27,7 @@ export async function listarPacientes(
   ctx: TenantContext,
   termo: string,
 ): Promise<{ id: string; nome: string }[]> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   return withTenant(ctx, (tx) =>
     tx
       .select({ id: schema.patient.id, nome: schema.patient.nome })
@@ -39,6 +41,23 @@ export async function listarPacientes(
       .orderBy(asc(schema.patient.nome))
       .limit(20),
   );
+}
+
+/** Task 8: nome do paciente p/ o prefill de reposição em `/agenda/semana`
+ * (a query string só carrega `patientId` — o rótulo é resolvido aqui). */
+export async function pacientePorId(
+  ctx: TenantContext,
+  patientId: string,
+): Promise<{ id: string; nome: string } | null> {
+  requireAgendar(ctx);
+  const [row] = await withTenant(ctx, (tx) =>
+    tx
+      .select({ id: schema.patient.id, nome: schema.patient.nome })
+      .from(schema.patient)
+      .where(and(eq(schema.patient.id, patientId), eq(schema.patient.clinicId, ctx.clinicId)))
+      .limit(1),
+  );
+  return row ?? null;
 }
 
 export interface CarregarSemanaParams {
@@ -56,7 +75,7 @@ export async function carregarSemana(
   ctx: TenantContext,
   { eixo, entidadeId, semanaInicioISO }: CarregarSemanaParams,
 ): Promise<SemanaCarregada> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   const dias = diasDaSemana(semanaInicioISO);
   const primeiro = dias[0]!;
   const ultimo = dias[6]!;
@@ -212,8 +231,8 @@ export async function carregarSemana(
 }
 
 export class ConflitoError extends Error {
-  constructor(public dimensao: "terapeuta" | "paciente") {
-    super(`Horário em conflito para ${dimensao}.`);
+  constructor(public dimensao: "terapeuta" | "paciente" | "disciplina", mensagem?: string) {
+    super(mensagem ?? `Horário em conflito para ${dimensao}.`);
     this.name = "ConflitoError";
   }
 }
@@ -235,7 +254,11 @@ export async function criarRegra(
   ctx: TenantContext,
   dados: NovaRegra,
 ): Promise<{ id: string }> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
+  const { disciplinas } = await carregarConfigClinica(ctx);
+  if (!disciplinas.includes(dados.disciplina)) {
+    throw new ConflitoError("disciplina", "Disciplina não configurada nesta clínica.");
+  }
   const inicioMin = horaParaMin(dados.horaInicio);
   const novo: Slot = {
     diaSemana: dados.diaSemana,
@@ -368,11 +391,16 @@ export interface NovaAvulsa {
   patientId: string;
   terapeutaId: string;
   disciplina: string;
-  tipo: "avaliacao" | "devolutiva" | "reuniao_pais" | "outro";
+  // "terapia": reposição (Task 8) — a avulsa repõe uma sessão de terapia
+  // comum, não é um dos tipos especiais abaixo.
+  tipo: "terapia" | "avaliacao" | "devolutiva" | "reuniao_pais" | "outro";
   dataISO: string; // "YYYY-MM-DD"
   horaInicio: string; // "HH:MM"
   duracaoMin: number;
   modalidade: "presencial" | "online";
+  /** Reposição: quando presente, aponta para a sessão `falta_*` original que
+   * esta avulsa está repondo (self-FK, `ON DELETE SET NULL`). */
+  repostaDe?: string;
 }
 
 /** Cria uma sessão avulsa (`recorrenteId=null`, `estado="agendada"`), ancorada
@@ -386,7 +414,11 @@ export async function criarAvulsa(
   ctx: TenantContext,
   dados: NovaAvulsa,
 ): Promise<{ id: string }> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
+  const { disciplinas } = await carregarConfigClinica(ctx);
+  if (!disciplinas.includes(dados.disciplina)) {
+    throw new ConflitoError("disciplina", "Disciplina não configurada nesta clínica.");
+  }
   const diaSemana = new Date(`${dados.dataISO}T00:00:00Z`).getUTCDay();
   const inicioMin = horaParaMin(dados.horaInicio);
   const novo: Slot = { diaSemana, inicioMin, fimMin: inicioMin + dados.duracaoMin };
@@ -445,6 +477,7 @@ export async function criarAvulsa(
           duracaoMin: dados.duracaoMin,
           estado: "agendada",
           modalidade: dados.modalidade,
+          repostaDe: dados.repostaDe ?? null,
         })
         .returning({ id: schema.session.id });
       return row!;
@@ -466,7 +499,7 @@ export interface ConfigClinica {
 /** Config da clínica p/ pré-preencher o popover de alocação (D2): disciplinas
  * conhecidas e duração padrão por disciplina (`clinic.duracaoDisciplina`). */
 export async function carregarConfigClinica(ctx: TenantContext): Promise<ConfigClinica> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   return withTenant(ctx, async (tx) => {
     const [row] = await tx
       .select({ duracaoDisciplina: schema.clinic.duracaoDisciplina })
@@ -630,7 +663,7 @@ export async function materializarRegra(
   regraId: string,
   ateISO: string,
 ): Promise<ResultadoMaterializacao> {
-  requireRole(ctx, "coordenador");
+  requireAgendar(ctx);
   return withTenant(ctx, async (tx) => {
     const [regra] = await tx
       .select()
@@ -810,4 +843,74 @@ export async function disponibilidadeTerapeutaNoDia(
       horaFim: j.horaFim,
     }));
   });
+}
+
+// ─── Etapa E: listas derivadas de pendência na grade do dia ───────────────
+
+const SELECT_SESSAO_DO_DIA = {
+  id: schema.session.id,
+  agendadaPara: schema.session.agendadaPara,
+  estado: schema.session.estado,
+  terapeutaId: schema.session.terapeutaId,
+  terapeutaNome: schema.appUser.name,
+  pacienteNome: schema.patient.nome,
+  patientId: schema.session.patientId,
+  disciplina: schema.session.disciplina,
+} as const;
+
+/**
+ * Sessões travadas em `agendada` no passado — ninguém consolidou o
+ * atendimento (realizada/falta/cancelada). Gate igual ao `podeGerir` da
+ * página: só coordenação/recepção resolvem essa fila. RLS (`withTenant`)
+ * escopa por clínica/papel por baixo.
+ */
+export async function pendentesDeConsolidacao(
+  ctx: TenantContext,
+): Promise<SessaoDoDia[]> {
+  requireAgendar(ctx);
+  return withTenant(ctx, (tx) =>
+    tx
+      .select(SELECT_SESSAO_DO_DIA)
+      .from(schema.session)
+      .leftJoin(schema.patient, eq(schema.patient.id, schema.session.patientId))
+      .leftJoin(schema.appUser, eq(schema.appUser.id, schema.session.terapeutaId))
+      .where(
+        and(
+          eq(schema.session.estado, "agendada"),
+          lt(schema.session.agendadaPara, sql`now()`),
+        ),
+      )
+      .orderBy(asc(schema.session.agendadaPara)),
+  );
+}
+
+/**
+ * Faltas (paciente ou terapeuta) sem reposição ainda: nenhuma outra sessão
+ * aponta pra ela via `reposta_de`. Alias necessário — `session` aparece duas
+ * vezes na query (a falta candidata e a checagem de existência da filha).
+ */
+export async function reposicoesPendentes(
+  ctx: TenantContext,
+): Promise<SessaoDoDia[]> {
+  requireAgendar(ctx);
+  const reposicao = alias(schema.session, "reposicao");
+  return withTenant(ctx, (tx) =>
+    tx
+      .select(SELECT_SESSAO_DO_DIA)
+      .from(schema.session)
+      .leftJoin(schema.patient, eq(schema.patient.id, schema.session.patientId))
+      .leftJoin(schema.appUser, eq(schema.appUser.id, schema.session.terapeutaId))
+      .where(
+        and(
+          inArray(schema.session.estado, ["falta_paciente", "falta_terapeuta"]),
+          notExists(
+            tx
+              .select({ id: reposicao.id })
+              .from(reposicao)
+              .where(eq(reposicao.repostaDe, schema.session.id)),
+          ),
+        ),
+      )
+      .orderBy(asc(schema.session.agendadaPara)),
+  );
 }

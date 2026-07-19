@@ -23,7 +23,7 @@ describe.skipIf(!hasDb)("criarRegra — atomicidade (F5b)", () => {
   });
   beforeEach(async () => {
     await owner`TRUNCATE clinic, app_user, user_role, patient, agendamento_recorrente, session, bloqueio RESTART IDENTITY CASCADE`;
-    await owner`INSERT INTO clinic (id, nome, timezone) VALUES (${CLINIC_A}, 'A', 'America/Sao_Paulo')`;
+    await owner`INSERT INTO clinic (id, nome, timezone, duracao_disciplina) VALUES (${CLINIC_A}, 'A', 'America/Sao_Paulo', ${owner.json({ aba: 60 })})`;
     await owner`INSERT INTO app_user (id, name, email) VALUES (${U_COORD}, 'C', 'c@d2'), (${U_T1}, 'T', 't@d2')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_COORD}, ${CLINIC_A}, 'coordenador'), (${U_T1}, ${CLINIC_A}, 'terapeuta')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC}, ${CLINIC_A}, 'Ana')`;
@@ -42,8 +42,8 @@ describe.skipIf(!hasDb)("criarRegra — atomicidade (F5b)", () => {
     await owner`INSERT INTO agendamento_recorrente
       (id, clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
       VALUES (${OUTRA_REGRA}, ${CLINIC_A}, ${PAC}, ${U_T1}, 'aba', 2, '09:00', 60, '2026-07-13', 'ativo')`;
-    await owner`INSERT INTO session (clinic_id, patient_id, terapeuta_id, recorrente_id, agendada_para, estado, duracao_min, tipo)
-      VALUES (${CLINIC_A}, ${PAC}, ${U_T1}, ${OUTRA_REGRA}, '2026-07-20T12:00:00Z', 'agendada', 60, 'terapia')`;
+    await owner`INSERT INTO session (clinic_id, patient_id, terapeuta_id, recorrente_id, agendada_para, estado, duracao_min, tipo, disciplina)
+      VALUES (${CLINIC_A}, ${PAC}, ${U_T1}, ${OUTRA_REGRA}, '2026-07-20T12:00:00Z', 'agendada', 60, 'terapia', 'aba')`;
     const { id } = await criarRegra(ctx, base);
     const [regraRow] = (await owner`SELECT count(*)::int AS n FROM agendamento_recorrente WHERE id = ${id}`) as { n: number }[];
     expect(regraRow!.n).toBe(1); // regra existe

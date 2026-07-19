@@ -85,6 +85,10 @@ export async function criarAvulsaAction(
     horaInicio: String(formData.get("horaInicio")),
     duracaoMin: Number(formData.get("duracaoMin")),
     modalidade: (formData.get("modalidade") as NovaAvulsa["modalidade"]) ?? "presencial",
+    repostaDe: (() => {
+      const v = String(formData.get("repostaDe") ?? "").trim();
+      return v === "" ? undefined : v;
+    })(),
   };
   try {
     await criarAvulsa(ctx, dados);

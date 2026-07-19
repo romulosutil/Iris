@@ -13,7 +13,7 @@ export function AdicionarMembroForm({ patientId }: { patientId: string }) {
   );
   return (
     <Form action={formAction} error={state.error}>
-      <Field label="ID do profissional (userId)" htmlFor="userId">
+      <Field label="ID do terapeuta (userId)" htmlFor="userId">
         <Input id="userId" name="userId" required />
       </Field>
       <Field label="Disciplina" htmlFor="disciplina">

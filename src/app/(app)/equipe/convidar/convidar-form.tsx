@@ -17,7 +17,7 @@ export function ConvidarForm() {
     return (
       <Alert severidade="sucesso" titulo="Convite criado">
         Senha temporária (exibida uma única vez — copie e repasse manualmente ao
-        profissional; ela não será mostrada de novo):
+        terapeuta; ela não será mostrada de novo):
         <br />
         <code className="mt-2 inline-block font-mono text-lg">
           {state.senhaTemporaria}

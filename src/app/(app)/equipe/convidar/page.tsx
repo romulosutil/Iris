@@ -13,7 +13,7 @@ export default async function ConvidarPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-display text-ink-anchor text-3xl font-bold">
-        Convidar profissional
+        Convidar terapeuta
       </h1>
       <ConvidarForm />
     </div>

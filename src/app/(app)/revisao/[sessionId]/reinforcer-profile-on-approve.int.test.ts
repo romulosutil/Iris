@@ -33,8 +33,8 @@ async function seed() {
   await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
     VALUES (${PAC}, ${U_T1}, 'ABA', 'terapeuta_referencia')`;
   // sessão JÁ consolidada (numero_sequencial_paciente preenchido) — caso "feliz"
-  await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente) VALUES
-    (${SESS}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'realizada', 1)`;
+  await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina) VALUES
+    (${SESS}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'realizada', 1, 'aba')`;
 
   await owner`INSERT INTO extraction
       (id, session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload) VALUES
@@ -112,8 +112,8 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
   test("sessão sem numero_sequencial_paciente: aprovação segue OK, mas reinforcer_profile NÃO é inserido", async () => {
     const SESS_SEM_NUMERO = "00000000-0000-0000-0000-00000005e1f4";
     const EX_SEM_NUMERO = "00000000-0000-0000-0000-00000e0a0006";
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
-      (${SESS_SEM_NUMERO}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'realizada')`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
+      (${SESS_SEM_NUMERO}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'realizada', 'aba')`;
     await owner`INSERT INTO extraction
         (id, session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload) VALUES
       (${EX_SEM_NUMERO}, ${SESS_SEM_NUMERO}, ${CLINIC}, 'sugerida', 'preferencia_reforcador', 'adorou música', 'alta',

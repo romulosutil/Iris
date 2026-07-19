@@ -204,6 +204,7 @@ async function main() {
         patientId: pacienteIds[0]!,
         terapeutaId,
         agendadaPara,
+        disciplina: DISCIPLINA,
       });
     }
   });

@@ -1,16 +1,21 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
-import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { appUser, patient, session, sessionEstado, userRole } from "@/db/schema";
+import {
+  appUser,
+  patient,
+  session,
+  sessionEstado,
+  sessionModalidade,
+  userRole,
+} from "@/db/schema";
+import { transicaoPermitida, exigeJustificada } from "@/lib/agenda/transicoes";
 import { FUSO_CLINICA_OFFSET } from "./fuso";
 
 export type SessionEstado = (typeof sessionEstado.enumValues)[number];
-
-export type AgendarState = { error?: string };
 
 export type SessaoDoDia = {
   id: string;
@@ -19,98 +24,12 @@ export type SessaoDoDia = {
   terapeutaId: string;
   terapeutaNome: string | null;
   pacienteNome: string | null;
+  // Task 8 (reposição): pré-preenchem `/agenda/semana?repor=...` a partir do
+  // botão "Repor" numa falta — dispensa uma query extra na hora de montar o
+  // link.
+  patientId: string;
+  disciplina: string;
 };
-
-const agendarSchema = z.object({
-  patientId: z.string().uuid("Selecione um paciente válido."),
-  terapeutaId: z.string().uuid("Selecione um profissional válido."),
-  agendadaPara: z.string().min(1, "Data e hora são obrigatórias."),
-});
-
-/**
- * O `<input type="datetime-local">` envia uma string SEM fuso ("2026-07-11T12:00").
- * `new Date()` sobre ela assume o fuso do servidor (UTC no VPS) — a sessão
- * marcada às 12:00 viraria 09:00 ao exibir em São Paulo. Ancoramos a string
- * naive no fuso da clínica antes de instanciar. Strings que já trazem fuso
- * (`Z` ou `±HH:MM`) passam intactas.
- */
-function ancorarNoFusoDaClinica(local: string): string {
-  if (/(Z|[+-]\d{2}:\d{2})$/.test(local)) return local;
-  const comSegundos = /T\d{2}:\d{2}$/.test(local) ? `${local}:00` : local;
-  return `${comSegundos}${FUSO_CLINICA_OFFSET}`;
-}
-
-/**
- * Núcleo testável do agendamento. Marcar sessão é ato administrativo da agenda —
- * recepção e coordenação. O RLS ainda fecha o tenant (paciente e profissional
- * têm que ser da clínica ativa); aqui só validamos a entrada e traduzimos a
- * rejeição do banco numa mensagem amigável.
- */
-export async function agendarSessao(
-  ctx: TenantContext,
-  formData: FormData,
-): Promise<AgendarState & { id?: string }> {
-  requireRole(ctx, "admin_recepcao", "coordenador");
-
-  const parsed = agendarSchema.safeParse({
-    patientId: String(formData.get("patientId") ?? "").trim(),
-    terapeutaId: String(formData.get("terapeutaId") ?? "").trim(),
-    agendadaPara: String(formData.get("agendadaPara") ?? "").trim(),
-  });
-  if (!parsed.success) return { error: parsed.error.issues[0]!.message };
-
-  const quando = new Date(ancorarNoFusoDaClinica(parsed.data.agendadaPara));
-  if (Number.isNaN(quando.getTime())) return { error: "Data e hora inválidas." };
-
-  // O RLS garante que o profissional é da clínica, mas não que ele é TERAPEUTA
-  // — sem isto, um erro de digitação vincularia a sessão a um coordenador ou à
-  // recepção. Exige uma role `terapeuta` na clínica ativa (quem coordena e
-  // também atende tem as duas roles em `user_role`). O `user_role_read` do RLS
-  // já escopa por clínica, então isto também barra id de outra clínica.
-  const ehTerapeuta = await withTenant(ctx, (tx) =>
-    tx
-      .select({ papel: userRole.papel })
-      .from(userRole)
-      .where(
-        and(
-          eq(userRole.userId, parsed.data.terapeutaId),
-          eq(userRole.clinicId, ctx.clinicId),
-          eq(userRole.papel, "terapeuta"),
-        ),
-      )
-      .limit(1),
-  );
-  if (ehTerapeuta.length === 0) {
-    return {
-      error: "O profissional selecionado não é um terapeuta desta clínica.",
-    };
-  }
-
-  try {
-    const id = await withTenant(ctx, async (tx) => {
-      const [nova] = await tx
-        .insert(session)
-        .values({
-          clinicId: ctx.clinicId,
-          patientId: parsed.data.patientId,
-          terapeutaId: parsed.data.terapeutaId,
-          agendadaPara: quando,
-        })
-        .returning({ id: session.id });
-      return nova!.id;
-    });
-    return { id };
-  } catch (err) {
-    // O caminho esperado aqui é o WITH CHECK do RLS barrando paciente/
-    // profissional de outra clínica. Mas um erro sistêmico (banco fora, bug)
-    // cairia no mesmo catch e ficaria escondido sob a mensagem amigável —
-    // logamos o erro real para não perder o diagnóstico.
-    console.error("agendarSessao: insert falhou", err);
-    return {
-      error: "Não foi possível agendar: paciente ou profissional inválido.",
-    };
-  }
-}
 
 /**
  * Check-in: o terapeuta (ou recepção/coordenação) marca o início da sessão ao
@@ -167,6 +86,8 @@ export async function listarSessoesDoDia(
         terapeutaId: session.terapeutaId,
         terapeutaNome: appUser.name,
         pacienteNome: patient.nome,
+        patientId: session.patientId,
+        disciplina: session.disciplina,
       })
       .from(session)
       .leftJoin(patient, eq(patient.id, session.patientId))
@@ -181,30 +102,99 @@ export async function listarSessoesDoDia(
   );
 }
 
-// ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
+export type MarcarEstadoInput = {
+  sessionId: string;
+  estado: SessionEstado;
+  justificada?: boolean;
+  atendidoPorId?: string | null;
+  modalidade?: (typeof sessionModalidade.enumValues)[number];
+};
 
-export async function agendarSessaoAction(
-  _prev: AgendarState,
+/**
+ * Transição de estado da sessão (consolidação pós-atendimento). CAS otimista:
+ * o UPDATE só afeta a linha se `estado = 'agendada'` no momento da escrita —
+ * sem versão explícita, isso evita "lost update" quando duas pessoas marcam a
+ * mesma sessão concorrentemente (0 linhas afetadas → erro "já foi
+ * atualizada", em vez de sobrescrever silenciosamente).
+ */
+export async function marcarEstado(
+  ctx: TenantContext,
+  input: MarcarEstadoInput,
+): Promise<{ error?: string; ok?: boolean }> {
+  requireRole(ctx, "coordenador", "admin_recepcao", "terapeuta");
+
+  if (!transicaoPermitida("agendada", input.estado)) {
+    return { error: "Transição de estado inválida." };
+  }
+
+  // Substituto (quem realmente atendeu) tem que ser terapeuta da clínica ativa.
+  if (input.atendidoPorId) {
+    const ok = await withTenant(ctx, (tx) =>
+      tx
+        .select({ id: userRole.userId })
+        .from(userRole)
+        .where(
+          and(
+            eq(userRole.userId, input.atendidoPorId!),
+            eq(userRole.clinicId, ctx.clinicId),
+            eq(userRole.papel, "terapeuta"),
+          ),
+        )
+        .limit(1),
+    );
+    if (ok.length === 0) return { error: "Substituto não é terapeuta desta clínica." };
+  }
+
+  const just = exigeJustificada(input.estado) ? (input.justificada ?? false) : null;
+
+  const rows = await withTenant(ctx, (tx) =>
+    tx
+      .update(session)
+      .set({
+        estado: input.estado,
+        justificada: just,
+        ...(input.atendidoPorId !== undefined ? { atendidoPorId: input.atendidoPorId } : {}),
+        ...(input.modalidade ? { modalidade: input.modalidade } : {}),
+      })
+      .where(
+        and(
+          eq(session.id, input.sessionId),
+          eq(session.estado, "agendada"), // CAS: só transiciona de agendada
+        ),
+      )
+      .returning({ id: session.id }),
+  );
+
+  if (rows.length === 0) {
+    return { error: "Esta sessão já foi atualizada por outra pessoa. Recarregue a página." };
+  }
+  return { ok: true };
+}
+
+export async function marcarEstadoAction(
+  _prev: { error?: string; ok?: boolean },
   formData: FormData,
-): Promise<AgendarState> {
+): Promise<{ error?: string; ok?: boolean }> {
   const ctx = await getTenantContext();
+  const atendido = String(formData.get("atendidoPorId") ?? "").trim();
   try {
-    const resultado = await agendarSessao(ctx, formData);
-    if (resultado.error) return { error: resultado.error };
-    revalidatePath("/agenda");
-    return {};
+    const r = await marcarEstado(ctx, {
+      sessionId: String(formData.get("sessionId") ?? "").trim(),
+      estado: formData.get("estado") as SessionEstado,
+      justificada: formData.get("justificada") === "true",
+      atendidoPorId: atendido === "" ? undefined : atendido,
+      modalidade: (formData.get("modalidade") as MarcarEstadoInput["modalidade"]) || undefined,
+    });
+    if (r.ok) revalidatePath("/agenda");
+    return r;
   } catch (err) {
-    // `requireRole` lança `RoleError` em papel não autorizado — mensagem
-    // específica. Qualquer outro erro (ex.: banco fora na query de terapeuta)
-    // NÃO é falta de permissão: logamos e devolvemos mensagem genérica em vez
-    // de mentir "sem permissão". Em ambos os casos evitamos o 500 no boundary.
-    if (err instanceof RoleError) {
-      return { error: "Você não tem permissão para agendar sessões." };
-    }
-    console.error("agendarSessaoAction: erro inesperado", err);
-    return { error: "Não foi possível agendar a sessão. Tente novamente." };
+    if (err instanceof RoleError) return { error: "Você não tem permissão para atualizar a sessão." };
+    console.error("marcarEstadoAction:", err);
+    return { error: "Não foi possível atualizar a sessão." };
   }
 }
+
+// ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
 
 export async function checkInAction(
   _prev: { error?: string },

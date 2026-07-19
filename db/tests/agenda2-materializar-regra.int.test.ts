@@ -58,8 +58,8 @@ describe.skipIf(!hasDb)("materializarRegra", () => {
   test("overbook: avulsa no slot vira pulada, resto materializa (D-3 / F1)", async () => {
     // avulsa ocupando o terapeuta na 2ª segunda (20/07 09:00 SP = 12:00Z)
     await owner`INSERT INTO session
-      (clinic_id, patient_id, terapeuta_id, agendada_para, estado, duracao_min, tipo)
-      VALUES (${CLINIC_A}, ${PAC}, ${U_T1}, '2026-07-20T12:00:00Z', 'agendada', 60, 'avaliacao')`;
+      (clinic_id, patient_id, terapeuta_id, agendada_para, estado, duracao_min, tipo, disciplina)
+      VALUES (${CLINIC_A}, ${PAC}, ${U_T1}, '2026-07-20T12:00:00Z', 'agendada', 60, 'avaliacao', 'aba')`;
     const r = await materializarRegra(ctx, REGRA, "2026-08-03");
     expect(r.puladas).toEqual(["2026-07-20"]); // buraco reportado, não engolido
     expect(r.geradas).toBe(3);

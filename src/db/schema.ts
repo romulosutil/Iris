@@ -534,8 +534,11 @@ export const session = pgTable(
     // Agenda 2.0 (Etapa A): enriquecimento disciplina-aware. A FK de
     // `recorrente_id → agendamento_recorrente` é criada na migration à mão 0034
     // (evita reordenar o arquivo / ciclo de import); aqui declara-se só a coluna.
-    recorrenteId: uuid("recorrente_id"), // null = avulsa
-    disciplina: text("disciplina"),
+    // recorrenteId null = avulsa; avulsa carrega a disciplina escolhida no
+    // popover, nunca null (Etapa E+F: disciplina é NOT NULL, backfill legado
+    // = 'desconhecida' — ver migration 0036).
+    recorrenteId: uuid("recorrente_id"),
+    disciplina: text("disciplina").notNull(),
     duracaoMin: integer("duracao_min").notNull().default(60),
     justificada: boolean("justificada"), // só relevante em falta_*
     modalidade: sessionModalidade("modalidade").notNull().default("presencial"),

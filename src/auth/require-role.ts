@@ -30,3 +30,13 @@ export function requireRole(
     );
   }
 }
+
+/**
+ * Guarda para as ações de agendar/ler do fluxo `/agenda/semana` (etapa E):
+ * coordenador e recepção (`admin_recepcao`) podem agendar — só as ações
+ * estruturais (encerrar regra, editar regra, config de disponibilidade)
+ * seguem coordenador-only via `requireRole`.
+ */
+export function requireAgendar(ctx: TenantContext): void {
+  requireRole(ctx, "coordenador", "admin_recepcao");
+}

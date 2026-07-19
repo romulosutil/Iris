@@ -81,8 +81,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
       (${PROTO_A}, ${CLINIC_A}, 'VB-MAPP demo', 'ABA', ${PROTOCOL_FAMILIA}),
       (${PROTO_A2}, ${CLINIC_A}, 'VB-MAPP demo 2 (J4)', 'ABA', ${PROTOCOL_FAMILIA})`;
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
-      (${SESS_A1}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'presente')`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
+      (${SESS_A1}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, now(), 'realizada', 'desconhecida')`;
     // T1 está na equipe do paciente A1 (para app_is_on_team). care_team_membership
     // não tem clinic_id — só patient_id/user_id/disciplina/papel_na_equipe/vigência —
     // e `papel_na_equipe` é restrito por CHECK a terapeuta_referencia|coordenador_referencia|substituto.
@@ -94,8 +94,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     // T1A é o terapeuta dono de SESS_A2; T3A está na equipe (substituto) mas
     // não é o dono — prova que app_session_clinica_visivel (equipe) não basta
     // para UPDATE de extraction, precisa ser o app_session_terapeuta_id.
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
-      (${SESS_A2}, ${CLINIC_A}, ${PAC_A2}, ${U_T1_A}, now(), 'presente')`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
+      (${SESS_A2}, ${CLINIC_A}, ${PAC_A2}, ${U_T1_A}, now(), 'realizada', 'desconhecida')`;
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe) VALUES
       (${PAC_A2}, ${U_T1_A}, 'ABA', 'terapeuta_referencia'),
       (${PAC_A2}, ${U_T3_A}, 'ABA', 'substituto')`;
@@ -110,8 +110,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       (${PROTO_B}, ${CLINIC_B}, 'VB-MAPP demo B', 'ABA', ${PROTOCOL_FAMILIA})`;
     await owner`INSERT INTO milestone (id, protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
       VALUES (${MILE_B}, ${PROTO_B}, 'mando', 'Pedir item preferido (B)', 'marco_simples', ${owner.json({ escala: [] })})`;
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado) VALUES
-      (${SESS_B1}, ${CLINIC_B}, ${PAC_B1}, ${U_T1_B}, now(), 'presente')`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
+      (${SESS_B1}, ${CLINIC_B}, ${PAC_B1}, ${U_T1_B}, now(), 'realizada', 'desconhecida')`;
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
       VALUES (${PAC_B1}, ${U_T1_B}, 'ABA', 'terapeuta_referencia')`;
   });

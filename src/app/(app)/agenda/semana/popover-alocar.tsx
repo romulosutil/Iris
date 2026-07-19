@@ -50,6 +50,16 @@ export interface PopoverAlocarProps {
   /** Busca (debounced) do combobox de entidade variável — só relevante no
    * eixo terapeuta, onde a entidade variável é o paciente (lista grande). */
   aoBuscarEntidadeVar?: (termo: string) => void;
+  /** Reposição (Task 8): presente quando o popover foi aberto a partir do
+   * botão "Repor" numa falta (`/agenda/semana?repor=...`). Paciente e
+   * disciplina vêm fixados da falta original — só o horário/terapeuta são
+   * escolhidos aqui. Sempre grava como avulsa (`session.repostaDe`),
+   * nunca vira regra recorrente. */
+  reposicao?: {
+    repostaDe: string;
+    pacienteFixo: { id: string; nome: string };
+    disciplinaFixa: string;
+  };
 }
 
 const ESTADO_INICIAL: EstadoAcao = {};
@@ -60,10 +70,17 @@ function formatarDataBR(dataISO: string): string {
 }
 
 export function PopoverAlocar(props: PopoverAlocarProps) {
-  const [modo, setModo] = useState<"recorrente" | "avulsa">("recorrente");
-  const [disciplina, setDisciplina] = useState(props.disciplinas[0] ?? "");
-  const [tipo, setTipo] = useState<(typeof TIPOS_AVULSA)[number]["v"]>("avaliacao");
-  const [entidadeVar, setEntidadeVar] = useState<string | null>(null);
+  const reposicao = props.reposicao;
+  const [modo, setModo] = useState<"recorrente" | "avulsa">(reposicao ? "avulsa" : "recorrente");
+  const [disciplina, setDisciplina] = useState(
+    reposicao?.disciplinaFixa ?? props.disciplinas[0] ?? "",
+  );
+  const [tipo, setTipo] = useState<"terapia" | (typeof TIPOS_AVULSA)[number]["v"]>(
+    reposicao ? "terapia" : "avaliacao",
+  );
+  const [entidadeVar, setEntidadeVar] = useState<string | null>(
+    reposicao ? reposicao.pacienteFixo.id : null,
+  );
   const [duracao, setDuracao] = useState(props.duracaoPadrao[disciplina] ?? 60);
 
   const action = modo === "recorrente" ? criarRegraAction : criarAvulsaAction;
@@ -90,25 +107,28 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
           {formatarDataBR(props.dataISO)} às {minParaHora(props.inicioMin)}
         </DialogDescription>
 
-        {/* Toggle Recorrente | Avulsa (C6) */}
-        <div role="group" aria-label="Tipo de alocação" className="my-3 flex gap-2">
-          <Button
-            type="button"
-            variante={modo === "recorrente" ? "primaria" : "secundaria"}
-            aria-pressed={modo === "recorrente"}
-            onClick={() => setModo("recorrente")}
-          >
-            Recorrente
-          </Button>
-          <Button
-            type="button"
-            variante={modo === "avulsa" ? "primaria" : "secundaria"}
-            aria-pressed={modo === "avulsa"}
-            onClick={() => setModo("avulsa")}
-          >
-            Avulsa
-          </Button>
-        </div>
+        {/* Toggle Recorrente | Avulsa (C6) — reposição não é regra, sempre
+            grava avulsa com repostaDe; toggle não faz sentido aqui. */}
+        {!reposicao && (
+          <div role="group" aria-label="Tipo de alocação" className="my-3 flex gap-2">
+            <Button
+              type="button"
+              variante={modo === "recorrente" ? "primaria" : "secundaria"}
+              aria-pressed={modo === "recorrente"}
+              onClick={() => setModo("recorrente")}
+            >
+              Recorrente
+            </Button>
+            <Button
+              type="button"
+              variante={modo === "avulsa" ? "primaria" : "secundaria"}
+              aria-pressed={modo === "avulsa"}
+              onClick={() => setModo("avulsa")}
+            >
+              Avulsa
+            </Button>
+          </div>
+        )}
 
         {estado.error && (
           <Alert severidade="erro" titulo="Não foi possível alocar">
@@ -130,31 +150,57 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
           <input type="hidden" name="disciplina" value={disciplina} />
           {modo === "avulsa" && <input type="hidden" name="tipo" value={tipo} />}
           <input type="hidden" name="modalidade" value="presencial" />
+          <input type="hidden" name="repostaDe" value={reposicao?.repostaDe ?? ""} />
 
-          <ComboboxEntidade
-            label={pedePaciente ? "Paciente" : "Terapeuta"}
-            opcoes={opcoesVar}
-            valor={entidadeVar}
-            aoSelecionar={setEntidadeVar}
-            aoBuscar={pedePaciente ? props.aoBuscarEntidadeVar : undefined}
-          />
+          {reposicao ? (
+            <Field label="Paciente" htmlFor="popover-alocar-paciente-fixo">
+              <Input
+                id="popover-alocar-paciente-fixo"
+                value={reposicao.pacienteFixo.nome}
+                readOnly
+                disabled
+              />
+            </Field>
+          ) : (
+            <ComboboxEntidade
+              label={pedePaciente ? "Paciente" : "Terapeuta"}
+              opcoes={opcoesVar}
+              valor={entidadeVar}
+              aoSelecionar={setEntidadeVar}
+              aoBuscar={pedePaciente ? props.aoBuscarEntidadeVar : undefined}
+            />
+          )}
 
-          <Field label="Disciplina" htmlFor="popover-alocar-disciplina">
-            <Select value={disciplina} onValueChange={trocarDisciplina}>
-              <SelectTrigger id="popover-alocar-disciplina">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {props.disciplinas.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d.toUpperCase()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          {reposicao ? (
+            <Field label="Disciplina" htmlFor="popover-alocar-disciplina-fixa">
+              <Input
+                id="popover-alocar-disciplina-fixa"
+                value={disciplina.toUpperCase()}
+                readOnly
+                disabled
+              />
+            </Field>
+          ) : (
+            <Field label="Disciplina" htmlFor="popover-alocar-disciplina">
+              <Select value={disciplina} onValueChange={trocarDisciplina}>
+                <SelectTrigger id="popover-alocar-disciplina">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {props.disciplinas.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d.toUpperCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
 
-          {modo === "avulsa" && (
+          {/* Reposição é sempre tipo "terapia" (repõe uma sessão comum) —
+              o seletor de tipo especial (avaliação/devolutiva/...) não se
+              aplica; o hidden input acima já carrega "terapia". */}
+          {modo === "avulsa" && !reposicao && (
             <Field label="Tipo" htmlFor="popover-alocar-tipo">
               <Select
                 value={tipo}

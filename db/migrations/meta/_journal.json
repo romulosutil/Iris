@@ -253,6 +253,13 @@
       "when": 1784229603545,
       "tag": "0035_agenda2_session_exclude_overbook",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1784229604545,
+      "tag": "0036_agenda2_disciplina_notnull",
+      "breakpoints": true
     }
   ]
 }

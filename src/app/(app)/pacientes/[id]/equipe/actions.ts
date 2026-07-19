@@ -21,7 +21,7 @@ export async function adicionarMembroEquipe(
 ): Promise<{ error?: string }> {
   requireRole(ctx, "coordenador");
   const userId = String(formData.get("userId") ?? "").trim();
-  if (!userId) return { error: "Selecione um profissional." };
+  if (!userId) return { error: "Selecione um terapeuta." };
   const disciplina = String(formData.get("disciplina") ?? "").trim();
   if (!disciplina) return { error: "Informe a disciplina." };
   const papelNaEquipe = String(formData.get("papelNaEquipe") ?? "").trim();
@@ -35,7 +35,7 @@ export async function adicionarMembroEquipe(
   // Espelha o CHECK ctm_nao_auto_supervisao.
   if (responsavelTecnicoId && responsavelTecnicoId === userId) {
     return {
-      error: "Um profissional não pode ser responsável técnico de si mesmo.",
+      error: "Um terapeuta não pode ser responsável técnico de si mesmo.",
     };
   }
   await withTenant(ctx, (tx) =>
