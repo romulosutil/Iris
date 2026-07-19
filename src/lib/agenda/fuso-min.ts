@@ -25,3 +25,20 @@ export function paraMinutosLocais(
   const minuto = Number(partes.minute);
   return { diaSemana, inicioMin: hora * 60 + minuto };
 }
+
+// Converte um instante absoluto para a data local (YYYY-MM-DD) na zona da
+// clínica, via Intl (respeita DST). F2: comparar sessões concretas/esperadas
+// por data local, não por timestamp cru.
+export function paraDataLocal(instante: Date, fuso: string): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: fuso,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(instante)
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.year}-${p.month}-${p.day}`;
+}

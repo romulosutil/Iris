@@ -1,10 +1,10 @@
-import { and, asc, eq, gte, ilike, isNull, lte } from "drizzle-orm";
+import { and, asc, count, eq, gt, gte, ilike, isNull, lte, max, min, or, sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
 import { diasDaSemana, vigenciaInicioC7 } from "@/lib/agenda/semana";
-import { paraMinutosLocais } from "@/lib/agenda/fuso-min";
+import { paraDataLocal, paraMinutosLocais } from "@/lib/agenda/fuso-min";
 import {
   projetarSemana,
   type AvulsaProjecao,
@@ -13,6 +13,13 @@ import {
 } from "@/lib/agenda/projecao";
 import { horaParaMin, type FaixaDia } from "@/lib/agenda/janela";
 import { conflita, type Slot } from "@/lib/agenda/conflito";
+import {
+  datasDaRegra,
+  horizontePadrao,
+  proximoDia,
+  resolverInstante,
+  type BloqueioPeriodo,
+} from "@/lib/agenda/materializar";
 
 export async function listarPacientes(
   ctx: TenantContext,
@@ -88,16 +95,10 @@ export async function carregarSemana(
           lte(schema.agendamentoRecorrente.vigenciaInicio, ultimo),
         ),
       );
-    const regras: RegraProjecao[] = regrasRaw.map((r) => ({
-      id: r.id,
-      diaSemana: r.diaSemana,
-      horaInicio: r.horaInicio,
-      duracaoMin: r.duracaoMin,
-      disciplina: r.disciplina,
-      rotulo: r.rotulo ?? "—",
-    }));
-
-    // Avulsas (session recorrenteId null) na janela de datas (concreto).
+    // Sessões concretas (avulsas + materializadas, estado="agendada") na
+    // janela de datas. Etapa D (F2): não filtra mais isNull(recorrenteId) —
+    // materializadas também aparecem como bloco "concreto". O de-dup contra
+    // "previsto" é feito via recorrentesConcretos abaixo.
     const colSessEntidade =
       eixo === "terapeuta" ? schema.session.terapeutaId : schema.session.patientId;
     const avulsasRaw = await tx
@@ -107,6 +108,7 @@ export async function carregarSemana(
         duracaoMin: schema.session.duracaoMin,
         disciplina: schema.session.disciplina,
         rotulo: colRotulo,
+        recorrenteId: schema.session.recorrenteId,
       })
       .from(schema.session)
       .innerJoin(schema.patient, eq(schema.session.patientId, schema.patient.id))
@@ -115,7 +117,7 @@ export async function carregarSemana(
         and(
           eq(schema.session.clinicId, ctx.clinicId),
           eq(colSessEntidade, entidadeId),
-          isNull(schema.session.recorrenteId),
+          eq(schema.session.estado, "agendada"),
           gte(
             schema.session.agendadaPara,
             new Date(`${primeiro}T00:00:00${FUSO_CLINICA_OFFSET}`),
@@ -126,6 +128,9 @@ export async function carregarSemana(
           ),
         ),
       );
+    const recorrentesConcretos = new Set(
+      avulsasRaw.filter((a) => a.recorrenteId).map((a) => a.recorrenteId as string),
+    );
     const avulsas: AvulsaProjecao[] = avulsasRaw.map((a) => {
       const { diaSemana, inicioMin } = paraMinutosLocais(a.agendadaPara, FUSO_CLINICA);
       return {
@@ -135,8 +140,23 @@ export async function carregarSemana(
         duracaoMin: a.duracaoMin,
         disciplina: a.disciplina ?? "—",
         rotulo: a.rotulo ?? "—",
+        recorrenteId: a.recorrenteId ?? undefined,
       };
     });
+
+    // Regra só é projetada como "previsto" se não houver sessão concreta dela
+    // nesta semana (de-dup por recorrenteId) — evita bloco duplicado quando a
+    // regra já foi materializada (F2).
+    const regras: RegraProjecao[] = regrasRaw
+      .filter((r) => !recorrentesConcretos.has(r.id))
+      .map((r) => ({
+        id: r.id,
+        diaSemana: r.diaSemana,
+        horaInicio: r.horaInicio,
+        duracaoMin: r.duracaoMin,
+        disciplina: r.disciplina,
+        rotulo: r.rotulo ?? "—",
+      }));
 
     // Janelas de trabalho (só no eixo terapeuta).
     let janelas: FaixaDia[] = [];
@@ -171,7 +191,23 @@ export async function carregarSemana(
         ),
       );
 
-    return { blocos: projetarSemana(regras, avulsas), janelas, bloqueios: bloq };
+    const blocos = projetarSemana(regras, avulsas);
+    // F2: previsto dentro do horizonte, sem sessão e não bloqueado = conflito.
+    const conflitoKeys = new Set<string>();
+    for (const r of regras) {
+      for (const d of await conflitosNaTx(tx, ctx, r.id)) {
+        if (d >= primeiro && d <= ultimo) conflitoKeys.add(`${r.id}|${d}`);
+      }
+    }
+    const idxDia = (ds: number) => (ds === 0 ? 6 : ds - 1); // diaSemana→índice em dias (seg..dom)
+    const blocosMarcados = blocos.map((b) =>
+      b.origem === "previsto" &&
+      b.recorrenteId &&
+      conflitoKeys.has(`${b.recorrenteId}|${dias[idxDia(b.diaSemana)]}`)
+        ? { ...b, origem: "conflito" as const }
+        : b,
+    );
+    return { blocos: blocosMarcados, janelas, bloqueios: bloq };
   });
 }
 
@@ -294,6 +330,36 @@ export async function criarRegra(
         status: "ativo",
       })
       .returning({ id: schema.agendamentoRecorrente.id });
+
+    const fusoRow = await tx
+      .select({ timezone: schema.clinic.timezone })
+      .from(schema.clinic)
+      .where(eq(schema.clinic.id, ctx.clinicId));
+    const bloqueios = await tx
+      .select({ dataInicio: schema.bloqueio.dataInicio, dataFim: schema.bloqueio.dataFim })
+      .from(schema.bloqueio)
+      .where(
+        and(
+          eq(schema.bloqueio.clinicId, ctx.clinicId),
+          or(
+            eq(schema.bloqueio.escopo, "clinica"),
+            and(eq(schema.bloqueio.escopo, "terapeuta"), eq(schema.bloqueio.terapeutaId, dados.terapeutaId)),
+            and(eq(schema.bloqueio.escopo, "paciente"), eq(schema.bloqueio.patientId, dados.patientId)),
+          ),
+        ),
+      );
+    await materializarNaTx(tx, {
+      regra: {
+        id: row!.id, clinicId: ctx.clinicId, patientId: dados.patientId,
+        terapeutaId: dados.terapeutaId, disciplina: dados.disciplina,
+        diaSemana: dados.diaSemana, horaInicio: dados.horaInicio, duracaoMin: dados.duracaoMin,
+        vigenciaInicio, vigenciaFim: null,
+      },
+      bloqueios,
+      fuso: fusoRow[0]?.timezone ?? "America/Sao_Paulo",
+      deISO: vigenciaInicio,
+      ateISO: horizontePadrao(dados.hojeISO),
+    });
     return row!;
   });
 }
@@ -321,14 +387,20 @@ export async function criarAvulsa(
   dados: NovaAvulsa,
 ): Promise<{ id: string }> {
   requireRole(ctx, "coordenador");
-  const agendadaPara = new Date(
-    `${dados.dataISO}T${dados.horaInicio}:00${FUSO_CLINICA_OFFSET}`,
-  );
   const diaSemana = new Date(`${dados.dataISO}T00:00:00Z`).getUTCDay();
   const inicioMin = horaParaMin(dados.horaInicio);
   const novo: Slot = { diaSemana, inicioMin, fimMin: inicioMin + dados.duracaoMin };
   try {
     return await withTenant(ctx, async (tx) => {
+      const [clinicRow] = await tx
+        .select({ timezone: schema.clinic.timezone })
+        .from(schema.clinic)
+        .where(eq(schema.clinic.id, ctx.clinicId));
+      const agendadaPara = resolverInstante(
+        dados.dataISO,
+        dados.horaInicio,
+        clinicRow?.timezone ?? "America/Sao_Paulo",
+      );
       const regrasAtivas = await tx
         .select({
           terapeutaId: schema.agendamentoRecorrente.terapeutaId,
@@ -378,13 +450,8 @@ export async function criarAvulsa(
       return row!;
     });
   } catch (e) {
-    // EXCLUDE gist (btree_gist) → SQLSTATE 23P01 exclusion_violation. O driver
-    // postgres-js lança o erro cru; o drizzle-orm o envolve em
-    // DrizzleQueryError com o original em `.cause` — checar os dois.
-    const code =
-      (e as { code?: string } | undefined)?.code ??
-      (e as { cause?: { code?: string } } | undefined)?.cause?.code;
-    if (code === "23P01") {
+    // EXCLUDE gist (btree_gist) → SQLSTATE 23P01 exclusion_violation.
+    if (codigoPg(e) === "23P01") {
       throw new ConflitoError("terapeuta");
     }
     throw e;
@@ -407,6 +474,311 @@ export async function carregarConfigClinica(ctx: TenantContext): Promise<ConfigC
       .where(eq(schema.clinic.id, ctx.clinicId));
     const duracaoDisciplina = (row?.duracaoDisciplina as Record<string, number> | undefined) ?? {};
     return { disciplinas: Object.keys(duracaoDisciplina), duracaoDisciplina };
+  });
+}
+
+export interface ResultadoMaterializacao {
+  geradas: number;
+  puladas: string[]; // datas ISO puladas por overbook (23P01)
+}
+
+/** SQLSTATE do erro do postgres-js (drizzle embrulha em DrizzleQueryError → .cause). */
+export function codigoPg(e: unknown): string | undefined {
+  return (
+    (e as { code?: string } | undefined)?.code ??
+    (e as { cause?: { code?: string } } | undefined)?.cause?.code
+  );
+}
+
+// `Tx` = o tipo do 1º arg do callback de withTenant. Reusa a inferência local.
+type TxMat = Parameters<Parameters<typeof withTenant<unknown>>[1]>[0];
+
+interface MaterializarParams {
+  regra: {
+    id: string;
+    clinicId: string;
+    patientId: string;
+    terapeutaId: string;
+    disciplina: string;
+    diaSemana: number;
+    horaInicio: string;
+    duracaoMin: number;
+    vigenciaInicio: string;
+    vigenciaFim: string | null;
+  };
+  bloqueios: BloqueioPeriodo[];
+  fuso: string;
+  deISO: string;
+  ateISO: string;
+}
+
+/**
+ * Materializa as ocorrências da regra DENTRO de uma tx já aberta. Insert por
+ * savepoint (tx.transaction): 23505 (retry) → skip silencioso; 23P01 (overbook)
+ * → puladas[]; outro código → rethrow (aborta a tx). Reusada por criarRegra (mesma
+ * tx, atômico D-7) e materializarRegra (tx própria).
+ */
+export async function materializarNaTx(
+  tx: TxMat,
+  { regra, bloqueios, fuso, deISO, ateISO }: MaterializarParams,
+): Promise<ResultadoMaterializacao> {
+  const datas = datasDaRegra(
+    { diaSemana: regra.diaSemana, vigenciaInicio: regra.vigenciaInicio, vigenciaFim: regra.vigenciaFim },
+    deISO,
+    ateISO,
+    bloqueios,
+  );
+  let geradas = 0;
+  const puladas: string[] = [];
+  for (const data of datas) {
+    const agendadaPara = resolverInstante(data, regra.horaInicio, fuso);
+    try {
+      await tx.transaction(async (sp) => {
+        await sp.insert(schema.session).values({
+          clinicId: regra.clinicId,
+          patientId: regra.patientId,
+          terapeutaId: regra.terapeutaId,
+          recorrenteId: regra.id,
+          disciplina: regra.disciplina,
+          agendadaPara,
+          duracaoMin: regra.duracaoMin,
+          estado: "agendada",
+          tipo: "terapia",
+        });
+      });
+      geradas++;
+    } catch (e) {
+      const code = codigoPg(e);
+      if (code === "23505") continue; // idempotente (uq_session_recorrente_agendada)
+      if (code === "23P01") { puladas.push(data); continue; } // overbook (EXCLUDE gist)
+      throw e; // erro real → propaga, aborta a tx
+    }
+  }
+  return { geradas, puladas };
+}
+
+/**
+ * F2: re-deriva as datas "esperadas" da regra que caem DENTRO do horizonte já
+ * materializado (`<= max(agendada_para)`), não estão bloqueadas, e NÃO têm
+ * sessão concreta (de qualquer estado) — i.e. foram puladas por overbook
+ * (23P01) na materialização. Persistente: recalculada a cada load, sem
+ * coluna nova. Datas além do max = "ainda não materializado" (estender
+ * resolve), NÃO são conflito.
+ */
+export async function conflitosNaTx(
+  tx: TxMat,
+  ctx: TenantContext,
+  regraId: string,
+): Promise<string[]> {
+  const [regra] = await tx
+    .select()
+    .from(schema.agendamentoRecorrente)
+    .where(
+      and(
+        eq(schema.agendamentoRecorrente.id, regraId),
+        eq(schema.agendamentoRecorrente.clinicId, ctx.clinicId),
+      ),
+    );
+  if (!regra) return [];
+  const [clinicRow] = await tx
+    .select({ timezone: schema.clinic.timezone })
+    .from(schema.clinic)
+    .where(eq(schema.clinic.id, ctx.clinicId));
+  const fuso = clinicRow?.timezone ?? "America/Sao_Paulo";
+  const [maxRow] = await tx
+    .select({ ultimo: max(schema.session.agendadaPara) })
+    .from(schema.session)
+    .where(eq(schema.session.recorrenteId, regraId));
+  if (!maxRow?.ultimo) return []; // nada materializado → sem conflito
+  const maxISO = paraDataLocal(new Date(maxRow.ultimo), fuso);
+  const bloqueios = await tx
+    .select({ dataInicio: schema.bloqueio.dataInicio, dataFim: schema.bloqueio.dataFim })
+    .from(schema.bloqueio)
+    .where(
+      and(
+        eq(schema.bloqueio.clinicId, ctx.clinicId),
+        or(
+          eq(schema.bloqueio.escopo, "clinica"),
+          and(eq(schema.bloqueio.escopo, "terapeuta"), eq(schema.bloqueio.terapeutaId, regra.terapeutaId)),
+          and(eq(schema.bloqueio.escopo, "paciente"), eq(schema.bloqueio.patientId, regra.patientId)),
+        ),
+      ),
+    );
+  const esperadas = datasDaRegra(
+    { diaSemana: regra.diaSemana, vigenciaInicio: regra.vigenciaInicio, vigenciaFim: regra.vigenciaFim },
+    regra.vigenciaInicio,
+    maxISO,
+    bloqueios,
+  );
+  const concretasRows = await tx
+    .select({ ap: schema.session.agendadaPara })
+    .from(schema.session)
+    .where(eq(schema.session.recorrenteId, regraId)); // QUALQUER estado (slot materializado existe)
+  const concretas = new Set(concretasRows.map((r) => paraDataLocal(new Date(r.ap), fuso)));
+  return esperadas.filter((d) => !concretas.has(d));
+}
+
+/** F2: expõe `conflitosNaTx` p/ a action (`requireRole`+`withTenant`). */
+export async function conflitosDaRegra(ctx: TenantContext, regraId: string): Promise<string[]> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, (tx) => conflitosNaTx(tx, ctx, regraId));
+}
+
+/** Materializa a regra até `ateISO`, retomando de max(agendada_para)+1dia. */
+export async function materializarRegra(
+  ctx: TenantContext,
+  regraId: string,
+  ateISO: string,
+): Promise<ResultadoMaterializacao> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, async (tx) => {
+    const [regra] = await tx
+      .select()
+      .from(schema.agendamentoRecorrente)
+      .where(
+        and(
+          eq(schema.agendamentoRecorrente.id, regraId),
+          eq(schema.agendamentoRecorrente.clinicId, ctx.clinicId),
+        ),
+      );
+    if (!regra) return { geradas: 0, puladas: [] };
+
+    const [clinicRow] = await tx
+      .select({ timezone: schema.clinic.timezone })
+      .from(schema.clinic)
+      .where(eq(schema.clinic.id, ctx.clinicId));
+    const fuso = clinicRow?.timezone ?? "America/Sao_Paulo";
+
+    const [ultimoRow] = await tx
+      .select({ ultimo: max(schema.session.agendadaPara) })
+      .from(schema.session)
+      .where(eq(schema.session.recorrenteId, regraId));
+    const ultimo = ultimoRow?.ultimo ?? null;
+    // deISO = max(materializado + 1 dia, vigenciaInicio)
+    const deISO = ultimo
+      ? proximoDia(new Date(ultimo).toISOString().slice(0, 10))
+      : regra.vigenciaInicio;
+
+    const bloqueios = await tx
+      .select({ dataInicio: schema.bloqueio.dataInicio, dataFim: schema.bloqueio.dataFim })
+      .from(schema.bloqueio)
+      .where(
+        and(
+          eq(schema.bloqueio.clinicId, ctx.clinicId),
+          or(
+            eq(schema.bloqueio.escopo, "clinica"),
+            and(eq(schema.bloqueio.escopo, "terapeuta"), eq(schema.bloqueio.terapeutaId, regra.terapeutaId)),
+            and(eq(schema.bloqueio.escopo, "paciente"), eq(schema.bloqueio.patientId, regra.patientId)),
+          ),
+          lte(schema.bloqueio.dataInicio, ateISO),
+          gte(schema.bloqueio.dataFim, deISO),
+        ),
+      );
+
+    return materializarNaTx(tx, {
+      regra: {
+        id: regra.id, clinicId: regra.clinicId, patientId: regra.patientId,
+        terapeutaId: regra.terapeutaId, disciplina: regra.disciplina,
+        diaSemana: regra.diaSemana, horaInicio: regra.horaInicio, duracaoMin: regra.duracaoMin,
+        vigenciaInicio: regra.vigenciaInicio, vigenciaFim: regra.vigenciaFim,
+      },
+      bloqueios, fuso, deISO, ateISO,
+    });
+  });
+}
+
+async function cutoffEncerramento(
+  tx: TxMat,
+  clinicId: string,
+  ateFimISO: string,
+): Promise<Date> {
+  const [clinicRow] = await tx
+    .select({ timezone: schema.clinic.timezone })
+    .from(schema.clinic)
+    .where(eq(schema.clinic.id, clinicId));
+  return resolverInstante(
+    proximoDia(ateFimISO),
+    "00:00",
+    clinicRow?.timezone ?? "America/Sao_Paulo",
+  );
+}
+
+/** Etapa D (contagem): quantas sessões `agendada` futuras (a partir do dia
+ * seguinte a `ateFimISO`, F5a "hoje fica, amanhã+ sai") a regra ainda tem. */
+export async function contarFuturasDaRegra(
+  ctx: TenantContext,
+  regraId: string,
+  ateFimISO: string,
+): Promise<number> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, async (tx) => {
+    const cutoff = await cutoffEncerramento(tx, ctx.clinicId, ateFimISO);
+    const [row] = await tx
+      .select({ n: count() })
+      .from(schema.session)
+      .where(
+        and(
+          eq(schema.session.recorrenteId, regraId),
+          eq(schema.session.estado, "agendada"),
+          gte(schema.session.agendadaPara, cutoff),
+        ),
+      );
+    return row?.n ?? 0;
+  });
+}
+
+/** Etapa D (encerrar "esta e futuras"): marca a regra como `encerrado` com
+ * `vigencia_fim=ateFimISO` e remove só as sessões `agendada` futuras (D-5:
+ * preserva `realizada`/`falta`/`cancelada`, inclusive as futuras já lançadas). */
+export async function encerrarRegra(
+  ctx: TenantContext,
+  regraId: string,
+  ateFimISO: string,
+): Promise<{ removidas: number }> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, async (tx) => {
+    const cutoff = await cutoffEncerramento(tx, ctx.clinicId, ateFimISO);
+    await tx
+      .update(schema.agendamentoRecorrente)
+      .set({ status: "encerrado", vigenciaFim: ateFimISO })
+      .where(
+        and(
+          eq(schema.agendamentoRecorrente.id, regraId),
+          eq(schema.agendamentoRecorrente.clinicId, ctx.clinicId),
+        ),
+      );
+    const removidas = await tx
+      .delete(schema.session)
+      .where(
+        and(
+          eq(schema.session.recorrenteId, regraId),
+          eq(schema.session.estado, "agendada"),
+          gte(schema.session.agendadaPara, cutoff),
+        ),
+      )
+      .returning({ id: schema.session.id });
+    return { removidas: removidas.length };
+  });
+}
+
+/** Etapa D: próxima sessão `agendada` futura da regra (`YYYY-MM-DD` ou null). */
+export async function proximaSessaoDaRegra(
+  ctx: TenantContext,
+  regraId: string,
+): Promise<string | null> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, async (tx) => {
+    const [row] = await tx
+      .select({ prox: min(schema.session.agendadaPara) })
+      .from(schema.session)
+      .where(
+        and(
+          eq(schema.session.recorrenteId, regraId),
+          eq(schema.session.estado, "agendada"),
+          gt(schema.session.agendadaPara, sql`now()`),
+        ),
+      );
+    return row?.prox ? new Date(row.prox).toISOString().slice(0, 10) : null;
   });
 }
 

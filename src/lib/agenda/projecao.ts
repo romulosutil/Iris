@@ -1,6 +1,6 @@
 import { horaParaMin } from "./janela";
 
-export type OrigemBloco = "previsto" | "concreto";
+export type OrigemBloco = "previsto" | "concreto" | "conflito";
 
 export interface RegraProjecao {
   id: string;
@@ -18,6 +18,8 @@ export interface AvulsaProjecao {
   duracaoMin: number;
   disciplina: string;
   rotulo: string;
+  /** Regra que originou esta sessão materializada (null/undefined p/ avulsa pura). */
+  recorrenteId?: string | null;
 }
 
 export interface BlocoAgenda {
@@ -28,6 +30,10 @@ export interface BlocoAgenda {
   duracaoMin: number;
   disciplina: string;
   rotulo: string;
+  /** Regra de origem (Etapa D): presente em todo bloco "previsto" (a própria
+   * regra) e em "concreto" quando a sessão foi materializada de uma regra.
+   * Ausente em avulsa pura — overlay correspondente continua não-interativo. */
+  recorrenteId?: string;
 }
 
 /** Unifica regras (previsto) e avulsas (concreto) em blocos ordenados. */
@@ -43,6 +49,7 @@ export function projetarSemana(
     duracaoMin: r.duracaoMin,
     disciplina: r.disciplina,
     rotulo: r.rotulo,
+    recorrenteId: r.id,
   }));
   const concretos: BlocoAgenda[] = avulsas.map((a) => ({
     id: a.id,
@@ -52,6 +59,7 @@ export function projetarSemana(
     duracaoMin: a.duracaoMin,
     disciplina: a.disciplina,
     rotulo: a.rotulo,
+    recorrenteId: a.recorrenteId ?? undefined,
   }));
   return [...previstos, ...concretos].sort(
     (x, y) => x.diaSemana - y.diaSemana || x.inicioMin - y.inicioMin,

@@ -94,4 +94,14 @@ describe.skipIf(!hasDb)("criarAvulsa", () => {
     // base é do U_T1_A (terapeuta livre); só a dimensão paciente deve colidir.
     await expect(criarAvulsa(ctxCoordA, base)).rejects.toBeInstanceOf(ConflitoError);
   });
+
+  test("ancora via resolverInstante: 09:00 SP grava 12:00Z (não-regressão F3)", async () => {
+    const { id } = await criarAvulsa(ctxCoordA, base); // base.dataISO 2026-07-13, horaInicio 09:00
+    // `owner` (bypass RLS) em vez de `appSql`: fora de uma tx de withTenant não
+    // há GUC app.clinic_id setado, então uma query app_role falharia com
+    // "invalid input syntax for type uuid" — mesmo padrão dos demais testes
+    // deste arquivo, que já leem de volta via `owner`.
+    const [s] = await owner`SELECT agendada_para FROM session WHERE id = ${id}`;
+    expect(new Date(s!.agendada_para).toISOString()).toBe("2026-07-13T12:00:00.000Z");
+  });
 });

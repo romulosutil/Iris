@@ -24,6 +24,68 @@
 
 ---
 
+## 🧭 Sessão 18-19/07/2026 — Agenda 2.0 Etapa D (materialização IANA) — ✅ CONCLUÍDA
+
+**Design:** `docs/superpowers/specs/2026-07-18-agenda-2.0-etapa-d-materializacao-design.md`
+**Plano:** `docs/superpowers/plans/2026-07-18-agenda-2.0-etapa-d-materializacao.md`
+**Branch:** `feat/agenda-2.0-etapa-d`. Execução subagent-driven (12 tasks, cada uma
+com review spec+qualidade; review final whole-branch opus). Gate final GREEN:
+lint/typecheck/build limpos, unit 243/243, `test:rls` só as 15 falhas baseline
+conhecidas (enum `session_estado` desync local, alheias à agenda).
+
+**Entregue:**
+* **Materialização IANA** (`resolverInstante`, ponto-fixo 2 iterações robusto a
+  DST — teste dedicado com `America/New_York`; SP é -3 fixo, NY prova
+  portabilidade). Núcleo puro em `src/lib/agenda/materializar.ts`.
+* **Idempotência + anti-overbook por ocorrência:** insert por SAVEPOINT
+  (`tx.transaction`) — `23505`→skip silencioso, `23P01`→`puladas[]`, outro→rethrow.
+  **Não** usa `onConflictDoNothing` (índice de idempotência é parcial → arbiter
+  frágil + engoliria o `23P01`).
+* **`criarRegra` atômico:** materializa o horizonte inicial (12 semanas) na mesma
+  transação do insert da regra.
+* **`estender`** (horizonte rolling on-demand, retoma de `max(agendada_para)+1dia`),
+  **`encerrarRegra`** ("esta e futuras": deleta só `agendada` futura, passado
+  preservado; confirmação com contagem real), **`carregarSemana`** lê
+  materializadas como concreto + de-dup do previsto.
+* **F2 superfície de conflito persistente:** datas puladas por overbook são
+  **re-derivadas** do banco (`datasDaRegra` até `max(agendada_para)` menos sessões
+  concretas de qualquer estado) — célula "conflito" no calendário + lista no
+  `PopoverRegra`. Sem coluna nova, sem threading de `puladas`.
+* **F3 unificação de fuso (fecha dívida da Etapa C):** `criarAvulsa` passou a
+  ancorar via `resolverInstante`/`clinic.timezone` — escrita unificada.
+
+**Review adversarial (3 lentes) → 5 achados F1-F5, todos endereçados:**
+F1 skip via SQLSTATE (não onConflictDoNothing); F2 superfície persistente;
+F3 ancoragem unificada; F4 rótulo "próxima sessão" (não "materializado até");
+F5 encerrar com contagem + testes de atomicidade.
+
+**Dívidas NOVAS abertas (do review final opus, aceitas como backlog):**
+* **Teste do rollback não-`23P01`** (F5b-a): o path `throw e` que reverte a regra
+  inteira em erro real durante a materialização de `criarRegra` está correto mas
+  **sem teste** (difícil sem fault injection). Coverage hole conhecido.
+* **Divergência fuso leitura×escrita:** escrita já é IANA (`resolverInstante`), mas
+  **leitura** ainda usa `FUSO_CLINICA`/`FUSO_CLINICA_OFFSET` hardcoded
+  (`carregarSemana` bounds, `paraMinutosLocais`, pre-check de avulsa do
+  `criarRegra`). Zero impacto em SP (-3 fixo); reconciliar quando entrar clínica
+  multi-fuso. (Fecha parcialmente a dívida C10 — escrita unificada, leitura não.)
+* **`encerrarRegra` DELETE sem `clinicId` explícito:** seguro hoje via RLS
+  `session_delete` (clínica+coordenador), mas assimétrico com o UPDATE acima (que
+  filtra). Adicionar `eq(clinicId)` ao DELETE = defesa em profundidade se o RLS
+  regredir.
+* **`criarRegra` query de bloqueios sem filtro de data-range** (só eficiência —
+  `datasDaRegra` filtra por overlap real; busca linhas a mais).
+* **Variante `destructive` no Button do DS:** encerrar usa `secundaria` (o DS não
+  tem tier destrutivo) → perde cue visual de perigo; a confirmação numérica já
+  mitiga. Adicionar variante destrutiva ao design system.
+
+**Mantidas (dívida consciente do design mestre, NÃO regridem):** cron automático
+de materialização (v1 on-demand), grupo/co-terapia (v1 é 1:1:1). Próximo no
+faseamento: **Etapa E** (ciclo de vida da sessão: estados + substituto
+`atendidoPorId` + reposição `repostaDe` + modalidade) e **Etapa F** (métricas
+por disciplina + alerta de defasagem).
+
+---
+
 ## 🧭 Sessão 18/07/2026 — Agenda 2.0 Etapa C (design + tech-lead review)
 
 **Design doc:** `docs/superpowers/specs/2026-07-18-agenda-2.0-etapa-c-calendario-alocacao-design.md`
