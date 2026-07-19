@@ -97,6 +97,18 @@ runtime a Iris vai ter.
   (`bloqueio`, `agendamento_recorrente`) usam p/ impedir `clinic_id` divergir do
   paciente. Não é furo de isolamento (RLS chaveia em `patient_id`; `audit_insert`
   re-fixa `clinic_id`), mas alinhar ao padrão do schema.
+* Arquitetura (review final F0): `exportReport` (`src/lib/report/export.ts`)
+  roda `renderer.render()` com a `tx` aberta (trade-off já documentado no
+  topo do arquivo). Sob pooler de transação (PgBouncer), render lento do
+  Chromium pode esgotar o pool. Quando o render real chegar (Task 7),
+  reavaliar: fazer read+render 100% fora da transação, abrir a tx só para o
+  recheck `FOR UPDATE` + escritas (fases 3/4).
+* Segurança (NIT, review final F0 → **PR 46**): `app_purgar_report` (`0040`)
+  usa mensagens de exceção distintas p/ "inexistente" vs. "fora da clínica",
+  criando um oráculo teórico de existência de ID cross-tenant (UUID 128-bit
+  torna inexplorável, mas é má prática). Unificar numa mensagem genérica
+  ("report % não encontrado ou inacessível"). **Via migração nova** com
+  `CREATE OR REPLACE` — não editar `0040` já aplicada.
 
 ---
 
