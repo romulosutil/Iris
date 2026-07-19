@@ -140,6 +140,30 @@ describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => 
     expect(naQuarta[0]!.origem).toBe("concreto"); // a materializada vence
   });
 
+  test("F2: previsto sem sessão dentro do horizonte materializado vira origem conflito", async () => {
+    // regra quinta 08:00 (dia_semana=4), com sessões materializadas em
+    // 2026-07-16 e 2026-08-06 mas PULANDO 2026-07-23 (a semana visível é
+    // 13-19/07, então a materializada de 16/07 fica fora da semana e o
+    // "previsto" da própria regra na quinta 16/07 não existe pra semana
+    // visível — usamos a quinta 2026-07-16 mesmo, dentro da semana 13-19/07).
+    const regraConflito = await owner`INSERT INTO agendamento_recorrente
+      (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
+      VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 4, '08:00', 60, '2026-07-16', 'ativo')
+      RETURNING id`;
+    const idRegraConflito = regraConflito[0]!.id as string;
+    // materializa só a próxima ocorrência (2026-07-23, fora da semana
+    // visível) — max(agendada_para) passa a ser 23/07, então a quinta
+    // 16/07 (dentro do horizonte materializado, sem sessão) é conflito.
+    await owner`INSERT INTO session
+      (clinic_id, patient_id, terapeuta_id, disciplina, agendada_para, duracao_min, estado, recorrente_id)
+      VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', '2026-07-23T11:00:00Z', 60, 'agendada', ${idRegraConflito})`;
+    const r = await carregarSemana(ctxCoordA, {
+      eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
+    });
+    const blocoQuinta = r.blocos.find((b) => b.diaSemana === 4 && b.inicioMin === 480);
+    expect(blocoQuinta).toMatchObject({ origem: "conflito", recorrenteId: idRegraConflito });
+  });
+
   test("disponibilidadeTerapeutaNoDia retorna a janela do dia certo", async () => {
     const faixas = await disponibilidadeTerapeutaNoDia(ctxCoordA, U_T1_A, "2026-07-13");
     expect(faixas).toHaveLength(1);

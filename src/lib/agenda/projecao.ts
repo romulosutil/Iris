@@ -1,6 +1,6 @@
 import { horaParaMin } from "./janela";
 
-export type OrigemBloco = "previsto" | "concreto";
+export type OrigemBloco = "previsto" | "concreto" | "conflito";
 
 export interface RegraProjecao {
   id: string;

@@ -6,6 +6,7 @@ import { RoleError } from "@/auth/require-role";
 import {
   carregarSemana,
   ConflitoError,
+  conflitosDaRegra,
   contarFuturasDaRegra,
   criarAvulsa,
   criarRegra,
@@ -136,4 +137,10 @@ export async function contarFuturasAction(regraId: string, ateFimISO: string): P
 export async function proximaSessaoAction(regraId: string): Promise<string | null> {
   const ctx = await getTenantContext();
   return proximaSessaoDaRegra(ctx, regraId);
+}
+
+/** Leitura fina p/ as datas de conflito (F2): re-derivadas do estado do banco. */
+export async function conflitosAction(regraId: string): Promise<string[]> {
+  const ctx = await getTenantContext();
+  return conflitosDaRegra(ctx, regraId);
 }

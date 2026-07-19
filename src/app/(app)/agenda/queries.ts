@@ -4,7 +4,7 @@ import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
 import { diasDaSemana, vigenciaInicioC7 } from "@/lib/agenda/semana";
-import { paraMinutosLocais } from "@/lib/agenda/fuso-min";
+import { paraDataLocal, paraMinutosLocais } from "@/lib/agenda/fuso-min";
 import {
   projetarSemana,
   type AvulsaProjecao,
@@ -191,7 +191,23 @@ export async function carregarSemana(
         ),
       );
 
-    return { blocos: projetarSemana(regras, avulsas), janelas, bloqueios: bloq };
+    const blocos = projetarSemana(regras, avulsas);
+    // F2: previsto dentro do horizonte, sem sessão e não bloqueado = conflito.
+    const conflitoKeys = new Set<string>();
+    for (const r of regras) {
+      for (const d of await conflitosNaTx(tx, ctx, r.id)) {
+        if (d >= primeiro && d <= ultimo) conflitoKeys.add(`${r.id}|${d}`);
+      }
+    }
+    const idxDia = (ds: number) => (ds === 0 ? 6 : ds - 1); // diaSemana→índice em dias (seg..dom)
+    const blocosMarcados = blocos.map((b) =>
+      b.origem === "previsto" &&
+      b.recorrenteId &&
+      conflitoKeys.has(`${b.recorrenteId}|${dias[idxDia(b.diaSemana)]}`)
+        ? { ...b, origem: "conflito" as const }
+        : b,
+    );
+    return { blocos: blocosMarcados, janelas, bloqueios: bloq };
   });
 }
 
@@ -539,6 +555,73 @@ export async function materializarNaTx(
     }
   }
   return { geradas, puladas };
+}
+
+/**
+ * F2: re-deriva as datas "esperadas" da regra que caem DENTRO do horizonte já
+ * materializado (`<= max(agendada_para)`), não estão bloqueadas, e NÃO têm
+ * sessão concreta (de qualquer estado) — i.e. foram puladas por overbook
+ * (23P01) na materialização. Persistente: recalculada a cada load, sem
+ * coluna nova. Datas além do max = "ainda não materializado" (estender
+ * resolve), NÃO são conflito.
+ */
+export async function conflitosNaTx(
+  tx: TxMat,
+  ctx: TenantContext,
+  regraId: string,
+): Promise<string[]> {
+  const [regra] = await tx
+    .select()
+    .from(schema.agendamentoRecorrente)
+    .where(
+      and(
+        eq(schema.agendamentoRecorrente.id, regraId),
+        eq(schema.agendamentoRecorrente.clinicId, ctx.clinicId),
+      ),
+    );
+  if (!regra) return [];
+  const [clinicRow] = await tx
+    .select({ timezone: schema.clinic.timezone })
+    .from(schema.clinic)
+    .where(eq(schema.clinic.id, ctx.clinicId));
+  const fuso = clinicRow?.timezone ?? "America/Sao_Paulo";
+  const [maxRow] = await tx
+    .select({ ultimo: max(schema.session.agendadaPara) })
+    .from(schema.session)
+    .where(eq(schema.session.recorrenteId, regraId));
+  if (!maxRow?.ultimo) return []; // nada materializado → sem conflito
+  const maxISO = paraDataLocal(new Date(maxRow.ultimo), fuso);
+  const bloqueios = await tx
+    .select({ dataInicio: schema.bloqueio.dataInicio, dataFim: schema.bloqueio.dataFim })
+    .from(schema.bloqueio)
+    .where(
+      and(
+        eq(schema.bloqueio.clinicId, ctx.clinicId),
+        or(
+          eq(schema.bloqueio.escopo, "clinica"),
+          and(eq(schema.bloqueio.escopo, "terapeuta"), eq(schema.bloqueio.terapeutaId, regra.terapeutaId)),
+          and(eq(schema.bloqueio.escopo, "paciente"), eq(schema.bloqueio.patientId, regra.patientId)),
+        ),
+      ),
+    );
+  const esperadas = datasDaRegra(
+    { diaSemana: regra.diaSemana, vigenciaInicio: regra.vigenciaInicio, vigenciaFim: regra.vigenciaFim },
+    regra.vigenciaInicio,
+    maxISO,
+    bloqueios,
+  );
+  const concretasRows = await tx
+    .select({ ap: schema.session.agendadaPara })
+    .from(schema.session)
+    .where(eq(schema.session.recorrenteId, regraId)); // QUALQUER estado (slot materializado existe)
+  const concretas = new Set(concretasRows.map((r) => paraDataLocal(new Date(r.ap), fuso)));
+  return esperadas.filter((d) => !concretas.has(d));
+}
+
+/** F2: expõe `conflitosNaTx` p/ a action (`requireRole`+`withTenant`). */
+export async function conflitosDaRegra(ctx: TenantContext, regraId: string): Promise<string[]> {
+  requireRole(ctx, "coordenador");
+  return withTenant(ctx, (tx) => conflitosNaTx(tx, ctx, regraId));
 }
 
 /** Materializa a regra até `ateISO`, retomando de max(agendada_para)+1dia. */
