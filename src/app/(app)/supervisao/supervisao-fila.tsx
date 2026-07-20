@@ -103,7 +103,7 @@ function ItemCard({
           Item {indice} de {total}
         </span>
         <h3 className="text-ink text-lg font-semibold">
-          <Link href={`/pacientes/${item.patientId}/timeline`} className="hover:underline">
+          <Link href={`/pacientes/${item.patientId}`} className="hover:underline">
             {item.patientNome}
           </Link>
         </h3>
