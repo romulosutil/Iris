@@ -426,26 +426,28 @@ async function main() {
   // 7) Agendamentos Recorrentes (Standing Schedules)
   const schedules: any[] = [];
   for (let i = 0; i < insertedPatients.length; i++) {
-    const pId = insertedPatients[i]!.id;
+    const p = insertedPatients[i]!;
+    const pId = p.id;
+    const origIdx = PACIENTES.indexOf(p.nome);
     let terapeutaId: string;
     let horaInicio: string;
 
-    if (i < 20) {
+    if (origIdx < 20) {
       // Turno da Manhã (0-19)
-      if (i < 10) {
-        terapeutaId = therapistIds[i]!;
+      if (origIdx < 10) {
+        terapeutaId = therapistIds[origIdx]!;
         horaInicio = "08:30:00";
       } else {
-        terapeutaId = therapistIds[i]!;
+        terapeutaId = therapistIds[origIdx]!;
         horaInicio = "10:30:00";
       }
     } else {
       // Turno da Tarde (20-39)
-      if (i < 30) {
-        terapeutaId = therapistIds[i - 20]!; // terapeutas 0-9
+      if (origIdx < 30) {
+        terapeutaId = therapistIds[origIdx - 20]!; // terapeutas 0-9
         horaInicio = "13:30:00";
       } else {
-        terapeutaId = therapistIds[i - 20]!; // terapeutas 10-19
+        terapeutaId = therapistIds[origIdx - 20]!; // terapeutas 10-19
         horaInicio = "15:30:00";
       }
     }
@@ -509,6 +511,7 @@ async function main() {
 
   const sessionValues: any[] = [];
   const patientSessionCounter = new Map<string, number>();
+  let brunoFaltas = 0;
 
   for (const dt of dateList) {
     // Filtra regras recorrentes para o dia da semana correspondente
@@ -532,10 +535,11 @@ async function main() {
       if (dt.isPast) {
         if (pIdx === 1) {
           // Paciente 2 (Bruno Carvalho): Força exatamente 4 faltas para alertar faltas excessivas.
-          // Vamos colocar faltas nos primeiros 4 dias úteis passados.
-          if (dt.dayIndex === -15 || dt.dayIndex === -14 || dt.dayIndex === -13 || dt.dayIndex === -12) {
+          // Registra estado = "falta_paciente" nas 4 primeiras iterações onde dt.isPast for verdadeiro.
+          if (brunoFaltas < 4) {
             estado = "falta_paciente";
             justificada = false;
+            brunoFaltas++;
           } else {
             estado = "realizada";
           }
@@ -599,7 +603,7 @@ async function main() {
         clinicId: c.id,
         patientId: anaBeatrizId,
         terapeutaId: therapist1Id,
-        agendadaPara: new Date(`${dt.dateStr}T09:00:00${FUSO_CLINICA_OFFSET}`),
+        agendadaPara: new Date(`${dt.dateStr}T08:30:00${FUSO_CLINICA_OFFSET}`),
         estado: "agendada",
         disciplina: DISCIPLINA,
         duracaoMin: 90,
@@ -627,7 +631,7 @@ async function main() {
   const patientProtocolMap = new Map<string, string>();
   for (let i = 0; i < insertedPatients.length; i++) {
     const p = insertedPatients[i]!;
-    const protoId = i === 0 ? pMarcosId : pGeralId;
+    const protoId = PACIENTES.indexOf(p.nome) === 0 ? pMarcosId : pGeralId;
     patientProtocolMap.set(p.id, protoId);
   }
 
