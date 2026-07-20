@@ -22,8 +22,7 @@ RUN pnpm install --frozen-lockfile
 # abortando o deploy (o app velho segue no ar contra o schema velho).
 FROM base AS migrate
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json tsconfig.json ./
-COPY scripts ./scripts
+COPY package.json ./
+COPY scripts/migrate.mjs ./scripts/migrate.mjs
 COPY db/migrations ./db/migrations
-COPY src ./src
 CMD ["node", "scripts/migrate.mjs"]

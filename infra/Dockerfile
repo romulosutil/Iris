@@ -17,6 +17,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
+RUN npx esbuild scripts/seed-demo.ts --bundle --platform=node --target=node22 --conditions=react-server --outfile=scripts/seed-demo.js
 
 # --- migrate: job de deploy, roda ANTES do app (gate de schema) ---------------
 # Easypanel roda esta imagem como serviço/pre-deploy separado, com
@@ -25,10 +26,9 @@ RUN pnpm build
 # Precisa de node_modules + scripts + db/migrations (o standalone não os tem).
 FROM base AS migrate
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json tsconfig.json ./
-COPY scripts ./scripts
+COPY package.json ./
+COPY scripts/migrate.mjs ./scripts/migrate.mjs
 COPY db/migrations ./db/migrations
-COPY src ./src
 CMD ["node", "scripts/migrate.mjs"]
 
 # --- runner: imagem final enxuta ---------------------------------------------
@@ -44,6 +44,7 @@ RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 COPY --from=build /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-demo.js ./scripts/seed-demo.js
 
 USER nextjs
 EXPOSE 3000
