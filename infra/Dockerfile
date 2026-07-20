@@ -25,9 +25,10 @@ RUN pnpm build
 # Precisa de node_modules + scripts + db/migrations (o standalone não os tem).
 FROM base AS migrate
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-COPY scripts/migrate.mjs ./scripts/migrate.mjs
+COPY package.json tsconfig.json ./
+COPY scripts ./scripts
 COPY db/migrations ./db/migrations
+COPY src ./src
 CMD ["node", "scripts/migrate.mjs"]
 
 # --- runner: imagem final enxuta ---------------------------------------------
