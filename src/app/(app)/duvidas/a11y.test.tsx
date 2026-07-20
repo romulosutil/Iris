@@ -40,6 +40,12 @@ const CHEIA: { itens: DuvidaAberta[]; alvosPorPaciente: Record<string, AlvoValid
       sessionNumero: 3,
       pergunta: "O apontar foi espontâneo ou com dica gestual?",
       criadoEm: "2026-07-10T12:00:00.000Z",
+      trecho: "Paciente apontou para o brinquedo após o terapeuta perguntar \"o que você quer?\".",
+      classificacaoAtual: {
+        alvo: { goal_id: "00000000-0000-0000-0000-0000000000g1", protocol_id: null, dominio_id: null, tipo_estrutura: null },
+        nivel_ajuda: "dica_verbal",
+        polaridade: "positivo",
+      },
     },
     {
       evidenceQueryId: "00000000-0000-0000-0000-000000000011",
@@ -48,6 +54,12 @@ const CHEIA: { itens: DuvidaAberta[]; alvosPorPaciente: Record<string, AlvoValid
       sessionNumero: 5,
       pergunta: "A recusa foi registrada no protocolo correto?",
       criadoEm: "2026-07-11T09:30:00.000Z",
+      trecho: "Paciente recusou a atividade proposta virando o rosto e empurrando o material.",
+      classificacaoAtual: {
+        alvo: { goal_id: null, protocol_id: "vbmapp", dominio_id: "mand", tipo_estrutura: "marco_simples" },
+        nivel_ajuda: "independente",
+        polaridade: "negativo",
+      },
     },
   ],
   alvosPorPaciente: {

@@ -12,11 +12,7 @@ import { cn } from "@/lib/cn";
 import { responderQueryAction, type ValidacaoState } from "./actions";
 import type { DuvidaAberta } from "./queries";
 import type { AlvoValido } from "../validacao/alvos";
-
-function rotuloAlvo(alvo: AlvoValido): string {
-  if (alvo.goal_id) return `Meta do paciente (${alvo.goal_id.slice(0, 8)})`;
-  return `Protocolo ${alvo.protocol_id} · domínio ${alvo.dominio_id}`;
-}
+import { ClassificacaoAtual, rotuloAlvo } from "../validacao/classificacao-atual";
 
 /**
  * Um item da lista = uma dúvida aberta pelo coordenador em `devolverComDuvida`,
@@ -66,7 +62,12 @@ function DuvidaCard({
         <h3 className="text-ink text-lg font-semibold">
           Sessão {item.sessionNumero}
         </h3>
-        <p className="text-ink text-base">{item.pergunta}</p>
+        <p className="text-ink text-base">{item.trecho || "(sem trecho registrado)"}</p>
+        <Stack gap="sm">
+          <span className="text-graphite text-sm">Classificação atual:</span>
+          <ClassificacaoAtual classificacao={item.classificacaoAtual} />
+        </Stack>
+        <p className="text-ink text-base font-medium">{item.pergunta}</p>
       </Stack>
 
       <form action={formAction}>
