@@ -104,6 +104,11 @@ describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
     expect(r.ok).toBe(true);
     const [q] = await owner`SELECT respondido_em FROM evidence_query WHERE id=${Q}`;
     expect(q!.respondido_em).not.toBeNull();
+
+    const [log] = await owner`SELECT acao, entidade_id, ator_id FROM audit_log WHERE entidade_id=${EV} AND acao='resposta_duvida'`;
+    expect(log).toBeDefined();
+    expect(log!.acao).toBe("resposta_duvida");
+    expect(log!.ator_id).toBe(U_TERAPEUTA);
   });
 
   test("responder com novoAlvo cria evidence_revision resultante e liga na query", async () => {

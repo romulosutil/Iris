@@ -159,13 +159,20 @@ export async function responderQuery(
     const rowCount = updateResult.rowCount ?? updateResult.count ?? 0;
     if (rowCount === 0) return { error: "CONCURRENCY_ERROR" };
 
-    // Paridade de governança: reclassificar via resposta de query produz o
-    // mesmo efeito que `reclassificarEvidencia` do coordenador — registra
-    // audit_log igual (mesma forma), só quando houve novoAlvo de fato.
+    // Atribuição de governança: TODA resposta que fecha uma query precisa
+    // registrar quem autorizou — mesmo sem reclassificar, fechar a query
+    // re-inclui a evidência no cômputo (materializarSnapshot). Por isso o
+    // audit_log é incondicional aqui; só a forma do `detalhe`/`acao` varia
+    // conforme houve novoAlvo (paridade com `reclassificarEvidencia`) ou não.
     if (p.data.novoAlvo) {
       await tx.execute(sql`
         INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
         VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'reclassificacao', 'evidence', ${e.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('de', ${JSON.stringify(e.classificacaoAtual)}::jsonb, 'para', ${JSON.stringify(classificacaoNova)}::jsonb, 'justificativa', ${p.data.respostaTexto}::text))
+      `);
+    } else {
+      await tx.execute(sql`
+        INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
+        VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'resposta_duvida', 'evidence', ${e.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('resposta', ${p.data.respostaTexto}::text))
       `);
     }
 
