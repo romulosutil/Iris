@@ -17,7 +17,7 @@ import { eq, inArray } from "drizzle-orm";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import crypto from "crypto";
-import { authDb, authSql, sql } from "@/db/client";
+import { authDb, authSql } from "@/db/client";
 import * as schema from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
 
@@ -45,6 +45,9 @@ const {
 
 const FUSO_CLINICA = "America/Sao_Paulo";
 const FUSO_CLINICA_OFFSET = "-03:00";
+const fmtFuso = new Intl.DateTimeFormat("en-CA", {
+  timeZone: FUSO_CLINICA,
+});
 
 const NOME_CLINICA = "Clínica Demo Iris";
 const COORD_EMAIL = "coordenador.demo@iris.test";
@@ -345,7 +348,7 @@ async function main() {
     return {
       clinicId: c.id,
       nome,
-      nascimento: nascimento.toISOString().split("T")[0]!,
+      nascimento: fmtFuso.format(nascimento),
       responsavelContato: `Responsável de ${nome.split(" ")[0]}`,
       escola: index % 2 === 0 ? "Escola Municipal Pequeno Príncipe" : "Colégio Saber",
       convenio: index % 3 === 0 ? "Unimed" : index % 3 === 1 ? "Bradesco" : "SulAmérica",
@@ -378,7 +381,7 @@ async function main() {
       patientId: pId,
       disciplina: DISCIPLINA,
       horasAlvoSemana: "10.0",
-      vigenciaInicio: "2026-06-01",
+      vigenciaInicio: "2025-01-01",
     });
 
     careTeamMemberships.push({
@@ -386,7 +389,7 @@ async function main() {
       userId: terapeutaId,
       disciplina: DISCIPLINA,
       papelNaEquipe: "terapeuta_referencia",
-      vigenciaInicio: "2026-06-01",
+      vigenciaInicio: "2025-01-01",
     });
 
     // 2 metas por paciente
@@ -454,7 +457,7 @@ async function main() {
         diaSemana: dia,
         horaInicio,
         duracaoMin: 90,
-        vigenciaInicio: "2026-06-01",
+        vigenciaInicio: "2025-01-01",
         status: "ativo",
       });
     }
@@ -473,7 +476,7 @@ async function main() {
 
   for (let i = -15; i <= 14; i++) {
     const d = new Date(todayDate.getTime() + i * 24 * 60 * 60 * 1000);
-    const dateStr = d.toISOString().split("T")[0]!;
+    const dateStr = fmtFuso.format(d);
     const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
       dateList.push({
@@ -535,13 +538,8 @@ async function main() {
           }
         }
       } else if (dt.isToday) {
-        // Hoje
-        // E2E requer que a sessão do terapeuta demo com a Ana Beatriz esteja como 'agendada'
-        if (isTherapist1 && pIdx === 0) {
-          estado = "agendada";
-        } else {
-          estado = "agendada";
-        }
+        // Hoje (E2E requer que a sessão do terapeuta demo com a Ana Beatriz esteja como 'agendada')
+        estado = "agendada";
       } else {
         // Futuro
         estado = "agendada";
@@ -789,7 +787,7 @@ async function main() {
   );
 
   console.log("Encerrando pools de conexão...");
-  await Promise.all([authSql.end(), sql.end(), ownerSql.end()]);
+  await Promise.all([authSql.end(), ownerSql.end()]);
   console.log("Seed concluído com sucesso!");
 }
 
