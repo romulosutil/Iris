@@ -67,6 +67,15 @@ async function lerEvidenciaDaQuery(
     sql`SELECT pg_advisory_xact_lock(hashtextextended(${alvo.patient_id}::text, 0))`,
   );
 
+  // Guarda de concorrência: se a query já foi respondida (por outra ação
+  // concorrente, ou já foi tratada antes do lock), não prossiga — evita
+  // cair no INSERT evidence_revision, que a RLS `evidence_revision_insert`
+  // rejeitaria (exige query ABERTA) com um erro cru do Postgres.
+  const rowsQ = (await tx.execute(
+    sql`SELECT respondido_em FROM evidence_query WHERE id = ${evidenceQueryId}`,
+  )) as unknown as { respondido_em: Date | string | null }[];
+  if (rowsQ[0]?.respondido_em != null) return { erro: "CONCURRENCY_ERROR" };
+
   const rows = (await tx.execute(sql`
     SELECT ec.patient_id, ec.session_numero, ec.classificacao_atual, ec.milestone_id
     FROM evidence_current ec WHERE ec.id = ${alvo.evidence_id}
@@ -120,6 +129,7 @@ export async function responderQuery(
     }
 
     let resultanteId: string | null = null;
+    let classificacaoNova: unknown = null;
     if (p.data.novoAlvo) {
       const validacao = await validarAlvo(
         tx,
@@ -129,11 +139,7 @@ export async function responderQuery(
       );
       if (!validacao.ok) return { error: validacao.error };
 
-      const classificacaoNova = montarClassificacaoNova(
-        e.classificacaoAtual,
-        p.data.novoAlvo,
-        validacao.fks,
-      );
+      classificacaoNova = montarClassificacaoNova(e.classificacaoAtual, p.data.novoAlvo, validacao.fks);
 
       const revRows = (await tx.execute(sql`
         INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
@@ -152,6 +158,16 @@ export async function responderQuery(
     `)) as unknown as { rowCount?: number; count?: number };
     const rowCount = updateResult.rowCount ?? updateResult.count ?? 0;
     if (rowCount === 0) return { error: "CONCURRENCY_ERROR" };
+
+    // Paridade de governança: reclassificar via resposta de query produz o
+    // mesmo efeito que `reclassificarEvidencia` do coordenador — registra
+    // audit_log igual (mesma forma), só quando houve novoAlvo de fato.
+    if (p.data.novoAlvo) {
+      await tx.execute(sql`
+        INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
+        VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'reclassificacao', 'evidence', ${e.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('de', ${JSON.stringify(e.classificacaoAtual)}::jsonb, 'para', ${JSON.stringify(classificacaoNova)}::jsonb, 'justificativa', ${p.data.respostaTexto}::text))
+      `);
+    }
 
     await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
     return { ok: true };

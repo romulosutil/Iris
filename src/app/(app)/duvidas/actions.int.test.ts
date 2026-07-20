@@ -15,14 +15,17 @@ const SESS = "00000000-0000-0000-0000-00000000e5e1";
 const EX = "00000000-0000-0000-0000-00000000ee11";
 const EX2 = "00000000-0000-0000-0000-00000000ee12";
 const EX3 = "00000000-0000-0000-0000-00000000ee13";
+const EX4 = "00000000-0000-0000-0000-00000000ee14";
 
 const EV = "00000000-0000-0000-0000-00000000ee21";
 const EV2 = "00000000-0000-0000-0000-00000000ee22";
 const EV3 = "00000000-0000-0000-0000-00000000ee23";
+const EV4 = "00000000-0000-0000-0000-00000000ee24";
 
 const Q = "00000000-0000-0000-0000-00000000eeb1";
 const Q2 = "00000000-0000-0000-0000-00000000eeb2";
 const Q3 = "00000000-0000-0000-0000-00000000eeb3";
+const Q4 = "00000000-0000-0000-0000-00000000eeb4";
 
 const ctxTerapeuta = { clinicId: CLINIC, userId: U_TERAPEUTA, role: "terapeuta" } as const;
 const ctxTerapeutaForaEquipe = {
@@ -63,11 +66,13 @@ describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
     await owner`INSERT INTO extraction (id, session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, inconsistente_com_historico, payload) VALUES
       (${EX}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 1', 'baixa', false, '{"funcao":"tato"}'),
       (${EX2}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 2', 'baixa', false, '{"funcao":"tato"}'),
-      (${EX3}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 3', 'baixa', false, '{"funcao":"tato"}')`;
+      (${EX3}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 3', 'baixa', false, '{"funcao":"tato"}'),
+      (${EX4}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 4', 'baixa', false, '{"funcao":"tato"}')`;
     await owner`INSERT INTO evidence (id, extraction_id, patient_id, session_id, session_numero, alvo_ordinal, classificacao_original, aprovado_por) VALUES
       (${EV}, ${EX}, ${PAC}, ${SESS}, 1, 0, '{"funcao":"tato"}'::jsonb, ${U_COORD}),
       (${EV2}, ${EX2}, ${PAC}, ${SESS}, 1, 1, '{"funcao":"tato"}'::jsonb, ${U_COORD}),
-      (${EV3}, ${EX3}, ${PAC}, ${SESS}, 1, 2, '{"funcao":"tato"}'::jsonb, ${U_COORD})`;
+      (${EV3}, ${EX3}, ${PAC}, ${SESS}, 1, 2, '{"funcao":"tato"}'::jsonb, ${U_COORD}),
+      (${EV4}, ${EX4}, ${PAC}, ${SESS}, 1, 3, '{"funcao":"tato"}'::jsonb, ${U_COORD})`;
 
     // Protocolo ATIVO + goal válido do paciente, p/ o teste de novoAlvo.
     const PROTOCOL_FAMILIA = "vbmapp-e";
@@ -85,7 +90,8 @@ describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
     await owner`INSERT INTO evidence_query (id, evidence_id, coordenador_id, pergunta) VALUES
       (${Q}, ${EV}, ${U_COORD}, 'isso é mando ou tato?'),
       (${Q2}, ${EV2}, ${U_COORD}, 'confirma o alvo?'),
-      (${Q3}, ${EV3}, ${U_COORD}, 'reescreve isso?')`;
+      (${Q3}, ${EV3}, ${U_COORD}, 'reescreve isso?'),
+      (${Q4}, ${EV4}, ${U_COORD}, 'confirma de novo?')`;
   });
 
   afterAll(async () => {
@@ -112,6 +118,29 @@ describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
     const [rev] = await owner`SELECT acao, autor_id FROM evidence_revision WHERE id=${q!.resultante_evidence_revision_id}`;
     expect(rev!.acao).toBe("reclassificar");
     expect(rev!.autor_id).toBe(U_TERAPEUTA);
+
+    const [log] = await owner`SELECT acao, entidade_id FROM audit_log WHERE entidade_id=${EV2} AND acao='reclassificacao'`;
+    expect(log).toBeDefined();
+    expect(log!.acao).toBe("reclassificacao");
+  });
+
+  test("responder query já respondida com novoAlvo retorna CONCURRENCY_ERROR e não cria segunda evidence_revision", async () => {
+    const rowsAntes = (await owner`SELECT count(*)::int AS count FROM evidence_revision WHERE evidence_id=${EV4}`) as unknown as { count: number }[];
+    const antes = rowsAntes[0]!.count;
+
+    const primeira = await responderQuery(ctxTerapeuta, { evidenceQueryId: Q4, respostaTexto: "primeira resposta" });
+    expect(primeira.ok).toBe(true);
+
+    const r = await responderQuery(ctxTerapeuta, {
+      evidenceQueryId: Q4,
+      respostaTexto: "segunda resposta",
+      novoAlvo: ALVO_VALIDO,
+    });
+    expect(r.ok).not.toBe(true);
+
+    const rowsDepois = (await owner`SELECT count(*)::int AS count FROM evidence_revision WHERE evidence_id=${EV4}`) as unknown as { count: number }[];
+    const depois = rowsDepois[0]!.count;
+    expect(depois).toBe(antes);
   });
 
   test("terapeuta fora da equipe não responde (RLS)", async () => {
