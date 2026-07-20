@@ -16,6 +16,7 @@ import {
   drizzleResolverQueries,
   resolverAlvoParaFks,
   type Alvo,
+  type ResolvedFks,
 } from "@/lib/evidence/resolver";
 
 export type AlvoValido = {
@@ -82,19 +83,38 @@ export async function alvosValidosDoPaciente(
 }
 
 export type ValidacaoAlvo =
-  | { ok: true }
+  | { ok: true; fks: ResolvedFks }
   | { ok: false; error: string };
+
+async function tipoEstruturaDoMarco(tx: Tx, milestoneId: string): Promise<string | null> {
+  const [row] = await tx
+    .select({ tipoEstrutura: milestone.tipoEstrutura })
+    .from(milestone)
+    .where(eq(milestone.id, milestoneId));
+  return (row?.tipoEstrutura as string | undefined) ?? null;
+}
 
 /**
  * Valida que `novoAlvo` resolve para algo real dentro do escopo do paciente:
  * goal existente, OU marco de protocolo ATIVO do paciente (resolução
  * determinística — ambíguo/inexistente nunca é aceito, mesmo padrão de
  * `resolverAlvoParaFks`).
+ *
+ * Também impõe compatibilidade de `tipo_estrutura` (achado de review da
+ * Task 3): se a evidência sendo reclassificada tem um marco original
+ * resolvido (`evidenciaOriginal.milestoneId`) e o novo alvo TAMBÉM resolve
+ * para um marco, os dois precisam ter o MESMO `tipo_estrutura` — reclassificar
+ * entre estruturas diferentes (ex.: marco_simples → marco_com_barreira)
+ * misturaria semânticas de segmentação incompatíveis (rótulo numérico vs.
+ * "aguardando_avaliacao_formal"). Evidência original goal-only (sem marco) ou
+ * novo alvo goal-only não passam por este check — não há `tipo_estrutura` a
+ * comparar (decisão de escopo: permitido).
  */
 export async function validarAlvo(
   tx: Tx,
   ctx: { clinicId: string; patientId: string },
   novoAlvo: Alvo,
+  evidenciaOriginal?: { milestoneId: string | null },
 ): Promise<ValidacaoAlvo> {
   const temGoal = typeof novoAlvo.goal_id === "string" && novoAlvo.goal_id.length > 0;
   const temMarco =
@@ -124,7 +144,21 @@ export async function validarAlvo(
     }
   }
 
-  return { ok: true };
+  const marcoOriginalId = evidenciaOriginal?.milestoneId ?? null;
+  if (marcoOriginalId && resolved.milestoneId) {
+    const [tipoOriginal, tipoNovo] = await Promise.all([
+      tipoEstruturaDoMarco(tx, marcoOriginalId),
+      tipoEstruturaDoMarco(tx, resolved.milestoneId),
+    ]);
+    if (tipoOriginal && tipoNovo && tipoOriginal !== tipoNovo) {
+      return {
+        ok: false,
+        error: "Alvo inválido: reclassificação entre estruturas diferentes não é permitida.",
+      };
+    }
+  }
+
+  return { ok: true, fks: resolved };
 }
 
 /**
@@ -132,9 +166,24 @@ export async function validarAlvo(
  * espelha a forma canônica de `db/tests/fase4-materializar.int.test.ts`
  * ("recompute retroativo", ~L297): mescla o alvo novo por cima da
  * classificação anterior, preservando os demais campos (ex.: `nivel_ajuda`,
- * `polaridade`).
+ * `polaridade`). `alvo_resolvido` (as FKs já resolvidas por `validarAlvo`) é a
+ * fonte canônica que `materializar.ts` (`rowParaObservacao`) lê para religar
+ * a evidência ao stream de segmentação correto — `alvo` (o ref cru enviado
+ * pelo coordenador) permanece só para auditoria/exibição.
  */
-export function montarClassificacaoNova(anterior: unknown, novoAlvo: Alvo): unknown {
+export function montarClassificacaoNova(
+  anterior: unknown,
+  novoAlvo: Alvo,
+  fksResolvidas: ResolvedFks,
+): unknown {
   const base = anterior && typeof anterior === "object" ? (anterior as Record<string, unknown>) : {};
-  return { ...base, alvo: novoAlvo };
+  return {
+    ...base,
+    alvo: novoAlvo,
+    alvo_resolvido: {
+      goal_id: fksResolvidas.goalId,
+      protocol_id: fksResolvidas.protocolId,
+      milestone_id: fksResolvidas.milestoneId,
+    },
+  };
 }

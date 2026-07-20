@@ -23,6 +23,7 @@ type LeituraOk = {
   patientId: string;
   sessionNumero: number;
   classificacaoAtual: unknown;
+  milestoneId: string | null;
 };
 type LeituraErro = { erro: "NAO_ENCONTRADA" | "CONCURRENCY_ERROR" };
 
@@ -49,7 +50,7 @@ async function lerEvidenciaParaValidar(
   );
 
   const rows = (await tx.execute(sql`
-    SELECT ec.id, ec.patient_id, ec.session_numero, ec.classificacao_atual, ec.invalidada
+    SELECT ec.id, ec.patient_id, ec.session_numero, ec.classificacao_atual, ec.invalidada, ec.milestone_id
     FROM evidence_current ec WHERE ec.id = ${evidenceId}
   `)) as unknown as {
     id: string;
@@ -57,6 +58,7 @@ async function lerEvidenciaParaValidar(
     session_numero: number;
     classificacao_atual: unknown;
     invalidada: boolean;
+    milestone_id: string | null;
   }[];
   const e = rows[0];
   if (!e) return { erro: "NAO_ENCONTRADA" };
@@ -76,6 +78,7 @@ async function lerEvidenciaParaValidar(
     patientId: e.patient_id,
     sessionNumero: e.session_numero,
     classificacaoAtual: e.classificacao_atual,
+    milestoneId: e.milestone_id,
   };
 }
 
@@ -178,10 +181,15 @@ export async function reclassificarEvidencia(
       tx,
       { clinicId: ctx.clinicId, patientId: e.patientId },
       p.data.novoAlvo,
+      { milestoneId: e.milestoneId },
     );
     if (!validacao.ok) return { error: validacao.error };
 
-    const classificacaoNova = montarClassificacaoNova(e.classificacaoAtual, p.data.novoAlvo);
+    const classificacaoNova = montarClassificacaoNova(
+      e.classificacaoAtual,
+      p.data.novoAlvo,
+      validacao.fks,
+    );
 
     await tx.execute(sql`
       INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)

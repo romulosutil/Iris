@@ -32,8 +32,11 @@ let confirmarEvidencia: typeof import("./actions").confirmarEvidencia;
 let invalidarEvidencia: typeof import("./actions").invalidarEvidencia;
 let reclassificarEvidencia: typeof import("./actions").reclassificarEvidencia;
 let GOAL_ID: string;
+let MARCO_SIMPLES_ID: string;
 let ALVO_VALIDO: { goal_id: string };
 const ALVO_FORA = { goal_id: "00000000-0000-0000-0000-00000000face" };
+const ALVO_BARREIRA = { protocol_id: PROTOCOL_FAMILIA, dominio_id: "barreiras" };
+const EV6 = "00000000-0000-0000-0000-00000000de26";
 
 describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
   beforeAll(async () => {
@@ -68,8 +71,14 @@ describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
       VALUES (${CLINIC}, 'VB-MAPP (teste D)', 'ABA', ${PROTOCOL_FAMILIA}, ${owner.json(["independente", "dica_verbal"])})
       RETURNING id`;
     await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por) VALUES (${PAC}, ${protocolo!.id}, ${U_COORD})`;
+    const [marcoSimples] = await owner`INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+      VALUES (${protocolo!.id}, 'mando', 'Mando nível 1', 'marco_simples', ${owner.json({})})
+      RETURNING id`;
+    MARCO_SIMPLES_ID = marcoSimples!.id as string;
+    // Marco de outro dominio, com tipo_estrutura DIFERENTE — usado no teste de
+    // rejeição de reclassificação entre estruturas incompatíveis (fix Task 3).
     await owner`INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
-      VALUES (${protocolo!.id}, 'mando', 'Mando nível 1', 'marco_simples', ${owner.json({})})`;
+      VALUES (${protocolo!.id}, 'barreiras', 'Barreira comportamental', 'marco_com_barreira', ${owner.json({ escala: [0, 1, 2] })})`;
     const [goalRow] = await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
       VALUES (${PAC}, ${CLINIC}, 'Pedir água de forma independente', 'ativa', ${owner.json({ tipo: "sessoes_consecutivas_independente", valor: 2 })}, ${U_COORD})
       RETURNING id`;
@@ -78,12 +87,18 @@ describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
 
     const EX4 = "00000000-0000-0000-0000-00000000ee04";
     const EX5 = "00000000-0000-0000-0000-00000000ee05";
+    const EX6 = "00000000-0000-0000-0000-00000000ee06";
     await owner`INSERT INTO extraction (id, session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, inconsistente_com_historico, payload) VALUES
       (${EX4}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 4', 'baixa', false, '{"funcao":"mando"}'),
-      (${EX5}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 5', 'baixa', false, '{"funcao":"mando"}')`;
+      (${EX5}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 5', 'baixa', false, '{"funcao":"mando"}'),
+      (${EX6}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 6', 'baixa', false, '{"funcao":"mando"}')`;
     await owner`INSERT INTO evidence (id, extraction_id, patient_id, session_id, session_numero, alvo_ordinal, classificacao_original, aprovado_por) VALUES
       (${EV4}, ${EX4}, ${PAC}, ${SESS}, 1, 3, '{"nivel_ajuda":"dica_verbal","polaridade":"positiva"}'::jsonb, ${U_COORD}),
       (${EV5}, ${EX5}, ${PAC}, ${SESS}, 1, 4, '{"nivel_ajuda":"dica_verbal","polaridade":"positiva"}'::jsonb, ${U_COORD})`;
+    // EV6: evidência com marco ORIGINAL resolvido (marco_simples) — usada no
+    // teste de rejeição de reclassificação entre tipo_estrutura diferentes.
+    await owner`INSERT INTO evidence (id, extraction_id, patient_id, session_id, session_numero, alvo_ordinal, protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por) VALUES
+      (${EV6}, ${EX6}, ${PAC}, ${SESS}, 1, 5, ${protocolo!.id}, ${GOAL_ID}, ${MARCO_SIMPLES_ID}, '{"nivel_ajuda":"dica_verbal","polaridade":"positiva"}'::jsonb, ${U_COORD})`;
   });
 
   afterAll(async () => {
@@ -166,5 +181,18 @@ describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
     expect(log).toBeTruthy();
     const [ec] = await owner`SELECT classificacao_atual FROM evidence_current WHERE id=${EV4}`;
     expect(JSON.stringify(ec!.classificacao_atual)).toContain(ALVO_VALIDO.goal_id);
+  });
+
+  test("reclassificar entre tipo_estrutura diferentes (marco_simples → marco_com_barreira) → rejeita", async () => {
+    // EV6 tem marco ORIGINAL marco_simples; ALVO_BARREIRA resolve p/ um
+    // marco_com_barreira. Estruturas incompatíveis → rejeita, sem revisão.
+    const r = await reclassificarEvidencia(ctxCoord, {
+      evidenceId: EV6,
+      novoAlvo: ALVO_BARREIRA,
+      justificativa: "tentativa entre estruturas",
+    });
+    expect(r.error).toMatch(/estrutura/i);
+    const rows = await owner`SELECT 1 FROM evidence_revision WHERE evidence_id=${EV6}`;
+    expect(rows).toHaveLength(0);
   });
 });

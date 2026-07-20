@@ -216,11 +216,17 @@ function rowParaObservacao(r: any): EvidenciaObservada {
   const polaridadeRaw = classificacao?.polaridade;
   const polaridade: "positiva" | "negativa" | null =
     polaridadeRaw === "positiva" || polaridadeRaw === "negativa" ? polaridadeRaw : null;
+  // Task 3b: reclassificar o ALVO (via evidence_revision) grava as FKs
+  // resolvidas em `classificacao_atual.alvo_resolvido` — preferimos essas
+  // FKs sobre as colunas estáticas de `evidence_current` (congeladas de
+  // `evidence`, nunca movem) para que o recompute religue a evidência ao
+  // stream de segmentação/repertório do NOVO alvo, não do original.
+  const alvoResolvido = classificacao?.alvo_resolvido;
   return {
     sessionNumero: Number(r.sessionNumero ?? r.session_numero),
-    goalId: (r.goalId ?? r.goal_id) ?? null,
-    milestoneId: (r.milestoneId ?? r.milestone_id) ?? null,
-    protocolId: (r.protocolId ?? r.protocol_id) ?? null,
+    goalId: alvoResolvido?.goal_id ?? (r.goalId ?? r.goal_id) ?? null,
+    milestoneId: alvoResolvido?.milestone_id ?? (r.milestoneId ?? r.milestone_id) ?? null,
+    protocolId: alvoResolvido?.protocol_id ?? (r.protocolId ?? r.protocol_id) ?? null,
     nivelAjuda,
     polaridade,
     temQueryAberta: Boolean(r.temQueryAberta ?? r.tem_query_aberta),
