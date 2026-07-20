@@ -215,14 +215,6 @@ async function main() {
   console.log(`Clínica "${NOME_CLINICA}" (${c.id}) identificada. Iniciando limpeza de dados demo antigos...`);
 
   // 2) Deletions to clean up old demo data in the clinic (making it idempotent)
-  await ownerDb.delete(alerta).where(eq(alerta.clinicId, c.id));
-  await ownerDb.delete(auditLog).where(eq(auditLog.clinicId, c.id));
-  await ownerDb.delete(extraction).where(eq(extraction.clinicId, c.id));
-  await ownerDb.delete(sessionNote).where(eq(sessionNote.clinicId, c.id));
-  await ownerDb.delete(session).where(eq(session.clinicId, c.id));
-  await ownerDb.delete(agendamentoRecorrente).where(eq(agendamentoRecorrente.clinicId, c.id));
-  await ownerDb.delete(janelaTrabalho).where(eq(janelaTrabalho.clinicId, c.id));
-
   const oldPatientIds = (
     await ownerDb
       .select({ id: patient.id })
@@ -231,12 +223,22 @@ async function main() {
   ).map((p) => p.id);
 
   if (oldPatientIds.length > 0) {
+    // Delete evidence first to avoid foreign key violations in sessions and extractions
+    await ownerDb.delete(evidence).where(inArray(evidence.patientId, oldPatientIds));
     await ownerDb.delete(sessionSnapshot).where(inArray(sessionSnapshot.patientId, oldPatientIds));
     await ownerDb.delete(milestoneCandidacy).where(inArray(milestoneCandidacy.patientId, oldPatientIds));
     await ownerDb.delete(careTeamMembership).where(inArray(careTeamMembership.patientId, oldPatientIds));
     await ownerDb.delete(patientProtocol).where(inArray(patientProtocol.patientId, oldPatientIds));
     await ownerDb.delete(patientClinicalProfile).where(inArray(patientClinicalProfile.patientId, oldPatientIds));
   }
+
+  await ownerDb.delete(alerta).where(eq(alerta.clinicId, c.id));
+  await ownerDb.delete(auditLog).where(eq(auditLog.clinicId, c.id));
+  await ownerDb.delete(extraction).where(eq(extraction.clinicId, c.id));
+  await ownerDb.delete(sessionNote).where(eq(sessionNote.clinicId, c.id));
+  await ownerDb.delete(session).where(eq(session.clinicId, c.id));
+  await ownerDb.delete(agendamentoRecorrente).where(eq(agendamentoRecorrente.clinicId, c.id));
+  await ownerDb.delete(janelaTrabalho).where(eq(janelaTrabalho.clinicId, c.id));
 
   await ownerDb.delete(goal).where(eq(goal.clinicId, c.id));
   await ownerDb.delete(patientAlvoDisciplina).where(eq(patientAlvoDisciplina.clinicId, c.id));
@@ -471,41 +473,47 @@ async function main() {
     timeZone: FUSO_CLINICA,
   }).format(new Date());
 
-  const todayDate = new Date(`${hojeStr}T00:00:00`);
-  const dateList: { dateStr: string; dayIndex: number; isPast: boolean; isToday: boolean }[] = [];
+  const [hojeY, hojeM, hojeD] = hojeStr.split("-").map(Number);
+  const todayDateUTC = new Date(Date.UTC(hojeY!, hojeM! - 1, hojeD!));
+  const dateList: { dateStr: string; dayIndex: number; isPast: boolean; isToday: boolean; dayOfWeek: number }[] = [];
 
   for (let i = -15; i <= 14; i++) {
-    const d = new Date(todayDate.getTime() + i * 24 * 60 * 60 * 1000);
-    const dateStr = fmtFuso.format(d);
-    const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
-    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+    const dUTC = new Date(todayDateUTC.getTime() + i * 24 * 60 * 60 * 1000);
+    const y = dUTC.getUTCFullYear();
+    const m = String(dUTC.getUTCMonth() + 1).padStart(2, "0");
+    const dVal = String(dUTC.getUTCDate()).padStart(2, "0");
+    const dateStr = `${y}-${m}-${dVal}`;
+    const dayOfWeek = dUTC.getUTCDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+
+    // Always include Today (i === 0) even if it's on a weekend, to ensure E2E tests pass
+    if ((dayOfWeek >= 1 && dayOfWeek <= 5) || i === 0) {
       dateList.push({
         dateStr,
         dayIndex: i,
         isPast: i < 0,
         isToday: i === 0,
+        dayOfWeek,
       });
     }
   }
 
-  console.log(`Janela de materialização: ${dateList[0]!.dateStr} a ${dateList[dateList.length - 1]!.dateStr} (${dateList.length} dias úteis).`);
+  console.log(`Janela de materialização: ${dateList[0]!.dateStr} a ${dateList[dateList.length - 1]!.dateStr} (${dateList.length} dias).`);
 
-  const patientMap = new Map(insertedPatients.map((p, idx) => [p.nome, { id: p.id, index: idx }]));
-  const getPatientIndex = (name: string) => patientMap.get(name)!.index;
+  const patientInfoMap = new Map(
+    insertedPatients.map((p, idx) => [p.id, { nome: p.nome, index: idx }])
+  );
 
   const sessionValues: any[] = [];
   const patientSessionCounter = new Map<string, number>();
 
   for (const dt of dateList) {
-    const dObj = new Date(`${dt.dateStr}T00:00:00`);
-    const dayOfWeek = dObj.getDay();
-
     // Filtra regras recorrentes para o dia da semana correspondente
-    const matchingSchedules = insertedSchedules.filter((s) => s.diaSemana === dayOfWeek);
+    const matchingSchedules = insertedSchedules.filter((s) => s.diaSemana === dt.dayOfWeek);
 
     for (const sched of matchingSchedules) {
-      const patientNome = insertedPatients.find((p) => p.id === sched.patientId)!.nome;
-      const pIdx = getPatientIndex(patientNome);
+      const pInfo = patientInfoMap.get(sched.patientId)!;
+      const patientNome = pInfo.nome;
+      const pIdx = pInfo.index;
       const isTherapist1 = sched.terapeutaId === therapistIds[0]!;
 
       let estado: "agendada" | "realizada" | "falta_paciente" | "falta_terapeuta" | "cancelada" = "agendada";
@@ -599,11 +607,12 @@ async function main() {
   }
 
   const realizedSessions = insertedSessions.filter((s) => s.estado === "realizada");
+  let claraEvidenceId: string | null = null;
 
   for (let sIdx = 0; sIdx < realizedSessions.length; sIdx++) {
     const sess = realizedSessions[sIdx]!;
-    const patientNome = insertedPatients.find((p) => p.id === sess.patientId)!.nome;
-    const pIdx = getPatientIndex(patientNome);
+    const pInfo = patientInfoMap.get(sess.patientId)!;
+    const pIdx = pInfo.index;
     const noteTemplate = NOTAS_POOL[(pIdx + sIdx) % NOTAS_POOL.length]!;
 
     // Captura Rápida
@@ -650,8 +659,13 @@ async function main() {
     });
 
     // Evidência
+    const evidenceId = crypto.randomUUID();
+    if (pInfo.nome === "Clara Dias (demo)") {
+      claraEvidenceId = evidenceId;
+    }
+
     evidenceValues.push({
-      id: crypto.randomUUID(),
+      id: evidenceId,
       extractionId: extractionId,
       patientId: sess.patientId,
       sessionId: sess.id,
@@ -749,7 +763,7 @@ async function main() {
       atorId: mainCoordinatorId,
       acao: "aprovar_revisao",
       entidade: "evidence",
-      entidadeId: crypto.randomUUID(),
+      entidadeId: claraEvidenceId ?? crypto.randomUUID(),
       patientId: claraId,
       detalhe: { motivo: "Revisão de histórico clínica" },
     },
