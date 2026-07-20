@@ -1,4 +1,5 @@
-const MAX = Number(process.env.RENDER_MAX_CONCURRENCY ?? "1");
+const parsed = Number(process.env.RENDER_MAX_CONCURRENCY ?? "1");
+const MAX = Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : 1;
 
 let emUso = 0;
 const fila: Array<() => void> = [];
