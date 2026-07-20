@@ -1,5 +1,6 @@
 import "server-only";
 import { and, desc, eq, gte, lte, inArray, or, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { withTenant, type TenantContext } from "@/db/rls";
 import {
   sessionSnapshot,
@@ -8,6 +9,7 @@ import {
   patientProtocol,
   protocol,
   evidence,
+  evidenceRevision,
   appUser,
   session,
 } from "@/db/schema";
@@ -307,6 +309,12 @@ export interface ResumoEvidenciaTrecho {
   descricao: string;
   polaridade: "positiva" | "negativa";
   nivelAjuda: string | null;
+  revisao: {
+    acao: string;
+    justificativa: string | null;
+    autorNome: string | null;
+    criadoEm: Date;
+  } | null;
 }
 
 /**
@@ -321,6 +329,22 @@ export async function carregarEvidenciasPorTrecho(
   sessaoFim: number
 ): Promise<ResumoEvidenciaTrecho[]> {
   return withTenant(ctx, async (tx) => {
+    // Última revisão (evidence_revision) por evidência — apenas a mais recente
+    // interessa à timeline (governança V4 passiva).
+    const ultimaRevisao = tx
+      .selectDistinctOn([evidenceRevision.evidenceId], {
+        evidenceId: evidenceRevision.evidenceId,
+        acao: evidenceRevision.acao,
+        justificativa: evidenceRevision.justificativa,
+        autorId: evidenceRevision.autorId,
+        criadoEm: evidenceRevision.criadoEm,
+      })
+      .from(evidenceRevision)
+      .orderBy(evidenceRevision.evidenceId, desc(evidenceRevision.criadoEm))
+      .as("ultima_revisao");
+
+    const revisorUser = alias(appUser, "revisor_user");
+
     const rows = await tx
       .select({
         id: evidence.id,
@@ -329,10 +353,16 @@ export async function carregarEvidenciasPorTrecho(
         aprovadorNome: appUser.name,
         classificacaoOriginal: evidence.classificacaoOriginal,
         aprovadoEm: evidence.aprovadoEm,
+        revisaoAcao: ultimaRevisao.acao,
+        revisaoJustificativa: ultimaRevisao.justificativa,
+        revisaoCriadoEm: ultimaRevisao.criadoEm,
+        revisaoAutorNome: revisorUser.name,
       })
       .from(evidence)
       .innerJoin(session, eq(evidence.sessionId, session.id))
       .leftJoin(appUser, eq(evidence.aprovadoPor, appUser.id))
+      .leftJoin(ultimaRevisao, eq(ultimaRevisao.evidenceId, evidence.id))
+      .leftJoin(revisorUser, eq(revisorUser.id, ultimaRevisao.autorId))
       .where(
         and(
           eq(evidence.patientId, patientId),
@@ -357,6 +387,14 @@ export async function carregarEvidenciasPorTrecho(
         descricao: classif.descricao || "Evidência de sessão",
         polaridade: classif.polaridade || "positiva",
         nivelAjuda: classif.nivel_ajuda || null,
+        revisao: r.revisaoAcao
+          ? {
+              acao: r.revisaoAcao,
+              justificativa: r.revisaoJustificativa,
+              autorNome: r.revisaoAutorNome,
+              criadoEm: r.revisaoCriadoEm!,
+            }
+          : null,
       };
     });
   });
