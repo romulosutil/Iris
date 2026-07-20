@@ -31,6 +31,7 @@ let appSql: typeof import("@/db/client").sql;
 let confirmarEvidencia: typeof import("./actions").confirmarEvidencia;
 let invalidarEvidencia: typeof import("./actions").invalidarEvidencia;
 let reclassificarEvidencia: typeof import("./actions").reclassificarEvidencia;
+let devolverComDuvida: typeof import("./actions").devolverComDuvida;
 let GOAL_ID: string;
 let MARCO_SIMPLES_ID: string;
 let ALVO_VALIDO: { goal_id: string };
@@ -40,7 +41,9 @@ const EV6 = "00000000-0000-0000-0000-00000000de26";
 
 describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
   beforeAll(async () => {
-    ({ confirmarEvidencia, invalidarEvidencia, reclassificarEvidencia } = await import("./actions"));
+    ({ confirmarEvidencia, invalidarEvidencia, reclassificarEvidencia, devolverComDuvida } = await import(
+      "./actions"
+    ));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 
@@ -194,5 +197,19 @@ describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
     expect(r.error).toMatch(/estrutura/i);
     const rows = await owner`SELECT 1 FROM evidence_revision WHERE evidence_id=${EV6}`;
     expect(rows).toHaveLength(0);
+  });
+
+  test("devolver sem pergunta → rejeita", async () => {
+    const r = await devolverComDuvida(ctxCoord, { evidenceId: EV3, pergunta: " " });
+    expect(r.error).toBeTruthy();
+  });
+
+  test("devolver abre evidence_query + audit(devolucao) + recompute exclui do cômputo", async () => {
+    const r = await devolverComDuvida(ctxCoord, { evidenceId: EV3, pergunta: "isso é mando ou tato?" });
+    expect(r.ok).toBe(true);
+    const [q] = await owner`SELECT respondido_em FROM evidence_query WHERE evidence_id=${EV3}`;
+    expect(q!.respondido_em).toBeNull();
+    const [log] = await owner`SELECT 1 FROM audit_log WHERE entidade_id=${EV3} AND acao='devolucao'`;
+    expect(log).toBeTruthy();
   });
 });

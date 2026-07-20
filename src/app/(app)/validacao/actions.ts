@@ -204,6 +204,42 @@ export async function reclassificarEvidencia(
   });
 }
 
+const devolverSchema = z.object({
+  evidenceId: z.string().uuid(),
+  pergunta: z.string().trim().min(1, "Pergunta obrigatória."),
+});
+
+export async function devolverComDuvida(
+  ctx: TenantContext,
+  input: { evidenceId: string; pergunta: string },
+): Promise<ValidacaoResult> {
+  const p = devolverSchema.safeParse(input);
+  if (!p.success) return { error: p.error.issues[0]!.message };
+  try {
+    requireRole(ctx, "coordenador");
+  } catch (err) {
+    if (err instanceof RoleError) return { error: err.message };
+    throw err;
+  }
+
+  return withTenant(ctx, async (tx) => {
+    const e = await lerEvidenciaParaValidar(tx, p.data.evidenceId);
+    if ("erro" in e) {
+      return { error: e.erro === "NAO_ENCONTRADA" ? "Evidência não encontrada." : "CONCURRENCY_ERROR" };
+    }
+    await tx.execute(sql`
+      INSERT INTO evidence_query (evidence_id, coordenador_id, pergunta)
+      VALUES (${p.data.evidenceId}, ${ctx.userId}::uuid, ${p.data.pergunta})
+    `);
+    await tx.execute(sql`
+      INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
+      VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'devolucao', 'evidence', ${p.data.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('pergunta', ${p.data.pergunta}::text))
+    `);
+    await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
+    return { ok: true };
+  });
+}
+
 // ─── Wrappers para `useActionState` ────────────────────────────────────────
 
 async function comCtx(
@@ -238,6 +274,18 @@ export async function invalidarEvidenciaAction(
     invalidarEvidencia(ctx, {
       evidenceId: String(fd.get("evidenceId") ?? ""),
       motivo: String(fd.get("motivo") ?? ""),
+    }),
+  );
+}
+
+export async function devolverComDuvidaAction(
+  _prev: ValidacaoState,
+  fd: FormData,
+): Promise<ValidacaoState> {
+  return comCtx(fd, (ctx) =>
+    devolverComDuvida(ctx, {
+      evidenceId: String(fd.get("evidenceId") ?? ""),
+      pergunta: String(fd.get("pergunta") ?? ""),
     }),
   );
 }
