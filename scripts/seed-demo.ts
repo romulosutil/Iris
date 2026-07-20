@@ -369,8 +369,9 @@ async function main() {
   for (let i = 0; i < insertedPatients.length; i++) {
     const p = insertedPatients[i]!;
     const pId = p.id;
-    const protoId = i === 0 ? pMarcosId : pGeralId;
-    const terapeutaId = therapistIds[i % 20]!;
+    const origIdx = PACIENTES.indexOf(p.nome);
+    const protoId = origIdx === 0 ? pMarcosId : pGeralId;
+    const terapeutaId = therapistIds[origIdx % 20]!;
 
     patientProtocols.push({
       patientId: pId,
@@ -500,8 +501,11 @@ async function main() {
   console.log(`Janela de materialização: ${dateList[0]!.dateStr} a ${dateList[dateList.length - 1]!.dateStr} (${dateList.length} dias).`);
 
   const patientInfoMap = new Map(
-    insertedPatients.map((p, idx) => [p.id, { nome: p.nome, index: idx }])
+    insertedPatients.map((p) => [p.id, { nome: p.nome, index: PACIENTES.indexOf(p.nome) }])
   );
+
+  const anaBeatrizId = insertedPatients.find((p) => p.nome === "Ana Beatriz (demo)")!.id;
+  const therapist1Id = therapistIds[0]!;
 
   const sessionValues: any[] = [];
   const patientSessionCounter = new Map<string, number>();
@@ -509,12 +513,17 @@ async function main() {
   for (const dt of dateList) {
     // Filtra regras recorrentes para o dia da semana correspondente
     const matchingSchedules = insertedSchedules.filter((s) => s.diaSemana === dt.dayOfWeek);
+    let hasTodayE2ESession = false;
 
     for (const sched of matchingSchedules) {
       const pInfo = patientInfoMap.get(sched.patientId)!;
       const patientNome = pInfo.nome;
       const pIdx = pInfo.index;
-      const isTherapist1 = sched.terapeutaId === therapistIds[0]!;
+      const isTherapist1 = sched.terapeutaId === therapist1Id;
+
+      if (dt.isToday && pIdx === 0 && isTherapist1) {
+        hasTodayE2ESession = true;
+      }
 
       let estado: "agendada" | "realizada" | "falta_paciente" | "falta_terapeuta" | "cancelada" = "agendada";
       let checkInEm: Date | null = null;
@@ -580,6 +589,22 @@ async function main() {
         modalidade: "presencial",
         tipo: "terapia",
         recorrenteId: sched.id, // associa com a regra
+      });
+    }
+
+    // Fallback: Se for hoje e não geramos a sessão do E2E (ex: fim de semana), força a criação dela
+    if (dt.isToday && !hasTodayE2ESession) {
+      console.log("Hoje é final de semana ou sem regra de agenda ativa. Forçando a sessão principal do E2E (Ana Beatriz)...");
+      sessionValues.push({
+        clinicId: c.id,
+        patientId: anaBeatrizId,
+        terapeutaId: therapist1Id,
+        agendadaPara: new Date(`${dt.dateStr}T09:00:00${FUSO_CLINICA_OFFSET}`),
+        estado: "agendada",
+        disciplina: DISCIPLINA,
+        duracaoMin: 90,
+        modalidade: "presencial",
+        tipo: "terapia",
       });
     }
   }
