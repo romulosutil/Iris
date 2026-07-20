@@ -203,4 +203,44 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     expect(semRevisao).toBeTruthy();
     expect(semRevisao!.revisao).toBeNull();
   });
+
+  test("carregarEvidenciasPorTrecho com múltiplas revisões retorna a evidência 1x com a revisão MAIS RECENTE (DISTINCT ON)", async () => {
+    // Sessão isolada (numero 3, fora do range 1-2 usado nos testes acima) para
+    // não poluir a contagem dos testes anteriores sobre MARCO_ID.
+    const sessA3Id = crypto.randomUUID();
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina)
+      VALUES (${sessA3Id}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-03 10:00:00Z', 'realizada', 3, 'aba')`;
+
+    const [extMulti] = await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
+      VALUES (${sessA3Id}, ${CLINIC_A}, 'aprovada', 'evidencia', 'bateu palma pedindo ajuda', 'alta', ${owner.json({})}) RETURNING id`;
+
+    const [evidenciaMultiRow] = await owner`INSERT INTO evidence
+      (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
+      VALUES (${extMulti!.id}, ${PAC_A1}, ${sessA3Id}, 3, 0, ${PROTOCOL_ID}, ${null}, ${MARCO_ID}, ${owner.json({ descricao: "bateu palma pedindo ajuda", polaridade: "positiva", nivel_ajuda: "dica_gestual" })}, ${U_T1_A})
+      RETURNING id`;
+    const evidenciaMultiId = evidenciaMultiRow!.id as string;
+
+    await owner`INSERT INTO evidence_revision
+      (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id, criado_em)
+      VALUES (${evidenciaMultiId}, 'reclassificar',
+        ${owner.json({ descricao: "bateu palma pedindo ajuda", polaridade: "positiva", nivel_ajuda: "dica_gestual" })},
+        ${owner.json({ descricao: "bateu palma pedindo ajuda", polaridade: "positiva", nivel_ajuda: "dica_verbal" })},
+        'primeira revisão', ${U_COORD_A}, '2026-07-10 10:00:00Z')`;
+
+    await owner`INSERT INTO evidence_revision
+      (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id, criado_em)
+      VALUES (${evidenciaMultiId}, 'confirmar',
+        ${owner.json({ descricao: "bateu palma pedindo ajuda", polaridade: "positiva", nivel_ajuda: "dica_verbal" })},
+        ${null},
+        'revisão mais recente', ${U_COORD_A}, '2026-07-11 10:00:00Z')`;
+
+    const res = await carregarEvidenciasPorTrecho(ctxCoordA, PAC_A1, MARCO_ID, 3, 3);
+    expect(res).toHaveLength(1); // sem fan-out: DISTINCT ON evita duplicar linha por revisão
+
+    const item = res[0]!;
+    expect(item.id).toBe(evidenciaMultiId);
+    expect(item.revisao).toBeTruthy();
+    expect(item.revisao!.acao).toBe("confirmar");
+    expect(item.revisao!.justificativa).toBe("revisão mais recente");
+  });
 });
