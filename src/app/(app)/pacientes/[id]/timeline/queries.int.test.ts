@@ -28,6 +28,8 @@ let MARCO_ID: string;
 let GOAL_ID: string;
 let SESS_A1_ID: string;
 let SESS_A2_ID: string;
+let EVIDENCIA_ID: string;
+let EVIDENCIA_SEM_REVISAO_ID: string;
 
 describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
   beforeAll(async () => {
@@ -102,9 +104,28 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     const [ext] = await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
       VALUES (${SESS_A2_ID}, ${CLINIC_A}, 'aprovada', 'evidencia', 'falou agua sozinho', 'alta', ${owner.json({})}) RETURNING id`;
     
-    await owner`INSERT INTO evidence
+    const [evidenciaRow] = await owner`INSERT INTO evidence
       (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
-      VALUES (${ext!.id}, ${PAC_A1}, ${SESS_A2_ID}, 2, 0, ${PROTOCOL_ID}, ${GOAL_ID}, ${MARCO_ID}, ${owner.json({ descricao: "pediu agua independente", polaridade: "positiva", nivel_ajuda: "independente" })}, ${U_T1_A})`;
+      VALUES (${ext!.id}, ${PAC_A1}, ${SESS_A2_ID}, 2, 0, ${PROTOCOL_ID}, ${GOAL_ID}, ${MARCO_ID}, ${owner.json({ descricao: "pediu agua independente", polaridade: "positiva", nivel_ajuda: "independente" })}, ${U_T1_A})
+      RETURNING id`;
+    EVIDENCIA_ID = evidenciaRow!.id as string;
+
+    await owner`INSERT INTO evidence_revision
+      (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
+      VALUES (${EVIDENCIA_ID}, 'reclassificar',
+        ${owner.json({ descricao: "pediu agua independente", polaridade: "positiva", nivel_ajuda: "independente" })},
+        ${owner.json({ descricao: "pediu agua independente", polaridade: "positiva", nivel_ajuda: "dica_verbal" })},
+        'Reclassificado após revisão do vídeo da sessão', ${U_COORD_A})`;
+
+    // Segunda evidência (alvo distinto, mesma sessão) SEM revisão — garante que
+    // o LEFT JOIN não descarta linhas nem fabrica dados quando não há revisão.
+    // goal_id proposital NULL: continua casando por milestone_id (MARCO_ID),
+    // mas não polui a busca existente por GOAL_ID (mantém toHaveLength(1) lá).
+    const [evidenciaSemRevisaoRow] = await owner`INSERT INTO evidence
+      (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
+      VALUES (${ext!.id}, ${PAC_A1}, ${SESS_A2_ID}, 2, 1, ${PROTOCOL_ID}, ${null}, ${MARCO_ID}, ${owner.json({ descricao: "pediu agua com dica", polaridade: "positiva", nivel_ajuda: "dica_gestual" })}, ${U_T1_A})
+      RETURNING id`;
+    EVIDENCIA_SEM_REVISAO_ID = evidenciaSemRevisaoRow!.id as string;
   });
 
   afterAll(async () => {
@@ -163,5 +184,63 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     expect(res).toHaveLength(1);
     expect(res[0]!.descricao).toBe("pediu agua independente");
     expect(res[0]!.nivelAjuda).toBe("independente");
+  });
+
+  test("carregarEvidenciasPorTrecho expõe a revisão do coordenador (V4 passiva) sem fabricar dados quando ausente", async () => {
+    const res = await carregarEvidenciasPorTrecho(ctxCoordA, PAC_A1, MARCO_ID, 1, 2);
+    expect(res).toHaveLength(2);
+
+    const comRevisao = res.find((r) => r.id === EVIDENCIA_ID);
+    expect(comRevisao).toBeTruthy();
+    expect(comRevisao!.revisao).toBeTruthy();
+    expect(comRevisao!.revisao!.acao).toBe("reclassificar");
+    expect(comRevisao!.revisao!.justificativa).toBe(
+      "Reclassificado após revisão do vídeo da sessão"
+    );
+    expect(comRevisao!.revisao!.autorNome).toBe("Coord A");
+
+    const semRevisao = res.find((r) => r.id === EVIDENCIA_SEM_REVISAO_ID);
+    expect(semRevisao).toBeTruthy();
+    expect(semRevisao!.revisao).toBeNull();
+  });
+
+  test("carregarEvidenciasPorTrecho com múltiplas revisões retorna a evidência 1x com a revisão MAIS RECENTE (DISTINCT ON)", async () => {
+    // Sessão isolada (numero 3, fora do range 1-2 usado nos testes acima) para
+    // não poluir a contagem dos testes anteriores sobre MARCO_ID.
+    const sessA3Id = crypto.randomUUID();
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina)
+      VALUES (${sessA3Id}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-03 10:00:00Z', 'realizada', 3, 'aba')`;
+
+    const [extMulti] = await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
+      VALUES (${sessA3Id}, ${CLINIC_A}, 'aprovada', 'evidencia', 'bateu palma pedindo ajuda', 'alta', ${owner.json({})}) RETURNING id`;
+
+    const [evidenciaMultiRow] = await owner`INSERT INTO evidence
+      (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
+      VALUES (${extMulti!.id}, ${PAC_A1}, ${sessA3Id}, 3, 0, ${PROTOCOL_ID}, ${null}, ${MARCO_ID}, ${owner.json({ descricao: "bateu palma pedindo ajuda", polaridade: "positiva", nivel_ajuda: "dica_gestual" })}, ${U_T1_A})
+      RETURNING id`;
+    const evidenciaMultiId = evidenciaMultiRow!.id as string;
+
+    await owner`INSERT INTO evidence_revision
+      (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id, criado_em)
+      VALUES (${evidenciaMultiId}, 'reclassificar',
+        ${owner.json({ descricao: "bateu palma pedindo ajuda", polaridade: "positiva", nivel_ajuda: "dica_gestual" })},
+        ${owner.json({ descricao: "bateu palma pedindo ajuda", polaridade: "positiva", nivel_ajuda: "dica_verbal" })},
+        'primeira revisão', ${U_COORD_A}, '2026-07-10 10:00:00Z')`;
+
+    await owner`INSERT INTO evidence_revision
+      (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id, criado_em)
+      VALUES (${evidenciaMultiId}, 'confirmar',
+        ${owner.json({ descricao: "bateu palma pedindo ajuda", polaridade: "positiva", nivel_ajuda: "dica_verbal" })},
+        ${null},
+        'revisão mais recente', ${U_COORD_A}, '2026-07-11 10:00:00Z')`;
+
+    const res = await carregarEvidenciasPorTrecho(ctxCoordA, PAC_A1, MARCO_ID, 3, 3);
+    expect(res).toHaveLength(1); // sem fan-out: DISTINCT ON evita duplicar linha por revisão
+
+    const item = res[0]!;
+    expect(item.id).toBe(evidenciaMultiId);
+    expect(item.revisao).toBeTruthy();
+    expect(item.revisao!.acao).toBe("confirmar");
+    expect(item.revisao!.justificativa).toBe("revisão mais recente");
   });
 });

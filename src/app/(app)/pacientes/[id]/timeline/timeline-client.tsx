@@ -941,6 +941,12 @@ export function TimelineClient({
                       </span>
                     )}
                   </div>
+                  {ev.revisao && (
+                    <p className="text-xs text-muted font-medium border-t border-gray-200 pt-1 mt-1">
+                      Revisado por {ev.revisao.autorNome ?? "coordenador"}
+                      {ev.revisao.justificativa ? `: ${ev.revisao.justificativa}` : ""}
+                    </p>
+                  )}
                 </div>
               ))
             )}

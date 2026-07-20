@@ -313,5 +313,41 @@ describe.skipIf(!hasDb)("Fase 4 (4B) · materializarSnapshot (segmentação real
       const seg3 = snap3Depois!.segmentacao[GOAL_REGRESSAO_ID][PROTOCOL_ID];
       expect(seg3.rotulo).not.toBe("regressao");
     });
+
+    test("reclassificar o ALVO (goal A → goal B) move a evidência de stream no recompute", async () => {
+      const [goalA] = await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+        VALUES (${PAC_A1}, ${CLINIC_A}, 'Goal A (teste move-de-stream)', 'ativa',
+          ${owner.json({ tipo: "sessoes_consecutivas_independente", valor: 99 })}, ${U_COORD_A})
+        RETURNING id`;
+      const [goalB] = await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+        VALUES (${PAC_A1}, ${CLINIC_A}, 'Goal B (teste move-de-stream)', 'ativa',
+          ${owner.json({ tipo: "sessoes_consecutivas_independente", valor: 99 })}, ${U_COORD_A})
+        RETURNING id`;
+      const GOAL_A = goalA!.id as string;
+      const GOAL_B = goalB!.id as string;
+
+      await inserirEvidence({ sessionNumero: 4, goalId: GOAL_A, milestoneId: MARCO_SIMPLES_ID, nivelAjuda: "independente", polaridade: "positiva" });
+      const [ev] = await owner`
+        SELECT id, classificacao_original FROM evidence
+        WHERE patient_id = ${PAC_A1} AND goal_id = ${GOAL_A} AND session_numero = 4
+      `;
+      const classificacaoNova = {
+        ...(ev!.classificacao_original as object),
+        alvo_resolvido: { goal_id: GOAL_B, protocol_id: PROTOCOL_ID, milestone_id: MARCO_SIMPLES_ID },
+      };
+      await owner`INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
+        VALUES (${ev!.id}, 'reclassificar', ${owner.json(ev!.classificacao_original)}, ${owner.json(classificacaoNova)}, 'corrige alvo', ${U_COORD_A})`;
+
+      await withTenant(ctxCoordA, (tx) =>
+        materializarSnapshot(drizzleMaterializarQueries(tx), PAC_A1, 4),
+      );
+
+      const snap4 = await lerSnapshot(4);
+      expect(snap4!.segmentacao[GOAL_B]).toBeDefined();
+      expect(snap4!.segmentacao[GOAL_B][PROTOCOL_ID]).toBeDefined();
+      expect(snap4!.segmentacao[GOAL_A]).toBeUndefined();
+      expect(snap4!.repertorio_state[GOAL_B]).toBeDefined();
+      expect(snap4!.repertorio_state[GOAL_A]).toBeUndefined();
+    });
   });
 });
