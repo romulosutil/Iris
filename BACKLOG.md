@@ -24,6 +24,43 @@
 
 ---
 
+## 🏁 Sessão 20/07/2026 — Fase 5 Fatia 2 (Supervisão: fila de alertas) — ✅ CONCLUÍDA
+
+Fila de alertas do coordenador (`/supervisao`, coordenador-only) sobre 2 sinais
+**derivados ao vivo**: estagnação/regressão (via `session_snapshot.segmentacao`,
+Fase 4) e faltas excessivas (contagem de `falta_paciente` em janela configurável
+por clínica — `clinic.faltas_limiar`/`faltas_janela_semanas`, defaults 3/4).
+Tabela `alerta` = **livro-razão da decisão** (só server actions escrevem; `novo`
+= sinal vivo sem linha). Ações reconhecer/resolver/descartar espelhando a Fatia 1
+(advisory lock + re-check + `CONCURRENCY_ERROR`, **sem coluna OCC**), audit inline.
+Auto-resolve = "sinal cessou + resolver 1-clique" (auditado), sem write-on-GET.
+Migrações `0041` (tabela+enums+config) + `0042` (RLS espelhando `report`).
+
+**Experimento de delegação Claude→Gemini 3.5 (validado):** Claude entregou a
+camada de schema/RLS (cara-de-errar: multi-tenant); Gemini 3.5 implementou a
+camada de app (lib pura + queries + actions + UI + testes) a partir da spec
+`docs/superpowers/specs/2026-07-20-fase5-fatia2-supervisao-alertas-design.md`
+(contrato executável com I/O, arquivos-irmão a espelhar, casos de teste,
+protocolo de execução). Claude validou o diff (fronteira + gates + revisão
+manual de segurança/lógica). **Resultado:** entrega do Gemini passou todos os
+gates de primeira; custo de validação baixo. **Regra destilada:** quando a task
+espelha padrão existente + I/O fechável + verificação determinística + NÃO toca
+RLS/schema-do-agente/migração-com-dado → escrever spec Gemini-ready e delegar.
+
+**Nits não-bloqueantes (registrados):** N+1 na resolução de nomes do laço
+"sinal cessou" (conjunto pequeno); falta teste int de rejeição cross-tenant no
+INSERT de `alerta` (RLS provado pela suíte do `report`); `any` em 2 tipos de
+`queries.ts`.
+
+**Adiado deliberadamente:** incidente grave (sem fonte no modelo); auto-close
+automático/cron; re-alerta de condição persistente pós-resolução (chave sem
+bucket temporal — **atenção a faltas**); W de estagnação configurável; alertas
+por-terapeuta; reabertura de alerta terminal.
+
+**Dívida técnica FECHADA nesta sessão:** `src/db/rls.int.test.ts` (arrastava
+desde a Fatia 1) — seed não garantia a linha-pai `protocol_familia_catalogo`;
+insert idempotente resolveu. **Integração agora 319/319, 0 skipped.**
+
 ## 🏁 Sessão 19/07/2026 — Fase 5 Fatia 1 (fila de validação do coordenador, Tasks 1-9) — ✅ CONCLUÍDA
 
 Fila de validação (`/validacao`, coordenador-only) + dúvidas do terapeuta

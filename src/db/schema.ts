@@ -186,6 +186,10 @@ export const clinic = pgTable("clinic", {
   passoGradeMin: integer("passo_grade_min").notNull().default(30),
   // default de duração por disciplina, ex {"aba":60,"fono":30,"to":50}.
   duracaoDisciplina: jsonb("duracao_disciplina").notNull().default({}),
+  // Fase 5 Fatia 2 (Supervisão): limiar de "faltas excessivas" do paciente —
+  // N faltas (falta_paciente) numa janela de M semanas dispara o alerta.
+  faltasLimiar: integer("faltas_limiar").notNull().default(3),
+  faltasJanelaSemanas: integer("faltas_janela_semanas").notNull().default(4),
   criadoEm: timestamp("criado_em", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -1021,4 +1025,72 @@ export const auditLog = pgTable(
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("idx_audit_log_patient").on(t.patientId, t.criadoEm.desc())],
+);
+
+// ─── Fase 5 Fatia 2 — Supervisão (fila de alertas do coordenador) ────────────
+// Sinais derivados AO VIVO (estagnação/regressão via session_snapshot; faltas
+// via session.estado) — nunca materializados por job. `alerta` é o LIVRO-RAZÃO
+// da decisão do coordenador: só server actions escrevem. `novo` = sinal vivo
+// SEM linha viva (não é valor de enum). Concorrência = advisory lock + re-check
+// (padrão do repo), sem coluna de versão/OCC.
+export const alertaTipo = pgEnum("alerta_tipo", [
+  "estagnacao", "regressao", "faltas_excessivas",
+]);
+export const alertaStatus = pgEnum("alerta_status", [
+  "reconhecido", "resolvido", "descartado",
+]);
+
+export const alerta = pgTable(
+  "alerta",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id),
+    patientId: uuid("patient_id").notNull(),
+    tipo: alertaTipo("tipo").notNull(),
+    status: alertaStatus("status").notNull(),
+    // dedupe determinístico da condição; linha terminal suprime re-alerta.
+    chaveNatural: text("chave_natural").notNull(),
+    // localizador clínico (estagnação/regressão); NULL p/ faltas.
+    goalId: uuid("goal_id").references(() => goal.id),
+    protocolId: uuid("protocol_id").references(() => protocol.id),
+    // snapshot do sinal no momento da decisão (métrica / contagem de faltas).
+    detalhe: jsonb("detalhe").notNull(),
+    nota: text("nota"), // preenchido em resolver
+    motivo: text("motivo"), // preenchido em descartar
+    criadoPor: uuid("criado_por")
+      .notNull()
+      .references(() => appUser.id),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoPor: uuid("atualizado_por")
+      .notNull()
+      .references(() => appUser.id),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    // null = vigente; soft-delete p/ paridade RLS (espelha `report`).
+    deletadoEm: timestamp("deletado_em", { withTimezone: true }),
+  },
+  (t) => [
+    // anti-IDOR em nível de banco (mesma FK composta das tabelas Agenda 2.0).
+    foreignKey({
+      columns: [t.patientId, t.clinicId],
+      foreignColumns: [patient.id, patient.clinicId],
+      name: "alerta_patient_fk",
+    }).onDelete("cascade"),
+    // localizador clínico obrigatório p/ estagnação/regressão, ausente p/ faltas.
+    check(
+      "alerta_locator",
+      sql`(${t.tipo} = 'faltas_excessivas' AND ${t.goalId} IS NULL AND ${t.protocolId} IS NULL)
+       OR (${t.tipo} IN ('estagnacao','regressao') AND ${t.goalId} IS NOT NULL AND ${t.protocolId} IS NOT NULL)`,
+    ),
+    // 1 alerta vivo por condição (dedupe + supressão pós-terminal).
+    uniqueIndex("alerta_chave_uk")
+      .on(t.chaveNatural)
+      .where(sql`${t.deletadoEm} IS NULL`),
+    index("idx_alerta_fila")
+      .on(t.clinicId, t.status)
+      .where(sql`${t.deletadoEm} IS NULL`),
+  ],
 );
