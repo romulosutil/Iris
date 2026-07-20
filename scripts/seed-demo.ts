@@ -436,7 +436,7 @@ async function main() {
       // Turno da Manhã (0-19)
       if (origIdx < 10) {
         terapeutaId = therapistIds[origIdx]!;
-        horaInicio = "08:30:00";
+        horaInicio = "09:00:00";
       } else {
         terapeutaId = therapistIds[origIdx]!;
         horaInicio = "10:30:00";
@@ -603,7 +603,7 @@ async function main() {
         clinicId: c.id,
         patientId: anaBeatrizId,
         terapeutaId: therapist1Id,
-        agendadaPara: new Date(`${dt.dateStr}T08:30:00${FUSO_CLINICA_OFFSET}`),
+        agendadaPara: new Date(`${dt.dateStr}T09:00:00${FUSO_CLINICA_OFFSET}`),
         estado: "agendada",
         disciplina: DISCIPLINA,
         duracaoMin: 90,
