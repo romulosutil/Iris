@@ -63,7 +63,12 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       (${U_COORD}, ${CLINIC_A}, 'coordenador'),
       (${U_TERA3}, ${CLINIC_A}, 'terapeuta'),
       (${U_EXT}, ${CLINIC_B}, 'terapeuta')`;
-    // Protocolos por clínica (família do catálogo semeado pela migração).
+    // Família do catálogo: semear explicitamente (idempotente). Outra suíte de
+    // integração pode ter dado TRUNCATE ... CASCADE em protocol_familia_catalogo,
+    // apagando o seed da migração — sem isto o FK protocol.familia falha.
+    await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES
+      ('fonoaudiologia', 'Fonoaudiologia') ON CONFLICT (id) DO NOTHING`;
+    // Protocolos por clínica (família do catálogo).
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
       (${PROT_A}, ${CLINIC_A}, 'Proto A', 'Fono', 'fonoaudiologia'),
       (${PROT_B}, ${CLINIC_B}, 'Proto B', 'Fono', 'fonoaudiologia')`;
