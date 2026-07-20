@@ -24,6 +24,50 @@
 
 ---
 
+## 🏁 Sessão 19/07/2026 — Fase 5 Fatia 1 (fila de validação do coordenador, Tasks 1-9) — ✅ CONCLUÍDA
+
+Fila de validação (`/validacao`, coordenador-only) + dúvidas do terapeuta
+(`/duvidas`, terapeuta e coordenador) sobre evidências extraídas com sinal
+V1a (baixa-confiança) ou V1b (inconsistente-com-histórico). Ações unitárias
+(confirmar/reclassificar/devolver-com-dúvida/invalidar), 1 tx + advisory
+lock + `requireRole('coordenador')` por ação, `responderQuery` fecha a
+dúvida e recomputa. V4 passiva: revisão (justificativa+autor) aparece na
+timeline do paciente. Links de entrada adicionados ao shell (`(app)/layout.tsx`):
+"Dúvidas" perto de Pendências (terapeuta+coordenador), "Validação" logo
+após Exceções (coordenador-only).
+
+**Adiado deliberadamente (fora do MVP da Fatia 1):**
+* **Sinais V1c/V1d/V1e/V1f** — a fila hoje só entra por V1a (baixa-confiança)
+  e V1b (inconsistente-com-histórico); os demais sinais candidatos de fila
+  (definidos na spec de governança mas não implementados) ficam para uma
+  fatia futura.
+* **V4 ativa (dívida de compliance/UX)** — hoje a revisão só aparece
+  passivamente na timeline; um sino/notificação push avisando o terapeuta
+  em tempo real de uma reclassificação/devolução não existe. Registrar como
+  dívida de compliance: o terapeuta pode não perceber a correção a tempo de
+  agir sobre ela.
+* **Checklist estruturado por protocolo** — a validação do coordenador hoje
+  é justificativa em texto livre; um checklist estruturado por tipo de
+  protocolo (o que checar antes de confirmar/reclassificar) fica para depois.
+* **V5 (métricas de validação / dataset IOA)** — nenhuma métrica agregada de
+  quantidade/tipo de correção, tempo de fila, ou dataset para acordo
+  inter-avaliadores foi construída nesta fatia.
+* **Caminho de correção de reclassificação** — a fila é **tiro-único**: uma
+  reclassificação submetida não tem undo/re-edição. Se o coordenador errar a
+  reclassificação, não há fluxo de correção — só abrir uma dúvida nova ou
+  reverter manualmente. Fluxo de correção fica para uma fatia futura.
+
+**Dívida técnica observada (não é regressão desta fatia):**
+* **`src/db/rls.int.test.ts` falha localmente** — o seed do teste insere em
+  `protocol` com `familia` referenciando `protocol_familia_catalogo` sem criar
+  a linha-pai (FK `protocol_familia_protocol_familia_catalogo_id_fk`, da migração
+  `0000`/`0001`). Independe desta fatia (o branch não tocou o teste, o schema,
+  as migrações nem `protocol`) — `git diff main...HEAD` não inclui nenhum deles,
+  logo o resultado é idêntico em `main`. Corrigir: o seed precisa inserir a
+  linha em `protocol_familia_catalogo` antes do `protocol` (mesmo padrão já
+  usado em `validacao/actions.int.test.ts`). Todas as suítes novas da Fatia 1
+  (validação, dúvidas, timeline, fase4-materializar) passam.
+
 ## 🏁 Sessão 19/07/2026 — Fase 5 F0 (fundação de relatórios, Tasks 1-8) — ✅ CONCLUÍDA
 
 Fundação de relatórios da Fase 5: tabela `report` (migração `0038`) com
