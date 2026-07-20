@@ -65,6 +65,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "axe-core": "^4.10.2",
     "drizzle-kit": "0.31.10",
+    "esbuild": "^0.28.1",
     "eslint": "^9.36.0",
     "eslint-config-next": "16.2.10",
     "eslint-config-prettier": "^9.1.0",
