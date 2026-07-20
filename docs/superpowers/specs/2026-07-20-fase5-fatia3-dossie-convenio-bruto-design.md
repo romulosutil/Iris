@@ -129,10 +129,15 @@ type PayloadConvenioBruto = {
     sessoesRealizadas: number;
     faltasJustificadas: number;
     faltasNaoJustificadas: number;
-    incidentesGraves: number;
   };
 };
 ```
+
+> **Gap registrado:** o wireframe §4.6 mostra "episódios de incidente grave" no
+> preview, mas **não há coluna de incidente/gravidade no schema** (grep zero em
+> `session` e no schema inteiro). Omitido do payload da Fatia 3; modelar como
+> item futuro (nova coluna/tabela ou derivação de `session_note`). Registrado no
+> BACKLOG.
 
 Fontes (RLS já escopa por ctx): `evidence` (aprovadas), `session`, `goal` /
 `milestone` / `protocol` (nome curto do domínio), nomes via `app_user`.
@@ -188,10 +193,15 @@ de rede; qualquer request não-abortada = falha.
     `care_team_membership` vigente, `vigencia_fim IS NULL`).
   - `admin_recepcao` **bloqueado** (nunca acessa dado clínico).
 - Escopo de linha vem do RLS já existente em `evidence` / `session` (as leituras
-  do payload retornam apenas linhas no escopo do ator). **A validar no plano:**
-  a policy de `report` (`db/migrations/0039_fase5_report_audit_rls.sql`) permite
-  o `INSERT` de `convenio_bruto` no mesmo escopo (coordenador clínica / terapeuta
-  on-team) — se faltar, migration `0043+` com policy + `rls.int.test`.
+  do payload retornam apenas linhas no escopo do ator).
+- **RESOLVIDO (sem migration):** a policy `report_scope FOR ALL` de
+  `db/migrations/0039_fase5_report_audit_rls.sql:21-34` já tem `WITH CHECK
+  (app_patient_in_clinic(patient_id) AND (user_role='coordenador' OR
+  app_is_on_team(patient_id)))` — cobre o INSERT do `convenio_bruto` para
+  coordenador (clínica) e terapeuta on-team. `convenio_bruto` já é valor do enum
+  `reportTipo` (`schema.ts:941`). **A Fatia 3 não precisa de migration de
+  schema nem de RLS.** `audit_log` exige `ator_id = app.user_id` (garantido, o
+  `exportReport` passa `atorId = ctx.userId`).
 
 ## 9. Concorrência de render (resolve C1)
 
