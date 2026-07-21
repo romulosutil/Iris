@@ -31,20 +31,49 @@ COPY scripts/migrate.mjs ./scripts/migrate.mjs
 COPY db/migrations ./db/migrations
 CMD ["node", "scripts/migrate.mjs"]
 
-# --- runner: imagem final enxuta ---------------------------------------------
-FROM node:22-alpine AS runner
+# --- runner: imagem final ------------------------------------------------------
+# Base trocada de node:22-alpine (musl) p/ node:22-slim (glibc/Debian): o
+# PlaywrightPdfRenderer (src/lib/report/playwright-renderer.ts) lança Chromium
+# em runtime, e o Playwright não dá suporte oficial a musl/Alpine. Custo:
+# +~300MB de imagem (aceito — ver task-8-brief.md, INFRA-GATE/sign-off Rômulo).
+FROM node:22-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# Cache de browsers fora do node_modules, path idêntico em build e runtime
+# (aqui os dois acontecem na mesma etapa, mas fixar o path evita depender de
+# onde o Playwright resolveria o default e facilita mover a instalação depois).
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
+RUN groupadd --system nodejs && useradd --system --gid nodejs --create-home nextjs
 
 COPY --from=build /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-demo.js ./scripts/seed-demo.js
+
+# Garante playwright + o browser Chromium. Instala em /opt/playwright (fora
+# de /app) porque o node_modules copiado do standalone é gerenciado pelo
+# pnpm (layout .pnpm/symlinks) e o npm trava
+# ("Cannot read properties of null (reading 'isDescendantOf')") ao instalar
+# dentro dele. Em seguida SUBSTITUI o playwright/playwright-core que o
+# tracing do Next já copiou para /app/node_modules — o tracing captura só os
+# requires estáticos, não o browsers.json (asset lido em runtime), então o
+# pacote traçado sozinho não basta; a cópia completa de /opt/playwright
+# resolve primeiro por estar mais perto na cadeia de node_modules.
+# --with-deps instala só as libs de sistema do Chromium (não baixa
+# firefox/webkit), mantendo a imagem enxuta.
+RUN mkdir -p /opt/playwright \
+    && cd /opt/playwright \
+    && npm init -y >/dev/null \
+    && npm install --no-save playwright@1.61.1 \
+    && npx playwright install --with-deps chromium \
+    && rm -rf /app/node_modules/playwright /app/node_modules/playwright-core \
+    && cp -r /opt/playwright/node_modules/playwright /app/node_modules/playwright \
+    && cp -r /opt/playwright/node_modules/playwright-core /app/node_modules/playwright-core \
+    && chown -R nextjs:nodejs /ms-playwright /app/node_modules/playwright /app/node_modules/playwright-core
 
 USER nextjs
 EXPOSE 3000

@@ -14,6 +14,7 @@ import {
   patient,
   patientClinicalProfile,
   patientProtocol,
+  report,
 } from "./schema";
 import { withTenant, type TenantContext } from "./rls";
 import { sql as appSql } from "./client";
@@ -297,6 +298,59 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
           userId: U_ADMIN,
           disciplina: "ABA",
           papelNaEquipe: "substituto",
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("report_scope (WITH CHECK): terapeuta da equipe insere report convenio_bruto do próprio paciente", async () => {
+    // TERA está na equipe de P1 (seed do describe) → INSERT deve passar.
+    await withTenant(ctx("terapeuta", U_TERA), (db) =>
+      db.insert(report).values({
+        clinicId: CLINIC_A,
+        patientId: P1,
+        tipo: "convenio_bruto",
+        periodoInicio: "2026-06-01",
+        periodoFim: "2026-06-30",
+        payload: {},
+      }),
+    );
+    const linhas = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db
+        .select()
+        .from(report)
+        .where(eq(report.patientId, P1)),
+    );
+    expect(linhas).toHaveLength(1);
+  });
+
+  test("report_scope (WITH CHECK): terapeuta FORA da equipe é barrado no INSERT de report", async () => {
+    // TERA2 não está na equipe de P2 → WITH CHECK (app_is_on_team) deve barrar.
+    await expect(
+      withTenant(ctx("terapeuta", U_TERA2), (db) =>
+        db.insert(report).values({
+          clinicId: CLINIC_A,
+          patientId: P2,
+          tipo: "convenio_bruto",
+          periodoInicio: "2026-06-01",
+          periodoFim: "2026-06-30",
+          payload: {},
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("report_scope (WITH CHECK): admin_recepcao (sem membership) é barrado no INSERT de report", async () => {
+    // admin_recepcao nunca satisfaz coordenador OU app_is_on_team → sempre barrado.
+    await expect(
+      withTenant(ctx("admin_recepcao", U_ADMIN), (db) =>
+        db.insert(report).values({
+          clinicId: CLINIC_A,
+          patientId: P1,
+          tipo: "convenio_bruto",
+          periodoInicio: "2026-06-01",
+          periodoFim: "2026-06-30",
+          payload: {},
         }),
       ),
     ).rejects.toThrow();

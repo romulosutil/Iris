@@ -24,6 +24,63 @@
 
 ---
 
+## 🏁 Sessão 20/07/2026 — Fase 5 Fatia 3 (Dossiê `convenio_bruto` + PDF real via Chromium, Tasks 1-9) — ✅ CONCLUÍDA
+
+Dossiê **factual** `convenio_bruto` (sem narrativo de IA — só contagens
+derivadas de dado estruturado): tipos + `build-html` (escapa todo texto
+livre via `escapeHtml`), `build-payload` sob RLS (`buildConvenioBrutoPayload`
+reusado por preview e export), semáforo `render-lock` (concorrência de
+render), `PlaywrightPdfRenderer` real com sandbox SSRF (JS desabilitado,
+rede bloqueada exceto local, `file://` proibido — DoD de segurança herdado
+de F0 fechado nesta fatia), query de preview read-only (`/relatorios`),
+server action de export em **transação única** (F0 intocado: recheck
+`payload_versao` sob `FOR UPDATE`), UI `/relatorios` + rota de download, e
+runner Docker com Chromium (infra-gate revisado manualmente).
+
+**Verificação final (Task 9):** `lint` limpo (0 erros, 2 warnings
+pré-existentes fora do escopo); `typecheck` **limpo project-wide** após 1
+fix (ver abaixo); unitários da fatia 5/5 (`build-html.test.ts`,
+`render-lock.test.ts`); integração da fatia **34/34** (`build-payload`,
+`playwright-renderer`, `relatorios/queries`, `relatorios/actions`,
+`db/rls.int.test.ts`) + a11y `relatorios/a11y.test.tsx` 2/2. `pnpm test`
+(suíte default) 359/362 — as 3 falhas são **pré-existentes e alheias**
+(timeout de `axe-core`/jsdom em `feriados`, `ausencias`, `equipe/[id]`
+disponibilidade — canvas não implementado no jsdom, mesma classe de
+flakiness já documentada na Etapa B).
+
+**Fix nesta sessão:**
+* **Nit de review (comentário enganoso)** em `relatorios/queries.ts` —
+  dizia que o terapeuta "segue vendo o paciente" no seletor, mas a policy
+  RLS `patient_select` já restringe o SELECT de `patient` a on-team para
+  terapeuta (coordenador vê a clínica toda); não há filtro de app
+  necessário. Comentário corrigido para refletir o RLS real.
+* **Typecheck:** `actions.int.test.ts` desestruturava `[rep]` de um
+  `SELECT` (tipo `Row | undefined` do driver `postgres`) e acessava
+  `.status`/`.tipo`/`.gerado_por_ia` sem narrowing → 3 erros `TS18048`.
+  Corrigido com optional chaining (`rep?.status` etc.) — teste roda sob
+  `describe.skipIf(!hasDb)`, a asserção segue válida quando o DB existe.
+
+**Dívidas registradas (fora desta fatia):**
+* **`report_pdf.bytes` como `bytea` no Postgres** — PDF real (não mais
+  stub) é grande; offload para MinIO/object storage quando o volume de
+  relatórios crescer (mesma dívida já apontada em F0, agora com renderer
+  real ativo — prioridade sobe).
+* **Render in-process com semáforo N=1`** — funciona para volume baixo;
+  extrair para worker de render dedicado se o volume de exports
+  justificar (evita bloquear o processo do app durante o Chromium).
+* **"Incidente grave"** aparece no wireframe (§4.6) mas **não tem coluna
+  no schema** — modelar (nova coluna/tabela dedicada, ou derivar de
+  `session_note`) antes de qualquer tela que prometa esse dado.
+* **Docker runner ~1.95GB** (Chromium + cópia de `playwright` fragilizada
+  pelo tracing do Next) — revisitar: imagem enxuta (multi-stage mais
+  agressivo) ou mover o render para um worker separado; hoje **sem CI**
+  cobrindo o smoke de Chromium (só verificado manualmente/infra-gate).
+* **Pré-existentes a resolver à parte** (não desta fatia): config
+  storybook/vitest em stash (não neste branch) quebra `pnpm test`/
+  `pnpm typecheck` default em outras sessões — ver dependências faltantes
+  (`@storybook/addon-vitest`, `@vitest/coverage-v8`); `agenda2-encerrar-
+  regra.int.test.ts` com date-drift (assertiva hardcoded vs. data atual).
+
 ## 🏁 Sessão 20/07/2026 — Fase 5 Fatia 2 (Supervisão: fila de alertas) — ✅ CONCLUÍDA
 
 Fila de alertas do coordenador (`/supervisao`, coordenador-only) sobre 2 sinais
