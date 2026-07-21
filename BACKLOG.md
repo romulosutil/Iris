@@ -81,6 +81,23 @@ flakiness já documentada na Etapa B).
   (`@storybook/addon-vitest`, `@vitest/coverage-v8`); `agenda2-encerrar-
   regra.int.test.ts` com date-drift (assertiva hardcoded vs. data atual).
 
+**Follow-ups rastreados (tarefas dedicadas):**
+* **[Item 1 — infra] Render Playwright → worker isolado + smoke de CI.**
+  Sign-off dado ao Docker de 1.95GB como **dívida técnica aceita** (PR #54
+  mergeada). Tarefa dedicada: extrair o render do Chromium para um
+  worker/serviço isolado (a interface `PdfRenderer` já isola — swap de 1
+  arquivo) devolvendo o runtime do app a uma imagem enxuta, **e** adicionar
+  um smoke de CI que renderiza 1 PDF (`%PDF-`) antes de confiar no runner
+  em produção. Prioridade: fazer antes de o volume de exports crescer.
+* **[Item 2 — segurança] ctx forjável em módulos `"use server"` → Issue
+  #55.** Padrão corrigido na Fatia 3 (`export-logic.ts`) existe em **~12
+  módulos `actions.ts`** app-wide (validacao, revisao, metas,
+  cadastro-clinico + protocolo, pacientes/[id]/equipe, pacientes/novo,
+  equipe/convidar, diario, agenda, duvidas, supervisao). Core ctx-accepting
+  exportado de `"use server"` = endpoint com ctx forjável → bypass RLS
+  cross-tenant. Corrigir à parte (sessão dedicada, SDD por módulo). Ver
+  memória de projeto `ctx-forjavel-use-server` e Issue #55.
+
 ## 🏁 Sessão 20/07/2026 — Fase 5 Fatia 2 (Supervisão: fila de alertas) — ✅ CONCLUÍDA
 
 Fila de alertas do coordenador (`/supervisao`, coordenador-only) sobre 2 sinais
