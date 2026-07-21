@@ -18,12 +18,15 @@ export interface InputProps extends Omit<
   leftAddon?: React.ReactNode;
   /** Elemento/texto acoplado no fim (fora do campo, mas visualmente unido). */
   rightAddon?: React.ReactNode;
+  /** ClassName adicional para aplicar diretamente no elemento <input> interno. */
+  inputClassName?: string;
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   function Input(
     {
       className,
+      inputClassName,
       type,
       size = "md",
       prefixIcon,
@@ -53,7 +56,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const handleWrapperClick = (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
       if (
-        target.closest("button, a, input, select, textarea, [role='button']")
+        target?.closest?.("button, a, input, select, textarea, [role='button']")
       ) {
         return;
       }
@@ -102,7 +105,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           )}
         >
           {prefixIcon && (
-            <span className="pointer-events-none flex shrink-0 items-center justify-center pl-3 text-[color:var(--color-text-body)]/60">
+            <span className="flex shrink-0 items-center justify-center pl-3 text-[color:var(--color-text-body)]/60">
               {prefixIcon}
             </span>
           )}
@@ -121,11 +124,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
                 "min-h-[var(--input-height-lg)] px-4 py-3 text-base",
               disabled &&
                 "cursor-not-allowed text-[color:var(--color-text-body)]/70",
+              inputClassName,
             )}
             {...props}
           />
           {suffixIcon && (
-            <span className="pointer-events-none flex shrink-0 items-center justify-center pr-3 text-[color:var(--color-text-body)]/60">
+            <span className="flex shrink-0 items-center justify-center pr-3 text-[color:var(--color-text-body)]/60">
               {suffixIcon}
             </span>
           )}

@@ -21,12 +21,12 @@ describe("Input component click focus handler", () => {
       <Input
         placeholder="Test focus"
         suffixIcon={
-          <div className="pointer-events-auto">
+          <>
             <button data-testid="native-btn">Click</button>
             <div role="button" data-testid="custom-btn">
               Click Custom
             </div>
-          </div>
+          </>
         }
       />,
     );
@@ -49,5 +49,21 @@ describe("Input component click focus handler", () => {
     input?.blur();
     fireEvent.click(customBtn!);
     expect(document.activeElement).not.toBe(input);
+  });
+
+  test("applies inputClassName directly to the input element", () => {
+    const { container } = render(
+      <Input
+        className="w-full"
+        inputClassName="text-center text-red-500"
+        placeholder="Centered text"
+      />,
+    );
+    const wrapper = container.firstElementChild;
+    const input = container.querySelector("input");
+
+    expect(wrapper?.classList.contains("w-full")).toBe(true);
+    expect(input?.classList.contains("text-center")).toBe(true);
+    expect(input?.classList.contains("text-red-500")).toBe(true);
   });
 });

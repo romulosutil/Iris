@@ -137,7 +137,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         type={type ?? "button"}
         disabled={disabled || isLoading}
-        aria-disabled={isLoading ? "true" : undefined}
         onClick={onClick}
         className={cn(
           // base: alvo de toque e layout
