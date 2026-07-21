@@ -1,18 +1,21 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import { control, surface } from "./primitives/surface";
+import { control } from "./primitives/surface";
 
 /**
- * Escala de ênfase (Espectro Brutal). O PESO é o antídoto contra "wireframe":
+ * Escala de ênfase (Espectro Brutal v3). O PESO é o antídoto contra "wireframe":
  * primária e secundária carregam a superfície sólida com sombra dura que
  * LEVANTA (não são contornos finos); só a terciária é leve, para ações de
  * baixa ênfase (cancelar, voltar).
  */
 type Variante =
-  | "primaria" // CTA confiante — fill ouro, superfície elevada (ex.: Aprovar)
-  | "secundaria" // ação neutra com peso — fill branco, mesma elevação
-  | "terciaria" // baixa ênfase — sem fill, sem sombra (ex.: Cancelar)
-  | "neutra"; // DEPRECADO: alias de `secundaria` (compat)
+  | "primaria"
+  | "secundaria"
+  | "terciaria"
+  | "neutra"
+  | "primary"
+  | "secondary"
+  | "tertiary";
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -21,27 +24,35 @@ export interface ButtonProps
   risco?: "baixo" | "alto";
 }
 
-// Cada tier: classes de fill/superfície. `temPeso` liga o deslocamento no press.
-function estiloVariante(v: Variante): { classes: string; temPeso: boolean } {
+function estiloVariante(v: Variante): string {
   switch (v) {
     case "primaria":
-      return {
-        classes: cn(surface("solida"), "bg-brand-primary text-brand-primary-text active:bg-brand-primary-hover"),
-        temPeso: true,
-      };
+    case "primary":
+      return cn(
+        "bg-[color:var(--brand-primary)] text-[color:var(--ink-anchor)]",
+        "border-[length:var(--border-brutal)] border-[color:var(--ink-anchor)]",
+        "shadow-[var(--shadow-composite)]",
+        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[4px_4px_0_0_var(--ink-anchor),var(--shadow-soft)]",
+        "active:translate-x-0 active:translate-y-0 active:shadow-none"
+      );
     case "terciaria":
-      return {
-        classes:
-          "border-2 border-transparent bg-transparent text-text-body hover:bg-bg-canvas hover:underline hover:underline-offset-4 disabled:hover:bg-transparent disabled:hover:no-underline",
-        temPeso: false,
-      };
+    case "tertiary":
+      return cn(
+        "border-transparent bg-transparent text-gray-500 shadow-none",
+        "hover:bg-[#F1EFE9] hover:text-[color:var(--ink-anchor)]",
+        "disabled:hover:bg-transparent disabled:hover:text-gray-500"
+      );
     case "secundaria":
+    case "secondary":
     case "neutra":
     default:
-      return {
-        classes: cn(surface("solida"), "bg-bg-surface text-text-body"),
-        temPeso: true,
-      };
+      return cn(
+        "bg-white text-[color:var(--color-text-body)]",
+        "border-[length:var(--border-brutal)] border-[#1A1A1A]",
+        "shadow-[var(--shadow-composite)]",
+        "hover:-translate-x-[1px] hover:-translate-y-[1px]",
+        "active:translate-x-0 active:translate-y-0 active:shadow-none"
+      );
   }
 }
 
@@ -50,13 +61,13 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     { className, variante = "primaria", type, risco, ...props },
     ref,
   ) {
-    const { classes, temPeso } = estiloVariante(variante);
+    const classes = estiloVariante(variante);
     return (
       <button
         ref={ref}
         type={type ?? "button"}
         className={cn(
-          // base: alvo de toque (piso 44×44 — Casey), tipografia display, layout
+          // base: alvo de toque (piso 44×44), tipografia display, layout
           control("sm"),
           "inline-flex items-center justify-center px-5 py-2.5",
           "font-display text-base font-semibold",
@@ -67,9 +78,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
           "disabled:active:translate-x-0 disabled:active:translate-y-0",
           classes,
-          // hover/press só nas variantes com peso (a leve não "afunda")
-          temPeso && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
-          temPeso && "active:translate-x-0 active:translate-y-0 active:shadow-none",
           className,
         )}
         {...props}
@@ -77,3 +85,4 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     );
   },
 );
+

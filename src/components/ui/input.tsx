@@ -10,17 +10,14 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         ref={ref}
         type={type ?? "text"}
         className={cn(
-          // base neobrutalista: mesma linguagem do Button — borda âncora +
-          // sem sombra dura (input não é ação, não recebe deslocamento).
           "min-h-11 w-full px-4 py-2.5",
           "bg-surface text-ink font-body text-base",
-          "border-ink-anchor border-2",
+          "border-[length:1.5px] border-[#C9C6BC] rounded-[5px]",
           "placeholder:text-graphite/60",
-          "transition-[border-color,box-shadow] duration-100 ease-out",
-          // anel de foco ortogonal — mesmo token do Button.
-          "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
-          // erro: sinal estrutural (borda), NUNCA só cor — o texto redundante
-          // fica a cargo do <Field> (role="alert" associado via aria-describedby).
+          "transition-[border-color,box-shadow] duration-200 ease-out",
+          // foco suave da v3
+          "focus:border-[#2274A5] focus:shadow-[0_0_0_3px_rgba(34,116,165,0.2)] focus:outline-none",
+          // erro
           "aria-invalid:border-[color:var(--color-spectrum-red)]",
           "disabled:cursor-not-allowed disabled:opacity-50",
           className,
@@ -30,3 +27,4 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     );
   },
 );
+

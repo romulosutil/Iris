@@ -22,12 +22,56 @@ export type EstadoDado =
   | "reclassificada" // coordenador criou nova versão (governança, Fase 5)
   | "devolvida"; // coordenador devolveu ao terapeuta — pede ação
 
+export type BadgesVariantes =
+  | "success"
+  | "warning"
+  | "ai"
+  | "info"
+  | "brand"
+  | "neutral"
+  | "Success"
+  | "Warning"
+  | "AI"
+  | "Info";
+
+const estadoToVariante: Record<EstadoDado, BadgesVariantes> = {
+  sugerida: "ai",
+  aprovada: "success",
+  editada: "success",
+  descartada: "neutral",
+  pendente: "warning",
+  reclassificada: "info",
+  devolvida: "warning",
+};
+
+export const variantStyles: Record<string, string> = {
+  success: "bg-[color:var(--success-tint)] border-[color:var(--success-accent)] text-[color:var(--success-deep)]",
+  Success: "bg-[color:var(--success-tint)] border-[color:var(--success-accent)] text-[color:var(--success-deep)]",
+  warning: "bg-[color:var(--warning-tint)] border-[color:var(--warning-accent)] text-[color:var(--warning-deep)]",
+  Warning: "bg-[color:var(--warning-tint)] border-[color:var(--warning-accent)] text-[color:var(--warning-deep)]",
+  ai: "bg-[color:var(--ai-tint)] border-[color:var(--ai-accent)] text-[color:var(--ai-deep)]",
+  AI: "bg-[color:var(--ai-tint)] border-[color:var(--ai-accent)] text-[color:var(--ai-deep)]",
+  info: "bg-[color:var(--info-tint)] border-[color:var(--info-accent)] text-[color:var(--info-deep)]",
+  Info: "bg-[color:var(--info-tint)] border-[color:var(--info-accent)] text-[color:var(--info-deep)]",
+  brand: "bg-[color:var(--brand-tint)] border-[color:var(--brand-primary)] text-[color:var(--ink-anchor)]",
+  neutral: "bg-[color:var(--color-raw-gray-50)] border-[color:var(--color-raw-gray-800)] text-[color:var(--color-raw-gray-900)]",
+};
+
+const dotColorMap: Record<string, string> = {
+  success: "bg-[color:var(--success-accent)]",
+  Success: "bg-[color:var(--success-accent)]",
+  warning: "bg-[color:var(--warning-accent)]",
+  Warning: "bg-[color:var(--warning-accent)]",
+  ai: "bg-[color:var(--ai-accent)]",
+  AI: "bg-[color:var(--ai-accent)]",
+  info: "bg-[color:var(--info-accent)]",
+  Info: "bg-[color:var(--info-accent)]",
+  brand: "bg-[color:var(--brand-primary)]",
+  neutral: "bg-[color:var(--color-raw-gray-800)]",
+};
+
 type Config = {
   rotulo: string;
-  /** Estrutura do selo. Sugerida = contorno tracejado violeta, sem fill. */
-  selo: string;
-  /** Cor do ponto no StatusDot (visível com borda âncora redundante). */
-  dot: string;
   Icone: React.FC;
 };
 
@@ -91,70 +135,76 @@ function IconeClock() {
 const config: Record<EstadoDado, Config> = {
   sugerida: {
     rotulo: "Sugerida",
-    // Contorno tracejado violeta, SEM fill sólido — o "ainda-não-fato" da IA.
-    // (A profundidade "afunda" mora no Card/ConfidenceCard; o selo é rótulo.)
-    selo: "border-dashed border-[color:var(--color-suggested)] bg-canvas text-[color:var(--color-suggested)]",
-    dot: "bg-[color:var(--color-suggested)]",
     Icone: IconeSparkle,
   },
   aprovada: {
     rotulo: "Aprovada",
-    selo: "border-ink-anchor bg-mint text-ink-anchor",
-    dot: "bg-mint",
     Icone: IconeCheck,
   },
   editada: {
     rotulo: "Editada",
-    // Fato, com ajuste humano — mesmo fill de "aprovada" (é fato), ícone lápis.
-    selo: "border-ink-anchor bg-mint text-ink-anchor",
-    dot: "bg-mint",
     Icone: IconePencil,
   },
   descartada: {
     rotulo: "Descartada",
-    // Rejeitada — baixa ênfase, sem fill forte (não é fato, saiu do fluxo).
-    selo: "border-graphite bg-canvas text-graphite",
-    dot: "bg-graphite",
     Icone: IconeSlash,
   },
   pendente: {
     rotulo: "Pendente",
-    // Extração pendente de reprocessamento (falha do pipeline) — pede atenção.
-    selo: "border-ink-anchor bg-terracotta text-ink-anchor",
-    dot: "bg-terracotta",
     Icone: IconeClock,
   },
   reclassificada: {
     rotulo: "Reclassificada",
-    selo: "border-ink-anchor bg-blue text-ink-anchor",
-    dot: "bg-blue",
     Icone: IconeLayers,
   },
   devolvida: {
     rotulo: "Devolvida",
-    selo: "border-ink-anchor bg-terracotta text-ink-anchor",
-    dot: "bg-terracotta",
     Icone: IconeUndo,
   },
 };
 
+const defaultIcons: Record<string, React.FC> = {
+  success: IconeCheck,
+  Success: IconeCheck,
+  warning: IconeClock,
+  Warning: IconeClock,
+  ai: IconeSparkle,
+  AI: IconeSparkle,
+  info: IconeLayers,
+  Info: IconeLayers,
+  brand: IconeCheck,
+  neutral: IconeSlash,
+};
+
 export interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  estado: EstadoDado;
+  estado?: EstadoDado;
+  variante?: BadgesVariantes;
   /** Sobrescreve o texto do selo (default: rótulo canônico do estado). */
   children?: React.ReactNode;
 }
 
 export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
-  function StatusBadge({ className, estado, children, ...props }, ref) {
-    const { rotulo, selo, Icone } = config[estado];
+  function StatusBadge({ className, estado, variante, children, ...props }, ref) {
+    const resolvedVariant = variante ?? (estado ? estadoToVariante[estado] : "neutral");
+    const styleClasses = variantStyles[resolvedVariant] ?? variantStyles.neutral;
+    
+    // Sugerida mantém contorno tracejado
+    const borderStyle = (estado === "sugerida" || resolvedVariant === "ai" || resolvedVariant === "AI")
+      ? "border-dashed"
+      : "border-solid";
+
+    const rotulo = estado ? config[estado].rotulo : String(resolvedVariant);
+    const Icone = estado ? config[estado].Icone : (defaultIcons[resolvedVariant] ?? IconeCheck);
+
     return (
       <span
         ref={ref}
         data-estado={estado}
         className={cn(
-          "inline-flex items-center gap-1.5 border-2 px-2 py-0.5",
+          "inline-flex items-center gap-1.5 border-[length:var(--border-brutal)] px-3 py-0.5 rounded-full",
           "font-display text-xs font-semibold tracking-wide uppercase",
-          selo,
+          borderStyle,
+          styleClasses,
           className,
         )}
         {...props}
@@ -169,7 +219,8 @@ export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
 );
 
 export interface StatusDotProps extends React.HTMLAttributes<HTMLSpanElement> {
-  estado: EstadoDado;
+  estado?: EstadoDado;
+  variante?: BadgesVariantes;
   /** Sobrescreve o texto ao lado do ponto (default: rótulo canônico). */
   children?: React.ReactNode;
 }
@@ -180,8 +231,11 @@ export interface StatusDotProps extends React.HTMLAttributes<HTMLSpanElement> {
  * sozinha). O ponto ganha borda âncora para ser visível mesmo em fill pastel.
  */
 export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
-  function StatusDot({ className, estado, children, ...props }, ref) {
-    const { rotulo, dot } = config[estado];
+  function StatusDot({ className, estado, variante, children, ...props }, ref) {
+    const resolvedVariant = variante ?? (estado ? estadoToVariante[estado] : "neutral");
+    const dotStyle = dotColorMap[resolvedVariant] ?? dotColorMap.neutral;
+    const rotulo = estado ? config[estado].rotulo : String(resolvedVariant);
+
     return (
       <span
         ref={ref}
@@ -191,10 +245,11 @@ export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
       >
         <span
           aria-hidden
-          className={cn("border-ink-anchor size-2.5 shrink-0 border", dot)}
+          className={cn("border-ink-anchor size-2.5 shrink-0 border rounded-full", dotStyle)}
         />
         {children ?? rotulo}
       </span>
     );
   },
 );
+
