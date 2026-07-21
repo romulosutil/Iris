@@ -40,7 +40,7 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
 
     const baseCardClasses = isFact
       ? cn(
-          "bg-white border-[length:var(--border-brutal)] border-[#1A1A1A] shadow-[var(--shadow-composite)]",
+          "bg-white border-[length:var(--border-brutal)] border-[color:var(--ink-anchor)] shadow-[var(--shadow-composite)]",
           (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[color:var(--success-accent)]"
         )
       : "bg-[color:var(--ai-tint)] border-[length:1.5px] border-dashed border-[color:var(--ai-accent)] shadow-[var(--shadow-inset-ia)]";
@@ -51,7 +51,8 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
       !disabled && isFact && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[5px_5px_0_0_var(--color-ink-anchor),var(--shadow-soft)]",
       !disabled && !isFact && "hover:opacity-95",
       "active:translate-x-0 active:translate-y-0 active:shadow-none",
-      "focus-visible:outline-focus-ring focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
+      // foco v3
+      "focus-visible:border-[color:var(--color-focus)] focus-visible:shadow-[var(--shadow-focus-ring)] focus-visible:outline-none",
       destacado && "relative pt-8",
       baseCardClasses,
       className,

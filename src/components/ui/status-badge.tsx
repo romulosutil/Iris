@@ -201,7 +201,7 @@ export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
         ref={ref}
         data-estado={estado}
         className={cn(
-          "inline-flex items-center gap-1.5 border-[length:var(--border-brutal)] px-3 py-0.5 rounded-full",
+          "inline-flex items-center gap-1.5 border-[length:var(--border-brutal)] px-3 py-0.5 rounded-[length:var(--radius-pill)]",
           "font-display text-xs font-semibold tracking-wide uppercase",
           borderStyle,
           styleClasses,
@@ -245,11 +245,10 @@ export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
       >
         <span
           aria-hidden
-          className={cn("border-ink-anchor size-2.5 shrink-0 border rounded-full", dotStyle)}
+          className={cn("border-ink-anchor size-2.5 shrink-0 border rounded-[length:var(--radius-pill)]", dotStyle)}
         />
         {children ?? rotulo}
       </span>
     );
   },
-);
 

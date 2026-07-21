@@ -23,7 +23,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
 
   const cardClasses = isFact
     ? cn(
-        "bg-white border-[length:var(--border-brutal)] border-[#1A1A1A] shadow-[var(--shadow-composite)]",
+        "bg-white border-[length:var(--border-brutal)] border-[color:var(--ink-anchor)] shadow-[var(--shadow-composite)]",
         (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[color:var(--success-accent)]"
       )
     : "bg-[color:var(--ai-tint)] border-[length:1.5px] border-dashed border-[color:var(--ai-accent)] shadow-[var(--shadow-inset-ia)]";
@@ -55,7 +55,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
         ) : null}
         <span
           className={cn(
-            "shrink-0 border-[length:var(--border-brutal)] px-2 py-0.5 text-xs font-semibold tracking-wide uppercase rounded-full",
+            "shrink-0 border-[length:var(--border-brutal)] px-2 py-0.5 text-xs font-semibold tracking-wide uppercase rounded-[length:var(--radius-pill)]",
             isFact
               ? "border-[color:var(--success-accent)] bg-[color:var(--success-tint)] text-[color:var(--success-deep)]"
               : "border-[color:var(--ai-accent)] bg-[color:var(--ai-tint)] text-[color:var(--ai-deep)]",

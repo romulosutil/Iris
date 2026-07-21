@@ -39,7 +39,7 @@ function estiloVariante(v: Variante): string {
     case "tertiary":
       return cn(
         "border-transparent bg-transparent text-gray-500 shadow-none",
-        "hover:bg-[#F1EFE9] hover:text-[color:var(--ink-anchor)]",
+        "hover:bg-[color:var(--gray-light-hover)] hover:text-[color:var(--ink-anchor)]",
         "disabled:hover:bg-transparent disabled:hover:text-gray-500"
       );
     case "secundaria":
@@ -48,7 +48,7 @@ function estiloVariante(v: Variante): string {
     default:
       return cn(
         "bg-white text-[color:var(--color-text-body)]",
-        "border-[length:var(--border-brutal)] border-[#1A1A1A]",
+        "border-[length:var(--border-brutal)] border-[color:var(--ink-anchor)]",
         "shadow-[var(--shadow-composite)]",
         "hover:-translate-x-[1px] hover:-translate-y-[1px]",
         "active:translate-x-0 active:translate-y-0 active:shadow-none"
@@ -72,8 +72,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           "inline-flex items-center justify-center px-5 py-2.5",
           "font-display text-base font-semibold",
           "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-          // anel de foco ortogonal — independente de hover/active
-          "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
+          // anel de foco ortogonal da v3
+          "focus-visible:border-[#2274A5] focus-visible:shadow-[var(--shadow-focus-ring)] focus-visible:outline-none",
           // desabilitado: sem sombra, sem interação
           "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
           "disabled:active:translate-x-0 disabled:active:translate-y-0",

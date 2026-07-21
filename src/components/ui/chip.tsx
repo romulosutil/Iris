@@ -33,7 +33,7 @@ const stylesVariante: Record<string, string> = {
  * Alvo de toque ≥44px no Modo Clínico via min-h-11.
  */
 const base = cn(
-  "inline-flex items-center gap-2 border-[length:var(--border-brutal)] px-3 font-body text-sm rounded-full",
+  "inline-flex items-center gap-2 border-[length:var(--border-brutal)] px-3 font-body text-sm rounded-[length:var(--radius-pill)]",
   control("sm"),
 );
 
@@ -46,7 +46,7 @@ const getFundo = (variante: ChipVariante, selecionado: boolean) => {
 };
 
 const foco =
-  "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]";
+  "focus-visible:border-[#2274A5] focus-visible:shadow-[var(--shadow-focus-ring)] focus-visible:outline-none";
 
 export interface ChipProps {
   children: React.ReactNode;
@@ -126,9 +126,9 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
           onClick={onRemover}
           aria-label={rotuloRemover ?? "Remover"}
           className={cn(
-            "text-currentColor -mr-1 grid size-7 shrink-0 place-items-center rounded-full",
+            "text-currentColor -mr-1 grid size-7 shrink-0 place-items-center rounded-[length:var(--radius-pill)]",
             foco,
-            "hover:bg-black/10",
+            "hover:bg-[color:var(--ink-anchor)]/10",
           )}
         >
           <IconeX />

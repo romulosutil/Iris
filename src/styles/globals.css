@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 /*
   Design System "Espectro Brutal" — fonte única dos tokens (Tailwind v4 @theme).
   Raiz cromática neurodiversidade-afirmativa: ouro (infinito do autismo) como
@@ -39,6 +45,15 @@
   --color-raw-gray-800: #2b2b2b;
   --color-raw-gray-900: #1a1a1a;
   --color-raw-gray-950: #0a0a0a;
+
+  /* Tokens de Raio (Border-radius) */
+  --radius-sm: 4px;
+  --radius-md: 5px;
+  --radius-pill: 999px;
+
+  /* Cores Adicionais Tokenizadas para Componentes */
+  --border-neutral-light: #C9C6BC;
+  --gray-light-hover: #F1EFE9;
 
   /* ==========================================================================
      2. Semânticas (Papéis de Sistema)
@@ -132,6 +147,7 @@
   --shadow-soft: 0 12px 22px -12px rgba(20, 20, 20, 0.32);
   --shadow-composite: var(--shadow-brutal-base), var(--shadow-soft);
   --shadow-inset-ia: inset 0 2px 8px rgba(106, 76, 147, 0.1);
+  --shadow-focus-ring: 0 0 0 3px rgba(34, 116, 165, 0.2);
 
   /* Sombras brutalistas legadas */
   --shadow-brutal: var(--shadow-composite);

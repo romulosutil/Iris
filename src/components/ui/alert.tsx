@@ -141,7 +141,7 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         )}
         {...props}
       >
-        <span className={cn("mt-0.5 shrink-0 flex items-center justify-center rounded-full w-7 h-7 text-white", iconeBg)}>
+        <span className={cn("mt-0.5 shrink-0 flex items-center justify-center rounded-[length:var(--radius-pill)] w-7 h-7 text-white", iconeBg)}>
           <Icone severidade={severidade} />
         </span>
         <div className="flex flex-col gap-0.5">
