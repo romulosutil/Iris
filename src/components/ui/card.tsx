@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { surface } from "@/components/ui/primitives/surface";
 
 export type EpistemicState = "fact" | "suggestion" | "conquistado" | "candidato";
 
@@ -23,10 +24,10 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
 
   const cardClasses = isFact
     ? cn(
-        "bg-white border-[length:var(--border-brutal)] border-[color:var(--ink-anchor)] shadow-[var(--shadow-composite)]",
+        surface("solida", { className: "bg-white" }),
         (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[color:var(--success-accent)]"
       )
-    : "bg-[color:var(--ai-tint)] border-[length:1.5px] border-dashed border-[color:var(--ai-accent)] shadow-[var(--shadow-inset-ia)]";
+    : surface("sugerida", { className: "bg-[color:var(--ai-tint)]" });
 
   return (
     <div

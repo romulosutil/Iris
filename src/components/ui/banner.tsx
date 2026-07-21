@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { surface } from "@/components/ui/primitives/surface";
 
 export type BannerVariant = "info" | "alerta" | "sucesso";
 
@@ -32,7 +33,8 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(function Ban
     <div
       ref={ref}
       className={cn(
-        "relative border-2 border-border-brutal p-6 shadow-[var(--ds-shadow)] flex flex-col gap-2 pt-8",
+        surface("solida"),
+        "relative p-6 flex flex-col gap-2 pt-8",
         container,
         className,
       )}

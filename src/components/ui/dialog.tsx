@@ -40,7 +40,7 @@ export const DialogContent = React.forwardRef<
         ref={ref}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 p-6",
-          surface("solida", "bg-surface"),
+          surface("solida", { elevation: "overlay", radius: "2xl", className: "bg-surface" }),
           "focus-visible:outline-none",
           className,
         )}

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { surface } from "@/components/ui/primitives/surface";
 
 export type EpistemicState = "fact" | "suggestion" | "conquistado" | "candidato";
 
@@ -40,15 +41,15 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
 
     const baseCardClasses = isFact
       ? cn(
-          "bg-white border-[length:var(--border-brutal)] border-[color:var(--ink-anchor)] shadow-[var(--shadow-composite)]",
+          surface("solida", { className: "bg-white" }),
           (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[color:var(--success-accent)]"
         )
-      : "bg-[color:var(--ai-tint)] border-[length:1.5px] border-dashed border-[color:var(--ai-accent)] shadow-[var(--shadow-inset-ia)]";
+      : surface("sugerida", { className: "bg-[color:var(--ai-tint)]" });
 
     const cardClasses = cn(
       "text-text-body flex flex-col gap-2 p-5 text-left outline-none cursor-pointer select-none w-full",
       "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-      !disabled && isFact && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[5px_5px_0_0_var(--color-ink-anchor),var(--shadow-soft)]",
+      !disabled && isFact && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[var(--elevation-3)]",
       !disabled && !isFact && "hover:opacity-95",
       "active:translate-x-0 active:translate-y-0 active:shadow-none",
       // foco v3

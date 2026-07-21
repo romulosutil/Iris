@@ -46,9 +46,18 @@
   --color-raw-gray-900: #1a1a1a;
   --color-raw-gray-950: #0a0a0a;
 
-  /* Tokens de Raio (Border-radius) */
-  --radius-sm: 4px;
-  --radius-md: 5px;
+  /* Rampa de Raio (Border-radius) — escala coerente derivada do reference
+     (Iris_Design_System.html). surface() e componentes COMPÕEM via token,
+     nunca px cru. A "temperatura" macia (6px no fato) mantém o peso
+     brutalista pela borda 1.5px preta + sombra dura; só suaviza o canto. */
+  --radius-none: 0;
+  --radius-xs: 3px; /* micro-chips, dots */
+  --radius-sm: 4px; /* small */
+  --radius-control: 5px; /* inputs, botões, abas */
+  --radius-md: 6px; /* superfície padrão / cards (default do surface) */
+  --radius-lg: 8px; /* containers / diálogo interno */
+  --radius-xl: 10px; /* destaque */
+  --radius-2xl: 12px; /* modal / overlay */
   --radius-pill: 999px;
 
   /* Cores Adicionais Tokenizadas para Componentes */
@@ -123,8 +132,8 @@
   --color-graphite: var(--color-raw-gray-800);
   --color-gold: var(--color-brand-primary);
   --color-gold-pressed: var(--color-brand-primary-hover);
-  --color-mint: var(--color-status-success-bg);
-  --color-blue: var(--color-status-info-bg);
+  --color-mint: var(--success-accent);
+  --color-blue: var(--info-accent);
   --color-terracotta: var(--color-status-error-bg);
   --color-suggested: var(--color-status-ia-border);
   --color-suggested-ink: #ffffff;
@@ -142,18 +151,35 @@
     var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
   --font-body: var(--font-jakarta), "Plus Jakarta Sans", system-ui, sans-serif;
 
-  /* Elevação (Shadows) */
-  --shadow-brutal-base: 3px 3px 0 0 var(--ink-anchor, #1A1A1A);
+  /* ==========================================================================
+     Escala de Elevação — índice semântico → sombra (perpetua)
+     ========================================================================== */
+  /* O eixo de profundidade É a honestidade epistêmica: níveis positivos
+     LEVANTAM (fato conquistado), o inset AFUNDA (candidato tentativo).
+     Derivada 1:1 do reference. surface() indexa por nível, nunca copia o
+     valor cru — subir um degrau propaga a todos os consumidores. */
   --shadow-soft: 0 12px 22px -12px rgba(20, 20, 20, 0.32);
-  --shadow-composite: var(--shadow-brutal-base), var(--shadow-soft);
-  --shadow-inset-ia: inset 0 2px 8px rgba(106, 76, 147, 0.1);
+
+  --elevation-0: none;
+  --elevation-1: 2px 2px 0 0 var(--ink-anchor); /* raise sutil */
+  --elevation-2:
+    3px 3px 0 0 var(--ink-anchor), 0 12px 22px -14px rgba(20, 20, 20, 0.3); /* base: dura + suave */
+  --elevation-3:
+    4px 4px 0 0 var(--ink-anchor), 0 12px 22px -10px rgba(20, 20, 20, 0.45); /* hover / lg */
+  --elevation-inset: inset 0 2px 8px rgba(106, 76, 147, 0.1); /* afunda (IA / tentativo) */
+  --elevation-overlay: 0 20px 44px -24px rgba(20, 20, 20, 0.4); /* modal / popover — só suave */
+
   --shadow-focus-ring: 0 0 0 3px rgba(34, 116, 165, 0.2);
 
-  /* Sombras brutalistas legadas */
-  --shadow-brutal: var(--shadow-composite);
-  --shadow-brutal-hover: 5px 5px 0 0 var(--color-ink-anchor), var(--shadow-soft);
-  --shadow-brutal-sm: 2px 2px 0 0 var(--color-ink-anchor);
-  --shadow-brutal-xs: 1px 1px 0 0 var(--color-ink-anchor);
+  /* Aliases legados — apontam para a escala; nomes preservados p/ compat.
+     Novos componentes devem consumir --elevation-* diretamente. */
+  --shadow-brutal-base: 3px 3px 0 0 var(--ink-anchor);
+  --shadow-composite: var(--elevation-2);
+  --shadow-inset-ia: var(--elevation-inset);
+  --shadow-brutal: var(--elevation-2);
+  --shadow-brutal-hover: var(--elevation-3);
+  --shadow-brutal-sm: var(--elevation-1);
+  --shadow-brutal-xs: 1px 1px 0 0 var(--ink-anchor);
 
   /* Sombra reversa (offset negativo) */
   --shadow-brutal-inset: -3px -3px 0 0 var(--color-ink-anchor);

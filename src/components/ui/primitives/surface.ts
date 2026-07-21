@@ -17,16 +17,99 @@ export type SurfaceVariante =
   | "sugerida" // sugerido pela IA — tracejado violeta + afunda (tentativo)
   | "candidata"; // candidato a marco (Fase 4) — pontilhado azul + afunda
 
-const variantes: Record<SurfaceVariante, string> = {
-  solida: "border-border-brutal border-2 shadow-[var(--ds-shadow)]",
+/**
+ * Eixo de profundidade (indexa a escala --elevation-* dos tokens). `base` usa
+ * o ponteiro mode-aware --ds-shadow (Clínico eleva cheio, Família reduz sem
+ * rebuild); os demais são fixos. `inset` é o AFUNDA violeta soft (fiel ao
+ * reference e ao card sugerido pela IA), não a sombra reversa legada.
+ */
+export type ElevationNivel =
+  | "flat" // rente — sem sombra
+  | "raise" // levanta sutil (--elevation-1)
+  | "base" // levanta cheio, mode-aware (--ds-shadow)
+  | "hover" // pico de interação (--elevation-3)
+  | "inset" // afunda (--elevation-inset)
+  | "overlay"; // flutua acima do canvas — modal/popover (--elevation-overlay)
+
+/** Rampa de raio (indexa --radius-* dos tokens). */
+export type RadiusNivel =
+  | "none"
+  | "xs"
+  | "sm"
+  | "control"
+  | "md"
+  | "lg"
+  | "xl"
+  | "2xl"
+  | "pill";
+
+const bordas: Record<SurfaceVariante, string> = {
+  solida: "border-[length:var(--border-brutal)] border-border-brutal",
   sugerida:
-    "border-2 border-dashed border-status-ia-border shadow-[var(--ds-shadow-inset)]",
+    "border-[length:var(--border-brutal)] border-dashed border-status-ia-border",
   candidata:
-    "border-2 border-dotted border-status-info-bg shadow-[var(--ds-shadow-inset)]",
+    "border-[length:var(--border-brutal)] border-dotted border-status-info-bg",
 };
 
-export function surface(variante: SurfaceVariante = "solida", className?: string) {
-  return cn(variantes[variante], className);
+const elevacoes: Record<ElevationNivel, string> = {
+  flat: "shadow-none",
+  raise: "shadow-[var(--elevation-1)]",
+  base: "shadow-[var(--ds-shadow)]",
+  hover: "shadow-[var(--elevation-3)]",
+  inset: "shadow-[var(--elevation-inset)]",
+  overlay: "shadow-[var(--elevation-overlay)]",
+};
+
+const raios: Record<RadiusNivel, string> = {
+  none: "rounded-none",
+  xs: "rounded-[var(--radius-xs)]",
+  sm: "rounded-[var(--radius-sm)]",
+  control: "rounded-[var(--radius-control)]",
+  md: "rounded-[var(--radius-md)]",
+  lg: "rounded-[var(--radius-lg)]",
+  xl: "rounded-[var(--radius-xl)]",
+  "2xl": "rounded-[var(--radius-2xl)]",
+  pill: "rounded-[var(--radius-pill)]",
+};
+
+/**
+ * Defaults por variante — o eixo de profundidade É a honestidade epistêmica:
+ * `solida` LEVANTA (fato), tentativos AFUNDAM. Todas nascem com raio macio
+ * (`md` = 6px), coerente com o reference; sobrescreva por consumidor.
+ */
+const defaults: Record<
+  SurfaceVariante,
+  { elevation: ElevationNivel; radius: RadiusNivel }
+> = {
+  solida: { elevation: "base", radius: "md" },
+  sugerida: { elevation: "inset", radius: "md" },
+  candidata: { elevation: "inset", radius: "md" },
+};
+
+export interface SurfaceOpts {
+  elevation?: ElevationNivel;
+  radius?: RadiusNivel;
+  className?: string;
+}
+
+/**
+ * Fonte única da superfície: acopla borda + elevação + raio num só ponto.
+ * Aceita `opts` como objeto {elevation, radius, className} ou, por
+ * compatibilidade, uma string tratada como className (default de variante).
+ */
+export function surface(
+  variante: SurfaceVariante = "solida",
+  opts?: SurfaceOpts | string,
+) {
+  const o: SurfaceOpts =
+    typeof opts === "string" ? { className: opts } : (opts ?? {});
+  const d = defaults[variante];
+  return cn(
+    bordas[variante],
+    elevacoes[o.elevation ?? d.elevation],
+    raios[o.radius ?? d.radius],
+    o.className,
+  );
 }
 
 /**
