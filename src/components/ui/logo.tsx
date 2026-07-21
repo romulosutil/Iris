@@ -74,12 +74,8 @@ export function Logo({
   // Calcula a largura automaticamente a partir do viewBox + altura
   // para evitar colapso de dimensão em navegadores sem inferência automática.
   const parsed = viewBox[variante].split(" ").map(Number);
-  const vx1 = parsed[0] ?? 0;
-  const vy1 = parsed[1] ?? 0;
-  const vx2 = parsed[2] ?? 0;
-  const vy2 = parsed[3] ?? 0;
-  const vbWidth = vx2 - vx1;
-  const vbHeight = vy2 - vy1;
+  const vbWidth = parsed[2] ?? 0;
+  const vbHeight = parsed[3] ?? 0;
   const safeAltura = typeof altura === "number" && !isNaN(altura) ? altura : 40;
   const largura = Math.round((vbWidth / vbHeight) * safeAltura);
 

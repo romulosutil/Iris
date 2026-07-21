@@ -115,7 +115,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     // Estado de carregamento
     const loadingClasses = isLoading
-      ? "pointer-events-none cursor-wait relative"
+      ? "cursor-wait relative"
       : "";
 
     // Interceptar cliques se estiver carregando
@@ -146,7 +146,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         type={type ?? "button"}
-        disabled={disabled}
+        disabled={disabled || isLoading}
         aria-disabled={isLoading ? "true" : undefined}
         onClick={handleOnClick}
         className={cn(

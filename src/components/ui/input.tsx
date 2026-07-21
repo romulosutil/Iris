@@ -35,14 +35,17 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ) {
     const inputRef = React.useRef<HTMLInputElement>(null);
 
-    const handleRef = (node: HTMLInputElement | null) => {
-      inputRef.current = node;
-      if (typeof ref === "function") {
-        ref(node);
-      } else if (ref) {
-        ref.current = node;
-      }
-    };
+    const handleRef = React.useCallback(
+      (node: HTMLInputElement | null) => {
+        inputRef.current = node;
+        if (typeof ref === "function") {
+          ref(node);
+        } else if (ref && typeof ref === "object") {
+          ref.current = node;
+        }
+      },
+      [ref],
+    );
 
     const handleWrapperClick = (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
