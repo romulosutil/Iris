@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Slider } from "./slider";
 
 const meta = {
-  title: "Espectro Brutal/Slider",
+  title: "Atoms/Slider",
   component: Slider,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof Slider>;

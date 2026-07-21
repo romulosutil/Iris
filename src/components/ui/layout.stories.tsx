@@ -5,7 +5,7 @@ import { Chip } from "./chip";
 import { Button } from "./button";
 
 const meta = {
-  title: "Espectro Brutal/Layout",
+  title: "Layout/Layout",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

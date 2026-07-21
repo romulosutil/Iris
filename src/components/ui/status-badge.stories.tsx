@@ -12,7 +12,7 @@ const estados: EstadoDado[] = [
 ];
 
 const meta = {
-  title: "Espectro Brutal/StatusBadge",
+  title: "Molecules/StatusBadge",
   component: StatusBadge,
   parameters: { layout: "centered" },
   args: { estado: "sugerida" },

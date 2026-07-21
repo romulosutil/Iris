@@ -7,8 +7,9 @@ import {
 } from "./accordion";
 
 const meta = {
-  title: "Espectro Brutal/Accordion",
+  title: "Molecules/Accordion",
   component: Accordion,
+  tags: ["autodocs"],
   parameters: { layout: "padded" },
 } satisfies Meta<typeof Accordion>;
 

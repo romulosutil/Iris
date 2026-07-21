@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Progress } from "./progress";
 
 const meta = {
-  title: "Espectro Brutal/Progress",
+  title: "Atoms/Progress",
   component: Progress,
   parameters: { layout: "padded" },
   args: { value: 60 },

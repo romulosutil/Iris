@@ -3,7 +3,7 @@ import { Field } from "./field";
 import { Input } from "./input";
 
 const meta = {
-  title: "Espectro Brutal/Field",
+  title: "Molecules/Field",
   component: Field,
   parameters: { layout: "centered" },
   args: {

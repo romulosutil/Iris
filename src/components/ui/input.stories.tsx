@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Input } from "./input";
 
 const meta = {
-  title: "Espectro Brutal/Input",
+  title: "Atoms/Input",
   component: Input,
   parameters: { layout: "centered" },
   args: { placeholder: "nome@clinica.com.br" },

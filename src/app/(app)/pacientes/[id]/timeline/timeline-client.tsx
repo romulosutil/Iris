@@ -575,9 +575,9 @@ export function TimelineClient({
               {chunks.map((chunk, idx) => {
                 let colorClass = "bg-gray-100 border-dashed border-gray-400 text-gray-600 shadow-[2px_2px_0px_#000000]";
                 if (chunk.rotulo === "evolucao") {
-                  colorClass = "bg-[#B2DFDB] border-black text-black shadow-[4px_4px_0px_#000000]";
+                  colorClass = "bg-status-success-bg border-black text-status-success-text shadow-[4px_4px_0px_#000000]";
                 } else if (chunk.rotulo === "regressao") {
-                  colorClass = "bg-[#EF9A9A] border-black text-black shadow-[4px_4px_0px_#000000]";
+                  colorClass = "bg-status-error-bg border-black text-status-error-text shadow-[4px_4px_0px_#000000]";
                 } else if (chunk.rotulo === "estagnacao") {
                   colorClass = "bg-gray-200 border-black text-black shadow-[4px_4px_0px_#000000]";
                 }
@@ -655,10 +655,10 @@ export function TimelineClient({
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs font-black">
-                      <span className="text-green-800 bg-[#B2DFDB] px-1.5 py-0.5 rounded border border-black">
+                      <span className="text-status-success-text bg-status-success-bg px-1.5 py-0.5 rounded border border-black">
                         Conquistados: {stats.conquistados}
                       </span>
-                      <span className="text-blue-800 bg-[#90CAF9] px-1.5 py-0.5 rounded border border-black">
+                      <span className="text-status-info-text bg-status-info-bg px-1.5 py-0.5 rounded border border-black">
                         Candidatos: {stats.candidatos}
                       </span>
                     </div>
@@ -669,14 +669,14 @@ export function TimelineClient({
                     {percConquistados > 0 && (
                       <div
                         style={{ width: `${percConquistados}%` }}
-                        className="bg-[#B2DFDB] h-full border-r border-black"
+                        className="bg-status-success-bg h-full border-r border-black"
                         title={`${percConquistados.toFixed(0)}% Conquistados`}
                       />
                     )}
                     {percCandidatos > 0 && (
                       <div
                         style={{ width: `${percCandidatos}%` }}
-                        className="bg-[#90CAF9] h-full border-r border-black"
+                        className="bg-status-info-bg h-full border-r border-black"
                         title={`${percCandidatos.toFixed(0)}% Candidatos`}
                       />
                     )}
@@ -707,11 +707,11 @@ export function TimelineClient({
                           
                           {/* Indicador Visual do Milestone */}
                           {status === "conquistado" ? (
-                            <div className="w-8 h-8 rounded-full bg-[#B2DFDB] border-2 border-black flex items-center justify-center font-black text-xs text-black" title="Conquistado">
+                            <div className="w-8 h-8 rounded-full bg-status-success-bg border-2 border-black flex items-center justify-center font-black text-xs text-status-success-text" title="Conquistado">
                               ✓
                             </div>
                           ) : status === "candidato" ? (
-                            <div className="w-8 h-8 bg-[#90CAF9] border-2 border-dashed border-black flex items-center justify-center font-black text-xs text-black transform rotate-45" title="Candidato">
+                            <div className="w-8 h-8 bg-status-info-bg border-2 border-dashed border-black flex items-center justify-center font-black text-xs text-status-info-text transform rotate-45" title="Candidato">
                               <span className="transform -rotate-45 block">★</span>
                             </div>
                           ) : (
@@ -930,8 +930,8 @@ export function TimelineClient({
                   <div className="flex flex-wrap items-center gap-2 mt-1">
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded border border-black ${
                       ev.polaridade === "positiva"
-                        ? "bg-[#B2DFDB] text-green-900"
-                        : "bg-[#EF9A9A] text-red-900"
+                        ? "bg-status-success-bg text-status-success-text"
+                        : "bg-status-error-bg text-status-error-text"
                     }`}>
                       {ev.polaridade === "positiva" ? "Evolução" : "Dificuldade"}
                     </span>
@@ -952,10 +952,7 @@ export function TimelineClient({
             )}
           </div>
           <div className="mt-4 flex justify-end">
-            <Button
-              onClick={() => setDrilldownOpen(false)}
-              className="border-2 border-black bg-[#F2B705] text-black font-black hover:bg-[#d19c00] active:translate-y-0.5 active:shadow-[1px_1px_0px_#000000] px-4 py-2"
-            >
+            <Button onClick={() => setDrilldownOpen(false)}>
               Fechar Painel
             </Button>
           </div>

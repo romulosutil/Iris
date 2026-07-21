@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs";
 
 const meta = {
-  title: "Espectro Brutal/Tabs",
+  title: "Molecules/Tabs",
   component: Tabs,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof Tabs>;

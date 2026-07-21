@@ -2,8 +2,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Alert } from "./alert";
 
 const meta = {
-  title: "Espectro Brutal/Alert",
+  title: "Molecules/Alert",
   component: Alert,
+  tags: ["autodocs"],
   parameters: { layout: "centered" },
   args: { className: "w-[420px] max-w-full" },
   argTypes: {

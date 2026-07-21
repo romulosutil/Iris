@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Indicator } from "./indicator";
 
 const meta = {
-  title: "Espectro Brutal/Indicator",
+  title: "Atoms/Indicator",
   component: Indicator,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof Indicator>;
