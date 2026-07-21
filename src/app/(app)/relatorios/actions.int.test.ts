@@ -3,10 +3,10 @@ import postgres from "postgres";
 import { StubPdfRenderer } from "@/lib/report/renderer";
 import type { TenantContext } from "@/db/rls";
 
-// actions.ts puxa getTenantContext (next/headers) → server-only. Neutraliza o
-// side-effect e importa o núcleo testável dinamicamente.
+// export-logic.ts importa server-only. Neutraliza o side-effect e importa o
+// núcleo testável dinamicamente.
 vi.mock("server-only", () => ({}));
-const { exportarConvenioBruto } = await import("./actions");
+const { exportarConvenioBruto } = await import("./export-logic");
 
 const hasDb = !!process.env.MIGRATION_DATABASE_URL;
 const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!) : (null as never);
