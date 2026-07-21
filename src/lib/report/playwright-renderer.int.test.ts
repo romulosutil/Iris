@@ -15,6 +15,10 @@ const VETORES: Array<[string, string]> = [
   ],
   ["css import", `<style>@import url(http://attacker.test/x.css);</style>`],
   ["meta refresh", `<meta http-equiv="refresh" content="0;url=http://attacker.test/">`],
+  [
+    "meta refresh entity-encoded",
+    `<meta http-equiv="&#x72;efresh" content="0;url=http://attacker.test/">`,
+  ],
   ["svg image", `<svg><image href="http://attacker.test/x.png"/></svg>`],
   ["iframe", `<iframe src="http://attacker.test/"></iframe>`],
   ["link prefetch", `<link rel="prefetch" href="http://attacker.test/x">`],

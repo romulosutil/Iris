@@ -13,10 +13,29 @@ const CSP =
 // default-src/frame-src não a cobre). Nenhum relatório legítimo precisa de
 // auto-refresh, então a tag é removida estruturalmente antes de renderizar
 // (mais forte que confiar em abort de rede para uma navegação inteira).
-const META_REFRESH = /<meta\s+[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi;
+//
+// A detecção decodifica entidades HTML (numéricas dec/hex, com ou sem ";")
+// antes de comparar http-equiv — do contrário `&#x72;efresh` (Blink decodifica
+// antes de interpretar o atributo) passaria pelo strip sem ser detectado.
+// Ainda assim, mesmo se o strip falhar contra alguma variante não coberta, o
+// `page.route('**/*', abort)` em renderComAuditoria barra a navegação como
+// backstop de rede — ver teste "meta refresh — entity-encoded".
+const META_TAG = /<meta\b[^>]*>/gi;
+
+function decodificarEntidadesHtml(texto: string): string {
+  return texto
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_, dec: string) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&amp;?/gi, "&");
+}
+
+function ehMetaRefresh(tag: string): boolean {
+  const decodificada = decodificarEntidadesHtml(tag);
+  return /http-equiv\s*=\s*["']?\s*refresh\s*["']?/i.test(decodificada);
+}
 
 function sanitizarParaRender(html: string): string {
-  const semMetaRefresh = html.replace(META_REFRESH, "");
+  const semMetaRefresh = html.replace(META_TAG, (tag) => (ehMetaRefresh(tag) ? "" : tag));
   const meta = `<meta http-equiv="Content-Security-Policy" content="${CSP}">`;
   if (/<head[^>]*>/i.test(semMetaRefresh)) {
     return semMetaRefresh.replace(/<head([^>]*)>/i, `<head$1>${meta}`);
