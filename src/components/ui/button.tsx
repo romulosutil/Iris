@@ -118,16 +118,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       ? "cursor-wait relative"
       : "";
 
-    // Interceptar cliques se estiver carregando
-    const handleOnClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-      if (isLoading) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-      onClick?.(e);
-    };
-
     // Alerta de acessibilidade para Icon Only
     if (process.env.NODE_ENV !== "production" && iconOnly && !props["aria-label"]) {
       console.warn(
@@ -148,7 +138,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         type={type ?? "button"}
         disabled={disabled || isLoading}
         aria-disabled={isLoading ? "true" : undefined}
-        onClick={handleOnClick}
+        onClick={onClick}
         className={cn(
           // base: alvo de toque e layout
           control(resolvedTamanho),

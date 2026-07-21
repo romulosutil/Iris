@@ -56,7 +56,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     };
 
     return (
-      <div className="flex w-full items-stretch">
+      <div className={cn("flex w-full items-stretch", className)}>
         {leftAddon && (
           <div
             className={cn(
@@ -64,7 +64,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               size === "sm" && "text-sm",
               size === "md" && "text-base",
               size === "lg" && "text-base",
-              disabled && "opacity-50"
+              disabled && "border-[color:var(--border-neutral-light)]/50 cursor-not-allowed text-[color:var(--color-text-body)]/70"
             )}
           >
             {leftAddon}
@@ -86,16 +86,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ariaInvalid && "border-[color:var(--color-spectrum-red)]",
             // disabled - WCAG contrast compliant (bg and text tokens, no opacity-50)
             disabled && "bg-[color:var(--color-canvas)] border-[color:var(--border-neutral-light)]/50 cursor-not-allowed",
-            className,
           )}
         >
           {prefixIcon && (
-            <span
-              className={cn(
-                "flex shrink-0 items-center justify-center pl-3 text-[color:var(--color-text-body)]/60 pointer-events-none",
-                disabled && "opacity-50"
-              )}
-            >
+            <span className="flex shrink-0 items-center justify-center pl-3 text-[color:var(--color-text-body)]/60 pointer-events-none">
               {prefixIcon}
             </span>
           )}
@@ -114,12 +108,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {suffixIcon && (
-            <span
-              className={cn(
-                "flex shrink-0 items-center justify-center pr-3 text-[color:var(--color-text-body)]/60 pointer-events-none",
-                disabled && "opacity-50"
-              )}
-            >
+            <span className="flex shrink-0 items-center justify-center pr-3 text-[color:var(--color-text-body)]/60 pointer-events-none">
               {suffixIcon}
             </span>
           )}
@@ -131,7 +120,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               size === "sm" && "text-sm",
               size === "md" && "text-base",
               size === "lg" && "text-base",
-              disabled && "opacity-50"
+              disabled && "border-[color:var(--border-neutral-light)]/50 cursor-not-allowed text-[color:var(--color-text-body)]/70"
             )}
           >
             {rightAddon}
