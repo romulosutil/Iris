@@ -9,11 +9,11 @@ import * as schema from "@/db/schema";
 import { buildConvenioBrutoPayload } from "@/lib/report/convenio-bruto/build-payload";
 
 /**
- * Pacientes para o seletor da rota `/relatorios` (Task 7). RLS já restringe
- * o resultado ao que o papel pode ver (coordenador: toda a clínica;
- * terapeuta: paciente segue visível aqui, mas a exportação em si é bloqueada
- * por RLS na tabela `session`/`report` se o terapeuta não estiver na equipe —
- * ver `exportarConvenioBruto`). Lista pequena por clínica, sem paginação.
+ * Pacientes para o seletor da rota `/relatorios` (Task 7). A política RLS
+ * `patient_select` (db/migrations/0001_rls.sql) já restringe este SELECT ao
+ * que o papel pode ver: coordenador vê toda a clínica, terapeuta só vê
+ * pacientes da própria equipe — nenhum filtro adicional em app é necessário
+ * aqui. Lista pequena por clínica, sem paginação.
  */
 export async function listarPacientesParaRelatorio(
   ctx: TenantContext,

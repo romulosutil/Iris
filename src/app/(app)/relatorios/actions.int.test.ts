@@ -35,9 +35,9 @@ describe.skipIf(!hasDb)("exportarConvenioBruto", () => {
     const r = await exportarConvenioBruto(ctx("coordenador", COORD), input, new StubPdfRenderer());
     expect("hash" in r).toBe(true);
     const [rep] = await owner`SELECT status, tipo, gerado_por_ia FROM report WHERE patient_id=${PAC}`;
-    expect(rep.status).toBe("exportado");
-    expect(rep.tipo).toBe("convenio_bruto");
-    expect(rep.gerado_por_ia).toBe(false);
+    expect(rep?.status).toBe("exportado");
+    expect(rep?.tipo).toBe("convenio_bruto");
+    expect(rep?.gerado_por_ia).toBe(false);
     const pdfs = await owner`SELECT 1 FROM report_pdf`;
     expect(pdfs.length).toBe(1);
     const logs = await owner`SELECT acao FROM audit_log WHERE acao='relatorio_exportado'`;
