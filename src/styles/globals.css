@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 /*
   Design System "Espectro Brutal" — fonte única dos tokens (Tailwind v4 @theme).
   Raiz cromática neurodiversidade-afirmativa: ouro (infinito do autismo) como
@@ -11,62 +17,98 @@
   /* ==========================================================================
      1. Primitivas (Rampa Enxuta de Cores Brutalistas)
      ========================================================================== */
-  --color-raw-gold-100: #fff9e6;
+  --color-raw-gold-100: #fff6db;
   --color-raw-gold-500: #f2b705;
   --color-raw-gold-700: #d29e04;
   --color-raw-gold-900: #664d00;
 
-  --color-raw-mint-100: #e0f2f1;
-  --color-raw-mint-500: #b2dfdb;
+  --color-raw-mint-100: #e6f4f1;
+  --color-raw-mint-500: #14857a;
   --color-raw-mint-700: #80cbc4;
-  --color-raw-mint-900: #004d40;
+  --color-raw-mint-900: #0a5c54;
 
-  --color-raw-blue-100: #e3f2fd;
-  --color-raw-blue-500: #90caf9;
+  --color-raw-blue-100: #e7f0fb;
+  --color-raw-blue-500: #1f6fb2;
   --color-raw-blue-700: #2274a5;
-  --color-raw-blue-900: #0d47a1;
+  --color-raw-blue-900: #124a78;
 
-  --color-raw-violet-100: #f3e5f5;
+  --color-raw-violet-100: #f1e9f6;
   --color-raw-violet-500: #6a4c93;
-  --color-raw-violet-900: #4a148c;
+  --color-raw-violet-900: #45286e;
 
-  --color-raw-terracotta-100: #ffebee;
-  --color-raw-terracotta-500: #ef9a9a;
-  --color-raw-terracotta-900: #b71c1c;
+  --color-raw-terracotta-100: #fbe9e9;
+  --color-raw-terracotta-500: #c0392b;
+  --color-raw-terracotta-900: #7e1f16;
 
   --color-raw-gray-50: #f8f9fa;
   --color-raw-gray-100: #f1f3f5;
   --color-raw-gray-800: #2b2b2b;
   --color-raw-gray-900: #1a1a1a;
-  --color-raw-gray-950: #000000;
+  --color-raw-gray-950: #0a0a0a;
+
+  /* Tokens de Raio (Border-radius) */
+  --radius-sm: 4px;
+  --radius-md: 5px;
+  --radius-pill: 999px;
+
+  /* Cores Adicionais Tokenizadas para Componentes */
+  --border-neutral-light: #C9C6BC;
+  --gray-light-hover: #F1EFE9;
 
   /* ==========================================================================
      2. Semânticas (Papéis de Sistema)
      ========================================================================== */
+  /* Cores em Tríade (Tint, Accent, Deep) - Variáveis de Base */
+  --brand-primary: #F2B705;
+  --brand-hover: #D29E04;
+  --brand-tint: #FFF6DB;
+  --ink-anchor: #0A0A0A;
+
+  --success-tint: #E6F4F1;
+  --success-accent: #14857A;
+  --success-deep: #0A5C54;
+
+  --info-tint: #E7F0FB;
+  --info-accent: #1F6FB2;
+  --info-deep: #124A78;
+
+  --ai-tint: #F1E9F6;
+  --ai-accent: #6A4C93;
+  --ai-deep: #45286E;
+
+  --warning-tint: #FBE9E9;
+  --warning-accent: #C0392B;
+  --warning-deep: #7E1F16;
+
   /* Marca e Ação */
-  --color-brand-primary: var(--color-raw-gold-500);
-  --color-brand-primary-hover: var(--color-raw-gold-700);
-  --color-brand-primary-text: var(--color-raw-gray-950);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-hover: var(--brand-hover);
+  --color-brand-primary-text: var(--ink-anchor);
+  --color-brand-primary-tint: var(--brand-tint);
 
   /* Superfícies e Bordas */
   --color-bg-canvas: var(--color-raw-gray-50);
   --color-bg-surface: #ffffff;
-  --color-border-brutal: var(--color-raw-gray-900);
+  --color-border-brutal: var(--ink-anchor);
   
   /* Textos */
   --color-text-body: var(--color-raw-gray-800);
-  --color-text-heading: var(--color-raw-gray-950);
+  --color-text-heading: var(--ink-anchor);
 
   /* Status / Evidências */
-  --color-status-success-bg: var(--color-raw-mint-500);
-  --color-status-success-text: var(--color-raw-mint-900);
-  --color-status-ia-bg: var(--color-raw-violet-100);
-  --color-status-ia-border: var(--color-raw-violet-500);
-  --color-status-ia-text: var(--color-raw-violet-900);
-  --color-status-info-bg: var(--color-raw-blue-100);
-  --color-status-info-text: var(--color-raw-blue-900);
-  --color-status-error-bg: var(--color-raw-terracotta-500);
-  --color-status-error-text: var(--color-raw-terracotta-900);
+  --color-status-success-bg: var(--success-tint);
+  --color-status-success-accent: var(--success-accent);
+  --color-status-success-text: var(--success-deep);
+  --color-status-ia-bg: var(--ai-tint);
+  --color-status-ia-border: var(--ai-accent);
+  --color-status-ia-accent: var(--ai-accent);
+  --color-status-ia-text: var(--ai-deep);
+  --color-status-info-bg: var(--info-tint);
+  --color-status-info-accent: var(--info-accent);
+  --color-status-info-text: var(--info-deep);
+  --color-status-error-bg: var(--warning-tint);
+  --color-status-error-accent: var(--warning-accent);
+  --color-status-error-text: var(--warning-deep);
 
   /* Foco */
   --color-focus-ring: var(--color-raw-blue-700);
@@ -100,19 +142,25 @@
     var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
   --font-body: var(--font-jakarta), "Plus Jakarta Sans", system-ui, sans-serif;
 
-  /* Sombras brutalistas sem blur */
-  --shadow-brutal: 4px 4px 0 0 var(--color-ink-anchor);
-  --shadow-brutal-hover: 6px 6px 0 0 var(--color-ink-anchor);
+  /* Elevação (Shadows) */
+  --shadow-brutal-base: 3px 3px 0 0 var(--ink-anchor, #1A1A1A);
+  --shadow-soft: 0 12px 22px -12px rgba(20, 20, 20, 0.32);
+  --shadow-composite: var(--shadow-brutal-base), var(--shadow-soft);
+  --shadow-inset-ia: inset 0 2px 8px rgba(106, 76, 147, 0.1);
+  --shadow-focus-ring: 0 0 0 3px rgba(34, 116, 165, 0.2);
+
+  /* Sombras brutalistas legadas */
+  --shadow-brutal: var(--shadow-composite);
+  --shadow-brutal-hover: 5px 5px 0 0 var(--color-ink-anchor), var(--shadow-soft);
   --shadow-brutal-sm: 2px 2px 0 0 var(--color-ink-anchor);
   --shadow-brutal-xs: 1px 1px 0 0 var(--color-ink-anchor);
 
-  /* Sombra reversa (offset negativo) — "sugerido pela IA afunda na
-     superfície" (tentativo) vs "aprovado levanta". Par estrutural, não cor. */
-  --shadow-brutal-inset: -4px -4px 0 0 var(--color-ink-anchor);
+  /* Sombra reversa (offset negativo) */
+  --shadow-brutal-inset: -3px -3px 0 0 var(--color-ink-anchor);
   --shadow-brutal-inset-sm: -2px -2px 0 0 var(--color-ink-anchor);
 
-  /* Largura de borda tokenizada (antes hardcoded como border-2 nos componentes). */
-  --border-brutal: 2px;
+  /* Largura de borda tokenizada (muda de 2px para 1.5px) */
+  --border-brutal: 1.5px;
 
   /* Escala de altura de controle — piso 44px (alvo de toque do Modo Clínico). */
   --control-sm: 2.75rem; /* 44px */
@@ -120,7 +168,7 @@
   --control-lg: 3.5rem; /* 56px */
 
   /* Animações de abrir/fechar (Radix Accordion). Duração curta de produto
-     (150-250ms); o prefers-reduced-motion abaixo zera a duração. */
+     (150-250ms); o prefers-reduced-motion abaixo zera a duration. */
   --animate-accordion-down: accordion-down 200ms ease-out;
   --animate-accordion-up: accordion-up 200ms ease-out;
 

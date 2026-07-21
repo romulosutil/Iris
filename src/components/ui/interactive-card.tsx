@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import { surface } from "@/components/ui/primitives/surface";
+
+export type EpistemicState = "fact" | "suggestion" | "conquistado" | "candidato";
 
 export interface InteractiveCardProps
   extends React.HTMLAttributes<HTMLElement> {
@@ -11,6 +12,9 @@ export interface InteractiveCardProps
   target?: string;
   rel?: string;
   disabled?: boolean;
+  epistemicState?: EpistemicState;
+  estado?: "conquistado" | "candidato";
+  bordaEsquerda?: boolean;
 }
 
 export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProps>(
@@ -24,19 +28,33 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
       href,
       onClick,
       disabled,
+      epistemicState,
+      estado,
+      bordaEsquerda = false,
       ...props
     },
     ref,
   ) {
+    const resolvedState = epistemicState ?? estado ?? "fact";
+    const isFact = resolvedState === "fact" || resolvedState === "conquistado";
+
+    const baseCardClasses = isFact
+      ? cn(
+          "bg-white border-[length:var(--border-brutal)] border-[color:var(--ink-anchor)] shadow-[var(--shadow-composite)]",
+          (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[color:var(--success-accent)]"
+        )
+      : "bg-[color:var(--ai-tint)] border-[length:1.5px] border-dashed border-[color:var(--ai-accent)] shadow-[var(--shadow-inset-ia)]";
+
     const cardClasses = cn(
       "text-text-body flex flex-col gap-2 p-5 text-left outline-none cursor-pointer select-none w-full",
       "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-      "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
+      !disabled && isFact && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[5px_5px_0_0_var(--color-ink-anchor),var(--shadow-soft)]",
+      !disabled && !isFact && "hover:opacity-95",
       "active:translate-x-0 active:translate-y-0 active:shadow-none",
-      "focus-visible:outline-focus-ring focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
-      destacado
-        ? cn("relative pt-8", surface("solida", "bg-bg-surface"))
-        : surface("solida", "bg-bg-surface"),
+      // foco v3
+      "focus-visible:border-[color:var(--color-focus)] focus-visible:shadow-[var(--shadow-focus-ring)] focus-visible:outline-none",
+      destacado && "relative pt-8",
+      baseCardClasses,
       className,
     );
 
@@ -135,3 +153,4 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
     );
   },
 );
+

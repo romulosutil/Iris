@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Stat } from "./stat";
 
 const meta = {
-  title: "Espectro Brutal/Stat",
+  title: "Molecules/Stat",
   component: Stat,
   parameters: { layout: "centered" },
   args: { rotulo: "Aguardando revisão", valor: "12" },

@@ -2,25 +2,51 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { control } from "./primitives/surface";
 
+export type ChipVariante =
+  | "success"
+  | "warning"
+  | "ai"
+  | "info"
+  | "brand"
+  | "neutral"
+  | "Success"
+  | "Warning"
+  | "AI"
+  | "Info";
+
+const stylesVariante: Record<string, string> = {
+  success: "bg-[color:var(--success-tint)] border-[color:var(--success-accent)] text-[color:var(--success-deep)]",
+  Success: "bg-[color:var(--success-tint)] border-[color:var(--success-accent)] text-[color:var(--success-deep)]",
+  warning: "bg-[color:var(--warning-tint)] border-[color:var(--warning-accent)] text-[color:var(--warning-deep)]",
+  Warning: "bg-[color:var(--warning-tint)] border-[color:var(--warning-accent)] text-[color:var(--warning-deep)]",
+  ai: "bg-[color:var(--ai-tint)] border-[color:var(--ai-accent)] text-[color:var(--ai-deep)]",
+  AI: "bg-[color:var(--ai-tint)] border-[color:var(--ai-accent)] text-[color:var(--ai-deep)]",
+  info: "bg-[color:var(--info-tint)] border-[color:var(--info-accent)] text-[color:var(--info-deep)]",
+  Info: "bg-[color:var(--info-tint)] border-[color:var(--info-accent)] text-[color:var(--info-deep)]",
+  brand: "bg-[color:var(--brand-tint)] border-[color:var(--brand-primary)] text-[color:var(--ink-anchor)]",
+  neutral: "bg-[color:var(--color-raw-gray-50)] border-[color:var(--color-raw-gray-800)] text-[color:var(--color-raw-gray-900)]",
+};
+
 /**
  * Chip: tag de protocolo/família ou filtro selecionável na fila do coordenador.
- * Mesma linguagem do Button (borda âncora, canto vivo, foco ortogonal). Três
- * usos a partir das props:
- *  - estático (só `children`): um <span> rotulador.
- *  - selecionável (`onSelecionar`): vira <button aria-pressed> (filtro/toggle).
- *  - removível (`onRemover`): ganha um botão × dedicado.
+ * Mesma linguagem do Button (borda âncora, canto redondo/pílula, foco ortogonal).
  * Alvo de toque ≥44px no Modo Clínico via min-h-11.
  */
 const base = cn(
-  "inline-flex items-center gap-2 border-ink-anchor border-2 px-3 font-body text-sm",
+  "inline-flex items-center gap-2 border-[length:var(--border-brutal)] px-3 font-body text-sm rounded-[length:var(--radius-pill)]",
   control("sm"),
 );
 
-const fundo = (selecionado: boolean) =>
-  selecionado ? "bg-gold text-ink-anchor font-semibold" : "bg-surface text-ink";
+const getFundo = (variante: ChipVariante, selecionado: boolean) => {
+  if (selecionado) {
+    // Destaque brand-primary se selecionado
+    return "bg-[color:var(--brand-primary)] border-[color:var(--ink-anchor)] text-[color:var(--ink-anchor)] font-semibold";
+  }
+  return stylesVariante[variante] ?? stylesVariante.neutral;
+};
 
 const foco =
-  "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]";
+  "focus-visible:border-[#2274A5] focus-visible:shadow-[var(--shadow-focus-ring)] focus-visible:outline-none";
 
 export interface ChipProps {
   children: React.ReactNode;
@@ -32,6 +58,7 @@ export interface ChipProps {
   /** Rótulo acessível para o botão remover (ex.: "Remover ABA"). */
   rotuloRemover?: string;
   className?: string;
+  variante?: ChipVariante;
 }
 
 function IconeX() {
@@ -43,10 +70,11 @@ function IconeX() {
 }
 
 export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
-  { children, onSelecionar, selecionado = false, onRemover, rotuloRemover, className },
+  { children, onSelecionar, selecionado = false, onRemover, rotuloRemover, className, variante = "neutral" },
   ref,
 ) {
   const removivel = typeof onRemover === "function";
+  const corClasses = getFundo(variante, selecionado);
 
   // Toggle puro: o próprio chip é o botão (sem remover).
   if (onSelecionar && !removivel) {
@@ -61,7 +89,7 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
           // alvo de toque ≥44px TAMBÉM em largura — um toggle curto ("ABA")
           // não pode furar o piso de 44px (achado Casey da crítica /impeccable).
           "justify-center",
-          fundo(selecionado),
+          corClasses,
           foco,
           "transition-transform duration-100 ease-out hover:-translate-x-px hover:-translate-y-px",
           "active:translate-x-0 active:translate-y-0",
@@ -78,7 +106,7 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
   return (
     <span
       ref={ref as React.Ref<HTMLSpanElement>}
-      className={cn(base, fundo(selecionado), className)}
+      className={cn(base, corClasses, className)}
     >
       {onSelecionar ? (
         <button
@@ -98,9 +126,9 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
           onClick={onRemover}
           aria-label={rotuloRemover ?? "Remover"}
           className={cn(
-            "text-ink-anchor -mr-1 grid size-7 shrink-0 place-items-center",
+            "text-currentColor -mr-1 grid size-7 shrink-0 place-items-center rounded-[length:var(--radius-pill)]",
             foco,
-            "hover:bg-ink-anchor/10",
+            "hover:bg-[color:var(--ink-anchor)]/10",
           )}
         >
           <IconeX />
