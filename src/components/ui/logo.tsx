@@ -37,12 +37,15 @@ const WORDMARK: string[] = [
 type Variante = "completo" | "marca" | "wordmark";
 type Tom = "cor" | "mono";
 
-export interface LogoProps extends Omit<React.SVGProps<SVGSVGElement>, "height" | "width"> {
+export interface LogoProps extends Omit<
+  React.SVGProps<SVGSVGElement>,
+  "height" | "width"
+> {
   variante?: Variante;
   /** `cor` = paleta da marca; `mono` = uma cor só via `currentColor` (herda text-*). */
   tom?: Tom;
-  /** Altura em px; a largura acompanha a proporção. */
-  altura?: number;
+  /** Altura em px ou string CSS válida; a largura acompanha a proporção. */
+  altura?: number | string;
   /** Anima os anéis entrando em cascata na montagem (respeita reduced-motion). */
   animado?: boolean;
 }
@@ -76,8 +79,13 @@ export function Logo({
   const parsed = viewBox[variante].split(" ").map(Number);
   const vbWidth = parsed[2] ?? 0;
   const vbHeight = parsed[3] ?? 0;
-  const safeAltura = typeof altura === "number" && !isNaN(altura) ? altura : 40;
-  const largura = Math.round((vbWidth / vbHeight) * safeAltura);
+  const numAltura = Number(altura);
+  const isNumeric =
+    typeof altura !== "symbol" && altura !== null && !isNaN(numAltura);
+  const safeAltura = isNumeric ? numAltura : (altura ?? 40);
+  const largura = isNumeric
+    ? Math.round((vbWidth / vbHeight) * numAltura)
+    : undefined;
 
   return (
     <svg
