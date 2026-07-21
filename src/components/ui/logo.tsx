@@ -37,7 +37,7 @@ const WORDMARK: string[] = [
 type Variante = "completo" | "marca" | "wordmark";
 type Tom = "cor" | "mono";
 
-export interface LogoProps extends React.SVGProps<SVGSVGElement> {
+export interface LogoProps extends Omit<React.SVGProps<SVGSVGElement>, "height" | "width"> {
   variante?: Variante;
   /** `cor` = paleta da marca; `mono` = uma cor só via `currentColor` (herda text-*). */
   tom?: Tom;
@@ -80,12 +80,13 @@ export function Logo({
   const vy2 = parsed[3] ?? 0;
   const vbWidth = vx2 - vx1;
   const vbHeight = vy2 - vy1;
-  const largura = Math.round((vbWidth / vbHeight) * altura);
+  const safeAltura = typeof altura === "number" && !isNaN(altura) ? altura : 40;
+  const largura = Math.round((vbWidth / vbHeight) * safeAltura);
 
   return (
     <svg
       viewBox={viewBox[variante]}
-      height={altura}
+      height={safeAltura}
       width={largura}
       role="img"
       aria-label={rotulo}

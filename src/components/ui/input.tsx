@@ -18,7 +18,7 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  function Input(
+  function Input  (
     {
       className,
       type,
@@ -33,6 +33,25 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     },
     ref,
   ) {
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleRef = (node: HTMLInputElement | null) => {
+      inputRef.current = node;
+      if (typeof ref === "function") {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    };
+
+    const handleWrapperClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("button, a, input, select, textarea")) {
+        return;
+      }
+      inputRef.current?.focus();
+    };
+
     return (
       <div className="flex w-full items-stretch">
         {leftAddon && (
@@ -49,8 +68,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           </div>
         )}
         <div
+          onClick={handleWrapperClick}
           className={cn(
             "flex flex-1 items-center bg-[color:var(--color-bg-surface)] border-[length:1.5px] border-[color:var(--border-neutral-light)]",
+            !disabled && "cursor-text",
             leftAddon ? "rounded-l-none" : "rounded-l-[length:var(--radius-control)]",
             rightAddon ? "rounded-r-none" : "rounded-r-[length:var(--radius-control)]",
             "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
@@ -68,7 +89,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           {prefixIcon && (
             <span
               className={cn(
-                "flex shrink-0 items-center justify-center pl-3 text-[color:var(--color-text-body)]/60",
+                "flex shrink-0 items-center justify-center pl-3 text-[color:var(--color-text-body)]/60 pointer-events-none",
                 disabled && "opacity-50"
               )}
             >
@@ -76,7 +97,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             </span>
           )}
           <input
-            ref={ref}
+            ref={handleRef}
             type={type ?? "text"}
             disabled={disabled}
             aria-invalid={ariaInvalid}
@@ -92,7 +113,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           {suffixIcon && (
             <span
               className={cn(
-                "flex shrink-0 items-center justify-center pr-3 text-[color:var(--color-text-body)]/60",
+                "flex shrink-0 items-center justify-center pr-3 text-[color:var(--color-text-body)]/60 pointer-events-none",
                 disabled && "opacity-50"
               )}
             >
