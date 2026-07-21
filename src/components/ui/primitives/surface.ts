@@ -27,7 +27,7 @@ export type ElevationNivel =
   | "flat" // rente — sem sombra
   | "raise" // levanta sutil (--elevation-1)
   | "base" // levanta cheio, mode-aware (--ds-shadow)
-  | "hover" // pico de interação (--elevation-3)
+  | "hover" // pico de interação (+1 nível sobre --ds-shadow, mode-aware via --ds-shadow-hover)
   | "inset" // afunda (--elevation-inset)
   | "overlay"; // flutua acima do canvas — modal/popover (--elevation-overlay)
 
@@ -55,7 +55,7 @@ const elevacoes: Record<ElevationNivel, string> = {
   flat: "shadow-none",
   raise: "shadow-[var(--elevation-1)]",
   base: "shadow-[var(--ds-shadow)]",
-  hover: "shadow-[var(--elevation-3)]",
+  hover: "shadow-[var(--ds-shadow-hover)]",
   inset: "shadow-[var(--elevation-inset)]",
   overlay: "shadow-[var(--elevation-overlay)]",
 };

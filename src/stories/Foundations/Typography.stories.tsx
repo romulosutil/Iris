@@ -49,7 +49,7 @@ const SCALES: ScaleItem[] = [
 export const Scales: StoryObj = {
   render: () => (
     <div className="space-y-12 max-w-6xl font-sans text-stone-900">
-      <div className="border-4 border-black p-8 bg-[#F2B705] shadow-[8px_8px_0px_#000000] relative overflow-hidden">
+      <div className="border-4 border-black p-8 bg-[#F2B705] shadow-brutal relative overflow-hidden">
         <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight text-black font-mono">
           Tipografia & Escala
         </h1>
@@ -60,7 +60,7 @@ export const Scales: StoryObj = {
 
       <div className="grid md:grid-cols-2 gap-8 mt-12">
         {FAMILY_GROUPS.map((family) => (
-          <section key={family.name} className="border-2 border-black bg-white p-6 shadow-[4px_4px_0px_#000000]">
+          <section key={family.name} className="border-2 border-black bg-white p-6 shadow-brutal">
             <h2 className="text-xl font-black border-b-2 border-black pb-2 mb-4 uppercase font-mono">
               {family.name}
             </h2>
@@ -88,7 +88,7 @@ export const Scales: StoryObj = {
         ))}
       </div>
 
-      <section className="border-2 border-black bg-white p-6 md:p-8 shadow-[4px_4px_0px_#000000]">
+      <section className="border-2 border-black bg-white p-6 md:p-8 shadow-brutal">
         <h2 className="text-2xl font-black border-b-2 border-black pb-2 mb-6 uppercase font-mono">
           Rampa de Escala Visual (Font Scales)
         </h2>
@@ -111,6 +111,56 @@ export const Scales: StoryObj = {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* DO'S & DON'TS DE TIPOGRAFIA */}
+      <section className="space-y-4 pt-6 border-t-2 border-dashed border-stone-200">
+        <h2 className="text-2xl font-black font-mono text-black uppercase tracking-wider">
+          Do's & Don'ts (Tipografia & Hierarquia)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* DO */}
+          <div className="border-2 border-black rounded-lg p-6 bg-emerald-50 shadow-brutal-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="bg-emerald-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
+                DO (SIM)
+              </span>
+              <h3 className="text-lg font-black text-emerald-950">Hierarquia Clara</h3>
+            </div>
+            <ul className="space-y-3 text-emerald-900 text-sm list-disc pl-5">
+              <li>
+                <strong>Display apenas para Títulos:</strong> Limite o uso de <code>font-display</code> (Space Grotesk) para títulos principais (headings) maiores que 20px.
+              </li>
+              <li>
+                <strong>Body Sans para Leitura:</strong> Use a família <code>font-body</code> (Plus Jakarta Sans) para controles, labels, descrições e parágrafos.
+              </li>
+              <li>
+                <strong>Letter-spacing Ergonômico:</strong> Preserve o espaçamento de caracteres (<code>letter-spacing: 0.01em</code>) nas descrições clínicas para otimizar a leitura rápida.
+              </li>
+            </ul>
+          </div>
+
+          {/* DON'T */}
+          <div className="border-2 border-black rounded-lg p-6 bg-rose-50 shadow-brutal-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="bg-rose-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
+                DON'T (NÃO)
+              </span>
+              <h3 className="text-lg font-black text-rose-950">Desvios de Legibilidade</h3>
+            </div>
+            <ul className="space-y-3 text-rose-900 text-sm list-disc pl-5">
+              <li>
+                <strong>Display em Texto Corrido:</strong> Nunca use a fonte <code>font-display</code> para blocos explicativos ou parágrafos, pois o peso geométrico excessivo fadiga os olhos.
+              </li>
+              <li>
+                <strong>Display Abaixo de 20px:</strong> Evite utilizar a fonte display em tamanhos pequenos de fonte (como 12px ou 14px), pois inviabiliza o escaneamento rápido.
+              </li>
+              <li>
+                <strong>Copy Longa ou Ambígua:</strong> Evite parágrafos densos ou termos metafóricos/subjetivos na interface. Mantenha as frases curtas, literais e diretas.
+              </li>
+            </ul>
+          </div>
         </div>
       </section>
     </div>

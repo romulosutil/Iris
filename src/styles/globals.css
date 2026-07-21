@@ -68,26 +68,26 @@
      2. Semânticas (Papéis de Sistema)
      ========================================================================== */
   /* Cores em Tríade (Tint, Accent, Deep) - Variáveis de Base */
-  --brand-primary: #F2B705;
-  --brand-hover: #D29E04;
-  --brand-tint: #FFF6DB;
-  --ink-anchor: #0A0A0A;
+  --brand-primary: var(--color-raw-gold-500);
+  --brand-hover: var(--color-raw-gold-700);
+  --brand-tint: var(--color-raw-gold-100);
+  --ink-anchor: var(--color-raw-gray-950);
 
-  --success-tint: #E6F4F1;
-  --success-accent: #14857A;
-  --success-deep: #0A5C54;
+  --success-tint: var(--color-raw-mint-100);
+  --success-accent: var(--color-raw-mint-500);
+  --success-deep: var(--color-raw-mint-900);
 
-  --info-tint: #E7F0FB;
-  --info-accent: #1F6FB2;
-  --info-deep: #124A78;
+  --info-tint: var(--color-raw-blue-100);
+  --info-accent: var(--color-raw-blue-500);
+  --info-deep: var(--color-raw-blue-900);
 
-  --ai-tint: #F1E9F6;
-  --ai-accent: #6A4C93;
-  --ai-deep: #45286E;
+  --ai-tint: var(--color-raw-violet-100);
+  --ai-accent: var(--color-raw-violet-500);
+  --ai-deep: var(--color-raw-violet-900);
 
-  --warning-tint: #FBE9E9;
-  --warning-accent: #C0392B;
-  --warning-deep: #7E1F16;
+  --warning-tint: var(--color-raw-terracotta-100);
+  --warning-accent: var(--color-raw-terracotta-500);
+  --warning-deep: var(--color-raw-terracotta-900);
 
   /* Marca e Ação */
   --color-brand-primary: var(--brand-primary);
@@ -193,6 +193,12 @@
   --control-md: 3rem; /* 48px */
   --control-lg: 3.5rem; /* 56px */
 
+  /* Alturas específicas para variações de inputs (sm = 32px, md = 40px, lg = 48px) */
+  --input-height-sm: 2rem;
+  --input-height-md: 2.5rem;
+  --input-height-lg: 3rem;
+
+
   /* Animações de abrir/fechar (Radix Accordion). Duração curta de produto
      (150-250ms); o prefers-reduced-motion abaixo zera a duration. */
   --animate-accordion-down: accordion-down 200ms ease-out;
@@ -213,12 +219,14 @@
 :root,
 [data-mode="clinico"] {
   --ds-shadow: var(--shadow-brutal);
+  --ds-shadow-hover: var(--elevation-3);   /* +1 nível acima do base: elevation-2 → 3 */
   --ds-shadow-inset: var(--shadow-brutal-inset);
   --ds-offset: 4px;
 }
 
 [data-mode="familia"] {
   --ds-shadow: var(--shadow-brutal-sm);
+  --ds-shadow-hover: var(--elevation-2);   /* +1 nível acima do base: elevation-1 → 2 */
   --ds-shadow-inset: var(--shadow-brutal-inset-sm);
   --ds-offset: 2px;
 }
@@ -281,6 +289,44 @@ html {
     transition-duration: 0.001ms !important;
     animation-duration: 0.001ms !important;
   }
+}
+
+/*
+  Dark Mode (Tema Escuro)
+  Inverte os tokens de fundo e borda para alto contraste sem perder a elevação física brutalista.
+*/
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-canvas: var(--color-raw-gray-950);
+    --color-bg-surface: var(--color-raw-gray-900);
+    --color-border-brutal: var(--color-raw-gray-100);
+    --ink-anchor: var(--color-raw-gray-100);
+    --color-text-body: var(--color-raw-gray-100);
+    --color-text-heading: var(--color-raw-gray-50);
+    
+    /* Inversão dos aliases legados de cor */
+    --color-canvas: var(--color-bg-canvas);
+    --color-surface: var(--color-bg-surface);
+    --color-ink: var(--color-text-body);
+    --color-ink-anchor: var(--color-text-heading);
+    --color-graphite: var(--color-raw-gray-100);
+  }
+}
+
+.dark {
+  --color-bg-canvas: var(--color-raw-gray-950);
+  --color-bg-surface: var(--color-raw-gray-900);
+  --color-border-brutal: var(--color-raw-gray-100);
+  --ink-anchor: var(--color-raw-gray-100);
+  --color-text-body: var(--color-raw-gray-100);
+  --color-text-heading: var(--color-raw-gray-50);
+  
+  /* Inversão dos aliases legados de cor */
+  --color-canvas: var(--color-bg-canvas);
+  --color-surface: var(--color-bg-surface);
+  --color-ink: var(--color-text-body);
+  --color-ink-anchor: var(--color-text-heading);
+  --color-graphite: var(--color-raw-gray-100);
 }
 
 /*

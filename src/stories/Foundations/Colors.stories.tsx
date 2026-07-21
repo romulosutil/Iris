@@ -82,9 +82,9 @@ const ESPECTRO_TOKENS: ColorToken[] = [
 
 export const Palette: StoryObj = {
   render: () => (
-    <div className="space-y-12 max-w-6xl font-sans text-stone-900 bg-[#FAF9F5] p-6 md:p-8 border-4 border-black shadow-[8px_8px_0px_#000000]">
+    <div className="space-y-12 max-w-6xl font-sans text-stone-900 bg-[#FAF9F5] p-6 md:p-8 border-4 border-black shadow-brutal">
       {/* Banner Superior Brutalista */}
-      <div className="border-4 border-black p-8 bg-[#F2B705] shadow-[8px_8px_0px_#000000] relative overflow-hidden">
+      <div className="border-4 border-black p-8 bg-[#F2B705] shadow-brutal relative overflow-hidden">
         <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight text-black font-mono">
           Cores & Paleta
         </h1>
@@ -102,7 +102,7 @@ export const Palette: StoryObj = {
           {BRAND_TOKENS.map((token) => (
             <div 
               key={token.variable} 
-              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-[4px_4px_0px_#000000] hover:shadow-[6px_6px_0px_#000000] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150"
+              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-brutal hover:shadow-brutal-hover hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150"
             >
               <div 
                 className="w-full h-24 border-b-2 border-black" 
@@ -133,7 +133,7 @@ export const Palette: StoryObj = {
           ESTADOS DO DADO — TINTA · ACENTO · PROFUNDO
         </h2>
         
-        <div className="border-2 border-black rounded-lg bg-white p-6 shadow-[4px_4px_0px_#000000] space-y-6">
+        <div className="border-2 border-black rounded-lg bg-white p-6 shadow-brutal space-y-6">
           {DATA_STATES.map((row) => (
             <div key={row.label} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-stone-100 last:border-0 pb-6 last:pb-0">
               {/* Nome do Estado */}
@@ -145,7 +145,7 @@ export const Palette: StoryObj = {
               <div className="md:col-span-9 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* TINT */}
                 <div 
-                  className={`border-2 border-black rounded-lg p-4 flex flex-col justify-between h-18 shadow-[2px_2px_0px_#000000] ${row.tint.textColor}`}
+                  className={`border-2 border-black rounded-lg p-4 flex flex-col justify-between h-18 shadow-brutal-sm ${row.tint.textColor}`}
                   style={{ backgroundColor: row.tint.variable }}
                 >
                   <span className="font-mono text-xs font-bold uppercase tracking-wider">{row.tint.label}</span>
@@ -154,7 +154,7 @@ export const Palette: StoryObj = {
 
                 {/* ACCENT */}
                 <div 
-                  className={`border-2 border-black rounded-lg p-4 flex flex-col justify-between h-18 shadow-[2px_2px_0px_#000000] ${row.accent.textColor}`}
+                  className={`border-2 border-black rounded-lg p-4 flex flex-col justify-between h-18 shadow-brutal-sm ${row.accent.textColor}`}
                   style={{ backgroundColor: row.accent.variable }}
                 >
                   <span className="font-mono text-xs font-bold uppercase tracking-wider">{row.accent.label}</span>
@@ -163,7 +163,7 @@ export const Palette: StoryObj = {
 
                 {/* DEEP */}
                 <div 
-                  className={`border-2 border-black rounded-lg p-4 flex flex-col justify-between h-18 shadow-[2px_2px_0px_#000000] ${row.deep.textColor}`}
+                  className={`border-2 border-black rounded-lg p-4 flex flex-col justify-between h-18 shadow-brutal-sm ${row.deep.textColor}`}
                   style={{ backgroundColor: row.deep.variable }}
                 >
                   <span className="font-mono text-xs font-bold uppercase tracking-wider">{row.deep.label}</span>
@@ -184,7 +184,7 @@ export const Palette: StoryObj = {
           {ESTRUTURA_TOKENS.map((token) => (
             <div 
               key={token.variable} 
-              className="border-2 border-black p-4 flex flex-col justify-between bg-white shadow-[2px_2px_0px_#000000] hover:shadow-[4px_4px_0px_#000000] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150 rounded-lg"
+              className="border-2 border-black p-4 flex flex-col justify-between bg-white shadow-brutal-sm hover:shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150 rounded-lg"
             >
               <div>
                 <div 
@@ -220,7 +220,7 @@ export const Palette: StoryObj = {
           {ESPECTRO_TOKENS.map((token) => (
             <div 
               key={token.variable} 
-              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-[2px_2px_0px_#000000]"
+              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-brutal-sm"
             >
               <div 
                 className="w-full h-8 border-b border-black" 
@@ -236,6 +236,68 @@ export const Palette: StoryObj = {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* DO'S & DON'TS */}
+      <section className="space-y-4 pt-6 border-t-2 border-dashed border-stone-200">
+        <h2 className="text-2xl font-black font-mono text-black uppercase tracking-wider">
+          Do's & Don'ts (Boas Práticas de Cores)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* DO */}
+          <div className="border-2 border-black rounded-lg p-6 bg-emerald-50 shadow-brutal-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="bg-emerald-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
+                DO (SIM)
+              </span>
+              <h3 className="text-lg font-black text-emerald-950">Práticas Recomendadas</h3>
+            </div>
+            <ul className="space-y-3 text-emerald-900 text-sm list-disc pl-5">
+              <li>
+                <strong>Contraste Seguro na Cor Primária:</strong> Use sempre <code>ink.anchor</code> (<code>#0A0A0A</code>) ou <code>Heading Text</code> sobre fundos <code>brand.primary</code> (amarelo).
+              </li>
+              <li>
+                <strong>Tríade de Estados:</strong> Utilize a estrutura semântica <code>Tint</code> (fundo), <code>Accent</code> (borda/detalhe) e <code>Deep</code> (texto) para representar estados de dados clínicos.
+              </li>
+              <li>
+                <strong>Redundância Visual:</strong> Combine cor com ícones e rótulos textuais para que o significado nunca dependa apenas da cor.
+              </li>
+            </ul>
+            <div className="mt-4 p-3 bg-white border border-emerald-300 rounded text-xs flex items-center justify-between">
+              <span className="font-bold text-emerald-950">Exemplo Correto:</span>
+              <div className="bg-[#F2B705] text-[#0A0A0A] font-bold px-3 py-1 border border-black rounded font-mono">
+                Texto Escuro no Amarelo (OK)
+              </div>
+            </div>
+          </div>
+
+          {/* DON'T */}
+          <div className="border-2 border-black rounded-lg p-6 bg-rose-50 shadow-brutal-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="bg-rose-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
+                DON'T (NÃO)
+              </span>
+              <h3 className="text-lg font-black text-rose-950">Práticas Proibidas</h3>
+            </div>
+            <ul className="space-y-3 text-rose-900 text-sm list-disc pl-5">
+              <li>
+                <strong>Texto Claro no Amarelo:</strong> Nunca utilize texto branco (<code>#FFFFFF</code>) ou tons claros sobre fundos <code>brand.primary</code>. A acessibilidade WCAG falha severamente.
+              </li>
+              <li>
+                <strong>Spectrum como Chrome:</strong> Nunca aplique as cores da régua <code>Spectrum</code> em botões ou status badges interativos, pois gera confusão e ruído visual.
+              </li>
+              <li>
+                <strong>Cores Puras para Status:</strong> Evite utilizar vermelho ou verde puro de alta saturação sem mitigação estrutural (como hachuras ou bordas diferenciadas).
+              </li>
+            </ul>
+            <div className="mt-4 p-3 bg-white border border-rose-300 rounded text-xs flex items-center justify-between">
+              <span className="font-bold text-rose-950">Exemplo Incorreto:</span>
+              <div className="bg-[#F2B705] text-white font-bold px-3 py-1 border border-black rounded font-mono line-through opacity-70">
+                Texto Branco no Amarelo (FALHA)
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </div>

@@ -132,7 +132,7 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         className={cn(
           "flex items-start gap-4 p-4",
           "border-y-[length:var(--border-brutal)] border-r-[length:var(--border-brutal)] border-l-[4px]",
-          destacado && "shadow-[var(--shadow-composite)] p-8 md:p-12 text-lg font-medium",
+          destacado && "shadow-[var(--ds-shadow)] p-8 md:p-12 text-lg font-medium",
           fundo,
           bordaEsquerda,
           bordaOutras,

@@ -170,7 +170,7 @@ const ICONS: IconItem[] = [
 export const Gallery: StoryObj = {
   render: () => (
     <div className="space-y-12 max-w-6xl font-sans text-stone-900">
-      <div className="border-4 border-black p-8 bg-[#F2B705] shadow-[8px_8px_0px_#000000] relative overflow-hidden">
+      <div className="border-4 border-black p-8 bg-[#F2B705] shadow-brutal relative overflow-hidden">
         <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight text-black font-mono">
           Iconografia
         </h1>
@@ -179,7 +179,7 @@ export const Gallery: StoryObj = {
         </p>
       </div>
 
-      <div className="border-2 border-black bg-[#E3F2FD] p-6 shadow-[4px_4px_0px_#000000] flex gap-4 items-start">
+      <div className="border-2 border-black bg-[#E3F2FD] p-6 shadow-brutal flex gap-4 items-start">
         <div className="text-blue-900 shrink-0 mt-1">
           <svg width={24} height={24} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5">
             <circle cx="10" cy="5" r="1.4" fill="currentColor" />
@@ -194,7 +194,7 @@ export const Gallery: StoryObj = {
         </div>
       </div>
 
-      <section className="border-2 border-black bg-white p-6 md:p-8 shadow-[4px_4px_0px_#000000]">
+      <section className="border-2 border-black bg-white p-6 md:p-8 shadow-brutal">
         <h2 className="text-2xl font-black border-b-2 border-black pb-2 mb-6 uppercase font-mono">
           Biblioteca de Ícones Core
         </h2>
@@ -204,9 +204,9 @@ export const Gallery: StoryObj = {
             return (
               <div 
                 key={icon.name} 
-                className="border-2 border-black p-4 flex flex-col items-center text-center bg-stone-50 shadow-[2px_2px_0px_#000000] hover:shadow-[4px_4px_0px_#000000] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150"
+                className="border-2 border-black p-4 flex flex-col items-center text-center bg-stone-50 shadow-brutal-sm hover:shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150"
               >
-                <div className="w-16 h-16 border-2 border-black bg-white flex items-center justify-center text-black mb-4 shadow-[2px_2px_0px_#000000]">
+                <div className="w-16 h-16 border-2 border-black bg-white flex items-center justify-center text-black mb-4 shadow-brutal-sm">
                   <IconComponent className="text-stone-900" />
                 </div>
                 <h3 className="font-extrabold text-base mb-1">{icon.name}</h3>

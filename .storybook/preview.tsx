@@ -40,9 +40,25 @@ const preview: Preview = {
         canvas: { name: "Canvas", value: "#F8F9FA" },
         surface: { name: "Surface", value: "#FFFFFF" },
       },
+      grid: {
+        disable: true,
+      },
     },
     viewport: { options: viewports },
     a11y: { test: "error" },
+    options: {
+      storySort: {
+        order: [
+          "Intro",
+          "Foundations",
+          "Atoms",
+          "Molecules",
+          "Organisms",
+          "Layout",
+          "Pages",
+        ],
+      },
+    },
   },
   initialGlobals: {
     backgrounds: { value: "canvas" },

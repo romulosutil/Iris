@@ -46,7 +46,7 @@ const getFundo = (variante: ChipVariante, selecionado: boolean) => {
 };
 
 const foco =
-  "focus-visible:border-[#2274A5] focus-visible:shadow-[var(--shadow-focus-ring)] focus-visible:outline-none";
+  "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]";
 
 export interface ChipProps {
   children: React.ReactNode;
