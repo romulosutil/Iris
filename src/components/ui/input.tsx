@@ -64,11 +64,29 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     };
 
     return (
-      <div className={cn("flex w-full items-stretch", className)}>
+      <div
+        onClick={handleWrapperClick}
+        className={cn(
+          "group flex w-full items-stretch rounded-[length:var(--radius-control)] border-[length:1.5px] border-[color:var(--border-neutral-light)] bg-[color:var(--color-bg-surface)]",
+          !disabled && "cursor-text",
+          "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
+          // hover state across the entire control
+          !disabled && "hover:border-[color:var(--ink-anchor)]",
+          // focus state (focus-within) across the entire control (including addons)
+          !disabled &&
+            "focus-within:border-[color:var(--color-focus)] focus-within:shadow-[var(--shadow-focus-ring)] focus-within:outline-none",
+          // error/aria-invalid
+          ariaInvalid && "border-[color:var(--color-spectrum-red)]",
+          // disabled - WCAG contrast compliant (bg and text tokens, no opacity-50)
+          disabled &&
+            "cursor-not-allowed border-[color:var(--border-neutral-light)]/50 bg-[color:var(--color-canvas)]",
+          className,
+        )}
+      >
         {leftAddon && (
           <div
             className={cn(
-              "font-body flex items-center justify-center rounded-l-[length:var(--radius-control)] border-[length:1.5px] border-r-0 border-[color:var(--border-neutral-light)] bg-[color:var(--color-canvas)] px-3 text-[color:var(--color-text-body)]/70 select-none",
+              "font-body flex shrink-0 items-center justify-center rounded-l-[calc(var(--radius-control)-1.5px)] border-r-[length:1.5px] border-[color:var(--border-neutral-light)] bg-[color:var(--color-canvas)] px-3 text-[color:var(--color-text-body)]/70 select-none",
               size === "sm" && "text-sm",
               size === "md" && "text-base",
               size === "lg" && "text-base",
@@ -80,28 +98,16 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           </div>
         )}
         <div
-          onClick={handleWrapperClick}
           className={cn(
-            "flex flex-1 items-center border-[length:1.5px] border-[color:var(--border-neutral-light)] bg-[color:var(--color-bg-surface)]",
-            !disabled && "cursor-text",
+            "flex flex-1 items-center bg-[color:var(--color-bg-surface)]",
             leftAddon
               ? "rounded-l-none"
-              : "rounded-l-[length:var(--radius-control)]",
+              : "rounded-l-[calc(var(--radius-control)-1.5px)]",
             rightAddon
               ? "rounded-r-none"
-              : "rounded-r-[length:var(--radius-control)]",
-            "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
-            // hover state
-            !disabled &&
-              "hover:border-[color:var(--ink-anchor)] hover:bg-[color:var(--gray-light-hover)]",
-            // focus state (focus-within)
-            !disabled &&
-              "focus-within:border-[color:var(--color-focus)] focus-within:shadow-[var(--shadow-focus-ring)] focus-within:outline-none",
-            // error/aria-invalid
-            ariaInvalid && "border-[color:var(--color-spectrum-red)]",
-            // disabled - WCAG contrast compliant (bg and text tokens, no opacity-50)
-            disabled &&
-              "cursor-not-allowed border-[color:var(--border-neutral-light)]/50 bg-[color:var(--color-canvas)]",
+              : "rounded-r-[calc(var(--radius-control)-1.5px)]",
+            !disabled && "group-hover:bg-[color:var(--gray-light-hover)]",
+            disabled && "cursor-not-allowed bg-[color:var(--color-canvas)]",
           )}
         >
           {prefixIcon && (
@@ -137,7 +143,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {rightAddon && (
           <div
             className={cn(
-              "font-body flex items-center justify-center rounded-r-[length:var(--radius-control)] border-[length:1.5px] border-l-0 border-[color:var(--border-neutral-light)] bg-[color:var(--color-canvas)] px-3 text-[color:var(--color-text-body)]/70 select-none",
+              "font-body flex shrink-0 items-center justify-center rounded-r-[calc(var(--radius-control)-1.5px)] border-l-[length:1.5px] border-[color:var(--border-neutral-light)] bg-[color:var(--color-canvas)] px-3 text-[color:var(--color-text-body)]/70 select-none",
               size === "sm" && "text-sm",
               size === "md" && "text-base",
               size === "lg" && "text-base",
