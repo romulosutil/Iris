@@ -745,6 +745,14 @@ Novos componentes + tokens no conceito Espectro Brutal, inspirados em ng-brutali
 * **Componentes (15, todos com stories + gate axe — 38 testes verde)**: StatusBadge/StatusDot, Chip/ChipGroup; Stack/Cluster/Split; Accordion, Checkbox, Select, Tabs, Dialog, Slider, Progress, Avatar/AvatarGroup, Stat.
 * **Proposta pendente**: formalizar `--color-suggested` no doc do DS (`docs/ux/design-system-espectro-brutal.md` §3) após revisão visual do Rômulo.
 
+### [Melhoria] Surface v3 — eixos radius + elevação escaláveis (21/07/2026, branch `feat/design-system-v3`)
+Ingerido o reference `storybook-static/Iris_Design_System.html` (showcase hand-authored). Achados vs código: (1) `surface()` compunha borda+sombra mas **sem radius** — cards/dialog/accordion com canto reto enquanto metric-card era 6px (o "elevation sem radius" que o Rômulo flagrou); (2) elevação era pilha plana de 8 vars `--shadow-brutal-*` soltas, não escala indexável ("não perpetuava"); (3) rampa de radius fina (só sm/md/pill) vs 3–12px do reference.
+* **Decisão de gosto (travada com o Rômulo)**: superfície sólida adota radius **macio 6px** seguindo o reference — brutalismo mantido pela borda 1.5px preta + sombra dura, só o canto suaviza.
+* **Tokens** (`globals.css`): rampa `--radius-{none,xs,sm,control,md,lg,xl,2xl,pill}` (md=6px, control=5px p/ inputs/botões); escala semântica `--elevation-{0,1,2,3,inset,overlay}` derivada 1:1 do reference. Vars legadas `--shadow-brutal-*`/`--shadow-composite`/`--ds-shadow` remapeadas p/ a escala (compat preservada; `--ds-shadow` segue mode-aware: Clínico=elev-2, Família=elev-1).
+* **Primitive** (`surface.ts`): `surface(variante, { elevation, radius, className })` — acopla borda+elevação+raio num ponto só; defaults por variante (solida→base/md LEVANTA; sugerida/candidata→inset/md AFUNDA com inset violeta soft, agora fiel ao reference). Borda alinhada ao token 1.5px (era `border-2`). Compat com `surface('solida','classe')`.
+* **11 consumidores migrados** p/ compor `surface()` matando borda/shadow hardcoded: card, interactive-card, accordion, banner, select (overlay+lg), dialog (overlay+2xl), metric-card; input→radius-control; button ganha radius-control nas 3 variantes. **typecheck/lint(0 erro)/build verde.**
+* **Pendente**: revisão visual no Storybook/Chromatic pelo Rômulo; formalizar rampa radius + escala elevação no doc do DS (`docs/ux/design-system-espectro-brutal.md`). Token reverso legado `--shadow-brutal-inset` ficou órfão (surface não usa mais) — avaliar remoção.
+
 ---
 
 ## 📋 Backlog de Fases Futuras (Foco das Issues GitHub)

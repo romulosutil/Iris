@@ -70,6 +70,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           // base: alvo de toque (piso 44×44), tipografia display, layout
           control("sm"),
           "inline-flex items-center justify-center px-5 py-2.5",
+          "rounded-[var(--radius-control)]",
           "font-display text-base font-semibold",
           "transition-[transform,box-shadow,background-color] duration-100 ease-out",
           // anel de foco ortogonal da v3

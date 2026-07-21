@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { surface } from "@/components/ui/primitives/surface";
 
 export interface MetricTrend {
   /** Direção da tendência — controla o glifo (▲/▼) e a semântica visual. */
@@ -38,8 +39,9 @@ export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
       <div
         ref={ref}
         className={cn(
-          "border-[1.5px] border-[color:var(--ink-anchor)] bg-[color:var(--color-bg-surface)]",
-          "rounded-[var(--radius-md)] p-[22px] shadow-[var(--shadow-composite)]",
+          surface("solida", {
+            className: "bg-[color:var(--color-bg-surface)] p-[22px]",
+          }),
           className,
         )}
         {...props}

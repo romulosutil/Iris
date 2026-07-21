@@ -3,6 +3,7 @@
 import * as React from "react";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { cn } from "@/lib/cn";
+import { surface } from "@/components/ui/primitives/surface";
 
 /**
  * Accordion sobre Radix (WAI-ARIA, teclado e roving tabindex de graça), vestido
@@ -19,7 +20,7 @@ export const AccordionItem = React.forwardRef<
     <AccordionPrimitive.Item
       ref={ref}
       className={cn(
-        "border-ink-anchor bg-surface border-2 shadow-[var(--ds-shadow)]",
+        surface("solida", { className: "bg-surface" }),
         className,
       )}
       {...props}

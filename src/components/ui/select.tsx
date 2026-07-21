@@ -3,6 +3,7 @@
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { cn } from "@/lib/cn";
+import { surface } from "@/components/ui/primitives/surface";
 
 /**
  * Select sobre Radix (typeahead, teclado e portal de graça), vestido com
@@ -65,7 +66,12 @@ export const SelectContent = React.forwardRef<
         ref={ref}
         position={position}
         className={cn(
-          "border-ink-anchor bg-surface z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden border-2 shadow-[var(--ds-shadow)]",
+          surface("solida", {
+            elevation: "overlay",
+            radius: "lg",
+            className:
+              "bg-surface z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden",
+          }),
           position === "popper" && "mt-1",
           className,
         )}
