@@ -251,4 +251,4 @@ export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
       </span>
     );
   },
-
+);

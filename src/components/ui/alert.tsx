@@ -123,7 +123,7 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
     { className, severidade = "erro", titulo, destacado = false, children, ...props },
     ref,
   ) {
-    const activeStyle = estilo[severidade] ?? estilo.erro;
+    const activeStyle = estilo[severidade] ?? estilo.erro!;
     const { fundo, bordaEsquerda, bordaOutras, texto, iconeBg, rotulo } = activeStyle;
     return (
       <div
