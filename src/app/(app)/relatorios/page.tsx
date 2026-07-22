@@ -3,6 +3,7 @@ import { getTenantContext } from "@/auth/tenant";
 import { Stack } from "@/components/ui/layout";
 import { listarPacientesParaRelatorio } from "./queries";
 import { RelatoriosExport } from "./relatorios-export";
+import { FamiliaReport } from "./familia-report";
 
 /**
  * Rota `/relatorios` (Fase 5 · Fatia 3) — exportação do dossiê
@@ -31,6 +32,11 @@ export default async function RelatoriosPage() {
       </Stack>
 
       <RelatoriosExport pacientes={pacientes} />
+
+      <FamiliaReport
+        pacientes={pacientes}
+        podeCurar={ctx.role === "coordenador"}
+      />
     </Stack>
   );
 }
