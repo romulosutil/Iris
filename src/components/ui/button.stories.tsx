@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 import { Button } from "./button";
+import { CheckIcon, PencilIcon, CloseIcon, SparkleIcon } from "./icon";
 
 const meta = {
   title: "Atoms/Button",
@@ -83,3 +84,71 @@ export const EscalaDeEnfase: Story = {
   ),
   parameters: { controls: { disable: true } },
 };
+
+export const ComIcones: Story = {
+  render: () => (
+    <div className="flex flex-wrap items-center gap-4">
+      <Button iconLeft={<SparkleIcon className="h-4 w-4" />}>
+        Gerar Sugestões
+      </Button>
+      <Button variante="secundaria" iconRight={<CheckIcon className="h-4 w-4" />}>
+        Confirmar
+      </Button>
+    </div>
+  ),
+};
+
+export const ApenasIcone: Story = {
+  render: () => (
+    <div className="flex flex-wrap items-center gap-4">
+      <Button
+        iconOnly
+        aria-label="Editar item"
+        iconLeft={<PencilIcon className="h-5 w-5" />}
+      />
+      <Button
+        iconOnly
+        formato="circular"
+        aria-label="Fechar diálogo"
+        iconLeft={<CloseIcon className="h-5 w-5" />}
+      />
+    </div>
+  ),
+};
+
+export const DiferentesTamanhos: Story = {
+  render: () => (
+    <div className="flex flex-wrap items-end gap-4">
+      <div className="flex flex-col gap-2">
+        <span className="text-xs text-gray-500 font-mono">Tamanho sm (44px target)</span>
+        <Button tamanho="sm">Salvar</Button>
+      </div>
+      <div className="flex flex-col gap-2">
+        <span className="text-xs text-gray-500 font-mono">Tamanho md (Padrão - 48px)</span>
+        <Button tamanho="md">Salvar</Button>
+      </div>
+      <div className="flex flex-col gap-2">
+        <span className="text-xs text-gray-500 font-mono">Tamanho lg (56px target)</span>
+        <Button tamanho="lg">Salvar</Button>
+      </div>
+    </div>
+  ),
+};
+
+export const Carregamento: Story = {
+  render: () => (
+    <div className="flex flex-wrap items-center gap-4">
+      <Button isLoading>Aprovar</Button>
+      <Button variante="secundaria" isLoading>
+        Editar
+      </Button>
+      <Button tamanho="sm" isLoading>
+        Pequeno
+      </Button>
+      <Button tamanho="lg" isLoading>
+        Grande
+      </Button>
+    </div>
+  ),
+};
+

@@ -49,7 +49,7 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
     const cardClasses = cn(
       "text-text-body flex flex-col gap-2 p-5 text-left outline-none cursor-pointer select-none w-full",
       "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-      !disabled && isFact && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[var(--elevation-3)]",
+      !disabled && isFact && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[var(--ds-shadow-hover)]",
       !disabled && !isFact && "hover:opacity-95",
       "active:translate-x-0 active:translate-y-0 active:shadow-none",
       // foco v3

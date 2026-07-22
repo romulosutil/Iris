@@ -30,26 +30,30 @@ const SPACING_ITEMS: SpacingItem[] = [
 const ELEVATIONS = [
   {
     name: "Standard Shadow (Modo Clínico)",
-    variable: "var(--shadow-brutal)",
-    className: "shadow-[var(--shadow-brutal)]",
+    variable: "--shadow-brutal",
+    utility: "shadow-brutal",
+    className: "shadow-brutal",
     description: "Sombra dura sem desfoque (4px). Assinatura visual neobrutalista para cards e botões no Modo Clínico.",
   },
   {
     name: "Medium Shadow (Modo Família)",
-    variable: "var(--shadow-brutal-sm)",
-    className: "shadow-[var(--shadow-brutal-sm)]",
+    variable: "--shadow-brutal-sm",
+    utility: "shadow-brutal-sm",
+    className: "shadow-brutal-sm",
     description: "Sombra dura reduzida (2px). Usada no Modo Família para atenuar a aspereza visual.",
   },
   {
     name: "Hover Shadow",
-    variable: "var(--shadow-brutal-hover)",
-    className: "shadow-[var(--shadow-brutal-hover)] -translate-x-0.5 -translate-y-0.5",
+    variable: "--shadow-brutal-hover",
+    utility: "shadow-brutal-hover",
+    className: "shadow-brutal-hover -translate-x-0.5 -translate-y-0.5",
     description: "Sombra dura expandida (6px) com deslocamento negativo para simular elevação ao pairar.",
   },
   {
     name: "Suggested Inset Shadow (IA)",
-    variable: "var(--shadow-brutal-inset)",
-    className: "shadow-[var(--shadow-brutal-inset)] translate-x-1 translate-y-1",
+    variable: "--shadow-brutal-inset",
+    utility: "shadow-brutal-inset",
+    className: "shadow-brutal-inset translate-x-1 translate-y-1",
     description: "Sombra interna invertida (-4px). Representa o estado 'afundado' ou 'tentativo' de sugestões da IA.",
   },
 ];
@@ -63,7 +67,7 @@ const CONTROL_HEIGHTS = [
 export const Spacing: StoryObj = {
   render: () => (
     <div className="space-y-12 max-w-6xl font-sans text-stone-900">
-      <div className="border-4 border-black p-8 bg-[#F2B705] shadow-[8px_8px_0px_#000000] relative overflow-hidden">
+      <div className="border-4 border-black p-8 bg-[#F2B705] shadow-brutal relative overflow-hidden">
         <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight text-black font-mono">
           Espaçamento, Bordas & Elevação
         </h1>
@@ -74,7 +78,7 @@ export const Spacing: StoryObj = {
 
       <div className="grid md:grid-cols-2 gap-8">
         {/* Espaçamento */}
-        <section className="border-2 border-black bg-white p-6 md:p-8 shadow-[4px_4px_0px_#000000] flex flex-col justify-between">
+        <section className="border-2 border-black bg-white p-6 md:p-8 shadow-brutal flex flex-col justify-between">
           <div>
             <h2 className="text-2xl font-black border-b-2 border-black pb-2 mb-6 uppercase font-mono">
               Escala de Espaçamento
@@ -104,7 +108,7 @@ export const Spacing: StoryObj = {
         </section>
 
         {/* Alturas de Controle */}
-        <section className="border-2 border-black bg-white p-6 md:p-8 shadow-[4px_4px_0px_#000000] flex flex-col justify-between">
+        <section className="border-2 border-black bg-white p-6 md:p-8 shadow-brutal flex flex-col justify-between">
           <div>
             <h2 className="text-2xl font-black border-b-2 border-black pb-2 mb-6 uppercase font-mono">
               Alvos de Toque (Heights)
@@ -120,7 +124,7 @@ export const Spacing: StoryObj = {
                     <span className="font-mono text-stone-500 text-xs font-bold">{control.px} ({control.variable})</span>
                   </div>
                   <div 
-                    className="border-2 border-black bg-[#E0F2F1] text-[#004D40] flex items-center px-4 font-mono font-bold text-sm shadow-[2px_2px_0px_#000000]"
+                    className="border-2 border-black bg-[#E0F2F1] text-[#004D40] flex items-center px-4 font-mono font-bold text-sm shadow-brutal-sm"
                     style={{ height: control.variable }}
                   >
                     Alvo de Toque: {control.px}
@@ -139,7 +143,7 @@ export const Spacing: StoryObj = {
       </div>
 
       {/* Sombras e Elevações */}
-      <section className="border-2 border-black bg-white p-6 md:p-8 shadow-[4px_4px_0px_#000000]">
+      <section className="border-2 border-black bg-white p-6 md:p-8 shadow-brutal">
         <h2 className="text-2xl font-black border-b-2 border-black pb-2 mb-6 uppercase font-mono">
           Elevação & Sombras (Neo-Brutalismo)
         </h2>
@@ -151,22 +155,77 @@ export const Spacing: StoryObj = {
           {ELEVATIONS.map((shadow) => (
             <div 
               key={shadow.name} 
-              className="border-2 border-black p-6 flex flex-col justify-between bg-stone-50 shadow-[2px_2px_0px_#000000]"
+              className="border-2 border-black p-6 flex flex-col justify-between bg-stone-50 shadow-brutal-sm"
             >
               <div>
                 <div className={`w-full h-24 bg-white border-2 border-black flex items-center justify-center font-mono font-extrabold text-xs uppercase ${shadow.className} mb-6 transition-all duration-150`}>
                   Elevado
                 </div>
                 <h3 className="font-extrabold text-base mb-1">{shadow.name}</h3>
-                <code className="text-[10px] text-rose-600 font-bold bg-stone-100 px-1.5 py-0.5 border border-stone-200 rounded block mb-3 max-w-max">
-                  {shadow.variable}
-                </code>
+                <div className="flex flex-col gap-1 mb-3">
+                  <code className="text-[10px] text-stone-500 font-bold bg-stone-100 px-1.5 py-0.5 border border-stone-200 rounded block max-w-max">
+                    var({shadow.variable})
+                  </code>
+                  <code className="text-[10px] text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 border border-rose-200 rounded block max-w-max">
+                    {shadow.utility}
+                  </code>
+                </div>
               </div>
               <p className="text-stone-600 text-xs leading-relaxed border-t border-stone-200 pt-3">
                 {shadow.description}
               </p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* DO'S & DON'TS DE ESPAÇAMENTO E BORDAS */}
+      <section className="space-y-4 pt-6 border-t-2 border-dashed border-stone-200">
+        <h2 className="text-2xl font-black font-mono text-black uppercase tracking-wider">
+          Do's & Don'ts (Espaçamento & Bordas)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* DO */}
+          <div className="border-2 border-black rounded-lg p-6 bg-emerald-50 shadow-brutal-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="bg-emerald-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
+                DO (SIM)
+              </span>
+              <h3 className="text-lg font-black text-emerald-950">Alinhamento Modular</h3>
+            </div>
+            <ul className="space-y-3 text-emerald-900 text-sm list-disc pl-5">
+              <li>
+                <strong>Uso da Escala de 4px/8px:</strong> Utilize exclusivamente classes utilitárias de espaçamento baseadas na escala (<code>p-1</code>, <code>p-2</code>, <code>p-4</code>, <code>p-6</code>, <code>p-8</code>).
+              </li>
+              <li>
+                <strong>Borda Brutal Uniforme:</strong> Use a classe de borda brutalista nativa ou a variável <code>border-[length:var(--border-brutal)]</code> (1.5px) para manter a uniformidade de delineamento.
+              </li>
+              <li>
+                <strong>Sombras Rígidas Físicas:</strong> Aplique <code>shadow-brutal</code> (Modo Clínico) ou <code>shadow-brutal-sm</code> (Modo Família) para refletir o nível correto de elevação mecânica.
+              </li>
+            </ul>
+          </div>
+
+          {/* DON'T */}
+          <div className="border-2 border-black rounded-lg p-6 bg-rose-50 shadow-brutal-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="bg-rose-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
+                DON'T (NÃO)
+              </span>
+              <h3 className="text-lg font-black text-rose-950">Desvios de Grade</h3>
+            </div>
+            <ul className="space-y-3 text-rose-900 text-sm list-disc pl-5">
+              <li>
+                <strong>Valores Ad-Hoc/Arbitrários:</strong> Não use valores em pixel arbitrários nas classes de margin ou padding (ex: <code>p-[13px]</code>, <code>mt-[21px]</code>).
+              </li>
+              <li>
+                <strong>Soft Shadows (Desfoque):</strong> Evite utilizar sombras clássicas do Tailwind (como <code>shadow-md</code> ou <code>shadow-lg</code>), pois elas quebram a consistência física e estética do design system.
+              </li>
+              <li>
+                <strong>Bordas Arbitrárias:</strong> Evite definir larguras de borda cruas fora da escala (ex: <code>border-4</code> ou <code>border-[3px]</code>) em componentes de conteúdo comuns.
+              </li>
+            </ul>
+          </div>
         </div>
       </section>
     </div>

@@ -122,6 +122,19 @@ test("Input desabilitado — sem violações axe", async () => {
   await semViolacoes(<Input aria-label="E-mail" disabled />);
 });
 
+test("Input — aplica className no container raiz", () => {
+  const { container } = render(<Input className="mt-4 w-1/2" leftAddon="R$" />);
+  const root = container.firstElementChild;
+  expect(root?.classList.contains("mt-4")).toBe(true);
+  expect(root?.classList.contains("w-1/2")).toBe(true);
+});
+
+test("Button — desabilitado nativamente no estado isLoading", () => {
+  const { getByRole } = render(<Button isLoading>Salvar</Button>);
+  const button = getByRole("button");
+  expect(button.hasAttribute("disabled")).toBe(true);
+});
+
 test("Field sem erro — sem violações axe", async () => {
   await semViolacoes(
     <Field label="E-mail" htmlFor="email">

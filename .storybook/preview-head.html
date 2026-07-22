@@ -1,0 +1,29 @@
+<script>
+  // Workaround para o bug do Storybook 10.5.3 (TypeError: Illegal invocation no getter do focus)
+  // Storybook Issue: https://github.com/storybookjs/storybook/issues/35503
+  // Protege o prototype.focus contra leituras fora de instâncias reais de HTMLElement.
+  (function() {
+    const originalDefineProperty = Object.defineProperty;
+    Object.defineProperty = function(obj, prop, descriptor) {
+      if (
+        obj === HTMLElement.prototype &&
+        prop === 'focus' &&
+        descriptor &&
+        typeof descriptor.get === 'function'
+      ) {
+        const originalGet = descriptor.get;
+        descriptor.get = function() {
+          if (this === HTMLElement.prototype) {
+            return function() {};
+          }
+          try {
+            return originalGet.call(this);
+          } catch (e) {
+            return function() {};
+          }
+        };
+      }
+      return originalDefineProperty.apply(this, arguments);
+    };
+  })();
+</script>
