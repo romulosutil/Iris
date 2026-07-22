@@ -28,7 +28,7 @@ export interface HeaderProps extends React.HTMLAttributes<HTMLElement> {
   itemsNav: NavItem[];
   usuarioNome?: string;
   onSignOut?: () => void;
-  renderLink?: (item: NavItem, children: React.ReactNode) => React.ReactNode;
+  renderLink?: (item: NavItem, children: React.ReactNode, className: string) => React.ReactNode;
 }
 
 function MenuIcon() {
@@ -55,23 +55,30 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
 ) {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
-  const defaultRenderLink = (item: NavItem, children: React.ReactNode) => (
-    <a
-      key={item.href}
-      href={item.href}
-      aria-current={item.active ? "page" : undefined}
-      className={cn(
-        "inline-block font-display underline-offset-4 transition-transform duration-100 ease-out hover:-translate-y-0.5 font-semibold text-sm",
-        item.active
-          ? "text-[var(--text-primary)] underline font-bold"
-          : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline",
-      )}
-    >
-      {children}
-    </a>
-  );
+  const getItemClassName = (item: NavItem) =>
+    cn(
+      "font-display text-sm font-semibold px-3 py-1.5 rounded-[var(--radius-xs)] transition-all duration-100 ease-out inline-flex items-center gap-1.5",
+      item.active
+        ? "bg-[var(--surface-elevated)] text-[var(--text-primary)] font-bold shadow-sm border border-[var(--border-brutal)]/40"
+        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]/60",
+    );
 
-  const linkRenderer = renderLink ?? defaultRenderLink;
+  const linkRenderer = (item: NavItem, children: React.ReactNode) => {
+    const itemClass = getItemClassName(item);
+    if (renderLink) {
+      return renderLink(item, children, itemClass);
+    }
+    return (
+      <a
+        key={item.href}
+        href={item.href}
+        aria-current={item.active ? "page" : undefined}
+        className={itemClass}
+      >
+        {children}
+      </a>
+    );
+  };
 
   return (
     <Split
@@ -187,13 +194,15 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
       </Cluster>
 
       {/* Navegação Desktop (≥ 640px) */}
-      <Cluster como="nav" gap="md" aria-label="Navegação principal" className="hidden sm:flex items-center">
+      <Cluster como="nav" gap="sm" aria-label="Navegação principal" className="hidden sm:flex items-center flex-wrap">
         {itemsNav.map((item) => {
           const labelWithBadge = (
             <>
-              {item.label}{" "}
+              {item.label}
               {item.badge !== undefined && item.badge > 0 ? (
-                <span className="font-mono text-xs font-bold font-normal">({item.badge})</span>
+                <span className="font-mono text-xs px-1.5 py-0.2 rounded-full border border-[var(--border-brutal)]/40 bg-[var(--surface-card)] text-[var(--text-primary)] font-bold">
+                  {item.badge}
+                </span>
               ) : null}
             </>
           );
@@ -201,7 +210,7 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
         })}
 
         {onSignOut ? (
-          <Button variante="neutra" tamanho="sm" onClick={onSignOut}>
+          <Button variante="neutra" tamanho="sm" onClick={onSignOut} className="ml-2">
             Sair
           </Button>
         ) : null}

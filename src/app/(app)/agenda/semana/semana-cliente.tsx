@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -146,48 +147,61 @@ export function SemanaCliente({
   }
 
   return (
-    <section className="space-y-4 p-4">
-      <header className="flex flex-wrap items-center gap-3">
-        {prefill ? (
-          <p className="text-[var(--text-primary)] font-body text-sm">
-            Repondo sessão de <strong>{prefill.patientNome}</strong> (
-            {prefill.disciplina.toUpperCase()}) — escolha o novo horário.
-          </p>
-        ) : (
-          <Tabs
-            value={eixo}
-            onValueChange={(v) => {
-              const novoEixo = v as typeof eixo;
-              setEixo(novoEixo);
-              setEntidade(novoEixo === "terapeuta" ? (terapeutas[0] ?? null) : null);
-            }}
-          >
-            <TabsList>
-              <TabsTrigger value="terapeuta">Por terapeuta</TabsTrigger>
-              <TabsTrigger value="paciente">Por paciente</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
-        <div className="min-w-64">
-          <ComboboxEntidade
-            label={eixo === "terapeuta" ? "Terapeuta" : "Paciente"}
-            opcoes={opcoesEntidade}
-            valor={entidade?.id ?? null}
-            aoSelecionar={(id) =>
-              setEntidade(opcoesEntidade.find((o) => o.id === id) ?? null)
-            }
-            aoBuscar={eixo === "paciente" ? buscarPacientes : undefined}
-          />
+    <section className="space-y-6">
+      <PageHeader
+        title="Agenda Semanal"
+        description="Alocação de grade de horários, reposição de sessões e conciliação de agendas da equipe."
+      />
+
+      <div className="bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] p-4 rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end gap-4">
+          {prefill ? (
+            <p className="text-[var(--text-primary)] font-body text-sm self-center">
+              Repondo sessão de <strong>{prefill.patientNome}</strong> (
+              {prefill.disciplina.toUpperCase()}) — escolha o novo horário.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <span className="font-display text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                Visualização
+              </span>
+              <Tabs
+                value={eixo}
+                onValueChange={(v) => {
+                  const novoEixo = v as typeof eixo;
+                  setEixo(novoEixo);
+                  setEntidade(novoEixo === "terapeuta" ? (terapeutas[0] ?? null) : null);
+                }}
+              >
+                <TabsList>
+                  <TabsTrigger value="terapeuta">Por terapeuta</TabsTrigger>
+                  <TabsTrigger value="paciente">Por paciente</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
+          <div className="w-64">
+            <ComboboxEntidade
+              label={eixo === "terapeuta" ? "Terapeuta" : "Paciente"}
+              opcoes={opcoesEntidade}
+              valor={entidade?.id ?? null}
+              aoSelecionar={(id) =>
+                setEntidade(opcoesEntidade.find((o) => o.id === id) ?? null)
+              }
+              aoBuscar={eixo === "paciente" ? buscarPacientes : undefined}
+            />
+          </div>
         </div>
-        <div className="ml-auto flex gap-2">
-          <Button variante="secundaria" onClick={() => setSemanaISO(recuarSemana(semanaISO))}>
-            ← Semana
+
+        <div className="flex items-center gap-2">
+          <Button variante="secundaria" tamanho="sm" onClick={() => setSemanaISO(recuarSemana(semanaISO))}>
+            ← Semana anterior
           </Button>
-          <Button variante="secundaria" onClick={() => setSemanaISO(avancarSemana(semanaISO))}>
-            Semana →
+          <Button variante="secundaria" tamanho="sm" onClick={() => setSemanaISO(avancarSemana(semanaISO))}>
+            Próxima semana →
           </Button>
         </div>
-      </header>
+      </div>
 
       {passada && (
         <p role="status" className="text-[var(--text-primary)] font-body text-sm">
