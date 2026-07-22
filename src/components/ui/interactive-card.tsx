@@ -1,6 +1,9 @@
+"use client";
+
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import { surface } from "@/components/ui/primitives/surface";
+
 
 export type EpistemicState = "fact" | "suggestion" | "conquistado" | "candidato";
 

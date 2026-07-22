@@ -24,6 +24,24 @@
 
 ---
 
+## 🏁 Sessão 22/07/2026 — Refatoração de UI/UX, Clusterização de Menus & Central de Validação — ✅ CONCLUÍDA
+
+Com base em entrevistas de profundidade e testes de usabilidade com Terapeutas, Coordenadores e time de Recepção, foi realizada a refatoração da arquitetura de informação e navegação do Iris:
+
+* **Clusterização do Menu Principal (`AppHeader` & `layout.tsx`):**
+  * Substituto do menu linear extenso (8 links) por navegação contextual por papel (`ctx.role`).
+  * **Coordenador:** `Central de Validação` | `Agenda` | `Pacientes` | `Equipe` | `Dúvidas`.
+  * **Terapeuta:** `Agenda do Dia` | `Pacientes & PEIs` | `Pendências` | `Dúvidas`.
+  * **Recepção/Geral:** `Agenda` | `Pacientes` | `Pendências`.
+* **Central de Validação Unificada (`GovernancaNav`):**
+  * Criado o componente de sub-navegação em abas [`GovernancaNav`](file:///c:/Users/sutil/Documents/dev/PESSOAL/apps/iris/src/components/ui/governanca-nav.tsx).
+  * Unificou as telas de `/validacao`, `/excecoes`, `/supervisao` e `/pendencias` em um único workspace fluído para o Coordenador.
+* **Validação:**
+  * `tsc --noEmit` 0 erros.
+  * Suíte de testes unitários/a11y 100% verde (422/422 testes passando).
+
+---
+
 ## 🏁 Sessão 22/07/2026 — Fase 5 Fatia 5 (Convênio Narrativo, Task 10) — ✅ CONCLUÍDA
 
 Relatório **Narrativo de Convênio** (`report.tipo = 'convenio_narrativo'`):
@@ -91,7 +109,10 @@ warnings pré-existentes. `pnpm typecheck` **limpo**. Unitários focados
   dívida de rename em `docs/agente/agente-2-relatorio-familia.md` ou doc
   irmão do agente-3, a confirmar caminho exato e corrigir.
 
+---
+
 ## 🏁 Sessão 20/07/2026 — Fase 5 Fatia 3 (Dossiê `convenio_bruto` + PDF real via Chromium, Tasks 1-9) — ✅ CONCLUÍDA
+
 
 Dossiê **factual** `convenio_bruto` (sem narrativo de IA — só contagens
 derivadas de dado estruturado): tipos + `build-html` (escapa todo texto

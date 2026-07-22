@@ -13,24 +13,31 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const clinicas = await listarClinicasDoUsuario(ctx.userId);
   const { total: totalPendencias } = await listarPendencias(ctx);
 
-  const itemsNav: NavItem[] = [
-    { href: "/agenda", label: "Agenda" },
-    { href: "/pendencias", label: "Pendências", badge: totalPendencias },
-  ];
-
-  if (ctx.role === "coordenador" || ctx.role === "terapeuta") {
-    itemsNav.push({ href: "/duvidas", label: "Dúvidas" });
-  }
+  let itemsNav: NavItem[] = [];
 
   if (ctx.role === "coordenador") {
-    itemsNav.push(
-      { href: "/excecoes", label: "Exceções" },
-      { href: "/validacao", label: "Validação" },
-      { href: "/supervisao", label: "Supervisão" },
+    itemsNav = [
+      { href: "/validacao", label: "Central de Validação", badge: totalPendencias },
+      { href: "/agenda", label: "Agenda" },
+      { href: "/pacientes", label: "Pacientes" },
       { href: "/equipe", label: "Equipe" },
-      { href: "/clinica/feriados", label: "Feriados" },
-    );
+      { href: "/duvidas", label: "Dúvidas" },
+    ];
+  } else if (ctx.role === "terapeuta") {
+    itemsNav = [
+      { href: "/agenda", label: "Agenda do Dia" },
+      { href: "/pacientes", label: "Pacientes & PEIs" },
+      { href: "/pendencias", label: "Pendências", badge: totalPendencias },
+      { href: "/duvidas", label: "Dúvidas" },
+    ];
+  } else {
+    itemsNav = [
+      { href: "/agenda", label: "Agenda" },
+      { href: "/pacientes", label: "Pacientes" },
+      { href: "/pendencias", label: "Pendências", badge: totalPendencias },
+    ];
   }
+
 
   return (
     <div className="flex min-h-dvh flex-col bg-[var(--bg-app)]">

@@ -6,8 +6,11 @@ import { withTenant } from "@/db/rls";
 import { patient } from "@/db/schema";
 import { carregarTimeline } from "./timeline/queries";
 import { TimelineClient } from "./timeline/timeline-client";
-import { Stack } from "@/components/ui/layout";
+import { Stack, Cluster } from "@/components/ui/layout";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
+
 
 interface PacientePageProps {
   params: Promise<{ id: string }>;
@@ -40,43 +43,54 @@ export default async function PacientePage({ params }: PacientePageProps) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <Stack gap="lg">
-        {/* Cabeçalho do Paciente */}
-        <div className="border-[var(--border-brutal)] flex flex-col gap-4 border-b-2 pb-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <span className="text-[var(--text-secondary)] text-xs font-bold tracking-wider uppercase">
-              Perfil do Paciente
-            </span>
-            <h1 className="text-[var(--text-primary)] text-3xl font-black">{paciente.nome}</h1>
-          </div>
+        {/* PageHeader Padronizado */}
+        <PageHeader
+          title={paciente.nome}
+          description="Prontuário e linha do tempo de evolução clínica"
+          actions={
+            <Cluster gap="sm">
+              <Link href={`/pacientes/${paciente.id}/cadastro-clinico`}>
+                <Button variante="neutra" tamanho="sm">
+                  Ficha Clínica
+                </Button>
+              </Link>
+              <Link href={`/pacientes/${paciente.id}/metas`}>
+                <Button variante="secundaria" tamanho="sm">
+                  PEI & Metas
+                </Button>
+              </Link>
+            </Cluster>
+          }
+        />
 
-          {/* Navegação entre abas */}
-          <div className="border-[var(--border-brutal)] -mb-4 flex border-b-2">
-            <Link
-              href={`/pacientes/${paciente.id}`}
-              className="font-display border-[var(--border-brutal)] bg-[var(--color-gold)] text-[var(--text-primary)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 px-6 py-2 text-base font-black"
-            >
-              Evolução
-            </Link>
-            <Link
-              href={`/pacientes/${paciente.id}/briefing`}
-              className="font-display text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
-            >
-              Briefing
-            </Link>
-            <Link
-              href={`/pacientes/${paciente.id}/ausencias`}
-              className="font-display text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
-            >
-              Ausências
-            </Link>
-            <Link
-              href={`/pacientes/${paciente.id}/horas`}
-              className="font-display text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
-            >
-              Horas
-            </Link>
-          </div>
+        {/* Navegação entre abas */}
+        <div className="border-[var(--border-brutal)] -mt-4 mb-2 flex border-b-2 overflow-x-auto scrollbar-none">
+          <Link
+            href={`/pacientes/${paciente.id}`}
+            className="font-display border-[var(--border-brutal)] bg-[var(--action-primary)] text-[var(--action-primary-fg)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 px-6 py-2 text-base font-bold shadow-xs"
+          >
+            Evolução
+          </Link>
+          <Link
+            href={`/pacientes/${paciente.id}/briefing`}
+            className="font-display text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
+          >
+            Briefing
+          </Link>
+          <Link
+            href={`/pacientes/${paciente.id}/ausencias`}
+            className="font-display text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
+          >
+            Ausências
+          </Link>
+          <Link
+            href={`/pacientes/${paciente.id}/horas`}
+            className="font-display text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
+          >
+            Horas
+          </Link>
         </div>
+
 
         {/* Estado Vazio ou Timeline */}
         {!temSnapshots ? (

@@ -32,10 +32,21 @@ export function AppHeader({
     .filter((c) => c.clinicId !== ativaId)
     .map((c) => ({ id: c.clinicId, nome: c.nome }));
 
-  const navItemsComEstado: HeaderNavItem[] = itemsNav.map((item) => ({
-    ...item,
-    active: pathname === item.href,
-  }));
+  const navItemsComEstado: HeaderNavItem[] = itemsNav.map((item) => {
+    const isExact = pathname === item.href;
+    const isGovernanca =
+      item.href === "/validacao" &&
+      (pathname.startsWith("/validacao") ||
+        pathname.startsWith("/excecoes") ||
+        pathname.startsWith("/supervisao"));
+    const isSubPath = item.href !== "/" && pathname.startsWith(item.href);
+
+    return {
+      ...item,
+      active: isExact || isGovernanca || isSubPath,
+    };
+  });
+
 
   const handleTrocarClinica = async (clinicId: string) => {
     const { definirClinicaAtiva } = await import("@/auth/actions");
