@@ -41,6 +41,57 @@ describe("validarDraftContraDossie", () => {
     const draft = buildDraft("Paciente realizou 8 sessões no período, com 1 falta justificada.");
     expect(validarDraftContraDossie(draft, dossie)).toEqual({ ok: true });
   });
+
+  it("rejeita número que só aparece como fragmento de data (vazamento de data)", () => {
+    const dossie: PayloadConvenioBruto = {
+      ...buildDossie(),
+      sessoes: [
+        {
+          numeroSequencial: 1,
+          data: "2026-12-05",
+          disciplina: "Fonoaudiologia",
+          modalidade: "individual",
+          estado: "realizada",
+          justificada: null,
+          terapeuta: "T",
+        },
+      ],
+      presenca: { sessoesRealizadas: 8, faltasJustificadas: 1, faltasNaoJustificadas: 0 },
+    };
+    const draft = buildDraft("Foram realizadas 12 sessões no período.");
+    expect(validarDraftContraDossie(draft, dossie)).toEqual({ ok: false, numeroOrfao: "12" });
+  });
+
+  it("aceita draft citando apenas contagens reais (total e por domínio)", () => {
+    const dossie: PayloadConvenioBruto = {
+      ...buildDossie(),
+      sessoes: [
+        {
+          numeroSequencial: 1,
+          data: "2026-12-05",
+          disciplina: "Fonoaudiologia",
+          modalidade: "individual",
+          estado: "realizada",
+          justificada: null,
+          terapeuta: "T",
+        },
+      ],
+      evidencias: [
+        { data: "2026-01-05", metaOuDominio: "Comunicação", classificacao: "independente", autor: "A" },
+        { data: "2026-01-12", metaOuDominio: "Comunicação", classificacao: "dica_verbal", autor: "A" },
+      ],
+      presenca: { sessoesRealizadas: 8, faltasJustificadas: 1, faltasNaoJustificadas: 0 },
+    };
+    const draft: ConvenioNarrativoDraft = {
+      ...buildDraft(
+        "Paciente realizou 8 sessões no período, com 1 falta justificada e 0 não justificadas.",
+      ),
+      evolucaoPorDominio: [
+        { dominio: "Comunicação", narrativa: "Foram registradas 2 evidências no domínio Comunicação." },
+      ],
+    };
+    expect(validarDraftContraDossie(draft, dossie)).toEqual({ ok: true });
+  });
 });
 
 describe("resolveConvenioNarrativoProvider", () => {

@@ -4,6 +4,7 @@
 // "use server"), mesmo padrão de src/app/(app)/validacao/queries.ts.
 import "server-only";
 import { asc, eq } from "drizzle-orm";
+import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
 import { buildConvenioBrutoPayload } from "@/lib/report/convenio-bruto/build-payload";
@@ -49,7 +50,10 @@ export async function previewConvenioBruto(ctx: TenantContext, args: PreviewArgs
  * Preview de leitura do rascunho de convênio narrativo (Task 9 — tela de
  * curadoria do coordenador). Lê o `payload` já persistido por
  * `gerarRascunhoConvenioNarrativo` — não gera nada novo. RLS via
- * `withTenant` escopa o `report` à clínica do coordenador.
+ * `withTenant` escopa o `report` à clínica, mas isto sozinho permitiria a
+ * qualquer terapeuta da equipe ler o rascunho de curadoria do coordenador;
+ * `requireRole` restringe a leitura ao mesmo papel que já guarda as ações de
+ * escrita em `actions.ts` (gerar/curar/exportar).
  */
 export async function previewConvenioNarrativo(
   ctx: TenantContext,
@@ -65,6 +69,7 @@ export async function previewConvenioNarrativo(
     }
   | { error: string }
 > {
+  requireRole(ctx, "coordenador");
   return withTenant(ctx, async (tx) => {
     const rows = await tx
       .select({

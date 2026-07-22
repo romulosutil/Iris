@@ -17,14 +17,48 @@ const CAMPOS_LIVRES = (d: ConvenioNarrativoDraft): string[] => [
   d.justificativaContinuidade,
   d.notaHonestidade ?? "",
   ...d.evolucaoPorDominio.map((e) => e.narrativa),
+  ...d.evolucaoPorDominio.map((e) => e.dominio),
   ...d.objetivosProximoPeriodo,
 ];
 
+/**
+ * Contagens estruturadas do dossiê que legitimamente podem aparecer como
+ * números numa narrativa: presença, total de sessões/evidências e a
+ * contagem de evidências por domínio (as mesmas tally que o stub emite).
+ * Propositalmente NÃO inclui datas, anos, ou qualquer outro dígito da
+ * serialização bruta do dossiê — um "12" vindo de "2026-12-05" não pode
+ * validar uma alegação de "12 sessões".
+ */
+function contagensPermitidas(dossie: PayloadConvenioBruto): Set<string> {
+  const porDominio = new Map<string, number>();
+  for (const e of dossie.evidencias) {
+    porDominio.set(e.metaOuDominio, (porDominio.get(e.metaOuDominio) ?? 0) + 1);
+  }
+  return new Set(
+    [
+      dossie.presenca.sessoesRealizadas,
+      dossie.presenca.faltasJustificadas,
+      dossie.presenca.faltasNaoJustificadas,
+      dossie.evidencias.length,
+      dossie.sessoes.length,
+      ...porDominio.values(),
+    ].map(String),
+  );
+}
+
+/**
+ * LIMITAÇÃO RESIDUAL: este guard é um backstop de token numérico — ele NÃO
+ * captura números por extenso ("oito sessões") nem decimais partidos em
+ * dois tokens. Isto é aceitável só porque, no fluxo real, o prompt do
+ * ClaudeProvider já instrui "números só do dossiê"; este guard endurece a
+ * costura para quando o provider real for ligado (ainda não está — o
+ * skeleton do ClaudeProvider lança erro), não é a única linha de defesa.
+ */
 export function validarDraftContraDossie(
   draft: ConvenioNarrativoDraft,
   dossie: PayloadConvenioBruto,
 ): { ok: true } | { ok: false; numeroOrfao: string } {
-  const permitidos = new Set(JSON.stringify(dossie).match(/\d+/g) ?? []);
+  const permitidos = contagensPermitidas(dossie);
   for (const campo of CAMPOS_LIVRES(draft)) {
     for (const num of campo.match(/\d+/g) ?? []) {
       if (!permitidos.has(num)) return { ok: false, numeroOrfao: num };
