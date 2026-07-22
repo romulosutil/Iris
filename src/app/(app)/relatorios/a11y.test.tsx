@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import axe from "axe-core";
 import { RelatoriosExport } from "./relatorios-export";
+import { FamiliaReport } from "./familia-report";
 
 vi.mock("./actions", () => ({
   previewConvenioBrutoAction: vi.fn(async () => ({
@@ -11,6 +12,9 @@ vi.mock("./actions", () => ({
     evidenciasAprovadas: 0,
   })),
   exportarConvenioBrutoAction: vi.fn(async () => ({ reportId: "r1", hash: "h1" })),
+  gerarRascunhoFamiliaAction: vi.fn(async () => ({ error: "stub" })),
+  curarFamiliaAction: vi.fn(async () => ({ ok: true })),
+  exportarFamiliaAction: vi.fn(async () => ({ reportId: "r1", hash: "h1" })),
 }));
 
 afterEach(cleanup);
@@ -40,4 +44,12 @@ test("RelatoriosExport — sem violações axe (sem pacientes)", async () => {
 
 test("RelatoriosExport — sem violações axe (com pacientes)", async () => {
   await semViolacoes(<RelatoriosExport pacientes={PACIENTES} />);
+});
+
+test("FamiliaReport — sem violações axe (coordenador)", async () => {
+  await semViolacoes(<FamiliaReport pacientes={PACIENTES} podeCurar />);
+});
+
+test("FamiliaReport — sem violações axe (terapeuta, sem curar)", async () => {
+  await semViolacoes(<FamiliaReport pacientes={PACIENTES} podeCurar={false} />);
 });

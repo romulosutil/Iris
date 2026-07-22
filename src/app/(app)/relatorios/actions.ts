@@ -3,6 +3,14 @@ import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { exportarConvenioBruto, exportarSchema, type ExportarInput } from "./export-logic";
 import { previewConvenioBruto } from "./queries";
+import {
+  gerarRascunhoFamilia,
+  curarFamilia,
+  exportarFamilia,
+  type GerarFamiliaInput,
+  type CurarFamiliaInput,
+  type ExportarFamiliaInput,
+} from "./familia-logic";
 
 /** Wrapper de request — deriva o tenant do servidor. */
 export async function exportarConvenioBrutoAction(input: ExportarInput) {
@@ -28,4 +36,26 @@ export async function previewConvenioBrutoAction(
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   const ctx = await getTenantContext();
   return previewConvenioBruto(ctx, parsed.data);
+}
+
+// ─── Relatório de Família (Fatia 4) — wrappers derivam ctx do servidor ───────
+export async function gerarRascunhoFamiliaAction(input: GerarFamiliaInput) {
+  const ctx = await getTenantContext();
+  const res = await gerarRascunhoFamilia(ctx, input);
+  revalidatePath("/relatorios");
+  return res;
+}
+
+export async function curarFamiliaAction(input: CurarFamiliaInput) {
+  const ctx = await getTenantContext();
+  const res = await curarFamilia(ctx, input);
+  revalidatePath("/relatorios");
+  return res;
+}
+
+export async function exportarFamiliaAction(input: ExportarFamiliaInput) {
+  const ctx = await getTenantContext();
+  const res = await exportarFamilia(ctx, input);
+  revalidatePath("/relatorios");
+  return res;
 }
