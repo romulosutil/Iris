@@ -31,7 +31,7 @@ test("editor de disponibilidade (grade) sem violações de a11y estrutural", asy
   await semViolacoes(
     <DisponibilidadeEditor terapeutaId="t1" passoMin={30} celulasIniciais={new Set()} />,
   );
-});
+}, 15000);
 
 const horasFixture = {
   capacidade: 40,

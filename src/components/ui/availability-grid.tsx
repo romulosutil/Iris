@@ -4,7 +4,10 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 
+import { chaveCelula, colunasDaGrade, copiarDia } from "@/lib/agenda/grade";
+
 const DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const DIAS_ORDEM = [1, 2, 3, 4, 5, 6, 0]; // Segunda (1) a Domingo (0) para alinhar com a Agenda
 const DIAS_UTEIS = [2, 3, 4, 5]; // segunda (1) é a origem; destinos: terça–sexta
 
 export type AvailabilityGridProps = {
@@ -17,46 +20,6 @@ export type AvailabilityGridProps = {
   onSalvar?: () => void;
   salvando?: boolean;
 };
-
-function horaParaMin(h: string): number {
-  const [hh, mm] = h.split(":").map(Number);
-  return (hh ?? 0) * 60 + (mm ?? 0);
-}
-
-function minParaHora(m: number): string {
-  const hh = Math.floor(m / 60)
-    .toString()
-    .padStart(2, "0");
-  const mm = (m % 60).toString().padStart(2, "0");
-  return `${hh}:${mm}`;
-}
-
-function colunasDaGrade(passoMin: number, abertura: string, fechamento: string): string[] {
-  const inicio = horaParaMin(abertura);
-  const fim = horaParaMin(fechamento);
-  const cols: string[] = [];
-  for (let m = inicio; m < fim; m += passoMin) {
-    cols.push(minParaHora(m));
-  }
-  return cols;
-}
-
-function chaveCelula(dia: number, col: string): string {
-  return `${dia}:${col}`;
-}
-
-function copiarDia(celulas: Set<string>, diaOrigem: number, diasDestino: number[], cols: string[]): Set<string> {
-  const next = new Set(celulas);
-  for (const col of cols) {
-    const ativaNaOrigem = celulas.has(chaveCelula(diaOrigem, col));
-    for (const dDest of diasDestino) {
-      const chaveDest = chaveCelula(dDest, col);
-      if (ativaNaOrigem) next.add(chaveDest);
-      else next.delete(chaveDest);
-    }
-  }
-  return next;
-}
 
 export function AvailabilityGrid({
   passoMin = 30,
@@ -78,7 +41,7 @@ export function AvailabilityGrid({
   );
 
   const celulasAtivas = celulasProps ?? interno;
-  const [foco, setFoco] = React.useState<{ dia: number; col: number }>({ dia: 1, col: 2 });
+  const [foco, setFoco] = React.useState<{ dia: number; col: number }>({ dia: 1, col: 0 });
   const pintandoRef = React.useRef<null | boolean>(null);
   const refs = React.useRef(new Map<string, HTMLButtonElement | null>());
 
@@ -111,8 +74,9 @@ export function AvailabilityGrid({
     definir(dia, col, !celulasAtivas.has(chaveCelula(dia, col)));
   }
 
-  function focarCelula(dia: number, colIdx: number): { d: number; c: number } {
-    const d = Math.max(0, Math.min(DIAS.length - 1, dia));
+  function focarCelula(diaIdx: number, colIdx: number): { d: number; c: number } {
+    const dIdx = Math.max(0, Math.min(DIAS_ORDEM.length - 1, diaIdx));
+    const d = DIAS_ORDEM[dIdx]!;
     const c = Math.max(0, Math.min(cols.length - 1, colIdx));
     setFoco({ dia: d, col: c });
     refs.current.get(chaveCelula(d, cols[c]!))?.focus();
@@ -126,11 +90,12 @@ export function AvailabilityGrid({
       alternar(dia, col);
       return;
     }
+    const diaOrdemIdx = DIAS_ORDEM.indexOf(dia);
     const destinos: Record<string, [number, number]> = {
-      ArrowUp: [dia - 1, colIdx],
-      ArrowDown: [dia + 1, colIdx],
-      ArrowLeft: [dia, colIdx - 1],
-      ArrowRight: [dia, colIdx + 1],
+      ArrowUp: [diaOrdemIdx - 1, colIdx],
+      ArrowDown: [diaOrdemIdx + 1, colIdx],
+      ArrowLeft: [diaOrdemIdx, colIdx - 1],
+      ArrowRight: [diaOrdemIdx, colIdx + 1],
     };
     const alvo = destinos[e.key];
     if (!alvo) return;
@@ -189,7 +154,7 @@ export function AvailabilityGrid({
         className="w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)] p-3"
       >
         {/* Cabeçalho de Horários */}
-        <div role="row" className="flex items-center border-b-2 border-[var(--border-brutal)] pb-2 mb-2">
+        <div role="row" className="flex items-center border-b border-[var(--border-brutal)]/30 pb-1 mb-1">
           <div role="columnheader" className="w-24 shrink-0 font-display text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] px-2">
             Dia / Hora
           </div>
@@ -198,7 +163,7 @@ export function AvailabilityGrid({
               <div
                 key={c}
                 role="columnheader"
-                className="w-12 shrink-0 text-center font-mono text-xs font-semibold text-[var(--text-secondary)]"
+                className="w-12 shrink-0 text-center font-mono text-xs font-semibold text-[var(--text-secondary)] border-l border-[var(--border-brutal)]/20 py-0.5"
               >
                 {c}
               </div>
@@ -207,56 +172,59 @@ export function AvailabilityGrid({
         </div>
 
         {/* Linhas de Dias da Semana */}
-        <div className="flex flex-col gap-1.5">
-          {DIAS.map((nome, dia) => (
-            <div role="row" key={dia} className="flex items-center">
-              <div
-                role="rowheader"
-                className="w-24 shrink-0 font-display text-sm font-bold text-[var(--text-primary)] px-2"
-              >
-                {nome}
+        <div className="flex flex-col">
+          {DIAS_ORDEM.map((dia) => {
+            const nome = DIAS[dia]!;
+            return (
+              <div role="row" key={dia} className="flex items-stretch border-t border-[var(--border-brutal)]/20 first:border-t-0">
+                <div
+                  role="rowheader"
+                  className="w-24 shrink-0 font-display text-sm font-bold text-[var(--text-primary)] flex items-center px-2"
+                >
+                  {nome}
+                </div>
+                <div className="flex items-stretch">
+                  {cols.map((col, colIdx) => {
+                    const selecionada = celulasAtivas.has(chaveCelula(dia, col));
+                    const ehFoco = foco.dia === dia && foco.col === colIdx;
+                    return (
+                      <button
+                        type="button"
+                        key={col}
+                        role="gridcell"
+                        ref={(el) => {
+                          refs.current.set(chaveCelula(dia, col), el);
+                        }}
+                        tabIndex={ehFoco ? 0 : -1}
+                        aria-selected={selecionada}
+                        aria-label={`${nome} ${col}: ${selecionada ? "disponível" : "indisponível"}`}
+                        onFocus={() => setFoco({ dia, col: colIdx })}
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          const novo = !selecionada;
+                          pintandoRef.current = novo;
+                          definir(dia, col, novo);
+                        }}
+                        onPointerEnter={() => {
+                          if (pintandoRef.current !== null) definir(dia, col, pintandoRef.current);
+                        }}
+                        onKeyDown={(e) => aoTeclar(e, dia, colIdx)}
+                        className={cn(
+                          "w-12 h-10 shrink-0 border-l border-[var(--border-brutal)]/20 transition-colors duration-75 flex items-center justify-center font-mono text-xs font-bold",
+                          "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)] z-10",
+                          selecionada
+                            ? "bg-[var(--color-gold)] text-[var(--text-primary)] font-black"
+                            : "bg-[var(--surface-card)] hover:bg-[var(--color-gold)]/20 text-transparent",
+                        )}
+                      >
+                        {selecionada ? "✓" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex items-center">
-                {cols.map((col, colIdx) => {
-                  const selecionada = celulasAtivas.has(chaveCelula(dia, col));
-                  const ehFoco = foco.dia === dia && foco.col === colIdx;
-                  return (
-                    <button
-                      type="button"
-                      key={col}
-                      role="gridcell"
-                      ref={(el) => {
-                        refs.current.set(chaveCelula(dia, col), el);
-                      }}
-                      tabIndex={ehFoco ? 0 : -1}
-                      aria-selected={selecionada}
-                      aria-label={`${nome} ${col}: ${selecionada ? "disponível" : "indisponível"}`}
-                      onFocus={() => setFoco({ dia, col: colIdx })}
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        const novo = !selecionada;
-                        pintandoRef.current = novo;
-                        definir(dia, col, novo);
-                      }}
-                      onPointerEnter={() => {
-                        if (pintandoRef.current !== null) definir(dia, col, pintandoRef.current);
-                      }}
-                      onKeyDown={(e) => aoTeclar(e, dia, colIdx)}
-                      className={cn(
-                        "w-12 h-10 shrink-0 m-0.5 border-2 transition-colors duration-75 flex items-center justify-center font-mono text-xs font-bold rounded-[var(--radius-xs)]",
-                        "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
-                        selecionada
-                          ? "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)] shadow-[var(--elevation-1)]"
-                          : "bg-[var(--surface-elevated)] border-[var(--border-brutal)]/20 text-transparent hover:border-[var(--border-brutal)] hover:text-[var(--text-secondary)]",
-                      )}
-                    >
-                      {selecionada ? "✓" : "·"}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

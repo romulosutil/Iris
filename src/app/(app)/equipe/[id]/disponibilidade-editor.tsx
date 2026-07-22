@@ -17,14 +17,26 @@ export function DisponibilidadeEditor({
     if (faixasRef.current) faixasRef.current.value = JSON.stringify(celulasParaFaixas(celulas, passoMin));
   }
 
+  const formRef = useRef<HTMLFormElement>(null);
+
+  function handleSalvar() {
+    if (formRef.current) {
+      formRef.current.requestSubmit();
+    }
+  }
+
   return (
-    <form action={formAction} onSubmit={aoSubmeter} className="flex flex-col gap-4">
+    <form ref={formRef} action={formAction} onSubmit={aoSubmeter} className="flex flex-col gap-4">
       <input type="hidden" name="terapeutaId" value={terapeutaId} />
       <input type="hidden" name="faixas" ref={faixasRef} defaultValue="[]" />
       {state.error ? <Alert severidade="erro" titulo="Não foi possível salvar">{state.error}</Alert> : null}
       {state.ok ? <Alert severidade="sucesso" titulo="Disponibilidade salva">Janelas atualizadas.</Alert> : null}
       <GradeDisponibilidade passoMin={passoMin} celulasIniciais={celulasIniciais} onChange={setCelulas} />
-      <Button type="submit">Salvar disponibilidade</Button>
+      <div className="flex justify-end">
+        <Button type="submit" variante="primaria">
+          Salvar disponibilidade
+        </Button>
+      </div>
     </form>
   );
 }
