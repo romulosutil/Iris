@@ -6,9 +6,10 @@ import { cn } from "@/lib/cn";
  * consistente sem margens avulsas. Impõe ritmo no cadastro clínico denso —
  * "hierarquia acima de uniformidade" nasce de uma escala, não de one-offs.
  */
-type Gap = "sm" | "md" | "lg";
+type Gap = "xs" | "sm" | "md" | "lg";
 
 const gapClasse: Record<Gap, string> = {
+  xs: "gap-1.5", // 6px
   sm: "gap-2", // 8px
   md: "gap-4", // 16px
   lg: "gap-6", // 24px

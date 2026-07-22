@@ -48,11 +48,13 @@ export function AppHeader({
       outrasClinicas={outrasClinicas}
       onTrocarClinica={handleTrocarClinica}
       itemsNav={navItemsComEstado}
-      renderLink={(item, children) => (
+      signOutSlot={signOutSlot}
+      renderLink={(item, children, className) => (
         <Link
+          key={item.href}
           href={item.href}
           aria-current={item.active ? "page" : undefined}
-          className="contents"
+          className={className}
         >
           {children}
         </Link>

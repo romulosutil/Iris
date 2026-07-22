@@ -5,6 +5,13 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import { convidarUsuarioAction, type ConvidarState } from "./actions";
 
 export function ConvidarForm() {
@@ -35,15 +42,15 @@ export function ConvidarForm() {
         <Input id="email" name="email" type="email" required />
       </Field>
       <Field label="Papel" htmlFor="papel">
-        <select
-          id="papel"
-          name="papel"
-          required
-          className="border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] rounded-[var(--radius-control)] border-2 px-3 py-2"
-        >
-          <option value="terapeuta">Terapeuta</option>
-          <option value="admin_recepcao">Recepção/Administrativo</option>
-        </select>
+        <Select name="papel" defaultValue="terapeuta">
+          <SelectTrigger id="papel">
+            <SelectValue placeholder="Selecione o papel" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="terapeuta">Terapeuta</SelectItem>
+            <SelectItem value="admin_recepcao">Recepção/Administrativo</SelectItem>
+          </SelectContent>
+        </Select>
       </Field>
       <Button type="submit">Convidar</Button>
     </Form>

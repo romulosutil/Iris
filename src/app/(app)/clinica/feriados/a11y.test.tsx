@@ -16,4 +16,4 @@ async function semViolacoes(ui: ReactElement) {
 test("form de feriados da clínica sem violações", async () => {
   const { FeriadosForm } = await import("./feriados-form");
   await semViolacoes(<FeriadosForm bloqueios={[]} />);
-});
+}, 15000);

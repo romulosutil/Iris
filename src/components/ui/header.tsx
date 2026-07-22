@@ -28,6 +28,7 @@ export interface HeaderProps extends React.HTMLAttributes<HTMLElement> {
   itemsNav: NavItem[];
   usuarioNome?: string;
   onSignOut?: () => void;
+  signOutSlot?: React.ReactNode;
   renderLink?: (item: NavItem, children: React.ReactNode, className: string) => React.ReactNode;
 }
 
@@ -48,6 +49,7 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
     itemsNav = [],
     usuarioNome,
     onSignOut,
+    signOutSlot,
     renderLink,
     ...props
   },
@@ -57,10 +59,10 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
 
   const getItemClassName = (item: NavItem) =>
     cn(
-      "font-display text-sm font-semibold px-3 py-1.5 rounded-[var(--radius-xs)] transition-all duration-100 ease-out inline-flex items-center gap-1.5",
+      "font-display text-sm px-3.5 py-1.5 rounded-[var(--radius-control)] transition-all duration-100 ease-out inline-flex items-center gap-2 border-2",
       item.active
-        ? "bg-[var(--surface-elevated)] text-[var(--text-primary)] font-bold shadow-sm border border-[var(--border-brutal)]/40"
-        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]/60",
+        ? "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold border-[var(--border-brutal)] shadow-[var(--ds-shadow)]"
+        : "border-transparent text-[var(--text-primary)] font-semibold hover:border-[var(--border-brutal)]/40 hover:bg-[var(--surface-elevated)]",
     );
 
   const linkRenderer = (item: NavItem, children: React.ReactNode) => {
@@ -85,20 +87,20 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
       ref={ref}
       como="header"
       className={cn(
-        "border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)] border-b-2 px-4 sm:px-6 py-3.5",
+        "border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)] border-b-2 px-4 sm:px-6 py-3",
         className,
       )}
       {...props}
     >
       {/* Marca + Clínica */}
       <Cluster gap="sm" className="items-center justify-between w-full sm:w-auto">
-        <a href="/" aria-label="Iris — início" className="shrink-0">
+        <a href="/" aria-label="Iris — início" className="shrink-0 focus-visible:outline-focus">
           <Logo variante="completo" altura={28} />
         </a>
 
         {/* Clínica ativa (Desktop) */}
         <div className="hidden sm:flex items-center gap-2">
-          <span className="font-display text-[var(--text-primary)] font-semibold text-sm">
+          <span className="font-display text-[var(--text-primary)] font-bold text-sm">
             {clinicaAtivaNome}
           </span>
           {outrasClinicas.map((c) => (
@@ -156,7 +158,7 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
                       <span className="flex items-center justify-between w-full">
                         <span>{item.label}</span>
                         {item.badge !== undefined && item.badge > 0 ? (
-                          <span className="font-mono text-xs px-2 py-0.5 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] font-bold">
+                          <span className="font-mono text-xs px-2 py-0.5 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)] font-bold">
                             {item.badge}
                           </span>
                         ) : null}
@@ -167,14 +169,12 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
                       <div
                         key={item.href}
                         onClick={() => setDrawerOpen(false)}
-                        className={cn(
-                          "flex items-center justify-between p-3 rounded-[var(--radius-control)] font-display text-base font-semibold border-2 transition-colors",
-                          item.active
-                            ? "border-[var(--border-brutal)] bg-[var(--action-primary)] text-[var(--action-primary-fg)] shadow-[var(--ds-shadow)]"
-                            : "border-transparent text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]",
-                        )}
+                        className="w-full"
                       >
-                        {linkRenderer(item, content)}
+                        {linkRenderer(
+                          item,
+                          content
+                        )}
                       </div>
                     );
                   })}
@@ -182,7 +182,7 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
               </div>
 
               <DrawerFooter>
-                {onSignOut ? (
+                {signOutSlot ? signOutSlot : onSignOut ? (
                   <Button variante="terciaria" tamanho="sm" onClick={onSignOut}>
                     Sair da conta
                   </Button>
@@ -194,13 +194,13 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
       </Cluster>
 
       {/* Navegação Desktop (≥ 640px) */}
-      <Cluster como="nav" gap="sm" aria-label="Navegação principal" className="hidden sm:flex items-center flex-wrap">
+      <Cluster como="nav" gap="xs" aria-label="Navegação principal" className="hidden sm:flex items-center flex-wrap">
         {itemsNav.map((item) => {
           const labelWithBadge = (
             <>
-              {item.label}
+              <span>{item.label}</span>
               {item.badge !== undefined && item.badge > 0 ? (
-                <span className="font-mono text-xs px-1.5 py-0.2 rounded-full border border-[var(--border-brutal)]/40 bg-[var(--surface-card)] text-[var(--text-primary)] font-bold">
+                <span className="font-mono text-xs px-2 py-0.5 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)] font-bold">
                   {item.badge}
                 </span>
               ) : null}
@@ -209,7 +209,9 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
           return linkRenderer(item, labelWithBadge);
         })}
 
-        {onSignOut ? (
+        {signOutSlot ? (
+          <div className="ml-2">{signOutSlot}</div>
+        ) : onSignOut ? (
           <Button variante="neutra" tamanho="sm" onClick={onSignOut} className="ml-2">
             Sair
           </Button>

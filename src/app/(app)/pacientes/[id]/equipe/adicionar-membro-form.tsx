@@ -4,6 +4,13 @@ import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import { adicionarMembroEquipeAction } from "./actions";
 
 export function AdicionarMembroForm({ patientId }: { patientId: string }) {
@@ -20,18 +27,18 @@ export function AdicionarMembroForm({ patientId }: { patientId: string }) {
         <Input id="disciplina" name="disciplina" required />
       </Field>
       <Field label="Papel na equipe" htmlFor="papelNaEquipe">
-        <select
-          id="papelNaEquipe"
-          name="papelNaEquipe"
-          required
-          className="border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] rounded-[var(--radius-control)] border-2 px-3 py-2"
-        >
-          <option value="terapeuta_referencia">Terapeuta de referência</option>
-          <option value="coordenador_referencia">
-            Coordenador de referência
-          </option>
-          <option value="substituto">Substituto</option>
-        </select>
+        <Select name="papelNaEquipe" defaultValue="terapeuta_referencia">
+          <SelectTrigger id="papelNaEquipe">
+            <SelectValue placeholder="Selecione o papel" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="terapeuta_referencia">Terapeuta de referência</SelectItem>
+            <SelectItem value="coordenador_referencia">
+              Coordenador de referência
+            </SelectItem>
+            <SelectItem value="substituto">Substituto</SelectItem>
+          </SelectContent>
+        </Select>
       </Field>
       <Field label="Responsável técnico (opcional)" htmlFor="responsavelTecnicoId">
         <Input id="responsavelTecnicoId" name="responsavelTecnicoId" />

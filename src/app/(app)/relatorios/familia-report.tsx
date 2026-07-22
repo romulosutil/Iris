@@ -24,12 +24,6 @@ import type { FamilyReportDraft } from "@/lib/report/familia/types";
 
 type Paciente = { id: string; nome: string };
 
-// Textarea nativo estilizado — o design system ainda não tem um Textarea
-// (dívida registrada no BACKLOG). Classes espelham a superfície de campo do DS.
-const textareaClass =
-  "w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-2 text-[var(--text-primary)] text-base " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-color)]";
-
 function linhasParaArray(v: string): string[] {
   return v
     .split("\n")
@@ -206,9 +200,9 @@ export function FamiliaReport({
             </p>
 
             <Field label="A conquista deste período" htmlFor="familia-conquista">
-              <textarea
+              <Input
                 id="familia-conquista"
-                className={textareaClass}
+                multiline
                 rows={3}
                 maxLength={600}
                 value={conquista}
@@ -221,9 +215,9 @@ export function FamiliaReport({
               label="O que estamos trabalhando agora (uma por linha, até 4)"
               htmlFor="familia-trabalhando"
             >
-              <textarea
+              <Input
                 id="familia-trabalhando"
-                className={textareaClass}
+                multiline
                 rows={4}
                 maxLength={400}
                 value={trabalhando}
@@ -236,9 +230,9 @@ export function FamiliaReport({
               label="Como apoiar em casa (uma por linha, até 3)"
               htmlFor="familia-apoiar"
             >
-              <textarea
+              <Input
                 id="familia-apoiar"
-                className={textareaClass}
+                multiline
                 rows={3}
                 maxLength={300}
                 value={apoiar}
@@ -256,9 +250,9 @@ export function FamiliaReport({
 
             {semAvanco ? (
               <Field label="Nota de honestidade" htmlFor="familia-nota">
-                <textarea
+                <Input
                   id="familia-nota"
-                  className={textareaClass}
+                  multiline
                   rows={4}
                   maxLength={600}
                   value={nota}
