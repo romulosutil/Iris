@@ -130,9 +130,9 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         ref={ref}
         role={severidade === "erro" || severidade === "error" ? "alert" : "status"}
         className={cn(
-          "flex items-start gap-4 p-4 rounded-md border-2 border-[var(--border-brutal)]",
+          "flex items-start gap-4 p-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]",
           "border-l-[4px]",
-          destacado && "shadow-[var(--shadow-brutal)] p-8 md:p-12 text-lg font-medium",
+          destacado && "shadow-[var(--ds-shadow)] p-8 md:p-12 text-lg font-medium",
           fundo,
           bordaEsquerda,
           bordaOutras,

@@ -88,7 +88,7 @@ export function GradeDisponibilidade({
         <button
           type="button"
           onClick={() => aplicar(copiarDia(celulas, 1, DIAS_UTEIS, cols))}
-          className={`font-display border-ink-anchor border-2 bg-surface px-3 py-2 text-sm font-bold ${FOCO}`}
+          className={`font-display border-[var(--border-brutal)] border-2 bg-[var(--surface-card)] text-[var(--text-primary)] px-3 py-2 text-sm font-bold rounded-[var(--radius-xs)] ${FOCO}`}
         >
           Copiar segunda para os dias úteis
         </button>
@@ -97,14 +97,14 @@ export function GradeDisponibilidade({
         <div role="row" className="flex">
           <div role="columnheader" className="w-24 shrink-0" />
           {cols.map((c) => (
-            <div key={c} role="columnheader" className="font-body text-ink w-12 shrink-0 text-center text-xs">
+            <div key={c} role="columnheader" className="font-body text-[var(--text-secondary)] w-12 shrink-0 text-center text-xs">
               {c}
             </div>
           ))}
         </div>
         {DIAS.map((nome, dia) => (
           <div role="row" key={dia} className="flex items-stretch">
-            <div role="rowheader" className="font-display text-ink-anchor flex w-24 shrink-0 items-center text-sm font-bold">
+            <div role="rowheader" className="font-display text-[var(--text-primary)] flex w-24 shrink-0 items-center text-sm font-bold">
               {nome}
             </div>
             {cols.map((col, colIdx) => {
@@ -133,7 +133,7 @@ export function GradeDisponibilidade({
                   }}
                   onKeyDown={(e) => aoTeclar(e, dia, colIdx)}
                   className={`m-px h-9 w-12 shrink-0 border ${FOCO} ${
-                    selecionada ? "bg-gold border-ink-anchor" : "bg-canvas border-ink/40"
+                    selecionada ? "bg-[var(--color-gold)] border-[var(--border-brutal)]" : "bg-[var(--bg-app)] border-[var(--border-brutal)]/40"
                   }`}
                 />
               );

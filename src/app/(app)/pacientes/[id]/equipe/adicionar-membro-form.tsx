@@ -24,7 +24,7 @@ export function AdicionarMembroForm({ patientId }: { patientId: string }) {
           id="papelNaEquipe"
           name="papelNaEquipe"
           required
-          className="border-ink-anchor rounded-md border-2 px-3 py-2"
+          className="border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] rounded-[var(--radius-control)] border-2 px-3 py-2"
         >
           <option value="terapeuta_referencia">Terapeuta de referência</option>
           <option value="coordenador_referencia">

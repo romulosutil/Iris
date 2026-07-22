@@ -18,17 +18,24 @@ type ScaleItem = {
 const FAMILY_GROUPS = [
   {
     name: "Display Font (Títulos & Destaques)",
-    fontFamily: "Space Grotesk / Archivo Black",
+    fontFamily: "Space Grotesk",
     variable: "var(--font-display)",
     className: "font-display",
     description: "Fonte geométrica pesada de alta legibilidade para títulos e chamadas rápidas. Proibida em corpo de texto corrido ou abaixo de 20px.",
   },
   {
     name: "Body Font (Corpo de Texto & Controles)",
-    fontFamily: "Plus Jakarta Sans / Inter",
+    fontFamily: "Plus Jakarta Sans",
     variable: "var(--font-body)",
     className: "font-body",
     description: "Fonte sans-serif limpa e moderna com letter-spacing levemente aumentado para máxima clareza em leituras apressadas ou em trânsito.",
+  },
+  {
+    name: "Mono Font (Código & Rótulos de Dados)",
+    fontFamily: "Space Mono",
+    variable: "var(--font-mono)",
+    className: "font-mono",
+    description: "Fonte monoespaçada para exibição de dados estruturados, códigos de tokens, timestamps e metadados.",
   },
 ];
 

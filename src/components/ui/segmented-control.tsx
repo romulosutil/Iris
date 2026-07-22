@@ -44,8 +44,8 @@ export const SegmentedControl = React.forwardRef<
       ref={ref}
       role="group"
       className={cn(
-        "inline-flex gap-1 rounded-[7px] border-[1.5px] border-[color:var(--ink-anchor)] p-[3px]",
-        "bg-[#F7F6F1] shadow-[2px_2px_0_0_var(--ink-anchor)]",
+        "inline-flex max-w-full overflow-x-auto gap-1 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] p-1",
+        "bg-[var(--surface-card)] shadow-[var(--ds-shadow)]",
         className,
       )}
       {...props}
@@ -59,10 +59,11 @@ export const SegmentedControl = React.forwardRef<
             aria-pressed={isAtivo}
             onClick={() => selecionar(opcao.value)}
             className={cn(
-              "cursor-pointer px-4 py-[7px] text-sm font-medium transition-all duration-150",
+              "cursor-pointer min-h-9 px-4 py-1.5 text-sm font-medium transition-all duration-150 rounded-[var(--radius-xs)]",
+              "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
               isAtivo
-                ? "rounded-[var(--radius-sm)] bg-[color:var(--brand-primary)] text-[color:var(--ink-anchor)] shadow-[1px_1px_0_0_var(--ink-anchor)]"
-                : "bg-transparent text-[color:var(--color-graphite)]",
+                ? "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold"
+                : "bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
             )}
           >
             {opcao.label}

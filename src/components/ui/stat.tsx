@@ -20,18 +20,21 @@ export const Stat = React.forwardRef<HTMLElement, StatProps>(function Stat(
   return (
     <dl
       ref={ref as React.Ref<HTMLDListElement>}
-      className={cn("border-ink-anchor bg-surface border-2 p-4", className)}
+      className={cn(
+        "border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] p-4",
+        className,
+      )}
       {...props}
     >
-      <dt className="font-display text-graphite text-xs font-semibold tracking-wide uppercase">
+      <dt className="font-display text-[var(--text-secondary)] text-xs font-semibold tracking-wide uppercase">
         {rotulo}
       </dt>
       <dd className="mt-1">
-        <span className="font-display text-ink-anchor text-2xl font-semibold">
+        <span className="font-display text-[var(--text-primary)] text-2xl font-semibold">
           {valor}
         </span>
         {descricao ? (
-          <span className="text-graphite mt-0.5 block text-sm">{descricao}</span>
+          <span className="text-[var(--text-secondary)] mt-0.5 block text-sm">{descricao}</span>
         ) : null}
       </dd>
     </dl>

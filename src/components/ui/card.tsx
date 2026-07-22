@@ -27,10 +27,10 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
 
   const cardClasses = isFact
     ? cn(
-        "bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] rounded-md text-[var(--text-primary)] shadow-[var(--shadow-brutal)]",
+        "bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]",
         (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[var(--status-success-border)]"
       )
-    : "bg-[var(--ai-tint)] border-2 border-dashed border-[var(--ai-accent)] text-[var(--text-primary)] rounded-md";
+    : "bg-[var(--status-ia-bg)] border-2 border-dashed border-[var(--status-ia-border)] text-[var(--text-primary)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]";
 
   return (
     <Component
@@ -48,7 +48,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
       {destacado ? (
         <span
           aria-hidden
-          className="bg-[var(--action-primary)] absolute inset-x-0 top-0 h-2 rounded-t-md"
+          className="bg-[var(--action-primary)] absolute inset-x-0 top-0 h-2 rounded-t-[var(--radius-control)]"
         />
       ) : null}
       <div className="flex items-center justify-between gap-3">
@@ -59,10 +59,10 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
         ) : null}
         <span
           className={cn(
-            "shrink-0 border-2 px-2 py-0.5 font-mono text-xs font-semibold tracking-wide uppercase rounded-sm",
+            "shrink-0 border-2 px-2 py-0.5 font-mono text-xs font-semibold tracking-wide uppercase rounded-[var(--radius-xs)]",
             isFact
               ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
-              : "border-[var(--ai-accent)] bg-[var(--ai-tint)] text-[var(--ai-deep)]",
+              : "border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-[var(--status-ia-fg)]",
           )}
         >
           {isFact ? "Conquistado" : "Sugerido"}

@@ -29,18 +29,18 @@ export function HorasTerapeutaBloco({ horas }: { horas: HorasTerapeuta }) {
     >
       <h2
         id="horas-terapeuta-titulo"
-        className="font-display text-ink-anchor text-xl font-bold"
+        className="font-display text-[var(--text-primary)] text-xl font-bold"
       >
         Carga horária semanal
       </h2>
 
-      <dl className="border-ink-anchor bg-surface flex flex-wrap gap-x-8 gap-y-4 border-2 p-4">
+      <dl className="border-[var(--border-brutal)] bg-[var(--surface-card)] flex flex-wrap gap-x-8 gap-y-4 border-2 p-4 rounded-[var(--radius-control)]">
         {cifras.map(({ rotulo, chave }) => (
           <div key={chave}>
-            <dt className="font-display text-graphite text-xs font-semibold tracking-wide uppercase">
+            <dt className="font-display text-[var(--text-secondary)] text-xs font-semibold tracking-wide uppercase">
               {rotulo}
             </dt>
-            <dd className="font-display text-ink-anchor mt-1 text-2xl font-semibold">
+            <dd className="font-display text-[var(--text-primary)] mt-1 text-2xl font-semibold">
               {formatarHoras(horas[chave])}
             </dd>
           </div>
@@ -48,18 +48,18 @@ export function HorasTerapeutaBloco({ horas }: { horas: HorasTerapeuta }) {
       </dl>
 
       <div className="flex flex-col gap-2">
-        <h3 className="font-display text-ink-anchor text-base font-semibold">
+        <h3 className="font-display text-[var(--text-primary)] text-base font-semibold">
           Pacientes fixos
         </h3>
         {horas.pacientes.length === 0 ? (
-          <p className="font-body text-graphite text-sm">Nenhum paciente fixo</p>
+          <p className="font-body text-[var(--text-secondary)] text-sm">Nenhum paciente fixo</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {horas.pacientes.map((p) => (
               <li key={p.id}>
                 <Link
                   href={`/pacientes/${p.id}/horas`}
-                  className="font-body text-ink underline underline-offset-2"
+                  className="font-body text-[var(--text-primary)] underline underline-offset-2"
                 >
                   {p.nome}
                 </Link>

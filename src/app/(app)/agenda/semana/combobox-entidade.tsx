@@ -148,8 +148,8 @@ export function ComboboxEntidade({
                   role="option"
                   aria-selected={ehAtivo}
                   className={cn(
-                    "font-body text-ink min-h-11 cursor-pointer px-4 py-2.5 text-base",
-                    ehAtivo && "bg-gold text-ink-anchor",
+                    "font-body text-[var(--text-primary)] min-h-11 cursor-pointer px-4 py-2.5 text-base",
+                    ehAtivo && "bg-[var(--color-gold)] text-[var(--text-primary)]",
                   )}
                   onMouseDown={(e) => {
                     e.preventDefault();

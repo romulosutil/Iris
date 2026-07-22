@@ -117,7 +117,7 @@ export function CalendarioSemana({
           <div role="row" key={diaISO} className="relative flex items-stretch">
             <div
               role="rowheader"
-              className="font-display text-ink-anchor flex shrink-0 items-center text-sm font-bold"
+              className="font-display text-[var(--text-primary)] flex shrink-0 items-center text-sm font-bold"
               style={{ width: `${LARGURA_ROTULO_REM}rem` }}
             >
               {DIAS_LABEL[diaSemana]}
@@ -153,9 +153,9 @@ export function CalendarioSemana({
                     "border-border-brutal/20 h-10 w-12 shrink-0 border-l",
                     FOCO,
                     bloqueado
-                      ? "bg-status-error-bg/30 cursor-not-allowed"
-                      : "bg-surface cursor-pointer",
-                    foraJanela && !bloqueado && "bg-gold/10",
+                      ? "bg-[var(--color-terracotta)]/10 cursor-not-allowed"
+                      : "bg-[var(--surface-card)] cursor-pointer",
+                    foraJanela && !bloqueado && "bg-[var(--color-gold)]/10",
                   )}
                 />
               );

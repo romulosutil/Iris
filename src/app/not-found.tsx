@@ -12,20 +12,20 @@ export default function NotFound() {
     <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col items-start justify-center gap-8 px-6 py-16">
       <Logo variante="completo" altura={36} />
       <div className="flex flex-col gap-3">
-        <p className="font-display text-graphite text-sm font-semibold tracking-wide uppercase">
+        <p className="font-mono text-[var(--text-secondary)] text-xs font-semibold tracking-wide uppercase">
           Erro 404
         </p>
-        <h1 className="font-display text-ink-anchor text-4xl font-bold text-balance md:text-5xl">
+        <h1 className="font-display text-[var(--text-primary)] text-4xl font-bold text-balance md:text-5xl">
           Página não encontrada.
         </h1>
-        <p className="text-ink max-w-[60ch] text-lg">
+        <p className="text-[var(--text-primary)] max-w-[60ch] text-lg">
           O endereço mudou ou nunca existiu. Nada quebrou do seu lado — é só um
           link que não leva a lugar nenhum.
         </p>
       </div>
       <Link
         href="/agenda"
-        className="font-display text-ink-anchor border-ink-anchor bg-surface border-2 px-5 py-2.5 text-base font-semibold underline-offset-4 shadow-[var(--ds-shadow)] hover:underline"
+        className="font-display text-[var(--action-secondary-fg)] border-[var(--border-brutal)] bg-[var(--action-secondary-bg)] border-2 rounded-[var(--radius-control)] px-5 py-2.5 text-base font-semibold underline-offset-4 shadow-[var(--ds-shadow)] hover:underline"
       >
         Voltar para a agenda
       </Link>

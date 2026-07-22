@@ -74,13 +74,62 @@ export const Split = React.forwardRef<HTMLElement, SplitProps>(function Split(
     <Como
       ref={ref}
       className={cn(
-        // items-start no empilhado evita que filhos (ex.: um selo inline)
-        // estiquem full-width; no modo linha, centraliza se pedido.
         "flex flex-col items-start justify-between min-[40rem]:flex-row",
         alinha === "center" && "min-[40rem]:items-center",
         gapClasse[gap],
         className,
       )}
+      {...props}
+    />
+  );
+});
+
+export interface GridProps extends React.HTMLAttributes<HTMLElement>, ComoProp {
+  gap?: Gap;
+  colunas?: 1 | 2 | 3 | 4;
+}
+
+const colunasClasses = {
+  1: "grid-cols-1",
+  2: "grid-cols-1 sm:grid-cols-2",
+  3: "grid-cols-1 sm:grid-cols-2 md:grid-cols-3",
+  4: "grid-cols-1 sm:grid-cols-2 md:grid-cols-4",
+};
+
+/** Grid de colunas responsivas (1 col no mobile, N colunas no desktop). */
+export const Grid = React.forwardRef<HTMLElement, GridProps>(function Grid(
+  { className, gap = "md", colunas = 2, como: Como = "div", ...props },
+  ref,
+) {
+  return (
+    <Como
+      ref={ref}
+      className={cn("grid", colunasClasses[colunas], gapClasse[gap], className)}
+      {...props}
+    />
+  );
+});
+
+export interface ContainerProps extends React.HTMLAttributes<HTMLElement>, ComoProp {
+  largura?: "sm" | "md" | "lg" | "full";
+}
+
+const larguraClasses = {
+  sm: "max-w-3xl",
+  md: "max-w-5xl",
+  lg: "max-w-7xl",
+  full: "max-w-full",
+};
+
+/** Container de página com padding responsivo e largura máxima controlada. */
+export const Container = React.forwardRef<HTMLElement, ContainerProps>(function Container(
+  { className, largura = "md", como: Como = "div", ...props },
+  ref,
+) {
+  return (
+    <Como
+      ref={ref}
+      className={cn("mx-auto w-full px-4 sm:px-6 md:px-8", larguraClasses[largura], className)}
       {...props}
     />
   );

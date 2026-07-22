@@ -31,7 +31,7 @@ const rotuloPolaridade: Record<string, string> = {
  */
 export function ClassificacaoAtual({ classificacao }: { classificacao: unknown }) {
   if (!classificacao || typeof classificacao !== "object") {
-    return <span className="text-graphite text-sm">Classificação não disponível.</span>;
+    return <span className="text-[var(--text-secondary)] text-sm">Classificação não disponível.</span>;
   }
 
   const c = classificacao as Record<string, unknown>;
@@ -42,26 +42,26 @@ export function ClassificacaoAtual({ classificacao }: { classificacao: unknown }
 
   return (
     <Stack gap="sm">
-      <p className="text-graphite text-sm">
-        Alvo: <span className="text-ink font-medium">{alvo ? rotuloAlvo(alvo) : "—"}</span>
+      <p className="text-[var(--text-secondary)] text-sm">
+        Alvo: <span className="text-[var(--text-primary)] font-medium">{alvo ? rotuloAlvo(alvo) : "—"}</span>
       </p>
       {nivelAjuda ? (
-        <p className="text-graphite text-sm">
+        <p className="text-[var(--text-secondary)] text-sm">
           Nível de ajuda:{" "}
-          <span className="text-ink font-medium">
+          <span className="text-[var(--text-primary)] font-medium">
             {rotuloNivelAjuda[nivelAjuda] ?? nivelAjuda}
           </span>
         </p>
       ) : null}
       {polaridade ? (
-        <p className="text-graphite text-sm">
+        <p className="text-[var(--text-secondary)] text-sm">
           Polaridade:{" "}
-          <span className="text-ink font-medium">{rotuloPolaridade[polaridade] ?? polaridade}</span>
+          <span className="text-[var(--text-primary)] font-medium">{rotuloPolaridade[polaridade] ?? polaridade}</span>
         </p>
       ) : null}
       {funcao ? (
-        <p className="text-graphite text-sm">
-          Função: <span className="text-ink font-medium">{funcao}</span>
+        <p className="text-[var(--text-secondary)] text-sm">
+          Função: <span className="text-[var(--text-primary)] font-medium">{funcao}</span>
         </p>
       ) : null}
     </Stack>

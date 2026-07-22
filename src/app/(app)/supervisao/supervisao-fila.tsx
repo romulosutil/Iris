@@ -95,24 +95,26 @@ function ItemCard({
     <Stack
       gap="md"
       como="li"
-      className={cn("bg-bg-surface p-5", surface("solida"))}
+      className={cn(
+        "bg-[var(--surface-card)] p-5 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
+      )}
       id={`item-card-${item.chaveNatural}`}
     >
       <Stack gap="sm">
-        <span className="text-graphite text-sm font-semibold tracking-wide uppercase">
+        <span className="text-[var(--text-secondary)] font-mono text-xs font-semibold tracking-wide uppercase">
           Item {indice} de {total}
         </span>
-        <h3 className="text-ink text-lg font-semibold">
+        <h3 className="text-[var(--text-primary)] text-lg font-semibold font-display">
           <Link href={`/pacientes/${item.patientId}`} className="hover:underline">
             {item.patientNome}
           </Link>
         </h3>
-        <p className="text-ink text-base">{formatDetalhe()}</p>
+        <p className="text-[var(--text-primary)] text-base">{formatDetalhe()}</p>
 
         <ChipGroup rotulo="Status e Tipo do Alerta">
           <Chip>{rotuloTipo[item.tipo]}</Chip>
           {item.sinalPresente === false ? (
-            <Chip className="border-red-600 bg-bg-surface text-red-600">sinal cessou</Chip>
+            <Chip className="border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]">sinal cessou</Chip>
           ) : null}
           {item.estado === "reconhecido" ? (
             <Chip>Reconhecido</Chip>

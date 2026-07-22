@@ -78,8 +78,8 @@ export function NovaMetaForm({
         </fieldset>
       ) : null}
 
-      <fieldset className="border-ink-anchor flex flex-col gap-3 border-2 p-4">
-        <legend className="text-ink font-display px-1 text-sm font-semibold">
+      <fieldset className="border-[var(--border-brutal)] flex flex-col gap-3 border-2 p-4 rounded-[var(--radius-control)]">
+        <legend className="text-[var(--text-primary)] font-display px-1 text-sm font-semibold">
           Critério de domínio
         </legend>
         <div className="flex flex-wrap gap-4">

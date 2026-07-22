@@ -12,10 +12,10 @@ export function BloqueiosTerapeuta({ terapeutaId, bloqueios }: { terapeutaId: st
   const [state, formAction] = useActionState<BloqueioState, FormData>(criarBloqueioAction, {});
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="font-display text-ink-anchor text-xl font-black">Bloqueios (férias, afastamento)</h2>
+      <h2 className="font-display text-[var(--text-primary)] text-xl font-black">Bloqueios (férias, afastamento)</h2>
       <ul className="flex flex-col gap-1">
         {bloqueios.map((b) => (
-          <li key={b.id} className="font-body text-ink">
+          <li key={b.id} className="font-body text-[var(--text-primary)]">
             {b.dataInicio} — {b.dataFim}: {b.motivo}
           </li>
         ))}

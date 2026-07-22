@@ -17,7 +17,7 @@ const acaoClasses = cn(
   control("sm"),
   surface("solida"),
   "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
-  "bg-brand-primary text-ink-anchor font-display text-base font-semibold",
+  "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-display text-base font-semibold",
   "transition-[transform,box-shadow,background-color] duration-100 ease-out",
   "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
   "active:translate-x-0 active:translate-y-0 active:shadow-none",
@@ -28,7 +28,7 @@ function ItemCaptura({ item }: { item: CapturaAConsolidar }) {
   return (
     <Card estado="conquistado" destacado={true} titulo="Captura rápida sem nota consolidada">
       <Split alinha="center">
-        <span className="text-ink text-base">
+        <span className="text-[var(--text-primary)] text-base">
           {item.pacienteNome ?? "Paciente (acesso restrito)"}
         </span>
         <Link href={`/diario/${item.sessionId}`} className={acaoClasses}>
@@ -54,9 +54,9 @@ function ItemExtracao({
   return (
     <Card estado={estado} titulo={titulo}>
       <Split alinha="center">
-        <span className="text-ink text-base">
+        <span className="text-[var(--text-primary)] text-base">
           {item.pacienteNome ?? "Paciente (acesso restrito)"} ·{" "}
-          <span className="text-graphite">{item.subtipo}</span>
+          <span className="text-[var(--text-secondary)]">{item.subtipo}</span>
         </span>
         <Link href={`/${destino}/${item.sessionId}`} className={acaoClasses}>
           Revisar →
@@ -93,7 +93,7 @@ export function PendenciasList({
         <Stack gap="md" como="section" aria-labelledby="capturas-titulo">
           <h2
             id="capturas-titulo"
-            className="font-display text-ink-anchor text-2xl font-bold"
+            className="font-display text-[var(--text-primary)] text-2xl font-bold"
           >
             Capturas a consolidar
           </h2>
@@ -120,11 +120,11 @@ export function PendenciasList({
           gap="md"
           como="section"
           aria-labelledby="extracao-titulo"
-          className="pt-6 border-t-2 border-dashed border-graphite"
+          className="pt-6 border-t-2 border-dashed border-[var(--text-secondary)]"
         >
           <h2
             id="extracao-titulo"
-            className="font-display text-ink-anchor text-2xl font-bold"
+            className="font-display text-[var(--text-primary)] text-2xl font-bold"
           >
             Extração pendente de reprocessamento
           </h2>
@@ -151,11 +151,11 @@ export function PendenciasList({
           gap="md"
           como="section"
           aria-labelledby="sugestoes-titulo"
-          className="pt-6 border-t-2 border-dashed border-graphite"
+          className="pt-6 border-t-2 border-dashed border-[var(--text-secondary)]"
         >
           <h2
             id="sugestoes-titulo"
-            className="font-display text-ink-anchor text-2xl font-bold"
+            className="font-display text-[var(--text-primary)] text-2xl font-bold"
           >
             Sugestões da IA (candidatas)
           </h2>

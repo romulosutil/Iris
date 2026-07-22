@@ -22,7 +22,7 @@ export default async function AusenciasPage({ params }: Props) {
   const bloqueios = await listarBloqueios(ctx, { escopo: "paciente", patientId: id });
   return (
     <main className="flex flex-col gap-6">
-      <h1 className="font-display text-ink-anchor text-2xl font-black">Ausências — {pac.nome}</h1>
+      <h1 className="font-display text-[var(--text-primary)] text-2xl font-black">Ausências — {pac.nome}</h1>
       <AusenciasForm patientId={id} bloqueios={bloqueios} />
     </main>
   );

@@ -11,15 +11,15 @@ export interface BannerProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const estiloBanner: Record<BannerVariant, { container: string; bar: string }> = {
   info: {
-    container: "bg-[var(--status-info-bg)] text-[var(--status-info-fg)] border-2 border-[var(--border-brutal)] rounded-md shadow-[var(--shadow-brutal)]",
+    container: "bg-[var(--status-info-bg)] text-[var(--status-info-fg)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
     bar: "bg-[var(--status-info-border)]",
   },
   alerta: {
-    container: "bg-[var(--status-error-bg)] text-[var(--status-error-fg)] border-2 border-[var(--border-brutal)] rounded-md shadow-[var(--shadow-brutal)]",
+    container: "bg-[var(--status-error-bg)] text-[var(--status-error-fg)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
     bar: "bg-[var(--status-error-border)]",
   },
   sucesso: {
-    container: "bg-[var(--status-success-bg)] text-[var(--status-success-fg)] border-2 border-[var(--border-brutal)] rounded-md shadow-[var(--shadow-brutal)]",
+    container: "bg-[var(--status-success-bg)] text-[var(--status-success-fg)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
     bar: "bg-[var(--status-success-border)]",
   },
 };
@@ -32,6 +32,7 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(function Ban
   return (
     <div
       ref={ref}
+      role={variant === "alerta" ? "alert" : "status"}
       className={cn(
         "relative p-6 flex flex-col gap-2 pt-8 overflow-hidden",
         container,

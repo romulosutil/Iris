@@ -67,12 +67,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <div
         onClick={handleWrapperClick}
         className={cn(
-          "group flex w-full items-stretch rounded-md border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)]",
+          "group flex w-full items-stretch rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)]",
           !disabled && "cursor-text",
           "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
-          // focus state (focus-within)
+          // focus state (focus-within) - anel de foco ortogonal do design system
           !disabled &&
-            "focus-within:border-[var(--action-primary)] focus-within:ring-2 focus-within:ring-[var(--action-primary)] focus-within:outline-none",
+            "focus-within:outline-focus outline-none focus-within:outline-[length:var(--ring-width)] focus-within:outline-offset-[var(--ring-offset)]",
           // error/aria-invalid
           ariaInvalid && "border-[var(--status-error-border)]",
           // disabled
@@ -84,7 +84,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {leftAddon && (
           <div
             className={cn(
-              "font-body flex shrink-0 items-center justify-center rounded-l-[calc(0.375rem-2px)] border-r-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-3 text-[var(--text-secondary)] select-none",
+              "font-body flex shrink-0 items-center justify-center rounded-l-[calc(var(--radius-control)-2px)] border-r-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-3 text-[var(--text-secondary)] select-none",
               size === "sm" && "text-sm",
               size === "md" && "text-base",
               size === "lg" && "text-base",
@@ -99,15 +99,15 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             "flex flex-1 items-center bg-[var(--surface-card)] text-[var(--text-primary)]",
             leftAddon
               ? "rounded-l-none"
-              : "rounded-l-[calc(0.375rem-2px)]",
+              : "rounded-l-[calc(var(--radius-control)-2px)]",
             rightAddon
               ? "rounded-r-none"
-              : "rounded-r-[calc(0.375rem-2px)]",
+              : "rounded-r-[calc(var(--radius-control)-2px)]",
             disabled && "cursor-not-allowed bg-[var(--surface-elevated)]",
           )}
         >
           {prefixIcon && (
-            <span className="flex shrink-0 items-center justify-center pl-3 text-[var(--text-secondary)]">
+            <span aria-hidden="true" className="flex shrink-0 items-center justify-center pl-3 text-[var(--text-secondary)]">
               {prefixIcon}
             </span>
           )}
@@ -119,7 +119,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             className={cn(
               "font-body placeholder:text-[var(--text-secondary)] w-full bg-transparent text-[var(--text-primary)] focus:outline-none",
               size === "sm" &&
-                "min-h-[var(--input-height-sm)] px-2.5 py-1 text-sm",
+                "min-h-[var(--input-height-sm)] px-2.5 py-1 text-base sm:text-sm",
               size === "md" &&
                 "min-h-[var(--input-height-md)] px-3.5 py-2 text-base",
               size === "lg" &&
@@ -131,7 +131,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {suffixIcon && (
-            <span className="flex shrink-0 items-center justify-center pr-3 text-[var(--text-secondary)]">
+            <span aria-hidden="true" className="flex shrink-0 items-center justify-center pr-3 text-[var(--text-secondary)]">
               {suffixIcon}
             </span>
           )}

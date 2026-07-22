@@ -37,8 +37,10 @@ const preview: Preview = {
     layout: "centered",
     backgrounds: {
       options: {
-        canvas: { name: "Canvas", value: "#F8F9FA" },
-        surface: { name: "Surface", value: "#FFFFFF" },
+        canvas: { name: "Canvas Claro", value: "#F8F9FA" },
+        canvasDark: { name: "Canvas Escuro", value: "#09090B" },
+        surface: { name: "Surface Claro", value: "#FFFFFF" },
+        surfaceDark: { name: "Surface Escuro", value: "#18181B" },
       },
       grid: {
         disable: true,
@@ -63,7 +65,7 @@ const preview: Preview = {
   initialGlobals: {
     backgrounds: { value: "canvas" },
   },
-  // Modo Clínico / Família — troca [data-mode] sem rebuild.
+  // Controles Globais do Design System: Modo (Clínico / Família) e Tema (Claro / Escuro)
   globalTypes: {
     modo: {
       description: "Modo do design system",
@@ -78,14 +80,37 @@ const preview: Preview = {
         dynamicTitle: true,
       },
     },
+    tema: {
+      description: "Tema de cor (Claro / Escuro)",
+      defaultValue: "claro",
+      toolbar: {
+        title: "Tema",
+        icon: "sun",
+        items: [
+          { value: "claro", icon: "sun", title: "Claro" },
+          { value: "escuro", icon: "moon", title: "Escuro" },
+        ],
+        dynamicTitle: true,
+      },
+    },
   },
   decorators: [
     (Story, context) => {
       if (typeof document !== "undefined") {
-        document.documentElement.setAttribute(
-          "data-mode",
-          context.globals.modo ?? "clinico",
-        );
+        const modo = context.globals.modo ?? "clinico";
+        const tema = context.globals.tema ?? "claro";
+        const isDark = tema === "escuro";
+
+        document.documentElement.setAttribute("data-mode", modo);
+        document.documentElement.setAttribute("data-theme", tema);
+        document.documentElement.classList.toggle("dark", isDark);
+
+        // Atualiza a cor de fundo e texto da lona do Storybook para espelhar o tema
+        document.body.style.backgroundColor = isDark
+          ? "#09090B"
+          : "var(--bg-app)";
+        document.body.style.color = isDark ? "#FAFAFA" : "var(--text-primary)";
+
         // Injeta as vars de fonte no <html> — espelha layout.tsx, faz o
         // globals.css (html { font-family: var(--font-body) }) resolver.
         document.documentElement.classList.add(

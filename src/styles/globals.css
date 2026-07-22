@@ -47,6 +47,9 @@
   --color-status-info-bg: var(--status-info-bg);
   --color-status-info-fg: var(--status-info-fg);
   --color-status-info-border: var(--status-info-border);
+  --color-status-ia-bg: var(--status-ia-bg);
+  --color-status-ia-fg: var(--status-ia-fg);
+  --color-status-ia-border: var(--status-ia-border);
 
   /* ==========================================================================
      1. Primitivas (Rampa Enxuta de Cores Brutalistas)
@@ -184,6 +187,8 @@
   --font-display:
     var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
   --font-body: var(--font-jakarta), "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono:
+    var(--font-space-mono), "Space Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* ==========================================================================
      Escala de Elevação — índice semântico → sombra (perpetua)
@@ -268,7 +273,7 @@
   --text-secondary: #71717A;
 
   /* Ações Primárias e Secundárias */
-  --action-primary: #F59E0B;
+  --action-primary: var(--brand-primary);
   --action-primary-fg: #000000; /* WCAG AA mantido fixo */
   --action-secondary-bg: #FFFFFF;
   --action-secondary-fg: #000000;
@@ -289,6 +294,10 @@
   --status-info-bg: #EFF6FF;
   --status-info-fg: #1E40AF;
   --status-info-border: #2563EB;
+
+  --status-ia-bg: #F1E9F6;
+  --status-ia-fg: #45286E;
+  --status-ia-border: #6A4C93;
 
   --ds-shadow: var(--shadow-brutal);
   --ds-shadow-hover: var(--elevation-3);   /* +1 nível acima do base: elevation-2 → 3 */
@@ -408,6 +417,13 @@ html {
   --status-info-bg: rgba(30, 58, 138, 0.4);
   --status-info-fg: #BFDBFE;
   --status-info-border: #2563EB;
+
+  --status-ia-bg: rgba(106, 76, 147, 0.4);
+  --status-ia-fg: #E9D5FF;
+  --status-ia-border: #9333EA;
+  --ai-tint: rgba(106, 76, 147, 0.4);
+  --ai-deep: #E9D5FF;
+  --ai-accent: #9333EA;
 }
 
 /*

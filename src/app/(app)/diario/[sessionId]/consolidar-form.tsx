@@ -27,7 +27,7 @@ export function ConsolidarForm({ sessionId }: { sessionId: string }) {
           required
           rows={6}
           aria-describedby={state.error ? "texto-consolidado-error" : undefined}
-          className="bg-surface text-ink font-body border-ink-anchor focus-visible:outline-focus min-h-32 w-full border-2 px-4 py-2.5 text-base outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+          className="bg-[var(--surface-card)] text-[var(--text-primary)] font-body border-[var(--border-brutal)] focus-visible:outline-focus min-h-32 w-full border-2 px-4 py-2.5 text-base outline-none rounded-[var(--radius-control)] focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
         />
       </Field>
       <Button type="submit" disabled={pending}>

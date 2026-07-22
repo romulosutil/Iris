@@ -6,7 +6,7 @@ import type { ExtracaoFalha, ListaExcecoes, RevisaoIncompleta } from "./queries"
 const linkClasses = cn(
   "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-5 py-2.5",
   "font-display text-base font-semibold",
-  "border-ink-anchor bg-surface text-ink border-2 shadow-[var(--ds-shadow)]",
+  "border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] border-2 shadow-[var(--ds-shadow)]",
   "transition-[transform,box-shadow] duration-100 ease-out",
   "hover:-translate-x-px hover:-translate-y-px",
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
@@ -26,10 +26,10 @@ function desde(data: Date | null, agora: number): string {
 
 function LinhaFalha({ item, agora }: { item: ExtracaoFalha; agora: number }) {
   return (
-    <div className="border-ink-anchor bg-surface flex flex-col gap-2 border-2 p-5 shadow-[var(--ds-shadow)]">
+    <div className="border-[var(--border-brutal)] bg-[var(--surface-card)] flex flex-col gap-2 border-2 p-5 shadow-[var(--ds-shadow)] rounded-[var(--radius-control)]">
       <Split alinha="start">
         <Stack gap="sm">
-          <span className="border-ink-anchor bg-gold text-ink-anchor inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
+          <span className="border-[var(--border-brutal)] bg-[var(--color-gold)] text-[var(--text-primary)] inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
             Extração falhou · {desde(item.desdeEm, agora)}
           </span>
           <span className="text-ink text-base">
@@ -53,15 +53,15 @@ function LinhaIncompleta({
   agora: number;
 }) {
   return (
-    <div className="border-ink-anchor bg-surface flex flex-col gap-2 border-2 p-5 shadow-[var(--ds-shadow)]">
+    <div className="border-[var(--border-brutal)] bg-[var(--surface-card)] flex flex-col gap-2 border-2 p-5 shadow-[var(--ds-shadow)] rounded-[var(--radius-control)]">
       <Split alinha="start">
         <Stack gap="sm">
           <Cluster gap="sm">
-            <span className="border-ink-anchor bg-blue text-ink-anchor inline-flex items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
+            <span className="border-[var(--border-brutal)] bg-[var(--color-blue)] text-[var(--text-primary)] inline-flex items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
               {item.quantidade}{" "}
               {item.quantidade === 1 ? "sugestão a revisar" : "sugestões a revisar"}
             </span>
-            <span className="text-graphite text-sm">
+            <span className="text-[var(--text-secondary)] text-sm">
               mais antiga {desde(item.maisAntigaEm, agora)}
             </span>
           </Cluster>
@@ -92,7 +92,7 @@ export function ExcecoesList({
 }: ListaExcecoes) {
   if (total === 0) {
     return (
-      <p className="text-ink border-ink-anchor bg-surface border-2 border-dashed p-6">
+      <p className="text-[var(--text-primary)] border-[var(--border-brutal)] bg-[var(--surface-card)] border-2 border-dashed p-6 rounded-[var(--radius-control)]">
         Nenhuma exceção — nenhuma extração falha nem revisão represada na clínica.
       </p>
     );
@@ -104,7 +104,7 @@ export function ExcecoesList({
         <Stack gap="md" como="section" aria-labelledby="falhas-titulo">
           <h2
             id="falhas-titulo"
-            className="font-display text-ink-anchor text-2xl font-bold"
+            className="font-display text-[var(--text-primary)] text-2xl font-bold"
           >
             Extrações que falharam
           </h2>
@@ -122,7 +122,7 @@ export function ExcecoesList({
         <Stack gap="md" como="section" aria-labelledby="incompletas-titulo">
           <h2
             id="incompletas-titulo"
-            className="font-display text-ink-anchor text-2xl font-bold"
+            className="font-display text-[var(--text-primary)] text-2xl font-bold"
           >
             Revisões represadas
           </h2>

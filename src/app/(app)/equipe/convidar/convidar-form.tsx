@@ -39,7 +39,7 @@ export function ConvidarForm() {
           id="papel"
           name="papel"
           required
-          className="border-ink-anchor rounded-md border-2 px-3 py-2"
+          className="border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] rounded-[var(--radius-control)] border-2 px-3 py-2"
         >
           <option value="terapeuta">Terapeuta</option>
           <option value="admin_recepcao">Recepção/Administrativo</option>

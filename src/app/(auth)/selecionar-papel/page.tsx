@@ -27,7 +27,7 @@ export default async function SelecionarPapelPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-ink-anchor text-2xl font-bold">
+      <h1 className="font-display text-[var(--text-primary)] text-2xl font-bold">
         Como você quer entrar?
       </h1>
       <ul className="flex flex-col gap-3">

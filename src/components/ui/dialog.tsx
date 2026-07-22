@@ -35,12 +35,12 @@ export const DialogContent = React.forwardRef<
 ) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-[color:var(--color-ink-anchor)]/70" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/70 backdrop-blur-xs" />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 p-6",
-          surface("solida", { elevation: "overlay", radius: "2xl", className: "bg-surface" }),
+          "fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-md max-h-[85vh] overflow-y-auto -translate-x-1/2 -translate-y-1/2 p-6",
+          surface("solida", { elevation: "overlay", radius: "2xl", className: "bg-[var(--surface-card)]" }),
           "focus-visible:outline-none",
           className,
         )}
@@ -50,8 +50,8 @@ export const DialogContent = React.forwardRef<
         <DialogPrimitive.Close
           aria-label={rotuloFechar}
           className={cn(
-            "text-ink-anchor absolute top-3 right-3 grid size-11 place-items-center",
-            "hover:bg-ink-anchor/10",
+            "text-[var(--text-primary)] absolute top-3 right-3 grid size-11 place-items-center rounded-[var(--radius-pill)]",
+            "hover:bg-[var(--surface-elevated)]",
             "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
           )}
         >
@@ -70,7 +70,7 @@ export const DialogTitle = React.forwardRef<
     <DialogPrimitive.Title
       ref={ref}
       className={cn(
-        "font-display text-ink-anchor pr-8 text-lg font-semibold",
+        "font-display text-[var(--text-primary)] pr-8 text-lg font-semibold",
         className,
       )}
       {...props}
@@ -85,7 +85,7 @@ export const DialogDescription = React.forwardRef<
   return (
     <DialogPrimitive.Description
       ref={ref}
-      className={cn("text-ink mt-2 text-base", className)}
+      className={cn("text-[var(--text-secondary)] mt-2 text-base", className)}
       {...props}
     />
   );

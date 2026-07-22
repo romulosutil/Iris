@@ -37,9 +37,9 @@ export const SelectTrigger = React.forwardRef<
     <SelectPrimitive.Trigger
       ref={ref}
       className={cn(
-        "border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] rounded-md font-body flex min-h-11 w-full items-center justify-between gap-2 px-4 py-2.5 text-base",
+        "border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] rounded-[var(--radius-control)] font-body flex min-h-11 w-full items-center justify-between gap-2 px-4 py-2.5 text-base",
         "data-[placeholder]:text-[var(--text-secondary)]",
-        "focus:outline-none focus:ring-2 focus:ring-[var(--action-primary)]",
+        "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
@@ -66,7 +66,7 @@ export const SelectContent = React.forwardRef<
         ref={ref}
         position={position}
         className={cn(
-          "bg-[var(--surface-elevated)] border-2 border-[var(--border-brutal)] text-[var(--text-primary)] rounded-md shadow-[var(--shadow-brutal)] z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden",
+          "bg-[var(--surface-elevated)] border-2 border-[var(--border-brutal)] text-[var(--text-primary)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden",
           position === "popper" && "mt-1",
           className,
         )}
@@ -88,7 +88,7 @@ export const SelectItem = React.forwardRef<
     <SelectPrimitive.Item
       ref={ref}
       className={cn(
-        "text-[var(--text-primary)] relative flex min-h-11 cursor-pointer items-center py-2 pr-9 pl-3 text-base outline-none select-none rounded-sm",
+        "text-[var(--text-primary)] relative flex min-h-11 cursor-pointer items-center py-2 pr-9 pl-3 text-base outline-none select-none rounded-[var(--radius-xs)]",
         "data-[highlighted]:bg-[var(--action-primary)] data-[highlighted]:text-[var(--action-primary-fg)] font-bold",
         "data-[state=checked]:font-semibold",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",

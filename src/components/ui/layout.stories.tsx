@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { Stack, Cluster, Split } from "./layout";
+import { Stack, Cluster, Split, Grid, Container } from "./layout";
 import { StatusBadge } from "./status-badge";
 import { Chip } from "./chip";
 import { Button } from "./button";
@@ -15,9 +15,9 @@ type Story = StoryObj;
 export const StackVertical: Story = {
   render: () => (
     <Stack gap="md" className="max-w-md">
-      <div className="border-ink-anchor bg-surface border-2 p-3">Diário</div>
-      <div className="border-ink-anchor bg-surface border-2 p-3">Evidências</div>
-      <div className="border-ink-anchor bg-surface border-2 p-3">Protocolo</div>
+      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-3 font-body">Diário</div>
+      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-3 font-body">Evidências</div>
+      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-3 font-body">Protocolo</div>
     </Stack>
   ),
 };
@@ -33,45 +33,31 @@ export const ClusterDeChips: Story = {
   ),
 };
 
+export const GridResponsivo: Story = {
+  render: () => (
+    <Grid colunas={3} gap="md">
+      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-4 font-body shadow-[var(--ds-shadow)]">Métrica 1</div>
+      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-4 font-body shadow-[var(--ds-shadow)]">Métrica 2</div>
+      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-4 font-body shadow-[var(--ds-shadow)]">Métrica 3</div>
+    </Grid>
+  ),
+};
+
+export const ContainerCentralizado: Story = {
+  render: () => (
+    <Container largura="md" className="border-2 border-dashed border-[var(--border-brutal)] py-6 text-center font-body text-[var(--text-primary)]">
+      Container com largura máxima controlada (max-w-5xl) e padding responsivo.
+    </Container>
+  ),
+};
+
 export const SplitTituloEstado: Story = {
   render: () => (
-    <Split className="border-ink-anchor bg-surface max-w-lg border-2 p-4">
-      <h3 className="font-display text-ink-anchor text-lg font-semibold">
+    <Split className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] max-w-lg p-4">
+      <h3 className="font-display text-[var(--text-primary)] text-lg font-semibold">
         Imita gesto simples
       </h3>
       <StatusBadge estado="sugerida" />
     </Split>
   ),
-  parameters: {
-    docs: {
-      description: {
-        story:
-          "Split empurra título e selo para as extremidades; empilha no mobile (<40rem).",
-      },
-    },
-  },
-};
-
-export const Composto: Story = {
-  render: () => (
-    <Stack gap="lg" className="max-w-lg">
-      <Split className="border-ink-anchor bg-surface border-2 p-4">
-        <h3 className="font-display text-ink-anchor text-lg font-semibold">
-          Sessão de 12/07
-        </h3>
-        <StatusBadge estado="aprovada" />
-      </Split>
-      <Cluster gap="sm">
-        <Chip selecionado onSelecionar={() => {}}>
-          ABA
-        </Chip>
-        <Chip onSelecionar={() => {}}>Fono</Chip>
-      </Cluster>
-      <Cluster gap="md">
-        <Button variante="neutra">Editar</Button>
-        <Button>Aprovar</Button>
-      </Cluster>
-    </Stack>
-  ),
-  parameters: { controls: { disable: true } },
 };

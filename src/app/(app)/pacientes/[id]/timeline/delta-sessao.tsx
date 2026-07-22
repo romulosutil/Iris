@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import type { DeltaSessao } from "./logic";
@@ -18,21 +18,21 @@ export function DeltaSessaoLateral({
 }: DeltaSessaoProps) {
   if (carregando) {
     return (
-      <div className="bg-canvas border-ink-anchor border-2 p-4 animate-pulse flex flex-col gap-3">
-        <div className="h-6 bg-muted w-1/3 border border-ink-anchor"></div>
-        <div className="h-12 bg-muted w-full border border-ink-anchor"></div>
-        <div className="h-12 bg-muted w-full border border-ink-anchor"></div>
+      <div className="bg-[var(--surface-card)] border-[var(--border-brutal)] border-2 p-4 animate-pulse flex flex-col gap-3 rounded-[var(--radius-control)]">
+        <div className="h-6 bg-[var(--surface-elevated)] w-1/3 border border-[var(--border-brutal)]"></div>
+        <div className="h-12 bg-[var(--surface-elevated)] w-full border border-[var(--border-brutal)]"></div>
+        <div className="h-12 bg-[var(--surface-elevated)] w-full border border-[var(--border-brutal)]"></div>
       </div>
     );
   }
 
   if (!delta || delta.itens.length === 0) {
     return (
-      <div className="bg-canvas border-ink-anchor border-2 p-6 text-center">
-        <div className="text-muted text-base font-semibold">
+      <div className="bg-[var(--surface-card)] border-[var(--border-brutal)] border-2 p-6 text-center rounded-[var(--radius-control)]">
+        <div className="text-[var(--text-secondary)] text-base font-semibold">
           Nenhuma alteração clínica registrada nesta sessão
         </div>
-        <p className="text-xs text-muted mt-1">
+        <p className="text-xs text-[var(--text-secondary)] mt-1">
           Apenas manutenção de repertório estável sem alterações de nível de ajuda.
         </p>
       </div>
@@ -52,25 +52,21 @@ export function DeltaSessaoLateral({
   const novos = delta.itens.filter((i) => i.tipo === "novo");
 
   return (
-    <div className="bg-canvas border-ink-anchor flex flex-col gap-4 border-2 p-4">
-      <div className="border-ink-anchor border-b-2 pb-2">
-        <h3 className="text-lg font-black text-ink">
-          Delta da Sessão
+    <div className="bg-[var(--surface-card)] border-[var(--border-brutal)] flex flex-col gap-4 border-2 p-4 rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]">
+      <div className="border-[var(--border-brutal)] border-b-2 pb-2">
+        <h3 className="text-lg font-bold font-display text-[var(--text-primary)]">
+          Resumo da Sessão
         </h3>
-        <p className="text-xs text-muted mt-0.5">
-          Resumo das evoluções e registros consolidados na sessão selecionada.
-        </p>
       </div>
 
-      {/* Indicadores numéricos rápidos */}
-      <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="bg-canvas border-ink-anchor border-2 p-2">
-          <div className="text-2xl font-black text-ink">{delta.evidenciasNovas}</div>
-          <div className="text-xxs font-bold text-muted uppercase tracking-wider">Evidências</div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-[var(--surface-elevated)] border-[var(--border-brutal)] border-2 p-3 rounded-[var(--radius-xs)]">
+          <div className="text-2xl font-bold font-display text-[var(--text-primary)]">{delta.evidenciasNovas}</div>
+          <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide font-mono font-semibold">Evidências Registradas</div>
         </div>
-        <div className="bg-canvas border-ink-anchor border-2 p-2">
-          <div className="text-2xl font-black text-ink">{delta.metasCandidatasNovas}</div>
-          <div className="text-xxs font-bold text-muted uppercase tracking-wider">Candidatas</div>
+        <div className="bg-[var(--surface-elevated)] border-[var(--border-brutal)] border-2 p-3 rounded-[var(--radius-xs)]">
+          <div className="text-2xl font-bold font-display text-[var(--text-primary)]">{delta.metasCandidatasNovas}</div>
+          <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide font-mono font-semibold">Novas Candidatas</div>
         </div>
       </div>
 

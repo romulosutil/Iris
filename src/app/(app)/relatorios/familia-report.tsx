@@ -27,8 +27,8 @@ type Paciente = { id: string; nome: string };
 // Textarea nativo estilizado — o design system ainda não tem um Textarea
 // (dívida registrada no BACKLOG). Classes espelham a superfície de campo do DS.
 const textareaClass =
-  "w-full rounded-md border border-line bg-surface px-3 py-2 text-ink text-base " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+  "w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-2 text-[var(--text-primary)] text-base " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-color)]";
 
 function linhasParaArray(v: string): string[] {
   return v
@@ -136,7 +136,7 @@ export function FamiliaReport({
   return (
     <Card titulo="Relatório da família">
       <Stack gap="md">
-        <p className="text-ink text-base">
+        <p className="text-[var(--text-primary)] text-base">
           Rascunho gerado pela IA a partir das evidências aprovadas do período,
           para o coordenador revisar e aprovar antes de enviar à família.
         </p>
@@ -201,7 +201,7 @@ export function FamiliaReport({
 
         {draft ? (
           <Stack gap="md">
-            <p className="text-ink-anchor text-lg font-semibold">
+            <p className="text-[var(--text-primary)] text-lg font-semibold">
               Revisão do coordenador
             </p>
 

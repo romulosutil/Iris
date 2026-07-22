@@ -40,27 +40,28 @@ export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
         ref={ref}
         className={cn(
           surface("solida", {
-            className: "bg-[color:var(--color-bg-surface)] p-[22px]",
+            className: "bg-[var(--surface-card)] p-[22px]",
           }),
           className,
         )}
         {...props}
       >
-        <p className="font-display text-[12px] font-semibold uppercase tracking-wide text-[color:var(--color-graphite)]">
+        <p className="font-display text-[12px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
           {titulo}
         </p>
 
         <div className="mt-2 flex items-center gap-3">
-          <span className="font-display text-[40px] font-bold leading-none text-[color:var(--ink-anchor)]">
+          <span className="font-display text-[40px] font-bold leading-none text-[var(--text-primary)]">
             {valor}
           </span>
 
           {tendencia && (
             <span
               className={cn(
-                "inline-flex items-center gap-1 rounded-[var(--radius-pill)] border-[1.5px] px-2 py-0.5",
-                "border-[color:var(--success-accent)] bg-[color:var(--success-tint)] text-[color:var(--success-deep)]",
-                "text-sm font-semibold",
+                "inline-flex items-center gap-1 rounded-[var(--radius-pill)] border-[1.5px] px-2 py-0.5 text-sm font-semibold",
+                tendencia.direcao === "alta"
+                  ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
+                  : "border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]",
               )}
             >
               <span aria-hidden>{tendencia.direcao === "alta" ? "▲" : "▼"}</span>
@@ -71,14 +72,14 @@ export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
 
         {pct !== null && (
           <div
-            className="mt-4 h-1.5 w-full rounded-[var(--radius-pill)] bg-[color:var(--color-raw-gray-100)]"
+            className="mt-4 h-1.5 w-full rounded-[var(--radius-pill)] bg-[var(--bg-app)]"
             role="progressbar"
             aria-valuenow={pct}
             aria-valuemin={0}
             aria-valuemax={100}
           >
             <div
-              className="h-full rounded-[var(--radius-pill)] bg-[color:var(--brand-primary)]"
+              className="h-full rounded-[var(--radius-pill)] bg-[var(--action-primary)]"
               style={{ width: `${pct}%` }}
             />
           </div>

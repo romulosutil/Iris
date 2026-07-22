@@ -49,8 +49,8 @@ export const variantStyles: Record<string, string> = {
   Success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
   warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
   Warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
-  ai: "bg-[var(--ai-tint)] border-[var(--ai-accent)] text-[var(--ai-deep)]",
-  AI: "bg-[var(--ai-tint)] border-[var(--ai-accent)] text-[var(--ai-deep)]",
+  ai: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
+  AI: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
   info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
   Info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
   brand: "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)]",
@@ -62,8 +62,8 @@ const dotColorMap: Record<string, string> = {
   Success: "bg-[var(--status-success-border)]",
   warning: "bg-[var(--status-warning-border)]",
   Warning: "bg-[var(--status-warning-border)]",
-  ai: "bg-[var(--ai-accent)]",
-  AI: "bg-[var(--ai-accent)]",
+  ai: "bg-[var(--status-ia-border)]",
+  AI: "bg-[var(--status-ia-border)]",
   info: "bg-[var(--status-info-border)]",
   Info: "bg-[var(--status-info-border)]",
   brand: "bg-[var(--action-primary)]",
@@ -240,12 +240,12 @@ export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
       <span
         ref={ref}
         data-estado={estado}
-        className={cn("text-ink inline-flex items-center gap-2 text-sm", className)}
+        className={cn("text-[var(--text-primary)] inline-flex items-center gap-2 text-sm", className)}
         {...props}
       >
         <span
           aria-hidden
-          className={cn("border-ink-anchor size-2.5 shrink-0 border rounded-[length:var(--radius-pill)]", dotStyle)}
+          className={cn("border-[var(--border-brutal)] size-2.5 shrink-0 border rounded-[length:var(--radius-pill)]", dotStyle)}
         />
         {children ?? rotulo}
       </span>

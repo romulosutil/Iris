@@ -45,8 +45,8 @@ export default async function TerapeutaPage({ params }: Props) {
   return (
     <main className="flex flex-col gap-8">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-ink-anchor text-2xl font-black">{dados.terapeuta.name}</h1>
-        <p className="font-body text-ink">Disponibilidade oferecida: <strong>{horas.toLocaleString("pt-BR")}h/semana</strong></p>
+        <h1 className="font-display text-[var(--text-primary)] text-2xl font-black">{dados.terapeuta.name}</h1>
+        <p className="font-body text-[var(--text-primary)]">Disponibilidade oferecida: <strong>{horas.toLocaleString("pt-BR")}h/semana</strong></p>
       </header>
       <HorasTerapeutaBloco horas={horasTerapeuta} />
       <DisponibilidadeEditor terapeutaId={id} passoMin={dados.passoGradeMin} celulasIniciais={celulasIniciais} />

@@ -44,7 +44,7 @@ export default async function CadastroClinicoPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="font-display text-ink-anchor text-3xl font-bold">
+      <h1 className="font-display text-[var(--text-primary)] text-3xl font-bold">
         Cadastro clínico — {pacienteRow[0].nome}
       </h1>
       <FichaClinicaForm patientId={id} perfil={perfilRow[0]} />

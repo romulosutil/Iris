@@ -39,8 +39,8 @@ function estiloVariante(v: Variante): string {
       return cn(
         "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold",
         "border-2 border-[var(--border-brutal)]",
-        "shadow-[var(--shadow-brutal)]",
-        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--elevation-3)]",
+        "shadow-[var(--ds-shadow)]",
+        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--ds-shadow-hover)]",
         "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75"
       );
     case "terciaria":
@@ -57,8 +57,8 @@ function estiloVariante(v: Variante): string {
       return cn(
         "bg-[var(--action-secondary-bg)] text-[var(--action-secondary-fg)]",
         "border-2 border-[var(--border-brutal)]",
-        "shadow-[var(--shadow-brutal)]",
-        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--elevation-3)]",
+        "shadow-[var(--ds-shadow)]",
+        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--ds-shadow-hover)]",
         "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75"
       );
   }
@@ -110,7 +110,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const formatoClasses =
       resolvedFormato === "circular" || shape === "circle"
         ? "rounded-full"
-        : "rounded-md";
+        : "rounded-[var(--radius-control)]";
 
     // Estado de carregamento
     const loadingClasses = isLoading
@@ -136,6 +136,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         type={type ?? "button"}
         disabled={disabled || isLoading}
+        aria-busy={isLoading || undefined}
         onClick={onClick}
         className={cn(
           // base: alvo de toque e layout

@@ -149,7 +149,7 @@ export function SemanaCliente({
     <section className="space-y-4 p-4">
       <header className="flex flex-wrap items-center gap-3">
         {prefill ? (
-          <p className="text-ink font-body text-sm">
+          <p className="text-[var(--text-primary)] font-body text-sm">
             Repondo sessão de <strong>{prefill.patientNome}</strong> (
             {prefill.disciplina.toUpperCase()}) — escolha o novo horário.
           </p>
@@ -190,7 +190,7 @@ export function SemanaCliente({
       </header>
 
       {passada && (
-        <p role="status" className="text-ink font-body text-sm">
+        <p role="status" className="text-[var(--text-primary)] font-body text-sm">
           Semana passada — alocação desabilitada (C7).
         </p>
       )}

@@ -39,27 +39,33 @@ const BRAND_TOKENS: ColorToken[] = [
 const DATA_STATES: StateRow[] = [
   {
     label: "Sucesso",
-    tint: { label: "tint", variable: "var(--color-status-success-bg)", hex: "#E6F4F1", textColor: "text-[#0A5C54]" },
-    accent: { label: "accent", variable: "var(--color-status-success-accent)", hex: "#14857A", textColor: "text-white" },
-    deep: { label: "deep", variable: "var(--color-status-success-text)", hex: "#0A5C54", textColor: "text-white" },
+    tint: { label: "tint", variable: "var(--status-success-bg)", hex: "#ECFDF5", textColor: "text-[#065F46]" },
+    accent: { label: "accent", variable: "var(--status-success-border)", hex: "#059669", textColor: "text-white" },
+    deep: { label: "deep", variable: "var(--status-success-fg)", hex: "#065F46", textColor: "text-white" },
   },
   {
     label: "Informação",
-    tint: { label: "tint", variable: "var(--color-status-info-bg)", hex: "#E7F0FB", textColor: "text-[#124A78]" },
-    accent: { label: "accent", variable: "var(--color-status-info-accent)", hex: "#1F6FB2", textColor: "text-white" },
-    deep: { label: "deep", variable: "var(--color-status-info-text)", hex: "#124A78", textColor: "text-white" },
+    tint: { label: "tint", variable: "var(--status-info-bg)", hex: "#EFF6FF", textColor: "text-[#1E40AF]" },
+    accent: { label: "accent", variable: "var(--status-info-border)", hex: "#2563EB", textColor: "text-white" },
+    deep: { label: "deep", variable: "var(--status-info-fg)", hex: "#1E40AF", textColor: "text-white" },
   },
   {
     label: "IA / sugerida",
-    tint: { label: "tint", variable: "var(--color-status-ia-bg)", hex: "#F1E9F6", textColor: "text-[#45286E]" },
-    accent: { label: "accent", variable: "var(--color-status-ia-accent)", hex: "#6A4C93", textColor: "text-white" },
-    deep: { label: "deep", variable: "var(--color-status-ia-text)", hex: "#45286E", textColor: "text-white" },
+    tint: { label: "tint", variable: "var(--status-ia-bg)", hex: "#F1E9F6", textColor: "text-[#45286E]" },
+    accent: { label: "accent", variable: "var(--status-ia-border)", hex: "#6A4C93", textColor: "text-white" },
+    deep: { label: "deep", variable: "var(--status-ia-fg)", hex: "#45286E", textColor: "text-white" },
   },
   {
-    label: "Alerta",
-    tint: { label: "tint", variable: "var(--color-status-error-bg)", hex: "#FBE9E9", textColor: "text-[#7E1F16]" },
-    accent: { label: "accent", variable: "var(--color-status-error-accent)", hex: "#C0392B", textColor: "text-white" },
-    deep: { label: "deep", variable: "var(--color-status-error-text)", hex: "#7E1F16", textColor: "text-white" },
+    label: "Aviso",
+    tint: { label: "tint", variable: "var(--status-warning-bg)", hex: "#FFFBEB", textColor: "text-[#92400E]" },
+    accent: { label: "accent", variable: "var(--status-warning-border)", hex: "#D97706", textColor: "text-white" },
+    deep: { label: "deep", variable: "var(--status-warning-fg)", hex: "#92400E", textColor: "text-white" },
+  },
+  {
+    label: "Erro / Perigo",
+    tint: { label: "tint", variable: "var(--status-error-bg)", hex: "#FEF2F2", textColor: "text-[#991B1B]" },
+    accent: { label: "accent", variable: "var(--status-error-border)", hex: "#DC2626", textColor: "text-white" },
+    deep: { label: "deep", variable: "var(--status-error-fg)", hex: "#991B1B", textColor: "text-white" },
   },
 ];
 
@@ -80,23 +86,69 @@ const ESPECTRO_TOKENS: ColorToken[] = [
   { name: "Spectrum Violet", variable: "var(--color-spectrum-violet)", hex: "#6A4C93", description: "Stop violeta do arco-íris." },
 ];
 
+const ACTION_TOKENS: ColorToken[] = [
+  { name: "action.primary", variable: "var(--color-action-primary)", hex: "#F2B705", description: "Fundo dos botões primários (ouro alinhado à marca)." },
+  { name: "action.primary.fg", variable: "var(--color-action-primary-fg)", hex: "#000000", description: "Texto/ícone dos botões primários (alto contraste)." },
+  { name: "action.secondary.bg", variable: "var(--color-action-secondary-bg)", hex: "#FFFFFF", description: "Fundo dos botões secundários." },
+  { name: "action.secondary.fg", variable: "var(--color-action-secondary-fg)", hex: "#000000", description: "Texto/ícone dos botões secundários." },
+];
+
+const RAW_PRIMITIVE_TOKENS: ColorToken[] = [
+  { name: "Gold 100", variable: "var(--color-raw-gold-100)", hex: "#FFF6DB", description: "Tint suave de marca." },
+  { name: "Gold 500", variable: "var(--color-raw-gold-500)", hex: "#F2B705", description: "Ouro primário (infinito autismo)." },
+  { name: "Gold 700", variable: "var(--color-raw-gold-700)", hex: "#D29E04", description: "Hover de marca." },
+  { name: "Mint 500", variable: "var(--color-raw-mint-500)", hex: "#14857A", description: "Acento de sucesso." },
+  { name: "Blue 500", variable: "var(--color-raw-blue-500)", hex: "#1F6FB2", description: "Acento de informação." },
+  { name: "Violet 500", variable: "var(--color-raw-violet-500)", hex: "#6A4C93", description: "Acento de IA / sugestão." },
+  { name: "Terracotta 500", variable: "var(--color-raw-terracotta-500)", hex: "#C0392B", description: "Acento de erro / perigo." },
+  { name: "Gray 900", variable: "var(--color-raw-gray-900)", hex: "#1A1A1A", description: "Âncora gráfica brutalista." },
+];
+
 export const Palette: StoryObj = {
   render: () => (
     <div className="space-y-12 max-w-6xl font-sans text-stone-900 bg-[#FAF9F5] p-6 md:p-8 border-4 border-black shadow-brutal">
       {/* Banner Superior Brutalista */}
       <div className="border-4 border-black p-8 bg-[#F2B705] shadow-brutal relative overflow-hidden">
         <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight text-black font-mono">
-          Cores & Paleta
+          Cores &amp; Paleta
         </h1>
         <p className="mt-4 text-lg md:text-xl font-bold max-w-3xl text-black">
-          Design System Espectro Brutal — Paleta de cores semântica baseada na lente conceitual da neurodiversidade-afirmativa.
+          Design System Espectro Brutal — Paleta de cores semântica e primitivas brutais baseadas na neurodiversidade-afirmativa.
         </p>
       </div>
 
-      {/* MARCA & AÇÃO */}
+      {/* PRIMITIVAS BRUTALISTAS */}
       <section className="space-y-4">
         <h2 className="text-xl font-black font-mono text-stone-500 uppercase tracking-wider">
-          MARCA & AÇÃO
+          PRIMITIVAS DE CORES BRUTALISTAS
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
+          {RAW_PRIMITIVE_TOKENS.map((token) => (
+            <div 
+              key={token.variable} 
+              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-brutal-sm"
+            >
+              <div 
+                className="w-full h-12 border-b border-black" 
+                style={{ backgroundColor: token.variable }}
+              />
+              <div className="p-2 text-center">
+                <span className="font-mono text-xs font-bold text-black block truncate">
+                  {token.name}
+                </span>
+                <span className="font-mono text-[10px] text-stone-400 block uppercase">
+                  {token.hex}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* MARCA & AÇÃO INSTITUCIONAL */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-black font-mono text-stone-500 uppercase tracking-wider">
+          MARCA &amp; AÇÃO INSTITUCIONAL
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           {BRAND_TOKENS.map((token) => (
@@ -108,6 +160,42 @@ export const Palette: StoryObj = {
                 className="w-full h-24 border-b-2 border-black" 
                 style={{ backgroundColor: token.variable }}
               />
+              <div className="p-4 bg-white">
+                <span className="font-mono text-base font-extrabold text-black block mb-0.5">
+                  {token.name}
+                </span>
+                <span className="font-mono text-sm text-stone-400 block uppercase">
+                  {token.hex}
+                </span>
+                <code className="text-[10px] text-rose-600 font-semibold bg-stone-50 px-1 py-0.5 border border-stone-200 block mt-2 break-all rounded w-fit">
+                  {token.variable}
+                </code>
+                <p className="text-stone-600 text-xs mt-2 leading-relaxed">
+                  {token.description}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* TOKENS SEMÂNTICOS DE AÇÃO (COMPONENTES / BOTÕES) */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-black font-mono text-stone-500 uppercase tracking-wider">
+          AÇÕES SEMÂNTICAS (BOTÕES &amp; CONTROLES)
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          {ACTION_TOKENS.map((token) => (
+            <div 
+              key={token.variable} 
+              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-brutal hover:shadow-brutal-hover hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150"
+            >
+              <div 
+                className="w-full h-24 border-b-2 border-black flex items-center justify-center font-bold text-sm" 
+                style={{ backgroundColor: token.variable }}
+              >
+                <span className="bg-black/10 px-2 py-1 rounded">Amostra</span>
+              </div>
               <div className="p-4 bg-white">
                 <span className="font-mono text-base font-extrabold text-black block mb-0.5">
                   {token.name}

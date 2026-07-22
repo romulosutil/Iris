@@ -8,10 +8,10 @@ export interface IndicatorProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 const estiloIndicator: Record<IndicatorVariant, string> = {
-  conquistado: "bg-status-success-bg",
-  sugerido: "bg-status-ia-border",
-  erro: "bg-status-error-bg",
-  info: "bg-status-info-bg",
+  conquistado: "bg-[var(--status-success-border)]",
+  sugerido: "bg-[var(--status-ia-border)]",
+  erro: "bg-[var(--status-error-border)]",
+  info: "bg-[var(--status-info-border)]",
 };
 
 export const Indicator = React.forwardRef<HTMLSpanElement, IndicatorProps>(

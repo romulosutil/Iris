@@ -17,7 +17,7 @@ const linkClasses = cn(
   control("sm"),
   surface("solida"),
   "inline-flex shrink-0 items-center justify-center px-5 py-2.5",
-  "bg-bg-surface text-text-body font-display text-base font-semibold",
+  "bg-[var(--surface-card)] text-[var(--text-primary)] font-display text-base font-semibold",
   "transition-[transform,box-shadow,background-color] duration-100 ease-out",
   "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-brutal-hover",
   "active:translate-x-0 active:translate-y-0 active:shadow-none",
@@ -41,7 +41,7 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
     <Stack
       gap="md"
       className={cn(
-        "bg-bg-surface relative p-5 pt-8",
+        "bg-[var(--surface-card)] relative p-5 pt-8",
         surface("solida")
       )}
     >
@@ -51,10 +51,10 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
       />
       <Split alinha="start">
         <Stack gap="sm">
-          <span className="border-ink-anchor bg-brand-primary text-ink-anchor inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
+          <span className="border-[var(--border-brutal)] bg-[var(--action-primary)] text-[var(--action-primary-fg)] inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
             Extração pendente
           </span>
-          <span className="text-ink text-base">
+          <span className="text-[var(--text-primary)] text-base">
             {item.pacienteNome ?? "Paciente (acesso restrito)"}
           </span>
         </Stack>
