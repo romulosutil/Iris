@@ -869,11 +869,38 @@ Decisões travadas com o Rômulo: **evidência revisada = estender `extraction_e
 * ✅ F0 (fundação de relatórios) concluída 19/07/2026 — `report`/`report_pdf`/
   `audit_log`, RLS, purga rastreável, export transacional com
   `StubPdfRenderer` (ver sessão 19/07/2026 acima).
-* Fila de reclassificação/validação com justificativa para o coordenador.
-* Exportação de Relatório de Família (pt-BR calibrado) e Dossiê de Auditoria de Convênio factual.
-* Relatório narrativo de convênio gerado por IA com revisão humana.
-* Render real de PDF (Chromium) — adiado de F0, ver itens abertos na sessão
-  19/07/2026 acima.
+* ✅ Fatia 1 (fila de validação) e Fatia 2 (supervisão) concluídas (PRs #47/#48).
+* ✅ Fatia 3 (Dossiê `convenio_bruto` factual + PlaywrightPdfRenderer real)
+  concluída (PR #54). Trilho de PDF pronto.
+* ✅ **Fatia 4 (Relatório de Família — IA narrativo + curadoria) concluída
+  21/07/2026** (branch `feat/fase5-fatia4-relatorio-familia`). Spec:
+  `docs/superpowers/specs/2026-07-21-fase5-fatia4-relatorio-familia-design.md`.
+  Primeiro relatório `gerado_por_ia=true` + a máquina de curadoria reusável
+  (rascunho durável → revisado → exportado). **Sem migração** (schema F0 já
+  previu `familia`/`gerado_por_ia`/`revisado`/`payload_versao`). Provider do
+  Agente 2 (interface + stub determinístico honrando F1/F2/F3/F6/F8; IA nunca
+  fabrica número). IA-original + curado no mesmo `payload` jsonb (auditoria).
+  Gerar: coordenador **ou** terapeuta on-team; curar/exportar: só coordenador
+  (F9). Gate `status=revisado` antes do export + trava otimista `payload_versao`.
+  UI `/relatorios` (tile + editor de curadoria). Verde: 13 unit + 4 axe + 9
+  int/RLS; typecheck 0, lint 0.
+  * **Dívidas registradas:**
+    - **ClaudeFamilyReportProvider real** = esqueleto; `resolveFamilyReportProvider`
+      cai no stub, e sob a flag `FAMILY_REPORT_LLM_ENABLED` (OFF) hoje lança. Ligar
+      pós-DPA (mesmo gate P0/LGPD da extração) com assembler do prompt do Agente 2
+      + parsing validado. IA de verdade da família depende disso.
+    - **Textarea no design system:** o editor de curadoria usa `<textarea>` nativo
+      estilizado (o DS só tem Input single-line + Checkbox). Promover a um
+      componente do DS quando houver mais um consumidor.
+    - `MilestoneAssessment` formal ainda ausente (deferido da Fase 4): `avaliacoesFormais`
+      chega vazio; stub não fabrica. Encaixa quando a série formal existir.
+* `convenio_narrativo` e `avaliativo_interdisciplinar` (IA) — **próximas fatias**,
+  encaixando no trilho da Fatia 4. Exigem escrever o contrato do agente (não há
+  doc F-rules como o da família) antes de codar.
+* Fila de reclassificação/validação com justificativa para o coordenador (Fatia 1 ✅).
+* **Flaky pré-existente:** `db/tests/agenda2-encerrar-regra.int.test.ts` depende da
+  data do sistema (esperava `2026-07-20`, recebe data corrente) — falha fora da
+  janela; não relacionado à Fatia 4. Corrigir para data fixa/injetada.
 
 ### [Fase 6] Hardening e Ditado de Voz (Issue #9)
 * Integração de ASR (ditado por voz) com preservação do áudio original local.
