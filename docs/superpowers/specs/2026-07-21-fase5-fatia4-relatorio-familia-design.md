@@ -38,7 +38,7 @@ relatórios IA vão reusar.
 | D2 | **Sem migração** | `report` já tem `familia`, `gerado_por_ia`, status `rascunho/revisado/exportado`, `revisado_por`, `payload_versao`. Schema F0 já previu curadoria IA |
 | D3 | IA-original **e** curado no mesmo `payload` jsonb | Evita DDL; preserva rascunho da IA imutável p/ auditoria (F2/governança). `build-html` renderiza `curado ?? iaOriginal` |
 | D4 | Rascunho **durável** (difere do bruto transiente) | F9: relatório de família exige revisão humana entre geração e export |
-| D5 | `requireRole(coordenador)` em geração, curadoria e export | F9: comunicação com a família é do coordenador. Terapeuta e `admin_recepcao` fora |
+| D5 | **Gerar rascunho:** coordenador **ou** terapeuta (on-team via RLS). **Curar + exportar:** só coordenador | F9: o rascunho pode ser redigido pela equipe; a **revisão/aprovação** que libera à família é do coordenador. `admin_recepcao` fora de tudo |
 | D6 | Export só aceita `revisado` (gate na action) | `exportReport` aceita `rascunho`/`revisado`; a action **exige `revisado`** p/ impor a curadoria (F9). Bruto continua usando tx-única |
 | D7 | Provider stub determinístico honra F1/F3/F6 | Demo e testes rodam sem LLM e sem fabricar dado; IA nunca gera número (F2) |
 
@@ -139,7 +139,8 @@ function resolveFamilyReportProvider(clinic: { isDemo: boolean }): FamilyReportP
 ## 6. Máquina de estado (curadoria)
 
 1. **`gerarRascunhoFamilia({ patientId, periodo })`** (`"use server"`):
-   - `ctx = getTenantContext()`; `requireRole(ctx, "coordenador")`.
+   - `ctx = getTenantContext()`; `requireRole(ctx, "coordenador", "terapeuta")`
+     (terapeuta escopado por RLS `app_is_on_team`).
    - `withTenant(ctx, tx)`: `build-input` agrega o recorte → `FamilyReportInput`;
      `resolveFamilyReportProvider(...).gerar(input)` → draft;
      `INSERT report(tipo='familia', gerado_por_ia=true, status='rascunho',
@@ -175,8 +176,9 @@ Função **pura** `buildFamiliaHtml(payload: PayloadFamilia): string`. Mirror de
 
 ## 8. Autorização e RLS
 
-- `requireRole(ctx, "coordenador")` nas 3 actions (D5). Terapeuta e
-  `admin_recepcao` **fora** (família é do coordenador).
+- **Gerar:** `requireRole(ctx, "coordenador", "terapeuta")` (terapeuta on-team via
+  RLS). **Curar + exportar:** `requireRole(ctx, "coordenador")` (D5).
+  `admin_recepcao` **fora** de tudo.
 - RLS `report_scope` (`0039_fase5_report_audit_rls.sql`) já cobre INSERT/SELECT/UPDATE
   de `report` por `app_patient_in_clinic` + papel. `familia` já é valor do enum.
   Check `report_bruto_sem_ia` não afeta (só restringe `convenio_bruto`).
@@ -199,8 +201,10 @@ Função **pura** `buildFamiliaHtml(payload: PayloadFamilia): string`. Mirror de
   `curado=null`, audit); cura (`status=revisado`, `payload_versao++`, `revisado_por`);
   export só após revisado (rascunho não curado → erro); PDF real gravado, `status=exportado`,
   audit; re-download lê bytes sem re-render; trava otimista (`versaoEsperada` obsoleto → erro).
-- **RLS** (`rls.int.test`): coordenador de outra clínica não vê/edita; terapeuta e
-  `admin_recepcao` bloqueados nas 3 actions; isolamento multi-tenant.
+- **RLS** (`rls.int.test`): coordenador de outra clínica não vê/edita; terapeuta
+  on-team **gera** mas **não cura/exporta** (curar/exportar → erro de papel);
+  terapeuta fora da equipe não gera; `admin_recepcao` bloqueado nas 3 actions;
+  isolamento multi-tenant.
 - **a11y**: preview + form de curadoria (0 violações axe).
 
 ### DoD da fatia (AGENTS.md §6)
