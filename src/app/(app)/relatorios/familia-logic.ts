@@ -20,11 +20,16 @@ import type {
 import { playwrightRenderer } from "@/lib/report/playwright-renderer";
 
 // ─── Schemas de request ──────────────────────────────────────────────────────
-export const gerarFamiliaSchema = z.object({
-  patientId: z.string().uuid(),
-  periodoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  periodoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-});
+export const gerarFamiliaSchema = z
+  .object({
+    patientId: z.string().uuid(),
+    periodoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    periodoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .refine((d) => d.periodoInicio <= d.periodoFim, {
+    message: "A data de início deve ser anterior ou igual à data de fim.",
+    path: ["periodoInicio"],
+  });
 export type GerarFamiliaInput = z.infer<typeof gerarFamiliaSchema>;
 
 const draftSchema: z.ZodType<FamilyReportDraft> = z.object({

@@ -48,7 +48,8 @@ export function buildFamiliaHtml(payload: PayloadFamilia): string {
   html{font-family:system-ui,sans-serif;color:#1a1a1a;font-size:14px;line-height:1.5}
   h1{font-size:22px;margin-bottom:2px} h2{font-size:16px;margin-top:20px}
   .periodo{color:#555;margin-top:0}
-  .nota{background:#f4efe6;padding:10px 14px;border-radius:6px}
+  .nota{background:#f4efe6;padding:10px 14px;border-radius:6px;white-space:pre-wrap}
+  p.conquista{white-space:pre-wrap}
   ul{margin:6px 0;padding-left:20px}
   table{width:100%;border-collapse:collapse;margin:8px 0}
   th,td{border:1px solid #ccc;padding:4px 8px;text-align:left}
@@ -58,7 +59,7 @@ export function buildFamiliaHtml(payload: PayloadFamilia): string {
 <h1>Relatório de acompanhamento — ${nome}</h1>
 <p class="periodo">Período: ${escapeHtml(payload.periodo.inicio)} a ${escapeHtml(payload.periodo.fim)}</p>
 <h2>A conquista deste período</h2>
-<p>${escapeHtml(draft.conquistaDestaque)}</p>
+<p class="conquista">${escapeHtml(draft.conquistaDestaque)}</p>
 ${nota}
 <h2>O que estamos trabalhando agora</h2>
 <ul>${draft.trabalhandoAgora.map(li).join("")}</ul>

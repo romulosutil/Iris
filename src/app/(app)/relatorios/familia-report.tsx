@@ -210,6 +210,7 @@ export function FamiliaReport({
                 id="familia-conquista"
                 className={textareaClass}
                 rows={3}
+                maxLength={600}
                 value={conquista}
                 onChange={(e) => setConquista(e.target.value)}
                 disabled={!podeCurar}
@@ -224,6 +225,7 @@ export function FamiliaReport({
                 id="familia-trabalhando"
                 className={textareaClass}
                 rows={4}
+                maxLength={400}
                 value={trabalhando}
                 onChange={(e) => setTrabalhando(e.target.value)}
                 disabled={!podeCurar}
@@ -238,6 +240,7 @@ export function FamiliaReport({
                 id="familia-apoiar"
                 className={textareaClass}
                 rows={3}
+                maxLength={300}
                 value={apoiar}
                 onChange={(e) => setApoiar(e.target.value)}
                 disabled={!podeCurar}
@@ -257,6 +260,7 @@ export function FamiliaReport({
                   id="familia-nota"
                   className={textareaClass}
                   rows={4}
+                  maxLength={600}
                   value={nota}
                   onChange={(e) => setNota(e.target.value)}
                   disabled={!podeCurar}
