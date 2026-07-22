@@ -60,7 +60,10 @@ export function validarDraftContraDossie(
 ): { ok: true } | { ok: false; numeroOrfao: string } {
   const permitidos = contagensPermitidas(dossie);
   for (const campo of CAMPOS_LIVRES(draft)) {
-    for (const num of campo.match(/\d+/g) ?? []) {
+    const campoSemDatas = campo
+      .replace(/\b\d{4}-\d{2}-\d{2}\b/g, "")
+      .replace(/\b\d{2}\/\d{2}\/\d{4}\b/g, "");
+    for (const num of campoSemDatas.match(/\d+/g) ?? []) {
       if (!permitidos.has(num)) return { ok: false, numeroOrfao: num };
     }
   }
