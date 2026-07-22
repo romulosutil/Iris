@@ -1,6 +1,7 @@
 import { getTenantContext } from "@/auth/tenant";
 import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
+import { GovernancaNav } from "@/components/ui/governanca-nav";
 import { listarPendencias } from "./queries";
 import { PendenciasList } from "./pendencias-list";
 
@@ -14,8 +15,9 @@ export default async function PendenciasPage() {
 
   return (
     <Stack gap="lg">
+      {ctx.role === "coordenador" ? <GovernancaNav /> : null}
       <PageHeader
-        title="Pendências"
+        title="Pendências Gerais"
         description={
           pendencias.total === 0
             ? "Nada pendente agora."
@@ -26,3 +28,4 @@ export default async function PendenciasPage() {
     </Stack>
   );
 }
+

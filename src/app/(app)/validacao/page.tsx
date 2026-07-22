@@ -3,6 +3,7 @@ import { getTenantContext } from "@/auth/tenant";
 import { withTenant } from "@/db/rls";
 import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
+import { GovernancaNav } from "@/components/ui/governanca-nav";
 import { listarFilaValidacao } from "./queries";
 import { alvosValidosDoPaciente, type AlvoValido } from "./alvos";
 import { ValidacaoFila } from "./validacao-fila";
@@ -28,8 +29,9 @@ export default async function ValidacaoPage() {
 
   return (
     <Stack gap="lg">
+      <GovernancaNav />
       <PageHeader
-        title="Fila de validação"
+        title="Central de Validação"
         description={
           fila.total === 0
             ? "Nada represado — fila em dia."
@@ -40,3 +42,4 @@ export default async function ValidacaoPage() {
     </Stack>
   );
 }
+
