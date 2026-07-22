@@ -34,10 +34,10 @@ export default async function RevisaoPage({
   return (
     <Stack gap="lg">
       <Stack gap="sm">
-        <h1 className="font-display text-ink-anchor text-3xl font-bold">
+        <h1 className="font-display text-[var(--text-primary)] text-3xl font-bold">
           Revisão de extrações
         </h1>
-        <p className="text-ink text-lg">
+        <p className="text-[var(--text-primary)] text-lg">
           {dados.pacienteNome ?? "Paciente (acesso restrito)"} ·{" "}
           {n === 0
             ? "nada a revisar"

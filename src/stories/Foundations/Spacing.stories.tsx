@@ -27,34 +27,53 @@ const SPACING_ITEMS: SpacingItem[] = [
   { token: "16", rem: "4rem", px: 64 },
 ];
 
+const BORDER_RADIUS_ITEMS = [
+  { name: "None (0px)", token: "--radius-none", className: "rounded-none", px: "0px", description: "Bordas retas sem raio." },
+  { name: "XS (3px)", token: "--radius-xs", className: "rounded-[var(--radius-xs)]", px: "3px", description: "Micro-chips e indicadores pontuais." },
+  { name: "SM (4px)", token: "--radius-sm", className: "rounded-[var(--radius-sm)]", px: "4px", description: "Badges compactos e sub-elementos." },
+  { name: "Control (5px)", token: "--radius-control", className: "rounded-[var(--radius-control)]", px: "5px", description: "Inputs, botões e controles interativos." },
+  { name: "MD (6px - Surface Default)", token: "--radius-md", className: "rounded-[var(--radius-md)]", px: "6px", description: "Fator de forma padrão das superfícies e cards." },
+  { name: "LG (8px)", token: "--radius-lg", className: "rounded-[var(--radius-lg)]", px: "8px", description: "Containers de destaque e diálogos internos." },
+  { name: "XL (10px)", token: "--radius-xl", className: "rounded-[var(--radius-xl)]", px: "10px", description: "Painéis e modais." },
+  { name: "2XL (12px)", token: "--radius-2xl", className: "rounded-[var(--radius-2xl)]", px: "12px", description: "Overlays de grande escala." },
+  { name: "Pill (999px)", token: "--radius-pill", className: "rounded-[var(--radius-pill)]", px: "999px", description: "Formato pílula/circular." },
+];
+
 const ELEVATIONS = [
   {
-    name: "Standard Shadow (Modo Clínico)",
-    variable: "--shadow-brutal",
-    utility: "shadow-brutal",
-    className: "shadow-brutal",
-    description: "Sombra dura sem desfoque (4px). Assinatura visual neobrutalista para cards e botões no Modo Clínico.",
+    name: "Raise Sutil (Nível 1)",
+    variable: "--elevation-1",
+    utility: "shadow-[var(--elevation-1)]",
+    className: "shadow-[var(--elevation-1)]",
+    description: "Elevação sutil (2px dura). Usada para micro-cards e elevações secundárias.",
   },
   {
-    name: "Medium Shadow (Modo Família)",
-    variable: "--shadow-brutal-sm",
-    utility: "shadow-brutal-sm",
-    className: "shadow-brutal-sm",
-    description: "Sombra dura reduzida (2px). Usada no Modo Família para atenuar a aspereza visual.",
+    name: "Base Mode-Aware (Nível 2 / --ds-shadow)",
+    variable: "--ds-shadow",
+    utility: "shadow-[var(--ds-shadow)]",
+    className: "shadow-[var(--ds-shadow)]",
+    description: "Sombra base dura neobrutalista (4px modo Clínico / 2px modo Família).",
   },
   {
-    name: "Hover Shadow",
-    variable: "--shadow-brutal-hover",
-    utility: "shadow-brutal-hover",
-    className: "shadow-brutal-hover -translate-x-0.5 -translate-y-0.5",
-    description: "Sombra dura expandida (6px) com deslocamento negativo para simular elevação ao pairar.",
+    name: "Hover Peak (Nível 3 / --ds-shadow-hover)",
+    variable: "--ds-shadow-hover",
+    utility: "shadow-[var(--ds-shadow-hover)]",
+    className: "shadow-[var(--ds-shadow-hover)] -translate-x-0.5 -translate-y-0.5",
+    description: "Elevação máxima no hover com deslocamento mecânico (+1 nível).",
   },
   {
-    name: "Suggested Inset Shadow (IA)",
-    variable: "--shadow-brutal-inset",
-    utility: "shadow-brutal-inset",
-    className: "shadow-brutal-inset translate-x-1 translate-y-1",
-    description: "Sombra interna invertida (-4px). Representa o estado 'afundado' ou 'tentativo' de sugestões da IA.",
+    name: "Inset Shadow (IA / Tentativo)",
+    variable: "--elevation-inset",
+    utility: "shadow-[var(--elevation-inset)]",
+    className: "shadow-[var(--elevation-inset)]",
+    description: "Sombra interna que AFUNDA o card. Assinatura visual de dados sugeridos pela IA.",
+  },
+  {
+    name: "Overlay Shadow (Modais/Popovers)",
+    variable: "--elevation-overlay",
+    utility: "shadow-[var(--elevation-overlay)]",
+    className: "shadow-[var(--elevation-overlay)]",
+    description: "Sombra suave de sobreposição para diálogos flutuantes e modais.",
   },
 ];
 
@@ -72,7 +91,7 @@ export const Spacing: StoryObj = {
           Espaçamento, Bordas & Elevação
         </h1>
         <p className="mt-4 text-lg md:text-xl font-bold max-w-3xl text-black">
-          Design System Espectro Brutal — Grade de espaçamento base 4px, alturas de controle mobile-friendly e física neobrutalista de sombras.
+          Design System Espectro Brutal — Grade de espaçamento base 4px, escala de raio de bordas, alturas de controle e física de elevação (surface.ts).
         </p>
       </div>
 
@@ -142,6 +161,34 @@ export const Spacing: StoryObj = {
         </section>
       </div>
 
+      {/* Rampa de Border Radius */}
+      <section className="border-2 border-black bg-white p-6 md:p-8 shadow-brutal">
+        <h2 className="text-2xl font-black border-b-2 border-black pb-2 mb-6 uppercase font-mono">
+          Rampa de Bordas &amp; Raio (Border Radius)
+        </h2>
+        <p className="text-stone-600 text-sm font-medium mb-8 max-w-3xl">
+          A rampa de border-radius suaviza os cantos neobrutalistas sem perder o peso da borda sólida (1.5px / 2px). As superfícies padrão nascem com <code>--radius-md</code> (6px).
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {BORDER_RADIUS_ITEMS.map((item) => (
+            <div key={item.token} className="border-2 border-black p-4 bg-stone-50 shadow-brutal-sm rounded-lg flex flex-col justify-between">
+              <div>
+                <div className={`w-full h-16 bg-white border-2 border-black ${item.className} mb-3 flex items-center justify-center font-mono font-bold text-xs`}>
+                  {item.px}
+                </div>
+                <h3 className="font-extrabold text-sm text-black">{item.name}</h3>
+                <code className="text-[10px] text-rose-600 font-mono font-bold bg-stone-100 px-1 border border-stone-200 rounded block max-w-max my-1">
+                  {item.token}
+                </code>
+              </div>
+              <p className="text-stone-600 text-xs mt-2 border-t border-stone-200 pt-2">
+                {item.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Sombras e Elevações */}
       <section className="border-2 border-black bg-white p-6 md:p-8 shadow-brutal">
         <h2 className="text-2xl font-black border-b-2 border-black pb-2 mb-6 uppercase font-mono">
@@ -182,7 +229,7 @@ export const Spacing: StoryObj = {
       {/* DO'S & DON'TS DE ESPAÇAMENTO E BORDAS */}
       <section className="space-y-4 pt-6 border-t-2 border-dashed border-stone-200">
         <h2 className="text-2xl font-black font-mono text-black uppercase tracking-wider">
-          Do's & Don'ts (Espaçamento & Bordas)
+          Do&apos;s &amp; Don&apos;ts (Espaçamento &amp; Bordas)
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* DO */}
@@ -210,7 +257,7 @@ export const Spacing: StoryObj = {
           <div className="border-2 border-black rounded-lg p-6 bg-rose-50 shadow-brutal-sm">
             <div className="flex items-center gap-2 mb-4">
               <span className="bg-rose-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
-                DON'T (NÃO)
+                DON&apos;T (NÃO)
               </span>
               <h3 className="text-lg font-black text-rose-950">Desvios de Grade</h3>
             </div>

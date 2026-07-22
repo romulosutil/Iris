@@ -61,14 +61,14 @@ const confiancaRotulo: Record<ExtracaoRevisavel["confianca"], string> = {
 
 function ResumoDefinicoes({ linhas }: { linhas: LinhaResumo[] }) {
   if (linhas.length === 0) {
-    return <p className="text-graphite text-sm">Sem detalhes estruturados.</p>;
+    return <p className="text-[var(--text-secondary)] text-sm">Sem detalhes estruturados.</p>;
   }
   return (
     <dl className="grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-4 gap-y-1.5 text-sm">
       {linhas.map((l, i) => (
         <React.Fragment key={`${l.rotulo}-${i}`}>
-          <dt className="text-graphite font-semibold">{l.rotulo}</dt>
-          <dd className="text-ink">{l.valor}</dd>
+          <dt className="text-[var(--text-secondary)] font-semibold">{l.rotulo}</dt>
+          <dd className="text-[var(--text-primary)]">{l.valor}</dd>
         </React.Fragment>
       ))}
     </dl>
@@ -79,23 +79,23 @@ function PainelHistorico({ itens }: { itens: HistoricoItem[] }) {
   return (
     <section
       aria-label="Histórico do paciente no mesmo domínio"
-      className="border-ink-anchor bg-canvas border-2 border-dashed p-4"
+      className="border-[var(--border-brutal)] bg-[var(--surface-elevated)] border-2 border-dashed p-4 rounded-[var(--radius-xs)]"
     >
-      <h4 className="font-display text-ink-anchor mb-2 text-sm font-bold uppercase tracking-wide">
+      <h4 className="font-display text-[var(--text-primary)] mb-2 text-sm font-bold uppercase tracking-wide">
         Histórico do paciente (mesmo domínio)
       </h4>
       {itens.length === 0 ? (
-        <p className="text-graphite text-sm">
+        <p className="text-[var(--text-secondary)] text-sm">
           Sem registro anterior aprovado neste domínio para comparar. A IA
           sinalizou inconsistência — confirme manualmente antes de aprovar.
         </p>
       ) : (
         <Stack gap="md" como="ul">
           {itens.map((h) => (
-            <li key={h.id} className="border-graphite border-l-2 pl-3">
-              <p className="text-ink text-sm italic">“{h.trechoFonte}”</p>
+            <li key={h.id} className="border-[var(--text-secondary)] border-l-2 pl-3">
+              <p className="text-[var(--text-primary)] text-sm italic">"{h.trechoFonte}"</p>
               {h.revisadoEm ? (
-                <p className="text-graphite mt-0.5 text-xs">
+                <p className="text-[var(--text-secondary)] mt-0.5 text-xs">
                   aprovado em {dataFmt.format(h.revisadoEm)}
                 </p>
               ) : null}
@@ -179,7 +179,7 @@ function DialogoEditar({
             value={JSON.stringify(payloadOriginalDe(ex))}
           />
           <label className="flex flex-col gap-1">
-            <span className="text-ink text-sm font-semibold">Função</span>
+            <span className="text-[var(--text-primary)] text-sm font-semibold">Função</span>
             <input
               name="funcao"
               defaultValue={valorDe(ex, "funcao")}
@@ -187,7 +187,7 @@ function DialogoEditar({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-ink text-sm font-semibold">Nível de ajuda</span>
+            <span className="text-[var(--text-primary)] text-sm font-semibold">Nível de ajuda</span>
             <input
               name="nivel_ajuda"
               defaultValue={valorDe(ex, "nivel_ajuda")}
@@ -195,7 +195,7 @@ function DialogoEditar({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-ink text-sm font-semibold">Resultado</span>
+            <span className="text-[var(--text-primary)] text-sm font-semibold">Resultado</span>
             <input
               name="resultado"
               defaultValue={valorDe(ex, "resultado")}
@@ -213,7 +213,7 @@ function DialogoEditar({
 }
 
 const campoClasses =
-  "bg-surface text-ink font-body border-ink-anchor focus-visible:outline-focus w-full border-2 px-3 py-2 text-base outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]";
+  "bg-[var(--surface-card)] text-[var(--text-primary)] font-body border-[var(--border-brutal)] focus-visible:outline-focus w-full border-2 px-3 py-2 text-base outline-none rounded-[var(--radius-xs)] focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]";
 
 // A UI de edição expõe os campos clínicos mais corrigidos (função/nível de
 // ajuda/resultado). O resumo já vem pronto do servidor; recuperamos os valores
@@ -259,25 +259,25 @@ function CartaoRevisao({
   const podeAprovar = ehDono && (!info.exigeConfirmacao || confirmado);
 
   return (
-    <article className="border-ink-anchor bg-surface border-2 shadow-[var(--ds-shadow)]">
+    <article className="border-[var(--border-brutal)] bg-[var(--surface-card)] border-2 shadow-[var(--ds-shadow)] rounded-[var(--radius-control)]">
       <div className={cn("h-2 w-full", info.faixa)} aria-hidden />
       <div className="flex flex-col gap-3 p-5">
         <Split alinha="start">
           <Stack gap="sm">
             <Cluster gap="sm">
               <StatusBadge estado="sugerida" />
-              <span className="font-display text-ink-anchor text-sm font-semibold">
+              <span className="font-display text-[var(--text-primary)] text-sm font-semibold">
                 {rotuloSubtipo(ex.subtipo)}
               </span>
             </Cluster>
-            <p className="text-graphite text-sm">
+            <p className="text-[var(--text-secondary)] text-sm">
               {info.alerta ? "⚠ " : ""}
               {info.rotulo} · {confiancaRotulo[ex.confianca]}
             </p>
           </Stack>
         </Split>
 
-        <blockquote className="border-graphite text-ink border-l-2 pl-3 text-base italic">
+        <blockquote className="border-[var(--text-secondary)] text-[var(--text-primary)] border-l-2 pl-3 text-base italic">
           “{ex.trechoFonte}”
         </blockquote>
 
@@ -286,7 +286,7 @@ function CartaoRevisao({
             <ResumoDefinicoes linhas={ex.resumo} />
 
             {ex.justificativaConfianca ? (
-              <p className="text-graphite text-sm">
+              <p className="text-[var(--text-secondary)] text-sm">
                 <span className="font-semibold">Por que esta confiança: </span>
                 {ex.justificativaConfianca}
               </p>
@@ -297,12 +297,12 @@ function CartaoRevisao({
             ) : null}
 
             {info.exigeConfirmacao && ehDono ? (
-              <label className="text-ink flex items-start gap-2 text-sm">
+              <label className="text-[var(--text-primary)] flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={confirmado}
                   onChange={(e) => setConfirmado(e.target.checked)}
-                  className="border-ink-anchor mt-0.5 size-5 shrink-0 border-2 accent-[color:var(--color-suggested)]"
+                  className="border-[var(--border-brutal)] mt-0.5 size-5 shrink-0 border-2 accent-[color:var(--color-suggested)]"
                 />
                 <span>
                   Confirmo que revisei o nível de ajuda observado e o alvo antes
@@ -333,7 +333,7 @@ function CartaoRevisao({
                 </AcaoForm>
               </Cluster>
             ) : (
-              <p className="text-graphite text-sm">
+              <p className="text-[var(--text-secondary)] text-sm">
                 Só o terapeuta da sessão pode aprovar — você está acompanhando.
               </p>
             )}
@@ -373,7 +373,7 @@ export function RevisaoLista({
 }) {
   if (extracoes.length === 0) {
     return (
-      <p className="text-ink border-ink-anchor bg-surface border-2 border-dashed p-6">
+      <p className="text-[var(--text-primary)] border-[var(--border-brutal)] bg-[var(--surface-card)] border-2 border-dashed p-6 rounded-[var(--radius-control)]">
         Nenhuma sugestão pendente nesta sessão — tudo revisado.
       </p>
     );

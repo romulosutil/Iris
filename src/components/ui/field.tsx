@@ -28,7 +28,7 @@ export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
       >
         <label
           htmlFor={htmlFor}
-          className="text-ink font-display text-sm font-semibold"
+          className="text-[var(--text-primary)] font-display text-sm font-semibold"
         >
           {label}
         </label>
@@ -37,7 +37,7 @@ export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
           <p
             id={`${htmlFor}-error`}
             role="alert"
-            className="text-ink-anchor text-sm font-semibold"
+            className="text-[var(--status-error-fg)] text-sm font-semibold"
           >
             {error}
           </p>

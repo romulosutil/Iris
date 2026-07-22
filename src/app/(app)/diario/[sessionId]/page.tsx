@@ -10,6 +10,7 @@ import {
   session,
 } from "@/db/schema";
 import { Stack } from "@/components/ui/layout";
+import { PageHeader } from "@/components/ui/page-header";
 import { CapturaForm } from "./captura-form";
 import { ConsolidarForm } from "./consolidar-form";
 
@@ -96,19 +97,15 @@ export default async function DiarioPage({
 
   return (
     <Stack gap="lg">
-      <Stack gap="sm">
-        <h1 className="font-display text-ink-anchor text-3xl font-bold">
-          Diário da sessão
-        </h1>
-        <p className="text-ink text-lg">
-          {dados.pacienteNome ?? "Paciente (acesso restrito)"}
-        </p>
-      </Stack>
+      <PageHeader
+        title="Diário da sessão"
+        description={dados.pacienteNome ?? "Paciente (acesso restrito)"}
+      />
 
       <Stack gap="md" como="section" aria-labelledby="captura-titulo">
         <h2
           id="captura-titulo"
-          className="font-display text-ink-anchor text-2xl font-bold"
+          className="font-display text-[var(--text-primary)] text-2xl font-bold"
         >
           Captura rápida
         </h2>
@@ -122,7 +119,7 @@ export default async function DiarioPage({
       <Stack gap="md" como="section" aria-labelledby="consolidar-titulo">
         <h2
           id="consolidar-titulo"
-          className="font-display text-ink-anchor text-2xl font-bold"
+          className="font-display text-[var(--text-primary)] text-2xl font-bold"
         >
           Consolidar sessão
         </h2>

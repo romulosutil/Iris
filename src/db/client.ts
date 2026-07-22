@@ -34,11 +34,19 @@ function lazy<T extends object>(init: () => T): T {
   });
 }
 
+const globalForDb = globalThis as unknown as {
+  sql: Sql | undefined;
+  authSql: Sql | undefined;
+};
+
 // Conexão de runtime — usuário membro de app_role (RLS aplica).
 export const sql: Sql = lazy(() => {
+  if (globalForDb.sql) return globalForDb.sql;
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL não definida");
-  return postgres(url, { max: 10 });
+  const instance = postgres(url, { max: 10 });
+  if (process.env.NODE_ENV !== "production") globalForDb.sql = instance;
+  return instance;
 });
 
 // db "cru" (sem contexto de tenant). NÃO usar para dados de paciente —
@@ -51,9 +59,12 @@ export const db: Db = lazy(() => drizzle(sql, { schema, casing: "snake_case" }))
 // permissivas em app_user/clinic/user_role p/ ler/escrever identidade pré-GUC.
 // ⚠️ authDb NUNCA toca dado de paciente — isso fura o gargalo único withTenant.
 export const authSql: Sql = lazy(() => {
+  if (globalForDb.authSql) return globalForDb.authSql;
   const authUrl = process.env.AUTH_DATABASE_URL;
   if (!authUrl) throw new Error("AUTH_DATABASE_URL não definida");
-  return postgres(authUrl, { max: 5 });
+  const instance = postgres(authUrl, { max: 5 });
+  if (process.env.NODE_ENV !== "production") globalForDb.authSql = instance;
+  return instance;
 });
 export const authDb: Db = lazy(() =>
   drizzle(authSql, { schema, casing: "snake_case" }),

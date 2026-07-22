@@ -23,7 +23,7 @@ export default async function EquipePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-ink-anchor text-3xl font-bold">
+      <h1 className="font-display text-[var(--text-primary)] text-3xl font-bold">
         Equipe de cuidado
       </h1>
       <ul className="flex flex-col gap-3">

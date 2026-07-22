@@ -15,32 +15,26 @@ export type ChipVariante =
   | "Info";
 
 const stylesVariante: Record<string, string> = {
-  success: "bg-[color:var(--success-tint)] border-[color:var(--success-accent)] text-[color:var(--success-deep)]",
-  Success: "bg-[color:var(--success-tint)] border-[color:var(--success-accent)] text-[color:var(--success-deep)]",
-  warning: "bg-[color:var(--warning-tint)] border-[color:var(--warning-accent)] text-[color:var(--warning-deep)]",
-  Warning: "bg-[color:var(--warning-tint)] border-[color:var(--warning-accent)] text-[color:var(--warning-deep)]",
-  ai: "bg-[color:var(--ai-tint)] border-[color:var(--ai-accent)] text-[color:var(--ai-deep)]",
-  AI: "bg-[color:var(--ai-tint)] border-[color:var(--ai-accent)] text-[color:var(--ai-deep)]",
-  info: "bg-[color:var(--info-tint)] border-[color:var(--info-accent)] text-[color:var(--info-deep)]",
-  Info: "bg-[color:var(--info-tint)] border-[color:var(--info-accent)] text-[color:var(--info-deep)]",
-  brand: "bg-[color:var(--brand-tint)] border-[color:var(--brand-primary)] text-[color:var(--ink-anchor)]",
-  neutral: "bg-[color:var(--color-raw-gray-50)] border-[color:var(--color-raw-gray-800)] text-[color:var(--color-raw-gray-900)]",
+  success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
+  Success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
+  warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
+  Warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
+  ai: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
+  AI: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
+  info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
+  Info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
+  brand: "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)]",
+  neutral: "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)]",
 };
 
-/**
- * Chip: tag de protocolo/família ou filtro selecionável na fila do coordenador.
- * Mesma linguagem do Button (borda âncora, canto redondo/pílula, foco ortogonal).
- * Alvo de toque ≥44px no Modo Clínico via min-h-11.
- */
 const base = cn(
-  "inline-flex items-center gap-2 border-[length:var(--border-brutal)] px-3 font-body text-sm rounded-[length:var(--radius-pill)]",
+  "inline-flex items-center gap-2 border-2 border-[var(--border-brutal)] px-3 font-mono text-xs uppercase rounded-sm",
   control("sm"),
 );
 
 const getFundo = (variante: ChipVariante, selecionado: boolean) => {
   if (selecionado) {
-    // Destaque brand-primary se selecionado
-    return "bg-[color:var(--brand-primary)] border-[color:var(--ink-anchor)] text-[color:var(--ink-anchor)] font-semibold";
+    return "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)] font-semibold";
   }
   return stylesVariante[variante] ?? stylesVariante.neutral;
 };

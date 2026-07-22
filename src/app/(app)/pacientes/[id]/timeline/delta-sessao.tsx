@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import type { DeltaSessao } from "./logic";
@@ -18,21 +18,21 @@ export function DeltaSessaoLateral({
 }: DeltaSessaoProps) {
   if (carregando) {
     return (
-      <div className="bg-canvas border-ink-anchor border-2 p-4 animate-pulse flex flex-col gap-3">
-        <div className="h-6 bg-muted w-1/3 border border-ink-anchor"></div>
-        <div className="h-12 bg-muted w-full border border-ink-anchor"></div>
-        <div className="h-12 bg-muted w-full border border-ink-anchor"></div>
+      <div className="bg-[var(--surface-card)] border-[var(--border-brutal)] border-2 p-4 animate-pulse flex flex-col gap-3 rounded-[var(--radius-control)]">
+        <div className="h-6 bg-[var(--surface-elevated)] w-1/3 border border-[var(--border-brutal)]"></div>
+        <div className="h-12 bg-[var(--surface-elevated)] w-full border border-[var(--border-brutal)]"></div>
+        <div className="h-12 bg-[var(--surface-elevated)] w-full border border-[var(--border-brutal)]"></div>
       </div>
     );
   }
 
   if (!delta || delta.itens.length === 0) {
     return (
-      <div className="bg-canvas border-ink-anchor border-2 p-6 text-center">
-        <div className="text-muted text-base font-semibold">
+      <div className="bg-[var(--surface-card)] border-[var(--border-brutal)] border-2 p-6 text-center rounded-[var(--radius-control)]">
+        <div className="text-[var(--text-secondary)] text-base font-semibold">
           Nenhuma alteração clínica registrada nesta sessão
         </div>
-        <p className="text-xs text-muted mt-1">
+        <p className="text-xs text-[var(--text-secondary)] mt-1">
           Apenas manutenção de repertório estável sem alterações de nível de ajuda.
         </p>
       </div>
@@ -52,25 +52,21 @@ export function DeltaSessaoLateral({
   const novos = delta.itens.filter((i) => i.tipo === "novo");
 
   return (
-    <div className="bg-canvas border-ink-anchor flex flex-col gap-4 border-2 p-4">
-      <div className="border-ink-anchor border-b-2 pb-2">
-        <h3 className="text-lg font-black text-ink">
-          Delta da Sessão
+    <div className="bg-[var(--surface-card)] border-[var(--border-brutal)] flex flex-col gap-4 border-2 p-4 rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]">
+      <div className="border-[var(--border-brutal)] border-b-2 pb-2">
+        <h3 className="text-lg font-bold font-display text-[var(--text-primary)]">
+          Resumo da Sessão
         </h3>
-        <p className="text-xs text-muted mt-0.5">
-          Resumo das evoluções e registros consolidados na sessão selecionada.
-        </p>
       </div>
 
-      {/* Indicadores numéricos rápidos */}
-      <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="bg-canvas border-ink-anchor border-2 p-2">
-          <div className="text-2xl font-black text-ink">{delta.evidenciasNovas}</div>
-          <div className="text-xxs font-bold text-muted uppercase tracking-wider">Evidências</div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-[var(--surface-elevated)] border-[var(--border-brutal)] border-2 p-3 rounded-[var(--radius-xs)]">
+          <div className="text-2xl font-bold font-display text-[var(--text-primary)]">{delta.evidenciasNovas}</div>
+          <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide font-mono font-semibold">Evidências Registradas</div>
         </div>
-        <div className="bg-canvas border-ink-anchor border-2 p-2">
-          <div className="text-2xl font-black text-ink">{delta.metasCandidatasNovas}</div>
-          <div className="text-xxs font-bold text-muted uppercase tracking-wider">Candidatas</div>
+        <div className="bg-[var(--surface-elevated)] border-[var(--border-brutal)] border-2 p-3 rounded-[var(--radius-xs)]">
+          <div className="text-2xl font-bold font-display text-[var(--text-primary)]">{delta.metasCandidatasNovas}</div>
+          <div className="text-xs text-[var(--text-secondary)] uppercase tracking-wide font-mono font-semibold">Novas Candidatas</div>
         </div>
       </div>
 
@@ -79,16 +75,16 @@ export function DeltaSessaoLateral({
         {/* Novos Itens */}
         {novos.length > 0 && (
           <div className="flex flex-col gap-2">
-            <h4 className="text-xs font-bold text-muted uppercase tracking-wider">
+            <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
               🚀 Introduzidos na Sessão ({novos.length})
             </h4>
             {novos.map((item) => (
               <div
                 key={item.id}
-                className="bg-blue-50 border-blue-600 border-2 p-2 text-sm text-blue-900 font-medium"
+                className="bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)] border-2 p-2.5 text-sm font-medium rounded-[var(--radius-control)] shadow-[var(--ds-shadow-sm)]"
               >
                 <div>{obterNomeItem(item.id)}</div>
-                <div className="text-xs text-blue-700 mt-0.5 font-bold">
+                <div className="text-xs text-[var(--status-info-fg)] mt-0.5 font-bold">
                   Nível inicial: {item.nivelNovo !== null ? `Nível ${item.nivelNovo}` : "Independente"}
                 </div>
               </div>
@@ -99,16 +95,16 @@ export function DeltaSessaoLateral({
         {/* Evoluções */}
         {evolucoes.length > 0 && (
           <div className="flex flex-col gap-2">
-            <h4 className="text-xs font-bold text-muted uppercase tracking-wider">
+            <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
               📈 Evoluções ({evolucoes.length})
             </h4>
             {evolucoes.map((item) => (
               <div
                 key={item.id}
-                className="bg-green-50 border-green-600 border-2 p-2 text-sm text-green-900 font-medium"
+                className="bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)] border-2 p-2.5 text-sm font-medium rounded-[var(--radius-control)] shadow-[var(--ds-shadow-sm)]"
               >
                 <div>{obterNomeItem(item.id)}</div>
-                <div className="text-xs text-green-700 mt-0.5 font-bold flex justify-between">
+                <div className="text-xs text-[var(--status-success-fg)] mt-0.5 font-bold flex justify-between">
                   <span>De: {item.nivelAnterior !== null ? `Nível ${item.nivelAnterior}` : "Sem nível"}</span>
                   <span>&rarr;</span>
                   <span>Para: {item.nivelNovo !== null ? `Nível ${item.nivelNovo}` : "Independente"}</span>
@@ -121,16 +117,16 @@ export function DeltaSessaoLateral({
         {/* Regressões */}
         {regressoes.length > 0 && (
           <div className="flex flex-col gap-2">
-            <h4 className="text-xs font-bold text-muted uppercase tracking-wider">
+            <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
               📉 Regressões / Removidos ({regressoes.length})
             </h4>
             {regressoes.map((item) => (
               <div
                 key={item.id}
-                className="bg-red-50 border-red-600 border-2 p-2 text-sm text-red-900 font-medium"
+                className="bg-[var(--status-error-bg)] border-[var(--status-error-border)] text-[var(--status-error-fg)] border-2 p-2.5 text-sm font-medium rounded-[var(--radius-control)] shadow-[var(--ds-shadow-sm)]"
               >
                 <div>{obterNomeItem(item.id)}</div>
-                <div className="text-xs text-red-700 mt-0.5 font-bold flex justify-between">
+                <div className="text-xs text-[var(--status-error-fg)] mt-0.5 font-bold flex justify-between">
                   <span>De: {item.nivelAnterior !== null ? `Nível ${item.nivelAnterior}` : "Independente"}</span>
                   <span>&rarr;</span>
                   <span>Para: {item.nivelNovo !== null ? `Nível ${item.nivelNovo}` : "Nulo / Arquivado"}</span>

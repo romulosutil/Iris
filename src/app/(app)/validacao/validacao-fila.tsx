@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
+import Link from "next/link";
 import { Stack, Cluster } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -100,20 +101,25 @@ function ItemCard({
     <Stack
       gap="md"
       como="li"
-      className={cn("bg-bg-surface p-5", surface("solida"))}
+      className={cn(
+        "bg-[var(--surface-card)] p-5 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
+      )}
+      id={`validacao-card-${item.evidenceId}`}
     >
       <Stack gap="sm">
-        <span className="text-graphite text-sm font-semibold tracking-wide uppercase">
+        <span className="text-[var(--text-secondary)] font-mono text-xs font-semibold tracking-wide uppercase">
           Item {indice} de {total}
         </span>
-        <h3 className="text-ink text-lg font-semibold">
-          {item.patientNome} · sessão {item.sessionNumero}
+        <h3 className="text-[var(--text-primary)] font-display text-lg font-bold">
+          <Link href={`/pacientes/${item.patientId}`} className="hover:underline">
+            {item.patientNome}
+          </Link>
         </h3>
-        <p className="text-ink text-base">{item.trecho || "(sem trecho registrado)"}</p>
-        <Stack gap="sm">
-          <span className="text-graphite text-sm">Classificação atual:</span>
+        <p className="text-[var(--text-primary)] text-base">{item.trecho || "(sem trecho registrado)"}</p>
+        <Cluster gap="sm" className="items-center">
+          <span className="text-[var(--text-secondary)] text-sm font-semibold">Classificação atual:</span>
           <ClassificacaoAtual classificacao={item.classificacaoAtual} />
-        </Stack>
+        </Cluster>
         {item.motivo.length > 0 ? (
           <ChipGroup rotulo="Motivo da validação">
             {item.motivo.map((m) => (

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { withTenant } from "@/db/rls";
 import { Stack } from "@/components/ui/layout";
+import { PageHeader } from "@/components/ui/page-header";
 import { listarDuvidasAbertas } from "./queries";
 import { alvosValidosDoPaciente, type AlvoValido } from "../validacao/alvos";
 import { DuvidasLista } from "./duvidas-lista";
@@ -31,16 +32,14 @@ export default async function DuvidasPage() {
 
   return (
     <Stack gap="lg">
-      <Stack gap="sm">
-        <h1 className="font-display text-ink-anchor text-3xl font-bold">
-          Dúvidas do coordenador
-        </h1>
-        <p className="text-ink text-lg">
-          {itens.length === 0
+      <PageHeader
+        title="Dúvidas do coordenador"
+        description={
+          itens.length === 0
             ? "Nenhuma dúvida aberta — nada pendente de resposta."
-            : `${itens.length} ${itens.length === 1 ? "dúvida pede" : "dúvidas pedem"} resposta.`}
-        </p>
-      </Stack>
+            : `${itens.length} ${itens.length === 1 ? "dúvida pede" : "dúvidas pedem"} resposta.`
+        }
+      />
 
       <DuvidasLista itens={itens} alvosPorPaciente={alvosPorPaciente} />
     </Stack>

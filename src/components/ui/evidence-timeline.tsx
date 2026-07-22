@@ -19,17 +19,17 @@ export interface EvidenceTimelineProps
 
 const nodeClasses: Record<EvidenceKind, string> = {
   "fato-success":
-    "border-solid border-[color:var(--ink-anchor)] bg-[color:var(--success-accent)]",
+    "border-solid border-[var(--border-brutal)] bg-[var(--status-success-border)]",
   "fato-brand":
-    "border-solid border-[color:var(--ink-anchor)] bg-[color:var(--brand-primary)]",
+    "border-solid border-[var(--border-brutal)] bg-[var(--action-primary)]",
   sugestao:
-    "border-dashed border-[color:var(--ai-accent)] bg-[color:var(--color-bg-surface)]",
+    "border-dashed border-[var(--status-ia-border)] bg-[var(--surface-card)]",
 };
 
 const titleClasses: Record<EvidenceKind, string> = {
-  "fato-success": "text-[color:var(--success-deep)]",
-  "fato-brand": "text-[color:var(--ink-anchor)]",
-  sugestao: "text-[color:var(--ai-deep)]",
+  "fato-success": "text-[var(--status-success-fg)]",
+  "fato-brand": "text-[var(--text-primary)]",
+  sugestao: "text-[var(--status-ia-fg)]",
 };
 
 /**
@@ -63,7 +63,7 @@ export const EvidenceTimeline = React.forwardRef<
               {!ultimo && (
                 <span
                   aria-hidden
-                  className="w-0.5 flex-1 bg-[color:var(--border-neutral-light)]"
+                  className="w-0.5 flex-1 bg-[var(--border-brutal)]"
                 />
               )}
             </div>
@@ -79,7 +79,7 @@ export const EvidenceTimeline = React.forwardRef<
                 {item.titulo}
               </p>
               {item.descricao && (
-                <p className="mt-1 text-sm text-[color:var(--color-graphite)]">
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
                   {item.descricao}
                 </p>
               )}

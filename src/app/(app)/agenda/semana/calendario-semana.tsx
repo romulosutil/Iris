@@ -96,15 +96,15 @@ export function CalendarioSemana({
     <div
       role="grid"
       aria-label="Calendário semanal"
-      className="border-border-brutal overflow-x-auto border-2"
+      className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] overflow-x-auto p-2"
     >
-      <div role="row" className="flex">
+      <div role="row" className="flex border-b border-[var(--border-brutal)]/30 pb-1 mb-1">
         <div className="shrink-0" style={{ width: `${LARGURA_ROTULO_REM}rem` }} />
         {colunas.map((c) => (
           <div
             key={c}
             role="columnheader"
-            className="font-body text-ink w-12 shrink-0 border-l border-border-brutal/20 text-center text-xs"
+            className="font-mono text-[var(--text-secondary)] w-12 shrink-0 border-l border-[var(--border-brutal)]/20 text-center text-xs font-semibold py-1"
           >
             {c}
           </div>
@@ -117,7 +117,7 @@ export function CalendarioSemana({
           <div role="row" key={diaISO} className="relative flex items-stretch">
             <div
               role="rowheader"
-              className="font-display text-ink-anchor flex shrink-0 items-center text-sm font-bold"
+              className="font-display text-[var(--text-primary)] flex shrink-0 items-center text-sm font-bold"
               style={{ width: `${LARGURA_ROTULO_REM}rem` }}
             >
               {DIAS_LABEL[diaSemana]}
@@ -153,9 +153,9 @@ export function CalendarioSemana({
                     "border-border-brutal/20 h-10 w-12 shrink-0 border-l",
                     FOCO,
                     bloqueado
-                      ? "bg-status-error-bg/30 cursor-not-allowed"
-                      : "bg-surface cursor-pointer",
-                    foraJanela && !bloqueado && "bg-gold/10",
+                      ? "bg-[var(--color-terracotta)]/10 cursor-not-allowed"
+                      : "bg-[var(--surface-card)] cursor-pointer",
+                    foraJanela && !bloqueado && "bg-[var(--color-gold)]/10",
                   )}
                 />
               );
@@ -175,19 +175,14 @@ export function CalendarioSemana({
                   width: `calc(${colunasLargura} * ${LARGURA_COL_REM}rem)`,
                 };
                 const classesBloco = cn(
-                  "absolute top-0 h-10 overflow-hidden px-1 text-xs",
+                  "absolute top-0.5 bottom-0.5 rounded-[var(--radius-xs)] overflow-hidden px-2 text-xs flex flex-col justify-center transition-all shadow-sm z-10",
                   b.origem === "previsto" &&
-                    "border-status-ia-border bg-status-ia-bg border-2 border-dashed",
+                    "border-2 border-dashed border-[var(--color-purple)] bg-[var(--color-purple)]/15 text-[var(--text-primary)] font-semibold",
                   b.origem === "conflito" &&
-                    "border-status-error-border bg-status-error-bg border-2 border-dashed",
+                    "border-2 border-dashed border-[var(--color-terracotta)] bg-[var(--color-terracotta)]/20 text-[var(--text-primary)] font-bold",
                   b.origem === "concreto" &&
-                    "border-border-brutal bg-status-success-bg border-2",
+                    "border-2 border-[var(--border-brutal)] bg-[var(--color-gold)] text-[var(--text-primary)] font-bold shadow-[var(--ds-shadow)]",
                 );
-                // Bloco de origem recorrente (regra ou sessão materializada
-                // dela) vira acionável — abre o popover de detalhe/ações da
-                // regra (F2/F4/F5). Avulsa pura (sem recorrenteId) continua
-                // decorativa p/ leitor de tela (a info já é anunciada na
-                // célula onde o bloco começa, ver rotuloCelula acima).
                 if (b.recorrenteId) {
                   const ehConflito = b.origem === "conflito";
                   return (
@@ -201,12 +196,14 @@ export function CalendarioSemana({
                           : undefined
                       }
                       onClick={() => aoAbrirRegra?.(b.recorrenteId!, b.rotulo)}
-                      className={cn(classesBloco, "text-left", FOCO)}
+                      className={cn(classesBloco, "text-left leading-tight truncate", FOCO)}
                       style={estilo}
                     >
-                      {ehConflito
-                        ? `⚠ ${b.rotulo} · não agendado`
-                        : `${b.rotulo} · ${b.disciplina}`}
+                      <span className="truncate block">
+                        {ehConflito
+                          ? `⚠ ${b.rotulo} · não agendado`
+                          : `${b.rotulo} · ${b.disciplina}`}
+                      </span>
                     </button>
                   );
                 }
@@ -215,10 +212,12 @@ export function CalendarioSemana({
                     key={b.id}
                     aria-hidden="true"
                     data-testid="bloco-overlay"
-                    className={classesBloco}
+                    className={cn(classesBloco, "leading-tight truncate")}
                     style={estilo}
                   >
-                    {b.rotulo} · {b.disciplina}
+                    <span className="truncate block">
+                      {b.rotulo} · {b.disciplina}
+                    </span>
                   </div>
                 );
               })}

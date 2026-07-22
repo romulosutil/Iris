@@ -96,16 +96,20 @@ export function PopoverRegra({
 
         {/* F2: lista persistente das datas puladas por conflito (não é toast) */}
         {conflitos.length > 0 && (
-          <div role="status" className="mt-2">
-            <p className="text-ink font-body text-sm font-medium">
+          <div role="status" className="mt-3 flex flex-col gap-2">
+            <p className="text-[var(--text-primary)] font-body text-sm font-semibold">
               {conflitos.length}{" "}
               {conflitos.length === 1 ? "data não criada" : "datas não criadas"} por conflito:
             </p>
-            <ul className="text-ink font-body text-sm">
-              {conflitos.map((d) => (
-                <li key={d}>{formatarBR(d)}</li>
-              ))}
-            </ul>
+            <div className="max-h-48 overflow-y-auto border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] bg-[var(--surface-elevated)] p-3">
+              <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 font-mono text-xs text-[var(--text-primary)]">
+                {conflitos.map((d) => (
+                  <li key={d} className="bg-[var(--surface-card)] px-2 py-1 border border-[var(--border-brutal)]/40 rounded-[var(--radius-xs)] text-center">
+                    {formatarBR(d)}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         )}
 

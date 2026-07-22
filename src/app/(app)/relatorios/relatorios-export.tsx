@@ -95,7 +95,7 @@ export function RelatoriosExport({ pacientes }: { pacientes: Paciente[] }) {
   return (
     <Card titulo="Dossiê para convênio">
       <Stack gap="md">
-        <p className="text-ink text-base">
+        <p className="text-[var(--text-primary)] text-base">
           Sessões realizadas, faltas justificadas e evidências aprovadas do
           período — sem texto gerado por IA.
         </p>

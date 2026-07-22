@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { Stack, Cluster } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -54,23 +55,24 @@ function DuvidaCard({
       : "";
 
   return (
-    <Stack gap="md" como="li" className={cn("bg-bg-surface p-5", surface("solida"))}>
+    <Card
+      como="li"
+      titulo={`Sessão ${item.sessionNumero}`}
+      className="p-5"
+    >
       <Stack gap="sm">
-        <span className="text-graphite text-sm font-semibold tracking-wide uppercase">
+        <span className="text-[var(--text-secondary)] text-sm font-semibold tracking-wide uppercase font-mono">
           Dúvida {indice} de {total}
         </span>
-        <h3 className="text-ink text-lg font-semibold">
-          Sessão {item.sessionNumero}
-        </h3>
-        <p className="text-ink text-base">{item.trecho || "(sem trecho registrado)"}</p>
+        <p className="text-[var(--text-primary)] text-base">{item.trecho || "(sem trecho registrado)"}</p>
         <Stack gap="sm">
-          <span className="text-graphite text-sm">Classificação atual:</span>
+          <span className="text-[var(--text-secondary)] text-sm">Classificação atual:</span>
           <ClassificacaoAtual classificacao={item.classificacaoAtual} />
         </Stack>
-        <p className="text-ink text-base font-medium">{item.pergunta}</p>
+        <p className="text-[var(--text-primary)] text-base font-medium">{item.pergunta}</p>
       </Stack>
 
-      <form action={formAction}>
+      <form action={formAction} className="mt-4">
         <Stack gap="md">
           <input type="hidden" name="evidenceQueryId" value={item.evidenceQueryId} />
           <input type="hidden" name="novoAlvo" value={novoAlvoJson} />
@@ -124,7 +126,7 @@ function DuvidaCard({
           </Cluster>
         </Stack>
       </form>
-    </Stack>
+    </Card>
   );
 }
 

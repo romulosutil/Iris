@@ -4,6 +4,7 @@ import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { criarMetaAction, type CriarMetaState } from "./actions";
 
 export type MilestoneOpcao = { id: string; rotulo: string };
@@ -37,19 +38,19 @@ export function NovaMetaForm({
         />
       </Field>
 
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="text-ink font-display text-sm font-semibold">
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-[var(--text-primary)] font-display text-sm font-bold">
           Disciplina
         </legend>
         <div className="flex flex-wrap gap-4">
           {(["ABA", "Fono", "TO"] as const).map((d, i) => (
-            <label key={d} className="text-ink inline-flex items-center gap-2">
+            <label key={d} className="text-[var(--text-primary)] font-semibold inline-flex min-h-11 items-center gap-2 cursor-pointer">
               <input
                 type="radio"
                 name="disciplina"
                 value={d}
                 defaultChecked={i === 0}
-                className="size-4"
+                className="size-5 accent-[var(--action-primary)] border-2 border-[var(--border-brutal)] focus-visible:outline-focus"
               />
               {d}
             </label>
@@ -58,28 +59,25 @@ export function NovaMetaForm({
       </fieldset>
 
       {milestones.length > 0 ? (
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="text-ink font-display text-sm font-semibold">
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-[var(--text-primary)] font-display text-sm font-bold">
             Mapear a marco(s) — opcional
           </legend>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
             {milestones.map((m) => (
-              <label key={m.id} className="text-ink inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="milestoneIds"
-                  value={m.id}
-                  className="size-4"
-                />
-                {m.rotulo}
-              </label>
+              <Checkbox
+                key={m.id}
+                name="milestoneIds"
+                value={m.id}
+                label={m.rotulo}
+              />
             ))}
           </div>
         </fieldset>
       ) : null}
 
-      <fieldset className="border-ink-anchor flex flex-col gap-3 border-2 p-4">
-        <legend className="text-ink font-display px-1 text-sm font-semibold">
+      <fieldset className="border-[var(--border-brutal)] flex flex-col gap-3 border-2 p-4 rounded-[var(--radius-control)] bg-[var(--surface-card)] shadow-[var(--ds-shadow-sm)]">
+        <legend className="text-[var(--text-primary)] font-display px-1 text-sm font-bold">
           Critério de domínio
         </legend>
         <div className="flex flex-wrap gap-4">
@@ -108,7 +106,7 @@ export function NovaMetaForm({
             />
           </Field>
         </div>
-        <p className="text-ink text-sm">
+        <p className="text-[var(--text-secondary)] text-sm">
           Formulário estruturado (não texto livre) — evita ambiguidade e permite
           a avaliação automática de domínio.
         </p>

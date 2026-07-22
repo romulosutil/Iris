@@ -12,23 +12,32 @@ import { cn } from "@/lib/cn";
 export const Progress = React.forwardRef<
   React.ComponentRef<typeof ProgressPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> & {
-    value?: number;
+    value?: number | null;
   }
->(function Progress({ className, value = 0, ...props }, ref) {
-  const pct = Math.min(100, Math.max(0, value));
+>(function Progress({ className, value, ...props }, ref) {
+  const isIndeterminate = value === null || value === undefined;
+  const pct = isIndeterminate ? null : Math.min(100, Math.max(0, value));
+
   return (
     <ProgressPrimitive.Root
       ref={ref}
       value={pct}
       className={cn(
-        "border-ink-anchor bg-canvas relative h-4 w-full overflow-hidden border-2",
+        "border-[var(--border-brutal)] bg-[var(--bg-app)] relative h-4 w-full overflow-hidden border-2 rounded-[var(--radius-sm)]",
         className,
       )}
       {...props}
     >
       <ProgressPrimitive.Indicator
-        className="bg-gold h-full transition-transform duration-300 ease-out"
-        style={{ transform: `translateX(-${100 - pct}%)` }}
+        className={cn(
+          "bg-[var(--action-primary)] h-full transition-transform duration-300 ease-out",
+          isIndeterminate && "w-full animate-pulse opacity-80"
+        )}
+        style={
+          isIndeterminate
+            ? undefined
+            : { transform: `translateX(-${100 - (pct ?? 0)}%)` }
+        }
       />
     </ProgressPrimitive.Root>
   );

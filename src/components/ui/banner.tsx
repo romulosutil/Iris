@@ -11,16 +11,16 @@ export interface BannerProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const estiloBanner: Record<BannerVariant, { container: string; bar: string }> = {
   info: {
-    container: "bg-status-info-bg text-status-info-text",
-    bar: "bg-status-info-text",
+    container: "bg-[var(--status-info-bg)] text-[var(--status-info-fg)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
+    bar: "bg-[var(--status-info-border)]",
   },
   alerta: {
-    container: "bg-status-error-bg text-status-error-text",
-    bar: "bg-status-error-text",
+    container: "bg-[var(--status-error-bg)] text-[var(--status-error-fg)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
+    bar: "bg-[var(--status-error-border)]",
   },
   sucesso: {
-    container: "bg-status-success-bg text-status-success-text",
-    bar: "bg-status-success-text",
+    container: "bg-[var(--status-success-bg)] text-[var(--status-success-fg)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
+    bar: "bg-[var(--status-success-border)]",
   },
 };
 
@@ -32,9 +32,9 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(function Ban
   return (
     <div
       ref={ref}
+      role={variant === "alerta" ? "alert" : "status"}
       className={cn(
-        surface("solida"),
-        "relative p-6 flex flex-col gap-2 pt-8",
+        "relative p-6 flex flex-col gap-2 pt-8 overflow-hidden",
         container,
         className,
       )}

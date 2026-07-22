@@ -91,10 +91,10 @@ export default async function MetasPage({
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-ink-anchor text-3xl font-bold">
+        <h1 className="font-display text-[var(--text-primary)] text-3xl font-bold">
           Metas · {pacienteRow[0].nome}
         </h1>
-        <p className="text-ink text-sm">
+        <p className="text-[var(--text-primary)] text-sm">
           Metas individualizadas (PEI) e seu critério de domínio.
         </p>
       </header>
@@ -107,11 +107,11 @@ export default async function MetasPage({
       ) : null}
 
       <section className="flex flex-col gap-4">
-        <h2 className="font-display text-ink-anchor text-xl font-semibold">
+        <h2 className="font-display text-[var(--text-primary)] text-xl font-semibold">
           Metas do paciente
         </h2>
         {metas.length === 0 ? (
-          <p className="text-ink text-sm">Nenhuma meta criada ainda.</p>
+          <p className="text-[var(--text-primary)] text-sm">Nenhuma meta criada ainda.</p>
         ) : (
           <ul className="flex flex-col gap-4">
             {metas.map((m) => {
@@ -122,21 +122,21 @@ export default async function MetasPage({
               return (
                 <li
                   key={m.id}
-                  className="border-ink-anchor bg-surface flex flex-col gap-2 border-2 p-5 shadow-[var(--ds-shadow)]"
+                  className="border-[var(--border-brutal)] bg-[var(--surface-card)] flex flex-col gap-2 border-2 p-5 shadow-[var(--ds-shadow)] rounded-[var(--radius-control)]"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-display text-ink-anchor text-lg font-semibold">
+                    <h3 className="font-display text-[var(--text-primary)] text-lg font-semibold">
                       {m.descricao}
                     </h3>
-                    <span className="border-ink-anchor bg-canvas text-ink-anchor shrink-0 border px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
+                    <span className="border-[var(--border-brutal)] bg-[var(--surface-elevated)] text-[var(--text-primary)] shrink-0 border px-2 py-0.5 text-xs font-semibold tracking-wide uppercase rounded-[var(--radius-xs)]">
                       {ESTADO_ROTULO[m.estado] ?? m.estado}
                     </span>
                   </div>
-                  <p className="text-ink text-sm">
+                  <p className="text-[var(--text-primary)] text-sm">
                     {m.disciplina ? `${m.disciplina} · ` : ""}
                     {criterioTexto(m.criterioDominio)}
                   </p>
-                  <p className="text-ink text-sm">
+                  <p className="text-[var(--text-primary)] text-sm">
                     Ciclo de revisão: {m.cicloRevisaoSemanas} semanas
                     {m.proximaRevisaoEm ? ` · próxima: ${m.proximaRevisaoEm}` : ""}
                     {vencida ? " (vencida)" : ""}
@@ -187,7 +187,7 @@ export default async function MetasPage({
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="font-display text-ink-anchor text-xl font-semibold">
+        <h2 className="font-display text-[var(--text-primary)] text-xl font-semibold">
           Nova meta
         </h2>
         <NovaMetaForm patientId={id} milestones={opcoesMarco} />

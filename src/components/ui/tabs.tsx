@@ -18,7 +18,7 @@ export const TabsList = React.forwardRef<
   return (
     <TabsPrimitive.List
       ref={ref}
-      className={cn("border-ink-anchor flex items-stretch border-b-2", className)}
+      className={cn("border-[var(--border-brutal)] flex items-stretch border-b-2 overflow-x-auto scrollbar-none", className)}
       {...props}
     />
   );
@@ -32,9 +32,9 @@ export const TabsTrigger = React.forwardRef<
     <TabsPrimitive.Trigger
       ref={ref}
       className={cn(
-        "text-ink font-display -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-4 py-2 text-base font-semibold",
-        "hover:text-ink-anchor",
-        "data-[state=active]:border-ink-anchor data-[state=active]:bg-gold data-[state=active]:text-ink-anchor",
+        "text-[var(--text-secondary)] font-display -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-4 py-2 text-base font-semibold",
+        "hover:text-[var(--text-primary)]",
+        "data-[state=active]:border-[var(--border-brutal)] data-[state=active]:bg-[var(--action-primary)] data-[state=active]:text-[var(--action-primary-fg)]",
         "focus-visible:outline-focus outline-none focus-visible:-outline-offset-[var(--ring-offset)] focus-visible:outline-[length:var(--ring-width)]",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
@@ -52,7 +52,7 @@ export const TabsContent = React.forwardRef<
     <TabsPrimitive.Content
       ref={ref}
       className={cn(
-        "text-ink pt-4 text-base",
+        "text-[var(--text-primary)] pt-4 text-base",
         "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)]",
         className,
       )}

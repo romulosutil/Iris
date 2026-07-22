@@ -16,10 +16,10 @@ export default async function AppHome() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="font-display text-ink-anchor text-3xl font-bold">
+      <h1 className="font-display text-[var(--text-primary)] text-3xl font-bold">
         Tudo pronto.
       </h1>
-      <p className="text-ink max-w-[60ch] text-lg">
+      <p className="text-[var(--text-primary)] max-w-[60ch] text-lg">
         Você entrou como <strong>{rotuloPapel[ctx.role]}</strong>. O painel de
         trabalho chega nas próximas fases — por enquanto, a fundação de acesso e
         tenant está no lugar.

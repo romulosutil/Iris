@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Chip, ChipGroup } from "./chip";
 
 const meta = {
-  title: "Molecules/Chip",
+  title: "Atoms/Chip",
   component: Chip,
   parameters: { layout: "centered" },
   args: { children: "ABA" },

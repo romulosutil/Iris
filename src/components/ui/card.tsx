@@ -5,37 +5,40 @@ import { surface } from "@/components/ui/primitives/surface";
 export type EpistemicState = "fact" | "suggestion" | "conquistado" | "candidato";
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  estado?: "conquistado" | "candidato";
+  /** @deprecated usar `epistemicState` */
+  estado?: EpistemicState;
   epistemicState?: EpistemicState;
   /** Título do cartão; recebe tratamento display. */
   titulo?: React.ReactNode;
-  /** Injeta a barra dourada superior e altera o padding superior */
+  /** Se true, adiciona barra de sotaque no topo */
   destacado?: boolean;
-  /** Adiciona um detalhe de borda esquerda 4px verde */
+  /** Se true, força a borda esquerda espessa independente do estado */
   bordaEsquerda?: boolean;
+  como?: "div" | "li" | "article" | "section";
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
-  { className, estado, epistemicState, titulo, destacado = false, bordaEsquerda = false, children, ...props },
+  { className, estado, epistemicState, titulo, destacado = false, bordaEsquerda = false, como = "div", children, ...props },
   ref,
 ) {
+  const Component = como as any;
   const resolvedState = epistemicState ?? estado ?? "fact";
   const isFact = resolvedState === "fact" || resolvedState === "conquistado";
 
   const cardClasses = isFact
     ? cn(
-        surface("solida", { className: "bg-white" }),
-        (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[color:var(--success-accent)]"
+        "bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]",
+        (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[var(--status-success-border)]"
       )
-    : surface("sugerida", { className: "bg-[color:var(--ai-tint)]" });
+    : "bg-[var(--status-ia-bg)] border-2 border-dashed border-[var(--status-ia-border)] text-[var(--text-primary)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]";
 
   return (
-    <div
-      ref={ref}
+    <Component
+      ref={ref as any}
       data-estado={resolvedState}
       data-destacado={destacado}
       className={cn(
-        "text-text-body flex flex-col gap-2 p-5",
+        "flex flex-col gap-2 p-5 text-[var(--text-primary)]",
         destacado && "relative pt-8",
         cardClasses,
         className,
@@ -45,28 +48,28 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
       {destacado ? (
         <span
           aria-hidden
-          className="bg-brand-primary absolute inset-x-0 top-0 h-2"
+          className="bg-[var(--action-primary)] absolute inset-x-0 top-0 h-2 rounded-t-[var(--radius-control)]"
         />
       ) : null}
       <div className="flex items-center justify-between gap-3">
         {titulo ? (
-          <h3 className="font-display text-text-heading text-lg font-semibold">
+          <h3 className="font-display text-[var(--text-primary)] text-lg font-semibold">
             {titulo}
           </h3>
         ) : null}
         <span
           className={cn(
-            "shrink-0 border-[length:var(--border-brutal)] px-2 py-0.5 text-xs font-semibold tracking-wide uppercase rounded-[length:var(--radius-pill)]",
+            "shrink-0 border-2 px-2 py-0.5 font-mono text-xs font-semibold tracking-wide uppercase rounded-[var(--radius-xs)]",
             isFact
-              ? "border-[color:var(--success-accent)] bg-[color:var(--success-tint)] text-[color:var(--success-deep)]"
-              : "border-[color:var(--ai-accent)] bg-[color:var(--ai-tint)] text-[color:var(--ai-deep)]",
+              ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
+              : "border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-[var(--status-ia-fg)]",
           )}
         >
           {isFact ? "Conquistado" : "Sugerido"}
         </span>
       </div>
-      {children ? <div className="text-text-body">{children}</div> : null}
-    </div>
+      {children ? <div className="text-[var(--text-primary)] text-sm">{children}</div> : null}
+    </Component>
   );
 });
 

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Avatar, AvatarFallback, AvatarGroup } from "./avatar";
 
 const meta = {
-  title: "Molecules/Avatar",
+  title: "Atoms/Avatar",
   component: Avatar,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof Avatar>;

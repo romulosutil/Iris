@@ -18,17 +18,24 @@ type ScaleItem = {
 const FAMILY_GROUPS = [
   {
     name: "Display Font (Títulos & Destaques)",
-    fontFamily: "Space Grotesk / Archivo Black",
+    fontFamily: "Space Grotesk",
     variable: "var(--font-display)",
     className: "font-display",
     description: "Fonte geométrica pesada de alta legibilidade para títulos e chamadas rápidas. Proibida em corpo de texto corrido ou abaixo de 20px.",
   },
   {
     name: "Body Font (Corpo de Texto & Controles)",
-    fontFamily: "Plus Jakarta Sans / Inter",
+    fontFamily: "Plus Jakarta Sans",
     variable: "var(--font-body)",
     className: "font-body",
     description: "Fonte sans-serif limpa e moderna com letter-spacing levemente aumentado para máxima clareza em leituras apressadas ou em trânsito.",
+  },
+  {
+    name: "Mono Font (Código & Rótulos de Dados)",
+    fontFamily: "Space Mono",
+    variable: "var(--font-mono)",
+    className: "font-mono",
+    description: "Fonte monoespaçada para exibição de dados estruturados, códigos de tokens, timestamps e metadados.",
   },
 ];
 
@@ -117,7 +124,7 @@ export const Scales: StoryObj = {
       {/* DO'S & DON'TS DE TIPOGRAFIA */}
       <section className="space-y-4 pt-6 border-t-2 border-dashed border-stone-200">
         <h2 className="text-2xl font-black font-mono text-black uppercase tracking-wider">
-          Do's & Don'ts (Tipografia & Hierarquia)
+          Do&apos;s &amp; Don&apos;ts (Tipografia &amp; Hierarquia)
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* DO */}
@@ -145,7 +152,7 @@ export const Scales: StoryObj = {
           <div className="border-2 border-black rounded-lg p-6 bg-rose-50 shadow-brutal-sm">
             <div className="flex items-center gap-2 mb-4">
               <span className="bg-rose-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
-                DON'T (NÃO)
+                DON&apos;T (NÃO)
               </span>
               <h3 className="text-lg font-black text-rose-950">Desvios de Legibilidade</h3>
             </div>

@@ -66,10 +66,10 @@ export function Scrubber({
   const isSessaoPassada = sessaoVisual !== ultimaSessaoDisponivel;
 
   return (
-    <div className="bg-canvas border-ink-anchor flex flex-col gap-4 border-2 p-4">
+    <div className="bg-[var(--surface-card)] border-[var(--border-brutal)] flex flex-col gap-4 border-2 p-4 rounded-[var(--radius-control)]">
       {/* Banner de Sessão Passada */}
       {isSessaoPassada && (
-        <div className="bg-gold text-ink-anchor border-ink-anchor -mx-4 -mt-4 flex items-center justify-center gap-2 border-b-2 p-2 text-center text-sm font-bold">
+        <div className="bg-[var(--color-gold)] text-[var(--text-primary)] border-[var(--border-brutal)] -mx-4 -mt-4 flex items-center justify-center gap-2 border-b-2 p-2 text-center text-sm font-bold">
           <span>⚠️</span>
           <span>Visualizando histórico passado: Sessão {sessaoVisual}</span>
         </div>
@@ -90,11 +90,11 @@ export function Scrubber({
         </Button>
 
         <div className="text-center">
-          <div className="text-ink text-lg font-black">
+          <div className="text-[var(--text-primary)] text-lg font-black">
             Sessão {sessaoVisual}
           </div>
           {dataSessaoSelecionada && (
-            <div className="text-muted text-xs" suppressHydrationWarning>
+            <div className="text-[var(--text-secondary)] text-xs" suppressHydrationWarning>
               {formatarData(dataSessaoSelecionada)}
             </div>
           )}
@@ -130,7 +130,7 @@ export function Scrubber({
           onValueCommit={handleSliderChange}
           aria-label="Selecionar sessão histórica"
         />
-        <div className="text-muted mt-1 flex justify-between text-xs">
+        <div className="text-[var(--text-secondary)] mt-1 flex justify-between text-xs">
           <span>Início (Sessão {sessoesDisponiveis[0]})</span>
           <span>Atual (Sessão {ultimaSessaoDisponivel})</span>
         </div>

@@ -573,13 +573,13 @@ export function TimelineClient({
             {/* Visualização de Chunks como linha temporal */}
             <div className="flex flex-col gap-3">
               {chunks.map((chunk, idx) => {
-                let colorClass = "bg-gray-100 border-dashed border-gray-400 text-gray-600 shadow-[2px_2px_0px_#000000]";
+                let colorClass = "bg-[var(--surface-elevated)] border-dashed border-[var(--border-brutal)] text-[var(--text-secondary)] shadow-[var(--ds-shadow)]";
                 if (chunk.rotulo === "evolucao") {
-                  colorClass = "bg-status-success-bg border-black text-status-success-text shadow-[4px_4px_0px_#000000]";
+                  colorClass = "bg-[var(--status-success-bg)] border-[var(--border-brutal)] text-[var(--status-success-fg)] shadow-[var(--ds-shadow)]";
                 } else if (chunk.rotulo === "regressao") {
-                  colorClass = "bg-status-error-bg border-black text-status-error-text shadow-[4px_4px_0px_#000000]";
+                  colorClass = "bg-[var(--status-error-bg)] border-[var(--border-brutal)] text-[var(--status-error-fg)] shadow-[var(--ds-shadow)]";
                 } else if (chunk.rotulo === "estagnacao") {
-                  colorClass = "bg-gray-200 border-black text-black shadow-[4px_4px_0px_#000000]";
+                  colorClass = "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]";
                 }
 
                 return (
@@ -588,7 +588,7 @@ export function TimelineClient({
                     onClick={() =>
                       handleAbrirDrilldown(chunk, trajetoriaAlvoId, targetNome)
                     }
-                    className={`border-2 p-4 text-left transition-all duration-75 active:translate-y-0.5 active:shadow-[1px_1px_0px_#000000] focus:outline-none flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${colorClass}`}
+                    className={`border-2 p-4 text-left transition-all duration-75 active:translate-y-0.5 focus:outline-none flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-[var(--radius-control)] ${colorClass}`}
                   >
                     <div>
                       <span className="font-display font-black text-base uppercase tracking-tight">
@@ -838,7 +838,7 @@ export function TimelineClient({
                     <div className="border-ink-anchor flex flex-col gap-3 border-t-2 pt-3">
                       {/* Alerta Clínico Guard G7 */}
                       {comparacaoData.protocoloMudou ? (
-                        <div className="flex items-start gap-2 border-2 border-red-600 bg-red-50 p-2 text-xs font-bold text-red-900">
+                        <div className="flex items-start gap-2 border-2 border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-2.5 text-xs font-bold text-[var(--status-error-fg)] rounded-[var(--radius-control)]">
                           <span>⚠️</span>
                           <div>
                             <strong>Guard G7 Ativado:</strong> Houve mudança nos
@@ -852,17 +852,17 @@ export function TimelineClient({
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2">
-                          <div className="text-ink bg-gold border-ink-anchor border p-1 text-center text-xs font-bold">
+                          <div className="text-[var(--action-primary-fg)] bg-[var(--action-primary)] border-[var(--border-brutal)] border-2 p-1.5 text-center text-xs font-bold rounded-[var(--radius-control)]">
                             Resultados da Comparação
                           </div>
-                          <div className="text-xxs text-muted">
+                          <div className="text-xs text-[var(--text-secondary)]">
                             Evolução da Sessão{" "}
                             {Math.min(sessaoAtiva, sessaoCompararValida ?? 0)}{" "}
                             para a{" "}
                             {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)}:
                           </div>
-                          <div className="grid grid-cols-2 gap-1 text-center text-xs">
-                            <div className="border-ink-anchor border bg-green-50 p-1 font-bold text-green-900">
+                          <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                            <div className="border-[var(--status-success-border)] border-2 bg-[var(--status-success-bg)] p-2 font-bold text-[var(--status-success-fg)] rounded-[var(--radius-control)]">
                               +
                               {comparacaoData.delta?.itens?.filter(
                                 (i) =>
@@ -870,7 +870,7 @@ export function TimelineClient({
                               ).length ?? 0}{" "}
                               Avanços
                             </div>
-                            <div className="border-ink-anchor border bg-red-50 p-1 font-bold text-red-900">
+                            <div className="border-[var(--status-error-border)] border-2 bg-[var(--status-error-bg)] p-2 font-bold text-[var(--status-error-fg)] rounded-[var(--radius-control)]">
                               +
                               {comparacaoData.delta?.itens?.filter(
                                 (i) => i.tipo === "regressao",
@@ -891,58 +891,58 @@ export function TimelineClient({
 
       {/* Dialog de Drilldown de Evidências por Trecho */}
       <Dialog open={drilldownOpen} onOpenChange={setDrilldownOpen}>
-        <DialogContent className="max-w-2xl bg-canvas border-4 border-black shadow-[8px_8px_0px_#000000]">
-          <DialogTitle className="font-display font-black text-xl text-black">
+        <DialogContent className="max-w-2xl bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] shadow-[var(--ds-shadow)]">
+          <DialogTitle className="font-display font-black text-xl text-[var(--text-primary)]">
             Evidências Clínicas do Trecho
           </DialogTitle>
-          <DialogDescription className="text-sm font-bold text-gray-700">
+          <DialogDescription className="text-sm font-bold text-[var(--text-secondary)]">
             Sessões {drilldownChunk?.inicio} até {drilldownChunk?.fim} para {drilldownChunk?.targetNome}
           </DialogDescription>
 
           <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2 flex flex-col gap-4">
             {carregandoEvidencias ? (
-              <div className="py-8 text-center text-sm font-black text-gray-600 animate-pulse">
+              <div className="py-8 text-center text-sm font-black text-[var(--text-secondary)] animate-pulse">
                 Buscando evidências no histórico do paciente...
               </div>
             ) : drilldownEvidencias.length === 0 ? (
-              <div className="py-8 text-center text-sm font-bold text-gray-500 border-2 border-dashed border-gray-400 bg-gray-50">
+              <div className="py-8 text-center text-sm font-bold text-[var(--text-secondary)] border-2 border-dashed border-[var(--border-brutal)]/40 bg-[var(--surface-elevated)] rounded-[var(--radius-control)]">
                 Nenhuma evidência registrada para este trecho nas sessões selecionadas.
               </div>
             ) : (
               drilldownEvidencias.map((ev: any) => (
                 <div
                   key={ev.id}
-                  className={`border-2 border-black p-4 bg-white shadow-[4px_4px_0px_#000000] flex flex-col gap-2 ${
-                    ev.polaridade === "positiva" ? "border-green-800" : "border-red-800"
+                  className={`border-2 border-[var(--border-brutal)] p-4 bg-[var(--surface-card)] shadow-[var(--ds-shadow)] flex flex-col gap-2 rounded-[var(--radius-control)] ${
+                    ev.polaridade === "positiva" ? "border-l-4 border-l-[var(--status-success-border)]" : "border-l-4 border-l-[var(--status-error-border)]"
                   }`}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-gray-200 pb-1 text-xs">
-                    <span className="font-black text-black">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-[var(--border-brutal)]/20 pb-1 text-xs">
+                    <span className="font-black text-[var(--text-primary)]">
                       Sessão {ev.sessionNumero} • {ev.dataSessao ? new Date(ev.dataSessao).toLocaleDateString("pt-BR") : "Sem data"}
                     </span>
-                    <span className="text-muted font-bold">
+                    <span className="text-[var(--text-secondary)] font-bold">
                       Aprovado por: {ev.aprovadorNome}
                     </span>
                   </div>
-                  <p className="text-sm text-black leading-relaxed font-medium">
+                  <p className="text-sm text-[var(--text-primary)] leading-relaxed font-medium">
                     {ev.descricao}
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-1">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded border border-black ${
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] ${
                       ev.polaridade === "positiva"
-                        ? "bg-status-success-bg text-status-success-text"
-                        : "bg-status-error-bg text-status-error-text"
+                        ? "bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
+                        : "bg-[var(--status-error-bg)] text-[var(--status-error-fg)]"
                     }`}>
                       {ev.polaridade === "positiva" ? "Evolução" : "Dificuldade"}
                     </span>
                     {ev.nivelAjuda && (
-                      <span className="text-[10px] font-black px-2 py-0.5 rounded border border-black bg-gray-100 text-gray-800">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--surface-elevated)] text-[var(--text-primary)]">
                         Nível de Ajuda: {ev.nivelAjuda}
                       </span>
                     )}
                   </div>
                   {ev.revisao && (
-                    <p className="text-xs text-muted font-medium border-t border-gray-200 pt-1 mt-1">
+                    <p className="text-xs text-[var(--text-secondary)] font-medium border-t border-[var(--border-brutal)]/20 pt-1 mt-1">
                       Revisado por {ev.revisao.autorNome ?? "coordenador"}
                       {ev.revisao.justificativa ? `: ${ev.revisao.justificativa}` : ""}
                     </p>

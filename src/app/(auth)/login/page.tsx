@@ -49,12 +49,12 @@ export default function LoginPage() {
     <div className="flex flex-col gap-8">
       <div className="flex flex-col items-center gap-4 text-center">
         <Logo altura={40} aria-label="Iris" />
-        <h1 className="font-display text-ink-anchor text-2xl font-bold">
+        <h1 className="font-display text-[var(--text-primary)] text-2xl font-bold">
           Entrar
         </h1>
       </div>
  
-      <div className={cn("bg-surface p-6", surface("solida"))}>
+      <div className={cn("bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] p-6")}>
         <Form onSubmit={handleSubmit} error={erro}>
           <Field label="E-mail" htmlFor="email">
             <Input
