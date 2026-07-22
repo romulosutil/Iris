@@ -1,0 +1,49 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`snapshot estrutural 1`] = `
+"<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<style>
+  html{font-family:system-ui,sans-serif;color:#111;font-size:12px;line-height:1.5}
+  h1{font-size:18px} h2{font-size:15px;margin-top:20px} h3{font-size:13px;margin-bottom:2px}
+  table{width:100%;border-collapse:collapse;margin:8px 0}
+  th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}
+  .nota{background:#f4efe6;padding:8px 12px;border-radius:4px}
+  .dominio{margin:8px 0}
+  .rodape{margin-top:16px;font-size:10px;color:#555}
+</style></head><body>
+<h1>Relatório de convênio — Miguel S.</h1>
+<p>Período: 2026-06-01 a 2026-06-30 · Operadora: Amil</p>
+<p>CID (conforme prescrição médica assistente): F84.0</p>
+<p>Finalidade: Renovação de guia</p>
+<p>Dados extraídos em 2026-07-20T12:00:00.000Z</p>
+<h2>Dossiê factual</h2>
+<p>8 sessões realizadas, 1 falta(s) justificada(s), 0 não justificada(s).</p>
+<h2>Sessões</h2>
+<table><thead><tr><th>#</th><th>Data</th><th>Disciplina</th><th>Modalidade</th><th>Estado</th><th>Terapeuta</th></tr></thead>
+<tbody><tr>
+    <td>8</td>
+    <td>2026-06-10</td>
+    <td>ABA</td>
+    <td>presencial</td>
+    <td>Realizada</td>
+    <td>Dra. Ana</td>
+  </tr></tbody></table>
+<h2>Evidências aprovadas</h2>
+<table><thead><tr><th>Data</th><th>Meta/Domínio</th><th>Classificação</th><th>Autor</th></tr></thead>
+<tbody><tr>
+    <td>2026-06-10</td>
+    <td>Mando</td>
+    <td>{&quot;rotulo&quot;:&quot;adquirido&quot;}</td>
+    <td>Dra. Ana</td>
+  </tr></tbody></table>
+<h2>Relatório narrativo</h2>
+<p>Resumo IA original</p>
+<section class="dominio"><h3>Comunicação</h3><p>Narrativa IA original</p></section>
+<h2>Justificativa de continuidade</h2>
+<p>Justificativa IA original</p>
+<h2>Objetivos para o próximo período</h2>
+<ul><li>Objetivo IA 1</li></ul>
+
+<p class="rodape">Documento de suporte à solicitação de cobertura, revisado por [coordenador]. Diagnóstico e prescrição são do médico assistente externo; a clínica não diagnostica.</p>
+</body></html>"
+`;
