@@ -6,7 +6,7 @@
  * pacientes de equipe vigente; isolamento cross-clinic; escrita clínica negada
  * à recepção.
  */
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import postgres from "postgres";
 import {
@@ -18,6 +18,19 @@ import {
 } from "./schema";
 import { withTenant, type TenantContext } from "./rls";
 import { sql as appSql } from "./client";
+import { StubPdfRenderer } from "@/lib/report/renderer";
+import type {
+  CabecalhoConvenio,
+  ConvenioNarrativoDraft,
+} from "@/lib/report/convenio-narrativo/types";
+
+// Módulos "use server"/"server-only" precisam do mock antes do import dinâmico.
+vi.mock("server-only", () => ({}));
+const {
+  gerarRascunhoConvenioNarrativo,
+  curarConvenioNarrativo,
+  exportarConvenioNarrativo,
+} = await import("../app/(app)/relatorios/convenio-narrativo-logic");
 
 const hasDb =
   !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
@@ -31,6 +44,7 @@ const U_TERA2 = "a0000000-0000-0000-0000-000000000003"; // sem equipe
 const U_ADMIN = "a0000000-0000-0000-0000-000000000004";
 const U_TERA3 = "a0000000-0000-0000-0000-000000000005"; // também na equipe de P1
 const U_EXT = "a0000000-0000-0000-0000-000000000006"; // papel só na clínica B
+const U_COORD_B = "a0000000-0000-0000-0000-000000000007"; // coordenador só na clínica B
 const P1 = "b0000000-0000-0000-0000-000000000001"; // clinic A, equipe = TERA
 const P2 = "b0000000-0000-0000-0000-000000000002"; // clinic A, sem equipe p/ TERA
 const P3 = "b0000000-0000-0000-0000-000000000003"; // clinic B
@@ -58,12 +72,14 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       (${U_TERA2}, 'Tera2', 'tera2@a.test'),
       (${U_ADMIN}, 'Admin', 'admin@a.test'),
       (${U_TERA3}, 'Tera3', 'tera3@a.test'),
-      (${U_EXT}, 'Ext', 'ext@b.test')`;
+      (${U_EXT}, 'Ext', 'ext@b.test'),
+      (${U_COORD_B}, 'CoordB', 'coordb@b.test')`;
     // Papéis por clínica (user_role): TERA3 é da clínica A; U_EXT só da B.
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD}, ${CLINIC_A}, 'coordenador'),
       (${U_TERA3}, ${CLINIC_A}, 'terapeuta'),
-      (${U_EXT}, ${CLINIC_B}, 'terapeuta')`;
+      (${U_EXT}, ${CLINIC_B}, 'terapeuta'),
+      (${U_COORD_B}, ${CLINIC_B}, 'coordenador')`;
     // Família do catálogo: semear explicitamente (idempotente). Outra suíte de
     // integração pode ter dado TRUNCATE ... CASCADE em protocol_familia_catalogo,
     // apagando o seed da migração — sem isto o FK protocol.familia falha.
@@ -354,5 +370,152 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
         }),
       ),
     ).rejects.toThrow();
+  });
+
+  // ─── convenio_narrativo: coordenador-only em todas as 3 ações ──────────────
+  // Diferente de família (terapeuta on-team pode gerar): convênio narrativo é
+  // coordenador-only nas 3 etapas (gerar/curar/exportar) — R1 de agente-3.
+  describe("convenio_narrativo — coordenador-only (Fase 5 Fatia 5)", () => {
+    const cnCabecalho: CabecalhoConvenio = {
+      operadora: "Amil",
+      cid: "F84.0",
+      finalidade: "Renovação de guia",
+    };
+    const cnDraft: ConvenioNarrativoDraft = {
+      resumoClinico: "Evoluiu bem no período.",
+      evolucaoPorDominio: [
+        { dominio: "Comunicação", narrativa: "Avançou em pedidos." },
+      ],
+      justificativaContinuidade: "Necessita continuidade do plano.",
+      objetivosProximoPeriodo: ["Ampliar vocabulário funcional"],
+      periodoSemAvancoVisivel: false,
+      notaHonestidade: null,
+      status: "rascunho_para_revisao",
+    };
+    const gerarInput = {
+      patientId: P1,
+      periodoInicio: "2026-06-01",
+      periodoFim: "2026-06-30",
+      cabecalho: cnCabecalho,
+    };
+
+    test("controle positivo: coordenador da clínica dona gera, cura e exporta com sucesso", async () => {
+      const gerado = await gerarRascunhoConvenioNarrativo(
+        ctx("coordenador", U_COORD),
+        gerarInput,
+      );
+      expect("reportId" in gerado).toBe(true);
+      const reportId = (gerado as { reportId: string }).reportId;
+
+      const curado = await curarConvenioNarrativo(ctx("coordenador", U_COORD), {
+        reportId,
+        versaoEsperada: 1,
+        cabecalhoEditado: cnCabecalho,
+        draftEditado: cnDraft,
+      });
+      expect(curado).toEqual({ ok: true });
+
+      const exportado = await exportarConvenioNarrativo(
+        ctx("coordenador", U_COORD),
+        { reportId },
+        new StubPdfRenderer(),
+      );
+      expect("hash" in exportado).toBe(true);
+    });
+
+    test("terapeuta on-team é BARRADO nas 3 ações (RoleError) — difere de família", async () => {
+      const gerado = await gerarRascunhoConvenioNarrativo(
+        ctx("terapeuta", U_TERA),
+        gerarInput,
+      );
+      expect(gerado).toEqual({ error: expect.stringContaining("papel") });
+
+      // Usa um report já existente (do controle positivo) p/ curar/exportar.
+      const [existente] = await owner<{ id: string }[]>`
+        SELECT id FROM report WHERE tipo = 'convenio_narrativo' AND patient_id = ${P1} LIMIT 1
+      `;
+      const reportId = existente!.id;
+
+      const curado = await curarConvenioNarrativo(ctx("terapeuta", U_TERA), {
+        reportId,
+        versaoEsperada: 1,
+        cabecalhoEditado: cnCabecalho,
+        draftEditado: cnDraft,
+      });
+      expect(curado).toEqual({ error: expect.stringContaining("papel") });
+
+      const exportado = await exportarConvenioNarrativo(
+        ctx("terapeuta", U_TERA),
+        { reportId },
+        new StubPdfRenderer(),
+      );
+      expect(exportado).toEqual({ error: expect.stringContaining("papel") });
+    });
+
+    test("admin_recepcao é BARRADO nas 3 ações (RoleError)", async () => {
+      const [existente] = await owner<{ id: string }[]>`
+        SELECT id FROM report WHERE tipo = 'convenio_narrativo' AND patient_id = ${P1} LIMIT 1
+      `;
+      const reportId = existente!.id;
+
+      const gerado = await gerarRascunhoConvenioNarrativo(
+        ctx("admin_recepcao", U_ADMIN),
+        gerarInput,
+      );
+      expect(gerado).toEqual({ error: expect.stringContaining("papel") });
+
+      const curado = await curarConvenioNarrativo(ctx("admin_recepcao", U_ADMIN), {
+        reportId,
+        versaoEsperada: 1,
+        cabecalhoEditado: cnCabecalho,
+        draftEditado: cnDraft,
+      });
+      expect(curado).toEqual({ error: expect.stringContaining("papel") });
+
+      const exportado = await exportarConvenioNarrativo(
+        ctx("admin_recepcao", U_ADMIN),
+        { reportId },
+        new StubPdfRenderer(),
+      );
+      expect(exportado).toEqual({ error: expect.stringContaining("papel") });
+    });
+
+    test("cross-tenant: coordenador de OUTRA clínica não vê nem edita o relatório", async () => {
+      // gerar: paciente P1 é da clínica A → RLS não deixa CLINIC_B enxergá-lo.
+      const gerado = await gerarRascunhoConvenioNarrativo(
+        ctx("coordenador", U_COORD_B, CLINIC_B),
+        gerarInput,
+      );
+      expect(gerado).toEqual({
+        error: expect.stringContaining("Paciente não encontrado"),
+      });
+
+      // curar/exportar: report existente pertence à clínica A → RLS escopa por
+      // clinic_id e a linha não aparece p/ CLINIC_B (isolamento cross-tenant).
+      const [existente] = await owner<{ id: string }[]>`
+        SELECT id FROM report WHERE tipo = 'convenio_narrativo' AND patient_id = ${P1} LIMIT 1
+      `;
+      const reportId = existente!.id;
+
+      const curado = await curarConvenioNarrativo(
+        ctx("coordenador", U_COORD_B, CLINIC_B),
+        {
+          reportId,
+          versaoEsperada: 1,
+          cabecalhoEditado: cnCabecalho,
+          draftEditado: cnDraft,
+        },
+      );
+      expect(curado).toEqual({ error: expect.stringContaining("mudou") });
+
+      const exportado = await exportarConvenioNarrativo(
+        ctx("coordenador", U_COORD_B, CLINIC_B),
+        { reportId },
+        new StubPdfRenderer(),
+      );
+      expect(exportado).toEqual({
+        error: expect.stringContaining("não encontrado"),
+      });
+    });
   });
 });

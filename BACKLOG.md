@@ -18,11 +18,78 @@
 | **2** | Metas & Diário por Texto | ✅ Concluído (Planos 1-4) | Issue #5 |
 | **3** | Extração de Evidências (IA) | ✅ Concluído | Issue #6 (fechada 13/07) |
 | **4** | Evidências Acumuladas & Gráficos | ✅ Concluído | Issue #7 |
-| **5** | Relatórios de Convênio & Supervisão | 📅 Pendente | Issue #8 |
+| **5** | Relatórios de Convênio & Supervisão | ✅ Concluído | Issue #8 |
 | **6** | Ditado de Voz & Hardening LGPD | 📅 Pendente | Issue #9 |
 | **7** | Self-Service & Growth (onboarding + pagamento autônomo) | 📅 Pós-MVP | Issue #36 |
 
 ---
+
+## 🏁 Sessão 22/07/2026 — Fase 5 Fatia 5 (Convênio Narrativo, Task 10) — ✅ CONCLUÍDA
+
+Relatório **Narrativo de Convênio** (`report.tipo = 'convenio_narrativo'`):
+projeção de IA sobre o dossiê factual já congelado (mesmo `dossie` estrutural
+do `convenio_bruto`), com curadoria **obrigatória** do coordenador antes de
+exportar — máquina de estado gerar (IA) → curar (humano) → exportar, as
+**3 etapas coordenador-only** (difere de família, onde terapeuta on-team
+pode gerar). Contrato do agente-3 (regras C1-C8) implementado em
+`resolveConvenioNarrativoProvider`: `StubConvenioNarrativoProvider` ativo
+sempre (determinístico, sem custo de API); `ClaudeConvenioNarrativoProvider`
+real existe como **skeleton** (lança erro), gated até pós-DPA. Guardrails de
+schema: `CHECK report_narrativo_com_ia` (garante `gerado_por_ia = true` só
+para `convenio_narrativo`) e numeric-guard (zod recusa dígitos soltos fora
+de campos estruturados no draft da IA, força honestidade sobre estagnação
+via `periodoSemAvancoVisivel`/`notaHonestidade`). HTML de export reusa
+`renderDossieTablesHtml` compartilhado com `convenio_bruto` (mesma tabela
+factual, sem duplicar template).
+
+**Task 10 (fechamento) — RLS coordenador-only:** adicionadas 4 provas de
+integração em `src/db/rls.int.test.ts` (bloco `convenio_narrativo —
+coordenador-only`), usando as 3 funções reais
+(`gerarRascunhoConvenioNarrativo`/`curarConvenioNarrativo`/
+`exportarConvenioNarrativo`) com `StubPdfRenderer` no export — nunca só
+policy SQL isolada, para eliminar falso-verde:
+* **Controle positivo:** coordenador da clínica dona gera → cura → exporta
+  com sucesso nas 3 etapas (prova que o guardrail não superbloqueia).
+* **Terapeuta on-team barrado nas 3 ações** (`RoleError`, mensagem
+  `"papel"`) — a diferença deliberada frente a `familia` (lá terapeuta
+  on-team pode gerar).
+* **`admin_recepcao` barrado nas 3 ações** (mesma classe de erro).
+* **Cross-tenant:** coordenador de outra clínica não enxerga o paciente
+  (gerar → "Paciente não encontrado") nem o relatório já existente
+  (curar/exportar → linha invisível sob RLS por `clinic_id`, mesmo com
+  `versaoEsperada` correta — a policy barra antes do optimistic lock).
+
+**Verificação final:** `pnpm test:rls` **362/363** (1 falha é o flaky
+pré-existente e alheio de `agenda2-encerrar-regra.int.test.ts`, date-drift
+documentado); só o arquivo novo/alterado (`src/db/rls.int.test.ts`)
+**21/21**. `pnpm lint` com os mesmos 2 erros pré-existentes de sempre em
+`revisao-lista.tsx` (fora do escopo desta fatia, não tocado nesta sessão) +
+warnings pré-existentes. `pnpm typecheck` **limpo**. Unitários focados
+(`convenio-narrativo`, `convenio-bruto`, `relatorios/a11y.test.tsx`)
+**25/25**. Integração focada (`convenio-narrativo-logic.int.test.ts`,
+`build-input.int.test.ts`, `fase5-report-schema.int.test.ts`) **15/15**.
+
+**Dívidas registradas (fecham a Fase 5, ficam para depois):**
+* **`ClaudeConvenioNarrativoProvider` real é skeleton** (lança erro
+  proposital) — gated até o DPA com a Anthropic ser assinado; quando
+  habilitado, ligar o numeric-guard de fato sobre a resposta real do
+  modelo (hoje só valida o shape do stub).
+* **Templating por operadora** (Amil/Bradesco/etc. têm formatos próprios de
+  guia) deferido — hoje 1 template genérico serve todas.
+* **Prescrição externa / entidade de CID + anexo** deferido — o cabeçalho
+  aceita `cid` como string livre, sem entidade dedicada nem upload de
+  documento de prescrição.
+* **Rascunhos duplicados por paciente+período são aceitos** — nada impede
+  gerar 2 rascunhos `convenio_narrativo` para o mesmo paciente/período;
+  sem deduplicação nem aviso.
+* **Detecção ativa de dossiê obsoleto** (o `dossie` é congelado no momento
+  do "gerar" — se o dado factual mudar depois, o rascunho não é invalidado
+  nem sinalizado como stale) deferida.
+* **UX de curadoria de `evolucaoPorDominio`** (hoje é convenção de texto
+  livre por domínio, sem editor estruturado) a melhorar.
+* **Título do doc do agente-3 diz "Xpect"** (nome antigo do projeto) —
+  dívida de rename em `docs/agente/agente-2-relatorio-familia.md` ou doc
+  irmão do agente-3, a confirmar caminho exato e corrigir.
 
 ## 🏁 Sessão 20/07/2026 — Fase 5 Fatia 3 (Dossiê `convenio_bruto` + PDF real via Chromium, Tasks 1-9) — ✅ CONCLUÍDA
 
