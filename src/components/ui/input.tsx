@@ -67,31 +67,28 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <div
         onClick={handleWrapperClick}
         className={cn(
-          "group flex w-full items-stretch rounded-[length:var(--radius-control)] border-[length:1.5px] border-[color:var(--border-neutral-light)] bg-[color:var(--color-bg-surface)]",
+          "group flex w-full items-stretch rounded-md border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)]",
           !disabled && "cursor-text",
           "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
-          // hover state across the entire control
-          !disabled && "hover:border-[color:var(--ink-anchor)]",
-          // focus state (focus-within) across the entire control (including addons)
+          // focus state (focus-within)
           !disabled &&
-            "focus-within:border-[color:var(--color-focus)] focus-within:shadow-[var(--shadow-focus-ring)] focus-within:outline-none",
+            "focus-within:border-[var(--action-primary)] focus-within:ring-2 focus-within:ring-[var(--action-primary)] focus-within:outline-none",
           // error/aria-invalid
-          ariaInvalid && "border-[color:var(--color-spectrum-red)]",
-          // disabled - WCAG contrast compliant (bg and text tokens, no opacity-50)
+          ariaInvalid && "border-[var(--status-error-border)]",
+          // disabled
           disabled &&
-            "cursor-not-allowed border-[color:var(--border-neutral-light)]/50 bg-[color:var(--color-canvas)]",
+            "cursor-not-allowed opacity-50 bg-[var(--surface-elevated)]",
           className,
         )}
       >
         {leftAddon && (
           <div
             className={cn(
-              "font-body flex shrink-0 items-center justify-center rounded-l-[calc(var(--radius-control)-1.5px)] border-r-[length:1.5px] border-[color:var(--border-neutral-light)] bg-[color:var(--color-canvas)] px-3 text-[color:var(--color-text-body)]/70 select-none",
+              "font-body flex shrink-0 items-center justify-center rounded-l-[calc(0.375rem-2px)] border-r-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-3 text-[var(--text-secondary)] select-none",
               size === "sm" && "text-sm",
               size === "md" && "text-base",
               size === "lg" && "text-base",
-              disabled &&
-                "cursor-not-allowed border-[color:var(--border-neutral-light)]/50 text-[color:var(--color-text-body)]/70",
+              disabled && "cursor-not-allowed opacity-50",
             )}
           >
             {leftAddon}
@@ -99,19 +96,18 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         )}
         <div
           className={cn(
-            "flex flex-1 items-center bg-[color:var(--color-bg-surface)]",
+            "flex flex-1 items-center bg-[var(--surface-card)] text-[var(--text-primary)]",
             leftAddon
               ? "rounded-l-none"
-              : "rounded-l-[calc(var(--radius-control)-1.5px)]",
+              : "rounded-l-[calc(0.375rem-2px)]",
             rightAddon
               ? "rounded-r-none"
-              : "rounded-r-[calc(var(--radius-control)-1.5px)]",
-            !disabled && "group-hover:bg-[color:var(--gray-light-hover)]",
-            disabled && "cursor-not-allowed bg-[color:var(--color-canvas)]",
+              : "rounded-r-[calc(0.375rem-2px)]",
+            disabled && "cursor-not-allowed bg-[var(--surface-elevated)]",
           )}
         >
           {prefixIcon && (
-            <span className="flex shrink-0 items-center justify-center pl-3 text-[color:var(--color-text-body)]/60">
+            <span className="flex shrink-0 items-center justify-center pl-3 text-[var(--text-secondary)]">
               {prefixIcon}
             </span>
           )}
@@ -121,7 +117,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             disabled={disabled}
             aria-invalid={ariaInvalid}
             className={cn(
-              "font-body placeholder:text-graphite/60 w-full bg-transparent text-[color:var(--color-text-body)] focus:outline-none",
+              "font-body placeholder:text-[var(--text-secondary)] w-full bg-transparent text-[var(--text-primary)] focus:outline-none",
               size === "sm" &&
                 "min-h-[var(--input-height-sm)] px-2.5 py-1 text-sm",
               size === "md" &&
@@ -129,13 +125,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               size === "lg" &&
                 "min-h-[var(--input-height-lg)] px-4 py-3 text-base",
               disabled &&
-                "cursor-not-allowed text-[color:var(--color-text-body)]/70",
+                "cursor-not-allowed text-[var(--text-secondary)]",
               inputClassName,
             )}
             {...props}
           />
           {suffixIcon && (
-            <span className="flex shrink-0 items-center justify-center pr-3 text-[color:var(--color-text-body)]/60">
+            <span className="flex shrink-0 items-center justify-center pr-3 text-[var(--text-secondary)]">
               {suffixIcon}
             </span>
           )}
@@ -143,12 +139,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {rightAddon && (
           <div
             className={cn(
-              "font-body flex shrink-0 items-center justify-center rounded-r-[calc(var(--radius-control)-1.5px)] border-l-[length:1.5px] border-[color:var(--border-neutral-light)] bg-[color:var(--color-canvas)] px-3 text-[color:var(--color-text-body)]/70 select-none",
+              "font-body flex shrink-0 items-center justify-center rounded-r-[calc(0.375rem-2px)] border-l-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-3 text-[var(--text-secondary)] select-none",
               size === "sm" && "text-sm",
               size === "md" && "text-base",
               size === "lg" && "text-base",
-              disabled &&
-                "cursor-not-allowed border-[color:var(--border-neutral-light)]/50 text-[color:var(--color-text-body)]/70",
+              disabled && "cursor-not-allowed opacity-50",
             )}
           >
             {rightAddon}

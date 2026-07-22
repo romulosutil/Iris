@@ -37,30 +37,29 @@ function estiloVariante(v: Variante): string {
     case "primaria":
     case "primary":
       return cn(
-        "bg-[color:var(--brand-primary)] text-[color:var(--ink-anchor)]",
-        "border-[length:var(--border-brutal)] border-[color:var(--ink-anchor)]",
-        "shadow-[var(--ds-shadow)]",
-        "hover:bg-[color:var(--brand-hover)]",
-        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--ds-shadow-hover)]",
-        "active:translate-x-0 active:translate-y-0 active:shadow-none"
+        "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold",
+        "border-2 border-[var(--border-brutal)]",
+        "shadow-[var(--shadow-brutal)]",
+        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--elevation-3)]",
+        "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75"
       );
     case "terciaria":
     case "tertiary":
       return cn(
-        "border-transparent bg-transparent text-gray-500 shadow-none",
-        "hover:bg-[color:var(--gray-light-hover)] hover:text-[color:var(--ink-anchor)]",
-        "disabled:hover:bg-transparent disabled:hover:text-gray-500"
+        "border-2 border-transparent bg-transparent text-[var(--text-secondary)] shadow-none",
+        "hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
+        "disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]"
       );
     case "secundaria":
     case "secondary":
     case "neutra":
     default:
       return cn(
-        "bg-white text-[color:var(--color-text-body)]",
-        "border-[length:var(--border-brutal)] border-[color:var(--ink-anchor)]",
-        "shadow-[var(--ds-shadow)]",
-        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--ds-shadow-hover)]",
-        "active:translate-x-0 active:translate-y-0 active:shadow-none"
+        "bg-[var(--action-secondary-bg)] text-[var(--action-secondary-fg)]",
+        "border-2 border-[var(--border-brutal)]",
+        "shadow-[var(--shadow-brutal)]",
+        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--elevation-3)]",
+        "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75"
       );
   }
 }
@@ -111,7 +110,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const formatoClasses =
       resolvedFormato === "circular" || shape === "circle"
         ? "rounded-full"
-        : "rounded-[var(--radius-control)]";
+        : "rounded-md";
 
     // Estado de carregamento
     const loadingClasses = isLoading

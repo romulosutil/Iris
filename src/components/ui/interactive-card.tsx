@@ -41,19 +41,18 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
 
     const baseCardClasses = isFact
       ? cn(
-          surface("solida", { className: "bg-white" }),
-          (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[color:var(--success-accent)]"
+          "bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] rounded-md text-[var(--text-primary)] shadow-[var(--shadow-brutal)]",
+          (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[var(--status-success-border)]"
         )
-      : surface("sugerida", { className: "bg-[color:var(--ai-tint)]" });
+      : "bg-[var(--ai-tint)] border-2 border-dashed border-[var(--ai-accent)] text-[var(--text-primary)] rounded-md";
 
     const cardClasses = cn(
-      "text-text-body flex flex-col gap-2 p-5 text-left outline-none cursor-pointer select-none w-full",
+      "flex flex-col gap-2 p-5 text-left outline-none cursor-pointer select-none w-full text-[var(--text-primary)]",
       "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-      !disabled && isFact && "hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[var(--ds-shadow-hover)]",
+      !disabled && isFact && "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--elevation-3)]",
       !disabled && !isFact && "hover:opacity-95",
       "active:translate-x-0 active:translate-y-0 active:shadow-none",
-      // foco v3
-      "focus-visible:border-[color:var(--color-focus)] focus-visible:shadow-[var(--shadow-focus-ring)] focus-visible:outline-none",
+      "focus-visible:ring-2 focus-visible:ring-[var(--action-primary)] focus-visible:outline-none",
       destacado && "relative pt-8",
       baseCardClasses,
       className,
@@ -62,12 +61,12 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
     const accentBar = destacado ? (
       <span
         aria-hidden
-        className="bg-brand-primary absolute inset-x-0 top-0 h-2"
+        className="bg-[var(--action-primary)] absolute inset-x-0 top-0 h-2 rounded-t-md"
       />
     ) : null;
 
     const titleHeading = titulo ? (
-      <div className="font-display text-text-heading text-lg font-semibold">
+      <div className="font-display text-[var(--text-primary)] text-lg font-semibold">
         {titulo}
       </div>
     ) : null;

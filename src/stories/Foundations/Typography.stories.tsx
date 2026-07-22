@@ -117,7 +117,7 @@ export const Scales: StoryObj = {
       {/* DO'S & DON'TS DE TIPOGRAFIA */}
       <section className="space-y-4 pt-6 border-t-2 border-dashed border-stone-200">
         <h2 className="text-2xl font-black font-mono text-black uppercase tracking-wider">
-          Do's & Don'ts (Tipografia & Hierarquia)
+          Do&apos;s &amp; Don&apos;ts (Tipografia &amp; Hierarquia)
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* DO */}
@@ -145,7 +145,7 @@ export const Scales: StoryObj = {
           <div className="border-2 border-black rounded-lg p-6 bg-rose-50 shadow-brutal-sm">
             <div className="flex items-center gap-2 mb-4">
               <span className="bg-rose-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
-                DON'T (NÃO)
+                DON&apos;T (NÃO)
               </span>
               <h3 className="text-lg font-black text-rose-950">Desvios de Legibilidade</h3>
             </div>

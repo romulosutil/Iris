@@ -15,6 +15,40 @@
 
 @theme {
   /* ==========================================================================
+     0. Foundations — Design Tokens Semânticos (Espectro Brutal)
+     ========================================================================== */
+  --color-bg-app: var(--bg-app);
+  --color-surface-card: var(--surface-card);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border-brutal: var(--border-brutal);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-action-primary: var(--action-primary);
+  --color-action-primary-fg: var(--action-primary-fg);
+  --color-action-secondary-bg: var(--action-secondary-bg);
+  --color-action-secondary-fg: var(--action-secondary-fg);
+
+  /* Aliases para utilitários semânticos diretos */
+  --color-app: var(--bg-app);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-brutal: var(--border-brutal);
+
+  /* Estados semânticos */
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-fg: var(--status-success-fg);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-fg: var(--status-warning-fg);
+  --color-status-warning-border: var(--status-warning-border);
+  --color-status-error-bg: var(--status-error-bg);
+  --color-status-error-fg: var(--status-error-fg);
+  --color-status-error-border: var(--status-error-border);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-fg: var(--status-info-fg);
+  --color-status-info-border: var(--status-info-border);
+
+  /* ==========================================================================
      1. Primitivas (Rampa Enxuta de Cores Brutalistas)
      ========================================================================== */
   --color-raw-gold-100: #fff6db;
@@ -71,53 +105,53 @@
   --brand-primary: var(--color-raw-gold-500);
   --brand-hover: var(--color-raw-gold-700);
   --brand-tint: var(--color-raw-gold-100);
-  --ink-anchor: var(--color-raw-gray-950);
+  --ink-anchor: var(--text-primary);
 
-  --success-tint: var(--color-raw-mint-100);
-  --success-accent: var(--color-raw-mint-500);
-  --success-deep: var(--color-raw-mint-900);
+  --success-tint: var(--status-success-bg);
+  --success-accent: var(--status-success-border);
+  --success-deep: var(--status-success-fg);
 
-  --info-tint: var(--color-raw-blue-100);
-  --info-accent: var(--color-raw-blue-500);
-  --info-deep: var(--color-raw-blue-900);
+  --info-tint: var(--status-info-bg);
+  --info-accent: var(--status-info-border);
+  --info-deep: var(--status-info-fg);
 
   --ai-tint: var(--color-raw-violet-100);
   --ai-accent: var(--color-raw-violet-500);
   --ai-deep: var(--color-raw-violet-900);
 
-  --warning-tint: var(--color-raw-terracotta-100);
-  --warning-accent: var(--color-raw-terracotta-500);
-  --warning-deep: var(--color-raw-terracotta-900);
+  --warning-tint: var(--status-warning-bg);
+  --warning-accent: var(--status-warning-border);
+  --warning-deep: var(--status-warning-fg);
 
   /* Marca e Ação */
   --color-brand-primary: var(--brand-primary);
   --color-brand-primary-hover: var(--brand-hover);
-  --color-brand-primary-text: var(--ink-anchor);
+  --color-brand-primary-text: var(--action-primary-fg);
   --color-brand-primary-tint: var(--brand-tint);
 
   /* Superfícies e Bordas */
-  --color-bg-canvas: var(--color-raw-gray-50);
-  --color-bg-surface: #ffffff;
-  --color-border-brutal: var(--ink-anchor);
+  --color-bg-canvas: var(--bg-app);
+  --color-bg-surface: var(--surface-card);
+  --color-border-brutal: var(--border-brutal);
   
   /* Textos */
-  --color-text-body: var(--color-raw-gray-800);
-  --color-text-heading: var(--ink-anchor);
+  --color-text-body: var(--text-primary);
+  --color-text-heading: var(--text-primary);
 
   /* Status / Evidências */
-  --color-status-success-bg: var(--success-tint);
-  --color-status-success-accent: var(--success-accent);
-  --color-status-success-text: var(--success-deep);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-accent: var(--status-success-border);
+  --color-status-success-text: var(--status-success-fg);
   --color-status-ia-bg: var(--ai-tint);
   --color-status-ia-border: var(--ai-accent);
   --color-status-ia-accent: var(--ai-accent);
   --color-status-ia-text: var(--ai-deep);
-  --color-status-info-bg: var(--info-tint);
-  --color-status-info-accent: var(--info-accent);
-  --color-status-info-text: var(--info-deep);
-  --color-status-error-bg: var(--warning-tint);
-  --color-status-error-accent: var(--warning-accent);
-  --color-status-error-text: var(--warning-deep);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-accent: var(--status-info-border);
+  --color-status-info-text: var(--status-info-fg);
+  --color-status-error-bg: var(--status-error-bg);
+  --color-status-error-accent: var(--status-error-border);
+  --color-status-error-text: var(--status-error-fg);
 
   /* Foco */
   --color-focus-ring: var(--color-raw-blue-700);
@@ -125,16 +159,16 @@
   /* ==========================================================================
      3. Aliases de Legado (Compatibilidade com Páginas Existentes)
      ========================================================================== */
-  --color-canvas: var(--color-bg-canvas);
-  --color-surface: var(--color-bg-surface);
-  --color-ink: var(--color-text-body);
-  --color-ink-anchor: var(--color-text-heading);
-  --color-graphite: var(--color-raw-gray-800);
-  --color-gold: var(--color-brand-primary);
-  --color-gold-pressed: var(--color-brand-primary-hover);
-  --color-mint: var(--success-accent);
-  --color-blue: var(--info-accent);
-  --color-terracotta: var(--color-status-error-bg);
+  --color-canvas: var(--bg-app);
+  --color-surface: var(--surface-card);
+  --color-ink: var(--text-primary);
+  --color-ink-anchor: var(--text-primary);
+  --color-graphite: var(--text-secondary);
+  --color-gold: var(--action-primary);
+  --color-gold-pressed: var(--color-raw-gold-700);
+  --color-mint: var(--status-success-border);
+  --color-blue: var(--status-info-border);
+  --color-terracotta: var(--status-error-bg);
   --color-suggested: var(--color-status-ia-border);
   --color-suggested-ink: #ffffff;
 
@@ -161,11 +195,11 @@
   --shadow-soft: 0 12px 22px -12px rgba(20, 20, 20, 0.32);
 
   --elevation-0: none;
-  --elevation-1: 2px 2px 0 0 var(--ink-anchor); /* raise sutil */
+  --elevation-1: 2px 2px 0 0 var(--border-brutal); /* raise sutil */
   --elevation-2:
-    3px 3px 0 0 var(--ink-anchor), 0 12px 22px -14px rgba(20, 20, 20, 0.3); /* base: dura + suave */
+    2px 2px 0 0 var(--border-brutal); /* base: dura brutalista */
   --elevation-3:
-    4px 4px 0 0 var(--ink-anchor), 0 12px 22px -10px rgba(20, 20, 20, 0.45); /* hover / lg */
+    4px 4px 0 0 var(--border-brutal); /* hover / lg */
   --elevation-inset: inset 0 2px 8px rgba(106, 76, 147, 0.1); /* afunda (IA / tentativo) */
   --elevation-overlay: 0 20px 44px -24px rgba(20, 20, 20, 0.4); /* modal / popover — só suave */
 
@@ -173,20 +207,20 @@
 
   /* Aliases legados — apontam para a escala; nomes preservados p/ compat.
      Novos componentes devem consumir --elevation-* diretamente. */
-  --shadow-brutal-base: 3px 3px 0 0 var(--ink-anchor);
+  --shadow-brutal-base: 2px 2px 0 0 var(--border-brutal);
   --shadow-composite: var(--elevation-2);
   --shadow-inset-ia: var(--elevation-inset);
-  --shadow-brutal: var(--elevation-2);
+  --shadow-brutal: 2px 2px 0px var(--border-brutal);
   --shadow-brutal-hover: var(--elevation-3);
   --shadow-brutal-sm: var(--elevation-1);
-  --shadow-brutal-xs: 1px 1px 0 0 var(--ink-anchor);
+  --shadow-brutal-xs: 1px 1px 0 0 var(--border-brutal);
 
   /* Sombra reversa (offset negativo) */
-  --shadow-brutal-inset: -3px -3px 0 0 var(--color-ink-anchor);
-  --shadow-brutal-inset-sm: -2px -2px 0 0 var(--color-ink-anchor);
+  --shadow-brutal-inset: -3px -3px 0 0 var(--border-brutal);
+  --shadow-brutal-inset-sm: -2px -2px 0 0 var(--border-brutal);
 
-  /* Largura de borda tokenizada (muda de 2px para 1.5px) */
-  --border-brutal: 1.5px;
+  /* Largura de borda tokenizada */
+  --border-brutal-width: 2px;
 
   /* Escala de altura de controle — piso 44px (alvo de toque do Modo Clínico). */
   --control-sm: 2.75rem; /* 44px */
@@ -218,6 +252,44 @@
 */
 :root,
 [data-mode="clinico"] {
+  color-scheme: light;
+
+  /* Superfícies e Layout */
+  --bg-app: #F8F9FA;
+  --surface-card: #FFFFFF;
+  --surface-elevated: #FFFFFF;
+
+  /* Bordas e Sombras Brutalistas */
+  --border-brutal: #000000;
+  --shadow-brutal: 2px 2px 0px #000000;
+
+  /* Tipografia */
+  --text-primary: #09090B;
+  --text-secondary: #71717A;
+
+  /* Ações Primárias e Secundárias */
+  --action-primary: #F59E0B;
+  --action-primary-fg: #000000; /* WCAG AA mantido fixo */
+  --action-secondary-bg: #FFFFFF;
+  --action-secondary-fg: #000000;
+
+  /* Estados e Feedbacks Semânticos */
+  --status-success-bg: #ECFDF5;
+  --status-success-fg: #065F46;
+  --status-success-border: #059669;
+
+  --status-warning-bg: #FFFBEB;
+  --status-warning-fg: #92400E;
+  --status-warning-border: #D97706;
+
+  --status-error-bg: #FEF2F2;
+  --status-error-fg: #991B1B;
+  --status-error-border: #DC2626;
+
+  --status-info-bg: #EFF6FF;
+  --status-info-fg: #1E40AF;
+  --status-info-border: #2563EB;
+
   --ds-shadow: var(--shadow-brutal);
   --ds-shadow-hover: var(--elevation-3);   /* +1 nível acima do base: elevation-2 → 3 */
   --ds-shadow-inset: var(--shadow-brutal-inset);
@@ -232,8 +304,8 @@
 }
 
 html {
-  background-color: var(--color-canvas);
-  color: var(--color-ink);
+  background-color: var(--bg-app);
+  color: var(--text-primary);
   font-family: var(--font-body);
   /* letter-spacing levemente aumentado ajuda leitura apressada */
   letter-spacing: 0.01em;
@@ -294,39 +366,48 @@ html {
 /*
   Dark Mode (Tema Escuro)
   Inverte os tokens de fundo e borda para alto contraste sem perder a elevação física brutalista.
+  Ativado via classe .dark no HTML/Body ou [data-mode="dark"].
 */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg-canvas: var(--color-raw-gray-950);
-    --color-bg-surface: var(--color-raw-gray-900);
-    --color-border-brutal: var(--color-raw-gray-100);
-    --ink-anchor: var(--color-raw-gray-100);
-    --color-text-body: var(--color-raw-gray-100);
-    --color-text-heading: var(--color-raw-gray-50);
-    
-    /* Inversão dos aliases legados de cor */
-    --color-canvas: var(--color-bg-canvas);
-    --color-surface: var(--color-bg-surface);
-    --color-ink: var(--color-text-body);
-    --color-ink-anchor: var(--color-text-heading);
-    --color-graphite: var(--color-raw-gray-100);
-  }
-}
+.dark,
+[data-mode="dark"],
+[data-theme="dark"] {
+  color-scheme: dark;
 
-.dark {
-  --color-bg-canvas: var(--color-raw-gray-950);
-  --color-bg-surface: var(--color-raw-gray-900);
-  --color-border-brutal: var(--color-raw-gray-100);
-  --ink-anchor: var(--color-raw-gray-100);
-  --color-text-body: var(--color-raw-gray-100);
-  --color-text-heading: var(--color-raw-gray-50);
-  
-  /* Inversão dos aliases legados de cor */
-  --color-canvas: var(--color-bg-canvas);
-  --color-surface: var(--color-bg-surface);
-  --color-ink: var(--color-text-body);
-  --color-ink-anchor: var(--color-text-heading);
-  --color-graphite: var(--color-raw-gray-100);
+  /* Superfícies e Layout */
+  --bg-app: #09090B;
+  --surface-card: #18181B;
+  --surface-elevated: #27272A;
+
+  /* Bordas e Sombras Brutalistas */
+  --border-brutal: #E4E4E7;
+  --shadow-brutal: 2px 2px 0px #E4E4E7;
+
+  /* Tipografia */
+  --text-primary: #FAFAFA;
+  --text-secondary: #A1A1AA;
+
+  /* Ações Primárias e Secundárias */
+  --action-primary: #FBBF24;
+  --action-primary-fg: #000000; /* WCAG AA mantido fixo */
+  --action-secondary-bg: #27272A;
+  --action-secondary-fg: #FAFAFA;
+
+  /* Estados e Feedbacks Semânticos (Ajustados para Dark Mode) */
+  --status-success-bg: rgba(6, 78, 59, 0.4);
+  --status-success-fg: #A7F3D0;
+  --status-success-border: #059669;
+
+  --status-warning-bg: rgba(120, 53, 15, 0.4);
+  --status-warning-fg: #FDE68A;
+  --status-warning-border: #D97706;
+
+  --status-error-bg: rgba(127, 29, 29, 0.4);
+  --status-error-fg: #FECACA;
+  --status-error-border: #DC2626;
+
+  --status-info-bg: rgba(30, 58, 138, 0.4);
+  --status-info-fg: #BFDBFE;
+  --status-info-border: #2563EB;
 }
 
 /*

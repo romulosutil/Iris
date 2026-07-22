@@ -45,29 +45,29 @@ const estadoToVariante: Record<EstadoDado, BadgesVariantes> = {
 };
 
 export const variantStyles: Record<string, string> = {
-  success: "bg-[color:var(--success-tint)] border-[color:var(--success-accent)] text-[color:var(--success-deep)]",
-  Success: "bg-[color:var(--success-tint)] border-[color:var(--success-accent)] text-[color:var(--success-deep)]",
-  warning: "bg-[color:var(--warning-tint)] border-[color:var(--warning-accent)] text-[color:var(--warning-deep)]",
-  Warning: "bg-[color:var(--warning-tint)] border-[color:var(--warning-accent)] text-[color:var(--warning-deep)]",
-  ai: "bg-[color:var(--ai-tint)] border-[color:var(--ai-accent)] text-[color:var(--ai-deep)]",
-  AI: "bg-[color:var(--ai-tint)] border-[color:var(--ai-accent)] text-[color:var(--ai-deep)]",
-  info: "bg-[color:var(--info-tint)] border-[color:var(--info-accent)] text-[color:var(--info-deep)]",
-  Info: "bg-[color:var(--info-tint)] border-[color:var(--info-accent)] text-[color:var(--info-deep)]",
-  brand: "bg-[color:var(--brand-tint)] border-[color:var(--brand-primary)] text-[color:var(--ink-anchor)]",
-  neutral: "bg-[color:var(--color-raw-gray-50)] border-[color:var(--color-raw-gray-800)] text-[color:var(--color-raw-gray-900)]",
+  success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
+  Success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
+  warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
+  Warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
+  ai: "bg-[var(--ai-tint)] border-[var(--ai-accent)] text-[var(--ai-deep)]",
+  AI: "bg-[var(--ai-tint)] border-[var(--ai-accent)] text-[var(--ai-deep)]",
+  info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
+  Info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
+  brand: "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)]",
+  neutral: "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)]",
 };
 
 const dotColorMap: Record<string, string> = {
-  success: "bg-[color:var(--success-accent)]",
-  Success: "bg-[color:var(--success-accent)]",
-  warning: "bg-[color:var(--warning-accent)]",
-  Warning: "bg-[color:var(--warning-accent)]",
-  ai: "bg-[color:var(--ai-accent)]",
-  AI: "bg-[color:var(--ai-accent)]",
-  info: "bg-[color:var(--info-accent)]",
-  Info: "bg-[color:var(--info-accent)]",
-  brand: "bg-[color:var(--brand-primary)]",
-  neutral: "bg-[color:var(--color-raw-gray-800)]",
+  success: "bg-[var(--status-success-border)]",
+  Success: "bg-[var(--status-success-border)]",
+  warning: "bg-[var(--status-warning-border)]",
+  Warning: "bg-[var(--status-warning-border)]",
+  ai: "bg-[var(--ai-accent)]",
+  AI: "bg-[var(--ai-accent)]",
+  info: "bg-[var(--status-info-border)]",
+  Info: "bg-[var(--status-info-border)]",
+  brand: "bg-[var(--action-primary)]",
+  neutral: "bg-[var(--text-secondary)]",
 };
 
 type Config = {
@@ -201,8 +201,8 @@ export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
         ref={ref}
         data-estado={estado}
         className={cn(
-          "inline-flex items-center gap-1.5 border-[length:var(--border-brutal)] px-3 py-0.5 rounded-[length:var(--radius-pill)]",
-          "font-display text-xs font-semibold tracking-wide uppercase",
+          "inline-flex items-center gap-1.5 border-2 px-3 py-0.5 rounded-sm",
+          "font-mono text-xs font-semibold tracking-wide uppercase",
           borderStyle,
           styleClasses,
           className,
