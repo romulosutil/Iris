@@ -302,6 +302,13 @@
       "when": 1784521553778,
       "tag": "0042_fase5_supervisao_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1784521554778,
+      "tag": "0043_report_narrativo_com_ia",
+      "breakpoints": true
     }
   ]
 }
