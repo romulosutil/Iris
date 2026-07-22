@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
+import { GovernancaNav } from "@/components/ui/governanca-nav";
 import { listarSupervisao } from "./queries";
 import { SupervisaoFila } from "./supervisao-fila";
 
@@ -13,11 +14,13 @@ export default async function SupervisaoPage() {
 
   return (
     <Stack gap="lg">
+      <GovernancaNav />
       <PageHeader
-        title="Supervisão"
+        title="Supervisão & Estagnação"
         description="Acompanhamento de estagnação, regressão clínica e faltas excessivas de pacientes."
       />
       <SupervisaoFila itens={itens} />
     </Stack>
   );
 }
+

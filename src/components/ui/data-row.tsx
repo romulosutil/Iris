@@ -41,14 +41,14 @@ export const DataRow = React.forwardRef<HTMLDivElement, DataRowProps>(
         )}
         {...props}
       >
-        <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto flex-1">
+        <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto flex-1">
           {leading ? <div className="shrink-0">{leading}</div> : null}
           <div className="flex flex-col min-w-0 flex-1">
-            <div className="font-display font-semibold text-base text-[var(--text-primary)] truncate">
+            <div className="font-display font-semibold text-base text-[var(--text-primary)]">
               {title}
             </div>
             {subtitle ? (
-              <div className="text-sm text-[var(--text-secondary)] truncate">
+              <div className="text-sm text-[var(--text-secondary)]">
                 {subtitle}
               </div>
             ) : null}
@@ -56,10 +56,11 @@ export const DataRow = React.forwardRef<HTMLDivElement, DataRowProps>(
           </div>
         </div>
         {trailing ? (
-          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--border-brutal)]/20 sm:border-transparent">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--border-brutal)]/20 sm:border-transparent">
             {trailing}
           </div>
         ) : null}
+
       </Component>
     );
   },

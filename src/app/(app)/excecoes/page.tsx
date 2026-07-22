@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
+import { GovernancaNav } from "@/components/ui/governanca-nav";
 import { listarExcecoes } from "./queries";
 import { ExcecoesList } from "./excecoes-list";
 
@@ -16,8 +17,9 @@ export default async function ExcecoesPage() {
 
   return (
     <Stack gap="lg">
+      <GovernancaNav />
       <PageHeader
-        title="Exceções"
+        title="Exceções Clínicas"
         description={
           excecoes.total === 0
             ? "Nada represado — clínica em dia."
@@ -28,3 +30,4 @@ export default async function ExcecoesPage() {
     </Stack>
   );
 }
+
