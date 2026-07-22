@@ -38,6 +38,13 @@ describe.skipIf(!hasDb)("report — constraints de banco", () => {
     ).rejects.toThrow();
   });
 
+  test("convenio_narrativo com gerado_por_ia=false é rejeitado", async () => {
+    await expect(
+      owner!`INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, payload, status, gerado_por_ia)
+             VALUES (${CLINIC}, ${PATIENT}, 'convenio_narrativo', '2026-01-01', '2026-01-31', '{}'::jsonb, 'rascunho', false)`,
+    ).rejects.toThrow(/report_narrativo_com_ia/);
+  });
+
   test("status=exportado sem pdf_hash/exportado_por/exportado_em é rejeitado", async () => {
     await expect(
       owner!`INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, payload, status)

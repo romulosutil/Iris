@@ -11,6 +11,14 @@ import {
   type CurarFamiliaInput,
   type ExportarFamiliaInput,
 } from "./familia-logic";
+import {
+  gerarRascunhoConvenioNarrativo,
+  curarConvenioNarrativo,
+  exportarConvenioNarrativo,
+  type GerarConvenioNarrativoInput,
+  type CurarConvenioNarrativoInput,
+  type ExportarConvenioNarrativoInput,
+} from "./convenio-narrativo-logic";
 
 /** Wrapper de request — deriva o tenant do servidor. */
 export async function exportarConvenioBrutoAction(input: ExportarInput) {
@@ -56,6 +64,34 @@ export async function curarFamiliaAction(input: CurarFamiliaInput) {
 export async function exportarFamiliaAction(input: ExportarFamiliaInput) {
   const ctx = await getTenantContext();
   const res = await exportarFamilia(ctx, input);
+  revalidatePath("/relatorios");
+  return res;
+}
+
+// ─── Relatório Narrativo de Convênio (Fatia 5) — coordenador-only ────────────
+export async function gerarRascunhoConvenioNarrativoAction(
+  input: GerarConvenioNarrativoInput,
+) {
+  const ctx = await getTenantContext();
+  const res = await gerarRascunhoConvenioNarrativo(ctx, input);
+  revalidatePath("/relatorios");
+  return res;
+}
+
+export async function curarConvenioNarrativoAction(
+  input: CurarConvenioNarrativoInput,
+) {
+  const ctx = await getTenantContext();
+  const res = await curarConvenioNarrativo(ctx, input);
+  revalidatePath("/relatorios");
+  return res;
+}
+
+export async function exportarConvenioNarrativoAction(
+  input: ExportarConvenioNarrativoInput,
+) {
+  const ctx = await getTenantContext();
+  const res = await exportarConvenioNarrativo(ctx, input);
   revalidatePath("/relatorios");
   return res;
 }

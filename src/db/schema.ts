@@ -988,6 +988,10 @@ export const report = pgTable(
       "report_bruto_sem_ia",
       sql`${t.tipo} <> 'convenio_bruto' OR ${t.geradoPorIa} = false`,
     ),
+    check(
+      "report_narrativo_com_ia",
+      sql`${t.tipo} <> 'convenio_narrativo' OR ${t.geradoPorIa} = true`,
+    ),
     index("idx_report_patient").on(t.patientId, t.criadoEm.desc()),
     index("idx_report_clinic_tipo").on(t.clinicId, t.tipo),
     index("idx_report_vigente")

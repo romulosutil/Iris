@@ -4,14 +4,16 @@ import { Stack } from "@/components/ui/layout";
 import { listarPacientesParaRelatorio } from "./queries";
 import { RelatoriosExport } from "./relatorios-export";
 import { FamiliaReport } from "./familia-report";
+import { ConvenioNarrativoReport } from "./convenio-narrativo-report";
 
 /**
- * Rota `/relatorios` (Fase 5 · Fatia 3) — exportação do dossiê
- * `convenio_bruto`. Coordenador E terapeuta podem gerar (terapeuta só do seu
- * próprio paciente — RLS bloqueia o resto na exportação); qualquer outro
- * papel é rejeitado, espelhando `duvidas/page.tsx`. Hoje só existe o tile
- * "Dossiê para convênio" — "Relatório da família" é Fatia 4, não invente
- * aqui.
+ * Rota `/relatorios` (Fase 5). Tiles: "Dossiê para convênio" (Fatia 3, factual,
+ * coordenador E terapeuta — terapeuta só do seu próprio paciente, RLS
+ * bloqueia o resto na exportação); "Relatório da família" (Fatia 4, gerar:
+ * coordenador ou terapeuta on-team, curar/exportar: só coordenador);
+ * "Relatório narrativo de convênio" (Fatia 5, D6: coordenador-only em TODAS
+ * as ações — terapeuta nem gera, nem vê o tile). Qualquer outro papel é
+ * rejeitado, espelhando `duvidas/page.tsx`.
  */
 export default async function RelatoriosPage() {
   const ctx = await getTenantContext();
@@ -37,6 +39,10 @@ export default async function RelatoriosPage() {
         pacientes={pacientes}
         podeCurar={ctx.role === "coordenador"}
       />
+
+      {ctx.role === "coordenador" ? (
+        <ConvenioNarrativoReport pacientes={pacientes} podeCurar />
+      ) : null}
     </Stack>
   );
 }
