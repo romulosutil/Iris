@@ -18,9 +18,9 @@ export default async function PacientesPage() {
         description="Pacientes cadastrados na clínica."
         actions={
           podeCadastrar ? (
-            <Link href="/pacientes/novo">
-              <Button variante="primaria">+ Novo Paciente</Button>
-            </Link>
+            <Button variante="primaria" asChild>
+              <Link href="/pacientes/novo">+ Novo Paciente</Link>
+            </Button>
           ) : undefined
         }
       />

@@ -93,7 +93,7 @@ function PainelHistorico({ itens }: { itens: HistoricoItem[] }) {
         <Stack gap="md" como="ul">
           {itens.map((h) => (
             <li key={h.id} className="border-[var(--text-secondary)] border-l-2 pl-3">
-              <p className="text-[var(--text-primary)] text-sm italic">"{h.trechoFonte}"</p>
+              <p className="text-[var(--text-primary)] text-sm italic">&quot;{h.trechoFonte}&quot;</p>
               {h.revisadoEm ? (
                 <p className="text-[var(--text-secondary)] mt-0.5 text-xs">
                   aprovado em {dataFmt.format(h.revisadoEm)}

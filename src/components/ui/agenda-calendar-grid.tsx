@@ -101,7 +101,7 @@ export function AgendaCalendarGrid({
     slotIdx: 0,
     terapeutaIdx: 0,
   });
-  const refs = React.useRef(new Map<string, HTMLButtonElement | null>());
+  const refs = React.useRef(new Map<string, HTMLElement | null>());
 
   function chaveRef(slotIdx: number, terapeutaIdx: number) {
     return `${slotIdx}-${terapeutaIdx}`;
@@ -194,7 +194,15 @@ export function AgendaCalendarGrid({
                       className="p-1 border-r border-[var(--border-brutal)]/20 align-top h-12"
                     >
                       {sessoesNoSlot.length === 0 ? (
-                        <div className="w-full h-full min-h-[36px] rounded-[var(--radius-xs)] hover:bg-[var(--color-gold)]/10 transition-colors cursor-pointer opacity-30" />
+                        <div
+                          ref={(el) => {
+                            refs.current.set(chaveRef(slotIdx, terapeutaIdx), el);
+                          }}
+                          tabIndex={ehFoco ? 0 : -1}
+                          onFocus={() => setFoco({ slotIdx, terapeutaIdx })}
+                          onKeyDown={(e) => aoTeclar(e, slotIdx, terapeutaIdx)}
+                          className="w-full h-full min-h-[36px] rounded-[var(--radius-xs)] hover:bg-[var(--color-gold)]/10 transition-colors cursor-pointer opacity-30 focus-visible:outline-focus outline-none"
+                        />
                       ) : (
                         <div className="flex flex-col gap-1">
                           {sessoesNoSlot.map((s) => (
@@ -284,11 +292,11 @@ export function AgendaCalendarGrid({
 
             <DrawerFooter className="flex flex-col sm:flex-row gap-2">
               {role === "coordenador" || sessaoSelecionada.terapeutaId === userId ? (
-                <Link href={`/diario/${sessaoSelecionada.id}`} className="w-full">
-                  <Button variante="primaria" className="w-full">
+                <Button variante="primaria" className="w-full" asChild>
+                  <Link href={`/diario/${sessaoSelecionada.id}`}>
                     Abrir Sessão no Diário
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               ) : null}
 
               {sessaoSelecionada.estado === "agendada" ? (
@@ -302,14 +310,13 @@ export function AgendaCalendarGrid({
               ) : null}
 
               {(sessaoSelecionada.estado === "falta_paciente" || sessaoSelecionada.estado === "falta_terapeuta") && podeGerir ? (
-                <Link
-                  href={`/agenda/semana?repor=${sessaoSelecionada.id}&patientId=${sessaoSelecionada.patientId}&terapeutaId=${sessaoSelecionada.terapeutaId}&disciplina=${encodeURIComponent(sessaoSelecionada.disciplina)}`}
-                  className="w-full"
-                >
-                  <Button variante="secundaria" className="w-full">
+                <Button variante="secundaria" className="w-full" asChild>
+                  <Link
+                    href={`/agenda/semana?repor=${sessaoSelecionada.id}&patientId=${sessaoSelecionada.patientId}&terapeutaId=${sessaoSelecionada.terapeutaId}&disciplina=${encodeURIComponent(sessaoSelecionada.disciplina)}`}
+                  >
                     Repor Sessão
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               ) : null}
             </DrawerFooter>
           </DrawerContent>

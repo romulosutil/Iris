@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DataRow } from "@/components/ui/data-row";
 import { Cluster, Stack } from "@/components/ui/layout";
@@ -46,6 +47,7 @@ export function AgendaViewCliente({
   diaExtenso,
   diaISO,
 }: AgendaViewClienteProps) {
+  const router = useRouter();
   const isCoordenador = role === "coordenador" || role === "admin_recepcao";
   
   // Modo de exibição: Matriz (Geral), Terapeuta (Bento) ou Horário (Cronológico)
@@ -272,7 +274,7 @@ export function AgendaViewCliente({
                       onAbrir={
                         role === "coordenador" || s.terapeutaId === userId
                           ? () => {
-                              window.location.href = `/diario/${s.id}`;
+                              router.push(`/diario/${s.id}`);
                             }
                           : undefined
                       }

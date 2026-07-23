@@ -33,11 +33,11 @@ export function ListaPacientes({ pacientes }: { pacientes: PacienteListItem[] })
                 </div>
               </div>
             </div>
-            <Link href={`/pacientes/${p.id}`}>
-              <Button variante="terciaria" tamanho="sm">
+            <Button variante="terciaria" tamanho="sm" asChild>
+              <Link href={`/pacientes/${p.id}`}>
                 Ver Prontuário &rarr;
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </li>
       ))}
