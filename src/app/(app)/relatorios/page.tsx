@@ -35,10 +35,16 @@ export default async function RelatoriosPage() {
 
       <RelatoriosExport pacientes={pacientes} />
 
-      <FamiliaReport
-        pacientes={pacientes}
-        podeCurar={ctx.role === "coordenador"}
-      />
+      {/* Escopo de tema família: aplica os tokens [data-mode="familia"]
+          (sombra reduzida, canto macio, acento de conquista) SÓ ao cartão da
+          família. Os demais cartões desta página herdam o modo clínico do
+          <html data-mode="clinico"> (layout.tsx). R6.6.1. */}
+      <div data-mode="familia">
+        <FamiliaReport
+          pacientes={pacientes}
+          podeCurar={ctx.role === "coordenador"}
+        />
+      </div>
 
       {ctx.role === "coordenador" ? (
         <ConvenioNarrativoReport pacientes={pacientes} podeCurar />

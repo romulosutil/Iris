@@ -77,6 +77,50 @@ test("FamiliaReport — sem violações axe (terapeuta, sem curar)", async () =>
   await semViolacoes(<FamiliaReport pacientes={PACIENTES} podeCurar={false} />);
 });
 
+test("FamiliaReport — renderiza sob escopo data-mode='familia', sem regressão axe", async () => {
+  // R6.6.1: o cartão da família é envolto por [data-mode="familia"] na página
+  // (relatorios/page.tsx). Aqui espelhamos esse escopo e verificamos que o
+  // cartão renderiza dentro dele e que os tokens do modo família não
+  // introduzem violação axe.
+  const { container } = render(
+    <div data-mode="familia">
+      <FamiliaReport pacientes={PACIENTES} podeCurar />
+    </div>,
+  );
+
+  const escopo = container.querySelector('[data-mode="familia"]');
+  expect(escopo).not.toBeNull();
+  // o cartão da família (h3 do Card) está dentro do escopo família
+  expect(escopo?.querySelector("h3")?.textContent).toContain(
+    "Relatório da família",
+  );
+
+  const resultado = await axe.run(container, {
+    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    rules: {
+      region: { enabled: false },
+      "landmark-one-main": { enabled: false },
+      "page-has-heading-one": { enabled: false },
+      // color-contrast fica desligado porque o JSDOM não computa cor/luminância
+      // de CSS custom properties (não há layout/render real), então a regra do
+      // axe produziria falso-negativo aqui — NÃO é prova de contraste.
+      // O único token de cor novo do modo família (--action-primary:#B2DFDB) é
+      // usado só como fill/borda/ring; o fg herda #000000 → contraste 15.9:1,
+      // validado manualmente (piso AA = 4.5:1). Regressão de cor deve ser pega
+      // por revisão de token/visual, não por este teste. Ver PR #73 / R6.6.1.
+      "color-contrast": { enabled: false },
+    },
+  });
+  expect(resultado.violations).toEqual([]);
+});
+
+test("RelatoriosExport permanece clínico (fora do escopo data-mode='familia')", () => {
+  // O escopo família é cirúrgico: os outros cartões da página não recebem
+  // data-mode="familia" e herdam o modo clínico do <html>.
+  const { container } = render(<RelatoriosExport pacientes={PACIENTES} />);
+  expect(container.querySelector('[data-mode="familia"]')).toBeNull();
+});
+
 test("ConvenioNarrativoReport — sem violações axe (form inicial + cabeçalho)", async () => {
   await semViolacoes(<ConvenioNarrativoReport pacientes={PACIENTES} podeCurar />);
 });

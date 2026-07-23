@@ -19,8 +19,38 @@
 | **3** | Extração de Evidências (IA) | ✅ Concluído | Issue #6 (fechada 13/07) |
 | **4** | Evidências Acumuladas & Gráficos | ✅ Concluído | Issue #7 |
 | **5** | Relatórios de Convênio & Supervisão | ✅ Concluído | Issue #8 |
-| **6** | Ditado de Voz & Hardening LGPD | 🚧 Em andamento (6.1/6.3/6.2a ✅ · 6.2b PR aberta) | Issue #9 |
+| **6** | Hardening LGPD (fechamento MVP) | ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅) | Issue #9 |
+| **6b** | Ditado de Voz (áudio + ASR) | 📅 Fast-follow · gated por DPA | Issue #72 |
 | **7** | Self-Service & Growth (onboarding + pagamento autônomo) | 📅 Pós-MVP | Issue #36 |
+
+---
+
+## 🏁 Sessão 23/07/2026 — Fatia 6.6 (Polimento família + Checklist produção/DPA) — PR aberta
+
+Fechamento do MVP (spec A7/A8): MVP fecha por 6.1–6.3 + 6.6. Áudio (6.4/6.5) sai
+como fast-follow gated por DPA — **não** gatilha o aceite do MVP.
+Detalhe em `.specs/features/fase6/EXECUTION.md`.
+
+**Entregue:**
+- R6.6.1: `data-mode="familia"` ativado no cartão de relatório da família
+  (`src/app/(app)/relatorios/familia-report.tsx`) — antes herdava `clinico` do
+  `<html>` e o modo só existia no Storybook. Tokens de temperatura família
+  expandidos (design-system §2), a11y sem regressão (axe WCAG 2.1 AA).
+- R6.6.2: `docs/arquitetura/checklist-producao-mvp.md` (aceite do MVP, gates
+  legais/infra) + `docs/legal/dpa-asr-audio.md` (transferência internacional do
+  áudio, retenção 7 dias, gate de ASR real por DPA).
+- R6.6.3: README/BACKLOG/EXECUTION atualizados; issue de áudio fast-follow
+  criada; #9 fecha na merge documentando divergências do spec.
+
+**Bloqueado — predecessor do PILOTO com dado real (não do merge):**
+- [ ] ❌ Validação legal da política de retenção + respostas do briefing.
+- [ ] ❌ **DPA de ASR/áudio assinado** — habilita 6.4/6.5 (ASR real desabilitado
+      por flag até lá).
+- [ ] Smoke manual do fluxo MFA (herdado da 6.2b).
+
+**Diferido (dívida registrada, fora de escopo 6.6):**
+- [ ] Alinhar PDF família (`build-html.ts`, CSS inline) à paleta de temperatura.
+- [ ] 6.4/6.5 (captura áudio + pipeline ASR) na issue fast-follow.
 
 ---
 

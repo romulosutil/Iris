@@ -318,6 +318,20 @@
   --ds-shadow-hover: var(--elevation-2);   /* +1 nível acima do base: elevation-1 → 2 */
   --ds-shadow-inset: var(--shadow-brutal-inset-sm);
   --ds-offset: 2px;
+
+  /* Densidade / leitura calma (§2, linha "Densidade"): canto mais macio reduz
+     a aspereza brutalista sem tocar em cor de texto — zero risco de contraste.
+     Consumido por Card/Input/Button via var(--radius-control). */
+  --radius-control: 10px;
+
+  /* Acento dominante emocional/positivo (§2, linha "Acento dominante"): no
+     modo família a ação principal carrega a cor de conquista (menta/sucesso)
+     em vez do ouro funcional. --action-primary-fg permanece #000000 (herdado
+     de :root) → contraste preto sobre menta = 15.9:1 (WCAG AA folgado).
+     Reusa token existente, sem hex novo. Consumido por Button variante
+     primária e pela barra de destaque do Card. Menta #B2DFDB = "Sucesso/
+     conquistado" documentado em §3.A. */
+  --action-primary: #B2DFDB;
 }
 
 html {
