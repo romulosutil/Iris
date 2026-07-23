@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { describe, expect, test } from "vitest";
 
 /**
@@ -18,10 +18,15 @@ import { describe, expect, test } from "vitest";
  * SÓ wrappers `*Action` que derivam o ctx via `getTenantContext()` server-side.
  *
  * Este teste falha se QUALQUER módulo `"use server"` exportar uma função que
- * recebe `ctx`/`TenantContext` como parâmetro. O `ALLOWLIST` abaixo lista os
- * módulos ainda pendentes de correção (fatias B/C da #55) — deve ENCOLHER a
- * cada fatia, nunca crescer. Um módulo novo vulnerável e fora do allowlist
- * quebra o CI de propósito.
+ * recebe `ctx`/`TenantContext` em qualquer posição de parâmetro. O `ALLOWLIST`
+ * abaixo lista os módulos ainda pendentes de correção (fatias B/C da #55) —
+ * deve ENCOLHER a cada fatia, nunca crescer. Um módulo novo vulnerável e fora
+ * do allowlist quebra o CI de propósito.
+ *
+ * NIT conhecido (dívida): parse por regex é frágil a formatação exótica; a
+ * evolução natural é uma regra ESLint custom baseada em AST. Enquanto isso,
+ * este guard cobre os padrões reais do repo (function decl + const arrow) com
+ * balanceamento de parênteses e strip de comentários no topo.
  */
 
 // Módulos AINDA vulneráveis, pendentes de correção nas próximas fatias da #55.
@@ -45,60 +50,104 @@ const ALLOWLIST = new Set<string>([
   // o CI quebra — que é o objetivo.
 ]);
 
-/** Normaliza p/ caminho relativo com barras `/` (estável entre SO). */
+/** Caminho relativo ao cwd com barras `/` (estável entre SO). */
 function rel(abs: string): string {
-  return abs.replace(/\\/g, "/").replace(/.*?(src\/app\/.*)$/, "$1");
-}
-
-/** Tem a diretiva `"use server"` na primeira linha de código? */
-function hasUseServer(src: string): boolean {
-  // ignora BOM e linhas em branco iniciais
-  const firstCode = src.replace(/^﻿/, "").trimStart();
-  return /^["']use server["'];?/.test(firstCode);
+  return relative(process.cwd(), abs).replace(/\\/g, "/");
 }
 
 /**
- * Retorna os nomes de funções exportadas cujo PRIMEIRO parâmetro é `ctx`
- * (ou anotado como `TenantContext`). Cobre `export async function fn(ctx…`,
- * `export function fn(ctx…` e `export const fn = async (ctx…`.
+ * Remove BOM + comentários de linha/bloco e espaços do TOPO do arquivo, para
+ * que a checagem da diretiva não seja enganada por um `// TODO` antes do
+ * `"use server"` (o React/Next permite comentários acima da diretiva).
+ */
+function stripLeading(src: string): string {
+  let s = src.replace(/^﻿/, "");
+  for (;;) {
+    const t = s.replace(/^\s+/, "");
+    if (t.startsWith("//")) {
+      s = t.replace(/^\/\/[^\n]*\n?/, "");
+      continue;
+    }
+    if (t.startsWith("/*")) {
+      s = t.replace(/^\/\*[\s\S]*?\*\//, "");
+      continue;
+    }
+    s = t;
+    break;
+  }
+  return s;
+}
+
+/** Tem a diretiva `"use server"` como primeira instrução (ignorando comentários)? */
+function hasUseServer(src: string): boolean {
+  return /^["']use server["'];?/.test(stripLeading(src));
+}
+
+/** Dado o índice do `(` de abertura, retorna o conteúdo balanceado até o `)`. */
+function balancedParams(src: string, openIdx: number): string {
+  let depth = 0;
+  for (let i = openIdx; i < src.length; i++) {
+    const c = src[i];
+    if (c === "(") depth++;
+    else if (c === ")") {
+      depth--;
+      if (depth === 0) return src.slice(openIdx + 1, i);
+    }
+  }
+  return "";
+}
+
+/** Algum parâmetro se chama `ctx` OU é tipado como `TenantContext`? */
+function paramsAcceptCtx(params: string): boolean {
+  if (/\bTenantContext\b/.test(params)) return true; // tipo em qualquer posição
+  // nome `ctx` no início ou após vírgula (cobre 1º, 2º, … argumento)
+  return /(^|,)\s*\{?\s*ctx\b/.test(params);
+}
+
+/**
+ * Nomes de funções exportadas que aceitam ctx em QUALQUER posição de parâmetro.
+ * Cobre `export [async] function fn(…)` e `export const fn = [async] (…)`.
  */
 function exportedCtxAcceptingFns(src: string): string[] {
   const hits: string[] = [];
-  const fnDecl =
-    /export\s+(?:async\s+)?function\s+(\w+)\s*\(\s*(\w+)\s*:\s*([^,)]+)/g;
-  const constArrow =
-    /export\s+const\s+(\w+)\s*(?::[^=]+)?=\s*(?:async\s+)?\(\s*(\w+)\s*:\s*([^,)]+)/g;
-  for (const re of [fnDecl, constArrow]) {
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(src)) !== null) {
-      const [, name, param, type] = m;
-      if (param === "ctx" || /TenantContext/.test(type ?? "")) hits.push(name!);
-    }
+  const re =
+    /export\s+(?:async\s+)?function\s+(\w+)\s*\(|export\s+const\s+(\w+)\s*(?::[^=]+)?=\s*(?:async\s+)?\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    const name = m[1] ?? m[2];
+    const openIdx = m.index + m[0].length - 1; // posição do `(` (m[0] termina nele)
+    if (paramsAcceptCtx(balancedParams(src, openIdx))) hits.push(name!);
   }
   return hits;
 }
 
 describe("Issue #55 — nenhum core ctx-accepting exportado de módulo `use server`", () => {
-  const appDir = join(process.cwd(), "src", "app");
-  const files = readdirSync(appDir, { recursive: true, encoding: "utf8" })
-    .filter((f) => /actions\.ts$/.test(f.replace(/\\/g, "/")))
-    .map((f) => join(appDir, f));
+  // Varre TODO arquivo .ts/.tsx sob src — qualquer arquivo com "use server" no
+  // topo vira server-actions, não só `actions.ts` (WARN da review).
+  const srcDir = join(process.cwd(), "src");
+  const files = readdirSync(srcDir, { recursive: true, encoding: "utf8" })
+    .map((f) => f.replace(/\\/g, "/"))
+    .filter((f) => /\.tsx?$/.test(f) && !/\.d\.ts$/.test(f))
+    .map((f) => join(srcDir, f));
+
+  const serverModules = files.filter((abs) =>
+    hasUseServer(readFileSync(abs, "utf8")),
+  );
 
   test("há módulos `use server` para auditar (sanidade do glob)", () => {
-    expect(files.length).toBeGreaterThan(5);
+    expect(serverModules.length).toBeGreaterThan(5);
   });
 
-  for (const abs of files) {
+  for (const abs of serverModules) {
     const relPath = rel(abs);
     const src = readFileSync(abs, "utf8");
-    if (!hasUseServer(src)) continue;
 
     test(`${relPath} — exporta só wrappers (nenhuma fn recebe ctx)`, () => {
       const offenders = exportedCtxAcceptingFns(src);
       if (ALLOWLIST.has(relPath)) {
-        // Ainda vulnerável por design (pendente de fatia). Documenta a dívida:
-        // quando a fatia corrigir, `offenders` fica vazio e a entrada do
-        // allowlist deve ser removida (senão este expect falha e cobra a limpeza).
+        // Ainda vulnerável por design (pendente de fatia). Quando a fatia
+        // corrigir, `offenders` fica vazio e a entrada do allowlist deve ser
+        // removida (senão este expect falha e cobra a limpeza).
         expect(
           offenders.length,
           `${relPath} está no ALLOWLIST mas já não expõe ctx — remover do allowlist.`,
