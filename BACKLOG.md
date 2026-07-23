@@ -37,6 +37,11 @@ Teste `fase6-expurgo-paciente.int.test.ts` 6/6 verde. Detalhe em
 - export já grava audit síncrono inline (`export.ts:82-85`) → R6.3.4 foi confirm-only.
 
 **Diferido (dívida registrada):**
+- [ ] **Preservar metadado não-PII na pseudonimização (`app_purgar_paciente`)** — hoje
+  `detalhe` é sobrescrito por inteiro (erasure por whitelist, decisão travada na 6.3).
+  Ajuste futuro: preservar chaves provadamente não-PII (ex.: `detalhe->'hash'`, hash de
+  conteúdo) via merge seletivo, sem reintroduzir risco de PII em chave livre. Trade-off:
+  riqueza de trilha × garantia de erasure. (Review PR #68, aceito como está.)
 - [ ] **Alinhar oráculo de erro em `app_purgar_report`** — a 6.3 unificou os erros
   de `app_purgar_paciente` em mensagem opaca ("inexistente ou sem permissão") p/ não
   confirmar cross-tenant a um coordenador. `app_purgar_report` (0040) ainda tem
