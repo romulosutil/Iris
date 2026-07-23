@@ -1,0 +1,320 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { cn } from "@/lib/cn";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter } from "@/components/ui/drawer";
+import { Button } from "@/components/ui/button";
+import { Cluster } from "@/components/ui/layout";
+import { EstadoBadge } from "@/app/(app)/agenda/estado-badge";
+import { CheckInButton } from "@/app/(app)/agenda/checkin-button";
+import { GerirSessao } from "@/app/(app)/agenda/gerir-sessao";
+import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso";
+import type { SessaoDoDia } from "@/app/(app)/agenda/actions";
+
+export interface AgendaCalendarGridProps {
+  sessoes: SessaoDoDia[];
+  terapeutas: { id: string; nome: string }[];
+  role: string;
+  userId: string;
+  podeGerir: boolean;
+  abertura?: string; // ex: "07:00"
+  fechamento?: string; // ex: "19:30"
+  passoMin?: number; // ex: 30
+}
+
+function horaDaSessao(quando: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: FUSO_CLINICA,
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(quando));
+}
+
+function horaParaMin(h: string): number {
+  const [hh, mm] = h.split(":").map(Number);
+  return (hh ?? 0) * 60 + (mm ?? 0);
+}
+
+function minParaHora(m: number): string {
+  const hh = Math.floor(m / 60)
+    .toString()
+    .padStart(2, "0");
+  const mm = (m % 60).toString().padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function gerarHorarios(abertura: string, fechamento: string, passoMin: number): string[] {
+  const inicio = horaParaMin(abertura);
+  const fim = horaParaMin(fechamento);
+  const slots: string[] = [];
+  for (let m = inicio; m <= fim; m += passoMin) {
+    slots.push(minParaHora(m));
+  }
+  return slots;
+}
+
+export function AgendaCalendarGrid({
+  sessoes,
+  terapeutas,
+  role,
+  userId,
+  podeGerir,
+  abertura = "07:00",
+  fechamento = "19:30",
+  passoMin = 30,
+}: AgendaCalendarGridProps) {
+  const horarios = React.useMemo(
+    () => gerarHorarios(abertura, fechamento, passoMin),
+    [abertura, fechamento, passoMin]
+  );
+
+  // Sessão selecionada para o Drawer de Detalhes
+  const [sessaoSelecionada, setSessaoSelecionada] = React.useState<SessaoDoDia | null>(null);
+
+  // Mapeia sessões por (terapeutaId_horario) para busca O(1)
+  const mapaSessoes = React.useMemo(() => {
+    const map = new Map<string, SessaoDoDia[]>();
+    for (const s of sessoes) {
+      const h = horaDaSessao(s.agendadaPara);
+      const tId = s.terapeutaId ?? "sem-terapeuta";
+      const key = `${tId}_${h}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(s);
+    }
+    return map;
+  }, [sessoes]);
+
+  // Terapeutas visíveis (com sessões ou todos se coordenador)
+  const terapeutasVisiveis = React.useMemo(() => {
+    if (terapeutas.length > 0) return terapeutas;
+    // Fallback se a lista vier vazia
+    const idsUnicos = Array.from(new Set(sessoes.map((s) => s.terapeutaId ?? "sem-terapeuta")));
+    return idsUnicos.map((id) => {
+      const sessao = sessoes.find((s) => s.terapeutaId === id);
+      return { id, nome: sessao?.terapeutaNome ?? "Profissional não atribuído" };
+    });
+  }, [terapeutas, sessoes]);
+
+  // Foco para acessibilidade por teclado
+  const [foco, setFoco] = React.useState<{ slotIdx: number; terapeutaIdx: number }>({
+    slotIdx: 0,
+    terapeutaIdx: 0,
+  });
+  const refs = React.useRef(new Map<string, HTMLButtonElement | null>());
+
+  function chaveRef(slotIdx: number, terapeutaIdx: number) {
+    return `${slotIdx}-${terapeutaIdx}`;
+  }
+
+  function focarCelula(slotIdx: number, terapeutaIdx: number) {
+    const sIdx = Math.max(0, Math.min(horarios.length - 1, slotIdx));
+    const tIdx = Math.max(0, Math.min(terapeutasVisiveis.length - 1, terapeutaIdx));
+    setFoco({ slotIdx: sIdx, terapeutaIdx: tIdx });
+    refs.current.get(chaveRef(sIdx, tIdx))?.focus();
+  }
+
+  function aoTeclar(e: React.KeyboardEvent, slotIdx: number, terapeutaIdx: number) {
+    const destinos: Record<string, [number, number]> = {
+      ArrowRight: [slotIdx, terapeutaIdx + 1],
+      ArrowLeft: [slotIdx, terapeutaIdx - 1],
+      ArrowDown: [slotIdx + 1, terapeutaIdx],
+      ArrowUp: [slotIdx - 1, terapeutaIdx],
+    };
+    const alvo = destinos[e.key];
+    if (alvo) {
+      e.preventDefault();
+      focarCelula(alvo[0], alvo[1]);
+    }
+  }
+
+  return (
+    <div className="w-full space-y-4">
+      {/* Container com Scroll Horizontal e Vertical Flexível */}
+      <div
+        role="grid"
+        aria-label="Grade de Agenda Geral da Clínica"
+        className="w-full overflow-auto max-h-[75vh] rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]"
+      >
+        <table className="w-full border-collapse text-left min-w-[700px]">
+          {/* Cabeçalho Sticky de Terapeutas */}
+          <thead className="sticky top-0 z-20 bg-[var(--surface-elevated)] border-b-2 border-[var(--border-brutal)]">
+            <tr role="row">
+              <th
+                role="columnheader"
+                className="sticky left-0 z-30 w-20 p-2.5 bg-[var(--surface-elevated)] border-r-2 border-[var(--border-brutal)] font-display text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]"
+              >
+                Horário
+              </th>
+              {terapeutasVisiveis.map((t) => {
+                const sessoesTerapeuta = sessoes.filter((s) => s.terapeutaId === t.id);
+                const concluidas = sessoesTerapeuta.filter((s) => s.estado === "realizada").length;
+                return (
+                  <th
+                    key={t.id}
+                    role="columnheader"
+                    className="p-2.5 border-r border-[var(--border-brutal)]/30 min-w-[150px] max-w-[200px]"
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-display font-bold text-xs text-[var(--text-primary)] truncate" title={t.nome}>
+                        {t.nome}
+                      </span>
+                      <span className="font-mono text-[10px] text-[var(--text-secondary)] font-semibold">
+                        {sessoesTerapeuta.length} {sessoesTerapeuta.length === 1 ? "sessão" : "sessões"} ({concluidas} ok)
+                      </span>
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+
+          {/* Corpo da Matriz Horário x Terapeuta */}
+          <tbody>
+            {horarios.map((horario, slotIdx) => (
+              <tr role="row" key={horario} className="border-b border-[var(--border-brutal)]/15 hover:bg-[var(--surface-elevated)]/40 transition-colors">
+                {/* Linha Fixo de Horário */}
+                <th
+                  role="rowheader"
+                  className="sticky left-0 z-10 w-20 p-2 bg-[var(--surface-card)] border-r-2 border-[var(--border-brutal)] font-mono text-xs font-bold text-[var(--text-secondary)] text-center"
+                >
+                  {horario}
+                </th>
+
+                {/* Células da Grade */}
+                {terapeutasVisiveis.map((t, terapeutaIdx) => {
+                  const key = `${t.id}_${horario}`;
+                  const sessoesNoSlot = mapaSessoes.get(key) ?? [];
+                  const ehFoco = foco.slotIdx === slotIdx && foco.terapeutaIdx === terapeutaIdx;
+
+                  return (
+                    <td
+                      key={t.id}
+                      role="gridcell"
+                      className="p-1 border-r border-[var(--border-brutal)]/20 align-top h-12"
+                    >
+                      {sessoesNoSlot.length === 0 ? (
+                        <div className="w-full h-full min-h-[36px] rounded-[var(--radius-xs)] hover:bg-[var(--color-gold)]/10 transition-colors cursor-pointer opacity-30" />
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {sessoesNoSlot.map((s) => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              ref={(el) => {
+                                refs.current.set(chaveRef(slotIdx, terapeutaIdx), el);
+                              }}
+                              tabIndex={ehFoco ? 0 : -1}
+                              onClick={() => setSessaoSelecionada(s)}
+                              onFocus={() => setFoco({ slotIdx, terapeutaIdx })}
+                              onKeyDown={(e) => aoTeclar(e, slotIdx, terapeutaIdx)}
+                              className={cn(
+                                "w-full text-left p-1.5 rounded-[var(--radius-xs)] border-2 border-[var(--border-brutal)] shadow-[1px_1px_0_0_#000000] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000000] focus-visible:outline-focus outline-none cursor-pointer",
+                                s.estado === "realizada" && "bg-[var(--status-success-bg)] text-[var(--text-primary)] border-[var(--status-success-border)]",
+                                s.estado === "agendada" && "bg-[var(--surface-card)] text-[var(--text-primary)] border-[var(--border-brutal)]",
+                                (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-[var(--status-error-bg)] text-[var(--status-error-fg)] border-[var(--status-error-border)]",
+                                s.estado === "cancelada" && "bg-[var(--surface-elevated)] text-[var(--text-secondary)] opacity-60 line-through"
+                              )}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-mono text-[10px] font-bold tracking-tight">
+                                  {horario}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "size-2 rounded-full border border-[var(--border-brutal)] shrink-0",
+                                    s.estado === "realizada" && "bg-[var(--color-blue)]",
+                                    s.estado === "agendada" && "bg-[var(--action-primary)]",
+                                    (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-[var(--color-terracotta)]",
+                                    s.estado === "cancelada" && "bg-gray-400"
+                                  )}
+                                />
+                              </div>
+                              <div className="font-display font-semibold text-xs truncate leading-tight mt-0.5">
+                                {s.pacienteNome ?? "Paciente (restrito)"}
+                              </div>
+                              {s.disciplina ? (
+                                <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)] truncate">
+                                  {s.disciplina}
+                                </div>
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Drawer Contextual de Detalhes da Sessão */}
+      <Drawer open={!!sessaoSelecionada} onOpenChange={(open) => !open && setSessaoSelecionada(null)}>
+        {sessaoSelecionada ? (
+          <DrawerContent posicao="right">
+            <DrawerHeader>
+              <Cluster gap="sm" className="items-center mb-1">
+                <span className="font-mono text-sm font-bold px-2 py-0.5 bg-[var(--action-primary)] text-[var(--text-primary)] rounded-[var(--radius-xs)] border border-[var(--border-brutal)]">
+                  {horaDaSessao(sessaoSelecionada.agendadaPara)}
+                </span>
+                <EstadoBadge estado={sessaoSelecionada.estado} />
+              </Cluster>
+              <DrawerTitle>{sessaoSelecionada.pacienteNome ?? "Paciente (acesso restrito)"}</DrawerTitle>
+              <DrawerDescription>
+                {sessaoSelecionada.terapeutaNome ? `Terapeuta: ${sessaoSelecionada.terapeutaNome}` : "Sem terapeuta atribuído"}
+                {sessaoSelecionada.disciplina ? ` · Disciplina: ${sessaoSelecionada.disciplina}` : ""}
+              </DrawerDescription>
+            </DrawerHeader>
+
+            <div className="py-6 space-y-4">
+              <div className="p-4 rounded-[var(--radius-md)] border-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] space-y-2">
+                <div className="text-xs font-mono font-bold uppercase text-[var(--text-secondary)]">Status da Sessão</div>
+                <div className="text-sm font-medium">
+                  {sessaoSelecionada.estado === "realizada" && "Sessão já realizada e registrada."}
+                  {sessaoSelecionada.estado === "agendada" && "Sessão agendada aguardando confirmação / check-in."}
+                  {sessaoSelecionada.estado === "falta_paciente" && "Falta registrada pelo paciente."}
+                  {sessaoSelecionada.estado === "falta_terapeuta" && "Falta registrada pelo profissional."}
+                  {sessaoSelecionada.estado === "cancelada" && "Sessão cancelada."}
+                </div>
+              </div>
+            </div>
+
+            <DrawerFooter className="flex flex-col sm:flex-row gap-2">
+              {role === "coordenador" || sessaoSelecionada.terapeutaId === userId ? (
+                <Link href={`/diario/${sessaoSelecionada.id}`} className="w-full">
+                  <Button variante="primaria" className="w-full">
+                    Abrir Sessão no Diário
+                  </Button>
+                </Link>
+              ) : null}
+
+              {sessaoSelecionada.estado === "agendada" ? (
+                <div className="w-full">
+                  <CheckInButton sessionId={sessaoSelecionada.id} />
+                </div>
+              ) : null}
+
+              {sessaoSelecionada.estado === "agendada" && (podeGerir || sessaoSelecionada.terapeutaId === userId) ? (
+                <GerirSessao sessionId={sessaoSelecionada.id} terapeutas={terapeutas} />
+              ) : null}
+
+              {(sessaoSelecionada.estado === "falta_paciente" || sessaoSelecionada.estado === "falta_terapeuta") && podeGerir ? (
+                <Link
+                  href={`/agenda/semana?repor=${sessaoSelecionada.id}&patientId=${sessaoSelecionada.patientId}&terapeutaId=${sessaoSelecionada.terapeutaId}&disciplina=${encodeURIComponent(sessaoSelecionada.disciplina)}`}
+                  className="w-full"
+                >
+                  <Button variante="secundaria" className="w-full">
+                    Repor Sessão
+                  </Button>
+                </Link>
+              ) : null}
+            </DrawerFooter>
+          </DrawerContent>
+        ) : null}
+      </Drawer>
+    </div>
+  );
+}

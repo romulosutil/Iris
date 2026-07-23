@@ -31,7 +31,10 @@ export default function RootLayout({
       data-mode="clinico"
       className={`${spaceGrotesk.variable} ${jakarta.variable}`}
     >
-      <body>{children}</body>
+      <body>{children}{/* impeccable-live-start */}
+<script src="http://localhost:8400/live.js"></script>
+{/* impeccable-live-end */}
+</body>
     </html>
   );
 }

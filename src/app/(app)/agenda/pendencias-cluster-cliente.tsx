@@ -84,7 +84,7 @@ export function PendenciasClusterCliente({
   terapeutas,
 }: PendenciasClusterClienteProps) {
   const [filtroTerapeutaId, setFiltroTerapeutaId] = React.useState<string>("todos");
-  const [recolhido, setRecolhido] = React.useState<boolean>(false);
+  const [recolhido, setRecolhido] = React.useState<boolean>(true);
 
   // Agrupar itens por terapeuta
   const gruposPorTerapeuta = React.useMemo(() => {
@@ -115,104 +115,48 @@ export function PendenciasClusterCliente({
       : gruposPorTerapeuta.filter((g) => g.terapeutaId === filtroTerapeutaId);
 
   return (
-    <Stack como="section" gap="sm" aria-labelledby={tituloId} className="animate-fade-in-up">
-      {/* Cabeçalho da Seção com Total e Ação de Recolher */}
-      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 pb-1 border-b-2 border-[var(--border-brutal)]">
-        <div className="flex items-center gap-3">
-          <h2 id={tituloId} className="font-display text-[var(--text-primary)] text-xl md:text-2xl font-bold">
+    <div className="p-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]">
+      <div className="flex items-center justify-between pb-3 border-b-2 border-[var(--border-brutal)]">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs font-bold text-[var(--status-warning-fg)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] px-2 py-0.5 rounded-[var(--radius-xs)]">
+            [PENDÊNCIAS]
+          </span>
+          <h2 id={tituloId} className="font-display font-bold text-base text-[var(--text-primary)]">
             {titulo}
           </h2>
-          <span className="font-mono text-xs px-2.5 py-0.5 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)] font-bold shrink-0">
-            {itens.length}
-          </span>
         </div>
-
         <Button
           variante="neutra"
           tamanho="sm"
           onClick={() => setRecolhido((v) => !v)}
           aria-expanded={!recolhido}
-          className="shrink-0"
         >
-          {recolhido ? "Expandir ▾" : "Recolher ⌃"}
+          {recolhido ? "Ver todos" : "Recolher"}
         </Button>
       </div>
 
       {!recolhido ? (
-        <Stack gap="md" className="pt-2">
-          {/* Chips de Filtro Rápido por Terapeuta (exibidos se houver mais de 1 terapeuta) */}
-          {gruposPorTerapeuta.length > 1 ? (
-            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 overflow-x-auto pb-1 scrollbar-none max-w-full">
-              <span className="text-xs font-mono font-bold uppercase text-[var(--text-secondary)] shrink-0">
-                Filtrar:
-              </span>
-
-
-              <button
-                type="button"
-                onClick={() => setFiltroTerapeutaId("todos")}
-                className={cn(
-                  "cursor-pointer font-display text-xs px-3 py-1 rounded-[var(--radius-pill)] border-2 transition-all duration-100 shrink-0 font-semibold",
-                  filtroTerapeutaId === "todos"
-                    ? "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold border-[var(--border-brutal)] shadow-xs"
-                    : "border-transparent bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-brutal)]/40 hover:text-[var(--text-primary)]"
-                )}
-              >
-                Todos ({itens.length})
-              </button>
-
-              {gruposPorTerapeuta.map((grupo) => {
-                const isSelected = filtroTerapeutaId === grupo.terapeutaId;
-                return (
-                  <button
-                    key={grupo.terapeutaId}
-                    type="button"
-                    onClick={() => setFiltroTerapeutaId(grupo.terapeutaId)}
-                    className={cn(
-                      "cursor-pointer font-display text-xs px-3 py-1 rounded-[var(--radius-pill)] border-2 transition-all duration-100 shrink-0 font-semibold",
-                      isSelected
-                        ? "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold border-[var(--border-brutal)] shadow-xs"
-                        : "border-transparent bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-brutal)]/40 hover:text-[var(--text-primary)]"
-                    )}
-                  >
-                    {grupo.terapeutaNome} ({grupo.sessoes.length})
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-
-          {/* Renderização dos Grupos Agrupados por Terapeuta */}
-          <Stack gap="md">
-            {gruposExibidos.map((grupo) => (
-              <div key={grupo.terapeutaId} className="space-y-2">
-                {/* Subcabeçalho do Terapeuta (mostrado na visão 'todos' ou se houver múltiplos) */}
-                <div className="flex items-center justify-between pt-1 text-sm font-semibold text-[var(--text-secondary)] border-b border-[var(--border-brutal)]/20 pb-1">
-                  <span className="font-display text-[var(--text-primary)] font-bold">
-                    👩‍⚕️ {grupo.terapeutaNome}
-                  </span>
-                  <span className="font-mono text-xs text-[var(--text-secondary)]">
-                    {grupo.sessoes.length} {grupo.sessoes.length === 1 ? "pendência" : "pendências"}
-                  </span>
-                </div>
-
-                {/* Lista de Itens do Terapeuta */}
-                <Stack gap="xs" como="ul">
-                  {grupo.sessoes.map((s) => (
-                    <ItemPendenciaClustered
-                      key={s.id}
-                      sessao={s}
-                      tipo={tipo}
-                      terapeutas={terapeutas}
-                      ocultarNomeTerapeuta={true}
-                    />
-                  ))}
-                </Stack>
+        <div className="divide-y border-b border-[var(--border-brutal)]/10 pt-2">
+          {gruposExibidos.map((grupo) => (
+            <div key={grupo.terapeutaId} className="py-3">
+              <div className="text-xs font-mono font-bold text-[var(--text-secondary)] uppercase mb-2">
+                {grupo.terapeutaNome} ({grupo.sessoes.length})
               </div>
-            ))}
-          </Stack>
-        </Stack>
+              <Stack gap="xs" como="ul">
+                {grupo.sessoes.map((s) => (
+                  <ItemPendenciaClustered
+                    key={s.id}
+                    sessao={s}
+                    tipo={tipo}
+                    terapeutas={terapeutas}
+                    ocultarNomeTerapeuta={true}
+                  />
+                ))}
+              </Stack>
+            </div>
+          ))}
+        </div>
       ) : null}
-    </Stack>
+    </div>
   );
 }

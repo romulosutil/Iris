@@ -164,6 +164,8 @@ export default async function AgendaPage() {
         role={ctx.role}
         userId={ctx.userId}
         podeGerir={podeGerir}
+        diaExtenso={dataPorExtenso(dia)}
+        diaISO={dia}
       />
     </Stack>
   );

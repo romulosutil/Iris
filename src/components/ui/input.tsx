@@ -98,7 +98,7 @@ export const Input = React.forwardRef<
       {leftAddon && (
         <div
           className={cn(
-            "font-body flex shrink-0 items-center justify-center rounded-l-[calc(var(--radius-control)-2px)] border-r-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-3 text-[var(--text-secondary)] select-none",
+            "font-body flex shrink-0 items-center justify-center rounded-l-[calc(var(--radius-control)-2px)] border-r border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-3 text-[var(--text-secondary)] select-none",
             size === "sm" && "text-sm",
             size === "md" && "text-base",
             size === "lg" && "text-base",
@@ -153,7 +153,7 @@ export const Input = React.forwardRef<
       {rightAddon && (
         <div
           className={cn(
-            "font-body flex shrink-0 items-center justify-center rounded-r-[calc(0.375rem-2px)] border-l-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-3 text-[var(--text-secondary)] select-none",
+            "font-body flex shrink-0 items-center justify-center rounded-r-[calc(0.375rem-2px)] border-l border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-3 text-[var(--text-secondary)] select-none",
             size === "sm" && "text-sm",
             size === "md" && "text-base",
             size === "lg" && "text-base",

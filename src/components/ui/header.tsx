@@ -87,15 +87,15 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
       ref={ref}
       como="header"
       className={cn(
-        "border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)] border-b-2 px-4 sm:px-6 py-3",
+        "sticky top-0 z-40 border-b-2 border-[var(--border-brutal)] bg-[var(--surface-card)]/95 backdrop-blur-md shadow-[var(--ds-shadow)] px-4 sm:px-6 py-3 min-h-[64px] sm:min-h-[72px]",
         className,
       )}
       {...props}
     >
       {/* Marca + Clínica */}
       <Cluster gap="sm" className="items-center justify-between w-full sm:w-auto">
-        <a href="/" aria-label="Iris — início" className="shrink-0 focus-visible:outline-focus">
-          <Logo variante="completo" altura={28} />
+        <a href="/" aria-label="Iris — Início" className="shrink-0 focus-visible:outline-focus flex items-center min-w-[44px] min-h-[44px]">
+          <Logo variante="completo" altura={36} />
         </a>
 
         {/* Clínica ativa (Desktop) */}

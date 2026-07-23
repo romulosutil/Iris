@@ -237,6 +237,14 @@
   --input-height-md: 2.5rem;
   --input-height-lg: 3rem;
 
+  /* Escala de Espaçamento Interno / Padding (Cards & Containers) */
+  --spacing-card-sm: 0.75rem; /* 12px - micro-cards / chips */
+  --spacing-card-md: 1rem;    /* 16px - padding padrão de superfície */
+  --spacing-card-lg: 1.25rem; /* 20px - cards principais */
+  --spacing-card-xl: 1.5rem;  /* 24px - contêineres e modais */
+  --spacing-container: 2rem;  /* 32px - seções e painéis de destaque */
+
+
 
   /* Animações de abrir/fechar (Radix Accordion). Duração curta de produto
      (150-250ms); o prefers-reduced-motion abaixo zera a duration. */
