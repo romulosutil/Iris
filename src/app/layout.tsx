@@ -31,7 +31,13 @@ export default function RootLayout({
       data-mode="clinico"
       className={`${spaceGrotesk.variable} ${jakarta.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        {process.env.NODE_ENV === "development" && (
+          /* eslint-disable-next-line @next/next/no-sync-scripts */
+          <script src="http://localhost:8400/live.js" />
+        )}
+      </body>
     </html>
   );
 }

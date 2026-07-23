@@ -24,7 +24,7 @@ export function GovernancaNav() {
   return (
     <nav
       aria-label="Navegação da Central de Governança"
-      className="flex items-center gap-1 border-b-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-1.5 rounded-[var(--radius-card)] shadow-xs overflow-x-auto scrollbar-none mb-4"
+      className="flex items-center gap-1 border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-1.5 rounded-[var(--radius-card)] shadow-xs overflow-x-auto scrollbar-none mb-4"
     >
       {items.map((item) => {
         const isActive = pathname === item.href || (item.href !== "/validacao" && pathname.startsWith(item.href));

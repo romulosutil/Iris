@@ -30,6 +30,7 @@ export interface ButtonProps
   size?: "sm" | "md" | "lg";
   formato?: "padrao" | "circular";
   shape?: "square" | "circle";
+  asChild?: boolean;
 }
 
 function estiloVariante(v: Variante): string {
@@ -82,6 +83,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       children,
       onClick,
       disabled,
+      asChild = false,
       ...props
     },
     ref,
@@ -124,12 +126,34 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       );
     }
 
-    // Tamanho do spinner
     const spinnerSize = {
       sm: "h-4 w-4",
       md: "h-5 w-5",
       lg: "h-6 w-6",
     }[resolvedTamanho];
+
+    const combinedClassName = cn(
+      control(resolvedTamanho),
+      "inline-flex items-center justify-center font-display",
+      "transition-[transform,box-shadow,background-color] duration-100 ease-out",
+      tamanhoClasses,
+      formatoClasses,
+      loadingClasses,
+      "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
+      "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
+      "disabled:active:translate-x-0 disabled:active:translate-y-0",
+      classes,
+      className
+    );
+
+    if (asChild && React.isValidElement(children)) {
+      const child = children as React.ReactElement<any>;
+      return React.cloneElement(child, {
+        ref,
+        className: cn(combinedClassName, child.props.className),
+        ...props,
+      });
+    }
 
     return (
       <button
@@ -138,22 +162,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || isLoading}
         aria-busy={isLoading || undefined}
         onClick={onClick}
-        className={cn(
-          // base: alvo de toque e layout
-          control(resolvedTamanho),
-          "inline-flex items-center justify-center font-display",
-          "transition-[transform,box-shadow,background-color] duration-100 ease-out",
-          tamanhoClasses,
-          formatoClasses,
-          loadingClasses,
-          // anel de foco ortogonal de alto contraste da v3 (que não depende exclusivamente de cor)
-          "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
-          // desabilitado: sem sombra, sem interação
-          "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
-          "disabled:active:translate-x-0 disabled:active:translate-y-0",
-          classes,
-          className,
-        )}
+        className={combinedClassName}
         {...props}
       >
         {isLoading && (
