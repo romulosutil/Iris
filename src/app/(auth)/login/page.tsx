@@ -35,10 +35,16 @@ export default function LoginPage() {
     setEnviando(true);
  
     void (async () => {
-      const { error } = await signIn.email({ email, password });
+      const { data, error } = await signIn.email({ email, password });
       if (error) {
         setErro("E-mail ou senha inválidos.");
         setEnviando(false);
+        return;
+      }
+      // Fase 6.2b: usuário com MFA ativo não recebe sessão aqui — o Better-Auth
+      // devolve { twoFactorRedirect: true } e o 2º fator completa em /mfa/verify.
+      if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+        router.push("/mfa/verify");
         return;
       }
       router.push("/");

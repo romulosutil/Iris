@@ -30,6 +30,12 @@ export async function resolveTenant(
   const userId = session?.user?.id;
   if (!userId) return { status: "unauthenticated" };
 
+  // Fase 6.2b: enrollment de MFA vem do usuário do Better-Auth. Uma sessão só
+  // existe após o 2º fator (o plugin não cria sessão com desafio pendente), então
+  // `twoFactorEnabled` aqui já implica 2º fator satisfeito nesta sessão.
+  const mfaEnrolled =
+    (session.user as { twoFactorEnabled?: boolean }).twoFactorEnabled === true;
+
   // Papéis do usuário em TODAS as clínicas (bootstrap via iris_auth, pré-GUC).
   const vinculos = await authDb
     .select({ clinicId: userRole.clinicId, papel: userRole.papel, nome: clinic.nome })
@@ -63,11 +69,11 @@ export async function resolveTenant(
   const resolvido = papelAtivo(papeis);
   if ("needsSelection" in resolvido) {
     if (ck.activeRole && (resolvido.needsSelection as string[]).includes(ck.activeRole)) {
-      return { status: "ok", ctx: { clinicId, userId, role: ck.activeRole as Papel } };
+      return { status: "ok", ctx: { clinicId, userId, role: ck.activeRole as Papel, mfaEnrolled } };
     }
     return { status: "needs_role_selection", clinicId, papeis: resolvido.needsSelection };
   }
-  return { status: "ok", ctx: { clinicId, userId, role: resolvido.papel } };
+  return { status: "ok", ctx: { clinicId, userId, role: resolvido.papel, mfaEnrolled } };
 }
 
 /**
@@ -98,8 +104,15 @@ export async function getTenantContext(): Promise<TenantContext> {
     activeRole: ck.get(COOKIE_PAPEL)?.value,
   });
   switch (r.status) {
-    case "ok":
+    case "ok": {
+      // Fase 6.2b (R6.2.1, hard enforcement): papel clínico sem MFA cadastrado é
+      // mandado ao onboarding. BYPASS_MFA_FOR_DEV pula isto em dev (o boot já
+      // impede a flag em produção — src/auth/mfa-gate.ts).
+      const bypass = process.env.BYPASS_MFA_FOR_DEV === "true";
+      const clinico = r.ctx.role === "terapeuta" || r.ctx.role === "coordenador";
+      if (clinico && !r.ctx.mfaEnrolled && !bypass) redirect("/mfa/setup");
       return r.ctx;
+    }
     case "unauthenticated":
       redirect("/login");
     case "no_access":

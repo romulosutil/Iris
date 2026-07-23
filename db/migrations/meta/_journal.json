@@ -330,6 +330,13 @@
       "when": 1784521557778,
       "tag": "0046_recepcao_audit_mascarada",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1784521558778,
+      "tag": "0047_mfa_two_factor",
+      "breakpoints": true
     }
   ]
 }

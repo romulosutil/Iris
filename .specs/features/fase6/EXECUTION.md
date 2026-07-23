@@ -6,10 +6,10 @@ Main thread orquestra; subagents fazem o trabalho pesado e retornam comprimido.
 ## Estado
 - Fatia 6.1: mergeada em main via PR #66. Docs pós-merge em PR #67.
 - Fatia 6.3: mergeada em main via PR #68. Follow-up de docs em PR #69.
-- Fatia 6.2: SPLIT. **6.2a** (não-MFA: gate de bypass + guard puro + auditoria
-  mascarada/recepção) na branch `feat/fase6-2-mfa-isolamento-recepcao`, PR aberta.
-  **6.2b** (MFA real: plugin Better-Auth + tabela/coluna auth + UI enrollment +
-  wiring) BLOQUEADA por confirmação do Rômulo no DDL de `app_user` (auth c/ dado).
+- Fatia 6.2: SPLIT. **6.2a** mergeada (PR #70): gate de bypass + guard puro +
+  auditoria mascarada/recepção. **6.2b** (MFA real) na branch
+  `feat/fase6-2b-mfa-totp`, PR aberta. Rômulo autorizou: TOTP+backup, hard
+  enforce, DDL em `app_user` liberado.
 - WIP Fase 5: stash `fase5-wip-relatorios-f08a8d2`
 
 ## Fatia 6.1 — Hardening RLS (PX1–PX4) · migração `0044`
@@ -121,5 +121,37 @@ Main thread orquestra; subagents fazem o trabalho pesado e retornam comprimido.
   consumidor de UI hoje (greenfield), só 1 teste dependia do path antigo.
 - MFA dividido: guard + gate agora; plugin/tabela/UI em 6.2b (confirmar `app_user`).
 
+## Fatia 6.2b — MFA TOTP + backup codes · migração `0047`
+- [x] Investigação (2 subagents): contrato exato do plugin twoFactor (Better-Auth
+      1.6.23) + design system/UI de auth.
+- [x] Decisões do Rômulo: TOTP + códigos de backup; hard enforce (redirect);
+      DDL em `app_user` autorizado.
+- [x] Migração `0047`: `app_user.two_factor_enabled` (default false) + tabela
+      `two_factor` (secret/backup_codes cifrados + verified/failed_count/locked_until,
+      exatamente o schema que o plugin exige). Credencial: `REVOKE FROM app_role`
+      + `GRANT TO iris_auth` + RLS FORCE com policy só-iris_auth (espelha auth_account).
+- [x] schema.ts: tabela `twoFactor` (chaves camelCase p/ o adapter) + coluna.
+      Journal idx 47, `when=1784521558778`.
+- [x] `auth.ts`: plugin `twoFactor({issuer:'Iris'})` + tabela no adapter.
+      `client.ts`: `twoFactorClient()`.
+- [x] `tenant.ts`: `resolveTenant` popula `ctx.mfaEnrolled` de
+      `session.user.twoFactorEnabled`; `getTenantContext` redireciona papel clínico
+      sem MFA → `/mfa/setup` (respeita `BYPASS_MFA_FOR_DEV`).
+- [x] Login trata `{twoFactorRedirect:true}` → `/mfa/verify`.
+- [x] UI (design system): `(auth)/mfa/setup` (enable → segredo+backups → verifyTotp)
+      e `(auth)/mfa/verify` (TOTP ou backup code). Enrollment por ENTRADA MANUAL do
+      segredo (sem lib de QR — ver backlog).
+- [x] Teste `fase6-mfa-two-factor.int.test.ts` (4): coluna default; app_role NÃO
+      lê nem escreve o segredo; owner enxerga. typecheck/lint limpos; tenant.int intacto.
+- [ ] **Smoke manual pendente:** fluxo enable→verify→login-challenge num app rodando
+      (o schema casa com o contrato do plugin; typecheck+build validam wiring, mas o
+      round-trip real com app autenticador precisa de verificação manual).
+
+### Decisões travadas 6.2b
+- Enrollment por entrada manual do segredo (QR fica p/ depois — sem dep nova).
+- Enforcement central em `getTenantContext` (não por-action) — chokepoint único.
+- Sessão só existe pós-2º-fator (plugin), então `twoFactorEnabled` na sessão já
+  implica 2º fator satisfeito; não há flag separada "sessão passou 2FA".
+
 ## Fatias seguintes (ordem por risco)
-6.2b (MFA real — confirmar DDL `app_user`) → 6.6-checklist → 6.4 → 6.5 (áudio, gated por DPA).
+6.6-checklist → 6.4 → 6.5 (áudio, gated por DPA).
