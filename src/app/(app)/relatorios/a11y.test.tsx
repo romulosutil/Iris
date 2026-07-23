@@ -101,6 +101,13 @@ test("FamiliaReport — renderiza sob escopo data-mode='familia', sem regressão
       region: { enabled: false },
       "landmark-one-main": { enabled: false },
       "page-has-heading-one": { enabled: false },
+      // color-contrast fica desligado porque o JSDOM não computa cor/luminância
+      // de CSS custom properties (não há layout/render real), então a regra do
+      // axe produziria falso-negativo aqui — NÃO é prova de contraste.
+      // O único token de cor novo do modo família (--action-primary:#B2DFDB) é
+      // usado só como fill/borda/ring; o fg herda #000000 → contraste 15.9:1,
+      // validado manualmente (piso AA = 4.5:1). Regressão de cor deve ser pega
+      // por revisão de token/visual, não por este teste. Ver PR #73 / R6.6.1.
       "color-contrast": { enabled: false },
     },
   });
