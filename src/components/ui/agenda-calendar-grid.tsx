@@ -31,6 +31,21 @@ function horaDaSessao(quando: Date): string {
   }).format(new Date(quando));
 }
 
+function obterHorarioSlot(quando: Date, passoMin: number): string {
+  const str = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: FUSO_CLINICA,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(quando));
+  const [hhStr, mmStr] = str.split(":");
+  const hh = parseInt(hhStr ?? "0", 10);
+  const mm = parseInt(mmStr ?? "0", 10);
+  const totalMin = hh * 60 + mm;
+  const slotMin = Math.floor(totalMin / passoMin) * passoMin;
+  return minParaHora(slotMin);
+}
+
 function horaParaMin(h: string): number {
   const [hh, mm] = h.split(":").map(Number);
   return (hh ?? 0) * 60 + (mm ?? 0);
@@ -72,18 +87,18 @@ export function AgendaCalendarGrid({
   // Sessão selecionada para o Drawer de Detalhes
   const [sessaoSelecionada, setSessaoSelecionada] = React.useState<SessaoDoDia | null>(null);
 
-  // Mapeia sessões por (terapeutaId_horario) para busca O(1)
+  // Mapeia sessões por (terapeutaId_horarioSlot) para busca O(1) com suporte a minutos fracionados
   const mapaSessoes = React.useMemo(() => {
     const map = new Map<string, SessaoDoDia[]>();
     for (const s of sessoes) {
-      const h = horaDaSessao(s.agendadaPara);
+      const h = obterHorarioSlot(s.agendadaPara, passoMin);
       const tId = s.terapeutaId ?? "sem-terapeuta";
       const key = `${tId}_${h}`;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(s);
     }
     return map;
-  }, [sessoes]);
+  }, [sessoes, passoMin]);
 
   // Terapeutas visíveis (com sessões ou todos se coordenador)
   const terapeutasVisiveis = React.useMemo(() => {
@@ -97,34 +112,65 @@ export function AgendaCalendarGrid({
   }, [terapeutas, sessoes]);
 
   // Foco para acessibilidade por teclado
-  const [foco, setFoco] = React.useState<{ slotIdx: number; terapeutaIdx: number }>({
+  const [foco, setFoco] = React.useState<{ slotIdx: number; terapeutaIdx: number; sessaoIdx: number }>({
     slotIdx: 0,
     terapeutaIdx: 0,
+    sessaoIdx: 0,
   });
   const refs = React.useRef(new Map<string, HTMLElement | null>());
 
-  function chaveRef(slotIdx: number, terapeutaIdx: number) {
-    return `${slotIdx}-${terapeutaIdx}`;
+  function chaveRef(slotIdx: number, terapeutaIdx: number, sessaoIdx: number = 0) {
+    return `${slotIdx}-${terapeutaIdx}-${sessaoIdx}`;
   }
 
-  function focarCelula(slotIdx: number, terapeutaIdx: number) {
+  function focarCelula(slotIdx: number, terapeutaIdx: number, sessaoIdx: number = 0) {
     const sIdx = Math.max(0, Math.min(horarios.length - 1, slotIdx));
     const tIdx = Math.max(0, Math.min(terapeutasVisiveis.length - 1, terapeutaIdx));
-    setFoco({ slotIdx: sIdx, terapeutaIdx: tIdx });
-    refs.current.get(chaveRef(sIdx, tIdx))?.focus();
+    const key = `${terapeutasVisiveis[tIdx]?.id}_${horarios[sIdx]}`;
+    const totalSessoes = mapaSessoes.get(key)?.length ?? 0;
+    const sessIdxTarget = totalSessoes > 0 ? Math.max(0, Math.min(totalSessoes - 1, sessaoIdx)) : 0;
+
+    setFoco({ slotIdx: sIdx, terapeutaIdx: tIdx, sessaoIdx: sessIdxTarget });
+    refs.current.get(chaveRef(sIdx, tIdx, sessIdxTarget))?.focus();
   }
 
-  function aoTeclar(e: React.KeyboardEvent, slotIdx: number, terapeutaIdx: number) {
-    const destinos: Record<string, [number, number]> = {
-      ArrowRight: [slotIdx, terapeutaIdx + 1],
-      ArrowLeft: [slotIdx, terapeutaIdx - 1],
-      ArrowDown: [slotIdx + 1, terapeutaIdx],
-      ArrowUp: [slotIdx - 1, terapeutaIdx],
-    };
-    const alvo = destinos[e.key];
-    if (alvo) {
+  function aoTeclar(
+    e: React.KeyboardEvent,
+    slotIdx: number,
+    terapeutaIdx: number,
+    sessaoIdx: number = 0,
+    totalSessoesNoSlot: number = 0
+  ) {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
-      focarCelula(alvo[0], alvo[1]);
+      if (totalSessoesNoSlot > 1 && sessaoIdx < totalSessoesNoSlot - 1) {
+        focarCelula(slotIdx, terapeutaIdx, sessaoIdx + 1);
+      } else {
+        focarCelula(slotIdx + 1, terapeutaIdx, 0);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (totalSessoesNoSlot > 1 && sessaoIdx > 0) {
+        focarCelula(slotIdx, terapeutaIdx, sessaoIdx - 1);
+      } else {
+        focarCelula(slotIdx - 1, terapeutaIdx, 0);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      focarCelula(slotIdx, terapeutaIdx + 1, 0);
+      return;
+    }
+
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      focarCelula(slotIdx, terapeutaIdx - 1, 0);
+      return;
     }
   }
 
@@ -196,58 +242,61 @@ export function AgendaCalendarGrid({
                       {sessoesNoSlot.length === 0 ? (
                         <div
                           ref={(el) => {
-                            refs.current.set(chaveRef(slotIdx, terapeutaIdx), el);
+                            refs.current.set(chaveRef(slotIdx, terapeutaIdx, 0), el);
                           }}
-                          tabIndex={ehFoco ? 0 : -1}
-                          onFocus={() => setFoco({ slotIdx, terapeutaIdx })}
-                          onKeyDown={(e) => aoTeclar(e, slotIdx, terapeutaIdx)}
+                          tabIndex={ehFoco && foco.sessaoIdx === 0 ? 0 : -1}
+                          onFocus={() => setFoco({ slotIdx, terapeutaIdx, sessaoIdx: 0 })}
+                          onKeyDown={(e) => aoTeclar(e, slotIdx, terapeutaIdx, 0, 0)}
                           className="w-full h-full min-h-[36px] rounded-[var(--radius-xs)] hover:bg-[var(--color-gold)]/10 transition-colors cursor-pointer opacity-30 focus-visible:outline-focus outline-none"
                         />
                       ) : (
                         <div className="flex flex-col gap-1">
-                          {sessoesNoSlot.map((s) => (
-                            <button
-                              key={s.id}
-                              type="button"
-                              ref={(el) => {
-                                refs.current.set(chaveRef(slotIdx, terapeutaIdx), el);
-                              }}
-                              tabIndex={ehFoco ? 0 : -1}
-                              onClick={() => setSessaoSelecionada(s)}
-                              onFocus={() => setFoco({ slotIdx, terapeutaIdx })}
-                              onKeyDown={(e) => aoTeclar(e, slotIdx, terapeutaIdx)}
-                              className={cn(
-                                "w-full text-left p-1.5 rounded-[var(--radius-xs)] border-2 border-[var(--border-brutal)] shadow-[1px_1px_0_0_#000000] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000000] focus-visible:outline-focus outline-none cursor-pointer",
-                                s.estado === "realizada" && "bg-[var(--status-success-bg)] text-[var(--text-primary)] border-[var(--status-success-border)]",
-                                s.estado === "agendada" && "bg-[var(--surface-card)] text-[var(--text-primary)] border-[var(--border-brutal)]",
-                                (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-[var(--status-error-bg)] text-[var(--status-error-fg)] border-[var(--status-error-border)]",
-                                s.estado === "cancelada" && "bg-[var(--surface-elevated)] text-[var(--text-secondary)] opacity-60 line-through"
-                              )}
-                            >
-                              <div className="flex items-center justify-between gap-1">
-                                <span className="font-mono text-[10px] font-bold tracking-tight">
-                                  {horario}
-                                </span>
-                                <span
-                                  className={cn(
-                                    "size-2 rounded-full border border-[var(--border-brutal)] shrink-0",
-                                    s.estado === "realizada" && "bg-[var(--color-blue)]",
-                                    s.estado === "agendada" && "bg-[var(--action-primary)]",
-                                    (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-[var(--color-terracotta)]",
-                                    s.estado === "cancelada" && "bg-gray-400"
-                                  )}
-                                />
-                              </div>
-                              <div className="font-display font-semibold text-xs truncate leading-tight mt-0.5">
-                                {s.pacienteNome ?? "Paciente (restrito)"}
-                              </div>
-                              {s.disciplina ? (
-                                <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)] truncate">
-                                  {s.disciplina}
+                          {sessoesNoSlot.map((s, sIdx) => {
+                            const ehEsteItemFoco = ehFoco && foco.sessaoIdx === sIdx;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                ref={(el) => {
+                                  refs.current.set(chaveRef(slotIdx, terapeutaIdx, sIdx), el);
+                                }}
+                                tabIndex={ehEsteItemFoco ? 0 : -1}
+                                onClick={() => setSessaoSelecionada(s)}
+                                onFocus={() => setFoco({ slotIdx, terapeutaIdx, sessaoIdx: sIdx })}
+                                onKeyDown={(e) => aoTeclar(e, slotIdx, terapeutaIdx, sIdx, sessoesNoSlot.length)}
+                                className={cn(
+                                  "w-full text-left p-1.5 rounded-[var(--radius-xs)] border-2 border-[var(--border-brutal)] shadow-[1px_1px_0_0_#000000] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000000] focus-visible:outline-focus outline-none cursor-pointer",
+                                  s.estado === "realizada" && "bg-[var(--status-success-bg)] text-[var(--text-primary)] border-[var(--status-success-border)]",
+                                  s.estado === "agendada" && "bg-[var(--surface-card)] text-[var(--text-primary)] border-[var(--border-brutal)]",
+                                  (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-[var(--status-error-bg)] text-[var(--status-error-fg)] border-[var(--status-error-border)]",
+                                  s.estado === "cancelada" && "bg-[var(--surface-elevated)] text-[var(--text-secondary)] opacity-60 line-through"
+                                )}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-mono text-[10px] font-bold tracking-tight">
+                                    {horaDaSessao(s.agendadaPara)}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "size-2 rounded-full border border-[var(--border-brutal)] shrink-0",
+                                      s.estado === "realizada" && "bg-[var(--color-blue)]",
+                                      s.estado === "agendada" && "bg-[var(--action-primary)]",
+                                      (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-[var(--color-terracotta)]",
+                                      s.estado === "cancelada" && "bg-gray-400"
+                                    )}
+                                  />
                                 </div>
-                              ) : null}
-                            </button>
-                          ))}
+                                <div className="font-display font-semibold text-xs truncate leading-tight mt-0.5">
+                                  {s.pacienteNome ?? "Paciente (restrito)"}
+                                </div>
+                                {s.disciplina ? (
+                                  <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)] truncate">
+                                    {s.disciplina}
+                                  </div>
+                                ) : null}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </td>
