@@ -69,7 +69,11 @@ function stripLeading(src: string): string {
       continue;
     }
     if (t.startsWith("/*")) {
-      s = t.replace(/^\/\*[\s\S]*?\*\//, "");
+      const stripped = t.replace(/^\/\*[\s\S]*?\*\//, "");
+      // comentário de bloco não fechado (`/*` sem `*/`): replace não altera →
+      // para em vez de girar pra sempre (travaria o runner no modo watch).
+      if (stripped === t) break;
+      s = stripped;
       continue;
     }
     s = t;
