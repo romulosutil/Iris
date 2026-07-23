@@ -19,10 +19,33 @@
 | **3** | Extração de Evidências (IA) | ✅ Concluído | Issue #6 (fechada 13/07) |
 | **4** | Evidências Acumuladas & Gráficos | ✅ Concluído | Issue #7 |
 | **5** | Relatórios de Convênio & Supervisão | ✅ Concluído | Issue #8 |
-| **6** | Ditado de Voz & Hardening LGPD | 🚧 Em andamento (Fatia 6.1 ✅) | Issue #9 |
+| **6** | Ditado de Voz & Hardening LGPD | 🚧 Em andamento (6.1 ✅ · 6.3 PR aberta) | Issue #9 |
 | **7** | Self-Service & Growth (onboarding + pagamento autônomo) | 📅 Pós-MVP | Issue #36 |
 
 ---
+
+## 🏁 Sessão 23/07/2026 — Fatia 6.3 (Retenção & Expurgo) — PR aberta (migração `0045`)
+
+`app_purgar_paciente(uuid,text)` (erasure LGPD físico + trilha pseudonimizada),
+`app_paciente_expurgavel(uuid)` (regra `MAX(18a, alta+10a)`), `patient.alta_em`.
+Teste `fase6-expurgo-paciente.int.test.ts` 6/6 verde. Detalhe em
+`.specs/features/fase6/EXECUTION.md` (Fatia 6.3).
+
+**Correções ao spec descobertas na implementação:**
+- `clinic.politica_retencao_meses` já existia (0000) — consumida, não criada.
+- `patient` não tinha coluna de alta → adicionada `alta_em date` (fonte da retenção).
+- export já grava audit síncrono inline (`export.ts:82-85`) → R6.3.4 foi confirm-only.
+
+**Diferido (dívida registrada):**
+- [ ] **Server action/UI de purga de paciente** — hoje `app_purgar_paciente` (e
+  `app_purgar_report` desde a Fase 5) só têm entrada via SQL/teste. Wiring de
+  app-callable (com confirmação forte) fica p/ fatia própria.
+- [ ] **Flaky temporal `agenda2-encerrar-regra.int.test.ts`** — asserção com data
+  hardcoded (`2026-07-20`) que expira; trocar por data relativa. Reincidente (já
+  notado na 6.1). Faz a suite RLS ficar 388/389.
+- ❌ **Job automático de expurgo — decidido NÃO construir** no MVP: risco alto;
+  expurgo é gatilho manual do coordenador. `app_paciente_expurgavel` serve para
+  listar elegíveis, não para deletar sozinho.
 
 ## 🏁 Sessão 23/07/2026 — Fase 6 arrancada: review adversarial de escopo + Fatia 6.1 (Hardening RLS) — ✅ FATIA 6.1 CONCLUÍDA (PR #66 mergeada)
 
