@@ -7,6 +7,11 @@ export type TenantContext = {
   clinicId: string;
   userId: string;
   role: UserRole;
+  // Fase 6.2: 2º fator cadastrado? Papéis clínicos (terapeuta/coordenador) só
+  // operam com MFA — ver `requireMfaIfClinicalRole`. Populado em `resolveTenant`
+  // a partir do enrollment do Better-Auth (wiring na fatia 6.2b). Opcional aqui
+  // porque a fonte de enrollment (coluna/tabela) ainda não existe.
+  mfaEnrolled?: boolean;
 };
 
 // Transação Drizzle com o schema tipado. Exportado p/ ser reusado por

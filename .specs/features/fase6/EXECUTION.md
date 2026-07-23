@@ -4,10 +4,12 @@ Checkpoint enxuto por fatia (protege progresso contra reset de contexto).
 Main thread orquestra; subagents fazem o trabalho pesado e retornam comprimido.
 
 ## Estado
-- Fatia 6.1: mergeada em main via PR #66 (branch de trabalho já deletada).
-  Docs pós-merge em PR #67. Próxima fatia sai de main atualizado.
-- Fatia 6.3: implementada na branch `feat/fase6-3-expurgo-retencao` (de main
-  680c814). PR aberta (não mergeada) — aguardando review do Rômulo.
+- Fatia 6.1: mergeada em main via PR #66. Docs pós-merge em PR #67.
+- Fatia 6.3: mergeada em main via PR #68. Follow-up de docs em PR #69.
+- Fatia 6.2: SPLIT. **6.2a** (não-MFA: gate de bypass + guard puro + auditoria
+  mascarada/recepção) na branch `feat/fase6-2-mfa-isolamento-recepcao`, PR aberta.
+  **6.2b** (MFA real: plugin Better-Auth + tabela/coluna auth + UI enrollment +
+  wiring) BLOQUEADA por confirmação do Rômulo no DDL de `app_user` (auth c/ dado).
 - WIP Fase 5: stash `fase5-wip-relatorios-f08a8d2`
 
 ## Fatia 6.1 — Hardening RLS (PX1–PX4) · migração `0044`
@@ -90,5 +92,34 @@ Main thread orquestra; subagents fazem o trabalho pesado e retornam comprimido.
 - **Diferido p/ backlog:** server action/UI de purga (mesma dívida do `app_purgar_report`);
   job automático de expurgo (não construir — risco; expurgo é gatilho manual do coordenador).
 
+## Fatia 6.2a — Bypass-gate + guard MFA + auditoria mascarada · migração `0046`
+- [x] Investigação (2 subagents): Better-Auth/MFA + env-flag; audit masking + isolamento recepção.
+- [x] **Achado que força SPLIT:** MFA é greenfield total — sem plugin twoFactor,
+      sem tabela `two_factor`, sem coluna `twoFactorEnabled` em `app_user`.
+      Implementar MFA real = DDL em `app_user` (auth c/ dado) = "confirmar antes"
+      + UI de enrollment. Vira fatia 6.2b (gated pelo Rômulo). 6.2a leva o resto.
+- [x] **R6.2.2** `assertMfaBypassSafe` (`src/auth/mfa-gate.ts`): hard-fail no boot
+      se `BYPASS_MFA_FOR_DEV=true` + `NODE_ENV=production` (A5, fail-closed).
+      Chamado no topo de `auth.ts`. `.env.example` + teste (prod+true lança).
+- [x] **R6.2.1** `requireMfaIfClinicalRole(ctx)` + `MfaRequiredError`
+      (`require-role.ts`): guard puro, papéis clínicos exigem MFA, recepção não.
+      `TenantContext.mfaEnrolled?` adicionado. **Não** cablado em produção ainda
+      (fonte de enrollment só existe em 6.2b — evita travar todos). Teste unit.
+- [x] **R6.2.4/A4** `0046`: `audit_select` → coordenador-only; view
+      `audit_log_mascarado` (`security_barrier`, SEM `security_invoker` — a base
+      exclui recepção, então invoker a bloquearia; owner-rights + `WHERE
+      clinic_id = app.clinic_id` reimpõe tenant) projetando só colunas
+      não-clínicas. Recepção perde base, lê view mascarada.
+- [x] Journal idx 46, `when=1784521557778`. Aplicado via psql manual.
+- [x] Testes: unit 10/10 (`require-role` + `mfa-gate`); RLS
+      `fase6-recepcao-isolation` (6 casos: base bloqueada, view mascarada sem
+      patient_id/detalhe, tenant-scoped, coordenador regressão, report bloqueado)
+      + `fase5-report-purga` atualizado (recepção agora 0 no base). typecheck/lint limpos.
+
+### Decisões travadas 6.2a
+- Auditoria p/ recepção = **view mascarada owner-rights** (não invoker); sem
+  consumidor de UI hoje (greenfield), só 1 teste dependia do path antigo.
+- MFA dividido: guard + gate agora; plugin/tabela/UI em 6.2b (confirmar `app_user`).
+
 ## Fatias seguintes (ordem por risco)
-6.2 → 6.6-checklist → 6.4 → 6.5 (áudio, gated por DPA).
+6.2b (MFA real — confirmar DDL `app_user`) → 6.6-checklist → 6.4 → 6.5 (áudio, gated por DPA).

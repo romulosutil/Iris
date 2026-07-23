@@ -62,12 +62,14 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
     ).rejects.toThrow();
   });
 
-  test("admin_recepcao da clínica lê audit_log (path admin_recepcao do audit_select)", async () => {
+  test("admin_recepcao NÃO lê o audit_log base após 6.2 (A4 — path removido)", async () => {
+    // A policy audit_select agora é coordenador-only (0046). Recepção lê só a
+    // view mascarada (coberto em fase6-recepcao-isolation).
     await owner!`INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id)
       VALUES (${CLINIC_A}, ${U_COORD_A}, 'relatorio_exportado', 'report', ${R1})`;
     const rows = await withTenant(ctx("admin_recepcao", U_ADMIN_A), (db) =>
       db.execute(sql`SELECT acao FROM audit_log WHERE clinic_id = ${CLINIC_A}::uuid`),
     );
-    expect(rows.length).toBeGreaterThan(0);
+    expect(rows).toHaveLength(0);
   });
 });

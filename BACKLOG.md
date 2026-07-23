@@ -19,10 +19,33 @@
 | **3** | Extração de Evidências (IA) | ✅ Concluído | Issue #6 (fechada 13/07) |
 | **4** | Evidências Acumuladas & Gráficos | ✅ Concluído | Issue #7 |
 | **5** | Relatórios de Convênio & Supervisão | ✅ Concluído | Issue #8 |
-| **6** | Ditado de Voz & Hardening LGPD | 🚧 Em andamento (6.1 ✅ · 6.3 PR aberta) | Issue #9 |
+| **6** | Ditado de Voz & Hardening LGPD | 🚧 Em andamento (6.1 ✅ · 6.3 ✅ · 6.2a PR aberta) | Issue #9 |
 | **7** | Self-Service & Growth (onboarding + pagamento autônomo) | 📅 Pós-MVP | Issue #36 |
 
 ---
+
+## 🏁 Sessão 23/07/2026 — Fatia 6.2a (bypass-gate + guard MFA + auditoria mascarada) — PR aberta (migração `0046`)
+
+MFA descoberto como **greenfield total** (sem plugin/tabela/coluna) → 6.2 dividida.
+6.2a entrega o que não toca schema de auth; detalhe em `.specs/features/fase6/EXECUTION.md`.
+
+**Entregue (6.2a):**
+- `assertMfaBypassSafe` — hard-fail no boot se `BYPASS_MFA_FOR_DEV=true` em produção (A5).
+- `requireMfaIfClinicalRole` + `MfaRequiredError` — guard puro (não cablado ainda).
+- Migração `0046`: `audit_select` coordenador-only + view `audit_log_mascarado` →
+  recepção com zero leitura clínica (A4, opção mascarada).
+
+**Bloqueado — precisa do teu OK (6.2b, MFA real):**
+- [ ] **Fatia 6.2b — MFA Better-Auth completo.** Plugin `twoFactor` (server+client),
+  tabela `two_factor`, **coluna `twoFactorEnabled` em `app_user`** (⚠️ DDL em tabela
+  de auth com dado = "confirmar antes"), migração, UI de enrollment/verify
+  (R6.2.3 banner/redirect), e cablar `requireMfaIfClinicalRole` + popular
+  `ctx.mfaEnrolled` em `resolveTenant`. Consome a flag `BYPASS_MFA_FOR_DEV` no dev.
+
+**Dívida menor:**
+- [ ] Isolamento de recepção em `session`/`evidence`/`goal` (SELECT) não tem teste
+  explícito — bloqueado pelo mesmo padrão RLS de `patient_clinical_profile` (que É
+  testado). Adicionar casos se quiser cobertura exaustiva de "zero leitura clínica".
 
 ## 🏁 Sessão 23/07/2026 — Fatia 6.3 (Retenção & Expurgo) — PR aberta (migração `0045`)
 
