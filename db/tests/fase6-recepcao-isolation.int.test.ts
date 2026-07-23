@@ -93,6 +93,17 @@ describe.skipIf(!hasDb)("fase6.2 · isolamento recepção + auditoria mascarada"
     expect(rows.length).toBeGreaterThan(0);
   });
 
+  test("terapeuta não enxerga a view mascarada (papel não autorizado)", async () => {
+    // GRANT é p/ todo app_role; a view filtra por papel → terapeuta vê 0.
+    const U_TER = "00000000-0000-0000-0000-0000000000a1";
+    await owner!`INSERT INTO app_user (id, name, email) VALUES (${U_TER}, 'Ter A', 'ter-a@fase6-recep.test')`;
+    await owner!`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_TER}, ${CLINIC_A}, 'terapeuta')`;
+    const rows = await withTenant(ctx("terapeuta", U_TER), (db) =>
+      db.execute(sql`SELECT id FROM audit_log_mascarado`),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
   test("recepção não lê tabela clínica report", async () => {
     const rows = await withTenant(ctx("admin_recepcao", U_RECEP_A), (db) =>
       db.execute(sql`SELECT id FROM report WHERE clinic_id = ${CLINIC_A}::uuid`),

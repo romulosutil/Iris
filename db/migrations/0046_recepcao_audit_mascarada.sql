@@ -20,9 +20,14 @@ CREATE POLICY audit_select ON audit_log FOR SELECT TO app_role USING (
 --    isolamento de tenant é reimposto AQUI pelo `WHERE clinic_id = app.clinic_id`
 --    (fixo na view, o chamador não remove). `security_barrier` impede vazamento
 --    por predicado do chamador antes do filtro de clínica.
+--    A view TAMBÉM filtra por papel: como o GRANT é para todo o app_role, sem
+--    isto um `terapeuta` (que nunca teve acesso a auditoria) leria a trilha
+--    mascarada da clínica. Mantém o conjunto de papéis do `audit_select`
+--    original (coordenador + admin_recepcao).
 CREATE VIEW audit_log_mascarado WITH (security_barrier = true) AS
   SELECT id, clinic_id, ator_id, acao, entidade, entidade_id, criado_em
   FROM audit_log
-  WHERE clinic_id = current_setting('app.clinic_id')::uuid;
+  WHERE clinic_id = current_setting('app.clinic_id')::uuid
+    AND current_setting('app.user_role') IN ('coordenador', 'admin_recepcao');
 --> statement-breakpoint
 GRANT SELECT ON audit_log_mascarado TO app_role;
