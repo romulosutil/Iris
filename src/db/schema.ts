@@ -221,6 +221,9 @@ export const patient = pgTable(
       .references(() => clinic.id, { onDelete: "restrict" }),
     nome: text("nome").notNull(),
     nascimento: date("nascimento"),
+    // Fase 6.3: data de alta clínica — fonte da regra de retenção/expurgo LGPD
+    // (MAX(18 anos, alta+10a)). Nullable: em acompanhamento = nunca expurgável.
+    altaEm: date("alta_em"),
     responsavelContato: text("responsavel_contato"),
     escola: text("escola"),
     convenio: text("convenio"),
