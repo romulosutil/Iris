@@ -19,10 +19,30 @@
 | **3** | Extração de Evidências (IA) | ✅ Concluído | Issue #6 (fechada 13/07) |
 | **4** | Evidências Acumuladas & Gráficos | ✅ Concluído | Issue #7 |
 | **5** | Relatórios de Convênio & Supervisão | ✅ Concluído | Issue #8 |
-| **6** | Ditado de Voz & Hardening LGPD | 🚧 Em andamento (6.1 ✅ · 6.3 ✅ · 6.2a PR aberta) | Issue #9 |
+| **6** | Ditado de Voz & Hardening LGPD | 🚧 Em andamento (6.1/6.3/6.2a ✅ · 6.2b PR aberta) | Issue #9 |
 | **7** | Self-Service & Growth (onboarding + pagamento autônomo) | 📅 Pós-MVP | Issue #36 |
 
 ---
+
+## 🏁 Sessão 23/07/2026 — Fatia 6.2b (MFA TOTP + backup codes) — PR aberta (migração `0047`)
+
+MFA real via plugin twoFactor do Better-Auth. Decisões: TOTP+backup, hard enforce,
+DDL em `app_user` autorizado. Detalhe em `.specs/features/fase6/EXECUTION.md`.
+
+**Entregue:** migração `0047` (`app_user.two_factor_enabled` + tabela `two_factor`
+cifrada, isolada do app_role); plugin server+client; enforcement central em
+`getTenantContext` (clínico sem MFA → `/mfa/setup`, respeita bypass); login trata
+challenge → `/mfa/verify`; UI `(auth)/mfa/setup|verify` (design system). Teste de
+isolamento da credencial 4/4.
+
+**Dívida / pendências:**
+- [ ] **Smoke manual do fluxo MFA** — enable→verify→login-challenge num app rodando
+  com app autenticador real. Schema casa com o contrato do plugin e typecheck+build
+  validam o wiring, mas o round-trip real não foi exercido em teste automatizado.
+- [ ] **QR code no enrollment** — hoje o cadastro é por ENTRADA MANUAL do segredo
+  (sem dep nova). Adicionar `qrcode` (ou render inline) p/ escanear o `otpauth://`.
+- [ ] **Reset de MFA pelo coordenador** — se um usuário perde device + códigos de
+  backup, precisa de caminho administrativo para resetar (hoje só via DB).
 
 ## 🏁 Sessão 23/07/2026 — Fatia 6.2a (bypass-gate + guard MFA + auditoria mascarada) — PR aberta (migração `0046`)
 

@@ -108,6 +108,9 @@ export const appUser = pgTable("app_user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  // Fase 6.2b: flag de enrollment do 2º fator (plugin twoFactor). Vira true no
+  // 1º verifyTotp bem-sucedido. Papéis clínicos só operam com isto true.
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -115,6 +118,28 @@ export const appUser = pgTable("app_user", {
     .notNull()
     .defaultNow(),
 });
+
+// Fase 6.2b — tabela do plugin twoFactor (Better-Auth). Chaves em camelCase = o
+// que o Better-Auth espera; colunas snake_case. `secret`/`backupCodes` guardam
+// texto CIFRADO pelo Better-Auth (não modelar como array). Credencial: só
+// iris_auth acessa (RLS em 0047), nunca app_role.
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => appUser.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").notNull().default(true),
+    failedVerificationCount: integer("failed_verification_count")
+      .notNull()
+      .default(0),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  },
+  (t) => [index("idx_two_factor_user").on(t.userId)],
+);
 
 export const authSession = pgTable("auth_session", {
   id: uuid("id").primaryKey().defaultRandom(),

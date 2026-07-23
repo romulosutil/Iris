@@ -1,11 +1,13 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { twoFactor as twoFactorPlugin } from "better-auth/plugins";
 import { authDb } from "@/db/client";
 import {
   appUser,
   authAccount,
   authSession,
   authVerification,
+  twoFactor,
 } from "@/db/schema";
 import { assertMfaBypassSafe } from "./mfa-gate";
 
@@ -25,6 +27,10 @@ export const auth = betterAuth({
   emailAndPassword: { enabled: true },
   // DB gera o id (uuid default) — não deixar o Better-Auth gerar string.
   advanced: { database: { generateId: false } },
+  // Fase 6.2b: MFA TOTP + backup codes. Enrollment exige verificação (fluxo
+  // padrão: enable → verifyTotp ativa). Papéis clínicos são obrigados a cadastrar
+  // (enforcement em getTenantContext).
+  plugins: [twoFactorPlugin({ issuer: "Iris" })],
   database: drizzleAdapter(authDb, {
     provider: "pg",
     schema: {
@@ -32,6 +38,7 @@ export const auth = betterAuth({
       session: authSession,
       account: authAccount,
       verification: authVerification,
+      twoFactor,
     },
   }),
 });
