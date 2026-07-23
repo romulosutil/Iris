@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 
 vi.mock("server-only", () => ({}));
 const { adicionarMembroEquipe, encerrarVinculoEquipe } = await import(
-  "./actions"
+  "./logic"
 );
 const { withTenant } = await import("@/db/rls");
 const { sql: appSql } = await import("@/db/client");

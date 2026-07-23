@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import postgres from "postgres";
 import { eq } from "drizzle-orm";
 
-// actions.ts puxa a cadeia getTenantContext (next/headers) → server-only.
-// Neutraliza o side-effect e importa dinamicamente só o núcleo testável.
+// O núcleo testável vive em ./logic (server-only, sem "use server"). Neutraliza
+// o side-effect de server-only e importa dinamicamente só o núcleo.
 vi.mock("server-only", () => ({}));
-const { criarPacienteEConsent } = await import("./actions");
+const { criarPacienteEConsent } = await import("./logic");
 const { withTenant } = await import("@/db/rls");
 const { sql: appSql } = await import("@/db/client");
 const { patient, consent } = await import("@/db/schema");
