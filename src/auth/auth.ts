@@ -7,6 +7,11 @@ import {
   authSession,
   authVerification,
 } from "@/db/schema";
+import { assertMfaBypassSafe } from "./mfa-gate";
+
+// Fase 6.2 (A5): fail-closed no boot se o bypass de MFA vazar para produção.
+// Roda na 1ª importação de qualquer caminho de auth/servidor.
+assertMfaBypassSafe();
 
 /**
  * Better-Auth — auth in-app (Postgres puro, sem Supabase). A tabela `user` do
