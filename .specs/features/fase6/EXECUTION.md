@@ -153,5 +153,28 @@ Main thread orquestra; subagents fazem o trabalho pesado e retornam comprimido.
 - Sessão só existe pós-2º-fator (plugin), então `twoFactorEnabled` na sessão já
   implica 2º fator satisfeito; não há flag separada "sessão passou 2FA".
 
-## Fatias seguintes (ordem por risco)
-6.6-checklist → 6.4 → 6.5 (áudio, gated por DPA).
+## Fatia 6.6 — Polimento família + Checklist produção/DPA (fechamento MVP)
+- [x] Investigação (2 subagents): componentes de relatório/`data-mode` +
+      local dos docs legais/checklist.
+- [x] **Achado R6.6.1:** `data-mode="familia"` existia mas (a) só sobrescrevia 4
+      sombras e (b) nunca era ativado fora do Storybook — `FamiliaReport` herdava
+      `clinico` do `<html>`. Gap = ativar no cartão família + expandir tokens.
+- [x] R6.6.1 (builder + validado pelo main): `page.tsx` envolve só `FamiliaReport`
+      em `<div data-mode="familia">` (outros 2 cartões seguem clínicos). Bloco
+      `[data-mode="familia"]` em globals.css ganhou 2 tokens já consumidos:
+      `--radius-control:10px` (canto macio, sem cor) + `--action-primary:#B2DFDB`
+      (menta "conquista"; fg preto herdado → contraste 15.9:1, AA folgado). Todos
+      usos de `--action-primary` no escopo são fill/borda/ring, nunca cor de texto.
+      +2 testes em `a11y.test.tsx`. typecheck limpo; lint 0 erros; a11y 8/8.
+- [x] R6.6.2: `docs/arquitetura/checklist-producao-mvp.md` +
+      `docs/legal/dpa-asr-audio.md` (recorte áudio que o briefing §4 não cobre).
+- [x] R6.6.3: README (2 linhas de doc), BACKLOG (painel + sessão), issue áudio.
+
+### Decisões travadas 6.6
+- MVP fecha por 6.1–6.3 + 6.6 (spec A7/A8). Áudio 6.4/6.5 = fast-follow, ASR real
+  desabilitado por flag até DPA assinado — **não** gatilha aceite do MVP.
+- PDF família (`build-html.ts`) fora de escopo (CSS inline próprio) → follow-up.
+
+## Fatias seguintes — áudio (fast-follow, gated por DPA)
+6.4 (captura + persistência local IndexedDB) → 6.5 (pipeline ASR pt-BR). Ver
+issue fast-follow spun-out da #9 e `docs/legal/dpa-asr-audio.md` para o gate.
