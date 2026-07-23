@@ -114,6 +114,15 @@ describe.skipIf(!hasDb)("fase6.3 · app_purgar_paciente + retenção", () => {
     expect(past[0]?.elig).toBe("true");
   });
 
+  test("elegibilidade não vaza cross-tenant (coord A não enxerga paciente da clínica B)", async () => {
+    // P2 é da clínica B; app_paciente_expurgavel é SECURITY DEFINER mas filtra
+    // por app.clinic_id → sem linha → NULL (nem true nem false).
+    const cross = await withTenant(ctx("coordenador", U_COORD_A), (db) =>
+      db.execute(sql`SELECT app_paciente_expurgavel(${P2}::uuid)::text AS elig`),
+    );
+    expect(cross[0]?.elig ?? null).toBeNull();
+  });
+
   test("coordenador purga: erasure físico + trilha pseudonimizada (não deletada)", async () => {
     await withTenant(ctx("coordenador", U_COORD_A), (db) =>
       db.execute(sql`SELECT app_purgar_paciente(${P1}::uuid, 'fim de retenção')`),

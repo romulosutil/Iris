@@ -10,6 +10,10 @@ ALTER TABLE patient ADD COLUMN alta_em date;
 -- completa 18 anos, alta + 10 anos). A clínica só pode ESTENDER via
 -- politica_retencao_meses (nunca encurtar). Sem alta/sem nascimento → NULL/false
 -- (conservador: não expurga o que não dá para comprovar).
+-- SECURITY DEFINER exige guard de tenant explícito: sem ele, qualquer usuário
+-- consultaria o status de retenção de paciente de OUTRA clínica (vazamento
+-- cross-tenant por UUID). O filtro `p.clinic_id = app.clinic_id` restaura o
+-- isolamento que o DEFINER ignora.
 CREATE OR REPLACE FUNCTION app_paciente_expurgavel(p_patient uuid) RETURNS boolean
   LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT
@@ -21,7 +25,8 @@ CREATE OR REPLACE FUNCTION app_paciente_expurgavel(p_patient uuid) RETURNS boole
                             make_interval(months => COALESCE(c.politica_retencao_meses, 0))))
     )
   FROM patient p JOIN clinic c ON c.id = p.clinic_id
-  WHERE p.id = p_patient;
+  WHERE p.id = p_patient
+    AND p.clinic_id = current_setting('app.clinic_id')::uuid;  -- isolamento cross-tenant
 $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app_paciente_expurgavel(uuid) FROM PUBLIC;
@@ -43,11 +48,11 @@ BEGIN
     RAISE EXCEPTION 'app_purgar_paciente: só coordenador purga (papel atual %)', current_setting('app.user_role');
   END IF;
   SELECT clinic_id INTO v_clinic FROM patient WHERE id = p_patient;
-  IF v_clinic IS NULL THEN
-    RAISE EXCEPTION 'app_purgar_paciente: paciente % inexistente', p_patient;
-  END IF;
-  IF NOT app_patient_in_clinic(p_patient) THEN
-    RAISE EXCEPTION 'app_purgar_paciente: paciente % fora da clínica do chamador', p_patient;
+  -- Erro OPACO unificado (evita oráculo cross-tenant): não distinguir
+  -- "inexistente" de "de outra clínica" — senão um coordenador confirmaria
+  -- que um UUID pertence a outra clínica da plataforma.
+  IF v_clinic IS NULL OR NOT app_patient_in_clinic(p_patient) THEN
+    RAISE EXCEPTION 'app_purgar_paciente: paciente inexistente ou sem permissão';
   END IF;
 
   -- 1) trilha PRIMEIRO — linha-fato já pseudônima (patient_id NULL;
@@ -57,7 +62,13 @@ BEGIN
           jsonb_build_object('motivo', p_motivo, 'pseudonimizado', true));
 
   -- 2) pseudonimiza a trilha histórica do sujeito: remove PII, mantém o fato
-  --    (acao/clinic/ator/timestamp) e neutraliza a FK patient_id.
+  --    (acao/entidade/entidade_id/clinic/ator/timestamp — colunas estruturais)
+  --    e neutraliza a FK patient_id.
+  --    `detalhe` é sobrescrito POR INTEIRO de propósito: é JSONB livre, PII pode
+  --    residir em qualquer chave (ex.: `motivo` é texto livre). Remover só chaves
+  --    PII conhecidas (blacklist) deixaria PII imprevista sobreviver — em erasure,
+  --    over-remoção não gera breach, under-remoção sim. Perde-se metadado não-PII
+  --    (ex.: hash) por segurança; a trilha permanece nas colunas estruturais.
   UPDATE audit_log
      SET patient_id = NULL,
          detalhe = jsonb_build_object('pseudonimizado', true, 'motivo_expurgo', p_motivo)

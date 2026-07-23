@@ -74,6 +74,14 @@ Main thread orquestra; subagents fazem o trabalho pesado e retornam comprimido.
       Suite RLS completa **388/389** — a 1 falha é o flaky temporal do agenda2
       (data hardcoded `2026-07-20`), pré-existente e fora de escopo (ver nota 6.1).
 
+### Review PR #68 — endereçado
+- [x] WARN cross-tenant: `app_paciente_expurgavel` (SECURITY DEFINER) ganhou guard
+      `p.clinic_id = app.clinic_id` + teste de vazamento cross-clínica (7/7 verde).
+- [x] NIT oráculo: erros de `app_purgar_paciente` unificados em mensagem opaca
+      ("inexistente ou sem permissão"). `app_purgar_report` tem o mesmo → backlog.
+- [~] WARN sobrescrita de `detalhe`: **mantida de propósito** (erasure = whitelist,
+      não blacklist; PII em chave imprevista sobreviveria). Racional documentado no SQL.
+
 ### Decisões travadas 6.3
 - Erasure = **físico** (espelha `app_purgar_report`), não soft-delete.
 - Trilha do sujeito **pseudonimizada** (patient_id→NULL, detalhe sem PII), nunca deletada.

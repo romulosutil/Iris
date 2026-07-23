@@ -37,6 +37,10 @@ Teste `fase6-expurgo-paciente.int.test.ts` 6/6 verde. Detalhe em
 - export já grava audit síncrono inline (`export.ts:82-85`) → R6.3.4 foi confirm-only.
 
 **Diferido (dívida registrada):**
+- [ ] **Alinhar oráculo de erro em `app_purgar_report`** — a 6.3 unificou os erros
+  de `app_purgar_paciente` em mensagem opaca ("inexistente ou sem permissão") p/ não
+  confirmar cross-tenant a um coordenador. `app_purgar_report` (0040) ainda tem
+  erros distintos (mesmo oráculo, baixo risco). Alinhar numa fatia própria.
 - [ ] **Server action/UI de purga de paciente** — hoje `app_purgar_paciente` (e
   `app_purgar_report` desde a Fase 5) só têm entrada via SQL/teste. Wiring de
   app-callable (com confirmação forte) fica p/ fatia própria.
