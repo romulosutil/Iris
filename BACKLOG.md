@@ -19,8 +19,68 @@
 | **3** | Extração de Evidências (IA) | ✅ Concluído | Issue #6 (fechada 13/07) |
 | **4** | Evidências Acumuladas & Gráficos | ✅ Concluído | Issue #7 |
 | **5** | Relatórios de Convênio & Supervisão | ✅ Concluído | Issue #8 |
-| **6** | Ditado de Voz & Hardening LGPD | 📅 Pendente | Issue #9 |
+| **6** | Ditado de Voz & Hardening LGPD | 🚧 Em andamento (Fatia 6.1 ✅) | Issue #9 |
 | **7** | Self-Service & Growth (onboarding + pagamento autônomo) | 📅 Pós-MVP | Issue #36 |
+
+---
+
+## 🏁 Sessão 23/07/2026 — Fase 6 arrancada: review adversarial de escopo + Fatia 6.1 (Hardening RLS) — ✅ FATIA 6.1 CONCLUÍDA (PR #66 mergeada)
+
+Início da Fase 6 (Issue #9). Antes de codar, review adversarial de Tech Lead
+do plano da issue, materializado em `.specs/features/fase6/spec.md`. Checkpoint
+de execução vivo em `.specs/features/fase6/EXECUTION.md`.
+
+### Decisões de escopo travadas (spec endurecido — 10 achados)
+- **A1 — Numeração de migração:** `0043` já estava tomado (`report_narrativo_com_ia`).
+  Renumerado: **6.1 = `0044`**, 6.3 = `0045`. `when` do journal = `max+1000`.
+- **A2 — 6.3 não é greenfield:** `audit_log` já é imutável (`0039`) e o padrão
+  log-antes-delete-com-hash já shippou em `app_purgar_report` (`0040`). 6.3
+  vira **reuso** de padrão, não reconstrução.
+- **A3 — Contradição LGPD (erasure × trilha):** `app_purgar_paciente` cascateia,
+  mas `audit_log.patient_id` não tem FK (sobrevive ao delete). Purgar paciente
+  mantendo trilha identificável = erasure incompleto. **Regra travada:**
+  pseudonimizar `patient_id`/`detalhe` da trilha do sujeito no expurgo.
+- **A4 — Recepção zero-clínico × `audit_select`:** policy vigente dá SELECT de
+  `audit_log` (com `patient_id`) a `admin_recepcao`. Contradiz 6.2. Decisão a
+  travar na 6.2: mascarar `patient_id`/`detalhe` p/ recepção OU reclassificar.
+- **A5 — `BYPASS_MFA_FOR_DEV`:** deve **hard-fail no boot em produção**, não
+  default-false. Com teste `prod+bypass ⇒ crash`.
+- **A6 — Áudio = dado sensível cruzando fronteira nova:** IndexedDB não-cript. em
+  device compartilhado (purgar em logout + pós-upload, não só flush-on-online);
+  ASR externa (OpenAI/Azure) = transferência internacional → **habilitar
+  provider real BLOQUEADO por DPA assinado**.
+- **A7 — Áudio (6.4/6.5) é fast-follow**, não gatilha aceite do MVP. Segurança/
+  LGPD (6.1–6.3 + checklist 6.6) = fechamento real do MVP.
+- **A8 — Fechar #9 depende de DPA externo** (predecessor explícito, não checkbox).
+- **A9 — Gate de migração:** teste que **falha se coluna dita imutável ainda
+  for UPDATE-ável** (via `has_column_privilege`), provando que o grant pegou.
+- **A10 — PX4 sem TBD:** `patient` — travadas `clinic_id`+`criado_em`; mutáveis
+  = campos de cadastro.
+
+**Ordem de execução travada:** 6.1 → 6.3 → 6.2 → 6.6-checklist → 6.4 → 6.5.
+
+### Fatia 6.1 — Hardening RLS PX1–PX4 (PR #66, commit `0c4bae3`)
+- `db/migrations/0044_rls_hardening_px.sql`: `REVOKE UPDATE` global + `GRANT
+  UPDATE (<mutáveis>)` em `session`, `patient_clinical_profile`,
+  `patient_protocol`, `care_team_membership`, `patient`. Fecha reassociação
+  intra-clínica por UPDATE de FK/identidade (gap pré-existente da auditoria
+  adversarial da Fase 2). Imutáveis travadas por privilégio: identidade/FK/
+  autoria/timestamp de cada tabela.
+- **Divergência do plano:** `session` mantém mutável todo o conjunto operacional
+  da agenda (o app só faz UPDATE em `estado/justificada/atendidoPorId/
+  modalidade/checkInEm`); a coluna `observacoes` do plano **não existe** no
+  schema → droppada.
+- Teste `src/db/rls-hardening-px.int.test.ts` (20 casos): gate A9 +
+  reassociação de `session.patient_id` barrada. Resultado: **20/20**; suite RLS
+  completa sem regressão em agenda/session. Typecheck + lint limpos.
+- **Nota de infra:** migração aplicada via psql (desync de tracking do drizzle
+  no `0043` pré-existente — lição conhecida). 10/10 statements limpos.
+
+### 🐞 Achado fora de escopo (dívida a tratar em fatia separada)
+- `db/tests/agenda2-encerrar-regra.int.test.ts > proximaSessaoDaRegra` tem
+  asserção de data **hardcoded** (`2026-07-20`) que expira com o tempo — falha
+  hoje (23/07) porque a próxima sessão futura correta virou `2026-07-27`.
+  Flaky temporal, sem relação com RLS. Corrigir com data relativa.
 
 ---
 
