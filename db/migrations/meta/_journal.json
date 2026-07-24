@@ -337,6 +337,13 @@
       "when": 1784521558778,
       "tag": "0047_mfa_two_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1784521559778,
+      "tag": "0048_snapshot_candidatura_team_guard",
+      "breakpoints": true
     }
   ]
 }
