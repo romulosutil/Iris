@@ -23,13 +23,13 @@ const ctxCobertura = {
 } as const;
 
 let owner: ReturnType<typeof postgres>;
-let capturarDiario: typeof import("./actions").capturarDiario;
-let corrigirEscopoProtocolo: typeof import("./actions").corrigirEscopoProtocolo;
+let capturarDiario: typeof import("./logic").capturarDiario;
+let corrigirEscopoProtocolo: typeof import("./logic").corrigirEscopoProtocolo;
 let appSql: typeof import("@/db/client").sql;
 
 describe.skipIf(!hasDb)("diário · captura", () => {
   beforeAll(async () => {
-    ({ capturarDiario, corrigirEscopoProtocolo } = await import("./actions"));
+    ({ capturarDiario, corrigirEscopoProtocolo } = await import("./logic"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, protocol, session,
@@ -78,7 +78,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
   });
 
   test("consolidar grava nota, popula numero_sequencial e é idempotente", async () => {
-    const { consolidarSessao } = await import("./actions");
+    const { consolidarSessao } = await import("./logic");
     const r1 = await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota final revisada da sessão." });
     expect(r1.error).toBeUndefined();
     expect(r1.numeroSequencial).toBe(1);
@@ -91,7 +91,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
 
   test("clínica demo gera extrações sugeridas ao consolidar", async () => {
     await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
-    const { consolidarSessao } = await import("./actions");
+    const { consolidarSessao } = await import("./logic");
     await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Pediu água. Falou 'á' sozinho. Não respondeu depois." });
     const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
     expect(ex.length).toBeGreaterThanOrEqual(1);
@@ -108,7 +108,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     await owner`UPDATE goal SET estado = 'ativa' WHERE id IN (${GOAL_PAC}, ${GOAL_PAC2})`;
 
     await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
-    const { consolidarSessao } = await import("./actions");
+    const { consolidarSessao } = await import("./logic");
     await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Pediu água. Falou 'á' sozinho." });
     const ex = await owner`SELECT payload FROM extraction WHERE session_id = ${SESS}`;
     expect(ex.length).toBeGreaterThanOrEqual(1);
@@ -124,7 +124,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
   test("clínica de produção fica pendente de reprocessamento (sem LLM)", async () => {
     // limpa extrações da sessão do caso anterior
     await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
-    const { consolidarSessao } = await import("./actions");
+    const { consolidarSessao } = await import("./logic");
     await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota de produção." });
     const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
     expect(ex.some((e) => e.estado === "pendente_reprocessamento")).toBe(true);
@@ -137,7 +137,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     // sessões visíveis a ele (subestimado → daria 1, duplicando). O helper
     // SECURITY DEFINER enxerga todas as sessões do paciente → deve dar 2.
     await owner`DELETE FROM extraction WHERE session_id = ${SESS_COBERTURA}`;
-    const { consolidarSessao } = await import("./actions");
+    const { consolidarSessao } = await import("./logic");
     const r = await consolidarSessao(ctxCobertura, {
       sessionId: SESS_COBERTURA,
       texto: "Sessão de cobertura consolidada.",

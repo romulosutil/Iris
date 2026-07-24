@@ -32,11 +32,8 @@ import { describe, expect, test } from "vitest";
 // Módulos AINDA vulneráveis, pendentes de correção nas próximas fatias da #55.
 // Remover a entrada quando a fatia correspondente corrigir o módulo.
 const ALLOWLIST = new Set<string>([
-  // Fatia B ✅ corrigida (cores movidos p/ logic.ts `server-only`).
-  // Fatia C — sessão/agenda/metas
-  "src/app/(app)/diario/[sessionId]/actions.ts",
-  "src/app/(app)/agenda/actions.ts",
-  "src/app/(app)/pacientes/[id]/metas/actions.ts",
+  // Fatias A/B/C ✅ corrigidas (cores movidos p/ logic.ts `server-only`).
+  // Allowlist vazio: nenhum módulo `use server` ainda expõe core ctx-accepting.
   // NÃO allowlistados de propósito — o guard confirmou que já não expõem core
   // ctx-accepting (varredura da auditoria da #55): `agenda/semana/actions.ts`,
   // `equipe/[id]/actions.ts`, `pacientes/[id]/timeline/actions.ts`,

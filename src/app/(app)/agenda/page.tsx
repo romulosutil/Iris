@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { DataRow } from "@/components/ui/data-row";
 import { listarTerapeutas } from "@/app/(app)/equipe/[id]/queries";
-import { listarSessoesDoDia, type SessaoDoDia } from "./actions";
+import { listarSessoesDoDia, type SessaoDoDia } from "./logic";
 import { pendentesDeConsolidacao, reposicoesPendentes } from "./queries";
 import { EstadoBadge } from "./estado-badge";
 import { GerirSessao } from "./gerir-sessao";
