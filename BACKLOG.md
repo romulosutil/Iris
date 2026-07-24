@@ -25,6 +25,49 @@
 
 ---
 
+## 🏁 Sessão 24/07/2026 — Go-live #75 Etapa 3 (smoke navegação + gate técnico) — branch `test/issue75-etapa3-smoke-gate`
+
+**Gate técnico ✅ verde:** `build` ✅ (guard `mfa-gate.ts` bloqueia `BYPASS_MFA_FOR_DEV=true`
+sob `NODE_ENV=production` — comportamento correto; com flag off, exit 0) · `test`
+**471/471** ✅ · `test:rls` **404/404** ✅ · typecheck ✅ · lint ✅ (0 err, 8 warn de
+`storybook/no-redundant-story-name`).
+
+**Fix aplicado no gate:** `pacientes/[id]/ausencias/a11y.test.tsx` era flaky —
+timeout de 5s estourava sob carga paralela da suíte (axe + `await import()` do form).
+Timeout elevado p/ **15000ms**, seguindo padrão já existente no repo
+(`clinica/feriados/a11y.test.tsx`, `equipe/[id]/a11y.test.tsx`). Passa isolado e na
+suíte cheia. (Os `Not implemented: HTMLCanvasElement.getContext` no log são ruído
+benigno do axe/jsdom, não falha — `color-contrast` já está desabilitado no teste.)
+
+**Smoke navegação ✅** (dev :3002, `seed:demo`, `BYPASS_MFA_FOR_DEV=true`, Playwright):
+- **Bypass MFA validado** — 3 papéis logam (`Senha Demo 123`) e vão direto p/ `/`,
+  nenhum cai em `/mfa/setup`.
+- **Coordenador:** `/`, `/validacao` (empty-state "Fila vazia"), `/agenda` (grade geral),
+  `/pacientes` (40), `/equipe` (20 terapeutas), `/duvidas`, `/supervisao` (3 alertas do
+  seed: Bruno faltas, Davi regressão, Clara estagnação) — todos renderizam.
+- **Terapeuta:** nav correto (Agenda do Dia / Pacientes & PEIs / Pendências / Dúvidas —
+  sem governança); `/agenda` **scoped** só às 2 sessões dele (Ana Beatriz 09h, Arthur
+  Souza 13h30); `/pendencias` ok.
+- **Recepção:** nav reduzido (Agenda / Pacientes / Pendências); `/supervisao` → **404**
+  (rota coordenador-only bloqueada — authz por papel ok).
+- Único console error: `localhost:8400/live.js` (livereload externo, ERR_CONNECTION_REFUSED),
+  inócuo, não é do app.
+
+**Pendência herdada (NÃO automatizável por IA):** o **smoke MFA round-trip real**
+(`enable → verify → login-challenge` com app autenticador físico) segue aberto — herdado
+da 6.2b, precisa de humano + dispositivo TOTP. É o 3º sub-item da Etapa 3 e o único que
+falta; deixado desmarcado na #75 p/ o Rômulo rodar manualmente. Schema/plugin já batem
+(6.2b); só falta o round-trip ao vivo.
+
+**Estado Etapa 2:** confirmada fechável — checkboxes `[x]`, PR #79 mergeado, nada
+BLOCKING pendente; #64 permanece aberta só p/ os ~90 NITs cosméticos diferidos (por design).
+
+**Nota infra (não-bloqueante):** `db:migrate` local segue vermelho por desync do tracking
+drizzle (0044–0048 não trackeadas em `__drizzle_migrations`, mas as tabelas existem —
+`test:rls` 404/404 prova schema aplicado). Reconciliar o tracking é dívida à parte.
+
+---
+
 ## 🏁 Sessão 24/07/2026 — Atrito de login com seed (MFA) + dívida de UI — branch `fix/user-mvp`
 
 **Sintoma:** usuário testando com usuários seedados travou na tela de enrollment
