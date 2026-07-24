@@ -162,7 +162,10 @@ else
 	if [[ -n "${missing_role_dump}" ]]; then
 		fail "globals (${GLOBALS_PATH}) não contêm CREATE ROLE para: ${missing_role_dump}(referenciadas por CREATE POLICY em db/migrations/) — restore em cluster novo perderia RLS para essas roles"
 	else
-		log_ok "globals (${GLOBALS_PATH}) contêm CREATE ROLE para todas as roles referenciadas por policies: ${POLICY_ROLES[*]}"
+		log_ok "globals (${GLOBALS_PATH}) contêm CREATE ROLE para todas as roles referenciadas por policies: $(
+			IFS=','
+			printf '%s' "${POLICY_ROLES[*]}"
+		)"
 	fi
 fi
 
@@ -170,14 +173,20 @@ fi
 # b.1: para TODA tabela de public, relrowsecurity(origem) == relrowsecurity(restaurado).
 # Conexões separadas (origem e check db são bancos diferentes no mesmo
 # cluster) — sem dependência de dblink, só duas queries + comparação em bash.
+# Os DOIS lados precisam do `::text` explícito. Sem ele a comparação é sempre
+# falsa: `relname || '|' || relrowsecurity` promove o boolean a texto e rende
+# "true"/"false", enquanto um `SELECT relrowsecurity` isolado sai pelo psql -tA
+# como "t"/"f" — e "true" != "t" em toda tabela. O efeito era um verify que
+# acusava divergência de RLS nas 37 tabelas com origem e restaurado idênticos.
+# Gate que sempre falha é gate que o operador aprende a ignorar.
 mismatched_rls=""
 while IFS='|' read -r tbl_name origin_rls; do
 	[[ -z "${tbl_name}" ]] && continue
-	restored_rls="$(psql_q "${CHECK_DB}" "SELECT relrowsecurity FROM pg_class WHERE relname = '${tbl_name}' AND relnamespace = 'public'::regnamespace;")"
+	restored_rls="$(psql_q "${CHECK_DB}" "SELECT relrowsecurity::text FROM pg_class WHERE relname = '${tbl_name}' AND relnamespace = 'public'::regnamespace;")"
 	if [[ "${origin_rls}" != "${restored_rls}" ]]; then
 		mismatched_rls="${mismatched_rls}${tbl_name} "
 	fi
-done < <(psql_q "${PGDATABASE}" "SELECT relname || '|' || relrowsecurity FROM pg_class WHERE relkind = 'r' AND relnamespace = 'public'::regnamespace;")
+done < <(psql_q "${PGDATABASE}" "SELECT relname || '|' || relrowsecurity::text FROM pg_class WHERE relkind = 'r' AND relnamespace = 'public'::regnamespace;")
 
 if [[ -n "${mismatched_rls}" ]]; then
 	fail "relrowsecurity difere da origem nas tabelas: ${mismatched_rls}"
@@ -281,7 +290,12 @@ log_info "policies     : origem=${origin_policy_count} restaurado=${restored_pol
 log_info "globals      : ${GLOBALS_PATH}"
 log_info "----------------------------------------"
 log_info "AVISO DE ESCOPO: este verify roda no MESMO cluster do banco de origem — as"
-log_info "roles ${POLICY_ROLES[*]} já existem ali, então este teste NÃO cobre o cenário de"
+# `${arr[*]}` junta pelo PRIMEIRO char do IFS, que aqui é \n — sem forçar IFS
+# o aviso sai quebrado no meio da frase.
+log_info "roles $(
+	IFS=','
+	printf '%s' "${POLICY_ROLES[*]}"
+) já existem ali, então este teste NÃO cobre o cenário de"
 log_info "disaster recovery (cluster Postgres novo/vazio). O checkpoint a.5 (par de"
 log_info "globals + CREATE ROLE) reduz o risco de repetir o furo, mas o teste de"
 log_info "verdade — restaurar num cluster novo e conferir 37 tabelas + 85 policies —"

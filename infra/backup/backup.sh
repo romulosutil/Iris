@@ -51,6 +51,28 @@ log_error() {
 	printf '[backup] ERRO: %s\n' "$*" >&2
 }
 
+# Configura o alias do mc lendo as credenciais por STDIN.
+#
+# Por que não `MC_HOST_<alias>="scheme://KEY:SECRET@host"`: aquilo é uma URL, e
+# segredo de MinIO é tipicamente base64 — contém `/` e `+`. Um `/` cru encerra o
+# campo userinfo e o mc lê o resto como path; a autenticação falha com erro que
+# não aponta pra causa. E percent-encodar NÃO resolve: verificado que este mc
+# não faz percent-decode do userinfo, então `%2F` chega como três caracteres
+# literais e o segredo fica errado ("signature does not match").
+#
+# Por que não `mc alias set ALIAS URL KEY SECRET`: credencial em argv fica
+# visível em `ps` e /proc/<pid>/cmdline.
+#
+# `mc alias set ALIAS URL` sem as chaves lê Access Key e Secret Key de stdin —
+# não passa por parsing de URL (aceita qualquer caractere) e não vai pra argv.
+# Custo: o mc grava as chaves em texto plano no config.json. Por isso
+# MC_CONFIG_DIR aponta pra um diretório temporário 0700 apagado no EXIT, fora do
+# volume persistente `/backups`.
+mc_configurar_alias() {
+	printf '%s\n%s\n' "${S3_ACCESS_KEY}" "${S3_SECRET_KEY}" \
+		| mc alias set "${MC_ALIAS}" "${S3_ENDPOINT}" --api S3v4 >/dev/null 2>&1
+}
+
 # shellcheck disable=SC2329 # invocada indiretamente via `trap ... ERR`
 on_error() {
 	local exit_code=$?
@@ -119,6 +141,13 @@ readonly TMP_PATH
 TMP_GLOBALS_PATH="$(mktemp "${BACKUP_DIR}/.${GLOBALS_NAME}.tmp.XXXXXX")"
 readonly TMP_GLOBALS_PATH
 
+# Config do mc fica num dir temporário 0700 FORA do volume persistente
+# `/backups` — o `mc alias set` grava as credenciais em texto plano nele, e elas
+# não podem sobreviver ao container nem entrar no volume de backup.
+MC_CONFIG_DIR="$(mktemp -d "/tmp/.mc-iris.XXXXXX")"
+export MC_CONFIG_DIR
+chmod 700 -- "${MC_CONFIG_DIR}"
+
 # shellcheck disable=SC2329 # invocada indiretamente via `trap ... EXIT`
 cleanup_tmp() {
 	# Se o script sair antes do rename (passo 4), nenhum tmp pode sobreviver
@@ -129,6 +158,10 @@ cleanup_tmp() {
 	fi
 	if [[ -f "${TMP_GLOBALS_PATH}" ]]; then
 		rm -f -- "${TMP_GLOBALS_PATH}"
+	fi
+	# Credencial em texto plano não sobrevive ao script, mesmo em falha.
+	if [[ -n "${MC_CONFIG_DIR:-}" && -d "${MC_CONFIG_DIR}" ]]; then
+		rm -rf -- "${MC_CONFIG_DIR}"
 	fi
 }
 trap cleanup_tmp EXIT
@@ -203,9 +236,12 @@ mv -f -- "${TMP_GLOBALS_PATH}" "${GLOBALS_PATH}"
 END_EPOCH="$(date +%s)"
 DURATION_S=$((END_EPOCH - START_EPOCH))
 
-SIZE_BYTES="$(wc -c <"${FINAL_PATH}" | tr -d '[:space:]')"
+# `stat -c %s` lê o tamanho do inode (metadado); `wc -c` streamaria o dump
+# inteiro por stdin só para contar byte — I/O desnecessário num arquivo que
+# cresce com o banco.
+SIZE_BYTES="$(stat -c %s "${FINAL_PATH}")"
 CHECKSUM="$(sha256sum "${FINAL_PATH}" | awk '{print $1}')"
-GLOBALS_SIZE_BYTES="$(wc -c <"${GLOBALS_PATH}" | tr -d '[:space:]')"
+GLOBALS_SIZE_BYTES="$(stat -c %s "${GLOBALS_PATH}")"
 GLOBALS_CHECKSUM="$(sha256sum "${GLOBALS_PATH}" | awk '{print $1}')"
 
 log_info "arquivo=${FINAL_NAME} tamanho_bytes=${SIZE_BYTES} duracao_s=${DURATION_S} sha256=${CHECKSUM}"
@@ -217,12 +253,12 @@ readonly MC_ALIAS="irisbackup"
 if [[ -z "${S3_ENDPOINT}" ]]; then
 	log_info "S3_ENDPOINT vazio — pulando upload (esperado em dev local sem MinIO)"
 else
-	# Credenciais via MC_HOST_<alias> (env), NUNCA via argv de `mc alias set`
-	# (argv fica visível em /proc//cmdline e `ps aux` do host). O config do mc
-	# não fica persistido em disco com a chave/segredo em texto plano.
-	scheme="${S3_ENDPOINT%%://*}"
-	hostpart="${S3_ENDPOINT#*://}"
-	export MC_HOST_irisbackup="${scheme}://${S3_ACCESS_KEY}:${S3_SECRET_KEY}@${hostpart}"
+	# Alias configurado por stdin — ver mc_configurar_alias() para o porquê de
+	# não usar MC_HOST_* (URL, quebra com `/` no segredo) nem argv (vaza em ps).
+	if ! mc_configurar_alias; then
+		log_error "falha ao configurar o alias do mc — conferir S3_ENDPOINT/credenciais (valores não são logados)"
+		EXIT_CODE=1
+	fi
 
 	log_info "subindo ${FINAL_NAME} e ${GLOBALS_NAME} para ${MC_ALIAS}/${S3_BACKUP_BUCKET} (endpoint mascarado)"
 
@@ -259,7 +295,7 @@ if [[ -n "${S3_ENDPOINT}" ]]; then
 		log_error "prune remoto falhou (não fatal para o backup do dia, mas fica registrado)"
 		EXIT_CODE=1
 	fi
-	unset MC_HOST_irisbackup
+	# O config do mc (com credencial em texto plano) é apagado no trap EXIT.
 fi
 
 if [[ "${EXIT_CODE}" -eq 0 ]]; then

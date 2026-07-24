@@ -258,6 +258,12 @@ Rodar dentro do container do serviço de backup (Easypanel → Console):
 ./verify-restore.sh; echo "exit=$?"
 ```
 
+> `verify-restore.sh` precisa de um servidor **PG17** (o client da imagem é 17 e
+> emite `SET transaction_timeout`, que o PG16 rejeita). Em produção isso é o caso.
+> **Em dev local não** — o compose ainda roda PG16, então o verify falha ali no
+> `pg_restore` por versão, não por backup ruim. Para exercitar localmente, aponte
+> `PGHOST` para um Postgres 17. Rastreado na issue de paridade do compose.
+
 `verify-restore.sh` sai **0** só se, no banco restaurado: contagem de tabelas
 bate, **RLS continua ativo e o número de policies é igual ao da origem**, os
 row counts batem, roles/grants foram preservados **e existe o `.globals.sql`
