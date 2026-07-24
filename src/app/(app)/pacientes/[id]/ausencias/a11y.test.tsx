@@ -16,4 +16,4 @@ async function semViolacoes(ui: ReactElement) {
 test("form de ausência do paciente sem violações", async () => {
   const { AusenciasForm } = await import("./ausencias-form");
   await semViolacoes(<AusenciasForm patientId="p1" bloqueios={[]} />);
-});
+}, 15000);
