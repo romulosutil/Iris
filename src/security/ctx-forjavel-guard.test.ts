@@ -32,13 +32,7 @@ import { describe, expect, test } from "vitest";
 // Módulos AINDA vulneráveis, pendentes de correção nas próximas fatias da #55.
 // Remover a entrada quando a fatia correspondente corrigir o módulo.
 const ALLOWLIST = new Set<string>([
-  // Fatia B — dado clínico + trilha de auditoria
-  "src/app/(app)/pacientes/[id]/cadastro-clinico/actions.ts",
-  "src/app/(app)/pacientes/[id]/cadastro-clinico/protocolo-actions.ts",
-  "src/app/(app)/validacao/actions.ts",
-  "src/app/(app)/duvidas/actions.ts",
-  "src/app/(app)/revisao/[sessionId]/actions.ts",
-  "src/app/(app)/supervisao/actions.ts",
+  // Fatia B ✅ corrigida (cores movidos p/ logic.ts `server-only`).
   // Fatia C — sessão/agenda/metas
   "src/app/(app)/diario/[sessionId]/actions.ts",
   "src/app/(app)/agenda/actions.ts",

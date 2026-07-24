@@ -4,7 +4,8 @@ import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { salvarFichaClinicaAction, type FichaClinicaState } from "./actions";
+import { salvarFichaClinicaAction } from "./actions";
+import { type FichaClinicaState } from "./logic";
 
 type Perfil = {
   diagnostico?: string | null;

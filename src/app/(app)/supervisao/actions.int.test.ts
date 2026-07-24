@@ -19,15 +19,15 @@ const ctxTerapeuta = { clinicId: CLINIC, userId: U_TERAPEUTA, role: "terapeuta" 
 
 let owner: ReturnType<typeof postgres>;
 let appSql: typeof import("@/db/client").sql;
-let reconhecerAlerta: typeof import("./actions").reconhecerAlerta;
-let resolverAlerta: typeof import("./actions").resolverAlerta;
-let descartarAlerta: typeof import("./actions").descartarAlerta;
+let reconhecerAlerta: typeof import("./logic").reconhecerAlerta;
+let resolverAlerta: typeof import("./logic").resolverAlerta;
+let descartarAlerta: typeof import("./logic").descartarAlerta;
 let listarSupervisao: typeof import("./queries").listarSupervisao;
 
 describe.skipIf(!hasDb)("actions.int.test.ts - supervisao actions integration tests", () => {
   beforeAll(async () => {
     if (!hasDb) return;
-    ({ reconhecerAlerta, resolverAlerta, descartarAlerta } = await import("./actions"));
+    ({ reconhecerAlerta, resolverAlerta, descartarAlerta } = await import("./logic"));
     ({ listarSupervisao } = await import("./queries"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });

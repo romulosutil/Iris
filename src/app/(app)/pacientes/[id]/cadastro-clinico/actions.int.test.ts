@@ -3,7 +3,7 @@ import postgres from "postgres";
 import { eq } from "drizzle-orm";
 
 vi.mock("server-only", () => ({}));
-const { salvarFichaClinica } = await import("./actions");
+const { salvarFichaClinica } = await import("./logic");
 const { withTenant } = await import("@/db/rls");
 const { sql: appSql } = await import("@/db/client");
 const { patientClinicalProfile } = await import("@/db/schema");
