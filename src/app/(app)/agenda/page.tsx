@@ -70,13 +70,13 @@ export function ItemPendencia({
         tipo === "consolidacao" ? (
           <GerirSessao sessionId={sessao.id} terapeutas={terapeutas} />
         ) : (
-          <Link
-            href={`/agenda/semana?repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
-          >
-            <Button variante="secundaria" tamanho="sm">
+          <Button asChild variante="secundaria" tamanho="sm">
+            <Link
+              href={`/agenda/semana?repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
+            >
               Repor
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         )
       }
     />
@@ -135,9 +135,9 @@ export default async function AgendaPage() {
         description={dataPorExtenso(dia)}
         actions={
           podeAgendar ? (
-            <Link href="/agenda/semana">
-              <Button variante="primaria">+ Agendar no Calendário</Button>
-            </Link>
+            <Button asChild variante="primaria">
+              <Link href="/agenda/semana">+ Agendar no Calendário</Link>
+            </Button>
           ) : undefined
         }
       />

@@ -23,6 +23,8 @@ const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL
 const CLINIC_A = "00000000-0000-0000-0000-0000000000d1";
 const U_COORD_A = "00000000-0000-0000-0000-00000000c0d1";
 const U_T1_A = "00000000-0000-0000-0000-0000000071d1";
+// Terapeuta da MESMA clínica, mas FORA da equipe do PAC_A1 (guard cross-team).
+const U_T2_A = "00000000-0000-0000-0000-0000000072d1";
 const PAC_A1 = "00000000-0000-0000-0000-00000000acd1";
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
@@ -32,6 +34,8 @@ const U_COORD_B = "00000000-0000-0000-0000-00000000c0d2";
 const PAC_B1 = "00000000-0000-0000-0000-00000000acd2";
 
 const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
+const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const; // on-team
+const ctxT2A = { clinicId: CLINIC_A, userId: U_T2_A, role: "terapeuta" } as const; // fora da equipe
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;
@@ -101,11 +105,14 @@ describe.skipIf(!hasDb)("Fase 4 (4B) · materializarSnapshot (segmentação real
     await owner`INSERT INTO clinic (id, nome, is_demo) VALUES (${CLINIC_A}, 'Clínica A (materializar)', false)`;
     await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD_A}, 'Coord A', 'coord.a.mat@t.com'),
-      (${U_T1_A}, 'Terapeuta 1 A', 't1.a.mat@t.com')`;
+      (${U_T1_A}, 'Terapeuta 1 A', 't1.a.mat@t.com'),
+      (${U_T2_A}, 'Terapeuta 2 A (fora da equipe)', 't2.a.mat@t.com')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
-      (${U_T1_A}, ${CLINIC_A}, 'terapeuta')`;
+      (${U_T1_A}, ${CLINIC_A}, 'terapeuta'),
+      (${U_T2_A}, ${CLINIC_A}, 'terapeuta')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC_A1}, ${CLINIC_A}, 'Paciente A1 (materializar)')`;
+    // Só U_T1_A entra na equipe; U_T2_A fica de fora de propósito (guard cross-team).
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
       VALUES (${PAC_A1}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
 
@@ -281,6 +288,50 @@ describe.skipIf(!hasDb)("Fase 4 (4B) · materializarSnapshot (segmentação real
         ),
       );
       expect(msg).toMatch(/isolamento violado/);
+    });
+
+    // Guard cross-team (0048): terapeuta da MESMA clínica, mas fora da equipe do
+    // paciente, não pode materializar snapshot/candidatura — paridade com a
+    // leitura (session_snapshot_select / milestone_candidacy_select gateiam por
+    // equipe). Coordenador e terapeuta-da-equipe continuam podendo.
+    test("app_aplicar_snapshot: terapeuta fora da equipe (mesma clínica) é barrado e não escreve", async () => {
+      const msg = await capturarErro(() =>
+        withTenant(ctxT2A, (tx) =>
+          tx.execute(
+            dsql`SELECT app_aplicar_snapshot(${PAC_A1}::uuid, 901, '{}'::jsonb, '{}'::jsonb)`,
+          ),
+        ),
+      );
+      expect(msg).toMatch(/autorização cross-team/);
+
+      const [row] = await owner`
+        SELECT 1 FROM session_snapshot WHERE patient_id = ${PAC_A1} AND session_numero = 901
+      `;
+      expect(row).toBeUndefined();
+    });
+
+    test("app_aplicar_candidatura: terapeuta fora da equipe (mesma clínica) é barrado", async () => {
+      const msg = await capturarErro(() =>
+        withTenant(ctxT2A, (tx) =>
+          tx.execute(
+            dsql`SELECT app_aplicar_candidatura(${PAC_A1}::uuid, NULL, NULL, true, NULL, NULL, NULL)`,
+          ),
+        ),
+      );
+      expect(msg).toMatch(/autorização cross-team/);
+    });
+
+    test("app_aplicar_snapshot: terapeuta DA equipe escreve normalmente (controle positivo)", async () => {
+      await withTenant(ctxT1A, (tx) =>
+        tx.execute(
+          dsql`SELECT app_aplicar_snapshot(${PAC_A1}::uuid, 900, '{}'::jsonb, '{}'::jsonb)`,
+        ),
+      );
+      const [row] = await owner`
+        SELECT 1 FROM session_snapshot WHERE patient_id = ${PAC_A1} AND session_numero = 900
+      `;
+      expect(row).toBeDefined();
+      await owner`DELETE FROM session_snapshot WHERE patient_id = ${PAC_A1} AND session_numero = 900`;
     });
   });
 
