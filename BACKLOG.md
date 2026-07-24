@@ -25,6 +25,25 @@
 
 ---
 
+## 🏁 Sessão 23/07/2026 — Go-live #75 Etapa 1 (fecha #55) + Etapa 2 (triagem #64) — PR #79
+
+**Etapa 1 (#55):** ctx forjável em `"use server"` — 12/12 módulos migrados (core
+ctx→`logic.ts`/`server-only`; actions só expõem `*Action`). Fatias A/B/C mergeadas
+(#74/#77/#78). Guard `ctx-forjavel-guard.test.ts` 19/19 repo-wide. **#55 fechada.**
+
+**Etapa 2 (#64), escopo "só crítico p/ piloto":** #64 era snapshot de review-time
+— maioria dos 153 já resolvida nos próprios PRs. Verificação dirigida (3 subagents,
+read-only) confirmou:
+- RLS/migração: 7/8 resolvidos + **1 débito real corrigido** — guard cross-team em
+  `app_aplicar_snapshot`/`candidatura` (SECURITY DEFINER checava só clínica, leitura
+  gateia por equipe). Migração **0048** + teste. Intra-clínica, não cross-tenant.
+- seed-demo/timeline: 0 sobreviventes. prompt-injection BLOCKING = falso-positivo.
+- P0 UI: agenda Button-in-Link (`asChild`) corrigido; outros 2 já estavam.
+- **Diferido pós-MVP:** ~90 NIT/WARN de design system → #64 fica aberta só p/ isso.
+
+Verificação: typecheck ✅ · test:rls **404/404** ✅. **Próximo: Etapa 3** (smoke
+manual MFA + navegação por papel com seed:demo + gate build/test/test:rls).
+
 ## 🏁 Sessão 23/07/2026 — Fatia 6.6 (Polimento família + Checklist produção/DPA) — PR aberta
 
 Fechamento do MVP (spec A7/A8): MVP fecha por 6.1–6.3 + 6.6. Áudio (6.4/6.5) sai
