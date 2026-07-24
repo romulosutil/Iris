@@ -10,6 +10,20 @@ const PAC = "00000000-0000-0000-0000-00000000acd3";
 const REGRA = "00000000-0000-0000-0000-000000009903";
 const ctx = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
 
+// Datas relativas ao agora — evita o teste expirar com o tempo (issue #75 Etapa 0).
+// `proximaSessaoDaRegra` filtra por `now()`, então as futuras precisam estar de
+// fato no futuro em cada execução. Meio-dia UTC (09:00 SP) fica seguro dentro do dia.
+function isoMaisDias(dias: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+const VIG_INI = isoMaisDias(-30); // início da vigência da regra (bem no passado)
+const PASSADO = isoMaisDias(-14); // sessão realizada (passado)
+const HOJE = isoMaisDias(0); // cutoff de encerramento ("hoje fica, amanhã+ sai")
+const FUT_1 = isoMaisDias(7); // próxima futura agendada
+const FUT_2 = isoMaisDias(14); // futura agendada seguinte
+
 let owner: ReturnType<typeof postgres>;
 let q: typeof import("@/app/(app)/agenda/queries");
 
@@ -26,31 +40,31 @@ describe.skipIf(!hasDb)("encerrarRegra / contarFuturas / proximaSessao", () => {
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC}, ${CLINIC_A}, 'Ana')`;
     await owner`INSERT INTO agendamento_recorrente
       (id, clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
-      VALUES (${REGRA}, ${CLINIC_A}, ${PAC}, ${U_T1}, 'aba', 1, '09:00', 60, '2026-07-06', 'ativo')`;
-    // passado realizada (06/07) + futura agendada (20/07, 27/07)
+      VALUES (${REGRA}, ${CLINIC_A}, ${PAC}, ${U_T1}, 'aba', 1, '09:00', 60, ${VIG_INI}, 'ativo')`;
+    // passado realizada + duas futuras agendadas (relativas ao agora)
     await owner`INSERT INTO session (clinic_id, patient_id, terapeuta_id, recorrente_id, agendada_para, estado, duracao_min, tipo, disciplina) VALUES
-      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, '2026-07-06T12:00:00Z', 'realizada', 60, 'terapia', 'aba'),
-      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, '2026-07-20T12:00:00Z', 'agendada', 60, 'terapia', 'aba'),
-      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, '2026-07-27T12:00:00Z', 'agendada', 60, 'terapia', 'aba')`;
+      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, ${`${PASSADO}T12:00:00Z`}, 'realizada', 60, 'terapia', 'aba'),
+      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, ${`${FUT_1}T12:00:00Z`}, 'agendada', 60, 'terapia', 'aba'),
+      (${CLINIC_A}, ${PAC}, ${U_T1}, ${REGRA}, ${`${FUT_2}T12:00:00Z`}, 'agendada', 60, 'terapia', 'aba')`;
   });
 
   test("contarFuturasDaRegra conta só agendadas a partir de amanhã", async () => {
-    // encerrar em 2026-07-13 → futuras = 20 e 27 (2)
-    expect(await q.contarFuturasDaRegra(ctx, REGRA, "2026-07-13")).toBe(2);
+    // encerrar hoje → futuras (FUT_1, FUT_2) = 2
+    expect(await q.contarFuturasDaRegra(ctx, REGRA, HOJE)).toBe(2);
   });
 
   test("encerrarRegra remove futuras agendadas e preserva passado (D-5)", async () => {
-    const { removidas } = await q.encerrarRegra(ctx, REGRA, "2026-07-13");
+    const { removidas } = await q.encerrarRegra(ctx, REGRA, HOJE);
     expect(removidas).toBe(2);
     const rest = await owner`SELECT estado FROM session WHERE recorrente_id = ${REGRA} ORDER BY agendada_para`;
     expect(rest.map((r) => r.estado)).toEqual(["realizada"]); // só o passado sobra
     const [regra] = await owner`SELECT status, vigencia_fim::text AS vigencia_fim FROM agendamento_recorrente WHERE id = ${REGRA}`;
     expect(regra!.status).toBe("encerrado");
-    expect(regra!.vigencia_fim).toBe("2026-07-13");
+    expect(regra!.vigencia_fim).toBe(HOJE);
   });
 
   test("proximaSessaoDaRegra devolve a menor futura", async () => {
     const prox = await q.proximaSessaoDaRegra(ctx, REGRA);
-    expect(prox).toBe("2026-07-20"); // 06/07 já passou
+    expect(prox).toBe(FUT_1); // o passado já passou
   });
 });

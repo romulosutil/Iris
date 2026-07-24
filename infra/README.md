@@ -9,12 +9,12 @@ rodando Easypanel (Docker Swarm).
 Sobe Postgres + MinIO com paridade de produção; o app roda fora do compose.
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d   # Postgres:5432, MinIO:9000/9001
+docker compose -f infra/docker-compose.yml up -d   # Postgres:5433, MinIO:9000/9001
 cp .env.example .env                               # e preencher DATABASE_URL etc.
 pnpm dev
 ```
 
-`DATABASE_URL=postgres://iris:iris@localhost:5432/iris` (ver compose para MinIO).
+`DATABASE_URL=postgres://iris:iris@localhost:5433/iris` (ver compose para MinIO).
 
 ## Deploy no Easypanel (provisionamento — via única do Rômulo)
 
@@ -77,7 +77,24 @@ via console SQL do serviço.
 pnpm db:generate   # gera SQL a partir de src/db/schema.ts (offline)
 pnpm db:migrate    # aplica em db/migrations (usa MIGRATION_DATABASE_URL)
 pnpm test:rls      # prova o isolamento contra o Postgres (5 casos por papel)
+pnpm seed:clinic   # dados clínicos base (papéis, protocolos)
+pnpm seed:demo     # dados de demonstração para navegar as telas
 ```
+
+`seed:demo` popula dado sintético para o smoke de navegação por papel.
+
+## Gotchas de dev local
+
+- **Porta do Postgres:** o compose mapeia o host em **5433** (evita conflito com
+  outros Postgres locais) → `DATABASE_URL=...@localhost:5433/iris`. Usar 5432 no
+  host não conecta.
+- **`BYPASS_MFA_FOR_DEV=true`:** destrava navegar como papel clínico (coordenador/
+  terapeuta/recepção) sem enrollment de MFA em dev. Só em dev — em produção o boot
+  falha de propósito (fail-closed). Ver `.env.example` e `src/auth/mfa-gate.ts`.
+- **Drizzle desync (`db:migrate` falha):** se o tracking do drizzle ficar atrás do
+  schema, `pnpm db:migrate` aborta. Workaround: aplicar o SQL da migração à mão via
+  `psql` apontando pro container (`psql postgres://iris:iris@localhost:5433/iris -f
+  db/migrations/<arquivo>.sql`) e seguir.
 
 ## Gate de schema no deploy (autodeploy on push ligado)
 
