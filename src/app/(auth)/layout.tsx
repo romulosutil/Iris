@@ -16,7 +16,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             "linear-gradient(90deg, var(--color-spectrum-red), var(--color-spectrum-orange), var(--color-spectrum-yellow), var(--color-spectrum-green), var(--color-spectrum-blue), var(--color-spectrum-violet))",
         }}
       />
-      <div className="w-full max-w-sm">{children}</div>
+      <div className="flex w-full justify-center">{children}</div>
     </main>
   );
 }
