@@ -25,6 +25,26 @@
 
 ---
 
+## 🏁 Sessão 24/07/2026 — Atrito de login com seed (MFA) + dívida de UI — branch `fix/user-mvp`
+
+**Sintoma:** usuário testando com usuários seedados travou na tela de enrollment
+de MFA (`/mfa/setup`) e perguntou "precisa do autenticador para entrar?".
+
+**Diagnóstico (não é bug):** `getTenantContext` (`tenant.ts:109-113`, R6.2.1 hard
+enforcement) redireciona papel clínico (`terapeuta`/`coordenador`) sem MFA cadastrado
+para `/mfa/setup`. Seed cria esses papéis **sem** TOTP enrollado e o `.env` local não
+tinha `BYPASS_MFA_FOR_DEV` → todo seed clínico caía no enrollment no 1º login. Gate
+`mfa-gate.ts` mantém isso fail-closed em produção.
+
+**Resolução do atrito:** `BYPASS_MFA_FOR_DEV=true` no `.env` local (gitignored, escape
+hatch oficial). Zero mudança em código de segurança — enforcement/LGPD intactos em prod.
+
+**Dívida técnica aberta:** **#80** — melhorar UI/UX do `/mfa/setup` (QR code do
+`totpURI`, copiar/baixar backup codes, copy explicando o porquê do MFA clínico, a11y).
+UI atual é funcional mas crua (só chave em texto + lista de códigos).
+
+---
+
 ## 🏁 Sessão 23/07/2026 — Go-live #75 Etapa 1 (fecha #55) + Etapa 2 (triagem #64) — PR #79
 
 **Etapa 1 (#55):** ctx forjável em `"use server"` — 12/12 módulos migrados (core
