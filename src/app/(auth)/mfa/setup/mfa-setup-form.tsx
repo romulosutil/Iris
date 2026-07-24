@@ -102,6 +102,23 @@ function EyeOffIcon({ className = "size-4" }: { className?: string }) {
   );
 }
 
+function AlertIcon({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="square"
+    >
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
 function ShieldLockIcon({ className = "size-4" }: { className?: string }) {
   return (
     <svg
@@ -137,6 +154,8 @@ export function MfaSetupForm() {
   const [confirmouBackup, setConfirmouBackup] = React.useState(false);
   const [copiouSegredo, setCopiouSegredo] = React.useState(false);
   const [copiouBackup, setCopiouBackup] = React.useState(false);
+  const [falhaCopiaSegredo, setFalhaCopiaSegredo] = React.useState(false);
+  const [falhaCopiaBackup, setFalhaCopiaBackup] = React.useState(false);
 
   function iniciar(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -195,14 +214,27 @@ export function MfaSetupForm() {
     try {
       await navigator.clipboard.writeText(texto);
       if (tipo === "segredo") {
+        setFalhaCopiaSegredo(false);
         setCopiouSegredo(true);
         setTimeout(() => setCopiouSegredo(false), 2500);
       } else {
+        setFalhaCopiaBackup(false);
         setCopiouBackup(true);
         setTimeout(() => setCopiouBackup(false), 2500);
       }
     } catch {
-      // Fallback em navegadores restritos
+      // Área de transferência indisponível (navegador restrito, sem HTTPS,
+      // permissão negada). Sinaliza a falha para o usuário não achar que
+      // a cópia funcionou — a chave/códigos seguem visíveis para cópia manual.
+      if (tipo === "segredo") {
+        setCopiouSegredo(false);
+        setFalhaCopiaSegredo(true);
+        setTimeout(() => setFalhaCopiaSegredo(false), 4000);
+      } else {
+        setCopiouBackup(false);
+        setFalhaCopiaBackup(true);
+        setTimeout(() => setFalhaCopiaBackup(false), 4000);
+      }
     }
   }
 
@@ -360,8 +392,9 @@ export function MfaSetupForm() {
                       </div>
                     )}
                     <p className="max-w-xs text-xs text-[var(--text-secondary)]">
-                      No app do celular, toque em <strong>"+"</strong> e
-                      selecione <strong>"Escanear código QR"</strong>.
+                      No app do celular, toque em <strong>&quot;+&quot;</strong>{" "}
+                      e selecione{" "}
+                      <strong>&quot;Escanear código QR&quot;</strong>.
                     </p>
                   </div>
                 ) : (
@@ -402,16 +435,24 @@ export function MfaSetupForm() {
                         onClick={() =>
                           copiarParaTransferencia(segredo, "segredo")
                         }
-                        className="flex w-full items-center justify-center gap-2 text-xs"
+                        className={cn(
+                          "flex w-full items-center justify-center gap-2 text-xs",
+                          falhaCopiaSegredo &&
+                            "border-[var(--status-error-fg)] text-[var(--status-error-fg)]",
+                        )}
                       >
                         {copiouSegredo ? (
                           <CheckMarkIcon className="size-4 text-emerald-600" />
+                        ) : falhaCopiaSegredo ? (
+                          <AlertIcon className="size-4" />
                         ) : (
                           <CopyIcon className="size-4" />
                         )}
                         {copiouSegredo
                           ? "Chave Copiada para a Área de Transferência!"
-                          : "Copiar Chave Manual"}
+                          : falhaCopiaSegredo
+                            ? "Falha ao copiar. Selecione e copie manualmente."
+                            : "Copiar Chave Manual"}
                       </Button>
                     </div>
                   </div>
@@ -511,14 +552,24 @@ export function MfaSetupForm() {
                     onClick={() =>
                       copiarParaTransferencia(backupCodes.join("\n"), "backup")
                     }
-                    className="flex h-auto items-center justify-center gap-1.5 py-1.5 text-xs"
+                    className={cn(
+                      "flex h-auto items-center justify-center gap-1.5 py-1.5 text-xs",
+                      falhaCopiaBackup &&
+                        "border-[var(--status-error-fg)] text-[var(--status-error-fg)]",
+                    )}
                   >
                     {copiouBackup ? (
                       <CheckMarkIcon className="size-3.5 text-emerald-600" />
+                    ) : falhaCopiaBackup ? (
+                      <AlertIcon className="size-3.5" />
                     ) : (
                       <CopyIcon className="size-3.5" />
                     )}
-                    {copiouBackup ? "Copiados!" : "Copiar Todos"}
+                    {copiouBackup
+                      ? "Copiados!"
+                      : falhaCopiaBackup
+                        ? "Falha ao copiar"
+                        : "Copiar Todos"}
                   </Button>
 
                   <Button

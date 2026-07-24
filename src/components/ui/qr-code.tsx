@@ -1,9 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { QRCodeSVG } from "qrcode.react";
 
 /**
  * QR Code Component confiável para exibição da URI otpauth:// do TOTP.
+ *
+ * Renderização 100% local (client-side, offline) via qrcode.react. A URI
+ * otpauth:// contém o segredo do MFA e NUNCA deve ser transmitida a serviços
+ * externos de geração de QR Code — a codificação ocorre inteiramente no
+ * navegador.
  */
 
 interface QrCodeProps {
@@ -22,14 +28,7 @@ export function QrCode({
   alt = "QR Code para configuração de MFA",
   className,
 }: QrCodeProps) {
-  const [error, setError] = React.useState(false);
-
-  const qrUrl = React.useMemo(() => {
-    if (!value) return "";
-    return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}`;
-  }, [value, size]);
-
-  if (error || !value || !qrUrl) {
+  if (!value) {
     return (
       <div
         className="flex size-44 items-center justify-center rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-muted)] p-4 text-center text-xs font-semibold text-[var(--text-secondary)]"
@@ -45,13 +44,12 @@ export function QrCode({
       className={`inline-block rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-white p-3 shadow-[var(--ds-shadow-sm)] ${className ?? ""}`}
       style={{ width: size + 24, height: size + 24 }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={qrUrl}
-        width={size}
-        height={size}
-        alt={alt}
-        onError={() => setError(true)}
+      <QRCodeSVG
+        value={value}
+        size={size}
+        level="M"
+        role="img"
+        aria-label={alt}
         className="block size-full"
       />
     </div>
