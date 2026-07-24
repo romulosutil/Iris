@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Scripts de shell e Dockerfiles rodam DENTRO de container Linux. Com `text=auto`
+# acima, um checkout no Windows os traria em CRLF — e aí o `\r` entra no shebang
+# e o container falha com "no such file or directory", erro que não aponta pra
+# causa. `eol=lf` força LF no working copy em qualquer plataforma.
+*.sh text eol=lf
+Dockerfile* text eol=lf
