@@ -28,10 +28,10 @@ const ctxTerapeuta = { clinicId: CLINIC, userId: U_TERAPEUTA, role: "terapeuta" 
 
 let owner: ReturnType<typeof postgres>;
 let appSql: typeof import("@/db/client").sql;
-let confirmarEvidencia: typeof import("./actions").confirmarEvidencia;
-let invalidarEvidencia: typeof import("./actions").invalidarEvidencia;
-let reclassificarEvidencia: typeof import("./actions").reclassificarEvidencia;
-let devolverComDuvida: typeof import("./actions").devolverComDuvida;
+let confirmarEvidencia: typeof import("./logic").confirmarEvidencia;
+let invalidarEvidencia: typeof import("./logic").invalidarEvidencia;
+let reclassificarEvidencia: typeof import("./logic").reclassificarEvidencia;
+let devolverComDuvida: typeof import("./logic").devolverComDuvida;
 let GOAL_ID: string;
 let MARCO_SIMPLES_ID: string;
 let ALVO_VALIDO: { goal_id: string };
@@ -42,7 +42,7 @@ const EV6 = "00000000-0000-0000-0000-00000000de26";
 describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
   beforeAll(async () => {
     ({ confirmarEvidencia, invalidarEvidencia, reclassificarEvidencia, devolverComDuvida } = await import(
-      "./actions"
+      "./logic"
     ));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });

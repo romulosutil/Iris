@@ -30,7 +30,7 @@ const EX_UNICO = "00000000-0000-0000-0000-00000e0a0002"; // dominio com 1 marco 
 
 let owner: ReturnType<typeof postgres>;
 let appSql: typeof import("@/db/client").sql;
-let A: typeof import("./actions");
+let A: typeof import("./logic");
 
 async function seed() {
   await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
@@ -83,7 +83,7 @@ async function seed() {
 
 describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
   beforeAll(async () => {
-    A = await import("./actions");
+    A = await import("./logic");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
   });

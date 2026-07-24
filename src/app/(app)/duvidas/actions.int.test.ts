@@ -36,12 +36,12 @@ const ctxTerapeutaForaEquipe = {
 
 let owner: ReturnType<typeof postgres>;
 let appSql: typeof import("@/db/client").sql;
-let responderQuery: typeof import("./actions").responderQuery;
+let responderQuery: typeof import("./logic").responderQuery;
 let ALVO_VALIDO: { goal_id: string };
 
 describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
   beforeAll(async () => {
-    ({ responderQuery } = await import("./actions"));
+    ({ responderQuery } = await import("./logic"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 

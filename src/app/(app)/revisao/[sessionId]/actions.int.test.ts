@@ -19,7 +19,7 @@ const EX_PEND = "00000000-0000-0000-0000-00000e0e0da1";
 
 let owner: ReturnType<typeof postgres>;
 let appSql: typeof import("@/db/client").sql;
-let A: typeof import("./actions");
+let A: typeof import("./logic");
 
 async function seedExtracoes() {
   await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
@@ -32,7 +32,7 @@ async function seedExtracoes() {
 
 describe.skipIf(!hasDb)("revisão de extrações", () => {
   beforeAll(async () => {
-    A = await import("./actions");
+    A = await import("./logic");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, session, extraction RESTART IDENTITY CASCADE`;
