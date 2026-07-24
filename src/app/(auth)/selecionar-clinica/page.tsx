@@ -20,8 +20,8 @@ export default async function SelecionarClinicaPage() {
   if (r.status !== "needs_clinic_selection") redirect("/");
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="font-display text-[var(--text-primary)] text-2xl font-bold">
+    <div className="flex w-full max-w-sm flex-col gap-6">
+      <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">
         Selecione a clínica
       </h1>
       <ul className="flex flex-col gap-3">
