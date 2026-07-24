@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 // side-effect e importa o núcleo testável dinamicamente.
 vi.mock("server-only", () => ({}));
 const { checkInSessao, listarSessoesDoDia, marcarEstado } = await import(
-  "./actions"
+  "./logic"
 );
 const { pendentesDeConsolidacao, reposicoesPendentes } = await import(
   "./queries"

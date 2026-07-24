@@ -19,12 +19,12 @@ const ctxRecep = { clinicId: CLINIC_A, userId: U_COORD, role: "admin_recepcao" }
 const CRITERIO = { tipo: "n_acertos_m_sessoes", n: 3, m: 3 } as const;
 
 let owner: ReturnType<typeof postgres>;
-let A: typeof import("./actions");
+let A: typeof import("./logic");
 let appSql: typeof import("@/db/client").sql;
 
 describe.skipIf(!hasDb)("metas · CRUD + transições", () => {
   beforeAll(async () => {
-    A = await import("./actions");
+    A = await import("./logic");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
