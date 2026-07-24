@@ -6,39 +6,42 @@ Não recopia conteúdo de outros docs — **linka** e rastreia estado.
 
 > **Definição de escopo do fechamento (decisão travada, spec A7/A8):** o MVP
 > fecha por **6.1–6.3 + 6.6** (hardening RLS + MFA/isolamento + retenção/expurgo
-> + polimento família). O **ditado de voz (6.4/6.5) NÃO gatilha o aceite do
-> MVP** — é fast-follow com ASR real desabilitado até DPA assinado
-> (`docs/legal/dpa-asr-audio.md`).
+>
+> - polimento família). O **ditado de voz (6.4/6.5) NÃO gatilha o aceite do
+>   MVP** — é fast-follow com ASR real desabilitado até DPA assinado
+>   (`docs/legal/dpa-asr-audio.md`).
 
 ---
 
 ## 1. Hardening de segurança / multi-tenancy — ✅ shipado
 
-| Item | Estado | Onde |
-| --- | --- | --- |
-| RLS hardening PX1–PX4 (colunas imutáveis por grant) | ✅ | migração `0044`, PR #66 |
-| Teste `has_column_privilege` prova imutabilidade real | ✅ | `src/db/rls-hardening-px.int.test.ts` |
-| MFA TOTP + backup codes (Better-Auth) | ✅ | migração `0047`, PR #71 |
-| Enforcement MFA central p/ papel clínico | ✅ | `getTenantContext` (`tenant.ts`) |
-| `BYPASS_MFA_FOR_DEV` hard-fail em produção | ✅ | `src/auth/mfa-gate.ts`, PR #70 |
-| Isolamento recepção (0 leitura clínica; auditoria mascarada) | ✅ | migração `0046`, view `audit_log_mascarado` |
+| Item                                                         | Estado | Onde                                        |
+| ------------------------------------------------------------ | ------ | ------------------------------------------- |
+| RLS hardening PX1–PX4 (colunas imutáveis por grant)          | ✅     | migração `0044`, PR #66                     |
+| Teste `has_column_privilege` prova imutabilidade real        | ✅     | `src/db/rls-hardening-px.int.test.ts`       |
+| MFA TOTP + backup codes (Better-Auth)                        | ✅     | migração `0047`, PR #71                     |
+| Enforcement MFA central p/ papel clínico                     | ✅     | `getTenantContext` (`tenant.ts`)            |
+| `BYPASS_MFA_FOR_DEV` hard-fail em produção                   | ✅     | `src/auth/mfa-gate.ts`, PR #70              |
+| Isolamento recepção (0 leitura clínica; auditoria mascarada) | ✅     | migração `0046`, view `audit_log_mascarado` |
 
 **Pendência de verificação manual (não bloqueia código, bloqueia piloto):**
+
 - [ ] Smoke manual do fluxo MFA `enable → verify → login-challenge` num app
       rodando com app autenticador real (o schema casa com o contrato do plugin;
       typecheck/build validam o wiring, mas o round-trip real é manual).
 
 ## 2. Retenção & Expurgo (LGPD) — ✅ shipado
 
-| Item | Estado | Onde |
-| --- | --- | --- |
-| `app_purgar_paciente(uuid,text)` (erasure físico auditado) | ✅ | migração `0045`, PR #68 |
-| Pseudonimização da trilha `audit_log` do sujeito no expurgo | ✅ | mesma migração; `[[audit-log-mutacao-via-definer-bypassrls]]` |
-| `clinic.politica_retencao_meses` + regra `MAX(18a, alta+10a)` | ✅ | `app_paciente_expurgavel(uuid)` |
-| Verificação síncrona de audit no export | ✅ (já existia) | `export.ts:82-85` |
-| Política de retenção redigida | ✅ rascunho | `docs/legal/politica-retencao-dados.md` |
+| Item                                                          | Estado          | Onde                                                          |
+| ------------------------------------------------------------- | --------------- | ------------------------------------------------------------- |
+| `app_purgar_paciente(uuid,text)` (erasure físico auditado)    | ✅              | migração `0045`, PR #68                                       |
+| Pseudonimização da trilha `audit_log` do sujeito no expurgo   | ✅              | mesma migração; `[[audit-log-mutacao-via-definer-bypassrls]]` |
+| `clinic.politica_retencao_meses` + regra `MAX(18a, alta+10a)` | ✅              | `app_paciente_expurgavel(uuid)`                               |
+| Verificação síncrona de audit no export                       | ✅ (já existia) | `export.ts:82-85`                                             |
+| Política de retenção redigida                                 | ✅ rascunho     | `docs/legal/politica-retencao-dados.md`                       |
 
 **Diferido (dívida registrada, não bloqueia MVP):**
+
 - [ ] Server action / UI de purga de paciente (hoje SQL-only; mesma dívida de
       `app_purgar_report`).
 - [ ] Job automático de expurgo — **não construir**; expurgo é gatilho manual
@@ -46,13 +49,14 @@ Não recopia conteúdo de outros docs — **linka** e rastreia estado.
 
 ## 3. Polimento família — ✅ (fatia 6.6)
 
-| Item | Estado | Onde |
-| --- | --- | --- |
-| `data-mode="familia"` ativado no cartão de relatório da família | ✅ | `src/app/(app)/relatorios/familia-report.tsx` |
-| Tokens de temperatura família (design-system §2) | ✅ | `src/styles/globals.css` |
-| a11y sem regressão (axe WCAG 2.1 AA) | ✅ | `src/app/(app)/relatorios/a11y.test.tsx` |
+| Item                                                            | Estado | Onde                                          |
+| --------------------------------------------------------------- | ------ | --------------------------------------------- |
+| `data-mode="familia"` ativado no cartão de relatório da família | ✅     | `src/app/(app)/relatorios/familia-report.tsx` |
+| Tokens de temperatura família (design-system §2)                | ✅     | `src/styles/globals.css`                      |
+| a11y sem regressão (axe WCAG 2.1 AA)                            | ✅     | `src/app/(app)/relatorios/a11y.test.tsx`      |
 
 **Follow-up (fora de escopo 6.6):**
+
 - [ ] Alinhar o PDF exportado (`src/lib/report/familia/build-html.ts`, CSS
       inline próprio) à paleta de temperatura família.
 
@@ -81,7 +85,32 @@ Easypanel + Postgres puro + MinIO). Itens de infra são "confirmar antes / via
 - [ ] Gate de migração no deploy (stage `migrate`, role dona, `exit!=0` aborta —
       lição `[[deploy-schema-gate]]`).
 - [ ] Backup/retenção passa a ser responsabilidade da operação (some Supabase
-      gerenciado).
+      gerenciado). Scripts e runbook entregues em `infra/backup/` +
+      `infra/README.md` §Backup e restore (LGPD); falta a ação humana no VPS
+      (abaixo).
+- [ ] Serviço de backup provisionado no Easypanel (Dockerfile `infra/backup/`,
+      volume em `/backups`, bucket `iris-backups` no MinIO, schedule `0 6 * * *`
+      = 03:00 de Brasília) rodando com a **role dona** (`iris`), nunca
+      `iris_app` — NOBYPASSRLS faria o dump sair incompleto em silêncio.
+- [ ] Primeira execução conferida: cada ciclo gera **um par** de arquivos com o
+      mesmo timestamp — `iris-<ts>.dump` **e** `iris-<ts>.globals.sql`
+      (`pg_dumpall --globals-only`) — em `/backups` **e** no bucket. Só um dos
+      dois = backup quebrado: `pg_dump` não carrega roles de cluster
+      (`app_role`/`iris_auth`), e restaurar sem globals dá 37 tabelas com **0
+      policies de RLS**, sem erro fatal.
+- [ ] Teste de restore executado e verde (`verify-restore.sh` exit 0: tabelas,
+      RLS ativo + contagem de policies, row counts, roles/grants, e presença do
+      `.globals.sql` com as roles). É o que fecha o item LGPD; reexecutar
+      mensalmente e após toda migração que mexa em RLS/roles, com registro no
+      `BACKLOG.md`.
+- [ ] **DR em cluster novo testado à mão** (runbook em `infra/README.md`):
+      restaurar globals + dump num Postgres vazio, re-setar as senhas das roles
+      de login (os globals vêm com `--no-role-passwords`), rodar `pnpm test:rls`
+      contra o restaurado, só então religar o app. `verify-restore.sh` **não
+      cobre** este cenário — ele restaura no mesmo cluster, onde as roles já
+      existem. Item separado, exige um segundo cluster Postgres.
+- [ ] Risco aceito e registrado: backup no mesmo VPS não cobre perda total do
+      host; réplica off-site em outro provedor BR é fast-follow pós-piloto.
 - [ ] Variáveis de ambiente de produção conferidas (`.env.example`).
 
 ## 6. Qualidade — gate técnico

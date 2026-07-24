@@ -31,8 +31,9 @@ pnpm dev
    (`openssl rand -base64 32`), `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`.
    `ANTHROPIC_API_KEY` só na Fase 3.
 7. **Segurança do SO** (responsabilidade nossa): SSH só por chave, firewall
-   (80/443/SSH), `unattended-upgrades`, `pg_dump` agendado + restore testado
-   (item LGPD antes de dado real).
+   (80/443/SSH), `unattended-upgrades`. Backup + restore testado: ver
+   [§Backup e restore (LGPD)](#backup-e-restore-lgpd) — **item LGPD, bloqueia
+   dado real**.
 
 ## Banco — role de runtime (CRÍTICO para o RLS)
 
@@ -94,7 +95,7 @@ pnpm seed:demo     # dados de demonstração para navegar as telas
 - **Drizzle desync (`db:migrate` falha):** se o tracking do drizzle ficar atrás do
   schema, `pnpm db:migrate` aborta. Workaround: aplicar o SQL da migração à mão via
   `psql` apontando pro container (`psql postgres://iris:iris@localhost:5433/iris -f
-  db/migrations/<arquivo>.sql`) e seguir.
+db/migrations/<arquivo>.sql`) e seguir.
 
 ## Gate de schema no deploy (autodeploy on push ligado)
 
@@ -113,6 +114,300 @@ passo_grade_min` inexistentes). A barreira é o stage **`migrate`** do Dockerfil
   do app (app_role não tem DDL) — mesma separação de role do `pnpm db:migrate`.
 
 `MIGRATION_DATABASE_URL` entra como env var do serviço `migrate` (não do app).
+
+## Backup e restore (LGPD)
+
+Iris guarda **dado clínico de menor de idade**. A LGPD (art. 46) exige medida de
+segurança que cubra perda e alteração acidental — na prática, backup **com
+restore comprovado**. Backup que nunca foi restaurado não conta como plano de
+recuperação. Este é o item "`pg_dump` agendado + restore testado" da **Etapa 5
+da issue #75**, e ele **bloqueia o piloto com dado real**.
+
+Scripts em `infra/backup/`: `backup.sh` (dump + globals + verificação + cópia
+MinIO + prune), `restore.sh` (aplica os globals e restaura um dump num alvo),
+`verify-restore.sh` (restaura o dump mais recente num banco descartável, no
+mesmo cluster, e valida).
+
+### CRÍTICO — o backup são DOIS arquivos, não um (`.dump` + `.globals.sql`)
+
+`pg_dump` dumpa **um banco**. As roles `app_role` e `iris_auth` — as mesmas que
+todo `CREATE POLICY ... TO` e todo `GRANT` referenciam — são objetos de
+**cluster**, e **nunca entram no dump**. Restaurando num cluster Postgres novo
+(o cenário real de desastre), o `pg_restore` recria as tabelas e depois **falha
+todos os GRANTs/policies com `role does not exist` — emitindo só warning, exit
+0**. O resultado medido, num PG17 vazio, antes da correção:
+
+| | só `.dump` (errado) | `.globals.sql` + `.dump` (hoje) |
+| --- | --- | --- |
+| Tabelas | 37 | 37 |
+| **Policies de RLS** | **0** | **85** |
+| Tabelas com `relrowsecurity` | 0 | 33 |
+| Roles `app_role`/`iris_auth` | 0 | 2 |
+
+Ou seja: banco com dado clínico de menor e **zero isolamento multi-tenant**, sem
+nenhum erro fatal visível. É por isso que `backup.sh` gera **dois artefatos por
+ciclo, com o mesmo timestamp**:
+
+- `iris-<ts>.dump` — `pg_dump -Fc` (o banco);
+- `iris-<ts>.globals.sql` — `pg_dumpall --globals-only --no-role-passwords`
+  (roles e grants de cluster).
+
+Os dois são um **par indivisível**: `backup.sh` valida os dois **antes** de
+qualquer rename (se um falhar, nenhum vira "o backup do dia"), sobe os dois pro
+MinIO, e prune os dois pela mesma retenção.
+
+**`--no-role-passwords` é deliberado:** hash de senha é credencial e o arquivo
+vai pro MinIO. A consequência operacional é real e está nos dois runbooks
+abaixo: **depois de restaurar num cluster novo, o operador precisa re-setar as
+senhas das roles de login** (`ALTER ROLE ... PASSWORD '...'`), com os valores do
+provisionamento. Policies e GRANTs **não** dependem de senha — só o login
+depende.
+
+### CRÍTICO — o dump roda com a role dona (`iris`), nunca com `iris_app`
+
+`iris_app` é **NOBYPASSRLS** (§Banco — role de runtime). O `pg_dump` faz `SELECT`
+nas tabelas como o usuário conectado: rodando como `iris_app`, **a RLS filtra as
+linhas e o dump sai incompleto — sem erro, sem aviso, exit 0**. Você só descobre
+no dia do restore, com o banco de prod já perdido.
+
+- `PGUSER` do serviço de backup = a **role dona** (`iris`, a mesma de
+  `MIGRATION_DATABASE_URL`).
+- Nunca reaproveitar a `DATABASE_URL` do app aqui.
+- O `verify-restore.sh` compara **contagem de linhas por tabela** com a origem
+  justamente para pegar esse erro; um dump feito com `iris_app` falha o verify.
+
+### Onde o backup fica (e o risco aceito)
+
+Destino duplo, **ambos no mesmo VPS**: volume persistente local (`/backups`) +
+cópia no MinIO local (`iris-minio`, bucket `iris-backups`).
+
+> **Risco aceito conscientemente para o piloto:** backup no mesmo host **não
+> sobrevive à perda total do VPS**. Cobre corrupção de dado, erro humano e
+> `DROP` acidental — não cobre desastre de host. Réplica off-site em outro
+> provedor BR é **fast-follow pós-piloto**, não pré-requisito do piloto.
+
+### Provisionamento no Easypanel
+
+O runner é um **serviço Easypanel dedicado com schedule**, não cron do SO: fica
+versionado no repo e com log no painel.
+
+1. **Criar o bucket** no MinIO (uma vez), com o `mc` já apontado pro servidor:
+
+   ```bash
+   mc mb --ignore-existing iris/iris-backups
+   ```
+
+2. **Novo serviço** → Code Source `romulosutil/Iris` → Builder **Dockerfile**,
+   path `infra/backup/Dockerfile`, build context na raiz, branch `main`.
+3. **Volume persistente** montado em **`/backups`** (senão o dump some a cada
+   restart do container).
+4. **Env vars** do serviço:
+
+   ```
+   PGHOST=iris-postgres      PGPORT=5432
+   PGUSER=iris               # role DONA — ver aviso acima
+   PGPASSWORD=<senha da role dona>
+   PGDATABASE=iris
+   BACKUP_DIR=/backups       RETENTION_DAYS=30
+   S3_ENDPOINT=http://iris-minio:9000
+   S3_ACCESS_KEY=<...>       S3_SECRET_KEY=<...>
+   S3_BACKUP_BUCKET=iris-backups
+   ```
+
+5. **Schedule**: diário às **03:00 de Brasília**. O container roda em **UTC**, e
+   Brasília é UTC−3 (sem horário de verão desde 2019), então o cron é:
+
+   ```
+   0 6 * * *
+   ```
+
+   Conferir depois no log do painel se o carimbo do arquivo bate com 03:00 local.
+
+6. **Conferir a primeira execução**: rodar o serviço à mão uma vez e checar que
+   apareceram **os dois arquivos do par**, com o mesmo timestamp, em `/backups`
+   **e** no bucket:
+
+   ```
+   iris-<YYYYmmddTHHMMSSZ>.dump
+   iris-<YYYYmmddTHHMMSSZ>.globals.sql
+   ```
+
+   Só um dos dois = backup quebrado, mesmo que o exit tenha sido 0 (não deveria
+   acontecer: o rename é atômico e só ocorre depois dos dois validarem — se você
+   vir isso, investigue antes de confiar no backup). `backup.sh` sai != 0 se o
+   `pg_restore --list` do dump falhar **ou** se o `.globals.sql` sair vazio / sem
+   `CREATE ROLE`, e só faz o prune por `RETENTION_DAYS` **depois** que o par
+   passou.
+
+> `backup.sh` **não aceita argumento** e sai 2 se receber um. É proposital: o
+> `Dockerfile` usa `CMD` (não `ENTRYPOINT`), então
+> `docker compose run --rm backup ./verify-restore.sh` **substitui** o comando.
+> Com o `ENTRYPOINT` antigo o script vinha como argv do `backup.sh`, que o
+> ignorava e rodava mais um backup saindo 0 — o operador lia "exit 0" e marcava
+> o teste de restore como feito sem ele jamais ter rodado.
+
+### Runbook — teste de restore (é isto que fecha o checkbox)
+
+Rodar dentro do container do serviço de backup (Easypanel → Console):
+
+```bash
+# 1. Gera um backup fresco e confirma exit 0
+./backup.sh; echo "exit=$?"
+
+# 2. Restaura o dump mais recente num banco descartável e valida
+./verify-restore.sh; echo "exit=$?"
+```
+
+`verify-restore.sh` sai **0** só se, no banco restaurado: contagem de tabelas
+bate, **RLS continua ativo e o número de policies é igual ao da origem**, os
+row counts batem, roles/grants foram preservados **e existe o `.globals.sql`
+irmão do dump escolhido, contendo `CREATE ROLE` para `app_role` e `iris_auth`**.
+Ele dropa o banco descartável no fim.
+
+> **Limitação deliberada — e é ela que deixou o furo passar antes:**
+> `verify-restore.sh` restaura no **mesmo cluster** da origem, onde `app_role` e
+> `iris_auth` **já existem**. Nesse cenário até um restore sem globals
+> "funcionaria". Por isso ele agora assere o par `.globals.sql`, mas isso **não
+> substitui** o teste de cluster novo — esse é o runbook de DR abaixo, e é
+> manual, porque exige um segundo cluster Postgres vazio.
+
+Se sair != 0, **o backup não vale** — não subir dado real até resolver. Falha
+mais provável, na ordem: `PGUSER` não é a role dona (row counts menores),
+`.globals.sql` ausente ou sem as roles, policies faltando, ou volume `/backups`
+não persistente.
+
+Registrar o resultado (data + exit code) no `BACKLOG.md` — é a evidência que
+fecha o item da Etapa 5 da #75.
+
+### Runbook — restore real em incidente
+
+Banco de produção corrompido ou perdido. **A ordem importa:**
+
+1. **Parar o app primeiro** (Easypanel → serviço do app → Stop). Restaurar com o
+   app escrevendo em cima gera dado meio-velho meio-novo, pior que a perda.
+2. **Restaurar** o dump escolhido (ou `latest`) no alvo:
+
+   ```bash
+   TARGET_DATABASE_URL=postgres://iris:<senha>@iris-postgres:5432/iris \
+   I_UNDERSTAND_THIS_OVERWRITES=yes \
+   ./restore.sh latest
+   ```
+
+   `restore.sh` é **destrutivo** e exige `I_UNDERSTAND_THIS_OVERWRITES=yes` para
+   alvo de produção — é de propósito, não contornar.
+
+   O script resolve sozinho o `.globals.sql` irmão do dump escolhido e o aplica
+   **antes** do `pg_restore`. Se não achar o irmão, **aborta** — restaurar sem
+   globals produz banco sem RLS. Os globals são aplicados com
+   `psql -v ON_ERROR_STOP=0`: erro de role já existente (`role "iris" already
+   exists`) é **esperado e benigno** quando o cluster já é o antigo.
+
+3. **Re-setar as senhas das roles de login.** Os globals vieram sem senha
+   (`--no-role-passwords`), então quem autentica precisa de senha de volta,
+   com os valores do provisionamento:
+
+   ```sql
+   ALTER ROLE iris_app        PASSWORD '<senha do provisionamento>';
+   ALTER ROLE iris_auth_login PASSWORD '<senha do provisionamento>';
+   ```
+
+   Num restore no cluster que já existia, as senhas antigas continuam lá e este
+   passo é no-op — mas confira, em vez de assumir. Policies e GRANTs **não**
+   dependem disso; só o login depende.
+4. **Validar o isolamento antes de religar**: rodar `pnpm test:rls` apontando
+   pro banco restaurado. Restore que perdeu policy vira vazamento entre
+   clínicas no minuto em que o app voltar. Sem `test:rls` verde, **não religar**.
+5. **Religar o app** e conferir login + uma leitura por papel.
+6. Registrar o incidente (janela de dado perdida = do último backup até a falha)
+   — dado de paciente perdido é comunicação ao titular, não só nota técnica.
+
+### Runbook — DR em cluster novo (o VPS morreu, subiu outro)
+
+Cenário diferente do anterior: **o cluster Postgres é novo e vazio**. Nada de
+`app_role`, `iris_auth` ou grants existe ali. É exatamente o cenário que o
+`verify-restore.sh` **NÃO cobre** (ele testa no mesmo cluster, onde as roles já
+existem) — este runbook é manual e não tem atalho.
+
+Pré-requisito: ter em mãos **o par completo** (`iris-<ts>.dump` +
+`iris-<ts>.globals.sql`) e as senhas do provisionamento das roles de login.
+
+1. **Subir Postgres novo** (mesma major version, PG 17) e o serviço de backup
+   com o par de arquivos acessível em `/backups`.
+2. **Restaurar o par** — `restore.sh` aplica os globals primeiro e só então o
+   `pg_restore`:
+
+   ```bash
+   TARGET_DATABASE_URL=postgres://iris:<senha>@iris-postgres:5432/iris \
+   I_UNDERSTAND_THIS_OVERWRITES=yes \
+   ./restore.sh /backups/iris-<ts>.dump
+   ```
+
+   Erros benignos de `CREATE ROLE` ao aplicar globals são esperados (o cluster
+   novo já tem `iris`). Erro **fatal** aqui é abortar e investigar.
+3. **Re-setar as senhas das roles de login** (obrigatório aqui — no cluster novo
+   elas nascem sem senha e **nada autentica**):
+
+   ```sql
+   ALTER ROLE iris_app        PASSWORD '<senha do provisionamento>';
+   ALTER ROLE iris_auth_login PASSWORD '<senha do provisionamento>';
+   ```
+
+4. **Conferir que o isolamento veio junto**, antes de qualquer app tocar o
+   banco. Rodar `pnpm test:rls` contra o banco restaurado; e olhar os números
+   à mão, comparando com a tabela do topo desta seção:
+
+   ```sql
+   SELECT count(*) FROM pg_policies;                          -- espera-se 85
+   SELECT count(*) FROM pg_class WHERE relrowsecurity;         -- espera-se 33
+   SELECT rolname FROM pg_roles WHERE rolname IN ('app_role','iris_auth');
+   ```
+
+   **`0` policies = os globals não foram aplicados.** Parar, não religar nada,
+   voltar ao passo 2.
+5. **Só então religar o app**, apontado pro cluster novo, e conferir login +
+   uma leitura por papel.
+6. Registrar tudo no `BACKLOG.md` (data, timestamp do par usado, exit codes,
+   números do passo 4).
+
+### `SKIP_GLOBALS=yes` — escape hatch, com o preço explícito
+
+`restore.sh` **aborta** se não achar o `.globals.sql` irmão do dump. Para seguir
+mesmo assim, só com a variável explícita:
+
+```bash
+SKIP_GLOBALS=yes ./restore.sh <dump>
+```
+
+O script loga aviso alto e segue. O que você perde:
+
+- Num **cluster novo**: todo `GRANT`/`CREATE POLICY ... TO app_role` falha com
+  `role does not exist` — banco com dado clínico e **RLS não-funcional**, sem
+  erro fatal. É literalmente o furo 37 tabelas / **0 policies** da tabela lá em
+  cima.
+- Num **cluster onde as roles já existem**: normalmente inócuo — é o único caso
+  em que usar isto é defensável (ex.: restaurar um dump antigo, anterior aos
+  globals, num cluster já provisionado).
+
+Regra: **nunca em DR de verdade.** Se você não tem certeza de que as roles já
+existem no alvo, você não tem o direito de usar esta flag.
+
+### Cadência — o teste de restore não é one-shot
+
+Backup apodrece em silêncio: schema muda, role muda, volume enche. Reexecutar o
+runbook de teste de restore:
+
+- **Mensalmente**, como rotina de operação; e
+- **após toda migração que mexa em RLS, policies, roles ou grants** — são
+  exatamente as coisas que o `pg_dump` **não** carrega (roles são de cluster) e
+  que o `verify` checa.
+
+O runbook de **DR em cluster novo** tem cadência própria e mais folgada
+(exige subir um segundo Postgres vazio): reexecutar **a cada mudança de role**
+(`CREATE ROLE` novo na migração) e pelo menos **uma vez antes do go-live com
+dado real**. `verify-restore.sh` verde não é evidência para este item.
+
+Cada execução vai registrada no `BACKLOG.md` (data + exit code + o que mudou
+desde a anterior). Sem registro, considerar não testado.
 
 ## Notas
 
