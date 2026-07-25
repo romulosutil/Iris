@@ -50,7 +50,11 @@ services:
   backup:
     profiles: ["backup"]
     build:
-      context: ./backup
+      # Contexto na RAIZ do repo (não em ./backup) para bater com o que o
+      # Easypanel faz em produção. Com contextos diferentes, um `COPY` que
+      # funciona aqui quebra lá — e o teste local não pega.
+      context: ..
+      dockerfile: infra/backup/Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
