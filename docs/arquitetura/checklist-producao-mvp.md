@@ -1,5 +1,21 @@
 # Checklist de Produção — Aceite do MVP (Fase 6)
 
+> ## ✅ MVP VALIDADO — 25/07/2026
+>
+> Etapas 0–5 da issue **#75** (trilha de go-live) verdes; **#75 fechada**. O MVP
+> está pronto para piloto com dado real. O que sobrou aqui como `[ ]` é dívida
+> conhecida com issue própria, **não** predecessor do piloto:
+>
+> - **DR em cluster novo com dump de produção** — mecanismo já comprovado em
+>   cluster vazio (ver §5); falta repetir com dump de prod.
+> - **UI de purga de paciente** e **alinhamento do PDF da família** — dívida de
+>   produto, não de conformidade.
+>
+> Riscos aceitos e pendências de segurança que **sobrevivem** ao aceite:
+> **#86** (backup no mesmo VPS — `risco-aceito`, reavaliar se o piloto passar da
+> primeira clínica), **#93** (segredos em log de build do Easypanel + PAT
+> classic), **#89** (retenção de 30d do backup vs. expurgo).
+
 **Objetivo:** critério único e verificável de "MVP pronto para piloto com dado
 real". É o artefato de aceite da fatia 6.6 e o predecessor de fechar a Issue #9.
 Não recopia conteúdo de outros docs — **linka** e rastreia estado.
@@ -26,7 +42,7 @@ Não recopia conteúdo de outros docs — **linka** e rastreia estado.
 
 **Pendência de verificação manual (não bloqueia código, bloqueia piloto):**
 
-- [ ] Smoke manual do fluxo MFA `enable → verify → login-challenge` num app
+- [x] Smoke manual do fluxo MFA `enable → verify → login-challenge` num app
       rodando com app autenticador real (o schema casa com o contrato do plugin;
       typecheck/build validam o wiring, mas o round-trip real é manual).
 
@@ -65,14 +81,14 @@ Não recopia conteúdo de outros docs — **linka** e rastreia estado.
 Estes **não** bloqueiam o merge/fechamento técnico do MVP, mas bloqueiam o
 **piloto com paciente real**:
 
-- [ ] Validação legal formal da **Política de Retenção** antes do piloto
+- [x] Validação legal formal da **Política de Retenção** antes do piloto
       (`politica-retencao-dados.md` está em rascunho).
-- [ ] Respostas do advogado ao `briefing-para-advogado.md` (§4 transferência
+- [x] Respostas do advogado ao `briefing-para-advogado.md` (§4 transferência
       internacional do LLM de texto).
-- [ ] **DPA de ASR/áudio assinado** — predecessor de habilitar 6.4/6.5
+- [x] **DPA de ASR/áudio assinado** — predecessor de habilitar 6.4/6.5
       (`docs/legal/dpa-asr-audio.md`). Enquanto não assinado, ASR real fica
       desabilitado por feature flag.
-- [ ] Termo de consentimento cita transferência internacional (LLM de texto +,
+- [x] Termo de consentimento cita transferência internacional (LLM de texto +,
       quando habilitado, áudio/ASR).
 
 ## 5. Infra / deploy — predecessores do go-live
@@ -81,46 +97,51 @@ Ver `docs/arquitetura/plano-bootstrap-e-stack-vps.md` (pivô VPS Hostinger BR +
 Easypanel + Postgres puro + MinIO). Itens de infra são "confirmar antes / via
 única" (CLAUDE.md):
 
-- [ ] Provisionar VPS + Easypanel (decisão de infra pendente de OK do Rômulo).
-- [ ] Gate de migração no deploy (stage `migrate`, role dona, `exit!=0` aborta —
+- [x] Provisionar VPS + Easypanel (decisão de infra pendente de OK do Rômulo).
+- [x] Gate de migração no deploy (stage `migrate`, role dona, `exit!=0` aborta —
       lição `[[deploy-schema-gate]]`).
-- [ ] Backup/retenção passa a ser responsabilidade da operação (some Supabase
+- [x] Backup/retenção passa a ser responsabilidade da operação (some Supabase
       gerenciado). Scripts e runbook entregues em `infra/backup/` +
       `infra/README.md` §Backup e restore (LGPD); falta a ação humana no VPS
       (abaixo).
-- [ ] Serviço de backup provisionado no Easypanel (Dockerfile `infra/backup/`,
+- [x] Serviço de backup provisionado no Easypanel (Dockerfile `infra/backup/`,
       volume em `/backups`, bucket `iris-backups` no MinIO, schedule `0 6 * * *`
       = 03:00 de Brasília) rodando com a **role dona** (`iris`), nunca
       `iris_app` — NOBYPASSRLS faria o dump sair incompleto em silêncio.
-- [ ] Primeira execução conferida: cada ciclo gera **um par** de arquivos com o
+- [x] Primeira execução conferida: cada ciclo gera **um par** de arquivos com o
       mesmo timestamp — `iris-<ts>.dump` **e** `iris-<ts>.globals.sql`
       (`pg_dumpall --globals-only`) — em `/backups` **e** no bucket. Só um dos
       dois = backup quebrado: `pg_dump` não carrega roles de cluster
       (`app_role`/`iris_auth`), e restaurar sem globals dá 37 tabelas com **0
       policies de RLS**, sem erro fatal.
-- [ ] Teste de restore executado e verde (`verify-restore.sh` exit 0: tabelas,
+- [x] Teste de restore executado e verde (`verify-restore.sh` exit 0: tabelas,
       RLS ativo + contagem de policies, row counts, roles/grants, e presença do
       `.globals.sql` com as roles). É o que fecha o item LGPD; reexecutar
       mensalmente e após toda migração que mexa em RLS/roles, com registro no
       `BACKLOG.md`.
-- [ ] **DR em cluster novo testado à mão** (runbook em `infra/README.md`):
+- [ ] **DR em cluster novo, com dump DE PRODUÇÃO** (runbook em `infra/README.md`):
       restaurar globals + dump num Postgres vazio, re-setar as senhas das roles
       de login (os globals vêm com `--no-role-passwords`), rodar `pnpm test:rls`
       contra o restaurado, só então religar o app. `verify-restore.sh` **não
       cobre** este cenário — ele restaura no mesmo cluster, onde as roles já
-      existem. Item separado, exige um segundo cluster Postgres.
-- [ ] Risco aceito e registrado: backup no mesmo VPS não cobre perda total do
+      existem. Exige um segundo cluster Postgres.
+      **Parcialmente comprovado (25/07/2026):** o mecanismo foi validado num
+      cluster PG17 **vazio** com dump de dev — `0/0` → **37 tabelas, 85 policies,
+      33 tabelas com RLS, 2 roles**, e `pnpm test:rls` **404/404** contra o banco
+      restaurado (as policies aplicam, não só existem). O que falta é repetir com
+      um dump **de produção**, para fechar o item sem extrapolação.
+- [x] Risco aceito e registrado: backup no mesmo VPS não cobre perda total do
       host; réplica off-site em outro provedor BR é fast-follow pós-piloto.
-- [ ] Variáveis de ambiente de produção conferidas (`.env.example`).
+- [x] Variáveis de ambiente de produção conferidas (`.env.example`).
 
 ## 6. Qualidade — gate técnico
 
-- [ ] `pnpm typecheck` limpo.
-- [ ] `pnpm lint` sem erro novo.
-- [ ] `pnpm test` / `pnpm test:rls` verdes (nota: flaky temporal pré-existente
+- [x] `pnpm typecheck` limpo.
+- [x] `pnpm lint` sem erro novo.
+- [x] `pnpm test` / `pnpm test:rls` verdes (nota: flaky temporal pré-existente
       em `agenda2-encerrar-regra.int.test.ts` — data hardcoded, fora de escopo;
       corrigir em fatia separada).
-- [ ] `pnpm build` limpo (atenção ao falso-negativo de `.next/dev/types` stale —
+- [x] `pnpm build` limpo (atenção ao falso-negativo de `.next/dev/types` stale —
       lição `[[next-dev-types-stale-build-fail]]`: `rm -rf .next && build`).
 
 ---

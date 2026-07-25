@@ -35,6 +35,67 @@ pnpm dev
    [§Backup e restore (LGPD)](#backup-e-restore-lgpd) — **item LGPD, bloqueia
    dado real**.
 
+### CRÍTICO — o log de build do Easypanel contém TODOS os segredos em texto plano
+
+O Easypanel repassa **toda** env var do serviço como `--build-arg` para o
+`docker build`. Confirmado no log de deploy do `iris-backup` (auditoria da #93).
+Consequência: o log de build guardado no painel expõe, em texto plano,
+`DATABASE_URL`, `AUTH_DATABASE_URL` (com senha das roles),
+`BETTER_AUTH_SECRET`, `GLITCHTIP_WEBHOOK_SECRET` e `GITHUB_TOKEN`.
+
+**Nunca cole log de deploy em issue, PR, Discord ou chat de IA.** Ele não tem
+aparência de segredo — parece saída de build inócua — e é exatamente por isso
+que vaza. Se precisar compartilhar, recorte só a linha do erro.
+
+Mitigação que já existe: nenhum Dockerfile declara `ARG` para essas variáveis,
+então elas **não viram camada da imagem** nem aparecem em `docker history`. O
+vazamento é só no log.
+
+**Decisão (25/07/2026, #93) — risco aceito.** O Easypanel v2.31 **não** oferece
+como evitar isso: a tela `Ambiente` do serviço é um único campo de texto livre
+`CHAVE=valor`, sem toggle de secret, sem separação build-time/runtime, sem seção
+"Secrets" apartada, e sem nem mascarar o valor na tela. Verificado no painel, não
+deduzido da documentação. Restariam duas saídas — segredo por arquivo em volume
+(existe um toggle `Create env file` de semântica não testada) ou aceitar. Aceito,
+com base neste modelo de ameaça:
+
+- repositório privado, um único mantenedor;
+- acesso ao painel restrito ao mesmo mantenedor;
+- log de deploy não sai do painel — não vai para issue, PR, Discord, fórum.
+
+**Gatilhos que invalidam a aceitação e obrigam a reabrir a discussão:**
+
+1. qualquer segunda pessoa com acesso ao painel ou ao repositório (piloto com
+   clínica, contratação, agência);
+2. qualquer log de deploy compartilhado com terceiro — **inclusive colado em chat
+   de IA**, que é o caminho mais fácil de esquecer que conta;
+3. o repositório deixar de ser privado.
+
+**Ação combinada ao disparar um gatilho:** revisar **todas** as variáveis de
+ambiente de **todos** os serviços do projeto — rotacionar cada segredo, reavaliar
+se ainda precisa existir como env var, e reabrir a decisão de segredo-por-arquivo.
+Não é revisar só a variável relacionada ao evento: se o log vazou, vazou inteiro.
+
+Enquanto isso valer, o controle real é **rotação**: qualquer segredo que saia do
+painel é considerado comprometido e trocado pela tabela abaixo. Não é defesa em
+profundidade, é contenção — e depende de disciplina, não de plataforma.
+
+Se um segredo passou por log compartilhado, trate como comprometido e rotacione:
+
+| Segredo | Como rotacionar | Efeito colateral |
+| --- | --- | --- |
+| `GLITCHTIP_WEBHOOK_SECRET` | `openssl rand -hex 24` | trocar nos **dois** lados (env do app + URL do webhook no GlitchTip), senão o relay passa a 401 |
+| `BETTER_AUTH_SECRET` | `openssl rand -base64 32` | **invalida toda sessão ativa** — todo mundo reloga |
+| `GITHUB_TOKEN` | novo PAT fine-grained (ver abaixo) | validar o relay ANTES de revogar o antigo |
+| senha das roles Postgres | `ALTER ROLE ... PASSWORD` | atualizar `DATABASE_URL`, `AUTH_DATABASE_URL` e `MIGRATION_DATABASE_URL` |
+
+`GITHUB_TOKEN` é **PAT fine-grained**, escopado só a `romulosutil/Iris` com
+`Issues: read+write` — e nada mais. PAT classic (`ghp_`) com scope `repo` dá
+leitura e escrita em **todos** os repositórios da conta; não use. Para validar
+uma troca de token sem quebrar a automação, dispare o relay manualmente
+(`POST /api/hooks/glitchtip?token=<GLITCHTIP_WEBHOOK_SECRET>` com o payload do
+GlitchTip), confirme que a issue abriu, e só então revogue o token velho.
+
 ## Banco — role de runtime (CRÍTICO para o RLS)
 
 O RLS **só se aplica a roles não-superuser e não-donos da tabela**. Um superuser
