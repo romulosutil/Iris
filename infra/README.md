@@ -191,37 +191,51 @@ cópia no MinIO local (`iris-minio`, bucket `iris-backups`).
 O runner é um **serviço Easypanel dedicado com schedule**, não cron do SO: fica
 versionado no repo e com log no painel.
 
-1. **Criar o bucket** no MinIO (uma vez), com o `mc` já apontado pro servidor:
+> O bucket `iris-backups` **não** precisa ser criado à mão — o `backup.sh` roda
+> `mc mb --ignore-existing` antes do upload.
 
-   ```bash
-   mc mb --ignore-existing iris/iris-backups
-   ```
-
-2. **Novo serviço** → Code Source `romulosutil/Iris` → Builder **Dockerfile**,
-   path `infra/backup/Dockerfile`, build context na raiz, branch `main`.
-3. **Volume persistente** montado em **`/backups`** (senão o dump some a cada
-   restart do container).
-4. **Env vars** do serviço:
+1. **Novo serviço** → tipo **Aplicativo** → Code Source `romulosutil/Iris` →
+   Builder **Dockerfile**, path `infra/backup/Dockerfile`, build context na raiz,
+   branch `main`.
+2. **Volume persistente** (aba `Armazenamento`) montado em **`/backups`** (senão
+   o dump some a cada restart do container).
+3. **Env vars** do serviço (aba `Ambiente`):
 
    ```
-   PGHOST=iris-postgres      PGPORT=5432
+   PGHOST=espectro-mvp_iris-postgres    PGPORT=5432
    PGUSER=iris               # role DONA — ver aviso acima
    PGPASSWORD=<senha da role dona>
    PGDATABASE=iris
    BACKUP_DIR=/backups       RETENTION_DAYS=30
-   S3_ENDPOINT=http://iris-minio:9000
+   S3_ENDPOINT=http://espectro-mvp_iris-minio:9000
    S3_ACCESS_KEY=<...>       S3_SECRET_KEY=<...>
    S3_BACKUP_BUCKET=iris-backups
    ```
 
-5. **Schedule**: diário às **03:00 de Brasília**. O container roda em **UTC**, e
-   Brasília é UTC−3 (sem horário de verão desde 2019), então o cron é:
+   **Atenção ao nome de host interno:** no Easypanel ele é
+   `<projeto>_<serviço>` (ex.: `espectro-mvp_iris-postgres`), não só o nome do
+   serviço. Conferir na env var `MIGRATION_DATABASE_URL` do serviço
+   `iris-migrate`, que já aponta pro mesmo Postgres com a mesma role dona.
+
+4. **Agendamento** (aba `Avançado` → campo **Comando**):
 
    ```
-   0 6 * * *
+   /app/scheduler.sh
    ```
 
-   Conferir depois no log do painel se o carimbo do arquivo bate com 03:00 local.
+   **Este Easypanel (v2.31.0) não tem cron para serviço de app** — não existe
+   campo "Schedule", não existe tipo de serviço "Cron", e o backup nativo do
+   serviço Postgres é manual (e faria `pg_dump` sem globals, o furo documentado
+   acima). Por isso o agendador é o `scheduler.sh` do repo: o container fica de
+   pé dormindo (poucos MB de RSS, 0% de CPU) e dispara o `backup.sh` na janela.
+
+   Default: **06:00 UTC = 03:00 de Brasília** (UTC−3, sem horário de verão desde
+   2019). Para mudar, `BACKUP_AT_HOUR_UTC` (0-23). Ele marca
+   `.ultimo-backup-<data>` no volume e **não roda duas vezes no mesmo dia UTC** —
+   então um redeploy ou reboot do VPS no meio do dia não dispara backup extra, e
+   uma falha transitória é retentada na volta seguinte sem matar o agendador.
+
+   `Réplicas` = 1. Não ligar `Tempo de inatividade zero` (não é serviço web).
 
 6. **Conferir a primeira execução**: rodar o serviço à mão uma vez e checar que
    apareceram **os dois arquivos do par**, com o mesmo timestamp, em `/backups`
