@@ -83,6 +83,35 @@ build guardado no painel — inclui `BETTER_AUTH_SECRET` e senhas de role no
 `.env.example` prescreve → acesso a todos os repos da conta para uma automação que
 só abre issue.
 
+**Andamento da #93 (mesma sessão):** item 2 **resolvido** — `GITHUB_TOKEN` trocado
+por PAT fine-grained (só `romulosutil/Iris`, só Issues read+write), validado ponta a
+ponta disparando o relay à mão (issue #96, criada e fechada). Revogação do PAT
+classic: **confirmar** — o teste já provou o fine-grained, então nada mais depende
+do antigo. `GLITCHTIP_WEBHOOK_SECRET` **rotacionado** (o valor antigo vazou num paste
+de terminal — a rotação já era exigida pelo item 1a de qualquer forma). Item 1c
+**feito**: `infra/README.md` ganhou seção "o log de build contém TODOS os segredos"
+com tabela de rotação por segredo, e `.env.example` explicita "nunca PAT classic".
+
+Nota operacional descoberta no caminho: `curl.exe` chamado do PowerShell perde as
+aspas do JSON (modo `Windows` de `$PSNativeCommandArgumentPassing`) → o relay
+devolve `corpo inválido (JSON esperado)`. Usar `Invoke-RestMethod` ou
+`--data-binary "@arquivo"`.
+
+**#93 FECHADA.** Rotacionados: `GLITCHTIP_WEBHOOK_SECRET` (2×, a primeira tentativa
+não chegou a ser salva no painel — só descobrimos conferindo o valor na tela contra
+o que tinha vazado; **verificar a rotação, não presumi-la**), `BETTER_AUTH_SECRET`,
+senhas das roles Postgres. `GITHUB_TOKEN` trocado por fine-grained e classic
+revogado.
+
+**Item 1b resolvido como risco aceito.** O Easypanel v2.31 não tem como marcar env
+como secret — verificado no painel: `Ambiente` é um textarea `CHAVE=valor` puro, sem
+toggle, sem split build/runtime, sem máscara. Aceito com base em repo privado +
+mantenedor único + log que não sai do painel. Gatilhos de reabertura e a ação
+combinada (revisar TODAS as env vars de TODOS os serviços) estão em
+`infra/README.md` §"o log de build contém TODOS os segredos". Existe um toggle
+`Create env file` no painel, semântica não testada — é a porta para
+segredo-por-arquivo se um gatilho disparar.
+
 **Priorização criada** (labels no GitHub): `P1 · antes de dado real` (#93, #86) ·
 `P2 · pos-piloto` (#89, #88, #72) · `P3 · quando sobrar` (#87, #64, #80) ·
 `pos-mvp` · `risco-aceito`. #80 precisa **re-triagem** — os commits `38361d4` e
