@@ -43,6 +43,35 @@ services:
       timeout: 5s
       retries: 5
 
+  # Serviço de backup (infra/backup/) — não sobe por default (profile
+  # "backup"). Rodar com:
+  #   docker compose -f infra/docker-compose.yml --profile backup run --rm backup
+  #   docker compose -f infra/docker-compose.yml --profile backup run --rm backup ./verify-restore.sh
+  backup:
+    profiles: ["backup"]
+    build:
+      context: ./backup
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: iris
+      PGPASSWORD: iris
+      PGDATABASE: iris
+      BACKUP_DIR: /backups
+      RETENTION_DAYS: "30"
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: iris
+      S3_SECRET_KEY: iris123456
+      S3_BACKUP_BUCKET: iris-backups
+    volumes:
+      - backupdata:/backups
+
 volumes:
   pgdata:
   miniodata:
+  backupdata:
