@@ -26,8 +26,8 @@ RUN curl -fsSL -o /usr/local/bin/mc \
 
 WORKDIR /app
 
-COPY backup.sh restore.sh verify-restore.sh ./
-RUN chmod +x backup.sh restore.sh verify-restore.sh
+COPY backup.sh restore.sh verify-restore.sh scheduler.sh ./
+RUN chmod +x backup.sh restore.sh verify-restore.sh scheduler.sh
 
 # Comando default = dump agendado (o caso de uso do serviço rodando via
 # schedule do Easypanel). restore.sh e verify-restore.sh rodam sob demanda.
