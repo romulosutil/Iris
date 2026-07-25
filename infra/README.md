@@ -202,20 +202,31 @@ versionado no repo e com log no painel.
 3. **Env vars** do serviço (aba `Ambiente`):
 
    ```
-   PGHOST=espectro-mvp_iris-postgres    PGPORT=5432
+   PGHOST=espectro-mvp-iris-postgres    PGPORT=5432
    PGUSER=iris               # role DONA — ver aviso acima
    PGPASSWORD=<senha da role dona>
    PGDATABASE=iris
    BACKUP_DIR=/backups       RETENTION_DAYS=30
-   S3_ENDPOINT=http://espectro-mvp_iris-minio:9000
+   S3_ENDPOINT=http://espectro-mvp-iris-minio:9000
    S3_ACCESS_KEY=<...>       S3_SECRET_KEY=<...>
    S3_BACKUP_BUCKET=iris-backups
    ```
 
-   **Atenção ao nome de host interno:** no Easypanel ele é
-   `<projeto>_<serviço>` (ex.: `espectro-mvp_iris-postgres`), não só o nome do
-   serviço. Conferir na env var `MIGRATION_DATABASE_URL` do serviço
-   `iris-migrate`, que já aponta pro mesmo Postgres com a mesma role dona.
+   **Atenção ao nome de host interno — use HÍFEN, não underscore.** O Easypanel
+   registra o serviço em duas formas: `espectro-mvp_iris-minio` (a canônica, com
+   underscore) e `espectro-mvp-iris-minio` (com hífen). As duas resolvem pro
+   mesmo IP, mas:
+
+   - `libpq` (`pg_dump`/`psql`) aceita underscore → o dump funciona com as duas.
+   - **o `mc` (MinIO/S3) rejeita:** underscore é ilegal em hostname por RFC 1123,
+     e o SDK valida. Com `espectro-mvp_iris-minio` o upload falha com
+     `Invalid Request (invalid hostname)` — erro que não menciona underscore e
+     parece problema de credencial. Foi o que quebrou o primeiro deploy.
+
+   Por isso **hífen nas duas** env vars: uma regra só, válida pros dois clientes.
+   Para descobrir o nome do projeto/serviço, conferir a env var
+   `MIGRATION_DATABASE_URL` do serviço `iris-migrate` (mesmo Postgres, mesma role
+   dona) e trocar `_` por `-`.
 
 4. **Agendamento** (aba `Avançado` → campo **Comando**):
 
