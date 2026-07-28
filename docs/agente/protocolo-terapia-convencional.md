@@ -167,7 +167,11 @@ o texto não sustenta.
 O agente nunca atribui, sugere ou nomeia quadro nosológico, transtorno,
 CID ou traço de personalidade — mesmo que o texto do terapeuta contenha
 linguagem que soe diagnóstica ("parece ter traços de X"). Diagnóstico é ato
-privativo do psicólogo/psiquiatra (Resolução CFP nº 6/2019 e correlatas);
+privativo do psicólogo/psiquiatra — e qualquer documento psicológico com
+conteúdo diagnóstico emitido pelo profissional é regulado pela Resolução CFP
+nº 06/2019 (documentos escritos: declaração, atestado, relatório, laudo,
+parecer). A base normativa exata da reserva do ato diagnóstico em si continua
+pendente de confirmação profissional (issue #110, pergunta 6);
 o agente que sugerisse um violaria prática profissional regulada, não
 apenas um princípio de produto. Isto é o análogo, para este modo, de R3
 ("evidência, nunca pontuação") — mas com risco regulatório mais direto do
@@ -528,8 +532,8 @@ citação.
 
 | Regra | Convenção real | Avaliação |
 | --- | --- | --- |
-| **R1-TC** (fidelidade ao texto) | Resolução CFP nº 001/2009 (Manual de Elaboração de Documentos Psicológicos): documentos devem descrever fatos observados de forma objetiva, evitando juízo de valor não fundamentado. | Alinhado, sem divergência. |
-| **R2-TC** (nunca diagnosticar) | Diagnóstico como ato privativo do psicólogo/psiquiatra; Código de Ética Profissional do Psicólogo (Resolução CFP nº 010/2005 — **verificar número exato**) reserva a leitura clínica ao profissional. O próprio documento já cita "Resolução CFP nº 6/2019 e correlatas" na seção 2.3 — **há risco de inconsistência entre os números de resolução citados em pontos diferentes do próprio ecossistema de documentação do Iris; recomendo ao Rômulo unificar/confirmar qual resolução é a referência correta antes de usar qualquer uma delas em copy voltada ao usuário final** (terapeuta, coordenador ou parecer jurídico). | Alinhado no mérito; divergência apenas na precisão da citação, não na regra em si. |
+| **R1-TC** (fidelidade ao texto) | Resolução CFP nº 001/2009 (obrigatoriedade do registro documental) exige registro da evolução do trabalho e dos procedimentos técnico-científicos adotados; Resolução CFP nº 06/2019 rege os documentos escritos emitidos. Em ambas, o registro descreve fatos observados de forma objetiva, evitando juízo de valor não fundamentado. | Alinhado, sem divergência. |
+| **R2-TC** (nunca diagnosticar) | Diagnóstico como ato privativo do psicólogo/psiquiatra; Código de Ética Profissional do Psicólogo (**Resolução CFP nº 010/2005 — número confirmado, norma vigente**) reserva a leitura clínica ao profissional. A aparente divergência de citação com a seção 2.3 ("nº 6/2019") **está resolvida**: as duas resoluções estão vigentes e regulam objetos diferentes — 010/2005 é o Código de Ética, 06/2019 rege documentos escritos emitidos, 001/2009 rege o registro documental/prontuário. Ver `docs/legal/briefing-duty-to-warn.md`, Anexo A.1. Confirmação profissional dessa leitura segue pendente na issue #110 antes de qualquer copy user-facing citar resolução. | Alinhado no mérito; citação agora precisa. |
 | **R3-TC** (sem conduta prescrita) | Não corresponde a uma norma formal específica — nenhuma resolução do CFP regula "o que uma ferramenta de apoio pode sugerir". É decisão de produto ancorada no princípio geral de que técnica clínica é ato do profissional. | Sem divergência; sem norma específica a citar (não fabricado). |
 | **R4-TC** (linguagem hedged) | Idem R3-TC — mitigação de produto, não exigência normativa. | Sem divergência; registrar que a regra não tem autoridade normativa própria, só de produto. |
 | **R5-TC** (alerta de risco obrigatório) | Sigilo profissional (Código de Ética Profissional do Psicólogo — **verificar número exato**) tem exceção reconhecida para risco de vida a si ou a terceiros. Essa exceção é o que torna legítima a própria existência do alerta de risco — sem ela, o alerta poderia ser lido como o produto violando sigilo por padrão. | **Gap: o documento nunca cita essa base normativa explicitamente** (nem na seção 2.3, nem na seção 4) — ver achado AV-3. |
@@ -564,8 +568,10 @@ R: O princípio de governança em 3 camadas (seção 1, item 2) sustenta em
 tese que a Camada 2 (terapeuta) sempre revisa antes de qualquer coisa virar
 registro — mas este documento específico nunca declara, para o modo Terapia
 Convencional, que a saída da IA é sempre rascunho editável até aprovação
-explícita do terapeuta. Pela Resolução CFP nº 001/2009, a responsabilidade
-pelo conteúdo do documento psicológico é sempre de quem o assina — um texto
+explícita do terapeuta. A responsabilidade pelo conteúdo do documento
+psicológico é sempre de quem o assina (Resolução CFP nº 06/2019, que rege os
+documentos escritos emitidos; o registro/prontuário em si é regido pela
+Resolução CFP nº 001/2009) — um texto
 gerado por IA que vira prontuário sem edição/aprovação explícita é risco de
 responsabilidade profissional do terapeuta, não só do produto.
 
@@ -658,7 +664,8 @@ decidida aqui.
 relatório periódico como a TEA tem (CID F84 como gatilho)?**
 R: Fora do escopo da issue #98 e deste documento — convênio de terapia
 convencional adulta provavelmente segue formato de relatório psicológico
-diferente do TEA (Resolução CFP nº 001/2009, não o modelo de laudo por
+diferente do TEA (Resolução CFP nº 06/2019, que rege relatório/laudo/parecer
+emitidos, não o modelo de laudo por
 domínio usado no TEA). Registrado como possível fast-follow, não bloqueante
 para este nicho agora.
 
@@ -667,9 +674,9 @@ para este nicho agora.
 | ID | Achado | Severidade | Cobertura |
 | --- | --- | --- | --- |
 | AV-1 | `padrao_silencio_resistencia` embute vocabulário de escola psicanalítica no NOME DO CAMPO do schema (seção 3), em tensão com R9-TC mesmo que o texto gerado seja agnóstico. | Bloqueante | Gap novo — nome de campo é mudança de contrato de dado; se corrigido, entra como proposta pendente de confirmação com o Rômulo. |
-| AV-2 | Documento não declara que a saída da IA neste modo é sempre rascunho editável pelo terapeuta antes de virar registro oficial de prontuário (Resolução CFP nº 001/2009 responsabiliza quem assina o documento). | Bloqueante | Gap novo — parcialmente sustentado pelo princípio geral de governança em 3 camadas (seção 1), mas não formalizado para este modo especificamente. |
-| AV-3 | R5-TC nunca cita a base normativa (exceção de sigilo profissional por risco de vida) que legitima a própria existência do alerta de risco. | Bloqueante | Gap novo, referência exata de resolução a verificar. |
-| AV-4 | Categoria "risco a menores no entorno" de R5-TC não cita a base legal do dever de comunicação (ECA, verificar artigo) nem deixa claro que o dever é do profissional, não do sistema. | Importante | Gap novo. |
+| AV-2 | Documento não declara que a saída da IA neste modo é sempre rascunho editável pelo terapeuta antes de virar registro oficial de prontuário (Resolução CFP nº 06/2019 responsabiliza quem assina o documento emitido; Resolução CFP nº 001/2009 rege o registro documental). | Bloqueante | Gap novo — parcialmente sustentado pelo princípio geral de governança em 3 camadas (seção 1), mas não formalizado para este modo especificamente. |
+| AV-3 | R5-TC nunca cita a base normativa (exceção de sigilo profissional por risco de vida) que legitima a própria existência do alerta de risco. | Bloqueante | **Referência levantada:** Código de Ética (Res. CFP nº 010/2005), **art. 10** — o psicólogo "poderá decidir pela quebra de sigilo, baseando sua decisão na busca do menor prejuízo", restringindo-se ao estritamente necessário. É **faculdade**, não dever. Confirmação profissional pendente na issue #110; ver `docs/legal/briefing-duty-to-warn.md` Anexo A.2. |
+| AV-4 | Categoria "risco a menores no entorno" de R5-TC não cita a base legal do dever de comunicação (ECA, verificar artigo) nem deixa claro que o dever é do profissional, não do sistema. | Importante | **Referência levantada:** ECA **art. 13** (comunicação obrigatória ao Conselho Tutelar) e Lei 13.431/2017 **art. 13** (dever de qualquer pessoa comunicar imediatamente). Diferente de AV-3: aqui há **dever legal**, não faculdade — e o dever é do profissional, não do sistema. Confirmação pendente na issue #110; ver Anexo A.3 do briefing. |
 | AV-5 | Falta política concreta de amostragem/auditoria da Camada 3 para este modo (quais sessões revisar, sem gatilho estruturado). | Importante | Amplia achado 1/Risco 4 já existentes na seção 7 — não é totalmente novo, mas ganha requisito concreto. |
 | AV-6 | Modelo de acesso da Camada 3 a `resumo_sessao` completo de adulto pode precisar ser mais restrito que o acesso a evidência estruturada de TEA, por sensibilidade de conteúdo (sigilo profissional). | Importante | Gap novo — decisão de modelo de acesso/RLS, proposta pendente de confirmação com o Rômulo. |
 | AV-7 | Falta disclaimer explícito de que a responsabilidade profissional pela conduta clínica é sempre do terapeuta, independentemente de sugestão da IA. | Importante | Gap novo, complementar ao Risco 2 já registrado (que cobre só a marcação visual, não o texto do disclaimer). |
@@ -677,7 +684,7 @@ para este nicho agora.
 | AV-9 | Direito do paciente adulto de acessar o próprio resumo/prontuário não é mencionado neste documento. | Nice-to-have | Provável feature genérica do produto, fora do escopo deste nicho — lembrete de verificação cruzada. |
 | AV-10 | Requisitos de relatório periódico para convênio em Terapia Convencional adulta não abordados. | Nice-to-have | Fora do escopo da issue #98 — possível fast-follow. |
 | AV-11 | Achado 2 da seção 7 (paciente com atendimento misto TEA + terapia convencional) tem severidade subestimada — é cenário plausível e recorrente, não hipotético raro. | Bloqueante (reclassificação) | Reforça achado já existente; eleva sua severidade de "lacuna registrada" para bloqueante em clínicas com os dois públicos. |
-| AV-12 | Divergência entre os números de resolução do CFP citados em pontos diferentes da documentação do Iris ("nº 6/2019" na seção 2.3 vs. "nº 001/2009" e "nº 010/2005 — verificar" nesta seção). | Importante | Gap de precisão de citação, não de mérito da regra — recomenda-se unificação/confirmação pelo Rômulo antes de uso em copy voltada ao usuário. |
+| AV-12 | Divergência entre os números de resolução do CFP citados em pontos diferentes da documentação do Iris ("nº 6/2019" na seção 2.3 vs. "nº 001/2009" e "nº 010/2005 — verificar" nesta seção). | Importante | **Resolvido (issue #110).** Não havia divergência: as três resoluções estão vigentes e regulam objetos distintos — 001/2009 (registro documental/prontuário, alterada pela 05/2010), 06/2019 (documentos escritos emitidos), 010/2005 (Código de Ética). As citações deste documento foram corrigidas. Tabela completa em `docs/legal/briefing-duty-to-warn.md`, Anexo A.1. Segue valendo: nenhuma copy user-facing cita resolução até confirmação profissional. |
 
 Nenhum destes 12 achados invalida a arquitetura proposta. Nenhuma mudança de
 schema, DDL, ou modelo de acesso foi implementada a partir desta seção — os
