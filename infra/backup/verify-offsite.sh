@@ -89,9 +89,32 @@ if [[ -n "${AGE_IDENTITY:-}" ]]; then
 	exit 1
 fi
 
-: "${OFFSITE_S3_ENDPOINT:?OFFSITE_S3_ENDPOINT é obrigatório}"
-: "${OFFSITE_S3_ACCESS_KEY:?OFFSITE_S3_ACCESS_KEY é obrigatório}"
-: "${OFFSITE_S3_SECRET_KEY:?OFFSITE_S3_SECRET_KEY é obrigatório}"
+# `: "${VAR:?...}"` só pega vazio/não-setada. Não pega o defeito real da #105:
+# o runbook mostra `OFFSITE_S3_ENDPOINT=https://<ns>.compat...oraclecloud.com`
+# como exemplo, o operador exporta o placeholder literal sem substituir, a
+# variável fica NÃO-vazia, o guard de ausência passa, e o `mc` falha lá na
+# frente com um erro genérico de hostname — que a mensagem de `mc ls` (abaixo)
+# lia como credencial sem permissão de leitura. Checar os dois defeitos aqui,
+# na borda, fecha isso antes de chegar no `mc`.
+#
+# A mensagem do placeholder NUNCA ecoa o valor: OFFSITE_S3_SECRET_KEY é
+# segredo, e um log de DR é o pior lugar para vazar credencial.
+verificar_env_obrigatoria() {
+	local nome="$1"
+	local valor="${!nome:-}"
+	if [[ -z "${valor}" ]]; then
+		log_error "${nome} é obrigatório e não foi definido."
+		exit 1
+	fi
+	if [[ "${valor}" == *'<'*'>'* ]]; then
+		log_error "${nome} contém um placeholder não substituído (formato <...>). Conferir o valor exportado — provavelmente foi copiado do exemplo do runbook sem trocar pelo valor real. O valor não é logado por conter possível segredo."
+		exit 1
+	fi
+}
+
+verificar_env_obrigatoria OFFSITE_S3_ENDPOINT
+verificar_env_obrigatoria OFFSITE_S3_ACCESS_KEY
+verificar_env_obrigatoria OFFSITE_S3_SECRET_KEY
 readonly OFFSITE_S3_BUCKET="${OFFSITE_S3_BUCKET:-iris-backups-offsite}"
 readonly OFFSITE_REGION="${OFFSITE_S3_REGION:-}"
 readonly OFFSITE_PATH_STYLE="${OFFSITE_S3_PATH_STYLE:-auto}"
@@ -148,7 +171,11 @@ log_info "bucket=${OFFSITE_S3_BUCKET} região=${OFFSITE_REGION:-us-east-1 (defau
 
 # --- escolha do par a verificar ------------------------------------------------
 if ! listagem="$(MC_REGION="${OFFSITE_REGION}" mc ls "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
-	log_error "não foi possível LISTAR ${OFFSITE_S3_BUCKET}. Se a credencial de produção é write-only (por design, sem DeleteObject), ela pode também não ter leitura — gerar uma credencial de LEITURA só para esta verificação e revogá-la depois. Resposta: ${listagem}"
+	log_error "não foi possível LISTAR ${OFFSITE_S3_BUCKET}. Resposta do mc: ${listagem//${OFFSITE_S3_SECRET_KEY}/***}
+Hipóteses, sem ordem de probabilidade — não afirmar qual é a causa antes de checar:
+  1) OFFSITE_S3_ENDPOINT malformado (placeholder do runbook não substituído, typo, protocolo/host errado).
+  2) credencial sem permissão de LEITURA (a de produção é write-only por design, sem ListBucket/GetObject) — gerar uma credencial de LEITURA só para esta verificação e revogá-la depois.
+  3) OFFSITE_S3_BUCKET ou OFFSITE_S3_REGION errados para este endpoint."
 	exit 1
 fi
 
@@ -189,7 +216,11 @@ for objeto in "${NOME_DUMP}" "${NOME_GLOBALS}"; do
 	# réplica íntegra com credencial errada.
 	if ! saida_cp="$(MC_REGION="${OFFSITE_REGION}" mc cp --quiet \
 		"${MC_ALIAS}/${OFFSITE_S3_BUCKET}/${objeto}" "${TMP_DIR}/${objeto}" 2>&1)"; then
-		log_error "falha ao baixar ${objeto}. Se for negação de acesso, é a credencial (a de produção é write-only — gerar uma de LEITURA temporária). Se for objeto inexistente e o outro do par tiver baixado, o par está INCOMPLETO no bucket — um restore com esse artefato recria as tabelas e nenhuma policy de RLS (ver PR #85). Resposta: ${saida_cp//${OFFSITE_S3_SECRET_KEY}/***}"
+		log_error "falha ao baixar ${objeto}. Resposta do mc: ${saida_cp//${OFFSITE_S3_SECRET_KEY}/***}
+Hipóteses, sem ordem de probabilidade — não afirmar qual é a causa antes de checar:
+  1) OFFSITE_S3_ENDPOINT malformado (placeholder do runbook não substituído, typo, protocolo/host errado).
+  2) negação de acesso: a credencial de produção é write-only por design (sem GetObject) — gerar uma de LEITURA temporária.
+  3) objeto inexistente: se o outro do par tiver baixado, o par está INCOMPLETO no bucket — um restore com esse artefato recria as tabelas e nenhuma policy de RLS (ver PR #85)."
 		exit 1
 	fi
 done
