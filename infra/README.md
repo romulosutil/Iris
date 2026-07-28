@@ -295,6 +295,35 @@ cenário que o off-site cobre.
 > criada**. O `backup.sh` loga `prune off-site: NÃO executado pelo script (por
 > design)` toda execução justamente para esse esquecimento não ficar silencioso.
 
+#### Cadência do off-site — quanto se perde no pior dia
+
+`OFFSITE_INTERVAL_DAYS` controla **só** a réplica off-site. O dump local e a
+cópia no MinIO rodam **todo dia** de qualquer forma: são baratos e ficam no
+mesmo disco.
+
+| Valor | Perda máxima no desastre de host | Volume no bucket (ret. 30d) |
+| --- | --- | --- |
+| `1` (default) | até 1 dia | ~30 pares |
+| `7` | **até 7 dias** | ~4 pares |
+
+Traduzindo "7 dias" para o que o usuário sente: uma terapeuta que escreveu 40
+evoluções naquela semana **perde as 40**. Ela não reconstrói — a sessão
+aconteceu, a memória já não está fresca. É uma decisão de produto, não de
+infra: escolha o número olhando para isso, não para o custo de storage (que é
+zero nos dois casos, dentro dos 20 GB do plano gratuito).
+
+**O controle é por marcador de tempo (`.ultimo-offsite`), não por dia da
+semana.** A diferença aparece quando o container está parado no dia marcado
+(deploy, reboot, OOM): a regra por dia-da-semana **pula a semana inteira** e
+ninguém percebe; o marcador faz a réplica sair na próxima execução em que o
+tempo já venceu — atrasada, nunca perdida. E o marcador só é gravado em
+sucesso: réplica que falhou continua devida e tenta de novo no dia seguinte,
+independente do intervalo.
+
+> Pular por cadência **não** é falha e **não** muda o exit code — o log diz
+> `réplica off-site não é devida nesta execução`. Não confundir com o `exit 3`
+> da tabela abaixo, que é replicação que deveria ter acontecido e falhou.
+
 #### Exit codes do `backup.sh` — 1 e 3 não são a mesma coisa
 
 | Exit | Significado | O que o `scheduler.sh` faz |
@@ -346,6 +375,7 @@ versionado no repo e com log no painel.
    OFFSITE_S3_ACCESS_KEY=<...>   OFFSITE_S3_SECRET_KEY=<...>
    OFFSITE_S3_BUCKET=iris-backups-offsite
    OFFSITE_AGE_RECIPIENT=age1...   # chave PÚBLICA. A privada nunca entra aqui.
+   OFFSITE_INTERVAL_DAYS=1         # 1 = diário · 7 = semanal (ver abaixo)
    ```
 
    **Atenção ao nome de host interno — use HÍFEN, não underscore.** O Easypanel

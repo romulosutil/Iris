@@ -59,12 +59,12 @@ limpar() {
 trap limpar EXIT
 
 # ---------------------------------------------------------------------------
-log "1/7 · subindo Postgres + MinIO"
+log "1/8 · subindo Postgres + MinIO"
 "${COMPOSE[@]}" up -d postgres minio >/dev/null
 "${COMPOSE[@]}" build backup >/dev/null
 
 # ---------------------------------------------------------------------------
-log "2/7 · gerando par de chaves age efêmero (a privada NUNCA entra no container de backup)"
+log "2/8 · gerando par de chaves age efêmero (a privada NUNCA entra no container de backup)"
 
 KEYPAIR="$("${COMPOSE[@]}" run --rm --no-deps -T backup bash -c '
 	age-keygen 2>/dev/null
@@ -79,7 +79,7 @@ fi
 ok "par de chaves gerado (recipient=${AGE_RECIPIENT:0:16}...)"
 
 # ---------------------------------------------------------------------------
-log "3/7 · semeando dado reconhecível no banco"
+log "3/8 · semeando dado reconhecível no banco"
 
 # A role app_role precisa existir porque backup.sh aborta se os globals não
 # tiverem nenhum CREATE ROLE — comportamento correto (é o furo do PR #85), mas
@@ -93,7 +93,7 @@ no_container >/dev/null
 ok "tabela canario_offsite + role app_role criadas"
 
 # ---------------------------------------------------------------------------
-log "4/7 · provisionando o bucket off-site (simula o provisionamento manual do runbook)"
+log "4/8 · provisionando o bucket off-site (simula o provisionamento manual do runbook)"
 
 CMD="printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null \
 	&& mc mb --ignore-existing off/${BUCKET_OFFSITE} >/dev/null && echo criado"
@@ -101,7 +101,7 @@ no_container >/dev/null
 ok "bucket ${BUCKET_OFFSITE} provisionado"
 
 # ---------------------------------------------------------------------------
-log "5/7 · CAMINHO FELIZ — rodando backup.sh com off-site habilitado"
+log "5/8 · CAMINHO FELIZ — rodando backup.sh com off-site habilitado"
 
 set +e
 "${COMPOSE[@]}" run --rm -T \
@@ -122,7 +122,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log "6/7 · ASSERÇÕES sobre o que efetivamente chegou no bucket off-site"
+log "6/8 · ASSERÇÕES sobre o que efetivamente chegou no bucket off-site"
 
 CMD="set -e
 printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null
@@ -193,7 +193,7 @@ verificar ASSERT_CONTEUDO "ok" "dump decifrado contém o dado semeado (não é d
 verificar ASSERT_GLOBALS "ok" "globals decifram e contêm CREATE ROLE"
 
 # ---------------------------------------------------------------------------
-log "7/7 · CAMINHOS DE ERRO"
+log "7/8 · CAMINHOS DE ERRO"
 
 # off-site fora do ar: exit 3 (replicação parcial), NUNCA 1, e dump local íntegro.
 set +e
@@ -249,6 +249,97 @@ if [[ "${EXIT_OFF}" -eq 0 ]]; then
 	ok "off-site desabilitado => exit 0 (dev local não quebra)"
 else
 	fail "off-site desabilitado => exit ${EXIT_OFF}, esperado 0"
+fi
+
+# ---------------------------------------------------------------------------
+log "8/8 · CADÊNCIA (OFFSITE_INTERVAL_DAYS) — réplica semanal sem depender de ninguém lembrar"
+
+# Quantos artefatos existem no bucket agora. O marcador .ultimo-offsite foi
+# escrito no passo 5 (único que teve sucesso de upload até aqui).
+contar_no_bucket() {
+	CMD="printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null
+mc ls off/${BUCKET_OFFSITE}/ | grep -c 'dump.age' || true"
+	no_container 2>/dev/null | tr -d '\r' | tail -1
+}
+
+ANTES="$(contar_no_bucket)"
+
+# a) intervalo 7d com marcador fresco => réplica NÃO é devida. Sai 0 (não é
+#    falha, é a cadência), e nada novo sobe.
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	-e OFFSITE_INTERVAL_DAYS=7 \
+	backup >/tmp/iris-offsite-semanal.log 2>&1
+EXIT_SEMANAL=$?
+set -e
+
+DEPOIS="$(contar_no_bucket)"
+
+if [[ "${EXIT_SEMANAL}" -eq 0 ]] && grep -q 'não é devida' /tmp/iris-offsite-semanal.log; then
+	ok "intervalo 7d + marcador fresco => réplica pulada, exit 0 (pular por cadência não é falha)"
+else
+	fail "intervalo 7d => exit ${EXIT_SEMANAL} e log sem 'não é devida'"
+fi
+
+if [[ "${ANTES}" == "${DEPOIS}" ]]; then
+	ok "nada novo subiu quando a réplica não era devida (${ANTES} => ${DEPOIS})"
+else
+	fail "subiu artefato fora da cadência (${ANTES} => ${DEPOIS})"
+fi
+
+# b) envelhecendo o marcador para 8 dias atrás, a réplica volta a ser devida.
+#    Prova que o gate é temporal e não um "desligado" disfarçado.
+#
+#    O timestamp é calculado AQUI no host e passado absoluto: a imagem é Alpine
+#    e o `touch` do busybox NÃO aceita data relativa — `touch -d '8 days ago'`
+#    responde `invalid date`. Só o `-t YYYYMMDDhhmm` é portável entre o busybox
+#    do container e o GNU coreutils da máquina de dev.
+STAMP_8D="$(date -u -d '8 days ago' +%Y%m%d%H%M)"
+CMD="touch -t ${STAMP_8D} /backups/.ultimo-offsite && echo envelhecido"
+no_container >/dev/null
+
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	-e OFFSITE_INTERVAL_DAYS=7 \
+	backup >/tmp/iris-offsite-vencido.log 2>&1
+EXIT_VENCIDO=$?
+set -e
+
+VENCIDO="$(contar_no_bucket)"
+
+if [[ "${EXIT_VENCIDO}" -eq 0 && "${VENCIDO}" -gt "${DEPOIS}" ]]; then
+	ok "marcador vencido (8d > 7d) => réplica volta a subir (${DEPOIS} => ${VENCIDO})"
+else
+	fail "marcador vencido não disparou a réplica (exit ${EXIT_VENCIDO}, ${DEPOIS} => ${VENCIDO})"
+fi
+
+# c) intervalo inválido é rejeitado na validação de env, antes do dump.
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	-e OFFSITE_INTERVAL_DAYS=0 \
+	backup >/tmp/iris-offsite-intervalo.log 2>&1
+EXIT_INTERVALO=$?
+set -e
+
+if [[ "${EXIT_INTERVALO}" -eq 1 ]]; then
+	ok "OFFSITE_INTERVAL_DAYS=0 => exit 1 na validação (não vira 'nunca replicar' silencioso)"
+else
+	fail "OFFSITE_INTERVAL_DAYS=0 => exit ${EXIT_INTERVALO}, esperado 1"
 fi
 
 # ---------------------------------------------------------------------------

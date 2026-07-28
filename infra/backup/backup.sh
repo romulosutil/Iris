@@ -23,6 +23,9 @@
 #   OFFSITE_S3_BUCKET       default iris-backups-offsite
 #   OFFSITE_AGE_RECIPIENT   obrigatório SE OFFSITE_S3_ENDPOINT setado — chave
 #                            PÚBLICA age (age1...). Ver seção "off-site" abaixo.
+#   OFFSITE_INTERVAL_DAYS   default 1 (toda execução). 7 = semanal. Só afeta a
+#                            réplica off-site; o dump local e o MinIO continuam
+#                            diários. Ver "cadência do off-site" abaixo.
 #
 # Exit code:
 #   0 = sucesso completo.
@@ -70,6 +73,22 @@
 # A chave privada NÃO fica no VPS. Perder a chave privada = perder a réplica
 # off-site (as cópias local e MinIO continuam em claro e restauráveis).
 #
+# CADÊNCIA DO OFF-SITE (OFFSITE_INTERVAL_DAYS): a réplica pode ser mais
+# esparsa que o dump. O dump local roda todo dia de qualquer forma — ele é
+# barato e fica no mesmo disco. Já a réplica cifrada custa banda e cota no
+# provedor de terceiro, e para muitos estágios de produto uma cópia semanal
+# fora do host é a troca certa entre "quanto eu perco no pior dia" e "quanto
+# isso me custa".
+#
+# O controle é por MARCADOR de tempo (.ultimo-offsite), não por dia da semana.
+# Diferença que importa: se o container estiver parado no dia marcado (deploy,
+# reboot, OOM), a regra por dia-da-semana simplesmente PULA a semana inteira e
+# ninguém percebe. Com marcador, a réplica sai na próxima execução em que o
+# tempo já venceu — atrasada, nunca perdida.
+#
+# O marcador só é escrito em SUCESSO. Off-site que falhou é off-site devido, e
+# tenta de novo no dia seguinte independente do intervalo.
+
 # CREDENCIAL SEM DeleteObject: a credencial off-site é dedicada e só escreve.
 # Backup que o host comprometido consegue apagar não é backup. Por isso este
 # script NÃO poda o off-site — a retenção lá é responsabilidade de uma REGRA DE
@@ -165,6 +184,8 @@ readonly OFFSITE_S3_ACCESS_KEY="${OFFSITE_S3_ACCESS_KEY:-}"
 readonly OFFSITE_S3_SECRET_KEY="${OFFSITE_S3_SECRET_KEY:-}"
 readonly OFFSITE_S3_BUCKET="${OFFSITE_S3_BUCKET:-iris-backups-offsite}"
 readonly OFFSITE_AGE_RECIPIENT="${OFFSITE_AGE_RECIPIENT:-}"
+readonly OFFSITE_INTERVAL_DAYS="${OFFSITE_INTERVAL_DAYS:-1}"
+readonly OFFSITE_MARCADOR="${BACKUP_DIR}/.ultimo-offsite"
 
 if [[ -n "${S3_ENDPOINT}" ]]; then
 	: "${S3_ACCESS_KEY:?S3_ACCESS_KEY é obrigatório quando S3_ENDPOINT está setado}"
@@ -192,6 +213,11 @@ if [[ -n "${OFFSITE_S3_ENDPOINT}" ]]; then
 		log_error "OFFSITE_S3_ENDPOINT está setado mas o binário 'age' não está na imagem — ver infra/backup/Dockerfile"
 		exit 1
 	fi
+fi
+
+if ! [[ "${OFFSITE_INTERVAL_DAYS}" =~ ^[0-9]+$ ]] || [[ "${OFFSITE_INTERVAL_DAYS}" -lt 1 ]]; then
+	log_error "OFFSITE_INTERVAL_DAYS precisa ser inteiro >= 1, recebido: ${OFFSITE_INTERVAL_DAYS}"
+	exit 1
 fi
 
 if ! [[ "${RETENTION_DAYS}" =~ ^[0-9]+$ ]]; then
@@ -376,8 +402,32 @@ readonly MC_ALIAS_OFFSITE="irisoffsite"
 readonly OFFSITE_NAME="${FINAL_NAME}.age"
 readonly OFFSITE_GLOBALS_NAME="${GLOBALS_NAME}.age"
 
+# Decide se a réplica é devida nesta execução. Marcador ausente => devida (é o
+# caso da primeira execução e o caso de a última ter falhado, já que o marcador
+# só é escrito em sucesso).
+offsite_devido=1
+offsite_motivo="intervalo=${OFFSITE_INTERVAL_DAYS}d"
+
+if [[ -n "${OFFSITE_S3_ENDPOINT}" && "${OFFSITE_INTERVAL_DAYS}" -gt 1 && -f "${OFFSITE_MARCADOR}" ]]; then
+	AGORA_EPOCH="$(date +%s)"
+	ULTIMO_EPOCH="$(stat -c %Y "${OFFSITE_MARCADOR}")"
+	DECORRIDO_S=$((AGORA_EPOCH - ULTIMO_EPOCH))
+	INTERVALO_S=$((OFFSITE_INTERVAL_DAYS * 86400))
+
+	# Margem de 1h: a janela do scheduler tem jitter (reavalia a cada 10min), e
+	# sem margem uma execução que caísse alguns minutos antes do intervalo exato
+	# empurraria a réplica para o dia seguinte, e o seguinte, acumulando atraso.
+	if [[ "${DECORRIDO_S}" -lt $((INTERVALO_S - 3600)) ]]; then
+		offsite_devido=0
+		offsite_motivo="última há $((DECORRIDO_S / 3600))h, intervalo ${OFFSITE_INTERVAL_DAYS}d"
+	fi
+fi
+
 if [[ -z "${OFFSITE_S3_ENDPOINT}" ]]; then
 	log_info "OFFSITE_S3_ENDPOINT vazio — pulando réplica off-site (esperado em dev local)"
+elif [[ "${offsite_devido}" -eq 0 ]]; then
+	# Não é falha: é a cadência configurada. Exit code não muda.
+	log_info "réplica off-site não é devida nesta execução (${offsite_motivo}) — dump local e MinIO seguem normalmente"
 else
 	# O recipient é chave PÚBLICA: logar é seguro e é a única forma de provar,
 	# depois, com QUAL chave um artefato foi cifrado. Sem isso, descobrir que a
@@ -425,6 +475,9 @@ else
 		# a retenção — ver o runbook em infra/README.md.
 		if mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_NAME}" >/dev/null \
 			&& mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_GLOBALS_NAME}" >/dev/null; then
+			# Marcador SÓ aqui, no sucesso: uma réplica que falhou continua
+			# devida e tenta de novo amanhã, independente do intervalo.
+			date -u '+%Y-%m-%dT%H:%M:%SZ' >"${OFFSITE_MARCADOR}"
 			log_info "réplica off-site concluída (dump + globals, cifrados)"
 		else
 			log_error "upload off-site falhou (dump ou globals) — backup local e MinIO existem, mas NÃO há cópia fora do host. Marcando replicação parcial."
