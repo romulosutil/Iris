@@ -659,25 +659,45 @@ fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
    Guardar a **privada** em gerenciador de senhas **e** impressa em papel, em
    local físico distinto. Ela é o único caminho de volta a partir do off-site.
 
-6. **PROVA OBRIGATÓRIA antes de considerar pronto — decifrar de verdade.** Não
+6. **Preencher as env vars** `OFFSITE_*` no serviço de backup do Easypanel e
+   redeployar (**Implantar**, não restart — restart mantém a imagem antiga).
+   Conferir no log da primeira execução:
+   `réplica off-site concluída (dump + globals, cifrados)`.
+
+7. **PROVA OBRIGATÓRIA antes de considerar pronto — decifrar de verdade.** Não
    pule: uma réplica cifrada com uma chave cuja privada ninguém tem é
-   indistinguível de uma réplica boa, até o dia do desastre.
+   indistinguível de uma réplica boa — mesmo tamanho, mesmo header, mesmo log de
+   sucesso — até o dia do desastre. `verify-offsite.sh` fecha o laço contra o
+   bucket de **produção**: baixa o par mais recente, confirma que está cifrado,
+   **decifra**, valida o dump com `pg_restore --list`, confere que os globals
+   trazem `app_role` e `iris_auth`, e imprime o sha256 do dump decifrado.
 
    ```bash
-   # com a chave privada na máquina local (nunca no VPS)
-   printf '%s\n' 'AGE-SECRET-KEY-1YYY...' > id.txt && chmod 600 id.txt
-   mc cp offsite/iris-backups-offsite/iris-<ts>.dump.age .
-   age -d -i id.txt -o iris-<ts>.dump iris-<ts>.dump.age
-   pg_restore --list iris-<ts>.dump | head        # tem que listar objetos
-   shred -u id.txt
+   docker compose -f infra/docker-compose.yml --profile backup run --rm --no-deps -T backup ./verify-offsite.sh < /caminho/chave-privada-age.txt
    ```
 
-   Se `pg_restore --list` reclamar, **a réplica não presta** — parar e
-   investigar antes de marcar a #86 como fechada.
+   As `OFFSITE_S3_*` vêm do ambiente do shell (o compose repassa). Rodar **na
+   máquina que guarda a chave privada**, nunca no VPS — o VPS tem só a pública,
+   e levar a privada para lá anularia o desenho inteiro da #86. A chave entra por
+   **stdin**: não é argumento (apareceria em `ps`), não é env var (`docker
+   inspect` mostra o env de qualquer container) e não é volume montado. O script
+   recusa a chave por `AGE_IDENTITY` justamente por isso.
 
-7. **Preencher as env vars** `OFFSITE_*` no serviço de backup do Easypanel e
-   redeployar. Conferir no log da primeira execução:
-   `réplica off-site concluída (dump + globals, cifrados)`.
+   Fecho da prova: o `sha256` que ele imprime tem que bater com o `sha256=` que o
+   `backup.sh` logou naquele dia. Batendo, está provado que o artefato
+   restaurável é exatamente o que o VPS gerou — não uma cópia antiga, não outro
+   banco.
+
+   Dois desfechos com diagnóstico próprio, porque são problemas diferentes:
+   **não conseguir listar o bucket** é credencial de leitura (a de produção é
+   write-only por design — gerar uma de leitura só para a verificação e revogar
+   depois); **não conseguir decifrar** é o desastre silencioso, e aí a réplica
+   existe e é inútil.
+
+   Repetir esta verificação a cada rotação da chave `age` e sempre que o destino
+   off-site mudar. O próprio `verify-offsite.sh` é coberto pelo
+   `test-offsite.sh` (seção 10), inclusive a asserção de que ele **falha** com a
+   chave errada — um verificador que passa com qualquer chave não prova nada.
 
 ### Runbook — DR a partir do off-site (o VPS não existe mais)
 

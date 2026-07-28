@@ -101,10 +101,25 @@ externo com dublê prova o protocolo, não o dialeto nem a credencial do destino
 nova (25 asserções no total) trava os defaults e exercita os dois parafusos com endpoint no
 formato da OCI e região inexistente — sem depender de rede.
 
-**Pendências reais que sobraram da #86** (o upload funcionar não fecha nenhuma delas): a **regra
-de lifecycle** no bucket (sem ela o Always Free estoura e o backup sai `3` todo dia), e a **prova
-de decifra do artefato de produção** com a chave privada guardada fora do VPS — réplica cifrada
-com chave cuja privada ninguém tem é indistinguível de uma boa até o dia do desastre.
+**Ferramenta nova: `infra/backup/verify-offsite.sh`.** A prova de decifra era um punhado de
+comandos no runbook que escrevia a chave privada em `id.txt` no disco — passo manual, fácil de
+pular, fácil de fazer errado. Virou script: baixa o par mais recente do bucket de produção,
+confirma cifra, **decifra**, valida com `pg_restore --list`, exige `app_role` e `iris_auth` nos
+globals (furo do PR #85) e imprime o sha256 do dump decifrado para bater com o log do
+`backup.sh` daquele dia — se bate, o artefato restaurável é comprovadamente o que o VPS gerou.
+Chave privada só por **stdin**: não é argv (`ps`), não é env var (`docker inspect`) e não é
+volume; o script recusa `AGE_IDENTITY` explicitamente. Coberto pela seção 10 do
+`test-offsite.sh`, **incluindo a asserção de que ele FALHA com a chave errada** — verificador
+que passa com qualquer chave não prova nada. 31 asserções no total.
+
+**Pendências reais que sobraram da #86** (o upload funcionar não fecha nenhuma delas):
+
+1. **Regra de lifecycle no bucket.** Sem ela o Always Free estoura a cota e o backup passa a
+   sair `3` todo dia.
+2. **Rodar o `verify-offsite.sh` contra o bucket de produção**, na máquina que guarda a chave
+   privada. Enquanto não rodar, a réplica é *presumida* restaurável — que é o estado
+   indistinguível de uma réplica inútil. Pode exigir uma credencial de **leitura** temporária:
+   a de produção é write-only por design.
 
 ---
 
