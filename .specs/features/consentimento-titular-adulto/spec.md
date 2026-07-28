@@ -42,7 +42,9 @@
   o paciente.
 - Próxima migração livre: journal (`db/migrations/meta/_journal.json`)
   termina em `idx: 48`, `tag: "0048_snapshot_candidatura_team_guard"`,
-  `when: 1784521559778`. **Próximo número livre: `0049`.**
+  `when: 1784521559778`. A #122 tomou o `0049`
+  (`0049_alerta_risco_clinico`, `when: 1784521560778`), então **o próximo
+  número livre é `0050`** — `when: 1784521561778`.
 - Padrão de `check()` condicional já existe no schema (ex.:
   `patient_protocol_vigencia` em `schema.ts:371-374`,
   `ctm_nao_auto_supervisao` em `schema.ts:404-407`) — usa
@@ -109,8 +111,8 @@ deixa passar sem restringir, preservando compatibilidade retroativa.
 
 ## Plano de migração Drizzle (planejado — NÃO executar)
 
-- **Próximo número:** `0049`.
-- **Nome de arquivo:** `db/migrations/0049_consentimento_titular_adulto.sql`.
+- **Próximo número:** `0050` (o `0049` foi tomado pela #122).
+- **Nome de arquivo:** `db/migrations/0050_consentimento_titular_adulto.sql`.
 - **`when` no journal:** `1784521559778 + 1000 = 1784521560778` (regra
   `drizzle-hand-migration-when-ordering` — nunca placeholder).
 - **DDL exato:**
@@ -144,8 +146,8 @@ ALTER TABLE consent ADD CONSTRAINT consent_responsavel_por_tipo CHECK (
   transação" manualmente — o padrão de statement-breakpoint do projeto já
   resolve isso, desde que o runner de migração não agrupe os 3
   statements numa única transação (verificar `db/migrate.ts` antes de
-  aplicar; se agrupar, split em duas migrações: `0049a` só o `ALTER TYPE`,
-  `0049b` o `DROP NOT NULL` + `CHECK`).
+  aplicar; se agrupar, split em duas migrações: `0050a` só o `ALTER TYPE`,
+  `0050b` o `DROP NOT NULL` + `CHECK`).
 - **Correspondência de schema Drizzle** (`src/db/schema.ts`):
   - `consentTipo`: adicionar `"autoconsentimento_titular_adulto"` ao
     array do `pgEnum` (linha 37-41).
@@ -257,7 +259,7 @@ Já decidido por este spec (desenho travado, não fica em aberto):
 
 - Modelagem D1 (enum novo + nullable + CHECK condicional) e a rejeição
   justificada das 4 alternativas.
-- Nome/número da migração (`0049_consentimento_titular_adulto.sql`) e
+- Nome/número da migração (`0050_consentimento_titular_adulto.sql`) e
   DDL exato.
 - Contrato de `criarPacienteEConsent` (parâmetro, branches de validação,
   valores de insert).
@@ -268,14 +270,14 @@ Já decidido por este spec (desenho travado, não fica em aberto):
 `CLAUDE.md`: "qualquer DDL que altere tabela que já tenha dado" +
 "qualquer mudança em schema de auth/LGPD"):**
 
-1. **Executar a migração `0049`** — `consent` já tem dado real em
+1. **Executar a migração `0050`** — `consent` já tem dado real em
    produção (clínica(s) TEA ativa(s)); `ALTER TYPE`, `DROP NOT NULL` e
    `ADD CONSTRAINT` em tabela com dado é exatamente o caso que
    `CLAUDE.md` marca como "confirmar antes".
 2. **Confirmar se o runner de migração do projeto (`db/migrate.ts`)
    agrupa os 3 statements numa única transação** — determina se a
-   migração pode ser um arquivo só (`0049`) ou precisa virar dois
-   (`0049a`/`0049b`) por causa da restrição do Postgres sobre uso de
+   migração pode ser um arquivo só (`0050`) ou precisa virar dois
+   (`0050a`/`0050b`) por causa da restrição do Postgres sobre uso de
    valor de enum recém-criado na mesma transação. Verificação técnica
    simples, mas decide a estrutura do arquivo de migração.
 3. **Nome/valores exatos de UI** (`tipoConsentimento`, rótulos do
