@@ -59,12 +59,12 @@ limpar() {
 trap limpar EXIT
 
 # ---------------------------------------------------------------------------
-log "1/8 · subindo Postgres + MinIO"
+log "1/9 · subindo Postgres + MinIO"
 "${COMPOSE[@]}" up -d postgres minio >/dev/null
 "${COMPOSE[@]}" build backup >/dev/null
 
 # ---------------------------------------------------------------------------
-log "2/8 · gerando par de chaves age efêmero (a privada NUNCA entra no container de backup)"
+log "2/9 · gerando par de chaves age efêmero (a privada NUNCA entra no container de backup)"
 
 KEYPAIR="$("${COMPOSE[@]}" run --rm --no-deps -T backup bash -c '
 	age-keygen 2>/dev/null
@@ -79,7 +79,7 @@ fi
 ok "par de chaves gerado (recipient=${AGE_RECIPIENT:0:16}...)"
 
 # ---------------------------------------------------------------------------
-log "3/8 · semeando dado reconhecível no banco"
+log "3/9 · semeando dado reconhecível no banco"
 
 # A role app_role precisa existir porque backup.sh aborta se os globals não
 # tiverem nenhum CREATE ROLE — comportamento correto (é o furo do PR #85), mas
@@ -93,7 +93,7 @@ no_container >/dev/null
 ok "tabela canario_offsite + role app_role criadas"
 
 # ---------------------------------------------------------------------------
-log "4/8 · provisionando o bucket off-site (simula o provisionamento manual do runbook)"
+log "4/9 · provisionando o bucket off-site (simula o provisionamento manual do runbook)"
 
 CMD="printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null \
 	&& mc mb --ignore-existing off/${BUCKET_OFFSITE} >/dev/null && echo criado"
@@ -101,7 +101,7 @@ no_container >/dev/null
 ok "bucket ${BUCKET_OFFSITE} provisionado"
 
 # ---------------------------------------------------------------------------
-log "5/8 · CAMINHO FELIZ — rodando backup.sh com off-site habilitado"
+log "5/9 · CAMINHO FELIZ — rodando backup.sh com off-site habilitado"
 
 set +e
 "${COMPOSE[@]}" run --rm -T \
@@ -122,7 +122,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log "6/8 · ASSERÇÕES sobre o que efetivamente chegou no bucket off-site"
+log "6/9 · ASSERÇÕES sobre o que efetivamente chegou no bucket off-site"
 
 CMD="set -e
 printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null
@@ -193,7 +193,7 @@ verificar ASSERT_CONTEUDO "ok" "dump decifrado contém o dado semeado (não é d
 verificar ASSERT_GLOBALS "ok" "globals decifram e contêm CREATE ROLE"
 
 # ---------------------------------------------------------------------------
-log "7/8 · CAMINHOS DE ERRO"
+log "7/9 · CAMINHOS DE ERRO"
 
 # off-site fora do ar: exit 3 (replicação parcial), NUNCA 1, e dump local íntegro.
 set +e
@@ -252,7 +252,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log "8/8 · CADÊNCIA (OFFSITE_INTERVAL_DAYS) — réplica semanal sem depender de ninguém lembrar"
+log "8/9 · CADÊNCIA (OFFSITE_INTERVAL_DAYS) — réplica semanal sem depender de ninguém lembrar"
 
 # Quantos artefatos existem no bucket agora. O marcador .ultimo-offsite foi
 # escrito no passo 5 (único que teve sucesso de upload até aqui).
@@ -340,6 +340,106 @@ if [[ "${EXIT_INTERVALO}" -eq 1 ]]; then
 	ok "OFFSITE_INTERVAL_DAYS=0 => exit 1 na validação (não vira 'nunca replicar' silencioso)"
 else
 	fail "OFFSITE_INTERVAL_DAYS=0 => exit ${EXIT_INTERVALO}, esperado 1"
+fi
+
+# ---------------------------------------------------------------------------
+log "9/9 · REGIÃO DE ASSINATURA SigV4 — o dialeto S3 que o MinIO perdoa e a OCI não"
+
+# POR QUE ESTA SEÇÃO EXISTE: os 18 testes acima passaram verdes enquanto a
+# réplica off-site de PRODUÇÃO não subia nada. O destino real é a Oracle Cloud,
+# e o mc, sem região configurada, assina SigV4 com `us-east-1` (medido). O MinIO
+# ignora a região; a OCI recusa, com uma mensagem que mistura região e
+# credencial e faz o operador procurar no lugar errado. Um teste que só fala
+# MinIO não consegue ver essa classe de bug — daí testar a derivação e o
+# override diretamente.
+#
+# Os endpoints abaixo usam uma região INEXISTENTE de propósito: o formato casa
+# com o da OCI (é o que se quer exercitar) mas o DNS não resolve, então o teste
+# não depende de rede nem manda tráfego para a Oracle.
+readonly ENDPOINT_OCI_FALSO="https://nsfake.compat.objectstorage.regiao-inexistente-9.oraclecloud.com"
+
+# a) região derivada do endpoint da OCI, sem OFFSITE_S3_REGION setado.
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT="${ENDPOINT_OCI_FALSO}" \
+	-e OFFSITE_S3_ACCESS_KEY=chavedeacessofalsa \
+	-e OFFSITE_S3_SECRET_KEY=segredofalsocomtamanhosuficiente \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	backup >/tmp/iris-offsite-regiao-derivada.log 2>&1
+EXIT_DERIVADA=$?
+set -e
+
+if grep -q "assinando SigV4 na região 'regiao-inexistente-9'" /tmp/iris-offsite-regiao-derivada.log; then
+	ok "região derivada do endpoint da OCI (sem OFFSITE_S3_REGION, o mc assinaria us-east-1)"
+else
+	fail "região não foi derivada do endpoint — log: $(grep -i 'sigv4\|região' /tmp/iris-offsite-regiao-derivada.log || echo '(linha ausente)')"
+fi
+
+if grep -q 'path-style=on' /tmp/iris-offsite-regiao-derivada.log; then
+	ok "path-style forçado para 'on' no destino OCI (que não atende bucket em virtual-host)"
+else
+	fail "path-style não foi forçado no destino OCI"
+fi
+
+if [[ "${EXIT_DERIVADA}" -eq 3 ]]; then
+	ok "destino OCI inalcançável => exit 3, backup local preservado"
+else
+	fail "destino OCI inalcançável => exit ${EXIT_DERIVADA}, esperado 3"
+fi
+
+# b) OFFSITE_S3_REGION explícito tem precedência sobre a derivação. É o que
+#    salva o dia se a Oracle mudar o formato do endpoint ou se o destino trocar
+#    de provedor.
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT="${ENDPOINT_OCI_FALSO}" \
+	-e OFFSITE_S3_REGION="eu-frankfurt-1" \
+	-e OFFSITE_S3_ACCESS_KEY=chavedeacessofalsa \
+	-e OFFSITE_S3_SECRET_KEY=segredofalsocomtamanhosuficiente \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	backup >/tmp/iris-offsite-regiao-override.log 2>&1
+set -e
+
+if grep -q "assinando SigV4 na região 'eu-frankfurt-1'" /tmp/iris-offsite-regiao-override.log; then
+	ok "OFFSITE_S3_REGION explícito vence a derivação do endpoint"
+else
+	fail "override de região ignorado — log: $(grep -i 'sigv4' /tmp/iris-offsite-regiao-override.log || echo '(linha ausente)')"
+fi
+
+# c) região explícita num destino que NÃO é OCI não pode quebrar o upload. Esta
+#    é a asserção de não-regressão: o MinIO local continua recebendo a réplica
+#    com a variável nova em jogo.
+ANTES_REGIAO="$(contar_no_bucket)"
+
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_REGION="sa-saopaulo-1" \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	backup >/tmp/iris-offsite-regiao-minio.log 2>&1
+EXIT_REGIAO_MINIO=$?
+set -e
+
+DEPOIS_REGIAO="$(contar_no_bucket)"
+
+if [[ "${EXIT_REGIAO_MINIO}" -eq 0 && "${DEPOIS_REGIAO}" -gt "${ANTES_REGIAO}" ]]; then
+	ok "upload segue funcionando com região explícita (${ANTES_REGIAO} => ${DEPOIS_REGIAO})"
+else
+	fail "região explícita quebrou o upload (exit ${EXIT_REGIAO_MINIO}, ${ANTES_REGIAO} => ${DEPOIS_REGIAO})"
+fi
+
+# d) a sonda pré-upload precisa dizer QUAL região usou quando falha. Sem isso a
+#    próxima falha em produção volta a ser um chute entre credencial e região.
+if grep -q "sonda de autenticação falhou" /tmp/iris-offsite-regiao-derivada.log \
+	&& grep -q "regiao-inexistente-9" /tmp/iris-offsite-regiao-derivada.log; then
+	ok "sonda pré-upload nomeia a região usada ao falhar (diagnóstico não vira adivinhação)"
+else
+	fail "sonda não reportou a região na falha — log: $(grep -i 'sonda' /tmp/iris-offsite-regiao-derivada.log || echo '(linha ausente)')"
 fi
 
 # ---------------------------------------------------------------------------

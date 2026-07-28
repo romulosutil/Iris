@@ -71,6 +71,31 @@ privada ninguém tem é indistinguível de uma boa até o dia do desastre.
 expurgo da Fase 6). Um titular expurgado passa a existir em **três** lugares, um fora do host.
 A #89 deveria fechar antes de o off-site entrar em produção com dado real.
 
+**Segunda rodada (28/07) — dialeto S3: o teste verde e a produção sem cópia.** Com o destino
+Oracle provisionado, o `backup.sh` rodou até o fim e o upload falhou com _"The secret key
+required to complete authentication could not be found. The region must be specified if this
+is not the home region for the tenancy."_ — mensagem que junta duas causas e faz a primeira
+leitura ser "credencial errada". Não era. **Medido no `mc RELEASE.2025-08-13`:** `alias set`
+não tem `--region`, o `config.json` v10 não guarda região, e sem configuração o `mc` assina
+SigV4 com `us-east-1`. Única alavanca disponível: a env var `MC_REGION`, lida por invocação
+(`Credential=.../<região>/s3/aws4_request` confirmado com `mc --debug`). Corrigido: região
+derivada do endpoint quando ele é da OCI, `OFFSITE_S3_REGION` como override, `--path on` no
+destino OCI (não atende bucket em virtual-host) e sonda de autenticação **antes** do upload
+que separa credencial / região / bucket no log.
+
+**Por que 18 testes verdes não pegaram isso.** O `test-offsite.sh` fecha o laço inteiro — cifra,
+sobe, baixa, decifra, restaura — mas **contra o MinIO local**. MinIO ignora região e path-style;
+a OCI não. Teste e produção falavam dialetos S3 diferentes, e a diferença ficava exatamente na
+única cópia que ninguém exercita. Regra que fica: _um teste de integração de destino externo
+precisa cobrir o dialeto do destino real, não só o protocolo_. Seção 9 nova (6 asserções, 25 no
+total) usa endpoint com formato da OCI e região inexistente — exercita a derivação sem depender
+de rede. **Ainda não é prova de que a produção sobe:** só uma execução real contra a Oracle
+fecha isso, e o `mc alias set` também rejeita chave curta em silêncio (agora loga).
+
+**Também corrigido de passagem:** `mc_configurar_alias` descartava `stderr` com `>/dev/null 2>&1`
+— um erro de digitação em credencial virava falha genérica de upload dez linhas depois. Agora
+loga a mensagem do `mc`, com o secret redigido (o `mc` **ecoa a chave inválida** no erro).
+
 ---
 
 ## 🏁 Sessão 25/07/2026 — Go-live #75 Etapa 5: backup + restore testado (OPERANDO EM PROD) — PRs #85, #90, #91, #92
@@ -85,7 +110,7 @@ retenção 30d, `PGUSER=iris` role dona, 06:00 UTC = 03:00 BRT, RSS dormindo 764
 **Achado que definiu o desenho — `pg_dump` não carrega roles.** Roles são objeto de
 **cluster**; restore num cluster novo dava **37 tabelas e 0 policies**, com os 85
 `CREATE POLICY ... TO app_role` falhando com `role does not exist` e o `pg_restore`
-só emitindo *warning*. Ou seja: backup que restaura dado clínico **sem isolamento
+só emitindo _warning_. Ou seja: backup que restaura dado clínico **sem isolamento
 multi-tenant**, sem erro fatal. Backup virou par indivisível `dump` + `globals.sql`
 (`pg_dumpall --globals-only`). Ver `[[pg-dump-perde-roles-e-rls]]`.
 

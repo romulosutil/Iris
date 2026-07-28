@@ -21,6 +21,10 @@
 #   OFFSITE_S3_ACCESS_KEY   obrigatório SE OFFSITE_S3_ENDPOINT setado
 #   OFFSITE_S3_SECRET_KEY   obrigatório SE OFFSITE_S3_ENDPOINT setado
 #   OFFSITE_S3_BUCKET       default iris-backups-offsite
+#   OFFSITE_S3_REGION       opcional — região de ASSINATURA SigV4 do destino
+#                            off-site. Vazio = derivada do endpoint quando ele
+#                            é da OCI; senão o mc assina `us-east-1`. Ver
+#                            "região de assinatura" abaixo.
 #   OFFSITE_AGE_RECIPIENT   obrigatório SE OFFSITE_S3_ENDPOINT setado — chave
 #                            PÚBLICA age (age1...). Ver seção "off-site" abaixo.
 #   OFFSITE_INTERVAL_DAYS   default 1 (toda execução). 7 = semanal. Só afeta a
@@ -118,7 +122,12 @@ log_error() {
 
 # Configura um alias do mc lendo as credenciais por STDIN.
 #
-# Uso: mc_configurar_alias <alias> <endpoint> <access_key> <secret_key>
+# Uso: mc_configurar_alias <alias> <endpoint> <access_key> <secret_key> [path]
+#
+# <path> é o `--path` do mc (auto|on|off), default `auto`. O off-site na OCI
+# passa `on`: a S3 Compatibility API da Oracle não atende bucket em virtual-host
+# (`<bucket>.<ns>.compat.objectstorage...` não existe no DNS deles), só em path.
+# `auto` funciona por acidente hoje; explicitar remove a variável.
 #
 # Recebe por parâmetro (e não por global) porque existem DOIS destinos S3 com
 # credenciais distintas: o MinIO local e o off-site da #86. Compartilhar
@@ -141,9 +150,30 @@ log_error() {
 # MC_CONFIG_DIR aponta pra um diretório temporário 0700 apagado no EXIT, fora do
 # volume persistente `/backups`.
 mc_configurar_alias() {
-	local alias="$1" endpoint="$2" access_key="$3" secret_key="$4"
-	printf '%s\n%s\n' "${access_key}" "${secret_key}" \
-		| mc alias set "${alias}" "${endpoint}" --api S3v4 >/dev/null 2>&1
+	local alias="$1" endpoint="$2" access_key="$3" secret_key="$4" path_style="${5:-auto}"
+	local saida
+
+	# stderr capturado em vez de descartado: `mc alias set` recusa chave curta
+	# ("Invalid secret key `...`") e endpoint malformado, e engolir isso
+	# transformava um erro de digitação numa falha de upload genérica dez linhas
+	# depois. Rodar dentro do `if` também evita que o ERR trap mate o script
+	# antes de a mensagem ser logada.
+	#
+	# CUIDADO ao mexer: o mc ECOA a chave inválida na mensagem de erro. Por isso
+	# só o access key pode aparecer aqui; a linha abaixo filtra qualquer eco do
+	# secret antes de logar.
+	if saida="$(
+		printf '%s\n%s\n' "${access_key}" "${secret_key}" \
+			| mc alias set "${alias}" "${endpoint}" --api S3v4 --path "${path_style}" 2>&1
+	)"; then
+		return 0
+	fi
+
+	if [[ -n "${secret_key}" ]]; then
+		saida="${saida//${secret_key}/***}"
+	fi
+	log_error "mc alias set falhou para '${alias}': ${saida}"
+	return 1
 }
 
 # shellcheck disable=SC2329 # invocada indiretamente via `trap ... ERR`
@@ -184,6 +214,34 @@ readonly OFFSITE_S3_ACCESS_KEY="${OFFSITE_S3_ACCESS_KEY:-}"
 readonly OFFSITE_S3_SECRET_KEY="${OFFSITE_S3_SECRET_KEY:-}"
 readonly OFFSITE_S3_BUCKET="${OFFSITE_S3_BUCKET:-iris-backups-offsite}"
 readonly OFFSITE_AGE_RECIPIENT="${OFFSITE_AGE_RECIPIENT:-}"
+
+# --- região de assinatura do off-site ---------------------------------------
+# O mc NÃO tem `--region` em `alias set` e o config.json v10 não guarda região
+# (medido no mc RELEASE.2025-08-13). Sem nada configurado ele assina SigV4 com
+# `us-east-1`. O MinIO local não liga; a OCI liga, e devolve uma mensagem que
+# mistura duas causas — "The secret key required to complete authentication
+# could not be found. The region must be specified if this is not the home
+# region for the tenancy." — o que faz um erro de região parecer credencial
+# errada. Custou uma janela de backup sem cópia off-site.
+#
+# A única alavanca que o mc expõe é a env var MC_REGION (AWS_REGION também
+# funciona), lida por invocação. É por isso que os comandos off-site abaixo são
+# prefixados com ela em vez de a região morar no alias.
+#
+# Derivar do endpoint quando ele é da OCI evita uma env var a mais para o
+# operador esquecer no dia da recriação do serviço; o override explícito
+# continua valendo para qualquer outro provedor.
+if [[ "${OFFSITE_S3_ENDPOINT}" =~ ^https?://[^/]*\.compat\.objectstorage\.([a-z0-9-]+)\.oraclecloud\.com/?$ ]]; then
+	OFFSITE_REGION_DERIVADA="${BASH_REMATCH[1]}"
+	# Path-style só é forçado no destino OCI, que não atende virtual-host.
+	# Em qualquer outro provedor o `auto` do mc continua decidindo.
+	readonly OFFSITE_PATH_STYLE="on"
+else
+	OFFSITE_REGION_DERIVADA=""
+	readonly OFFSITE_PATH_STYLE="auto"
+fi
+
+readonly OFFSITE_REGION="${OFFSITE_S3_REGION:-${OFFSITE_REGION_DERIVADA}}"
 readonly OFFSITE_INTERVAL_DAYS="${OFFSITE_INTERVAL_DAYS:-1}"
 readonly OFFSITE_MARCADOR="${BACKUP_DIR}/.ultimo-offsite"
 
@@ -459,9 +517,39 @@ else
 	fi
 
 	if [[ "${offsite_ok}" -eq 1 ]]; then
-		if ! mc_configurar_alias "${MC_ALIAS_OFFSITE}" "${OFFSITE_S3_ENDPOINT}" "${OFFSITE_S3_ACCESS_KEY}" "${OFFSITE_S3_SECRET_KEY}"; then
+		if ! mc_configurar_alias "${MC_ALIAS_OFFSITE}" "${OFFSITE_S3_ENDPOINT}" \
+			"${OFFSITE_S3_ACCESS_KEY}" "${OFFSITE_S3_SECRET_KEY}" "${OFFSITE_PATH_STYLE}"; then
 			log_error "falha ao configurar o alias off-site do mc — conferir OFFSITE_S3_ENDPOINT/credenciais (valores não são logados)"
 			offsite_ok=0
+		fi
+	fi
+
+	# Região é dado de configuração, não segredo: logar é o que permite ler o
+	# log de uma falha futura e saber com QUAL região o mc assinou.
+	if [[ "${offsite_ok}" -eq 1 ]]; then
+		if [[ -n "${OFFSITE_REGION}" ]]; then
+			log_info "off-site: assinando SigV4 na região '${OFFSITE_REGION}' (path-style=${OFFSITE_PATH_STYLE})"
+		else
+			log_info "off-site: OFFSITE_S3_REGION não setado e endpoint não é OCI — o mc vai assinar 'us-east-1' (path-style=${OFFSITE_PATH_STYLE})"
+		fi
+	fi
+
+	# Sonda antes do upload. Não é redundante com o `mc cp`: quando o cp falha
+	# sozinho, o erro não diz se o problema é a credencial, a região de
+	# assinatura ou a permissão naquele bucket. Rodando `mc ls` na raiz e no
+	# bucket, a combinação de resultados responde isso no próprio log.
+	#
+	# Deliberadamente NÃO fatal: a credencial off-site é restrita de propósito e
+	# pode não ter ListBucket. Falha aqui vira diagnóstico, não bloqueio — quem
+	# decide é o cp.
+	if [[ "${offsite_ok}" -eq 1 ]]; then
+		if sonda="$(MC_REGION="${OFFSITE_REGION}" mc ls "${MC_ALIAS_OFFSITE}/" 2>&1)"; then
+			log_info "off-site: sonda OK — credencial autentica e a região de assinatura é aceita"
+			if ! sonda="$(MC_REGION="${OFFSITE_REGION}" mc ls "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
+				log_error "off-site: autenticação OK, mas o bucket '${OFFSITE_S3_BUCKET}' não respondeu — nome errado ou credencial sem permissão nele. Resposta: ${sonda}"
+			fi
+		else
+			log_error "off-site: sonda de autenticação falhou ANTES do upload. Causas, nesta ordem: (1) OFFSITE_S3_ACCESS_KEY/SECRET não são um par Customer Secret Key válido da OCI; (2) região de assinatura errada — usada '${OFFSITE_REGION:-us-east-1}'. Resposta: ${sonda}"
 		fi
 	fi
 
@@ -473,8 +561,8 @@ else
 		# criar bucket falharia e mascararia o erro real. O bucket é
 		# provisionado uma vez, à mão, junto com a regra de lifecycle que faz
 		# a retenção — ver o runbook em infra/README.md.
-		if mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_NAME}" >/dev/null \
-			&& mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_GLOBALS_NAME}" >/dev/null; then
+		if MC_REGION="${OFFSITE_REGION}" mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_NAME}" >/dev/null \
+			&& MC_REGION="${OFFSITE_REGION}" mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_GLOBALS_NAME}" >/dev/null; then
 			# Marcador SÓ aqui, no sucesso: uma réplica que falhou continua
 			# devida e tenta de novo amanhã, independente do intervalo.
 			date -u '+%Y-%m-%dT%H:%M:%SZ' >"${OFFSITE_MARCADOR}"
