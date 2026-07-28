@@ -167,6 +167,51 @@ foi escrita e mergeada horas antes de esse caminho aparecer em produção. Sem e
 teria visto só "o par está INCOMPLETO no bucket" e caçado um incidente classe #85 inexistente,
 em vez de ler `Bucket does not exist` vindo do provedor.
 
+**Continuação 28/07 — tentativa de rodar o runbook da #105, causa raiz isolada por medição.**
+Credencial de produção (`iris-backup-vps`) foi exposta na sessão e teve que ser rotacionada:
+antiga apagada, `iris-backup-vps-novo` criada (prefixo `131642...`, 28/07 10:41 UTC), variáveis
+do serviço atualizadas no Easypanel, confirmado no console 1 Customer Secret Key só (a antiga,
+prefixo `f18998...`, não existe mais). Pendente confirmar se o serviço de backup precisa
+reiniciar para ler as variáveis novas — se o scheduler leu env só no start, o ciclo de 29/07
+falha no upload.
+
+Causa raiz do `Bucket does not exist` no download: a política `iris-backup-offsite-writeonly`
+concede ao grupo `iris-backup-writers` só `OBJECT_CREATE` + `OBJECT_INSPECT` + `read buckets` —
+falta `read objects`. A listagem funciona, o GET falha, e a Oracle mascara a negação de leitura
+como bucket inexistente. Medição: `mc` reportou `Total 373.79 KiB` / `Transferred 0 B` — viu o
+tamanho (INSPECT), não leu o conteúdo (READ). Statement `Allow group iris-backup-writers to read
+objects in tenancy where target.bucket.name='iris-backups-offsite'` foi adicionado como terceiro
+statement (não editado no primeiro, para não mexer na cláusula que impede o VPS de apagar/
+adulterar a réplica), usado para verificar, e removido em seguida.
+
+Com `read objects` ativo, o download funcionou e a decifragem falhou com `age: error: no
+identity matched any of the recipients` — o único par no bucket (`iris-20260728T024929Z`,
+02:49:29 UTC) é anterior à rotação da chave `age` (~04:00 UTC), cifrado com a chave perdida. É o
+caso já previsto no critério de aceite 3 da #105; o lifecycle de 30 dias expurga sozinho. **A
+#105 continua aberta**: a prova de decifragem depende do objeto que o ciclo de 29/07 (~02:49 UTC)
+vai gerar com o recipient novo. Sequência de amanhã: reaplicar `read objects`, rodar o verify,
+confrontar o `sha256` impresso com o `sha256=` logado pelo `backup.sh`, remover o statement.
+
+**Defeitos corrigidos no `infra/backup/verify-offsite.sh`** (branch `fix/105-guards-verify-offsite`,
+2 commits, ainda sem merge): guard de variável obrigatória passou a detectar valor com
+placeholder `<...>` (não só vazia) — motivado por um endpoint exportado com `<namespace>` literal
+copiado do runbook, que o script diagnosticou como falta de permissão IAM em plena DR; mensagens
+de falha de listagem/download/decifragem reescritas para stderr da ferramenta como evidência
+primária e hipóteses numeradas, sem afirmar causa única (o `verify-offsite.sh` era regressão em
+relação ao padrão já usado no `backup.sh`); na falha de decifragem o script agora deriva a chave
+pública da identity recebida por stdin e compara com `OFFSITE_AGE_RECIPIENT` quando a env está
+disponível, separando sozinho "chave errada" de "objeto anterior à rotação" (nunca loga a
+privada); carimbo do objeto impresso em formato legível (`2026-07-28 02:49:29 UTC`); `.gitignore`
+passou a cobrir `*.age`, `id.txt`, `identity*`, `chave-privada*`, `chave-iris*` — nomes que o
+próprio runbook usa de exemplo para a chave privada e que antes não eram ignorados.
+
+**Gaps abertos:** `shellcheck` não instalado no ambiente do operador — as correções foram
+validadas com `bash -n` e execução, não por análise estática. A chave privada `age` está num
+único arquivo na máquina do operador, sem cópia em cofre — mesmo modo de falha que causou a #86.
+O `verify-offsite.sh` é copiado para dentro da imagem no build (`COPY` no `infra/backup/Dockerfile`),
+não montado por volume — alterar o script exige `docker compose --profile backup build backup`
+antes de testar, senão o container roda a versão antiga (aconteceu nesta sessão).
+
 ---
 
 ## 🏁 Sessão 25/07/2026 — Go-live #75 Etapa 5: backup + restore testado (OPERANDO EM PROD) — PRs #85, #90, #91, #92
