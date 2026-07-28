@@ -30,8 +30,22 @@
 **Entregue:** atualização e consolidação do documento `docs/legal/politica-retencao-dados.md` travando a matriz de retenção unificada para o MVP (#122, #116, #89):
 - **Prontuário Multidisciplinar:** Default `MAX(18 anos do menor, alta + 10 anos)`, configurável pela clínica em `clinic.politica_retencao_meses`.
 - **Alertas de Risco Clínico (#122):** Pseudonimização LGPD (`pseudonimizado_em IS NOT NULL`, zerando `patient_id` e `session_id`), preservando o registro anônimo para defesa jurídica do software.
-- **Logs de Acesso (#116):** 6 meses estritos (Marco Civil da Internet, art. 15).
-- **Backups (#89):** Retenção de 30 dias (locais e off-site OCI S3).
+- **Logs de Acesso (#116):** mínimo de 6 meses (Marco Civil da Internet, art. 15).
+- **Backups (#89):** 30 dias — prune do `backup.sh` (`RETENTION_DAYS`) nas cópias locais/MinIO; off-site depende de Lifecycle Rule no bucket.
+
+**Não fecha sozinho** (verificado no código em 28/07/2026, registrado na §6 do
+documento — a política descreve intenção, não estado do software):
+- **Nenhum código chama `app_purgar_paciente`.** A função e o gate
+  `app_paciente_expurgavel` existem desde a `0045`, mas não há ação, tela ou job
+  que as invoque: hoje o expurgo LGPD só sai por SQL manual. É o item que mais
+  destoa entre a política escrita e o produto.
+- **Não existe expurgo do `audit_log` por idade (#116).** O único caminho que
+  toca a trilha é o `app_purgar_paciente`, e ele *pseudonimiza* no expurgo do
+  paciente — não apaga por tempo. Sem job, o prazo de 6 meses é só um mínimo
+  legal cumprido por inércia (nada é apagado), não uma regra implementada.
+- **Lifecycle Rule do bucket off-site (OCI S3) não é verificável pelo repo.**
+  O `backup.sh` não poda o off-site de propósito. Confirmar no console do
+  provedor antes de afirmar os 30 dias — fato de infra se verifica medindo.
 
 ---
 

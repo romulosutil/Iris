@@ -6,7 +6,7 @@
 
 ## 1. Objetivo e escopo
 
-Esta política define por quanto tempo o Iris mantém os dados pessoais e sensíveis (dado de saúde) tratados na plataforma, e o processo de eliminação ao fim do prazo. Aplica-se a todo dado de: `Patient`, `PatientClinicalProfile`, `SessionNote`, `AudioCapture`, `Extraction`, `Evidence`, `MilestoneAssessment`, `Report`, `Consent`, `AlertaRiscoClinico` e `AuditLog` (modelo completo em `docs/dados/modelo-de-dados.md`).
+Esta política define por quanto tempo o Iris mantém os dados pessoais e sensíveis (dado de saúde) tratados na plataforma, e o processo de eliminação ao fim do prazo. Aplica-se a todo dado de: `Patient`, `PatientClinicalProfile`, `SessionNote`, `AudioCapture`, `Extraction`, `Evidence`, `MilestoneCandidacy`, `Report`, `Consent`, `AlertaRiscoClinico` e `AuditLog` (modelo completo em `docs/dados/modelo-de-dados.md`).
 
 ---
 
@@ -22,10 +22,10 @@ Isso é consequência direta de o Iris ser classificado como produto de tecnolog
 
 | Categoria de Dado | Prazo de Retenção | Regulamentação / Fundamento Legal | Comportamento no Fim do Prazo |
 | :--- | :--- | :--- | :--- |
-| **Prontuário Multidisciplinar** (`Patient`, `Session`, `Extraction`, `Report`) | Default: `MAX(18 anos do menor, alta + 10 anos)` | CFP (Res. 01/2009 & 04/2020), CFFa, COFFITO. LGPD Art. 16, I (obrigação legal/regulatória). | Expurgo a pedido da clínica ou ao atingir o prazo via `app_purgar_paciente`. |
+| **Prontuário Multidisciplinar** (`Patient`, `Session`, `Extraction`, `Report`) | Default: `MAX(18 anos do menor, alta + 10 anos)`, configurável em `clinic.politica_retencao_meses` (nunca para encurtar) | CFP (Res. 01/2009 & 04/2020), CFFa, COFFITO. LGPD Art. 16, I (obrigação legal/regulatória). | Expurgo via `app_purgar_paciente`, com o gate `app_paciente_expurgavel` (migração `0045`). **Sempre por comando da clínica — não há expurgo automático ao vencer o prazo**, e hoje ainda não há tela nem ação de aplicação que chame a função (§6). |
 | **Alertas de Risco Clínico** (`AlertaRiscoClinico` — #122) | Acompanha o prontuário | Defesa de responsabilidade técnica da clínica / prova do software. | **Pseudonimização LGPD (`pseudonimizado_em IS NOT NULL`)**: ao expurgar o paciente, `patient_id` e `session_id` viram `NULL`. O registro anônimo e a trilha no `audit_log` permanecem imutáveis (LGPD Art. 12). |
-| **Logs de Acesso à Aplicação** (`AuditLog` de autenticação — #116) | **6 meses (180 dias)** | Marco Civil da Internet (Lei 12.965/2014, Art. 15). | Expurgo automático dos registros de IP/sessão brutos ao completar 6 meses. |
-| **Cópia de Segurança / Backups** (`MinIO` + `OCI S3` Off-site — #89) | **30 dias** | LGPD Art. 46 (Segurança e Recuperação). | Rotação automática via script de backup e Lifecycle Rule no Object Storage. |
+| **Logs de Acesso à Aplicação** (`AuditLog` de autenticação — #116) | **6 meses (180 dias)** — mínimo legal, não teto | Marco Civil da Internet (Lei 12.965/2014, Art. 15). | Expurgo dos registros brutos ao completar 6 meses. **Não implementado** (§6): não existe job de expurgo de `audit_log` por idade. O único caminho que hoje toca a trilha é `app_purgar_paciente`, que a **pseudonimiza** no expurgo do paciente — não a apaga por tempo. |
+| **Cópia de Segurança / Backups** (`MinIO` + `OCI S3` Off-site — #89) | **30 dias** | LGPD Art. 46 (Segurança e Recuperação). | Local e MinIO: prune automático no `infra/backup/backup.sh` (`RETENTION_DAYS`, default 30). Off-site (OCI S3): o script **não poda de propósito** — a retenção depende de uma Lifecycle Rule no bucket, do lado do provedor (§6). |
 
 ---
 
@@ -45,6 +45,20 @@ O responsável legal do paciente pode solicitar, a qualquer momento através da 
 
 ---
 
-## 6. Encarregado (DPO)
+## 6. Lacunas de implementação (o que esta política ainda descreve como intenção)
+
+Esta seção existe para que a política não seja lida como descrição do que o
+software já faz. Cada item foi conferido no código em 28/07/2026 e nenhum deles
+tem implementação hoje:
+
+| Lacuna | Estado verificado | Onde fecha |
+| :--- | :--- | :--- |
+| Expurgo de prontuário ao vencer o prazo | `app_purgar_paciente` e `app_paciente_expurgavel` existem na `0045`, mas **nenhum código da aplicação as chama** (nenhuma ação, tela ou job). O expurgo hoje só acontece por SQL manual. | Fase 6 / BACKLOG |
+| Expurgo do `audit_log` aos 6 meses (#116) | Não existe job nem função de expurgo por idade. | BACKLOG |
+| Lifecycle Rule de 30 dias no bucket off-site (OCI S3) | É configuração do provedor, fora do repositório — **confirmar no console do bucket**, não presumir pelo texto desta política. | #89 |
+
+---
+
+## 7. Encarregado (DPO)
 
 A clínica-cliente, como controladora, é responsável por indicar seu encarregado (DPO) próprio (LGPD Art. 41). O Iris mantém contato institucional de privacidade em `privacidade@irisclinica.ia.br`.
