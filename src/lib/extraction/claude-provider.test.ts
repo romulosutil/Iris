@@ -32,7 +32,7 @@ const saidaValida: AgentOutput = {
 describe("ClaudeProvider", () => {
   test("mapeia a saída validada do agente para drafts 'sugerida'", async () => {
     const invoker = vi.fn().mockResolvedValue(saidaValida);
-    const drafts = await new ClaudeProvider(invoker).extrair(ctx);
+    const { drafts } = await new ClaudeProvider(invoker).extrair(ctx);
 
     expect(drafts).toHaveLength(1);
     const d = drafts[0]!;
@@ -56,7 +56,7 @@ describe("ClaudeProvider", () => {
 
   test("saída vazia (nenhuma evidência) devolve zero drafts — sucesso, não falha", async () => {
     const vazio: AgentOutput = { extracoes: [], resumo_sessao: "Nada a extrair." };
-    const drafts = await new ClaudeProvider(vi.fn().mockResolvedValue(vazio)).extrair(ctx);
+    const { drafts } = await new ClaudeProvider(vi.fn().mockResolvedValue(vazio)).extrair(ctx);
     expect(drafts).toHaveLength(0);
   });
 

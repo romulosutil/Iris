@@ -41,7 +41,7 @@ describe("resolveProvider", () => {
 
 describe("NullProvider", () => {
   test("não gera sugestão; marca a extração como pendente de reprocessamento", async () => {
-    const drafts = await new NullProvider().extrair(ctx);
+    const { drafts } = await new NullProvider().extrair(ctx);
     expect(drafts).toHaveLength(1);
     expect(drafts[0]!.estado).toBe("pendente_reprocessamento");
     expect(drafts[0]!.subtipo).toBe("pendente");
@@ -50,11 +50,11 @@ describe("NullProvider", () => {
 
 describe("DemoStubProvider", () => {
   test("gera >=1 extração fake 'sugerida' ligada a texto da nota", async () => {
-    const drafts = await new DemoStubProvider().extrair(ctx);
+    const { drafts } = await new DemoStubProvider().extrair(ctx);
     expect(drafts.length).toBeGreaterThanOrEqual(1);
     expect(drafts.every((d) => d.estado === "sugerida")).toBe(true);
     // determinístico: mesmo input → mesma quantidade
-    const again = await new DemoStubProvider().extrair(ctx);
+    const { drafts: again } = await new DemoStubProvider().extrair(ctx);
     expect(again.length).toBe(drafts.length);
     // trecho_fonte vem do texto da nota (fatia real, não inventada)
     expect(ctx.notaConsolidada).toContain(drafts[0]!.trechoFonte);

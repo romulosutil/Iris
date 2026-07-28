@@ -344,6 +344,13 @@
       "when": 1784521559778,
       "tag": "0048_snapshot_candidatura_team_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1784521560778,
+      "tag": "0049_alerta_risco_clinico",
+      "breakpoints": true
     }
   ]
 }

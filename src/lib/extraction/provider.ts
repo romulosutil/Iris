@@ -1,3 +1,5 @@
+import type { AlertaRiscoAgente } from "./agent-output-schema";
+
 export type ExtractionContext = {
   sessionId: string;
   clinicId: string;
@@ -27,8 +29,23 @@ export type ExtractionDraft = {
   estado: "sugerida" | "pendente_reprocessamento";
 };
 
+/**
+ * #122 — o sinal de risco (R20 / R5-TC) viaja SEPARADO das extrações, e não
+ * como mais um `ExtractionDraft`.
+ *
+ * Motivo: extração vai para a fila de validação por exceção do coordenador
+ * (V1) e pode ficar dias em `sugerida`. Risco é notificação imediata com prazo
+ * — está explicitamente FORA daquela fila. Modelá-lo como draft o faria herdar
+ * o ciclo de vida errado, e um risco esperando validação é o oposto do que a
+ * spec pede.
+ */
+export type ExtractionResult = {
+  drafts: ExtractionDraft[];
+  alertaRisco: AlertaRiscoAgente | null;
+};
+
 export interface ExtractionProvider {
-  extrair(ctx: ExtractionContext): Promise<ExtractionDraft[]>;
+  extrair(ctx: ExtractionContext): Promise<ExtractionResult>;
 }
 
 import { DemoStubProvider } from "./demo-stub-provider";

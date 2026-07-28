@@ -6,7 +6,7 @@
 > a regra existe e **QUANDO** ela dispara — casos de teste já fixam isso
 > (`docs/agente/casos-de-teste-terapia-convencional.md` TC-2,
 > `docs/agente/casos-de-teste-tcc.md` T5). Este documento fecha **O QUE
-> ACONTECE DEPOIS** do disparo: canal, SLA, escalonamento, modelo de dado,
+> ACONTECE DEPOIS** do disparo: canal, prazo, escalonamento, modelo de dado,
 > copy. Escopo: só especificação/documentação — nada aqui está implementado.
 > Contexto lido antes de escrever: os dois protocolos acima, `README.md` (8
 > princípios), `docs/governanca/validacao-coordenador.md` (V1-V5),
@@ -14,7 +14,7 @@
 > linhas ~1151-1223), `src/app/(app)/supervisao/logic.ts` e `BACKLOG.md`
 > (sessão 20/07/2026, Fase 5 Fatia 2).
 
-**Como ler este documento:** ele fecha decisões técnicas (canal, SLA,
+**Como ler este documento:** ele fecha decisões técnicas (canal, prazo,
 schema, copy) com recomendação concreta e justificada — não deixa "opções
 penduradas". Mas há um ponto (Seção 5, duty to warn) que é **explicitamente
 deixado em aberto**, porque é decisão de responsabilidade profissional/ética
@@ -127,7 +127,7 @@ alerta). Duas medidas concretas para não reintroduzir esse problema:
    inequívoca) e um alerta `certeza: "ambiguo_citado"` (ex.: "brincou que ia
    sumir do mapa") NUNCA deveriam ter o mesmo tratamento de urgência na UI —
    ambos disparam, ambos entram na fila, mas o explícito é visualmente
-   distinto e o SLA (Seção 4) pode diferenciar por certeza, não só por
+   distinto e o prazo (Seção 4) pode diferenciar por certeza, não só por
    severidade. Sem essa distinção, cada caso ambíguo (que existirá em volume
    real, dado que linguagem coloquial de sofrimento é comum) teria o mesmo
    peso visual de uma emergência real — a receita exata da fadiga de alerta.
@@ -201,7 +201,7 @@ schema real (`src/db/schema.ts` linhas 1151-1223) e a lógica
    forçar o padrão de "faltas" (ambos nulos) e perderia a chance de um
    localizador mais específico (severidade, certeza, canal) que a tabela
    atual não tem colunas para representar sem migração.
-3. **SLA e escalonamento (Seção 4) não existem em NENHUM sinal atual da
+3. **prazo e escalonamento (Seção 4) não existem em NENHUM sinal atual da
    tabela `alerta`** (confirmado lendo `logic.ts`: reconhecer/resolver/
    descartar não têm timestamp de prazo nem lógica de escalonamento) — isso
    não é uma pequena extensão, é um conceito novo de domínio (tempo como
@@ -229,9 +229,9 @@ muito maior" já citado na própria issue #101.
 
 ---
 
-## 4. SLA e escalonamento
+## 4. Prazos e escalonamento interno
 
-Este é o primeiro conceito de SLA/escalonamento por tempo em qualquer fila
+Este é o primeiro conceito de prazo/escalonamento por tempo em qualquer fila
 do Iris — não há precedente direto no produto para adaptar; a proposta abaixo
 é desenho novo, sujeito a validação com o Rômulo antes de virar código (fora
 do escopo deste documento, que é só especificação).
@@ -245,20 +245,24 @@ do escopo deste documento, que é só especificação).
 > existe prazo legal brasileiro para resposta clínica a crise (o parecer
 > confirma), e prometer resposta humana em 15 minutos é promessa de
 > atendimento de emergência que o produto não pode cumprir — notificação web
-> não fura o "Não perturbe" do SO. Onde o texto abaixo diz "SLA", leia-se
-> sempre no sentido restrito de prazo interno do software.
+> não fura o "Não perturbe" do SO. O termo "SLA" foi eliminado do texto desta
+> spec; onde ele ainda aparecer como identificador de banco já criado
+> (`sla_minutos`, `idx_alerta_risco_sla`, migração
+> `db/migrations/0049_alerta_risco_clinico.sql`), leia-se sempre no sentido
+> restrito de prazo interno do software — nome de coluna/índice não é copy, e
+> renomeá-los custaria uma migração sem ganho jurídico.
 >
 > **Declaração obrigatória na UI**, ao lado de qualquer temporizador de prazo:
 > *"Estes prazos regem apenas o envio de alertas dentro do sistema Iris para
 > os gestores da clínica. O Iris não realiza atendimento e não garante a
 > presença de profissionais logados."*
 
-| Severidade                                             | SLA de reconhecimento (por qualquer um dos dois destinatários) |
+| Severidade                                             | Prazo de reconhecimento (por qualquer um dos dois destinatários) |
 | -------------------------------------------------------- | ------------------------------------------------------------------ |
 | `ideacao_ativa_com_plano`, `tentativa_relatada`         | 15 minutos                                                          |
 | `ideacao_ativa_sem_plano`, `autolesao_recente`          | 1 hora                                                              |
 | `ideacao_passiva`, `violencia_sofrida`/`praticada`, `risco_a_terceiro` | 4 horas (mesmo dia útil)                             |
-| Qualquer severidade com `certeza: "ambiguo_citado"`     | Mesmo SLA da severidade classificada — a ambiguidade não relaxa o prazo, só afeta apresentação (Seção 2) |
+| Qualquer severidade com `certeza: "ambiguo_citado"`     | Mesmo prazo da severidade classificada — a ambiguidade não relaxa o prazo, só afeta apresentação (Seção 2) |
 
 "Reconhecer" aqui significa uma ação humana explícita de "estou ciente,
 estou avaliando" — não implica que o caso esteja resolvido, só que alguém
@@ -269,13 +273,13 @@ com competência clínica já está com os olhos nele. Distinto de "resolver"
 
 Proposta em 2 estágios:
 
-1. **Estágio 1 (SLA vencido, ninguém reconheceu):** escalar para TODOS os
+1. **Estágio 1 (prazo vencido, ninguém reconheceu):** escalar para TODOS os
    coordenadores da clínica (não só o vinculado ao paciente) — o grafo M:N
    já suporta múltiplos coordenadores por clínica (princípio 7 do README).
-   Notificação de escalonamento explicitamente marcada como "SLA de alerta
-   de risco vencido" — nunca silenciosa, mesmo princípio de V4
+   Notificação de escalonamento explicitamente marcada como "prazo de
+   reconhecimento de alerta de risco vencido" — nunca silenciosa, mesmo princípio de V4
    (`validacao-coordenador.md`: "a notificação nunca é silenciosa").
-2. **Estágio 2 (dobro do SLA original vencido, ainda ninguém reconheceu):**
+2. **Estágio 2 (dobro do prazo original vencido, ainda ninguém reconheceu):**
    **TRAVADO** — desenho fechado abaixo. Era o único ponto em branco desta
    spec; o parecer jurídico (Thiago Lyra, `docs/legal/parecer-juridico-duty-to-warn.md`,
    pergunta 2) travou a **Opção B**: o estágio 2 existe e é **estritamente
@@ -495,9 +499,9 @@ export const alertaRiscoCerteza = pgEnum("alerta_risco_certeza", [
 
 export const alertaRiscoStatus = pgEnum("alerta_risco_status", [
   "aberto",              // recém-criado, aguardando reconhecimento
-  "reconhecido",         // um dos destinatários confirmou ciência (SLA cumprido)
-  "escalado_estagio_1",  // SLA vencido, escalado para todos coordenadores da clínica
-  "escalado_estagio_2",  // 2º SLA vencido — canal externo (Seção 4.2, pendente Seção 5)
+  "reconhecido",         // um dos destinatários confirmou ciência (prazo cumprido)
+  "escalado_estagio_1",  // prazo vencido, escalado para todos coordenadores da clínica
+  "escalado_estagio_2",  // dobro do prazo vencido — saturação INTERNA da clínica: banner clínica-wide + RT + protocolo da própria clínica + log imutável (Seção 4.2.1). Nunca canal externo.
   "resolvido",           // conduta humana definida e registrada
   "descartado",          // avaliado como não-risco após revisão humana (nunca apaga o registro)
 ]);
@@ -507,8 +511,11 @@ export const alertaRiscoClinico = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     clinicId: uuid("clinic_id").notNull().references(() => clinic.id),
-    patientId: uuid("patient_id").notNull(),
-    sessionId: uuid("session_id").notNull().references(() => session.id),
+    // nulos-permitidos na COLUNA, obrigatórios na PRÁTICA — ver a nota
+    // "§7 × H2" logo abaixo do bloco; a invariante é garantida pelo CHECK
+    // `alerta_risco_vinculo`, não pelo notNull.
+    patientId: uuid("patient_id"),
+    sessionId: uuid("session_id").references(() => session.id),
 
     categoria: alertaRiscoCategoria("categoria").notNull(),
     severidade: alertaRiscoSeveridade("severidade").notNull(),
@@ -537,6 +544,8 @@ export const alertaRiscoClinico = pgTable(
     atualizadoPor: uuid("atualizado_por").notNull().references(() => appUser.id),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
 
+    pseudonimizadoEm: timestamp("pseudonimizado_em", { withTimezone: true }), // marca de expurgo LGPD (H2, Seção 10)
+
     deletadoEm: timestamp("deletado_em", { withTimezone: true }), // nunca usado para expurgo (ver achado 9.4 e H2, Seção 10) — só paridade RLS
   },
   (t) => [
@@ -551,6 +560,28 @@ export const alertaRiscoClinico = pgTable(
 );
 ```
 
+> **Nota de reconciliação §7 × H2 — `patientId` / `sessionId` nulos-permitidos
+> (decisão de implementação, travada).** A versão anterior desta seção pedia
+> `patientId`/`sessionId` com `notNull`. Isso é incompatível com o H2 (Seção
+> 10): o expurgo LGPD **pseudonimiza em vez de deletar** o alerta, mas o
+> erasure do paciente **deleta** as linhas de `patient` e `session` — as duas
+> coisas não podem ser verdadeiras ao mesmo tempo na mesma coluna, porque uma
+> FK `notNull` não sobrevive ao sumiço do pai.
+>
+> Implementado assim em `db/migrations/0049_alerta_risco_clinico.sql`:
+> `patient_id` e `session_id` são **nulos-permitidos no nível da coluna**, e a
+> invariante "todo alerta vivo tem paciente e sessão" passa a ser garantida
+> pelo CHECK `alerta_risco_vinculo`, que só admite os nulos quando
+> `pseudonimizado_em IS NOT NULL`. Ou seja: alerta vivo → ambos preenchidos,
+> obrigatoriamente; alerta pseudonimizado → ambos nulos, obrigatoriamente. Não
+> existe estado intermediário nem linha órfã silenciosa.
+>
+> É o mesmo mecanismo já usado em `audit_log.patient_id` dentro de
+> `app_purgar_paciente` (migração `0045`): nula-se a FK antes do DELETE, em
+> vez de deixar a linha ser arrastada junto. A nulidade da coluna aqui não é
+> frouxidão de modelagem — é a condição para o expurgo poder preservar a
+> trilha.
+
 Notas de modelagem:
 
 - **Sem dedupe por `chaveNatural`.** Diferente de `alerta`, cada linha é um
@@ -563,11 +594,13 @@ Notas de modelagem:
   travar em enum nesta primeira versão — e um enum aqui correria o risco de
   sugerir ao terapeuta "opções aceitáveis", o que não é papel do produto
   definir (mesmo espírito de R3-TC: o produto nunca prescreve conduta).
-- **`sessionId` obrigatório** (diferente de `alerta`, que não referencia
-  sessão) — o alerta de risco nasce sempre de uma sessão específica, e a
-  rastreabilidade ao diário de origem é o próprio mecanismo de auditoria
-  (princípio 1 do README: "dados estruturados são derivados e rastreáveis à
-  frase de origem").
+- **`sessionId` obrigatório enquanto o alerta está vivo** (diferente de
+  `alerta`, que não referencia sessão) — o alerta de risco nasce sempre de uma
+  sessão específica, e a rastreabilidade ao diário de origem é o próprio
+  mecanismo de auditoria (princípio 1 do README: "dados estruturados são
+  derivados e rastreáveis à frase de origem"). A obrigatoriedade é imposta
+  pelo CHECK `alerta_risco_vinculo`, não por `notNull` na coluna — ver a nota
+  de reconciliação §7 × H2 acima.
 
 ---
 
@@ -613,10 +646,10 @@ mesmo assim — ambiguidade nunca suprime).
 }
 ```
 
-**Fluxo pós-disparo esperado:** SLA de 4 horas (Seção 4.1). Notificação
+**Fluxo pós-disparo esperado:** prazo de 4 horas (Seção 4.1). Notificação
 síncrona a terapeuta e coordenador, apresentação na UI com prioridade visual
 mais baixa que um caso `certeza: "explicito"` de mesma severidade (Seção 2),
-mas o SLA continua sendo o mesmo — a certeza não relaxa o prazo.
+mas o prazo continua sendo o mesmo — a certeza não relaxa o prazo.
 
 ---
 
@@ -636,7 +669,7 @@ identificado na Seção 1.3, agora suprido).
 **Regras que este caso exercita:** Seção 1.3 (distinção entre
 `ideacao_ativa_sem_plano` — Caso T5 — e `ideacao_ativa_com_plano` — este
 caso: meios já separados + carta escrita + prazo aproximado definido = plano
-estruturado, não apenas método pensado); Seção 4.1 (SLA de 15 minutos, o mais
+estruturado, não apenas método pensado); Seção 4.1 (prazo de 15 minutos, o mais
 curto da tabela); R1-TC/R1 (fidelidade — "nega ter contado para família" é
 dado clínico relevante registrado literalmente, sem inferir o motivo da
 paciente não ter contado).
@@ -653,23 +686,29 @@ paciente não ter contado).
 }
 ```
 
-**Fluxo pós-disparo esperado:** SLA de 15 minutos. Se ninguém reconhecer no
-prazo, escalonamento estágio 1 imediato (todos os coordenadores da clínica,
-Seção 4.2) — este é o caso onde o estágio 2 (canal externo, pendente da
-Seção 5) mais provavelmente se aplicaria na prática, mas o mecanismo
-concreto do estágio 2 continua não fechado por este documento.
+**Fluxo pós-disparo esperado:** prazo de reconhecimento de 15 minutos. Se
+ninguém reconhecer no prazo, escalonamento estágio 1 imediato (todos os
+coordenadores da clínica, Seção 4.2). Este é o caso onde o estágio 2 mais
+provavelmente se aplicaria na prática — e o estágio 2 está fechado (Seção
+4.2.1, Opção B): decorridos 30 minutos (o dobro do prazo) sem reconhecimento,
+o sistema exibe **banner crítico** para todos os usuários logados da clínica,
+envia **e-mail/push de emergência** ao responsável técnico, exibe o
+**Protocolo de Emergência Interno** cadastrado pela própria clínica e grava
+**log imutável** de não-reconhecimento. Tudo dentro do tenant: nenhuma
+notificação sai para família, contato de emergência, SAMU, polícia ou
+Conselho Tutelar.
 
 ---
 
-### Caso ARC-3 — Alerta reconhecido dentro do SLA
+### Caso ARC-3 — Alerta reconhecido dentro do prazo
 
-**Contexto:** continuação do Caso ARC-1 (severidade `ideacao_passiva`, SLA
+**Contexto:** continuação do Caso ARC-1 (severidade `ideacao_passiva`, prazo
 de 4 horas, criado às 14h00).
 
 **Evento:** o terapeuta responsável abre o alerta às 15h30 (1h30 após a
-criação, dentro do SLA de 4 horas) e registra reconhecimento.
+criação, dentro do prazo de 4 horas) e registra reconhecimento.
 
-**Regras que este caso exercita:** Seção 4.1 (SLA cumprido — nenhum
+**Regras que este caso exercita:** Seção 4.1 (prazo cumprido — nenhum
 escalonamento deve disparar); Seção 7 (campos `reconhecidoPor`/
 `reconhecidoEm` preenchidos, `status` transiciona `aberto` → `reconhecido`);
 distinção Seção 4.1 entre "reconhecer" (ciência) e "resolver" (Seção 7,
@@ -699,7 +738,7 @@ como não-risco após revisão humana (transição para `descartado`, com
 ### Caso ARC-4 — Alerta não reconhecido → escalonamento dispara
 
 **Contexto:** paciente adulto, modo Terapia Convencional. Alerta criado com
-severidade `autolesao_recente` (SLA de 1 hora, Seção 4.1), às 22h00 — fora do
+severidade `autolesao_recente` (prazo de 1 hora, Seção 4.1), às 22h00 — fora do
 horário comercial da clínica.
 
 **Diário de entrada:**
@@ -714,7 +753,8 @@ alerta dentro de 1 hora (23h00). Nenhuma ação humana registrada.
 
 **Regras que este caso exercita:** Seção 4.2 (escalonamento estágio 1 —
 todos os coordenadores da clínica são notificados às 23h00, marcados
-explicitamente como "SLA de alerta de risco vencido"); Seção 3.1 (o
+explicitamente como "prazo de reconhecimento de alerta de risco vencido");
+Seção 3.1 (o
 cenário de indisponibilidade do terapeuta fora do horário comercial é
 justamente o caso que motiva notificar os dois destinatários desde o
 início — aqui nem os dois destinatários originais reconheceram, forçando o
@@ -766,7 +806,7 @@ cobertura do achado 9.3 — o desenho já respondia isso implicitamente
 responsável **pela sessão de origem**, não todo profissional vinculado ao
 paciente, + coordenador sempre); Seção 7 (`sessionId` obrigatório é o que
 resolve a ambiguidade — o alerta pertence a uma sessão, não a um paciente);
-Seção 1.3 (`ideacao_passiva`, SLA de 4 horas).
+Seção 1.3 (`ideacao_passiva`, prazo de 4 horas).
 
 **Saída esperada:**
 
@@ -806,12 +846,12 @@ não lateral (mais gente).
 Revisão crítica deste documento, no mesmo padrão de rigor já aplicado aos
 outros documentos de `docs/agente/` — nenhum "aprovado sem ressalva".
 
-1. **O SLA (Seção 4) depende de um job/cron para detectar vencimento e
+1. **O prazo (Seção 4) depende de um job/cron para detectar vencimento e
    disparar escalonamento — e o Iris hoje não tem execução agendada nativa
    no ambiente de produção.** A memória do projeto sobre a migração para
    VPS/Easypanel já registra que a v2.31 do Easypanel não tem cron nativo
    para app (agendador precisa ser script do repo no campo Comando) — o
-   escalonamento por SLA proposto aqui depende diretamente dessa
+   escalonamento por prazo proposto aqui depende diretamente dessa
    infraestrutura de agendamento existir e ser confiável. Se o cron/job
    falhar silenciosamente, o alerta fica "aberto" indefinidamente sem
    nenhum escalonamento disparar — isso é, na prática, o mesmo problema de
@@ -823,7 +863,7 @@ outros documentos de `docs/agente/` — nenhum "aprovado sem ressalva".
 
 2. **A notificação push (Seção 6.2) deliberadamente omite a categoria de
    risco por causa de exposição em tela de bloqueio — mas isso mesmo cria
-   uma tensão com o SLA de 15 minutos do caso mais grave.** Um destinatário
+   uma tensão com o prazo de 15 minutos do caso mais grave.** Um destinatário
    que só vê "novo sinal prioritário" numa notificação genérica pode não
    priorizar corretamente entre um alerta de `ideacao_ativa_com_plano` e
    outros tipos de notificação do produto (validação de rotina, pendência
@@ -864,7 +904,7 @@ outros documentos de `docs/agente/` — nenhum "aprovado sem ressalva".
    deveria ser decidida por este documento de qualquer forma.
 
 Nenhum destes 4 achados invalida a arquitetura proposta (fila dedicada,
-severidade+certeza, SLA em 2 estágios, canal duplo síncrono) — são lacunas
+severidade+certeza, prazo em 2 estágios, canal duplo síncrono) — são lacunas
 de cobertura de infraestrutura/teste e um ponto de tensão de retenção ainda
 sem solução fechada, seguindo o mesmo padrão de "aprovado com ressalvas" já
 usado nos dois documentos de origem. **A ressalva mais importante continua
@@ -886,7 +926,7 @@ segurança/LGPD). Verificado no repo antes de decidir, não presumido:
 `.specs/features/fase6/spec.md`) e já implementa pseudonimização de
 `audit_log` no expurgo, não delete — esse é o precedente direto que H2 usa.
 
-### H1 — Mecanismo de escalonamento de SLA em produção (Easypanel sem cron nativo)
+### H1 — Mecanismo de escalonamento de prazo em produção (Easypanel sem cron nativo)
 
 **Decisão a travar:** job agendado, mesmo padrão já validado no projeto para
 o outro caso de ausência de cron nativo — script do repo executado pelo
@@ -899,14 +939,14 @@ consulta) e dispara a transição de estágio (`aberto` → `escalado_estagio_1`
 `escalado_estagio_1` → `escalado_estagio_2` no dobro do prazo, Seção 4.2).
 
 **Frequência do polling: a cada 1 minuto.** Justificativa do trade-off: o
-SLA mais curto da tabela (Seção 4.1) é 15 minutos
+prazo mais curto da tabela (Seção 4.1) é 15 minutos
 (`ideacao_ativa_com_plano`/`tentativa_relatada` — exatamente o Caso ARC-2,
 severidade máxima). Um polling de 5 minutos já introduziria até 1/3 de atraso
-adicional sobre um SLA de 15 minutos no pior caso (alerta criado 1s depois de
+adicional sobre um prazo de 15 minutos no pior caso (alerta criado 1s depois de
 um ciclo de polling) — inaceitável dado que a Seção 2 trata falso negativo
 *operacional* (alerta não escalado a tempo) com a mesma gravidade que falso
 negativo de detecção. 1 minuto limita o atraso máximo de escalonamento a
-~7% do SLA mais curto, com custo de carga desprezível (uma query indexada
+~7% do prazo mais curto, com custo de carga desprezível (uma query indexada
 sobre uma tabela de volume baixo — alertas de risco não são um fluxo de alto
 volume por natureza).
 
@@ -965,7 +1005,7 @@ já implementado para `audit_log` em `app_purgar_paciente`
   porque o paciente pediu exclusão de dados de marketing; (2) **defesa
   profissional do terapeuta** — em caso de processo por omissão de conduta
   diante de risco relatado, o registro de que o alerta existiu, foi
-  reconhecido dentro do SLA e teve conduta registrada (`condutaRegistrada`,
+  reconhecido dentro do prazo e teve conduta registrada (`condutaRegistrada`,
   Seção 7) é exatamente o tipo de prova que protege o profissional que agiu
   corretamente; deletar essa trilha no primeiro pedido de erasure do
   paciente removeria a única evidência de diligência do terapeuta. Este é o
@@ -976,26 +1016,28 @@ já implementado para `audit_log` em `app_purgar_paciente`
   apenas estende o mesmo princípio à tabela nova.
 
 **O que pseudonimizar, especificamente:** ao expurgar o paciente (via
-`app_purgar_paciente`, que já cascateia sobre `alerta_risco_clinico` por
-causa da FK composta `alerta_risco_patient_fk` com `onDelete("cascade")`
-definida na Seção 7 — **isso precisa mudar**, ver nota abaixo), as colunas
-que identificam o sujeito e o conteúdo literal do relato
-(`trechoFonte`, `detalhe`, `condutaRegistrada`, `motivoDescarte`) devem ser
-substituídas por um marcador de expurgo (mesmo padrão de "hash + fato
-purgado, remover PII" de `A3`), preservando `categoria`, `severidade`,
-`certeza`, `status`, os timestamps de SLA/reconhecimento/escalonamento, e
-`sessionId`/`clinicId` (sem PII direta do paciente) — o suficiente para
-provar que o processo de resposta a risco funcionou, sem reter o conteúdo
-sensível do relato em si.
+`app_purgar_paciente`), o conteúdo literal do relato (`trechoFonte`,
+`detalhe`, `condutaRegistrada`, `motivoDescarte`) é substituído por um
+marcador de expurgo (mesmo padrão de "hash + fato purgado, remover PII" de
+`A3`), `patientId` e `sessionId` são **nulados** antes do DELETE das linhas
+de origem (ver a nota de reconciliação §7 × H2 na Seção 7) e
+`pseudonimizadoEm` é carimbado. Preservam-se `categoria`, `severidade`,
+`certeza`, `status`, os timestamps de prazo/reconhecimento/escalonamento e
+`clinicId` — o suficiente para provar que o processo de resposta a risco
+funcionou, sem reter nem o conteúdo sensível do relato nem o vínculo com o
+sujeito.
 
-**Consequência de desenho que este achado força a corrigir na Seção 7:** o
-`onDelete("cascade")` de `alerta_risco_patient_fk` está incorreto à luz
-desta decisão — cascade deleta a linha inteira, o oposto de pseudonimizar.
-A FK deve ser ajustada (migração futura, não deste documento) para não
-cascatear delete, e a pseudonimização de `alerta_risco_clinico` deve ser
-adicionada como um passo explícito dentro de `app_purgar_paciente` (mesmo
-lugar onde `audit_log` já é pseudonimizado), não deixada para o
-comportamento default de FK.
+**Consequência de desenho que este achado já forçou a corrigir na Seção 7
+(RESOLVIDO — não há pendência aqui):** uma versão anterior desta spec definia
+`alerta_risco_patient_fk` com `onDelete("cascade")`, o que era incompatível
+com a decisão acima — cascade deleta a linha inteira, o oposto de
+pseudonimizar. A FK **já está** com `onDelete("restrict")` na Seção 7, e a
+migração `db/migrations/0049_alerta_risco_clinico.sql` foi criada assim: o
+cascade nunca chegou a existir em banco. A pseudonimização de
+`alerta_risco_clinico` é um passo explícito dentro de `app_purgar_paciente`
+(mesmo lugar onde `audit_log` já é pseudonimizado), não o comportamento
+default de FK. **Não abrir migração de correção de FK** — não há o que
+corrigir.
 
 **Prazo de retenção: ancorado em `clinic.politicaRetencaoMeses`.**
 Verificado em `src/db/schema.ts` linha 235 — a coluna já existe
@@ -1022,7 +1064,7 @@ acima (pseudonimizar, o quê pseudonimizar, ancorar em
 
 **O achado:** o texto push humano-neutro que protege privacidade em tela de
 bloqueio é o mesmo texto que não comunica urgência — um alerta de
-`ideacao_ativa_com_plano` (SLA 15 min) chega parecendo uma pendência comum.
+`ideacao_ativa_com_plano` (prazo 15 min) chega parecendo uma pendência comum.
 
 **Decisão a travar: a urgência é carregada pelo canal, não pelo texto.**
 O texto push permanece sem categoria e sem nome do paciente (Seção 6.2,
@@ -1036,11 +1078,11 @@ notificação de rotina é o envelope:
 - **`requireInteraction: true`** na Web Notification (a notificação não some
   sozinha; exige dispensa explícita) — é o análogo mais próximo de "alerta
   persistente" disponível no ambiente web atual do produto.
-- **Renotificação uma vez por estágio de SLA** (`renotify: true`, mesma
+- **Renotificação uma vez por estágio de escalonamento** (`renotify: true`, mesma
   `tag`, disparada junto com cada transição da Seção 4.2) — não é
   escalonamento contínuo (Seção 4.3 continua valendo), são no máximo 3
   toques: criação, estágio 1, estágio 2.
-- **Escalonamento de intrusividade por faixa de SLA:** só a faixa de 15
+- **Escalonamento de intrusividade por faixa de prazo:** só a faixa de 15
   minutos (Seção 4.1) usa o canal com som + `requireInteraction`; as faixas
   de 1h e 4h usam o mesmo canal dedicado com badge persistente, sem som.
   Anti-fadiga (Seção 2) aplicado ao próprio canal: se todo alerta de risco
@@ -1050,13 +1092,13 @@ notificação de rotina é o envelope:
 furar "Não perturbe" do sistema operacional — só um app nativo com *critical
 alert* (iOS) / canal de alta prioridade (Android) consegue, e o Iris hoje é
 web. Isso significa que, com o celular em modo silencioso durante a noite,
-o SLA de 15 minutos **não é garantido pelo canal push** — quem cobre esse
+o prazo de 15 minutos **não é garantido pelo canal push** — quem cobre esse
 buraco é o escalonamento da Seção 4.2 (mais destinatários = mais chance de
 alguém estar com o celular ativo), não a tecnologia de notificação.
 Consequência de produto: prometer "15 minutos" em contrato/copy comercial
 seria overclaim — o produto entrega *notificação imediata e escalonamento
 verificável*, não *resposta humana em 15 minutos*. Alinhar a pergunta 3 da
-Seção 5 (SLA compatível com diligência profissional) com essa distinção
+Seção 5 (prazo compatível com diligência profissional) com essa distinção
 quando a consulta profissional acontecer.
 
 ### H4 — Paciente multiprofissional: eixo de notificação (achado 9.3)
