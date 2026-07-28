@@ -310,7 +310,7 @@ Traduzindo "7 dias" para o que o usuário sente: uma terapeuta que escreveu 40
 evoluções naquela semana **perde as 40**. Ela não reconstrói — a sessão
 aconteceu, a memória já não está fresca. É uma decisão de produto, não de
 infra: escolha o número olhando para isso, não para o custo de storage (que é
-zero nos dois casos, dentro dos 20 GB do plano gratuito).
+zero nos dois casos, dentro dos 10 GiB do plano gratuito).
 
 **O controle é por marcador de tempo (`.ultimo-offsite`), não por dia da
 semana.** A diferença aparece quando o container está parado no dia marcado
@@ -374,9 +374,47 @@ versionado no repo e com log no painel.
    OFFSITE_S3_ENDPOINT=https://<namespace>.compat.objectstorage.sa-saopaulo-1.oraclecloud.com
    OFFSITE_S3_ACCESS_KEY=<...>   OFFSITE_S3_SECRET_KEY=<...>
    OFFSITE_S3_BUCKET=iris-backups-offsite
+   OFFSITE_S3_REGION=              # VAZIO. Só mexer com evidência — ver abaixo
+   OFFSITE_S3_PATH_STYLE=          # vazio = auto. idem
    OFFSITE_AGE_RECIPIENT=age1...   # chave PÚBLICA. A privada nunca entra aqui.
    OFFSITE_INTERVAL_DAYS=1         # 1 = diário · 7 = semanal (ver abaixo)
    ```
+
+   **Se a autenticação off-site falhar, comece pela credencial.** A OCI responde
+   assim quando o `mc` não consegue autenticar:
+
+   ```
+   The secret key required to complete authentication could not be found.
+   The region must be specified if this is not the home region for the tenancy.
+   ```
+
+   A frase junta duas causas e a segunda é uma pista falsa convincente — dá
+   vontade de mexer em região antes de conferir a chave. **Em 28/07/2026 a causa
+   foi a credencial**: o par `OFFSITE_S3_ACCESS_KEY`/`OFFSITE_S3_SECRET_KEY`
+   precisa ser uma **Customer Secret Key** da OCI (Identity → usuário → *Customer
+   Secret Keys*) — não um Auth Token, não uma chave de API com PEM. Trocada a
+   chave, a réplica voltou a subir **sem tocar em região nenhuma**.
+
+   Isso é o que o `backup.sh` loga hoje a cada execução, e é a configuração
+   **provada** funcionando contra a OCI:
+
+   ```
+   [backup] off-site: assinando SigV4 na região 'us-east-1 (default do mc)' (path-style=auto)
+   [backup] off-site: sonda OK — credencial autentica e a região de assinatura é aceita
+   ```
+
+   A **sonda roda antes do upload** e não é fatal. `sonda OK` = credencial e
+   região aceitas, e qualquer problema restante está no bucket ou na permissão
+   dele — o que o log diz na linha seguinte.
+
+   **Os dois parafusos de dialeto, se um dia precisarem.** `OFFSITE_S3_REGION` e
+   `OFFSITE_S3_PATH_STYLE` (`auto`|`on`|`off`) existem porque, medido no
+   `mc RELEASE.2025-08-13`: `alias set` não tem `--region`, o `config.json` v10
+   não guarda região, e sem configuração o `mc` assina `us-east-1`. A única
+   alavanca é a env var `MC_REGION`, lida por invocação — o `backup.sh` a aplica
+   só nos comandos off-site, para não mexer no MinIO local. **Ambos vêm vazios de
+   propósito**: trocar um comportamento que funciona por um que parece mais
+   correto é o tipo de mudança que só aparece na janela de backup seguinte.
 
    **Atenção ao nome de host interno — use HÍFEN, não underscore.** O Easypanel
    registra o serviço em duas formas: `espectro-mvp_iris-minio` (a canônica, com
@@ -573,7 +611,9 @@ chave, definir lifecycle. Ordem importa — o passo 5 é o que impede o pior
 desfecho (réplica cifrada com chave que ninguém tem).
 
 **Provedor recomendado: Oracle Cloud Object Storage, região Brazil East (São
-Paulo, `sa-saopaulo-1`).** Always Free: 20 GB permanentes (não é trial de 12
+Paulo, `sa-saopaulo-1`).** Always Free: 10 GiB de Object Storage permanentes
+(+10 GiB de Archive, cota combinada de 20 GiB — o que serve para o backup é a
+cota de 10 GiB do tier Standard; medido no console em 27/07/2026, não é trial de 12
 meses), 50k requisições/mês, API S3-compatível — o `mc` que já está na imagem
 fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
 
@@ -592,7 +632,7 @@ fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
    no endpoint: `https://<namespace>.compat.objectstorage.sa-saopaulo-1.oraclecloud.com`.
 3. **Regra de lifecycle no bucket** com a mesma janela do `RETENTION_DAYS`
    (hoje 30 dias). **Isto não é opcional** — o `backup.sh` não poda o off-site
-   por design, então sem a regra o bucket cresce até estourar os 20 GB e os
+   por design, então sem a regra o bucket cresce até estourar os 10 GiB e os
    uploads passam a falhar (`exit 3` todo dia).
    > A janela de retenção do off-site é **a mesma discussão da issue #89**
    > (retenção de backup × direito ao expurgo da Fase 6). Um titular expurgado
@@ -619,25 +659,45 @@ fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
    Guardar a **privada** em gerenciador de senhas **e** impressa em papel, em
    local físico distinto. Ela é o único caminho de volta a partir do off-site.
 
-6. **PROVA OBRIGATÓRIA antes de considerar pronto — decifrar de verdade.** Não
+6. **Preencher as env vars** `OFFSITE_*` no serviço de backup do Easypanel e
+   redeployar (**Implantar**, não restart — restart mantém a imagem antiga).
+   Conferir no log da primeira execução:
+   `réplica off-site concluída (dump + globals, cifrados)`.
+
+7. **PROVA OBRIGATÓRIA antes de considerar pronto — decifrar de verdade.** Não
    pule: uma réplica cifrada com uma chave cuja privada ninguém tem é
-   indistinguível de uma réplica boa, até o dia do desastre.
+   indistinguível de uma réplica boa — mesmo tamanho, mesmo header, mesmo log de
+   sucesso — até o dia do desastre. `verify-offsite.sh` fecha o laço contra o
+   bucket de **produção**: baixa o par mais recente, confirma que está cifrado,
+   **decifra**, valida o dump com `pg_restore --list`, confere que os globals
+   trazem `app_role` e `iris_auth`, e imprime o sha256 do dump decifrado.
 
    ```bash
-   # com a chave privada na máquina local (nunca no VPS)
-   printf '%s\n' 'AGE-SECRET-KEY-1YYY...' > id.txt && chmod 600 id.txt
-   mc cp offsite/iris-backups-offsite/iris-<ts>.dump.age .
-   age -d -i id.txt -o iris-<ts>.dump iris-<ts>.dump.age
-   pg_restore --list iris-<ts>.dump | head        # tem que listar objetos
-   shred -u id.txt
+   docker compose -f infra/docker-compose.yml --profile backup run --rm --no-deps -T backup ./verify-offsite.sh < /caminho/chave-privada-age.txt
    ```
 
-   Se `pg_restore --list` reclamar, **a réplica não presta** — parar e
-   investigar antes de marcar a #86 como fechada.
+   As `OFFSITE_S3_*` vêm do ambiente do shell (o compose repassa). Rodar **na
+   máquina que guarda a chave privada**, nunca no VPS — o VPS tem só a pública,
+   e levar a privada para lá anularia o desenho inteiro da #86. A chave entra por
+   **stdin**: não é argumento (apareceria em `ps`), não é env var (`docker
+   inspect` mostra o env de qualquer container) e não é volume montado. O script
+   recusa a chave por `AGE_IDENTITY` justamente por isso.
 
-7. **Preencher as env vars** `OFFSITE_*` no serviço de backup do Easypanel e
-   redeployar. Conferir no log da primeira execução:
-   `réplica off-site concluída (dump + globals, cifrados)`.
+   Fecho da prova: o `sha256` que ele imprime tem que bater com o `sha256=` que o
+   `backup.sh` logou naquele dia. Batendo, está provado que o artefato
+   restaurável é exatamente o que o VPS gerou — não uma cópia antiga, não outro
+   banco.
+
+   Dois desfechos com diagnóstico próprio, porque são problemas diferentes:
+   **não conseguir listar o bucket** é credencial de leitura (a de produção é
+   write-only por design — gerar uma de leitura só para a verificação e revogar
+   depois); **não conseguir decifrar** é o desastre silencioso, e aí a réplica
+   existe e é inútil.
+
+   Repetir esta verificação a cada rotação da chave `age` e sempre que o destino
+   off-site mudar. O próprio `verify-offsite.sh` é coberto pelo
+   `test-offsite.sh` (seção 10), inclusive a asserção de que ele **falha** com a
+   chave errada — um verificador que passa com qualquer chave não prova nada.
 
 ### Runbook — DR a partir do off-site (o VPS não existe mais)
 

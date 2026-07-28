@@ -37,8 +37,9 @@ WORKDIR /app
 # funciona no compose local (se o contexto for ./backup) e QUEBRA em produção
 # com "not found" — foi o que aconteceu no primeiro deploy. O compose agora usa
 # o mesmo contexto (raiz) justamente para o teste local pegar isso.
-COPY infra/backup/backup.sh infra/backup/restore.sh infra/backup/verify-restore.sh infra/backup/scheduler.sh ./
-RUN chmod +x backup.sh restore.sh verify-restore.sh scheduler.sh
+COPY infra/backup/backup.sh infra/backup/restore.sh infra/backup/verify-restore.sh \
+	infra/backup/verify-offsite.sh infra/backup/scheduler.sh ./
+RUN chmod +x backup.sh restore.sh verify-restore.sh verify-offsite.sh scheduler.sh
 
 # Comando default = dump agendado (o caso de uso do serviço rodando via
 # schedule do Easypanel). restore.sh e verify-restore.sh rodam sob demanda.

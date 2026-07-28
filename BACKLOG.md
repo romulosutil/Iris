@@ -71,6 +71,93 @@ privada ninguém tem é indistinguível de uma boa até o dia do desastre.
 expurgo da Fase 6). Um titular expurgado passa a existir em **três** lugares, um fora do host.
 A #89 deveria fechar antes de o off-site entrar em produção com dado real.
 
+**#86 FECHADA na prática (28/07): réplica off-site subindo em produção.** Log de
+`iris-20260728T024929Z`: dump 382486 B + globals 1319 B, cifrados com `age` e replicados para o
+bucket fora do VPS, `concluído com sucesso`.
+
+**A causa da falha era CREDENCIAL, e a mensagem de erro mentiu.** A OCI respondia _"The secret
+key required to complete authentication could not be found. The region must be specified if
+this is not the home region for the tenancy."_ — duas causas na mesma frase, e a segunda é uma
+pista falsa convincente. Persegui a região primeiro e estava errado: com a Customer Secret Key
+correta, a réplica subiu **sem nenhuma configuração de região**, com o `mc` assinando
+`us-east-1`. Fica registrado no runbook e no próprio script: nesse erro, comece pela credencial.
+
+**O que a investigação de região produziu de aproveitável.** Medido no `mc RELEASE.2025-08-13`:
+`alias set` não tem `--region`, o `config.json` v10 não guarda região, e sem configuração o `mc`
+assina `us-east-1` (`Credential=.../us-east-1/s3/aws4_request`, confirmado com `mc --debug`);
+a única alavanca é a env var `MC_REGION`, lida por invocação. Virou `OFFSITE_S3_REGION` e
+`OFFSITE_S3_PATH_STYLE`, **ambos vazios por default** — o comportamento provado em produção não
+foi trocado por um que parecia mais correto. Junto veio o que de fato faltava: **sonda de
+autenticação antes do upload** (não fatal) que separa credencial / região / bucket no log, e
+`mc_configurar_alias` parando de descartar `stderr` — ele rejeita chave curta em silêncio, e um
+erro de digitação virava falha genérica de upload dez linhas depois. O secret é redigido antes
+de logar porque o `mc` **ecoa a chave inválida** na mensagem de erro.
+
+**Por que 18 testes verdes conviveram com produção sem cópia.** O `test-offsite.sh` fecha o laço
+inteiro — cifra, sobe, baixa, decifra, restaura — mas **contra o MinIO local**, que perdoa
+desvios de dialeto (região, path-style) que a OCI não perdoa, e que aceita qualquer credencial
+que ele mesmo emitiu. A suíte nunca teve como ver a falha. Regra que fica: _teste de destino
+externo com dublê prova o protocolo, não o dialeto nem a credencial do destino real_. Seção 9
+nova (25 asserções no total) trava os defaults e exercita os dois parafusos com endpoint no
+formato da OCI e região inexistente — sem depender de rede.
+
+**Ferramenta nova: `infra/backup/verify-offsite.sh`.** A prova de decifra era um punhado de
+comandos no runbook que escrevia a chave privada em `id.txt` no disco — passo manual, fácil de
+pular, fácil de fazer errado. Virou script: baixa o par mais recente do bucket de produção,
+confirma cifra, **decifra**, valida com `pg_restore --list`, exige `app_role` e `iris_auth` nos
+globals (furo do PR #85) e imprime o sha256 do dump decifrado para bater com o log do
+`backup.sh` daquele dia — se bate, o artefato restaurável é comprovadamente o que o VPS gerou.
+Chave privada só por **stdin**: não é argv (`ps`), não é env var (`docker inspect`) e não é
+volume; o script recusa `AGE_IDENTITY` explicitamente. Coberto pela seção 10 do
+`test-offsite.sh`, **incluindo a asserção de que ele FALHA com a chave errada** — verificador
+que passa com qualquer chave não prova nada. 33 asserções no total.
+
+**Rodada de review sobre o próprio `verify-offsite.sh`.** Quatro achados, todos no mesmo tema: a
+ferramenta de diagnóstico dava o diagnóstico ERRADO em caminhos plausíveis, e ela é justamente a
+que roda sob pressão de DR. (1) `mc cp` descartava o `stderr` e a mensagem seguinte afirmava
+"par INCOMPLETO no bucket" — como a credencial de produção é write-only por design, um
+`ListBucket` sem `GetObject` viraria um incidente classe PR #85 inventado. (2) `grep -c ' TABLE '`
+casava também com as linhas `TABLE DATA` do TOC e reportava o **dobro** das tabelas, num artefato
+cuja função inteira é servir de evidência; virou contagem por campo (`awk`), e o `N_DADOS`, que
+era calculado e nunca cobrado, agora barra dump só-de-schema. (3) `OFFSITE_S3_PATH_STYLE` não era
+validado como no `backup.sh`, então um typo saía como "mc alias set falhou" — que o runbook
+condiciona a ler como credencial. (4) argumento livre sem validação: nome digitado pela metade
+fazia os dois downloads darem 404 e reproduzia o falso "par INCOMPLETO". Junto, no `backup.sh`:
+falha do alias do MinIO caía direto no `mc mb`/`mc cp` contra alias inexistente, empilhando três
+erros cujo último apontava para a camada errada — agora o upload e o prune remoto são gateados
+por `minio_ok`.
+
+**A primeira tentativa de rodar a verificação encontrou exatamente o que ela existe para
+encontrar: a chave privada não existia mais.** 28/07, mesma noite. A réplica vinha subindo há
+dias, com `exit 0` e log de sucesso todo dia, e o conteúdo era irrecuperável — a metade privada
+do par `age` nunca foi guardada em lugar durável. Nenhum sinal disso aparecia em canal nenhum:
+`backup.sh` sai `0`, o objeto existe no bucket, tem header `age` e o tamanho certo. A única
+coisa capaz de distinguir esse estado de um bom é decifrar, e ninguém tinha decifrado ainda.
+
+Isto é a validação mais forte que a #86 podia receber, e é um argumento contra tratar o drill
+trimestral como formalidade: o furo apareceu na **primeira** execução da verificação, não na
+décima.
+
+Par novo gerado (`age-keygen` na máquina do Rômulo, nunca no VPS), `OFFSITE_AGE_RECIPIENT`
+trocado no Easypanel e redeploy feito. **Casamento do par provado**, não presumido:
+`age-keygen -y < chave-privada` devolveu exatamente a pública que está no Easypanel — o mesmo
+tipo de prova que o `verify-offsite.sh` faz com o artefato. As réplicas anteriores no bucket
+continuam lá e são lixo permanente; a regra de lifecycle (pendência 1) é o que as remove.
+
+**Pendências reais que sobraram da #86** (o upload funcionar não fecha nenhuma delas):
+
+1. **Regra de lifecycle no bucket.** Sem ela o Always Free estoura a cota e o backup passa a
+   sair `3` todo dia. Agora tem uma segunda função: expurgar as réplicas cifradas com a chave
+   perdida.
+2. **Rodar o `verify-offsite.sh` contra o bucket de produção**, na máquina que guarda a chave
+   privada. Enquanto não rodar, a réplica é *presumida* restaurável — que é o estado
+   indistinguível de uma réplica inútil. Pode exigir uma credencial de **leitura** temporária:
+   a de produção é write-only por design. **Só é executável a partir de 29/07**, depois da
+   janela das 03:00 BRT — antes disso não existe no bucket nenhum objeto cifrado com o par novo.
+3. **Guardar a metade privada em dois lugares duráveis** (gerenciador de senhas + papel). É o
+   passo que falhou da primeira vez, é o único sem desfazer, e não tem verificação automática
+   possível — nenhum script consegue provar que existe uma cópia fora do disco.
+
 ---
 
 ## 🏁 Sessão 25/07/2026 — Go-live #75 Etapa 5: backup + restore testado (OPERANDO EM PROD) — PRs #85, #90, #91, #92
@@ -85,7 +172,7 @@ retenção 30d, `PGUSER=iris` role dona, 06:00 UTC = 03:00 BRT, RSS dormindo 764
 **Achado que definiu o desenho — `pg_dump` não carrega roles.** Roles são objeto de
 **cluster**; restore num cluster novo dava **37 tabelas e 0 policies**, com os 85
 `CREATE POLICY ... TO app_role` falhando com `role does not exist` e o `pg_restore`
-só emitindo *warning*. Ou seja: backup que restaura dado clínico **sem isolamento
+só emitindo _warning_. Ou seja: backup que restaura dado clínico **sem isolamento
 multi-tenant**, sem erro fatal. Backup virou par indivisível `dump` + `globals.sql`
 (`pg_dumpall --globals-only`). Ver `[[pg-dump-perde-roles-e-rls]]`.
 

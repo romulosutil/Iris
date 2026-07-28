@@ -59,12 +59,12 @@ limpar() {
 trap limpar EXIT
 
 # ---------------------------------------------------------------------------
-log "1/8 · subindo Postgres + MinIO"
+log "1/10 · subindo Postgres + MinIO"
 "${COMPOSE[@]}" up -d postgres minio >/dev/null
 "${COMPOSE[@]}" build backup >/dev/null
 
 # ---------------------------------------------------------------------------
-log "2/8 · gerando par de chaves age efêmero (a privada NUNCA entra no container de backup)"
+log "2/10 · gerando par de chaves age efêmero (a privada NUNCA entra no container de backup)"
 
 KEYPAIR="$("${COMPOSE[@]}" run --rm --no-deps -T backup bash -c '
 	age-keygen 2>/dev/null
@@ -79,7 +79,7 @@ fi
 ok "par de chaves gerado (recipient=${AGE_RECIPIENT:0:16}...)"
 
 # ---------------------------------------------------------------------------
-log "3/8 · semeando dado reconhecível no banco"
+log "3/10 · semeando dado reconhecível no banco"
 
 # A role app_role precisa existir porque backup.sh aborta se os globals não
 # tiverem nenhum CREATE ROLE — comportamento correto (é o furo do PR #85), mas
@@ -88,12 +88,13 @@ CMD="export PGURL='postgres://iris:iris@postgres:5432/iris'
 psql \"\${PGURL}\" -v ON_ERROR_STOP=1 -c 'CREATE TABLE IF NOT EXISTS canario_offsite (id int primary key, segredo text)'
 psql \"\${PGURL}\" -v ON_ERROR_STOP=1 -c \"INSERT INTO canario_offsite VALUES (1, '${MARCADOR}') ON CONFLICT DO NOTHING\"
 psql \"\${PGURL}\" -c 'CREATE ROLE app_role' 2>/dev/null || true
+psql \"\${PGURL}\" -c 'CREATE ROLE iris_auth' 2>/dev/null || true
 echo semeado"
 no_container >/dev/null
-ok "tabela canario_offsite + role app_role criadas"
+ok "tabela canario_offsite + roles de RLS (app_role, iris_auth) criadas"
 
 # ---------------------------------------------------------------------------
-log "4/8 · provisionando o bucket off-site (simula o provisionamento manual do runbook)"
+log "4/10 · provisionando o bucket off-site (simula o provisionamento manual do runbook)"
 
 CMD="printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null \
 	&& mc mb --ignore-existing off/${BUCKET_OFFSITE} >/dev/null && echo criado"
@@ -101,7 +102,7 @@ no_container >/dev/null
 ok "bucket ${BUCKET_OFFSITE} provisionado"
 
 # ---------------------------------------------------------------------------
-log "5/8 · CAMINHO FELIZ — rodando backup.sh com off-site habilitado"
+log "5/10 · CAMINHO FELIZ — rodando backup.sh com off-site habilitado"
 
 set +e
 "${COMPOSE[@]}" run --rm -T \
@@ -122,7 +123,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log "6/8 · ASSERÇÕES sobre o que efetivamente chegou no bucket off-site"
+log "6/10 · ASSERÇÕES sobre o que efetivamente chegou no bucket off-site"
 
 CMD="set -e
 printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null
@@ -193,7 +194,7 @@ verificar ASSERT_CONTEUDO "ok" "dump decifrado contém o dado semeado (não é d
 verificar ASSERT_GLOBALS "ok" "globals decifram e contêm CREATE ROLE"
 
 # ---------------------------------------------------------------------------
-log "7/8 · CAMINHOS DE ERRO"
+log "7/10 · CAMINHOS DE ERRO"
 
 # off-site fora do ar: exit 3 (replicação parcial), NUNCA 1, e dump local íntegro.
 set +e
@@ -252,7 +253,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log "8/8 · CADÊNCIA (OFFSITE_INTERVAL_DAYS) — réplica semanal sem depender de ninguém lembrar"
+log "8/10 · CADÊNCIA (OFFSITE_INTERVAL_DAYS) — réplica semanal sem depender de ninguém lembrar"
 
 # Quantos artefatos existem no bucket agora. O marcador .ultimo-offsite foi
 # escrito no passo 5 (único que teve sucesso de upload até aqui).
@@ -340,6 +341,274 @@ if [[ "${EXIT_INTERVALO}" -eq 1 ]]; then
 	ok "OFFSITE_INTERVAL_DAYS=0 => exit 1 na validação (não vira 'nunca replicar' silencioso)"
 else
 	fail "OFFSITE_INTERVAL_DAYS=0 => exit ${EXIT_INTERVALO}, esperado 1"
+fi
+
+# ---------------------------------------------------------------------------
+log "9/10 · REGIÃO DE ASSINATURA SigV4 — o dialeto S3 que o MinIO perdoa e a OCI não"
+
+# POR QUE ESTA SEÇÃO EXISTE: os 18 testes acima passaram verdes enquanto a
+# réplica off-site de PRODUÇÃO não subia nada. O teste fala MinIO; o destino
+# real é a Oracle Cloud, e MinIO perdoa dois desvios de dialeto que a OCI não:
+# região de assinatura SigV4 e estilo de path. Sem cobrir isso, essa classe de
+# bug fica invisível justamente na cópia que ninguém exercita.
+#
+# ATENÇÃO ao que esta seção NÃO afirma. A falha real em produção foi de
+# CREDENCIAL, não de região — a réplica voltou a subir com o mc assinando
+# `us-east-1`, sem nenhuma configuração de região. Por isso os dois parafusos
+# são opt-in e o default testado aqui é o que está PROVADO em produção. Testar
+# o default é metade do ponto: garante que ninguém "conserte" preventivamente o
+# que está funcionando.
+#
+# O endpoint abaixo usa uma região INEXISTENTE de propósito: o formato casa com
+# o da OCI (é o que se quer exercitar) mas o DNS não resolve, então o teste não
+# depende de rede nem manda tráfego para a Oracle.
+readonly ENDPOINT_OCI_FALSO="https://nsfake.compat.objectstorage.regiao-inexistente-9.oraclecloud.com"
+
+# a) DEFAULT: sem OFFSITE_S3_REGION, o mc assina us-east-1 e o path-style fica
+#    em `auto`. É a configuração que sobe para a OCI hoje — qualquer mudança
+#    aqui é mudança de comportamento em produção e tem que ser deliberada.
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT="${ENDPOINT_OCI_FALSO}" \
+	-e OFFSITE_S3_ACCESS_KEY=chavedeacessofalsa \
+	-e OFFSITE_S3_SECRET_KEY=segredofalsocomtamanhosuficiente \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	backup >/tmp/iris-offsite-regiao-derivada.log 2>&1
+EXIT_DERIVADA=$?
+set -e
+
+if grep -q "assinando SigV4 na região 'us-east-1 (default do mc)' (path-style=auto)" /tmp/iris-offsite-regiao-derivada.log; then
+	ok "default preservado: us-east-1 + path-style=auto (o que a OCI aceita hoje)"
+else
+	fail "default de região/path-style mudou — log: $(grep -i 'sigv4' /tmp/iris-offsite-regiao-derivada.log || echo '(linha ausente)')"
+fi
+
+if [[ "${EXIT_DERIVADA}" -eq 3 ]]; then
+	ok "destino off-site inalcançável => exit 3, backup local preservado"
+else
+	fail "destino inalcançável => exit ${EXIT_DERIVADA}, esperado 3"
+fi
+
+# b) os dois parafusos existem e chegam mesmo até o mc. São a saída se a OCI
+#    mudar de exigência ou se o destino trocar de provedor.
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT="${ENDPOINT_OCI_FALSO}" \
+	-e OFFSITE_S3_REGION="eu-frankfurt-1" \
+	-e OFFSITE_S3_PATH_STYLE="on" \
+	-e OFFSITE_S3_ACCESS_KEY=chavedeacessofalsa \
+	-e OFFSITE_S3_SECRET_KEY=segredofalsocomtamanhosuficiente \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	backup >/tmp/iris-offsite-regiao-override.log 2>&1
+set -e
+
+if grep -q "assinando SigV4 na região 'eu-frankfurt-1' (path-style=on)" /tmp/iris-offsite-regiao-override.log; then
+	ok "OFFSITE_S3_REGION e OFFSITE_S3_PATH_STYLE chegam até o mc quando setados"
+else
+	fail "override ignorado — log: $(grep -i 'sigv4' /tmp/iris-offsite-regiao-override.log || echo '(linha ausente)')"
+fi
+
+# b2) valor inválido de path-style falha na validação, antes do dump.
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT="${ENDPOINT_OCI_FALSO}" \
+	-e OFFSITE_S3_PATH_STYLE="talvez" \
+	-e OFFSITE_S3_ACCESS_KEY=chavedeacessofalsa \
+	-e OFFSITE_S3_SECRET_KEY=segredofalsocomtamanhosuficiente \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	backup >/tmp/iris-offsite-pathstyle-invalido.log 2>&1
+EXIT_PATH_INVALIDO=$?
+set -e
+
+if [[ "${EXIT_PATH_INVALIDO}" -eq 1 ]]; then
+	ok "OFFSITE_S3_PATH_STYLE inválido => exit 1 na validação (não vira 'auto' silencioso)"
+else
+	fail "path-style inválido => exit ${EXIT_PATH_INVALIDO}, esperado 1"
+fi
+
+# c) região explícita num destino que NÃO é OCI não pode quebrar o upload. Esta
+#    é a asserção de não-regressão: o MinIO local continua recebendo a réplica
+#    com a variável nova em jogo.
+ANTES_REGIAO="$(contar_no_bucket)"
+
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_REGION="sa-saopaulo-1" \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	backup >/tmp/iris-offsite-regiao-minio.log 2>&1
+EXIT_REGIAO_MINIO=$?
+set -e
+
+DEPOIS_REGIAO="$(contar_no_bucket)"
+
+if [[ "${EXIT_REGIAO_MINIO}" -eq 0 && "${DEPOIS_REGIAO}" -gt "${ANTES_REGIAO}" ]]; then
+	ok "upload segue funcionando com região explícita (${ANTES_REGIAO} => ${DEPOIS_REGIAO})"
+else
+	fail "região explícita quebrou o upload (exit ${EXIT_REGIAO_MINIO}, ${ANTES_REGIAO} => ${DEPOIS_REGIAO})"
+fi
+
+# d) a sonda pré-upload precisa dizer QUAL região usou quando falha. Sem isso a
+#    próxima falha em produção volta a ser um chute entre credencial e região.
+if grep -q "sonda de autenticação falhou" /tmp/iris-offsite-regiao-derivada.log \
+	&& grep -q "Comece pela CREDENCIAL" /tmp/iris-offsite-regiao-derivada.log \
+	&& grep -q "usada 'us-east-1'" /tmp/iris-offsite-regiao-derivada.log; then
+	ok "sonda pré-upload manda olhar a credencial primeiro e nomeia a região usada"
+else
+	fail "sonda não reportou a região na falha — log: $(grep -i 'sonda' /tmp/iris-offsite-regiao-derivada.log || echo '(linha ausente)')"
+fi
+
+# ---------------------------------------------------------------------------
+log "10/10 · verify-offsite.sh — a ferramenta que prova que a réplica é RESTAURÁVEL"
+
+# O verify-offsite.sh é o que o operador roda contra o bucket de PRODUÇÃO, com a
+# chave privada que só existe fora do VPS. Ou seja: é mais uma coisa que só seria
+# exercitada no pior dia. Testá-lo aqui é o que impede que a ferramenta de
+# verificação seja, ela mesma, o próximo item quebrado sem ninguém saber.
+
+verify_offsite() {
+	# A chave privada entra por STDIN, igual ao uso real documentado no
+	# cabeçalho do verify-offsite.sh.
+	"${COMPOSE[@]}" run --rm --no-deps -T \
+		-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+		-e OFFSITE_S3_ACCESS_KEY=iris \
+		-e OFFSITE_S3_SECRET_KEY=iris123456 \
+		-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+		backup ./verify-offsite.sh
+}
+
+# a) caminho feliz: chave certa => decifra, restaura e sai 0.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | verify_offsite >/tmp/iris-verify-ok.log 2>&1
+EXIT_VERIFY=$?
+set -e
+
+if [[ "${EXIT_VERIFY}" -eq 0 ]] && grep -q 'RÉPLICA OFF-SITE VERIFICADA' /tmp/iris-verify-ok.log; then
+	ok "verify-offsite.sh com a chave certa => exit 0 e réplica verificada"
+else
+	fail "verify-offsite.sh falhou com a chave certa (exit ${EXIT_VERIFY}) — log:"
+	tail -12 /tmp/iris-verify-ok.log
+fi
+
+if grep -q 'dump restaurável: [1-9]' /tmp/iris-verify-ok.log \
+	&& grep -q 'globals contêm as roles de RLS' /tmp/iris-verify-ok.log; then
+	ok "verificação inspeciona conteúdo (tabelas > 0 e roles de RLS presentes)"
+else
+	fail "verify-offsite.sh não reportou tabelas e roles — log: $(grep -E 'restaurável|roles' /tmp/iris-verify-ok.log || echo '(ausente)')"
+fi
+
+if grep -q 'sha256 do dump decifrado' /tmp/iris-verify-ok.log; then
+	ok "sha256 do dump decifrado impresso (fecho contra o log do backup.sh)"
+else
+	fail "verify-offsite.sh não imprimiu o sha256 do dump decifrado"
+fi
+
+# b) ESTA é a asserção que impede o teste de ser decorativo: com a chave ERRADA
+#    o script tem que FALHAR. Um verify que passa com qualquer chave não prova
+#    nada — e o cenário que ele existe para pegar (réplica cifrada com chave
+#    cuja privada ninguém tem) é exatamente esse.
+OUTRO_PAR="$("${COMPOSE[@]}" run --rm --no-deps -T backup bash -c 'age-keygen 2>/dev/null')"
+CHAVE_ERRADA="$(printf '%s' "${OUTRO_PAR}" | grep -E '^AGE-SECRET-KEY-' | head -1)"
+
+set +e
+printf '%s\n' "${CHAVE_ERRADA}" | verify_offsite >/tmp/iris-verify-chave-errada.log 2>&1
+EXIT_ERRADA=$?
+set -e
+
+if [[ "${EXIT_ERRADA}" -ne 0 ]] && grep -q 'NÃO FOI POSSÍVEL DECIFRAR' /tmp/iris-verify-chave-errada.log; then
+	ok "chave errada => verify-offsite.sh FALHA (o teste do caminho feliz não é vácuo)"
+else
+	fail "chave errada passou (exit ${EXIT_ERRADA}) — o verify não prova nada"
+fi
+
+# c) chave privada por env var é recusada: `docker inspect` mostra o env de
+#    qualquer container, e o histórico fica no daemon.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | "${COMPOSE[@]}" run --rm --no-deps -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e AGE_IDENTITY="${AGE_IDENTITY}" \
+	backup ./verify-offsite.sh >/tmp/iris-verify-env.log 2>&1
+EXIT_ENV=$?
+set -e
+
+if [[ "${EXIT_ENV}" -ne 0 ]] && grep -q 'entra por STDIN' /tmp/iris-verify-env.log; then
+	ok "chave privada em env var é recusada (só stdin)"
+else
+	fail "verify-offsite.sh aceitou a chave privada por env var (exit ${EXIT_ENV})"
+fi
+
+# d) bucket que responde mas está vazio tem mensagem própria — é o desfecho de
+#    "a réplica nunca subiu", que não pode ser confundido com falha de chave.
+CMD="printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null \
+	&& mc mb --ignore-existing off/bucket-vazio-teste >/dev/null && echo criado"
+no_container >/dev/null
+
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | "${COMPOSE[@]}" run --rm --no-deps -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET=bucket-vazio-teste \
+	backup ./verify-offsite.sh >/tmp/iris-verify-vazio.log 2>&1
+EXIT_VAZIO=$?
+set -e
+
+if [[ "${EXIT_VAZIO}" -ne 0 ]] && grep -q 'está VAZIO' /tmp/iris-verify-vazio.log; then
+	ok "bucket vazio => mensagem própria ('a réplica nunca subiu'), não erro de chave"
+else
+	fail "bucket vazio não teve diagnóstico próprio (exit ${EXIT_VAZIO})"
+fi
+
+# e) argumento malformado tem diagnóstico próprio. Sem a validação, um nome
+#    digitado pela metade (ou o nome do globals no lugar do dump) faz os DOIS
+#    downloads darem 404 e o operador recebe "par INCOMPLETO no bucket" — um
+#    incidente classe PR #85 — por causa de um erro de digitação, no meio de um
+#    DR. O diagnóstico errado aqui custa mais caro do que em qualquer outro
+#    ponto do script.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | "${COMPOSE[@]}" run --rm --no-deps -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	backup ./verify-offsite.sh iris-20260728T024929Z.globals.sql.age \
+	>/tmp/iris-verify-arg.log 2>&1
+EXIT_ARG=$?
+set -e
+
+if [[ "${EXIT_ARG}" -ne 0 ]] && grep -q 'argumento inválido' /tmp/iris-verify-arg.log; then
+	ok "argumento fora do formato do dump => erro próprio, não 'par INCOMPLETO'"
+else
+	fail "verify-offsite.sh aceitou argumento malformado (exit ${EXIT_ARG}) — diagnóstico vira incidente falso"
+fi
+
+# f) mesmo guard de OFFSITE_S3_PATH_STYLE que o backup.sh tem. Sem ele o valor
+#    cru chega no `mc alias set --path` e o erro sai como "mc alias set falhou",
+#    que o runbook condiciona a ler como problema de CREDENCIAL.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | "${COMPOSE[@]}" run --rm --no-deps -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_S3_PATH_STYLE=onn \
+	backup ./verify-offsite.sh >/tmp/iris-verify-path.log 2>&1
+EXIT_PATH=$?
+set -e
+
+if [[ "${EXIT_PATH}" -ne 0 ]] && grep -q 'OFFSITE_S3_PATH_STYLE precisa ser' /tmp/iris-verify-path.log; then
+	ok "OFFSITE_S3_PATH_STYLE inválido no verify => erro nomeado, não 'alias falhou'"
+else
+	fail "verify-offsite.sh não validou OFFSITE_S3_PATH_STYLE (exit ${EXIT_PATH})"
 fi
 
 # ---------------------------------------------------------------------------
