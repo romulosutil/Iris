@@ -1004,8 +1004,13 @@ normal e curta o bastante para não queimar um prazo de 15 minutos inteiro.
 
 ### Teste de fumaça com alerta sintético
 
-Confirma as **duas** transições de ponta a ponta. Rode no console do Postgres,
-com a role dona — **em ambiente de teste**, não em produção com dado real.
+Confirma as **duas** transições de ponta a ponta. Você pode rodar a verificação automatizada via script Node.js:
+
+```bash
+DATABASE_URL=postgres://... node scripts/smoke-alerta-risco.mjs
+```
+
+Ou executar manualmente no console do Postgres com a role dona — **em ambiente de teste**, não em produção com dado real:
 
 ```sql
 -- 1) Cria um alerta JÁ VENCIDO a partir de uma sessão de teste existente.
