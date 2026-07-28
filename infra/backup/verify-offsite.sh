@@ -236,11 +236,50 @@ done
 log_info "ambos os artefatos têm header age (estão cifrados no bucket)"
 
 # --- decifra --------------------------------------------------------------------
+# Carimbo do objeto em formato legível, para o operador comparar direto com a
+# data da última rotação da chave age sem fazer aritmética mental sob pressão
+# de DR. CARIMBO é iris-YYYYMMDDTHHMMSSZ; extrai a parte da data.
+formatar_carimbo_legivel() {
+	local carimbo="$1"
+	if [[ "${carimbo}" =~ ^iris-([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z$ ]]; then
+		printf '%s-%s-%s %s:%s:%s UTC' \
+			"${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" \
+			"${BASH_REMATCH[4]}" "${BASH_REMATCH[5]}" "${BASH_REMATCH[6]}"
+	else
+		printf '%s (formato de carimbo não reconhecido)' "${carimbo}"
+	fi
+}
+readonly CARIMBO_LEGIVEL="$(formatar_carimbo_legivel "${CARIMBO}")"
+
 # É AQUI que mora o desastre silencioso que este script existe para achar: uma
 # réplica cifrada com uma chave pública cuja privada ninguém guardou passa por
 # todas as verificações anteriores e falha só nesta.
 if ! age -d -i "${IDENTITY_FILE}" -o "${TMP_DIR}/${CARIMBO}.dump" "${TMP_DIR}/${NOME_DUMP}" 2>"${TMP_DIR}/age.err"; then
-	log_error "NÃO FOI POSSÍVEL DECIFRAR ${NOME_DUMP} com a chave fornecida. A réplica off-site existe e é INÚTIL até isto ser resolvido. Verificar se a chave privada é o par de OFFSITE_AGE_RECIPIENT configurado no VPS. Detalhe do age: $(tr -d '\n' <"${TMP_DIR}/age.err")"
+	# Checagem barata e determinística: a pública derivada da privada recebida
+	# por stdin bate com OFFSITE_AGE_RECIPIENT (configurada no VPS)? Se bater,
+	# as hipóteses (b)/(c) abaixo caem e sobra só a (a) — objeto pré-rotação.
+	# NUNCA logar a privada; `age-keygen -y` só imprime a pública (age1...).
+	verificacao_chave=""
+	if [[ -n "${OFFSITE_AGE_RECIPIENT:-}" ]]; then
+		if publica_derivada="$(age-keygen -y "${IDENTITY_FILE}" 2>/dev/null)"; then
+			if [[ "${publica_derivada}" == "${OFFSITE_AGE_RECIPIENT}" ]]; then
+				verificacao_chave="A pública derivada da chave fornecida (${publica_derivada}) BATE com OFFSITE_AGE_RECIPIENT — a chave é o par certo do recipient atual. Hipóteses (b) e (c) descartadas: sobra (a)."
+			else
+				verificacao_chave="A pública derivada da chave fornecida (${publica_derivada}) NÃO bate com OFFSITE_AGE_RECIPIENT (${OFFSITE_AGE_RECIPIENT}) — hipótese (b) ou (c) confirmada, não é problema de rotação."
+			fi
+		else
+			verificacao_chave="não foi possível derivar a pública da chave fornecida com 'age-keygen -y' (chave malformada?) — checagem automática inconclusiva."
+		fi
+	else
+		verificacao_chave="OFFSITE_AGE_RECIPIENT não está definida neste ambiente — rodar manualmente 'age-keygen -y' na chave privada fornecida e comparar o age1... resultante com o OFFSITE_AGE_RECIPIENT configurado no VPS."
+	fi
+
+	log_error "NÃO FOI POSSÍVEL DECIFRAR ${NOME_DUMP} com a chave fornecida (carimbo do objeto: ${CARIMBO_LEGIVEL}). A réplica off-site existe e é INÚTIL até isto ser resolvido. Detalhe do age: $(tr -d '\n' <"${TMP_DIR}/age.err")
+Hipóteses, sem ordem de probabilidade — não afirmar qual é a causa antes de checar:
+  a) o objeto é ANTERIOR à última rotação da chave age e foi cifrado com uma chave cuja privada não existe mais — comparar ${CARIMBO_LEGIVEL} com a data da última rotação; se o objeto for anterior, é IRRECUPERÁVEL POR DESENHO e não há o que consertar (coberto pela regra de lifecycle de 30 dias).
+  b) a chave privada fornecida não é o par de OFFSITE_AGE_RECIPIENT configurado no VPS atualmente.
+  c) a chave passada por stdin é de outra geração/outro ambiente (ex.: staging em vez de produção).
+Verificação automática: ${verificacao_chave}"
 	exit 1
 fi
 
