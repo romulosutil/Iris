@@ -144,19 +144,28 @@ trocado no Easypanel e redeploy feito. **Casamento do par provado**, não presum
 tipo de prova que o `verify-offsite.sh` faz com o artefato. As réplicas anteriores no bucket
 continuam lá e são lixo permanente; a regra de lifecycle (pendência 1) é o que as remove.
 
-**Pendências reais que sobraram da #86** (o upload funcionar não fecha nenhuma delas):
+**#86 FECHADA em 28/07.** Regra de lifecycle de 30 dias criada no bucket (fecha a pendência 1,
+e de quebra expurga sozinha as réplicas cifradas com a chave perdida) e a privada nova guardada
+em lugar durável (pendência 3, a única da cadeia sem verificação automática possível — nenhum
+script prova que existe cópia fora do disco).
 
-1. **Regra de lifecycle no bucket.** Sem ela o Always Free estoura a cota e o backup passa a
-   sair `3` todo dia. Agora tem uma segunda função: expurgar as réplicas cifradas com a chave
-   perdida.
-2. **Rodar o `verify-offsite.sh` contra o bucket de produção**, na máquina que guarda a chave
-   privada. Enquanto não rodar, a réplica é *presumida* restaurável — que é o estado
-   indistinguível de uma réplica inútil. Pode exigir uma credencial de **leitura** temporária:
-   a de produção é write-only por design. **Só é executável a partir de 29/07**, depois da
-   janela das 03:00 BRT — antes disso não existe no bucket nenhum objeto cifrado com o par novo.
-3. **Guardar a metade privada em dois lugares duráveis** (gerenciador de senhas + papel). É o
-   passo que falhou da primeira vez, é o único sem desfazer, e não tem verificação automática
-   possível — nenhum script consegue provar que existe uma cópia fora do disco.
+**A pendência 2 virou a #105, e não foi por burocracia.** A prova de decifra contra produção não
+rodou: a credencial de produção **lista mas não lê** — na Oracle são permissões separadas, a
+negação volta mascarada como `Bucket does not exist`, e isso é o desenho funcionando, não um
+defeito. A tentativa de contornar com Customer Secret Key da conta admin bateu no erro já
+conhecido do projeto (`The secret key required to complete authentication could not be found` +
+a isca da região); formato do par confere com o de produção, então as hipóteses vivas são
+propagação ou pares misturados, não formato. Somado a isso, a réplica cifrada com o par novo só
+nasce na janela seguinte — o único objeto no bucket era anterior à troca.
+
+Fechar a #86 sem a #105 teria marcado como pronto exatamente o tipo de coisa que esta issue
+inteira existe para impedir. Enquanto a #105 estiver aberta, a terceira camada é **presumida**
+restaurável.
+
+**Nota que se paga sozinha:** a correção de review que fez o `mc cp` parar de engolir o `stderr`
+foi escrita e mergeada horas antes de esse caminho aparecer em produção. Sem ela, o operador
+teria visto só "o par está INCOMPLETO no bucket" e caçado um incidente classe #85 inexistente,
+em vez de ler `Bucket does not exist` vindo do provedor.
 
 ---
 
