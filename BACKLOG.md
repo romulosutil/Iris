@@ -127,14 +127,36 @@ falha do alias do MinIO caía direto no `mc mb`/`mc cp` contra alias inexistente
 erros cujo último apontava para a camada errada — agora o upload e o prune remoto são gateados
 por `minio_ok`.
 
+**A primeira tentativa de rodar a verificação encontrou exatamente o que ela existe para
+encontrar: a chave privada não existia mais.** 28/07, mesma noite. A réplica vinha subindo há
+dias, com `exit 0` e log de sucesso todo dia, e o conteúdo era irrecuperável — a metade privada
+do par `age` nunca foi guardada em lugar durável. Nenhum sinal disso aparecia em canal nenhum:
+`backup.sh` sai `0`, o objeto existe no bucket, tem header `age` e o tamanho certo. A única
+coisa capaz de distinguir esse estado de um bom é decifrar, e ninguém tinha decifrado ainda.
+
+Isto é a validação mais forte que a #86 podia receber, e é um argumento contra tratar o drill
+trimestral como formalidade: o furo apareceu na **primeira** execução da verificação, não na
+décima.
+
+Par novo gerado (`age-keygen` na máquina do Rômulo, nunca no VPS), `OFFSITE_AGE_RECIPIENT`
+trocado no Easypanel e redeploy feito. **Casamento do par provado**, não presumido:
+`age-keygen -y < chave-privada` devolveu exatamente a pública que está no Easypanel — o mesmo
+tipo de prova que o `verify-offsite.sh` faz com o artefato. As réplicas anteriores no bucket
+continuam lá e são lixo permanente; a regra de lifecycle (pendência 1) é o que as remove.
+
 **Pendências reais que sobraram da #86** (o upload funcionar não fecha nenhuma delas):
 
 1. **Regra de lifecycle no bucket.** Sem ela o Always Free estoura a cota e o backup passa a
-   sair `3` todo dia.
+   sair `3` todo dia. Agora tem uma segunda função: expurgar as réplicas cifradas com a chave
+   perdida.
 2. **Rodar o `verify-offsite.sh` contra o bucket de produção**, na máquina que guarda a chave
    privada. Enquanto não rodar, a réplica é *presumida* restaurável — que é o estado
    indistinguível de uma réplica inútil. Pode exigir uma credencial de **leitura** temporária:
-   a de produção é write-only por design.
+   a de produção é write-only por design. **Só é executável a partir de 29/07**, depois da
+   janela das 03:00 BRT — antes disso não existe no bucket nenhum objeto cifrado com o par novo.
+3. **Guardar a metade privada em dois lugares duráveis** (gerenciador de senhas + papel). É o
+   passo que falhou da primeira vez, é o único sem desfazer, e não tem verificação automática
+   possível — nenhum script consegue provar que existe uma cópia fora do disco.
 
 ---
 
