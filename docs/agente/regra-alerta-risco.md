@@ -364,13 +364,17 @@ que a interpretação/decisão é humana.
 
 ### 6.2 Notificação push/e-mail (texto curto)
 
-> "Iris: novo sinal prioritário no diário de [nome do paciente] requer
-> revisão. Abrir agora."
+> "Iris: sinal prioritário requer revisão imediata. Abrir agora."
 
 Deliberadamente sem categoria de risco no texto da notificação push (que
 pode aparecer em tela de bloqueio de celular, visível a terceiros) — a
-categoria só aparece dentro do app, após autenticação. Ver Seção 9, achado
-sobre isso.
+categoria só aparece dentro do app, após autenticação. **E sem nome do
+paciente** — o nome de alguém em atendimento clínico é, ele próprio, dado
+sensível de saúde por associação (a existência do vínculo terapêutico é o
+dado); expor na tela de bloqueio é vazamento a qualquer terceiro que olhe o
+celular. A identificação do paciente aparece só dentro do app, junto com o
+trecho literal. A urgência é carregada pelo **canal** (H3, Seção 10), não
+pelo texto.
 
 ---
 
@@ -451,14 +455,14 @@ export const alertaRiscoClinico = pgTable(
     atualizadoPor: uuid("atualizado_por").notNull().references(() => appUser.id),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
 
-    deletadoEm: timestamp("deletado_em", { withTimezone: true }), // nunca usado para expurgo (ver achado 9.2) — só paridade RLS
+    deletadoEm: timestamp("deletado_em", { withTimezone: true }), // nunca usado para expurgo (ver achado 9.4 e H2, Seção 10) — só paridade RLS
   },
   (t) => [
     foreignKey({
       columns: [t.patientId, t.clinicId],
       foreignColumns: [patient.id, patient.clinicId],
       name: "alerta_risco_patient_fk",
-    }).onDelete("cascade"),
+    }).onDelete("restrict"), // NÃO cascade — o expurgo pseudonimiza esta tabela (H2, Seção 10); cascade deletaria a linha inteira, o oposto da decisão
     index("idx_alerta_risco_fila").on(t.clinicId, t.status).where(sql`${t.deletadoEm} IS NULL`),
     index("idx_alerta_risco_sla").on(t.status, t.prazoReconhecimento), // suporte ao job de escalonamento (achado 9.1)
   ],
@@ -661,6 +665,60 @@ de resposta) que a Seção 2 trata como inaceitável.
 
 ---
 
+### Caso ARC-5 — Paciente multiprofissional: qual terapeuta é notificado
+
+**Contexto:** paciente adulto atendido por dois profissionais na mesma
+clínica — psicóloga (Terapia Convencional, sessões às terças) e
+fonoaudiólogo (protocolo de fluência, sessões às quintas). O risco é
+relatado no diário da sessão de **terça** (psicóloga). Fecha a lacuna de
+cobertura do achado 9.3 — o desenho já respondia isso implicitamente
+(`sessionId` obrigatório, Seção 7), mas nenhum caso exercitava.
+
+**Diário de entrada (sessão da psicóloga):**
+
+> "Falou pela primeira vez que anda pensando que 'seria mais fácil não
+> acordar'. Disse que não tem plano nenhum e que não faria nada, mas que o
+> pensamento tem voltado nas últimas semanas."
+
+**Regras que este caso exercita:** Seção 3.1 (destinatário = terapeuta
+responsável **pela sessão de origem**, não todo profissional vinculado ao
+paciente, + coordenador sempre); Seção 7 (`sessionId` obrigatório é o que
+resolve a ambiguidade — o alerta pertence a uma sessão, não a um paciente);
+Seção 1.3 (`ideacao_passiva`, SLA de 4 horas).
+
+**Saída esperada:**
+
+```json
+{
+  "alerta_risco": true,
+  "categoria": "ideacao_suicida",
+  "severidade": "ideacao_passiva",
+  "certeza": "explicito",
+  "session_id": "ses_terca_psicologa",
+  "canais_notificados": ["push_terapeuta_da_sessao", "push_coordenador"],
+  "sla_minutos": 240
+}
+```
+
+**Decisão que este caso trava:** o fonoaudiólogo (segundo profissional do
+mesmo paciente, sem vínculo com a sessão de origem) **não** é notificado.
+Razões: (a) ele não tem contexto clínico do relato nem competência de
+conduta sobre risco relatado em psicoterapia; (b) notificar todo profissional
+vinculado ao paciente amplia desnecessariamente a exposição de dado
+sensível de saúde (minimização, Art. 6º, III, LGPD) para quem não precisa
+dele para agir; (c) a cobertura contra indisponibilidade já é dada pelo
+coordenador (Seção 3.1) e pelo escalonamento (Seção 4.2) — não por difundir
+o alerta lateralmente. Se a decisão futura for compartilhar risco entre
+profissionais do mesmo paciente, isso é decisão clínica de coordenação de
+caso, não regra automática do produto.
+
+**Escalonamento neste caso:** o estágio 1 continua sendo "todos os
+coordenadores da clínica" (Seção 4.2), **não** "os outros profissionais do
+paciente" — o eixo de escalonamento é hierárquico (mais responsabilidade),
+não lateral (mais gente).
+
+---
+
 ## 9. Achados da autovalidação
 
 Revisão crítica deste documento, no mesmo padrão de rigor já aplicado aos
@@ -735,7 +793,8 @@ produção antes da validação profissional (CFP/jurídico) sobre duty to warn.
 
 ## 10. Decisões de hardening (tech lead)
 
-Fecha os dois achados 9.1 e 9.4, que não podiam ficar como TBD numa fatia que
+Fecha os quatro achados da Seção 9 (9.1 e 9.4 em H1/H2; 9.2 em H3; 9.3 em
+H4 + Caso ARC-5), que não podiam ficar como TBD numa fatia que
 lida com dado de vida/segurança — mesmo padrão de rigor de
 `.specs/features/fase6/spec.md` (nunca "avaliar depois" em fatia de
 segurança/LGPD). Verificado no repo antes de decidir, não presumido:
@@ -876,3 +935,57 @@ carrega dado real de saúde (`CLAUDE.md` do projeto: "qualquer DDL que altere
 tabela que já tenha dado" entra na categoria de confirmar antes). O desenho
 acima (pseudonimizar, o quê pseudonimizar, ancorar em
 `politicaRetencaoMeses`) é decisão de tech lead fechada.
+
+### H3 — Urgência sem conteúdo: a tensão do achado 9.2
+
+**O achado:** o texto push humano-neutro que protege privacidade em tela de
+bloqueio é o mesmo texto que não comunica urgência — um alerta de
+`ideacao_ativa_com_plano` (SLA 15 min) chega parecendo uma pendência comum.
+
+**Decisão a travar: a urgência é carregada pelo canal, não pelo texto.**
+O texto push permanece sem categoria e sem nome do paciente (Seção 6.2,
+corrigida por este hardening — a versão anterior expunha o nome, que é dado
+sensível de saúde por associação). O que distingue um alerta de risco de uma
+notificação de rotina é o envelope:
+
+- **Tag/canal de notificação dedicado** (`iris-risco`, separado do canal de
+  notificações de rotina), com som próprio e ícone próprio — o destinatário
+  aprende a reconhecer o canal, não a ler o texto.
+- **`requireInteraction: true`** na Web Notification (a notificação não some
+  sozinha; exige dispensa explícita) — é o análogo mais próximo de "alerta
+  persistente" disponível no ambiente web atual do produto.
+- **Renotificação uma vez por estágio de SLA** (`renotify: true`, mesma
+  `tag`, disparada junto com cada transição da Seção 4.2) — não é
+  escalonamento contínuo (Seção 4.3 continua valendo), são no máximo 3
+  toques: criação, estágio 1, estágio 2.
+- **Escalonamento de intrusividade por faixa de SLA:** só a faixa de 15
+  minutos (Seção 4.1) usa o canal com som + `requireInteraction`; as faixas
+  de 1h e 4h usam o mesmo canal dedicado com badge persistente, sem som.
+  Anti-fadiga (Seção 2) aplicado ao próprio canal: se todo alerta de risco
+  tocar, o som deixa de significar "15 minutos".
+
+**Limitação registrada, não escondida:** notificação web não consegue
+furar "Não perturbe" do sistema operacional — só um app nativo com *critical
+alert* (iOS) / canal de alta prioridade (Android) consegue, e o Iris hoje é
+web. Isso significa que, com o celular em modo silencioso durante a noite,
+o SLA de 15 minutos **não é garantido pelo canal push** — quem cobre esse
+buraco é o escalonamento da Seção 4.2 (mais destinatários = mais chance de
+alguém estar com o celular ativo), não a tecnologia de notificação.
+Consequência de produto: prometer "15 minutos" em contrato/copy comercial
+seria overclaim — o produto entrega *notificação imediata e escalonamento
+verificável*, não *resposta humana em 15 minutos*. Alinhar a pergunta 3 da
+Seção 5 (SLA compatível com diligência profissional) com essa distinção
+quando a consulta profissional acontecer.
+
+### H4 — Paciente multiprofissional: eixo de notificação (achado 9.3)
+
+**Decisão a travar: o alerta segue a sessão, não o paciente.** Destinatários
+= terapeuta da sessão de origem (`sessionId`, Seção 7) + coordenador;
+escalonamento sobe pelo eixo hierárquico (todos os coordenadores), nunca
+lateral (outros profissionais do mesmo paciente). Fundamentação e o caso de
+teste que exercita isso: Caso ARC-5 (Seção 8) — a lacuna do achado 9.3 era
+de cobertura de teste, e está fechada por ele.
+
+Consequência para o modelo de dado: nenhuma. `sessionId` já é `notNull`
+(Seção 7) e já resolve a resolução de destinatário sem coluna nova — a
+regra de destinatário é derivável da sessão, não precisa ser materializada.

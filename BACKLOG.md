@@ -267,12 +267,33 @@ ainda não decidida (LGPD).
   multi-instância), polling a cada 1min (SLA mais curto é 15min). Retenção
   LGPD: **pseudonimizar no expurgo, não deletar** — mesmo padrão de
   `audit_log`/`0045`, ancorado em `clinic.politicaRetencaoMeses` (coluna já
-  existe, `schema.ts:235`). Achado residual: FK atual de
-  `alerta_risco_clinico` tem `onDelete("cascade")`, contradiz a decisão de
-  pseudonimizar — precisa correção antes de codar.
+  existe, `schema.ts:235`).
 
-**Nada commitado ainda** — branch `docs/spec-nichos-terapia-convencional-tcc`,
-9 arquivos novos/editados em `docs/agente/` e `.specs/features/`.
+**#101 fechamento dos achados residuais (sessão 28/07):** os 4 achados de
+autovalidação da §9 estão fechados — antes só 9.1/9.4 estavam.
+
+- **9.2 (urgência × privacidade no push) → H3.** Urgência passa a ser
+  carregada pelo **canal**, não pelo texto: tag dedicada `iris-risco`, som +
+  `requireInteraction` só na faixa de SLA de 15min, renotificação 1× por
+  estágio. Correção de vazamento encontrada de passagem: o texto push da §6.2
+  citava o **nome do paciente** — dado sensível de saúde por associação,
+  visível em tela de bloqueio; removido. Limitação registrada: web push não
+  fura DND do SO, então "15 minutos" é promessa de *notificação +
+  escalonamento*, não de *resposta humana* — não usar em copy comercial.
+- **9.3 (paciente multiprofissional) → H4 + Caso ARC-5 novo.** O alerta segue
+  a **sessão** (`sessionId`), não o paciente: só o terapeuta daquela sessão +
+  coordenador; escalonamento é hierárquico, nunca lateral (outros
+  profissionais do mesmo paciente não são notificados — minimização).
+- **FK corrigida no doc:** `alerta_risco_patient_fk` passa de
+  `onDelete("cascade")` para `restrict` (cascade deletaria a linha, oposto da
+  decisão de pseudonimizar em H2).
+
+Continua em aberto **só a §5 (duty to warn)** — as 5 perguntas de CFP/
+jurídico, que por desenho não são decisão de tech lead. Nenhuma linha desta
+spec vira código antes dessa resposta.
+
+**Branch `docs/spec-nichos-terapia-convencional-tcc`** (worktree
+`iris-wt-101`) — spec commitada, ainda sem push/PR.
 
 ---
 
