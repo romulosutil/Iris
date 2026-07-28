@@ -105,6 +105,53 @@ Legislação brasileira, incluindo LGPD (Lei 13.709/2018). [Foro específico —
 pendente de definição jurídica, tipicamente o foro da sede do contratante ou
 do Iris, a decidir.]
 
+## 10. Da natureza do sistema de alerta de risco clínico e isenção de monitoramento contínuo
+
+> **Origem:** minuta redigida pelo advogado **Thiago Lyra Galvão**
+> (`parecer-juridico-duty-to-warn.md`, pergunta 4, issue #110). Reproduzida
+> literalmente — a limitação genérica da cláusula 5 foi considerada
+> insuficiente para o módulo de alerta de risco. Não editar sem novo parecer.
+
+**10.1.** O SOFTWARE disponibiliza um mecanismo automatizado de identificação
+e sinalização de termos sugestivos de risco clínico ("Alerta de Risco"),
+baseado na análise *ex post* do texto digitado pelo profissional da
+CONTRATANTE após as sessões.
+
+**10.2.** A CONTRATANTE declara e reconhece expressamente que:
+
+&nbsp;&nbsp;**(a)** O SOFTWARE **NÃO** realiza monitoramento em tempo real (24
+horas por dia, 7 dias por semana) de pacientes, não substitui plantões
+clínicos e não funciona como serviço de triagem de emergência ou prevenção de
+crises;
+
+&nbsp;&nbsp;**(b)** As sinalizações geradas pelo SOFTWARE possuem caráter
+meramente informativo e probabilístico, dependendo obrigatoriamente da
+avaliação, julgamento clínico, validação e conduta humana dos profissionais
+da CONTRATANTE;
+
+&nbsp;&nbsp;**(c)** As notificações do SOFTWARE dependem de fatores técnicos
+externos, incluindo conectividade com a internet, permissões de dispositivos
+móveis e configurações de sistemas operacionais (tais como modos "Não
+Perturbe"), não garantindo o SOFTWARE a resposta humana em prazos
+determinados;
+
+&nbsp;&nbsp;**(d)** A responsabilidade pela adoção de condutas clínicas,
+intervenções de emergência, quebra de sigilo ético e notificações
+compulsórias às autoridades públicas (Conselho Tutelar, Vigilância Sanitária,
+autoridades policiais) é **EXCLUSIVA** da CONTRATANTE e de seus profissionais
+de saúde vinculados, nos termos do Código de Ética Profissional e da
+legislação aplicável.
+
+**10.3.** Como condição para uso do módulo de Alerta de Risco, a CONTRATANTE
+se obriga a manter protocolo clínico próprio de gestão de crises e
+emergências fora do ambiente do SOFTWARE, declarando que não deposita no
+SOFTWARE a exclusividade no acompanhamento de pacientes em risco.
+
+> **Requisito de produto derivado desta cláusula:** o aceite de 10.3 é
+> checkbox obrigatório no onboarding do tenant ("Declaro que a clínica possui
+> protocolo próprio de atendimento de emergências"), não só texto de contrato.
+> Ver `docs/agente/regra-alerta-risco.md` §5.1, pergunta 4.
+
 ---
 
 ## Pendências antes deste documento valer como final

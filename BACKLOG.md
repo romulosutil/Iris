@@ -396,6 +396,66 @@ que a sessão possa produzir. O que foi entregue:
 psicólogo(a)/advogado(a). Só depois disso a #110 fecha e a #101 pode virar
 código.
 
+### ✅ #110 FECHADA — parecer recebido (Thiago Lyra Galvão)
+
+Parecer em `docs/legal/parecer-juridico-duty-to-warn.md`. **O levantamento do
+projeto (Anexo A do briefing) foi confirmado integralmente** — nenhuma
+correção normativa. **O bloqueio de implementação da #101 está levantado.**
+
+**O que ficou travado:**
+
+- **Estágio 2 do escalonamento = Opção B, estritamente interno à clínica.**
+  Regra de ouro: o Iris **nunca** notifica contato externo — nem família, nem
+  contato de emergência, nem SAMU/polícia/Conselho Tutelar. O estágio 2 faz 4
+  coisas dentro do tenant: banner crítico para todos os usuários logados da
+  clínica, e-mail/push para o RT, exibição do protocolo de crise cadastrado
+  pela própria clínica, e log imutável de não-reconhecimento. Razão
+  registrada em §4.2.1 para não ser reaberta por engano: notificação externa
+  cria responsabilidade civil do Iris nos dois sentidos (falso positivo =
+  quebra ilícita de sigilo + LGPD; falso negativo/atraso = perda de uma
+  chance). Notificar contato de emergência pelo app está **descartado, não
+  adiado**.
+- **Nomenclatura dos prazos.** 15 min / 1 h / 4 h continuam, mas só podem ser
+  chamados de "prazos de notificação e escalonamento interno do software" —
+  **nunca** "SLA de atendimento de emergência", em nenhum lugar (UI, contrato,
+  copy comercial). Declaração obrigatória ao lado de qualquer temporizador.
+- **Idade do paciente é o único eixo que muda comportamento do software.**
+  Estado da federação não varia (ECA/CEPP/CP são federais); vínculo
+  profissional não varia (contrato é B2B com a clínica, que responde
+  solidariamente — CC 932 III, CDC 14). Mas **`violencia_sofrida` em paciente
+  menor** tem **dever legal imperativo** (ECA art. 13 + Lei 13.431/2017 art.
+  13) e ganha copy própria, citando a obrigação. Não viola o princípio de "IA
+  nunca tem autoridade": a copy não afirma que houve violência, informa uma
+  obrigação que já existe.
+- **Cláusula 10 dos termos de uso** (isenção de monitoramento contínuo) —
+  minuta literal do advogado aplicada em `docs/legal/termos-de-uso.md`. A
+  limitação genérica da cláusula 5 foi considerada insuficiente.
+
+**Requisitos de implementação novos que a #101 herda:**
+
+1. Campo de **protocolo de crise da clínica**, cadastrado no onboarding — o
+   estágio 2 exibe esse texto.
+2. **Checkbox obrigatório no onboarding** do tenant: "Declaro que a clínica
+   possui protocolo próprio de atendimento de emergências" (cláusula 10.3).
+3. **Banner crítico clínica-wide** — componente que não existe hoje.
+4. Notificação ao **responsável técnico** por e-mail institucional.
+5. Copy diferenciada para `violencia_sofrida` + paciente menor.
+6. Declaração de limitação ao lado de qualquer temporizador de prazo na UI.
+
+**Aditivo veio junto e NÃO é da #110** — `docs/legal/aditivo-especificacoes-legais.md`
+traz requisitos independentes, cada um virou issue própria:
+
+- **#116** — retenção de log de aplicação (Marco Civil art. 15, mínimo 6
+  meses); expurgo do `audit_log` desatrelado da exclusão de conta.
+- **#117** — revogação de consentimento leva o prontuário a **Read-Only
+  Locked**, não a exclusão (LGPD 15/16/18 vs. retenção regulatória).
+- **#118** — declaração e-Psi (**Resolução CFP nº 009/2024** — norma que o
+  projeto ainda não tinha mapeada).
+- **#119** — `visibility_level` no prontuário multidisciplinar (CEPP art. 9º):
+  sigilo por disciplina vs. prontuário unificado. Toca RLS, precisa plan mode.
+- **#120** — exportação PDF/A com marca d'água + hash SHA-256 (LGPD art. 18);
+  fecha o "formato a definir" do §6 dos termos de uso.
+
 ---
 
 ## 🏁 Sessão 25/07/2026 — Go-live #75 Etapa 5: backup + restore testado (OPERANDO EM PROD) — PRs #85, #90, #91, #92

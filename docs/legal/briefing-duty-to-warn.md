@@ -1,5 +1,22 @@
 # Iris — Briefing de consulta profissional: duty to warn em risco clínico
 
+> ## ✅ RESPONDIDO — issue #110 fechada
+>
+> Este briefing **já cumpriu sua função**. As respostas estão em
+> **`parecer-juridico-duty-to-warn.md`** (advogado **Thiago Lyra Galvão**), e
+> as decisões travadas estão em `docs/agente/regra-alerta-risco.md` §4.1,
+> §4.2.1, §5 e §6, além da cláusula 10 de `termos-de-uso.md`.
+>
+> **Resumo do que voltou:** o levantamento do Anexo A foi confirmado
+> integralmente — não há Tarasoff no Brasil, não há prazo legal para resposta
+> clínica, e as citações do CFP estavam corretas. Pergunta 2 fechou na
+> **Opção B** (escalonamento estritamente interno à clínica). O único eixo que
+> muda comportamento do software é **idade do paciente + violência sofrida**,
+> onde há dever legal do ECA e a copy precisa ser diferenciada.
+>
+> Mantido no repositório como registro do que foi perguntado e por quê —
+> qualquer reabertura desse desenho deve partir daqui, não do zero.
+
 **Para quem vai ler:** psicólogo(a) com experiência em ética profissional
 e/ou advogado(a). Mesmo espírito de `docs/legal/briefing-para-advogado.md` —
 é uma **checagem antes de escrever código**, não um pedido de parecer formal

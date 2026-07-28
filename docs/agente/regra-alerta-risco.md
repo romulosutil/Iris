@@ -236,7 +236,22 @@ do Iris — não há precedente direto no produto para adaptar; a proposta abaix
 é desenho novo, sujeito a validação com o Rômulo antes de virar código (fora
 do escopo deste documento, que é só especificação).
 
-### 4.1 SLA proposto
+### 4.1 Prazos de notificação e escalonamento interno
+
+> **Nomenclatura travada pelo parecer jurídico (pergunta 3).** Estes prazos
+> **nunca** podem ser chamados de "SLA de atendimento de emergência" — nem na
+> UI, nem no contrato, nem em copy comercial. A denominação correta é
+> **"prazos de notificação e escalonamento interno do software"**. Motivo: não
+> existe prazo legal brasileiro para resposta clínica a crise (o parecer
+> confirma), e prometer resposta humana em 15 minutos é promessa de
+> atendimento de emergência que o produto não pode cumprir — notificação web
+> não fura o "Não perturbe" do SO. Onde o texto abaixo diz "SLA", leia-se
+> sempre no sentido restrito de prazo interno do software.
+>
+> **Declaração obrigatória na UI**, ao lado de qualquer temporizador de prazo:
+> *"Estes prazos regem apenas o envio de alertas dentro do sistema Iris para
+> os gestores da clínica. O Iris não realiza atendimento e não garante a
+> presença de profissionais logados."*
 
 | Severidade                                             | SLA de reconhecimento (por qualquer um dos dois destinatários) |
 | -------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -261,91 +276,130 @@ Proposta em 2 estágios:
    de risco vencido" — nunca silenciosa, mesmo princípio de V4
    (`validacao-coordenador.md`: "a notificação nunca é silenciosa").
 2. **Estágio 2 (dobro do SLA original vencido, ainda ninguém reconheceu):**
-   este é o ponto em que o produto **não pode decidir sozinho o que fazer** —
-   escalar para um canal fora do produto (contato de emergência da clínica?
-   linha de crise? isso depende diretamente da resposta jurídica/ética da
-   Seção 5, duty to warn) é decisão que **não deveria ser travada aqui**.
-   Registrado como requisito confirmado (precisa existir um estágio 2), com
-   o mecanismo concreto pendente da mesma validação profissional da Seção 5.
+   **TRAVADO** — desenho fechado abaixo. Era o único ponto em branco desta
+   spec; o parecer jurídico (Thiago Lyra, `docs/legal/parecer-juridico-duty-to-warn.md`,
+   pergunta 2) travou a **Opção B**: o estágio 2 existe e é **estritamente
+   interno à clínica-cliente**.
 
-**As três saídas possíveis do estágio 2** já estão mapeadas em
-`docs/legal/briefing-duty-to-warn.md` (pergunta 2), cada uma amarrada ao que
-muda em código — resumo:
+#### 4.2.1 Estágio 2 — desenho fechado (Opção B)
 
-| Se a resposta profissional for... | Estágio 2 vira |
-| ---------------------------------- | --------------- |
-| Responsabilidade é só do terapeuta; o Iris é ferramenta neutra | Estágio 2 pode notificar fora da clínica; abre discussão sobre "notificar contato de emergência pelo app" como feature |
-| É do terapeuta, mas intermediar cria responsabilidade para o Iris | Estágio 2 **não** notifica ninguém fora da clínica: registra de forma inescapável e exibe o protocolo de crise que a própria clínica cadastrou. O produto nunca é remetente do aviso externo |
-| O Iris não deve participar de escalonamento externo nenhum | Estágio 2 não existe; o produto notifica, registra e para — e a cláusula contratual da pergunta 4 do briefing vira obrigatória |
+**Regra de ouro, inegociável:** o Iris **NUNCA** envia e-mail, SMS, push ou
+qualquer notificação para contato externo à clínica — não para família, não
+para contato de emergência do paciente, não para SAMU, polícia ou Conselho
+Tutelar. Todo o fluxo encerra na notificação e responsabilização dos gestores
+da clínica.
 
-Enquanto não houver resposta, **nenhuma das três** é implementada — inclusive
-a terceira, porque "não fazer nada" também precisa da cláusula contratual
-correspondente para ser uma decisão, e não uma omissão.
+O estágio 2 dispara quatro ações, todas dentro do tenant:
+
+1. **Banner crítico** em destaque na tela de **todos** os usuários logados da
+   clínica (não só coordenadores) — o alerta deixa de depender de alguém
+   abrir uma tela específica.
+2. **E-mail/push de emergência** para o e-mail institucional do **responsável
+   técnico** da clínica.
+3. **Exibição do "Protocolo de Emergência Interno"** previamente cadastrado
+   pela própria clínica — o produto mostra o protocolo da clínica, não
+   propõe conduta própria. (Implica campo novo: a clínica cadastra esse
+   protocolo no onboarding.)
+4. **Log imutável**: `Alerta ID #X não reconhecido pela equipe clínica no
+   prazo Y`. Trilha de auditoria, não notificação.
+
+**Por que Opção B e não notificação externa** (razão registrada para não ser
+reaberta por engano): intermediar notificação externa criaria
+responsabilidade civil direta do Iris nos dois sentidos — em **falso
+positivo**, violação ilícita de sigilo + dano moral + infração LGPD por
+compartilhamento indevido de dado sensível de menor; em **falso negativo ou
+atraso de entrega**, alegação de que a clínica "confiou que o Iris
+notificaria os socorristas" (perda de uma chance). O Iris não é inscrito em
+CRP/CRM, não tem responsável técnico de saúde e não presta atendimento — não
+tem *duty of care* clínico a exercer.
 
 ### 4.3 Por que 2 estágios e não escalonamento contínuo
 
 Um esquema de escalonamento que soa a cada N minutos indefinidamente tende a
 gerar o mesmo efeito de fadiga discutido na Seção 2, na direção oposta
 (alarme persistente sendo silenciado pelo usuário por exaustão, não por
-descrença). Dois estágios discretos (mais coordenadores → canal externo)
-equilibram urgência real com o mesmo cuidado antifadiga.
+descrença). Dois estágios discretos (mais coordenadores → banner clínica-wide
++ RT + protocolo da clínica) equilibram urgência real com o mesmo cuidado
+antifadiga. Note que, com a Opção B travada em 4.2.1, o segundo estágio
+**não** é "canal externo" — é saturação interna da clínica.
 
 ---
 
-## 5. Duty to warn — decisão que exige validação profissional (NÃO travada aqui)
+## 5. Duty to warn — VALIDADO E TRAVADO
 
-**Este documento não responde as perguntas desta seção.** Elas são
-apresentadas como perguntas objetivas, no mesmo formato de
-`docs/legal/briefing-para-advogado.md`, precisamente para que a resposta
-venha de quem tem competência para dá-la — psicólogo(a)/advogado(a)
-consultado(a) pelo Rômulo, nunca deste documento nem do agente de IA.
-Nenhuma implementação do fluxo desta seção deveria avançar sem essas
-respostas.
+> **Status: fechado (issue #110).** As 5 perguntas desta seção foram
+> respondidas em parecer do advogado **Thiago Lyra Galvão**, registrado em
+> `docs/legal/parecer-juridico-duty-to-warn.md`. O briefing que originou a
+> consulta está em `docs/legal/briefing-duty-to-warn.md`. **O bloqueio de
+> implementação desta spec está levantado** — as decisões abaixo são o
+> contrato a seguir, não proposta.
 
-> **Estado (issue #110):** as perguntas abaixo já estão empacotadas para
-> consulta em **`docs/legal/briefing-duty-to-warn.md`** — com o mecanismo do
-> produto descrito em detalhe, as saídas possíveis de cada resposta mapeadas
-> para o que muda em código, e espaço de resposta. A versão canônica das
-> perguntas passa a ser a de lá; a lista abaixo fica como resumo. **As
-> respostas ainda não existem** — o bloqueio de implementação continua
-> valendo integralmente.
+### 5.1 As respostas
 
-**Perguntas objetivas para o profissional consultado:**
+**1 — Existe obrigação de notificar terceiro? Depende do tipo de risco.**
+O levantamento do projeto foi confirmado integralmente:
 
-1. O terapeuta que atende pelo Iris tem, pela Resolução CFP aplicável (e por
-   eventual dispositivo estadual do conselho regional), alguma **obrigação
-   de notificar terceiro** (autoridade, família, contato de emergência) ao
-   identificar risco de vida a si ou a outrem relatado em sessão? Essa
-   obrigação muda conforme o tipo de risco (ideação vs. violência sofrida
-   vs. violência a terceiro, especialmente menor)?
-2. Se existe obrigação de notificação, ela é do **terapeuta enquanto
-   profissional** (responsabilidade dele, independente de ferramenta) ou o
-   **produto Iris** assume alguma responsabilidade adicional por
-   intermediar/registrar/armazenar o alerta? (Esta pergunta decide se o
-   produto pode, no futuro, oferecer "notificar contato de emergência
-   diretamente pelo app" como feature, ou se isso teria que ficar
-   estritamente fora do escopo do produto, deixando a ação humana 100% fora
-   da ferramenta.)
-3. O SLA proposto na Seção 4 (15 minutos / 1 hora / 4 horas) é compatível
-   com o padrão de diligência esperado da prática profissional, ou existe
-   um prazo de referência já usado em protocolo de crise clínico que o
-   produto deveria espelhar em vez de propor um número novo?
-4. Existe risco de o produto, ao oferecer QUALQUER automação neste fluxo
-   (mesmo só "sinalizar e notificar", sem decidir nada), criar **falso senso
-   de segurança** para a clínica-cliente — isto é, a clínica passar a confiar
-   que "o Iris cobre isso" e relaxar o próprio protocolo de crise interno?
-   Se sim, que texto/disclaimer contratual (termos de uso, `docs/legal/`)
-   mitigaria esse risco?
-5. Isso muda por estado do Brasil, por tipo de vínculo profissional (CLT vs.
-   autônomo vs. clínica-empresa), ou por idade do paciente (adulto
-   autoconsentindo vs. menor com responsável)?
+| Tipo de risco | Situação legal | Consequência para o produto |
+| --- | --- | --- |
+| Ideação suicida em adulto, sem ato | **Faculdade ética**, não dever (CEPP art. 10, "busca do menor prejuízo"). Não há dever de avisar família de adulto capaz | Copy padrão |
+| Tentativa de suicídio / autolesão | Notificação compulsória **sanitária**, do estabelecimento ao SINAN em 24h, sob sigilo (Lei 13.819/2019 art. 6º). Não é dever de avisar família ou polícia | Copy padrão |
+| **Violência SOFRIDA por criança/adolescente** | **DEVER LEGAL IMPERATIVO** e imediato (ECA art. 13 + Lei 13.431/2017 art. 13). Omissão é infração administrativa (ECA art. 245) | **Copy diferenciada** — ver 5.2 |
+| Violência sofrida por mulher adulta em serviço de saúde | Comunicação compulsória à autoridade em 24h (Leis 10.778/2003 e 13.931/2019), pelo serviço, notificando o fato sem detalhes de prontuário | Copy padrão |
+| Violência PRATICADA pelo paciente / risco a terceiro | **Não há Tarasoff no Brasil.** Faculdade/justa causa (CEPP art. 10 c/c CP art. 154 e estado de necessidade, CP art. 24), não obrigação | Copy padrão |
 
-**Enquanto essas respostas não existirem:** o desenho deste documento
-(Seções 3-4) cobre só a parte que é seguramente território de produto —
-notificar rapidamente os humanos certos dentro do Iris. Qualquer ação que
-"saia" do produto (notificar terceiro externo, acionar serviço de
-emergência) fica fora de escopo até a resposta acima existir — nunca
-implementar por analogia ou suposição.
+**2 — De quem é a responsabilidade? Opção B.** O Iris é operador de dados /
+provedor de tecnologia. Notificação externa automatizada criaria
+responsabilidade civil direta do Iris. **O estágio 2 do escalonamento é
+estritamente interno à clínica** — desenho fechado em 4.2.1.
+
+**3 — Os prazos.** Não existe prazo legal brasileiro para resposta clínica em
+crise. Os prazos de 15 min / 1 h / 4 h são bons parâmetros de software, mas
+só podem ser chamados de **"prazos de notificação e escalonamento interno"** —
+nunca "SLA de atendimento de emergência". Ver o bloco normativo em 4.1,
+incluindo a declaração obrigatória na UI.
+
+**4 — Falso senso de segurança.** A limitação genérica de responsabilidade
+**não basta**. Exige (a) cláusula específica no contrato B2B / termos de uso
+— minuta do advogado já aplicada em `docs/legal/termos-de-uso.md`, seção 10 —
+e (b) **declaração de aceite no onboarding** da clínica de que ela mantém
+protocolo de crise próprio.
+
+**5 — Eixos de variação.** **Estado: não varia** (ECA, CEPP e Código Penal são
+federais; recomendação de CRP regional não altera arquitetura). **Vínculo
+profissional: não varia** (o contrato é B2B com a clínica, que responde
+solidariamente pelos atos dos seus profissionais — CC art. 932, III e CDC art.
+14). **Idade do paciente: VARIA — é o eixo crítico**, e é o único que exige
+diferenciação no sistema (5.2).
+
+### 5.2 O único eixo que muda comportamento: idade + violência sofrida
+
+Quando o alerta for de **`violencia_sofrida` em paciente menor de idade**, a
+copy **não** pode ser a mesma dos demais casos. Aqui existe dever legal
+*ex lege*, e a interface deve reforçar a norma em vez de sugerir que a
+avaliação é discricionária. Texto travado pelo parecer:
+
+> ⚠️ **Sinalização de risco: suspeita/registro de violência contra menor.**
+>
+> Este registro contém elementos que indicam possível violência ou maus-tratos
+> contra criança/adolescente. Lembramos que, nos termos do art. 13 do ECA e da
+> Lei 13.431/2017, a comunicação ao Conselho Tutelar / autoridade competente é
+> **dever legal do profissional e do estabelecimento de saúde**. A avaliação
+> clínica e a tomada de providências cabem exclusivamente à equipe
+> responsável.
+
+Note que isso **não** viola o princípio da Seção 1.1 (a IA nunca tem
+autoridade): a copy não afirma que houve violência nem classifica o caso —
+ela informa uma obrigação legal que já existe, e devolve a avaliação à
+equipe. O produto continua sem decidir nada.
+
+Para paciente **adulto capaz**, incide com força total o sigilo do CEPP art.
+9º, e a quebra é exceção ponderada — copy padrão hedged da Seção 6.
+
+### 5.3 O que continua fora de escopo, agora por decisão e não por lacuna
+
+Notificar contato de emergência pelo app, acionar linha de crise, avisar
+família ou autoridade: **descartado**, não adiado. Reabrir isso exige novo
+parecer, não decisão de produto.
 
 ---
 
@@ -355,6 +409,12 @@ Princípio idêntico ao já usado em R4-TC e no restante de `docs/agente/`:
 linguagem sempre hedged, nunca overclaim de capacidade diagnóstica da IA.
 Nunca "IA detectou risco de suicídio" — sempre formulação que deixa claro
 que a interpretação/decisão é humana.
+
+> **Exceção única, travada pelo parecer jurídico:** alerta de
+> `violencia_sofrida` em **paciente menor de idade** usa a copy específica da
+> Seção 5.2, que cita o dever legal do ECA. Continua sem afirmar que houve
+> violência — só informa uma obrigação que já existe. Todos os demais casos
+> usam a copy padrão desta seção.
 
 ### 6.1 Texto do alerta na UI (proposta)
 
