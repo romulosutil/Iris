@@ -374,42 +374,47 @@ versionado no repo e com log no painel.
    OFFSITE_S3_ENDPOINT=https://<namespace>.compat.objectstorage.sa-saopaulo-1.oraclecloud.com
    OFFSITE_S3_ACCESS_KEY=<...>   OFFSITE_S3_SECRET_KEY=<...>
    OFFSITE_S3_BUCKET=iris-backups-offsite
-   OFFSITE_S3_REGION=              # vazio com endpoint OCI (derivado) — ver abaixo
+   OFFSITE_S3_REGION=              # VAZIO. Só mexer com evidência — ver abaixo
+   OFFSITE_S3_PATH_STYLE=          # vazio = auto. idem
    OFFSITE_AGE_RECIPIENT=age1...   # chave PÚBLICA. A privada nunca entra aqui.
    OFFSITE_INTERVAL_DAYS=1         # 1 = diário · 7 = semanal (ver abaixo)
    ```
 
-   **Região de assinatura SigV4 — a segunda armadilha de dialeto S3.** O `mc`
-   não tem `--region` em `alias set` e o `config.json` v10 não guarda região
-   (medido no `mc RELEASE.2025-08-13`). Sem nada configurado ele assina
-   `us-east-1`. O MinIO ignora a região; a **OCI recusa**, com esta mensagem:
+   **Se a autenticação off-site falhar, comece pela credencial.** A OCI responde
+   assim quando o `mc` não consegue autenticar:
 
    ```
    The secret key required to complete authentication could not be found.
    The region must be specified if this is not the home region for the tenancy.
    ```
 
-   A frase mistura duas causas e faz procurar no lugar errado — a primeira
-   leitura é "credencial errada", e a resposta natural (gerar outra Customer
-   Secret Key) não resolve nada. Foi o que custou uma janela de backup sem
-   cópia off-site. A única alavanca que o `mc` expõe é a env var `MC_REGION`,
-   lida por invocação; o `backup.sh` a aplica só nos comandos off-site.
+   A frase junta duas causas e a segunda é uma pista falsa convincente — dá
+   vontade de mexer em região antes de conferir a chave. **Em 28/07/2026 a causa
+   foi a credencial**: o par `OFFSITE_S3_ACCESS_KEY`/`OFFSITE_S3_SECRET_KEY`
+   precisa ser uma **Customer Secret Key** da OCI (Identity → usuário → *Customer
+   Secret Keys*) — não um Auth Token, não uma chave de API com PEM. Trocada a
+   chave, a réplica voltou a subir **sem tocar em região nenhuma**.
 
-   Com endpoint da OCI (`https://<ns>.compat.objectstorage.<região>.oraclecloud.com`)
-   a região é **derivada do próprio host** e `OFFSITE_S3_REGION` fica vazio.
-   Preencher só em provedor cujo endpoint não carrega a região. A região efetiva
-   sai no log a cada execução:
+   Isso é o que o `backup.sh` loga hoje a cada execução, e é a configuração
+   **provada** funcionando contra a OCI:
 
    ```
-   [backup] off-site: assinando SigV4 na região 'sa-saopaulo-1' (path-style=on)
+   [backup] off-site: assinando SigV4 na região 'us-east-1 (default do mc)' (path-style=auto)
+   [backup] off-site: sonda OK — credencial autentica e a região de assinatura é aceita
    ```
 
-   `path-style=on` no destino OCI é deliberado: a S3 Compatibility API da Oracle
-   não atende bucket em virtual-host.
+   A **sonda roda antes do upload** e não é fatal. `sonda OK` = credencial e
+   região aceitas, e qualquer problema restante está no bucket ou na permissão
+   dele — o que o log diz na linha seguinte.
 
-   Se a autenticação off-site falhar, a **sonda pré-upload** roda antes do envio
-   e separa as causas no log — `sonda OK` significa credencial e região aceitas,
-   e o problema está no bucket ou na permissão dele.
+   **Os dois parafusos de dialeto, se um dia precisarem.** `OFFSITE_S3_REGION` e
+   `OFFSITE_S3_PATH_STYLE` (`auto`|`on`|`off`) existem porque, medido no
+   `mc RELEASE.2025-08-13`: `alias set` não tem `--region`, o `config.json` v10
+   não guarda região, e sem configuração o `mc` assina `us-east-1`. A única
+   alavanca é a env var `MC_REGION`, lida por invocação — o `backup.sh` a aplica
+   só nos comandos off-site, para não mexer no MinIO local. **Ambos vêm vazios de
+   propósito**: trocar um comportamento que funciona por um que parece mais
+   correto é o tipo de mudança que só aparece na janela de backup seguinte.
 
    **Atenção ao nome de host interno — use HÍFEN, não underscore.** O Easypanel
    registra o serviço em duas formas: `espectro-mvp_iris-minio` (a canônica, com

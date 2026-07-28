@@ -346,19 +346,26 @@ fi
 log "9/9 · REGIÃO DE ASSINATURA SigV4 — o dialeto S3 que o MinIO perdoa e a OCI não"
 
 # POR QUE ESTA SEÇÃO EXISTE: os 18 testes acima passaram verdes enquanto a
-# réplica off-site de PRODUÇÃO não subia nada. O destino real é a Oracle Cloud,
-# e o mc, sem região configurada, assina SigV4 com `us-east-1` (medido). O MinIO
-# ignora a região; a OCI recusa, com uma mensagem que mistura região e
-# credencial e faz o operador procurar no lugar errado. Um teste que só fala
-# MinIO não consegue ver essa classe de bug — daí testar a derivação e o
-# override diretamente.
+# réplica off-site de PRODUÇÃO não subia nada. O teste fala MinIO; o destino
+# real é a Oracle Cloud, e MinIO perdoa dois desvios de dialeto que a OCI não:
+# região de assinatura SigV4 e estilo de path. Sem cobrir isso, essa classe de
+# bug fica invisível justamente na cópia que ninguém exercita.
 #
-# Os endpoints abaixo usam uma região INEXISTENTE de propósito: o formato casa
-# com o da OCI (é o que se quer exercitar) mas o DNS não resolve, então o teste
-# não depende de rede nem manda tráfego para a Oracle.
+# ATENÇÃO ao que esta seção NÃO afirma. A falha real em produção foi de
+# CREDENCIAL, não de região — a réplica voltou a subir com o mc assinando
+# `us-east-1`, sem nenhuma configuração de região. Por isso os dois parafusos
+# são opt-in e o default testado aqui é o que está PROVADO em produção. Testar
+# o default é metade do ponto: garante que ninguém "conserte" preventivamente o
+# que está funcionando.
+#
+# O endpoint abaixo usa uma região INEXISTENTE de propósito: o formato casa com
+# o da OCI (é o que se quer exercitar) mas o DNS não resolve, então o teste não
+# depende de rede nem manda tráfego para a Oracle.
 readonly ENDPOINT_OCI_FALSO="https://nsfake.compat.objectstorage.regiao-inexistente-9.oraclecloud.com"
 
-# a) região derivada do endpoint da OCI, sem OFFSITE_S3_REGION setado.
+# a) DEFAULT: sem OFFSITE_S3_REGION, o mc assina us-east-1 e o path-style fica
+#    em `auto`. É a configuração que sobe para a OCI hoje — qualquer mudança
+#    aqui é mudança de comportamento em produção e tem que ser deliberada.
 set +e
 "${COMPOSE[@]}" run --rm -T \
 	-e OFFSITE_S3_ENDPOINT="${ENDPOINT_OCI_FALSO}" \
@@ -370,31 +377,25 @@ set +e
 EXIT_DERIVADA=$?
 set -e
 
-if grep -q "assinando SigV4 na região 'regiao-inexistente-9'" /tmp/iris-offsite-regiao-derivada.log; then
-	ok "região derivada do endpoint da OCI (sem OFFSITE_S3_REGION, o mc assinaria us-east-1)"
+if grep -q "assinando SigV4 na região 'us-east-1 (default do mc)' (path-style=auto)" /tmp/iris-offsite-regiao-derivada.log; then
+	ok "default preservado: us-east-1 + path-style=auto (o que a OCI aceita hoje)"
 else
-	fail "região não foi derivada do endpoint — log: $(grep -i 'sigv4\|região' /tmp/iris-offsite-regiao-derivada.log || echo '(linha ausente)')"
-fi
-
-if grep -q 'path-style=on' /tmp/iris-offsite-regiao-derivada.log; then
-	ok "path-style forçado para 'on' no destino OCI (que não atende bucket em virtual-host)"
-else
-	fail "path-style não foi forçado no destino OCI"
+	fail "default de região/path-style mudou — log: $(grep -i 'sigv4' /tmp/iris-offsite-regiao-derivada.log || echo '(linha ausente)')"
 fi
 
 if [[ "${EXIT_DERIVADA}" -eq 3 ]]; then
-	ok "destino OCI inalcançável => exit 3, backup local preservado"
+	ok "destino off-site inalcançável => exit 3, backup local preservado"
 else
-	fail "destino OCI inalcançável => exit ${EXIT_DERIVADA}, esperado 3"
+	fail "destino inalcançável => exit ${EXIT_DERIVADA}, esperado 3"
 fi
 
-# b) OFFSITE_S3_REGION explícito tem precedência sobre a derivação. É o que
-#    salva o dia se a Oracle mudar o formato do endpoint ou se o destino trocar
-#    de provedor.
+# b) os dois parafusos existem e chegam mesmo até o mc. São a saída se a OCI
+#    mudar de exigência ou se o destino trocar de provedor.
 set +e
 "${COMPOSE[@]}" run --rm -T \
 	-e OFFSITE_S3_ENDPOINT="${ENDPOINT_OCI_FALSO}" \
 	-e OFFSITE_S3_REGION="eu-frankfurt-1" \
+	-e OFFSITE_S3_PATH_STYLE="on" \
 	-e OFFSITE_S3_ACCESS_KEY=chavedeacessofalsa \
 	-e OFFSITE_S3_SECRET_KEY=segredofalsocomtamanhosuficiente \
 	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
@@ -402,10 +403,29 @@ set +e
 	backup >/tmp/iris-offsite-regiao-override.log 2>&1
 set -e
 
-if grep -q "assinando SigV4 na região 'eu-frankfurt-1'" /tmp/iris-offsite-regiao-override.log; then
-	ok "OFFSITE_S3_REGION explícito vence a derivação do endpoint"
+if grep -q "assinando SigV4 na região 'eu-frankfurt-1' (path-style=on)" /tmp/iris-offsite-regiao-override.log; then
+	ok "OFFSITE_S3_REGION e OFFSITE_S3_PATH_STYLE chegam até o mc quando setados"
 else
-	fail "override de região ignorado — log: $(grep -i 'sigv4' /tmp/iris-offsite-regiao-override.log || echo '(linha ausente)')"
+	fail "override ignorado — log: $(grep -i 'sigv4' /tmp/iris-offsite-regiao-override.log || echo '(linha ausente)')"
+fi
+
+# b2) valor inválido de path-style falha na validação, antes do dump.
+set +e
+"${COMPOSE[@]}" run --rm -T \
+	-e OFFSITE_S3_ENDPOINT="${ENDPOINT_OCI_FALSO}" \
+	-e OFFSITE_S3_PATH_STYLE="talvez" \
+	-e OFFSITE_S3_ACCESS_KEY=chavedeacessofalsa \
+	-e OFFSITE_S3_SECRET_KEY=segredofalsocomtamanhosuficiente \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_AGE_RECIPIENT="${AGE_RECIPIENT}" \
+	backup >/tmp/iris-offsite-pathstyle-invalido.log 2>&1
+EXIT_PATH_INVALIDO=$?
+set -e
+
+if [[ "${EXIT_PATH_INVALIDO}" -eq 1 ]]; then
+	ok "OFFSITE_S3_PATH_STYLE inválido => exit 1 na validação (não vira 'auto' silencioso)"
+else
+	fail "path-style inválido => exit ${EXIT_PATH_INVALIDO}, esperado 1"
 fi
 
 # c) região explícita num destino que NÃO é OCI não pode quebrar o upload. Esta
@@ -436,8 +456,9 @@ fi
 # d) a sonda pré-upload precisa dizer QUAL região usou quando falha. Sem isso a
 #    próxima falha em produção volta a ser um chute entre credencial e região.
 if grep -q "sonda de autenticação falhou" /tmp/iris-offsite-regiao-derivada.log \
-	&& grep -q "regiao-inexistente-9" /tmp/iris-offsite-regiao-derivada.log; then
-	ok "sonda pré-upload nomeia a região usada ao falhar (diagnóstico não vira adivinhação)"
+	&& grep -q "Comece pela CREDENCIAL" /tmp/iris-offsite-regiao-derivada.log \
+	&& grep -q "usada 'us-east-1'" /tmp/iris-offsite-regiao-derivada.log; then
+	ok "sonda pré-upload manda olhar a credencial primeiro e nomeia a região usada"
 else
 	fail "sonda não reportou a região na falha — log: $(grep -i 'sonda' /tmp/iris-offsite-regiao-derivada.log || echo '(linha ausente)')"
 fi

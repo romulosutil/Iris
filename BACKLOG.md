@@ -71,30 +71,40 @@ privada ninguém tem é indistinguível de uma boa até o dia do desastre.
 expurgo da Fase 6). Um titular expurgado passa a existir em **três** lugares, um fora do host.
 A #89 deveria fechar antes de o off-site entrar em produção com dado real.
 
-**Segunda rodada (28/07) — dialeto S3: o teste verde e a produção sem cópia.** Com o destino
-Oracle provisionado, o `backup.sh` rodou até o fim e o upload falhou com _"The secret key
-required to complete authentication could not be found. The region must be specified if this
-is not the home region for the tenancy."_ — mensagem que junta duas causas e faz a primeira
-leitura ser "credencial errada". Não era. **Medido no `mc RELEASE.2025-08-13`:** `alias set`
-não tem `--region`, o `config.json` v10 não guarda região, e sem configuração o `mc` assina
-SigV4 com `us-east-1`. Única alavanca disponível: a env var `MC_REGION`, lida por invocação
-(`Credential=.../<região>/s3/aws4_request` confirmado com `mc --debug`). Corrigido: região
-derivada do endpoint quando ele é da OCI, `OFFSITE_S3_REGION` como override, `--path on` no
-destino OCI (não atende bucket em virtual-host) e sonda de autenticação **antes** do upload
-que separa credencial / região / bucket no log.
+**#86 FECHADA na prática (28/07): réplica off-site subindo em produção.** Log de
+`iris-20260728T024929Z`: dump 382486 B + globals 1319 B, cifrados com `age` e replicados para o
+bucket fora do VPS, `concluído com sucesso`.
 
-**Por que 18 testes verdes não pegaram isso.** O `test-offsite.sh` fecha o laço inteiro — cifra,
-sobe, baixa, decifra, restaura — mas **contra o MinIO local**. MinIO ignora região e path-style;
-a OCI não. Teste e produção falavam dialetos S3 diferentes, e a diferença ficava exatamente na
-única cópia que ninguém exercita. Regra que fica: _um teste de integração de destino externo
-precisa cobrir o dialeto do destino real, não só o protocolo_. Seção 9 nova (6 asserções, 25 no
-total) usa endpoint com formato da OCI e região inexistente — exercita a derivação sem depender
-de rede. **Ainda não é prova de que a produção sobe:** só uma execução real contra a Oracle
-fecha isso, e o `mc alias set` também rejeita chave curta em silêncio (agora loga).
+**A causa da falha era CREDENCIAL, e a mensagem de erro mentiu.** A OCI respondia _"The secret
+key required to complete authentication could not be found. The region must be specified if
+this is not the home region for the tenancy."_ — duas causas na mesma frase, e a segunda é uma
+pista falsa convincente. Persegui a região primeiro e estava errado: com a Customer Secret Key
+correta, a réplica subiu **sem nenhuma configuração de região**, com o `mc` assinando
+`us-east-1`. Fica registrado no runbook e no próprio script: nesse erro, comece pela credencial.
 
-**Também corrigido de passagem:** `mc_configurar_alias` descartava `stderr` com `>/dev/null 2>&1`
-— um erro de digitação em credencial virava falha genérica de upload dez linhas depois. Agora
-loga a mensagem do `mc`, com o secret redigido (o `mc` **ecoa a chave inválida** no erro).
+**O que a investigação de região produziu de aproveitável.** Medido no `mc RELEASE.2025-08-13`:
+`alias set` não tem `--region`, o `config.json` v10 não guarda região, e sem configuração o `mc`
+assina `us-east-1` (`Credential=.../us-east-1/s3/aws4_request`, confirmado com `mc --debug`);
+a única alavanca é a env var `MC_REGION`, lida por invocação. Virou `OFFSITE_S3_REGION` e
+`OFFSITE_S3_PATH_STYLE`, **ambos vazios por default** — o comportamento provado em produção não
+foi trocado por um que parecia mais correto. Junto veio o que de fato faltava: **sonda de
+autenticação antes do upload** (não fatal) que separa credencial / região / bucket no log, e
+`mc_configurar_alias` parando de descartar `stderr` — ele rejeita chave curta em silêncio, e um
+erro de digitação virava falha genérica de upload dez linhas depois. O secret é redigido antes
+de logar porque o `mc` **ecoa a chave inválida** na mensagem de erro.
+
+**Por que 18 testes verdes conviveram com produção sem cópia.** O `test-offsite.sh` fecha o laço
+inteiro — cifra, sobe, baixa, decifra, restaura — mas **contra o MinIO local**, que perdoa
+desvios de dialeto (região, path-style) que a OCI não perdoa, e que aceita qualquer credencial
+que ele mesmo emitiu. A suíte nunca teve como ver a falha. Regra que fica: _teste de destino
+externo com dublê prova o protocolo, não o dialeto nem a credencial do destino real_. Seção 9
+nova (25 asserções no total) trava os defaults e exercita os dois parafusos com endpoint no
+formato da OCI e região inexistente — sem depender de rede.
+
+**Pendências reais que sobraram da #86** (o upload funcionar não fecha nenhuma delas): a **regra
+de lifecycle** no bucket (sem ela o Always Free estoura e o backup sai `3` todo dia), e a **prova
+de decifra do artefato de produção** com a chave privada guardada fora do VPS — réplica cifrada
+com chave cuja privada ninguém tem é indistinguível de uma boa até o dia do desastre.
 
 ---
 

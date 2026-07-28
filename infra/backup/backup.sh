@@ -22,9 +22,11 @@
 #   OFFSITE_S3_SECRET_KEY   obrigatório SE OFFSITE_S3_ENDPOINT setado
 #   OFFSITE_S3_BUCKET       default iris-backups-offsite
 #   OFFSITE_S3_REGION       opcional — região de ASSINATURA SigV4 do destino
-#                            off-site. Vazio = derivada do endpoint quando ele
-#                            é da OCI; senão o mc assina `us-east-1`. Ver
-#                            "região de assinatura" abaixo.
+#                            off-site. Vazio (default) = o mc assina
+#                            `us-east-1`, que é o que a OCI aceita hoje. Só
+#                            mexer com evidência. Ver "região de assinatura".
+#   OFFSITE_S3_PATH_STYLE   opcional — auto (default) | on | off. Só mexer se o
+#                            destino recusar bucket em virtual-host.
 #   OFFSITE_AGE_RECIPIENT   obrigatório SE OFFSITE_S3_ENDPOINT setado — chave
 #                            PÚBLICA age (age1...). Ver seção "off-site" abaixo.
 #   OFFSITE_INTERVAL_DAYS   default 1 (toda execução). 7 = semanal. Só afeta a
@@ -215,33 +217,37 @@ readonly OFFSITE_S3_SECRET_KEY="${OFFSITE_S3_SECRET_KEY:-}"
 readonly OFFSITE_S3_BUCKET="${OFFSITE_S3_BUCKET:-iris-backups-offsite}"
 readonly OFFSITE_AGE_RECIPIENT="${OFFSITE_AGE_RECIPIENT:-}"
 
-# --- região de assinatura do off-site ---------------------------------------
-# O mc NÃO tem `--region` em `alias set` e o config.json v10 não guarda região
-# (medido no mc RELEASE.2025-08-13). Sem nada configurado ele assina SigV4 com
-# `us-east-1`. O MinIO local não liga; a OCI liga, e devolve uma mensagem que
-# mistura duas causas — "The secret key required to complete authentication
-# could not be found. The region must be specified if this is not the home
-# region for the tenancy." — o que faz um erro de região parecer credencial
-# errada. Custou uma janela de backup sem cópia off-site.
+# --- região de assinatura e estilo de path do off-site ------------------------
+# Dois parafusos de dialeto S3, ambos DESLIGADOS por default. Existem porque a
+# réplica off-site já falhou por autenticação com esta mensagem da OCI:
 #
-# A única alavanca que o mc expõe é a env var MC_REGION (AWS_REGION também
-# funciona), lida por invocação. É por isso que os comandos off-site abaixo são
-# prefixados com ela em vez de a região morar no alias.
+#   "The secret key required to complete authentication could not be found.
+#    The region must be specified if this is not the home region for the
+#    tenancy."
 #
-# Derivar do endpoint quando ele é da OCI evita uma env var a mais para o
-# operador esquecer no dia da recriação do serviço; o override explícito
-# continua valendo para qualquer outro provedor.
-if [[ "${OFFSITE_S3_ENDPOINT}" =~ ^https?://[^/]*\.compat\.objectstorage\.([a-z0-9-]+)\.oraclecloud\.com/?$ ]]; then
-	OFFSITE_REGION_DERIVADA="${BASH_REMATCH[1]}"
-	# Path-style só é forçado no destino OCI, que não atende virtual-host.
-	# Em qualquer outro provedor o `auto` do mc continua decidindo.
-	readonly OFFSITE_PATH_STYLE="on"
-else
-	OFFSITE_REGION_DERIVADA=""
-	readonly OFFSITE_PATH_STYLE="auto"
-fi
+# A frase junta duas causas e a segunda é uma pista falsa convincente. Na
+# ocasião a causa real foi a CREDENCIAL (par Customer Secret Key inválido); a
+# réplica voltou a subir sem tocar em região nenhuma, com o mc assinando
+# `us-east-1`. Registrado aqui porque a próxima pessoa a ler esse erro vai ter
+# o mesmo impulso de mexer na região primeiro. Comece pela credencial.
+#
+# O que continua verdade, medido no mc RELEASE.2025-08-13: `alias set` não tem
+# `--region`, o config.json v10 não guarda região, e sem configuração o mc
+# assina `us-east-1`. A única alavanca é a env var MC_REGION, lida por
+# invocação — daí os comandos off-site abaixo serem prefixados com ela em vez
+# de a região morar no alias.
+#
+# Default vazio é deliberado: `us-east-1` é a configuração que está PROVADA
+# funcionando contra a OCI em produção. Derivar a região do endpoint parecia
+# defensivo e seria uma troca de comportamento funcionando por comportamento
+# suposto — o tipo de mudança que só aparece na janela de backup seguinte.
+readonly OFFSITE_REGION="${OFFSITE_S3_REGION:-}"
+readonly OFFSITE_PATH_STYLE="${OFFSITE_S3_PATH_STYLE:-auto}"
 
-readonly OFFSITE_REGION="${OFFSITE_S3_REGION:-${OFFSITE_REGION_DERIVADA}}"
+if ! [[ "${OFFSITE_PATH_STYLE}" =~ ^(auto|on|off)$ ]]; then
+	log_error "OFFSITE_S3_PATH_STYLE precisa ser auto, on ou off — recebido: ${OFFSITE_PATH_STYLE}"
+	exit 1
+fi
 readonly OFFSITE_INTERVAL_DAYS="${OFFSITE_INTERVAL_DAYS:-1}"
 readonly OFFSITE_MARCADOR="${BACKUP_DIR}/.ultimo-offsite"
 
@@ -527,11 +533,7 @@ else
 	# Região é dado de configuração, não segredo: logar é o que permite ler o
 	# log de uma falha futura e saber com QUAL região o mc assinou.
 	if [[ "${offsite_ok}" -eq 1 ]]; then
-		if [[ -n "${OFFSITE_REGION}" ]]; then
-			log_info "off-site: assinando SigV4 na região '${OFFSITE_REGION}' (path-style=${OFFSITE_PATH_STYLE})"
-		else
-			log_info "off-site: OFFSITE_S3_REGION não setado e endpoint não é OCI — o mc vai assinar 'us-east-1' (path-style=${OFFSITE_PATH_STYLE})"
-		fi
+		log_info "off-site: assinando SigV4 na região '${OFFSITE_REGION:-us-east-1 (default do mc)}' (path-style=${OFFSITE_PATH_STYLE})"
 	fi
 
 	# Sonda antes do upload. Não é redundante com o `mc cp`: quando o cp falha
@@ -549,7 +551,7 @@ else
 				log_error "off-site: autenticação OK, mas o bucket '${OFFSITE_S3_BUCKET}' não respondeu — nome errado ou credencial sem permissão nele. Resposta: ${sonda}"
 			fi
 		else
-			log_error "off-site: sonda de autenticação falhou ANTES do upload. Causas, nesta ordem: (1) OFFSITE_S3_ACCESS_KEY/SECRET não são um par Customer Secret Key válido da OCI; (2) região de assinatura errada — usada '${OFFSITE_REGION:-us-east-1}'. Resposta: ${sonda}"
+			log_error "off-site: sonda de autenticação falhou ANTES do upload. Comece pela CREDENCIAL — já foi ela uma vez, e a mensagem da OCI aponta para região. (1) OFFSITE_S3_ACCESS_KEY/SECRET precisam ser um par Customer Secret Key da OCI (não Auth Token, não chave de API); (2) só depois, região — usada '${OFFSITE_REGION:-us-east-1}', ajustável em OFFSITE_S3_REGION; (3) estilo de path (OFFSITE_S3_PATH_STYLE=on). Resposta: ${sonda}"
 		fi
 	fi
 
