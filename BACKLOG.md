@@ -25,6 +25,54 @@
 
 ---
 
+## 🏁 Sessão 27/07/2026 — #86 réplica off-site cifrada + evidência de residência BR (#102 aberta)
+
+**Entregue (branch `infra/86-replica-offsite-backup`):** passo 6 do `backup.sh` — terceira
+cópia do par dump+globals num bucket **fora do VPS**, cifrada client-side com `age`. O VPS
+carrega só a chave **pública** e por construção **não decifra o que enviou**; credencial
+write-only (sem `DeleteObject`) e retenção por lifecycle do bucket, porque prune disparado
+pelo host confiaria no relógio e nas permissões do host — o que se assume perdido no cenário
+que o off-site cobre. Teste de integração novo (`infra/backup/test-offsite.sh`, 15 asserções,
+round-trip real com decifra), `shellcheck -S warning` limpo nos 5 scripts.
+
+**Achado fora do escopo, corrigido junto — exit code 3.** O `scheduler.sh` só gravava o
+marcador do dia em `exit 0`, e falha de upload saía `1`. Uma falha **persistente** de
+replicação faria o scheduler disparar um `pg_dump` completo contra o banco de produção **a
+cada 10 min, o dia inteiro**. O bug já existia com o MinIO; a #86 o pioraria. Agora `1` = não
+há backup do dia · `3` = backup íntegro, replicação falhou (marcador gravado, alerta alto,
+dump não refeito).
+
+**Teste que passava por motivo errado.** A asserção de vazamento gripava um marcador dentro do
+`.dump.age` — vácua, porque `pg_dump -Fc` já comprime com zlib e a string não aparece em claro
+**nem no dump original** (medido: dump de 1293 B com o marcador, `grep -a` não acha). Passaria
+mesmo com upload em claro. Canário trocado para o `.globals.sql` (SQL puro) e asserção em dois
+lados: confirma que a string existe em claro na origem antes de exigir que não exista no bucket.
+
+**Residência BR: era `[x] CONFIRMADO` sem prova nenhuma.** `plano-bootstrap-e-stack-vps.md:241`
+afirmava confirmado; a linha 45 do mesmo arquivo dizia "a confirmar". Medido em 27/07:
+`irisclinica.ia.br` → `31.97.170.105`, São Paulo/AS47583, **RTT 33 ms** (baseline SP 24 ms,
+baseline Europa 231 ms; piso físico Brasil↔Europa ~210 ms). Evidência gravada no doc,
+contradição resolvida. **O gatilho da investigação foi um relato de que o VPS estaria em
+Vilnius — era o domicílio societário da Hostinger, não o datacenter.**
+
+**Aberta #102:** o dado está no BR (provado), mas o DPA da Hostinger nunca foi assinado, o DPA
+público **não garante região** (exige que o controlador avise que dados podem sair do país) e
+autoriza subprocessadores genericamente (Cloudflare, AWS/Google EMEA). E
+`validacao-legal-prontuario.md:169-171` trata residência BR como base legal substituta
+("elimina inteiramente") — forte demais. `docs/legal/` não foi tocado (exige confirmação).
+
+**Pendente com o Rômulo (via única, não automatizável do VPS):** conta Oracle Always Free com
+home region **São Paulo** (trava no cadastro), bucket + credencial write-only, **regra de
+lifecycle** (sem ela o bucket estoura 20 GB e o backup sai `3` todo dia), geração do par `age`
+fora do VPS, e **prova de decifra antes de fechar a #86** — réplica cifrada com chave cuja
+privada ninguém tem é indistinguível de uma boa até o dia do desastre.
+
+**Dependência:** a janela de retenção do off-site é a mesma discussão da **#89** (retenção ×
+expurgo da Fase 6). Um titular expurgado passa a existir em **três** lugares, um fora do host.
+A #89 deveria fechar antes de o off-site entrar em produção com dado real.
+
+---
+
 ## 🏁 Sessão 25/07/2026 — Go-live #75 Etapa 5: backup + restore testado (OPERANDO EM PROD) — PRs #85, #90, #91, #92
 
 **Fecha o item `pg_dump` agendado + restore testado da Etapa 5.** Antes desta sessão

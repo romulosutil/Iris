@@ -42,7 +42,7 @@ Criado: 09/07/2026. Contexto: init do impeccable + leitura completa da doc.
 
 | Camada          | Antes (serverless)       | Agora (VPS/Easypanel)                                 | Nota                                       |
 | --------------- | ------------------------ | ----------------------------------------------------- | ------------------------------------------ |
-| Host            | Vercel `gru1`            | VPS Hostinger + Easypanel (Docker Swarm)              | Região SP **a confirmar**                  |
+| Host            | Vercel `gru1`            | VPS Hostinger + Easypanel (Docker Swarm)              | Região SP **medida** (27/07/26 — ver §Stack) |
 | App web         | Next.js (serverless)     | Next.js `output: 'standalone'` em container           | Multi-stage Dockerfile                     |
 | Build/deploy    | Vercel auto              | Easypanel GitHub source + **Dockerfile builder**      | Dockerfile > Nixpacks (reprodutível)       |
 | Banco           | Supabase Postgres        | **Postgres puro** (template Easypanel)                | RLS nativo via session GUC (`app.user_id`) |
@@ -239,6 +239,21 @@ Estado da revisão (atualizado 09/07/2026):
 **Stack — TODAS RESOLVIDAS (09/07/2026):**
 
 - [x] VPS Hostinger região **SP** — CONFIRMADO (residência LGPD ok).
+      **Evidência medida em 27/07/2026** (antes disso o `[x]` não tinha prova
+      registrada em lugar nenhum do repo, e a linha 45 desta mesma tabela ainda
+      dizia "a confirmar" — contradição resolvida aqui):
+      - `irisclinica.ia.br` → `31.97.170.105`; geolocalização por duas fontes
+        independentes: São Paulo/BR, AS47583 Hostinger International Limited.
+      - **RTT 33 ms** do Brasil. Baseline São Paulo (NIC.br) 24 ms; baseline
+        Europa (Hetzner/DE) **231 ms**. Brasil↔Europa tem piso físico de
+        ~210 ms em fibra — 33 ms exclui qualquer datacenter fora da América do
+        Sul. Latência é a única prova que geolocalização de IP não falsifica.
+      - `tracert`: último salto via `200.25.x` (backbone BR), ~30 ms constante.
+      > ⚠️ **Não confundir com o domicílio societário.** A *Hostinger
+      > International Ltd* é pessoa jurídica estrangeira (aparece como
+      > Lituânia/Chipre em fatura e no DPA). O **dado** está em São Paulo; a
+      > **empresa** não é brasileira. São coisas distintas e só a primeira está
+      > provada aqui — ver a issue de DPA da Hostinger no GitHub.
 - [x] Banco: **Postgres puro** (não Supabase) — ver seção 2.
 - [x] Estrutura de pastas feature-first (seção 4).
 - [x] Tier do VPS: **KVM 4 (4 vCPU / 16 GB)** — confortável, comporta GlitchTip.
