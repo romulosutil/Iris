@@ -16,6 +16,13 @@ pnpm dev
 
 `DATABASE_URL=postgres://iris:iris@localhost:5433/iris` (ver compose para MinIO).
 
+Teste de integração da réplica off-site cifrada (sobe o ambiente, roda o
+`backup.sh` real, decifra o artefato e derruba tudo no final):
+
+```bash
+./infra/backup/test-offsite.sh
+```
+
 ## Deploy no Easypanel (provisionamento — via única do Rômulo)
 
 1. **VPS Hostinger** KVM 4 (16 GB), **região São Paulo** (bloqueador LGPD —
@@ -237,15 +244,105 @@ no dia do restore, com o banco de prod já perdido.
 - O `verify-restore.sh` compara **contagem de linhas por tabela** com a origem
   justamente para pegar esse erro; um dump feito com `iris_app` falha o verify.
 
-### Onde o backup fica (e o risco aceito)
+### Onde o backup fica — três destinos, dois domínios de falha
 
-Destino duplo, **ambos no mesmo VPS**: volume persistente local (`/backups`) +
-cópia no MinIO local (`iris-minio`, bucket `iris-backups`).
+| # | Destino | Onde roda | Cifrado? | Cobre |
+| --- | --- | --- | --- | --- |
+| 1 | Volume `/backups` | **no VPS** | não | corrupção lógica, `DROP` acidental, erro humano |
+| 2 | MinIO `iris-backups` | **no VPS** | não | perda do volume do Postgres |
+| 3 | Bucket off-site | **fora do VPS** | **sim (age)** | **perda total do host** |
 
-> **Risco aceito conscientemente para o piloto:** backup no mesmo host **não
-> sobrevive à perda total do VPS**. Cobre corrupção de dado, erro humano e
-> `DROP` acidental — não cobre desastre de host. Réplica off-site em outro
-> provedor BR é **fast-follow pós-piloto**, não pré-requisito do piloto.
+Os destinos 1 e 2 são um **único domínio de falha**: os dois morrem junto com o
+VPS. O destino 3 (issue #86) existe só para o cenário que eles não cobrem —
+host destruído, conta do provedor suspensa, ransomware no host.
+
+> **Se o destino 3 não estiver configurado** (`OFFSITE_S3_ENDPOINT` vazio), o
+> `backup.sh` pula o passo e loga isso. Esse é o default do dev local e era o
+> estado de produção antes da #86. Em produção com dado real, **off-site vazio
+> é risco aceito e precisa estar registrado como tal** — não é configuração
+> neutra.
+
+#### Por que o off-site é cifrado no cliente
+
+O bucket off-site é conta de **terceiro**, fora do seu controle. O dump vai
+cifrado com `age` usando uma chave **pública**; o VPS carrega só a pública e
+**não consegue decifrar o que ele mesmo enviou**. Duas consequências, ambas
+desejadas:
+
+- o provedor off-site nunca vê dado clínico legível;
+- quem tomar o VPS não consegue ler a réplica.
+
+E uma consequência que **custa**: não dá para testar o restore do off-site
+automaticamente no VPS. Esse drill é manual, com a chave privada, e está no
+runbook «DR a partir do off-site» abaixo.
+
+> **A chave privada não fica no VPS e não fica no repo.** Perder a chave
+> privada = perder a réplica off-site. As cópias 1 e 2 continuam em claro e
+> restauráveis, então não é perda total — mas é a perda exatamente da cópia que
+> existe para o pior dia. Guardar em gerenciador de senhas **e** em papel.
+
+#### Por que a credencial off-site não apaga nada
+
+A credencial do destino 3 é dedicada e **só escreve** (sem `DeleteObject`, sem
+`CreateBucket`). Backup que o host comprometido consegue apagar não é backup.
+
+Por isso **o `backup.sh` não poda o off-site**. A retenção lá é uma **regra de
+lifecycle do bucket**, do lado do provedor. Prune disparado pelo host confiaria
+no relógio e nas permissões do host — exatamente o que se assume perdido no
+cenário que o off-site cobre.
+
+> ⚠️ Se o bucket off-site crescer sem limite, **a regra de lifecycle não foi
+> criada**. O `backup.sh` loga `prune off-site: NÃO executado pelo script (por
+> design)` toda execução justamente para esse esquecimento não ficar silencioso.
+
+#### Cadência do off-site — quanto se perde no pior dia
+
+`OFFSITE_INTERVAL_DAYS` controla **só** a réplica off-site. O dump local e a
+cópia no MinIO rodam **todo dia** de qualquer forma: são baratos e ficam no
+mesmo disco.
+
+| Valor | Perda máxima no desastre de host | Volume no bucket (ret. 30d) |
+| --- | --- | --- |
+| `1` (default) | até 1 dia | ~30 pares |
+| `7` | **até 7 dias** | ~4 pares |
+
+Traduzindo "7 dias" para o que o usuário sente: uma terapeuta que escreveu 40
+evoluções naquela semana **perde as 40**. Ela não reconstrói — a sessão
+aconteceu, a memória já não está fresca. É uma decisão de produto, não de
+infra: escolha o número olhando para isso, não para o custo de storage (que é
+zero nos dois casos, dentro dos 20 GB do plano gratuito).
+
+**O controle é por marcador de tempo (`.ultimo-offsite`), não por dia da
+semana.** A diferença aparece quando o container está parado no dia marcado
+(deploy, reboot, OOM): a regra por dia-da-semana **pula a semana inteira** e
+ninguém percebe; o marcador faz a réplica sair na próxima execução em que o
+tempo já venceu — atrasada, nunca perdida. E o marcador só é gravado em
+sucesso: réplica que falhou continua devida e tenta de novo no dia seguinte,
+independente do intervalo.
+
+> Pular por cadência **não** é falha e **não** muda o exit code — o log diz
+> `réplica off-site não é devida nesta execução`. Não confundir com o `exit 3`
+> da tabela abaixo, que é replicação que deveria ter acontecido e falhou.
+
+#### Exit codes do `backup.sh` — 1 e 3 não são a mesma coisa
+
+| Exit | Significado | O que o `scheduler.sh` faz |
+| --- | --- | --- |
+| 0 | sucesso completo | grava marcador do dia |
+| 1 | **dump ou globals falharam** — não existe backup do dia | **não** grava marcador; tenta de novo em 10min |
+| 2 | uso incorreto (argumento passado) | idem |
+| 3 | backup do dia **íntegro em disco**, mas alguma **replicação** falhou | **grava** marcador + loga `ATENÇÃO`; não refaz o dump |
+
+O 3 existe por um motivo operacional concreto: o marcador só era escrito em
+`exit 0`, então uma falha **persistente** de replicação (conta off-site
+suspensa, MinIO fora) faria o scheduler disparar um `pg_dump` completo contra o
+banco de produção **a cada 10 minutos, o dia inteiro** — carga real e contínua
+por um problema que refazer o dump não conserta. Com o 3, o dia é dado por
+resolvido, o alerta fica alto no log, e a próxima janela replica.
+
+> Ao configurar alerta em cima do log do painel: **exit 3 é acionável no mesmo
+> dia** (pode não haver cópia fora do host), mas **não é emergência de dado
+> perdido**. Exit 1 é.
 
 ### Provisionamento no Easypanel
 
@@ -271,6 +368,14 @@ versionado no repo e com log no painel.
    S3_ENDPOINT=http://espectro-mvp-iris-minio:9000
    S3_ACCESS_KEY=<...>       S3_SECRET_KEY=<...>
    S3_BACKUP_BUCKET=iris-backups
+
+   # réplica off-site (#86) — ver «Provisionar o destino off-site» abaixo.
+   # Deixar OFFSITE_S3_ENDPOINT vazio DESLIGA o passo (e é risco aceito).
+   OFFSITE_S3_ENDPOINT=https://<namespace>.compat.objectstorage.sa-saopaulo-1.oraclecloud.com
+   OFFSITE_S3_ACCESS_KEY=<...>   OFFSITE_S3_SECRET_KEY=<...>
+   OFFSITE_S3_BUCKET=iris-backups-offsite
+   OFFSITE_AGE_RECIPIENT=age1...   # chave PÚBLICA. A privada nunca entra aqui.
+   OFFSITE_INTERVAL_DAYS=1         # 1 = diário · 7 = semanal (ver abaixo)
    ```
 
    **Atenção ao nome de host interno — use HÍFEN, não underscore.** O Easypanel
@@ -461,6 +566,120 @@ Pré-requisito: ter em mãos **o par completo** (`iris-<ts>.dump` +
 6. Registrar tudo no `BACKLOG.md` (data, timestamp do par usado, exit codes,
    números do passo 4).
 
+### Runbook — provisionar o destino off-site (uma vez, o Rômulo executa)
+
+Passos que **não** dá para automatizar do VPS: criar conta em provedor, gerar
+chave, definir lifecycle. Ordem importa — o passo 5 é o que impede o pior
+desfecho (réplica cifrada com chave que ninguém tem).
+
+**Provedor recomendado: Oracle Cloud Object Storage, região Brazil East (São
+Paulo, `sa-saopaulo-1`).** Always Free: 20 GB permanentes (não é trial de 12
+meses), 50k requisições/mês, API S3-compatível — o `mc` que já está na imagem
+fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
+
+> ⚠️ **A região de origem (home region) trava no cadastro e não muda depois.**
+> Escolher **Brazil East (São Paulo)** no signup. Errar aqui = refazer a conta.
+>
+> Alternativa 100% nacional: **Magalu Cloud** (empresa brasileira). Não tem
+> camada gratuita — Cold Instant a R$ 0,06/GiB/mês, ou seja ~R$ 0,30/mês nesse
+> volume. Se a exigência for "provedor nacional" e não só "dado no Brasil",
+> é essa. A troca é só endpoint + credencial: os dois falam S3.
+
+1. **Criar a conta** com home region São Paulo. Cartão é exigido no cadastro e
+   não é cobrado no Always Free; cartão virtual descartável costuma ser
+   rejeitado.
+2. **Criar o bucket** `iris-backups-offsite`. Anotar o *namespace* — ele entra
+   no endpoint: `https://<namespace>.compat.objectstorage.sa-saopaulo-1.oraclecloud.com`.
+3. **Regra de lifecycle no bucket** com a mesma janela do `RETENTION_DAYS`
+   (hoje 30 dias). **Isto não é opcional** — o `backup.sh` não poda o off-site
+   por design, então sem a regra o bucket cresce até estourar os 20 GB e os
+   uploads passam a falhar (`exit 3` todo dia).
+   > A janela de retenção do off-site é **a mesma discussão da issue #89**
+   > (retenção de backup × direito ao expurgo da Fase 6). Um titular expurgado
+   > continua existindo nos backups pela janela de retenção — agora em três
+   > lugares, um deles fora do host. Alinhar com a decisão da #89.
+4. **Criar credencial dedicada** (na Oracle: *Customer Secret Key*) com política
+   de **escrita apenas** — sem `DeleteObject`, sem `CreateBucket`. Não reusar a
+   credencial do MinIO: ela vive no host que se assume comprometido.
+5. **Gerar o par de chaves `age`** — numa máquina que **não é o VPS**:
+
+   ```bash
+   # a imagem de backup já tem o age instalado; --no-deps não sobe o Postgres
+   docker compose -f infra/docker-compose.yml --profile backup \
+     run --rm --no-deps backup age-keygen
+   ```
+
+   A saída tem as duas metades:
+
+   ```
+   # public key: age1xxxxxxxx...   <- vai para OFFSITE_AGE_RECIPIENT no Easypanel
+   AGE-SECRET-KEY-1YYYYYYYY...     <- NUNCA no VPS, nunca no repo, nunca no chat
+   ```
+
+   Guardar a **privada** em gerenciador de senhas **e** impressa em papel, em
+   local físico distinto. Ela é o único caminho de volta a partir do off-site.
+
+6. **PROVA OBRIGATÓRIA antes de considerar pronto — decifrar de verdade.** Não
+   pule: uma réplica cifrada com uma chave cuja privada ninguém tem é
+   indistinguível de uma réplica boa, até o dia do desastre.
+
+   ```bash
+   # com a chave privada na máquina local (nunca no VPS)
+   printf '%s\n' 'AGE-SECRET-KEY-1YYY...' > id.txt && chmod 600 id.txt
+   mc cp offsite/iris-backups-offsite/iris-<ts>.dump.age .
+   age -d -i id.txt -o iris-<ts>.dump iris-<ts>.dump.age
+   pg_restore --list iris-<ts>.dump | head        # tem que listar objetos
+   shred -u id.txt
+   ```
+
+   Se `pg_restore --list` reclamar, **a réplica não presta** — parar e
+   investigar antes de marcar a #86 como fechada.
+
+7. **Preencher as env vars** `OFFSITE_*` no serviço de backup do Easypanel e
+   redeployar. Conferir no log da primeira execução:
+   `réplica off-site concluída (dump + globals, cifrados)`.
+
+### Runbook — DR a partir do off-site (o VPS não existe mais)
+
+Pior cenário: host destruído, `/backups` e MinIO foram junto. A única cópia é a
+do bucket off-site, cifrada.
+
+Diferença crucial em relação ao runbook «DR em cluster novo»: **há um passo de
+decifrar antes**, e ele exige a chave privada. Sem ela não há restore.
+
+1. **Baixar o par** — os dois, sempre (`.dump.age` **e** `.globals.sql.age` do
+   mesmo timestamp). Dump sem globals restaura 37 tabelas e **zero policies de
+   RLS**, com exit 0 — ver a tabela no topo desta seção.
+
+   ```bash
+   printf '%s\n%s\n' "$ACCESS_KEY" "$SECRET_KEY" \
+     | mc alias set offsite "https://<namespace>.compat.objectstorage.sa-saopaulo-1.oraclecloud.com" --api S3v4
+   mc ls offsite/iris-backups-offsite/ | tail -5      # escolher o timestamp
+   mc cp offsite/iris-backups-offsite/iris-<ts>.dump.age .
+   mc cp offsite/iris-backups-offsite/iris-<ts>.globals.sql.age .
+   ```
+
+2. **Decifrar os dois**, com a chave privada, numa máquina de confiança:
+
+   ```bash
+   printf '%s\n' 'AGE-SECRET-KEY-1YYY...' > id.txt && chmod 600 id.txt
+   age -d -i id.txt -o iris-<ts>.dump        iris-<ts>.dump.age
+   age -d -i id.txt -o iris-<ts>.globals.sql iris-<ts>.globals.sql.age
+   shred -u id.txt
+   ```
+
+   > Os nomes decifrados **têm que ficar exatamente** `iris-<ts>.dump` e
+   > `iris-<ts>.globals.sql`, com o mesmo `<ts>`: é trocando a extensão que o
+   > `restore.sh` acha o irmão de globals. Nome fora do padrão faz ele abortar
+   > dizendo que os globals não existem — o que, aqui, seria confuso.
+
+3. **Seguir o runbook «DR em cluster novo»** a partir do passo 1, com esses
+   dois arquivos em `/backups`. Ele já cobre restore, re-set de senhas das
+   roles e a conferência de `pg_policies`.
+
+4. **Prova de que deu certo é `pnpm test:rls` passando** no banco restaurado —
+   não contagem de tabelas. 37 tabelas aparecem com ou sem RLS.
+
 ### `SKIP_GLOBALS=yes` — escape hatch, com o preço explícito
 
 `restore.sh` **aborta** se não achar o `.globals.sql` irmão do dump. Para seguir
@@ -497,6 +716,19 @@ O runbook de **DR em cluster novo** tem cadência própria e mais folgada
 (exige subir um segundo Postgres vazio): reexecutar **a cada mudança de role**
 (`CREATE ROLE` novo na migração) e pelo menos **uma vez antes do go-live com
 dado real**. `verify-restore.sh` verde não é evidência para este item.
+
+O drill de **DR a partir do off-site** é o mais folgado e o mais fácil de
+esquecer — justamente porque nada no VPS o executa nem o cobra. **Trimestral**,
+e obrigatoriamente **toda vez que a chave `age` for rotacionada**. O que ele
+verifica e nenhum outro verifica:
+
+- a chave privada ainda existe e ainda é a que decifra o que está no bucket;
+- a credencial off-site ainda autentica (conta gratuita não foi reclamada);
+- a regra de lifecycle não comeu mais do que devia.
+
+> Um `exit 0` diário do `backup.sh` **não** é evidência de que o off-site
+> presta. Ele prova que o upload não deu erro — não que alguém consegue
+> decifrar o que subiu. Só o drill prova isso.
 
 Cada execução vai registrada no `BACKLOG.md` (data + exit code + o que mudou
 desde a anterior). Sem registro, considerar não testado.

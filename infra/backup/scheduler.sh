@@ -53,17 +53,42 @@ while :; do
 	if [[ "${hora_atual}" -eq "${BACKUP_AT_HOUR_UTC}" && ! -f "${marcador}" ]]; then
 		log "janela atingida (${hora_atual}:xx UTC) e ${hoje} ainda sem backup — executando"
 
-		# `|| true` de propósito: um dia que falha não pode matar o agendador,
-		# senão a primeira falha transitória (banco reiniciando, MinIO fora)
-		# desliga o backup para SEMPRE e ninguém percebe. O exit code fica no
-		# log do painel; o marcador só é escrito em caso de sucesso, então a
-		# próxima volta (10min) tenta de novo no mesmo dia.
-		if "${BACKUP_SCRIPT}"; then
-			date -u '+%Y-%m-%dT%H:%M:%SZ' >"${marcador}"
-			log "backup do dia ${hoje} concluído com sucesso"
-		else
-			log "ERRO: backup do dia ${hoje} FALHOU (exit $?) — vai tentar de novo em ${CHECK_INTERVAL_S}s, ainda dentro da janela"
-		fi
+		# Uma falha não pode matar o agendador, senão a primeira falha
+		# transitória (banco reiniciando, MinIO fora) desliga o backup para
+		# SEMPRE e ninguém percebe. O exit code fica no log do painel.
+		#
+		# O marcador é escrito em DOIS casos, não um:
+		#
+		#   exit 0 — sucesso completo.
+		#   exit 3 — backup do dia íntegro em disco, mas alguma replicação
+		#            (MinIO e/ou off-site) falhou. O DUMP ESTÁ FEITO. Refazê-lo
+		#            não conserta o destino que está fora, e sem marcador o
+		#            laço dispararia um pg_dump completo contra o banco de
+		#            produção a cada ${CHECK_INTERVAL_S}s até a hora virar —
+		#            carga real e contínua por um problema que não é do dump.
+		#            Registra alto e segue; a próxima janela replica.
+		#
+		# Qualquer outro exit (1 = dump/globals falharam, 2 = uso incorreto):
+		# NÃO grava marcador — não existe backup do dia — e tenta de novo na
+		# próxima volta, ainda dentro da janela.
+		backup_exit=0
+		"${BACKUP_SCRIPT}" || backup_exit=$?
+
+		case "${backup_exit}" in
+			0)
+				date -u '+%Y-%m-%dT%H:%M:%SZ' >"${marcador}"
+				log "backup do dia ${hoje} concluído com sucesso"
+				;;
+			3)
+				date -u '+%Y-%m-%dT%H:%M:%SZ' >"${marcador}"
+				log "ATENÇÃO: backup do dia ${hoje} está ÍNTEGRO em disco, mas a REPLICAÇÃO falhou (exit 3)."
+				log "ATENÇÃO: pode não haver cópia fora do host. Verificar MinIO e destino off-site HOJE — ver §Backup e restore em infra/README.md."
+				log "ATENÇÃO: o dump NÃO será refeito nesta janela (refazer não conserta destino fora do ar)."
+				;;
+			*)
+				log "ERRO: backup do dia ${hoje} FALHOU (exit ${backup_exit}) — não há backup do dia. Vai tentar de novo em ${CHECK_INTERVAL_S}s, ainda dentro da janela"
+				;;
+		esac
 
 		# Limpa marcadores antigos para não acumular um arquivo por dia
 		# indefinidamente no volume.

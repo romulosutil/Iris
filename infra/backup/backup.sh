@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # backup.sh — dump agendado do Postgres do Iris (pg_dump -Fc) com verificação
-# de integridade, upload pro MinIO e prune de retenção local + remoto.
+# de integridade, replicação (MinIO local + off-site cifrado) e prune de
+# retenção.
 #
 # Contrato de env vars (ver infra/backup/ para o restante do serviço):
 #   PGHOST            obrigatório
@@ -15,8 +16,28 @@
 #   S3_SECRET_KEY     obrigatório SE S3_ENDPOINT setado
 #   S3_BACKUP_BUCKET  default iris-backups
 #
-# Exit code: 0 = sucesso completo. != 0 = alguma etapa falhou (o schedule do
-# Easypanel precisa detectar isso, então nunca "engolimos" erro aqui).
+#   -- réplica off-site (issue #86) --
+#   OFFSITE_S3_ENDPOINT     opcional — vazio = pula a réplica off-site
+#   OFFSITE_S3_ACCESS_KEY   obrigatório SE OFFSITE_S3_ENDPOINT setado
+#   OFFSITE_S3_SECRET_KEY   obrigatório SE OFFSITE_S3_ENDPOINT setado
+#   OFFSITE_S3_BUCKET       default iris-backups-offsite
+#   OFFSITE_AGE_RECIPIENT   obrigatório SE OFFSITE_S3_ENDPOINT setado — chave
+#                            PÚBLICA age (age1...). Ver seção "off-site" abaixo.
+#   OFFSITE_INTERVAL_DAYS   default 1 (toda execução). 7 = semanal. Só afeta a
+#                            réplica off-site; o dump local e o MinIO continuam
+#                            diários. Ver "cadência do off-site" abaixo.
+#
+# Exit code:
+#   0 = sucesso completo.
+#   1 = o BACKUP DO DIA falhou (dump ou globals). Não existe artefato válido.
+#   2 = uso incorreto (argumento passado).
+#   3 = backup do dia ÍNTEGRO em disco, mas alguma REPLICAÇÃO falhou (MinIO
+#       e/ou off-site). Distinguir 1 de 3 é essencial: o scheduler.sh trata 3
+#       como "dia resolvido, com aviso" e NÃO refaz o dump. Sem essa distinção,
+#       uma falha persistente de replicação (conta off-site suspensa, MinIO
+#       fora) faria o scheduler disparar um pg_dump completo a cada 10 minutos,
+#       24h por dia, contra o banco de produção — carga real por um problema
+#       que não é do dump.
 #
 # Ordem de execução (cada etapa só roda se a anterior for segura):
 #   1. dump do banco em arquivo TEMPORÁRIO (nunca no nome final)
@@ -32,15 +53,59 @@
 #      dois artefatos são um par: nunca existe "backup do dia" com só um.
 #   4. rename atômico tmp -> nome final dos dois (só íntegro vira "o backup do dia")
 #   5. upload pro MinIO dos dois (se configurado)
-#   6. prune local + remoto por retenção (dump E globals)
+#   6. réplica off-site CIFRADA dos dois (se configurada) — passo 6, novo
+#   7. prune local + remoto (MinIO) por retenção (dump E globals)
+#
+# --- off-site (issue #86): por que cifrado e por que sem delete -------------
+#
+# O MinIO do passo 5 roda no MESMO VPS do Postgres. Ele cobre corrupção, DROP
+# acidental e erro humano — NÃO cobre perda total do host (VPS destruído, conta
+# suspensa, ransomware no host). Os dois destinos de hoje são um único domínio
+# de falha. O passo 6 é a terceira cópia, num provedor e numa conta distintos.
+#
+# CIFRA CLIENT-SIDE (age): o off-site é conta de terceiro. O dump vai cifrado
+# com uma chave PÚBLICA age; o VPS carrega só a chave pública e por construção
+# NÃO CONSEGUE DECIFRAR o que ele mesmo enviou. Consequências, ambas desejadas:
+#   - o provedor off-site nunca vê dado clínico legível;
+#   - um atacante que tome o VPS não consegue ler a réplica.
+# Preço: NÃO É POSSÍVEL testar o restore do off-site automaticamente aqui. Esse
+# drill é manual, com a chave privada, e está no runbook (infra/README.md).
+# A chave privada NÃO fica no VPS. Perder a chave privada = perder a réplica
+# off-site (as cópias local e MinIO continuam em claro e restauráveis).
+#
+# CADÊNCIA DO OFF-SITE (OFFSITE_INTERVAL_DAYS): a réplica pode ser mais
+# esparsa que o dump. O dump local roda todo dia de qualquer forma — ele é
+# barato e fica no mesmo disco. Já a réplica cifrada custa banda e cota no
+# provedor de terceiro, e para muitos estágios de produto uma cópia semanal
+# fora do host é a troca certa entre "quanto eu perco no pior dia" e "quanto
+# isso me custa".
+#
+# O controle é por MARCADOR de tempo (.ultimo-offsite), não por dia da semana.
+# Diferença que importa: se o container estiver parado no dia marcado (deploy,
+# reboot, OOM), a regra por dia-da-semana simplesmente PULA a semana inteira e
+# ninguém percebe. Com marcador, a réplica sai na próxima execução em que o
+# tempo já venceu — atrasada, nunca perdida.
+#
+# O marcador só é escrito em SUCESSO. Off-site que falhou é off-site devido, e
+# tenta de novo no dia seguinte independente do intervalo.
+
+# CREDENCIAL SEM DeleteObject: a credencial off-site é dedicada e só escreve.
+# Backup que o host comprometido consegue apagar não é backup. Por isso este
+# script NÃO poda o off-site — a retenção lá é responsabilidade de uma REGRA DE
+# LIFECYCLE no bucket, do lado do provedor. Prune disparado pelo host confiaria
+# no relógio e nas permissões do host, que são exatamente o que se assume
+# perdido no cenário que o off-site existe para cobrir.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
 
 # --- estado global de saída -------------------------------------------------
 # EXIT_CODE começa em 0; qualquer etapa não-fatal-mas-com-falha (ex.: upload
-# pro S3 falhou depois de um dump local válido) marca 1 aqui em vez de sair
-# na hora, para não pular o prune local (que é independente do S3).
+# pro S3 falhou depois de um dump local válido) marca 3 (REPLICAÇÃO PARCIAL)
+# aqui em vez de sair na hora, para não pular o prune local (que é
+# independente do S3). Falha do dump/globals sai com 1 na hora — ali não
+# existe backup do dia. Ver a tabela de exit codes no cabeçalho.
+readonly EXIT_REPLICACAO_PARCIAL=3
 EXIT_CODE=0
 
 log_info() {
@@ -51,7 +116,14 @@ log_error() {
 	printf '[backup] ERRO: %s\n' "$*" >&2
 }
 
-# Configura o alias do mc lendo as credenciais por STDIN.
+# Configura um alias do mc lendo as credenciais por STDIN.
+#
+# Uso: mc_configurar_alias <alias> <endpoint> <access_key> <secret_key>
+#
+# Recebe por parâmetro (e não por global) porque existem DOIS destinos S3 com
+# credenciais distintas: o MinIO local e o off-site da #86. Compartilhar
+# credencial entre os dois anularia o ponto do off-site — a credencial do
+# MinIO está no mesmo host que se assume comprometido.
 #
 # Por que não `MC_HOST_<alias>="scheme://KEY:SECRET@host"`: aquilo é uma URL, e
 # segredo de MinIO é tipicamente base64 — contém `/` e `+`. Um `/` cru encerra o
@@ -69,8 +141,9 @@ log_error() {
 # MC_CONFIG_DIR aponta pra um diretório temporário 0700 apagado no EXIT, fora do
 # volume persistente `/backups`.
 mc_configurar_alias() {
-	printf '%s\n%s\n' "${S3_ACCESS_KEY}" "${S3_SECRET_KEY}" \
-		| mc alias set "${MC_ALIAS}" "${S3_ENDPOINT}" --api S3v4 >/dev/null 2>&1
+	local alias="$1" endpoint="$2" access_key="$3" secret_key="$4"
+	printf '%s\n%s\n' "${access_key}" "${secret_key}" \
+		| mc alias set "${alias}" "${endpoint}" --api S3v4 >/dev/null 2>&1
 }
 
 # shellcheck disable=SC2329 # invocada indiretamente via `trap ... ERR`
@@ -106,9 +179,45 @@ readonly S3_ACCESS_KEY="${S3_ACCESS_KEY:-}"
 readonly S3_SECRET_KEY="${S3_SECRET_KEY:-}"
 readonly S3_BACKUP_BUCKET="${S3_BACKUP_BUCKET:-iris-backups}"
 
+readonly OFFSITE_S3_ENDPOINT="${OFFSITE_S3_ENDPOINT:-}"
+readonly OFFSITE_S3_ACCESS_KEY="${OFFSITE_S3_ACCESS_KEY:-}"
+readonly OFFSITE_S3_SECRET_KEY="${OFFSITE_S3_SECRET_KEY:-}"
+readonly OFFSITE_S3_BUCKET="${OFFSITE_S3_BUCKET:-iris-backups-offsite}"
+readonly OFFSITE_AGE_RECIPIENT="${OFFSITE_AGE_RECIPIENT:-}"
+readonly OFFSITE_INTERVAL_DAYS="${OFFSITE_INTERVAL_DAYS:-1}"
+readonly OFFSITE_MARCADOR="${BACKUP_DIR}/.ultimo-offsite"
+
 if [[ -n "${S3_ENDPOINT}" ]]; then
 	: "${S3_ACCESS_KEY:?S3_ACCESS_KEY é obrigatório quando S3_ENDPOINT está setado}"
 	: "${S3_SECRET_KEY:?S3_SECRET_KEY é obrigatório quando S3_ENDPOINT está setado}"
+fi
+
+# A réplica off-site é tudo-ou-nada: sem a chave pública age não existe upload
+# off-site, ponto. Falhar aqui (antes do dump) e não "subir em claro como
+# fallback" é deliberado — um fallback silencioso para texto plano num
+# provedor de terceiro é exatamente o tipo de degradação que ninguém percebe
+# até virar incidente de vazamento.
+if [[ -n "${OFFSITE_S3_ENDPOINT}" ]]; then
+	: "${OFFSITE_S3_ACCESS_KEY:?OFFSITE_S3_ACCESS_KEY é obrigatório quando OFFSITE_S3_ENDPOINT está setado}"
+	: "${OFFSITE_S3_SECRET_KEY:?OFFSITE_S3_SECRET_KEY é obrigatório quando OFFSITE_S3_ENDPOINT está setado}"
+	: "${OFFSITE_AGE_RECIPIENT:?OFFSITE_AGE_RECIPIENT (chave pública age) é obrigatório quando OFFSITE_S3_ENDPOINT está setado — a réplica off-site nunca sobe em claro}"
+
+	# Formato da chave pública age (bech32, prefixo age1). Validar aqui evita
+	# descobrir um recipient mal colado só depois de um dump completo.
+	if ! [[ "${OFFSITE_AGE_RECIPIENT}" =~ ^age1[0-9a-z]{58}$ ]]; then
+		log_error "OFFSITE_AGE_RECIPIENT não parece uma chave pública age válida (esperado age1 + 58 caracteres [0-9a-z]). Valor não é logado."
+		exit 1
+	fi
+
+	if ! command -v age >/dev/null 2>&1; then
+		log_error "OFFSITE_S3_ENDPOINT está setado mas o binário 'age' não está na imagem — ver infra/backup/Dockerfile"
+		exit 1
+	fi
+fi
+
+if ! [[ "${OFFSITE_INTERVAL_DAYS}" =~ ^[0-9]+$ ]] || [[ "${OFFSITE_INTERVAL_DAYS}" -lt 1 ]]; then
+	log_error "OFFSITE_INTERVAL_DAYS precisa ser inteiro >= 1, recebido: ${OFFSITE_INTERVAL_DAYS}"
+	exit 1
 fi
 
 if ! [[ "${RETENTION_DAYS}" =~ ^[0-9]+$ ]]; then
@@ -148,6 +257,15 @@ MC_CONFIG_DIR="$(mktemp -d "/tmp/.mc-iris.XXXXXX")"
 export MC_CONFIG_DIR
 chmod 700 -- "${MC_CONFIG_DIR}"
 
+# Diretório dos artefatos CIFRADOS do off-site. Fica DENTRO de BACKUP_DIR (e
+# não em /tmp) de propósito: /tmp pode ser tmpfs — cifrar um dump de vários GB
+# ali consumiria RAM do mesmo host que roda o Postgres. Aqui é o mesmo disco
+# que já guarda o dump. O prefixo `.offsite.` é o que o sweep de lixo antigo
+# procura; o trap EXIT apaga o desta execução.
+OFFSITE_TMP_DIR="$(mktemp -d "${BACKUP_DIR}/.offsite.XXXXXX")"
+readonly OFFSITE_TMP_DIR
+chmod 700 -- "${OFFSITE_TMP_DIR}"
+
 # shellcheck disable=SC2329 # invocada indiretamente via `trap ... EXIT`
 cleanup_tmp() {
 	# Se o script sair antes do rename (passo 4), nenhum tmp pode sobreviver
@@ -158,6 +276,11 @@ cleanup_tmp() {
 	fi
 	if [[ -f "${TMP_GLOBALS_PATH}" ]]; then
 		rm -f -- "${TMP_GLOBALS_PATH}"
+	fi
+	# Os .age são cópia cifrada e descartável do que já está em BACKUP_DIR —
+	# não têm valor após o upload e não podem ficar ocupando disco.
+	if [[ -n "${OFFSITE_TMP_DIR:-}" && -d "${OFFSITE_TMP_DIR}" ]]; then
+		rm -rf -- "${OFFSITE_TMP_DIR}"
 	fi
 	# Credencial em texto plano não sobrevive ao script, mesmo em falha.
 	if [[ -n "${MC_CONFIG_DIR:-}" && -d "${MC_CONFIG_DIR}" ]]; then
@@ -255,9 +378,9 @@ if [[ -z "${S3_ENDPOINT}" ]]; then
 else
 	# Alias configurado por stdin — ver mc_configurar_alias() para o porquê de
 	# não usar MC_HOST_* (URL, quebra com `/` no segredo) nem argv (vaza em ps).
-	if ! mc_configurar_alias; then
+	if ! mc_configurar_alias "${MC_ALIAS}" "${S3_ENDPOINT}" "${S3_ACCESS_KEY}" "${S3_SECRET_KEY}"; then
 		log_error "falha ao configurar o alias do mc — conferir S3_ENDPOINT/credenciais (valores não são logados)"
-		EXIT_CODE=1
+		EXIT_CODE="${EXIT_REPLICACAO_PARCIAL}"
 	fi
 
 	log_info "subindo ${FINAL_NAME} e ${GLOBALS_NAME} para ${MC_ALIAS}/${S3_BACKUP_BUCKET} (endpoint mascarado)"
@@ -267,8 +390,103 @@ else
 		&& mc cp --quiet "${GLOBALS_PATH}" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/${GLOBALS_NAME}" >/dev/null; then
 		log_info "upload concluído (dump + globals)"
 	else
-		log_error "upload pro MinIO falhou (dump ou globals) — backup local existe, mas cópia offsite não está completa. Marcando falha."
-		EXIT_CODE=1
+		log_error "upload pro MinIO falhou (dump ou globals) — backup local existe, mas a cópia no MinIO não está completa. Marcando replicação parcial."
+		EXIT_CODE="${EXIT_REPLICACAO_PARCIAL}"
+	fi
+fi
+
+# --- réplica off-site cifrada (issue #86) ------------------------------------
+# Terceira cópia, em provedor e conta distintos do VPS. Ver a seção "off-site"
+# no cabeçalho para o porquê da cifra e da credencial sem delete.
+readonly MC_ALIAS_OFFSITE="irisoffsite"
+readonly OFFSITE_NAME="${FINAL_NAME}.age"
+readonly OFFSITE_GLOBALS_NAME="${GLOBALS_NAME}.age"
+
+# Decide se a réplica é devida nesta execução. Marcador ausente => devida (é o
+# caso da primeira execução e o caso de a última ter falhado, já que o marcador
+# só é escrito em sucesso).
+offsite_devido=1
+offsite_motivo="intervalo=${OFFSITE_INTERVAL_DAYS}d"
+
+if [[ -n "${OFFSITE_S3_ENDPOINT}" && "${OFFSITE_INTERVAL_DAYS}" -gt 1 && -f "${OFFSITE_MARCADOR}" ]]; then
+	AGORA_EPOCH="$(date +%s)"
+	ULTIMO_EPOCH="$(stat -c %Y "${OFFSITE_MARCADOR}")"
+	DECORRIDO_S=$((AGORA_EPOCH - ULTIMO_EPOCH))
+	INTERVALO_S=$((OFFSITE_INTERVAL_DAYS * 86400))
+
+	# Margem de 1h: a janela do scheduler tem jitter (reavalia a cada 10min), e
+	# sem margem uma execução que caísse alguns minutos antes do intervalo exato
+	# empurraria a réplica para o dia seguinte, e o seguinte, acumulando atraso.
+	if [[ "${DECORRIDO_S}" -lt $((INTERVALO_S - 3600)) ]]; then
+		offsite_devido=0
+		offsite_motivo="última há $((DECORRIDO_S / 3600))h, intervalo ${OFFSITE_INTERVAL_DAYS}d"
+	fi
+fi
+
+if [[ -z "${OFFSITE_S3_ENDPOINT}" ]]; then
+	log_info "OFFSITE_S3_ENDPOINT vazio — pulando réplica off-site (esperado em dev local)"
+elif [[ "${offsite_devido}" -eq 0 ]]; then
+	# Não é falha: é a cadência configurada. Exit code não muda.
+	log_info "réplica off-site não é devida nesta execução (${offsite_motivo}) — dump local e MinIO seguem normalmente"
+else
+	# O recipient é chave PÚBLICA: logar é seguro e é a única forma de provar,
+	# depois, com QUAL chave um artefato foi cifrado. Sem isso, descobrir que a
+	# réplica foi cifrada com uma chave cuja privada ninguém tem só aconteceria
+	# no dia do desastre.
+	log_info "réplica off-site: cifrando com age recipient=${OFFSITE_AGE_RECIPIENT}"
+
+	offsite_ok=1
+
+	# `age -r` cifra para a chave pública. O VPS não tem a privada e portanto
+	# não consegue reverter isto — por design.
+	if ! age -r "${OFFSITE_AGE_RECIPIENT}" -o "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${FINAL_PATH}" \
+		|| ! age -r "${OFFSITE_AGE_RECIPIENT}" -o "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${GLOBALS_PATH}"; then
+		log_error "falha ao cifrar os artefatos para o off-site — nada é enviado. Marcando replicação parcial."
+		offsite_ok=0
+	fi
+
+	# Verificação de que o que vai subir é REALMENTE um arquivo age. Barato, e
+	# a única barreira contra o pior desfecho possível deste passo: dado
+	# clínico em claro num bucket de terceiro por um `age` que falhou de forma
+	# silenciosa. O header é texto fixo definido pelo formato ("age-encryption.org/v1").
+	if [[ "${offsite_ok}" -eq 1 ]]; then
+		for artefato in "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}"; do
+			if [[ ! -s "${artefato}" ]] || ! head -c 21 "${artefato}" | grep -q 'age-encryption.org'; then
+				log_error "artefato off-site $(basename "${artefato}") não tem header age válido — ABORTANDO o envio (jamais subir em claro)."
+				offsite_ok=0
+			fi
+		done
+	fi
+
+	if [[ "${offsite_ok}" -eq 1 ]]; then
+		if ! mc_configurar_alias "${MC_ALIAS_OFFSITE}" "${OFFSITE_S3_ENDPOINT}" "${OFFSITE_S3_ACCESS_KEY}" "${OFFSITE_S3_SECRET_KEY}"; then
+			log_error "falha ao configurar o alias off-site do mc — conferir OFFSITE_S3_ENDPOINT/credenciais (valores não são logados)"
+			offsite_ok=0
+		fi
+	fi
+
+	if [[ "${offsite_ok}" -eq 1 ]]; then
+		log_info "subindo ${OFFSITE_NAME} e ${OFFSITE_GLOBALS_NAME} para ${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET} (endpoint mascarado)"
+
+		# Sem `mc mb` aqui, ao contrário do MinIO: a credencial off-site é
+		# deliberadamente restrita (sem CreateBucket, sem DeleteObject), então
+		# criar bucket falharia e mascararia o erro real. O bucket é
+		# provisionado uma vez, à mão, junto com a regra de lifecycle que faz
+		# a retenção — ver o runbook em infra/README.md.
+		if mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_NAME}" >/dev/null \
+			&& mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_GLOBALS_NAME}" >/dev/null; then
+			# Marcador SÓ aqui, no sucesso: uma réplica que falhou continua
+			# devida e tenta de novo amanhã, independente do intervalo.
+			date -u '+%Y-%m-%dT%H:%M:%SZ' >"${OFFSITE_MARCADOR}"
+			log_info "réplica off-site concluída (dump + globals, cifrados)"
+		else
+			log_error "upload off-site falhou (dump ou globals) — backup local e MinIO existem, mas NÃO há cópia fora do host. Marcando replicação parcial."
+			offsite_ok=0
+		fi
+	fi
+
+	if [[ "${offsite_ok}" -eq 0 ]]; then
+		EXIT_CODE="${EXIT_REPLICACAO_PARCIAL}"
 	fi
 fi
 
@@ -288,20 +506,38 @@ done < <(find "${BACKUP_DIR}" -maxdepth 1 -type f \( -name 'iris-*.dump' -o -nam
 
 log_info "prune local: ${PRUNED_COUNT} arquivo(s) removido(s)"
 
+# Sweep de diretórios `.offsite.*` órfãos: o trap EXIT limpa o desta execução,
+# mas um SIGKILL (OOM, `docker kill`, reboot do VPS no meio do upload) não
+# dispara trap nenhum. Sem este sweep, cada morte violenta deixaria uma cópia
+# CIFRADA do dump ocupando disco para sempre. `-mtime +1` não toca no
+# diretório de uma execução em andamento.
+while IFS= read -r -d '' orfao; do
+	log_info "removendo diretório off-site órfão de execução anterior: $(basename "${orfao}")"
+	rm -rf -- "${orfao}"
+done < <(find "${BACKUP_DIR}" -maxdepth 1 -type d -name '.offsite.*' -mtime +1 -print0)
+
 # --- prune remoto -------------------------------------------------------------
 if [[ -n "${S3_ENDPOINT}" ]]; then
 	log_info "prune remoto: removendo objetos com mais de ${RETENTION_DAYS}d em ${MC_ALIAS}/${S3_BACKUP_BUCKET}"
 	if ! mc rm --recursive --force --older-than "${RETENTION_DAYS}d" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/" >/dev/null 2>&1; then
 		log_error "prune remoto falhou (não fatal para o backup do dia, mas fica registrado)"
-		EXIT_CODE=1
+		EXIT_CODE="${EXIT_REPLICACAO_PARCIAL}"
 	fi
 	# O config do mc (com credencial em texto plano) é apagado no trap EXIT.
+fi
+
+# O off-site NÃO é podado aqui — de propósito. Ver a seção "off-site" no
+# cabeçalho: a credencial não tem DeleteObject e a retenção é uma regra de
+# lifecycle no bucket. Se este log aparecer e o bucket estiver crescendo sem
+# limite, a regra de lifecycle não foi criada — ver runbook em infra/README.md.
+if [[ -n "${OFFSITE_S3_ENDPOINT}" ]]; then
+	log_info "prune off-site: NÃO executado pelo script (por design) — retenção é regra de lifecycle do bucket ${OFFSITE_S3_BUCKET}"
 fi
 
 if [[ "${EXIT_CODE}" -eq 0 ]]; then
 	log_info "concluído com sucesso"
 else
-	log_error "concluído com falhas parciais — ver mensagens acima"
+	log_error "backup do dia ÍNTEGRO em ${BACKUP_DIR}, mas houve falha de REPLICAÇÃO (exit ${EXIT_CODE}) — ver mensagens acima. O dump NÃO será refeito; corrija o destino e a próxima janela replica."
 fi
 
 exit "${EXIT_CODE}"

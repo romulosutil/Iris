@@ -13,7 +13,12 @@ FROM postgres:17-alpine
 # curl + ca-certificates: baixar o binário do mc (MinIO client) via HTTPS.
 # findutils: `find` completo (o busybox find da alpine não tem -printf/-mtime
 # em todas as variações; findutils garante o `find -mtime` usado em backup.sh).
-RUN apk add --no-cache bash curl ca-certificates findutils
+# age: cifra client-side da réplica off-site (issue #86). O dump vai cifrado
+# para um provedor de terceiro; o VPS carrega só a chave PÚBLICA e não
+# consegue decifrar o que enviou. Vem do repositório da Alpine (community),
+# não de um binário baixado solto como o mc — menos superfície e atualizável
+# pelo apk.
+RUN apk add --no-cache bash curl ca-certificates findutils age
 
 # MinIO Client (mc) — binário estático oficial. Não existe pacote apk; segue
 # a distribuição oficial da MinIO. TARGETARCH é setado automaticamente pelo
