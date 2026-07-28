@@ -22,6 +22,35 @@
 | **6**   | Hardening LGPD (fechamento MVP)                         | ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅) | Issue #9                 |
 | **6b**  | Ditado de Voz (áudio + ASR)                             |  📅 Fast-follow · gated por DPA   | Issue #72                |
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
+| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |            📅 Pós-MVP             | Issue #126               |
+
+---
+
+## 🏁 Sessão 28/07/2026 — E-mail transacional do responsável técnico → pós-MVP (Issue #126)
+
+**Decisão:** o canal de e-mail ao RT no estágio 2 (#122, §4.2.1 ação 2) sai do
+MVP. Spec completa em `docs/produto/issue-resend-integracao-rt.md` e na
+Issue #126.
+
+**Por que não bloqueia o go-live:** `canaisIndisponiveis()` já registra
+`email_responsavel_tecnico_indisponivel` no estágio 2 quando não há chave
+configurada — a ausência do canal é explícita na trilha, não silenciosa (lição
+da #108). O acionamento do RT continua acontecendo por banner clínica-wide e
+fila. E o passo que trava é humano e de via única: conta no Resend, verificação
+de domínio, chave.
+
+**Retirado da árvore de propósito:**
+- dependência `resend` no `package.json` — pacote sem código que o use é
+  superfície de ataque sem contrapartida;
+- a migração `0050` rascunhada. Migração em `db/migrations/` é migração
+  **aplicada em produção no próximo push** (gate de schema, `infra/README.md`).
+  Subir função de e-mail meses antes do código que a chama é drift puro. O SQL
+  vive no apêndice do documento e é renumerado quando a execução começar.
+
+**Decisão pendente para o Rômulo:** o guard hoje lê `EMAIL_PROVIDER_API_KEY`
+(neutro de provedor). O rascunho original trocava por `RESEND_API_KEY`.
+Recomendação: manter o nome neutro no guard e deixar `RESEND_API_KEY` só dentro
+do adapter — trocar de provedor vira trocar um arquivo.
 
 ---
 
