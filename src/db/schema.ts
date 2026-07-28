@@ -215,6 +215,25 @@ export const clinic = pgTable("clinic", {
   // N faltas (falta_paciente) numa janela de M semanas dispara o alerta.
   faltasLimiar: integer("faltas_limiar").notNull().default(3),
   faltasJanelaSemanas: integer("faltas_janela_semanas").notNull().default(4),
+  // #122 — pré-requisitos do alerta de risco clínico (Fatia 4).
+  // Responsável técnico: destinatário do estágio 2 (§4.2.1). É um usuário DA
+  // clínica — nunca um contato externo. Distinto de `responsavelContaId`, que é
+  // dono da conta/billing e pode não ser profissional de saúde.
+  responsavelTecnicoId: uuid("responsavel_tecnico_id").references(
+    () => appUser.id,
+  ),
+  // Protocolo de Emergência Interno DA PRÓPRIA CLÍNICA, exibido no estágio 2.
+  // O Iris mostra o protocolo da clínica; nunca propõe conduta própria.
+  protocoloEmergenciaInterno: text("protocolo_emergencia_interno"),
+  // Declaração obrigatória (matriz do parecer + cláusula X.3 dos termos):
+  // "Declaro que a clínica possui protocolo próprio de atendimento de
+  // emergências". Guardamos QUEM e QUANDO — é prova de aceite, não um booleano.
+  protocoloEmergenciaDeclaradoEm: timestamp("protocolo_emergencia_declarado_em", {
+    withTimezone: true,
+  }),
+  protocoloEmergenciaDeclaradoPor: uuid(
+    "protocolo_emergencia_declarado_por",
+  ).references(() => appUser.id),
   criadoEm: timestamp("criado_em", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -1124,5 +1143,145 @@ export const alerta = pgTable(
     index("idx_alerta_fila")
       .on(t.clinicId, t.status)
       .where(sql`${t.deletadoEm} IS NULL`),
+  ],
+);
+
+// ─── #122 — Alerta de risco clínico (spec: docs/agente/regra-alerta-risco.md) ─
+// Fila DEDICADA, paralela a `alerta` e não filha dela (§3.2): risco é evento
+// pontual (cada menção em cada sessão é uma linha), não sinal persistente com
+// dedupe por chave natural; `alerta_locator` é hardcoded p/ os 3 tipos antigos;
+// prazo/escalonamento não existem em nenhum sinal atual; e a RLS precisa incluir
+// o terapeuta da sessão, não só o coordenador.
+//
+// REGRA DE OURO (§4.2.1): nenhuma coluna aqui é destinatário externo. O Iris
+// nunca notifica família, contato de emergência, SAMU, polícia ou Conselho
+// Tutelar — todo o fluxo encerra nos gestores da própria clínica.
+
+export const alertaRiscoCategoria = pgEnum("alerta_risco_categoria", [
+  "ideacao_suicida",
+  "autolesao",
+  "violencia_sofrida",
+  "violencia_praticada",
+  "risco_a_terceiro",
+]);
+
+export const alertaRiscoSeveridade = pgEnum("alerta_risco_severidade", [
+  "ideacao_passiva",
+  "ideacao_ativa_sem_plano",
+  "ideacao_ativa_com_plano",
+  "autolesao_recente",
+  "tentativa_relatada",
+  "violencia_sofrida",
+  "violencia_praticada",
+  "risco_a_terceiro",
+]);
+
+export const alertaRiscoCerteza = pgEnum("alerta_risco_certeza", [
+  "explicito", // menção direta, inequívoca
+  "ambiguo_citado", // texto ambíguo, citado literalmente — alerta mantido (§1.4)
+]);
+
+export const alertaRiscoStatus = pgEnum("alerta_risco_status", [
+  "aberto", // recém-criado, aguardando reconhecimento
+  "reconhecido", // um dos destinatários confirmou ciência (prazo cumprido)
+  "escalado_estagio_1", // prazo vencido — todos os coordenadores da clínica
+  // 2º prazo vencido — saturação INTERNA da clínica (§4.2.1, Opção B do parecer):
+  // banner clínica-wide + responsável técnico + protocolo interno + log imutável.
+  // Não existe canal externo em nenhum estágio.
+  "escalado_estagio_2",
+  "resolvido", // conduta humana definida e registrada
+  "descartado", // avaliado como não-risco após revisão humana (nunca apaga)
+]);
+
+export const alertaRiscoClinico = pgTable(
+  "alerta_risco_clinico",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id),
+    // patientId/sessionId são NOT NULL *enquanto o alerta vive* — garantido pelo
+    // CHECK `alerta_risco_vinculo` abaixo, não pela coluna. A nulidade existe só
+    // para o expurgo LGPD: o erasure do paciente DELETA `patient` e `session`,
+    // e este registro PSEUDONIMIZA em vez de morrer junto (H2). Mesmo mecanismo
+    // do `audit_log.patient_id` em `app_purgar_paciente` (0045): nula-se a FK
+    // antes do delete. Resolve a contradição §7 (`sessionId notNull`) × H2.
+    patientId: uuid("patient_id"),
+    // o alerta segue a SESSÃO, não o paciente (H4) — o destinatário do
+    // estágio 0 é derivado daqui, nunca difundido lateralmente.
+    sessionId: uuid("session_id").references(() => session.id),
+
+    categoria: alertaRiscoCategoria("categoria").notNull(),
+    severidade: alertaRiscoSeveridade("severidade").notNull(),
+    certeza: alertaRiscoCerteza("certeza").notNull(),
+    trechoFonte: text("trecho_fonte").notNull(), // citação literal do diário
+    detalhe: text("detalhe").notNull(), // descrição do agente, sem juízo de gravidade
+
+    status: alertaRiscoStatus("status").notNull().default("aberto"),
+
+    // auditoria de ENVIO (o que de fato disparou), não decisão. Inclui registro
+    // explícito de canal indisponível — canal que falha em silêncio é o modo de
+    // falha da #108.
+    canaisNotificados: jsonb("canais_notificados").notNull().default([]),
+
+    // "prazos de notificação e escalonamento interno do software" (§4.1) —
+    // NUNCA "SLA de atendimento de emergência": não há prazo legal brasileiro
+    // p/ resposta clínica a crise e o Iris não presta atendimento.
+    prazoMinutos: integer("prazo_minutos").notNull(),
+    prazoReconhecimento: timestamp("prazo_reconhecimento", {
+      withTimezone: true,
+    }).notNull(),
+
+    reconhecidoPor: uuid("reconhecido_por").references(() => appUser.id),
+    reconhecidoEm: timestamp("reconhecido_em", { withTimezone: true }),
+
+    escaladoEm: timestamp("escalado_em", { withTimezone: true }), // estágio 1
+    escaladoEstagio2Em: timestamp("escalado_estagio_2_em", {
+      withTimezone: true,
+    }),
+
+    condutaRegistrada: text("conduta_registrada"), // preenchido em resolver
+    motivoDescarte: text("motivo_descarte"), // preenchido em descartar
+
+    // marca de expurgo LGPD (H2): o expurgo PSEUDONIMIZA, nunca deleta.
+    pseudonimizadoEm: timestamp("pseudonimizado_em", { withTimezone: true }),
+
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    atualizadoPor: uuid("atualizado_por").references(() => appUser.id),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    // paridade RLS com o resto do repo; NUNCA usado para expurgo (H2).
+    deletadoEm: timestamp("deletado_em", { withTimezone: true }),
+  },
+  (t) => [
+    // anti-IDOR em nível de banco. RESTRICT e não CASCADE de propósito: o
+    // expurgo pseudonimiza esta tabela (H2); cascade deletaria a linha inteira,
+    // o oposto exato da decisão.
+    foreignKey({
+      columns: [t.patientId, t.clinicId],
+      foreignColumns: [patient.id, patient.clinicId],
+      name: "alerta_risco_patient_fk",
+    }).onDelete("restrict"),
+    // Invariante da §7 preservada onde importa: TODO alerta vivo tem paciente e
+    // sessão. Só o expurgo (H2) pode soltar esses vínculos, e apenas marcando
+    // `pseudonimizado_em` — não há caminho para uma linha órfã silenciosa.
+    check(
+      "alerta_risco_vinculo",
+      sql`(${t.pseudonimizadoEm} IS NULL
+            AND ${t.patientId} IS NOT NULL
+            AND ${t.sessionId} IS NOT NULL)
+       OR (${t.pseudonimizadoEm} IS NOT NULL
+            AND ${t.patientId} IS NULL
+            AND ${t.sessionId} IS NULL)`,
+    ),
+    index("idx_alerta_risco_fila")
+      .on(t.clinicId, t.status)
+      .where(sql`${t.deletadoEm} IS NULL`),
+    // serve o job de escalonamento (H1): status='aberto' AND prazo < now().
+    index("idx_alerta_risco_sla").on(t.status, t.prazoReconhecimento),
   ],
 );

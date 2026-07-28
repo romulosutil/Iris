@@ -133,13 +133,101 @@ export const sinalizacaoSchema = z.object({
   detalhe: z.string().optional(),
 });
 
-export const agentOutputSchema = z.object({
+// ─── #122 — sinal de risco transversal (R20 / R5-TC) ─────────────────────────
+// Camada GLOBAL do agente, mais checagem de segurança do que regra de extração:
+// dispara mesmo com `protocolos_ativos: []`, em qualquer domínio ou protocolo, e
+// não é engolida por nenhuma outra regra. Fora da fila de validação por exceção
+// do coordenador (V1).
+export const alertaRiscoCategoriaEnum = z.enum([
+  "ideacao_suicida",
+  "autolesao",
+  "violencia_sofrida",
+  "violencia_praticada",
+  "risco_a_terceiro",
+]);
+
+export const alertaRiscoSeveridadeEnum = z.enum([
+  "ideacao_passiva",
+  "ideacao_ativa_sem_plano",
+  "ideacao_ativa_com_plano",
+  "autolesao_recente",
+  "tentativa_relatada",
+  "violencia_sofrida",
+  "violencia_praticada",
+  "risco_a_terceiro",
+]);
+
+export const alertaRiscoCertezaEnum = z.enum(["explicito", "ambiguo_citado"]);
+
+export const alertaRiscoSchema = z.object({
+  categoria: alertaRiscoCategoriaEnum,
+  severidade: alertaRiscoSeveridadeEnum,
+  // R20 não tem `certeza`; o default é o lado CONSERVADOR. `ambiguo_citado`
+  // rebaixa a prioridade visual (§2), então presumi-lo na ausência de sinal
+  // enfraqueceria um alerta que o agente considerou direto. `explicito` só
+  // afeta apresentação — o prazo é o mesmo nos dois casos (§4.1).
+  certeza: alertaRiscoCertezaEnum.default("explicito"),
+  // literal do diário, obrigatório: um alerta sem trecho seria veredito da IA
+  // sem evidência, e a §6 exige o trecho sempre visível ao lado do alerta.
+  trecho_fonte: z.string().min(1),
+  detalhe: z.string().min(1),
+});
+
+/**
+ * Levanta um sinal de risco emitido na forma do R20
+ * (`sinalizacoes[].tipo === "risco_seguranca"`) para o campo dedicado, ANTES da
+ * validação.
+ *
+ * Sem isto o `.catch([])` de `sinalizacoes` degradaria um sinal de risco
+ * malformado para vazio — silenciosamente. Sinalização comum pode degradar;
+ * risco de vida não pode. Depois desta normalização, um risco presente e
+ * malformado invalida a saída inteira (estado `erro_validacao`, visível), que é
+ * o comportamento alto e não o baixo.
+ */
+function levantarRiscoDeSinalizacoes(entrada: unknown): unknown {
+  if (typeof entrada !== "object" || entrada === null) return entrada;
+  const obj = entrada as Record<string, unknown>;
+  if (obj.alerta_risco != null) return entrada;
+  if (!Array.isArray(obj.sinalizacoes)) return entrada;
+
+  const risco = obj.sinalizacoes.find(
+    (s): s is Record<string, unknown> =>
+      typeof s === "object" &&
+      s !== null &&
+      (s as Record<string, unknown>).tipo === "risco_seguranca",
+  );
+  if (!risco) return entrada;
+
+  return {
+    ...obj,
+    alerta_risco: {
+      categoria: risco.categoria,
+      severidade: risco.severidade,
+      ...(risco.certeza != null ? { certeza: risco.certeza } : {}),
+      trecho_fonte: risco.trecho_fonte ?? risco.trecho,
+      detalhe: risco.detalhe ?? risco.descricao,
+    },
+  };
+}
+
+// Forma do objeto, SEM o preprocess. Exportada separadamente porque é ela que
+// alimenta `zodToJsonSchema` para o tool schema do Claude: um ZodEffects não
+// gera JSON Schema confiável, e o tool schema é o que ensina a forma ao modelo.
+export const agentOutputObjectSchema = z.object({
   extracoes: z.array(extracaoSchema),
   resumo_sessao: z.string(),
   // .catch([]): sinalizações malformadas degradam para vazio, nunca invalidam a
   // saída inteira (extracoes é o que importa e permanece estrito).
   sinalizacoes: z.array(sinalizacaoSchema).optional().catch([]),
+  // ESTRITO e sem .catch de propósito: ver `levantarRiscoDeSinalizacoes`.
+  alerta_risco: alertaRiscoSchema.nullable().optional(),
 });
+
+export const agentOutputSchema = z.preprocess(
+  levantarRiscoDeSinalizacoes,
+  agentOutputObjectSchema,
+);
 
 export type AgentOutput = z.infer<typeof agentOutputSchema>;
 export type ExtracaoAgente = z.infer<typeof extracaoSchema>;
+export type AlertaRiscoAgente = z.infer<typeof alertaRiscoSchema>;

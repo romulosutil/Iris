@@ -1,12 +1,19 @@
 import { zodToJsonSchema } from "zod-to-json-schema";
-import type { ExtractionContext, ExtractionDraft, ExtractionProvider } from "./provider";
-import { agentOutputSchema, type ExtracaoAgente } from "./agent-output-schema";
+import type { ExtractionContext, ExtractionProvider, ExtractionResult } from "./provider";
+import {
+  agentOutputObjectSchema,
+  agentOutputSchema,
+  type ExtracaoAgente,
+} from "./agent-output-schema";
 import { SYSTEM_PROMPT, buildUserMessage } from "./prompt";
 
 // Tool schema DERIVADO do contrato zod (fonte única de verdade) — guia o modelo
 // aos enums/campos obrigatórios exatos. Sem isto, o modelo inventa formas (ex.:
 // tipo "evidencia_comportamental", confianca ausente — achado do teste vivo).
-const TOOL_INPUT_SCHEMA = zodToJsonSchema(agentOutputSchema, {
+// Deriva do OBJETO, não do schema com preprocess: um ZodEffects não gera JSON
+// Schema confiável. O preprocess só normaliza a forma R20 na ENTRADA — o que o
+// modelo deve produzir é exatamente o objeto.
+const TOOL_INPUT_SCHEMA = zodToJsonSchema(agentOutputObjectSchema, {
   target: "openApi3",
   $refStrategy: "none",
 });
@@ -37,7 +44,7 @@ function payloadDoSubtipo(e: ExtracaoAgente): unknown {
 export class ClaudeProvider implements ExtractionProvider {
   constructor(private readonly invoker: AgentInvoker) {}
 
-  async extrair(ctx: ExtractionContext): Promise<ExtractionDraft[]> {
+  async extrair(ctx: ExtractionContext): Promise<ExtractionResult> {
     const contexto =
       ctx.contextoCanonico ?? { metas_ativas: ctx.metasAtivas };
     const user = buildUserMessage({
@@ -52,16 +59,19 @@ export class ClaudeProvider implements ExtractionProvider {
     // alucinou a forma — nunca gravamos saída fora do schema.
     const saida = agentOutputSchema.parse(bruto);
 
-    return saida.extracoes.map((e) => ({
-      subtipo: e.tipo,
-      trechoFonte: e.trecho_fonte,
-      confianca: e.confianca,
-      justificativaConfianca: e.justificativa_confianca,
-      inconsistenteComHistorico: e.inconsistente_com_historico ?? false,
-      parContrasteId: e.par_contraste_id ?? null,
-      payload: payloadDoSubtipo(e) as object,
-      estado: "sugerida" as const,
-    }));
+    return {
+      drafts: saida.extracoes.map((e) => ({
+        subtipo: e.tipo,
+        trechoFonte: e.trecho_fonte,
+        confianca: e.confianca,
+        justificativaConfianca: e.justificativa_confianca,
+        inconsistenteComHistorico: e.inconsistente_com_historico ?? false,
+        parContrasteId: e.par_contraste_id ?? null,
+        payload: payloadDoSubtipo(e) as object,
+        estado: "sugerida" as const,
+      })),
+      alertaRisco: saida.alerta_risco ?? null,
+    };
   }
 }
 
