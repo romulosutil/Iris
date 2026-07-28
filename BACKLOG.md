@@ -214,6 +214,146 @@ antes de testar, senão o container roda a versão antiga (aconteceu nesta sess�
 
 ---
 
+## 🏁 Sessão 27/07/2026 — Especificação de 2 nichos novos: Terapia Convencional (#98) e TCC (#99)
+
+**Decisão de produto nova (não retomada):** Iris vai atender 2 nichos além do
+atual (TEA/neurodesenvolvimento, 10 protocolos catalogados). Issues abertas:
+**#98** (Terapia Convencional — sem protocolo, sem pontuação) e **#99** (TCC —
+precisa métrica real). Trabalho desta sessão é só especificação, zero código.
+
+**Achado estrutural:** cadastro básico (`pacientes/novo/logic.ts`) já não
+exige protocolo — vínculo é ação separada do coordenador (`ativarProtocolo`).
+"Sem protocolo" já é suportado; o que falta é um **modo novo do agente** (sem
+`dominio_id`/meta pontuável), não uma extensão do modo atual.
+
+**Gap real encontrado (bloqueia piloto de qualquer um dos 2 nichos):**
+`criarPacienteEConsent` grava `consent.tipo = "tratamento_dados_menor"` fixo,
+com `responsavelSignatario` obrigatório — pressupõe paciente menor com
+responsável. TCC e Terapia Convencional atendem majoritariamente **adulto**.
+Precisa de um tipo de consentimento novo (autoconsentimento do titular adulto)
+— **desenho decidido depois nesta mesma sessão (ver #100 abaixo), execução
+ainda pendente de confirmação com o Rômulo** (schema de auth/LGPD é camada
+cara de errar retroativamente).
+
+**Entregue (docs, via 2 subagents em paralelo, mesmo processo de validação
+usado nos 10 protocolos de TEA — 1 especialista dedicado por documento,
+seção final de achados de autovalidação):**
+
+- `docs/agente/protocolo-terapia-convencional.md` — regras novas R1-TC a
+  R9-TC (não reusa R1-R19, que pressupõem domínio/meta); regra de alerta de
+  risco obrigatória (R5-TC); linguagem sempre hedged, nunca diagnóstico.
+- `docs/agente/casos-de-teste-terapia-convencional.md` — 4 casos (escuta
+  simples, risco/violência doméstica, silêncio/resistência, encerramento de
+  ciclo).
+- `docs/agente/protocolo-tcc.md` — Registro de Pensamentos (situação →
+  pensamento automático → distorção cognitiva → emoção → comportamento,
+  taxonomia de distorções de Beck/Burns) como estrutura de evento; PHQ-9/
+  GAD-7 como escala padronizada intervalar (uso público, não protegida como
+  VB-MAPP — números **PRECISAM CONFIRMAÇÃO com fonte primária**, não
+  validados contra manual oficial nesta sessão); tarefa de casa (adesão).
+  Proposta de extensão `tipo_coleta` (`registro_pensamento`,
+  `escala_padronizada_intervalar`) e regra de alerta transversal (proposta
+  "R20", compartilhada com #98) — **desenho operacional do alerta (canal,
+  SLA) fica explicitamente em aberto, é o gap mais sério do documento.**
+- `docs/agente/casos-de-teste-tcc.md` — 5 casos (catastrofização, múltiplas
+  distorções, PHQ-9 intercalado, tarefa de casa mista, ideação suicida com
+  `protocolos_ativos: []` — prova que o alerta dispara sem protocolo ativo).
+
+**Pendente ao fim desta sessão (ver "Revisão das 4 issues" abaixo p/ o que já
+foi resolvido depois):** desenho operacional da regra de alerta de risco
+(R20) — resolvido, ver #101; validação dos números de PHQ-9/GAD-7 contra
+fonte primária — parcialmente resolvido, ver #99; qualquer implementação de
+código (schema/RLS/agente) segue pendente — exige plano à parte por tocar as
+3 camadas caras (dado de menor→adulto, schema do agente, RLS), e execução
+real segue condicionada à confirmação do Rômulo mesmo com desenho fechado.
+
+**Priorizados como issue própria (mesma sessão):**
+
+- **#100** — consentimento hoje só cobre menor (`responsavelSignatario`
+  **`notNull` no schema**, não só regra de app — confirmado em
+  `src/db/schema.ts:319`). Bloqueia cadastro de QUALQUER paciente adulto.
+- **#101** — regra de alerta de risco (R5-TC/"R20") sem desenho operacional
+  (canal, SLA, duty to warn — território legal/ético do CFP, não só técnico).
+
+**#101 especificada (mesma sessão):** `docs/agente/regra-alerta-risco.md`
+(732 linhas) + 4 casos de teste (ARC-1 a ARC-4). Decisões concretas: tabela
+dedicada `alerta_risco_clinico` (não reusa `alerta`/`/supervisao` — custo de
+erro incomparável com estagnação/falta); notificação síncrona dupla
+(terapeuta da sessão + coordenador sempre); SLA por severidade (15min/1h/4h)
+com escalonamento em 2 estágios. **Duty to warn deliberadamente NÃO
+respondido** — 5 perguntas objetivas documentadas para revisão de
+profissional de direito/CFP, mesmo padrão do `docs/legal/briefing-para-
+advogado.md`. Achados de autovalidação: escalonamento por SLA depende de
+infra de cron que o Easypanel não tem nativamente (mesmo achado de
+`[[easypanel-sem-cron-e-host-interno]]`); retenção/erasure da tabela nova
+ainda não decidida (LGPD).
+
+**Revisão das 4 issues (mesma sessão, 4 subagents paralelos):**
+
+- **#98 validada** contra Resolução CFP e entrevistas simuladas
+  terapeuta+coordenador (seção 8 anexada ao spec). 2 achados **reclassificados
+  para bloqueante**: `padrao_silencio_resistencia` embute vocabulário
+  psicanalítico no contrato de dados (contradiz R9-TC school-agnostic); doc
+  não afirma que saída da IA é rascunho exigindo edição/aprovação explícita
+  do terapeuta antes de virar prontuário oficial (risco de responsabilidade
+  civil, quem assina responde pelo conteúdo). R5-TC também não cita a exceção
+  de sigilo profissional (risco à vida) que legitima o próprio alerta existir.
+  Números de resolução CFP citados no projeto estão **inconsistentes entre
+  documentos** (nº 6/2019 vs 001/2009 vs 010/2005) — precisa unificação antes
+  de qualquer copy user-facing usar isso.
+- **#99 validada** — PHQ-9/GAD-7 **confirmados** quanto à estrutura numérica
+  (conhecimento público bem documentado: 9/7 itens, 0-3, cortes, item 9 =
+  risco); segue pendente confirmação de fonte primária só para texto
+  oficial/validação PT-BR. `registro_pensamento` ganhou 2 achados de gap
+  (falta campo de reavaliação de emoção pós-resposta racional; campo de risco
+  do item 9 deveria ser `boolean | null`, não `boolean`, para distinguir
+  "negou" de "não respondeu").
+- **#100 decidida (tech lead):** novo spec
+  `.specs/features/consentimento-titular-adulto/spec.md`. Decisão travada:
+  adicionar `"autoconsentimento_titular_adulto"` ao enum `consentTipo`,
+  `responsavelSignatario` vira nullable + CHECK constraint condicional (XOR
+  menor+responsável vs. adulto+nulo). Migração planejada `0049`. Confirmado
+  via grep: nenhuma policy RLS depende desses campos; expurgo (`0045`) já
+  deleta `consent` fisicamente, agnóstico a tipo — sem necessidade de
+  pseudonimização aqui. **Execução da migração fica pendente de confirmação
+  do Rômulo** (dado real).
+- **#101 hardening decidido (tech lead):** `docs/agente/regra-alerta-risco.md`
+  §10. Escalonamento de SLA = job dedicado (script via Comando na Easypanel,
+  mesmo padrão de `[[easypanel-sem-cron-e-host-interno]]`), rodando como
+  serviço separado do Next.js (não `setInterval` — evita duplicação
+  multi-instância), polling a cada 1min (SLA mais curto é 15min). Retenção
+  LGPD: **pseudonimizar no expurgo, não deletar** — mesmo padrão de
+  `audit_log`/`0045`, ancorado em `clinic.politicaRetencaoMeses` (coluna já
+  existe, `schema.ts:235`).
+
+**#101 fechamento dos achados residuais (sessão 28/07):** os 4 achados de
+autovalidação da §9 estão fechados — antes só 9.1/9.4 estavam.
+
+- **9.2 (urgência × privacidade no push) → H3.** Urgência passa a ser
+  carregada pelo **canal**, não pelo texto: tag dedicada `iris-risco`, som +
+  `requireInteraction` só na faixa de SLA de 15min, renotificação 1× por
+  estágio. Correção de vazamento encontrada de passagem: o texto push da §6.2
+  citava o **nome do paciente** — dado sensível de saúde por associação,
+  visível em tela de bloqueio; removido. Limitação registrada: web push não
+  fura DND do SO, então "15 minutos" é promessa de *notificação +
+  escalonamento*, não de *resposta humana* — não usar em copy comercial.
+- **9.3 (paciente multiprofissional) → H4 + Caso ARC-5 novo.** O alerta segue
+  a **sessão** (`sessionId`), não o paciente: só o terapeuta daquela sessão +
+  coordenador; escalonamento é hierárquico, nunca lateral (outros
+  profissionais do mesmo paciente não são notificados — minimização).
+- **FK corrigida no doc:** `alerta_risco_patient_fk` passa de
+  `onDelete("cascade")` para `restrict` (cascade deletaria a linha, oposto da
+  decisão de pseudonimizar em H2).
+
+Continua em aberto **só a §5 (duty to warn)** — as 5 perguntas de CFP/
+jurídico, que por desenho não são decisão de tech lead. Nenhuma linha desta
+spec vira código antes dessa resposta.
+
+**PR #109** (branch `docs/spec-nichos-terapia-convencional-tcc`, worktree
+`iris-wt-101`) — só docs/specs, 3613 linhas, nenhuma migração aplicada.
+
+---
+
 ## 🏁 Sessão 25/07/2026 — Go-live #75 Etapa 5: backup + restore testado (OPERANDO EM PROD) — PRs #85, #90, #91, #92
 
 **Fecha o item `pg_dump` agendado + restore testado da Etapa 5.** Antes desta sessão
