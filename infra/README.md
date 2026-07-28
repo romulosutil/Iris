@@ -310,7 +310,7 @@ Traduzindo "7 dias" para o que o usuário sente: uma terapeuta que escreveu 40
 evoluções naquela semana **perde as 40**. Ela não reconstrói — a sessão
 aconteceu, a memória já não está fresca. É uma decisão de produto, não de
 infra: escolha o número olhando para isso, não para o custo de storage (que é
-zero nos dois casos, dentro dos 20 GB do plano gratuito).
+zero nos dois casos, dentro dos 10 GiB do plano gratuito).
 
 **O controle é por marcador de tempo (`.ultimo-offsite`), não por dia da
 semana.** A diferença aparece quando o container está parado no dia marcado
@@ -573,7 +573,9 @@ chave, definir lifecycle. Ordem importa — o passo 5 é o que impede o pior
 desfecho (réplica cifrada com chave que ninguém tem).
 
 **Provedor recomendado: Oracle Cloud Object Storage, região Brazil East (São
-Paulo, `sa-saopaulo-1`).** Always Free: 20 GB permanentes (não é trial de 12
+Paulo, `sa-saopaulo-1`).** Always Free: 10 GiB de Object Storage permanentes
+(+10 GiB de Archive, cota combinada de 20 GiB — o que serve para o backup é a
+cota de 10 GiB do tier Standard; medido no console em 27/07/2026, não é trial de 12
 meses), 50k requisições/mês, API S3-compatível — o `mc` que já está na imagem
 fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
 
@@ -592,7 +594,7 @@ fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
    no endpoint: `https://<namespace>.compat.objectstorage.sa-saopaulo-1.oraclecloud.com`.
 3. **Regra de lifecycle no bucket** com a mesma janela do `RETENTION_DAYS`
    (hoje 30 dias). **Isto não é opcional** — o `backup.sh` não poda o off-site
-   por design, então sem a regra o bucket cresce até estourar os 20 GB e os
+   por design, então sem a regra o bucket cresce até estourar os 10 GiB e os
    uploads passam a falhar (`exit 3` todo dia).
    > A janela de retenção do off-site é **a mesma discussão da issue #89**
    > (retenção de backup × direito ao expurgo da Fase 6). Um titular expurgado
