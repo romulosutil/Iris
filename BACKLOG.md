@@ -298,9 +298,14 @@ ainda não decidida (LGPD).
   do terapeuta antes de virar prontuário oficial (risco de responsabilidade
   civil, quem assina responde pelo conteúdo). R5-TC também não cita a exceção
   de sigilo profissional (risco à vida) que legitima o próprio alerta existir.
-  Números de resolução CFP citados no projeto estão **inconsistentes entre
-  documentos** (nº 6/2019 vs 001/2009 vs 010/2005) — precisa unificação antes
-  de qualquer copy user-facing usar isso.
+  Números de resolução CFP citados no projeto estavam **inconsistentes entre
+  documentos** (nº 6/2019 vs 001/2009 vs 010/2005) — **resolvido na #110**:
+  não havia divergência, as três estão vigentes e regulam objetos distintos
+  (001/2009 = registro documental/prontuário, alterada pela 05/2010;
+  06/2019 = documentos escritos emitidos; 010/2005 = Código de Ética).
+  Citações corrigidas em `protocolo-terapia-convencional.md` e
+  `validacao-legal-prontuario.md`. Segue valendo: nenhuma copy user-facing
+  cita resolução até confirmação profissional (#110, pergunta 6).
 - **#99 validada** — PHQ-9/GAD-7 **confirmados** quanto à estrutura numérica
   (conhecimento público bem documentado: 9/7 itens, 0-3, cortes, item 9 =
   risco); segue pendente confirmação de fonte primária só para texto
@@ -351,6 +356,45 @@ spec vira código antes dessa resposta.
 
 **PR #109** (branch `docs/spec-nichos-terapia-convencional-tcc`, worktree
 `iris-wt-101`) — só docs/specs, 3613 linhas, nenhuma migração aplicada.
+
+**#110 (sessão 28/07) — briefing de consulta pronto, respostas ainda não
+existem.** A #110 pede respostas de psicólogo(a)/advogado(a); isso não é algo
+que a sessão possa produzir. O que foi entregue:
+
+- `docs/legal/briefing-duty-to-warn.md` — o briefing pronto para levar à
+  consulta, no padrão de `briefing-para-advogado.md`. Descreve o mecanismo do
+  produto em detalhe (inclusive a limitação de "Não perturbe", que impede
+  prometer resposta humana em 15 min) e **mapeia cada resposta possível para o
+  que muda em código** — em especial a pergunta 2, cujas 3 saídas determinam
+  se o estágio 2 do escalonamento pode existir dentro do produto.
+- **Levantamento normativo próprio (Anexo A)**, em fonte primária do CFP.
+  Achados que mudam o enquadramento de 3 das 5 perguntas:
+  - **Não existe Tarasoff no Brasil.** O Código de Ética (Res. 010/2005) art.
+    10 diz que o psicólogo "**poderá** decidir pela quebra de sigilo" pela
+    "busca do menor prejuízo" — **faculdade, não dever**. Não há artigo sobre
+    suicídio ou dever de proteção a terceiro. A quebra é facultativa; o
+    **mínimo necessário é obrigatório** (par. único).
+  - **Exceção: violência contra criança/adolescente é dever legal** (ECA art.
+    13 + Lei 13.431/2017 art. 13, "imediatamente"). Como o Iris atende
+    majoritariamente menores, o caso com dever mais claro é o caso central do
+    produto — provável impacto na copy do alerta nesse recorte.
+  - **Não existe prazo/SLA oficial** para resposta clínica a risco de vida em
+    fonte brasileira nenhuma. Os 24h que existem são notificação
+    epidemiológica (SINAN) ou policial — outra coisa. Consequência: o SLA do
+    Iris é **decisão de produto** e nunca pode ser vendido como "conforme
+    protocolo oficial".
+  - Ressalva honesta: o Planalto ficou inacessível no levantamento — **nenhum
+    texto de lei federal foi lido em fonte primária**. Só os PDFs do CFP
+    foram. O Anexo A declara isso item a item.
+- §4.2 e §5 de `regra-alerta-risco.md` atualizadas: §4.2 agora tem a tabela
+  das 3 saídas possíveis do estágio 2; §5 aponta o briefing como versão
+  canônica das perguntas. **O bloqueio de implementação continua valendo
+  integralmente** — inclusive para "não fazer nada", que também precisa da
+  cláusula contratual correspondente para ser decisão e não omissão.
+
+**Próximo passo é do Rômulo, não de código:** levar o briefing a
+psicólogo(a)/advogado(a). Só depois disso a #110 fecha e a #101 pode virar
+código.
 
 ---
 
@@ -1775,3 +1819,15 @@ Além disso, há hard-blockers técnicos que precisariam ser resolvidos antes do
   - [ ] Confirmar com a contadora a inserção do CNAE secundário de desenvolvimento/licenciamento de SaaS na ME.
   - [ ] Testar trial/demo dos concorrentes direto (logado).
   - [ ] Fechar precificação final do "paciente ativo" após rodadas do piloto.
+
+---
+
+## 🎨 Issues de Melhoria de UI/UX — Trust & Safety (Sinais de Confiança)
+
+- [ ] **Issue #111 — Trust Badges na Tela de Login (`/(auth)/login`)**: Exibir badges autorais no rodapé do formulário de autenticação (ex: `🛡️ LGPD Compliant`, `🔒 TLS 1.3 / AES-256`, `🔑 MFA Enforced`) para transmitir segurança e credibilidade desde a primeira interação.
+- [ ] **Issue #112 — Indicador de Proteção de Dados no Prontuário (`/(app)/pacientes/[id]`)**: Exibir badge/pílula discreta no cabeçalho do paciente (`🔒 Dados Protegidos por RLS & Criptografia`) com tooltip contextual explicando a segregação e isolamento multi-tenant da clínica.
+- [ ] **Issue #113 — Painel de Governança & Segurança da Clínica (`/(app)/configuracoes/seguranca`)**: Criar visão para o Coordenador visualizar o percentual de adesão ao MFA pela equipe clínica, atalhos de auditoria de acessos e download do termo de governança/proteção de dados.
+- [ ] **Issue #114 — Landing Page Institucional e Central de Segurança (`/seguranca`)**: Construção da nova Landing Page pública (Hero, 4 pilares, provas sociais e badges autorais) e da Central de Segurança & Transparência (`/seguranca`) com o roadmap transparente de segurança.
+
+
+

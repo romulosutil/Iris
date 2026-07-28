@@ -268,6 +268,20 @@ Proposta em 2 estágios:
    Registrado como requisito confirmado (precisa existir um estágio 2), com
    o mecanismo concreto pendente da mesma validação profissional da Seção 5.
 
+**As três saídas possíveis do estágio 2** já estão mapeadas em
+`docs/legal/briefing-duty-to-warn.md` (pergunta 2), cada uma amarrada ao que
+muda em código — resumo:
+
+| Se a resposta profissional for... | Estágio 2 vira |
+| ---------------------------------- | --------------- |
+| Responsabilidade é só do terapeuta; o Iris é ferramenta neutra | Estágio 2 pode notificar fora da clínica; abre discussão sobre "notificar contato de emergência pelo app" como feature |
+| É do terapeuta, mas intermediar cria responsabilidade para o Iris | Estágio 2 **não** notifica ninguém fora da clínica: registra de forma inescapável e exibe o protocolo de crise que a própria clínica cadastrou. O produto nunca é remetente do aviso externo |
+| O Iris não deve participar de escalonamento externo nenhum | Estágio 2 não existe; o produto notifica, registra e para — e a cláusula contratual da pergunta 4 do briefing vira obrigatória |
+
+Enquanto não houver resposta, **nenhuma das três** é implementada — inclusive
+a terceira, porque "não fazer nada" também precisa da cláusula contratual
+correspondente para ser uma decisão, e não uma omissão.
+
 ### 4.3 Por que 2 estágios e não escalonamento contínuo
 
 Um esquema de escalonamento que soa a cada N minutos indefinidamente tende a
@@ -287,6 +301,14 @@ venha de quem tem competência para dá-la — psicólogo(a)/advogado(a)
 consultado(a) pelo Rômulo, nunca deste documento nem do agente de IA.
 Nenhuma implementação do fluxo desta seção deveria avançar sem essas
 respostas.
+
+> **Estado (issue #110):** as perguntas abaixo já estão empacotadas para
+> consulta em **`docs/legal/briefing-duty-to-warn.md`** — com o mecanismo do
+> produto descrito em detalhe, as saídas possíveis de cada resposta mapeadas
+> para o que muda em código, e espaço de resposta. A versão canônica das
+> perguntas passa a ser a de lá; a lista abaixo fica como resumo. **As
+> respostas ainda não existem** — o bloqueio de implementação continua
+> valendo integralmente.
 
 **Perguntas objetivas para o profissional consultado:**
 
