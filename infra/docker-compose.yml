@@ -92,7 +92,41 @@ services:
     volumes:
       - backupdata:/backups
 
+  # Motor de escalonamento de alerta de risco (#122/H1, infra/escalonamento/).
+  # Não sobe por default (profile "escalonamento"). Rodar com:
+  #   docker compose -f infra/docker-compose.yml --profile escalonamento up escalonamento
+  #   docker compose -f infra/docker-compose.yml --profile escalonamento run --rm \
+  #     escalonamento node scripts/escalonamento-risco.mjs --dry-run
+  #
+  # Sem `ports:` de propósito: este serviço não expõe nada e não fala com nada
+  # além do Postgres. Ele muda status no banco e loga — não existe, nem pode
+  # passar a existir, canal de saída para destinatário fora da clínica.
+  escalonamento:
+    profiles: ["escalonamento"]
+    build:
+      # Contexto na RAIZ do repo (não em ./escalonamento) para bater com o que
+      # o Easypanel faz em produção — mesma razão do serviço `backup`.
+      context: ..
+      dockerfile: infra/escalonamento/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Em dev local a role dedicada `iris_escalonamento_login` pode não
+      # existir ainda; o superuser `iris` funciona para exercitar o fluxo. Em
+      # PRODUÇÃO isto é sempre a role de login que herda `iris_escalonamento`
+      # (sem SELECT em tabela nenhuma) — ver infra/README.md.
+      ESCALONAMENTO_DATABASE_URL: "${ESCALONAMENTO_DATABASE_URL:-postgres://iris:iris@postgres:5432/iris}"
+      ESCALONAMENTO_HEARTBEAT_DIR: /heartbeat
+      INTERVALO_S: "${INTERVALO_S:-60}"
+    volumes:
+      # Volume nomeado, não bind: o heartbeat precisa sobreviver a restart do
+      # container para que "heartbeat parado" signifique "motor parado" e não
+      # "container reiniciou agora".
+      - escalonamentodata:/heartbeat
+
 volumes:
   pgdata:
   miniodata:
   backupdata:
+  escalonamentodata:

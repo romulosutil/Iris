@@ -803,3 +803,272 @@ build-storybook` → `storybook-static/`), com Password Protection.
   `DATABASE_URL` do app (app_role, sem DDL). Não rodam dentro do container do
   app; rodam no stage `migrate`, gated ANTES do app (ver §Gate de schema). Dado
   clínico não migra sozinho — o gate é executado por release, não em cada boot.
+
+## Motor de escalonamento de alerta de risco (#122)
+
+Um alerta de risco clínico tem prazo de reconhecimento (15, 60 ou 240 minutos,
+conforme a severidade — tabela §4.1 da spec). Vencido o prazo sem ninguém
+reconhecer, ele **escala sozinho**, em dois estágios:
+
+| de                   | condição                      | para                 |
+| -------------------- | ----------------------------- | -------------------- |
+| `aberto`             | prazo vencido                 | `escalado_estagio_1` |
+| `escalado_estagio_1` | mais um prazo inteiro vencido | `escalado_estagio_2` |
+
+Quem faz isso é um **serviço separado** (`infra/escalonamento/`) que roda uma
+varredura por minuto.
+
+> **O escalonamento é INTERNO À CLÍNICA.** Estágio 1 = todos os coordenadores.
+> Estágio 2 = banner para toda a clínica + responsável técnico + exibição do
+> protocolo de emergência da própria clínica. Em nenhum estágio o Iris avisa
+> família, contato de emergência, SAMU, polícia ou Conselho Tutelar — decisão
+> travada no parecer da #110. Não há webhook, e-mail ou chamada HTTP no
+> serviço, e adicionar um seria reverter essa decisão.
+
+### Por que serviço separado e não um `setInterval` dentro do Next.js
+
+- **O app roda com mais de uma réplica.** Um `setInterval` no processo Next
+  existiria em cada réplica: duas réplicas = duas varreduras simultâneas, e
+  duas linhas de trilha para o mesmo escalonamento.
+- **Ou nenhuma.** Se a instância que "tinha o timer" cair ou reciclar (deploy,
+  OOM, escala a zero), o escalonamento simplesmente para — e para em silêncio,
+  porque a ausência de escalonamento é indistinguível de "nenhum alerta
+  venceu". É a pior falha possível justamente nesta funcionalidade.
+- **Não há lock distribuído neste projeto.** Não existe Redis nem advisory-lock
+  no caminho do app, então não há como eleger uma réplica. Um serviço com
+  `Réplicas = 1` resolve o mesmo problema sem introduzir infraestrutura nova.
+- **Bônus de segurança:** o serviço separado roda com uma role de banco própria
+  que não tem SELECT em tabela nenhuma (ver abaixo). O app não consegue rodar
+  assim, porque precisa ler tudo.
+
+### Passo 1 — criar a role de login em produção (uma vez)
+
+A migração `0049` cria a role `iris_escalonamento` como **NOLOGIN**: ela é só o
+porta-privilégios (EXECUTE em `app_escalonar_risco_vencidos()` e nada mais). A
+role que de fato se conecta é criada **fora das migrações**, mesmo padrão de
+`app_role`/`iris_app`.
+
+1. Gere uma senha forte **com CSPRNG**, no seu terminal. No PowerShell:
+
+   ```powershell
+   [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+   ```
+
+   > `Get-Random` **não** é CSPRNG. Não use.
+   > **A senha nunca é colada em chat, em issue, em PR ou aqui.** Ela vai
+   > direto do seu terminal para o campo do Easypanel.
+
+2. Abra o console do Postgres (Easypanel → serviço do Postgres → Console) e
+   rode, **substituindo `COLE_A_SENHA_AQUI`**:
+
+   ```sql
+   CREATE ROLE iris_escalonamento_login LOGIN PASSWORD 'COLE_A_SENHA_AQUI' IN ROLE iris_escalonamento;
+   ```
+
+3. Confirme que a role herdou o privilégio certo — e **só** ele:
+
+   ```sql
+   -- deve retornar t (true)
+   SELECT has_function_privilege('iris_escalonamento_login', 'app_escalonar_risco_vencidos()', 'EXECUTE');
+
+   -- deve retornar f (false). Se retornar t, PARE: a role está podendo ler
+   -- dado clínico e o desenho de segurança se perdeu em algum lugar.
+   SELECT has_table_privilege('iris_escalonamento_login', 'alerta_risco_clinico', 'SELECT');
+   ```
+
+4. Monte a URL de conexão (é isto que vai na env var do serviço):
+
+   ```
+   postgres://iris_escalonamento_login:<senha>@espectro-mvp-iris-postgres:5432/iris
+   ```
+
+   **Hífen, não underscore, no host** — mesma regra da seção de backup.
+
+### Passo 2 — criar o serviço no Easypanel
+
+Mesmo desenho do serviço de backup. Os nomes de aba abaixo são os que a seção
+de backup deste arquivo já usa; **se o painel tiver mudado e você não achar um
+campo, procure pelo objetivo descrito e confira antes de prosseguir — não
+adivinhe o nome do botão.**
+
+1. **Novo serviço** → tipo **Aplicativo** → Code Source `romulosutil/Iris` →
+   Builder **Dockerfile**, path `infra/escalonamento/Dockerfile`, build context
+   na **raiz**, branch `main`.
+2. **Volume persistente** (aba `Armazenamento`) montado em **`/heartbeat`**.
+   Sem ele, o arquivo de heartbeat some a cada restart e "heartbeat parado"
+   passa a significar "container reiniciou", que é ruído — o sinal de
+   monitoração deixa de valer.
+3. **Env vars** (aba `Ambiente`):
+
+   ```
+   ESCALONAMENTO_DATABASE_URL=postgres://iris_escalonamento_login:<senha>@espectro-mvp-iris-postgres:5432/iris
+   ESCALONAMENTO_HEARTBEAT_DIR=/heartbeat
+   INTERVALO_S=60
+   ```
+
+4. **Comando** (aba `Avançado` → campo **Comando**):
+
+   ```
+   /app/agendador.sh
+   ```
+
+   **Este Easypanel (v2.31.0) não tem cron para serviço de app** — não existe
+   campo "Schedule", não existe tipo de serviço "Cron". Por isso o laço é o
+   `agendador.sh` do repo: o container fica de pé dormindo (poucos MB de RSS) e
+   acorda a cada `INTERVALO_S`.
+
+5. **`Réplicas` = 1.** Não é opcional: duas réplicas produzem duas linhas de
+   trilha de auditoria para o mesmo escalonamento.
+   Não ligar `Tempo de inatividade zero` (não é serviço web).
+
+**Por que 60 segundos e não 5 minutos:** o menor prazo é de 15 minutos. Um tick
+de 5 minutos adicionaria até 5 minutos de atraso sobre 15 — até um terço do
+prazo inteiro, gasto depois que ele já venceu. Com 1 minuto o atraso máximo é
+~7%. O custo é uma consulta indexada por minuto que, quase sempre, não retorna
+nada.
+
+### Como saber que deu certo
+
+Logo depois do primeiro deploy, olhe os **Logs** do serviço no painel. A
+primeira linha esperada é:
+
+```
+[agendador-escalonamento] 2026-07-28T12:00:00Z ativo. intervalo=60s · heartbeat=/heartbeat/.ultima-varredura
+```
+
+E, a cada minuto:
+
+```
+[escalonamento] 2026-07-28T12:01:00.123Z varredura concluída: 0 alerta(s) escalado(s).
+```
+
+`0 alerta(s)` é o resultado normal e saudável — significa que nada venceu.
+
+Agora confirme o **heartbeat**. Easypanel → serviço `escalonamento` → Console:
+
+```bash
+cat /heartbeat/.ultima-varredura
+```
+
+Deve sair um timestamp ISO **de menos de um minuto atrás**. Rode duas vezes com
+um minuto de intervalo: o valor tem que avançar.
+
+### O heartbeat é o alarme — e ele é o alarme sobre o alarme
+
+O arquivo `/heartbeat/.ultima-varredura` é reescrito **só depois de uma
+varredura bem-sucedida**. Se ele parar de avançar, o motor parou.
+
+**Isso importa mais aqui do que em qualquer outro serviço.** Um motor de
+escalonamento parado não gera erro visível dentro do produto: a tela continua
+mostrando alertas em aberto, sem nada indicando que eles deveriam ter escalado
+há vinte minutos. De dentro do Iris, "o motor morreu" e "nada venceu" são
+idênticos. O heartbeat é o único sinal que separa os dois.
+
+**Regra operacional: heartbeat com mais de ~5 minutos de idade é incidente.**
+Cinco minutos = quatro ticks perdidos — folga suficiente para um redeploy
+normal e curta o bastante para não queimar um prazo de 15 minutos inteiro.
+
+### O que fazer se der errado
+
+1. **Leia os logs do serviço no painel.** Uma varredura que falha imprime o
+   erro completo (com stack) em stderr, seguido de:
+
+   ```
+   [agendador-escalonamento] ... ATENÇÃO: varredura FALHOU (exit 1) — N falha(s) seguida(s).
+   ```
+
+   O laço **não morre** numa falha; ele tenta de novo no tick seguinte. Se o
+   problema era transitório (banco reiniciando, deploy do Postgres), você verá
+   `recuperado após N falha(s) seguida(s)` e o heartbeat volta a andar sozinho.
+
+2. **Se o log estiver vazio ou o container parado**, o serviço caiu. Reinicie-o
+   pelo painel e confira o heartbeat de novo.
+
+3. **Se a falha se repete**, as causas prováveis, em ordem:
+   - **Credencial.** Mensagem de `password authentication failed` ou
+     `role ... does not exist`. Reveja o Passo 1 e o valor de
+     `ESCALONAMENTO_DATABASE_URL` **no painel** — abra o campo e olhe, não
+     confie em "eu já configurei".
+   - **Host errado.** `could not translate host name`. Use hífen, não
+     underscore.
+   - **`permission denied for function app_escalonar_risco_vencidos`.** A role
+     de login não está `IN ROLE iris_escalonamento`. Rode a verificação do
+     Passo 1.3.
+   - **`function app_escalonar_risco_vencidos() does not exist`.** A migração
+     `0049` não foi aplicada neste banco. Ver §Gate de schema no deploy.
+
+4. **Enquanto o motor está parado, o escalonamento automático não acontece.**
+   Nada é perdido: assim que ele voltar, a varredura pega tudo que venceu no
+   intervalo (a query olha o estado atual, não um cursor). Mas o atraso é real
+   e é clínico — trate como incidente, não como manutenção.
+
+### Teste de fumaça com alerta sintético
+
+Confirma as **duas** transições de ponta a ponta. Rode no console do Postgres,
+com a role dona — **em ambiente de teste**, não em produção com dado real.
+
+```sql
+-- 1) Cria um alerta JÁ VENCIDO a partir de uma sessão de teste existente.
+--    Troque o UUID por uma sessão real do ambiente de teste.
+INSERT INTO alerta_risco_clinico (
+  clinic_id, patient_id, session_id,
+  categoria, severidade, certeza, trecho_fonte, detalhe,
+  prazo_minutos, prazo_reconhecimento
+)
+SELECT s.clinic_id, s.patient_id, s.id,
+       'ideacao_suicida', 'ideacao_ativa_com_plano', 'explicito',
+       '[alerta sintetico de teste - #122]', '[teste de fumaca do motor]',
+       15, now() - interval '1 minute'
+  FROM session s
+ WHERE s.id = '<UUID_DE_UMA_SESSAO_DE_TESTE>'
+RETURNING id, status;   -- anote o id; status deve vir 'aberto'
+```
+
+```sql
+-- 2) Espere ~1 minuto e confira que o motor pegou.
+--    Esperado: status = escalado_estagio_1, escalado_em preenchido.
+SELECT id, status, escalado_em, escalado_estagio_2_em, canais_notificados
+  FROM alerta_risco_clinico WHERE id = '<ID_ANOTADO>';
+```
+
+```sql
+-- 3) Força o SEGUNDO estágio empurrando o prazo para trás
+--    (2x prazo_minutos = 30 min neste exemplo).
+UPDATE alerta_risco_clinico
+   SET prazo_reconhecimento = now() - interval '31 minutes'
+ WHERE id = '<ID_ANOTADO>';
+```
+
+```sql
+-- 4) Espere mais ~1 minuto. Esperado: status = escalado_estagio_2.
+SELECT id, status, escalado_estagio_2_em, canais_notificados
+  FROM alerta_risco_clinico WHERE id = '<ID_ANOTADO>';
+
+-- 5) A trilha imutável tem que ter DUAS linhas, uma por estágio.
+SELECT acao, detalhe, criado_em
+  FROM audit_log
+ WHERE entidade = 'alerta_risco_clinico' AND entidade_id = '<ID_ANOTADO>'
+ ORDER BY criado_em;
+```
+
+```sql
+-- 6) Limpeza (só em ambiente de teste).
+DELETE FROM alerta_risco_clinico WHERE id = '<ID_ANOTADO>';
+```
+
+Se o passo 2 não mudar o status, o problema está no motor — volte para «O que
+fazer se der errado». Se mudar, mas o passo 5 não trouxer as duas linhas, o
+problema está na migração, não no serviço.
+
+> **Ensaio sem mutação.** Para só _contar_ quantos alertas escalariam agora,
+> sem escalar nada:
+>
+> ```bash
+> ESCALONAMENTO_DATABASE_URL='postgres://iris:<senha da role dona>@...' \
+>   node /app/scripts/escalonamento-risco.mjs --dry-run
+> ```
+>
+> Isso exige **SELECT na tabela**, que a role do job propositalmente não tem —
+> então o `--dry-run` só funciona com a role dona, à mão. O serviço em produção
+> nunca roda com essa flag, e o `--dry-run` **não** atualiza o heartbeat (para
+> uma inspeção manual jamais mascarar um motor parado).
