@@ -27,7 +27,12 @@
 
 ## 🏁 Sessão 28/07/2026 — Consolidação da Política de Retenção de Dados (branch `docs/politica-retencao-dados`)
 
-**Entregue:** atualização e consolidação do documento `docs/legal/politica-retencao-dados.md` travando a matriz de retenção unificada para o MVP (#122, #116, #89):
+**Entregue:** consolidação do `docs/legal/politica-retencao-dados.md` com a
+matriz de retenção unificada (#122, #116, #89). O documento **continua
+RASCUNHO pendente de parecer de advogado** — consolidar prazos não substitui a
+validação formal, que segue bloqueando o piloto com dado real (seção B). Nada
+do texto original de 09/07 (tabela por conselho com fontes, opção de
+anonimização, aviso prévio de 90 dias, pendência do DPO) foi removido:
 - **Prontuário Multidisciplinar:** Default `MAX(18 anos do menor, alta + 10 anos)`, configurável pela clínica em `clinic.politica_retencao_meses`.
 - **Alertas de Risco Clínico (#122):** Pseudonimização LGPD (`pseudonimizado_em IS NOT NULL`, zerando `patient_id` e `session_id`), preservando o registro anônimo para defesa jurídica do software.
 - **Logs de Acesso (#116):** mínimo de 6 meses (Marco Civil da Internet, art. 15).
