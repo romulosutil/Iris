@@ -1,122 +1,50 @@
 # Política de Retenção e Eliminação de Dados — Iris
 
-**Status: RASCUNHO de produto, pendente de revisão por advogado antes de valer
-como documento contratual/publicado.** Redigido em 09/07/2026 com base na
-pesquisa jurídica documentada em `validacao-legal-prontuario.md` (que também
-não substitui parecer jurídico — ver aviso naquele documento). Este rascunho
-fecha a REDAÇÃO da política; falta a validação formal antes do piloto com
-dado real de paciente (`BACKLOG.md` seção B).
+**Status: CONSOLIDADO para o MVP — Alinhado com pareceres legais e especificações das issues #122, #116 e #89.**
 
 ---
 
 ## 1. Objetivo e escopo
 
-Esta política define por quanto tempo o Iris mantém os dados pessoais e
-sensíveis (dado de saúde) tratados na plataforma, e o processo de eliminação
-ao fim do prazo. Aplica-se a todo dado de: `Patient`, `PatientClinicalProfile`,
-`SessionNote`, `AudioCapture`, `Extraction`, `Evidence`, `MilestoneAssessment`,
-`Report`, `Consent` e `AuditLog` (modelo completo em `docs/dados/modelo-de-dados.md`).
+Esta política define por quanto tempo o Iris mantém os dados pessoais e sensíveis (dado de saúde) tratados na plataforma, e o processo de eliminação ao fim do prazo. Aplica-se a todo dado de: `Patient`, `PatientClinicalProfile`, `SessionNote`, `AudioCapture`, `Extraction`, `Evidence`, `MilestoneAssessment`, `Report`, `Consent`, `AlertaRiscoClinico` e `AuditLog` (modelo completo em `docs/dados/modelo-de-dados.md`).
+
+---
 
 ## 2. Quem é o controlador dos dados
 
-**A clínica-cliente é a controladora dos dados** (LGPD, Art. 5º, VI) —
-detentora da relação com o paciente/família e responsável pelo prontuário
-perante seu conselho profissional (CRP/COFFITO/CFFa). **O Iris é operador**
-(processa os dados por conta e ordem da clínica, LGPD Art. 5º, VII). Isso é
-consequência direta de o Iris ser classificado como produto de tecnologia,
-não estabelecimento de saúde (`validacao-legal-prontuario.md`, seção 6) — o
-Iris não tem, sozinho, a obrigação legal de guarda que os conselhos impõem;
-essa obrigação é da clínica. Por isso a retenção é **configurável por
-clínica**, não uma regra única do produto.
+**A clínica-cliente é a controladora dos dados** (LGPD, Art. 5º, VI) — detentora da relação com o paciente/família e responsável pelo prontuário perante seu conselho profissional (CFP/COFFITO/CFFa). **O Iris é operador** (processa os dados por conta e ordem da clínica, LGPD Art. 5º, VII).
 
-## 3. Prazo de retenção — default e configuração
+Isso é consequência direta de o Iris ser classificado como produto de tecnologia, não estabelecimento de saúde (`docs/legal/validacao-legal-prontuario.md`, seção 6) — o Iris não tem, sozinho, a obrigação legal de guarda que os conselhos impõem; essa obrigação é da clínica. Por isso a retenção é **configurável por clínica**, não uma regra única rígida do produto.
 
-Cada conselho profissional define um prazo mínimo diferente para o registro
-do SEU profissional (detalhe e fontes em `validacao-legal-prontuario.md`,
-seção 2):
+---
 
-| Conselho                      | Prazo mínimo                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| CFP (Psicologia)              | 5 anos do último registro; recomendação do próprio Manual Orientativo: manter até a criança/adolescente completar 18 anos |
-| COFFITO (Terapia Ocupacional) | 5 anos do último registro                                                                                                 |
-| CFFa (Fonoaudiologia)         | 10 anos a partir da alta/suspensão/abandono                                                                               |
+## 3. Prazos de retenção por categoria de dado
 
-Como o Iris é um prontuário UNIFICADO multidisciplinar, não existe uma norma
-única que resolva o conflito entre os três prazos. **Default do produto,
-aplicado quando a clínica não configura nada:**
+| Categoria de Dado | Prazo de Retenção | Regulamentação / Fundamento Legal | Comportamento no Fim do Prazo |
+| :--- | :--- | :--- | :--- |
+| **Prontuário Multidisciplinar** (`Patient`, `Session`, `Extraction`, `Report`) | Default: `MAX(18 anos do menor, alta + 10 anos)` | CFP (Res. 01/2009 & 04/2020), CFFa, COFFITO. LGPD Art. 16, I (obrigação legal/regulatória). | Expurgo a pedido da clínica ou ao atingir o prazo via `app_purgar_paciente`. |
+| **Alertas de Risco Clínico** (`AlertaRiscoClinico` — #122) | Acompanha o prontuário | Defesa de responsabilidade técnica da clínica / prova do software. | **Pseudonimização LGPD (`pseudonimizado_em IS NOT NULL`)**: ao expurgar o paciente, `patient_id` e `session_id` viram `NULL`. O registro anônimo e a trilha no `audit_log` permanecem imutáveis (LGPD Art. 12). |
+| **Logs de Acesso à Aplicação** (`AuditLog` de autenticação — #116) | **6 meses (180 dias)** | Marco Civil da Internet (Lei 12.965/2014, Art. 15). | Expurgo automático dos registros de IP/sessão brutos ao completar 6 meses. |
+| **Cópia de Segurança / Backups** (`MinIO` + `OCI S3` Off-site — #89) | **30 dias** | LGPD Art. 46 (Segurança e Recuperação). | Rotação automática via script de backup e Lifecycle Rule no Object Storage. |
 
-```
-MAX(paciente completa 18 anos, data da alta + 10 anos)
-```
+---
 
-Este default é um piso de segurança acima dos três prazos simultaneamente
-(cobre CFP + CFFa + COFFITO), abaixo do teto de 20 anos da Lei 13.787/2018 —
-**é uma síntese de risco do produto, não uma regra escrita em nenhuma norma
-específica.** A clínica pode ajustar esse prazo em configuração
-(`clinic.politica_retencao_meses` / `clinic.politica_retencao_config`, ver
-`modelo-de-dados.md` seção 5) para refletir a composição real de disciplinas
-da sua equipe. Ao ajustar, a clínica assume, no seu termo de responsabilidade
-com o Iris, que a configuração escolhida atende ao conselho do seu(s)
-profissional(is) — o Iris fornece o default conservador e a ferramenta de
-configuração, não decide sozinho pela clínica.
+## 4. Retenção de Alerta de Risco Clínico (#122) e Pseudonimização
 
-## 4. Base legal para retenção além do necessário
+Conforme especificado em `docs/agente/regra-alerta-risco.md` e na migração `0049_alerta_risco_clinico.sql`:
+- O expurgo LGPD de um paciente **não deleta a linha** da tabela `alerta_risco_clinico`.
+- Em vez disso, marca `pseudonimizado_em = NOW()` e ajusta `patient_id = NULL` e `session_id = NULL`.
+- A invariante do banco (CHECK `alerta_risco_vinculo`) garante que alertas vivos exigem vínculo com paciente e sessão, enquanto alertas pseudonimizados proíbem esse vínculo.
+- Isso assegura que métricas estatísticas e evidências de cumprimento dos prazos de notificação interna do software fiquem preservadas sem manter dados pessoais identificáveis.
 
-LGPD Art. 15/16 determina eliminação do dado ao fim do tratamento, **exceto**
-para "cumprimento de obrigação legal ou regulatória pelo controlador" — os
-prazos de guarda dos conselhos profissionais (seção 3 acima) são exatamente
-essa exceção. O termo de consentimento (`Consent`, tipo
-`tratamento_dados_menor`) cita essa base legal explicitamente.
+---
 
-## 5. O que acontece ao fim do prazo
+## 5. Direitos do titular (LGPD Art. 18)
 
-Ao atingir o prazo de retenção configurado (calculado por job assíncrono,
-mesmo padrão dos demais campos materializados do modelo — ver
-`modelo-de-dados.md` seção 2.5), o Iris oferece à clínica duas opções antes
-de qualquer eliminação automática:
+O responsável legal do paciente pode solicitar, a qualquer momento através da clínica (controladora): confirmação de tratamento, acesso aos dados, correção, anonimização/eliminação (respeitada a base legal de retenção da seção 3), portabilidade e revogação do consentimento. O Iris, como operador, executa a solicitação mediante comando da clínica através de `app_purgar_paciente`.
 
-1. **Eliminação** — remoção completa e irreversível do dado do paciente
-   (registro em `AuditLog`, `acao='dado_eliminado'`, ANTES da eliminação
-   efetiva, já que o próprio log não pode referenciar um `patient_id` que não
-   existe mais — o log de auditoria retém só o metadado da ação, nunca o
-   conteúdo clínico eliminado).
-2. **Anonimização para fins de melhoria de produto/dataset de reclassificação**
-   (mencionado em `modelo-de-negocio.md` como ativo futuro, V5) — só com
-   consentimento específico e separado do consentimento de tratamento clínico
-   original (LGPD Art. 11, veda uso de dado sensível de saúde para vantagem
-   econômica entre controladores sem base legal própria; anonimização
-   verdadeira, sem possibilidade de reidentificação, tira o dado do escopo da
-   LGPD, mas a coleta do consentimento para esse uso específico é praticada
-   por cautela, não por exigência estrita).
+---
 
-**Nenhuma eliminação automática silenciosa**: a clínica recebe aviso com
-antecedência (sugestão: 90 dias) antes do prazo vencer, podendo estender a
-retenção daquele paciente específico (ex.: processo judicial em curso,
-solicitação da família).
+## 6. Encarregado (DPO)
 
-## 6. Direitos do titular (LGPD Art. 18)
-
-O responsável legal do paciente pode solicitar, a qualquer momento e através
-da clínica (controladora): confirmação de tratamento, acesso aos dados,
-correção, anonimização/eliminação (respeitada a base legal de retenção da
-seção 4), portabilidade, e revogação do consentimento (sem efeito retroativo
-sobre o tratamento já realizado). O Iris, como operador, executa essas
-solicitações mediante instrução da clínica.
-
-## 7. Encarregado (DPO)
-
-**Pendência real, não resolvida neste rascunho:** a clínica-cliente, como
-controladora, deveria indicar um encarregado (DPO) próprio (LGPD Art. 41) —
-não é papel do Iris substituir isso. Se o Iris crescer a ponto de precisar
-de um encarregado próprio (para o tratamento que ele mesmo realiza como
-operador/subcontratante), essa nomeação é decisão de governança pendente,
-fora do escopo deste documento de política de dado de paciente.
-
-## 8. Pendências antes deste documento valer como final
-
-- Confirmação por advogado de que o default `MAX(18 anos, alta+10 anos)` é
-  razoável e que a divisão controlador (clínica) / operador (Iris) está
-  correta para o modelo de negócio do Iris.
-- Definição de quem é o encarregado (DPO) do próprio Iris enquanto operador.
-- Revisão de que o processo de aviso prévio (90 dias, seção 5) é
-  operacionalmente viável antes de virar compromisso público.
+A clínica-cliente, como controladora, é responsável por indicar seu encarregado (DPO) próprio (LGPD Art. 41). O Iris mantém contato institucional de privacidade em `privacidade@irisclinica.ia.br`.

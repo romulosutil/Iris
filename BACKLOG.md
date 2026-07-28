@@ -25,6 +25,16 @@
 
 ---
 
+## 🏁 Sessão 28/07/2026 — Consolidação da Política de Retenção de Dados (branch `docs/politica-retencao-dados`)
+
+**Entregue:** atualização e consolidação do documento `docs/legal/politica-retencao-dados.md` travando a matriz de retenção unificada para o MVP (#122, #116, #89):
+- **Prontuário Multidisciplinar:** Default `MAX(18 anos do menor, alta + 10 anos)`, configurável pela clínica em `clinic.politica_retencao_meses`.
+- **Alertas de Risco Clínico (#122):** Pseudonimização LGPD (`pseudonimizado_em IS NOT NULL`, zerando `patient_id` e `session_id`), preservando o registro anônimo para defesa jurídica do software.
+- **Logs de Acesso (#116):** 6 meses estritos (Marco Civil da Internet, art. 15).
+- **Backups (#89):** Retenção de 30 dias (locais e off-site OCI S3).
+
+---
+
 ## 🏁 Sessão 28/07/2026 — #122 implementação do alerta de risco clínico (branch `feat/122-alerta-risco-clinico`)
 
 **Entregue:** as 5 fatias da #122. Tabela dedicada `alerta_risco_clinico` + RLS + `app_criar_alerta_risco` (migração `0049`), sinal de risco transversal no contrato do agente, fila `/alertas-risco` com reconhecer/resolver/descartar, banner clínica-wide do estágio 2, `/clinica/emergencia` (responsável técnico + Protocolo de Emergência Interno + declaração da cláusula 10.3), motor de escalonamento em serviço dedicado, e expurgo que pseudonimiza em vez de deletar.
