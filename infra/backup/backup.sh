@@ -437,25 +437,36 @@ log_info "arquivo=${GLOBALS_NAME} tamanho_bytes=${GLOBALS_SIZE_BYTES} sha256=${G
 # --- upload pro MinIO --------------------------------------------------------
 readonly MC_ALIAS="irisbackup"
 
+# Declarado fora do bloco porque o prune remoto, lá embaixo, também depende de o
+# alias existir — e com S3_ENDPOINT vazio o `set -u` mataria a leitura.
+minio_ok=1
+
 if [[ -z "${S3_ENDPOINT}" ]]; then
 	log_info "S3_ENDPOINT vazio — pulando upload (esperado em dev local sem MinIO)"
 else
 	# Alias configurado por stdin — ver mc_configurar_alias() para o porquê de
 	# não usar MC_HOST_* (URL, quebra com `/` no segredo) nem argv (vaza em ps).
+	# Alias falhou => NÃO tenta o upload. Sem este gate o fluxo cai no `mc mb`
+	# contra um alias que não existe e uma credencial errada vira três erros
+	# empilhados, sendo o último ("upload pro MinIO falhou") o que aponta para a
+	# camada errada. Mesmo gate que a réplica off-site já usa.
 	if ! mc_configurar_alias "${MC_ALIAS}" "${S3_ENDPOINT}" "${S3_ACCESS_KEY}" "${S3_SECRET_KEY}"; then
-		log_error "falha ao configurar o alias do mc — conferir S3_ENDPOINT/credenciais (valores não são logados)"
+		log_error "falha ao configurar o alias do mc — conferir S3_ENDPOINT/credenciais (valores não são logados). Upload pro MinIO pulado."
 		EXIT_CODE="${EXIT_REPLICACAO_PARCIAL}"
+		minio_ok=0
 	fi
 
-	log_info "subindo ${FINAL_NAME} e ${GLOBALS_NAME} para ${MC_ALIAS}/${S3_BACKUP_BUCKET} (endpoint mascarado)"
+	if [[ "${minio_ok}" -eq 1 ]]; then
+		log_info "subindo ${FINAL_NAME} e ${GLOBALS_NAME} para ${MC_ALIAS}/${S3_BACKUP_BUCKET} (endpoint mascarado)"
 
-	if mc mb --ignore-existing "${MC_ALIAS}/${S3_BACKUP_BUCKET}" >/dev/null 2>&1 \
-		&& mc cp --quiet "${FINAL_PATH}" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/${FINAL_NAME}" >/dev/null \
-		&& mc cp --quiet "${GLOBALS_PATH}" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/${GLOBALS_NAME}" >/dev/null; then
-		log_info "upload concluído (dump + globals)"
-	else
-		log_error "upload pro MinIO falhou (dump ou globals) — backup local existe, mas a cópia no MinIO não está completa. Marcando replicação parcial."
-		EXIT_CODE="${EXIT_REPLICACAO_PARCIAL}"
+		if mc mb --ignore-existing "${MC_ALIAS}/${S3_BACKUP_BUCKET}" >/dev/null 2>&1 \
+			&& mc cp --quiet "${FINAL_PATH}" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/${FINAL_NAME}" >/dev/null \
+			&& mc cp --quiet "${GLOBALS_PATH}" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/${GLOBALS_NAME}" >/dev/null; then
+			log_info "upload concluído (dump + globals)"
+		else
+			log_error "upload pro MinIO falhou (dump ou globals) — backup local existe, mas a cópia no MinIO não está completa. Marcando replicação parcial."
+			EXIT_CODE="${EXIT_REPLICACAO_PARCIAL}"
+		fi
 	fi
 fi
 
@@ -607,7 +618,7 @@ while IFS= read -r -d '' orfao; do
 done < <(find "${BACKUP_DIR}" -maxdepth 1 -type d -name '.offsite.*' -mtime +1 -print0)
 
 # --- prune remoto -------------------------------------------------------------
-if [[ -n "${S3_ENDPOINT}" ]]; then
+if [[ -n "${S3_ENDPOINT}" && "${minio_ok}" -eq 1 ]]; then
 	log_info "prune remoto: removendo objetos com mais de ${RETENTION_DAYS}d em ${MC_ALIAS}/${S3_BACKUP_BUCKET}"
 	if ! mc rm --recursive --force --older-than "${RETENTION_DAYS}d" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/" >/dev/null 2>&1; then
 		log_error "prune remoto falhou (não fatal para o backup do dia, mas fica registrado)"

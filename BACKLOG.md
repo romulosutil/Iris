@@ -110,7 +110,22 @@ globals (furo do PR #85) e imprime o sha256 do dump decifrado para bater com o l
 Chave privada só por **stdin**: não é argv (`ps`), não é env var (`docker inspect`) e não é
 volume; o script recusa `AGE_IDENTITY` explicitamente. Coberto pela seção 10 do
 `test-offsite.sh`, **incluindo a asserção de que ele FALHA com a chave errada** — verificador
-que passa com qualquer chave não prova nada. 31 asserções no total.
+que passa com qualquer chave não prova nada. 33 asserções no total.
+
+**Rodada de review sobre o próprio `verify-offsite.sh`.** Quatro achados, todos no mesmo tema: a
+ferramenta de diagnóstico dava o diagnóstico ERRADO em caminhos plausíveis, e ela é justamente a
+que roda sob pressão de DR. (1) `mc cp` descartava o `stderr` e a mensagem seguinte afirmava
+"par INCOMPLETO no bucket" — como a credencial de produção é write-only por design, um
+`ListBucket` sem `GetObject` viraria um incidente classe PR #85 inventado. (2) `grep -c ' TABLE '`
+casava também com as linhas `TABLE DATA` do TOC e reportava o **dobro** das tabelas, num artefato
+cuja função inteira é servir de evidência; virou contagem por campo (`awk`), e o `N_DADOS`, que
+era calculado e nunca cobrado, agora barra dump só-de-schema. (3) `OFFSITE_S3_PATH_STYLE` não era
+validado como no `backup.sh`, então um typo saía como "mc alias set falhou" — que o runbook
+condiciona a ler como credencial. (4) argumento livre sem validação: nome digitado pela metade
+fazia os dois downloads darem 404 e reproduzia o falso "par INCOMPLETO". Junto, no `backup.sh`:
+falha do alias do MinIO caía direto no `mc mb`/`mc cp` contra alias inexistente, empilhando três
+erros cujo último apontava para a camada errada — agora o upload e o prune remoto são gateados
+por `minio_ok`.
 
 **Pendências reais que sobraram da #86** (o upload funcionar não fecha nenhuma delas):
 

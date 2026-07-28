@@ -96,6 +96,25 @@ readonly OFFSITE_S3_BUCKET="${OFFSITE_S3_BUCKET:-iris-backups-offsite}"
 readonly OFFSITE_REGION="${OFFSITE_S3_REGION:-}"
 readonly OFFSITE_PATH_STYLE="${OFFSITE_S3_PATH_STYLE:-auto}"
 
+# Mesma validação do backup.sh. Sem ela um typo (`onn`) chega cru no
+# `mc alias set --path` e sai como "mc alias set falhou" — que o runbook
+# condiciona a ler como problema de credencial. Este script roda sob pressão de
+# DR; não é hora de diagnosticar errado.
+if ! [[ "${OFFSITE_PATH_STYLE}" =~ ^(auto|on|off)$ ]]; then
+	log_error "OFFSITE_S3_PATH_STYLE precisa ser auto, on ou off — recebido: ${OFFSITE_PATH_STYLE}"
+	exit 1
+fi
+
+# O argumento opcional vira o nome do objeto e a raiz de onde o nome do globals
+# é derivado. Sem validar, um nome digitado pela metade (ou o nome do globals no
+# lugar do dump) faz os dois downloads darem 404 e o operador recebe a mensagem
+# de "par INCOMPLETO no bucket" — um incidente de gravidade máxima — por causa de
+# um erro de digitação.
+if [[ -n "${OBJETO_ALVO}" ]] && ! [[ "${OBJETO_ALVO}" =~ ^iris-[0-9]{8}T[0-9]{6}Z\.dump\.age$ ]]; then
+	log_error "argumento inválido: '${OBJETO_ALVO}'. Esperado o nome do DUMP cifrado, no formato iris-YYYYMMDDTHHMMSSZ.dump.age (o nome dos globals é derivado dele). Sem argumento, verifica o par mais recente."
+	exit 1
+fi
+
 if [[ -t 0 ]]; then
 	log_error "stdin é um terminal — a chave privada age não foi passada. Ver o cabeçalho deste arquivo para a linha de comando completa."
 	exit 1
@@ -162,9 +181,15 @@ log_info "verificando o par ${NOME_DUMP} + ${NOME_GLOBALS}"
 
 # --- download ------------------------------------------------------------------
 for objeto in "${NOME_DUMP}" "${NOME_GLOBALS}"; do
-	if ! MC_REGION="${OFFSITE_REGION}" mc cp --quiet \
-		"${MC_ALIAS}/${OFFSITE_S3_BUCKET}/${objeto}" "${TMP_DIR}/${objeto}" >/dev/null 2>&1; then
-		log_error "falha ao baixar ${objeto}. Se o dump baixou e o globals não, o par está INCOMPLETO no bucket — um restore com esse artefato recria as tabelas e nenhuma policy de RLS (ver PR #85)."
+	# Capturar o stderr do mc, não descartá-lo: a credencial de produção é
+	# write-only por design, então `ListBucket` sem `GetObject` é um desfecho
+	# provável. Sem a resposta do provedor, um 403 AccessDenied fica
+	# indistinguível de um 404, e a mensagem abaixo — que afirma uma causa —
+	# manda o operador tratar como par incompleto (incidente classe PR #85) uma
+	# réplica íntegra com credencial errada.
+	if ! saida_cp="$(MC_REGION="${OFFSITE_REGION}" mc cp --quiet \
+		"${MC_ALIAS}/${OFFSITE_S3_BUCKET}/${objeto}" "${TMP_DIR}/${objeto}" 2>&1)"; then
+		log_error "falha ao baixar ${objeto}. Se for negação de acesso, é a credencial (a de produção é write-only — gerar uma de LEITURA temporária). Se for objeto inexistente e o outro do par tiver baixado, o par está INCOMPLETO no bucket — um restore com esse artefato recria as tabelas e nenhuma policy de RLS (ver PR #85). Resposta: ${saida_cp//${OFFSITE_S3_SECRET_KEY}/***}"
 		exit 1
 	fi
 done
@@ -203,11 +228,25 @@ fi
 
 # Um dump VAZIO também passa no `--list`. Contar objetos é o que separa "é um
 # dump" de "é o backup de um banco com dado dentro".
-N_TABELAS="$(grep -c ' TABLE ' "${TMP_DIR}/toc.txt" || true)"
-N_DADOS="$(grep -c 'TABLE DATA ' "${TMP_DIR}/toc.txt" || true)"
+#
+# Contado por CAMPO, não por substring: a linha de dados do TOC é
+# `<id>; <oid> <oid> TABLE DATA <schema> <tabela> <dono>`, então um `grep ' TABLE '`
+# casa também com ela e reporta o dobro das tabelas. Número errado no artefato
+# cuja função inteira é servir de evidência é pior do que número nenhum.
+N_TABELAS="$(awk '$4 == "TABLE" && $5 != "DATA"' "${TMP_DIR}/toc.txt" | wc -l)"
+N_DADOS="$(awk '$4 == "TABLE" && $5 == "DATA"' "${TMP_DIR}/toc.txt" | wc -l)"
 
 if [[ "${N_TABELAS}" -lt 1 ]]; then
 	log_error "o dump decifra e é válido, mas não tem NENHUMA tabela. Backup de banco vazio — verificar PGDATABASE no serviço de backup."
+	exit 1
+fi
+
+# Schema sem dado é um desfecho real e silencioso: `pg_dump --schema-only` por
+# engano produz um artefato que decifra, passa no `--list` e tem todas as
+# tabelas. No dia do desastre ele restaura um banco vazio. O cabeçalho promete
+# "com tabelas E com dado" — aqui é onde a promessa é cobrada.
+if [[ "${N_DADOS}" -lt 1 ]]; then
+	log_error "o dump tem ${N_TABELAS} tabela(s) mas NENHUMA entrada TABLE DATA — é um dump só de schema. Restaurar isto recria a estrutura e ZERO dado clínico. Verificar as flags do pg_dump no backup.sh."
 	exit 1
 fi
 

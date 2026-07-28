@@ -568,6 +568,49 @@ else
 	fail "bucket vazio não teve diagnóstico próprio (exit ${EXIT_VAZIO})"
 fi
 
+# e) argumento malformado tem diagnóstico próprio. Sem a validação, um nome
+#    digitado pela metade (ou o nome do globals no lugar do dump) faz os DOIS
+#    downloads darem 404 e o operador recebe "par INCOMPLETO no bucket" — um
+#    incidente classe PR #85 — por causa de um erro de digitação, no meio de um
+#    DR. O diagnóstico errado aqui custa mais caro do que em qualquer outro
+#    ponto do script.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | "${COMPOSE[@]}" run --rm --no-deps -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	backup ./verify-offsite.sh iris-20260728T024929Z.globals.sql.age \
+	>/tmp/iris-verify-arg.log 2>&1
+EXIT_ARG=$?
+set -e
+
+if [[ "${EXIT_ARG}" -ne 0 ]] && grep -q 'argumento inválido' /tmp/iris-verify-arg.log; then
+	ok "argumento fora do formato do dump => erro próprio, não 'par INCOMPLETO'"
+else
+	fail "verify-offsite.sh aceitou argumento malformado (exit ${EXIT_ARG}) — diagnóstico vira incidente falso"
+fi
+
+# f) mesmo guard de OFFSITE_S3_PATH_STYLE que o backup.sh tem. Sem ele o valor
+#    cru chega no `mc alias set --path` e o erro sai como "mc alias set falhou",
+#    que o runbook condiciona a ler como problema de CREDENCIAL.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | "${COMPOSE[@]}" run --rm --no-deps -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	-e OFFSITE_S3_PATH_STYLE=onn \
+	backup ./verify-offsite.sh >/tmp/iris-verify-path.log 2>&1
+EXIT_PATH=$?
+set -e
+
+if [[ "${EXIT_PATH}" -ne 0 ]] && grep -q 'OFFSITE_S3_PATH_STYLE precisa ser' /tmp/iris-verify-path.log; then
+	ok "OFFSITE_S3_PATH_STYLE inválido no verify => erro nomeado, não 'alias falhou'"
+else
+	fail "verify-offsite.sh não validou OFFSITE_S3_PATH_STYLE (exit ${EXIT_PATH})"
+fi
+
 # ---------------------------------------------------------------------------
 printf '\n[test-offsite] %d passaram, %d falharam\n\n' "${TESTES_OK}" "${TESTES_FALHOS}"
 [[ "${TESTES_FALHOS}" -eq 0 ]]
