@@ -25,6 +25,29 @@
 
 ---
 
+## 🏁 Sessão 28/07/2026 — #122 implementação do alerta de risco clínico (branch `feat/122-alerta-risco-clinico`)
+
+**Entregue:** as 5 fatias da #122. Tabela dedicada `alerta_risco_clinico` + RLS + `app_criar_alerta_risco` (migração `0049`), sinal de risco transversal no contrato do agente, fila `/alertas-risco` com reconhecer/resolver/descartar, banner clínica-wide do estágio 2, `/clinica/emergencia` (responsável técnico + Protocolo de Emergência Interno + declaração da cláusula 10.3), motor de escalonamento em serviço dedicado, e expurgo que pseudonimiza em vez de deletar.
+
+**Verificado:** `test:rls` 426/426 · unitários 511/511 · ARC-1..ARC-5 e os dois estágios de escalonamento passando · `lint` 0 erros · `build` OK.
+
+### Decisões novas travadas nesta sessão
+
+- **`app_role` não tem INSERT em `alerta_risco_clinico`.** Criar alerta é privilégio do caminho do agente, via SECURITY DEFINER que resolve o prazo no banco. INSERT direto permitiria forjar severidade e prazo a partir do cliente.
+- **`patient_id`/`session_id` nulos-permitidos + CHECK `alerta_risco_vinculo`.** A §7 pedia `notNull` e o H2 exige pseudonimizar em vez de deletar, mas o erasure DELETA `patient` e `session` — as duas coisas não cabiam na mesma coluna. A invariante "todo alerta vivo tem paciente e sessão" passou para o CHECK.
+- **`audit_log.ator_id` perdeu o NOT NULL** (`ator_id IS NULL` = ação automática do sistema). O escalonamento não tem ator humano; atribuí-lo a alguém seria registrar numa trilha-prova uma ação que a pessoa não praticou. Confirmado com o Rômulo antes de aplicar.
+- **Sinal de risco não pode ser engolido pelo `.catch([])` de `sinalizacoes`.** Um preprocess levanta a forma R20 para um campo estrito antes da validação: sinalização comum degrada em silêncio, risco de vida não.
+- **Idempotência de re-extração** por (sessão, trecho, categoria, severidade) — não é dedupe clínico; dois relatos distintos na mesma sessão continuam gerando duas linhas (§3.2).
+- **Migração `0049` ficou com a #122**; a spec de consentimento de titular adulto foi renumerada para `0050`.
+
+### Aberto — não fecha a #122 sozinho
+
+- **Provisionar o serviço de escalonamento no Easypanel** (decisão de infra de via única, documentada passo a passo no `infra/README.md`) e **exercitar o estágio 2 em produção com alerta sintético** — item 3 da definição de pronto, ainda não cumprido. Precedente direto de job que falha em silêncio: #108.
+- **Push e e-mail não existem no projeto** (sem VAPID/service worker, sem provedor de e-mail). O piso da §4 (fila persistente + badge + banner) está entregue e o dispatcher já é plugável; canal ausente é registrado como indisponível em `canais_notificados`, nunca omitido. Decidir provedor de e-mail é pré-requisito para o e-mail ao responsável técnico no estágio 2.
+- **Retenção**: cruza com #116 (Marco Civil art. 15) e #89 (backup). A política de retenção do registro de risco seguiu `clinic.politica_retencao_meses`; a decisão única para as três ainda não foi tomada.
+
+---
+
 ## 🏁 Sessão 27/07/2026 — #86 réplica off-site cifrada + evidência de residência BR (#102 aberta)
 
 **Entregue (branch `infra/86-replica-offsite-backup`):** passo 6 do `backup.sh` — terceira
