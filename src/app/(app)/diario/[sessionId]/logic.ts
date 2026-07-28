@@ -14,6 +14,8 @@ import {
 } from "@/db/schema";
 import { resolveProvider } from "@/lib/extraction/provider";
 import type { ExtractionDraft } from "@/lib/extraction/provider";
+import type { AlertaRiscoAgente } from "@/lib/extraction/agent-output-schema";
+import { registrarAlertaRisco } from "@/lib/risco/registrar";
 import { loadCanonicalContext } from "@/lib/extraction/context-loader";
 import { deveReextrair } from "@/lib/extraction/reextraction-policy";
 
@@ -285,7 +287,14 @@ export async function consolidarSessao(
           })
         : null;
 
-      return { numero, reextrair, isDemo: cl!.isDemo, metas, contexto };
+      return {
+        numero,
+        reextrair,
+        isDemo: cl!.isDemo,
+        metas,
+        contexto,
+        patientId: sess!.patientId,
+      };
     });
 
     // Texto inalterado (e sem pendência) → não chama LLM, não apaga nada.
@@ -297,14 +306,17 @@ export async function consolidarSessao(
     //    nem locks durante a chamada de vários segundos.
     const provider = resolveProvider({ isDemo: prep.isDemo });
     let drafts: ExtractionDraft[];
+    let alertaRisco: AlertaRiscoAgente | null = null;
     try {
-      drafts = await provider.extrair({
+      const saida = await provider.extrair({
         sessionId: sid,
         clinicId: ctx.clinicId,
         notaConsolidada: novoTexto,
         metasAtivas: prep.metas,
         contextoCanonico: prep.contexto,
       });
+      drafts = saida.drafts;
+      alertaRisco = saida.alertaRisco;
     } catch (err) {
       console.error("extração falhou (marcando pendente):", err);
       drafts = [PENDENTE_DRAFT];
@@ -336,6 +348,24 @@ export async function consolidarSessao(
         );
       }
     });
+
+    // ── Fase D: sinal de risco transversal (#122, R20 / R5-TC).
+    //    FORA da fila de validação por exceção do coordenador (V1) e depois da
+    //    gravação das extrações, mas em transação própria: um erro ao gravar
+    //    extração não pode engolir um alerta de risco, e vice-versa.
+    if (alertaRisco) {
+      const r = await registrarAlertaRisco(ctx, {
+        patientId: prep.patientId,
+        sessionId: sid,
+        risco: alertaRisco,
+      });
+      if ("erro" in r) {
+        // Não derruba a consolidação (o texto do terapeuta já está salvo), mas
+        // devolve o erro para a UI — o terapeuta precisa saber que o alerta
+        // não subiu, senão presume que a clínica foi avisada e não foi.
+        return { numeroSequencial: prep.numero ?? undefined, error: r.erro };
+      }
+    }
 
     return { numeroSequencial: prep.numero ?? undefined };
   } catch (err) {
