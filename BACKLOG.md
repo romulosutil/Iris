@@ -144,19 +144,76 @@ trocado no Easypanel e redeploy feito. **Casamento do par provado**, não presum
 tipo de prova que o `verify-offsite.sh` faz com o artefato. As réplicas anteriores no bucket
 continuam lá e são lixo permanente; a regra de lifecycle (pendência 1) é o que as remove.
 
-**Pendências reais que sobraram da #86** (o upload funcionar não fecha nenhuma delas):
+**#86 FECHADA em 28/07.** Regra de lifecycle de 30 dias criada no bucket (fecha a pendência 1,
+e de quebra expurga sozinha as réplicas cifradas com a chave perdida) e a privada nova guardada
+em lugar durável (pendência 3, a única da cadeia sem verificação automática possível — nenhum
+script prova que existe cópia fora do disco).
 
-1. **Regra de lifecycle no bucket.** Sem ela o Always Free estoura a cota e o backup passa a
-   sair `3` todo dia. Agora tem uma segunda função: expurgar as réplicas cifradas com a chave
-   perdida.
-2. **Rodar o `verify-offsite.sh` contra o bucket de produção**, na máquina que guarda a chave
-   privada. Enquanto não rodar, a réplica é *presumida* restaurável — que é o estado
-   indistinguível de uma réplica inútil. Pode exigir uma credencial de **leitura** temporária:
-   a de produção é write-only por design. **Só é executável a partir de 29/07**, depois da
-   janela das 03:00 BRT — antes disso não existe no bucket nenhum objeto cifrado com o par novo.
-3. **Guardar a metade privada em dois lugares duráveis** (gerenciador de senhas + papel). É o
-   passo que falhou da primeira vez, é o único sem desfazer, e não tem verificação automática
-   possível — nenhum script consegue provar que existe uma cópia fora do disco.
+**A pendência 2 virou a #105, e não foi por burocracia.** A prova de decifra contra produção não
+rodou: a credencial de produção **lista mas não lê** — na Oracle são permissões separadas, a
+negação volta mascarada como `Bucket does not exist`, e isso é o desenho funcionando, não um
+defeito. A tentativa de contornar com Customer Secret Key da conta admin bateu no erro já
+conhecido do projeto (`The secret key required to complete authentication could not be found` +
+a isca da região); formato do par confere com o de produção, então as hipóteses vivas são
+propagação ou pares misturados, não formato. Somado a isso, a réplica cifrada com o par novo só
+nasce na janela seguinte — o único objeto no bucket era anterior à troca.
+
+Fechar a #86 sem a #105 teria marcado como pronto exatamente o tipo de coisa que esta issue
+inteira existe para impedir. Enquanto a #105 estiver aberta, a terceira camada é **presumida**
+restaurável.
+
+**Nota que se paga sozinha:** a correção de review que fez o `mc cp` parar de engolir o `stderr`
+foi escrita e mergeada horas antes de esse caminho aparecer em produção. Sem ela, o operador
+teria visto só "o par está INCOMPLETO no bucket" e caçado um incidente classe #85 inexistente,
+em vez de ler `Bucket does not exist` vindo do provedor.
+
+**Continuação 28/07 — tentativa de rodar o runbook da #105, causa raiz isolada por medição.**
+Credencial de produção (`iris-backup-vps`) foi exposta na sessão e teve que ser rotacionada:
+antiga apagada, `iris-backup-vps-novo` criada (prefixo `131642...`, 28/07 10:41 UTC), variáveis
+do serviço atualizadas no Easypanel, confirmado no console 1 Customer Secret Key só (a antiga,
+prefixo `f18998...`, não existe mais). Pendente confirmar se o serviço de backup precisa
+reiniciar para ler as variáveis novas — se o scheduler leu env só no start, o ciclo de 29/07
+falha no upload.
+
+Causa raiz do `Bucket does not exist` no download: a política `iris-backup-offsite-writeonly`
+concede ao grupo `iris-backup-writers` só `OBJECT_CREATE` + `OBJECT_INSPECT` + `read buckets` —
+falta `read objects`. A listagem funciona, o GET falha, e a Oracle mascara a negação de leitura
+como bucket inexistente. Medição: `mc` reportou `Total 373.79 KiB` / `Transferred 0 B` — viu o
+tamanho (INSPECT), não leu o conteúdo (READ). Statement `Allow group iris-backup-writers to read
+objects in tenancy where target.bucket.name='iris-backups-offsite'` foi adicionado como terceiro
+statement (não editado no primeiro, para não mexer na cláusula que impede o VPS de apagar/
+adulterar a réplica), usado para verificar, e removido em seguida.
+
+Com `read objects` ativo, o download funcionou e a decifragem falhou com `age: error: no
+identity matched any of the recipients` — o único par no bucket (`iris-20260728T024929Z`,
+02:49:29 UTC) é anterior à rotação da chave `age` (~04:00 UTC), cifrado com a chave perdida. É o
+caso já previsto no critério de aceite 3 da #105; o lifecycle de 30 dias expurga sozinho. **A
+#105 continua aberta**: a prova de decifragem depende do objeto que o ciclo de 29/07 (~02:49 UTC)
+vai gerar com o recipient novo. Sequência de amanhã: reaplicar `read objects`, rodar o verify,
+confrontar o `sha256` impresso com o `sha256=` logado pelo `backup.sh`, remover o statement.
+
+**Defeitos corrigidos no `infra/backup/verify-offsite.sh`** (branch `fix/105-guards-verify-offsite`,
+2 commits, ainda sem merge): guard de variável obrigatória passou a detectar valor com
+placeholder `<...>` (não só vazia) — motivado por um endpoint exportado com `<namespace>` literal
+copiado do runbook, que o script diagnosticou como falta de permissão IAM em plena DR; mensagens
+de falha de listagem/download/decifragem reescritas para stderr da ferramenta como evidência
+primária e hipóteses numeradas, sem afirmar causa única (o `verify-offsite.sh` era regressão em
+relação ao padrão já usado no `backup.sh`); na falha de decifragem o script agora deriva a chave
+pública da identity recebida por stdin e compara com `OFFSITE_AGE_RECIPIENT` quando a env está
+disponível, separando sozinho "chave errada" de "objeto anterior à rotação" (nunca loga a
+privada); carimbo do objeto impresso em formato legível (`2026-07-28 02:49:29 UTC`); `.gitignore`
+passou a cobrir `*.age`, `id.txt`, `identity*`, `chave-privada*`, `chave-iris*` — nomes que o
+próprio runbook usa de exemplo para a chave privada e que antes não eram ignorados.
+
+**Gaps abertos:** `shellcheck` não instalado no ambiente do operador — as correções foram
+validadas com `bash -n` e execução, não por análise estática. A chave privada `age` está num
+único arquivo na máquina do operador, sem cópia em cofre — mesmo modo de falha que causou a #86.
+O `verify-offsite.sh` é copiado para dentro da imagem no build (`COPY` no `infra/backup/Dockerfile`),
+não montado por volume — alterar o script exige `docker compose --profile backup build backup`
+antes de testar, senão o container roda a versão antiga (aconteceu nesta sessão).
+
+---
+
 ## 🏁 Sessão 27/07/2026 — Especificação de 2 nichos novos: Terapia Convencional (#98) e TCC (#99)
 
 **Decisão de produto nova (não retomada):** Iris vai atender 2 nichos além do
@@ -292,8 +349,8 @@ Continua em aberto **só a §5 (duty to warn)** — as 5 perguntas de CFP/
 jurídico, que por desenho não são decisão de tech lead. Nenhuma linha desta
 spec vira código antes dessa resposta.
 
-**Branch `docs/spec-nichos-terapia-convencional-tcc`** (worktree
-`iris-wt-101`) — spec commitada, ainda sem push/PR.
+**PR #109** (branch `docs/spec-nichos-terapia-convencional-tcc`, worktree
+`iris-wt-101`) — só docs/specs, 3613 linhas, nenhuma migração aplicada.
 
 ---
 

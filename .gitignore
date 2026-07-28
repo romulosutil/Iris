@@ -66,6 +66,15 @@ pnpm-debug.log*
 *.original.md
 *.tsbuildinfo
 
+# --- Chave privada age do backup off-site (#86/#105) ---
+# Nomes de exemplo usados pelo runbook de verify-offsite.sh — sem isto, uma
+# chave privada salva na raiz com o nome do exemplo não é ignorada.
+*.age
+id.txt
+identity*
+chave-privada*
+chave-iris*
+
 # --- Scratch / throwaway ---
 scratch/
 

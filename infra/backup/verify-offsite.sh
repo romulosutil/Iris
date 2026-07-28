@@ -89,9 +89,32 @@ if [[ -n "${AGE_IDENTITY:-}" ]]; then
 	exit 1
 fi
 
-: "${OFFSITE_S3_ENDPOINT:?OFFSITE_S3_ENDPOINT é obrigatório}"
-: "${OFFSITE_S3_ACCESS_KEY:?OFFSITE_S3_ACCESS_KEY é obrigatório}"
-: "${OFFSITE_S3_SECRET_KEY:?OFFSITE_S3_SECRET_KEY é obrigatório}"
+# `: "${VAR:?...}"` só pega vazio/não-setada. Não pega o defeito real da #105:
+# o runbook mostra `OFFSITE_S3_ENDPOINT=https://<ns>.compat...oraclecloud.com`
+# como exemplo, o operador exporta o placeholder literal sem substituir, a
+# variável fica NÃO-vazia, o guard de ausência passa, e o `mc` falha lá na
+# frente com um erro genérico de hostname — que a mensagem de `mc ls` (abaixo)
+# lia como credencial sem permissão de leitura. Checar os dois defeitos aqui,
+# na borda, fecha isso antes de chegar no `mc`.
+#
+# A mensagem do placeholder NUNCA ecoa o valor: OFFSITE_S3_SECRET_KEY é
+# segredo, e um log de DR é o pior lugar para vazar credencial.
+verificar_env_obrigatoria() {
+	local nome="$1"
+	local valor="${!nome:-}"
+	if [[ -z "${valor}" ]]; then
+		log_error "${nome} é obrigatório e não foi definido."
+		exit 1
+	fi
+	if [[ "${valor}" == *'<'*'>'* ]]; then
+		log_error "${nome} contém um placeholder não substituído (formato <...>). Conferir o valor exportado — provavelmente foi copiado do exemplo do runbook sem trocar pelo valor real. O valor não é logado por conter possível segredo."
+		exit 1
+	fi
+}
+
+verificar_env_obrigatoria OFFSITE_S3_ENDPOINT
+verificar_env_obrigatoria OFFSITE_S3_ACCESS_KEY
+verificar_env_obrigatoria OFFSITE_S3_SECRET_KEY
 readonly OFFSITE_S3_BUCKET="${OFFSITE_S3_BUCKET:-iris-backups-offsite}"
 readonly OFFSITE_REGION="${OFFSITE_S3_REGION:-}"
 readonly OFFSITE_PATH_STYLE="${OFFSITE_S3_PATH_STYLE:-auto}"
@@ -148,7 +171,11 @@ log_info "bucket=${OFFSITE_S3_BUCKET} região=${OFFSITE_REGION:-us-east-1 (defau
 
 # --- escolha do par a verificar ------------------------------------------------
 if ! listagem="$(MC_REGION="${OFFSITE_REGION}" mc ls "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
-	log_error "não foi possível LISTAR ${OFFSITE_S3_BUCKET}. Se a credencial de produção é write-only (por design, sem DeleteObject), ela pode também não ter leitura — gerar uma credencial de LEITURA só para esta verificação e revogá-la depois. Resposta: ${listagem}"
+	log_error "não foi possível LISTAR ${OFFSITE_S3_BUCKET}. Resposta do mc: ${listagem//${OFFSITE_S3_SECRET_KEY}/***}
+Hipóteses, sem ordem de probabilidade — não afirmar qual é a causa antes de checar:
+  1) OFFSITE_S3_ENDPOINT malformado (placeholder do runbook não substituído, typo, protocolo/host errado).
+  2) credencial sem permissão de LEITURA (a de produção é write-only por design, sem ListBucket/GetObject) — gerar uma credencial de LEITURA só para esta verificação e revogá-la depois.
+  3) OFFSITE_S3_BUCKET ou OFFSITE_S3_REGION errados para este endpoint."
 	exit 1
 fi
 
@@ -189,7 +216,11 @@ for objeto in "${NOME_DUMP}" "${NOME_GLOBALS}"; do
 	# réplica íntegra com credencial errada.
 	if ! saida_cp="$(MC_REGION="${OFFSITE_REGION}" mc cp --quiet \
 		"${MC_ALIAS}/${OFFSITE_S3_BUCKET}/${objeto}" "${TMP_DIR}/${objeto}" 2>&1)"; then
-		log_error "falha ao baixar ${objeto}. Se for negação de acesso, é a credencial (a de produção é write-only — gerar uma de LEITURA temporária). Se for objeto inexistente e o outro do par tiver baixado, o par está INCOMPLETO no bucket — um restore com esse artefato recria as tabelas e nenhuma policy de RLS (ver PR #85). Resposta: ${saida_cp//${OFFSITE_S3_SECRET_KEY}/***}"
+		log_error "falha ao baixar ${objeto}. Resposta do mc: ${saida_cp//${OFFSITE_S3_SECRET_KEY}/***}
+Hipóteses, sem ordem de probabilidade — não afirmar qual é a causa antes de checar:
+  1) OFFSITE_S3_ENDPOINT malformado (placeholder do runbook não substituído, typo, protocolo/host errado).
+  2) negação de acesso: a credencial de produção é write-only por design (sem GetObject) — gerar uma de LEITURA temporária.
+  3) objeto inexistente: se o outro do par tiver baixado, o par está INCOMPLETO no bucket — um restore com esse artefato recria as tabelas e nenhuma policy de RLS (ver PR #85)."
 		exit 1
 	fi
 done
@@ -205,11 +236,50 @@ done
 log_info "ambos os artefatos têm header age (estão cifrados no bucket)"
 
 # --- decifra --------------------------------------------------------------------
+# Carimbo do objeto em formato legível, para o operador comparar direto com a
+# data da última rotação da chave age sem fazer aritmética mental sob pressão
+# de DR. CARIMBO é iris-YYYYMMDDTHHMMSSZ; extrai a parte da data.
+formatar_carimbo_legivel() {
+	local carimbo="$1"
+	if [[ "${carimbo}" =~ ^iris-([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z$ ]]; then
+		printf '%s-%s-%s %s:%s:%s UTC' \
+			"${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" \
+			"${BASH_REMATCH[4]}" "${BASH_REMATCH[5]}" "${BASH_REMATCH[6]}"
+	else
+		printf '%s (formato de carimbo não reconhecido)' "${carimbo}"
+	fi
+}
+readonly CARIMBO_LEGIVEL="$(formatar_carimbo_legivel "${CARIMBO}")"
+
 # É AQUI que mora o desastre silencioso que este script existe para achar: uma
 # réplica cifrada com uma chave pública cuja privada ninguém guardou passa por
 # todas as verificações anteriores e falha só nesta.
 if ! age -d -i "${IDENTITY_FILE}" -o "${TMP_DIR}/${CARIMBO}.dump" "${TMP_DIR}/${NOME_DUMP}" 2>"${TMP_DIR}/age.err"; then
-	log_error "NÃO FOI POSSÍVEL DECIFRAR ${NOME_DUMP} com a chave fornecida. A réplica off-site existe e é INÚTIL até isto ser resolvido. Verificar se a chave privada é o par de OFFSITE_AGE_RECIPIENT configurado no VPS. Detalhe do age: $(tr -d '\n' <"${TMP_DIR}/age.err")"
+	# Checagem barata e determinística: a pública derivada da privada recebida
+	# por stdin bate com OFFSITE_AGE_RECIPIENT (configurada no VPS)? Se bater,
+	# as hipóteses (b)/(c) abaixo caem e sobra só a (a) — objeto pré-rotação.
+	# NUNCA logar a privada; `age-keygen -y` só imprime a pública (age1...).
+	verificacao_chave=""
+	if [[ -n "${OFFSITE_AGE_RECIPIENT:-}" ]]; then
+		if publica_derivada="$(age-keygen -y "${IDENTITY_FILE}" 2>/dev/null)"; then
+			if [[ "${publica_derivada}" == "${OFFSITE_AGE_RECIPIENT}" ]]; then
+				verificacao_chave="A pública derivada da chave fornecida (${publica_derivada}) BATE com OFFSITE_AGE_RECIPIENT — a chave é o par certo do recipient atual. Hipóteses (b) e (c) descartadas: sobra (a)."
+			else
+				verificacao_chave="A pública derivada da chave fornecida (${publica_derivada}) NÃO bate com OFFSITE_AGE_RECIPIENT (${OFFSITE_AGE_RECIPIENT}) — hipótese (b) ou (c) confirmada, não é problema de rotação."
+			fi
+		else
+			verificacao_chave="não foi possível derivar a pública da chave fornecida com 'age-keygen -y' (chave malformada?) — checagem automática inconclusiva."
+		fi
+	else
+		verificacao_chave="OFFSITE_AGE_RECIPIENT não está definida neste ambiente — rodar manualmente 'age-keygen -y' na chave privada fornecida e comparar o age1... resultante com o OFFSITE_AGE_RECIPIENT configurado no VPS."
+	fi
+
+	log_error "NÃO FOI POSSÍVEL DECIFRAR ${NOME_DUMP} com a chave fornecida (carimbo do objeto: ${CARIMBO_LEGIVEL}). A réplica off-site existe e é INÚTIL até isto ser resolvido. Detalhe do age: $(tr -d '\n' <"${TMP_DIR}/age.err")
+Hipóteses, sem ordem de probabilidade — não afirmar qual é a causa antes de checar:
+  a) o objeto é ANTERIOR à última rotação da chave age e foi cifrado com uma chave cuja privada não existe mais — comparar ${CARIMBO_LEGIVEL} com a data da última rotação; se o objeto for anterior, é IRRECUPERÁVEL POR DESENHO e não há o que consertar (coberto pela regra de lifecycle de 30 dias).
+  b) a chave privada fornecida não é o par de OFFSITE_AGE_RECIPIENT configurado no VPS atualmente.
+  c) a chave passada por stdin é de outra geração/outro ambiente (ex.: staging em vez de produção).
+Verificação automática: ${verificacao_chave}"
 	exit 1
 fi
 
