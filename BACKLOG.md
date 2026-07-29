@@ -26,6 +26,84 @@
 
 ---
 
+## 🏁 Sessão 29/07/2026 — Ratificação jurídica do termo adulto e diferimento consciente (Issues #129, #134, #135)
+
+**Gatilho.** #98 (Terapia Convencional) e #99 (TCC) deixaram de ser pós-MVP e
+viraram **necessidade de MVP**. A ordem foi explícita: qualquer decisão que
+possa ser adiada para lançar #98 **deve** ser adiada. Esta sessão fecha o que
+travava e adia, por escrito, o que não trava.
+
+### Ratificação — como se deu (registrar é parte da decisão)
+
+O termo `adulto-v1` foi lido pelo advogado ao vivo durante a sessão e **não
+recebeu apontamentos**. Pelo protocolo acordado com o Rômulo, texto sem
+comentários até o fim da sessão é dado por alinhado. Isso está escrito **no
+próprio termo**, de propósito: a validade se apoia nesse protocolo, **não** em
+parecer escrito autônomo — que não foi emitido. Se apontamentos vierem depois,
+o texto vira `adulto-v2` e exige nova coleta de assinatura (o versionamento já
+suporta isso; `consent` é append-only).
+
+### Decisões travadas nesta sessão
+
+- **(a) Transição menor→maioridade: não há janela de descoberto.** O
+  consentimento do responsável continua sustentando o tratamento entre o
+  aniversário de 18 anos e a nova assinatura. A renovação regulariza **para a
+  frente**; não sana nulidade nenhuma, porque não havia nulidade. O registro
+  clínico em si segue apoiado na tutela da saúde (Art. 11, II, "f"), que
+  independe de consentimento.
+- **(b) Prazo de renovação:** primeira sessão após a maioridade, no limite **90
+  dias corridos**. Estourado o prazo, é pendência administrativa da clínica —
+  **não** é impedimento de atendimento e não autoriza apagar nada.
+- **(c) Curatela terá termo próprio**, não adaptação do termo de menor.
+  Registrar curatelado como "menor" numa trilha append-only afirmaria fato
+  falso sobre a pessoa. Termo e enum ficam **fora do MVP** (#134).
+- **Operador identificado:** R Sutil Correa Ltda, CNPJ 29.811.201/0001-50 —
+  seção 5 do termo. A **controladora** continua sendo a clínica-contratante,
+  preenchida por clínica na impressão.
+- **Prazo de guarda do adulto escrito por extenso:** 10 (dez) anos do último
+  atendimento. Remissão a uma política que o titular não recebe não satisfaz o
+  dever de informar o prazo (Art. 9º, II).
+
+### Adiado de propósito (não bloqueia #98/#99)
+
+- **#134 — curatela e emancipado.** Direção decidida, implementação adiada. A
+  guarda hoje é dupla: o termo proíbe por escrito, e a UI de cadastro já exibe
+  aviso não-bloqueante quando idade e tipo de consentimento divergem, citando
+  emancipação e curatela como os casos legítimos. Vira bloqueante quando uma
+  clínica atender adulto sob curatela — em TEA adulto isso não é raro.
+- **#135 — detecção automática de maioridade.** Com (a) respondido, **não ter**
+  detecção deixou de ser risco jurídico: virou responsabilidade operacional da
+  clínica, dita assim na seção 4 do termo. Lista/aviso e fluxo de renovação
+  ficam pós-MVP.
+
+### Entregue
+
+- `docs/legal/termo-consentimento-titular-adulto.md` — status RASCUNHO →
+  **RATIFICADO**; seção 4 com as três respostas; seção 5 com o operador; seção
+  11 com o prazo por extenso; seção 1 corrigida (as migrações `0050`/`0051` já
+  estão aplicadas, o texto ainda dizia que não); bloco final reescrito como
+  **estado das pendências** (fechadas / gates de impressão / pós-MVP).
+- `docs/legal/politica-privacidade.md` — seções 1, 2 e 4 passam a descrever os
+  **dois regimes** coexistentes em vez de só "crianças e adolescentes".
+- `docs/legal/politica-retencao-dados.md` — seções 3, 4 e 9 idem: prazo do
+  adulto explícito, `autoconsentimento_titular_adulto` citado como base de
+  retenção, e o titular adulto exercendo direitos por si.
+
+### Gates que sobraram — de impressão, não de código
+
+Não bloqueiam o lançamento de #98/#99, mas **bloqueiam colher a primeira
+assinatura em papel**:
+
+- Razão social/CNPJ/endereço da clínica, canal de direitos e encarregado (DPO).
+- **Nome do provedor de IA e país de processamento.** Sem isso o consentimento
+  de transferência internacional (seção 9) não é específico e não é válido. O
+  ambiente hoje admite dois (`ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`) — a escolha
+  precisa estar feita e escrita antes do piloto.
+- DPA com esse provedor assinado; número/vigência da resolução da ANPD sobre
+  cláusulas-padrão conferidos em fonte primária.
+
+---
+
 ## 🏁 Sessão 28/07/2026 — Desbloqueio do consentimento de titular adulto (Issues #100, #129 · PRs #130, #131)
 
 **Contexto — deixou de ser expansão especulativa.** Há interessados reais em TCC
@@ -44,7 +122,7 @@ paciente. A dependência subiu para **P1**.
   e `:145`), então múltiplas linhas por paciente já eram possíveis. A D2 tinha
   sido registrada como "isto determina a modelagem" — não determinava.
 - **D3 — `consent` continua append-only** (`REVOKE UPDATE, DELETE ON consent FROM
-  app_role`). Confirmado e mantido.
+app_role`). Confirmado e mantido.
 
 ### Entregue
 
@@ -62,8 +140,8 @@ paciente. A dependência subiu para **P1**.
   arquivos não basta**: o `drizzle-orm@0.45.2` envolve todas as migrações
   pendentes num único `session.transaction`. A solução foi o CHECK comparar
   `tipo::text` em vez do enum. Erro real reproduzido: `ERROR: unsafe use of new
-  value ... of enum type consent_tipo / HINT: New enum values must be committed
-  before they can be used.`
+value ... of enum type consent_tipo / HINT: New enum values must be committed
+before they can be used.`
 - **`src/db/rls.int.test.ts` não cobria `consent`** — as policies e o append-only
   nunca tiveram teste de RLS. Cobertura adicionada na PR #131.
 - **A função de expurgo vigente é a redefinida em
@@ -85,7 +163,7 @@ paciente. A dependência subiu para **P1**.
   13.931/2019 — violência contra a mulher). O `parecer-juridico-duty-to-warn.md`
   já as classificava, então o termo contradizia o parecer por omissão.
 - **Cláusulas-padrão contratuais são `Art. 33, II, "b"`** (a alínea "a" é
-  cláusulas contratuais *específicas*) somado ao `Art. 33, VIII`.
+  cláusulas contratuais _específicas_) somado ao `Art. 33, VIII`.
 - **⚠️ Baixa confiança não resolvida:** a numeração e a vigência da "Resolução
   CD/ANPD nº 19/2024", herdada de `politica-privacidade.md`, **não foram
   conferidas em fonte primária**. Não pode ir para documento assinado por titular
@@ -100,7 +178,7 @@ paciente. A dependência subiu para **P1**.
 - **#133** — não existe forma de **registrar** uma revogação de consentimento
   (`consent` é append-only e o enum não tem evento de revogação). A promessa dos
   termos não é só não-implementada, é **não-registrável**. Diferente da #117, que
-  trata do *efeito* da revogação.
+  trata do _efeito_ da revogação.
 - **#134** — adulto sob curatela e adolescente emancipado **não têm caminho de
   cadastro**. Mitigado por escrito no termo (seção 2 proíbe), não por código.
 - **#135** — transição menor→maioridade. Travada por duas perguntas ao advogado:
@@ -135,6 +213,7 @@ fila. E o passo que trava é humano e de via única: conta no Resend, verificaç
 de domínio, chave.
 
 **Retirado da árvore de propósito:**
+
 - dependência `resend` no `package.json` — pacote sem código que o use é
   superfície de ataque sem contrapartida;
 - a migração `0050` rascunhada. Migração em `db/migrations/` é migração
@@ -157,6 +236,7 @@ RASCUNHO pendente de parecer de advogado** — consolidar prazos não substitui 
 validação formal, que segue bloqueando o piloto com dado real (seção B). Nada
 do texto original de 09/07 (tabela por conselho com fontes, opção de
 anonimização, aviso prévio de 90 dias, pendência do DPO) foi removido:
+
 - **Prontuário Multidisciplinar:** Default `MAX(18 anos do menor, alta + 10 anos)`, configurável pela clínica em `clinic.politica_retencao_meses`.
 - **Alertas de Risco Clínico (#122):** Pseudonimização LGPD (`pseudonimizado_em IS NOT NULL`, zerando `patient_id` e `session_id`), preservando o registro anônimo para defesa jurídica do software.
 - **Logs de Acesso (#116):** mínimo de 6 meses (Marco Civil da Internet, art. 15).
@@ -164,12 +244,13 @@ anonimização, aviso prévio de 90 dias, pendência do DPO) foi removido:
 
 **Não fecha sozinho** (verificado no código em 28/07/2026, registrado na §6 do
 documento — a política descreve intenção, não estado do software):
+
 - **Nenhum código chama `app_purgar_paciente`.** A função e o gate
   `app_paciente_expurgavel` existem desde a `0045`, mas não há ação, tela ou job
   que as invoque: hoje o expurgo LGPD só sai por SQL manual. É o item que mais
   destoa entre a política escrita e o produto.
 - **Não existe expurgo do `audit_log` por idade (#116).** O único caminho que
-  toca a trilha é o `app_purgar_paciente`, e ele *pseudonimiza* no expurgo do
+  toca a trilha é o `app_purgar_paciente`, e ele _pseudonimiza_ no expurgo do
   paciente — não apaga por tempo. Sem job, o prazo de 6 meses é só um mínimo
   legal cumprido por inércia (nada é apagado), não uma regra implementada.
 - **Lifecycle Rule do bucket off-site (OCI S3) não é verificável pelo repo.**
@@ -516,8 +597,8 @@ autovalidação da §9 estão fechados — antes só 9.1/9.4 estavam.
   estágio. Correção de vazamento encontrada de passagem: o texto push da §6.2
   citava o **nome do paciente** — dado sensível de saúde por associação,
   visível em tela de bloqueio; removido. Limitação registrada: web push não
-  fura DND do SO, então "15 minutos" é promessa de *notificação +
-  escalonamento*, não de *resposta humana* — não usar em copy comercial.
+  fura DND do SO, então "15 minutos" é promessa de _notificação +
+  escalonamento_, não de _resposta humana_ — não usar em copy comercial.
 - **9.3 (paciente multiprofissional) → H4 + Caso ARC-5 novo.** O alerta segue
   a **sessão** (`sessionId`), não o paciente: só o terapeuta daquela sessão +
   coordenador; escalonamento é hierárquico, nunca lateral (outros
@@ -599,8 +680,7 @@ correção normativa. **O bloqueio de implementação da #101 está levantado.**
   Estado da federação não varia (ECA/CEPP/CP são federais); vínculo
   profissional não varia (contrato é B2B com a clínica, que responde
   solidariamente — CC 932 III, CDC 14). Mas **`violencia_sofrida` em paciente
-  menor** tem **dever legal imperativo** (ECA art. 13 + Lei 13.431/2017 art.
-  13) e ganha copy própria, citando a obrigação. Não viola o princípio de "IA
+  menor** tem **dever legal imperativo** (ECA art. 13 + Lei 13.431/2017 art. 13) e ganha copy própria, citando a obrigação. Não viola o princípio de "IA
   nunca tem autoridade": a copy não afirma que houve violência, informa uma
   obrigação que já existe.
 - **Cláusula 10 dos termos de uso** (isenção de monitoramento contínuo) —
@@ -2064,6 +2144,3 @@ Além disso, há hard-blockers técnicos que precisariam ser resolvidos antes do
 - [ ] **Issue #112 — Indicador de Proteção de Dados no Prontuário (`/(app)/pacientes/[id]`)**: Exibir badge/pílula discreta no cabeçalho do paciente (`🔒 Dados Protegidos por RLS & Criptografia`) com tooltip contextual explicando a segregação e isolamento multi-tenant da clínica.
 - [ ] **Issue #113 — Painel de Governança & Segurança da Clínica (`/(app)/configuracoes/seguranca`)**: Criar visão para o Coordenador visualizar o percentual de adesão ao MFA pela equipe clínica, atalhos de auditoria de acessos e download do termo de governança/proteção de dados.
 - [ ] **Issue #114 — Landing Page Institucional e Central de Segurança (`/seguranca`)**: Construção da nova Landing Page pública (Hero, 4 pilares, provas sociais e badges autorais) e da Central de Segurança & Transparência (`/seguranca`) com o roadmap transparente de segurança.
-
-
-

@@ -1,10 +1,20 @@
 # Termo de Consentimento para Tratamento de Dados — Titular Adulto — Iris
 
-**Status: RASCUNHO de produto, pendente de revisão por advogado antes de
-publicação.** Redigido em 28/07/2026 para fechar a issue #129, e revisado no
-mesmo dia contra parecer adversarial interno (achados aplicados: base legal
-por finalidade, dispositivo da tutela da saúde, notificações compulsórias do
-regime adulto). Preenche um buraco real: todo o texto legal existente do
+**Status: RATIFICADO em 29/07/2026 — apto a ser colhido.** Redigido em
+28/07/2026 para fechar a issue #129, revisado no mesmo dia contra parecer
+adversarial interno (achados aplicados: base legal por finalidade,
+dispositivo da tutela da saúde, notificações compulsórias do regime adulto)
+e submetido em 29/07/2026 à revisão jurídica em leitura ao vivo.
+
+> **Como esta ratificação se deu, registrado de propósito:** o texto foi
+> lido pelo advogado durante a sessão e **não recebeu apontamentos**. Pelo
+> protocolo acordado com o responsável pelo produto, texto sem comentários
+> até o fim da sessão é dado por alinhado. A validade deste termo se apoia
+> nesse protocolo — **não** em parecer escrito autônomo, que não foi
+> emitido. Se apontamentos vierem depois, o texto passa a `adulto-v2` e
+> exige nova coleta de assinatura (seção 3).
+
+Preenche um buraco real: todo o texto legal existente do
 projeto pressupõe responsável legal assinando por paciente menor de idade
 (LGPD Art. 14, §1º), e não existia termo para o titular adulto capaz.
 Complementa `politica-privacidade.md`, `politica-retencao-dados.md` e
@@ -31,14 +41,14 @@ No sistema, corresponde ao registro `Consent` com
 nulo — o par mutuamente exclusivo do `tipo = 'tratamento_dados_menor'`, que
 continua sendo o caminho de paciente menor com responsável legal.
 
-> ⚠️ **Isso ainda NÃO existe no banco.** Hoje o enum `consent_tipo` tem
-> apenas `tratamento_dados_menor`, `uso_ia_processamento` e
-> `exportacao_relatorios`, e `consent.responsavel_signatario` é `NOT NULL`
-> (`db/migrations/0000_fase1_tabelas.sql`, `src/db/schema.ts`). O valor novo
-> de enum e a nulidade da coluna são entregues pela **issue #100**
-> (migrações `0050` e `0051`). **Enquanto essa migração não estiver
-> aplicada, este termo não pode ser colhido** — não há onde gravar o
-> consentimento que ele documenta.
+> ✅ **Isso já existe no banco.** O valor de enum
+> `autoconsentimento_titular_adulto` e a nulidade de
+> `consent.responsavel_signatario` foram entregues pela **issue #100**
+> (migrações `0050` e `0051`, aplicadas). O CHECK
+> `consent_responsavel_por_tipo` garante o par mutuamente exclusivo: menor
+> exige responsável não vazio, titular adulto exige responsável nulo
+> (`src/db/schema.ts`). Há onde gravar o consentimento que este termo
+> documenta.
 
 ## 2. A quem este termo NÃO se aplica
 
@@ -51,11 +61,15 @@ cadastrado usando esta minuta:
 2. **Adulto sob curatela ou com capacidade civil reduzida.** Precisa de
    representação/assistência do curador, e o termo correspondente ainda não
    existe. Idade maior que 18 **não** é prova de capacidade civil, e o
-   sistema hoje não modela esse caso — ver seção 4, pendência (c).
+   sistema hoje não modela esse caso. Já está decidido que curatela terá
+   **termo próprio**, fora do MVP — ver seção 4, resposta (c), e a
+   issue #134.
 3. **Adolescente emancipado** (Art. 5º, parágrafo único, do Código Civil).
    Juridicamente é capaz, mas a emancipação precisa ser comprovada
    documentalmente pela clínica e não há hoje campo para registrar essa
-   comprovação. Até que exista, tratar caso a caso com o advogado da clínica.
+   comprovação. Até que exista, tratar caso a caso com o advogado da
+   clínica, arquivando a comprovação fora do sistema. Rastreado na
+   issue #134.
 
 > **Por isso o tipo de consentimento é escolha explícita do operador, nunca
 > derivada da data de nascimento.** Derivar por idade erraria nos dois
@@ -88,16 +102,36 @@ trilha. Para o tratamento a partir da maioridade, a orientação de produto é
 como uma linha nova de `Consent` (renovação nunca é edição — decisões D2 e
 D3 da issue #100).
 
-> **Pendências reais desta seção, a confirmar com o advogado:**
-> (a) o consentimento do responsável continua sustentando o tratamento
-> entre a data do aniversário de 18 anos e a data da nova assinatura, ou há
-> uma janela de descoberto que exige interrupção do tratamento de dados?
-> (b) qual o prazo razoável para colher a renovação?
-> (c) o caso de curatela (seção 2, item 2) precisa de termo próprio ou é
-> coberto por adaptação do termo de menor?
-> Enquanto (a) e (b) não estiverem respondidos, o sistema não implementa
-> detecção automática de maioridade — a clínica é responsável por
-> identificar e renovar.
+> **Respostas ratificadas em 29/07/2026** (pelo protocolo descrito no topo
+> deste documento):
+>
+> **(a) Não há janela de descoberto.** O consentimento dado pelo
+> responsável legal continua sustentando o tratamento dos dados entre a
+> data em que o paciente completa 18 anos e a data da nova assinatura. O
+> aniversário não interrompe o tratamento nem exige suspensão do
+> atendimento: a renovação **regulariza para a frente** quem é o titular
+> que consente, e não sana nulidade nenhuma no período anterior. O
+> sustentáculo do registro clínico em si continua sendo a tutela da saúde
+> (Art. 11, II, "f"), que independe de consentimento — ver seção 7.
+>
+> **(b) O prazo é a primeira sessão após a maioridade e, no limite, 90
+> dias corridos contados do aniversário de 18 anos.** Passado esse prazo
+> sem renovação, o caso é **pendência administrativa da clínica** — não é
+> impedimento de atendimento, e não autoriza apagar nada.
+>
+> **(c) Curatela terá termo próprio**, não adaptação do termo de menor.
+> Registrar um adulto sob curatela como "menor" numa trilha append-only
+> afirmaria um fato falso sobre a pessoa, num registro que existe
+> justamente para ser preciso. O termo próprio e o valor de enum
+> correspondente ficam **fora do MVP** e estão rastreados na issue #134 —
+> até que existam, adulto sob curatela permanece fora deste caminho
+> (seção 2, item 2).
+>
+> **Consequência de implementação, mantida:** o sistema **não** implementa
+> detecção automática de maioridade no MVP. Com (a) respondido, a ausência
+> de detecção não cria descoberto jurídico — apenas mantém na clínica a
+> responsabilidade de identificar o aniversário e colher a renovação.
+> Rastreado na issue #135.
 
 ---
 
@@ -110,9 +144,10 @@ Versão `adulto-v1`.
 
 - **Controladora dos dados:** [Razão social da clínica, CNPJ, endereço — a
   clínica-contratante é a controladora.]
-- **Operador:** Iris — [razão social e CNPJ do Iris, a preencher],
-  plataforma de prontuário e gestão clínica, que trata os dados por conta e
-  ordem da clínica, exclusivamente para prestar o serviço contratado.
+- **Operador:** Iris — **R Sutil Correa Ltda**, inscrita no CNPJ sob o
+  nº **29.811.201/0001-50**, plataforma de prontuário e gestão clínica, que
+  trata os dados por conta e ordem da clínica, exclusivamente para prestar o
+  serviço contratado.
 - **Titular:** [Nome completo], [CPF], [data de nascimento].
 - **Provedor de inteligência artificial contratado:** [Nome do provedor e
   país onde o processamento ocorre — a preencher. Ver seções 8 e 9: sem
@@ -144,14 +179,14 @@ Cada finalidade abaixo tem **uma** base legal própria. Isso importa para
 mim: só as finalidades das seções 8, 9 e 10 dependem do meu consentimento,
 e só elas podem ser revogadas por mim.
 
-| Finalidade | Base legal | Depende do meu consentimento? |
-| :--- | :--- | :--- |
-| Registro e condução do meu acompanhamento terapêutico — prontuário, evolução das sessões, planejamento clínico | **Tutela da saúde**, em procedimento realizado por profissionais e serviços de saúde (LGPD Art. 11, II, "f") | **Não.** É o tratamento que permite que eu seja atendido, e o registro em prontuário é exigido do profissional pelo seu conselho. |
-| Organização do atendimento — agenda, frequência, comunicação com a clínica | Execução de contrato do qual sou parte (LGPD Art. 7º, V) e tutela da saúde (Art. 11, II, "f") | Não. |
-| Guarda do prontuário depois do fim do acompanhamento | Cumprimento de obrigação legal e regulatória (LGPD Art. 16, I, e normas do conselho profissional) | Não. |
-| Estruturação assistida por inteligência artificial (seção 8) | **Consentimento** (LGPD Art. 7º, I, e Art. 11, I) | **Sim.** |
-| Transferência internacional para o provedor de IA (seção 9) | **Consentimento específico e destacado** (LGPD Art. 33, VIII), somado às garantias contratuais do Art. 33, II, "b" | **Sim.** |
-| Exportação de relatórios para convênio ou terceiro por mim indicado (seção 10) | **Consentimento** (LGPD Art. 7º, I, e Art. 11, I) | **Sim.** |
+| Finalidade                                                                                                     | Base legal                                                                                                         | Depende do meu consentimento?                                                                                                     |
+| :------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| Registro e condução do meu acompanhamento terapêutico — prontuário, evolução das sessões, planejamento clínico | **Tutela da saúde**, em procedimento realizado por profissionais e serviços de saúde (LGPD Art. 11, II, "f")       | **Não.** É o tratamento que permite que eu seja atendido, e o registro em prontuário é exigido do profissional pelo seu conselho. |
+| Organização do atendimento — agenda, frequência, comunicação com a clínica                                     | Execução de contrato do qual sou parte (LGPD Art. 7º, V) e tutela da saúde (Art. 11, II, "f")                      | Não.                                                                                                                              |
+| Guarda do prontuário depois do fim do acompanhamento                                                           | Cumprimento de obrigação legal e regulatória (LGPD Art. 16, I, e normas do conselho profissional)                  | Não.                                                                                                                              |
+| Estruturação assistida por inteligência artificial (seção 8)                                                   | **Consentimento** (LGPD Art. 7º, I, e Art. 11, I)                                                                  | **Sim.**                                                                                                                          |
+| Transferência internacional para o provedor de IA (seção 9)                                                    | **Consentimento específico e destacado** (LGPD Art. 33, VIII), somado às garantias contratuais do Art. 33, II, "b" | **Sim.**                                                                                                                          |
+| Exportação de relatórios para convênio ou terceiro por mim indicado (seção 10)                                 | **Consentimento** (LGPD Art. 7º, I, e Art. 11, I)                                                                  | **Sim.**                                                                                                                          |
 
 > **Nota de produto (não vai para o papel assinado):** a separação acima é
 > o ponto mais importante deste termo. Empilhar bases legais — dizer que o
@@ -240,19 +275,21 @@ reembolso ou autorização de sessões.)
 
 ## 11. Por quanto tempo os dados serão mantidos
 
-Meus dados serão mantidos pelo prazo de **[preencher com o número de anos]**
-após a alta, observados os prazos mínimos de guarda de prontuário exigidos
-pelo conselho profissional. Estou ciente de que **a revogação dos
+Meus dados serão mantidos pelo prazo de **10 (dez) anos contados do meu
+último atendimento**, observados os prazos mínimos de guarda de prontuário
+exigidos pelo conselho profissional. Estou ciente de que **a revogação dos
 consentimentos das seções 8, 9 e 10 não apaga o prontuário** enquanto durar
 esse prazo legal de guarda — ver seção 13.
 
-> **Pendência real:** `politica-retencao-dados.md` expressa o prazo default
-> como `MAX(paciente completa 18 anos, alta + 10 anos)`, fórmula desenhada
-> para paciente menor. Para titular que já é adulto na admissão, o primeiro
-> termo da fórmula é inócuo e o prazo efetivo é `alta + 10 anos`. O número
-> precisa ser confirmado com o advogado e **escrito por extenso nesta
-> seção** antes da impressão — remissão a uma política que o titular não
-> recebe não satisfaz o dever de informar o prazo (LGPD Art. 9º, II).
+> **Nota de produto (não vai para o papel assinado):**
+> `politica-retencao-dados.md` expressa o prazo default como
+> `MAX(paciente completa 18 anos, alta + 10 anos)`, fórmula desenhada para
+> paciente menor. Para titular que já é adulto na admissão o primeiro termo
+> da fórmula é inócuo, e o prazo efetivo é `alta + 10 anos` — que é o que
+> está escrito por extenso acima, como exige o dever de informar o prazo ao
+> titular (LGPD Art. 9º, II). Remissão a uma política que o titular não
+> recebe não satisfaria esse dever. O número foi ratificado em 29/07/2026
+> junto com o restante deste documento.
 
 ## 12. Segurança
 
@@ -353,33 +390,51 @@ o efeito prático informado em cada seção.
 
 ---
 
-## Pendências antes deste documento valer como final
+## Estado das pendências
 
-**Jurídicas**
+### ✅ Fechadas em 29/07/2026
 
-- **Revisão por advogado** — em especial da seção 7 (atribuição de base
-  legal por finalidade, e o enquadramento do registro clínico do adulto em
-  tutela da saúde), da seção 4 (transição menor→adulto, perguntas (a), (b)
-  e (c)), da seção 13 (efeitos da revogação × prazo de guarda × aplicação
-  do Read-Only Locked ao adulto) e da seção 14 (redação das notificações
-  compulsórias).
-- **Seção 2, item 2 (curatela)** — decidir se vira termo próprio ou
-  adaptação do termo de menor. Enquanto não decidido, adulto sob curatela
-  não pode ser cadastrado por este caminho.
-- **Seção 9** — DPA com o provedor de IA assinado e conferido; numeração e
-  vigência da resolução da ANPD conferidas em fonte primária; definição de
-  quem é parte nas cláusulas-padrão.
+- **Revisão jurídica do texto** (seções 7, 13 e 14) — lida ao vivo, sem
+  apontamentos. Protocolo de ratificação descrito no topo do documento.
+- **Seção 4, (a) e (b)** — transição menor→maioridade respondida: não há
+  janela de descoberto, e a renovação é colhida na primeira sessão após a
+  maioridade, no limite 90 dias corridos.
+- **Seção 4, (c) / seção 2, item 2 (curatela)** — decidido: **termo
+  próprio**, fora do MVP, rastreado na issue #134.
+- **Seção 5, operador** — R Sutil Correa Ltda, CNPJ 29.811.201/0001-50.
+- **Seção 11** — prazo escrito por extenso: 10 (dez) anos contados do
+  último atendimento.
+- **Correções nos documentos vizinhos** — `politica-privacidade.md`
+  (seções 1, 2 e 4) e `politica-retencao-dados.md` (seções 3, 4 e 9) já
+  descrevem os dois regimes de consentimento. Aplicadas nesta mesma
+  entrega.
 
-**De preenchimento, antes da impressão**
+### ⛔ Gates de impressão — por clínica, antes de colher a primeira assinatura
 
-- **Seção 5** — razão social/CNPJ da clínica e do Iris, nome do provedor de
-  IA e país de destino, canal de contato, encarregado.
-- **Seção 11** — prazo de guarda escrito por extenso, em número de anos.
+Estes **não** bloqueiam o código nem o lançamento dos nichos #98/#99, mas
+bloqueiam a **coleta** do termo em papel:
 
-**De implementação**
+- **Seção 5** — razão social, CNPJ e endereço da clínica-contratante
+  (controladora); canal para exercício de direitos; encarregado (DPO).
+- **Seção 5 + seção 9** — nome do provedor de IA efetivamente contratado e
+  país onde o processamento ocorre. Sem esse dado o consentimento da
+  seção 9 **não é específico** e portanto não é válido: não colher a
+  seção 9 em branco. Hoje o ambiente admite dois provedores
+  (`ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`) — a escolha precisa estar feita
+  e escrita.
+- **Seção 9** — DPA com esse provedor assinado; numeração e vigência da
+  resolução da ANPD sobre cláusulas-padrão conferidas em fonte primária
+  (DOU / site da ANPD); definição de quem figura como parte nas
+  cláusulas — a clínica (controladora) ou o Iris (operador).
 
-- **Issue #100** — migrações `0050`/`0051`. Sem elas o tipo de
-  consentimento deste termo não pode ser gravado (seção 1).
+### 🔜 De implementação, pós-MVP
+
+- **Issue #134** — termo e modelagem de curatela; campo para registrar a
+  comprovação de emancipação.
+- **Issue #135** — lista/aviso de pacientes que completam 18 anos e fluxo
+  de coleta da renovação. Enquanto não existir, identificar o aniversário
+  e colher a renovação é responsabilidade **da clínica** — dito assim, de
+  propósito, na seção 4.
 - **Evento de revogação** — não existe modelagem para registrá-lo
   (seção 13, pendência (a)).
 - **Issue #117** — Read-Only Locked, com a ressalva de que foi desenhado
@@ -387,20 +442,7 @@ o efeito prático informado em cada seção.
 - **Portabilidade** — exportação integral do prontuário em PDF/A
   (seção 13, pendência (c)).
 
-**Correções necessárias em outros documentos deste repositório**
+### Entregue
 
-- **`politica-privacidade.md` seção 2** — cita "LGPD Art. 11, II, 'a'" para
-  tutela da saúde; a alínea correta é **"f"**. Corrigido nesta mesma
-  entrega.
-- **`politica-privacidade.md` seções 1 e 2** — descrevem o público como
-  "crianças e adolescentes" e a base legal apenas pelo Art. 14; sem ajuste,
-  contradizem este termo.
-- **`politica-retencao-dados.md` seção 9** — redigida como se só o
-  responsável legal pudesse solicitar; não contempla o titular adulto
-  exercendo direitos por si.
-- **`politica-retencao-dados.md` seção 3** — o prazo default
-  `MAX(18 anos, alta + 10 anos)` precisa dizer explicitamente qual é o
-  prazo do titular já adulto na admissão.
-
-**Resposta do advogado:** ☐ Alinhado &nbsp;&nbsp; ☐ Ajustar: ___________
-&nbsp;&nbsp; ☐ Precisa de parecer formal
+- **Issue #100** — migrações `0050`/`0051` aplicadas. O tipo de
+  consentimento deste termo já pode ser gravado (seção 1).

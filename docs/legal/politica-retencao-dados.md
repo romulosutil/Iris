@@ -58,7 +58,9 @@ MAX(paciente completa 18 anos, data da alta + 10 anos)
 Este default é um piso de segurança acima dos três prazos simultaneamente
 (cobre CFP + CFFa + COFFITO), abaixo do teto de 20 anos da Lei 13.787/2018 —
 **é uma síntese de risco do produto, não uma regra escrita em nenhuma norma
-específica.** A clínica pode ajustar esse prazo em configuração
+específica.** Para o titular que já era **adulto na admissão**, o primeiro
+termo da fórmula (paciente completar 18 anos) não se aplica — o prazo
+efetivo é **alta + 10 anos**, contado do último atendimento. A clínica pode ajustar esse prazo em configuração
 (`clinic.politica_retencao_meses` / `clinic.politica_retencao_config`, ver
 `modelo-de-dados.md` seção 5) para refletir a composição real de disciplinas
 da sua equipe — e o gate `app_paciente_expurgavel` (migração `0045`) usa a
@@ -73,8 +75,10 @@ sozinho pela clínica.
 LGPD Art. 15/16 determina eliminação do dado ao fim do tratamento, **exceto**
 para "cumprimento de obrigação legal ou regulatória pelo controlador" — os
 prazos de guarda dos conselhos profissionais (seção 3 acima) são exatamente
-essa exceção. O termo de consentimento (`Consent`, tipo
-`tratamento_dados_menor`) cita essa base legal explicitamente.
+essa exceção. O termo de consentimento cita essa base legal explicitamente —
+seja no regime de paciente menor (`Consent`, tipo `tratamento_dados_menor`),
+seja no regime de titular adulto (`Consent`, tipo
+`autoconsentimento_titular_adulto`).
 
 ## 5. Matriz consolidada por categoria de dado
 
@@ -83,12 +87,12 @@ issues #122, #116 e #89 acrescentaram três, com fundamentos legais distintos.
 A coluna "estado" descreve o que o software faz **hoje**; a distinção entre
 regra escrita e regra implementada está na seção 8.
 
-| Categoria de dado | Prazo | Fundamento | Comportamento no fim do prazo | Estado |
-| :--- | :--- | :--- | :--- | :--- |
-| **Prontuário multidisciplinar** (`Patient`, `Session`, `Extraction`, `Report`) | Default `MAX(18 anos do menor, alta + 10 anos)`, configurável para estender | CFP (Res. 01/2009 e 04/2020), COFFITO, CFFa. LGPD Art. 16, I | Eliminação ou anonimização, sempre por decisão da clínica (seção 6), via `app_purgar_paciente` com o gate `app_paciente_expurgavel` | Funções no banco (`0045`); **sem caminho de aplicação** |
-| **Alertas de risco clínico** (`AlertaRiscoClinico` — #122) | Acompanha o prontuário | Defesa de responsabilidade técnica da clínica e prova de diligência do software | **Pseudonimização, não eliminação**: `pseudonimizado_em` é carimbado e `patient_id`/`session_id` viram `NULL`; categoria, severidade e carimbos de prazo sobrevivem (seção 7) | Implementado (`0049`), dentro do `app_purgar_paciente` |
-| **Logs de acesso à aplicação** (`AuditLog` — #116) | **Mínimo** de 6 meses (180 dias) — não é teto | Marco Civil da Internet (Lei 12.965/2014, Art. 15) | Expurgo dos registros brutos de IP/sessão depois do mínimo legal | **Não implementado** (seção 8) |
-| **Cópias de segurança** (MinIO local + OCI S3 off-site — #89) | 30 dias | LGPD Art. 46 (segurança e recuperação) | Local/MinIO: prune do `infra/backup/backup.sh` (`RETENTION_DAYS`, default 30). Off-site: **não podado pelo script, de propósito** — depende de Lifecycle Rule no bucket | Prune local implementado; lifecycle do bucket a confirmar (seção 8) |
+| Categoria de dado                                                              | Prazo                                                                       | Fundamento                                                                      | Comportamento no fim do prazo                                                                                                                                                 | Estado                                                              |
+| :----------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------ |
+| **Prontuário multidisciplinar** (`Patient`, `Session`, `Extraction`, `Report`) | Default `MAX(18 anos do menor, alta + 10 anos)`, configurável para estender | CFP (Res. 01/2009 e 04/2020), COFFITO, CFFa. LGPD Art. 16, I                    | Eliminação ou anonimização, sempre por decisão da clínica (seção 6), via `app_purgar_paciente` com o gate `app_paciente_expurgavel`                                           | Funções no banco (`0045`); **sem caminho de aplicação**             |
+| **Alertas de risco clínico** (`AlertaRiscoClinico` — #122)                     | Acompanha o prontuário                                                      | Defesa de responsabilidade técnica da clínica e prova de diligência do software | **Pseudonimização, não eliminação**: `pseudonimizado_em` é carimbado e `patient_id`/`session_id` viram `NULL`; categoria, severidade e carimbos de prazo sobrevivem (seção 7) | Implementado (`0049`), dentro do `app_purgar_paciente`              |
+| **Logs de acesso à aplicação** (`AuditLog` — #116)                             | **Mínimo** de 6 meses (180 dias) — não é teto                               | Marco Civil da Internet (Lei 12.965/2014, Art. 15)                              | Expurgo dos registros brutos de IP/sessão depois do mínimo legal                                                                                                              | **Não implementado** (seção 8)                                      |
+| **Cópias de segurança** (MinIO local + OCI S3 off-site — #89)                  | 30 dias                                                                     | LGPD Art. 46 (segurança e recuperação)                                          | Local/MinIO: prune do `infra/backup/backup.sh` (`RETENTION_DAYS`, default 30). Off-site: **não podado pelo script, de propósito** — depende de Lifecycle Rule no bucket       | Prune local implementado; lifecycle do bucket a confirmar (seção 8) |
 
 ## 6. O que acontece ao fim do prazo do prontuário
 
@@ -146,20 +150,23 @@ redação: este é o documento que a clínica-controladora usaria para responder
 um titular ou à ANPD, e afirmar controle que não roda é declarar controle
 inexistente. Cada item foi conferido no código em 28/07/2026:
 
-| Lacuna | Estado verificado | Onde fecha |
-| :--- | :--- | :--- |
-| Expurgo do prontuário ao vencer o prazo | `app_purgar_paciente` e `app_paciente_expurgavel` existem na `0045`, mas **nenhum código da aplicação as chama** — nenhuma ação, tela ou job. O expurgo hoje só sai por SQL manual, e o aviso prévio de 90 dias da seção 6 não existe. | Fase 6 / `BACKLOG.md` |
-| Expurgo do `audit_log` após 6 meses (#116) | Não há job nem função de expurgo por idade. O único caminho que toca a trilha é o `app_purgar_paciente`, que pseudonimiza no expurgo do paciente — não apaga por tempo. O mínimo legal é cumprido por inércia (nada é apagado), não por regra implementada. | `BACKLOG.md` |
-| Lifecycle Rule de 30 dias no bucket off-site (OCI S3) | Configuração do provedor, fora do repositório. **Confirmar no console do bucket** — não presumir pelo texto desta política. | #89 |
+| Lacuna                                                | Estado verificado                                                                                                                                                                                                                                           | Onde fecha            |
+| :---------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------- |
+| Expurgo do prontuário ao vencer o prazo               | `app_purgar_paciente` e `app_paciente_expurgavel` existem na `0045`, mas **nenhum código da aplicação as chama** — nenhuma ação, tela ou job. O expurgo hoje só sai por SQL manual, e o aviso prévio de 90 dias da seção 6 não existe.                      | Fase 6 / `BACKLOG.md` |
+| Expurgo do `audit_log` após 6 meses (#116)            | Não há job nem função de expurgo por idade. O único caminho que toca a trilha é o `app_purgar_paciente`, que pseudonimiza no expurgo do paciente — não apaga por tempo. O mínimo legal é cumprido por inércia (nada é apagado), não por regra implementada. | `BACKLOG.md`          |
+| Lifecycle Rule de 30 dias no bucket off-site (OCI S3) | Configuração do provedor, fora do repositório. **Confirmar no console do bucket** — não presumir pelo texto desta política.                                                                                                                                 | #89                   |
 
 ## 9. Direitos do titular (LGPD Art. 18)
 
-O responsável legal do paciente pode solicitar, a qualquer momento e através
-da clínica (controladora): confirmação de tratamento, acesso aos dados,
-correção, anonimização/eliminação (respeitada a base legal de retenção da
-seção 4), portabilidade, e revogação do consentimento (sem efeito retroativo
-sobre o tratamento já realizado). O Iris, como operador, executa essas
-solicitações mediante instrução da clínica.
+O titular dos dados pode solicitar, a qualquer momento e através da clínica
+(controladora): confirmação de tratamento, acesso aos dados, correção,
+anonimização/eliminação (respeitada a base legal de retenção da seção 4),
+portabilidade, e revogação do consentimento (sem efeito retroativo sobre o
+tratamento já realizado). Quando o paciente é menor de 18 anos, esses
+direitos são exercidos pelo responsável legal; quando é titular adulto e
+civilmente capaz, são exercidos pelo próprio titular
+(`termo-consentimento-titular-adulto.md`, seção 13). O Iris, como operador,
+executa essas solicitações mediante instrução da clínica.
 
 ## 10. Encarregado (DPO)
 
