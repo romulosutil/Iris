@@ -11,7 +11,7 @@
  * Roda como superuser (`MIGRATION_DATABASE_URL`): o objetivo é provar que nem
  * quem bypassa RLS consegue gravar o estado inválido. Auto-skip sem DB.
  */
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import postgres from "postgres";
 
 const hasDb = !!process.env.MIGRATION_DATABASE_URL;
@@ -30,6 +30,13 @@ describe.skipIf(!hasDb)("consent_responsavel_por_tipo (CHECK de banco)", () => {
     await owner`DELETE FROM patient WHERE id = ${P_CHECK}`;
     await owner`INSERT INTO patient (id, clinic_id, nome)
       VALUES (${P_CHECK}, ${CLINIC}, 'Paciente do CHECK')`;
+  });
+
+  // Limpeza por teste, não por suíte: sem isto um teste que insere linhas
+  // válidas contamina a contagem do seguinte, e a suíte só passa na ordem em
+  // que foi escrita (quebra com --shuffle).
+  beforeEach(async () => {
+    await owner`DELETE FROM consent WHERE patient_id = ${P_CHECK}`;
   });
 
   afterAll(async () => {
@@ -52,6 +59,22 @@ describe.skipIf(!hasDb)("consent_responsavel_por_tipo (CHECK de banco)", () => {
     ).rejects.toThrow(/consent_responsavel_por_tipo/);
   });
 
+  test("tratamento_dados_menor com responsável string VAZIA é rejeitado", async () => {
+    // `IS NOT NULL` sozinho aceitaria '' — é exatamente a sentinela falsa que
+    // a constraint existe para impedir. Daí o btrim SOMADO ao NULL-check.
+    await expect(
+      owner`INSERT INTO consent (patient_id, tipo, responsavel_signatario, versao_termo)
+        VALUES (${P_CHECK}, 'tratamento_dados_menor', '', 'v1')`,
+    ).rejects.toThrow(/consent_responsavel_por_tipo/);
+  });
+
+  test("tratamento_dados_menor com responsável só de espaços é rejeitado", async () => {
+    await expect(
+      owner`INSERT INTO consent (patient_id, tipo, responsavel_signatario, versao_termo)
+        VALUES (${P_CHECK}, 'tratamento_dados_menor', '   ', 'v1')`,
+    ).rejects.toThrow(/consent_responsavel_por_tipo/);
+  });
+
   test("os dois estados VÁLIDOS passam (o CHECK não é um bloqueio geral)", async () => {
     await owner`INSERT INTO consent (patient_id, tipo, responsavel_signatario, versao_termo)
       VALUES (${P_CHECK}, 'tratamento_dados_menor', 'Mãe Legítima', 'v1')`;
@@ -61,7 +84,9 @@ describe.skipIf(!hasDb)("consent_responsavel_por_tipo (CHECK de banco)", () => {
     // em que os valores foram adicionados), não a alfabética.
     const linhas = await owner`
       SELECT tipo, responsavel_signatario FROM consent
-      WHERE patient_id = ${P_CHECK} ORDER BY tipo::text`;
+      WHERE patient_id = ${P_CHECK}
+        AND tipo IN ('tratamento_dados_menor', 'autoconsentimento_titular_adulto')
+      ORDER BY tipo::text`;
     expect(linhas).toHaveLength(2);
     // D2: renovação/coexistência é LINHA NOVA — não há UNIQUE em patient_id.
     expect(linhas[0]!.responsavel_signatario).toBeNull();

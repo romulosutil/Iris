@@ -344,6 +344,31 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
     expect(daClinicaB.map((c) => c.id)).toEqual([CONSENT_P3]);
   });
 
+  test("consent_insert: coordenador da clínica A NÃO grava consent de paciente da clínica B", async () => {
+    // Esta PR mexe justamente no caminho de ESCRITA de consent. A policy
+    // consent_insert exige app_patient_in_clinic(patient_id) — P3 é da clínica
+    // B, então o WITH CHECK falha mesmo com papel de coordenador válido em A.
+    const erro = await capturarErro(
+      withTenant(ctx("coordenador", U_COORD), (db) =>
+        db.insert(consent).values({
+          patientId: P3,
+          tipo: "tratamento_dados_menor",
+          responsavelSignatario: "Invasor",
+          versaoTermo: "v1",
+        }),
+      ),
+    );
+    expect(erro).toMatch(/row-level security|violates row-level security/i);
+
+    // E nada vazou para a clínica B: só o consent semeado continua lá.
+    const daClinicaB = await withTenant(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      (db) => db.select().from(consent).where(eq(consent.patientId, P3)),
+    );
+    expect(daClinicaB).toHaveLength(1);
+    expect(daClinicaB[0]!.id).toBe(CONSENT_P3);
+  });
+
   test("consent: UPDATE é negado a app_role (append-only, LGPD)", async () => {
     // REVOKE UPDATE, DELETE ON consent FROM app_role (0001_rls.sql:23). Não é
     // policy que retorna 0 linhas — é privilégio ausente, que ERRA. O drizzle
