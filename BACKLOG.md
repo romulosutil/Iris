@@ -24,6 +24,11 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |            📅 Pós-MVP             | Issue #126               |
 
+## 🏁 Sessão 29/07/2026 (Part 2) — Padrões "Is It Agent Ready" & Descoberta por IA (PR #138)
+
+- **Capacidades Implementadas**: 14 padrões de prontidão para agentes de IA publicados (robots.txt com regras AI + Content-Signal, sitemap.xml, Link headers RFC 8288, negociação Accept: text/markdown, API Catalog RFC 9727, OIDC discovery, OAuth Authorization Server RFC 8414 com `agent_auth`, OAuth Protected Resource Metadata RFC 9728, `/auth.md`, MCP Server Card SEP-1649, Agent Skills Discovery Index v0.2.0, WebMCP `navigator.modelContext`, guia e zonefile DNS-AID RFC 9460).
+- **PR Aberta**: [#138](https://github.com/romulosutil/Iris/pull/138).
+
 ---
 
 ## 🏁 Sessão 29/07/2026 — Ratificação jurídica do termo adulto e diferimento consciente (Issues #129, #134, #135)
