@@ -24,7 +24,9 @@ e relatórios gerados (`Report`).
   responsável legal (LGPD Art. 14) — coletado no ato de admissão do paciente
   na clínica, versionado e nunca sobrescrito (`Consent`).
 - **Tutela da saúde**, quando o tratamento é realizado por profissionais/
-  serviços de saúde (LGPD Art. 11, II, "a").
+  serviços de saúde (LGPD Art. 11, II, "f" — a alínea "a" é cumprimento de
+  obrigação legal ou regulatória, citada abaixo, e estava trocada aqui até
+  28/07/2026).
 - **Cumprimento de obrigação legal/regulatória** para a retenção além do
   período de tratamento ativo (LGPD Art. 15/16 — ver seção 5 abaixo e
   `politica-retencao-dados.md`).
