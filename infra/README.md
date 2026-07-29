@@ -1004,8 +1004,33 @@ normal e curta o bastante para não queimar um prazo de 15 minutos inteiro.
 
 ### Teste de fumaça com alerta sintético
 
-Confirma as **duas** transições de ponta a ponta. Rode no console do Postgres,
-com a role dona — **em ambiente de teste**, não em produção com dado real.
+Confirma as **duas** transições de ponta a ponta. Há uma verificação
+automatizada em `scripts/smoke-alerta-risco.mjs` — **em ambiente de teste**,
+não em produção com dado real:
+
+```bash
+SMOKE_AMBIENTE_TESTE=1 \
+SMOKE_DATABASE_URL=postgres://iris:...@localhost:5433/iris \
+node scripts/smoke-alerta-risco.mjs
+```
+
+Duas coisas sobre esse script, porque as duas são consequência direta do
+desenho de permissões da `0049`:
+
+- **A URL tem que ser a da role dona**, não a da aplicação. `app_role` não tem
+  INSERT em `alerta_risco_clinico` (criar alerta é privilégio do caminho do
+  agente), a tabela é `FORCE ROW LEVEL SECURITY` e `app_escalonar_risco_vencidos()`
+  só tem EXECUTE para `iris_escalonamento`. O script ignora `DATABASE_URL` de
+  propósito — é a role errada e é a variável que aponta para produção na
+  `.env.local`.
+- **Nada é commitado.** Tudo roda numa transação que termina em `ROLLBACK`,
+  inclusive as linhas de `audit_log`. O teste não precisa (e não tenta) deletar
+  da trilha imutável para se limpar.
+
+`--dry-run` para logo depois do INSERT sintético: valida conexão, permissões e
+schema sem exercitar o motor.
+
+Ou execute manualmente no console do Postgres com a role dona — **em ambiente de teste**, não em produção com dado real:
 
 ```sql
 -- 1) Cria um alerta JÁ VENCIDO a partir de uma sessão de teste existente.
