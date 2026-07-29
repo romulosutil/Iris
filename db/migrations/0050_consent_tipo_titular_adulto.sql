@@ -1,0 +1,19 @@
+-- #100 — Consentimento de titular adulto (parte 1 de 2): só o valor de enum.
+--
+-- Por que DUAS migrações e não uma: em Postgres >= 12 um valor de enum
+-- recém-adicionado NÃO pode ser USADO na mesma transação em que foi criado
+-- ("unsafe use of new value ... of enum type"). O CHECK de 0051 referencia o
+-- valor novo, então o `ALTER TYPE` precisa estar num arquivo separado —
+-- migração aplicada isoladamente (`migrate` incremental) já commita este
+-- arquivo antes do próximo.
+--
+-- ATENÇÃO: o runner do projeto (drizzle-orm/postgres-js migrator, ver
+-- scripts/migrate.mjs) envolve TODAS as migrações pendentes numa ÚNICA
+-- transação (drizzle-orm 0.45.2, pg-core/dialect.js `migrate`). Numa base
+-- nova (CI, restore, dev zerado) 0050 e 0051 entram juntas no mesmo BEGIN, e
+-- a separação em dois arquivos por si só NÃO resolve. Por isso o CHECK de
+-- 0051 compara `tipo::text` — o cast tira o literal do domínio do enum e a
+-- restrição do Postgres deixa de valer (verificado contra Postgres 16 local).
+-- A divisão em dois arquivos é mantida por clareza de intenção e porque
+-- protege o caso incremental; o cast é o que garante o caso atômico.
+ALTER TYPE "consent_tipo" ADD VALUE IF NOT EXISTS 'autoconsentimento_titular_adulto';

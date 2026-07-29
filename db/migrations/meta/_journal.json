@@ -351,6 +351,20 @@
       "when": 1784521560778,
       "tag": "0049_alerta_risco_clinico",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1784521561778,
+      "tag": "0050_consent_tipo_titular_adulto",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1784521562778,
+      "tag": "0051_consent_responsavel_opcional",
+      "breakpoints": true
     }
   ]
 }

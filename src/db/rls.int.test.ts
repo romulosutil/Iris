@@ -15,6 +15,7 @@ import {
   patientClinicalProfile,
   patientProtocol,
   report,
+  consent,
 } from "./schema";
 import { withTenant, type TenantContext } from "./rls";
 import { sql as appSql } from "./client";
@@ -51,6 +52,9 @@ const P3 = "b0000000-0000-0000-0000-000000000003"; // clinic B
 const P4 = "b0000000-0000-0000-0000-000000000004"; // clinic A, sem profile, sem equipe
 const PROT_A = "c0000000-0000-0000-0000-000000000001"; // protocolo da clínica A
 const PROT_B = "c0000000-0000-0000-0000-000000000002"; // protocolo da clínica B
+const CONSENT_P1 = "d0000000-0000-0000-0000-000000000001"; // clinic A, menor
+const CONSENT_P2 = "d0000000-0000-0000-0000-000000000002"; // clinic A, adulto (#100)
+const CONSENT_P3 = "d0000000-0000-0000-0000-000000000003"; // clinic B
 
 const ctx = (
   role: TenantContext["role"],
@@ -58,13 +62,33 @@ const ctx = (
   clinicId = CLINIC_A,
 ) => ({ role, userId, clinicId }) satisfies TenantContext;
 
+/**
+ * Achata a cadeia `cause` de um erro rejeitado numa string. O drizzle embrulha
+ * o erro do Postgres em "Failed query: ...", escondendo o texto que interessa
+ * (ex.: "permission denied for table consent") em `cause`.
+ */
+async function capturarErro(p: Promise<unknown>): Promise<string> {
+  try {
+    await p;
+  } catch (e) {
+    const partes: string[] = [];
+    let atual: unknown = e;
+    while (atual instanceof Error) {
+      partes.push(atual.message);
+      atual = atual.cause;
+    }
+    return partes.join(" | ");
+  }
+  throw new Error("esperava rejeição, mas a promise resolveu");
+}
+
 let owner: ReturnType<typeof postgres>;
 
 describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
   beforeAll(async () => {
     // Seed como superuser (iris) — bypassa RLS.
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
-    await owner`TRUNCATE clinic, app_user, user_role, patient, patient_clinical_profile, care_team_membership, protocol, patient_protocol RESTART IDENTITY CASCADE`;
+    await owner`TRUNCATE clinic, app_user, user_role, patient, patient_clinical_profile, care_team_membership, protocol, patient_protocol, consent RESTART IDENTITY CASCADE`;
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'Clínica A'), (${CLINIC_B}, 'Clínica B')`;
     await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD}, 'Coord', 'coord@a.test'),
@@ -100,6 +124,13 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe) VALUES
       (${P1}, ${U_TERA}, 'ABA', 'terapeuta_referencia'),
       (${P1}, ${U_TERA3}, 'Fono', 'terapeuta_referencia')`;
+    // consent (#100): um por clínica para provar isolamento cross-tenant, e
+    // um do tipo novo (titular adulto, sem responsável) para provar que o
+    // CHECK e a RLS convivem — a policy é agnóstica ao `tipo`.
+    await owner`INSERT INTO consent (id, patient_id, tipo, responsavel_signatario, versao_termo) VALUES
+      (${CONSENT_P1}, ${P1}, 'tratamento_dados_menor', 'Mãe do P1', 'v1'),
+      (${CONSENT_P2}, ${P2}, 'autoconsentimento_titular_adulto', NULL, 'adulto-v1'),
+      (${CONSENT_P3}, ${P3}, 'tratamento_dados_menor', 'Mãe do P3', 'v1')`;
   });
 
   afterAll(async () => {
@@ -284,6 +315,92 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
         .where(eq(patientClinicalProfile.patientId, P1)),
     );
     expect(removido).toHaveLength(0);
+  });
+
+  // ─── consent — isolamento cross-tenant + append-only (gap coberto na #100) ──
+  // A tabela `consent` não tinha teste de RLS neste arquivo. As policies
+  // (0001_rls.sql) são agnósticas ao `tipo`, então o valor novo
+  // `autoconsentimento_titular_adulto` não muda nada aqui — é exatamente isso
+  // que estes testes provam.
+
+  test("consent: leitura é isolada por clínica (cross-tenant bloqueado)", async () => {
+    const daClinicaA = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.select().from(consent),
+    );
+    expect(daClinicaA.map((c) => c.id).sort()).toEqual(
+      [CONSENT_P1, CONSENT_P2].sort(),
+    );
+    // O consent do paciente da clínica B é invisível mesmo pedindo pelo id.
+    const vazamento = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.select().from(consent).where(eq(consent.id, CONSENT_P3)),
+    );
+    expect(vazamento).toHaveLength(0);
+
+    // E o inverso: coordenador da clínica B não vê os da A.
+    const daClinicaB = await withTenant(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      (db) => db.select().from(consent),
+    );
+    expect(daClinicaB.map((c) => c.id)).toEqual([CONSENT_P3]);
+  });
+
+  test("consent_insert: coordenador da clínica A NÃO grava consent de paciente da clínica B", async () => {
+    // Esta PR mexe justamente no caminho de ESCRITA de consent. A policy
+    // consent_insert exige app_patient_in_clinic(patient_id) — P3 é da clínica
+    // B, então o WITH CHECK falha mesmo com papel de coordenador válido em A.
+    const erro = await capturarErro(
+      withTenant(ctx("coordenador", U_COORD), (db) =>
+        db.insert(consent).values({
+          patientId: P3,
+          tipo: "tratamento_dados_menor",
+          responsavelSignatario: "Invasor",
+          versaoTermo: "v1",
+        }),
+      ),
+    );
+    expect(erro).toMatch(/row-level security|violates row-level security/i);
+
+    // E nada vazou para a clínica B: só o consent semeado continua lá.
+    const daClinicaB = await withTenant(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      (db) => db.select().from(consent).where(eq(consent.patientId, P3)),
+    );
+    expect(daClinicaB).toHaveLength(1);
+    expect(daClinicaB[0]!.id).toBe(CONSENT_P3);
+  });
+
+  test("consent: UPDATE é negado a app_role (append-only, LGPD)", async () => {
+    // REVOKE UPDATE, DELETE ON consent FROM app_role (0001_rls.sql:23). Não é
+    // policy que retorna 0 linhas — é privilégio ausente, que ERRA. O drizzle
+    // embrulha o erro do Postgres, então a mensagem real está em `cause`.
+    const erro = await capturarErro(
+      withTenant(ctx("coordenador", U_COORD), (db) =>
+        db
+          .update(consent)
+          .set({ responsavelSignatario: "Adulterado" })
+          .where(eq(consent.id, CONSENT_P1)),
+      ),
+    );
+    expect(erro).toMatch(/permission denied for table consent/i);
+
+    const intacto = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.select().from(consent).where(eq(consent.id, CONSENT_P1)),
+    );
+    expect(intacto[0]!.responsavelSignatario).toBe("Mãe do P1");
+  });
+
+  test("consent: DELETE é negado a app_role (append-only, LGPD)", async () => {
+    const erro = await capturarErro(
+      withTenant(ctx("coordenador", U_COORD), (db) =>
+        db.delete(consent).where(eq(consent.id, CONSENT_P1)),
+      ),
+    );
+    expect(erro).toMatch(/permission denied for table consent/i);
+
+    const aindaExiste = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.select().from(consent).where(eq(consent.id, CONSENT_P1)),
+    );
+    expect(aindaExiste).toHaveLength(1);
   });
 
   test("admin_recepcao NUNCA lê nem escreve patient_protocol ou care_team_membership (guardrail 1c)", async () => {

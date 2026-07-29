@@ -44,7 +44,11 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
   test("admin_recepcao cadastra paciente + consent na mesma transação", async () => {
     const result = await criarPacienteEConsent(
       ctx,
-      form({ nome: "Paciente Teste", responsavelSignatario: "Mãe do Paciente" }),
+      form({
+        nome: "Paciente Teste",
+        tipoConsentimento: "responsavel_legal",
+        responsavelSignatario: "Mãe do Paciente",
+      }),
     );
     expect(result.error).toBeUndefined();
     const [p] = await withTenant(ctx, (db) =>
@@ -56,20 +60,26 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     );
     expect(consentimentos).toHaveLength(1);
     expect(consentimentos[0]!.tipo).toBe("tratamento_dados_menor");
+    expect(consentimentos[0]!.responsavelSignatario).toBe("Mãe do Paciente");
+    expect(consentimentos[0]!.versaoTermo).toBe("v1");
   });
 
   test("nome vazio retorna erro sem gravar nada", async () => {
     const result = await criarPacienteEConsent(
       ctx,
-      form({ nome: "  ", responsavelSignatario: "Mãe" }),
+      form({
+        nome: "  ",
+        tipoConsentimento: "responsavel_legal",
+        responsavelSignatario: "Mãe",
+      }),
     );
     expect(result.error).toMatch(/Nome/);
   });
 
-  test("sem responsavelSignatario retorna erro (consent obrigatório antes do paciente)", async () => {
+  test("responsavel_legal sem responsavelSignatario retorna erro (consent obrigatório antes do paciente)", async () => {
     const result = await criarPacienteEConsent(
       ctx,
-      form({ nome: "Outro Paciente" }),
+      form({ nome: "Outro Paciente", tipoConsentimento: "responsavel_legal" }),
     );
     expect(result.error).toMatch(/responsável/i);
     const encontrados = await withTenant(ctx, (db) =>
@@ -78,9 +88,79 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     expect(encontrados).toHaveLength(0);
   });
 
+  // ─── #100 — titular adulto autoconsentindo ────────────────────────────────
+
+  test("titular_adulto grava tipo novo com responsavelSignatario NULL", async () => {
+    const result = await criarPacienteEConsent(
+      ctx,
+      form({ nome: "Adulto Autoconsente", tipoConsentimento: "titular_adulto" }),
+    );
+    expect(result.error).toBeUndefined();
+    const consentimentos = await withTenant(ctx, (db) =>
+      db.select().from(consent).where(eq(consent.patientId, result.id!)),
+    );
+    expect(consentimentos).toHaveLength(1);
+    expect(consentimentos[0]!.tipo).toBe("autoconsentimento_titular_adulto");
+    expect(consentimentos[0]!.responsavelSignatario).toBeNull();
+    expect(consentimentos[0]!.versaoTermo).toBe("adulto-v1");
+  });
+
+  test("titular_adulto COM responsável preenchido retorna erro e não grava nada", async () => {
+    const result = await criarPacienteEConsent(
+      ctx,
+      form({
+        nome: "Adulto Com Responsavel",
+        tipoConsentimento: "titular_adulto",
+        responsavelSignatario: "Mãe Indevida",
+      }),
+    );
+    expect(result.error).toMatch(/titular adulto não deve informar responsável/i);
+    const encontrados = await withTenant(ctx, (db) =>
+      db.select().from(patient).where(eq(patient.nome, "Adulto Com Responsavel")),
+    );
+    expect(encontrados).toHaveLength(0);
+  });
+
+  test("tipoConsentimento ausente retorna erro (sem default silencioso)", async () => {
+    const result = await criarPacienteEConsent(
+      ctx,
+      form({ nome: "Sem Tipo", responsavelSignatario: "Mãe" }),
+    );
+    expect(result.error).toMatch(/quem assina o consentimento/i);
+    const encontrados = await withTenant(ctx, (db) =>
+      db.select().from(patient).where(eq(patient.nome, "Sem Tipo")),
+    );
+    expect(encontrados).toHaveLength(0);
+  });
+
+  test("tipoConsentimento inválido retorna erro", async () => {
+    const result = await criarPacienteEConsent(
+      ctx,
+      form({ nome: "Tipo Invalido", tipoConsentimento: "curatela" }),
+    );
+    expect(result.error).toMatch(/quem assina o consentimento/i);
+  });
+
+  test("nascimento de menor com titular_adulto NÃO bloqueia (emancipação existe)", async () => {
+    const result = await criarPacienteEConsent(
+      ctx,
+      form({
+        nome: "Menor Emancipado",
+        nascimento: "2012-05-10",
+        tipoConsentimento: "titular_adulto",
+      }),
+    );
+    expect(result.error).toBeUndefined();
+    const consentimentos = await withTenant(ctx, (db) =>
+      db.select().from(consent).where(eq(consent.patientId, result.id!)),
+    );
+    expect(consentimentos[0]!.tipo).toBe("autoconsentimento_titular_adulto");
+  });
+
   test("grava paciente + consent + alvo na mesma transação", async () => {
     const fd = new FormData();
     fd.set("nome", "Bruna");
+    fd.set("tipoConsentimento", "responsavel_legal");
     fd.set("responsavelSignatario", "Mãe da Bruna");
     fd.append("alvoDisciplina", "aba");
     fd.append("alvoHorasSemana", "12.0");
@@ -99,7 +179,11 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
   test("sem alvo informado grava paciente + consent + 0 alvos", async () => {
     const res = await criarPacienteEConsent(
       ctx,
-      form({ nome: "Sem Alvo", responsavelSignatario: "Pai" }),
+      form({
+        nome: "Sem Alvo",
+        tipoConsentimento: "responsavel_legal",
+        responsavelSignatario: "Pai",
+      }),
     );
     expect(res.error).toBeUndefined();
     const alvos = await owner`
@@ -110,6 +194,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
   test("par de alvo inválido (horas não numéricas) reverte tudo (rollback)", async () => {
     const fd = new FormData();
     fd.set("nome", "Rollback Teste");
+    fd.set("tipoConsentimento", "responsavel_legal");
     fd.set("responsavelSignatario", "Mãe");
     fd.append("alvoDisciplina", "aba");
     fd.append("alvoHorasSemana", "abc"); // inválido

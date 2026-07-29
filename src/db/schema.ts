@@ -34,10 +34,16 @@ export const userRoleTipo = pgEnum("user_role_tipo", [
   "admin_recepcao",
 ]);
 
+// `tratamento_dados_menor` = responsável legal assina pelo paciente menor.
+// `autoconsentimento_titular_adulto` (#100) = o próprio titular adulto assina.
+// O tipo é ESCOLHA EXPLÍCITA do operador no formulário, NUNCA derivado de
+// `patient.nascimento` (nullable, e a idade erra nos dois sentidos: adolescente
+// emancipado, adulto sob curatela).
 export const consentTipo = pgEnum("consent_tipo", [
   "tratamento_dados_menor",
   "uso_ia_processamento",
   "exportacao_relatorios",
+  "autoconsentimento_titular_adulto",
 ]);
 
 // Estados de sessão (Agenda 2.0, Etapa A). Expande/substitui o enum da Fase 1d.
@@ -299,18 +305,52 @@ export const patientClinicalProfile = pgTable("patient_clinical_profile", {
     .defaultNow(),
 });
 
-export const consent = pgTable("consent", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  patientId: uuid("patient_id")
-    .notNull()
-    .references(() => patient.id, { onDelete: "restrict" }),
-  tipo: consentTipo("tipo").notNull(),
-  responsavelSignatario: text("responsavel_signatario").notNull(),
-  versaoTermo: text("versao_termo").notNull(),
-  assinadoEm: timestamp("assinado_em", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+// Append-only por design (LGPD): `REVOKE UPDATE, DELETE ON consent FROM
+// app_role` em 0001_rls.sql. Renovação de consentimento é LINHA NOVA — não há
+// UNIQUE em patient_id nem coluna de vigência; "consentimento vigente" = linha
+// de maior `assinadoEm`.
+export const consent = pgTable(
+  "consent",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "restrict" }),
+    tipo: consentTipo("tipo").notNull(),
+    // Nullable desde #100: no autoconsentimento de titular adulto não existe
+    // responsável. NULL é a representação correta — preencher com o nome do
+    // próprio paciente seria semanticamente falso e contaminaria exports.
+    responsavelSignatario: text("responsavel_signatario"),
+    versaoTermo: text("versao_termo").notNull(),
+    assinadoEm: timestamp("assinado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // Última linha de defesa: qualquer novo caminho de escrita (script admin,
+    // migração de dados, outro formulário) é barrado pelo banco, não só pela
+    // validação de app. `::text` espelha o SQL de 0051 — ver a nota lá.
+    //
+    // CUSTO DO `::text`: a constraint fica CEGA a `ALTER TYPE ... RENAME VALUE`
+    // — renomear um valor de `consentTipo` não reescreve o literal de texto do
+    // lado direito, e o CHECK passa a rejeitar silenciosamente toda linha
+    // daquele valor. Quem renomear tem que reescrever esta constraint junto.
+    //
+    // `IS NOT NULL` E `btrim(...) <> ''`, nunca um no lugar do outro: `''` e
+    // `'   '` satisfazem NOT NULL e são a sentinela falsa que a constraint
+    // existe para impedir; e trocar o NULL-check pelo btrim abriria um buraco
+    // maior, porque em CHECK uma expressão que avalia para NULL SATISFAZ a
+    // constraint (só FALSE rejeita).
+    check(
+      "consent_responsavel_por_tipo",
+      sql`(${t.tipo}::text = 'tratamento_dados_menor'
+    AND ${t.responsavelSignatario} IS NOT NULL
+    AND btrim(${t.responsavelSignatario}) <> '')
+  OR (${t.tipo}::text = 'autoconsentimento_titular_adulto' AND ${t.responsavelSignatario} IS NULL)
+  OR (${t.tipo}::text IN ('uso_ia_processamento', 'exportacao_relatorios'))`,
+    ),
+  ],
+);
 
 // ─── Protocolos (catálogo + instância por paciente) ──────────────────────────
 export const protocolFamiliaCatalogo = pgTable("protocol_familia_catalogo", {

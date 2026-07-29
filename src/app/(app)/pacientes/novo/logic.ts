@@ -5,9 +5,26 @@ import { patient, consent, patientAlvoDisciplina } from "@/db/schema";
 
 export type CadastroAdminState = { error?: string };
 
-// Versão do termo de consentimento vigente. Fixo por ora; vira config quando
-// houver versionamento de termo (docs/legal).
-const VERSAO_TERMO_CONSENTIMENTO_ATUAL = "v1";
+// Versões de termo vigentes, uma por tipo de titular. Fixas por ora; viram
+// config quando houver versionamento de termo (docs/legal). O valor "v1" do
+// termo do menor NÃO muda — há dado gravado com ele em produção.
+export const VERSAO_TERMO_MENOR_ATUAL = "v1";
+export const VERSAO_TERMO_TITULAR_ADULTO_ATUAL = "adulto-v1";
+
+/**
+ * Quem assina o consentimento. É ESCOLHA EXPLÍCITA do operador no formulário,
+ * NUNCA derivada de `patient.nascimento`: `nascimento` é nullable, e derivar
+ * por idade erra nos dois sentidos (adolescente emancipado assina por si;
+ * adulto sob curatela não assina por si). `nascimento` segue desacoplado.
+ *
+ * Adulto sob curatela está fora de escopo (#100) — não existe terceiro valor.
+ */
+export type TipoConsentimento = "responsavel_legal" | "titular_adulto";
+
+const TIPOS_CONSENTIMENTO: readonly string[] = [
+  "responsavel_legal",
+  "titular_adulto",
+];
 
 /**
  * Núcleo testável: cria paciente + Consent LGPD na MESMA transação. Consent
@@ -31,13 +48,37 @@ export async function criarPacienteEConsent(
     return { error: "Data de nascimento inválida." };
   }
 
+  // Campo OBRIGATÓRIO e sem default silencioso: um default "responsavel_legal"
+  // gravaria consentimento de menor para um adulto sempre que a UI esquecesse
+  // de mandar o campo — erro que só apareceria numa auditoria LGPD.
+  const tipoConsentimentoRaw = String(
+    formData.get("tipoConsentimento") ?? "",
+  ).trim();
+  if (!TIPOS_CONSENTIMENTO.includes(tipoConsentimentoRaw)) {
+    return {
+      error:
+        "Selecione quem assina o consentimento: o próprio paciente (titular adulto) ou o responsável legal.",
+    };
+  }
+  const tipoConsentimento = tipoConsentimentoRaw as TipoConsentimento;
+
   const responsavelSignatario = String(
     formData.get("responsavelSignatario") ?? "",
   ).trim();
-  if (!responsavelSignatario) {
+  if (tipoConsentimento === "responsavel_legal" && !responsavelSignatario) {
     return {
       error:
         "Nome do responsável que assina o consentimento é obrigatório.",
+    };
+  }
+  // Rejeita em vez de ignorar: o CHECK do banco barraria de qualquer forma,
+  // com erro 500 opaco. Responsável preenchido junto de "titular adulto" é
+  // inconsistência de formulário — o operador precisa saber qual das duas
+  // informações está errada.
+  if (tipoConsentimento === "titular_adulto" && responsavelSignatario) {
+    return {
+      error:
+        "Consentimento de titular adulto não deve informar responsável — remova o nome do responsável ou troque para responsável legal.",
     };
   }
 
@@ -64,12 +105,22 @@ export async function criarPacienteEConsent(
           convenio,
         })
         .returning({ id: patient.id });
-      await tx.insert(consent).values({
-        patientId: novo!.id,
-        tipo: "tratamento_dados_menor",
-        responsavelSignatario,
-        versaoTermo: VERSAO_TERMO_CONSENTIMENTO_ATUAL,
-      });
+      await tx.insert(consent).values(
+        tipoConsentimento === "titular_adulto"
+          ? {
+              patientId: novo!.id,
+              tipo: "autoconsentimento_titular_adulto" as const,
+              // null, não "" — o CHECK do banco exige IS NULL.
+              responsavelSignatario: null,
+              versaoTermo: VERSAO_TERMO_TITULAR_ADULTO_ATUAL,
+            }
+          : {
+              patientId: novo!.id,
+              tipo: "tratamento_dados_menor" as const,
+              responsavelSignatario,
+              versaoTermo: VERSAO_TERMO_MENOR_ATUAL,
+            },
+      );
       // 0..N alvos, na MESMA transação (rollback junto do paciente/consent se
       // algum par for inválido). vigenciaInicio = hoje; campos vazios ignorados.
       for (let i = 0; i < disciplinas.length; i++) {
