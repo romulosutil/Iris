@@ -59,6 +59,35 @@ ALTER TABLE "consent" ADD CONSTRAINT "consent_revogado_mesmo_paciente"
 --> statement-breakpoint
 
 -- ---------------------------------------------------------------------------
+-- 1b. Índices do caminho quente do gate
+-- ---------------------------------------------------------------------------
+-- O Postgres NÃO cria índice para coluna de FK automaticamente. Sem estes dois,
+-- toda chamada de `app_prontuario_somente_leitura` e `app_finalidade_revogada`
+-- faz seq scan em `consent` — e essas funções entram no WITH CHECK/USING de 31
+-- policies, ou seja, rodam em toda escrita clínica. O custo cresceria junto com
+-- o número de consentimentos da base inteira.
+--
+-- Os dois índices que já existiam não servem a estas consultas:
+-- `consent_pkey` (id) e `consent_id_patient_uniq` (id, patient_id) — neste
+-- último `patient_id` é a SEGUNDA coluna, então não atende filtro por paciente.
+
+-- Acesso 1: "qual a concessão de regime mais recente deste paciente"
+--   WHERE patient_id = $1 AND tipo::text IN (...) ORDER BY assinado_em DESC, id DESC LIMIT 1
+-- A ordem das colunas espelha o predicado; DESC evita sort.
+CREATE INDEX "consent_patient_assinado_idx"
+  ON "consent" ("patient_id", "assinado_em" DESC, "id" DESC);
+--> statement-breakpoint
+
+-- Acesso 2: "existe revogação apontando para esta linha"
+--   WHERE tipo::text = 'revogacao_consentimento' AND consent_revogado_id = $1
+-- Índice PARCIAL: só linhas de revogação têm ponteiro, e elas são a minoria da
+-- tabela. Mantém o índice pequeno e não onera o INSERT de concessão.
+CREATE INDEX "consent_revogado_id_idx"
+  ON "consent" ("consent_revogado_id")
+  WHERE "consent_revogado_id" IS NOT NULL;
+--> statement-breakpoint
+
+-- ---------------------------------------------------------------------------
 -- 2. CHECK de coerência entre tipo e colunas
 -- ---------------------------------------------------------------------------
 
