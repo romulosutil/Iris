@@ -403,6 +403,19 @@ o efeito prático informado em cada seção.
 > **factualmente falsas**. Documento legal que descreve errado o sistema é
 > pior que documento omisso. Os trechos afetados foram marcados no corpo
 > acima com remissão a esta seção; nenhum texto histórico foi apagado.
+>
+> **Esta emenda também está coberta pela ratificação de 29/07/2026.** Ela
+> reverte, com base factual nova, dois pontos que constavam do texto já
+> ratificado na mesma data: a resposta (c) da seção 4, que registrava
+> curatela como "termo próprio, fora do MVP" (issue #134), e a "consequência
+> de implementação" da seção 4, que registrava que "o sistema não implementa
+> detecção automática de maioridade" (issue #135). Ambos os pontos foram
+> lidos pelo advogado na mesma sessão em que o restante deste documento foi
+> validado, e também não receberam apontamento. Não há contradição entre as
+> duas leituras da mesma data: a ratificação anterior cobria a intenção de
+> produto vigente até então; esta emenda cobre o que foi de fato
+> implementado depois, e substitui aqueles dois pontos especificamente —
+> nada mais do texto ratificado antes muda.
 
 ### 16.1 A revogação passou a ser registrável (corrige §13, pendência (a))
 
@@ -428,9 +441,9 @@ revogação.
 ### 16.2 Somente-leitura: implementado, e **diferente** para menor e para adulto (corrige §13, pendência (b))
 
 A pendência (b) pedia que se confirmasse antes de aplicar o mesmo
-comportamento aos dois regimes. **Resposta proposta, e é o que está
-implementado: os dois comportamentos são distintos, e a distinção é a base
-legal.**
+comportamento aos dois regimes. **Resposta ratificada em 29/07/2026, e é o
+que está implementado: os dois comportamentos são distintos, e a distinção
+é a base legal.**
 
 - **Menor e curatelado.** Revogado o consentimento de regime e não havendo
   outro consentimento de regime vigente, o prontuário vai a
@@ -487,8 +500,8 @@ completaram 18 anos, classificados dentro ou fora dos 90 dias corridos de
 §4(b). Data de nascimento ausente é terceiro estado, "desconhecido" —
 nunca "ainda é menor".
 
-**Resposta proposta — por que isso não conflita com a resposta (a)
-ratificada:** a resposta (a) afirma que **não há janela de descoberto** —
+**Resposta ratificada em 29/07/2026 — por que isso não conflita com a
+resposta (a) ratificada:** a resposta (a) afirma que **não há janela de descoberto** —
 o consentimento do responsável continua sustentando o tratamento entre o
 aniversário de 18 anos e a nova assinatura, e a renovação regulariza para a
 frente sem sanar nulidade nenhuma. Um indicador que **bloqueasse** o

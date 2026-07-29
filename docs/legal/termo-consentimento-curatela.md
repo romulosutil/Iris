@@ -1,9 +1,18 @@
 # Termo de Consentimento para Tratamento de Dados — Adulto sob Curatela — Iris
 
-**Versão `curatela-v1`.** Redigido em 29/07/2026 para a issue #134,
-cumprindo a resposta **(c)** já ratificada em
-`termo-consentimento-titular-adulto.md` §4: curatela tem **termo próprio**,
-nunca adaptação do termo de menor.
+**Status: RATIFICADO em 29/07/2026 — apto a ser colhido.** Versão
+`curatela-v1`. Redigido em 29/07/2026 para a issue #134, cumprindo a
+resposta **(c)** já ratificada em `termo-consentimento-titular-adulto.md`
+§4: curatela tem **termo próprio**, nunca adaptação do termo de menor. O
+termo foi submetido no mesmo dia à revisão jurídica.
+
+> **Como esta ratificação se deu, registrado de propósito:** o advogado
+> acompanha e lê os documentos jurídicos produzidos neste projeto; a
+> validação deste documento foi comunicada pelo Rômulo (responsável pelo
+> produto) em 29/07/2026, e **não houve apontamento a corrigir**. A validade
+> deste termo se apoia nesse protocolo — **não** em parecer escrito
+> autônomo, que não foi emitido. Se apontamentos vierem depois, o texto
+> passa a `curatela-v2` e exige nova coleta de assinatura (seção 3).
 
 Complementa `termo-consentimento-titular-adulto.md`,
 `procedimento-revogacao-consentimento.md`, `politica-privacidade.md`,
@@ -73,7 +82,7 @@ ser inválido por representação excessiva:
   do titular a participação na decisão sobre o próprio cuidado. O termo diz
   isso expressamente na seção 13.
 
-**Resposta proposta — participação do titular:** a assinatura é do curador,
+**Resposta ratificada em 29/07/2026 — participação do titular:** a assinatura é do curador,
 mas o termo declara que o **conteúdo foi apresentado ao titular em
 linguagem acessível** e que ele participou da decisão **na medida do seu
 discernimento**. Se o titular tiver discernimento para tanto, assina
@@ -81,7 +90,7 @@ discernimento**. Se o titular tiver discernimento para tanto, assina
 curador nem é condição de validade — ela documenta o respeito à autonomia
 exigido pelo Estatuto.
 
-**Resposta proposta — curatela parcial que não alcance dados de saúde:** se
+**Resposta ratificada em 29/07/2026 — curatela parcial que não alcance dados de saúde:** se
 o instrumento restringir a curatela a atos patrimoniais e nada disser sobre
 saúde, o caminho correto **não** é presumir representação. É colher o
 **termo de adulto capaz**, assinado pelo próprio titular, e registrar no
@@ -375,5 +384,9 @@ questão jurídica aparece aqui como **resposta afirmativa única**, com
 fundamento e efeito no sistema — nunca como pergunta aberta, que silêncio
 não ratifica.
 
-Data desta versão: **29/07/2026**. Se vierem apontamentos, o texto passa a
-`curatela-v2` e exige nova coleta de assinatura (seção 3).
+**Ratificado em 29/07/2026.** O advogado acompanha e lê os documentos
+produzidos; a validação foi comunicada pelo Rômulo em 29/07/2026, e não
+houve apontamento a corrigir neste documento — não houve parecer escrito
+autônomo nem reunião, apenas a leitura pelo protocolo acima. Se
+apontamentos vierem depois, o texto passa a `curatela-v2` e exige nova
+coleta de assinatura (seção 3).

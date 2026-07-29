@@ -1,7 +1,18 @@
 # Procedimento de Revogação de Consentimento — Iris
 
-**Versão `revogacao-v1`.** Redigido em 29/07/2026 para a issue #133,
-junto com a implementação do evento de revogação (migrações `0052`/`0053`).
+**Status: RATIFICADO em 29/07/2026 — apto a ser usado.** Versão
+`revogacao-v1`. Redigido em 29/07/2026 para a issue #133, junto com a
+implementação do evento de revogação (migrações `0052`/`0053`), e submetido
+no mesmo dia à revisão jurídica.
+
+> **Como esta ratificação se deu, registrado de propósito:** o advogado
+> acompanha e lê os documentos jurídicos produzidos neste projeto; a
+> validação deste documento foi comunicada pelo Rômulo (responsável pelo
+> produto) em 29/07/2026, e **não houve apontamento a corrigir**. A validade
+> deste documento se apoia nesse protocolo — **não** em parecer escrito
+> autônomo, que não foi emitido. Se apontamentos vierem depois, o texto
+> passa a `revogacao-v2`, e as revogações já gravadas com `revogacao-v1`
+> permanecem como estão (ver "Método de validação" ao final).
 
 > **Este identificador vai para o banco.** Toda linha de revogação gravada
 > na tabela `consent` leva `versao_termo = 'revogacao-v1'`. Existe uma
@@ -204,7 +215,11 @@ questão jurídica aqui aparece como **resposta afirmativa única**, com
 fundamento e efeito no sistema — nunca como pergunta aberta, que silêncio
 não ratifica.
 
-Data desta versão: **29/07/2026**. Se vierem apontamentos, o texto passa a
-`revogacao-v2` e o novo identificador é gravado nas revogações seguintes;
-as linhas já gravadas com `revogacao-v1` permanecem como estão, porque
-descrevem o procedimento vigente no momento em que o evento ocorreu.
+**Ratificado em 29/07/2026.** O advogado acompanha e lê os documentos
+produzidos; a validação foi comunicada pelo Rômulo em 29/07/2026, e não
+houve apontamento a corrigir neste documento — não houve parecer escrito
+autônomo nem reunião, apenas a leitura pelo protocolo acima. Se
+apontamentos vierem depois, o texto passa a `revogacao-v2` e o novo
+identificador é gravado nas revogações seguintes; as linhas já gravadas com
+`revogacao-v1` permanecem como estão, porque descrevem o procedimento
+vigente no momento em que o evento ocorreu.

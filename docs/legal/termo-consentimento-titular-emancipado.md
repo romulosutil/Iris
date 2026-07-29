@@ -1,6 +1,16 @@
 # Termo de Consentimento para Tratamento de Dados — Titular Emancipado — Iris
 
-**Versão `emancipado-v1`.** Redigido em 29/07/2026 para a issue #134.
+**Status: RATIFICADO em 29/07/2026 — apto a ser colhido.** Versão
+`emancipado-v1`. Redigido em 29/07/2026 para a issue #134, e submetido no
+mesmo dia à revisão jurídica.
+
+> **Como esta ratificação se deu, registrado de propósito:** o advogado
+> acompanha e lê os documentos jurídicos produzidos neste projeto; a
+> validação deste documento foi comunicada pelo Rômulo (responsável pelo
+> produto) em 29/07/2026, e **não houve apontamento a corrigir**. A validade
+> deste termo se apoia nesse protocolo — **não** em parecer escrito
+> autônomo, que não foi emitido. Se apontamentos vierem depois, o texto
+> passa a `emancipado-v2` e exige nova coleta de assinatura.
 
 > **Por que arquivo próprio, e não um parágrafo dentro do termo adulto.**
 > `versao_termo` é gravado no banco e nunca sobrescrito. Se o emancipado
@@ -86,5 +96,9 @@ sessão é dado por alinhado**. Por isso toda questão jurídica aparece como
 **resposta afirmativa única**, com fundamento e efeito no sistema — nunca
 como pergunta aberta, que silêncio não ratifica.
 
-Data desta versão: **29/07/2026**. Se vierem apontamentos, o texto passa a
-`emancipado-v2` e exige nova coleta de assinatura.
+**Ratificado em 29/07/2026.** O advogado acompanha e lê os documentos
+produzidos; a validação foi comunicada pelo Rômulo em 29/07/2026, e não
+houve apontamento a corrigir neste documento — não houve parecer escrito
+autônomo nem reunião, apenas a leitura pelo protocolo acima. Se
+apontamentos vierem depois, o texto passa a `emancipado-v2` e exige nova
+coleta de assinatura.
