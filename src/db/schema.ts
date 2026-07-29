@@ -330,9 +330,22 @@ export const consent = pgTable(
     // Última linha de defesa: qualquer novo caminho de escrita (script admin,
     // migração de dados, outro formulário) é barrado pelo banco, não só pela
     // validação de app. `::text` espelha o SQL de 0051 — ver a nota lá.
+    //
+    // CUSTO DO `::text`: a constraint fica CEGA a `ALTER TYPE ... RENAME VALUE`
+    // — renomear um valor de `consentTipo` não reescreve o literal de texto do
+    // lado direito, e o CHECK passa a rejeitar silenciosamente toda linha
+    // daquele valor. Quem renomear tem que reescrever esta constraint junto.
+    //
+    // `IS NOT NULL` E `btrim(...) <> ''`, nunca um no lugar do outro: `''` e
+    // `'   '` satisfazem NOT NULL e são a sentinela falsa que a constraint
+    // existe para impedir; e trocar o NULL-check pelo btrim abriria um buraco
+    // maior, porque em CHECK uma expressão que avalia para NULL SATISFAZ a
+    // constraint (só FALSE rejeita).
     check(
       "consent_responsavel_por_tipo",
-      sql`(${t.tipo}::text = 'tratamento_dados_menor' AND ${t.responsavelSignatario} IS NOT NULL)
+      sql`(${t.tipo}::text = 'tratamento_dados_menor'
+    AND ${t.responsavelSignatario} IS NOT NULL
+    AND btrim(${t.responsavelSignatario}) <> '')
   OR (${t.tipo}::text = 'autoconsentimento_titular_adulto' AND ${t.responsavelSignatario} IS NULL)
   OR (${t.tipo}::text IN ('uso_ia_processamento', 'exportacao_relatorios'))`,
     ),
