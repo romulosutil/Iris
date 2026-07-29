@@ -51,10 +51,62 @@ critica e refina, como o próprio README pede.
 - **PatientClinicalProfile** — dados clínicos sensíveis 1:1 com Patient
   (diagnóstico/hipótese, medicações, alergias, convulsões, contatos de
   emergência). NUNCA visível a `admin_recepcao` (RLS, seção 4).
-- **Consent** — consentimento LGPD da admissão, VERSIONADO (histórico completo,
-  nunca sobrescrito): tipo (`tratamento_dados_menor` |
-  `uso_ia_processamento` | `exportacao_relatorios`), responsável signatário,
-  timestamp, referência à versão do termo aceito.
+- **Consent** — livro-razão de eventos de consentimento LGPD, VERSIONADO e
+  **append-only** (histórico completo, nunca sobrescrito nem apagado:
+  `REVOKE UPDATE, DELETE ON consent FROM app_role`). Atualizado em
+  29/07/2026 pelas migrações `0050`/`0051` (issue #100) e `0052`/`0053`
+  (issues #133/#134). Colunas: `tipo`, `responsavel_signatario`,
+  `instrumento_representacao`, `consent_revogado_id`, `assinado_em`,
+  `versao_termo`.
+
+  `consent_tipo` tem **7 valores**, em três grupos:
+
+  | Grupo | Valor | Semântica |
+  | :--- | :--- | :--- |
+  | Regime | `tratamento_dados_menor` | Responsável legal consente por menor (LGPD Art. 14, §1º). Exige `responsavel_signatario`. |
+  | Regime | `autoconsentimento_titular_adulto` | Adulto capaz consente por si. Exige `responsavel_signatario` **nulo**. |
+  | Regime | `representacao_curador` | Curador consente por adulto sob curatela. Exige `responsavel_signatario` **e** `instrumento_representacao`. |
+  | Regime | `autoconsentimento_titular_emancipado` | Emancipado consente por si (CC Art. 5º, p. único). Exige `responsavel_signatario` nulo **e** `instrumento_representacao` (comprovação da emancipação). |
+  | Finalidade | `uso_ia_processamento` | Estruturação assistida por IA. |
+  | Finalidade | `exportacao_relatorios` | Exportação de relatório a convênio/terceiro. |
+  | Evento | `revogacao_consentimento` | Revoga **um** consentimento anterior. Exige `consent_revogado_id`. |
+
+  Colunas novas:
+  - **`consentRevogadoId`** (`uuid`, nulo nas concessões) — ponteiro para o
+    consentimento revogado. **É ele que define o escopo da revogação**: por
+    isso revogar a finalidade de IA não derruba o prontuário. Obrigatório
+    quando `tipo = 'revogacao_consentimento'`, proibido nos demais tipos.
+  - **`instrumentoRepresentacao`** (`text`, nulo por padrão) — identificação
+    do instrumento que legitima a representação: processo/termo de curatela,
+    ou a comprovação da emancipação. Obrigatório em `representacao_curador`
+    e `autoconsentimento_titular_emancipado`, proibido nos demais.
+
+  Integridade (migração `0053`):
+  - `UNIQUE (id, patient_id)` — chave composta que existe **só** para ser
+    alvo da FK abaixo.
+  - **Auto-FK composta** `(consent_revogado_id, patient_id) → (id, patient_id)`:
+    impede que uma revogação aponte um consentimento **de outro paciente**.
+    `MATCH SIMPLE` (padrão): com `consent_revogado_id` nulo a restrição é
+    satisfeita sem lookup — é o que permite as linhas de concessão.
+    `ON DELETE NO ACTION`, para não conflitar com o `DELETE` único de
+    `app_purgar_paciente`.
+  - CHECK `consent_responsavel_por_tipo` reescrito com um arm por valor de
+    enum, comparando `tipo::text`. Valor de enum futuro não casa nenhum arm
+    e é rejeitado — fail-closed intencional.
+  - CHECK `consent_versao_termo_por_tipo`: `versao_termo LIKE 'revogacao-%'`
+    se e somente se o tipo for `revogacao_consentimento`.
+  - Trigger `app_consent_valida_revogacao()` (`BEFORE INSERT`): rejeita
+    revogação de revogação e ponteiro para a própria linha.
+
+  `versaoTermo` só é versão de termo assinado quando
+  `tipo <> 'revogacao_consentimento'`; na revogação é o identificador do
+  procedimento (`revogacao-v1`).
+
+  O **estado do prontuário** (ativo × somente-leitura por revogação) é
+  **derivado** dessas linhas por `app_prontuario_somente_leitura()`, e
+  **nunca** armazenado em coluna — ver
+  `docs/arquitetura/ciclo-de-vida-do-prontuario.md` e
+  `docs/legal/procedimento-revogacao-consentimento.md`.
 
 ### 1.3 Agenda e sessão (esqueleto mínimo, princípio "agenda não é módulo completo")
 

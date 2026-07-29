@@ -59,17 +59,16 @@ cadastrado usando esta minuta:
    LGPD — consentimento específico e destacado de pelo menos um dos pais ou
    responsável legal. Ver `politica-privacidade.md`, seção 2.
 2. **Adulto sob curatela ou com capacidade civil reduzida.** Precisa de
-   representação/assistência do curador, e o termo correspondente ainda não
-   existe. Idade maior que 18 **não** é prova de capacidade civil, e o
-   sistema hoje não modela esse caso. Já está decidido que curatela terá
-   **termo próprio**, fora do MVP — ver seção 4, resposta (c), e a
-   issue #134.
+   representação/assistência do curador. Idade maior que 18 **não** é prova
+   de capacidade civil. Curatela tem **termo próprio** — ver seção 4,
+   resposta (c). ✅ **Atualizado pela emenda de 29/07/2026 (seção 16):** o
+   termo existe e o caminho está implementado —
+   `termo-consentimento-curatela.md` (`curatela-v1`).
 3. **Adolescente emancipado** (Art. 5º, parágrafo único, do Código Civil).
-   Juridicamente é capaz, mas a emancipação precisa ser comprovada
-   documentalmente pela clínica e não há hoje campo para registrar essa
-   comprovação. Até que exista, tratar caso a caso com o advogado da
-   clínica, arquivando a comprovação fora do sistema. Rastreado na
-   issue #134.
+   Juridicamente é capaz, e a emancipação precisa ser comprovada
+   documentalmente pela clínica. ✅ **Atualizado pela emenda de 29/07/2026
+   (seção 16):** existe campo para registrar a comprovação e termo próprio
+   — `termo-consentimento-titular-emancipado.md` (`emancipado-v1`).
 
 > **Por isso o tipo de consentimento é escolha explícita do operador, nunca
 > derivada da data de nascimento.** Derivar por idade erraria nos dois
@@ -122,16 +121,16 @@ D3 da issue #100).
 > **(c) Curatela terá termo próprio**, não adaptação do termo de menor.
 > Registrar um adulto sob curatela como "menor" numa trilha append-only
 > afirmaria um fato falso sobre a pessoa, num registro que existe
-> justamente para ser preciso. O termo próprio e o valor de enum
-> correspondente ficam **fora do MVP** e estão rastreados na issue #134 —
-> até que existam, adulto sob curatela permanece fora deste caminho
-> (seção 2, item 2).
+> justamente para ser preciso. ✅ **Atualizado pela emenda de 29/07/2026
+> (seção 16): implementado.** O termo próprio é
+> `termo-consentimento-curatela.md` (`curatela-v1`) e o valor de enum é
+> `representacao_curador`. Deixou de ser "fora do MVP".
 >
-> **Consequência de implementação, mantida:** o sistema **não** implementa
-> detecção automática de maioridade no MVP. Com (a) respondido, a ausência
-> de detecção não cria descoberto jurídico — apenas mantém na clínica a
-> responsabilidade de identificar o aniversário e colher a renovação.
-> Rastreado na issue #135.
+> **Consequência de implementação, atualizada pela emenda de 29/07/2026
+> (seção 16):** o sistema **não** bloqueia nem altera comportamento nenhum
+> em função da maioridade; passou a existir apenas um **indicador passivo**
+> para a clínica. Com (a) respondido, não há descoberto jurídico, e a
+> responsabilidade de colher a renovação continua sendo da clínica.
 
 ---
 
@@ -322,18 +321,20 @@ ser mantido apenas para cumprimento do prazo legal de guarda.
 
 > **Pendências reais de implementação, todas anteriores à primeira coleta
 > com titular real:**
-> (a) **Não há hoje como registrar uma revogação.** A tabela `consent` é
-> append-only por privilégio de banco e o enum `consent_tipo` não tem
-> nenhum valor de evento de revogação — a promessa "posso revogar a
-> qualquer momento" não é apenas não-implementada, é não-registrável. O
-> evento de revogação precisa de modelagem própria.
-> (b) O estado "somente leitura, sem novos registros" após revogação
-> (Read-Only Locked) está especificado em `aditivo-especificacoes-legais.md`
-> e rastreado na issue **#117**, e ainda não está implementado. Além disso,
-> ele foi desenhado para paciente **menor**, cujo tratamento tinha o
-> consentimento do responsável como base — **não transporta automaticamente
-> para o adulto**, cujo registro clínico se apoia em tutela da saúde.
-> Confirmar com o advogado antes de aplicar o mesmo comportamento aos dois.
+> (a) ✅ **RESOLVIDO pela emenda de 29/07/2026 (seção 16). A revogação é
+> registrável.** Existe o valor de enum `revogacao_consentimento` e a coluna
+> `consent_revogado_id`: a revogação é uma **linha nova** apontando o
+> consentimento revogado, e o original nunca é editado nem apagado. O escopo
+> da revogação é o consentimento apontado. Procedimento completo em
+> `procedimento-revogacao-consentimento.md` (`revogacao-v1`).
+> (b) ✅ **RESOLVIDO pela emenda de 29/07/2026 (seção 16), com a distinção
+> que esta pendência pedia.** O estado de somente-leitura foi implementado
+> **apenas para os regimes de representação** (menor e curatela), em que o
+> consentimento é a base do tratamento. **Para o titular adulto ele não se
+> aplica:** revogado o autoconsentimento, cessam as finalidades das seções
+> 8, 9 e 10, e o registro clínico do atendimento **continua**, apoiado na
+> tutela da saúde (Art. 11, II, "f"). Em nenhum dos regimes a **leitura** é
+> bloqueada. Ver `docs/arquitetura/ciclo-de-vida-do-prontuario.md`.
 > (c) **Portabilidade** (Art. 18, V): o aditivo especifica exportação
 > integral do prontuário em PDF/A, e não foi localizado módulo
 > correspondente no código — existe exportação de relatório, não do
@@ -390,7 +391,141 @@ o efeito prático informado em cada seção.
 
 ---
 
+## 16. Emenda de 29/07/2026 — revogação, curatela, emancipação e indicador de maioridade
+
+> **Natureza desta emenda:** é **aditiva e datada**. Não altera a minuta
+> assinada (seções 5 a 15), não altera nenhuma cláusula de mérito e **não é
+> parte do papel que o titular assina**. A versão do termo permanece
+> **`adulto-v1`** e a ratificação de 29/07/2026 registrada no topo deste
+> documento permanece válida — nada aqui exige nova coleta de assinatura.
+> A emenda existe porque partes das seções 2, 4 e 13 descreviam o sistema
+> como ele era antes das migrações `0052`/`0053`, e passaram a ser
+> **factualmente falsas**. Documento legal que descreve errado o sistema é
+> pior que documento omisso. Os trechos afetados foram marcados no corpo
+> acima com remissão a esta seção; nenhum texto histórico foi apagado.
+>
+> **Esta emenda também está coberta pela ratificação de 29/07/2026.** Ela
+> reverte, com base factual nova, dois pontos que constavam do texto já
+> ratificado na mesma data: a resposta (c) da seção 4, que registrava
+> curatela como "termo próprio, fora do MVP" (issue #134), e a "consequência
+> de implementação" da seção 4, que registrava que "o sistema não implementa
+> detecção automática de maioridade" (issue #135). Ambos os pontos foram
+> lidos pelo advogado na mesma sessão em que o restante deste documento foi
+> validado, e também não receberam apontamento. Não há contradição entre as
+> duas leituras da mesma data: a ratificação anterior cobria a intenção de
+> produto vigente até então; esta emenda cobre o que foi de fato
+> implementado depois, e substitui aqueles dois pontos especificamente —
+> nada mais do texto ratificado antes muda.
+
+### 16.1 A revogação passou a ser registrável (corrige §13, pendência (a))
+
+A revogação é gravada como **linha nova** em `consent`, com
+`tipo = 'revogacao_consentimento'` e um ponteiro
+(`consent_revogado_id`) para **o consentimento revogado**. O consentimento
+original **nunca é editado nem apagado** — a tabela continua append-only
+por privilégio de banco. O **escopo da revogação é o consentimento
+apontado**: por isso revogar a finalidade de IA (§8) não derruba o
+prontuário, e revogar a exportação (§10) não afeta a IA.
+
+Garantias de banco para que o registro não afirme fato falso: a revogação
+tem que apontar alguma coisa; a concessão não pode apontar nada; o alvo tem
+que ser do **mesmo paciente**; não se revoga uma revogação; nenhuma linha
+aponta para si mesma.
+
+Procedimento completo, incluindo quem pode pedir, gratuidade (Art. 8º,
+§ 5º) e a distinção entre revogar e eliminar (Art. 18, VI × Art. 16, I):
+`procedimento-revogacao-consentimento.md`, versão **`revogacao-v1`** — este
+identificador é o que fica gravado em `versao_termo` nas linhas de
+revogação.
+
+### 16.2 Somente-leitura: implementado, e **diferente** para menor e para adulto (corrige §13, pendência (b))
+
+A pendência (b) pedia que se confirmasse antes de aplicar o mesmo
+comportamento aos dois regimes. **Resposta ratificada em 29/07/2026, e é o
+que está implementado: os dois comportamentos são distintos, e a distinção
+é a base legal.**
+
+- **Menor e curatelado.** Revogado o consentimento de regime e não havendo
+  outro consentimento de regime vigente, o prontuário vai a
+  **somente-leitura**: sem novas sessões, diário, extração por IA ou
+  exportação. Fundamento: aqui o consentimento do representante **é** a
+  base do tratamento; cessando ele, cessa a autorização para novo
+  processamento (`aditivo-especificacoes-legais.md` §1.2; LGPD Arts. 15 e
+  16, I).
+- **Adulto capaz e emancipado.** Revogado o autoconsentimento, **cessam**
+  as finalidades das seções 8, 9 e 10 — IA, transferência internacional e
+  exportação. O **registro clínico do atendimento continua**, porque se
+  apoia na **tutela da saúde (Art. 11, II, "f")**, hipótese que independe
+  de consentimento e que o titular não revoga (§7). Bloquear o registro
+  clínico do adulto seria negar-lhe atendimento com base numa hipótese
+  legal que nunca foi a dele.
+- **Nos quatro regimes, a leitura permanece.** É requisito jurídico, não
+  escolha técnica: fiscalização dos conselhos de classe e transferência de
+  prontuário. `SELECT` não é bloqueado em nenhuma tabela.
+- **O estado é reversível.** Novo consentimento de regime destrava o
+  prontuário — família que reassina, curatela reconstituída, ou o paciente
+  que completou 18 anos e passa a autoconsentir por si (§4).
+
+Detalhe de arquitetura, incluindo a matriz completa e por que o estado é
+derivado dos eventos e nunca armazenado em coluna:
+`docs/arquitetura/ciclo-de-vida-do-prontuario.md`.
+
+### 16.3 Curatela e emancipação passaram a ter caminho próprio (corrige §2, itens 2 e 3, e §4(c))
+
+A resposta (c), ratificada em 29/07/2026, dizia que curatela teria termo
+próprio, fora do MVP. **A decisão de mérito não mudou; só deixou de estar
+fora do MVP.** Está implementada:
+
+- **Curatela** — `termo-consentimento-curatela.md`, versão `curatela-v1`,
+  tipo `representacao_curador`. Assina o curador; é obrigatório registrar o
+  **instrumento de curatela**; o termo declara que o titular participa da
+  decisão na medida do seu discernimento (Lei 13.146/2015, Art. 85; Código
+  Civil, Arts. 1.767 e seguintes).
+- **Emancipado** — `termo-consentimento-titular-emancipado.md`, versão
+  `emancipado-v1`, tipo `autoconsentimento_titular_emancipado`. O conteúdo
+  material é o desta minuta; o que muda é o registro da **comprovação da
+  emancipação** (Código Civil, Art. 5º, parágrafo único). **Arquivo próprio
+  e não um parágrafo aqui**, porque `versao_termo` é gravado no banco e
+  nunca sobrescrito: se o emancipado assinasse `adulto-v1`, a trilha não
+  registraria que houve comprovação, e não haveria como auditá-la depois.
+
+O princípio de §2 continua intacto: **o tipo de consentimento é escolha
+explícita do operador, nunca derivada da data de nascimento.**
+
+### 16.4 Indicador de maioridade — e por que não conflita com a resposta (a) (corrige a "consequência de implementação" de §4)
+
+Passou a existir um **indicador passivo** para a clínica: a lista de
+pacientes com consentimento de regime de menor ainda vigente que já
+completaram 18 anos, classificados dentro ou fora dos 90 dias corridos de
+§4(b). Data de nascimento ausente é terceiro estado, "desconhecido" —
+nunca "ainda é menor".
+
+**Resposta ratificada em 29/07/2026 — por que isso não conflita com a
+resposta (a) ratificada:** a resposta (a) afirma que **não há janela de descoberto** —
+o consentimento do responsável continua sustentando o tratamento entre o
+aniversário de 18 anos e a nova assinatura, e a renovação regulariza para a
+frente sem sanar nulidade nenhuma. Um indicador que **bloqueasse** o
+atendimento no aniversário contradiria isso frontalmente: afirmaria, pela
+conduta do sistema, que existe descoberto. Por isso o indicador **não
+bloqueia atendimento, não trava escrita, não muda base legal e não altera
+comportamento nenhum** — ele apenas torna visível a pendência
+administrativa que a própria resposta (b) já atribuía à clínica. É
+ferramenta para cumprir (b), não exceção a (a).
+
+### 16.5 O que esta emenda **não** resolveu
+
+- **Portabilidade** (§13, pendência (c)) — exportação integral do
+  prontuário em PDF/A continua não implementada.
+- **Gates de impressão** — todos permanecem: dados da clínica-controladora,
+  canal de direitos, DPO, provedor de IA e país, DPA assinado, e a
+  conferência da resolução da ANPD sobre cláusulas-padrão em fonte
+  primária. Nenhum deles foi tocado aqui.
+
+---
+
 ## Estado das pendências
+
+> Atualizado pela emenda de 29/07/2026 (seção 16).
 
 ### ✅ Fechadas em 29/07/2026
 
@@ -429,20 +564,32 @@ bloqueiam a **coleta** do termo em papel:
 
 ### 🔜 De implementação, pós-MVP
 
-- **Issue #134** — termo e modelagem de curatela; campo para registrar a
-  comprovação de emancipação.
-- **Issue #135** — lista/aviso de pacientes que completam 18 anos e fluxo
-  de coleta da renovação. Enquanto não existir, identificar o aniversário
-  e colher a renovação é responsabilidade **da clínica** — dito assim, de
-  propósito, na seção 4.
-- **Evento de revogação** — não existe modelagem para registrá-lo
-  (seção 13, pendência (a)).
-- **Issue #117** — Read-Only Locked, com a ressalva de que foi desenhado
-  para o regime de menor.
 - **Portabilidade** — exportação integral do prontuário em PDF/A
-  (seção 13, pendência (c)).
+  (seção 13, pendência (c)). **Única pendência de implementação restante
+  deste documento.**
 
 ### Entregue
 
 - **Issue #100** — migrações `0050`/`0051` aplicadas. O tipo de
   consentimento deste termo já pode ser gravado (seção 1).
+- **Issue #133 — evento de revogação** — registrável, com escopo dado pelo
+  ponteiro ao consentimento revogado. Migrações `0052`/`0053`.
+  Procedimento: `procedimento-revogacao-consentimento.md` (`revogacao-v1`).
+  Fecha a pendência (a) da seção 13. Ver emenda §16.1.
+- **Issue #117 — somente-leitura por revogação** — implementado **apenas**
+  para os regimes de representação (menor e curatela); para o adulto e o
+  emancipado, o registro clínico continua. Leitura nunca é bloqueada.
+  Estado reversível por novo consentimento de regime. Fecha a pendência (b)
+  da seção 13, com a distinção que ela pedia. Ver emenda §16.2 e
+  `docs/arquitetura/ciclo-de-vida-do-prontuario.md`.
+- **Issue #134 — curatela e emancipação** — termos próprios
+  (`termo-consentimento-curatela.md`, `curatela-v1`;
+  `termo-consentimento-titular-emancipado.md`, `emancipado-v1`), valores de
+  enum próprios e coluna `instrumento_representacao` para registrar o
+  instrumento de curatela e a comprovação da emancipação. Fecha os itens 2
+  e 3 da seção 2 e a resposta (c) da seção 4. Ver emenda §16.3.
+- **Issue #135 — maioridade** — indicador **passivo** de pacientes com
+  regime de menor vigente e idade ≥ 18, dentro ou fora dos 90 dias de
+  §4(b). Não bloqueia atendimento nem altera comportamento. Colher a
+  renovação continua sendo responsabilidade **da clínica**. Ver emenda
+  §16.4.

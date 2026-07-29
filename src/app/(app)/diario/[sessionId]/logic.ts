@@ -18,6 +18,26 @@ import type { AlertaRiscoAgente } from "@/lib/extraction/agent-output-schema";
 import { registrarAlertaRisco } from "@/lib/risco/registrar";
 import { loadCanonicalContext } from "@/lib/extraction/context-loader";
 import { deveReextrair } from "@/lib/extraction/reextraction-policy";
+import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
+import { diagnosticarBloqueioDeConsentimentoSeguro } from "@/lib/consent/diagnostico";
+
+/**
+ * Traduz a recusa do banco em mensagem de consentimento, quando (e só quando)
+ * o consentimento realmente a explica. Primeiro o tradutor puro (constraints e
+ * RAISE EXCEPTION, que são inequívocos); depois, para a negação genérica de
+ * RLS, o diagnóstico que PERGUNTA ao banco. `null` = ninguém explicou → o
+ * chamador mantém o comportamento que tinha antes deste gate existir.
+ */
+async function mensagemDeConsentimento(
+  ctx: TenantContext,
+  err: unknown,
+  alvo: { sessionId?: string },
+): Promise<string | null> {
+  return (
+    traduzirErroDeConsentimento(err) ??
+    (await diagnosticarBloqueioDeConsentimentoSeguro(ctx, alvo))
+  );
+}
 
 // Draft de fallback quando a extração (LLM) falha: mantém a nota salva e marca
 // pendente de reprocessamento (flow 2.4 dos wireframes) — nunca perde o diário.
@@ -68,6 +88,10 @@ export async function capturarDiario(
     );
     return { id: row!.id };
   } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, {
+      sessionId: parsed.data.sessionId,
+    });
+    if (msg) return { error: msg };
     console.error("capturarDiario:", err);
     return { error: "Não foi possível salvar a captura." };
   }
@@ -110,6 +134,10 @@ export async function corrigirEscopoProtocolo(
     });
     return {};
   } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, {
+      sessionId: parsed.data.sessionId,
+    });
+    if (msg) return { error: msg };
     console.error("corrigirEscopoProtocolo:", err);
     return { error: "Não foi possível ajustar os protocolos." };
   }
@@ -146,6 +174,10 @@ export async function registrarAudioLocal(
     );
     return { id: row!.id };
   } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, {
+      sessionId: parsed.data.sessionId,
+    });
+    if (msg) return { error: msg };
     console.error("registrarAudioLocal:", err);
     return { error: "Não foi possível registrar o áudio." };
   }
@@ -369,6 +401,8 @@ export async function consolidarSessao(
 
     return { numeroSequencial: prep.numero ?? undefined };
   } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, { sessionId: sid });
+    if (msg) return { error: msg };
     console.error("consolidarSessao:", err);
     return { error: "Não foi possível consolidar a sessão." };
   }

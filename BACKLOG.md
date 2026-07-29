@@ -26,6 +26,109 @@
 
 ---
 
+## 🏁 Sessão 29/07/2026 — Encerramento de revogação, prontuário somente-leitura, curatela/emancipado e transição de maioridade (Issues #133, #117, #134, #135)
+
+**O que foi entregue**
+
+- `consent` ganhou 3 valores de enum (`revogacao_consentimento`,
+  `representacao_curador`, `autoconsentimento_titular_emancipado`), 2 colunas
+  (`consentRevogadoId`, `instrumentoRepresentacao`), `UNIQUE (id, patient_id)` e
+  auto-FK composta. Migrações `0052` (só enum) e `0053` (resto).
+- Revogação é linha nova apontando para a linha revogada. Escopo da revogação
+  = o que ela aponta. Sem coluna de escopo, sem valor de enum por finalidade.
+  `consent` segue append-only.
+- Estado do prontuário é **derivado**, nunca coluna. Trava sse a concessão de
+  regime mais recente for de tipo representado (menor/curador) e estiver
+  revogada.
+- Gate de escrita em 31 policies (INSERT/UPDATE/DELETE) + guards dentro de
+  `app_aplicar_snapshot`, `app_aplicar_candidatura` e `app_criar_alerta_risco`,
+  porque funções SECURITY DEFINER não passam por RLS. SELECT intocado em
+  todas as tabelas.
+- Gate por finalidade com semântica **negativa** (`app_finalidade_revogada`):
+  bloqueia só se a linha mais recente daquela finalidade estiver revogada.
+  Motivo: nenhum código insere `uso_ia_processamento`/`exportacao_relatorios`,
+  então a forma afirmativa causaria regressão em 100% dos pacientes.
+- Caminho de consentimento para paciente já existente
+  (`registrarEventoConsentimento`) — não existia; era o gap comum às 4 issues.
+- Indicador passivo de maioridade (90 dias do §4(b)), que não bloqueia nada.
+  `nascimento` nulo é terceiro estado.
+
+**Decisões travadas**
+
+- **D4 — revogação aponta a linha revogada; escopo = ponteiro.** Sem coluna de
+  escopo nem enum por finalidade.
+- **D5 — vigência é derivada**, desempate por `(assinado_em DESC, id DESC)`
+  porque `now()` é fixo por transação e várias linhas nascem com o mesmo
+  timestamp.
+- **D6 — trava qualificada pelo regime corrente**, não pelo histórico.
+- **D7 — menor/curatelado travam; adulto/emancipado não travam** (só cessam
+  IA, transferência internacional e exportação) — §13 do termo `adulto-v1`.
+- **D8 — gate de finalidade é negativo** por não-regressão.
+- **D9 — enforcement no banco**; TypeScript só traduz a recusa, nunca decide.
+- **D10 — ex-menor que autoconsente aos 18 e depois revoga não volta a
+  travar** (corrige furo achado na redação jurídica, contrariaria o §13).
+
+**Achados da revisão adversarial** (registro é parte do valor do processo)
+
+- `ALTER POLICY ... WITH CHECK` substitui a expressão inteira — a versão
+  original da spec teria apagado os guards de tenant e papel de
+  `session_insert`/`session_update`. Corrigido para DROP+CREATE com
+  predicado verbatim.
+- O Read-Only Locked era irreversível na primeira modelagem (qualificado por
+  histórico); reassinatura não destravaria.
+- Furo achado depois, na redação jurídica: ex-menor que autoconsente aos 18 e
+  depois revoga voltava a travar, contrariando o §13 (vira D10 acima).
+- Um bloqueador alegado foi **refutado empiricamente**: `ON DELETE RESTRICT`
+  não quebra `app_purgar_paciente` (testado no Postgres real). Usamos
+  `NO ACTION` mesmo assim, por margem.
+
+**Achado de infraestrutura de teste — grave, atualiza a #132**
+
+- `DATABASE_URL` do `.env` apontava para a role `iris`, que é
+  **superusuário com BYPASSRLS**. Toda a suíte de integração, quando rodava,
+  rodava sem RLS aplicada — casos negativos eram vácuo.
+- O gate de skip é `DATABASE_URL && MIGRATION_DATABASE_URL`; faltando a
+  segunda, 64 de 68 arquivos se auto-pulavam em silêncio e a suíte reportava
+  verde.
+- Correto: `DATABASE_URL` em `iris_app` (sem BYPASSRLS),
+  `MIGRATION_DATABASE_URL` em `iris`. Depois disso: 68 arquivos / 465 testes,
+  0 pulados.
+- A #132 subestima o problema: não é só "pula quando falta env", é "pode
+  rodar com a role errada e passar por vácuo".
+
+**Verificação** — typecheck limpo; lint 0 erros/8 warnings (baseline);
+unitários 117 arquivos/523 testes; integração 68/465 com 0 skip; build
+limpo; migrações aplicam do zero (54 arquivos).
+
+**Pendências abertas geradas por esta sessão** (candidatas a issue)
+
+1. Coleta de consentimento por finalidade não existe —
+   `criarPacienteEConsent` grava só a linha de regime, mas o §7 do termo diz
+   que IA e exportação dependem de consentimento. Exige mudança de UI.
+2. `app_purgar_paciente` apaga as linhas de `consent` no expurgo, enquanto o
+   `audit_log` é pseudonimizado e preservado — some a prova de que o
+   tratamento anterior era consentido. Assimetria.
+3. Bug pré-existente `eq.evidence_id = eq.evidence_id` (tautologia) em
+   `evidence_revision_insert`, `db/migrations/0014_fase4_evidence_rls.sql:61-80`.
+   Não corrigido de propósito: mudaria autorização de terapeuta dentro de uma
+   migração de consentimento.
+4. Cobertura fraca reconhecida: `evidence_revision` e `evidence_query` só
+   exercitadas indiretamente; cross-tenant testado em 3 das 20 tabelas
+   tocadas.
+5. Comunicação ao provedor de IA na revogação não existe — cessação é o Iris
+   parar de enviar. Amarrado ao DPA.
+
+**Documentação produzida** —
+`docs/legal/procedimento-revogacao-consentimento.md` (`revogacao-v1`),
+`docs/legal/termo-consentimento-curatela.md` (`curatela-v1`),
+`docs/legal/termo-consentimento-titular-emancipado.md` (`emancipado-v1`),
+emenda datada no `termo-consentimento-titular-adulto.md` (§16),
+`docs/arquitetura/ciclo-de-vida-do-prontuario.md`, atualização da entidade
+Consent em `docs/dados/modelo-de-dados.md`. Todos submetidos à ratificação
+por silêncio, ainda **não** ratificados.
+
+---
+
 ## 🏁 Sessão 29/07/2026 — Ratificação jurídica do termo adulto e diferimento consciente (Issues #129, #134, #135)
 
 **Gatilho.** #98 (Terapia Convencional) e #99 (TCC) deixaram de ser pós-MVP e

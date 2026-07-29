@@ -365,6 +365,20 @@
       "when": 1784521562778,
       "tag": "0051_consent_responsavel_opcional",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1784521563778,
+      "tag": "0052_consent_revogacao_e_representacao_enum",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1784521564778,
+      "tag": "0053_consent_revogacao_gate_prontuario",
+      "breakpoints": true
     }
   ]
 }
