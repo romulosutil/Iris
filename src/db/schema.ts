@@ -36,6 +36,11 @@ export const userRoleTipo = pgEnum("user_role_tipo", [
 
 // `tratamento_dados_menor` = responsável legal assina pelo paciente menor.
 // `autoconsentimento_titular_adulto` (#100) = o próprio titular adulto assina.
+// `representacao_curador` (#134) = curador assina pelo adulto sob curatela.
+// `autoconsentimento_titular_emancipado` (#134) = menor emancipado assina por si.
+// `revogacao_consentimento` (#133) = NÃO é uma concessão: é a linha nova que
+// aponta (via `consentRevogadoId`) para a concessão que deixa de valer —
+// `consent` é append-only, revogar nunca edita a linha original.
 // O tipo é ESCOLHA EXPLÍCITA do operador no formulário, NUNCA derivado de
 // `patient.nascimento` (nullable, e a idade erra nos dois sentidos: adolescente
 // emancipado, adulto sob curatela).
@@ -44,6 +49,9 @@ export const consentTipo = pgEnum("consent_tipo", [
   "uso_ia_processamento",
   "exportacao_relatorios",
   "autoconsentimento_titular_adulto",
+  "revogacao_consentimento",
+  "representacao_curador",
+  "autoconsentimento_titular_emancipado",
 ]);
 
 // Estados de sessão (Agenda 2.0, Etapa A). Expande/substitui o enum da Fase 1d.
@@ -307,8 +315,20 @@ export const patientClinicalProfile = pgTable("patient_clinical_profile", {
 
 // Append-only por design (LGPD): `REVOKE UPDATE, DELETE ON consent FROM
 // app_role` em 0001_rls.sql. Renovação de consentimento é LINHA NOVA — não há
-// UNIQUE em patient_id nem coluna de vigência; "consentimento vigente" = linha
-// de maior `assinadoEm`.
+// UNIQUE em patient_id nem coluna de vigência. REVOGAÇÃO também é linha nova
+// (#133): `tipo = 'revogacao_consentimento'` + `consentRevogadoId` apontando
+// para a concessão que deixa de valer. Logo "consentimento vigente" NÃO é mais
+// só "linha de maior `assinadoEm`" — é a última linha do tipo (desempate
+// determinístico por `assinadoEm DESC, id DESC`, porque `defaultNow()` empata
+// dentro de uma mesma transação) que NÃO tenha revogação apontando para ela.
+// Espelho testável em `src/lib/consent/vigencia.ts`; fronteira real é a RLS.
+//
+// `versaoTermo` só é a versão de um TERMO ASSINADO quando
+// `tipo <> 'revogacao_consentimento'`. Na linha de revogação ela guarda a
+// versão do PROCEDIMENTO administrativo de revogação (`revogacao-v1`) — não
+// existe termo de revogação assinado pelo titular. Relatórios/exports que
+// tratarem `versaoTermo` como "versão de termo LGPD" precisam excluir esse
+// tipo. O CHECK `consent_versao_termo_por_tipo` torna a convenção verificável.
 export const consent = pgTable(
   "consent",
   {
@@ -321,12 +341,36 @@ export const consent = pgTable(
     // responsável. NULL é a representação correta — preencher com o nome do
     // próprio paciente seria semanticamente falso e contaminaria exports.
     responsavelSignatario: text("responsavel_signatario"),
+    // #133 — só preenchido em `revogacao_consentimento`: aponta a concessão
+    // revogada. A FK é COMPOSTA com `patientId` (ver extras abaixo), não
+    // `.references(() => consent.id)`: um ponteiro só por `id` permitiria
+    // revogar consentimento de OUTRO paciente (e de outra clínica).
+    consentRevogadoId: uuid("consent_revogado_id"),
+    // #134 — identificação do documento que comprova a representação/
+    // capacidade: processo/termo de curatela, ou certidão de emancipação.
+    // "idade > 18" não é prova de capacidade civil; o instrumento é a prova
+    // rastreável dentro do próprio registro append-only.
+    instrumentoRepresentacao: text("instrumento_representacao"),
     versaoTermo: text("versao_termo").notNull(),
     assinadoEm: timestamp("assinado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (t) => [
+    // Alvo da auto-FK composta. `id` já é PK; este UNIQUE existe só para dar
+    // ao par (id, patient_id) um índice único referenciável.
+    unique("consent_id_patient_uniq").on(t.id, t.patientId),
+    // Auto-FK COMPOSTA: a revogação tem de apontar para uma linha do MESMO
+    // paciente. `MATCH SIMPLE` (padrão, não escrever MATCH FULL): com
+    // `consentRevogadoId` NULL a restrição é satisfeita sem lookup — é o que
+    // permite que linhas de concessão existam. `ON DELETE NO ACTION` (não
+    // RESTRICT): `app_purgar_paciente` apaga todo o `consent` do paciente num
+    // único DELETE, e RESTRICT quebraria o expurgo LGPD.
+    foreignKey({
+      name: "consent_revogado_mesmo_paciente",
+      columns: [t.consentRevogadoId, t.patientId],
+      foreignColumns: [t.id, t.patientId],
+    }).onDelete("no action"),
     // Última linha de defesa: qualquer novo caminho de escrita (script admin,
     // migração de dados, outro formulário) é barrado pelo banco, não só pela
     // validação de app. `::text` espelha o SQL de 0051 — ver a nota lá.
@@ -341,13 +385,47 @@ export const consent = pgTable(
     // existe para impedir; e trocar o NULL-check pelo btrim abriria um buraco
     // maior, porque em CHECK uma expressão que avalia para NULL SATISFAZ a
     // constraint (só FALSE rejeita).
+    //
+    // FAIL-CLOSED INTENCIONAL: um valor futuro de `consentTipo` não casa
+    // nenhum arm e é REJEITADO no INSERT. Quem adicionar valor ao enum tem de
+    // adicionar o arm aqui e na migração — é de propósito, para que um tipo
+    // novo não entre no banco com combinação de colunas não decidida.
     check(
       "consent_responsavel_por_tipo",
       sql`(${t.tipo}::text = 'tratamento_dados_menor'
     AND ${t.responsavelSignatario} IS NOT NULL
-    AND btrim(${t.responsavelSignatario}) <> '')
-  OR (${t.tipo}::text = 'autoconsentimento_titular_adulto' AND ${t.responsavelSignatario} IS NULL)
-  OR (${t.tipo}::text IN ('uso_ia_processamento', 'exportacao_relatorios'))`,
+    AND btrim(${t.responsavelSignatario}) <> ''
+    AND ${t.instrumentoRepresentacao} IS NULL
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text = 'autoconsentimento_titular_adulto'
+    AND ${t.responsavelSignatario} IS NULL
+    AND ${t.instrumentoRepresentacao} IS NULL
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text = 'representacao_curador'
+    AND ${t.responsavelSignatario} IS NOT NULL
+    AND btrim(${t.responsavelSignatario}) <> ''
+    AND ${t.instrumentoRepresentacao} IS NOT NULL
+    AND btrim(${t.instrumentoRepresentacao}) <> ''
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text = 'autoconsentimento_titular_emancipado'
+    AND ${t.responsavelSignatario} IS NULL
+    AND ${t.instrumentoRepresentacao} IS NOT NULL
+    AND btrim(${t.instrumentoRepresentacao}) <> ''
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text IN ('uso_ia_processamento', 'exportacao_relatorios')
+    AND ${t.instrumentoRepresentacao} IS NULL
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text = 'revogacao_consentimento'
+    AND ${t.consentRevogadoId} IS NOT NULL
+    AND ${t.instrumentoRepresentacao} IS NULL)`,
+    ),
+    // Torna VERIFICÁVEL a convenção de `versaoTermo` documentada no comentário
+    // da tabela: `revogacao-%` sse a linha for de revogação. Bicondicional, não
+    // implicação — impede tanto revogação com "adulto-v1" quanto concessão
+    // gravada com "revogacao-v1".
+    check(
+      "consent_versao_termo_por_tipo",
+      sql`(${t.tipo}::text = 'revogacao_consentimento') = (${t.versaoTermo} LIKE 'revogacao-%')`,
     ),
   ],
 );

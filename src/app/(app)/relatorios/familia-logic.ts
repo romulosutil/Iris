@@ -18,6 +18,8 @@ import type {
   PayloadFamilia,
 } from "@/lib/report/familia/types";
 import { playwrightRenderer } from "@/lib/report/playwright-renderer";
+import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
+import { diagnosticarBloqueioDeConsentimentoSeguro } from "@/lib/consent/diagnostico";
 
 // ─── Schemas de request ──────────────────────────────────────────────────────
 export const gerarFamiliaSchema = z
@@ -92,7 +94,8 @@ export async function gerarRascunhoFamilia(
   }
   const { patientId, periodoInicio, periodoFim } = parsed.data;
 
-  return withTenant(ctx, async (tx) => {
+  try {
+    return await withTenant(ctx, async (tx) => {
     // RLS já escopa o paciente: terapeuta fora da equipe não o enxerga → null.
     const nome = await nomePaciente(tx, patientId);
     if (!nome) return { error: "Paciente não encontrado ou fora do seu acesso." };
@@ -131,7 +134,18 @@ export async function gerarRascunhoFamilia(
               jsonb_build_object('tipo', 'familia'::text))
     `);
     return { reportId, versao: 1, draft: iaOriginal };
-  });
+    });
+  } catch (err) {
+    // Tradutor puro primeiro (constraints/RAISE, inequívocos); depois o
+    // diagnóstico que PERGUNTA ao banco se algum gate de consentimento explica
+    // a negação genérica de RLS. Se ninguém explicar, o erro propaga como
+    // propagava antes deste gate — erro não explicado não pode ser engolido.
+    const msg =
+      traduzirErroDeConsentimento(err) ??
+      (await diagnosticarBloqueioDeConsentimentoSeguro(ctx, { patientId }));
+    if (msg) return { error: msg };
+    throw err;
+  }
 }
 
 // ─── 2. Curar (editar + revisar) — só coordenador; trava otimista ────────────
@@ -148,8 +162,9 @@ export async function curarFamilia(
   }
   const { reportId, versaoEsperada, draftEditado } = parsed.data;
 
-  return withTenant(ctx, async (tx) => {
-    const rows = (await tx.execute(sql`
+  try {
+    return await withTenant(ctx, async (tx) => {
+      const rows = (await tx.execute(sql`
       UPDATE report
       SET payload = jsonb_set(payload, '{curado}', ${JSON.stringify(draftEditado)}::jsonb, true),
           payload_versao = payload_versao + 1,
@@ -160,19 +175,24 @@ export async function curarFamilia(
         AND payload_versao = ${versaoEsperada}
       RETURNING id, patient_id
     `)) as unknown as Array<{ id: string; patient_id: string }>;
-    if (rows.length === 0) {
-      return {
-        error:
-          "Não foi possível salvar: o rascunho mudou ou já foi exportado. Recarregue e tente de novo.",
-      };
-    }
-    await tx.execute(sql`
+      if (rows.length === 0) {
+        return {
+          error:
+            "Não foi possível salvar: o rascunho mudou ou já foi exportado. Recarregue e tente de novo.",
+        };
+      }
+      await tx.execute(sql`
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'relatorio_revisado', 'report', ${reportId}::uuid, ${rows[0]!.patient_id}::uuid,
               jsonb_build_object('tipo', 'familia'::text))
     `);
-    return { ok: true };
-  });
+      return { ok: true };
+    });
+  } catch (err) {
+    const mensagemConsentimento = traduzirErroDeConsentimento(err);
+    if (mensagemConsentimento) return { error: mensagemConsentimento };
+    throw err;
+  }
 }
 
 // ─── 3. Exportar — só coordenador; exige status 'revisado' (gate F9) ─────────
@@ -190,24 +210,30 @@ export async function exportarFamilia(
   }
   const { reportId } = parsed.data;
 
-  return withTenant(ctx, async (tx) => {
-    // Gate F9 (D6): família só exporta APÓS curadoria humana (status revisado).
-    const pre = (await tx.execute(sql`
+  try {
+    return await withTenant(ctx, async (tx) => {
+      // Gate F9 (D6): família só exporta APÓS curadoria humana (status revisado).
+      const pre = (await tx.execute(sql`
       SELECT status FROM report WHERE id = ${reportId}::uuid AND tipo = 'familia'
     `)) as unknown as Array<{ status: string }>;
-    if (!pre[0]) return { error: "Relatório não encontrado." };
-    if (pre[0].status !== "revisado") {
-      return {
-        error:
-          "O relatório precisa ser revisado pelo coordenador antes de exportar.",
-      };
-    }
-    const { hash } = await exportReport(tx, {
-      reportId,
-      atorId: ctx.userId,
-      buildHtml: (pl) => buildFamiliaHtml(pl as PayloadFamilia),
-      renderer,
+      if (!pre[0]) return { error: "Relatório não encontrado." };
+      if (pre[0].status !== "revisado") {
+        return {
+          error:
+            "O relatório precisa ser revisado pelo coordenador antes de exportar.",
+        };
+      }
+      const { hash } = await exportReport(tx, {
+        reportId,
+        atorId: ctx.userId,
+        buildHtml: (pl) => buildFamiliaHtml(pl as PayloadFamilia),
+        renderer,
+      });
+      return { reportId, hash };
     });
-    return { reportId, hash };
-  });
+  } catch (err) {
+    const mensagemConsentimento = traduzirErroDeConsentimento(err);
+    if (mensagemConsentimento) return { error: mensagemConsentimento };
+    throw err;
+  }
 }

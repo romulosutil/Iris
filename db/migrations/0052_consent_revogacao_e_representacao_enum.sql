@@ -1,0 +1,33 @@
+-- #133 / #134 / #135 — Revogação e representação do consentimento
+-- (parte 1 de 2): SÓ os valores de enum.
+--
+-- Mesma razão de 0050: em Postgres >= 12 um valor de enum recém-adicionado não
+-- pode ser USADO na mesma transação em que foi criado ("unsafe use of new
+-- value ... of enum type"). O CHECK, o trigger e as funções de 0053
+-- referenciam os três valores abaixo, então o `ALTER TYPE` fica num arquivo
+-- separado — no caminho incremental (`migrate` de uma base já em 0051) este
+-- arquivo commita antes do próximo.
+--
+-- ATENÇÃO (idêntico ao aviso de 0050): o runner do projeto
+-- (drizzle-orm/postgres-js migrator, ver scripts/migrate.mjs) envolve TODAS as
+-- migrações pendentes numa ÚNICA transação. Numa base nova (CI, restore, dev
+-- zerado) 0052 e 0053 entram juntas no mesmo BEGIN, e a separação em dois
+-- arquivos por si só NÃO resolve. Por isso TODA comparação de `tipo` em 0053
+-- usa `"tipo"::text` — o cast tira o literal do domínio do enum e a restrição
+-- do Postgres deixa de valer. A divisão em dois arquivos é mantida por clareza
+-- de intenção e porque protege o caso incremental; o cast é o que garante o
+-- caso atômico.
+--
+-- Os três valores:
+--   revogacao_consentimento             — #133, o evento de revogação. É uma
+--                                         linha nova (consent é append-only),
+--                                         nunca um UPDATE da linha revogada.
+--   representacao_curador               — #134, adulto sob curatela: quem
+--                                         assina é o curador, com instrumento.
+--   autoconsentimento_titular_emancipado— #134/#135, menor emancipado assina
+--                                         por si, também com instrumento.
+ALTER TYPE "consent_tipo" ADD VALUE IF NOT EXISTS 'revogacao_consentimento';
+--> statement-breakpoint
+ALTER TYPE "consent_tipo" ADD VALUE IF NOT EXISTS 'representacao_curador';
+--> statement-breakpoint
+ALTER TYPE "consent_tipo" ADD VALUE IF NOT EXISTS 'autoconsentimento_titular_emancipado';
