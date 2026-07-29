@@ -54,6 +54,7 @@ clínica humana.
 | `HANDOFF-FASE1.md`                                | Briefing de início de construção para a sessão de Claude Code CLI que vai codar a Fase 1                                                                                                                                                  |
 | `docs/legal/briefing-para-advogado.md`            | Consolidado de pontos jurídicos em aberto, formatado para revisão informal por advogado                                                                                                                                                   |
 | `docs/legal/dpa-asr-audio.md`                     | DPA e gating de áudio (ASR externo): transferência internacional Art. 33 específica do áudio, retenção 7 dias do áudio bruto, feature flag que mantém ASR real desabilitado até DPA assinado. Predecessor legal de 6.4/6.5. |
+| `docs/legal/termo-consentimento-titular-adulto.md` | Termo de consentimento do **titular adulto capaz** que autoconsente (LGPD Art. 7º I e 11 I) — versão `adulto-v1`. Complementa o regime de menor (Art. 14) das políticas. Caminho crítico dos nichos Terapia Convencional (#98) e TCC (#99). |
 
 ## Como usar a série de prompts
 
