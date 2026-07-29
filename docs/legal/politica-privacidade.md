@@ -10,23 +10,37 @@ ser lidos e revisados juntos.
 
 ## 1. Que dados o Iris trata
 
-Dados pessoais e dados sensíveis (dado de saúde, LGPD Art. 5º, II) de crianças
-e adolescentes em acompanhamento terapêutico, incluindo: identificação e
-contato do responsável (`Patient`), diagnóstico/hipótese e informações de
-saúde (`PatientClinicalProfile`), notas de sessão em texto e áudio
-(`SessionNote`, `AudioCapture`), evidências clínicas estruturadas derivadas do
-relato do profissional (`Evidence`), avaliações formais (`MilestoneAssessment`)
-e relatórios gerados (`Report`).
+Dados pessoais e dados sensíveis (dado de saúde, LGPD Art. 5º, II) de
+pacientes em acompanhamento terapêutico — tanto menores de 18 anos quanto
+titulares adultos e civilmente capazes —, incluindo: identificação e contato
+do paciente ou do responsável, quando aplicável (`Patient`),
+diagnóstico/hipótese e informações de saúde (`PatientClinicalProfile`), notas
+de sessão em texto e áudio (`SessionNote`, `AudioCapture`), evidências
+clínicas estruturadas derivadas do relato do profissional (`Evidence`),
+avaliações formais (`MilestoneAssessment`) e relatórios gerados (`Report`).
 
 ## 2. Base legal do tratamento
 
-- **Consentimento específico e destacado** de pelo menos um dos pais/
-  responsável legal (LGPD Art. 14) — coletado no ato de admissão do paciente
-  na clínica, versionado e nunca sobrescrito (`Consent`).
+O Iris opera dois regimes de consentimento coexistentes, nunca derivados da
+data de nascimento (`patient.nascimento` é campo opcional) — a escolha do
+regime é sempre decisão explícita do operador no cadastro:
+
+- **Paciente menor de 18 anos**: **consentimento específico e destacado** de
+  pelo menos um dos pais/responsável legal (LGPD Art. 14, §1º) — coletado no
+  ato de admissão do paciente na clínica, versionado e nunca sobrescrito
+  (`Consent`, `tipo = 'tratamento_dados_menor'`).
+- **Titular maior de 18 anos e civilmente capaz**: **consentimento do próprio
+  titular** (LGPD Art. 7º, I, e Art. 11, I), registrado como
+  `Consent`, `tipo = 'autoconsentimento_titular_adulto'`. Adulto sob curatela
+  ou com capacidade civil reduzida e adolescente emancipado ficam, por ora,
+  fora deste caminho de autoconsentimento — ver
+  `termo-consentimento-titular-adulto.md` (versão `adulto-v1`), seção 2.
 - **Tutela da saúde**, quando o tratamento é realizado por profissionais/
   serviços de saúde (LGPD Art. 11, II, "f" — a alínea "a" é cumprimento de
   obrigação legal ou regulatória, citada abaixo, e estava trocada aqui até
-  28/07/2026).
+  28/07/2026) — base do registro clínico em si, tanto para o menor quanto
+  para o titular adulto, complementar ao consentimento de admissão de cada
+  regime.
 - **Cumprimento de obrigação legal/regulatória** para a retenção além do
   período de tratamento ativo (LGPD Art. 15/16 — ver seção 5 abaixo e
   `politica-retencao-dados.md`).
@@ -47,12 +61,17 @@ pontuar, diagnosticar ou decidir automaticamente (princípio R3,
 `docs/agente/protocolos-e-agente.md`). Toda sugestão exige aprovação humana
 antes de virar registro permanente. O texto da sessão é enviado ao provedor
 de IA para processamento; **isso configura transferência internacional de
-dado sensível de saúde de menor quando o provedor não tem infraestrutura no
-Brasil** (LGPD Art. 33) — protegida por Cláusulas-Padrão Contratuais (Resolução
+dado sensível de saúde quando o provedor não tem infraestrutura no Brasil**
+(LGPD Art. 33) — protegida por Cláusulas-Padrão Contratuais (Resolução
 CD/ANPD nº 19/2024) e por acordo de processamento de dados (DPA) com o
 provedor, que não retém o conteúdo além do necessário para gerar a resposta
 (confirmar termos exatos do DPA com o provedor escolhido antes do piloto —
 `docs/arquitetura/stack-e-plano-de-construcao.md`, seção sobre escolha de LLM).
+No regime de paciente menor, o consentimento específico e destacado para
+essa transferência é dado pelo responsável legal (`Consent`, tipo
+`uso_ia_processamento`); no regime de titular adulto, é dado pelo próprio
+titular, e está materializado na seção 9 do termo
+`termo-consentimento-titular-adulto.md` (versão `adulto-v1`).
 
 ## 5. Por quanto tempo os dados são mantidos
 
