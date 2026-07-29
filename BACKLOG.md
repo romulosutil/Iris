@@ -26,6 +26,101 @@
 
 ---
 
+## 🏁 Sessão 28/07/2026 — Desbloqueio do consentimento de titular adulto (Issues #100, #129 · PRs #130, #131)
+
+**Contexto — deixou de ser expansão especulativa.** Há interessados reais em TCC
+(#99) e Terapia Convencional (#98). Os dois nichos atendem majoritariamente
+paciente **adulto, que autoconsente**, e nenhum deles conseguia sequer cadastrar
+paciente. A dependência subiu para **P1**.
+
+### Decisões travadas (Issue #100 — D1/D2/D3)
+
+- **D1 — o tipo de consentimento é escolha explícita do operador**, nunca
+  derivado de `patient.nascimento`. Derivar por idade erra nos dois sentidos:
+  classificaria adulto sob curatela como capaz e adolescente emancipado como
+  incapaz. Além disso `nascimento` é nullable, e ausência de data não é "adulto".
+- **D2 — renovação de consentimento é linha nova.** Fato que destravou: `consent`
+  **não tem UNIQUE em `patient_id`** (só PK e FK — `0000_fase1_tabelas.sql:73-80`
+  e `:145`), então múltiplas linhas por paciente já eram possíveis. A D2 tinha
+  sido registrada como "isto determina a modelagem" — não determinava.
+- **D3 — `consent` continua append-only** (`REVOKE UPDATE, DELETE ON consent FROM
+  app_role`). Confirmado e mantido.
+
+### Entregue
+
+- **PR #130 (Issue #129)** — `docs/legal/termo-consentimento-titular-adulto.md`,
+  versão `adulto-v1`. **Proposta, não confirmada:** `docs/legal/` é via única e
+  exige o Rômulo + leitura do advogado.
+- **PR #131 (Issue #100)** — migrações `0050` (ALTER TYPE ADD VALUE) e `0051`
+  (DROP NOT NULL + CHECK XOR `consent_responsavel_por_tipo`), schema, logic, UI e
+  testes. **Não aplicada em produção.**
+
+### Achados técnicos que valem registro
+
+- **São necessárias duas migrações, não uma.** Em Postgres um valor novo de enum
+  não pode ser usado na mesma transação em que é criado. E **dividir em dois
+  arquivos não basta**: o `drizzle-orm@0.45.2` envolve todas as migrações
+  pendentes num único `session.transaction`. A solução foi o CHECK comparar
+  `tipo::text` em vez do enum. Erro real reproduzido: `ERROR: unsafe use of new
+  value ... of enum type consent_tipo / HINT: New enum values must be committed
+  before they can be used.`
+- **`src/db/rls.int.test.ts` não cobria `consent`** — as policies e o append-only
+  nunca tiveram teste de RLS. Cobertura adicionada na PR #131.
+- **A função de expurgo vigente é a redefinida em
+  `0049_alerta_risco_clinico.sql:472`**, não a de `0045:97` (mesma semântica,
+  agnóstica ao tipo). O mapa da issue apontava o arquivo errado.
+
+### Revisão jurídica adversarial do termo (achados aplicados na PR #130)
+
+- **`Art. 11, II, "a"` estava sendo usado para tutela da saúde** — a alínea
+  correta é **"f"**. O erro estava também em `docs/legal/politica-privacidade.md`
+  desde 09/07/2026; corrigido nos dois.
+- **Empilhamento de bases legais** (consentimento + tutela da saúde + obrigação
+  legal para o mesmo tratamento) tornava a revogação ilusória. Reescrito como
+  **base legal por finalidade**: o registro clínico do adulto se apoia em tutela
+  da saúde e **não é revogável pelo titular**; só IA, transferência internacional
+  e exportação dependem de consentimento.
+- **Faltavam as notificações compulsórias** que incidem sobre paciente adulto
+  (Lei 13.819/2019 — tentativa de suicídio/autolesão; Lei 10.778/2003 e Lei
+  13.931/2019 — violência contra a mulher). O `parecer-juridico-duty-to-warn.md`
+  já as classificava, então o termo contradizia o parecer por omissão.
+- **Cláusulas-padrão contratuais são `Art. 33, II, "b"`** (a alínea "a" é
+  cláusulas contratuais *específicas*) somado ao `Art. 33, VIII`.
+- **⚠️ Baixa confiança não resolvida:** a numeração e a vigência da "Resolução
+  CD/ANPD nº 19/2024", herdada de `politica-privacidade.md`, **não foram
+  conferidas em fonte primária**. Não pode ir para documento assinado por titular
+  sem conferência.
+
+### Issues abertas nesta sessão
+
+- **#132** — a suíte de integração faz **auto-skip silencioso** quando
+  `DATABASE_URL` está vazio; `pnpm test` e `pnpm test:rls` terminam **verdes sem
+  rodar nada**. P1: são exatamente os comandos que provam isolamento
+  multi-tenant.
+- **#133** — não existe forma de **registrar** uma revogação de consentimento
+  (`consent` é append-only e o enum não tem evento de revogação). A promessa dos
+  termos não é só não-implementada, é **não-registrável**. Diferente da #117, que
+  trata do *efeito* da revogação.
+- **#134** — adulto sob curatela e adolescente emancipado **não têm caminho de
+  cadastro**. Mitigado por escrito no termo (seção 2 proíbe), não por código.
+- **#135** — transição menor→maioridade. Travada por duas perguntas ao advogado:
+  (a) há janela de descoberto entre o aniversário de 18 e a nova assinatura?
+  (b) qual prazo para colher a renovação? Sem resposta, nada de detecção
+  automática de maioridade.
+
+### Pendências que exigem o Rômulo
+
+- **Merge da PR #130** (`docs/legal/` é via única) e **leitura do advogado** —
+  pontos a confrontar: base legal por finalidade (seção 7), notificações
+  compulsórias (seção 14), e se o **Read-Only Locked da #117 se aplica ao
+  adulto** (foi desenhado para o regime de menor).
+- **Aplicação das migrações `0050`/`0051` em produção** (DDL em tabela com dado).
+- **Preenchimento do termo antes de qualquer coleta:** razão social/CNPJ, nome do
+  provedor de IA e país de destino, canal de contato, encarregado, prazo de
+  guarda por extenso.
+
+---
+
 ## 🏁 Sessão 28/07/2026 — E-mail transacional do responsável técnico → pós-MVP (Issue #126)
 
 **Decisão:** o canal de e-mail ao RT no estágio 2 (#122, §4.2.1 ação 2) sai do
