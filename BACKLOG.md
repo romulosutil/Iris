@@ -25,6 +25,35 @@
 
 ---
 
+## 🏁 Sessão 28/07/2026 — Consolidação da Política de Retenção de Dados (branch `docs/politica-retencao-dados`)
+
+**Entregue:** consolidação do `docs/legal/politica-retencao-dados.md` com a
+matriz de retenção unificada (#122, #116, #89). O documento **continua
+RASCUNHO pendente de parecer de advogado** — consolidar prazos não substitui a
+validação formal, que segue bloqueando o piloto com dado real (seção B). Nada
+do texto original de 09/07 (tabela por conselho com fontes, opção de
+anonimização, aviso prévio de 90 dias, pendência do DPO) foi removido:
+- **Prontuário Multidisciplinar:** Default `MAX(18 anos do menor, alta + 10 anos)`, configurável pela clínica em `clinic.politica_retencao_meses`.
+- **Alertas de Risco Clínico (#122):** Pseudonimização LGPD (`pseudonimizado_em IS NOT NULL`, zerando `patient_id` e `session_id`), preservando o registro anônimo para defesa jurídica do software.
+- **Logs de Acesso (#116):** mínimo de 6 meses (Marco Civil da Internet, art. 15).
+- **Backups (#89):** 30 dias — prune do `backup.sh` (`RETENTION_DAYS`) nas cópias locais/MinIO; off-site depende de Lifecycle Rule no bucket.
+
+**Não fecha sozinho** (verificado no código em 28/07/2026, registrado na §6 do
+documento — a política descreve intenção, não estado do software):
+- **Nenhum código chama `app_purgar_paciente`.** A função e o gate
+  `app_paciente_expurgavel` existem desde a `0045`, mas não há ação, tela ou job
+  que as invoque: hoje o expurgo LGPD só sai por SQL manual. É o item que mais
+  destoa entre a política escrita e o produto.
+- **Não existe expurgo do `audit_log` por idade (#116).** O único caminho que
+  toca a trilha é o `app_purgar_paciente`, e ele *pseudonimiza* no expurgo do
+  paciente — não apaga por tempo. Sem job, o prazo de 6 meses é só um mínimo
+  legal cumprido por inércia (nada é apagado), não uma regra implementada.
+- **Lifecycle Rule do bucket off-site (OCI S3) não é verificável pelo repo.**
+  O `backup.sh` não poda o off-site de propósito. Confirmar no console do
+  provedor antes de afirmar os 30 dias — fato de infra se verifica medindo.
+
+---
+
 ## 🏁 Sessão 28/07/2026 — #122 implementação do alerta de risco clínico (branch `feat/122-alerta-risco-clinico`)
 
 **Entregue:** as 5 fatias da #122. Tabela dedicada `alerta_risco_clinico` + RLS + `app_criar_alerta_risco` (migração `0049`), sinal de risco transversal no contrato do agente, fila `/alertas-risco` com reconhecer/resolver/descartar, banner clínica-wide do estágio 2, `/clinica/emergencia` (responsável técnico + Protocolo de Emergência Interno + declaração da cláusula 10.3), motor de escalonamento em serviço dedicado, e expurgo que pseudonimiza em vez de deletar.
