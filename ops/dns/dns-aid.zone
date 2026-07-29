@@ -1,0 +1,24 @@
+; BIND Zone File - DNS for AI Discovery (DNS-AID) for iris.app
+; References: RFC 9460, draft-mozleywilliams-dnsop-dnsaid
+
+$TTL 3600
+$ORIGIN iris.app.
+
+; DNS-AID Well-Known Entrypoint Records
+_index._agents.iris.app. IN HTTPS 1 iris.app. (
+    alpn="h2,h3"
+    port="443"
+    key65300="/.well-known/api-catalog"
+)
+
+_a2a._agents.iris.app. IN HTTPS 1 iris.app. (
+    alpn="h2,h3"
+    port="443"
+    key65300="/.well-known/mcp/server-card.json"
+)
+
+_mcp._agents.iris.app. IN HTTPS 1 iris.app. (
+    alpn="h2,h3"
+    port="443"
+    key65300="/.well-known/mcp/server-card.json"
+)
