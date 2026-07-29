@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,10 @@ function idadeEmAnos(nascimento: string): number | null {
   let anos = hoje.getFullYear() - nasc.getFullYear();
   const mes = hoje.getMonth() - nasc.getMonth();
   if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) anos--;
+  // Data no futuro (erro de digitação) não vira aviso de "idade -4 ano(s)".
+  // Validar `nascimento <= hoje` na action é mudança de comportamento de um
+  // campo que já existia — fica fora do escopo desta mudança.
+  if (anos < 0) return null;
   return anos;
 }
 
@@ -52,6 +56,21 @@ export function NovoPacienteForm() {
         : tipoConsentimento === "responsavel_legal" && idade >= 18
           ? `A data de nascimento indica ${idade} ano(s), mas o consentimento está marcado como assinado por responsável legal. Confirme se é o caso (ex.: pessoa sob curatela). O cadastro segue normalmente.`
           : null;
+
+  // O SegmentedControl é a única entrada OBRIGATÓRIA que o browser não valida
+  // (hidden input não aceita `required`). Sem isto, quem usa leitor de tela
+  // submete sem escolher, ouve a mensagem no topo do form e não tem vínculo
+  // nenhum com o grupo que a causou. a11y é compromisso de 1ª classe aqui.
+  const erroEhDoTipo =
+    !!state.error && /quem assina o consentimento/i.test(state.error);
+  const grupoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!erroEhDoTipo) return;
+    // Leva o foco para o primeiro botão do grupo: a mensagem sozinha, no topo
+    // do form, não diz ONDE corrigir.
+    grupoRef.current?.querySelector("button")?.focus();
+  }, [erroEhDoTipo, state]);
 
   return (
     <Form action={formAction} error={state.error}>
@@ -103,10 +122,18 @@ export function NovoPacienteForm() {
         <legend className="text-[var(--text-primary)] font-display mb-1.5 text-sm font-semibold">
           Quem assina o consentimento?
         </legend>
+        {/* Sem `aria-label` aqui: o <legend> do fieldset já nomeia o grupo, e
+            repetir o mesmo texto num role="group" aninhado faz o leitor de
+            tela anunciar duas vezes. */}
         <SegmentedControl
+          ref={grupoRef}
           value={tipoConsentimento}
           onValueChange={(v) => setTipoConsentimento(v as TipoConsentimento)}
-          aria-label="Quem assina o consentimento"
+          aria-required="true"
+          aria-invalid={erroEhDoTipo || undefined}
+          aria-describedby={
+            erroEhDoTipo ? "tipoConsentimento-error" : undefined
+          }
           opcoes={[
             {
               value: "titular_adulto",
@@ -118,6 +145,14 @@ export function NovoPacienteForm() {
             },
           ]}
         />
+        {erroEhDoTipo ? (
+          <p
+            id="tipoConsentimento-error"
+            className="text-[var(--status-error-fg)] text-sm font-semibold"
+          >
+            {state.error}
+          </p>
+        ) : null}
         {/* Valor lido pela action. Vazio até o operador escolher — a action
             devolve erro em pt-BR nesse caso, sem default silencioso. */}
         <input
