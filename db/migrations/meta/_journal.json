@@ -386,6 +386,13 @@
       "when": 1785421565000,
       "tag": "0054_fix_evidence_revision_insert_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1785421566000,
+      "tag": "0056_alerta_risco_email_rt",
+      "breakpoints": true
     }
   ]
 }

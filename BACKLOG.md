@@ -22,7 +22,57 @@
 | **6**   | Hardening LGPD (fechamento MVP)                         | ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅) | Issue #9                 |
 | **6b**  | Ditado de Voz (áudio + ASR)                             |  📅 Fast-follow · gated por DPA   | Issue #72                |
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
-| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |            📅 Pós-MVP             | Issue #126               |
+| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
+
+## 🏁 Sessão 30/07/2026 — E-mail Resend pro RT no estágio 2 (Issue #126)
+
+**O que foi entregue**
+- Migração `db/migrations/0056_alerta_risco_email_rt.sql` — 3 funções `SECURITY DEFINER` pra role `iris_escalonamento`: `app_rt_do_alerta` (resolve e-mail/nome do RT só em `escalado_estagio_2` com papel vigente), `app_registrar_email_rt` (grava marcador em `canais_notificados` + `audit_log`, sempre — sucesso ou falha), `app_alertas_estagio2_sem_email` (reconciliação).
+- `src/lib/email/resend.ts` (adapter TS pro app Next, Provider+resolver+NullProvider) e `scripts/lib/resend-rt.mjs` (espelho JS puro pro motor de escalonamento — script roda via `node` puro, não importa `.ts`).
+- `scripts/escalonamento-risco.mjs`: `processarEmailRt()` chamado pros recém-escalados pra estágio 2 **e** pros pendentes da reconciliação, toda varredura.
+- `EMAIL_PROVIDER_API_KEY`/`RESEND_FROM_EMAIL` documentadas em `.env.example`.
+- Testes novos: `notificacao.test.ts`, `email/resend.test.ts`, `scripts/escalonamento-risco.test.mjs` (532→538 testes unitários, todos verdes).
+- **PR #153** aberta (branch `feat/126-email-rt-estagio2`), 4 commits (`build`/`feat`/`test`/`docs`). **Merge segurado a pedido do Rômulo** — main=prod com autodeploy, decisão de mergear é dele.
+- **Smoke test manual com Resend real deferido a pedido do Rômulo** — nenhuma key real em `.env`/`.env.local` locais; quando quiser rodar, adicionar `EMAIL_PROVIDER_API_KEY` (nunca colar a key no chat) e forçar um alerta pro estágio 2 pra conferir e-mail recebido + `canais_notificados`/`audit_log` gravados.
+
+**Decisão de escopo (fora do Apêndice A original da issue)**
+- Achado durante o planejamento: se o processo morre entre a transição pro estágio 2 e o envio do e-mail, a função de escalonamento não devolve mais aquele alerta (já saiu do estágio que a query casa) — e-mail perdido em silêncio (contra #108). Fechado com a 3ª função de reconciliação acima, rodada toda varredura.
+
+**Gaps incidentais encontrados e corrigidos nesta sessão (fora do escopo da #126)**
+- `vitest.config.ts` não tinha alias pra `server-only` — todo teste unitário que importa um módulo com `import "server-only"` lançava (`This module cannot be imported from a Client Component module`), sem precedente no repo pra teste puro (só cobertos por `.int.test.ts`, config diferente). Corrigido com `resolve.alias["server-only"]` apontando pro `empty.js` do próprio pacote (mesma troca que o Next faz via condição `react-server`; não é `vi.mock`).
+- `scripts/` não tinha nenhum projeto vitest cobrindo (`include` só pegava `src/**/*.test.ts`). Estendido pra `scripts/**/*.test.mjs`.
+- `scripts/escalonamento-risco.mjs` chamava `main().catch(...)` incondicional no escopo do módulo — importar o arquivo (p.ex. do teste, pra pegar `processarEmailRt`) disparava uma varredura real contra `ESCALONAMENTO_DATABASE_URL`. Corrigido com guarda de execução direta — mas a 1ª versão da guarda estava errada e foi refeita na revisão (ver sessão seguinte).
+- Banco local (`docker compose infra/docker-compose.yml`) precisou de `iris_app`/`iris_auth_login` criadas à mão (não vêm de migração — receita em `infra/README.md`), volume era novo.
+
+**Gap pré-existente encontrado, NÃO corrigido (fora de escopo — registrar, não silenciar)**
+- `pnpm test:rls` roda 3 falhas em `src/db/rls.int.test.ts`, todas sem relação com #126: (1) teste da issue #141 insere `extraction.subtipo = 'sugestao_marcos'`, valor que **não existe** no enum `extraction_subtipo` nem em `src/db/schema.ts` nem em nenhuma migração — enum só tem `evidencia/registro_abc/ausencia_comportamento/cadeia/preferencia_reforcador/pendente`; (2)/(3) dois testes da issue #128 (`session_note`/`extraction` — terapeuta que não é dono da sessão) colidem com a exclusion constraint `session_no_overbook_terapeuta` ao inserir a sessão de setup. Confirmado que as 3 funções novas do #126 (`app_rt_do_alerta`/`app_registrar_email_rt`/`app_alertas_estagio2_sem_email`) não vazam dado — zero falha nos testes que as cobrem, e essas 3 falhas são em describe blocks totalmente diferentes. Precisa de sessão própria pra investigar se `sugestao_marcos` deveria ter entrado no enum numa migração que faltou, ou se o teste #141 está desatualizado.
+
+## 🏁 Sessão 30/07/2026 — Infra Resend + revisão da PR #153 (Issue #126)
+
+**Infra concluída (ações humanas de via única, feitas pelo Rômulo)**
+- Conta Resend criada; domínio `irisclinica.ia.br` **Verified**, região São Paulo (`sa-east-1`).
+- DNS publicado no painel do **Registro.br** (nameservers `d/e.sec.dns.br`, não Cloudflare): DKIM `resend._domainkey`, SPF TXT `send`, MX `send` (prio 10, `feedback-smtp.sa-east-1.amazonses.com`), DMARC `_dmarc` (`p=none`). Os 4 verificados por resolução DNS, não só pelo status do painel.
+- API key `iris-producao` (Sending access) criada; a key `Onboarding` do fluxo inicial foi removida.
+- Easypanel: `EMAIL_PROVIDER_API_KEY` + `NEXT_PUBLIC_APP_URL=https://irisclinica.ia.br` nos **dois** serviços (`iris-app` e `iris-escalonamento`). `RESEND_FROM_EMAIL` **não** foi setada — é opcional: o default no código já é `notificacoes@irisclinica.ia.br` e o domínio verificado é a raiz, então bate. Só faria falta se um dia o remetente mudasse ou o domínio verificado virasse subdomínio.
+- ⚠️ A `iris-producao` está em texto plano no painel e vai aparecer no log de build (`infra/README.md`) — entra na tabela de rotação.
+
+**Revisão da PR #153 (Jules não concluiu; revisão feita pelo Claude) — 2 bloqueantes corrigidos em `618c131`**
+- **E-mail sairia com link vazio, registrado como enviado.** `NEXT_PUBLIC_APP_URL` não existia no serviço `iris-escalonamento` (só no `iris-app`), então `appUrl` caía no fallback `""` e o corpo saía com `<a href=""></a>` — enquanto `app_registrar_email_rt` gravava `_enviado` com sucesso. Canal que consta entregue sem ter servido é a falha silenciosa da #108. Os dois adapters passam a **recusar** o envio com falha explícita na trilha quando a URL do painel está ausente. A variável também foi setada no Easypanel.
+- **Guarda de execução virava no-op com caminho relativo.** `import.meta.url === \`file://${process.argv[1]}\`` não funciona porque o Node **não absolutiza** `argv[1]`: com caminho relativo — como no dry-run documentado em `infra/docker-compose.yml` — a comparação dá `false`, `main()` nunca roda e o processo sai **0**. Verificado empiricamente (antes: nenhuma saída, exit 0; depois: erro de `ESCALONAMENTO_DATABASE_URL` na stack). Trocado por `pathToFileURL(process.argv[1]).href`. Também destravou a execução local no Windows.
+- **Teste do guardrail LGPD era tautologia.** `resend.test.ts` reconstruía o template numa string local em vez de exercitar o código — interpolar nome de paciente em `resend.ts` não quebraria nada. O corpo saiu para `montarCorpoAlertaRt(appUrl)`, exportada dos dois adapters, e o teste asserta contra ela. Teste novo garante que o espelho `.mjs` e o adapter TS não divirjam (a duplicação é intencional, mas nada garantia paridade).
+- Achado ao escrever o teste: o fake de `sql` lia `p_sucesso` de `valores[1]`, mas esse parâmetro é **literal** no template SQL — só `p_alerta` e `p_detalhe` são interpolados.
+- Verificação: `pnpm test` 535/535, `typecheck` limpo, `lint` 0 erros.
+
+**Achados não-bloqueantes → Issue #154**
+- Falha de envio nunca é reprocessada: `app_alertas_estagio2_sem_email()` exclui `_falhou`, então um 429/5xx transitório da Resend queima a única chance daquele alerta. Decidir entre aceitar+documentar ou separar transitório de definitivo.
+- Exceção em `processarEmailRt` aborta a varredura inteira (sem `try/catch` por alerta) — os alertas seguintes ficam sem e-mail naquela passada e o heartbeat não avança. A reconciliação recupera na varredura seguinte, mas um alerta ruim não deveria bloquear os outros.
+- Menores: `rt_nome` devolvido por `app_rt_do_alerta` e nunca consumido; `UPDATE` em `app_registrar_email_rt` sem `deletado_em IS NULL`, diferente das funções irmãs da mesma migração.
+
+**Ainda pendente pra fechar a #126**
+- Merge da PR #153 (decisão do Rômulo — main=prod com autodeploy).
+- **Implantar** `iris-app` e `iris-escalonamento` depois do merge: env var salva no Easypanel não reinicia container sozinha.
+- Smoke test com envio real — só possível após merge + deploy. Hoje a key `iris-producao` marca "No activity", o que confirma que nada foi enviado ainda.
+- Reaproveitar o adapter no convite de equipe (`/equipe/convidar`), item da Fase 3 da issue que a PR não entregou.
 
 ## 🏁 Sessão 30/07/2026 — Telemetria de UX (Microsoft Clarity — PR #151)
 
