@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
 import "@/styles/globals.css";
+import { Clarity } from "@/components/clarity";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -32,6 +33,7 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${jakarta.variable}`}
     >
       <body>
+        <Clarity />
         {children}
         {process.env.NODE_ENV === "development" && (
           /* eslint-disable-next-line @next/next/no-sync-scripts */
@@ -41,3 +43,4 @@ export default function RootLayout({
     </html>
   );
 }
+
