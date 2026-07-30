@@ -101,6 +101,16 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
     ).rejects.toThrow(/disciplina/i);
   });
 
+  test("rejeita regra se terapeutaId não possui papel de terapeuta", async () => {
+    await expect(
+      criarRegra(ctxCoord, {
+        ...regraValida,
+        terapeutaId: U_COORD, // U_COORD é coordenador, não terapeuta
+        diaSemana: 3,
+      }),
+    ).rejects.toThrow(/não é terapeuta/i);
+  });
+
   const avulsaValida = {
     patientId: PATIENT_P,
     terapeutaId: U_T1,
@@ -111,6 +121,15 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
     duracaoMin: 60,
     modalidade: "presencial" as const,
   };
+
+  test("rejeita avulsa se terapeutaId não possui papel de terapeuta", async () => {
+    await expect(
+      criarAvulsa(ctxCoord, {
+        ...avulsaValida,
+        terapeutaId: U_COORD,
+      }),
+    ).rejects.toThrow(/não é terapeuta/i);
+  });
 
   test("reposição grava repostaDe apontando a falta original", async () => {
     await criarAvulsa(ctxCoord, { ...avulsaValida, repostaDe: FALTA_ID });
