@@ -22,7 +22,28 @@
 | **6**   | Hardening LGPD (fechamento MVP)                         | ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅) | Issue #9                 |
 | **6b**  | Ditado de Voz (áudio + ASR)                             |  📅 Fast-follow · gated por DPA   | Issue #72                |
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
-| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |            📅 Pós-MVP             | Issue #126               |
+| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
+
+## 🏁 Sessão 30/07/2026 — E-mail Resend pro RT no estágio 2 (Issue #126)
+
+**O que foi entregue**
+- Migração `db/migrations/0056_alerta_risco_email_rt.sql` — 3 funções `SECURITY DEFINER` pra role `iris_escalonamento`: `app_rt_do_alerta` (resolve e-mail/nome do RT só em `escalado_estagio_2` com papel vigente), `app_registrar_email_rt` (grava marcador em `canais_notificados` + `audit_log`, sempre — sucesso ou falha), `app_alertas_estagio2_sem_email` (reconciliação).
+- `src/lib/email/resend.ts` (adapter TS pro app Next, Provider+resolver+NullProvider) e `scripts/lib/resend-rt.mjs` (espelho JS puro pro motor de escalonamento — script roda via `node` puro, não importa `.ts`).
+- `scripts/escalonamento-risco.mjs`: `processarEmailRt()` chamado pros recém-escalados pra estágio 2 **e** pros pendentes da reconciliação, toda varredura.
+- `EMAIL_PROVIDER_API_KEY`/`RESEND_FROM_EMAIL` documentadas em `.env.example`.
+- Testes novos: `notificacao.test.ts`, `email/resend.test.ts`, `scripts/escalonamento-risco.test.mjs` (532→538 testes unitários, todos verdes).
+
+**Decisão de escopo (fora do Apêndice A original da issue)**
+- Achado durante o planejamento: se o processo morre entre a transição pro estágio 2 e o envio do e-mail, a função de escalonamento não devolve mais aquele alerta (já saiu do estágio que a query casa) — e-mail perdido em silêncio (contra #108). Fechado com a 3ª função de reconciliação acima, rodada toda varredura.
+
+**Gaps incidentais encontrados e corrigidos nesta sessão (fora do escopo da #126)**
+- `vitest.config.ts` não tinha alias pra `server-only` — todo teste unitário que importa um módulo com `import "server-only"` lançava (`This module cannot be imported from a Client Component module`), sem precedente no repo pra teste puro (só cobertos por `.int.test.ts`, config diferente). Corrigido com `resolve.alias["server-only"]` apontando pro `empty.js` do próprio pacote (mesma troca que o Next faz via condição `react-server`; não é `vi.mock`).
+- `scripts/` não tinha nenhum projeto vitest cobrindo (`include` só pegava `src/**/*.test.ts`). Estendido pra `scripts/**/*.test.mjs`.
+- `scripts/escalonamento-risco.mjs` chamava `main().catch(...)` incondicional no escopo do módulo — importar o arquivo (p.ex. do teste, pra pegar `processarEmailRt`) disparava uma varredura real contra `ESCALONAMENTO_DATABASE_URL`. Corrigido com guarda `import.meta.url === file://${process.argv[1]}`.
+- Banco local (`docker compose infra/docker-compose.yml`) precisou de `iris_app`/`iris_auth_login` criadas à mão (não vêm de migração — receita em `infra/README.md`), volume era novo.
+
+**Gap pré-existente encontrado, NÃO corrigido (fora de escopo — registrar, não silenciar)**
+- `pnpm test:rls` roda 3 falhas em `src/db/rls.int.test.ts`, todas sem relação com #126: (1) teste da issue #141 insere `extraction.subtipo = 'sugestao_marcos'`, valor que **não existe** no enum `extraction_subtipo` nem em `src/db/schema.ts` nem em nenhuma migração — enum só tem `evidencia/registro_abc/ausencia_comportamento/cadeia/preferencia_reforcador/pendente`; (2)/(3) dois testes da issue #128 (`session_note`/`extraction` — terapeuta que não é dono da sessão) colidem com a exclusion constraint `session_no_overbook_terapeuta` ao inserir a sessão de setup. Confirmado que as 3 funções novas do #126 (`app_rt_do_alerta`/`app_registrar_email_rt`/`app_alertas_estagio2_sem_email`) não vazam dado — zero falha nos testes que as cobrem, e essas 3 falhas são em describe blocks totalmente diferentes. Precisa de sessão própria pra investigar se `sugestao_marcos` deveria ter entrado no enum numa migração que faltou, ou se o teste #141 está desatualizado.
 
 ## 🏁 Sessão 30/07/2026 — Telemetria de UX (Microsoft Clarity — PR #151)
 
