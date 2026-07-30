@@ -33,6 +33,20 @@
 - Variável `NEXT_PUBLIC_CLARITY_PROJECT_ID` documentada em `.env.example`.
 - **Compliance LGPD:** Mascaramento nativo de formulários e execução `no-op` sem a variável configurada.
 
+## 🏁 Sessão 30/07/2026 — Identify API do Clarity (staff tracking)
+
+**O que foi entregue**
+- Clarify.identify(session.user.id) adicionado a `src/components/clarity.tsx`.
+- Integração com `authClient.useSession()` — Clarity rastreia staff (terapeuta/coordenador) logado, reativo a login/logout.
+- Guard: só chama `identify` com projectId setado e sessão ativa.
+
+**Gap para próxima rodada**
+- `Clarity.consentV2()` + cookie-consent banner — depende de:
+  1. Formalização no design system (componente banner, HANDOFF-FASE1.md §0 proíbe hardcode ad hoc).
+  2. Decisão de produto: opt-in vs opt-out, texto de consentimento, integração com analytics-storage flag da ANPD.
+  3. Definição de custom tags (tipo de usuário, clinic_id) e custom events (fluxos chave) — ainda sem necessidade concreta mapeada.
+- Registrar em issue separada quando produto tiver alinhamento.
+
 ## 🏁 Sessão 30/07/2026 — Gate único da suíte de integração: fim do auto-skip silencioso (Issue #132)
 
 

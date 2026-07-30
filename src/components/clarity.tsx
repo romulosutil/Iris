@@ -2,10 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import ClaritySDK from "@microsoft/clarity";
+import { useSession } from "@/auth/client";
 
 export function Clarity() {
   const projectId = process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID;
   const initialized = useRef(false);
+  const { data: session } = useSession();
 
   useEffect(() => {
     if (projectId && !initialized.current) {
@@ -17,6 +19,12 @@ export function Clarity() {
       );
     }
   }, [projectId]);
+
+  useEffect(() => {
+    if (projectId && initialized.current && session?.user?.id) {
+      ClaritySDK.identify(session.user.id);
+    }
+  }, [projectId, session?.user?.id]);
 
   return null;
 }
