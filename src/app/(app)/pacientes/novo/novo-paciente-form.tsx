@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   cadastrarPacienteAdministrativo,
   type CadastroAdminState,
@@ -44,6 +45,8 @@ export function NovoPacienteForm() {
     TipoConsentimento | ""
   >("");
   const [nascimento, setNascimento] = useState("");
+  const [consentimentoIa, setConsentimentoIa] = useState(false);
+  const [consentimentoExportacao, setConsentimentoExportacao] = useState(false);
 
   const idade = idadeEmAnos(nascimento);
   // Aviso NÃO-BLOQUEANTE: emancipação e curatela existem, e `nascimento` é
@@ -183,6 +186,47 @@ export function NovoPacienteForm() {
           />
         </Field>
       ) : null}
+
+      {/* Consentimentos por finalidade LGPD (#140) — destacados e facultativos. */}
+      <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
+        <legend className="text-[var(--text-primary)] font-display mb-1 text-sm font-semibold">
+          Consentimentos Adicionais por Finalidade (LGPD)
+        </legend>
+        <div className="flex flex-col gap-3">
+          <div>
+            <Checkbox
+              id="consentimentoIa"
+              checked={consentimentoIa}
+              onCheckedChange={(c) => setConsentimentoIa(!!c)}
+              label="Autorizar processamento por Inteligência Artificial (IA)"
+            />
+            <p className="text-[var(--text-secondary)] text-xs ml-9 mt-0.5">
+              Conforme §8 dos Termos LGPD. Facultativo — autoriza transcrição, resumos e auxílio clínico por IA.
+            </p>
+          </div>
+          <div>
+            <Checkbox
+              id="consentimentoExportacao"
+              checked={consentimentoExportacao}
+              onCheckedChange={(c) => setConsentimentoExportacao(!!c)}
+              label="Autorizar exportação e download de relatórios"
+            />
+            <p className="text-[var(--text-secondary)] text-xs ml-9 mt-0.5">
+              Conforme §10 dos Termos LGPD. Facultativo — autoriza a geração e download de relatórios em PDF/CSV.
+            </p>
+          </div>
+        </div>
+        <input
+          type="hidden"
+          name="consentimentoIa"
+          value={consentimentoIa ? "on" : ""}
+        />
+        <input
+          type="hidden"
+          name="consentimentoExportacao"
+          value={consentimentoExportacao ? "on" : ""}
+        />
+      </fieldset>
 
       <Button type="submit">Salvar e continuar para o cadastro clínico</Button>
     </Form>
