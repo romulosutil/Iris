@@ -25,6 +25,7 @@
     "db:migrate:deploy": "node scripts/migrate.mjs",
     "seed:clinic": "tsx --conditions=react-server --env-file=.env scripts/seed-clinic.ts",
     "seed:demo": "tsx --conditions=react-server --env-file=.env scripts/seed-demo.ts",
+    "seed:lorena": "tsx --conditions=react-server --env-file=.env scripts/seed-lorena.ts",
     "backfill:evidence": "tsx --conditions=react-server --env-file=.env scripts/backfill-evidence.ts",
     "prepare": "husky"
   },
