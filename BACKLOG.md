@@ -33,14 +33,15 @@
 - Variável `NEXT_PUBLIC_CLARITY_PROJECT_ID` documentada em `.env.example`.
 - **Compliance LGPD:** Mascaramento nativo de formulários e execução `no-op` sem a variável configurada.
 
-## 🏁 Sessão 30/07/2026 — Implementação completa do Clarity (telemetria de UX — PR #151)
+## 🏁 Sessão 30/07/2026 — Implementação completa do Clarity (telemetria de UX — PR #152)
 
 **O que foi entregue**
-- `Clarity.init(projectId)` — integração SDK v1.0.2, guard Strict Mode via `useRef`.
-- `Clarity.consentV2({ad_Storage: 'denied', analytics_Storage: 'granted'})` — LGPD. Staff é empregado (contrato de trabalho já existe); Clarity mascara dados sensíveis nativamente; sem banner necessária (futura override via design system).
-- `Clarity.identify(session.user.id)` — rastreamento de staff logado (terapeuta/coordenador), reativo a login/logout.
-- Variável `NEXT_PUBLIC_CLARITY_PROJECT_ID=xulmzzqxsv` documentada em `.env.example` + comentário LGPD.
-- Painel Clarity vivo: https://clarity.microsoft.com/projects/view/xulmzzqxsv/gettingstarted
+- `Clarity.init(projectId)` — integração SDK v1.0.2, guard Strict Mode via `useRef`, init só roda uma vez.
+- `Clarity.consentV2({ad_Storage: 'denied', analytics_Storage: 'granted'})` — chamado no init. LGPD: staff é empregado (contrato de trabalho já existe); Clarity mascara dados sensíveis nativamente; sem banner necessária (futura override via design system).
+- `Clarity.identify(session.user.id)` — rastreamento de staff logado (terapeuta/coordenador), reativo a login/logout. Chama `identify` sempre que sessão muda (login/logout).
+- Variável `NEXT_PUBLIC_CLARITY_PROJECT_ID=xulmzzqxsv` setada em produção (Easypanel); documentada em `.env.example` + comentário LGPD.
+- Deploy em produção (PR #152 merged, branch deletada).
+- Painel Clarity vivo e funcional: https://clarity.microsoft.com/projects/view/xulmzzqxsv/gettingstarted (aguardando dados do primeiro login de staff).
 
 **Decisões de design**
 - consentV2 chamado no init (não no identify), sem dependência de banner. Futuro: se design system formalizar cookie-consent, refatorar pra aceitar override do banner sem mudar lógica.
@@ -48,8 +49,13 @@
 - ad_Storage='denied' (sem publicidade no produto, sem motivo p/ storage de ads).
 
 **Verificação (all passed)**
-- `pnpm typecheck` ✅
-- `pnpm build` ✅ (Next.js route map gerado, zero warnings)
+- ✅ `pnpm typecheck` — zero erros
+- ✅ `pnpm build` — Next.js route map gerado, zero warnings
+- ✅ Deploy Easypanel — app rodando, env setada, container up
+- ✅ SDK live em painel (project criado, pronto pra dados)
+
+**Próximo passo**
+- Quando primeiro staff logar em produção: `identify(session.user.id)` acionado automaticamente → painel recebe dados em 5-10min (coleta assíncrona Clarity)
 
 ## 🏁 Sessão 30/07/2026 — Gate único da suíte de integração: fim do auto-skip silencioso (Issue #132)
 
