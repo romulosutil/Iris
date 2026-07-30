@@ -2438,6 +2438,7 @@ Além disso, há hard-blockers técnicos que precisariam ser resolvidos antes do
   - [ ] Confirmar com a contadora a inserção do CNAE secundário de desenvolvimento/licenciamento de SaaS na ME.
   - [ ] Testar trial/demo dos concorrentes direto (logado).
   - [ ] Fechar precificação final do "paciente ativo" após rodadas do piloto.
+  - [ ] **Issue #167 — Trial de 7 dias grátis + gateway de pagamento (Fase 7)**: Implementar modelo de cobrança onde toda clínica/profissional novo recebe **7 dias grátis** para testar o MVP sem restrição. Após expiração, acesso bloqueado até pagamento. Componentes a desenvolver: (1) `trial_periodo_dias` e `trial_comeco_em` em `clinic` (schema); (2) middleware de acesso que valida vigência do trial vs. status de pagamento; (3) integração de gateway (Stripe ou Abacatepay, a decidir); (4) tela de upgrade/pagamento pós-trial; (5) faturamento e retenção de recibos. **Gatilho:** após ≥3 pilotos validarem a jornada de onboarding (Fase 7 pós-MVP). **Status:** investigação de modelo aberta, não prototipado.
 
 ---
 
