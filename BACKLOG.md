@@ -74,6 +74,27 @@
 - Smoke test com envio real — só possível após merge + deploy. Hoje a key `iris-producao` marca "No activity", o que confirma que nada foi enviado ainda.
 - Reaproveitar o adapter no convite de equipe (`/equipe/convidar`), item da Fase 3 da issue que a PR não entregou.
 
+## 🏁 Sessão 30/07/2026 — #126 FECHADA: incidente do motor parado + smoke test verde
+
+**Incidente: motor de escalonamento parado em produção (PR #156)**
+- O deploy da #126 derrubou o motor: `ERR_MODULE_NOT_FOUND` em `file:///app/scripts/lib/resend-rt.mjs`, 6 varreduras com `exit 1`, heartbeat congelado. **Nenhum alerta de risco vencido escalou** enquanto durou (~20:47Z→21:07Z).
+- Causa raiz, duas faces do mesmo ponto cego: `infra/escalonamento/Dockerfile` **não** compartilha o `node_modules` nem a árvore de arquivos do app — lista o que copia e instala o que precisa à mão, de propósito, pra não arrastar Next/React/Playwright. (1) O `COPY` listava só `scripts/escalonamento-risco.mjs`, e o `scripts/lib/resend-rt.mjs` novo nunca entrou na imagem — import de topo não cai em `try/catch`, o processo morre na carga. (2) `resend` foi adicionado ao `package.json` da raiz, que não alcança essa imagem; ela instalava só `postgres@3.4.9`. Sem a 2ª correção, mesmo com o COPY certo o `await import("resend")` cairia no catch e gravaria `_falhou` — e como falha não é reprocessada (#154), cada alerta de estágio 2 queimaria sua **única** tentativa num módulo ausente.
+- Corrigido copiando `scripts/lib/` inteiro (módulo novo entra sozinho) e instalando `resend@6.18.1` pinado.
+- **Por que test/typecheck/lint não pegaram:** os três rodam contra a árvore do repo, onde o arquivo existe e a dependência está no `node_modules` da raiz. Nenhum constrói a imagem do escalonamento, e o serviço não sobe por default no compose (`profiles: ["escalonamento"]`) — então o teste local que o próprio Dockerfile diz existir pra pegar exatamente isso nunca rodou. Vira issue de CI (ver abaixo).
+
+**Smoke test — VERDE (30/07/2026, 21:1xZ)**
+- Executado do terminal do container `iris-escalonamento`, importando o módulo de produção `scripts/lib/resend-rt.mjs` (não um envio genérico), com a chave saindo de `process.env` — nunca colada no chat.
+- Pré-checagem: módulo carrega, `EMAIL_PROVIDER_API_KEY` presente (36 chars, valor não impresso), `NEXT_PUBLIC_APP_URL=https://irisclinica.ia.br`, remetente no default.
+- Envio: `{"ok":true,"providerMessageId":"0006091f-8534-4031-a8bb-b9396dfd65aa"}`.
+- Resend → Emails: **Delivered**, destino `correaromulo963@gmail.com`, assunto `Iris — alerta de risco pendente há mais tempo que o esperado`.
+- **Migração `0056` confirmada aplicada em produção sem abrir console:** toda varredura chama `app_alertas_estagio2_sem_email()`; as varreduras estão concluindo verdes a cada 60s, o que só é possível com as funções no banco.
+- **Escopo do smoke:** camada de infra (domínio verificado, chave válida, SPF/DKIM, entrega real, módulo de produção). **NÃO** exercitou `app_rt_do_alerta` nem a reconciliação ponta a ponta — isso exigiria criar/alterar alerta na base de produção, e a decisão foi não escrever dado clínico em prod pra teste. Fica pendente até existir ambiente separado.
+
+**Estado final da #126**
+- PRs #153 (feature), #156 (hotfix do Dockerfile) mergeadas e implantadas.
+- Infra completa: conta Resend, domínio `irisclinica.ia.br` Verified, DNS no Registro.br, key `iris-producao`, env vars nos dois serviços.
+- Desdobramentos abertos: **#154** (robustez — retry de falha transitória, `try/catch` por alerta, 2 pontas soltas), **#155** (reaproveitar o adapter em `/equipe/convidar`, Fase 3 que a #153 não entregou), **#157** (CI que builda a imagem do escalonamento).
+
 ## 🏁 Sessão 30/07/2026 — Telemetria de UX (Microsoft Clarity — PR #151)
 
 **O que foi entregue**
