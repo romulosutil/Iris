@@ -13,7 +13,8 @@ RUN apk add --no-cache bash
 
 WORKDIR /app
 
-# DEPENDÊNCIA: só `postgres`, pinada na MESMA versão do pnpm-lock.yaml (3.4.9).
+# DEPENDÊNCIAS: `postgres` e `resend`, pinadas nas MESMAS versões do
+# pnpm-lock.yaml (3.4.9 e 6.18.1).
 #
 # Por que `npm install` e não `pnpm install` como o resto do repo, apesar do
 # `packageManager: pnpm@11.11.0`: `pnpm install` a partir do lockfile do repo
@@ -24,16 +25,25 @@ WORKDIR /app
 # lockfile próprio deste diretório para manter; a garantia de reprodutibilidade
 # vem da versão EXATA fixada aqui.
 #
-# Se algum dia o `postgres` subir de versão no pnpm-lock.yaml, esta linha
-# precisa subir junto — é o preço explícito de não compartilhar o lockfile.
-RUN npm install --no-package-lock --no-audit --no-fund postgres@3.4.9
+# Se algum dia o `postgres` ou o `resend` subir de versão no pnpm-lock.yaml,
+# esta linha precisa subir junto — é o preço explícito de não compartilhar o
+# lockfile. `resend` entrou na #126: esta imagem NÃO enxerga o node_modules do
+# app, então adicionar a dependência no package.json da raiz não a alcança.
+RUN npm install --no-package-lock --no-audit --no-fund postgres@3.4.9 resend@6.18.1
 
 # Caminhos relativos à RAIZ DO REPO, não a este diretório: o Easypanel builda
 # com o contexto na raiz, igual ao `infra/backup/Dockerfile` e ao
 # `infra/Dockerfile` do app. Um `COPY agendador.sh` bare funcionaria no compose
 # local e quebraria em produção com "not found" — o compose usa o mesmo
 # contexto (raiz) justamente para o teste local pegar isso.
+#
+# `scripts/lib/` é diretório inteiro de propósito: copiar arquivo por arquivo
+# fez a #126 derrubar o motor em produção — o script passou a importar
+# `./lib/resend-rt.mjs`, que não estava nesta lista, e o processo morreu em
+# ERR_MODULE_NOT_FOUND na carga do módulo (import de topo não cai em try/catch).
+# Qualquer módulo novo que o script importe entra sozinho agora.
 COPY scripts/escalonamento-risco.mjs ./scripts/escalonamento-risco.mjs
+COPY scripts/lib/ ./scripts/lib/
 COPY infra/escalonamento/agendador.sh ./agendador.sh
 RUN chmod +x agendador.sh
 
