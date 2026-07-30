@@ -640,7 +640,8 @@ if [[ "${EXIT_CODE}" -eq 0 ]]; then
 	rm -f -- "${DEGRADADO_MARCADOR}" 2>/dev/null || true
 	log_info "concluído com sucesso"
 else
-	printf 'timestamp=%s\nexit_code=%d\nstatus=degraded\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${EXIT_CODE}" >"${DEGRADADO_MARCADOR}"
+	hoje="$(date -u +%F)"
+	printf 'timestamp=%s\nexit_code=%d\ndate=%s\nstatus=degraded\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${EXIT_CODE}" "${hoje}" >"${DEGRADADO_MARCADOR}"
 	log_error "backup do dia ÍNTEGRO em ${BACKUP_DIR}, mas houve falha de REPLICAÇÃO (exit ${EXIT_CODE}) — ver mensagens acima. O dump NÃO será refeito; corrija o destino e a próxima janela replica."
 fi
 

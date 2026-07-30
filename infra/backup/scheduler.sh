@@ -78,14 +78,10 @@ while :; do
 		case "${backup_exit}" in
 			0)
 				date -u '+%Y-%m-%dT%H:%M:%SZ' >"${marcador}"
-				rm -f -- "${DEGRADADO_MARCADOR}" 2>/dev/null || true
 				log "backup do dia ${hoje} concluído com sucesso"
 				;;
 			3)
 				date -u '+%Y-%m-%dT%H:%M:%SZ' >"${marcador}"
-				if [[ ! -f "${DEGRADADO_MARCADOR}" ]]; then
-					printf 'timestamp=%s\nexit_code=3\ndate=%s\nstatus=degraded\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${hoje}" >"${DEGRADADO_MARCADOR}"
-				fi
 				log "ATENÇÃO: backup do dia ${hoje} está ÍNTEGRO em disco, mas a REPLICAÇÃO falhou (exit 3)."
 				log "ATENÇÃO: pode não haver cópia fora do host. Verificar MinIO e destino off-site HOJE — ver §Backup e restore em infra/README.md."
 				log "ATENÇÃO: sinalizador de degradação registrado em ${DEGRADADO_MARCADOR}."

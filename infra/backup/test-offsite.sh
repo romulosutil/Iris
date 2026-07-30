@@ -222,11 +222,11 @@ else
 	fail "backup local sumiu quando o off-site falhou"
 fi
 
-CMD="grep -q 'exit_code=3' /backups/.offsite-degradado 2>/dev/null && echo ASSERT_DEGRADADO:ok || echo ASSERT_DEGRADADO:FALHOU"
+CMD="grep -q 'exit_code=3' /backups/.offsite-degradado 2>/dev/null && grep -q 'date=' /backups/.offsite-degradado 2>/dev/null && echo ASSERT_DEGRADADO:ok || echo ASSERT_DEGRADADO:FALHOU"
 if "${COMPOSE[@]}" run --rm -T --no-deps -e MC_CONFIG_DIR=/tmp/mc backup bash -c "${CMD}" 2>&1 | grep -q 'ASSERT_DEGRADADO:ok'; then
-	ok "marcador .offsite-degradado criado quando a replicação falha (exit 3)"
+	ok "marcador .offsite-degradado criado (com exit_code e date) quando a replicação falha (exit 3)"
 else
-	fail "marcador .offsite-degradado não foi criado em exit 3"
+	fail "marcador .offsite-degradado não foi criado ou não tem schema completo em exit 3"
 fi
 
 # recipient inválido: falha ANTES do dump, não sobe nada em claro.
