@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { NullEmailProvider, ResendEmailProvider, resolveEmailProvider } from "./resend";
+import {
+  montarCorpoAlertaRt,
+  NullEmailProvider,
+  ResendEmailProvider,
+  resolveEmailProvider,
+} from "./resend";
+import { montarCorpoAlertaRt as montarCorpoAlertaRtMjs } from "../../../scripts/lib/resend-rt.mjs";
 
 // Guardrail §4.2.1: nomes/categoria/trecho de paciente nunca podem aparecer no
 // corpo do e-mail — o tipo de entrada (RtAlertaEmailInput) só aceita
@@ -39,17 +45,33 @@ describe("resend.ts — resolveEmailProvider (#126)", () => {
     }
   });
 
+  // Asserta contra o MESMO `montarCorpoAlertaRt` que o provider usa para montar
+  // o html — não contra uma cópia do template no teste. Uma cópia passaria
+  // verde mesmo se alguém interpolasse nome de paciente no código real, o que
+  // deixaria o guardrail §4.2.1 sem cobertura nenhuma.
   test("corpo fixo do e-mail não contém termo clínico (§4.2.1)", () => {
-    // Reconstrói o mesmo template que ResendEmailProvider.enviarAlertaRiscoRt
-    // monta, sem chamar o SDK real (sem key de verdade em teste).
-    const appUrl = "https://irisclinica.ia.br/painel";
-    const corpo = `<p>Um alerta de risco clínico da sua clínica está aguardando reconhecimento
-        da equipe há mais tempo que o prazo interno configurado.</p>
-        <p>Acesse o painel para revisar: <a href="${appUrl}">${appUrl}</a></p>
-        <p>Consulte o Protocolo de Emergência Interno da clínica para a conduta indicada.</p>`;
+    const corpo = montarCorpoAlertaRt("https://irisclinica.ia.br/painel");
 
     for (const proibido of TERMOS_CLINICOS_PROIBIDOS) {
       expect(corpo.toLowerCase()).not.toContain(proibido);
+    }
+  });
+
+  // O adapter do motor de escalonamento é um espelho deste (roda em `node`
+  // puro, não importa `.ts`). Duplicação só é segura se a divergência quebrar
+  // o build — senão um dos dois corpos vaza dado clínico sem ninguém ver.
+  test("corpo do espelho .mjs é idêntico ao do adapter TS", () => {
+    const appUrl = "https://irisclinica.ia.br/painel";
+    expect(montarCorpoAlertaRtMjs(appUrl)).toBe(montarCorpoAlertaRt(appUrl));
+  });
+
+  test("sem appUrl o envio é recusado com falha explícita, sem chamar o provedor", async () => {
+    const provider = new ResendEmailProvider("re_chave_de_teste", "iris@example.com");
+    const resultado = await provider.enviarAlertaRiscoRt({ rtEmail: "rt@example.com", appUrl: "" });
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) {
+      expect(resultado.erro).toContain("NEXT_PUBLIC_APP_URL");
     }
   });
 });

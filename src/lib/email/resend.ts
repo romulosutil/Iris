@@ -14,6 +14,22 @@ export type EmailSendResult =
   | { ok: true; providerMessageId: string }
   | { ok: false; erro: string };
 
+export const ASSUNTO_ALERTA_RT =
+  "Iris — alerta de risco pendente há mais tempo que o esperado";
+
+/**
+ * Corpo do e-mail ao RT. Recebe SÓ a URL do painel — nenhum parâmetro clínico,
+ * para que não exista nem a possibilidade de interpolar paciente/categoria/
+ * trecho aqui (§4.2.1). Exportada para que o teste do guardrail asserte contra
+ * ESTE código, e não contra uma cópia do template.
+ */
+export function montarCorpoAlertaRt(appUrl: string): string {
+  return `<p>Um alerta de risco clínico da sua clínica está aguardando reconhecimento
+        da equipe há mais tempo que o prazo interno configurado.</p>
+        <p>Acesse o painel para revisar: <a href="${appUrl}">${appUrl}</a></p>
+        <p>Consulte o Protocolo de Emergência Interno da clínica para a conduta indicada.</p>`;
+}
+
 export interface EmailProvider {
   enviarAlertaRiscoRt(input: RtAlertaEmailInput): Promise<EmailSendResult>;
 }
@@ -31,18 +47,21 @@ export class ResendEmailProvider implements EmailProvider {
   ) {}
 
   async enviarAlertaRiscoRt(input: RtAlertaEmailInput): Promise<EmailSendResult> {
+    // Sem URL do painel o e-mail não cumpre a função dele: o corpo não carrega
+    // nada de clínico de propósito, então o link é a única ação possível pro
+    // RT. Falha explícita é melhor que e-mail com link vazio registrado como
+    // entregue na trilha (#108).
+    if (!input.appUrl) {
+      return { ok: false, erro: "email nao enviado (NEXT_PUBLIC_APP_URL ausente)" };
+    }
+
     const { Resend } = await import("resend");
     const resend = new Resend(this.apiKey);
     const { data, error } = await resend.emails.send({
       from: this.fromEmail,
       to: input.rtEmail,
-      subject: "Iris — alerta de risco pendente há mais tempo que o esperado",
-      // Corpo fixo, sem interpolação clínica: paciente/categoria/trecho nunca
-      // aparecem aqui — só um link pro painel autenticado (§4.2.1).
-      html: `<p>Um alerta de risco clínico da sua clínica está aguardando reconhecimento
-        da equipe há mais tempo que o prazo interno configurado.</p>
-        <p>Acesse o painel para revisar: <a href="${input.appUrl}">${input.appUrl}</a></p>
-        <p>Consulte o Protocolo de Emergência Interno da clínica para a conduta indicada.</p>`,
+      subject: ASSUNTO_ALERTA_RT,
+      html: montarCorpoAlertaRt(input.appUrl),
     });
 
     if (error) {

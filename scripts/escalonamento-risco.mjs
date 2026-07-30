@@ -35,9 +35,17 @@
  *                                tabela — credencial vazada não lê diário,
  *                                paciente nem trecho de risco.
  *   ESCALONAMENTO_HEARTBEAT_DIR  default /heartbeat.
+ *   EMAIL_PROVIDER_API_KEY       #126 — sem ela o canal de e-mail ao RT fica
+ *                                indisponível (registrado na trilha, não
+ *                                silencioso). Neutra de provedor de propósito.
+ *   RESEND_FROM_EMAIL            default notificacoes@irisclinica.ia.br.
+ *   NEXT_PUBLIC_APP_URL          #126 — URL do painel, único conteúdo acionável
+ *                                do e-mail ao RT. Sem ela o envio é recusado
+ *                                com falha explícita (ver processarEmailRt).
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import postgres from "postgres";
 import { enviarEmailRt } from "./lib/resend-rt.mjs";
 
@@ -207,7 +215,14 @@ async function main() {
 // (ex.: `escalonamento-risco.test.mjs` importando `processarEmailRt`). Sem
 // isto, importar o módulo em teste dispararia uma varredura real contra
 // ESCALONAMENTO_DATABASE_URL.
-if (import.meta.url === `file://${process.argv[1]}`) {
+//
+// `pathToFileURL` e não `file://${process.argv[1]}`: o Node NÃO absolutiza
+// argv[1], então a comparação crua falha quando o script é chamado por caminho
+// relativo — como no dry-run documentado em infra/docker-compose.yml — e o
+// processo sairia 0 sem varrer nada. Falha silenciosa disfarçada de sucesso é
+// exatamente o que este motor não pode fazer. (Também quebrava no Windows, em
+// que argv[1] vem com barra invertida e a URL não.)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     // Erro COMPLETO em stderr, incluindo stack e `cause`. Não engolir stderr é
     // regra deste repo: mensagem que afirma UMA causa provável produz
