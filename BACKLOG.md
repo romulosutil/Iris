@@ -24,9 +24,34 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 30/07/2026 — CI carrega as imagens de infra (Issue #157)
+
+**O buraco que fechou**
+
+- `infra/escalonamento/Dockerfile` e `infra/backup/Dockerfile` não compartilham o `node_modules` nem a árvore do app (COPY explícito + deps instaladas à mão, de propósito). `pnpm test`/`typecheck`/`lint` rodam contra a árvore do REPO e **ficam verdes com a imagem quebrada** — foi assim que a #126 subiu um `import` novo e derrubou o motor em produção por ~20 min (PR #156).
+
+**O que foi entregue**
+
+- `scripts/ci/carga-imagens-infra.sh` — **builda a imagem e carrega o código lá dentro**, não inspeciona Dockerfile. Roda igual no CI e na máquina do dev (`scripts/ci/carga-imagens-infra.sh [escalonamento|backup]`).
+- Escalonamento: dry-run por caminho **absoluto E relativo** (a forma do compose, que foi a que a #153 quebrou). Asserção tripla — exit 0 é **vermelho** (guarda de execução regrediu), erro diferente do esperado é vermelho, e só `ESCALONAMENTO_DATABASE_URL não definida` é verde.
+- Backup: mesmo desenho, cobrindo os 8 binários instalados à mão (`pg_dump`/`mc`/`age`/…), sintaxe dos 5 scripts e carga de `backup.sh`/`restore.sh`/`verify-restore.sh`/`verify-offsite.sh` até a guarda de env.
+- `.github/workflows/carga-imagens-infra.yml` — PR + push em `main` + `workflow_dispatch`, filtrado nos caminhos que entram nas imagens (inclui `pnpm-lock.yaml`, porque as versões da imagem são pinadas à mão e têm que acompanhar o lockfile).
+- Seção nova em `infra/README.md` com a tabela de como ler o resultado.
+
+**Gap novo encontrado no meio (não estava na issue)**
+
+- Carregar o script prova só os imports de **topo**. `resend` entra por `await import()` dentro de `try/catch` em `scripts/lib/resend-rt.mjs`: numa imagem sem a dependência o dry-run passa **verde**, o motor sobe e escalona normalmente, e o e-mail ao RT falha **em silêncio** gravando "email nao enviado" na trilha — modo de falha pior que o da #126, que ao menos morria alto.
+- Fechado com `scripts/ci/verificar-deps-imagem.mjs`, que resolve **todo** specifier dos arquivos copiados (dinâmicos inclusive) dentro da imagem. Entra por stdin de propósito — não vira arquivo numa imagem de produção.
+
+**Verificação (rodada de verdade, local, Docker 29.6.1)**
+
+- 21/21 asserções verdes nos dois serviços.
+- Controles negativos: imagem sem `COPY scripts/lib/` → pega `ERR_MODULE_NOT_FOUND`; imagem sem `resend` → passa no teste de carga (confirmando o gap acima) e é pega pelo verificador de deps.
+
 ## 🏁 Sessão 30/07/2026 — E-mail Resend pro RT no estágio 2 (Issue #126)
 
 **O que foi entregue**
+
 - Migração `db/migrations/0056_alerta_risco_email_rt.sql` — 3 funções `SECURITY DEFINER` pra role `iris_escalonamento`: `app_rt_do_alerta` (resolve e-mail/nome do RT só em `escalado_estagio_2` com papel vigente), `app_registrar_email_rt` (grava marcador em `canais_notificados` + `audit_log`, sempre — sucesso ou falha), `app_alertas_estagio2_sem_email` (reconciliação).
 - `src/lib/email/resend.ts` (adapter TS pro app Next, Provider+resolver+NullProvider) e `scripts/lib/resend-rt.mjs` (espelho JS puro pro motor de escalonamento — script roda via `node` puro, não importa `.ts`).
 - `scripts/escalonamento-risco.mjs`: `processarEmailRt()` chamado pros recém-escalados pra estágio 2 **e** pros pendentes da reconciliação, toda varredura.
@@ -36,20 +61,24 @@
 - **Smoke test manual com Resend real deferido a pedido do Rômulo** — nenhuma key real em `.env`/`.env.local` locais; quando quiser rodar, adicionar `EMAIL_PROVIDER_API_KEY` (nunca colar a key no chat) e forçar um alerta pro estágio 2 pra conferir e-mail recebido + `canais_notificados`/`audit_log` gravados.
 
 **Decisão de escopo (fora do Apêndice A original da issue)**
+
 - Achado durante o planejamento: se o processo morre entre a transição pro estágio 2 e o envio do e-mail, a função de escalonamento não devolve mais aquele alerta (já saiu do estágio que a query casa) — e-mail perdido em silêncio (contra #108). Fechado com a 3ª função de reconciliação acima, rodada toda varredura.
 
 **Gaps incidentais encontrados e corrigidos nesta sessão (fora do escopo da #126)**
+
 - `vitest.config.ts` não tinha alias pra `server-only` — todo teste unitário que importa um módulo com `import "server-only"` lançava (`This module cannot be imported from a Client Component module`), sem precedente no repo pra teste puro (só cobertos por `.int.test.ts`, config diferente). Corrigido com `resolve.alias["server-only"]` apontando pro `empty.js` do próprio pacote (mesma troca que o Next faz via condição `react-server`; não é `vi.mock`).
 - `scripts/` não tinha nenhum projeto vitest cobrindo (`include` só pegava `src/**/*.test.ts`). Estendido pra `scripts/**/*.test.mjs`.
 - `scripts/escalonamento-risco.mjs` chamava `main().catch(...)` incondicional no escopo do módulo — importar o arquivo (p.ex. do teste, pra pegar `processarEmailRt`) disparava uma varredura real contra `ESCALONAMENTO_DATABASE_URL`. Corrigido com guarda de execução direta — mas a 1ª versão da guarda estava errada e foi refeita na revisão (ver sessão seguinte).
 - Banco local (`docker compose infra/docker-compose.yml`) precisou de `iris_app`/`iris_auth_login` criadas à mão (não vêm de migração — receita em `infra/README.md`), volume era novo.
 
 **Gap pré-existente encontrado, NÃO corrigido (fora de escopo — registrar, não silenciar)**
+
 - `pnpm test:rls` roda 3 falhas em `src/db/rls.int.test.ts`, todas sem relação com #126: (1) teste da issue #141 insere `extraction.subtipo = 'sugestao_marcos'`, valor que **não existe** no enum `extraction_subtipo` nem em `src/db/schema.ts` nem em nenhuma migração — enum só tem `evidencia/registro_abc/ausencia_comportamento/cadeia/preferencia_reforcador/pendente`; (2)/(3) dois testes da issue #128 (`session_note`/`extraction` — terapeuta que não é dono da sessão) colidem com a exclusion constraint `session_no_overbook_terapeuta` ao inserir a sessão de setup. Confirmado que as 3 funções novas do #126 (`app_rt_do_alerta`/`app_registrar_email_rt`/`app_alertas_estagio2_sem_email`) não vazam dado — zero falha nos testes que as cobrem, e essas 3 falhas são em describe blocks totalmente diferentes. Precisa de sessão própria pra investigar se `sugestao_marcos` deveria ter entrado no enum numa migração que faltou, ou se o teste #141 está desatualizado.
 
 ## 🏁 Sessão 30/07/2026 — Infra Resend + revisão da PR #153 (Issue #126)
 
 **Infra concluída (ações humanas de via única, feitas pelo Rômulo)**
+
 - Conta Resend criada; domínio `irisclinica.ia.br` **Verified**, região São Paulo (`sa-east-1`).
 - DNS publicado no painel do **Registro.br** (nameservers `d/e.sec.dns.br`, não Cloudflare): DKIM `resend._domainkey`, SPF TXT `send`, MX `send` (prio 10, `feedback-smtp.sa-east-1.amazonses.com`), DMARC `_dmarc` (`p=none`). Os 4 verificados por resolução DNS, não só pelo status do painel.
 - API key `iris-producao` (Sending access) criada; a key `Onboarding` do fluxo inicial foi removida.
@@ -57,18 +86,21 @@
 - ⚠️ A `iris-producao` está em texto plano no painel e vai aparecer no log de build (`infra/README.md`) — entra na tabela de rotação.
 
 **Revisão da PR #153 (Jules não concluiu; revisão feita pelo Claude) — 2 bloqueantes corrigidos em `618c131`**
+
 - **E-mail sairia com link vazio, registrado como enviado.** `NEXT_PUBLIC_APP_URL` não existia no serviço `iris-escalonamento` (só no `iris-app`), então `appUrl` caía no fallback `""` e o corpo saía com `<a href=""></a>` — enquanto `app_registrar_email_rt` gravava `_enviado` com sucesso. Canal que consta entregue sem ter servido é a falha silenciosa da #108. Os dois adapters passam a **recusar** o envio com falha explícita na trilha quando a URL do painel está ausente. A variável também foi setada no Easypanel.
-- **Guarda de execução virava no-op com caminho relativo.** `import.meta.url === \`file://${process.argv[1]}\`` não funciona porque o Node **não absolutiza** `argv[1]`: com caminho relativo — como no dry-run documentado em `infra/docker-compose.yml` — a comparação dá `false`, `main()` nunca roda e o processo sai **0**. Verificado empiricamente (antes: nenhuma saída, exit 0; depois: erro de `ESCALONAMENTO_DATABASE_URL` na stack). Trocado por `pathToFileURL(process.argv[1]).href`. Também destravou a execução local no Windows.
+- **Guarda de execução virava no-op com caminho relativo.** `import.meta.url === \`file://${process.argv[1]}\``não funciona porque o Node **não absolutiza**`argv[1]`: com caminho relativo — como no dry-run documentado em `infra/docker-compose.yml`— a comparação dá`false`, `main()`nunca roda e o processo sai **0**. Verificado empiricamente (antes: nenhuma saída, exit 0; depois: erro de`ESCALONAMENTO_DATABASE_URL`na stack). Trocado por`pathToFileURL(process.argv[1]).href`. Também destravou a execução local no Windows.
 - **Teste do guardrail LGPD era tautologia.** `resend.test.ts` reconstruía o template numa string local em vez de exercitar o código — interpolar nome de paciente em `resend.ts` não quebraria nada. O corpo saiu para `montarCorpoAlertaRt(appUrl)`, exportada dos dois adapters, e o teste asserta contra ela. Teste novo garante que o espelho `.mjs` e o adapter TS não divirjam (a duplicação é intencional, mas nada garantia paridade).
 - Achado ao escrever o teste: o fake de `sql` lia `p_sucesso` de `valores[1]`, mas esse parâmetro é **literal** no template SQL — só `p_alerta` e `p_detalhe` são interpolados.
 - Verificação: `pnpm test` 535/535, `typecheck` limpo, `lint` 0 erros.
 
 **Achados não-bloqueantes → Issue #154**
+
 - Falha de envio nunca é reprocessada: `app_alertas_estagio2_sem_email()` exclui `_falhou`, então um 429/5xx transitório da Resend queima a única chance daquele alerta. Decidir entre aceitar+documentar ou separar transitório de definitivo.
 - Exceção em `processarEmailRt` aborta a varredura inteira (sem `try/catch` por alerta) — os alertas seguintes ficam sem e-mail naquela passada e o heartbeat não avança. A reconciliação recupera na varredura seguinte, mas um alerta ruim não deveria bloquear os outros.
 - Menores: `rt_nome` devolvido por `app_rt_do_alerta` e nunca consumido; `UPDATE` em `app_registrar_email_rt` sem `deletado_em IS NULL`, diferente das funções irmãs da mesma migração.
 
 **Ainda pendente pra fechar a #126**
+
 - Merge da PR #153 (decisão do Rômulo — main=prod com autodeploy).
 - **Implantar** `iris-app` e `iris-escalonamento` depois do merge: env var salva no Easypanel não reinicia container sozinha.
 - Smoke test com envio real — só possível após merge + deploy. Hoje a key `iris-producao` marca "No activity", o que confirma que nada foi enviado ainda.
@@ -77,12 +109,14 @@
 ## 🏁 Sessão 30/07/2026 — #126 FECHADA: incidente do motor parado + smoke test verde
 
 **Incidente: motor de escalonamento parado em produção (PR #156)**
+
 - O deploy da #126 derrubou o motor: `ERR_MODULE_NOT_FOUND` em `file:///app/scripts/lib/resend-rt.mjs`, 6 varreduras com `exit 1`, heartbeat congelado. **Nenhum alerta de risco vencido escalou** enquanto durou (~20:47Z→21:07Z).
 - Causa raiz, duas faces do mesmo ponto cego: `infra/escalonamento/Dockerfile` **não** compartilha o `node_modules` nem a árvore de arquivos do app — lista o que copia e instala o que precisa à mão, de propósito, pra não arrastar Next/React/Playwright. (1) O `COPY` listava só `scripts/escalonamento-risco.mjs`, e o `scripts/lib/resend-rt.mjs` novo nunca entrou na imagem — import de topo não cai em `try/catch`, o processo morre na carga. (2) `resend` foi adicionado ao `package.json` da raiz, que não alcança essa imagem; ela instalava só `postgres@3.4.9`. Sem a 2ª correção, mesmo com o COPY certo o `await import("resend")` cairia no catch e gravaria `_falhou` — e como falha não é reprocessada (#154), cada alerta de estágio 2 queimaria sua **única** tentativa num módulo ausente.
 - Corrigido copiando `scripts/lib/` inteiro (módulo novo entra sozinho) e instalando `resend@6.18.1` pinado.
 - **Por que test/typecheck/lint não pegaram:** os três rodam contra a árvore do repo, onde o arquivo existe e a dependência está no `node_modules` da raiz. Nenhum constrói a imagem do escalonamento, e o serviço não sobe por default no compose (`profiles: ["escalonamento"]`) — então o teste local que o próprio Dockerfile diz existir pra pegar exatamente isso nunca rodou. Vira issue de CI (ver abaixo).
 
 **Smoke test — VERDE (30/07/2026, 21:1xZ)**
+
 - Executado do terminal do container `iris-escalonamento`, importando o módulo de produção `scripts/lib/resend-rt.mjs` (não um envio genérico), com a chave saindo de `process.env` — nunca colada no chat.
 - Pré-checagem: módulo carrega, `EMAIL_PROVIDER_API_KEY` presente (36 chars, valor não impresso), `NEXT_PUBLIC_APP_URL=https://irisclinica.ia.br`, remetente no default.
 - Envio: `{"ok":true,"providerMessageId":"0006091f-8534-4031-a8bb-b9396dfd65aa"}`.
@@ -91,6 +125,7 @@
 - **Escopo do smoke:** camada de infra (domínio verificado, chave válida, SPF/DKIM, entrega real, módulo de produção). **NÃO** exercitou `app_rt_do_alerta` nem a reconciliação ponta a ponta — isso exigiria criar/alterar alerta na base de produção, e a decisão foi não escrever dado clínico em prod pra teste. Fica pendente até existir ambiente separado.
 
 **Estado final da #126**
+
 - PRs #153 (feature), #156 (hotfix do Dockerfile) mergeadas e implantadas.
 - Infra completa: conta Resend, domínio `irisclinica.ia.br` Verified, DNS no Registro.br, key `iris-producao`, env vars nos dois serviços.
 - Desdobramentos abertos: **#154** (robustez — retry de falha transitória, `try/catch` por alerta, 2 pontas soltas), **#155** (reaproveitar o adapter em `/equipe/convidar`, Fase 3 que a #153 não entregou), **#157** (CI que builda a imagem do escalonamento).
@@ -98,6 +133,7 @@
 ## 🏁 Sessão 30/07/2026 — Telemetria de UX (Microsoft Clarity — PR #151)
 
 **O que foi entregue**
+
 - Integração do **Microsoft Clarity** via SDK oficial (`@microsoft/clarity` v1.0.2).
 - Componente cliente `<Clarity />` em `src/components/clarity.tsx` montado no `src/app/layout.tsx`.
 - Proteção contra dupla execução no React 19 Strict Mode via `useRef(false)`.
@@ -107,6 +143,7 @@
 ## 🏁 Sessão 30/07/2026 — Implementação completa do Clarity (telemetria de UX — PR #152)
 
 **O que foi entregue**
+
 - `Clarity.init(projectId)` — integração SDK v1.0.2, guard Strict Mode via `useRef`, init só roda uma vez.
 - `Clarity.consentV2({ad_Storage: 'denied', analytics_Storage: 'granted'})` — chamado no init. LGPD: staff é empregado (contrato de trabalho já existe); Clarity mascara dados sensíveis nativamente; sem banner necessária (futura override via design system).
 - `Clarity.identify(session.user.id)` — rastreamento de staff logado (terapeuta/coordenador), reativo a login/logout. Chama `identify` sempre que sessão muda (login/logout).
@@ -115,21 +152,23 @@
 - Painel Clarity vivo e funcional: https://clarity.microsoft.com/projects/view/xulmzzqxsv/gettingstarted (aguardando dados do primeiro login de staff).
 
 **Decisões de design**
+
 - consentV2 chamado no init (não no identify), sem dependência de banner. Futuro: se design system formalizar cookie-consent, refatorar pra aceitar override do banner sem mudar lógica.
 - Custom tags (tipo_usuario, clinic_id) e custom events (diario_iniciado, resultado_gerado) — deferred até produto mapear casos de uso concretos. Skeleton exportável em `src/lib/telemetry/clarity-tags.ts` / `clarity-events.ts` p/ quando precisar.
 - ad_Storage='denied' (sem publicidade no produto, sem motivo p/ storage de ads).
 
 **Verificação (all passed)**
+
 - ✅ `pnpm typecheck` — zero erros
 - ✅ `pnpm build` — Next.js route map gerado, zero warnings
 - ✅ Deploy Easypanel — app rodando, env setada, container up
 - ✅ SDK live em painel (project criado, pronto pra dados)
 
 **Próximo passo**
+
 - Quando primeiro staff logar em produção: `identify(session.user.id)` acionado automaticamente → painel recebe dados em 5-10min (coleta assíncrona Clarity)
 
 ## 🏁 Sessão 30/07/2026 — Gate único da suíte de integração: fim do auto-skip silencioso (Issue #132)
-
 
 **O problema fechado**
 
