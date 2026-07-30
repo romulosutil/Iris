@@ -211,4 +211,57 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
       SELECT 1 FROM patient WHERE nome = 'Rollback Teste'`;
     expect(encontrados).toHaveLength(0); // paciente também não persiste
   });
+
+  // ─── #140 — consentimento por finalidade (IA e exportação) ─────────────────
+
+  test("grava consentimentos de finalidade (uso_ia_processamento e exportacao_relatorios) na mesma transação quando marcados", async () => {
+    const fd = new FormData();
+    fd.set("nome", "Paciente Com IA e Exportacao");
+    fd.set("tipoConsentimento", "titular_adulto");
+    fd.set("consentimentoIa", "on");
+    fd.set("consentimentoExportacao", "on");
+
+    const res = await criarPacienteEConsent(ctx, fd);
+    expect(res.error).toBeUndefined();
+    expect(res.id).toBeTruthy();
+
+    const consentimentos = await withTenant(ctx, (db) =>
+      db.select().from(consent).where(eq(consent.patientId, res.id!)),
+    );
+    expect(consentimentos).toHaveLength(3);
+
+    const tipos = consentimentos.map((c) => c.tipo);
+    expect(tipos).toContain("autoconsentimento_titular_adulto");
+    expect(tipos).toContain("uso_ia_processamento");
+    expect(tipos).toContain("exportacao_relatorios");
+
+    // Para titular adulto, responsavelSignatario é NULL nas finalidades também
+    const ia = consentimentos.find((c) => c.tipo === "uso_ia_processamento")!;
+    expect(ia.responsavelSignatario).toBeNull();
+    expect(ia.versaoTermo).toBe("adulto-v1");
+
+    const exp = consentimentos.find((c) => c.tipo === "exportacao_relatorios")!;
+    expect(exp.responsavelSignatario).toBeNull();
+    expect(exp.versaoTermo).toBe("adulto-v1");
+  });
+
+  test("grava consentimentos de finalidade com responsável legal quando menor", async () => {
+    const fd = new FormData();
+    fd.set("nome", "Menor Com IA");
+    fd.set("tipoConsentimento", "responsavel_legal");
+    fd.set("responsavelSignatario", "Pai do Menor");
+    fd.set("consentimentoIa", "on");
+
+    const res = await criarPacienteEConsent(ctx, fd);
+    expect(res.error).toBeUndefined();
+
+    const consentimentos = await withTenant(ctx, (db) =>
+      db.select().from(consent).where(eq(consent.patientId, res.id!)),
+    );
+    expect(consentimentos).toHaveLength(2);
+
+    const ia = consentimentos.find((c) => c.tipo === "uso_ia_processamento")!;
+    expect(ia.responsavelSignatario).toBe("Pai do Menor");
+    expect(ia.versaoTermo).toBe("v1");
+  });
 });
