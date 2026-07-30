@@ -1,16 +1,26 @@
 import postgres from "postgres";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000d2";
 const U_COORD = "00000000-0000-0000-0000-00000000c0d2";
 const U_T1 = "00000000-0000-0000-0000-0000000071d2";
 const PAC = "00000000-0000-0000-0000-00000000acd2";
-const ctx = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
+const ctx = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
 const base = {
-  patientId: PAC, terapeutaId: U_T1, disciplina: "aba", diaSemana: 1,
-  horaInicio: "09:00", duracaoMin: 60, semanaVisivelISO: "2026-07-13", hojeISO: "2026-07-13",
+  patientId: PAC,
+  terapeutaId: U_T1,
+  disciplina: "aba",
+  diaSemana: 1,
+  horaInicio: "09:00",
+  duracaoMin: 60,
+  semanaVisivelISO: "2026-07-13",
+  hojeISO: "2026-07-13",
 };
 
 let owner: ReturnType<typeof postgres>;
@@ -45,9 +55,13 @@ describe.skipIf(!hasDb)("criarRegra — atomicidade (F5b)", () => {
     await owner`INSERT INTO session (clinic_id, patient_id, terapeuta_id, recorrente_id, agendada_para, estado, duracao_min, tipo, disciplina)
       VALUES (${CLINIC_A}, ${PAC}, ${U_T1}, ${OUTRA_REGRA}, '2026-07-20T12:00:00Z', 'agendada', 60, 'terapia', 'aba')`;
     const { id } = await criarRegra(ctx, base);
-    const [regraRow] = (await owner`SELECT count(*)::int AS n FROM agendamento_recorrente WHERE id = ${id}`) as { n: number }[];
+    const [regraRow] =
+      (await owner`SELECT count(*)::int AS n FROM agendamento_recorrente WHERE id = ${id}`) as {
+        n: number;
+      }[];
     expect(regraRow!.n).toBe(1); // regra existe
-    const mat = await owner`SELECT count(*)::int AS n FROM session WHERE recorrente_id = ${id}`;
+    const mat =
+      await owner`SELECT count(*)::int AS n FROM session WHERE recorrente_id = ${id}`;
     expect(mat[0]!.n).toBeGreaterThanOrEqual(11); // 20/07 pulada, resto materializado
   });
 });

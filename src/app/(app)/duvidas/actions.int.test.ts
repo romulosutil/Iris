@@ -2,8 +2,7 @@ import { vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
-
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+import { hasDb } from "@tests/integration-env";
 
 const CLINIC = "00000000-0000-0000-0000-0000000000e1";
 const U_COORD = "00000000-0000-0000-0000-00000000e0c1";
@@ -27,7 +26,11 @@ const Q2 = "00000000-0000-0000-0000-00000000eeb2";
 const Q3 = "00000000-0000-0000-0000-00000000eeb3";
 const Q4 = "00000000-0000-0000-0000-00000000eeb4";
 
-const ctxTerapeuta = { clinicId: CLINIC, userId: U_TERAPEUTA, role: "terapeuta" } as const;
+const ctxTerapeuta = {
+  clinicId: CLINIC,
+  userId: U_TERAPEUTA,
+  role: "terapeuta",
+} as const;
 const ctxTerapeutaForaEquipe = {
   clinicId: CLINIC,
   userId: U_TERAPEUTA_FORA,
@@ -77,11 +80,13 @@ describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
     // Protocolo ATIVO + goal válido do paciente, p/ o teste de novoAlvo.
     const PROTOCOL_FAMILIA = "vbmapp-e";
     await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES (${PROTOCOL_FAMILIA}, 'VB-MAPP (teste E)') ON CONFLICT (id) DO NOTHING`;
-    const [protocolo] = await owner`INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
+    const [protocolo] =
+      await owner`INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
       VALUES (${CLINIC}, 'VB-MAPP (teste E)', 'ABA', ${PROTOCOL_FAMILIA}, ${owner.json(["independente", "dica_verbal"])})
       RETURNING id`;
     await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por) VALUES (${PAC}, ${protocolo!.id}, ${U_COORD})`;
-    const [goalRow] = await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+    const [goalRow] =
+      await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
       VALUES (${PAC}, ${CLINIC}, 'Pedir água de forma independente', 'ativa', ${owner.json({ tipo: "sessoes_consecutivas_independente", valor: 2 })}, ${U_COORD})
       RETURNING id`;
     ALVO_VALIDO = { goal_id: goalRow!.id as string };
@@ -100,12 +105,17 @@ describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
   });
 
   test("terapeuta responde query → fecha (respondido_em) e recompute re-inclui a evidência", async () => {
-    const r = await responderQuery(ctxTerapeuta, { evidenceQueryId: Q, respostaTexto: "é mando" });
+    const r = await responderQuery(ctxTerapeuta, {
+      evidenceQueryId: Q,
+      respostaTexto: "é mando",
+    });
     expect(r.ok).toBe(true);
-    const [q] = await owner`SELECT respondido_em FROM evidence_query WHERE id=${Q}`;
+    const [q] =
+      await owner`SELECT respondido_em FROM evidence_query WHERE id=${Q}`;
     expect(q!.respondido_em).not.toBeNull();
 
-    const [log] = await owner`SELECT acao, entidade_id, ator_id FROM audit_log WHERE entidade_id=${EV} AND acao='resposta_duvida'`;
+    const [log] =
+      await owner`SELECT acao, entidade_id, ator_id FROM audit_log WHERE entidade_id=${EV} AND acao='resposta_duvida'`;
     expect(log).toBeDefined();
     expect(log!.acao).toBe("resposta_duvida");
     expect(log!.ator_id).toBe(U_TERAPEUTA);
@@ -118,22 +128,31 @@ describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
       novoAlvo: ALVO_VALIDO,
     });
     expect(r.ok).toBe(true);
-    const [q] = await owner`SELECT resultante_evidence_revision_id FROM evidence_query WHERE id=${Q2}`;
+    const [q] =
+      await owner`SELECT resultante_evidence_revision_id FROM evidence_query WHERE id=${Q2}`;
     expect(q!.resultante_evidence_revision_id).not.toBeNull();
-    const [rev] = await owner`SELECT acao, autor_id FROM evidence_revision WHERE id=${q!.resultante_evidence_revision_id}`;
+    const [rev] =
+      await owner`SELECT acao, autor_id FROM evidence_revision WHERE id=${q!.resultante_evidence_revision_id}`;
     expect(rev!.acao).toBe("reclassificar");
     expect(rev!.autor_id).toBe(U_TERAPEUTA);
 
-    const [log] = await owner`SELECT acao, entidade_id FROM audit_log WHERE entidade_id=${EV2} AND acao='reclassificacao'`;
+    const [log] =
+      await owner`SELECT acao, entidade_id FROM audit_log WHERE entidade_id=${EV2} AND acao='reclassificacao'`;
     expect(log).toBeDefined();
     expect(log!.acao).toBe("reclassificacao");
   });
 
   test("responder query já respondida com novoAlvo retorna CONCURRENCY_ERROR e não cria segunda evidence_revision", async () => {
-    const rowsAntes = (await owner`SELECT count(*)::int AS count FROM evidence_revision WHERE evidence_id=${EV4}`) as unknown as { count: number }[];
+    const rowsAntes =
+      (await owner`SELECT count(*)::int AS count FROM evidence_revision WHERE evidence_id=${EV4}`) as unknown as {
+        count: number;
+      }[];
     const antes = rowsAntes[0]!.count;
 
-    const primeira = await responderQuery(ctxTerapeuta, { evidenceQueryId: Q4, respostaTexto: "primeira resposta" });
+    const primeira = await responderQuery(ctxTerapeuta, {
+      evidenceQueryId: Q4,
+      respostaTexto: "primeira resposta",
+    });
     expect(primeira.ok).toBe(true);
 
     const r = await responderQuery(ctxTerapeuta, {
@@ -143,15 +162,22 @@ describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
     });
     expect(r.ok).not.toBe(true);
 
-    const rowsDepois = (await owner`SELECT count(*)::int AS count FROM evidence_revision WHERE evidence_id=${EV4}`) as unknown as { count: number }[];
+    const rowsDepois =
+      (await owner`SELECT count(*)::int AS count FROM evidence_revision WHERE evidence_id=${EV4}`) as unknown as {
+        count: number;
+      }[];
     const depois = rowsDepois[0]!.count;
     expect(depois).toBe(antes);
   });
 
   test("terapeuta fora da equipe não responde (RLS)", async () => {
-    const r = await responderQuery(ctxTerapeutaForaEquipe, { evidenceQueryId: Q3, respostaTexto: "x" });
+    const r = await responderQuery(ctxTerapeutaForaEquipe, {
+      evidenceQueryId: Q3,
+      respostaTexto: "x",
+    });
     expect(r.ok).not.toBe(true);
-    const [q] = await owner`SELECT respondido_em FROM evidence_query WHERE id=${Q3}`;
+    const [q] =
+      await owner`SELECT respondido_em FROM evidence_query WHERE id=${Q3}`;
     expect(q!.respondido_em).toBeNull();
   });
 });

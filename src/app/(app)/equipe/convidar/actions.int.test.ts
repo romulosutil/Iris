@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import postgres from "postgres";
 import { eq } from "drizzle-orm";
+import { hasDb } from "@tests/integration-env";
 
 vi.mock("server-only", () => ({}));
 const { convidarUsuario } = await import("./logic");
@@ -8,10 +9,6 @@ const { authDb, authSql, sql: appSql } = await import("@/db/client");
 const { userRole, appUser } = await import("@/db/schema");
 
 // Convite escreve via authDb (iris_auth) → exige AUTH_DATABASE_URL além dos demais.
-const hasDb =
-  !!process.env.DATABASE_URL &&
-  !!process.env.AUTH_DATABASE_URL &&
-  !!process.env.MIGRATION_DATABASE_URL;
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
 const U_COORD = "a0000000-0000-0000-0000-000000000001";
 const U_ADMIN = "a0000000-0000-0000-0000-000000000004";

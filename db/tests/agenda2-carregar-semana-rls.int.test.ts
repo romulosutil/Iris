@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000f1";
 const CLINIC_B = "00000000-0000-0000-0000-0000000000f2";
@@ -11,162 +11,222 @@ const U_T1_A = "00000000-0000-0000-0000-0000000071f1"; // terapeuta na equipe de
 const U_COORD_B = "00000000-0000-0000-0000-00000000c0f2";
 const PAC_A1 = "00000000-0000-0000-0000-00000000acf1";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
-const ctxCoordB = { clinicId: CLINIC_B, userId: U_COORD_B, role: "coordenador" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
+const ctxCoordB = {
+  clinicId: CLINIC_B,
+  userId: U_COORD_B,
+  role: "coordenador",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let carregarSemana: typeof import("@/app/(app)/agenda/queries").carregarSemana;
 let disponibilidadeTerapeutaNoDia: typeof import("@/app/(app)/agenda/queries").disponibilidadeTerapeutaNoDia;
 let appSql: typeof import("@/db/client").sql;
 
-describe.skipIf(!hasDb)("carregarSemana / disponibilidadeTerapeutaNoDia", () => {
-  beforeAll(async () => {
-    ({ carregarSemana, disponibilidadeTerapeutaNoDia } = await import(
-      "@/app/(app)/agenda/queries"
-    ));
-    ({ sql: appSql } = await import("@/db/client"));
-    owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
+describe.skipIf(!hasDb)(
+  "carregarSemana / disponibilidadeTerapeutaNoDia",
+  () => {
+    beforeAll(async () => {
+      ({ carregarSemana, disponibilidadeTerapeutaNoDia } =
+        await import("@/app/(app)/agenda/queries"));
+      ({ sql: appSql } = await import("@/db/client"));
+      owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 
-    await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
+      await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
       agendamento_recorrente, session, janela_trabalho, bloqueio RESTART IDENTITY CASCADE`;
-    await owner`INSERT INTO clinic (id, nome, is_demo) VALUES
+      await owner`INSERT INTO clinic (id, nome, is_demo) VALUES
       (${CLINIC_A}, 'Clínica A (carregar-semana)', false),
       (${CLINIC_B}, 'Clínica B (carregar-semana)', false)`;
-    await owner`INSERT INTO app_user (id, name, email) VALUES
+      await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD_A}, 'Coord A', 'coord.a.carregarsemana@t.com'),
       (${U_T1_A}, 'T1 A', 't1.a.carregarsemana@t.com'),
       (${U_COORD_B}, 'Coord B', 'coord.b.carregarsemana@t.com')`;
-    await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
+      await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
       (${U_T1_A}, ${CLINIC_A}, 'terapeuta'),
       (${U_COORD_B}, ${CLINIC_B}, 'coordenador')`;
-    await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
+      await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${PAC_A1}, ${CLINIC_A}, 'Ana Alfa')`;
-    await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
+      await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
       VALUES (${PAC_A1}, ${U_T1_A}, 'aba', 'terapeuta_referencia')`;
-    await owner`INSERT INTO agendamento_recorrente
+      await owner`INSERT INTO agendamento_recorrente
       (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 1, '09:00', 60, '2026-07-13', 'ativo')`;
-    await owner`INSERT INTO janela_trabalho (clinic_id, terapeuta_id, dia_semana, hora_inicio, hora_fim)
+      await owner`INSERT INTO janela_trabalho (clinic_id, terapeuta_id, dia_semana, hora_inicio, hora_fim)
       VALUES (${CLINIC_A}, ${U_T1_A}, 1, '08:00', '12:00')`;
-    // Avulsa (recorrente_id null) — 2026-07-13 (segunda) 23:30 em São Paulo
-    // (UTC-3) = 2026-07-14T02:30:00Z. O dia UTC (terça) difere do dia local
-    // (segunda) — cobre o round-trip driver timestamptz → minutos-locais SP
-    // (C10), que o unit test puro de fuso-min.ts não exercita.
-    await owner`INSERT INTO session
+      // Avulsa (recorrente_id null) — 2026-07-13 (segunda) 23:30 em São Paulo
+      // (UTC-3) = 2026-07-14T02:30:00Z. O dia UTC (terça) difere do dia local
+      // (segunda) — cobre o round-trip driver timestamptz → minutos-locais SP
+      // (C10), que o unit test puro de fuso-min.ts não exercita.
+      await owner`INSERT INTO session
       (clinic_id, patient_id, terapeuta_id, disciplina, agendada_para, duracao_min, estado, recorrente_id)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', '2026-07-14T02:30:00Z', 30, 'agendada', NULL)`;
-    // Regra recorrente materializada (Etapa D): tem linha `session` real com
-    // recorrente_id apontando pra ela — dia_semana=2 (terça), pra não colidir
-    // com a avulsa acima (segunda). carregarSemana deve mostrar só o bloco
-    // "previsto" (projeção da regra), NUNCA um "concreto" pra essa session,
-    // senão duplica a renderização quando Etapa D materializar de verdade.
-    const regrasMaterializadas = await owner`INSERT INTO agendamento_recorrente
+      // Regra recorrente materializada (Etapa D): tem linha `session` real com
+      // recorrente_id apontando pra ela — dia_semana=2 (terça), pra não colidir
+      // com a avulsa acima (segunda). carregarSemana deve mostrar só o bloco
+      // "previsto" (projeção da regra), NUNCA um "concreto" pra essa session,
+      // senão duplica a renderização quando Etapa D materializar de verdade.
+      const regrasMaterializadas =
+        await owner`INSERT INTO agendamento_recorrente
       (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 2, '10:00', 60, '2026-07-13', 'ativo')
       RETURNING id`;
-    const idRegraMaterializada = regrasMaterializadas[0]!.id as string;
-    await owner`INSERT INTO session
+      const idRegraMaterializada = regrasMaterializadas[0]!.id as string;
+      await owner`INSERT INTO session
       (clinic_id, patient_id, terapeuta_id, disciplina, agendada_para, duracao_min, estado, recorrente_id)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', '2026-07-14T13:00:00Z', 60, 'agendada', ${idRegraMaterializada})`;
-  });
-  afterAll(async () => { await owner?.end(); await appSql?.end(); });
-
-  test("eixo terapeuta traz regra ativa como bloco previsto", async () => {
-    const r = await carregarSemana(ctxCoordA, {
-      eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
     });
-    expect(r.blocos).toHaveLength(3);
-    const previsto = r.blocos.find((b) => b.origem === "previsto" && b.diaSemana === 1);
-    expect(previsto).toMatchObject({ origem: "previsto", diaSemana: 1, inicioMin: 540, rotulo: "Ana Alfa" });
-    expect(r.janelas).toHaveLength(1);
-    expect(r.janelas[0]).toMatchObject({ diaSemana: 1, horaInicio: "08:00:00", horaFim: "12:00:00" });
-  });
-
-  test("eixo paciente traz a mesma regra sem janelas (só eixo terapeuta preenche)", async () => {
-    const r = await carregarSemana(ctxCoordA, {
-      eixo: "paciente", entidadeId: PAC_A1, semanaInicioISO: "2026-07-13",
+    afterAll(async () => {
+      await owner?.end();
+      await appSql?.end();
     });
-    expect(r.blocos).toHaveLength(3);
-    expect(r.janelas).toHaveLength(0);
-  });
 
-  test("cross-tenant: coordenador B não vê regra da clínica A (RLS filtra, não lança)", async () => {
-    const r = await carregarSemana(ctxCoordB, {
-      eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
+    test("eixo terapeuta traz regra ativa como bloco previsto", async () => {
+      const r = await carregarSemana(ctxCoordA, {
+        eixo: "terapeuta",
+        entidadeId: U_T1_A,
+        semanaInicioISO: "2026-07-13",
+      });
+      expect(r.blocos).toHaveLength(3);
+      const previsto = r.blocos.find(
+        (b) => b.origem === "previsto" && b.diaSemana === 1,
+      );
+      expect(previsto).toMatchObject({
+        origem: "previsto",
+        diaSemana: 1,
+        inicioMin: 540,
+        rotulo: "Ana Alfa",
+      });
+      expect(r.janelas).toHaveLength(1);
+      expect(r.janelas[0]).toMatchObject({
+        diaSemana: 1,
+        horaInicio: "08:00:00",
+        horaFim: "12:00:00",
+      });
     });
-    expect(r.blocos).toHaveLength(0);
-    expect(r.janelas).toHaveLength(0);
-  });
 
-  test("avulsa (C10): timestamptz do driver vira dia/minuto locais SP corretos", async () => {
-    const r = await carregarSemana(ctxCoordA, {
-      eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
+    test("eixo paciente traz a mesma regra sem janelas (só eixo terapeuta preenche)", async () => {
+      const r = await carregarSemana(ctxCoordA, {
+        eixo: "paciente",
+        entidadeId: PAC_A1,
+        semanaInicioISO: "2026-07-13",
+      });
+      expect(r.blocos).toHaveLength(3);
+      expect(r.janelas).toHaveLength(0);
     });
-    const avulsa = r.blocos.find((b) => b.origem === "concreto");
-    expect(avulsa).toMatchObject({ origem: "concreto", diaSemana: 1, inicioMin: 1410 });
-  });
 
-  test("regra materializada (Etapa D, F2): session com recorrente_id aparece como bloco concreto, sem duplicar previsto", async () => {
-    const r = await carregarSemana(ctxCoordA, {
-      eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
+    test("cross-tenant: coordenador B não vê regra da clínica A (RLS filtra, não lança)", async () => {
+      const r = await carregarSemana(ctxCoordB, {
+        eixo: "terapeuta",
+        entidadeId: U_T1_A,
+        semanaInicioISO: "2026-07-13",
+      });
+      expect(r.blocos).toHaveLength(0);
+      expect(r.janelas).toHaveLength(0);
     });
-    // dia_semana=2 (terça) 10:00 = a regra materializada. Deve haver exatamente
-    // um bloco nesse dia/hora, de origem "concreto" (a materializada vence) —
-    // a projeção "previsto" da regra é de-duplicada por recorrenteId (F2).
-    const blocosTerca = r.blocos.filter((b) => b.diaSemana === 2 && b.inicioMin === 600);
-    expect(blocosTerca).toHaveLength(1);
-    expect(blocosTerca[0]!.origem).toBe("concreto");
-  });
 
-  test("materializada aparece como bloco concreto, sem duplicar o previsto (F2)", async () => {
-    // regra segunda 09:00 (com 1 sessão materializada dela na semana visível)
-    // já existe no seed (U_T1_A / PAC_A1, dia_semana=1, hora=09:00). Cobrimos
-    // aqui o caso isolado descrito no plano: insere regra+materializada nova
-    // num slot livre e confirma que carregarSemana não duplica o bloco.
-    const regraNova = await owner`INSERT INTO agendamento_recorrente
+    test("avulsa (C10): timestamptz do driver vira dia/minuto locais SP corretos", async () => {
+      const r = await carregarSemana(ctxCoordA, {
+        eixo: "terapeuta",
+        entidadeId: U_T1_A,
+        semanaInicioISO: "2026-07-13",
+      });
+      const avulsa = r.blocos.find((b) => b.origem === "concreto");
+      expect(avulsa).toMatchObject({
+        origem: "concreto",
+        diaSemana: 1,
+        inicioMin: 1410,
+      });
+    });
+
+    test("regra materializada (Etapa D, F2): session com recorrente_id aparece como bloco concreto, sem duplicar previsto", async () => {
+      const r = await carregarSemana(ctxCoordA, {
+        eixo: "terapeuta",
+        entidadeId: U_T1_A,
+        semanaInicioISO: "2026-07-13",
+      });
+      // dia_semana=2 (terça) 10:00 = a regra materializada. Deve haver exatamente
+      // um bloco nesse dia/hora, de origem "concreto" (a materializada vence) —
+      // a projeção "previsto" da regra é de-duplicada por recorrenteId (F2).
+      const blocosTerca = r.blocos.filter(
+        (b) => b.diaSemana === 2 && b.inicioMin === 600,
+      );
+      expect(blocosTerca).toHaveLength(1);
+      expect(blocosTerca[0]!.origem).toBe("concreto");
+    });
+
+    test("materializada aparece como bloco concreto, sem duplicar o previsto (F2)", async () => {
+      // regra segunda 09:00 (com 1 sessão materializada dela na semana visível)
+      // já existe no seed (U_T1_A / PAC_A1, dia_semana=1, hora=09:00). Cobrimos
+      // aqui o caso isolado descrito no plano: insere regra+materializada nova
+      // num slot livre e confirma que carregarSemana não duplica o bloco.
+      const regraNova = await owner`INSERT INTO agendamento_recorrente
       (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 3, '11:00', 60, '2026-07-13', 'ativo')
       RETURNING id`;
-    const idRegraNova = regraNova[0]!.id as string;
-    await owner`INSERT INTO session
+      const idRegraNova = regraNova[0]!.id as string;
+      await owner`INSERT INTO session
       (clinic_id, patient_id, terapeuta_id, disciplina, agendada_para, duracao_min, estado, recorrente_id)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', '2026-07-15T14:00:00Z', 60, 'agendada', ${idRegraNova})`;
-    const r = await carregarSemana(ctxCoordA, {
-      eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
+      const r = await carregarSemana(ctxCoordA, {
+        eixo: "terapeuta",
+        entidadeId: U_T1_A,
+        semanaInicioISO: "2026-07-13",
+      });
+      const naQuarta = r.blocos.filter(
+        (b) => b.diaSemana === 3 && b.inicioMin === 660,
+      );
+      expect(naQuarta).toHaveLength(1); // NÃO duplica previsto+concreto
+      expect(naQuarta[0]!.origem).toBe("concreto"); // a materializada vence
     });
-    const naQuarta = r.blocos.filter((b) => b.diaSemana === 3 && b.inicioMin === 660);
-    expect(naQuarta).toHaveLength(1); // NÃO duplica previsto+concreto
-    expect(naQuarta[0]!.origem).toBe("concreto"); // a materializada vence
-  });
 
-  test("F2: previsto sem sessão dentro do horizonte materializado vira origem conflito", async () => {
-    // regra quinta 08:00 (dia_semana=4), com sessões materializadas em
-    // 2026-07-16 e 2026-08-06 mas PULANDO 2026-07-23 (a semana visível é
-    // 13-19/07, então a materializada de 16/07 fica fora da semana e o
-    // "previsto" da própria regra na quinta 16/07 não existe pra semana
-    // visível — usamos a quinta 2026-07-16 mesmo, dentro da semana 13-19/07).
-    const regraConflito = await owner`INSERT INTO agendamento_recorrente
+    test("F2: previsto sem sessão dentro do horizonte materializado vira origem conflito", async () => {
+      // regra quinta 08:00 (dia_semana=4), com sessões materializadas em
+      // 2026-07-16 e 2026-08-06 mas PULANDO 2026-07-23 (a semana visível é
+      // 13-19/07, então a materializada de 16/07 fica fora da semana e o
+      // "previsto" da própria regra na quinta 16/07 não existe pra semana
+      // visível — usamos a quinta 2026-07-16 mesmo, dentro da semana 13-19/07).
+      const regraConflito = await owner`INSERT INTO agendamento_recorrente
       (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 4, '08:00', 60, '2026-07-16', 'ativo')
       RETURNING id`;
-    const idRegraConflito = regraConflito[0]!.id as string;
-    // materializa só a próxima ocorrência (2026-07-23, fora da semana
-    // visível) — max(agendada_para) passa a ser 23/07, então a quinta
-    // 16/07 (dentro do horizonte materializado, sem sessão) é conflito.
-    await owner`INSERT INTO session
+      const idRegraConflito = regraConflito[0]!.id as string;
+      // materializa só a próxima ocorrência (2026-07-23, fora da semana
+      // visível) — max(agendada_para) passa a ser 23/07, então a quinta
+      // 16/07 (dentro do horizonte materializado, sem sessão) é conflito.
+      await owner`INSERT INTO session
       (clinic_id, patient_id, terapeuta_id, disciplina, agendada_para, duracao_min, estado, recorrente_id)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', '2026-07-23T11:00:00Z', 60, 'agendada', ${idRegraConflito})`;
-    const r = await carregarSemana(ctxCoordA, {
-      eixo: "terapeuta", entidadeId: U_T1_A, semanaInicioISO: "2026-07-13",
+      const r = await carregarSemana(ctxCoordA, {
+        eixo: "terapeuta",
+        entidadeId: U_T1_A,
+        semanaInicioISO: "2026-07-13",
+      });
+      const blocoQuinta = r.blocos.find(
+        (b) => b.diaSemana === 4 && b.inicioMin === 480,
+      );
+      expect(blocoQuinta).toMatchObject({
+        origem: "conflito",
+        recorrenteId: idRegraConflito,
+      });
     });
-    const blocoQuinta = r.blocos.find((b) => b.diaSemana === 4 && b.inicioMin === 480);
-    expect(blocoQuinta).toMatchObject({ origem: "conflito", recorrenteId: idRegraConflito });
-  });
 
-  test("disponibilidadeTerapeutaNoDia retorna a janela do dia certo", async () => {
-    const faixas = await disponibilidadeTerapeutaNoDia(ctxCoordA, U_T1_A, "2026-07-13");
-    expect(faixas).toHaveLength(1);
-    expect(faixas[0]).toMatchObject({ diaSemana: 1, horaInicio: "08:00:00", horaFim: "12:00:00" });
-  });
-});
+    test("disponibilidadeTerapeutaNoDia retorna a janela do dia certo", async () => {
+      const faixas = await disponibilidadeTerapeutaNoDia(
+        ctxCoordA,
+        U_T1_A,
+        "2026-07-13",
+      );
+      expect(faixas).toHaveLength(1);
+      expect(faixas[0]).toMatchObject({
+        diaSemana: 1,
+        horaInicio: "08:00:00",
+        horaFim: "12:00:00",
+      });
+    });
+  },
+);

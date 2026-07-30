@@ -1,10 +1,9 @@
 import { eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 // IDs fixos do seed — reusados pelas Tasks 4-8.
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
@@ -28,12 +27,36 @@ const MILE_B = "00000000-0000-0000-0000-00000000d1b1";
 const SESS_B1 = "00000000-0000-0000-0000-00000005e1b1"; // terapeuta = T1B, clínica B
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
-const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
-const ctxT2A = { clinicId: CLINIC_A, userId: U_T2_A, role: "terapeuta" } as const;
-const ctxRecepA = { clinicId: CLINIC_A, userId: U_RECEP_A, role: "admin_recepcao" } as const;
-const ctxT1B = { clinicId: CLINIC_B, userId: U_T1_B, role: "terapeuta" } as const;
-const ctxT3A = { clinicId: CLINIC_A, userId: U_T3_A, role: "terapeuta" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
+const ctxT1A = {
+  clinicId: CLINIC_A,
+  userId: U_T1_A,
+  role: "terapeuta",
+} as const;
+const ctxT2A = {
+  clinicId: CLINIC_A,
+  userId: U_T2_A,
+  role: "terapeuta",
+} as const;
+const ctxRecepA = {
+  clinicId: CLINIC_A,
+  userId: U_RECEP_A,
+  role: "admin_recepcao",
+} as const;
+const ctxT1B = {
+  clinicId: CLINIC_B,
+  userId: U_T1_B,
+  role: "terapeuta",
+} as const;
+const ctxT3A = {
+  clinicId: CLINIC_A,
+  userId: U_T3_A,
+  role: "terapeuta",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;
@@ -124,10 +147,16 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   // ---------- session_note ----------
   test("terapeuta dono escreve e lê a própria nota da sessão", async () => {
     const [nota] = await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.sessionNote).values({
-        sessionId: SESS_A1, clinicId: CLINIC_A, tipo: "captura_rapida",
-        texto: "Pediu água e apontou", autorId: U_T1_A,
-      }).returning({ id: schema.sessionNote.id }),
+      tx
+        .insert(schema.sessionNote)
+        .values({
+          sessionId: SESS_A1,
+          clinicId: CLINIC_A,
+          tipo: "captura_rapida",
+          texto: "Pediu água e apontou",
+          autorId: U_T1_A,
+        })
+        .returning({ id: schema.sessionNote.id }),
     );
     expect(nota?.id).toBeTruthy();
 
@@ -155,8 +184,11 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     await expect(
       withTenant(ctxT2A, (tx) =>
         tx.insert(schema.sessionNote).values({
-          sessionId: SESS_A1, clinicId: CLINIC_A, tipo: "nota_consolidada",
-          texto: "tentativa indevida", autorId: U_T2_A,
+          sessionId: SESS_A1,
+          clinicId: CLINIC_A,
+          tipo: "nota_consolidada",
+          texto: "tentativa indevida",
+          autorId: U_T2_A,
         }),
       ),
     ).rejects.toThrow();
@@ -168,13 +200,15 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   // então evita inserir outra linha para o mesmo par.
   test("J9 · terapeuta dono NÃO consegue reatribuir autor_id da própria nota", async () => {
     const [nota] = await withTenant(ctxT1A, (tx) =>
-      tx.select({ id: schema.sessionNote.id })
+      tx
+        .select({ id: schema.sessionNote.id })
         .from(schema.sessionNote)
         .where(eq(schema.sessionNote.tipo, "captura_rapida")),
     );
     await expect(
       withTenant(ctxT1A, (tx) =>
-        tx.update(schema.sessionNote)
+        tx
+          .update(schema.sessionNote)
           .set({ autorId: U_T2_A })
           .where(eq(schema.sessionNote.id, nota!.id)),
       ),
@@ -183,12 +217,14 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
 
   test("J9 · terapeuta dono consegue atualizar o texto da própria nota", async () => {
     const [nota] = await withTenant(ctxT1A, (tx) =>
-      tx.select({ id: schema.sessionNote.id })
+      tx
+        .select({ id: schema.sessionNote.id })
         .from(schema.sessionNote)
         .where(eq(schema.sessionNote.tipo, "captura_rapida")),
     );
     const alterados = await withTenant(ctxT1A, (tx) =>
-      tx.update(schema.sessionNote)
+      tx
+        .update(schema.sessionNote)
         .set({ texto: "texto revisado pelo dono" })
         .where(eq(schema.sessionNote.id, nota!.id))
         .returning({ id: schema.sessionNote.id }),
@@ -199,25 +235,39 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   // ---------- goal ----------
   test("coordenador cria meta; terapeuta da equipe lê", async () => {
     const [g] = await withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.goal).values({
-        patientId: PAC_A1, clinicId: CLINIC_A, descricao: "Pedir água sozinho",
-        criterioDominio: { tipo: "sessoes_consecutivas_independente", valor: 3 },
-        criadoPor: U_COORD_A,
-      }).returning({ id: schema.goal.id }),
+      tx
+        .insert(schema.goal)
+        .values({
+          patientId: PAC_A1,
+          clinicId: CLINIC_A,
+          descricao: "Pedir água sozinho",
+          criterioDominio: {
+            tipo: "sessoes_consecutivas_independente",
+            valor: 3,
+          },
+          criadoPor: U_COORD_A,
+        })
+        .returning({ id: schema.goal.id }),
     );
     expect(g?.id).toBeTruthy();
 
-    const lidasT1 = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goal));
+    const lidasT1 = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.goal),
+    );
     expect(lidasT1.length).toBe(1);
   });
 
   test("recepção não vê meta (dado clínico)", async () => {
-    const lidas = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.goal));
+    const lidas = await withTenant(ctxRecepA, (tx) =>
+      tx.select().from(schema.goal),
+    );
     expect(lidas.length).toBe(0);
   });
 
   test("terapeuta de outra clínica não vê meta (cross-tenant)", async () => {
-    const lidas = await withTenant(ctxT1B, (tx) => tx.select().from(schema.goal));
+    const lidas = await withTenant(ctxT1B, (tx) =>
+      tx.select().from(schema.goal),
+    );
     expect(lidas.length).toBe(0);
   });
 
@@ -225,8 +275,11 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     await expect(
       withTenant(ctxT1A, (tx) =>
         tx.insert(schema.goal).values({
-          patientId: PAC_A1, clinicId: CLINIC_A, descricao: "meta forjada",
-          criterioDominio: { tipo: "x", valor: 1 }, criadoPor: U_COORD_A, // != app.user_id
+          patientId: PAC_A1,
+          clinicId: CLINIC_A,
+          descricao: "meta forjada",
+          criterioDominio: { tipo: "x", valor: 1 },
+          criadoPor: U_COORD_A, // != app.user_id
         }),
       ),
     ).rejects.toThrow();
@@ -238,8 +291,13 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     await expect(
       withTenant(ctxT2A, (tx) =>
         tx.insert(schema.goal).values({
-          patientId: PAC_A1, clinicId: CLINIC_A, descricao: "meta indevida (fora da equipe)",
-          criterioDominio: { tipo: "sessoes_consecutivas_independente", valor: 3 },
+          patientId: PAC_A1,
+          clinicId: CLINIC_A,
+          descricao: "meta indevida (fora da equipe)",
+          criterioDominio: {
+            tipo: "sessoes_consecutivas_independente",
+            valor: 3,
+          },
           criadoPor: U_T2_A,
         }),
       ),
@@ -253,7 +311,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     // USING já bloqueia a visibilidade da linha para quem está fora da equipe —
     // 0 linhas afetadas prova o mesmo gate de authz (sem exceção do driver).
     const alterados = await withTenant(ctxT2A, (tx) =>
-      tx.update(schema.goal)
+      tx
+        .update(schema.goal)
         .set({ descricao: "alteração indevida" })
         .where(eq(schema.goal.id, g!.id))
         .returning({ id: schema.goal.id }),
@@ -261,7 +320,10 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     expect(alterados.length).toBe(0);
 
     const [lida] = await withTenant(ctxCoordA, (tx) =>
-      tx.select({ descricao: schema.goal.descricao }).from(schema.goal).where(eq(schema.goal.id, g!.id)),
+      tx
+        .select({ descricao: schema.goal.descricao })
+        .from(schema.goal)
+        .where(eq(schema.goal.id, g!.id)),
     );
     expect(lida?.descricao).not.toBe("alteração indevida");
   });
@@ -273,7 +335,10 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     );
     await expect(
       withTenant(ctxT1A, (tx) =>
-        tx.update(schema.goal).set({ patientId: PAC_B1 }).where(eq(schema.goal.id, g!.id)),
+        tx
+          .update(schema.goal)
+          .set({ patientId: PAC_B1 })
+          .where(eq(schema.goal.id, g!.id)),
       ),
     ).rejects.toThrow();
   });
@@ -283,7 +348,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
     );
     const alterados = await withTenant(ctxT1A, (tx) =>
-      tx.update(schema.goal)
+      tx
+        .update(schema.goal)
         .set({ descricao: "meta revisada pelo terapeuta dono" })
         .where(eq(schema.goal.id, g!.id))
         .returning({ id: schema.goal.id }),
@@ -296,9 +362,13 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
     );
     await withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.goalMilestoneMapping).values({ goalId: g!.id, milestoneId: MILE_A }),
+      tx
+        .insert(schema.goalMilestoneMapping)
+        .values({ goalId: g!.id, milestoneId: MILE_A }),
     );
-    const maps = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goalMilestoneMapping));
+    const maps = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.goalMilestoneMapping),
+    );
     expect(maps.length).toBe(1);
   });
 
@@ -306,7 +376,9 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   test("terapeuta dono grava e lê escopo de protocolo da sessão", async () => {
     await withTenant(ctxT1A, (tx) =>
       tx.insert(schema.sessionProtocolScope).values({
-        sessionId: SESS_A1, protocolId: PROTO_A, origem: "inferido_disciplina",
+        sessionId: SESS_A1,
+        protocolId: PROTO_A,
+        origem: "inferido_disciplina",
       }),
     );
     const lidas = await withTenant(ctxT1A, (tx) =>
@@ -327,7 +399,9 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     await expect(
       withTenant(ctxT1A, (tx) =>
         tx.insert(schema.sessionProtocolScope).values({
-          sessionId: SESS_A1, protocolId: PROTO_A2, origem: "ajustado_manualmente",
+          sessionId: SESS_A1,
+          protocolId: PROTO_A2,
+          origem: "ajustado_manualmente",
           ajustadoPor: U_T2_A, // != app.user_id — forja
         }),
       ),
@@ -336,10 +410,15 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
 
   test("J4 · terapeuta grava escopo com ajustado_por = próprio id (caso positivo)", async () => {
     const [criado] = await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.sessionProtocolScope).values({
-        sessionId: SESS_A1, protocolId: PROTO_A2, origem: "ajustado_manualmente",
-        ajustadoPor: U_T1_A,
-      }).returning({ id: schema.sessionProtocolScope.id }),
+      tx
+        .insert(schema.sessionProtocolScope)
+        .values({
+          sessionId: SESS_A1,
+          protocolId: PROTO_A2,
+          origem: "ajustado_manualmente",
+          ajustadoPor: U_T1_A,
+        })
+        .returning({ id: schema.sessionProtocolScope.id }),
     );
     expect(criado?.id).toBeTruthy();
   });
@@ -348,15 +427,21 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   test("terapeuta dono grava rascunho local de áudio e lê", async () => {
     await withTenant(ctxT1A, (tx) =>
       tx.insert(schema.audioCapture).values({
-        sessionId: SESS_A1, clinicId: CLINIC_A, statusUpload: "rascunho_local",
+        sessionId: SESS_A1,
+        clinicId: CLINIC_A,
+        statusUpload: "rascunho_local",
       }),
     );
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.audioCapture));
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.audioCapture),
+    );
     expect(lidas.length).toBe(1);
   });
 
   test("terapeuta de outra clínica não vê áudio (cross-tenant)", async () => {
-    const lidas = await withTenant(ctxT1B, (tx) => tx.select().from(schema.audioCapture));
+    const lidas = await withTenant(ctxT1B, (tx) =>
+      tx.select().from(schema.audioCapture),
+    );
     expect(lidas.length).toBe(0);
   });
 
@@ -364,17 +449,25 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   test("extração gravada no contexto do terapeuta da sessão é lida por ele", async () => {
     await withTenant(ctxT1A, (tx) =>
       tx.insert(schema.extraction).values({
-        sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
-        subtipo: "evidencia", trechoFonte: "falou á sozinho", confianca: "alta",
+        sessionId: SESS_A1,
+        clinicId: CLINIC_A,
+        estado: "sugerida",
+        subtipo: "evidencia",
+        trechoFonte: "falou á sozinho",
+        confianca: "alta",
         payload: { alvos: [] },
       }),
     );
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.extraction));
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.extraction),
+    );
     expect(lidas.length).toBe(1);
   });
 
   test("recepção não vê extração (dado clínico)", async () => {
-    const lidas = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.extraction));
+    const lidas = await withTenant(ctxRecepA, (tx) =>
+      tx.select().from(schema.extraction),
+    );
     expect(lidas.length).toBe(0);
   });
 
@@ -382,13 +475,19 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   test("qualquer papel da clínica lê o catálogo de marcos do protocolo", async () => {
     // M-c: milestone_select é role-agnóstico — terapeuta, coordenador e
     // recepção leem igualmente o catálogo (dado não-clínico, escopado só por tenant).
-    const lidasT1 = await withTenant(ctxT1A, (tx) => tx.select().from(schema.milestone));
+    const lidasT1 = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.milestone),
+    );
     expect(lidasT1.length).toBeGreaterThanOrEqual(1);
 
-    const lidasCoord = await withTenant(ctxCoordA, (tx) => tx.select().from(schema.milestone));
+    const lidasCoord = await withTenant(ctxCoordA, (tx) =>
+      tx.select().from(schema.milestone),
+    );
     expect(lidasCoord.length).toBeGreaterThanOrEqual(1);
 
-    const lidasRecep = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.milestone));
+    const lidasRecep = await withTenant(ctxRecepA, (tx) =>
+      tx.select().from(schema.milestone),
+    );
     expect(lidasRecep.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -396,8 +495,11 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     await expect(
       withTenant(ctxT1A, (tx) =>
         tx.insert(schema.milestone).values({
-          protocolId: PROTO_A, dominioId: "tato", nome: "nomear objeto",
-          tipoEstrutura: "marco_simples", estrutura: { escala: [] },
+          protocolId: PROTO_A,
+          dominioId: "tato",
+          nome: "nomear objeto",
+          tipoEstrutura: "marco_simples",
+          estrutura: { escala: [] },
         }),
       ),
     ).rejects.toThrow();
@@ -407,7 +509,9 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     // ctxT1B enxerga só o marco da própria clínica (MILE_B); MILE_A (clínica A)
     // não aparece — checagem por id em vez de length, pois a clínica B já tem
     // seu próprio marco de catálogo (fixture PROTO_B/MILE_B).
-    const lidasB = await withTenant(ctxT1B, (tx) => tx.select().from(schema.milestone));
+    const lidasB = await withTenant(ctxT1B, (tx) =>
+      tx.select().from(schema.milestone),
+    );
     expect(lidasB.map((m) => m.id)).not.toContain(MILE_A);
     expect(lidasB.map((m) => m.id)).toContain(MILE_B);
   });
@@ -426,7 +530,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   test("coordenador NÃO consegue reatribuir protocol_id do marco a outro protocolo (grant por coluna)", async () => {
     await expect(
       withTenant(ctxCoordA, (tx) =>
-        tx.update(schema.milestone)
+        tx
+          .update(schema.milestone)
           .set({ protocolId: PROTO_A2 })
           .where(eq(schema.milestone.id, MILE_A)),
       ),
@@ -435,7 +540,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
 
   test("coordenador consegue atualizar coluna mutável (nome) do marco", async () => {
     const alterados = await withTenant(ctxCoordA, (tx) =>
-      tx.update(schema.milestone)
+      tx
+        .update(schema.milestone)
         .set({ nome: "Pedir item preferido (revisado)" })
         .where(eq(schema.milestone.id, MILE_A))
         .returning({ id: schema.milestone.id }),
@@ -457,9 +563,13 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
     );
     await withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.goalCandidacy).values({ goalId: g!.id, isCandidateDominada: false }),
+      tx
+        .insert(schema.goalCandidacy)
+        .values({ goalId: g!.id, isCandidateDominada: false }),
     );
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goalCandidacy));
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.goalCandidacy),
+    );
     expect(lidas.length).toBe(1);
   });
 
@@ -471,7 +581,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     // USING já esconde a linha para quem não é coordenador — 0 linhas afetadas
     // prova o gate de authz (sem exceção do driver, mesmo mecanismo do J1).
     const alterados = await withTenant(ctxT1A, (tx) =>
-      tx.update(schema.goalCandidacy)
+      tx
+        .update(schema.goalCandidacy)
         .set({ isCandidateDominada: true })
         .where(eq(schema.goalCandidacy.goalId, g!.id))
         .returning({ goalId: schema.goalCandidacy.goalId }),
@@ -484,7 +595,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
     );
     const alterados = await withTenant(ctxCoordA, (tx) =>
-      tx.update(schema.goalCandidacy)
+      tx
+        .update(schema.goalCandidacy)
         .set({ isCandidateDominada: true })
         .where(eq(schema.goalCandidacy.goalId, g!.id))
         .returning({ goalId: schema.goalCandidacy.goalId }),
@@ -499,7 +611,9 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     );
     await expect(
       withTenant(ctxCoordA, (tx) =>
-        tx.insert(schema.goalMilestoneMapping).values({ goalId: g!.id, milestoneId: MILE_B }),
+        tx
+          .insert(schema.goalMilestoneMapping)
+          .values({ goalId: g!.id, milestoneId: MILE_B }),
       ),
     ).rejects.toThrow();
   });
@@ -508,19 +622,28 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   describe("I3 · extraction_update", () => {
     test("terapeuta dono atualiza o estado da própria extração e a mudança persiste", async () => {
       const [ext] = await withTenant(ctxT1A, (tx) =>
-        tx.insert(schema.extraction).values({
-          sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
-          subtipo: "evidencia", trechoFonte: "trecho para update", confianca: "alta",
-          payload: { alvos: [] },
-        }).returning({ id: schema.extraction.id }),
+        tx
+          .insert(schema.extraction)
+          .values({
+            sessionId: SESS_A1,
+            clinicId: CLINIC_A,
+            estado: "sugerida",
+            subtipo: "evidencia",
+            trechoFonte: "trecho para update",
+            confianca: "alta",
+            payload: { alvos: [] },
+          })
+          .returning({ id: schema.extraction.id }),
       );
       await withTenant(ctxT1A, (tx) =>
-        tx.update(schema.extraction)
+        tx
+          .update(schema.extraction)
           .set({ estado: "pendente_reprocessamento" })
           .where(eq(schema.extraction.id, ext!.id)),
       );
       const [lida] = await withTenant(ctxT1A, (tx) =>
-        tx.select({ estado: schema.extraction.estado })
+        tx
+          .select({ estado: schema.extraction.estado })
           .from(schema.extraction)
           .where(eq(schema.extraction.id, ext!.id)),
       );
@@ -529,14 +652,22 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
 
     test("recepção NÃO consegue atualizar extração (USING esconde a linha)", async () => {
       const [ext] = await withTenant(ctxT1A, (tx) =>
-        tx.insert(schema.extraction).values({
-          sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
-          subtipo: "evidencia", trechoFonte: "trecho recepção", confianca: "alta",
-          payload: { alvos: [] },
-        }).returning({ id: schema.extraction.id }),
+        tx
+          .insert(schema.extraction)
+          .values({
+            sessionId: SESS_A1,
+            clinicId: CLINIC_A,
+            estado: "sugerida",
+            subtipo: "evidencia",
+            trechoFonte: "trecho recepção",
+            confianca: "alta",
+            payload: { alvos: [] },
+          })
+          .returning({ id: schema.extraction.id }),
       );
       const alterados = await withTenant(ctxRecepA, (tx) =>
-        tx.update(schema.extraction)
+        tx
+          .update(schema.extraction)
           .set({ estado: "pendente_reprocessamento" })
           .where(eq(schema.extraction.id, ext!.id))
           .returning({ id: schema.extraction.id }),
@@ -544,7 +675,8 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       expect(alterados.length).toBe(0);
 
       const [lida] = await withTenant(ctxT1A, (tx) =>
-        tx.select({ estado: schema.extraction.estado })
+        tx
+          .select({ estado: schema.extraction.estado })
           .from(schema.extraction)
           .where(eq(schema.extraction.id, ext!.id)),
       );
@@ -553,15 +685,23 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
 
     test("terapeuta dono não pode fazer swap cross-tenant da sessão da extração (WITH CHECK)", async () => {
       const [ext] = await withTenant(ctxT1A, (tx) =>
-        tx.insert(schema.extraction).values({
-          sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
-          subtipo: "evidencia", trechoFonte: "trecho swap", confianca: "alta",
-          payload: { alvos: [] },
-        }).returning({ id: schema.extraction.id }),
+        tx
+          .insert(schema.extraction)
+          .values({
+            sessionId: SESS_A1,
+            clinicId: CLINIC_A,
+            estado: "sugerida",
+            subtipo: "evidencia",
+            trechoFonte: "trecho swap",
+            confianca: "alta",
+            payload: { alvos: [] },
+          })
+          .returning({ id: schema.extraction.id }),
       );
       await expect(
         withTenant(ctxT1A, (tx) =>
-          tx.update(schema.extraction)
+          tx
+            .update(schema.extraction)
             .set({ sessionId: SESS_B1 })
             .where(eq(schema.extraction.id, ext!.id)),
         ),
@@ -574,14 +714,22 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       // não é o dono da sessão. Prova que app_session_clinica_visivel (equipe) já
       // não basta para UPDATE; precisa ser o terapeuta dono (app_session_terapeuta_id).
       const [ext] = await withTenant(ctxT1A, (tx) =>
-        tx.insert(schema.extraction).values({
-          sessionId: SESS_A2, clinicId: CLINIC_A, estado: "sugerida",
-          subtipo: "evidencia", trechoFonte: "trecho J2", confianca: "alta",
-          payload: { alvos: [] },
-        }).returning({ id: schema.extraction.id }),
+        tx
+          .insert(schema.extraction)
+          .values({
+            sessionId: SESS_A2,
+            clinicId: CLINIC_A,
+            estado: "sugerida",
+            subtipo: "evidencia",
+            trechoFonte: "trecho J2",
+            confianca: "alta",
+            payload: { alvos: [] },
+          })
+          .returning({ id: schema.extraction.id }),
       );
       const alterados = await withTenant(ctxT3A, (tx) =>
-        tx.update(schema.extraction)
+        tx
+          .update(schema.extraction)
           .set({ estado: "pendente_reprocessamento" })
           .where(eq(schema.extraction.id, ext!.id))
           .returning({ id: schema.extraction.id }),
@@ -594,25 +742,36 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   describe("I1 · milestone_candidacy", () => {
     test("coordenador insere milestone_candidacy", async () => {
       const inseridos = await withTenant(ctxCoordA, (tx) =>
-        tx.insert(schema.milestoneCandidacy).values({
-          patientId: PAC_A1, milestoneId: MILE_A, isCandidate: true,
-        }).returning({ patientId: schema.milestoneCandidacy.patientId }),
+        tx
+          .insert(schema.milestoneCandidacy)
+          .values({
+            patientId: PAC_A1,
+            milestoneId: MILE_A,
+            isCandidate: true,
+          })
+          .returning({ patientId: schema.milestoneCandidacy.patientId }),
       );
       expect(inseridos.length).toBe(1);
     });
 
     test("recepção não vê milestone_candidacy (guardrail #1)", async () => {
-      const lidas = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.milestoneCandidacy));
+      const lidas = await withTenant(ctxRecepA, (tx) =>
+        tx.select().from(schema.milestoneCandidacy),
+      );
       expect(lidas.length).toBe(0);
     });
 
     test("terapeuta da equipe vê milestone_candidacy do paciente", async () => {
-      const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.milestoneCandidacy));
+      const lidas = await withTenant(ctxT1A, (tx) =>
+        tx.select().from(schema.milestoneCandidacy),
+      );
       expect(lidas.length).toBe(1);
     });
 
     test("terapeuta fora da equipe não vê milestone_candidacy", async () => {
-      const lidas = await withTenant(ctxT2A, (tx) => tx.select().from(schema.milestoneCandidacy));
+      const lidas = await withTenant(ctxT2A, (tx) =>
+        tx.select().from(schema.milestoneCandidacy),
+      );
       expect(lidas.length).toBe(0);
     });
 
@@ -620,7 +779,9 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
       await expect(
         withTenant(ctxT1A, (tx) =>
           tx.insert(schema.milestoneCandidacy).values({
-            patientId: PAC_A1, milestoneId: MILE_A, isCandidate: true,
+            patientId: PAC_A1,
+            milestoneId: MILE_A,
+            isCandidate: true,
           }),
         ),
       ).rejects.toThrow();

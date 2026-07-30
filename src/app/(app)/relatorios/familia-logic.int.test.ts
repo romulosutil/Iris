@@ -3,14 +3,15 @@ import postgres from "postgres";
 import { StubPdfRenderer } from "@/lib/report/renderer";
 import type { TenantContext } from "@/db/rls";
 import type { FamilyReportDraft } from "@/lib/report/familia/types";
+import { hasDb } from "@tests/integration-env";
 
 vi.mock("server-only", () => ({}));
-const { gerarRascunhoFamilia, curarFamilia, exportarFamilia } = await import(
-  "./familia-logic"
-);
+const { gerarRascunhoFamilia, curarFamilia, exportarFamilia } =
+  await import("./familia-logic");
 
-const hasDb = !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!) : (null as never);
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!)
+  : (null as never);
 const CLINIC = "11111111-1111-1111-1111-111111111111";
 const COORD = "22222222-2222-2222-2222-222222222222";
 const TERA_ON = "33333333-3333-3333-3333-333333333333";
@@ -22,7 +23,11 @@ const ctx = (role: TenantContext["role"], userId: string): TenantContext => ({
   userId,
   clinicId: CLINIC,
 });
-const gerarInput = { patientId: PAC, periodoInicio: "2026-06-01", periodoFim: "2026-06-30" };
+const gerarInput = {
+  patientId: PAC,
+  periodoInicio: "2026-06-01",
+  periodoFim: "2026-06-30",
+};
 
 const draftOk: FamilyReportDraft = {
   conquistaDestaque: "Miguel avançou em pedir o que quer.",
@@ -54,67 +59,105 @@ describe.skipIf(!hasDb)("Relatório de Família — máquina de curadoria", () =
     const r = await gerarRascunhoFamilia(ctx("terapeuta", TERA_ON), gerarInput);
     expect("reportId" in r).toBe(true);
     reportId = (r as { reportId: string }).reportId;
-    const [rep] = await owner`SELECT status, tipo, gerado_por_ia, payload_versao, payload FROM report WHERE id=${reportId}`;
+    const [rep] =
+      await owner`SELECT status, tipo, gerado_por_ia, payload_versao, payload FROM report WHERE id=${reportId}`;
     expect(rep?.status).toBe("rascunho");
     expect(rep?.tipo).toBe("familia");
     expect(rep?.gerado_por_ia).toBe(true);
     expect(rep?.payload_versao).toBe(1);
     expect(rep?.payload.curado).toBeNull();
-    expect(rep?.payload.iaOriginal.trabalhandoAgora).toContain("Pedir o que quer");
-    const [log] = await owner`SELECT 1 FROM audit_log WHERE acao='relatorio_rascunho_gerado' AND entidade_id=${reportId}`;
+    expect(rep?.payload.iaOriginal.trabalhandoAgora).toContain(
+      "Pedir o que quer",
+    );
+    const [log] =
+      await owner`SELECT 1 FROM audit_log WHERE acao='relatorio_rascunho_gerado' AND entidade_id=${reportId}`;
     expect(log).toBeTruthy();
   });
 
   test("exportar antes de curar é bloqueado (gate F9)", async () => {
-    const r = await exportarFamilia(ctx("coordenador", COORD), { reportId }, new StubPdfRenderer());
+    const r = await exportarFamilia(
+      ctx("coordenador", COORD),
+      { reportId },
+      new StubPdfRenderer(),
+    );
     expect(r).toEqual({ error: expect.stringContaining("revisado") });
   });
 
   test("terapeuta não pode curar (papel)", async () => {
-    const r = await curarFamilia(ctx("terapeuta", TERA_ON), { reportId, versaoEsperada: 1, draftEditado: draftOk });
+    const r = await curarFamilia(ctx("terapeuta", TERA_ON), {
+      reportId,
+      versaoEsperada: 1,
+      draftEditado: draftOk,
+    });
     expect(r).toEqual({ error: expect.stringContaining("papel") });
   });
 
   test("coordenador cura: status revisado, versao++, revisado_por, curado gravado", async () => {
-    const r = await curarFamilia(ctx("coordenador", COORD), { reportId, versaoEsperada: 1, draftEditado: draftOk });
+    const r = await curarFamilia(ctx("coordenador", COORD), {
+      reportId,
+      versaoEsperada: 1,
+      draftEditado: draftOk,
+    });
     expect(r).toEqual({ ok: true });
-    const [rep] = await owner`SELECT status, payload_versao, revisado_por, payload FROM report WHERE id=${reportId}`;
+    const [rep] =
+      await owner`SELECT status, payload_versao, revisado_por, payload FROM report WHERE id=${reportId}`;
     expect(rep?.status).toBe("revisado");
     expect(rep?.payload_versao).toBe(2);
     expect(rep?.revisado_por).toBe(COORD);
     expect(rep?.payload.curado.conquistaDestaque).toContain("Miguel");
-    const [log] = await owner`SELECT 1 FROM audit_log WHERE acao='relatorio_revisado' AND entidade_id=${reportId}`;
+    const [log] =
+      await owner`SELECT 1 FROM audit_log WHERE acao='relatorio_revisado' AND entidade_id=${reportId}`;
     expect(log).toBeTruthy();
   });
 
   test("curar com versão obsoleta falha (trava otimista)", async () => {
-    const r = await curarFamilia(ctx("coordenador", COORD), { reportId, versaoEsperada: 1, draftEditado: draftOk });
+    const r = await curarFamilia(ctx("coordenador", COORD), {
+      reportId,
+      versaoEsperada: 1,
+      draftEditado: draftOk,
+    });
     expect("error" in r).toBe(true);
   });
 
   test("terapeuta não pode exportar (papel)", async () => {
-    const r = await exportarFamilia(ctx("terapeuta", TERA_ON), { reportId }, new StubPdfRenderer());
+    const r = await exportarFamilia(
+      ctx("terapeuta", TERA_ON),
+      { reportId },
+      new StubPdfRenderer(),
+    );
     expect(r).toEqual({ error: expect.stringContaining("papel") });
   });
 
   test("coordenador exporta após revisão: exportado + pdf + audit", async () => {
-    const r = await exportarFamilia(ctx("coordenador", COORD), { reportId }, new StubPdfRenderer());
+    const r = await exportarFamilia(
+      ctx("coordenador", COORD),
+      { reportId },
+      new StubPdfRenderer(),
+    );
     expect("hash" in r).toBe(true);
     const [rep] = await owner`SELECT status FROM report WHERE id=${reportId}`;
     expect(rep?.status).toBe("exportado");
-    const pdfs = await owner`SELECT 1 FROM report_pdf WHERE report_id=${reportId}`;
+    const pdfs =
+      await owner`SELECT 1 FROM report_pdf WHERE report_id=${reportId}`;
     expect(pdfs.length).toBe(1);
-    const [log] = await owner`SELECT 1 FROM audit_log WHERE acao='relatorio_exportado' AND entidade_id=${reportId}`;
+    const [log] =
+      await owner`SELECT 1 FROM audit_log WHERE acao='relatorio_exportado' AND entidade_id=${reportId}`;
     expect(log).toBeTruthy();
   });
 
   test("admin_recepcao não gera rascunho (papel)", async () => {
-    const r = await gerarRascunhoFamilia(ctx("admin_recepcao", RECEP), gerarInput);
+    const r = await gerarRascunhoFamilia(
+      ctx("admin_recepcao", RECEP),
+      gerarInput,
+    );
     expect(r).toEqual({ error: expect.stringContaining("papel") });
   });
 
   test("terapeuta fora da equipe não gera (RLS esconde o paciente)", async () => {
-    const r = await gerarRascunhoFamilia(ctx("terapeuta", TERA_OFF), gerarInput);
+    const r = await gerarRascunhoFamilia(
+      ctx("terapeuta", TERA_OFF),
+      gerarInput,
+    );
     expect("error" in r).toBe(true);
   });
 });

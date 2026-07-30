@@ -10,9 +10,11 @@ import { buildConvenioBrutoPayload } from "../convenio-bruto/build-payload";
 import { buildConvenioNarrativoInput } from "./build-input";
 import type { CabecalhoConvenio } from "./types";
 import type { PayloadConvenioBruto } from "../convenio-bruto/types";
+import { hasDb } from "@tests/integration-env";
 
-const hasDb = !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!) : (null as never);
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!)
+  : (null as never);
 
 const CLINIC = "11111111-1111-1111-1111-111111111111";
 const COORD = "22222222-2222-2222-2222-222222222222";
@@ -20,9 +22,17 @@ const TERA = "33333333-3333-3333-3333-333333333333";
 const PAC = "44444444-4444-4444-4444-444444444444";
 const SES = "55555555-5555-5555-5555-555555555555";
 const EXT = "66666666-6666-6666-6666-666666666666";
-const ctx = (role: TenantContext["role"], userId: string): TenantContext => ({ role, userId, clinicId: CLINIC });
+const ctx = (role: TenantContext["role"], userId: string): TenantContext => ({
+  role,
+  userId,
+  clinicId: CLINIC,
+});
 
-const cabecalho: CabecalhoConvenio = { operadora: "Unimed", cid: "F84.0", finalidade: "Renovação de guia" };
+const cabecalho: CabecalhoConvenio = {
+  operadora: "Unimed",
+  cid: "F84.0",
+  finalidade: "Renovação de guia",
+};
 
 describe.skipIf(!hasDb)("buildConvenioNarrativoInput", () => {
   beforeAll(async () => {
@@ -42,21 +52,32 @@ describe.skipIf(!hasDb)("buildConvenioNarrativoInput", () => {
     await owner`INSERT INTO evidence (id, extraction_id, patient_id, session_id, session_numero, alvo_ordinal, aprovado_por, aprovado_em, classificacao_original, goal_ref)
       VALUES (gen_random_uuid(), ${EXT}, ${PAC}, ${SES}, 8, 1, ${TERA}, '2026-05-10T10:00:00Z', '{"rotulo":"emergente"}'::jsonb, 'Fora do período')`;
   });
-  afterAll(async () => { if (hasDb) await owner.end(); });
+  afterAll(async () => {
+    if (hasDb) await owner.end();
+  });
 
   test("reusa buildConvenioBrutoPayload e preserva paciente/período/cabeçalho", async () => {
-    const args = { patientId: PAC, nomePaciente: "Miguel S.", periodoInicio: "2026-06-01", periodoFim: "2026-06-30", cabecalho };
+    const args = {
+      patientId: PAC,
+      nomePaciente: "Miguel S.",
+      periodoInicio: "2026-06-01",
+      periodoFim: "2026-06-30",
+      cabecalho,
+    };
 
-    const [input, dossieEsperado] = await withTenant(ctx("coordenador", COORD), async (tx) => {
-      const input = await buildConvenioNarrativoInput(tx, args);
-      const dossieEsperado = await buildConvenioBrutoPayload(tx, {
-        patientId: args.patientId,
-        nomePaciente: args.nomePaciente,
-        periodoInicio: args.periodoInicio,
-        periodoFim: args.periodoFim,
-      });
-      return [input, dossieEsperado];
-    });
+    const [input, dossieEsperado] = await withTenant(
+      ctx("coordenador", COORD),
+      async (tx) => {
+        const input = await buildConvenioNarrativoInput(tx, args);
+        const dossieEsperado = await buildConvenioBrutoPayload(tx, {
+          patientId: args.patientId,
+          nomePaciente: args.nomePaciente,
+          periodoInicio: args.periodoInicio,
+          periodoFim: args.periodoFim,
+        });
+        return [input, dossieEsperado];
+      },
+    );
 
     expect(input.paciente).toEqual({ nome: "Miguel S." });
     expect(input.periodo).toEqual({ inicio: "2026-06-01", fim: "2026-06-30" });
@@ -69,7 +90,10 @@ describe.skipIf(!hasDb)("buildConvenioNarrativoInput", () => {
     expect(input.dossie.evidencias).toHaveLength(1);
     expect(input.dossie.evidencias[0]!.metaOuDominio).toBe("Mando");
     expect(
-      input.dossie.evidencias.some((e: PayloadConvenioBruto["evidencias"][number]) => e.metaOuDominio === "Fora do período"),
+      input.dossie.evidencias.some(
+        (e: PayloadConvenioBruto["evidencias"][number]) =>
+          e.metaOuDominio === "Fora do período",
+      ),
     ).toBe(false);
   });
 });

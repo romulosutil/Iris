@@ -26,6 +26,91 @@
 
 ---
 
+## 🏁 Sessão 30/07/2026 — Gate único da suíte de integração: fim do auto-skip silencioso (Issue #132)
+
+**O problema fechado**
+
+`pnpm test:rls` — o comando que prova isolamento multi-tenant (RLS) e trilha de
+auditoria append-only — saía **verde sem rodar nada** quando faltava env de
+banco. Cada um dos 65 arquivos `*.int.test.ts` declarava o próprio
+`const hasDb = ...` a partir de `process.env`, em **três variantes divergentes**,
+e o `catch {}` vazio do `vitest.integration.config.ts` engolia até o "`.env` não
+existe". Verde por omissão em cima desse comando encerra a investigação.
+
+**O que foi entregue**
+
+- `db/tests/integration-env.ts` — gate ÚNICO, exportando `hasDb`,
+  `missingDbEnv()` e `allowSkip`. `hasDb` agora exige as **três** conexões
+  (`DATABASE_URL`, `AUTH_DATABASE_URL`, `MIGRATION_DATABASE_URL`), presentes e
+  não-vazias. Os 65 arquivos passaram a importar daí; a lógica interna de cada
+  teste (conexões, `beforeAll`, `describe.skipIf`) não foi tocada.
+- **A unificação matou a variante fraca.** 8 arquivos exigiam só
+  `MIGRATION_DATABASE_URL` — a role **dona** (`iris`, SUPERUSER + BYPASSRLS).
+  Rodavam num ambiente onde a role de app sequer estava configurada, e o que
+  passasse por ali passava com RLS desligada. Eram
+  `db/tests/consent-responsavel-por-tipo`, `db/tests/fase5-report-schema`,
+  `src/app/(app)/relatorios/{actions,queries,familia-logic,convenio-narrativo-logic}`,
+  `src/lib/report/convenio-bruto/build-payload` e
+  `src/lib/report/convenio-narrativo/build-input`. Nenhum quebrou com o gate
+  forte — vários já dependiam de `withTenant` (portanto de `DATABASE_URL`)
+  implicitamente, sem declarar.
+- `db/tests/global-setup.ts` (novo `globalSetup` do
+  `vitest.integration.config.ts`) roda **antes de qualquer teste** e:
+  - **falha dura (exit != 0)** quando falta qualquer uma das três vars — este é
+    o **default**, com mensagem listando o que falta e como corrigir;
+  - com `ALLOW_SKIP_INTEGRATION=1`, troca a falha por um **banner de aviso
+    alto** ("isso NÃO é cobertura", quantos arquivos foram pulados) e sai 0.
+    Escape hatch nomeado, mesmo espírito do `SKIP_GLOBALS` de
+    `infra/backup/restore.sh`;
+  - **valida a identidade das roles**: `DATABASE_URL`/`AUTH_DATABASE_URL` com
+    `rolsuper` ou `rolbypassrls` = **falha dura sem opt-in**
+    (`ALLOW_SKIP_INTEGRATION` não suprime) — é exatamente o achado da sessão
+    29/07 que fez a suíte inteira rodar sobre vácuo;
+  - exige que `MIGRATION_DATABASE_URL` **seja** a role dona (senão fixtures
+    morrem confusas N arquivos abaixo) e que o schema esteja migrado
+    (sentinela `public.clinic` → manda rodar `pnpm db:migrate`);
+  - no caminho feliz imprime uma linha só, sem senha nem URL:
+    `[int] app=iris_app(norls) auth=iris_auth_login(norls) owner=iris(owner) schema=ok`.
+- `vitest.integration.config.ts`: `catch {}` vazio virou `console.warn`
+  explícito; alias `@tests` → `db/tests` (espelhado em `tsconfig.json`) para o
+  helper ser importável dos dois lados da árvore.
+- `.env.example`: `ALLOW_SKIP_INTEGRATION` documentado (o que faz, que o default
+  é falhar, e que não suprime a checagem de role).
+
+**Decisões de design**
+
+- Gate uniforme nas três URLs, mesmo para teste que só usa a role dona. Um
+  ambiente sem role de app configurada não é ambiente de integração válido.
+- Falhar é o default; pular é opt-in **nomeado**. O inverso é o que produziu a
+  #132.
+- Falha de identidade de role **não tem opt-in**. Pular teste é uma decisão;
+  rodar teste de RLS com RLS desligada é uma afirmação falsa.
+
+**Verificação** (todas executadas nesta sessão)
+
+| Caminho                                            | Resultado                                                         |
+| :------------------------------------------------- | :---------------------------------------------------------------- |
+| `pnpm typecheck`                                   | limpo                                                             |
+| `pnpm lint`                                        | 0 erros / 24 warnings (baseline pré-existente, stories + hooks)   |
+| `pnpm test:rls` sem as três vars                   | **exit 1** + mensagem acionável                                   |
+| idem + `ALLOW_SKIP_INTEGRATION=1`                  | **exit 0** + banner; 4 passed / 64 skipped (68) — 15 / 450 testes |
+| `pnpm test:rls` com as três URLs locais            | **68 arquivos / 465 testes passados, 0 pulados**                  |
+| `DATABASE_URL` apontando para a role dona (`iris`) | **exit 1** — "ROLE ERRADA — A SUÍTE RODARIA COM RLS DESATIVADA"   |
+
+**Ficou de fora desta fatia (virou a issue #143)**
+
+- **"Skip em CI = falha de build"**, o outro item da #132: **não foi feito**. O
+  repositório hoje **não tem nenhum workflow que rode teste** — só
+  `guard-base-branch.yml` e `pr-review.yml`. Como o default agora é falhar sem
+  banco, o gate de CI é a consequência natural, mas exige decidir antes onde o
+  Postgres de CI vive (service container no GitHub Actions vs. nada) — decisão
+  de infra, fora do escopo desta fatia.
+- Os 3 arquivos `*.int.test.ts` que não tocam banco
+  (`src/lib/report/playwright-renderer`, `db/tests/agenda2-semana-actions` e
+  `-etapa-d`) seguem sem gate, de propósito.
+
+---
+
 ## 🏁 Sessão 29/07/2026 — Encerramento de revogação, prontuário somente-leitura, curatela/emancipado e transição de maioridade (Issues #133, #117, #134, #135)
 
 **O que foi entregue**
@@ -95,6 +180,11 @@
   0 pulados.
 - A #132 subestima o problema: não é só "pula quando falta env", é "pode
   rodar com a role errada e passar por vácuo".
+- ✅ **Resolvido em 30/07/2026** (ver sessão acima): gate único em
+  `db/tests/integration-env.ts` + `globalSetup` que falha duro sem as três
+  vars e recusa role SUPERUSER/BYPASSRLS em `DATABASE_URL`/`AUTH_DATABASE_URL`.
+  A variante fraca do gate (só `MIGRATION_DATABASE_URL`, 8 arquivos) deixou de
+  existir. Continua aberto só o item de CI — ver "ficou de fora" na sessão 30/07.
 
 **Verificação** — typecheck limpo; lint 0 erros/8 warnings (baseline);
 unitários 117 arquivos/523 testes; integração 68/465 com 0 skip; build
@@ -278,6 +368,11 @@ before they can be used.`
   `DATABASE_URL` está vazio; `pnpm test` e `pnpm test:rls` terminam **verdes sem
   rodar nada**. P1: são exatamente os comandos que provam isolamento
   multi-tenant.
+  → **Endereçada em 30/07/2026** (branch `fix/132-gate-suite-integracao`): gate
+  único + `globalSetup` que falha duro; escape hatch `ALLOW_SKIP_INTEGRATION`.
+  **Resta o item de CI** ("skip em CI = falha de build"), deliberadamente fora
+  daquela fatia porque o repo ainda não tem workflow que rode teste — agora
+  rastreado na **#143**. A #132 fica aberta até a #143 fechar.
 - **#133** — não existe forma de **registrar** uma revogação de consentimento
   (`consent` é append-only e o enum não tem evento de revogação). A promessa dos
   termos não é só não-implementada, é **não-registrável**. Diferente da #117, que

@@ -13,9 +13,11 @@ import { sha256Hex } from "./hash";
 import { StubPdfRenderer } from "./renderer";
 import { exportReport } from "./export";
 import { getReportPdf } from "./download";
+import { hasDb } from "@tests/integration-env";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 const CLINIC_A = "00000000-0000-0000-0000-00000000000a";
 const CLINIC_B = "00000000-0000-0000-0000-00000000000b";
 const U_COORD_A = "00000000-0000-0000-0000-0000000000c1";
@@ -57,13 +59,17 @@ describe.skipIf(!hasDb)("getReportPdf", () => {
   });
 
   test("getReportPdf devolve os bytes congelados, hash idêntico", async () => {
-    const out = await withTenant(ctx("coordenador", U_COORD_A), (tx) => getReportPdf(tx, R));
+    const out = await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
+      getReportPdf(tx, R),
+    );
     expect(out).not.toBeNull();
     expect(sha256Hex(out!.bytes)).toBe(out!.hash);
   });
 
   test("report de outra clínica → null (RLS)", async () => {
-    const out = await withTenant(ctx("coordenador", U_COORD_A), (tx) => getReportPdf(tx, R_B));
+    const out = await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
+      getReportPdf(tx, R_B),
+    );
     expect(out).toBeNull();
   });
 });

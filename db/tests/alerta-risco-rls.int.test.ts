@@ -10,9 +10,11 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "../../src/db/rls";
+import { hasDb } from "./integration-env";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000012a0";
 const CLINIC_B = "00000000-0000-0000-0000-0000000012b0";
@@ -131,8 +133,9 @@ describe.skipIf(!hasDb)("alerta_risco_clinico — RLS e privilégios", () => {
       patientId: P_A,
       sessionId: S_A,
     });
-    const rows = (await withTenant(ctx("coordenador", U_COORD_B, CLINIC_B), (tx) =>
-      tx.execute(sql`SELECT id FROM alerta_risco_clinico`),
+    const rows = (await withTenant(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      (tx) => tx.execute(sql`SELECT id FROM alerta_risco_clinico`),
     )) as unknown as Array<{ id: string }>;
     expect(rows).toHaveLength(0);
   });
@@ -163,7 +166,9 @@ describe.skipIf(!hasDb)("alerta_risco_clinico — RLS e privilégios", () => {
     });
     const ve = async (c: TenantContext) => {
       const r = (await withTenant(c, (tx) =>
-        tx.execute(sql`SELECT id FROM alerta_risco_clinico WHERE id = ${id}::uuid`),
+        tx.execute(
+          sql`SELECT id FROM alerta_risco_clinico WHERE id = ${id}::uuid`,
+        ),
       )) as unknown as Array<{ id: string }>;
       return r.length === 1;
     };
@@ -239,7 +244,9 @@ describe.skipIf(!hasDb)("alerta_risco_clinico — RLS e privilégios", () => {
     });
 
     await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
-      tx.execute(sql`SELECT app_purgar_paciente(${P_A}::uuid, 'pedido de erasure')`),
+      tx.execute(
+        sql`SELECT app_purgar_paciente(${P_A}::uuid, 'pedido de erasure')`,
+      ),
     );
 
     const [linha] = await owner!<
@@ -271,13 +278,19 @@ describe.skipIf(!hasDb)("alerta_risco_clinico — RLS e privilégios", () => {
   });
 
   test("linha pseudonimizada não é legível por terapeuta, só pelo coordenador do tenant", async () => {
-    const comoTerapeuta = (await withTenant(ctx("terapeuta", U_TER_SESSAO), (tx) =>
-      tx.execute(sql`SELECT id FROM alerta_risco_clinico WHERE pseudonimizado_em IS NOT NULL`),
+    const comoTerapeuta = (await withTenant(
+      ctx("terapeuta", U_TER_SESSAO),
+      (tx) =>
+        tx.execute(
+          sql`SELECT id FROM alerta_risco_clinico WHERE pseudonimizado_em IS NOT NULL`,
+        ),
     )) as unknown as unknown[];
     expect(comoTerapeuta).toHaveLength(0);
 
     const comoCoord = (await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
-      tx.execute(sql`SELECT id FROM alerta_risco_clinico WHERE pseudonimizado_em IS NOT NULL`),
+      tx.execute(
+        sql`SELECT id FROM alerta_risco_clinico WHERE pseudonimizado_em IS NOT NULL`,
+      ),
     )) as unknown as unknown[];
     expect(comoCoord.length).toBeGreaterThan(0);
   });

@@ -1,14 +1,18 @@
 import postgres from "postgres";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000d1";
 const U_COORD = "00000000-0000-0000-0000-00000000c0d1";
 const U_T1 = "00000000-0000-0000-0000-0000000071d1";
 const PAC = "00000000-0000-0000-0000-00000000acd1";
 const REGRA = "00000000-0000-0000-0000-000000009901";
-const ctx = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
+const ctx = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let materializarRegra: typeof import("@/app/(app)/agenda/queries").materializarRegra;
@@ -39,19 +43,27 @@ describe.skipIf(!hasDb)("materializarRegra", () => {
     const r = await materializarRegra(ctx, REGRA, "2026-08-03"); // 4 segundas: 13,20,27/07 + 03/08
     expect(r.geradas).toBe(4);
     expect(r.puladas).toEqual([]);
-    const { n } = (await owner`SELECT count(*)::int AS n FROM session WHERE recorrente_id = ${REGRA}`)[0]! as { n: number };
+    const { n } = (
+      await owner`SELECT count(*)::int AS n FROM session WHERE recorrente_id = ${REGRA}`
+    )[0]! as { n: number };
     expect(n).toBe(4);
     // instante IANA correto: 09:00 SP = 12:00Z na 1ª segunda
-    const { agendada_para } = (await owner`
-      SELECT agendada_para FROM session WHERE recorrente_id = ${REGRA} ORDER BY agendada_para LIMIT 1`)[0]! as { agendada_para: Date };
-    expect(new Date(agendada_para).toISOString()).toBe("2026-07-13T12:00:00.000Z");
+    const { agendada_para } = (
+      await owner`
+      SELECT agendada_para FROM session WHERE recorrente_id = ${REGRA} ORDER BY agendada_para LIMIT 1`
+    )[0]! as { agendada_para: Date };
+    expect(new Date(agendada_para).toISOString()).toBe(
+      "2026-07-13T12:00:00.000Z",
+    );
   });
 
   test("idempotente: rodar 2× não duplica (D-2, 23505 silencioso)", async () => {
     await materializarRegra(ctx, REGRA, "2026-08-03");
     const r2 = await materializarRegra(ctx, REGRA, "2026-08-03");
     expect(r2.geradas).toBe(0); // nada novo
-    const { n } = (await owner`SELECT count(*)::int AS n FROM session WHERE recorrente_id = ${REGRA}`)[0]! as { n: number };
+    const { n } = (
+      await owner`SELECT count(*)::int AS n FROM session WHERE recorrente_id = ${REGRA}`
+    )[0]! as { n: number };
     expect(n).toBe(4); // estável
   });
 
@@ -70,8 +82,10 @@ describe.skipIf(!hasDb)("materializarRegra", () => {
       VALUES (${CLINIC_A}, 'paciente', ${PAC}, '2026-07-20', '2026-07-20', 'viagem')`;
     const r = await materializarRegra(ctx, REGRA, "2026-08-03");
     expect(r.geradas).toBe(3);
-    const datas = await owner`SELECT agendada_para FROM session WHERE recorrente_id = ${REGRA} ORDER BY 1`;
-    expect(datas.map((d) => new Date(d.agendada_para).toISOString().slice(0, 10)))
-      .not.toContain("2026-07-20");
+    const datas =
+      await owner`SELECT agendada_para FROM session WHERE recorrente_id = ${REGRA} ORDER BY 1`;
+    expect(
+      datas.map((d) => new Date(d.agendada_para).toISOString().slice(0, 10)),
+    ).not.toContain("2026-07-20");
   });
 });

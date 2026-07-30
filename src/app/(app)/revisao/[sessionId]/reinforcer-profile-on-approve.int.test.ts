@@ -5,10 +5,18 @@
  * em (extraction_id, item_atividade).
  */
 import postgres from "postgres";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest";
+import { hasDb } from "@tests/integration-env";
 vi.mock("server-only", () => ({}));
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 const CLINIC = "00000000-0000-0000-0000-0000000000f3";
 const U_T1 = "00000000-0000-0000-0000-0000000071f3"; // dono da sessão, na equipe do paciente
 const PAC = "00000000-0000-0000-0000-00000000acf3";
@@ -55,10 +63,14 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
   beforeEach(seed);
 
   test("aprovar extração preferencia_reforcador grava 1 reinforcer_profile", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_PREF, versao: 1 });
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_PREF,
+      versao: 1,
+    });
     expect(r.ok).toBe(true);
 
-    const rows = await owner`SELECT * FROM reinforcer_profile WHERE extraction_id = ${EX_PREF}`;
+    const rows =
+      await owner`SELECT * FROM reinforcer_profile WHERE extraction_id = ${EX_PREF}`;
     expect(rows.length).toBe(1);
     const rp = rows[0]!;
     expect(rp.item_atividade).toBe("carrinho de brinquedo");
@@ -68,15 +80,22 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
   });
 
   test("idempotente: re-aprovar (2ª chamada) não duplica reinforcer_profile", async () => {
-    const r1 = await A.aprovarExtracao(ctxT1, { extractionId: EX_PREF, versao: 1 });
+    const r1 = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_PREF,
+      versao: 1,
+    });
     expect(r1.ok).toBe(true);
 
     // 2ª chamada: extração já não está mais 'sugerida' → transicionar não acha
     // a linha, não reexecuta a inserção.
-    const r2 = await A.aprovarExtracao(ctxT1, { extractionId: EX_PREF, versao: 1 });
+    const r2 = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_PREF,
+      versao: 1,
+    });
     expect(r2.ok).toBe(false);
 
-    const rows = await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_PREF}`;
+    const rows =
+      await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_PREF}`;
     expect(rows.length).toBe(1);
   });
 
@@ -84,13 +103,17 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
     const r = await A.editarExtracao(ctxT1, {
       extractionId: EX_PREF,
       payloadEditado: {
-        preferencia_reforcador: { item_atividade: "bolha de sabão", valencia: "saciado" },
+        preferencia_reforcador: {
+          item_atividade: "bolha de sabão",
+          valencia: "saciado",
+        },
       },
       versao: 1,
     });
     expect(r.ok).toBe(true);
 
-    const [rp] = await owner`SELECT * FROM reinforcer_profile WHERE extraction_id = ${EX_PREF}`;
+    const [rp] =
+      await owner`SELECT * FROM reinforcer_profile WHERE extraction_id = ${EX_PREF}`;
     expect(rp!.item_atividade).toBe("bolha de sabão");
     expect(rp!.valencia).toBe("saciado");
   });
@@ -102,10 +125,14 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
       (${EX_VAZIO}, ${SESS}, ${CLINIC}, 'sugerida', 'preferencia_reforcador', 'sem item claro', 'baixa',
         ${owner.json({ preferencia_reforcador: { item_atividade: "", valencia: "alta" } })})`;
 
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_VAZIO, versao: 1 });
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_VAZIO,
+      versao: 1,
+    });
     expect(r.ok).toBe(true);
 
-    const rows = await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_VAZIO}`;
+    const rows =
+      await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_VAZIO}`;
     expect(rows.length).toBe(0);
   });
 
@@ -119,10 +146,14 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
       (${EX_SEM_NUMERO}, ${SESS_SEM_NUMERO}, ${CLINIC}, 'sugerida', 'preferencia_reforcador', 'adorou música', 'alta',
         ${owner.json({ preferencia_reforcador: { item_atividade: "música", valencia: "alta" } })})`;
 
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_SEM_NUMERO, versao: 1 });
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_SEM_NUMERO,
+      versao: 1,
+    });
     expect(r.ok).toBe(true); // a revisão em si não falha
 
-    const rows = await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_SEM_NUMERO}`;
+    const rows =
+      await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_SEM_NUMERO}`;
     expect(rows.length).toBe(0);
   });
 });

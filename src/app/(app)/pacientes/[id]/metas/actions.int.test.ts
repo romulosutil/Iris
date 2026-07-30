@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "@tests/integration-env";
 vi.mock("server-only", () => ({}));
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
 const CLINIC_B = "00000000-0000-0000-0000-0000000000b1";
 const U_COORD = "00000000-0000-0000-0000-0000000c01a1";
@@ -11,10 +11,18 @@ const U_T2 = "00000000-0000-0000-0000-0000000072a1"; // NÃO na equipe de PAC
 const PAC = "00000000-0000-0000-0000-0000000ac1a1";
 const PAC_B = "00000000-0000-0000-0000-0000000ac1b1"; // outra clínica
 
-const ctxCoord = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
+const ctxCoord = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
 const ctxT1 = { clinicId: CLINIC_A, userId: U_T1, role: "terapeuta" } as const;
 const ctxT2 = { clinicId: CLINIC_A, userId: U_T2, role: "terapeuta" } as const;
-const ctxRecep = { clinicId: CLINIC_A, userId: U_COORD, role: "admin_recepcao" } as const;
+const ctxRecep = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "admin_recepcao",
+} as const;
 
 const CRITERIO = { tipo: "n_acertos_m_sessoes", n: 3, m: 3 } as const;
 
@@ -124,7 +132,10 @@ describe.skipIf(!hasDb)("metas · CRUD + transições", () => {
     await A.transicionarEstadoMeta(ctxT1, { goalId: c.id!, estado: "pausada" });
     let [row] = await owner`SELECT estado FROM goal WHERE id = ${c.id!}`;
     expect(row!.estado).toBe("pausada");
-    await A.transicionarEstadoMeta(ctxCoord, { goalId: c.id!, estado: "ativa" });
+    await A.transicionarEstadoMeta(ctxCoord, {
+      goalId: c.id!,
+      estado: "ativa",
+    });
     [row] = await owner`SELECT estado FROM goal WHERE id = ${c.id!}`;
     expect(row!.estado).toBe("ativa");
   });
@@ -140,7 +151,8 @@ describe.skipIf(!hasDb)("metas · CRUD + transições", () => {
     await owner`UPDATE goal SET proxima_revisao_em = '2000-01-01' WHERE id = ${c.id!}`;
     const r = await A.manterMetaAtiva(ctxT1, { goalId: c.id! });
     expect(r.error).toBeUndefined();
-    const [row] = await owner`SELECT proxima_revisao_em FROM goal WHERE id = ${c.id!}`;
+    const [row] =
+      await owner`SELECT proxima_revisao_em FROM goal WHERE id = ${c.id!}`;
     expect(String(row!.proxima_revisao_em) > "2000-01-01").toBe(true);
   });
 
@@ -151,7 +163,11 @@ describe.skipIf(!hasDb)("metas · CRUD + transições", () => {
       criterioDominio: CRITERIO,
       cicloRevisaoSemanas: 10,
     });
-    const ctxCoordB = { clinicId: CLINIC_B, userId: U_COORD, role: "coordenador" } as const;
+    const ctxCoordB = {
+      clinicId: CLINIC_B,
+      userId: U_COORD,
+      role: "coordenador",
+    } as const;
     // domina sob contexto da clínica B → RLS não acha a linha, estado permanece
     await A.marcarDominada(ctxCoordB, { goalId: c.id! });
     const [row] = await owner`SELECT estado FROM goal WHERE id = ${c.id!}`;

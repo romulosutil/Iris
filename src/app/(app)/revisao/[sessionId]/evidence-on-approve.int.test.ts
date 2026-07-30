@@ -7,10 +7,18 @@
  * quando o domínio é ambíguo (decisão §3 opção C).
  */
 import postgres from "postgres";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest";
+import { hasDb } from "@tests/integration-env";
 vi.mock("server-only", () => ({}));
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 const CLINIC = "00000000-0000-0000-0000-0000000000f1";
 const U_T1 = "00000000-0000-0000-0000-0000000071f1"; // dono da sessão, na equipe do paciente
 const PAC = "00000000-0000-0000-0000-00000000acf1";
@@ -68,7 +76,9 @@ async function seed() {
         evidencia: {
           descricao: "pediu suco",
           funcao: "mando",
-          alvos: [{ goal_id: GOAL, protocol_id: "vbmapp", dominio_id: "mando" }],
+          alvos: [
+            { goal_id: GOAL, protocol_id: "vbmapp", dominio_id: "mando" },
+          ],
         },
       })}),
     (${EX_UNICO}, ${SESS}, ${CLINIC}, 'sugerida', 'evidencia', 'nomeou o carro', 'alta',
@@ -94,10 +104,14 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
   beforeEach(seed);
 
   test("aprovar extração com domínio AMBÍGUO (2 marcos): resolve goal+protocol, milestoneId fica null", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_AMBIGUO, versao: 1 });
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_AMBIGUO,
+      versao: 1,
+    });
     expect(r.ok).toBe(true);
 
-    const rows = await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_AMBIGUO}`;
+    const rows =
+      await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_AMBIGUO}`;
     expect(rows.length).toBe(1);
     const ev = rows[0]!;
     expect(ev.alvo_ordinal).toBe(0);
@@ -112,25 +126,36 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
   });
 
   test("aprovar extração com domínio COM 1 MARCO SÓ: milestoneId resolve", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_UNICO, versao: 1 });
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_UNICO,
+      versao: 1,
+    });
     expect(r.ok).toBe(true);
 
-    const [ev] = await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_UNICO}`;
+    const [ev] =
+      await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_UNICO}`;
     expect(ev!.protocol_id).toBe(PROTOCOL);
     expect(ev!.milestone_id).toBe(MILESTONE_TATO);
     expect(ev!.goal_id).toBeNull(); // alvo não trouxe goal_id
   });
 
   test("idempotente: re-aprovar (2ª chamada) não duplica evidence", async () => {
-    const r1 = await A.aprovarExtracao(ctxT1, { extractionId: EX_AMBIGUO, versao: 1 });
+    const r1 = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_AMBIGUO,
+      versao: 1,
+    });
     expect(r1.ok).toBe(true);
 
     // 2ª chamada: extração já não está mais 'sugerida' → transicionar não acha
     // a linha, não reexecuta a inserção de evidence.
-    const r2 = await A.aprovarExtracao(ctxT1, { extractionId: EX_AMBIGUO, versao: 1 });
+    const r2 = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_AMBIGUO,
+      versao: 1,
+    });
     expect(r2.ok).toBe(false);
 
-    const rows = await owner`SELECT id FROM evidence WHERE extraction_id = ${EX_AMBIGUO}`;
+    const rows =
+      await owner`SELECT id FROM evidence WHERE extraction_id = ${EX_AMBIGUO}`;
     expect(rows.length).toBe(1);
   });
 
@@ -148,7 +173,8 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
     });
     expect(r.ok).toBe(true);
 
-    const [ev] = await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_UNICO}`;
+    const [ev] =
+      await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_UNICO}`;
     expect(ev!.milestone_id).toBe(MILESTONE_TATO);
     expect(ev!.classificacao_original).toMatchObject({
       alvo: { protocol_id: "vbmapp", dominio_id: "tato" },
@@ -165,10 +191,14 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
       (${EX_SEM_NUMERO}, ${SESS_SEM_NUMERO}, ${CLINIC}, 'sugerida', 'evidencia', 'pediu suco', 'alta',
         ${owner.json({ evidencia: { alvos: [{ protocol_id: "vbmapp", dominio_id: "tato" }] } })})`;
 
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_SEM_NUMERO, versao: 1 });
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_SEM_NUMERO,
+      versao: 1,
+    });
     expect(r.ok).toBe(true); // a revisão em si não falha
 
-    const rows = await owner`SELECT id FROM evidence WHERE extraction_id = ${EX_SEM_NUMERO}`;
+    const rows =
+      await owner`SELECT id FROM evidence WHERE extraction_id = ${EX_SEM_NUMERO}`;
     expect(rows.length).toBe(0);
   });
 });

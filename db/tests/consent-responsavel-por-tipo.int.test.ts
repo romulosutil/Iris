@@ -11,10 +11,16 @@
  * Roda como superuser (`MIGRATION_DATABASE_URL`): o objetivo é provar que nem
  * quem bypassa RLS consegue gravar o estado inválido. Auto-skip sem DB.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "vitest";
 import postgres from "postgres";
-
-const hasDb = !!process.env.MIGRATION_DATABASE_URL;
+import { hasDb } from "./integration-env";
 
 const CLINIC = "11111111-1111-1111-1111-111111111111";
 const P_CHECK = "b0000000-0000-0000-0000-0000000000c1";

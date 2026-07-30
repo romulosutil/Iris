@@ -1,8 +1,16 @@
 import postgres from "postgres";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest";
+import { hasDb } from "@tests/integration-env";
 vi.mock("server-only", () => ({}));
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 const CLINIC = "00000000-0000-0000-0000-0000000000b1";
 const U_T1 = "00000000-0000-0000-0000-0000000071b1"; // dono da sessão
 const U_T2 = "00000000-0000-0000-0000-0000000072b1"; // outro terapeuta
@@ -43,22 +51,33 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
       (${SESS}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'realizada', 'desconhecida')`;
   });
-  afterAll(async () => { await owner?.end(); await appSql?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
   beforeEach(seedExtracoes);
 
   test("terapeuta dono aprova uma sugerida → estado aprovada + revisado_por", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_ALTA, versao: 1 });
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_ALTA,
+      versao: 1,
+    });
     expect(r.ok).toBe(true);
-    const [row] = await owner`SELECT estado, revisado_por, revisado_em FROM extraction WHERE id = ${EX_ALTA}`;
+    const [row] =
+      await owner`SELECT estado, revisado_por, revisado_em FROM extraction WHERE id = ${EX_ALTA}`;
     expect(row!.estado).toBe("aprovada");
     expect(row!.revisado_por).toBe(U_T1);
     expect(row!.revisado_em).not.toBeNull();
   });
 
   test("descartar → estado descartada", async () => {
-    const r = await A.descartarExtracao(ctxT1, { extractionId: EX_BAIXA, versao: 1 });
+    const r = await A.descartarExtracao(ctxT1, {
+      extractionId: EX_BAIXA,
+      versao: 1,
+    });
     expect(r.ok).toBe(true);
-    const [row] = await owner`SELECT estado FROM extraction WHERE id = ${EX_BAIXA}`;
+    const [row] =
+      await owner`SELECT estado FROM extraction WHERE id = ${EX_BAIXA}`;
     expect(row!.estado).toBe("descartada");
   });
 
@@ -69,23 +88,32 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
       versao: 1,
     });
     expect(r.ok).toBe(true);
-    const [row] = await owner`SELECT estado, payload, payload_editado FROM extraction WHERE id = ${EX_INCONS}`;
+    const [row] =
+      await owner`SELECT estado, payload, payload_editado FROM extraction WHERE id = ${EX_INCONS}`;
     expect(row!.estado).toBe("editada");
     expect((row!.payload as { funcao: string }).funcao).toBe("tato"); // original imutável
     expect((row!.payload_editado as { funcao: string }).funcao).toBe("mando");
   });
 
   test("não age em extração pendente de reprocessamento (só sugerida é revisável)", async () => {
-    const r = await A.aprovarExtracao(ctxT1, { extractionId: EX_PEND, versao: 1 });
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_PEND,
+      versao: 1,
+    });
     expect(r.ok).toBe(false);
-    const [row] = await owner`SELECT estado FROM extraction WHERE id = ${EX_PEND}`;
+    const [row] =
+      await owner`SELECT estado FROM extraction WHERE id = ${EX_PEND}`;
     expect(row!.estado).toBe("pendente_reprocessamento");
   });
 
   test("terapeuta que não é dono da sessão é barrado pelo RLS (nada muda)", async () => {
-    const r = await A.aprovarExtracao(ctxT2, { extractionId: EX_ALTA, versao: 1 });
+    const r = await A.aprovarExtracao(ctxT2, {
+      extractionId: EX_ALTA,
+      versao: 1,
+    });
     expect(r.ok).toBe(false); // RLS USING filtra a linha → 0 updates
-    const [row] = await owner`SELECT estado FROM extraction WHERE id = ${EX_ALTA}`;
+    const [row] =
+      await owner`SELECT estado FROM extraction WHERE id = ${EX_ALTA}`;
     expect(row!.estado).toBe("sugerida");
   });
 });

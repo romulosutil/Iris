@@ -6,9 +6,11 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "../../src/db/rls";
+import { hasDb } from "./integration-env";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 
 const CLINIC_A = "00000000-0000-0000-0000-00000000000a";
 const U_COORD_A = "00000000-0000-0000-0000-0000000000c1";
@@ -48,7 +50,8 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
     );
     const rep = await owner!`SELECT 1 FROM report WHERE id = ${R1}`;
     const pdf = await owner!`SELECT 1 FROM report_pdf WHERE report_id = ${R1}`;
-    const log = await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R1} AND acao = 'relatorio_purgado'`;
+    const log =
+      await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R1} AND acao = 'relatorio_purgado'`;
     expect(rep).toHaveLength(0);
     expect(pdf).toHaveLength(0);
     expect(log).toHaveLength(1); // trilha sobrevive ao delete (entidade_id sem FK)
@@ -68,7 +71,9 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
     await owner!`INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id)
       VALUES (${CLINIC_A}, ${U_COORD_A}, 'relatorio_exportado', 'report', ${R1})`;
     const rows = await withTenant(ctx("admin_recepcao", U_ADMIN_A), (db) =>
-      db.execute(sql`SELECT acao FROM audit_log WHERE clinic_id = ${CLINIC_A}::uuid`),
+      db.execute(
+        sql`SELECT acao FROM audit_log WHERE clinic_id = ${CLINIC_A}::uuid`,
+      ),
     );
     expect(rows).toHaveLength(0);
   });

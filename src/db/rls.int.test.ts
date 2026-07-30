@@ -24,6 +24,7 @@ import type {
   CabecalhoConvenio,
   ConvenioNarrativoDraft,
 } from "@/lib/report/convenio-narrativo/types";
+import { hasDb } from "@tests/integration-env";
 
 // Módulos "use server"/"server-only" precisam do mock antes do import dinâmico.
 vi.mock("server-only", () => ({}));
@@ -32,9 +33,6 @@ const {
   curarConvenioNarrativo,
   exportarConvenioNarrativo,
 } = await import("../app/(app)/relatorios/convenio-narrativo-logic");
-
-const hasDb =
-  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 // UUIDs fixos para determinismo.
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
@@ -449,10 +447,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       }),
     );
     const linhas = await withTenant(ctx("coordenador", U_COORD), (db) =>
-      db
-        .select()
-        .from(report)
-        .where(eq(report.patientId, P1)),
+      db.select().from(report).where(eq(report.patientId, P1)),
     );
     expect(linhas).toHaveLength(1);
   });
@@ -581,12 +576,15 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       );
       expect(gerado).toEqual({ error: expect.stringContaining("papel") });
 
-      const curado = await curarConvenioNarrativo(ctx("admin_recepcao", U_ADMIN), {
-        reportId,
-        versaoEsperada: 1,
-        cabecalhoEditado: cnCabecalho,
-        draftEditado: cnDraft,
-      });
+      const curado = await curarConvenioNarrativo(
+        ctx("admin_recepcao", U_ADMIN),
+        {
+          reportId,
+          versaoEsperada: 1,
+          cabecalhoEditado: cnCabecalho,
+          draftEditado: cnDraft,
+        },
+      );
       expect(curado).toEqual({ error: expect.stringContaining("papel") });
 
       const exportado = await exportarConvenioNarrativo(

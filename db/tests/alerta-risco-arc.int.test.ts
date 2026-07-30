@@ -23,9 +23,11 @@ import {
   destinatariosEstagio1,
   destinatariosEstagio2,
 } from "../../src/lib/risco/notificacao";
+import { hasDb } from "./integration-env";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 
 const CLINIC = "00000000-0000-0000-0000-0000000013a0";
 const CLINIC_X = "00000000-0000-0000-0000-0000000013b0";
@@ -109,7 +111,9 @@ async function criar(args: {
 }
 
 const ler = async (id: string): Promise<Linha> => {
-  const [l] = await owner!<Linha[]>`SELECT * FROM alerta_risco_clinico WHERE id = ${id}`;
+  const [l] = await owner!<
+    Linha[]
+  >`SELECT * FROM alerta_risco_clinico WHERE id = ${id}`;
   return l!;
 };
 
@@ -215,7 +219,8 @@ describe.skipIf(!hasDb)("#122 §8 — casos ARC-1..ARC-5", () => {
       categoria: "autolesao",
       severidade: "autolesao_recente",
       certeza: "explicito",
-      trecho: "marcas recentes de corte no antebraço, há dois dias, numa noite ruim",
+      trecho:
+        "marcas recentes de corte no antebraço, há dois dias, numa noite ruim",
       detalhe: "Nega intenção suicida; relata alívio de tensão.",
     });
     expect(Number((await ler(id)).prazo_minutos)).toBe(60);
@@ -254,7 +259,9 @@ describe.skipIf(!hasDb)("#122 §8 — casos ARC-1..ARC-5", () => {
 
     // 1ª varredura, prazo vencido → estágio 1
     await envelhecer(id, 61);
-    expect((await varrer()).find((e) => e.out_alerta_id === id)?.out_estagio).toBe(1);
+    expect(
+      (await varrer()).find((e) => e.out_alerta_id === id)?.out_estagio,
+    ).toBe(1);
 
     // ainda NÃO atingiu o dobro → nada acontece (§4.3: estágios discretos)
     expect((await varrer()).map((e) => e.out_alerta_id)).not.toContain(id);
@@ -262,7 +269,9 @@ describe.skipIf(!hasDb)("#122 §8 — casos ARC-1..ARC-5", () => {
 
     // passado o dobro do prazo → estágio 2
     await envelhecer(id, 61);
-    expect((await varrer()).find((e) => e.out_alerta_id === id)?.out_estagio).toBe(2);
+    expect(
+      (await varrer()).find((e) => e.out_alerta_id === id)?.out_estagio,
+    ).toBe(2);
 
     const l = await ler(id);
     expect(l.status).toBe("escalado_estagio_2");
@@ -320,56 +329,70 @@ describe.skipIf(!hasDb)("#122 §8 — casos ARC-1..ARC-5", () => {
   });
 });
 
-describe.skipIf(!hasDb)("#122 — regra de ouro: nenhum destinatário fora do tenant", () => {
-  beforeAll(semear);
+describe.skipIf(!hasDb)(
+  "#122 — regra de ouro: nenhum destinatário fora do tenant",
+  () => {
+    beforeAll(semear);
 
-  test("todo destinatário de todo estágio pertence à clínica do alerta", async () => {
-    const daClinica = new Set(
-      (
-        await owner!<{ user_id: string }[]>`
+    test("todo destinatário de todo estágio pertence à clínica do alerta", async () => {
+      const daClinica = new Set(
+        (
+          await owner!<{ user_id: string }[]>`
         SELECT user_id FROM user_role WHERE clinic_id = ${CLINIC}`
-      ).map((r) => r.user_id),
-    );
+        ).map((r) => r.user_id),
+      );
 
-    const todos = await withTenant(ctx("coordenador", U_COORD), async (tx) => [
-      ...(await destinatariosCriacao(tx, { clinicId: CLINIC, sessionId: S_TERCA })),
-      ...(await destinatariosEstagio1(tx, { clinicId: CLINIC })),
-      ...(await destinatariosEstagio2(tx, { clinicId: CLINIC })),
-    ]);
+      const todos = await withTenant(
+        ctx("coordenador", U_COORD),
+        async (tx) => [
+          ...(await destinatariosCriacao(tx, {
+            clinicId: CLINIC,
+            sessionId: S_TERCA,
+          })),
+          ...(await destinatariosEstagio1(tx, { clinicId: CLINIC })),
+          ...(await destinatariosEstagio2(tx, { clinicId: CLINIC })),
+        ],
+      );
 
-    expect(todos.length).toBeGreaterThan(0);
-    for (const d of todos) expect(daClinica.has(d.userId)).toBe(true);
-    // ninguém de fora, em nenhum estágio
-    expect(todos.map((d) => d.userId)).not.toContain(U_ESTRANHO);
-  });
+      expect(todos.length).toBeGreaterThan(0);
+      for (const d of todos) expect(daClinica.has(d.userId)).toBe(true);
+      // ninguém de fora, em nenhum estágio
+      expect(todos.map((d) => d.userId)).not.toContain(U_ESTRANHO);
+    });
 
-  test("o guard quebra alto se alguém injetar destinatário de outra clínica", async () => {
-    await expect(
-      withTenant(ctx("coordenador", U_COORD), (tx) =>
-        assertDestinatariosNoTenant(tx, {
-          clinicId: CLINIC,
-          destinatarios: [
-            { userId: U_ESTRANHO, canal: "in_app_coordenador" as const },
-          ],
-        }),
-      ),
-    ).rejects.toThrow(/fora do tenant/);
-  });
+    test("o guard quebra alto se alguém injetar destinatário de outra clínica", async () => {
+      await expect(
+        withTenant(ctx("coordenador", U_COORD), (tx) =>
+          assertDestinatariosNoTenant(tx, {
+            clinicId: CLINIC,
+            destinatarios: [
+              { userId: U_ESTRANHO, canal: "in_app_coordenador" as const },
+            ],
+          }),
+        ),
+      ).rejects.toThrow(/fora do tenant/);
+    });
 
-  test("nenhum canal declarado endereça destinatário externo à clínica", async () => {
-    const canais = await withTenant(ctx("coordenador", U_COORD), async (tx) =>
-      [
-        ...(await destinatariosCriacao(tx, { clinicId: CLINIC, sessionId: S_TERCA })),
-        ...(await destinatariosEstagio1(tx, { clinicId: CLINIC })),
-        ...(await destinatariosEstagio2(tx, { clinicId: CLINIC })),
-      ].map((d) => d.canal),
-    );
-    // proíbe por construção qualquer canal que soe externo
-    for (const c of canais) {
-      expect(c).not.toMatch(/familia|emergencia_contato|samu|policia|conselho/i);
-    }
-  });
-});
+    test("nenhum canal declarado endereça destinatário externo à clínica", async () => {
+      const canais = await withTenant(ctx("coordenador", U_COORD), async (tx) =>
+        [
+          ...(await destinatariosCriacao(tx, {
+            clinicId: CLINIC,
+            sessionId: S_TERCA,
+          })),
+          ...(await destinatariosEstagio1(tx, { clinicId: CLINIC })),
+          ...(await destinatariosEstagio2(tx, { clinicId: CLINIC })),
+        ].map((d) => d.canal),
+      );
+      // proíbe por construção qualquer canal que soe externo
+      for (const c of canais) {
+        expect(c).not.toMatch(
+          /familia|emergencia_contato|samu|policia|conselho/i,
+        );
+      }
+    });
+  },
+);
 
 describe.skipIf(!hasDb)("#122 — reconhecer ≠ resolver ≠ descartar", () => {
   beforeAll(semear);
@@ -402,7 +425,8 @@ describe.skipIf(!hasDb)("#122 — reconhecer ≠ resolver ≠ descartar", () => 
     expect(
       await resolverAlertaRisco(ctx("terapeuta", U_PSICO), {
         alertaId: id,
-        conduta: "Contato telefônico realizado; sessão extra agendada para amanhã.",
+        conduta:
+          "Contato telefônico realizado; sessão extra agendada para amanhã.",
       }),
     ).toEqual({ ok: true });
 
@@ -416,9 +440,12 @@ describe.skipIf(!hasDb)("#122 — reconhecer ≠ resolver ≠ descartar", () => 
   });
 
   test("alerta de outra clínica: mesma mensagem opaca de inexistente (sem oráculo de UUID)", async () => {
-    const r = await reconhecerAlertaRisco(ctx("coordenador", U_ESTRANHO, CLINIC_X), {
-      alertaId: "00000000-0000-0000-0000-0000000099ff",
-    });
+    const r = await reconhecerAlertaRisco(
+      ctx("coordenador", U_ESTRANHO, CLINIC_X),
+      {
+        alertaId: "00000000-0000-0000-0000-0000000099ff",
+      },
+    );
     expect(r).toEqual({ error: "Alerta inexistente ou sem permissão." });
   });
 });

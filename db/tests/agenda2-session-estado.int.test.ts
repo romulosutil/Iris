@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 let owner: ReturnType<typeof postgres>;
 
@@ -21,7 +21,11 @@ describe.skipIf(!hasDb)("Agenda 2.0 · enum session_estado (recreate)", () => {
       ORDER BY e.enumsortorder`;
     const labels = vals.map((r) => r.v);
     expect(labels).toEqual([
-      "agendada", "realizada", "falta_paciente", "falta_terapeuta", "cancelada",
+      "agendada",
+      "realizada",
+      "falta_paciente",
+      "falta_terapeuta",
+      "cancelada",
     ]);
   });
 
