@@ -34,6 +34,7 @@ readonly BACKUP_DIR="${BACKUP_DIR:-/backups}"
 readonly BACKUP_AT_HOUR_UTC="${BACKUP_AT_HOUR_UTC:-6}"
 readonly CHECK_INTERVAL_S="${CHECK_INTERVAL_S:-600}"
 readonly BACKUP_SCRIPT="/app/backup.sh"
+readonly DEGRADADO_MARCADOR="${BACKUP_DIR}/.offsite-degradado"
 
 if ! [[ "${BACKUP_AT_HOUR_UTC}" =~ ^([0-9]|1[0-9]|2[0-3])$ ]]; then
 	log "ERRO: BACKUP_AT_HOUR_UTC precisa ser 0-23, recebido: ${BACKUP_AT_HOUR_UTC}"
@@ -77,12 +78,17 @@ while :; do
 		case "${backup_exit}" in
 			0)
 				date -u '+%Y-%m-%dT%H:%M:%SZ' >"${marcador}"
+				rm -f -- "${DEGRADADO_MARCADOR}" 2>/dev/null || true
 				log "backup do dia ${hoje} concluído com sucesso"
 				;;
 			3)
 				date -u '+%Y-%m-%dT%H:%M:%SZ' >"${marcador}"
+				if [[ ! -f "${DEGRADADO_MARCADOR}" ]]; then
+					printf 'timestamp=%s\nexit_code=3\ndate=%s\nstatus=degraded\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${hoje}" >"${DEGRADADO_MARCADOR}"
+				fi
 				log "ATENÇÃO: backup do dia ${hoje} está ÍNTEGRO em disco, mas a REPLICAÇÃO falhou (exit 3)."
 				log "ATENÇÃO: pode não haver cópia fora do host. Verificar MinIO e destino off-site HOJE — ver §Backup e restore em infra/README.md."
+				log "ATENÇÃO: sinalizador de degradação registrado em ${DEGRADADO_MARCADOR}."
 				log "ATENÇÃO: o dump NÃO será refeito nesta janela (refazer não conserta destino fora do ar)."
 				;;
 			*)
