@@ -8,6 +8,14 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
+      // Next resolve isto pra `empty.js` no bundle de servidor (condição
+      // "react-server"); vitest não aplica essa condição, então sem o alias
+      // todo módulo com "import server-only" lança ao ser importado num
+      // teste unitário, mesmo sendo puro (#126).
+      "server-only": path.resolve(
+        import.meta.dirname,
+        "node_modules/server-only/empty.js",
+      ),
     },
   },
   test: {
@@ -19,7 +27,7 @@ export default defineConfig({
           environment: "jsdom",
           globals: true,
           setupFiles: ["./vitest.setup.ts"],
-          include: ["src/**/*.test.{ts,tsx}"],
+          include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.mjs"],
           exclude: ["**/node_modules/**", "**/*.int.test.ts"],
           css: false,
         },
