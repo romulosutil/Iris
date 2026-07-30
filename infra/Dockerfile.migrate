@@ -20,9 +20,18 @@ RUN pnpm install --frozen-lockfile
 
 # migrate: ÚLTIMO stage = job. Aplica db/migrations e sai != 0 se falhar,
 # abortando o deploy (o app velho segue no ar contra o schema velho).
+#
+# Também carrega scripts/seed-clinic.ts (+ src/ + tsconfig, needed pelos
+# imports @/): mesma imagem serve pra provisionar clínica+coordenador via
+# `pnpm exec tsx --conditions=react-server scripts/seed-clinic.ts ...`
+# rodado manualmente no console do Easypanel (Comando sobrescrito), sem
+# precisar de deploy dedicado a cada usuário real novo. Exige env
+# AUTH_DATABASE_URL (role iris_auth) além de MIGRATION_DATABASE_URL — CMD
+# padrão do serviço continua sendo só a migração.
 FROM base AS migrate
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-COPY scripts/migrate.mjs ./scripts/migrate.mjs
+COPY package.json tsconfig.json ./
+COPY scripts ./scripts
 COPY db/migrations ./db/migrations
+COPY src ./src
 CMD ["node", "scripts/migrate.mjs"]
