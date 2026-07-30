@@ -1,15 +1,27 @@
 import postgres from "postgres";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000e1";
 const U_COORD_A = "00000000-0000-0000-0000-00000000c0e1";
 const U_T1_A = "00000000-0000-0000-0000-0000000071e1";
 const PAC_A1 = "00000000-0000-0000-0000-00000000ace1";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
 const base = {
   patientId: PAC_A1,
   terapeutaId: U_T1_A,
@@ -28,7 +40,8 @@ let appSql: typeof import("@/db/client").sql;
 
 describe.skipIf(!hasDb)("criarAvulsa", () => {
   beforeAll(async () => {
-    ({ criarAvulsa, ConflitoError } = await import("@/app/(app)/agenda/queries"));
+    ({ criarAvulsa, ConflitoError } =
+      await import("@/app/(app)/agenda/queries"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 
@@ -56,7 +69,8 @@ describe.skipIf(!hasDb)("criarAvulsa", () => {
 
   test("cria session avulsa com recorrenteId null e estado agendada", async () => {
     const { id } = await criarAvulsa(ctxCoordA, base);
-    const [s] = await owner`SELECT recorrente_id, estado, tipo FROM session WHERE id = ${id}`;
+    const [s] =
+      await owner`SELECT recorrente_id, estado, tipo FROM session WHERE id = ${id}`;
     expect(s?.recorrente_id).toBeNull();
     expect(s?.estado).toBe("agendada");
     expect(s?.tipo).toBe("avaliacao");
@@ -76,7 +90,9 @@ describe.skipIf(!hasDb)("criarAvulsa", () => {
     await owner`INSERT INTO agendamento_recorrente
       (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, 'aba', 1, '09:00', 60, '2026-07-06', 'ativo')`;
-    await expect(criarAvulsa(ctxCoordA, base)).rejects.toBeInstanceOf(ConflitoError);
+    await expect(criarAvulsa(ctxCoordA, base)).rejects.toBeInstanceOf(
+      ConflitoError,
+    );
     // confirma que nenhuma session foi criada (rejeitado antes do insert/gist).
     const sess = await owner`SELECT id FROM session`;
     expect(sess).toHaveLength(0);
@@ -92,7 +108,9 @@ describe.skipIf(!hasDb)("criarAvulsa", () => {
       (clinic_id, patient_id, terapeuta_id, disciplina, dia_semana, hora_inicio, duracao_min, vigencia_inicio, status)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T2_A}, 'aba', 1, '09:00', 60, '2026-07-06', 'ativo')`;
     // base é do U_T1_A (terapeuta livre); só a dimensão paciente deve colidir.
-    await expect(criarAvulsa(ctxCoordA, base)).rejects.toBeInstanceOf(ConflitoError);
+    await expect(criarAvulsa(ctxCoordA, base)).rejects.toBeInstanceOf(
+      ConflitoError,
+    );
   });
 
   test("ancora via resolverInstante: 09:00 SP grava 12:00Z (não-regressão F3)", async () => {
@@ -102,6 +120,8 @@ describe.skipIf(!hasDb)("criarAvulsa", () => {
     // "invalid input syntax for type uuid" — mesmo padrão dos demais testes
     // deste arquivo, que já leem de volta via `owner`.
     const [s] = await owner`SELECT agendada_para FROM session WHERE id = ${id}`;
-    expect(new Date(s!.agendada_para).toISOString()).toBe("2026-07-13T12:00:00.000Z");
+    expect(new Date(s!.agendada_para).toISOString()).toBe(
+      "2026-07-13T12:00:00.000Z",
+    );
   });
 });

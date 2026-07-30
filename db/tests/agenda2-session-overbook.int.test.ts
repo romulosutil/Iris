@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CID_A = "00000000-0000-0000-0000-0000000000a7";
 const U_COORD_A = "00000000-0000-0000-0000-00000000c0a7";
@@ -11,7 +11,11 @@ const U_T2_A = "00000000-0000-0000-0000-0000000072a7";
 const PAC_A1 = "00000000-0000-0000-0000-00000000aca7";
 const PAC_A2 = "00000000-0000-0000-0000-00000000aca8";
 
-const ctxCoordA = { clinicId: CID_A, userId: U_COORD_A, role: "coordenador" } as const;
+const ctxCoordA = {
+  clinicId: CID_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;
@@ -40,52 +44,121 @@ describe.skipIf(!hasDb)("Agenda 2.0 · EXCLUDE anti-overbook em session", () => 
       (${PAC_A1}, ${CID_A}, 'Paciente A1'),
       (${PAC_A2}, ${CID_A}, 'Paciente A2')`;
   });
-  afterAll(async () => { await owner?.end(); await appSql?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
 
   test("overbook do terapeuta é barrado no banco", async () => {
-    await withTenant(ctxCoordA, (tx) => tx.insert(schema.session).values({
-      clinicId: CID_A, patientId: PAC_A1, terapeutaId: U_T1_A,
-      agendadaPara: new Date("2026-07-20T13:00:00Z"), duracaoMin: 60, estado: "agendada", disciplina: "aba",
-    }));
-    await expect(withTenant(ctxCoordA, (tx) => tx.insert(schema.session).values({
-      clinicId: CID_A, patientId: PAC_A2, terapeutaId: U_T1_A,
-      agendadaPara: new Date("2026-07-20T13:30:00Z"), duracaoMin: 60, estado: "agendada", disciplina: "aba",
-    }))).rejects.toThrow(); // session_no_overbook_terapeuta
+    await withTenant(ctxCoordA, (tx) =>
+      tx.insert(schema.session).values({
+        clinicId: CID_A,
+        patientId: PAC_A1,
+        terapeutaId: U_T1_A,
+        agendadaPara: new Date("2026-07-20T13:00:00Z"),
+        duracaoMin: 60,
+        estado: "agendada",
+        disciplina: "aba",
+      }),
+    );
+    await expect(
+      withTenant(ctxCoordA, (tx) =>
+        tx.insert(schema.session).values({
+          clinicId: CID_A,
+          patientId: PAC_A2,
+          terapeutaId: U_T1_A,
+          agendadaPara: new Date("2026-07-20T13:30:00Z"),
+          duracaoMin: 60,
+          estado: "agendada",
+          disciplina: "aba",
+        }),
+      ),
+    ).rejects.toThrow(); // session_no_overbook_terapeuta
   });
 
   test("overbook do paciente é barrado no banco", async () => {
-    await withTenant(ctxCoordA, (tx) => tx.insert(schema.session).values({
-      clinicId: CID_A, patientId: PAC_A1, terapeutaId: U_T1_A,
-      agendadaPara: new Date("2026-07-21T09:00:00Z"), duracaoMin: 60, estado: "agendada", disciplina: "aba",
-    }));
+    await withTenant(ctxCoordA, (tx) =>
+      tx.insert(schema.session).values({
+        clinicId: CID_A,
+        patientId: PAC_A1,
+        terapeutaId: U_T1_A,
+        agendadaPara: new Date("2026-07-21T09:00:00Z"),
+        duracaoMin: 60,
+        estado: "agendada",
+        disciplina: "aba",
+      }),
+    );
     // mesmo paciente, OUTRO terapeuta, horário sobreposto → constraint de paciente
-    await expect(withTenant(ctxCoordA, (tx) => tx.insert(schema.session).values({
-      clinicId: CID_A, patientId: PAC_A1, terapeutaId: U_T2_A,
-      agendadaPara: new Date("2026-07-21T09:30:00Z"), duracaoMin: 60, estado: "agendada", disciplina: "aba",
-    }))).rejects.toThrow(); // session_no_overbook_paciente
+    await expect(
+      withTenant(ctxCoordA, (tx) =>
+        tx.insert(schema.session).values({
+          clinicId: CID_A,
+          patientId: PAC_A1,
+          terapeutaId: U_T2_A,
+          agendadaPara: new Date("2026-07-21T09:30:00Z"),
+          duracaoMin: 60,
+          estado: "agendada",
+          disciplina: "aba",
+        }),
+      ),
+    ).rejects.toThrow(); // session_no_overbook_paciente
   });
 
   test("sobreposição com sessão cancelada é permitida (WHERE só cobre agendada)", async () => {
-    await withTenant(ctxCoordA, (tx) => tx.insert(schema.session).values({
-      clinicId: CID_A, patientId: PAC_A2, terapeutaId: U_T2_A,
-      agendadaPara: new Date("2026-07-22T14:00:00Z"), duracaoMin: 60, estado: "cancelada", disciplina: "aba",
-    }));
-    const [row] = await withTenant(ctxCoordA, (tx) => tx.insert(schema.session).values({
-      clinicId: CID_A, patientId: PAC_A2, terapeutaId: U_T2_A,
-      agendadaPara: new Date("2026-07-22T14:00:00Z"), duracaoMin: 60, estado: "agendada", disciplina: "aba",
-    }).returning({ id: schema.session.id }));
+    await withTenant(ctxCoordA, (tx) =>
+      tx.insert(schema.session).values({
+        clinicId: CID_A,
+        patientId: PAC_A2,
+        terapeutaId: U_T2_A,
+        agendadaPara: new Date("2026-07-22T14:00:00Z"),
+        duracaoMin: 60,
+        estado: "cancelada",
+        disciplina: "aba",
+      }),
+    );
+    const [row] = await withTenant(ctxCoordA, (tx) =>
+      tx
+        .insert(schema.session)
+        .values({
+          clinicId: CID_A,
+          patientId: PAC_A2,
+          terapeutaId: U_T2_A,
+          agendadaPara: new Date("2026-07-22T14:00:00Z"),
+          duracaoMin: 60,
+          estado: "agendada",
+          disciplina: "aba",
+        })
+        .returning({ id: schema.session.id }),
+    );
     expect(row?.id).toBeTruthy();
   });
 
   test("horários adjacentes não sobrepostos são permitidos (range meia-aberto)", async () => {
-    await withTenant(ctxCoordA, (tx) => tx.insert(schema.session).values({
-      clinicId: CID_A, patientId: PAC_A1, terapeutaId: U_T2_A,
-      agendadaPara: new Date("2026-07-23T10:00:00Z"), duracaoMin: 60, estado: "agendada", disciplina: "aba",
-    }));
-    const [row] = await withTenant(ctxCoordA, (tx) => tx.insert(schema.session).values({
-      clinicId: CID_A, patientId: PAC_A1, terapeutaId: U_T2_A,
-      agendadaPara: new Date("2026-07-23T11:00:00Z"), duracaoMin: 60, estado: "agendada", disciplina: "aba",
-    }).returning({ id: schema.session.id }));
+    await withTenant(ctxCoordA, (tx) =>
+      tx.insert(schema.session).values({
+        clinicId: CID_A,
+        patientId: PAC_A1,
+        terapeutaId: U_T2_A,
+        agendadaPara: new Date("2026-07-23T10:00:00Z"),
+        duracaoMin: 60,
+        estado: "agendada",
+        disciplina: "aba",
+      }),
+    );
+    const [row] = await withTenant(ctxCoordA, (tx) =>
+      tx
+        .insert(schema.session)
+        .values({
+          clinicId: CID_A,
+          patientId: PAC_A1,
+          terapeutaId: U_T2_A,
+          agendadaPara: new Date("2026-07-23T11:00:00Z"),
+          duracaoMin: 60,
+          estado: "agendada",
+          disciplina: "aba",
+        })
+        .returning({ id: schema.session.id }),
+    );
     expect(row?.id).toBeTruthy();
   });
 });

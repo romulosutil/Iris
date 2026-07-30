@@ -1,14 +1,18 @@
 import postgres from "postgres";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000d3";
 const U_COORD = "00000000-0000-0000-0000-00000000c0d3";
 const U_T1 = "00000000-0000-0000-0000-0000000071d3";
 const PAC = "00000000-0000-0000-0000-00000000acd3";
 const REGRA = "00000000-0000-0000-0000-000000009903";
-const ctx = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
+const ctx = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
 
 // Datas relativas ao agora — evita o teste expirar com o tempo (issue #75 Etapa 0).
 // `proximaSessaoDaRegra` filtra por `now()`, então as futuras precisam estar de
@@ -56,9 +60,11 @@ describe.skipIf(!hasDb)("encerrarRegra / contarFuturas / proximaSessao", () => {
   test("encerrarRegra remove futuras agendadas e preserva passado (D-5)", async () => {
     const { removidas } = await q.encerrarRegra(ctx, REGRA, HOJE);
     expect(removidas).toBe(2);
-    const rest = await owner`SELECT estado FROM session WHERE recorrente_id = ${REGRA} ORDER BY agendada_para`;
+    const rest =
+      await owner`SELECT estado FROM session WHERE recorrente_id = ${REGRA} ORDER BY agendada_para`;
     expect(rest.map((r) => r.estado)).toEqual(["realizada"]); // só o passado sobra
-    const [regra] = await owner`SELECT status, vigencia_fim::text AS vigencia_fim FROM agendamento_recorrente WHERE id = ${REGRA}`;
+    const [regra] =
+      await owner`SELECT status, vigencia_fim::text AS vigencia_fim FROM agendamento_recorrente WHERE id = ${REGRA}`;
     expect(regra!.status).toBe("encerrado");
     expect(regra!.vigencia_fim).toBe(HOJE);
   });

@@ -1,17 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import postgres from "postgres";
 import { eq } from "drizzle-orm";
+import { hasDb } from "@tests/integration-env";
 
 vi.mock("server-only", () => ({}));
-const { adicionarMembroEquipe, encerrarVinculoEquipe } = await import(
-  "./logic"
-);
+const { adicionarMembroEquipe, encerrarVinculoEquipe } =
+  await import("./logic");
 const { withTenant } = await import("@/db/rls");
 const { sql: appSql } = await import("@/db/client");
 const { careTeamMembership } = await import("@/db/schema");
 
-const hasDb =
-  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
 const U_COORD = "a0000000-0000-0000-0000-000000000001";
 const U_TERA = "a0000000-0000-0000-0000-000000000002";
@@ -48,7 +46,11 @@ describe.skipIf(!hasDb)("equipe actions", () => {
     const result = await adicionarMembroEquipe(
       ctx,
       PATIENT,
-      form({ userId: U_TERA, disciplina: "ABA", papelNaEquipe: "chefe_supremo" }),
+      form({
+        userId: U_TERA,
+        disciplina: "ABA",
+        papelNaEquipe: "chefe_supremo",
+      }),
     );
     expect(result.error).toMatch(/Papel na equipe inválido/);
   });

@@ -2,8 +2,7 @@ import { vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
-
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+import { hasDb } from "@tests/integration-env";
 
 const CLINIC = "00000000-0000-0000-0000-0000000000c1";
 const OUTRA_CLINIC = "00000000-0000-0000-0000-0000000000c2";
@@ -24,7 +23,11 @@ const EV_OK = "00000000-0000-0000-0000-00000000e0a2";
 const EV_INCONSISTENTE = "00000000-0000-0000-0000-00000000e1c2";
 const EV_OUTRA_CLINICA = "00000000-0000-0000-0000-00000000e0c3";
 
-const ctxCoord = { clinicId: CLINIC, userId: U_COORD, role: "coordenador" } as const;
+const ctxCoord = {
+  clinicId: CLINIC,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let appSql: typeof import("@/db/client").sql;
@@ -75,7 +78,9 @@ describe.skipIf(!hasDb)("listarFilaValidacao", () => {
     const ids = itens.map((i) => i.evidenceId);
     expect(ids).toContain(EV_BAIXA);
     expect(ids).not.toContain(EV_OK);
-    expect(itens.find((i) => i.evidenceId === EV_BAIXA)!.motivo).toContain("baixa_confianca");
+    expect(itens.find((i) => i.evidenceId === EV_BAIXA)!.motivo).toContain(
+      "baixa_confianca",
+    );
   });
 
   test("inclui evidência inconsistente com histórico", async () => {

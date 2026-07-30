@@ -1,15 +1,27 @@
 import postgres from "postgres";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000d1";
 const U_COORD_A = "00000000-0000-0000-0000-00000000c0d1";
 const U_T1_A = "00000000-0000-0000-0000-0000000071d1";
 const PAC_A1 = "00000000-0000-0000-0000-00000000acd1";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
 const base = {
   patientId: PAC_A1,
   terapeutaId: U_T1_A,
@@ -29,7 +41,8 @@ let schema: typeof import("@/db/schema");
 
 describe.skipIf(!hasDb)("criarRegra", () => {
   beforeAll(async () => {
-    ({ criarRegra, ConflitoError } = await import("@/app/(app)/agenda/queries"));
+    ({ criarRegra, ConflitoError } =
+      await import("@/app/(app)/agenda/queries"));
     ({ sql: appSql } = await import("@/db/client"));
     schema = await import("@/db/schema");
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
@@ -58,17 +71,19 @@ describe.skipIf(!hasDb)("criarRegra", () => {
 
   test("cria regra E materializa o horizonte na mesma tx (D-7, ex-C1)", async () => {
     const { id } = await criarRegra(ctxCoordA, base);
-    const [regra] = await owner`SELECT vigencia_inicio::text AS vigencia_inicio FROM agendamento_recorrente WHERE id = ${id}`;
+    const [regra] =
+      await owner`SELECT vigencia_inicio::text AS vigencia_inicio FROM agendamento_recorrente WHERE id = ${id}`;
     expect(regra?.vigencia_inicio).toBe("2026-07-13");
-    const sess = await owner`SELECT count(*)::int AS n FROM session WHERE recorrente_id = ${id}`;
+    const sess =
+      await owner`SELECT count(*)::int AS n FROM session WHERE recorrente_id = ${id}`;
     expect(sess[0]?.n).toBeGreaterThanOrEqual(12); // ~12-13 segundas em 84 dias
   });
 
   test("colisão de horário no mesmo terapeuta lança ConflitoError (C2/C5)", async () => {
     await criarRegra(ctxCoordA, base);
-    await expect(criarRegra(ctxCoordA, { ...base, horaInicio: "09:30" })).rejects.toBeInstanceOf(
-      ConflitoError,
-    );
+    await expect(
+      criarRegra(ctxCoordA, { ...base, horaInicio: "09:30" }),
+    ).rejects.toBeInstanceOf(ConflitoError);
   });
 
   test("colisão com avulsa (session recorrenteId null) do mesmo terapeuta/dia lança ConflitoError", async () => {
@@ -76,7 +91,9 @@ describe.skipIf(!hasDb)("criarRegra", () => {
     await owner`INSERT INTO session
       (clinic_id, patient_id, terapeuta_id, recorrente_id, disciplina, tipo, agendada_para, duracao_min, estado, modalidade)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, NULL, 'aba', 'avaliacao', '2026-07-13T09:00:00-03:00', 60, 'agendada', 'presencial')`;
-    await expect(criarRegra(ctxCoordA, base)).rejects.toBeInstanceOf(ConflitoError);
+    await expect(criarRegra(ctxCoordA, base)).rejects.toBeInstanceOf(
+      ConflitoError,
+    );
   });
 
   test("colisão com avulsa do mesmo paciente (terapeuta diferente) lança ConflitoError", async () => {
@@ -90,6 +107,8 @@ describe.skipIf(!hasDb)("criarRegra", () => {
     await owner`INSERT INTO session
       (clinic_id, patient_id, terapeuta_id, recorrente_id, disciplina, tipo, agendada_para, duracao_min, estado, modalidade)
       VALUES (${CLINIC_A}, ${PAC_A1}, ${U_T2_A}, NULL, 'aba', 'avaliacao', '2026-07-13T09:00:00-03:00', 60, 'agendada', 'presencial')`;
-    await expect(criarRegra(ctxCoordA, base)).rejects.toBeInstanceOf(ConflitoError);
+    await expect(criarRegra(ctxCoordA, base)).rejects.toBeInstanceOf(
+      ConflitoError,
+    );
   });
 });

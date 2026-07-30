@@ -10,9 +10,11 @@ import postgres from "postgres";
 import { withTenant, type TenantContext } from "../../db/rls";
 import { StubPdfRenderer } from "./renderer";
 import { exportReport } from "./export";
+import { hasDb } from "@tests/integration-env";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 const CLINIC_A = "00000000-0000-0000-0000-00000000000a";
 const U_COORD_A = "00000000-0000-0000-0000-0000000000c1";
 const P1 = "00000000-0000-0000-0000-0000000000d1";
@@ -45,9 +47,12 @@ describe.skipIf(!hasDb)("exportReport", () => {
     const { hash } = await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
       exportReport(tx, { reportId: R, atorId: U_COORD_A, buildHtml, renderer }),
     );
-    const [rep] = await owner!`SELECT status, pdf_hash FROM report WHERE id = ${R}`;
-    const [pdf] = await owner!`SELECT hash FROM report_pdf WHERE report_id = ${R}`;
-    const [log] = await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R} AND acao = 'relatorio_exportado'`;
+    const [rep] =
+      await owner!`SELECT status, pdf_hash FROM report WHERE id = ${R}`;
+    const [pdf] =
+      await owner!`SELECT hash FROM report_pdf WHERE report_id = ${R}`;
+    const [log] =
+      await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R} AND acao = 'relatorio_exportado'`;
     expect(rep!.status).toBe("exportado");
     expect(rep!.pdf_hash).toBe(hash);
     expect(pdf!.hash).toBe(hash);
@@ -66,7 +71,12 @@ describe.skipIf(!hasDb)("exportReport", () => {
     };
     await expect(
       withTenant(ctx("coordenador", U_COORD_A), (tx) =>
-        exportReport(tx, { reportId: R, atorId: U_COORD_A, buildHtml, renderer: racingRenderer }),
+        exportReport(tx, {
+          reportId: R,
+          atorId: U_COORD_A,
+          buildHtml,
+          renderer: racingRenderer,
+        }),
       ),
     ).rejects.toThrow(/vers/i);
     const [rep] = await owner!`SELECT status FROM report WHERE id = ${R}`;
@@ -77,7 +87,12 @@ describe.skipIf(!hasDb)("exportReport", () => {
     const R = "00000000-0000-0000-0000-0000000000e1"; // já exportado no 1º teste
     await expect(
       withTenant(ctx("coordenador", U_COORD_A), (tx) =>
-        exportReport(tx, { reportId: R, atorId: U_COORD_A, buildHtml, renderer }),
+        exportReport(tx, {
+          reportId: R,
+          atorId: U_COORD_A,
+          buildHtml,
+          renderer,
+        }),
       ),
     ).rejects.toThrow(/status/i);
   });

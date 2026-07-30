@@ -10,10 +10,9 @@
 import { eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000f1";
 const CLINIC_B = "00000000-0000-0000-0000-0000000000f2";
@@ -24,10 +23,26 @@ const U_T1_B = "00000000-0000-0000-0000-00000000710e"; // clínica B
 const PAC_A1 = "00000000-0000-0000-0000-00000000acf1";
 const PAC_B1 = "00000000-0000-0000-0000-00000000acf2";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
-const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
-const ctxT2A = { clinicId: CLINIC_A, userId: U_T2_A, role: "terapeuta" } as const;
-const ctxT1B = { clinicId: CLINIC_B, userId: U_T1_B, role: "terapeuta" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
+const ctxT1A = {
+  clinicId: CLINIC_A,
+  userId: U_T1_A,
+  role: "terapeuta",
+} as const;
+const ctxT2A = {
+  clinicId: CLINIC_A,
+  userId: U_T2_A,
+  role: "terapeuta",
+} as const;
+const ctxT1B = {
+  clinicId: CLINIC_B,
+  userId: U_T1_B,
+  role: "terapeuta",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;
@@ -121,7 +136,8 @@ describe.skipIf(!hasDb)("Fase 4 (4B) · RLS de session_snapshot", () => {
   test("app_role NÃO tem UPDATE em session_snapshot (privilégio não concedido)", async () => {
     await expect(
       withTenant(ctxCoordA, (tx) =>
-        tx.update(schema.sessionSnapshot)
+        tx
+          .update(schema.sessionSnapshot)
           .set({ repertorioState: { hack: true } })
           .where(eq(schema.sessionSnapshot.patientId, PAC_A1)),
       ),
@@ -131,7 +147,9 @@ describe.skipIf(!hasDb)("Fase 4 (4B) · RLS de session_snapshot", () => {
   test("app_role NÃO tem DELETE em session_snapshot (privilégio não concedido)", async () => {
     await expect(
       withTenant(ctxCoordA, (tx) =>
-        tx.delete(schema.sessionSnapshot).where(eq(schema.sessionSnapshot.patientId, PAC_A1)),
+        tx
+          .delete(schema.sessionSnapshot)
+          .where(eq(schema.sessionSnapshot.patientId, PAC_A1)),
       ),
     ).rejects.toThrow();
   });

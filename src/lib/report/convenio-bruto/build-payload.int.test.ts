@@ -5,9 +5,11 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
 import { withTenant, type TenantContext } from "../../../db/rls";
 import { buildConvenioBrutoPayload } from "./build-payload";
+import { hasDb } from "@tests/integration-env";
 
-const hasDb = !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!) : (null as never);
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!)
+  : (null as never);
 
 const CLINIC = "11111111-1111-1111-1111-111111111111";
 const COORD = "22222222-2222-2222-2222-222222222222";
@@ -15,7 +17,11 @@ const TERA = "33333333-3333-3333-3333-333333333333";
 const PAC = "44444444-4444-4444-4444-444444444444";
 const SES = "55555555-5555-5555-5555-555555555555";
 const EXT = "66666666-6666-6666-6666-666666666666";
-const ctx = (role: TenantContext["role"], userId: string): TenantContext => ({ role, userId, clinicId: CLINIC });
+const ctx = (role: TenantContext["role"], userId: string): TenantContext => ({
+  role,
+  userId,
+  clinicId: CLINIC,
+});
 
 describe.skipIf(!hasDb)("buildConvenioBrutoPayload", () => {
   beforeAll(async () => {
@@ -31,11 +37,19 @@ describe.skipIf(!hasDb)("buildConvenioBrutoPayload", () => {
     await owner`INSERT INTO evidence (id, extraction_id, patient_id, session_id, session_numero, alvo_ordinal, aprovado_por, aprovado_em, classificacao_original, goal_ref)
       VALUES (gen_random_uuid(), ${EXT}, ${PAC}, ${SES}, 8, 0, ${TERA}, '2026-06-10T10:00:00Z', '{"rotulo":"adquirido"}'::jsonb, 'Mando')`;
   });
-  afterAll(async () => { if (hasDb) await owner.end(); });
+  afterAll(async () => {
+    if (hasDb) await owner.end();
+  });
 
   test("coordenador agrega sessões, evidências e presença do período", async () => {
     const payload = await withTenant(ctx("coordenador", COORD), (tx) =>
-      buildConvenioBrutoPayload(tx, { patientId: PAC, nomePaciente: "Miguel S.", periodoInicio: "2026-06-01", periodoFim: "2026-06-30" }));
+      buildConvenioBrutoPayload(tx, {
+        patientId: PAC,
+        nomePaciente: "Miguel S.",
+        periodoInicio: "2026-06-01",
+        periodoFim: "2026-06-30",
+      }),
+    );
     expect(payload.sessoes).toHaveLength(1);
     expect(payload.sessoes[0]!.terapeuta).toBe("Dra. Ana");
     expect(payload.evidencias).toHaveLength(1);
@@ -45,7 +59,13 @@ describe.skipIf(!hasDb)("buildConvenioBrutoPayload", () => {
 
   test("exclui dados fora do período", async () => {
     const payload = await withTenant(ctx("coordenador", COORD), (tx) =>
-      buildConvenioBrutoPayload(tx, { patientId: PAC, nomePaciente: "Miguel S.", periodoInicio: "2026-05-01", periodoFim: "2026-05-31" }));
+      buildConvenioBrutoPayload(tx, {
+        patientId: PAC,
+        nomePaciente: "Miguel S.",
+        periodoInicio: "2026-05-01",
+        periodoFim: "2026-05-31",
+      }),
+    );
     expect(payload.sessoes).toHaveLength(0);
     expect(payload.evidencias).toHaveLength(0);
   });

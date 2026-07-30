@@ -1,9 +1,8 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "@tests/integration-env";
 
 vi.mock("server-only", () => ({}));
-
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 // IDs fixos — namespace próprio desta suíte (evita colisão com o seed de
 // db/tests/fase2-rls.int.test.ts, que também usa TRUNCATE ... CASCADE nas
@@ -19,7 +18,11 @@ const SESS_EXTRACAO_PEND = "00000000-0000-0000-0000-0000000fe1a3";
 const SESS_EXTRACAO_SUG = "00000000-0000-0000-0000-0000000fe1a4";
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
-const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
+const ctxT1A = {
+  clinicId: CLINIC_A,
+  userId: U_T1_A,
+  role: "terapeuta",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;

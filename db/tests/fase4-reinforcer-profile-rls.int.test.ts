@@ -13,10 +13,9 @@
 import { eq } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000f1";
 const CLINIC_B = "00000000-0000-0000-0000-0000000000f2";
@@ -29,10 +28,26 @@ const PAC_B1 = "00000000-0000-0000-0000-00000000acf2";
 const SESS_A1 = "00000000-0000-0000-0000-00000005f1f1";
 const SESS_B1 = "00000000-0000-0000-0000-00000005f1f2";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
-const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
-const ctxT2A = { clinicId: CLINIC_A, userId: U_T2_A, role: "terapeuta" } as const;
-const ctxT1B = { clinicId: CLINIC_B, userId: U_T1_B, role: "terapeuta" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
+const ctxT1A = {
+  clinicId: CLINIC_A,
+  userId: U_T1_A,
+  role: "terapeuta",
+} as const;
+const ctxT2A = {
+  clinicId: CLINIC_A,
+  userId: U_T2_A,
+  role: "terapeuta",
+} as const;
+const ctxT1B = {
+  clinicId: CLINIC_B,
+  userId: U_T1_B,
+  role: "terapeuta",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;
@@ -87,65 +102,87 @@ describe.skipIf(!hasDb)("Fase 4 (4C.1) · RLS de reinforcer_profile", () => {
 
   test("terapeuta dono insere reinforcer_profile a partir da aprovação e lê", async () => {
     const [rp] = await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.reinforcerProfile).values({
-        extractionId,
-        patientId: PAC_A1,
-        sessionId: SESS_A1,
-        sessionNumero: 1,
-        itemAtividade: "carrinho de brinquedo",
-        valencia: "alta",
-      }).returning({ id: schema.reinforcerProfile.id }),
+      tx
+        .insert(schema.reinforcerProfile)
+        .values({
+          extractionId,
+          patientId: PAC_A1,
+          sessionId: SESS_A1,
+          sessionNumero: 1,
+          itemAtividade: "carrinho de brinquedo",
+          valencia: "alta",
+        })
+        .returning({ id: schema.reinforcerProfile.id }),
     );
     expect(rp?.id).toBeTruthy();
 
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.reinforcerProfile));
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.reinforcerProfile),
+    );
     expect(lidas.length).toBe(1);
     expect(lidas[0]?.valencia).toBe("alta");
   });
 
   test("idempotente: (extraction_id, item_atividade) repetido não duplica", async () => {
     await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.reinforcerProfile).values({
-        extractionId,
-        patientId: PAC_A1,
-        sessionId: SESS_A1,
-        sessionNumero: 1,
-        itemAtividade: "carrinho de brinquedo",
-        valencia: "saciado", // mesma chave (extraction_id, item_atividade); simula reprocessamento
-      }).onConflictDoNothing({
-        target: [schema.reinforcerProfile.extractionId, schema.reinforcerProfile.itemAtividade],
-      }),
+      tx
+        .insert(schema.reinforcerProfile)
+        .values({
+          extractionId,
+          patientId: PAC_A1,
+          sessionId: SESS_A1,
+          sessionNumero: 1,
+          itemAtividade: "carrinho de brinquedo",
+          valencia: "saciado", // mesma chave (extraction_id, item_atividade); simula reprocessamento
+        })
+        .onConflictDoNothing({
+          target: [
+            schema.reinforcerProfile.extractionId,
+            schema.reinforcerProfile.itemAtividade,
+          ],
+        }),
     );
 
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.reinforcerProfile));
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.reinforcerProfile),
+    );
     expect(lidas.length).toBe(1);
     expect(lidas[0]?.valencia).toBe("alta"); // conflito ignorado, linha original preservada
   });
 
   test("um novo item da MESMA extração (item_atividade diferente) gera outra linha (série, não upsert)", async () => {
     const [rp2] = await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.reinforcerProfile).values({
-        extractionId,
-        patientId: PAC_A1,
-        sessionId: SESS_A1,
-        sessionNumero: 1,
-        itemAtividade: "bolha de sabão",
-        valencia: "baixa",
-      }).returning({ id: schema.reinforcerProfile.id }),
+      tx
+        .insert(schema.reinforcerProfile)
+        .values({
+          extractionId,
+          patientId: PAC_A1,
+          sessionId: SESS_A1,
+          sessionNumero: 1,
+          itemAtividade: "bolha de sabão",
+          valencia: "baixa",
+        })
+        .returning({ id: schema.reinforcerProfile.id }),
     );
     expect(rp2?.id).toBeTruthy();
 
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.reinforcerProfile));
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.reinforcerProfile),
+    );
     expect(lidas.length).toBe(2);
   });
 
   test("terapeuta fora da equipe de PAC_A1 NÃO vê o reinforcer_profile", async () => {
-    const lidas = await withTenant(ctxT2A, (tx) => tx.select().from(schema.reinforcerProfile));
+    const lidas = await withTenant(ctxT2A, (tx) =>
+      tx.select().from(schema.reinforcerProfile),
+    );
     expect(lidas.length).toBe(0);
   });
 
   test("cross-tenant: terapeuta da clínica B NÃO vê reinforcer_profile da clínica A", async () => {
-    const lidas = await withTenant(ctxT1B, (tx) => tx.select().from(schema.reinforcerProfile));
+    const lidas = await withTenant(ctxT1B, (tx) =>
+      tx.select().from(schema.reinforcerProfile),
+    );
     expect(lidas.length).toBe(0);
   });
 
@@ -165,17 +202,23 @@ describe.skipIf(!hasDb)("Fase 4 (4C.1) · RLS de reinforcer_profile", () => {
   });
 
   test("coordenador lê toda a clínica (inclusive fora da equipe)", async () => {
-    const lidas = await withTenant(ctxCoordA, (tx) => tx.select().from(schema.reinforcerProfile));
+    const lidas = await withTenant(ctxCoordA, (tx) =>
+      tx.select().from(schema.reinforcerProfile),
+    );
     expect(lidas.length).toBe(2);
   });
 
   test("UPDATE em reinforcer_profile por app_role falha (privilégio revogado)", async () => {
     const [rp] = await withTenant(ctxCoordA, (tx) =>
-      tx.select({ id: schema.reinforcerProfile.id }).from(schema.reinforcerProfile).limit(1),
+      tx
+        .select({ id: schema.reinforcerProfile.id })
+        .from(schema.reinforcerProfile)
+        .limit(1),
     );
     await expect(
       withTenant(ctxCoordA, (tx) =>
-        tx.update(schema.reinforcerProfile)
+        tx
+          .update(schema.reinforcerProfile)
           .set({ valencia: "baixa" })
           .where(eq(schema.reinforcerProfile.id, rp!.id)),
       ),
@@ -184,11 +227,16 @@ describe.skipIf(!hasDb)("Fase 4 (4C.1) · RLS de reinforcer_profile", () => {
 
   test("DELETE em reinforcer_profile por app_role falha (privilégio revogado)", async () => {
     const [rp] = await withTenant(ctxCoordA, (tx) =>
-      tx.select({ id: schema.reinforcerProfile.id }).from(schema.reinforcerProfile).limit(1),
+      tx
+        .select({ id: schema.reinforcerProfile.id })
+        .from(schema.reinforcerProfile)
+        .limit(1),
     );
     await expect(
       withTenant(ctxCoordA, (tx) =>
-        tx.delete(schema.reinforcerProfile).where(eq(schema.reinforcerProfile.id, rp!.id)),
+        tx
+          .delete(schema.reinforcerProfile)
+          .where(eq(schema.reinforcerProfile.id, rp!.id)),
       ),
     ).rejects.toThrow();
   });

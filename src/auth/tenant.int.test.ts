@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import postgres from "postgres";
+import { hasDb } from "@tests/integration-env";
 
 // tenant.ts importa "server-only" (pacote inexistente fora do bundler do Next)
 // e next/headers|next/navigation (cujas funções só funcionam dentro de uma
@@ -18,11 +19,6 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 const { resolveTenant } = await import("./tenant");
 const { authSql, sql: appSql } = await import("@/db/client");
 const { auth } = await import("@/auth/auth");
-
-const hasDb =
-  !!process.env.DATABASE_URL &&
-  !!process.env.AUTH_DATABASE_URL &&
-  !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
 const CLINIC_B = "22222222-2222-2222-2222-222222222222";

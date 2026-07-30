@@ -15,9 +15,7 @@ import { sql } from "drizzle-orm";
 import postgres from "postgres";
 import { withTenant, type TenantContext } from "./rls";
 import { sql as appSql } from "./client";
-
-const hasDb =
-  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+import { hasDb } from "@tests/integration-env";
 
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
 const U_COORD = "a0000000-0000-0000-0000-000000000001";
@@ -111,7 +109,9 @@ describe.skipIf(!hasDb)("Hardening RLS Fase 6.1 (PX1–PX4)", () => {
         sql`UPDATE session SET estado = 'realizada' WHERE id = ${SESS}`,
       ),
     );
-    const [row] = await owner<{ estado: string }[]>`SELECT estado FROM session WHERE id = ${SESS}`;
+    const [row] = await owner<
+      { estado: string }[]
+    >`SELECT estado FROM session WHERE id = ${SESS}`;
     expect(row!.estado).toBe("realizada");
   });
 });

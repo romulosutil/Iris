@@ -1,14 +1,18 @@
 import postgres from "postgres";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000e1";
 const U_COORD = "00000000-0000-0000-0000-00000000c0e1";
 const U_T1 = "00000000-0000-0000-0000-0000000071e1";
 const PAC = "00000000-0000-0000-0000-00000000ace1";
 const REGRA = "00000000-0000-0000-0000-000000009a01";
-const ctx = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
+const ctx = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let conflitosDaRegra: typeof import("@/app/(app)/agenda/queries").conflitosDaRegra;
@@ -36,7 +40,12 @@ describe.skipIf(!hasDb)("conflitosDaRegra (F2)", () => {
     // Seed manual das sessões da regra (09:00 SP = 12:00Z): 06/07, 13/07,
     // PULA 20/07 (overbook), 27/07, 03/08. max(agendada_para)=03/08 →
     // 20/07 está dentro do horizonte, não bloqueada, sem sessão → conflito.
-    for (const data of ["2026-07-06", "2026-07-13", "2026-07-27", "2026-08-03"]) {
+    for (const data of [
+      "2026-07-06",
+      "2026-07-13",
+      "2026-07-27",
+      "2026-08-03",
+    ]) {
       await owner`INSERT INTO session
         (clinic_id, patient_id, terapeuta_id, disciplina, agendada_para, duracao_min, estado, recorrente_id, tipo)
         VALUES (${CLINIC_A}, ${PAC}, ${U_T1}, 'aba', ${data + "T12:00:00Z"}, 60, 'agendada', ${REGRA}, 'terapia')`;
@@ -78,7 +87,10 @@ describe.skipIf(!hasDb)("conflitosDaRegra (F2)", () => {
   });
 
   test("regra inexistente retorna vazio", async () => {
-    const r = await conflitosDaRegra(ctx, "00000000-0000-0000-0000-000000000000");
+    const r = await conflitosDaRegra(
+      ctx,
+      "00000000-0000-0000-0000-000000000000",
+    );
     expect(r).toEqual([]);
   });
 });
