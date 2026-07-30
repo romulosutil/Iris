@@ -39,6 +39,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import postgres from "postgres";
+import { enviarEmailRt } from "./lib/resend-rt.mjs";
 
 const HEARTBEAT_DIR = process.env.ESCALONAMENTO_HEARTBEAT_DIR ?? "/heartbeat";
 const HEARTBEAT_FILE = path.join(HEARTBEAT_DIR, ".ultima-varredura");
@@ -93,6 +94,39 @@ async function dryRun(sql) {
   );
 }
 
+/**
+ * #126 — dispara/registra o e-mail ao RT para UM alerta em estágio 2.
+ *
+ * Sempre chama `app_registrar_email_rt` no fim (sucesso ou falha) — nunca
+ * deixa o alerta sem registro na trilha. Sem RT resolvido (clínica sem RT
+ * configurado, ou RT sem papel mais vigente), registra falha explícita sem
+ * tentar enviar (§4.2.1: a função de banco já filtra isso, então "sem linha"
+ * é o próprio motivo).
+ */
+export async function processarEmailRt(sql, alertaId) {
+  const apiKey = process.env.EMAIL_PROVIDER_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "notificacoes@irisclinica.ia.br";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+
+  const rts = await sql`SELECT * FROM app_rt_do_alerta(${alertaId})`;
+  if (rts.length === 0) {
+    await sql`SELECT app_registrar_email_rt(${alertaId}, false, ${"RT nao encontrado ou sem papel vigente na clinica"})`;
+    log(`e-mail RT: alerta_id=${alertaId} sem RT resolvido — falha registrada.`);
+    return;
+  }
+
+  const { rt_email: rtEmail } = rts[0];
+  const resultado = await enviarEmailRt({ apiKey, fromEmail, appUrl, rtEmail });
+
+  if (resultado.ok) {
+    await sql`SELECT app_registrar_email_rt(${alertaId}, true, ${resultado.providerMessageId})`;
+    log(`e-mail RT enviado: alerta_id=${alertaId} providerMessageId=${resultado.providerMessageId}`);
+  } else {
+    await sql`SELECT app_registrar_email_rt(${alertaId}, false, ${resultado.erro})`;
+    log(`e-mail RT FALHOU: alerta_id=${alertaId} erro=${resultado.erro}`);
+  }
+}
+
 async function varrer(sql) {
   const linhas = await sql`SELECT * FROM app_escalonar_risco_vencidos()`;
 
@@ -109,6 +143,21 @@ async function varrer(sql) {
         `estagio=${l.out_estagio} severidade=${l.out_severidade} ` +
         `prazo_minutos=${l.out_prazo_minutos}`,
     );
+  }
+
+  // #126 — recém-escalados pro estágio 2, nesta mesma varredura.
+  const recemEstagio2 = linhas.filter((l) => Number(l.out_estagio) === 2);
+  for (const l of recemEstagio2) {
+    await processarEmailRt(sql, l.out_alerta_id);
+  }
+
+  // #126 — reconciliação: cobre alertas que já viraram estágio 2 numa
+  // varredura anterior e ficaram sem e-mail registrado (crash entre a
+  // transição e o envio). Roda toda varredura, não só quando algo escalou
+  // agora — é exatamente o caso que o gap cobre.
+  const pendentes = await sql`SELECT * FROM app_alertas_estagio2_sem_email()`;
+  for (const p of pendentes) {
+    await processarEmailRt(sql, p.alerta_id);
   }
 
   log(`varredura concluída: ${linhas.length} alerta(s) escalado(s).`);
@@ -153,13 +202,20 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  // Erro COMPLETO em stderr, incluindo stack e `cause`. Não engolir stderr é
-  // regra deste repo: mensagem que afirma UMA causa provável produz
-  // diagnóstico falso justamente no incidente em que ele custa mais caro.
-  console.error(
-    "[escalonamento] FALHA na varredura — heartbeat NÃO foi atualizado:",
-  );
-  console.error(err);
-  process.exit(1);
-});
+// #126 — guarda de execução: só roda `main()` quando o arquivo é invocado
+// diretamente (`node scripts/escalonamento-risco.mjs`), não quando importado
+// (ex.: `escalonamento-risco.test.mjs` importando `processarEmailRt`). Sem
+// isto, importar o módulo em teste dispararia uma varredura real contra
+// ESCALONAMENTO_DATABASE_URL.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    // Erro COMPLETO em stderr, incluindo stack e `cause`. Não engolir stderr é
+    // regra deste repo: mensagem que afirma UMA causa provável produz
+    // diagnóstico falso justamente no incidente em que ele custa mais caro.
+    console.error(
+      "[escalonamento] FALHA na varredura — heartbeat NÃO foi atualizado:",
+    );
+    console.error(err);
+    process.exit(1);
+  });
+}
