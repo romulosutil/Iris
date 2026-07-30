@@ -250,6 +250,7 @@ if ! [[ "${OFFSITE_PATH_STYLE}" =~ ^(auto|on|off)$ ]]; then
 fi
 readonly OFFSITE_INTERVAL_DAYS="${OFFSITE_INTERVAL_DAYS:-1}"
 readonly OFFSITE_MARCADOR="${BACKUP_DIR}/.ultimo-offsite"
+readonly DEGRADADO_MARCADOR="${BACKUP_DIR}/.offsite-degradado"
 
 if [[ -n "${S3_ENDPOINT}" ]]; then
 	: "${S3_ACCESS_KEY:?S3_ACCESS_KEY é obrigatório quando S3_ENDPOINT está setado}"
@@ -636,8 +637,11 @@ if [[ -n "${OFFSITE_S3_ENDPOINT}" ]]; then
 fi
 
 if [[ "${EXIT_CODE}" -eq 0 ]]; then
+	rm -f -- "${DEGRADADO_MARCADOR}" 2>/dev/null || true
 	log_info "concluído com sucesso"
 else
+	hoje="$(date -u +%F)"
+	printf 'timestamp=%s\nexit_code=%d\ndate=%s\nstatus=degraded\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "${EXIT_CODE}" "${hoje}" >"${DEGRADADO_MARCADOR}"
 	log_error "backup do dia ÍNTEGRO em ${BACKUP_DIR}, mas houve falha de REPLICAÇÃO (exit ${EXIT_CODE}) — ver mensagens acima. O dump NÃO será refeito; corrija o destino e a próxima janela replica."
 fi
 

@@ -331,7 +331,7 @@ independente do intervalo.
 | 0 | sucesso completo | grava marcador do dia |
 | 1 | **dump ou globals falharam** — não existe backup do dia | **não** grava marcador; tenta de novo em 10min |
 | 2 | uso incorreto (argumento passado) | idem |
-| 3 | backup do dia **íntegro em disco**, mas alguma **replicação** falhou | **grava** marcador + loga `ATENÇÃO`; não refaz o dump |
+| 3 | backup do dia **íntegro em disco**, mas alguma **replicação** falhou | **grava** marcador + cria arquivo-sinal `/backups/.offsite-degradado` + loga `ATENÇÃO`; não refaz o dump |
 
 O 3 existe por um motivo operacional concreto: o marcador só era escrito em
 `exit 0`, então uma falha **persistente** de replicação (conta off-site
@@ -340,9 +340,7 @@ banco de produção **a cada 10 minutos, o dia inteiro** — carga real e contí
 por um problema que refazer o dump não conserta. Com o 3, o dia é dado por
 resolvido, o alerta fica alto no log, e a próxima janela replica.
 
-> Ao configurar alerta em cima do log do painel: **exit 3 é acionável no mesmo
-> dia** (pode não haver cópia fora do host), mas **não é emergência de dado
-> perdido**. Exit 1 é.
+> Ao configurar alerta em cima do log do painel ou do volume: **exit 3 grava o arquivo-sinal passivo `/backups/.offsite-degradado`** com timestamp e exit code 3 (removido automaticamente na primeira execução com sucesso, exit 0). Isso permite que verificações externas detectem a degradação sem depender de parse de logs ou interrupção do container. **exit 3 é acionável no mesmo dia** (pode não haver cópia fora do host), mas **não é emergência de dado perdido**. Exit 1 é.
 
 ### Provisionamento no Easypanel
 

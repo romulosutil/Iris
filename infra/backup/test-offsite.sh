@@ -222,6 +222,13 @@ else
 	fail "backup local sumiu quando o off-site falhou"
 fi
 
+CMD="grep -q 'exit_code=3' /backups/.offsite-degradado 2>/dev/null && grep -q 'date=' /backups/.offsite-degradado 2>/dev/null && echo ASSERT_DEGRADADO:ok || echo ASSERT_DEGRADADO:FALHOU"
+if "${COMPOSE[@]}" run --rm -T --no-deps -e MC_CONFIG_DIR=/tmp/mc backup bash -c "${CMD}" 2>&1 | grep -q 'ASSERT_DEGRADADO:ok'; then
+	ok "marcador .offsite-degradado criado (com exit_code e date) quando a replicação falha (exit 3)"
+else
+	fail "marcador .offsite-degradado não foi criado ou não tem schema completo em exit 3"
+fi
+
 # recipient inválido: falha ANTES do dump, não sobe nada em claro.
 set +e
 "${COMPOSE[@]}" run --rm -T \
@@ -322,6 +329,13 @@ if [[ "${EXIT_VENCIDO}" -eq 0 && "${VENCIDO}" -gt "${DEPOIS}" ]]; then
 	ok "marcador vencido (8d > 7d) => réplica volta a subir (${DEPOIS} => ${VENCIDO})"
 else
 	fail "marcador vencido não disparou a réplica (exit ${EXIT_VENCIDO}, ${DEPOIS} => ${VENCIDO})"
+fi
+
+CMD="[ ! -f /backups/.offsite-degradado ] && echo ASSERT_LIMPO:ok || echo ASSERT_LIMPO:FALHOU"
+if "${COMPOSE[@]}" run --rm -T --no-deps -e MC_CONFIG_DIR=/tmp/mc backup bash -c "${CMD}" 2>&1 | grep -q 'ASSERT_LIMPO:ok'; then
+	ok "marcador .offsite-degradado removido após replicação bem-sucedida"
+else
+	fail "marcador .offsite-degradado permaneceu após replicação bem-sucedida"
 fi
 
 # c) intervalo inválido é rejeitado na validação de env, antes do dump.
