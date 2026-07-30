@@ -24,9 +24,17 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |            📅 Pós-MVP             | Issue #126               |
 
----
+## 🏁 Sessão 30/07/2026 — Telemetria de UX (Microsoft Clarity — PR #151)
+
+**O que foi entregue**
+- Integração do **Microsoft Clarity** via SDK oficial (`@microsoft/clarity` v1.0.2).
+- Componente cliente `<Clarity />` em `src/components/clarity.tsx` montado no `src/app/layout.tsx`.
+- Proteção contra dupla execução no React 19 Strict Mode via `useRef(false)`.
+- Variável `NEXT_PUBLIC_CLARITY_PROJECT_ID` documentada em `.env.example`.
+- **Compliance LGPD:** Mascaramento nativo de formulários e execução `no-op` sem a variável configurada.
 
 ## 🏁 Sessão 30/07/2026 — Gate único da suíte de integração: fim do auto-skip silencioso (Issue #132)
+
 
 **O problema fechado**
 
