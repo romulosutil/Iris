@@ -13,6 +13,13 @@ export function Clarity() {
     if (projectId && !initialized.current) {
       initialized.current = true;
       ClaritySDK.init(projectId);
+      // LGPD: staff (employee) — no banner required; Clarity masks sensitive data natively.
+      // ad_Storage: not used (no ads); analytics_Storage: granted for UX telemetry.
+      // Future: override via cookie banner when implemented in design system.
+      ClaritySDK.consentV2({
+        ad_Storage: "denied",
+        analytics_Storage: "granted",
+      });
     } else if (!projectId && process.env.NODE_ENV === "development") {
       console.warn(
         "[Clarity] NEXT_PUBLIC_CLARITY_PROJECT_ID não definido em .env.local. Reinicie o pnpm dev após definir."

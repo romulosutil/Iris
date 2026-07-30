@@ -33,19 +33,23 @@
 - Variável `NEXT_PUBLIC_CLARITY_PROJECT_ID` documentada em `.env.example`.
 - **Compliance LGPD:** Mascaramento nativo de formulários e execução `no-op` sem a variável configurada.
 
-## 🏁 Sessão 30/07/2026 — Identify API do Clarity (staff tracking)
+## 🏁 Sessão 30/07/2026 — Implementação completa do Clarity (telemetria de UX — PR #151)
 
 **O que foi entregue**
-- Clarify.identify(session.user.id) adicionado a `src/components/clarity.tsx`.
-- Integração com `authClient.useSession()` — Clarity rastreia staff (terapeuta/coordenador) logado, reativo a login/logout.
-- Guard: só chama `identify` com projectId setado e sessão ativa.
+- `Clarity.init(projectId)` — integração SDK v1.0.2, guard Strict Mode via `useRef`.
+- `Clarity.consentV2({ad_Storage: 'denied', analytics_Storage: 'granted'})` — LGPD. Staff é empregado (contrato de trabalho já existe); Clarity mascara dados sensíveis nativamente; sem banner necessária (futura override via design system).
+- `Clarity.identify(session.user.id)` — rastreamento de staff logado (terapeuta/coordenador), reativo a login/logout.
+- Variável `NEXT_PUBLIC_CLARITY_PROJECT_ID=xulmzzqxsv` documentada em `.env.example` + comentário LGPD.
+- Painel Clarity vivo: https://clarity.microsoft.com/projects/view/xulmzzqxsv/gettingstarted
 
-**Gap para próxima rodada**
-- `Clarity.consentV2()` + cookie-consent banner — depende de:
-  1. Formalização no design system (componente banner, HANDOFF-FASE1.md §0 proíbe hardcode ad hoc).
-  2. Decisão de produto: opt-in vs opt-out, texto de consentimento, integração com analytics-storage flag da ANPD.
-  3. Definição de custom tags (tipo de usuário, clinic_id) e custom events (fluxos chave) — ainda sem necessidade concreta mapeada.
-- Registrar em issue separada quando produto tiver alinhamento.
+**Decisões de design**
+- consentV2 chamado no init (não no identify), sem dependência de banner. Futuro: se design system formalizar cookie-consent, refatorar pra aceitar override do banner sem mudar lógica.
+- Custom tags (tipo_usuario, clinic_id) e custom events (diario_iniciado, resultado_gerado) — deferred até produto mapear casos de uso concretos. Skeleton exportável em `src/lib/telemetry/clarity-tags.ts` / `clarity-events.ts` p/ quando precisar.
+- ad_Storage='denied' (sem publicidade no produto, sem motivo p/ storage de ads).
+
+**Verificação (all passed)**
+- `pnpm typecheck` ✅
+- `pnpm build` ✅ (Next.js route map gerado, zero warnings)
 
 ## 🏁 Sessão 30/07/2026 — Gate único da suíte de integração: fim do auto-skip silencioso (Issue #132)
 
