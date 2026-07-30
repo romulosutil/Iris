@@ -32,6 +32,8 @@
 - `scripts/escalonamento-risco.mjs`: `processarEmailRt()` chamado pros recém-escalados pra estágio 2 **e** pros pendentes da reconciliação, toda varredura.
 - `EMAIL_PROVIDER_API_KEY`/`RESEND_FROM_EMAIL` documentadas em `.env.example`.
 - Testes novos: `notificacao.test.ts`, `email/resend.test.ts`, `scripts/escalonamento-risco.test.mjs` (532→538 testes unitários, todos verdes).
+- **PR #153** aberta (branch `feat/126-email-rt-estagio2`), 4 commits (`build`/`feat`/`test`/`docs`). **Merge segurado a pedido do Rômulo** — main=prod com autodeploy, decisão de mergear é dele.
+- **Smoke test manual com Resend real deferido a pedido do Rômulo** — nenhuma key real em `.env`/`.env.local` locais; quando quiser rodar, adicionar `EMAIL_PROVIDER_API_KEY` (nunca colar a key no chat) e forçar um alerta pro estágio 2 pra conferir e-mail recebido + `canais_notificados`/`audit_log` gravados.
 
 **Decisão de escopo (fora do Apêndice A original da issue)**
 - Achado durante o planejamento: se o processo morre entre a transição pro estágio 2 e o envio do e-mail, a função de escalonamento não devolve mais aquele alerta (já saiu do estágio que a query casa) — e-mail perdido em silêncio (contra #108). Fechado com a 3ª função de reconciliação acima, rodada toda varredura.
