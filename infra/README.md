@@ -133,7 +133,7 @@ login membro dela:
 ```sql
 -- Cria o usuário de LOGIN membro de iris_auth (senha por ambiente, nunca versionada).
 CREATE ROLE iris_auth_login LOGIN PASSWORD :'authpwd' IN ROLE iris_auth;
--- O usuário de app_role (app_login) já existe desde a Fase 1a; mesma receita.
+-- O usuário de app_role (iris_app) já existe desde a Fase 1a; mesma receita.
 ```
 
 Em dev local (docker-compose) o superuser é `iris`; rodar o SQL acima com
