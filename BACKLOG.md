@@ -370,9 +370,11 @@ before they can be used.`
   multi-tenant.
   → **Endereçada em 30/07/2026** (branch `fix/132-gate-suite-integracao`): gate
   único + `globalSetup` que falha duro; escape hatch `ALLOW_SKIP_INTEGRATION`.
-  **Resta o item de CI** ("skip em CI = falha de build"), deliberadamente fora
-  daquela fatia porque o repo ainda não tem workflow que rode teste — agora
-  rastreado na **#143**. A #132 fica aberta até a #143 fechar.
+  **Mergeada na PR #142 e a #132 foi FECHADA em 30/07/2026.** O item de CI
+  ("skip em CI = falha de build") ficou deliberadamente fora daquela fatia
+  porque o repo ainda não tem workflow que rode teste, e vive na **#143** —
+  que é maior que a #132: exige o primeiro workflow com service Postgres,
+  roles e migrações, e a decisão de tornar isso required check da `main`.
 - **#133** — não existe forma de **registrar** uma revogação de consentimento
   (`consent` é append-only e o enum não tem evento de revogação). A promessa dos
   termos não é só não-implementada, é **não-registrável**. Diferente da #117, que
