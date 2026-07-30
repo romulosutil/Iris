@@ -97,7 +97,7 @@ existe". Verde por omissão em cima desse comando encerra a investigação.
 | `pnpm test:rls` com as três URLs locais            | **68 arquivos / 465 testes passados, 0 pulados**                  |
 | `DATABASE_URL` apontando para a role dona (`iris`) | **exit 1** — "ROLE ERRADA — A SUÍTE RODARIA COM RLS DESATIVADA"   |
 
-**Ficou de fora desta fatia (vira issue separada)**
+**Ficou de fora desta fatia (virou a issue #143)**
 
 - **"Skip em CI = falha de build"**, o outro item da #132: **não foi feito**. O
   repositório hoje **não tem nenhum workflow que rode teste** — só
@@ -371,8 +371,8 @@ before they can be used.`
   → **Endereçada em 30/07/2026** (branch `fix/132-gate-suite-integracao`): gate
   único + `globalSetup` que falha duro; escape hatch `ALLOW_SKIP_INTEGRATION`.
   **Resta o item de CI** ("skip em CI = falha de build"), deliberadamente fora
-  daquela fatia porque o repo ainda não tem workflow que rode teste — abrir
-  issue própria.
+  daquela fatia porque o repo ainda não tem workflow que rode teste — agora
+  rastreado na **#143**. A #132 fica aberta até a #143 fechar.
 - **#133** — não existe forma de **registrar** uma revogação de consentimento
   (`consent` é append-only e o enum não tem evento de revogação). A promessa dos
   termos não é só não-implementada, é **não-registrável**. Diferente da #117, que
