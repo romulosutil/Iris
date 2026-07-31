@@ -46,23 +46,38 @@ skills-lock.json
 # --- Database & Documentation ---
 db/tests
 db/backups
-docs
+
+# Documentação fora da imagem, EXCETO os dois documentos legais que o build
+# precisa ler: /termos e /privacidade são `force-static` e renderizam o
+# markdown de docs/legal/ como fonte única de verdade. O prerender roda dentro
+# do `RUN pnpm build` (infra/Dockerfile), então sem eles o `readFile` lança
+# ENOENT e o build da imagem aborta.
+#
+# ATENÇÃO à forma da cadeia abaixo — não é questão de ordem, é de ancestral.
+# `.dockerignore` casa como `.gitignore`: **um diretório excluído nunca é
+# percorrido**, então uma negação de arquivo lá dentro é inerte. Um `docs`
+# simples aqui tornaria `!docs/legal/termos-de-uso.md` um no-op silencioso
+# (foi o que aconteceu na 1ª tentativa desta correção).
+#
+# A cadeia correta desexclui cada ancestral e reexclui os irmãos em cada
+# nível — é a forma documentada pelo próprio Docker (`* / !foo / foo/* /
+# !foo/bar`):
+#
+#   docs/*          exclui todo filho de docs/ (docs/ux, docs/agente, …)
+#   !docs/legal     reabre SÓ o diretório docs/legal, para poder ser percorrido
+#   docs/legal/*    volta a excluir todo o conteúdo dele (pareceres,
+#                   consentimentos, briefings continuam fora da imagem)
+#   !docs/legal/…   libera nominalmente os dois arquivos publicados
+#
+# As duas negações finais vêm depois de `*.md` de propósito: vale a última
+# regra que casa, então nem `*.md` nem nada acima pode revertê-las.
+#
+# Verificado com `git check-ignore` (mesmo motor de casamento do
+# .dockerignore) — ver task-14-report.md §15.
+docs/*
+!docs/legal
+docs/legal/*
 *.md
 !README.md
-
-# --- Exceções: documentos legais que o build precisa ler ---------------------
-# As rotas públicas /termos e /privacidade são `force-static` e renderizam o
-# markdown de docs/legal/ como fonte única de verdade. O prerender roda dentro
-# do `RUN pnpm build` (infra/Dockerfile), então estes dois arquivos precisam
-# estar no contexto de build — o `docs` acima os excluiria e o `readFile`
-# lançaria ENOENT, abortando o build da imagem.
-#
-# Reincluído SÓ o necessário: dois arquivos, não `docs/` inteiro. Os demais
-# documentos de docs/legal/ (consentimentos, pareceres, briefings) continuam
-# fora da imagem.
-#
-# Ficam no fim do arquivo de propósito: no .dockerignore vale a ÚLTIMA regra
-# que casa com o caminho, então nenhuma linha acima (nem `docs`, nem `*.md`)
-# pode reverter estas.
 !docs/legal/termos-de-uso.md
 !docs/legal/politica-privacidade.md

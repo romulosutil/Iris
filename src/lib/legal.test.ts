@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 import { DOCUMENTOS_LEGAIS, VERSAO_TERMO, type SlugLegal } from "./legal";
@@ -102,50 +104,104 @@ describe("marcadores de pendência", () => {
   });
 });
 
+/**
+ * Avalia o `.dockerignore` do repositório **pelo comportamento**, não pelo
+ * texto.
+ *
+ * `.dockerignore` e `.gitignore` compartilham o mesmo motor de casamento, e a
+ * regra que interessa aqui é comum aos dois: **um diretório excluído nunca é
+ * percorrido**, então negar um arquivo lá dentro é inerte. `git check-ignore`
+ * executa esse motor diretamente, o que dá medição em vez de argumento.
+ *
+ * Monta um repositório descartável, instala o `.dockerignore` real como
+ * `.gitignore`, cria os caminhos e pergunta ao git quais ficariam de fora.
+ * `core.excludesFile` é neutralizado para o gitignore global da máquina não
+ * contaminar o resultado.
+ *
+ * Limite conhecido: git e Docker não são idênticos em todo detalhe (p.ex. o
+ * `*.md` sem barra casa em qualquer nível no git e só na raiz no Docker). A
+ * cadeia usada no `.dockerignore` é correta sob as duas semânticas, e a regra
+ * de ancestral — a que quebrou aqui — é a mesma nos dois. Isto **não**
+ * substitui `docker build -f infra/Dockerfile .`, que segue sendo o portão
+ * real.
+ */
+function forasDoContextoDeBuild(caminhos: string[]): Set<string> {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "iris-dockerignore-"));
+  try {
+    const git = (args: string[]) =>
+      execFileSync(
+        "git",
+        ["-c", `core.excludesFile=${path.join(dir, ".sem-global")}`, ...args],
+        { cwd: dir, stdio: "pipe" },
+      );
+
+    git(["init", "-q"]);
+    writeFileSync(
+      path.join(dir, ".gitignore"),
+      readFileSync(path.join(process.cwd(), ".dockerignore"), "utf8"),
+    );
+    for (const c of caminhos) {
+      const destino = path.join(dir, c);
+      mkdirSync(path.dirname(destino), { recursive: true });
+      writeFileSync(destino, "");
+    }
+
+    const ignorados = new Set<string>();
+    for (const c of caminhos) {
+      try {
+        git(["check-ignore", "-q", "--", c]);
+        ignorados.add(c); // saída 0 = casa uma exclusão
+      } catch (erro) {
+        const status = (erro as { status?: number }).status;
+        // 1 = não ignorado (chega no contexto). Qualquer outro código é falha
+        // real do git e não pode virar "não ignorado" por omissão.
+        if (status !== 1) throw erro;
+      }
+    }
+    return ignorados;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 describe("contexto de build do Docker", () => {
   // Por que este teste existe:
   //
   // As rotas /termos e /privacidade são `force-static` e leem o markdown
   // durante o `pnpm build`. No Dockerfile, `RUN pnpm build` vem logo depois de
-  // `COPY . .` — e `COPY . .` respeita o .dockerignore, que exclui `docs`.
-  // Resultado: ENOENT e build da imagem abortado, verde na máquina de dev e
-  // quebrado só dentro do contêiner (assinatura de #156/#157).
+  // `COPY . .` — e `COPY . .` respeita o .dockerignore. Se os documentos não
+  // estiverem no contexto, o readFile lança ENOENT e o build da IMAGEM aborta:
+  // verde na máquina de dev, quebrado só dentro do contêiner (#156/#157).
   //
-  // `outputFileTracingIncludes` NÃO cobre isso: ele traça um arquivo que nunca
-  // entrou no contexto de build. A única correção é a reinclusão explícita.
-  const dockerignore = readFileSync(
-    path.join(process.cwd(), ".dockerignore"),
-    "utf8",
-  );
-  const linhas = dockerignore
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !l.startsWith("#"));
+  // `outputFileTracingIncludes` NÃO cobre isso — traça um arquivo que nunca
+  // entrou no contexto de build.
+  //
+  // A 1ª tentativa de correção só acrescentou `!docs/legal/<arquivo>` mantendo
+  // `docs` excluído, e os testes de então (que liam o TEXTO do .dockerignore)
+  // ficaram verdes enquanto o build seguia quebrado — um teste verde afirmando
+  // o contrário do que acontece é pior que teste nenhum. Por isso agora o
+  // teste executa o motor de casamento em vez de ler linhas.
+  const publicados = slugs.map((s) => DOCUMENTOS_LEGAIS[s].arquivo);
+  const controles = [
+    // Continuam fora da imagem: a reinclusão precisa ser estreita.
+    "docs/legal/parecer-juridico-duty-to-warn.md",
+    "docs/ux/fluxos-e-wireframes.md",
+    "docs/dados/modelo-de-dados.md",
+  ];
+  const ignorados = forasDoContextoDeBuild([...publicados, ...controles]);
 
-  it.each(slugs)(
-    "o markdown de %s está reincluído no contexto de build",
-    (slug) => {
-      expect(linhas).toContain(`!${DOCUMENTOS_LEGAIS[slug].arquivo}`);
-    },
-  );
-
-  it("as reinclusões são as últimas regras que casam com docs/legal", () => {
-    // No .dockerignore vale a ÚLTIMA regra que casa com o caminho. Se alguém
-    // acrescentar uma exclusão depois delas, a reinclusão morre em silêncio.
-    const ultimaRelevante = linhas
-      .map((l, i) => ({ l, i }))
-      .filter(({ l }) => l.includes("docs") || l === "*.md")
-      .at(-1);
-    expect(ultimaRelevante?.l.startsWith("!docs/legal/")).toBe(true);
+  it.each(slugs)("o markdown de %s chega ao contexto de build", (slug) => {
+    const arquivo = DOCUMENTOS_LEGAIS[slug].arquivo;
+    expect(
+      ignorados.has(arquivo),
+      `${arquivo} está sendo excluído do contexto de build — o \`pnpm build\` dentro da imagem vai falhar com ENOENT`,
+    ).toBe(false);
   });
 
-  it("reinclui só os documentos publicados, não docs/ inteiro", () => {
-    // Manter a exclusão o mais estreita possível: consentimentos, pareceres e
-    // briefings de advogado não têm por que viajar para a imagem.
-    const reinclusoes = linhas.filter((l) => l.startsWith("!docs"));
-    expect(reinclusoes).toHaveLength(slugs.length);
-    expect(linhas).not.toContain("!docs");
-    expect(linhas).not.toContain("!docs/");
+  it.each(controles)("%s continua fora da imagem", (arquivo) => {
+    // Estreiteza: pareceres, consentimentos e o resto de docs/ não têm por que
+    // viajar para a imagem de produção.
+    expect(ignorados.has(arquivo)).toBe(true);
   });
 });
 
