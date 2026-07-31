@@ -24,6 +24,55 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 31/07/2026 — Fatia A: action pública de cadastro + throttle persistente (Issue #163, Task 7)
+
+**A decisão que muda o desenho combinado**
+
+A Task 6 entregou `src/lib/rate-limit.ts`, um contador **em memória por
+processo**, dimensionado para cadastro (anti-enumeração). Ele **não** é
+suficiente para a rota pública de cadastro, e o motivo é estrutural: a Task 5
+verifica a senha de e-mails já existentes via `auth.$context`
+(`verificarPossePorSenha`), caminho que **não passa por `auth.handler`** — logo
+o rate limiting, o contador de falha e o lockout do Better-Auth **nunca rodam**
+ali. Na prática a rota é um verificador de credencial, e o throttle dela é a
+única barreira anti-força-bruta que existe. Um `Map` por processo falha em dois
+pontos triviais de explorar: com N réplicas o limite efetivo vira N×limite, e
+todo deploy/reciclagem zera o estado.
+
+**O que foi feito**
+
+- Nova migração **0061** (`auth_throttle`) + `src/lib/throttle.ts`: contador
+  **compartilhado e persistente** no Postgres, atômico (`INSERT … ON CONFLICT
+  DO UPDATE … RETURNING`, uma instrução), com **backoff exponencial** e teto, e
+  **fail-closed** (`ThrottleIndisponivel` — nunca "permitido") se o store cair.
+- Dimensionamento **de login, não de cadastro**: 5 tentativas/e-mail/15 min e
+  20/IP/15 min, ambas com backoff até 24 h.
+- Contagem **idêntica nos dois ramos** e **antes** do núcleo: o contador nunca
+  olha o resultado de `criarContaEClinica`. Contar só "falhas" faria o
+  bloqueio subir apenas para e-mails existentes — o próprio contador viraria o
+  oráculo de enumeração que a Task 5 fechou.
+- **Resposta uniforme** (a metade que a Task 6 não entregou, agora fechada):
+  e-mail novo, retomada e `CredencialInvalida` colapsam no mesmo `{}` + mesmo
+  redirect, com **piso de tempo** (`PISO_RESPOSTA_MS = 1200`) para o tempo não
+  virar o oráculo que o corpo deixou de ser. Medido: 1200 ms vs 1208 ms
+  (delta 8 ms) com 120 ms de custo artificial só num dos ramos.
+- Semáforo de concorrência (`src/lib/semaforo.ts`, teto 4) sobre a chamada ao
+  núcleo: scrypt em rota aberta é DoS de CPU sem precisar de volume.
+- `src/lib/rate-limit.ts` **continua existindo e não foi alterado** — segue
+  válido para o que foi feito (anti-enumeração barata); só não é o mecanismo
+  desta rota.
+
+**Aberto**
+
+- `professional_consent` só é gravado pelo núcleo; a **notificação por e-mail**
+  a quem já tem conta e tentou se cadastrar de novo (aviso + link de
+  recuperação) **não foi implementada** nesta task — não estava na lista de
+  arquivos da Task 7 e depende da tela de recuperação. Sem ela, a resposta
+  uniforme é segura mas deixa o usuário legítimo que errou a senha sem
+  instrução útil. Registrar como fatia própria.
+- A limpeza de `auth_throttle` é oportunista (a cada 5 min por instância,
+  entradas com mais de 1 h de expiradas). Não há job dedicado.
+
 ## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 1 de review (Issue #163)
 
 **O achado**

@@ -473,6 +473,19 @@ export const professionalConsent = pgTable(
   ],
 );
 
+/**
+ * Contador de tentativas da rota pública de cadastro (migração 0061).
+ * Compartilhado entre instâncias e persistente de propósito — ver o comentário
+ * longo da migração e `src/lib/throttle.ts`. Não é dado de paciente: só
+ * `iris_auth` tem grant.
+ */
+export const authThrottle = pgTable("auth_throttle", {
+  chave: text("chave").primaryKey(),
+  contagem: integer("contagem").notNull().default(0),
+  janelaExpiraEm: timestamp("janela_expira_em", { withTimezone: true }).notNull(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ─── Protocolos (catálogo + instância por paciente) ──────────────────────────
 export const protocolFamiliaCatalogo = pgTable("protocol_familia_catalogo", {
   id: text("id").primaryKey(),

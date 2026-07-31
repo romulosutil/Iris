@@ -421,6 +421,13 @@
       "when": 1785421570000,
       "tag": "0060_professional_consent_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785421571000,
+      "tag": "0061_auth_throttle",
+      "breakpoints": true
     }
   ]
 }
