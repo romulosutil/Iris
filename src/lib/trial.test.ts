@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diasRestantesDeTrial } from "./trial";
+import { diasRestantesDeTrial, resolverDiasRestantesParaFaixa } from "./trial";
 
 const TZ = "America/Sao_Paulo";
 
@@ -31,5 +31,42 @@ describe("diasRestantesDeTrial", () => {
     const inicio = new Date("2026-08-01T14:00:00-03:00");
     // 02:00 UTC de 08/08 ainda é 23:00 de 07/08 em São Paulo → ainda resta 1 dia.
     expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-08-08T02:00:00Z"))).toBe(1);
+  });
+});
+
+describe("resolverDiasRestantesParaFaixa", () => {
+  it("Finding 2 da review da PR #166: trial com 0 dias restantes tem que renderizar a faixa, não escondê-la", () => {
+    // trialDias = 0 é falsy em JS — a checagem antiga (`&&`) cairia no
+    // fallback e ocultaria a faixa mesmo com o trial "terminando hoje".
+    const agora = new Date();
+    const resultado = resolverDiasRestantesParaFaixa({
+      trialComecoEm: agora,
+      trialDias: 0,
+      timezone: TZ,
+    });
+    // Não pode ser `null` (que faria o layout usar o fallback -1 e ocultar
+    // a faixa) — precisa ser um número, mesmo que seja 0.
+    expect(resultado).not.toBeNull();
+    expect(resultado).toBe(0);
+  });
+
+  it("devolve null quando não há trial ativo (trialDias ausente)", () => {
+    expect(
+      resolverDiasRestantesParaFaixa({
+        trialComecoEm: new Date(),
+        trialDias: null,
+        timezone: TZ,
+      }),
+    ).toBeNull();
+  });
+
+  it("devolve null quando não há data de início de trial", () => {
+    expect(
+      resolverDiasRestantesParaFaixa({
+        trialComecoEm: null,
+        trialDias: 7,
+        timezone: TZ,
+      }),
+    ).toBeNull();
   });
 });

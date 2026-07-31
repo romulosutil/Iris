@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getTenantContext, listarClinicasDoUsuario } from "@/auth/tenant";
 import { Container } from "@/components/ui/layout";
 import { Banner } from "@/components/ui/banner";
-import { diasRestantesDeTrial as calcularDiasRestantesTrial } from "@/lib/trial";
+import { resolverDiasRestantesParaFaixa } from "@/lib/trial";
 import { FaixaTrial } from "@/components/app/faixa-trial";
 import { estadoEstagio2 } from "./alertas-risco/queries";
 import { listarPendencias } from "./pendencias/queries";
@@ -25,14 +25,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   // Fatia A — dados de trial para exibir faixa de dias restantes
   const dadosTrial = await obterDadosTrialDaClinica(ctx);
-  const diasRestantes =
-    dadosTrial.trialComecoEm && dadosTrial.trialDias
-      ? calcularDiasRestantesTrial(
-          dadosTrial.trialComecoEm,
-          dadosTrial.trialDias,
-          dadosTrial.timezone,
-        )
-      : -1;
+  const diasRestantes = resolverDiasRestantesParaFaixa(dadosTrial) ?? -1;
 
   let itemsNav: NavItem[] = [];
 

@@ -53,3 +53,28 @@ export function diasRestantesDeTrial(
   // O render decide: `diasRestantes >= 0` → exibe; `< 0` → não exibe.
   return dias - diferenca;
 }
+
+/**
+ * Resolve quantos dias faltam para exibir na faixa de trial a partir dos
+ * dados brutos da clínica, ou `null` quando a faixa não deve aparecer
+ * (clínica sem trial ativo).
+ *
+ * Finding 2 da review da PR #166: usar `&&` truthy em `trialDias` esconderia
+ * a faixa quando o trial tem explicitamente 0 dias restantes (0 é falsy em
+ * JS, mas é um valor válido — "termina hoje"). `!= null` cobre null/undefined
+ * sem descartar 0.
+ */
+export function resolverDiasRestantesParaFaixa(dadosTrial: {
+  trialComecoEm: Date | null;
+  trialDias: number | null;
+  timezone: string;
+}): number | null {
+  if (dadosTrial.trialComecoEm == null || dadosTrial.trialDias == null) {
+    return null;
+  }
+  return diasRestantesDeTrial(
+    dadosTrial.trialComecoEm,
+    dadosTrial.trialDias,
+    dadosTrial.timezone,
+  );
+}
