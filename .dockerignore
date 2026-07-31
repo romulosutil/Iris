@@ -49,3 +49,20 @@ db/backups
 docs
 *.md
 !README.md
+
+# --- Exceções: documentos legais que o build precisa ler ---------------------
+# As rotas públicas /termos e /privacidade são `force-static` e renderizam o
+# markdown de docs/legal/ como fonte única de verdade. O prerender roda dentro
+# do `RUN pnpm build` (infra/Dockerfile), então estes dois arquivos precisam
+# estar no contexto de build — o `docs` acima os excluiria e o `readFile`
+# lançaria ENOENT, abortando o build da imagem.
+#
+# Reincluído SÓ o necessário: dois arquivos, não `docs/` inteiro. Os demais
+# documentos de docs/legal/ (consentimentos, pareceres, briefings) continuam
+# fora da imagem.
+#
+# Ficam no fim do arquivo de propósito: no .dockerignore vale a ÚLTIMA regra
+# que casa com o caminho, então nenhuma linha acima (nem `docs`, nem `*.md`)
+# pode reverter estas.
+!docs/legal/termos-de-uso.md
+!docs/legal/politica-privacidade.md

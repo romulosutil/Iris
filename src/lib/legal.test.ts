@@ -102,6 +102,69 @@ describe("marcadores de pendência", () => {
   });
 });
 
+describe("contexto de build do Docker", () => {
+  // Por que este teste existe:
+  //
+  // As rotas /termos e /privacidade são `force-static` e leem o markdown
+  // durante o `pnpm build`. No Dockerfile, `RUN pnpm build` vem logo depois de
+  // `COPY . .` — e `COPY . .` respeita o .dockerignore, que exclui `docs`.
+  // Resultado: ENOENT e build da imagem abortado, verde na máquina de dev e
+  // quebrado só dentro do contêiner (assinatura de #156/#157).
+  //
+  // `outputFileTracingIncludes` NÃO cobre isso: ele traça um arquivo que nunca
+  // entrou no contexto de build. A única correção é a reinclusão explícita.
+  const dockerignore = readFileSync(
+    path.join(process.cwd(), ".dockerignore"),
+    "utf8",
+  );
+  const linhas = dockerignore
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#"));
+
+  it.each(slugs)(
+    "o markdown de %s está reincluído no contexto de build",
+    (slug) => {
+      expect(linhas).toContain(`!${DOCUMENTOS_LEGAIS[slug].arquivo}`);
+    },
+  );
+
+  it("as reinclusões são as últimas regras que casam com docs/legal", () => {
+    // No .dockerignore vale a ÚLTIMA regra que casa com o caminho. Se alguém
+    // acrescentar uma exclusão depois delas, a reinclusão morre em silêncio.
+    const ultimaRelevante = linhas
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => l.includes("docs") || l === "*.md")
+      .at(-1);
+    expect(ultimaRelevante?.l.startsWith("!docs/legal/")).toBe(true);
+  });
+
+  it("reinclui só os documentos publicados, não docs/ inteiro", () => {
+    // Manter a exclusão o mais estreita possível: consentimentos, pareceres e
+    // briefings de advogado não têm por que viajar para a imagem.
+    const reinclusoes = linhas.filter((l) => l.startsWith("!docs"));
+    expect(reinclusoes).toHaveLength(slugs.length);
+    expect(linhas).not.toContain("!docs");
+    expect(linhas).not.toContain("!docs/");
+  });
+});
+
+describe("proteção contra reformatação automática", () => {
+  it("docs/legal/ está fora do Prettier", () => {
+    // Sem isto, `pnpm format` reescreve a cláusula 10 do advogado (já
+    // reescreveu uma vez, em 30/07/2026) e derruba o guard byte a byte.
+    const prettierignore = readFileSync(
+      path.join(process.cwd(), ".prettierignore"),
+      "utf8",
+    );
+    const linhas = prettierignore
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("#"));
+    expect(linhas).toContain("docs/legal/");
+  });
+});
+
 describe("compromissos de produto que não podem ser enfraquecidos", () => {
   it("os termos mantêm que o Iris nunca notifica terceiros externos", () => {
     const doc = texto("termos");
@@ -111,10 +174,37 @@ describe("compromissos de produto que não podem ser enfraquecidos", () => {
   });
 
   it("os termos preservam literalmente a cláusula 10 de autoria do advogado", () => {
-    const doc = texto("termos");
+    // Guarda byte a byte, não por palavras-chave.
+    //
+    // A versão anterior deste teste checava só o nome do advogado, a frase
+    // "Não editar sem novo parecer" e a existência de "10.3." — e passou verde
+    // enquanto o Prettier trocava `*ex post*` por `_ex post_` dentro do texto
+    // que nos comprometemos a reproduzir literalmente. Inofensivo naquele caso,
+    // mas provava que o guard não guardava nada: `texto()` remove `**` e
+    // colapsa espaço, então nem em princípio detectaria deriva no corpo.
+    //
+    // Agora o corpo inteiro — da nota de origem até o fim de 10.3 — é comparado
+    // com um fixture gerado do texto original do advogado. Qualquer edição ali
+    // falha, alto e claro. O `.prettierignore` cobre `docs/legal/` para que a
+    // ferramenta não reintroduza a deriva.
+    const fixture = readFileSync(
+      path.join(process.cwd(), "src/lib/__fixtures__/clausula-10-advogado.txt"),
+      "utf8",
+    ).replace(/\r\n/g, "\n");
+    const doc = lerDoc("termos").replace(/\r\n/g, "\n");
+    expect(
+      doc.includes(fixture.trimEnd()),
+      "cláusula 10.1–10.3 divergiu do texto do advogado (ver src/lib/__fixtures__/clausula-10-advogado.txt)",
+    ).toBe(true);
+  });
+
+  it("a cláusula 10 do advogado não foi enfraquecida por reformatação", () => {
+    const doc = lerDoc("termos");
+    // A ênfase original é `*ex post*`. O Prettier normaliza para `_ex post_`;
+    // semanticamente igual, mas "reproduzida literalmente" tem que ser literal.
+    expect(doc).toContain("análise *ex post* do texto digitado");
     expect(doc).toContain("Thiago Lyra Galvão");
     expect(doc).toContain("Não editar sem novo parecer");
-    expect(doc).toMatch(/10\.3\./);
   });
 
   it("os termos garantem somente-leitura com exportação livre após o trial", () => {

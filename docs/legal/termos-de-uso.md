@@ -266,7 +266,7 @@ domicílio da contratante; a definir juridicamente⟩.
 
 **10.1.** O SOFTWARE disponibiliza um mecanismo automatizado de identificação
 e sinalização de termos sugestivos de risco clínico ("Alerta de Risco"),
-baseado na análise _ex post_ do texto digitado pelo profissional da
+baseado na análise *ex post* do texto digitado pelo profissional da
 CONTRATANTE após as sessões.
 
 **10.2.** A CONTRATANTE declara e reconhece expressamente que:

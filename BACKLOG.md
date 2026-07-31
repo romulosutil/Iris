@@ -24,6 +24,44 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 30/07/2026 — Termos e Política publicados para o cadastro self-service (Issue #163, Fatia A)
+
+**O buraco que fechou**
+
+- `docs/legal/termos-de-uso.md` declarava cobrir "a relação Iris ↔ clínica-contratante (B2B)". O cadastro self-service quebra esse pressuposto: o profissional pessoa física é, ao mesmo tempo, a parte contratante, o responsável pela conta e o controlador dos dados dos pacientes que vai cadastrar — figura que não existia em nenhum dos dois documentos.
+
+**Decisão travada nesta sessão**
+
+- **Autorização do Rômulo (31/07/2026):** "qualquer documento aceite como aprovado, se precisar de algum novo crie e use, meu advogado está ciente e se algo tiver que ser mudado ele vai informar". Os dois documentos saíram de `Status: RASCUNHO pendente de revisão por advogado` e passaram a **vigentes na versão `2026-07-30`** — que é a string gravada no aceite do profissional (`VERSAO_TERMO`, `src/lib/legal.ts`, fonte única).
+- A autorização é para **publicar sem esperar revisão prévia**, não para inventar fato jurídico. Onde falta dado, o texto traz `⟨PENDENTE: …⟩` visível, consolidado numa seção "Itens em aberto" ao final de cada documento.
+
+**O que foi entregue**
+
+- Termos: seções 2.1 (a CONTRATANTE no self-service) e 2.2 (declaração de conselho de classe/registro profissional, auditada por nós, com suspensão em caso de declaração falsa); seção 7 reescrita (cobrança por paciente ativo/mês sem piso, trial de 7 dias sem cartão, 1ª fatura no 8º dia por aniversário da conta, Pix e boleto); **7.4 — fim do trial vira somente-leitura com exportação livre, nenhum dado apagado** (compromisso com o titular, não política comercial); seção 8 (vigência/rescisão/alteração) deixou de ser placeholder; 10.4 reforça que o Iris nunca notifica família, SAMU ou Conselho Tutelar.
+- Política: seção 1.1 nova (o **profissional como titular** — tabela dado × finalidade × base legal × prazo); 3.1 (papéis quando controlador e usuário cadastrante são a mesma pessoa; Iris é **controlador** dos dados de conta do profissional e **operador** dos dados de paciente); seção 7 ganhou **Resend** (e-mail transacional) e **Asaas** (pagamento), com o que cada um recebe e o que não recebe.
+- Rotas públicas `/termos` e `/privacidade` renderizando o markdown de `docs/legal/` como fonte única (nada de segunda cópia do texto legal no `.tsx`), fora do grupo `(app)` — o guard de sessão vive em `src/app/(app)/layout.tsx`.
+
+**Pendências jurídicas em aberto — 14 no total (9 nos Termos, 5 na Política)**
+
+- Tabela completa, item a item, em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-14-report.md`. Resumo do que falta: endereço da sede, formato de exportação, valor unitário final dos tiers, definição de "paciente ativo", prazo em somente-leitura antes de eliminação, prazo de aviso por inadimplência, prazo de aviso de alteração dos Termos, foro, canal de contato (Termos); retenção dos dados cadastrais do profissional, provedor de IA/país, país do provedor de e-mail, DPO, canal de contato de privacidade (Política).
+- ⚠️ **Maior risco comercial da lista: a definição operacional de "paciente ativo".** É a **unidade de cobrança**, e a **primeira fatura cai no dia 8** do primeiro cadastro self-service. Sem ela, não há como faturar corretamente. Precisa estar fechada antes de ligar a cobrança (fatia seguinte, Asaas).
+- **Provedor de IA e país de processamento seguem deliberadamente em aberto** (transferência internacional, LGPD Art. 33 — ver seção B). Nomear um provedor não contratado seria informação falsa ao titular; a Política diz explicitamente que nenhum provedor é nomeado enquanto a definição não existir.
+
+**Para o advogado decidir (não resolvido por nós, de propósito)**
+
+- A seção 9 dos Termos diz que o CDC se aplica "quando a CONTRATANTE for pessoa física ou microempresa em situação de vulnerabilidade". Com a definição ampliada da §2.1, **todo cadastro self-service é uma CONTRATANTE pessoa física** — ou seja, o documento passa a dizer a todo usuário self-service que o CDC governa. Se um profissional que compra SaaS B2B como insumo do negócio é consumidor é questão contestada, que este repositório não responde. **Erra a favor do usuário, não contra**, então foi mantida exatamente como está, para Rômulo e o advogado decidirem.
+- A subseção 10.4 foi **adicionada** a uma cláusula marcada "Não editar sem novo parecer". 10.1–10.3 estão literalmente intactas (agora com guard byte a byte); 10.4 é aditiva e só reforça o compromisso. Removível sem afetar mais nada, se o advogado preferir.
+
+**Achados técnicos que valem registro**
+
+- **`.dockerignore` excluía `docs/` — e o `pnpm build` do contêiner prerenderiza as duas rotas.** `COPY . .` (infra/Dockerfile) respeita o `.dockerignore`, então o `readFile` lançaria ENOENT e **abortaria o build da imagem**: verde na máquina de dev, quebrado só dentro do contêiner — mesma assinatura de #156/#157. `outputFileTracingIncludes` **não** cobre isso (traça um arquivo que nunca entrou no contexto de build). Corrigido com reinclusão explícita e estreita (`!docs/legal/termos-de-uso.md`, `!docs/legal/politica-privacidade.md`) no fim do arquivo, onde vale a última regra que casa. **Ainda NÃO verificado com `docker build` — Docker está fora nesta máquina.**
+- **Prettier reescreveu texto do advogado.** O `pnpm format` trocou `*ex post*` por `_ex post_` dentro da cláusula 10, e o teste que dizia guardá-la passou verde (checava só nome do advogado, a frase "Não editar sem novo parecer" e a existência de "10.3."). Restaurado o original; corpo de 10.1–10.3 agora fixado **byte a byte** contra `src/lib/__fixtures__/clausula-10-advogado.txt`, e `docs/legal/` entrou no `.prettierignore` novo para a ferramenta não reintroduzir a deriva.
+
+**Verificação**
+
+- 54 testes novos verdes; suíte unitária 485+ verde; typecheck limpo; lint 0 erros; `pnpm build` gera `/termos` e `/privacidade` como `○ (Static)`.
+- Os guards foram validados por **mutação**: reintroduzir `_ex post_`, enfraquecer 10.2(d) (`EXCLUSIVA` → `compartilhada`), remover a reinclusão do `.dockerignore`, acrescentar uma exclusão depois dela, e remover `docs/legal/` do `.prettierignore` — todos falham como devem.
+
 ## 🏁 Sessão 30/07/2026 — CI carrega as imagens de infra (Issue #157)
 
 **O buraco que fechou**
