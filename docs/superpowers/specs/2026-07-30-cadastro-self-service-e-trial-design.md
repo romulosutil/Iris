@@ -233,6 +233,14 @@ ciclo já existiria com o valor errado; e `updatePendingPayments: true` reajusta
   Campos: `user_id`, `clinic_id`, `versao_termo`, `aceito_em`, `ip`, `user_agent`.
   Registro auditável, imutável pela aplicação.
 
+> **Não confundir com o consentimento do titular do tratamento.** Existe spec
+> própria e independente em `.specs/features/consentimento-titular-adulto/`
+> (enum `autoconsentimento_titular_adulto`, migração 0049), que trata do
+> **paciente adulto** consentindo com o próprio tratamento — gap dos nichos
+> #98/#99. O `professional_consent` daqui é o **profissional aceitando os termos
+> de uso do Iris**: outro titular, outra base legal, outra tabela. Fundir os dois
+> misturaria contrato comercial com consentimento clínico.
+
 ### 4.2 Fatia B
 
 - `subscription`: `clinic_id`, `plano`, `preco_unitario_centavos`, `status`
