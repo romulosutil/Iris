@@ -393,6 +393,13 @@
       "when": 1785421566000,
       "tag": "0056_alerta_risco_email_rt",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1785421567000,
+      "tag": "0057_cadastro_self_service",
+      "breakpoints": true
     }
   ]
 }
