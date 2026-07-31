@@ -428,6 +428,13 @@
       "when": 1785421571000,
       "tag": "0061_auth_throttle",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785421572000,
+      "tag": "0062_auth_throttle_janela_inicio",
+      "breakpoints": true
     }
   ]
 }

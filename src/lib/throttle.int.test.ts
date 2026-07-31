@@ -91,6 +91,32 @@ describe.skipIf(!hasDb)(
       expect(Number(rows[0]!.s)).toBeLessThanOrEqual(3_600 + 1);
     });
 
+    it("o bloqueio NÃO é prorrogável indefinidamente (backoff ancorado no início)", async () => {
+      // Finding 5 do review: com o backoff ancorado em `now()`, cada requisição
+      // extra empurrava o fim da janela para frente — uma requisição a cada teto
+      // mantinha a vítima travada para sempre, de graça. Ancorado no INÍCIO da
+      // janela, depois que o teto satura o fim para de andar.
+      const chave = `t:${crypto.randomUUID()}`;
+      const fim = async () => {
+        const rows = (await authDb.execute(
+          sql`SELECT extract(epoch from janela_expira_em) AS s FROM auth_throttle WHERE chave = ${chave}`,
+        )) as unknown as { s: string }[];
+        return Number(rows[0]!.s);
+      };
+      // Satura bem além do teto.
+      for (let i = 0; i < 15; i++)
+        await registrarTentativa(chave, 5, 900, 1_800);
+      const antes = await fim();
+
+      // Mais 10 tentativas do atacante insistente: o fim NÃO pode andar.
+      await new Promise((r) => setTimeout(r, 1_100));
+      for (let i = 0; i < 10; i++)
+        await registrarTentativa(chave, 5, 900, 1_800);
+      const depois = await fim();
+
+      expect(depois).toBeCloseTo(antes, 1);
+    });
+
     it("é atômico: 20 tentativas concorrentes contam 20, não menos", async () => {
       const chave = `t:${crypto.randomUUID()}`;
       const rs = await Promise.all(

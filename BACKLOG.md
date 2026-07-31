@@ -73,6 +73,49 @@ todo deploy/reciclagem zera o estado.
 - A limpeza de `auth_throttle` é oportunista (a cada 5 min por instância,
   entradas com mais de 1 h de expiradas). Não há job dedicado.
 
+## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 1 (Issue #163)
+
+Review da Task 7 apontou 1 Crítico e 4 Importantes. O que mudou de **decisão**
+(o detalhe de execução está em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-7-report.md`):
+
+- **Tabela nova sem teste de RLS foi a terceira ocorrência desta fatia.**
+  `src/db/auth-throttle.int.test.ts` fecha o caso de `auth_throttle`. Provado
+  por mutação no banco: `DISABLE ROW LEVEL SECURITY` e `GRANT SELECT … TO
+  app_role` deixam o arquivo vermelho, e a suíte funcional
+  (`throttle.int.test.ts`) continuava **verde** nas duas mutações. **Regra que
+  isso confirma: teste funcional de tabela nova nunca substitui teste de
+  RLS/grants — eles rodam com a role que TEM acesso.**
+- **O piso de tempo virou quantização.** `respeitarPiso` agora arredonda a
+  resposta para o próximo múltiplo de `PISO_RESPOSTA_MS` em vez de só esperar
+  até ele. Motivo: um piso puro só protege enquanto os dois ramos couberem
+  embaixo dele, e ninguém mediu o custo real do ramo caro no container de
+  produção — a proteção sumia exatamente na condição em que mais importa.
+  Quantizado, a uniformidade não depende de calibração. **Custo aceito:** sob
+  carga a latência salta em degraus de 1,2 s.
+- **`sendOnSignUp` saiu do caminho síncrono da requisição** (`dispararEmail`,
+  `src/auth/auth.ts`). Um round-trip ao Resend dentro do ramo "e-mail novo" —
+  e só dele — era o maior custo assimétrico da rota. Seguro porque
+  `enviarEmailTransacional` tem contrato de não lançar.
+- **Ausência de IP não colapsa mais numa chave global.** `resolverIp` devolve
+  `null` e a rota simplesmente não consome contador de IP (fica só com o de
+  e-mail). A chave `cadastro:ip:desconhecido` era autonegação de serviço da
+  rota inteira — mesma forma da falha do WARN corrigida na PR #166.
+- **Backoff ancorado no início da janela** (migração **0062**) + teto de e-mail
+  de 24 h → **30 min**, limite 5 → 8. Ancorado em `now()`, uma requisição a
+  cada teto mantinha uma vítima nomeada travada para sempre, de graça.
+- **Fila do semáforo ganhou cap (32) e timeout (3 s).** Fila infinita só movia
+  o DoS de CPU para memória/latência.
+
+**Aberto (não resolvido nesta rodada)**
+
+- Nenhuma medição real do custo do ramo "e-mail novo" no container de produção.
+  A quantização torna isso **não-bloqueante para segurança**, mas continua
+  aberto para latência.
+- `x-forwarded-for` do Easypanel não foi verificado. `resolverIp` toma a
+  **última** entrada válida (a que um proxy confiável apenda); se não houver
+  proxy, o teto por IP é contornável — o de e-mail continua valendo.
+- Sem teste HTTP end-to-end do endpoint (status/headers/tempo reais).
+
 ## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 1 de review (Issue #163)
 
 **O achado**

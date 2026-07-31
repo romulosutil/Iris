@@ -482,6 +482,12 @@ export const professionalConsent = pgTable(
 export const authThrottle = pgTable("auth_throttle", {
   chave: text("chave").primaryKey(),
   contagem: integer("contagem").notNull().default(0),
+  // Âncora do backoff (migração 0062): o fim da janela é calculado a partir do
+  // INÍCIO dela, não de `now()` — senão cada requisição extra empurra o fim e o
+  // bloqueio vira prorrogável para sempre.
+  janelaInicioEm: timestamp("janela_inicio_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   janelaExpiraEm: timestamp("janela_expira_em", { withTimezone: true }).notNull(),
   atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -49,10 +49,16 @@ function limparOportunisticamente(): void {
  * - é atômico: `INSERT … ON CONFLICT DO UPDATE … RETURNING` resolve leitura,
  *   incremento e decisão numa única instrução, então N requisições
  *   simultâneas contam N (sem janela de corrida read-modify-write);
- * - aplica BACKOFF EXPONENCIAL: passado o limite, cada tentativa excedente
- *   empurra o fim da janela para `janelaSegundos * 2^(excesso)`, com teto em
- *   `tetoSegundos`. Sem backoff, um atacante recupera `limite` tentativas a
- *   cada janela indefinidamente.
+ * - aplica BACKOFF EXPONENCIAL **ancorado no início da janela**: o bloqueio
+ *   dura `min(janelaSegundos * 2^excesso, tetoSegundos)` contado a partir da
+ *   PRIMEIRA tentativa da janela. Sem backoff nenhum, um atacante recupera
+ *   `limite` tentativas a cada janela indefinidamente. Mas ancorar em `now()`
+ *   (como fazia a versão original, finding 5 do review) era pior no outro
+ *   sentido: cada tentativa excedente empurrava o fim para frente, então uma
+ *   requisição a cada `teto` mantinha um e-mail conhecido travado para sempre,
+ *   de graça. Ancorado no início, o expoente cresce mas satura no teto, e o
+ *   bloqueio TERMINA na hora marcada — re-travar custa `limite + 1`
+ *   requisições novas.
  *
  * NÃO diferencia "falha" de "sucesso": quem chama registra a tentativa ANTES
  * de saber o resultado, e nunca depois. É o que impede o contador de virar o
@@ -75,18 +81,23 @@ export async function registrarTentativa(
   let contagem: number;
   try {
     const linhas = (await authDb.execute(sql`
-      INSERT INTO auth_throttle (chave, contagem, janela_expira_em)
-      VALUES (${chave}, 1, now() + make_interval(secs => ${janelaSegundos}))
+      INSERT INTO auth_throttle (chave, contagem, janela_inicio_em, janela_expira_em)
+      VALUES (${chave}, 1, now(), now() + make_interval(secs => ${janelaSegundos}))
       ON CONFLICT (chave) DO UPDATE SET
         contagem = CASE
           WHEN auth_throttle.janela_expira_em <= now() THEN 1
           ELSE auth_throttle.contagem + 1
         END,
+        janela_inicio_em = CASE
+          WHEN auth_throttle.janela_expira_em <= now() THEN now()
+          ELSE auth_throttle.janela_inicio_em
+        END,
         janela_expira_em = CASE
           WHEN auth_throttle.janela_expira_em <= now()
             THEN now() + make_interval(secs => ${janelaSegundos})
           WHEN auth_throttle.contagem + 1 > ${limite}
-            THEN now() + make_interval(secs => LEAST(
+            -- Ancorado em janela_inicio_em, NAO em now(): ver a docstring.
+            THEN auth_throttle.janela_inicio_em + make_interval(secs => LEAST(
               ${janelaSegundos}::double precision
                 * power(2, auth_throttle.contagem + 1 - ${limite}),
               ${tetoSegundos}::double precision

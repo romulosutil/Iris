@@ -22,6 +22,33 @@ assertMfaBypassSafe();
  * com id UUID gerado pelo banco. Papéis ficam em `user_role` (fora daqui).
  * MFA entra no hardening pré-dado-real (checklist LGPD, AGENTS.md §8).
  */
+/**
+ * Dispara o e-mail FORA do caminho da requisição (Fatia A, #163, Task 7 —
+ * finding 2 do review).
+ *
+ * Por que isto é de SEGURANÇA e não só de performance: `sendOnSignUp` faz o
+ * Better-Auth AGUARDAR este callback dentro de `signUpEmail`, que é chamado por
+ * `provisionUser` dentro de `criarContaEClinica`. Ou seja, um round-trip de
+ * rede até o Resend ficava no caminho síncrono do ramo "e-mail novo" do
+ * cadastro público — e SÓ dele (o ramo "e-mail existente" não cria conta e não
+ * manda e-mail). A rota de cadastro normaliza o tempo de resposta com um piso
+ * justamente para não virar oráculo de enumeração; um round-trip de rede
+ * variável é exatamente o tipo de coisa que estoura esse piso num dia ruim e
+ * inverte o oráculo (e-mail desconhecido LENTO, e-mail conhecido rápido).
+ *
+ * Destacar é seguro porque `enviarEmailTransacional` tem contrato de NÃO
+ * LANÇAR (degrada e loga — ver src/lib/email/transacional.ts): não existe erro
+ * a propagar que o chamador pudesse tratar. O `.catch` é cinto de segurança
+ * contra rejeição inesperada virar `unhandledRejection` e derrubar o processo.
+ */
+function dispararEmail(
+  input: Parameters<typeof enviarEmailTransacional>[0],
+): void {
+  void enviarEmailTransacional(input).catch((err) => {
+    console.error("dispararEmail: falha fora do caminho da requisição:", err);
+  });
+}
+
 export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
@@ -31,7 +58,7 @@ export const auth = betterAuth({
     // A migração 0059 fez o backfill das contas pré-existentes no mesmo commit.
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
-      await enviarEmailTransacional({
+      dispararEmail({
         para: user.email,
         assunto: "Redefinir sua senha no Iris",
         texto: `Para redefinir sua senha, acesse: ${url}`,
@@ -43,7 +70,7 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      await enviarEmailTransacional({
+      dispararEmail({
         para: user.email,
         assunto: "Confirme seu e-mail no Iris",
         texto: `Para confirmar seu e-mail, acesse: ${url}`,
