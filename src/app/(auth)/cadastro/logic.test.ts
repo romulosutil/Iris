@@ -416,12 +416,91 @@ describe("executarCadastro", () => {
     expect(Math.abs(msErrado - msNovo)).toBeLessThan(120);
   }, 20_000);
 
-  it("AVISA quando o piso é estourado, em vez de degradar em silêncio", async () => {
-    // Piso estourado = a resposta volta a revelar o ramo pelo tempo. Precisa
-    // ser observável em produção, senão a proteção morre sem ninguém notar.
-    const avisos: string[] = [];
-    const original = console.warn;
-    console.warn = (...a: unknown[]) => void avisos.push(String(a[0]));
+  it("STRADDLE: ramos em lados diferentes do piso não são amplificados", async () => {
+    // Rodada de correção 2, achado I1 reaberto. A quantização da rodada 1
+    // tinha um modo de falha PIOR que o piso puro: quando os dois ramos caem
+    // em degraus DIFERENTES do quantum, o degrau vira amplificador. Medido
+    // pelo re-reviewer na rota real: barato=1216 caro=2407 delta=1191ms.
+    //
+    // Com piso puro, nos mesmos custos, o delta observável é o delta do
+    // TRABALHO (aqui ~400ms de custo injetado, na prática 38ms medidos contra
+    // Postgres real) — nunca um quantum inteiro. Este teste fixa isso: os
+    // custos são escolhidos de propósito para cair em lados opostos do piso.
+    const custoBarato = PISO_RESPOSTA_MS - 300; // fica ABAIXO do piso
+    const custoCaro = PISO_RESPOSTA_MS + 100; // fica ACIMA do piso
+
+    criarContaEClinica.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, custoCaro));
+      return { userId: "u", clinicId: "c" };
+    });
+    const t0 = Date.now();
+    await executarCadastro(fd(completo));
+    const msCaro = Date.now() - t0;
+
+    criarContaEClinica.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, custoBarato));
+      throw new CredencialInvalidaFake();
+    });
+    const t1 = Date.now();
+    await executarCadastro(fd(completo));
+    const msBarato = Date.now() - t1;
+
+    // Com quantização isto daria ~2400 vs ~1200 = 1200ms de delta.
+    expect(msBarato).toBeGreaterThanOrEqual(PISO_RESPOSTA_MS - 30);
+    expect(msCaro).toBeGreaterThanOrEqual(PISO_RESPOSTA_MS - 30);
+    expect(Math.abs(msCaro - msBarato)).toBeLessThan(250);
+  }, 30_000);
+
+  it("a espera na FILA do semáforo não entra na janela normalizada", async () => {
+    // Rodada de correção 2. `iniciadoEm` fixado antes do semáforo punha a
+    // espera na fila (até TIMEOUT_FILA_MS) dentro de `decorrido` — e a espera
+    // é justamente a parte do relógio que o ATACANTE controla, carregando o
+    // endpoint. Com ela dentro da janela, dá para empurrar o total para além
+    // do piso sob demanda e voltar a ler o tempo do trabalho.
+    //
+    // O piso passa a ser contado a partir da AQUISIÇÃO da vaga. Consequência
+    // observável: quem esperou na fila responde em `espera + piso`, não em
+    // `piso`. É isso que este teste mede.
+    const custoNucleo = 600;
+    criarContaEClinica.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, custoNucleo));
+      return { userId: "u", clinicId: "c" };
+    });
+
+    // 4 vagas ocupadas por `custoNucleo`; a 5ª espera por elas.
+    const ocupantes = Array.from({ length: 4 }, (_, i) =>
+      executarCadastro(fd({ ...completo, email: `ocup${i}@exemplo.com` })),
+    );
+    await new Promise((r) => setTimeout(r, 20)); // garante a ordem na fila
+    const t0 = Date.now();
+    const atrasado = executarCadastro(
+      fd({ ...completo, email: "fila@exemplo.com" }),
+    );
+    await Promise.all([...ocupantes, atrasado]);
+    const msAtrasado = Date.now() - t0;
+
+    // Com `iniciadoEm` antes do semáforo daria ~max(piso, espera+núcleo) =
+    // ~1200ms. Contado da aquisição, dá ~espera(600) + piso(1200) = ~1800ms.
+    expect(msAtrasado).toBeGreaterThanOrEqual(
+      PISO_RESPOSTA_MS + custoNucleo - 150,
+    );
+  }, 30_000);
+
+  it("não emite log correlacionado ao ramo quando o piso é estourado", async () => {
+    // Rodada de correção 2, quebra nova encontrada na re-review: o aviso
+    // `PISO DE TEMPO ESTOURADO` só disparava no ramo que estourava — ou seja,
+    // a linha de log correlacionava 1:1 com "o e-mail era novo". Quem lê o log
+    // ganhava o oráculo de graça, e o custo do próprio log caía FORA da janela
+    // normalizada. O canal saiu; observabilidade de estouro fica com métrica
+    // genérica de duração de requisição, que não distingue ramo.
+    const warns: unknown[][] = [];
+    const errors: unknown[][] = [];
+    const w = vi
+      .spyOn(console, "warn")
+      .mockImplementation((...a) => void warns.push(a));
+    const e = vi
+      .spyOn(console, "error")
+      .mockImplementation((...a) => void errors.push(a));
     try {
       criarContaEClinica.mockImplementation(async () => {
         await new Promise((r) => setTimeout(r, PISO_RESPOSTA_MS + 200));
@@ -429,52 +508,15 @@ describe("executarCadastro", () => {
       });
       await executarCadastro(fd(completo));
     } finally {
-      console.warn = original;
+      w.mockRestore();
+      e.mockRestore();
     }
-    expect(avisos.some((a) => a.includes("PISO DE TEMPO ESTOURADO"))).toBe(
-      true,
-    );
-  }, 20_000);
-
-  it("com o piso ESTOURADO, o tempo continua QUANTIZADO — não vira o tempo bruto", async () => {
-    // Rodada de correção 1, achado I1. O piso fixo tem um modo de falha que o
-    // teste anterior não cobria: assim que UM ramo passa de PISO_RESPOSTA_MS,
-    // `respeitarPiso` deixa de esperar e o tempo de resposta passa a ser o
-    // tempo BRUTO daquele ramo — ou seja, o canal reabre inteiro, com
-    // resolução de milissegundo, exatamente no cenário em que mais importa
-    // (ramo de e-mail novo caro sob carga).
-    //
-    // A correção não é "aumentar o piso" (o que exigiria adivinhar o custo do
-    // hardware de produção, que é o que a review disse para não depender).
-    // É QUANTIZAR: a resposta sai sempre num múltiplo do piso. Um ramo que
-    // gasta 1.3 s e outro que gasta 1.7 s caem no MESMO múltiplo (2.4 s) e
-    // continuam indistinguíveis, sem ninguém ter calibrado nada.
-    const silenciar = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      criarContaEClinica.mockImplementation(async () => {
-        await new Promise((r) => setTimeout(r, PISO_RESPOSTA_MS + 150));
-        return { userId: "u", clinicId: "c" };
-      });
-      const t0 = Date.now();
-      await executarCadastro(fd(completo));
-      const msNovo = Date.now() - t0;
-
-      criarContaEClinica.mockImplementation(async () => {
-        await new Promise((r) => setTimeout(r, PISO_RESPOSTA_MS + 600));
-        throw new CredencialInvalidaFake();
-      });
-      const t1 = Date.now();
-      await executarCadastro(fd(completo));
-      const msErrado = Date.now() - t1;
-
-      // Sem quantização estes dois seriam ~1350 ms e ~1800 ms: 450 ms de
-      // diferença, medível de fora com folga.
-      expect(msNovo).toBeGreaterThanOrEqual(2 * PISO_RESPOSTA_MS - 30);
-      expect(msErrado).toBeGreaterThanOrEqual(2 * PISO_RESPOSTA_MS - 30);
-      expect(Math.abs(msErrado - msNovo)).toBeLessThan(120);
-    } finally {
-      silenciar.mockRestore();
-    }
+    const tudo = [...warns, ...errors]
+      .map((l) => l.map((x) => String(x)).join(" "))
+      .join(" | ");
+    expect(tudo).not.toContain("PISO");
+    expect(warns).toHaveLength(0);
+    expect(errors).toHaveLength(0);
   }, 30_000);
 
   // ── Log de erro do núcleo ──────────────────────────────────────────────────

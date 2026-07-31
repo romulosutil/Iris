@@ -291,6 +291,22 @@ export async function criarContaEClinica(
  * mesma resposta genérica usada para qualquer outra falha (ex.: e-mail
  * inválido, rate limit) — sem mencionar que o e-mail já existe.
  */
+/**
+ * Hash fixo usado só para gastar o mesmo scrypt no ramo que não tem credencial
+ * para conferir. Derivado sob demanda e memoizado por processo — a senha de
+ * origem é irrelevante e nunca é comparada com nada de verdade; o valor existe
+ * exclusivamente para dar trabalho equivalente a `password.verify`.
+ */
+let hashDummy: Promise<string> | null = null;
+function hashDeComparacaoDummy(context: {
+  password: { hash: (s: string) => Promise<string> };
+}): Promise<string> {
+  hashDummy ??= context.password.hash(
+    "hash-de-comparacao-sem-uso-real-apenas-para-simetria-de-tempo",
+  );
+  return hashDummy;
+}
+
 async function verificarPossePorSenha(
   userId: string,
   senha: string,
@@ -300,6 +316,21 @@ async function verificarPossePorSenha(
   const credencial = contas?.find((c) => c.providerId === "credential");
 
   if (!credencial?.password) {
+    // TRABALHO SIMÉTRICO (rodada de correção 2 da Task 7, achado I1). Sem
+    // isto, uma conta SEM credencial de senha — o estado de toda conta criada
+    // por convite ou por seed — saía daqui antes de qualquer scrypt. Medido
+    // contra Postgres real: 3 ms de p50, contra 60 ms do ramo "senha errada" e
+    // 98 ms do ramo "e-mail novo". Um ramo 20x mais rápido que os outros é um
+    // oráculo de "esta conta existe e nunca definiu senha", e nenhum piso de
+    // tempo conserta isso — piso é curativo, trabalho igual é a defesa.
+    // Verificação dummy contra um hash fixo, que é a técnica padrão de
+    // endpoint de autenticação. O hash é derivado UMA vez por processo e
+    // reaproveitado (a derivação em si é cara; a verificação é o que precisa
+    // acontecer toda vez).
+    await context.password.verify({
+      hash: await hashDeComparacaoDummy(context),
+      password: senha,
+    });
     throw new CredencialInvalida();
   }
 

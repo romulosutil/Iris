@@ -73,6 +73,58 @@ todo deploy/reciclagem zera o estado.
 - A limpeza de `auth_throttle` é oportunista (a cada 5 min por instância,
   entradas com mais de 1 h de expiradas). Não há job dedicado.
 
+## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 2 (Issue #163)
+
+Re-review derrubou a quantização de tempo da rodada 1. **A decisão que muda o
+desenho: parar de normalizar TEMPO por cima de trabalho desigual e normalizar o
+TRABALHO.**
+
+- **Números medidos** (Postgres real + Better-Auth real, 12 amostras
+  interleaved por ramo, em `criarContaEClinica` — nenhum dublê):
+
+  | ramo | min | p50 | p99 | max |
+  | --- | --- | --- | --- | --- |
+  | e-mail NOVO (o "caro") | 89 | 98 | 105 | 105 |
+  | e-mail existente + senha errada | 57 | 60 | 67 | 67 |
+  | e-mail existente + retomada | 63 | 66 | 77 | 77 |
+  | **conta SEM credencial de senha** | **2** | **3** | **4** | **4** |
+
+  O piso de 1200 ms tem ~11x de folga sobre o pior ramo, e o delta real
+  novo-vs-errado é de **38 ms**, não os ~400 ms que os testes sintéticos
+  sugeriam. Os ramos já eram quase simétricos: cada um faz exatamente um
+  scrypt.
+- **O ramo assimétrico de verdade era outro, e ninguém tinha olhado:** conta
+  sem credencial de senha (estado normal de quem entrou por convite ou seed)
+  saía de `verificarPossePorSenha` **antes de qualquer scrypt** — 3 ms contra
+  60 ms. Oráculo de "esta conta existe e nunca definiu senha". Corrigido com
+  verificação dummy contra hash fixo memoizado (técnica padrão de endpoint de
+  autenticação). **Isto tocou `src/auth/cadastro.ts`, que é da Task 5.**
+- **Quantização revertida para piso simples.** Quando os dois ramos caem em
+  degraus diferentes do quantum (straddle), o degrau **amplifica**: medido
+  1191 ms de delta onde o piso simples daria 100 ms. Regra que fica: piso
+  simples degrada para o delta do trabalho; quantização degrada para o tamanho
+  do degrau. **Quantizar só faz sentido se o straddle for inalcançável, e ele é
+  alcançável por construção sempre que o atacante influencia a duração.**
+- **A janela normalizada passou a começar na aquisição da vaga do semáforo.**
+  Antes ela incluía a espera na fila (até 3 s), que é justamente a parte do
+  relógio que o atacante controla carregando o endpoint — dava para empurrar o
+  total para além do piso sob demanda e voltar a ler o tempo do trabalho.
+  Custo aceito: quem espera na fila responde em `espera + piso`.
+- **O aviso `PISO DE TEMPO ESTOURADO` saiu.** Ele só disparava no ramo que
+  estourava: a linha de log correlacionava 1:1 com "o e-mail era novo", e o
+  custo do log caía fora da janela normalizada. Observabilidade de estouro fica
+  com métrica genérica de duração de requisição, que não distingue ramo.
+  **Regra: log condicional a um ramo é canal lateral, mesmo quando o texto não
+  cita o dado.**
+
+**Aberto**
+
+- A medição é da máquina de desenvolvimento, não do container do Easypanel.
+  Com 11x de folga, escalar não muda a conclusão — mas o número de produção
+  segue não medido.
+- `x-forwarded-for` do Easypanel continua não verificado (mesmo item da rodada 1).
+- Sem teste HTTP end-to-end do endpoint.
+
 ## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 1 (Issue #163)
 
 Review da Task 7 apontou 1 Crítico e 4 Importantes. O que mudou de **decisão**

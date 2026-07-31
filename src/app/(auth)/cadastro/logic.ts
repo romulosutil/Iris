@@ -70,12 +70,30 @@ const TETO_IP_S = 30 * 60;
  * qualquer piso num dia de rede ruim. O envio saiu do caminho da requisição
  * (`dispararEmail` em src/auth/auth.ts) exatamente por isso.
  *
- * ESTE VALOR NÃO É UMA APOSTA NO CUSTO DO SCRYPT. `respeitarPiso` não pisa,
- * QUANTIZA: a resposta sai sempre num múltiplo desta constante, então a
- * uniformidade não depende de o ramo caro caber embaixo dela — que era
- * exatamente a dependência frágil apontada na rodada de correção 1 (achado
- * I1), já que ninguém mediu o custo real no container de produção. Estourar um
- * quantum piora a latência e gera aviso; NÃO reabre o canal de tempo.
+ * O VALOR É DERIVADO DE MEDIÇÃO, não de chute (rodada de correção 2). Medido
+ * contra Postgres real + Better-Auth real, 12 amostras interleaved por ramo,
+ * em `criarContaEClinica`:
+ *
+ *     ramo NOVO (caro)      min=89  p50=98  p99=105  max=105 ms
+ *     ramo SENHA-ERRADA     min=57  p50=60  p99=67   max=67  ms
+ *     ramo RETOMADA         min=63  p50=66  p99=77   max=77  ms
+ *
+ * Ou seja: o pior ramo tem p99 de ~105 ms e o piso é ~11x isso. Os ramos já
+ * são quase simétricos por construção — cada um faz EXATAMENTE um scrypt (o
+ * novo deriva no sign-up, o existente verifica) — e os 38 ms de diferença são
+ * os três inserts do ramo novo.
+ *
+ * POR QUE PISO SIMPLES E NÃO QUANTIZAÇÃO (a rodada 1 tentou quantizar e foi
+ * revertida): quantizar amplifica em vez de normalizar quando os dois ramos
+ * caem em degraus diferentes (straddle) — o vazamento passa a ser de até um
+ * quantum INTEIRO (1200 ms) em vez do delta real de trabalho (38 ms). Piso
+ * simples degrada no pior caso para o delta do trabalho; quantização degrada
+ * para o tamanho do degrau. Com trabalho simétrico, piso simples é
+ * estritamente melhor nos dois regimes.
+ *
+ * A DEFESA DE VERDADE É O TRABALHO SIMÉTRICO (`verificarPossePorSenha` faz uma
+ * verificação dummy quando não há credencial, para não existir ramo que sai
+ * antes do scrypt). O piso é curativo para jitter, não a barreira.
  */
 export const PISO_RESPOSTA_MS = 1_200;
 
@@ -195,42 +213,30 @@ function descreverErro(err: unknown): string {
 }
 
 /**
- * Segura a resposta até o próximo MÚLTIPLO de `PISO_RESPOSTA_MS` desde
- * `iniciadoEm`. Não é só um piso: é quantização.
+ * Espera o que faltar para fechar `PISO_RESPOSTA_MS` desde `iniciadoEm`.
  *
- * Por que quantizar e não só pisar (rodada de correção 1, achado I1): um piso
- * puro protege enquanto os dois ramos couberem embaixo dele — e no instante em
- * que um estoura, o tempo de resposta volta a ser o tempo BRUTO daquele ramo,
- * com resolução de milissegundo. Ou seja, a proteção some exatamente na
- * condição em que ela mais importa (ramo de e-mail novo caro, sob carga, em
- * hardware que ninguém mediu). Depender de "o ramo caro cabe no piso" é
- * depender de uma calibração que não temos.
+ * PISO SIMPLES, de novo (a rodada de correção 1 trocou por quantização e a
+ * rodada 2 reverteu). Motivo medido, não estético: quando os dois ramos caem
+ * em degraus diferentes do quantum, o degrau AMPLIFICA — o observável vira a
+ * distância entre degraus (1200 ms) em vez da distância entre os trabalhos
+ * (38 ms medidos). Piso simples nunca amplifica: no pior caso ele degrada
+ * exatamente para o delta de trabalho, que é a grandeza que a simetria de
+ * `verificarPossePorSenha` mantém pequena.
  *
- * Quantizado, o tempo observável é sempre `n * PISO_RESPOSTA_MS`. Dois ramos
- * que gastam 1,3 s e 1,7 s saem os dois em 2,4 s e continuam indistinguíveis
- * sem ninguém ter ajustado constante nenhuma. O que resta de canal é a
- * fronteira do quantum, e ela some ao aumentar o quantum — não ao adivinhar o
- * custo do scrypt.
+ * `iniciadoEm` DEVE ser tomado depois da aquisição da vaga do semáforo. A
+ * espera na fila é a parte do relógio que o atacante controla (basta carregar
+ * o endpoint); dentro da janela medida, ela deixaria ele empurrar o total para
+ * além do piso sob demanda e voltar a ler o tempo do trabalho. Fora da janela,
+ * a espera é somada igualmente aos dois ramos e não distingue nada.
  *
- * O aviso continua: cruzar um quantum não quebra a uniformidade, mas é o sinal
- * de que o custo do caminho síncrono cresceu (alguém pôs I/O de volta na rota,
- * por exemplo — foi o caso do `sendOnSignUp`). Degradar em silêncio aqui seria
- * perder esse sinal.
+ * NÃO LOGA nada aqui. O aviso de "piso estourado" que existiu na rodada 1 era
+ * ele próprio um canal: disparava só no ramo que estourava, ou seja a linha de
+ * log correlacionava 1:1 com "o e-mail era novo", e o custo do log caía fora
+ * da janela normalizada. Estouro de piso se observa por métrica genérica de
+ * duração de requisição, que não distingue ramo.
  */
 async function respeitarPiso(iniciadoEm: number): Promise<void> {
-  const decorrido = Date.now() - iniciadoEm;
-  const quanta = Math.max(1, Math.ceil(decorrido / PISO_RESPOSTA_MS));
-  const alvo = quanta * PISO_RESPOSTA_MS;
-
-  if (quanta > 1) {
-    console.warn(
-      `executarCadastro: PISO DE TEMPO ESTOURADO (${decorrido}ms > ${PISO_RESPOSTA_MS}ms) — ` +
-        `a resposta foi quantizada para ${alvo}ms e segue uniforme, mas o custo do ` +
-        "caminho síncrono cresceu: investigar antes que o quantum vire latência visível.",
-    );
-  }
-
-  const restante = alvo - decorrido;
+  const restante = PISO_RESPOSTA_MS - (Date.now() - iniciadoEm);
   if (restante > 0) await new Promise((r) => setTimeout(r, restante));
 }
 
@@ -321,15 +327,24 @@ export async function executarCadastro(
     };
   }
 
+  // JANELA NORMALIZADA — começa na AQUISIÇÃO DA VAGA, não na chegada da
+  // requisição (rodada de correção 2). A espera na fila do semáforo pode ir a
+  // TIMEOUT_FILA_MS e é o atacante quem a controla, carregando o endpoint: se
+  // ela entrar em `decorrido`, ele empurra o total para além do piso quando
+  // quiser e o tempo volta a refletir qual ramo rodou. Fora da janela, a
+  // espera é somada igualmente aos dois ramos e não distingue nada — custa
+  // latência sob carga, não confidencialidade.
+  let iniciadoNucleo = iniciadoEm;
   try {
-    await comLimiteDeCpu(() =>
-      criarContaEClinica({
+    await comLimiteDeCpu(() => {
+      iniciadoNucleo = Date.now();
+      return criarContaEClinica({
         ...validado.dados,
         versaoTermo: VERSAO_TERMO,
         ip: ip ?? undefined,
         userAgent,
-      }),
-    );
+      });
+    });
   } catch (err) {
     if (err instanceof SemaforoSaturado) {
       // Servidor sem vaga de CPU para scrypt agora. A decisão é tomada ANTES de
@@ -358,7 +373,7 @@ export async function executarCadastro(
         "executarCadastro: falha ao criar conta/clínica:",
         descreverErro(err),
       );
-      await respeitarPiso(iniciadoEm);
+      await respeitarPiso(iniciadoNucleo);
       return {
         error:
           "Não foi possível concluir o cadastro agora. Tente novamente em instantes.",
@@ -369,6 +384,6 @@ export async function executarCadastro(
     // não escreveu nada (Task 5 garante zero escrita antes desse gate).
   }
 
-  await respeitarPiso(iniciadoEm);
+  await respeitarPiso(iniciadoNucleo);
   return {};
 }
