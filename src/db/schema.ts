@@ -131,6 +131,11 @@ export const appUser = pgTable("app_user", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  // Registro profissional DECLARADO no cadastro aberto (spec §2, D6). Não há
+  // verificação na API do conselho — o valor está na trilha, não na barreira.
+  conselho: text("conselho"),
+  registroNumero: text("registro_numero"),
+  registroUf: text("registro_uf"),
 });
 
 // Fase 6.2b — tabela do plugin twoFactor (Better-Auth). Chaves em camelCase = o
@@ -248,6 +253,12 @@ export const clinic = pgTable("clinic", {
   protocoloEmergenciaDeclaradoPor: uuid(
     "protocolo_emergencia_declarado_por",
   ).references(() => appUser.id),
+  // Fatia A (#163): relógio do trial. Começa no signup; `trial_dias` é dado,
+  // não constante, porque o valor é hipótese de produto (spec §2, D3).
+  trialComecoEm: timestamp("trial_comeco_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  trialDias: integer("trial_dias").notNull().default(7),
   criadoEm: timestamp("criado_em", { withTimezone: true })
     .notNull()
     .defaultNow(),
