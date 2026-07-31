@@ -101,6 +101,23 @@ describe("validarCadastro", () => {
       error: "A senha precisa ter ao menos 12 caracteres.",
     });
   });
+
+  it("recusa senha acima de 128 caracteres ANTES do núcleo", () => {
+    // Rodada de correção 3. 129 caracteres é o gatilho exato: o Better-Auth
+    // lança `APIError` no sign-up (`maxPasswordLength`) e NÃO lança no
+    // `password.verify`, então os dois ramos divergiam sem tocar scrypt.
+    // Barrado aqui, o núcleo nem roda. Erro específico é legítimo neste ponto
+    // porque a validação não olha o banco e não depende de o e-mail existir.
+    const r = validarCadastro(fd({ ...completo, senha: "x".repeat(129) }));
+    expect(r).toEqual({
+      ok: false,
+      error: "A senha pode ter no máximo 128 caracteres.",
+    });
+    // O limite em si passa.
+    expect(
+      validarCadastro(fd({ ...completo, senha: "x".repeat(128) })).ok,
+    ).toBe(true);
+  });
 });
 
 describe("executarCadastro", () => {
@@ -359,6 +376,114 @@ describe("executarCadastro", () => {
     expect(rSenhaErrada).toEqual(rNovo);
     expect(JSON.stringify(rSenhaErrada)).toBe(JSON.stringify(rNovo));
   });
+
+  /**
+   * CLASSE, não caso (rodada de correção 3).
+   *
+   * Este mesmo Critical já se mudou de lugar três vezes nesta fatia: fechou em
+   * "conta completa" e reapareceu em "conta incompleta"; fechou lá e virou
+   * canal de tempo; fechou o tempo e voltou pelo CORPO da resposta. O gatilho
+   * da terceira vez foi uma senha de 129 caracteres: o Better-Auth aplica
+   * `maxPasswordLength` no sign-up e NÃO no `password.verify`, então e-mail
+   * novo dava `APIError` (corpo de erro) e e-mail existente dava
+   * `CredencialInvalida` (corpo de sucesso). Um POST, um bit, determinístico —
+   * imune ao piso de tempo e ao trabalho simétrico, porque nem toca scrypt.
+   *
+   * Um teste que só cobrisse "senha de 129 caracteres" não impediria a quarta
+   * relocação. O que se assere aqui é a invariante: QUALQUER desfecho do
+   * núcleo — inclusive um que ainda não existe — produz a resposta do sucesso.
+   * A tabela existe para que adicionar um desfecho novo seja uma linha.
+   */
+  const DESFECHOS_DO_NUCLEO: [string, () => unknown][] = [
+    ["sucesso (e-mail novo)", () => ({ userId: "u", clinicId: "c" })],
+    [
+      "CredencialInvalida (e-mail existe, senha errada)",
+      () => {
+        throw new CredencialInvalidaFake();
+      },
+    ],
+    [
+      "APIError do Better-Auth (senha > maxPasswordLength)",
+      () => {
+        // O caso que reabriu o oráculo: só o ramo de e-mail NOVO chega no
+        // sign-up, que é onde o Better-Auth aplica o teto de 128.
+        const e = new Error("Password too long");
+        e.name = "APIError";
+        throw e;
+      },
+    ],
+    [
+      "erro de driver Postgres (unique violation)",
+      () => {
+        // Só acontece no ramo de e-mail novo (é ele que faz os inserts) — ou
+        // seja, mapear este erro para corpo próprio é o mesmo vazamento.
+        throw Object.assign(new Error("duplicate key"), { code: "23505" });
+      },
+    ],
+    [
+      "hash corrompido em auth_account (verify lança)",
+      () => {
+        // Minor registrado pelo controlador: hash inválido faz
+        // `password.verify` lançar em vez de devolver false. Só é alcançável
+        // no ramo de e-mail EXISTENTE, logo é oráculo pelo lado oposto.
+        throw new Error("Invalid scrypt hash format");
+      },
+    ],
+    [
+      "throw de não-Error (string)",
+      () => {
+        throw "pane";
+      },
+    ],
+    [
+      "throw de undefined",
+      () => {
+        throw undefined;
+      },
+    ],
+  ];
+
+  it.each(DESFECHOS_DO_NUCLEO)(
+    "desfecho do núcleo %s colapsa na resposta do sucesso",
+    async (_nome, produzir) => {
+      const silencio = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        criarContaEClinica.mockImplementation(async () => produzir());
+        const r = await executarCadastro(fd(completo));
+        expect(r).toEqual({});
+        expect(JSON.stringify(r)).toBe("{}");
+        // `error` ausente é o que faz `actions.ts` redirecionar — se qualquer
+        // desfecho trouxesse `error`, o redirect também viraria o oráculo.
+        expect(Object.hasOwn(r, "error")).toBe(false);
+      } finally {
+        silencio.mockRestore();
+      }
+    },
+    20_000,
+  );
+
+  it("nenhum par de desfechos do núcleo é distinguível entre si", async () => {
+    // A asserção anterior é por linha; esta é sobre o CONJUNTO. Se um desfecho
+    // novo entrar na tabela e vazar, os dois testes caem — este mostra o par.
+    const silencio = vi.spyOn(console, "error").mockImplementation(() => {});
+    const respostas: [string, string][] = [];
+    try {
+      for (const [nome, produzir] of DESFECHOS_DO_NUCLEO) {
+        criarContaEClinica.mockImplementation(async () => produzir());
+        respostas.push([
+          nome,
+          JSON.stringify(await executarCadastro(fd(completo))),
+        ]);
+      }
+    } finally {
+      silencio.mockRestore();
+    }
+    const distintas = new Set(respostas.map(([, r]) => r));
+    expect(
+      distintas.size,
+      `respostas distinguíveis: ${JSON.stringify(respostas)}`,
+    ).toBe(1);
+  }, 30_000);
 
   /**
    * O custo caro fica no ramo **e-mail novo** (finding 2 do review): é ele que

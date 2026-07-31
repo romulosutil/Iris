@@ -297,13 +297,36 @@ export async function criarContaEClinica(
  * origem é irrelevante e nunca é comparada com nada de verdade; o valor existe
  * exclusivamente para dar trabalho equivalente a `password.verify`.
  */
-let hashDummy: Promise<string> | null = null;
-function hashDeComparacaoDummy(context: {
+let hashDummy: string | null = null;
+let hashDummyEmVoo: Promise<string> | null = null;
+/** Só para teste: descarta a memoização entre casos. */
+export function __resetHashDummyParaTeste(): void {
+  hashDummy = null;
+  hashDummyEmVoo = null;
+}
+// Exportada para teste direto: a memoização é estado de MÓDULO e o modo de
+// falha que interessa (envenenamento por rejeição) não é alcançável de fora
+// sem derrubar o Better-Auth de propósito. `context` já é injetado, então a
+// função é testável sem tocar em banco. Não é `"use server"` e não recebe
+// `ctx` — fora do alcance da issue #55.
+export async function hashDeComparacaoDummy(context: {
   password: { hash: (s: string) => Promise<string> };
 }): Promise<string> {
-  hashDummy ??= context.password.hash(
-    "hash-de-comparacao-sem-uso-real-apenas-para-simetria-de-tempo",
-  );
+  if (hashDummy !== null) return hashDummy;
+  // MEMOIZA O VALOR RESOLVIDO, NÃO A PROMISE (rodada de correção 3). Memoizar
+  // a promise envenena o processo inteiro se ela rejeitar uma única vez: toda
+  // requisição seguinte para e-mail sem credencial passaria a lançar, o erro
+  // subiria para `executarCadastro` e o corpo da resposta divergiria — ou seja,
+  // exatamente o mesmo oráculo de enumeração, por outra porta. A promise em voo
+  // ainda é compartilhada para não derivar N hashes sob concorrência, mas é
+  // limpa no catch, então a próxima tentativa recomeça limpa.
+  hashDummyEmVoo ??= context.password
+    .hash("hash-de-comparacao-sem-uso-real-apenas-para-simetria-de-tempo")
+    .catch((err: unknown) => {
+      hashDummyEmVoo = null;
+      throw err;
+    });
+  hashDummy = await hashDummyEmVoo;
   return hashDummy;
 }
 

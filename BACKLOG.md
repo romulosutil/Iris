@@ -73,6 +73,42 @@ todo deploy/reciclagem zera o estado.
 - A limpeza de `auth_throttle` é oportunista (a cada 5 min por instância,
   entradas com mais de 1 h de expiradas). Não há job dedicado.
 
+## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 3 (Issue #163)
+
+**O oráculo de enumeração voltou pelo CORPO da resposta — terceira relocação do
+mesmo Critical nesta fatia.** Histórico: fechou em "conta completa" (Task 5) e
+reapareceu em "conta incompleta"; fechou lá e virou canal de tempo (rodadas 1 e
+2); fechou o tempo e voltou pelo corpo.
+
+- **A instância:** o Better-Auth aplica `maxPasswordLength = 128` no sign-up e
+  **não** no `password.verify`. Com senha de 129 caracteres, e-mail novo dava
+  `APIError` (corpo de erro) e e-mail existente dava `CredencialInvalida`
+  (corpo de sucesso). **Um POST, um bit, determinístico** — imune ao piso de
+  tempo e ao trabalho simétrico, porque nem chega a tocar scrypt.
+- **A correção é de CLASSE, e é a decisão que fica:** todo desfecho de
+  `criarContaEClinica` colapsa na mesma resposta do sucesso. A fronteira é
+  **`nucleoEntrou`**, não uma lista de erros conhecidos — validação pré-núcleo
+  (não olha o banco, não depende de o e-mail existir) pode ter erro específico;
+  qualquer coisa pós-núcleo é uniforme. **Regra permanente: mapeamento de erro
+  por lista de casos conhecidos numa rota anti-enumeração vaza no próximo erro
+  que ninguém previu.**
+- **Custo aceito e declarado:** falha real de infraestrutura passa a responder
+  "verifique seu e-mail" sem ter criado conta. Silêncio para o usuário legítimo;
+  diagnóstico vai só para o log do servidor. É o preço de não devolver o
+  oráculo. **Consequência operacional: uma indisponibilidade de banco fica
+  invisível para o usuário — o alarme tem de vir de monitoração, não de
+  reclamação.**
+- **Dois minors morreram junto com a correção de classe**, e isso é o argumento
+  a favor dela: hash corrompido em `auth_account` (só alcançável no ramo de
+  e-mail existente) e envenenamento da memoização do hash dummy deixaram de
+  produzir corpo distinto sem precisar de tratamento próprio.
+- **Teto de 128 caracteres em `validarCadastro`** — validação pré-núcleo, para o
+  usuário legítimo receber mensagem útil em vez de silêncio.
+- **`hashDeComparacaoDummy` passou a memoizar o valor resolvido, não a
+  promise.** Promise memoizada que rejeita uma vez fica envenenada para o
+  processo inteiro. **Regra: memoização de promise em caminho de segurança é
+  falha permanente disfarçada de cache.**
+
 ## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 2 (Issue #163)
 
 Re-review derrubou a quantização de tempo da rodada 1. **A decisão que muda o

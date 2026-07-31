@@ -1,7 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { CredencialInvalida, criarContaEClinica } from "@/auth/cadastro";
-import { SemaforoSaturado, criarSemaforo } from "@/lib/semaforo";
+import { criarSemaforo } from "@/lib/semaforo";
 import { registrarTentativa } from "@/lib/throttle";
 
 export type EstadoCadastro = { error?: string };
@@ -19,6 +19,16 @@ export type EstadoCadastro = { error?: string };
 export const VERSAO_TERMO = "2026-07-30";
 
 const CONSELHOS = ["crp", "crfa", "crefito", "crm", "outro"] as const;
+
+/**
+ * Espelha `maxPasswordLength` do Better-Auth (128). Não é preferência nossa: é
+ * o valor a partir do qual o sign-up lança e a verificação de senha não lança,
+ * que foi o que reabriu o oráculo de enumeração pelo corpo da resposta na
+ * rodada de correção 3. Se o Better-Auth mudar esse teto, este número muda
+ * junto — e o teste de classe de `logic.test.ts` continua valendo de qualquer
+ * jeito, porque ele não depende deste número.
+ */
+export const MAX_SENHA = 128;
 
 // ─── Dimensionamento do throttle ─────────────────────────────────────────────
 // DIMENSIONADO PARA LOGIN, NÃO PARA CADASTRO. Esta rota verifica senha de
@@ -180,6 +190,18 @@ export function validarCadastro(
     return { ok: false, error: "Informe um e-mail válido." };
   if (dados.senha.length < 12)
     return { ok: false, error: "A senha precisa ter ao menos 12 caracteres." };
+  // TETO, do lado de cá (rodada de correção 3). O Better-Auth aplica
+  // `maxPasswordLength = 128` no sign-up e NÃO no `password.verify`, então sem
+  // este teto os dois ramos divergiam ANTES de qualquer scrypt e a divergência
+  // saía no corpo da resposta. O colapso pós-núcleo já fecha o vazamento; isto
+  // aqui é para o usuário legítimo receber mensagem útil em vez de silêncio.
+  // Pode ser específico porque é validação PRÉ-NÚCLEO: não olha o banco e não
+  // depende de o e-mail existir.
+  if (dados.senha.length > MAX_SENHA)
+    return {
+      ok: false,
+      error: `A senha pode ter no máximo ${MAX_SENHA} caracteres.`,
+    };
   if (!dados.nome) return { ok: false, error: "Informe seu nome completo." };
   if (!dados.nomeClinica)
     return { ok: false, error: "Informe o nome da clínica." };
@@ -335,8 +357,12 @@ export async function executarCadastro(
   // espera é somada igualmente aos dois ramos e não distingue nada — custa
   // latência sob carga, não confidencialidade.
   let iniciadoNucleo = iniciadoEm;
+  // A FRONTEIRA (rodada de correção 3). Não é "que erro foi esse", é "o núcleo
+  // chegou a rodar". Ver o bloco DESFECHO DO NÚCLEO abaixo.
+  let nucleoEntrou = false;
   try {
     await comLimiteDeCpu(() => {
+      nucleoEntrou = true;
       iniciadoNucleo = Date.now();
       return criarContaEClinica({
         ...validado.dados,
@@ -346,14 +372,20 @@ export async function executarCadastro(
       });
     });
   } catch (err) {
-    if (err instanceof SemaforoSaturado) {
-      // Servidor sem vaga de CPU para scrypt agora. A decisão é tomada ANTES de
-      // qualquer consulta ao banco e não depende do e-mail submetido — logo é
-      // idêntica para e-mail cadastrado e para e-mail livre, e não distingue os
-      // dois. Mensagem genérica, mesmo piso de tempo.
+    if (!nucleoEntrou) {
+      // NÃO CHEGOU AO NÚCLEO. Só o semáforo recusa aqui (fila cheia ou timeout
+      // de espera), e essa decisão sai do estado de carga do processo, antes de
+      // qualquer consulta ao banco — não do e-mail submetido. Logo é idêntica
+      // para e-mail cadastrado e para e-mail livre, e pode ter corpo próprio
+      // sem distinguir os dois.
+      //
+      // O teste é `nucleoEntrou`, e NÃO `err instanceof SemaforoSaturado`, de
+      // propósito: se um dia algo mais passar a lançar antes do núcleo, ele cai
+      // aqui por ser pré-núcleo, não por alguém ter lembrado de atualizar uma
+      // lista.
       console.warn(
-        "executarCadastro: recusado por saturação de CPU:",
-        err.message,
+        "executarCadastro: recusado antes do núcleo:",
+        descreverErro(err),
       );
       await respeitarPiso(iniciadoEm);
       return {
@@ -361,27 +393,43 @@ export async function executarCadastro(
           "Não foi possível concluir o cadastro agora. Tente novamente em instantes.",
       };
     }
+
+    // ── DESFECHO DO NÚCLEO — UNIFORME, SEM EXCEÇÃO ──────────────────────────
+    //
+    // TUDO que sai de `criarContaEClinica` colapsa no MESMO retorno do
+    // sucesso: `CredencialInvalida`, `APIError` do Better-Auth, erro de driver
+    // do Postgres, `throw` de string, e o erro que ainda não existe.
+    //
+    // Regra de CLASSE, não lista de casos conhecidos — a lista já falhou três
+    // vezes nesta fatia. O mesmo Critical fechou em "conta completa" e
+    // reapareceu em "conta incompleta"; fechou lá e virou canal de tempo;
+    // fechou o tempo e voltou pelo CORPO. A instância que fechou a terceira
+    // vez: senha com mais de 128 caracteres faz o Better-Auth lançar `APIError`
+    // no sign-up (`maxPasswordLength`), mas o `password.verify` do ramo de
+    // e-mail existente NÃO aplica esse teto — então e-mail novo devolvia corpo
+    // de erro e e-mail existente devolvia corpo de sucesso. Um POST, um bit,
+    // determinístico, imune ao piso de tempo e ao trabalho simétrico porque
+    // nem chega a tocar scrypt.
+    //
+    // A linha que separa o que PODE ter corpo próprio: validação PRÉ-NÚCLEO
+    // (`validarCadastro`) não olha o banco e não depende de o e-mail existir,
+    // então reporta erro específico e útil. Qualquer desfecho DEPOIS do núcleo
+    // depende, direta ou indiretamente, de o e-mail existir.
+    //
+    // CUSTO ACEITO, DECLARADO: uma falha real de infraestrutura passa a
+    // responder "verifique seu e-mail" sem ter criado conta nenhuma — silêncio
+    // para o usuário legítimo. A alternativa é devolver o oráculo. O
+    // diagnóstico vai para o log do servidor, que é onde ele pertence.
+    //
+    // Só nome + código, NUNCA o objeto cru (rodada 1, achado M1): erro de
+    // driver do Postgres carrega os parâmetros da query, ou seja e-mail do
+    // titular e potencialmente hash de senha.
     if (!(err instanceof CredencialInvalida)) {
-      // Falha genuína de infraestrutura. Não vaza nada sobre o e-mail: acontece
-      // igualmente nos dois ramos.
-      // Só nome + código, NUNCA o objeto cru (rodada de correção 1, achado
-      // M1): erro de driver do Postgres carrega os parâmetros da query, ou
-      // seja e-mail do titular e potencialmente hash de senha. Log de servidor
-      // não é destino legítimo de dado pessoal (LGPD), e um objeto de erro
-      // serializado inteiro também expõe estrutura interna a quem lê o log.
       console.error(
         "executarCadastro: falha ao criar conta/clínica:",
         descreverErro(err),
       );
-      await respeitarPiso(iniciadoNucleo);
-      return {
-        error:
-          "Não foi possível concluir o cadastro agora. Tente novamente em instantes.",
-      };
     }
-    // `CredencialInvalida` (e-mail já existe e a senha não confere) cai no
-    // MESMO retorno do sucesso — ver o bloco RESPOSTA UNIFORME acima. O núcleo
-    // não escreveu nada (Task 5 garante zero escrita antes desse gate).
   }
 
   await respeitarPiso(iniciadoNucleo);
