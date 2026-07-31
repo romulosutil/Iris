@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/auth/client";
 import { Form } from "@/components/ui/form";
@@ -93,6 +94,16 @@ export default function LoginPage() {
           </Button>
         </Form>
       </div>
+
+      <p className="text-[var(--text-secondary)] text-center text-sm">
+        Ainda não tem conta?{" "}
+        <Link
+          href="/cadastro"
+          className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
+        >
+          Criar conta
+        </Link>
+      </p>
     </div>
   );
 }
