@@ -178,9 +178,12 @@ pagamento; **não usamos a assinatura nativa dele**.
 4. Fechamento do ciclo: job conta pacientes ativos, multiplica pelo preço unitário
    vigente e cria `POST /v3/payments` com `externalReference` = `tenant:AAAA-MM`,
    referenciando a autorização.
-5. Fallback cartão/boleto: `billingType` alternativo com token de cartão salvo
-   (tokenização em produção depende de liberação do gerente de contas).
-6. NFS-e: no webhook de pagamento recebido, `POST /v3/invoices` referenciando o
+5. Meios de pagamento no MVP: **Pix e boleto**. Cartão só pela página de fatura
+   hospedada do provedor (`invoiceUrl`), sem tokenização e sem recorrência
+   automática — ver PCI abaixo.
+6. Inadimplência: webhook de cobrança vencida degrada a conta para somente-leitura
+   (§3.3). A política de retentativa da autorização Pix cobre a falha transitória.
+7. NFS-e: no webhook de pagamento **recebido**, `POST /v3/invoices` referenciando o
    pagamento.
 
 **Não usar `POST /v3/subscriptions`:** cobranças de assinatura são geradas **40
@@ -202,9 +205,17 @@ ciclo já existiria com o valor errado; e `updatePendingPayments: true` reajusta
 - `PAYMENT_CONFIRMED` **e** `PAYMENT_RECEIVED` chegam para a mesma cobrança, sem
   ordem garantida. Deduplicar por id do evento e **liberar acesso no
   `RECEIVED`** (fundos disponíveis), não no `CONFIRMED`.
-- **PCI:** o Asaas não tem tokenização client-side. Capturar cartão no nosso front
-  puxaria SAQ-D, desproporcional para um MVP. Redirecionar para o `invoiceUrl`
-  hospedado — cartão nunca toca a VPS (SAQ-A).
+- **PCI:** o Asaas não tem tokenização client-side, e a própria doc diz que uma
+  aplicação que captura cartão deveria ser **SAQ-D** — caro e desproporcional para
+  um MVP solo. Daí a decisão do passo 5: Pix e boleto na cobrança recorrente,
+  cartão só pela fatura hospedada. O cartão nunca toca a VPS (SAQ-A).
+- **Se a instrução do ciclo não for criada, ninguém é cobrado** — não existe rede
+  de segurança do lado do provedor. Isso reforça a assimetria já escolhida em
+  §3.3: job morto bloqueia acesso (falha fechada) mas nunca cobra sozinho.
+- **Rate limit de 100 requisições por janela.** O job de fechamento toca todos os
+  tenants no mesmo dia — fila com backoff, nunca disparo paralelo.
+- A conta do pagador tem **limite diário de Pix**; valor acima disso não passa.
+  Boleto é o fallback, não exceção rara.
 - **Datas sem fuso** (`dueDate` é `YYYY-MM-DD`): job em UTC gera competência do mês
   errado. Já coberto pela regra de timezone do §3.4.
 
@@ -282,8 +293,13 @@ cobrança.
    aprova em minutos na maioria dos casos, com análise cadastral de 2 a 7 dias
    úteis. **O sandbox é independente e autoaprovado** — dá para construir a
    integração inteira antes de abrir a conta real. Duas liberações a pedir por
-   escrito ao gerente: **tokenização de cartão** em produção e redução da
-   antecedência de geração de cobrança de 40 para 7 dias.
+   escrito ao gerente, **só se e quando cartão recorrente virar necessário**:
+   tokenização em produção (sujeita a análise, e é ela que puxaria o SAQ-D) e
+   redução da antecedência de geração de cobrança de 40 para 7 dias.
+   **NFS-e é trabalho do contador, não de engenharia:** Inscrição Municipal
+   regular, homologação da prefeitura para emissão por webservice, certificado
+   digital **e-CNPJ A1** e o código de serviço municipal. Em 2026 há ainda a
+   migração para o Portal Nacional com campos de IBS/CBS.
    O Pix Automático exige CNPJ ativo há ≥6 meses (o de 2018 satisfaz) e **CNAE
    compatível** — conferir o CNAE principal no contrato social.
    Não confirmado em fonte oficial: se **pagador PJ** é aceito no Pix Automático
