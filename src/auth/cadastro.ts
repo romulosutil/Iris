@@ -29,38 +29,66 @@ export type ResultadoCadastro = { userId: string; clinicId: string };
  * falha no meio deixaria o usuário sem clínica — beco sem saída em /sem-acesso,
  * com o e-mail do interessado já queimado.
  *
+ * SEGURANÇA (review round 1, item Crítico): a definição de "falta completar"
+ * NUNCA vem do que o chamador mandou — vem só do estado gravado. Uma conta já
+ * completa (dados profissionais preenchidos + algum aceite registrado) não
+ * sofre NENHUMA escrita nesta chamada, mesmo que o payload traga
+ * conselho/registroNumero/registroUf/versaoTermo diferentes. Sem isso, alguém
+ * que soubesse o e-mail de um profissional já cadastrado (e-mail não é
+ * segredo) reenviaria o formulário com dados forjados e sobrescreveria o
+ * registro dele, incluindo inserir um aceite de termos com IP/user-agent
+ * arbitrários — que depois é IMUTÁVEL (professional_consent só aceita
+ * SELECT/INSERT de iris_auth, ver migração 0058). Contrato para quem chama
+ * (Task 7): se a conta já está completa, esta função devolve os ids
+ * existentes e não sinaliza erro — decisão registrada no relatório da
+ * task-5, não inventar aqui uma forma de erro "já existe" (isso é
+ * responsabilidade da resposta anti-enumeração do Task 7).
+ *
+ * Quando a conta existe mas está INCOMPLETA (dados parciais ou nenhum
+ * aceite), os campos já preenchidos NUNCA são sobrescritos — só o que está
+ * `NULL` é completado (preencher é concluir um cadastro pendente; substituir
+ * valor já gravado é edição sem autenticação, e esta função não autentica
+ * ninguém no caminho de retomada — ver `provisionUser`, que para e-mail já
+ * existente devolve o id sem checar senha).
+ *
  * Estados parciais alcançáveis e como o retry resolve cada um (ver
  * task-5-report.md para o detalhe dos testes que cobrem cada caso):
  *
  * 1. Crash ANTES de `provisionUser` gravar `user_role` (app_user já existe —
  *    signUpEmail é side-effect do Better-Auth fora da nossa transação — mas o
  *    vínculo ainda não foi gravado): o retry NÃO encontra `vinculo`, então
- *    cria uma clínica NOVA e chama `provisionUser` de novo — que reconhece o
- *    e-mail existente e só grava o `user_role` que faltava. A clínica da
- *    tentativa anterior (se de fato existiu) fica órfã (sem `user_role`, sem
- *    `responsavel_conta_id`) — lixo inofensivo (sem dado de paciente), não
- *    dado privado exposto. Fora do escopo desta tarefa remover órfãs; registrado
- *    no BACKLOG.
+ *    tenta criar uma clínica NOVA e chama `provisionUser` de novo — que
+ *    reconhece o e-mail existente e só grava o `user_role` que faltava. Se
+ *    `provisionUser` falhar depois de criada a clínica nova,
+ *    `criarClinicaEVinculo` apaga a clínica órfã antes de propagar o erro
+ *    (item 3 do review). Uma clínica órfã só sobrevive a um crash de
+ *    processo real (kill no meio do `try`), não a um erro tratável — esse
+ *    resíduo raro está registrado no BACKLOG.md (sessão desta rodada).
  * 2. Crash DEPOIS de `user_role` gravado mas ANTES de completar os dados
  *    declarados (conselho/registro) ou o aceite: o retry ENCONTRA o vínculo,
- *    então NÃO cria clínica nem usuário novos, mas ainda assim roda os passos
- *    de conclusão (update idempotente dos dados declarados + upsert do
- *    aceite) — por isso eles NUNCA ficam dentro do bloco "só roda se for
- *    usuário novo". Um retorno antecipado ali é o bug que este módulo evita
- *    deliberadamente.
+ *    então NÃO cria clínica nem usuário novos; `contaEstaCompleta` detecta o
+ *    estado incompleto e `completarCadastro` preenche só os campos `NULL` e
+ *    grava o aceite que faltava.
  * 3. Reentrada dupla (retry do cliente, ou duplo-clique) com tudo já
- *    completo: todo passo é um upsert idempotente (update com os mesmos
- *    valores, ou um `select` antes do `insert` do aceite) — devolve o mesmo
- *    resultado sem duplicar nada.
+ *    completo: `contaEstaCompleta` devolve `true` e a função retorna sem
+ *    escrever nada.
  * 4. Duas requisições CONCORRENTES para o mesmo e-mail nunca visto antes: a
  *    unicidade de `app_user.email` decide uma corrida — uma delas pode
  *    receber erro de violação de unicidade do Better-Auth em vez de sucesso.
  *    Não é resolvido por esta função (não há lock); o cliente que recebeu erro
  *    deve reenviar, e o reenvio cai no caminho normal de retomada (item 3).
+ *    Duas requisições concorrentes de retomada (ambas encontram `vinculo`,
+ *    ambas tentam gravar o aceite) são resolvidas pelo índice único da
+ *    migração 0060 + `onConflictDoNothing`.
  */
 export async function criarContaEClinica(
-  e: EntradaCadastro,
+  entrada: EntradaCadastro,
 ): Promise<ResultadoCadastro> {
+  // Normaliza como o Better-Auth normaliza ao gravar (sign-up.mjs:164,
+  // `email.toLowerCase()`) — sem isso, "Foo@x.com" e "foo@x.com" não seriam
+  // reconhecidos como o mesmo cadastro na retomada.
+  const e: EntradaCadastro = { ...entrada, email: entrada.email.trim().toLowerCase() };
+
   const [existente] = await authDb
     .select({ id: appUser.id })
     .from(appUser)
@@ -95,50 +123,108 @@ export async function criarContaEClinica(
     clinicId = criado.clinicId;
   }
 
-  // Passos de conclusão: sempre rodam, mesmo em retomada — idempotentes por
-  // construção (update com os mesmos valores; insert do aceite guardado por
-  // select prévio). É isto que garante que uma falha ENTRE o vínculo e a
-  // conclusão (dados declarados + aceite) seja sanada no próximo retry, em
-  // vez de deixar o usuário permanentemente sem aceite registrado.
-  await authDb
-    .update(appUser)
-    .set({
-      conselho: e.conselho,
-      registroNumero: e.registroNumero,
-      registroUf: e.registroUf,
+  // Gate de segurança: conta já completa não sofre NENHUMA escrita, mesmo
+  // que o payload atual traga valores diferentes dos já gravados.
+  if (await contaEstaCompleta(userId, clinicId)) {
+    return { userId, clinicId };
+  }
+
+  await completarCadastro(userId, clinicId, e);
+
+  return { userId, clinicId };
+}
+
+/**
+ * Uma conta é "completa" quando os dados profissionais declarados estão
+ * todos preenchidos E já existe pelo menos um aceite de termos registrado
+ * para o vínculo usuário/clínica. Deliberadamente NÃO depende de
+ * `versaoTermo` do payload atual — o objetivo é impedir que um reenvio
+ * hostil (mesmo com uma versão de termo diferente) grave um aceite novo ou
+ * sobrescreva dado já gravado; renovar aceite para uma versão de termo nova
+ * é fluxo de outra tela (fora do escopo desta função de cadastro).
+ */
+async function contaEstaCompleta(userId: string, clinicId: string): Promise<boolean> {
+  const [user] = await authDb
+    .select({
+      conselho: appUser.conselho,
+      registroNumero: appUser.registroNumero,
+      registroUf: appUser.registroUf,
     })
-    .where(eq(appUser.id, userId));
+    .from(appUser)
+    .where(eq(appUser.id, userId))
+    .limit(1);
 
-  await authDb
-    .update(clinic)
-    .set({ responsavelContaId: userId })
-    .where(eq(clinic.id, clinicId));
+  if (
+    !user ||
+    user.conselho === null ||
+    user.registroNumero === null ||
+    user.registroUf === null
+  ) {
+    return false;
+  }
 
-  await garantirVinculoParaConsentimento(userId, clinicId);
-
-  const [aceiteExistente] = await authDb
+  const [aceite] = await authDb
     .select({ id: professionalConsent.id })
     .from(professionalConsent)
     .where(
       and(
         eq(professionalConsent.userId, userId),
         eq(professionalConsent.clinicId, clinicId),
-        eq(professionalConsent.versaoTermo, e.versaoTermo),
       ),
     )
     .limit(1);
 
-  if (!aceiteExistente) {
-    await authDb.insert(professionalConsent).values({
-      userId,
-      clinicId,
-      versaoTermo: e.versaoTermo,
-      ip: e.ip,
-      userAgent: e.userAgent,
-    });
+  return !!aceite;
+}
+
+/**
+ * Completa um cadastro incompleto: preenche só os campos `NULL` de
+ * `app_user`/`clinic.responsavel_conta_id` (nunca sobrescreve valor já
+ * gravado) e grava o aceite de termos que faltar, pelo único caminho que
+ * escreve em `professional_consent` (`gravarAceite`, abaixo).
+ */
+async function completarCadastro(
+  userId: string,
+  clinicId: string,
+  e: EntradaCadastro,
+): Promise<void> {
+  const [user] = await authDb
+    .select({
+      conselho: appUser.conselho,
+      registroNumero: appUser.registroNumero,
+      registroUf: appUser.registroUf,
+    })
+    .from(appUser)
+    .where(eq(appUser.id, userId))
+    .limit(1);
+
+  const patch: Partial<{
+    conselho: string;
+    registroNumero: string;
+    registroUf: string;
+  }> = {};
+  if (user?.conselho === null) patch.conselho = e.conselho;
+  if (user?.registroNumero === null) patch.registroNumero = e.registroNumero;
+  if (user?.registroUf === null) patch.registroUf = e.registroUf;
+
+  if (Object.keys(patch).length > 0) {
+    await authDb.update(appUser).set(patch).where(eq(appUser.id, userId));
   }
 
-  return { userId, clinicId };
+  const [c] = await authDb
+    .select({ responsavelContaId: clinic.responsavelContaId })
+    .from(clinic)
+    .where(eq(clinic.id, clinicId))
+    .limit(1);
+
+  if (c && c.responsavelContaId === null) {
+    await authDb
+      .update(clinic)
+      .set({ responsavelContaId: userId })
+      .where(eq(clinic.id, clinicId));
+  }
+
+  await gravarAceite(userId, clinicId, e);
 }
 
 /** Cria a clínica e provisiona (ou reaproveita) o usuário coordenador dela. */
@@ -151,15 +237,30 @@ async function criarClinicaEVinculo(
     .returning({ id: clinic.id });
   const clinicId = nova!.id;
 
-  const { userId } = await provisionUser({
-    email: e.email,
-    nome: e.nome,
-    senha: e.senha,
-    clinicId,
-    papel: "coordenador",
-  });
+  try {
+    const { userId } = await provisionUser({
+      email: e.email,
+      nome: e.nome,
+      senha: e.senha,
+      clinicId,
+      papel: "coordenador",
+    });
 
-  return { userId, clinicId };
+    return { userId, clinicId };
+  } catch (err) {
+    // provisionUser falhou (ex.: signUpEmail recusou a senha) — a clínica
+    // recém-criada não tem dono nem vínculo; apaga para não deixar órfã
+    // (item 3 do review). Se o processo morrer aqui dentro do try em vez de
+    // lançar (kill real), a clínica sobrevive órfã — resíduo raro, registrado
+    // no BACKLOG.md.
+    try {
+      await authDb.delete(clinic).where(eq(clinic.id, clinicId));
+    } catch {
+      // best-effort: se a exclusão também falhar, a clínica fica órfã —
+      // mesmo resíduo raro documentado acima.
+    }
+    throw err;
+  }
 }
 
 /**
@@ -187,5 +288,46 @@ export async function garantirVinculoParaConsentimento(
     throw new Error(
       `cadastro: usuário ${userId} não tem vínculo (user_role) com a clínica ${clinicId} — recusando gravar aceite de termos (professional_consent) para evitar registro incoerente.`,
     );
+  }
+}
+
+/**
+ * Único caminho que grava em `professional_consent` (review round 1, item
+ * 7): a checagem de vínculo deixa de ser um passo separado e opcional para
+ * virar parte estrutural do único jeito de inserir um aceite. `select`
+ * prévio + `onConflictDoNothing` contra o índice único da migração 0060
+ * cobrem tanto retomada serial (não duplica) quanto duas retomadas
+ * concorrentes (o índice decide, a segunda não lança).
+ */
+async function gravarAceite(
+  userId: string,
+  clinicId: string,
+  e: EntradaCadastro,
+): Promise<void> {
+  await garantirVinculoParaConsentimento(userId, clinicId);
+
+  const [aceiteExistente] = await authDb
+    .select({ id: professionalConsent.id })
+    .from(professionalConsent)
+    .where(
+      and(
+        eq(professionalConsent.userId, userId),
+        eq(professionalConsent.clinicId, clinicId),
+        eq(professionalConsent.versaoTermo, e.versaoTermo),
+      ),
+    )
+    .limit(1);
+
+  if (!aceiteExistente) {
+    await authDb
+      .insert(professionalConsent)
+      .values({
+        userId,
+        clinicId,
+        versaoTermo: e.versaoTermo,
+        ip: e.ip,
+        userAgent: e.userAgent,
+      })
+      .onConflictDoNothing();
   }
 }

@@ -446,19 +446,32 @@ export const consent = pgTable(
  * Não confundir com o consentimento do titular do tratamento (paciente) —
  * outro titular, outra base legal. Imutável para a aplicação de produto.
  */
-export const professionalConsent = pgTable("professional_consent", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => appUser.id),
-  clinicId: uuid("clinic_id")
-    .notNull()
-    .references(() => clinic.id),
-  versaoTermo: text("versao_termo").notNull(),
-  aceitoEm: timestamp("aceito_em", { withTimezone: true }).notNull().defaultNow(),
-  ip: text("ip"),
-  userAgent: text("user_agent"),
-});
+export const professionalConsent = pgTable(
+  "professional_consent",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => appUser.id),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id),
+    versaoTermo: text("versao_termo").notNull(),
+    aceitoEm: timestamp("aceito_em", { withTimezone: true }).notNull().defaultNow(),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+  },
+  (t) => [
+    // Corrida entre requisições concorrentes de retomada não deve criar
+    // dois aceites para a mesma tripla — onConflictDoNothing em cadastro.ts
+    // depende deste índice existir (migração 0060).
+    uniqueIndex("uq_professional_consent_user_clinic_versao").on(
+      t.userId,
+      t.clinicId,
+      t.versaoTermo,
+    ),
+  ],
+);
 
 // ─── Protocolos (catálogo + instância por paciente) ──────────────────────────
 export const protocolFamiliaCatalogo = pgTable("protocol_familia_catalogo", {

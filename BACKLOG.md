@@ -24,6 +24,67 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 1 de review (Issue #163)
+
+**O achado**
+
+- Review de código do Task 5 (`criarContaEClinica`, `src/auth/cadastro.ts`) achou
+  1 **Crítico**: o caminho de retomada (e-mail já existente, já com `user_role`)
+  escrevia de forma incondicional — sobrescrevia `conselho`/`registroNumero`/
+  `registroUf` e `clinic.responsavelContaId`, e inseria um novo aceite de termos —
+  usando só o payload do chamador, sem autenticar ninguém (`provisionUser` não
+  checa senha para e-mail existente). Corrigido: conta "completa" (dados
+  preenchidos + algum aceite já gravado) não sofre nenhuma escrita, independente
+  do payload recebido.
+- Dentro da correção, `criarClinicaEVinculo` ficou órfã de clínica se
+  `provisionUser` falhar depois de criada a clínica (ex.: senha recusada pelo
+  Better-Auth). Mitigado com `try/catch` que apaga a clínica no erro tratável.
+
+**Decisão travada nesta sessão**
+
+- Resíduo que o `try/catch` não cobre: um **kill de processo** (não um erro
+  lançado) entre o `insert` da clínica e o retorno de `provisionUser` ainda
+  deixa uma clínica órfã (sem `user_role`, sem `responsavel_conta_id`, sem dado
+  de paciente — lixo inofensivo, não vazamento). Decisão: aceitar esse resíduo
+  raríssimo para a Fatia A; não construir reconciliação/job de limpeza agora.
+  Se a taxa de crash observada em produção justificar, abrir issue própria com
+  uma consulta (`clinic` sem `user_role` correspondente) — não faz parte do
+  MVP self-service.
+- Contrato para quem consumir `criarContaEClinica` (Task 7, cadastro/ação
+  server): conta já completa devolve os `{ userId, clinicId }` existentes, sem
+  lançar erro nem sinalizar "já existe" — a resposta anti-enumeração uniforme é
+  responsabilidade do Task 7, não desta função.
+
+**O que foi entregue**
+
+- `src/auth/cadastro.ts`: gate de completude derivado de dado (nunca do
+  payload), preenchimento só de campos `NULL` (nunca sobrescreve valor já
+  gravado), normalização de e-mail (`trim().toLowerCase()`, espelhando
+  `sign-up.mjs` do Better-Auth), inserção de aceite encapsulada no único
+  caminho que escreve em `professional_consent` (`gravarAceite`).
+- `db/migrations/0060_professional_consent_unique.sql` + índice único
+  `(user_id, clinic_id, versao_termo)` em `src/db/schema.ts` — fecha corrida de
+  duas retomadas concorrentes gravando aceite duplicado; insert passa a usar
+  `onConflictDoNothing`.
+- `src/auth/cadastro.int.test.ts`: teste RED-first do Crítico (reenvio hostil
+  contra conta completa — dados e versão de termo forjados, sem sobrescrever
+  nada nem gravar aceite novo); troca de `TRUNCATE` de tabela compartilhada por
+  limpeza escopada por e-mail (não poisona mais suítes vizinhas); teste antes
+  mal-nomeado ("não duplica clínica") corrigido para o que de fato acontece
+  nessa janela (cria clínica nova, órfã fica; garante 1 vínculo ativo ao final).
+- `src/auth/verificacao.int.test.ts` reescrito: em vez de contar
+  `email_verified = false` na tabela inteira (capturava toda conta nova
+  legitimamente não-verificada, criada por outras suítes), semeia sua própria
+  conta "legada" e reproduz o `UPDATE` da migração 0059 contra ela.
+
+**Verificação**
+
+- RED capturado antes do fix (`corepack pnpm vitest run --config
+  vitest.integration.config.ts -t CRÍTICO src/auth/cadastro.int.test.ts` contra
+  o `cadastro.ts` pré-fix): 1 falhou (`expected 'crm' to be 'crp'`).
+- Detalhe completo (comandos, contagens pass/fail/skip, GREEN) no apêndice de
+  round 1 em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
+
 ## 🏁 Sessão 31/07/2026 — Migração 0055 perdida: correção de segurança que nunca rodou (Issue #165)
 
 **O achado**
