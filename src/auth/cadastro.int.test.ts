@@ -344,6 +344,15 @@ describe.skipIf(!hasDb)("criarContaEClinica — núcleo do cadastro self-service
     expect(aceites).toHaveLength(1);
     expect(aceites[0]!.versaoTermo).toBe("2026-07-30");
     expect(aceites[0]!.ip).not.toBe("203.0.113.66");
+
+    // Round 3, item 4: reenvio hostil também não cria clínica nova nenhuma —
+    // o usuário continua com exatamente um vínculo, na mesma clínica.
+    const vinculos = await authDb
+      .select()
+      .from(userRole)
+      .where(eq(userRole.userId, primeira.userId));
+    expect(vinculos).toHaveLength(1);
+    expect(vinculos[0]!.clinicId).toBe(primeira.clinicId);
   });
 
   it("CRÍTICO: e-mail de conta LEGADA (incompleta, sem aceite) + senha errada não escreve nada", async () => {
@@ -407,5 +416,225 @@ describe.skipIf(!hasDb)("criarContaEClinica — núcleo do cadastro self-service
       .from(clinic)
       .where(eq(clinic.id, clinicaLegado!.id));
     expect(c!.responsavelContaId).toBeNull();
+  });
+
+  it("retomada com senha CERTA contra conta legada completa de fato o cadastro (caminho feliz, antes descoberto sem teste)", async () => {
+    // Round 3, item 4: até esta rodada, nenhum teste comprovava o caminho
+    // feliz inteiro do gate de senha — só o caminho de rejeição
+    // (CredencialInvalida). Este teste prova que uma conta legada,
+    // legitimamente dona da sua própria clínica (coordenador, clínica ainda
+    // sem responsável), retomada com a senha CERTA, é de fato completada.
+    const email = emailUnico("i1");
+    const senhaDaConta = "Senha Legado Certa 123";
+    const [clinicaLegado] = await authDb
+      .insert(clinic)
+      .values({ nome: "Clínica Legado Certa" })
+      .returning({ id: clinic.id });
+
+    const { userId } = await provisionUser({
+      email,
+      nome: "Legado Certa Teste",
+      senha: senhaDaConta,
+      clinicId: clinicaLegado!.id,
+      papel: "coordenador",
+    });
+
+    const resultado = await criarContaEClinica({
+      ...base,
+      email,
+      senha: senhaDaConta,
+    });
+
+    expect(resultado.userId).toBe(userId);
+    expect(resultado.clinicId).toBe(clinicaLegado!.id);
+
+    const [user] = await authDb
+      .select()
+      .from(appUser)
+      .where(eq(appUser.id, userId));
+    expect(user!.conselho).toBe(base.conselho);
+    expect(user!.registroNumero).toBe(base.registroNumero);
+    expect(user!.registroUf).toBe(base.registroUf);
+
+    const aceites = await authDb
+      .select()
+      .from(professionalConsent)
+      .where(eq(professionalConsent.userId, userId));
+    expect(aceites).toHaveLength(1);
+    expect(aceites[0]!.clinicId).toBe(clinicaLegado!.id);
+
+    const [c] = await authDb
+      .select()
+      .from(clinic)
+      .where(eq(clinic.id, clinicaLegado!.id));
+    expect(c!.responsavelContaId).toBe(userId);
+  });
+
+  it("CRÍTICO: usuário com mais de um vínculo coordenador-e-próprio resolve deterministicamente para a clínica JÁ REIVINDICADA (review round 3, item 1 do fix anterior sem proteção de mutação — item 4 desta rodada)", async () => {
+    // Constrói dois vínculos coordenador+próprio qualificados para o mesmo
+    // usuário: clínica A pendente (responsavel_conta_id NULL, criada
+    // PRIMEIRO) e clínica B já reivindicada (responsavel_conta_id = o
+    // próprio usuário, criada DEPOIS). Sem o `orderBy` que prioriza
+    // "responsavel_conta_id = eu mesmo", a varredura sem ordenação explícita
+    // tende a devolver a linha inserida primeiro (clínica A) — o oposto do
+    // que a regra de ownership do item 2 exige. É essa a garantia que este
+    // teste prova por mutação (ver task-5-report.md, round 4, para a saída
+    // RED capturada ao remover o `.orderBy(...)` e restaurada em seguida).
+    const email = emailUnico("i2");
+    const senha = "Senha MultiClinica 123";
+
+    const [clinicaA] = await authDb
+      .insert(clinic)
+      .values({ nome: "Clínica A (pendente)" })
+      .returning({ id: clinic.id });
+    const { userId } = await provisionUser({
+      email,
+      nome: "Multi Clínica",
+      senha,
+      clinicId: clinicaA!.id,
+      papel: "coordenador",
+    });
+
+    const [clinicaB] = await authDb
+      .insert(clinic)
+      .values({ nome: "Clínica B (reivindicada)" })
+      .returning({ id: clinic.id });
+    await provisionUser({
+      email,
+      nome: "Multi Clínica",
+      senha,
+      clinicId: clinicaB!.id,
+      papel: "coordenador",
+    });
+    // Simula que B já foi reivindicada (completada por outro caminho antes
+    // desta retomada) — é a clínica que a retomada DEVE escolher.
+    await authDb
+      .update(clinic)
+      .set({ responsavelContaId: userId })
+      .where(eq(clinic.id, clinicaB!.id));
+
+    const retomada = await criarContaEClinica({
+      ...base,
+      email,
+      senha,
+      nomeClinica: "ignorado nesta retomada",
+    });
+
+    expect(retomada.userId).toBe(userId);
+    expect(retomada.clinicId).toBe(clinicaB!.id);
+
+    // Clínica A pendente não foi tocada — sem aceite, sem responsável.
+    const [aInalterada] = await authDb
+      .select()
+      .from(clinic)
+      .where(eq(clinic.id, clinicaA!.id));
+    expect(aInalterada!.responsavelContaId).toBeNull();
+    const aceitesA = await authDb
+      .select()
+      .from(professionalConsent)
+      .where(
+        and(
+          eq(professionalConsent.userId, userId),
+          eq(professionalConsent.clinicId, clinicaA!.id),
+        ),
+      );
+    expect(aceitesA).toHaveLength(0);
+  });
+
+  it("CRÍTICO: vínculo NÃO-coordenador em clínica alheia nunca é retomado — cadastro self-service ganha clínica NOVA (review round 3, item 2, ramo 1/2)", async () => {
+    // Estado de toda conta legada pré-Fatia-A que atua como terapeuta (não
+    // coordenador) na clínica de outra pessoa. Antes do fix, este era
+    // exatamente o vínculo que `criarContaEClinica` resolvia por engano —
+    // com senha própria e correta, o gate de posse passava legitimamente, e
+    // a função escrevia dados profissionais + aceite + responsavel_conta_id
+    // na clínica ALHEIA.
+    const email = emailUnico("j");
+    const senha = "Senha Terapeuta 123";
+
+    const [clinicaAlheia] = await authDb
+      .insert(clinic)
+      .values({ nome: "Clínica Alheia (terapeuta convidado)" })
+      .returning({ id: clinic.id });
+    const { userId } = await provisionUser({
+      email,
+      nome: "Terapeuta Convidado",
+      senha,
+      clinicId: clinicaAlheia!.id,
+      papel: "terapeuta",
+    });
+
+    const resultado = await criarContaEClinica({ ...base, email, senha });
+
+    expect(resultado.userId).toBe(userId);
+    expect(resultado.clinicId).not.toBe(clinicaAlheia!.id);
+
+    // Clínica alheia jamais ganha responsável nem aceite forjado.
+    const [alheiaInalterada] = await authDb
+      .select()
+      .from(clinic)
+      .where(eq(clinic.id, clinicaAlheia!.id));
+    expect(alheiaInalterada!.responsavelContaId).toBeNull();
+    const aceitesAlheia = await authDb
+      .select()
+      .from(professionalConsent)
+      .where(
+        and(
+          eq(professionalConsent.userId, userId),
+          eq(professionalConsent.clinicId, clinicaAlheia!.id),
+        ),
+      );
+    expect(aceitesAlheia).toHaveLength(0);
+
+    // O vínculo terapeuta original continua intacto (não removido nem
+    // alterado) — só um vínculo coordenador NOVO foi adicionado.
+    const vinculos = await authDb
+      .select()
+      .from(userRole)
+      .where(eq(userRole.userId, userId));
+    expect(vinculos).toHaveLength(2);
+    const vinculoAlheio = vinculos.find((v) => v.clinicId === clinicaAlheia!.id);
+    expect(vinculoAlheio?.papel).toBe("terapeuta");
+    const vinculoNovo = vinculos.find((v) => v.clinicId === resultado.clinicId);
+    expect(vinculoNovo?.papel).toBe("coordenador");
+  });
+
+  it("CRÍTICO: vínculo coordenador em clínica já reivindicada por OUTRO usuário nunca reatribui responsavel_conta_id — ganha clínica NOVA (review round 3, item 2, ramo 2/2)", async () => {
+    // Estado corrompido/de arestas: usuário tem papel "coordenador" numa
+    // clínica cujo responsavel_conta_id já é OUTRO usuário (não deveria
+    // acontecer no fluxo normal, mas a regra de ownership precisa recusar
+    // mesmo este caso, não só o de responsavel_conta_id NULL de outrem).
+    const emailDono = emailUnico("k-dono");
+    const senhaDono = "Senha Dono Real 123";
+    const donoResultado = await criarContaEClinica({
+      ...base,
+      email: emailDono,
+      senha: senhaDono,
+      nomeClinica: "Clínica do Dono Real",
+    });
+
+    const email = emailUnico("k");
+    const senha = "Senha Coordenador Fantasma 123";
+    // Mesma clínica do dono real, mas com um SEGUNDO "coordenador" —
+    // inserido direto (fora de provisionUser) para simular o estado
+    // corrompido sem depender de uma regra de negócio que hoje o impede.
+    const { userId } = await provisionUser({
+      email,
+      nome: "Coordenador Fantasma",
+      senha,
+      clinicId: donoResultado.clinicId,
+      papel: "coordenador",
+    });
+
+    const resultado = await criarContaEClinica({ ...base, email, senha });
+
+    expect(resultado.userId).toBe(userId);
+    expect(resultado.clinicId).not.toBe(donoResultado.clinicId);
+
+    // A clínica do dono real continua com o dono real — não reatribuída.
+    const [clinicaDoDono] = await authDb
+      .select()
+      .from(clinic)
+      .where(eq(clinic.id, donoResultado.clinicId));
+    expect(clinicaDoDono!.responsavelContaId).toBe(donoResultado.userId);
   });
 });

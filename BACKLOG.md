@@ -153,6 +153,72 @@
   apêndice de round 3 em
   `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
 
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 4 de review (Issue #163)
+
+**O achado**
+
+- `auth.api.signInEmail` (round 3) bypassa `auth.handler` — vira oráculo de
+  senha sem rate limit/lockout/log nativos do Better-Auth, além de criar
+  sessão de 7 dias e linha `2fa-*` a cada retomada. `auth.api.verifyPassword`
+  (sugestão do review) testado e descartado: exige sessão já autenticada
+  (`sensitiveSessionMiddleware`), não recebe e-mail — confirmado lendo
+  `dist/api/routes/password.mjs` do pacote instalado.
+- **Novo Crítico introduzido pelo próprio fix do round 3**: profissional
+  legado com papel NÃO-coordenador na clínica de outra pessoa se
+  autocadastrando com e-mail/senha corretos passava no gate de senha,
+  `vinculo` resolvia pra clínica alheia, e `completarCadastro` reatribuía
+  `clinic.responsavel_conta_id` (dono de faturamento) pro atacante + gravava
+  aceite irremovível nela.
+- `contaEstaCompleta` mistura escopo global (`app_user`) com escopo por
+  vínculo (`professional_consent`) — parágrafo do relatório round 3 estava
+  impreciso sobre isso.
+- Suíte não protegia os fixes: nenhum teste com >1 `user_role`; remover o
+  `.orderBy` deixava tudo verde.
+
+**Decisão travada nesta sessão**
+
+- Verificação de senha trocada para `auth.$context` + `context.password.verify`
+  (mesmo primitivo interno do Better-Auth) — elimina sessão e linha 2FA, mas
+  **continua bypassando `auth.handler`**: rate limiting do endpoint de
+  cadastro fica sob responsabilidade de Task 6/7, não resolvido aqui.
+- **Regra de ownership (item 2)**: retomada só mira clínica onde o usuário É
+  coordenador E (`responsavel_conta_id IS NULL` OU já é o próprio dono).
+  Vínculo não-coordenador nunca qualifica; clínica já reivindicada por outro
+  nunca é reatribuída. Quem só tem vínculos que não qualificam ganha clínica
+  NOVA — é o comportamento correto do self-service.
+- Bug real achado escrevendo o teste de multi-vínculo (não fazia parte do
+  review): `ORDER BY ... DESC` sem `coalesce` — Postgres usa `NULLS FIRST`
+  por padrão, então `eq(coluna_null, valor)` (que avalia pra `NULL`, não
+  `false`) inverteria o desempate. Corrigido com
+  `coalesce(clinic.responsavel_conta_id = existente.id, false)`.
+
+**O que foi entregue**
+
+- `src/auth/cadastro.ts`: `verificarPossePorSenha` reescrita
+  (`auth.$context`); query de `vinculo` com filtro `papel = "coordenador"` +
+  `or(isNull(...), eq(responsavelContaId, existente.id))` + `orderBy` com
+  `coalesce`; docstring de `contaEstaCompleta` corrigida (dois escopos
+  explícitos).
+- `src/auth/cadastro.int.test.ts`: +5 testes — determinismo com dois
+  vínculos coordenador-e-próprio (achou o bug do NULL), vínculo
+  não-coordenador nunca resolve, clínica já reivindicada por outro nunca é
+  reatribuída, caminho feliz de retomada com senha certa (antes sem teste),
+  "nenhuma clínica nova" no reenvio hostil. Todos provados por mutação
+  (RED/restore), inclusive achando o bug do `coalesce` no processo.
+- Duas observações adiadas (registradas, não resolvidas): `app_user.email`
+  sem `citext`/índice `lower()` (nenhuma linha suja hoje); TOCTOU gratuito
+  entre `contaEstaCompleta` e `completarCadastro` (duas leituras de
+  `app_user`, janela curta, sem escrita cross-tenant possível dado o item 2).
+
+**Verificação**
+
+- `test:rls`: 489 passed / 3 failed (conhecidas, #167) / 0 skipped (492).
+- `test --project unit`: 496 passed / 0 failed / 0 skipped (77 arquivos).
+- `typecheck` limpo; `lint` 0 erros / 8 warnings pré-existentes.
+- Detalhe completo (query final, saída de cada mutação, os 4 branches de
+  ownership testados) no apêndice de round 4 em
+  `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
+
 ## 🏁 Sessão 31/07/2026 — Migração 0055 perdida: correção de segurança que nunca rodou (Issue #165)
 
 **O achado**

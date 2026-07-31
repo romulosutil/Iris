@@ -1,6 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq } from "drizzle-orm";
-import { APIError } from "better-auth/api";
+import { and, asc, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { auth } from "@/auth/auth";
 import { authDb } from "@/db/client";
 import { appUser, clinic, professionalConsent, userRole } from "@/db/schema";
@@ -126,40 +125,81 @@ export async function criarContaEClinica(
     // checar senha para e-mail existente), falhava o gate de completude e
     // gravava dados profissionais forjados + um aceite permanente. Fechado
     // aqui: nenhuma escrita no ramo `existente` acontece sem comprovar posse
-    // da senha primeiro, pelo caminho de sign-in do Better-Auth (não
-    // comparamos hash nós mesmos).
-    await verificarPossePorSenha(e.email, e.senha);
+    // da senha primeiro (ver `verificarPossePorSenha` — troca de mecanismo
+    // no review round 3, item 1).
+    await verificarPossePorSenha(existente.id, e.senha);
 
-    // Determinístico (review round 2, regressão): antes escolhia com
-    // `limit(1)` sem `order by` — não determinístico para usuário com mais
-    // de um `user_role`, podia selecionar a clínica errada e reabrir o gate
-    // de completude para uma conta já completa (na OUTRA clínica). Critério:
-    // prioriza o vínculo em que o usuário é "coordenador" (papel do
-    // cadastro self-service), com `clinicId` como desempate estável. Para um
-    // usuário genuinamente multi-clínica (estado real do produto — ex.:
-    // profissional que atua em duas clínicas), esta função sempre resolve
-    // para o MESMO vínculo em toda retomada, mas não necessariamente para a
-    // clínica que o cadastro atual pretendia completar; isso é aceitável
-    // porque o gate de completude abaixo é por (userId, clinicId) — se a
-    // clínica escolhida já está completa, nada é escrito, e a clínica
-    // "outra" continua exigindo seu próprio fluxo de completude (não coberto
-    // por este endpoint, que é de cadastro inicial, não de vínculo
-    // adicional).
+    // OWNERSHIP (review round 3, item 2 — defeito introduzido pelo próprio
+    // fix do round 2): "o usuário tem ALGUM user_role" não é a mesma coisa
+    // que "o usuário tem uma clínica para retomar". Antes deste fix, um
+    // profissional pré-Fatia-A com papel NÃO-coordenador na clínica de
+    // OUTRA pessoa (estado de toda conta legada: app_user incompleto,
+    // clinic.responsavel_conta_id NULL) podia se auto-cadastrar no
+    // formulário público com o próprio e-mail/senha (gate de senha passa
+    // legitimamente), resolver `vinculo` para a clínica alheia, falhar o
+    // gate de completude, e `completarCadastro` setava
+    // `clinic.responsavel_conta_id` (dono de faturamento, schema.ts:239)
+    // para ele numa clínica que não é dele — mais um `professional_consent`
+    // IRREMOVÍVEL preso àquela clínica alheia.
+    //
+    // REGRA (decidida nesta rodada, cobre cada ramo com teste em
+    // cadastro.int.test.ts): a retomada só pode mirar uma clínica que o
+    // usuário JÁ é `coordenador` E que OU não tem dono ainda
+    // (`responsavel_conta_id IS NULL` — clínica própria em cadastro
+    // incompleto) OU o dono já é ele mesmo (retomada de verdade). Um vínculo
+    // não-coordenador em clínica alheia NUNCA qualifica — mesmo que seja o
+    // único vínculo que o usuário tem. `responsavel_conta_id` de uma clínica
+    // que já tem OUTRO dono nunca é reatribuído por este caminho. Usuário
+    // cujos únicos vínculos são papéis não-coordenador em clínicas de
+    // terceiros cai no `else` abaixo e ganha uma clínica NOVA — que é
+    // exatamente o que pedir cadastro self-service significa: virar
+    // coordenador da PRÓPRIA clínica, não completar a clínica de outro.
+    // Desempate determinístico (regressão do round 2) entre múltiplas
+    // clínicas próprias qualificadas: prioriza a que já tem
+    // `responsavel_conta_id = existente.id` (retomada real) sobre a que
+    // ainda está `NULL` (cadastro solto pendente), depois `clinicId` como
+    // critério estável.
+    // NULL-SAFETY (achado durante esta rodada, não no review original):
+    // `eq(clinic.responsavelContaId, existente.id)` avalia para SQL `NULL`
+    // (não `false`) quando `responsavel_conta_id IS NULL` — comparação com
+    // NULL nunca é `false` em SQL, é "desconhecido". Isso quebrava
+    // silenciosamente o desempate: `ORDER BY ... DESC` do Postgres usa
+    // `NULLS FIRST` por padrão, então a clínica NULL (pendente) vinha ANTES
+    // da clínica realmente reivindicada (`= true`) — o oposto do que a regra
+    // de ownership exige. `coalesce(..., false)` força um booleano de
+    // verdade (nunca NULL), eliminando a ambiguidade de ordenação de NULL.
+    // Descoberto pelo primeiro teste com dois vínculos coordenador-e-próprio
+    // reais (item 4 desta rodada) — sem ele, este bug ficaria invisível.
     const [vinculo] = await authDb
       .select({ clinicId: userRole.clinicId })
       .from(userRole)
-      .where(eq(userRole.userId, existente.id))
-      .orderBy(desc(eq(userRole.papel, "coordenador")), asc(userRole.clinicId))
+      .innerJoin(clinic, eq(clinic.id, userRole.clinicId))
+      .where(
+        and(
+          eq(userRole.userId, existente.id),
+          eq(userRole.papel, "coordenador"),
+          or(
+            isNull(clinic.responsavelContaId),
+            eq(clinic.responsavelContaId, existente.id),
+          ),
+        ),
+      )
+      .orderBy(
+        desc(sql`coalesce(${clinic.responsavelContaId} = ${existente.id}, false)`),
+        asc(userRole.clinicId),
+      )
       .limit(1);
-
     if (vinculo) {
       userId = existente.id;
       clinicId = vinculo.clinicId;
     } else {
-      // app_user existe (signUpEmail já rodou numa tentativa anterior) mas o
-      // vínculo não foi gravado — retoma criando o vínculo que faltou.
-      // provisionUser é idempotente por e-mail: reconhece o app_user
-      // existente e devolve o mesmo id, sem chamar signUpEmail de novo.
+      // Sem clínica própria qualificada: cria uma clínica NOVA e provisiona
+      // (ou reaproveita, se app_user já existe) o vínculo de coordenador
+      // nela. provisionUser é idempotente por e-mail: reconhece o app_user
+      // existente e devolve o mesmo id, sem chamar signUpEmail de novo. Isto
+      // também cobre a janela de crash original (item 1 da docstring acima
+      // de `criarContaEClinica`): app_user existe, mas nenhum vínculo
+      // coordenador-e-próprio foi gravado ainda.
       const criado = await criarClinicaEVinculo(e);
       userId = criado.userId;
       clinicId = criado.clinicId;
@@ -184,9 +224,48 @@ export async function criarContaEClinica(
 /**
  * Comprova posse da senha de um e-mail já existente ANTES de qualquer
  * escrita no ramo `existente` de `criarContaEClinica` (review round 2, item
- * Crítico). Usa `auth.api.signInEmail` — o caminho de sign-in do próprio
- * Better-Auth — em vez de comparar hash de senha aqui (instrução explícita
- * do review: "não tocar hash você mesmo").
+ * Crítico; troca de mecanismo no review round 3, item 1).
+ *
+ * ROUND 2 usava `auth.api.signInEmail` — funcionava, mas tinha um problema
+ * que só apareceu no review round 3: `auth.api.*` roda o handler do
+ * endpoint DIRETO, pulando `auth.handler` (o dispatcher HTTP do
+ * Better-Auth). Rate limiting, contador de falha, lockout e log de
+ * tentativa do Better-Auth vivem no `auth.handler`, não no endpoint em si —
+ * então nenhum deles rodava. Pior: em caso de senha certa, `signInEmail`
+ * cria uma sessão real (`internalAdapter.createSession`) e, se a conta tem
+ * 2FA habilitado, grava linha de verificação `2fa-*` — nenhum dos dois é
+ * revogado, então cada retomada bem-sucedida deixava resíduo (sessão de 7
+ * dias sem uso, linha de verificação órfã).
+ *
+ * ROUND 3 tentou `auth.api.verifyPassword` (sugestão do review) e
+ * DESCARTOU: lendo `password.mjs` do Better-Auth, esse endpoint usa
+ * `sensitiveSessionMiddleware` e só aceita `{ password }` no corpo — ele
+ * verifica a senha do usuário JÁ AUTENTICADO na sessão atual
+ * (`ctx.context.session.user.id`), não aceita e-mail, e portanto não serve
+ * para provar posse de credencial de um e-mail anônimo/não autenticado.
+ * Confirmado lendo o código-fonte do pacote instalado, não a partir de
+ * memória.
+ *
+ * SOLUÇÃO ROUND 3: verificar a senha diretamente pelo mesmo primitivo que o
+ * Better-Auth usa internamente (`context.password.verify`, contra o hash
+ * gravado em `auth_account`, via `context.internalAdapter.findAccounts`),
+ * acessado por `auth.$context` — a MESMA função que `validatePassword` (o
+ * util interno que `verifyPassword` chama) usa, só que sem exigir uma
+ * sessão prévia. Confirmado em `context/create-context.mjs`:
+ * `context.password.verify` e `context.internalAdapter` existem
+ * diretamente no objeto que `auth.$context` resolve — é o mesmo `ctx.context`
+ * que qualquer endpoint do Better-Auth recebe. Isso:
+ * - NÃO cria sessão (não chama `internalAdapter.createSession`);
+ * - NÃO grava linha de verificação 2FA (não entra no fluxo de sign-in, que é
+ *   o único lugar que aciona o plugin de 2FA);
+ * - continua SEM passar por `auth.handler` — então a ressalva de rate
+ *   limiting do Better-Auth do parágrafo acima PERSISTE: nem `signInEmail`
+ *   nem este `context.password.verify` acionam o limitador do handler. A
+ *   única proteção contra força bruta neste caminho é o que Task 6/7
+ *   colocar no endpoint HTTP de cadastro — throttling dimensionado para
+ *   cadastro (anti-enumeração), não para login (anti-força-bruta). Registrado
+ *   como preocupação explícita no relatório desta rodada, não escondido
+ *   como resolvido.
  *
  * Contrato para quem chama esta função (Task 5, este módulo) e para quem
  * consome o resultado de `criarContaEClinica` (Task 7, resposta HTTP
@@ -195,58 +274,76 @@ export async function criarContaEClinica(
  * 1. E-MAIL NOVO: nunca passa por aqui (este gate só roda dentro do `if
  *    (existente)`). `criarContaEClinica` cria conta+clínica e devolve
  *    `{ userId, clinicId }` normalmente — sem erro.
- * 2. E-MAIL EXISTENTE + SENHA CERTA: `auth.api.signInEmail` ou resolve (senha
- *    certa, e-mail já verificado) ou lança `APIError` com
- *    `body.code === "EMAIL_NOT_VERIFIED"` — a verificação de senha, no
- *    Better-Auth, roda ANTES da checagem de e-mail verificado (confirmado em
- *    `sign-in.mjs`), então esse erro específico já significa posse
- *    comprovada. Em ambos os sub-casos, esta função retorna normalmente
- *    (sem lançar) e `criarContaEClinica` segue para completar/retomar o
- *    cadastro, devolvendo `{ userId, clinicId }` — sem erro.
- * 3. E-MAIL EXISTENTE + SENHA ERRADA (inclui e-mail desconhecido para o
- *    Better-Auth ou conta sem credencial local — mesmo código de erro):
- *    `auth.api.signInEmail` lança `APIError` com
- *    `body.code === "INVALID_EMAIL_OR_PASSWORD"`. Esta função relança como
- *    `CredencialInvalida`, e NENHUMA escrita acontece — nem dados
- *    profissionais, nem `professional_consent`.
+ * 2. E-MAIL EXISTENTE + SENHA CERTA: existe conta de credencial
+ *    (`auth_account.provider_id === "credential"`) e o hash confere. Esta
+ *    função retorna normalmente (sem lançar); `criarContaEClinica` segue
+ *    para completar/retomar o cadastro, devolvendo `{ userId, clinicId }` —
+ *    sem erro. (Diferente do round 2: `email_verified` não importa mais
+ *    aqui — verificação direta de hash não depende dessa checagem, que só
+ *    existe no fluxo de sign-in.)
+ * 3. E-MAIL EXISTENTE + SENHA ERRADA (inclui conta sem credencial local —
+ *    ex.: só OAuth — mesmo resultado): hash não confere ou não existe conta
+ *    de credencial. Esta função lança `CredencialInvalida`, e NENHUMA
+ *    escrita acontece — nem dados profissionais, nem `professional_consent`.
  *
  * Só os casos 1/2 (sucesso) e o caso 3 (`CredencialInvalida`) existem na
  * saída deste módulo. Task 7 só precisa mapear `CredencialInvalida` para a
  * mesma resposta genérica usada para qualquer outra falha (ex.: e-mail
- * inválido, rate limit) — sem mencionar que o e-mail já existe. Este módulo
- * não decide o formato HTTP; só garante que os dois casos são
- * distinguíveis (sucesso vs. erro) sem depender de qual dos três motivos
- * originou o erro.
- *
- * Efeito colateral aceito: uma chamada bem-sucedida a `signInEmail` cria uma
- * sessão real no Better-Auth (via `internalAdapter.createSession`) — não é
- * revogada aqui. Documentado, não tratado como bug: é sessão do próprio
- * dono da conta, criada só quando a senha confere.
+ * inválido, rate limit) — sem mencionar que o e-mail já existe.
  */
 async function verificarPossePorSenha(
-  email: string,
+  userId: string,
   senha: string,
 ): Promise<void> {
-  try {
-    await auth.api.signInEmail({ body: { email, password: senha } });
-  } catch (err) {
-    if (err instanceof APIError && err.body?.code === "EMAIL_NOT_VERIFIED") {
-      return;
-    }
-    throw err instanceof APIError && err.body?.code === "INVALID_EMAIL_OR_PASSWORD"
-      ? new CredencialInvalida()
-      : err;
+  const context = await auth.$context;
+  const contas = await context.internalAdapter.findAccounts(userId);
+  const credencial = contas?.find((c) => c.providerId === "credential");
+
+  if (!credencial?.password) {
+    throw new CredencialInvalida();
+  }
+
+  const senhaConfere = await context.password.verify({
+    hash: credencial.password,
+    password: senha,
+  });
+
+  if (!senhaConfere) {
+    throw new CredencialInvalida();
   }
 }
 
 /**
- * Uma conta é "completa" quando os dados profissionais declarados estão
- * todos preenchidos E já existe pelo menos um aceite de termos registrado
- * para o vínculo usuário/clínica. Deliberadamente NÃO depende de
- * `versaoTermo` do payload atual — o objetivo é impedir que um reenvio
- * hostil (mesmo com uma versão de termo diferente) grave um aceite novo ou
- * sobrescreva dado já gravado; renovar aceite para uma versão de termo nova
- * é fluxo de outra tela (fora do escopo desta função de cadastro).
+ * ESCOPOS MISTURADOS DE PROPÓSITO (esclarecido no review round 3, item 3 —
+ * a versão anterior deste comentário simplificava demais dizendo "clínica
+ * já completa não sofre escrita", o que ocultava que são dois escopos
+ * diferentes combinados por AND):
+ *
+ * - `conselho`/`registroNumero`/`registroUf` são escopo GLOBAL DO USUÁRIO
+ *   (`app_user`, sem `clinic_id`) — uma vez preenchidos, nunca são
+ *   perguntados de novo em nenhuma clínica.
+ * - o aceite de termos é escopo POR VÍNCULO (`professional_consent`, chave
+ *   `(userId, clinicId)`) — cada clínica exige seu próprio aceite.
+ *
+ * `contaEstaCompleta` só devolve `true` quando AMBOS os escopos estão
+ * satisfeitos PARA O `clinicId` resolvido. Consequência real, não teórica:
+ * um usuário com dado profissional já preenchido (de uma clínica anterior)
+ * que resolve, por `verificarPossePorSenha` + a regra de ownership do item
+ * 2 acima, para OUTRA clínica seguramente sua (ex.: usuário legitimamente
+ * dono de mais de uma clínica) onde ainda não existe aceite, PASSA pelo gate
+ * (`contaEstaCompleta` devolve `false` porque falta o aceite NAQUELA
+ * clínica) e `completarCadastro` roda — mas grava só o aceite que falta;
+ * `conselho`/`registroNumero`/`registroUf` já preenchidos NÃO são
+ * sobrescritos (ver o `patch` condicional em `completarCadastro`, abaixo).
+ * Isso é coerente com a regra de ownership do item 2: só existe write path
+ * para uma clínica que o usuário legitimamente possui, então misturar os
+ * dois escopos aqui nunca abre uma escrita em clínica alheia — só decide
+ * SE falta algo a completar na clínica própria já selecionada.
+ * Deliberadamente NÃO depende de `versaoTermo` do payload atual — o
+ * objetivo é impedir que um reenvio hostil (mesmo com uma versão de termo
+ * diferente) grave um aceite novo ou sobrescreva dado já gravado; renovar
+ * aceite para uma versão de termo nova é fluxo de outra tela (fora do
+ * escopo desta função de cadastro).
  */
 async function contaEstaCompleta(userId: string, clinicId: string): Promise<boolean> {
   const [user] = await authDb
