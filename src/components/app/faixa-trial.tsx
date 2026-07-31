@@ -1,4 +1,5 @@
 import { Banner } from "@/components/ui/banner";
+import { Container } from "@/components/ui/layout";
 
 interface FaixaTrialProps {
   diasRestantes: number;
@@ -27,10 +28,8 @@ export function FaixaTrial({ diasRestantes }: FaixaTrialProps) {
         : `Seu período de teste termina em ${diasRestantes} dias.`;
 
   return (
-    <div className="bg-[var(--bg-app)] py-4">
-      <div className="px-4 sm:px-6">
-        <Banner variant="info">{mensagem}</Banner>
-      </div>
-    </div>
+    <Container largura="md" className="py-4">
+      <Banner variant="info">{mensagem}</Banner>
+    </Container>
   );
 }

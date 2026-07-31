@@ -10,13 +10,14 @@
  * Exemplo: trial de 7 dias começando 2026-08-01 14:00 São Paulo:
  * - No mesmo dia (2026-08-01 qualquer hora): 7 dias restam
  * - Na véspera (2026-08-07 qualquer hora): 1 dia resta
- * - No vencimento e depois (2026-08-08+): 0 dias
+ * - No vencimento (2026-08-08): 0 dias (último dia, deve exibir)
+ * - Depois do vencimento (2026-08-09+): negativo (trial encerrado, não exibe)
  *
  * @param inicio - Data/hora de início do trial (momento do cadastro)
  * @param dias - Número total de dias de trial (ex: 7)
  * @param timezone - Timezone IANA da clínica (ex: "America/Sao_Paulo")
  * @param agora - Data/hora atual (padrão: agora). Injetada para testabilidade.
- * @returns Número de dias restantes (nunca negativo)
+ * @returns Número de dias restantes (negativo quando trial já terminou)
  */
 export function diasRestantesDeTrial(
   inicio: Date,
@@ -47,6 +48,8 @@ export function diasRestantesDeTrial(
   // Diferença em dias
   const diferenca = Math.floor((dateAgora.getTime() - dateInicio.getTime()) / (1000 * 60 * 60 * 24));
 
-  // Dias restantes (nunca negativo)
-  return Math.max(0, dias - diferenca);
+  // Dias restantes: retorna valores negativos quando o trial já terminou.
+  // Isso permite distinguir entre "dia 0 (último dia)" e "já passou" no shell.
+  // O render decide: `diasRestantes >= 0` → exibe; `< 0` → não exibe.
+  return dias - diferenca;
 }

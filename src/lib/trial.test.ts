@@ -14,10 +14,17 @@ describe("diasRestantesDeTrial", () => {
     expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-08-07T23:00:00-03:00"))).toBe(1);
   });
 
-  it("no dia do vencimento resta 0 e nunca fica negativo", () => {
+  it("no dia do vencimento resta 0 (último dia a exibir)", () => {
     const inicio = new Date("2026-08-01T14:00:00-03:00");
     expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-08-08T01:00:00-03:00"))).toBe(0);
-    expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-09-30T01:00:00-03:00"))).toBe(0);
+  });
+
+  it("depois do vencimento fica negativo (não exibe banner)", () => {
+    const inicio = new Date("2026-08-01T14:00:00-03:00");
+    // 1 dia depois: -1
+    expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-08-09T01:00:00-03:00"))).toBe(-1);
+    // Muitos dias depois: número negativo maior
+    expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-09-30T01:00:00-03:00"))).toBeLessThan(0);
   });
 
   it("usa a fronteira de dia do timezone da clínica, não do servidor", () => {
