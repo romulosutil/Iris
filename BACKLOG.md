@@ -24,6 +24,34 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 31/07/2026 — Migração 0055 perdida: correção de segurança que nunca rodou (Issue #165)
+
+**O achado**
+
+- `db/migrations/0055_fix_purga_report_oracle.sql` existe no disco desde a #128 mas
+  **nunca entrou no `_journal.json`** — o `idx 55` aponta para o arquivo `0056`.
+  Drizzle só aplica o que está no journal, então essa migração nunca rodou em banco
+  nenhum: nem local, nem produção.
+- O que ela corrige: o **oráculo de existência cross-tenant** em `app_purgar_report`.
+  Sem ela, a função distingue por mensagem de exceção "report inexistente" de "report
+  de outra clínica". A #128 foi fechada em 30/07 tratando a correção como entregue.
+- Alcance: exige papel `coordenador` e um UUID de report conhecido — não é exfiltração
+  em massa, mas é vazamento de existência entre tenants num produto com dado clínico
+  de menor, e a correção já estava escrita.
+
+**Lição que generaliza**
+
+Migração commitada ≠ migração aplicada. Fechar issue de segurança pelo diff, sem
+confrontar o estado real do banco, deixa a vulnerabilidade viva com a issue verde.
+A verificação é `SELECT prosrc ... FROM pg_proc`, não `git log`.
+
+**Estado**
+
+- Issue #165 aberta com o plano de reintrodução (numeração nova, `when` maior que o
+  maior já aplicado, teste de regressão em `test:rls`). #128 comentada com o rastro.
+- Verificação em banco (dev e produção) **ainda não feita** — Docker local estava fora.
+- Fora do escopo da Fatia A; não entra na branch `feat/163-fatia-a-cadastro`.
+
 ## 🏁 Sessão 30/07/2026 — CI carrega as imagens de infra (Issue #157)
 
 **O buraco que fechou**
