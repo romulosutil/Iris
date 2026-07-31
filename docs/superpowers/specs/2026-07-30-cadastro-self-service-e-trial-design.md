@@ -172,9 +172,12 @@ pagamento; **não usamos a assinatura nativa dele**.
    signup + 7 dias.
 3. Trilho Pix recorrente: autorização de Pix Automático criada **sem o campo
    `value`** — a doc é explícita de que, sem valor fixo, cada instrução define o
-   valor livremente. `paymentCreationMode` fica em `MANUAL`; `SUBSCRIPTION`
-   **força valor fixo**. Como não temos piso (D2), `minLimitValue` fica no mínimo
-   operacional, não em múltiplo de 10 pacientes.
+   valor livremente. Autorização criada **com** `value` trava o valor e só muda
+   cancelando e recriando. `paymentCreationMode` fica em `MANUAL`; `SUBSCRIPTION`
+   **força valor fixo**.
+   ⚠️ `minLimitValue` **não é piso comercial nosso** — é o menor valor que o
+   *pagador* pode definir como teto da autorização dele. Piso (que por D2 não
+   existe) é regra do nosso backend, nunca campo do provedor.
 4. Fechamento do ciclo: job conta pacientes ativos, multiplica pelo preço unitário
    vigente e cria `POST /v3/payments` com `externalReference` = `tenant:AAAA-MM`,
    referenciando a autorização.
