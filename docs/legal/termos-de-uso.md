@@ -1,11 +1,28 @@
 # Termos de Uso — Iris
 
-**Status: RASCUNHO de produto, pendente de revisão por advogado antes de
-publicação/assinatura.** Redigido em 09/07/2026 com base na especificação do
-produto e na pesquisa jurídica de `validacao-legal-prontuario.md`. Cobre a
-relação Iris ↔ clínica-contratante (B2B) — não é um termo direcionado à
-família/paciente (esse é o consentimento LGPD, modelado como `Consent` e
-apresentado no ato de admissão, ver `docs/ux/fluxos-e-wireframes.md`).
+**Versão `2026-07-30` — vigente desde 30/07/2026.**
+
+Estes Termos regem o uso da plataforma Iris por quem contrata o serviço, em
+dois caminhos de contratação:
+
+- **Contratação B2B** — uma clínica já constituída contrata o Iris.
+- **Cadastro self-service** — um profissional de saúde pessoa física cria a
+  própria conta e a própria clínica pelo site, sem contrato assinado
+  previamente, com período de teste gratuito (seção 7).
+
+Estes Termos **não** são o documento apresentado ao paciente ou à família. O
+consentimento LGPD do titular dos dados (ou de seu responsável legal) é
+colhido separadamente, no ato de admissão do paciente, em documento próprio e
+versionado (modelado como `Consent`, ver `docs/ux/fluxos-e-wireframes.md` e os
+termos de consentimento em `docs/legal/`). **Aceitar estes Termos não substitui,
+não dispensa e não antecipa aquele consentimento.**
+
+Redação original de 09/07/2026, com base na especificação do produto e na
+pesquisa jurídica de `validacao-legal-prontuario.md`. Revisão de 30/07/2026
+para cobrir o cadastro self-service.
+
+Os itens ainda não fechados aparecem no corpo do texto marcados como
+`⟨PENDENTE: …⟩` e estão consolidados na seção **Itens em aberto**, ao final.
 
 ---
 
@@ -28,15 +45,60 @@ tecnicamente por ele perante seu conselho profissional
 
 ## 2. Partes e papéis
 
-- **Iris** — fornecedor do software, operador de dados pessoais (LGPD Art.
-  5º, VII) por conta e ordem da clínica-contratante.
-- **Clínica-contratante** — controladora dos dados (LGPD Art. 5º, VI),
+- **Iris** — nome comercial da plataforma, operada por **R Sutil Correa Ltda**,
+  CNPJ **29.811.201/0001-50**, sede em ⟨PENDENTE: endereço completo da sede do
+  operador⟩. Fornecedor do software e **operador** de dados pessoais (LGPD Art.
+  5º, VII), por conta e ordem da clínica-contratante.
+- **Clínica-contratante** — **controladora** dos dados (LGPD Art. 5º, VI),
   responsável pelo cadastro de protocolos licenciados, pela composição de
   disciplinas/profissionais, pela relação com pacientes/famílias e pela
   adequação do uso do Iris às normas do(s) seu(s) conselho(s) profissional(is).
 - **Responsável pela conta** (`Clinic.responsavel_conta_id`) — pessoa física
   com quem o Iris trata assuntos contratuais/financeiros, mesmo em clínicas
   onde essa pessoa acumula papel clínico (freelancer/terapeuta único).
+
+### 2.1. Cadastro self-service — quem é a CONTRATANTE
+
+No cadastro self-service, o profissional de saúde pessoa física que cria a
+conta acumula **os três papéis acima ao mesmo tempo**: é ele quem contrata o
+serviço, é ele o responsável pela conta, e é a clínica que ele criou que figura
+como controladora dos dados dos pacientes que vier a cadastrar. Enquanto essa
+clínica não tiver outros profissionais vinculados, **controladora e usuário
+cadastrante são, na prática, a mesma pessoa**.
+
+Para todos os efeitos destes Termos — inclusive para a seção 10, cuja redação é
+de autoria externa e não foi alterada —, as expressões "clínica-contratante" e
+"CONTRATANTE" designam também esse profissional pessoa física e a clínica por
+ele criada no self-service. As obrigações atribuídas à CONTRATANTE recaem
+integralmente sobre ele.
+
+O Iris **não** se torna controlador dos dados dos pacientes por ter fornecido o
+caminho de cadastro automatizado. A ausência de contrato negociado
+individualmente não transfere ao Iris nenhuma responsabilidade clínica, ética
+ou de controle de dados que seja da CONTRATANTE.
+
+### 2.2. Declaração de habilitação profissional e auditoria
+
+No cadastro, o profissional **declara** seu conselho de classe e o respectivo
+número de registro profissional. Sobre essa declaração:
+
+&nbsp;&nbsp;**(a)** A veracidade e a atualidade da declaração são de
+**responsabilidade exclusiva do profissional que a presta**. O Iris não valida
+o registro no ato do cadastro e a criação da conta **não constitui atestado,
+verificação ou endosso** da habilitação declarada.
+
+&nbsp;&nbsp;**(b)** O Iris **audita** essas declarações, por amostragem ou
+integralmente, a qualquer tempo, e pode solicitar comprovação documental ao
+profissional.
+
+&nbsp;&nbsp;**(c)** Declaração falsa, registro inexistente, suspenso ou
+cassado, ou recusa em comprovar quando solicitado, autorizam o Iris a
+**suspender ou encerrar a conta**, a seu critério e sem aviso prévio. Nessa
+hipótese, o direito de exportação previsto na seção 6 é preservado.
+
+&nbsp;&nbsp;**(d)** Prestar declaração falsa de habilitação profissional pode
+configurar ilícito perante o conselho de classe e perante a legislação penal,
+em esfera própria e independente destes Termos.
 
 ## 3. Licenciamento de protocolos/instrumentos — responsabilidade da clínica
 
@@ -52,8 +114,11 @@ texto desses instrumentos.
 
 A clínica-contratante concorda em:
 
-- Obter o consentimento LGPD apropriado do responsável legal do paciente antes
-  de inserir qualquer dado no sistema (Art. 14, ver `Consent`).
+- Obter o consentimento LGPD apropriado do titular dos dados — o próprio
+  paciente, quando maior e civilmente capaz, ou seu responsável legal, no caso
+  de menor — antes de inserir qualquer dado no sistema (LGPD Art. 7º, I; Art.
+  11, I; Art. 14, ver `Consent`). **Esse consentimento é distinto do aceite
+  destes Termos** e não é suprido por ele.
 - Não usar o Iris para automatizar decisão clínica sem revisão humana — a
   sugestão da IA (`Extraction`) é sempre revisável/editável/rejeitável antes
   de virar registro (`Evidence`); a clínica é responsável pela revisão
@@ -64,6 +129,11 @@ A clínica-contratante concorda em:
   quando aplicável — profissionais de disciplina ABA sem CRP próprio devem
   estar sob supervisão de um psicólogo (achado de `validacao-legal-prontuario.md`,
   seção 1).
+- Manter exatas e atualizadas as declarações de habilitação profissional
+  prestadas no cadastro (seção 2.2).
+- Não compartilhar credenciais de acesso. Cada profissional com acesso ao
+  prontuário deve ter conta própria — a trilha de auditoria depende disso para
+  ter valor.
 - Não usar o produto para fins fora do escopo de acompanhamento terapêutico
   descrito acima (ex.: não é ferramenta de diagnóstico, prescrição, ou decisão
   de cobertura de convênio automatizada).
@@ -77,33 +147,115 @@ responsabilidade técnica/clínica pelo atendimento, pelo prontuário e pelo
 cumprimento das normas do conselho profissional é da clínica-contratante e
 de seus profissionais, não do Iris.
 
-## 6. Propriedade de dados e portabilidade
+## 6. Propriedade de dados, portabilidade e exportação
 
 Os dados inseridos pela clínica (prontuário, evidências, relatórios) pertencem
-à clínica/paciente. Em caso de encerramento de contrato, a clínica pode
-exportar seus dados (formato a definir — provavelmente JSON estruturado +
-PDFs de relatórios já gerados) dentro de um prazo razoável, antes de qualquer
-eliminação conforme `politica-retencao-dados.md`.
+à clínica/paciente. **O Iris não reivindica propriedade sobre eles e não
+condiciona o acesso a esses dados a pagamento.**
 
-## 7. Preço e cobrança
+A clínica pode exportar seus dados **a qualquer momento e sem custo adicional**,
+inclusive:
 
-Cobrança por paciente ativo/mês, conforme tier contratado
-(`docs/produto/modelo-de-negocio.md`, seção 4). Números finais de preço e
-definição operacional de "paciente ativo" ainda em validação (Roteiro C da
-pesquisa real) — o contrato do piloto usa os valores acordados individualmente
-com cada clínica fundadora.
+- durante o período de teste gratuito;
+- **após o fim do período de teste sem pagamento**, quando a conta passa ao
+  modo somente-leitura (seção 7.4);
+- em caso de encerramento da conta por iniciativa da clínica;
+- em caso de suspensão ou encerramento por decisão do Iris, inclusive na
+  hipótese da seção 2.2 (c).
+
+O formato da exportação é ⟨PENDENTE: formato final de exportação — a previsão
+de produto é JSON estruturado dos registros + PDFs dos relatórios já gerados⟩.
+Nenhuma eliminação de dados ocorre antes de decorrido o prazo de exportação
+previsto na seção 7.4 e observado o disposto em `politica-retencao-dados.md`.
+
+## 7. Preço, período de teste e cobrança
+
+### 7.1. Modelo de cobrança
+
+A cobrança é **por paciente ativo por mês**, conforme o tier contratado
+(`docs/produto/modelo-de-negocio.md`, seção 4). No cadastro self-service **não
+há valor mínimo de fatura nem piso de número de pacientes** — a clínica paga
+pelo que usa.
+
+O tier "Diário" situa-se na faixa de **R$ 39 a R$ 49 por paciente ativo/mês**;
+o valor exato vigente é ⟨PENDENTE: valor unitário final do tier "Diário" e dos
+demais tiers, a ser publicado na página de preços⟩ e é o que estiver informado
+no ato da contratação.
+
+A definição operacional de "paciente ativo" — isto é, o critério exato que faz
+um paciente entrar na contagem de um ciclo — é ⟨PENDENTE: definição operacional
+de "paciente ativo" para fins de faturamento⟩. Até que esteja publicada, nenhuma
+cobrança é feita sem que o critério aplicado tenha sido informado à clínica.
+
+### 7.2. Período de teste (trial) de 7 dias
+
+O cadastro self-service inclui um **período de teste gratuito de 7 (sete) dias
+corridos**, contados a partir do momento do cadastro. **Não exigimos cartão de
+crédito para iniciar o teste** e não há cobrança automática ao final dele.
+
+A **primeira fatura é emitida no 8º dia**, caso a clínica opte por continuar.
+O ciclo de cobrança seguinte é mensal por **aniversário da conta** — a data de
+cadastro —, não por um dia fixo do mês.
+
+### 7.3. Meios de pagamento
+
+Na recorrência, os meios de pagamento aceitos são **Pix e boleto bancário**.
+**Cartão de crédito não é aceito** no momento. O processamento dos pagamentos é
+feito por operador de pagamento terceiro (ver `politica-privacidade.md`, seção
+7); o Iris não armazena dados de meio de pagamento.
+
+### 7.4. O que acontece ao fim do teste sem pagamento
+
+Esta cláusula é um compromisso com o titular dos dados, não apenas uma política
+comercial, e deve ser lida literalmente:
+
+&nbsp;&nbsp;**(a)** Encerrado o período de teste sem pagamento, a conta passa
+ao modo **somente-leitura**. **A clínica NÃO perde o acesso aos dados.**
+
+&nbsp;&nbsp;**(b)** Em modo somente-leitura, a clínica **continua podendo
+visualizar todo o conteúdo já registrado e exportá-lo integralmente, sem
+custo** (seção 6). O que fica bloqueado é a criação de novos registros.
+
+&nbsp;&nbsp;**(c)** **Nenhum dado é apagado pelo simples fim do período de
+teste.** Eliminação só ocorre conforme `politica-retencao-dados.md` e após o
+prazo de ⟨PENDENTE: prazo de permanência da conta em modo somente-leitura antes
+de qualquer eliminação, e forma de aviso prévio à clínica⟩.
+
+&nbsp;&nbsp;**(d)** O pagamento reativa a conta com todo o conteúdo preservado.
 
 ## 8. Vigência, rescisão e alterações
 
-[Pendente de definição jurídica — cláusulas padrão de prazo, rescisão por
-inadimplência, aviso prévio, e processo de alteração destes termos precisam
-de revisão de advogado antes de virarem compromisso contratual.]
+**8.1. Vigência.** Estes Termos vigoram a partir do aceite e enquanto a conta
+existir. No self-service, o aceite ocorre no ato do cadastro, é registrado com
+data, hora e a versão aceita (`2026-07-30`).
+
+**8.2. Rescisão pela clínica.** A clínica pode encerrar a conta a qualquer
+momento, sem multa e sem necessidade de justificativa. O direito de exportação
+da seção 6 sobrevive ao encerramento pelo prazo referido na seção 7.4 (c).
+
+**8.3. Rescisão ou suspensão pelo Iris.** O Iris pode suspender ou encerrar a
+conta em caso de: (i) declaração falsa de habilitação profissional (seção 2.2);
+(ii) violação da seção 4 (uso aceitável); (iii) inadimplência, observado aviso
+prévio de ⟨PENDENTE: prazo de aviso prévio por inadimplência antes da suspensão⟩;
+(iv) uso que exponha dados de pacientes a risco. Em qualquer hipótese, o acesso
+somente-leitura e a exportação da seção 6 são preservados.
+
+**8.4. Alteração destes Termos.** O Iris pode alterar estes Termos. Toda
+alteração gera **uma nova versão datada**, e a versão aceita por cada conta fica
+registrada — versões não são sobrescritas. Alterações relevantes serão
+comunicadas por e-mail ao responsável pela conta com antecedência de
+⟨PENDENTE: prazo de antecedência para comunicar alteração relevante dos Termos⟩,
+e o uso continuado após a entrada em vigor caracteriza aceite da nova versão.
 
 ## 9. Foro e legislação aplicável
 
-Legislação brasileira, incluindo LGPD (Lei 13.709/2018). [Foro específico —
-pendente de definição jurídica, tipicamente o foro da sede do contratante ou
-do Iris, a decidir.]
+Aplica-se a legislação brasileira, incluindo a Lei Geral de Proteção de Dados
+(Lei 13.709/2018), o Marco Civil da Internet (Lei 12.965/2014) e, quando a
+CONTRATANTE for pessoa física ou microempresa em situação de vulnerabilidade, o
+Código de Defesa do Consumidor.
+
+Foro: ⟨PENDENTE: foro de eleição — tipicamente o da sede do operador ou o do
+domicílio da contratante; a definir juridicamente⟩.
 
 ## 10. Da natureza do sistema de alerta de risco clínico e isenção de monitoramento contínuo
 
@@ -114,7 +266,7 @@ do Iris, a decidir.]
 
 **10.1.** O SOFTWARE disponibiliza um mecanismo automatizado de identificação
 e sinalização de termos sugestivos de risco clínico ("Alerta de Risco"),
-baseado na análise *ex post* do texto digitado pelo profissional da
+baseado na análise _ex post_ do texto digitado pelo profissional da
 CONTRATANTE após as sessões.
 
 **10.2.** A CONTRATANTE declara e reconhece expressamente que:
@@ -152,14 +304,62 @@ SOFTWARE a exclusividade no acompanhamento de pacientes em risco.
 > protocolo próprio de atendimento de emergências"), não só texto de contrato.
 > Ver `docs/agente/regra-alerta-risco.md` §5.1, pergunta 4.
 
+**10.4. Reforço de escopo (redação de produto, 30/07/2026 — não altera 10.1 a
+10.3).** Para afastar qualquer dúvida na leitura por quem se cadastra sozinho:
+**o Iris nunca notifica terceiros externos à clínica.** O Alerta de Risco é
+exibido exclusivamente dentro da plataforma, para profissionais da própria
+CONTRATANTE com acesso ao caso. **O Iris não avisa a família, não aciona SAMU,
+não comunica Conselho Tutelar, nem qualquer outra autoridade.** Toda
+comunicação externa é decisão e ato da CONTRATANTE, conforme 10.2 (d).
+
+## 11. Proteção de dados pessoais
+
+O tratamento de dados pessoais está descrito na **Política de Privacidade**
+(`politica-privacidade.md`), que integra estes Termos e é aceita no mesmo ato.
+A retenção e a eliminação seguem `politica-retencao-dados.md`. Os três
+documentos devem ser lidos em conjunto.
+
+## 12. Contato
+
+Canal para dúvidas sobre estes Termos e assuntos contratuais: ⟨PENDENTE: e-mail
+ou canal oficial de contato do operador⟩.
+
+Para assuntos de proteção de dados e exercício de direitos do titular, ver a
+seção 11 da Política de Privacidade.
+
 ---
 
-## Pendências antes deste documento valer como final
+## Itens em aberto
 
-- Revisão completa por advogado (cláusulas 8 e 9 estão deliberadamente
-  incompletas).
-- Confirmação de que a divisão de responsabilidade Iris (operador) / clínica
-  (controladora) está corretamente refletida em linguagem contratual, não só
-  descritiva.
-- Alinhamento com `politica-privacidade.md` e `politica-retencao-dados.md`
-  (devem ser referenciados formalmente um no outro).
+Itens resolvidos em 30/07/2026 (não bloqueiam mais a publicação):
+
+- Cláusula 7 (preço e cobrança) — modelo de cobrança, trial de 7 dias, ausência
+  de exigência de cartão, modo somente-leitura com exportação livre e meios de
+  pagamento agora estão escritos.
+- Cláusula 8 (vigência, rescisão e alterações) — deixou de ser um placeholder;
+  as regras de rescisão, suspensão e versionamento estão redigidas.
+- Cadastro self-service (seções 2.1 e 2.2) — a figura do profissional pessoa
+  física que cria a própria clínica passou a estar descrita, com a declaração
+  de habilitação e a auditoria.
+- Referência formal cruzada com `politica-privacidade.md` e
+  `politica-retencao-dados.md` (seção 11).
+
+Itens **ainda em aberto** — cada um corresponde a um marcador `⟨PENDENTE⟩` no
+corpo do documento e depende de um dado que ainda não existe no projeto:
+
+1. **Endereço completo da sede do operador** (seção 2).
+2. **Formato final de exportação de dados** (seção 6).
+3. **Valor unitário final do tier "Diário" e dos demais tiers** (seção 7.1).
+4. **Definição operacional de "paciente ativo"** para fins de faturamento
+   (seção 7.1).
+5. **Prazo de permanência em modo somente-leitura antes de qualquer eliminação,
+   e a forma de aviso prévio** (seção 7.4 c).
+6. **Prazo de aviso prévio por inadimplência antes da suspensão** (seção 8.3).
+7. **Prazo de antecedência para comunicar alteração relevante dos Termos**
+   (seção 8.4).
+8. **Foro de eleição** (seção 9).
+9. **Canal oficial de contato do operador** (seção 12).
+
+Além destes, permanece pendente a **revisão jurídica completa** do documento.
+A publicação nesta versão foi autorizada pelo titular do negócio em 30/07/2026,
+com ciência do advogado, que sinalizará o que precisar ser alterado.
