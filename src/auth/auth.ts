@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor as twoFactorPlugin } from "better-auth/plugins";
 import { authDb } from "@/db/client";
+import { enviarEmailTransacional } from "@/lib/email/transacional";
 import {
   appUser,
   authAccount,
@@ -24,7 +25,32 @@ assertMfaBypassSafe();
 export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
-  emailAndPassword: { enabled: true },
+  emailAndPassword: {
+    enabled: true,
+    // Fatia A (#163): sem e-mail verificado não se entra em dado clínico.
+    // A migração 0059 fez o backfill das contas pré-existentes no mesmo commit.
+    requireEmailVerification: true,
+    sendResetPassword: async ({ user, url }) => {
+      await enviarEmailTransacional({
+        para: user.email,
+        assunto: "Redefinir sua senha no Iris",
+        texto: `Para redefinir sua senha, acesse: ${url}`,
+        html: `<p>Para redefinir sua senha, <a href="${url}">clique aqui</a>.</p><p>Se não foi você, ignore este e-mail.</p>`,
+      });
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      await enviarEmailTransacional({
+        para: user.email,
+        assunto: "Confirme seu e-mail no Iris",
+        texto: `Para confirmar seu e-mail, acesse: ${url}`,
+        html: `<p>Para confirmar seu e-mail e ativar sua conta, <a href="${url}">clique aqui</a>.</p>`,
+      });
+    },
+  },
   // DB gera o id (uuid default) — não deixar o Better-Auth gerar string.
   advanced: { database: { generateId: false } },
   // Fase 6.2b: MFA TOTP + backup codes. Enrollment exige verificação (fluxo
