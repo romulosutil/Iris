@@ -3,8 +3,11 @@ import Link from "next/link";
 import { getTenantContext, listarClinicasDoUsuario } from "@/auth/tenant";
 import { Container } from "@/components/ui/layout";
 import { Banner } from "@/components/ui/banner";
+import { diasRestantesDeTrial as calcularDiasRestantesTrial } from "@/lib/trial";
+import { FaixaTrial } from "@/components/app/faixa-trial";
 import { estadoEstagio2 } from "./alertas-risco/queries";
 import { listarPendencias } from "./pendencias/queries";
+import { obterDadosTrialDaClinica } from "./queries";
 import { SignOutButton } from "./sign-out-button";
 import { AppHeader, type NavItem } from "./app-header";
 
@@ -19,6 +22,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // quem tem acesso ao caso. Sem nome de paciente e sem categoria aqui: quem vê
   // este banner pode não ter acesso clínico ao caso (H3 aplicado à tela).
   const { quantidade: riscoEstagio2, protocoloInterno } = await estadoEstagio2(ctx);
+
+  // Fatia A — dados de trial para exibir faixa de dias restantes
+  const dadosTrial = await obterDadosTrialDaClinica(ctx);
+  const diasRestantes =
+    dadosTrial.trialComecoEm && dadosTrial.trialDias
+      ? calcularDiasRestantesTrial(
+          dadosTrial.trialComecoEm,
+          dadosTrial.trialDias,
+          dadosTrial.timezone,
+        )
+      : -1;
 
   let itemsNav: NavItem[] = [];
 
@@ -87,6 +101,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </Banner>
         </Container>
       ) : null}
+      {diasRestantes >= 0 ? <FaixaTrial diasRestantes={diasRestantes} /> : null}
       <Container como="main" largura="md" className="flex-1 py-6 sm:py-10">
         {children}
       </Container>
