@@ -21,9 +21,9 @@ import { hasDb } from "@tests/integration-env";
 // inexistente fora do bundler do Next. Stub, mesmo padrão de provisioning.int.test.ts.
 vi.mock("server-only", () => ({}));
 
-const { criarContaEClinica, garantirVinculoParaConsentimento } = await import(
-  "./cadastro"
-);
+const { criarContaEClinica, garantirVinculoParaConsentimento, CredencialInvalida } =
+  await import("./cadastro");
+const { provisionUser } = await import("@/auth/provisioning");
 const { authDb, authSql, sql: appSql } = await import("@/db/client");
 const { appUser, clinic, professionalConsent, userRole } = await import(
   "@/db/schema"
@@ -234,7 +234,7 @@ describe.skipIf(!hasDb)("criarContaEClinica — núcleo do cadastro self-service
     expect(aceites).toHaveLength(1);
   });
 
-  it("cria vínculo (não duplica a clínica) quando o e-mail já existe mas ainda não tem vínculo — janela entre signUpEmail e user_role", async () => {
+  it("cria uma clínica nova (e deixa a anterior órfã) quando o e-mail já existe mas ainda não tem vínculo — janela entre signUpEmail e user_role", async () => {
     const email = emailUnico("e");
     const primeira = await criarContaEClinica({ ...base, email });
 
@@ -242,8 +242,6 @@ describe.skipIf(!hasDb)("criarContaEClinica — núcleo do cadastro self-service
     // provisionUser, entre signUpEmail e o insert de user_role): o app_user
     // existe, mas o vínculo não.
     await authDb.delete(userRole).where(eq(userRole.userId, primeira.userId));
-
-    const clinicasAntes = await authDb.select({ id: clinic.id }).from(clinic);
 
     const retry = await criarContaEClinica({ ...base, email });
     expect(retry.userId).toBe(primeira.userId);
@@ -255,11 +253,21 @@ describe.skipIf(!hasDb)("criarContaEClinica — núcleo do cadastro self-service
     expect(papeis).toHaveLength(1);
 
     // A retomada de fato cria uma clínica NOVA nesta janela (documentado na
-    // docstring de cadastro.ts, item 1 — não é "não duplica clínica": a
-    // clínica da tentativa anterior fica órfã). O que este teste garante é
-    // que existe exatamente UMA clínica com vínculo ativo ao final.
-    const clinicasDepois = await authDb.select({ id: clinic.id }).from(clinic);
-    expect(clinicasDepois.length).toBe(clinicasAntes.length + 1);
+    // docstring de cadastro.ts, item 1 — a clínica da tentativa anterior fica
+    // órfã, não reaproveitada). Escopado às duas clínicas que este teste
+    // conhece (não a contagem global de `clinic` — review round 2, regressão:
+    // contar a tabela inteira só era verde porque test:rls roda serial).
+    expect(retry.clinicId).not.toBe(primeira.clinicId);
+    const [clinicaOrfa] = await authDb
+      .select()
+      .from(clinic)
+      .where(eq(clinic.id, primeira.clinicId));
+    expect(clinicaOrfa).toBeDefined();
+    const [clinicaNova] = await authDb
+      .select()
+      .from(clinic)
+      .where(eq(clinic.id, retry.clinicId));
+    expect(clinicaNova).toBeDefined();
 
     const clinicasComVinculo = await authDb
       .select({ clinicId: userRole.clinicId })
@@ -295,11 +303,15 @@ describe.skipIf(!hasDb)("criarContaEClinica — núcleo do cadastro self-service
     const email = emailUnico("g");
     const primeira = await criarContaEClinica({ ...base, email });
 
-    // "Reenvio hostil": alguém que só sabe o e-mail (não é segredo) reenvia
-    // o formulário de cadastro com dados profissionais diferentes e uma
-    // versão de termo diferente, sem apresentar senha nenhuma — o caminho de
-    // retomada não autentica (provisionUser só chama signUpEmail para e-mail
-    // NOVO; para e-mail existente devolve o id sem checar senha).
+    // "Reenvio hostil": o próprio dono da conta (ou alguém que sabe a senha
+    // certa — `base.senha`, reaproveitada aqui) reenvia o formulário com
+    // dados profissionais diferentes e uma versão de termo diferente. Mesmo
+    // comprovando posse da senha (review round 2 — gate de
+    // `verificarPossePorSenha`), o gate de completude por estado gravado
+    // (round 1) segue impedindo a sobrescrita: conta já completa não sofre
+    // NENHUMA escrita, senha certa ou não. O caso de senha ERRADA contra
+    // conta INCOMPLETA (o ataque que não exige senha nenhuma) está coberto
+    // no teste "CRÍTICO" seguinte.
     const hostil = await criarContaEClinica({
       ...base,
       email,
@@ -332,5 +344,68 @@ describe.skipIf(!hasDb)("criarContaEClinica — núcleo do cadastro self-service
     expect(aceites).toHaveLength(1);
     expect(aceites[0]!.versaoTermo).toBe("2026-07-30");
     expect(aceites[0]!.ip).not.toBe("203.0.113.66");
+  });
+
+  it("CRÍTICO: e-mail de conta LEGADA (incompleta, sem aceite) + senha errada não escreve nada", async () => {
+    // Conta "legada": provisionada fora do cadastro self-service (mesmo
+    // caminho de seed:clinic/convite — provisionUser direto), sem passar
+    // por criarContaEClinica. conselho/registroNumero/registroUf ficam NULL
+    // e não existe professional_consent — exatamente o estado que o review
+    // round 2 apontou como o alvo real do Crítico: `contaEstaCompleta`
+    // devolve false pra qualquer conta assim, legada ou não.
+    const email = emailUnico("h");
+    const senhaDaConta = "Senha Legado 123";
+    const [clinicaLegado] = await authDb
+      .insert(clinic)
+      .values({ nome: "Clínica Legado" })
+      .returning({ id: clinic.id });
+
+    const { userId } = await provisionUser({
+      email,
+      nome: "Legado Teste",
+      senha: senhaDaConta,
+      clinicId: clinicaLegado!.id,
+      papel: "coordenador",
+    });
+
+    // Anônimo: sabe o e-mail (não é segredo) mas NÃO sabe a senha da conta.
+    await expect(
+      criarContaEClinica({
+        ...base,
+        email,
+        senha: "senha-do-atacante-errada",
+        conselho: "crm",
+        registroNumero: "FORJADO-999",
+        registroUf: "RJ",
+        versaoTermo: "2099-01-01-versao-forjada",
+        ip: "203.0.113.66",
+        userAgent: "forjado",
+      }),
+    ).rejects.toBeInstanceOf(CredencialInvalida);
+
+    // Nenhum dado profissional forjado foi gravado — os campos continuam
+    // exatamente como a conta legada os deixou: NULL.
+    const [user] = await authDb
+      .select()
+      .from(appUser)
+      .where(eq(appUser.id, userId));
+    expect(user!.conselho).toBeNull();
+    expect(user!.registroNumero).toBeNull();
+    expect(user!.registroUf).toBeNull();
+
+    // Nenhum aceite (professional_consent é imutável — se tivesse sido
+    // gravado, seria permanente) foi criado.
+    const aceites = await authDb
+      .select()
+      .from(professionalConsent)
+      .where(eq(professionalConsent.userId, userId));
+    expect(aceites).toHaveLength(0);
+
+    // A clínica legada não ganhou responsável forjado.
+    const [c] = await authDb
+      .select()
+      .from(clinic)
+      .where(eq(clinic.id, clinicaLegado!.id));
+    expect(c!.responsavelContaId).toBeNull();
   });
 });

@@ -85,6 +85,74 @@
 - Detalhe completo (comandos, contagens pass/fail/skip, GREEN) no apêndice de
   round 1 em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
 
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 2 de review, item Crítico reaberto (Issue #163)
+
+**O achado**
+
+- O gate de completude do round 1 (acima) só protege contas JÁ completas.
+  Qualquer conta LEGADA (`seed:clinic`, convite, ou qualquer coisa anterior à
+  Fatia A) tem `conselho`/`registro_numero`/`registro_uf` `NULL` e nenhum
+  `professional_consent` — o gate a lê como incompleta por definição. Um POST
+  anônimo com o e-mail de qualquer conta existente e uma senha QUALQUER
+  passava por `provisionUser` (não checa senha para e-mail já existente),
+  falhava o gate, e gravava dados profissionais forjados + um aceite
+  permanente. Mesma classe de dano do round 1, relocada de "conta completa"
+  para "conta incompleta" — o conjunto de vítimas é toda conta que já existe
+  hoje.
+- Raiz nomeada pelo review: "este endpoint resumia uma conta que nunca
+  autenticou. Derivar estado do banco diz o que falta; não diz se quem está
+  chamando tem direito de preencher."
+
+**Decisão travada nesta sessão**
+
+- Fechado com prova de posse ANTES de qualquer escrita no ramo de e-mail
+  existente: `verificarPossePorSenha` chama `auth.api.signInEmail` (caminho
+  de sign-in do próprio Better-Auth — não comparamos hash na aplicação).
+  Falha de verificação (senha errada) lança `CredencialInvalida`, tratada
+  exatamente como chamador desconhecido — zero escrita.
+- Contrato para Task 7 (resposta HTTP uniforme anti-enumeração): só dois
+  formatos de saída existem no caminho de cadastro — sucesso (e-mail novo OU
+  e-mail existente com senha certa) e `CredencialInvalida` (e-mail existente
+  com senha errada). Task 7 mapeia `CredencialInvalida` para a mesma resposta
+  genérica de qualquer outra falha, sem mencionar que o e-mail já existe.
+- Efeito colateral aceito, não corrigido: `signInEmail` bem-sucedido cria uma
+  sessão real no Better-Auth (não revogada) — é sessão do próprio dono da
+  conta, só criada quando a senha confere.
+- `clinicId` que alimenta o gate de segurança passou a ser resolvido de
+  forma determinística (prioriza vínculo "coordenador", desempate por
+  `clinicId`) — antes vinha de `.limit(1)` sem `order by`, podia escolher a
+  clínica errada para um usuário com mais de um `user_role` e reabrir
+  escrita numa conta já completa (na outra clínica). Para usuário
+  genuinamente multi-clínica, a função resolve sempre para o MESMO vínculo
+  em toda retomada, não necessariamente a clínica que o cadastro atual
+  pretendia completar — aceitável porque o gate é por `(userId, clinicId)`,
+  e vínculo adicional a uma segunda clínica não é fluxo deste endpoint.
+
+**O que foi entregue**
+
+- `src/auth/cadastro.ts`: `verificarPossePorSenha` + `CredencialInvalida`
+  (exportada); `orderBy` determinístico na seleção de `vinculo`.
+- `src/auth/cadastro.int.test.ts`: teste RED-first novo ("CRÍTICO: e-mail de
+  conta LEGADA... + senha errada não escreve nada"); teste da janela
+  `signUpEmail`/`user_role` deixou de contar a tabela `clinic` inteira
+  (escopado às duas clínicas que o teste conhece) e foi retitulado para o
+  que de fato prova (cria clínica nova); comentário desatualizado do teste
+  "CRÍTICO" do round 1 corrigido.
+- `src/auth/verificacao.int.test.ts`: reescrito para ler o predicado `WHERE`
+  da migração 0059 DO DISCO (não mais uma cópia colada) — provado por
+  mutação (enfraquecer a migração, confirmar teste vermelho, restaurar).
+
+**Verificação**
+
+- RED capturado antes do fix (`cadastro.ts` isolado via `git stash push --
+  src/auth/cadastro.ts`): `AssertionError: promise resolved "{ …(2) }"
+  instead of rejecting`.
+- Mutação do item 8: migração 0059 enfraquecida → `AssertionError: expected
+  false to be true`; restaurada → verde.
+- Detalhe completo (comandos, contagens, contrato dos três casos) no
+  apêndice de round 3 em
+  `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
+
 ## 🏁 Sessão 31/07/2026 — Migração 0055 perdida: correção de segurança que nunca rodou (Issue #165)
 
 **O achado**

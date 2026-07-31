@@ -1,8 +1,27 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { APIError } from "better-auth/api";
+import { auth } from "@/auth/auth";
 import { authDb } from "@/db/client";
 import { appUser, clinic, professionalConsent, userRole } from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
+
+/**
+ * Lançado quando o e-mail já pertence a uma conta existente e a senha
+ * enviada não comprova posse dela (review round 2, item Crítico). Zero
+ * escrita acontece antes desta checagem. Contrato para quem chama (Task 7):
+ * este erro e o "sucesso silencioso" de um e-mail novo/senha correta são os
+ * únicos dois formatos que este módulo produz para o caminho de cadastro —
+ * ver o comentário de `verificarPossePorSenha` para a tabela completa dos
+ * três casos (e-mail novo / existente+senha certa / existente+senha errada)
+ * e o que cada um devolve.
+ */
+export class CredencialInvalida extends Error {
+  constructor() {
+    super("cadastro: e-mail já cadastrado e a senha enviada não confere");
+    this.name = "CredencialInvalida";
+  }
+}
 
 export type EntradaCadastro = {
   email: string;
@@ -99,10 +118,38 @@ export async function criarContaEClinica(
   let clinicId: string;
 
   if (existente) {
+    // SEGURANÇA (review round 2, item Crítico): o gate de "conta completa"
+    // só protege contas já completas. Qualquer conta LEGADA (seed:clinic,
+    // convite, ou qualquer coisa anterior à Fatia A) está incompleta por
+    // definição — sem isso, um POST anônimo com o e-mail de alguém e
+    // QUALQUER senha passava por `provisionUser` (que devolve o id sem
+    // checar senha para e-mail existente), falhava o gate de completude e
+    // gravava dados profissionais forjados + um aceite permanente. Fechado
+    // aqui: nenhuma escrita no ramo `existente` acontece sem comprovar posse
+    // da senha primeiro, pelo caminho de sign-in do Better-Auth (não
+    // comparamos hash nós mesmos).
+    await verificarPossePorSenha(e.email, e.senha);
+
+    // Determinístico (review round 2, regressão): antes escolhia com
+    // `limit(1)` sem `order by` — não determinístico para usuário com mais
+    // de um `user_role`, podia selecionar a clínica errada e reabrir o gate
+    // de completude para uma conta já completa (na OUTRA clínica). Critério:
+    // prioriza o vínculo em que o usuário é "coordenador" (papel do
+    // cadastro self-service), com `clinicId` como desempate estável. Para um
+    // usuário genuinamente multi-clínica (estado real do produto — ex.:
+    // profissional que atua em duas clínicas), esta função sempre resolve
+    // para o MESMO vínculo em toda retomada, mas não necessariamente para a
+    // clínica que o cadastro atual pretendia completar; isso é aceitável
+    // porque o gate de completude abaixo é por (userId, clinicId) — se a
+    // clínica escolhida já está completa, nada é escrito, e a clínica
+    // "outra" continua exigindo seu próprio fluxo de completude (não coberto
+    // por este endpoint, que é de cadastro inicial, não de vínculo
+    // adicional).
     const [vinculo] = await authDb
       .select({ clinicId: userRole.clinicId })
       .from(userRole)
       .where(eq(userRole.userId, existente.id))
+      .orderBy(desc(eq(userRole.papel, "coordenador")), asc(userRole.clinicId))
       .limit(1);
 
     if (vinculo) {
@@ -132,6 +179,64 @@ export async function criarContaEClinica(
   await completarCadastro(userId, clinicId, e);
 
   return { userId, clinicId };
+}
+
+/**
+ * Comprova posse da senha de um e-mail já existente ANTES de qualquer
+ * escrita no ramo `existente` de `criarContaEClinica` (review round 2, item
+ * Crítico). Usa `auth.api.signInEmail` — o caminho de sign-in do próprio
+ * Better-Auth — em vez de comparar hash de senha aqui (instrução explícita
+ * do review: "não tocar hash você mesmo").
+ *
+ * Contrato para quem chama esta função (Task 5, este módulo) e para quem
+ * consome o resultado de `criarContaEClinica` (Task 7, resposta HTTP
+ * uniforme anti-enumeração) — os TRÊS casos que existem:
+ *
+ * 1. E-MAIL NOVO: nunca passa por aqui (este gate só roda dentro do `if
+ *    (existente)`). `criarContaEClinica` cria conta+clínica e devolve
+ *    `{ userId, clinicId }` normalmente — sem erro.
+ * 2. E-MAIL EXISTENTE + SENHA CERTA: `auth.api.signInEmail` ou resolve (senha
+ *    certa, e-mail já verificado) ou lança `APIError` com
+ *    `body.code === "EMAIL_NOT_VERIFIED"` — a verificação de senha, no
+ *    Better-Auth, roda ANTES da checagem de e-mail verificado (confirmado em
+ *    `sign-in.mjs`), então esse erro específico já significa posse
+ *    comprovada. Em ambos os sub-casos, esta função retorna normalmente
+ *    (sem lançar) e `criarContaEClinica` segue para completar/retomar o
+ *    cadastro, devolvendo `{ userId, clinicId }` — sem erro.
+ * 3. E-MAIL EXISTENTE + SENHA ERRADA (inclui e-mail desconhecido para o
+ *    Better-Auth ou conta sem credencial local — mesmo código de erro):
+ *    `auth.api.signInEmail` lança `APIError` com
+ *    `body.code === "INVALID_EMAIL_OR_PASSWORD"`. Esta função relança como
+ *    `CredencialInvalida`, e NENHUMA escrita acontece — nem dados
+ *    profissionais, nem `professional_consent`.
+ *
+ * Só os casos 1/2 (sucesso) e o caso 3 (`CredencialInvalida`) existem na
+ * saída deste módulo. Task 7 só precisa mapear `CredencialInvalida` para a
+ * mesma resposta genérica usada para qualquer outra falha (ex.: e-mail
+ * inválido, rate limit) — sem mencionar que o e-mail já existe. Este módulo
+ * não decide o formato HTTP; só garante que os dois casos são
+ * distinguíveis (sucesso vs. erro) sem depender de qual dos três motivos
+ * originou o erro.
+ *
+ * Efeito colateral aceito: uma chamada bem-sucedida a `signInEmail` cria uma
+ * sessão real no Better-Auth (via `internalAdapter.createSession`) — não é
+ * revogada aqui. Documentado, não tratado como bug: é sessão do próprio
+ * dono da conta, criada só quando a senha confere.
+ */
+async function verificarPossePorSenha(
+  email: string,
+  senha: string,
+): Promise<void> {
+  try {
+    await auth.api.signInEmail({ body: { email, password: senha } });
+  } catch (err) {
+    if (err instanceof APIError && err.body?.code === "EMAIL_NOT_VERIFIED") {
+      return;
+    }
+    throw err instanceof APIError && err.body?.code === "INVALID_EMAIL_OR_PASSWORD"
+      ? new CredencialInvalida()
+      : err;
+  }
 }
 
 /**
