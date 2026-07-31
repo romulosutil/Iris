@@ -441,6 +441,25 @@ export const consent = pgTable(
   ],
 );
 
+/**
+ * Aceite dos termos de uso pelo PROFISSIONAL (adulto) no cadastro self-service.
+ * Não confundir com o consentimento do titular do tratamento (paciente) —
+ * outro titular, outra base legal. Imutável para a aplicação de produto.
+ */
+export const professionalConsent = pgTable("professional_consent", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => appUser.id),
+  clinicId: uuid("clinic_id")
+    .notNull()
+    .references(() => clinic.id),
+  versaoTermo: text("versao_termo").notNull(),
+  aceitoEm: timestamp("aceito_em", { withTimezone: true }).notNull().defaultNow(),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+});
+
 // ─── Protocolos (catálogo + instância por paciente) ──────────────────────────
 export const protocolFamiliaCatalogo = pgTable("protocol_familia_catalogo", {
   id: text("id").primaryKey(),
