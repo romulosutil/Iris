@@ -1,7 +1,11 @@
-import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
 import { Alert } from "@/components/ui/alert";
-import { cn } from "@/lib/cn";
+import { surface } from "@/components/ui/primitives/surface";
+
+export const metadata = {
+  title: "Verifique seu e-mail — Iris",
+  description: "Confirmação pós-cadastro do Iris.",
+};
 
 /**
  * Página estática pós-cadastro. `cadastrar` (Task 7) redireciona para cá em
@@ -16,7 +20,9 @@ import { cn } from "@/lib/cn";
  * byte-idêntico para os sete desfechos possíveis — não afirma "enviamos um
  * e-mail para você" e não revela se o e-mail já existia. Não adicione nada
  * aqui (nome, e-mail digitado, "conta criada") que permita a um visitante
- * inferir em qual dos sete ramos ele caiu.
+ * inferir em qual dos sete ramos ele caiu. Sem botão de reenvio (#168) e
+ * sem links de navegação além do necessário — fix round 1 removeu os que
+ * não estavam no brief.
  */
 export default function VerifiqueEmailPage() {
   return (
@@ -29,9 +35,10 @@ export default function VerifiqueEmailPage() {
       </div>
 
       <div
-        className={cn(
-          "flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-6 shadow-[var(--ds-shadow)]",
-        )}
+        className={surface("solida", {
+          radius: "control",
+          className: "bg-[var(--surface-card)] flex flex-col gap-4 p-6",
+        })}
       >
         <p className="text-[var(--text-primary)] font-body text-base">
           Se este e-mail puder criar uma conta, você receberá uma mensagem
@@ -43,26 +50,7 @@ export default function VerifiqueEmailPage() {
           Confira a caixa de spam ou lixo eletrônico. Se ainda assim não
           encontrar, você pode tentar o cadastro novamente.
         </Alert>
-
-        <p className="text-[var(--text-secondary)] text-center text-sm">
-          <Link
-            href="/cadastro"
-            className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
-          >
-            Tentar de novo
-          </Link>
-        </p>
       </div>
-
-      <p className="text-[var(--text-secondary)] text-center text-sm">
-        Já confirmou seu e-mail?{" "}
-        <Link
-          href="/login"
-          className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
-        >
-          Entrar
-        </Link>
-      </p>
     </div>
   );
 }

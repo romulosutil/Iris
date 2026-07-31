@@ -1,7 +1,11 @@
-import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
-import { cn } from "@/lib/cn";
+import { surface } from "@/components/ui/primitives/surface";
 import { CadastroForm } from "./cadastro-form";
+
+export const metadata = {
+  title: "Criar conta — Iris",
+  description: "Cadastro self-service de clínica no Iris.",
+};
 
 /**
  * Tela de cadastro self-service (Fatia A). Mesmo desenho visual de
@@ -19,22 +23,13 @@ export default function CadastroPage() {
       </div>
 
       <div
-        className={cn(
-          "rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-6 shadow-[var(--ds-shadow)]",
-        )}
+        className={surface("solida", {
+          radius: "control",
+          className: "bg-[var(--surface-card)] p-6",
+        })}
       >
         <CadastroForm />
       </div>
-
-      <p className="text-[var(--text-secondary)] text-center text-sm">
-        Já tem conta?{" "}
-        <Link
-          href="/login"
-          className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
-        >
-          Entrar
-        </Link>
-      </p>
     </div>
   );
 }
