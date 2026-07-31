@@ -31,8 +31,13 @@ export async function enviarEmailTransacional(
       text: input.texto,
       html: input.html,
     });
-    return { enviado: !error };
-  } catch {
+    if (error) {
+      console.error("enviarEmailTransacional: erro do provedor:", error);
+      return { enviado: false };
+    }
+    return { enviado: true };
+  } catch (err) {
+    console.error("enviarEmailTransacional: exceção capturada:", err);
     return { enviado: false };
   }
 }
