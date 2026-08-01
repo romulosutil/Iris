@@ -72,19 +72,46 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
   test("unifica mensagem de erro entre report inexistente e report de outra clínica (#165)", async () => {
     const INEXISTENTE = "00000000-0000-0000-0000-0000000000ff";
 
+    // A mensagem do RAISE do Postgres NÃO está em `error.message` — o drizzle
+    // embrulha tudo num DrizzleQueryError cujo `message` é sempre
+    // "Failed query: …". O texto do banco vive na cadeia de `cause`. Asserir
+    // direto com `.rejects.toThrow("app_purgar_report: …")` compara contra o
+    // wrapper e NUNCA casa, nem com o oráculo vivo nem com ele fechado.
+    const mensagemDoBanco = async (p: Promise<unknown>): Promise<string> => {
+      try {
+        await p;
+      } catch (e) {
+        const partes: string[] = [];
+        let atual: unknown = e;
+        while (atual instanceof Error) {
+          partes.push(atual.message);
+          atual = atual.cause;
+        }
+        return partes.join(" | ");
+      }
+      throw new Error("esperava rejeição, mas a purga resolveu");
+    };
+
     // 1) Report inexistente
-    await expect(
+    const msgInexistente = await mensagemDoBanco(
       withTenant(ctx("coordenador", U_COORD_A), (db) =>
         db.execute(sql`SELECT app_purgar_report(${INEXISTENTE}::uuid, 'teste')`),
       ),
-    ).rejects.toThrow(`app_purgar_report: report ${INEXISTENTE} não encontrado`);
+    );
+    expect(msgInexistente).toContain(`app_purgar_report: report ${INEXISTENTE} não encontrado`);
 
-    // 2) Report de outra clínica (cross-tenant) — devolve a MESMA mensagem genérica sem vazar existência
-    await expect(
+    // 2) Report de outra clínica (cross-tenant) — MESMA mensagem genérica, sem vazar existência
+    const msgCrossTenant = await mensagemDoBanco(
       withTenant(ctx("coordenador", U_COORD_A), (db) =>
         db.execute(sql`SELECT app_purgar_report(${R2}::uuid, 'teste')`),
       ),
-    ).rejects.toThrow(`app_purgar_report: report ${R2} não encontrado`);
+    );
+    expect(msgCrossTenant).toContain(`app_purgar_report: report ${R2} não encontrado`);
+
+    // O oráculo da 0040 dizia "fora da clínica" no caso cross-tenant e
+    // "inexistente" no outro. Nenhuma das duas palavras pode sobreviver.
+    expect(msgCrossTenant).not.toMatch(/fora da clínica/i);
+    expect(msgInexistente).not.toMatch(/inexistente/i);
   });
 
   test("terapeuta não pode executar a purga", async () => {
