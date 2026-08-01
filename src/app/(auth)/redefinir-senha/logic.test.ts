@@ -41,6 +41,7 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+import { APIError } from "better-auth/api";
 import {
   MENSAGEM_SEM_LINK_ATIVO,
   executarRedefinirSenha,
@@ -208,11 +209,57 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
     expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(false);
   });
 
-  it("apaga o cookie após tentativa real (falha do Better-Auth)", async () => {
+  it("apaga o cookie quando o Better-Auth REJEITA o token (APIError 4xx — desfecho definitivo)", async () => {
     cookieStore.set(NOME_COOKIE_TOKEN, "token-invalido");
-    resetPassword.mockRejectedValueOnce(new Error("token inválido"));
+    resetPassword.mockRejectedValueOnce(
+      new APIError("BAD_REQUEST", { message: "invalid token" }),
+    );
+    const silencio = vi.spyOn(console, "error").mockImplementation(() => {});
     await executar(fd(SENHA_VALIDA));
+    silencio.mockRestore();
     expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(false);
+  });
+
+  // Fix round 2 (finding W1 do review): infra fora do ar não é culpa do
+  // usuário e o token dele continua válido — queimar o cookie aqui obrigava
+  // uma vítima de outage nossa a recomeçar o fluxo de recuperação.
+  it("NÃO apaga o cookie quando a chamada falha por infra (exceção comum — token pode continuar válido)", async () => {
+    cookieStore.set(NOME_COOKIE_TOKEN, "token-da-vitima");
+    resetPassword.mockRejectedValueOnce(new Error("postgres indisponível"));
+    const silencio = vi.spyOn(console, "error").mockImplementation(() => {});
+    await executar(fd(SENHA_VALIDA));
+    silencio.mockRestore();
+    expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
+  });
+
+  it("NÃO apaga o cookie quando o Better-Auth devolve APIError 5xx (ele falhou, não o token)", async () => {
+    cookieStore.set(NOME_COOKIE_TOKEN, "token-da-vitima");
+    resetPassword.mockRejectedValueOnce(
+      new APIError("INTERNAL_SERVER_ERROR", { message: "boom" }),
+    );
+    const silencio = vi.spyOn(console, "error").mockImplementation(() => {});
+    await executar(fd(SENHA_VALIDA));
+    silencio.mockRestore();
+    expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
+  });
+
+  // O cookie ficar ou não ficar não pode virar canal: as duas rotas devolvem
+  // o mesmo corpo (o `Set.size === 1` acima já cobre; este é o par explícito).
+  it("rejeição de token e falha de infra devolvem corpos indistinguíveis", async () => {
+    const silencio = vi.spyOn(console, "error").mockImplementation(() => {});
+    cookieStore.set(NOME_COOKIE_TOKEN, "t1");
+    resetPassword.mockRejectedValueOnce(
+      new APIError("BAD_REQUEST", { message: "invalid token" }),
+    );
+    const rejeitado = await executar(fd(SENHA_VALIDA));
+
+    cookieStore.set(NOME_COOKIE_TOKEN, "t2");
+    resetPassword.mockRejectedValueOnce(new Error("postgres indisponível"));
+    const infra = await executar(fd(SENHA_VALIDA));
+    silencio.mockRestore();
+
+    expect(rejeitado).toEqual(infra);
+    expect(rejeitado).toEqual({ ok: false, error: MENSAGEM_SEM_LINK_ATIVO });
   });
 
   it("NÃO apaga o cookie quando o throttle bloqueia (protege a vítima de NAT compartilhado)", async () => {

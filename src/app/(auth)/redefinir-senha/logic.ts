@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
+import { APIError } from "better-auth/api";
 import { auth } from "@/auth/auth";
 import { registrarTentativa } from "@/lib/throttle";
 import { resolverIp } from "../esqueci-senha/logic";
@@ -89,6 +90,24 @@ async function apagarCookieToken(): Promise<void> {
 }
 
 /**
+ * "O Better-Auth REJEITOU este token" (desfecho definitivo — repetir com o
+ * mesmo token nunca vai dar certo) vs. "a chamada não chegou a um veredito"
+ * (Postgres fora, rede, bug não antecipado — o token pode continuar
+ * perfeitamente válido).
+ *
+ * O Better-Auth sinaliza rejeição de regra de negócio com `APIError` e
+ * status 4xx (`INVALID_TOKEN` → 400). Erro de driver/rede sobe como exceção
+ * comum; um `APIError` 5xx é o próprio Better-Auth dizendo que ele falhou,
+ * não que o token é ruim. Só o 4xx queima o cookie — ver
+ * `executarRedefinirSenha`.
+ */
+function tokenFoiRejeitado(err: unknown): boolean {
+  return (
+    err instanceof APIError && err.statusCode >= 400 && err.statusCode < 500
+  );
+}
+
+/**
  * Núcleo público (`server-only`, sem `"use server"`) da redefinição de
  * senha. Superfície invocável pelo cliente é só `./actions.ts` (Issue #55).
  *
@@ -152,20 +171,30 @@ export async function executarRedefinirSenha(
 
   let sucesso = false;
   if (permitido) {
+    // O cookie só é queimado em DESFECHO DEFINITIVO: sucesso (token já foi
+    // consumido pelo Better-Auth) ou rejeição explícita do token (4xx —
+    // repetir com o mesmo token nunca daria certo). Fix round 2 (finding W1
+    // do review): a versão anterior apagava em QUALQUER saída da chamada,
+    // então um Postgres momentaneamente fora — culpa zero do usuário —
+    // custava a ele o link que ele tinha em mãos. Nunca apaga no throttle,
+    // pelo mesmo motivo: um IP temporariamente estourado (NAT compartilhado,
+    // etc.) queimaria o link de uma vítima legítima que nunca tentou nada.
+    // Nos casos não-definitivos o cookie fica e expira sozinho em 15 min
+    // (`./cookie.ts`) — o custo de deixá-lo é apenas essa janela; o de
+    // apagá-lo é o usuário ter que recomeçar o fluxo por falha nossa.
+    let definitivo = false;
     try {
       await auth.api.resetPassword({ body: { token, newPassword: validado.novaSenha } });
       sucesso = true;
+      definitivo = true;
     } catch (err) {
+      definitivo = tokenFoiRejeitado(err);
       console.error(
-        "executarRedefinirSenha: falha ao redefinir senha:",
+        `executarRedefinirSenha: falha ao redefinir senha (definitivo=${definitivo}):`,
         descreverErro(err),
       );
     }
-    // Cookie só é apagado quando de fato houve tentativa contra o
-    // Better-Auth (sucesso ou não) — nunca no throttle, senão um IP
-    // temporariamente estourado (NAT compartilhado, etc.) queimaria o link
-    // de uso único de uma vítima legítima sem ela nunca ter tentado nada.
-    await apagarCookieToken();
+    if (definitivo) await apagarCookieToken();
   }
 
   // Piso de tempo: mesma lógica de `../esqueci-senha/logic.ts` — normaliza o
