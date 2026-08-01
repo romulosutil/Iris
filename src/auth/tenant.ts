@@ -14,6 +14,7 @@ export const COOKIE_PAPEL = "iris_active_role";
 export type TenantResolution =
   | { status: "unauthenticated" }
   | { status: "no_access" }
+  | { status: "cadastro_incompleto"; userId: string }
   | { status: "needs_clinic_selection"; opcoes: { clinicId: string; nome: string }[] }
   | { status: "needs_role_selection"; clinicId: string; papeis: Papel[] }
   | { status: "ok"; ctx: TenantContext };
@@ -43,7 +44,11 @@ export async function resolveTenant(
     .innerJoin(clinic, eq(clinic.id, userRole.clinicId))
     .where(eq(userRole.userId, userId));
 
-  if (vinculos.length === 0) return { status: "no_access" };
+  // Usuário autenticado sem NENHUM vínculo: no self-service isto significa que o
+  // cadastro morreu entre criar a conta e criar a clínica (o provisionamento não
+  // é atômico — ver src/auth/cadastro.ts). Devolver "sem acesso" aqui seria beco
+  // sem saída com o e-mail já queimado.
+  if (vinculos.length === 0) return { status: "cadastro_incompleto", userId };
 
   const clinicasIds = [...new Set(vinculos.map((v) => v.clinicId))];
 
@@ -117,6 +122,8 @@ export async function getTenantContext(): Promise<TenantContext> {
       redirect("/login");
     case "no_access":
       redirect("/sem-acesso");
+    case "cadastro_incompleto":
+      redirect("/sem-acesso?motivo=cadastro-incompleto");
     case "needs_clinic_selection":
       redirect("/selecionar-clinica");
     case "needs_role_selection":
