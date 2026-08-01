@@ -69,4 +69,54 @@ describe("resolverDiasRestantesParaFaixa", () => {
       }),
     ).toBeNull();
   });
+
+  /**
+   * Achado bloqueante do Jules na PR #176.
+   *
+   * A migração 0057 é `NOT NULL` e fez `UPDATE clinic SET trial_comeco_em =
+   * '2020-01-01'` nas clínicas pré-existentes, escolhendo 2020 exatamente
+   * porque, no contrato antigo, negativo significava "não mostrar a faixa".
+   * Quando a faixa ganhou o estado "encerrado", esse sentinela virou uma
+   * clínica em trial vencido para sempre — toda clínica anterior ao
+   * self-service passaria a ver "seu período de teste terminou" eternamente.
+   *
+   * Sem o corte de data, este caso devolve um número negativo (≈ -2400) em vez
+   * de `null`, e o layout renderiza a faixa. É o que discrimina o fix.
+   */
+  it("devolve null para o sentinela de 2020 da migração 0057 (clínica pré-self-service)", () => {
+    expect(
+      resolverDiasRestantesParaFaixa({
+        trialComecoEm: new Date("2020-01-01T00:00:00Z"),
+        trialDias: 7,
+        timezone: TZ,
+      }),
+    ).toBeNull();
+  });
+
+  it("devolve null para qualquer data anterior ao nascimento do self-service", () => {
+    expect(
+      resolverDiasRestantesParaFaixa({
+        trialComecoEm: new Date("2026-06-30T23:59:59Z"),
+        trialDias: 7,
+        timezone: TZ,
+      }),
+    ).toBeNull();
+  });
+
+  it("trata como trial real uma conta criada depois do corte, mesmo já vencida", () => {
+    // Conta self-service de verdade, com o trial vencido: precisa devolver
+    // número negativo (faixa "encerrado"), não `null`. Se o corte engolir este
+    // caso, o estado "encerrado" nunca aparece para ninguém.
+    //
+    // A data é logo depois do corte e o vencimento fica no passado, então a
+    // asserção não envelhece com o relógio real.
+    const resultado = resolverDiasRestantesParaFaixa({
+      trialComecoEm: new Date("2026-07-01T12:00:00Z"),
+      trialDias: 7,
+      timezone: TZ,
+    });
+
+    expect(resultado).not.toBeNull();
+    expect(resultado!).toBeLessThan(0);
+  });
 });

@@ -119,6 +119,11 @@ Easypanel + Postgres puro + MinIO). Itens de infra são "confirmar antes / via
       `.globals.sql` com as roles). É o que fecha o item LGPD; reexecutar
       mensalmente e após toda migração que mexa em RLS/roles, com registro no
       `BACKLOG.md`.
+      **Reexecutado em 01/08/2026** no serviço `iris-backup` (Easypanel →
+      Console), imediatamente antes de liberar o cadastro self-service:
+      `/app/backup.sh` → `exit=0` e `/app/verify-restore.sh` → `exit=0`.
+      Cobre o cenário "banco corrompeu com o VPS vivo". **Não** cobre perda
+      total do host — isso depende dos dois itens abaixo, que seguem abertos.
 - [ ] **DR em cluster novo, com dump DE PRODUÇÃO** (runbook em `infra/README.md`):
       restaurar globals + dump num Postgres vazio, re-setar as senhas das roles
       de login (os globals vêm com `--no-role-passwords`), rodar `pnpm test:rls`
