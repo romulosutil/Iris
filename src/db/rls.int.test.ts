@@ -646,7 +646,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       `;
       const [ext] = await owner<{ id: string }[]>`
         INSERT INTO extraction (session_id, clinic_id, subtipo, trecho_fonte, confianca, payload)
-        VALUES (${sess!.id}, ${CLINIC_A}, 'sugestao_marcos', 'trecho fonte', 'alta', '{}'::jsonb) RETURNING id
+        VALUES (${sess!.id}, ${CLINIC_A}, 'evidencia', 'trecho fonte', 'alta', '{}'::jsonb) RETURNING id
       `;
       const [ev1] = await owner<{ id: string }[]>`
         INSERT INTO evidence (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, classificacao_original, aprovado_por)
@@ -710,7 +710,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       // 1. Criar sessão pertencente a U_TERA
       const [sess] = await owner<{ id: string }[]>`
         INSERT INTO session (clinic_id, patient_id, terapeuta_id, agendada_para, disciplina)
-        VALUES (${CLINIC_A}, ${P1}, ${U_TERA}, now(), 'ABA') RETURNING id
+        VALUES (${CLINIC_A}, ${P1}, ${U_TERA}, now() + interval '1 day', 'ABA') RETURNING id
       `;
 
       // 2. U_TERA2 (outro terapeuta) tenta inserir nota na sessão de U_TERA -> RLS barra
@@ -731,7 +731,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       // 1. Criar sessão pertencente a U_TERA
       const [sess] = await owner<{ id: string }[]>`
         INSERT INTO session (clinic_id, patient_id, terapeuta_id, agendada_para, disciplina)
-        VALUES (${CLINIC_A}, ${P1}, ${U_TERA}, now(), 'ABA') RETURNING id
+        VALUES (${CLINIC_A}, ${P1}, ${U_TERA}, now() + interval '2 days', 'ABA') RETURNING id
       `;
 
       // 2. U_TERA2 tenta inserir extração para a sessão de U_TERA -> RLS barra
