@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { CredencialInvalida, criarContaEClinica } from "@/auth/cadastro";
 import { criarSemaforo } from "@/lib/semaforo";
 import { registrarTentativa } from "@/lib/throttle";
+import { enviarEmailTransacional } from "@/lib/email/transacional";
+
 
 export type EstadoCadastro = { error?: string };
 
@@ -424,12 +426,41 @@ export async function executarCadastro(
     // Só nome + código, NUNCA o objeto cru (rodada 1, achado M1): erro de
     // driver do Postgres carrega os parâmetros da query, ou seja e-mail do
     // titular e potencialmente hash de senha.
-    if (!(err instanceof CredencialInvalida)) {
+    if (err instanceof CredencialInvalida) {
+      // #168: Notifica por e-mail transacional o titular da conta existente de que houve uma tentativa de cadastro.
+      // O disparo roda em background (void ... catch) para preservar o piso de tempo e a resposta anti-enumeração.
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.iris.med.br";
+      const loginUrl = `${baseUrl}/login`;
+      const esqueciSenhaUrl = `${baseUrl}/esqueci-senha`;
+      const emailDestinatario = validado.dados.email.toLowerCase();
+
+      void enviarEmailTransacional({
+        para: emailDestinatario,
+        assunto: "Tentativa de cadastro no Iris",
+        texto: `Identificamos uma tentativa de cadastro no Iris utilizando este endereço de e-mail.\n\nComo você já possui uma conta ativa, você pode entrar diretamente em:\n${loginUrl}\n\nCaso tenha esquecido sua senha, redefina em:\n${esqueciSenhaUrl}\n\nSe você não realizou esta tentativa, nenhuma ação é necessária. Sua conta continua segura.`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Tentativa de cadastro no Iris</h2>
+            <p>Identificamos uma tentativa de criar uma nova conta utilizando este e-mail.</p>
+            <p>Como você já possui uma conta cadastrada no Iris, acesse o sistema abaixo:</p>
+            <p style="margin: 24px 0;">
+              <a href="${loginUrl}" style="background-color: #1a1a1a; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">
+                Acessar minha conta
+              </a>
+            </p>
+            <p style="color: #666666; font-size: 14px;">Esqueceu sua senha? <a href="${esqueciSenhaUrl}">Clique aqui para redefinir</a>.</p>
+          </div>
+        `,
+      }).catch((e) => {
+        console.error("executarCadastro: falha ao notificar conta existente:", e);
+      });
+    } else {
       console.error(
         "executarCadastro: falha ao criar conta/clínica:",
         descreverErro(err),
       );
     }
+
   }
 
   await respeitarPiso(iniciadoNucleo);
