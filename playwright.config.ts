@@ -11,7 +11,9 @@ const baseURL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  workers: process.env.CI ? 1 : 2,
   forbidOnly: !!process.env.CI,
+
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
   use: {
