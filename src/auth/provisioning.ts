@@ -20,7 +20,7 @@ export type ProvisionInput = {
  */
 export async function provisionUser(
   input: ProvisionInput,
-): Promise<{ userId: string }> {
+): Promise<{ userId: string; isNewUser: boolean }> {
   const existente = await authDb
     .select({ id: appUser.id })
     .from(appUser)
@@ -28,6 +28,7 @@ export async function provisionUser(
     .limit(1);
 
   let userId: string;
+  let isNewUser = false;
   if (existente.length > 0) {
     userId = existente[0]!.id;
   } else {
@@ -36,6 +37,7 @@ export async function provisionUser(
       body: { email: input.email, password: input.senha, name: input.nome },
     });
     userId = created.user.id;
+    isNewUser = true;
   }
 
   await authDb
@@ -43,5 +45,5 @@ export async function provisionUser(
     .values({ userId, clinicId: input.clinicId, papel: input.papel })
     .onConflictDoNothing();
 
-  return { userId };
+  return { userId, isNewUser };
 }
