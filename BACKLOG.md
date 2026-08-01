@@ -24,6 +24,452 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 31/07/2026 — Fatia A: action pública de cadastro + throttle persistente (Issue #163, Task 7)
+
+**A decisão que muda o desenho combinado**
+
+A Task 6 entregou `src/lib/rate-limit.ts`, um contador **em memória por
+processo**, dimensionado para cadastro (anti-enumeração). Ele **não** é
+suficiente para a rota pública de cadastro, e o motivo é estrutural: a Task 5
+verifica a senha de e-mails já existentes via `auth.$context`
+(`verificarPossePorSenha`), caminho que **não passa por `auth.handler`** — logo
+o rate limiting, o contador de falha e o lockout do Better-Auth **nunca rodam**
+ali. Na prática a rota é um verificador de credencial, e o throttle dela é a
+única barreira anti-força-bruta que existe. Um `Map` por processo falha em dois
+pontos triviais de explorar: com N réplicas o limite efetivo vira N×limite, e
+todo deploy/reciclagem zera o estado.
+
+**O que foi feito**
+
+- Nova migração **0061** (`auth_throttle`) + `src/lib/throttle.ts`: contador
+  **compartilhado e persistente** no Postgres, atômico (`INSERT … ON CONFLICT
+  DO UPDATE … RETURNING`, uma instrução), com **backoff exponencial** e teto, e
+  **fail-closed** (`ThrottleIndisponivel` — nunca "permitido") se o store cair.
+- Dimensionamento **de login, não de cadastro**: 5 tentativas/e-mail/15 min e
+  20/IP/15 min, ambas com backoff até 24 h.
+- Contagem **idêntica nos dois ramos** e **antes** do núcleo: o contador nunca
+  olha o resultado de `criarContaEClinica`. Contar só "falhas" faria o
+  bloqueio subir apenas para e-mails existentes — o próprio contador viraria o
+  oráculo de enumeração que a Task 5 fechou.
+- **Resposta uniforme** (a metade que a Task 6 não entregou, agora fechada):
+  e-mail novo, retomada e `CredencialInvalida` colapsam no mesmo `{}` + mesmo
+  redirect, com **piso de tempo** (`PISO_RESPOSTA_MS = 1200`) para o tempo não
+  virar o oráculo que o corpo deixou de ser. Medido: 1200 ms vs 1208 ms
+  (delta 8 ms) com 120 ms de custo artificial só num dos ramos.
+- Semáforo de concorrência (`src/lib/semaforo.ts`, teto 4) sobre a chamada ao
+  núcleo: scrypt em rota aberta é DoS de CPU sem precisar de volume.
+- `src/lib/rate-limit.ts` **continua existindo e não foi alterado** — segue
+  válido para o que foi feito (anti-enumeração barata); só não é o mecanismo
+  desta rota.
+
+**Aberto**
+
+- `professional_consent` só é gravado pelo núcleo; a **notificação por e-mail**
+  a quem já tem conta e tentou se cadastrar de novo (aviso + link de
+  recuperação) **não foi implementada** nesta task — não estava na lista de
+  arquivos da Task 7 e depende da tela de recuperação. Sem ela, a resposta
+  uniforme é segura mas deixa o usuário legítimo que errou a senha sem
+  instrução útil. Registrar como fatia própria.
+- A limpeza de `auth_throttle` é oportunista (a cada 5 min por instância,
+  entradas com mais de 1 h de expiradas). Não há job dedicado.
+
+## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 3 (Issue #163)
+
+**O oráculo de enumeração voltou pelo CORPO da resposta — terceira relocação do
+mesmo Critical nesta fatia.** Histórico: fechou em "conta completa" (Task 5) e
+reapareceu em "conta incompleta"; fechou lá e virou canal de tempo (rodadas 1 e
+2); fechou o tempo e voltou pelo corpo.
+
+- **A instância:** o Better-Auth aplica `maxPasswordLength = 128` no sign-up e
+  **não** no `password.verify`. Com senha de 129 caracteres, e-mail novo dava
+  `APIError` (corpo de erro) e e-mail existente dava `CredencialInvalida`
+  (corpo de sucesso). **Um POST, um bit, determinístico** — imune ao piso de
+  tempo e ao trabalho simétrico, porque nem chega a tocar scrypt.
+- **A correção é de CLASSE, e é a decisão que fica:** todo desfecho de
+  `criarContaEClinica` colapsa na mesma resposta do sucesso. A fronteira é
+  **`nucleoEntrou`**, não uma lista de erros conhecidos — validação pré-núcleo
+  (não olha o banco, não depende de o e-mail existir) pode ter erro específico;
+  qualquer coisa pós-núcleo é uniforme. **Regra permanente: mapeamento de erro
+  por lista de casos conhecidos numa rota anti-enumeração vaza no próximo erro
+  que ninguém previu.**
+- **Custo aceito e declarado:** falha real de infraestrutura passa a responder
+  "verifique seu e-mail" sem ter criado conta. Silêncio para o usuário legítimo;
+  diagnóstico vai só para o log do servidor. É o preço de não devolver o
+  oráculo. **Consequência operacional: uma indisponibilidade de banco fica
+  invisível para o usuário — o alarme tem de vir de monitoração, não de
+  reclamação.**
+- **Dois minors morreram junto com a correção de classe**, e isso é o argumento
+  a favor dela: hash corrompido em `auth_account` (só alcançável no ramo de
+  e-mail existente) e envenenamento da memoização do hash dummy deixaram de
+  produzir corpo distinto sem precisar de tratamento próprio.
+- **Teto de 128 caracteres em `validarCadastro`** — validação pré-núcleo, para o
+  usuário legítimo receber mensagem útil em vez de silêncio.
+- **`hashDeComparacaoDummy` passou a memoizar o valor resolvido, não a
+  promise.** Promise memoizada que rejeita uma vez fica envenenada para o
+  processo inteiro. **Regra: memoização de promise em caminho de segurança é
+  falha permanente disfarçada de cache.**
+
+## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 2 (Issue #163)
+
+Re-review derrubou a quantização de tempo da rodada 1. **A decisão que muda o
+desenho: parar de normalizar TEMPO por cima de trabalho desigual e normalizar o
+TRABALHO.**
+
+- **Números medidos** (Postgres real + Better-Auth real, 12 amostras
+  interleaved por ramo, em `criarContaEClinica` — nenhum dublê):
+
+  | ramo | min | p50 | p99 | max |
+  | --- | --- | --- | --- | --- |
+  | e-mail NOVO (o "caro") | 89 | 98 | 105 | 105 |
+  | e-mail existente + senha errada | 57 | 60 | 67 | 67 |
+  | e-mail existente + retomada | 63 | 66 | 77 | 77 |
+  | **conta SEM credencial de senha** | **2** | **3** | **4** | **4** |
+
+  O piso de 1200 ms tem ~11x de folga sobre o pior ramo, e o delta real
+  novo-vs-errado é de **38 ms**, não os ~400 ms que os testes sintéticos
+  sugeriam. Os ramos já eram quase simétricos: cada um faz exatamente um
+  scrypt.
+- **O ramo assimétrico de verdade era outro, e ninguém tinha olhado:** conta
+  sem credencial de senha (estado normal de quem entrou por convite ou seed)
+  saía de `verificarPossePorSenha` **antes de qualquer scrypt** — 3 ms contra
+  60 ms. Oráculo de "esta conta existe e nunca definiu senha". Corrigido com
+  verificação dummy contra hash fixo memoizado (técnica padrão de endpoint de
+  autenticação). **Isto tocou `src/auth/cadastro.ts`, que é da Task 5.**
+- **Quantização revertida para piso simples.** Quando os dois ramos caem em
+  degraus diferentes do quantum (straddle), o degrau **amplifica**: medido
+  1191 ms de delta onde o piso simples daria 100 ms. Regra que fica: piso
+  simples degrada para o delta do trabalho; quantização degrada para o tamanho
+  do degrau. **Quantizar só faz sentido se o straddle for inalcançável, e ele é
+  alcançável por construção sempre que o atacante influencia a duração.**
+- **A janela normalizada passou a começar na aquisição da vaga do semáforo.**
+  Antes ela incluía a espera na fila (até 3 s), que é justamente a parte do
+  relógio que o atacante controla carregando o endpoint — dava para empurrar o
+  total para além do piso sob demanda e voltar a ler o tempo do trabalho.
+  Custo aceito: quem espera na fila responde em `espera + piso`.
+- **O aviso `PISO DE TEMPO ESTOURADO` saiu.** Ele só disparava no ramo que
+  estourava: a linha de log correlacionava 1:1 com "o e-mail era novo", e o
+  custo do log caía fora da janela normalizada. Observabilidade de estouro fica
+  com métrica genérica de duração de requisição, que não distingue ramo.
+  **Regra: log condicional a um ramo é canal lateral, mesmo quando o texto não
+  cita o dado.**
+
+**Aberto**
+
+- A medição é da máquina de desenvolvimento, não do container do Easypanel.
+  Com 11x de folga, escalar não muda a conclusão — mas o número de produção
+  segue não medido.
+- `x-forwarded-for` do Easypanel continua não verificado (mesmo item da rodada 1).
+- Sem teste HTTP end-to-end do endpoint.
+
+## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 1 (Issue #163)
+
+Review da Task 7 apontou 1 Crítico e 4 Importantes. O que mudou de **decisão**
+(o detalhe de execução está em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-7-report.md`):
+
+- **Tabela nova sem teste de RLS foi a terceira ocorrência desta fatia.**
+  `src/db/auth-throttle.int.test.ts` fecha o caso de `auth_throttle`. Provado
+  por mutação no banco: `DISABLE ROW LEVEL SECURITY` e `GRANT SELECT … TO
+  app_role` deixam o arquivo vermelho, e a suíte funcional
+  (`throttle.int.test.ts`) continuava **verde** nas duas mutações. **Regra que
+  isso confirma: teste funcional de tabela nova nunca substitui teste de
+  RLS/grants — eles rodam com a role que TEM acesso.**
+- **O piso de tempo virou quantização.** `respeitarPiso` agora arredonda a
+  resposta para o próximo múltiplo de `PISO_RESPOSTA_MS` em vez de só esperar
+  até ele. Motivo: um piso puro só protege enquanto os dois ramos couberem
+  embaixo dele, e ninguém mediu o custo real do ramo caro no container de
+  produção — a proteção sumia exatamente na condição em que mais importa.
+  Quantizado, a uniformidade não depende de calibração. **Custo aceito:** sob
+  carga a latência salta em degraus de 1,2 s.
+- **`sendOnSignUp` saiu do caminho síncrono da requisição** (`dispararEmail`,
+  `src/auth/auth.ts`). Um round-trip ao Resend dentro do ramo "e-mail novo" —
+  e só dele — era o maior custo assimétrico da rota. Seguro porque
+  `enviarEmailTransacional` tem contrato de não lançar.
+- **Ausência de IP não colapsa mais numa chave global.** `resolverIp` devolve
+  `null` e a rota simplesmente não consome contador de IP (fica só com o de
+  e-mail). A chave `cadastro:ip:desconhecido` era autonegação de serviço da
+  rota inteira — mesma forma da falha do WARN corrigida na PR #166.
+- **Backoff ancorado no início da janela** (migração **0062**) + teto de e-mail
+  de 24 h → **30 min**, limite 5 → 8. Ancorado em `now()`, uma requisição a
+  cada teto mantinha uma vítima nomeada travada para sempre, de graça.
+- **Fila do semáforo ganhou cap (32) e timeout (3 s).** Fila infinita só movia
+  o DoS de CPU para memória/latência.
+
+**Aberto (não resolvido nesta rodada)**
+
+- Nenhuma medição real do custo do ramo "e-mail novo" no container de produção.
+  A quantização torna isso **não-bloqueante para segurança**, mas continua
+  aberto para latência.
+- `x-forwarded-for` do Easypanel não foi verificado. `resolverIp` toma a
+  **última** entrada válida (a que um proxy confiável apenda); se não houver
+  proxy, o teto por IP é contornável — o de e-mail continua valendo.
+- Sem teste HTTP end-to-end do endpoint (status/headers/tempo reais).
+
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 1 de review (Issue #163)
+
+**O achado**
+
+- Review de código do Task 5 (`criarContaEClinica`, `src/auth/cadastro.ts`) achou
+  1 **Crítico**: o caminho de retomada (e-mail já existente, já com `user_role`)
+  escrevia de forma incondicional — sobrescrevia `conselho`/`registroNumero`/
+  `registroUf` e `clinic.responsavelContaId`, e inseria um novo aceite de termos —
+  usando só o payload do chamador, sem autenticar ninguém (`provisionUser` não
+  checa senha para e-mail existente). Corrigido: conta "completa" (dados
+  preenchidos + algum aceite já gravado) não sofre nenhuma escrita, independente
+  do payload recebido.
+- Dentro da correção, `criarClinicaEVinculo` ficou órfã de clínica se
+  `provisionUser` falhar depois de criada a clínica (ex.: senha recusada pelo
+  Better-Auth). Mitigado com `try/catch` que apaga a clínica no erro tratável.
+
+**Decisão travada nesta sessão**
+
+- Resíduo que o `try/catch` não cobre: um **kill de processo** (não um erro
+  lançado) entre o `insert` da clínica e o retorno de `provisionUser` ainda
+  deixa uma clínica órfã (sem `user_role`, sem `responsavel_conta_id`, sem dado
+  de paciente — lixo inofensivo, não vazamento). Decisão: aceitar esse resíduo
+  raríssimo para a Fatia A; não construir reconciliação/job de limpeza agora.
+  Se a taxa de crash observada em produção justificar, abrir issue própria com
+  uma consulta (`clinic` sem `user_role` correspondente) — não faz parte do
+  MVP self-service.
+- Contrato para quem consumir `criarContaEClinica` (Task 7, cadastro/ação
+  server): conta já completa devolve os `{ userId, clinicId }` existentes, sem
+  lançar erro nem sinalizar "já existe" — a resposta anti-enumeração uniforme é
+  responsabilidade do Task 7, não desta função.
+
+**O que foi entregue**
+
+- `src/auth/cadastro.ts`: gate de completude derivado de dado (nunca do
+  payload), preenchimento só de campos `NULL` (nunca sobrescreve valor já
+  gravado), normalização de e-mail (`trim().toLowerCase()`, espelhando
+  `sign-up.mjs` do Better-Auth), inserção de aceite encapsulada no único
+  caminho que escreve em `professional_consent` (`gravarAceite`).
+- `db/migrations/0060_professional_consent_unique.sql` + índice único
+  `(user_id, clinic_id, versao_termo)` em `src/db/schema.ts` — fecha corrida de
+  duas retomadas concorrentes gravando aceite duplicado; insert passa a usar
+  `onConflictDoNothing`.
+- `src/auth/cadastro.int.test.ts`: teste RED-first do Crítico (reenvio hostil
+  contra conta completa — dados e versão de termo forjados, sem sobrescrever
+  nada nem gravar aceite novo); troca de `TRUNCATE` de tabela compartilhada por
+  limpeza escopada por e-mail (não poisona mais suítes vizinhas); teste antes
+  mal-nomeado ("não duplica clínica") corrigido para o que de fato acontece
+  nessa janela (cria clínica nova, órfã fica; garante 1 vínculo ativo ao final).
+- `src/auth/verificacao.int.test.ts` reescrito: em vez de contar
+  `email_verified = false` na tabela inteira (capturava toda conta nova
+  legitimamente não-verificada, criada por outras suítes), semeia sua própria
+  conta "legada" e reproduz o `UPDATE` da migração 0059 contra ela.
+
+**Verificação**
+
+- RED capturado antes do fix (`corepack pnpm vitest run --config
+  vitest.integration.config.ts -t CRÍTICO src/auth/cadastro.int.test.ts` contra
+  o `cadastro.ts` pré-fix): 1 falhou (`expected 'crm' to be 'crp'`).
+- Detalhe completo (comandos, contagens pass/fail/skip, GREEN) no apêndice de
+  round 1 em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
+
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: Task 10 fix round 1 de review (`/sem-acesso`, Issue #163)
+
+**O achado**
+
+- Review do Task 10 (`resolveTenant`/`getTenantContext`/`/sem-acesso`) achou
+  0 Crítico, 2 **Importante**: (I-1) o docstring de `/sem-acesso/page.tsx`
+  afirmava exigir sessão autenticada, quando a página é PÚBLICA (`(auth)/layout.tsx`
+  já dizia "sem guarda de sessão") — risco: um mantenedor futuro, confiando no
+  comentário, personaliza a copy com e-mail/clínica e reabre o oráculo de
+  enumeração da Task 7 num `GET` sem sessão; (I-2) `no_access` tinha virado
+  código morto (só `cadastro_incompleto` era produzido para "zero vínculo"),
+  então uma revogação futura (`equipe/` "remover da equipe", ainda não
+  construída) resolveria para "Cadastro incompleto → Concluir cadastro" e
+  `criarContaEClinica` auto-provisionaria uma clínica NOVA para o revogado
+  como coordenador — revogação virando promoção.
+- 4 Minor: teste unilateral (M-1), zero cobertura do mapeamento status→rota
+  (M-2), `<title>` estático divergindo do `<h1>` dinâmico (M-3, WCAG 2.4.2), e
+  o estado de recuperação sem nenhuma UI de logout alcançável (M-4).
+
+**Decisão travada nesta sessão (I-2)**
+
+- Investigação: `professional_consent` (Task 2) não tem FK para `user_role`
+  (só para `app_user`/`clinic`) e o único caminho que escreve nela
+  (`gravarAceite`, em `cadastro.ts`) exige um `user_role` já existente
+  (`garantirVinculoParaConsentimento`). Logo, um aceite pregresso para um
+  `userId` é prova durável de que ele teve vínculo real algum dia — coisa que
+  "cadastro nunca terminou" não pode ter produzido. Decisão: usar a presença
+  de qualquer `professional_consent` do usuário como o critério que distingue
+  "nunca terminou" (`cadastro_incompleto`) de "teve e perdeu" (`no_access`).
+- Limite assumido e registrado (não escondido): não cobre um futuro convite
+  (Fase 1c) que crie `user_role` sem nunca passar por aceite, nem usuários de
+  seed (`seed:clinic`/`seed:demo`) — nenhum dos dois grava
+  `professional_consent` hoje. Revisitar quando a Fase 1c definir o fluxo de
+  convite; população de seed não é produção, risco aceito por ora.
+
+**O que foi entregue**
+
+- `src/auth/tenant.ts`: `resolveTenant`, ao achar zero vínculo, consulta
+  `professional_consent` por `userId` antes de decidir o status — achou
+  aceite pregresso → `no_access` (reabre o `<SairButton />` do ramo default);
+  não achou → `cadastro_incompleto` como antes.
+- `src/app/(auth)/sem-acesso/page.tsx`: docstring reescrito para afirmar a
+  regra real (página pública, nunca personalizar com dado de conta);
+  `metadata` estático virou `generateMetadata` lendo o mesmo `searchParams`
+  que decide o `<h1>` (M-3); `<SairButton />` adicionado também no ramo
+  `cadastro_incompleto`, abaixo do CTA primário (M-4).
+- `src/auth/tenant-cadastro-incompleto.int.test.ts`: caso negativo (usuário
+  com `user_role` real não é `cadastro_incompleto` — M-1) e caso do I-2
+  (usuário sem vínculo mas com aceite pregresso → `no_access`).
+- `src/auth/tenant-status-routing.int.test.ts` (novo): cobre o mapeamento
+  `status → rota` de `getTenantContext` ponta a ponta, 8 casos, incluindo a
+  query string exata de `cadastro_incompleto` e o gate de MFA dentro de
+  `case "ok"` (M-2).
+
+**Verificação**
+
+- Duas mutações aplicadas e revertidas com RED/GREEN observado: (1) trocar a
+  rota de `cadastro_incompleto` para `/sem-acesso` sem `motivo` — pega pelo
+  teste novo de M-2; (2) neutralizar a checagem de `professional_consent` —
+  pega pelo teste novo do I-2. Nenhuma delas era pega pela suíte antes desta
+  rodada.
+- `pnpm test:rls` completo: 1 falhou | 76 passaram (77 arquivos); 3 falharam |
+  515 passaram (518 testes) — **0 skipped**; as 3 falhas são a baseline
+  conhecida de `src/db/rls.int.test.ts` (issue #167), não relacionadas.
+- `pnpm build` (com `.next` limpo) exit 0; evidência de navegador (Playwright
+  MCP) confirmou título ↔ `<h1>` batendo nos dois estados e o botão "Sair"
+  funcionando a partir do estado `cadastro_incompleto`.
+- Detalhe completo (comandos, saída verbatim das mutações, snapshot do
+  navegador) no apêndice de fix round 1 em
+  `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-10-report.md`.
+
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 2 de review, item Crítico reaberto (Issue #163)
+
+**O achado**
+
+- O gate de completude do round 1 (acima) só protege contas JÁ completas.
+  Qualquer conta LEGADA (`seed:clinic`, convite, ou qualquer coisa anterior à
+  Fatia A) tem `conselho`/`registro_numero`/`registro_uf` `NULL` e nenhum
+  `professional_consent` — o gate a lê como incompleta por definição. Um POST
+  anônimo com o e-mail de qualquer conta existente e uma senha QUALQUER
+  passava por `provisionUser` (não checa senha para e-mail já existente),
+  falhava o gate, e gravava dados profissionais forjados + um aceite
+  permanente. Mesma classe de dano do round 1, relocada de "conta completa"
+  para "conta incompleta" — o conjunto de vítimas é toda conta que já existe
+  hoje.
+- Raiz nomeada pelo review: "este endpoint resumia uma conta que nunca
+  autenticou. Derivar estado do banco diz o que falta; não diz se quem está
+  chamando tem direito de preencher."
+
+**Decisão travada nesta sessão**
+
+- Fechado com prova de posse ANTES de qualquer escrita no ramo de e-mail
+  existente: `verificarPossePorSenha` chama `auth.api.signInEmail` (caminho
+  de sign-in do próprio Better-Auth — não comparamos hash na aplicação).
+  Falha de verificação (senha errada) lança `CredencialInvalida`, tratada
+  exatamente como chamador desconhecido — zero escrita.
+- Contrato para Task 7 (resposta HTTP uniforme anti-enumeração): só dois
+  formatos de saída existem no caminho de cadastro — sucesso (e-mail novo OU
+  e-mail existente com senha certa) e `CredencialInvalida` (e-mail existente
+  com senha errada). Task 7 mapeia `CredencialInvalida` para a mesma resposta
+  genérica de qualquer outra falha, sem mencionar que o e-mail já existe.
+- Efeito colateral aceito, não corrigido: `signInEmail` bem-sucedido cria uma
+  sessão real no Better-Auth (não revogada) — é sessão do próprio dono da
+  conta, só criada quando a senha confere.
+- `clinicId` que alimenta o gate de segurança passou a ser resolvido de
+  forma determinística (prioriza vínculo "coordenador", desempate por
+  `clinicId`) — antes vinha de `.limit(1)` sem `order by`, podia escolher a
+  clínica errada para um usuário com mais de um `user_role` e reabrir
+  escrita numa conta já completa (na outra clínica). Para usuário
+  genuinamente multi-clínica, a função resolve sempre para o MESMO vínculo
+  em toda retomada, não necessariamente a clínica que o cadastro atual
+  pretendia completar — aceitável porque o gate é por `(userId, clinicId)`,
+  e vínculo adicional a uma segunda clínica não é fluxo deste endpoint.
+
+**O que foi entregue**
+
+- `src/auth/cadastro.ts`: `verificarPossePorSenha` + `CredencialInvalida`
+  (exportada); `orderBy` determinístico na seleção de `vinculo`.
+- `src/auth/cadastro.int.test.ts`: teste RED-first novo ("CRÍTICO: e-mail de
+  conta LEGADA... + senha errada não escreve nada"); teste da janela
+  `signUpEmail`/`user_role` deixou de contar a tabela `clinic` inteira
+  (escopado às duas clínicas que o teste conhece) e foi retitulado para o
+  que de fato prova (cria clínica nova); comentário desatualizado do teste
+  "CRÍTICO" do round 1 corrigido.
+- `src/auth/verificacao.int.test.ts`: reescrito para ler o predicado `WHERE`
+  da migração 0059 DO DISCO (não mais uma cópia colada) — provado por
+  mutação (enfraquecer a migração, confirmar teste vermelho, restaurar).
+
+**Verificação**
+
+- RED capturado antes do fix (`cadastro.ts` isolado via `git stash push --
+  src/auth/cadastro.ts`): `AssertionError: promise resolved "{ …(2) }"
+  instead of rejecting`.
+- Mutação do item 8: migração 0059 enfraquecida → `AssertionError: expected
+  false to be true`; restaurada → verde.
+- Detalhe completo (comandos, contagens, contrato dos três casos) no
+  apêndice de round 3 em
+  `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
+
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 4 de review (Issue #163)
+
+**O achado**
+
+- `auth.api.signInEmail` (round 3) bypassa `auth.handler` — vira oráculo de
+  senha sem rate limit/lockout/log nativos do Better-Auth, além de criar
+  sessão de 7 dias e linha `2fa-*` a cada retomada. `auth.api.verifyPassword`
+  (sugestão do review) testado e descartado: exige sessão já autenticada
+  (`sensitiveSessionMiddleware`), não recebe e-mail — confirmado lendo
+  `dist/api/routes/password.mjs` do pacote instalado.
+- **Novo Crítico introduzido pelo próprio fix do round 3**: profissional
+  legado com papel NÃO-coordenador na clínica de outra pessoa se
+  autocadastrando com e-mail/senha corretos passava no gate de senha,
+  `vinculo` resolvia pra clínica alheia, e `completarCadastro` reatribuía
+  `clinic.responsavel_conta_id` (dono de faturamento) pro atacante + gravava
+  aceite irremovível nela.
+- `contaEstaCompleta` mistura escopo global (`app_user`) com escopo por
+  vínculo (`professional_consent`) — parágrafo do relatório round 3 estava
+  impreciso sobre isso.
+- Suíte não protegia os fixes: nenhum teste com >1 `user_role`; remover o
+  `.orderBy` deixava tudo verde.
+
+**Decisão travada nesta sessão**
+
+- Verificação de senha trocada para `auth.$context` + `context.password.verify`
+  (mesmo primitivo interno do Better-Auth) — elimina sessão e linha 2FA, mas
+  **continua bypassando `auth.handler`**: rate limiting do endpoint de
+  cadastro fica sob responsabilidade de Task 6/7, não resolvido aqui.
+- **Regra de ownership (item 2)**: retomada só mira clínica onde o usuário É
+  coordenador E (`responsavel_conta_id IS NULL` OU já é o próprio dono).
+  Vínculo não-coordenador nunca qualifica; clínica já reivindicada por outro
+  nunca é reatribuída. Quem só tem vínculos que não qualificam ganha clínica
+  NOVA — é o comportamento correto do self-service.
+- Bug real achado escrevendo o teste de multi-vínculo (não fazia parte do
+  review): `ORDER BY ... DESC` sem `coalesce` — Postgres usa `NULLS FIRST`
+  por padrão, então `eq(coluna_null, valor)` (que avalia pra `NULL`, não
+  `false`) inverteria o desempate. Corrigido com
+  `coalesce(clinic.responsavel_conta_id = existente.id, false)`.
+
+**O que foi entregue**
+
+- `src/auth/cadastro.ts`: `verificarPossePorSenha` reescrita
+  (`auth.$context`); query de `vinculo` com filtro `papel = "coordenador"` +
+  `or(isNull(...), eq(responsavelContaId, existente.id))` + `orderBy` com
+  `coalesce`; docstring de `contaEstaCompleta` corrigida (dois escopos
+  explícitos).
+- `src/auth/cadastro.int.test.ts`: +5 testes — determinismo com dois
+  vínculos coordenador-e-próprio (achou o bug do NULL), vínculo
+  não-coordenador nunca resolve, clínica já reivindicada por outro nunca é
+  reatribuída, caminho feliz de retomada com senha certa (antes sem teste),
+  "nenhuma clínica nova" no reenvio hostil. Todos provados por mutação
+  (RED/restore), inclusive achando o bug do `coalesce` no processo.
+- Duas observações adiadas (registradas, não resolvidas): `app_user.email`
+  sem `citext`/índice `lower()` (nenhuma linha suja hoje); TOCTOU gratuito
+  entre `contaEstaCompleta` e `completarCadastro` (duas leituras de
+  `app_user`, janela curta, sem escrita cross-tenant possível dado o item 2).
+
+**Verificação**
+
+- `test:rls`: 489 passed / 3 failed (conhecidas, #167) / 0 skipped (492).
+- `test --project unit`: 496 passed / 0 failed / 0 skipped (77 arquivos).
+- `typecheck` limpo; `lint` 0 erros / 8 warnings pré-existentes.
+- Detalhe completo (query final, saída de cada mutação, os 4 branches de
+  ownership testados) no apêndice de round 4 em
+  `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
+
 ## 🏁 Sessão 31/07/2026 — Migração 0055 perdida: correção de segurança que nunca rodou (Issue #165)
 
 **O achado**

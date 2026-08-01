@@ -400,6 +400,41 @@
       "when": 1785421567000,
       "tag": "0057_cadastro_self_service",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1785421568000,
+      "tag": "0058_professional_consent",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1785421569000,
+      "tag": "0059_email_verificado_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1785421570000,
+      "tag": "0060_professional_consent_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785421571000,
+      "tag": "0061_auth_throttle",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785421572000,
+      "tag": "0062_auth_throttle_janela_inicio",
+      "breakpoints": true
     }
   ]
 }

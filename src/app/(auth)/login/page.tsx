@@ -1,15 +1,33 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/auth/client";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/cn";
 import { surface } from "@/components/ui/primitives/surface";
+
+/**
+ * Aviso pós-redefinição de senha (Task 9, `../redefinir-senha`). Isolado num
+ * componente próprio, dentro de `<Suspense>`, porque `useSearchParams`
+ * numa página client exige um boundary de suspense — sem isso o Next
+ * recusa a build desta rota.
+ */
+function AvisoSenhaAlterada() {
+  const params = useSearchParams();
+  if (params.get("senhaAlterada") !== "1") return null;
+  return (
+    <Alert severidade="sucesso" titulo="Senha alterada">
+      Sua senha foi redefinida. Entre com a nova senha.
+    </Alert>
+  );
+}
 
 /**
  * Tela de login (área pública). Email + senha via design system. No sucesso
@@ -60,6 +78,10 @@ export default function LoginPage() {
         </h1>
       </div>
 
+      <React.Suspense fallback={null}>
+        <AvisoSenhaAlterada />
+      </React.Suspense>
+
       <div
         className={cn(
           "rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-6 shadow-[var(--ds-shadow)]",
@@ -93,6 +115,25 @@ export default function LoginPage() {
           </Button>
         </Form>
       </div>
+
+      <p className="text-[var(--text-secondary)] text-center text-sm">
+        <Link
+          href="/esqueci-senha"
+          className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
+        >
+          Esqueceu sua senha?
+        </Link>
+      </p>
+
+      <p className="text-[var(--text-secondary)] text-center text-sm">
+        Ainda não tem conta?{" "}
+        <Link
+          href="/cadastro"
+          className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
+        >
+          Criar conta
+        </Link>
+      </p>
     </div>
   );
 }

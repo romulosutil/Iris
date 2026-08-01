@@ -441,6 +441,57 @@ export const consent = pgTable(
   ],
 );
 
+/**
+ * Aceite dos termos de uso pelo PROFISSIONAL (adulto) no cadastro self-service.
+ * Não confundir com o consentimento do titular do tratamento (paciente) —
+ * outro titular, outra base legal. Imutável para a aplicação de produto.
+ */
+export const professionalConsent = pgTable(
+  "professional_consent",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => appUser.id),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id),
+    versaoTermo: text("versao_termo").notNull(),
+    aceitoEm: timestamp("aceito_em", { withTimezone: true }).notNull().defaultNow(),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+  },
+  (t) => [
+    // Corrida entre requisições concorrentes de retomada não deve criar
+    // dois aceites para a mesma tripla — onConflictDoNothing em cadastro.ts
+    // depende deste índice existir (migração 0060).
+    uniqueIndex("uq_professional_consent_user_clinic_versao").on(
+      t.userId,
+      t.clinicId,
+      t.versaoTermo,
+    ),
+  ],
+);
+
+/**
+ * Contador de tentativas da rota pública de cadastro (migração 0061).
+ * Compartilhado entre instâncias e persistente de propósito — ver o comentário
+ * longo da migração e `src/lib/throttle.ts`. Não é dado de paciente: só
+ * `iris_auth` tem grant.
+ */
+export const authThrottle = pgTable("auth_throttle", {
+  chave: text("chave").primaryKey(),
+  contagem: integer("contagem").notNull().default(0),
+  // Âncora do backoff (migração 0062): o fim da janela é calculado a partir do
+  // INÍCIO dela, não de `now()` — senão cada requisição extra empurra o fim e o
+  // bloqueio vira prorrogável para sempre.
+  janelaInicioEm: timestamp("janela_inicio_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  janelaExpiraEm: timestamp("janela_expira_em", { withTimezone: true }).notNull(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ─── Protocolos (catálogo + instância por paciente) ──────────────────────────
 export const protocolFamiliaCatalogo = pgTable("protocol_familia_catalogo", {
   id: text("id").primaryKey(),
