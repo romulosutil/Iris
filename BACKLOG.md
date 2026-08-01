@@ -24,6 +24,78 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 01/08/2026 — Fechamento da Fatia A: suíte de fechamento rodada (Issue #163)
+
+**Task 12 (E2E) já estava em main.** O commit `47dec03` era uma variante órfã;
+a versão que vale entrou por `7fdfd84` + `3584351`. O diagnóstico anterior de
+"nunca chegou em main" veio de `git branch --contains` rodado contra um `main`
+local 7 commits atrás do `origin/main` — **ref stale mente igual a migração
+não aplicada**. Verificar contra `origin/`, não contra o local.
+
+**Task 13 verificada por medição.** `scripts/migrate.mjs` lê só
+`MIGRATION_DATABASE_URL` (fallback `DATABASE_URL`). Rodado com
+`AUTH_DATABASE_URL`, `BETTER_AUTH_SECRET` e `BETTER_AUTH_URL` ausentes →
+exit 0, "schema em dia". O gate de schema não depende delas. Comentário stale
+do `infra/Dockerfile.migrate` corrigido. Efeito colateral aceito: o caminho
+manual do `seed-clinic` na imagem do migrate passa a exigir injeção ad-hoc de
+`AUTH_DATABASE_URL`.
+
+**Dois defeitos reais achados pela suíte de fechamento (corrigidos):**
+
+1. **Migração 0055 nunca rodou em banco nenhum** — mesmo padrão de
+   [[drizzle-hand-migration-when-ordering]], desta vez **dentro do próprio fix
+   da #165**: `f55a696` registrou a 0055 com `when = 1785421565500`, menor que
+   o `when` da 0056 já aplicada. `drizzle.__drizzle_migrations` local não tem
+   esse valor. Resultado: `app_purgar_report` seguia com o corpo da 0040, que
+   distingue "inexistente" de "fora da clínica" — o **oráculo de existência
+   cross-tenant estava vivo em produção**, com a issue fechada. Corrigido pela
+   `0063_reaplica_purga_report_oracle.sql`.
+   O teste da #165 também nunca poderia pegar isso: assertava com
+   `.rejects.toThrow("app_purgar_report: …")` contra o `DrizzleQueryError`,
+   cujo `message` é sempre `"Failed query: …"` — a mensagem do `RAISE` mora na
+   cadeia de `cause`. Mais um [[teste-verde-que-nao-testa-nada]], desta vez
+   vermelho-que-não-testa-nada. Mutação (corpo 0040 vs 0063) agora discrimina.
+2. **Enum inválido na suíte RLS da #141** — `'invalidador'` não existe
+   (`confirmar|reclassificar|invalidar`). O INSERT morria no cast, então a
+   asserção de RLS nunca era exercitada e o ramo positivo nunca rodava.
+   Sobra do `521ccec`, que corrigiu outras ocorrências e deixou estas duas.
+
+**Resultado da suíte de fechamento:**
+
+| Comando | Resultado |
+| --- | --- |
+| `pnpm lint` | ✅ 0 erros (24 warnings pré-existentes) |
+| `pnpm typecheck` | ✅ |
+| `pnpm test` | ✅ 131 arquivos / 685 testes, 0 skipped |
+| `pnpm test:rls` | ✅ 77 arquivos / 519 testes, 0 skipped, banner `app=iris_app(norls) auth=iris_auth_login(norls) owner=iris(owner)` |
+| `pnpm test:e2e` | ❌ **não fecha** — ver abaixo |
+
+**E2E não fecha, e o ambiente local não é a única causa.** Obstáculos de
+ambiente já contornados nesta sessão (não são bug de produto): porta 3000
+ocupada por container de outro projeto + `reuseExistingServer` faz o Playwright
+adotar o nginx alheio e todos os 13 specs falharem com "404 Not Found"; e
+`BETTER_AUTH_SECRET` está **vazia** no `.env` local, o que faz `next start`
+(produção) recusar toda rota autenticada. Rodando em `:3100` com segredo
+efêmero, sobram falhas de verdade:
+
+- [x] `getByLabel("Nome da sua clínica")` em 10 pontos dos specs; o formulário
+      renderiza "Nome da clínica" (corrigido nesta sessão).
+- [ ] **`auth_verification` fica vazia após o cadastro.** Medido: usuário
+      criado (`email_verified = false`), clínica criada com `trial_dias = 7`,
+      e **zero** linhas de token. Com `requireEmailVerification: true`, isso é
+      conta sem caminho de entrada. Falta decidir se o Better-Auth desta versão
+      persiste token em tabela ou assina um token sem linha — se for o segundo,
+      o defeito é do teste; se for o primeiro, é bug de produto na Fatia A.
+      **Não resolvido: precisa de decisão do Rômulo.**
+- [ ] `PostgresError: unrecognized configuration parameter "app.clinic_id"` no
+      spec de idempotência: a consulta de verificação usa conexão sem GUC de
+      tenant.
+- [ ] `expect(alert).toBeFocused()` falha: o `role="alert"` de erro de validação
+      não recebe foco. Decidir se é requisito de a11y a implementar ou asserção
+      além do que a Task 8 especificou.
+- [ ] `login`, `cadastro-clinico`, `diario-demo`, `revisao` dependem de
+      `seed:clinic`/`seed:demo`, não rodados aqui.
+
 ## 🏁 Sessão 31/07/2026 — Fatia A: action pública de cadastro + throttle persistente (Issue #163, Task 7)
 
 **A decisão que muda o desenho combinado**
