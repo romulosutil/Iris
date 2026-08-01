@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/*
+  Fallback das vars de fonte. No app quem as define é o next/font (as classes
+  geradas em layout.tsx, que são unlayered e por isso vencem esta camada).
+  Fora do Next — Storybook, previews do /design-sync, qualquer consumo do CSS
+  compilado — elas ficariam indefinidas, e aí `font-family: var(--font-body)`
+  vira inválida no computed value e o browser cai para serif. Nomear a família
+  literal aqui mantém a tipografia correta nos dois contextos.
+*/
+@layer ds-font-fallback {
+  :root {
+    --font-space-grotesk: "Space Grotesk";
+    --font-jakarta: "Plus Jakarta Sans";
+    --font-space-mono: "Space Mono";
+  }
+}
+
 *,
 *::before,
 *::after {
