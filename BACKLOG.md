@@ -68,33 +68,73 @@ manual do `seed-clinic` na imagem do migrate passa a exigir injeção ad-hoc de
 | `pnpm typecheck` | ✅ |
 | `pnpm test` | ✅ 131 arquivos / 685 testes, 0 skipped |
 | `pnpm test:rls` | ✅ 77 arquivos / 519 testes, 0 skipped, banner `app=iris_app(norls) auth=iris_auth_login(norls) owner=iris(owner)` |
-| `pnpm test:e2e` | ❌ **não fecha** — ver abaixo |
+| `pnpm test:e2e` | ✅ 13/13 (ver pré-requisitos de ambiente abaixo) |
 
-**E2E não fecha, e o ambiente local não é a única causa.** Obstáculos de
-ambiente já contornados nesta sessão (não são bug de produto): porta 3000
-ocupada por container de outro projeto + `reuseExistingServer` faz o Playwright
-adotar o nginx alheio e todos os 13 specs falharem com "404 Not Found"; e
-`BETTER_AUTH_SECRET` está **vazia** no `.env` local, o que faz `next start`
-(produção) recusar toda rota autenticada. Rodando em `:3100` com segredo
-efêmero, sobram falhas de verdade:
+**E2E: 13/13 verdes.** Estava 8/13 vermelha. **Nenhuma causa era regressão de
+produto** — todas eram teste medindo a coisa errada, e a maioria estava
+vermelha desde muito antes da Fatia A.
 
-- [x] `getByLabel("Nome da sua clínica")` em 10 pontos dos specs; o formulário
-      renderiza "Nome da clínica" (corrigido nesta sessão).
-- [ ] **`auth_verification` fica vazia após o cadastro.** Medido: usuário
-      criado (`email_verified = false`), clínica criada com `trial_dias = 7`,
-      e **zero** linhas de token. Com `requireEmailVerification: true`, isso é
-      conta sem caminho de entrada. Falta decidir se o Better-Auth desta versão
-      persiste token em tabela ou assina um token sem linha — se for o segundo,
-      o defeito é do teste; se for o primeiro, é bug de produto na Fatia A.
-      **Não resolvido: precisa de decisão do Rômulo.**
-- [ ] `PostgresError: unrecognized configuration parameter "app.clinic_id"` no
-      spec de idempotência: a consulta de verificação usa conexão sem GUC de
-      tenant.
-- [ ] `expect(alert).toBeFocused()` falha: o `role="alert"` de erro de validação
-      não recebe foco. Decidir se é requisito de a11y a implementar ou asserção
-      além do que a Task 8 especificou.
-- [ ] `login`, `cadastro-clinico`, `diario-demo`, `revisao` dependem de
-      `seed:clinic`/`seed:demo`, não rodados aqui.
+Dois obstáculos de ambiente, primeiro (não são bug, mas travam qualquer
+execução local):
+
+- Porta 3000 ocupada por container de outro projeto + `reuseExistingServer`
+  faz o Playwright **adotar o nginx alheio**: os 13 specs falham com
+  "404 Not Found". Rodar em porta livre (`PORT` + `NEXT_PUBLIC_APP_URL`).
+- `BETTER_AUTH_SECRET` está **vazia** no `.env` local. `next start` roda em
+  produção e o Better-Auth recusa o segredo default, derrubando toda rota
+  autenticada. Exportar um segredo antes de rodar o E2E.
+
+Achados corrigidos:
+
+- [x] **Token de verificação nunca esteve no banco.**
+      `createEmailVerificationToken` é `signJWT`
+      (`email-verification.mjs:12`) — JWT assinado, **sem linha em
+      `auth_verification`**. Os specs esperavam a linha e expiravam sempre. A
+      premissa veio do próprio plano da Task 12. O cadastro sempre funcionou:
+      medido usuário criado, clínica criada, `trial_dias = 7`. Os testes agora
+      assinam o mesmo JWT e consomem `/api/auth/verify-email`.
+- [x] **Enforcement de MFA invalidou os specs de Fase 1b/1c/2/3.** Papel
+      clínico é obrigado a cadastrar segundo fator desde a 6.2b, então
+      autenticar para em `/mfa/setup`. Helper novo `e2e/helpers/sessao.ts`
+      conclui o enrollment pelo mesmo caminho HTTP da UI. **Não** usa
+      `BYPASS_MFA_FOR_DEV`: `assertMfaBypassSafe` derruba o boot com
+      `NODE_ENV=production`, que é como o `webServer` sobe o app — ligar o
+      bypass exigiria deixar de exercitar o binário que vai para produção.
+      Dependência nova: `otpauth` (devDependency), porque o `generateTOTP` do
+      Better-Auth é `serverOnly`.
+- [x] **Validação nativa escondia o caminho do servidor.** O campo de senha
+      tem `minLength={12}`: o browser barrava o submit, nenhum `role="alert"`
+      chegava a existir (medido: 0 no DOM) e o teste de a11y pedia foco num nó
+      inexistente. O teste de form-wipe, no mesmo spec, passava **sem
+      round-trip nenhum** — verde vazio.
+- [x] Anti-enumeração assertava a copy contra um literal fixo. Agora compara
+      os dois ramos **entre si**, que é a propriedade real; qualquer ajuste de
+      redação derrubava o teste como se fosse falha de segurança.
+- [x] O spec do cookie de reset procurava `iris_reset_token`; o nome real é
+      `redefinir_senha_token`. Nunca achava o cookie, mesmo com a proteção
+      funcionando.
+- [x] URL absoluta `http://localhost:3000` fixada num spec de segurança.
+- [x] Locators desatualizados: `"Nome da sua clínica"` (é `"Nome da clínica"`),
+      campo de responsável que só existe após escolher o tipo de consentimento
+      (#100), botão da agenda cujo nome acessível vem do `aria-label`, cartão
+      de revisão referenciado por filtro que deixa de casar após o clique.
+- [x] `workers: 1` + retry em 429 no sign-in: specs compartilham conta semeada,
+      o helper zera o enrollment, e o Better-Auth tem rate limit próprio **em
+      memória** (não zerável pelo banco). Sem isso a suíte falhava por ORDEM de
+      execução.
+
+**Defeito de produto que a suíte revelou (corrigido):** desde que a Fatia A
+ligou `requireEmailVerification`, **toda conta criada por seed nasce trancada**
+— `signUpEmail` grava `email_verified = false` e nenhum script envia e-mail de
+verificação. Não é problema só de teste: o `seed-clinic` na imagem do
+`iris-migrate` é o caminho documentado para provisionar a primeira usuária real
+em produção. `provisionUser` ganhou `emailVerificado?: boolean` (opt-in
+explícito, só para provisionamento out-of-band), aplicado **fora** do ramo
+`isNewUser` para que reexecutar um seed interrompido conclua o que faltou.
+
+**Higiene:** `eslint .` passou a varrer `.claude/worktrees/**` e os bundles
+minificados do design-sync — 328 erros em código gerado, escondendo erro real.
+Ignores adicionados.
 
 ## 🏁 Sessão 31/07/2026 — Fatia A: action pública de cadastro + throttle persistente (Issue #163, Task 7)
 
