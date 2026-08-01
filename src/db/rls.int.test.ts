@@ -669,7 +669,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
         withTenant(ctx("terapeuta", U_TERA), async (db) => {
           await db.execute(sql`
             INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, justificativa, autor_id)
-            VALUES (${ev2!.id}::uuid, 'invalidador'::evidence_revision_acao, '{}'::jsonb, 'Tentativa em EV2', ${U_TERA}::uuid)
+            VALUES (${ev2!.id}::uuid, 'invalidar'::evidence_revision_acao, '{}'::jsonb, 'Tentativa em EV2', ${U_TERA}::uuid)
           `);
         })
       );
@@ -679,7 +679,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       await withTenant(ctx("terapeuta", U_TERA), async (db) => {
         await db.execute(sql`
           INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, justificativa, autor_id)
-          VALUES (${ev1!.id}::uuid, 'invalidador'::evidence_revision_acao, '{}'::jsonb, 'Resposta em EV1', ${U_TERA}::uuid)
+          VALUES (${ev1!.id}::uuid, 'invalidar'::evidence_revision_acao, '{}'::jsonb, 'Resposta em EV1', ${U_TERA}::uuid)
         `);
       });
 
