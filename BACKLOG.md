@@ -113,6 +113,21 @@ lint 0 erros.
 engenharia: os primeiros clientes são cobrados **na mão**, por link de pagamento
 do Asaas, como manda o §6 do modelo de negócio (fazer coisas que não escalam).
 
+**Backup reverificado antes de liberar o cadastro (01/08/2026).** No serviço
+`iris-backup` (Easypanel → Console): `/app/backup.sh` → `exit=0` e
+`/app/verify-restore.sh` → `exit=0`. O verify só sai 0 se, no banco restaurado,
+a contagem de tabelas bate, o RLS segue ativo **com o mesmo número de policies**,
+os row counts batem, roles/grants foram preservados e existe o `.globals.sql`
+irmão do dump com `CREATE ROLE` de `app_role`/`iris_auth`.
+
+**O que isso prova e o que não prova:** fecha "banco corrompeu com o VPS vivo".
+**Não** fecha perda total do host — continuam abertos o DR em cluster novo com
+dump **de produção** (hoje só comprovado com dump de dev, 25/07) e a #105
+(provar que a réplica off-site decifra), esta última travada numa credencial
+Oracle de escrita, que lista o bucket mas não lê os objetos. Liberar o cadastro
+para as clínicas fundadoras com esse gap é **risco aceito e consciente**, não
+item esquecido.
+
 **Aberto para a Fatia B:**
 
 - [ ] Relógio de trial: mudar `trial_comeco_em` para **1º paciente cadastrado ou
