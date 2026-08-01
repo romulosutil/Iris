@@ -4,20 +4,22 @@ import { authVerification, appUser, professionalConsent } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 /**
- * Task 12 — E2E da jornada de Cadastro Self-Service (Revisão QA Sênior Adversarial)
+ * ============================================================================
+ * IRIS HEALTHCARE PLATFORM — SUÍTE E2E DE CADASTRO SELF-SERVICE (FATIA A)
+ * ----------------------------------------------------------------------------
+ * Persona: QA Lead Specialist (Playwright / E2E Engineering)
  *
- * Coberta pela especificação em docs/superpowers/plans/2026-07-30-fatia-a-cadastro-self-service.md:
- * 1. Preenchimento do formulário em `/cadastro` com dados válidos e aceite dos termos.
- * 2. Redirecionamento para `/cadastro/verifique-email` com resposta uniforme anti-enumeração.
- * 3. Leitura resiliente (poll) do token de verificação no banco e navegação para `/verificar-email?token=...`.
- * 4. Confirmação do redirecionamento para `/mfa/setup` (enforcement de papel clínico).
- * 5. Garantia de idempotência: submissão duplicada com mesmo e-mail não duplica clínica no banco.
- * 6. Validação de integridade de dados no banco: conselho, número de registro, UF e consentimento LGPD.
- * 7. Resiliência de formulário: erro de validação preserva inputs, Select (Radix) e Checkbox sem form-wipe (React 19).
- * 8. Acessibilidade (a11y): confirma foco automático no alerta de erro (`role="alert"`).
+ * Cobertura de Testes:
+ *  1. Jornada Principal (Happy Path + MFA Enforcement + Integridade DB)
+ *  2. Anti-Enumeração Estrita & Idempotência de Banco
+ *  3. Resiliência de Formulário (React 19 / Radix UI Form-Wipe Prevention)
+ *  4. Acessibilidade (WCAG 2.4.7 — Foco Automático em Erros)
+ *  5. Contrato de Links Legais (Termos & Privacidade)
+ * ============================================================================
  */
+
 test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
-  test("profissional conclui cadastro, verifica e-mail e cai no enrollment de MFA", async ({
+  test("Jornada Completa: Cadastro, Verificação de E-mail, Integridade DB e Enrollment de MFA", async ({
     page,
   }) => {
     const timestamp = Date.now();
@@ -25,137 +27,204 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
     const email = `selfservice-${timestamp}@iris.test`;
     const senha = "SenhaSeguraE2E123!";
 
-    // Step 1: Acessa e preenche o formulário de cadastro self-service.
-    await page.goto("/cadastro");
-    await expect(page.getByRole("heading", { name: "Criar conta" })).toBeVisible();
+    await test.step("1. Acessa e preenche o formulário de cadastro com dados válidos", async () => {
+      await page.goto("/cadastro");
+      await expect(page.getByRole("heading", { name: "Criar conta" })).toBeVisible();
 
-    await page.getByLabel("Nome completo").fill("Dra. Helena E2E");
-    await page.getByLabel("E-mail").fill(email);
-    await page.getByLabel("Senha").fill(senha);
-    await page.getByLabel("Nome da sua clínica").fill(nomeClinica);
+      await page.getByLabel("Nome completo").fill("Dra. Helena E2E");
+      await page.getByLabel("E-mail").fill(email);
+      await page.getByLabel("Senha").fill(senha);
+      await page.getByLabel("Nome da sua clínica").fill(nomeClinica);
 
-    // Seleção de conselho profissional
-    await page.getByRole("combobox", { name: "Conselho profissional" }).click();
-    await page.getByRole("option", { name: "CRP" }).click();
+      // Seleção de Conselho Profissional via componente Radix UI Select
+      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page.getByRole("option", { name: "CRP" }).click();
 
-    await page.getByLabel("Número do registro").fill("998877");
-    await page.getByLabel("UF do registro").fill("SP");
+      await page.getByLabel("Número do registro").fill("998877");
+      await page.getByLabel("UF do registro").fill("SP");
 
-    // Aceita os termos de uso
-    await page.getByRole("checkbox").check();
+      // Aceite dos Termos de Uso
+      await page.getByRole("checkbox").check();
+      await expect(page.getByRole("checkbox")).toBeChecked();
 
-    // Submete o cadastro
-    await page.getByRole("button", { name: "Criar conta" }).click();
+      // Envio do formulário
+      await page.getByRole("button", { name: "Criar conta" }).click();
+    });
 
-    // Step 2: Deve redirecionar para a tela de instrução de e-mail enviado.
-    await expect(page).toHaveURL("/cadastro/verifique-email");
-    await expect(
-      page.getByText(/Se este e-mail puder criar uma conta/i)
-    ).toBeVisible();
+    await test.step("2. Valida resposta uniforme e proteção anti-enumeração", async () => {
+      await expect(page).toHaveURL("/cadastro/verifique-email");
+      await expect(
+        page.getByText(/Se este e-mail puder criar uma conta/i)
+      ).toBeVisible();
 
-    // Asserção anti-enumeração: A tela é estritamente uniforme e não revela criação/existência.
-    await expect(page.getByText(/E-mail já cadastrado/i)).not.toBeVisible();
+      // Garantia que não vazamos mensagens como "E-mail já existe" ou "Conta criada"
+      await expect(page.getByText(/E-mail já cadastrado/i)).not.toBeVisible();
+      await expect(page.getByText(/Conta criada com sucesso/i)).not.toBeVisible();
+    });
 
-    // Step 3: Resiliência contra latência de CI — poll até o token de verificação existir no banco.
     let token = "";
-    await expect
-      .poll(
-        async () => {
-          const rec = await authDb.query.authVerification.findFirst({
-            where: eq(authVerification.identifier, email),
-          });
-          token = rec?.value ?? "";
-          return token;
-        },
-        { message: "Aguardando token de verificação na tabela auth_verification", timeout: 10_000 }
-      )
-      .toBeTruthy();
-
-    // Step 4: Acessa a rota de verificação com o token real.
-    await page.goto(`/verificar-email?token=${token}`);
-
-    // Redireciona para o setup de MFA (enforcement de papel clínico no Iris).
-    await expect(page).toHaveURL(/\/mfa\/setup/);
-    await expect(
-      page.getByRole("heading", { name: /Configurar segundo fator/i })
-    ).toBeVisible();
-
-    // Step 5: Validação de integridade de dados gravados em app_user e professional_consent
-    const userRecord = await authDb.query.appUser.findFirst({
-      where: eq(appUser.email, email),
+    await test.step("3. Consulta token de verificação diretamente no banco com retry resiliente", async () => {
+      await expect
+        .poll(
+          async () => {
+            const record = await authDb.query.authVerification.findFirst({
+              where: eq(authVerification.identifier, email),
+            });
+            token = record?.value ?? "";
+            return token;
+          },
+          {
+            message: "Aguardando geração do token em auth_verification no banco",
+            timeout: 10_000,
+            intervals: [500, 1000, 2000],
+          }
+        )
+        .toBeTruthy();
     });
-    expect(userRecord).toBeDefined();
-    expect(userRecord?.conselho).toBe("crp");
-    expect(userRecord?.registroNumero).toBe("998877");
-    expect(userRecord?.registroUf).toBe("SP");
 
-    const consentRecord = await authDb.query.professionalConsent.findFirst({
-      where: eq(professionalConsent.userId, userRecord!.id),
+    await test.step("4. Consome o token de verificação e valida o redirection para MFA", async () => {
+      await page.goto(`/verificar-email?token=${token}`);
+
+      // O Iris força enrollment de MFA para profissionais de saúde
+      await expect(page).toHaveURL(/\/mfa\/setup/);
+      await expect(
+        page.getByRole("heading", { name: /Configurar segundo fator/i })
+      ).toBeVisible();
     });
-    expect(consentRecord).toBeDefined();
 
-    // Step 6: Idempotência — submissão duplicada com mesmo e-mail não cria segunda clínica no banco.
-    await page.goto("/cadastro");
-    await page.getByLabel("Nome completo").fill("Dra. Helena E2E");
-    await page.getByLabel("E-mail").fill(email);
-    await page.getByLabel("Senha").fill(senha);
-    await page.getByLabel("Nome da sua clínica").fill(nomeClinica);
-    await page.getByRole("combobox", { name: "Conselho profissional" }).click();
-    await page.getByRole("option", { name: "CRP" }).click();
-    await page.getByLabel("Número do registro").fill("998877");
-    await page.getByLabel("UF do registro").fill("SP");
-    await page.getByRole("checkbox").check();
-    await page.getByRole("button", { name: "Criar conta" }).click();
+    await test.step("5. Verifica a integridade dos dados gravados no banco (app_user e professional_consent)", async () => {
+      const userRecord = await authDb.query.appUser.findFirst({
+        where: eq(appUser.email, email),
+      });
 
-    // Redireciona para a mesma tela uniforme
-    await expect(page).toHaveURL("/cadastro/verifique-email");
+      expect(userRecord).toBeDefined();
+      expect(userRecord?.conselho).toBe("crp");
+      expect(userRecord?.registroNumero).toBe("998877");
+      expect(userRecord?.registroUf).toBe("SP");
 
-    // Consulta ao banco confirma exatamente 1 clínica com esse nome.
-    const result = await sql<{ count: string }[]>`
-      SELECT count(*) as count FROM clinic WHERE nome = ${nomeClinica}
-    `;
-    expect(Number(result[0]?.count ?? 0)).toBe(1);
+      const consentRecord = await authDb.query.professionalConsent.findFirst({
+        where: eq(professionalConsent.userId, userRecord!.id),
+      });
+
+      expect(consentRecord).toBeDefined();
+      expect(consentRecord?.versaoTermos).toBeTruthy();
+    });
   });
 
-  test("preserva campos preenchidos e o estado do formulário quando ocorre erro de validação", async ({
+  test("Anti-Enumeração & Idempotência: Tentativa de re-cadastro com e-mail existente", async ({
+    page,
+  }) => {
+    const timestamp = Date.now();
+    const nomeClinica = `Clínica Idempotência ${timestamp}`;
+    const email = `idempotente-${timestamp}@iris.test`;
+    const senha = "SenhaSeguraE2E123!";
+
+    await test.step("1. Realiza o primeiro cadastro normalmente", async () => {
+      await page.goto("/cadastro");
+      await page.getByLabel("Nome completo").fill("Dr. Idempotente Primeiro");
+      await page.getByLabel("E-mail").fill(email);
+      await page.getByLabel("Senha").fill(senha);
+      await page.getByLabel("Nome da sua clínica").fill(nomeClinica);
+      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page.getByRole("option", { name: "CRM" }).click();
+      await page.getByLabel("Número do registro").fill("112233");
+      await page.getByLabel("UF do registro").fill("MG");
+      await page.getByRole("checkbox").check();
+      await page.getByRole("button", { name: "Criar conta" }).click();
+
+      await expect(page).toHaveURL("/cadastro/verifique-email");
+    });
+
+    await test.step("2. Tenta re-cadastrar com o MESMO e-mail e nova clínica", async () => {
+      await page.goto("/cadastro");
+      await page.getByLabel("Nome completo").fill("Dr. Idempotente Segundo");
+      await page.getByLabel("E-mail").fill(email);
+      await page.getByLabel("Senha").fill("OutraSenha123!");
+      await page.getByLabel("Nome da sua clínica").fill(`Tentativa Duplicada ${timestamp}`);
+      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page.getByRole("option", { name: "CRM" }).click();
+      await page.getByLabel("Número do registro").fill("112233");
+      await page.getByLabel("UF do registro").fill("MG");
+      await page.getByRole("checkbox").check();
+      await page.getByRole("button", { name: "Criar conta" }).click();
+
+      // Redireciona para a mesma página uniforme sem revelar que o e-mail já existe
+      await expect(page).toHaveURL("/cadastro/verifique-email");
+      await expect(
+        page.getByText(/Se este e-mail puder criar uma conta/i)
+      ).toBeVisible();
+    });
+
+    await test.step("3. Valida no banco que a clínica duplicada NÃO foi criada", async () => {
+      const resultOriginal = await sql<{ count: string }[]>`
+        SELECT count(*) as count FROM clinic WHERE nome = ${nomeClinica}
+      `;
+      expect(Number(resultOriginal[0]?.count ?? 0)).toBe(1);
+
+      const resultDuplicada = await sql<{ count: string }[]>`
+        SELECT count(*) as count FROM clinic WHERE nome = ${`Tentativa Duplicada ${timestamp}`}
+      `;
+      expect(Number(resultDuplicada[0]?.count ?? 0)).toBe(0);
+    });
+  });
+
+  test("Resiliência de Formulário & Acessibilidade em Erros de Validação", async ({
     page,
   }) => {
     await page.goto("/cadastro");
 
-    await page.getByLabel("Nome completo").fill("Dr. Roberto Teste");
-    await page.getByLabel("E-mail").fill("roberto-resiliente@iris.test");
-    await page.getByLabel("Senha").fill("SenhaCurta");
-    await page.getByLabel("Nome da sua clínica").fill("Clínica Resiliente E2E");
+    await test.step("1. Preenche o formulário com dados e senha inválida (curta)", async () => {
+      await page.getByLabel("Nome completo").fill("Dra. Beatriz Resiliente");
+      await page.getByLabel("E-mail").fill("beatriz@iris.test");
+      await page.getByLabel("Senha").fill("123"); // Senha inválida (< 12 caracteres)
+      await page.getByLabel("Nome da sua clínica").fill("Clínica Resiliente E2E");
 
-    // Seleção do Select (Radix UI)
-    await page.getByRole("combobox", { name: "Conselho profissional" }).click();
-    await page.getByRole("option", { name: "CRM" }).click();
+      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page.getByRole("option", { name: "CREFITO" }).click();
 
-    await page.getByLabel("Número do registro").fill("123456");
-    await page.getByLabel("UF do registro").fill("RJ");
+      await page.getByLabel("Número do registro").fill("456789");
+      await page.getByLabel("UF do registro").fill("PR");
+      await page.getByRole("checkbox").check();
 
-    // Marcar Checkbox
-    await page.getByRole("checkbox").check();
+      await page.getByRole("button", { name: "Criar conta" }).click();
+    });
 
-    // Tenta submeter formulário com senha fraca
-    await page.getByRole("button", { name: "Criar conta" }).click();
+    await test.step("2. Valida acessibilidade (foco automático em role='alert')", async () => {
+      const alert = page.getByRole("alert");
+      await expect(alert).toBeVisible();
+      await expect(alert).toBeFocused();
+    });
 
-    // 1. Deve exibir alerta de erro
-    const alert = page.getByRole("alert");
-    await expect(alert).toBeVisible();
+    await test.step("3. Valida preservação de estado contra form-wipe (React 19 / Radix UI)", async () => {
+      await expect(page.getByLabel("Nome completo")).toHaveValue("Dra. Beatriz Resiliente");
+      await expect(page.getByLabel("E-mail")).toHaveValue("beatriz@iris.test");
+      await expect(page.getByLabel("Nome da sua clínica")).toHaveValue("Clínica Resiliente E2E");
+      await expect(page.getByLabel("Número do registro")).toHaveValue("456789");
+      await expect(page.getByLabel("UF do registro")).toHaveValue("PR");
 
-    // 2. Acessibilidade (WCAG 2.4.7): O foco deve se mover automaticamente para o alerta de erro
-    await expect(alert).toBeFocused();
+      // Componentes Radix UI continuam com os valores selecionados
+      await expect(
+        page.getByRole("combobox", { name: "Conselho profissional" })
+      ).toHaveText(/CREFITO/);
+      await expect(page.getByRole("checkbox")).toBeChecked();
+    });
+  });
 
-    // 3. Resiliência de campos nativos (React 19): Valores preservados sem form-wipe
-    await expect(page.getByLabel("Nome completo")).toHaveValue("Dr. Roberto Teste");
-    await expect(page.getByLabel("Nome da sua clínica")).toHaveValue("Clínica Resiliente E2E");
-    await expect(page.getByLabel("E-mail")).toHaveValue("roberto-resiliente@iris.test");
-    await expect(page.getByLabel("Número do registro")).toHaveValue("123456");
-    await expect(page.getByLabel("UF do registro")).toHaveValue("RJ");
+  test("Links Legais: Termos de Uso e Política de Privacidade abrem em nova aba", async ({
+    page,
+  }) => {
+    await page.goto("/cadastro");
 
-    // 4. Resiliência de componentes Radix (Select e Checkbox): Estado mantido pós-erro
-    await expect(page.getByRole("combobox", { name: "Conselho profissional" })).toHaveText(/CRM/);
-    await expect(page.getByRole("checkbox")).toBeChecked();
+    await test.step("Valida presença e atributos dos links de Termos e Privacidade", async () => {
+      const linkTermos = page.getByRole("link", { name: "Termos de Uso" });
+      await expect(linkTermos).toBeVisible();
+      await expect(linkTermos).toHaveAttribute("href", "/termos");
+      await expect(linkTermos).toHaveAttribute("target", "_blank");
+
+      const linkPrivacidade = page.getByRole("link", { name: "Política de Privacidade" });
+      await expect(linkPrivacidade).toBeVisible();
+      await expect(linkPrivacidade).toHaveAttribute("href", "/privacidade");
+      await expect(linkPrivacidade).toHaveAttribute("target", "_blank");
+    });
   });
 });
