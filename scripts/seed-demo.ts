@@ -260,6 +260,9 @@ async function main() {
       senha: COORD_SENHA,
       clinicId: c.id,
       papel: "coordenador",
+      // Provisionamento out-of-band: a conta nasce verificada, senão o
+      // requireEmailVerification da Fatia A (#163) tranca o acesso.
+      emailVerificado: true,
     });
     coordIds.push(userId);
   }
@@ -272,6 +275,7 @@ async function main() {
     senha: COORD_SENHA,
     clinicId: c.id,
     papel: "admin_recepcao",
+    emailVerificado: true,
   });
 
   // 20 Terapeutas
@@ -289,6 +293,7 @@ async function main() {
       senha: TERAPEUTA_SENHA,
       clinicId: c.id,
       papel: "terapeuta",
+      emailVerificado: true,
     });
     therapistIds.push(userId);
   }
