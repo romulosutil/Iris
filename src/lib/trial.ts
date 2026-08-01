@@ -55,14 +55,42 @@ export function diasRestantesDeTrial(
 }
 
 /**
+ * Anterior a esta data, `trial_comeco_em` não representa um trial de verdade.
+ *
+ * A migração `0057_cadastro_self_service.sql` criou a coluna como `NOT NULL` e
+ * fez `UPDATE clinic SET trial_comeco_em = '2020-01-01'` nas clínicas que já
+ * existiam — elas nunca passaram pelo self-service. O comentário da migração
+ * diz por que escolheu 2020: *"garante que diasRestantesDeTrial() retorne
+ * negativo, e o banner não apareça"*.
+ *
+ * Ou seja: o dado foi escolhido para um contrato em que **negativo = não
+ * mostrar**. Quando a faixa passou a ter estado "encerrado" (negativo =
+ * mostrar), esse sentinela virou uma clínica em trial vencido para sempre.
+ * Achado bloqueante do Jules na PR #176 — procede.
+ *
+ * A checagem é por corte de data, não por igualdade com `'2020-01-01'`: a
+ * coluna é `timestamptz` e o valor gravado depende do timezone da sessão que
+ * rodou a migração, então comparar por igualdade seria frágil. Nenhuma conta
+ * self-service pode ser anterior a 30/07/2026, data em que a 0057 nasceu.
+ */
+const CORTE_TRIAL_REAL = new Date("2026-07-01T00:00:00Z");
+
+/**
  * Resolve quantos dias faltam para exibir na faixa de trial a partir dos
  * dados brutos da clínica, ou `null` quando a faixa não deve aparecer
- * (clínica sem trial ativo).
+ * (clínica sem trial).
  *
  * Finding 2 da review da PR #166: usar `&&` truthy em `trialDias` esconderia
  * a faixa quando o trial tem explicitamente 0 dias restantes (0 é falsy em
  * JS, mas é um valor válido — "termina hoje"). `!= null` cobre null/undefined
  * sem descartar 0.
+ *
+ * ⚠️ **Limite conhecido, com prazo:** isto ainda não sabe distinguir "trial
+ * vencido" de "assinante pagante" — só existe o relógio, não existe estado de
+ * assinatura. Hoje isso é inofensivo porque **não há como pagar**: o gate e a
+ * tabela `subscription` chegam na Fatia B (#159), e nenhum assinante pode
+ * existir antes dela. Quando a `subscription` existir, é ela quem decide se a
+ * faixa aparece — e este corte de data sai junto. Registrado na #159.
  */
 export function resolverDiasRestantesParaFaixa(dadosTrial: {
   trialComecoEm: Date | null;
@@ -70,6 +98,9 @@ export function resolverDiasRestantesParaFaixa(dadosTrial: {
   timezone: string;
 }): number | null {
   if (dadosTrial.trialComecoEm == null || dadosTrial.trialDias == null) {
+    return null;
+  }
+  if (dadosTrial.trialComecoEm < CORTE_TRIAL_REAL) {
     return null;
   }
   return diasRestantesDeTrial(

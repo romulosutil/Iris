@@ -16,11 +16,20 @@ export function IrisPreviewProvider({
   tema?: "claro" | "escuro";
   children?: React.ReactNode;
 }) {
-  if (typeof document !== "undefined") {
+  // `useLayoutEffect`, não `useEffect`: os atributos precisam estar no <html>
+  // ANTES da pintura, senão o primeiro frame sai com os tokens no default do
+  // CSS — que é exatamente o estado errado que este provider existe para
+  // evitar, e o que um screenshot de preview capturaria.
+  //
+  // Mutar o DOM no corpo do render (como estava) é side-effect em tempo de
+  // renderização: sob StrictMode o componente renderiza duas vezes e a ordem
+  // de aplicação deixa de ser garantida quando há mais de um preview na tela.
+  React.useLayoutEffect(() => {
     const root = document.documentElement;
     root.setAttribute("data-mode", modo);
     root.setAttribute("data-theme", tema);
     root.classList.toggle("dark", tema === "escuro");
-  }
+  }, [modo, tema]);
+
   return <>{children}</>;
 }
