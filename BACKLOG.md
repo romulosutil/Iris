@@ -265,6 +265,77 @@ Review da Task 7 apontou 1 Crítico e 4 Importantes. O que mudou de **decisão**
 - Detalhe completo (comandos, contagens pass/fail/skip, GREEN) no apêndice de
   round 1 em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
 
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: Task 10 fix round 1 de review (`/sem-acesso`, Issue #163)
+
+**O achado**
+
+- Review do Task 10 (`resolveTenant`/`getTenantContext`/`/sem-acesso`) achou
+  0 Crítico, 2 **Importante**: (I-1) o docstring de `/sem-acesso/page.tsx`
+  afirmava exigir sessão autenticada, quando a página é PÚBLICA (`(auth)/layout.tsx`
+  já dizia "sem guarda de sessão") — risco: um mantenedor futuro, confiando no
+  comentário, personaliza a copy com e-mail/clínica e reabre o oráculo de
+  enumeração da Task 7 num `GET` sem sessão; (I-2) `no_access` tinha virado
+  código morto (só `cadastro_incompleto` era produzido para "zero vínculo"),
+  então uma revogação futura (`equipe/` "remover da equipe", ainda não
+  construída) resolveria para "Cadastro incompleto → Concluir cadastro" e
+  `criarContaEClinica` auto-provisionaria uma clínica NOVA para o revogado
+  como coordenador — revogação virando promoção.
+- 4 Minor: teste unilateral (M-1), zero cobertura do mapeamento status→rota
+  (M-2), `<title>` estático divergindo do `<h1>` dinâmico (M-3, WCAG 2.4.2), e
+  o estado de recuperação sem nenhuma UI de logout alcançável (M-4).
+
+**Decisão travada nesta sessão (I-2)**
+
+- Investigação: `professional_consent` (Task 2) não tem FK para `user_role`
+  (só para `app_user`/`clinic`) e o único caminho que escreve nela
+  (`gravarAceite`, em `cadastro.ts`) exige um `user_role` já existente
+  (`garantirVinculoParaConsentimento`). Logo, um aceite pregresso para um
+  `userId` é prova durável de que ele teve vínculo real algum dia — coisa que
+  "cadastro nunca terminou" não pode ter produzido. Decisão: usar a presença
+  de qualquer `professional_consent` do usuário como o critério que distingue
+  "nunca terminou" (`cadastro_incompleto`) de "teve e perdeu" (`no_access`).
+- Limite assumido e registrado (não escondido): não cobre um futuro convite
+  (Fase 1c) que crie `user_role` sem nunca passar por aceite, nem usuários de
+  seed (`seed:clinic`/`seed:demo`) — nenhum dos dois grava
+  `professional_consent` hoje. Revisitar quando a Fase 1c definir o fluxo de
+  convite; população de seed não é produção, risco aceito por ora.
+
+**O que foi entregue**
+
+- `src/auth/tenant.ts`: `resolveTenant`, ao achar zero vínculo, consulta
+  `professional_consent` por `userId` antes de decidir o status — achou
+  aceite pregresso → `no_access` (reabre o `<SairButton />` do ramo default);
+  não achou → `cadastro_incompleto` como antes.
+- `src/app/(auth)/sem-acesso/page.tsx`: docstring reescrito para afirmar a
+  regra real (página pública, nunca personalizar com dado de conta);
+  `metadata` estático virou `generateMetadata` lendo o mesmo `searchParams`
+  que decide o `<h1>` (M-3); `<SairButton />` adicionado também no ramo
+  `cadastro_incompleto`, abaixo do CTA primário (M-4).
+- `src/auth/tenant-cadastro-incompleto.int.test.ts`: caso negativo (usuário
+  com `user_role` real não é `cadastro_incompleto` — M-1) e caso do I-2
+  (usuário sem vínculo mas com aceite pregresso → `no_access`).
+- `src/auth/tenant-status-routing.int.test.ts` (novo): cobre o mapeamento
+  `status → rota` de `getTenantContext` ponta a ponta, 8 casos, incluindo a
+  query string exata de `cadastro_incompleto` e o gate de MFA dentro de
+  `case "ok"` (M-2).
+
+**Verificação**
+
+- Duas mutações aplicadas e revertidas com RED/GREEN observado: (1) trocar a
+  rota de `cadastro_incompleto` para `/sem-acesso` sem `motivo` — pega pelo
+  teste novo de M-2; (2) neutralizar a checagem de `professional_consent` —
+  pega pelo teste novo do I-2. Nenhuma delas era pega pela suíte antes desta
+  rodada.
+- `pnpm test:rls` completo: 1 falhou | 76 passaram (77 arquivos); 3 falharam |
+  515 passaram (518 testes) — **0 skipped**; as 3 falhas são a baseline
+  conhecida de `src/db/rls.int.test.ts` (issue #167), não relacionadas.
+- `pnpm build` (com `.next` limpo) exit 0; evidência de navegador (Playwright
+  MCP) confirmou título ↔ `<h1>` batendo nos dois estados e o botão "Sair"
+  funcionando a partir do estado `cadastro_incompleto`.
+- Detalhe completo (comandos, saída verbatim das mutações, snapshot do
+  navegador) no apêndice de fix round 1 em
+  `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-10-report.md`.
+
 ## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 2 de review, item Crítico reaberto (Issue #163)
 
 **O achado**

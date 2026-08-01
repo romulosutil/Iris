@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { authDb } from "@/db/client";
-import { userRole, clinic } from "@/db/schema";
+import { userRole, clinic, professionalConsent } from "@/db/schema";
 import { auth } from "@/auth/auth";
 import { papelAtivo, type Papel } from "@/auth/papel-ativo";
 import type { TenantContext } from "@/db/rls";
@@ -44,11 +44,39 @@ export async function resolveTenant(
     .innerJoin(clinic, eq(clinic.id, userRole.clinicId))
     .where(eq(userRole.userId, userId));
 
-  // Usuário autenticado sem NENHUM vínculo: no self-service isto significa que o
-  // cadastro morreu entre criar a conta e criar a clínica (o provisionamento não
-  // é atômico — ver src/auth/cadastro.ts). Devolver "sem acesso" aqui seria beco
-  // sem saída com o e-mail já queimado.
-  if (vinculos.length === 0) return { status: "cadastro_incompleto", userId };
+  // Usuário autenticado sem NENHUM vínculo: dois cenários distintos levam aqui,
+  // e não podem receber a mesma resposta (review Task 10, achado I-2).
+  //
+  // 1. Cadastro self-service morreu entre criar a conta e criar a clínica (o
+  //    provisionamento não é atômico — ver src/auth/cadastro.ts). Devolver
+  //    "sem acesso" aqui seria beco sem saída com o e-mail já queimado.
+  // 2. O usuário JÁ teve vínculo, completou o aceite de termos em alguma
+  //    clínica, e depois teve TODOS os vínculos revogados (hoje nada em
+  //    produção faz isso; é preparo para quando `equipe/` ganhar "remover da
+  //    equipe"). Devolver "cadastro_incompleto" aqui seria armar uma
+  //    escalação: o botão "Concluir cadastro" leva a `/cadastro`, e o ramo
+  //    `existente` sem clínica própria qualificada de `criarContaEClinica`
+  //    (`src/auth/cadastro.ts`) cria uma clínica NOVA para ele como
+  //    coordenador — uma revogação virando promoção.
+  //
+  // Distinção usada: `professional_consent` (Task 2) nunca é apagada por
+  // nenhum caminho de produção e não tem FK para `user_role` — só para
+  // `app_user`/`clinic`, e sempre é escrita DEPOIS de um `user_role` existir
+  // (`garantirVinculoParaConsentimento` em cadastro.ts recusa gravar sem
+  // vínculo). Logo, um aceite pregresso é prova durável de que este usuário
+  // teve vínculo em algum momento — mesmo que hoje esteja zerado. Ausência de
+  // qualquer aceite é o caso genuinamente incompleto. Não cobre o caso ainda
+  // inexistente de convite (Fase 1c) que crie `user_role` sem jamais passar
+  // por `professional_consent` — registrado no BACKLOG.md.
+  if (vinculos.length === 0) {
+    const [acetePregresso] = await authDb
+      .select({ id: professionalConsent.id })
+      .from(professionalConsent)
+      .where(eq(professionalConsent.userId, userId))
+      .limit(1);
+    if (acetePregresso) return { status: "no_access" };
+    return { status: "cadastro_incompleto", userId };
+  }
 
   const clinicasIds = [...new Set(vinculos.map((v) => v.clinicId))];
 
