@@ -24,6 +24,113 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 01/08/2026 (2ª) — Modelo de negócio, gateway e liberação do cadastro (Issues #163/#159)
+
+**Gateway: Asaas confirmado depois de avaliar Mercado Pago e Getnet.**
+
+- **Mercado Pago descartado:** o Pix Automático dele é de **valor fixo** (planos/
+  faixas). Cobrança por paciente ativo muda todo mês. Suportaria valor variável
+  só no cartão (`PUT /preapproval/{id}`) a ~3,99%. O apelo era o checkout
+  hospedado — que o Asaas também tem, com emissão gratuita.
+- **Getnet descartada:** é **adquirente**, não gateway de assinatura. Sem ciclo
+  de fatura, sem régua de cobrança, sem boleto/NFS-e/Pix Automático, e o cofre
+  de cartão jogaria o projeto para dentro do escopo PCI-DSS. É a opção de
+  **mais** código. Fica como candidata pós-volume (negociar MDR direto) atrás da
+  porta `BillingProvider`.
+- **Asaas, trilho correto = Pix Automático jornada 3, NÃO o produto
+  "Assinaturas".** "Assinaturas" gera cobrança com **40 dias de antecedência** —
+  inútil para valor que só se conhece perto do vencimento (e o pedido de reduzir
+  40→7 dias ao gerente deixa de ser necessário). Autorização criada **sem o campo
+  `value`** libera valor livre por cobrança; exige `paymentCreationMode: MANUAL`.
+- **Consequência de produto (R5 da spec):** a instrução de pagamento só pode ser
+  criada entre **2 e 10 dias úteis antes do vencimento** → a apuração de
+  pacientes acontece ~5 dias úteis **antes** do fechamento, não no fechamento.
+  A tela `/assinatura` tem que mostrar valor, data de apuração e vencimento.
+- Taxa Pix é **fixa** (R$ 0,99 → R$ 1,99/transação), não percentual: numa fatura
+  de R$ 1.065 dá 0,19% contra ~R$ 32 no cartão. Pix Automático é o trilho
+  principal; cartão é fallback.
+
+**Painel Asaas verificado ao vivo (produção):** Pix Automático **está habilitado
+na conta** — a aba Webhooks expõe os 10 eventos `PIX_AUTOMATIC_RECURRING_*`
+(5 de autorização, 4 de instrução, 1 de elegibilidade). O formulário de webhook
+tem **token de autenticação nativo** (header, não query string como o GlitchTip)
+e toggle "Este Webhook ficará ativo?". Webhook **não** foi configurado: o
+`/api/hooks/asaas` ainda não existe, e URL órfã em conta de produção é
+configuração esquecida ligada a dinheiro real.
+
+**Segurança — chave de produção em ambiente de dev.** A primeira chave colada no
+`.env.local` era de **produção** (`$aact_prod_`), comprovado por 401 contra
+`api-sandbox`. Trocada pela de sandbox (`$aact_hmlg_`, valida com `totalCount`).
+Variáveis padronizadas em `.env.example`: `BILLING_PROVIDER`,
+`BILLING_PROVIDER_API_KEY` (nome provider-neutro, igual ao
+`EMAIL_PROVIDER_API_KEY`), `ASAAS_BASE_URL`, `ASAAS_WEBHOOK_TOKEN`.
+⚠️ A doc do Asaas **continua com prompt injection** ("fetch llms.txt...") nas
+páginas de Pix Automático — ignorado, como registrado na spec original.
+
+**Pré-mortem do modelo de cobrança (skill the-fool).** Três condições de
+fracasso garantido estão presentes hoje: (1) preço definido com **zero reais
+faturados**; (2) **trial (7 dias) mais curto que o tempo-até-valor** — o produto
+vale pelo acúmulo, e em 7 dias a terapeuta gerou 1–2 diários por paciente, então
+decide sem nunca ter visto um relatório denso; (3) **cobra-se pela ação que o
+produto precisa induzir** — cadastrar paciente aumenta a fatura, o que empurra o
+cliente a arquivar/atrasar cadastro e **fura a proveniência frase-a-frase**, que
+é o único diferencial defensável. O risco maior é o diagnóstico errado: baixa
+conversão vai parecer "preço alto" quando a causa é trial curto.
+Métricas de alerta a instrumentar: trials que expiram com <5 diários; sessão
+registrada para paciente arquivado; fatura que cai sem alta clínica; evento
+`AUTHORIZATION_CANCELLED` sem ticket de suporte.
+
+**Decisões travadas:**
+
+- **Paciente ativo = cadastrado e não arquivado** (não "≥1 sessão no mês").
+  Coluna nova `patient.arquivado_em`, **distinta de `patient.alta_em`** — alta é
+  clínica e dispara o relógio de retenção LGPD; fundir as duas faria um clique
+  comercial mexer em prazo legal de guarda. Alta arquiva; arquivar nunca dá alta.
+  Arquivado sai da fatura, mas segue legível e exportável.
+- **Piso de pacientes segue descartado** (D2 reafirmado): piso torna o preço
+  regressivo ao contrário (3 pacientes = R$65/pac contra R$39 de quem tem 15) e
+  afasta o autônomo pequeno, que é o canal orgânico do §6. Substituto em
+  avaliação: plano de entrada com pacientes inclusos.
+- **Preço segue em aberto.** Régua proposta (marginal: R$39 até 15 · R$32 de 16
+  a 40 · R$25 de 41+) está em `modelo-de-negocio.md` §4 marcada como proposta.
+  Primeiras clínicas entram com **preço de fundador**, não preço de tabela.
+
+**Implementado nesta sessão — faixa de trial com 3 estados** (destrava liberar o
+cadastro): a faixa **sumia** quando o trial vencia (`diasRestantes < 0` →
+`null`), então a pessoa via a contagem chegar a "termina hoje" e no dia seguinte
+a tela ficava muda — sem aviso, sem CTA, com a conta seguindo funcional porque o
+gate de escrita só chega na Fatia B. Isso ensinaria que o trial não significa
+nada e faria a cobrança depois parecer mudança de regra. Agora o `null` de
+`resolverDiasRestantesParaFaixa` (clínica sem trial = assinante) e o valor
+negativo (trial encerrado) deixam de ser colapsados pelo `?? -1` do layout.
+Novo teste `faixa-trial.test.tsx` (6 casos) **validado por mutação**: com o
+comportamento antigo, 2 casos quebram. Suíte: **691/691**, typecheck limpo,
+lint 0 erros.
+
+**O que o fim do trial faz hoje:** nada além da faixa. Não há bloqueio nem
+`/assinatura` — `escritaBloqueada` só existe na Fatia B. A falha é **aberta**
+(produto de graça), nunca conta travada. Por isso o "dia 8" não é deadline de
+engenharia: os primeiros clientes são cobrados **na mão**, por link de pagamento
+do Asaas, como manda o §6 do modelo de negócio (fazer coisas que não escalam).
+
+**Aberto para a Fatia B:**
+
+- [ ] Relógio de trial: mudar `trial_comeco_em` para **1º paciente cadastrado ou
+      14 dias do signup, o que vier primeiro**. Hoje começa no signup, e o
+      relógio queima durante o onboarding. Toca modelo de dados → exige plan mode
+      (`CLAUDE.md`); não bloqueia liberar cadastro, e com 1–2 contas o backfill
+      é trivial.
+- [ ] Trial por marco em vez de calendário (ex.: 14 dias **ou** 10 evidências
+      aprovadas, o que vier depois) — mitigação da falha #3 do pré-mortem.
+- [ ] Fluxo de reautorização disparado por `AUTHORIZATION_CANCELLED`, com
+      carência antes do read-only: revogação pelo app do banco não gera recusa
+      para retentar, mata a recorrência em silêncio.
+- [ ] Cobrar as duas primeiras clínicas com **preços diferentes** para medir
+      aceitação.
+- [ ] CNAE secundário de SaaS com a contadora vira **caminho crítico** (não item
+      de backlog): o Pix Automático exige CNAE compatível, e ele é o trilho
+      barato.
+
 ## 🏁 Sessão 01/08/2026 — Fechamento da Fatia A: suíte de fechamento rodada (Issue #163)
 
 **Task 12 (E2E) já estava em main.** O commit `47dec03` era uma variante órfã;

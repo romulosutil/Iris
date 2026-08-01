@@ -25,7 +25,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   // Fatia A — dados de trial para exibir faixa de dias restantes
   const dadosTrial = await obterDadosTrialDaClinica(ctx);
-  const diasRestantes = resolverDiasRestantesParaFaixa(dadosTrial) ?? -1;
+  // `null` = clínica sem trial (assinante) → faixa não aparece.
+  // Negativo = trial encerrado → a faixa APARECE, com o estado "terminou".
+  // O `?? -1` de antes colapsava os dois casos e escondia o fim do trial.
+  const diasRestantes = resolverDiasRestantesParaFaixa(dadosTrial);
 
   let itemsNav: NavItem[] = [];
 
@@ -94,7 +97,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </Banner>
         </Container>
       ) : null}
-      {diasRestantes >= 0 ? <FaixaTrial diasRestantes={diasRestantes} /> : null}
+      {diasRestantes !== null ? <FaixaTrial diasRestantes={diasRestantes} /> : null}
       <Container como="main" largura="md" className="flex-1 py-6 sm:py-10">
         {children}
       </Container>

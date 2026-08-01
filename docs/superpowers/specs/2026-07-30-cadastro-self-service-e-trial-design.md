@@ -35,6 +35,34 @@ de entrega.
 | D8 | Gateway atrás de uma porta `BillingProvider` | O adapter concreto é trocável; dado o risco de KYC do §9, isso deixou de ser higiene e virou requisito |
 | D9 | Provedor: **Asaas** (runner-up: Galax Pay/cel_cash) | Único que resolve cobrança **e** NFS-e no mesmo contrato sem mensalidade (R$ 0,49/nota), é Instituição de Pagamento brasileira autorizada pelo BCB — elimina a transferência internacional do checklist LGPD — e tem Pix Automático com autorização de **valor variável**, que é exatamente o nosso modelo |
 
+## 2.1 Revisão de 01/08/2026 (antes de abrir a Fatia B)
+
+Sessão de revisão do modelo de negócio com o Rômulo, já com a conta Asaas
+acessível. O que mudou em relação ao texto de 30/07:
+
+| # | Revisão | Racional |
+|---|---|---|
+| R1 | **Mercado Pago avaliado e descartado** como provedor | O Pix Automático do MP opera com **valor fixo** (planos/faixas). Cobrança por paciente ativo muda todo mês; o MP só suportaria valor variável no cartão (`PUT /preapproval/{id}`), a 3,99%. O apelo era o checkout hospedado — que o Asaas também tem, com emissão gratuita |
+| R2 | **Getnet (Santander) avaliada e descartada** | É adquirente, não gateway de assinatura: não tem ciclo de fatura, régua de cobrança, boleto, NFS-e nem Pix Automático, e o cofre de cartão jogaria o projeto para dentro do escopo PCI-DSS. É a opção de **mais** código, não de menos. Fica como candidata pós-volume, atrás da porta `BillingProvider` (D8), para negociar MDR direto |
+| R3 | Trilho técnico do Asaas: **Pix Automático (jornada 3)**, não o produto "Assinaturas" | "Assinaturas" gera as cobranças sozinho **com 40 dias de antecedência** — inadequado para valor que só se conhece perto do vencimento (era o motivo do pedido de redução 40→7 dias ao gerente; o pedido deixa de ser necessário). No Pix Automático a nossa aplicação cria cada instrução e define o valor |
+| R4 | Autorização criada **sem o campo `value`** | `POST /v3/pix/automatic/authorizations` com `value` preenchido fixa o valor de todas as cobranças. Omitindo, o valor é livre por cobrança — e libera `minLimitValue` (piso do recebedor). Exige `paymentCreationMode: MANUAL`; com `SUBSCRIPTION` o `value` volta a ser obrigatório |
+| R5 | **A apuração de pacientes acontece ~5 dias úteis ANTES do vencimento**, não no fechamento do ciclo | A instrução de pagamento só pode ser criada entre **2 e 10 dias úteis** antes do vencimento; fora da janela a API rejeita. Isso é contrato de produto, não detalhe: a tela `/assinatura` precisa mostrar valor, data de apuração e vencimento juntos |
+| R6 | `retryPolicy: ALLOW_THREE_IN_SEVEN_DAYS` na autorização | Régua de cobrança nativa, sem código nosso |
+| R7 | Coluna nova **`patient.arquivado_em`** — decisão organizacional, distinta de `patient.alta_em` (clínica) | `alta_em` dispara o relógio de retenção LGPD (MAX(18 anos, alta+10a)). Se ela virasse também a chave de cobrança, um clique comercial mexeria em prazo legal de guarda de prontuário. Alta arquiva; arquivar **nunca** dá alta. Arquivado não é cobrado, mas segue legível e exportável |
+| R8 | Auto-arquivamento após **90 dias sem atualização**, com aviso 7 dias antes | Evita fatura inflada por cadastro esquecido — que é o que empurraria o cliente a apagar prontuário |
+| R9 | **Confirmado que o Pix Automático está habilitado na conta** | A aba Webhooks do painel expõe os 10 eventos `PIX_AUTOMATIC_RECURRING_*` (5 de autorização, 4 de instrução, 1 de elegibilidade). Escutar os de **autorização** é obrigatório: revogação pelo app do banco não gera recusa de cobrança, ela mata a recorrência em silêncio |
+| R10 | **D2 (sem piso) reafirmado.** A proposta de piso de 5 pacientes levantada nesta sessão foi descartada | Piso torna o preço regressivo ao contrário (quem tem 3 pacientes pagaria R$65/paciente contra R$39 de quem tem 15) e afasta o autônomo pequeno, que é o canal orgânico do §6 do modelo de negócio. Substituto em avaliação: **plano de entrada** (base mensal que já inclui os primeiros pacientes), que protege o CAC sem punir o pequeno |
+| R11 | Faixa de trial ganhou **estado "encerrado"** (implementado em 01/08) | A faixa sumia quando o trial vencia: a pessoa via a contagem chegar a "termina hoje" e no dia seguinte não havia nada — sem aviso e sem CTA, com a conta seguindo funcional. Isso ensinaria que o trial não significa nada e faria a cobrança posterior parecer mudança de regra |
+| R12 | Regra do relógio de trial (`trial_comeco_em` no signup) **fica como está por ora**; mudança para "1º paciente cadastrado ou 14 dias do signup, o que vier primeiro" entra na Fatia B | Toca modelo de dados (coluna nullable) e o caminho de criação de paciente — o `CLAUDE.md` exige plan mode. Não bloqueia liberar o cadastro, porque nada aplica o fim do trial hoje; com 1–2 contas o backfill é trivial |
+
+**Preço — estado real:** segue **em aberto**. A régua discutida (R$39 até 15
+pacientes, R$32 de 16 a 40, R$25 de 41 em diante, marginal) está ancorada na
+tabela pública do ComportaTUDO e em **zero reais faturados**. Os três outros
+concorrentes praticam "sob consulta", ou seja, preço negociado — tabela pública
+não é preço praticado. Enquanto não houver cliente pagante, o número vive em
+coluna versionada por assinatura e as primeiras clínicas entram com **preço de
+fundador**, não com preço de tabela.
+
 ## 3. Arquitetura
 
 ### 3.1 Provisionamento (Fatia A)
