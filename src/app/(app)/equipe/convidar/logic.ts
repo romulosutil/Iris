@@ -4,8 +4,13 @@ import { requireRole } from "@/auth/require-role";
 import type { TenantContext } from "@/db/rls";
 import { provisionUser } from "@/auth/provisioning";
 import type { Papel } from "@/auth/papel-ativo";
+import { enviarEmailTransacional } from "@/lib/email/transacional";
 
-export type ConvidarState = { error?: string; senhaTemporaria?: string };
+export type ConvidarState = {
+  error?: string;
+  senhaTemporaria?: string;
+  emailEnviado?: boolean;
+};
 
 // Coordenador não se convida nem convida outro coordenador por esta tela —
 // promoção a coordenador é ato separado (fora do escopo 1c).
@@ -14,8 +19,12 @@ const PAPEIS_CONVITE = ["terapeuta", "admin_recepcao"] as const;
 /**
  * Convida um profissional para a clínica ativa. Só coordenador. Reusa
  * provisionUser (authDb/iris_auth já tem grant em user_role) — autorização é
- * de app (requireRole), não de RLS. Sem provedor de e-mail no escopo 1c: gera
- * senha temporária e devolve para a página exibir UMA vez ao coordenador.
+ * de app (requireRole), não de RLS.
+ *
+ * Envia e-mail de convite transacional com a senha temporária via
+ * `enviarEmailTransacional` (#155). Se o provedor de e-mail estiver
+ * indisponível, a senha temporária continua sendo devolvida ao coordenador
+ * para ser copiada manualmente.
  *
  * Núcleo `ctx`-accepting — vive em módulo `server-only` (NÃO `"use server"`),
  * então nunca vira endpoint invocável pelo cliente. `ctx` é sempre derivado no
@@ -46,5 +55,16 @@ export async function convidarUsuario(
     clinicId: ctx.clinicId,
     papel: papel as Papel,
   });
-  return { senhaTemporaria };
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const loginUrl = `${appUrl}/login`;
+
+  const emailRes = await enviarEmailTransacional({
+    para: email,
+    assunto: "Convite para integrar a equipe no Iris",
+    texto: `Olá, ${nome}!\n\nVocê foi convidado(a) para se juntar à equipe da clínica no Iris.\nSua senha temporária de acesso é: ${senhaTemporaria}\n\nAcesse ${loginUrl} para realizar seu primeiro acesso.`,
+    html: `<p>Olá, <strong>${nome}</strong>!</p><p>Você foi convidado(a) para se juntar à equipe da clínica no Iris.</p><p>Sua senha temporária de acesso é: <code>${senhaTemporaria}</code></p><p><a href="${loginUrl}">Clique aqui para acessar a plataforma</a></p>`,
+  });
+
+  return { senhaTemporaria, emailEnviado: emailRes.enviado };
 }
