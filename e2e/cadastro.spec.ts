@@ -34,7 +34,7 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.getByLabel("Nome completo").fill("Dra. Helena E2E");
       await page.getByLabel("E-mail").fill(email);
       await page.getByLabel("Senha").fill(senha);
-      await page.getByLabel("Nome da sua clínica").fill(nomeClinica);
+      await page.getByLabel("Nome da clínica").fill(nomeClinica);
 
       // Seleção de Conselho Profissional via componente Radix UI Select
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
@@ -125,7 +125,7 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.getByLabel("Nome completo").fill("Dr. Idempotente Primeiro");
       await page.getByLabel("E-mail").fill(email);
       await page.getByLabel("Senha").fill(senha);
-      await page.getByLabel("Nome da sua clínica").fill(nomeClinica);
+      await page.getByLabel("Nome da clínica").fill(nomeClinica);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRM" }).click();
       await page.getByLabel("Número do registro").fill("112233");
@@ -141,7 +141,7 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.getByLabel("Nome completo").fill("Dr. Idempotente Segundo");
       await page.getByLabel("E-mail").fill(email);
       await page.getByLabel("Senha").fill("OutraSenha123!");
-      await page.getByLabel("Nome da sua clínica").fill(`Tentativa Duplicada ${timestamp}`);
+      await page.getByLabel("Nome da clínica").fill(`Tentativa Duplicada ${timestamp}`);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRM" }).click();
       await page.getByLabel("Número do registro").fill("112233");
@@ -178,7 +178,7 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.getByLabel("Nome completo").fill("Dra. Beatriz Resiliente");
       await page.getByLabel("E-mail").fill("beatriz@iris.test");
       await page.getByLabel("Senha").fill("123"); // Senha inválida (< 12 caracteres)
-      await page.getByLabel("Nome da sua clínica").fill("Clínica Resiliente E2E");
+      await page.getByLabel("Nome da clínica").fill("Clínica Resiliente E2E");
 
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CREFITO" }).click();
@@ -199,7 +199,7 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
     await test.step("3. Valida preservação de estado contra form-wipe (React 19 / Radix UI)", async () => {
       await expect(page.getByLabel("Nome completo")).toHaveValue("Dra. Beatriz Resiliente");
       await expect(page.getByLabel("E-mail")).toHaveValue("beatriz@iris.test");
-      await expect(page.getByLabel("Nome da sua clínica")).toHaveValue("Clínica Resiliente E2E");
+      await expect(page.getByLabel("Nome da clínica")).toHaveValue("Clínica Resiliente E2E");
       await expect(page.getByLabel("Número do registro")).toHaveValue("456789");
       await expect(page.getByLabel("UF do registro")).toHaveValue("PR");
 

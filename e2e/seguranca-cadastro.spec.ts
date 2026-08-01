@@ -31,7 +31,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.getByLabel("Nome completo").fill("Dra. Validação Segurança");
       await page.getByLabel("E-mail").fill(emailExistente);
       await page.getByLabel("Senha").fill("SenhaSeguraE2E123!");
-      await page.getByLabel("Nome da sua clínica").fill(`Clínica Primária ${timestamp}`);
+      await page.getByLabel("Nome da clínica").fill(`Clínica Primária ${timestamp}`);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Número do registro").fill("111222");
@@ -47,7 +47,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.getByLabel("Nome completo").fill("Impostor E2E");
       await page.getByLabel("E-mail").fill(emailExistente); // E-mail já existente
       await page.getByLabel("Senha").fill("OutraSenhaFortissima123!");
-      await page.getByLabel("Nome da sua clínica").fill(`Clínica Falsa ${timestamp}`);
+      await page.getByLabel("Nome da clínica").fill(`Clínica Falsa ${timestamp}`);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Número do registro").fill("111222");
@@ -70,7 +70,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.getByLabel("Nome completo").fill("Dr. Novo Usuário");
       await page.getByLabel("E-mail").fill(emailNovo); // E-mail virgem
       await page.getByLabel("Senha").fill("SenhaSeguraE2E123!");
-      await page.getByLabel("Nome da sua clínica").fill(`Clínica Nova ${timestamp}`);
+      await page.getByLabel("Nome da clínica").fill(`Clínica Nova ${timestamp}`);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Número do registro").fill("333444");
@@ -123,7 +123,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
         await page.getByLabel("Nome completo").fill("Atacante Bot");
         await page.getByLabel("E-mail").fill(emailAtaque);
         await page.getByLabel("Senha").fill("SenhaQualquer123!");
-        await page.getByLabel("Nome da sua clínica").fill(`Clínica Bot ${i}`);
+        await page.getByLabel("Nome da clínica").fill(`Clínica Bot ${i}`);
         await page.getByRole("combobox", { name: "Conselho profissional" }).click();
         await page.getByRole("option", { name: "CRP" }).click();
         await page.getByLabel("Número do registro").fill("999000");
@@ -163,7 +163,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.getByLabel("Nome completo").fill("Dra. Helena MFA");
       await page.getByLabel("E-mail").fill(emailClinico);
       await page.getByLabel("Senha").fill(senha);
-      await page.getByLabel("Nome da sua clínica").fill(`Clínica MFA ${timestamp}`);
+      await page.getByLabel("Nome da clínica").fill(`Clínica MFA ${timestamp}`);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Número do registro").fill("777888");
