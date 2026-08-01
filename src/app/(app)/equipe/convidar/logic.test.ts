@@ -48,8 +48,8 @@ describe("convidarUsuario — lógica de envio de e-mail de convite (#155)", () 
     expect(resPapelInvalido.error).toBe("Só é possível convidar terapeuta ou recepção por aqui.");
   });
 
-  it("chama provisionUser e dispara e-mail transacional com a senha temporária (#155)", async () => {
-    vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-123" });
+  it("chama provisionUser e dispara e-mail transacional com a senha temporária para NOVO usuário (#155)", async () => {
+    vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-123", isNewUser: true });
     const spyEmail = vi.spyOn(transacional, "enviarEmailTransacional").mockResolvedValue({ enviado: true });
 
     const res = await convidarUsuario(
@@ -73,8 +73,33 @@ describe("convidarUsuario — lógica de envio de e-mail de convite (#155)", () 
     vi.restoreAllMocks();
   });
 
-  it("degrada graciosamente se o envio de e-mail falhar, mantendo a senha temporária", async () => {
-    vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-123" });
+  it("NÃO envia senha temporária para usuário JÁ EXISTENTE na plataforma e orienta uso da senha atual (#155 review)", async () => {
+    vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-123", isNewUser: false });
+    const spyEmail = vi.spyOn(transacional, "enviarEmailTransacional").mockResolvedValue({ enviado: true });
+
+    const res = await convidarUsuario(
+      ctxCoord,
+      form({ nome: "Dra. Paula", email: "paula-existente@iris.test", papel: "terapeuta" })
+    );
+
+    expect(res.error).toBeUndefined();
+    expect(res.senhaTemporaria).toBeUndefined(); // Não devolve senha temporária ao coordenador
+    expect(res.emailEnviado).toBe(true);
+
+    expect(spyEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        para: "paula-existente@iris.test",
+        assunto: "Convite para integrar nova equipe no Iris",
+        texto: expect.stringContaining("faça login com sua senha atual"),
+        html: expect.stringContaining("faça login com sua senha atual"),
+      })
+    );
+
+    vi.restoreAllMocks();
+  });
+
+  it("degrada graciosamente se o envio de e-mail falhar para novo usuário, mantendo a senha temporária", async () => {
+    vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-123", isNewUser: true });
     vi.spyOn(transacional, "enviarEmailTransacional").mockResolvedValue({ enviado: false });
 
     const res = await convidarUsuario(
@@ -90,10 +115,9 @@ describe("convidarUsuario — lógica de envio de e-mail de convite (#155)", () 
   });
 
   it("escapa caracteres HTML no nome para evitar injeção no template e resolve URL sem barra dupla (#155 review)", async () => {
-    const originalAppUrl = process.env.NEXT_PUBLIC_APP_URL;
-    process.env.NEXT_PUBLIC_APP_URL = "https://iris.com.br/"; // URL com barra no final
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://iris.com.br/");
 
-    vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-123" });
+    vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-123", isNewUser: true });
     const spyEmail = vi.spyOn(transacional, "enviarEmailTransacional").mockResolvedValue({ enviado: true });
 
     const nomeComHtml = "Dra. <script>alert('xss')</script> & Cia";
@@ -112,7 +136,7 @@ describe("convidarUsuario — lógica de envio de e-mail de convite (#155)", () 
     expect(payloadHtml).not.toContain("<script>");
     expect(payloadHtml).not.toContain("https://iris.com.br//login");
 
-    process.env.NEXT_PUBLIC_APP_URL = originalAppUrl;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 });

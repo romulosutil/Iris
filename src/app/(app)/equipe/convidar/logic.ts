@@ -10,6 +10,7 @@ export type ConvidarState = {
   error?: string;
   senhaTemporaria?: string;
   emailEnviado?: boolean;
+  sucesso?: boolean;
 };
 
 // Coordenador não se convida nem convida outro coordenador por esta tela —
@@ -57,7 +58,7 @@ export async function convidarUsuario(
   }
 
   const senhaTemporaria = crypto.randomBytes(12).toString("base64url");
-  await provisionUser({
+  const { isNewUser } = await provisionUser({
     email,
     nome,
     senha: senhaTemporaria,
@@ -69,12 +70,24 @@ export async function convidarUsuario(
   const loginUrl = new URL("/login", appUrl).toString();
   const nomeEscapado = escapeHtml(nome);
 
+  // Usuário novo: recebe a senha temporária no e-mail e na tela do coordenador.
+  // Usuário pré-existente: a senha do app_user é mantida intocada; o e-mail o orienta a entrar com a senha atual.
+  if (isNewUser) {
+    const emailRes = await enviarEmailTransacional({
+      para: email,
+      assunto: "Convite para integrar a equipe no Iris",
+      texto: `Olá, ${nome}!\n\nVocê foi convidado(a) para se juntar à equipe da clínica no Iris.\nSua senha temporária de acesso é: ${senhaTemporaria}\n\nAcesse ${loginUrl} para realizar seu primeiro acesso.`,
+      html: `<p>Olá, <strong>${nomeEscapado}</strong>!</p><p>Você foi convidado(a) para se juntar à equipe da clínica no Iris.</p><p>Sua senha temporária de acesso é: <code>${senhaTemporaria}</code></p><p><a href="${loginUrl}">Clique aqui para acessar a plataforma</a></p>`,
+    });
+    return { sucesso: true, senhaTemporaria, emailEnviado: emailRes.enviado };
+  }
+
   const emailRes = await enviarEmailTransacional({
     para: email,
-    assunto: "Convite para integrar a equipe no Iris",
-    texto: `Olá, ${nome}!\n\nVocê foi convidado(a) para se juntar à equipe da clínica no Iris.\nSua senha temporária de acesso é: ${senhaTemporaria}\n\nAcesse ${loginUrl} para realizar seu primeiro acesso.`,
-    html: `<p>Olá, <strong>${nomeEscapado}</strong>!</p><p>Você foi convidado(a) para se juntar à equipe da clínica no Iris.</p><p>Sua senha temporária de acesso é: <code>${senhaTemporaria}</code></p><p><a href="${loginUrl}">Clique aqui para acessar a plataforma</a></p>`,
+    assunto: "Convite para integrar nova equipe no Iris",
+    texto: `Olá, ${nome}!\n\nVocê foi adicionado(a) à equipe de uma nova clínica no Iris.\nComo você já possui uma conta no Iris, acesse ${loginUrl} e faça login com sua senha atual.`,
+    html: `<p>Olá, <strong>${nomeEscapado}</strong>!</p><p>Você foi adicionado(a) à equipe de uma nova clínica no Iris.</p><p>Como você já possui uma conta no sistema, <a href="${loginUrl}">clique aqui para acessar a plataforma</a> e faça login com sua senha atual.</p>`,
   });
 
-  return { senhaTemporaria, emailEnviado: emailRes.enviado };
+  return { sucesso: true, emailEnviado: emailRes.enviado };
 }
