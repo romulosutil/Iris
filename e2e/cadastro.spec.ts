@@ -107,7 +107,8 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       });
 
       expect(consentRecord).toBeDefined();
-      expect(consentRecord?.versaoTermos).toBeTruthy();
+      expect(consentRecord?.versaoTermo).toBeTruthy();
+
     });
   });
 
