@@ -24,6 +24,118 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 01/08/2026 — Fechamento da Fatia A: suíte de fechamento rodada (Issue #163)
+
+**Task 12 (E2E) já estava em main.** O commit `47dec03` era uma variante órfã;
+a versão que vale entrou por `7fdfd84` + `3584351`. O diagnóstico anterior de
+"nunca chegou em main" veio de `git branch --contains` rodado contra um `main`
+local 7 commits atrás do `origin/main` — **ref stale mente igual a migração
+não aplicada**. Verificar contra `origin/`, não contra o local.
+
+**Task 13 verificada por medição.** `scripts/migrate.mjs` lê só
+`MIGRATION_DATABASE_URL` (fallback `DATABASE_URL`). Rodado com
+`AUTH_DATABASE_URL`, `BETTER_AUTH_SECRET` e `BETTER_AUTH_URL` ausentes →
+exit 0, "schema em dia". O gate de schema não depende delas. Comentário stale
+do `infra/Dockerfile.migrate` corrigido. Efeito colateral aceito: o caminho
+manual do `seed-clinic` na imagem do migrate passa a exigir injeção ad-hoc de
+`AUTH_DATABASE_URL`.
+
+**Dois defeitos reais achados pela suíte de fechamento (corrigidos):**
+
+1. **Migração 0055 nunca rodou em banco nenhum** — mesmo padrão de
+   [[drizzle-hand-migration-when-ordering]], desta vez **dentro do próprio fix
+   da #165**: `f55a696` registrou a 0055 com `when = 1785421565500`, menor que
+   o `when` da 0056 já aplicada. `drizzle.__drizzle_migrations` local não tem
+   esse valor. Resultado: `app_purgar_report` seguia com o corpo da 0040, que
+   distingue "inexistente" de "fora da clínica" — o **oráculo de existência
+   cross-tenant estava vivo em produção**, com a issue fechada. Corrigido pela
+   `0063_reaplica_purga_report_oracle.sql`.
+   O teste da #165 também nunca poderia pegar isso: assertava com
+   `.rejects.toThrow("app_purgar_report: …")` contra o `DrizzleQueryError`,
+   cujo `message` é sempre `"Failed query: …"` — a mensagem do `RAISE` mora na
+   cadeia de `cause`. Mais um [[teste-verde-que-nao-testa-nada]], desta vez
+   vermelho-que-não-testa-nada. Mutação (corpo 0040 vs 0063) agora discrimina.
+2. **Enum inválido na suíte RLS da #141** — `'invalidador'` não existe
+   (`confirmar|reclassificar|invalidar`). O INSERT morria no cast, então a
+   asserção de RLS nunca era exercitada e o ramo positivo nunca rodava.
+   Sobra do `521ccec`, que corrigiu outras ocorrências e deixou estas duas.
+
+**Resultado da suíte de fechamento:**
+
+| Comando | Resultado |
+| --- | --- |
+| `pnpm lint` | ✅ 0 erros (24 warnings pré-existentes) |
+| `pnpm typecheck` | ✅ |
+| `pnpm test` | ✅ 131 arquivos / 685 testes, 0 skipped |
+| `pnpm test:rls` | ✅ 77 arquivos / 519 testes, 0 skipped, banner `app=iris_app(norls) auth=iris_auth_login(norls) owner=iris(owner)` |
+| `pnpm test:e2e` | ✅ 13/13 (ver pré-requisitos de ambiente abaixo) |
+
+**E2E: 13/13 verdes.** Estava 8/13 vermelha. **Nenhuma causa era regressão de
+produto** — todas eram teste medindo a coisa errada, e a maioria estava
+vermelha desde muito antes da Fatia A.
+
+Dois obstáculos de ambiente, primeiro (não são bug, mas travam qualquer
+execução local):
+
+- Porta 3000 ocupada por container de outro projeto + `reuseExistingServer`
+  faz o Playwright **adotar o nginx alheio**: os 13 specs falham com
+  "404 Not Found". Rodar em porta livre (`PORT` + `NEXT_PUBLIC_APP_URL`).
+- `BETTER_AUTH_SECRET` está **vazia** no `.env` local. `next start` roda em
+  produção e o Better-Auth recusa o segredo default, derrubando toda rota
+  autenticada. Exportar um segredo antes de rodar o E2E.
+
+Achados corrigidos:
+
+- [x] **Token de verificação nunca esteve no banco.**
+      `createEmailVerificationToken` é `signJWT`
+      (`email-verification.mjs:12`) — JWT assinado, **sem linha em
+      `auth_verification`**. Os specs esperavam a linha e expiravam sempre. A
+      premissa veio do próprio plano da Task 12. O cadastro sempre funcionou:
+      medido usuário criado, clínica criada, `trial_dias = 7`. Os testes agora
+      assinam o mesmo JWT e consomem `/api/auth/verify-email`.
+- [x] **Enforcement de MFA invalidou os specs de Fase 1b/1c/2/3.** Papel
+      clínico é obrigado a cadastrar segundo fator desde a 6.2b, então
+      autenticar para em `/mfa/setup`. Helper novo `e2e/helpers/sessao.ts`
+      conclui o enrollment pelo mesmo caminho HTTP da UI. **Não** usa
+      `BYPASS_MFA_FOR_DEV`: `assertMfaBypassSafe` derruba o boot com
+      `NODE_ENV=production`, que é como o `webServer` sobe o app — ligar o
+      bypass exigiria deixar de exercitar o binário que vai para produção.
+      Dependência nova: `otpauth` (devDependency), porque o `generateTOTP` do
+      Better-Auth é `serverOnly`.
+- [x] **Validação nativa escondia o caminho do servidor.** O campo de senha
+      tem `minLength={12}`: o browser barrava o submit, nenhum `role="alert"`
+      chegava a existir (medido: 0 no DOM) e o teste de a11y pedia foco num nó
+      inexistente. O teste de form-wipe, no mesmo spec, passava **sem
+      round-trip nenhum** — verde vazio.
+- [x] Anti-enumeração assertava a copy contra um literal fixo. Agora compara
+      os dois ramos **entre si**, que é a propriedade real; qualquer ajuste de
+      redação derrubava o teste como se fosse falha de segurança.
+- [x] O spec do cookie de reset procurava `iris_reset_token`; o nome real é
+      `redefinir_senha_token`. Nunca achava o cookie, mesmo com a proteção
+      funcionando.
+- [x] URL absoluta `http://localhost:3000` fixada num spec de segurança.
+- [x] Locators desatualizados: `"Nome da sua clínica"` (é `"Nome da clínica"`),
+      campo de responsável que só existe após escolher o tipo de consentimento
+      (#100), botão da agenda cujo nome acessível vem do `aria-label`, cartão
+      de revisão referenciado por filtro que deixa de casar após o clique.
+- [x] `workers: 1` + retry em 429 no sign-in: specs compartilham conta semeada,
+      o helper zera o enrollment, e o Better-Auth tem rate limit próprio **em
+      memória** (não zerável pelo banco). Sem isso a suíte falhava por ORDEM de
+      execução.
+
+**Defeito de produto que a suíte revelou (corrigido):** desde que a Fatia A
+ligou `requireEmailVerification`, **toda conta criada por seed nasce trancada**
+— `signUpEmail` grava `email_verified = false` e nenhum script envia e-mail de
+verificação. Não é problema só de teste: o `seed-clinic` na imagem do
+`iris-migrate` é o caminho documentado para provisionar a primeira usuária real
+em produção. `provisionUser` ganhou `emailVerificado?: boolean` (opt-in
+explícito, só para provisionamento out-of-band), aplicado **fora** do ramo
+`isNewUser` para que reexecutar um seed interrompido conclua o que faltou.
+
+**Higiene:** `eslint .` passou a varrer `.claude/worktrees/**` e os bundles
+minificados do design-sync — 328 erros em código gerado, escondendo erro real.
+Ignores adicionados.
+
 ## 🏁 Sessão 31/07/2026 — Fatia A: action pública de cadastro + throttle persistente (Issue #163, Task 7)
 
 **A decisão que muda o desenho combinado**

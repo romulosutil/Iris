@@ -1,7 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { authDb, sql } from "@/db/client";
-import { authVerification, appUser, professionalConsent } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { signJWT } from "better-auth/crypto";
 
 /**
  * ============================================================================
@@ -31,7 +29,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.getByLabel("Nome completo").fill("Dra. Validação Segurança");
       await page.getByLabel("E-mail").fill(emailExistente);
       await page.getByLabel("Senha").fill("SenhaSeguraE2E123!");
-      await page.getByLabel("Nome da sua clínica").fill(`Clínica Primária ${timestamp}`);
+      await page.getByLabel("Nome da clínica").fill(`Clínica Primária ${timestamp}`);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Número do registro").fill("111222");
@@ -42,12 +40,14 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await expect(page).toHaveURL("/cadastro/verifique-email");
     });
 
+    let textoExistente = "";
+
     await test.step("1.2. Submete novo cadastro com e-mail EXISTENTE e captura resposta visual", async () => {
       await page.goto("/cadastro");
       await page.getByLabel("Nome completo").fill("Impostor E2E");
       await page.getByLabel("E-mail").fill(emailExistente); // E-mail já existente
       await page.getByLabel("Senha").fill("OutraSenhaFortissima123!");
-      await page.getByLabel("Nome da sua clínica").fill(`Clínica Falsa ${timestamp}`);
+      await page.getByLabel("Nome da clínica").fill(`Clínica Falsa ${timestamp}`);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Número do registro").fill("111222");
@@ -56,7 +56,9 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.getByRole("button", { name: "Criar conta" }).click();
 
       await expect(page).toHaveURL("/cadastro/verifique-email");
-      const textoExistente = await page.getByText(/Se este e-mail puder criar uma conta/i).textContent();
+      textoExistente =
+        (await page.getByText(/Se este e-mail puder criar uma conta/i).textContent())?.trim() ??
+        "";
 
       // Nenhuma indicação visual de erro ou vazamento de existência
       await expect(page.getByText(/E-mail já cadastrado/i)).not.toBeVisible();
@@ -70,7 +72,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.getByLabel("Nome completo").fill("Dr. Novo Usuário");
       await page.getByLabel("E-mail").fill(emailNovo); // E-mail virgem
       await page.getByLabel("Senha").fill("SenhaSeguraE2E123!");
-      await page.getByLabel("Nome da sua clínica").fill(`Clínica Nova ${timestamp}`);
+      await page.getByLabel("Nome da clínica").fill(`Clínica Nova ${timestamp}`);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Número do registro").fill("333444");
@@ -81,9 +83,14 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await expect(page).toHaveURL("/cadastro/verifique-email");
       const textoNovo = await page.getByText(/Se este e-mail puder criar uma conta/i).textContent();
 
-      // Asserção estrita de segurança: Textos 100% idênticos em ambos os fluxos
-      expect(textoNovo).toBeDefined();
-      expect(textoNovo?.trim()).toBe("Se este e-mail puder criar uma conta, enviamos um link de verificação.");
+      // Asserção estrita de segurança: textos 100% idênticos nos dois fluxos.
+      // Comparar com o texto CAPTURADO no ramo do e-mail existente, e não com
+      // um literal fixo: a propriedade que importa é "as duas respostas são
+      // indistinguíveis", não qual é a redação. Com o literal, qualquer ajuste
+      // de copy derrubava o teste como se fosse falha de segurança — e a
+      // asserção real (igualdade entre os ramos) nunca era feita.
+      expect(textoExistente).not.toBe("");
+      expect(textoNovo?.trim()).toBe(textoExistente);
     });
   });
 
@@ -96,13 +103,22 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.goto(`/redefinir-senha?token=${tokenSensivel}`);
 
       // O proxy middleware (src/proxy.ts) intercepta e remove o token da URL para não vazar em session replay / Clarity / Analytics
-      await expect(page).toHaveURL("http://localhost:3000/redefinir-senha");
+      // URL RELATIVA: com a absoluta, o teste só passava em `localhost:3000` e
+      // falhava em qualquer outra porta (o `baseURL` vem de
+      // NEXT_PUBLIC_APP_URL) — falha de ambiente disfarçada de falha de
+      // segurança.
+      await expect(page).toHaveURL("/redefinir-senha");
       expect(page.url()).not.toContain("token=");
     });
 
     await test.step("2.2. Confirma gravação do cookie HttpOnly com o token interceptado", async () => {
+      // Nome real do cookie: `NOME_COOKIE_TOKEN` em
+      // src/app/(auth)/redefinir-senha/cookie.ts. O teste procurava
+      // "iris_reset_token", que não existe em lugar nenhum do produto — nunca
+      // achava o cookie e falhava mesmo com a proteção funcionando. A constante
+      // não é importada aqui porque o módulo é `server-only`.
       const cookies = await context.cookies();
-      const cookieReset = cookies.find((c) => c.name === "iris_reset_token");
+      const cookieReset = cookies.find((c) => c.name === "redefinir_senha_token");
 
       expect(cookieReset).toBeDefined();
       expect(cookieReset?.httpOnly).toBe(true);
@@ -123,7 +139,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
         await page.getByLabel("Nome completo").fill("Atacante Bot");
         await page.getByLabel("E-mail").fill(emailAtaque);
         await page.getByLabel("Senha").fill("SenhaQualquer123!");
-        await page.getByLabel("Nome da sua clínica").fill(`Clínica Bot ${i}`);
+        await page.getByLabel("Nome da clínica").fill(`Clínica Bot ${i}`);
         await page.getByRole("combobox", { name: "Conselho profissional" }).click();
         await page.getByRole("option", { name: "CRP" }).click();
         await page.getByLabel("Número do registro").fill("999000");
@@ -163,7 +179,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.getByLabel("Nome completo").fill("Dra. Helena MFA");
       await page.getByLabel("E-mail").fill(emailClinico);
       await page.getByLabel("Senha").fill(senha);
-      await page.getByLabel("Nome da sua clínica").fill(`Clínica MFA ${timestamp}`);
+      await page.getByLabel("Nome da clínica").fill(`Clínica MFA ${timestamp}`);
       await page.getByRole("combobox", { name: "Conselho profissional" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Número do registro").fill("777888");
@@ -173,27 +189,22 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
 
       await expect(page).toHaveURL("/cadastro/verifique-email");
 
-      await expect
-        .poll(
-          async () => {
-            const rec = await authDb.query.authVerification.findFirst({
-              where: eq(authVerification.identifier, emailClinico),
-            });
-            token = rec?.value ?? "";
-            return token;
-          },
-          { timeout: 10_000 }
-        )
-        .toBeTruthy();
+      // O token de verificação do Better-Auth é um JWT assinado
+      // (`createEmailVerificationToken` = `signJWT`), NÃO uma linha em
+      // `auth_verification`. Esperar a linha aparecer expirava sempre e a
+      // Garantia 4 nunca chegava a exercitar o enforcement de MFA.
+      token = await signJWT({ email: emailClinico }, process.env.BETTER_AUTH_SECRET!, 3600);
     });
 
     await test.step("4.2. Executa verificação e garante redirecionamento obrigatório para /mfa/setup", async () => {
-      await page.goto(`/verificar-email?token=${token}`);
+      await page.goto(
+        `/api/auth/verify-email?token=${token}&callbackURL=${encodeURIComponent("/")}`,
+      );
 
       // Redirecionamento obrigatório para enrollment de MFA
       await expect(page).toHaveURL(/\/mfa\/setup/);
       await expect(
-        page.getByRole("heading", { name: /Configurar segundo fator/i })
+        page.getByRole("heading", { name: /Verificação em Duas Etapas/i })
       ).toBeVisible();
     });
 

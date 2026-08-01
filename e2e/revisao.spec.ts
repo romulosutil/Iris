@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { entrarComMfa } from "./helpers/sessao";
 
 /**
  * E2E da Tela de Revisão (Fase 3 Plano 2): terapeuta demo consolida uma sessão,
@@ -15,15 +16,22 @@ import { test, expect } from "@playwright/test";
 test("terapeuta demo: revisão exige abrir o cartão antes de aprovar (lastro)", async ({
   page,
 }) => {
-  await page.goto("/login");
-  await page.getByLabel("E-mail").fill("terapeuta.demo@iris.test");
-  await page.getByLabel("Senha").fill("Senha Demo 123");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  // Terapeuta é papel clínico: segundo fator obrigatório desde a Fase 6.2b.
+  await entrarComMfa(page, "terapeuta.demo@iris.test", "Senha Demo 123");
   await expect(page).toHaveURL("/");
 
   // Abre a sessão do dia e consolida (gera as sugestões via DemoStubProvider).
   await page.goto("/agenda");
-  await page.getByRole("link", { name: /Abrir sessão/i }).first().click();
+  // O nome acessível do botão vem do `aria-label` ("Abrir agendamento de <nome>
+  // às <hora>"), não do texto visível ("Abrir"). O spec procurava um link
+  // chamado "Abrir sessão" — outra visão da agenda, inexistente aqui.
+  // `visible=true` descarta a variante responsiva de 0x0 que fica no DOM e que
+  // faria o `.first()` esperar para sempre por algo que nunca aparece.
+  await page
+    .getByRole("button", { name: /^Abrir agendamento de / })
+    .locator("visible=true")
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/diario\/.+/);
   await page
     .getByLabel(/Nota consolidada/i)
@@ -43,10 +51,27 @@ test("terapeuta demo: revisão exige abrir o cartão antes de aprovar (lastro)",
 
   // Cartão de alta confiança nasce COMPACTO: tem um botão "Revisar →" e NÃO
   // expõe "Aprovar" ainda (o botão de aprovar só existe no estado expandido).
-  const compacto = page
-    .locator("article")
-    .filter({ has: page.getByRole("button", { name: "Revisar →" }) })
-    .first();
+  // Referência POSICIONAL ao cartão, não por filtro. Um locator filtrado por
+  // "tem o botão Revisar →" é reavaliado a cada uso: no instante em que o
+  // cartão abre, o botão some, o filtro deixa de casar e a asserção seguinte
+  // falha com "element(s) not found" mesmo com o lastro funcionando. Filtrar
+  // pelo texto também não serve — os cartões começam com o mesmo cabeçalho
+  // ("SUGERIDA Evidência Alta confiança…") e `.first()` cairia no cartão errado.
+  const cartoes = page.locator("article");
+  const totalCartoes = await cartoes.count();
+  let indiceCompacto = -1;
+  for (let i = 0; i < totalCartoes; i++) {
+    if (
+      (await cartoes.nth(i).getByRole("button", { name: "Revisar →" }).count()) >
+      0
+    ) {
+      indiceCompacto = i;
+      break;
+    }
+  }
+  expect(indiceCompacto, "nenhum cartão compacto na fila").toBeGreaterThanOrEqual(0);
+
+  const compacto = cartoes.nth(indiceCompacto);
   await expect(compacto).toBeVisible();
   await expect(compacto.getByRole("button", { name: "Aprovar" })).toHaveCount(0);
 

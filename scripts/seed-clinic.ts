@@ -31,6 +31,10 @@ async function main() {
     senha,
     clinicId: c.id,
     papel: "coordenador",
+    // Provisionamento out-of-band: a conta nasce verificada, senão o
+    // requireEmailVerification da Fatia A (#163) tranca o acesso e nenhum
+    // e-mail de verificação sai por script.
+    emailVerificado: true,
   });
 
   console.log(

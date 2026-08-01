@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { entrarComMfa } from "./helpers/sessao";
 
 /**
  * Pré-requisito (mesmo de login.spec.ts):
@@ -14,16 +15,22 @@ import { test, expect } from "@playwright/test";
 test("coordenador completa cadastro administrativo, clínico e vê a equipe", async ({
   page,
 }) => {
-  // Login → shell protegido.
-  await page.goto("/login");
-  await page.getByLabel("E-mail").fill("e2e@iris.test");
-  await page.getByLabel("Senha").fill("Senha E2E 123");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  // Login → shell protegido. Papel clínico exige segundo fator desde a Fase
+  // 6.2b; o helper conclui o enrollment antes de chegar ao shell.
+  await entrarComMfa(page, "e2e@iris.test", "Senha E2E 123");
   await expect(page).toHaveURL("/");
 
   // Cadastro administrativo (paciente + Consent LGPD).
   await page.goto("/pacientes/novo");
   await page.getByLabel("Nome do paciente").fill("Paciente E2E");
+
+  // Desde a #100 a escolha de quem assina o consentimento é EXPLÍCITA (nunca
+  // derivada da data de nascimento), e o campo do responsável só é renderizado
+  // no ramo "responsável legal". Sem escolher primeiro, o campo não existe e o
+  // spec expirava esperando um input que a tela não tem.
+  await page
+    .getByRole("button", { name: "Responsável legal (paciente menor de 18 anos)" })
+    .click();
   await page
     .getByLabel("Responsável que assina o Consentimento LGPD")
     .fill("Mãe E2E");
