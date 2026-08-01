@@ -88,4 +88,31 @@ describe("convidarUsuario — lógica de envio de e-mail de convite (#155)", () 
 
     vi.restoreAllMocks();
   });
+
+  it("escapa caracteres HTML no nome para evitar injeção no template e resolve URL sem barra dupla (#155 review)", async () => {
+    const originalAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+    process.env.NEXT_PUBLIC_APP_URL = "https://iris.com.br/"; // URL com barra no final
+
+    vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-123" });
+    const spyEmail = vi.spyOn(transacional, "enviarEmailTransacional").mockResolvedValue({ enviado: true });
+
+    const nomeComHtml = "Dra. <script>alert('xss')</script> & Cia";
+    await convidarUsuario(
+      ctxCoord,
+      form({ nome: nomeComHtml, email: "seguro@iris.test", papel: "terapeuta" })
+    );
+
+    expect(spyEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        texto: expect.stringContaining("https://iris.com.br/login"),
+        html: expect.stringContaining("&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt; &amp; Cia"),
+      })
+    );
+    const payloadHtml = spyEmail.mock.calls[0]?.[0]?.html ?? "";
+    expect(payloadHtml).not.toContain("<script>");
+    expect(payloadHtml).not.toContain("https://iris.com.br//login");
+
+    process.env.NEXT_PUBLIC_APP_URL = originalAppUrl;
+    vi.restoreAllMocks();
+  });
 });

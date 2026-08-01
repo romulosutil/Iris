@@ -16,6 +16,15 @@ export type ConvidarState = {
 // promoção a coordenador é ato separado (fora do escopo 1c).
 const PAPEIS_CONVITE = ["terapeuta", "admin_recepcao"] as const;
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /**
  * Convida um profissional para a clínica ativa. Só coordenador. Reusa
  * provisionUser (authDb/iris_auth já tem grant em user_role) — autorização é
@@ -57,13 +66,14 @@ export async function convidarUsuario(
   });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const loginUrl = `${appUrl}/login`;
+  const loginUrl = new URL("/login", appUrl).toString();
+  const nomeEscapado = escapeHtml(nome);
 
   const emailRes = await enviarEmailTransacional({
     para: email,
     assunto: "Convite para integrar a equipe no Iris",
     texto: `Olá, ${nome}!\n\nVocê foi convidado(a) para se juntar à equipe da clínica no Iris.\nSua senha temporária de acesso é: ${senhaTemporaria}\n\nAcesse ${loginUrl} para realizar seu primeiro acesso.`,
-    html: `<p>Olá, <strong>${nome}</strong>!</p><p>Você foi convidado(a) para se juntar à equipe da clínica no Iris.</p><p>Sua senha temporária de acesso é: <code>${senhaTemporaria}</code></p><p><a href="${loginUrl}">Clique aqui para acessar a plataforma</a></p>`,
+    html: `<p>Olá, <strong>${nomeEscapado}</strong>!</p><p>Você foi convidado(a) para se juntar à equipe da clínica no Iris.</p><p>Sua senha temporária de acesso é: <code>${senhaTemporaria}</code></p><p><a href="${loginUrl}">Clique aqui para acessar a plataforma</a></p>`,
   });
 
   return { senhaTemporaria, emailEnviado: emailRes.enviado };
