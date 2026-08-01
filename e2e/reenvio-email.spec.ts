@@ -1,7 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { authDb } from "@/db/client";
-import { authVerification } from "@/db/schema";
-import { eq } from "drizzle-orm";
 
 /**
  * Issue #168 — Teste E2E do Reenvio de E-mail de Verificação
@@ -32,9 +29,14 @@ test.describe("Reenvio de E-mail de Verificação (Issue #168)", () => {
     });
 
     await test.step("3. Valida alerta de confirmação e resposta uniforme anti-enumeração", async () => {
-      const alert = page.getByRole("status");
+      // A tela já traz um Alert informativo fixo ("Não chegou nenhuma
+      // mensagem?"), que também tem role="status": `getByRole("status")` sozinho
+      // viola o strict mode com 2 nós. Filtrar pelo texto do resultado é o que
+      // amarra a asserção à resposta da action, não ao layout da página.
+      const alert = page
+        .getByRole("status")
+        .filter({ hasText: "Se este e-mail estiver cadastrado" });
       await expect(alert).toBeVisible();
-      await expect(alert).toContainText("Se este e-mail estiver cadastrado");
 
       // Acessibilidade: o foco migra para o alerta (WCAG 2.4.7)
       await expect(alert).toBeFocused();

@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { authDb, sql } from "@/db/client";
-import { authVerification, appUser, professionalConsent } from "@/db/schema";
+import { signJWT } from "better-auth/crypto";
+import { authDb } from "@/db/client";
+import { appUser, clinic, professionalConsent } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 /**
@@ -62,34 +63,36 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await expect(page.getByText(/Conta criada com sucesso/i)).not.toBeVisible();
     });
 
-    let token = "";
-    await test.step("3. Consulta token de verificação diretamente no banco com retry resiliente", async () => {
-      await expect
-        .poll(
-          async () => {
-            const record = await authDb.query.authVerification.findFirst({
-              where: eq(authVerification.identifier, email),
-            });
-            token = record?.value ?? "";
-            return token;
-          },
-          {
-            message: "Aguardando geração do token em auth_verification no banco",
-            timeout: 10_000,
-            intervals: [500, 1000, 2000],
-          }
-        )
-        .toBeTruthy();
-    });
+    await test.step("3. Reconstrói o token de verificação e consome o endpoint real", async () => {
+      // O token de verificação de e-mail do Better-Auth NÃO é uma linha em
+      // `auth_verification`: `createEmailVerificationToken` é `signJWT(...)`
+      // (node_modules/better-auth/dist/api/routes/email-verification.mjs:12),
+      // ou seja, um JWT HS256 assinado com o `secret`, sem persistência. A
+      // versão anterior deste passo esperava a linha aparecer no banco e
+      // expirava sempre — o cadastro funcionava, o teste é que media a coisa
+      // errada. Aqui o teste assina o MESMO token que o e-mail carregaria e
+      // consome o endpoint de verdade, sem rota de atalho no produto.
+      const token = await signJWT({ email }, process.env.BETTER_AUTH_SECRET!, 3600);
 
-    await test.step("4. Consome o token de verificação e valida o redirection para MFA", async () => {
-      await page.goto(`/verificar-email?token=${token}`);
+      // `${baseURL}/verify-email` do Better-Auth = /api/auth/verify-email.
+      // `callbackURL` relativo passa no originCheck da lib.
+      await page.goto(
+        `/api/auth/verify-email?token=${token}&callbackURL=${encodeURIComponent("/")}`,
+      );
 
-      // O Iris força enrollment de MFA para profissionais de saúde
+      // `autoSignInAfterVerification` cria a sessão; o Iris força enrollment
+      // de MFA para papel clínico antes de qualquer dado de paciente.
       await expect(page).toHaveURL(/\/mfa\/setup/);
       await expect(
-        page.getByRole("heading", { name: /Configurar segundo fator/i })
+        page.getByRole("heading", { name: /Verificação em Duas Etapas/i })
       ).toBeVisible();
+
+      // A verificação precisa ter marcado a conta — senão o redirect para
+      // /mfa/setup poderia vir de qualquer outro caminho de enforcement.
+      const verificado = await authDb.query.appUser.findFirst({
+        where: eq(appUser.email, email),
+      });
+      expect(verificado?.emailVerified).toBe(true);
     });
 
     await test.step("5. Verifica a integridade dos dados gravados no banco (app_user e professional_consent)", async () => {
@@ -157,15 +160,24 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
     });
 
     await test.step("3. Valida no banco que a clínica duplicada NÃO foi criada", async () => {
-      const resultOriginal = await sql<{ count: string }[]>`
-        SELECT count(*) as count FROM clinic WHERE nome = ${nomeClinica}
-      `;
-      expect(Number(resultOriginal[0]?.count ?? 0)).toBe(1);
+      // Consulta pela conexão de IDENTIDADE (`authDb`, role iris_auth), não
+      // pela `sql` de runtime (role app_role). A policy de `clinic` compara
+      // com `current_setting('app.clinic_id')` e, sem o GUC de tenant setado
+      // por `withTenant`, a app_role estoura
+      // `unrecognized configuration parameter "app.clinic_id"` — o teste
+      // morria no erro de conexão, não na regra que queria provar. `authDb` é
+      // exatamente a conexão que `criarContaEClinica` usa para criar a clínica.
+      const original = await authDb
+        .select({ id: clinic.id })
+        .from(clinic)
+        .where(eq(clinic.nome, nomeClinica));
+      expect(original).toHaveLength(1);
 
-      const resultDuplicada = await sql<{ count: string }[]>`
-        SELECT count(*) as count FROM clinic WHERE nome = ${`Tentativa Duplicada ${timestamp}`}
-      `;
-      expect(Number(resultDuplicada[0]?.count ?? 0)).toBe(0);
+      const duplicada = await authDb
+        .select({ id: clinic.id })
+        .from(clinic)
+        .where(eq(clinic.nome, `Tentativa Duplicada ${timestamp}`));
+      expect(duplicada).toHaveLength(0);
     });
   });
 
@@ -187,12 +199,30 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.getByLabel("UF do registro").fill("PR");
       await page.getByRole("checkbox").check();
 
+      // O campo de senha tem `minLength={12}`: com a validação NATIVA ligada, o
+      // browser barra o submit, o servidor nunca responde e nenhum
+      // `role="alert"` chega a existir (medido: 0 alertas no DOM). Este teste
+      // ficava verde na etapa 3 e vermelho na 2 pelo motivo errado — nada do
+      // caminho de erro do servidor era exercitado.
+      //
+      // Desligar `novalidate` é justamente o que um cliente scriptado faz: a
+      // validação de aplicação em `validarCadastro` (servidor) tem que
+      // responder do mesmo jeito. É o caminho que precisa ser coberto.
+      await page.evaluate(() => {
+        document.querySelector("form")?.setAttribute("novalidate", "");
+      });
+
       await page.getByRole("button", { name: "Criar conta" }).click();
     });
 
     await test.step("2. Valida acessibilidade (foco automático em role='alert')", async () => {
-      const alert = page.getByRole("alert");
+      // Dois nós ganham role="alert" no erro: o Alert do <Form> (acima do
+      // formulário) e a mensagem do <Field> da senha. O foco vai para o
+      // primeiro do DOM — é o que o efeito de acessibilidade em
+      // `cadastro-form.tsx` seleciona com querySelector.
+      const alert = page.getByRole("alert").first();
       await expect(alert).toBeVisible();
+      await expect(alert).toContainText("A senha precisa ter ao menos 12 caracteres.");
       await expect(alert).toBeFocused();
     });
 

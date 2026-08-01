@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@11.11.0",
+  "publishConfig": {
+    "types": ".design-sync/dts/design-system.d.ts"
+  },
   "engines": {
     "node": ">=22"
   },
@@ -85,6 +88,7 @@
     "husky": "^9.1.7",
     "jsdom": "^25.0.1",
     "lint-staged": "^15.2.10",
+    "otpauth": "^9.5.1",
     "prettier": "3.9.5",
     "prettier-plugin-tailwindcss": "^0.6.9",
     "storybook": "10.5.3",

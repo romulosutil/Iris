@@ -11,7 +11,14 @@ const baseURL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
-  workers: process.env.CI ? 1 : 2,
+  // Um worker: vários specs compartilham a MESMA conta semeada
+  // (`terapeuta.demo@iris.test` em diario-demo e revisao, por exemplo) e o
+  // helper `entrarComMfa` zera o enrollment de segundo fator antes de recriá-lo.
+  // Em paralelo, um worker apaga o enrollment que o outro acabou de registrar e
+  // o `verify-totp` do vizinho volta "Invalid code" — flake que aparece como
+  // bug de MFA. A suíte inteira roda em menos de um minuto; determinismo vale
+  // mais que os segundos. Dar conta própria a cada spec substituiria isto.
+  workers: 1,
   forbidOnly: !!process.env.CI,
 
   retries: process.env.CI ? 2 : 0,
