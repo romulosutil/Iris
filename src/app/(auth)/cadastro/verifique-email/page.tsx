@@ -1,6 +1,7 @@
 import { Logo } from "@/components/ui/logo";
 import { Alert } from "@/components/ui/alert";
 import { surface } from "@/components/ui/primitives/surface";
+import { ReenvioForm } from "./reenvio-form";
 
 export const metadata = {
   title: "Verifique seu e-mail — Iris",
@@ -8,21 +9,8 @@ export const metadata = {
 };
 
 /**
- * Página estática pós-cadastro. `cadastrar` (Task 7) redireciona para cá em
- * TODOS os desfechos não-erro — e-mail novo, retomada de cadastro existente,
- * e-mail existente com senha errada — porque o núcleo colapsa os três na
- * mesma resposta para não expor um oráculo de enumeração de e-mail (ver
- * `src/app/(auth)/cadastro/logic.ts`, bloco RESPOSTA UNIFORME).
- *
- * CONSEQUÊNCIA PARA A COPY: esta tela é alcançada em casos onde nenhum
- * e-mail foi de fato enviado e nenhuma conta foi criada. O texto abaixo é
- * deliberadamente condicional ("se este e-mail puder criar uma conta") e
- * byte-idêntico para os sete desfechos possíveis — não afirma "enviamos um
- * e-mail para você" e não revela se o e-mail já existia. Não adicione nada
- * aqui (nome, e-mail digitado, "conta criada") que permita a um visitante
- * inferir em qual dos sete ramos ele caiu. Sem botão de reenvio (#168) e
- * sem links de navegação além do necessário — fix round 1 removeu os que
- * não estavam no brief.
+ * Página estática pós-cadastro com formulário de reenvio (#168).
+ * `cadastrar` (Task 7) redireciona para cá em TODOS os desfechos não-erro.
  */
 export default function VerifiqueEmailPage() {
   return (
@@ -47,9 +35,11 @@ export default function VerifiqueEmailPage() {
         </p>
 
         <Alert severidade="info" titulo="Não chegou nenhuma mensagem?">
-          Confira a caixa de spam ou lixo eletrônico. Se ainda assim não
-          encontrar, você pode tentar o cadastro novamente.
+          Confira a caixa de spam ou lixo eletrônico. Se não encontrar, informe seu
+          e-mail abaixo para solicitar um novo envio.
         </Alert>
+
+        <ReenvioForm />
       </div>
     </div>
   );
