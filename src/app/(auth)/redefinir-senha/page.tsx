@@ -1,40 +1,37 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Logo } from "@/components/ui/logo";
 import { Alert } from "@/components/ui/alert";
 import { surface } from "@/components/ui/primitives/surface";
 import { RedefinirSenhaForm } from "./redefinir-senha-form";
+import { NOME_COOKIE_TOKEN } from "./cookie";
+import { MENSAGEM_SEM_LINK_ATIVO } from "./logic";
 
 export const metadata = {
   title: "Redefinir senha — Iris",
   description: "Redefinição de senha do Iris.",
 };
 
-interface PageProps {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-function primeiro(v: string | string[] | undefined): string | undefined {
-  return Array.isArray(v) ? v[0] : v;
-}
-
 /**
- * Tela de redefinição de senha (Fatia A, Task 9). Lê `token` da query — é o
- * valor que `/esqueci-senha` -> Better-Auth (`sendResetPassword` em
- * `src/auth/auth.ts`) manda por e-mail, via `redirectTo: "/redefinir-senha"`
- * (ver `../esqueci-senha/logic.ts`). Server Component só para extrair o
- * parâmetro (mesmo padrão de `src/app/(app)/agenda/semana/page.tsx`) — o
- * formulário em si é client (`./redefinir-senha-form.tsx`), porque
- * `authClient.resetPassword` é chamado direto do navegador.
+ * Fix round 1, Task 9 (finding C1 do review). Antes esta página lia `token`
+ * de `searchParams` e passava para o formulário client — o token ficava na
+ * URL (visível a `document.location`, a scripts de terceiro montados por
+ * `src/app/layout.tsx`, e ao header `Referer` de qualquer recurso externo
+ * carregado pela página). Agora `src/middleware.ts` já interceptou
+ * `?token=...` ANTES desta página renderizar, moveu o valor para um cookie
+ * httpOnly e redirecionou para a URL limpa — então esta página nunca vê o
+ * token, só a PRESENÇA do cookie (`cookies()` pode ser lido em Server
+ * Component; só não pode ser gravado/apagado aqui — isso é `./logic.ts`,
+ * chamado a partir de uma Server Action).
  *
- * SEM TOKEN (ausente/vazio na query): não renderiza formulário nenhum — só
- * o aviso genérico + link para pedir um novo. Isto NÃO é um oráculo de
- * enumeração de e-mail: o token é opaco e não carrega nenhuma informação
- * sobre qual e-mail ele representa, então a mensagem não distingue nada
- * sobre contas — só sobre o link em si (presente/ausente).
+ * Fix round 1 (finding M5 do review): a mensagem de "sem link" não afirma
+ * mais uma causa específica ("inválido ou expirado") que o servidor não tem
+ * como confirmar neste ponto — só descreve o fato observável (não há cookie
+ * de link ativo agora). Ver `MENSAGEM_SEM_LINK_ATIVO` em `./logic.ts`.
  */
-export default async function RedefinirSenhaPage({ searchParams }: PageProps) {
-  const sp = await searchParams;
-  const token = primeiro(sp.token);
+export default async function RedefinirSenhaPage() {
+  const jar = await cookies();
+  const temLinkAtivo = jar.has(NOME_COOKIE_TOKEN);
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-8">
@@ -51,13 +48,12 @@ export default async function RedefinirSenhaPage({ searchParams }: PageProps) {
           className: "bg-[var(--surface-card)] p-6",
         })}
       >
-        {token ? (
-          <RedefinirSenhaForm token={token} />
+        {temLinkAtivo ? (
+          <RedefinirSenhaForm />
         ) : (
           <div className="flex flex-col gap-4">
-            <Alert severidade="erro" titulo="Link inválido ou expirado">
-              Este link de redefinição de senha é inválido ou já expirou.
-              Solicite um novo.
+            <Alert severidade="erro" titulo="Sem link ativo">
+              {MENSAGEM_SEM_LINK_ATIVO}
             </Alert>
             <Link
               href="/esqueci-senha"

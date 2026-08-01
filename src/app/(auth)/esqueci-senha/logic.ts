@@ -2,6 +2,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { auth } from "@/auth/auth";
 import { registrarTentativa } from "@/lib/throttle";
+import { consumirTentativa } from "@/lib/rate-limit";
 import { mensagemUniforme } from "./mensagem";
 
 export type EstadoEsqueciSenha = { error?: string; mensagem?: string };
@@ -38,6 +39,74 @@ const JANELA_IP_S = 60 * 60;
 const TETO_IP_S = 60 * 60;
 
 /**
+ * Fix round 1 (finding I4 do review): o brief manda `consumirTentativa`
+ * (`src/lib/rate-limit.ts`, em memória) por IP (10/h) e por e-mail (3/h) — a
+ * Task 9 tinha TROCADO esse mecanismo pelo throttle persistente em vez de
+ * espelhar ADICIONALMENTE, que era a instrução original do orquestrador. Os
+ * dois agora rodam em conjunto, com os MESMOS números (não há por que os
+ * dois limitadores terem tetos diferentes): o persistente continua sendo a
+ * defesa de verdade (sobrevive a réplica/deploy, ver comentário acima), o em
+ * memória é defesa-em-profundidade barata — não gasta uma linha de
+ * `auth_throttle` nem uma consulta ao Postgres para recusar um IP/e-mail que
+ * já está claramente estourado na instância atual, reduzindo a superfície de
+ * DoS contra o próprio banco.
+ *
+ * `consumirTentativa` usa milissegundos na janela (`JANELA_EMAIL_S * 1000`),
+ * não segundos como `registrarTentativa` — assinaturas diferentes por serem
+ * módulos de fatias diferentes (Task 6 vs Task 7), não um erro de conversão.
+ *
+ * SEMPRE CHAMADO, nunca pulado por causa do resultado do outro limitador —
+ * pela mesma razão que os contadores de e-mail e IP do throttle persistente
+ * sempre rodam os dois: se um serví-se de curto-circuito no outro, a ORDEM
+ * de avaliação viraria ela própria um canal de tempo (ver I2 abaixo).
+ */
+const LIMITE_EMAIL_MEM = LIMITE_EMAIL;
+const LIMITE_IP_MEM = LIMITE_IP;
+const JANELA_EMAIL_MEM_MS = JANELA_EMAIL_S * 1000;
+const JANELA_IP_MEM_MS = JANELA_IP_S * 1000;
+
+/**
+ * Piso de tempo de resposta (fix round 1, finding I2 do review).
+ *
+ * MEDIDO, não chutado: `auth.api.requestPasswordReset` real contra Postgres
+ * real (script de medição, 15 amostras interleaved e-mail existente vs.
+ * inexistente — ver task-9-report.md para o transcript completo):
+ *
+ *     ramo EXISTENTE   min=4.7  p50=5.1  p99=7.4  max=10.3 ms
+ *     ramo INEXISTENTE min=4.0  p50=4.7  p99=5.6  max=8.6  ms
+ *     delta p50 ≈ 0.47 ms
+ *
+ * O delta é pequeno porque o próprio Better-Auth já simula o trabalho do
+ * ramo "e-mail desconhecido" (`generateId` + um SELECT dummy — ver
+ * `password.mjs`, ramo `!user`) — mas "pequeno" não é "zero", e o SEGUNDO
+ * canal (`permitido === false` pula TODA a chamada ao Better-Auth) é maior:
+ * não faz nem o SELECT/INSERT do Postgres nem o `generateId`. Um piso ÚNICO,
+ * acima do pior caso medido dos dois canais, resolve ambos — não há
+ * variação suficiente para justificar quantização (mesma lição da Task 7:
+ * quantizar amplifica quando os ramos caem em degraus diferentes do
+ * quantum; piso simples nunca amplifica).
+ *
+ * O valor (300 ms) é ~30x o pior caso medido (max=10.3 ms), a mesma ordem de
+ * grandeza de margem que `cadastro/logic.ts` usa sobre o delta medido lá
+ * (`PISO_RESPOSTA_MS = 1_200` para um delta de 38 ms, ~30x) — não é preciso
+ * um piso tão alto quanto o do cadastro porque o delta aqui é praticamente
+ * todo absorvido pela própria mitigação do Better-Auth; o piso aqui é
+ * majoritariamente para cobrir jitter de rede/GC, não trabalho assimétrico.
+ */
+export const PISO_RESPOSTA_MS = 300;
+
+/**
+ * Espera o que faltar para fechar `PISO_RESPOSTA_MS` desde `iniciadoEm`.
+ * Mesmo desenho de `respeitarPiso` em `../cadastro/logic.ts` — não loga nada
+ * (um aviso de "estouro" só dispararia no ramo mais caro, o que seria, ele
+ * próprio, um canal).
+ */
+async function respeitarPiso(iniciadoEm: number): Promise<void> {
+  const restante = PISO_RESPOSTA_MS - (Date.now() - iniciadoEm);
+  if (restante > 0) await new Promise((r) => setTimeout(r, restante));
+}
+
+/**
  * Aceita só o que é IP plausível. Mesma checagem de `../cadastro/logic.ts`
  * (não importada de lá de propósito — Task 9 não depende de internals de
  * uma fatia fechada; a lógica é pequena o bastante para duplicar em vez de
@@ -67,12 +136,22 @@ export function resolverIp(h: { get(nome: string): string | null }): string | nu
  * pode ter mensagem própria — não depende de o e-mail existir (mesma regra
  * de `../cadastro/logic.ts`, bloco RESPOSTA UNIFORME).
  */
+// Fix round 1 (finding M3 do review): `formData.get("email")` não tem limite
+// de tamanho — um cliente hostil pode mandar um "e-mail" de megabytes só
+// para inflar a chave de throttle (`esqueci-senha:email:${...}`) em memória
+// (`consumirTentativa`, Map por processo) e no Postgres (`registrarTentativa`,
+// coluna de chave). 254 é o teto de e-mail do RFC 5321 (linha "MAIL FROM" +
+// domínio); qualquer coisa além disso já não é um e-mail válido de qualquer
+// forma, então truncar aqui não perde nenhum caso legítimo.
+const TAMANHO_MAX_EMAIL = 254;
+
 export function validarEsqueciSenha(
   formData: FormData,
 ): { ok: true; email: string } | { ok: false; error: string } {
   const email = String(formData.get("email") ?? "")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .slice(0, TAMANHO_MAX_EMAIL);
   if (!email.includes("@")) {
     return { ok: false, error: "Informe um e-mail válido." };
   }
@@ -120,14 +199,37 @@ export async function executarEsqueciSenha(
   const validado = validarEsqueciSenha(formData);
   if (!validado.ok) return { error: validado.error };
 
+  // Piso de tempo começa aqui — DEPOIS da validação de formato (que não
+  // depende de banco nem de e-mail existir, então pode ser rápida) e ANTES
+  // de qualquer coisa que toque throttle ou Better-Auth (ver PISO_RESPOSTA_MS
+  // acima).
+  const iniciadoEm = Date.now();
+
   const h = await headers();
   const ip = resolverIp(h);
 
   // Tentativa é contada ANTES de qualquer chamada ao Better-Auth e sempre
   // (nunca só em "falha") — mesma regra de `../cadastro/logic.ts`: contar
   // só uma classe de desfecho tornaria o contador, ele mesmo, um oráculo.
+  //
+  // Os DOIS limitadores (memória + persistente, finding I4) são chamados
+  // sempre, incondicionalmente um do outro — nenhum curto-circuita o outro.
   let permitido: boolean;
   try {
+    const memEmail = consumirTentativa(
+      `esqueci-senha:email:${validado.email}`,
+      LIMITE_EMAIL_MEM,
+      JANELA_EMAIL_MEM_MS,
+    );
+    const memIp =
+      ip !== null
+        ? consumirTentativa(
+            `esqueci-senha:ip:${ip}`,
+            LIMITE_IP_MEM,
+            JANELA_IP_MEM_MS,
+          )
+        : { permitido: true };
+
     const contadores = [
       registrarTentativa(
         `esqueci-senha:email:${validado.email}`,
@@ -147,11 +249,26 @@ export async function executarEsqueciSenha(
       );
     }
     const resultados = await Promise.all(contadores);
-    permitido = resultados.every((r) => r.permitido);
-  } catch {
+    permitido =
+      memEmail.permitido &&
+      memIp.permitido &&
+      resultados.every((r) => r.permitido);
+  } catch (err) {
     // FAIL-CLOSED: store indisponível bloqueia a tentativa (mesma regra do
     // `ThrottleIndisponivel` de `src/lib/throttle.ts`). Não muda a resposta
     // devolvida ao cliente — só evita chamar o Better-Auth sem proteção.
+    //
+    // Fix round 1 (finding M4 do review): antes este catch falhava em
+    // silêncio total — um outage de throttle (Postgres ou processo) virava
+    // "todo mundo bloqueado" sem NENHUM sinal em log para o operador
+    // perceber. `descreverErro` (mesma função usada abaixo, na chamada ao
+    // Better-Auth) já garante que só nome+código do erro são logados, nunca
+    // o objeto cru — que poderia carregar parâmetros de query com o e-mail
+    // do titular (mesmo cuidado do achado M1 da Task 7).
+    console.error(
+      "executarEsqueciSenha: throttle indisponível, bloqueando (fail-closed):",
+      descreverErro(err),
+    );
     permitido = false;
   }
 
@@ -167,6 +284,12 @@ export async function executarEsqueciSenha(
       );
     }
   }
+
+  // Piso cobre os DOIS canais de tempo (finding I2): o delta residual entre
+  // e-mail existente/inexistente dentro do Better-Auth, E o atalho muito
+  // maior de quando `permitido` é `false` (que pula a chamada inteira). Um
+  // piso só, sempre aplicado no fim, normaliza os dois.
+  await respeitarPiso(iniciadoEm);
 
   return { mensagem: mensagemUniforme() };
 }

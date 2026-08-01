@@ -3,99 +3,121 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { authClient } from "@/auth/client";
+import { useActionState } from "react";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
+import { redefinirSenha } from "./actions";
+import type { EstadoRedefinirSenha } from "./logic";
 
 const SENHA_MIN = 12;
 const SENHA_MAX = 128;
 
-/**
- * Mensagem única para QUALQUER falha da chamada a `resetPassword` — token
- * ausente, malformado, expirado, ou já consumido. Não distingue o motivo:
- * do lado do Better-Auth o endpoint `/reset-password` lança o mesmo
- * `INVALID_TOKEN` para "não existe" e para "expirou" (ver
- * `node_modules/better-auth/dist/api/routes/password.mjs`), e não há
- * ganho de usabilidade em tentar diferenciar — só risco de reabrir um
- * canal que a Task 7 fechou a duras penas em outra rota. Mesma classe de
- * regra: colapsar depois do núcleo, não enumerar casos conhecidos.
- */
-const MENSAGEM_TOKEN_INVALIDO =
-  "Este link de redefinição é inválido ou expirou. Solicite um novo link.";
-
-type Props = { token?: string };
+const ESTADO_INICIAL: EstadoRedefinirSenha | null = null;
 
 /**
- * Formulário de `/redefinir-senha`. Diferente de `/esqueci-senha`, esta
- * tela NÃO precisa de server action com throttle — o token já é um segredo
- * de posse (só quem recebeu o e-mail o tem), e o brief pede consumo direto
- * de `authClient.resetPassword` (mesmo padrão client-side de
- * `../login/page.tsx`, que chama `signIn.email` diretamente).
+ * Formulário de `/redefinir-senha`.
  *
- * Sem `token` (ausente/malformado na query), a página que monta este
- * componente (`./page.tsx`) já filtra e não o renderiza — ver lá.
+ * Fix round 1, Task 9 (finding C1 do review): antes este componente recebia
+ * `token` via prop (lido de `searchParams` pela página) e chamava
+ * `authClient.resetPassword` DIRETO do navegador — o token, portanto,
+ * precisava existir em algum lugar visível ao JS do cliente (prop React,
+ * estado, ou a própria URL de origem). Agora o token nunca sai do servidor:
+ * fica só no cookie httpOnly gravado por `src/middleware.ts`, e este
+ * componente não recebe mais `token` nenhum — só dispara a Server Action
+ * `redefinirSenha` (`./actions.ts`), que lê o cookie no servidor
+ * (`./logic.ts`). Por isso a troca de `authClient.resetPassword` (client)
+ * para `useActionState` (server action) não é só estilo — é o mecanismo que
+ * fecha C1.
+ *
+ * Fix round 1 (finding M7, indireto): o throttle por IP agora vive em
+ * `./logic.ts` — não precisa de nada extra aqui, a Server Action já herda a
+ * proteção.
  */
-export function RedefinirSenhaForm({ token }: Props) {
+export function RedefinirSenhaForm() {
   const router = useRouter();
+  const [estado, formAction, emAndamento] = useActionState(
+    redefinirSenha,
+    ESTADO_INICIAL,
+  );
   const [senha, setSenha] = React.useState("");
   const [confirmacao, setConfirmacao] = React.useState("");
-  const [erro, setErro] = React.useState<string | undefined>(undefined);
-  const [enviando, setEnviando] = React.useState(false);
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [erroFormato, setErroFormato] = React.useState<string | undefined>(
+    undefined,
+  );
+  const alertaRef = React.useRef<HTMLDivElement>(null);
 
+  const erroServidor =
+    estado && !estado.ok ? estado.error : undefined;
+  const erro = erroFormato ?? erroServidor;
+
+  // Fix round 1 (finding M2 do review): antes o efeito só reagia a MUDANÇA
+  // de referência de `erro` — dois envios seguidos que resultassem no
+  // MESMO texto de erro (ex.: "As senhas não conferem." duas vezes
+  // seguidas) não refocavam o alerta na 2ª vez, porque a string era
+  // idêntica e o efeito não disparava de novo. Uma revisão incrementada a
+  // cada tentativa (sucesso ou falha) força o efeito a rodar mesmo quando o
+  // texto do erro se repete.
+  const [revisao, setRevisao] = React.useState(0);
   React.useEffect(() => {
     if (!erro) return;
-    const alerta = containerRef.current?.querySelector('[role="alert"]');
-    if (alerta instanceof HTMLElement) {
-      alerta.setAttribute("tabindex", "-1");
-      alerta.focus();
-    }
-  }, [erro]);
+    alertaRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revisao]);
+
+  React.useEffect(() => {
+    if (estado?.ok) router.push("/login?senhaAlterada=1");
+  }, [estado, router]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (enviando || !token) return;
+    setRevisao((r) => r + 1);
 
-    // Validação de FORMATO da senha nova — não depende de conta/token, só
-    // do que foi digitado, então pode ter mensagem própria (mesma regra de
-    // `../cadastro/logic.ts`, `validarCadastro`).
+    // Validação de FORMATO — mesma regra de `./logic.ts` (`validarNovaSenha`):
+    // não depende de cookie/token, só do que foi digitado, então pode
+    // interromper o envio e ter mensagem própria sem tocar a Server Action.
     if (senha.length < SENHA_MIN) {
-      setErro(`A senha precisa ter ao menos ${SENHA_MIN} caracteres.`);
+      event.preventDefault();
+      setErroFormato(`A senha precisa ter ao menos ${SENHA_MIN} caracteres.`);
       return;
     }
     if (senha.length > SENHA_MAX) {
-      setErro(`A senha pode ter no máximo ${SENHA_MAX} caracteres.`);
+      event.preventDefault();
+      setErroFormato(`A senha pode ter no máximo ${SENHA_MAX} caracteres.`);
       return;
     }
     if (senha !== confirmacao) {
-      setErro("As senhas não conferem.");
+      event.preventDefault();
+      setErroFormato("As senhas não conferem.");
       return;
     }
-
-    setErro(undefined);
-    setEnviando(true);
-
-    void (async () => {
-      const { error } = await authClient.resetPassword({
-        newPassword: senha,
-        token,
-      });
-      if (error) {
-        // QUALQUER erro do reset (token inválido/expirado, ou falha do
-        // Better-Auth) colapsa na mesma mensagem — ver docstring acima.
-        setErro(MENSAGEM_TOKEN_INVALIDO);
-        setEnviando(false);
-        return;
-      }
-      router.push("/login?senhaAlterada=1");
-    })();
+    setErroFormato(undefined);
   }
 
   return (
-    <div ref={containerRef}>
-      <Form onSubmit={handleSubmit} error={erro}>
+    <div>
+      {/* Fix round 1 (finding M6 do review): antes o foco era localizado via
+          `containerRef.current?.querySelector('[role="alert"]')` —
+          funcionava só porque o `Alert` interno do `Form` acontecia de
+          renderizar esse role; qualquer refatoração do design system que
+          trocasse a estrutura interna quebraria o foco em silêncio (sem erro
+          de tipo, sem teste pegando). Por isso o `Alert` é renderizado AQUI,
+          diretamente, com `ref` próprio — não delegado ao `error` prop do
+          `Form` (que não expõe ref para o alerta que ele mesmo desenha). */}
+      {erro ? (
+        <Alert
+          ref={alertaRef}
+          severidade="erro"
+          titulo="Não foi possível continuar"
+          tabIndex={-1}
+          className="mb-4"
+        >
+          {erro}
+        </Alert>
+      ) : null}
+
+      <Form action={formAction} onSubmit={handleSubmit}>
         <Field
           label="Nova senha"
           htmlFor="senha"
@@ -109,11 +131,23 @@ export function RedefinirSenhaForm({ token }: Props) {
             minLength={SENHA_MIN}
             maxLength={SENHA_MAX}
             required
-            disabled={!token}
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
             aria-describedby="senha-hint"
-            aria-invalid={erro ? true : undefined}
+            // Fix round 1 (finding M1 do review): antes `aria-invalid` era
+            // setado em AMBOS os campos sempre que `erro` existia, mesmo
+            // quando o erro era só da confirmação (ex.: "As senhas não
+            // conferem." marcava a senha original como inválida também,
+            // apesar de ela sozinha satisfazer todas as regras de formato).
+            // Agora cada campo só é marcado inválido pela classe de erro que
+            // é REALMENTE sobre ele.
+            aria-invalid={
+              erro === `A senha precisa ter ao menos ${SENHA_MIN} caracteres.` ||
+              erro === `A senha pode ter no máximo ${SENHA_MAX} caracteres.` ||
+              erro === "As senhas não conferem."
+                ? true
+                : undefined
+            }
           />
         </Field>
 
@@ -126,15 +160,14 @@ export function RedefinirSenhaForm({ token }: Props) {
             minLength={SENHA_MIN}
             maxLength={SENHA_MAX}
             required
-            disabled={!token}
             value={confirmacao}
             onChange={(e) => setConfirmacao(e.target.value)}
-            aria-invalid={erro ? true : undefined}
+            aria-invalid={erro === "As senhas não conferem." ? true : undefined}
           />
         </Field>
 
-        <Button type="submit" isLoading={enviando} disabled={!token}>
-          {enviando ? "Redefinindo…" : "Redefinir senha"}
+        <Button type="submit" isLoading={emAndamento} disabled={emAndamento}>
+          {emAndamento ? "Redefinindo…" : "Redefinir senha"}
         </Button>
       </Form>
 
