@@ -60,12 +60,27 @@ export function RedefinirSenhaForm() {
   // idêntica e o efeito não disparava de novo. Uma revisão incrementada a
   // cada tentativa (sucesso ou falha) força o efeito a rodar mesmo quando o
   // texto do erro se repete.
+  //
+  // Fix round 2 (finding N1 da re-review): a correção acima trocou a
+  // dependência de `[erro]` para `[revisao]` sozinho — mas `revisao` só
+  // incrementa SINCRONAMENTE dentro de `handleSubmit`, enquanto o erro do
+  // SERVIDOR chega depois, quando a Server Action resolve (o `estado` do
+  // `useActionState` muda em uma render posterior, sem que `revisao` mude
+  // de novo). Com `[revisao]` isolado, o efeito rodava no momento do
+  // submit (quando `erro` ainda podia estar `undefined` ou conter o valor
+  // da tentativa anterior) e nunca de novo quando o erro reto do servidor
+  // finalmente chegava — ou seja, o caminho de erro PRINCIPAL desta tela
+  // (token inválido/expirado/throttled) parava de focar o alerta. Mantendo
+  // as duas dimensões (`[revisao, erro]`) o efeito roda tanto quando
+  // `revisao` muda (reenvio com erro idêntico) quanto quando `erro` muda
+  // por conta própria (erro assíncrono do servidor chegando depois do
+  // submit) — sem reintroduzir o bug original de M2, porque `revisao`
+  // continua na lista.
   const [revisao, setRevisao] = React.useState(0);
   React.useEffect(() => {
     if (!erro) return;
     alertaRef.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revisao]);
+  }, [revisao, erro]);
 
   React.useEffect(() => {
     if (estado?.ok) router.push("/login?senhaAlterada=1");
