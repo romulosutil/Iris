@@ -40,6 +40,7 @@
 | **D8** | **Terapeuta de cobertura não desarquiva.** `app_desarquivar_paciente` estoura antes de olhar `arquivado_em`, então há um gate de visibilidade antes da chamada — senão a exceção abortaria a transação e o terapeuta perderia o diário inteiro. | Consequência assumida, não acidente: paciente arquivado invisível ao terapeuta de cobertura só volta pela mão do coordenador. Vira problema se cobertura for comum na prática. | #174 · `0067` |
 | **D9** | **Customização White-Label nos PDFs exportados (#120)** — funcionalidade de personalização com logotipo e cores da clínica no cabeçalho do PDF. | Melhoria de produto futura: hoje os PDFs usam o layout auditável padrão da plataforma Iris. | #120 · `src/lib/export/pdf-generator.ts` |
 | **D10** | **Assinatura Digital ICP-Brasil A1/A3 (#120)** — integração com certificados ICP-Brasil para relatórios com exigência judicial/pericial. | Melhoria de produto futura: o padrão atual (MFA + SHA-256 + AuditLog) atende ao piso legal, mas certas instâncias judiciais pedem ICP-Brasil. | #120 · `src/lib/export/pdf-generator.ts` |
+| **D12** | **Conta Asaas de produção bloqueada — não aprovada** (03/08/2026), e **Pix Automático indisponível por até 6 meses** (origem do prazo a confirmar). | Bloqueia a Fase 7 inteira: sem conta aprovada não há cobrança, webhook de produção nem self-service. Cuidado de leitura: a aba de Webhooks listar os eventos `PIX_AUTOMATIC_*` **não** prova habilitação na conta — é catálogo do produto. Foi assim que 01/08 registrou "habilitado" por engano. | #36 |
 | **D11** | **Estratégia de Ativo de Dados & Indexação RAG (#120)** — pipeline de tokenização e treinamento de IA sobre históricos exportados. | Diretriz de negócio Iris: preservação integral de evoluções e prontuários no banco para vetorização/RAG e aperfeiçoamento dos modelos clínicos. | #120 · `src/lib/extraction/` |
 
 ---
@@ -69,6 +70,8 @@
 - **Issue #190 — Páginas de Erro Customizadas 404 e 500 (Design System):** [Issue #190](https://github.com/romulosutil/Iris/issues/190) com spec em [`docs/superpowers/specs/2026-08-03-issue-190-paginas-erro-espectro-brutal-design.md`](docs/superpowers/specs/2026-08-03-issue-190-paginas-erro-espectro-brutal-design.md).
   - ✅ **404 (`not-found.tsx`):** Entregue no commit `e9d5d20` (pt-BR, Espectro Brutal, retorno à agenda).
   - 🚧 **500 (`error.tsx`):** Pendente (Client Component React Error Boundary, botão `reset()`, log seguro sem vazar stack trace, testes Vitest).
+- **Issue #191 — Trava Anti-Fraude de Trial & Validação de CPF (Paciente/Responsável):** [Issue #191](https://github.com/romulosutil/Iris/issues/191) com spec em [`docs/superpowers/specs/2026-08-03-issue-191-trava-anti-fraude-cpf-design.md`](docs/superpowers/specs/2026-08-03-issue-191-trava-anti-fraude-cpf-design.md).
+
 
 
 ---
@@ -143,6 +146,115 @@
 - Nada de código. O que não dá pra provar daqui é o caminho ponta a ponta contra
   a Resend real (429 de verdade), pelo mesmo motivo da #126: exigiria alterar
   alerta na base de produção. Segue dependendo de ambiente separado.
+
+---
+
+## 🚨 Sessão 03/08/2026 (2ª) — Pix Automático cai, conta Asaas bloqueada, trilho muda (#36)
+
+**Dois bloqueadores novos, descobertos no fim da sessão. A Fase 7 para aqui até
+resolverem.**
+
+### 1. Conta Asaas de produção **bloqueada — ainda não aprovada**
+
+Descoberto ao tentar cadastrar o webhook de produção. Trabalho no Asaas
+**interrompido imediatamente**; nem a limpeza dos dados de teste do sandbox foi
+feita, para não mexer na conta nesse estado.
+
+Isso é pré-requisito de tudo: sem conta aprovada não há cobrança, não há webhook
+de produção, não há self-service. **Provavelmente também é a causa raiz do item
+2** — vale confirmar com o Asaas se a indisponibilidade do Pix Automático é
+consequência da conta não aprovada, e não um prazo de produto.
+
+### 2. Pix Automático indisponível por **até 6 meses**
+
+Derruba a premissa central da spec `2026-08-02-issue-36-fase-7-self-service-asaas-design.md`
+e da decisão de gateway de 01/08. Origem do prazo **ainda não confirmada**
+(gerente Asaas? fila do BC? análise cadastral?) — anotar quando souber, porque
+muda o plano: se for da conta, pode acelerar; se for regulatório, não tem o que
+fazer.
+
+⚠️ Note que o BACKLOG de 01/08 afirma "Pix Automático **está habilitado na
+conta**", com base na aba de Webhooks expor os 10 eventos. **A lista de eventos
+no formulário de webhook não prova habilitação** — é catálogo do produto Asaas,
+não estado da conta. Erro de leitura a não repetir.
+
+### Correção de registro: Assinatura **não** é inútil, como estava escrito
+
+O BACKLOG de 01/08 descartou o produto "Assinaturas" por gerar cobrança com
+40 dias de antecedência, "inútil para valor que só se conhece perto do
+vencimento". **Medido no sandbox hoje, o quadro é outro:**
+
+- A antecedência é **pior** que o registrado: pedindo `nextDueDate: 2026-10-08`
+  em 03/08, o Asaas emitiu a cobrança **na hora** — 66 dias antes.
+- **Mas o valor de uma cobrança `PENDING` pode ser corrigido**: `PUT
+  /v3/payments/{id}` mudou 487 → 611 sem erro.
+
+Ou seja: Assinatura é **utilizável com correção de valor**, não inútil. O
+descarte continua valendo, mas por outro motivo — ver abaixo.
+
+### Decisão travada (03/08): trilho = **cobrança avulsa mensal**
+
+A apuração cria uma cobrança por mês já com o valor certo:
+
+```
+job mensal apura pacientes ativos
+   → POST /v3/payments  { billingType: PIX, value: <apurado>, dueDate,
+                          externalReference: IRIS-<clinica>-<AAAA-MM> }
+   → Asaas emite QR e cobra por e-mail
+   → webhook PAYMENT_RECEIVED libera o mês
+```
+
+**O motivo da escolha é modo de falha, não custo nem esforço.** Com Assinatura, a
+cobrança nasce automática com o valor do mês anterior: job morto, bug ou deploy
+quebrado significam **cliente cobrado com valor errado** — falha fechada em cima
+de dinheiro do cliente. Com avulsa, job morto significa **ninguém cobrado** —
+falha aberta. É o mesmo lado que o projeto já escolheu duas vezes: "a falha é
+aberta (produto de graça), nunca conta travada" e "gate de trial derivado no
+request, não flag setada por job — job morto falha fechado".
+
+Cobrar R$ 611 de quem devia R$ 0 destrói confiança de um jeito que não cobrar não
+destrói.
+
+**Verificado no sandbox:** `POST /v3/payments` com `value: 487.00`,
+`billingType: PIX` e `externalReference` retornou `PENDING` com `invoiceUrl` —
+valor variável é nativo aqui, sem nada a corrigir depois.
+
+### Consequência boa, que quase passou despercebida
+
+A regra de apurar **entre 2 e 10 dias úteis antes do vencimento** era exigência
+do Pix Automático (R5 da spec). Sem ele, **a amarra some**: a apuração roda
+quando quisermos. O trilho novo é mais simples que o que estava planejado, não
+mais complexo.
+
+### O que muda no código: menos do que parece
+
+Nada no endpoint. `POST /api/hooks/asaas` grava qualquer evento e responde 200 —
+evento desconhecido já era caso previsto. A virada é **de configuração**: o
+webhook passa a assinar a seção **Cobranças** (`PAYMENT_*`) em vez de Pix
+Automático. O que foi entregue continua válido: endpoint, token em produção,
+idempotência por `UNIQUE`, payload bruto reprocessável.
+
+### Estado em que a sessão parou (nada quebrado)
+
+- **Produção:** `ASAAS_WEBHOOK_TOKEN` provisionada e verificada; **nenhum
+  webhook cadastrado** no Asaas. Nada em produção depende do Asaas hoje, então a
+  conta bloqueada não derruba nada.
+- **Sandbox:** webhook `Iris - sandbox (tunel local)` **desativado** (URL do
+  túnel já morreu), `0 eventos penalizados`.
+- **Lixo de teste no sandbox, a limpar quando a conta normalizar:** cliente
+  `cus_000008561913`, chave Pix EVP `2b02027c-…`, autorização
+  `53da5204-…`, cobranças `pay_lw8gvq2qm2f7hmu1` e `pay_dexdnwf6w79b5hsi`,
+  assinatura `sub_xbfz55y4jl79z38j`.
+- **Produção tem uma linha de probe** em `asaas_webhook_event`
+  (`probe-easypanel-token-2026-08-03`), apagável quando houver acesso ao banco.
+
+### Para retomar
+
+1. Destravar a aprovação da conta Asaas — **bloqueia todo o resto**.
+2. Confirmar a origem do prazo do Pix Automático.
+3. Refazer o webhook (sandbox primeiro) assinando `PAYMENT_*`, e provar com
+   evento real, mesmo rito que fechou o D5.
+4. Só então: tabela `subscription`, apuração e gate de pagamento.
 
 ---
 
