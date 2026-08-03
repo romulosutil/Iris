@@ -449,6 +449,34 @@
       "when": 1785421573000,
       "tag": "0063_reaplica_purga_report_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1785422573000,
+      "tag": "0064_trial_primeiro_paciente",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1785422574000,
+      "tag": "0065_patient_arquivado_em",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1785422575000,
+      "tag": "0066_asaas_webhook_event",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1785422576000,
+      "tag": "0067_desarquivar_paciente_por_atendimento",
+      "breakpoints": true
     }
   ]
 }

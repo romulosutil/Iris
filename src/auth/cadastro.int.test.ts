@@ -191,12 +191,18 @@ describe.skipIf(!hasDb)("criarContaEClinica — núcleo do cadastro self-service
     expect(contas).toHaveLength(1);
   });
 
-  it("inicia o trial no momento do cadastro", async () => {
+  it("NÃO inicia o trial no cadastro — o relógio só dispara no 1º paciente", async () => {
+    // #175: antes, `trial_comeco_em` era `NOT NULL DEFAULT now()` e o trial
+    // começava a correr no signup, contra quem ainda estava configurando a
+    // clínica. Agora nasce `NULL` ("cadastrou, ainda sem 1º paciente") e é
+    // `app_iniciar_trial()`, no cadastro do primeiro paciente, quem grava.
     const email = emailUnico("c");
     const { clinicId } = await criarContaEClinica({ ...base, email });
     const [c] = await authDb.select().from(clinic).where(eq(clinic.id, clinicId));
     expect(c!.trialDias).toBe(7);
-    expect(Date.now() - new Date(c!.trialComecoEm).getTime()).toBeLessThan(60_000);
+    expect(c!.trialComecoEm).toBeNull();
+    // Conta nova nunca é legado isento: ela entra no relógio, só não começou.
+    expect(c!.isentoTrial).toBe(false);
   });
 
   it("retomada completa o que faltou: conta criada mas aceite/dados pendentes é concluído no retry", async () => {

@@ -253,12 +253,22 @@ export const clinic = pgTable("clinic", {
   protocoloEmergenciaDeclaradoPor: uuid(
     "protocolo_emergencia_declarado_por",
   ).references(() => appUser.id),
-  // Fatia A (#163): relógio do trial. Começa no signup; `trial_dias` é dado,
-  // não constante, porque o valor é hipótese de produto (spec §2, D3).
-  trialComecoEm: timestamp("trial_comeco_em", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  // Fatia A (#163) / #175: relógio do trial. `trial_dias` é dado, não
+  // constante, porque o valor é hipótese de produto (spec §2, D3).
+  //
+  // `trial_comeco_em` é NULLABLE de propósito (#175): NULL significa
+  // "clínica cadastrada, ainda sem 1º paciente — relógio não começou". O
+  // relógio dispara no cadastro do 1º paciente (mesma transação) ou, se
+  // nenhum paciente for cadastrado, no teto de 14 dias após `criado_em`.
+  // Foi `NOT NULL DEFAULT now()` na 0057, que precisou de um sentinela
+  // '2020-01-01' para o legado — sentinela removido junto com esta mudança.
+  trialComecoEm: timestamp("trial_comeco_em", { withTimezone: true }),
   trialDias: integer("trial_dias").notNull().default(7),
+  // Clínicas pré-self-service (existiam antes da 0057) nunca contrataram um
+  // trial. Sem esta flag elas cairiam no teto de 14 dias sobre `criado_em` e
+  // virariam "trial vencido" — exatamente o bug que `ad789a6` corrigiu no
+  // paliativo. `true` = fora do relógio de trial e do gate de pagamento.
+  isentoTrial: boolean("isento_trial").notNull().default(false),
   criadoEm: timestamp("criado_em", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -293,6 +303,12 @@ export const patient = pgTable(
     // Fase 6.3: data de alta clínica — fonte da regra de retenção/expurgo LGPD
     // (MAX(18 anos, alta+10a)). Nullable: em acompanhamento = nunca expurgável.
     altaEm: date("alta_em"),
+    // #174 — arquivamento COMERCIAL, independente da alta clínica acima.
+    // NULL = paciente ativo (entra na contagem de faturados do mês).
+    // Dar alta arquiva (trigger `patient_alta_arquiva_trg`, 0065); arquivar
+    // nunca dá alta. Arquivado continua legível/exportável — é filtro de
+    // negócio, nunca de RLS.
+    arquivadoEm: timestamp("arquivado_em", { withTimezone: true }),
     responsavelContato: text("responsavel_contato"),
     escola: text("escola"),
     convenio: text("convenio"),
@@ -302,6 +318,7 @@ export const patient = pgTable(
   },
   (t) => [
     index("idx_patient_clinic").on(t.clinicId),
+    index("patient_clinic_arquivado_idx").on(t.clinicId, t.arquivadoEm),
     // Alvo das FKs compostas (patient_id, clinic_id) das tabelas da Agenda 2.0
     // (anti-IDOR em nível de banco). PK só em `id` não satisfaz FK de 2 colunas.
     unique("uq_patient_id_clinic").on(t.id, t.clinicId),
@@ -1245,9 +1262,11 @@ export const auditLog = pgTable(
     clinicId: uuid("clinic_id")
       .notNull()
       .references(() => clinic.id),
-    atorId: uuid("ator_id")
-      .notNull()
-      .references(() => appUser.id),
+    // Nullable desde a 0049: `ator_id IS NULL` significa "ação automática do
+    // sistema" (job de escalonamento, varredura de arquivamento) — não existe
+    // humano a quem atribuir. O schema declarava `.notNull()` mesmo depois da
+    // migração; drift corrigido aqui, o banco sempre foi a fonte da verdade.
+    atorId: uuid("ator_id").references(() => appUser.id),
     acao: text("acao").notNull(),
     entidade: text("entidade").notNull(),
     entidadeId: uuid("entidade_id").notNull(),
@@ -1464,4 +1483,26 @@ export const alertaRiscoClinico = pgTable(
     // serve o job de escalonamento (H1): status='aberto' AND prazo < now().
     index("idx_alerta_risco_sla").on(t.status, t.prazoReconhecimento),
   ],
+);
+
+// ─── Faturamento (Fase 7, #36): recepção de webhook do Asaas ────────────────
+// Deduplicação de entrega: o Asaas reentrega o mesmo evento após qualquer
+// falha de rede ou 5xx, então `asaasEventId` é UNIQUE e a barreira contra
+// efeito duplicado é o próprio banco (0066), não uma checagem em memória.
+// `payload` é guardado bruto porque a apuração do valor cobrado só existe a
+// partir da tabela `subscription` (#159) — quando ela chegar, os eventos já
+// recebidos precisam ser reprocessáveis sem pedir reenvio ao Asaas.
+// Plano de billing/identidade: só `iris_auth` tem grant; `app_role` não toca.
+export const asaasWebhookEvent = pgTable(
+  "asaas_webhook_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    asaasEventId: text("asaas_event_id").notNull().unique(),
+    evento: text("evento").notNull(),
+    payload: jsonb("payload").notNull(),
+    processadoEm: timestamp("processado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("asaas_webhook_event_processado_idx").on(t.processadoEm)],
 );

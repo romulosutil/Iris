@@ -55,57 +55,177 @@ export function diasRestantesDeTrial(
 }
 
 /**
- * Anterior a esta data, `trial_comeco_em` não representa um trial de verdade.
+ * Teto entre o cadastro da clínica e o disparo automático do relógio (#175).
  *
- * A migração `0057_cadastro_self_service.sql` criou a coluna como `NOT NULL` e
- * fez `UPDATE clinic SET trial_comeco_em = '2020-01-01'` nas clínicas que já
- * existiam — elas nunca passaram pelo self-service. O comentário da migração
- * diz por que escolheu 2020: *"garante que diasRestantesDeTrial() retorne
- * negativo, e o banner não apareça"*.
- *
- * Ou seja: o dado foi escolhido para um contrato em que **negativo = não
- * mostrar**. Quando a faixa passou a ter estado "encerrado" (negativo =
- * mostrar), esse sentinela virou uma clínica em trial vencido para sempre.
- * Achado bloqueante do Jules na PR #176 — procede.
- *
- * A checagem é por corte de data, não por igualdade com `'2020-01-01'`: a
- * coluna é `timestamptz` e o valor gravado depende do timezone da sessão que
- * rodou a migração, então comparar por igualdade seria frágil. Nenhuma conta
- * self-service pode ser anterior a 30/07/2026, data em que a 0057 nasceu.
+ * O trial começa no 1º paciente cadastrado — mas quem nunca cadastra paciente
+ * nenhum não pode ficar com trial eterno. Passado o teto, o relógio conta como
+ * se tivesse começado no 14º dia após o cadastro.
  */
-const CORTE_TRIAL_REAL = new Date("2026-07-01T00:00:00Z");
+const DIAS_ATE_INICIO_AUTOMATICO = 14;
+
+export interface StatusTrial {
+  ativo: boolean;
+  expirado: boolean;
+  /** Nunca negativo (clamp em 0). Use `expirado` para saber se já acabou. */
+  diasRestantes: number;
+  dataInicio: Date;
+  dataFim: Date;
+  aguardandoPrimeiroPaciente: boolean;
+}
 
 /**
- * Resolve quantos dias faltam para exibir na faixa de trial a partir dos
- * dados brutos da clínica, ou `null` quando a faixa não deve aparecer
- * (clínica sem trial).
+ * Soma dias mantendo a disciplina de data civil do `diasRestantesDeTrial`:
+ * pega a data civil de `base` no timezone da clínica, soma os dias nessa
+ * escala e devolve um instante ao meio-dia UTC do dia resultante.
  *
- * Finding 2 da review da PR #166: usar `&&` truthy em `trialDias` esconderia
- * a faixa quando o trial tem explicitamente 0 dias restantes (0 é falsy em
- * JS, mas é um valor válido — "termina hoje"). `!= null` cobre null/undefined
- * sem descartar 0.
- *
- * ⚠️ **Limite conhecido, com prazo:** isto ainda não sabe distinguir "trial
- * vencido" de "assinante pagante" — só existe o relógio, não existe estado de
- * assinatura. Hoje isso é inofensivo porque **não há como pagar**: o gate e a
- * tabela `subscription` chegam na Fatia B (#159), e nenhum assinante pode
- * existir antes dela. Quando a `subscription` existir, é ela quem decide se a
- * faixa aparece — e este corte de data sai junto. Registrado na #159.
+ * Somar `dias * 86_400_000` ao instante bruto derraparia um dia inteiro quando
+ * o horário do cadastro é próximo da meia-noite local e há mudança de offset
+ * (DST) no intervalo — o mesmo deslize que a doc no topo deste arquivo
+ * descreve. Meio-dia UTC é escolhido por ser o horário que preserva a data
+ * civil em qualquer offset entre -12 e +12, o que cobre todo o Brasil.
  */
-export function resolverDiasRestantesParaFaixa(dadosTrial: {
+function somarDiasCivis(base: Date, dias: number, timezone: string): Date {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const [ano, mes, dia] = formatter.format(base).split("-");
+  const civil = new Date(`${ano}-${mes}-${dia}T12:00:00Z`);
+  civil.setUTCDate(civil.getUTCDate() + dias);
+  return civil;
+}
+
+/**
+ * Estado completo do trial de uma clínica (#175).
+ *
+ * O relógio **não** começa no cadastro: começa quando o 1º paciente é
+ * cadastrado (`trial_comeco_em` é gravado na mesma transação, via
+ * `app_iniciar_trial()`). Enquanto isso não acontece, `trialComecoEm` é `NULL`
+ * e a clínica está *aguardando* — não faz sentido consumir dias de teste de
+ * quem ainda não tem o que testar.
+ *
+ * O teto de 14 dias existe para que "nunca cadastrei paciente" não vire trial
+ * eterno: passado ele, o início efetivo é o próprio teto.
+ *
+ * `agora` é injetável para testabilidade (nenhum caller de produção passa).
+ */
+export function calcularStatusTrial(
+  criadoEm: Date,
+  trialComecoEm: Date | null,
+  trialDias: number,
+  timezone: string,
+  agora?: Date,
+): StatusTrial {
+  const agora_ = agora ?? new Date();
+
+  const dentroDoTeto =
+    trialComecoEm == null &&
+    diasRestantesDeTrial(criadoEm, DIAS_ATE_INICIO_AUTOMATICO, timezone, agora_) >= 0;
+
+  if (dentroDoTeto) {
+    // Relógio parado: o trial inteiro continua disponível. `dataFim` é a data
+    // em que o relógio dispara sozinho, não uma data de vencimento — por isso
+    // a UI deste estado não exibe contagem (ver FaixaTrial).
+    const dataFim = somarDiasCivis(criadoEm, DIAS_ATE_INICIO_AUTOMATICO, timezone);
+    return {
+      ativo: true,
+      expirado: false,
+      diasRestantes: trialDias,
+      dataInicio: criadoEm,
+      dataFim,
+      aguardandoPrimeiroPaciente: true,
+    };
+  }
+
+  const dataInicio =
+    trialComecoEm ?? somarDiasCivis(criadoEm, DIAS_ATE_INICIO_AUTOMATICO, timezone);
+  const restantes = diasRestantesDeTrial(dataInicio, trialDias, timezone, agora_);
+  // `expirado` sai do valor BRUTO: `diasRestantes === 0` é o último dia (ainda
+  // ativo), e só o negativo significa acabou. Derivar depois do clamp
+  // confundiria os dois.
+  const expirado = restantes < 0;
+
+  return {
+    ativo: !expirado,
+    expirado,
+    diasRestantes: Math.max(0, restantes),
+    dataInicio,
+    dataFim: somarDiasCivis(dataInicio, trialDias, timezone),
+    aguardandoPrimeiroPaciente: false,
+  };
+}
+
+/** Dados brutos de trial da clínica, como vêm de `clinic`. */
+export interface DadosTrialClinica {
+  criadoEm: Date;
   trialComecoEm: Date | null;
   trialDias: number | null;
+  isentoTrial: boolean;
   timezone: string;
-}): number | null {
-  if (dadosTrial.trialComecoEm == null || dadosTrial.trialDias == null) {
+}
+
+export interface FaixaTrialResolvida {
+  /**
+   * Valor BRUTO (pode ser negativo = trial encerrado). Não é o
+   * `StatusTrial.diasRestantes` clampado: a faixa precisa do negativo para
+   * renderizar o estado "encerrado".
+   */
+  diasRestantes: number;
+  aguardandoPrimeiroPaciente: boolean;
+}
+
+/**
+ * Resolve o que a faixa de trial deve mostrar, ou `null` quando ela não deve
+ * aparecer.
+ *
+ * Não aparece em dois casos: clínica **isenta** (legado pré-self-service, que
+ * nunca contratou trial) e clínica sem `trial_dias` configurado. `trialComecoEm
+ * == null` **não** esconde mais a faixa — agora significa "aguardando o 1º
+ * paciente", que é justamente o que a faixa precisa explicar (#175).
+ *
+ * O paliativo `CORTE_TRIAL_REAL` (commit ad789a6) saiu daqui: ele adivinhava o
+ * legado pela data do sentinela `'2020-01-01'` da migração 0057. O sentinela
+ * não existe mais — virou `NULL` + `isento_trial = true`, um fato do banco em
+ * vez de uma heurística de data.
+ *
+ * Finding 2 da review da PR #166: `!= null` em vez de `&&` truthy porque
+ * `trialDias = 0` é valor válido ("termina hoje") e falsy em JS.
+ *
+ * ⚠️ **Limite conhecido, com prazo:** isto ainda não distingue "trial vencido"
+ * de "assinante pagante" — só existe o relógio, não existe estado de
+ * assinatura. Hoje é inofensivo porque não há como pagar: o gate e a tabela
+ * `subscription` chegam na Fatia B (#159). Quando a `subscription` existir, é
+ * ela quem decide se a faixa aparece.
+ */
+export function resolverFaixaTrial(
+  dadosTrial: DadosTrialClinica,
+  agora?: Date,
+): FaixaTrialResolvida | null {
+  if (dadosTrial.isentoTrial || dadosTrial.trialDias == null) {
     return null;
   }
-  if (dadosTrial.trialComecoEm < CORTE_TRIAL_REAL) {
-    return null;
-  }
-  return diasRestantesDeTrial(
+
+  const status = calcularStatusTrial(
+    dadosTrial.criadoEm,
     dadosTrial.trialComecoEm,
     dadosTrial.trialDias,
     dadosTrial.timezone,
+    agora,
   );
+
+  if (status.aguardandoPrimeiroPaciente) {
+    return { diasRestantes: dadosTrial.trialDias, aguardandoPrimeiroPaciente: true };
+  }
+
+  return {
+    diasRestantes: diasRestantesDeTrial(
+      status.dataInicio,
+      dadosTrial.trialDias,
+      dadosTrial.timezone,
+      agora,
+    ),
+    aguardandoPrimeiroPaciente: false,
+  };
 }

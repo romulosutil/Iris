@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diasRestantesDeTrial, resolverDiasRestantesParaFaixa } from "./trial";
+import { calcularStatusTrial, diasRestantesDeTrial, resolverFaixaTrial } from "./trial";
 
 const TZ = "America/Sao_Paulo";
 
@@ -34,89 +34,166 @@ describe("diasRestantesDeTrial", () => {
   });
 });
 
-describe("resolverDiasRestantesParaFaixa", () => {
-  it("Finding 2 da review da PR #166: trial com 0 dias restantes tem que renderizar a faixa, não escondê-la", () => {
-    // trialDias = 0 é falsy em JS — a checagem antiga (`&&`) cairia no
-    // fallback e ocultaria a faixa mesmo com o trial "terminando hoje".
-    const agora = new Date();
-    const resultado = resolverDiasRestantesParaFaixa({
-      trialComecoEm: agora,
-      trialDias: 0,
-      timezone: TZ,
-    });
-    // Não pode ser `null` (que faria o layout usar o fallback -1 e ocultar
-    // a faixa) — precisa ser um número, mesmo que seja 0.
-    expect(resultado).not.toBeNull();
-    expect(resultado).toBe(0);
+/**
+ * #175: o relógio do trial passa a começar no 1º paciente cadastrado, com teto
+ * de 14 dias após o cadastro da clínica. `trialComecoEm = null` deixou de ser
+ * "clínica sem trial" e passou a ser "relógio ainda não disparou".
+ */
+describe("calcularStatusTrial", () => {
+  const criadoEm = new Date("2026-08-01T14:00:00-03:00");
+
+  it("sem 1º paciente e dentro do teto: aguardando, sem consumir dias", () => {
+    const s = calcularStatusTrial(criadoEm, null, 7, TZ, new Date("2026-08-10T09:00:00-03:00"));
+
+    expect(s.aguardandoPrimeiroPaciente).toBe(true);
+    expect(s.ativo).toBe(true);
+    expect(s.expirado).toBe(false);
+    // O relógio não começou: continua valendo o trial inteiro.
+    expect(s.diasRestantes).toBe(7);
   });
 
-  it("devolve null quando não há trial ativo (trialDias ausente)", () => {
-    expect(
-      resolverDiasRestantesParaFaixa({
-        trialComecoEm: new Date(),
-        trialDias: null,
-        timezone: TZ,
-      }),
-    ).toBeNull();
+  it("no último dia do teto ainda está aguardando (fronteira de data civil)", () => {
+    // 15/08 é o 14º dia após 01/08 — último dia dentro do teto.
+    const s = calcularStatusTrial(criadoEm, null, 7, TZ, new Date("2026-08-15T23:00:00-03:00"));
+
+    expect(s.aguardandoPrimeiroPaciente).toBe(true);
+    expect(s.expirado).toBe(false);
   });
 
-  it("devolve null quando não há data de início de trial", () => {
+  it("teto de 14 dias estourado sem paciente: relógio conta a partir do teto", () => {
+    // Teto = 15/08. Trial de 7 dias sobre o teto vence em 22/08.
+    const dentro = calcularStatusTrial(criadoEm, null, 7, TZ, new Date("2026-08-18T09:00:00-03:00"));
+    expect(dentro.aguardandoPrimeiroPaciente).toBe(false);
+    expect(dentro.expirado).toBe(false);
+    expect(dentro.diasRestantes).toBe(4);
+
+    const fora = calcularStatusTrial(criadoEm, null, 7, TZ, new Date("2026-09-01T09:00:00-03:00"));
+    expect(fora.aguardandoPrimeiroPaciente).toBe(false);
+    expect(fora.expirado).toBe(true);
+    // Clamp: nunca negativo na saída, mesmo com o trial vencido há semanas.
+    expect(fora.diasRestantes).toBe(0);
+  });
+
+  it("trial iniciado no 1º paciente conta a partir dele, não do cadastro", () => {
+    // Clínica criada em 01/08, 1º paciente só no dia 04/08.
+    const trialComecoEm = new Date("2026-08-04T10:00:00-03:00");
+    const s = calcularStatusTrial(criadoEm, trialComecoEm, 7, TZ, new Date("2026-08-06T09:00:00-03:00"));
+
+    expect(s.aguardandoPrimeiroPaciente).toBe(false);
+    expect(s.ativo).toBe(true);
+    expect(s.diasRestantes).toBe(5);
+    expect(s.dataInicio.getTime()).toBe(trialComecoEm.getTime());
+  });
+
+  it("expirado é derivado ANTES do clamp — 0 dias restantes ainda é trial ativo", () => {
+    const trialComecoEm = new Date("2026-08-04T10:00:00-03:00");
+    // 11/08 = dia do vencimento: 0 dias restantes, mas ainda não expirou.
+    const ultimoDia = calcularStatusTrial(criadoEm, trialComecoEm, 7, TZ, new Date("2026-08-11T09:00:00-03:00"));
+    expect(ultimoDia.diasRestantes).toBe(0);
+    expect(ultimoDia.expirado).toBe(false);
+    expect(ultimoDia.ativo).toBe(true);
+
+    const diaSeguinte = calcularStatusTrial(criadoEm, trialComecoEm, 7, TZ, new Date("2026-08-12T09:00:00-03:00"));
+    expect(diaSeguinte.diasRestantes).toBe(0);
+    expect(diaSeguinte.expirado).toBe(true);
+    expect(diaSeguinte.ativo).toBe(false);
+  });
+});
+
+describe("resolverFaixaTrial", () => {
+  const criadoEm = new Date("2026-08-01T14:00:00-03:00");
+
+  it("clínica isenta (pré-self-service) nunca vê a faixa", () => {
+    // Substitui o paliativo do corte de data (`CORTE_TRIAL_REAL`, commit
+    // ad789a6): o legado agora é marcado no banco, não adivinhado pela data.
     expect(
-      resolverDiasRestantesParaFaixa({
+      resolverFaixaTrial({
+        criadoEm,
         trialComecoEm: null,
         trialDias: 7,
+        isentoTrial: true,
         timezone: TZ,
       }),
     ).toBeNull();
   });
 
-  /**
-   * Achado bloqueante do Jules na PR #176.
-   *
-   * A migração 0057 é `NOT NULL` e fez `UPDATE clinic SET trial_comeco_em =
-   * '2020-01-01'` nas clínicas pré-existentes, escolhendo 2020 exatamente
-   * porque, no contrato antigo, negativo significava "não mostrar a faixa".
-   * Quando a faixa ganhou o estado "encerrado", esse sentinela virou uma
-   * clínica em trial vencido para sempre — toda clínica anterior ao
-   * self-service passaria a ver "seu período de teste terminou" eternamente.
-   *
-   * Sem o corte de data, este caso devolve um número negativo (≈ -2400) em vez
-   * de `null`, e o layout renderiza a faixa. É o que discrimina o fix.
-   */
-  it("devolve null para o sentinela de 2020 da migração 0057 (clínica pré-self-service)", () => {
+  it("clínica isenta não vê a faixa nem se tiver trial_comeco_em gravado", () => {
     expect(
-      resolverDiasRestantesParaFaixa({
-        trialComecoEm: new Date("2020-01-01T00:00:00Z"),
+      resolverFaixaTrial({
+        criadoEm,
+        trialComecoEm: new Date("2026-08-02T10:00:00-03:00"),
         trialDias: 7,
+        isentoTrial: true,
         timezone: TZ,
       }),
     ).toBeNull();
   });
 
-  it("devolve null para qualquer data anterior ao nascimento do self-service", () => {
+  it("devolve null quando não há trial configurado (trialDias ausente)", () => {
     expect(
-      resolverDiasRestantesParaFaixa({
-        trialComecoEm: new Date("2026-06-30T23:59:59Z"),
-        trialDias: 7,
+      resolverFaixaTrial({
+        criadoEm,
+        trialComecoEm: new Date("2026-08-02T10:00:00-03:00"),
+        trialDias: null,
+        isentoTrial: false,
         timezone: TZ,
       }),
     ).toBeNull();
   });
 
-  it("trata como trial real uma conta criada depois do corte, mesmo já vencida", () => {
-    // Conta self-service de verdade, com o trial vencido: precisa devolver
-    // número negativo (faixa "encerrado"), não `null`. Se o corte engolir este
-    // caso, o estado "encerrado" nunca aparece para ninguém.
-    //
-    // A data é logo depois do corte e o vencimento fica no passado, então a
-    // asserção não envelhece com o relógio real.
-    const resultado = resolverDiasRestantesParaFaixa({
-      trialComecoEm: new Date("2026-07-01T12:00:00Z"),
+  it("sem 1º paciente dentro do teto: a faixa APARECE, no estado aguardando", () => {
+    const r = resolverFaixaTrial({
+      criadoEm,
+      trialComecoEm: null,
       trialDias: 7,
+      isentoTrial: false,
       timezone: TZ,
-    });
+    }, new Date("2026-08-05T09:00:00-03:00"));
 
-    expect(resultado).not.toBeNull();
-    expect(resultado!).toBeLessThan(0);
+    expect(r).not.toBeNull();
+    expect(r!.aguardandoPrimeiroPaciente).toBe(true);
+  });
+
+  it("Finding 2 da review da PR #166: trial com 0 dias restantes renderiza a faixa, não some", () => {
+    // 0 é falsy em JS — a checagem antiga (`&&`) ocultaria a faixa no dia do
+    // vencimento. `!= null` cobre null/undefined sem descartar 0.
+    const r = resolverFaixaTrial({
+      criadoEm,
+      trialComecoEm: new Date("2026-08-04T10:00:00-03:00"),
+      trialDias: 7,
+      isentoTrial: false,
+      timezone: TZ,
+    }, new Date("2026-08-11T09:00:00-03:00"));
+
+    expect(r).not.toBeNull();
+    expect(r!.diasRestantes).toBe(0);
+    expect(r!.aguardandoPrimeiroPaciente).toBe(false);
+  });
+
+  it("trial vencido devolve número negativo (faixa no estado 'encerrado')", () => {
+    const r = resolverFaixaTrial({
+      criadoEm,
+      trialComecoEm: new Date("2026-08-04T10:00:00-03:00"),
+      trialDias: 7,
+      isentoTrial: false,
+      timezone: TZ,
+    }, new Date("2026-09-01T09:00:00-03:00"));
+
+    expect(r).not.toBeNull();
+    expect(r!.diasRestantes).toBeLessThan(0);
+  });
+
+  it("teto estourado sem paciente: faixa deixa de ser 'aguardando' e vira contagem", () => {
+    const r = resolverFaixaTrial({
+      criadoEm,
+      trialComecoEm: null,
+      trialDias: 7,
+      isentoTrial: false,
+      timezone: TZ,
+    }, new Date("2026-09-01T09:00:00-03:00"));
+
+    expect(r).not.toBeNull();
+    expect(r!.aguardandoPrimeiroPaciente).toBe(false);
+    expect(r!.diasRestantes).toBeLessThan(0);
   });
 });
