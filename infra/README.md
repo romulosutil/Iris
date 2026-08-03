@@ -871,8 +871,44 @@ varredura por minuto.
 > Estágio 2 = banner para toda a clínica + responsável técnico + exibição do
 > protocolo de emergência da própria clínica. Em nenhum estágio o Iris avisa
 > família, contato de emergência, SAMU, polícia ou Conselho Tutelar — decisão
-> travada no parecer da #110. Não há webhook, e-mail ou chamada HTTP no
-> serviço, e adicionar um seria reverter essa decisão.
+> travada no parecer da #110. Não há webhook nem chamada HTTP para terceiros, e
+> adicionar um seria reverter essa decisão.
+>
+> A **única** saída de rede do serviço, fora o Postgres, é o e-mail ao
+> responsável técnico da própria clínica no estágio 2 (#126, via Resend). Ele
+> não é exceção à regra acima: o RT é interno à clínica, e o corpo do e-mail é
+> fixo — só um link para o painel autenticado, sem paciente, categoria ou
+> trecho clínico (§4.2.1). Ver `scripts/lib/resend-rt.mjs`.
+
+### Canal de e-mail ao RT: até 3 tentativas, não uma (#154)
+
+O envio ao RT não tem fila própria — a retentativa é derivada do estado do
+alerta, e é a mesma consulta que já fazia a reconciliação:
+
+| resultado do envio                        | marcador em `canais_notificados`     | ainda na fila? |
+| ----------------------------------------- | ------------------------------------ | -------------- |
+| sucesso                                   | `email_responsavel_tecnico_enviado`  | não            |
+| falha **transitória** (429/5xx, timeout)  | `email_responsavel_tecnico_adiado`   | **sim**        |
+| falha **permanente** (endereço inválido)  | `email_responsavel_tecnico_falhou`   | não            |
+| transitória após o teto de 3 tentativas   | `email_responsavel_tecnico_falhou`   | não            |
+
+`app_alertas_estagio2_sem_email()` exclui só `_enviado` e `_falhou`. Um alerta
+`_adiado` continua elegível, então a varredura seguinte (1 min depois) o retenta
+sozinha. O contador fica em `alerta_risco_clinico.email_rt_tentativas`.
+
+**Como ler isso num incidente:**
+
+- `_adiado` repetido e nunca virando `_enviado` → o provedor está fora do ar há
+  mais de 3 minutos, ou a chave está inválida. Verifique a Resend antes de mexer
+  no motor.
+- `_falhou` na **primeira** tentativa → não foi rede: é endereço inválido, RT
+  sem papel vigente na clínica, ou `EMAIL_PROVIDER_API_KEY`/`NEXT_PUBLIC_APP_URL`
+  ausentes no serviço. O motivo exato está no `audit_log`, ação
+  `alerta_risco_email_rt`, campo `detalhe`.
+- Um alerta que estoure exceção **não** derruba mais a varredura: cada alerta é
+  isolado, o erro completo vai para **stderr** (com stack e `cause`) e a fila
+  segue. Se o log mostra `erro não tratado no alerta_id=...`, os demais alertas
+  daquela passada foram processados normalmente.
 
 ### Por que serviço separado e não um `setInterval` dentro do Next.js
 
