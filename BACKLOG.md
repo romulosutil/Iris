@@ -34,7 +34,7 @@
 | **D2** | **Migração à mão exige `when` manual no `_journal.json`** (anterior + 1000). Se o `when` for ≤ o da última aplicada, o Drizzle **pula a migração em silêncio**. | Já causou incidente: a `0055` (fix do oráculo cross-tenant, #128) ficou fora do journal e nunca rodou em produção, com a issue fechada pelo diff (#165). Documentado no `CLAUDE.md`; o fim real seria um teste de CI que compara `_journal.json` com os `.sql` do diretório e com o que está aplicado. | `db/migrations/meta/_journal.json` · guardrail em `CLAUDE.md` |
 | **D3** | **`app_role` tem `GRANT` de tabela `INSERT`/`UPDATE`/`DELETE` em `clinic`** (herdado). Hoje inofensivo porque não há policy de escrita que case — a barreira é só a RLS, sem defesa em profundidade no nível de privilégio. | `clinic.isento_trial` é flag de billing: quem a ligasse sairia do gate de pagamento. Uma policy de escrita adicionada por distração no futuro abre tudo de uma vez. | Revogar e re-conceder coluna a coluna, como já se faz em `patient` (`0044`) |
 | **D4** | **Job de auto-arquivamento (90 dias) não existe** — só a regra pura `calcularStatusArquivamento`. Bloqueado por decisão de produto: "última atividade" atravessa `session_note`, `evidence` e `goal`. | Essa definição decide **o que a clínica paga**. Escolher de passagem é errar em cima de dinheiro do cliente. | #174 · padrão em `scripts/escalonamento-risco.mjs` (delega a função do banco, porque cruza clínicas) |
-| **D5** | ~~Sandbox Asaas nunca exercitado ponta a ponta.~~ **Fechado em 03/08/2026** — evento real entregue e gravado (ver sessão abaixo). **Resta:** `ASAAS_WEBHOOK_TOKEN` no Easypanel e webhook de **produção** cadastrado no painel do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. **Confirmado na prática:** o `id` real vem como `evt_<hash>&<n>` (com `&`) e as datas dentro de `authorization` são `dd/MM/yyyy`, não ISO — nenhum dublê do repo usava esse formato. | #36 |
+| **D5** | ~~Sandbox Asaas nunca exercitado ponta a ponta.~~ **Fechado em 03/08/2026** — evento real entregue e gravado (ver sessão abaixo). `ASAAS_WEBHOOK_TOKEN` provisionada e **verificada por medição** em produção no mesmo dia. **Resta só** o webhook de **produção** cadastrado na conta de produção do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. **Confirmado na prática:** o `id` real vem como `evt_<hash>&<n>` (com `&`) e as datas dentro de `authorization` são `dd/MM/yyyy`, não ISO — nenhum dublê do repo usava esse formato. | #36 |
 | **D6** | **Sem UI de arquivar/desarquivar** e sem aviso in-app quando um paciente volta a contar na fatura. As Server Actions existem, a tela não. | O desarquivamento automático é silencioso: a clínica volta a ser cobrada por um paciente sem nada na interface dizendo isso. | #174 |
 | **D7** | **Regra 6 só dispara por `session_note`.** Áudio (`registrarAudioLocal`), `evidence` e escopo de protocolo não desarquivam. | Se a intenção da issue era "qualquer registro clínico", há paciente em atendimento ativo fora da fatura. É ampliação de escopo a decidir, não bug. | #174 |
 | **D8** | **Terapeuta de cobertura não desarquiva.** `app_desarquivar_paciente` estoura antes de olhar `arquivado_em`, então há um gate de visibilidade antes da chamada — senão a exceção abortaria a transação e o terapeuta perderia o diário inteiro. | Consequência assumida, não acidente: paciente arquivado invisível ao terapeuta de cobertura só volta pela mão do coordenador. Vira problema se cobertura for comum na prática. | #174 · `0067` |
@@ -58,9 +58,12 @@
 **Novas Demandas & Débitos Mapeados e Criados como GitHub Issues:**
 - **Issue #184 — Central de Super Admin / Backoffice (`/super-admin`):** [Issue #184](https://github.com/romulosutil/Iris/issues/184) com spec em [`docs/superpowers/specs/2026-08-03-central-super-admin-backoffice-design.md`](docs/superpowers/specs/2026-08-03-central-super-admin-backoffice-design.md).
 - **Issue #185 — Responsividade Mobile & Publicação Android (PWA/TWA Play Store):** [Issue #185](https://github.com/romulosutil/Iris/issues/185) com spec em [`docs/superpowers/specs/2026-08-03-mobile-responsividade-pwa-twa-android-design.md`](docs/superpowers/specs/2026-08-03-mobile-responsividade-pwa-twa-android-design.md).
-- **Issue #186 — Reconciliação do Snapshot do Drizzle ORM (Débito D1):** [Issue #186](https://github.com/romulosutil/Iris/issues/186) para destravar `pnpm db:generate`.
-- **Issue #187 — Teste de CI para Integridade de Migrações e `_journal.json` (Débito D2):** [Issue #187](https://github.com/romulosutil/Iris/issues/187) para impedir migrações ignoradas em silêncio.
-- **Issue #188 — Revogação de Privilégios `GRANT` em `clinic` (Débito D3):** [Issue #188](https://github.com/romulosutil/Iris/issues/188) para segurança em profundidade da coluna `isento_trial`.
+- **Issue #186 — Reconciliação do Snapshot do Drizzle ORM (Débito D1):** [Issue #186](https://github.com/romulosutil/Iris/issues/186) com spec em [`docs/superpowers/specs/2026-08-03-issue-186-reconciliacao-snapshot-drizzle-design.md`](docs/superpowers/specs/2026-08-03-issue-186-reconciliacao-snapshot-drizzle-design.md).
+
+- **Issue #187 — Teste de CI para Integridade de Migrações e `_journal.json` (Débito D2):** [Issue #187](https://github.com/romulosutil/Iris/issues/187) com spec em [`docs/superpowers/specs/2026-08-03-issue-187-teste-ci-integridade-migracoes-design.md`](docs/superpowers/specs/2026-08-03-issue-187-teste-ci-integridade-migracoes-design.md).
+
+- **Issue #188 — Revogação de Privilégios `GRANT` em `clinic` (Débito D3):** [Issue #188](https://github.com/romulosutil/Iris/issues/188) com spec em [`docs/superpowers/specs/2026-08-03-issue-188-revogacao-grant-clinic-design.md`](docs/superpowers/specs/2026-08-03-issue-188-revogacao-grant-clinic-design.md).
+
 - **Issue #189 — Sitemap, Robots.txt, Meta OpenGraph & Suíte A11y (WCAG 2.1 AA):** ✅ **Concluído em 03/08/2026** — [Issue #189](https://github.com/romulosutil/Iris/issues/189) com spec em [`docs/superpowers/specs/2026-08-03-issue-189-seo-a11y-design.md`](docs/superpowers/specs/2026-08-03-issue-189-seo-a11y-design.md) e plano em [`docs/superpowers/plans/2026-08-03-seo-a11y-pr138-fixes-plan.md`](docs/superpowers/plans/2026-08-03-seo-a11y-pr138-fixes-plan.md). (Sitemap, Robots.txt, OpenGraph/Twitter Cards, A11y axe-core e proxy com testes 100% verdes).
 
 - **Issue #190 — Páginas de Erro Customizadas 404 e 500 (Design System):** [Issue #190](https://github.com/romulosutil/Iris/issues/190) com spec em [`docs/superpowers/specs/2026-08-03-issue-190-paginas-erro-espectro-brutal-design.md`](docs/superpowers/specs/2026-08-03-issue-190-paginas-erro-espectro-brutal-design.md).
@@ -199,9 +202,47 @@ a ordem de chegada. **Quando a apuração entrar, o webhook de produção precis
 nascer "Sequencial"** — ordem passa a importar (`AUTHORIZED` antes de
 `CANCELLED`).
 
-**Ainda aberto:** `ASAAS_WEBHOOK_TOKEN` no Easypanel e o webhook de **produção**
-cadastrado no painel do Asaas (conta de produção, não sandbox). O token de
-produção tem que ser **distinto** do de sandbox.
+**`ASAAS_WEBHOOK_TOKEN` provisionada em produção (03/08/2026).** A variável
+**não existia** entre as 13 do `iris-app` — ou seja, o 401 que produção devolvia
+não era token errado, era o guard "env ausente nunca vira passa". Se o webhook
+de produção tivesse sido cadastrado antes disso, **toda** entrega do Asaas
+tomaria 401 e o diagnóstico seria caro, porque o corpo do 401 é idêntico nos
+três casos de propósito.
+
+Token gerado com `randomBytes(32).toString("base64url")` (CSPRNG — não
+`Get-Random`, ver #93), **distinto do de sandbox**, passado por clipboard e
+nunca colado no chat. Antes de implantar, foi conferido que o último deploy
+verde (há 5h) já era o HEAD de `origin/main` (`1decf13`) — então o "Implantar"
+rebuildou o mesmo código, sem carregar commit não deployado junto.
+
+**Verificado medindo, não pelo painel** (regra do repo — "está no painel" não é
+prova de que o processo leu a variável):
+
+| Cenário | Esperado | Obtido |
+| :-- | :-- | :-- |
+| Token de produção | 200 | **200** `{"received":true}` |
+| Token de **sandbox** | 401 | **401** — ambientes isolados |
+| Token lixo | 401 | **401** |
+| Header ausente | 401 | **401** |
+| Reenvio do mesmo `id` | `duplicado` | **`{"duplicado":true}`** |
+
+O teste positivo deixou **uma** linha em `asaas_webhook_event` de produção
+(`probe-easypanel-token-2026-08-03`, evento `PROBE_PROVISIONAMENTO_TOKEN`). Foi
+de propósito: o mesmo `id` foi reenviado em todas as tentativas justamente para
+o `ON CONFLICT DO NOTHING` garantir no máximo uma linha. Pode ser apagada quando
+houver acesso ao banco de produção — a porta pública do Postgres está fechada.
+
+**Ainda aberto:** o webhook de **produção** cadastrado na conta de produção do
+Asaas (não sandbox). Quando for, tem que nascer **"Sequencial"**.
+
+⚠️ **Segurança — achado colateral, não relacionado ao Asaas.** A tela de
+Ambiente do Easypanel expõe todos os segredos em texto plano, e o painel roda em
+**HTTP sem TLS** num IP (`31.97.170.105:3000`). Ficaram visíveis as senhas de
+`DATABASE_URL`/`AUTH_DATABASE_URL`, `BETTER_AUTH_SECRET`,
+`GLITCHTIP_WEBHOOK_SECRET`, `EMAIL_PROVIDER_API_KEY` e um **`GITHUB_TOKEN` PAT**
+com acesso ao repositório. Mesmo padrão do #93 (segredos em log de build do
+Easypanel + PAT). **Recomendação: rotacionar o PAT do GitHub** e avaliar TLS no
+painel — abrir issue própria.
 
 ---
 
