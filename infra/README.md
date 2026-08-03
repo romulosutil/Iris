@@ -1182,3 +1182,17 @@ problema está na migração, não no serviço.
 > então o `--dry-run` só funciona com a role dona, à mão. O serviço em produção
 > nunca roda com essa flag, e o `--dry-run` **não** atualiza o heartbeat (para
 > uma inspeção manual jamais mascarar um motor parado).
+
+---
+
+### Job de Expurgo e Retenção do AuditLog (Marco Civil Art. 15 — #116)
+
+Varredura diária para cumprimento da obrigação legal de retenção de 6 meses (180 dias):
+
+```bash
+DATABASE_URL='postgres://...' node /app/scripts/expurgo-audit-log.mjs
+```
+
+1. **Pseudonimização de logs órfãos:** invoca `app_pseudonimizar_audit_log_orfao()`, tratando logs onde `ator_id IS NULL` devido ao `ON DELETE SET NULL` no apagamento da conta de um usuário.
+2. **Expurgo físico:** invoca `app_expurgar_audit_log_expirado()`, removendo do banco apenas registros com `criado_em < NOW() - INTERVAL '180 days'`.
+

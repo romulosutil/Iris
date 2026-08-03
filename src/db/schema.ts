@@ -1264,9 +1264,9 @@ export const auditLog = pgTable(
       .references(() => clinic.id),
     // Nullable desde a 0049: `ator_id IS NULL` significa "ação automática do
     // sistema" (job de escalonamento, varredura de arquivamento) — não existe
-    // humano a quem atribuir. O schema declarava `.notNull()` mesmo depois da
-    // migração; drift corrigido aqui, o banco sempre foi a fonte da verdade.
-    atorId: uuid("ator_id").references(() => appUser.id),
+    // humano a quem atribuir. `onDelete: "set null"` (0070 / #116) garante retenção
+    // do audit_log por 6 meses mesmo se a conta do ator for excluída.
+    atorId: uuid("ator_id").references(() => appUser.id, { onDelete: "set null" }),
     acao: text("acao").notNull(),
     entidade: text("entidade").notNull(),
     entidadeId: uuid("entidade_id").notNull(),
