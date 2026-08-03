@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
 import "@/styles/globals.css";
+import { WebMCPProvider } from "@/components/webmcp-provider";
 import { Clarity } from "@/components/clarity";
 import { GoogleAnalytics } from "@/components/google-analytics";
 
@@ -36,6 +37,7 @@ export default function RootLayout({
       <body>
         <GoogleAnalytics />
         <Clarity />
+        <WebMCPProvider />
         {children}
         {process.env.NODE_ENV === "development" && (
           /* eslint-disable-next-line @next/next/no-sync-scripts */
