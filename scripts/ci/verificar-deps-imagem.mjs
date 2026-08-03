@@ -27,14 +27,19 @@ import path from "node:path";
 
 const ALVO = process.env.ALVO || "/app/scripts";
 
-/** Todos os arquivos .mjs/.js abaixo de `dir`, recursivo. */
+/** Todos os arquivos .mjs/.js abaixo de `dir`, recursivo (ignorando arquivos de teste). */
 async function listar(dir) {
   const entradas = await readdir(dir, { withFileTypes: true });
   const arquivos = [];
   for (const e of entradas) {
     const completo = path.join(dir, e.name);
     if (e.isDirectory()) arquivos.push(...(await listar(completo)));
-    else if (/\.(mjs|js)$/.test(e.name)) arquivos.push(completo);
+    else if (
+      /\.(mjs|js)$/.test(e.name) &&
+      !/\.(test|spec)\.(mjs|js)$/.test(e.name)
+    ) {
+      arquivos.push(completo);
+    }
   }
   return arquivos;
 }
