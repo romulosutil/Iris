@@ -57,7 +57,7 @@ function desenharRodapeAuditavel(doc: PDFKit.PDFDocument, pagina: number, totalP
 }
 
 /**
- * Gera um prontuário clínico integral em formato PDF/A auditável com marca d'água
+ * Gera um prontuário clínico integral em formato PDF 1.4 auditável com marca d'água
  * e calcula o hash SHA-256 do arquivo resultante.
  */
 export async function gerarPdfProntuario(
@@ -71,7 +71,7 @@ export async function gerarPdfProntuario(
     pdfVersion: "1.4",
     tagged: true,
     bufferPages: true,
-    compress: options.compress ?? false,
+    compress: options.compress ?? true,
     info: {
       Title: `Prontuário Clínico — ${dados.nomePaciente}`,
       Author: `Iris Plataforma Clínica LGPD`,
@@ -82,7 +82,10 @@ export async function gerarPdfProntuario(
 
   const chunks: Buffer[] = [];
   doc.on("data", (chunk) => chunks.push(chunk));
-  const fim = new Promise<void>((resolve) => doc.on("end", () => resolve()));
+  const fim = new Promise<void>((resolve, reject) => {
+    doc.on("end", () => resolve());
+    doc.on("error", (err) => reject(err));
+  });
 
   // Página 1: Capa do Prontuário
   doc.fontSize(20).text(`Prontuário Clínico — ${dados.nomePaciente}`, { align: "center" });
@@ -133,11 +136,11 @@ export function montarDetalheAuditoriaExportacao(
   patientId: string,
 ) {
   return {
-    acao: "prontuario_exportado_pdfa",
+    acao: "prontuario_exportado_pdf",
     hash_sha256: hashSha256,
     solicitado_por: solicitanteId,
     patient_id: patientId,
     fundamento_legal: "LGPD Art. 18, II e V",
-    formato: "PDF/A-2b",
+    formato: "PDF 1.4 Auditável",
   };
 }

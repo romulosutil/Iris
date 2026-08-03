@@ -36,6 +36,14 @@ describe("gerarPdfProntuario", () => {
     expect(texto).toContain("Iris Plataforma");
   });
 
+  it("utiliza compressão nativa por padrão em produção (compress: true)", async () => {
+    const { buffer: bufferComprimido } = await gerarPdfProntuario(dados);
+    const { buffer: bufferNaoComprimido } = await gerarPdfProntuario(dados, { compress: false });
+
+    expect(bufferComprimido.length).toBeGreaterThan(0);
+    expect(bufferComprimido.length).toBeLessThan(bufferNaoComprimido.length);
+  });
+
   it("retorna hash SHA-256 idêntico a gerarHashPdf(buffer)", async () => {
     const { buffer, hash } = await gerarPdfProntuario(dados);
     expect(hash).toBe(gerarHashPdf(buffer));
@@ -54,12 +62,12 @@ describe("montarDetalheAuditoriaExportacao (#116 integration)", () => {
     const detalhe = montarDetalheAuditoriaExportacao(hash, "user-solicitante-id", "patient-id-123");
 
     expect(detalhe).toEqual({
-      acao: "prontuario_exportado_pdfa",
+      acao: "prontuario_exportado_pdf",
       hash_sha256: hash,
       solicitado_por: "user-solicitante-id",
       patient_id: "patient-id-123",
       fundamento_legal: "LGPD Art. 18, II e V",
-      formato: "PDF/A-2b",
+      formato: "PDF 1.4 Auditável",
     });
   });
 });

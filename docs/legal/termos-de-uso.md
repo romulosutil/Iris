@@ -163,7 +163,7 @@ inclusive:
 - em caso de suspensão ou encerramento por decisão do Iris, inclusive na
   hipótese da seção 2.2 (c).
 
-A exportação de dados clínicos do prontuário é fornecida no formato **PDF/A auditável**, incorporando marca d'água de emissão nominal (nome, CPF, data/hora UTC) e assinatura de integridade via hash SHA-256 registrada na trilha imutável de auditoria (`audit_log`), garantindo a autenticidade e não-repúdio do documento (LGPD Art. 18, II e V).
+A exportação de dados clínicos do prontuário é fornecida no formato **PDF 1.4 Auditável**, incorporando marca d'água de emissão nominal (nome, CPF, data/hora UTC) e assinatura de integridade via hash SHA-256 registrada na trilha imutável de auditoria (`audit_log`), garantindo a autenticidade e não-repúdio do documento (LGPD Art. 18, II e V).
 Nenhuma eliminação de dados ocorre antes de decorrido o prazo de exportação
 previsto na seção 7.4 e observado o disposto em `politica-retencao-dados.md`.
 
