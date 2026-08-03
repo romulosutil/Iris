@@ -24,7 +24,42 @@
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
 
+## 🏁 Sessão 02/08/2026 (2ª) — Fase 7: trial no 1º paciente, arquivamento e webhook Asaas (#175/#174/#36)
+
+**Entregue** (unit 712/712, RLS 550/550 sem nenhum skipped, typecheck/lint/build limpos):
+
+- **#175 — o relógio do trial começa no 1º paciente**, com teto de 14 dias. `clinic.trial_comeco_em` virou nullable sem default (migração `0064`); `NULL` agora significa de verdade "cadastrou, ainda não tem 1º paciente". O sentinela `'2020-01-01'` da `0057` e o paliativo `CORTE_TRIAL_REAL` (`ad789a6`) saíram juntos — as duas estratégias não podiam coexistir.
+- **Coluna nova `clinic.isento_trial`** — decisão do Rômulo nesta sessão. Clínica legada pré-self-service fica fora do relógio **e** do gate de pagamento. Sem ela, zerar o sentinela para `NULL` faria o legado cair no teto de 14 dias e virar trial vencido: o mesmo bug do #176 por outro caminho.
+- **#174 — `patient.arquivado_em`** (comercial) desatrelado de `alta_em` (clínico), migração `0065`. Dar alta arquiva; arquivar nunca dá alta; arquivado continua 100% legível e exportável (travado por teste de RLS). Regra dos 90 dias com aviso no 83º implementada como função pura; registrar atendimento desarquiva automaticamente e grava trilha uma única vez.
+- **#36 — `POST /api/hooks/asaas`** com token `timing-safe` e idempotência garantida pelo banco (`UNIQUE` + `ON CONFLICT DO NOTHING`, migração `0066`). Evento desconhecido responde 200 de propósito — 5xx vira loop de reentrega do Asaas.
+
+**Decisões de arquitetura tomadas na execução (não estavam no plano):**
+
+- **Migrações escritas à mão, não por `pnpm db:generate`.** O snapshot do Drizzle está dessincronizado do repositório: `db:generate` produziu 128 linhas recriando migrações antigas já aplicadas. Enquanto o snapshot não for reconciliado, `db:generate` é armadilha neste repo. ⚠️ **Débito aberto.**
+- **Escrita em `clinic` e desarquivamento via `SECURITY DEFINER`, não via policy nova.** `app_role` só tem policy de `SELECT` em `clinic` (`0002`), e `patient_update` (`0001`) exclui terapeuta. Afrouxar as policies abriria todas as colunas mutáveis para resolver a transição de uma; as funções `app_iniciar_trial()` e `app_desarquivar_paciente()` (`0064`/`0067`) mantêm a superfície mínima, com guard interno espelhando o predicado de **leitura**.
+- **"Dar alta arquiva" virou trigger de banco**, não regra de Server Action: `alta_em` não tem nenhum caminho de escrita no app hoje (só o script de retenção), então a regra em código não cobriria os escritores reais.
+- **O webhook não apura pacientes ativos.** Ele roda em `authDb`/`iris_auth`, e essa conexão nunca toca dado de paciente (gargalo único do `withTenant`). A apuração roda fora do handler, sobre o payload bruto guardado.
+- **Drift corrigido:** `auditLog.atorId` estava `.notNull()` no schema, mas o banco é nullable desde a `0049` (`ator_id IS NULL` = ação automática do sistema) — é exatamente o campo que o job de 90 dias precisa.
+
+**Aberto / próximo:**
+
+- [ ] **Script de varredura dos 90 dias** (`scripts/`) e seu agendador. Depende de definir "última atividade", que atravessa `session_note`, `evidence` e `goal` — essa definição decide o que a clínica paga e precisa de decisão do Rômulo, não de escolha de implementação.
+- [ ] **Apuração de faturamento** (`app_contar_pacientes_ativos_billing`) e cálculo do valor cobrado — dependem da tabela `subscription`.
+- [ ] **UI de arquivar/desarquivar** na tela do paciente: as Server Actions existem, a tela não. Também não há aviso in-app de que um paciente voltou a contar na fatura.
+- [ ] **Sandbox Asaas ainda não exercitado ponta a ponta** — o webhook foi validado só com payload simulado em teste de integração. Falta disparar um evento real do sandbox contra o ambiente.
+- [ ] **`app_role` tem GRANT de tabela `INSERT/UPDATE/DELETE` em `clinic`** (herdado, pré-existente), hoje inofensivo porque não há policy de escrita que case. Vale revogar e re-conceder coluna a coluna, como já é feito em `patient` (`0044`) — `isento_trial` é flag de billing.
+
+## 🏁 Sessão 02/08/2026 — Revisão de Issues e Decisões de Produto (Rômulo)
+
+**Decisões de produto e alinhamento de backlog:**
+
+- **Issue #159 Fechada:** Encerrada no GitHub por ter sido superada e substituída pelas Issues #174 (arquivamento de pacientes) e #175 (relógio de trial no 1º paciente) e pela integração com Asaas.
+- **Fase 7 / Asaas (Issue #36):** O gateway Asaas está em implementação ativa para suportar o faturamento por paciente ativo/mês e a régua de cobrança do onboarding assistido.
+- **Nicho Terapia Convencional (Issue #98 promovida):** Antecipada a pedido de terapeutas (removida a tag `pos-mvp`). Design simplificado: permitir criar sessões/pacientes sem selecionar nenhum protocolo (`protocolo = null`). O agente de IA atuará como psicólogo generalista (gerando resumo de sessão, extraindo insights qualitativos e emitindo alertas de risco/crise, sem tentar pontuar domínios ou marcos rígidos).
+- **Prontuário Multidisciplinar & Sigilo (Issue #119 ajustada):** Mantido o princípio de prontuário unificado — todos os profissionais da equipe de cuidado multidisciplinar vinculados ao paciente têm acesso a 100% das informações clínicas (viabilizando substituições e visão integrada). Perfis administrativos/recepção não têm acesso aos prontuários. O requisito de fiscalização e sigilo será atendido por um **Audit Log detalhado de acessos** (registrando quem leu/acessou o quê).
+
 ## 🏁 Sessão 01/08/2026 (2ª) — Modelo de negócio, gateway e liberação do cadastro (Issues #163/#159)
+
 
 **Gateway: Asaas confirmado depois de avaliar Mercado Pago e Getnet.**
 
