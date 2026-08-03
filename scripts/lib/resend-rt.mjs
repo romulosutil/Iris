@@ -24,9 +24,30 @@ export function montarCorpoAlertaRt(appUrl) {
         <p>Consulte o Protocolo de Emergência Interno da clínica para a conduta indicada.</p>`;
 }
 
+// Nomes de erro documentados pela Resend (https://resend.com/docs/api-reference/errors).
+// Transitório = vale a pena retentar sem intervenção humana. Erro desconhecido
+// fica de fora de propósito: retentar às cegas um erro que não entendemos gasta
+// 3 varreduras para chegar na mesma falha permanente, só mais tarde.
+const ERROS_TRANSITORIOS = new Set([
+  "rate_limit_exceeded",
+  "internal_server_error",
+  "application_error",
+  "concurrent_idempotency_conflict",
+]);
+
+export function classificarErroResend(nomeErro) {
+  return ERROS_TRANSITORIOS.has(nomeErro);
+}
+
 export async function enviarEmailRt({ apiKey, fromEmail, appUrl, rtEmail }) {
+  // Configuração ausente é permanente: retentar não faz aparecer variável de
+  // ambiente que ninguém setou.
   if (!apiKey) {
-    return { ok: false, erro: "email nao configurado (EMAIL_PROVIDER_API_KEY ausente)" };
+    return {
+      ok: false,
+      transitorio: false,
+      erro: "email nao configurado (EMAIL_PROVIDER_API_KEY ausente)",
+    };
   }
 
   // Sem URL do painel o e-mail não cumpre a função dele: o corpo não carrega
@@ -35,7 +56,11 @@ export async function enviarEmailRt({ apiKey, fromEmail, appUrl, rtEmail }) {
   // canal que consta como entregue sem ter servido é a falha silenciosa da
   // #108. Falha explícita é melhor que e-mail com link vazio.
   if (!appUrl) {
-    return { ok: false, erro: "email nao enviado (NEXT_PUBLIC_APP_URL ausente)" };
+    return {
+      ok: false,
+      transitorio: false,
+      erro: "email nao enviado (NEXT_PUBLIC_APP_URL ausente)",
+    };
   }
 
   try {
@@ -49,10 +74,20 @@ export async function enviarEmailRt({ apiKey, fromEmail, appUrl, rtEmail }) {
     });
 
     if (error) {
-      return { ok: false, erro: error.message ?? "erro desconhecido do provedor" };
+      return {
+        ok: false,
+        transitorio: classificarErroResend(error.name),
+        erro: error.message ?? "erro desconhecido do provedor",
+      };
     }
-    return { ok: true, providerMessageId: data?.id ?? "" };
+    return { ok: true, transitorio: false, providerMessageId: data?.id ?? "" };
   } catch (err) {
-    return { ok: false, erro: err instanceof Error ? err.message : String(err) };
+    // Exceção de rede/timeout: o provedor pode ter processado ou não. Assumir
+    // permanente descartaria e-mail que só precisava de retry.
+    return {
+      ok: false,
+      transitorio: true,
+      erro: err instanceof Error ? err.message : String(err),
+    };
   }
 }
