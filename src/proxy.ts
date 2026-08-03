@@ -5,39 +5,61 @@ import {
 } from "@/app/(auth)/redefinir-senha/cookie";
 
 /**
- * Fix round 1, Task 9 (finding C1 do review). Único trabalho deste proxy
- * (nome atual do Next.js 16 para o que antes se chamava "middleware" — ver
- * https://nextjs.org/docs/messages/middleware-to-proxy; arquivo precisa se
- * chamar `proxy.ts` e exportar uma função `proxy`, não `middleware`, senão o
- * build falha com "Proxy is missing expected function export name"):
- * interceptar `GET /redefinir-senha?token=...` ANTES de qualquer render de
- * página (e portanto antes de Google Analytics/Clarity em
- * `src/app/layout.tsx`, que montam em toda rota sem opt-out), mover o token
- * para um cookie httpOnly, e redirecionar para a URL limpa — o token nunca
- * chega a existir num `document.location`/`Referer` observável por
- * terceiro.
+ * Proxy de navegação e middleware central do Next.js 16 (`src/proxy.ts`).
  *
- * NÃO server component: um Server Component não pode gravar cookie (só
- * Server Actions e Route Handlers podem — restrição do próprio Next.js).
- * Este proxy é o único lugar que roda cedo o bastante E pode setar cookie +
- * redirecionar no mesmo request.
- *
- * Sem `token` na query (recarregamento da página já limpa, ou navegação
- * direta): passa adiante sem tocar em nada — a página decide sozinha, pela
- * PRESENÇA do cookie (não da query), se mostra formulário ou aviso.
+ * Responsabilidades:
+ * 1. Restringir respostas de interceptação a métodos de leitura (GET e HEAD).
+ *    Requisições de mutação (POST, PUT, DELETE - Server Actions) passam direto sem interceptação.
+ * 2. Interceptação segura de `/redefinir-senha?token=...` movendo token para cookie httpOnly.
+ * 3. Injeção de cabeçalhos RFC 8288 Link para descoberta de agentes de IA usando `.append("Link", ...)`
+ *    para não sobrescrever tags nativas de prefetching/preloading do Next.js.
  */
 export function proxy(request: NextRequest) {
+  // Apenas métodos de leitura (GET e HEAD) sofrem interceptações customizadas
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return NextResponse.next();
+  }
+
+  const { pathname } = request.nextUrl;
+
+  // Interceptação de /redefinir-senha?token=...
   const token = request.nextUrl.searchParams.get("token");
-  if (!token) return NextResponse.next();
+  if (token && pathname === "/redefinir-senha") {
+    const urlLimpa = request.nextUrl.clone();
+    urlLimpa.searchParams.delete("token");
 
-  const urlLimpa = request.nextUrl.clone();
-  urlLimpa.searchParams.delete("token");
+    const resposta = NextResponse.redirect(urlLimpa);
+    resposta.cookies.set(NOME_COOKIE_TOKEN, token, opcoesCookieToken());
+    return resposta;
+  }
 
-  const resposta = NextResponse.redirect(urlLimpa);
-  resposta.cookies.set(NOME_COOKIE_TOKEN, token, opcoesCookieToken());
-  return resposta;
+  const response = NextResponse.next();
+
+  // Injeção de cabeçalhos Link para descoberta por agentes de IA (preservando preload headers nativos)
+  const isApiOrStatic =
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/.well-known") ||
+    pathname.includes(".");
+
+  if (!isApiOrStatic) {
+    const linkHeaders = [
+      '</.well-known/api-catalog>; rel="api-catalog"',
+      '</docs/api>; rel="service-doc"',
+      '</auth.md>; rel="authorizing-agent"',
+      '</.well-known/mcp/server-card.json>; rel="mcp-server-card"',
+      '</.well-known/agent-skills/index.json>; rel="agent-skills"',
+    ].join(", ");
+
+    response.headers.append("Link", linkHeaders);
+  }
+
+  return response;
 }
 
 export const config = {
-  matcher: "/redefinir-senha",
+  matcher: [
+    "/redefinir-senha",
+    "/((?!_next/static|_next/image|favicon.ico|brand/).*)",
+  ],
 };

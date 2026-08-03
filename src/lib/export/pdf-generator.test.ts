@@ -22,10 +22,10 @@ describe("comporSecoesProntuarioIntegral", () => {
     });
 
     expect(secoes).toHaveLength(4);
-    expect(secoes[0].titulo).toContain("Plano Terapêutico");
-    expect(secoes[1].conteudo).toContain("Dra. Ana Silva");
-    expect(secoes[2].conteudo).toContain("Treino de contato visual");
-    expect(secoes[3].titulo).toContain("Matriz de Evolução");
+    expect(secoes[0]?.titulo).toContain("Plano Terapêutico");
+    expect(secoes[1]?.conteudo).toContain("Dra. Ana Silva");
+    expect(secoes[2]?.conteudo).toContain("Treino de contato visual");
+    expect(secoes[3]?.titulo).toContain("Matriz de Evolução");
   });
 });
 
