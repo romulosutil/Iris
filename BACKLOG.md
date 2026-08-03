@@ -34,13 +34,39 @@
 | **D2** | **Migração à mão exige `when` manual no `_journal.json`** (anterior + 1000). Se o `when` for ≤ o da última aplicada, o Drizzle **pula a migração em silêncio**. | Já causou incidente: a `0055` (fix do oráculo cross-tenant, #128) ficou fora do journal e nunca rodou em produção, com a issue fechada pelo diff (#165). Documentado no `CLAUDE.md`; o fim real seria um teste de CI que compara `_journal.json` com os `.sql` do diretório e com o que está aplicado. | `db/migrations/meta/_journal.json` · guardrail em `CLAUDE.md` |
 | **D3** | **`app_role` tem `GRANT` de tabela `INSERT`/`UPDATE`/`DELETE` em `clinic`** (herdado). Hoje inofensivo porque não há policy de escrita que case — a barreira é só a RLS, sem defesa em profundidade no nível de privilégio. | `clinic.isento_trial` é flag de billing: quem a ligasse sairia do gate de pagamento. Uma policy de escrita adicionada por distração no futuro abre tudo de uma vez. | Revogar e re-conceder coluna a coluna, como já se faz em `patient` (`0044`) |
 | **D4** | **Job de auto-arquivamento (90 dias) não existe** — só a regra pura `calcularStatusArquivamento`. Bloqueado por decisão de produto: "última atividade" atravessa `session_note`, `evidence` e `goal`. | Essa definição decide **o que a clínica paga**. Escolher de passagem é errar em cima de dinheiro do cliente. | #174 · padrão em `scripts/escalonamento-risco.mjs` (delega a função do banco, porque cruza clínicas) |
-| **D5** | **Sandbox Asaas nunca exercitado ponta a ponta.** O webhook só viu payload simulado em teste de integração; nenhum evento real foi disparado contra o ambiente. Falta também provisionar `ASAAS_WEBHOOK_TOKEN` no Easypanel e cadastrar a URL no painel do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. | #36 |
+| **D5** | ~~Sandbox Asaas nunca exercitado ponta a ponta.~~ **Fechado em 03/08/2026** — evento real entregue e gravado (ver sessão abaixo). **Resta:** `ASAAS_WEBHOOK_TOKEN` no Easypanel e webhook de **produção** cadastrado no painel do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. **Confirmado na prática:** o `id` real vem como `evt_<hash>&<n>` (com `&`) e as datas dentro de `authorization` são `dd/MM/yyyy`, não ISO — nenhum dublê do repo usava esse formato. | #36 |
 | **D6** | **Sem UI de arquivar/desarquivar** e sem aviso in-app quando um paciente volta a contar na fatura. As Server Actions existem, a tela não. | O desarquivamento automático é silencioso: a clínica volta a ser cobrada por um paciente sem nada na interface dizendo isso. | #174 |
 | **D7** | **Regra 6 só dispara por `session_note`.** Áudio (`registrarAudioLocal`), `evidence` e escopo de protocolo não desarquivam. | Se a intenção da issue era "qualquer registro clínico", há paciente em atendimento ativo fora da fatura. É ampliação de escopo a decidir, não bug. | #174 |
 | **D8** | **Terapeuta de cobertura não desarquiva.** `app_desarquivar_paciente` estoura antes de olhar `arquivado_em`, então há um gate de visibilidade antes da chamada — senão a exceção abortaria a transação e o terapeuta perderia o diário inteiro. | Consequência assumida, não acidente: paciente arquivado invisível ao terapeuta de cobertura só volta pela mão do coordenador. Vira problema se cobertura for comum na prática. | #174 · `0067` |
 | **D9** | **Customização White-Label nos PDFs exportados (#120)** — funcionalidade de personalização com logotipo e cores da clínica no cabeçalho do PDF. | Melhoria de produto futura: hoje os PDFs usam o layout auditável padrão da plataforma Iris. | #120 · `src/lib/export/pdf-generator.ts` |
 | **D10** | **Assinatura Digital ICP-Brasil A1/A3 (#120)** — integração com certificados ICP-Brasil para relatórios com exigência judicial/pericial. | Melhoria de produto futura: o padrão atual (MFA + SHA-256 + AuditLog) atende ao piso legal, mas certas instâncias judiciais pedem ICP-Brasil. | #120 · `src/lib/export/pdf-generator.ts` |
 | **D11** | **Estratégia de Ativo de Dados & Indexação RAG (#120)** — pipeline de tokenização e treinamento de IA sobre históricos exportados. | Diretriz de negócio Iris: preservação integral de evoluções e prontuários no banco para vetorização/RAG e aperfeiçoamento dos modelos clínicos. | #120 · `src/lib/extraction/` |
+
+---
+
+## 🏁 Sessão 03/08/2026 — Alinhamento de Prioridades & Central Super Admin
+
+**Ajuste da Ordem de Prioridades (Decisão com Rômulo):**
+
+1. **P0 · Lançamento Self-Service (#175, #174, #36):** Finalização da Fase 7 (trial nullable, cobrança Asaas, desarquivamento).
+2. **Infra Canal RT (#154 - Task 1):** Retentativa resiliente de e-mail ao RT — ✅ Concluído.
+3. **P1 Antes de Dado Real (#116, #120):** Retenção Marco Civil (6 meses em `audit_log`) + Exportação auditável de prontuários em PDF/A.
+4. **Postergado (gated por 40 pacientes em prod) (#102, #89):** Auditoria DPA Hostinger (Task 3 de LGPD) e harmonização de backup. Não bloqueia a entrada inicial de dados.
+5. **P1/P2 · Expansão Clínica (#98, #119):** Nicho generalista (sem protocolo) + RLS multidisciplinar.
+6. **Pós-MVP (#99, #89, #72):** Protocolo TCC (#99), ASR ditado de voz (#72).
+
+**Novas Demandas & Débitos Mapeados e Criados como GitHub Issues:**
+- **Issue #184 — Central de Super Admin / Backoffice (`/super-admin`):** [Issue #184](https://github.com/romulosutil/Iris/issues/184) com spec em [`docs/superpowers/specs/2026-08-03-central-super-admin-backoffice-design.md`](docs/superpowers/specs/2026-08-03-central-super-admin-backoffice-design.md).
+- **Issue #185 — Responsividade Mobile & Publicação Android (PWA/TWA Play Store):** [Issue #185](https://github.com/romulosutil/Iris/issues/185) com spec em [`docs/superpowers/specs/2026-08-03-mobile-responsividade-pwa-twa-android-design.md`](docs/superpowers/specs/2026-08-03-mobile-responsividade-pwa-twa-android-design.md).
+- **Issue #186 — Reconciliação do Snapshot do Drizzle ORM (Débito D1):** [Issue #186](https://github.com/romulosutil/Iris/issues/186) para destravar `pnpm db:generate`.
+- **Issue #187 — Teste de CI para Integridade de Migrações e `_journal.json` (Débito D2):** [Issue #187](https://github.com/romulosutil/Iris/issues/187) para impedir migrações ignoradas em silêncio.
+- **Issue #188 — Revogação de Privilégios `GRANT` em `clinic` (Débito D3):** [Issue #188](https://github.com/romulosutil/Iris/issues/188) para segurança em profundidade da coluna `isento_trial`.
+- **Issue #189 — Sitemap, Robots.txt, Meta OpenGraph & Suíte A11y (WCAG 2.1 AA):** ✅ **Concluído em 03/08/2026** — [Issue #189](https://github.com/romulosutil/Iris/issues/189) com spec em [`docs/superpowers/specs/2026-08-03-issue-189-seo-a11y-design.md`](docs/superpowers/specs/2026-08-03-issue-189-seo-a11y-design.md) e plano em [`docs/superpowers/plans/2026-08-03-seo-a11y-pr138-fixes-plan.md`](docs/superpowers/plans/2026-08-03-seo-a11y-pr138-fixes-plan.md). (Sitemap, Robots.txt, OpenGraph/Twitter Cards, A11y axe-core e proxy com testes 100% verdes).
+
+- **Issue #190 — Páginas de Erro Customizadas 404 e 500 (Design System):** [Issue #190](https://github.com/romulosutil/Iris/issues/190) com spec em [`docs/superpowers/specs/2026-08-03-issue-190-paginas-erro-espectro-brutal-design.md`](docs/superpowers/specs/2026-08-03-issue-190-paginas-erro-espectro-brutal-design.md).
+  - ✅ **404 (`not-found.tsx`):** Entregue no commit `e9d5d20` (pt-BR, Espectro Brutal, retorno à agenda).
+  - 🚧 **500 (`error.tsx`):** Pendente (Client Component React Error Boundary, botão `reset()`, log seguro sem vazar stack trace, testes Vitest).
+
 
 ---
 
@@ -114,6 +140,68 @@
 - Nada de código. O que não dá pra provar daqui é o caminho ponta a ponta contra
   a Resend real (429 de verdade), pelo mesmo motivo da #126: exigiria alterar
   alerta na base de produção. Segue dependendo de ambiente separado.
+
+---
+
+## 🏁 Sessão 03/08/2026 — Webhook Asaas exercitado com evento real (#36, fecha D5)
+
+**O canal foi provado de ponta a ponta pela primeira vez.** Um evento
+`PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED` **real**, gerado pelo Asaas
+sandbox, atravessou a rede e virou linha em `asaas_webhook_event`
+(`evt_a81765ea346714f51a9656a8c74aefa8&17706514`, 03/08 22:55:12Z). Payload
+guardado em `docs/evidencias/2026-08-03-asaas-sandbox-evento-real.json`.
+
+**Montagem:** webhook do sandbox apontado para um túnel `cloudflared` →
+`localhost:3010` → Postgres local. **Produção não foi tocada de propósito** —
+apontar o sandbox para `irisclinica.ia.br` misturaria evento de teste com evento
+de dinheiro real na mesma tabela e amarraria o mesmo token aos dois ambientes.
+
+**O que o dublê não cobria (e por isso o D5 existia):**
+
+- O `id` real é `evt_<hash>&<n>` — **contém `&`**. Todos os testes do repo usam
+  `evt_teste_<uuid>`. Nada quebrou, mas ninguém tinha verificado.
+- Dentro de `authorization`, datas vêm em **`dd/MM/yyyy`** (`startDate:
+  "08/09/2026"`), enquanto o `dateCreated` do topo vem `yyyy-MM-dd HH:mm:ss`.
+  **Dois formatos no mesmo payload** — a apuração precisa saber disso.
+- `paymentCreationMode: "MANUAL"` e `originType:
+  "IMMEDIATE_PAYMENT_AND_RECURRING_QR_CODE"` vêm preenchidos pelo Asaas.
+
+**A decisão de arquitetura da spec ficou comprovada, não só documentada:** a
+autorização foi criada **sem `value` na raiz** e a resposta voltou com
+`"value": null`. O valor variável por paciente ativo é viável no trilho
+escolhido — isso era premissa até agora.
+
+**Contrato real do endpoint, levantado por tentativa** (a doc não foi usada —
+segue com prompt injection nas páginas de Pix Automático): `POST
+/v3/pix/automatic/authorizations` exige `frequency`, `contractId`, `startDate`,
+`customerId` e um objeto `immediateQrCode` com `value` + `originalValue` +
+`expirationSeconds`. Note que `customerId` (não `customer`, como no resto da
+API) e que **a conta precisa de chave Pix cadastrada** — sem ela o erro é
+`"Chave Pix não encontrada."`, que não diz o que fazer. Foi criada uma chave EVP
+no sandbox.
+
+**Dois defeitos de configuração encontrados no caminho** (ambos silenciosos):
+
+- `ASAAS_WEBHOOK_TOKEN` estava **vazia** no `.env.local` (só espaços + um
+  comentário TODO). O endpoint respondia 401 — comportamento **correto**, é o
+  guard "env ausente nunca vira passa" funcionando, mas indistinguível de token
+  errado, porque o corpo do 401 é idêntico nos três casos por decisão de projeto.
+- `.env.local` sobrescrevia `DATABASE_URL`/`AUTH_DATABASE_URL` com o placeholder
+  literal `<sua conn>`. Como `.env.local` tem precedência sobre `.env` no Next,
+  o app dev subia apontando para lugar nenhum e o webhook dava 500 com
+  `TypeError: Invalid URL`. Linhas comentadas.
+
+**Ressalva:** o webhook do sandbox ficou com tipo de envio **"Não sequencial"** —
+o form do painel não expõe `select`/`checkbox` no DOM (componentes custom em
+iframe) e a troca por coordenada não pegou. Aceitável enquanto o handler só
+grava: a barreira contra efeito duplicado é o `UNIQUE` em `asaas_event_id`, não
+a ordem de chegada. **Quando a apuração entrar, o webhook de produção precisa
+nascer "Sequencial"** — ordem passa a importar (`AUTHORIZED` antes de
+`CANCELLED`).
+
+**Ainda aberto:** `ASAAS_WEBHOOK_TOKEN` no Easypanel e o webhook de **produção**
+cadastrado no painel do Asaas (conta de produção, não sandbox). O token de
+produção tem que ser **distinto** do de sandbox.
 
 ---
 
