@@ -1,4 +1,5 @@
 import "server-only";
+import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { patient, consent, patientAlvoDisciplina } from "@/db/schema";
@@ -178,6 +179,15 @@ export async function criarPacienteEConsent(
           vigenciaInicio: hoje,
         });
       }
+      // #175: o relógio do trial começa no 1º paciente, na MESMA transação —
+      // se o cadastro reverter, o trial não começou. A função é idempotente
+      // (só escreve com `trial_comeco_em IS NULL AND isento_trial = false`),
+      // então não há SELECT antes para saber se é o primeiro: um
+      // SELECT-then-UPDATE reintroduziria a corrida entre dois cadastros
+      // simultâneos. É também o único caminho de escrita — `app_role` não tem
+      // policy de UPDATE em `clinic`.
+      await tx.execute(sql`SELECT app_iniciar_trial()`);
+
       return novo!.id;
     });
     return { id };
