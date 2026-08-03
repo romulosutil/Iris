@@ -110,6 +110,13 @@ async function dryRun(sql) {
  * configurado, ou RT sem papel mais vigente), registra falha explícita sem
  * tentar enviar (§4.2.1: a função de banco já filtra isso, então "sem linha"
  * é o próprio motivo).
+ *
+ * #154 — o 3º argumento (`p_transitorio`) diz à função de banco se vale
+ * retentar. Falha transitória (429/5xx, timeout) grava `_adiado` e o alerta
+ * continua elegível em `app_alertas_estagio2_sem_email()`, então a próxima
+ * varredura o retenta sozinha — até o teto de 3 tentativas, quando vira
+ * `_falhou`. Falha permanente (endereço inválido, canal não configurado)
+ * grava `_falhou` de primeira: retentar não mudaria o resultado.
  */
 export async function processarEmailRt(sql, alertaId) {
   const apiKey = process.env.EMAIL_PROVIDER_API_KEY;
@@ -118,7 +125,10 @@ export async function processarEmailRt(sql, alertaId) {
 
   const rts = await sql`SELECT * FROM app_rt_do_alerta(${alertaId})`;
   if (rts.length === 0) {
-    await sql`SELECT app_registrar_email_rt(${alertaId}, false, ${"RT nao encontrado ou sem papel vigente na clinica"})`;
+    // Permanente: clínica sem RT configurado (ou RT sem papel vigente) não se
+    // resolve em 3 varreduras de 5 minutos — depende de alguém arrumar o
+    // cadastro. Adiar aqui só atrasaria o registro do problema na trilha.
+    await sql`SELECT app_registrar_email_rt(${alertaId}, false, false, ${"RT nao encontrado ou sem papel vigente na clinica"})`;
     log(`e-mail RT: alerta_id=${alertaId} sem RT resolvido — falha registrada.`);
     return;
   }
@@ -127,15 +137,21 @@ export async function processarEmailRt(sql, alertaId) {
   const resultado = await enviarEmailRt({ apiKey, fromEmail, appUrl, rtEmail });
 
   if (resultado.ok) {
-    await sql`SELECT app_registrar_email_rt(${alertaId}, true, ${resultado.providerMessageId})`;
+    await sql`SELECT app_registrar_email_rt(${alertaId}, true, false, ${resultado.providerMessageId})`;
     log(`e-mail RT enviado: alerta_id=${alertaId} providerMessageId=${resultado.providerMessageId}`);
   } else {
-    await sql`SELECT app_registrar_email_rt(${alertaId}, false, ${resultado.erro})`;
-    log(`e-mail RT FALHOU: alerta_id=${alertaId} erro=${resultado.erro}`);
+    await sql`SELECT app_registrar_email_rt(${alertaId}, false, ${resultado.transitorio === true}, ${resultado.erro})`;
+    log(
+      `e-mail RT FALHOU (transitorio=${resultado.transitorio === true}): ` +
+        `alerta_id=${alertaId} erro=${resultado.erro}`,
+    );
   }
 }
 
-async function varrer(sql) {
+// Exportada só para o teste: o isolamento por alerta (#154) é comportamento de
+// `varrer`, não de `processarEmailRt` — testar via `main()` exigiria um banco
+// real. Não é ponto de entrada; `main()` continua sendo o único.
+export async function varrer(sql) {
   const linhas = await sql`SELECT * FROM app_escalonar_risco_vencidos()`;
 
   // Uma linha de log por escalonamento. Os campos são EXATAMENTE os que a
@@ -154,18 +170,46 @@ async function varrer(sql) {
   }
 
   // #126 — recém-escalados pro estágio 2, nesta mesma varredura.
+  //
+  // #154 — cada alerta é isolado num try/catch próprio. `processarEmailRt` já
+  // captura falha do provedor, mas o que escapa dele (queda de conexão com o
+  // Postgres no meio de um `app_registrar_email_rt`, por exemplo) derrubava a
+  // varredura inteira e silenciava TODOS os alertas seguintes da fila. Um
+  // alerta com problema não pode custar o e-mail dos outros.
   const recemEstagio2 = linhas.filter((l) => Number(l.out_estagio) === 2);
   for (const l of recemEstagio2) {
-    await processarEmailRt(sql, l.out_alerta_id);
+    try {
+      await processarEmailRt(sql, l.out_alerta_id);
+    } catch (err) {
+      log(
+        `e-mail RT: erro não tratado no alerta_id=${l.out_alerta_id} — ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
+      // Erro COMPLETO (stack + `cause`) em stderr. `log()` escreve em stdout e
+      // só a mensagem — engolir o resto produziria diagnóstico falso justamente
+      // no incidente em que ele custa mais caro (regra do repo).
+      console.error(err);
+    }
   }
 
   // #126 — reconciliação: cobre alertas que já viraram estágio 2 numa
   // varredura anterior e ficaram sem e-mail registrado (crash entre a
   // transição e o envio). Roda toda varredura, não só quando algo escalou
   // agora — é exatamente o caso que o gap cobre.
+  // A partir da #154 essa mesma consulta é também a fila de retentativa: um
+  // alerta com `_adiado` não tem `_enviado` nem `_falhou`, então continua
+  // aparecendo aqui até o teto de 3 tentativas — sem tabela de fila nova.
   const pendentes = await sql`SELECT * FROM app_alertas_estagio2_sem_email()`;
   for (const p of pendentes) {
-    await processarEmailRt(sql, p.alerta_id);
+    try {
+      await processarEmailRt(sql, p.alerta_id);
+    } catch (err) {
+      log(
+        `e-mail RT: erro não tratado no alerta_id=${p.alerta_id} (reconciliação) — ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
+      console.error(err);
+    }
   }
 
   log(`varredura concluída: ${linhas.length} alerta(s) escalado(s).`);

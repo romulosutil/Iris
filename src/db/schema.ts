@@ -1422,6 +1422,7 @@ export const alertaRiscoClinico = pgTable(
     // explícito de canal indisponível — canal que falha em silêncio é o modo de
     // falha da #108.
     canaisNotificados: jsonb("canais_notificados").notNull().default([]),
+    emailRtTentativas: integer("email_rt_tentativas").notNull().default(0),
 
     // "prazos de notificação e escalonamento interno do software" (§4.1) —
     // NUNCA "SLA de atendimento de emergência": não há prazo legal brasileiro

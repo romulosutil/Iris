@@ -41,6 +41,79 @@
 
 ---
 
+## 🏁 Sessão 02/08/2026 (3ª) — #154: robustez do canal de e-mail ao RT
+
+**O que foi entregue** (Task 1 do plano `2026-08-02-infra-offsite-email-rt-landing-page-asr-plan.md`)
+
+- **Retentativa transitório vs permanente, teto de 3.** `enviarEmailRt` passou a
+  devolver `transitorio` em todos os caminhos. Transitório = `rate_limit_exceeded`,
+  `internal_server_error`, `application_error`, `concurrent_idempotency_conflict`,
+  mais qualquer exceção de rede/timeout (o provedor pode ter processado ou não;
+  assumir permanente descartaria e-mail que só precisava de retry). Erro
+  **desconhecido** fica permanente de propósito — retentar às cegas gasta 3
+  varreduras pra chegar na mesma falha, só mais tarde.
+- **A fila de retentativa é a reconciliação que já existia.** `_adiado` é um
+  marcador novo, distinto de `_enviado`/`_falhou`; como
+  `app_alertas_estagio2_sem_email()` só exclui os dois últimos, o alerta adiado
+  continua elegível e a varredura seguinte o retenta sozinha. **Sem tabela de
+  fila nova.** Contador em `alerta_risco_clinico.email_rt_tentativas`.
+- **Isolamento por alerta em `varrer()`.** Os dois laços agora têm `try/catch`
+  individual: erro completo (stack + `cause`) em **stderr**, mensagem curta em
+  stdout, e a fila segue. Antes, um blip de conexão com o Postgres no meio de um
+  alerta abortava a varredura e silenciava todos os seguintes.
+- **Pontas soltas do item 3 da issue, fechadas.** `rt_nome` saiu da assinatura de
+  `app_rt_do_alerta` (coluna devolvida sem uso é superfície de graça numa
+  `SECURITY DEFINER`); guard de soft-delete entrou em `app_registrar_email_rt`.
+- Migrações `0068` (coluna + função de 4 args, a de 3 args removida) e `0069`
+  (pontas soltas). `infra/README.md` ganhou a tabela de marcadores e o roteiro de
+  leitura num incidente — a doc afirmava que o serviço não fazia e-mail nenhum,
+  defasada desde a #126.
+
+**Decisões travadas nesta sessão**
+
+- **Soft-delete vira `RAISE EXCEPTION`, não `AND deletado_em IS NULL` no
+  `UPDATE`.** A issue sugeria alinhar o `UPDATE` com as funções irmãs, mas um
+  `UPDATE` que não casa afeta **0 linhas em silêncio** e não estoura — o
+  `INSERT` no `audit_log` logo abaixo gravaria mesmo assim, produzindo trilha que
+  afirma um registro que não aconteceu. Exatamente a classe de falha da #108. O
+  guard virou exceção explícita, absorvida pelo `try/catch` por alerta da mesma
+  PR.
+- **`rt_nome` removido em vez de consumido.** Usá-lo numa saudação exigiria abrir
+  `montarCorpoAlertaRt(appUrl)` para um segundo parâmetro — e o contrato de um
+  parâmetro só é o que garante mecanicamente que nada clínico pode ser
+  interpolado no corpo (§4.2.1), com teste de paridade contra o adapter TS.
+  Remover preserva o mínimo privilégio sem tocar no guardrail.
+- **Falha permanente não consome o teto.** `(false, false)` encerra na 1ª
+  tentativa — provado no ROLLBACK.
+
+**Verificação (medida, não presumida)**
+
+- Comportamento da função no Postgres local, em `BEGIN … ROLLBACK`:
+  `_adiado → _adiado → _falhou`, `email_rt_tentativas = 3`, e o alerta segue
+  elegível em `app_alertas_estagio2_sem_email()` enquanto estiver `_adiado`.
+- `pg_proc`: só a assinatura de 4 args de `app_registrar_email_rt`, `prosecdef = t`,
+  `proacl` com EXECUTE só para `iris_escalonamento`.
+- **Cheque de mutação nos dois lados** (regra do repo — já houve teste verde que
+  passava contra o código pré-fix): removidos os `try/catch`, 2 testes falham;
+  `classificarErroResend` forçada a `return true`, 3 testes falham.
+- `pnpm test` 726/726, `typecheck` limpo, `lint` 0 erros.
+
+**Achado colateral (não vira débito, já corrigido)**
+
+- O dublê de `Resend` no teste usava `vi.fn().mockImplementation(() => ({...}))`
+  — arrow **não é construtor**, então `new Resend(apiKey)` estourava dentro do
+  `try` e caía no `catch`, que classifica como transitório. O teste de
+  `validation_error` passaria sem nunca exercitar `classificarErroResend`.
+  Trocado por `function` normal.
+
+**Ainda aberto na #154**
+
+- Nada de código. O que não dá pra provar daqui é o caminho ponta a ponta contra
+  a Resend real (429 de verdade), pelo mesmo motivo da #126: exigiria alterar
+  alerta na base de produção. Segue dependendo de ambiente separado.
+
+---
+
 ## 🏁 Sessão 02/08/2026 (2ª) — Fase 7: trial no 1º paciente, arquivamento e webhook Asaas (#175/#174/#36)
 
 **Entregue** (unit 712/712, RLS 550/550 sem nenhum skipped, typecheck/lint/build limpos):

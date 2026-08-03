@@ -477,6 +477,20 @@
       "when": 1785422576000,
       "tag": "0067_desarquivar_paciente_por_atendimento",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1785422577000,
+      "tag": "0068_alerta_risco_email_rt_retry",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1785422578000,
+      "tag": "0069_email_rt_pontas_soltas",
+      "breakpoints": true
     }
   ]
 }
