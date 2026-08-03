@@ -33,14 +33,14 @@ export function comporSecoesProntuarioIntegral(
 
   if (input.planoTerapeutico) {
     secoes.push({
-      titulo: "1. Plano Terapêutico Singular (PTS)",
+      titulo: `${secoes.length + 1}. Plano Terapêutico Singular (PTS)`,
       conteudo: input.planoTerapeutico,
     });
   }
 
   if (input.responsavelTecnico) {
     secoes.push({
-      titulo: "2. Responsável Técnico pelo Prontuário",
+      titulo: `${secoes.length + 1}. Responsável Técnico pelo Prontuário`,
       conteudo: `Nome: ${input.responsavelTecnico.nome} | Conselho: ${input.responsavelTecnico.conselho} | Registro: ${input.responsavelTecnico.registro}`,
     });
   }
@@ -54,14 +54,14 @@ export function comporSecoesProntuarioIntegral(
       .join("\n\n");
 
     secoes.push({
-      titulo: "3. Histórico de Evoluções Clínicas Factuais",
+      titulo: `${secoes.length + 1}. Histórico de Evoluções Clínicas Factuais`,
       conteudo: textoEvolucoes,
     });
   }
 
   if (input.metasResumo) {
     secoes.push({
-      titulo: "4. Matriz de Evolução de Metas e Marcos",
+      titulo: `${secoes.length + 1}. Matriz de Evolução de Metas e Marcos`,
       conteudo: input.metasResumo,
     });
   }
