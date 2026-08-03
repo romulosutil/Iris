@@ -10,7 +10,7 @@ CREATE OR REPLACE FUNCTION app_pseudonimizar_audit_log_orfao() RETURNS int
   LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   WITH atualizados AS (
     UPDATE audit_log
-       SET detalhe = jsonb_build_object('pseudonimizado', true)
+       SET detalhe = COALESCE(detalhe, '{}'::jsonb) || jsonb_build_object('pseudonimizado', true)
      WHERE ator_id IS NULL
        AND COALESCE((detalhe->>'pseudonimizado')::boolean, false) = false
     RETURNING id
