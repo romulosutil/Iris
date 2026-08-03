@@ -183,4 +183,68 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${SESS_COBERTURA}`;
     expect(s[0]!.numero_sequencial_paciente).toBe(2);
   });
+
+  // ─── #174 regra 6: gravar registro clínico desarquiva o paciente ──────────
+  const ACAO = "paciente_desarquivado_automaticamente";
+  const arquivar = () =>
+    owner`UPDATE patient SET arquivado_em = now() WHERE id = ${PAC}`;
+  const trilha = async () => {
+    const [r] = await owner`SELECT count(*)::int AS n FROM audit_log
+      WHERE acao = ${ACAO} AND patient_id = ${PAC}`;
+    return r!.n as number;
+  };
+  const arquivadoEm = async () => {
+    const [r] =
+      await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    return r!.arquivado_em as Date | null;
+  };
+
+  test("regra 6 · captura de diário desarquiva o paciente e grava 1 linha de trilha", async () => {
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await arquivar();
+    expect(await arquivadoEm()).not.toBeNull(); // pré-condição real
+
+    const r = await capturarDiario(ctxT1, {
+      sessionId: SESS,
+      texto: "Voltou a atender depois de meses.",
+    });
+    expect(r.error).toBeUndefined();
+    expect(await arquivadoEm()).toBeNull(); // saiu do arquivo comercial
+    expect(await trilha()).toBe(1);
+  });
+
+  test("regra 6 · segunda nota na sequência NÃO gera 2ª linha de trilha", async () => {
+    // Paciente já ativo (teste anterior). `audit_log` é append-only para
+    // `app_role`: uma duplicata aqui não teria como ser apagada depois.
+    await capturarDiario(ctxT1, { sessionId: SESS, texto: "Segunda nota." });
+    const { consolidarSessao } = await import("./logic");
+    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Consolidada." });
+    expect(await trilha()).toBe(1);
+  });
+
+  test("regra 6 · nota de paciente NÃO arquivado não gera trilha nenhuma", async () => {
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    expect(await arquivadoEm()).toBeNull();
+    await capturarDiario(ctxT1, { sessionId: SESS, texto: "Sessão normal." });
+    expect(await trilha()).toBe(0);
+  });
+
+  test("regra 6 · terapeuta de cobertura (fora da equipe) não perde o diário", async () => {
+    // O definer ESTOURA para quem não passa no predicado de `patient_select`.
+    // Sem o gate de visibilidade em `desarquivarAoRegistrar`, essa exceção
+    // abortaria a transação e o terapeuta de cobertura perderia a nota — em
+    // TODO paciente, arquivado ou não. Aqui o paciente segue arquivado (quem
+    // desarquiva nesse caso é o coordenador) mas o diário É salvo.
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await arquivar();
+    const r = await capturarDiario(ctxCobertura, {
+      sessionId: SESS_COBERTURA,
+      texto: "Cobertura registrou a sessão.",
+    });
+    expect(r.error).toBeUndefined();
+    expect(r.id).toBeTruthy();
+    expect(await arquivadoEm()).not.toBeNull();
+    expect(await trilha()).toBe(0);
+    await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PAC}`;
+  });
 });
