@@ -21,8 +21,25 @@
 | **5**   | Relatórios de Convênio & Supervisão                     |           ✅ Concluído            | Issue #8                 |
 | **6**   | Hardening LGPD (fechamento MVP)                         | ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅) | Issue #9                 |
 | **6b**  | Ditado de Voz (áudio + ASR)                             |  📅 Fast-follow · gated por DPA   | Issue #72                |
-| **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
+| **7**   | Self-Service & Growth (onboarding + pagamento autônomo) | 🚧 Em construção (trial #175 ✅ · arquivamento #174 parcial · webhook ✅ · **cobrança pendente**) | Issue #36                |
 | **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
+
+## 🧾 Débitos técnicos abertos
+
+> Lista viva, não log de sessão. Item só sai daqui quando estiver **resolvido e verificado** — não quando a issue relacionada fechar. Cada linha diz o que dói, não só o que falta.
+
+| # | Débito | Por que dói | Onde |
+| :- | :----- | :---------- | :--- |
+| **D1** | **`pnpm db:generate` é armadilha neste repo.** O snapshot do Drizzle está dessincronizado das migrações escritas à mão: gerar produz SQL recriando tabelas e enums que já existem em produção (na Fase 7 foram 128 linhas). | Um agente que siga o comando documentado no `CLAUDE.md` e aplique o resultado **derruba o banco**. Hoje a única proteção é alguém ler o SQL gerado antes de aplicar. | `db/migrations/meta/*_snapshot.json` |
+| **D2** | **Migração à mão exige `when` manual no `_journal.json`** (anterior + 1000). Se o `when` for ≤ o da última aplicada, o Drizzle **pula a migração em silêncio**. | Já causou incidente: a `0055` (fix do oráculo cross-tenant, #128) ficou fora do journal e nunca rodou em produção, com a issue fechada pelo diff (#165). | `db/migrations/meta/_journal.json` |
+| **D3** | **`app_role` tem `GRANT` de tabela `INSERT`/`UPDATE`/`DELETE` em `clinic`** (herdado). Hoje inofensivo porque não há policy de escrita que case — a barreira é só a RLS, sem defesa em profundidade no nível de privilégio. | `clinic.isento_trial` é flag de billing: quem a ligasse sairia do gate de pagamento. Uma policy de escrita adicionada por distração no futuro abre tudo de uma vez. | Revogar e re-conceder coluna a coluna, como já se faz em `patient` (`0044`) |
+| **D4** | **Job de auto-arquivamento (90 dias) não existe** — só a regra pura `calcularStatusArquivamento`. Bloqueado por decisão de produto: "última atividade" atravessa `session_note`, `evidence` e `goal`. | Essa definição decide **o que a clínica paga**. Escolher de passagem é errar em cima de dinheiro do cliente. | #174 · padrão em `scripts/escalonamento-risco.mjs` (delega a função do banco, porque cruza clínicas) |
+| **D5** | **Sandbox Asaas nunca exercitado ponta a ponta.** O webhook só viu payload simulado em teste de integração; nenhum evento real foi disparado contra o ambiente. Falta também provisionar `ASAAS_WEBHOOK_TOKEN` no Easypanel e cadastrar a URL no painel do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. | #36 |
+| **D6** | **Sem UI de arquivar/desarquivar** e sem aviso in-app quando um paciente volta a contar na fatura. As Server Actions existem, a tela não. | O desarquivamento automático é silencioso: a clínica volta a ser cobrada por um paciente sem nada na interface dizendo isso. | #174 |
+| **D7** | **Regra 6 só dispara por `session_note`.** Áudio (`registrarAudioLocal`), `evidence` e escopo de protocolo não desarquivam. | Se a intenção da issue era "qualquer registro clínico", há paciente em atendimento ativo fora da fatura. É ampliação de escopo a decidir, não bug. | #174 |
+| **D8** | **Terapeuta de cobertura não desarquiva.** `app_desarquivar_paciente` estoura antes de olhar `arquivado_em`, então há um gate de visibilidade antes da chamada — senão a exceção abortaria a transação e o terapeuta perderia o diário inteiro. | Consequência assumida, não acidente: paciente arquivado invisível ao terapeuta de cobertura só volta pela mão do coordenador. Vira problema se cobertura for comum na prática. | #174 · `0067` |
+
+---
 
 ## 🏁 Sessão 02/08/2026 (2ª) — Fase 7: trial no 1º paciente, arquivamento e webhook Asaas (#175/#174/#36)
 
@@ -41,13 +58,9 @@
 - **O webhook não apura pacientes ativos.** Ele roda em `authDb`/`iris_auth`, e essa conexão nunca toca dado de paciente (gargalo único do `withTenant`). A apuração roda fora do handler, sobre o payload bruto guardado.
 - **Drift corrigido:** `auditLog.atorId` estava `.notNull()` no schema, mas o banco é nullable desde a `0049` (`ator_id IS NULL` = ação automática do sistema) — é exatamente o campo que o job de 90 dias precisa.
 
-**Aberto / próximo:**
+**Aberto / próximo:** consolidado em **🧾 Débitos técnicos abertos** (D1–D8, no topo deste arquivo) para não duplicar e sair de sincronia. O que esta sessão adicionou lá: D1, D3, D4, D5, D6, D7, D8. Fora deles, falta só a **apuração de faturamento** (`app_contar_pacientes_ativos_billing`) e o cálculo do valor cobrado, ambos dependentes da tabela `subscription`.
 
-- [ ] **Script de varredura dos 90 dias** (`scripts/`) e seu agendador. Depende de definir "última atividade", que atravessa `session_note`, `evidence` e `goal` — essa definição decide o que a clínica paga e precisa de decisão do Rômulo, não de escolha de implementação.
-- [ ] **Apuração de faturamento** (`app_contar_pacientes_ativos_billing`) e cálculo do valor cobrado — dependem da tabela `subscription`.
-- [ ] **UI de arquivar/desarquivar** na tela do paciente: as Server Actions existem, a tela não. Também não há aviso in-app de que um paciente voltou a contar na fatura.
-- [ ] **Sandbox Asaas ainda não exercitado ponta a ponta** — o webhook foi validado só com payload simulado em teste de integração. Falta disparar um evento real do sandbox contra o ambiente.
-- [ ] **`app_role` tem GRANT de tabela `INSERT/UPDATE/DELETE` em `clinic`** (herdado, pré-existente), hoje inofensivo porque não há policy de escrita que case. Vale revogar e re-conceder coluna a coluna, como já é feito em `patient` (`0044`) — `isento_trial` é flag de billing.
+**Estado das issues:** #175 fechada. #174 e #36 seguem abertas, com o escopo restante comentado em cada uma (PR #177).
 
 ## 🏁 Sessão 02/08/2026 — Revisão de Issues e Decisões de Produto (Rômulo)
 
