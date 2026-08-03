@@ -7,9 +7,11 @@ import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "../../src/db/rls";
 import { report, reportPdf, auditLog } from "../../src/db/schema";
+import { hasDb } from "./integration-env";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 
 const CLINIC_A = "00000000-0000-0000-0000-00000000000a";
 const CLINIC_B = "00000000-0000-0000-0000-00000000000b";
@@ -97,7 +99,9 @@ describe.skipIf(!hasDb)("report/report_pdf/audit_log — RLS", () => {
       VALUES (${CLINIC_A}, ${U_COORD_A}, 'relatorio_exportado', 'report', ${R1})`;
     await expect(
       withTenant(ctx("coordenador", U_COORD_A), (db) =>
-        db.execute(sql`DELETE FROM audit_log WHERE clinic_id = ${CLINIC_A}::uuid`),
+        db.execute(
+          sql`DELETE FROM audit_log WHERE clinic_id = ${CLINIC_A}::uuid`,
+        ),
       ),
     ).rejects.toThrow();
   });

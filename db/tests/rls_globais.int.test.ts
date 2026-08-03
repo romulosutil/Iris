@@ -8,13 +8,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
 import { withTenant } from "../../src/db/rls";
-import { careTeamMembership, appUser, userRole, clinic } from "../../src/db/schema";
+import {
+  careTeamMembership,
+  appUser,
+  userRole,
+  clinic,
+} from "../../src/db/schema";
 import { sql as appSql, authSql, authDb } from "../../src/db/client";
-
-const hasDb =
-  !!process.env.DATABASE_URL &&
-  !!process.env.AUTH_DATABASE_URL &&
-  !!process.env.MIGRATION_DATABASE_URL;
+import { hasDb } from "./integration-env";
 
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
 const CLINIC_B = "22222222-2222-2222-2222-222222222222";
@@ -75,9 +76,7 @@ describe.skipIf(!hasDb)("RLS tabelas globais — Fase 1b", () => {
   });
 
   test("iris_auth (bootstrap) lê user_role de qualquer clínica do usuário", async () => {
-    const rows = await authDb
-      .select({ cid: userRole.clinicId })
-      .from(userRole);
+    const rows = await authDb.select({ cid: userRole.clinicId }).from(userRole);
     const clinicas = new Set(rows.map((r) => r.cid));
     expect(clinicas.has(CLINIC_A)).toBe(true);
     expect(clinicas.has(CLINIC_B)).toBe(true); // vê além da clínica ativa

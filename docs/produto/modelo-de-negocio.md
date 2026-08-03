@@ -159,10 +159,32 @@ terapeuta/assento, por quatro razões:
 4. **Coincide com a unidade LGPD** — o titular dos dados é o paciente;
    contratos, consentimento e cobrança falam da mesma coisa.
 
-Definição de "paciente ativo" (hipótese): paciente com ≥1 sessão registrada no
-mês. Alternativa Neoaba (>3 sessões/mês) é mais generosa; decidir no piloto.
-Piso por assinatura (ex.: 10 pacientes, como ComportaTUDO) protege o CAC em
-clínicas muito pequenas.
+**Definição de "paciente ativo" — DECISÃO (01/08/2026, Rômulo):** paciente
+**cadastrado e não arquivado**, apurado por snapshot no ciclo. Não é "≥1 sessão
+no mês" (hipótese anterior, e a alternativa Neoaba de >3 sessões/mês fica
+descartada): contagem por sessão obrigaria a apurar uso retroativo e puniria
+recesso, férias e paciente em avaliação.
+
+Três guardas inegociáveis, porque a unidade de cobrança encosta em dever de
+guarda de prontuário:
+
+1. **Arquivado ≠ apagado.** Paciente arquivado sai da fatura mas continua
+   legível e exportável. Cobrar por dado que o profissional é obrigado a manter
+   empurraria o cliente a apagar prontuário.
+2. **Arquivamento é decisão organizacional** (`patient.arquivado_em`), distinta
+   da alta clínica (`patient.alta_em`), que dispara o relógio de retenção LGPD.
+   Alta arquiva; arquivar nunca dá alta.
+3. **Auto-arquivamento após 90 dias sem atualização**, com aviso 7 dias antes —
+   fatura inflada por cadastro esquecido é o caminho mais curto para o cliente
+   mutilar o prontuário e o dossiê de convênio sair furado.
+
+**Piso por assinatura: descartado no self-service** (D2 da spec de cadastro,
+reafirmado em 01/08). Piso deixa o preço regressivo ao contrário — quem tem 3
+pacientes pagaria mais por paciente que quem tem 15 — e afasta o autônomo
+pequeno, que é exatamente o canal orgânico do §6. Em avaliação como substituto:
+**plano de entrada** (base mensal que já inclui os primeiros pacientes),
+protegendo o CAC sem punir o pequeno. Na venda assistida (#36) o piso continua
+válido.
 
 ## 4. Empacotamento: 3 tiers mapeados às fases do MVP
 
@@ -229,6 +251,24 @@ revisável, não definitiva). Os outros 8 itens da seção F (2º protocolo,
 anamnese, relatório escolar, transição/alta, reunião interdisciplinar, treino
 parental, dataset de divergência) não têm pedido de cliente nem urgência de
 receita identificados nesta rodada — continuam pós-MVP sem mudança.
+
+**Revisão 01/08/2026 — régua marginal para o self-service (PROPOSTA, não
+fechada).** O preço linear por paciente explode na conta média: 30 pacientes a
+R$ 39 dá R$ 1.170/mês, contra ~R$ 387 do ABA Digital (que cobra por terapeuta,
+pacientes ilimitados) — o piso de preço da categoria. Proposta em avaliação:
+desconto **marginal** por degrau, sem salto ao cadastrar mais um paciente —
+R$ 39 até 15 pacientes, R$ 32 de 16 a 40, R$ 25 de 41 em diante. Resultado:
+8 pacientes = R$ 312 · 30 = R$ 1.065 · 80 = R$ 2.385, ~40–50% abaixo da tabela
+pública do ComportaTUDO.
+
+**O que impede fechar o número:** ele está ancorado na única tabela pública do
+mercado, e os outros três concorrentes praticam "sob consulta" — preço de tabela
+não é preço praticado. Nenhum real foi faturado até hoje. Até haver cliente
+pagante, o valor vive em coluna versionada por assinatura (nunca em constante no
+código) e as primeiras clínicas entram com **preço de fundador**. Medição
+proposta: cobrar as duas primeiras clínicas com valores diferentes e observar
+aceitação — a única evidência real disponível antes do Van Westendorp do
+Roteiro C.
 
 Racional dos números: ancorados na régua pública do ComportaTUDO (59,90–99,90),
 com o tier de entrada ABAIXO deles (escopo menor — não temos financeiro/agenda

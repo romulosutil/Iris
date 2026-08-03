@@ -21,8 +21,1213 @@
 | **5**   | Relatórios de Convênio & Supervisão                     |           ✅ Concluído            | Issue #8                 |
 | **6**   | Hardening LGPD (fechamento MVP)                         | ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅) | Issue #9                 |
 | **6b**  | Ditado de Voz (áudio + ASR)                             |  📅 Fast-follow · gated por DPA   | Issue #72                |
-| **7**   | Self-Service & Growth (onboarding + pagamento autônomo) |            📅 Pós-MVP             | Issue #36                |
-| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |            📅 Pós-MVP             | Issue #126               |
+| **7**   | Self-Service & Growth (onboarding + pagamento autônomo) | 🚧 Em construção (trial #175 ✅ · arquivamento #174 parcial · webhook ✅ · **cobrança pendente**) | Issue #36                |
+| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
+
+## 🧾 Débitos técnicos abertos
+
+> Lista viva, não log de sessão. Item só sai daqui quando estiver **resolvido e verificado** — não quando a issue relacionada fechar. Cada linha diz o que dói, não só o que falta.
+
+| # | Débito | Por que dói | Onde |
+| :- | :----- | :---------- | :--- |
+| **D1** | **`pnpm db:generate` é armadilha neste repo.** O snapshot do Drizzle está dessincronizado das migrações escritas à mão: gerar produz SQL recriando tabelas e enums que já existem em produção (na Fase 7 foram 128 linhas). | Mitigado, **não resolvido**: o `CLAUDE.md` agora manda escrever migração à mão e descartar o que o `db:generate` produzir. A proteção é uma instrução que alguém precisa seguir — reconciliar o snapshot é o que fecha de verdade. | `db/migrations/meta/*_snapshot.json` · guardrail em `CLAUDE.md` |
+| **D2** | **Migração à mão exige `when` manual no `_journal.json`** (anterior + 1000). Se o `when` for ≤ o da última aplicada, o Drizzle **pula a migração em silêncio**. | Já causou incidente: a `0055` (fix do oráculo cross-tenant, #128) ficou fora do journal e nunca rodou em produção, com a issue fechada pelo diff (#165). Documentado no `CLAUDE.md`; o fim real seria um teste de CI que compara `_journal.json` com os `.sql` do diretório e com o que está aplicado. | `db/migrations/meta/_journal.json` · guardrail em `CLAUDE.md` |
+| **D3** | **`app_role` tem `GRANT` de tabela `INSERT`/`UPDATE`/`DELETE` em `clinic`** (herdado). Hoje inofensivo porque não há policy de escrita que case — a barreira é só a RLS, sem defesa em profundidade no nível de privilégio. | `clinic.isento_trial` é flag de billing: quem a ligasse sairia do gate de pagamento. Uma policy de escrita adicionada por distração no futuro abre tudo de uma vez. | Revogar e re-conceder coluna a coluna, como já se faz em `patient` (`0044`) |
+| **D4** | **Job de auto-arquivamento (90 dias) não existe** — só a regra pura `calcularStatusArquivamento`. Bloqueado por decisão de produto: "última atividade" atravessa `session_note`, `evidence` e `goal`. | Essa definição decide **o que a clínica paga**. Escolher de passagem é errar em cima de dinheiro do cliente. | #174 · padrão em `scripts/escalonamento-risco.mjs` (delega a função do banco, porque cruza clínicas) |
+| **D5** | **Sandbox Asaas nunca exercitado ponta a ponta.** O webhook só viu payload simulado em teste de integração; nenhum evento real foi disparado contra o ambiente. Falta também provisionar `ASAAS_WEBHOOK_TOKEN` no Easypanel e cadastrar a URL no painel do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. | #36 |
+| **D6** | **Sem UI de arquivar/desarquivar** e sem aviso in-app quando um paciente volta a contar na fatura. As Server Actions existem, a tela não. | O desarquivamento automático é silencioso: a clínica volta a ser cobrada por um paciente sem nada na interface dizendo isso. | #174 |
+| **D7** | **Regra 6 só dispara por `session_note`.** Áudio (`registrarAudioLocal`), `evidence` e escopo de protocolo não desarquivam. | Se a intenção da issue era "qualquer registro clínico", há paciente em atendimento ativo fora da fatura. É ampliação de escopo a decidir, não bug. | #174 |
+| **D8** | **Terapeuta de cobertura não desarquiva.** `app_desarquivar_paciente` estoura antes de olhar `arquivado_em`, então há um gate de visibilidade antes da chamada — senão a exceção abortaria a transação e o terapeuta perderia o diário inteiro. | Consequência assumida, não acidente: paciente arquivado invisível ao terapeuta de cobertura só volta pela mão do coordenador. Vira problema se cobertura for comum na prática. | #174 · `0067` |
+| **D9** | **Customização White-Label nos PDFs exportados (#120)** — funcionalidade de personalização com logotipo e cores da clínica no cabeçalho do PDF. | Melhoria de produto futura: hoje os PDFs usam o layout auditável padrão da plataforma Iris. | #120 · `src/lib/export/pdf-generator.ts` |
+| **D10** | **Assinatura Digital ICP-Brasil A1/A3 (#120)** — integração com certificados ICP-Brasil para relatórios com exigência judicial/pericial. | Melhoria de produto futura: o padrão atual (MFA + SHA-256 + AuditLog) atende ao piso legal, mas certas instâncias judiciais pedem ICP-Brasil. | #120 · `src/lib/export/pdf-generator.ts` |
+| **D11** | **Estratégia de Ativo de Dados & Indexação RAG (#120)** — pipeline de tokenização e treinamento de IA sobre históricos exportados. | Diretriz de negócio Iris: preservação integral de evoluções e prontuários no banco para vetorização/RAG e aperfeiçoamento dos modelos clínicos. | #120 · `src/lib/extraction/` |
+
+---
+
+## 🏁 Sessão 02/08/2026 (3ª) — #154: robustez do canal de e-mail ao RT
+
+**O que foi entregue** (Task 1 do plano `2026-08-02-infra-offsite-email-rt-landing-page-asr-plan.md`)
+
+- **Retentativa transitório vs permanente, teto de 3.** `enviarEmailRt` passou a
+  devolver `transitorio` em todos os caminhos. Transitório = `rate_limit_exceeded`,
+  `internal_server_error`, `application_error`, `concurrent_idempotency_conflict`,
+  mais qualquer exceção de rede/timeout (o provedor pode ter processado ou não;
+  assumir permanente descartaria e-mail que só precisava de retry). Erro
+  **desconhecido** fica permanente de propósito — retentar às cegas gasta 3
+  varreduras pra chegar na mesma falha, só mais tarde.
+- **A fila de retentativa é a reconciliação que já existia.** `_adiado` é um
+  marcador novo, distinto de `_enviado`/`_falhou`; como
+  `app_alertas_estagio2_sem_email()` só exclui os dois últimos, o alerta adiado
+  continua elegível e a varredura seguinte o retenta sozinha. **Sem tabela de
+  fila nova.** Contador em `alerta_risco_clinico.email_rt_tentativas`.
+- **Isolamento por alerta em `varrer()`.** Os dois laços agora têm `try/catch`
+  individual: erro completo (stack + `cause`) em **stderr**, mensagem curta em
+  stdout, e a fila segue. Antes, um blip de conexão com o Postgres no meio de um
+  alerta abortava a varredura e silenciava todos os seguintes.
+- **Pontas soltas do item 3 da issue, fechadas.** `rt_nome` saiu da assinatura de
+  `app_rt_do_alerta` (coluna devolvida sem uso é superfície de graça numa
+  `SECURITY DEFINER`); guard de soft-delete entrou em `app_registrar_email_rt`.
+- Migrações `0068` (coluna + função de 4 args, a de 3 args removida) e `0069`
+  (pontas soltas). `infra/README.md` ganhou a tabela de marcadores e o roteiro de
+  leitura num incidente — a doc afirmava que o serviço não fazia e-mail nenhum,
+  defasada desde a #126.
+
+**Decisões travadas nesta sessão**
+
+- **Soft-delete vira `RAISE EXCEPTION`, não `AND deletado_em IS NULL` no
+  `UPDATE`.** A issue sugeria alinhar o `UPDATE` com as funções irmãs, mas um
+  `UPDATE` que não casa afeta **0 linhas em silêncio** e não estoura — o
+  `INSERT` no `audit_log` logo abaixo gravaria mesmo assim, produzindo trilha que
+  afirma um registro que não aconteceu. Exatamente a classe de falha da #108. O
+  guard virou exceção explícita, absorvida pelo `try/catch` por alerta da mesma
+  PR.
+- **`rt_nome` removido em vez de consumido.** Usá-lo numa saudação exigiria abrir
+  `montarCorpoAlertaRt(appUrl)` para um segundo parâmetro — e o contrato de um
+  parâmetro só é o que garante mecanicamente que nada clínico pode ser
+  interpolado no corpo (§4.2.1), com teste de paridade contra o adapter TS.
+  Remover preserva o mínimo privilégio sem tocar no guardrail.
+- **Falha permanente não consome o teto.** `(false, false)` encerra na 1ª
+  tentativa — provado no ROLLBACK.
+
+**Verificação (medida, não presumida)**
+
+- Comportamento da função no Postgres local, em `BEGIN … ROLLBACK`:
+  `_adiado → _adiado → _falhou`, `email_rt_tentativas = 3`, e o alerta segue
+  elegível em `app_alertas_estagio2_sem_email()` enquanto estiver `_adiado`.
+- `pg_proc`: só a assinatura de 4 args de `app_registrar_email_rt`, `prosecdef = t`,
+  `proacl` com EXECUTE só para `iris_escalonamento`.
+- **Cheque de mutação nos dois lados** (regra do repo — já houve teste verde que
+  passava contra o código pré-fix): removidos os `try/catch`, 2 testes falham;
+  `classificarErroResend` forçada a `return true`, 3 testes falham.
+- `pnpm test` 726/726, `typecheck` limpo, `lint` 0 erros.
+
+**Achado colateral (não vira débito, já corrigido)**
+
+- O dublê de `Resend` no teste usava `vi.fn().mockImplementation(() => ({...}))`
+  — arrow **não é construtor**, então `new Resend(apiKey)` estourava dentro do
+  `try` e caía no `catch`, que classifica como transitório. O teste de
+  `validation_error` passaria sem nunca exercitar `classificarErroResend`.
+  Trocado por `function` normal.
+
+**Ainda aberto na #154**
+
+- Nada de código. O que não dá pra provar daqui é o caminho ponta a ponta contra
+  a Resend real (429 de verdade), pelo mesmo motivo da #126: exigiria alterar
+  alerta na base de produção. Segue dependendo de ambiente separado.
+
+---
+
+## 🏁 Sessão 02/08/2026 (2ª) — Fase 7: trial no 1º paciente, arquivamento e webhook Asaas (#175/#174/#36)
+
+**Entregue** (unit 712/712, RLS 550/550 sem nenhum skipped, typecheck/lint/build limpos):
+
+- **#175 — o relógio do trial começa no 1º paciente**, com teto de 14 dias. `clinic.trial_comeco_em` virou nullable sem default (migração `0064`); `NULL` agora significa de verdade "cadastrou, ainda não tem 1º paciente". O sentinela `'2020-01-01'` da `0057` e o paliativo `CORTE_TRIAL_REAL` (`ad789a6`) saíram juntos — as duas estratégias não podiam coexistir.
+- **Coluna nova `clinic.isento_trial`** — decisão do Rômulo nesta sessão. Clínica legada pré-self-service fica fora do relógio **e** do gate de pagamento. Sem ela, zerar o sentinela para `NULL` faria o legado cair no teto de 14 dias e virar trial vencido: o mesmo bug do #176 por outro caminho.
+- **#174 — `patient.arquivado_em`** (comercial) desatrelado de `alta_em` (clínico), migração `0065`. Dar alta arquiva; arquivar nunca dá alta; arquivado continua 100% legível e exportável (travado por teste de RLS). Regra dos 90 dias com aviso no 83º implementada como função pura; registrar atendimento desarquiva automaticamente e grava trilha uma única vez.
+- **#36 — `POST /api/hooks/asaas`** com token `timing-safe` e idempotência garantida pelo banco (`UNIQUE` + `ON CONFLICT DO NOTHING`, migração `0066`). Evento desconhecido responde 200 de propósito — 5xx vira loop de reentrega do Asaas.
+
+**Decisões de arquitetura tomadas na execução (não estavam no plano):**
+
+- **Migrações escritas à mão, não por `pnpm db:generate`.** O snapshot do Drizzle está dessincronizado do repositório: `db:generate` produziu 128 linhas recriando migrações antigas já aplicadas. Enquanto o snapshot não for reconciliado, `db:generate` é armadilha neste repo. ⚠️ **Débito aberto.**
+- **Escrita em `clinic` e desarquivamento via `SECURITY DEFINER`, não via policy nova.** `app_role` só tem policy de `SELECT` em `clinic` (`0002`), e `patient_update` (`0001`) exclui terapeuta. Afrouxar as policies abriria todas as colunas mutáveis para resolver a transição de uma; as funções `app_iniciar_trial()` e `app_desarquivar_paciente()` (`0064`/`0067`) mantêm a superfície mínima, com guard interno espelhando o predicado de **leitura**.
+- **"Dar alta arquiva" virou trigger de banco**, não regra de Server Action: `alta_em` não tem nenhum caminho de escrita no app hoje (só o script de retenção), então a regra em código não cobriria os escritores reais.
+- **O webhook não apura pacientes ativos.** Ele roda em `authDb`/`iris_auth`, e essa conexão nunca toca dado de paciente (gargalo único do `withTenant`). A apuração roda fora do handler, sobre o payload bruto guardado.
+- **Drift corrigido:** `auditLog.atorId` estava `.notNull()` no schema, mas o banco é nullable desde a `0049` (`ator_id IS NULL` = ação automática do sistema) — é exatamente o campo que o job de 90 dias precisa.
+
+**Aberto / próximo:** consolidado em **🧾 Débitos técnicos abertos** (D1–D8, no topo deste arquivo) para não duplicar e sair de sincronia. O que esta sessão adicionou lá: D1, D3, D4, D5, D6, D7, D8. Fora deles, falta só a **apuração de faturamento** (`app_contar_pacientes_ativos_billing`) e o cálculo do valor cobrado, ambos dependentes da tabela `subscription`.
+
+**Estado das issues:** #175 fechada. #174 e #36 seguem abertas, com o escopo restante comentado em cada uma (PR #177).
+
+## 🏁 Sessão 02/08/2026 — Revisão de Issues e Decisões de Produto (Rômulo)
+
+**Decisões de produto e alinhamento de backlog:**
+
+- **Issue #159 Fechada:** Encerrada no GitHub por ter sido superada e substituída pelas Issues #174 (arquivamento de pacientes) e #175 (relógio de trial no 1º paciente) e pela integração com Asaas.
+- **Fase 7 / Asaas (Issue #36):** O gateway Asaas está em implementação ativa para suportar o faturamento por paciente ativo/mês e a régua de cobrança do onboarding assistido.
+- **Nicho Terapia Convencional (Issue #98 promovida):** Antecipada a pedido de terapeutas (removida a tag `pos-mvp`). Design simplificado: permitir criar sessões/pacientes sem selecionar nenhum protocolo (`protocolo = null`). O agente de IA atuará como psicólogo generalista (gerando resumo de sessão, extraindo insights qualitativos e emitindo alertas de risco/crise, sem tentar pontuar domínios ou marcos rígidos).
+- **Prontuário Multidisciplinar & Sigilo (Issue #119 ajustada):** Mantido o princípio de prontuário unificado — todos os profissionais da equipe de cuidado multidisciplinar vinculados ao paciente têm acesso a 100% das informações clínicas (viabilizando substituições e visão integrada). Perfis administrativos/recepção não têm acesso aos prontuários. O requisito de fiscalização e sigilo será atendido por um **Audit Log detalhado de acessos** (registrando quem leu/acessou o quê).
+
+## 🏁 Sessão 01/08/2026 (2ª) — Modelo de negócio, gateway e liberação do cadastro (Issues #163/#159)
+
+
+**Gateway: Asaas confirmado depois de avaliar Mercado Pago e Getnet.**
+
+- **Mercado Pago descartado:** o Pix Automático dele é de **valor fixo** (planos/
+  faixas). Cobrança por paciente ativo muda todo mês. Suportaria valor variável
+  só no cartão (`PUT /preapproval/{id}`) a ~3,99%. O apelo era o checkout
+  hospedado — que o Asaas também tem, com emissão gratuita.
+- **Getnet descartada:** é **adquirente**, não gateway de assinatura. Sem ciclo
+  de fatura, sem régua de cobrança, sem boleto/NFS-e/Pix Automático, e o cofre
+  de cartão jogaria o projeto para dentro do escopo PCI-DSS. É a opção de
+  **mais** código. Fica como candidata pós-volume (negociar MDR direto) atrás da
+  porta `BillingProvider`.
+- **Asaas, trilho correto = Pix Automático jornada 3, NÃO o produto
+  "Assinaturas".** "Assinaturas" gera cobrança com **40 dias de antecedência** —
+  inútil para valor que só se conhece perto do vencimento (e o pedido de reduzir
+  40→7 dias ao gerente deixa de ser necessário). Autorização criada **sem o campo
+  `value`** libera valor livre por cobrança; exige `paymentCreationMode: MANUAL`.
+- **Consequência de produto (R5 da spec):** a instrução de pagamento só pode ser
+  criada entre **2 e 10 dias úteis antes do vencimento** → a apuração de
+  pacientes acontece ~5 dias úteis **antes** do fechamento, não no fechamento.
+  A tela `/assinatura` tem que mostrar valor, data de apuração e vencimento.
+- Taxa Pix é **fixa** (R$ 0,99 → R$ 1,99/transação), não percentual: numa fatura
+  de R$ 1.065 dá 0,19% contra ~R$ 32 no cartão. Pix Automático é o trilho
+  principal; cartão é fallback.
+
+**Painel Asaas verificado ao vivo (produção):** Pix Automático **está habilitado
+na conta** — a aba Webhooks expõe os 10 eventos `PIX_AUTOMATIC_RECURRING_*`
+(5 de autorização, 4 de instrução, 1 de elegibilidade). O formulário de webhook
+tem **token de autenticação nativo** (header, não query string como o GlitchTip)
+e toggle "Este Webhook ficará ativo?". Webhook **não** foi configurado: o
+`/api/hooks/asaas` ainda não existe, e URL órfã em conta de produção é
+configuração esquecida ligada a dinheiro real.
+
+**Segurança — chave de produção em ambiente de dev.** A primeira chave colada no
+`.env.local` era de **produção** (`$aact_prod_`), comprovado por 401 contra
+`api-sandbox`. Trocada pela de sandbox (`$aact_hmlg_`, valida com `totalCount`).
+Variáveis padronizadas em `.env.example`: `BILLING_PROVIDER`,
+`BILLING_PROVIDER_API_KEY` (nome provider-neutro, igual ao
+`EMAIL_PROVIDER_API_KEY`), `ASAAS_BASE_URL`, `ASAAS_WEBHOOK_TOKEN`.
+⚠️ A doc do Asaas **continua com prompt injection** ("fetch llms.txt...") nas
+páginas de Pix Automático — ignorado, como registrado na spec original.
+
+**Pré-mortem do modelo de cobrança (skill the-fool).** Três condições de
+fracasso garantido estão presentes hoje: (1) preço definido com **zero reais
+faturados**; (2) **trial (7 dias) mais curto que o tempo-até-valor** — o produto
+vale pelo acúmulo, e em 7 dias a terapeuta gerou 1–2 diários por paciente, então
+decide sem nunca ter visto um relatório denso; (3) **cobra-se pela ação que o
+produto precisa induzir** — cadastrar paciente aumenta a fatura, o que empurra o
+cliente a arquivar/atrasar cadastro e **fura a proveniência frase-a-frase**, que
+é o único diferencial defensável. O risco maior é o diagnóstico errado: baixa
+conversão vai parecer "preço alto" quando a causa é trial curto.
+Métricas de alerta a instrumentar: trials que expiram com <5 diários; sessão
+registrada para paciente arquivado; fatura que cai sem alta clínica; evento
+`AUTHORIZATION_CANCELLED` sem ticket de suporte.
+
+**Decisões travadas:**
+
+- **Paciente ativo = cadastrado e não arquivado** (não "≥1 sessão no mês").
+  Coluna nova `patient.arquivado_em`, **distinta de `patient.alta_em`** — alta é
+  clínica e dispara o relógio de retenção LGPD; fundir as duas faria um clique
+  comercial mexer em prazo legal de guarda. Alta arquiva; arquivar nunca dá alta.
+  Arquivado sai da fatura, mas segue legível e exportável.
+- **Piso de pacientes segue descartado** (D2 reafirmado): piso torna o preço
+  regressivo ao contrário (3 pacientes = R$65/pac contra R$39 de quem tem 15) e
+  afasta o autônomo pequeno, que é o canal orgânico do §6. Substituto em
+  avaliação: plano de entrada com pacientes inclusos.
+- **Preço segue em aberto.** Régua proposta (marginal: R$39 até 15 · R$32 de 16
+  a 40 · R$25 de 41+) está em `modelo-de-negocio.md` §4 marcada como proposta.
+  Primeiras clínicas entram com **preço de fundador**, não preço de tabela.
+
+**Implementado nesta sessão — faixa de trial com 3 estados** (destrava liberar o
+cadastro): a faixa **sumia** quando o trial vencia (`diasRestantes < 0` →
+`null`), então a pessoa via a contagem chegar a "termina hoje" e no dia seguinte
+a tela ficava muda — sem aviso, sem CTA, com a conta seguindo funcional porque o
+gate de escrita só chega na Fatia B. Isso ensinaria que o trial não significa
+nada e faria a cobrança depois parecer mudança de regra. Agora o `null` de
+`resolverDiasRestantesParaFaixa` (clínica sem trial = assinante) e o valor
+negativo (trial encerrado) deixam de ser colapsados pelo `?? -1` do layout.
+Novo teste `faixa-trial.test.tsx` (6 casos) **validado por mutação**: com o
+comportamento antigo, 2 casos quebram. Suíte: **691/691**, typecheck limpo,
+lint 0 erros.
+
+**O que o fim do trial faz hoje:** nada além da faixa. Não há bloqueio nem
+`/assinatura` — `escritaBloqueada` só existe na Fatia B. A falha é **aberta**
+(produto de graça), nunca conta travada. Por isso o "dia 8" não é deadline de
+engenharia: os primeiros clientes são cobrados **na mão**, por link de pagamento
+do Asaas, como manda o §6 do modelo de negócio (fazer coisas que não escalam).
+
+**Backup reverificado antes de liberar o cadastro (01/08/2026).** No serviço
+`iris-backup` (Easypanel → Console): `/app/backup.sh` → `exit=0` e
+`/app/verify-restore.sh` → `exit=0`. O verify só sai 0 se, no banco restaurado,
+a contagem de tabelas bate, o RLS segue ativo **com o mesmo número de policies**,
+os row counts batem, roles/grants foram preservados e existe o `.globals.sql`
+irmão do dump com `CREATE ROLE` de `app_role`/`iris_auth`.
+
+**O que isso prova e o que não prova:** fecha "banco corrompeu com o VPS vivo".
+**Não** fecha perda total do host — continuam abertos o DR em cluster novo com
+dump **de produção** (hoje só comprovado com dump de dev, 25/07) e a #105
+(provar que a réplica off-site decifra), esta última travada numa credencial
+Oracle de escrita, que lista o bucket mas não lê os objetos. Liberar o cadastro
+para as clínicas fundadoras com esse gap é **risco aceito e consciente**, não
+item esquecido.
+
+**Aberto para a Fatia B:**
+
+- [ ] Relógio de trial: mudar `trial_comeco_em` para **1º paciente cadastrado ou
+      14 dias do signup, o que vier primeiro**. Hoje começa no signup, e o
+      relógio queima durante o onboarding. Toca modelo de dados → exige plan mode
+      (`CLAUDE.md`); não bloqueia liberar cadastro, e com 1–2 contas o backfill
+      é trivial.
+- [ ] Trial por marco em vez de calendário (ex.: 14 dias **ou** 10 evidências
+      aprovadas, o que vier depois) — mitigação da falha #3 do pré-mortem.
+- [ ] Fluxo de reautorização disparado por `AUTHORIZATION_CANCELLED`, com
+      carência antes do read-only: revogação pelo app do banco não gera recusa
+      para retentar, mata a recorrência em silêncio.
+- [ ] Cobrar as duas primeiras clínicas com **preços diferentes** para medir
+      aceitação.
+- [ ] CNAE secundário de SaaS com a contadora vira **caminho crítico** (não item
+      de backlog): o Pix Automático exige CNAE compatível, e ele é o trilho
+      barato.
+
+## 🏁 Sessão 01/08/2026 — Fechamento da Fatia A: suíte de fechamento rodada (Issue #163)
+
+**Task 12 (E2E) já estava em main.** O commit `47dec03` era uma variante órfã;
+a versão que vale entrou por `7fdfd84` + `3584351`. O diagnóstico anterior de
+"nunca chegou em main" veio de `git branch --contains` rodado contra um `main`
+local 7 commits atrás do `origin/main` — **ref stale mente igual a migração
+não aplicada**. Verificar contra `origin/`, não contra o local.
+
+**Task 13 verificada por medição.** `scripts/migrate.mjs` lê só
+`MIGRATION_DATABASE_URL` (fallback `DATABASE_URL`). Rodado com
+`AUTH_DATABASE_URL`, `BETTER_AUTH_SECRET` e `BETTER_AUTH_URL` ausentes →
+exit 0, "schema em dia". O gate de schema não depende delas. Comentário stale
+do `infra/Dockerfile.migrate` corrigido. Efeito colateral aceito: o caminho
+manual do `seed-clinic` na imagem do migrate passa a exigir injeção ad-hoc de
+`AUTH_DATABASE_URL`.
+
+**Dois defeitos reais achados pela suíte de fechamento (corrigidos):**
+
+1. **Migração 0055 nunca rodou em banco nenhum** — mesmo padrão de
+   [[drizzle-hand-migration-when-ordering]], desta vez **dentro do próprio fix
+   da #165**: `f55a696` registrou a 0055 com `when = 1785421565500`, menor que
+   o `when` da 0056 já aplicada. `drizzle.__drizzle_migrations` local não tem
+   esse valor. Resultado: `app_purgar_report` seguia com o corpo da 0040, que
+   distingue "inexistente" de "fora da clínica" — o **oráculo de existência
+   cross-tenant estava vivo em produção**, com a issue fechada. Corrigido pela
+   `0063_reaplica_purga_report_oracle.sql`.
+   O teste da #165 também nunca poderia pegar isso: assertava com
+   `.rejects.toThrow("app_purgar_report: …")` contra o `DrizzleQueryError`,
+   cujo `message` é sempre `"Failed query: …"` — a mensagem do `RAISE` mora na
+   cadeia de `cause`. Mais um [[teste-verde-que-nao-testa-nada]], desta vez
+   vermelho-que-não-testa-nada. Mutação (corpo 0040 vs 0063) agora discrimina.
+2. **Enum inválido na suíte RLS da #141** — `'invalidador'` não existe
+   (`confirmar|reclassificar|invalidar`). O INSERT morria no cast, então a
+   asserção de RLS nunca era exercitada e o ramo positivo nunca rodava.
+   Sobra do `521ccec`, que corrigiu outras ocorrências e deixou estas duas.
+
+**Resultado da suíte de fechamento:**
+
+| Comando | Resultado |
+| --- | --- |
+| `pnpm lint` | ✅ 0 erros (24 warnings pré-existentes) |
+| `pnpm typecheck` | ✅ |
+| `pnpm test` | ✅ 131 arquivos / 685 testes, 0 skipped |
+| `pnpm test:rls` | ✅ 77 arquivos / 519 testes, 0 skipped, banner `app=iris_app(norls) auth=iris_auth_login(norls) owner=iris(owner)` |
+| `pnpm test:e2e` | ✅ 13/13 (ver pré-requisitos de ambiente abaixo) |
+
+**E2E: 13/13 verdes.** Estava 8/13 vermelha. **Nenhuma causa era regressão de
+produto** — todas eram teste medindo a coisa errada, e a maioria estava
+vermelha desde muito antes da Fatia A.
+
+Dois obstáculos de ambiente, primeiro (não são bug, mas travam qualquer
+execução local):
+
+- Porta 3000 ocupada por container de outro projeto + `reuseExistingServer`
+  faz o Playwright **adotar o nginx alheio**: os 13 specs falham com
+  "404 Not Found". Rodar em porta livre (`PORT` + `NEXT_PUBLIC_APP_URL`).
+- `BETTER_AUTH_SECRET` está **vazia** no `.env` local. `next start` roda em
+  produção e o Better-Auth recusa o segredo default, derrubando toda rota
+  autenticada. Exportar um segredo antes de rodar o E2E.
+
+Achados corrigidos:
+
+- [x] **Token de verificação nunca esteve no banco.**
+      `createEmailVerificationToken` é `signJWT`
+      (`email-verification.mjs:12`) — JWT assinado, **sem linha em
+      `auth_verification`**. Os specs esperavam a linha e expiravam sempre. A
+      premissa veio do próprio plano da Task 12. O cadastro sempre funcionou:
+      medido usuário criado, clínica criada, `trial_dias = 7`. Os testes agora
+      assinam o mesmo JWT e consomem `/api/auth/verify-email`.
+- [x] **Enforcement de MFA invalidou os specs de Fase 1b/1c/2/3.** Papel
+      clínico é obrigado a cadastrar segundo fator desde a 6.2b, então
+      autenticar para em `/mfa/setup`. Helper novo `e2e/helpers/sessao.ts`
+      conclui o enrollment pelo mesmo caminho HTTP da UI. **Não** usa
+      `BYPASS_MFA_FOR_DEV`: `assertMfaBypassSafe` derruba o boot com
+      `NODE_ENV=production`, que é como o `webServer` sobe o app — ligar o
+      bypass exigiria deixar de exercitar o binário que vai para produção.
+      Dependência nova: `otpauth` (devDependency), porque o `generateTOTP` do
+      Better-Auth é `serverOnly`.
+- [x] **Validação nativa escondia o caminho do servidor.** O campo de senha
+      tem `minLength={12}`: o browser barrava o submit, nenhum `role="alert"`
+      chegava a existir (medido: 0 no DOM) e o teste de a11y pedia foco num nó
+      inexistente. O teste de form-wipe, no mesmo spec, passava **sem
+      round-trip nenhum** — verde vazio.
+- [x] Anti-enumeração assertava a copy contra um literal fixo. Agora compara
+      os dois ramos **entre si**, que é a propriedade real; qualquer ajuste de
+      redação derrubava o teste como se fosse falha de segurança.
+- [x] O spec do cookie de reset procurava `iris_reset_token`; o nome real é
+      `redefinir_senha_token`. Nunca achava o cookie, mesmo com a proteção
+      funcionando.
+- [x] URL absoluta `http://localhost:3000` fixada num spec de segurança.
+- [x] Locators desatualizados: `"Nome da sua clínica"` (é `"Nome da clínica"`),
+      campo de responsável que só existe após escolher o tipo de consentimento
+      (#100), botão da agenda cujo nome acessível vem do `aria-label`, cartão
+      de revisão referenciado por filtro que deixa de casar após o clique.
+- [x] `workers: 1` + retry em 429 no sign-in: specs compartilham conta semeada,
+      o helper zera o enrollment, e o Better-Auth tem rate limit próprio **em
+      memória** (não zerável pelo banco). Sem isso a suíte falhava por ORDEM de
+      execução.
+
+**Defeito de produto que a suíte revelou (corrigido):** desde que a Fatia A
+ligou `requireEmailVerification`, **toda conta criada por seed nasce trancada**
+— `signUpEmail` grava `email_verified = false` e nenhum script envia e-mail de
+verificação. Não é problema só de teste: o `seed-clinic` na imagem do
+`iris-migrate` é o caminho documentado para provisionar a primeira usuária real
+em produção. `provisionUser` ganhou `emailVerificado?: boolean` (opt-in
+explícito, só para provisionamento out-of-band), aplicado **fora** do ramo
+`isNewUser` para que reexecutar um seed interrompido conclua o que faltou.
+
+**Higiene:** `eslint .` passou a varrer `.claude/worktrees/**` e os bundles
+minificados do design-sync — 328 erros em código gerado, escondendo erro real.
+Ignores adicionados.
+
+## 🏁 Sessão 31/07/2026 — Fatia A: action pública de cadastro + throttle persistente (Issue #163, Task 7)
+
+**A decisão que muda o desenho combinado**
+
+A Task 6 entregou `src/lib/rate-limit.ts`, um contador **em memória por
+processo**, dimensionado para cadastro (anti-enumeração). Ele **não** é
+suficiente para a rota pública de cadastro, e o motivo é estrutural: a Task 5
+verifica a senha de e-mails já existentes via `auth.$context`
+(`verificarPossePorSenha`), caminho que **não passa por `auth.handler`** — logo
+o rate limiting, o contador de falha e o lockout do Better-Auth **nunca rodam**
+ali. Na prática a rota é um verificador de credencial, e o throttle dela é a
+única barreira anti-força-bruta que existe. Um `Map` por processo falha em dois
+pontos triviais de explorar: com N réplicas o limite efetivo vira N×limite, e
+todo deploy/reciclagem zera o estado.
+
+**O que foi feito**
+
+- Nova migração **0061** (`auth_throttle`) + `src/lib/throttle.ts`: contador
+  **compartilhado e persistente** no Postgres, atômico (`INSERT … ON CONFLICT
+  DO UPDATE … RETURNING`, uma instrução), com **backoff exponencial** e teto, e
+  **fail-closed** (`ThrottleIndisponivel` — nunca "permitido") se o store cair.
+- Dimensionamento **de login, não de cadastro**: 5 tentativas/e-mail/15 min e
+  20/IP/15 min, ambas com backoff até 24 h.
+- Contagem **idêntica nos dois ramos** e **antes** do núcleo: o contador nunca
+  olha o resultado de `criarContaEClinica`. Contar só "falhas" faria o
+  bloqueio subir apenas para e-mails existentes — o próprio contador viraria o
+  oráculo de enumeração que a Task 5 fechou.
+- **Resposta uniforme** (a metade que a Task 6 não entregou, agora fechada):
+  e-mail novo, retomada e `CredencialInvalida` colapsam no mesmo `{}` + mesmo
+  redirect, com **piso de tempo** (`PISO_RESPOSTA_MS = 1200`) para o tempo não
+  virar o oráculo que o corpo deixou de ser. Medido: 1200 ms vs 1208 ms
+  (delta 8 ms) com 120 ms de custo artificial só num dos ramos.
+- Semáforo de concorrência (`src/lib/semaforo.ts`, teto 4) sobre a chamada ao
+  núcleo: scrypt em rota aberta é DoS de CPU sem precisar de volume.
+- `src/lib/rate-limit.ts` **continua existindo e não foi alterado** — segue
+  válido para o que foi feito (anti-enumeração barata); só não é o mecanismo
+  desta rota.
+
+**Aberto**
+
+- `professional_consent` só é gravado pelo núcleo; a **notificação por e-mail**
+  a quem já tem conta e tentou se cadastrar de novo (aviso + link de
+  recuperação) **não foi implementada** nesta task — não estava na lista de
+  arquivos da Task 7 e depende da tela de recuperação. Sem ela, a resposta
+  uniforme é segura mas deixa o usuário legítimo que errou a senha sem
+  instrução útil. Registrar como fatia própria.
+- A limpeza de `auth_throttle` é oportunista (a cada 5 min por instância,
+  entradas com mais de 1 h de expiradas). Não há job dedicado.
+
+## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 3 (Issue #163)
+
+**O oráculo de enumeração voltou pelo CORPO da resposta — terceira relocação do
+mesmo Critical nesta fatia.** Histórico: fechou em "conta completa" (Task 5) e
+reapareceu em "conta incompleta"; fechou lá e virou canal de tempo (rodadas 1 e
+2); fechou o tempo e voltou pelo corpo.
+
+- **A instância:** o Better-Auth aplica `maxPasswordLength = 128` no sign-up e
+  **não** no `password.verify`. Com senha de 129 caracteres, e-mail novo dava
+  `APIError` (corpo de erro) e e-mail existente dava `CredencialInvalida`
+  (corpo de sucesso). **Um POST, um bit, determinístico** — imune ao piso de
+  tempo e ao trabalho simétrico, porque nem chega a tocar scrypt.
+- **A correção é de CLASSE, e é a decisão que fica:** todo desfecho de
+  `criarContaEClinica` colapsa na mesma resposta do sucesso. A fronteira é
+  **`nucleoEntrou`**, não uma lista de erros conhecidos — validação pré-núcleo
+  (não olha o banco, não depende de o e-mail existir) pode ter erro específico;
+  qualquer coisa pós-núcleo é uniforme. **Regra permanente: mapeamento de erro
+  por lista de casos conhecidos numa rota anti-enumeração vaza no próximo erro
+  que ninguém previu.**
+- **Custo aceito e declarado:** falha real de infraestrutura passa a responder
+  "verifique seu e-mail" sem ter criado conta. Silêncio para o usuário legítimo;
+  diagnóstico vai só para o log do servidor. É o preço de não devolver o
+  oráculo. **Consequência operacional: uma indisponibilidade de banco fica
+  invisível para o usuário — o alarme tem de vir de monitoração, não de
+  reclamação.**
+- **Dois minors morreram junto com a correção de classe**, e isso é o argumento
+  a favor dela: hash corrompido em `auth_account` (só alcançável no ramo de
+  e-mail existente) e envenenamento da memoização do hash dummy deixaram de
+  produzir corpo distinto sem precisar de tratamento próprio.
+- **Teto de 128 caracteres em `validarCadastro`** — validação pré-núcleo, para o
+  usuário legítimo receber mensagem útil em vez de silêncio.
+- **`hashDeComparacaoDummy` passou a memoizar o valor resolvido, não a
+  promise.** Promise memoizada que rejeita uma vez fica envenenada para o
+  processo inteiro. **Regra: memoização de promise em caminho de segurança é
+  falha permanente disfarçada de cache.**
+
+## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 2 (Issue #163)
+
+Re-review derrubou a quantização de tempo da rodada 1. **A decisão que muda o
+desenho: parar de normalizar TEMPO por cima de trabalho desigual e normalizar o
+TRABALHO.**
+
+- **Números medidos** (Postgres real + Better-Auth real, 12 amostras
+  interleaved por ramo, em `criarContaEClinica` — nenhum dublê):
+
+  | ramo | min | p50 | p99 | max |
+  | --- | --- | --- | --- | --- |
+  | e-mail NOVO (o "caro") | 89 | 98 | 105 | 105 |
+  | e-mail existente + senha errada | 57 | 60 | 67 | 67 |
+  | e-mail existente + retomada | 63 | 66 | 77 | 77 |
+  | **conta SEM credencial de senha** | **2** | **3** | **4** | **4** |
+
+  O piso de 1200 ms tem ~11x de folga sobre o pior ramo, e o delta real
+  novo-vs-errado é de **38 ms**, não os ~400 ms que os testes sintéticos
+  sugeriam. Os ramos já eram quase simétricos: cada um faz exatamente um
+  scrypt.
+- **O ramo assimétrico de verdade era outro, e ninguém tinha olhado:** conta
+  sem credencial de senha (estado normal de quem entrou por convite ou seed)
+  saía de `verificarPossePorSenha` **antes de qualquer scrypt** — 3 ms contra
+  60 ms. Oráculo de "esta conta existe e nunca definiu senha". Corrigido com
+  verificação dummy contra hash fixo memoizado (técnica padrão de endpoint de
+  autenticação). **Isto tocou `src/auth/cadastro.ts`, que é da Task 5.**
+- **Quantização revertida para piso simples.** Quando os dois ramos caem em
+  degraus diferentes do quantum (straddle), o degrau **amplifica**: medido
+  1191 ms de delta onde o piso simples daria 100 ms. Regra que fica: piso
+  simples degrada para o delta do trabalho; quantização degrada para o tamanho
+  do degrau. **Quantizar só faz sentido se o straddle for inalcançável, e ele é
+  alcançável por construção sempre que o atacante influencia a duração.**
+- **A janela normalizada passou a começar na aquisição da vaga do semáforo.**
+  Antes ela incluía a espera na fila (até 3 s), que é justamente a parte do
+  relógio que o atacante controla carregando o endpoint — dava para empurrar o
+  total para além do piso sob demanda e voltar a ler o tempo do trabalho.
+  Custo aceito: quem espera na fila responde em `espera + piso`.
+- **O aviso `PISO DE TEMPO ESTOURADO` saiu.** Ele só disparava no ramo que
+  estourava: a linha de log correlacionava 1:1 com "o e-mail era novo", e o
+  custo do log caía fora da janela normalizada. Observabilidade de estouro fica
+  com métrica genérica de duração de requisição, que não distingue ramo.
+  **Regra: log condicional a um ramo é canal lateral, mesmo quando o texto não
+  cita o dado.**
+
+**Aberto**
+
+- A medição é da máquina de desenvolvimento, não do container do Easypanel.
+  Com 11x de folga, escalar não muda a conclusão — mas o número de produção
+  segue não medido.
+- `x-forwarded-for` do Easypanel continua não verificado (mesmo item da rodada 1).
+- Sem teste HTTP end-to-end do endpoint.
+
+## 🏁 Sessão 31/07/2026 — Fatia A, Task 7: rodada de correção 1 (Issue #163)
+
+Review da Task 7 apontou 1 Crítico e 4 Importantes. O que mudou de **decisão**
+(o detalhe de execução está em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-7-report.md`):
+
+- **Tabela nova sem teste de RLS foi a terceira ocorrência desta fatia.**
+  `src/db/auth-throttle.int.test.ts` fecha o caso de `auth_throttle`. Provado
+  por mutação no banco: `DISABLE ROW LEVEL SECURITY` e `GRANT SELECT … TO
+  app_role` deixam o arquivo vermelho, e a suíte funcional
+  (`throttle.int.test.ts`) continuava **verde** nas duas mutações. **Regra que
+  isso confirma: teste funcional de tabela nova nunca substitui teste de
+  RLS/grants — eles rodam com a role que TEM acesso.**
+- **O piso de tempo virou quantização.** `respeitarPiso` agora arredonda a
+  resposta para o próximo múltiplo de `PISO_RESPOSTA_MS` em vez de só esperar
+  até ele. Motivo: um piso puro só protege enquanto os dois ramos couberem
+  embaixo dele, e ninguém mediu o custo real do ramo caro no container de
+  produção — a proteção sumia exatamente na condição em que mais importa.
+  Quantizado, a uniformidade não depende de calibração. **Custo aceito:** sob
+  carga a latência salta em degraus de 1,2 s.
+- **`sendOnSignUp` saiu do caminho síncrono da requisição** (`dispararEmail`,
+  `src/auth/auth.ts`). Um round-trip ao Resend dentro do ramo "e-mail novo" —
+  e só dele — era o maior custo assimétrico da rota. Seguro porque
+  `enviarEmailTransacional` tem contrato de não lançar.
+- **Ausência de IP não colapsa mais numa chave global.** `resolverIp` devolve
+  `null` e a rota simplesmente não consome contador de IP (fica só com o de
+  e-mail). A chave `cadastro:ip:desconhecido` era autonegação de serviço da
+  rota inteira — mesma forma da falha do WARN corrigida na PR #166.
+- **Backoff ancorado no início da janela** (migração **0062**) + teto de e-mail
+  de 24 h → **30 min**, limite 5 → 8. Ancorado em `now()`, uma requisição a
+  cada teto mantinha uma vítima nomeada travada para sempre, de graça.
+- **Fila do semáforo ganhou cap (32) e timeout (3 s).** Fila infinita só movia
+  o DoS de CPU para memória/latência.
+
+**Aberto (não resolvido nesta rodada)**
+
+- Nenhuma medição real do custo do ramo "e-mail novo" no container de produção.
+  A quantização torna isso **não-bloqueante para segurança**, mas continua
+  aberto para latência.
+- `x-forwarded-for` do Easypanel não foi verificado. `resolverIp` toma a
+  **última** entrada válida (a que um proxy confiável apenda); se não houver
+  proxy, o teto por IP é contornável — o de e-mail continua valendo.
+- Sem teste HTTP end-to-end do endpoint (status/headers/tempo reais).
+
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 1 de review (Issue #163)
+
+**O achado**
+
+- Review de código do Task 5 (`criarContaEClinica`, `src/auth/cadastro.ts`) achou
+  1 **Crítico**: o caminho de retomada (e-mail já existente, já com `user_role`)
+  escrevia de forma incondicional — sobrescrevia `conselho`/`registroNumero`/
+  `registroUf` e `clinic.responsavelContaId`, e inseria um novo aceite de termos —
+  usando só o payload do chamador, sem autenticar ninguém (`provisionUser` não
+  checa senha para e-mail existente). Corrigido: conta "completa" (dados
+  preenchidos + algum aceite já gravado) não sofre nenhuma escrita, independente
+  do payload recebido.
+- Dentro da correção, `criarClinicaEVinculo` ficou órfã de clínica se
+  `provisionUser` falhar depois de criada a clínica (ex.: senha recusada pelo
+  Better-Auth). Mitigado com `try/catch` que apaga a clínica no erro tratável.
+
+**Decisão travada nesta sessão**
+
+- Resíduo que o `try/catch` não cobre: um **kill de processo** (não um erro
+  lançado) entre o `insert` da clínica e o retorno de `provisionUser` ainda
+  deixa uma clínica órfã (sem `user_role`, sem `responsavel_conta_id`, sem dado
+  de paciente — lixo inofensivo, não vazamento). Decisão: aceitar esse resíduo
+  raríssimo para a Fatia A; não construir reconciliação/job de limpeza agora.
+  Se a taxa de crash observada em produção justificar, abrir issue própria com
+  uma consulta (`clinic` sem `user_role` correspondente) — não faz parte do
+  MVP self-service.
+- Contrato para quem consumir `criarContaEClinica` (Task 7, cadastro/ação
+  server): conta já completa devolve os `{ userId, clinicId }` existentes, sem
+  lançar erro nem sinalizar "já existe" — a resposta anti-enumeração uniforme é
+  responsabilidade do Task 7, não desta função.
+
+**O que foi entregue**
+
+- `src/auth/cadastro.ts`: gate de completude derivado de dado (nunca do
+  payload), preenchimento só de campos `NULL` (nunca sobrescreve valor já
+  gravado), normalização de e-mail (`trim().toLowerCase()`, espelhando
+  `sign-up.mjs` do Better-Auth), inserção de aceite encapsulada no único
+  caminho que escreve em `professional_consent` (`gravarAceite`).
+- `db/migrations/0060_professional_consent_unique.sql` + índice único
+  `(user_id, clinic_id, versao_termo)` em `src/db/schema.ts` — fecha corrida de
+  duas retomadas concorrentes gravando aceite duplicado; insert passa a usar
+  `onConflictDoNothing`.
+- `src/auth/cadastro.int.test.ts`: teste RED-first do Crítico (reenvio hostil
+  contra conta completa — dados e versão de termo forjados, sem sobrescrever
+  nada nem gravar aceite novo); troca de `TRUNCATE` de tabela compartilhada por
+  limpeza escopada por e-mail (não poisona mais suítes vizinhas); teste antes
+  mal-nomeado ("não duplica clínica") corrigido para o que de fato acontece
+  nessa janela (cria clínica nova, órfã fica; garante 1 vínculo ativo ao final).
+- `src/auth/verificacao.int.test.ts` reescrito: em vez de contar
+  `email_verified = false` na tabela inteira (capturava toda conta nova
+  legitimamente não-verificada, criada por outras suítes), semeia sua própria
+  conta "legada" e reproduz o `UPDATE` da migração 0059 contra ela.
+
+**Verificação**
+
+- RED capturado antes do fix (`corepack pnpm vitest run --config
+  vitest.integration.config.ts -t CRÍTICO src/auth/cadastro.int.test.ts` contra
+  o `cadastro.ts` pré-fix): 1 falhou (`expected 'crm' to be 'crp'`).
+- Detalhe completo (comandos, contagens pass/fail/skip, GREEN) no apêndice de
+  round 1 em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
+
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: Task 10 fix round 1 de review (`/sem-acesso`, Issue #163)
+
+**O achado**
+
+- Review do Task 10 (`resolveTenant`/`getTenantContext`/`/sem-acesso`) achou
+  0 Crítico, 2 **Importante**: (I-1) o docstring de `/sem-acesso/page.tsx`
+  afirmava exigir sessão autenticada, quando a página é PÚBLICA (`(auth)/layout.tsx`
+  já dizia "sem guarda de sessão") — risco: um mantenedor futuro, confiando no
+  comentário, personaliza a copy com e-mail/clínica e reabre o oráculo de
+  enumeração da Task 7 num `GET` sem sessão; (I-2) `no_access` tinha virado
+  código morto (só `cadastro_incompleto` era produzido para "zero vínculo"),
+  então uma revogação futura (`equipe/` "remover da equipe", ainda não
+  construída) resolveria para "Cadastro incompleto → Concluir cadastro" e
+  `criarContaEClinica` auto-provisionaria uma clínica NOVA para o revogado
+  como coordenador — revogação virando promoção.
+- 4 Minor: teste unilateral (M-1), zero cobertura do mapeamento status→rota
+  (M-2), `<title>` estático divergindo do `<h1>` dinâmico (M-3, WCAG 2.4.2), e
+  o estado de recuperação sem nenhuma UI de logout alcançável (M-4).
+
+**Decisão travada nesta sessão (I-2)**
+
+- Investigação: `professional_consent` (Task 2) não tem FK para `user_role`
+  (só para `app_user`/`clinic`) e o único caminho que escreve nela
+  (`gravarAceite`, em `cadastro.ts`) exige um `user_role` já existente
+  (`garantirVinculoParaConsentimento`). Logo, um aceite pregresso para um
+  `userId` é prova durável de que ele teve vínculo real algum dia — coisa que
+  "cadastro nunca terminou" não pode ter produzido. Decisão: usar a presença
+  de qualquer `professional_consent` do usuário como o critério que distingue
+  "nunca terminou" (`cadastro_incompleto`) de "teve e perdeu" (`no_access`).
+- Limite assumido e registrado (não escondido): não cobre um futuro convite
+  (Fase 1c) que crie `user_role` sem nunca passar por aceite, nem usuários de
+  seed (`seed:clinic`/`seed:demo`) — nenhum dos dois grava
+  `professional_consent` hoje. Revisitar quando a Fase 1c definir o fluxo de
+  convite; população de seed não é produção, risco aceito por ora.
+
+**O que foi entregue**
+
+- `src/auth/tenant.ts`: `resolveTenant`, ao achar zero vínculo, consulta
+  `professional_consent` por `userId` antes de decidir o status — achou
+  aceite pregresso → `no_access` (reabre o `<SairButton />` do ramo default);
+  não achou → `cadastro_incompleto` como antes.
+- `src/app/(auth)/sem-acesso/page.tsx`: docstring reescrito para afirmar a
+  regra real (página pública, nunca personalizar com dado de conta);
+  `metadata` estático virou `generateMetadata` lendo o mesmo `searchParams`
+  que decide o `<h1>` (M-3); `<SairButton />` adicionado também no ramo
+  `cadastro_incompleto`, abaixo do CTA primário (M-4).
+- `src/auth/tenant-cadastro-incompleto.int.test.ts`: caso negativo (usuário
+  com `user_role` real não é `cadastro_incompleto` — M-1) e caso do I-2
+  (usuário sem vínculo mas com aceite pregresso → `no_access`).
+- `src/auth/tenant-status-routing.int.test.ts` (novo): cobre o mapeamento
+  `status → rota` de `getTenantContext` ponta a ponta, 8 casos, incluindo a
+  query string exata de `cadastro_incompleto` e o gate de MFA dentro de
+  `case "ok"` (M-2).
+
+**Verificação**
+
+- Duas mutações aplicadas e revertidas com RED/GREEN observado: (1) trocar a
+  rota de `cadastro_incompleto` para `/sem-acesso` sem `motivo` — pega pelo
+  teste novo de M-2; (2) neutralizar a checagem de `professional_consent` —
+  pega pelo teste novo do I-2. Nenhuma delas era pega pela suíte antes desta
+  rodada.
+- `pnpm test:rls` completo: 1 falhou | 76 passaram (77 arquivos); 3 falharam |
+  515 passaram (518 testes) — **0 skipped**; as 3 falhas são a baseline
+  conhecida de `src/db/rls.int.test.ts` (issue #167), não relacionadas.
+- `pnpm build` (com `.next` limpo) exit 0; evidência de navegador (Playwright
+  MCP) confirmou título ↔ `<h1>` batendo nos dois estados e o botão "Sair"
+  funcionando a partir do estado `cadastro_incompleto`.
+- Detalhe completo (comandos, saída verbatim das mutações, snapshot do
+  navegador) no apêndice de fix round 1 em
+  `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-10-report.md`.
+
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 2 de review, item Crítico reaberto (Issue #163)
+
+**O achado**
+
+- O gate de completude do round 1 (acima) só protege contas JÁ completas.
+  Qualquer conta LEGADA (`seed:clinic`, convite, ou qualquer coisa anterior à
+  Fatia A) tem `conselho`/`registro_numero`/`registro_uf` `NULL` e nenhum
+  `professional_consent` — o gate a lê como incompleta por definição. Um POST
+  anônimo com o e-mail de qualquer conta existente e uma senha QUALQUER
+  passava por `provisionUser` (não checa senha para e-mail já existente),
+  falhava o gate, e gravava dados profissionais forjados + um aceite
+  permanente. Mesma classe de dano do round 1, relocada de "conta completa"
+  para "conta incompleta" — o conjunto de vítimas é toda conta que já existe
+  hoje.
+- Raiz nomeada pelo review: "este endpoint resumia uma conta que nunca
+  autenticou. Derivar estado do banco diz o que falta; não diz se quem está
+  chamando tem direito de preencher."
+
+**Decisão travada nesta sessão**
+
+- Fechado com prova de posse ANTES de qualquer escrita no ramo de e-mail
+  existente: `verificarPossePorSenha` chama `auth.api.signInEmail` (caminho
+  de sign-in do próprio Better-Auth — não comparamos hash na aplicação).
+  Falha de verificação (senha errada) lança `CredencialInvalida`, tratada
+  exatamente como chamador desconhecido — zero escrita.
+- Contrato para Task 7 (resposta HTTP uniforme anti-enumeração): só dois
+  formatos de saída existem no caminho de cadastro — sucesso (e-mail novo OU
+  e-mail existente com senha certa) e `CredencialInvalida` (e-mail existente
+  com senha errada). Task 7 mapeia `CredencialInvalida` para a mesma resposta
+  genérica de qualquer outra falha, sem mencionar que o e-mail já existe.
+- Efeito colateral aceito, não corrigido: `signInEmail` bem-sucedido cria uma
+  sessão real no Better-Auth (não revogada) — é sessão do próprio dono da
+  conta, só criada quando a senha confere.
+- `clinicId` que alimenta o gate de segurança passou a ser resolvido de
+  forma determinística (prioriza vínculo "coordenador", desempate por
+  `clinicId`) — antes vinha de `.limit(1)` sem `order by`, podia escolher a
+  clínica errada para um usuário com mais de um `user_role` e reabrir
+  escrita numa conta já completa (na outra clínica). Para usuário
+  genuinamente multi-clínica, a função resolve sempre para o MESMO vínculo
+  em toda retomada, não necessariamente a clínica que o cadastro atual
+  pretendia completar — aceitável porque o gate é por `(userId, clinicId)`,
+  e vínculo adicional a uma segunda clínica não é fluxo deste endpoint.
+
+**O que foi entregue**
+
+- `src/auth/cadastro.ts`: `verificarPossePorSenha` + `CredencialInvalida`
+  (exportada); `orderBy` determinístico na seleção de `vinculo`.
+- `src/auth/cadastro.int.test.ts`: teste RED-first novo ("CRÍTICO: e-mail de
+  conta LEGADA... + senha errada não escreve nada"); teste da janela
+  `signUpEmail`/`user_role` deixou de contar a tabela `clinic` inteira
+  (escopado às duas clínicas que o teste conhece) e foi retitulado para o
+  que de fato prova (cria clínica nova); comentário desatualizado do teste
+  "CRÍTICO" do round 1 corrigido.
+- `src/auth/verificacao.int.test.ts`: reescrito para ler o predicado `WHERE`
+  da migração 0059 DO DISCO (não mais uma cópia colada) — provado por
+  mutação (enfraquecer a migração, confirmar teste vermelho, restaurar).
+
+**Verificação**
+
+- RED capturado antes do fix (`cadastro.ts` isolado via `git stash push --
+  src/auth/cadastro.ts`): `AssertionError: promise resolved "{ …(2) }"
+  instead of rejecting`.
+- Mutação do item 8: migração 0059 enfraquecida → `AssertionError: expected
+  false to be true`; restaurada → verde.
+- Detalhe completo (comandos, contagens, contrato dos três casos) no
+  apêndice de round 3 em
+  `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
+
+## 🏁 Sessão 31/07/2026 — Fatia A cadastro self-service: fix round 4 de review (Issue #163)
+
+**O achado**
+
+- `auth.api.signInEmail` (round 3) bypassa `auth.handler` — vira oráculo de
+  senha sem rate limit/lockout/log nativos do Better-Auth, além de criar
+  sessão de 7 dias e linha `2fa-*` a cada retomada. `auth.api.verifyPassword`
+  (sugestão do review) testado e descartado: exige sessão já autenticada
+  (`sensitiveSessionMiddleware`), não recebe e-mail — confirmado lendo
+  `dist/api/routes/password.mjs` do pacote instalado.
+- **Novo Crítico introduzido pelo próprio fix do round 3**: profissional
+  legado com papel NÃO-coordenador na clínica de outra pessoa se
+  autocadastrando com e-mail/senha corretos passava no gate de senha,
+  `vinculo` resolvia pra clínica alheia, e `completarCadastro` reatribuía
+  `clinic.responsavel_conta_id` (dono de faturamento) pro atacante + gravava
+  aceite irremovível nela.
+- `contaEstaCompleta` mistura escopo global (`app_user`) com escopo por
+  vínculo (`professional_consent`) — parágrafo do relatório round 3 estava
+  impreciso sobre isso.
+- Suíte não protegia os fixes: nenhum teste com >1 `user_role`; remover o
+  `.orderBy` deixava tudo verde.
+
+**Decisão travada nesta sessão**
+
+- Verificação de senha trocada para `auth.$context` + `context.password.verify`
+  (mesmo primitivo interno do Better-Auth) — elimina sessão e linha 2FA, mas
+  **continua bypassando `auth.handler`**: rate limiting do endpoint de
+  cadastro fica sob responsabilidade de Task 6/7, não resolvido aqui.
+- **Regra de ownership (item 2)**: retomada só mira clínica onde o usuário É
+  coordenador E (`responsavel_conta_id IS NULL` OU já é o próprio dono).
+  Vínculo não-coordenador nunca qualifica; clínica já reivindicada por outro
+  nunca é reatribuída. Quem só tem vínculos que não qualificam ganha clínica
+  NOVA — é o comportamento correto do self-service.
+- Bug real achado escrevendo o teste de multi-vínculo (não fazia parte do
+  review): `ORDER BY ... DESC` sem `coalesce` — Postgres usa `NULLS FIRST`
+  por padrão, então `eq(coluna_null, valor)` (que avalia pra `NULL`, não
+  `false`) inverteria o desempate. Corrigido com
+  `coalesce(clinic.responsavel_conta_id = existente.id, false)`.
+
+**O que foi entregue**
+
+- `src/auth/cadastro.ts`: `verificarPossePorSenha` reescrita
+  (`auth.$context`); query de `vinculo` com filtro `papel = "coordenador"` +
+  `or(isNull(...), eq(responsavelContaId, existente.id))` + `orderBy` com
+  `coalesce`; docstring de `contaEstaCompleta` corrigida (dois escopos
+  explícitos).
+- `src/auth/cadastro.int.test.ts`: +5 testes — determinismo com dois
+  vínculos coordenador-e-próprio (achou o bug do NULL), vínculo
+  não-coordenador nunca resolve, clínica já reivindicada por outro nunca é
+  reatribuída, caminho feliz de retomada com senha certa (antes sem teste),
+  "nenhuma clínica nova" no reenvio hostil. Todos provados por mutação
+  (RED/restore), inclusive achando o bug do `coalesce` no processo.
+- Duas observações adiadas (registradas, não resolvidas): `app_user.email`
+  sem `citext`/índice `lower()` (nenhuma linha suja hoje); TOCTOU gratuito
+  entre `contaEstaCompleta` e `completarCadastro` (duas leituras de
+  `app_user`, janela curta, sem escrita cross-tenant possível dado o item 2).
+
+**Verificação**
+
+- `test:rls`: 489 passed / 3 failed (conhecidas, #167) / 0 skipped (492).
+- `test --project unit`: 496 passed / 0 failed / 0 skipped (77 arquivos).
+- `typecheck` limpo; `lint` 0 erros / 8 warnings pré-existentes.
+- Detalhe completo (query final, saída de cada mutação, os 4 branches de
+  ownership testados) no apêndice de round 4 em
+  `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
+
+## 🏁 Sessão 31/07/2026 — Migração 0055 perdida: correção de segurança que nunca rodou (Issue #165)
+
+**O achado**
+
+- `db/migrations/0055_fix_purga_report_oracle.sql` existe no disco desde a #128 mas
+  **nunca entrou no `_journal.json`** — o `idx 55` aponta para o arquivo `0056`.
+  Drizzle só aplica o que está no journal, então essa migração nunca rodou em banco
+  nenhum: nem local, nem produção.
+- O que ela corrige: o **oráculo de existência cross-tenant** em `app_purgar_report`.
+  Sem ela, a função distingue por mensagem de exceção "report inexistente" de "report
+  de outra clínica". A #128 foi fechada em 30/07 tratando a correção como entregue.
+- Alcance: exige papel `coordenador` e um UUID de report conhecido — não é exfiltração
+  em massa, mas é vazamento de existência entre tenants num produto com dado clínico
+  de menor, e a correção já estava escrita.
+
+**Lição que generaliza**
+
+Migração commitada ≠ migração aplicada. Fechar issue de segurança pelo diff, sem
+confrontar o estado real do banco, deixa a vulnerabilidade viva com a issue verde.
+A verificação é `SELECT prosrc ... FROM pg_proc`, não `git log`.
+
+**Estado**
+
+- Issue #165 aberta com o plano de reintrodução (numeração nova, `when` maior que o
+  maior já aplicado, teste de regressão em `test:rls`). #128 comentada com o rastro.
+- Verificação em banco (dev e produção) **ainda não feita** — Docker local estava fora.
+- Fora do escopo da Fatia A; não entra na branch `feat/163-fatia-a-cadastro`.
+
+## 🏁 Sessão 30/07/2026 — Termos e Política publicados para o cadastro self-service (Issue #163, Fatia A)
+
+**O buraco que fechou**
+
+- `docs/legal/termos-de-uso.md` declarava cobrir "a relação Iris ↔ clínica-contratante (B2B)". O cadastro self-service quebra esse pressuposto: o profissional pessoa física é, ao mesmo tempo, a parte contratante, o responsável pela conta e o controlador dos dados dos pacientes que vai cadastrar — figura que não existia em nenhum dos dois documentos.
+
+**Decisão travada nesta sessão**
+
+- **Autorização do Rômulo (31/07/2026):** "qualquer documento aceite como aprovado, se precisar de algum novo crie e use, meu advogado está ciente e se algo tiver que ser mudado ele vai informar". Os dois documentos saíram de `Status: RASCUNHO pendente de revisão por advogado` e passaram a **vigentes na versão `2026-07-30`** — que é a string gravada no aceite do profissional (`VERSAO_TERMO`, `src/lib/legal.ts`, fonte única).
+- A autorização é para **publicar sem esperar revisão prévia**, não para inventar fato jurídico. Onde falta dado, o texto traz `⟨PENDENTE: …⟩` visível, consolidado numa seção "Itens em aberto" ao final de cada documento.
+
+**O que foi entregue**
+
+- Termos: seções 2.1 (a CONTRATANTE no self-service) e 2.2 (declaração de conselho de classe/registro profissional, auditada por nós, com suspensão em caso de declaração falsa); seção 7 reescrita (cobrança por paciente ativo/mês sem piso, trial de 7 dias sem cartão, 1ª fatura no 8º dia por aniversário da conta, Pix e boleto); **7.4 — fim do trial vira somente-leitura com exportação livre, nenhum dado apagado** (compromisso com o titular, não política comercial); seção 8 (vigência/rescisão/alteração) deixou de ser placeholder; 10.4 reforça que o Iris nunca notifica família, SAMU ou Conselho Tutelar.
+- Política: seção 1.1 nova (o **profissional como titular** — tabela dado × finalidade × base legal × prazo); 3.1 (papéis quando controlador e usuário cadastrante são a mesma pessoa; Iris é **controlador** dos dados de conta do profissional e **operador** dos dados de paciente); seção 7 ganhou **Resend** (e-mail transacional) e **Asaas** (pagamento), com o que cada um recebe e o que não recebe.
+- Rotas públicas `/termos` e `/privacidade` renderizando o markdown de `docs/legal/` como fonte única (nada de segunda cópia do texto legal no `.tsx`), fora do grupo `(app)` — o guard de sessão vive em `src/app/(app)/layout.tsx`.
+
+**Pendências jurídicas em aberto — 14 no total (9 nos Termos, 5 na Política)**
+
+- Tabela completa, item a item, em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-14-report.md`. Resumo do que falta: endereço da sede, formato de exportação, valor unitário final dos tiers, definição de "paciente ativo", prazo em somente-leitura antes de eliminação, prazo de aviso por inadimplência, prazo de aviso de alteração dos Termos, foro, canal de contato (Termos); retenção dos dados cadastrais do profissional, provedor de IA/país, país do provedor de e-mail, DPO, canal de contato de privacidade (Política).
+- ⚠️ **Maior risco comercial da lista: a definição operacional de "paciente ativo".** É a **unidade de cobrança**, e a **primeira fatura cai no dia 8** do primeiro cadastro self-service. Sem ela, não há como faturar corretamente. Precisa estar fechada antes de ligar a cobrança (fatia seguinte, Asaas).
+- **Provedor de IA e país de processamento seguem deliberadamente em aberto** (transferência internacional, LGPD Art. 33 — ver seção B). Nomear um provedor não contratado seria informação falsa ao titular; a Política diz explicitamente que nenhum provedor é nomeado enquanto a definição não existir.
+
+**Para o advogado decidir (não resolvido por nós, de propósito)**
+
+- A seção 9 dos Termos diz que o CDC se aplica "quando a CONTRATANTE for pessoa física ou microempresa em situação de vulnerabilidade". Com a definição ampliada da §2.1, **todo cadastro self-service é uma CONTRATANTE pessoa física** — ou seja, o documento passa a dizer a todo usuário self-service que o CDC governa. Se um profissional que compra SaaS B2B como insumo do negócio é consumidor é questão contestada, que este repositório não responde. **Erra a favor do usuário, não contra**, então foi mantida exatamente como está, para Rômulo e o advogado decidirem.
+- A subseção 10.4 foi **adicionada** a uma cláusula marcada "Não editar sem novo parecer". 10.1–10.3 estão literalmente intactas (agora com guard byte a byte); 10.4 é aditiva e só reforça o compromisso. Removível sem afetar mais nada, se o advogado preferir.
+
+**Achados técnicos que valem registro**
+
+- **`.dockerignore` excluía `docs/` — e o `pnpm build` do contêiner prerenderiza as duas rotas.** `COPY . .` (infra/Dockerfile) respeita o `.dockerignore`, então o `readFile` lançaria ENOENT e **abortaria o build da imagem**: verde na máquina de dev, quebrado só dentro do contêiner — mesma assinatura de #156/#157. `outputFileTracingIncludes` **não** cobre isso (traça um arquivo que nunca entrou no contexto de build). Corrigido com reinclusão explícita e estreita (`!docs/legal/termos-de-uso.md`, `!docs/legal/politica-privacidade.md`) no fim do arquivo, onde vale a última regra que casa. **Ainda NÃO verificado com `docker build` — Docker está fora nesta máquina.**
+- **Prettier reescreveu texto do advogado.** O `pnpm format` trocou `*ex post*` por `_ex post_` dentro da cláusula 10, e o teste que dizia guardá-la passou verde (checava só nome do advogado, a frase "Não editar sem novo parecer" e a existência de "10.3."). Restaurado o original; corpo de 10.1–10.3 agora fixado **byte a byte** contra `src/lib/__fixtures__/clausula-10-advogado.txt`, e `docs/legal/` entrou no `.prettierignore` novo para a ferramenta não reintroduzir a deriva.
+
+**Verificação**
+
+- 54 testes novos verdes; suíte unitária 485+ verde; typecheck limpo; lint 0 erros; `pnpm build` gera `/termos` e `/privacidade` como `○ (Static)`.
+- Os guards foram validados por **mutação**: reintroduzir `_ex post_`, enfraquecer 10.2(d) (`EXCLUSIVA` → `compartilhada`), remover a reinclusão do `.dockerignore`, acrescentar uma exclusão depois dela, e remover `docs/legal/` do `.prettierignore` — todos falham como devem.
+
+## 🏁 Sessão 30/07/2026 — CI carrega as imagens de infra (Issue #157)
+
+**O buraco que fechou**
+
+- `infra/escalonamento/Dockerfile` e `infra/backup/Dockerfile` não compartilham o `node_modules` nem a árvore do app (COPY explícito + deps instaladas à mão, de propósito). `pnpm test`/`typecheck`/`lint` rodam contra a árvore do REPO e **ficam verdes com a imagem quebrada** — foi assim que a #126 subiu um `import` novo e derrubou o motor em produção por ~20 min (PR #156).
+
+**O que foi entregue**
+
+- `scripts/ci/carga-imagens-infra.sh` — **builda a imagem e carrega o código lá dentro**, não inspeciona Dockerfile. Roda igual no CI e na máquina do dev (`scripts/ci/carga-imagens-infra.sh [escalonamento|backup]`).
+- Escalonamento: dry-run por caminho **absoluto E relativo** (a forma do compose, que foi a que a #153 quebrou). Asserção tripla — exit 0 é **vermelho** (guarda de execução regrediu), erro diferente do esperado é vermelho, e só `ESCALONAMENTO_DATABASE_URL não definida` é verde.
+- Backup: mesmo desenho, cobrindo os 8 binários instalados à mão (`pg_dump`/`mc`/`age`/…), sintaxe dos 5 scripts e carga de `backup.sh`/`restore.sh`/`verify-restore.sh`/`verify-offsite.sh` até a guarda de env.
+- `.github/workflows/carga-imagens-infra.yml` — PR + push em `main` + `workflow_dispatch`, filtrado nos caminhos que entram nas imagens (inclui `pnpm-lock.yaml`, porque as versões da imagem são pinadas à mão e têm que acompanhar o lockfile).
+- Seção nova em `infra/README.md` com a tabela de como ler o resultado.
+
+**Gap novo encontrado no meio (não estava na issue)**
+
+- Carregar o script prova só os imports de **topo**. `resend` entra por `await import()` dentro de `try/catch` em `scripts/lib/resend-rt.mjs`: numa imagem sem a dependência o dry-run passa **verde**, o motor sobe e escalona normalmente, e o e-mail ao RT falha **em silêncio** gravando "email nao enviado" na trilha — modo de falha pior que o da #126, que ao menos morria alto.
+- Fechado com `scripts/ci/verificar-deps-imagem.mjs`, que resolve **todo** specifier dos arquivos copiados (dinâmicos inclusive) dentro da imagem. Entra por stdin de propósito — não vira arquivo numa imagem de produção.
+
+**Verificação (rodada de verdade, local, Docker 29.6.1)**
+
+- 21/21 asserções verdes nos dois serviços.
+- Controles negativos: imagem sem `COPY scripts/lib/` → pega `ERR_MODULE_NOT_FOUND`; imagem sem `resend` → passa no teste de carga (confirmando o gap acima) e é pega pelo verificador de deps.
+
+## 🏁 Sessão 30/07/2026 — E-mail Resend pro RT no estágio 2 (Issue #126)
+
+**O que foi entregue**
+
+- Migração `db/migrations/0056_alerta_risco_email_rt.sql` — 3 funções `SECURITY DEFINER` pra role `iris_escalonamento`: `app_rt_do_alerta` (resolve e-mail/nome do RT só em `escalado_estagio_2` com papel vigente), `app_registrar_email_rt` (grava marcador em `canais_notificados` + `audit_log`, sempre — sucesso ou falha), `app_alertas_estagio2_sem_email` (reconciliação).
+- `src/lib/email/resend.ts` (adapter TS pro app Next, Provider+resolver+NullProvider) e `scripts/lib/resend-rt.mjs` (espelho JS puro pro motor de escalonamento — script roda via `node` puro, não importa `.ts`).
+- `scripts/escalonamento-risco.mjs`: `processarEmailRt()` chamado pros recém-escalados pra estágio 2 **e** pros pendentes da reconciliação, toda varredura.
+- `EMAIL_PROVIDER_API_KEY`/`RESEND_FROM_EMAIL` documentadas em `.env.example`.
+- Testes novos: `notificacao.test.ts`, `email/resend.test.ts`, `scripts/escalonamento-risco.test.mjs` (532→538 testes unitários, todos verdes).
+- **PR #153** aberta (branch `feat/126-email-rt-estagio2`), 4 commits (`build`/`feat`/`test`/`docs`). **Merge segurado a pedido do Rômulo** — main=prod com autodeploy, decisão de mergear é dele.
+- **Smoke test manual com Resend real deferido a pedido do Rômulo** — nenhuma key real em `.env`/`.env.local` locais; quando quiser rodar, adicionar `EMAIL_PROVIDER_API_KEY` (nunca colar a key no chat) e forçar um alerta pro estágio 2 pra conferir e-mail recebido + `canais_notificados`/`audit_log` gravados.
+
+**Decisão de escopo (fora do Apêndice A original da issue)**
+
+- Achado durante o planejamento: se o processo morre entre a transição pro estágio 2 e o envio do e-mail, a função de escalonamento não devolve mais aquele alerta (já saiu do estágio que a query casa) — e-mail perdido em silêncio (contra #108). Fechado com a 3ª função de reconciliação acima, rodada toda varredura.
+
+**Gaps incidentais encontrados e corrigidos nesta sessão (fora do escopo da #126)**
+
+- `vitest.config.ts` não tinha alias pra `server-only` — todo teste unitário que importa um módulo com `import "server-only"` lançava (`This module cannot be imported from a Client Component module`), sem precedente no repo pra teste puro (só cobertos por `.int.test.ts`, config diferente). Corrigido com `resolve.alias["server-only"]` apontando pro `empty.js` do próprio pacote (mesma troca que o Next faz via condição `react-server`; não é `vi.mock`).
+- `scripts/` não tinha nenhum projeto vitest cobrindo (`include` só pegava `src/**/*.test.ts`). Estendido pra `scripts/**/*.test.mjs`.
+- `scripts/escalonamento-risco.mjs` chamava `main().catch(...)` incondicional no escopo do módulo — importar o arquivo (p.ex. do teste, pra pegar `processarEmailRt`) disparava uma varredura real contra `ESCALONAMENTO_DATABASE_URL`. Corrigido com guarda de execução direta — mas a 1ª versão da guarda estava errada e foi refeita na revisão (ver sessão seguinte).
+- Banco local (`docker compose infra/docker-compose.yml`) precisou de `iris_app`/`iris_auth_login` criadas à mão (não vêm de migração — receita em `infra/README.md`), volume era novo.
+
+**Gap pré-existente encontrado, NÃO corrigido (fora de escopo — registrar, não silenciar)**
+
+- `pnpm test:rls` roda 3 falhas em `src/db/rls.int.test.ts`, todas sem relação com #126: (1) teste da issue #141 insere `extraction.subtipo = 'sugestao_marcos'`, valor que **não existe** no enum `extraction_subtipo` nem em `src/db/schema.ts` nem em nenhuma migração — enum só tem `evidencia/registro_abc/ausencia_comportamento/cadeia/preferencia_reforcador/pendente`; (2)/(3) dois testes da issue #128 (`session_note`/`extraction` — terapeuta que não é dono da sessão) colidem com a exclusion constraint `session_no_overbook_terapeuta` ao inserir a sessão de setup. Confirmado que as 3 funções novas do #126 (`app_rt_do_alerta`/`app_registrar_email_rt`/`app_alertas_estagio2_sem_email`) não vazam dado — zero falha nos testes que as cobrem, e essas 3 falhas são em describe blocks totalmente diferentes. Precisa de sessão própria pra investigar se `sugestao_marcos` deveria ter entrado no enum numa migração que faltou, ou se o teste #141 está desatualizado.
+
+## 🏁 Sessão 30/07/2026 — Infra Resend + revisão da PR #153 (Issue #126)
+
+**Infra concluída (ações humanas de via única, feitas pelo Rômulo)**
+
+- Conta Resend criada; domínio `irisclinica.ia.br` **Verified**, região São Paulo (`sa-east-1`).
+- DNS publicado no painel do **Registro.br** (nameservers `d/e.sec.dns.br`, não Cloudflare): DKIM `resend._domainkey`, SPF TXT `send`, MX `send` (prio 10, `feedback-smtp.sa-east-1.amazonses.com`), DMARC `_dmarc` (`p=none`). Os 4 verificados por resolução DNS, não só pelo status do painel.
+- API key `iris-producao` (Sending access) criada; a key `Onboarding` do fluxo inicial foi removida.
+- Easypanel: `EMAIL_PROVIDER_API_KEY` + `NEXT_PUBLIC_APP_URL=https://irisclinica.ia.br` nos **dois** serviços (`iris-app` e `iris-escalonamento`). `RESEND_FROM_EMAIL` **não** foi setada — é opcional: o default no código já é `notificacoes@irisclinica.ia.br` e o domínio verificado é a raiz, então bate. Só faria falta se um dia o remetente mudasse ou o domínio verificado virasse subdomínio.
+- ⚠️ A `iris-producao` está em texto plano no painel e vai aparecer no log de build (`infra/README.md`) — entra na tabela de rotação.
+
+**Revisão da PR #153 (Jules não concluiu; revisão feita pelo Claude) — 2 bloqueantes corrigidos em `618c131`**
+
+- **E-mail sairia com link vazio, registrado como enviado.** `NEXT_PUBLIC_APP_URL` não existia no serviço `iris-escalonamento` (só no `iris-app`), então `appUrl` caía no fallback `""` e o corpo saía com `<a href=""></a>` — enquanto `app_registrar_email_rt` gravava `_enviado` com sucesso. Canal que consta entregue sem ter servido é a falha silenciosa da #108. Os dois adapters passam a **recusar** o envio com falha explícita na trilha quando a URL do painel está ausente. A variável também foi setada no Easypanel.
+- **Guarda de execução virava no-op com caminho relativo.** `import.meta.url === \`file://${process.argv[1]}\``não funciona porque o Node **não absolutiza**`argv[1]`: com caminho relativo — como no dry-run documentado em `infra/docker-compose.yml`— a comparação dá`false`, `main()`nunca roda e o processo sai **0**. Verificado empiricamente (antes: nenhuma saída, exit 0; depois: erro de`ESCALONAMENTO_DATABASE_URL`na stack). Trocado por`pathToFileURL(process.argv[1]).href`. Também destravou a execução local no Windows.
+- **Teste do guardrail LGPD era tautologia.** `resend.test.ts` reconstruía o template numa string local em vez de exercitar o código — interpolar nome de paciente em `resend.ts` não quebraria nada. O corpo saiu para `montarCorpoAlertaRt(appUrl)`, exportada dos dois adapters, e o teste asserta contra ela. Teste novo garante que o espelho `.mjs` e o adapter TS não divirjam (a duplicação é intencional, mas nada garantia paridade).
+- Achado ao escrever o teste: o fake de `sql` lia `p_sucesso` de `valores[1]`, mas esse parâmetro é **literal** no template SQL — só `p_alerta` e `p_detalhe` são interpolados.
+- Verificação: `pnpm test` 535/535, `typecheck` limpo, `lint` 0 erros.
+
+**Achados não-bloqueantes → Issue #154**
+
+- Falha de envio nunca é reprocessada: `app_alertas_estagio2_sem_email()` exclui `_falhou`, então um 429/5xx transitório da Resend queima a única chance daquele alerta. Decidir entre aceitar+documentar ou separar transitório de definitivo.
+- Exceção em `processarEmailRt` aborta a varredura inteira (sem `try/catch` por alerta) — os alertas seguintes ficam sem e-mail naquela passada e o heartbeat não avança. A reconciliação recupera na varredura seguinte, mas um alerta ruim não deveria bloquear os outros.
+- Menores: `rt_nome` devolvido por `app_rt_do_alerta` e nunca consumido; `UPDATE` em `app_registrar_email_rt` sem `deletado_em IS NULL`, diferente das funções irmãs da mesma migração.
+
+**Ainda pendente pra fechar a #126**
+
+- Merge da PR #153 (decisão do Rômulo — main=prod com autodeploy).
+- **Implantar** `iris-app` e `iris-escalonamento` depois do merge: env var salva no Easypanel não reinicia container sozinha.
+- Smoke test com envio real — só possível após merge + deploy. Hoje a key `iris-producao` marca "No activity", o que confirma que nada foi enviado ainda.
+- Reaproveitar o adapter no convite de equipe (`/equipe/convidar`), item da Fase 3 da issue que a PR não entregou.
+
+## 🏁 Sessão 30/07/2026 — #126 FECHADA: incidente do motor parado + smoke test verde
+
+**Incidente: motor de escalonamento parado em produção (PR #156)**
+
+- O deploy da #126 derrubou o motor: `ERR_MODULE_NOT_FOUND` em `file:///app/scripts/lib/resend-rt.mjs`, 6 varreduras com `exit 1`, heartbeat congelado. **Nenhum alerta de risco vencido escalou** enquanto durou (~20:47Z→21:07Z).
+- Causa raiz, duas faces do mesmo ponto cego: `infra/escalonamento/Dockerfile` **não** compartilha o `node_modules` nem a árvore de arquivos do app — lista o que copia e instala o que precisa à mão, de propósito, pra não arrastar Next/React/Playwright. (1) O `COPY` listava só `scripts/escalonamento-risco.mjs`, e o `scripts/lib/resend-rt.mjs` novo nunca entrou na imagem — import de topo não cai em `try/catch`, o processo morre na carga. (2) `resend` foi adicionado ao `package.json` da raiz, que não alcança essa imagem; ela instalava só `postgres@3.4.9`. Sem a 2ª correção, mesmo com o COPY certo o `await import("resend")` cairia no catch e gravaria `_falhou` — e como falha não é reprocessada (#154), cada alerta de estágio 2 queimaria sua **única** tentativa num módulo ausente.
+- Corrigido copiando `scripts/lib/` inteiro (módulo novo entra sozinho) e instalando `resend@6.18.1` pinado.
+- **Por que test/typecheck/lint não pegaram:** os três rodam contra a árvore do repo, onde o arquivo existe e a dependência está no `node_modules` da raiz. Nenhum constrói a imagem do escalonamento, e o serviço não sobe por default no compose (`profiles: ["escalonamento"]`) — então o teste local que o próprio Dockerfile diz existir pra pegar exatamente isso nunca rodou. Vira issue de CI (ver abaixo).
+
+**Smoke test — VERDE (30/07/2026, 21:1xZ)**
+
+- Executado do terminal do container `iris-escalonamento`, importando o módulo de produção `scripts/lib/resend-rt.mjs` (não um envio genérico), com a chave saindo de `process.env` — nunca colada no chat.
+- Pré-checagem: módulo carrega, `EMAIL_PROVIDER_API_KEY` presente (36 chars, valor não impresso), `NEXT_PUBLIC_APP_URL=https://irisclinica.ia.br`, remetente no default.
+- Envio: `{"ok":true,"providerMessageId":"0006091f-8534-4031-a8bb-b9396dfd65aa"}`.
+- Resend → Emails: **Delivered**, destino `correaromulo963@gmail.com`, assunto `Iris — alerta de risco pendente há mais tempo que o esperado`.
+- **Migração `0056` confirmada aplicada em produção sem abrir console:** toda varredura chama `app_alertas_estagio2_sem_email()`; as varreduras estão concluindo verdes a cada 60s, o que só é possível com as funções no banco.
+- **Escopo do smoke:** camada de infra (domínio verificado, chave válida, SPF/DKIM, entrega real, módulo de produção). **NÃO** exercitou `app_rt_do_alerta` nem a reconciliação ponta a ponta — isso exigiria criar/alterar alerta na base de produção, e a decisão foi não escrever dado clínico em prod pra teste. Fica pendente até existir ambiente separado.
+
+**Estado final da #126**
+
+- PRs #153 (feature), #156 (hotfix do Dockerfile) mergeadas e implantadas.
+- Infra completa: conta Resend, domínio `irisclinica.ia.br` Verified, DNS no Registro.br, key `iris-producao`, env vars nos dois serviços.
+- Desdobramentos abertos: **#154** (robustez — retry de falha transitória, `try/catch` por alerta, 2 pontas soltas), **#155** (reaproveitar o adapter em `/equipe/convidar`, Fase 3 que a #153 não entregou), **#157** (CI que builda a imagem do escalonamento).
+
+## 🏁 Sessão 30/07/2026 — Telemetria de UX (Microsoft Clarity — PR #151)
+
+**O que foi entregue**
+
+- Integração do **Microsoft Clarity** via SDK oficial (`@microsoft/clarity` v1.0.2).
+- Componente cliente `<Clarity />` em `src/components/clarity.tsx` montado no `src/app/layout.tsx`.
+- Proteção contra dupla execução no React 19 Strict Mode via `useRef(false)`.
+- Variável `NEXT_PUBLIC_CLARITY_PROJECT_ID` documentada em `.env.example`.
+- **Compliance LGPD:** Mascaramento nativo de formulários e execução `no-op` sem a variável configurada.
+
+## 🏁 Sessão 30/07/2026 — Implementação completa do Clarity (telemetria de UX — PR #152)
+
+**O que foi entregue**
+
+- `Clarity.init(projectId)` — integração SDK v1.0.2, guard Strict Mode via `useRef`, init só roda uma vez.
+- `Clarity.consentV2({ad_Storage: 'denied', analytics_Storage: 'granted'})` — chamado no init. LGPD: staff é empregado (contrato de trabalho já existe); Clarity mascara dados sensíveis nativamente; sem banner necessária (futura override via design system).
+- `Clarity.identify(session.user.id)` — rastreamento de staff logado (terapeuta/coordenador), reativo a login/logout. Chama `identify` sempre que sessão muda (login/logout).
+- Variável `NEXT_PUBLIC_CLARITY_PROJECT_ID=xulmzzqxsv` setada em produção (Easypanel); documentada em `.env.example` + comentário LGPD.
+- Deploy em produção (PR #152 merged, branch deletada).
+- Painel Clarity vivo e funcional: https://clarity.microsoft.com/projects/view/xulmzzqxsv/gettingstarted (aguardando dados do primeiro login de staff).
+
+**Decisões de design**
+
+- consentV2 chamado no init (não no identify), sem dependência de banner. Futuro: se design system formalizar cookie-consent, refatorar pra aceitar override do banner sem mudar lógica.
+- Custom tags (tipo_usuario, clinic_id) e custom events (diario_iniciado, resultado_gerado) — deferred até produto mapear casos de uso concretos. Skeleton exportável em `src/lib/telemetry/clarity-tags.ts` / `clarity-events.ts` p/ quando precisar.
+- ad_Storage='denied' (sem publicidade no produto, sem motivo p/ storage de ads).
+
+**Verificação (all passed)**
+
+- ✅ `pnpm typecheck` — zero erros
+- ✅ `pnpm build` — Next.js route map gerado, zero warnings
+- ✅ Deploy Easypanel — app rodando, env setada, container up
+- ✅ SDK live em painel (project criado, pronto pra dados)
+
+**Próximo passo**
+
+- Quando primeiro staff logar em produção: `identify(session.user.id)` acionado automaticamente → painel recebe dados em 5-10min (coleta assíncrona Clarity)
+
+## 🏁 Sessão 30/07/2026 — Gate único da suíte de integração: fim do auto-skip silencioso (Issue #132)
+
+**O problema fechado**
+
+`pnpm test:rls` — o comando que prova isolamento multi-tenant (RLS) e trilha de
+auditoria append-only — saía **verde sem rodar nada** quando faltava env de
+banco. Cada um dos 65 arquivos `*.int.test.ts` declarava o próprio
+`const hasDb = ...` a partir de `process.env`, em **três variantes divergentes**,
+e o `catch {}` vazio do `vitest.integration.config.ts` engolia até o "`.env` não
+existe". Verde por omissão em cima desse comando encerra a investigação.
+
+**O que foi entregue**
+
+- `db/tests/integration-env.ts` — gate ÚNICO, exportando `hasDb`,
+  `missingDbEnv()` e `allowSkip`. `hasDb` agora exige as **três** conexões
+  (`DATABASE_URL`, `AUTH_DATABASE_URL`, `MIGRATION_DATABASE_URL`), presentes e
+  não-vazias. Os 65 arquivos passaram a importar daí; a lógica interna de cada
+  teste (conexões, `beforeAll`, `describe.skipIf`) não foi tocada.
+- **A unificação matou a variante fraca.** 8 arquivos exigiam só
+  `MIGRATION_DATABASE_URL` — a role **dona** (`iris`, SUPERUSER + BYPASSRLS).
+  Rodavam num ambiente onde a role de app sequer estava configurada, e o que
+  passasse por ali passava com RLS desligada. Eram
+  `db/tests/consent-responsavel-por-tipo`, `db/tests/fase5-report-schema`,
+  `src/app/(app)/relatorios/{actions,queries,familia-logic,convenio-narrativo-logic}`,
+  `src/lib/report/convenio-bruto/build-payload` e
+  `src/lib/report/convenio-narrativo/build-input`. Nenhum quebrou com o gate
+  forte — vários já dependiam de `withTenant` (portanto de `DATABASE_URL`)
+  implicitamente, sem declarar.
+- `db/tests/global-setup.ts` (novo `globalSetup` do
+  `vitest.integration.config.ts`) roda **antes de qualquer teste** e:
+  - **falha dura (exit != 0)** quando falta qualquer uma das três vars — este é
+    o **default**, com mensagem listando o que falta e como corrigir;
+  - com `ALLOW_SKIP_INTEGRATION=1`, troca a falha por um **banner de aviso
+    alto** ("isso NÃO é cobertura", quantos arquivos foram pulados) e sai 0.
+    Escape hatch nomeado, mesmo espírito do `SKIP_GLOBALS` de
+    `infra/backup/restore.sh`;
+  - **valida a identidade das roles**: `DATABASE_URL`/`AUTH_DATABASE_URL` com
+    `rolsuper` ou `rolbypassrls` = **falha dura sem opt-in**
+    (`ALLOW_SKIP_INTEGRATION` não suprime) — é exatamente o achado da sessão
+    29/07 que fez a suíte inteira rodar sobre vácuo;
+  - exige que `MIGRATION_DATABASE_URL` **seja** a role dona (senão fixtures
+    morrem confusas N arquivos abaixo) e que o schema esteja migrado
+    (sentinela `public.clinic` → manda rodar `pnpm db:migrate`);
+  - no caminho feliz imprime uma linha só, sem senha nem URL:
+    `[int] app=iris_app(norls) auth=iris_auth_login(norls) owner=iris(owner) schema=ok`.
+- `vitest.integration.config.ts`: `catch {}` vazio virou `console.warn`
+  explícito; alias `@tests` → `db/tests` (espelhado em `tsconfig.json`) para o
+  helper ser importável dos dois lados da árvore.
+- `.env.example`: `ALLOW_SKIP_INTEGRATION` documentado (o que faz, que o default
+  é falhar, e que não suprime a checagem de role).
+
+**Decisões de design**
+
+- Gate uniforme nas três URLs, mesmo para teste que só usa a role dona. Um
+  ambiente sem role de app configurada não é ambiente de integração válido.
+- Falhar é o default; pular é opt-in **nomeado**. O inverso é o que produziu a
+  #132.
+- Falha de identidade de role **não tem opt-in**. Pular teste é uma decisão;
+  rodar teste de RLS com RLS desligada é uma afirmação falsa.
+
+**Verificação** (todas executadas nesta sessão)
+
+| Caminho                                            | Resultado                                                         |
+| :------------------------------------------------- | :---------------------------------------------------------------- |
+| `pnpm typecheck`                                   | limpo                                                             |
+| `pnpm lint`                                        | 0 erros / 24 warnings (baseline pré-existente, stories + hooks)   |
+| `pnpm test:rls` sem as três vars                   | **exit 1** + mensagem acionável                                   |
+| idem + `ALLOW_SKIP_INTEGRATION=1`                  | **exit 0** + banner; 4 passed / 64 skipped (68) — 15 / 450 testes |
+| `pnpm test:rls` com as três URLs locais            | **68 arquivos / 465 testes passados, 0 pulados**                  |
+| `DATABASE_URL` apontando para a role dona (`iris`) | **exit 1** — "ROLE ERRADA — A SUÍTE RODARIA COM RLS DESATIVADA"   |
+
+**Ficou de fora desta fatia (virou a issue #143)**
+
+- **"Skip em CI = falha de build"**, o outro item da #132: **não foi feito**. O
+  repositório hoje **não tem nenhum workflow que rode teste** — só
+  `guard-base-branch.yml` e `pr-review.yml`. Como o default agora é falhar sem
+  banco, o gate de CI é a consequência natural, mas exige decidir antes onde o
+  Postgres de CI vive (service container no GitHub Actions vs. nada) — decisão
+  de infra, fora do escopo desta fatia.
+- Os 3 arquivos `*.int.test.ts` que não tocam banco
+  (`src/lib/report/playwright-renderer`, `db/tests/agenda2-semana-actions` e
+  `-etapa-d`) seguem sem gate, de propósito.
+
+---
+
+## 🏁 Sessão 29/07/2026 — Encerramento de revogação, prontuário somente-leitura, curatela/emancipado e transição de maioridade (Issues #133, #117, #134, #135)
+
+**O que foi entregue**
+
+- `consent` ganhou 3 valores de enum (`revogacao_consentimento`,
+  `representacao_curador`, `autoconsentimento_titular_emancipado`), 2 colunas
+  (`consentRevogadoId`, `instrumentoRepresentacao`), `UNIQUE (id, patient_id)` e
+  auto-FK composta. Migrações `0052` (só enum) e `0053` (resto).
+- Revogação é linha nova apontando para a linha revogada. Escopo da revogação
+  = o que ela aponta. Sem coluna de escopo, sem valor de enum por finalidade.
+  `consent` segue append-only.
+- Estado do prontuário é **derivado**, nunca coluna. Trava sse a concessão de
+  regime mais recente for de tipo representado (menor/curador) e estiver
+  revogada.
+- Gate de escrita em 31 policies (INSERT/UPDATE/DELETE) + guards dentro de
+  `app_aplicar_snapshot`, `app_aplicar_candidatura` e `app_criar_alerta_risco`,
+  porque funções SECURITY DEFINER não passam por RLS. SELECT intocado em
+  todas as tabelas.
+- Gate por finalidade com semântica **negativa** (`app_finalidade_revogada`):
+  bloqueia só se a linha mais recente daquela finalidade estiver revogada.
+  Motivo: nenhum código insere `uso_ia_processamento`/`exportacao_relatorios`,
+  então a forma afirmativa causaria regressão em 100% dos pacientes.
+- Caminho de consentimento para paciente já existente
+  (`registrarEventoConsentimento`) — não existia; era o gap comum às 4 issues.
+- Indicador passivo de maioridade (90 dias do §4(b)), que não bloqueia nada.
+  `nascimento` nulo é terceiro estado.
+
+**Decisões travadas**
+
+- **D4 — revogação aponta a linha revogada; escopo = ponteiro.** Sem coluna de
+  escopo nem enum por finalidade.
+- **D5 — vigência é derivada**, desempate por `(assinado_em DESC, id DESC)`
+  porque `now()` é fixo por transação e várias linhas nascem com o mesmo
+  timestamp.
+- **D6 — trava qualificada pelo regime corrente**, não pelo histórico.
+- **D7 — menor/curatelado travam; adulto/emancipado não travam** (só cessam
+  IA, transferência internacional e exportação) — §13 do termo `adulto-v1`.
+- **D8 — gate de finalidade é negativo** por não-regressão.
+- **D9 — enforcement no banco**; TypeScript só traduz a recusa, nunca decide.
+- **D10 — ex-menor que autoconsente aos 18 e depois revoga não volta a
+  travar** (corrige furo achado na redação jurídica, contrariaria o §13).
+
+**Achados da revisão adversarial** (registro é parte do valor do processo)
+
+- `ALTER POLICY ... WITH CHECK` substitui a expressão inteira — a versão
+  original da spec teria apagado os guards de tenant e papel de
+  `session_insert`/`session_update`. Corrigido para DROP+CREATE com
+  predicado verbatim.
+- O Read-Only Locked era irreversível na primeira modelagem (qualificado por
+  histórico); reassinatura não destravaria.
+- Furo achado depois, na redação jurídica: ex-menor que autoconsente aos 18 e
+  depois revoga voltava a travar, contrariando o §13 (vira D10 acima).
+- Um bloqueador alegado foi **refutado empiricamente**: `ON DELETE RESTRICT`
+  não quebra `app_purgar_paciente` (testado no Postgres real). Usamos
+  `NO ACTION` mesmo assim, por margem.
+
+**Achado de infraestrutura de teste — grave, atualiza a #132**
+
+- `DATABASE_URL` do `.env` apontava para a role `iris`, que é
+  **superusuário com BYPASSRLS**. Toda a suíte de integração, quando rodava,
+  rodava sem RLS aplicada — casos negativos eram vácuo.
+- O gate de skip é `DATABASE_URL && MIGRATION_DATABASE_URL`; faltando a
+  segunda, 64 de 68 arquivos se auto-pulavam em silêncio e a suíte reportava
+  verde.
+- Correto: `DATABASE_URL` em `iris_app` (sem BYPASSRLS),
+  `MIGRATION_DATABASE_URL` em `iris`. Depois disso: 68 arquivos / 465 testes,
+  0 pulados.
+- A #132 subestima o problema: não é só "pula quando falta env", é "pode
+  rodar com a role errada e passar por vácuo".
+- ✅ **Resolvido em 30/07/2026** (ver sessão acima): gate único em
+  `db/tests/integration-env.ts` + `globalSetup` que falha duro sem as três
+  vars e recusa role SUPERUSER/BYPASSRLS em `DATABASE_URL`/`AUTH_DATABASE_URL`.
+  A variante fraca do gate (só `MIGRATION_DATABASE_URL`, 8 arquivos) deixou de
+  existir. Continua aberto só o item de CI — ver "ficou de fora" na sessão 30/07.
+
+**Verificação** — typecheck limpo; lint 0 erros/8 warnings (baseline);
+unitários 117 arquivos/523 testes; integração 68/465 com 0 skip; build
+limpo; migrações aplicam do zero (54 arquivos).
+
+**Pendências abertas geradas por esta sessão** (candidatas a issue)
+
+1. Coleta de consentimento por finalidade não existe —
+   `criarPacienteEConsent` grava só a linha de regime, mas o §7 do termo diz
+   que IA e exportação dependem de consentimento. Exige mudança de UI.
+2. `app_purgar_paciente` apaga as linhas de `consent` no expurgo, enquanto o
+   `audit_log` é pseudonimizado e preservado — some a prova de que o
+   tratamento anterior era consentido. Assimetria.
+3. Bug pré-existente `eq.evidence_id = eq.evidence_id` (tautologia) em
+   `evidence_revision_insert`, `db/migrations/0014_fase4_evidence_rls.sql:61-80`.
+   Não corrigido de propósito: mudaria autorização de terapeuta dentro de uma
+   migração de consentimento.
+4. Cobertura fraca reconhecida: `evidence_revision` e `evidence_query` só
+   exercitadas indiretamente; cross-tenant testado em 3 das 20 tabelas
+   tocadas.
+5. Comunicação ao provedor de IA na revogação não existe — cessação é o Iris
+   parar de enviar. Amarrado ao DPA.
+
+**Documentação produzida** —
+`docs/legal/procedimento-revogacao-consentimento.md` (`revogacao-v1`),
+`docs/legal/termo-consentimento-curatela.md` (`curatela-v1`),
+`docs/legal/termo-consentimento-titular-emancipado.md` (`emancipado-v1`),
+emenda datada no `termo-consentimento-titular-adulto.md` (§16),
+`docs/arquitetura/ciclo-de-vida-do-prontuario.md`, atualização da entidade
+Consent em `docs/dados/modelo-de-dados.md`. Todos submetidos à ratificação
+por silêncio, ainda **não** ratificados.
 
 ## 🏁 Sessão 29/07/2026 (Part 2) — Padrões "Is It Agent Ready" & Descoberta por IA (PR #138)
 
@@ -180,6 +1385,13 @@ before they can be used.`
   `DATABASE_URL` está vazio; `pnpm test` e `pnpm test:rls` terminam **verdes sem
   rodar nada**. P1: são exatamente os comandos que provam isolamento
   multi-tenant.
+  → **Endereçada em 30/07/2026** (branch `fix/132-gate-suite-integracao`): gate
+  único + `globalSetup` que falha duro; escape hatch `ALLOW_SKIP_INTEGRATION`.
+  **Mergeada na PR #142 e a #132 foi FECHADA em 30/07/2026.** O item de CI
+  ("skip em CI = falha de build") ficou deliberadamente fora daquela fatia
+  porque o repo ainda não tem workflow que rode teste, e vive na **#143** —
+  que é maior que a #132: exige o primeiro workflow com service Postgres,
+  roles e migrações, e a decisão de tornar isso required check da `main`.
 - **#133** — não existe forma de **registrar** uma revogação de consentimento
   (`consent` é append-only e o enum não tem evento de revogação). A promessa dos
   termos não é só não-implementada, é **não-registrável**. Diferente da #117, que
@@ -2140,6 +3352,7 @@ Além disso, há hard-blockers técnicos que precisariam ser resolvidos antes do
   - [ ] Confirmar com a contadora a inserção do CNAE secundário de desenvolvimento/licenciamento de SaaS na ME.
   - [ ] Testar trial/demo dos concorrentes direto (logado).
   - [ ] Fechar precificação final do "paciente ativo" após rodadas do piloto.
+  - [ ] **Issues #163 + #159 — Cadastro self-service + trial de 7 dias e cobrança**: planejadas **juntas** em 30/07/2026 (spec: `docs/superpowers/specs/2026-07-30-cadastro-self-service-e-trial-design.md`). A #159 estava gated em "≥3 pilotos validarem o onboarding", mas o gatilho pressupõe um onboarding que não existe — e a tentativa de provisionar a primeira usuária real em prod (30/07) falhou porque o seed não roda no `iris-app` (build standalone) nem no `iris-migrate` (job sem container ativo). Decisões travadas: cobrança **por paciente ativo/mês** (tier Diário, `modelo-de-negocio.md` §3), **sem piso** no self-service, ciclo por **aniversário da conta** com 1ª fatura no dia 8, **sem exigir cartão no cadastro**, pós-trial = **somente-leitura com exportação livre** (substitui o "acesso bloqueado até pagamento" do texto original — dever de guarda do profissional), cadastro **aberto** com conselho/registro declarados e auditados, entrega em **2 fatias** (A destrava o cadastro, B cobra). Gateway escolhido: **Asaas** (IP autorizada pelo BC → sem transferência internacional; NFS-e nativa a R$ 0,49; Pix Automático com autorização de valor variável), runner-up **Galax Pay/cel_cash**; a porta `BillingProvider` existe porque há relatos recentes de bloqueio de saldo por reanálise cadastral pós-aprovação. Gate de trial é **derivado no request**, não flag setada por job — job morto falha fechado. **Bloqueadores não-técnicos:** Termo de Uso e Política de Privacidade publicados e versionados (aceite do profissional adulto aponta pra eles) e o CNAE secundário de SaaS junto à contadora (item acima) — o Pix Automático exige CNAE compatível.
 
 ---
 

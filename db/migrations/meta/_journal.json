@@ -365,6 +365,139 @@
       "when": 1784521562778,
       "tag": "0051_consent_responsavel_opcional",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1784521563778,
+      "tag": "0052_consent_revogacao_e_representacao_enum",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1784521564778,
+      "tag": "0053_consent_revogacao_gate_prontuario",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1785421565000,
+      "tag": "0054_fix_evidence_revision_insert_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1785421565500,
+      "tag": "0055_fix_purga_report_oracle",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1785421566000,
+      "tag": "0056_alerta_risco_email_rt",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1785421567000,
+      "tag": "0057_cadastro_self_service",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1785421568000,
+      "tag": "0058_professional_consent",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1785421569000,
+      "tag": "0059_email_verificado_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785421570000,
+      "tag": "0060_professional_consent_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785421571000,
+      "tag": "0061_auth_throttle",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1785421572000,
+      "tag": "0062_auth_throttle_janela_inicio",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1785421573000,
+      "tag": "0063_reaplica_purga_report_oracle",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1785422573000,
+      "tag": "0064_trial_primeiro_paciente",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1785422574000,
+      "tag": "0065_patient_arquivado_em",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1785422575000,
+      "tag": "0066_asaas_webhook_event",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1785422576000,
+      "tag": "0067_desarquivar_paciente_por_atendimento",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1785422577000,
+      "tag": "0068_alerta_risco_email_rt_retry",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1785422578000,
+      "tag": "0069_email_rt_pontas_soltas",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1785422579000,
+      "tag": "0070_expurgo_audit_log_marco_civil",
+      "breakpoints": true
     }
   ]
 }

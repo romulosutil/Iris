@@ -33,6 +33,15 @@ export function ConvidarForm() {
     );
   }
 
+  if (state.sucesso) {
+    return (
+      <Alert severidade="sucesso" titulo="Profissional adicionado à equipe">
+        O profissional já possui uma conta cadastrada no Iris e foi vinculado com sucesso à equipe da clínica.
+        Ele deve realizar o login utilizando sua senha de acesso atual.
+      </Alert>
+    );
+  }
+
   return (
     <Form action={formAction} error={state.error}>
       <Field label="Nome" htmlFor="nome">

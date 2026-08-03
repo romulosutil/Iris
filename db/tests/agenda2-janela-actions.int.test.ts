@@ -1,9 +1,8 @@
 // db/tests/agenda2-janela-actions.int.test.ts
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 vi.mock("server-only", () => ({}));
-
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "aaaa0000-0000-0000-0000-0000000000a1";
 const U_COORD_A = "aaaa0000-0000-0000-0000-0000000000c1";
@@ -13,8 +12,16 @@ describe.skipIf(!hasDb)("janela actions — salvar/carregar/RLS", () => {
   let owner: ReturnType<typeof postgres>;
   let actions: typeof import("@/app/(app)/equipe/[id]/queries");
   let appSql: typeof import("@/db/client").sql;
-  const ctxCoord = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
-  const ctxT1 = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
+  const ctxCoord = {
+    clinicId: CLINIC_A,
+    userId: U_COORD_A,
+    role: "coordenador",
+  } as const;
+  const ctxT1 = {
+    clinicId: CLINIC_A,
+    userId: U_T1_A,
+    role: "terapeuta",
+  } as const;
 
   beforeAll(async () => {
     actions = await import("@/app/(app)/equipe/[id]/queries");
@@ -27,7 +34,10 @@ describe.skipIf(!hasDb)("janela actions — salvar/carregar/RLS", () => {
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD_A}, ${CLINIC_A}, 'coordenador'), (${U_T1_A}, ${CLINIC_A}, 'terapeuta')`;
   });
-  afterAll(async () => { await owner?.end(); await appSql?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
 
   test("listarTerapeutas retorna o terapeuta da clínica", async () => {
     const lista = await actions.listarTerapeutas(ctxCoord);
@@ -41,17 +51,26 @@ describe.skipIf(!hasDb)("janela actions — salvar/carregar/RLS", () => {
       { diaSemana: 1, horaInicio: "10:00", horaFim: "14:00" }, // sobrepõe -> funde 08-14
     ]);
     const carregado = await actions.carregarDisponibilidade(ctxCoord, U_T1_A);
-    expect(carregado).toEqual([{ diaSemana: 1, horaInicio: "08:00", horaFim: "14:00" }]);
+    expect(carregado).toEqual([
+      { diaSemana: 1, horaInicio: "08:00", horaFim: "14:00" },
+    ]);
   });
 
   test("salvar de novo substitui (não acumula)", async () => {
-    await actions.salvarJanelas(ctxCoord, U_T1_A, [{ diaSemana: 2, horaInicio: "09:00", horaFim: "11:00" }]);
+    await actions.salvarJanelas(ctxCoord, U_T1_A, [
+      { diaSemana: 2, horaInicio: "09:00", horaFim: "11:00" },
+    ]);
     const carregado = await actions.carregarDisponibilidade(ctxCoord, U_T1_A);
-    expect(carregado).toEqual([{ diaSemana: 2, horaInicio: "09:00", horaFim: "11:00" }]);
+    expect(carregado).toEqual([
+      { diaSemana: 2, horaInicio: "09:00", horaFim: "11:00" },
+    ]);
   });
 
   test("terapeuta é barrado por requireRole", async () => {
-    await expect(actions.salvarJanelas(ctxT1, U_T1_A, [{ diaSemana: 3, horaInicio: "08:00", horaFim: "09:00" }]))
-      .rejects.toThrow();
+    await expect(
+      actions.salvarJanelas(ctxT1, U_T1_A, [
+        { diaSemana: 3, horaInicio: "08:00", horaFim: "09:00" },
+      ]),
+    ).rejects.toThrow();
   });
 });

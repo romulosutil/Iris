@@ -20,9 +20,24 @@ RUN pnpm install --frozen-lockfile
 
 # migrate: ÚLTIMO stage = job. Aplica db/migrations e sai != 0 se falhar,
 # abortando o deploy (o app velho segue no ar contra o schema velho).
+#
+# Também carrega scripts/seed-clinic.ts (+ src/ + tsconfig, needed pelos
+# imports @/): mesma imagem serve pra provisionar clínica+coordenador via
+# `pnpm exec tsx --conditions=react-server scripts/seed-clinic.ts ...`
+# rodado manualmente no console do Easypanel (Comando sobrescrito).
+#
+# ⚠️ Desde o fechamento da Fatia A (#163), o serviço `iris-migrate` NÃO carrega
+# mais `AUTH_DATABASE_URL`, `BETTER_AUTH_SECRET` nem `BETTER_AUTH_URL`: um job
+# que só faz DDL não tem por que guardar a chave de assinatura de sessão. O
+# `scripts/migrate.mjs` lê apenas `MIGRATION_DATABASE_URL` (fallback
+# `DATABASE_URL` em dev), então o gate de schema segue intacto.
+# Consequência: o caminho manual do seed-clinic passou a exigir injeção
+# ad-hoc de `AUTH_DATABASE_URL` na execução. O caminho normal de entrada de
+# usuário novo é o cadastro self-service em /cadastro, não o seed.
 FROM base AS migrate
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-COPY scripts/migrate.mjs ./scripts/migrate.mjs
+COPY package.json tsconfig.json ./
+COPY scripts ./scripts
 COPY db/migrations ./db/migrations
+COPY src ./src
 CMD ["node", "scripts/migrate.mjs"]

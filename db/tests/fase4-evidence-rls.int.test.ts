@@ -12,10 +12,9 @@
 import { eq, sql } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000e1";
 const CLINIC_B = "00000000-0000-0000-0000-0000000000e2";
@@ -29,10 +28,26 @@ const SESS_A1 = "00000000-0000-0000-0000-00000005e1e1";
 const SESS_B1 = "00000000-0000-0000-0000-00000005e1e2";
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
-const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
-const ctxT2A = { clinicId: CLINIC_A, userId: U_T2_A, role: "terapeuta" } as const;
-const ctxT1B = { clinicId: CLINIC_B, userId: U_T1_B, role: "terapeuta" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
+const ctxT1A = {
+  clinicId: CLINIC_A,
+  userId: U_T1_A,
+  role: "terapeuta",
+} as const;
+const ctxT2A = {
+  clinicId: CLINIC_A,
+  userId: U_T2_A,
+  role: "terapeuta",
+} as const;
+const ctxT1B = {
+  clinicId: CLINIC_B,
+  userId: U_T1_B,
+  role: "terapeuta",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;
@@ -92,20 +107,25 @@ describe.skipIf(!hasDb)("Fase 4 (4A) · RLS da Evidence layer", () => {
 
   test("terapeuta dono insere evidence a partir da aprovação e lê", async () => {
     const [ev] = await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.evidence).values({
-        extractionId,
-        patientId: PAC_A1,
-        sessionId: SESS_A1,
-        sessionNumero: 1,
-        alvoOrdinal: 0,
-        dominioId: "mando",
-        classificacaoOriginal: { descricao: "pediu água" },
-        aprovadoPor: U_T1_A,
-      }).returning({ id: schema.evidence.id }),
+      tx
+        .insert(schema.evidence)
+        .values({
+          extractionId,
+          patientId: PAC_A1,
+          sessionId: SESS_A1,
+          sessionNumero: 1,
+          alvoOrdinal: 0,
+          dominioId: "mando",
+          classificacaoOriginal: { descricao: "pediu água" },
+          aprovadoPor: U_T1_A,
+        })
+        .returning({ id: schema.evidence.id }),
     );
     expect(ev?.id).toBeTruthy();
 
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.evidence));
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.evidence),
+    );
     expect(lidas.length).toBe(1);
   });
 
@@ -114,35 +134,46 @@ describe.skipIf(!hasDb)("Fase 4 (4A) · RLS da Evidence layer", () => {
     // goal_id, milestone_id)` com NULLS NOT DISTINCT viraria `(id, null, null)`
     // para ambos e o segundo insert falharia. Agora o discriminador é o ordinal.
     const [ev1] = await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.evidence).values({
-        extractionId,
-        patientId: PAC_A1,
-        sessionId: SESS_A1,
-        sessionNumero: 1,
-        alvoOrdinal: 1, // ordinal 0 já foi inserido no teste anterior
-        protocolSlug: "vbmapp",
-        dominioId: "mando",
-        goalRef: "meta-livre-1",
-        classificacaoOriginal: { descricao: "segundo alvo, mesmo payload" },
-        aprovadoPor: U_T1_A,
-      }).returning({ id: schema.evidence.id }),
+      tx
+        .insert(schema.evidence)
+        .values({
+          extractionId,
+          patientId: PAC_A1,
+          sessionId: SESS_A1,
+          sessionNumero: 1,
+          alvoOrdinal: 1, // ordinal 0 já foi inserido no teste anterior
+          protocolSlug: "vbmapp",
+          dominioId: "mando",
+          goalRef: "meta-livre-1",
+          classificacaoOriginal: { descricao: "segundo alvo, mesmo payload" },
+          aprovadoPor: U_T1_A,
+        })
+        .returning({ id: schema.evidence.id }),
     );
     expect(ev1?.id).toBeTruthy();
 
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.evidence));
+    const lidas = await withTenant(ctxT1A, (tx) =>
+      tx.select().from(schema.evidence),
+    );
     expect(lidas.length).toBe(2);
     // ambos com FKs resolvidos nulos, distinguidos só pelo ordinal
-    expect(lidas.every((e) => e.goalId === null && e.milestoneId === null)).toBe(true);
+    expect(
+      lidas.every((e) => e.goalId === null && e.milestoneId === null),
+    ).toBe(true);
     expect(new Set(lidas.map((e) => e.alvoOrdinal))).toEqual(new Set([0, 1]));
   });
 
   test("terapeuta fora da equipe de PAC_A1 NÃO vê a evidence", async () => {
-    const lidas = await withTenant(ctxT2A, (tx) => tx.select().from(schema.evidence));
+    const lidas = await withTenant(ctxT2A, (tx) =>
+      tx.select().from(schema.evidence),
+    );
     expect(lidas.length).toBe(0);
   });
 
   test("cross-tenant: terapeuta da clínica B NÃO vê evidence da clínica A (tabela base)", async () => {
-    const lidas = await withTenant(ctxT1B, (tx) => tx.select().from(schema.evidence));
+    const lidas = await withTenant(ctxT1B, (tx) =>
+      tx.select().from(schema.evidence),
+    );
     expect(lidas.length).toBe(0);
   });
 
@@ -160,7 +191,9 @@ describe.skipIf(!hasDb)("Fase 4 (4A) · RLS da Evidence layer", () => {
       tx.execute(sql`SELECT * FROM evidence_current`),
     );
     expect(linhas.length).toBe(2); // as 2 evidences inseridas acima, ambas na equipe
-    expect((linhas[0] as { classificacao_atual: unknown }).classificacao_atual).toBeTruthy();
+    expect(
+      (linhas[0] as { classificacao_atual: unknown }).classificacao_atual,
+    ).toBeTruthy();
   });
 
   test("UPDATE em evidence por app_role falha (privilégio revogado)", async () => {
@@ -169,7 +202,8 @@ describe.skipIf(!hasDb)("Fase 4 (4A) · RLS da Evidence layer", () => {
     );
     await expect(
       withTenant(ctxCoordA, (tx) =>
-        tx.update(schema.evidence)
+        tx
+          .update(schema.evidence)
           .set({ classificacaoOriginal: { hack: true } })
           .where(eq(schema.evidence.id, ev!.id)),
       ),
@@ -193,14 +227,17 @@ describe.skipIf(!hasDb)("Fase 4 (4A) · RLS da Evidence layer", () => {
         tx.select({ id: schema.evidence.id }).from(schema.evidence).limit(1),
       );
       const [rev] = await withTenant(ctxCoordA, (tx) =>
-        tx.insert(schema.evidenceRevision).values({
-          evidenceId: ev!.id,
-          acao: "reclassificar",
-          classificacaoAnterior: { descricao: "pediu água" },
-          classificacaoNova: { descricao: "pediu água (reclassificado)" },
-          justificativa: "ajuste de função",
-          autorId: U_COORD_A,
-        }).returning({ id: schema.evidenceRevision.id }),
+        tx
+          .insert(schema.evidenceRevision)
+          .values({
+            evidenceId: ev!.id,
+            acao: "reclassificar",
+            classificacaoAnterior: { descricao: "pediu água" },
+            classificacaoNova: { descricao: "pediu água (reclassificado)" },
+            justificativa: "ajuste de função",
+            autorId: U_COORD_A,
+          })
+          .returning({ id: schema.evidenceRevision.id }),
       );
       expect(rev?.id).toBeTruthy();
     });
@@ -234,13 +271,16 @@ describe.skipIf(!hasDb)("Fase 4 (4A) · RLS da Evidence layer", () => {
         }),
       );
       const [rev] = await withTenant(ctxT1A, (tx) =>
-        tx.insert(schema.evidenceRevision).values({
-          evidenceId: ev!.id,
-          acao: "confirmar",
-          classificacaoAnterior: { descricao: "pediu água" },
-          justificativa: "resposta do terapeuta à dúvida do coordenador",
-          autorId: U_T1_A,
-        }).returning({ id: schema.evidenceRevision.id }),
+        tx
+          .insert(schema.evidenceRevision)
+          .values({
+            evidenceId: ev!.id,
+            acao: "confirmar",
+            classificacaoAnterior: { descricao: "pediu água" },
+            justificativa: "resposta do terapeuta à dúvida do coordenador",
+            autorId: U_T1_A,
+          })
+          .returning({ id: schema.evidenceRevision.id }),
       );
       expect(rev?.id).toBeTruthy();
     });

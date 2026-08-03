@@ -6,9 +6,11 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "../../src/db/rls";
+import { hasDb } from "./integration-env";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 
 const CLINIC_A = "00000000-0000-0000-0000-00000000000a";
 const U_COORD_A = "00000000-0000-0000-0000-0000000000c1";
@@ -17,6 +19,11 @@ const U_TER_A = "00000000-0000-0000-0000-0000000000a1";
 const P1 = "00000000-0000-0000-0000-0000000000d1";
 const R1 = "00000000-0000-0000-0000-0000000000f1";
 
+const CLINIC_B = "00000000-0000-0000-0000-00000000000b";
+const U_COORD_B = "00000000-0000-0000-0000-0000000000c2";
+const P2 = "00000000-0000-0000-0000-0000000000d2";
+const R2 = "00000000-0000-0000-0000-0000000000f2";
+
 const ctx = (role: string, userId: string, clinicId = CLINIC_A) =>
   ({ role, userId, clinicId }) as TenantContext;
 
@@ -24,18 +31,25 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
   beforeAll(async () => {
     await owner!`TRUNCATE report, report_pdf, audit_log RESTART IDENTITY CASCADE`;
     await owner!`TRUNCATE clinic, app_user, user_role, patient, care_team_membership RESTART IDENTITY CASCADE`;
-    await owner!`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'Clínica A')`;
+    await owner!`INSERT INTO clinic (id, nome) VALUES
+      (${CLINIC_A}, 'Clínica A'),
+      (${CLINIC_B}, 'Clínica B')`;
     await owner!`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD_A}, 'Coord A', 'coord-a@fase5-purga.test'),
+      (${U_COORD_B}, 'Coord B', 'coord-b@fase5-purga.test'),
       (${U_ADMIN_A}, 'Admin A', 'admin-a@fase5-purga.test'),
       (${U_TER_A}, 'Ter A', 'ter-a@fase5-purga.test')`;
     await owner!`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
+      (${U_COORD_B}, ${CLINIC_B}, 'coordenador'),
       (${U_ADMIN_A}, ${CLINIC_A}, 'admin_recepcao'),
       (${U_TER_A}, ${CLINIC_A}, 'terapeuta')`;
-    await owner!`INSERT INTO patient (id, clinic_id, nome) VALUES (${P1}, ${CLINIC_A}, 'Paciente 1')`;
+    await owner!`INSERT INTO patient (id, clinic_id, nome) VALUES
+      (${P1}, ${CLINIC_A}, 'Paciente 1'),
+      (${P2}, ${CLINIC_B}, 'Paciente 2')`;
     await owner!`INSERT INTO report (id, clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, status, payload) VALUES
-      (${R1}, ${CLINIC_A}, ${P1}, 'familia', '2026-01-01', '2026-01-31', 'rascunho', '{}')`;
+      (${R1}, ${CLINIC_A}, ${P1}, 'familia', '2026-01-01', '2026-01-31', 'rascunho', '{}'),
+      (${R2}, ${CLINIC_B}, ${P2}, 'familia', '2026-01-01', '2026-01-31', 'rascunho', '{}')`;
     await owner!`INSERT INTO report_pdf (report_id, bytes, hash) VALUES (${R1}, '\\x00', 'hash-r1')`;
   });
   afterAll(async () => {
@@ -48,10 +62,56 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
     );
     const rep = await owner!`SELECT 1 FROM report WHERE id = ${R1}`;
     const pdf = await owner!`SELECT 1 FROM report_pdf WHERE report_id = ${R1}`;
-    const log = await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R1} AND acao = 'relatorio_purgado'`;
+    const log =
+      await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R1} AND acao = 'relatorio_purgado'`;
     expect(rep).toHaveLength(0);
     expect(pdf).toHaveLength(0);
     expect(log).toHaveLength(1); // trilha sobrevive ao delete (entidade_id sem FK)
+  });
+
+  test("unifica mensagem de erro entre report inexistente e report de outra clínica (#165)", async () => {
+    const INEXISTENTE = "00000000-0000-0000-0000-0000000000ff";
+
+    // A mensagem do RAISE do Postgres NÃO está em `error.message` — o drizzle
+    // embrulha tudo num DrizzleQueryError cujo `message` é sempre
+    // "Failed query: …". O texto do banco vive na cadeia de `cause`. Asserir
+    // direto com `.rejects.toThrow("app_purgar_report: …")` compara contra o
+    // wrapper e NUNCA casa, nem com o oráculo vivo nem com ele fechado.
+    const mensagemDoBanco = async (p: Promise<unknown>): Promise<string> => {
+      try {
+        await p;
+      } catch (e) {
+        const partes: string[] = [];
+        let atual: unknown = e;
+        while (atual instanceof Error) {
+          partes.push(atual.message);
+          atual = atual.cause;
+        }
+        return partes.join(" | ");
+      }
+      throw new Error("esperava rejeição, mas a purga resolveu");
+    };
+
+    // 1) Report inexistente
+    const msgInexistente = await mensagemDoBanco(
+      withTenant(ctx("coordenador", U_COORD_A), (db) =>
+        db.execute(sql`SELECT app_purgar_report(${INEXISTENTE}::uuid, 'teste')`),
+      ),
+    );
+    expect(msgInexistente).toContain(`app_purgar_report: report ${INEXISTENTE} não encontrado`);
+
+    // 2) Report de outra clínica (cross-tenant) — MESMA mensagem genérica, sem vazar existência
+    const msgCrossTenant = await mensagemDoBanco(
+      withTenant(ctx("coordenador", U_COORD_A), (db) =>
+        db.execute(sql`SELECT app_purgar_report(${R2}::uuid, 'teste')`),
+      ),
+    );
+    expect(msgCrossTenant).toContain(`app_purgar_report: report ${R2} não encontrado`);
+
+    // O oráculo da 0040 dizia "fora da clínica" no caso cross-tenant e
+    // "inexistente" no outro. Nenhuma das duas palavras pode sobreviver.
+    expect(msgCrossTenant).not.toMatch(/fora da clínica/i);
+    expect(msgInexistente).not.toMatch(/inexistente/i);
   });
 
   test("terapeuta não pode executar a purga", async () => {
@@ -68,7 +128,9 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
     await owner!`INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id)
       VALUES (${CLINIC_A}, ${U_COORD_A}, 'relatorio_exportado', 'report', ${R1})`;
     const rows = await withTenant(ctx("admin_recepcao", U_ADMIN_A), (db) =>
-      db.execute(sql`SELECT acao FROM audit_log WHERE clinic_id = ${CLINIC_A}::uuid`),
+      db.execute(
+        sql`SELECT acao FROM audit_log WHERE clinic_id = ${CLINIC_A}::uuid`,
+      ),
     );
     expect(rows).toHaveLength(0);
   });

@@ -160,6 +160,80 @@ test("Field com erro — sem violações axe", async () => {
   );
 });
 
+// Fix round 2 (finding N1 do review): antes destes testes, ligar
+// `aria-describedby` era responsabilidade de cada call-site — e a maioria
+// dos ~90 usos de `<Field>` no app não ligava, então o erro existia no DOM e
+// o leitor de tela não o anunciava ao focar o campo. O `<Field>` passou a
+// ligar sozinho; estes testes são a rede que impede a regressão silenciosa.
+test("Field — liga aria-describedby do erro no input sem o consumidor pedir", () => {
+  const { getByLabelText } = render(
+    <Field label="E-mail" htmlFor="auto-erro" error="Informe um e-mail válido.">
+      <Input id="auto-erro" type="email" aria-invalid />
+    </Field>,
+  );
+  expect(getByLabelText("E-mail").getAttribute("aria-describedby")).toBe(
+    "auto-erro-error",
+  );
+});
+
+test("Field — liga hint e erro juntos, nessa ordem", () => {
+  const { getByLabelText } = render(
+    <Field
+      label="Senha"
+      htmlFor="auto-ambos"
+      hint="Mínimo 12 caracteres."
+      error="Senha muito curta."
+    >
+      <Input id="auto-ambos" type="password" />
+    </Field>,
+  );
+  expect(getByLabelText("Senha").getAttribute("aria-describedby")).toBe(
+    "auto-ambos-hint auto-ambos-error",
+  );
+});
+
+test("Field — sem hint nem erro, não inventa aria-describedby", () => {
+  const { getByLabelText } = render(
+    <Field label="E-mail" htmlFor="auto-vazio">
+      <Input id="auto-vazio" type="email" />
+    </Field>,
+  );
+  expect(getByLabelText("E-mail").hasAttribute("aria-describedby")).toBe(false);
+});
+
+test("Field — não duplica id quando o consumidor já ligou o mesmo aria-describedby na mão", () => {
+  const { getByLabelText } = render(
+    <Field label="Senha" htmlFor="auto-manual" hint="Mínimo 12 caracteres.">
+      <Input
+        id="auto-manual"
+        type="password"
+        aria-describedby="auto-manual-hint"
+      />
+    </Field>,
+  );
+  expect(getByLabelText("Senha").getAttribute("aria-describedby")).toBe(
+    "auto-manual-hint",
+  );
+});
+
+test("Field — preserva aria-describedby externo do consumidor e soma o do campo", () => {
+  const { getByLabelText } = render(
+    <>
+      <p id="nota-externa">Nota fora do campo.</p>
+      <Field label="Senha" htmlFor="auto-extra" error="Senha muito curta.">
+        <Input
+          id="auto-extra"
+          type="password"
+          aria-describedby="nota-externa"
+        />
+      </Field>
+    </>,
+  );
+  expect(getByLabelText("Senha").getAttribute("aria-describedby")).toBe(
+    "nota-externa auto-extra-error",
+  );
+});
+
 test("Form — sem violações axe", async () => {
   await semViolacoes(
     <Form onSubmit={(event) => event.preventDefault()}>

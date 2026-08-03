@@ -1,4 +1,5 @@
 import "server-only";
+import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { patient, consent, patientAlvoDisciplina } from "@/db/schema";
@@ -105,6 +106,13 @@ export async function criarPacienteEConsent(
           convenio,
         })
         .returning({ id: patient.id });
+      const signatario =
+        tipoConsentimento === "titular_adulto" ? null : responsavelSignatario;
+      const versaoTermo =
+        tipoConsentimento === "titular_adulto"
+          ? VERSAO_TERMO_TITULAR_ADULTO_ATUAL
+          : VERSAO_TERMO_MENOR_ATUAL;
+
       await tx.insert(consent).values(
         tipoConsentimento === "titular_adulto"
           ? {
@@ -112,15 +120,47 @@ export async function criarPacienteEConsent(
               tipo: "autoconsentimento_titular_adulto" as const,
               // null, não "" — o CHECK do banco exige IS NULL.
               responsavelSignatario: null,
-              versaoTermo: VERSAO_TERMO_TITULAR_ADULTO_ATUAL,
+              versaoTermo,
             }
           : {
               patientId: novo!.id,
               tipo: "tratamento_dados_menor" as const,
-              responsavelSignatario,
-              versaoTermo: VERSAO_TERMO_MENOR_ATUAL,
+              responsavelSignatario: signatario!,
+              versaoTermo,
             },
       );
+
+      // Finalidades específicas LGPD (#140): registros próprios de Consent
+      // se marcados no formulário pelo operador/titular.
+      const consentimentoIaRaw = String(formData.get("consentimentoIa") ?? "");
+      if (
+        consentimentoIaRaw === "on" ||
+        consentimentoIaRaw === "sim" ||
+        consentimentoIaRaw === "true"
+      ) {
+        await tx.insert(consent).values({
+          patientId: novo!.id,
+          tipo: "uso_ia_processamento" as const,
+          responsavelSignatario: signatario,
+          versaoTermo,
+        });
+      }
+
+      const consentimentoExportacaoRaw = String(
+        formData.get("consentimentoExportacao") ?? "",
+      );
+      if (
+        consentimentoExportacaoRaw === "on" ||
+        consentimentoExportacaoRaw === "sim" ||
+        consentimentoExportacaoRaw === "true"
+      ) {
+        await tx.insert(consent).values({
+          patientId: novo!.id,
+          tipo: "exportacao_relatorios" as const,
+          responsavelSignatario: signatario,
+          versaoTermo,
+        });
+      }
       // 0..N alvos, na MESMA transação (rollback junto do paciente/consent se
       // algum par for inválido). vigenciaInicio = hoje; campos vazios ignorados.
       for (let i = 0; i < disciplinas.length; i++) {
@@ -139,6 +179,15 @@ export async function criarPacienteEConsent(
           vigenciaInicio: hoje,
         });
       }
+      // #175: o relógio do trial começa no 1º paciente, na MESMA transação —
+      // se o cadastro reverter, o trial não começou. A função é idempotente
+      // (só escreve com `trial_comeco_em IS NULL AND isento_trial = false`),
+      // então não há SELECT antes para saber se é o primeiro: um
+      // SELECT-then-UPDATE reintroduziria a corrida entre dois cadastros
+      // simultâneos. É também o único caminho de escrita — `app_role` não tem
+      // policy de UPDATE em `clinic`.
+      await tx.execute(sql`SELECT app_iniciar_trial()`);
+
       return novo!.id;
     });
     return { id };

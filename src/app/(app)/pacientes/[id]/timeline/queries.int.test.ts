@@ -9,10 +9,9 @@ import {
   carregarComparacao,
   carregarEvidenciasPorTrecho,
 } from "./queries";
+import { hasDb } from "@tests/integration-env";
 
 vi.mock("server-only", () => ({}));
-
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000fa";
 const U_COORD_A = "00000000-0000-0000-0000-00000000c0fa";
@@ -20,7 +19,11 @@ const U_T1_A = "00000000-0000-0000-0000-0000000071fa";
 const PAC_A1 = "00000000-0000-0000-0000-00000000acfa";
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let PROTOCOL_ID: string;
@@ -56,7 +59,8 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
       VALUES (${PAC_A1}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
 
-    const [protocolo] = await owner`INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
+    const [protocolo] =
+      await owner`INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
       VALUES (${CLINIC_A}, 'VB-MAPP (timeline)', 'ABA', ${PROTOCOL_FAMILIA},
         ${owner.json(["independente", "dica_verbal", "dica_gestual", "modelacao", "dica_fisica"])})
       RETURNING id`;
@@ -65,12 +69,14 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por)
       VALUES (${PAC_A1}, ${PROTOCOL_ID}, ${U_COORD_A})`;
 
-    const [milestoneRow] = await owner`INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+    const [milestoneRow] =
+      await owner`INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
       VALUES (${PROTOCOL_ID}, 'mando', 'Mando nível 1', 'marco_simples', ${owner.json({})})
       RETURNING id`;
     MARCO_ID = milestoneRow!.id as string;
 
-    const [goalRow] = await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+    const [goalRow] =
+      await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
       VALUES (${PAC_A1}, ${CLINIC_A}, 'Pedir água de forma independente', 'ativa',
         ${owner.json({ tipo: "sessoes_consecutivas_independente", valor: 2 })}, ${U_COORD_A})
       RETURNING id`;
@@ -94,16 +100,21 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     await owner`INSERT INTO session_snapshot (patient_id, session_numero, repertorio_state, segmentacao) VALUES
       (${PAC_A1}, 2,
         ${owner.json({
-          [MARCO_ID]: { nivel_ajuda_recente: 0, contagem: 5, is_candidata: true },
-          [GOAL_ID]: { contagem: 4, is_candidata: true }
+          [MARCO_ID]: {
+            nivel_ajuda_recente: 0,
+            contagem: 5,
+            is_candidata: true,
+          },
+          [GOAL_ID]: { contagem: 4, is_candidata: true },
         })},
         ${owner.json({ [GOAL_ID]: { [PROTOCOL_ID]: { tipo_estrutura: "marco_simples", metrica: { eixo: "nivel_ajuda", ordinalRecente: 0 }, rotulo: "evolucao" } } })}
       )`;
 
     // Evidência na sessão 2 para testar o drill-down
-    const [ext] = await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
+    const [ext] =
+      await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
       VALUES (${SESS_A2_ID}, ${CLINIC_A}, 'aprovada', 'evidencia', 'falou agua sozinho', 'alta', ${owner.json({})}) RETURNING id`;
-    
+
     const [evidenciaRow] = await owner`INSERT INTO evidence
       (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
       VALUES (${ext!.id}, ${PAC_A1}, ${SESS_A2_ID}, 2, 0, ${PROTOCOL_ID}, ${GOAL_ID}, ${MARCO_ID}, ${owner.json({ descricao: "pediu agua independente", polaridade: "positiva", nivel_ajuda: "independente" })}, ${U_T1_A})
@@ -137,13 +148,15 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     const res = await carregarTimeline(ctxCoordA, PAC_A1);
     expect(res).toBeTruthy();
     expect(res!.snapshots).toHaveLength(2);
-    
+
     // sessão 2 deve vir primeiro (orderBy sessionNumero desc)
     const snap2 = res!.snapshots[0]!;
     expect(snap2.sessionNumero).toBe(2);
     expect(snap2.espectro).toHaveLength(6);
-    
-    const expressiva = snap2.espectro.find((e) => e.eixo === "comunicacao_expressiva");
+
+    const expressiva = snap2.espectro.find(
+      (e) => e.eixo === "comunicacao_expressiva",
+    );
     // milestone-1 (mando): nivel 0 de 4 -> 100%
     // goal-1 (ABA -> fallback): is_candidata=true -> 100%
     // Média = 100%
@@ -180,14 +193,26 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
   });
 
   test("carregarEvidenciasPorTrecho busca evidências e limita quantidade", async () => {
-    const res = await carregarEvidenciasPorTrecho(ctxCoordA, PAC_A1, GOAL_ID, 1, 2);
+    const res = await carregarEvidenciasPorTrecho(
+      ctxCoordA,
+      PAC_A1,
+      GOAL_ID,
+      1,
+      2,
+    );
     expect(res).toHaveLength(1);
     expect(res[0]!.descricao).toBe("pediu agua independente");
     expect(res[0]!.nivelAjuda).toBe("independente");
   });
 
   test("carregarEvidenciasPorTrecho expõe a revisão do coordenador (V4 passiva) sem fabricar dados quando ausente", async () => {
-    const res = await carregarEvidenciasPorTrecho(ctxCoordA, PAC_A1, MARCO_ID, 1, 2);
+    const res = await carregarEvidenciasPorTrecho(
+      ctxCoordA,
+      PAC_A1,
+      MARCO_ID,
+      1,
+      2,
+    );
     expect(res).toHaveLength(2);
 
     const comRevisao = res.find((r) => r.id === EVIDENCIA_ID);
@@ -195,7 +220,7 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     expect(comRevisao!.revisao).toBeTruthy();
     expect(comRevisao!.revisao!.acao).toBe("reclassificar");
     expect(comRevisao!.revisao!.justificativa).toBe(
-      "Reclassificado após revisão do vídeo da sessão"
+      "Reclassificado após revisão do vídeo da sessão",
     );
     expect(comRevisao!.revisao!.autorNome).toBe("Coord A");
 
@@ -211,7 +236,8 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina)
       VALUES (${sessA3Id}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-03 10:00:00Z', 'realizada', 3, 'aba')`;
 
-    const [extMulti] = await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
+    const [extMulti] =
+      await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
       VALUES (${sessA3Id}, ${CLINIC_A}, 'aprovada', 'evidencia', 'bateu palma pedindo ajuda', 'alta', ${owner.json({})}) RETURNING id`;
 
     const [evidenciaMultiRow] = await owner`INSERT INTO evidence
@@ -234,7 +260,13 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
         ${null},
         'revisão mais recente', ${U_COORD_A}, '2026-07-11 10:00:00Z')`;
 
-    const res = await carregarEvidenciasPorTrecho(ctxCoordA, PAC_A1, MARCO_ID, 3, 3);
+    const res = await carregarEvidenciasPorTrecho(
+      ctxCoordA,
+      PAC_A1,
+      MARCO_ID,
+      3,
+      3,
+    );
     expect(res).toHaveLength(1); // sem fan-out: DISTINCT ON evita duplicar linha por revisão
 
     const item = res[0]!;

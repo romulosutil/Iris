@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000e1";
 const CLINIC_B = "00000000-0000-0000-0000-0000000000e2";
@@ -13,10 +13,26 @@ const U_COORD_B = "00000000-0000-0000-0000-00000000c0e2";
 const PAC_A1 = "00000000-0000-0000-0000-00000000ace1";
 const PAC_B1 = "00000000-0000-0000-0000-00000000ace2";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
-const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
-const ctxT2A = { clinicId: CLINIC_A, userId: U_T2_A, role: "terapeuta" } as const;
-const ctxCoordB = { clinicId: CLINIC_B, userId: U_COORD_B, role: "coordenador" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
+const ctxT1A = {
+  clinicId: CLINIC_A,
+  userId: U_T1_A,
+  role: "terapeuta",
+} as const;
+const ctxT2A = {
+  clinicId: CLINIC_A,
+  userId: U_T2_A,
+  role: "terapeuta",
+} as const;
+const ctxCoordB = {
+  clinicId: CLINIC_B,
+  userId: U_COORD_B,
+  role: "coordenador",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;
@@ -50,72 +66,120 @@ describe.skipIf(!hasDb)("Agenda 2.0 · RLS de agendamento_recorrente", () => {
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
       VALUES (${PAC_A1}, ${U_T1_A}, 'aba', 'terapeuta_referencia')`;
   });
-  afterAll(async () => { await owner?.end(); await appSql?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
 
   test("coordenador cria regra do próprio paciente/terapeuta e lê", async () => {
     const [row] = await withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.agendamentoRecorrente).values({
-        clinicId: CLINIC_A, patientId: PAC_A1, terapeutaId: U_T1_A,
-        disciplina: "aba", diaSemana: 1, horaInicio: "08:00",
-        duracaoMin: 60, vigenciaInicio: "2026-07-01",
-      }).returning({ id: schema.agendamentoRecorrente.id }));
+      tx
+        .insert(schema.agendamentoRecorrente)
+        .values({
+          clinicId: CLINIC_A,
+          patientId: PAC_A1,
+          terapeutaId: U_T1_A,
+          disciplina: "aba",
+          diaSemana: 1,
+          horaInicio: "08:00",
+          duracaoMin: 60,
+          vigenciaInicio: "2026-07-01",
+        })
+        .returning({ id: schema.agendamentoRecorrente.id }),
+    );
     expect(row?.id).toBeTruthy();
     const lidas = await withTenant(ctxCoordA, (tx) =>
-      tx.select().from(schema.agendamentoRecorrente));
+      tx.select().from(schema.agendamentoRecorrente),
+    );
     expect(lidas.length).toBe(1);
   });
 
   test("terapeuta da equipe lê a própria regra", async () => {
     const lidas = await withTenant(ctxT1A, (tx) =>
-      tx.select().from(schema.agendamentoRecorrente));
+      tx.select().from(schema.agendamentoRecorrente),
+    );
     expect(lidas.length).toBe(1);
   });
 
   test("terapeuta fora da equipe NÃO lê", async () => {
     const lidas = await withTenant(ctxT2A, (tx) =>
-      tx.select().from(schema.agendamentoRecorrente));
+      tx.select().from(schema.agendamentoRecorrente),
+    );
     expect(lidas.length).toBe(0);
   });
 
   test("cross-tenant: coordenador B NÃO lê regra da A", async () => {
     const lidas = await withTenant(ctxCoordB, (tx) =>
-      tx.select().from(schema.agendamentoRecorrente));
+      tx.select().from(schema.agendamentoRecorrente),
+    );
     expect(lidas.length).toBe(0);
   });
 
   test("IDOR: coordenador B NÃO cria regra p/ paciente da A (FK composta)", async () => {
-    await expect(withTenant(ctxCoordB, (tx) =>
-      tx.insert(schema.agendamentoRecorrente).values({
-        clinicId: CLINIC_B, patientId: PAC_A1, terapeutaId: U_COORD_B,
-        disciplina: "aba", diaSemana: 1, horaInicio: "08:00",
-        duracaoMin: 60, vigenciaInicio: "2026-07-01",
-      }))).rejects.toThrow(); // FK composta (PAC_A1, CLINIC_B) inexistente
+    await expect(
+      withTenant(ctxCoordB, (tx) =>
+        tx.insert(schema.agendamentoRecorrente).values({
+          clinicId: CLINIC_B,
+          patientId: PAC_A1,
+          terapeutaId: U_COORD_B,
+          disciplina: "aba",
+          diaSemana: 1,
+          horaInicio: "08:00",
+          duracaoMin: 60,
+          vigenciaInicio: "2026-07-01",
+        }),
+      ),
+    ).rejects.toThrow(); // FK composta (PAC_A1, CLINIC_B) inexistente
   });
 
   test("IDOR: coordenador B NÃO cria regra c/ terapeuta da A (app_user_in_clinic)", async () => {
-    await expect(withTenant(ctxCoordB, (tx) =>
-      tx.insert(schema.agendamentoRecorrente).values({
-        clinicId: CLINIC_B, patientId: PAC_B1, terapeutaId: U_T1_A,
-        disciplina: "aba", diaSemana: 1, horaInicio: "08:00",
-        duracaoMin: 60, vigenciaInicio: "2026-07-01",
-      }))).rejects.toThrow(); // app_user_in_clinic(terapeuta A) falha sob clínica B
+    await expect(
+      withTenant(ctxCoordB, (tx) =>
+        tx.insert(schema.agendamentoRecorrente).values({
+          clinicId: CLINIC_B,
+          patientId: PAC_B1,
+          terapeutaId: U_T1_A,
+          disciplina: "aba",
+          diaSemana: 1,
+          horaInicio: "08:00",
+          duracaoMin: 60,
+          vigenciaInicio: "2026-07-01",
+        }),
+      ),
+    ).rejects.toThrow(); // app_user_in_clinic(terapeuta A) falha sob clínica B
   });
 
   test("terapeuta NÃO cria regra (só coordenação)", async () => {
-    await expect(withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.agendamentoRecorrente).values({
-        clinicId: CLINIC_A, patientId: PAC_A1, terapeutaId: U_T1_A,
-        disciplina: "fono", diaSemana: 2, horaInicio: "13:00",
-        duracaoMin: 50, vigenciaInicio: "2026-07-01",
-      }))).rejects.toThrow();
+    await expect(
+      withTenant(ctxT1A, (tx) =>
+        tx.insert(schema.agendamentoRecorrente).values({
+          clinicId: CLINIC_A,
+          patientId: PAC_A1,
+          terapeutaId: U_T1_A,
+          disciplina: "fono",
+          diaSemana: 2,
+          horaInicio: "13:00",
+          duracaoMin: 50,
+          vigenciaInicio: "2026-07-01",
+        }),
+      ),
+    ).rejects.toThrow();
   });
 
   test("check de duração > 0 é barrado", async () => {
-    await expect(withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.agendamentoRecorrente).values({
-        clinicId: CLINIC_A, patientId: PAC_A1, terapeutaId: U_T1_A,
-        disciplina: "to", diaSemana: 3, horaInicio: "09:00",
-        duracaoMin: 0, vigenciaInicio: "2026-07-01",
-      }))).rejects.toThrow(); // constraint agendamento_recorrente_duracao
+    await expect(
+      withTenant(ctxCoordA, (tx) =>
+        tx.insert(schema.agendamentoRecorrente).values({
+          clinicId: CLINIC_A,
+          patientId: PAC_A1,
+          terapeutaId: U_T1_A,
+          disciplina: "to",
+          diaSemana: 3,
+          horaInicio: "09:00",
+          duracaoMin: 0,
+          vigenciaInicio: "2026-07-01",
+        }),
+      ),
+    ).rejects.toThrow(); // constraint agendamento_recorrente_duracao
   });
 });

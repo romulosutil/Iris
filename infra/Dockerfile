@@ -16,6 +16,16 @@ FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* é inline no bundle client em build time — Easypanel só injeta
+# env var no runtime do container por padrão. Sem ARG+ENV aqui, `pnpm build`
+# compila com estas vars undefined e os componentes client (GoogleAnalytics,
+# Clarity, Sentry) nunca emitem o script, mesmo com a var setada no painel.
+ARG NEXT_PUBLIC_GA_ID
+ENV NEXT_PUBLIC_GA_ID=${NEXT_PUBLIC_GA_ID}
+ARG NEXT_PUBLIC_CLARITY_PROJECT_ID
+ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=${NEXT_PUBLIC_CLARITY_PROJECT_ID}
+ARG NEXT_PUBLIC_SENTRY_DSN
+ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 RUN pnpm build
 RUN npx esbuild scripts/seed-demo.ts --bundle --platform=node --target=node22 --conditions=react-server --outfile=scripts/seed-demo.js
 

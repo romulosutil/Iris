@@ -248,6 +248,27 @@ export interface NovaRegra {
   hojeISO: string;
 }
 
+async function validarTerapeutaDaClinica(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  clinicId: string,
+  terapeutaId: string,
+): Promise<void> {
+  const rows = await tx
+    .select({ userId: schema.userRole.userId })
+    .from(schema.userRole)
+    .where(
+      and(
+        eq(schema.userRole.userId, terapeutaId),
+        eq(schema.userRole.clinicId, clinicId),
+        eq(schema.userRole.papel, "terapeuta"),
+      ),
+    )
+    .limit(1);
+  if (rows.length === 0) {
+    throw new ConflitoError("terapeuta", "Usuário selecionado não é terapeuta desta clínica.");
+  }
+}
+
 /** C1: cria só a regra recorrente (nenhuma linha `session`). C2/C5: pré-check
  * de conflito nas 2 dimensões (terapeuta e paciente) antes de gravar. */
 export async function criarRegra(
@@ -268,6 +289,7 @@ export async function criarRegra(
   const vigenciaInicio = vigenciaInicioC7(dados.semanaVisivelISO, dados.hojeISO);
 
   return withTenant(ctx, async (tx) => {
+    await validarTerapeutaDaClinica(tx, ctx.clinicId, dados.terapeutaId);
     const ativas = await tx
       .select({
         terapeutaId: schema.agendamentoRecorrente.terapeutaId,
@@ -424,6 +446,7 @@ export async function criarAvulsa(
   const novo: Slot = { diaSemana, inicioMin, fimMin: inicioMin + dados.duracaoMin };
   try {
     return await withTenant(ctx, async (tx) => {
+      await validarTerapeutaDaClinica(tx, ctx.clinicId, dados.terapeutaId);
       const [clinicRow] = await tx
         .select({ timezone: schema.clinic.timezone })
         .from(schema.clinic)

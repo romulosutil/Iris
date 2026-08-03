@@ -7,7 +7,7 @@
  * à recepção.
  */
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import postgres from "postgres";
 import {
   careTeamMembership,
@@ -16,6 +16,9 @@ import {
   patientProtocol,
   report,
   consent,
+  session,
+  sessionNote,
+  extraction,
 } from "./schema";
 import { withTenant, type TenantContext } from "./rls";
 import { sql as appSql } from "./client";
@@ -24,6 +27,7 @@ import type {
   CabecalhoConvenio,
   ConvenioNarrativoDraft,
 } from "@/lib/report/convenio-narrativo/types";
+import { hasDb } from "@tests/integration-env";
 
 // Módulos "use server"/"server-only" precisam do mock antes do import dinâmico.
 vi.mock("server-only", () => ({}));
@@ -32,9 +36,6 @@ const {
   curarConvenioNarrativo,
   exportarConvenioNarrativo,
 } = await import("../app/(app)/relatorios/convenio-narrativo-logic");
-
-const hasDb =
-  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 // UUIDs fixos para determinismo.
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
@@ -449,10 +450,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       }),
     );
     const linhas = await withTenant(ctx("coordenador", U_COORD), (db) =>
-      db
-        .select()
-        .from(report)
-        .where(eq(report.patientId, P1)),
+      db.select().from(report).where(eq(report.patientId, P1)),
     );
     expect(linhas).toHaveLength(1);
   });
@@ -581,12 +579,15 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       );
       expect(gerado).toEqual({ error: expect.stringContaining("papel") });
 
-      const curado = await curarConvenioNarrativo(ctx("admin_recepcao", U_ADMIN), {
-        reportId,
-        versaoEsperada: 1,
-        cabecalhoEditado: cnCabecalho,
-        draftEditado: cnDraft,
-      });
+      const curado = await curarConvenioNarrativo(
+        ctx("admin_recepcao", U_ADMIN),
+        {
+          reportId,
+          versaoEsperada: 1,
+          cabecalhoEditado: cnCabecalho,
+          draftEditado: cnDraft,
+        },
+      );
       expect(curado).toEqual({ error: expect.stringContaining("papel") });
 
       const exportado = await exportarConvenioNarrativo(
@@ -635,4 +636,118 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
       });
     });
   });
+
+  describe("issue #141 — policy evidence_revision_insert (predicado eq.evidence_id = evidence_id)", () => {
+    test("terapeuta só insere revision se existir query ABERTA para a MESMA evidência", async () => {
+      // 1. Setup no banco via superuser: criar extraction, 2 evidencias (EV1 e EV2) e 1 query aberta para EV1.
+      const [sess] = await owner<{ id: string }[]>`
+        INSERT INTO session (clinic_id, patient_id, terapeuta_id, agendada_para, disciplina)
+        VALUES (${CLINIC_A}, ${P1}, ${U_TERA}, now(), 'ABA') RETURNING id
+      `;
+      const [ext] = await owner<{ id: string }[]>`
+        INSERT INTO extraction (session_id, clinic_id, subtipo, trecho_fonte, confianca, payload)
+        VALUES (${sess!.id}, ${CLINIC_A}, 'evidencia', 'trecho fonte', 'alta', '{}'::jsonb) RETURNING id
+      `;
+      const [ev1] = await owner<{ id: string }[]>`
+        INSERT INTO evidence (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, classificacao_original, aprovado_por)
+        VALUES (${ext!.id}, ${P1}, ${sess!.id}, 1, 0, '{}'::jsonb, ${U_COORD}) RETURNING id
+      `;
+      const [ev2] = await owner<{ id: string }[]>`
+        INSERT INTO evidence (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, classificacao_original, aprovado_por)
+        VALUES (${ext!.id}, ${P1}, ${sess!.id}, 1, 1, '{}'::jsonb, ${U_COORD}) RETURNING id
+      `;
+
+      // Query aberta apenas para EV1
+      await owner`
+        INSERT INTO evidence_query (evidence_id, coordenador_id, pergunta)
+        VALUES (${ev1!.id}, ${U_COORD}, 'Dúvida em EV1?')
+      `;
+
+      // 2. Tentar inserir revision em EV2 (que NÃO tem query aberta) como terapeuta da equipe (U_TERA)
+      // Com a falha antiga (eq.evidence_id = eq.evidence_id), a existência da query em EV1 liberava erroneamente a inserção em EV2.
+      const erroEV2 = await capturarErro(
+        withTenant(ctx("terapeuta", U_TERA), async (db) => {
+          await db.execute(sql`
+            INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, justificativa, autor_id)
+            VALUES (${ev2!.id}::uuid, 'invalidar'::evidence_revision_acao, '{}'::jsonb, 'Tentativa em EV2', ${U_TERA}::uuid)
+          `);
+        })
+      );
+      expect(erroEV2).toMatch(/row-level security policy/i);
+
+      // 3. Tentar inserir revision em EV1 (que TEM query aberta) como terapeuta da equipe (U_TERA) -> deve ter sucesso
+      await withTenant(ctx("terapeuta", U_TERA), async (db) => {
+        await db.execute(sql`
+          INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, justificativa, autor_id)
+          VALUES (${ev1!.id}::uuid, 'invalidar'::evidence_revision_acao, '{}'::jsonb, 'Resposta em EV1', ${U_TERA}::uuid)
+        `);
+      });
+
+      const [revCount] = await owner<{ count: number }[]>`
+        SELECT count(*)::int FROM evidence_revision WHERE evidence_id = ${ev1!.id}
+      `;
+      expect(revCount!.count).toBe(1);
+    });
+  });
+
+  describe("escrita não autorizada em session, session_note e extraction (issue #128)", () => {
+    test("session: inserção de sessão com paciente de OUTRA clínica é negada pelo RLS", async () => {
+      // P3 é paciente da clínica B. Tentar inserir sessão para P3 sob contexto da clínica A deve falhar.
+      await expect(
+        withTenant(ctx("coordenador", U_COORD), (db) =>
+          db.insert(session).values({
+            clinicId: CLINIC_A,
+            patientId: P3,
+            terapeutaId: U_TERA,
+            agendadaPara: new Date("2026-08-01T10:00:00Z"),
+            disciplina: "ABA",
+          }),
+        ),
+      ).rejects.toThrow();
+    });
+
+    test("session_note: terapeuta que NÃO é dono da sessão não insere nem edita nota", async () => {
+      // 1. Criar sessão pertencente a U_TERA
+      const [sess] = await owner<{ id: string }[]>`
+        INSERT INTO session (clinic_id, patient_id, terapeuta_id, agendada_para, disciplina)
+        VALUES (${CLINIC_A}, ${P1}, ${U_TERA}, now() + interval '1 day', 'ABA') RETURNING id
+      `;
+
+      // 2. U_TERA2 (outro terapeuta) tenta inserir nota na sessão de U_TERA -> RLS barra
+      await expect(
+        withTenant(ctx("terapeuta", U_TERA2), (db) =>
+          db.insert(sessionNote).values({
+            sessionId: sess!.id,
+            clinicId: CLINIC_A,
+            tipo: "captura_rapida",
+            texto: "nota não autorizada",
+            autorId: U_TERA2,
+          }),
+        ),
+      ).rejects.toThrow();
+    });
+
+    test("extraction: terapeuta que NÃO é dono da sessão não insere nem edita extração", async () => {
+      // 1. Criar sessão pertencente a U_TERA
+      const [sess] = await owner<{ id: string }[]>`
+        INSERT INTO session (clinic_id, patient_id, terapeuta_id, agendada_para, disciplina)
+        VALUES (${CLINIC_A}, ${P1}, ${U_TERA}, now() + interval '2 days', 'ABA') RETURNING id
+      `;
+
+      // 2. U_TERA2 tenta inserir extração para a sessão de U_TERA -> RLS barra
+      await expect(
+        withTenant(ctx("terapeuta", U_TERA2), (db) =>
+          db.insert(extraction).values({
+            sessionId: sess!.id,
+            clinicId: CLINIC_A,
+            subtipo: "evidencia",
+            trechoFonte: "fonte",
+            confianca: "alta",
+            payload: {},
+          }),
+        ),
+      ).rejects.toThrow();
+    });
+  });
 });
+

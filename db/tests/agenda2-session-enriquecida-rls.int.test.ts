@@ -1,9 +1,9 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { eq } from "drizzle-orm";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000f1";
 const CLINIC_B = "00000000-0000-0000-0000-0000000000f2";
@@ -16,9 +16,21 @@ const REC_A1 = "00000000-0000-0000-0000-0000000ec0f1"; // agendamento_recorrente
 const SESS_T1 = "00000000-0000-0000-0000-000000005ef1"; // sessão agendada do T1
 const SESS_B = "00000000-0000-0000-0000-000000005ef2"; // sessão da clínica B
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
-const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
-const ctxCoordB = { clinicId: CLINIC_B, userId: U_COORD_B, role: "coordenador" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
+const ctxT1A = {
+  clinicId: CLINIC_A,
+  userId: U_T1_A,
+  role: "terapeuta",
+} as const;
+const ctxCoordB = {
+  clinicId: CLINIC_B,
+  userId: U_COORD_B,
+  role: "coordenador",
+} as const;
 
 const AGENDA_MAT = new Date("2026-07-20T13:00:00Z");
 
@@ -59,43 +71,79 @@ describe.skipIf(!hasDb)("Agenda 2.0 · RLS de session enriquecida", () => {
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina)
       VALUES (${SESS_B}, ${CLINIC_B}, ${PAC_B1}, ${U_COORD_B}, '2026-07-21T13:00:00Z', 'agendada', 'aba')`;
   });
-  afterAll(async () => { await owner?.end(); await appSql?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
 
   test("materialização idempotente: (recorrenteId, agendadaPara) não duplica", async () => {
     const [row] = await withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.session).values({
-        clinicId: CLINIC_A, patientId: PAC_A1, terapeutaId: U_T1_A,
-        agendadaPara: AGENDA_MAT, recorrenteId: REC_A1, disciplina: "aba", duracaoMin: 60,
-      }).returning({ id: schema.session.id }));
+      tx
+        .insert(schema.session)
+        .values({
+          clinicId: CLINIC_A,
+          patientId: PAC_A1,
+          terapeutaId: U_T1_A,
+          agendadaPara: AGENDA_MAT,
+          recorrenteId: REC_A1,
+          disciplina: "aba",
+          duracaoMin: 60,
+        })
+        .returning({ id: schema.session.id }),
+    );
     expect(row?.id).toBeTruthy();
-    await expect(withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.session).values({
-        clinicId: CLINIC_A, patientId: PAC_A1, terapeutaId: U_T1_A,
-        agendadaPara: AGENDA_MAT, recorrenteId: REC_A1, disciplina: "aba", duracaoMin: 60,
-      }))).rejects.toThrow(); // uq_session_recorrente_agendada
+    await expect(
+      withTenant(ctxCoordA, (tx) =>
+        tx.insert(schema.session).values({
+          clinicId: CLINIC_A,
+          patientId: PAC_A1,
+          terapeutaId: U_T1_A,
+          agendadaPara: AGENDA_MAT,
+          recorrenteId: REC_A1,
+          disciplina: "aba",
+          duracaoMin: 60,
+        }),
+      ),
+    ).rejects.toThrow(); // uq_session_recorrente_agendada
   });
 
   test("terapeuta marca a própria sessão como realizada", async () => {
     const upd = await withTenant(ctxT1A, (tx) =>
-      tx.update(schema.session).set({ estado: "realizada" })
+      tx
+        .update(schema.session)
+        .set({ estado: "realizada" })
         .where(eq(schema.session.id, SESS_T1))
-        .returning({ id: schema.session.id }));
+        .returning({ id: schema.session.id }),
+    );
     expect(upd.length).toBe(1);
   });
 
   test("avulsa: insert com recorrenteId null e tipo=avaliacao", async () => {
     const [row] = await withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.session).values({
-        clinicId: CLINIC_A, patientId: PAC_A1, terapeutaId: U_T1_A,
-        agendadaPara: new Date("2026-07-22T09:00:00Z"), tipo: "avaliacao", duracaoMin: 90,
-        disciplina: "aba",
-      }).returning({ id: schema.session.id, tipo: schema.session.tipo }));
+      tx
+        .insert(schema.session)
+        .values({
+          clinicId: CLINIC_A,
+          patientId: PAC_A1,
+          terapeutaId: U_T1_A,
+          agendadaPara: new Date("2026-07-22T09:00:00Z"),
+          tipo: "avaliacao",
+          duracaoMin: 90,
+          disciplina: "aba",
+        })
+        .returning({ id: schema.session.id, tipo: schema.session.tipo }),
+    );
     expect(row?.tipo).toBe("avaliacao");
   });
 
   test("IDOR: coordenador B NÃO seta atendidoPorId = terapeuta da A", async () => {
-    await expect(withTenant(ctxCoordB, (tx) =>
-      tx.update(schema.session).set({ atendidoPorId: U_T1_A })
-        .where(eq(schema.session.id, SESS_B)))).rejects.toThrow(); // app_user_in_clinic(T1 A) sob clínica B (0034)
+    await expect(
+      withTenant(ctxCoordB, (tx) =>
+        tx
+          .update(schema.session)
+          .set({ atendidoPorId: U_T1_A })
+          .where(eq(schema.session.id, SESS_B)),
+      ),
+    ).rejects.toThrow(); // app_user_in_clinic(T1 A) sob clínica B (0034)
   });
 });

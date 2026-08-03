@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "@tests/integration-env";
 vi.mock("server-only", () => ({}));
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
 const U_T1 = "00000000-0000-0000-0000-0000000071a1";
 const U_T2 = "00000000-0000-0000-0000-0000000072a1";
@@ -56,44 +56,68 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA')`;
   });
-  afterAll(async () => { await owner?.end(); await appSql?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
 
   test("terapeuta dono grava captura rápida", async () => {
-    const r = await capturarDiario(ctxT1, { sessionId: SESS, texto: "Pediu água apontando" });
+    const r = await capturarDiario(ctxT1, {
+      sessionId: SESS,
+      texto: "Pediu água apontando",
+    });
     expect(r.error).toBeUndefined();
     expect(r.id).toBeTruthy();
   });
 
   test("terapeuta que não é dono da sessão é barrado", async () => {
-    const r = await capturarDiario(ctxT2, { sessionId: SESS, texto: "indevido" });
+    const r = await capturarDiario(ctxT2, {
+      sessionId: SESS,
+      texto: "indevido",
+    });
     expect(r.error).toBeTruthy(); // RLS WITH CHECK bloqueia
   });
 
   test("corrigir escopo grava protocolo com origem ajustada", async () => {
-    const r = await corrigirEscopoProtocolo(ctxT1, { sessionId: SESS, protocolIds: [PROTO] });
+    const r = await corrigirEscopoProtocolo(ctxT1, {
+      sessionId: SESS,
+      protocolIds: [PROTO],
+    });
     expect(r.error).toBeUndefined();
-    const rows = await owner`SELECT origem, ajustado_por FROM session_protocol_scope WHERE session_id = ${SESS}`;
+    const rows =
+      await owner`SELECT origem, ajustado_por FROM session_protocol_scope WHERE session_id = ${SESS}`;
     expect(rows[0]!.origem).toBe("ajustado_manualmente");
     expect(rows[0]!.ajustado_por).toBe(U_T1);
   });
 
   test("consolidar grava nota, popula numero_sequencial e é idempotente", async () => {
     const { consolidarSessao } = await import("./logic");
-    const r1 = await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota final revisada da sessão." });
+    const r1 = await consolidarSessao(ctxT1, {
+      sessionId: SESS,
+      texto: "Nota final revisada da sessão.",
+    });
     expect(r1.error).toBeUndefined();
     expect(r1.numeroSequencial).toBe(1);
     // reconsolidar NÃO incrementa o sequencial
-    const r2 = await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota final corrigida." });
+    const r2 = await consolidarSessao(ctxT1, {
+      sessionId: SESS,
+      texto: "Nota final corrigida.",
+    });
     expect(r2.numeroSequencial).toBe(1);
-    const s = await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${SESS}`;
+    const s =
+      await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${SESS}`;
     expect(s[0]!.numero_sequencial_paciente).toBe(1);
   });
 
   test("clínica demo gera extrações sugeridas ao consolidar", async () => {
     await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
     const { consolidarSessao } = await import("./logic");
-    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Pediu água. Falou 'á' sozinho. Não respondeu depois." });
-    const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
+    await consolidarSessao(ctxT1, {
+      sessionId: SESS,
+      texto: "Pediu água. Falou 'á' sozinho. Não respondeu depois.",
+    });
+    const ex =
+      await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
     expect(ex.length).toBeGreaterThanOrEqual(1);
     expect(ex.every((e) => e.estado === "sugerida")).toBe(true);
     await owner`UPDATE clinic SET is_demo = false WHERE id = ${CLINIC_A}`;
@@ -109,11 +133,18 @@ describe.skipIf(!hasDb)("diário · captura", () => {
 
     await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
     const { consolidarSessao } = await import("./logic");
-    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Pediu água. Falou 'á' sozinho." });
-    const ex = await owner`SELECT payload FROM extraction WHERE session_id = ${SESS}`;
+    await consolidarSessao(ctxT1, {
+      sessionId: SESS,
+      texto: "Pediu água. Falou 'á' sozinho.",
+    });
+    const ex =
+      await owner`SELECT payload FROM extraction WHERE session_id = ${SESS}`;
     expect(ex.length).toBeGreaterThanOrEqual(1);
     const goalIdsReferenciados = ex.flatMap(
-      (e) => (e.payload as { alvos?: Array<{ goal_id: string }> }).alvos?.map((a) => a.goal_id) ?? [],
+      (e) =>
+        (e.payload as { alvos?: Array<{ goal_id: string }> }).alvos?.map(
+          (a) => a.goal_id,
+        ) ?? [],
     );
     expect(goalIdsReferenciados.length).toBeGreaterThan(0);
     expect(goalIdsReferenciados.every((id) => id === GOAL_PAC)).toBe(true);
@@ -125,8 +156,12 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     // limpa extrações da sessão do caso anterior
     await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
     const { consolidarSessao } = await import("./logic");
-    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota de produção." });
-    const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
+    await consolidarSessao(ctxT1, {
+      sessionId: SESS,
+      texto: "Nota de produção.",
+    });
+    const ex =
+      await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
     expect(ex.some((e) => e.estado === "pendente_reprocessamento")).toBe(true);
   });
 
@@ -144,7 +179,72 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     });
     expect(r.error).toBeUndefined();
     expect(r.numeroSequencial).toBe(2);
-    const s = await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${SESS_COBERTURA}`;
+    const s =
+      await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${SESS_COBERTURA}`;
     expect(s[0]!.numero_sequencial_paciente).toBe(2);
+  });
+
+  // ─── #174 regra 6: gravar registro clínico desarquiva o paciente ──────────
+  const ACAO = "paciente_desarquivado_automaticamente";
+  const arquivar = () =>
+    owner`UPDATE patient SET arquivado_em = now() WHERE id = ${PAC}`;
+  const trilha = async () => {
+    const [r] = await owner`SELECT count(*)::int AS n FROM audit_log
+      WHERE acao = ${ACAO} AND patient_id = ${PAC}`;
+    return r!.n as number;
+  };
+  const arquivadoEm = async () => {
+    const [r] =
+      await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    return r!.arquivado_em as Date | null;
+  };
+
+  test("regra 6 · captura de diário desarquiva o paciente e grava 1 linha de trilha", async () => {
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await arquivar();
+    expect(await arquivadoEm()).not.toBeNull(); // pré-condição real
+
+    const r = await capturarDiario(ctxT1, {
+      sessionId: SESS,
+      texto: "Voltou a atender depois de meses.",
+    });
+    expect(r.error).toBeUndefined();
+    expect(await arquivadoEm()).toBeNull(); // saiu do arquivo comercial
+    expect(await trilha()).toBe(1);
+  });
+
+  test("regra 6 · segunda nota na sequência NÃO gera 2ª linha de trilha", async () => {
+    // Paciente já ativo (teste anterior). `audit_log` é append-only para
+    // `app_role`: uma duplicata aqui não teria como ser apagada depois.
+    await capturarDiario(ctxT1, { sessionId: SESS, texto: "Segunda nota." });
+    const { consolidarSessao } = await import("./logic");
+    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Consolidada." });
+    expect(await trilha()).toBe(1);
+  });
+
+  test("regra 6 · nota de paciente NÃO arquivado não gera trilha nenhuma", async () => {
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    expect(await arquivadoEm()).toBeNull();
+    await capturarDiario(ctxT1, { sessionId: SESS, texto: "Sessão normal." });
+    expect(await trilha()).toBe(0);
+  });
+
+  test("regra 6 · terapeuta de cobertura (fora da equipe) não perde o diário", async () => {
+    // O definer ESTOURA para quem não passa no predicado de `patient_select`.
+    // Sem o gate de visibilidade em `desarquivarAoRegistrar`, essa exceção
+    // abortaria a transação e o terapeuta de cobertura perderia a nota — em
+    // TODO paciente, arquivado ou não. Aqui o paciente segue arquivado (quem
+    // desarquiva nesse caso é o coordenador) mas o diário É salvo.
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await arquivar();
+    const r = await capturarDiario(ctxCobertura, {
+      sessionId: SESS_COBERTURA,
+      texto: "Cobertura registrou a sessão.",
+    });
+    expect(r.error).toBeUndefined();
+    expect(r.id).toBeTruthy();
+    expect(await arquivadoEm()).not.toBeNull();
+    expect(await trilha()).toBe(0);
+    await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PAC}`;
   });
 });

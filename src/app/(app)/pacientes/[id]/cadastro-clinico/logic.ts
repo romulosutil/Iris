@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { consent, patientClinicalProfile } from "@/db/schema";
+import { regimeVigente } from "@/lib/consent/vigencia";
 
 export type FichaClinicaState = { error?: string };
 
@@ -21,15 +22,30 @@ export async function salvarFichaClinica(
     String(formData.get(nome) ?? "").trim() || undefined;
 
   return withTenant(ctx, async (tx) => {
-    const [consentimento] = await tx
-      .select({ id: consent.id })
+    // Gate de consentimento: não basta EXISTIR linha em `consent` — tem de
+    // haver concessão de REGIME VIGENTE (não revogada). Consentimento de
+    // finalidade (`uso_ia_processamento`/`exportacao_relatorios`) NÃO serve
+    // como base para tratar o paciente, e passava no `EXISTS` puro anterior.
+    // O espelho em TS é para a mensagem; a fronteira real é a RLS.
+    const linhas = await tx
+      .select({
+        id: consent.id,
+        tipo: consent.tipo,
+        assinadoEm: consent.assinadoEm,
+        consentRevogadoId: consent.consentRevogadoId,
+      })
       .from(consent)
-      .where(eq(consent.patientId, patientId))
-      .limit(1);
-    if (!consentimento) {
+      .where(eq(consent.patientId, patientId));
+    if (linhas.length === 0) {
       return {
         error:
           "Este paciente ainda não tem Consentimento LGPD registrado — complete o cadastro administrativo antes do clínico.",
+      };
+    }
+    if (!regimeVigente(linhas)) {
+      return {
+        error:
+          "Este paciente não tem consentimento de tratamento vigente (nenhum registrado, ou o existente foi revogado) — registre um novo consentimento do titular, do responsável legal ou do curador antes de gravar dado clínico.",
       };
     }
 

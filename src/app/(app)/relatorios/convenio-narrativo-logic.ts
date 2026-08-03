@@ -21,6 +21,8 @@ import type {
   PayloadConvenioNarrativo,
 } from "@/lib/report/convenio-narrativo/types";
 import { playwrightRenderer } from "@/lib/report/playwright-renderer";
+import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
+import { diagnosticarBloqueioDeConsentimentoSeguro } from "@/lib/consent/diagnostico";
 
 // ─── Schemas de request ──────────────────────────────────────────────────────
 const cabecalhoSchema: z.ZodType<CabecalhoConvenio> = z.object({
@@ -109,49 +111,61 @@ export async function gerarRascunhoConvenioNarrativo(
   }
   const { patientId, periodoInicio, periodoFim, cabecalho } = parsed.data;
 
-  return withTenant(ctx, async (tx) => {
-    // RLS já escopa o paciente.
-    const nome = await nomePaciente(tx, patientId);
-    if (!nome) return { error: "Paciente não encontrado ou fora do seu acesso." };
+  try {
+    return await withTenant(ctx, async (tx) => {
+      // RLS já escopa o paciente.
+      const nome = await nomePaciente(tx, patientId);
+      if (!nome) return { error: "Paciente não encontrado ou fora do seu acesso." };
 
-    const isDemo = await clinicaDemo(tx, ctx.clinicId);
-    const provider = resolveConvenioNarrativoProvider({ isDemo });
-    const entrada = await buildConvenioNarrativoInput(tx, {
-      patientId,
-      nomePaciente: nome,
-      periodoInicio,
-      periodoFim,
-      cabecalho,
-    });
-    const iaOriginal = await provider.gerar(entrada);
+      const isDemo = await clinicaDemo(tx, ctx.clinicId);
+      const provider = resolveConvenioNarrativoProvider({ isDemo });
+      const entrada = await buildConvenioNarrativoInput(tx, {
+        patientId,
+        nomePaciente: nome,
+        periodoInicio,
+        periodoFim,
+        cabecalho,
+      });
+      const iaOriginal = await provider.gerar(entrada);
 
-    const payload: PayloadConvenioNarrativo = {
-      versao: 1,
-      paciente: { nome },
-      periodo: { inicio: periodoInicio, fim: periodoFim },
-      cabecalho,
-      geradoEm: new Date().toISOString(),
-      // sempre "stub" até o ClaudeProvider ser habilitado pós-DPA
-      provider: "stub",
-      dossie: entrada.dossie,
-      iaOriginal,
-      curado: null,
-    };
+      const payload: PayloadConvenioNarrativo = {
+        versao: 1,
+        paciente: { nome },
+        periodo: { inicio: periodoInicio, fim: periodoFim },
+        cabecalho,
+        geradoEm: new Date().toISOString(),
+        // sempre "stub" até o ClaudeProvider ser habilitado pós-DPA
+        provider: "stub",
+        dossie: entrada.dossie,
+        iaOriginal,
+        curado: null,
+      };
 
-    const rows = (await tx.execute(sql`
+      const rows = (await tx.execute(sql`
       INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, status, payload, gerado_por_ia)
       VALUES (${ctx.clinicId}::uuid, ${patientId}::uuid, 'convenio_narrativo', ${periodoInicio}::date, ${periodoFim}::date, 'rascunho', ${JSON.stringify(payload)}::jsonb, true)
       RETURNING id
     `)) as unknown as Array<{ id: string }>;
-    const reportId = rows[0]!.id;
+      const reportId = rows[0]!.id;
 
-    await tx.execute(sql`
+      await tx.execute(sql`
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'relatorio_rascunho_gerado', 'report', ${reportId}::uuid, ${patientId}::uuid,
               jsonb_build_object('tipo', 'convenio_narrativo'::text))
     `);
-    return { reportId, versao: 1, draft: iaOriginal };
-  });
+      return { reportId, versao: 1, draft: iaOriginal };
+    });
+  } catch (err) {
+    // Tradutor puro primeiro (constraints/RAISE, inequívocos); depois o
+    // diagnóstico que PERGUNTA ao banco se algum gate de consentimento explica
+    // a negação genérica de RLS. Se ninguém explicar, o erro propaga como
+    // propagava antes deste gate — erro não explicado não pode ser engolido.
+    const msg =
+      traduzirErroDeConsentimento(err) ??
+      (await diagnosticarBloqueioDeConsentimentoSeguro(ctx, { patientId }));
+    if (msg) return { error: msg };
+    throw err;
+  }
 }
 
 // ─── 2. Curar (editar + revisar) — só coordenador; trava otimista ────────────
@@ -168,8 +182,9 @@ export async function curarConvenioNarrativo(
   }
   const { reportId, versaoEsperada, cabecalhoEditado, draftEditado } = parsed.data;
 
-  return withTenant(ctx, async (tx) => {
-    const rows = (await tx.execute(sql`
+  try {
+    return await withTenant(ctx, async (tx) => {
+      const rows = (await tx.execute(sql`
       UPDATE report
       SET payload = jsonb_set(
             jsonb_set(payload, '{curado}', ${JSON.stringify(draftEditado)}::jsonb, true),
@@ -183,19 +198,24 @@ export async function curarConvenioNarrativo(
         AND payload_versao = ${versaoEsperada}
       RETURNING id, patient_id
     `)) as unknown as Array<{ id: string; patient_id: string }>;
-    if (rows.length === 0) {
-      return {
-        error:
-          "Não foi possível salvar: o rascunho mudou ou já foi exportado. Recarregue e tente de novo.",
-      };
-    }
-    await tx.execute(sql`
+      if (rows.length === 0) {
+        return {
+          error:
+            "Não foi possível salvar: o rascunho mudou ou já foi exportado. Recarregue e tente de novo.",
+        };
+      }
+      await tx.execute(sql`
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'relatorio_revisado', 'report', ${reportId}::uuid, ${rows[0]!.patient_id}::uuid,
               jsonb_build_object('tipo', 'convenio_narrativo'::text))
     `);
-    return { ok: true };
-  });
+      return { ok: true };
+    });
+  } catch (err) {
+    const mensagemConsentimento = traduzirErroDeConsentimento(err);
+    if (mensagemConsentimento) return { error: mensagemConsentimento };
+    throw err;
+  }
 }
 
 // ─── 3. Exportar — só coordenador; exige status 'revisado' ───────────────────
@@ -213,24 +233,30 @@ export async function exportarConvenioNarrativo(
   }
   const { reportId } = parsed.data;
 
-  return withTenant(ctx, async (tx) => {
-    // Gate: convênio narrativo só exporta APÓS curadoria humana (status revisado).
-    const pre = (await tx.execute(sql`
+  try {
+    return await withTenant(ctx, async (tx) => {
+      // Gate: convênio narrativo só exporta APÓS curadoria humana (status revisado).
+      const pre = (await tx.execute(sql`
       SELECT status FROM report WHERE id = ${reportId}::uuid AND tipo = 'convenio_narrativo'
     `)) as unknown as Array<{ status: string }>;
-    if (!pre[0]) return { error: "Relatório não encontrado." };
-    if (pre[0].status !== "revisado") {
-      return {
-        error:
-          "O relatório precisa ser revisado pelo coordenador antes de exportar.",
-      };
-    }
-    const { hash } = await exportReport(tx, {
-      reportId,
-      atorId: ctx.userId,
-      buildHtml: (pl) => buildConvenioNarrativoHtml(pl as PayloadConvenioNarrativo),
-      renderer,
+      if (!pre[0]) return { error: "Relatório não encontrado." };
+      if (pre[0].status !== "revisado") {
+        return {
+          error:
+            "O relatório precisa ser revisado pelo coordenador antes de exportar.",
+        };
+      }
+      const { hash } = await exportReport(tx, {
+        reportId,
+        atorId: ctx.userId,
+        buildHtml: (pl) => buildConvenioNarrativoHtml(pl as PayloadConvenioNarrativo),
+        renderer,
+      });
+      return { reportId, hash };
     });
-    return { reportId, hash };
-  });
+  } catch (err) {
+    const mensagemConsentimento = traduzirErroDeConsentimento(err);
+    if (mensagemConsentimento) return { error: mensagemConsentimento };
+    throw err;
+  }
 }

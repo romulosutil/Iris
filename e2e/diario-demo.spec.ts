@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { entrarComMfa } from "./helpers/sessao";
 
 /**
  * E2E do fluxo demo do Diário (Fase 2): login terapeuta → abrir sessão do dia
@@ -19,15 +20,22 @@ test("terapeuta demo: captura rápida → consolida → Fila mostra sugestões a
   page,
 }) => {
   // Login do terapeuta da clínica demo (credenciais fixas do seed do Plano 4).
-  await page.goto("/login");
-  await page.getByLabel("E-mail").fill("terapeuta.demo@iris.test");
-  await page.getByLabel("Senha").fill("Senha Demo 123");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  // Terapeuta é papel clínico: segundo fator obrigatório desde a Fase 6.2b.
+  await entrarComMfa(page, "terapeuta.demo@iris.test", "Senha Demo 123");
   await expect(page).toHaveURL("/");
 
   // Abre a sessão do dia semeada pelo seed demo, pela agenda.
   await page.goto("/agenda");
-  await page.getByRole("link", { name: /Abrir sessão/i }).first().click();
+  // O nome acessível do botão vem do `aria-label` ("Abrir agendamento de <nome>
+  // às <hora>"), não do texto visível ("Abrir"). O spec procurava um link
+  // chamado "Abrir sessão" — outra visão da agenda, inexistente aqui.
+  // `visible=true` descarta a variante responsiva de 0x0 que fica no DOM e que
+  // faria o `.first()` esperar para sempre por algo que nunca aparece.
+  await page
+    .getByRole("button", { name: /^Abrir agendamento de / })
+    .locator("visible=true")
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/diario\/.+/);
 
   // Captura rápida em texto (aba "Texto" já é a padrão — mais determinístico

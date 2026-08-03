@@ -29,10 +29,54 @@
 - Rodar Testes E2E (Playwright): `pnpm test:e2e`
 
 ### Comandos de Banco de Dados
-- Gerar migrações: `pnpm db:generate`
 - Aplicar migrações locais: `pnpm db:migrate`
 - Seed de dados clínicos: `pnpm seed:clinic`
 - Seed de dados de demo: `pnpm seed:demo`
+- Gerar migrações: `pnpm db:generate` — **⚠️ leia o bloco abaixo antes de usar.**
+
+#### ⚠️ Migrações: como escrever sem derrubar o banco
+
+Duas armadilhas reais deste repo, ambas com incidente no histórico. Elas
+não são teoria — estão registradas como **D1** e **D2** em `BACKLOG.md`.
+
+**1. `pnpm db:generate` não serve mais para gerar migração nova.**
+O snapshot do Drizzle (`db/migrations/meta/*_snapshot.json`) está
+dessincronizado das migrações escritas à mão. Rodar `db:generate` hoje
+produz SQL que **recria tabelas, enums e constraints que já existem em
+produção** (na Fase 7 foram 128 linhas: `two_factor`, `auth_throttle`,
+enums de `alerta_risco`…). Aplicar esse arquivo derruba o banco.
+
+Então: **escreva a migração à mão** em `db/migrations/NNNN_nome.sql`,
+seguindo o estilo dos arquivos vizinhos (comentário explicando o *porquê*
+da mudança, `--> statement-breakpoint` entre statements). Se ainda assim
+rodar `db:generate` para inspecionar o diff, **descarte** o `.sql` e o
+`meta/NNNN_snapshot.json` gerados antes de commitar.
+
+**2. Migração à mão exige entrada manual no `_journal.json`, com o
+`when` correto.** Se o `when` for **menor ou igual** ao da última migração
+já aplicada, o Drizzle **pula o arquivo em silêncio** — sem erro, sem
+aviso. Use `when` = o da migração anterior **+ 1000**. Foi exatamente
+assim que a `0055` (fix de isolamento cross-tenant, #128) nunca rodou em
+produção e a issue foi fechada olhando o diff (#165).
+
+**3. Verifique medindo, não lendo.** Depois de `pnpm db:migrate`, confirme
+no Postgres que o objeto existe e faz o que promete — `information_schema`
+para coluna/grant, `pg_proc` para função (incluindo `prosecdef`),
+`pg_trigger` para trigger, e um `BEGIN … ROLLBACK` exercitando a regra.
+"Está no `git log`" não é prova de que rodou.
+
+**4. Coluna nova quase sempre precisa de `GRANT` explícito.** Várias
+tabelas (`patient` na `0044`, `app_user`/`clinic` na `0057`) tiveram o
+`UPDATE` de tabela revogado e recebem privilégio **coluna a coluna**. Um
+grant faltando aparece como `permission denied for table X`, que não diz
+qual coluna — diagnóstico caro.
+
+**5. Escrita fora do que a RLS permite vai de `SECURITY DEFINER`, não de
+policy nova.** Afrouxar uma policy abre todas as colunas mutáveis de uma
+vez. E lembre: um `UPDATE` barrado por RLS **afeta 0 linhas em silêncio**,
+não estoura — o código parece funcionar. Sendo DEFINER, o guard interno
+**é** a fronteira de autorização: copie o predicado *exato* da policy de
+leitura correspondente (precedentes: `0048`, `0064`, `0067`).
 
 ## Onboarding de uma sessão nova (sem memória desta conversa)
 

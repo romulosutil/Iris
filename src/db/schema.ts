@@ -36,6 +36,11 @@ export const userRoleTipo = pgEnum("user_role_tipo", [
 
 // `tratamento_dados_menor` = responsável legal assina pelo paciente menor.
 // `autoconsentimento_titular_adulto` (#100) = o próprio titular adulto assina.
+// `representacao_curador` (#134) = curador assina pelo adulto sob curatela.
+// `autoconsentimento_titular_emancipado` (#134) = menor emancipado assina por si.
+// `revogacao_consentimento` (#133) = NÃO é uma concessão: é a linha nova que
+// aponta (via `consentRevogadoId`) para a concessão que deixa de valer —
+// `consent` é append-only, revogar nunca edita a linha original.
 // O tipo é ESCOLHA EXPLÍCITA do operador no formulário, NUNCA derivado de
 // `patient.nascimento` (nullable, e a idade erra nos dois sentidos: adolescente
 // emancipado, adulto sob curatela).
@@ -44,6 +49,9 @@ export const consentTipo = pgEnum("consent_tipo", [
   "uso_ia_processamento",
   "exportacao_relatorios",
   "autoconsentimento_titular_adulto",
+  "revogacao_consentimento",
+  "representacao_curador",
+  "autoconsentimento_titular_emancipado",
 ]);
 
 // Estados de sessão (Agenda 2.0, Etapa A). Expande/substitui o enum da Fase 1d.
@@ -123,6 +131,11 @@ export const appUser = pgTable("app_user", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  // Registro profissional DECLARADO no cadastro aberto (spec §2, D6). Não há
+  // verificação na API do conselho — o valor está na trilha, não na barreira.
+  conselho: text("conselho"),
+  registroNumero: text("registro_numero"),
+  registroUf: text("registro_uf"),
 });
 
 // Fase 6.2b — tabela do plugin twoFactor (Better-Auth). Chaves em camelCase = o
@@ -240,6 +253,22 @@ export const clinic = pgTable("clinic", {
   protocoloEmergenciaDeclaradoPor: uuid(
     "protocolo_emergencia_declarado_por",
   ).references(() => appUser.id),
+  // Fatia A (#163) / #175: relógio do trial. `trial_dias` é dado, não
+  // constante, porque o valor é hipótese de produto (spec §2, D3).
+  //
+  // `trial_comeco_em` é NULLABLE de propósito (#175): NULL significa
+  // "clínica cadastrada, ainda sem 1º paciente — relógio não começou". O
+  // relógio dispara no cadastro do 1º paciente (mesma transação) ou, se
+  // nenhum paciente for cadastrado, no teto de 14 dias após `criado_em`.
+  // Foi `NOT NULL DEFAULT now()` na 0057, que precisou de um sentinela
+  // '2020-01-01' para o legado — sentinela removido junto com esta mudança.
+  trialComecoEm: timestamp("trial_comeco_em", { withTimezone: true }),
+  trialDias: integer("trial_dias").notNull().default(7),
+  // Clínicas pré-self-service (existiam antes da 0057) nunca contrataram um
+  // trial. Sem esta flag elas cairiam no teto de 14 dias sobre `criado_em` e
+  // virariam "trial vencido" — exatamente o bug que `ad789a6` corrigiu no
+  // paliativo. `true` = fora do relógio de trial e do gate de pagamento.
+  isentoTrial: boolean("isento_trial").notNull().default(false),
   criadoEm: timestamp("criado_em", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -274,6 +303,12 @@ export const patient = pgTable(
     // Fase 6.3: data de alta clínica — fonte da regra de retenção/expurgo LGPD
     // (MAX(18 anos, alta+10a)). Nullable: em acompanhamento = nunca expurgável.
     altaEm: date("alta_em"),
+    // #174 — arquivamento COMERCIAL, independente da alta clínica acima.
+    // NULL = paciente ativo (entra na contagem de faturados do mês).
+    // Dar alta arquiva (trigger `patient_alta_arquiva_trg`, 0065); arquivar
+    // nunca dá alta. Arquivado continua legível/exportável — é filtro de
+    // negócio, nunca de RLS.
+    arquivadoEm: timestamp("arquivado_em", { withTimezone: true }),
     responsavelContato: text("responsavel_contato"),
     escola: text("escola"),
     convenio: text("convenio"),
@@ -283,6 +318,7 @@ export const patient = pgTable(
   },
   (t) => [
     index("idx_patient_clinic").on(t.clinicId),
+    index("patient_clinic_arquivado_idx").on(t.clinicId, t.arquivadoEm),
     // Alvo das FKs compostas (patient_id, clinic_id) das tabelas da Agenda 2.0
     // (anti-IDOR em nível de banco). PK só em `id` não satisfaz FK de 2 colunas.
     unique("uq_patient_id_clinic").on(t.id, t.clinicId),
@@ -307,8 +343,20 @@ export const patientClinicalProfile = pgTable("patient_clinical_profile", {
 
 // Append-only por design (LGPD): `REVOKE UPDATE, DELETE ON consent FROM
 // app_role` em 0001_rls.sql. Renovação de consentimento é LINHA NOVA — não há
-// UNIQUE em patient_id nem coluna de vigência; "consentimento vigente" = linha
-// de maior `assinadoEm`.
+// UNIQUE em patient_id nem coluna de vigência. REVOGAÇÃO também é linha nova
+// (#133): `tipo = 'revogacao_consentimento'` + `consentRevogadoId` apontando
+// para a concessão que deixa de valer. Logo "consentimento vigente" NÃO é mais
+// só "linha de maior `assinadoEm`" — é a última linha do tipo (desempate
+// determinístico por `assinadoEm DESC, id DESC`, porque `defaultNow()` empata
+// dentro de uma mesma transação) que NÃO tenha revogação apontando para ela.
+// Espelho testável em `src/lib/consent/vigencia.ts`; fronteira real é a RLS.
+//
+// `versaoTermo` só é a versão de um TERMO ASSINADO quando
+// `tipo <> 'revogacao_consentimento'`. Na linha de revogação ela guarda a
+// versão do PROCEDIMENTO administrativo de revogação (`revogacao-v1`) — não
+// existe termo de revogação assinado pelo titular. Relatórios/exports que
+// tratarem `versaoTermo` como "versão de termo LGPD" precisam excluir esse
+// tipo. O CHECK `consent_versao_termo_por_tipo` torna a convenção verificável.
 export const consent = pgTable(
   "consent",
   {
@@ -321,12 +369,36 @@ export const consent = pgTable(
     // responsável. NULL é a representação correta — preencher com o nome do
     // próprio paciente seria semanticamente falso e contaminaria exports.
     responsavelSignatario: text("responsavel_signatario"),
+    // #133 — só preenchido em `revogacao_consentimento`: aponta a concessão
+    // revogada. A FK é COMPOSTA com `patientId` (ver extras abaixo), não
+    // `.references(() => consent.id)`: um ponteiro só por `id` permitiria
+    // revogar consentimento de OUTRO paciente (e de outra clínica).
+    consentRevogadoId: uuid("consent_revogado_id"),
+    // #134 — identificação do documento que comprova a representação/
+    // capacidade: processo/termo de curatela, ou certidão de emancipação.
+    // "idade > 18" não é prova de capacidade civil; o instrumento é a prova
+    // rastreável dentro do próprio registro append-only.
+    instrumentoRepresentacao: text("instrumento_representacao"),
     versaoTermo: text("versao_termo").notNull(),
     assinadoEm: timestamp("assinado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (t) => [
+    // Alvo da auto-FK composta. `id` já é PK; este UNIQUE existe só para dar
+    // ao par (id, patient_id) um índice único referenciável.
+    unique("consent_id_patient_uniq").on(t.id, t.patientId),
+    // Auto-FK COMPOSTA: a revogação tem de apontar para uma linha do MESMO
+    // paciente. `MATCH SIMPLE` (padrão, não escrever MATCH FULL): com
+    // `consentRevogadoId` NULL a restrição é satisfeita sem lookup — é o que
+    // permite que linhas de concessão existam. `ON DELETE NO ACTION` (não
+    // RESTRICT): `app_purgar_paciente` apaga todo o `consent` do paciente num
+    // único DELETE, e RESTRICT quebraria o expurgo LGPD.
+    foreignKey({
+      name: "consent_revogado_mesmo_paciente",
+      columns: [t.consentRevogadoId, t.patientId],
+      foreignColumns: [t.id, t.patientId],
+    }).onDelete("no action"),
     // Última linha de defesa: qualquer novo caminho de escrita (script admin,
     // migração de dados, outro formulário) é barrado pelo banco, não só pela
     // validação de app. `::text` espelha o SQL de 0051 — ver a nota lá.
@@ -341,16 +413,101 @@ export const consent = pgTable(
     // existe para impedir; e trocar o NULL-check pelo btrim abriria um buraco
     // maior, porque em CHECK uma expressão que avalia para NULL SATISFAZ a
     // constraint (só FALSE rejeita).
+    //
+    // FAIL-CLOSED INTENCIONAL: um valor futuro de `consentTipo` não casa
+    // nenhum arm e é REJEITADO no INSERT. Quem adicionar valor ao enum tem de
+    // adicionar o arm aqui e na migração — é de propósito, para que um tipo
+    // novo não entre no banco com combinação de colunas não decidida.
     check(
       "consent_responsavel_por_tipo",
       sql`(${t.tipo}::text = 'tratamento_dados_menor'
     AND ${t.responsavelSignatario} IS NOT NULL
-    AND btrim(${t.responsavelSignatario}) <> '')
-  OR (${t.tipo}::text = 'autoconsentimento_titular_adulto' AND ${t.responsavelSignatario} IS NULL)
-  OR (${t.tipo}::text IN ('uso_ia_processamento', 'exportacao_relatorios'))`,
+    AND btrim(${t.responsavelSignatario}) <> ''
+    AND ${t.instrumentoRepresentacao} IS NULL
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text = 'autoconsentimento_titular_adulto'
+    AND ${t.responsavelSignatario} IS NULL
+    AND ${t.instrumentoRepresentacao} IS NULL
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text = 'representacao_curador'
+    AND ${t.responsavelSignatario} IS NOT NULL
+    AND btrim(${t.responsavelSignatario}) <> ''
+    AND ${t.instrumentoRepresentacao} IS NOT NULL
+    AND btrim(${t.instrumentoRepresentacao}) <> ''
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text = 'autoconsentimento_titular_emancipado'
+    AND ${t.responsavelSignatario} IS NULL
+    AND ${t.instrumentoRepresentacao} IS NOT NULL
+    AND btrim(${t.instrumentoRepresentacao}) <> ''
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text IN ('uso_ia_processamento', 'exportacao_relatorios')
+    AND ${t.instrumentoRepresentacao} IS NULL
+    AND ${t.consentRevogadoId} IS NULL)
+  OR (${t.tipo}::text = 'revogacao_consentimento'
+    AND ${t.consentRevogadoId} IS NOT NULL
+    AND ${t.instrumentoRepresentacao} IS NULL)`,
+    ),
+    // Torna VERIFICÁVEL a convenção de `versaoTermo` documentada no comentário
+    // da tabela: `revogacao-%` sse a linha for de revogação. Bicondicional, não
+    // implicação — impede tanto revogação com "adulto-v1" quanto concessão
+    // gravada com "revogacao-v1".
+    check(
+      "consent_versao_termo_por_tipo",
+      sql`(${t.tipo}::text = 'revogacao_consentimento') = (${t.versaoTermo} LIKE 'revogacao-%')`,
     ),
   ],
 );
+
+/**
+ * Aceite dos termos de uso pelo PROFISSIONAL (adulto) no cadastro self-service.
+ * Não confundir com o consentimento do titular do tratamento (paciente) —
+ * outro titular, outra base legal. Imutável para a aplicação de produto.
+ */
+export const professionalConsent = pgTable(
+  "professional_consent",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => appUser.id),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id),
+    versaoTermo: text("versao_termo").notNull(),
+    aceitoEm: timestamp("aceito_em", { withTimezone: true }).notNull().defaultNow(),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+  },
+  (t) => [
+    // Corrida entre requisições concorrentes de retomada não deve criar
+    // dois aceites para a mesma tripla — onConflictDoNothing em cadastro.ts
+    // depende deste índice existir (migração 0060).
+    uniqueIndex("uq_professional_consent_user_clinic_versao").on(
+      t.userId,
+      t.clinicId,
+      t.versaoTermo,
+    ),
+  ],
+);
+
+/**
+ * Contador de tentativas da rota pública de cadastro (migração 0061).
+ * Compartilhado entre instâncias e persistente de propósito — ver o comentário
+ * longo da migração e `src/lib/throttle.ts`. Não é dado de paciente: só
+ * `iris_auth` tem grant.
+ */
+export const authThrottle = pgTable("auth_throttle", {
+  chave: text("chave").primaryKey(),
+  contagem: integer("contagem").notNull().default(0),
+  // Âncora do backoff (migração 0062): o fim da janela é calculado a partir do
+  // INÍCIO dela, não de `now()` — senão cada requisição extra empurra o fim e o
+  // bloqueio vira prorrogável para sempre.
+  janelaInicioEm: timestamp("janela_inicio_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  janelaExpiraEm: timestamp("janela_expira_em", { withTimezone: true }).notNull(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ─── Protocolos (catálogo + instância por paciente) ──────────────────────────
 export const protocolFamiliaCatalogo = pgTable("protocol_familia_catalogo", {
@@ -1105,9 +1262,11 @@ export const auditLog = pgTable(
     clinicId: uuid("clinic_id")
       .notNull()
       .references(() => clinic.id),
-    atorId: uuid("ator_id")
-      .notNull()
-      .references(() => appUser.id),
+    // Nullable desde a 0049: `ator_id IS NULL` significa "ação automática do
+    // sistema" (job de escalonamento, varredura de arquivamento) — não existe
+    // humano a quem atribuir. `onDelete: "set null"` (0070 / #116) garante retenção
+    // do audit_log por 6 meses mesmo se a conta do ator for excluída.
+    atorId: uuid("ator_id").references(() => appUser.id, { onDelete: "set null" }),
     acao: text("acao").notNull(),
     entidade: text("entidade").notNull(),
     entidadeId: uuid("entidade_id").notNull(),
@@ -1263,6 +1422,7 @@ export const alertaRiscoClinico = pgTable(
     // explícito de canal indisponível — canal que falha em silêncio é o modo de
     // falha da #108.
     canaisNotificados: jsonb("canais_notificados").notNull().default([]),
+    emailRtTentativas: integer("email_rt_tentativas").notNull().default(0),
 
     // "prazos de notificação e escalonamento interno do software" (§4.1) —
     // NUNCA "SLA de atendimento de emergência": não há prazo legal brasileiro
@@ -1324,4 +1484,26 @@ export const alertaRiscoClinico = pgTable(
     // serve o job de escalonamento (H1): status='aberto' AND prazo < now().
     index("idx_alerta_risco_sla").on(t.status, t.prazoReconhecimento),
   ],
+);
+
+// ─── Faturamento (Fase 7, #36): recepção de webhook do Asaas ────────────────
+// Deduplicação de entrega: o Asaas reentrega o mesmo evento após qualquer
+// falha de rede ou 5xx, então `asaasEventId` é UNIQUE e a barreira contra
+// efeito duplicado é o próprio banco (0066), não uma checagem em memória.
+// `payload` é guardado bruto porque a apuração do valor cobrado só existe a
+// partir da tabela `subscription` (#159) — quando ela chegar, os eventos já
+// recebidos precisam ser reprocessáveis sem pedir reenvio ao Asaas.
+// Plano de billing/identidade: só `iris_auth` tem grant; `app_role` não toca.
+export const asaasWebhookEvent = pgTable(
+  "asaas_webhook_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    asaasEventId: text("asaas_event_id").notNull().unique(),
+    evento: text("evento").notNull(),
+    payload: jsonb("payload").notNull(),
+    processadoEm: timestamp("processado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("asaas_webhook_event_processado_idx").on(t.processadoEm)],
 );

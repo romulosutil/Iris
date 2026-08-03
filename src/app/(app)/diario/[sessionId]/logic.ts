@@ -1,23 +1,46 @@
 import "server-only";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole } from "@/auth/require-role";
-import { withTenant, type TenantContext } from "@/db/rls";
+import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import {
   audioCapture,
+  auditLog,
   clinic,
   extraction,
   goal,
+  patient,
   session,
   sessionNote,
   sessionProtocolScope,
 } from "@/db/schema";
+import { ACAO_DESARQUIVADO_AUTOMATICAMENTE } from "@/lib/jobs/auto-arquivamento";
 import { resolveProvider } from "@/lib/extraction/provider";
 import type { ExtractionDraft } from "@/lib/extraction/provider";
 import type { AlertaRiscoAgente } from "@/lib/extraction/agent-output-schema";
 import { registrarAlertaRisco } from "@/lib/risco/registrar";
 import { loadCanonicalContext } from "@/lib/extraction/context-loader";
 import { deveReextrair } from "@/lib/extraction/reextraction-policy";
+import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
+import { diagnosticarBloqueioDeConsentimentoSeguro } from "@/lib/consent/diagnostico";
+
+/**
+ * Traduz a recusa do banco em mensagem de consentimento, quando (e só quando)
+ * o consentimento realmente a explica. Primeiro o tradutor puro (constraints e
+ * RAISE EXCEPTION, que são inequívocos); depois, para a negação genérica de
+ * RLS, o diagnóstico que PERGUNTA ao banco. `null` = ninguém explicou → o
+ * chamador mantém o comportamento que tinha antes deste gate existir.
+ */
+async function mensagemDeConsentimento(
+  ctx: TenantContext,
+  err: unknown,
+  alvo: { sessionId?: string },
+): Promise<string | null> {
+  return (
+    traduzirErroDeConsentimento(err) ??
+    (await diagnosticarBloqueioDeConsentimentoSeguro(ctx, alvo))
+  );
+}
 
 // Draft de fallback quando a extração (LLM) falha: mantém a nota salva e marca
 // pendente de reprocessamento (flow 2.4 dos wireframes) — nunca perde o diário.
@@ -30,6 +53,57 @@ const PENDENTE_DRAFT: ExtractionDraft = {
   payload: { motivo: "extracao_falhou_retry" },
   estado: "pendente_reprocessamento",
 };
+
+/**
+ * #174 — regra 6: gravar registro clínico para paciente ARQUIVADO desarquiva
+ * automaticamente e deixa rastro na trilha.
+ *
+ * O UPDATE não pode ser direto daqui: `patient_update` (0001) só admite
+ * `coordenador`/`admin_recepcao`, e quem grava diário é o TERAPEUTA. O RLS
+ * filtra, não estoura — o UPDATE afetaria 0 linhas em silêncio e o paciente
+ * seguiria arquivado (fora da fatura) enquanto a UI diria o contrário. Por
+ * isso a escrita mora em `app_desarquivar_paciente` (SECURITY DEFINER), cujo
+ * guard interno espelha o predicado de LEITURA `patient_select` e ESTOURA
+ * quando não bate — silêncio nenhum.
+ *
+ * O gate `SELECT ... AND arquivado_em IS NOT NULL` antes da chamada não é
+ * otimização: ele reproduz, sob o RLS do próprio chamador, a precondição do
+ * guard do definer. Sem ele, o terapeuta de COBERTURA (dono da sessão, fora
+ * da care team — cenário real, coberto por teste) levaria a exceção do definer
+ * em TODA nota, inclusive de paciente ativo, e perderia o diário. Com o gate,
+ * o paciente que esse terapeuta sequer enxerga simplesmente não é desarquivado
+ * por aqui; quem desarquiva nesse caso é o coordenador, na tela do paciente.
+ */
+async function desarquivarAoRegistrar(
+  tx: Tx,
+  ctx: TenantContext,
+  patientId: string,
+): Promise<void> {
+  const alvo = await tx
+    .select({ id: patient.id })
+    .from(patient)
+    .where(and(eq(patient.id, patientId), isNotNull(patient.arquivadoEm)));
+  if (alvo.length === 0) return;
+
+  const linhas = (await tx.execute(
+    sql`SELECT app_desarquivar_paciente(${patientId}::uuid) AS desarquivou`,
+  )) as unknown as Array<{ desarquivou: boolean }>;
+
+  // `false` = não houve transição (outra nota da mesma sessão já desarquivou).
+  // Só quem transicionou grava a trilha: `audit_log` é append-only para
+  // `app_role`, então uma duplicata gravada por engano não teria como sair.
+  if (!linhas[0]?.desarquivou) return;
+
+  await tx.insert(auditLog).values({
+    clinicId: ctx.clinicId,
+    atorId: ctx.userId,
+    acao: ACAO_DESARQUIVADO_AUTOMATICAMENTE,
+    entidade: "patient",
+    entidadeId: patientId,
+    patientId,
+    detalhe: { origem: "registro_clinico" },
+  });
+}
 
 const capturaSchema = z.object({
   sessionId: z.string().uuid(),
@@ -50,8 +124,8 @@ export async function capturarDiario(
   const parsed = capturaSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   try {
-    const [row] = await withTenant(ctx, (tx) =>
-      tx
+    const row = await withTenant(ctx, async (tx) => {
+      const [nota] = await tx
         .insert(sessionNote)
         .values({
           sessionId: parsed.data.sessionId,
@@ -64,10 +138,24 @@ export async function capturarDiario(
           target: [sessionNote.sessionId, sessionNote.tipo],
           set: { texto: parsed.data.texto, atualizadoEm: new Date() },
         })
-        .returning({ id: sessionNote.id }),
-    );
+        .returning({ id: sessionNote.id });
+
+      // #174 regra 6, na MESMA transação da nota: ou o registro clínico e o
+      // desarquivamento existem juntos, ou nenhum dos dois existe.
+      const [sess] = await tx
+        .select({ patientId: session.patientId })
+        .from(session)
+        .where(eq(session.id, parsed.data.sessionId));
+      if (sess) await desarquivarAoRegistrar(tx, ctx, sess.patientId);
+
+      return nota;
+    });
     return { id: row!.id };
   } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, {
+      sessionId: parsed.data.sessionId,
+    });
+    if (msg) return { error: msg };
     console.error("capturarDiario:", err);
     return { error: "Não foi possível salvar a captura." };
   }
@@ -110,6 +198,10 @@ export async function corrigirEscopoProtocolo(
     });
     return {};
   } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, {
+      sessionId: parsed.data.sessionId,
+    });
+    if (msg) return { error: msg };
     console.error("corrigirEscopoProtocolo:", err);
     return { error: "Não foi possível ajustar os protocolos." };
   }
@@ -146,6 +238,10 @@ export async function registrarAudioLocal(
     );
     return { id: row!.id };
   } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, {
+      sessionId: parsed.data.sessionId,
+    });
+    if (msg) return { error: msg };
     console.error("registrarAudioLocal:", err);
     return { error: "Não foi possível registrar o áudio." };
   }
@@ -251,7 +347,11 @@ export async function consolidarSessao(
         }
       }
 
-      // 3) política de re-extração (P0): não re-chama o LLM nem apaga extrações
+      // 3) #174 regra 6: a nota consolidada é registro clínico — se o paciente
+      //    estava arquivado (comercialmente), ele volta a contar na fatura.
+      await desarquivarAoRegistrar(tx, ctx, sess!.patientId);
+
+      // 4) política de re-extração (P0): não re-chama o LLM nem apaga extrações
       //    já revisadas quando o texto não mudou (e não há pendência).
       const exEstados = await tx
         .select({ estado: extraction.estado })
@@ -369,6 +469,8 @@ export async function consolidarSessao(
 
     return { numeroSequencial: prep.numero ?? undefined };
   } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, { sessionId: sid });
+    if (msg) return { error: msg };
     console.error("consolidarSessao:", err);
     return { error: "Não foi possível consolidar a sessão." };
   }

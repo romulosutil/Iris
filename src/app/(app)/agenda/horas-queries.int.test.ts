@@ -1,22 +1,23 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import postgres from "postgres";
+import { hasDb } from "@tests/integration-env";
 
 // horas-queries.ts é ctx-accepting puro (sem "use server"), mas importa @/db
 // que puxa server-only transitivamente. Neutraliza e importa dinamicamente.
 vi.mock("server-only", () => ({}));
-const { carregarHorasPaciente, carregarHorasTerapeuta } = await import(
-  "./horas-queries"
-);
-
-const hasDb =
-  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+const { carregarHorasPaciente, carregarHorasTerapeuta } =
+  await import("./horas-queries");
 
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
 const U_COORD = "a0000000-0000-0000-0000-000000000001";
 const U_T1 = "a0000000-0000-0000-0000-000000000002";
 const PATIENT_P = "cccccccc-0000-0000-0000-000000000001";
 
-const ctxCoord = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
+const ctxCoord = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 

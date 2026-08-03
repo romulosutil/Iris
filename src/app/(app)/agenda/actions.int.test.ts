@@ -1,22 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import postgres from "postgres";
 import { eq } from "drizzle-orm";
+import { hasDb } from "@tests/integration-env";
 
 // actions.ts puxa getTenantContext (next/headers) → server-only. Neutraliza o
 // side-effect e importa o núcleo testável dinamicamente.
 vi.mock("server-only", () => ({}));
-const { checkInSessao, listarSessoesDoDia, marcarEstado } = await import(
-  "./logic"
-);
-const { pendentesDeConsolidacao, reposicoesPendentes } = await import(
-  "./queries"
-);
+const { checkInSessao, listarSessoesDoDia, marcarEstado } =
+  await import("./logic");
+const { pendentesDeConsolidacao, reposicoesPendentes } =
+  await import("./queries");
 const { withTenant } = await import("@/db/rls");
 const { sql: appSql } = await import("@/db/client");
 const { session } = await import("@/db/schema");
-
-const hasDb =
-  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
 const CLINIC_B = "22222222-2222-2222-2222-222222222222";
@@ -68,7 +64,11 @@ async function criarSessao(params: {
   return row!.id;
 }
 
-const ctxCoord = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
+const ctxCoord = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
 const ctxT1 = { clinicId: CLINIC_A, userId: U_T1, role: "terapeuta" } as const;
 const ctxT2 = { clinicId: CLINIC_A, userId: U_T2, role: "terapeuta" } as const;
 
@@ -168,10 +168,7 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     // Idem para terapeuta_id de outra clínica (app_user_in_clinic).
     await expect(
       withTenant(ctxCoord, (tx) =>
-        tx
-          .update(session)
-          .set({ terapeutaId: U_B })
-          .where(eq(session.id, id)),
+        tx.update(session).set({ terapeutaId: U_B }).where(eq(session.id, id)),
       ),
     ).rejects.toThrow();
   });
@@ -184,7 +181,10 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
       disciplina: "aba",
     });
 
-    const a = await marcarEstado(ctxCoord, { sessionId: id, estado: "realizada" });
+    const a = await marcarEstado(ctxCoord, {
+      sessionId: id,
+      estado: "realizada",
+    });
     expect(a.ok).toBe(true);
 
     const b = await marcarEstado(ctxCoord, {

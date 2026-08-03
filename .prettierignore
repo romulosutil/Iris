@@ -1,0 +1,12 @@
+# Documentos jurídicos — NÃO formatar automaticamente.
+#
+# `termos-de-uso.md` contém a cláusula 10 (Alerta de Risco), redigida pelo
+# advogado Thiago Lyra Galvão e reproduzida literalmente, com a instrução
+# "Não editar sem novo parecer". O Prettier normaliza marcadores de ênfase
+# (`*ex post*` → `_ex post_`) e reflui parágrafos — inofensivo em código,
+# inaceitável num texto que nos comprometemos a manter literal. Já aconteceu
+# uma vez, em 30/07/2026.
+#
+# `src/lib/legal.test.ts` fixa o corpo de 10.1–10.3 byte a byte; sem esta
+# exclusão, a próxima execução de `pnpm format` quebraria aquele teste.
+docs/legal/

@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
 const CLINIC_B = "00000000-0000-0000-0000-0000000000b1";
@@ -11,7 +11,11 @@ const PAC_A1 = "00000000-0000-0000-0000-0000000a0001";
 const PAC_A2 = "00000000-0000-0000-0000-0000000a0002";
 const PAC_B1 = "00000000-0000-0000-0000-0000000b0001";
 
-const ctxA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
+const ctxA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let listarPacientes: typeof import("@/app/(app)/agenda/queries").listarPacientes;
@@ -36,7 +40,10 @@ describe.skipIf(!hasDb)("listarPacientes (RLS/IDOR)", () => {
       (${PAC_A2}, ${CLINIC_A}, 'Bruno Beta'),
       (${PAC_B1}, ${CLINIC_B}, 'Ana Outra Clinica')`;
   });
-  afterAll(async () => { await owner?.end(); await appSql?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
 
   test("só retorna pacientes do tenant do ctx (isolamento)", async () => {
     const r = await listarPacientes(ctxA, "Ana");

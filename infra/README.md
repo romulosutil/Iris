@@ -89,12 +89,12 @@ profundidade, é contenção — e depende de disciplina, não de plataforma.
 
 Se um segredo passou por log compartilhado, trate como comprometido e rotacione:
 
-| Segredo | Como rotacionar | Efeito colateral |
-| --- | --- | --- |
-| `GLITCHTIP_WEBHOOK_SECRET` | `openssl rand -hex 24` | trocar nos **dois** lados (env do app + URL do webhook no GlitchTip), senão o relay passa a 401 |
-| `BETTER_AUTH_SECRET` | `openssl rand -base64 32` | **invalida toda sessão ativa** — todo mundo reloga |
-| `GITHUB_TOKEN` | novo PAT fine-grained (ver abaixo) | validar o relay ANTES de revogar o antigo |
-| senha das roles Postgres | `ALTER ROLE ... PASSWORD` | atualizar `DATABASE_URL`, `AUTH_DATABASE_URL` e `MIGRATION_DATABASE_URL` |
+| Segredo                    | Como rotacionar                    | Efeito colateral                                                                                |
+| -------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `GLITCHTIP_WEBHOOK_SECRET` | `openssl rand -hex 24`             | trocar nos **dois** lados (env do app + URL do webhook no GlitchTip), senão o relay passa a 401 |
+| `BETTER_AUTH_SECRET`       | `openssl rand -base64 32`          | **invalida toda sessão ativa** — todo mundo reloga                                              |
+| `GITHUB_TOKEN`             | novo PAT fine-grained (ver abaixo) | validar o relay ANTES de revogar o antigo                                                       |
+| senha das roles Postgres   | `ALTER ROLE ... PASSWORD`          | atualizar `DATABASE_URL`, `AUTH_DATABASE_URL` e `MIGRATION_DATABASE_URL`                        |
 
 `GITHUB_TOKEN` é **PAT fine-grained**, escopado só a `romulosutil/Iris` com
 `Issues: read+write` — e nada mais. PAT classic (`ghp_`) com scope `repo` dá
@@ -133,7 +133,7 @@ login membro dela:
 ```sql
 -- Cria o usuário de LOGIN membro de iris_auth (senha por ambiente, nunca versionada).
 CREATE ROLE iris_auth_login LOGIN PASSWORD :'authpwd' IN ROLE iris_auth;
--- O usuário de app_role (app_login) já existe desde a Fase 1a; mesma receita.
+-- O usuário de app_role (iris_app) já existe desde a Fase 1a; mesma receita.
 ```
 
 Em dev local (docker-compose) o superuser é `iris`; rodar o SQL acima com
@@ -183,6 +183,54 @@ passo_grade_min` inexistentes). A barreira é o stage **`migrate`** do Dockerfil
 
 `MIGRATION_DATABASE_URL` entra como env var do serviço `migrate` (não do app).
 
+## Teste de carga das imagens de infra (#157)
+
+`infra/escalonamento/Dockerfile` e `infra/backup/Dockerfile` **não compartilham
+o `node_modules` nem a árvore de arquivos do app** — copiam arquivo/diretório a
+arquivo e instalam as dependências à mão, para não arrastar Next/React/
+Playwright a processos que rodam uma chamada SQL por minuto. O preço disso é um
+ponto cego: `pnpm test`, `pnpm typecheck` e `pnpm lint` rodam contra a árvore do
+REPO, onde o arquivo importado existe e a dependência está no node_modules da
+raiz. **Os três ficam verdes com a imagem quebrada** — foi assim que a #126
+subiu um `import` novo com review e CI verdes e derrubou o motor de
+escalonamento em produção por ~20 minutos (`ERR_MODULE_NOT_FOUND`, PR #156).
+
+O fechamento é `scripts/ci/carga-imagens-infra.sh`, que **constrói a imagem e
+carrega o código lá dentro** em vez de inspecionar o Dockerfile. Roda no CI
+(`.github/workflows/carga-imagens-infra.yml`) e igual na sua máquina:
+
+```bash
+scripts/ci/carga-imagens-infra.sh                 # os dois serviços
+scripts/ci/carga-imagens-infra.sh escalonamento   # só um
+```
+
+Como ler o resultado — vale para os dois serviços:
+
+| resultado                                       | leitura                                                  |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| exit != 0 **com a mensagem de guarda esperada** | ✅ o módulo carregou inteiro e morreu na env que falta   |
+| **exit 0**                                      | ❌ a guarda de execução parou de rodar (defeito da #153) |
+| qualquer outra falha                            | ❌ arquivo/dependência não chegou na imagem              |
+
+O escalonamento é exercitado nas **duas** formas de invocação — caminho
+absoluto e caminho relativo (a forma documentada no `docker-compose.yml`) —
+porque foi a relativa que a #153 quebrou.
+
+Um passo separado resolve **todo specifier importado, inclusive os dinâmicos**
+(`scripts/ci/verificar-deps-imagem.mjs`, injetado por stdin para não virar
+arquivo dentro da imagem de produção). Sem ele, uma dependência ausente que só
+é usada em `await import()` dentro de `try/catch` — o caso do `resend` em
+`scripts/lib/resend-rt.mjs` — passaria verde no teste de carga e o e-mail ao RT
+falharia **em silêncio** em produção.
+
+> Se uma dependência npm nova entrar no caminho destes serviços, ela precisa ir
+> na linha de instalação do Dockerfile do serviço. Adicionar no `package.json`
+> da raiz **não alcança** estas imagens.
+
+**Windows/Git Bash:** o script já exporta `MSYS_NO_PATHCONV=1`. Sem isso o MSYS
+reescreve `/app/...` para caminho do Windows antes do docker ver o argumento, e
+o erro parece vir de dentro do container.
+
 ## Backup e restore (LGPD)
 
 Iris guarda **dado clínico de menor de idade**. A LGPD (art. 46) exige medida de
@@ -205,12 +253,12 @@ todo `CREATE POLICY ... TO` e todo `GRANT` referenciam — são objetos de
 todos os GRANTs/policies com `role does not exist` — emitindo só warning, exit
 0**. O resultado medido, num PG17 vazio, antes da correção:
 
-| | só `.dump` (errado) | `.globals.sql` + `.dump` (hoje) |
-| --- | --- | --- |
-| Tabelas | 37 | 37 |
-| **Policies de RLS** | **0** | **85** |
-| Tabelas com `relrowsecurity` | 0 | 33 |
-| Roles `app_role`/`iris_auth` | 0 | 2 |
+|                              | só `.dump` (errado) | `.globals.sql` + `.dump` (hoje) |
+| ---------------------------- | ------------------- | ------------------------------- |
+| Tabelas                      | 37                  | 37                              |
+| **Policies de RLS**          | **0**               | **85**                          |
+| Tabelas com `relrowsecurity` | 0                   | 33                              |
+| Roles `app_role`/`iris_auth` | 0                   | 2                               |
 
 Ou seja: banco com dado clínico de menor e **zero isolamento multi-tenant**, sem
 nenhum erro fatal visível. É por isso que `backup.sh` gera **dois artefatos por
@@ -246,11 +294,11 @@ no dia do restore, com o banco de prod já perdido.
 
 ### Onde o backup fica — três destinos, dois domínios de falha
 
-| # | Destino | Onde roda | Cifrado? | Cobre |
-| --- | --- | --- | --- | --- |
-| 1 | Volume `/backups` | **no VPS** | não | corrupção lógica, `DROP` acidental, erro humano |
-| 2 | MinIO `iris-backups` | **no VPS** | não | perda do volume do Postgres |
-| 3 | Bucket off-site | **fora do VPS** | **sim (age)** | **perda total do host** |
+| #   | Destino              | Onde roda       | Cifrado?      | Cobre                                           |
+| --- | -------------------- | --------------- | ------------- | ----------------------------------------------- |
+| 1   | Volume `/backups`    | **no VPS**      | não           | corrupção lógica, `DROP` acidental, erro humano |
+| 2   | MinIO `iris-backups` | **no VPS**      | não           | perda do volume do Postgres                     |
+| 3   | Bucket off-site      | **fora do VPS** | **sim (age)** | **perda total do host**                         |
 
 Os destinos 1 e 2 são um **único domínio de falha**: os dois morrem junto com o
 VPS. O destino 3 (issue #86) existe só para o cenário que eles não cobrem —
@@ -293,7 +341,7 @@ cenário que o off-site cobre.
 
 > ⚠️ Se o bucket off-site crescer sem limite, **a regra de lifecycle não foi
 > criada**. O `backup.sh` loga `prune off-site: NÃO executado pelo script (por
-> design)` toda execução justamente para esse esquecimento não ficar silencioso.
+design)` toda execução justamente para esse esquecimento não ficar silencioso.
 
 #### Cadência do off-site — quanto se perde no pior dia
 
@@ -301,10 +349,10 @@ cenário que o off-site cobre.
 cópia no MinIO rodam **todo dia** de qualquer forma: são baratos e ficam no
 mesmo disco.
 
-| Valor | Perda máxima no desastre de host | Volume no bucket (ret. 30d) |
-| --- | --- | --- |
-| `1` (default) | até 1 dia | ~30 pares |
-| `7` | **até 7 dias** | ~4 pares |
+| Valor         | Perda máxima no desastre de host | Volume no bucket (ret. 30d) |
+| ------------- | -------------------------------- | --------------------------- |
+| `1` (default) | até 1 dia                        | ~30 pares                   |
+| `7`           | **até 7 dias**                   | ~4 pares                    |
 
 Traduzindo "7 dias" para o que o usuário sente: uma terapeuta que escreveu 40
 evoluções naquela semana **perde as 40**. Ela não reconstrói — a sessão
@@ -326,12 +374,12 @@ independente do intervalo.
 
 #### Exit codes do `backup.sh` — 1 e 3 não são a mesma coisa
 
-| Exit | Significado | O que o `scheduler.sh` faz |
-| --- | --- | --- |
-| 0 | sucesso completo | grava marcador do dia |
-| 1 | **dump ou globals falharam** — não existe backup do dia | **não** grava marcador; tenta de novo em 10min |
-| 2 | uso incorreto (argumento passado) | idem |
-| 3 | backup do dia **íntegro em disco**, mas alguma **replicação** falhou | **grava** marcador + loga `ATENÇÃO`; não refaz o dump |
+| Exit | Significado                                                          | O que o `scheduler.sh` faz                                                                               |
+| ---- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 0    | sucesso completo                                                     | grava marcador do dia                                                                                    |
+| 1    | **dump ou globals falharam** — não existe backup do dia              | **não** grava marcador; tenta de novo em 10min                                                           |
+| 2    | uso incorreto (argumento passado)                                    | idem                                                                                                     |
+| 3    | backup do dia **íntegro em disco**, mas alguma **replicação** falhou | **grava** marcador + cria arquivo-sinal `/backups/.offsite-degradado` + loga `ATENÇÃO`; não refaz o dump |
 
 O 3 existe por um motivo operacional concreto: o marcador só era escrito em
 `exit 0`, então uma falha **persistente** de replicação (conta off-site
@@ -340,9 +388,7 @@ banco de produção **a cada 10 minutos, o dia inteiro** — carga real e contí
 por um problema que refazer o dump não conserta. Com o 3, o dia é dado por
 resolvido, o alerta fica alto no log, e a próxima janela replica.
 
-> Ao configurar alerta em cima do log do painel: **exit 3 é acionável no mesmo
-> dia** (pode não haver cópia fora do host), mas **não é emergência de dado
-> perdido**. Exit 1 é.
+> Ao configurar alerta em cima do log do painel ou do volume: **exit 3 grava o arquivo-sinal passivo `/backups/.offsite-degradado`** com timestamp e exit code 3 (removido automaticamente na primeira execução com sucesso, exit 0). Isso permite que verificações externas detectem a degradação sem depender de parse de logs ou interrupção do container. **exit 3 é acionável no mesmo dia** (pode não haver cópia fora do host), mas **não é emergência de dado perdido**. Exit 1 é.
 
 ### Provisionamento no Easypanel
 
@@ -391,8 +437,8 @@ versionado no repo e com log no painel.
    A frase junta duas causas e a segunda é uma pista falsa convincente — dá
    vontade de mexer em região antes de conferir a chave. **Em 28/07/2026 a causa
    foi a credencial**: o par `OFFSITE_S3_ACCESS_KEY`/`OFFSITE_S3_SECRET_KEY`
-   precisa ser uma **Customer Secret Key** da OCI (Identity → usuário → *Customer
-   Secret Keys*) — não um Auth Token, não uma chave de API com PEM. Trocada a
+   precisa ser uma **Customer Secret Key** da OCI (Identity → usuário → _Customer
+   Secret Keys_) — não um Auth Token, não uma chave de API com PEM. Trocada a
    chave, a réplica voltou a subir **sem tocar em região nenhuma**.
 
    Isso é o que o `backup.sh` loga hoje a cada execução, e é a configuração
@@ -452,7 +498,7 @@ versionado no repo e com log no painel.
 
    `Réplicas` = 1. Não ligar `Tempo de inatividade zero` (não é serviço web).
 
-6. **Conferir a primeira execução**: rodar o serviço à mão uma vez e checar que
+5. **Conferir a primeira execução**: rodar o serviço à mão uma vez e checar que
    apareceram **os dois arquivos do par**, com o mesmo timestamp, em `/backups`
    **e** no bucket:
 
@@ -535,7 +581,7 @@ Banco de produção corrompido ou perdido. **A ordem importa:**
    **antes** do `pg_restore`. Se não achar o irmão, **aborta** — restaurar sem
    globals produz banco sem RLS. Os globals são aplicados com
    `psql -v ON_ERROR_STOP=0`: erro de role já existente (`role "iris" already
-   exists`) é **esperado e benigno** quando o cluster já é o antigo.
+exists`) é **esperado e benigno** quando o cluster já é o antigo.
 
 3. **Re-setar as senhas das roles de login.** Os globals vieram sem senha
    (`--no-role-passwords`), então quem autentica precisa de senha de volta,
@@ -549,6 +595,7 @@ Banco de produção corrompido ou perdido. **A ordem importa:**
    Num restore no cluster que já existia, as senhas antigas continuam lá e este
    passo é no-op — mas confira, em vez de assumir. Policies e GRANTs **não**
    dependem disso; só o login depende.
+
 4. **Validar o isolamento antes de religar**: rodar `pnpm test:rls` apontando
    pro banco restaurado. Restore que perdeu policy vira vazamento entre
    clínicas no minuto em que o app voltar. Sem `test:rls` verde, **não religar**.
@@ -579,6 +626,7 @@ Pré-requisito: ter em mãos **o par completo** (`iris-<ts>.dump` +
 
    Erros benignos de `CREATE ROLE` ao aplicar globals são esperados (o cluster
    novo já tem `iris`). Erro **fatal** aqui é abortar e investigar.
+
 3. **Re-setar as senhas das roles de login** (obrigatório aqui — no cluster novo
    elas nascem sem senha e **nada autentica**):
 
@@ -599,6 +647,7 @@ Pré-requisito: ter em mãos **o par completo** (`iris-<ts>.dump` +
 
    **`0` policies = os globals não foram aplicados.** Parar, não religar nada,
    voltar ao passo 2.
+
 5. **Só então religar o app**, apontado pro cluster novo, e conferir login +
    uma leitura por papel.
 6. Registrar tudo no `BACKLOG.md` (data, timestamp do par usado, exit codes,
@@ -628,7 +677,7 @@ fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
 1. **Criar a conta** com home region São Paulo. Cartão é exigido no cadastro e
    não é cobrado no Always Free; cartão virtual descartável costuma ser
    rejeitado.
-2. **Criar o bucket** `iris-backups-offsite`. Anotar o *namespace* — ele entra
+2. **Criar o bucket** `iris-backups-offsite`. Anotar o _namespace_ — ele entra
    no endpoint: `https://<namespace>.compat.objectstorage.sa-saopaulo-1.oraclecloud.com`.
 3. **Regra de lifecycle no bucket** com a mesma janela do `RETENTION_DAYS`
    (hoje 30 dias). **Isto não é opcional** — o `backup.sh` não poda o off-site
@@ -638,7 +687,7 @@ fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
    > (retenção de backup × direito ao expurgo da Fase 6). Um titular expurgado
    > continua existindo nos backups pela janela de retenção — agora em três
    > lugares, um deles fora do host. Alinhar com a decisão da #89.
-4. **Criar credencial dedicada** (na Oracle: *Customer Secret Key*) com política
+4. **Criar credencial dedicada** (na Oracle: _Customer Secret Key_) com política
    de **escrita apenas** — sem `DeleteObject`, sem `CreateBucket`. Não reusar a
    credencial do MinIO: ela vive no host que se assume comprometido.
 5. **Gerar o par de chaves `age`** — numa máquina que **não é o VPS**:
@@ -680,7 +729,7 @@ fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
    máquina que guarda a chave privada**, nunca no VPS — o VPS tem só a pública,
    e levar a privada para lá anularia o desenho inteiro da #86. A chave entra por
    **stdin**: não é argumento (apareceria em `ps`), não é env var (`docker
-   inspect` mostra o env de qualquer container) e não é volume montado. O script
+inspect` mostra o env de qualquer container) e não é volume montado. O script
    recusa a chave por `AGE_IDENTITY` justamente por isso.
 
    Fecho da prova: o `sha256` que ele imprime tem que bater com o `sha256=` que o
@@ -822,8 +871,44 @@ varredura por minuto.
 > Estágio 2 = banner para toda a clínica + responsável técnico + exibição do
 > protocolo de emergência da própria clínica. Em nenhum estágio o Iris avisa
 > família, contato de emergência, SAMU, polícia ou Conselho Tutelar — decisão
-> travada no parecer da #110. Não há webhook, e-mail ou chamada HTTP no
-> serviço, e adicionar um seria reverter essa decisão.
+> travada no parecer da #110. Não há webhook nem chamada HTTP para terceiros, e
+> adicionar um seria reverter essa decisão.
+>
+> A **única** saída de rede do serviço, fora o Postgres, é o e-mail ao
+> responsável técnico da própria clínica no estágio 2 (#126, via Resend). Ele
+> não é exceção à regra acima: o RT é interno à clínica, e o corpo do e-mail é
+> fixo — só um link para o painel autenticado, sem paciente, categoria ou
+> trecho clínico (§4.2.1). Ver `scripts/lib/resend-rt.mjs`.
+
+### Canal de e-mail ao RT: até 3 tentativas, não uma (#154)
+
+O envio ao RT não tem fila própria — a retentativa é derivada do estado do
+alerta, e é a mesma consulta que já fazia a reconciliação:
+
+| resultado do envio                        | marcador em `canais_notificados`     | ainda na fila? |
+| ----------------------------------------- | ------------------------------------ | -------------- |
+| sucesso                                   | `email_responsavel_tecnico_enviado`  | não            |
+| falha **transitória** (429/5xx, timeout)  | `email_responsavel_tecnico_adiado`   | **sim**        |
+| falha **permanente** (endereço inválido)  | `email_responsavel_tecnico_falhou`   | não            |
+| transitória após o teto de 3 tentativas   | `email_responsavel_tecnico_falhou`   | não            |
+
+`app_alertas_estagio2_sem_email()` exclui só `_enviado` e `_falhou`. Um alerta
+`_adiado` continua elegível, então a varredura seguinte (1 min depois) o retenta
+sozinha. O contador fica em `alerta_risco_clinico.email_rt_tentativas`.
+
+**Como ler isso num incidente:**
+
+- `_adiado` repetido e nunca virando `_enviado` → o provedor está fora do ar há
+  mais de 3 minutos, ou a chave está inválida. Verifique a Resend antes de mexer
+  no motor.
+- `_falhou` na **primeira** tentativa → não foi rede: é endereço inválido, RT
+  sem papel vigente na clínica, ou `EMAIL_PROVIDER_API_KEY`/`NEXT_PUBLIC_APP_URL`
+  ausentes no serviço. O motivo exato está no `audit_log`, ação
+  `alerta_risco_email_rt`, campo `detalhe`.
+- Um alerta que estoure exceção **não** derruba mais a varredura: cada alerta é
+  isolado, o erro completo vai para **stderr** (com stack e `cause`) e a fila
+  segue. Se o log mostra `erro não tratado no alerta_id=...`, os demais alertas
+  daquela passada foram processados normalmente.
 
 ### Por que serviço separado e não um `setInterval` dentro do Next.js
 
@@ -1097,3 +1182,17 @@ problema está na migração, não no serviço.
 > então o `--dry-run` só funciona com a role dona, à mão. O serviço em produção
 > nunca roda com essa flag, e o `--dry-run` **não** atualiza o heartbeat (para
 > uma inspeção manual jamais mascarar um motor parado).
+
+---
+
+### Job de Expurgo e Retenção do AuditLog (Marco Civil Art. 15 — #116)
+
+Varredura diária para cumprimento da obrigação legal de retenção de 6 meses (180 dias):
+
+```bash
+DATABASE_URL='postgres://...' node /app/scripts/expurgo-audit-log.mjs
+```
+
+1. **Pseudonimização de logs órfãos:** invoca `app_pseudonimizar_audit_log_orfao()`, tratando logs onde `ator_id IS NULL` devido ao `ON DELETE SET NULL` no apagamento da conta de um usuário.
+2. **Expurgo físico:** invoca `app_expurgar_audit_log_expirado()`, removendo do banco apenas registros com `criado_em < NOW() - INTERVAL '180 days'`.
+

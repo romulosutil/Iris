@@ -5,9 +5,11 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
+import { hasDb } from "./integration-env";
 
-const hasDb = !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 
 // UUIDs fixos de seed mínimo (clínica + paciente + user).
 const CLINIC = "00000000-0000-0000-0000-0000000000c1";
@@ -53,7 +55,8 @@ describe.skipIf(!hasDb)("report — constraints de banco", () => {
   });
 
   test("report rascunho válido insere e payload_versao default = 1", async () => {
-    const [r] = await owner!`INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, payload)
+    const [r] =
+      await owner!`INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, payload)
              VALUES (${CLINIC}, ${PATIENT}, 'familia', '2026-01-01', '2026-01-31', '{"x":1}'::jsonb)
              RETURNING payload_versao, status`;
     expect(r!.payload_versao).toBe(1);

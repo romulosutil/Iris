@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import postgres from "postgres";
+import { hasDb } from "@tests/integration-env";
 
 // queries.ts é puro (sem next/headers), mas seguimos o mesmo padrão do resto
 // da suíte de integração: mock de server-only + import dinâmico após mocks.
@@ -11,8 +12,6 @@ const { withTenant } = await import("@/db/rls");
 const { session } = await import("@/db/schema");
 const { eq } = await import("drizzle-orm");
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-
 const CLINIC_A = "11111111-1111-1111-1111-111111111111";
 const U_COORD = "a0000000-0000-0000-0000-000000000001";
 const U_T1 = "a0000000-0000-0000-0000-000000000002";
@@ -22,8 +21,16 @@ const FALTA_ID = "dddddddd-0000-0000-0000-000000000001";
 
 let owner: ReturnType<typeof postgres>;
 
-const ctxCoord = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
-const ctxAdmin = { clinicId: CLINIC_A, userId: U_ADMIN, role: "admin_recepcao" } as const;
+const ctxCoord = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
+const ctxAdmin = {
+  clinicId: CLINIC_A,
+  userId: U_ADMIN,
+  role: "admin_recepcao",
+} as const;
 const ctxT1 = { clinicId: CLINIC_A, userId: U_T1, role: "terapeuta" } as const;
 
 describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
@@ -86,8 +93,22 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
 
   test("rejeita disciplina fora do vocabulário da clínica", async () => {
     await expect(
-      criarRegra(ctxCoord, { ...regraValida, diaSemana: 2, disciplina: "inexistente" }),
+      criarRegra(ctxCoord, {
+        ...regraValida,
+        diaSemana: 2,
+        disciplina: "inexistente",
+      }),
     ).rejects.toThrow(/disciplina/i);
+  });
+
+  test("rejeita regra se terapeutaId não possui papel de terapeuta", async () => {
+    await expect(
+      criarRegra(ctxCoord, {
+        ...regraValida,
+        terapeutaId: U_COORD, // U_COORD é coordenador, não terapeuta
+        diaSemana: 3,
+      }),
+    ).rejects.toThrow(/não é terapeuta/i);
   });
 
   const avulsaValida = {
@@ -100,6 +121,15 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
     duracaoMin: 60,
     modalidade: "presencial" as const,
   };
+
+  test("rejeita avulsa se terapeutaId não possui papel de terapeuta", async () => {
+    await expect(
+      criarAvulsa(ctxCoord, {
+        ...avulsaValida,
+        terapeutaId: U_COORD,
+      }),
+    ).rejects.toThrow(/não é terapeuta/i);
+  });
 
   test("reposição grava repostaDe apontando a falta original", async () => {
     await criarAvulsa(ctxCoord, { ...avulsaValida, repostaDe: FALTA_ID });
