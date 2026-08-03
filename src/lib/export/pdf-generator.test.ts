@@ -1,9 +1,33 @@
 import { describe, it, expect } from "vitest";
 import {
+  comporSecoesProntuarioIntegral,
   gerarHashPdf,
   gerarPdfProntuario,
   montarDetalheAuditoriaExportacao,
 } from "./pdf-generator";
+
+describe("comporSecoesProntuarioIntegral", () => {
+  it("constrói seções clínicas formatadas para o prontuário integral", () => {
+    const secoes = comporSecoesProntuarioIntegral({
+      planoTerapeutico: "Intervenção comportamental intensiva 20h/semana",
+      responsavelTecnico: {
+        nome: "Dra. Ana Silva",
+        conselho: "CRP 06/123456",
+        registro: "123456",
+      },
+      evolucoes: [
+        { data: "2026-08-01", profissional: "Carlos Lima", texto: "Treino de contato visual." },
+      ],
+      metasResumo: "3 metas atingidas no período.",
+    });
+
+    expect(secoes).toHaveLength(4);
+    expect(secoes[0].titulo).toContain("Plano Terapêutico");
+    expect(secoes[1].conteudo).toContain("Dra. Ana Silva");
+    expect(secoes[2].conteudo).toContain("Treino de contato visual");
+    expect(secoes[3].titulo).toContain("Matriz de Evolução");
+  });
+});
 
 describe("gerarHashPdf", () => {
   it("calcula o hash SHA-256 exato de 64 caracteres hex de um buffer de PDF", () => {
