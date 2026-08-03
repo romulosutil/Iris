@@ -15,6 +15,60 @@ export interface DadosProntuarioExport {
   secoes: SecaoProntuario[];
 }
 
+export interface InputComposicaoProntuario {
+  planoTerapeutico?: string;
+  responsavelTecnico?: { nome: string; registro: string; conselho: string };
+  evolucoes?: Array<{ data: string; profissional: string; texto: string }>;
+  metasResumo?: string;
+}
+
+/**
+ * Constrói a lista estruturada de seções clínicas para o Prontuário Integral
+ * em conformidade com as exigências de auditoria de planos de saúde.
+ */
+export function comporSecoesProntuarioIntegral(
+  input: InputComposicaoProntuario,
+): SecaoProntuario[] {
+  const secoes: SecaoProntuario[] = [];
+
+  if (input.planoTerapeutico) {
+    secoes.push({
+      titulo: "1. Plano Terapêutico Singular (PTS)",
+      conteudo: input.planoTerapeutico,
+    });
+  }
+
+  if (input.responsavelTecnico) {
+    secoes.push({
+      titulo: "2. Responsável Técnico pelo Prontuário",
+      conteudo: `Nome: ${input.responsavelTecnico.nome} | Conselho: ${input.responsavelTecnico.conselho} | Registro: ${input.responsavelTecnico.registro}`,
+    });
+  }
+
+  if (input.evolucoes && input.evolucoes.length > 0) {
+    const textoEvolucoes = input.evolucoes
+      .map(
+        (ev, index) =>
+          `[Sessão ${index + 1} - ${ev.data}] Profissional: ${ev.profissional}\nEvolução: ${ev.texto}`,
+      )
+      .join("\n\n");
+
+    secoes.push({
+      titulo: "3. Histórico de Evoluções Clínicas Factuais",
+      conteudo: textoEvolucoes,
+    });
+  }
+
+  if (input.metasResumo) {
+    secoes.push({
+      titulo: "4. Matriz de Evolução de Metas e Marcos",
+      conteudo: input.metasResumo,
+    });
+  }
+
+  return secoes;
+}
+
 /**
  * Calcula o Hash SHA-256 exato (64 caracteres hex) de um buffer de PDF.
  */
