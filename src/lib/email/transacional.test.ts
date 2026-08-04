@@ -36,4 +36,26 @@ describe("enviarEmailTransacional", () => {
       enviarEmailTransacional({ para: "a@b.com", assunto: "x", texto: "y", html: "<p>y</p>" }),
     ).resolves.toEqual({ enviado: false });
   });
+
+  it("retorna enviado: false e emite warning quando remetente ou apiKey estiverem ausentes", async () => {
+    delete process.env.RESEND_FROM_EMAIL;
+    delete process.env.EMAIL_REMETENTE;
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { enviarEmailTransacional } = await import("./transacional");
+    const r = await enviarEmailTransacional({
+      para: "pessoa@exemplo.com.br",
+      assunto: "Teste",
+      texto: "Texto",
+      html: "<p>Texto</p>",
+    });
+
+    expect(r.enviado).toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Chave de API ou remetente não configurados"),
+    );
+    expect(enviar).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
 });

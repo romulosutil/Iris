@@ -21,9 +21,7 @@ export async function enviarEmailTransacional(
   const apiKey =
     process.env.EMAIL_PROVIDER_API_KEY || process.env.RESEND_API_KEY;
   const remetente =
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.EMAIL_REMETENTE ||
-    "notificacoes@irisclinica.ia.br";
+    process.env.RESEND_FROM_EMAIL || process.env.EMAIL_REMETENTE;
 
   if (!apiKey || !remetente) {
     console.warn(
