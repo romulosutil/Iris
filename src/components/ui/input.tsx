@@ -200,19 +200,20 @@ export const InputSenha = React.forwardRef<any, InputProps>(
     const [visivel, setVisivel] = React.useState(false);
     return (
       <Input
+        {...props}
         ref={ref}
         type={visivel ? "text" : "password"}
         suffixAction={
           <button
             type="button"
+            disabled={props.disabled}
             onClick={() => setVisivel((v) => !v)}
-            className="flex items-center justify-center p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:outline-focus rounded transition-colors"
+            className="flex items-center justify-center p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:outline-focus rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={visivel ? "Ocultar senha" : "Exibir senha em texto"}
           >
             {visivel ? <IconeOlhoFechado /> : <IconeOlhoAberto />}
           </button>
         }
-        {...props}
       />
     );
   },
