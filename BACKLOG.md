@@ -119,17 +119,54 @@ lento); falha ao aplicar deixa `aplicado_em` NULL para reprocessamento, nunca
 - `ctx-forjavel-guard` verde: a action nova respeita `logic.ts`/`actions.ts`.
 
 ### Aberto (não feito nesta sessão)
-- **Credenciais do Mercado Pago não provisionadas.** `MERCADOPAGO_ACCESS_TOKEN`
-  e `MERCADOPAGO_WEBHOOK_SECRET` só existem comentadas no `.env.example`. Sem
-  elas o webhook responde 401 a tudo — deploy sem segredo rejeita, nunca aceita.
-- **Nenhum evento real do Mercado Pago exercitado.** O HMAC está coberto por
-  teste com manifest escrito à mão, não contra notificação real. Vale o
-  precedente do Asaas (D5): o dialeto do destino real não aparece no dublê.
 - **Serviço `billing` do Easypanel não criado** — existe só no compose sob
   `profiles: ["billing"]`.
 - Sem tela de cancelamento de assinatura (a porta tem `cancelarAssinatura`).
 
 Spec: `docs/superpowers/specs/2026-08-03-issue-36-billing-mercadopago-implementacao.md`
+
+---
+
+## 🏁 Sessão 04/08/2026 — Webhook Mercado Pago provisionado e mergeado, HMAC verificado (#36)
+
+**Credenciais provisionadas + webhook registrado.** `MERCADOPAGO_ACCESS_TOKEN`,
+`MERCADOPAGO_PUBLIC_KEY`, `MERCADOPAGO_WEBHOOK_SECRET` e
+`BILLING_PROVIDER=mercado_pago` no Easypanel (`iris-app`). Webhook cadastrado no
+painel MP (`irisia`, app 2823356619359948) para produção + sandbox, eventos
+"Planos e assinaturas" + "Pagamentos (legacy)".
+
+**Dois defeitos achados e corrigidos, ambos por medição (curl), não por leitura de log:**
+
+1. A branch `docs/36-asaas-sandbox-evento-real` nunca tinha sido mergeada em
+   `main` — o build do Easypanel segue `main`, então a rota
+   `/api/hooks/mercadopago` simplesmente não existia em produção (404).
+   Comparado com a rota irmã `/api/hooks/asaas` (401 = existe) pra confirmar
+   que era problema de deploy, não de código. Corrigido: PR #192 aberto e
+   mergeado (autorização explícita do Rômulo em dois passos — abrir PR e
+   mergear foram confirmações separadas, porque merge em `main` dispara
+   autodeploy de produção).
+2. Pós-merge, toda POST na rota respondia 500. Log do Easypanel mostrou
+   `Error: BILLING_PROVIDER desconhecido: mercadopago` — env colada sem
+   underscore (`mercadopago` em vez de `mercado_pago`). `getBillingProvider()`
+   (`provider/index.ts:29`) lança antes de qualquer guard da própria rota,
+   então nenhum erro de infra real: 500 era 100% causado pelo valor da env.
+   Corrigido trocando pra `mercado_pago` (que é inclusive o default — a env
+   nem precisava existir).
+
+**Depois da correção:** `curl -X POST` sem assinatura → 401 `{"error":"não
+autorizado"}` — comportamento correto. Segredo do painel MP comparado campo a
+campo com o do Easypanel — idêntico, não é mismatch de credencial.
+
+**"Simular notificação" do painel MP também deu 401 contra produção.** Não é
+o mesmo bug: o simulador manda uma fixture fixa (`date: 2021-11-01` no corpo),
+e o `ts` do header `x-signature` provavelmente reflete essa mesma fixture
+velha — a checagem anti-replay (`JANELA_REPLAY_MS`, `mercado-pago.ts:205`)
+rejeita por *design*, protegendo contra replay de assinatura capturada. Mesmo
+precedente do Asaas (D5): simulador de gateway não reproduz o dialeto real
+(timestamp vivo) do evento de produção. **Pendência que continua aberta:**
+só uma assinatura real criada/atualizada no MP prova essa última milha.
+
+Spec atualizada: `docs/superpowers/specs/2026-08-03-issue-36-billing-mercadopago-implementacao.md`.
 
 ---
 
