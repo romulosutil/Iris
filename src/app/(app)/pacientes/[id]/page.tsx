@@ -72,34 +72,10 @@ export default async function PacientePage({ params }: PacientePageProps) {
           }
         />
 
-        {/* Navegação entre abas */}
-        <div className="border-[var(--border-brutal)] -mt-4 mb-2 flex border-b-2 overflow-x-auto scrollbar-none">
-          <Link
-            href={`/pacientes/${paciente.id}`}
-            className="font-display border-[var(--border-brutal)] bg-[var(--action-primary)] text-[var(--action-primary-fg)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 px-6 py-2 text-base font-bold shadow-xs"
-          >
-            Evolução
-          </Link>
-          <Link
-            href={`/pacientes/${paciente.id}/briefing`}
-            className="font-display text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
-          >
-            Briefing
-          </Link>
-          <Link
-            href={`/pacientes/${paciente.id}/ausencias`}
-            className="font-display text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
-          >
-            Ausências
-          </Link>
-          <Link
-            href={`/pacientes/${paciente.id}/horas`}
-            className="font-display text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-6 py-2 text-base font-semibold"
-          >
-            Horas
-          </Link>
-        </div>
-
+        {/* A faixa de abas vive em `layout.tsx` desde a Fatia C. Estava aqui,
+            hardcoded, e por isso só existia NESTA aba: quem entrasse em
+            "Briefing" ou "Horas" perdia a navegação e só voltava pelo botão do
+            browser. Além disso listava 4 das 7 rotas irmãs reais. */}
 
         {/* Estado Vazio ou Timeline */}
         {!temSnapshots ? (

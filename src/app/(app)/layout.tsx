@@ -3,11 +3,10 @@ import Link from "next/link";
 import { getTenantContext, listarClinicasDoUsuario } from "@/auth/tenant";
 import { Container } from "@/components/ui/layout";
 import { Banner } from "@/components/ui/banner";
-import { resolverFaixaTrial } from "@/lib/trial";
 import { FaixaTrial } from "@/components/app/faixa-trial";
 import { estadoEstagio2 } from "./alertas-risco/queries";
 import { listarPendencias } from "./pendencias/queries";
-import { obterDadosTrialDaClinica } from "./queries";
+import { obterSituacaoConta } from "./queries";
 import { SignOutButton } from "./sign-out-button";
 import { AppHeader, type NavItem } from "./app-header";
 
@@ -23,13 +22,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // este banner pode não ter acesso clínico ao caso (H3 aplicado à tela).
   const { quantidade: riscoEstagio2, protocoloInterno } = await estadoEstagio2(ctx);
 
-  // Fatia A — dados de trial para exibir a faixa
-  const dadosTrial = await obterDadosTrialDaClinica(ctx);
-  // `null` = clínica fora do relógio de trial (isenta/sem trial) → faixa não
-  // aparece. Negativo = trial encerrado → a faixa APARECE, com o estado
-  // "terminou". `aguardandoPrimeiroPaciente` = relógio ainda não disparou
-  // (#175) → aparece sem contagem.
-  const faixaTrial = resolverFaixaTrial(dadosTrial);
+  // Situação da conta: é ela — e não mais só o relógio de trial — que decide o
+  // que a faixa mostra. Assinante pagante e trial vencido eram indistinguíveis
+  // enquanto `resolverFaixaTrial` decidia sozinho (#163).
+  const situacaoConta = await obterSituacaoConta(ctx);
 
   let itemsNav: NavItem[] = [];
 
@@ -98,12 +94,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </Banner>
         </Container>
       ) : null}
-      {faixaTrial !== null ? (
-        <FaixaTrial
-          diasRestantes={faixaTrial.diasRestantes}
-          aguardandoPrimeiroPaciente={faixaTrial.aguardandoPrimeiroPaciente}
-        />
-      ) : null}
+      <FaixaTrial
+        estado={situacaoConta.estado}
+        diasRestantes={situacaoConta.diasRestantesTrial}
+      />
       <Container como="main" largura="md" className="flex-1 py-6 sm:py-10">
         {children}
       </Container>
