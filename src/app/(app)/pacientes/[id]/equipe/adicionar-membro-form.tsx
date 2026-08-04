@@ -92,7 +92,7 @@ export function AdicionarMembroForm({
             <Field label="Especifique a disciplina" htmlFor="disciplinaCustom" className="md:col-span-2">
               <Input
                 id="disciplinaCustom"
-                name="disciplina"
+                name="disciplinaCustom"
                 required
                 placeholder="Ex.: Psicomotricidade"
               />

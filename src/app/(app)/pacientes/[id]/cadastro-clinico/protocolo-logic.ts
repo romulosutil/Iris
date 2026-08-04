@@ -43,15 +43,6 @@ export async function obterOuInicializarProtocolosDaClinica(
   tx: any,
   clinicId: string,
 ) {
-  await tx.execute(sql`
-    INSERT INTO protocol_familia_catalogo (id, nome, descricao) VALUES
-      ('aba_marcos_desenvolvimento', 'ABA — marcos de desenvolvimento', 'Protocolos de marcos (ex.: VB-MAPP, ABLLS-R, AFLS)'),
-      ('intervencao_naturalista', 'Intervenção naturalista', 'Modelos naturalistas (ex.: Denver/ESDM)'),
-      ('fonoaudiologia', 'Fonoaudiologia', 'Protocolos de linguagem e comunicação (ex.: PROC, ABFW, MBGR)'),
-      ('terapia_ocupacional', 'Terapia ocupacional', 'Protocolos de integração sensorial e AVDs (ex.: PEDI, Perfil Sensorial 2, DCDQ)')
-    ON CONFLICT (id) DO NOTHING;
-  `);
-
   let catalogo = await tx
     .select()
     .from(protocol)

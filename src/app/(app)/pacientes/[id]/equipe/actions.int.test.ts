@@ -82,4 +82,26 @@ describe.skipIf(!hasDb)("equipe actions", () => {
     );
     expect(encerrado?.vigenciaFim).not.toBeNull();
   });
+
+  test("adiciona membro com disciplina customizada quando selecionado Outra", async () => {
+    const result = await adicionarMembroEquipe(
+      ctx,
+      PATIENT,
+      form({
+        userId: U_TERA,
+        disciplina: "Outra",
+        disciplinaCustom: "Psicomotricidade",
+        papelNaEquipe: "terapeuta_referencia",
+      }),
+    );
+    expect(result.error).toBeUndefined();
+    const membros = await withTenant(ctx, (db) =>
+      db
+        .select()
+        .from(careTeamMembership)
+        .where(eq(careTeamMembership.patientId, PATIENT)),
+    );
+    const membroCustom = membros.find((m) => m.disciplina === "Psicomotricidade");
+    expect(membroCustom).toBeDefined();
+  });
 });
