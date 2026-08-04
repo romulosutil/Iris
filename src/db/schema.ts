@@ -136,6 +136,8 @@ export const appUser = pgTable("app_user", {
   conselho: text("conselho"),
   registroNumero: text("registro_numero"),
   registroUf: text("registro_uf"),
+  // Flag de administrador global/plataforma (#184). Dá acesso ao backoffice /benjamin.
+  isSuperAdmin: boolean("is_super_admin").notNull().default(false),
 });
 
 // Fase 6.2b — tabela do plugin twoFactor (Better-Auth). Chaves em camelCase = o

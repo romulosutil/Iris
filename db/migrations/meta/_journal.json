@@ -505,6 +505,13 @@
       "when": 1785422580000,
       "tag": "0071_billing_assinatura_e_ciclo",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1785422581000,
+      "tag": "0072_super_admin_role",
+      "breakpoints": true
     }
   ]
 }
