@@ -37,9 +37,9 @@ describe("enviarEmailTransacional", () => {
     ).resolves.toEqual({ enviado: false });
   });
 
-  it("retorna enviado: false e emite warning quando remetente ou apiKey estiverem ausentes", async () => {
-    delete process.env.RESEND_FROM_EMAIL;
-    delete process.env.EMAIL_REMETENTE;
+  it("retorna enviado: false e emite warning quando apiKey está ausente", async () => {
+    delete process.env.RESEND_API_KEY;
+    delete process.env.EMAIL_PROVIDER_API_KEY;
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const { enviarEmailTransacional } = await import("./transacional");
@@ -57,5 +57,24 @@ describe("enviarEmailTransacional", () => {
     expect(enviar).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
+  });
+
+  it("usa remetente default quando RESEND_FROM_EMAIL e EMAIL_REMETENTE estão ausentes", async () => {
+    delete process.env.RESEND_FROM_EMAIL;
+    delete process.env.EMAIL_REMETENTE;
+    enviar.mockResolvedValue({ data: { id: "abc" }, error: null });
+
+    const { enviarEmailTransacional } = await import("./transacional");
+    const r = await enviarEmailTransacional({
+      para: "pessoa@exemplo.com.br",
+      assunto: "Teste",
+      texto: "Texto",
+      html: "<p>Texto</p>",
+    });
+
+    expect(r.enviado).toBe(true);
+    expect(enviar).toHaveBeenCalledWith(
+      expect.objectContaining({ from: "notificacoes@irisclinica.ia.br" }),
+    );
   });
 });
