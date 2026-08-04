@@ -66,13 +66,13 @@ export const SelectContent = React.forwardRef<
         ref={ref}
         position={position}
         className={cn(
-          "bg-[var(--surface-elevated)] border-2 border-[var(--border-brutal)] text-[var(--text-primary)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden",
+          "bg-[var(--surface-elevated)] border-2 border-[var(--border-brutal)] text-[var(--text-primary)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] z-50 min-w-[var(--radix-select-trigger-width)] max-h-64 overflow-hidden",
           position === "popper" && "mt-1",
           className,
         )}
         {...props}
       >
-        <SelectPrimitive.Viewport className="p-1">
+        <SelectPrimitive.Viewport className="p-1 max-h-64 overflow-y-auto">
           {children}
         </SelectPrimitive.Viewport>
       </SelectPrimitive.Content>

@@ -14,18 +14,21 @@ export const metadata = {
  */
 export default function CadastroPage() {
   return (
-    <div className="flex w-full max-w-sm flex-col gap-8">
-      <div className="flex flex-col items-center gap-4 text-center">
-        <Logo altura={40} aria-label="Iris" />
+    <div className="flex w-full max-w-xl flex-col gap-6 my-4">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <Logo altura={44} aria-label="Iris" />
         <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">
-          Criar conta
+          Criar conta no Iris
         </h1>
+        <p className="text-sm text-[var(--text-secondary)]">
+          Governança clínica, dossiês automatizados e evidências rastreáveis.
+        </p>
       </div>
 
       <div
         className={surface("solida", {
           radius: "control",
-          className: "bg-[var(--surface-card)] p-6",
+          className: "bg-[var(--surface-card)] p-6 sm:p-8",
         })}
       >
         <CadastroForm />
