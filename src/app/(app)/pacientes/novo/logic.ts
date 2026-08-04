@@ -4,34 +4,35 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { patient, consent, patientAlvoDisciplina } from "@/db/schema";
 import {
-  avaliarGateCadastroPaciente,
-  mensagemDeBloqueio,
-  type MotivoBloqueio,
-} from "@/lib/billing/gate";
+  avaliarSituacaoConta,
+  mensagemDeEstado,
+  type EstadoConta,
+} from "@/lib/billing/estado-conta";
+import type { BloqueioConta } from "@/lib/billing/guard-escrita";
 
 /**
- * Sinaliza bloqueio comercial de dentro da transação. Precisa ser um throw, e
- * não um `return`, porque a decisão acontece dentro do callback do
+ * Sinaliza conta em somente-leitura de dentro da transação. Precisa ser um
+ * throw, e não um `return`, porque a decisão acontece dentro do callback do
  * `withTenant`: um return ali devolveria o valor mas deixaria a transação
  * seguir seu curso normal. Lançar garante o ROLLBACK — o cadastro bloqueado
  * não pode deixar rastro parcial.
  */
 class BloqueioBillingError extends Error {
-  constructor(readonly motivo: MotivoBloqueio) {
-    super(mensagemDeBloqueio(motivo));
+  constructor(readonly estado: EstadoConta) {
+    super(mensagemDeEstado(estado));
     this.name = "BloqueioBillingError";
   }
 }
 
 /**
- * `bloqueioBilling` existe separado de `error` porque o formulário reage de
- * forma diferente: `error` é texto de validação, enquanto bloqueio de cobrança
- * (#36) abre o fluxo de ativação da assinatura. Um único campo de string
- * obrigaria a UI a inferir a intenção pelo texto da mensagem.
+ * `bloqueioConta` existe separado de `error` porque o formulário reage de
+ * forma diferente: `error` é texto de validação, enquanto conta em
+ * somente-leitura (#163) abre o fluxo de ativação da assinatura. Um único campo
+ * de string obrigaria a UI a inferir a intenção pelo texto da mensagem.
  */
 export type CadastroAdminState = {
   error?: string;
-  bloqueioBilling?: { motivo: MotivoBloqueio; mensagem: string };
+  bloqueioConta?: BloqueioConta;
 };
 
 // Versões de termo vigentes, uma por tipo de titular. Fixas por ora; viram
@@ -123,12 +124,18 @@ export async function criarPacienteEConsent(
 
   try {
     const id = await withTenant(ctx, async (tx) => {
-      // Gate de cobrança (#36) ANTES do primeiro INSERT, e dentro da MESMA
-      // transação: avaliado fora dela, dois cadastros simultâneos numa clínica
-      // virgem leriam ambos "sem paciente" e criariam dois pacientes sob uma
-      // cobrança só. Aqui os dois competem pela mesma imagem do banco.
-      const gate = await avaliarGateCadastroPaciente(tx, ctx.clinicId);
-      if (!gate.permitido) throw new BloqueioBillingError(gate.motivo);
+      // Situação da conta ANTES do primeiro INSERT, e dentro da MESMA
+      // transação: avaliada fora dela, a decisão poderia enxergar um estado de
+      // assinatura diferente do que o INSERT enxerga, e um rollback do cadastro
+      // não reverteria a decisão junto.
+      //
+      // No 1º cadastro a clínica está em `free_tier` com `trial_comeco_em
+      // IS NULL` e dentro do teto de 14 dias → `trial_aguardando` → passa. Não
+      // há chicken-and-egg com `app_iniciar_trial()` lá embaixo.
+      const situacao = await avaliarSituacaoConta(tx, ctx.clinicId);
+      if (!situacao.podeCadastrarPaciente) {
+        throw new BloqueioBillingError(situacao.estado);
+      }
 
       const [novo] = await tx
         .insert(patient)
@@ -232,7 +239,7 @@ export async function criarPacienteEConsent(
     if (e instanceof BloqueioBillingError) {
       return {
         error: e.message,
-        bloqueioBilling: { motivo: e.motivo, mensagem: e.message },
+        bloqueioConta: { estado: e.estado, mensagem: e.message },
       };
     }
     return { error: e instanceof Error ? e.message : "Falha ao cadastrar paciente." };

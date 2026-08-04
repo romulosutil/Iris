@@ -270,56 +270,136 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     expect(ia.responsavelSignatario).toBe("Pai do Menor");
     expect(ia.versaoTermo).toBe("v1");
   });
-  // ── Gate de cobrança (#36) ──────────────────────────────────────────────
-  // O cadastro do 1º paciente é o gatilho comercial: sem assinatura ativa ele
-  // é recusado, e a recusa tem que ser TOTAL — um paciente gravado com a
-  // cobrança bloqueada seria serviço prestado de graça e, pior, dado clínico
-  // órfão de contrato.
-  describe("gate de cobrança", () => {
+  // ── Situação da conta (#163+#159) ───────────────────────────────────────
+  // O cadastro do 1º paciente é o gatilho do RELÓGIO, não da cobrança: ele
+  // passa sem cartão e dispara o trial. Quem bloqueia é o fim do teste — e o
+  // bloqueio é somente-leitura, não "assine para começar".
+  //
+  // Estes casos são a inversão explícita dos que existiam aqui antes, quando
+  // `free_tier` e `setup_pending` recusavam o cadastro. Aquela recusa era o
+  // deadlock: o gate rodava ANTES de `app_iniciar_trial()`, então o trial nunca
+  // começava para ninguém.
+  describe("situação da conta", () => {
     async function porStatus(status: string) {
       await owner`UPDATE subscription SET status = ${status}::subscription_status WHERE clinic_id = ${CLINIC_A}`;
+    }
+    /** Empurra o relógio para trás o bastante para o trial ter vencido. */
+    async function expirarTrial() {
+      await owner`UPDATE clinic SET trial_comeco_em = now() - interval '90 days' WHERE id = ${CLINIC_A}`;
+    }
+    async function reiniciarTrial() {
+      await owner`UPDATE clinic SET trial_comeco_em = now() WHERE id = ${CLINIC_A}`;
     }
 
     afterAll(async () => {
       await porStatus("active");
+      await reiniciarTrial();
     });
 
-    test("free_tier bloqueia o cadastro e NÃO grava paciente nenhum", async () => {
+    test("free_tier com trial vigente CADASTRA e grava trial_comeco_em", async () => {
       await porStatus("free_tier");
+      await owner`UPDATE clinic SET trial_comeco_em = NULL WHERE id = ${CLINIC_A}`;
+
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente Do Trial",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+        }),
+      );
+
+      expect(res.bloqueioConta).toBeUndefined();
+      expect(res.id).toBeTruthy();
+      // O relógio disparou na MESMA transação do cadastro.
+      const clinica =
+        await owner`SELECT trial_comeco_em FROM clinic WHERE id = ${CLINIC_A}`;
+      expect(clinica[0]!.trial_comeco_em).not.toBeNull();
+    });
+
+    test("2º paciente ainda em free_tier também passa", async () => {
+      await porStatus("free_tier");
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Segundo Paciente",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+        }),
+      );
+      expect(res.bloqueioConta).toBeUndefined();
+      expect(res.id).toBeTruthy();
+    });
+
+    test("setup_pending durante o trial passa — ativar não pode piorar a situação", async () => {
+      await porStatus("setup_pending");
+      await reiniciarTrial();
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente Ativando",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+        }),
+      );
+      expect(res.bloqueioConta).toBeUndefined();
+      expect(res.id).toBeTruthy();
+    });
+
+    test("trial expirado em free_tier bloqueia e NÃO grava paciente nenhum", async () => {
+      await porStatus("free_tier");
+      await expirarTrial();
       const antes = await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
 
       const res = await criarPacienteEConsent(
         ctx,
         form({
-          nome: "Paciente Bloqueado",
+          nome: "Paciente Pos Trial",
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
         }),
       );
 
       expect(res.id).toBeUndefined();
-      expect(res.bloqueioBilling?.motivo).toBe("ativacao_requerida");
-      // A transação inteira reverteu: nem paciente, nem consent, nem trial.
+      expect(res.bloqueioConta?.estado).toBe("trial_expirado");
+      // A transação inteira reverteu: nem paciente, nem consent.
       const depois = await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
       expect(depois[0]!.n).toBe(antes[0]!.n);
     });
 
-    test("setup_pending bloqueia com motivo próprio (cobrança em voo)", async () => {
+    test("trial expirado em setup_pending vira pagamento_em_processamento", async () => {
       await porStatus("setup_pending");
+      await expirarTrial();
       const res = await criarPacienteEConsent(
         ctx,
         form({
-          nome: "Paciente Pendente",
+          nome: "Paciente Pagando",
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
         }),
       );
       expect(res.id).toBeUndefined();
-      expect(res.bloqueioBilling?.motivo).toBe("pagamento_pendente");
+      expect(res.bloqueioConta?.estado).toBe("pagamento_em_processamento");
+    });
+
+    test("canceled bloqueia mesmo com trial nominalmente vigente", async () => {
+      await porStatus("canceled");
+      await reiniciarTrial();
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente Cancelado",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+        }),
+      );
+      expect(res.id).toBeUndefined();
+      expect(res.bloqueioConta?.estado).toBe("cancelada");
     });
 
     test("past_due NÃO bloqueia — inadimplência não tranca prontuário", async () => {
       await porStatus("past_due");
+      await expirarTrial();
       const res = await criarPacienteEConsent(
         ctx,
         form({
@@ -328,12 +408,13 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           responsavelSignatario: "Mãe",
         }),
       );
-      expect(res.bloqueioBilling).toBeUndefined();
+      expect(res.bloqueioConta).toBeUndefined();
       expect(res.id).toBeTruthy();
     });
 
-    test("clínica isenta (legado pré-cobrança) passa mesmo em free_tier", async () => {
+    test("clínica isenta (legado pré-cobrança) passa mesmo com trial vencido", async () => {
       await porStatus("free_tier");
+      await expirarTrial();
       await owner`UPDATE clinic SET isento_trial = true WHERE id = ${CLINIC_A}`;
       try {
         const res = await criarPacienteEConsent(
@@ -344,7 +425,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
             responsavelSignatario: "Mãe",
           }),
         );
-        expect(res.bloqueioBilling).toBeUndefined();
+        expect(res.bloqueioConta).toBeUndefined();
         expect(res.id).toBeTruthy();
       } finally {
         await owner`UPDATE clinic SET isento_trial = false WHERE id = ${CLINIC_A}`;
