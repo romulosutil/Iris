@@ -16,11 +16,11 @@ export function LandingDeciderFaqGrid() {
     },
     {
       question: "Cadastrar mais um terapeuta aumenta minha fatura?",
-      answer: "Não. A cobrança é por paciente ativo; usuários são ilimitados — inclusive fono, TO e coordenação no mesmo prontuário.",
+      answer: "Não. A cobrança é por ficha ativa no mês; usuários são ilimitados — inclusive fono, TO e coordenação no mesmo prontuário.",
     },
     {
       question: "Se eu cancelar, o que acontece com o histórico dos pacientes?",
-      answer: "Exportação integral em PDF e JSON, a qualquer momento, sem pedir para o suporte. Paciente arquivado sai da fatura e continua legível.",
+      answer: "Exportação integral em PDF e JSON, a qualquer momento, sem pedir para o suporte. Ficha sem movimento no mês não entra na fatura e continua legível.",
     },
     {
       question: "Quem responde pela LGPD se vazar?",

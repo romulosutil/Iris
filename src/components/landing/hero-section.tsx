@@ -52,7 +52,7 @@ export function LandingHeroSection() {
             ✓ Equipe Ilimitada
           </span>
           <span className="bg-[#F2B705] border-2 border-black px-3 py-1 rounded-[var(--radius-control,5px)] shadow-[2px_2px_0px_#000] text-black">
-            ★ Pague por Paciente Ativo
+            ★ Pague por Ficha Ativa
           </span>
         </div>
 
@@ -86,10 +86,23 @@ export function LandingHeroSection() {
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs font-semibold text-[var(--text-secondary,#71717A)] font-mono">
             <span>✓ Conta e equipe sem custo</span>
             <span>·</span>
-            <span>✓ 7 dias sem cobrança por paciente</span>
+            <span>✓ 7 dias de teste a partir do 1º paciente</span>
             <span>·</span>
             <span>✓ Sem cartão de crédito no cadastro</span>
           </div>
+          {/*
+            O relógio do teste começa no cadastro do primeiro paciente, não no
+            cadastro da conta — dizer "a partir do cadastro" seria falso. E o fim
+            do teste não bloqueia a conta nem dispara cobrança automática: a conta
+            passa a somente-leitura com exportação livre. Prometer aqui o que a
+            entrega faz é o que evita a conversa cara depois.
+          */}
+          <p className="font-mono text-[11px] text-[var(--text-secondary,#71717A)] leading-relaxed">
+            Os 7 dias começam a correr quando você cadastra o primeiro paciente.
+            No fim do teste nada é cobrado sem você contratar: a conta passa a{" "}
+            <strong className="font-bold">somente-leitura</strong>, com o
+            histórico inteiro visível e exportável em PDF e JSON.
+          </p>
         </div>
       </div>
 

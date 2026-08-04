@@ -11,10 +11,47 @@ import {
 import { eq, sql, ilike, or, desc, count } from "drizzle-orm";
 import { calcularMensalidadeCentavos } from "@/lib/billing/calculator";
 
+/**
+ * ## Por que o MRR daqui é ESTIMATIVA, e qual é exatamente a divergência
+ *
+ * O critério de faturamento real (migração 0075, função `billing_apurar_ciclo`)
+ * é: fatura-se a ficha **(a)** cadastrada dentro do ciclo **OU (b)** com
+ * interação registrada nele (sessão agendada, check-in, evolução em prontuário
+ * ou evidência aprovada). O critério **(c)** "não arquivado" SAIU.
+ *
+ * As queries abaixo continuam usando **(c)**. Isso é deliberado, por dois
+ * motivos que pesam mais que a precisão do número:
+ *
+ * 1. **(a)+(b) só existe dentro de um ciclo.** A apuração real é
+ *    `billing_apurar_ciclo(cycle_id)` — recebe uma linha de `billing_cycle` e
+ *    lê a janela `[inicio, fim)` dela. Clínica em trial, isenta ou recém-criada
+ *    não tem ciclo nenhum aberto, e o backoffice precisa mostrar uma linha para
+ *    todas elas. Não existe número (a)+(b) honesto para quem não tem ciclo.
+ * 2. **Reimplementar o predicado em Drizzle criaria a QUARTA definição.** O que
+ *    a 0075 foi consertar foi justamente haver três definições incompatíveis em
+ *    produção (a função SQL, o FAQ público e esta query). Copiar o predicado
+ *    para cá o deixaria livre para derivar do SQL na próxima mudança.
+ *
+ * **A divergência, nas duas direções** (não é um viés de mão única):
+ * - **superestima** quando há ficha na base sem movimento no ciclo — ela conta
+ *   aqui e não seria faturada. É o caso dominante e o de maior magnitude:
+ *   clínica em recesso aparece com MRR cheio aqui e fatura R$ 0,00 de verdade.
+ * - **subestima** quando uma ficha foi arquivada depois de ter tido movimento
+ *   no ciclo — ela é faturada e não aparece aqui.
+ *
+ * Quem quiser o número exato de um período fechado deve ler `billing_cycle`
+ * (`valor_centavos`) e `billing_cycle_patient`, que são o memorial auditável da
+ * fatura efetivamente emitida. Esta tela é termômetro comercial, não fatura.
+ */
 export interface SuperAdminKpis {
+  /**
+   * Teto de MRR pelo critério (c). Ver o bloco acima: para clínica em recesso
+   * este número é cheio e a fatura real é zero.
+   */
   mrrEstimadoCentavos: number;
   clinicasAtivas: number;
-  pacientesCobraveisTotais: number;
+  /** Fichas existentes na base e não arquivadas — NÃO é o que será faturado. */
+  fichasNaBaseTotais: number;
   clinicasEmTrial: number;
   clinicasIsentas: number;
 }
@@ -26,7 +63,7 @@ export interface SuperAdminClinicaItem {
   donoEmail: string | null;
   criadoEm: Date;
   status: "isenta" | "trial" | "ativa" | "inadimplente";
-  pacientesAtivosCount: number;
+  fichasNaBaseCount: number;
   valorEstimadoCentavos: number;
   diasTrialRestantes: number | null;
 }
@@ -99,7 +136,7 @@ export async function getSuperAdminKpis(): Promise<SuperAdminKpis> {
       trialDias: clinic.trialDias,
       criadoEm: clinic.criadoEm,
       subStatus: subscription.status,
-      pacientesAtivosCount: sql<number>`count(${patient.id}) filter (where ${patient.arquivadoEm} is null)::int`,
+      fichasNaBaseCount: sql<number>`count(${patient.id}) filter (where ${patient.arquivadoEm} is null)::int`,
     })
     .from(clinic)
     .leftJoin(subscription, eq(subscription.clinicId, clinic.id))
@@ -108,7 +145,7 @@ export async function getSuperAdminKpis(): Promise<SuperAdminKpis> {
 
   let mrrEstimadoCentavos = 0;
   let clinicasAtivas = 0;
-  let pacientesCobraveisTotais = 0;
+  let fichasNaBaseTotais = 0;
   let clinicasEmTrial = 0;
   let clinicasIsentas = 0;
 
@@ -121,24 +158,24 @@ export async function getSuperAdminKpis(): Promise<SuperAdminKpis> {
       row.subStatus,
     );
 
-    pacientesCobraveisTotais += row.pacientesAtivosCount;
+    fichasNaBaseTotais += row.fichasNaBaseCount;
 
     if (status === "isenta") {
       clinicasIsentas += 1;
       clinicasAtivas += 1;
     } else if (status === "ativa") {
       clinicasAtivas += 1;
-      mrrEstimadoCentavos += calcularMensalidadeCentavos(row.pacientesAtivosCount);
+      mrrEstimadoCentavos += calcularMensalidadeCentavos(row.fichasNaBaseCount);
     } else if (status === "trial") {
       clinicasEmTrial += 1;
-      mrrEstimadoCentavos += calcularMensalidadeCentavos(row.pacientesAtivosCount);
+      mrrEstimadoCentavos += calcularMensalidadeCentavos(row.fichasNaBaseCount);
     }
   }
 
   return {
     mrrEstimadoCentavos,
     clinicasAtivas,
-    pacientesCobraveisTotais,
+    fichasNaBaseTotais,
     clinicasEmTrial,
     clinicasIsentas,
   };
@@ -164,7 +201,7 @@ export async function getSuperAdminClinicas(opcoes?: {
       donoNome: appUser.name,
       donoEmail: appUser.email,
       subStatus: subscription.status,
-      pacientesAtivosCount: sql<number>`count(${patient.id}) filter (where ${patient.arquivadoEm} is null)::int`,
+      fichasNaBaseCount: sql<number>`count(${patient.id}) filter (where ${patient.arquivadoEm} is null)::int`,
     })
     .from(clinic)
     .leftJoin(appUser, eq(appUser.id, clinic.responsavelContaId))
@@ -189,7 +226,7 @@ export async function getSuperAdminClinicas(opcoes?: {
       row.subStatus,
     );
 
-    const valorEstimadoCentavos = status === "isenta" ? 0 : calcularMensalidadeCentavos(row.pacientesAtivosCount);
+    const valorEstimadoCentavos = status === "isenta" ? 0 : calcularMensalidadeCentavos(row.fichasNaBaseCount);
 
     return {
       id: row.id,
@@ -198,7 +235,7 @@ export async function getSuperAdminClinicas(opcoes?: {
       donoEmail: row.donoEmail,
       criadoEm: row.criadoEm,
       status,
-      pacientesAtivosCount: row.pacientesAtivosCount,
+      fichasNaBaseCount: row.fichasNaBaseCount,
       valorEstimadoCentavos,
       diasTrialRestantes: diasRestantes,
     };
@@ -208,7 +245,7 @@ export async function getSuperAdminClinicas(opcoes?: {
   if (ordenacao === "receita_desc") {
     resultado.sort((a, b) => b.valorEstimadoCentavos - a.valorEstimadoCentavos);
   } else if (ordenacao === "pacientes_desc") {
-    resultado.sort((a, b) => b.pacientesAtivosCount - a.pacientesAtivosCount);
+    resultado.sort((a, b) => b.fichasNaBaseCount - a.fichasNaBaseCount);
   } else {
     resultado.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime());
   }

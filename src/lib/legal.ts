@@ -36,7 +36,7 @@ export const DOCUMENTOS_LEGAIS: Record<SlugLegal, DocumentoLegalMeta> = {
     arquivo: "docs/legal/termos-de-uso.md",
     tituloFallback: "Termos de Uso",
     descricao:
-      "Termos de Uso do Iris — condições de contratação, período de teste, cobrança por paciente ativo e responsabilidades da clínica.",
+      "Termos de Uso do Iris — condições de contratação, período de teste, cobrança por ficha ativa e responsabilidades da clínica.",
   },
   privacidade: {
     slug: "privacidade",

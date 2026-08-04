@@ -65,7 +65,7 @@ export default async function SuperAdminClinicasPage({ searchParams }: PageProps
           >
             <option value="criado_em_desc">Data de Cadastro (Recentes)</option>
             <option value="receita_desc">Faturamento Estimado (Maior &rarr; Menor)</option>
-            <option value="pacientes_desc">Pacientes Ativos (Maior &rarr; Menor)</option>
+            <option value="pacientes_desc">Fichas na Base (Maior &rarr; Menor)</option>
           </select>
         </div>
       </form>
@@ -80,7 +80,7 @@ export default async function SuperAdminClinicasPage({ searchParams }: PageProps
                 <th className="px-4 py-3.5">Responsável / E-mail</th>
                 <th className="px-4 py-3.5">Cadastro</th>
                 <th className="px-4 py-3.5">Status</th>
-                <th className="px-4 py-3.5 text-right">Pacientes Ativos</th>
+                <th className="px-4 py-3.5 text-right">Fichas na Base</th>
                 <th className="px-4 py-3.5 text-right">Fatura Estimada</th>
                 <th className="px-4 py-3.5 text-center">Ações</th>
               </tr>
@@ -129,7 +129,7 @@ export default async function SuperAdminClinicasPage({ searchParams }: PageProps
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right font-mono text-slate-200">
-                      {c.pacientesAtivosCount}
+                      {c.fichasNaBaseCount}
                     </td>
                     <td className="px-4 py-4 text-right font-mono font-semibold text-teal-400">
                       {formatarBRL(c.valorEstimadoCentavos)}

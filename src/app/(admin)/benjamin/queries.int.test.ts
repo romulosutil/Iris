@@ -55,7 +55,7 @@ describe.skipIf(!hasDb)("Super Admin Queries — Zero-Knowledge LGPD & Metrics (
     expect(kpis.clinicasAtivas).toBe(1); // C1 isenta (ativa)
     expect(kpis.clinicasIsentas).toBe(1);
     expect(kpis.clinicasEmTrial).toBe(1); // C2 em trial
-    expect(kpis.pacientesCobraveisTotais).toBe(2); // P1 em C1 + P2 em C2 (P3 arquivado não conta)
+    expect(kpis.fichasNaBaseTotais).toBe(2); // P1 em C1 + P2 em C2 (P3 arquivado não conta)
     expect(kpis.mrrEstimadoCentavos).toBe(3900); // C2 em trial com 1 paciente ativo = 3900 centavos
   });
 
@@ -71,12 +71,12 @@ describe.skipIf(!hasDb)("Super Admin Queries — Zero-Knowledge LGPD & Metrics (
     expect(alfa?.nome).toBe("Clínica Alfa");
     expect(alfa?.donoEmail).toBe("dono@alfa.test");
     expect(alfa?.status).toBe("isenta");
-    expect(alfa?.pacientesAtivosCount).toBe(1);
+    expect(alfa?.fichasNaBaseCount).toBe(1);
 
     expect(beta).toBeDefined();
     expect(beta?.nome).toBe("Clínica Beta");
     expect(beta?.status).toBe("trial");
-    expect(beta?.pacientesAtivosCount).toBe(1);
+    expect(beta?.fichasNaBaseCount).toBe(1);
 
     // Garantia estrita de contracheque: nenhum objeto contém nome de paciente ou dados clínicos
     const stringified = JSON.stringify(clinicas);

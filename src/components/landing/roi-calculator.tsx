@@ -3,18 +3,37 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { Slider } from "@/components/ui/slider";
+import {
+  FAIXAS_PRECIFICACAO,
+  calculateMonthlyFee,
+} from "@/lib/billing/calculator";
+
+/**
+ * Rótulos das faixas derivados de `FAIXAS_PRECIFICACAO`, nunca digitados à mão.
+ * Antes este componente reimplementava as três faixas em JSX e num `if/else`
+ * próprio — preço duplicado em componente é exatamente como o valor exibido ao
+ * cliente descola do valor cobrado quando a tabela muda num lugar só.
+ */
+const DEGRAUS = FAIXAS_PRECIFICACAO.map((faixa, indice, todas) => {
+  const de = (todas[indice - 1]?.ateQuantidade ?? 0) + 1;
+  const ate = faixa.ateQuantidade;
+  return {
+    chave: `${de}-${ate ?? "mais"}`,
+    rotulo:
+      ate === null
+        ? `${de}+ fichas: R$ ${faixa.valorCentavos / 100}/mês`
+        : `${de} a ${ate} fichas: R$ ${faixa.valorCentavos / 100}/mês`,
+    de,
+    ate,
+  };
+});
 
 export function LandingRoiCalculator() {
   const [patients, setPatients] = useState<number>(25);
 
-  // Cálculo da fatura com desconto de escala por degrau marginal (Modelo oficial Iris/Asaas)
-  const calculateTotal = (n: number) => {
-    if (n <= 15) return n * 39;
-    if (n <= 40) return 15 * 39 + (n - 15) * 32;
-    return 15 * 39 + 25 * 32 + (n - 40) * 25;
-  };
-
-  const monthlyPrice = calculateTotal(patients);
+  // A conta é a MESMA função que emite a fatura (`src/lib/billing/calculator`),
+  // com as faixas marginais oficiais — o simulador não tem aritmética própria.
+  const monthlyPrice = calculateMonthlyFee(patients);
   const avgPricePerPatient = (monthlyPrice / patients).toFixed(2);
   const hoursSaved = (patients * 2.5).toFixed(1);
   const moneySaved = Math.round(patients * 2.5 * 60);
@@ -33,10 +52,10 @@ export function LandingRoiCalculator() {
           id="calculadora-title"
           className="font-display font-extrabold text-3xl sm:text-4xl md:text-5xl text-[var(--text-primary,#1A1A1A)]"
         >
-          Você paga por paciente. Nunca por quem trabalha nele.
+          Você paga por ficha ativa. Nunca por quem trabalha nela.
         </h2>
         <p className="text-[var(--text-secondary,#71717A)] font-medium text-base sm:text-lg">
-          A conta da clínica, a equipe inteira e o histórico não custam nada. Puxe a barra e veja a sua conta.
+          A conta da clínica, a equipe inteira e o histórico não custam nada. Ficha ativa é a que foi cadastrada no mês ou teve movimento nele — sessão, check-in, evolução ou evidência aprovada. Puxe a barra e veja a sua conta.
         </p>
       </div>
 
@@ -51,10 +70,10 @@ export function LandingRoiCalculator() {
                   htmlFor="patient-slider"
                   className="font-display font-bold text-lg text-[var(--text-primary,#1A1A1A)]"
                 >
-                  Pacientes ativos (cadastrados e não arquivados):
+                  Fichas ativas no mês (cadastradas ou com movimento):
                 </label>
                 <span className="font-mono text-2xl font-black bg-[var(--action-primary,#F2B705)] px-4 py-1 rounded-[var(--radius-control,5px)] border-2 border-[var(--border-brutal,#1A1A1A)] shadow-[var(--ds-shadow,2px_2px_0px_#1A1A1A)] self-start sm:self-auto">
-                  {patients} Pacientes
+                  {patients} Fichas
                 </span>
               </div>
 
@@ -65,30 +84,34 @@ export function LandingRoiCalculator() {
                 step={1}
                 value={[patients]}
                 onValueChange={(val) => setPatients(val[0] ?? 25)}
-                aria-label="Selecione a quantidade de pacientes ativos"
+                aria-label="Selecione a quantidade de fichas ativas no mês"
               />
               <div className="flex justify-between font-mono text-xs text-gray-600 font-bold">
-                <span>5 pacientes</span>
-                <span>50 pacientes</span>
-                <span>100 pacientes</span>
+                <span>5 fichas</span>
+                <span>50 fichas</span>
+                <span>100 fichas</span>
               </div>
             </div>
 
             {/* Degraus de Desconto por Volume */}
             <div className="p-4 bg-gray-50 border border-gray-300 rounded-[var(--radius-control,5px)] space-y-2 font-mono text-xs">
               <span className="font-bold text-[var(--text-primary,#1A1A1A)] block uppercase">
-                💡 Cadastrar mais um paciente nunca reprecifica os anteriores:
+                💡 Uma ficha ativa a mais nunca reprecifica as anteriores:
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-gray-700">
-                <div className={`p-2 rounded border ${patients <= 15 ? "bg-[var(--action-primary,#F2B705)] font-bold text-[#1A1A1A]" : "bg-white"}`}>
-                  1 a 15 pac: R$ 39/mês
-                </div>
-                <div className={`p-2 rounded border ${patients > 15 && patients <= 40 ? "bg-[var(--action-primary,#F2B705)] font-bold text-[#1A1A1A]" : "bg-white"}`}>
-                  16 a 40 pac: R$ 32/mês
-                </div>
-                <div className={`p-2 rounded border ${patients > 40 ? "bg-[var(--action-primary,#F2B705)] font-bold text-[#1A1A1A]" : "bg-white"}`}>
-                  41+ pac: R$ 25/mês
-                </div>
+                {DEGRAUS.map((degrau) => {
+                  const ativo =
+                    patients >= degrau.de &&
+                    (degrau.ate === null || patients <= degrau.ate);
+                  return (
+                    <div
+                      key={degrau.chave}
+                      className={`p-2 rounded border ${ativo ? "bg-[var(--action-primary,#F2B705)] font-bold text-[#1A1A1A]" : "bg-white"}`}
+                    >
+                      {degrau.rotulo}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -101,9 +124,9 @@ export function LandingRoiCalculator() {
                 </span>
               </div>
               <div className="flex justify-between items-center gap-2 pt-2 border-t border-gray-300">
-                <span className="text-gray-700 font-medium">Custo médio por paciente:</span>
+                <span className="text-gray-700 font-medium">Custo médio por ficha ativa:</span>
                 <span className="font-mono font-bold text-emerald-700">
-                  R$ {avgPricePerPatient.replace(".", ",")} /paciente/mês
+                  R$ {avgPricePerPatient.replace(".", ",")} /ficha/mês
                 </span>
               </div>
               <div className="flex justify-between items-center gap-2 pt-2 border-t border-gray-300">
@@ -120,7 +143,7 @@ export function LandingRoiCalculator() {
             </span>
             <div className="text-xs text-[var(--text-primary,#1A1A1A)] font-medium leading-relaxed">
               <strong className="font-bold block mb-0.5 text-xs sm:text-sm">Garantia de Custódia Legal dos Dados:</strong>
-              Pacientes arquivados saem imediatamente da fatura. Seus prontuários continuam acessíveis em modo <strong>somente-leitura gratuito e perpétuo</strong> com exportação em PDF/JSON a qualquer momento.
+              Ficha sem movimento no mês não entra na fatura — um mês inteiro de recesso fecha em R$ 0,00, com a base intacta. Os prontuários continuam acessíveis em modo <strong>somente-leitura gratuito e perpétuo</strong> com exportação em PDF/JSON a qualquer momento.
             </div>
           </div>
         </div>

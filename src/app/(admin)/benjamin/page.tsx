@@ -18,7 +18,7 @@ export default async function SuperAdminDashboardPage() {
           Visão Geral da Plataforma
         </h1>
         <p className="mt-1 text-slate-400 text-sm">
-          Métricas consolidadas de saúde financeira, pacientes cobráveis e trials ativos.
+          Métricas consolidadas de saúde financeira, base de fichas e trials ativos. O MRR aqui é TETO pelo critério &quot;ficha não arquivada&quot;: a fatura real conta só ficha cadastrada ou com movimento no ciclo (ver o bloco de comentário em queries.ts).
         </p>
       </div>
 
@@ -27,7 +27,7 @@ export default async function SuperAdminDashboardPage() {
         <KpiCard
           titulo="MRR Estimado"
           valor={formatarBRL(kpis.mrrEstimadoCentavos)}
-          subtitulo="Faturamento recorrente projetado"
+          subtitulo="Teto estimado — não é a fatura apurada"
           highlight
           badge={{ texto: "Pay-as-you-grow", cor: "emerald" }}
         />
@@ -40,16 +40,16 @@ export default async function SuperAdminDashboardPage() {
         />
 
         <KpiCard
-          titulo="Pacientes Cobráveis"
-          valor={kpis.pacientesCobraveisTotais}
-          subtitulo="Soma total de pacientes ativos"
+          titulo="Fichas na Base"
+          valor={kpis.fichasNaBaseTotais}
+          subtitulo="Fichas não arquivadas; nem toda ficha é faturada"
           badge={{ texto: "Base Total", cor: "slate" }}
         />
 
         <KpiCard
           titulo="Clínicas em Trial"
           valor={kpis.clinicasEmTrial}
-          subtitulo="Degustação de 14 dias"
+          subtitulo="7 dias a partir do 1º paciente"
           badge={{ texto: "Em Trial", cor: "amber" }}
         />
 
@@ -87,7 +87,7 @@ export default async function SuperAdminDashboardPage() {
                 <th className="px-4 py-3">Clínica</th>
                 <th className="px-4 py-3">Dono / E-mail</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Pacientes Ativos</th>
+                <th className="px-4 py-3 text-right">Fichas na Base</th>
                 <th className="px-4 py-3 text-right">Valor Estimado</th>
               </tr>
             </thead>
@@ -124,7 +124,7 @@ export default async function SuperAdminDashboardPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono text-slate-200">
-                      {c.pacientesAtivosCount}
+                      {c.fichasNaBaseCount}
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono font-semibold text-teal-400">
                       {formatarBRL(c.valorEstimadoCentavos)}
