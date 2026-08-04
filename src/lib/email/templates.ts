@@ -163,6 +163,41 @@ export function criarTemplateRedefinicaoSenha(linkReset: string) {
   return { assunto, texto, html };
 }
 
+/**
+ * E-mail 3b: Notificação de Tentativa de Cadastro em Conta Existente
+ */
+export function criarTemplateTentativaCadastroExistente({
+  loginUrl,
+  esqueciSenhaUrl,
+}: {
+  loginUrl: string;
+  esqueciSenhaUrl: string;
+}) {
+  const assunto = "Tentativa de cadastro no Iris";
+  const texto = `Identificamos uma tentativa de cadastro no Iris utilizando este endereço de e-mail.\n\nComo você já possui uma conta ativa, você pode entrar diretamente em:\n${loginUrl}\n\nCaso tenha esquecido sua senha, redefina em:\n${esqueciSenhaUrl}\n\nSe você não realizou esta tentativa, nenhuma ação é necessária. Sua conta continua segura.`;
+
+  const html = renderizarLayoutEmail({
+    tituloHeader: "Tentativa de cadastro no Iris",
+    conteudoHtml: `
+      <p style="margin-top: 0;">Identificamos uma tentativa de criar uma nova conta no Iris utilizando este e-mail.</p>
+      <p>Como você já possui uma conta cadastrada, acesse a plataforma abaixo ou redefina sua senha se necessário:</p>
+      
+      <p style="margin: 32px 0; text-align: center;">
+        <a href="${loginUrl}" style="background-color: #1A1A1A; color: #FFFFFF; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 2px 2px 0px #718096;">
+          Acessar minha conta
+        </a>
+      </p>
+
+      <p style="font-size: 14px; color: #718096;">
+        Esqueceu sua senha? <a href="${esqueciSenhaUrl}" style="color: #2B6CB0;">Clique aqui para redefinir</a>.
+      </p>
+    `,
+    rodapeContexto: "Se você não realizou esta tentativa, fique tranquilo: sua conta permanece totalmente protegida.",
+  });
+
+  return { assunto, texto, html };
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")

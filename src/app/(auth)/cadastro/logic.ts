@@ -4,6 +4,7 @@ import { CredencialInvalida, criarContaEClinica } from "@/auth/cadastro";
 import { criarSemaforo } from "@/lib/semaforo";
 import { registrarTentativa } from "@/lib/throttle";
 import { enviarEmailTransacional } from "@/lib/email/transacional";
+import { criarTemplateTentativaCadastroExistente } from "@/lib/email/templates";
 
 
 export type EstadoCadastro = { error?: string };
@@ -433,24 +434,16 @@ export async function executarCadastro(
       const loginUrl = `${baseUrl}/login`;
       const esqueciSenhaUrl = `${baseUrl}/esqueci-senha`;
       const emailDestinatario = validado.dados.email.toLowerCase();
+      const template = criarTemplateTentativaCadastroExistente({
+        loginUrl,
+        esqueciSenhaUrl,
+      });
 
       void enviarEmailTransacional({
         para: emailDestinatario,
-        assunto: "Tentativa de cadastro no Iris",
-        texto: `Identificamos uma tentativa de cadastro no Iris utilizando este endereço de e-mail.\n\nComo você já possui uma conta ativa, você pode entrar diretamente em:\n${loginUrl}\n\nCaso tenha esquecido sua senha, redefina em:\n${esqueciSenhaUrl}\n\nSe você não realizou esta tentativa, nenhuma ação é necessária. Sua conta continua segura.`,
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>Tentativa de cadastro no Iris</h2>
-            <p>Identificamos uma tentativa de criar uma nova conta utilizando este e-mail.</p>
-            <p>Como você já possui uma conta cadastrada no Iris, acesse o sistema abaixo:</p>
-            <p style="margin: 24px 0;">
-              <a href="${loginUrl}" style="background-color: #1a1a1a; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">
-                Acessar minha conta
-              </a>
-            </p>
-            <p style="color: #666666; font-size: 14px;">Esqueceu sua senha? <a href="${esqueciSenhaUrl}">Clique aqui para redefinir</a>.</p>
-          </div>
-        `,
+        assunto: template.assunto,
+        texto: template.texto,
+        html: template.html,
       }).catch((e) => {
         console.error("executarCadastro: falha ao notificar conta existente:", e);
       });
