@@ -77,7 +77,7 @@ describe("reenviarEmailVerificacao", () => {
     expect(enviarEmailTransacional).toHaveBeenCalledWith(
       expect.objectContaining({
         para: "helena@exemplo.com",
-        assunto: "Verifique seu e-mail — Iris",
+        assunto: "Novo link para verificação do seu e-mail — Iris",
       }),
     );
   });

@@ -6,6 +6,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Container, Stack } from "@/components/ui/layout";
 import { Logo } from "@/components/ui/logo";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { DOCUMENTOS_LEGAIS, VERSAO_TERMO, type SlugLegal } from "@/lib/legal";
 
 /**
@@ -50,6 +51,13 @@ export async function DocumentoLegal({ slug }: { slug: SlugLegal }) {
           >
             <Logo altura={36} aria-label="Iris — página inicial" />
           </Link>
+          <Breadcrumb
+            itens={[
+              { rotulo: "Início", href: "/" },
+              { rotulo: "Criar Conta", href: "/cadastro" },
+              { rotulo: titulo, atual: true },
+            ]}
+          />
           <h1 className="font-display text-3xl font-bold text-balance text-[var(--text-primary)] md:text-4xl">
             {titulo}
           </h1>

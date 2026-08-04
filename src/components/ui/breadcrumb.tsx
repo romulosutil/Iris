@@ -1,9 +1,11 @@
 import * as React from "react";
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 
 export interface BreadcrumbItem {
   rotulo: React.ReactNode;
   href?: string;
+  onClick?: () => void;
   atual?: boolean;
 }
 
@@ -36,12 +38,20 @@ export const Breadcrumb = React.forwardRef<HTMLElement, BreadcrumbProps>(
             return (
               <li key={index} className="flex items-center gap-2">
                 {item.href && !isCurrent ? (
-                  <a
+                  <Link
                     href={item.href}
                     className="font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline focus-visible:outline-focus rounded-xs"
                   >
                     {item.rotulo}
-                  </a>
+                  </Link>
+                ) : item.onClick && !isCurrent ? (
+                  <button
+                    type="button"
+                    onClick={item.onClick}
+                    className="font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline focus-visible:outline-focus rounded-xs cursor-pointer bg-transparent border-0 p-0"
+                  >
+                    {item.rotulo}
+                  </button>
                 ) : (
                   <span
                     aria-current={isCurrent ? "page" : undefined}

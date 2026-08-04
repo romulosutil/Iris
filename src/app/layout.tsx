@@ -4,6 +4,7 @@ import "@/styles/globals.css";
 import { WebMCPProvider } from "@/components/webmcp-provider";
 import { Clarity } from "@/components/clarity";
 import { GoogleAnalytics } from "@/components/google-analytics";
+import { ToastProvider } from "@/components/ui/toast";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -38,7 +39,7 @@ export default function RootLayout({
         <GoogleAnalytics />
         <Clarity />
         <WebMCPProvider />
-        {children}
+        <ToastProvider>{children}</ToastProvider>
         {process.env.NODE_ENV === "development" && (
           /* eslint-disable-next-line @next/next/no-sync-scripts */
           <script src="http://localhost:8400/live.js" />

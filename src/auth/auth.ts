@@ -12,6 +12,11 @@ import {
 } from "@/db/schema";
 import { assertMfaBypassSafe } from "./mfa-gate";
 
+import {
+  criarTemplateRedefinicaoSenha,
+  criarTemplateVerificacaoEmail,
+} from "@/lib/email/templates";
+
 // Fase 6.2 (A5): fail-closed no boot se o bypass de MFA vazar para produção.
 // Roda na 1ª importação de qualquer caminho de auth/servidor.
 assertMfaBypassSafe();
@@ -57,39 +62,16 @@ export const auth = betterAuth({
     // Fatia A (#163): sem e-mail verificado não se entra em dado clínico.
     // A migração 0059 fez o backfill das contas pré-existentes no mesmo commit.
     requireEmailVerification: true,
-    // Task 9, fix round 1 (finding I1 do review): o cadastro (Task 7) exige
-    // mínimo 12 / máximo 128 caracteres, mas isso vive só em
-    // `cadastro/logic.ts` (`validarCadastro`) — validação DE APLICAÇÃO,
-    // pré-núcleo. O Better-Auth em si nunca soube desses números: sem esta
-    // config, `minPasswordLength` ficava no default da biblioteca (8) e
-    // `POST /api/auth/reset-password` aceitava senha de 8 caracteres mesmo
-    // com o formulário de `/redefinir-senha` exigindo 12 no navegador — a
-    // troca de senha virava o caminho mais barato para furar a política que
-    // o cadastro aplica no servidor. `maxPasswordLength` já coincidia com o
-    // default (128), mas é fixado aqui explicitamente para não depender do
-    // default da lib mudar sem que ninguém perceba (é o mesmo número que
-    // `MAX_SENHA` em `cadastro/logic.ts` — ver o comentário lá sobre por que
-    // o teto importa tanto quanto o piso).
     minPasswordLength: 12,
     maxPasswordLength: 128,
-    // Task 9, fix round 1 (finding C2 do review): resetar a senha é
-    // exatamente o controle de recuperação que uma conta comprometida usa
-    // para se defender — se a sessão do atacante sobrevive à troca, o reset
-    // não expulsa quem já está dentro. Confirmado lendo
-    // `node_modules/better-auth/dist/api/routes/password.mjs:163`
-    // (`if (...revokeSessionsOnPasswordReset) await
-    // ...deleteUserSessions(userId)`): o default é `false`, e nenhum plugin
-    // configurado aqui (`twoFactorPlugin`) chama `deleteUserSessions` por
-    // conta própria em troca de senha — confirmado por busca em
-    // `node_modules/better-auth/dist/plugins/two-factor/**`, sem ocorrência.
-    // Sem este `true`, o cookie de sessão continuava válido depois do reset.
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
+      const template = criarTemplateRedefinicaoSenha(url);
       dispararEmail({
         para: user.email,
-        assunto: "Redefinir sua senha no Iris",
-        texto: `Para redefinir sua senha, acesse: ${url}`,
-        html: `<p>Para redefinir sua senha, <a href="${url}">clique aqui</a>.</p><p>Se não foi você, ignore este e-mail.</p>`,
+        assunto: template.assunto,
+        texto: template.texto,
+        html: template.html,
       });
     },
   },
@@ -97,11 +79,12 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
+      const template = criarTemplateVerificacaoEmail(url);
       dispararEmail({
         para: user.email,
-        assunto: "Confirme seu e-mail no Iris",
-        texto: `Para confirmar seu e-mail, acesse: ${url}`,
-        html: `<p>Para confirmar seu e-mail e ativar sua conta, <a href="${url}">clique aqui</a>.</p>`,
+        assunto: template.assunto,
+        texto: template.texto,
+        html: template.html,
       });
     },
   },

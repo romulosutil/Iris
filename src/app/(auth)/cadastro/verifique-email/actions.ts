@@ -6,6 +6,7 @@ import { authVerification } from "@/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { consumirTentativa } from "@/lib/rate-limit";
 import { enviarEmailTransacional } from "@/lib/email/transacional";
+import { criarTemplateReenvioVerificacao } from "@/lib/email/templates";
 
 export type EstadoReenvio = {
   success?: boolean;
@@ -64,23 +65,13 @@ export async function reenviarEmailVerificacao(
     if (tokenRecord?.value) {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
       const linkVerificacao = `${baseUrl}/verificar-email?token=${tokenRecord.value}`;
+      const template = criarTemplateReenvioVerificacao(linkVerificacao);
 
       void enviarEmailTransacional({
         para: email,
-        assunto: "Verifique seu e-mail — Iris",
-        texto: `Para concluir seu cadastro no Iris, acesse o link a seguir:\n\n${linkVerificacao}\n\nSe você não solicitou este cadastro, desconsidere esta mensagem.`,
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>Verifique seu e-mail no Iris</h2>
-            <p>Clique no botão abaixo para confirmar seu e-mail e continuar o cadastro:</p>
-            <p style="margin: 24px 0;">
-              <a href="${linkVerificacao}" style="background-color: #1a1a1a; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">
-                Verificar e-mail
-              </a>
-            </p>
-            <p style="color: #666666; font-size: 14px;">Ou copie o link: <a href="${linkVerificacao}">${linkVerificacao}</a></p>
-          </div>
-        `,
+        assunto: template.assunto,
+        texto: template.texto,
+        html: template.html,
       }).catch((err) => {
         console.error("reenviarEmailVerificacao: falha ao enviar e-mail transacional:", err);
       });
