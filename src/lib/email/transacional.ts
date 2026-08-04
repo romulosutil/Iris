@@ -18,9 +18,19 @@ export type EmailTransacionalInput = {
 export async function enviarEmailTransacional(
   input: EmailTransacionalInput,
 ): Promise<{ enviado: boolean }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const remetente = process.env.EMAIL_REMETENTE;
-  if (!apiKey || !remetente) return { enviado: false };
+  const apiKey =
+    process.env.EMAIL_PROVIDER_API_KEY || process.env.RESEND_API_KEY;
+  const remetente =
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.EMAIL_REMETENTE ||
+    "notificacoes@irisclinica.ia.br";
+
+  if (!apiKey || !remetente) {
+    console.warn(
+      "enviarEmailTransacional: Chave de API ou remetente não configurados (EMAIL_PROVIDER_API_KEY / RESEND_FROM_EMAIL).",
+    );
+    return { enviado: false };
+  }
 
   try {
     const { Resend } = await import("resend");
