@@ -20,6 +20,14 @@ export async function cadastrarPacienteAdministrativo(
 ): Promise<CadastroAdminState> {
   const ctx = await getTenantContext();
   const resultado = await criarPacienteEConsent(ctx, formData);
-  if (resultado.error) return { error: resultado.error };
+  // `bloqueioBilling` precisa atravessar até o formulário: é ele que decide
+  // entre "corrija o campo" e "ative a assinatura". Devolver só `error`
+  // apagaria o motivo e a UI teria de adivinhar pelo texto (#36).
+  if (resultado.error || resultado.bloqueioBilling) {
+    return {
+      error: resultado.error,
+      bloqueioBilling: resultado.bloqueioBilling,
+    };
+  }
   redirect(`/pacientes/${resultado.id}/cadastro-clinico`);
 }

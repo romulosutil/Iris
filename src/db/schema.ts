@@ -1507,3 +1507,164 @@ export const asaasWebhookEvent = pgTable(
   },
   (t) => [index("asaas_webhook_event_processado_idx").on(t.processadoEm)],
 );
+
+// ─── Billing: assinatura, ciclo e apuração (#36, Fase 7 Fatia B) ────────────
+// Modelo pay-as-you-grow por paciente ativo, faixas MARGINAIS. O preço não é
+// calculado em SQL: a fonte da verdade é `src/lib/billing/calculator.ts`, em
+// centavos inteiros. O banco guarda o RESULTADO e o memorial de quem foi
+// contado — preço muda, fatura já emitida não.
+// RLS/GRANT à mão em `db/migrations/0071_billing_assinatura_e_ciclo.sql`:
+// `app_role` só tem SELECT da própria clínica; escrita é exclusiva de
+// `iris_auth` (plano de billing/identidade, como asaas_webhook_event/0066).
+export const subscriptionStatus = pgEnum("subscription_status", [
+  "free_tier",
+  "setup_pending",
+  "active",
+  "past_due",
+  "canceled",
+]);
+
+export const billingCycleStatus = pgEnum("billing_cycle_status", [
+  "aberto",
+  "apurado",
+  "cobrado",
+  "falhou",
+]);
+
+export const billingMotivoAtivo = pgEnum("billing_motivo_ativo", [
+  "criado_no_ciclo",
+  "interacao_no_ciclo",
+  "ativo_nao_arquivado",
+]);
+
+// 1:1 com `clinic`. Renovação reusa a linha e abre um `billingCycle` novo.
+export const subscription = pgTable(
+  "subscription",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .unique()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    status: subscriptionStatus("status").notNull().default("free_tier"),
+    // Persistido em vez de lido de env: a conta Asaas ficou bloqueada e o
+    // trilho passou a Mercado Pago. Assinatura criada num provedor não pode ser
+    // reinterpretada por outro só porque a env mudou depois.
+    provider: text("provider").notNull().default("mercado_pago"),
+    // `preapproval_id` no Mercado Pago. UNIQUE porque o webhook resolve a
+    // clínica por ele — dois tenants no mesmo id seria cobrança cruzada.
+    providerSubscriptionId: text("provider_subscription_id").unique(),
+    providerCustomerId: text("provider_customer_id"),
+    metodoPagamento: text("metodo_pagamento"),
+    cicloDias: integer("ciclo_dias").notNull().default(30),
+    cicloAtualInicio: timestamp("ciclo_atual_inicio", { withTimezone: true }),
+    cicloAtualFim: timestamp("ciclo_atual_fim", { withTimezone: true }),
+    // Falha de Pix Automático/cartão costuma ser do banco do cliente; derrubar
+    // acesso a prontuário por isso é dano desproporcional.
+    carenciaDias: integer("carencia_dias").notNull().default(7),
+    pastDueDesde: timestamp("past_due_desde", { withTimezone: true }),
+    ativadaEm: timestamp("ativada_em", { withTimezone: true }),
+    canceladaEm: timestamp("cancelada_em", { withTimezone: true }),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("subscription_renovacao_idx").on(t.status, t.cicloAtualFim),
+    check(
+      "subscription_ciclo_valido",
+      sql`${t.cicloAtualFim} IS NULL OR ${t.cicloAtualInicio} IS NULL OR ${t.cicloAtualFim} > ${t.cicloAtualInicio}`,
+    ),
+    check("subscription_carencia_nao_negativa", sql`${t.carenciaDias} >= 0`),
+    check("subscription_ciclo_dias_positivo", sql`${t.cicloDias} > 0`),
+  ],
+);
+
+export const billingCycle = pgTable(
+  "billing_cycle",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => subscription.id, { onDelete: "restrict" }),
+    inicio: timestamp("inicio", { withTimezone: true }).notNull(),
+    fim: timestamp("fim", { withTimezone: true }).notNull(),
+    status: billingCycleStatus("status").notNull().default("aberto"),
+    pacientesContados: integer("pacientes_contados").notNull().default(0),
+    valorCentavos: integer("valor_centavos").notNull().default(0),
+    apuradoEm: timestamp("apurado_em", { withTimezone: true }),
+    cobradoEm: timestamp("cobrado_em", { withTimezone: true }),
+    providerChargeId: text("provider_charge_id"),
+    erro: text("erro"),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // "1 cobrança consolidada por mês" vira barreira física: retry do job de
+    // fechamento não consegue abrir um segundo ciclo com o mesmo início.
+    uniqueIndex("billing_cycle_clinic_inicio_uq").on(t.clinicId, t.inicio),
+    index("billing_cycle_clinic_fim_idx").on(t.clinicId, t.fim.desc()),
+    check("billing_cycle_intervalo_valido", sql`${t.fim} > ${t.inicio}`),
+    check("billing_cycle_valor_nao_negativo", sql`${t.valorCentavos} >= 0`),
+    check(
+      "billing_cycle_contagem_nao_negativa",
+      sql`${t.pacientesContados} >= 0`,
+    ),
+  ],
+);
+
+// Memorial da fatura. FK COMPOSTA (patient_id, clinic_id) contra
+// `uq_patient_id_clinic`: um ciclo da clínica A não contabiliza paciente da B
+// nem pela role de billing. CASCADE porque o expurgo LGPD é destrutivo e
+// manter o id aqui ressuscitaria o vínculo apagado — a prova do valor cobrado
+// sobrevive no agregado de `billingCycle`.
+export const billingCyclePatient = pgTable(
+  "billing_cycle_patient",
+  {
+    cycleId: uuid("cycle_id")
+      .notNull()
+      .references(() => billingCycle.id, { onDelete: "cascade" }),
+    patientId: uuid("patient_id").notNull(),
+    clinicId: uuid("clinic_id").notNull(),
+    motivo: billingMotivoAtivo("motivo").notNull(),
+    registradoEm: timestamp("registrado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.cycleId, t.patientId] }),
+    foreignKey({
+      columns: [t.patientId, t.clinicId],
+      foreignColumns: [patient.id, patient.clinicId],
+      name: "billing_cycle_patient_patient_fk",
+    }).onDelete("cascade"),
+    index("billing_cycle_patient_clinic_idx").on(t.clinicId, t.cycleId),
+  ],
+);
+
+// Espelha `asaasWebhookEvent` (0066): o Mercado Pago reentrega em qualquer 5xx
+// ou timeout, e reentrega é a regra. UNIQUE é a barreira contra efeito
+// duplicado em faturamento. `aplicadoEm` NULL com `processadoEm` preenchido =
+// recebido, efeito ainda não aplicado — reprocessável sem pedir reenvio.
+export const mercadopagoWebhookEvent = pgTable(
+  "mercadopago_webhook_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    providerEventId: text("provider_event_id").notNull().unique(),
+    evento: text("evento").notNull(),
+    payload: jsonb("payload").notNull(),
+    aplicadoEm: timestamp("aplicado_em", { withTimezone: true }),
+    erroAplicacao: text("erro_aplicacao"),
+    processadoEm: timestamp("processado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("mercadopago_webhook_event_processado_idx").on(t.processadoEm)],
+);

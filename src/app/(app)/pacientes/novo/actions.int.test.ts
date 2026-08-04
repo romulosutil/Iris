@@ -28,6 +28,12 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'Clínica A')`;
     await owner`INSERT INTO app_user (id, name, email) VALUES (${U_ADMIN}, 'Admin', 'admin@a.test')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_ADMIN}, ${CLINIC_A}, 'admin_recepcao')`;
+    // Gate de cobrança (#36): a partir da migração 0071, cadastrar paciente
+    // exige assinatura ativa. Estes testes são sobre cadastro + consent, não
+    // sobre billing, então a clínica entra já paga. A cobertura do gate em si
+    // (bloqueio em free_tier/setup_pending) fica no bloco no fim do arquivo.
+    await owner`INSERT INTO subscription (clinic_id, status) VALUES (${CLINIC_A}, 'active')
+                ON CONFLICT (clinic_id) DO UPDATE SET status = 'active'`;
   });
   afterAll(async () => {
     await owner?.end();
@@ -263,5 +269,86 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     const ia = consentimentos.find((c) => c.tipo === "uso_ia_processamento")!;
     expect(ia.responsavelSignatario).toBe("Pai do Menor");
     expect(ia.versaoTermo).toBe("v1");
+  });
+  // ── Gate de cobrança (#36) ──────────────────────────────────────────────
+  // O cadastro do 1º paciente é o gatilho comercial: sem assinatura ativa ele
+  // é recusado, e a recusa tem que ser TOTAL — um paciente gravado com a
+  // cobrança bloqueada seria serviço prestado de graça e, pior, dado clínico
+  // órfão de contrato.
+  describe("gate de cobrança", () => {
+    async function porStatus(status: string) {
+      await owner`UPDATE subscription SET status = ${status}::subscription_status WHERE clinic_id = ${CLINIC_A}`;
+    }
+
+    afterAll(async () => {
+      await porStatus("active");
+    });
+
+    test("free_tier bloqueia o cadastro e NÃO grava paciente nenhum", async () => {
+      await porStatus("free_tier");
+      const antes = await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente Bloqueado",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+        }),
+      );
+
+      expect(res.id).toBeUndefined();
+      expect(res.bloqueioBilling?.motivo).toBe("ativacao_requerida");
+      // A transação inteira reverteu: nem paciente, nem consent, nem trial.
+      const depois = await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+      expect(depois[0]!.n).toBe(antes[0]!.n);
+    });
+
+    test("setup_pending bloqueia com motivo próprio (cobrança em voo)", async () => {
+      await porStatus("setup_pending");
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente Pendente",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+        }),
+      );
+      expect(res.id).toBeUndefined();
+      expect(res.bloqueioBilling?.motivo).toBe("pagamento_pendente");
+    });
+
+    test("past_due NÃO bloqueia — inadimplência não tranca prontuário", async () => {
+      await porStatus("past_due");
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente Em Atraso",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+        }),
+      );
+      expect(res.bloqueioBilling).toBeUndefined();
+      expect(res.id).toBeTruthy();
+    });
+
+    test("clínica isenta (legado pré-cobrança) passa mesmo em free_tier", async () => {
+      await porStatus("free_tier");
+      await owner`UPDATE clinic SET isento_trial = true WHERE id = ${CLINIC_A}`;
+      try {
+        const res = await criarPacienteEConsent(
+          ctx,
+          form({
+            nome: "Paciente Legado",
+            tipoConsentimento: "responsavel_legal",
+            responsavelSignatario: "Mãe",
+          }),
+        );
+        expect(res.bloqueioBilling).toBeUndefined();
+        expect(res.id).toBeTruthy();
+      } finally {
+        await owner`UPDATE clinic SET isento_trial = false WHERE id = ${CLINIC_A}`;
+      }
+    });
   });
 });

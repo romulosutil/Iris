@@ -34,13 +34,133 @@
 | **D2** | **Migração à mão exige `when` manual no `_journal.json`** (anterior + 1000). Se o `when` for ≤ o da última aplicada, o Drizzle **pula a migração em silêncio**. | Já causou incidente: a `0055` (fix do oráculo cross-tenant, #128) ficou fora do journal e nunca rodou em produção, com a issue fechada pelo diff (#165). Documentado no `CLAUDE.md`; o fim real seria um teste de CI que compara `_journal.json` com os `.sql` do diretório e com o que está aplicado. | `db/migrations/meta/_journal.json` · guardrail em `CLAUDE.md` |
 | **D3** | **`app_role` tem `GRANT` de tabela `INSERT`/`UPDATE`/`DELETE` em `clinic`** (herdado). Hoje inofensivo porque não há policy de escrita que case — a barreira é só a RLS, sem defesa em profundidade no nível de privilégio. | `clinic.isento_trial` é flag de billing: quem a ligasse sairia do gate de pagamento. Uma policy de escrita adicionada por distração no futuro abre tudo de uma vez. | Revogar e re-conceder coluna a coluna, como já se faz em `patient` (`0044`) |
 | **D4** | **Job de auto-arquivamento (90 dias) não existe** — só a regra pura `calcularStatusArquivamento`. Bloqueado por decisão de produto: "última atividade" atravessa `session_note`, `evidence` e `goal`. | Essa definição decide **o que a clínica paga**. Escolher de passagem é errar em cima de dinheiro do cliente. | #174 · padrão em `scripts/escalonamento-risco.mjs` (delega a função do banco, porque cruza clínicas) |
-| **D5** | **Sandbox Asaas nunca exercitado ponta a ponta.** O webhook só viu payload simulado em teste de integração; nenhum evento real foi disparado contra o ambiente. Falta também provisionar `ASAAS_WEBHOOK_TOKEN` no Easypanel e cadastrar a URL no painel do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. | #36 |
+| **D5** | ~~Sandbox Asaas nunca exercitado ponta a ponta.~~ **Fechado em 03/08/2026** — evento real entregue e gravado (ver sessão abaixo). `ASAAS_WEBHOOK_TOKEN` provisionada e **verificada por medição** em produção no mesmo dia. **Resta só** o webhook de **produção** cadastrado na conta de produção do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. **Confirmado na prática:** o `id` real vem como `evt_<hash>&<n>` (com `&`) e as datas dentro de `authorization` são `dd/MM/yyyy`, não ISO — nenhum dublê do repo usava esse formato. | #36 |
 | **D6** | **Sem UI de arquivar/desarquivar** e sem aviso in-app quando um paciente volta a contar na fatura. As Server Actions existem, a tela não. | O desarquivamento automático é silencioso: a clínica volta a ser cobrada por um paciente sem nada na interface dizendo isso. | #174 |
 | **D7** | **Regra 6 só dispara por `session_note`.** Áudio (`registrarAudioLocal`), `evidence` e escopo de protocolo não desarquivam. | Se a intenção da issue era "qualquer registro clínico", há paciente em atendimento ativo fora da fatura. É ampliação de escopo a decidir, não bug. | #174 |
 | **D8** | **Terapeuta de cobertura não desarquiva.** `app_desarquivar_paciente` estoura antes de olhar `arquivado_em`, então há um gate de visibilidade antes da chamada — senão a exceção abortaria a transação e o terapeuta perderia o diário inteiro. | Consequência assumida, não acidente: paciente arquivado invisível ao terapeuta de cobertura só volta pela mão do coordenador. Vira problema se cobertura for comum na prática. | #174 · `0067` |
 | **D9** | **Customização White-Label nos PDFs exportados (#120)** — funcionalidade de personalização com logotipo e cores da clínica no cabeçalho do PDF. | Melhoria de produto futura: hoje os PDFs usam o layout auditável padrão da plataforma Iris. | #120 · `src/lib/export/pdf-generator.ts` |
 | **D10** | **Assinatura Digital ICP-Brasil A1/A3 (#120)** — integração com certificados ICP-Brasil para relatórios com exigência judicial/pericial. | Melhoria de produto futura: o padrão atual (MFA + SHA-256 + AuditLog) atende ao piso legal, mas certas instâncias judiciais pedem ICP-Brasil. | #120 · `src/lib/export/pdf-generator.ts` |
+| **D12** | **Conta Asaas de produção bloqueada — não aprovada** (03/08/2026), e **Pix Automático indisponível por até 6 meses** (origem do prazo a confirmar). | Bloqueia a Fase 7 inteira: sem conta aprovada não há cobrança, webhook de produção nem self-service. Cuidado de leitura: a aba de Webhooks listar os eventos `PIX_AUTOMATIC_*` **não** prova habilitação na conta — é catálogo do produto. Foi assim que 01/08 registrou "habilitado" por engano. | #36 |
 | **D11** | **Estratégia de Ativo de Dados & Indexação RAG (#120)** — pipeline de tokenização e treinamento de IA sobre históricos exportados. | Diretriz de negócio Iris: preservação integral de evoluções e prontuários no banco para vetorização/RAG e aperfeiçoamento dos modelos clínicos. | #120 · `src/lib/extraction/` |
+
+---
+
+## 🏁 Sessão 03/08/2026 (3ª) — Billing pay-as-you-grow implementado, trilho vira Mercado Pago (#36)
+
+**Trilho trocado.** Com a conta Asaas bloqueada e o Pix Automático fora por ~6
+meses (D12), o provedor ativo passa a ser o **Mercado Pago** (assinatura
+recorrente `preapproval`). O Asaas continua previsto na porta `BillingProvider`,
+mas **não implementado**: `BILLING_PROVIDER=asaas` lança erro explícito em vez
+de degradar em silêncio.
+
+`subscription.provider` é persistido **por linha**, não lido de env — assinatura
+criada num gateway não pode ser reinterpretada por outro porque a env mudou.
+
+### Modelo comercial travado
+Faixas **marginais**: 1–15 = R$ 39 · 16–40 = R$ 32 · 41+ = R$ 25, por paciente
+ativo/mês. Onboarding R$ 0; a cobrança nasce no 1º paciente (Mês 1 = R$ 39,00).
+Mês 2+ = **uma** cobrança consolidada a cada 30 dias. Aritmética em centavos
+inteiros, fonte única em `src/lib/billing/calculator.ts` — o SQL nunca calcula
+preço, só devolve contagem.
+
+> Correção: 100 pacientes = 15 + 25 + **60** = R$ 2.885,00. O valor R$ 2.860,00
+> que circulou no briefing corresponde a 99 pacientes.
+
+### Definição oficial de "paciente ativo" (fecha **D4** parcialmente)
+`billing_apurar_ciclo(uuid)` (migração `0071`) — conta se satisfizer ao menos um:
+criado no ciclo · interação no ciclo (`session.agendada_para`/`check_in_em`/
+`criado_em`, `evidence.aprovado_em`, `session_note.criado_em`) · `arquivado_em
+IS NULL`. **Arquivado e parado no ciclo não é faturado.** Intervalo semiaberto:
+borda `inicio` conta, borda `fim` não — os dois lados verificados por teste.
+
+Isto é a decisão de produto que D4 apontava como bloqueante ("essa definição
+decide o que a clínica paga"). D4 segue aberto quanto ao **job de
+auto-arquivamento** em si.
+
+### Decisões de política do gate
+- `past_due` **não** bloqueia cadastro. Falha de Pix/cartão costuma ser do banco
+  do cliente; travar cadastro pune o paciente, não o inadimplente.
+- `setup_pending` bloqueia **sem** oferecer link de checkout — já há cobrança em
+  voo, e reenviar ao checkout gera cobrança duplicada.
+- Clínica `isento_trial` (legado pré-cobrança, `0064`) nunca é bloqueada.
+- O gate roda **dentro da transação** do cadastro e sinaliza por `throw`, não
+  `return`: fora dela, dois cadastros simultâneos numa clínica virgem criariam
+  dois pacientes sob uma cobrança só; e um `return` deixaria a transação seguir.
+
+### Plano de privilégios
+Billing é plano de identidade (como `auth_throttle`/0061 e `asaas_webhook_event`
+/0066). `app_role` tem **apenas SELECT** da própria clínica — se o produto
+pudesse escrever `subscription.status`, o gate seria contornável de dentro do
+app. `iris_auth` escreve tudo, mas **não tem grant em `patient`**: a apuração
+passa obrigatoriamente pela função DEFINER, que devolve contagem, nunca dado
+clínico.
+
+### Job: gatilho magro, lógica no app
+`scripts/fechamento-ciclo-billing.mjs` só faz um POST autenticado em
+`/api/internal/billing/fechar-ciclos`. Motivo: a imagem Docker do job **não
+herda** as deps do app, e um import ausente já derrubou o motor de escalonamento
+em produção com test/typecheck/lint verdes (#156). Tabela de preços duplicada
+num `.mjs` seria a mesma classe de bug — cobrando valor errado em silêncio.
+
+### Webhook do Mercado Pago
+Grava e responde 200 **antes** de aplicar o efeito (o MP desabilita endpoint
+lento); falha ao aplicar deixa `aplicado_em` NULL para reprocessamento, nunca
+5xx. O payload do MP costuma ser só `{type, action, data:{id}}` — **sem estado**
+— então a transição vem de uma **consulta** à assinatura, não do tipo do evento.
+
+### Verificado por medição
+- `pg_proc`/`pg_policies`/`information_schema` após `db:migrate`: 4 tabelas,
+  7 policies, RLS `ENABLE`+`FORCE` nas 4, `billing_apurar_ciclo.prosecdef=true`,
+  `has_table_privilege('app_role','subscription','UPDATE')=false`.
+- `db/tests/billing-apuracao.int.test.ts`: **21 passaram, 0 skipped** — isolamento
+  cross-tenant, bordas, idempotência da dupla apuração, e `UPDATE subscription`
+  sob `app_role` rejeitando de verdade (não 0-linhas mudo).
+- Suíte completa: **692 unitários** + **575 de integração** (80 arquivos), verdes.
+- `ctx-forjavel-guard` verde: a action nova respeita `logic.ts`/`actions.ts`.
+
+### Aberto (não feito nesta sessão)
+- **Credenciais do Mercado Pago não provisionadas.** `MERCADOPAGO_ACCESS_TOKEN`
+  e `MERCADOPAGO_WEBHOOK_SECRET` só existem comentadas no `.env.example`. Sem
+  elas o webhook responde 401 a tudo — deploy sem segredo rejeita, nunca aceita.
+- **Nenhum evento real do Mercado Pago exercitado.** O HMAC está coberto por
+  teste com manifest escrito à mão, não contra notificação real. Vale o
+  precedente do Asaas (D5): o dialeto do destino real não aparece no dublê.
+- **Serviço `billing` do Easypanel não criado** — existe só no compose sob
+  `profiles: ["billing"]`.
+- Sem tela de cancelamento de assinatura (a porta tem `cancelarAssinatura`).
+
+Spec: `docs/superpowers/specs/2026-08-03-issue-36-billing-mercadopago-implementacao.md`
+
+---
+
+## 🏁 Sessão 03/08/2026 — Alinhamento de Prioridades & Central Super Admin
+
+**Ajuste da Ordem de Prioridades (Decisão com Rômulo):**
+
+1. **P0 · Lançamento Self-Service (#175, #174, #36):** Finalização da Fase 7 (trial nullable, cobrança Asaas, desarquivamento).
+2. **Infra Canal RT (#154 - Task 1):** Retentativa resiliente de e-mail ao RT — ✅ Concluído.
+3. **P1 Antes de Dado Real (#116, #120):** Retenção Marco Civil (6 meses em `audit_log`) + Exportação auditável de prontuários em PDF/A.
+4. **Postergado (gated por 40 pacientes em prod) (#102, #89):** Auditoria DPA Hostinger (Task 3 de LGPD) e harmonização de backup. Não bloqueia a entrada inicial de dados.
+5. **P1/P2 · Expansão Clínica (#98, #119):** Nicho generalista (sem protocolo) + RLS multidisciplinar.
+6. **Pós-MVP (#99, #89, #72):** Protocolo TCC (#99), ASR ditado de voz (#72).
+
+**Novas Demandas & Débitos Mapeados e Criados como GitHub Issues:**
+- **Issue #184 — Central de Super Admin / Backoffice (`/super-admin`):** [Issue #184](https://github.com/romulosutil/Iris/issues/184) com spec em [`docs/superpowers/specs/2026-08-03-central-super-admin-backoffice-design.md`](docs/superpowers/specs/2026-08-03-central-super-admin-backoffice-design.md).
+- **Issue #185 — Responsividade Mobile & Publicação Android (PWA/TWA Play Store):** [Issue #185](https://github.com/romulosutil/Iris/issues/185) com spec em [`docs/superpowers/specs/2026-08-03-mobile-responsividade-pwa-twa-android-design.md`](docs/superpowers/specs/2026-08-03-mobile-responsividade-pwa-twa-android-design.md).
+- **Issue #186 — Reconciliação do Snapshot do Drizzle ORM (Débito D1):** [Issue #186](https://github.com/romulosutil/Iris/issues/186) com spec em [`docs/superpowers/specs/2026-08-03-issue-186-reconciliacao-snapshot-drizzle-design.md`](docs/superpowers/specs/2026-08-03-issue-186-reconciliacao-snapshot-drizzle-design.md).
+
+- **Issue #187 — Teste de CI para Integridade de Migrações e `_journal.json` (Débito D2):** [Issue #187](https://github.com/romulosutil/Iris/issues/187) com spec em [`docs/superpowers/specs/2026-08-03-issue-187-teste-ci-integridade-migracoes-design.md`](docs/superpowers/specs/2026-08-03-issue-187-teste-ci-integridade-migracoes-design.md).
+
+- **Issue #188 — Revogação de Privilégios `GRANT` em `clinic` (Débito D3):** [Issue #188](https://github.com/romulosutil/Iris/issues/188) com spec em [`docs/superpowers/specs/2026-08-03-issue-188-revogacao-grant-clinic-design.md`](docs/superpowers/specs/2026-08-03-issue-188-revogacao-grant-clinic-design.md).
+
+- **Issue #189 — Sitemap, Robots.txt, Meta OpenGraph & Suíte A11y (WCAG 2.1 AA):** ✅ **Concluído em 03/08/2026** — [Issue #189](https://github.com/romulosutil/Iris/issues/189) com spec em [`docs/superpowers/specs/2026-08-03-issue-189-seo-a11y-design.md`](docs/superpowers/specs/2026-08-03-issue-189-seo-a11y-design.md) e plano em [`docs/superpowers/plans/2026-08-03-seo-a11y-pr138-fixes-plan.md`](docs/superpowers/plans/2026-08-03-seo-a11y-pr138-fixes-plan.md). (Sitemap, Robots.txt, OpenGraph/Twitter Cards, A11y axe-core e proxy com testes 100% verdes).
+
+- **Issue #190 — Páginas de Erro Customizadas 404 e 500 (Design System):** [Issue #190](https://github.com/romulosutil/Iris/issues/190) com spec em [`docs/superpowers/specs/2026-08-03-issue-190-paginas-erro-espectro-brutal-design.md`](docs/superpowers/specs/2026-08-03-issue-190-paginas-erro-espectro-brutal-design.md).
+  - ✅ **404 (`not-found.tsx`):** Entregue no commit `e9d5d20` (pt-BR, Espectro Brutal, retorno à agenda).
+  - 🚧 **500 (`error.tsx`):** Pendente (Client Component React Error Boundary, botão `reset()`, log seguro sem vazar stack trace, testes Vitest).
+- **Issue #191 — Trava Anti-Fraude de Trial & Validação de CPF (Paciente/Responsável):** [Issue #191](https://github.com/romulosutil/Iris/issues/191) com spec em [`docs/superpowers/specs/2026-08-03-issue-191-trava-anti-fraude-cpf-design.md`](docs/superpowers/specs/2026-08-03-issue-191-trava-anti-fraude-cpf-design.md).
+
+
 
 ---
 
@@ -114,6 +234,215 @@
 - Nada de código. O que não dá pra provar daqui é o caminho ponta a ponta contra
   a Resend real (429 de verdade), pelo mesmo motivo da #126: exigiria alterar
   alerta na base de produção. Segue dependendo de ambiente separado.
+
+---
+
+## 🚨 Sessão 03/08/2026 (2ª) — Pix Automático cai, conta Asaas bloqueada, trilho muda (#36)
+
+**Dois bloqueadores novos, descobertos no fim da sessão. A Fase 7 para aqui até
+resolverem.**
+
+### 1. Conta Asaas de produção **bloqueada — ainda não aprovada**
+
+Descoberto ao tentar cadastrar o webhook de produção. Trabalho no Asaas
+**interrompido imediatamente**; nem a limpeza dos dados de teste do sandbox foi
+feita, para não mexer na conta nesse estado.
+
+Isso é pré-requisito de tudo: sem conta aprovada não há cobrança, não há webhook
+de produção, não há self-service. **Provavelmente também é a causa raiz do item
+2** — vale confirmar com o Asaas se a indisponibilidade do Pix Automático é
+consequência da conta não aprovada, e não um prazo de produto.
+
+### 2. Pix Automático indisponível por **até 6 meses**
+
+Derruba a premissa central da spec `2026-08-02-issue-36-fase-7-self-service-asaas-design.md`
+e da decisão de gateway de 01/08. Origem do prazo **ainda não confirmada**
+(gerente Asaas? fila do BC? análise cadastral?) — anotar quando souber, porque
+muda o plano: se for da conta, pode acelerar; se for regulatório, não tem o que
+fazer.
+
+⚠️ Note que o BACKLOG de 01/08 afirma "Pix Automático **está habilitado na
+conta**", com base na aba de Webhooks expor os 10 eventos. **A lista de eventos
+no formulário de webhook não prova habilitação** — é catálogo do produto Asaas,
+não estado da conta. Erro de leitura a não repetir.
+
+### Correção de registro: Assinatura **não** é inútil, como estava escrito
+
+O BACKLOG de 01/08 descartou o produto "Assinaturas" por gerar cobrança com
+40 dias de antecedência, "inútil para valor que só se conhece perto do
+vencimento". **Medido no sandbox hoje, o quadro é outro:**
+
+- A antecedência é **pior** que o registrado: pedindo `nextDueDate: 2026-10-08`
+  em 03/08, o Asaas emitiu a cobrança **na hora** — 66 dias antes.
+- **Mas o valor de uma cobrança `PENDING` pode ser corrigido**: `PUT
+  /v3/payments/{id}` mudou 487 → 611 sem erro.
+
+Ou seja: Assinatura é **utilizável com correção de valor**, não inútil. O
+descarte continua valendo, mas por outro motivo — ver abaixo.
+
+### Decisão travada (03/08): trilho = **cobrança avulsa mensal**
+
+A apuração cria uma cobrança por mês já com o valor certo:
+
+```
+job mensal apura pacientes ativos
+   → POST /v3/payments  { billingType: PIX, value: <apurado>, dueDate,
+                          externalReference: IRIS-<clinica>-<AAAA-MM> }
+   → Asaas emite QR e cobra por e-mail
+   → webhook PAYMENT_RECEIVED libera o mês
+```
+
+**O motivo da escolha é modo de falha, não custo nem esforço.** Com Assinatura, a
+cobrança nasce automática com o valor do mês anterior: job morto, bug ou deploy
+quebrado significam **cliente cobrado com valor errado** — falha fechada em cima
+de dinheiro do cliente. Com avulsa, job morto significa **ninguém cobrado** —
+falha aberta. É o mesmo lado que o projeto já escolheu duas vezes: "a falha é
+aberta (produto de graça), nunca conta travada" e "gate de trial derivado no
+request, não flag setada por job — job morto falha fechado".
+
+Cobrar R$ 611 de quem devia R$ 0 destrói confiança de um jeito que não cobrar não
+destrói.
+
+**Verificado no sandbox:** `POST /v3/payments` com `value: 487.00`,
+`billingType: PIX` e `externalReference` retornou `PENDING` com `invoiceUrl` —
+valor variável é nativo aqui, sem nada a corrigir depois.
+
+### Consequência boa, que quase passou despercebida
+
+A regra de apurar **entre 2 e 10 dias úteis antes do vencimento** era exigência
+do Pix Automático (R5 da spec). Sem ele, **a amarra some**: a apuração roda
+quando quisermos. O trilho novo é mais simples que o que estava planejado, não
+mais complexo.
+
+### O que muda no código: menos do que parece
+
+Nada no endpoint. `POST /api/hooks/asaas` grava qualquer evento e responde 200 —
+evento desconhecido já era caso previsto. A virada é **de configuração**: o
+webhook passa a assinar a seção **Cobranças** (`PAYMENT_*`) em vez de Pix
+Automático. O que foi entregue continua válido: endpoint, token em produção,
+idempotência por `UNIQUE`, payload bruto reprocessável.
+
+### Estado em que a sessão parou (nada quebrado)
+
+- **Produção:** `ASAAS_WEBHOOK_TOKEN` provisionada e verificada; **nenhum
+  webhook cadastrado** no Asaas. Nada em produção depende do Asaas hoje, então a
+  conta bloqueada não derruba nada.
+- **Sandbox:** webhook `Iris - sandbox (tunel local)` **desativado** (URL do
+  túnel já morreu), `0 eventos penalizados`.
+- **Lixo de teste no sandbox, a limpar quando a conta normalizar:** cliente
+  `cus_000008561913`, chave Pix EVP `2b02027c-…`, autorização
+  `53da5204-…`, cobranças `pay_lw8gvq2qm2f7hmu1` e `pay_dexdnwf6w79b5hsi`,
+  assinatura `sub_xbfz55y4jl79z38j`.
+- **Produção tem uma linha de probe** em `asaas_webhook_event`
+  (`probe-easypanel-token-2026-08-03`), apagável quando houver acesso ao banco.
+
+### Para retomar
+
+1. Destravar a aprovação da conta Asaas — **bloqueia todo o resto**.
+2. Confirmar a origem do prazo do Pix Automático.
+3. Refazer o webhook (sandbox primeiro) assinando `PAYMENT_*`, e provar com
+   evento real, mesmo rito que fechou o D5.
+4. Só então: tabela `subscription`, apuração e gate de pagamento.
+
+---
+
+## 🏁 Sessão 03/08/2026 — Webhook Asaas exercitado com evento real (#36, fecha D5)
+
+**O canal foi provado de ponta a ponta pela primeira vez.** Um evento
+`PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED` **real**, gerado pelo Asaas
+sandbox, atravessou a rede e virou linha em `asaas_webhook_event`
+(`evt_a81765ea346714f51a9656a8c74aefa8&17706514`, 03/08 22:55:12Z). Payload
+guardado em `docs/evidencias/2026-08-03-asaas-sandbox-evento-real.json`.
+
+**Montagem:** webhook do sandbox apontado para um túnel `cloudflared` →
+`localhost:3010` → Postgres local. **Produção não foi tocada de propósito** —
+apontar o sandbox para `irisclinica.ia.br` misturaria evento de teste com evento
+de dinheiro real na mesma tabela e amarraria o mesmo token aos dois ambientes.
+
+**O que o dublê não cobria (e por isso o D5 existia):**
+
+- O `id` real é `evt_<hash>&<n>` — **contém `&`**. Todos os testes do repo usam
+  `evt_teste_<uuid>`. Nada quebrou, mas ninguém tinha verificado.
+- Dentro de `authorization`, datas vêm em **`dd/MM/yyyy`** (`startDate:
+  "08/09/2026"`), enquanto o `dateCreated` do topo vem `yyyy-MM-dd HH:mm:ss`.
+  **Dois formatos no mesmo payload** — a apuração precisa saber disso.
+- `paymentCreationMode: "MANUAL"` e `originType:
+  "IMMEDIATE_PAYMENT_AND_RECURRING_QR_CODE"` vêm preenchidos pelo Asaas.
+
+**A decisão de arquitetura da spec ficou comprovada, não só documentada:** a
+autorização foi criada **sem `value` na raiz** e a resposta voltou com
+`"value": null`. O valor variável por paciente ativo é viável no trilho
+escolhido — isso era premissa até agora.
+
+**Contrato real do endpoint, levantado por tentativa** (a doc não foi usada —
+segue com prompt injection nas páginas de Pix Automático): `POST
+/v3/pix/automatic/authorizations` exige `frequency`, `contractId`, `startDate`,
+`customerId` e um objeto `immediateQrCode` com `value` + `originalValue` +
+`expirationSeconds`. Note que `customerId` (não `customer`, como no resto da
+API) e que **a conta precisa de chave Pix cadastrada** — sem ela o erro é
+`"Chave Pix não encontrada."`, que não diz o que fazer. Foi criada uma chave EVP
+no sandbox.
+
+**Dois defeitos de configuração encontrados no caminho** (ambos silenciosos):
+
+- `ASAAS_WEBHOOK_TOKEN` estava **vazia** no `.env.local` (só espaços + um
+  comentário TODO). O endpoint respondia 401 — comportamento **correto**, é o
+  guard "env ausente nunca vira passa" funcionando, mas indistinguível de token
+  errado, porque o corpo do 401 é idêntico nos três casos por decisão de projeto.
+- `.env.local` sobrescrevia `DATABASE_URL`/`AUTH_DATABASE_URL` com o placeholder
+  literal `<sua conn>`. Como `.env.local` tem precedência sobre `.env` no Next,
+  o app dev subia apontando para lugar nenhum e o webhook dava 500 com
+  `TypeError: Invalid URL`. Linhas comentadas.
+
+**Ressalva:** o webhook do sandbox ficou com tipo de envio **"Não sequencial"** —
+o form do painel não expõe `select`/`checkbox` no DOM (componentes custom em
+iframe) e a troca por coordenada não pegou. Aceitável enquanto o handler só
+grava: a barreira contra efeito duplicado é o `UNIQUE` em `asaas_event_id`, não
+a ordem de chegada. **Quando a apuração entrar, o webhook de produção precisa
+nascer "Sequencial"** — ordem passa a importar (`AUTHORIZED` antes de
+`CANCELLED`).
+
+**`ASAAS_WEBHOOK_TOKEN` provisionada em produção (03/08/2026).** A variável
+**não existia** entre as 13 do `iris-app` — ou seja, o 401 que produção devolvia
+não era token errado, era o guard "env ausente nunca vira passa". Se o webhook
+de produção tivesse sido cadastrado antes disso, **toda** entrega do Asaas
+tomaria 401 e o diagnóstico seria caro, porque o corpo do 401 é idêntico nos
+três casos de propósito.
+
+Token gerado com `randomBytes(32).toString("base64url")` (CSPRNG — não
+`Get-Random`, ver #93), **distinto do de sandbox**, passado por clipboard e
+nunca colado no chat. Antes de implantar, foi conferido que o último deploy
+verde (há 5h) já era o HEAD de `origin/main` (`1decf13`) — então o "Implantar"
+rebuildou o mesmo código, sem carregar commit não deployado junto.
+
+**Verificado medindo, não pelo painel** (regra do repo — "está no painel" não é
+prova de que o processo leu a variável):
+
+| Cenário | Esperado | Obtido |
+| :-- | :-- | :-- |
+| Token de produção | 200 | **200** `{"received":true}` |
+| Token de **sandbox** | 401 | **401** — ambientes isolados |
+| Token lixo | 401 | **401** |
+| Header ausente | 401 | **401** |
+| Reenvio do mesmo `id` | `duplicado` | **`{"duplicado":true}`** |
+
+O teste positivo deixou **uma** linha em `asaas_webhook_event` de produção
+(`probe-easypanel-token-2026-08-03`, evento `PROBE_PROVISIONAMENTO_TOKEN`). Foi
+de propósito: o mesmo `id` foi reenviado em todas as tentativas justamente para
+o `ON CONFLICT DO NOTHING` garantir no máximo uma linha. Pode ser apagada quando
+houver acesso ao banco de produção — a porta pública do Postgres está fechada.
+
+**Ainda aberto:** o webhook de **produção** cadastrado na conta de produção do
+Asaas (não sandbox). Quando for, tem que nascer **"Sequencial"**.
+
+⚠️ **Segurança — achado colateral, não relacionado ao Asaas.** A tela de
+Ambiente do Easypanel expõe todos os segredos em texto plano, e o painel roda em
+**HTTP sem TLS** num IP (`31.97.170.105:3000`). Ficaram visíveis as senhas de
+`DATABASE_URL`/`AUTH_DATABASE_URL`, `BETTER_AUTH_SECRET`,
+`GLITCHTIP_WEBHOOK_SECRET`, `EMAIL_PROVIDER_API_KEY` e um **`GITHUB_TOKEN` PAT**
+com acesso ao repositório. Mesmo padrão do #93 (segredos em log de build do
+Easypanel + PAT). **Recomendação: rotacionar o PAT do GitHub** e avaliar TLS no
+painel — abrir issue própria.
 
 ---
 
