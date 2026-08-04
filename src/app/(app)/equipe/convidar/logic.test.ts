@@ -6,6 +6,23 @@ import { convidarUsuario } from "./logic";
 
 vi.mock("server-only", () => ({}));
 
+// `convidarUsuario` passou a ser envolvido por `comEscrita` (#163): antes de
+// executar, o guard consulta a situação da conta. Sem este dublê, a clínica
+// fictícia deste teste não existe no banco, `derivarSituacao` cai no ramo "sem
+// linha → somente-leitura" e TODOS os casos abaixo passariam a testar o guard
+// em vez do envio de e-mail. A regra do guard tem cobertura própria em
+// `src/lib/billing/estado-conta.test.ts` e nos testes de integração.
+vi.mock("@/lib/billing/estado-conta", async (original) => ({
+  ...(await original<typeof import("@/lib/billing/estado-conta")>()),
+  avaliarSituacaoConta: vi.fn(async () => ({
+    estado: "ativa" as const,
+    podeEscrever: true,
+    podeCadastrarPaciente: true,
+    diasRestantesTrial: null,
+    statusAssinatura: "active",
+  })),
+}));
+
 const ctxCoord: TenantContext = {
   clinicId: "11111111-1111-1111-1111-111111111111",
   userId: "a0000000-0000-0000-0000-000000000001",

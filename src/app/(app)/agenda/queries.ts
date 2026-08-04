@@ -15,6 +15,12 @@ import {
 } from "@/lib/agenda/projecao";
 import { horaParaMin, type FaixaDia } from "@/lib/agenda/janela";
 import { conflita, type Slot } from "@/lib/agenda/conflito";
+// Guarda por exceção: os cores de escrita da agenda devolvem o objeto criado
+// (`{ id }`, `{ removidas }`, …), não um estado com `error` — não há campo onde
+// encaixar `bloqueioConta`, então `comEscrita` não se aplica. Os chamadores já
+// convivem com exceção de domínio (`ConflitoError`, `RoleError`) e tratam
+// `ContaSomenteLeituraError` pelo mesmo caminho.
+import { requireEscritaPermitida } from "@/lib/billing/guard-escrita";
 import {
   datasDaRegra,
   horizontePadrao,
@@ -289,6 +295,7 @@ export async function criarRegra(
   const vigenciaInicio = vigenciaInicioC7(dados.semanaVisivelISO, dados.hojeISO);
 
   return withTenant(ctx, async (tx) => {
+    await requireEscritaPermitida(tx, ctx.clinicId);
     await validarTerapeutaDaClinica(tx, ctx.clinicId, dados.terapeutaId);
     const ativas = await tx
       .select({
@@ -446,6 +453,7 @@ export async function criarAvulsa(
   const novo: Slot = { diaSemana, inicioMin, fimMin: inicioMin + dados.duracaoMin };
   try {
     return await withTenant(ctx, async (tx) => {
+      await requireEscritaPermitida(tx, ctx.clinicId);
       await validarTerapeutaDaClinica(tx, ctx.clinicId, dados.terapeutaId);
       const [clinicRow] = await tx
         .select({ timezone: schema.clinic.timezone })
@@ -688,6 +696,7 @@ export async function materializarRegra(
 ): Promise<ResultadoMaterializacao> {
   requireAgendar(ctx);
   return withTenant(ctx, async (tx) => {
+    await requireEscritaPermitida(tx, ctx.clinicId);
     const [regra] = await tx
       .select()
       .from(schema.agendamentoRecorrente)
@@ -793,6 +802,7 @@ export async function encerrarRegra(
 ): Promise<{ removidas: number }> {
   requireRole(ctx, "coordenador");
   return withTenant(ctx, async (tx) => {
+    await requireEscritaPermitida(tx, ctx.clinicId);
     const cutoff = await cutoffEncerramento(tx, ctx.clinicId, ateFimISO);
     await tx
       .update(schema.agendamentoRecorrente)

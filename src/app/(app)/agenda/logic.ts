@@ -11,6 +11,7 @@ import {
   userRole,
 } from "@/db/schema";
 import { transicaoPermitida, exigeJustificada } from "@/lib/agenda/transicoes";
+import { comEscrita } from "@/lib/billing/guard-escrita";
 import { FUSO_CLINICA_OFFSET } from "./fuso";
 
 export type SessionEstado = (typeof sessionEstado.enumValues)[number];
@@ -36,7 +37,7 @@ export type SessaoDoDia = {
  * vez: a guarda `checkInEm IS NULL` torna a chamada repetida um no-op seguro. O
  * RLS garante que só quem pode tocar a sessão a atualiza.
  */
-export async function checkInSessao(
+async function checkInSessaoCore(
   ctx: TenantContext,
   sessionId: string,
 ): Promise<{ error?: string }> {
@@ -53,6 +54,13 @@ export async function checkInSessao(
   }
   return {};
 }
+
+/**
+ * Check-in escreve em `session` → conta em somente-leitura não passa. O guard
+ * fica aqui, na exportação, e não no `actions.ts`, para que os testes de
+ * integração (que chamam o core direto) exercitem o bloqueio.
+ */
+export const checkInSessao = comEscrita(checkInSessaoCore);
 
 /**
  * Grade do dia: sessões cuja data (no fuso da clínica, America/Sao_Paulo) é
@@ -115,7 +123,7 @@ export type MarcarEstadoInput = {
  * mesma sessão concorrentemente (0 linhas afetadas → erro "já foi
  * atualizada", em vez de sobrescrever silenciosamente).
  */
-export async function marcarEstado(
+async function marcarEstadoCore(
   ctx: TenantContext,
   input: MarcarEstadoInput,
 ): Promise<{ error?: string; ok?: boolean }> {
@@ -168,3 +176,11 @@ export async function marcarEstado(
   }
   return { ok: true };
 }
+
+/**
+ * Consolidação muda `session.estado` → escrita. Bloqueada antes do `requireRole`
+ * de propósito: com a conta em somente-leitura a resposta certa é o CTA de
+ * ativação, não "sem permissão" — papel e situação da conta são recusas
+ * diferentes e a UI reage a cada uma de um jeito.
+ */
+export const marcarEstado = comEscrita(marcarEstadoCore);

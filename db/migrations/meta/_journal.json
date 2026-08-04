@@ -505,6 +505,34 @@
       "when": 1785422580000,
       "tag": "0071_billing_assinatura_e_ciclo",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1785422581000,
+      "tag": "0072_super_admin_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1785422582000,
+      "tag": "0073_conta_somente_leitura",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1785422583000,
+      "tag": "0074_habilitar_barreira_somente_leitura",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1785422584000,
+      "tag": "0075_billing_pos_pago",
+      "breakpoints": true
     }
   ]
 }

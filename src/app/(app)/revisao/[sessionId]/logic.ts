@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { evidence, extraction, reinforcerProfile, session } from "@/db/schema";
+import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
 import { type Alvo, drizzleResolverQueries, resolverAlvoParaFks } from "@/lib/evidence/resolver";
 
@@ -171,7 +172,10 @@ async function inserirEvidenciasOnApprove(
 
 const idSchema = z.object({ extractionId: z.string().uuid() });
 
-export type ReviewResult = { error?: string; ok?: boolean };
+// `bloqueioConta` viaja junto de `error` (e não no lugar dele) porque a tela de
+// revisão já sabe renderizar `error`; sem o campo estruturado ela não teria como
+// distinguir "conta em somente-leitura" (CTA de ativação) de erro de validação.
+export type ReviewResult = { error?: string; ok?: boolean; bloqueioConta?: BloqueioConta };
 
 async function transicionar(
   ctx: TenantContext,
@@ -249,7 +253,13 @@ async function transicionar(
   }
 }
 
-export async function aprovarExtracao(
+// ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
+// Revisar extração é escrita clínica comum, então entra na regra geral: conta
+// em somente-leitura não avança a máquina de estados. O wrap fica aqui, na
+// exportação do core, e não no `actions.ts`, para que os testes de integração
+// — que chamam o core direto com `ctx` — exercitem o guard de verdade.
+
+async function aprovarExtracaoCore(
   ctx: TenantContext,
   input: { extractionId: string; versao: number },
 ): Promise<ReviewResult> {
@@ -258,7 +268,9 @@ export async function aprovarExtracao(
   return transicionar(ctx, p.data.extractionId, p.data.versao, { estado: "aprovada" });
 }
 
-export async function descartarExtracao(
+export const aprovarExtracao = comEscrita(aprovarExtracaoCore);
+
+async function descartarExtracaoCore(
   ctx: TenantContext,
   input: { extractionId: string; versao: number },
 ): Promise<ReviewResult> {
@@ -267,13 +279,17 @@ export async function descartarExtracao(
   return transicionar(ctx, p.data.extractionId, p.data.versao, { estado: "descartada" });
 }
 
+// Descartar também escreve (transição + `revisado_por`/`revisado_em`), então
+// não é isento por ser "a ação negativa" — o que conta é tocar o banco.
+export const descartarExtracao = comEscrita(descartarExtracaoCore);
+
 const editarSchema = z.object({
   extractionId: z.string().uuid(),
   payloadEditado: z.record(z.unknown()),
   versao: z.number(),
 });
 
-export async function editarExtracao(
+async function editarExtracaoCore(
   ctx: TenantContext,
   input: { extractionId: string; payloadEditado: Record<string, unknown>; versao: number },
 ): Promise<ReviewResult> {
@@ -284,3 +300,5 @@ export async function editarExtracao(
     payloadEditado: p.data.payloadEditado,
   });
 }
+
+export const editarExtracao = comEscrita(editarExtracaoCore);

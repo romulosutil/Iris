@@ -8,10 +8,11 @@ import {
   getBillingProvider,
   type MetodoPagamento,
   type StatusAssinaturaProvider,
+  type StatusCobranca,
 } from "./provider";
 
 /**
- * Estado da assinatura e do ciclo de faturamento (#36).
+ * Estado da assinatura e do ciclo de faturamento (#36, revisto em #163).
  *
  * Tudo aqui roda em `authDb` — a conexão da role `iris_auth`, sem GUC de
  * tenant. Não é atalho: o webhook chega do gateway, não de uma sessão de
@@ -19,18 +20,55 @@ import {
  * fechamento varre TODAS as clínicas, o que é justamente o que `withTenant`
  * proíbe. A contrapartida é que `iris_auth` não tem grant em `patient` — a
  * apuração passa obrigatoriamente pela função `billing_apurar_ciclo`
- * (SECURITY DEFINER, migração 0071), que devolve contagem, nunca dado clínico.
+ * (SECURITY DEFINER, migrações 0071/0075), que devolve contagem, nunca dado
+ * clínico.
+ *
+ * ## O trilho é PÓS-PAGO
+ *
+ * ```
+ * ativação (registra meio de pagamento, NÃO cobra)
+ *    ↓
+ * webhook autoriza → status active → abre o 1º ciclo
+ *    ↓
+ * fim do ciclo → billing_apurar_ciclo → status 'apurado'
+ *    ↓
+ * emitirCobrancaDeCiclo (valor REAL apurado) → 'aguardando_pagamento'
+ *    ↓
+ * webhook de pagamento → 'pago'   |   recusa/vencimento → 'falhou' → past_due
+ * ```
+ *
+ * **Regra inegociável: `pago` só pelo webhook.** A versão anterior carimbava o
+ * ciclo como `cobrado` no instante em que ajustava o valor da recorrência no
+ * gateway — nenhuma cobrança tinha sido emitida nem confirmada, e o
+ * `billing_cycle`, que é o memorial auditável da fatura, afirmava um fato que
+ * não aconteceu.
  */
 
 /** Ciclo padrão. Fica na coluna `subscription.ciclo_dias` por clínica. */
 const CICLO_DIAS_PADRAO = 30;
 
 /**
- * Antecedência da apuração. A regra (#36) é apurar 3 dias antes da renovação,
- * para que o reajuste do valor recorrente chegue ao gateway antes de ele
- * disparar o débito — mandar depois cobraria o valor do mês passado.
+ * Prazo de vencimento da cobrança emitida no fechamento, em dias.
+ * Esgotado sem pagamento, o ciclo vai a `falhou` e a assinatura a `past_due`,
+ * onde a carência (`subscription.carencia_dias`) começa a correr.
  */
-export const DIAS_ANTECEDENCIA_APURACAO = 3;
+const DIAS_VENCIMENTO_COBRANCA = 5;
+
+/**
+ * Antecedência da apuração: **zero**, e é o ponto do trilho pós-pago.
+ *
+ * Era 3. A apuração rodava 3 dias ANTES de `cicloAtualFim`, mas
+ * `billing_apurar_ciclo` conta o intervalo `[inicio, fim)` INTEIRO: paciente
+ * cadastrado nos dias 28-30 não existia no momento da apuração, o ciclo era
+ * marcado e nunca reapurado — subfaturamento recorrente e invisível. A
+ * antecedência só fazia sentido enquanto o trilho era recorrente e o valor
+ * precisava chegar ao gateway antes de ele disparar o débito. Emitindo a
+ * cobrança nós mesmos, no fechamento, ela deixa de ter razão de existir.
+ *
+ * Mantida como constante exportada (em vez de sumir) porque é referenciada em
+ * teste e o zero explícito documenta a decisão melhor que a ausência.
+ */
+export const DIAS_ANTECEDENCIA_APURACAO = 0;
 
 function somarDias(base: Date, dias: number): Date {
   const d = new Date(base);
@@ -39,11 +77,11 @@ function somarDias(base: Date, dias: number): Date {
 }
 
 /**
- * Traduz o status do gateway para o estado interno.
+ * Traduz o status do vínculo no gateway para o estado interno.
  *
- * `pendente` NÃO vira `free_tier`: uma assinatura que já existe no gateway e
- * aguarda autorização é `setup_pending`. Voltar para `free_tier` reabriria o
- * gate do 1º paciente com uma cobrança em voo.
+ * `pendente` NÃO vira `free_tier`: um vínculo que já existe no gateway e
+ * aguarda autorização é `setup_pending`. Voltar para `free_tier` faria a conta
+ * regredir de estado com uma autorização em voo.
  */
 function estadoInterno(
   statusProvider: StatusAssinaturaProvider,
@@ -75,17 +113,23 @@ export interface ResultadoAtivacao {
 }
 
 /**
- * Abre a cobrança de ativação do 1º paciente: cria a assinatura recorrente no
- * gateway com o valor do Mês 1 e deixa a linha local em `setup_pending`.
+ * Registra o meio de pagamento da clínica. **Não cobra nada.**
+ *
+ * Antes, esta função criava no gateway uma recorrência de valor FIXO
+ * `calcularMensalidadeCentavos(1)` = R$ 39 — o que é pré-pago: a clínica
+ * entrava numa cobrança antes de usar um ciclo sequer. Com a cobrança avulsa
+ * no fechamento, o problema "a recorrência nasce com valor de 1 paciente"
+ * simplesmente deixa de existir, e `VALOR_PRIMEIRO_PACIENTE_CENTAVOS` sai deste
+ * caminho.
  *
  * O paciente NÃO é criado aqui, e o status NÃO vai para `active` aqui — quem
  * promove para `active` é o webhook, depois da confirmação do banco. Confiar no
  * retorno do checkout seria confiar no navegador do cliente: a URL de retorno é
  * navegável à mão.
  *
- * Idempotente por clínica: se já existe assinatura com `provider_subscription_id`
- * e ela ainda está pendente, devolve o checkout existente em vez de criar uma
- * segunda no gateway — dois cliques no botão não viram duas cobranças.
+ * Idempotente por clínica: se já existe vínculo pendente, devolve o checkout
+ * existente em vez de criar um segundo no gateway — dois cliques no botão não
+ * viram dois vínculos.
  */
 export async function iniciarAtivacao(
   pedido: PedidoAtivacao,
@@ -99,33 +143,28 @@ export async function iniciarAtivacao(
     .limit(1);
 
   if (existente?.providerSubscriptionId && existente.status === "setup_pending") {
-    const atual = await provider.consultarAssinatura(
+    const atual = await provider.consultarVinculo(
       existente.providerSubscriptionId,
     );
     // Só reaproveita enquanto continua pendente no gateway. Se já autorizou,
     // cair aqui significa que o webhook atrasou; aplicar o efeito agora é
-    // melhor que devolver um checkout de algo já pago.
+    // melhor que devolver um checkout de algo já resolvido.
     if (atual.status === "pendente") {
       return {
-        checkoutUrl: existente.providerCustomerId ?? "",
+        checkoutUrl: existente.checkoutUrl ?? "",
         providerSubscriptionId: existente.providerSubscriptionId,
       };
     }
     await aplicarStatusProvider(existente.providerSubscriptionId, atual.status);
   }
 
-  // Mês 1 = 1 paciente. A calculadora é a fonte única do preço, mesmo para o
-  // caso trivial — hardcodar 3900 aqui criaria duas verdades sobre a faixa 1.
-  const valorCentavos = calcularMensalidadeCentavos(1);
-
-  const criada = await provider.criarAssinatura({
+  const criado = await provider.iniciarVinculoPagamento({
     assinante: {
       clinicId: pedido.clinicId,
       nomeClinica: pedido.nomeClinica,
       emailResponsavel: pedido.emailResponsavel,
       cpfCnpj: pedido.cpfCnpj,
     },
-    valorCentavos,
     metodo: pedido.metodo,
     urlRetorno: pedido.urlRetorno,
     referenciaExterna: `clinic:${pedido.clinicId}`,
@@ -137,9 +176,10 @@ export async function iniciarAtivacao(
       clinicId: pedido.clinicId,
       status: "setup_pending",
       provider: provider.id,
-      providerSubscriptionId: criada.providerSubscriptionId,
-      // Reaproveitado como cache do checkout para o retry idempotente acima.
-      providerCustomerId: criada.checkoutUrl,
+      providerSubscriptionId: criado.providerVinculoId,
+      // Coluna própria (0075). Antes o checkout era guardado em
+      // `provider_customer_id`, que significa outra coisa.
+      checkoutUrl: criado.checkoutUrl,
       metodoPagamento: pedido.metodo,
       cicloDias: CICLO_DIAS_PADRAO,
     })
@@ -148,29 +188,29 @@ export async function iniciarAtivacao(
       set: {
         status: "setup_pending",
         provider: provider.id,
-        providerSubscriptionId: criada.providerSubscriptionId,
-        providerCustomerId: criada.checkoutUrl,
+        providerSubscriptionId: criado.providerVinculoId,
+        checkoutUrl: criado.checkoutUrl,
         metodoPagamento: pedido.metodo,
         atualizadoEm: new Date(),
       },
     });
 
   return {
-    checkoutUrl: criada.checkoutUrl,
-    providerSubscriptionId: criada.providerSubscriptionId,
+    checkoutUrl: criado.checkoutUrl,
+    providerSubscriptionId: criado.providerVinculoId,
   };
 }
 
 /**
- * Aplica ao estado local o status observado no gateway.
+ * Aplica ao estado local o status do vínculo observado no gateway.
  *
  * Recebe o status CONSULTADO, não o inferido do payload do webhook: a
  * notificação do Mercado Pago frequentemente traz só `{type, action, data:{id}}`,
  * sem estado nenhum. Decidir transição a partir do tipo do evento seria decidir
  * a partir de dado que o gateway não mandou.
  *
- * Retorna `true` se alguma linha mudou — `false` significa assinatura
- * desconhecida (evento de outra conta, ou reentrega após cancelamento).
+ * Retorna `true` se alguma linha mudou — `false` significa vínculo desconhecido
+ * (evento de outra conta, ou reentrega após cancelamento).
  */
 export async function aplicarStatusProvider(
   providerSubscriptionId: string,
@@ -201,8 +241,10 @@ export async function aplicarStatusProvider(
       // assinatura nunca venceria.
       pastDueDesde:
         novo === "past_due" ? (linha.pastDueDesde ?? agora) : null,
-      // Ativação abre o primeiro ciclo. Sem isso o job de fechamento não teria
-      // por onde varrer e a renovação nunca aconteceria.
+      // A ativação abre o primeiro ciclo, e é a partir DELE que pacientes
+      // contam para faturamento. Nada do período de teste entra em fatura por
+      // construção: não existe `billing_cycle` antes deste ponto, e o ciclo
+      // começa em `agora`, sem retroagir.
       cicloAtualInicio: virandoAtiva ? agora : linha.cicloAtualInicio,
       cicloAtualFim: virandoAtiva
         ? somarDias(agora, linha.cicloDias)
@@ -237,21 +279,29 @@ async function abrirCiclo(
 export interface ResultadoFechamento {
   clinicId: string;
   cycleId: string;
-  pacientesContados: number;
+  fichasContadas: number;
   valorCentavos: number;
-  reajustado: boolean;
+  /** `true` quando uma cobrança foi efetivamente emitida no gateway. */
+  cobrancaEmitida: boolean;
+  providerChargeId?: string;
   erro?: string;
 }
 
 /**
- * Fechamento de ciclo: apura pacientes ativos, calcula o valor consolidado e
- * reajusta a recorrência no gateway. Roda `DIAS_ANTECEDENCIA_APURACAO` dias
- * antes de cada renovação.
+ * Fechamento de ciclo: apura, calcula o valor consolidado e **emite a cobrança
+ * do ciclo que acabou**, com o valor realmente apurado.
+ *
+ * Roda quando o ciclo já venceu (`cicloAtualFim <= agora`) — não antes. Ver
+ * `DIAS_ANTECEDENCIA_APURACAO`.
  *
  * Uma clínica que falha NÃO derruba a varredura das outras — o erro é
  * persistido em `billing_cycle.erro` e a função segue. Um `throw` aqui faria a
  * primeira clínica com problema de rede impedir o faturamento de todas as
  * seguintes.
+ *
+ * Ciclo de valor zero não gera cobrança: com o critério "criou ou interagiu",
+ * clínica em recesso apura 0 paciente e a fatura é R$ 0,00. Mandar uma cobrança
+ * de zero ao gateway é erro garantido; o ciclo é fechado direto como `pago`.
  */
 export async function fecharCiclosVencendo(opcoes?: {
   agora?: Date;
@@ -259,7 +309,6 @@ export async function fecharCiclosVencendo(opcoes?: {
 }): Promise<ResultadoFechamento[]> {
   const agora = opcoes?.agora ?? new Date();
   const dryRun = opcoes?.dryRun ?? false;
-  const limite = somarDias(agora, DIAS_ANTECEDENCIA_APURACAO);
   const provider = getBillingProvider();
 
   const vencendo = await authDb
@@ -275,7 +324,7 @@ export async function fecharCiclosVencendo(opcoes?: {
     .where(
       and(
         eq(subscription.status, "active"),
-        lte(subscription.cicloAtualFim, limite),
+        lte(subscription.cicloAtualFim, agora),
       ),
     );
 
@@ -295,7 +344,10 @@ export async function fecharCiclosVencendo(opcoes?: {
       );
 
       const [ciclo] = await authDb
-        .select({ id: billingCycle.id })
+        .select({
+          id: billingCycle.id,
+          providerChargeId: billingCycle.providerChargeId,
+        })
         .from(billingCycle)
         .where(
           and(
@@ -315,24 +367,57 @@ export async function fecharCiclosVencendo(opcoes?: {
       const apuracao = await authDb.execute<{ total: number }>(
         sql`SELECT billing_apurar_ciclo(${ciclo.id}::uuid) AS total`,
       );
-      const pacientesContados =
+      const fichasContadas =
         (apuracao as unknown as { total: number }[])[0]?.total ?? 0;
-      const valorCentavos = calcularMensalidadeCentavos(pacientesContados);
+      const valorCentavos = calcularMensalidadeCentavos(fichasContadas);
 
-      let reajustado = false;
-      if (!dryRun && assinatura.providerSubscriptionId) {
-        await provider.atualizarValorRecorrente(
-          assinatura.providerSubscriptionId,
-          valorCentavos,
-        );
-        reajustado = true;
-      }
+      let cobrancaEmitida = false;
+      let providerChargeId = ciclo.providerChargeId ?? undefined;
 
       if (!dryRun) {
         await authDb
           .update(billingCycle)
-          .set({ valorCentavos, status: "cobrado", cobradoEm: new Date(), erro: null })
+          .set({ valorCentavos, erro: null })
           .where(eq(billingCycle.id, ciclo.id));
+
+        if (valorCentavos === 0) {
+          await authDb
+            .update(billingCycle)
+            .set({ status: "pago", cobradoEm: new Date() })
+            .where(eq(billingCycle.id, ciclo.id));
+        } else if (ciclo.providerChargeId) {
+          // Guarda de idempotência própria da EMISSÃO: o UNIQUE
+          // `(clinic_id, inicio)` protege o ciclo, não a cobrança. Sem isto,
+          // uma reexecução do job depois de uma falha parcial emitiria uma
+          // segunda cobrança para o mesmo ciclo.
+        } else if (assinatura.providerSubscriptionId) {
+          const cobranca = await provider.emitirCobrancaDeCiclo({
+            vinculoId: assinatura.providerSubscriptionId,
+            valorCentavos,
+            referenciaExterna: `cycle:${ciclo.id}`,
+            descricao: `Iris — ficha(s) ativa(s) no ciclo encerrado em ${assinatura.cicloFim.toISOString().slice(0, 10)}`,
+            vencimento: somarDias(agora, DIAS_VENCIMENTO_COBRANCA),
+          });
+          providerChargeId = cobranca.providerChargeId;
+          cobrancaEmitida = true;
+          await authDb
+            .update(billingCycle)
+            .set({
+              providerChargeId: cobranca.providerChargeId,
+              cobrancaEmitidaEm: new Date(),
+              // NÃO é `pago`. Quem confirma é o webhook — este estado diz
+              // exatamente o que aconteceu: a cobrança saiu, o dinheiro não
+              // chegou.
+              status:
+                cobranca.status === "paga" ? "pago" : "aguardando_pagamento",
+              cobradoEm: cobranca.status === "paga" ? new Date() : null,
+            })
+            .where(eq(billingCycle.id, ciclo.id));
+        } else {
+          throw new Error(
+            "assinatura ativa sem vínculo de pagamento no gateway",
+          );
+        }
 
         // O ciclo seguinte começa onde este termina — encadear pelo `fim`
         // anterior, não por `now()`, evita que a data de renovação derive
@@ -358,24 +443,110 @@ export async function fecharCiclosVencendo(opcoes?: {
       resultados.push({
         clinicId: assinatura.clinicId,
         cycleId: ciclo.id,
-        pacientesContados,
+        fichasContadas,
         valorCentavos,
-        reajustado,
+        cobrancaEmitida,
+        providerChargeId,
       });
     } catch (e) {
       const erro = e instanceof Error ? e.message : String(e);
       resultados.push({
         clinicId: assinatura.clinicId,
         cycleId: "",
-        pacientesContados: 0,
+        fichasContadas: 0,
         valorCentavos: 0,
-        reajustado: false,
+        cobrancaEmitida: false,
         erro,
       });
     }
   }
 
   return resultados;
+}
+
+/**
+ * Reconcilia o pagamento de um ciclo a partir do webhook. É a peça que não
+ * existia: o vínculo é identificado por um id que não diz respeito a ciclo
+ * nenhum, então sem `provider_charge_id` não havia como saber QUAL fatura foi
+ * paga.
+ *
+ * `past_due` finalmente ganha caminho produtor real: cobrança de ciclo recusada
+ * ou vencida carimba `past_due` + `pastDueDesde`, e a carência
+ * (`subscription.carencia_dias`) leva a `canceled` a partir daí.
+ *
+ * Retorna `false` quando a cobrança não pertence a nenhum ciclo conhecido —
+ * evento de outra conta, ou reentrega depois de um expurgo.
+ */
+export async function conciliarPagamentoDeCiclo(
+  providerChargeId: string,
+  status: StatusCobranca,
+): Promise<boolean> {
+  const agora = new Date();
+
+  const [ciclo] = await authDb
+    .select({
+      id: billingCycle.id,
+      subscriptionId: billingCycle.subscriptionId,
+      status: billingCycle.status,
+    })
+    .from(billingCycle)
+    .where(eq(billingCycle.providerChargeId, providerChargeId))
+    .limit(1);
+
+  if (!ciclo) return false;
+
+  if (status === "paga") {
+    await authDb
+      .update(billingCycle)
+      .set({ status: "pago", cobradoEm: agora, erro: null })
+      .where(eq(billingCycle.id, ciclo.id));
+
+    // Pagamento em dia tira a assinatura de `past_due` — e só o pagamento faz
+    // isso. `pastDueDesde` volta a NULL para que uma inadimplência futura
+    // recomece a carência do zero.
+    await authDb
+      .update(subscription)
+      .set({ status: "active", pastDueDesde: null, atualizadoEm: agora })
+      .where(
+        and(
+          eq(subscription.id, ciclo.subscriptionId),
+          eq(subscription.status, "past_due"),
+        ),
+      );
+    return true;
+  }
+
+  if (status === "recusada") {
+    await authDb
+      .update(billingCycle)
+      .set({ status: "falhou", erro: "cobrança recusada pelo gateway" })
+      .where(eq(billingCycle.id, ciclo.id));
+
+    const [assinatura] = await authDb
+      .select({ id: subscription.id, pastDueDesde: subscription.pastDueDesde })
+      .from(subscription)
+      .where(eq(subscription.id, ciclo.subscriptionId))
+      .limit(1);
+
+    if (assinatura) {
+      await authDb
+        .update(subscription)
+        .set({
+          status: "past_due",
+          // Só na ENTRADA: recarimbar a cada reentrega zeraria a carência para
+          // sempre e a assinatura nunca venceria.
+          pastDueDesde: assinatura.pastDueDesde ?? agora,
+          atualizadoEm: agora,
+        })
+        .where(eq(subscription.id, assinatura.id));
+    }
+    return true;
+  }
+
+  // `estornada` e `pendente` não movem a assinatura: estorno é decisão
+  // comercial que precisa de tratamento humano, e pendente é o estado em que a
+  // cobrança já está.
+  return true;
 }
 
 /**
@@ -402,19 +573,36 @@ export async function reprocessarEventosPendentes(
   for (const evento of pendentes) {
     try {
       const normalizado = provider.normalizarEvento(evento.payload);
-      if (!normalizado.providerSubscriptionId) {
-        // Sem id de assinatura não há o que aplicar. Marca como aplicado para
-        // não reprocessar eternamente um evento que nunca terá efeito.
+
+      if (normalizado.providerChargeId) {
+        // Evento de COBRANÇA de ciclo. Consulta o gateway em vez de confiar no
+        // tipo do evento, pela mesma razão de `aplicarStatusProvider`: a
+        // notificação costuma vir sem estado nenhum.
+        const atual = await provider.consultarCobranca(
+          normalizado.providerChargeId,
+        );
+        await conciliarPagamentoDeCiclo(
+          normalizado.providerChargeId,
+          atual.status,
+        );
+      } else if (normalizado.providerSubscriptionId) {
+        const atual = await provider.consultarVinculo(
+          normalizado.providerSubscriptionId,
+        );
+        await aplicarStatusProvider(
+          normalizado.providerSubscriptionId,
+          atual.status,
+        );
+      } else {
+        // Sem id nenhum não há o que aplicar. Marca como aplicado para não
+        // reprocessar eternamente um evento que nunca terá efeito.
         await authDb
           .update(mercadopagoWebhookEvent)
-          .set({ aplicadoEm: new Date(), erroAplicacao: "sem provider_subscription_id" })
+          .set({ aplicadoEm: new Date(), erroAplicacao: "sem id utilizável" })
           .where(eq(mercadopagoWebhookEvent.id, evento.id));
         continue;
       }
-      const atual = await provider.consultarAssinatura(
-        normalizado.providerSubscriptionId,
-      );
-      await aplicarStatusProvider(normalizado.providerSubscriptionId, atual.status);
+
       await authDb
         .update(mercadopagoWebhookEvent)
         .set({ aplicadoEm: new Date(), erroAplicacao: null })

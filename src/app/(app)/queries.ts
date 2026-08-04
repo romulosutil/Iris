@@ -3,6 +3,24 @@ import { eq } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { clinic } from "@/db/schema";
 import type { DadosTrialClinica } from "@/lib/trial";
+import {
+  avaliarSituacaoConta,
+  type SituacaoConta,
+} from "@/lib/billing/estado-conta";
+
+/**
+ * Variante fora de transação de `avaliarSituacaoConta`, para uso em Server
+ * Components (layout do app, layout do paciente, telas de cadastro).
+ *
+ * Mesma disciplina do `obterDadosTrialDaClinica` logo abaixo: quem lê para
+ * RENDERIZAR abre a própria transação; quem lê para DECIDIR uma escrita usa a
+ * versão que recebe `tx` e enxerga a mesma imagem do banco que o INSERT.
+ */
+export async function obterSituacaoConta(
+  ctx: TenantContext,
+): Promise<SituacaoConta> {
+  return withTenant(ctx, (tx) => avaliarSituacaoConta(tx, ctx.clinicId));
+}
 
 export async function obterDadosTrialDaClinica(
   ctx: TenantContext,

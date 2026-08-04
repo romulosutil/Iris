@@ -4,6 +4,7 @@ import { requireRole } from "@/auth/require-role";
 import type { TenantContext } from "@/db/rls";
 import { provisionUser } from "@/auth/provisioning";
 import type { Papel } from "@/auth/papel-ativo";
+import { comEscrita } from "@/lib/billing/guard-escrita";
 import { enviarEmailTransacional } from "@/lib/email/transacional";
 import {
   criarTemplateConviteNovoUsuario,
@@ -44,7 +45,7 @@ function escapeHtml(str: string): string {
  * então nunca vira endpoint invocável pelo cliente. `ctx` é sempre derivado no
  * servidor pelo wrapper `*Action` em `./actions`.
  */
-export async function convidarUsuario(
+async function convidarUsuarioCore(
   ctx: TenantContext,
   formData: FormData,
 ): Promise<ConvidarState> {
@@ -104,3 +105,11 @@ export async function convidarUsuario(
 
   return { sucesso: true, emailEnviado: emailRes.enviado };
 }
+
+/**
+ * Convite cria `app_user`/`user_role` (via `provisionUser`) e dispara e-mail —
+ * escrita, e das caras: crescer a equipe é exatamente o que a conta em
+ * somente-leitura não pode fazer. O guard fica antes de qualquer efeito para
+ * não deixar e-mail enviado com provisionamento negado.
+ */
+export const convidarUsuario = comEscrita(convidarUsuarioCore);

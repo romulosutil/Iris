@@ -1,23 +1,39 @@
 /**
- * #36 (Fase 7, Fatia B) — apuração de pacientes ativos por ciclo, contra o banco
- * real. Objeto sob teste: a migração `0071_billing_assinatura_e_ciclo.sql`
- * (função `billing_apurar_ciclo(uuid)` SECURITY DEFINER, função
- * `app_assinatura_bloqueia_cadastro()`, RLS/grants de `subscription`,
- * `billing_cycle` e `billing_cycle_patient`).
+ * #36 (Fase 7, Fatia B) + #163/#159 — apuração de pacientes faturáveis por
+ * ciclo, contra o banco real. Objeto sob teste: `billing_apurar_ciclo(uuid)`
+ * na versão da migração `0075_billing_pos_pago.sql` (SECURITY DEFINER), mais a
+ * função `app_conta_somente_leitura()` da `0073` e a RLS/grants de
+ * `subscription`, `billing_cycle` e `billing_cycle_patient` (da `0071`).
  *
- * A regra comercial que este arquivo protege ("paciente ativo no ciclo
- * `[inicio, fim)`") vale se AO MENOS UM critério for verdadeiro:
- *   (a) `patient.criado_em` dentro do ciclo            → `criado_no_ciclo`
- *   (b) interação no ciclo                             → `interacao_no_ciclo`
+ * ## A regra comercial, na versão que vale a partir da 0075
+ *
+ * Paciente é faturável no ciclo `[inicio, fim)` se AO MENOS UM critério vale:
+ *   (a) `patient.criado_em` dentro do ciclo   → `criado_no_ciclo`
+ *   (b) interação no ciclo                    → `interacao_no_ciclo`
  *       (sessão agendada/check-in/criada, `evidence.aprovado_em`,
  *        `session_note.criado_em`)
- *   (c) `patient.arquivado_em IS NULL`                 → `ativo_nao_arquivado`
- * Precedência do motivo: (a) > (b) > (c).
+ * Precedência do motivo: (a) > (b).
  *
- * A consequência que sustenta a fatura: paciente ARQUIVADO e PARADO no ciclo
- * NÃO é cobrado. É o único critério que separa "base histórica" de "base
- * faturável" — se ele quebrar, a clínica paga por prontuário morto e a fatura
- * fica indefensável numa contestação.
+ * O critério (c) — "`arquivado_em IS NULL`", motivo `ativo_nao_arquivado` —
+ * **SAIU**. Havia três definições incompatíveis vivas em produção (esta função,
+ * o FAQ público e a query de MRR do backoffice); a decidida é "criou OU
+ * interagiu". O valor `ativo_nao_arquivado` continua no enum
+ * `billing_motivo_ativo` — `billing_cycle_patient.motivo` é memorial de fatura
+ * EMITIDA, e removê-lo reescreveria retroativamente o registro de por que
+ * alguém foi cobrado — mas **não é mais PRODUZIDO**. Nenhum caso deste arquivo
+ * pode voltar a esperá-lo.
+ *
+ * ## A consequência aceita conscientemente
+ *
+ * Clínica em recesso apura 0 e paga R$ 0: um mês sem sessão, check-in, evolução
+ * ou cadastro novo zera a fatura, mesmo com 40 pacientes ATIVOS e não
+ * arquivados na base. É deliberadamente mais generoso que a regra antiga. A
+ * inversão que isso força aqui: paciente não-arquivado e PARADO no ciclo, que
+ * antes entrava por (c), agora **não é contado**.
+ *
+ * O que sustenta a fatura numa contestação passa a ser: toda linha do memorial
+ * aponta para um FATO datado dentro do ciclo (um cadastro ou uma interação),
+ * nunca para a mera existência de um prontuário.
  *
  * Roda com `pnpm test:rls`. Gate de env em `integration-env.ts` (as três URLs).
  */
@@ -61,8 +77,8 @@ const CRIADO_ANTIGO = new Date("2026-01-05T09:00:00Z");
 
 // ─── pacientes da clínica A (o cenário) ─────────────────────────────────────
 const P_CRIADO = "00000000-0000-0000-0000-0000000036d1"; // (a)
-const P_ATIVO_ANTIGO = "00000000-0000-0000-0000-0000000036d2"; // (c)
-const P_ARQ_PARADO = "00000000-0000-0000-0000-0000000036d3"; // NEGATIVA principal
+const P_ATIVO_PARADO = "00000000-0000-0000-0000-0000000036d2"; // NEGATIVA nova (ex-(c))
+const P_ARQ_PARADO = "00000000-0000-0000-0000-0000000036d3"; // NEGATIVA histórica
 const P_ARQ_SESSAO = "00000000-0000-0000-0000-0000000036d4"; // (b) sessão no ciclo
 const P_CH_AGENDADA = "00000000-0000-0000-0000-0000000036d5"; // (b) só agendada_para
 const P_CH_CHECKIN = "00000000-0000-0000-0000-0000000036d6"; // (b) só check_in_em
@@ -75,11 +91,20 @@ const P_BORDA_FIM = "00000000-0000-0000-0000-0000000036dc"; // exatamente `fim`
 const P_TRES_SESSOES = "00000000-0000-0000-0000-0000000036dd"; // unicidade
 
 // ─── pacientes da clínica B (o vizinho que não pode contaminar) ─────────────
+// Ambos com sessão DENTRO do ciclo: sob o critério novo, "ativo" não basta —
+// um vizinho parado apuraria 0 e o teste de isolamento perderia toda a força
+// (0 no vizinho é indistinguível de "a RLS não deixou ver nada").
 const P_B1 = "00000000-0000-0000-0000-0000000036f1";
 const P_B2 = "00000000-0000-0000-0000-0000000036f2";
 
-/** Contados esperados na clínica A: 9 (dos 13 pacientes semeados). */
-const ESPERADO_A = 9;
+/**
+ * Contados esperados na clínica A: 8 (dos 13 pacientes semeados).
+ *
+ * Era 9 sob o critério antigo. O que saiu: `P_ATIVO_PARADO`, que entrava
+ * só por (c) — não-arquivado e sem nenhum fato datado no ciclo. É exatamente a
+ * "clínica em recesso paga R$ 0" em escala de um paciente.
+ */
+const ESPERADO_A = 8;
 
 const ctx = (role: string, userId: string, clinicId = CLINIC_A) =>
   ({ role, userId, clinicId }) as TenantContext;
@@ -157,15 +182,21 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
       (${U_COORD_C}, ${CLINIC_C}, 'coordenador')`;
 
     // ── pacientes ───────────────────────────────────────────────────────────
-    // Criado DENTRO do ciclo (critério a). Ativo, mas o motivo tem que ser
-    // `criado_no_ciclo` — a precedência (a) > (c) é parte da regra.
+    // Criado DENTRO do ciclo (critério a). Também tem interação implícita
+    // nenhuma — o motivo tem que ser `criado_no_ciclo`, e a precedência
+    // (a) > (b) é parte da regra.
     await owner!`INSERT INTO patient (id, clinic_id, nome, criado_em) VALUES
       (${P_CRIADO}, ${CLINIC_A}, 'Criado no ciclo', ${DENTRO})`;
-    // Ativo criado ANTES, sem nenhuma interação (critério c puro).
+    // ATIVO (não arquivado), criado ANTES do ciclo, sem NENHUMA interação
+    // dentro dele. Era o critério (c) puro e entrava na fatura; a partir da
+    // 0075 é a negativa nova. Deixado explicitamente NÃO arquivado: se o
+    // critério (c) ressuscitar, este é o único paciente que volta a contar.
     await owner!`INSERT INTO patient (id, clinic_id, nome, criado_em) VALUES
-      (${P_ATIVO_ANTIGO}, ${CLINIC_A}, 'Ativo antigo', ${CRIADO_ANTIGO})`;
-    // Todos os demais da clínica A são ARQUIVADOS e criados antes do ciclo:
-    // assim (a) e (c) estão descartados e só (b) pode contá-los.
+      (${P_ATIVO_PARADO}, ${CLINIC_A}, 'Ativo parado', ${CRIADO_ANTIGO})`;
+    // Todos os demais da clínica A são ARQUIVADOS e criados antes do ciclo.
+    // O arquivamento não decide mais nada na regra — foi mantido de propósito:
+    // ele prova que (b) conta INDEPENDENTE do arquivamento, que é o que separa
+    // "não faturamos base morta" de "não faturamos ninguém arquivado".
     await owner!`INSERT INTO patient (id, clinic_id, nome, criado_em, arquivado_em) VALUES
       (${P_ARQ_PARADO},   ${CLINIC_A}, 'Arquivado parado',   ${CRIADO_ANTIGO}, ${ANTES}),
       (${P_ARQ_SESSAO},   ${CLINIC_A}, 'Arquivado c/ sessão',${CRIADO_ANTIGO}, ${ANTES}),
@@ -178,8 +209,9 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
       (${P_BORDA_INICIO}, ${CLINIC_A}, 'Borda início',       ${CRIADO_ANTIGO}, ${ANTES}),
       (${P_BORDA_FIM},    ${CLINIC_A}, 'Borda fim',          ${CRIADO_ANTIGO}, ${ANTES}),
       (${P_TRES_SESSOES}, ${CLINIC_A}, 'Três sessões',       ${CRIADO_ANTIGO}, ${ANTES})`;
-    // Clínica B: dois pacientes ATIVOS — se o isolamento vazar, eles aparecem
-    // na contagem de A (ou A na de B).
+    // Clínica B: dois pacientes ativos, ambos com sessão no ciclo (semeadas
+    // abaixo) — se o isolamento vazar, eles aparecem na contagem de A (ou A na
+    // de B).
     await owner!`INSERT INTO patient (id, clinic_id, nome, criado_em) VALUES
       (${P_B1}, ${CLINIC_B}, 'B um',   ${CRIADO_ANTIGO}),
       (${P_B2}, ${CLINIC_B}, 'B dois', ${CRIADO_ANTIGO})`;
@@ -284,13 +316,24 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
         criadoEm: dia,
       });
     }
-    // Sessão da clínica B DENTRO do ciclo — vizinho barulhento de propósito.
+    // Sessões da clínica B DENTRO do ciclo — vizinho barulhento de propósito.
+    // Sob o critério "criou OU interagiu", os DOIS pacientes de B precisam de
+    // um fato datado no ciclo para que a contagem esperada de B (2) continue
+    // sendo uma afirmação forte.
     await semearSessao({
       id: "00000000-0000-0000-0000-000000036520",
       clinicId: CLINIC_B,
       patientId: P_B1,
       terapeutaId: U_TER_B,
       agendadaPara: DENTRO,
+      criadoEm: DENTRO,
+    });
+    await semearSessao({
+      id: "00000000-0000-0000-0000-000000036521",
+      clinicId: CLINIC_B,
+      patientId: P_B2,
+      terapeutaId: U_TER_B,
+      agendadaPara: new Date("2026-03-18T14:00:00Z"),
       criadoEm: DENTRO,
     });
 
@@ -335,23 +378,44 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
     await owner?.end();
   });
 
-  // ─── critérios (a), (b), (c) ──────────────────────────────────────────────
+  // ─── critérios (a) e (b) ─────────────────────────────────────────────────
   test("(a) paciente criado dentro do ciclo entra como `criado_no_ciclo`", async () => {
     expect(await motivoDe(CYCLE_A, P_CRIADO)).toBe("criado_no_ciclo");
   });
 
-  test("(c) ativo criado antes, sem interação, entra como `ativo_nao_arquivado`", async () => {
-    expect(await motivoDe(CYCLE_A, P_ATIVO_ANTIGO)).toBe("ativo_nao_arquivado");
+  test("ATIVO e PARADO no ciclo NÃO é contado (é a clínica em recesso pagando R$ 0)", async () => {
+    // A INVERSÃO da 0075. Este paciente está vivo, não arquivado, e sob o
+    // critério antigo entrava por (c) como `ativo_nao_arquivado`. Agora a mera
+    // existência do prontuário não gera fatura: sem cadastro nem interação
+    // datada no ciclo, não há o que cobrar.
+    //
+    // A consequência foi aceita conscientemente: um mês de recesso zera a
+    // fatura inteira de uma clínica com a base cheia.
+    expect(await motivoDe(CYCLE_A, P_ATIVO_PARADO)).toBeNull();
   });
 
-  test("ARQUIVADO e PARADO no ciclo NÃO é contado (o que sustenta a fatura)", async () => {
-    // A negativa central da regra: nenhuma linha no memorial, não "linha com
-    // motivo estranho". Se este teste ficar vermelho, a clínica está pagando
-    // por prontuário morto.
+  test("`ativo_nao_arquivado` não é PRODUZIDO por nenhuma linha do memorial", async () => {
+    // Trava de regressão do enum: o valor continua existindo (memorial de
+    // faturas antigas), então uma volta acidental do critério (c) não daria
+    // erro de tipo — passaria despercebida linha a linha. Esta asserção é
+    // sobre o ciclo INTEIRO, não sobre um paciente.
+    const motivos = (await memorial(CYCLE_A)).map((l) => l.motivo);
+    expect(motivos).not.toContain("ativo_nao_arquivado");
+    expect(new Set(motivos)).toEqual(
+      new Set(["criado_no_ciclo", "interacao_no_ciclo"]),
+    );
+  });
+
+  test("ARQUIVADO e PARADO no ciclo NÃO é contado", async () => {
+    // Nenhuma linha no memorial, não "linha com motivo estranho". Continua
+    // valendo pelo critério novo — só que agora pelo mesmo motivo de qualquer
+    // outro parado: falta de fato datado, não o arquivamento em si.
     expect(await motivoDe(CYCLE_A, P_ARQ_PARADO)).toBeNull();
   });
 
   test("(b) arquivado COM sessão no ciclo é contado como `interacao_no_ciclo`", async () => {
+    // O espelho do caso acima: arquivar NÃO isenta. Quem teve atendimento no
+    // ciclo é faturado, tenha sido arquivado depois ou não.
     expect(await motivoDe(CYCLE_A, P_ARQ_SESSAO)).toBe("interacao_no_ciclo");
   });
 
@@ -524,27 +588,67 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
     expect(sub!.status).toBe("free_tier");
   });
 
-  // ─── gate de cadastro lido de dentro do produto ───────────────────────────
-  test("app_assinatura_bloqueia_cadastro reage ao status da assinatura", async () => {
-    const bloqueia = async (clinicId: string, userId: string) => {
+  // ─── estado da conta lido de dentro do produto ────────────────────────────
+  test("app_conta_somente_leitura reage ao trial e ao status da assinatura", async () => {
+    // Substitui a antiga asserção sobre `app_assinatura_bloqueia_cadastro()`
+    // (0071), marcada OBSOLETA pela 0073: aquela função nunca foi chamada por
+    // código de aplicação, trigger ou CHECK — a única referência viva era este
+    // teste, o que a tornava uma barreira que só existia na suíte.
+    //
+    // A SEMÂNTICA INVERTEU de eixo junto com a política comercial:
+    //   antes → "bloqueia CADASTRO enquanto a assinatura não estiver de pé";
+    //   agora → "a conta inteira está em SOMENTE-LEITURA" (true = trancada
+    //           para escrita clínica; leitura e exportação seguem livres).
+    // Cobertura de escrita real (o trigger estourando) fica em
+    // `conta-somente-leitura-rls.int.test.ts`; aqui é só o veredito lido pelo
+    // produto, pela role de app e com a RLS ligada.
+    const somenteLeitura = async (clinicId: string, userId: string) => {
       const rows = await withTenant(ctx("coordenador", userId, clinicId), (db) =>
-        db.execute(sql`SELECT app_assinatura_bloqueia_cadastro() AS b`),
+        db.execute(sql`SELECT app_conta_somente_leitura() AS ro`),
       );
-      return rows[0]!.b as boolean;
+      return rows[0]!.ro as boolean;
     };
 
-    // free_tier (estado do backfill) não bloqueia ninguém.
-    expect(await bloqueia(CLINIC_A, U_COORD_A)).toBe(false);
+    // Clínica recém-criada (o seed roda agora, `trial_comeco_em` NULL): dentro
+    // do teto de 14 dias, escreve normalmente. É o estado do 1º minuto de vida
+    // da conta — se ISTO for true, o onboarding inteiro está quebrado.
+    expect(await somenteLeitura(CLINIC_A, U_COORD_A)).toBe(false);
 
+    // Trial iniciado há 90 dias e nenhuma assinatura de pé → somente-leitura.
+    await owner!`UPDATE clinic SET trial_comeco_em = now() - interval '90 days'
+                  WHERE id = ${CLINIC_A}`;
+    expect(await somenteLeitura(CLINIC_A, U_COORD_A)).toBe(true);
+
+    // `setup_pending` NÃO é assinatura ativa: quem começou a assinar e não
+    // terminou continua trancado. (Sob a regra antiga era este o estado que
+    // "bloqueava o cadastro" mesmo com trial vigente — a inversão do eixo.)
     await owner!`UPDATE subscription SET status = 'setup_pending' WHERE id = ${SUB_A}`;
-    expect(await bloqueia(CLINIC_A, U_COORD_A)).toBe(true);
+    expect(await somenteLeitura(CLINIC_A, U_COORD_A)).toBe(true);
 
+    // `active` destrava — é a saída do bloqueio.
     await owner!`UPDATE subscription SET status = 'active' WHERE id = ${SUB_A}`;
-    expect(await bloqueia(CLINIC_A, U_COORD_A)).toBe(false);
+    expect(await somenteLeitura(CLINIC_A, U_COORD_A)).toBe(false);
 
-    // Clínica isenta (legado) nunca é bloqueada, MESMO em setup_pending.
-    expect(await bloqueia(CLINIC_C, U_COORD_C)).toBe(false);
+    // `past_due` também destrava: inadimplência é régua de cobrança, não perda
+    // de acesso ao prontuário.
+    await owner!`UPDATE subscription SET status = 'past_due' WHERE id = ${SUB_A}`;
+    expect(await somenteLeitura(CLINIC_A, U_COORD_A)).toBe(false);
 
+    // `canceled` tranca mesmo com o trial nominalmente vigente — sem isso,
+    // cancelar e reassinar renovaria o trial indefinidamente.
+    await owner!`UPDATE clinic SET trial_comeco_em = now() WHERE id = ${CLINIC_A}`;
+    await owner!`UPDATE subscription SET status = 'canceled' WHERE id = ${SUB_A}`;
+    expect(await somenteLeitura(CLINIC_A, U_COORD_A)).toBe(true);
+
+    // Clínica isenta (legado/cortesia) nunca entra em somente-leitura, mesmo
+    // com trial vencido e assinatura em `setup_pending`.
+    await owner!`UPDATE clinic SET trial_comeco_em = now() - interval '90 days'
+                  WHERE id = ${CLINIC_C}`;
+    expect(await somenteLeitura(CLINIC_C, U_COORD_C)).toBe(false);
+
+    // Restaura o estado do seed (outros testes deste arquivo leem `SUB_A`).
     await owner!`UPDATE subscription SET status = 'free_tier' WHERE id = ${SUB_A}`;
+    await owner!`UPDATE clinic SET trial_comeco_em = NULL
+                  WHERE id IN (${CLINIC_A}, ${CLINIC_C})`;
   });
 });

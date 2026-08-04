@@ -3718,7 +3718,115 @@ Além disso, há hard-blockers técnicos que precisariam ser resolvidos antes do
   - [ ] Confirmar com a contadora a inserção do CNAE secundário de desenvolvimento/licenciamento de SaaS na ME.
   - [ ] Testar trial/demo dos concorrentes direto (logado).
   - [ ] Fechar precificação final do "paciente ativo" após rodadas do piloto.
-  - [ ] **Issues #163 + #159 — Cadastro self-service + trial de 7 dias e cobrança**: planejadas **juntas** em 30/07/2026 (spec: `docs/superpowers/specs/2026-07-30-cadastro-self-service-e-trial-design.md`). A #159 estava gated em "≥3 pilotos validarem o onboarding", mas o gatilho pressupõe um onboarding que não existe — e a tentativa de provisionar a primeira usuária real em prod (30/07) falhou porque o seed não roda no `iris-app` (build standalone) nem no `iris-migrate` (job sem container ativo). Decisões travadas: cobrança **por paciente ativo/mês** (tier Diário, `modelo-de-negocio.md` §3), **sem piso** no self-service, ciclo por **aniversário da conta** com 1ª fatura no dia 8, **sem exigir cartão no cadastro**, pós-trial = **somente-leitura com exportação livre** (substitui o "acesso bloqueado até pagamento" do texto original — dever de guarda do profissional), cadastro **aberto** com conselho/registro declarados e auditados, entrega em **2 fatias** (A destrava o cadastro, B cobra). Gateway escolhido: **Asaas** (IP autorizada pelo BC → sem transferência internacional; NFS-e nativa a R$ 0,49; Pix Automático com autorização de valor variável), runner-up **Galax Pay/cel_cash**; a porta `BillingProvider` existe porque há relatos recentes de bloqueio de saldo por reanálise cadastral pós-aprovação. Gate de trial é **derivado no request**, não flag setada por job — job morto falha fechado. **Bloqueadores não-técnicos:** Termo de Uso e Política de Privacidade publicados e versionados (aceite do profissional adulto aponta pra eles) e o CNAE secundário de SaaS junto à contadora (item acima) — o Pix Automático exige CNAE compatível.
+  - [ ] **Issues #163 + #159 — Cadastro self-service + trial de 7 dias e cobrança**: planejadas **juntas** em 30/07/2026 (spec: `docs/superpowers/specs/2026-07-30-cadastro-self-service-e-trial-design.md`). A #159 estava gated em "≥3 pilotos validarem o onboarding", mas o gatilho pressupõe um onboarding que não existe — e a tentativa de provisionar a primeira usuária real em prod (30/07) falhou porque o seed não roda no `iris-app` (build standalone) nem no `iris-migrate` (job sem container ativo). Decisões travadas: cobrança **por paciente ativo/mês** (tier Diário, `modelo-de-negocio.md` §3), **sem piso** no self-service, ciclo por **aniversário da conta** com ~~1ª fatura no dia 8~~ → **cobrança ao FIM de cada ciclo de 30 dias** (corrigido em 04/08/2026: "fatura no dia 8" é incompatível com pós-pago, e quem decide é o dono do produto), **sem exigir cartão no cadastro**, pós-trial = **somente-leitura com exportação livre** (substitui o "acesso bloqueado até pagamento" do texto original — dever de guarda do profissional), cadastro **aberto** com conselho/registro declarados e auditados, entrega em **2 fatias** (A destrava o cadastro, B cobra). ⚠️ **Gateway desatualizado nesta linha:** o texto abaixo diz Asaas, mas o código em produção é **Mercado Pago** — a conta Asaas foi bloqueada por reanálise cadastral e `src/db/schema.ts` documenta o porquê na coluna `subscription.provider`. Corrigido em 04/08/2026. Gateway originalmente escolhido: **Asaas** (IP autorizada pelo BC → sem transferência internacional; NFS-e nativa a R$ 0,49; Pix Automático com autorização de valor variável), runner-up **Galax Pay/cel_cash**; a porta `BillingProvider` existe porque há relatos recentes de bloqueio de saldo por reanálise cadastral pós-aprovação. Gate de trial é **derivado no request**, não flag setada por job — job morto falha fechado. **Bloqueadores não-técnicos:** Termo de Uso e Política de Privacidade publicados e versionados (aceite do profissional adulto aponta pra eles) e o CNAE secundário de SaaS junto à contadora (item acima) — o Pix Automático exige CNAE compatível.
+
+---
+
+## 🧯 Sessão 04/08/2026 — trial destravado, paywall → somente-leitura, trilho pós-pago
+
+**O incidente.** Cadastrar o primeiro paciente devolvia *"Cadastro bloqueado
+pela assinatura"* — no pior momento possível, antes de qualquer valor entregue.
+Não era decisão de produto ruim: era **bug de integração entre duas features com
+intenções opostas**. `src/lib/billing/gate.ts` afirmava "a cobrança nasce no
+cadastro do 1º paciente"; `src/lib/trial.ts` afirmava "o relógio começa quando o
+1º paciente é cadastrado". Em `pacientes/novo/logic.ts` o gate rodava **antes**
+do INSERT e o `SELECT app_iniciar_trial()` **depois** — e como o gate bloqueava
+`free_tier`, **o trial de 7 dias nunca começou para ninguém**. `trial.ts`
+inteiro, `faixa-trial.tsx` e a migração `0064` eram código morto em produção; só
+`isento_trial = true` (legado) escapava. O próprio `trial.ts` registrava o TODO
+que virou o bug (*"quando a `subscription` existir, é ela quem decide"*): a
+`subscription` chegou na `0071` e ninguém voltou.
+
+**Padrão de falha recorrente — é UM item, não três bugs.** Este repo já produziu
+três instâncias da mesma mecânica: decisão registrada em prosa, implementação
+divergente, e nenhum mecanismo que force o reencontro.
+1. **Trial** — o TODO acima.
+2. **Achado A1: "função criada" ≠ "regra aplicada".**
+   `app_assinatura_bloqueia_cadastro()` (`0071`) foi criada, revogada de PUBLIC
+   e concedida a `app_role` — e **nenhum código de aplicação, trigger ou CHECK a
+   chamava**. A única referência viva era um teste. A barreira SQL da `0073`
+   não é "espelhar a barreira existente": é criar a primeira.
+3. **Achado A3: o trilho de cobrança não era pós-pago e o livro-caixa mentia.**
+   A ativação criava recorrência de valor fixo (R$ 39) — pré-pago; o fechamento
+   só ajustava o valor da PRÓXIMA cobrança do gateway (que o MP gera com ~66
+   dias de antecedência, com o valor velho); e o ciclo era marcado `cobrado` +
+   `cobrado_em` no instante do ajuste, **sem nenhuma cobrança emitida nem
+   confirmada** — o `billing_cycle` é o memorial auditável da fatura e afirmava
+   um fato que não aconteceu. `provider/types.ts` chegava a se contradizer
+   dentro do mesmo parágrafo, e um pivô de *gateway* (Asaas reprovado) arrastou
+   junto uma reversão de *modelo comercial* que ninguém decidiu.
+
+- [ ] **Guardrail contra o padrão acima.** Propor um formato de TODO com **dono
+      e gatilho explícito** ("quando X existir, revisitar aqui") que o CI
+      consiga cobrar. Sem isso, a próxima instância é questão de tempo.
+
+**Entregue nesta sessão (PR `fix/trial-somente-leitura-billing-pos-pago`):**
+
+- `src/lib/billing/estado-conta.ts` substitui `gate.ts` (deletado). Decisão
+  unificada, derivada no request: `podeEscrever = isento || status ∈ {active,
+  past_due} || (status ≠ canceled && trialAtivo)`. `free_tier` deixa de
+  significar "não pagou" e passa a significar "ainda não entrou no ciclo de
+  cobrança". Invariante nova: **iniciar o pagamento nunca pode piorar a
+  situação** (`setup_pending` durante o trial escreve).
+- `src/lib/billing/guard-escrita.ts` + `comEscrita` aplicado na exportação dos
+  `logic.ts` (não do `actions.ts`, para que os testes de integração exercitem o
+  guard). **Isentos, cada um com razão própria:** `assinatura/` (bloquear é
+  trancar a saída do bloqueio), `relatorios/` (exportar é leitura),
+  `consentimento/` (LGPD art. 18 — direito do titular não se suspende por
+  inadimplência da clínica), `alertas-risco/` e `clinica/emergencia/`
+  (segurança clínica vence cobrança).
+- `0073` cria `app_conta_somente_leitura()` + trigger `BEFORE INSERT/UPDATE/
+  DELETE` em 18 tabelas, instalado **DISABLE**d; `0074` habilita. Dois passos de
+  propósito: trigger com predicado errado em tabela clínica trava clínica
+  pagante. O predicado do trigger exclui superusuário/BYPASSRLS explicitamente —
+  sem isso, `app_iniciar_trial()` (SECURITY DEFINER do owner) seria barrado por
+  si mesmo no 1º cadastro.
+- `0075` leva o trilho a pós-pago: `apurado → aguardando_pagamento → pago`,
+  `provider_charge_id` preenchido e reconciliado pelo webhook,
+  `DIAS_ANTECEDENCIA_APURACAO` de 3 → **0**. A antecedência de 3 dias era
+  **subfaturamento sistemático e invisível**: a apuração rodava antes do fim do
+  ciclo, mas `billing_apurar_ciclo` conta `[inicio, fim)` inteiro — paciente
+  cadastrado nos dias 28-30 nunca era contado e o ciclo nunca era reapurado.
+- **Critério de faturamento fechado (era o ⟨PENDENTE⟩ de "paciente ativo"):**
+  (a) criado no ciclo **ou** (b) interação no ciclo. O critério (c) "não
+  arquivado" **saiu**. ⚠️ Consequência aceita: **clínica em recesso paga R$ 0**.
+  O enum `billing_motivo_ativo` NÃO muda — `billing_cycle_patient.motivo` é
+  memorial de fatura emitida.
+- **Termo público adotado: "ficha ativa"** (não "paciente ativo"). Nomeia o
+  registro consumido, não a pessoa, e não colide com "paciente em tratamento".
+
+**Ficou em aberto:**
+
+- [ ] **Gate externo no Mercado Pago (pré-requisito da virada de chave, não da
+      implementação).** O débito headless no fechamento exige capacidade de
+      **MIT/CoF** (cobrança iniciada pelo lojista, sem CVV) habilitada na conta
+      junto ao suporte do MP; o fluxo documentado de cartão salvo exige CVV a
+      cada cobrança. Pix Automático existe, mas a jornada de consentimento via
+      API não está na documentação pública — mesma conversa. A porta
+      `emitirCobrancaDeCiclo` abstrai os dois; o adapter concreto se decide com
+      a resposta.
+- [ ] **Contagem de impacto em produção antes do merge.** O backfill da `0071`
+      pôs **todas** as clínicas em `free_tier`. Depois do fix, quem já passou
+      dos 14 dias sem cadastrar paciente cai direto em `trial_expirado` e é
+      **trancada no deploy**. Rodar contra produção um SELECT que classifique
+      cada clínica no novo estado e decidir entre backfill de cortesia
+      (`trial_comeco_em = now()`) ou `isento_trial = true`. Em base local isso
+      não aparece.
+- [ ] **Achado A2 — não existe exportação integral.** A única superfície é o PDF
+      de convênio por paciente/período (`relatorios/export-logic.ts`), e os
+      Termos §7.4(b) prometem exportar "integralmente". **§7.4(b) fica intocado
+      de propósito**: reduzir uma garantia já publicada ao titular é pior que
+      mantê-la e cumpri-la depois. Abrir issue própria e sinalizar na revisão
+      jurídica.
+- [ ] **Revisão jurídica dos Termos** (§7.1, §7.2, §7.3 e a nova §7.4(c)) antes
+      do merge — o texto entrou marcado como ⟨PENDENTE⟩.
+- [ ] **Exercitar o trilho de cobrança ponta a ponta com uma cobrança real**
+      antes de confiar nele. Nenhum evento real do MP foi exercitado, o job
+      nunca rodou em produção, e a Fatia 4 muda porta + adapter + testes +
+      webhook + job de uma vez. Manter `dryRun` como padrão do primeiro deploy.
+- [ ] Dropar `app_assinatura_bloqueia_cadastro()` depois de tirar a referência
+      em `db/tests/billing-apuracao.int.test.ts` (marcada obsoleta via
+      `COMMENT ON FUNCTION` na `0073`).
 
 ---
 

@@ -20,11 +20,28 @@ import {
   type SemanaCarregada,
 } from "@/app/(app)/agenda/queries";
 import { horizontePadrao } from "@/lib/agenda/materializar";
+import {
+  ContaSomenteLeituraError,
+  type BloqueioConta,
+} from "@/lib/billing/guard-escrita";
 
-export type EstadoAcao = { error?: string; ok?: boolean };
+export type EstadoAcao = {
+  error?: string;
+  ok?: boolean;
+  bloqueioConta?: BloqueioConta;
+};
 
 function trata(e: unknown): EstadoAcao {
   if (e instanceof ConflitoError) return { error: e.message };
+  // Os cores da agenda guardam por exceção (retornam `{ id }`, não estado com
+  // `error`), então a tradução para o formato que a UI entende acontece aqui —
+  // é o único ponto por onde todas as escritas da semana passam.
+  if (e instanceof ContaSomenteLeituraError) {
+    return {
+      error: e.message,
+      bloqueioConta: { estado: e.estado, mensagem: e.message },
+    };
+  }
   if (e instanceof RoleError) return { error: "Sem permissão para alocar." };
   throw e;
 }

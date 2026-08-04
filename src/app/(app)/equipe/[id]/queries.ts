@@ -3,6 +3,7 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { appUser, janelaTrabalho, userRole } from "@/db/schema";
 import { type FaixaDia, fundirFaixasPorDia } from "@/lib/agenda/janela";
+import { requireEscritaPermitida } from "@/lib/billing/guard-escrita";
 
 export async function listarTerapeutas(ctx: TenantContext) {
   return withTenant(ctx, (tx) =>
@@ -30,6 +31,11 @@ export async function salvarJanelas(ctx: TenantContext, terapeutaId: string, fai
   requireRole(ctx, "coordenador");
   const fundidas = fundirFaixasPorDia(faixas);
   await withTenant(ctx, async (tx) => {
+    // Retorno é `void`, então não há campo `error` onde devolver o bloqueio —
+    // por isso guarda por exceção (`ContaSomenteLeituraError` propaga) em vez
+    // de `comEscrita`. Primeira operação da transação: o delete abaixo é
+    // destrutivo e não pode acontecer nem parcialmente numa conta bloqueada.
+    await requireEscritaPermitida(tx, ctx.clinicId);
     await tx.delete(janelaTrabalho).where(and(eq(janelaTrabalho.clinicId, ctx.clinicId), eq(janelaTrabalho.terapeutaId, terapeutaId)));
     if (fundidas.length > 0) {
       await tx.insert(janelaTrabalho).values(

@@ -14,7 +14,7 @@ export function LandingFaqSection() {
       id: "faq-1",
       question: "Como funciona a cobrança, exatamente?",
       answer:
-        "Criar a conta da clínica, convidar a equipe inteira e manter o histórico não custa nada. Você paga por paciente ativo, e paciente ativo é o que está cadastrado e não arquivado — não contamos sessões, então recesso, férias e paciente em avaliação não mudam a fatura. Nos primeiros 7 dias não há cobrança de paciente nenhum, e o cadastro não pede cartão de crédito.",
+        "Criar a conta da clínica, convidar a equipe inteira e manter o histórico não custa nada. Você paga por ficha ativa no mês: é a ficha de um paciente que foi cadastrado dentro do ciclo ou que teve alguma interação registrada nele — sessão agendada, check-in, evolução no prontuário ou evidência aprovada. Ficha parada não entra na conta. Um mês de recesso, sem sessão, sem check-in, sem evolução e sem cadastro novo, fecha em R$ 0,00 mesmo que a clínica tenha 40 pacientes na base — a base continua inteira e legível, você simplesmente não paga por um mês em que não atendeu. A apuração é sempre do ciclo que já terminou: primeiro você usa, depois recebe a fatura do que usou. Nos primeiros 7 dias, contados a partir do cadastro do primeiro paciente, não há cobrança de ficha nenhuma, e o cadastro não pede cartão de crédito.",
     },
     {
       id: "faq-2",
@@ -26,7 +26,7 @@ export function LandingFaqSection() {
       id: "faq-3",
       question: "E se a minha equipe não adotar?",
       answer:
-        "É o risco número um de qualquer software clínico, e a razão de o registro aqui ser texto livre no celular em vez de planilha de tentativa: a terapeuta escreve como já escreve hoje, logo depois do atendimento. Não há taxonomia para decorar nem campo obrigatório para preencher. Nos primeiros 7 dias dá para testar exatamente isso com uma pessoa da equipe antes de envolver a clínica toda.",
+        "É o risco número um de qualquer software clínico, e a razão de o registro aqui ser texto livre no celular em vez de planilha de tentativa: a terapeuta escreve como já escreve hoje, logo depois do atendimento. Não há taxonomia para decorar nem campo obrigatório para preencher. Os 7 dias de teste só começam a correr quando você cadastra o primeiro paciente, então dá para testar exatamente isso com uma pessoa da equipe antes de envolver a clínica toda.",
     },
     {
       id: "faq-4",
@@ -44,7 +44,7 @@ export function LandingFaqSection() {
       id: "faq-6",
       question: "Se eu arquivar um paciente ou sair do Iris, o que acontece com os prontuários?",
       answer:
-        "Arquivar é decisão administrativa: tira o paciente da fatura e mantém o prontuário legível e exportável. É diferente de alta clínica, que é ato do profissional e dispara o prazo legal de guarda — separamos as duas de propósito, para que um clique comercial nunca mexa em prazo legal. A exportação integral em PDF e JSON fica disponível pela própria interface, a qualquer momento, sem abrir chamado.",
+        "Arquivar é decisão administrativa: encerra a movimentação daquela ficha e mantém o prontuário legível e exportável. Como a fatura só conta ficha com movimento no ciclo, uma ficha arquivada deixa de aparecer nela naturalmente — você não precisa arquivar para parar de pagar por quem não está sendo atendido. Arquivar é diferente de alta clínica, que é ato do profissional e dispara o prazo legal de guarda: separamos as duas de propósito, para que um clique comercial nunca mexa em prazo legal. A exportação integral em PDF e JSON fica disponível pela própria interface, a qualquer momento, sem abrir chamado.",
     },
     {
       id: "faq-7",

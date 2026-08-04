@@ -23,6 +23,17 @@ import { loadCanonicalContext } from "@/lib/extraction/context-loader";
 import { deveReextrair } from "@/lib/extraction/reextraction-policy";
 import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
 import { diagnosticarBloqueioDeConsentimentoSeguro } from "@/lib/consent/diagnostico";
+import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+
+// ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
+// Todo o diário é escrita clínica: conta em somente-leitura (trial expirado,
+// cancelada, pagamento em processamento) não grava nota, escopo, áudio nem
+// consolida. O wrap fica na exportação deste core, e não no `actions.ts`,
+// porque os testes de integração chamam o core direto com `ctx` — envolver na
+// action deixaria a suíte inteira cega para o guard.
+//
+// Nada aqui é isento por segurança clínica: a isenção de `alertas-risco` e
+// `clinica/emergencia` vale para a via de alerta, não para o registro de rotina.
 
 /**
  * Traduz a recusa do banco em mensagem de consentimento, quando (e só quando)
@@ -116,10 +127,10 @@ const capturaSchema = z.object({
  * da sessão; um terapeuta que não é dono cai no catch e recebe mensagem
  * genérica (RLS não deixa distinguir "não existe" de "sem permissão").
  */
-export async function capturarDiario(
+async function capturarDiarioCore(
   ctx: TenantContext,
   input: { sessionId: string; texto: string },
-): Promise<{ error?: string; id?: string }> {
+): Promise<{ error?: string; id?: string; bloqueioConta?: BloqueioConta }> {
   requireRole(ctx, "terapeuta");
   const parsed = capturaSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -161,6 +172,8 @@ export async function capturarDiario(
   }
 }
 
+export const capturarDiario = comEscrita(capturarDiarioCore);
+
 const escopoSchema = z.object({
   sessionId: z.string().uuid(),
   protocolIds: z.array(z.string().uuid()).min(1),
@@ -172,10 +185,10 @@ const escopoSchema = z.object({
  * "ajustado_manualmente"` e `ajustadoPor = ctx.userId` para auditoria; o RLS
  * (`sps_insert`/`sps_update`) barra forjar `ajustadoPor` de outro usuário.
  */
-export async function corrigirEscopoProtocolo(
+async function corrigirEscopoProtocoloCore(
   ctx: TenantContext,
   input: { sessionId: string; protocolIds: string[] },
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; bloqueioConta?: BloqueioConta }> {
   requireRole(ctx, "terapeuta");
   const parsed = escopoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -207,6 +220,8 @@ export async function corrigirEscopoProtocolo(
   }
 }
 
+export const corrigirEscopoProtocolo = comEscrita(corrigirEscopoProtocoloCore);
+
 const audioSchema = z.object({
   sessionId: z.string().uuid(),
   duracaoSegundos: z.number().int().positive().optional(),
@@ -217,10 +232,10 @@ const audioSchema = z.object({
  * enviado. O `id` retornado é a chave usada pelo cliente para encontrar o
  * blob local — o upload real do objeto é de fase posterior.
  */
-export async function registrarAudioLocal(
+async function registrarAudioLocalCore(
   ctx: TenantContext,
   input: { sessionId: string; duracaoSegundos?: number },
-): Promise<{ error?: string; id?: string }> {
+): Promise<{ error?: string; id?: string; bloqueioConta?: BloqueioConta }> {
   requireRole(ctx, "terapeuta");
   const parsed = audioSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -247,6 +262,10 @@ export async function registrarAudioLocal(
   }
 }
 
+// Grava linha em `audio_capture` (mesmo que o blob ainda seja local) — é
+// escrita, entra no guard.
+export const registrarAudioLocal = comEscrita(registrarAudioLocalCore);
+
 const consolidarSchema = z.object({
   sessionId: z.string().uuid(),
   texto: z.string().trim().min(1, "A nota consolidada não pode ficar vazia."),
@@ -262,10 +281,10 @@ const consolidarSchema = z.object({
  * `extraction_delete` (RLS) exigem `app_session_terapeuta_id(session_id) =
  * app.user_id`, então `requireRole` sozinho não bastaria sem essa condição.
  */
-export async function consolidarSessao(
+async function consolidarSessaoCore(
   ctx: TenantContext,
   input: { sessionId: string; texto: string },
-): Promise<{ error?: string; numeroSequencial?: number }> {
+): Promise<{ error?: string; numeroSequencial?: number; bloqueioConta?: BloqueioConta }> {
   requireRole(ctx, "terapeuta");
   const parsed = consolidarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -475,3 +494,8 @@ export async function consolidarSessao(
     return { error: "Não foi possível consolidar a sessão." };
   }
 }
+
+// Barrado ANTES da Fase A, então a chamada ao LLM (Fase B) e o alerta de risco
+// (Fase D) sequer acontecem — conta em somente-leitura não gasta provider nem
+// gera sinal que ninguém poderia tratar.
+export const consolidarSessao = comEscrita(consolidarSessaoCore);

@@ -25,7 +25,7 @@ export function LandingComparativeMatrix() {
     {
       title: "“Contratar mais um terapeuta aumenta minha fatura?”",
       planilha: "Aumenta: o preço cresce com o organograma — mais uma licença, mais um assento.",
-      iris: "Não. A conta é por paciente ativo; a equipe inteira entra sem custo por assento.",
+      iris: "Não. A conta é por ficha ativa; a equipe inteira entra sem custo por assento.",
     },
     {
       title: "“Quanto tempo até minha equipe estar usando de verdade?”",

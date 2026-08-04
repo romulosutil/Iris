@@ -12,11 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  FAIXAS_PRECIFICACAO,
-  VALOR_PRIMEIRO_PACIENTE_CENTAVOS,
-  formatarBRL,
-} from "@/lib/billing/calculator";
+import { FAIXAS_PRECIFICACAO, formatarBRL } from "@/lib/billing/calculator";
 import { FormularioAtivacao } from "./formulario-ativacao";
 
 export const metadata = {
@@ -36,8 +32,8 @@ function faixasParaLinhas() {
       chave: `${de}-${faixa.ateQuantidade ?? "mais"}`,
       intervalo:
         faixa.ateQuantidade === null
-          ? `${de}º paciente em diante`
-          : `${de}º ao ${faixa.ateQuantidade}º paciente`,
+          ? `${de}ª ficha ativa em diante`
+          : `${de}ª à ${faixa.ateQuantidade}ª ficha ativa`,
       valor: formatarBRL(faixa.valorCentavos),
     };
     anterior = faixa.ateQuantidade ?? anterior;
@@ -57,7 +53,7 @@ export default async function AssinaturaPage() {
     <main className="flex flex-col gap-6">
       <PageHeader
         title="Assinatura"
-        description="Você só paga quando começa a atender: a cobrança nasce no cadastro do primeiro paciente."
+        description="Você só paga quando começa a atender: a fatura é do ciclo que já fechou, pelas fichas que tiveram movimento nele."
       />
 
       <section className="flex flex-col gap-3">
@@ -70,16 +66,26 @@ export default async function AssinaturaPage() {
             durante o onboarding.
           </li>
           <li>
-            Para liberar o primeiro paciente, o mês 1 custa{" "}
-            <strong>{formatarBRL(VALOR_PRIMEIRO_PACIENTE_CENTAVOS)}</strong>.
+            Ativar a assinatura <strong>não cobra nada</strong>: registra o meio
+            de pagamento e libera o cadastro de pacientes. A primeira cobrança
+            só nasce quando o primeiro ciclo fecha.
           </li>
           <li>
-            Depois disso, uma única cobrança consolidada a cada 30 dias, pelo
-            número de pacientes ativos no período.
+            A partir daí, uma única cobrança consolidada a cada 30 dias, pelo
+            número de <strong>fichas ativas</strong> do ciclo que acabou de
+            fechar. Ficha ativa é a que foi cadastrada dentro do ciclo ou teve
+            interação registrada nele: sessão agendada, check-in, evolução no
+            prontuário ou evidência aprovada.
           </li>
           <li>
-            As faixas são <strong>marginais</strong>: cadastrar mais um paciente
-            nunca reprecifica os que já estavam lá — só o paciente novo entra na
+            Ficha sem movimento não é cobrada. Um ciclo inteiro sem cadastro
+            novo, sessão, check-in ou evolução fecha em{" "}
+            <strong>{formatarBRL(0)}</strong>, e a base de pacientes continua
+            inteira e legível.
+          </li>
+          <li>
+            As faixas são <strong>marginais</strong>: uma ficha ativa a mais
+            nunca reprecifica as que já estavam lá. Só a ficha nova entra na
             faixa seguinte.
           </li>
         </ul>
@@ -87,17 +93,17 @@ export default async function AssinaturaPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-[var(--text-primary)] text-xl font-semibold">
-          Preço por paciente ativo, por mês
+          Preço por ficha ativa, por mês
         </h2>
         <Table>
           <TableCaption>
-            Valores marginais: cada paciente é cobrado pela faixa em que ele
-            entra, não pela faixa do total.
+            Valores marginais: cada ficha é cobrada pela faixa em que ela entra,
+            não pela faixa do total.
           </TableCaption>
           <TableHeader>
             <TableRow>
               <TableHead scope="col">Faixa</TableHead>
-              <TableHead scope="col">Valor por paciente/mês</TableHead>
+              <TableHead scope="col">Valor por ficha/mês</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -138,6 +144,3 @@ export default async function AssinaturaPage() {
   );
 }
 
-// Importado no fim para manter o topo do arquivo legível; é o Client Component
-// que fala com a server action.
-import { FormularioAtivacao as FormularioAtivacaoSlot } from "./formulario-ativacao";

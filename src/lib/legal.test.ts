@@ -272,18 +272,32 @@ describe("compromissos de produto que não podem ser enfraquecidos", () => {
     );
   });
 
-  it("os termos descrevem trial de 7 dias sem exigir cartão", () => {
+  // Estas duas asserções mudaram de sentido em 04/08/2026 (#163). Não é
+  // "ajustar o teste ao código": o texto anterior descrevia um produto que
+  // nunca existiu — trial contado do cadastro da clínica, 1ª fatura no 8º dia
+  // e cartão recusado, sendo que o formulário de ativação sempre aceitou
+  // cartão. Publicidade e contrato divergindo da entrega é exposição de CDC,
+  // e é justamente isso que este arquivo existe para pegar.
+  it("os termos descrevem trial de 7 dias iniciado no 1º paciente, sem cartão", () => {
     const doc = texto("termos");
     expect(doc).toMatch(/7 \(sete\) dias/);
     expect(doc).toMatch(/Não exigimos cartão de crédito/i);
-    expect(doc).toMatch(/8º dia/);
-    expect(doc).toMatch(/aniversário da conta/i);
+    // O relógio começa no 1º paciente, com teto automático de 14 dias.
+    expect(doc).toMatch(/cadastra o primeiro paciente/i);
+    expect(doc).toMatch(/14 \(quatorze\) dias/);
+    // E não há cobrança automática ao final — o fim do teste leva a
+    // somente-leitura, não a um débito surpresa.
+    expect(doc).toMatch(/não há cobrança\s*\n?\s*automática ao final/i);
   });
 
-  it("os termos limitam os meios de pagamento a Pix e boleto", () => {
+  it("os termos aceitam cartão e Pix, com cobrança pós-paga no fim do ciclo", () => {
     const doc = texto("termos");
-    expect(doc).toMatch(/Pix e boleto/i);
-    expect(doc).toMatch(/[Cc]artão de crédito não é aceito/);
+    expect(doc).toMatch(/cartão de crédito e Pix/i);
+    expect(doc).toMatch(/pós-paga/i);
+    expect(doc).toMatch(/ao final de cada ciclo de 30/i);
+    expect(doc).toMatch(/sem valor mínimo/i);
+    // Nomear o provedor criaria obrigação de aditivo a cada troca de trilho.
+    expect(doc).not.toMatch(/Mercado Pago|Asaas/);
   });
 
   it("os termos cobrem a declaração de conselho de classe e a auditoria", () => {

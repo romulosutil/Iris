@@ -71,9 +71,10 @@ export async function POST(request: Request): Promise<Response> {
       falhas: comErro.map((r) => ({ clinicId: r.clinicId, erro: r.erro })),
       resultados: resultados.map((r) => ({
         clinicId: r.clinicId,
-        pacientesContados: r.pacientesContados,
+        fichasContadas: r.fichasContadas,
         valorCentavos: r.valorCentavos,
-        reajustado: r.reajustado,
+        cobrancaEmitida: r.cobrancaEmitida,
+        providerChargeId: r.providerChargeId,
       })),
     });
   } catch (err) {

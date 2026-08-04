@@ -57,7 +57,7 @@ origem" — mais defensável e harder to copy que só "ter" o relatório.
 
 O que isso muda:
 
-1. **O preço por paciente ativo está validado pelo mercado** — 3 dos 4
+1. **O preço por ficha ativa (paciente ativo, no vocabulário do mercado) está validado** — 3 dos 4
    concorrentes cobram assim; ABA Digital é a exceção (por terapeuta), o que
    reforça que "por paciente" é a norma, não a exceção.
 2. **"IA no relatório" deixou de ser diferencial declarável** — confirmado
@@ -145,9 +145,9 @@ o mesmo payload `tentativas` do agente), nunca substituir o diário como fonte
 primária. Revisitar esta decisão antes de travar as telas de captura da Fase 3,
 não depois.
 
-## 3. Métrica de valor: por paciente ativo/mês (DECISÃO)
+## 3. Métrica de valor: por ficha ativa/mês (DECISÃO)
 
-**Cobrança por paciente ativo/mês, usuários ilimitados.** Rejeitado o preço por
+**Cobrança por ficha ativa/mês, usuários ilimitados.** Rejeitado o preço por
 terapeuta/assento, por quatro razões:
 
 1. **Alinhamento com a receita da clínica** — clínica fatura por paciente×hora;
@@ -159,24 +159,52 @@ terapeuta/assento, por quatro razões:
 4. **Coincide com a unidade LGPD** — o titular dos dados é o paciente;
    contratos, consentimento e cobrança falam da mesma coisa.
 
-**Definição de "paciente ativo" — DECISÃO (01/08/2026, Rômulo):** paciente
-**cadastrado e não arquivado**, apurado por snapshot no ciclo. Não é "≥1 sessão
-no mês" (hipótese anterior, e a alternativa Neoaba de >3 sessões/mês fica
-descartada): contagem por sessão obrigaria a apurar uso retroativo e puniria
-recesso, férias e paciente em avaliação.
+**Termo público — DECISÃO 9 (04/08/2026, Rômulo):** a unidade se chama **ficha
+ativa** ("R$ 39 por ficha ativa no mês"), não mais "paciente ativo". Motivo:
+"paciente ativo" carregava três significados ao mesmo tempo — `arquivado_em IS
+NULL`, a unidade faturável do ciclo, e a leitura clínica de "paciente em
+tratamento". "Ficha ativa" nomeia o **registro consumido**, não a pessoa, e não
+colide com a linguagem clínica de quem usa o produto.
+
+**Critério de faturamento — DECISÃO 8 (04/08/2026, Rômulo), substitui a decisão
+de 01/08:** fatura-se a ficha que foi **(a) cadastrada dentro do ciclo** OU
+**(b) teve interação registrada nele** — sessão agendada, check-in, evolução em
+prontuário ou evidência aprovada. O critério **(c) "cadastrada e não
+arquivada"**, decidido em 01/08, **SAIU**.
+
+Implementado em `db/migrations/0075_billing_pos_pago.sql`, na função
+`billing_apurar_ciclo` (SECURITY DEFINER). Ela é a fonte única do "quem conta";
+`src/lib/billing/calculator.ts` responde só "quanto custa essa quantidade".
+
+**Consequência aceita conscientemente:** clínica em recesso paga **R$ 0,00**.
+Um mês sem sessão, sem check-in, sem evolução e sem cadastro novo zera a fatura,
+mesmo com 40 pacientes na base. É mais generoso que a regra publicada até 01/08,
+e o texto público foi reescrito junto (landing, FAQ, tela de assinatura). A
+justificativa de 01/08 para o critério (c) — "não punir recesso, férias e
+paciente em avaliação" — ficou invertida na prática: com (a)+(b), recesso e
+férias saem da conta em vez de entrarem nela.
+
+**Nota de compatibilidade, inegociável:** o enum `billing_motivo_ativo` e o
+valor `ativo_nao_arquivado` **não mudam**. `billing_cycle_patient.motivo` é
+memorial de fatura emitida; renomear reescreveria retroativamente o registro de
+por que alguém foi cobrado. A renomeação para "ficha ativa" vale na camada de
+linguagem e nos símbolos TypeScript, nunca em coluna ou enum de banco.
 
 Três guardas inegociáveis, porque a unidade de cobrança encosta em dever de
 guarda de prontuário:
 
-1. **Arquivado ≠ apagado.** Paciente arquivado sai da fatura mas continua
-   legível e exportável. Cobrar por dado que o profissional é obrigado a manter
-   empurraria o cliente a apagar prontuário.
+1. **Arquivado ≠ apagado.** Ficha arquivada continua legível e exportável, e
+   deixa de aparecer na fatura naturalmente (sem movimento, não conta). Cobrar
+   por dado que o profissional é obrigado a manter empurraria o cliente a apagar
+   prontuário.
 2. **Arquivamento é decisão organizacional** (`patient.arquivado_em`), distinta
    da alta clínica (`patient.alta_em`), que dispara o relógio de retenção LGPD.
    Alta arquiva; arquivar nunca dá alta.
-3. **Auto-arquivamento após 90 dias sem atualização**, com aviso 7 dias antes —
-   fatura inflada por cadastro esquecido é o caminho mais curto para o cliente
-   mutilar o prontuário e o dossiê de convênio sair furado.
+3. **Auto-arquivamento após 90 dias sem atualização**, com aviso 7 dias antes.
+   Com o critério (a)+(b) isso deixou de ser guarda contra fatura inflada — ficha
+   esquecida já não é cobrada — e continua valendo como higiene de base: lista de
+   pacientes que não reflete quem está em atendimento suja agenda, relatório e
+   dossiê de convênio.
 
 **Piso por assinatura: descartado no self-service** (D2 da spec de cadastro,
 reafirmado em 01/08). Piso deixa o preço regressivo ao contrário — quem tem 3
@@ -327,12 +355,12 @@ Sequência de receita: piloto pago com desconto → 5–10 clínicas por indica�
 - Qualidade da IA: % extrações aprovadas sem edição (meta ≥70%); taxa de
   reclassificação do coordenador (proxy IOA, V5).
 - Retenção: % de terapeutas registrando na semana 4+ (teste do Tema 4).
-- Economia: NRR (expansão por paciente ativo), churn de clínicas, custo de IA
+- Economia: NRR (expansão por ficha ativa), churn de clínicas, custo de IA
   por sessão.
 
 ## 8. O que segue em aberto (vai para pesquisa real / piloto)
 
-1. Números finais de preço e a definição exata de "paciente ativo" (Roteiro C).
+1. Números finais de preço (a definição da unidade faturável está fechada: ver Decisões 8 e 9 na §3).
 2. Peso real do relatório de convênio na decisão de compra (Tema 6) — se
    confirmado, ele pode ANTECIPAR: cobrar caro pelo tier Convênio desde o
    fast-follow em vez de tratá-lo como expansão.

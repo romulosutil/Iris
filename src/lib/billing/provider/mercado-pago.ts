@@ -3,13 +3,16 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   BillingProviderError,
-  type AssinaturaCriada,
   type BillingProvider,
+  type CobrancaEmitida,
   type EntradaVerificacaoWebhook,
   type EventoWebhookNormalizado,
-  type NovaAssinatura,
+  type NovaCobrancaDeCiclo,
+  type NovoVinculo,
   type StatusAssinaturaProvider,
+  type StatusCobranca,
   type TipoEventoNormalizado,
+  type VinculoCriado,
 } from "./types";
 
 /**
@@ -20,8 +23,23 @@ import {
  * O repo já tomou esse prejuízo: o Dockerfile do job de escalonamento lista os
  * `COPY` e instala dependências à mão, e um pacote adicionado no `package.json`
  * da raiz simplesmente **não chegou na imagem** — o motor caiu em produção com
- * `test`/`typecheck`/`lint` todos verdes (#156/#157). São quatro chamadas HTTP;
+ * `test`/`typecheck`/`lint` todos verdes (#156/#157). São cinco chamadas HTTP;
  * `fetch` nativo do Node 22 não tem esse risco de entrega.
+ *
+ * ## Como o trilho pós-pago se traduz para o Mercado Pago
+ *
+ * A porta separa **vínculo de pagamento** (autorização do meio, sem cobrar) de
+ * **cobrança de ciclo** (valor real, emitido por nós no fechamento). O MP não
+ * tem um recurso chamado "vínculo": o que mais se aproxima é um `preapproval`
+ * SEM `preapproval_plan_id`, que guarda o meio de pagamento e devolve um
+ * `init_point` de checkout. Já a cobrança do ciclo é um pagamento AVULSO
+ * (`POST /v1/payments`) — nunca a recorrência automática do `preapproval`,
+ * porque ela geraria a cobrança do próximo ciclo com antecedência e com o valor
+ * velho (a origem do subfaturamento silencioso descrito em `types.ts`).
+ *
+ * Consequência prática: o `auto_recurring.transaction_amount` do `preapproval`
+ * deixa de ser "o preço" e passa a ser **teto autorizado**. Ninguém debita esse
+ * valor — quem debita é a cobrança avulsa.
  *
  * ## Env — lidas por função, nunca no escopo do módulo
  *
@@ -47,6 +65,20 @@ const TIMEOUT_MS = 10_000;
 const JANELA_REPLAY_MS = 5 * 60 * 1000;
 
 const BASE_URL_PADRAO = "https://api.mercadopago.com";
+
+/**
+ * Teto autorizado default, em centavos, quando `NovoVinculo.tetoCentavos` não
+ * vem preenchido.
+ *
+ * O MP recusa `auto_recurring.transaction_amount` ausente ou zerado num
+ * `preapproval`, então algum número precisa ir. Este é o **menor valor que o MP
+ * aceita em BRL** (R$ 1,00) e é apenas um LIMITE de autorização: nada é
+ * debitado na criação do vínculo, e a cobrança real do ciclo sai por
+ * `emitirCobrancaDeCiclo` como pagamento avulso. Se a clínica tiver um teto
+ * conhecido (faixa de preço contratada), ele chega em `tetoCentavos` e
+ * substitui este piso.
+ */
+const TETO_MINIMO_CENTAVOS = 100;
 
 function baseUrl(): string {
   return process.env.MERCADOPAGO_BASE_URL || BASE_URL_PADRAO;
@@ -93,6 +125,32 @@ function mapearStatus(status: unknown): StatusAssinaturaProvider {
     default:
       // Estado novo do gateway não pode virar exceção no meio de um webhook:
       // "pendente" é o único default seguro (não libera nada, não cancela nada).
+      return "pendente";
+  }
+}
+
+/**
+ * Status de PAGAMENTO do MP → `StatusCobranca` do Iris.
+ *
+ * Separado de `mapearStatus` de propósito: são dois vocabulários distintos do
+ * próprio MP (ciclo de vida de `preapproval` vs. de `payment`) e colapsá-los num
+ * mapa só faria `cancelled` significar duas coisas — "assinatura cancelada" e
+ * "cobrança recusada". Estorno (`refunded`/`charged_back`) é estado terminal
+ * próprio: dinheiro que entrou e voltou não é o mesmo que dinheiro que nunca
+ * entrou, e a conciliação do ciclo trata os dois de forma diferente.
+ * Desconhecido cai em `pendente` — default seguro: não libera nem condena.
+ */
+function mapearStatusCobranca(status: unknown): StatusCobranca {
+  switch (status) {
+    case "approved":
+      return "paga";
+    case "rejected":
+    case "cancelled":
+      return "recusada";
+    case "refunded":
+    case "charged_back":
+      return "estornada";
+    default:
       return "pendente";
   }
 }
@@ -158,6 +216,23 @@ function comoTexto(valor: unknown): string | null {
   if (typeof valor === "string") return valor.trim() || null;
   if (typeof valor === "number" && Number.isFinite(valor)) return String(valor);
   return null;
+}
+
+/**
+ * Nossa `referenciaExterna` no payload, esteja ela na raiz ou dentro de `data`.
+ *
+ * Extraída para função porque é lida duas vezes na normalização — uma para
+ * decidir se o pagamento é cobrança de ciclo, outra para preencher o campo.
+ * Duas leituras divergentes deixariam o evento classificado como `cobranca.*`
+ * mas sem a referência que permite conciliá-lo.
+ */
+function referenciaDeCiclo(
+  p: Record<string, unknown>,
+  data: Record<string, unknown>,
+): string | null {
+  return (
+    comoTexto(p.external_reference) ?? comoTexto(data.external_reference)
+  );
 }
 
 /**
@@ -259,7 +334,28 @@ function normalizarEventoMP(payload: unknown): EventoWebhookNormalizado {
     }
   } else if (tipoMP === "payment") {
     const status = comoTexto(p.status) ?? comoTexto(data.status) ?? "";
-    if (status === "approved") tipo = "pagamento.aprovado";
+    const detalhe =
+      comoTexto(p.status_detail) ?? comoTexto(data.status_detail) ?? "";
+
+    /**
+     * Um pagamento pode ser (a) a cobrança de um ciclo que NÓS emitimos — e aí
+     * tem `external_reference` (`cycle:<id>`) e é reconciliável com o ciclo — ou
+     * (b) qualquer outro pagamento que o MP resolva notificar. Só no caso (a)
+     * faz sentido emitir `cobranca.*`: o consumidor desses eventos vai procurar
+     * o ciclo pela referência, e um evento `cobranca.paga` sem referência ficaria
+     * pendente para sempre na varredura. Sem referência, cai no vocabulário
+     * genérico antigo (`pagamento.*`), que não promete conciliação.
+     */
+    const ehCobrancaDeCiclo = referenciaDeCiclo(p, data);
+    const expirou = detalhe.includes("expired");
+
+    if (ehCobrancaDeCiclo) {
+      if (status === "approved") tipo = "cobranca.paga";
+      else if (expirou) tipo = "cobranca.vencida";
+      else if (status === "rejected" || status === "cancelled")
+        tipo = "cobranca.recusada";
+      else tipo = "desconhecido";
+    } else if (status === "approved") tipo = "pagamento.aprovado";
     else if (status === "rejected" || status === "cancelled")
       tipo = "pagamento.recusado";
     else tipo = "desconhecido";
@@ -288,11 +384,21 @@ function normalizarEventoMP(payload: unknown): EventoWebhookNormalizado {
       : (comoTexto(data.id) ??
         comoTexto((p as { preapproval_id?: unknown }).preapproval_id));
 
+  /**
+   * Simétrico ao raciocínio acima: `data.id` só é id de COBRANÇA quando a
+   * notificação é de pagamento. Num evento de `preapproval` ele é o id do
+   * vínculo, e devolvê-lo aqui faria o consumidor pedir
+   * `GET /v1/payments/<preapproval_id>` e tomar 404 em loop.
+   */
+  const idCobranca =
+    tipoMP === "payment" ? (comoTexto(data.id) ?? comoTexto(p.id)) : null;
+
   return {
     eventId: comoTexto(p.id) ?? comoTexto(data.id) ?? "",
     tipo,
     providerSubscriptionId: idAssinatura,
-    referenciaExterna: comoTexto(p.external_reference) ?? comoTexto(data.external_reference),
+    providerChargeId: idCobranca,
+    referenciaExterna: referenciaDeCiclo(p, data),
     ocorridoEm,
     bruto: payload,
   };
@@ -302,7 +408,18 @@ function normalizarEventoMP(payload: unknown): EventoWebhookNormalizado {
 export class MercadoPagoProvider implements BillingProvider {
   readonly id = "mercado_pago" as const;
 
-  async criarAssinatura(dados: NovaAssinatura): Promise<AssinaturaCriada> {
+  /**
+   * Cria o vínculo de pagamento: `preapproval` SEM plano, que é o recurso do MP
+   * que guarda o meio de pagamento e devolve um checkout (`init_point`).
+   *
+   * **Nada é cobrado aqui.** O `auto_recurring.transaction_amount` exigido pelo
+   * MP é preenchido com o TETO autorizado (`tetoCentavos`, ou o piso
+   * `TETO_MINIMO_CENTAVOS` quando não vier) — é limite de autorização, não
+   * cobrança. Quem debita é `emitirCobrancaDeCiclo`, com o valor apurado.
+   */
+  async iniciarVinculoPagamento(dados: NovoVinculo): Promise<VinculoCriado> {
+    const tetoCentavos = dados.tetoCentavos ?? TETO_MINIMO_CENTAVOS;
+
     const resposta = comoRegistro(
       await chamar("POST", "/preapproval", {
         idempotencyKey: dados.referenciaExterna,
@@ -315,18 +432,19 @@ export class MercadoPagoProvider implements BillingProvider {
           auto_recurring: {
             frequency: 1,
             frequency_type: "months",
-            transaction_amount: centavosParaReais(dados.valorCentavos),
+            // TETO autorizado — não é o preço e não gera débito.
+            transaction_amount: centavosParaReais(tetoCentavos),
             currency_id: "BRL",
           },
         },
       }),
     );
 
-    const providerSubscriptionId = comoTexto(resposta.id);
+    const providerVinculoId = comoTexto(resposta.id);
     const checkoutUrl = comoTexto(resposta.init_point);
-    if (!providerSubscriptionId || !checkoutUrl) {
+    if (!providerVinculoId || !checkoutUrl) {
       // 2xx sem `id`/`init_point` é contrato quebrado: falhar alto é melhor que
-      // persistir assinatura sem identificador (ficaria órfã e invisível).
+      // persistir vínculo sem identificador (ficaria órfão e invisível).
       throw new BillingProviderError(
         "resposta do Mercado Pago sem `id` ou `init_point`",
         { corpo: resposta },
@@ -334,49 +452,98 @@ export class MercadoPagoProvider implements BillingProvider {
     }
 
     return {
-      providerSubscriptionId,
+      providerVinculoId,
       checkoutUrl,
       status: mapearStatus(resposta.status),
     };
   }
 
-  async atualizarValorRecorrente(
-    providerSubscriptionId: string,
-    valorCentavos: number,
-  ): Promise<void> {
-    await chamar("PUT", `/preapproval/${providerSubscriptionId}`, {
-      corpo: {
-        auto_recurring: {
-          transaction_amount: centavosParaReais(valorCentavos),
-          currency_id: "BRL",
-        },
-      },
+  async consultarVinculo(providerVinculoId: string): Promise<{
+    status: StatusAssinaturaProvider;
+  }> {
+    const resposta = comoRegistro(
+      await chamar("GET", `/preapproval/${providerVinculoId}`),
+    );
+
+    // Deliberadamente NÃO devolve valor: o `transaction_amount` guardado no
+    // preapproval é teto autorizado, e devolvê-lo como se fosse o valor do ciclo
+    // reintroduziria exatamente a confusão que motivou a troca de contrato.
+    return { status: mapearStatus(resposta.status) };
+  }
+
+  async cancelarVinculo(providerVinculoId: string): Promise<void> {
+    await chamar("PUT", `/preapproval/${providerVinculoId}`, {
+      corpo: { status: "cancelled" },
     });
   }
 
-  async consultarAssinatura(providerSubscriptionId: string): Promise<{
-    status: StatusAssinaturaProvider;
+  /**
+   * Emite a cobrança de um ciclo já apurado como pagamento AVULSO.
+   *
+   * `X-Idempotency-Key` = `referenciaExterna` (`cycle:<id>`) é a peça crítica:
+   * o job de fechamento pode reexecutar (retry, redeploy, reentrega) e uma
+   * segunda emissão cobraria a clínica duas vezes pelo mesmo ciclo. Com a chave,
+   * o MP devolve a cobrança já criada em vez de criar outra. A chave é derivada
+   * do ciclo, não do relógio nem de um UUID novo — senão a idempotência não
+   * sobreviveria ao processo reiniciar.
+   */
+  async emitirCobrancaDeCiclo(
+    dados: NovaCobrancaDeCiclo,
+  ): Promise<CobrancaEmitida> {
+    const resposta = comoRegistro(
+      await chamar("POST", "/v1/payments", {
+        idempotencyKey: dados.referenciaExterna,
+        corpo: {
+          // Conversão centavos → decimal só aqui, na borda do adapter.
+          transaction_amount: centavosParaReais(dados.valorCentavos),
+          description: dados.descricao,
+          external_reference: dados.referenciaExterna,
+          date_of_expiration: dados.vencimento.toISOString(),
+          // Amarra a cobrança ao meio de pagamento já autorizado pela clínica.
+          metadata: { vinculo_id: dados.vinculoId },
+        },
+      }),
+    );
+
+    const providerChargeId = comoTexto(resposta.id);
+    if (!providerChargeId) {
+      // Sem id não há como reconciliar o webhook com o ciclo: falhar alto é
+      // melhor que registrar uma cobrança que nunca poderá ser conferida.
+      throw new BillingProviderError("resposta do Mercado Pago sem `id`", {
+        corpo: resposta,
+      });
+    }
+
+    // Pix devolve a URL do "ticket" para o pagador; cartão debitado não devolve
+    // nada. `undefined` (não string vazia) mantém o campo opcional honesto.
+    const interacao = comoRegistro(resposta.point_of_interaction);
+    const dadosTransacao = comoRegistro(interacao.transaction_data);
+    const urlPagamento = comoTexto(dadosTransacao.ticket_url) ?? undefined;
+
+    return {
+      providerChargeId,
+      status: mapearStatusCobranca(resposta.status),
+      ...(urlPagamento ? { urlPagamento } : {}),
+    };
+  }
+
+  async consultarCobranca(providerChargeId: string): Promise<{
+    status: StatusCobranca;
     valorCentavos: number;
   }> {
     const resposta = comoRegistro(
-      await chamar("GET", `/preapproval/${providerSubscriptionId}`),
+      await chamar("GET", `/v1/payments/${providerChargeId}`),
     );
-    const recorrencia = comoRegistro(resposta.auto_recurring);
-    const valor = recorrencia.transaction_amount;
+    const valor = resposta.transaction_amount;
 
     return {
-      status: mapearStatus(resposta.status),
+      status: mapearStatusCobranca(resposta.status),
+      // Volta ao inteiro na entrada do sistema: nenhum decimal atravessa a porta.
       valorCentavos:
         typeof valor === "number" && Number.isFinite(valor)
           ? reaisParaCentavos(valor)
           : 0,
     };
-  }
-
-  async cancelarAssinatura(providerSubscriptionId: string): Promise<void> {
-    await chamar("PUT", `/preapproval/${providerSubscriptionId}`, {
-      corpo: { status: "cancelled" },
-    });
   }
 
   verificarAssinaturaWebhook(input: EntradaVerificacaoWebhook): boolean {

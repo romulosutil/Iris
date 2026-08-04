@@ -9,28 +9,37 @@
  *    real, que é emitida em centavos pelo provedor de pagamento. Reais só
  *    aparecem na borda de exibição (`calculateMonthlyFee`, `formatarBRL`).
  *
- * 2. **Faixas MARGINAIS, não faixa única retroativa.** Cadastrar o 16º
- *    paciente não pode reprecificar os 15 anteriores — a clínica que cresce
- *    nunca vê a conta do mês passado subir sozinha, e o preço por paciente
- *    adicional só cai. Isso torna a curva monótona crescente com incremento
- *    decrescente, o que é a promessa comercial que vendemos.
+ * 2. **Faixas MARGINAIS, não faixa única retroativa.** A 16ª ficha ativa não
+ *    pode reprecificar as 15 anteriores — a clínica que cresce nunca vê a
+ *    conta do mês passado subir sozinha, e o preço por ficha adicional só cai.
+ *    Isso torna a curva monótona crescente com incremento decrescente, o que é
+ *    a promessa comercial que vendemos.
+ *
+ * 3. **A unidade cobrada é a FICHA ATIVA, não "o paciente".** Quem entra na
+ *    contagem é decidido pela apuração do ciclo em `billing_apurar_ciclo`
+ *    (migração 0075): ficha cadastrada dentro do ciclo OU com interação
+ *    registrada nele. "Paciente ativo" significava três coisas ao mesmo tempo
+ *    (não arquivado, unidade faturável, e "em tratamento" no sentido clínico);
+ *    "ficha ativa" nomeia o registro consumido e não colide com a leitura
+ *    clínica. Esta calculadora não decide QUEM conta — só quanto custa a
+ *    quantidade que a apuração devolveu.
  */
 
 /** Uma faixa de preço marginal. `ateQuantidade: null` = faixa aberta (última). */
 export interface Faixa {
   /** Limite superior INCLUSIVO da faixa; `null` na faixa final, sem teto. */
   readonly ateQuantidade: number | null;
-  /** Preço mensal, em centavos, de cada paciente que cai nesta faixa. */
+  /** Preço mensal, em centavos, de cada ficha ativa que cai nesta faixa. */
   readonly valorCentavos: number;
 }
 
 /** Linha do memorial de cálculo exibido na fatura. */
 export interface DetalheFaixa {
-  /** Primeiro paciente coberto por esta faixa (1-indexado, inclusivo). */
+  /** Primeira ficha ativa coberta por esta faixa (1-indexado, inclusivo). */
   readonly deQuantidade: number;
-  /** Último paciente coberto por esta faixa (1-indexado, inclusivo). */
+  /** Última ficha ativa coberta por esta faixa (1-indexado, inclusivo). */
   readonly ateQuantidade: number;
-  /** Quantos pacientes ativos caíram nesta faixa. */
+  /** Quantas fichas ativas caíram nesta faixa. */
   readonly quantidade: number;
   readonly valorUnitarioCentavos: number;
   readonly subtotalCentavos: number;
@@ -50,35 +59,37 @@ export const FAIXAS_PRECIFICACAO: readonly Faixa[] = [
 ] as const;
 
 /**
- * Cobrança de ativação do Mês 1: o primeiro paciente cadastrado sai pelo preço
- * cheio da primeira faixa, independente de quando no mês entrou. Exposto como
- * constante própria porque o fluxo de onboarding cobra esse valor isolado,
- * antes de existir ciclo mensal fechado.
+ * LEGADO — **não é mais cobrado em lugar nenhum.** Era a cobrança de ativação
+ * do Mês 1, do tempo em que a ativação criava uma recorrência de valor fixo no
+ * gateway (ou seja, cobrava antes de existir ciclo). Com o trilho pós-pago da
+ * migração 0075, a ativação só registra o meio de pagamento e a fatura nasce no
+ * fechamento do ciclo, com o valor apurado. Mantido apenas porque a suíte de
+ * testes ainda o referencia; nenhum caminho de produção deve voltar a usá-lo.
  */
 export const VALOR_PRIMEIRO_PACIENTE_CENTAVOS = 3900;
 
 /**
  * Rejeita entrada inválida em vez de degradar para 0. Uma contagem de
- * pacientes corrompida que vira "R$ 0,00" silenciosamente é uma fatura errada
+ * fichas corrompida que vira "R$ 0,00" silenciosamente é uma fatura errada
  * emitida ao cliente — falha barulhenta é mais barata que receita perdida.
  */
-function validarQuantidade(pacientesAtivos: number): void {
-  if (!Number.isFinite(pacientesAtivos)) {
+function validarQuantidade(fichasAtivas: number): void {
+  if (!Number.isFinite(fichasAtivas)) {
     throw new RangeError(
-      "Quantidade de pacientes ativos deve ser um número finito; recebido: " +
-        String(pacientesAtivos),
+      "Quantidade de fichas ativas deve ser um número finito; recebido: " +
+        String(fichasAtivas),
     );
   }
-  if (!Number.isInteger(pacientesAtivos)) {
+  if (!Number.isInteger(fichasAtivas)) {
     throw new RangeError(
-      "Quantidade de pacientes ativos deve ser um número inteiro; recebido: " +
-        String(pacientesAtivos),
+      "Quantidade de fichas ativas deve ser um número inteiro; recebido: " +
+        String(fichasAtivas),
     );
   }
-  if (pacientesAtivos < 0) {
+  if (fichasAtivas < 0) {
     throw new RangeError(
-      "Quantidade de pacientes ativos não pode ser negativa; recebido: " +
-        String(pacientesAtivos),
+      "Quantidade de fichas ativas não pode ser negativa; recebido: " +
+        String(fichasAtivas),
     );
   }
 }
@@ -87,20 +98,20 @@ function validarQuantidade(pacientesAtivos: number): void {
  * Memorial de cálculo por faixa. Só devolve faixas efetivamente atingidas —
  * a fatura não deve listar linha com quantidade zero.
  *
- * @throws {RangeError} se `pacientesAtivos` não for inteiro finito >= 0.
+ * @throws {RangeError} se `fichasAtivas` não for inteiro finito >= 0.
  */
-export function detalharMensalidade(pacientesAtivos: number): DetalheFaixa[] {
-  validarQuantidade(pacientesAtivos);
+export function detalharMensalidade(fichasAtivas: number): DetalheFaixa[] {
+  validarQuantidade(fichasAtivas);
 
   const detalhes: DetalheFaixa[] = [];
   let jaContabilizados = 0;
 
   for (const faixa of FAIXAS_PRECIFICACAO) {
-    if (jaContabilizados >= pacientesAtivos) break;
+    if (jaContabilizados >= fichasAtivas) break;
 
     // Faixa aberta absorve todo o restante; faixa fechada leva só o que cabe
     // até o seu teto, e o excedente segue para a próxima (regra marginal).
-    const restante = pacientesAtivos - jaContabilizados;
+    const restante = fichasAtivas - jaContabilizados;
     const capacidade =
       faixa.ateQuantidade === null
         ? restante
@@ -126,10 +137,10 @@ export function detalharMensalidade(pacientesAtivos: number): DetalheFaixa[] {
  * Valor total da mensalidade, em CENTAVOS. É esta função — não a versão em
  * reais — que deve alimentar a integração de cobrança.
  *
- * @throws {RangeError} se `pacientesAtivos` não for inteiro finito >= 0.
+ * @throws {RangeError} se `fichasAtivas` não for inteiro finito >= 0.
  */
-export function calcularMensalidadeCentavos(pacientesAtivos: number): number {
-  return detalharMensalidade(pacientesAtivos).reduce(
+export function calcularMensalidadeCentavos(fichasAtivas: number): number {
+  return detalharMensalidade(fichasAtivas).reduce(
     (total, detalhe) => total + detalhe.subtotalCentavos,
     0,
   );
@@ -140,10 +151,10 @@ export function calcularMensalidadeCentavos(pacientesAtivos: number): number {
  * por 100 reintroduz ponto flutuante, então nunca somar valores derivados
  * daqui — agregue em centavos e converta só no fim.
  *
- * @throws {RangeError} se `activePatientsCount` não for inteiro finito >= 0.
+ * @throws {RangeError} se `fichasAtivas` não for inteiro finito >= 0.
  */
-export function calculateMonthlyFee(activePatientsCount: number): number {
-  return calcularMensalidadeCentavos(activePatientsCount) / 100;
+export function calculateMonthlyFee(fichasAtivas: number): number {
+  return calcularMensalidadeCentavos(fichasAtivas) / 100;
 }
 
 /**

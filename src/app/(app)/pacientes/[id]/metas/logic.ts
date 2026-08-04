@@ -4,7 +4,16 @@ import { z } from "zod";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { goal, goalMilestoneMapping } from "@/db/schema";
+import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { atualizarSchema, criarSchema } from "./schemas";
+
+/**
+ * Toda escrita de meta passa pelo guard de conta somente-leitura (#163+#159) —
+ * planejamento terapêutico é o núcleo do que se paga para usar. A leitura do
+ * plano continua livre: conta bloqueada vira arquivo consultável, nunca cofre
+ * fechado sobre prontuário.
+ */
+type MetaState = { error?: string; bloqueioConta?: BloqueioConta };
 
 /**
  * `proxima_revisao_em` é uma coluna `date` — Drizzle espera string YYYY-MM-DD.
@@ -24,10 +33,10 @@ function proximaRevisaoISO(semanas: number): string {
  * app.user_id`. Mapeamento a marco(s) é opcional (Tema 2: uma meta pode combinar
  * marcos de protocolos diferentes).
  */
-export async function criarMeta(
+async function criarMetaCore(
   ctx: TenantContext,
   input: z.input<typeof criarSchema>,
-): Promise<{ error?: string; id?: string }> {
+): Promise<MetaState & { id?: string }> {
   requireRole(ctx, "coordenador", "terapeuta");
   const parsed = criarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -61,6 +70,8 @@ export async function criarMeta(
   }
 }
 
+export const criarMeta = comEscrita(criarMetaCore);
+
 /**
  * Edita o conteúdo clínico da meta (descrição, disciplina, critério, ciclo).
  * Coordenador e terapeuta da equipe — o RLS `goal_update` fecha tenant/equipe e
@@ -68,10 +79,10 @@ export async function criarMeta(
  * reancora `proxima_revisao_em` a partir de hoje (a revisão passa a valer do
  * novo ritmo). NÃO muda `estado` — transições têm ações próprias.
  */
-export async function atualizarMeta(
+async function atualizarMetaCore(
   ctx: TenantContext,
   input: z.input<typeof atualizarSchema>,
-): Promise<{ error?: string }> {
+): Promise<MetaState> {
   requireRole(ctx, "coordenador", "terapeuta");
   const parsed = atualizarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -97,6 +108,8 @@ export async function atualizarMeta(
   }
 }
 
+export const atualizarMeta = comEscrita(atualizarMetaCore);
+
 // Transições que coordenador OU terapeuta da equipe podem fazer. `dominada` NÃO
 // está aqui — é decisão do coordenador (ver marcarDominada). `rascunho` também
 // não: uma meta não volta a rascunho depois de ativa.
@@ -112,10 +125,10 @@ const transicaoSchema = z.object({
  * A transição para `dominada` fica fora deste conjunto de propósito: dominar é
  * um julgamento clínico reservado ao coordenador (marcarDominada).
  */
-export async function transicionarEstadoMeta(
+async function transicionarEstadoMetaCore(
   ctx: TenantContext,
   input: z.input<typeof transicaoSchema>,
-): Promise<{ error?: string }> {
+): Promise<MetaState> {
   requireRole(ctx, "coordenador", "terapeuta");
   const parsed = transicaoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -133,6 +146,8 @@ export async function transicionarEstadoMeta(
   }
 }
 
+export const transicionarEstadoMeta = comEscrita(transicionarEstadoMetaCore);
+
 const dominarSchema = z.object({ goalId: z.string().uuid() });
 
 /**
@@ -143,10 +158,10 @@ const dominarSchema = z.object({ goalId: z.string().uuid() });
  * requireRole restringe a AÇÃO). Fase posterior liga a máquina de candidatura
  * (`goal_candidacy`) que sugere quais metas o coordenador deve olhar aqui.
  */
-export async function marcarDominada(
+async function marcarDominadaCore(
   ctx: TenantContext,
   input: z.input<typeof dominarSchema>,
-): Promise<{ error?: string }> {
+): Promise<MetaState> {
   requireRole(ctx, "coordenador");
   const parsed = dominarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -166,6 +181,8 @@ export async function marcarDominada(
   }
 }
 
+export const marcarDominada = comEscrita(marcarDominadaCore);
+
 const manterSchema = z.object({ goalId: z.string().uuid() });
 
 /**
@@ -173,10 +190,10 @@ const manterSchema = z.object({ goalId: z.string().uuid() });
  * ciclo atual, sem mudar o estado. É o ramo "segue ativa, próxima revisão
  * agendada" do fluxo 4.4 quando a meta não é candidata a dominada.
  */
-export async function manterMetaAtiva(
+async function manterMetaAtivaCore(
   ctx: TenantContext,
   input: z.input<typeof manterSchema>,
-): Promise<{ error?: string }> {
+): Promise<MetaState> {
   requireRole(ctx, "coordenador", "terapeuta");
   const parsed = manterSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -198,3 +215,5 @@ export async function manterMetaAtiva(
     return { error: "Não foi possível reagendar a revisão." };
   }
 }
+
+export const manterMetaAtiva = comEscrita(manterMetaAtivaCore);

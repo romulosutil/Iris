@@ -3,6 +3,9 @@ import { eq, sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { careTeamMembership } from "@/db/schema";
+import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+
+type EquipeState = { error?: string; bloqueioConta?: BloqueioConta };
 
 // Espelha o CHECK ctm_papel do banco. Validação de app dá erro amigável antes
 // de o CHECK do Postgres estourar.
@@ -13,11 +16,11 @@ const PAPEIS_EQUIPE = [
 ] as const;
 
 /** Núcleo testável — recebe ctx (nunca do request). */
-export async function adicionarMembroEquipe(
+async function adicionarMembroEquipeCore(
   ctx: TenantContext,
   patientId: string,
   formData: FormData,
-): Promise<{ error?: string }> {
+): Promise<EquipeState> {
   requireRole(ctx, "coordenador");
   const userId = String(formData.get("userId") ?? "").trim();
   if (!userId) return { error: "Selecione um terapeuta." };
@@ -49,11 +52,18 @@ export async function adicionarMembroEquipe(
   return {};
 }
 
+/**
+ * Conta em somente-leitura não monta nem desmonta equipe (#163+#159): montar
+ * equipe é o que dá acesso ao prontuário pela RLS, então seria concessão de
+ * acesso novo numa conta sem relação comercial vigente.
+ */
+export const adicionarMembroEquipe = comEscrita(adicionarMembroEquipeCore);
+
 /** Encerra o vínculo append-only: marca `vigenciaFim`, nunca deleta (histórico). */
-export async function encerrarVinculoEquipe(
+async function encerrarVinculoEquipeCore(
   ctx: TenantContext,
   membershipId: string,
-): Promise<{ error?: string }> {
+): Promise<EquipeState> {
   requireRole(ctx, "coordenador");
   await withTenant(ctx, (tx) =>
     tx
@@ -65,3 +75,5 @@ export async function encerrarVinculoEquipe(
   );
   return {};
 }
+
+export const encerrarVinculoEquipe = comEscrita(encerrarVinculoEquipeCore);

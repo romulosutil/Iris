@@ -76,10 +76,10 @@ export function NovoPacienteForm() {
     grupoRef.current?.querySelector("button")?.focus();
   }, [erroEhDoTipo, state]);
 
-  // Bloqueio de cobrança (#36) não é erro de preenchimento: nada no formulário
-  // conserta. Some com o Alert genérico do <Form> para não repetir a mesma
-  // frase duas vezes na tela — a mensagem sai no aviso destacado abaixo.
-  const bloqueio = state.bloqueioBilling;
+  // Conta em somente-leitura (#163) não é erro de preenchimento: nada no
+  // formulário conserta. Some com o Alert genérico do <Form> para não repetir a
+  // mesma frase duas vezes na tela — a mensagem sai no aviso destacado abaixo.
+  const bloqueio = state.bloqueioConta;
 
   return (
     <Form action={formAction} error={bloqueio ? undefined : state.error}>
@@ -87,14 +87,14 @@ export function NovoPacienteForm() {
         <Alert
           severidade="erro"
           destacado
-          titulo="Cadastro bloqueado pela assinatura"
+          titulo="Conta em somente-leitura"
         >
           <p>{bloqueio.mensagem}</p>
-          {/* Link SÓ na ativação pendente. Em `pagamento_pendente` já existe
-              cobrança em voo: devolver a pessoa ao checkout gera uma segunda
-              cobrança para o mesmo mês. Nos demais motivos a saída também não
-              é um novo checkout, então nenhum deles ganha o link. */}
-          {bloqueio.motivo === "ativacao_requerida" ? (
+          {/* Link SÓ onde ativar/reativar é a saída. Em
+              `pagamento_em_processamento` já existe cobrança em voo: devolver a
+              pessoa ao checkout gera uma segunda cobrança para o mesmo mês. */}
+          {bloqueio.estado === "trial_expirado" ||
+          bloqueio.estado === "cancelada" ? (
             <p className="mt-2">
               <Link
                 href="/assinatura"
