@@ -163,6 +163,15 @@ export function criarTemplateRedefinicaoSenha(linkReset: string) {
   return { assunto, texto, html };
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /**
  * E-mail 4: Convite de Equipe — Novo Usuário (com senha temporária)
  */
@@ -175,11 +184,12 @@ export function criarTemplateConviteNovoUsuario({
   senhaTemporaria: string;
   loginUrl: string;
 }) {
-  const assunto = "Você foi convidado(a) para se juntar à equipe no Iris";
+  const nomeEscapado = escapeHtml(nome);
+  const assunto = "Convite para integrar a equipe no Iris";
   const texto = `Olá, ${nome}!\n\nVocê foi convidado(a) para integrar a equipe da sua clínica no Iris.\n\nSua senha temporária de primeiro acesso é: ${senhaTemporaria}\n\nAcesse ${loginUrl} para realizar seu primeiro login.`;
 
   const html = renderizarLayoutEmail({
-    tituloHeader: `Bem-vindo(a) à equipe, ${nome}!`,
+    tituloHeader: `Bem-vindo(a) à equipe, ${nomeEscapado}!`,
     conteudoHtml: `
       <p style="margin-top: 0;">Você foi convidado(a) pela coordenação para integrar a equipe clínica na plataforma Iris.</p>
       
@@ -212,15 +222,16 @@ export function criarTemplateConviteUsuarioExistente({
   nome: string;
   loginUrl: string;
 }) {
-  const assunto = "Nova clínica vinculada à sua conta no Iris";
-  const texto = `Olá, ${nome}!\n\nVocê foi adicionado(a) à equipe de uma nova clínica no Iris.\nComo você já tem uma conta ativa, basta acessar ${loginUrl} e entrar com sua senha atual.`;
+  const nomeEscapado = escapeHtml(nome);
+  const assunto = "Convite para integrar nova equipe no Iris";
+  const texto = `Olá, ${nome}!\n\nVocê foi adicionado(a) à equipe de uma nova clínica no Iris.\nComo você já tem uma conta ativa, faça login com sua senha atual acessando ${loginUrl}.`;
 
   const html = renderizarLayoutEmail({
     tituloHeader: "Nova clínica vinculada!",
     conteudoHtml: `
-      <p style="margin-top: 0;">Olá, <strong>${nome}</strong>.</p>
+      <p style="margin-top: 0;">Olá, <strong>${nomeEscapado}</strong>.</p>
       <p>Você acaba de ser adicionado(a) à equipe de uma nova clínica na plataforma Iris.</p>
-      <p>Como você já possui uma conta ativa, utilize suas credenciais normais para acessar:</p>
+      <p>Como você já possui uma conta ativa, faça login com sua senha atual para acessar a nova clínica:</p>
       
       <p style="margin: 32px 0; text-align: center;">
         <a href="${loginUrl}" style="background-color: #1A1A1A; color: #FFFFFF; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 2px 2px 0px #718096;">
