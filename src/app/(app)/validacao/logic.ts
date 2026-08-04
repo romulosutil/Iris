@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
+import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
 import type { Alvo } from "@/lib/evidence/resolver";
 import { montarClassificacaoNova, validarAlvo } from "./alvos";
@@ -14,8 +15,15 @@ import { montarClassificacaoNova, validarAlvo } from "./alvos";
 // request (o cliente nunca fornece ctx). `evidence`/`evidence_revision` são
 // append-only (RLS revoga UPDATE/DELETE) — toda ação aqui é só INSERT.
 
-export type ValidacaoResult = { ok?: boolean; error?: string };
-export type ValidacaoState = { ok?: boolean; error?: string };
+// ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
+// Toda ação daqui insere (`evidence_revision`/`evidence_query`/`audit_log`) e
+// remateriazaliza o snapshot — inclusive "confirmar", que parece leitura mas
+// grava a revisão. Conta em somente-leitura não avança a fila de validação.
+// O wrap fica na exportação do core, não no `actions.ts`, porque os testes de
+// integração chamam o core direto com `ctx`.
+
+export type ValidacaoResult = { ok?: boolean; error?: string; bloqueioConta?: BloqueioConta };
+export type ValidacaoState = { ok?: boolean; error?: string; bloqueioConta?: BloqueioConta };
 
 type LeituraOk = {
   patientId: string;
@@ -82,7 +90,7 @@ async function lerEvidenciaParaValidar(
 
 const evidenceIdSchema = z.object({ evidenceId: z.string().uuid() });
 
-export async function confirmarEvidencia(
+async function confirmarEvidenciaCore(
   ctx: TenantContext,
   input: { evidenceId: string },
 ): Promise<ValidacaoResult> {
@@ -108,12 +116,14 @@ export async function confirmarEvidencia(
   });
 }
 
+export const confirmarEvidencia = comEscrita(confirmarEvidenciaCore);
+
 const invalidarSchema = z.object({
   evidenceId: z.string().uuid(),
   motivo: z.string().trim().min(1, "Motivo obrigatório."),
 });
 
-export async function invalidarEvidencia(
+async function invalidarEvidenciaCore(
   ctx: TenantContext,
   input: { evidenceId: string; motivo: string },
 ): Promise<ValidacaoResult> {
@@ -144,6 +154,8 @@ export async function invalidarEvidencia(
   });
 }
 
+export const invalidarEvidencia = comEscrita(invalidarEvidenciaCore);
+
 const alvoSchema = z.object({
   goal_id: z.string().nullable().optional(),
   protocol_id: z.string().nullable().optional(),
@@ -156,7 +168,7 @@ const reclassificarSchema = z.object({
   justificativa: z.string().trim().min(1, "Justificativa obrigatória."),
 });
 
-export async function reclassificarEvidencia(
+async function reclassificarEvidenciaCore(
   ctx: TenantContext,
   input: { evidenceId: string; novoAlvo: Alvo; justificativa: string },
 ): Promise<ValidacaoResult> {
@@ -202,12 +214,14 @@ export async function reclassificarEvidencia(
   });
 }
 
+export const reclassificarEvidencia = comEscrita(reclassificarEvidenciaCore);
+
 const devolverSchema = z.object({
   evidenceId: z.string().uuid(),
   pergunta: z.string().trim().min(1, "Pergunta obrigatória."),
 });
 
-export async function devolverComDuvida(
+async function devolverComDuvidaCore(
   ctx: TenantContext,
   input: { evidenceId: string; pergunta: string },
 ): Promise<ValidacaoResult> {
@@ -237,3 +251,5 @@ export async function devolverComDuvida(
     return { ok: true };
   });
 }
+
+export const devolverComDuvida = comEscrita(devolverComDuvidaCore);

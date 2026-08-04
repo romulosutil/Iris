@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
+import { comEscrita } from "@/lib/billing/guard-escrita";
 import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
 import type { Alvo } from "@/lib/evidence/resolver";
 import { montarClassificacaoNova, validarAlvo } from "../validacao/alvos";
@@ -107,7 +108,7 @@ const responderSchema = z.object({
   novoAlvo: alvoSchema.optional(),
 });
 
-export async function responderQuery(
+async function responderQueryCore(
   ctx: TenantContext,
   input: { evidenceQueryId: string; respostaTexto: string; novoAlvo?: Alvo },
 ): Promise<ValidacaoResult> {
@@ -178,3 +179,10 @@ export async function responderQuery(
     return { ok: true };
   });
 }
+
+/**
+ * Responder query fecha a dúvida e pode gerar `evidence_revision` + `audit_log`
+ * → escrita. Guard na exportação (e não no `actions.ts`) para que a suíte de
+ * integração, que chama o core direto, enxergue o bloqueio.
+ */
+export const responderQuery = comEscrita(responderQueryCore);

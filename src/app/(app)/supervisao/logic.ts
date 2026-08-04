@@ -4,9 +4,17 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
+import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 
-export type SupervisaoResult = { ok?: boolean; error?: string };
-export type SupervisaoState = { ok?: boolean; error?: string };
+// ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
+// Alerta de SUPERVISÃO (estagnação/regressão/faltas) é gestão clínica, não
+// segurança — a isenção vale para `alertas-risco`/`clinica/emergencia`, onde
+// não agir tem custo humano imediato. Aqui, tratar o alerta grava em `alerta`
+// + `audit_log`, então segue a regra geral. O wrap fica na exportação do core
+// para que os testes de integração, que chamam o core direto, o exercitem.
+
+export type SupervisaoResult = { ok?: boolean; error?: string; bloqueioConta?: BloqueioConta };
+export type SupervisaoState = { ok?: boolean; error?: string; bloqueioConta?: BloqueioConta };
 
 const baseInputSchema = z.object({
   chaveNatural: z.string().min(1),
@@ -19,7 +27,7 @@ const baseInputSchema = z.object({
 
 type BaseInput = z.infer<typeof baseInputSchema>;
 
-export async function reconhecerAlerta(
+async function reconhecerAlertaCore(
   ctx: TenantContext,
   input: BaseInput,
 ): Promise<SupervisaoResult> {
@@ -66,11 +74,13 @@ export async function reconhecerAlerta(
   });
 }
 
+export const reconhecerAlerta = comEscrita(reconhecerAlertaCore);
+
 const resolverSchema = baseInputSchema.extend({
   nota: z.string().trim().min(1, "Nota de resolução obrigatória."),
 });
 
-export async function resolverAlerta(
+async function resolverAlertaCore(
   ctx: TenantContext,
   input: BaseInput & { nota: string },
 ): Promise<SupervisaoResult> {
@@ -138,11 +148,13 @@ export async function resolverAlerta(
   });
 }
 
+export const resolverAlerta = comEscrita(resolverAlertaCore);
+
 const descartarSchema = baseInputSchema.extend({
   motivo: z.string().trim().min(1, "Motivo de descarte obrigatório."),
 });
 
-export async function descartarAlerta(
+async function descartarAlertaCore(
   ctx: TenantContext,
   input: BaseInput & { motivo: string },
 ): Promise<SupervisaoResult> {
@@ -209,3 +221,5 @@ export async function descartarAlerta(
     return { error: "CONCURRENCY_ERROR" };
   });
 }
+
+export const descartarAlerta = comEscrita(descartarAlertaCore);

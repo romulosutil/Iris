@@ -3,16 +3,17 @@ import { eq } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { consent, patientClinicalProfile } from "@/db/schema";
+import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { regimeVigente } from "@/lib/consent/vigencia";
 
-export type FichaClinicaState = { error?: string };
+export type FichaClinicaState = { error?: string; bloqueioConta?: BloqueioConta };
 
 /**
  * Núcleo testável: grava/atualiza o perfil clínico. Só coordenador (dado
  * clínico é vedado à recepção). Bloqueia se não houver Consent LGPD prévio —
  * o cadastro administrativo tem que vir antes. Upsert por patientId (único).
  */
-export async function salvarFichaClinica(
+async function salvarFichaClinicaCore(
   ctx: TenantContext,
   patientId: string,
   formData: FormData,
@@ -69,3 +70,10 @@ export async function salvarFichaClinica(
     return {};
   });
 }
+
+/**
+ * Conta em somente-leitura não grava ficha clínica (#163+#159). O gate de
+ * consentimento continua valendo por dentro — são barreiras independentes: uma
+ * é a base legal do tratamento do dado, a outra é a relação comercial.
+ */
+export const salvarFichaClinica = comEscrita(salvarFichaClinicaCore);

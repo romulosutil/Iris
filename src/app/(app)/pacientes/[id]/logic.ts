@@ -3,8 +3,13 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { auditLog, patient } from "@/db/schema";
+import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 
-export type ArquivamentoState = { error?: string; ok?: boolean };
+export type ArquivamentoState = {
+  error?: string;
+  ok?: boolean;
+  bloqueioConta?: BloqueioConta;
+};
 
 /**
  * #174 — arquivamento COMERCIAL manual do paciente.
@@ -21,12 +26,22 @@ export type ArquivamentoState = { error?: string; ok?: boolean };
  * UI diria "arquivado" sobre um paciente que continua faturando. `requireRole`
  * transforma esse silêncio em recusa explícita.
  */
-export async function arquivarPaciente(
+async function arquivarPacienteCore(
   ctx: TenantContext,
   patientId: string,
 ): Promise<ArquivamentoState> {
   return alternarArquivamento(ctx, patientId, "arquivar");
 }
+
+/**
+ * Conta em somente-leitura não arquiva nem desarquiva (#163+#159). Arquivar
+ * *reduz* a fatura, então a tentação é isentá-lo — mas a apuração é por
+ * snapshot de ciclo, e deixar a única escrita permitida ser a que muda o valor
+ * a cobrar abriria uma porta para mexer na base de faturamento de uma conta que
+ * está justamente inadimplente ou fora do trial. Reativar a assinatura é o
+ * caminho, e é o que a mensagem do bloqueio oferece.
+ */
+export const arquivarPaciente = comEscrita(arquivarPacienteCore);
 
 /**
  * Desarquiva: o paciente volta a contar na fatura do mês.
@@ -37,12 +52,14 @@ export async function arquivarPaciente(
  * registro de alta é histórico clínico, que não se reescreve por ato
  * administrativo.
  */
-export async function desarquivarPaciente(
+async function desarquivarPacienteCore(
   ctx: TenantContext,
   patientId: string,
 ): Promise<ArquivamentoState> {
   return alternarArquivamento(ctx, patientId, "desarquivar");
 }
+
+export const desarquivarPaciente = comEscrita(desarquivarPacienteCore);
 
 async function alternarArquivamento(
   ctx: TenantContext,
