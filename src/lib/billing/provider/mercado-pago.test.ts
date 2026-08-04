@@ -57,8 +57,14 @@ describe("MercadoPagoProvider", () => {
     vi.restoreAllMocks();
   });
 
-  describe("criarAssinatura", () => {
-    it("monta o body do /preapproval e devolve id + init_point", async () => {
+  describe("iniciarVinculoPagamento", () => {
+    const ASSINANTE = {
+      clinicId: "clinic-1",
+      nomeClinica: "Clínica Aurora",
+      emailResponsavel: "responsavel@aurora.test",
+    };
+
+    it("cria o vínculo sem cobrar e devolve id + checkout", async () => {
       fetchMock.mockResolvedValue(
         respostaOk({
           id: "2c938084",
@@ -67,61 +73,49 @@ describe("MercadoPagoProvider", () => {
         }),
       );
 
-      const resultado = await new MercadoPagoProvider().criarAssinatura({
-        assinante: {
-          clinicId: "clinic-1",
-          nomeClinica: "Clínica Aurora",
-          emailResponsavel: "responsavel@aurora.test",
-        },
-        valorCentavos: 3900,
+      const resultado = await new MercadoPagoProvider().iniciarVinculoPagamento({
+        assinante: ASSINANTE,
         metodo: "cartao",
         urlRetorno: "https://iris.test/billing/retorno",
-        referenciaExterna: "sub_clinic-1",
+        referenciaExterna: "vinculo_clinic-1",
+        tetoCentavos: 15_000,
       });
 
       const chamada = ultimaChamada(fetchMock);
       expect(chamada.url).toBe("https://api.mercadopago.test/preapproval");
       expect(chamada.metodo).toBe("POST");
       expect(chamada.cabecalhos.Authorization).toBe(`Bearer ${TOKEN}`);
-      expect(chamada.cabecalhos["X-Idempotency-Key"]).toBe("sub_clinic-1");
-      expect(chamada.corpo.external_reference).toBe("sub_clinic-1");
+      expect(chamada.cabecalhos["X-Idempotency-Key"]).toBe("vinculo_clinic-1");
+      expect(chamada.corpo.external_reference).toBe("vinculo_clinic-1");
       expect(chamada.corpo.payer_email).toBe("responsavel@aurora.test");
       expect(chamada.corpo.back_url).toBe("https://iris.test/billing/retorno");
-      expect(chamada.corpo.status).toBe("pending");
-      expect(chamada.corpo.auto_recurring).toEqual({
-        frequency: 1,
-        frequency_type: "months",
-        transaction_amount: 39,
-        currency_id: "BRL",
-      });
+      // O valor que vai ao MP é o TETO autorizado (R$150), não uma cobrança.
+      expect(chamada.corpo.auto_recurring.transaction_amount).toBe(150);
 
       expect(resultado).toEqual({
-        providerSubscriptionId: "2c938084",
+        providerVinculoId: "2c938084",
         checkoutUrl: "https://mp.test/checkout/2c938084",
         status: "pendente",
       });
     });
 
-    it("converte centavos quebrados sem sujeira de ponto flutuante", async () => {
+    it("sem teto informado usa o piso mínimo, nunca um valor de ciclo", async () => {
       fetchMock.mockResolvedValue(
         respostaOk({ id: "x", init_point: "https://mp.test/x", status: "pending" }),
       );
 
-      await new MercadoPagoProvider().criarAssinatura({
-        assinante: {
-          clinicId: "c",
-          nomeClinica: "C",
-          emailResponsavel: "e@t.test",
-        },
-        valorCentavos: 1999,
+      await new MercadoPagoProvider().iniciarVinculoPagamento({
+        assinante: ASSINANTE,
         metodo: "pix",
         urlRetorno: "https://iris.test/r",
         referenciaExterna: "ref",
       });
 
+      // 1,00 = piso do MP. Se alguém reintroduzir "cobrar na ativação", este
+      // número deixa de ser 1 e o teste quebra.
       expect(
         ultimaChamada(fetchMock).corpo.auto_recurring.transaction_amount,
-      ).toBe(19.99);
+      ).toBe(1);
     });
 
     it("HTTP 400 vira BillingProviderError com status e corpo preservados", async () => {
@@ -129,9 +123,8 @@ describe("MercadoPagoProvider", () => {
         respostaOk({ message: "invalid payer_email", error: "bad_request" }, 400),
       );
 
-      const promessa = new MercadoPagoProvider().criarAssinatura({
+      const promessa = new MercadoPagoProvider().iniciarVinculoPagamento({
         assinante: { clinicId: "c", nomeClinica: "C", emailResponsavel: "x" },
-        valorCentavos: 3900,
         metodo: "cartao",
         urlRetorno: "https://iris.test/r",
         referenciaExterna: "ref",
@@ -151,30 +144,18 @@ describe("MercadoPagoProvider", () => {
     });
   });
 
-  it("atualizarValorRecorrente faz PUT com o valor novo", async () => {
-    fetchMock.mockResolvedValue(respostaOk({ id: "abc", status: "authorized" }));
+  it("cancelarVinculo faz PUT com status cancelled", async () => {
+    fetchMock.mockResolvedValue(respostaOk({ id: "abc", status: "cancelled" }));
 
-    await new MercadoPagoProvider().atualizarValorRecorrente("abc", 7800);
+    await new MercadoPagoProvider().cancelarVinculo("abc");
 
     const chamada = ultimaChamada(fetchMock);
     expect(chamada.metodo).toBe("PUT");
     expect(chamada.url).toBe("https://api.mercadopago.test/preapproval/abc");
-    expect(chamada.corpo).toEqual({
-      auto_recurring: { transaction_amount: 78, currency_id: "BRL" },
-    });
-  });
-
-  it("cancelarAssinatura faz PUT com status cancelled", async () => {
-    fetchMock.mockResolvedValue(respostaOk({ id: "abc", status: "cancelled" }));
-
-    await new MercadoPagoProvider().cancelarAssinatura("abc");
-
-    const chamada = ultimaChamada(fetchMock);
-    expect(chamada.metodo).toBe("PUT");
     expect(chamada.corpo).toEqual({ status: "cancelled" });
   });
 
-  describe("consultarAssinatura — mapeamento dos 4 status", () => {
+  describe("consultarVinculo — mapeamento dos 4 status", () => {
     const casos = [
       ["pending", "pendente"],
       ["authorized", "autorizada"],
@@ -183,18 +164,120 @@ describe("MercadoPagoProvider", () => {
     ] as const;
 
     it.each(casos)("%s → %s", async (statusMP, esperado) => {
+      fetchMock.mockResolvedValue(respostaOk({ id: "abc", status: statusMP }));
+
+      const resultado = await new MercadoPagoProvider().consultarVinculo("abc");
+      const chamada = ultimaChamada(fetchMock);
+      expect(chamada.metodo).toBe("GET");
+      expect(chamada.url).toBe("https://api.mercadopago.test/preapproval/abc");
+      expect(resultado.status).toBe(esperado);
+    });
+  });
+
+  describe("emitirCobrancaDeCiclo", () => {
+    const PEDIDO = {
+      vinculoId: "PREAPP-9",
+      valorCentavos: 19_999,
+      referenciaExterna: "cycle:ciclo-42",
+      descricao: "Iris — apuração de julho/2026",
+      vencimento: new Date("2026-08-10T03:00:00.000Z"),
+    };
+
+    it("emite pagamento avulso com valor, referência e idempotência corretos", async () => {
+      fetchMock.mockResolvedValue(
+        respostaOk({ id: 1234567890, status: "pending" }),
+      );
+
+      const resultado = await new MercadoPagoProvider().emitirCobrancaDeCiclo(
+        PEDIDO,
+      );
+
+      const chamada = ultimaChamada(fetchMock);
+      expect(chamada.url).toBe("https://api.mercadopago.test/v1/payments");
+      expect(chamada.metodo).toBe("POST");
+      // 19999 centavos → 199.99. Um `/100` ingênuo daria 199.99000000000001 e
+      // um `Math.round` no lugar errado daria 200.
+      expect(chamada.corpo.transaction_amount).toBe(199.99);
+      expect(chamada.corpo.external_reference).toBe("cycle:ciclo-42");
+      expect(chamada.corpo.description).toBe(
+        "Iris — apuração de julho/2026",
+      );
+      expect(chamada.corpo.date_of_expiration).toBe(
+        "2026-08-10T03:00:00.000Z",
+      );
+      // Sem esta chave, um retry do job de fechamento cobra o ciclo duas vezes.
+      expect(chamada.cabecalhos["X-Idempotency-Key"]).toBe("cycle:ciclo-42");
+
+      // Id numérico do MP vira string na fronteira — quem persiste guarda texto.
+      expect(resultado.providerChargeId).toBe("1234567890");
+      expect(resultado.status).toBe("pendente");
+      expect(resultado.urlPagamento).toBeUndefined();
+    });
+
+    it("a chave de idempotência é a do ciclo, não a do vínculo", async () => {
+      fetchMock.mockResolvedValue(respostaOk({ id: "p1", status: "pending" }));
+      await new MercadoPagoProvider().emitirCobrancaDeCiclo(PEDIDO);
+      expect(ultimaChamada(fetchMock).cabecalhos["X-Idempotency-Key"]).not.toBe(
+        "PREAPP-9",
+      );
+    });
+
+    it("Pix devolve a URL de pagamento", async () => {
       fetchMock.mockResolvedValue(
         respostaOk({
-          id: "abc",
-          status: statusMP,
-          auto_recurring: { transaction_amount: 39, currency_id: "BRL" },
+          id: "p2",
+          status: "pending",
+          point_of_interaction: {
+            transaction_data: { ticket_url: "https://mp.test/pix/p2" },
+          },
         }),
       );
 
-      const resultado = await new MercadoPagoProvider().consultarAssinatura("abc");
+      const resultado = await new MercadoPagoProvider().emitirCobrancaDeCiclo(
+        PEDIDO,
+      );
+      expect(resultado.urlPagamento).toBe("https://mp.test/pix/p2");
+    });
+
+    it("2xx sem id falha alto (cobrança irreconciliável)", async () => {
+      fetchMock.mockResolvedValue(respostaOk({ status: "pending" }));
+      await expect(
+        new MercadoPagoProvider().emitirCobrancaDeCiclo(PEDIDO),
+      ).rejects.toBeInstanceOf(BillingProviderError);
+    });
+  });
+
+  describe("consultarCobranca — mapeamento de status", () => {
+    const casos = [
+      ["approved", "paga"],
+      ["rejected", "recusada"],
+      ["cancelled", "recusada"],
+      ["refunded", "estornada"],
+      ["charged_back", "estornada"],
+      ["pending", "pendente"],
+      ["in_process", "pendente"],
+      ["status_que_o_mp_ainda_nao_inventou", "pendente"],
+    ] as const;
+
+    it.each(casos)("%s → %s", async (statusMP, esperado) => {
+      fetchMock.mockResolvedValue(
+        respostaOk({ id: "p1", status: statusMP, transaction_amount: 199.99 }),
+      );
+
+      const resultado = await new MercadoPagoProvider().consultarCobranca("p1");
+      const chamada = ultimaChamada(fetchMock);
+      expect(chamada.metodo).toBe("GET");
+      expect(chamada.url).toBe("https://api.mercadopago.test/v1/payments/p1");
       expect(resultado.status).toBe(esperado);
-      // Volta a decimal → centavos: a fonte da verdade interna é o inteiro.
-      expect(resultado.valorCentavos).toBe(3900);
+      // Decimal → centavos inteiros: 199.99*100 dá 19998.999… em ponto
+      // flutuante; sem `Math.round` o valor conciliado sairia 1 centavo menor.
+      expect(resultado.valorCentavos).toBe(19_999);
+    });
+
+    it("resposta sem valor devolve 0, sem NaN atravessando a porta", async () => {
+      fetchMock.mockResolvedValue(respostaOk({ id: "p1", status: "approved" }));
+      const resultado = await new MercadoPagoProvider().consultarCobranca("p1");
+      expect(resultado.valorCentavos).toBe(0);
     });
   });
 
@@ -339,7 +422,7 @@ describe("MercadoPagoProvider", () => {
       ).toBe("assinatura.pausada");
     });
 
-    it("payment approved => pagamento.aprovado", () => {
+    it("payment SEM external_reference => vocabulário genérico pagamento.*", () => {
       expect(
         provider.normalizarEvento({
           id: "evt-2",
@@ -349,9 +432,7 @@ describe("MercadoPagoProvider", () => {
           data: { id: "pay-1" },
         }).tipo,
       ).toBe("pagamento.aprovado");
-    });
 
-    it("payment rejected => pagamento.recusado", () => {
       expect(
         provider.normalizarEvento({
           id: "evt-3",
@@ -360,6 +441,68 @@ describe("MercadoPagoProvider", () => {
           data: { id: "pay-2" },
         }).tipo,
       ).toBe("pagamento.recusado");
+    });
+
+    /**
+     * A distinção que o novo trilho depende: um pagamento com
+     * `external_reference` = `cycle:<id>` é a cobrança de um ciclo que NÓS
+     * emitimos e é conciliável; sem referência, não há ciclo a conciliar e
+     * emitir `cobranca.*` deixaria o evento pendente para sempre.
+     */
+    describe("payment COM external_reference => cobranca.*", () => {
+      function eventoPagamento(extra: Record<string, unknown>) {
+        return provider.normalizarEvento({
+          id: "evt-9",
+          type: "payment",
+          external_reference: "cycle:ciclo-42",
+          data: { id: "PAY-777" },
+          ...extra,
+        });
+      }
+
+      it("approved => cobranca.paga, com providerChargeId preenchido", () => {
+        const evento = eventoPagamento({ status: "approved" });
+        expect(evento.tipo).toBe("cobranca.paga");
+        expect(evento.providerChargeId).toBe("PAY-777");
+        expect(evento.referenciaExterna).toBe("cycle:ciclo-42");
+        // Pagamento não carrega vínculo aqui: o campo de assinatura fica null.
+        expect(evento.providerSubscriptionId).toBeNull();
+      });
+
+      it("rejected => cobranca.recusada", () => {
+        expect(eventoPagamento({ status: "rejected" }).tipo).toBe(
+          "cobranca.recusada",
+        );
+      });
+
+      it("cancelled por expiração => cobranca.vencida (não recusada)", () => {
+        expect(
+          eventoPagamento({
+            status: "cancelled",
+            status_detail: "expired",
+          }).tipo,
+        ).toBe("cobranca.vencida");
+      });
+
+      it("cancelled sem expiração continua recusada", () => {
+        expect(
+          eventoPagamento({ status: "cancelled", status_detail: "by_collector" })
+            .tipo,
+        ).toBe("cobranca.recusada");
+      });
+    });
+
+    it("preapproval nunca preenche providerChargeId", () => {
+      const evento = provider.normalizarEvento({
+        id: "evt-10",
+        type: "preapproval",
+        status: "authorized",
+        data: { id: "PREAPP-1" },
+      });
+      expect(evento.providerChargeId).toBeNull();
+      // O id do vínculo não pode escapar como se fosse id de cobrança: o
+      // consumidor pediria GET /v1/payments/PREAPP-1 e tomaria 404 em loop.
+      expect(evento.providerChargeId).not.toBe("PREAPP-1");
     });
 
     /**

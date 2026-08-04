@@ -1526,13 +1526,24 @@ export const subscriptionStatus = pgEnum("subscription_status", [
   "canceled",
 ]);
 
+// Fluxo pós-pago (0075): aberto → apurado → aguardando_pagamento → pago,
+// com `falhou` no ramo de recusa/vencimento. `cobrado` é LEGADO: ficou de
+// quando o job carimbava o ciclo como cobrado no instante em que ajustava o
+// valor da recorrência — sem nenhuma cobrança emitida nem confirmada. Não é
+// removido porque há memorial de fatura gravado com ele.
 export const billingCycleStatus = pgEnum("billing_cycle_status", [
   "aberto",
   "apurado",
   "cobrado",
   "falhou",
+  "aguardando_pagamento",
+  "pago",
 ]);
 
+// `ativo_nao_arquivado` deixou de ser PRODUZIDO na 0075 (o critério de
+// faturamento passou a ser "criado ou interagiu no ciclo"), mas continua no
+// enum: `billing_cycle_patient.motivo` é memorial de fatura emitida, e remover
+// o valor reescreveria retroativamente o porquê de uma cobrança real.
 export const billingMotivoAtivo = pgEnum("billing_motivo_ativo", [
   "criado_no_ciclo",
   "interacao_no_ciclo",
@@ -1556,7 +1567,11 @@ export const subscription = pgTable(
     // `preapproval_id` no Mercado Pago. UNIQUE porque o webhook resolve a
     // clínica por ele — dois tenants no mesmo id seria cobrança cruzada.
     providerSubscriptionId: text("provider_subscription_id").unique(),
+    // Cliente/vínculo de pagamento no gateway. Voltou a significar isso na
+    // 0075 — estava sendo usado como cache da URL de checkout, que agora tem
+    // coluna própria (`checkoutUrl`).
     providerCustomerId: text("provider_customer_id"),
+    checkoutUrl: text("checkout_url"),
     metodoPagamento: text("metodo_pagamento"),
     cicloDias: integer("ciclo_dias").notNull().default(30),
     cicloAtualInicio: timestamp("ciclo_atual_inicio", { withTimezone: true }),
@@ -1602,7 +1617,12 @@ export const billingCycle = pgTable(
     valorCentavos: integer("valor_centavos").notNull().default(0),
     apuradoEm: timestamp("apurado_em", { withTimezone: true }),
     cobradoEm: timestamp("cobrado_em", { withTimezone: true }),
+    // Id da cobrança AVULSA deste ciclo no gateway. É por ele que o webhook
+    // reconcilia pagamento ↔ ciclo — o `preapproval_id` da assinatura não
+    // identifica ciclo nenhum. UNIQUE parcial na 0075 = guarda de idempotência
+    // da emissão.
     providerChargeId: text("provider_charge_id"),
+    cobrancaEmitidaEm: timestamp("cobranca_emitida_em", { withTimezone: true }),
     erro: text("erro"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()

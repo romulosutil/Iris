@@ -2,7 +2,10 @@ import { eq } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { mercadopagoWebhookEvent } from "@/db/schema";
 import { getBillingProvider } from "@/lib/billing/provider";
-import { aplicarStatusProvider } from "@/lib/billing/subscription";
+import {
+  aplicarStatusProvider,
+  conciliarPagamentoDeCiclo,
+} from "@/lib/billing/subscription";
 
 /**
  * Webhook do Mercado Pago (#36).
@@ -157,8 +160,27 @@ export async function POST(request: Request): Promise<Response> {
   // ── A partir daqui a entrega já está durável. Nada abaixo pode virar 5xx. ──
   try {
     const normalizado = provider.normalizarEvento(payload);
-    if (normalizado.providerSubscriptionId) {
-      const atual = await provider.consultarAssinatura(
+    // A cobrança tem precedência sobre o vínculo: é ela que carrega o
+    // `cycle:<id>` e é o ÚNICO caminho pelo qual um ciclo vira `pago`. Sem
+    // isto, um evento de pagamento seria tratado como evento de assinatura e a
+    // fatura ficaria eternamente em `aguardando_pagamento`.
+    if (normalizado.providerChargeId) {
+      const atual = await provider.consultarCobranca(
+        normalizado.providerChargeId,
+      );
+      const aplicou = await conciliarPagamentoDeCiclo(
+        normalizado.providerChargeId,
+        atual.status,
+      );
+      await authDb
+        .update(mercadopagoWebhookEvent)
+        .set({
+          aplicadoEm: new Date(),
+          erroAplicacao: aplicou ? null : "cobrança sem ciclo correspondente",
+        })
+        .where(eqId(eventoId));
+    } else if (normalizado.providerSubscriptionId) {
+      const atual = await provider.consultarVinculo(
         normalizado.providerSubscriptionId,
       );
       const aplicou = await aplicarStatusProvider(
@@ -169,9 +191,9 @@ export async function POST(request: Request): Promise<Response> {
         .update(mercadopagoWebhookEvent)
         .set({
           aplicadoEm: new Date(),
-          // Assinatura desconhecida não é erro de infra: pode ser evento de
-          // outra aplicação apontada para o mesmo endpoint. Fica registrado
-          // como motivo, sem repetir a consulta para sempre.
+          // Vínculo desconhecido não é erro de infra: pode ser evento de outra
+          // aplicação apontada para o mesmo endpoint. Fica registrado como
+          // motivo, sem repetir a consulta para sempre.
           erroAplicacao: aplicou ? null : "assinatura desconhecida",
         })
         .where(eqId(eventoId));
@@ -180,7 +202,7 @@ export async function POST(request: Request): Promise<Response> {
         .update(mercadopagoWebhookEvent)
         .set({
           aplicadoEm: new Date(),
-          erroAplicacao: "evento sem id de assinatura",
+          erroAplicacao: "evento sem id utilizável",
         })
         .where(eqId(eventoId));
     }

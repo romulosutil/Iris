@@ -7,11 +7,28 @@
  * O critério prático: um `AsaasProvider` futuro (#36) tem que implementar esta
  * interface sem que nenhuma linha aqui mude.
  *
- * Por que a porta existe: o trilho de cobrança do Iris já trocou uma vez (Pix
- * Automático → cobrança avulsa, com a conta Asaas bloqueada no meio do caminho).
- * O que muda é o gateway; o que não muda é "criar assinatura recorrente,
- * atualizar o valor quando a contagem de pacientes ativos muda, e receber
- * webhook autenticado". Essas três coisas são o contrato.
+ * ## O contrato mudou: vínculo de pagamento + cobrança por ciclo
+ *
+ * A versão anterior deste arquivo se contradizia dentro do mesmo parágrafo —
+ * registrava a decisão de **cobrança avulsa** e definia o contrato como
+ * **assinatura recorrente**. O contrato recorrente nunca chega a pós-pago de
+ * verdade: o gateway gera a cobrança do próximo ciclo com muita antecedência e
+ * com o valor vigente naquele momento, então o que se cobra é sempre a apuração
+ * de um ciclo anterior. Foi a origem do `DIAS_ANTECEDENCIA_APURACAO` e de um
+ * subfaturamento sistemático e silencioso.
+ *
+ * O contrato agora separa as duas coisas que de fato existem:
+ *
+ * 1. **Vínculo de pagamento** — a clínica autoriza uma vez um meio debitável.
+ *    Nenhum valor é cobrado nesse momento.
+ * 2. **Cobrança de ciclo** — emitida por NÓS, no fechamento, com o valor
+ *    realmente apurado. É quem tem `referenciaExterna`, e é ela que o webhook
+ *    reconcilia.
+ *
+ * 🔒 **Gate externo, fora do código:** o débito headless (sem CVV a cada
+ * cobrança) exige capacidade de MIT/CoF habilitada na conta do gateway. Essa
+ * negociação é pré-requisito da VIRADA DE CHAVE, não da implementação — a porta
+ * abstrai os dois caminhos e o adapter concreto se decide com a resposta.
  *
  * ## Dinheiro é sempre inteiro em centavos
  *
@@ -26,12 +43,20 @@ export type ProviderId = "mercado_pago" | "asaas";
 /** Meio de pagamento escolhido pela clínica no checkout. */
 export type MetodoPagamento = "cartao" | "pix";
 
-/** Status de assinatura normalizado — vocabulário do Iris, não do gateway. */
+/**
+ * Status do VÍNCULO de pagamento — vocabulário do Iris, não do gateway.
+ * Nome preservado da versão anterior para não quebrar os call sites de
+ * `estadoInterno`; o que mudou é o que ele descreve (autorização do meio de
+ * pagamento, não de uma recorrência de valor fixo).
+ */
 export type StatusAssinaturaProvider =
   | "pendente"
   | "autorizada"
   | "pausada"
   | "cancelada";
+
+/** Status de uma COBRANÇA de ciclo. */
+export type StatusCobranca = "pendente" | "paga" | "recusada" | "estornada";
 
 /** Quem paga. Só o mínimo que qualquer gateway brasileiro exige. */
 export interface DadosAssinante {
@@ -42,26 +67,53 @@ export interface DadosAssinante {
   cpfCnpj?: string;
 }
 
-/** Pedido de criação de assinatura recorrente mensal. */
-export interface NovaAssinatura {
+/**
+ * Pedido de criação do vínculo de pagamento.
+ *
+ * Não tem `valorCentavos`: **a ativação não cobra**. Alguns gateways exigem um
+ * teto autorizado para o débito futuro — é o que `tetoCentavos` cobre, e é um
+ * limite, não uma cobrança.
+ */
+export interface NovoVinculo {
   assinante: DadosAssinante;
-  /** Valor mensal em CENTAVOS (inteiro). Ex.: 3900 = R$ 39,00. */
-  valorCentavos: number;
   metodo: MetodoPagamento;
   /** Para onde o gateway devolve o usuário depois do checkout. */
   urlRetorno: string;
   /**
-   * Chave nossa que amarra a assinatura do gateway ao registro local.
+   * Chave nossa que amarra o vínculo do gateway ao registro local.
    * Também serve de chave de idempotência na criação.
    */
   referenciaExterna: string;
+  /** Teto autorizado para débitos futuros, em centavos. Opcional. */
+  tetoCentavos?: number;
 }
 
-/** Resultado da criação — o suficiente para persistir e redirecionar. */
-export interface AssinaturaCriada {
-  providerSubscriptionId: string;
+/** Resultado da criação do vínculo — o suficiente para persistir e redirecionar. */
+export interface VinculoCriado {
+  providerVinculoId: string;
   checkoutUrl: string;
   status: StatusAssinaturaProvider;
+}
+
+/** Pedido de emissão da cobrança de um ciclo fechado. */
+export interface NovaCobrancaDeCiclo {
+  /** Id do vínculo de pagamento autorizado pela clínica. */
+  vinculoId: string;
+  valorCentavos: number;
+  /**
+   * `cycle:${cycleId}`. É isto que permite reconciliar o webhook com o ciclo —
+   * o id do vínculo não identifica ciclo nenhum.
+   */
+  referenciaExterna: string;
+  descricao: string;
+  vencimento: Date;
+}
+
+export interface CobrancaEmitida {
+  providerChargeId: string;
+  status: StatusCobranca;
+  /** Presente quando o pagamento exige ação do usuário (ex.: Pix). */
+  urlPagamento?: string;
 }
 
 /** Tipos de evento que o Iris sabe tratar. Tudo mais é `desconhecido`. */
@@ -71,6 +123,9 @@ export type TipoEventoNormalizado =
   | "assinatura.cancelada"
   | "pagamento.aprovado"
   | "pagamento.recusado"
+  | "cobranca.paga"
+  | "cobranca.recusada"
+  | "cobranca.vencida"
   | "desconhecido";
 
 /**
@@ -85,6 +140,8 @@ export interface EventoWebhookNormalizado {
   eventId: string;
   tipo: TipoEventoNormalizado;
   providerSubscriptionId: string | null;
+  /** Id da COBRANÇA de ciclo, quando o evento é de pagamento avulso. */
+  providerChargeId: string | null;
   referenciaExterna: string | null;
   ocorridoEm: Date | null;
   bruto: unknown;
@@ -110,23 +167,26 @@ export interface EntradaVerificacaoWebhook {
 export interface BillingProvider {
   readonly id: ProviderId;
 
-  criarAssinatura(dados: NovaAssinatura): Promise<AssinaturaCriada>;
+  /** Registra o meio de pagamento. **Não cobra nada.** */
+  iniciarVinculoPagamento(dados: NovoVinculo): Promise<VinculoCriado>;
 
-  /**
-   * Reajusta o valor da recorrência (a contagem de pacientes ativos mudou).
-   * Valor em CENTAVOS.
-   */
-  atualizarValorRecorrente(
-    providerSubscriptionId: string,
-    valorCentavos: number,
-  ): Promise<void>;
-
-  consultarAssinatura(providerSubscriptionId: string): Promise<{
+  consultarVinculo(providerVinculoId: string): Promise<{
     status: StatusAssinaturaProvider;
-    valorCentavos: number;
   }>;
 
-  cancelarAssinatura(providerSubscriptionId: string): Promise<void>;
+  cancelarVinculo(providerVinculoId: string): Promise<void>;
+
+  /**
+   * Emite a cobrança de UM ciclo já apurado, com o valor real. Chamada por nós,
+   * no fechamento — não pelo calendário do gateway. É o que torna o trilho
+   * pós-pago de fato.
+   */
+  emitirCobrancaDeCiclo(dados: NovaCobrancaDeCiclo): Promise<CobrancaEmitida>;
+
+  consultarCobranca(providerChargeId: string): Promise<{
+    status: StatusCobranca;
+    valorCentavos: number;
+  }>;
 
   /**
    * Autentica a entrega do webhook. **Nunca lança e nunca revela o motivo da
