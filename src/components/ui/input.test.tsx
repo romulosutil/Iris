@@ -1,7 +1,7 @@
 import * as React from "react";
 import { expect, test, describe } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
-import { Input } from "./input";
+import { Input, InputSenha } from "./input";
 
 describe("Input component click focus handler", () => {
   test("focuses input when wrapper is clicked", () => {
@@ -65,5 +65,27 @@ describe("Input component click focus handler", () => {
     expect(wrapper?.classList.contains("w-full")).toBe(true);
     expect(input?.classList.contains("text-center")).toBe(true);
     expect(input?.classList.contains("text-red-500")).toBe(true);
+  });
+});
+
+describe("InputSenha component", () => {
+  test("alterna o tipo entre password e text ao clicar no botão de visibilidade", () => {
+    const { container, getByRole } = render(<InputSenha placeholder="Senha" />);
+    const input = container.querySelector("input")!;
+    expect(input.type).toBe("password");
+
+    const btn = getByRole("button", { name: "Exibir senha em texto" });
+    fireEvent.click(btn);
+    expect(input.type).toBe("text");
+
+    const btnOcultar = getByRole("button", { name: "Ocultar senha" });
+    fireEvent.click(btnOcultar);
+    expect(input.type).toBe("password");
+  });
+
+  test("desabilita o botão de alternância quando o input possui a prop disabled", () => {
+    const { getByRole } = render(<InputSenha disabled placeholder="Senha" />);
+    const btn = getByRole("button", { name: "Exibir senha em texto" });
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
   });
 });

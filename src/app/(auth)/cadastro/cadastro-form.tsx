@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Input, InputSenha } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -49,15 +49,9 @@ const CAMPOS_INICIAIS: Campos = {
 };
 
 /**
- * Formulário de cadastro self-service. `cadastrar` (Task 7) colapsa toda
- * saída não-erro em `redirect("/cadastro/verifique-email")` — este
- * componente nunca vê um estado de "sucesso", só o de erro (uma string
- * genérica) ou o `pending` do próprio envio.
- *
- * TODOS os campos são controlados (fix round 1, I2/G3): confirmado ao vivo
- * (pnpm dev + Playwright) que o formulário inteiro — inclusive Select e
- * Checkbox, não só os inputs nativos — reseta a cada roundtrip de erro da
- * server action. Controlar o estado aqui faz os valores sobreviverem.
+ * Formulário de cadastro self-service otimizado com UX de Onboarding.
+ * Divide a entrada em 2 seções visuais em grid (Credenciais e Perfil Profissional),
+ * inclui olho de visibilidade de senha e grupo inline para Registro Profissional.
  */
 export function CadastroForm() {
   const [estado, formAction, pending] = useActionState(
@@ -71,9 +65,8 @@ export function CadastroForm() {
     setCampos((c) => ({ ...c, [chave]: valor }));
   }
 
-  // I7: move o foco para o alerta de erro quando ele aparece — sem isto quem
-  // usa teclado/leitor de tela fica preso onde estava, e quem enviou o
-  // formulário de baixo da dobra não percebe a mudança.
+  const senhaTamanhoOk = campos.senha.length >= 12;
+
   React.useEffect(() => {
     if (!estado?.error) return;
     const alerta = containerRef.current?.querySelector('[role="alert"]');
@@ -83,20 +76,6 @@ export function CadastroForm() {
     }
   }, [estado]);
 
-  // I2/G3: React 19 dispara um evento "reset" real no <form> ao final de
-  // toda action, mesmo quando ela só RETORNA (erro). `<Form onReset=…>`
-  // (prop do React, entregue via listener delegado no document) roda TARDE
-  // demais: o Select e o Checkbox do Radix registram
-  // `form.addEventListener("reset", …)` diretamente no nó do <form> — um
-  // listener nativo no próprio alvo, que dispara antes do listener
-  // delegado do React alcançar o document. Resultado observado ao vivo:
-  // mesmo com os campos controlados aqui, Conselho e Termos voltavam ao
-  // padrão a cada erro (texto/e-mail/senha sobreviviam por serem re-commitados
-  // pelo React logo em seguida; Select/Checkbox não, porque o handler do
-  // Radix já tinha revertido o estado interno deles). Fix: interceptar o
-  // evento na FASE DE CAPTURA num ancestral do form e cortar a propagação
-  // antes que ele alcance o <form> — impede o listener do Radix de rodar e
-  // cancela (via preventDefault) o reset nativo dos demais campos.
   React.useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -110,120 +89,165 @@ export function CadastroForm() {
 
   return (
     <div ref={containerRef}>
-      <Form action={formAction} error={estado?.error}>
-        <Field label="Nome completo" htmlFor="nome">
-          <Input
-            id="nome"
-            name="nome"
-            type="text"
-            autoComplete="name"
-            required
-            value={campos.nome}
-            onChange={(e) => set("nome", e.target.value)}
-            aria-invalid={estado?.error ? true : undefined}
-          />
-        </Field>
+      <Form action={formAction} error={estado?.error} className="flex flex-col gap-6">
+        
+        {/* Seção 1: Credenciais de Acesso */}
+        <fieldset className="flex flex-col gap-4 border-b border-[var(--border-subtle)] pb-6">
+          <legend className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] font-display mb-1">
+            1. Credenciais de Acesso
+          </legend>
 
-        <Field label="E-mail" htmlFor="email">
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={campos.email}
-            onChange={(e) => set("email", e.target.value)}
-            aria-invalid={estado?.error ? true : undefined}
-          />
-        </Field>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Nome completo" htmlFor="nome">
+              <Input
+                id="nome"
+                name="nome"
+                type="text"
+                autoComplete="name"
+                placeholder="Dra. Paula Silva"
+                required
+                value={campos.nome}
+                onChange={(e) => set("nome", e.target.value)}
+                aria-invalid={estado?.error ? true : undefined}
+              />
+            </Field>
 
-        <Field label="Senha" htmlFor="senha" hint="Mínimo 12 caracteres.">
-          <Input
-            id="senha"
-            name="senha"
-            type="password"
-            autoComplete="new-password"
-            minLength={12}
-            maxLength={128}
-            required
-            value={campos.senha}
-            onChange={(e) => set("senha", e.target.value)}
-            aria-describedby="senha-hint"
-            aria-invalid={estado?.error ? true : undefined}
-          />
-        </Field>
+            <Field label="E-mail profissional" htmlFor="email">
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="paula@clinica.com.br"
+                required
+                value={campos.email}
+                onChange={(e) => set("email", e.target.value)}
+                aria-invalid={estado?.error ? true : undefined}
+              />
+            </Field>
+          </div>
 
-        <Field label="Nome da clínica" htmlFor="nomeClinica">
-          <Input
-            id="nomeClinica"
-            name="nomeClinica"
-            type="text"
-            autoComplete="organization"
-            required
-            value={campos.nomeClinica}
-            onChange={(e) => set("nomeClinica", e.target.value)}
-            aria-invalid={estado?.error ? true : undefined}
-          />
-        </Field>
-
-        <Field label="Conselho profissional" htmlFor="conselho-trigger">
-          <Select
-            name="conselho"
-            required
-            value={campos.conselho}
-            onValueChange={(v) => set("conselho", v)}
+          <Field
+            label="Senha"
+            htmlFor="senha"
+            hint={
+              <span className="flex items-center gap-1.5 text-xs">
+                <span
+                  className={
+                    senhaTamanhoOk
+                      ? "text-[var(--status-success-fg)] font-semibold"
+                      : "text-[var(--text-secondary)]"
+                  }
+                >
+                  {senhaTamanhoOk ? "✓ Mínimo 12 caracteres atendido" : "Mínimo 12 caracteres."}
+                </span>
+              </span>
+            }
           >
-            <SelectTrigger
-              id="conselho-trigger"
+            <InputSenha
+              id="senha"
+              name="senha"
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={128}
+              placeholder="Digite sua senha segura"
+              required
+              value={campos.senha}
+              onChange={(e) => set("senha", e.target.value)}
               aria-invalid={estado?.error ? true : undefined}
-            >
-              <SelectValue placeholder="Selecione seu conselho" />
-            </SelectTrigger>
-            <SelectContent>
-              {CONSELHOS.map((c) => (
-                <SelectItem key={c.valor} value={c.valor}>
-                  {c.rotulo}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+            />
+          </Field>
+        </fieldset>
 
-        <Field label="Número do registro" htmlFor="registroNumero">
-          <Input
-            id="registroNumero"
-            name="registroNumero"
-            type="text"
-            autoComplete="off"
-            required
-            value={campos.registroNumero}
-            onChange={(e) => set("registroNumero", e.target.value)}
-            aria-invalid={estado?.error ? true : undefined}
-          />
-        </Field>
+        {/* Seção 2: Organização & Registro Profissional */}
+        <fieldset className="flex flex-col gap-4 border-b border-[var(--border-subtle)] pb-6">
+          <legend className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] font-display mb-1">
+            2. Clínica & Registro Profissional
+          </legend>
 
-        <Field label="UF do registro" htmlFor="registroUf-trigger">
-          <Select
-            name="registroUf"
-            required
-            value={campos.registroUf}
-            onValueChange={(v) => set("registroUf", v)}
-          >
-            <SelectTrigger
-              id="registroUf-trigger"
+          <Field label="Nome da clínica" htmlFor="nomeClinica">
+            <Input
+              id="nomeClinica"
+              name="nomeClinica"
+              type="text"
+              autoComplete="organization"
+              placeholder="Clínica Desenvolvimento Infantil"
+              required
+              value={campos.nomeClinica}
+              onChange={(e) => set("nomeClinica", e.target.value)}
               aria-invalid={estado?.error ? true : undefined}
-            >
-              <SelectValue placeholder="Selecione a UF" />
-            </SelectTrigger>
-            <SelectContent>
-              {ESTADOS_UF.map((uf) => (
-                <SelectItem key={uf.sigla} value={uf.sigla}>
-                  {uf.sigla} - {uf.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+            />
+          </Field>
+
+          {/* Registro Profissional Inline em Grid de 3 Colunas */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+            <div className="md:col-span-4">
+              <Field label="Conselho" htmlFor="conselho-trigger">
+                <Select
+                  name="conselho"
+                  required
+                  value={campos.conselho}
+                  onValueChange={(v) => set("conselho", v)}
+                >
+                  <SelectTrigger
+                    id="conselho-trigger"
+                    aria-invalid={estado?.error ? true : undefined}
+                  >
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONSELHOS.map((c) => (
+                      <SelectItem key={c.valor} value={c.valor}>
+                        {c.rotulo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
+            <div className="md:col-span-5">
+              <Field label="Nº do registro" htmlFor="registroNumero">
+                <Input
+                  id="registroNumero"
+                  name="registroNumero"
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Ex: 06/12345"
+                  required
+                  value={campos.registroNumero}
+                  onChange={(e) => set("registroNumero", e.target.value)}
+                  aria-invalid={estado?.error ? true : undefined}
+                />
+              </Field>
+            </div>
+
+            <div className="md:col-span-3">
+              <Field label="UF" htmlFor="registroUf-trigger">
+                <Select
+                  name="registroUf"
+                  required
+                  value={campos.registroUf}
+                  onValueChange={(v) => set("registroUf", v)}
+                >
+                  <SelectTrigger
+                    id="registroUf-trigger"
+                    aria-invalid={estado?.error ? true : undefined}
+                  >
+                    <SelectValue placeholder="UF" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ESTADOS_UF.map((uf) => (
+                      <SelectItem key={uf.sigla} value={uf.sigla}>
+                        {uf.sigla} - {uf.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          </div>
+        </fieldset>
 
         <Checkbox
           name="termos"
@@ -237,7 +261,7 @@ export function CadastroForm() {
                 rel="noopener noreferrer"
                 className="font-semibold underline underline-offset-2"
               >
-                Termos de Uso
+                Termos de Uso <span className="sr-only">(abre em nova aba)</span>
               </Link>{" "}
               e a{" "}
               <Link
@@ -246,15 +270,15 @@ export function CadastroForm() {
                 rel="noopener noreferrer"
                 className="font-semibold underline underline-offset-2"
               >
-                Política de Privacidade
+                Política de Privacidade <span className="sr-only">(abre em nova aba)</span>
               </Link>{" "}
               do Iris.
             </span>
           }
         />
 
-        <Button type="submit" isLoading={pending}>
-          {pending ? "Criando conta…" : "Criar conta"}
+        <Button type="submit" isLoading={pending} className="w-full">
+          {pending ? "Criando conta…" : "Criar conta no Iris"}
         </Button>
       </Form>
     </div>
