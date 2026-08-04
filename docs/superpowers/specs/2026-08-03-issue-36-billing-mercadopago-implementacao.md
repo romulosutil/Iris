@@ -174,14 +174,29 @@ Achados por revisão adversarial dos próprios testes, todos com prova de mutaç
 
 ## Pendências conhecidas
 
-- **Credenciais do Mercado Pago não foram provisionadas** —
-  `MERCADOPAGO_ACCESS_TOKEN` e `MERCADOPAGO_WEBHOOK_SECRET` estão em
-  `.env.example`, comentadas. O webhook responde 401 a tudo até serem definidas
-  (deploy sem segredo rejeita, nunca aceita).
-- **Nenhum evento real do Mercado Pago foi exercitado.** A verificação de
-  assinatura HMAC está coberta por teste com manifest escrito à mão, mas não
-  contra uma notificação real do gateway. "Lista de eventos no painel ≠ produto
-  habilitado" — o precedente do Asaas vale aqui.
+- ~~Credenciais do Mercado Pago não foram provisionadas~~ — **feito 04/08/2026.**
+  `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_PUBLIC_KEY`, `MERCADOPAGO_WEBHOOK_SECRET`
+  e `BILLING_PROVIDER=mercado_pago` provisionados no Easypanel (`iris-app`).
+  Webhook registrado via painel MP (produção + sandbox,
+  `https://irisclinica.ia.br/api/hooks/mercadopago`, eventos "Planos e
+  assinaturas" + "Pagamentos (legacy)").
+- **Defeito achado e corrigido nesta virada:** branch só foi mergeada em main
+  via PR #192 em 04/08/2026 — antes disso a rota nem existia na imagem de
+  produção (404). Depois do merge, um segundo defeito: `BILLING_PROVIDER=mercadopago`
+  foi colado sem underscore; `getBillingProvider()` (`provider/index.ts`) só
+  reconhece `mercado_pago` e lançava `Error: BILLING_PROVIDER desconhecido`
+  antes de qualquer guard da própria rota — 500 em qualquer POST. Corrigido
+  trocando para `mercado_pago`. Rota agora responde 401 a payload não assinado
+  (`curl` medido), que é o comportamento correto.
+- **Nenhum evento real do Mercado Pago foi exercitado — ainda em aberto.** O
+  "Simular notificação" do painel MP foi testado contra a URL de produção:
+  segredo comparado campo a campo (idêntico ao do Easypanel), mas o simulador
+  manda uma fixture fixa (payload com `date: 2021-11-01`) cujo `ts` provavelmente
+  não é fresco — a checagem anti-replay (`JANELA_REPLAY_MS`,
+  `mercado-pago.ts:205`) rejeita por design, não por bug. "Lista de eventos no
+  painel ≠ produto habilitado" — mesmo precedente do Asaas: simulador não
+  reproduz o dialeto real (timestamp vivo) do gateway. Só uma assinatura real
+  criada/atualizada prova a última milha.
 - **Serviço `billing` do Easypanel não foi criado.** O compose tem o serviço sob
   `profiles: ["billing"]`; o provisionamento em produção é ação de infra e não
   foi feito.
