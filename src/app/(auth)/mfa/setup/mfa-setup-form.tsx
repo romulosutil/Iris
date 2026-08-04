@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { authClient } from "@/auth/client";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Input, InputSenha } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -286,7 +286,7 @@ export function MfaSetupForm() {
         </h1>
         <p className="max-w-lg text-sm text-[var(--text-secondary)]">
           {etapa === "senha"
-            ? "Para sua segurança clínica, confirme sua senha atual antes de gerar a chave e o QR Code de autenticação."
+            ? "Como este é seu primeiro acesso, confirme sua senha para iniciar a verificação em duas etapas. Tenha seu celular com um aplicativo autenticador em mãos."
             : "Siga os 3 passos abaixo para ativar a proteção de segundo fator na sua conta."}
         </p>
       </div>
@@ -306,10 +306,9 @@ export function MfaSetupForm() {
             </div>
 
             <Field label="Sua senha atual" htmlFor="password">
-              <Input
+              <InputSenha
                 id="password"
                 name="password"
-                type="password"
                 autoComplete="current-password"
                 required
                 autoFocus
