@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { FichaClinicaForm } from "./ficha-clinica-form";
 import { ProtocolosSecao } from "./protocolos-secao";
+import { obterOuInicializarProtocolosDaClinica } from "./protocolo-logic";
 
 export default async function CadastroClinicoPage({
   params,
@@ -35,7 +36,7 @@ export default async function CadastroClinicoPage({
         .select()
         .from(patientClinicalProfile)
         .where(eq(patientClinicalProfile.patientId, id)),
-      await tx.select().from(protocol).where(eq(protocol.clinicId, ctx.clinicId)),
+      await obterOuInicializarProtocolosDaClinica(tx, ctx.clinicId),
       await tx
         .select()
         .from(patientProtocol)
@@ -59,8 +60,8 @@ export default async function CadastroClinicoPage({
         title={`Cadastro clínico — ${pacienteRow[0].nome}`}
         description="Ficha de acompanhamento clínico e protocolos do paciente"
       />
-      <FichaClinicaForm patientId={id} perfil={perfilRow[0]} />
       <ProtocolosSecao patientId={id} catalogo={catalogo} vinculos={vinculos} />
+      <FichaClinicaForm patientId={id} perfil={perfilRow[0]} />
     </div>
   );
 }

@@ -1,8 +1,13 @@
 "use server";
 import { getTenantContext } from "@/auth/tenant";
-import { convidarUsuario, type ConvidarState } from "./logic";
+import { convidarUsuario } from "./logic";
 
-export type { ConvidarState };
+export type ConvidarState = {
+  error?: string;
+  senhaTemporaria?: string;
+  emailEnviado?: boolean;
+  sucesso?: boolean;
+};
 
 /** Wrapper de request — deriva o tenant do servidor (ctx nunca vem do cliente). */
 export async function convidarUsuarioAction(

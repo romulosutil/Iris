@@ -6,7 +6,11 @@ import { consent, patientClinicalProfile } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { regimeVigente } from "@/lib/consent/vigencia";
 
-export type FichaClinicaState = { error?: string; bloqueioConta?: BloqueioConta };
+export type FichaClinicaState = {
+  ok?: boolean;
+  error?: string;
+  bloqueioConta?: BloqueioConta;
+};
 
 /**
  * Núcleo testável: grava/atualiza o perfil clínico. Só coordenador (dado
@@ -67,7 +71,7 @@ async function salvarFichaClinicaCore(
         target: patientClinicalProfile.patientId,
         set: valores,
       });
-    return {};
+    return { ok: true };
   });
 }
 

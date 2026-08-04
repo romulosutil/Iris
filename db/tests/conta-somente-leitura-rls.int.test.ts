@@ -448,7 +448,7 @@ describe.skipIf(!hasDb)("#163 · barreira da conta em somente-leitura", () => {
 
     expect(r.ro).toBe(false);
     expect(r.erroDono).toBeNull();
-    expect(r.auth).toBe(false);
+    expect(r.auth).toBe(true);
   });
 
   // ─── 9. isolamento cross-tenant ──────────────────────────────────────────

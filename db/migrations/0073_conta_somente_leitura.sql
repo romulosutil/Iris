@@ -48,7 +48,11 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
     SELECT c.isento_trial, c.trial_comeco_em, c.trial_dias, c.criado_em,
            (SELECT s.status::text FROM subscription s WHERE s.clinic_id = c.id) AS status
       FROM clinic c
-     WHERE c.id = current_setting('app.clinic_id', true)::uuid
+     WHERE c.id = CASE
+                    WHEN current_setting('app.clinic_id', true) ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                    THEN current_setting('app.clinic_id', true)::uuid
+                    ELSE NULL
+                  END
   )
   SELECT CASE
     WHEN NOT EXISTS (SELECT 1 FROM ctx) THEN false
@@ -72,6 +76,8 @@ $$;
 REVOKE ALL ON FUNCTION app_conta_somente_leitura() FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app_conta_somente_leitura() TO app_role;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app_conta_somente_leitura() TO iris_auth;
 --> statement-breakpoint
 
 -- ==================== app_barreira_somente_leitura ====================
@@ -108,6 +114,10 @@ $$;
 --> statement-breakpoint
 
 REVOKE ALL ON FUNCTION app_barreira_somente_leitura() FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app_barreira_somente_leitura() TO app_role;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app_barreira_somente_leitura() TO iris_auth;
 --> statement-breakpoint
 
 -- ==================== Instalação dos triggers (DESABILITADOS) ====================
