@@ -15,17 +15,10 @@ export type ProvisionInput = {
    * Marca a conta como verificada na criação. Só para provisionamento
    * OUT-OF-BAND (scripts de seed), onde quem opera já conhece a pessoa e não
    * existe caixa de entrada no fluxo.
-   *
-   * Desde a Fatia A (#163) o `emailAndPassword.requireEmailVerification` está
-   * ligado, e `signUpEmail` nasce com `email_verified = false`. Sem isto, toda
-   * conta criada por `seed:clinic`/`seed:demo` nasce SEM caminho de entrada —
-   * o login é recusado e nenhum e-mail de verificação é enviado por script. É
-   * o mesmo raciocínio da migração 0059, que fez o backfill das contas
-   * pré-existentes no commit que ligou a flag.
-   *
-   * O cadastro self-service NÃO usa isto: lá a verificação é o controle.
    */
   emailVerificado?: boolean;
+  /** Instância de banco customizada (ex.: ownerDb nos scripts de seed). */
+  db?: any;
 };
 
 /**
@@ -36,7 +29,8 @@ export type ProvisionInput = {
 export async function provisionUser(
   input: ProvisionInput,
 ): Promise<{ userId: string; isNewUser: boolean }> {
-  const existente = await authDb
+  const db = input.db ?? authDb;
+  const existente = await db
     .select({ id: appUser.id })
     .from(appUser)
     .where(eq(appUser.email, input.email))
@@ -60,13 +54,13 @@ export async function provisionUser(
   // faltou. Preso ao ramo "usuário novo", a segunda execução acharia a conta
   // já existente e a deixaria trancada para sempre.
   if (input.emailVerificado) {
-    await authDb
+    await db
       .update(appUser)
       .set({ emailVerified: true })
       .where(eq(appUser.id, userId));
   }
 
-  await authDb
+  await db
     .insert(userRole)
     .values({ userId, clinicId: input.clinicId, papel: input.papel })
     .onConflictDoNothing();

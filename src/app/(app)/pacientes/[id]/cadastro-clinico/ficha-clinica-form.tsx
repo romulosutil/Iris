@@ -4,6 +4,7 @@ import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { salvarFichaClinicaAction } from "./actions";
 import { type FichaClinicaState } from "./logic";
 
@@ -28,6 +29,9 @@ export function FichaClinicaForm({
   );
   return (
     <Form action={formAction} error={state.error}>
+      {state.ok ? (
+        <Alert severidade="sucesso">Ficha clínica salva com sucesso.</Alert>
+      ) : null}
       <Field label="Diagnóstico" htmlFor="diagnostico">
         <Input
           id="diagnostico"

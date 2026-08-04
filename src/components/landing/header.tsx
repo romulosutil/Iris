@@ -18,7 +18,7 @@ export function LandingHeader() {
           aria-label="Ir para a página inicial do IRIS Governança Clínica"
         >
           <Logo altura={42} animado aria-label="Iris Governança Clínica Logo" />
-          <div className="flex flex-col">
+          <div className="hidden sm:flex flex-col">
             <span className="font-mono text-[10px] font-bold text-[var(--text-primary,#1A1A1A)] tracking-wider uppercase bg-[var(--status-info-bg,#B2DFDB)] px-2 py-0.5 border border-[var(--border-brutal,#1A1A1A)] rounded-[var(--radius-xs,3px)] shadow-[1px_1px_0px_#1A1A1A]">
               Governança Clínica & Prontuário ABA
             </span>

@@ -30,8 +30,7 @@
 
 ### Comandos de Banco de Dados
 - Aplicar migrações locais: `pnpm db:migrate`
-- Seed de dados clínicos: `pnpm seed:clinic`
-- Seed de dados de demo: `pnpm seed:demo`
+- Seed local limpo (clínica + 1º coordenador): `pnpm seed:local`
 - Gerar migrações: `pnpm db:generate` — **⚠️ leia o bloco abaixo antes de usar.**
 
 #### ⚠️ Migrações: como escrever sem derrubar o banco

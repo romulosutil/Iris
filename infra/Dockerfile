@@ -27,7 +27,7 @@ ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=${NEXT_PUBLIC_CLARITY_PROJECT_ID}
 ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 RUN pnpm build
-RUN npx esbuild scripts/seed-demo.ts --bundle --platform=node --target=node22 --conditions=react-server --outfile=scripts/seed-demo.js
+RUN npx esbuild scripts/seed-local.ts --bundle --platform=node --target=node22 --conditions=react-server --outfile=scripts/seed-local.js
 
 # --- migrate: job de deploy, roda ANTES do app (gate de schema) ---------------
 # Easypanel roda esta imagem como serviço/pre-deploy separado, com
@@ -62,7 +62,7 @@ RUN groupadd --system nodejs && useradd --system --gid nodejs --create-home next
 COPY --from=build /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-demo.js ./scripts/seed-demo.js
+COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-local.js ./scripts/seed-local.js
 
 # Garante playwright + o browser Chromium. Instala em /opt/playwright (fora
 # de /app) porque o node_modules copiado do standalone é gerenciado pelo

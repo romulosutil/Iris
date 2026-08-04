@@ -6,7 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import { RadioCards } from "@/components/ui/radio-cards";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   cadastrarPacienteAdministrativo,
@@ -157,7 +157,7 @@ export function NovoPacienteForm() {
         {/* Sem `aria-label` aqui: o <legend> do fieldset já nomeia o grupo, e
             repetir o mesmo texto num role="group" aninhado faz o leitor de
             tela anunciar duas vezes. */}
-        <SegmentedControl
+        <RadioCards
           ref={grupoRef}
           value={tipoConsentimento}
           onValueChange={(v) => setTipoConsentimento(v as TipoConsentimento)}
@@ -166,14 +166,17 @@ export function NovoPacienteForm() {
           aria-describedby={
             erroEhDoTipo ? "tipoConsentimento-error" : undefined
           }
+          error={erroEhDoTipo}
           opcoes={[
             {
               value: "titular_adulto",
-              label: "O próprio paciente (titular adulto)",
+              label: "O próprio paciente",
+              description: "Titular adulto (maior de 18 anos)",
             },
             {
               value: "responsavel_legal",
-              label: "Responsável legal (paciente menor de 18 anos)",
+              label: "Responsável legal",
+              description: "Pai, mãe ou tutor (menor de 18 anos ou sob curatela)",
             },
           ]}
         />

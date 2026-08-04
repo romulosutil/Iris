@@ -24,7 +24,10 @@ async function adicionarMembroEquipeCore(
   requireRole(ctx, "coordenador");
   const userId = String(formData.get("userId") ?? "").trim();
   if (!userId) return { error: "Selecione um terapeuta." };
-  const disciplina = String(formData.get("disciplina") ?? "").trim();
+  const disciplinaSelect = String(formData.get("disciplina") ?? "").trim();
+  const disciplinaCustom = String(formData.get("disciplinaCustom") ?? "").trim();
+  const disciplina =
+    disciplinaSelect === "Outra" ? disciplinaCustom : disciplinaSelect;
   if (!disciplina) return { error: "Informe a disciplina." };
   const papelNaEquipe = String(formData.get("papelNaEquipe") ?? "").trim();
   if (
