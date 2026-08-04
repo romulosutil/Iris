@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
@@ -75,8 +76,36 @@ export function NovoPacienteForm() {
     grupoRef.current?.querySelector("button")?.focus();
   }, [erroEhDoTipo, state]);
 
+  // Bloqueio de cobrança (#36) não é erro de preenchimento: nada no formulário
+  // conserta. Some com o Alert genérico do <Form> para não repetir a mesma
+  // frase duas vezes na tela — a mensagem sai no aviso destacado abaixo.
+  const bloqueio = state.bloqueioBilling;
+
   return (
-    <Form action={formAction} error={state.error}>
+    <Form action={formAction} error={bloqueio ? undefined : state.error}>
+      {bloqueio ? (
+        <Alert
+          severidade="erro"
+          destacado
+          titulo="Cadastro bloqueado pela assinatura"
+        >
+          <p>{bloqueio.mensagem}</p>
+          {/* Link SÓ na ativação pendente. Em `pagamento_pendente` já existe
+              cobrança em voo: devolver a pessoa ao checkout gera uma segunda
+              cobrança para o mesmo mês. Nos demais motivos a saída também não
+              é um novo checkout, então nenhum deles ganha o link. */}
+          {bloqueio.motivo === "ativacao_requerida" ? (
+            <p className="mt-2">
+              <Link
+                href="/assinatura"
+                className="font-semibold underline underline-offset-4"
+              >
+                Ativar a assinatura
+              </Link>
+            </p>
+          ) : null}
+        </Alert>
+      ) : null}
       <Field label="Nome do paciente" htmlFor="nome">
         <Input id="nome" name="nome" required />
       </Field>

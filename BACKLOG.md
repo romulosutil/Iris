@@ -45,6 +45,94 @@
 
 ---
 
+## 🏁 Sessão 03/08/2026 (3ª) — Billing pay-as-you-grow implementado, trilho vira Mercado Pago (#36)
+
+**Trilho trocado.** Com a conta Asaas bloqueada e o Pix Automático fora por ~6
+meses (D12), o provedor ativo passa a ser o **Mercado Pago** (assinatura
+recorrente `preapproval`). O Asaas continua previsto na porta `BillingProvider`,
+mas **não implementado**: `BILLING_PROVIDER=asaas` lança erro explícito em vez
+de degradar em silêncio.
+
+`subscription.provider` é persistido **por linha**, não lido de env — assinatura
+criada num gateway não pode ser reinterpretada por outro porque a env mudou.
+
+### Modelo comercial travado
+Faixas **marginais**: 1–15 = R$ 39 · 16–40 = R$ 32 · 41+ = R$ 25, por paciente
+ativo/mês. Onboarding R$ 0; a cobrança nasce no 1º paciente (Mês 1 = R$ 39,00).
+Mês 2+ = **uma** cobrança consolidada a cada 30 dias. Aritmética em centavos
+inteiros, fonte única em `src/lib/billing/calculator.ts` — o SQL nunca calcula
+preço, só devolve contagem.
+
+> Correção: 100 pacientes = 15 + 25 + **60** = R$ 2.885,00. O valor R$ 2.860,00
+> que circulou no briefing corresponde a 99 pacientes.
+
+### Definição oficial de "paciente ativo" (fecha **D4** parcialmente)
+`billing_apurar_ciclo(uuid)` (migração `0071`) — conta se satisfizer ao menos um:
+criado no ciclo · interação no ciclo (`session.agendada_para`/`check_in_em`/
+`criado_em`, `evidence.aprovado_em`, `session_note.criado_em`) · `arquivado_em
+IS NULL`. **Arquivado e parado no ciclo não é faturado.** Intervalo semiaberto:
+borda `inicio` conta, borda `fim` não — os dois lados verificados por teste.
+
+Isto é a decisão de produto que D4 apontava como bloqueante ("essa definição
+decide o que a clínica paga"). D4 segue aberto quanto ao **job de
+auto-arquivamento** em si.
+
+### Decisões de política do gate
+- `past_due` **não** bloqueia cadastro. Falha de Pix/cartão costuma ser do banco
+  do cliente; travar cadastro pune o paciente, não o inadimplente.
+- `setup_pending` bloqueia **sem** oferecer link de checkout — já há cobrança em
+  voo, e reenviar ao checkout gera cobrança duplicada.
+- Clínica `isento_trial` (legado pré-cobrança, `0064`) nunca é bloqueada.
+- O gate roda **dentro da transação** do cadastro e sinaliza por `throw`, não
+  `return`: fora dela, dois cadastros simultâneos numa clínica virgem criariam
+  dois pacientes sob uma cobrança só; e um `return` deixaria a transação seguir.
+
+### Plano de privilégios
+Billing é plano de identidade (como `auth_throttle`/0061 e `asaas_webhook_event`
+/0066). `app_role` tem **apenas SELECT** da própria clínica — se o produto
+pudesse escrever `subscription.status`, o gate seria contornável de dentro do
+app. `iris_auth` escreve tudo, mas **não tem grant em `patient`**: a apuração
+passa obrigatoriamente pela função DEFINER, que devolve contagem, nunca dado
+clínico.
+
+### Job: gatilho magro, lógica no app
+`scripts/fechamento-ciclo-billing.mjs` só faz um POST autenticado em
+`/api/internal/billing/fechar-ciclos`. Motivo: a imagem Docker do job **não
+herda** as deps do app, e um import ausente já derrubou o motor de escalonamento
+em produção com test/typecheck/lint verdes (#156). Tabela de preços duplicada
+num `.mjs` seria a mesma classe de bug — cobrando valor errado em silêncio.
+
+### Webhook do Mercado Pago
+Grava e responde 200 **antes** de aplicar o efeito (o MP desabilita endpoint
+lento); falha ao aplicar deixa `aplicado_em` NULL para reprocessamento, nunca
+5xx. O payload do MP costuma ser só `{type, action, data:{id}}` — **sem estado**
+— então a transição vem de uma **consulta** à assinatura, não do tipo do evento.
+
+### Verificado por medição
+- `pg_proc`/`pg_policies`/`information_schema` após `db:migrate`: 4 tabelas,
+  7 policies, RLS `ENABLE`+`FORCE` nas 4, `billing_apurar_ciclo.prosecdef=true`,
+  `has_table_privilege('app_role','subscription','UPDATE')=false`.
+- `db/tests/billing-apuracao.int.test.ts`: **21 passaram, 0 skipped** — isolamento
+  cross-tenant, bordas, idempotência da dupla apuração, e `UPDATE subscription`
+  sob `app_role` rejeitando de verdade (não 0-linhas mudo).
+- Suíte completa: **692 unitários** + **575 de integração** (80 arquivos), verdes.
+- `ctx-forjavel-guard` verde: a action nova respeita `logic.ts`/`actions.ts`.
+
+### Aberto (não feito nesta sessão)
+- **Credenciais do Mercado Pago não provisionadas.** `MERCADOPAGO_ACCESS_TOKEN`
+  e `MERCADOPAGO_WEBHOOK_SECRET` só existem comentadas no `.env.example`. Sem
+  elas o webhook responde 401 a tudo — deploy sem segredo rejeita, nunca aceita.
+- **Nenhum evento real do Mercado Pago exercitado.** O HMAC está coberto por
+  teste com manifest escrito à mão, não contra notificação real. Vale o
+  precedente do Asaas (D5): o dialeto do destino real não aparece no dublê.
+- **Serviço `billing` do Easypanel não criado** — existe só no compose sob
+  `profiles: ["billing"]`.
+- Sem tela de cancelamento de assinatura (a porta tem `cancelarAssinatura`).
+
+Spec: `docs/superpowers/specs/2026-08-03-issue-36-billing-mercadopago-implementacao.md`
+
+---
+
 ## 🏁 Sessão 03/08/2026 — Alinhamento de Prioridades & Central Super Admin
 
 **Ajuste da Ordem de Prioridades (Decisão com Rômulo):**

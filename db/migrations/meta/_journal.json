@@ -498,6 +498,13 @@
       "when": 1785422579000,
       "tag": "0070_expurgo_audit_log_marco_civil",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1785422580000,
+      "tag": "0071_billing_assinatura_e_ciclo",
+      "breakpoints": true
     }
   ]
 }
