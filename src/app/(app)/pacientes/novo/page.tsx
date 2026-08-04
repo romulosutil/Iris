@@ -35,7 +35,8 @@ export default async function NovoPacientePage() {
       {situacao.estado === "trial_aguardando" ? (
         <Alert severidade="info" titulo="Seu período de teste começa aqui">
           Cadastrar o primeiro paciente inicia seus 7 dias de teste. Nada é
-          cobrado agora e você não precisa de cartão.
+          cobrado agora e você não precisa de cartão. Seus dados e prontuários
+          continuam sempre acessíveis para leitura e exportação ao fim do teste.
         </Alert>
       ) : null}
       <NovoPacienteForm />
