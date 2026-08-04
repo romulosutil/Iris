@@ -1,3 +1,5 @@
+⟨PENDENTE: revisão jurídica antes do merge — texto ajustado para refletir o comportamento implementado⟩
+
 # Termos de Uso — Iris
 
 **Versão `2026-07-30` — vigente desde 30/07/2026.**
@@ -171,37 +173,58 @@ previsto na seção 7.4 e observado o disposto em `politica-retencao-dados.md`.
 
 ### 7.1. Modelo de cobrança
 
-A cobrança é **por paciente ativo por mês**, conforme o tier contratado
-(`docs/produto/modelo-de-negocio.md`, seção 4). No cadastro self-service **não
-há valor mínimo de fatura nem piso de número de pacientes** — a clínica paga
-pelo que usa.
+A cobrança é **por ficha ativa por ciclo**, conforme o tier contratado
+(`docs/produto/modelo-de-negocio.md`, seção 4). "Ficha ativa" designa o
+**registro de paciente consumido no ciclo**, e não a condição clínica da
+pessoa — uma ficha pode estar ativa para fins de faturamento sem que isso
+signifique que o paciente esteja em tratamento, e vice-versa. No cadastro
+self-service **não há valor mínimo de fatura nem piso de número de fichas** —
+a clínica paga pelo que usa.
 
-O tier "Diário" situa-se na faixa de **R$ 39 a R$ 49 por paciente ativo/mês**;
+O tier "Diário" situa-se na faixa de **R$ 39 a R$ 49 por ficha ativa/ciclo**;
 o valor exato vigente é ⟨PENDENTE: valor unitário final do tier "Diário" e dos
 demais tiers, a ser publicado na página de preços⟩ e é o que estiver informado
 no ato da contratação.
 
-A definição operacional de "paciente ativo" — isto é, o critério exato que faz
-um paciente entrar na contagem de um ciclo — é ⟨PENDENTE: definição operacional
-de "paciente ativo" para fins de faturamento⟩. Até que esteja publicada, nenhuma
-cobrança é feita sem que o critério aplicado tenha sido informado à clínica.
+Considera-se **ficha ativa** no ciclo aquela que, dentro do período apurado,
+satisfaça **ao menos um** dos critérios abaixo:
+
+&nbsp;&nbsp;**(a)** foi **cadastrada** dentro do período; **ou**
+
+&nbsp;&nbsp;**(b)** teve **interação registrada** dentro do período — sessão
+agendada, check-in, evolução em prontuário ou evidência aprovada.
+
+Ficha que não satisfaça nenhum desses critérios no período **não é faturada**,
+ainda que permaneça cadastrada e visível na plataforma. A mera permanência do
+registro na base — ou o fato de não ter sido arquivado — **não** gera cobrança.
 
 ### 7.2. Período de teste (trial) de 7 dias
 
 O cadastro self-service inclui um **período de teste gratuito de 7 (sete) dias
-corridos**, contados a partir do momento do cadastro. **Não exigimos cartão de
-crédito para iniciar o teste** e não há cobrança automática ao final dele.
+corridos**. O prazo **começa a correr quando a clínica cadastra o primeiro
+paciente** — e não no ato do cadastro da clínica. Caso nenhum paciente seja
+cadastrado, o período de teste **inicia automaticamente 14 (quatorze) dias
+corridos após o cadastro da clínica**.
 
-A **primeira fatura é emitida no 8º dia**, caso a clínica opte por continuar.
-O ciclo de cobrança seguinte é mensal por **aniversário da conta** — a data de
-cadastro —, não por um dia fixo do mês.
+**Não exigimos cartão de crédito para iniciar o teste** e **não há cobrança
+automática ao final dele**: terminado o teste, nada é debitado e nenhuma
+assinatura é ativada sem ato da clínica.
+
+Encerrado o teste sem ativação da assinatura, aplica-se o disposto na seção
+7.4. Optando a clínica por ativar, a cobrança segue o regime **pós-pago** da
+seção 7.3, em ciclos de 30 (trinta) dias contados a partir da ativação.
 
 ### 7.3. Meios de pagamento
 
-Na recorrência, os meios de pagamento aceitos são **Pix e boleto bancário**.
-**Cartão de crédito não é aceito** no momento. O processamento dos pagamentos é
-feito por operador de pagamento terceiro (ver `politica-privacidade.md`, seção
-7); o Iris não armazena dados de meio de pagamento.
+Os meios de pagamento aceitos são **cartão de crédito e Pix**.
+
+A cobrança é **pós-paga**: a fatura é emitida **ao final de cada ciclo de 30
+(trinta) dias**, pelo uso efetivamente apurado no período — isto é, pelas
+fichas ativas conforme o critério da seção 7.1 —, **sem valor mínimo**.
+
+O processamento dos pagamentos é feito por operador de pagamento terceiro (ver
+`politica-privacidade.md`, seção 7); o Iris **não armazena dados de meio de
+pagamento**.
 
 ### 7.4. O que acontece ao fim do teste sem pagamento
 
@@ -221,6 +244,10 @@ prazo de ⟨PENDENTE: prazo de permanência da conta em modo somente-leitura ant
 de qualquer eliminação, e forma de aviso prévio à clínica⟩.
 
 &nbsp;&nbsp;**(d)** O pagamento reativa a conta com todo o conteúdo preservado.
+
+&nbsp;&nbsp;**(e)** O regime de somente-leitura **não** suspende o exercício dos
+direitos do titular previstos na LGPD, incluindo revogação de consentimento e
+solicitação de eliminação de dados.
 
 ## 8. Vigência, rescisão e alterações
 
@@ -349,16 +376,50 @@ corpo do documento e depende de um dado que ainda não existe no projeto:
 1. **Endereço completo da sede do operador** (seção 2).
 2. **Formato final de exportação de dados** (seção 6).
 3. **Valor unitário final do tier "Diário" e dos demais tiers** (seção 7.1).
-4. **Definição operacional de "paciente ativo"** para fins de faturamento
-   (seção 7.1).
-5. **Prazo de permanência em modo somente-leitura antes de qualquer eliminação,
+4. **Prazo de permanência em modo somente-leitura antes de qualquer eliminação,
    e a forma de aviso prévio** (seção 7.4 c).
-6. **Prazo de aviso prévio por inadimplência antes da suspensão** (seção 8.3).
-7. **Prazo de antecedência para comunicar alteração relevante dos Termos**
+5. **Prazo de aviso prévio por inadimplência antes da suspensão** (seção 8.3).
+6. **Prazo de antecedência para comunicar alteração relevante dos Termos**
    (seção 8.4).
-8. **Foro de eleição** (seção 9).
-9. **Canal oficial de contato do operador** (seção 12).
+7. **Foro de eleição** (seção 9).
+8. **Canal oficial de contato do operador** (seção 12).
 
 Além destes, permanece pendente a **revisão jurídica completa** do documento.
 A publicação nesta versão foi autorizada pelo titular do negócio em 30/07/2026,
 com ciência do advogado, que sinalizará o que precisar ser alterado.
+
+---
+
+## Nota para a revisão jurídica — alterações desta rodada
+
+⟨PENDENTE: revisão jurídica antes do merge⟩ — as seções **7.1**, **7.2**, **7.3**
+e **7.4** foram reescritas para alinhar o texto ao comportamento efetivamente
+implementado no produto. O texto anterior prometia um trial de 7 dias contado do
+cadastro que o sistema nunca entregou, e afirmava que cartão de crédito não era
+aceito, o que contradiz a tela de ativação de assinatura. Pontos que exigem
+atenção do jurídico:
+
+&nbsp;&nbsp;**(1) Divergência conhecida e mantida de propósito — seção 7.4 (b).**
+A alínea 7.4 (b) promete que a clínica pode exportar o conteúdo registrado
+**"integralmente"**. O produto hoje **não** cumpre isso na extensão prometida: a
+exportação disponível é o relatório de convênio, por paciente e por período —
+não uma exportação integral da conta. A alínea **foi mantida sem alteração**
+porque reduzir uma garantia já publicada ao titular é pior que manter a
+garantia e passar a cumpri-la. Trata-se, portanto, de uma **obrigação assumida
+e ainda não implementada**, não de um erro de redação. Decisão jurídica
+necessária: manter o texto e tratar a exportação integral como pendência de
+produto com prazo, ou ajustar a redação.
+
+&nbsp;&nbsp;**(2) Termo "ficha ativa" (seção 7.1).** Adotado em substituição a
+"paciente ativo" para nomear o registro consumido, e não a pessoa, evitando
+colisão com a leitura clínica de "paciente em tratamento". Confirmar se a
+substituição do termo é adequada do ponto de vista contratual.
+
+&nbsp;&nbsp;**(3) Alínea nova numerada como (e), não (c) — seção 7.4.** A
+ressalva sobre direitos do titular sob regime de somente-leitura foi acrescida
+como **(e)**, por já existirem alíneas (c) e (d) na seção; a numeração
+preexistente foi preservada.
+
+&nbsp;&nbsp;**(4) Provedor de pagamento não nomeado (seção 7.3).** Deliberado:
+nomear o provedor criaria necessidade de aditivo a cada troca de trilho de
+cobrança. O texto refere-se apenas a "operador de pagamento terceiro".
