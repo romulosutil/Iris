@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { CapturaForm } from "./captura-form";
 import { ConsolidarForm } from "./consolidar-form";
 
@@ -98,6 +99,19 @@ export default async function DiarioPage({
   return (
     <Stack gap="lg">
       <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Agenda", href: "/agenda" },
+              {
+                rotulo: dados.pacienteNome
+                  ? `Sessão · ${dados.pacienteNome}`
+                  : "Diário da sessão",
+                atual: true,
+              },
+            ]}
+          />
+        }
         title="Diário da sessão"
         description={dados.pacienteNome ?? "Paciente (acesso restrito)"}
       />

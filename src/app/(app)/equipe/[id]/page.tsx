@@ -7,6 +7,8 @@ import { faixasParaCelulas } from "@/lib/agenda/grade";
 import { withTenant } from "@/db/rls";
 import { and, eq } from "drizzle-orm";
 import { appUser, clinic, userRole } from "@/db/schema";
+import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { carregarHorasTerapeuta } from "@/app/(app)/agenda/horas-queries";
 import { carregarDisponibilidade } from "./queries";
 import { DisponibilidadeEditor } from "./disponibilidade-editor";
@@ -44,10 +46,22 @@ export default async function TerapeutaPage({ params }: Props) {
 
   return (
     <main className="flex flex-col gap-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-display text-[var(--text-primary)] text-2xl font-black">{dados.terapeuta.name}</h1>
-        <p className="font-body text-[var(--text-primary)]">Disponibilidade oferecida: <strong>{horas.toLocaleString("pt-BR")}h/semana</strong></p>
-      </header>
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Equipe", href: "/equipe" },
+              { rotulo: dados.terapeuta.name, atual: true },
+            ]}
+          />
+        }
+        title={dados.terapeuta.name}
+        description={
+          <span>
+            Disponibilidade oferecida: <strong>{horas.toLocaleString("pt-BR")}h/semana</strong>
+          </span>
+        }
+      />
       <HorasTerapeutaBloco horas={horasTerapeuta} />
       <DisponibilidadeEditor terapeutaId={id} passoMin={dados.passoGradeMin} celulasIniciais={celulasIniciais} />
       <BloqueiosTerapeuta terapeutaId={id} bloqueios={bloqueios} />

@@ -6,6 +6,8 @@ import { withTenant } from "@/db/rls";
 import { goal, milestone, patient, patientProtocol } from "@/db/schema";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { NovaMetaForm, type MilestoneOpcao } from "./nova-meta-form";
 import {
   manterMetaAtivaAction,
@@ -90,14 +92,19 @@ export default async function MetasPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-display text-[var(--text-primary)] text-3xl font-bold">
-          Metas · {pacienteRow[0].nome}
-        </h1>
-        <p className="text-[var(--text-primary)] text-sm">
-          Metas individualizadas (PEI) e seu critério de domínio.
-        </p>
-      </header>
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Pacientes", href: "/pacientes" },
+              { rotulo: pacienteRow[0].nome, href: `/pacientes/${id}` },
+              { rotulo: "Metas", atual: true },
+            ]}
+          />
+        }
+        title={`Metas · ${pacienteRow[0].nome}`}
+        description="Metas individualizadas (PEI) e seu critério de domínio."
+      />
 
       {revisaoVencida.length > 0 ? (
         <Alert severidade="info" titulo="Revisão de ciclo pendente">

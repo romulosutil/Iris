@@ -8,6 +8,7 @@ import { carregarTimeline } from "./timeline/queries";
 import { TimelineClient } from "./timeline/timeline-client";
 import { Stack, Cluster } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -45,6 +46,14 @@ export default async function PacientePage({ params }: PacientePageProps) {
       <Stack gap="lg">
         {/* PageHeader Padronizado */}
         <PageHeader
+          breadcrumb={
+            <Breadcrumb
+              itens={[
+                { rotulo: "Pacientes", href: "/pacientes" },
+                { rotulo: paciente.nome, atual: true },
+              ]}
+            />
+          }
           title={paciente.nome}
           description="Prontuário e linha do tempo de evolução clínica"
           actions={

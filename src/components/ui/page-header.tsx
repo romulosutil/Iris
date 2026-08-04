@@ -7,11 +7,12 @@ export interface PageHeaderProps
   description?: React.ReactNode;
   actions?: React.ReactNode;
   badge?: React.ReactNode;
+  breadcrumb?: React.ReactNode;
 }
 
 export const PageHeader = React.forwardRef<HTMLDivElement, PageHeaderProps>(
   function PageHeader(
-    { className, title, description, actions, badge, children, ...props },
+    { className, title, description, actions, badge, breadcrumb, children, ...props },
     ref,
   ) {
     return (
@@ -24,6 +25,7 @@ export const PageHeader = React.forwardRef<HTMLDivElement, PageHeaderProps>(
         {...props}
       >
         <div className="flex flex-col gap-1 min-w-0">
+          {breadcrumb ? <div className="mb-2">{breadcrumb}</div> : null}
           <div className="flex items-center gap-3">
             <h1 className="font-display text-2xl md:text-3xl font-bold tracking-tight text-[var(--text-primary)]">
               {title}

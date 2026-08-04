@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
+import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { NovoPacienteForm } from "./novo-paciente-form";
 
 export default async function NovoPacientePage() {
@@ -12,9 +14,18 @@ export default async function NovoPacientePage() {
   }
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-[var(--text-primary)] text-3xl font-bold">
-        Novo paciente — cadastro administrativo
-      </h1>
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Pacientes", href: "/pacientes" },
+              { rotulo: "Novo paciente", atual: true },
+            ]}
+          />
+        }
+        title="Novo paciente"
+        description="Cadastro administrativo de paciente"
+      />
       <NovoPacienteForm />
     </div>
   );

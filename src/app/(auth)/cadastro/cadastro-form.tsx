@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ESTADOS_UF } from "@/lib/uf";
 import { cadastrar, type EstadoCadastro } from "./actions";
 
 const ESTADO_INICIAL: EstadoCadastro = {};
@@ -201,19 +202,27 @@ export function CadastroForm() {
           />
         </Field>
 
-        <Field label="UF do registro" htmlFor="registroUf">
-          <Input
-            id="registroUf"
+        <Field label="UF do registro" htmlFor="registroUf-trigger">
+          <Select
             name="registroUf"
-            type="text"
-            maxLength={2}
-            autoComplete="address-level1"
-            autoCapitalize="characters"
             required
             value={campos.registroUf}
-            onChange={(e) => set("registroUf", e.target.value.toUpperCase())}
-            aria-invalid={estado?.error ? true : undefined}
-          />
+            onValueChange={(v) => set("registroUf", v)}
+          >
+            <SelectTrigger
+              id="registroUf-trigger"
+              aria-invalid={estado?.error ? true : undefined}
+            >
+              <SelectValue placeholder="Selecione a UF" />
+            </SelectTrigger>
+            <SelectContent>
+              {ESTADOS_UF.map((uf) => (
+                <SelectItem key={uf.sigla} value={uf.sigla}>
+                  {uf.sigla} - {uf.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
 
         <Checkbox

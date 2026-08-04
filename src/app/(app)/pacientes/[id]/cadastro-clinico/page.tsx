@@ -9,6 +9,8 @@ import {
   protocol,
   patientProtocol,
 } from "@/db/schema";
+import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { FichaClinicaForm } from "./ficha-clinica-form";
 import { ProtocolosSecao } from "./protocolos-secao";
 
@@ -44,9 +46,19 @@ export default async function CadastroClinicoPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="font-display text-[var(--text-primary)] text-3xl font-bold">
-        Cadastro clínico — {pacienteRow[0].nome}
-      </h1>
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Pacientes", href: "/pacientes" },
+              { rotulo: pacienteRow[0].nome, href: `/pacientes/${id}` },
+              { rotulo: "Cadastro clínico", atual: true },
+            ]}
+          />
+        }
+        title={`Cadastro clínico — ${pacienteRow[0].nome}`}
+        description="Ficha de acompanhamento clínico e protocolos do paciente"
+      />
       <FichaClinicaForm patientId={id} perfil={perfilRow[0]} />
       <ProtocolosSecao patientId={id} catalogo={catalogo} vinculos={vinculos} />
     </div>

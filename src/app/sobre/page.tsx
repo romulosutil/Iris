@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { Logo } from "@/components/ui/logo";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Stack, Split } from "@/components/ui/layout";
 import { surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
@@ -61,6 +62,12 @@ export default function Home() {
 
       <Stack como="header" gap="md">
         <Logo altura={44} animado aria-label="Iris" />
+        <Breadcrumb
+          itens={[
+            { rotulo: "Início", href: "/" },
+            { rotulo: "Sobre o Iris", atual: true },
+          ]}
+        />
         <Stack gap="md">
           <h1 className="font-display text-[var(--text-primary)] max-w-[16ch] text-4xl font-bold text-balance md:text-6xl">
             Chegue na avaliação com o dossiê pronto.
