@@ -62,7 +62,7 @@ export interface SuperAdminClinicaItem {
   donoNome: string | null;
   donoEmail: string | null;
   criadoEm: Date;
-  status: "isenta" | "trial" | "ativa" | "inadimplente";
+  status: "isenta" | "trial" | "ativa" | "inadimplente" | "cancelada";
   fichasNaBaseCount: number;
   valorEstimadoCentavos: number;
   diasTrialRestantes: number | null;
@@ -98,9 +98,13 @@ function calcularStatusTrial(
   trialDias: number,
   criadoEm: Date,
   subStatus: string | null,
-): { status: "isenta" | "trial" | "ativa" | "inadimplente"; diasRestantes: number | null } {
+): { status: "isenta" | "trial" | "ativa" | "inadimplente" | "cancelada"; diasRestantes: number | null } {
   if (isentoTrial) {
     return { status: "isenta", diasRestantes: null };
+  }
+
+  if (subStatus === "canceled") {
+    return { status: "cancelada", diasRestantes: null };
   }
 
   if (subStatus === "past_due") {
@@ -258,7 +262,7 @@ export async function getSuperAdminClinicas(opcoes?: {
  */
 export async function getSuperAdminSaude(): Promise<SuperAdminSaude> {
   const [webhookCountRow] = await authDb
-    .select({ total: count() })
+    .select({ total: count(asaasWebhookEvent.id) })
     .from(asaasWebhookEvent);
 
   const ultimosWebhooks = await authDb
@@ -273,7 +277,7 @@ export async function getSuperAdminSaude(): Promise<SuperAdminSaude> {
     .limit(10);
 
   const [alertaCountRow] = await authDb
-    .select({ total: count() })
+    .select({ total: count(alertaRiscoClinico.id) })
     .from(alertaRiscoClinico);
 
   const ultimosAlertas = await authDb

@@ -40,6 +40,20 @@ export function AvailabilityGrid({
     handleCelulasChange(new Set());
   }
 
+  function copiarSegunda() {
+    const novas = new Set(celulasAtivas);
+    // Para cada chave de Segunda (dia 1), replica para os dias úteis (2 a 5)
+    for (const key of Array.from(celulasAtivas)) {
+      if (key.startsWith("1-")) {
+        const h = key.slice(2);
+        for (let d = 2; d <= 5; d++) {
+          novas.add(`${d}-${h}`);
+        }
+      }
+    }
+    handleCelulasChange(novas);
+  }
+
   return (
     <div className="w-full space-y-4">
       {/* Barra de Ações em Lote Brutalista */}
@@ -53,6 +67,15 @@ export function AvailabilityGrid({
             className="border-2 border-black font-display font-bold text-xs shadow-[1px_1px_0_#000]"
           >
             Limpar grade
+          </Button>
+          <Button
+            type="button"
+            variante="neutra"
+            size="sm"
+            onClick={copiarSegunda}
+            className="border-2 border-black font-display font-bold text-xs shadow-[1px_1px_0_#000]"
+          >
+            Copiar Segunda
           </Button>
         </div>
 

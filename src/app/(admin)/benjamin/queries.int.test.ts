@@ -89,5 +89,8 @@ describe.skipIf(!hasDb)("Super Admin Queries — Zero-Knowledge LGPD & Metrics (
 
     expect(saude.webhooksAsaas.totalRecebidos).toBeGreaterThanOrEqual(1);
     expect(saude.webhooksAsaas.ultimosEventos.some((e) => e.asaasEventId === "evt_123")).toBe(true);
+    expect(saude.alertasRisco).toBeDefined();
+    expect(typeof saude.alertasRisco.totalAlertas).toBe("number");
+    expect(Array.isArray(saude.alertasRisco.ultimosAlertas)).toBe(true);
   });
 });

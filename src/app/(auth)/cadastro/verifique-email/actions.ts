@@ -27,6 +27,8 @@ const esquemaEmail = z.string().trim().email("Informe um endereço de e-mail vá
  * RATE-LIMITING:
  * Limita a 3 tentativas de reenvio a cada 15 minutos por e-mail para impedir abuso do Resend.
  */
+import { getAppBaseUrl } from "@/lib/app-url";
+
 export async function reenviarEmailVerificacao(
   _estadoAnterior: EstadoReenvio,
   formData: FormData,
@@ -63,7 +65,7 @@ export async function reenviarEmailVerificacao(
     });
 
     if (tokenRecord?.value) {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const baseUrl = getAppBaseUrl();
       const linkVerificacao = `${baseUrl}/verificar-email?token=${tokenRecord.value}`;
       const template = criarTemplateReenvioVerificacao(linkVerificacao);
 

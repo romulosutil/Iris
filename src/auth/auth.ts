@@ -17,6 +17,8 @@ import {
   criarTemplateVerificacaoEmail,
 } from "@/lib/email/templates";
 
+import { getAppBaseUrl } from "@/lib/app-url";
+
 // Fase 6.2 (A5): fail-closed no boot se o bypass de MFA vazar para produção.
 // Roda na 1ª importação de qualquer caminho de auth/servidor.
 assertMfaBypassSafe();
@@ -54,7 +56,11 @@ function dispararEmail(
   });
 }
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.BETTER_AUTH_URL;
+const appUrl = getAppBaseUrl();
+
+if (process.env.NODE_ENV === "production" && !process.env.BETTER_AUTH_URL && !process.env.NEXT_PUBLIC_APP_URL) {
+  console.warn("ALERTA PRODUÇÃO: Nem BETTER_AUTH_URL nem NEXT_PUBLIC_APP_URL foram informadas. Usando URL fallback:", appUrl);
+}
 
 const origensPadrao = [
   "http://localhost:3000",
@@ -72,7 +78,7 @@ const origensExtras = process.env.TRUSTED_ORIGINS
 
 export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL,
+  baseURL: appUrl,
   trustedOrigins: Array.from(new Set([...origensPadrao, ...origensExtras])),
   emailAndPassword: {
     enabled: true,
