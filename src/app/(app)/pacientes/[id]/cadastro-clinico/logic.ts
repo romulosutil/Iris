@@ -24,7 +24,7 @@ async function salvarFichaClinicaCore(
 ): Promise<FichaClinicaState> {
   requireRole(ctx, "coordenador");
   const campo = (nome: string) =>
-    String(formData.get(nome) ?? "").trim() || undefined;
+    String(formData.get(nome) ?? "").trim() || null;
 
   return withTenant(ctx, async (tx) => {
     // Gate de consentimento: não basta EXISTIR linha em `consent` — tem de

@@ -58,6 +58,21 @@ describe.skipIf(!hasDb)("salvarFichaClinica", () => {
     expect(perfil?.diagnostico).toBe("TEA");
   });
 
+  test("coordenador grava ficha clínica com campos vazios (não lança 'No values to set')", async () => {
+    const ctx = {
+      clinicId: CLINIC_A,
+      userId: U_COORD,
+      role: "coordenador",
+    } as const;
+    const result = await salvarFichaClinica(
+      ctx,
+      P_COM_CONSENT,
+      form({}),
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.ok).toBe(true);
+  });
+
   test("bloqueia quando não há Consent LGPD prévio", async () => {
     const ctx = {
       clinicId: CLINIC_A,
