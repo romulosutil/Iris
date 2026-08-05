@@ -1,18 +1,18 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
 
-/**
- * Combobox acessível de busca por nome (paciente|terapeuta). O DS ainda não
- * tem Combobox/Popover/Command — este é o primeiro, construído sobre
- * `Field` + `Input` (rótulo/caixa de texto) com um listbox hand-rolled por
- * cima, estilizado com `surface()` (mesma borda+sombra brutalista do
- * `SelectContent`) em vez de classes inventadas.
- */
+function ChevronBaixo({ className }: { className?: string }) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 20 20" fill="none" aria-hidden focusable="false" className={className}>
+      <path d="M5 7.5l5 5 5-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="square" />
+    </svg>
+  );
+}
+
 export interface Opcao {
   id: string;
   nome: string;
@@ -24,6 +24,7 @@ export interface ComboboxEntidadeProps {
   valor: string | null;
   aoSelecionar: (id: string) => void;
   aoBuscar?: (termo: string) => void;
+  placeholder?: string;
 }
 
 export function ComboboxEntidade({
@@ -32,6 +33,7 @@ export function ComboboxEntidade({
   valor,
   aoSelecionar,
   aoBuscar,
+  placeholder,
 }: ComboboxEntidadeProps) {
   const inputId = useId();
   const listId = useId();
@@ -39,11 +41,20 @@ export function ComboboxEntidade({
 
   const [termo, setTermo] = useState(selecionadaInicial?.nome ?? "");
   const [aberto, setAberto] = useState(false);
-  // -1 = nenhuma opção realçada ainda (abrir a lista não pré-seleciona a
-  // primeira; só a navegação por seta o faz — comportamento padrão de
-  // combobox ARIA 1.2).
   const [ativo, setAtivo] = useState(-1);
   const fechandoPorSelecaoRef = useRef(false);
+
+  // Sincroniza o termo de busca quando a prop `valor` ou a lista `opcoes` muda externamente
+  useEffect(() => {
+    if (!aberto) {
+      const selecionada = opcoes.find((o) => o.id === valor);
+      if (selecionada) {
+        setTermo(selecionada.nome);
+      } else if (!valor) {
+        setTermo("");
+      }
+    }
+  }, [valor, opcoes, aberto]);
 
   const filtradas = useMemo(
     () =>
@@ -57,6 +68,7 @@ export function ComboboxEntidade({
 
   function abrir() {
     setAberto(true);
+    aoBuscar?.(termo);
   }
 
   function fechar() {
@@ -111,56 +123,78 @@ export function ComboboxEntidade({
   return (
     <Field label={label} htmlFor={inputId}>
       <div className="relative">
-        <Input
-          id={inputId}
-          role="combobox"
-          aria-expanded={aberto}
-          aria-controls={listId}
-          aria-autocomplete="list"
-          aria-activedescendant={opcaoAtiva ? `${listId}-${opcaoAtiva.id}` : undefined}
-          autoComplete="off"
-          value={termo}
-          onChange={(e) => aoMudarTexto(e.target.value)}
-          onFocus={abrir}
-          onBlur={() => {
-            // dá tempo do onMouseDown da opção rodar antes de fechar por blur.
-            if (!fechandoPorSelecaoRef.current) fechar();
-            fechandoPorSelecaoRef.current = false;
-          }}
-          onKeyDown={aoTeclar}
-        />
-        {aberto && filtradas.length > 0 && (
+        <div className="relative flex items-center">
+          <Input
+            id={inputId}
+            role="combobox"
+            aria-expanded={aberto}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={opcaoAtiva ? `${listId}-${opcaoAtiva.id}` : undefined}
+            autoComplete="off"
+            placeholder={placeholder ?? `Selecione ou busque ${label.toLowerCase()}...`}
+            value={termo}
+            onChange={(e) => aoMudarTexto(e.target.value)}
+            onFocus={abrir}
+            onBlur={() => {
+              if (!fechandoPorSelecaoRef.current) fechar();
+              fechandoPorSelecaoRef.current = false;
+            }}
+            onKeyDown={aoTeclar}
+            className="pr-9"
+          />
+          <ChevronBaixo
+            className={cn(
+              "w-4 h-4 text-[var(--text-secondary)] absolute right-3 pointer-events-none transition-transform duration-200",
+              aberto && "rotate-180 text-[var(--text-primary)]"
+            )}
+          />
+        </div>
+
+        {aberto && (
           <ul
             id={listId}
             role="listbox"
             aria-label={label}
             className={cn(
-              surface("solida", "bg-surface"),
-              "absolute z-10 mt-1 max-h-60 w-full overflow-auto",
+              "absolute top-full left-0 right-0 z-50 mt-1.5 max-h-60 overflow-y-auto rounded-[var(--radius-control)] bg-[var(--surface-elevated)] border-2 border-[var(--border-brutal)] shadow-[var(--ds-shadow-hover)] p-1",
             )}
           >
-            {filtradas.map((o, i) => {
-              const ehAtivo = i === ativo;
-              return (
-                <li
-                  key={o.id}
-                  id={`${listId}-${o.id}`}
-                  role="option"
-                  aria-selected={ehAtivo}
-                  className={cn(
-                    "font-body text-[var(--text-primary)] min-h-11 cursor-pointer px-4 py-2.5 text-base",
-                    ehAtivo && "bg-[var(--color-gold)] text-[var(--text-primary)]",
-                  )}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    selecionar(o);
-                  }}
-                  onMouseEnter={() => setAtivo(i)}
-                >
-                  {o.nome}
-                </li>
-              );
-            })}
+            {filtradas.length === 0 ? (
+              <li className="font-body text-[var(--text-secondary)] px-4 py-3 text-sm italic">
+                Nenhum {label.toLowerCase()} encontrado...
+              </li>
+            ) : (
+              filtradas.map((o, i) => {
+                const ehAtivo = i === ativo;
+                const ehSelecionado = o.id === valor;
+                return (
+                  <li
+                    key={o.id}
+                    id={`${listId}-${o.id}`}
+                    role="option"
+                    aria-selected={ehAtivo || ehSelecionado}
+                    className={cn(
+                      "font-body text-[var(--text-primary)] rounded-[var(--radius-xs)] min-h-10 cursor-pointer px-3.5 py-2 text-sm flex items-center justify-between transition-colors",
+                      ehSelecionado && "font-bold bg-[var(--color-gold)]/20",
+                      ehAtivo && "bg-[var(--action-primary)] text-[var(--text-primary)] font-semibold",
+                    )}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      selecionar(o);
+                    }}
+                    onMouseEnter={() => setAtivo(i)}
+                  >
+                    <span>{o.nome}</span>
+                    {ehSelecionado && (
+                      <span className="text-xs font-mono bg-[var(--border-brutal)] text-white px-1.5 py-0.5 rounded">
+                        Atual
+                      </span>
+                    )}
+                  </li>
+                );
+              })
+            )}
           </ul>
         )}
       </div>

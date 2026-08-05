@@ -1,6 +1,6 @@
 import { type FaixaDia, fundirFaixasPorDia, horaParaMin, minParaHora } from "./janela";
 
-export function colunasDaGrade(passoMin: number, abertura = "07:00", fechamento = "20:00"): string[] {
+export function colunasDaGrade(passoMin = 60, abertura = "07:00", fechamento = "20:00"): string[] {
   const ini = horaParaMin(abertura);
   const fim = horaParaMin(fechamento);
   const cols: string[] = [];
@@ -12,7 +12,7 @@ export function chaveCelula(dia: number, coluna: string): string {
   return `${dia}-${coluna}`;
 }
 
-export function faixasParaCelulas(faixas: FaixaDia[], passoMin: number, abertura = "07:00", fechamento = "20:00"): Set<string> {
+export function faixasParaCelulas(faixas: FaixaDia[], passoMin = 60, abertura = "07:00", fechamento = "20:00"): Set<string> {
   const cols = colunasDaGrade(passoMin, abertura, fechamento);
   const cel = new Set<string>();
   for (const f of faixas) {
@@ -26,7 +26,7 @@ export function faixasParaCelulas(faixas: FaixaDia[], passoMin: number, abertura
   return cel;
 }
 
-export function celulasParaFaixas(celulas: Set<string>, passoMin: number): FaixaDia[] {
+export function celulasParaFaixas(celulas: Set<string>, passoMin = 60): FaixaDia[] {
   const brutas: FaixaDia[] = [];
   for (const chave of celulas) {
     const idx = chave.indexOf("-");

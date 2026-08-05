@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import {
@@ -28,6 +28,7 @@ export type SessaoDoDia = {
   // link.
   patientId: string;
   disciplina: string;
+  modalidade?: string;
 };
 
 /**
@@ -133,7 +134,7 @@ async function marcarEstadoCore(
     return { error: "Transição de estado inválida." };
   }
 
-  // Substituto (quem realmente atendeu) tem que ser terapeuta da clínica ativa.
+  // Substituto (quem realmente atendeu) tem que ser terapeuta ou coordenador da clínica ativa.
   if (input.atendidoPorId) {
     const ok = await withTenant(ctx, (tx) =>
       tx
@@ -143,7 +144,7 @@ async function marcarEstadoCore(
           and(
             eq(userRole.userId, input.atendidoPorId!),
             eq(userRole.clinicId, ctx.clinicId),
-            eq(userRole.papel, "terapeuta"),
+            inArray(userRole.papel, ["terapeuta", "coordenador"]),
           ),
         )
         .limit(1),

@@ -229,7 +229,7 @@ export const clinic = pgTable("clinic", {
   // Agenda 2.0: zona IANA da clínica (materialização/DST corretos).
   timezone: text("timezone").notNull().default("America/Sao_Paulo"),
   // granularidade visual do calendário semanal (minutos).
-  passoGradeMin: integer("passo_grade_min").notNull().default(30),
+  passoGradeMin: integer("passo_grade_min").notNull().default(60),
   // default de duração por disciplina, ex {"aba":60,"fono":30,"to":50}.
   duracaoDisciplina: jsonb("duracao_disciplina").notNull().default({}),
   // Fase 5 Fatia 2 (Supervisão): limiar de "faltas excessivas" do paciente —

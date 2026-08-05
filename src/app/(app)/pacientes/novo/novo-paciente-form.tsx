@@ -9,6 +9,14 @@ import { Alert } from "@/components/ui/alert";
 import { RadioCards } from "@/components/ui/radio-cards";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+import { DISCIPLINAS_PADRAO } from "@/lib/disciplinas";
+import {
   cadastrarPacienteAdministrativo,
   type CadastroAdminState,
 } from "./actions";
@@ -131,11 +139,18 @@ export function NovoPacienteForm() {
           Campos vazios são ignorados pela action; repetição dinâmica de linhas
           fica para a UI da Etapa B. */}
       <Field label="Disciplina do alvo de carga (opcional)" htmlFor="alvoDisciplina">
-        <Input
-          id="alvoDisciplina"
-          name="alvoDisciplina"
-          placeholder="ex.: aba, fono, to"
-        />
+        <Select name="alvoDisciplina">
+          <SelectTrigger id="alvoDisciplina">
+            <SelectValue placeholder="Selecione a disciplina (opcional)" />
+          </SelectTrigger>
+          <SelectContent>
+            {DISCIPLINAS_PADRAO.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.nome}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Field>
       <Field label="Horas-alvo por semana" htmlFor="alvoHorasSemana">
         <Input

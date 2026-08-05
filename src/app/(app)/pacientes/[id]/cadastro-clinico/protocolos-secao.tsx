@@ -7,6 +7,12 @@ import { Alert } from "@/components/ui/alert";
 import { RadioCards } from "@/components/ui/radio-cards";
 import { Chip } from "@/components/ui/chip";
 import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   ativarProtocoloAction,
   desativarProtocoloAction,
   inicializarProtocolosAction,
@@ -33,6 +39,11 @@ export function ProtocolosSecao({
     temAtivos ? "estruturado" : "generalista"
   );
 
+  const [protocoloParaDesativar, setProtocoloParaDesativar] = useState<{
+    vinculoId: string;
+    nome: string;
+  } | null>(null);
+
   const disponiveis = catalogo.filter((p) => !idsAtivos.has(p.id));
   const ativosList = catalogo.filter((p) => idsAtivos.has(p.id));
 
@@ -40,14 +51,14 @@ export function ProtocolosSecao({
     <section className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">
-          Abordagem & Protocolos Clínicos
+          Abordagem & Protocolos Clínicos ABA
         </h2>
         <p className="text-xs text-[var(--text-secondary)] font-body">
-          Defina o modo de atendimento do paciente para orientar o acompanhamento clínico e os relatórios da IA.
+          Defina a estrutura de acompanhamento do paciente para orientar a coleta de dados e relatórios automatizados de inteligência clínica.
         </p>
       </div>
 
-      {/* Seletor do Modo da Abordagem (Terapia Convencional vs Marcos Estruturados) */}
+      {/* Seletor do Modo da Abordagem */}
       <RadioCards
         value={modo}
         onValueChange={(v) => setModo(v as "generalista" | "estruturado")}
@@ -59,13 +70,13 @@ export function ProtocolosSecao({
           },
           {
             value: "estruturado",
-            label: "Protocolos de Marcos de Desenvolvimento",
-            description: "Acompanhamento estruturado por domínios e metas (ABA, Denver, ABLLS-R, PROC, etc.).",
+            label: "Protocolos de Marcos de Desenvolvimento (ABA / Denver / PEI)",
+            description: "Acompanhamento estruturado por domínios e metas (VB-MAPP, Denver, ABLLS-R, PROC, etc.).",
           },
         ]}
       />
 
-      {/* Ramo 1: Terapia Convencional (Sem Protocolo Rígido) */}
+      {/* Ramo 1: Terapia Convencional */}
       {modo === "generalista" && (
         <div className="flex flex-col gap-4">
           <Alert severidade="sucesso" titulo="Modo Terapia Convencional Ativo">
@@ -82,7 +93,7 @@ export function ProtocolosSecao({
           {temAtivos && (
             <Alert severidade="warning" titulo="Atenção aos protocolos ativos">
               <p className="text-xs">
-                Este paciente possui {idsAtivos.size} protocolo(s) de marcos ativo(s). Caso prefira usar o modo generalista puro, você pode desativá-los na opção "Protocolos de Marcos de Desenvolvimento".
+                Este paciente possui {idsAtivos.size} protocolo(s) de marcos ativo(s). Caso prefira usar o modo generalista puro, você pode desativá-los na opção &quot;Protocolos de Marcos de Desenvolvimento&quot;.
               </p>
             </Alert>
           )}
@@ -101,7 +112,7 @@ export function ProtocolosSecao({
                 </p>
                 <form action={inicializarProtocolosAction.bind(null, patientId)}>
                   <Button type="submit" variante="secundaria">
-                    Carregar catálogo de protocolos padrão
+                    Carregar Catálogo de Protocolos Padrão (1-Clique)
                   </Button>
                 </form>
               </div>
@@ -132,11 +143,19 @@ export function ProtocolosSecao({
                             <div className="flex items-center justify-between gap-2 mt-1">
                               <Chip variante="info">{p.disciplina}</Chip>
                               {vinculo && (
-                                <form action={desativarProtocoloAction.bind(null, vinculo.id)}>
-                                  <Button type="submit" risco="alto" tamanho="sm">
-                                    Desativar
-                                  </Button>
-                                </form>
+                                <Button
+                                  type="button"
+                                  risco="alto"
+                                  tamanho="sm"
+                                  onClick={() =>
+                                    setProtocoloParaDesativar({
+                                      vinculoId: vinculo.id,
+                                      nome: p.nome,
+                                    })
+                                  }
+                                >
+                                  Desvincular
+                                </Button>
                               )}
                             </div>
                           </Card>
@@ -147,14 +166,14 @@ export function ProtocolosSecao({
                 )}
               </div>
 
-              {/* Bloco 2: Catálogo de Protocolos Disponíveis para Ativação (VISÍVEL E DIRETO) */}
+              {/* Bloco 2: Catálogo de Protocolos Disponíveis para Ativação */}
               <div className="flex flex-col gap-3 pt-2 border-t border-[var(--border-brutal)]/20">
                 <div className="flex flex-col gap-0.5">
                   <h3 className="font-display text-sm font-semibold text-[var(--text-primary)]">
                     Catálogo de Protocolos Disponíveis na Clínica ({disponiveis.length})
                   </h3>
                   <p className="text-xs text-[var(--text-secondary)]">
-                    Clique em "Ativar Protocolo" para adicionar o acompanhamento de marcos a este paciente.
+                    Clique em &quot;Vincular Protocolo ao Paciente&quot; para iniciar o acompanhamento de marcos.
                   </p>
                 </div>
 
@@ -183,7 +202,7 @@ export function ProtocolosSecao({
                             className="w-full mt-1"
                           >
                             <Button type="submit" tamanho="sm" className="w-full">
-                              + Ativar Protocolo
+                              + Vincular Protocolo ao Paciente
                             </Button>
                           </form>
                         </div>
@@ -196,6 +215,49 @@ export function ProtocolosSecao({
           )}
         </div>
       )}
+
+      {/* Modal Neobrutalista de Confirmação para Desvínculo */}
+      <Dialog
+        open={!!protocoloParaDesativar}
+        onOpenChange={(open) => {
+          if (!open) setProtocoloParaDesativar(null);
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>Desvincular Protocolo ABA?</DialogTitle>
+          <DialogDescription>
+            Você está prestes a desvincular o protocolo{" "}
+            <strong>{protocoloParaDesativar?.nome}</strong> deste paciente. Os registros e históricos de sessões anteriores serão mantidos intactos.
+          </DialogDescription>
+          <div className="flex items-center justify-end gap-3 mt-6">
+            <Button
+              type="button"
+              variante="neutra"
+              tamanho="sm"
+              onClick={() => setProtocoloParaDesativar(null)}
+            >
+              Cancelar
+            </Button>
+            {protocoloParaDesativar && (
+              <form
+                action={desativarProtocoloAction.bind(
+                  null,
+                  protocoloParaDesativar.vinculoId
+                )}
+              >
+                <Button
+                  type="submit"
+                  risco="alto"
+                  tamanho="sm"
+                  onClick={() => setProtocoloParaDesativar(null)}
+                >
+                  Confirmar Desvínculo
+                </Button>
+              </form>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

@@ -12,6 +12,7 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select";
+import { DISCIPLINAS_PADRAO } from "@/lib/disciplinas";
 import { adicionarMembroEquipeAction } from "./actions";
 
 export type ProfissionalOpcao = {
@@ -26,16 +27,20 @@ export type ProfissionalOpcao = {
 export function AdicionarMembroForm({
   patientId,
   profissionais,
+  disciplinasPrescritas = [],
 }: {
   patientId: string;
   profissionais: ProfissionalOpcao[];
+  disciplinasPrescritas?: string[];
 }) {
   const [state, formAction] = useActionState(
     adicionarMembroEquipeAction.bind(null, patientId),
     {},
   );
 
-  const [disciplinaSelecionada, setDisciplinaSelecionada] = useState<string>("ABA");
+  const [disciplinaSelecionada, setDisciplinaSelecionada] = useState<string>(
+    disciplinasPrescritas[0] ?? "ABA",
+  );
 
   const supervisores = profissionais.filter((p) => p.papel === "coordenador");
 
@@ -78,11 +83,16 @@ export function AdicionarMembroForm({
                 <SelectValue placeholder="Selecione a disciplina" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ABA">ABA / Psicologia</SelectItem>
-                <SelectItem value="Fonoaudiologia">Fonoaudiologia</SelectItem>
-                <SelectItem value="Terapia Ocupacional">Terapia Ocupacional</SelectItem>
-                <SelectItem value="Psicopedagogia">Psicopedagogia</SelectItem>
-                <SelectItem value="Fisioterapia">Fisioterapia</SelectItem>
+                {DISCIPLINAS_PADRAO.map((d) => {
+                  const ehPrescrita = disciplinasPrescritas.some(
+                    (dp) => dp.toLowerCase() === d.id.toLowerCase(),
+                  );
+                  return (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.nome} {ehPrescrita ? "🎯 (Prescrita)" : ""}
+                    </SelectItem>
+                  );
+                })}
                 <SelectItem value="Outra">Outra (especificar)</SelectItem>
               </SelectContent>
             </Select>

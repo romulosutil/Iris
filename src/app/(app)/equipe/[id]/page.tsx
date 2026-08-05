@@ -5,7 +5,7 @@ import { listarBloqueios } from "@/app/(app)/agenda/bloqueio-queries";
 import { horasDisponiveisSemana } from "@/lib/agenda/janela";
 import { faixasParaCelulas } from "@/lib/agenda/grade";
 import { withTenant } from "@/db/rls";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { appUser, clinic, userRole } from "@/db/schema";
 import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -31,10 +31,10 @@ export default async function TerapeutaPage({ params }: Props) {
       .select({ id: appUser.id, name: appUser.name })
       .from(userRole)
       .innerJoin(appUser, eq(appUser.id, userRole.userId))
-      .where(and(eq(userRole.userId, id), eq(userRole.clinicId, ctx.clinicId), eq(userRole.papel, "terapeuta")))
+      .where(and(eq(userRole.userId, id), eq(userRole.clinicId, ctx.clinicId), inArray(userRole.papel, ["terapeuta", "coordenador"])))
       .limit(1);
     const [c] = await tx.select({ passoGradeMin: clinic.passoGradeMin }).from(clinic).where(eq(clinic.id, ctx.clinicId)).limit(1);
-    return { terapeuta: terapeuta ?? null, passoGradeMin: c?.passoGradeMin ?? 30 };
+    return { terapeuta: terapeuta ?? null, passoGradeMin: c?.passoGradeMin ?? 60 };
   });
   if (!dados.terapeuta) notFound();
 

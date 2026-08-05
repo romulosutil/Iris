@@ -62,14 +62,30 @@ async function convidarUsuarioCore(
     return { error: "Só é possível convidar terapeuta ou recepção por aqui." };
   }
 
+  const conselho = String(formData.get("conselho") ?? "").trim() || undefined;
+  const registroNumero = String(formData.get("registroNumero") ?? "").trim() || undefined;
+  const registroUf = String(formData.get("registroUf") ?? "").trim() || undefined;
+
   const senhaTemporaria = crypto.randomBytes(12).toString("base64url");
-  const { isNewUser } = await provisionUser({
+  const { userId, isNewUser } = await provisionUser({
     email,
     nome,
     senha: senhaTemporaria,
     clinicId: ctx.clinicId,
     papel: papel as Papel,
   });
+
+  // Atualizar registro profissional se informado e for usuário recém-criado
+  if (isNewUser && (conselho || registroNumero || registroUf)) {
+    const { authDb } = await import("@/db/client");
+    const { appUser } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    await authDb.update(appUser).set({
+      conselho,
+      registroNumero,
+      registroUf,
+    }).where(eq(appUser.id, userId));
+  }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const loginUrl = new URL("/login", appUrl).toString();

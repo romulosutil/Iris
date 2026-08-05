@@ -61,6 +61,17 @@ export function ConvidarForm() {
           </SelectContent>
         </Select>
       </Field>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Field label="Conselho (opcional)" htmlFor="conselho">
+          <Input id="conselho" name="conselho" placeholder="Ex.: CRP, CRFa, CREFITO" />
+        </Field>
+        <Field label="Nº de Registro (opcional)" htmlFor="registroNumero">
+          <Input id="registroNumero" name="registroNumero" placeholder="Ex.: 123456" />
+        </Field>
+        <Field label="UF do Registro (opcional)" htmlFor="registroUf">
+          <Input id="registroUf" name="registroUf" placeholder="Ex.: SP" maxLength={2} />
+        </Field>
+      </div>
       <Button type="submit">Convidar</Button>
     </Form>
   );

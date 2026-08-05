@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { appUser, janelaTrabalho, userRole } from "@/db/schema";
@@ -8,10 +8,15 @@ import { requireEscritaPermitida } from "@/lib/billing/guard-escrita";
 export async function listarTerapeutas(ctx: TenantContext) {
   return withTenant(ctx, (tx) =>
     tx
-      .select({ id: appUser.id, name: appUser.name, email: appUser.email })
+      .selectDistinct({ id: appUser.id, name: appUser.name, email: appUser.email })
       .from(userRole)
       .innerJoin(appUser, eq(appUser.id, userRole.userId))
-      .where(and(eq(userRole.clinicId, ctx.clinicId), eq(userRole.papel, "terapeuta")))
+      .where(
+        and(
+          eq(userRole.clinicId, ctx.clinicId),
+          inArray(userRole.papel, ["terapeuta", "coordenador"]),
+        ),
+      )
       .orderBy(asc(appUser.name)),
   );
 }

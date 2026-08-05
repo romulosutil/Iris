@@ -132,7 +132,7 @@ export function NovaMetaForm({
           <div className="flex flex-col gap-0.5">
             <span className="font-semibold text-[var(--text-primary)]">Avaliação Automática por IA:</span>
             <span className="text-[var(--text-secondary)] leading-relaxed">
-              A meta será marcada como <strong className="text-black font-semibold">"Candidata a Dominada"</strong> assim que o paciente alcançar <strong>{criterioN} acerto(s) independente(s)</strong> em <strong>{criterioM} sessão(ões) consecutiva(s)</strong>.
+              A meta será marcada como <strong className="text-black font-semibold">&quot;Candidata a Dominada&quot;</strong> assim que o paciente alcançar <strong>{criterioN} acerto(s) independente(s)</strong> em <strong>{criterioM} sessão(ões) consecutiva(s)</strong>.
             </span>
           </div>
         </div>

@@ -32,7 +32,7 @@ const base = {
     "2026-07-18",
     "2026-07-19",
   ],
-  passoMin: 30,
+  passoMin: 60,
   abertura: "08:00",
   fechamento: "12:00",
   janelas: [{ diaSemana: 1, horaInicio: "08:00", horaFim: "12:00" }],
@@ -85,7 +85,7 @@ describe("CalendarioSemana", () => {
     render(<CalendarioSemana {...base} aoAlocar={aoAlocar} />);
     const celulaInicial = screen.getByRole("gridcell", { name: /segunda.*08:00/i });
     celulaInicial.focus();
-    await userEvent.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}{ArrowRight}{Enter}");
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}{Enter}");
     expect(aoAlocar).toHaveBeenCalledWith(1, 600);
   });
 
@@ -97,19 +97,19 @@ describe("CalendarioSemana", () => {
     });
     expect(celulaOcupada).not.toBeNull();
     // célula livre vizinha não ganha o sufixo de ocupação.
-    const celulaLivre = screen.getByRole("gridcell", { name: /^segunda 09:30$/i });
+    const celulaLivre = screen.getByRole("gridcell", { name: /^segunda 10:00$/i });
     expect(celulaLivre).not.toBeNull();
   });
 
-  test("overlay do bloco é posicionado em unidades fixas (rótulo 6rem + colunas de 3rem), não em % da linha (C3)", () => {
+  test("overlay do bloco é posicionado em unidades fixas (rótulo 6rem + colunas de 5rem), não em % da linha (C3)", () => {
     render(<CalendarioSemana {...base} aoAlocar={() => {}} />);
-    // fixture: abertura=08:00 (480min), passoMin=30, bloco inicioMin=540 duracaoMin=60
-    // deslocamento = (540-480)/30 = 2 colunas; largura = 60/30 = 2 colunas
+    // fixture: abertura=08:00 (480min), passoMin=60, bloco inicioMin=540 duracaoMin=60
+    // deslocamento = (540-480)/60 = 1 coluna; largura = 60/60 = 1 coluna
     const bloco = screen.getByText(/Ana.*aba/).closest('[data-testid="bloco-overlay"]');
     expect(bloco).not.toBeNull();
     // jsdom normaliza a expressão calc() constante para um único valor em rem
-    // (6rem rótulo + 2*3rem colunas = 12rem; largura 2*3rem = 6rem).
-    expect((bloco as HTMLElement).style.left).toBe("calc(12rem)");
-    expect((bloco as HTMLElement).style.width).toBe("calc(6rem)");
+    // (6rem rótulo + 1*5rem coluna = 11rem; largura 1*5rem = 5rem).
+    expect((bloco as HTMLElement).style.left).toBe("calc(11rem)");
+    expect((bloco as HTMLElement).style.width).toBe("calc(5rem)");
   });
 });

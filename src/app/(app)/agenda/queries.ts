@@ -266,7 +266,7 @@ async function validarTerapeutaDaClinica(
       and(
         eq(schema.userRole.userId, terapeutaId),
         eq(schema.userRole.clinicId, clinicId),
-        eq(schema.userRole.papel, "terapeuta"),
+        inArray(schema.userRole.papel, ["terapeuta", "coordenador"]),
       ),
     )
     .limit(1);
@@ -536,8 +536,43 @@ export async function carregarConfigClinica(ctx: TenantContext): Promise<ConfigC
       .select({ duracaoDisciplina: schema.clinic.duracaoDisciplina })
       .from(schema.clinic)
       .where(eq(schema.clinic.id, ctx.clinicId));
-    const duracaoDisciplina = (row?.duracaoDisciplina as Record<string, number> | undefined) ?? {};
+    const duracaoDisciplinaRaw = (row?.duracaoDisciplina as Record<string, number> | undefined) ?? {};
+    const DEFAULT_DISCIPLINAS: Record<string, number> = {
+      ABA: 60,
+      Fonoaudiologia: 30,
+      "Terapia Ocupacional": 50,
+      Psicopedagogia: 50,
+      Psicologia: 50,
+    };
+    const duracaoDisciplina =
+      Object.keys(duracaoDisciplinaRaw).length > 0 ? duracaoDisciplinaRaw : DEFAULT_DISCIPLINAS;
     return { disciplinas: Object.keys(duracaoDisciplina), duracaoDisciplina };
+  });
+}
+
+/** Busca disciplinas vinculadas na equipe de cuidado para o paciente e/ou terapeuta */
+export async function listarDisciplinasEquipe(
+  ctx: TenantContext,
+  patientId?: string | null,
+  terapeutaId?: string | null,
+): Promise<string[]> {
+  requireAgendar(ctx);
+  return withTenant(ctx, async (tx) => {
+    const conditions = [];
+    if (patientId) {
+      conditions.push(eq(schema.careTeamMembership.patientId, patientId));
+    }
+    if (terapeutaId) {
+      conditions.push(eq(schema.careTeamMembership.userId, terapeutaId));
+    }
+    if (conditions.length === 0) return [];
+
+    const rows = await tx
+      .selectDistinct({ disciplina: schema.careTeamMembership.disciplina })
+      .from(schema.careTeamMembership)
+      .where(and(...conditions));
+
+    return rows.map((r) => r.disciplina.toLowerCase()).filter(Boolean);
   });
 }
 
@@ -803,10 +838,24 @@ export async function encerrarRegra(
   requireRole(ctx, "coordenador");
   return withTenant(ctx, async (tx) => {
     await requireEscritaPermitida(tx, ctx.clinicId);
+    const [regra] = await tx
+      .select({ vigenciaInicio: schema.agendamentoRecorrente.vigenciaInicio })
+      .from(schema.agendamentoRecorrente)
+      .where(
+        and(
+          eq(schema.agendamentoRecorrente.id, regraId),
+          eq(schema.agendamentoRecorrente.clinicId, ctx.clinicId),
+        ),
+      )
+      .limit(1);
+
+    if (!regra) return { removidas: 0 };
+
+    const vigenciaFim = ateFimISO < regra.vigenciaInicio ? regra.vigenciaInicio : ateFimISO;
     const cutoff = await cutoffEncerramento(tx, ctx.clinicId, ateFimISO);
     await tx
       .update(schema.agendamentoRecorrente)
-      .set({ status: "encerrado", vigenciaFim: ateFimISO })
+      .set({ status: "encerrado", vigenciaFim })
       .where(
         and(
           eq(schema.agendamentoRecorrente.id, regraId),
