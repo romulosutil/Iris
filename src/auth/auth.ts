@@ -54,19 +54,26 @@ function dispararEmail(
   });
 }
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.BETTER_AUTH_URL;
+
+const origensPadrao = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+  "http://127.0.0.1:3002",
+  ...(appUrl ? [appUrl] : []),
+];
+
+const origensExtras = process.env.TRUSTED_ORIGINS
+  ? process.env.TRUSTED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  : [];
+
 export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
-  trustedOrigins: process.env.TRUSTED_ORIGINS
-    ? process.env.TRUSTED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
-    : [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "http://127.0.0.1:3002",
-      ],
+  trustedOrigins: Array.from(new Set([...origensPadrao, ...origensExtras])),
   emailAndPassword: {
     enabled: true,
     // Fatia A (#163): sem e-mail verificado não se entra em dado clínico.
