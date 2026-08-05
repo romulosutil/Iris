@@ -11,11 +11,16 @@ GRANT SELECT(is_super_admin) ON app_user TO app_role;
 GRANT SELECT(id, clinic_id, arquivado_em) ON patient TO iris_auth;
 GRANT SELECT(id, clinic_id, severidade, criado_em) ON alerta_risco_clinico TO iris_auth;
 
--- RLS Policy para a role iris_auth realizar contagem de plataforma de pacientes (sem dados sensíveis)
+-- RLS Policy para a role iris_auth realizar contagem de plataforma de pacientes e alertas de risco (sem dados sensíveis)
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies WHERE tablename = 'patient' AND policyname = 'patient_auth_select'
   ) THEN
     CREATE POLICY patient_auth_select ON patient FOR SELECT TO iris_auth USING (true);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'alerta_risco_clinico' AND policyname = 'alerta_risco_auth_select'
+  ) THEN
+    CREATE POLICY alerta_risco_auth_select ON alerta_risco_clinico FOR SELECT TO iris_auth USING (true);
   END IF;
 END $$;

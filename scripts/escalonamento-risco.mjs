@@ -121,7 +121,7 @@ async function dryRun(sql) {
 export async function processarEmailRt(sql, alertaId) {
   const apiKey = process.env.EMAIL_PROVIDER_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "notificacoes@irisclinica.ia.br";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
 
   const rts = await sql`SELECT * FROM app_rt_do_alerta(${alertaId})`;
   if (rts.length === 0) {

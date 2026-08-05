@@ -77,6 +77,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
   );
   const [duracao, setDuracao] = useState(props.duracaoPadrao[disciplina] ?? 60);
   const [disciplinasEquipe, setDisciplinasEquipe] = useState<string[]>([]);
+  const [erroCarregarDisciplinas, setErroCarregarDisciplinas] = useState(false);
   const [mostrarTodasDisciplinas, setMostrarTodasDisciplinas] = useState(false);
 
   const action = modo === "recorrente" ? criarRegraAction : criarAvulsaAction;
@@ -94,6 +95,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
   useEffect(() => {
     if (!patientId && !terapeutaId) return;
     let cancelado = false;
+    setErroCarregarDisciplinas(false);
     listarDisciplinasEquipeAction(patientId, terapeutaId)
       .then((list) => {
         if (!cancelado) {
@@ -108,7 +110,13 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
           }
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (!cancelado) {
+          console.error("Erro ao listar disciplinas da equipe para agendamento:", err);
+          setDisciplinasEquipe([]);
+          setErroCarregarDisciplinas(true);
+        }
+      });
     return () => {
       cancelado = true;
     };
@@ -167,6 +175,12 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
               Avulsa
             </Button>
           </div>
+        )}
+
+        {erroCarregarDisciplinas && (
+          <Alert severidade="warning" titulo="Atenção">
+            Não foi possível carregar as disciplinas vinculadas à equipe. Exibindo a lista completa de disciplinas.
+          </Alert>
         )}
 
         {estado.error && (

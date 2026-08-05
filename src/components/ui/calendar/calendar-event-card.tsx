@@ -79,7 +79,10 @@ export function CalendarEventCard({
       >
         <div className="flex items-center gap-1.5 overflow-hidden">
           <span className="h-2 w-2 shrink-0 rounded-full border border-black bg-current" />
-          <span className="truncate font-semibold text-xs">{pacienteNome}</span>
+          <span className="truncate font-semibold text-xs">
+            {pacienteNome}
+            {disciplinaNome ? ` · ${disciplinaNome}` : ""}
+          </span>
         </div>
         {horarioStr && (
           <span className="font-mono text-[10px] font-bold opacity-80 shrink-0">{horarioStr}</span>

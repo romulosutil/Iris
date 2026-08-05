@@ -50,19 +50,20 @@ export function ScheduleGrid({
   abertura = "07:00",
   fechamento = "20:00",
   blocos = [],
+  bloqueios = [],
   aoAlocar,
   aoAbrirRegra,
 }: ScheduleGridProps) {
   // Converte BlocoAgendaItem para formato SessaoDoDia compativel com o Calendar.Grid
   const sessoesFormatadas: SessaoDoDia[] = React.useMemo(() => {
-    const anoAtual = new Date().getFullYear();
-    const mesAtual = new Date().getMonth();
-    const diaHoje = new Date().getDate();
+    const hoje = new Date();
+    const hojeSemana = hoje.getDay(); // 0-6 (dom-seg)
+    const inicioSemanaDia = hoje.getDate() - hojeSemana;
 
     return blocos.map((b) => {
       const horaStr = minParaHora(b.inicioMin);
       const [hh, mm] = horaStr.split(":").map(Number);
-      const dt = new Date(anoAtual, mesAtual, diaHoje + b.diaSemana, hh, mm);
+      const dt = new Date(hoje.getFullYear(), hoje.getMonth(), inicioSemanaDia + b.diaSemana, hh, mm);
 
       return {
         id: b.id,
@@ -78,9 +79,9 @@ export function ScheduleGrid({
   }, [blocos]);
 
   const diasFormatados = React.useMemo(() => {
-    return dias.map((rotulo, idx) => ({
-      dataISO: "",
-      rotulo,
+    return dias.map((d, idx) => ({
+      dataISO: d,
+      rotulo: d,
       diaSemana: (idx + 1) % 7,
     }));
   }, [dias]);
@@ -88,11 +89,12 @@ export function ScheduleGrid({
   return (
     <Calendar.Grid
       modo="weekly-timeline"
-      sessoes={sessoesFormatadas}
-      diasSemana={diasFormatados}
       abertura={abertura}
       fechamento={fechamento}
       passoMin={passoMin}
+      diasSemana={diasFormatados}
+      sessoes={sessoesFormatadas}
+      bloqueios={bloqueios}
       onSlotClick={(_, horarioStr, diaSemana) => {
         const [hh, mm] = horarioStr.split(":").map(Number);
         const inicioMin = (hh ?? 0) * 60 + (mm ?? 0);

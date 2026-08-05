@@ -1,11 +1,15 @@
 import "server-only";
 import crypto from "node:crypto";
+import { eq } from "drizzle-orm";
+import { authDb } from "@/db/client";
+import { appUser } from "@/db/schema";
 import { requireRole } from "@/auth/require-role";
 import type { TenantContext } from "@/db/rls";
 import { provisionUser } from "@/auth/provisioning";
 import type { Papel } from "@/auth/papel-ativo";
-import { comEscrita } from "@/lib/billing/guard-escrita";
+import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { enviarEmailTransacional } from "@/lib/email/transacional";
+import { getAppBaseUrl } from "@/lib/app-url";
 import {
   criarTemplateConviteNovoUsuario,
   criarTemplateConviteUsuarioExistente,
@@ -16,6 +20,7 @@ export type ConvidarState = {
   senhaTemporaria?: string;
   emailEnviado?: boolean;
   sucesso?: boolean;
+  bloqueioConta?: BloqueioConta;
 };
 
 // Coordenador não se convida nem convida outro coordenador por esta tela —
@@ -77,9 +82,6 @@ async function convidarUsuarioCore(
 
   // Atualizar registro profissional se informado e for usuário recém-criado
   if (isNewUser && (conselho || registroNumero || registroUf)) {
-    const { authDb } = await import("@/db/client");
-    const { appUser } = await import("@/db/schema");
-    const { eq } = await import("drizzle-orm");
     await authDb.update(appUser).set({
       conselho,
       registroNumero,
@@ -87,7 +89,7 @@ async function convidarUsuarioCore(
     }).where(eq(appUser.id, userId));
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = getAppBaseUrl();
   const loginUrl = new URL("/login", appUrl).toString();
   const nomeEscapado = escapeHtml(nome);
 
