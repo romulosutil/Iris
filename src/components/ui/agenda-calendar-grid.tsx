@@ -21,6 +21,7 @@ export interface AgendaCalendarGridProps {
   abertura?: string; // ex: "07:00"
   fechamento?: string; // ex: "19:30"
   passoMin?: number; // ex: 30
+  onSlotClick?: (terapeutaId: string, horario: string) => void;
 }
 
 function horaDaSessao(quando: Date): string {
@@ -78,6 +79,7 @@ export function AgendaCalendarGrid({
   abertura = "07:00",
   fechamento = "19:30",
   passoMin = 30,
+  onSlotClick,
 }: AgendaCalendarGridProps) {
   const horarios = React.useMemo(
     () => gerarHorarios(abertura, fechamento, passoMin),
@@ -240,14 +242,17 @@ export function AgendaCalendarGrid({
                       className="p-1 border-r border-[var(--border-brutal)]/20 align-top h-12"
                     >
                       {sessoesNoSlot.length === 0 ? (
-                        <div
+                        <button
+                          type="button"
+                          aria-label={`Agendar atendimento com ${t.nome} às ${horario}`}
                           ref={(el) => {
                             refs.current.set(chaveRef(slotIdx, terapeutaIdx, 0), el);
                           }}
                           tabIndex={ehFoco && foco.sessaoIdx === 0 ? 0 : -1}
+                          onClick={() => onSlotClick?.(t.id, horario)}
                           onFocus={() => setFoco({ slotIdx, terapeutaIdx, sessaoIdx: 0 })}
                           onKeyDown={(e) => aoTeclar(e, slotIdx, terapeutaIdx, 0, 0)}
-                          className="w-full h-full min-h-[36px] rounded-[var(--radius-xs)] hover:bg-[var(--color-gold)]/10 transition-colors cursor-pointer opacity-30 focus-visible:outline-focus outline-none"
+                          className="w-full h-full min-h-[36px] rounded-[var(--radius-xs)] hover:bg-[var(--action-primary)]/25 hover:border hover:border-[var(--border-brutal)] transition-all cursor-pointer opacity-40 focus-visible:outline-focus outline-none"
                         />
                       ) : (
                         <div className="flex flex-col gap-1">

@@ -242,6 +242,11 @@ export function AgendaViewCliente({
           role={role}
           userId={userId}
           podeGerir={podeGerir}
+          onSlotClick={(terapeutaId, horario) => {
+            if (podeGerir || isCoordenador) {
+              router.push(`/agenda/semana?terapeutaId=${terapeutaId}&horario=${horario}`);
+            }
+          }}
         />
       ) : null}
 

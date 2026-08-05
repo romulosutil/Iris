@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useEffect, useMemo, useActionState, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,7 @@ import { minParaHora } from "@/lib/agenda/janela";
 import {
   criarAvulsaAction,
   criarRegraAction,
+  listarDisciplinasEquipeAction,
   type EstadoAcao,
 } from "./actions";
 import { ComboboxEntidade, type Opcao } from "./combobox-entidade";
@@ -47,14 +48,7 @@ export interface PopoverAlocarProps {
   terapeutas: Opcao[];
   disciplinas: string[];
   duracaoPadrao: Record<string, number>;
-  /** Busca (debounced) do combobox de entidade variável — só relevante no
-   * eixo terapeuta, onde a entidade variável é o paciente (lista grande). */
   aoBuscarEntidadeVar?: (termo: string) => void;
-  /** Reposição (Task 8): presente quando o popover foi aberto a partir do
-   * botão "Repor" numa falta (`/agenda/semana?repor=...`). Paciente e
-   * disciplina vêm fixados da falta original — só o horário/terapeuta são
-   * escolhidos aqui. Sempre grava como avulsa (`session.repostaDe`),
-   * nunca vira regra recorrente. */
   reposicao?: {
     repostaDe: string;
     pacienteFixo: { id: string; nome: string };
@@ -82,6 +76,8 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
     reposicao ? reposicao.pacienteFixo.id : null,
   );
   const [duracao, setDuracao] = useState(props.duracaoPadrao[disciplina] ?? 60);
+  const [disciplinasEquipe, setDisciplinasEquipe] = useState<string[]>([]);
+  const [mostrarTodasDisciplinas, setMostrarTodasDisciplinas] = useState(false);
 
   const action = modo === "recorrente" ? criarRegraAction : criarAvulsaAction;
   const [estado, formAction] = useActionState<EstadoAcao, FormData>(
@@ -93,6 +89,40 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
   const opcoesVar = pedePaciente ? props.pacientes : props.terapeutas;
   const patientId = pedePaciente ? entidadeVar : props.entidadeFixa.id;
   const terapeutaId = pedePaciente ? props.entidadeFixa.id : entidadeVar;
+
+  // Busca disciplinas vinculadas na equipe de cuidado do paciente/terapeuta selecionado
+  useEffect(() => {
+    if (!patientId && !terapeutaId) return;
+    let cancelado = false;
+    listarDisciplinasEquipeAction(patientId, terapeutaId)
+      .then((list) => {
+        if (!cancelado) {
+          setDisciplinasEquipe(list);
+          if (list.length > 0 && !reposicao) {
+            setDisciplina((dAtual) => {
+              const matched = props.disciplinas.find(
+                (d) => d.toLowerCase() === dAtual.toLowerCase() || list.includes(d.toLowerCase()),
+              );
+              return matched ?? list[0]!;
+            });
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [patientId, terapeutaId, reposicao, props.disciplinas]);
+
+  const disciplinasDisponiveis = useMemo(() => {
+    if (mostrarTodasDisciplinas || disciplinasEquipe.length === 0) {
+      return props.disciplinas;
+    }
+    const filtradas = props.disciplinas.filter((d) =>
+      disciplinasEquipe.includes(d.toLowerCase()),
+    );
+    return filtradas.length > 0 ? filtradas : props.disciplinas;
+  }, [props.disciplinas, disciplinasEquipe, mostrarTodasDisciplinas]);
 
   function trocarDisciplina(d: string) {
     setDisciplina(d);
@@ -136,7 +166,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
           </Alert>
         )}
 
-        <form action={formAction} className="space-y-3">
+        <form action={formAction} className="space-y-4 mt-2">
           <input type="hidden" name="patientId" value={patientId ?? ""} />
           <input type="hidden" name="terapeutaId" value={terapeutaId ?? ""} />
           <input type="hidden" name="diaSemana" value={props.diaSemana} />
@@ -168,6 +198,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
               valor={entidadeVar}
               aoSelecionar={setEntidadeVar}
               aoBuscar={pedePaciente ? props.aoBuscarEntidadeVar : undefined}
+              placeholder={pedePaciente ? "Selecione ou busque um paciente..." : "Selecione um terapeuta..."}
             />
           )}
 
@@ -184,22 +215,33 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
             <Field label="Disciplina" htmlFor="popover-alocar-disciplina">
               <Select value={disciplina} onValueChange={trocarDisciplina}>
                 <SelectTrigger id="popover-alocar-disciplina">
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione a disciplina..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {props.disciplinas.map((d) => (
-                    <SelectItem key={d} value={d}>
-                      {d.toUpperCase()}
-                    </SelectItem>
-                  ))}
+                  {disciplinasDisponiveis.map((d) => {
+                    const ehDaEquipe = disciplinasEquipe.includes(d.toLowerCase());
+                    return (
+                      <SelectItem key={d} value={d}>
+                        {d.toUpperCase()} {ehDaEquipe ? " (Equipe de Cuidado)" : ""}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+              {disciplinasEquipe.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarTodasDisciplinas((v) => !v)}
+                  className="text-xs text-[var(--text-secondary)] underline hover:text-[var(--text-primary)] mt-1 font-body text-left cursor-pointer"
+                >
+                  {mostrarTodasDisciplinas
+                    ? "Filtrar por disciplinas da equipe do paciente"
+                    : "Mostrar todas as disciplinas da clínica"}
+                </button>
+              )}
             </Field>
           )}
 
-          {/* Reposição é sempre tipo "terapia" (repõe uma sessão comum) —
-              o seletor de tipo especial (avaliação/devolutiva/...) não se
-              aplica; o hidden input acima já carrega "terapia". */}
           {modo === "avulsa" && !reposicao && (
             <Field label="Tipo" htmlFor="popover-alocar-tipo">
               <Select
@@ -207,7 +249,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
                 onValueChange={(v) => setTipo(v as typeof tipo)}
               >
                 <SelectTrigger id="popover-alocar-tipo">
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione o tipo de sessão..." />
                 </SelectTrigger>
                 <SelectContent>
                   {TIPOS_AVULSA.map((t) => (
@@ -220,18 +262,26 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
             </Field>
           )}
 
-          <Field label="Duração (min)" htmlFor="popover-alocar-duracao">
-            <Input
-              id="popover-alocar-duracao"
-              type="number"
-              min={5}
-              step={5}
-              value={duracao}
-              onChange={(e) => setDuracao(Number(e.target.value))}
-            />
+          <Field label="Duração da Sessão" htmlFor="popover-alocar-duracao">
+            <Select
+              value={String(duracao)}
+              onValueChange={(v) => setDuracao(Number(v))}
+            >
+              <SelectTrigger id="popover-alocar-duracao" aria-label="Duração da Sessão">
+                <SelectValue placeholder="Selecione a duração..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">30 minutos</SelectItem>
+                <SelectItem value="45">45 minutos</SelectItem>
+                <SelectItem value="50">50 minutos (Sessão ABA)</SelectItem>
+                <SelectItem value="60">60 minutos (1 hora)</SelectItem>
+                <SelectItem value="90">90 minutos (1h30min)</SelectItem>
+                <SelectItem value="120">120 minutos (2 horas)</SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
 
-          <Button type="submit" variante="primaria">
+          <Button type="submit" variante="primaria" className="w-full mt-2">
             Confirmar alocação
           </Button>
         </form>

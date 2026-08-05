@@ -153,8 +153,8 @@ export function SemanaCliente({
         description="Alocação de grade de horários, reposição de sessões e conciliação de agendas da equipe."
       />
 
-      <div className="bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] p-4 rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-wrap items-end gap-4">
+      <div className="bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] p-4 rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] flex flex-wrap items-end justify-between gap-6">
+        <div className="flex flex-wrap items-end gap-6">
           {prefill ? (
             <p className="text-[var(--text-primary)] font-body text-sm self-center">
               Repondo sessão de <strong>{prefill.patientNome}</strong> (
@@ -180,7 +180,7 @@ export function SemanaCliente({
               </Tabs>
             </div>
           )}
-          <div className="w-64">
+          <div className="w-72">
             <ComboboxEntidade
               label={eixo === "terapeuta" ? "Terapeuta" : "Paciente"}
               opcoes={opcoesEntidade}
@@ -193,13 +193,18 @@ export function SemanaCliente({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variante="secundaria" tamanho="sm" onClick={() => setSemanaISO(recuarSemana(semanaISO))}>
-            ← Semana anterior
-          </Button>
-          <Button variante="secundaria" tamanho="sm" onClick={() => setSemanaISO(avancarSemana(semanaISO))}>
-            Próxima semana →
-          </Button>
+        <div className="flex flex-col gap-1.5">
+          <span className="font-display text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+            Navegação Semanal
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variante="secundaria" tamanho="sm" onClick={() => setSemanaISO(recuarSemana(semanaISO))}>
+              ← Semana anterior
+            </Button>
+            <Button variante="secundaria" tamanho="sm" onClick={() => setSemanaISO(avancarSemana(semanaISO))}>
+              Próxima semana →
+            </Button>
+          </div>
         </div>
       </div>
 

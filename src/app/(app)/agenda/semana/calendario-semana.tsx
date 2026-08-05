@@ -98,29 +98,40 @@ export function CalendarioSemana({
       aria-label="Calendário semanal"
       className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] overflow-x-auto p-2"
     >
-      <div role="row" className="flex border-b border-[var(--border-brutal)]/30 pb-1 mb-1">
-        <div className="shrink-0" style={{ width: `${LARGURA_ROTULO_REM}rem` }} />
-        {colunas.map((c) => (
-          <div
-            key={c}
-            role="columnheader"
-            className="font-mono text-[var(--text-secondary)] w-12 shrink-0 border-l border-[var(--border-brutal)]/20 text-center text-xs font-semibold py-1"
-          >
-            {c}
-          </div>
-        ))}
+      <div role="row" className="flex border-b-2 border-[var(--border-brutal)] pb-1 mb-1 bg-[var(--surface-elevated)]/50 rounded-t-[var(--radius-xs)]">
+        <div className="shrink-0 p-1 font-display text-[11px] font-bold uppercase text-[var(--text-secondary)] tracking-wider flex items-center justify-start pl-1" style={{ width: `${LARGURA_ROTULO_REM}rem` }}>
+          Dia / Data
+        </div>
+        {colunas.map((c) => {
+          const ehHoraCheia = c.endsWith(":00");
+          return (
+            <div
+              key={c}
+              role="columnheader"
+              className={cn(
+                "font-mono w-12 shrink-0 border-l border-[var(--border-brutal)]/20 text-center text-[11px] py-1 transition-colors",
+                ehHoraCheia ? "font-bold text-[var(--text-primary)] bg-[var(--surface-card)]" : "font-normal text-[var(--text-secondary)]"
+              )}
+            >
+              {c}
+            </div>
+          );
+        })}
       </div>
       {dias.map((diaISO, linha) => {
         const diaSemana = new Date(`${diaISO}T00:00:00Z`).getUTCDay();
         const bloqueado = estaBloqueado(diaISO);
+        const [, mes, dia] = diaISO.split("-");
+        const dataFormatada = `${dia}/${mes}`;
         return (
-          <div role="row" key={diaISO} className="relative flex items-stretch">
+          <div role="row" key={diaISO} className="relative flex items-stretch py-0.5">
             <div
               role="rowheader"
-              className="font-display text-[var(--text-primary)] flex shrink-0 items-center text-sm font-bold"
+              className="font-display text-[var(--text-primary)] flex shrink-0 flex-col justify-center text-xs font-bold pr-2"
               style={{ width: `${LARGURA_ROTULO_REM}rem` }}
             >
-              {DIAS_LABEL[diaSemana]}
+              <span className="uppercase text-[var(--text-primary)] font-extrabold text-xs">{DIAS_LABEL[diaSemana]}</span>
+              <span className="font-mono text-[11px] text-[var(--text-secondary)] font-medium">{dataFormatada}</span>
             </div>
             {colunas.map((coluna, col) => {
               const inicioMin = horaParaMin(coluna);
@@ -150,11 +161,11 @@ export function CalendarioSemana({
                   onClick={() => !bloqueado && aoAlocar(diaSemana, inicioMin)}
                   onKeyDown={(e) => aoTeclar(e, linha, col, diaSemana, inicioMin, bloqueado)}
                   className={cn(
-                    "border-border-brutal/20 h-10 w-12 shrink-0 border-l",
+                    "border-border-brutal/20 h-11 w-12 shrink-0 border-l transition-all",
                     FOCO,
                     bloqueado
-                      ? "bg-[var(--color-terracotta)]/10 cursor-not-allowed"
-                      : "bg-[var(--surface-card)] cursor-pointer",
+                      ? "bg-[var(--color-terracotta)]/15 cursor-not-allowed"
+                      : "bg-[var(--surface-card)] hover:bg-[var(--action-primary)]/20 hover:border-2 hover:border-[var(--border-brutal)] cursor-pointer",
                     foraJanela && !bloqueado && "bg-[var(--color-gold)]/10",
                   )}
                 />
@@ -186,17 +197,12 @@ export function CalendarioSemana({
                 if (b.recorrenteId) {
                   const ehConflito = b.origem === "conflito";
                   return (
-                    <button
+                    <div
                       key={b.id}
-                      type="button"
+                      aria-hidden="true"
                       data-testid="bloco-overlay"
-                      aria-label={
-                        ehConflito
-                          ? `Conflito: ${b.rotulo} não agendado em ${b.disciplina}. Abrir detalhes da regra.`
-                          : undefined
-                      }
                       onClick={() => aoAbrirRegra?.(b.recorrenteId!, b.rotulo)}
-                      className={cn(classesBloco, "text-left leading-tight truncate", FOCO)}
+                      className={cn(classesBloco, "text-left leading-tight truncate cursor-pointer", FOCO)}
                       style={estilo}
                     >
                       <span className="truncate block">
@@ -204,7 +210,7 @@ export function CalendarioSemana({
                           ? `⚠ ${b.rotulo} · não agendado`
                           : `${b.rotulo} · ${b.disciplina}`}
                       </span>
-                    </button>
+                    </div>
                   );
                 }
                 return (
@@ -212,7 +218,8 @@ export function CalendarioSemana({
                     key={b.id}
                     aria-hidden="true"
                     data-testid="bloco-overlay"
-                    className={cn(classesBloco, "leading-tight truncate")}
+                    onClick={() => aoAbrirRegra?.(b.id, b.rotulo)}
+                    className={cn(classesBloco, "leading-tight truncate cursor-pointer", FOCO)}
                     style={estilo}
                   >
                     <span className="truncate block">

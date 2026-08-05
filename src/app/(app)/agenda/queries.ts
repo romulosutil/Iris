@@ -536,8 +536,43 @@ export async function carregarConfigClinica(ctx: TenantContext): Promise<ConfigC
       .select({ duracaoDisciplina: schema.clinic.duracaoDisciplina })
       .from(schema.clinic)
       .where(eq(schema.clinic.id, ctx.clinicId));
-    const duracaoDisciplina = (row?.duracaoDisciplina as Record<string, number> | undefined) ?? {};
+    const duracaoDisciplinaRaw = (row?.duracaoDisciplina as Record<string, number> | undefined) ?? {};
+    const DEFAULT_DISCIPLINAS: Record<string, number> = {
+      aba: 60,
+      fono: 30,
+      to: 50,
+      psicopedagogia: 50,
+      psicologia: 50,
+    };
+    const duracaoDisciplina =
+      Object.keys(duracaoDisciplinaRaw).length > 0 ? duracaoDisciplinaRaw : DEFAULT_DISCIPLINAS;
     return { disciplinas: Object.keys(duracaoDisciplina), duracaoDisciplina };
+  });
+}
+
+/** Busca disciplinas vinculadas na equipe de cuidado para o paciente e/ou terapeuta */
+export async function listarDisciplinasEquipe(
+  ctx: TenantContext,
+  patientId?: string | null,
+  terapeutaId?: string | null,
+): Promise<string[]> {
+  requireAgendar(ctx);
+  return withTenant(ctx, async (tx) => {
+    const conditions = [];
+    if (patientId) {
+      conditions.push(eq(schema.careTeamMembership.patientId, patientId));
+    }
+    if (terapeutaId) {
+      conditions.push(eq(schema.careTeamMembership.userId, terapeutaId));
+    }
+    if (conditions.length === 0) return [];
+
+    const rows = await tx
+      .selectDistinct({ disciplina: schema.careTeamMembership.disciplina })
+      .from(schema.careTeamMembership)
+      .where(and(...conditions));
+
+    return rows.map((r) => r.disciplina.toLowerCase()).filter(Boolean);
   });
 }
 

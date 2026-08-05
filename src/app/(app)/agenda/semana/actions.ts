@@ -11,6 +11,7 @@ import {
   criarAvulsa,
   criarRegra,
   encerrarRegra,
+  listarDisciplinasEquipe,
   listarPacientes,
   materializarRegra,
   proximaSessaoDaRegra,
@@ -86,6 +87,15 @@ export async function listarPacientesAction(
 ): Promise<{ id: string; nome: string }[]> {
   const ctx = await getTenantContext();
   return listarPacientes(ctx, termo);
+}
+
+/** Leitura fina p/ disciplinas da equipe do paciente/terapeuta. */
+export async function listarDisciplinasEquipeAction(
+  patientId?: string | null,
+  terapeutaId?: string | null,
+): Promise<string[]> {
+  const ctx = await getTenantContext();
+  return listarDisciplinasEquipe(ctx, patientId, terapeutaId);
 }
 
 export async function criarAvulsaAction(
