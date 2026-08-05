@@ -4,6 +4,7 @@ export * from "./components/ui/accordion";
 export * from "./components/ui/alert";
 export * from "./components/ui/appointment-card";
 export * from "./components/ui/availability-grid";
+export * from "./components/ui/calendar";
 export * from "./components/ui/avatar";
 export * from "./components/ui/banner";
 export * from "./components/ui/breadcrumb";
