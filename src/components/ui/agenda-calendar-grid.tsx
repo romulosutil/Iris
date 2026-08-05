@@ -77,8 +77,8 @@ export function AgendaCalendarGrid({
   userId,
   podeGerir,
   abertura = "07:00",
-  fechamento = "19:30",
-  passoMin = 30,
+  fechamento = "20:00",
+  passoMin = 60,
   onSlotClick,
 }: AgendaCalendarGridProps) {
   const horarios = React.useMemo(
@@ -190,26 +190,32 @@ export function AgendaCalendarGrid({
             <tr role="row">
               <th
                 role="columnheader"
-                className="sticky left-0 z-30 w-20 p-2.5 bg-[var(--surface-elevated)] border-r-2 border-[var(--border-brutal)] font-display text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]"
+                className="sticky left-0 z-30 w-24 p-3 bg-[var(--surface-elevated)] border-r-2 border-[var(--border-brutal)] font-display text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]"
               >
                 Horário
               </th>
               {terapeutasVisiveis.map((t) => {
                 const sessoesTerapeuta = sessoes.filter((s) => s.terapeutaId === t.id);
                 const concluidas = sessoesTerapeuta.filter((s) => s.estado === "realizada").length;
+                const inicial = t.nome.charAt(0).toUpperCase();
                 return (
                   <th
                     key={t.id}
                     role="columnheader"
-                    className="p-2.5 border-r border-[var(--border-brutal)]/30 min-w-[150px] max-w-[200px]"
+                    className="p-3 border-r border-[var(--border-brutal)]/30 min-w-[170px] max-w-[220px]"
                   >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-display font-bold text-xs text-[var(--text-primary)] truncate" title={t.nome}>
-                        {t.nome}
-                      </span>
-                      <span className="font-mono text-[10px] text-[var(--text-secondary)] font-semibold">
-                        {sessoesTerapeuta.length} {sessoesTerapeuta.length === 1 ? "sessão" : "sessões"} ({concluidas} ok)
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <div className="size-7 rounded-full bg-[var(--action-primary)] border border-[var(--border-brutal)] flex items-center justify-center font-display font-black text-xs shrink-0 shadow-xs">
+                        {inicial}
+                      </div>
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className="font-display font-bold text-xs text-[var(--text-primary)] truncate" title={t.nome}>
+                          {t.nome}
+                        </span>
+                        <span className="font-mono text-[10px] text-[var(--text-secondary)] font-semibold">
+                          {sessoesTerapeuta.length} {sessoesTerapeuta.length === 1 ? "sessão" : "sessões"} ({concluidas} ok)
+                        </span>
+                      </div>
                     </div>
                   </th>
                 );
@@ -224,7 +230,7 @@ export function AgendaCalendarGrid({
                 {/* Linha Fixo de Horário */}
                 <th
                   role="rowheader"
-                  className="sticky left-0 z-10 w-20 p-2 bg-[var(--surface-card)] border-r-2 border-[var(--border-brutal)] font-mono text-xs font-bold text-[var(--text-secondary)] text-center"
+                  className="sticky left-0 z-10 w-24 p-3 bg-[var(--surface-card)] border-r-2 border-[var(--border-brutal)] font-mono text-xs font-bold text-[var(--text-secondary)] text-center"
                 >
                   {horario}
                 </th>
@@ -239,7 +245,7 @@ export function AgendaCalendarGrid({
                     <td
                       key={t.id}
                       role="gridcell"
-                      className="p-1 border-r border-[var(--border-brutal)]/20 align-top h-12"
+                      className="p-1.5 border-r border-[var(--border-brutal)]/20 align-top h-14"
                     >
                       {sessoesNoSlot.length === 0 ? (
                         <button
@@ -252,10 +258,10 @@ export function AgendaCalendarGrid({
                           onClick={() => onSlotClick?.(t.id, horario)}
                           onFocus={() => setFoco({ slotIdx, terapeutaIdx, sessaoIdx: 0 })}
                           onKeyDown={(e) => aoTeclar(e, slotIdx, terapeutaIdx, 0, 0)}
-                          className="w-full h-full min-h-[36px] rounded-[var(--radius-xs)] hover:bg-[var(--action-primary)]/25 hover:border hover:border-[var(--border-brutal)] transition-all cursor-pointer opacity-40 focus-visible:outline-focus outline-none"
+                          className="w-full h-full min-h-[40px] rounded-lg border border-dashed border-[var(--border-brutal)]/20 hover:bg-[var(--action-primary)]/20 hover:border-solid hover:border-[var(--border-brutal)] transition-all cursor-pointer focus-visible:outline-focus outline-none"
                         />
                       ) : (
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-1.5">
                           {sessoesNoSlot.map((s, sIdx) => {
                             const ehEsteItemFoco = ehFoco && foco.sessaoIdx === sIdx;
                             return (
@@ -270,11 +276,11 @@ export function AgendaCalendarGrid({
                                 onFocus={() => setFoco({ slotIdx, terapeutaIdx, sessaoIdx: sIdx })}
                                 onKeyDown={(e) => aoTeclar(e, slotIdx, terapeutaIdx, sIdx, sessoesNoSlot.length)}
                                 className={cn(
-                                  "w-full text-left p-1.5 rounded-[var(--radius-xs)] border-2 border-[var(--border-brutal)] shadow-[1px_1px_0_0_#000000] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[2px_2px_0_0_#000000] focus-visible:outline-focus outline-none cursor-pointer",
-                                  s.estado === "realizada" && "bg-[var(--status-success-bg)] text-[var(--text-primary)] border-[var(--status-success-border)]",
-                                  s.estado === "agendada" && "bg-[var(--surface-card)] text-[var(--text-primary)] border-[var(--border-brutal)]",
-                                  (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-[var(--status-error-bg)] text-[var(--status-error-fg)] border-[var(--status-error-border)]",
-                                  s.estado === "cancelada" && "bg-[var(--surface-elevated)] text-[var(--text-secondary)] opacity-60 line-through"
+                                  "w-full text-left p-2 rounded-xl border border-[var(--border-brutal)]/30 shadow-xs transition-all hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-focus outline-none cursor-pointer",
+                                  s.estado === "realizada" && "bg-emerald-50/90 text-emerald-950 border-emerald-300",
+                                  s.estado === "agendada" && "bg-indigo-50/90 text-indigo-950 border-indigo-300",
+                                  (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-amber-50/90 text-amber-950 border-amber-300",
+                                  s.estado === "cancelada" && "bg-slate-100 text-slate-500 border-slate-200 opacity-60 line-through"
                                 )}
                               >
                                 <div className="flex items-center justify-between gap-1">
@@ -283,19 +289,19 @@ export function AgendaCalendarGrid({
                                   </span>
                                   <span
                                     className={cn(
-                                      "size-2 rounded-full border border-[var(--border-brutal)] shrink-0",
-                                      s.estado === "realizada" && "bg-[var(--color-blue)]",
-                                      s.estado === "agendada" && "bg-[var(--action-primary)]",
-                                      (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-[var(--color-terracotta)]",
-                                      s.estado === "cancelada" && "bg-gray-400"
+                                      "size-2 rounded-full shrink-0",
+                                      s.estado === "realizada" && "bg-emerald-600",
+                                      s.estado === "agendada" && "bg-indigo-600",
+                                      (s.estado === "falta_paciente" || s.estado === "falta_terapeuta") && "bg-amber-600",
+                                      s.estado === "cancelada" && "bg-slate-400"
                                     )}
                                   />
                                 </div>
-                                <div className="font-display font-semibold text-xs truncate leading-tight mt-0.5">
+                                <div className="font-display font-bold text-xs truncate leading-tight mt-0.5">
                                   {s.pacienteNome ?? "Paciente (restrito)"}
                                 </div>
                                 {s.disciplina ? (
-                                  <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)] truncate">
+                                  <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)] truncate mt-0.5 font-semibold">
                                     {s.disciplina}
                                   </div>
                                 ) : null}

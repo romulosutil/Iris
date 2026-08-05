@@ -1,9 +1,11 @@
-import { eq } from "drizzle-orm";
+import Link from "next/link";
+import { eq, and, isNull } from "drizzle-orm";
 import { getTenantContext } from "@/auth/tenant";
 import { withTenant } from "@/db/rls";
-import { careTeamMembership, appUser, userRole } from "@/db/schema";
+import { careTeamMembership, appUser, userRole, patientAlvoDisciplina } from "@/db/schema";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { formatarDisciplina } from "@/lib/disciplinas";
 import { encerrarVinculoAction } from "./actions";
 import { AdicionarMembroForm, type ProfissionalOpcao } from "./adicionar-membro-form";
 
@@ -45,7 +47,7 @@ export default async function EquipePage({
   const { id } = await params;
   const ctx = await getTenantContext();
 
-  const { equipe, profissionaisClinica } = await withTenant(ctx, async (tx) => {
+  const { equipe, profissionaisClinica, alvosCarga } = await withTenant(ctx, async (tx) => {
     // Query membros ativos e históricos da equipe do paciente com dados de usuário
     const membros = await tx
       .select({
@@ -81,7 +83,22 @@ export default async function EquipePage({
       .innerJoin(appUser, eq(userRole.userId, appUser.id))
       .where(eq(userRole.clinicId, ctx.clinicId));
 
-    return { equipe: membros, profissionaisClinica: profissionaisRaw };
+    // Query dos alvos de carga vigentes contratados para este paciente
+    const alvos = await tx
+      .select({
+        id: patientAlvoDisciplina.id,
+        disciplina: patientAlvoDisciplina.disciplina,
+        horasAlvoSemana: patientAlvoDisciplina.horasAlvoSemana,
+      })
+      .from(patientAlvoDisciplina)
+      .where(
+        and(
+          eq(patientAlvoDisciplina.patientId, id),
+          isNull(patientAlvoDisciplina.vigenciaFim),
+        ),
+      );
+
+    return { equipe: membros, profissionaisClinica: profissionaisRaw, alvosCarga: alvos };
   });
 
   // Mapear responsáveis técnicos por ID para busca rápida na lista de membros
@@ -118,6 +135,62 @@ export default async function EquipePage({
           Profissionais da saúde vinculados ao acompanhamento clínico deste paciente.
         </p>
       </div>
+
+      {/* Card de Cobertura de Carga Semanal Prescrita */}
+      {alvosCarga.length > 0 ? (
+        <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-5 shadow-[var(--ds-shadow-sm)] flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <span>🎯</span> Prescrição & Cobertura de Disciplinas Contratadas
+            </h2>
+            <span className="text-xs text-[var(--text-secondary)]">
+              {alvosCarga.length} disciplina(s) com alvo de carga
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {alvosCarga.map((alvo) => {
+              const terapeutasNaDisciplina = membrosAtivos.filter(
+                (m) => m.disciplina.toLowerCase() === alvo.disciplina.toLowerCase(),
+              );
+              const temCoordenador = terapeutasNaDisciplina.some(
+                (m) => m.papelNaEquipe === "coordenador_referencia",
+              );
+              const temTerapeuta = terapeutasNaDisciplina.some(
+                (m) => m.papelNaEquipe === "terapeuta_referencia" || m.papelNaEquipe === "substituto",
+              );
+
+              return (
+                <div
+                  key={alvo.id}
+                  className="border border-[var(--border-brutal)]/30 rounded-[var(--radius-xs)] p-3 bg-[var(--surface-elevated)] flex flex-col gap-1.5"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-bold text-sm text-[var(--text-primary)]">
+                      {formatarDisciplina(alvo.disciplina)}
+                    </span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[var(--action-primary)] text-black">
+                      {alvo.horasAlvoSemana}h/sem
+                    </span>
+                  </div>
+
+                  <div className="text-xs flex items-center gap-1.5 mt-1">
+                    {temTerapeuta ? (
+                      <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                        ✓ {terapeutasNaDisciplina.length} profissional(is)
+                      </span>
+                    ) : (
+                      <span className="text-amber-700 font-semibold flex items-center gap-1">
+                        ⚠️ Sem terapeuta alocado
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {/* Lista de Membros Ativos */}
       <div className="flex flex-col gap-4">
@@ -168,7 +241,7 @@ export default async function EquipePage({
                       </div>
 
                       <div className="text-xs text-[var(--text-secondary)] font-medium flex flex-wrap gap-x-3 gap-y-1">
-                        <span><strong>Disciplina:</strong> {m.disciplina}</span>
+                        <span><strong>Disciplina:</strong> {formatarDisciplina(m.disciplina)}</span>
                         {m.usuarioConselho && m.usuarioRegistroNumero ? (
                           <span>· <strong>{m.usuarioConselho}:</strong> {m.usuarioRegistroNumero}{m.usuarioRegistroUf ? `/${m.usuarioRegistroUf}` : ""}</span>
                         ) : null}
@@ -186,15 +259,23 @@ export default async function EquipePage({
                     </div>
                   </div>
 
-                  {ctx.role === "coordenador" ? (
-                    <div className="flex justify-end pt-2 border-t border-[var(--border-brutal)]/20">
+                  <div className="flex items-center justify-between pt-3 border-t border-[var(--border-brutal)]/20 gap-2">
+                    <Button asChild variante="secundaria" tamanho="sm">
+                      <Link
+                        href={`/agenda/semana?patientId=${id}&terapeutaId=${m.userId}&disciplina=${encodeURIComponent(m.disciplina)}`}
+                      >
+                        📅 Agendar Sessões
+                      </Link>
+                    </Button>
+
+                    {ctx.role === "coordenador" ? (
                       <form action={encerrarVinculoAction.bind(null, m.id)}>
-                        <Button type="submit" risco="alto" size="sm">
+                        <Button type="submit" risco="alto" tamanho="sm">
                           Encerrar vínculo
                         </Button>
                       </form>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </div>
               );
             })}
@@ -216,7 +297,7 @@ export default async function EquipePage({
               >
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-[var(--text-primary)]">{m.usuarioNome}</span>
-                  <span>({m.disciplina})</span>
+                  <span>({formatarDisciplina(m.disciplina)})</span>
                 </div>
                 <div>
                   Vigência: {m.vigenciaInicio} até <strong>{m.vigenciaFim}</strong>
@@ -232,6 +313,7 @@ export default async function EquipePage({
         <AdicionarMembroForm
           patientId={id}
           profissionais={listaProfissionais}
+          disciplinasPrescritas={alvosCarga.map((a) => a.disciplina)}
         />
       ) : null}
     </div>

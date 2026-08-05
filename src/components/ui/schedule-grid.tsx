@@ -39,7 +39,7 @@ export interface ScheduleGridProps {
 
 const DIAS_LABEL = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const LARGURA_ROTULO_REM = 6; // 96px (w-24)
-const LARGURA_COL_REM = 3.5; // 56px per slot column for comfortable touch targets
+const LARGURA_COL_REM = 5; // 80px (w-20) per slot column
 
 function horaParaMin(h: string): number {
   const [hh, mm] = h.split(":").map(Number);
@@ -66,9 +66,9 @@ function colunasDaGrade(passoMin: number, abertura: string, fechamento: string):
 
 export function ScheduleGrid({
   dias,
-  passoMin = 30,
-  abertura = "08:00",
-  fechamento = "18:00",
+  passoMin = 60,
+  abertura = "07:00",
+  fechamento = "20:00",
   janelas = [],
   bloqueios = [],
   blocos = [],

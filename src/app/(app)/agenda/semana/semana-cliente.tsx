@@ -221,9 +221,9 @@ export function SemanaCliente({
 
       <CalendarioSemana
         dias={dias}
-        passoMin={30}
-        abertura="08:00"
-        fechamento="18:00"
+        passoMin={60}
+        abertura="07:00"
+        fechamento="20:00"
         janelas={dadosVisiveis.janelas}
         bloqueios={dadosVisiveis.bloqueios}
         blocos={dadosVisiveis.blocos}

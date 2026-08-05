@@ -22,7 +22,7 @@ export type AvailabilityGridProps = {
 };
 
 export function AvailabilityGrid({
-  passoMin = 30,
+  passoMin = 60,
   abertura = "07:00",
   fechamento = "20:00",
   celulasIniciais,
@@ -130,7 +130,7 @@ export function AvailabilityGrid({
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="font-mono text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] px-2.5 py-1 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--surface-elevated)]">
+          <span className="font-mono text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] px-3 py-1 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--surface-elevated)]">
             Total: <strong>{totalHoras}h</strong> semanais
           </span>
           {onSalvar ? (
@@ -154,7 +154,7 @@ export function AvailabilityGrid({
         className="w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)] p-3"
       >
         {/* Cabeçalho de Horários */}
-        <div role="row" className="flex items-center border-b border-[var(--border-brutal)]/30 pb-1 mb-1">
+        <div role="row" className="flex items-center border-b border-[var(--border-brutal)]/30 pb-1.5 mb-1.5">
           <div role="columnheader" className="w-24 shrink-0 font-display text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] px-2">
             Dia / Hora
           </div>
@@ -163,7 +163,7 @@ export function AvailabilityGrid({
               <div
                 key={c}
                 role="columnheader"
-                className="w-12 shrink-0 text-center font-mono text-xs font-semibold text-[var(--text-secondary)] border-l border-[var(--border-brutal)]/20 py-0.5"
+                className="w-20 shrink-0 text-center font-mono text-xs font-bold text-[var(--text-secondary)] border-l border-[var(--border-brutal)]/20 py-1"
               >
                 {c}
               </div>
@@ -172,14 +172,14 @@ export function AvailabilityGrid({
         </div>
 
         {/* Linhas de Dias da Semana */}
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-1">
           {DIAS_ORDEM.map((dia) => {
             const nome = DIAS[dia]!;
             return (
-              <div role="row" key={dia} className="flex items-stretch border-t border-[var(--border-brutal)]/20 first:border-t-0">
+              <div role="row" key={dia} className="flex items-stretch border-t border-[var(--border-brutal)]/20 first:border-t-0 py-0.5">
                 <div
                   role="rowheader"
-                  className="w-24 shrink-0 font-display text-sm font-bold text-[var(--text-primary)] flex items-center px-2"
+                  className="w-24 shrink-0 font-display text-sm font-extrabold text-[var(--text-primary)] flex items-center px-2"
                 >
                   {nome}
                 </div>
@@ -210,11 +210,11 @@ export function AvailabilityGrid({
                         }}
                         onKeyDown={(e) => aoTeclar(e, dia, colIdx)}
                         className={cn(
-                          "w-12 h-10 shrink-0 border-l border-[var(--border-brutal)]/20 transition-colors duration-75 flex items-center justify-center font-mono text-xs font-bold",
-                          "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)] z-10",
+                          "w-20 h-11 shrink-0 border-l border-[var(--border-brutal)]/20 transition-all duration-75 flex items-center justify-center font-mono text-xs font-extrabold rounded-lg mx-[1px]",
+                          "focus-visible:outline-focus outline-none z-10",
                           selecionada
-                            ? "bg-[var(--color-gold)] text-[var(--text-primary)] font-black"
-                            : "bg-[var(--surface-card)] hover:bg-[var(--color-gold)]/20 text-transparent",
+                            ? "bg-emerald-500 text-white border border-emerald-600 shadow-xs"
+                            : "bg-[var(--surface-card)] hover:bg-emerald-500/20 text-transparent hover:text-emerald-700",
                         )}
                       >
                         {selecionada ? "✓" : ""}

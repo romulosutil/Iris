@@ -101,11 +101,11 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
     ).rejects.toThrow(/disciplina/i);
   });
 
-  test("rejeita regra se terapeutaId não possui papel de terapeuta", async () => {
+  test("rejeita regra se terapeutaId não possui papel de terapeuta nem coordenador", async () => {
     await expect(
       criarRegra(ctxCoord, {
         ...regraValida,
-        terapeutaId: U_COORD, // U_COORD é coordenador, não terapeuta
+        terapeutaId: U_ADMIN, // U_ADMIN é recepção, não terapeuta nem coordenador
         diaSemana: 3,
       }),
     ).rejects.toThrow(/não é terapeuta/i);
@@ -122,11 +122,11 @@ describe.skipIf(!hasDb)("agenda/semana — gate requireAgendar (RLS)", () => {
     modalidade: "presencial" as const,
   };
 
-  test("rejeita avulsa se terapeutaId não possui papel de terapeuta", async () => {
+  test("rejeita avulsa se terapeutaId não possui papel de terapeuta nem coordenador", async () => {
     await expect(
       criarAvulsa(ctxCoord, {
         ...avulsaValida,
-        terapeutaId: U_COORD,
+        terapeutaId: U_ADMIN,
       }),
     ).rejects.toThrow(/não é terapeuta/i);
   });

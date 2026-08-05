@@ -8,7 +8,7 @@ import type { BlocoAgenda } from "@/lib/agenda/projecao";
 
 const DIAS_LABEL = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const LARGURA_ROTULO_REM = 6; // w-24
-const LARGURA_COL_REM = 3; // w-12
+const LARGURA_COL_REM = 5; // w-20
 const FOCO =
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]";
 
@@ -96,10 +96,10 @@ export function CalendarioSemana({
     <div
       role="grid"
       aria-label="Calendário semanal"
-      className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] overflow-x-auto p-2"
+      className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] overflow-x-auto p-3"
     >
-      <div role="row" className="flex border-b-2 border-[var(--border-brutal)] pb-1 mb-1 bg-[var(--surface-elevated)]/50 rounded-t-[var(--radius-xs)]">
-        <div className="shrink-0 p-1 font-display text-[11px] font-bold uppercase text-[var(--text-secondary)] tracking-wider flex items-center justify-start pl-1" style={{ width: `${LARGURA_ROTULO_REM}rem` }}>
+      <div role="row" className="flex border-b-2 border-[var(--border-brutal)] pb-1.5 mb-1.5 bg-[var(--surface-elevated)]/50 rounded-t-[var(--radius-xs)]">
+        <div className="shrink-0 p-1 font-display text-[11px] font-bold uppercase text-[var(--text-secondary)] tracking-wider flex items-center justify-start pl-2" style={{ width: `${LARGURA_ROTULO_REM}rem` }}>
           Dia / Data
         </div>
         {colunas.map((c) => {
@@ -109,7 +109,7 @@ export function CalendarioSemana({
               key={c}
               role="columnheader"
               className={cn(
-                "font-mono w-12 shrink-0 border-l border-[var(--border-brutal)]/20 text-center text-[11px] py-1 transition-colors",
+                "font-mono w-20 shrink-0 border-l border-[var(--border-brutal)]/20 text-center text-xs py-1.5 transition-colors",
                 ehHoraCheia ? "font-bold text-[var(--text-primary)] bg-[var(--surface-card)]" : "font-normal text-[var(--text-secondary)]"
               )}
             >
@@ -127,7 +127,7 @@ export function CalendarioSemana({
           <div role="row" key={diaISO} className="relative flex items-stretch py-0.5">
             <div
               role="rowheader"
-              className="font-display text-[var(--text-primary)] flex shrink-0 flex-col justify-center text-xs font-bold pr-2"
+              className="font-display text-[var(--text-primary)] flex shrink-0 flex-col justify-center text-xs font-bold pr-2 pl-1"
               style={{ width: `${LARGURA_ROTULO_REM}rem` }}
             >
               <span className="uppercase text-[var(--text-primary)] font-extrabold text-xs">{DIAS_LABEL[diaSemana]}</span>
@@ -161,7 +161,7 @@ export function CalendarioSemana({
                   onClick={() => !bloqueado && aoAlocar(diaSemana, inicioMin)}
                   onKeyDown={(e) => aoTeclar(e, linha, col, diaSemana, inicioMin, bloqueado)}
                   className={cn(
-                    "border-border-brutal/20 h-11 w-12 shrink-0 border-l transition-all",
+                    "border-border-brutal/20 h-12 w-20 shrink-0 border-l transition-all",
                     FOCO,
                     bloqueado
                       ? "bg-[var(--color-terracotta)]/15 cursor-not-allowed"
@@ -172,9 +172,7 @@ export function CalendarioSemana({
               );
             })}
             {/* Overlay absoluto: blocos posicionados em unidades fixas (mesma unidade
-                das colunas w-12/LARGURA_COL_REM), não em % da linha — a linha
-                inclui o rótulo (6rem) + colunas de 3rem, então % da linha ≠ % das
-                colunas (C3). */}
+                das colunas w-20/LARGURA_COL_REM 5rem) */}
             {blocos
               .filter((b) => b.diaSemana === diaSemana)
               .map((b) => {
@@ -186,13 +184,13 @@ export function CalendarioSemana({
                   width: `calc(${colunasLargura} * ${LARGURA_COL_REM}rem)`,
                 };
                 const classesBloco = cn(
-                  "absolute top-0.5 bottom-0.5 rounded-[var(--radius-xs)] overflow-hidden px-2 text-xs flex flex-col justify-center transition-all shadow-sm z-10",
+                  "absolute top-1 bottom-1 rounded-xl overflow-hidden px-2.5 text-xs flex flex-col justify-center transition-all shadow-xs border z-10",
                   b.origem === "previsto" &&
-                    "border-2 border-dashed border-[var(--color-purple)] bg-[var(--color-purple)]/15 text-[var(--text-primary)] font-semibold",
+                    "border-amber-300 bg-amber-50/95 text-amber-950 font-semibold shadow-xs",
                   b.origem === "conflito" &&
-                    "border-2 border-dashed border-[var(--color-terracotta)] bg-[var(--color-terracotta)]/20 text-[var(--text-primary)] font-bold",
+                    "border-rose-300 bg-rose-50/95 text-rose-950 font-bold shadow-xs",
                   b.origem === "concreto" &&
-                    "border-2 border-[var(--border-brutal)] bg-[var(--color-gold)] text-[var(--text-primary)] font-bold shadow-[var(--ds-shadow)]",
+                    "border-emerald-300 bg-emerald-50/95 text-emerald-950 font-bold shadow-xs",
                 );
                 if (b.recorrenteId) {
                   const ehConflito = b.origem === "conflito";
@@ -202,7 +200,7 @@ export function CalendarioSemana({
                       aria-hidden="true"
                       data-testid="bloco-overlay"
                       onClick={() => aoAbrirRegra?.(b.recorrenteId!, b.rotulo)}
-                      className={cn(classesBloco, "text-left leading-tight truncate cursor-pointer", FOCO)}
+                      className={cn(classesBloco, "text-left leading-tight truncate cursor-pointer hover:shadow-md hover:-translate-y-0.5", FOCO)}
                       style={estilo}
                     >
                       <span className="truncate block">
@@ -219,7 +217,7 @@ export function CalendarioSemana({
                     aria-hidden="true"
                     data-testid="bloco-overlay"
                     onClick={() => aoAbrirRegra?.(b.id, b.rotulo)}
-                    className={cn(classesBloco, "leading-tight truncate cursor-pointer", FOCO)}
+                    className={cn(classesBloco, "leading-tight truncate cursor-pointer hover:shadow-md hover:-translate-y-0.5", FOCO)}
                     style={estilo}
                   >
                     <span className="truncate block">

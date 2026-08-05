@@ -266,7 +266,7 @@ async function validarTerapeutaDaClinica(
       and(
         eq(schema.userRole.userId, terapeutaId),
         eq(schema.userRole.clinicId, clinicId),
-        eq(schema.userRole.papel, "terapeuta"),
+        inArray(schema.userRole.papel, ["terapeuta", "coordenador"]),
       ),
     )
     .limit(1);
@@ -838,10 +838,24 @@ export async function encerrarRegra(
   requireRole(ctx, "coordenador");
   return withTenant(ctx, async (tx) => {
     await requireEscritaPermitida(tx, ctx.clinicId);
+    const [regra] = await tx
+      .select({ vigenciaInicio: schema.agendamentoRecorrente.vigenciaInicio })
+      .from(schema.agendamentoRecorrente)
+      .where(
+        and(
+          eq(schema.agendamentoRecorrente.id, regraId),
+          eq(schema.agendamentoRecorrente.clinicId, ctx.clinicId),
+        ),
+      )
+      .limit(1);
+
+    if (!regra) return { removidas: 0 };
+
+    const vigenciaFim = ateFimISO < regra.vigenciaInicio ? regra.vigenciaInicio : ateFimISO;
     const cutoff = await cutoffEncerramento(tx, ctx.clinicId, ateFimISO);
     await tx
       .update(schema.agendamentoRecorrente)
-      .set({ status: "encerrado", vigenciaFim: ateFimISO })
+      .set({ status: "encerrado", vigenciaFim })
       .where(
         and(
           eq(schema.agendamentoRecorrente.id, regraId),

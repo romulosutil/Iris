@@ -129,6 +129,15 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
     setDuracao(props.duracaoPadrao[d] ?? 60);
   }
 
+  useEffect(() => {
+    if (estado.ok) {
+      const timer = setTimeout(() => {
+        props.aoFechar();
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [estado.ok, props]);
+
   return (
     <Dialog open={props.aberto} onOpenChange={(o) => !o && props.aoFechar()}>
       <DialogContent>
@@ -163,6 +172,14 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
         {estado.error && (
           <Alert severidade="erro" titulo="Não foi possível alocar">
             {estado.error}
+          </Alert>
+        )}
+
+        {estado.ok && (
+          <Alert severidade="sucesso" titulo="Alocação realizada com sucesso">
+            {modo === "recorrente"
+              ? "Regra de agendamento recorrente criada e sessões reservadas na agenda."
+              : "Sessão avulsa alocada com sucesso na agenda."}
           </Alert>
         )}
 
