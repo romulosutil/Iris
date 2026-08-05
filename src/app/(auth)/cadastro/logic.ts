@@ -373,6 +373,7 @@ export async function executarCadastro(
         versaoTermo: VERSAO_TERMO,
         ip: ip ?? undefined,
         userAgent,
+        headers: h,
       });
     });
   } catch (err) {

@@ -33,6 +33,7 @@ export type EntradaCadastro = {
   versaoTermo: string;
   ip?: string;
   userAgent?: string;
+  headers?: Headers;
 };
 
 export type ResultadoCadastro = { userId: string; clinicId: string };
@@ -500,6 +501,7 @@ async function criarClinicaEVinculo(
       senha: e.senha,
       clinicId,
       papel: "coordenador",
+      headers: e.headers,
     });
 
     return { userId, clinicId };

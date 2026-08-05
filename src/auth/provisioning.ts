@@ -19,6 +19,8 @@ export type ProvisionInput = {
   emailVerificado?: boolean;
   /** Instância de banco customizada (ex.: ownerDb nos scripts de seed). */
   db?: any;
+  /** Headers HTTP da requisição atual para repassar ao Better-Auth em server-side calls. */
+  headers?: Headers;
 };
 
 /**
@@ -41,9 +43,20 @@ export async function provisionUser(
   if (existente.length > 0) {
     userId = existente[0]!.id;
   } else {
+    let reqHeaders = input.headers;
+    if (!reqHeaders) {
+      try {
+        const { headers: getHeaders } = await import("next/headers");
+        reqHeaders = await getHeaders();
+      } catch {
+        // Fora de escopo de requisição HTTP (ex.: script de seed)
+      }
+    }
+
     // Cria a credencial pelo Better-Auth (hash de senha + auth_account).
     const created = await auth.api.signUpEmail({
       body: { email: input.email, password: input.senha, name: input.nome },
+      ...(reqHeaders ? { headers: reqHeaders } : {}),
     });
     userId = created.user.id;
     isNewUser = true;
