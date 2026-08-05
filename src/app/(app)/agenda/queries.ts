@@ -538,11 +538,11 @@ export async function carregarConfigClinica(ctx: TenantContext): Promise<ConfigC
       .where(eq(schema.clinic.id, ctx.clinicId));
     const duracaoDisciplinaRaw = (row?.duracaoDisciplina as Record<string, number> | undefined) ?? {};
     const DEFAULT_DISCIPLINAS: Record<string, number> = {
-      aba: 60,
-      fono: 30,
-      to: 50,
-      psicopedagogia: 50,
-      psicologia: 50,
+      ABA: 60,
+      Fonoaudiologia: 30,
+      "Terapia Ocupacional": 50,
+      Psicopedagogia: 50,
+      Psicologia: 50,
     };
     const duracaoDisciplina =
       Object.keys(duracaoDisciplinaRaw).length > 0 ? duracaoDisciplinaRaw : DEFAULT_DISCIPLINAS;

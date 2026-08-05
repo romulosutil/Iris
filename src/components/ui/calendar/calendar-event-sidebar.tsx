@@ -49,7 +49,7 @@ export function CalendarEventSidebar({
   if (!aberto || !sessao) return null;
 
   const dataHoraStr = formatarHoraExtensa(sessao.agendadaPara);
-  const modalidadeStr = (sessao as unknown as { modalidade?: string }).modalidade;
+  const modalidadeStr = sessao.modalidade;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200">

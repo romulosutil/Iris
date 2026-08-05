@@ -117,7 +117,7 @@ export interface ContainerProps extends React.HTMLAttributes<HTMLElement>, ComoP
 
 const larguraClasses = {
   sm: "max-w-3xl",
-  md: "max-w-7xl",
+  md: "max-w-5xl",
   lg: "max-w-7xl",
   full: "max-w-full",
 };

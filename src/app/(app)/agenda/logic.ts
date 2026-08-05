@@ -28,6 +28,7 @@ export type SessaoDoDia = {
   // link.
   patientId: string;
   disciplina: string;
+  modalidade?: string;
 };
 
 /**
