@@ -115,6 +115,28 @@ describe("convidarUsuario — lógica de envio de e-mail de convite (#155)", () 
     vi.restoreAllMocks();
   });
 
+  it("NÃO atualiza dados profissionais de usuário JÁ EXISTENTE ao enviar convite", async () => {
+    vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-existente", isNewUser: false });
+    vi.spyOn(transacional, "enviarEmailTransacional").mockResolvedValue({ enviado: true });
+
+    const res = await convidarUsuario(
+      ctxCoord,
+      form({
+        nome: "Dra. Paula",
+        email: "paula-existente@iris.test",
+        papel: "terapeuta",
+        conselho: "CRM",
+        registroNumero: "99999",
+        registroUf: "SP",
+      })
+    );
+
+    expect(res.error).toBeUndefined();
+    expect(res.emailEnviado).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
   it("degrada graciosamente se o envio de e-mail falhar para novo usuário, mantendo a senha temporária", async () => {
     vi.spyOn(provisioning, "provisionUser").mockResolvedValue({ userId: "u-123", isNewUser: true });
     vi.spyOn(transacional, "enviarEmailTransacional").mockResolvedValue({ enviado: false });

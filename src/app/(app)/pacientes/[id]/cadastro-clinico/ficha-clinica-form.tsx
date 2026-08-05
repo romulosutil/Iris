@@ -85,7 +85,7 @@ export function FichaClinicaForm({
           defaultValue={perfil?.contatosEmergencia ?? ""}
         />
       </Field>
-      <Button type="submit" disabled={isPending} className="mt-2">
+      <Button type="submit" isLoading={isPending} className="mt-2">
         {isPending ? "Salvando Ficha Clínica..." : "Salvar Ficha Clínica"}
       </Button>
     </Form>

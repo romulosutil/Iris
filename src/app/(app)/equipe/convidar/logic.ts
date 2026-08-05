@@ -75,8 +75,8 @@ async function convidarUsuarioCore(
     papel: papel as Papel,
   });
 
-  // Atualizar registro profissional se informado
-  if (conselho || registroNumero || registroUf) {
+  // Atualizar registro profissional se informado e for usuário recém-criado
+  if (isNewUser && (conselho || registroNumero || registroUf)) {
     const { authDb } = await import("@/db/client");
     const { appUser } = await import("@/db/schema");
     const { eq } = await import("drizzle-orm");
