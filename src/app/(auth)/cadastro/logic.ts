@@ -231,11 +231,30 @@ export function validarCadastro(
  * com os valores.
  */
 function descreverErro(err: unknown): string {
-  const nome = err instanceof Error ? err.name : typeof err;
-  const codigo = (err as { code?: unknown })?.code;
-  return typeof codigo === "string" || typeof codigo === "number"
-    ? `${nome}(code=${codigo})`
-    : nome;
+  if (!err) return "null/undefined";
+  if (err instanceof Error) {
+    const code =
+      (err as any).code ||
+      (err as any).body?.code ||
+      (err as any).statusCode ||
+      (err as any).status;
+    const msg = err.message || (err as any).body?.message || "";
+    const parts = [err.name];
+    if (code) parts.push(`code=${code}`);
+    if (msg) parts.push(`msg="${msg}"`);
+    if ((err as any).cause) {
+      parts.push(`cause=${descreverErro((err as any).cause)}`);
+    }
+    return parts.join(" ");
+  }
+  if (typeof err === "object") {
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
 }
 
 /**

@@ -112,7 +112,12 @@ export const auth = betterAuth({
     },
   },
   // DB gera o id (uuid default) — não deixar o Better-Auth gerar string.
-  advanced: { database: { generateId: false } },
+  advanced: {
+    database: { generateId: false },
+    ipAddress: {
+      ipAddressHeaders: ["x-forwarded-for", "x-real-ip"],
+    },
+  },
   // Fase 6.2b: MFA TOTP + backup codes. Enrollment exige verificação (fluxo
   // padrão: enable → verifyTotp ativa). Papéis clínicos são obrigados a cadastrar
   // (enforcement em getTenantContext).
