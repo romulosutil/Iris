@@ -72,7 +72,17 @@ export default async function CadastroClinicoPage({
           redireciona (`#prescricao`), e sem prescrição o paciente não tem teto
           para montar equipe. Protocolo vem depois porque é encaixe opcional. */}
       <PrescricaoDisciplinasSecao patientId={id} prescricoes={prescricoes} />
-      <ProtocolosSecao patientId={id} catalogo={catalogo} vinculos={vinculos} />
+      {/* Protocolo é encaixe da prescrição (fatia 3): a mesma lista de
+          disciplinas vigentes que desenha a seção acima é o que decide o que a
+          seção de protocolo pode oferecer. Uma segunda query aqui teria o
+          próprio filtro de vigência, e é exatamente aí que os dois lados
+          divergem (plano §4.5). */}
+      <ProtocolosSecao
+        patientId={id}
+        catalogo={catalogo}
+        vinculos={vinculos}
+        disciplinasPrescritas={prescricoes.map((p) => p.disciplina)}
+      />
       <FichaClinicaForm patientId={id} perfil={perfilRow[0]} />
     </div>
   );

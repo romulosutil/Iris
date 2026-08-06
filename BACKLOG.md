@@ -159,6 +159,48 @@ Verificação: 12 asserções de DDL medidas no Postgres (`pg_indexes`,
 da jornada. `pnpm test` 917/917; `test:rls` só com as **duas falhas
 pré-existentes** acima.
 
+### Fatia 3 entregue — protocolo vira encaixe opcional da disciplina prescrita
+
+**Sem migração.** O que faltava não era coluna: era a seção de protocolo parar de
+viver em paralelo à prescrição e passar a ser sub-encaixe dela.
+
+Decisões desta fatia (confirmadas com o Rômulo, 06/08/2026):
+
+- **Saiu o rádio "Terapia Convencional × Protocolos de Marcos".** Ele guardava em
+  `useState` uma escolha que o banco não registra — ao recarregar, o modo era
+  reconstituído pela existência de vínculo, então o controle **mentia sobre ser
+  uma decisão**. A ausência de protocolo já significa acompanhamento narrativo; o
+  que faltava era dizer isso em texto, não pedir de novo.
+- **Protocolo de disciplina não prescrita não é oferecido nem aceito.** O
+  catálogo passou a ser agrupado por disciplina prescrita vigente. O guard vive
+  no **núcleo** (`protocolo-logic.ts`), não no dropdown: Server Action é
+  endpoint, e uma aba aberta desde antes de a prescrição ser encerrada continua
+  chamando.
+- **Vínculo órfão ganha bloco `Fora da prescrição atual`**, mesmo tratamento que
+  o plano §3.1 deu ao membro de equipe fora da prescrição. Esconder produziria
+  linha viva no banco que ninguém enxerga nem consegue desvincular pela UI.
+- **Encerrar prescrição NÃO desencaixa protocolo** — seria efeito colateral
+  clínico não pedido num ato que já é auditável por si.
+
+Três defeitos pré-existentes que a fatia fechou de passagem:
+
+- **Toda recusa era engolida.** As actions de protocolo retornavam `void` e
+  descartavam o `{ error }` do núcleo: erro de papel, de conta em somente-leitura
+  ou de vínculo já desfeito revalidavam a página sem uma palavra na tela.
+  Passaram a `useActionState`.
+- **`ativarProtocolo`/`desativarProtocolo` não passavam pelo `comEscrita`** —
+  conta em somente-leitura (#163+#159) escrevia protocolo.
+- **Duplo-clique criava dois vínculos vigentes** do mesmo protocolo. Advisory
+  lock de transação + checagem de idempotência (já ativo devolve `ok`, não erro).
+  Sem isso o segundo vínculo ficava vivo e **invisível**, porque a tela deduplica.
+
+Verificação: 9 testes unitários do agrupamento puro + 8 de integração;
+**7 dos 8 de integração falham contra o código anterior** (o único que passa é o
+caminho feliz, que já existia), e o agrupamento foi checado por mutação. `pnpm
+test` 926/926 · `typecheck` limpo · `lint` com os **mesmos 2 erros
+pré-existentes** de `agenda/semana` (confirmados por `git stash`) · `test:rls`
+só com as **duas falhas pré-existentes** acima.
+
 ---
 
 ## 🏁 Sessão 03/08/2026 (3ª) — Billing pay-as-you-grow implementado, trilho vira Mercado Pago (#36)
