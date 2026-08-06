@@ -115,6 +115,50 @@ Confirmadas por `git stash` — falham igual sem nenhuma alteração desta sess�
 Ficam registradas aqui porque **suíte vermelha crônica é o caminho mais curto
 para vermelho novo passar despercebido**.
 
+### Fatia 2 entregue — prescrição na ficha clínica + handoff 1
+
+Migração `0077` (à mão, `when` = anterior + 1000), fechando o lado do **teto**:
+
+- **`patient_alvo_unico_vigente`** — o `idx_patient_alvo_vigente` **não era
+  unique** (medido, não deduzido): nada impedia duas prescrições vigentes da
+  mesma disciplina, e o teto virava sorteio de qual linha a query pegasse. É o
+  espelho exato do `ctm_unico_vigente` do lado do consumo. O índice antigo foi
+  derrubado (mesma chave, mesmo predicado — manter os dois pagaria escrita
+  dobrada sem ganho de leitura).
+- **`REVOKE UPDATE` de tabela + `GRANT UPDATE (vigencia_fim)`** — numa tabela
+  SCD2, `UPDATE` de tabela permitia reescrever `horas_alvo_semana` no lugar e
+  destruir o histórico que o convênio audita. Mesmo padrão da `0044`.
+- **`REVOKE DELETE` + `DROP POLICY` de delete** (decisão do Rômulo, 06/08/2026):
+  prescrição vira append-only de verdade. A policy cai junto para não ficar
+  órfã convidando alguém a reconceder o grant achando que a barreira seguia
+  de pé.
+
+Aplicação: `prescricao-logic.ts` (SCD2 — fecha vigência e abre linha nova, as
+duas datas do mesmo `now() AT TIME ZONE 'America/Sao_Paulo'`, na mesma
+transação), seção de prescrição na ficha clínica, e o handoff 1 completo
+(cadastro deixou de prescrever · redirect para `#prescricao` · banner de
+continuidade · selo `Sem prescrição` na lista, **derivado na leitura**).
+
+Dois achados que mudaram código durante a verificação:
+
+- **`SELECT … FOR UPDATE` não serve nesta tabela.** O row lock do Postgres exige
+  `UPDATE` em **nível de tabela**, e a `0077` passou a conceder por coluna — o
+  `FOR UPDATE` do plano §4.4 falharia como `permission denied for table
+  patient_alvo_disciplina`. Serialização feita com `pg_advisory_xact_lock`, que
+  não depende de privilégio de tabela e morre com a transação. **A fatia 4
+  precisa disso**: o plano prevê `FOR UPDATE` do alvo vigente para o TOCTOU da
+  equipe, e esse caminho está fechado.
+- **`horas-queries.ts` contava prescrição fechada.** O filtro era
+  `vigencia_fim IS NULL OR vigencia_fim >= hoje`; represcrever fecha a linha
+  antiga hoje e abre a nova hoje, então as duas casavam e o alvo ficava com a
+  que o Postgres devolvesse por último. Trocado por `IS NULL` — o mesmo critério
+  do `app_is_on_team` e de todo o #203.
+
+Verificação: 12 asserções de DDL medidas no Postgres (`pg_indexes`,
+`has_column_privilege`, `has_table_privilege`, `pg_policies`) + 14 de integração
+da jornada. `pnpm test` 917/917; `test:rls` só com as **duas falhas
+pré-existentes** acima.
+
 ---
 
 ## 🏁 Sessão 03/08/2026 (3ª) — Billing pay-as-you-grow implementado, trilho vira Mercado Pago (#36)

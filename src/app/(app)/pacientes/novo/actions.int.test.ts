@@ -170,52 +170,59 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     expect(consentimentos[0]!.tipo).toBe("autoconsentimento_titular_adulto");
   });
 
-  test("grava paciente + consent + alvo na mesma transação", async () => {
-    const fd = new FormData();
-    fd.set("nome", "Bruna");
-    fd.set("tipoConsentimento", "responsavel_legal");
-    fd.set("responsavelSignatario", "Mãe da Bruna");
-    fd.append("alvoDisciplina", "aba");
-    fd.append("alvoHorasSemana", "12.0");
-    const res = await criarPacienteEConsent(ctx, fd);
-    expect(res.error).toBeUndefined();
-    expect(res.id).toBeTruthy();
-    const alvos = await owner`
-      SELECT disciplina, horas_alvo_semana, vigencia_inicio, vigencia_fim
-      FROM patient_alvo_disciplina WHERE patient_id = ${res.id!}`;
-    expect(alvos).toHaveLength(1);
-    expect(alvos[0]!.disciplina).toBe("aba");
-    expect(alvos[0]!.horas_alvo_semana).toBe("12.0");
-    expect(alvos[0]!.vigencia_fim).toBeNull();
-  });
-
-  test("sem alvo informado grava paciente + consent + 0 alvos", async () => {
+  // #203, fatia 2: o cadastro deixou de prescrever. Disciplina e carga foram
+  // para a ficha clínica, onde nascem com vigência própria (SCD2) e são o teto
+  // que a equipe consome. Os casos abaixo substituem os três que exercitavam a
+  // gravação de alvo aqui — e falham contra o código anterior, que gravava.
+  test("cadastro NÃO grava prescrição (é ato clínico, não cadastral)", async () => {
     const res = await criarPacienteEConsent(
       ctx,
       form({
-        nome: "Sem Alvo",
+        nome: "Bruna",
         tipoConsentimento: "responsavel_legal",
-        responsavelSignatario: "Pai",
+        responsavelSignatario: "Mãe da Bruna",
       }),
     );
+    expect(res.error).toBeUndefined();
+    expect(res.id).toBeTruthy();
+    const alvos = await owner`
+      SELECT 1 FROM patient_alvo_disciplina WHERE patient_id = ${res.id!}`;
+    expect(alvos).toHaveLength(0);
+  });
+
+  test("campo de alvo em formulário antigo é IGNORADO, não gravado", async () => {
+    // Um formulário em cache ainda pode mandar `alvoDisciplina`. Aceitar criaria
+    // prescrição pelo caminho velho, sem histórico — e a divergência só
+    // apareceria na barra de cobertura semanas depois.
+    const fd = new FormData();
+    fd.set("nome", "Form Antigo");
+    fd.set("tipoConsentimento", "responsavel_legal");
+    fd.set("responsavelSignatario", "Pai");
+    fd.append("alvoDisciplina", "aba");
+    fd.append("alvoHorasSemana", "12.0");
+    const res = await criarPacienteEConsent(ctx, fd);
     expect(res.error).toBeUndefined();
     const alvos = await owner`
       SELECT 1 FROM patient_alvo_disciplina WHERE patient_id = ${res.id!}`;
     expect(alvos).toHaveLength(0);
   });
 
-  test("par de alvo inválido (horas não numéricas) reverte tudo (rollback)", async () => {
+  test("horas inválidas no formulário antigo não bloqueiam o cadastro", async () => {
+    // Antes, `alvoHorasSemana: "abc"` derrubava a transação inteira e o
+    // paciente não era criado. Agora o cadastro é 100% cadastral: um campo
+    // órfão de uma versão antiga da tela não pode impedir a recepção de
+    // cadastrar quem já está na porta.
     const fd = new FormData();
-    fd.set("nome", "Rollback Teste");
+    fd.set("nome", "Horas Orfas");
     fd.set("tipoConsentimento", "responsavel_legal");
     fd.set("responsavelSignatario", "Mãe");
     fd.append("alvoDisciplina", "aba");
-    fd.append("alvoHorasSemana", "abc"); // inválido
+    fd.append("alvoHorasSemana", "abc");
     const res = await criarPacienteEConsent(ctx, fd);
-    expect(res.error).toBeTruthy();
+    expect(res.error).toBeUndefined();
     const encontrados = await owner`
-      SELECT 1 FROM patient WHERE nome = 'Rollback Teste'`;
-    expect(encontrados).toHaveLength(0); // paciente também não persiste
+      SELECT 1 FROM patient WHERE nome = 'Horas Orfas'`;
+    expect(encontrados).toHaveLength(1);
   });
 
   // ─── #140 — consentimento por finalidade (IA e exportação) ─────────────────

@@ -14,6 +14,8 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { FichaClinicaForm } from "./ficha-clinica-form";
 import { ProtocolosSecao } from "./protocolos-secao";
 import { obterOuInicializarProtocolosDaClinica } from "./protocolo-logic";
+import { PrescricaoDisciplinasSecao } from "./prescricao-disciplinas-secao";
+import { listarPrescricoesVigentes } from "./prescricao-logic";
 
 export default async function CadastroClinicoPage({
   params,
@@ -27,6 +29,12 @@ export default async function CadastroClinicoPage({
   } catch {
     notFound();
   }
+
+  // A prescrição é carregada FORA do `withTenant` das demais leituras porque o
+  // núcleo abre a própria transação (é o mesmo caminho usado pela action, e
+  // duplicar a query aqui deixaria as duas versões divergirem quanto ao filtro
+  // de vigência — o bug mais provável desta feature, plano §4.5).
+  const prescricoes = await listarPrescricoesVigentes(ctx, id);
 
   const [pacienteRow, perfilRow, catalogo, vinculos] = await withTenant(
     ctx,
@@ -60,6 +68,10 @@ export default async function CadastroClinicoPage({
         title={`Cadastro clínico — ${pacienteRow[0].nome}`}
         description="Ficha de acompanhamento clínico e protocolos do paciente"
       />
+      {/* Primeira seção da página de propósito: é para cá que o cadastro
+          redireciona (`#prescricao`), e sem prescrição o paciente não tem teto
+          para montar equipe. Protocolo vem depois porque é encaixe opcional. */}
+      <PrescricaoDisciplinasSecao patientId={id} prescricoes={prescricoes} />
       <ProtocolosSecao patientId={id} catalogo={catalogo} vinculos={vinculos} />
       <FichaClinicaForm patientId={id} perfil={perfilRow[0]} />
     </div>

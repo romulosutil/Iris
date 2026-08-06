@@ -29,5 +29,9 @@ export async function cadastrarPacienteAdministrativo(
       bloqueioConta: resultado.bloqueioConta,
     };
   }
-  redirect(`/pacientes/${resultado.id}/cadastro-clinico`);
+  // Âncora `#prescricao` (handoff 1, #203): sem disciplina e carga o paciente
+  // fica em estado incompleto e silencioso — não dá para montar equipe e nada
+  // na tela diz isso. Cair na lista de pacientes aqui transformaria a limpeza
+  // do cadastro num beco sem saída, que é regressão, não melhoria.
+  redirect(`/pacientes/${resultado.id}/cadastro-clinico#prescricao`);
 }

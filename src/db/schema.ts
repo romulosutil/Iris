@@ -707,7 +707,15 @@ export const patientAlvoDisciplina = pgTable(
       "patient_alvo_horas_passo",
       sql`${t.horasAlvoSemana} > 0 AND ${t.horasAlvoSemana} <= 60 AND (${t.horasAlvoSemana} * 10)::int % 5 = 0`,
     ),
-    index("idx_patient_alvo_vigente")
+    // #203 (0077) — UNIQUE, não só index: sem isso nada impedia DUAS
+    // prescrições vigentes para a mesma disciplina, e o teto da barra de
+    // cobertura passaria a depender de qual linha a query pegasse. Espelho
+    // exato do `ctm_unico_vigente` do lado do consumo.
+    //
+    // PARCIAL de propósito: encerrar a vigência libera a combinação, então
+    // represcrever a mesma disciplina segue possível com as duas passagens
+    // preservadas — é o que o SCD2 desta tabela exige.
+    uniqueIndex("patient_alvo_unico_vigente")
       .on(t.patientId, t.disciplina)
       .where(sql`${t.vigenciaFim} IS NULL`),
   ],

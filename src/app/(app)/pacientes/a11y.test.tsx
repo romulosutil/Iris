@@ -29,6 +29,20 @@ test("lista de pacientes sem violações", async () => {
           escola: "Escola ABC",
           convenio: "Unimed",
           criadoEm: new Date(),
+          temPrescricao: true,
+        },
+        // Segundo paciente SEM prescrição: o selo `Sem prescrição` (#203) só é
+        // renderizado neste ramo, e um fixture só com o caso feliz deixaria o
+        // contraste e o texto do selo fora da varredura do axe.
+        {
+          id: "p2",
+          nome: "Ana Pereira",
+          nascimento: "2019-02-01",
+          responsavelContato: "João Pereira",
+          escola: "Escola XYZ",
+          convenio: "Bradesco",
+          criadoEm: new Date(),
+          temPrescricao: false,
         },
       ]}
     />,
