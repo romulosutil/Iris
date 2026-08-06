@@ -1,6 +1,8 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
+import { ancoraCobertura } from "../equipe/cobertura";
 import {
   encerrarPrescricao,
   prescreverDisciplina,
@@ -21,6 +23,20 @@ function revalidar(patientId: string): void {
   revalidatePath("/pacientes");
 }
 
+/**
+ * O handoff de §MV4 é feito AQUI, no servidor, e não num efeito do cliente.
+ *
+ * Represcrever é SCD2: fecha a linha vigente e insere OUTRA, com id novo. O
+ * `revalidar` logo abaixo re-renderiza a lista, a `key` da linha muda, e o
+ * componente que fez o submit **desmonta** — levando junto o `useActionState` e
+ * qualquer `useEffect` que fosse navegar. Era exatamente isso que acontecia: a
+ * confirmação salvava e o coordenador ficava na tela onde não há o que fazer,
+ * que é o "descobrir depois" que esta fatia existe para eliminar. Um `redirect`
+ * de servidor não tem componente para perder.
+ *
+ * `ancoraCobertura` é a mesma função que a barra usa para montar o `id` — link
+ * e âncora derivam da mesma normalização, nunca de duas concatenações.
+ */
 export async function prescreverDisciplinaAction(
   patientId: string,
   _prev: PrescricaoState,
@@ -29,6 +45,11 @@ export async function prescreverDisciplinaAction(
   const ctx = await getTenantContext();
   const resultado = await prescreverDisciplina(ctx, patientId, formData);
   if (resultado.ok) revalidar(patientId);
+  if (resultado.ok && resultado.disciplinaSobrealocada) {
+    redirect(
+      `/pacientes/${patientId}/equipe#${ancoraCobertura(resultado.disciplinaSobrealocada)}`,
+    );
+  }
   return resultado;
 }
 

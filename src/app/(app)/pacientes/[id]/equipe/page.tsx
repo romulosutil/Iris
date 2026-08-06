@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatarDisciplina } from "@/lib/disciplinas";
 import { formatarHoras, papelConsomeSaldo } from "@/lib/horas";
-import { encerrarVinculoAction } from "./actions";
 import { calcularCobertura, chaveDisciplina } from "./cobertura";
+import { EncerrarVinculoForm } from "./encerrar-vinculo-form";
 import { BarraCobertura } from "./barra-cobertura";
 import {
   AdicionarMembroForm,
@@ -283,11 +283,16 @@ export default async function EquipePage({
                 horasAtuais={m.horasSemana}
                 disciplinasPrescritas={disciplinasComSaldo}
               />
-              <form action={encerrarVinculoAction.bind(null, m.id)}>
-                <Button type="submit" risco="alto" tamanho="sm">
-                  Encerrar vínculo
-                </Button>
-              </form>
+              {/* Confirma ANTES (o corte de acesso é imediato, D-A) e diz
+                  DEPOIS o saldo que voltou (§3.3). */}
+              <EncerrarVinculoForm
+                patientId={id}
+                membershipId={m.id}
+                nomeProfissional={m.usuarioNome}
+                disciplina={m.disciplina}
+                papelNaEquipe={m.papelNaEquipe}
+                horasSemana={m.horasSemana}
+              />
             </div>
           ) : null}
         </div>

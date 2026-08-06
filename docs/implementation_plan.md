@@ -424,7 +424,7 @@ Cada fatia entrega jornada utilizável de ponta a ponta. Não construir 2 antes 
 | **3**    | Encaixe opcional de protocolo por disciplina                                         | Prescrever Psicologia sem protocolo continua funcionando                                                          |
 | **4** ✅ | Equipe: horas, validação transacional, edição, estado vazio MV2                      | ✅ Entregue 06/08/2026 — 17 testes de integração + 15 unitários de cobertura                                      |
 | **5** ✅ | Barra de cobertura nos 4 estados + a11y + copy                                       | ✅ Entregue 06/08/2026 — 5 stories + `progressbar` com `aria-valuetext` = a frase de MV3                          |
-| **6**    | Represcrição com confirmação (MV4) + toast de devolução de saldo (3.3)               | Reduzir 15h→10h com 15h alocadas, confirmar, cair na equipe                                                       |
+| **6** ✅ | Represcrição com confirmação (MV4) + toast de devolução de saldo (3.3)               | ✅ Entregue 06/08/2026 — confirmação lê `textoCobertura`; toast diz saldo devolvido **e** corte de acesso         |
 
 ### O que a fatia 6 herda da 5 (não reconstruir)
 

@@ -5,6 +5,7 @@ import {
   adicionarMembroEquipe,
   editarMembroEquipe,
   encerrarVinculoEquipe,
+  type EncerramentoResultado,
 } from "./logic";
 
 /** Wrapper de request — deriva o tenant do servidor. */
@@ -44,10 +45,29 @@ export async function editarMembroEquipeAction(
   return resultado;
 }
 
-// Usada como `action` de <form> nativo → retorna void e revalida a rota da equipe.
+/**
+ * Encerra o vínculo e DEVOLVE o resultado (#203, fatia 6).
+ *
+ * Antes retornava `void`: o encerramento acontecia e a tela só piscava. Duas
+ * coisas acontecem no mesmo ato — as horas voltam para o saldo e o profissional
+ * perde o acesso ao prontuário na hora (D-A) — e o coordenador precisa ler as
+ * duas. Por isso a assinatura é de `useActionState`: o toast é montado a partir
+ * de `disciplina`, `horasDevolvidas` e `saldoTexto`.
+ *
+ * `patientId` vem bindado do cliente e serve SÓ de chave de cache no
+ * `revalidatePath` — nunca de autorização. O paciente que importa é o do
+ * `membershipId`, resolvido no servidor sob RLS por `encerrarVinculoEquipe`;
+ * mandar outro id aqui invalida uma rota alheia e nada mais.
+ */
 export async function encerrarVinculoAction(
+  patientId: string,
   membershipId: string,
-): Promise<void> {
-  await encerrarVinculoEquipe(await getTenantContext(), membershipId);
-  revalidatePath("/pacientes/[id]/equipe", "page");
+  _prev: EncerramentoResultado,
+): Promise<EncerramentoResultado> {
+  const resultado = await encerrarVinculoEquipe(
+    await getTenantContext(),
+    membershipId,
+  );
+  if (resultado.ok) revalidatePath(`/pacientes/${patientId}/equipe`);
+  return resultado;
 }

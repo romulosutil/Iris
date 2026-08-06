@@ -23,6 +23,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { DISCIPLINAS_PADRAO, formatarDisciplina } from "@/lib/disciplinas";
 import { formatarHoras, HORAS_MAX_SEMANA, HORAS_PASSO } from "@/lib/horas";
+import { ConfirmarSobrealocacaoDialog } from "./confirmar-sobrealocacao-dialog";
 import {
   encerrarPrescricaoAction,
   prescreverDisciplinaAction,
@@ -164,66 +165,78 @@ function NovaPrescricaoForm({
   }
 
   return (
-    <form
-      action={formAction}
-      // `key` derivado da lista de disponíveis: prescrever uma disciplina a
-      // remove da lista, o formulário remonta e volta vazio. Limpar por
-      // `setState` dentro do efeito de sucesso seria render em cascata (e o
-      // lint do repo barra) — remontar é o mesmo resultado sem o ciclo extra.
-      key={disponiveis.map((d) => d.id).join("|")}
-      className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/30 bg-[var(--surface-card)] p-4"
-    >
-      <h3 className="font-display text-sm font-semibold text-[var(--text-primary)]">
-        {temPrescricao
-          ? "Prescrever outra disciplina"
-          : "Prescrever a primeira disciplina"}
-      </h3>
-      {state.error ? (
-        <Alert severidade="erro" destacado={!!state.bloqueioConta}>
-          {state.error}
-        </Alert>
-      ) : null}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Disciplina" htmlFor="disciplina">
-          <Select name="disciplina" required>
-            <SelectTrigger id="disciplina">
-              <SelectValue placeholder="Selecione a disciplina" />
-            </SelectTrigger>
-            <SelectContent>
-              {disponiveis.map((d) => (
-                <SelectItem key={d.id} value={d.id}>
-                  {d.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field
-          label="Carga horária semanal"
-          htmlFor="horasAlvoSemana"
-          // O passo de 30min não é preferência de UI: é o CHECK
-          // `patient_alvo_horas_passo` no banco. Dizer aqui evita que o
-          // coordenador descubra a regra por mensagem de erro.
-          hint={`De 30 em 30 minutos, até ${formatarHoras(HORAS_MAX_SEMANA)} por semana. Ex.: 1,5 = 1h30.`}
-        >
-          <Input
-            id="horasAlvoSemana"
-            name="horasAlvoSemana"
-            type="number"
-            min={HORAS_PASSO}
-            max={HORAS_MAX_SEMANA}
-            step={HORAS_PASSO}
-            inputMode="decimal"
-            required
-          />
-        </Field>
-      </div>
-      <div>
-        <Button type="submit" isLoading={isPending} tamanho="sm">
-          {isPending ? "Salvando prescrição..." : "Salvar prescrição"}
-        </Button>
-      </div>
-    </form>
+    <>
+      {/* Prescrever uma disciplina NOVA também pode sobrealocar: encerrar a
+          prescrição mantém os vínculos já montados (§3.1), e prescrever de novo
+          com carga menor que a alocada cai no mesmo §MV4 da linha vigente. Sem
+          este diálogo aqui, o servidor devolvia a confirmação, este formulário
+          não sabia lê-la, e o submit virava um clique sem efeito e sem aviso. */}
+      <ConfirmarSobrealocacaoDialog
+        confirmacao={state.confirmacao}
+        formAction={formAction}
+        isPending={isPending}
+      />
+      <form
+        action={formAction}
+        // `key` derivado da lista de disponíveis: prescrever uma disciplina a
+        // remove da lista, o formulário remonta e volta vazio. Limpar por
+        // `setState` dentro do efeito de sucesso seria render em cascata (e o
+        // lint do repo barra) — remontar é o mesmo resultado sem o ciclo extra.
+        key={disponiveis.map((d) => d.id).join("|")}
+        className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/30 bg-[var(--surface-card)] p-4"
+      >
+        <h3 className="font-display text-sm font-semibold text-[var(--text-primary)]">
+          {temPrescricao
+            ? "Prescrever outra disciplina"
+            : "Prescrever a primeira disciplina"}
+        </h3>
+        {state.error ? (
+          <Alert severidade="erro" destacado={!!state.bloqueioConta}>
+            {state.error}
+          </Alert>
+        ) : null}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Disciplina" htmlFor="disciplina">
+            <Select name="disciplina" required>
+              <SelectTrigger id="disciplina">
+                <SelectValue placeholder="Selecione a disciplina" />
+              </SelectTrigger>
+              <SelectContent>
+                {disponiveis.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field
+            label="Carga horária semanal"
+            htmlFor="horasAlvoSemana"
+            // O passo de 30min não é preferência de UI: é o CHECK
+            // `patient_alvo_horas_passo` no banco. Dizer aqui evita que o
+            // coordenador descubra a regra por mensagem de erro.
+            hint={`De 30 em 30 minutos, até ${formatarHoras(HORAS_MAX_SEMANA)} por semana. Ex.: 1,5 = 1h30.`}
+          >
+            <Input
+              id="horasAlvoSemana"
+              name="horasAlvoSemana"
+              type="number"
+              min={HORAS_PASSO}
+              max={HORAS_MAX_SEMANA}
+              step={HORAS_PASSO}
+              inputMode="decimal"
+              required
+            />
+          </Field>
+        </div>
+        <div>
+          <Button type="submit" isLoading={isPending} tamanho="sm">
+            {isPending ? "Salvando prescrição..." : "Salvar prescrição"}
+          </Button>
+        </div>
+      </form>
+    </>
   );
 }
 
@@ -241,7 +254,13 @@ function LinhaPrescricao({
   const { addToast } = useToast();
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
   const horasAtuais = Number(prescricao.horasAlvoSemana);
+  const confirmacao = state.confirmacao;
 
+  // §MV4: o handoff para a barra da disciplina sobrealocada NÃO mora aqui.
+  // Represcrever insere uma linha nova (SCD2), a `key` desta linha muda e este
+  // componente desmonta na revalidação — um efeito de navegação daqui perde a
+  // corrida com a própria gravação que deveria segui-lo. Quem redireciona é
+  // `prescreverDisciplinaAction`, no servidor.
   useEffect(() => {
     if (!state.ok) return;
     addToast({
@@ -304,6 +323,12 @@ function LinhaPrescricao({
         </Button>
       </form>
 
+      <ConfirmarSobrealocacaoDialog
+        confirmacao={confirmacao}
+        formAction={formAction}
+        isPending={isPending}
+      />
+
       <Dialog
         open={confirmandoEncerrar}
         onOpenChange={(aberto) => {
@@ -330,6 +355,10 @@ function LinhaPrescricao({
             >
               Cancelar
             </Button>
+            {/* Sem `onClick` que feche: fechar aqui desmontava o `<form>` no
+                MESMO clique, e o submit ficava dependendo de o evento
+                sobreviver ao unmount — o encerramento não acontecia. O diálogo
+                sai de cena sozinho quando a revalidação remove esta linha. */}
             <form
               action={encerrarPrescricaoAction.bind(
                 null,
@@ -337,12 +366,7 @@ function LinhaPrescricao({
                 prescricao.disciplina,
               )}
             >
-              <Button
-                type="submit"
-                risco="alto"
-                tamanho="sm"
-                onClick={() => setConfirmandoEncerrar(false)}
-              >
+              <Button type="submit" risco="alto" tamanho="sm">
                 Encerrar prescrição
               </Button>
             </form>

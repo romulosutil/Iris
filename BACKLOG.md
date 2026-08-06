@@ -359,25 +359,130 @@ o anúncio pobre que o teste existe para impedir. `pnpm test` **964/964**
 (`agenda2-janela-actions`, `conta-somente-leitura-rls`, 2 erros de
 `react-hooks/set-state-in-effect` em `agenda/semana/`).
 
-### Fatia 6 — o que já está pronto para ela (represcrição MV4 + toast)
+### Fatia 6 — represcrição com confirmação (MV4) + toast de devolução (PR #208)
 
-- **A leitura da sobrealocação já existe e é derivada**: `calcularCobertura` →
-  `estado === "sobrealocada"` + `horasExcedentes`. A confirmação da fatia 6
-  ("esta redução deixa a disciplina sobrealocada") deve **ler** isso, nunca
-  replicar a regra nem persistir flag.
-- **A copy da consequência já está escrita e testada** (`textoCobertura` no
-  estado sobrealocado) — o diálogo de confirmação e a tela de equipe devem falar
-  a mesma frase, não duas paráfrases que divergem.
-- **`encerrarVinculoEquipe` já devolve `{ disciplina, horasDevolvidas }`** (0 em
-  papel de gestão, por D-C) — é o que o toast de devolução de saldo (§3.3)
-  precisa para nomear o número que mudou na tela, junto com o corte de acesso
-  imediato (D-A).
-- **`Dialog` do design system** é o componente previsto pelo §MV4; o padrão de
-  confirmação com `useActionState` (`bloqueioConta` separado de `error`) já está
-  nas fatias 3 e 4.
-- Depois de confirmar, a fatia 6 leva o coordenador **para a tela de equipe** —
-  o trabalho não termina no salvar, termina no ajuste. A barra desta fatia é o
-  destino dessa navegação.
+**Sem migração e sem regra nova.** As duas contas já existiam (`calcularCobertura`
+da fatia 4, `textoCobertura` da 5); o que faltava eram os dois momentos em que o
+produto precisa **falar** — antes de salvar uma redução que sobrealoca, e depois
+de encerrar um vínculo.
+
+O que entrou:
+
+- **Confirmação ANTES, não aviso depois (§MV4).** Ao detectar no submit que a
+  nova carga é menor que o alocado vigente, `prescreverDisciplina` **não salva**:
+  devolve `confirmacao` (disciplina, horas atuais, horas novas, alocado, frase).
+  Reduzir continua permitido — travar obrigaria a desmontar a equipe para depois
+  corrigir a prescrição, ordem que a clínica não segue.
+- **A frase do diálogo é a MESMA da barra**, por construção: vem de
+  `textoCobertura` passando por `calcularCobertura`, não de paráfrase escrita à
+  mão. Duas redações da mesma consequência divergem, e a que o coordenador lê ao
+  confirmar deixaria de ser a que ele encontra na tela de destino.
+- **A soma da confirmação roda sob o MESMO advisory lock da alocação**
+  (`patientId:disciplina`, namespace 203) e dentro da transação que grava: entre
+  ler o diálogo e clicar em "Salvar mesmo assim", o pedido é revalidado do zero.
+- **Depois de confirmar, o coordenador vai para a barra da disciplina afetada** —
+  `ancoraCobertura()` em `cobertura.ts` gera o `id` e o link do mesmo lugar, para
+  âncora montada em dois pontos não divergir no primeiro acento. O trabalho não
+  termina no salvar, termina no ajuste.
+- **Encerrar vínculo agora confirma antes e explica depois (D-A + §3.3).**
+  `encerrarVinculoAction` deixou de retornar `void` — o encerramento acontecia e
+  a tela só piscava. Novo `EncerrarVinculoForm` pergunta antes (o corte de acesso
+  ao prontuário é imediato e total) e o toast diz as **duas** consequências:
+  o saldo que voltou e o acesso que caiu.
+- **`saldoTexto` é lido depois do UPDATE e na mesma transação.** Fora dela, uma
+  alocação concorrente faria o toast citar um saldo que nunca existiu; sem o
+  filtro de vigência, o vínculo recém-encerrado voltaria para a soma e o toast
+  diria que nada mudou. Em vínculo fora da prescrição (§3.1) o campo vem
+  `undefined`: não há teto a nomear, e "0h de 0h" seria número inventado.
+
+Verificação — **mutação rodada, não presumida**: removendo o filtro
+`vigencia_fim IS NULL` da soma da confirmação, o caso "vínculo ENCERRADO não
+conta" cai (era a sobrealocação fantasma de §4.5 aparecendo). 8 testes de
+integração novos (5 de represcrição + 3 de encerramento). `pnpm test` 964/964 ·
+`typecheck` limpo · `test:rls` 698 passando, `lint` e as 2 falhas restantes
+**exatamente as mesmas pré-existentes** já registradas acima (confirmado por
+`git stash`).
+
+#### Revisão adversarial da PR #208 — o que ela pegou
+
+Toda a lógica de risco da fatia estava no cliente, e os 8 testes eram todos de
+servidor. Foi exatamente ali que estavam os dois bloqueantes:
+
+- **O diálogo de confirmação existia só dentro da linha vigente.**
+  `prescreverDisciplinaAction` é a mesma action do formulário de prescrição
+  NOVA, que recebia `confirmacao` e não sabia lê-la: nada salvava, nada
+  aparecia, o submit virava clique sem efeito — o defeito que a fatia existe
+  para matar, reintroduzido no formulário irmão. E o caminho é real: encerrar a
+  prescrição mantém os vínculos, prescrever de novo com carga menor cai ali.
+  O diálogo virou `ConfirmarSobrealocacaoDialog`, compartilhado pelos dois.
+- **O diálogo não fechava por Esc, X nem overlay.** `open` derivava de
+  `state.confirmacao`, que só muda no próximo submit; `onOpenChange` não tinha
+  como baixá-lo. Com o focus trap do Radix, quem navega por teclado ficava
+  preso, e a única saída era um `window.location.reload()` que jogava fora as
+  edições não salvas do resto do cadastro. Agora o descarte é local (guarda o
+  objeto da confirmação: resposta nova reabre sozinha, sem efeito de reset).
+
+Correções menores da mesma revisão:
+
+- **Sem prescrição vigente, `horasAtuais` vem `undefined`** — "passa de 0h para
+  10h" afirmava um teto que nunca existiu, a mesma mentira educada que o
+  encerramento de vínculo já se recusava a contar.
+- **O papel passou a ser filtrado por `PAPEIS_QUE_CONSOMEM_SALDO`**, não por
+  exclusão de `coordenador_referencia`. Empatam com os três papéis do CHECK
+  atual; um quarto papel faria a represcrição e a barra discordarem em silêncio.
+- **`avisoSemHoras` acompanha a frase**: com vínculo sem horas, o diálogo
+  mostrava uma frase e a barra de destino duas — divergência por omissão.
+- **O lock serializa a corrida, não a detecta.** O confirm passou a ecoar
+  `horasAtuaisEsperadas`; se o teto mudou enquanto o diálogo estava aberto, a
+  gravação é recusada em vez de apagar a decisão do outro coordenador.
+- **`isLoading` deixou de ser adorno**: os diálogos não fecham mais no `onClick`
+  do submit, então o botão cobre o roundtrip inteiro e o submit não depende de
+  o evento sobreviver ao unmount do próprio `<form>`.
+- **A barra de destino ficou focável** (`tabIndex={-1}` + região rotulada): o
+  handoff movia scroll, e scroll não é foco — quem usa leitor de tela confirmava
+  a redução e continuava no contexto antigo.
+
+Cobertura nova: 6 testes de componente (5 do diálogo + 1 que reproduz o submit
+mudo da prescrição nova) e 6 de integração (recusa por teto mudado, confirm sem
+o teto lido, prescrição nova sobre equipe legada, vínculo sem horas no aviso,
+`substituto` na conta). `pnpm test` **970/970** · `typecheck` limpo · `lint` só
+as 2 falhas pré-existentes de `react-hooks/set-state-in-effect` em
+`agenda/semana/`.
+
+#### O que só o E2E pegou (`e2e/represcricao-mv4.spec.ts`)
+
+Dois defeitos que passavam por 970 unitários + 703 de integração, porque os dois
+só existem no navegador:
+
+- **O handoff de §MV4 nunca acontecia.** Represcrever é SCD2: fecha a linha
+  vigente e insere OUTRA, com id novo. O `revalidatePath` re-renderiza a lista,
+  a `key` do `<li>` muda, `LinhaPrescricao` **desmonta** — e leva junto o
+  `useActionState` e o `useEffect` que fariam o `router.push`. O coordenador
+  confirmava a redução e ficava parado na tela onde não há o que fazer, que é
+  exatamente o "descobrir depois" que a fatia existe para eliminar. **Regra que
+  fica:** navegação que segue uma gravação SCD2 não pode morar num efeito do
+  componente que a gravação substitui — vai no `redirect()` do servidor.
+- **"Encerrar prescrição" não encerrava** (defeito **pré-existente**, da fatia
+  2). O `onClick` do submit fechava o diálogo no mesmo clique, desmontando o
+  `<form>` antes do envio. Mesmo padrão que a fatia 6 tinha copiado para
+  `EncerrarVinculoForm`; os dois foram corrigidos. **Regra que fica:** diálogo
+  de confirmação fecha quando a action responde, nunca no `onClick` do submit.
+
+Achados de ambiente, todos anteriores a esta PR e ainda **abertos**:
+
+- `playwright.config.ts` não carrega `.env`, e `entrarComMfa` fala com o banco
+  direto: sem `AUTH_DATABASE_URL` exportada a suíte morre na primeira linha.
+- **`.env.local` aponta `NEXT_PUBLIC_APP_URL`/`BETTER_AUTH_URL`/`TRUSTED_ORIGINS`
+  para produção.** Carregá-lo para pegar o `BETTER_AUTH_SECRET` faz o Playwright
+  rodar contra o ambiente real — aconteceu nesta sessão (duas tentativas de
+  login com credencial local, recusadas por prod). Vale um `.env.e2e` ou um
+  guard no config que recuse `baseURL` não-local.
+- `webServer` chama `pnpm start` e quebra quando o pnpm do PATH diverge do
+  `packageManager` (corepack 11.16.0 × 11.11.0 declarado).
+- `login.spec.ts` e `cadastro-clinico.spec.ts` estão **defasados**: asseram `/`
+  (o shell hoje cai em `/agenda`), clicam "Salvar e continuar" (hoje "Salvar e
+  prescrever a carga horária") e tratam o consentimento como botão (hoje
+  `role="radio"`). Não corrigidos aqui — fora do escopo da #203.
 
 ---
 
