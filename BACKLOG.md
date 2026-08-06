@@ -144,7 +144,7 @@ Dois achados que mudaram código durante a verificação:
 - **`SELECT … FOR UPDATE` não serve nesta tabela.** O row lock do Postgres exige
   `UPDATE` em **nível de tabela**, e a `0077` passou a conceder por coluna — o
   `FOR UPDATE` do plano §4.4 falharia como `permission denied for table
-  patient_alvo_disciplina`. Serialização feita com `pg_advisory_xact_lock`, que
+patient_alvo_disciplina`. Serialização feita com `pg_advisory_xact_lock`, que
   não depende de privilégio de tabela e morre com a transação. **A fatia 4
   precisa disso**: o plano prevê `FOR UPDATE` do alvo vigente para o TOCTOU da
   equipe, e esse caminho está fechado.
@@ -242,12 +242,85 @@ Os outros seis:
   agora é `Tx` → `Promise<ProtocoloCatalogo[]>`.
 - O SQL de verificação buscava objeto sem qualificar schema (`search_path`
   decidia). Homônimo em outro schema daria `PASSOU` falso — num arquivo que
-  existe justamente para não deixar ninguém *achar* que mediu.
+  existe justamente para não deixar ninguém _achar_ que mediu.
 
 Depois dos ajustes: 11 unitários do agrupamento + 11 de integração de protocolo
 verdes, `typecheck` limpo, `eslint` limpo no diretório tocado, e `test:rls`
 678 casos com **as mesmas duas falhas pré-existentes** (`agenda2-janela-actions`
 e `conta-somente-leitura-rls`).
+
+### Fatia 4 entregue — a equipe passa a CONSUMIR o saldo prescrito
+
+**Sem migração.** A `0076` já tinha posto coluna, CHECKs, índice único parcial e
+grant; o que faltava era a aplicação passar a usá-los. Até aqui a tela de equipe
+aceitava disciplina em texto livre e nenhuma hora — dava para alocar 40h de Fono
+num paciente com 8h prescritas e nada avisava.
+
+O que mudou de natureza:
+
+- **Disciplina deixou de ser texto livre.** O dropdown lista só prescritas
+  vigentes e a opção `Outra` + campo livre **saiu**; no lugar entra o link
+  `Prescrever outra disciplina →`. O servidor confirma contra o banco, não
+  contra o form — e grava a **grafia prescrita**, não a que veio do cliente,
+  senão `"fonoaudiologia"` alocado contra `"Fonoaudiologia"` prescrito partiria
+  o saldo em dois em silêncio.
+- **Horas obrigatórias em papel que consome (D-D) e proibidas em
+  `coordenador_referencia` (D-C).** O campo some no papel de gestão em vez de
+  ficar desabilitado — desabilitado sem explicação ocupa espaço e não diz o que
+  fazer.
+- **Edição de vínculo vigente** (`editarMembroEquipe`), que não existia. Sem
+  ela, corrigir 8h digitadas como 18h exigiria encerrar o vínculo — e encerrar
+  **corta o acesso ao prontuário na hora** (D-A) e registra no histórico uma
+  saída que nunca aconteceu. Erro de digitação não pode custar evento clínico
+  falso.
+- **Estado vazio MV2**: sem prescrição, o formulário fica **oculto** (não
+  desabilitado) e a tela mostra `Ir para a prescrição →`.
+- **Três blocos na lista**, porque são três coisas diferentes: quem entrega a
+  carga, `Gestão do caso` (fora da conta, D-C) e `Fora da prescrição atual`
+  (legado). Mais o chip `Horas não definidas` — vínculo legado sem carga é
+  dívida **visível**, senão a barra afirma 8h/20h enquanto cinco terapeutas
+  atendem.
+
+Decisões de implementação que valem registro (divergem do plano por medição):
+
+- **O lock é `pg_advisory_xact_lock`, não `SELECT … FOR UPDATE`** como o plano
+  §4.4 previa. Motivo medido na fatia 2 e válido aqui também: o row lock exige
+  privilégio de UPDATE em **nível de tabela**, e tanto a `0044` (equipe) quanto a
+  `0077` (prescrição) revogaram UPDATE de tabela e concedem coluna a coluna — o
+  `FOR UPDATE` falharia com `permission denied for table …`. A chave é a **mesma**
+  de `prescricao-logic.ts` (`patientId:disciplina`, namespace 203) de propósito:
+  represcrever e alocar ao mesmo tempo também é corrida.
+- **Edição trava as DUAS disciplinas em ordem alfabética.** Alterar disciplina
+  move carga entre dois saldos; sem ordem determinística, uma transação pegando
+  Fono→TO e outra TO→Fono deadlockam.
+- **`ignorarMembershipId` na validação compartilhada.** Sem ele, editar as
+  próprias 8h para 10h contaria as 8h antigas junto (18 contra 10) e recusaria
+  alteração cabível.
+- **O Drizzle embrulha o erro do driver.** `DrizzleQueryError` guarda o
+  `PostgresError` em `cause`, então checar `code === '23505'` só no topo devolve
+  `false` sempre — o duplo-clique, que é o caso comum, chegaria como 500 em vez
+  da frase amigável. A cadeia de `cause` é percorrida. **Este bug passou verde
+  na primeira rodada e só apareceu porque o teste de duplo-clique existia.**
+- **`calcularCobertura` é módulo puro** (`equipe/cobertura.ts`), usado pela tela
+  e pela validação. Duplicar a agregação faria o coordenador ler "restam 8h" e
+  receber recusa ao alocar 8h. A fatia 5 renderiza esta saída sem recalcular.
+- **Encerrar filtra `vigencia_fim IS NULL` no `WHERE`**: sem isso, reencerrar
+  moveria a data de saída de quem saiu em março para hoje.
+
+Verificação: 17 testes de integração da equipe + 15 unitários de cobertura,
+todos verdes. `pnpm test` 942/942 · `typecheck` limpo · `lint` e `test:rls` com
+**exatamente as mesmas falhas pré-existentes** já registradas acima (confirmado
+por `git stash`).
+
+### Fatia 5 — o que já está pronto para ela
+
+`calcularCobertura` devolve os quatro estados de MV3 (`vazio` / `parcial` /
+`completa` / `sobrealocada`) com `horasAlvo`, `horasAlocadas`, `horasRestantes`,
+`horasExcedentes`, `percentual` e `vinculosSemHoras` — os quatro estados já têm
+teste unitário. A tela hoje imprime a frase de estado por extenso; **falta**
+trocar o cartão por `Progress` + `StatusBadge` do design system com
+`role="progressbar"` e `aria-valuenow/min/max`, e as stories dos quatro estados.
+Nenhuma conta nova é necessária.
 
 ---
 
