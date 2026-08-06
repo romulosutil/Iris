@@ -45,6 +45,18 @@ export async function listarTodosPacientes(
         // disciplinas prescritas não pode virar três linhas na lista.
         // `vigencia_fim IS NULL` é o mesmo filtro de vigência usado em todo o
         // #203 — prescrição encerrada não conta como prescrição.
+        //
+        // Paciente sem nenhuma linha em `patient_alvo_disciplina` (legado
+        // anterior ao #203, ou cadastrado e ainda não prescrito) cai no ramo
+        // vazio do EXISTS: `temPrescricao = false`, selo `Sem prescrição`. É o
+        // resultado desejado — não há retrocompatibilidade a preservar aqui,
+        // porque antes do #203 o alvo não tinha histórico e o cadastro nunca
+        // gravava vigência.
+        //
+        // Se um dia a exclusão de prescrição virar lógica (coluna tipo
+        // `excluido_em`) em vez do encerramento SCD2 atual, este predicado
+        // precisa ganhar o filtro novo junto — `vigencia_fim IS NULL` sozinho
+        // passaria a contar linha excluída como prescrição vigente.
         temPrescricao: exists(
           tx
             .select({ um: sql`1` })
