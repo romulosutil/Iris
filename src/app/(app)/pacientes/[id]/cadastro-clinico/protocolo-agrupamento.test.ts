@@ -86,6 +86,32 @@ describe("agrupamento de protocolo por disciplina prescrita (fatia 3)", () => {
     expect(r.grupos[0]!.ativos.map((a) => a.vinculoId)).toEqual(["v1"]);
   });
 
+  test("vínculo cujo protocolo não está no catálogo aparece degradado, não some", () => {
+    // O catálogo é deduplicado por NOME (`obterOuInicializarProtocolosDaClinica`):
+    // duas linhas `protocol` de mesmo nome fazem um id desaparecer da lista. Um
+    // vínculo vigente apontando para esse id ficaria vivo no banco e invisível
+    // na tela — sem grupo e sem bloco de órfãos, portanto sem como desencaixar.
+    const r = agruparProtocolosPorPrescricao(["ABA"], CATALOGO, [
+      { id: "v9", protocolId: "id-que-sumiu", desativadoEm: null },
+    ]);
+    expect(r.foraDaPrescricao).toHaveLength(1);
+    expect(r.foraDaPrescricao[0]!.vinculoId).toBe("v9");
+    expect(r.foraDaPrescricao[0]!.foraDoCatalogo).toBe(true);
+    expect(r.grupos.flatMap((g) => g.ativos)).toHaveLength(0);
+  });
+
+  test("prescrição repetida em caixa/espaço diferente rende um grupo só", () => {
+    // O índice único de vigência (0077) é sobre a coluna crua, então "ABA" e
+    // " aba " coexistem como prescrições vigentes. Dois grupos idênticos dariam
+    // chave React repetida e dois cartões comandando o MESMO vínculo.
+    const r = agruparProtocolosPorPrescricao(["ABA", " aba "], CATALOGO, [
+      { id: "v1", protocolId: "p1", desativadoEm: null },
+    ]);
+    expect(r.grupos).toHaveLength(1);
+    expect(r.grupos[0]!.disciplina).toBe("ABA");
+    expect(r.grupos.flatMap((g) => g.ativos)).toHaveLength(1);
+  });
+
   test("vínculo ativo duplicado do mesmo protocolo rende um cartão só (legado)", () => {
     const r = agruparProtocolosPorPrescricao(["ABA"], CATALOGO, [
       { id: "v1", protocolId: "p1", desativadoEm: null },

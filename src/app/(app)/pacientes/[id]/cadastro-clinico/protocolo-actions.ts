@@ -39,6 +39,7 @@ export async function desativarProtocoloAction(
 ): Promise<ProtocoloState> {
   const r = await desativarProtocolo(
     await getTenantContext(),
+    patientId,
     patientProtocolId,
   );
   if (r.ok) revalidatePath(`/pacientes/${patientId}/cadastro-clinico`);

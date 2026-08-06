@@ -37,6 +37,11 @@ export type VinculoProtocolo = {
 export type ProtocoloVinculado = {
   protocolo: ProtocoloCatalogo;
   vinculoId: string;
+  /**
+   * Vínculo vigente cujo `protocolId` não existe no catálogo recebido — o nome
+   * e a disciplina são um marcador, não dado real. Ver `foraDaPrescricao`.
+   */
+  foraDoCatalogo?: boolean;
 };
 
 export type GrupoDisciplina = {
@@ -48,7 +53,18 @@ export type GrupoDisciplina = {
 export type AgrupamentoProtocolos = {
   /** Um grupo por disciplina prescrita vigente, na ordem em que foi recebida. */
   grupos: GrupoDisciplina[];
-  /** Vínculos ativos cuja disciplina não está prescrita hoje. */
+  /**
+   * Vínculos ativos que não couberam em nenhum grupo: disciplina não prescrita
+   * hoje, **ou** protocolo ausente do catálogo recebido.
+   *
+   * Derivado dos VÍNCULOS, não do catálogo, de propósito. Varrer o catálogo
+   * deixaria de fora justamente o vínculo cujo protocolo não está lá — e o
+   * catálogo é deduplicado por `nome` (`obterOuInicializarProtocolosDaClinica`),
+   * então duas linhas `protocol` de mesmo nome fazem um id sumir. Esse vínculo
+   * ficaria vivo no banco sem aparecer em lugar nenhum nem ter como ser
+   * desencaixado pela UI, que é exatamente o estado que este bloco existe para
+   * impedir.
+   */
   foraDaPrescricao: ProtocoloVinculado[];
 };
 
@@ -70,7 +86,18 @@ export function agruparProtocolosPorPrescricao(
   catalogo: ProtocoloCatalogo[],
   vinculos: VinculoProtocolo[],
 ): AgrupamentoProtocolos {
-  const prescritas = new Set(disciplinasPrescritas.map(chave));
+  // Deduplicação por chave normalizada, não pelo texto cru: o índice único
+  // `patient_alvo_unico_vigente` (0077) é sobre a coluna crua, então "ABA" e
+  // " aba " podem ser duas prescrições vigentes do mesmo paciente. Sem isto,
+  // sairiam dois grupos idênticos — chave React repetida, e dois cartões
+  // comandando o MESMO vínculo.
+  const prescritas = new Set<string>();
+  const disciplinasUnicas: string[] = [];
+  for (const d of disciplinasPrescritas) {
+    if (prescritas.has(chave(d))) continue;
+    prescritas.add(chave(d));
+    disciplinasUnicas.push(d);
+  }
 
   // Só vínculo vigente entra na conta — desativado é histórico, e é histórico
   // de propósito (desativar nunca deleta). Um `desativadoEm` esquecido aqui
@@ -85,7 +112,7 @@ export function agruparProtocolosPorPrescricao(
     }
   }
 
-  const grupos: GrupoDisciplina[] = disciplinasPrescritas.map((disciplina) => {
+  const grupos: GrupoDisciplina[] = disciplinasUnicas.map((disciplina) => {
     const daDisciplina = catalogo.filter(
       (p) => chave(p.disciplina) === chave(disciplina),
     );
@@ -101,12 +128,29 @@ export function agruparProtocolosPorPrescricao(
     };
   });
 
-  const foraDaPrescricao: ProtocoloVinculado[] = catalogo
-    .filter(
-      (p) =>
-        ativosPorProtocolo.has(p.id) && !prescritas.has(chave(p.disciplina)),
-    )
-    .map((p) => ({ protocolo: p, vinculoId: ativosPorProtocolo.get(p.id)! }));
+  const porId = new Map(catalogo.map((p) => [p.id, p]));
+  const foraDaPrescricao: ProtocoloVinculado[] = [];
+  for (const [protocolId, vinculoId] of ativosPorProtocolo) {
+    const protocolo = porId.get(protocolId);
+    if (!protocolo) {
+      // Protocolo sumiu do catálogo (id descartado pela deduplicação por nome,
+      // linha removida da tabela). O vínculo continua vigente no banco: ele
+      // aparece aqui degradado para que exista a saída de desencaixar.
+      foraDaPrescricao.push({
+        protocolo: {
+          id: protocolId,
+          nome: "Protocolo fora do catálogo",
+          disciplina: "",
+        },
+        vinculoId,
+        foraDoCatalogo: true,
+      });
+      continue;
+    }
+    if (!prescritas.has(chave(protocolo.disciplina))) {
+      foraDaPrescricao.push({ protocolo, vinculoId });
+    }
+  }
 
   return { grupos, foraDaPrescricao };
 }

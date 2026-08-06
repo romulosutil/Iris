@@ -296,10 +296,21 @@ function ProtocoloAtivo({
             {state.error}
           </Alert>
         ) : null}
+        {item.foraDoCatalogo && (
+          <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
+            O protocolo deste vínculo não está mais no catálogo da clínica,
+            então não dá para dizer a que disciplina ele pertencia. Desencaixar
+            é a única ação possível aqui.
+          </p>
+        )}
         <div className="flex items-center justify-between gap-2">
-          <Chip variante="info">
-            {formatarDisciplina(item.protocolo.disciplina)}
-          </Chip>
+          {item.foraDoCatalogo ? (
+            <span />
+          ) : (
+            <Chip variante="info">
+              {formatarDisciplina(item.protocolo.disciplina)}
+            </Chip>
+          )}
           <Button
             type="button"
             risco="alto"

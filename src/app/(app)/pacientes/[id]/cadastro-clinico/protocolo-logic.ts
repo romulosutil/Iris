@@ -5,6 +5,7 @@ import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import { protocol, patientProtocol, patientAlvoDisciplina } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { formatarDisciplina } from "@/lib/disciplinas";
+import type { ProtocoloCatalogo } from "./protocolo-agrupamento";
 
 export type ProtocoloState = {
   ok?: boolean;
@@ -107,6 +108,7 @@ export const ativarProtocolo = comEscrita(ativarProtocoloCore);
 
 async function desativarProtocoloCore(
   ctx: TenantContext,
+  patientId: string,
   patientProtocolId: string,
 ): Promise<ProtocoloState> {
   requireRole(ctx, "coordenador");
@@ -121,6 +123,10 @@ async function desativarProtocoloCore(
       .where(
         and(
           eq(patientProtocol.id, patientProtocolId),
+          // O paciente entra no predicado, e não só no `revalidatePath`: a RLS
+          // enxerga a clínica inteira, então um id de vínculo de OUTRO paciente
+          // desta clínica desativaria a linha e revalidaria a página errada.
+          eq(patientProtocol.patientId, patientId),
           isNull(patientProtocol.desativadoEm),
         ),
       )
@@ -141,16 +147,25 @@ async function desativarProtocoloCore(
 
 export const desativarProtocolo = comEscrita(desativarProtocoloCore);
 
+/**
+ * O retorno é tipado como `ProtocoloCatalogo[]` porque desce direto para o
+ * agrupamento e para a tela. Com o `any` anterior, mudar uma coluna do catálogo
+ * não quebrava nada em tempo de compilação — quebrava na renderização.
+ */
 export async function obterOuInicializarProtocolosDaClinica(
-  tx: any,
+  tx: Tx,
   clinicId: string,
-) {
+): Promise<ProtocoloCatalogo[]> {
   let catalogo = await tx
-    .select()
+    .select({
+      id: protocol.id,
+      nome: protocol.nome,
+      disciplina: protocol.disciplina,
+    })
     .from(protocol)
     .where(eq(protocol.clinicId, clinicId));
 
-  const nomesExistentes = new Set(catalogo.map((p: any) => p.nome));
+  const nomesExistentes = new Set(catalogo.map((p) => p.nome));
 
   const padroes = [
     {
