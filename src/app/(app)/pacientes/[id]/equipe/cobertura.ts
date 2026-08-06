@@ -22,7 +22,7 @@
  * aparece em paciente com histórico e nunca em dado de teste novo.
  */
 
-import { papelConsomeSaldo, parseHoras } from "@/lib/horas";
+import { formatarHoras, papelConsomeSaldo, parseHoras } from "@/lib/horas";
 
 export type PrescricaoParaCobertura = {
   disciplina: string;
@@ -131,6 +131,70 @@ export function calcularCobertura(
       };
     })
     .sort((a, b) => a.disciplina.localeCompare(b.disciplina, "pt-BR"));
+}
+
+/**
+ * Rótulo curto do estado, para o selo ao lado da barra (#203, fatia 5).
+ *
+ * O selo é REFORÇO: quem só vê a cor da barra lê o estado aqui, e quem usa
+ * leitor de tela recebe a frase inteira de `textoCobertura`. Nenhum dos dois
+ * depende de matiz — cor sozinha nunca carrega significado (§MV3).
+ */
+export const ROTULO_ESTADO: Record<EstadoCobertura, string> = {
+  vazio: "Sem alocação",
+  parcial: "Em construção",
+  completa: "Cobertura completa",
+  sobrealocada: "Sobrealocada",
+};
+
+/**
+ * A frase da tabela de MV3, por extenso. É simultaneamente o texto visível e o
+ * `aria-valuetext` da barra — um texto só, para o que o leitor de tela anuncia
+ * e o que está na tela nunca divergirem.
+ *
+ * Mora aqui, e não no componente, porque é regra de copy testável sem DOM: a
+ * diferença entre "restam 8h" e "sobrealocação de 5h" é clínica, não visual.
+ * Toda hora passa por `formatarHoras` (D-E): `1h30`, nunca `1,5h`.
+ */
+export function textoCobertura(c: CoberturaDisciplina): string {
+  const alvo = formatarHoras(c.horasAlvo);
+  const alocadas = formatarHoras(c.horasAlocadas);
+  const base = `${alocadas} de ${alvo} alocadas`;
+
+  switch (c.estado) {
+    case "vazio":
+      // Sem percentual: "0%" não acrescenta nada a "nenhum terapeuta vinculado"
+      // e a frase precisa dizer o que FALTA, não repetir o número.
+      return `${base} — nenhum terapeuta vinculado`;
+    case "completa":
+      return `${base} — cobertura completa`;
+    case "sobrealocada":
+      // A instrução faz parte da frase: sobrealocação não trava a tela (§MV3),
+      // então o único caminho de saída precisa estar escrito onde o problema
+      // aparece — inclusive para quem só ouve a barra.
+      return `${base} (${c.percentual}%) — sobrealocação de ${formatarHoras(
+        c.horasExcedentes,
+      )}. Reduza as horas de um membro ou aumente a prescrição.`;
+    case "parcial":
+      return `${base} (${c.percentual}%) — restam ${formatarHoras(
+        c.horasRestantes,
+      )}`;
+  }
+}
+
+/**
+ * Aviso de que a conta acima está incompleta.
+ *
+ * Vínculo vigente que consome mas não tem horas registradas (legado) faz a
+ * barra afirmar `8h de 20h` enquanto cinco terapeutas atendem. O número não
+ * está errado — está incompleto, e a diferença precisa estar escrita.
+ * Devolve `null` quando não há o que avisar, para a tela não renderizar caixa
+ * vazia.
+ */
+export function textoVinculosSemHoras(c: CoberturaDisciplina): string | null {
+  if (c.vinculosSemHoras <= 0) return null;
+  const plural = c.vinculosSemHoras === 1 ? "vínculo" : "vínculos";
+  return `${c.vinculosSemHoras} ${plural} sem horas definidas — a conta acima está incompleta até você defini-las.`;
 }
 
 /**

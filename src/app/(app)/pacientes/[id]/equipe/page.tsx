@@ -14,6 +14,7 @@ import { formatarDisciplina } from "@/lib/disciplinas";
 import { formatarHoras, papelConsomeSaldo } from "@/lib/horas";
 import { encerrarVinculoAction } from "./actions";
 import { calcularCobertura, chaveDisciplina } from "./cobertura";
+import { BarraCobertura } from "./barra-cobertura";
 import {
   AdicionarMembroForm,
   type DisciplinaComSaldo,
@@ -157,6 +158,10 @@ export default async function EquipePage({
     horasAlvo: c.horasAlvo,
     horasRestantes: c.horasRestantes,
   }));
+
+  // Derivada, nunca coluna: a sobrealocação some sozinha assim que as horas
+  // caem, sem ninguém precisar limpar flag.
+  const sobrealocadas = cobertura.filter((c) => c.estado === "sobrealocada");
 
   const temPrescricao = alvosCarga.length > 0;
   const prescritas = new Set(
@@ -324,10 +329,11 @@ export default async function EquipePage({
           </Button>
         </div>
       ) : (
-        /* Resumo de consumo por disciplina. A barra de cobertura com os 4
-           estados, a11y e copy final é a fatia 5 — aqui já se lê o número certo,
-           calculado pelo MESMO `calcularCobertura` que a fatia 5 vai renderizar,
-           para tela e validação nunca discordarem sobre o mesmo saldo. */
+        /* Objeto de leitura PRIMÁRIA da tela (§MV3): uma barra por disciplina
+           prescrita, inclusive as em 0% — é a linha vazia que mostra o buraco.
+           O render não recalcula nada: consome a saída de `calcularCobertura`,
+           a mesma que valida o saldo no servidor, para tela e validação nunca
+           discordarem sobre o mesmo número. */
         <div className="flex flex-col gap-3 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow-sm)]">
           <div className="flex items-center justify-between">
             <h2 className="font-display flex items-center gap-2 text-base font-bold text-[var(--text-primary)]">
@@ -340,40 +346,22 @@ export default async function EquipePage({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
             {cobertura.map((c) => (
-              <div
-                key={c.disciplina}
-                className="flex flex-col gap-1.5 rounded-[var(--radius-xs)] border border-[var(--border-brutal)]/30 bg-[var(--surface-elevated)] p-3"
-              >
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-sm font-bold text-[var(--text-primary)]">
-                    {formatarDisciplina(c.disciplina)}
-                  </span>
-                  <span className="rounded bg-[var(--action-primary)] px-2 py-0.5 text-xs font-semibold text-black">
-                    {formatarHoras(c.horasAlvo)}/sem
-                  </span>
-                </div>
-
-                {/* Estado sempre por extenso, nunca só por cor (a11y é
-                    requisito do produto, não polimento). */}
-                <p className="text-xs font-semibold text-[var(--text-primary)]">
-                  {c.estado === "vazio"
-                    ? `${formatarHoras(0)} de ${formatarHoras(c.horasAlvo)} alocadas — nenhum terapeuta vinculado`
-                    : c.estado === "completa"
-                      ? `${formatarHoras(c.horasAlocadas)} de ${formatarHoras(c.horasAlvo)} alocadas — cobertura completa`
-                      : c.estado === "sobrealocada"
-                        ? `${formatarHoras(c.horasAlocadas)} de ${formatarHoras(c.horasAlvo)} alocadas (${c.percentual}%) — sobrealocação de ${formatarHoras(c.horasExcedentes)}`
-                        : `${formatarHoras(c.horasAlocadas)} de ${formatarHoras(c.horasAlvo)} alocadas (${c.percentual}%) — restam ${formatarHoras(c.horasRestantes)}`}
-                </p>
-
-                {c.vinculosSemHoras > 0 ? (
-                  <p className="text-xs text-[var(--text-secondary)]">
-                    {c.vinculosSemHoras} vínculo(s) sem horas definidas — a
-                    conta acima está incompleta até você defini-las.
-                  </p>
-                ) : null}
-              </div>
+              <BarraCobertura key={c.disciplina} cobertura={c} />
             ))}
           </div>
+
+          {sobrealocadas.length > 0 ? (
+            /* Sobrealocação é legítima e transitória — grita, não trava (§MV3).
+               O resumo existe porque a disciplina afetada pode estar fora da
+               dobra num paciente com muitas disciplinas prescritas. */
+            <p className="rounded-[var(--radius-xs)] border-2 border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-2.5 text-xs font-semibold text-[var(--status-error-fg)]">
+              {sobrealocadas.length === 1
+                ? `${formatarDisciplina(sobrealocadas[0]!.disciplina)} está sobrealocada em ${formatarHoras(sobrealocadas[0]!.horasExcedentes)}.`
+                : `${sobrealocadas.length} disciplinas estão sobrealocadas.`}{" "}
+              Reduza as horas de um membro ou aumente a prescrição na ficha
+              clínica. A operação continua liberada.
+            </p>
+          ) : null}
         </div>
       )}
 
