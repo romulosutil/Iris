@@ -8,40 +8,156 @@
 
 ## 🚀 Painel de Fases (Roadmap MVP)
 
-| Fase    | Tópico Principal                                        |              Status               | GitHub Milestone / Issue |
-| :------ | :------------------------------------------------------ | :-------------------------------: | :----------------------- |
-| **0.5** | Design System (Espectro Brutal)                         |           ✅ Concluído            | PR #1                    |
-| **1**   | Fundação de Dados & Auth (Fase 1a)                      |           ✅ Concluído            | PR #3                    |
-| **1b**  | Fundação Auth + Multi-tenancy                           |           ✅ Concluído            | PR #10                   |
-| **1c**  | Cadastro Clínico (ficha + protocolos + equipe)          |           ✅ Concluído            | Issue #4                 |
-| **1d**  | Agenda Mínima + Check-in                                |           ✅ Concluído            | Issue #11                |
-| **2**   | Metas & Diário por Texto                                |     ✅ Concluído (Planos 1-4)     | Issue #5                 |
-| **3**   | Extração de Evidências (IA)                             |           ✅ Concluído            | Issue #6 (fechada 13/07) |
-| **4**   | Evidências Acumuladas & Gráficos                        |           ✅ Concluído            | Issue #7                 |
-| **5**   | Relatórios de Convênio & Supervisão                     |           ✅ Concluído            | Issue #8                 |
-| **6**   | Hardening LGPD (fechamento MVP)                         | ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅) | Issue #9                 |
-| **6b**  | Ditado de Voz (áudio + ASR)                             |  📅 Fast-follow · gated por DPA   | Issue #72                |
+| Fase    | Tópico Principal                                        |                                              Status                                               | GitHub Milestone / Issue |
+| :------ | :------------------------------------------------------ | :-----------------------------------------------------------------------------------------------: | :----------------------- |
+| **0.5** | Design System (Espectro Brutal)                         |                                           ✅ Concluído                                            | PR #1                    |
+| **1**   | Fundação de Dados & Auth (Fase 1a)                      |                                           ✅ Concluído                                            | PR #3                    |
+| **1b**  | Fundação Auth + Multi-tenancy                           |                                           ✅ Concluído                                            | PR #10                   |
+| **1c**  | Cadastro Clínico (ficha + protocolos + equipe)          |                                           ✅ Concluído                                            | Issue #4                 |
+| **1d**  | Agenda Mínima + Check-in                                |                                           ✅ Concluído                                            | Issue #11                |
+| **2**   | Metas & Diário por Texto                                |                                     ✅ Concluído (Planos 1-4)                                     | Issue #5                 |
+| **3**   | Extração de Evidências (IA)                             |                                           ✅ Concluído                                            | Issue #6 (fechada 13/07) |
+| **4**   | Evidências Acumuladas & Gráficos                        |                                           ✅ Concluído                                            | Issue #7                 |
+| **5**   | Relatórios de Convênio & Supervisão                     |                                           ✅ Concluído                                            | Issue #8                 |
+| **6**   | Hardening LGPD (fechamento MVP)                         |                                 ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅)                                 | Issue #9                 |
+| **6b**  | Ditado de Voz (áudio + ASR)                             |                                  📅 Fast-follow · gated por DPA                                   | Issue #72                |
 | **7**   | Self-Service & Growth (onboarding + pagamento autônomo) | 🚧 Em construção (trial #175 ✅ · arquivamento #174 parcial · webhook ✅ · **cobrança pendente**) | Issue #36                |
-| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |           ✅ Concluído            | Issue #126               |
+| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |                                           ✅ Concluído                                            | Issue #126               |
 
 ## 🧾 Débitos técnicos abertos
 
 > Lista viva, não log de sessão. Item só sai daqui quando estiver **resolvido e verificado** — não quando a issue relacionada fechar. Cada linha diz o que dói, não só o que falta.
 
-| # | Débito | Por que dói | Onde |
-| :- | :----- | :---------- | :--- |
-| **D1** | **`pnpm db:generate` é armadilha neste repo.** O snapshot do Drizzle está dessincronizado das migrações escritas à mão: gerar produz SQL recriando tabelas e enums que já existem em produção (na Fase 7 foram 128 linhas). | Mitigado, **não resolvido**: o `CLAUDE.md` agora manda escrever migração à mão e descartar o que o `db:generate` produzir. A proteção é uma instrução que alguém precisa seguir — reconciliar o snapshot é o que fecha de verdade. | `db/migrations/meta/*_snapshot.json` · guardrail em `CLAUDE.md` |
-| **D2** | **Migração à mão exige `when` manual no `_journal.json`** (anterior + 1000). Se o `when` for ≤ o da última aplicada, o Drizzle **pula a migração em silêncio**. | Já causou incidente: a `0055` (fix do oráculo cross-tenant, #128) ficou fora do journal e nunca rodou em produção, com a issue fechada pelo diff (#165). Documentado no `CLAUDE.md`; o fim real seria um teste de CI que compara `_journal.json` com os `.sql` do diretório e com o que está aplicado. | `db/migrations/meta/_journal.json` · guardrail em `CLAUDE.md` |
-| **D3** | **`app_role` tem `GRANT` de tabela `INSERT`/`UPDATE`/`DELETE` em `clinic`** (herdado). Hoje inofensivo porque não há policy de escrita que case — a barreira é só a RLS, sem defesa em profundidade no nível de privilégio. | `clinic.isento_trial` é flag de billing: quem a ligasse sairia do gate de pagamento. Uma policy de escrita adicionada por distração no futuro abre tudo de uma vez. | Revogar e re-conceder coluna a coluna, como já se faz em `patient` (`0044`) |
-| **D4** | **Job de auto-arquivamento (90 dias) não existe** — só a regra pura `calcularStatusArquivamento`. Bloqueado por decisão de produto: "última atividade" atravessa `session_note`, `evidence` e `goal`. | Essa definição decide **o que a clínica paga**. Escolher de passagem é errar em cima de dinheiro do cliente. | #174 · padrão em `scripts/escalonamento-risco.mjs` (delega a função do banco, porque cruza clínicas) |
-| **D5** | ~~Sandbox Asaas nunca exercitado ponta a ponta.~~ **Fechado em 03/08/2026** — evento real entregue e gravado (ver sessão abaixo). `ASAAS_WEBHOOK_TOKEN` provisionada e **verificada por medição** em produção no mesmo dia. **Resta só** o webhook de **produção** cadastrado na conta de produção do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. **Confirmado na prática:** o `id` real vem como `evt_<hash>&<n>` (com `&`) e as datas dentro de `authorization` são `dd/MM/yyyy`, não ISO — nenhum dublê do repo usava esse formato. | #36 |
-| **D6** | **Sem UI de arquivar/desarquivar** e sem aviso in-app quando um paciente volta a contar na fatura. As Server Actions existem, a tela não. | O desarquivamento automático é silencioso: a clínica volta a ser cobrada por um paciente sem nada na interface dizendo isso. | #174 |
-| **D7** | **Regra 6 só dispara por `session_note`.** Áudio (`registrarAudioLocal`), `evidence` e escopo de protocolo não desarquivam. | Se a intenção da issue era "qualquer registro clínico", há paciente em atendimento ativo fora da fatura. É ampliação de escopo a decidir, não bug. | #174 |
-| **D8** | **Terapeuta de cobertura não desarquiva.** `app_desarquivar_paciente` estoura antes de olhar `arquivado_em`, então há um gate de visibilidade antes da chamada — senão a exceção abortaria a transação e o terapeuta perderia o diário inteiro. | Consequência assumida, não acidente: paciente arquivado invisível ao terapeuta de cobertura só volta pela mão do coordenador. Vira problema se cobertura for comum na prática. | #174 · `0067` |
-| **D9** | **Customização White-Label nos PDFs exportados (#120)** — funcionalidade de personalização com logotipo e cores da clínica no cabeçalho do PDF. | Melhoria de produto futura: hoje os PDFs usam o layout auditável padrão da plataforma Iris. | #120 · `src/lib/export/pdf-generator.ts` |
-| **D10** | **Assinatura Digital ICP-Brasil A1/A3 (#120)** — integração com certificados ICP-Brasil para relatórios com exigência judicial/pericial. | Melhoria de produto futura: o padrão atual (MFA + SHA-256 + AuditLog) atende ao piso legal, mas certas instâncias judiciais pedem ICP-Brasil. | #120 · `src/lib/export/pdf-generator.ts` |
-| **D12** | **Conta Asaas de produção bloqueada — não aprovada** (03/08/2026), e **Pix Automático indisponível por até 6 meses** (origem do prazo a confirmar). | Bloqueia a Fase 7 inteira: sem conta aprovada não há cobrança, webhook de produção nem self-service. Cuidado de leitura: a aba de Webhooks listar os eventos `PIX_AUTOMATIC_*` **não** prova habilitação na conta — é catálogo do produto. Foi assim que 01/08 registrou "habilitado" por engano. | #36 |
-| **D11** | **Estratégia de Ativo de Dados & Indexação RAG (#120)** — pipeline de tokenização e treinamento de IA sobre históricos exportados. | Diretriz de negócio Iris: preservação integral de evoluções e prontuários no banco para vetorização/RAG e aperfeiçoamento dos modelos clínicos. | #120 · `src/lib/extraction/` |
+| #       | Débito                                                                                                                                                                                                                                                                                                       | Por que dói                                                                                                                                                                                                                                                                                                                         | Onde                                                                                                 |
+| :------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------- |
+| **D1**  | **`pnpm db:generate` é armadilha neste repo.** O snapshot do Drizzle está dessincronizado das migrações escritas à mão: gerar produz SQL recriando tabelas e enums que já existem em produção (na Fase 7 foram 128 linhas).                                                                                  | Mitigado, **não resolvido**: o `CLAUDE.md` agora manda escrever migração à mão e descartar o que o `db:generate` produzir. A proteção é uma instrução que alguém precisa seguir — reconciliar o snapshot é o que fecha de verdade.                                                                                                  | `db/migrations/meta/*_snapshot.json` · guardrail em `CLAUDE.md`                                      |
+| **D2**  | **Migração à mão exige `when` manual no `_journal.json`** (anterior + 1000). Se o `when` for ≤ o da última aplicada, o Drizzle **pula a migração em silêncio**.                                                                                                                                              | Já causou incidente: a `0055` (fix do oráculo cross-tenant, #128) ficou fora do journal e nunca rodou em produção, com a issue fechada pelo diff (#165). Documentado no `CLAUDE.md`; o fim real seria um teste de CI que compara `_journal.json` com os `.sql` do diretório e com o que está aplicado.                              | `db/migrations/meta/_journal.json` · guardrail em `CLAUDE.md`                                        |
+| **D3**  | **`app_role` tem `GRANT` de tabela `INSERT`/`UPDATE`/`DELETE` em `clinic`** (herdado). Hoje inofensivo porque não há policy de escrita que case — a barreira é só a RLS, sem defesa em profundidade no nível de privilégio.                                                                                  | `clinic.isento_trial` é flag de billing: quem a ligasse sairia do gate de pagamento. Uma policy de escrita adicionada por distração no futuro abre tudo de uma vez.                                                                                                                                                                 | Revogar e re-conceder coluna a coluna, como já se faz em `patient` (`0044`)                          |
+| **D4**  | **Job de auto-arquivamento (90 dias) não existe** — só a regra pura `calcularStatusArquivamento`. Bloqueado por decisão de produto: "última atividade" atravessa `session_note`, `evidence` e `goal`.                                                                                                        | Essa definição decide **o que a clínica paga**. Escolher de passagem é errar em cima de dinheiro do cliente.                                                                                                                                                                                                                        | #174 · padrão em `scripts/escalonamento-risco.mjs` (delega a função do banco, porque cruza clínicas) |
+| **D5**  | ~~Sandbox Asaas nunca exercitado ponta a ponta.~~ **Fechado em 03/08/2026** — evento real entregue e gravado (ver sessão abaixo). `ASAAS_WEBHOOK_TOKEN` provisionada e **verificada por medição** em produção no mesmo dia. **Resta só** o webhook de **produção** cadastrado na conta de produção do Asaas. | Teste com dublê não cobre o dialeto do destino real — precedente direto: 18/18 verdes contra MinIO com zero cópia chegando na produção Oracle. **Confirmado na prática:** o `id` real vem como `evt_<hash>&<n>` (com `&`) e as datas dentro de `authorization` são `dd/MM/yyyy`, não ISO — nenhum dublê do repo usava esse formato. | #36                                                                                                  |
+| **D6**  | **Sem UI de arquivar/desarquivar** e sem aviso in-app quando um paciente volta a contar na fatura. As Server Actions existem, a tela não.                                                                                                                                                                    | O desarquivamento automático é silencioso: a clínica volta a ser cobrada por um paciente sem nada na interface dizendo isso.                                                                                                                                                                                                        | #174                                                                                                 |
+| **D7**  | **Regra 6 só dispara por `session_note`.** Áudio (`registrarAudioLocal`), `evidence` e escopo de protocolo não desarquivam.                                                                                                                                                                                  | Se a intenção da issue era "qualquer registro clínico", há paciente em atendimento ativo fora da fatura. É ampliação de escopo a decidir, não bug.                                                                                                                                                                                  | #174                                                                                                 |
+| **D8**  | **Terapeuta de cobertura não desarquiva.** `app_desarquivar_paciente` estoura antes de olhar `arquivado_em`, então há um gate de visibilidade antes da chamada — senão a exceção abortaria a transação e o terapeuta perderia o diário inteiro.                                                              | Consequência assumida, não acidente: paciente arquivado invisível ao terapeuta de cobertura só volta pela mão do coordenador. Vira problema se cobertura for comum na prática.                                                                                                                                                      | #174 · `0067`                                                                                        |
+| **D9**  | **Customização White-Label nos PDFs exportados (#120)** — funcionalidade de personalização com logotipo e cores da clínica no cabeçalho do PDF.                                                                                                                                                              | Melhoria de produto futura: hoje os PDFs usam o layout auditável padrão da plataforma Iris.                                                                                                                                                                                                                                         | #120 · `src/lib/export/pdf-generator.ts`                                                             |
+| **D10** | **Assinatura Digital ICP-Brasil A1/A3 (#120)** — integração com certificados ICP-Brasil para relatórios com exigência judicial/pericial.                                                                                                                                                                     | Melhoria de produto futura: o padrão atual (MFA + SHA-256 + AuditLog) atende ao piso legal, mas certas instâncias judiciais pedem ICP-Brasil.                                                                                                                                                                                       | #120 · `src/lib/export/pdf-generator.ts`                                                             |
+| **D12** | **Conta Asaas de produção bloqueada — não aprovada** (03/08/2026), e **Pix Automático indisponível por até 6 meses** (origem do prazo a confirmar).                                                                                                                                                          | Bloqueia a Fase 7 inteira: sem conta aprovada não há cobrança, webhook de produção nem self-service. Cuidado de leitura: a aba de Webhooks listar os eventos `PIX_AUTOMATIC_*` **não** prova habilitação na conta — é catálogo do produto. Foi assim que 01/08 registrou "habilitado" por engano.                                   | #36                                                                                                  |
+| **D11** | **Estratégia de Ativo de Dados & Indexação RAG (#120)** — pipeline de tokenização e treinamento de IA sobre históricos exportados.                                                                                                                                                                           | Diretriz de negócio Iris: preservação integral de evoluções e prontuários no banco para vetorização/RAG e aperfeiçoamento dos modelos clínicos.                                                                                                                                                                                     | #120 · `src/lib/extraction/`                                                                         |
+
+---
+
+## 🏁 Sessão 06/08/2026 — Prescrição de horas vira pilar mestre; equipe passa a consumir saldo (#203)
+
+Refino do `docs/implementation_plan.md` por **jornada** (não por tela) e
+implementação da **fatia 1**. A dupla Disciplina + Horas passa a ser soberana,
+mora na ficha clínica com vigência, e a equipe consome esse saldo. Protocolo
+estruturado vira sub-encaixe **opcional** por disciplina.
+
+### Decisões clínicas travadas (não reabrir sem novo motivo)
+
+- **D-A · Quem sai do time perde acesso na hora, sem carência.** Verificado por
+  medição, não por leitura: `app_is_on_team` (`0001_rls.sql:37-46`) já filtra
+  `vigencia_fim IS NULL` e governa a leitura de todas as tabelas clínicas.
+  **Nada a implementar na RLS** — o trabalho é de UI (confirmar antes de
+  encerrar, dizer no toast que o acesso foi cortado).
+- **D-B · `substituto` CONSOME saldo.** Hora entregue é hora entregue: a família
+  recebeu e o convênio conta. A barra responde "a prescrição está sendo
+  entregue?", não "quem é o titular".
+- **D-C · `coordenador_referencia` NÃO consome — é gestão.** O **papel** define o
+  consumo, nunca a pessoa: coordenador que também atende ganha um **segundo
+  vínculo** como `terapeuta_referencia`. Consequências de modelagem: o índice
+  único parcial inclui `papel_na_equipe`, e horas em papel de gestão são
+  **proibidas por CHECK**.
+- **D-D · Horas obrigatórias** em vínculo novo de papel que consome. Validação de
+  **aplicação**, não `NOT NULL` — a coluna precisa aceitar NULL pelo legado e
+  pela gestão.
+- **D-E · Hora se exibe como tempo, não como decimal de planilha:** `30min`,
+  `1h`, `1h30`, `20h`. Nunca `2,0h`. Formatador único em `src/lib/horas.ts`; o
+  decimal segue sendo só armazenamento/cálculo (`numeric(4,1)`).
+
+### Fatia 1 entregue e verificada por medição
+
+Migração `0076` (à mão, `when` = anterior + 1000): coluna `horas_semana` nullable,
+CHECK de passo/teto **nos dois lados da conta** (`patient_alvo_disciplina` estava
+sem constraint nenhuma — dava para prescrever `0,3h` e nunca alocar contra isso),
+CHECK `ctm_gestao_sem_horas`, índice único parcial `ctm_unico_vigente` e
+`GRANT UPDATE (horas_semana)` (a `0044` revogou UPDATE de tabela; coluna nova não
+herda nada). Mais `src/lib/horas.ts` como fonte única de formato, passo e
+`PAPEIS_QUE_CONSOMEM_SALDO`.
+
+Verificação: **21/21 asserções medidas** no Postgres (`information_schema`,
+`pg_constraint`, `pg_indexes`, `has_column_privilege` e `BEGIN … ROLLBACK`
+exercitando cada CHECK), mais 40 testes unitários e 15 de integração.
+
+### Achados que o plano anterior não cobria
+
+- **Sem índice único**, duplo-clique no submit vira **dupla contagem de carga** —
+  barra estoura sem causa visível.
+- **TOCTOU** na validação de saldo: duas alocações simultâneas de 6h passam
+  contra 8h restantes. Fatia 4 resolve com `SELECT … FOR UPDATE` do alvo vigente
+  - insert na mesma transação.
+- **Sobrealocação é derivada, nunca coluna** — flag persistida diverge do fato
+  assim que alguém encerra um vínculo por outro caminho.
+- Remover disciplina/horas de `/pacientes/novo` sem handoff cria **beco sem
+  saída**: paciente incompleto e silencioso. Daí redirect, banner e selo
+  `Sem prescrição`.
+
+### ⚠️ Falhas pré-existentes encontradas em `pnpm test:rls` (não deste diff)
+
+Confirmadas por `git stash` — falham igual sem nenhuma alteração desta sessão:
+
+- `agenda2-janela-actions` → `listarTerapeutas retorna o terapeuta da clínica`:
+  a lista inclui o coordenador, que a asserção espera excluir.
+- `conta-somente-leitura-rls` → `sem GUC de tenant a função devolve false`:
+  `invalid input syntax for type uuid: ""` — `app_conta_somente_leitura()`
+  estoura no cast em vez de falhar fechado, que é exatamente o que o teste
+  existe para provar.
+
+Ficam registradas aqui porque **suíte vermelha crônica é o caminho mais curto
+para vermelho novo passar despercebido**.
+
+### Fatia 2 entregue — prescrição na ficha clínica + handoff 1
+
+Migração `0077` (à mão, `when` = anterior + 1000), fechando o lado do **teto**:
+
+- **`patient_alvo_unico_vigente`** — o `idx_patient_alvo_vigente` **não era
+  unique** (medido, não deduzido): nada impedia duas prescrições vigentes da
+  mesma disciplina, e o teto virava sorteio de qual linha a query pegasse. É o
+  espelho exato do `ctm_unico_vigente` do lado do consumo. O índice antigo foi
+  derrubado (mesma chave, mesmo predicado — manter os dois pagaria escrita
+  dobrada sem ganho de leitura).
+- **`REVOKE UPDATE` de tabela + `GRANT UPDATE (vigencia_fim)`** — numa tabela
+  SCD2, `UPDATE` de tabela permitia reescrever `horas_alvo_semana` no lugar e
+  destruir o histórico que o convênio audita. Mesmo padrão da `0044`.
+- **`REVOKE DELETE` + `DROP POLICY` de delete** (decisão do Rômulo, 06/08/2026):
+  prescrição vira append-only de verdade. A policy cai junto para não ficar
+  órfã convidando alguém a reconceder o grant achando que a barreira seguia
+  de pé.
+
+Aplicação: `prescricao-logic.ts` (SCD2 — fecha vigência e abre linha nova, as
+duas datas do mesmo `now() AT TIME ZONE 'America/Sao_Paulo'`, na mesma
+transação), seção de prescrição na ficha clínica, e o handoff 1 completo
+(cadastro deixou de prescrever · redirect para `#prescricao` · banner de
+continuidade · selo `Sem prescrição` na lista, **derivado na leitura**).
+
+Dois achados que mudaram código durante a verificação:
+
+- **`SELECT … FOR UPDATE` não serve nesta tabela.** O row lock do Postgres exige
+  `UPDATE` em **nível de tabela**, e a `0077` passou a conceder por coluna — o
+  `FOR UPDATE` do plano §4.4 falharia como `permission denied for table
+  patient_alvo_disciplina`. Serialização feita com `pg_advisory_xact_lock`, que
+  não depende de privilégio de tabela e morre com a transação. **A fatia 4
+  precisa disso**: o plano prevê `FOR UPDATE` do alvo vigente para o TOCTOU da
+  equipe, e esse caminho está fechado.
+- **`horas-queries.ts` contava prescrição fechada.** O filtro era
+  `vigencia_fim IS NULL OR vigencia_fim >= hoje`; represcrever fecha a linha
+  antiga hoje e abre a nova hoje, então as duas casavam e o alvo ficava com a
+  que o Postgres devolvesse por último. Trocado por `IS NULL` — o mesmo critério
+  do `app_is_on_team` e de todo o #203.
+
+Verificação: 12 asserções de DDL medidas no Postgres (`pg_indexes`,
+`has_column_privilege`, `has_table_privilege`, `pg_policies`) + 14 de integração
+da jornada. `pnpm test` 917/917; `test:rls` só com as **duas falhas
+pré-existentes** acima.
 
 ---
 
@@ -57,6 +173,7 @@ de degradar em silêncio.
 criada num gateway não pode ser reinterpretada por outro porque a env mudou.
 
 ### Modelo comercial travado
+
 Faixas **marginais**: 1–15 = R$ 39 · 16–40 = R$ 32 · 41+ = R$ 25, por paciente
 ativo/mês. Onboarding R$ 0; a cobrança nasce no 1º paciente (Mês 1 = R$ 39,00).
 Mês 2+ = **uma** cobrança consolidada a cada 30 dias. Aritmética em centavos
@@ -67,6 +184,7 @@ preço, só devolve contagem.
 > que circulou no briefing corresponde a 99 pacientes.
 
 ### Definição oficial de "paciente ativo" (fecha **D4** parcialmente)
+
 `billing_apurar_ciclo(uuid)` (migração `0071`) — conta se satisfizer ao menos um:
 criado no ciclo · interação no ciclo (`session.agendada_para`/`check_in_em`/
 `criado_em`, `evidence.aprovado_em`, `session_note.criado_em`) · `arquivado_em
@@ -78,6 +196,7 @@ decide o que a clínica paga"). D4 segue aberto quanto ao **job de
 auto-arquivamento** em si.
 
 ### Decisões de política do gate
+
 - `past_due` **não** bloqueia cadastro. Falha de Pix/cartão costuma ser do banco
   do cliente; travar cadastro pune o paciente, não o inadimplente.
 - `setup_pending` bloqueia **sem** oferecer link de checkout — já há cobrança em
@@ -88,6 +207,7 @@ auto-arquivamento** em si.
   dois pacientes sob uma cobrança só; e um `return` deixaria a transação seguir.
 
 ### Plano de privilégios
+
 Billing é plano de identidade (como `auth_throttle`/0061 e `asaas_webhook_event`
 /0066). `app_role` tem **apenas SELECT** da própria clínica — se o produto
 pudesse escrever `subscription.status`, o gate seria contornável de dentro do
@@ -96,6 +216,7 @@ passa obrigatoriamente pela função DEFINER, que devolve contagem, nunca dado
 clínico.
 
 ### Job: gatilho magro, lógica no app
+
 `scripts/fechamento-ciclo-billing.mjs` só faz um POST autenticado em
 `/api/internal/billing/fechar-ciclos`. Motivo: a imagem Docker do job **não
 herda** as deps do app, e um import ausente já derrubou o motor de escalonamento
@@ -103,12 +224,14 @@ em produção com test/typecheck/lint verdes (#156). Tabela de preços duplicada
 num `.mjs` seria a mesma classe de bug — cobrando valor errado em silêncio.
 
 ### Webhook do Mercado Pago
+
 Grava e responde 200 **antes** de aplicar o efeito (o MP desabilita endpoint
 lento); falha ao aplicar deixa `aplicado_em` NULL para reprocessamento, nunca
 5xx. O payload do MP costuma ser só `{type, action, data:{id}}` — **sem estado**
 — então a transição vem de uma **consulta** à assinatura, não do tipo do evento.
 
 ### Verificado por medição
+
 - `pg_proc`/`pg_policies`/`information_schema` após `db:migrate`: 4 tabelas,
   7 policies, RLS `ENABLE`+`FORCE` nas 4, `billing_apurar_ciclo.prosecdef=true`,
   `has_table_privilege('app_role','subscription','UPDATE')=false`.
@@ -119,6 +242,7 @@ lento); falha ao aplicar deixa `aplicado_em` NULL para reprocessamento, nunca
 - `ctx-forjavel-guard` verde: a action nova respeita `logic.ts`/`actions.ts`.
 
 ### Aberto (não feito nesta sessão)
+
 - **Serviço `billing` do Easypanel não criado** — existe só no compose sob
   `profiles: ["billing"]`.
 - Sem tela de cancelamento de assinatura (a porta tem `cancelarAssinatura`).
@@ -161,7 +285,7 @@ campo com o do Easypanel — idêntico, não é mismatch de credencial.
 o mesmo bug: o simulador manda uma fixture fixa (`date: 2021-11-01` no corpo),
 e o `ts` do header `x-signature` provavelmente reflete essa mesma fixture
 velha — a checagem anti-replay (`JANELA_REPLAY_MS`, `mercado-pago.ts:205`)
-rejeita por *design*, protegendo contra replay de assinatura capturada. Mesmo
+rejeita por _design_, protegendo contra replay de assinatura capturada. Mesmo
 precedente do Asaas (D5): simulador de gateway não reproduz o dialeto real
 (timestamp vivo) do evento de produção. **Pendência que continua aberta:**
 só uma assinatura real criada/atualizada no MP prova essa última milha.
@@ -182,6 +306,7 @@ Spec atualizada: `docs/superpowers/specs/2026-08-03-issue-36-billing-mercadopago
 6. **Pós-MVP (#99, #89, #72):** Protocolo TCC (#99), ASR ditado de voz (#72).
 
 **Novas Demandas & Débitos Mapeados e Criados como GitHub Issues:**
+
 - **Issue #184 — Central de Super Admin / Backoffice (`/super-admin`):** [Issue #184](https://github.com/romulosutil/Iris/issues/184) com spec em [`docs/superpowers/specs/2026-08-03-central-super-admin-backoffice-design.md`](docs/superpowers/specs/2026-08-03-central-super-admin-backoffice-design.md).
 - **Issue #185 — Responsividade Mobile & Publicação Android (PWA/TWA Play Store):** [Issue #185](https://github.com/romulosutil/Iris/issues/185) com spec em [`docs/superpowers/specs/2026-08-03-mobile-responsividade-pwa-twa-android-design.md`](docs/superpowers/specs/2026-08-03-mobile-responsividade-pwa-twa-android-design.md).
 - **Issue #186 — Reconciliação do Snapshot do Drizzle ORM (Débito D1):** [Issue #186](https://github.com/romulosutil/Iris/issues/186) com spec em [`docs/superpowers/specs/2026-08-03-issue-186-reconciliacao-snapshot-drizzle-design.md`](docs/superpowers/specs/2026-08-03-issue-186-reconciliacao-snapshot-drizzle-design.md).
@@ -196,8 +321,6 @@ Spec atualizada: `docs/superpowers/specs/2026-08-03-issue-36-billing-mercadopago
   - ✅ **404 (`not-found.tsx`):** Entregue no commit `e9d5d20` (pt-BR, Espectro Brutal, retorno à agenda).
   - 🚧 **500 (`error.tsx`):** Pendente (Client Component React Error Boundary, botão `reset()`, log seguro sem vazar stack trace, testes Vitest).
 - **Issue #191 — Trava Anti-Fraude de Trial & Validação de CPF (Paciente/Responsável):** [Issue #191](https://github.com/romulosutil/Iris/issues/191) com spec em [`docs/superpowers/specs/2026-08-03-issue-191-trava-anti-fraude-cpf-design.md`](docs/superpowers/specs/2026-08-03-issue-191-trava-anti-fraude-cpf-design.md).
-
-
 
 ---
 
@@ -312,7 +435,7 @@ vencimento". **Medido no sandbox hoje, o quadro é outro:**
 - A antecedência é **pior** que o registrado: pedindo `nextDueDate: 2026-10-08`
   em 03/08, o Asaas emitiu a cobrança **na hora** — 66 dias antes.
 - **Mas o valor de uma cobrança `PENDING` pode ser corrigido**: `PUT
-  /v3/payments/{id}` mudou 487 → 611 sem erro.
+/v3/payments/{id}` mudou 487 → 611 sem erro.
 
 Ou seja: Assinatura é **utilizável com correção de valor**, não inútil. O
 descarte continua valendo, mas por outro motivo — ver abaixo.
@@ -401,10 +524,10 @@ de dinheiro real na mesma tabela e amarraria o mesmo token aos dois ambientes.
 - O `id` real é `evt_<hash>&<n>` — **contém `&`**. Todos os testes do repo usam
   `evt_teste_<uuid>`. Nada quebrou, mas ninguém tinha verificado.
 - Dentro de `authorization`, datas vêm em **`dd/MM/yyyy`** (`startDate:
-  "08/09/2026"`), enquanto o `dateCreated` do topo vem `yyyy-MM-dd HH:mm:ss`.
+"08/09/2026"`), enquanto o `dateCreated` do topo vem `yyyy-MM-dd HH:mm:ss`.
   **Dois formatos no mesmo payload** — a apuração precisa saber disso.
 - `paymentCreationMode: "MANUAL"` e `originType:
-  "IMMEDIATE_PAYMENT_AND_RECURRING_QR_CODE"` vêm preenchidos pelo Asaas.
+"IMMEDIATE_PAYMENT_AND_RECURRING_QR_CODE"` vêm preenchidos pelo Asaas.
 
 **A decisão de arquitetura da spec ficou comprovada, não só documentada:** a
 autorização foi criada **sem `value` na raiz** e a resposta voltou com
@@ -455,13 +578,13 @@ rebuildou o mesmo código, sem carregar commit não deployado junto.
 **Verificado medindo, não pelo painel** (regra do repo — "está no painel" não é
 prova de que o processo leu a variável):
 
-| Cenário | Esperado | Obtido |
-| :-- | :-- | :-- |
-| Token de produção | 200 | **200** `{"received":true}` |
-| Token de **sandbox** | 401 | **401** — ambientes isolados |
-| Token lixo | 401 | **401** |
-| Header ausente | 401 | **401** |
-| Reenvio do mesmo `id` | `duplicado` | **`{"duplicado":true}`** |
+| Cenário               | Esperado    | Obtido                       |
+| :-------------------- | :---------- | :--------------------------- |
+| Token de produção     | 200         | **200** `{"received":true}`  |
+| Token de **sandbox**  | 401         | **401** — ambientes isolados |
+| Token lixo            | 401         | **401**                      |
+| Header ausente        | 401         | **401**                      |
+| Reenvio do mesmo `id` | `duplicado` | **`{"duplicado":true}`**     |
 
 O teste positivo deixou **uma** linha em `asaas_webhook_event` de produção
 (`probe-easypanel-token-2026-08-03`, evento `PROBE_PROVISIONAMENTO_TOKEN`). Foi
@@ -514,7 +637,6 @@ painel — abrir issue própria.
 - **Prontuário Multidisciplinar & Sigilo (Issue #119 ajustada):** Mantido o princípio de prontuário unificado — todos os profissionais da equipe de cuidado multidisciplinar vinculados ao paciente têm acesso a 100% das informações clínicas (viabilizando substituições e visão integrada). Perfis administrativos/recepção não têm acesso aos prontuários. O requisito de fiscalização e sigilo será atendido por um **Audit Log detalhado de acessos** (registrando quem leu/acessou o quê).
 
 ## 🏁 Sessão 01/08/2026 (2ª) — Modelo de negócio, gateway e liberação do cadastro (Issues #163/#159)
-
 
 **Gateway: Asaas confirmado depois de avaliar Mercado Pago e Getnet.**
 
@@ -674,13 +796,13 @@ manual do `seed-clinic` na imagem do migrate passa a exigir injeção ad-hoc de
 
 **Resultado da suíte de fechamento:**
 
-| Comando | Resultado |
-| --- | --- |
-| `pnpm lint` | ✅ 0 erros (24 warnings pré-existentes) |
-| `pnpm typecheck` | ✅ |
-| `pnpm test` | ✅ 131 arquivos / 685 testes, 0 skipped |
-| `pnpm test:rls` | ✅ 77 arquivos / 519 testes, 0 skipped, banner `app=iris_app(norls) auth=iris_auth_login(norls) owner=iris(owner)` |
-| `pnpm test:e2e` | ✅ 13/13 (ver pré-requisitos de ambiente abaixo) |
+| Comando          | Resultado                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `pnpm lint`      | ✅ 0 erros (24 warnings pré-existentes)                                                                            |
+| `pnpm typecheck` | ✅                                                                                                                 |
+| `pnpm test`      | ✅ 131 arquivos / 685 testes, 0 skipped                                                                            |
+| `pnpm test:rls`  | ✅ 77 arquivos / 519 testes, 0 skipped, banner `app=iris_app(norls) auth=iris_auth_login(norls) owner=iris(owner)` |
+| `pnpm test:e2e`  | ✅ 13/13 (ver pré-requisitos de ambiente abaixo)                                                                   |
 
 **E2E: 13/13 verdes.** Estava 8/13 vermelha. **Nenhuma causa era regressão de
 produto** — todas eram teste medindo a coisa errada, e a maioria estava
@@ -767,7 +889,7 @@ todo deploy/reciclagem zera o estado.
 
 - Nova migração **0061** (`auth_throttle`) + `src/lib/throttle.ts`: contador
   **compartilhado e persistente** no Postgres, atômico (`INSERT … ON CONFLICT
-  DO UPDATE … RETURNING`, uma instrução), com **backoff exponencial** e teto, e
+DO UPDATE … RETURNING`, uma instrução), com **backoff exponencial** e teto, e
   **fail-closed** (`ThrottleIndisponivel` — nunca "permitido") se o store cair.
 - Dimensionamento **de login, não de cadastro**: 5 tentativas/e-mail/15 min e
   20/IP/15 min, ambas com backoff até 24 h.
@@ -842,17 +964,18 @@ TRABALHO.**
 - **Números medidos** (Postgres real + Better-Auth real, 12 amostras
   interleaved por ramo, em `criarContaEClinica` — nenhum dublê):
 
-  | ramo | min | p50 | p99 | max |
-  | --- | --- | --- | --- | --- |
-  | e-mail NOVO (o "caro") | 89 | 98 | 105 | 105 |
-  | e-mail existente + senha errada | 57 | 60 | 67 | 67 |
-  | e-mail existente + retomada | 63 | 66 | 77 | 77 |
+  | ramo                              | min   | p50   | p99   | max   |
+  | --------------------------------- | ----- | ----- | ----- | ----- |
+  | e-mail NOVO (o "caro")            | 89    | 98    | 105   | 105   |
+  | e-mail existente + senha errada   | 57    | 60    | 67    | 67    |
+  | e-mail existente + retomada       | 63    | 66    | 77    | 77    |
   | **conta SEM credencial de senha** | **2** | **3** | **4** | **4** |
 
   O piso de 1200 ms tem ~11x de folga sobre o pior ramo, e o delta real
   novo-vs-errado é de **38 ms**, não os ~400 ms que os testes sintéticos
   sugeriam. Os ramos já eram quase simétricos: cada um faz exatamente um
   scrypt.
+
 - **O ramo assimétrico de verdade era outro, e ninguém tinha olhado:** conta
   sem credencial de senha (estado normal de quem entrou por convite ou seed)
   saía de `verificarPossePorSenha` **antes de qualquer scrypt** — 3 ms contra
@@ -893,7 +1016,7 @@ Review da Task 7 apontou 1 Crítico e 4 Importantes. O que mudou de **decisão**
 - **Tabela nova sem teste de RLS foi a terceira ocorrência desta fatia.**
   `src/db/auth-throttle.int.test.ts` fecha o caso de `auth_throttle`. Provado
   por mutação no banco: `DISABLE ROW LEVEL SECURITY` e `GRANT SELECT … TO
-  app_role` deixam o arquivo vermelho, e a suíte funcional
+app_role` deixam o arquivo vermelho, e a suíte funcional
   (`throttle.int.test.ts`) continuava **verde** nas duas mutações. **Regra que
   isso confirma: teste funcional de tabela nova nunca substitui teste de
   RLS/grants — eles rodam com a role que TEM acesso.**
@@ -984,7 +1107,7 @@ Review da Task 7 apontou 1 Crítico e 4 Importantes. O que mudou de **decisão**
 **Verificação**
 
 - RED capturado antes do fix (`corepack pnpm vitest run --config
-  vitest.integration.config.ts -t CRÍTICO src/auth/cadastro.int.test.ts` contra
+vitest.integration.config.ts -t CRÍTICO src/auth/cadastro.int.test.ts` contra
   o `cadastro.ts` pré-fix): 1 falhou (`expected 'crm' to be 'crp'`).
 - Detalhe completo (comandos, contagens pass/fail/skip, GREEN) no apêndice de
   round 1 em `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
@@ -1120,10 +1243,10 @@ Review da Task 7 apontou 1 Crítico e 4 Importantes. O que mudou de **decisão**
 **Verificação**
 
 - RED capturado antes do fix (`cadastro.ts` isolado via `git stash push --
-  src/auth/cadastro.ts`): `AssertionError: promise resolved "{ …(2) }"
-  instead of rejecting`.
+src/auth/cadastro.ts`): `AssertionError: promise resolved "{ …(2) }"
+instead of rejecting`.
 - Mutação do item 8: migração 0059 enfraquecida → `AssertionError: expected
-  false to be true`; restaurada → verde.
+false to be true`; restaurada → verde.
 - Detalhe completo (comandos, contagens, contrato dos três casos) no
   apêndice de round 3 em
   `.superpowers/sdd/2026-07-30-fatia-a-cadastro-self-service/task-5-report.md`.
@@ -3724,8 +3847,8 @@ Além disso, há hard-blockers técnicos que precisariam ser resolvidos antes do
 
 ## 🧯 Sessão 04/08/2026 — trial destravado, paywall → somente-leitura, trilho pós-pago
 
-**O incidente.** Cadastrar o primeiro paciente devolvia *"Cadastro bloqueado
-pela assinatura"* — no pior momento possível, antes de qualquer valor entregue.
+**O incidente.** Cadastrar o primeiro paciente devolvia _"Cadastro bloqueado
+pela assinatura"_ — no pior momento possível, antes de qualquer valor entregue.
 Não era decisão de produto ruim: era **bug de integração entre duas features com
 intenções opostas**. `src/lib/billing/gate.ts` afirmava "a cobrança nasce no
 cadastro do 1º paciente"; `src/lib/trial.ts` afirmava "o relógio começa quando o
@@ -3734,12 +3857,13 @@ do INSERT e o `SELECT app_iniciar_trial()` **depois** — e como o gate bloqueav
 `free_tier`, **o trial de 7 dias nunca começou para ninguém**. `trial.ts`
 inteiro, `faixa-trial.tsx` e a migração `0064` eram código morto em produção; só
 `isento_trial = true` (legado) escapava. O próprio `trial.ts` registrava o TODO
-que virou o bug (*"quando a `subscription` existir, é ela quem decide"*): a
+que virou o bug (_"quando a `subscription` existir, é ela quem decide"_): a
 `subscription` chegou na `0071` e ninguém voltou.
 
 **Padrão de falha recorrente — é UM item, não três bugs.** Este repo já produziu
 três instâncias da mesma mecânica: decisão registrada em prosa, implementação
 divergente, e nenhum mecanismo que force o reencontro.
+
 1. **Trial** — o TODO acima.
 2. **Achado A1: "função criada" ≠ "regra aplicada".**
    `app_assinatura_bloqueia_cadastro()` (`0071`) foi criada, revogada de PUBLIC
@@ -3753,8 +3877,8 @@ divergente, e nenhum mecanismo que force o reencontro.
    `cobrado_em` no instante do ajuste, **sem nenhuma cobrança emitida nem
    confirmada** — o `billing_cycle` é o memorial auditável da fatura e afirmava
    um fato que não aconteceu. `provider/types.ts` chegava a se contradizer
-   dentro do mesmo parágrafo, e um pivô de *gateway* (Asaas reprovado) arrastou
-   junto uma reversão de *modelo comercial* que ninguém decidiu.
+   dentro do mesmo parágrafo, e um pivô de _gateway_ (Asaas reprovado) arrastou
+   junto uma reversão de _modelo comercial_ que ninguém decidiu.
 
 - [ ] **Guardrail contra o padrão acima.** Propor um formato de TODO com **dono
       e gatilho explícito** ("quando X existir, revisitar aqui") que o CI
@@ -3764,7 +3888,7 @@ divergente, e nenhum mecanismo que force o reencontro.
 
 - `src/lib/billing/estado-conta.ts` substitui `gate.ts` (deletado). Decisão
   unificada, derivada no request: `podeEscrever = isento || status ∈ {active,
-  past_due} || (status ≠ canceled && trialAtivo)`. `free_tier` deixa de
+past_due} || (status ≠ canceled && trialAtivo)`. `free_tier` deixa de
   significar "não pagou" e passa a significar "ainda não entrou no ciclo de
   cobrança". Invariante nova: **iniciar o pagamento nunca pode piorar a
   situação** (`setup_pending` durante o trial escreve).
@@ -3776,7 +3900,7 @@ divergente, e nenhum mecanismo que force o reencontro.
   inadimplência da clínica), `alertas-risco/` e `clinica/emergencia/`
   (segurança clínica vence cobrança).
 - `0073` cria `app_conta_somente_leitura()` + trigger `BEFORE INSERT/UPDATE/
-  DELETE` em 18 tabelas, instalado **DISABLE**d; `0074` habilita. Dois passos de
+DELETE` em 18 tabelas, instalado **DISABLE**d; `0074` habilita. Dois passos de
   propósito: trigger com predicado errado em tabela clínica trava clínica
   pagante. O predicado do trigger exclui superusuário/BYPASSRLS explicitamente —
   sem isso, `app_iniciar_trial()` (SECURITY DEFINER do owner) seria barrado por

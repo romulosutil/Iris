@@ -533,6 +533,20 @@
       "when": 1785422584000,
       "tag": "0075_billing_pos_pago",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1785422585000,
+      "tag": "0076_care_team_horas_semana",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1785422586000,
+      "tag": "0077_prescricao_pilar_mestre",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,15 @@ export function ListaPacientes({ pacientes }: { pacientes: PacienteListItem[] })
                   <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-[var(--radius-pill)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)] border border-[var(--status-success-border)] font-semibold">
                     Ativo
                   </span>
+                  {/* Handoff 1 (#203): sem prescrição vigente o paciente não
+                      pode receber equipe. O selo existe para que esse estado
+                      incompleto não fique invisível para quem cadastrou e saiu
+                      da tela — o texto carrega o estado, a cor só reforça. */}
+                  {p.temPrescricao ? null : (
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-[var(--radius-pill)] bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)] border border-[var(--status-warning-border)] font-semibold">
+                      Sem prescrição
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[var(--text-secondary)]">
                   {p.convenio ? <span>Convênio: {p.convenio}</span> : null}

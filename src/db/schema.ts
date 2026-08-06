@@ -59,59 +59,89 @@ export const consentTipo = pgEnum("consent_tipo", [
 // estado permanece `agendada` até a consolidação (`realizada`). Migração de
 // dados: presente→realizada, falta→falta_paciente (ver 0032).
 export const sessionEstado = pgEnum("session_estado", [
-  "agendada", "realizada", "falta_paciente", "falta_terapeuta", "cancelada",
+  "agendada",
+  "realizada",
+  "falta_paciente",
+  "falta_terapeuta",
+  "cancelada",
 ]);
 
 export const goalEstado = pgEnum("goal_estado", [
-  "rascunho", "ativa", "dominada", "pausada", "descontinuada",
+  "rascunho",
+  "ativa",
+  "dominada",
+  "pausada",
+  "descontinuada",
 ]);
 
-export const sessionProtocolScopeOrigem = pgEnum("session_protocol_scope_origem", [
-  "inferido_disciplina", "ajustado_manualmente",
-]);
+export const sessionProtocolScopeOrigem = pgEnum(
+  "session_protocol_scope_origem",
+  ["inferido_disciplina", "ajustado_manualmente"],
+);
 
 export const sessionNoteTipo = pgEnum("session_note_tipo", [
-  "captura_rapida", "nota_consolidada",
+  "captura_rapida",
+  "nota_consolidada",
 ]);
 
 export const audioStatusUpload = pgEnum("audio_status_upload", [
-  "rascunho_local", "pendente", "confirmado", "falhou",
+  "rascunho_local",
+  "pendente",
+  "confirmado",
+  "falhou",
 ]);
 
 export const extractionEstado = pgEnum("extraction_estado", [
-  "sugerida", "pendente_reprocessamento",
+  "sugerida",
+  "pendente_reprocessamento",
   // estados de revisão humana (Fase 3 Plano 2): a extração aprovada É o registro
   // oficial (tabela `evidence` dedicada adiada p/ Fase 4).
-  "aprovada", "editada", "descartada", "erro_validacao",
+  "aprovada",
+  "editada",
+  "descartada",
+  "erro_validacao",
 ]);
 
 // subtipo/confianca text→enum agora que o contrato do agente estabilizou (dívida
 // registrada na Fase 2). "pendente" entra no enum de subtipo porque o
 // NullProvider já gravou linhas assim em produção (não quebrar dado existente).
 export const extractionSubtipo = pgEnum("extraction_subtipo", [
-  "evidencia", "registro_abc", "ausencia_comportamento", "cadeia",
-  "preferencia_reforcador", "pendente",
+  "evidencia",
+  "registro_abc",
+  "ausencia_comportamento",
+  "cadeia",
+  "preferencia_reforcador",
+  "pendente",
 ]);
 
 export const extractionConfianca = pgEnum("extraction_confianca", [
-  "alta", "media", "baixa",
+  "alta",
+  "media",
+  "baixa",
 ]);
 
 export const milestoneTipoEstrutura = pgEnum("milestone_tipo_estrutura", [
-  "marco_simples", "marco_com_barreira", "escore_composto", "faixa_normativa",
+  "marco_simples",
+  "marco_com_barreira",
+  "escore_composto",
+  "faixa_normativa",
 ]);
 
 // Fase 4 (4A — Evidence layer). Ação de revisão do coordenador sobre uma
 // evidência já gravada (log append-only, nunca sobrescreve a linha original).
 export const evidenceRevisionAcao = pgEnum("evidence_revision_acao", [
-  "confirmar", "reclassificar", "invalidar",
+  "confirmar",
+  "reclassificar",
+  "invalidar",
 ]);
 
 // Fase 4 (4C.1) — valência de reforçador/preferência observada (R17,
 // preferencia_reforcador). `saciado` é first-class: precisa poder DEMOVER um
 // item que já foi visto como reforçador forte (série, não conjunto flat).
 export const reinforcerValencia = pgEnum("reinforcer_valencia", [
-  "alta", "baixa", "saciado",
+  "alta",
+  "baixa",
+  "saciado",
 ]);
 
 // ─── Auth (Better-Auth) — `app_user` é a tabela `user` do Better-Auth ────────
@@ -249,9 +279,12 @@ export const clinic = pgTable("clinic", {
   // Declaração obrigatória (matriz do parecer + cláusula X.3 dos termos):
   // "Declaro que a clínica possui protocolo próprio de atendimento de
   // emergências". Guardamos QUEM e QUANDO — é prova de aceite, não um booleano.
-  protocoloEmergenciaDeclaradoEm: timestamp("protocolo_emergencia_declarado_em", {
-    withTimezone: true,
-  }),
+  protocoloEmergenciaDeclaradoEm: timestamp(
+    "protocolo_emergencia_declarado_em",
+    {
+      withTimezone: true,
+    },
+  ),
   protocoloEmergenciaDeclaradoPor: uuid(
     "protocolo_emergencia_declarado_por",
   ).references(() => appUser.id),
@@ -476,7 +509,9 @@ export const professionalConsent = pgTable(
       .notNull()
       .references(() => clinic.id),
     versaoTermo: text("versao_termo").notNull(),
-    aceitoEm: timestamp("aceito_em", { withTimezone: true }).notNull().defaultNow(),
+    aceitoEm: timestamp("aceito_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     ip: text("ip"),
     userAgent: text("user_agent"),
   },
@@ -507,8 +542,12 @@ export const authThrottle = pgTable("auth_throttle", {
   janelaInicioEm: timestamp("janela_inicio_em", { withTimezone: true })
     .notNull()
     .defaultNow(),
-  janelaExpiraEm: timestamp("janela_expira_em", { withTimezone: true }).notNull(),
-  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  janelaExpiraEm: timestamp("janela_expira_em", {
+    withTimezone: true,
+  }).notNull(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 // ─── Protocolos (catálogo + instância por paciente) ──────────────────────────
@@ -578,6 +617,12 @@ export const careTeamMembership = pgTable(
       .references(() => appUser.id, { onDelete: "restrict" }),
     disciplina: text("disciplina").notNull(),
     papelNaEquipe: text("papel_na_equipe").notNull(),
+    // #203 — carga semanal que este vínculo consome do alvo prescrito
+    // (patient_alvo_disciplina). NULLABLE de propósito, por duas razões, não
+    // por falta de rigor: vínculos legado anteriores à 0076 não têm carga, e
+    // `coordenador_referencia` é gestão e NUNCA tem (ver ctmGestaoSemHoras).
+    // A obrigatoriedade em papel que consome é validação de aplicação (D-D).
+    horasSemana: numeric("horas_semana", { precision: 4, scale: 1 }),
     vigenciaInicio: date("vigencia_inicio").notNull().defaultNow(),
     vigenciaFim: date("vigencia_fim"),
     responsavelTecnicoId: uuid("responsavel_tecnico_id").references(
@@ -593,11 +638,31 @@ export const careTeamMembership = pgTable(
       "ctm_nao_auto_supervisao",
       sql`${t.responsavelTecnicoId} IS NULL OR ${t.responsavelTecnicoId} <> ${t.userId}`,
     ),
+    // Passo de 30 min (a agenda é marcada assim) + teto de 60h como rede contra
+    // erro de digitação. `IS NULL OR` explícito: expressão NULL num CHECK
+    // SATISFAZ a constraint, então a nulidade tem que ser decisão declarada.
+    check(
+      "ctm_horas_semana_passo",
+      sql`${t.horasSemana} IS NULL OR (${t.horasSemana} > 0 AND ${t.horasSemana} <= 60 AND (${t.horasSemana} * 10)::int % 5 = 0)`,
+    ),
+    // D-C: coordenador de referência é gestão do caso, não carga clínica. Quem
+    // coordena E atende tem um SEGUNDO vínculo como terapeuta_referencia.
+    check(
+      "ctm_gestao_sem_horas",
+      sql`${t.papelNaEquipe} <> 'coordenador_referencia' OR ${t.horasSemana} IS NULL`,
+    ),
     index("idx_ctm_patient_vigente")
       .on(t.patientId)
       .where(sql`${t.vigenciaFim} IS NULL`),
     index("idx_ctm_user_vigente")
       .on(t.userId)
+      .where(sql`${t.vigenciaFim} IS NULL`),
+    // Sem isto, duplo-clique no submit vira DUPLA CONTAGEM de carga e a barra
+    // de cobertura estoura sem causa visível. `papelNaEquipe` está na chave por
+    // causa da D-C (mesma pessoa como gestora E terapeuta na mesma disciplina);
+    // parcial para que encerrar libere a combinação e recontratar seja possível.
+    uniqueIndex("ctm_unico_vigente")
+      .on(t.patientId, t.userId, t.disciplina, t.papelNaEquipe)
       .where(sql`${t.vigenciaFim} IS NULL`),
   ],
 );
@@ -615,10 +680,15 @@ export const patientAlvoDisciplina = pgTable(
       .references(() => clinic.id, { onDelete: "restrict" }),
     patientId: uuid("patient_id").notNull(),
     disciplina: text("disciplina").notNull(),
-    horasAlvoSemana: numeric("horas_alvo_semana", { precision: 4, scale: 1 }).notNull(),
+    horasAlvoSemana: numeric("horas_alvo_semana", {
+      precision: 4,
+      scale: 1,
+    }).notNull(),
     vigenciaInicio: date("vigencia_inicio").notNull(),
     vigenciaFim: date("vigencia_fim"),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     foreignKey({
@@ -630,7 +700,22 @@ export const patientAlvoDisciplina = pgTable(
       "patient_alvo_disciplina_vigencia",
       sql`${t.vigenciaFim} IS NULL OR ${t.vigenciaFim} >= ${t.vigenciaInicio}`,
     ),
-    index("idx_patient_alvo_vigente")
+    // #203 — mesma regra do lado do CONSUMO (ctm_horas_semana_passo). Constraint
+    // só no lado da equipe produziria o absurdo de prescrever 0,3h e nunca
+    // conseguir alocar contra isso. Aqui NOT NULL, então sem `IS NULL OR`.
+    check(
+      "patient_alvo_horas_passo",
+      sql`${t.horasAlvoSemana} > 0 AND ${t.horasAlvoSemana} <= 60 AND (${t.horasAlvoSemana} * 10)::int % 5 = 0`,
+    ),
+    // #203 (0077) — UNIQUE, não só index: sem isso nada impedia DUAS
+    // prescrições vigentes para a mesma disciplina, e o teto da barra de
+    // cobertura passaria a depender de qual linha a query pegasse. Espelho
+    // exato do `ctm_unico_vigente` do lado do consumo.
+    //
+    // PARCIAL de propósito: encerrar a vigência libera a combinação, então
+    // represcrever a mesma disciplina segue possível com as duas passagens
+    // preservadas — é o que o SCD2 desta tabela exige.
+    uniqueIndex("patient_alvo_unico_vigente")
       .on(t.patientId, t.disciplina)
       .where(sql`${t.vigenciaFim} IS NULL`),
   ],
@@ -653,7 +738,9 @@ export const janelaTrabalho = pgTable(
     diaSemana: smallint("dia_semana").notNull(),
     horaInicio: time("hora_inicio").notNull(),
     horaFim: time("hora_fim").notNull(),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     check("janela_trabalho_dia_semana", sql`${t.diaSemana} BETWEEN 0 AND 6`),
@@ -663,7 +750,9 @@ export const janelaTrabalho = pgTable(
 );
 
 export const bloqueioEscopo = pgEnum("bloqueio_escopo", [
-  "clinica", "terapeuta", "paciente",
+  "clinica",
+  "terapeuta",
+  "paciente",
 ]);
 
 // ─── Agenda 2.0 (Etapa A) — bloqueio de agenda (feriado/férias/afastamento) ──
@@ -683,7 +772,9 @@ export const bloqueio = pgTable(
     dataInicio: date("data_inicio").notNull(),
     dataFim: date("data_fim").notNull(),
     motivo: text("motivo").notNull(),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     foreignKey({
@@ -698,13 +789,18 @@ export const bloqueio = pgTable(
        OR (${t.escopo} = 'terapeuta' AND ${t.terapeutaId} IS NOT NULL AND ${t.patientId} IS NULL)
        OR (${t.escopo} = 'paciente'  AND ${t.patientId} IS NOT NULL AND ${t.terapeutaId} IS NULL)`,
     ),
-    index("idx_bloqueio_clinic_periodo").on(t.clinicId, t.dataInicio, t.dataFim),
+    index("idx_bloqueio_clinic_periodo").on(
+      t.clinicId,
+      t.dataInicio,
+      t.dataFim,
+    ),
   ],
 );
 
-export const agendamentoRecorrenteStatus = pgEnum("agendamento_recorrente_status", [
-  "ativo", "encerrado",
-]);
+export const agendamentoRecorrenteStatus = pgEnum(
+  "agendamento_recorrente_status",
+  ["ativo", "encerrado"],
+);
 
 // ─── Agenda 2.0 (Etapa A) — regra recorrente standing ────────────────────────
 // Um paciente tem N regras (uma por disciplina/terapeuta/horário) — é assim que
@@ -728,7 +824,9 @@ export const agendamentoRecorrente = pgTable(
     vigenciaInicio: date("vigencia_inicio").notNull(),
     vigenciaFim: date("vigencia_fim"),
     status: agendamentoRecorrenteStatus("status").notNull().default("ativo"),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     foreignKey({
@@ -736,7 +834,10 @@ export const agendamentoRecorrente = pgTable(
       foreignColumns: [patient.id, patient.clinicId],
       name: "agendamento_recorrente_patient_fk",
     }).onDelete("cascade"),
-    check("agendamento_recorrente_dia_semana", sql`${t.diaSemana} BETWEEN 0 AND 6`),
+    check(
+      "agendamento_recorrente_dia_semana",
+      sql`${t.diaSemana} BETWEEN 0 AND 6`,
+    ),
     check("agendamento_recorrente_duracao", sql`${t.duracaoMin} > 0`),
     check(
       "agendamento_recorrente_vigencia",
@@ -751,9 +852,16 @@ export const agendamentoRecorrente = pgTable(
   ],
 );
 
-export const sessionModalidade = pgEnum("session_modalidade", ["presencial", "online"]);
+export const sessionModalidade = pgEnum("session_modalidade", [
+  "presencial",
+  "online",
+]);
 export const sessionTipo = pgEnum("session_tipo", [
-  "terapia", "avaliacao", "devolutiva", "reuniao_pais", "outro",
+  "terapia",
+  "avaliacao",
+  "devolutiva",
+  "reuniao_pais",
+  "outro",
 ]);
 
 // ─── Agenda mínima + check-in (Fase 1d) ──────────────────────────────────────
@@ -842,8 +950,12 @@ export const sessionNote = pgTable(
     autorId: uuid("autor_id")
       .notNull()
       .references(() => appUser.id),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
-    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     // 1 captura_rapida + 1 nota_consolidada por sessão
@@ -862,7 +974,9 @@ export const sessionProtocolScope = pgTable(
     protocolId: uuid("protocol_id")
       .notNull()
       .references(() => protocol.id, { onDelete: "restrict" }),
-    origem: sessionProtocolScopeOrigem("origem").notNull().default("inferido_disciplina"),
+    origem: sessionProtocolScopeOrigem("origem")
+      .notNull()
+      .default("inferido_disciplina"),
     ajustadoPor: uuid("ajustado_por").references(() => appUser.id),
   },
   (t) => [unique("uq_session_protocol_scope").on(t.sessionId, t.protocolId)],
@@ -878,11 +992,15 @@ export const audioCapture = pgTable(
     clinicId: uuid("clinic_id")
       .notNull()
       .references(() => clinic.id, { onDelete: "restrict" }),
-    statusUpload: audioStatusUpload("status_upload").notNull().default("rascunho_local"),
+    statusUpload: audioStatusUpload("status_upload")
+      .notNull()
+      .default("rascunho_local"),
     // Referência ao objeto no storage — nulo enquanto o áudio vive só local (Fase 2).
     objetoRef: text("objeto_ref"),
     duracaoSegundos: integer("duracao_segundos"),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [index("idx_audio_capture_session").on(t.sessionId)],
 );
@@ -902,10 +1020,14 @@ export const extraction = pgTable(
     trechoFonte: text("trecho_fonte").notNull(),
     confianca: extractionConfianca("confianca").notNull(),
     justificativaConfianca: text("justificativa_confianca"),
-    inconsistenteComHistorico: boolean("inconsistente_com_historico").notNull().default(false),
+    inconsistenteComHistorico: boolean("inconsistente_com_historico")
+      .notNull()
+      .default(false),
     parContrasteId: text("par_contraste_id"),
-    payload: jsonb("payload").notNull(),           // sugestão ORIGINAL da IA — imutável (auditoria Camada 1)
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    payload: jsonb("payload").notNull(), // sugestão ORIGINAL da IA — imutável (auditoria Camada 1)
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     // revisão humana: conteúdo editado pelo terapeuta (null = aprovado sem
     // edição); conteúdo efetivo = payloadEditado ?? payload. Preserva a
     // distinção "o que a IA sugeriu" vs "o que o humano aprovou".
@@ -925,11 +1047,11 @@ export const milestone = pgTable(
     protocolId: uuid("protocol_id")
       .notNull()
       .references(() => protocol.id, { onDelete: "cascade" }),
-    dominioId: text("dominio_id").notNull(),       // 'mando','tato',... chave estável do agente
+    dominioId: text("dominio_id").notNull(), // 'mando','tato',... chave estável do agente
     nome: text("nome").notNull(),
     nivel: text("nivel"),
     tipoEstrutura: milestoneTipoEstrutura("tipo_estrutura").notNull(),
-    estrutura: jsonb("estrutura").notNull(),       // escala/critério formal/componentes
+    estrutura: jsonb("estrutura").notNull(), // escala/critério formal/componentes
     ordem: integer("ordem"),
   },
   (t) => [
@@ -950,8 +1072,8 @@ export const goal = pgTable(
     clinicId: uuid("clinic_id")
       .notNull()
       .references(() => clinic.id, { onDelete: "restrict" }),
-    descricao: text("descricao").notNull(),        // linguagem simples (família também vê)
-    disciplina: text("disciplina"),                // 'ABA'|'Fono'|'TO' — nullable: meta pode não mapear marco (wireframe 4.4)
+    descricao: text("descricao").notNull(), // linguagem simples (família também vê)
+    disciplina: text("disciplina"), // 'ABA'|'Fono'|'TO' — nullable: meta pode não mapear marco (wireframe 4.4)
     estado: goalEstado("estado").notNull().default("rascunho"),
     criterioDominio: jsonb("criterio_dominio").notNull(), // {"tipo":"...","valor":3}
     cicloRevisaoSemanas: integer("ciclo_revisao_semanas").notNull().default(10),
@@ -959,8 +1081,12 @@ export const goal = pgTable(
     criadoPor: uuid("criado_por")
       .notNull()
       .references(() => appUser.id),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
-    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [index("idx_goal_patient_estado").on(t.patientId, t.estado)],
 );
@@ -982,7 +1108,9 @@ export const goalCandidacy = pgTable("goal_candidacy", {
   goalId: uuid("goal_id")
     .primaryKey()
     .references(() => goal.id, { onDelete: "cascade" }),
-  isCandidateDominada: boolean("is_candidate_dominada").notNull().default(false),
+  isCandidateDominada: boolean("is_candidate_dominada")
+    .notNull()
+    .default(false),
   candidacySince: timestamp("candidacy_since", { withTimezone: true }),
 });
 
@@ -1047,7 +1175,9 @@ export const evidence = pgTable(
   },
   (t) => [
     index("idx_evidence_patient_session").on(t.patientId, t.sessionNumero),
-    index("idx_evidence_goal").on(t.goalId).where(sql`${t.goalId} IS NOT NULL`),
+    index("idx_evidence_goal")
+      .on(t.goalId)
+      .where(sql`${t.goalId} IS NOT NULL`),
     index("idx_evidence_milestone")
       .on(t.milestoneId)
       .where(sql`${t.milestoneId} IS NOT NULL`),
@@ -1172,7 +1302,10 @@ export const sessionSnapshot = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.patientId, t.sessionNumero] }),
-    index("idx_session_snapshot_patient").on(t.patientId, t.sessionNumero.desc()),
+    index("idx_session_snapshot_patient").on(
+      t.patientId,
+      t.sessionNumero.desc(),
+    ),
   ],
 );
 
@@ -1222,7 +1355,9 @@ export const report = pgTable(
     revisadoPor: uuid("revisado_por").references(() => appUser.id),
     exportadoPor: uuid("exportado_por").references(() => appUser.id),
     exportadoEm: timestamp("exportado_em", { withTimezone: true }),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     check("report_periodo", sql`${t.periodoFim} >= ${t.periodoInicio}`),
@@ -1253,7 +1388,9 @@ export const reportPdf = pgTable("report_pdf", {
     .references(() => report.id, { onDelete: "cascade" }),
   bytes: bytea("bytes").notNull(),
   hash: text("hash").notNull(),
-  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  criadoEm: timestamp("criado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 // Trilha de auditoria LGPD (spec §2). entidade_id SEM FK — sobrevive ao delete do alvo.
@@ -1268,13 +1405,17 @@ export const auditLog = pgTable(
     // sistema" (job de escalonamento, varredura de arquivamento) — não existe
     // humano a quem atribuir. `onDelete: "set null"` (0070 / #116) garante retenção
     // do audit_log por 6 meses mesmo se a conta do ator for excluída.
-    atorId: uuid("ator_id").references(() => appUser.id, { onDelete: "set null" }),
+    atorId: uuid("ator_id").references(() => appUser.id, {
+      onDelete: "set null",
+    }),
     acao: text("acao").notNull(),
     entidade: text("entidade").notNull(),
     entidadeId: uuid("entidade_id").notNull(),
     patientId: uuid("patient_id").references(() => patient.id),
     detalhe: jsonb("detalhe"),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [index("idx_audit_log_patient").on(t.patientId, t.criadoEm.desc())],
 );
@@ -1286,10 +1427,14 @@ export const auditLog = pgTable(
 // SEM linha viva (não é valor de enum). Concorrência = advisory lock + re-check
 // (padrão do repo), sem coluna de versão/OCC.
 export const alertaTipo = pgEnum("alerta_tipo", [
-  "estagnacao", "regressao", "faltas_excessivas",
+  "estagnacao",
+  "regressao",
+  "faltas_excessivas",
 ]);
 export const alertaStatus = pgEnum("alerta_status", [
-  "reconhecido", "resolvido", "descartado",
+  "reconhecido",
+  "resolvido",
+  "descartado",
 ]);
 
 export const alerta = pgTable(
@@ -1314,7 +1459,9 @@ export const alerta = pgTable(
     criadoPor: uuid("criado_por")
       .notNull()
       .references(() => appUser.id),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     atualizadoPor: uuid("atualizado_por")
       .notNull()
       .references(() => appUser.id),

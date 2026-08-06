@@ -2,7 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { patient, consent, patientAlvoDisciplina } from "@/db/schema";
+import { patient, consent } from "@/db/schema";
 import {
   avaliarSituacaoConta,
   mensagemDeEstado,
@@ -117,10 +117,12 @@ export async function criarPacienteEConsent(
   const escola = String(formData.get("escola") ?? "").trim() || undefined;
   const convenio = String(formData.get("convenio") ?? "").trim() || undefined;
 
-  // Alvo de carga por disciplina (Agenda 2.0). Pares posicionais do form.
-  const disciplinas = formData.getAll("alvoDisciplina").map(String);
-  const horas = formData.getAll("alvoHorasSemana").map(String);
-  const hoje = new Date().toISOString().slice(0, 10);
+  // #203 (fatia 2): o cadastro NÃO prescreve mais. Disciplina e carga horária
+  // migraram para a ficha clínica, onde nascem com vigência própria (SCD2) e
+  // são o teto que a equipe consome. Campos `alvoDisciplina`/`alvoHorasSemana`
+  // que ainda cheguem por um formulário em cache são IGNORADOS de propósito —
+  // aceitá-los criaria prescrição pelo caminho antigo, sem histórico, e a
+  // divergência só apareceria na barra de cobertura semanas depois.
 
   try {
     const id = await withTenant(ctx, async (tx) => {
@@ -201,24 +203,6 @@ export async function criarPacienteEConsent(
           tipo: "exportacao_relatorios" as const,
           responsavelSignatario: signatario,
           versaoTermo,
-        });
-      }
-      // 0..N alvos, na MESMA transação (rollback junto do paciente/consent se
-      // algum par for inválido). vigenciaInicio = hoje; campos vazios ignorados.
-      for (let i = 0; i < disciplinas.length; i++) {
-        const disc = disciplinas[i]?.trim();
-        if (!disc) continue;
-        const h = horas[i]?.trim();
-        const num = Number(h);
-        if (!h || Number.isNaN(num) || num <= 0) {
-          throw new Error(`Alvo de horas inválido para "${disc}".`);
-        }
-        await tx.insert(patientAlvoDisciplina).values({
-          clinicId: ctx.clinicId,
-          patientId: novo!.id,
-          disciplina: disc,
-          horasAlvoSemana: num.toFixed(1),
-          vigenciaInicio: hoje,
         });
       }
       // #175: o relógio do trial começa no 1º paciente, na MESMA transação —

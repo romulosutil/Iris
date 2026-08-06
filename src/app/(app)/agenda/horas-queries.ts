@@ -48,7 +48,17 @@ export async function carregarHorasPaciente(
   const hojeISO = new Date().toISOString().slice(0, 10);
 
   return withTenant(ctx, async (tx) => {
-    // alvo vigente por disciplina (vigencia_fim aberta OU >= hoje).
+    // Alvo VIGENTE por disciplina — `vigencia_fim IS NULL`, só.
+    //
+    // Antes o filtro também aceitava `vigencia_fim >= hoje`, e isso quebrou com
+    // a represcrição pela ficha clínica (#203, fatia 2): represcrever fecha a
+    // linha antiga com a data de HOJE e abre a nova no mesmo dia, então as duas
+    // casavam e `alvoPorDisc[disciplina]` ficava com a que o Postgres devolvesse
+    // por último — o teto da disciplina virava sorteio no dia da mudança.
+    //
+    // Vigência fechada não é vigência: é o mesmo critério do `app_is_on_team`
+    // na RLS (o vínculo encerrado perde acesso na hora, sem carência) e o que
+    // todo o #203 usa para somar saldo.
     const alvoRows = await tx
       .select({
         disciplina: schema.patientAlvoDisciplina.disciplina,
@@ -59,10 +69,7 @@ export async function carregarHorasPaciente(
         and(
           eq(schema.patientAlvoDisciplina.clinicId, ctx.clinicId),
           eq(schema.patientAlvoDisciplina.patientId, patientId),
-          or(
-            isNull(schema.patientAlvoDisciplina.vigenciaFim),
-            gte(schema.patientAlvoDisciplina.vigenciaFim, hojeISO),
-          ),
+          isNull(schema.patientAlvoDisciplina.vigenciaFim),
         ),
       );
     const alvoPorDisc: Record<string, number> = {};

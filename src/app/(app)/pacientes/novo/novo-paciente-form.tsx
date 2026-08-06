@@ -9,14 +9,6 @@ import { Alert } from "@/components/ui/alert";
 import { RadioCards } from "@/components/ui/radio-cards";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "@/components/ui/select";
-import { DISCIPLINAS_PADRAO } from "@/lib/disciplinas";
-import {
   cadastrarPacienteAdministrativo,
   type CadastroAdminState,
 } from "./actions";
@@ -135,33 +127,11 @@ export function NovoPacienteForm() {
       <Field label="Convênio" htmlFor="convenio">
         <Input id="convenio" name="convenio" />
       </Field>
-      {/* Alvo de carga por disciplina (Agenda 2.0) — opcional na v1: uma linha.
-          Campos vazios são ignorados pela action; repetição dinâmica de linhas
-          fica para a UI da Etapa B. */}
-      <Field label="Disciplina do alvo de carga (opcional)" htmlFor="alvoDisciplina">
-        <Select name="alvoDisciplina">
-          <SelectTrigger id="alvoDisciplina">
-            <SelectValue placeholder="Selecione a disciplina (opcional)" />
-          </SelectTrigger>
-          <SelectContent>
-            {DISCIPLINAS_PADRAO.map((d) => (
-              <SelectItem key={d.id} value={d.id}>
-                {d.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field label="Horas-alvo por semana" htmlFor="alvoHorasSemana">
-        <Input
-          id="alvoHorasSemana"
-          name="alvoHorasSemana"
-          type="number"
-          min="0"
-          step="0.5"
-          inputMode="decimal"
-        />
-      </Field>
+      {/* Disciplina e carga horária saíram daqui (#203, fatia 2). Cadastro é
+          cadastral + consentimento LGPD; prescrever é ato clínico, mora na
+          ficha clínica com vigência própria (SCD2) e é o teto que a equipe
+          consome. Prescrever no cadastro criava uma prescrição sem histórico e
+          sem quem a validasse. O submit leva direto para lá. */}
 
       {/* Consentimento LGPD. A escolha de quem assina é explícita — nunca
           derivada da data de nascimento (#100, D1). */}
@@ -275,7 +245,11 @@ export function NovoPacienteForm() {
         />
       </fieldset>
 
-      <Button type="submit">Salvar e continuar para o cadastro clínico</Button>
+      {/* A copy diz o próximo passo, não a tela de destino: o cadastro só
+          termina de verdade quando a carga horária está prescrita. */}
+      <Button type="submit">
+        Salvar e prescrever a carga horária
+      </Button>
     </Form>
   );
 }

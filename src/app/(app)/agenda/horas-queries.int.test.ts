@@ -66,6 +66,31 @@ describe.skipIf(!hasDb)("horas-queries — paciente/terapeuta (RLS)", () => {
     expect(aba!.alerta).toBe(true);
   });
 
+  test("prescrição fechada HOJE não conta como alvo (represcrição, #203)", async () => {
+    // Represcrever pela ficha clínica fecha a linha antiga com a data de hoje e
+    // abre a nova no mesmo dia. Com o filtro anterior (`vigencia_fim >= hoje`)
+    // as DUAS casavam e o alvo da disciplina virava sorteio de qual linha o
+    // Postgres devolvesse por último. Vigência fechada não é vigência.
+    await owner`UPDATE patient_alvo_disciplina
+                   SET vigencia_fim = (now() AT TIME ZONE 'America/Sao_Paulo')::date
+                 WHERE patient_id = ${PATIENT_P} AND disciplina = 'aba'`;
+    await owner`INSERT INTO patient_alvo_disciplina
+                  (clinic_id, patient_id, disciplina, horas_alvo_semana, vigencia_inicio)
+                VALUES (${CLINIC_A}, ${PATIENT_P}, 'aba', 6,
+                        (now() AT TIME ZONE 'America/Sao_Paulo')::date)`;
+
+    const aba = (await carregarHorasPaciente(ctxCoord, PATIENT_P)).find(
+      (l) => l.disciplina === "aba",
+    );
+    expect(aba!.alvo).toBe(6);
+
+    // Restaura o estado do fixture para não contaminar os casos seguintes.
+    await owner`DELETE FROM patient_alvo_disciplina
+                 WHERE patient_id = ${PATIENT_P} AND horas_alvo_semana = 6`;
+    await owner`UPDATE patient_alvo_disciplina SET vigencia_fim = NULL
+                 WHERE patient_id = ${PATIENT_P} AND disciplina = 'aba'`;
+  });
+
   test("carregarHorasTerapeuta: vago = capacidade - alocado - bloqueado", async () => {
     const r = await carregarHorasTerapeuta(ctxCoord, U_T1);
     expect(r.capacidade).toBe(8);
