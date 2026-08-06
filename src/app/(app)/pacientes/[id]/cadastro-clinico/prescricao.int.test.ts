@@ -347,6 +347,29 @@ describe.skipIf(!hasDb)("prescrição de disciplinas (fatia 2)", () => {
       expect(await horasVigentes()).toBe(12);
     });
 
+    test("confirmar SEM o teto lido é contrato quebrado, não corrida", async () => {
+      await prescrever("15");
+      await alocar("15");
+
+      // Campo ausente é chamador que não cumpriu o contrato do confirm — e o
+      // coordenador não pode receber isso como "a prescrição mudou enquanto
+      // você confirmava", que manda recarregar a página para um problema que
+      // recarregar não resolve.
+      const r = await prescreverDisciplina(
+        ctx,
+        PATIENT_MV4,
+        form({
+          disciplina: "Fonoaudiologia",
+          horasAlvoSemana: "10",
+          confirmarSobrealocacao: "1",
+        }),
+      );
+      expect(r.error).toBe(
+        "Confirmação incompleta: recarregue a página e refaça a alteração.",
+      );
+      expect(await horasVigentes()).toBe(15);
+    });
+
     test("prescrição NOVA sobre equipe legada não inventa teto anterior (§3.1)", async () => {
       // Disciplina com vínculo e SEM prescrição vigente é o legado de §3.1 — e
       // é alcançável de propósito: encerrar a prescrição mantém os vínculos.

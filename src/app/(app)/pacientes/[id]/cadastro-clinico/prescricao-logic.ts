@@ -313,6 +313,18 @@ async function prescreverDisciplinaCore(
     // confirm carrega o teto que ele viu, e divergência recusa em vez de
     // sobrescrever.
     if (confirmado) {
+      // Campo AUSENTE ≠ campo vazio. Vazio é uma resposta legítima ("não havia
+      // prescrição vigente quando eu li o diálogo"); ausente é chamador que não
+      // cumpriu o contrato do confirm. Tratar os dois como a mesma coisa faria
+      // um bug de programação chegar ao coordenador como "a prescrição mudou
+      // enquanto você confirmava" — mensagem que manda recarregar a página para
+      // um problema que recarregar não resolve.
+      if (!formData.has("horasAtuaisEsperadas")) {
+        return {
+          error:
+            "Confirmação incompleta: recarregue a página e refaça a alteração.",
+        };
+      }
       const esperadoBruto = String(
         formData.get("horasAtuaisEsperadas") ?? "",
       ).trim();

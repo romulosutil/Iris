@@ -443,10 +443,46 @@ Correções menores da mesma revisão:
   a redução e continuava no contexto antigo.
 
 Cobertura nova: 6 testes de componente (5 do diálogo + 1 que reproduz o submit
-mudo da prescrição nova) e 5 de integração (recusa por teto mudado, prescrição
-nova sobre equipe legada, vínculo sem horas no aviso, `substituto` na conta).
-`pnpm test` **970/970** · `typecheck` limpo · `lint` só as 2 falhas
-pré-existentes de `react-hooks/set-state-in-effect` em `agenda/semana/`.
+mudo da prescrição nova) e 6 de integração (recusa por teto mudado, confirm sem
+o teto lido, prescrição nova sobre equipe legada, vínculo sem horas no aviso,
+`substituto` na conta). `pnpm test` **970/970** · `typecheck` limpo · `lint` só
+as 2 falhas pré-existentes de `react-hooks/set-state-in-effect` em
+`agenda/semana/`.
+
+#### O que só o E2E pegou (`e2e/represcricao-mv4.spec.ts`)
+
+Dois defeitos que passavam por 970 unitários + 703 de integração, porque os dois
+só existem no navegador:
+
+- **O handoff de §MV4 nunca acontecia.** Represcrever é SCD2: fecha a linha
+  vigente e insere OUTRA, com id novo. O `revalidatePath` re-renderiza a lista,
+  a `key` do `<li>` muda, `LinhaPrescricao` **desmonta** — e leva junto o
+  `useActionState` e o `useEffect` que fariam o `router.push`. O coordenador
+  confirmava a redução e ficava parado na tela onde não há o que fazer, que é
+  exatamente o "descobrir depois" que a fatia existe para eliminar. **Regra que
+  fica:** navegação que segue uma gravação SCD2 não pode morar num efeito do
+  componente que a gravação substitui — vai no `redirect()` do servidor.
+- **"Encerrar prescrição" não encerrava** (defeito **pré-existente**, da fatia
+  2). O `onClick` do submit fechava o diálogo no mesmo clique, desmontando o
+  `<form>` antes do envio. Mesmo padrão que a fatia 6 tinha copiado para
+  `EncerrarVinculoForm`; os dois foram corrigidos. **Regra que fica:** diálogo
+  de confirmação fecha quando a action responde, nunca no `onClick` do submit.
+
+Achados de ambiente, todos anteriores a esta PR e ainda **abertos**:
+
+- `playwright.config.ts` não carrega `.env`, e `entrarComMfa` fala com o banco
+  direto: sem `AUTH_DATABASE_URL` exportada a suíte morre na primeira linha.
+- **`.env.local` aponta `NEXT_PUBLIC_APP_URL`/`BETTER_AUTH_URL`/`TRUSTED_ORIGINS`
+  para produção.** Carregá-lo para pegar o `BETTER_AUTH_SECRET` faz o Playwright
+  rodar contra o ambiente real — aconteceu nesta sessão (duas tentativas de
+  login com credencial local, recusadas por prod). Vale um `.env.e2e` ou um
+  guard no config que recuse `baseURL` não-local.
+- `webServer` chama `pnpm start` e quebra quando o pnpm do PATH diverge do
+  `packageManager` (corepack 11.16.0 × 11.11.0 declarado).
+- `login.spec.ts` e `cadastro-clinico.spec.ts` estão **defasados**: asseram `/`
+  (o shell hoje cai em `/agenda`), clicam "Salvar e continuar" (hoje "Salvar e
+  prescrever a carga horária") e tratam o consentimento como botão (hoje
+  `role="radio"`). Não corrigidos aqui — fora do escopo da #203.
 
 ---
 

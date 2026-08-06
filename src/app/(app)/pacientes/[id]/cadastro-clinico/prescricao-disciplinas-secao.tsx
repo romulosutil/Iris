@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,6 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { DISCIPLINAS_PADRAO, formatarDisciplina } from "@/lib/disciplinas";
 import { formatarHoras, HORAS_MAX_SEMANA, HORAS_PASSO } from "@/lib/horas";
-import { ancoraCobertura } from "../equipe/cobertura";
 import { ConfirmarSobrealocacaoDialog } from "./confirmar-sobrealocacao-dialog";
 import {
   encerrarPrescricaoAction,
@@ -254,11 +252,15 @@ function LinhaPrescricao({
     FormData
   >(prescreverDisciplinaAction.bind(null, patientId), VAZIO);
   const { addToast } = useToast();
-  const router = useRouter();
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
   const horasAtuais = Number(prescricao.horasAlvoSemana);
   const confirmacao = state.confirmacao;
 
+  // §MV4: o handoff para a barra da disciplina sobrealocada NÃO mora aqui.
+  // Represcrever insere uma linha nova (SCD2), a `key` desta linha muda e este
+  // componente desmonta na revalidação — um efeito de navegação daqui perde a
+  // corrida com a própria gravação que deveria segui-lo. Quem redireciona é
+  // `prescreverDisciplinaAction`, no servidor.
   useEffect(() => {
     if (!state.ok) return;
     addToast({
@@ -266,22 +268,7 @@ function LinhaPrescricao({
       mensagem: `${formatarDisciplina(prescricao.disciplina)} passou a valer a partir de hoje. A prescrição anterior fica no histórico.`,
       severidade: "sucesso",
     });
-    // §MV4: o trabalho não termina no salvar, termina no ajuste. Quem reduziu
-    // abaixo do alocado é levado à barra da disciplina afetada — a tela onde o
-    // excedente é resolvido —, não deixado nesta, onde não há o que fazer.
-    if (state.disciplinaSobrealocada) {
-      router.push(
-        `/pacientes/${patientId}/equipe#${ancoraCobertura(state.disciplinaSobrealocada)}`,
-      );
-    }
-  }, [
-    state.ok,
-    state.disciplinaSobrealocada,
-    addToast,
-    prescricao.disciplina,
-    patientId,
-    router,
-  ]);
+  }, [state.ok, addToast, prescricao.disciplina]);
 
   return (
     <div className="flex flex-col gap-2 rounded-[var(--radius-control)] border-2 border-l-4 border-[var(--border-brutal)] border-l-[var(--action-primary)] bg-[var(--surface-card)] p-3.5 shadow-[var(--ds-shadow)]">
@@ -368,6 +355,10 @@ function LinhaPrescricao({
             >
               Cancelar
             </Button>
+            {/* Sem `onClick` que feche: fechar aqui desmontava o `<form>` no
+                MESMO clique, e o submit ficava dependendo de o evento
+                sobreviver ao unmount — o encerramento não acontecia. O diálogo
+                sai de cena sozinho quando a revalidação remove esta linha. */}
             <form
               action={encerrarPrescricaoAction.bind(
                 null,
@@ -375,12 +366,7 @@ function LinhaPrescricao({
                 prescricao.disciplina,
               )}
             >
-              <Button
-                type="submit"
-                risco="alto"
-                tamanho="sm"
-                onClick={() => setConfirmandoEncerrar(false)}
-              >
+              <Button type="submit" risco="alto" tamanho="sm">
                 Encerrar prescrição
               </Button>
             </form>
