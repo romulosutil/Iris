@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
+  ROTULO_ESTADO,
   calcularCobertura,
   chaveDisciplina,
   somarHorasAlocadas,
+  textoCobertura,
+  textoVinculosSemHoras,
   vinculosForaDaPrescricao,
 } from "./cobertura";
 
@@ -171,6 +174,86 @@ describe("vinculosForaDaPrescricao", () => {
       [{ disciplina: "Fonoaudiologia", horasAlvoSemana: "20.0" }],
     );
     expect(fora).toHaveLength(0);
+  });
+});
+
+describe("textoCobertura — a copy dos 4 estados de MV3 (fatia 5)", () => {
+  const alvo20 = [{ disciplina: "Fonoaudiologia", horasAlvoSemana: "20.0" }];
+  const frase = (
+    vinculos: { papelNaEquipe: string; horasSemana: string | null }[],
+  ) => {
+    const [c] = calcularCobertura(
+      alvo20,
+      vinculos.map((v) => ({ disciplina: "Fonoaudiologia", ...v })),
+    );
+    return textoCobertura(c!);
+  };
+
+  test("0% diz o que falta, não repete o percentual", () => {
+    expect(frase([])).toBe("0h de 20h alocadas — nenhum terapeuta vinculado");
+  });
+
+  test("parcial nomeia o restante exato", () => {
+    expect(frase([{ papelNaEquipe: T, horasSemana: "12.0" }])).toBe(
+      "12h de 20h alocadas (60%) — restam 8h",
+    );
+  });
+
+  test("100% afirma cobertura completa sem falar em restante", () => {
+    expect(frase([{ papelNaEquipe: T, horasSemana: "20.0" }])).toBe(
+      "20h de 20h alocadas — cobertura completa",
+    );
+  });
+
+  test(">100% traz o excedente E a instrução de saída", () => {
+    // A instrução é parte da frase porque a sobrealocação não trava a tela: se
+    // o caminho de volta não estiver escrito onde o problema aparece, ele não
+    // existe para quem só ouve a barra.
+    expect(frase([{ papelNaEquipe: T, horasSemana: "25.0" }])).toBe(
+      "25h de 20h alocadas (125%) — sobrealocação de 5h. Reduza as horas de um membro ou aumente a prescrição.",
+    );
+  });
+
+  test("meia hora aparece como tempo, nunca como decimal (D-E)", () => {
+    // `1,5h de 20,0h` é notação de planilha e obriga o coordenador a converter
+    // de cabeça. Este é o teste que impede a barra de reintroduzir o decimal.
+    const texto = frase([{ papelNaEquipe: T, horasSemana: "1.5" }]);
+    expect(texto).toContain("1h30");
+    expect(texto).not.toContain(",");
+  });
+
+  test("cada estado tem rótulo textual próprio — cor nunca sozinha", () => {
+    const rotulos = Object.values(ROTULO_ESTADO);
+    expect(new Set(rotulos).size).toBe(rotulos.length);
+    expect(rotulos.every((r) => r.trim().length > 0)).toBe(true);
+  });
+});
+
+describe("textoVinculosSemHoras", () => {
+  const base = {
+    disciplina: "ABA",
+    horasAlvo: 20,
+    horasAlocadas: 8,
+    horasRestantes: 12,
+    horasExcedentes: 0,
+    percentual: 40,
+    estado: "parcial" as const,
+  };
+
+  test("silencia quando não há vínculo sem horas", () => {
+    expect(textoVinculosSemHoras({ ...base, vinculosSemHoras: 0 })).toBeNull();
+  });
+
+  test("um vínculo fala no singular", () => {
+    expect(textoVinculosSemHoras({ ...base, vinculosSemHoras: 1 })).toBe(
+      "1 vínculo sem horas definidas — a conta acima está incompleta até você defini-las.",
+    );
+  });
+
+  test("mais de um fala no plural", () => {
+    expect(textoVinculosSemHoras({ ...base, vinculosSemHoras: 3 })).toContain(
+      "3 vínculos sem horas definidas",
+    );
   });
 });
 

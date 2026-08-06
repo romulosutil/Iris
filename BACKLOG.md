@@ -312,15 +312,72 @@ todos verdes. `pnpm test` 942/942 · `typecheck` limpo · `lint` e `test:rls` co
 **exatamente as mesmas falhas pré-existentes** já registradas acima (confirmado
 por `git stash`).
 
-### Fatia 5 — o que já está pronto para ela
+### Fatia 5 — barra de cobertura nos 4 estados, a11y e copy (PR #207)
 
-`calcularCobertura` devolve os quatro estados de MV3 (`vazio` / `parcial` /
-`completa` / `sobrealocada`) com `horasAlvo`, `horasAlocadas`, `horasRestantes`,
-`horasExcedentes`, `percentual` e `vinculosSemHoras` — os quatro estados já têm
-teste unitário. A tela hoje imprime a frase de estado por extenso; **falta**
-trocar o cartão por `Progress` + `StatusBadge` do design system com
-`role="progressbar"` e `aria-valuenow/min/max`, e as stories dos quatro estados.
-Nenhuma conta nova é necessária.
+**Sem migração e sem conta nova.** A fatia 4 já deixava `calcularCobertura`
+devolvendo os quatro estados; o que faltava era a barra deixar de ser um cartão
+de texto e virar um `progressbar` de verdade, com a copy de MV3 fechada.
+
+O que entrou:
+
+- **`BarraCobertura`** (`equipe/barra-cobertura.tsx`) — `Progress` +
+  `StatusBadge` do design system, um por disciplina prescrita. **Não recalcula
+  nada**: consome a saída de `calcularCobertura`, a mesma que valida o saldo no
+  servidor. Barra que fizesse a própria conta diria "restam 8h" e o servidor
+  recusaria alocar 8h.
+- **A copy virou função pura** (`textoCobertura`, `textoVinculosSemHoras`,
+  `ROTULO_ESTADO` em `cobertura.ts`). A frase de MV3 é a mesma coisa que o
+  `aria-valuetext`: **o que se ouve é o que se lê**, por construção, não por
+  disciplina de quem edita. E, morando fora do componente, a diferença entre
+  "restam 8h" e "sobrealocação de 5h" — que é clínica — tem teste sem DOM.
+- **Estado nunca depende de cor** (§MV3, princípio de acessibilidade do
+  produto): aparece no selo (texto + ícone), na frase por extenso e no
+  `aria-valuetext`. A cor da barra é a quarta via, redundante de propósito.
+- **>100% satura a régua em 100 e diz a verdade no texto.** `aria-valuemax` é
+  100; deixar `aria-valuenow` em 125 entregaria ao leitor de tela um valor fora
+  da faixa declarada. O excedente e a **instrução de saída** ("Reduza as horas de
+  um membro ou aumente a prescrição") são parte da frase — sobrealocação não
+  trava a tela, então o caminho de volta precisa estar escrito onde o problema
+  aparece. Mais um resumo no topo do bloco, porque num paciente com muitas
+  disciplinas a linha sobrealocada pode estar fora da dobra.
+- **Design system ganhou duas variantes**, e nenhuma delas é decoração:
+  `Progress` passou a aceitar `variante` (`acao` — default histórico, `neutro`,
+  `atencao`, `sucesso`, `erro`) porque quatro estados na mesma cor seriam quatro
+  estados invisíveis para quem enxerga; `StatusBadge` ganhou `error`, que não
+  existia — só havia `warning` para desfecho ruim, e sobrealocação não é aviso.
+- **5 stories** (`barra-cobertura.stories.tsx`), incluindo o vínculo legado sem
+  horas. Nenhuma story escreve número à mão: todas montam o dado por
+  `calcularCobertura`, senão o Storybook viraria documentação que mente sobre o
+  produto quando a regra mudar.
+
+Verificação — **mutação rodada, não presumida**: apagando a instrução de saída de
+`textoCobertura` e o `aria-valuetext` do componente, 4 testes caem, e o
+`aria-valuetext` cai para o `"100%"` que o Radix gera sozinho — que é exatamente
+o anúncio pobre que o teste existe para impedir. `pnpm test` **964/964**
+(846 unitários + 118 de story) · `typecheck` limpo · `lint` e `test:rls` com
+**exatamente as mesmas falhas pré-existentes** já registradas acima
+(`agenda2-janela-actions`, `conta-somente-leitura-rls`, 2 erros de
+`react-hooks/set-state-in-effect` em `agenda/semana/`).
+
+### Fatia 6 — o que já está pronto para ela (represcrição MV4 + toast)
+
+- **A leitura da sobrealocação já existe e é derivada**: `calcularCobertura` →
+  `estado === "sobrealocada"` + `horasExcedentes`. A confirmação da fatia 6
+  ("esta redução deixa a disciplina sobrealocada") deve **ler** isso, nunca
+  replicar a regra nem persistir flag.
+- **A copy da consequência já está escrita e testada** (`textoCobertura` no
+  estado sobrealocado) — o diálogo de confirmação e a tela de equipe devem falar
+  a mesma frase, não duas paráfrases que divergem.
+- **`encerrarVinculoEquipe` já devolve `{ disciplina, horasDevolvidas }`** (0 em
+  papel de gestão, por D-C) — é o que o toast de devolução de saldo (§3.3)
+  precisa para nomear o número que mudou na tela, junto com o corte de acesso
+  imediato (D-A).
+- **`Dialog` do design system** é o componente previsto pelo §MV4; o padrão de
+  confirmação com `useActionState` (`bloqueioConta` separado de `error`) já está
+  nas fatias 3 e 4.
+- Depois de confirmar, a fatia 6 leva o coordenador **para a tela de equipe** —
+  o trabalho não termina no salvar, termina no ajuste. A barra desta fatia é o
+  destino dessa navegação.
 
 ---
 

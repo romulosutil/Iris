@@ -25,6 +25,7 @@ export type EstadoDado =
 export type BadgesVariantes =
   | "success"
   | "warning"
+  | "error"
   | "ai"
   | "info"
   | "brand"
@@ -49,6 +50,10 @@ export const variantStyles: Record<string, string> = {
   Success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
   warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
   Warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
+  // `error` é desfecho ruim porém legítimo (ex.: sobrealocação da equipe, #203):
+  // grita, mas nunca é o único portador da informação — o texto ao lado diz o
+  // estado por extenso.
+  error: "bg-[var(--status-error-bg)] border-[var(--status-error-border)] text-[var(--status-error-fg)]",
   ai: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
   AI: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
   info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
@@ -62,6 +67,7 @@ const dotColorMap: Record<string, string> = {
   Success: "bg-[var(--status-success-border)]",
   warning: "bg-[var(--status-warning-border)]",
   Warning: "bg-[var(--status-warning-border)]",
+  error: "bg-[var(--status-error-border)]",
   ai: "bg-[var(--status-ia-border)]",
   AI: "bg-[var(--status-ia-border)]",
   info: "bg-[var(--status-info-border)]",
@@ -123,6 +129,15 @@ function IconeSlash() {
     </svg>
   );
 }
+function IconeAlerta() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 16 16" fill="none" aria-hidden focusable="false">
+      <path d="M8 2l6 11H2L8 2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8 6.5v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+      <path d="M8 11.2v.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+    </svg>
+  );
+}
 function IconeClock() {
   return (
     <svg width={14} height={14} viewBox="0 0 16 16" fill="none" aria-hidden focusable="false">
@@ -168,6 +183,7 @@ const defaultIcons: Record<string, React.FC> = {
   Success: IconeCheck,
   warning: IconeClock,
   Warning: IconeClock,
+  error: IconeAlerta,
   ai: IconeSparkle,
   AI: IconeSparkle,
   info: IconeLayers,

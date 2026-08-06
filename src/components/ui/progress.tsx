@@ -9,12 +9,30 @@ import { cn } from "@/lib/cn";
  * Espectro Brutal. Linear e sóbrio — progresso do dossiê rumo à janela de
  * avaliação. Sem number gigante, sem gradiente (não é hero-metric).
  */
+/**
+ * Variante semântica do preenchimento. `acao` é o default histórico (progresso
+ * neutro do dossiê); as demais existem porque a barra de cobertura da equipe
+ * (#203) tem QUATRO estados com leituras diferentes. A cor é sempre reforço —
+ * quem chama continua obrigado a dizer o estado por extenso no rótulo.
+ */
+export type ProgressVariante =
+  "acao" | "neutro" | "atencao" | "sucesso" | "erro";
+
+const varianteIndicador: Record<ProgressVariante, string> = {
+  acao: "bg-[var(--action-primary)]",
+  neutro: "bg-[var(--text-secondary)]",
+  atencao: "bg-[var(--status-warning-border)]",
+  sucesso: "bg-[var(--status-success-border)]",
+  erro: "bg-[var(--status-error-border)]",
+};
+
 export const Progress = React.forwardRef<
   React.ComponentRef<typeof ProgressPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> & {
     value?: number | null;
+    variante?: ProgressVariante;
   }
->(function Progress({ className, value, ...props }, ref) {
+>(function Progress({ className, value, variante = "acao", ...props }, ref) {
   const isIndeterminate = value === null || value === undefined;
   const pct = isIndeterminate ? null : Math.min(100, Math.max(0, value));
 
@@ -23,15 +41,16 @@ export const Progress = React.forwardRef<
       ref={ref}
       value={pct}
       className={cn(
-        "border-[var(--border-brutal)] bg-[var(--bg-app)] relative h-4 w-full overflow-hidden border-2 rounded-[var(--radius-sm)]",
+        "relative h-4 w-full overflow-hidden rounded-[var(--radius-sm)] border-2 border-[var(--border-brutal)] bg-[var(--bg-app)]",
         className,
       )}
       {...props}
     >
       <ProgressPrimitive.Indicator
         className={cn(
-          "bg-[var(--action-primary)] h-full transition-transform duration-300 ease-out",
-          isIndeterminate && "w-full animate-pulse opacity-80"
+          "h-full transition-transform duration-300 ease-out",
+          varianteIndicador[variante],
+          isIndeterminate && "w-full animate-pulse opacity-80",
         )}
         style={
           isIndeterminate
