@@ -18,7 +18,8 @@ test("terapeuta demo: revisão exige abrir o cartão antes de aprovar (lastro)",
 }) => {
   // Terapeuta é papel clínico: segundo fator obrigatório desde a Fase 6.2b.
   await entrarComMfa(page, "terapeuta.demo@iris.test", "Senha Demo 123");
-  await expect(page).toHaveURL("/");
+  // `/` é a landing pública e redireciona quem tem sessão para `/agenda` (#209).
+  await expect(page).toHaveURL("/agenda");
 
   // Abre a sessão do dia e consolida (gera as sugestões via DemoStubProvider).
   await page.goto("/agenda");
@@ -43,7 +44,10 @@ test("terapeuta demo: revisão exige abrir o cartão antes de aprovar (lastro)",
 
   // Entra na revisão pela Fila de Pendências (o link agora aponta /revisao).
   await page.goto("/pendencias");
-  await page.getByRole("link", { name: /Revisar →/ }).first().click();
+  await page
+    .getByRole("link", { name: /Revisar →/ })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/revisao\/.+/);
   await expect(
     page.getByRole("heading", { name: "Revisão de extrações" }),
@@ -62,18 +66,25 @@ test("terapeuta demo: revisão exige abrir o cartão antes de aprovar (lastro)",
   let indiceCompacto = -1;
   for (let i = 0; i < totalCartoes; i++) {
     if (
-      (await cartoes.nth(i).getByRole("button", { name: "Revisar →" }).count()) >
-      0
+      (await cartoes
+        .nth(i)
+        .getByRole("button", { name: "Revisar →" })
+        .count()) > 0
     ) {
       indiceCompacto = i;
       break;
     }
   }
-  expect(indiceCompacto, "nenhum cartão compacto na fila").toBeGreaterThanOrEqual(0);
+  expect(
+    indiceCompacto,
+    "nenhum cartão compacto na fila",
+  ).toBeGreaterThanOrEqual(0);
 
   const compacto = cartoes.nth(indiceCompacto);
   await expect(compacto).toBeVisible();
-  await expect(compacto.getByRole("button", { name: "Aprovar" })).toHaveCount(0);
+  await expect(compacto.getByRole("button", { name: "Aprovar" })).toHaveCount(
+    0,
+  );
 
   // Abrir o cartão (o lastro de exibição) revela o botão de aprovar.
   await compacto.getByRole("button", { name: "Revisar →" }).click();

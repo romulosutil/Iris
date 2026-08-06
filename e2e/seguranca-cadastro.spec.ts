@@ -28,12 +28,17 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.goto("/cadastro");
       await page.getByLabel("Nome completo").fill("Dra. Validação Segurança");
       await page.getByLabel("E-mail").fill(emailExistente);
-      await page.getByLabel("Senha").fill("SenhaSeguraE2E123!");
-      await page.getByLabel("Nome da clínica").fill(`Clínica Primária ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page
+        .getByLabel("Senha", { exact: true })
+        .fill("SenhaSeguraE2E123!");
+      await page
+        .getByLabel("Nome da clínica")
+        .fill(`Clínica Primária ${timestamp}`);
+      await page.getByRole("combobox", { name: "Conselho" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
-      await page.getByLabel("Número do registro").fill("111222");
-      await page.getByLabel("UF do registro").fill("SP");
+      await page.getByLabel("Nº do registro").fill("111222");
+      await page.getByRole("combobox", { name: "UF" }).click();
+      await page.getByRole("option", { name: /^SP - / }).click();
       await page.getByRole("checkbox").check();
       await page.getByRole("button", { name: "Criar conta" }).click();
 
@@ -46,19 +51,27 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.goto("/cadastro");
       await page.getByLabel("Nome completo").fill("Impostor E2E");
       await page.getByLabel("E-mail").fill(emailExistente); // E-mail já existente
-      await page.getByLabel("Senha").fill("OutraSenhaFortissima123!");
-      await page.getByLabel("Nome da clínica").fill(`Clínica Falsa ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page
+        .getByLabel("Senha", { exact: true })
+        .fill("OutraSenhaFortissima123!");
+      await page
+        .getByLabel("Nome da clínica")
+        .fill(`Clínica Falsa ${timestamp}`);
+      await page.getByRole("combobox", { name: "Conselho" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
-      await page.getByLabel("Número do registro").fill("111222");
-      await page.getByLabel("UF do registro").fill("SP");
+      await page.getByLabel("Nº do registro").fill("111222");
+      await page.getByRole("combobox", { name: "UF" }).click();
+      await page.getByRole("option", { name: /^SP - / }).click();
       await page.getByRole("checkbox").check();
       await page.getByRole("button", { name: "Criar conta" }).click();
 
       await expect(page).toHaveURL("/cadastro/verifique-email");
       textoExistente =
-        (await page.getByText(/Se este e-mail puder criar uma conta/i).textContent())?.trim() ??
-        "";
+        (
+          await page
+            .getByText(/Se este e-mail puder criar uma conta/i)
+            .textContent()
+        )?.trim() ?? "";
 
       // Nenhuma indicação visual de erro ou vazamento de existência
       await expect(page.getByText(/E-mail já cadastrado/i)).not.toBeVisible();
@@ -71,17 +84,24 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.goto("/cadastro");
       await page.getByLabel("Nome completo").fill("Dr. Novo Usuário");
       await page.getByLabel("E-mail").fill(emailNovo); // E-mail virgem
-      await page.getByLabel("Senha").fill("SenhaSeguraE2E123!");
-      await page.getByLabel("Nome da clínica").fill(`Clínica Nova ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page
+        .getByLabel("Senha", { exact: true })
+        .fill("SenhaSeguraE2E123!");
+      await page
+        .getByLabel("Nome da clínica")
+        .fill(`Clínica Nova ${timestamp}`);
+      await page.getByRole("combobox", { name: "Conselho" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
-      await page.getByLabel("Número do registro").fill("333444");
-      await page.getByLabel("UF do registro").fill("RJ");
+      await page.getByLabel("Nº do registro").fill("333444");
+      await page.getByRole("combobox", { name: "UF" }).click();
+      await page.getByRole("option", { name: /^RJ - / }).click();
       await page.getByRole("checkbox").check();
       await page.getByRole("button", { name: "Criar conta" }).click();
 
       await expect(page).toHaveURL("/cadastro/verifique-email");
-      const textoNovo = await page.getByText(/Se este e-mail puder criar uma conta/i).textContent();
+      const textoNovo = await page
+        .getByText(/Se este e-mail puder criar uma conta/i)
+        .textContent();
 
       // Asserção estrita de segurança: textos 100% idênticos nos dois fluxos.
       // Comparar com o texto CAPTURADO no ramo do e-mail existente, e não com
@@ -118,7 +138,9 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       // achava o cookie e falhava mesmo com a proteção funcionando. A constante
       // não é importada aqui porque o módulo é `server-only`.
       const cookies = await context.cookies();
-      const cookieReset = cookies.find((c) => c.name === "redefinir_senha_token");
+      const cookieReset = cookies.find(
+        (c) => c.name === "redefinir_senha_token",
+      );
 
       expect(cookieReset).toBeDefined();
       expect(cookieReset?.httpOnly).toBe(true);
@@ -138,12 +160,15 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       for (let i = 0; i < 3; i++) {
         await page.getByLabel("Nome completo").fill("Atacante Bot");
         await page.getByLabel("E-mail").fill(emailAtaque);
-        await page.getByLabel("Senha").fill("SenhaQualquer123!");
+        await page
+          .getByLabel("Senha", { exact: true })
+          .fill("SenhaQualquer123!");
         await page.getByLabel("Nome da clínica").fill(`Clínica Bot ${i}`);
-        await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+        await page.getByRole("combobox", { name: "Conselho" }).click();
         await page.getByRole("option", { name: "CRP" }).click();
-        await page.getByLabel("Número do registro").fill("999000");
-        await page.getByLabel("UF do registro").fill("SP");
+        await page.getByLabel("Nº do registro").fill("999000");
+        await page.getByRole("combobox", { name: "UF" }).click();
+        await page.getByRole("option", { name: /^SP - / }).click();
         await page.getByRole("checkbox").check();
 
         await page.getByRole("button", { name: "Criar conta" }).click();
@@ -161,7 +186,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await expect(page.getByText(/500/i)).not.toBeVisible();
       await expect(page.getByText(/Internal Server Error/i)).not.toBeVisible();
       await expect(
-        page.getByText(/Se este e-mail puder criar uma conta/i)
+        page.getByText(/Se este e-mail puder criar uma conta/i),
       ).toBeVisible();
     });
   });
@@ -178,12 +203,13 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.goto("/cadastro");
       await page.getByLabel("Nome completo").fill("Dra. Helena MFA");
       await page.getByLabel("E-mail").fill(emailClinico);
-      await page.getByLabel("Senha").fill(senha);
+      await page.getByLabel("Senha", { exact: true }).fill(senha);
       await page.getByLabel("Nome da clínica").fill(`Clínica MFA ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page.getByRole("combobox", { name: "Conselho" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
-      await page.getByLabel("Número do registro").fill("777888");
-      await page.getByLabel("UF do registro").fill("MG");
+      await page.getByLabel("Nº do registro").fill("777888");
+      await page.getByRole("combobox", { name: "UF" }).click();
+      await page.getByRole("option", { name: /^MG - / }).click();
       await page.getByRole("checkbox").check();
       await page.getByRole("button", { name: "Criar conta" }).click();
 
@@ -193,7 +219,11 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       // (`createEmailVerificationToken` = `signJWT`), NÃO uma linha em
       // `auth_verification`. Esperar a linha aparecer expirava sempre e a
       // Garantia 4 nunca chegava a exercitar o enforcement de MFA.
-      token = await signJWT({ email: emailClinico }, process.env.BETTER_AUTH_SECRET!, 3600);
+      token = await signJWT(
+        { email: emailClinico },
+        process.env.BETTER_AUTH_SECRET!,
+        3600,
+      );
     });
 
     await test.step("4.2. Executa verificação e garante redirecionamento obrigatório para /mfa/setup", async () => {
@@ -204,7 +234,7 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       // Redirecionamento obrigatório para enrollment de MFA
       await expect(page).toHaveURL(/\/mfa\/setup/);
       await expect(
-        page.getByRole("heading", { name: /Verificação em Duas Etapas/i })
+        page.getByRole("heading", { name: /Verificação em Duas Etapas/i }),
       ).toBeVisible();
     });
 
@@ -214,7 +244,10 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
 
       // Deve ser barrado e mantido no fluxo de autenticação/MFA ou redirecionado
       const urlAtual = page.url();
-      const emMfaOuLogin = urlAtual.includes("/mfa/setup") || urlAtual.includes("/login") || urlAtual.includes("/sem-acesso");
+      const emMfaOuLogin =
+        urlAtual.includes("/mfa/setup") ||
+        urlAtual.includes("/login") ||
+        urlAtual.includes("/sem-acesso");
       expect(emMfaOuLogin).toBe(true);
     });
   });

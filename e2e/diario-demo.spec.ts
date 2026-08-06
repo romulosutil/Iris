@@ -11,7 +11,7 @@ import { entrarComMfa } from "./helpers/sessao";
  *   2. Seed demo: `pnpm seed:demo` — clínica `is_demo = true`, terapeuta
  *      `terapeuta.demo@iris.test` / `Senha Demo 123`, 4 pacientes, protocolo
  *      ativo e uma sessão de hoje do terapeuta demo.
- *   3. App servindo (o `webServer` do playwright.config sobe via `pnpm start`).
+ *   3. App servindo (o `webServer` do playwright.config sobe o Next sozinho).
  *
  * O `is_demo = true` faz `resolveProvider` usar o `DemoStubProvider`, que gera
  * sugestões determinísticas a partir das frases da nota consolidada (sem LLM).
@@ -22,7 +22,8 @@ test("terapeuta demo: captura rápida → consolida → Fila mostra sugestões a
   // Login do terapeuta da clínica demo (credenciais fixas do seed do Plano 4).
   // Terapeuta é papel clínico: segundo fator obrigatório desde a Fase 6.2b.
   await entrarComMfa(page, "terapeuta.demo@iris.test", "Senha Demo 123");
-  await expect(page).toHaveURL("/");
+  // `/` é a landing pública e redireciona quem tem sessão para `/agenda` (#209).
+  await expect(page).toHaveURL("/agenda");
 
   // Abre a sessão do dia semeada pelo seed demo, pela agenda.
   await page.goto("/agenda");
@@ -61,5 +62,7 @@ test("terapeuta demo: captura rápida → consolida → Fila mostra sugestões a
   await expect(
     page.getByRole("heading", { name: "Sugestões da IA (candidatas)" }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: /Revisar →/ }).first()).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Revisar →/ }).first(),
+  ).toBeVisible();
 });

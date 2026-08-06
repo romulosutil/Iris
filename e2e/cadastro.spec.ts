@@ -30,19 +30,22 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
 
     await test.step("1. Acessa e preenche o formulário de cadastro com dados válidos", async () => {
       await page.goto("/cadastro");
-      await expect(page.getByRole("heading", { name: "Criar conta" })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Criar conta" }),
+      ).toBeVisible();
 
       await page.getByLabel("Nome completo").fill("Dra. Helena E2E");
       await page.getByLabel("E-mail").fill(email);
-      await page.getByLabel("Senha").fill(senha);
+      await page.getByLabel("Senha", { exact: true }).fill(senha);
       await page.getByLabel("Nome da clínica").fill(nomeClinica);
 
       // Seleção de Conselho Profissional via componente Radix UI Select
-      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page.getByRole("combobox", { name: "Conselho" }).click();
       await page.getByRole("option", { name: "CRP" }).click();
 
-      await page.getByLabel("Número do registro").fill("998877");
-      await page.getByLabel("UF do registro").fill("SP");
+      await page.getByLabel("Nº do registro").fill("998877");
+      await page.getByRole("combobox", { name: "UF" }).click();
+      await page.getByRole("option", { name: /^SP - / }).click();
 
       // Aceite dos Termos de Uso
       await page.getByRole("checkbox").check();
@@ -55,12 +58,14 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
     await test.step("2. Valida resposta uniforme e proteção anti-enumeração", async () => {
       await expect(page).toHaveURL("/cadastro/verifique-email");
       await expect(
-        page.getByText(/Se este e-mail puder criar uma conta/i)
+        page.getByText(/Se este e-mail puder criar uma conta/i),
       ).toBeVisible();
 
       // Garantia que não vazamos mensagens como "E-mail já existe" ou "Conta criada"
       await expect(page.getByText(/E-mail já cadastrado/i)).not.toBeVisible();
-      await expect(page.getByText(/Conta criada com sucesso/i)).not.toBeVisible();
+      await expect(
+        page.getByText(/Conta criada com sucesso/i),
+      ).not.toBeVisible();
     });
 
     await test.step("3. Reconstrói o token de verificação e consome o endpoint real", async () => {
@@ -72,7 +77,11 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       // expirava sempre — o cadastro funcionava, o teste é que media a coisa
       // errada. Aqui o teste assina o MESMO token que o e-mail carregaria e
       // consome o endpoint de verdade, sem rota de atalho no produto.
-      const token = await signJWT({ email }, process.env.BETTER_AUTH_SECRET!, 3600);
+      const token = await signJWT(
+        { email },
+        process.env.BETTER_AUTH_SECRET!,
+        3600,
+      );
 
       // `${baseURL}/verify-email` do Better-Auth = /api/auth/verify-email.
       // `callbackURL` relativo passa no originCheck da lib.
@@ -84,7 +93,7 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       // de MFA para papel clínico antes de qualquer dado de paciente.
       await expect(page).toHaveURL(/\/mfa\/setup/);
       await expect(
-        page.getByRole("heading", { name: /Verificação em Duas Etapas/i })
+        page.getByRole("heading", { name: /Verificação em Duas Etapas/i }),
       ).toBeVisible();
 
       // A verificação precisa ter marcado a conta — senão o redirect para
@@ -111,7 +120,6 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
 
       expect(consentRecord).toBeDefined();
       expect(consentRecord?.versaoTermo).toBeTruthy();
-
     });
   });
 
@@ -127,12 +135,13 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.goto("/cadastro");
       await page.getByLabel("Nome completo").fill("Dr. Idempotente Primeiro");
       await page.getByLabel("E-mail").fill(email);
-      await page.getByLabel("Senha").fill(senha);
+      await page.getByLabel("Senha", { exact: true }).fill(senha);
       await page.getByLabel("Nome da clínica").fill(nomeClinica);
-      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page.getByRole("combobox", { name: "Conselho" }).click();
       await page.getByRole("option", { name: "CRM" }).click();
-      await page.getByLabel("Número do registro").fill("112233");
-      await page.getByLabel("UF do registro").fill("MG");
+      await page.getByLabel("Nº do registro").fill("112233");
+      await page.getByRole("combobox", { name: "UF" }).click();
+      await page.getByRole("option", { name: /^MG - / }).click();
       await page.getByRole("checkbox").check();
       await page.getByRole("button", { name: "Criar conta" }).click();
 
@@ -143,19 +152,22 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.goto("/cadastro");
       await page.getByLabel("Nome completo").fill("Dr. Idempotente Segundo");
       await page.getByLabel("E-mail").fill(email);
-      await page.getByLabel("Senha").fill("OutraSenha123!");
-      await page.getByLabel("Nome da clínica").fill(`Tentativa Duplicada ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page.getByLabel("Senha", { exact: true }).fill("OutraSenha123!");
+      await page
+        .getByLabel("Nome da clínica")
+        .fill(`Tentativa Duplicada ${timestamp}`);
+      await page.getByRole("combobox", { name: "Conselho" }).click();
       await page.getByRole("option", { name: "CRM" }).click();
-      await page.getByLabel("Número do registro").fill("112233");
-      await page.getByLabel("UF do registro").fill("MG");
+      await page.getByLabel("Nº do registro").fill("112233");
+      await page.getByRole("combobox", { name: "UF" }).click();
+      await page.getByRole("option", { name: /^MG - / }).click();
       await page.getByRole("checkbox").check();
       await page.getByRole("button", { name: "Criar conta" }).click();
 
       // Redireciona para a mesma página uniforme sem revelar que o e-mail já existe
       await expect(page).toHaveURL("/cadastro/verifique-email");
       await expect(
-        page.getByText(/Se este e-mail puder criar uma conta/i)
+        page.getByText(/Se este e-mail puder criar uma conta/i),
       ).toBeVisible();
     });
 
@@ -189,14 +201,15 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
     await test.step("1. Preenche o formulário com dados e senha inválida (curta)", async () => {
       await page.getByLabel("Nome completo").fill("Dra. Beatriz Resiliente");
       await page.getByLabel("E-mail").fill("beatriz@iris.test");
-      await page.getByLabel("Senha").fill("123"); // Senha inválida (< 12 caracteres)
+      await page.getByLabel("Senha", { exact: true }).fill("123"); // Senha inválida (< 12 caracteres)
       await page.getByLabel("Nome da clínica").fill("Clínica Resiliente E2E");
 
-      await page.getByRole("combobox", { name: "Conselho profissional" }).click();
+      await page.getByRole("combobox", { name: "Conselho" }).click();
       await page.getByRole("option", { name: "CREFITO" }).click();
 
-      await page.getByLabel("Número do registro").fill("456789");
-      await page.getByLabel("UF do registro").fill("PR");
+      await page.getByLabel("Nº do registro").fill("456789");
+      await page.getByRole("combobox", { name: "UF" }).click();
+      await page.getByRole("option", { name: /^PR - / }).click();
       await page.getByRole("checkbox").check();
 
       // O campo de senha tem `minLength={12}`: com a validação NATIVA ligada, o
@@ -222,21 +235,28 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       // `cadastro-form.tsx` seleciona com querySelector.
       const alert = page.getByRole("alert").first();
       await expect(alert).toBeVisible();
-      await expect(alert).toContainText("A senha precisa ter ao menos 12 caracteres.");
+      await expect(alert).toContainText(
+        "A senha precisa ter ao menos 12 caracteres.",
+      );
       await expect(alert).toBeFocused();
     });
 
     await test.step("3. Valida preservação de estado contra form-wipe (React 19 / Radix UI)", async () => {
-      await expect(page.getByLabel("Nome completo")).toHaveValue("Dra. Beatriz Resiliente");
+      await expect(page.getByLabel("Nome completo")).toHaveValue(
+        "Dra. Beatriz Resiliente",
+      );
       await expect(page.getByLabel("E-mail")).toHaveValue("beatriz@iris.test");
-      await expect(page.getByLabel("Nome da clínica")).toHaveValue("Clínica Resiliente E2E");
-      await expect(page.getByLabel("Número do registro")).toHaveValue("456789");
-      await expect(page.getByLabel("UF do registro")).toHaveValue("PR");
-
-      // Componentes Radix UI continuam com os valores selecionados
-      await expect(
-        page.getByRole("combobox", { name: "Conselho profissional" })
-      ).toHaveText(/CREFITO/);
+      await expect(page.getByLabel("Nome da clínica")).toHaveValue(
+        "Clínica Resiliente E2E",
+      );
+      await expect(page.getByLabel("Nº do registro")).toHaveValue("456789");
+      // Componentes Radix UI continuam com os valores selecionados. A UF também
+      // é `Select`, não input — `toHaveValue` estourava "Not an input element"
+      // (#209); o que se lê dela é o texto do gatilho.
+      await expect(page.getByRole("combobox", { name: "Conselho" })).toHaveText(
+        /CREFITO/,
+      );
+      await expect(page.getByRole("combobox", { name: "UF" })).toHaveText(/PR/);
       await expect(page.getByRole("checkbox")).toBeChecked();
     });
   });
@@ -252,7 +272,9 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await expect(linkTermos).toHaveAttribute("href", "/termos");
       await expect(linkTermos).toHaveAttribute("target", "_blank");
 
-      const linkPrivacidade = page.getByRole("link", { name: "Política de Privacidade" });
+      const linkPrivacidade = page.getByRole("link", {
+        name: "Política de Privacidade",
+      });
       await expect(linkPrivacidade).toBeVisible();
       await expect(linkPrivacidade).toHaveAttribute("href", "/privacidade");
       await expect(linkPrivacidade).toHaveAttribute("target", "_blank");

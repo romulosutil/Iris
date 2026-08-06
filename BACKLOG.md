@@ -468,21 +468,54 @@ só existem no navegador:
   `EncerrarVinculoForm`; os dois foram corrigidos. **Regra que fica:** diálogo
   de confirmação fecha quando a action responde, nunca no `onClick` do submit.
 
-Achados de ambiente, todos anteriores a esta PR e ainda **abertos**:
+Achados de ambiente, todos anteriores a esta PR — **levantados na #209 e
+resolvidos lá** (ver seção seguinte).
 
-- `playwright.config.ts` não carrega `.env`, e `entrarComMfa` fala com o banco
-  direto: sem `AUTH_DATABASE_URL` exportada a suíte morre na primeira linha.
-- **`.env.local` aponta `NEXT_PUBLIC_APP_URL`/`BETTER_AUTH_URL`/`TRUSTED_ORIGINS`
-  para produção.** Carregá-lo para pegar o `BETTER_AUTH_SECRET` faz o Playwright
-  rodar contra o ambiente real — aconteceu nesta sessão (duas tentativas de
-  login com credencial local, recusadas por prod). Vale um `.env.e2e` ou um
-  guard no config que recuse `baseURL` não-local.
-- `webServer` chama `pnpm start` e quebra quando o pnpm do PATH diverge do
-  `packageManager` (corepack 11.16.0 × 11.11.0 declarado).
-- `login.spec.ts` e `cadastro-clinico.spec.ts` estão **defasados**: asseram `/`
-  (o shell hoje cai em `/agenda`), clicam "Salvar e continuar" (hoje "Salvar e
-  prescrever a carga horária") e tratam o consentimento como botão (hoje
-  `role="radio"`). Não corrigidos aqui — fora do escopo da #203.
+### E2E: suíte volta a rodar, e não aponta mais para produção (#209)
+
+O que mudou em `playwright.config.ts`:
+
+- **O config carrega o env sozinho**, na ordem `shell > .env.e2e > .env`
+  (`process.loadEnvFile` não sobrescreve o que já está em `process.env`, então
+  carregar `.env.e2e` primeiro faz o arquivo dedicado vencer). Fim do
+  `AUTH_DATABASE_URL não definida` na primeira linha e do ritual manual de
+  `set -a; . ./.env.local`. Template versionado em `.env.e2e.example`.
+- **Guard que recusa `baseURL` não-local**, com escape explícito
+  `E2E_ALLOW_REMOTE=1`. `.env.local` desta máquina aponta para
+  `https://irisclinica.ia.br`; carregá-lo para pegar o `BETTER_AUTH_SECRET`
+  jogava a suíte inteira contra produção, e o único sinal era
+  `INVALID_EMAIL_OR_PASSWORD` — que parece falha de seed. **Regra que fica:**
+  enquanto rodar contra produção depender de ninguém esquecer um `export`, uma
+  hora acontece; documentação não é trava.
+- **`webServer` invoca `node ./node_modules/next/dist/bin/next start`**, sem
+  passar pelo pnpm — `pnpm start` aborta quando o pnpm do PATH diverge do campo
+  `packageManager` (11.16.0 × 11.11.0) e o Playwright só reporta
+  `Exit code: 1`.
+- **Projeto de setup `e2e/servidor.setup.ts`** roda antes de tudo e prova que
+  quem atende na `baseURL` é o Iris (`/api/auth/ok` + `<title>`).
+  `reuseExistingServer` reaproveita *qualquer coisa* na porta: na sessão da
+  #208 a suíte rodou contra outro projeto na 3000 e o `{"error":"Not found"}`
+  do `/api/auth` parecia bug do Iris.
+
+Specs defasados reconciliados com a UI atual: `/` é landing pública e
+redireciona para `/agenda`; consentimento é `role="radio"`; submit do cadastro
+é "Salvar e prescrever a carga horária"; `Conselho`/`Nº do registro`/`UF`
+perderam os rótulos antigos e a UF virou `Select` (não aceita `fill`); `Senha`
+casava também com o botão "Exibir senha em texto" (`exact: true`); o resultado
+do reenvio aparece em Alert **e** Toast, ambos `role="status"`.
+
+Um flake real corrigido: `cadastro-clinico.spec.ts` dava `reload()` logo após o
+clique em salvar, podendo abortar a server action em voo — o campo voltava
+vazio e o teste acusava "não persistiu" numa gravação que só não teve tempo de
+acontecer. **Regra que fica:** esperar a confirmação antes de recarregar.
+
+**Resultado medido:** 15 passam, 2 falham.
+
+**Aberto (não é da #209):** `diario-demo.spec.ts` e `revisao.spec.ts` dependem
+de `pnpm seed:demo` / `scripts/seed-demo.ts`, **removidos na `b53b294` (#163)**
+sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o seed
+demo é trabalho próprio: o schema mudou (prescrição virou pré-requisito da
+equipe, #203).
 
 ---
 
