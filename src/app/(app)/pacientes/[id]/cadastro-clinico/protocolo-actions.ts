@@ -6,27 +6,52 @@ import {
   desativarProtocolo,
   inicializarProtocolosDaClinica,
 } from "./protocolo-logic";
+import type { ProtocoloState } from "./protocolo-logic";
 
-// Usadas como `action` de <form> nativo (fire-and-refresh) → retornam void e
-// revalidam a rota do cadastro clínico para refletir o novo estado do vínculo.
+/**
+ * Actions de `useActionState`, não mais `<form action>` fire-and-refresh.
+ *
+ * A fatia 3 deu ao núcleo motivos legítimos para RECUSAR (disciplina não
+ * prescrita, conta em somente-leitura, vínculo já desfeito em outra aba). Com o
+ * retorno `void` anterior, toda recusa era engolida: o coordenador clicava, a
+ * página revalidava e nada mudava, sem uma palavra na tela.
+ */
 export async function ativarProtocoloAction(
   patientId: string,
   protocolId: string,
-): Promise<void> {
-  await ativarProtocolo(await getTenantContext(), patientId, protocolId);
-  revalidatePath(`/pacientes/${patientId}/cadastro-clinico`);
+  _anterior: ProtocoloState,
+  _formData: FormData,
+): Promise<ProtocoloState> {
+  const r = await ativarProtocolo(
+    await getTenantContext(),
+    patientId,
+    protocolId,
+  );
+  if (r.ok) revalidatePath(`/pacientes/${patientId}/cadastro-clinico`);
+  return r;
 }
 
 export async function desativarProtocoloAction(
+  patientId: string,
   patientProtocolId: string,
-): Promise<void> {
-  await desativarProtocolo(await getTenantContext(), patientProtocolId);
-  revalidatePath("/pacientes/[id]/cadastro-clinico", "page");
+  _anterior: ProtocoloState,
+  _formData: FormData,
+): Promise<ProtocoloState> {
+  const r = await desativarProtocolo(
+    await getTenantContext(),
+    patientId,
+    patientProtocolId,
+  );
+  if (r.ok) revalidatePath(`/pacientes/${patientId}/cadastro-clinico`);
+  return r;
 }
 
 export async function inicializarProtocolosAction(
   patientId: string,
-): Promise<void> {
-  await inicializarProtocolosDaClinica(await getTenantContext());
-  revalidatePath(`/pacientes/${patientId}/cadastro-clinico`);
+  _anterior: ProtocoloState,
+  _formData: FormData,
+): Promise<ProtocoloState> {
+  const r = await inicializarProtocolosDaClinica(await getTenantContext());
+  if (r.ok) revalidatePath(`/pacientes/${patientId}/cadastro-clinico`);
+  return r;
 }

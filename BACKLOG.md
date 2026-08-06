@@ -159,6 +159,96 @@ Verificação: 12 asserções de DDL medidas no Postgres (`pg_indexes`,
 da jornada. `pnpm test` 917/917; `test:rls` só com as **duas falhas
 pré-existentes** acima.
 
+### ✅ `0076` e `0077` verificadas EM PRODUÇÃO por medição (06/08/2026)
+
+`db/verificacao/0076-0077-pos-deploy.sql` rodado pelo Rômulo contra o Postgres
+de produção depois do implante: **13/13 PASSOU** — coluna, os três CHECKs, os
+dois índices únicos parciais, o drop do índice antigo, os grants de coluna e as
+**negativas** (`UPDATE` de tabela e `DELETE` revogados em
+`patient_alvo_disciplina`, policy de delete derrubada).
+
+As negativas são o ponto: um grant que sobrou não denuncia a si mesmo, e é
+exatamente aí que um deploy parcial se esconderia. Fica registrado aqui porque
+o precedente da `0055` foi uma issue fechada olhando o diff, com a falha viva em
+produção (#165).
+
+### Fatia 3 entregue — protocolo vira encaixe opcional da disciplina prescrita
+
+**Sem migração.** O que faltava não era coluna: era a seção de protocolo parar de
+viver em paralelo à prescrição e passar a ser sub-encaixe dela.
+
+Decisões desta fatia (confirmadas com o Rômulo, 06/08/2026):
+
+- **Saiu o rádio "Terapia Convencional × Protocolos de Marcos".** Ele guardava em
+  `useState` uma escolha que o banco não registra — ao recarregar, o modo era
+  reconstituído pela existência de vínculo, então o controle **mentia sobre ser
+  uma decisão**. A ausência de protocolo já significa acompanhamento narrativo; o
+  que faltava era dizer isso em texto, não pedir de novo.
+- **Protocolo de disciplina não prescrita não é oferecido nem aceito.** O
+  catálogo passou a ser agrupado por disciplina prescrita vigente. O guard vive
+  no **núcleo** (`protocolo-logic.ts`), não no dropdown: Server Action é
+  endpoint, e uma aba aberta desde antes de a prescrição ser encerrada continua
+  chamando.
+- **Vínculo órfão ganha bloco `Fora da prescrição atual`**, mesmo tratamento que
+  o plano §3.1 deu ao membro de equipe fora da prescrição. Esconder produziria
+  linha viva no banco que ninguém enxerga nem consegue desvincular pela UI.
+- **Encerrar prescrição NÃO desencaixa protocolo** — seria efeito colateral
+  clínico não pedido num ato que já é auditável por si.
+
+Três defeitos pré-existentes que a fatia fechou de passagem:
+
+- **Toda recusa era engolida.** As actions de protocolo retornavam `void` e
+  descartavam o `{ error }` do núcleo: erro de papel, de conta em somente-leitura
+  ou de vínculo já desfeito revalidavam a página sem uma palavra na tela.
+  Passaram a `useActionState`.
+- **`ativarProtocolo`/`desativarProtocolo` não passavam pelo `comEscrita`** —
+  conta em somente-leitura (#163+#159) escrevia protocolo.
+- **Duplo-clique criava dois vínculos vigentes** do mesmo protocolo. Advisory
+  lock de transação + checagem de idempotência (já ativo devolve `ok`, não erro).
+  Sem isso o segundo vínculo ficava vivo e **invisível**, porque a tela deduplica.
+
+Verificação: 9 testes unitários do agrupamento puro + 8 de integração;
+**7 dos 8 de integração falham contra o código anterior** (o único que passa é o
+caminho feliz, que já existia), e o agrupamento foi checado por mutação. `pnpm
+test` 926/926 · `typecheck` limpo · `lint` com os **mesmos 2 erros
+pré-existentes** de `agenda/semana` (confirmados por `git stash`) · `test:rls`
+só com as **duas falhas pré-existentes** acima.
+
+#### Revisão da PR #205 — 7 achados fechados na própria branch
+
+O mais grave reabria a classe de bug que a fatia dizia fechar: **o bloco `Fora
+da prescrição atual` era derivado do catálogo**, e o catálogo é deduplicado por
+`nome` em `obterOuInicializarProtocolosDaClinica`. Duas linhas `protocol` de
+mesmo nome fazem um id sumir da lista, e o vínculo vigente apontando para ele
+não aparecia em grupo nenhum **nem** no bloco de órfãos — linha viva no banco,
+invisível e sem como desencaixar. Passou a ser derivado dos **vínculos**, com
+cartão degradado quando o protocolo não está no catálogo.
+
+Os outros seis:
+
+- `desativarProtocolo` não filtrava por paciente — a RLS enxerga a clínica
+  inteira, então um id de vínculo de outro paciente desativava a linha e
+  revalidava a página errada. `patientId` entrou no predicado e na assinatura.
+- Prescrições vigentes que diferem só em caixa/espaço (o índice único da `0077`
+  é sobre a coluna crua) rendiam **dois grupos idênticos**: chave React repetida
+  e dois cartões comandando o mesmo vínculo. Agrupamento passou a deduplicar por
+  chave normalizada.
+- O advisory lock **não era exercitado por teste** — o caso de duplo-clique era
+  sequencial e passava só com a checagem de idempotência. Entrou um caso com
+  duas ativações em `Promise.all`.
+- O `comEscrita` das duas actions **não tinha teste**: remover o wrapper deixava
+  a suíte verde. Entrou um caso com `subscription` em `canceled`.
+- `obterOuInicializarProtocolosDaClinica(tx: any)` devolvia `any` até a tela;
+  agora é `Tx` → `Promise<ProtocoloCatalogo[]>`.
+- O SQL de verificação buscava objeto sem qualificar schema (`search_path`
+  decidia). Homônimo em outro schema daria `PASSOU` falso — num arquivo que
+  existe justamente para não deixar ninguém *achar* que mediu.
+
+Depois dos ajustes: 11 unitários do agrupamento + 11 de integração de protocolo
+verdes, `typecheck` limpo, `eslint` limpo no diretório tocado, e `test:rls`
+678 casos com **as mesmas duas falhas pré-existentes** (`agenda2-janela-actions`
+e `conta-somente-leitura-rls`).
+
 ---
 
 ## 🏁 Sessão 03/08/2026 (3ª) — Billing pay-as-you-grow implementado, trilho vira Mercado Pago (#36)
