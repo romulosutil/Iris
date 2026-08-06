@@ -350,13 +350,23 @@ histórico das duas passagens fica preservado. É o comportamento certo.
 
 Validar saldo lendo e depois inserindo é TOCTOU — duas alocações simultâneas de
 6h contra 8h restantes passam as duas. A checagem e o insert vão na **mesma
-transação**, com bloqueio da linha do alvo vigente:
+transação**, sob lock da disciplina.
+
+> ⚠️ **Corrigido na implementação (fatias 2 e 4): o lock é advisory, não
+> `SELECT … FOR UPDATE`.** O row lock do Postgres exige privilégio de UPDATE em
+> **nível de tabela**, e a `0044` (equipe) e a `0077` (prescrição) revogaram
+> UPDATE de tabela e concedem coluna a coluna — o `FOR UPDATE` falha com
+> `permission denied for table …`. O advisory lock não toca em privilégio
+> nenhum e morre com a transação.
 
 ```sql
-SELECT horas_alvo_semana FROM patient_alvo_disciplina
- WHERE patient_id = $1 AND disciplina = $2 AND vigencia_fim IS NULL
- FOR UPDATE;
+-- MESMA chave em prescricao-logic.ts e equipe/logic.ts, de propósito:
+-- represcrever e alocar a mesma disciplina ao mesmo tempo também é corrida.
+SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2, 203));
 ```
+
+Edição que troca de disciplina trava **as duas**, em ordem alfabética — sem
+ordem determinística, uma transação pegando Fono→TO e outra TO→Fono deadlockam.
 
 O perdedor da corrida recebe rollback gracioso com a mensagem de saldo real —
 nunca erro genérico:
@@ -407,14 +417,34 @@ usado por inserção e edição.
 Cada fatia entrega jornada utilizável de ponta a ponta. Não construir 2 antes de
 1 — a barra sem prescrição não tem o que mostrar.
 
-| #     | Fatia                                                                                | Entrega verificável                                                                                               |
-| ----- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| **1** | Migração 0076 + constraints simétricas + unique parcial + grants + `formatarHoras()` | `test:rls` verde; CHECK, unique e GRANT provados contra Postgres; `30min`/`1h`/`1h30` cobertos por teste unitário |
-| **2** | Prescrição na ficha clínica (SCD2, fuso BR) + handoff 1 (redirect, banner, selo)     | Criar paciente → cair na prescrição → salvar 20h Fono                                                             |
-| **3** | Encaixe opcional de protocolo por disciplina                                         | Prescrever Psicologia sem protocolo continua funcionando                                                          |
-| **4** | Equipe: horas, validação transacional, edição, estado vazio MV2                      | Alocar 12h; tentar 10h e receber recusa com saldo real                                                            |
-| **5** | Barra de cobertura nos 4 estados + a11y + copy                                       | Storybook com os 4 estados; leitura por leitor de tela                                                            |
-| **6** | Represcrição com confirmação (MV4) + toast de devolução de saldo (3.3)               | Reduzir 15h→10h com 15h alocadas, confirmar, cair na equipe                                                       |
+| #        | Fatia                                                                                | Entrega verificável                                                                                               |
+| -------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| **1**    | Migração 0076 + constraints simétricas + unique parcial + grants + `formatarHoras()` | `test:rls` verde; CHECK, unique e GRANT provados contra Postgres; `30min`/`1h`/`1h30` cobertos por teste unitário |
+| **2**    | Prescrição na ficha clínica (SCD2, fuso BR) + handoff 1 (redirect, banner, selo)     | Criar paciente → cair na prescrição → salvar 20h Fono                                                             |
+| **3**    | Encaixe opcional de protocolo por disciplina                                         | Prescrever Psicologia sem protocolo continua funcionando                                                          |
+| **4** ✅ | Equipe: horas, validação transacional, edição, estado vazio MV2                      | ✅ Entregue 06/08/2026 — 17 testes de integração + 15 unitários de cobertura                                      |
+| **5**    | Barra de cobertura nos 4 estados + a11y + copy                                       | Storybook com os 4 estados; leitura por leitor de tela                                                            |
+| **6**    | Represcrição com confirmação (MV4) + toast de devolução de saldo (3.3)               | Reduzir 15h→10h com 15h alocadas, confirmar, cair na equipe                                                       |
+
+### O que as fatias 5 e 6 herdam da 4 (não reconstruir)
+
+- **`equipe/cobertura.ts` — `calcularCobertura(prescrições, vínculos)`** já
+  devolve, por disciplina prescrita vigente e em ordem alfabética:
+  `horasAlvo`, `horasAlocadas`, `horasRestantes`, `horasExcedentes`,
+  `percentual`, `vinculosSemHoras` e `estado` (`vazio` | `parcial` | `completa`
+  | `sobrealocada` — os quatro de MV3, com teste unitário cada). É módulo puro:
+  o filtro de vigência é responsabilidade de quem chama, nos dois lados.
+  **A fatia 5 renderiza esta saída; recalcular faria a barra e a validação
+  discordarem sobre o mesmo número.**
+- **`encerrarVinculoEquipe` já devolve `{ disciplina, horasDevolvidas }`** —
+  é o que o toast da fatia 6 precisa para nomear o número que mudou na tela
+  (§3.3). `horasDevolvidas` é `0` em papel de gestão, por D-C.
+- **A tela já imprime o estado por extenso** (cor nunca sozinha). A fatia 5
+  troca o cartão por `Progress` + `StatusBadge` com `role="progressbar"` e
+  `aria-valuenow/min/max` — a frase permanece como texto associado.
+- **`validarSaldoDisciplina` já é compartilhada** por inserção e edição, com
+  `ignorarMembershipId`. A represcrição para baixo (fatia 6) precisa **ler** a
+  sobrealocação resultante, não replicar a regra.
 
 ---
 
