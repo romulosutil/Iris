@@ -6,6 +6,7 @@ import {
 import { formatarDisciplina } from "@/lib/disciplinas";
 import { formatarHoras } from "@/lib/horas";
 import {
+  ancoraCobertura,
   ROTULO_ESTADO,
   textoCobertura,
   textoVinculosSemHoras,
@@ -62,8 +63,12 @@ export function BarraCobertura({
 
   return (
     <div
+      // Alvo do handoff da represcrição (§MV4): quem confirma uma redução que
+      // sobrealoca cai direto NESTA barra, não no topo de uma tela com dez
+      // disciplinas. `scroll-mt` compensa o cabeçalho fixo.
+      id={ancoraCobertura(cobertura.disciplina)}
       data-estado={cobertura.estado}
-      className="flex flex-col gap-2 rounded-[var(--radius-xs)] border border-[var(--border-brutal)]/30 bg-[var(--surface-elevated)] p-3"
+      className="flex scroll-mt-24 flex-col gap-2 rounded-[var(--radius-xs)] border border-[var(--border-brutal)]/30 bg-[var(--surface-elevated)] p-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-bold text-[var(--text-primary)]">

@@ -359,25 +359,49 @@ o anúncio pobre que o teste existe para impedir. `pnpm test` **964/964**
 (`agenda2-janela-actions`, `conta-somente-leitura-rls`, 2 erros de
 `react-hooks/set-state-in-effect` em `agenda/semana/`).
 
-### Fatia 6 — o que já está pronto para ela (represcrição MV4 + toast)
+### Fatia 6 — represcrição com confirmação (MV4) + toast de devolução (PR #208)
 
-- **A leitura da sobrealocação já existe e é derivada**: `calcularCobertura` →
-  `estado === "sobrealocada"` + `horasExcedentes`. A confirmação da fatia 6
-  ("esta redução deixa a disciplina sobrealocada") deve **ler** isso, nunca
-  replicar a regra nem persistir flag.
-- **A copy da consequência já está escrita e testada** (`textoCobertura` no
-  estado sobrealocado) — o diálogo de confirmação e a tela de equipe devem falar
-  a mesma frase, não duas paráfrases que divergem.
-- **`encerrarVinculoEquipe` já devolve `{ disciplina, horasDevolvidas }`** (0 em
-  papel de gestão, por D-C) — é o que o toast de devolução de saldo (§3.3)
-  precisa para nomear o número que mudou na tela, junto com o corte de acesso
-  imediato (D-A).
-- **`Dialog` do design system** é o componente previsto pelo §MV4; o padrão de
-  confirmação com `useActionState` (`bloqueioConta` separado de `error`) já está
-  nas fatias 3 e 4.
-- Depois de confirmar, a fatia 6 leva o coordenador **para a tela de equipe** —
-  o trabalho não termina no salvar, termina no ajuste. A barra desta fatia é o
-  destino dessa navegação.
+**Sem migração e sem regra nova.** As duas contas já existiam (`calcularCobertura`
+da fatia 4, `textoCobertura` da 5); o que faltava eram os dois momentos em que o
+produto precisa **falar** — antes de salvar uma redução que sobrealoca, e depois
+de encerrar um vínculo.
+
+O que entrou:
+
+- **Confirmação ANTES, não aviso depois (§MV4).** Ao detectar no submit que a
+  nova carga é menor que o alocado vigente, `prescreverDisciplina` **não salva**:
+  devolve `confirmacao` (disciplina, horas atuais, horas novas, alocado, frase).
+  Reduzir continua permitido — travar obrigaria a desmontar a equipe para depois
+  corrigir a prescrição, ordem que a clínica não segue.
+- **A frase do diálogo é a MESMA da barra**, por construção: vem de
+  `textoCobertura` passando por `calcularCobertura`, não de paráfrase escrita à
+  mão. Duas redações da mesma consequência divergem, e a que o coordenador lê ao
+  confirmar deixaria de ser a que ele encontra na tela de destino.
+- **A soma da confirmação roda sob o MESMO advisory lock da alocação**
+  (`patientId:disciplina`, namespace 203) e dentro da transação que grava: entre
+  ler o diálogo e clicar em "Salvar mesmo assim", o pedido é revalidado do zero.
+- **Depois de confirmar, o coordenador vai para a barra da disciplina afetada** —
+  `ancoraCobertura()` em `cobertura.ts` gera o `id` e o link do mesmo lugar, para
+  âncora montada em dois pontos não divergir no primeiro acento. O trabalho não
+  termina no salvar, termina no ajuste.
+- **Encerrar vínculo agora confirma antes e explica depois (D-A + §3.3).**
+  `encerrarVinculoAction` deixou de retornar `void` — o encerramento acontecia e
+  a tela só piscava. Novo `EncerrarVinculoForm` pergunta antes (o corte de acesso
+  ao prontuário é imediato e total) e o toast diz as **duas** consequências:
+  o saldo que voltou e o acesso que caiu.
+- **`saldoTexto` é lido depois do UPDATE e na mesma transação.** Fora dela, uma
+  alocação concorrente faria o toast citar um saldo que nunca existiu; sem o
+  filtro de vigência, o vínculo recém-encerrado voltaria para a soma e o toast
+  diria que nada mudou. Em vínculo fora da prescrição (§3.1) o campo vem
+  `undefined`: não há teto a nomear, e "0h de 0h" seria número inventado.
+
+Verificação — **mutação rodada, não presumida**: removendo o filtro
+`vigencia_fim IS NULL` da soma da confirmação, o caso "vínculo ENCERRADO não
+conta" cai (era a sobrealocação fantasma de §4.5 aparecendo). 8 testes de
+integração novos (5 de represcrição + 3 de encerramento). `pnpm test` 964/964 ·
+`typecheck` limpo · `test:rls` 698 passando, `lint` e as 2 falhas restantes
+**exatamente as mesmas pré-existentes** já registradas acima (confirmado por
+`git stash`).
 
 ---
 

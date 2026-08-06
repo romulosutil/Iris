@@ -468,6 +468,79 @@ describe.skipIf(!hasDb)("equipe actions", () => {
       expect(outro.error).toBeUndefined();
     });
 
+    test("devolve a FRASE do saldo pós-encerramento, não só o número (§3.3)", async () => {
+      // Sem esta frase o toast não consegue nomear o número que mudou na tela,
+      // e o coordenador não relaciona "encerrei o vínculo" a "a barra caiu".
+      await prescrever("ABA", "20.0");
+      for (const [user, horas] of [
+        [U_TERA, "12"],
+        [U_TERA2, "8"],
+      ] as const) {
+        await adicionarMembroEquipe(
+          ctx,
+          PATIENT,
+          form({
+            userId: user,
+            disciplina: "ABA",
+            papelNaEquipe: "terapeuta_referencia",
+            horasSemana: horas,
+          }),
+        );
+      }
+      const alvo = (await membros()).find((m) => m.userId === U_TERA)!;
+      const encerrado = await encerrarVinculoEquipe(ctx, alvo.id);
+
+      // 8h de 20h é o estado DEPOIS do encerramento. Ler antes do UPDATE — ou
+      // fora da transação, sem o filtro de vigência — devolveria 20h de 20h e o
+      // toast anunciaria uma devolução que a barra desmente no mesmo segundo.
+      expect(encerrado.horasDevolvidas).toBe(12);
+      expect(encerrado.saldoTexto).toBe(
+        "8h de 20h alocadas (40%) — restam 12h",
+      );
+    });
+
+    test("gestão do caso encerra sem prometer devolução de hora (D-C)", async () => {
+      await prescrever("ABA", "20.0");
+      await adicionarMembroEquipe(
+        ctx,
+        PATIENT,
+        form({
+          userId: U_TERA,
+          disciplina: "ABA",
+          papelNaEquipe: "coordenador_referencia",
+        }),
+      );
+      const [m] = await membros();
+      const encerrado = await encerrarVinculoEquipe(ctx, m!.id);
+      expect(encerrado.horasDevolvidas).toBe(0);
+      // A disciplina segue como estava: supervisão nunca esteve na conta.
+      expect(encerrado.saldoTexto).toBe(
+        "0h de 20h alocadas — nenhum terapeuta vinculado",
+      );
+    });
+
+    test("vínculo fora da prescrição não inventa saldo (§3.1)", async () => {
+      await prescrever("ABA", "10.0");
+      await adicionarMembroEquipe(
+        ctx,
+        PATIENT,
+        form({
+          userId: U_TERA,
+          disciplina: "ABA",
+          papelNaEquipe: "terapeuta_referencia",
+          horasSemana: "4",
+        }),
+      );
+      const [m] = await membros();
+      // A prescrição sai de cena antes do encerramento (legado de §3.1): sem
+      // teto vigente não há saldo a nomear, e "0h de 0h" seria número inventado.
+      await owner`UPDATE patient_alvo_disciplina SET vigencia_fim = CURRENT_DATE
+                   WHERE patient_id = ${PATIENT} AND disciplina = 'ABA'`;
+      const encerrado = await encerrarVinculoEquipe(ctx, m!.id);
+      expect(encerrado.ok).toBe(true);
+      expect(encerrado.saldoTexto).toBeUndefined();
+    });
+
     test("encerrar duas vezes não reescreve a data de saída", async () => {
       await prescrever("ABA", "10.0");
       await adicionarMembroEquipe(

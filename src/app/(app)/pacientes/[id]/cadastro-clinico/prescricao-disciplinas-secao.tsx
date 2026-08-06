@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { DISCIPLINAS_PADRAO, formatarDisciplina } from "@/lib/disciplinas";
 import { formatarHoras, HORAS_MAX_SEMANA, HORAS_PASSO } from "@/lib/horas";
+import { ancoraCobertura } from "../equipe/cobertura";
 import {
   encerrarPrescricaoAction,
   prescreverDisciplinaAction,
@@ -239,8 +241,10 @@ function LinhaPrescricao({
     FormData
   >(prescreverDisciplinaAction.bind(null, patientId), VAZIO);
   const { addToast } = useToast();
+  const router = useRouter();
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
   const horasAtuais = Number(prescricao.horasAlvoSemana);
+  const confirmacao = state.confirmacao;
 
   useEffect(() => {
     if (!state.ok) return;
@@ -249,7 +253,22 @@ function LinhaPrescricao({
       mensagem: `${formatarDisciplina(prescricao.disciplina)} passou a valer a partir de hoje. A prescrição anterior fica no histórico.`,
       severidade: "sucesso",
     });
-  }, [state.ok, addToast, prescricao.disciplina]);
+    // §MV4: o trabalho não termina no salvar, termina no ajuste. Quem reduziu
+    // abaixo do alocado é levado à barra da disciplina afetada — a tela onde o
+    // excedente é resolvido —, não deixado nesta, onde não há o que fazer.
+    if (state.disciplinaSobrealocada) {
+      router.push(
+        `/pacientes/${patientId}/equipe#${ancoraCobertura(state.disciplinaSobrealocada)}`,
+      );
+    }
+  }, [
+    state.ok,
+    state.disciplinaSobrealocada,
+    addToast,
+    prescricao.disciplina,
+    patientId,
+    router,
+  ]);
 
   return (
     <div className="flex flex-col gap-2 rounded-[var(--radius-control)] border-2 border-l-4 border-[var(--border-brutal)] border-l-[var(--action-primary)] bg-[var(--surface-card)] p-3.5 shadow-[var(--ds-shadow)]">
@@ -303,6 +322,71 @@ function LinhaPrescricao({
           {isPending ? "Salvando..." : "Atualizar carga"}
         </Button>
       </form>
+
+      {/* §MV4 — reduzir abaixo do que a equipe entrega é LEGÍTIMO: travar
+          obrigaria a desmontar a equipe antes de corrigir a prescrição, ordem
+          que a clínica não segue. O refino é confirmar ANTES, com a frase exata
+          que o coordenador vai reencontrar na barra da tela de equipe. */}
+      <Dialog
+        open={!!confirmacao}
+        onOpenChange={() => {
+          // Fechar sem confirmar = cancelar. Nada foi salvo: o servidor devolveu
+          // a confirmação NO LUGAR de gravar, então não há o que desfazer.
+          if (confirmacao) window.location.hash = "prescricao";
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>
+            Esta redução deixa a disciplina sobrealocada.
+          </DialogTitle>
+          <DialogDescription>
+            {confirmacao ? (
+              <>
+                {formatarDisciplina(confirmacao.disciplina)} passa de{" "}
+                {formatarHoras(confirmacao.horasAtuais)} para{" "}
+                {formatarHoras(confirmacao.horasNovas)}, mas a equipe tem{" "}
+                {formatarHoras(confirmacao.horasAlocadas)} alocadas. A
+                prescrição será salva e a disciplina ficará assim:{" "}
+                <strong>{confirmacao.texto}</strong>
+              </>
+            ) : null}
+          </DialogDescription>
+          <div className="mt-6 flex items-center justify-end gap-3">
+            <Button
+              type="button"
+              variante="neutra"
+              tamanho="sm"
+              onClick={() => window.location.reload()}
+            >
+              Cancelar
+            </Button>
+            {/* Reenvia o MESMO pedido com a flag de confirmação — o servidor
+                revalida o saldo sob o mesmo lock, então uma alocação que
+                aconteça entre o diálogo e o clique não passa despercebida. */}
+            <form action={formAction}>
+              <input
+                type="hidden"
+                name="disciplina"
+                value={confirmacao?.disciplina ?? ""}
+              />
+              <input
+                type="hidden"
+                name="horasAlvoSemana"
+                value={confirmacao?.horasNovas ?? ""}
+              />
+              <input type="hidden" name="confirmarSobrealocacao" value="1" />
+              <Button
+                type="submit"
+                risco="alto"
+                tamanho="sm"
+                isLoading={isPending}
+              >
+                Salvar mesmo assim
+              </Button>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={confirmandoEncerrar}

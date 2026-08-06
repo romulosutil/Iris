@@ -2,9 +2,19 @@ import "server-only";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
-import { patientAlvoDisciplina } from "@/db/schema";
+import { careTeamMembership, patientAlvoDisciplina } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
-import { ehCargaValida, formatarHoras, HORAS_MAX_SEMANA } from "@/lib/horas";
+import {
+  ehCargaValida,
+  formatarHoras,
+  HORAS_MAX_SEMANA,
+  parseHoras,
+} from "@/lib/horas";
+import {
+  calcularCobertura,
+  chaveDisciplina,
+  textoCobertura,
+} from "../equipe/cobertura";
 
 /**
  * Prescrição de disciplina + carga horária semanal (#203, fatia 2).
@@ -25,10 +35,44 @@ import { ehCargaValida, formatarHoras, HORAS_MAX_SEMANA } from "@/lib/horas";
  *   linha antiga sai da conta no instante em que é fechada.
  */
 
+/**
+ * Represcrição que deixa a disciplina sobrealocada (#203, fatia 6 · §MV4).
+ *
+ * Reduzir o teto abaixo do que a equipe já entrega é LEGÍTIMO — travar
+ * obrigaria o coordenador a desmontar a equipe para depois corrigir a
+ * prescrição, ordem que a clínica não segue. O refino é de interação:
+ * confirmação ANTES, não aviso depois. Este objeto é o que a ação devolve no
+ * lugar de salvar, para a tela poder perguntar.
+ */
+export type ConfirmacaoSobrealocacao = {
+  disciplina: string;
+  /** Teto vigente hoje, antes da redução. */
+  horasAtuais: number;
+  /** Teto que o coordenador está pedindo. */
+  horasNovas: number;
+  /** Soma vigente de quem CONSOME saldo (D-B/D-C). */
+  horasAlocadas: number;
+  /**
+   * A frase do estado `sobrealocada` de MV3, palavra por palavra. Vem de
+   * `textoCobertura` — a MESMA função que a barra usa. Parafrasear aqui faria o
+   * coordenador ler uma consequência ao confirmar e encontrar outra na tela de
+   * destino, que é o jeito mais barato de destruir a confiança na barra.
+   */
+  texto: string;
+};
+
 export type PrescricaoState = {
   ok?: boolean;
   error?: string;
   bloqueioConta?: BloqueioConta;
+  /** Presente = nada foi salvo ainda; a tela precisa confirmar (§MV4). */
+  confirmacao?: ConfirmacaoSobrealocacao;
+  /**
+   * Preenchido junto com `ok` quando o que foi salvo deixou a disciplina
+   * sobrealocada: o trabalho não termina no salvar, termina no ajuste das
+   * horas dos membros — a tela usa isto para levar o coordenador até lá.
+   */
+  disciplinaSobrealocada?: string;
 };
 
 export type PrescricaoVigente = {
@@ -98,6 +142,69 @@ async function travarDisciplina(
   );
 }
 
+/**
+ * Soma das horas vigentes que CONSOMEM saldo nesta disciplina.
+ *
+ * Mesma conta de `validarSaldoDisciplina` (equipe/logic.ts), do outro lado da
+ * mesma moeda: lá é "cabe mais um?", aqui é "o novo teto ainda cobre o que já
+ * está alocado?". Roda dentro da transação e DEPOIS do advisory lock — que é o
+ * mesmo lock (`patientId:disciplina`, namespace 203) que a alocação pega. Sem
+ * isso, represcrever para baixo e alocar ao mesmo tempo produziriam
+ * sobrealocação sem que nenhum dos dois coordenadores tivesse errado.
+ *
+ * Filtros que não são opcionais: `vigencia_fim IS NULL` (histórico encerrado
+ * não é entrega) e `papel <> 'coordenador_referencia'` (D-C: gestão não
+ * consome). Esquecer qualquer um deles faria a confirmação de MV4 aparecer em
+ * redução que não sobrealoca nada.
+ */
+async function somarAlocadoVigente(
+  tx: Tx,
+  patientId: string,
+  disciplina: string,
+): Promise<number> {
+  const [linha] = await tx
+    .select({
+      alocado: sql<string>`COALESCE(SUM(${careTeamMembership.horasSemana}), 0)`,
+    })
+    .from(careTeamMembership)
+    .where(
+      and(
+        eq(careTeamMembership.patientId, patientId),
+        sql`lower(btrim(${careTeamMembership.disciplina})) = ${chaveDisciplina(disciplina)}`,
+        isNull(careTeamMembership.vigenciaFim),
+        sql`${careTeamMembership.papelNaEquipe} <> 'coordenador_referencia'`,
+      ),
+    );
+  return parseHoras(linha?.alocado) ?? 0;
+}
+
+/**
+ * A frase de MV3 para o estado em que a disciplina FICARIA com o novo teto.
+ *
+ * Passa pelo `calcularCobertura` real, com uma prescrição e um vínculo
+ * sintéticos que somam exatamente o alocado apurado, em vez de montar o
+ * `CoberturaDisciplina` na mão: a classificação dos quatro estados e o cálculo
+ * do excedente ficam num lugar só. Se a regra de classificação mudar, esta
+ * frase muda junto — que é o ponto.
+ */
+function textoDoEstadoResultante(
+  disciplina: string,
+  horasNovas: number,
+  horasAlocadas: number,
+): string {
+  const [cobertura] = calcularCobertura(
+    [{ disciplina, horasAlvoSemana: horasNovas }],
+    [
+      {
+        disciplina,
+        papelNaEquipe: "terapeuta_referencia",
+        horasSemana: horasAlocadas,
+      },
+    ],
+  );
+  return textoCobertura(cobertura!);
+}
+
 async function prescreverDisciplinaCore(
   ctx: TenantContext,
   patientId: string,
@@ -126,6 +233,10 @@ async function prescreverDisciplinaCore(
     };
   }
   const horasTexto = horas.toFixed(1);
+  // O cliente só manda isto depois de ler o diálogo de MV4. Sem a flag, uma
+  // redução que sobrealoca PARA no passo de confirmação em vez de salvar.
+  const confirmado =
+    String(formData.get("confirmarSobrealocacao") ?? "") === "1";
 
   return withTenant(ctx, async (tx) => {
     await travarDisciplina(tx, patientId, disciplina);
@@ -151,6 +262,23 @@ async function prescreverDisciplinaCore(
       return { ok: true };
     }
 
+    // §MV4 — o caso mais caro de errar. Só há o que confirmar quando a equipe
+    // já entrega mais do que o novo teto; prescrição nova (sem equipe) e
+    // aumento de carga seguem salvando direto, sem diálogo no caminho.
+    const horasAlocadas = await somarAlocadoVigente(tx, patientId, disciplina);
+    const ficaSobrealocada = horasAlocadas > horas;
+    if (ficaSobrealocada && !confirmado) {
+      return {
+        confirmacao: {
+          disciplina,
+          horasAtuais: parseHoras(vigente?.horasAlvoSemana) ?? 0,
+          horasNovas: horas,
+          horasAlocadas,
+          texto: textoDoEstadoResultante(disciplina, horas, horasAlocadas),
+        },
+      };
+    }
+
     if (vigente) {
       // Fecha HOJE (fuso BR) e abre HOJE: como toda leitura filtra
       // `vigencia_fim IS NULL`, a linha antiga sai da conta no mesmo ato — não
@@ -169,7 +297,12 @@ async function prescreverDisciplinaCore(
       vigenciaInicio: HOJE_BR,
     });
 
-    return { ok: true };
+    // O trabalho não termina aqui: quem confirmou a redução precisa ir ajustar
+    // as horas dos membros, e a tela usa este campo para levá-lo até a barra da
+    // disciplina afetada.
+    return ficaSobrealocada
+      ? { ok: true, disciplinaSobrealocada: disciplina }
+      : { ok: true };
   });
 }
 

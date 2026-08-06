@@ -74,6 +74,19 @@ export function chaveDisciplina(disciplina: string): string {
   return disciplina.trim().toLowerCase();
 }
 
+/**
+ * `id` do bloco da barra desta disciplina na tela de equipe (#203, fatia 6).
+ *
+ * A represcrição que sobrealoca leva o coordenador de uma tela para outra
+ * (§MV4) e precisa apontar para a disciplina afetada, não para o topo da
+ * página. Mora aqui junto de `chaveDisciplina` para que quem gera o link e quem
+ * renderiza a âncora derivem o mesmo texto da mesma normalização — âncora
+ * montada em dois lugares diverge no primeiro acento.
+ */
+export function ancoraCobertura(disciplina: string): string {
+  return `cobertura-${encodeURIComponent(chaveDisciplina(disciplina))}`;
+}
+
 /** Soma das horas vigentes que consomem saldo numa disciplina. */
 export function somarHorasAlocadas(
   vinculos: readonly VinculoParaCobertura[],

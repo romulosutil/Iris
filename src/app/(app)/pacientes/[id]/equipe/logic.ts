@@ -11,7 +11,11 @@ import {
   papelConsomeSaldo,
   parseHoras,
 } from "@/lib/horas";
-import { chaveDisciplina } from "./cobertura";
+import {
+  calcularCobertura,
+  chaveDisciplina,
+  textoCobertura,
+} from "./cobertura";
 
 /**
  * Alocação da equipe — o CONSUMO da carga prescrita (#203, fatia 4).
@@ -468,6 +472,72 @@ async function editarMembroEquipeCore(
 export const editarMembroEquipe = comEscrita(editarMembroEquipeCore);
 
 /**
+ * A frase de MV3 da disciplina, com o estado em que ela está AGORA.
+ *
+ * Lê os dois lados (prescrição vigente e vínculos vigentes) e passa por
+ * `calcularCobertura` — a mesma função da barra. Recalcular a frase aqui na mão
+ * faria o toast e a tela discordarem sobre o mesmo número no mesmo instante.
+ *
+ * Devolve `undefined` quando a disciplina não está prescrita hoje (vínculo
+ * legado de §3.1): não há teto, então não há saldo a nomear, e inventar "0h de
+ * 0h" seria pior que calar.
+ */
+async function lerSaldoDisciplina(
+  tx: Tx,
+  patientId: string,
+  disciplina: string,
+): Promise<string | undefined> {
+  const chave = chaveDisciplina(disciplina);
+
+  const prescricoes = await tx
+    .select({
+      disciplina: patientAlvoDisciplina.disciplina,
+      horasAlvoSemana: patientAlvoDisciplina.horasAlvoSemana,
+    })
+    .from(patientAlvoDisciplina)
+    .where(
+      and(
+        eq(patientAlvoDisciplina.patientId, patientId),
+        sql`lower(btrim(${patientAlvoDisciplina.disciplina})) = ${chave}`,
+        isNull(patientAlvoDisciplina.vigenciaFim),
+      ),
+    );
+  if (prescricoes.length === 0) return undefined;
+
+  // §4.5: vigência filtrada dos DOIS lados. Sem o filtro aqui, o vínculo que
+  // acabou de ser encerrado voltaria para a soma e o toast diria que nada mudou.
+  const vinculos = await tx
+    .select({
+      disciplina: careTeamMembership.disciplina,
+      papelNaEquipe: careTeamMembership.papelNaEquipe,
+      horasSemana: careTeamMembership.horasSemana,
+    })
+    .from(careTeamMembership)
+    .where(
+      and(
+        eq(careTeamMembership.patientId, patientId),
+        sql`lower(btrim(${careTeamMembership.disciplina})) = ${chave}`,
+        isNull(careTeamMembership.vigenciaFim),
+      ),
+    );
+
+  const [cobertura] = calcularCobertura(prescricoes, vinculos);
+  return cobertura ? textoCobertura(cobertura) : undefined;
+}
+
+/**
+ * O que a tela precisa saber para dizer, numa frase só, as DUAS coisas que
+ * aconteceram (plano §3.3): as horas voltaram para o saldo e o acesso foi
+ * cortado. `saldoTexto` é a frase de MV3 já com o número PÓS-encerramento —
+ * sem ela o coordenador não relaciona a ação ao número que mudou na tela.
+ */
+export type EncerramentoResultado = EquipeState & {
+  disciplina?: string;
+  horasDevolvidas?: number;
+  saldoTexto?: string;
+};
+
+/**
  * Encerra o vínculo append-only: marca `vigenciaFim`, nunca deleta (histórico).
  *
  * Duas coisas acontecem no mesmo ato, e a UI precisa dizer as duas (plano §3.3):
@@ -482,7 +552,7 @@ export const editarMembroEquipe = comEscrita(editarMembroEquipeCore);
 async function encerrarVinculoEquipeCore(
   ctx: TenantContext,
   membershipId: string,
-): Promise<EquipeState & { disciplina?: string; horasDevolvidas?: number }> {
+): Promise<EncerramentoResultado> {
   requireRole(ctx, "coordenador");
   return withTenant(ctx, async (tx) => {
     const linhas = await tx
@@ -500,6 +570,7 @@ async function encerrarVinculoEquipeCore(
         ),
       )
       .returning({
+        patientId: careTeamMembership.patientId,
         disciplina: careTeamMembership.disciplina,
         horasSemana: careTeamMembership.horasSemana,
         papelNaEquipe: careTeamMembership.papelNaEquipe,
@@ -518,6 +589,14 @@ async function encerrarVinculoEquipeCore(
       horasDevolvidas: papelConsomeSaldo(encerrado.papelNaEquipe)
         ? (parseHoras(encerrado.horasSemana) ?? 0)
         : 0,
+      // Lido DEPOIS do UPDATE e na MESMA transação: é justamente o número novo
+      // que o toast precisa nomear. Fora da transação, uma alocação concorrente
+      // faria a frase citar um saldo que nunca existiu.
+      saldoTexto: await lerSaldoDisciplina(
+        tx,
+        encerrado.patientId,
+        encerrado.disciplina,
+      ),
     };
   });
 }
