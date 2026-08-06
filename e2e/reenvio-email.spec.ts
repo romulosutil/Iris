@@ -17,26 +17,33 @@ test.describe("Reenvio de E-mail de Verificação (Issue #168)", () => {
 
     await test.step("1. Acessa a página /cadastro/verifique-email", async () => {
       await page.goto("/cadastro/verifique-email");
-      await expect(page.getByRole("heading", { name: "Verifique seu e-mail" })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Reenviar e-mail de verificação" })
+        page.getByRole("heading", { name: "Verifique seu e-mail" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Reenviar e-mail de verificação" }),
       ).toBeVisible();
     });
 
     await test.step("2. Preenche e submete o formulário de reenvio de e-mail", async () => {
       await page.getByLabel("E-mail profissional").fill(email);
-      await page.getByRole("button", { name: "Reenviar e-mail de verificação" }).click();
+      await page
+        .getByRole("button", { name: "Reenviar e-mail de verificação" })
+        .click();
     });
 
     await test.step("3. Valida alerta de confirmação e resposta uniforme anti-enumeração", async () => {
-      // A tela já traz um Alert informativo fixo ("Não chegou nenhuma
-      // mensagem?"), que também tem role="status": `getByRole("status")` sozinho
-      // viola o strict mode com 2 nós. Filtrar pelo texto do resultado é o que
-      // amarra a asserção à resposta da action, não ao layout da página.
+      // O resultado da action aparece DUAS vezes com role="status": no Alert
+      // inline e no Toast (`reenvio-form.tsx` dispara os dois com a mesma
+      // `estado.message`). Filtrar pelo texto da mensagem casava com ambos e
+      // violava o strict mode (#209). O título só existe no Alert inline — que
+      // é também o nó que recebe o foco — então é ele que desempata; a
+      // uniformidade da mensagem vira asserção própria logo abaixo.
       const alert = page
         .getByRole("status")
-        .filter({ hasText: "Se este e-mail estiver cadastrado" });
+        .filter({ hasText: "E-mail de confirmação enviado!" });
       await expect(alert).toBeVisible();
+      await expect(alert).toContainText("Se este e-mail estiver cadastrado");
 
       // Acessibilidade: o foco migra para o alerta (WCAG 2.4.7)
       await expect(alert).toBeFocused();

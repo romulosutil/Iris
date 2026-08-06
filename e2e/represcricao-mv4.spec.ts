@@ -6,21 +6,13 @@ import { entrarComMfa } from "./helpers/sessao";
  *   1. `pnpm db:migrate`
  *   2. `pnpm seed:clinic "Clínica E2E" e2e@iris.test "Senha E2E 123"`
  *      ⚠️ o seed TRUNCA as tabelas de domínio do banco local.
- *   3. App servindo. O `webServer` do playwright.config chama `pnpm start`, o
- *      que hoje falha se o pnpm do PATH divergir do `packageManager`; nesse
- *      caso suba à mão (`pnpm exec next start -p 3000`) e deixe o
- *      `reuseExistingServer` aproveitar.
+ *   3. `pnpm test:e2e` — o `webServer` do playwright.config sobe o Next
+ *      sozinho (invoca o binário direto, sem passar pelo pnpm) e o config
+ *      carrega `.env.e2e`/`.env` por conta própria.
  *
- * ⚠️ **Ambiente do processo de teste.** `entrarComMfa` fala com o banco direto,
- * então `AUTH_DATABASE_URL` precisa estar exportada — o playwright.config NÃO
- * carrega `.env`. E `.env.local` aponta `NEXT_PUBLIC_APP_URL`/`BETTER_AUTH_URL`
- * para **produção**: carregá-lo sem sobrescrever essas três variáveis faz a
- * suíte inteira rodar contra o ambiente real. Sempre force o host local:
- *
- *   set -a; . ./.env; . ./.env.local; set +a
- *   export NEXT_PUBLIC_APP_URL=http://localhost:3000 \
- *          BETTER_AUTH_URL=http://localhost:3000 \
- *          TRUSTED_ORIGINS=http://localhost:3000
+ * O ambiente do processo de teste deixou de ser manual na #209: nada de
+ * `set -a; . ./.env.local`, que apontava a suíte para produção. Veja o
+ * cabeçalho do `playwright.config.ts` e o `.env.e2e.example`.
  *
  * §MV4 de ponta a ponta (#203, fatia 6) — o que este spec cobre e nenhum outro
  * teste do repo cobre:
