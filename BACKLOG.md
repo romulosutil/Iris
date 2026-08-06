@@ -159,6 +159,19 @@ Verificação: 12 asserções de DDL medidas no Postgres (`pg_indexes`,
 da jornada. `pnpm test` 917/917; `test:rls` só com as **duas falhas
 pré-existentes** acima.
 
+### ✅ `0076` e `0077` verificadas EM PRODUÇÃO por medição (06/08/2026)
+
+`db/verificacao/0076-0077-pos-deploy.sql` rodado pelo Rômulo contra o Postgres
+de produção depois do implante: **13/13 PASSOU** — coluna, os três CHECKs, os
+dois índices únicos parciais, o drop do índice antigo, os grants de coluna e as
+**negativas** (`UPDATE` de tabela e `DELETE` revogados em
+`patient_alvo_disciplina`, policy de delete derrubada).
+
+As negativas são o ponto: um grant que sobrou não denuncia a si mesmo, e é
+exatamente aí que um deploy parcial se esconderia. Fica registrado aqui porque
+o precedente da `0055` foi uma issue fechada olhando o diff, com a falha viva em
+produção (#165).
+
 ### Fatia 3 entregue — protocolo vira encaixe opcional da disciplina prescrita
 
 **Sem migração.** O que faltava não era coluna: era a seção de protocolo parar de
