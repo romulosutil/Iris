@@ -403,6 +403,51 @@ integração novos (5 de represcrição + 3 de encerramento). `pnpm test` 964/96
 **exatamente as mesmas pré-existentes** já registradas acima (confirmado por
 `git stash`).
 
+#### Revisão adversarial da PR #208 — o que ela pegou
+
+Toda a lógica de risco da fatia estava no cliente, e os 8 testes eram todos de
+servidor. Foi exatamente ali que estavam os dois bloqueantes:
+
+- **O diálogo de confirmação existia só dentro da linha vigente.**
+  `prescreverDisciplinaAction` é a mesma action do formulário de prescrição
+  NOVA, que recebia `confirmacao` e não sabia lê-la: nada salvava, nada
+  aparecia, o submit virava clique sem efeito — o defeito que a fatia existe
+  para matar, reintroduzido no formulário irmão. E o caminho é real: encerrar a
+  prescrição mantém os vínculos, prescrever de novo com carga menor cai ali.
+  O diálogo virou `ConfirmarSobrealocacaoDialog`, compartilhado pelos dois.
+- **O diálogo não fechava por Esc, X nem overlay.** `open` derivava de
+  `state.confirmacao`, que só muda no próximo submit; `onOpenChange` não tinha
+  como baixá-lo. Com o focus trap do Radix, quem navega por teclado ficava
+  preso, e a única saída era um `window.location.reload()` que jogava fora as
+  edições não salvas do resto do cadastro. Agora o descarte é local (guarda o
+  objeto da confirmação: resposta nova reabre sozinha, sem efeito de reset).
+
+Correções menores da mesma revisão:
+
+- **Sem prescrição vigente, `horasAtuais` vem `undefined`** — "passa de 0h para
+  10h" afirmava um teto que nunca existiu, a mesma mentira educada que o
+  encerramento de vínculo já se recusava a contar.
+- **O papel passou a ser filtrado por `PAPEIS_QUE_CONSOMEM_SALDO`**, não por
+  exclusão de `coordenador_referencia`. Empatam com os três papéis do CHECK
+  atual; um quarto papel faria a represcrição e a barra discordarem em silêncio.
+- **`avisoSemHoras` acompanha a frase**: com vínculo sem horas, o diálogo
+  mostrava uma frase e a barra de destino duas — divergência por omissão.
+- **O lock serializa a corrida, não a detecta.** O confirm passou a ecoar
+  `horasAtuaisEsperadas`; se o teto mudou enquanto o diálogo estava aberto, a
+  gravação é recusada em vez de apagar a decisão do outro coordenador.
+- **`isLoading` deixou de ser adorno**: os diálogos não fecham mais no `onClick`
+  do submit, então o botão cobre o roundtrip inteiro e o submit não depende de
+  o evento sobreviver ao unmount do próprio `<form>`.
+- **A barra de destino ficou focável** (`tabIndex={-1}` + região rotulada): o
+  handoff movia scroll, e scroll não é foco — quem usa leitor de tela confirmava
+  a redução e continuava no contexto antigo.
+
+Cobertura nova: 6 testes de componente (5 do diálogo + 1 que reproduz o submit
+mudo da prescrição nova) e 5 de integração (recusa por teto mudado, prescrição
+nova sobre equipe legada, vínculo sem horas no aviso, `substituto` na conta).
+`pnpm test` **970/970** · `typecheck` limpo · `lint` só as 2 falhas
+pré-existentes de `react-hooks/set-state-in-effect` em `agenda/semana/`.
+
 ---
 
 ## 🏁 Sessão 03/08/2026 (3ª) — Billing pay-as-you-grow implementado, trilho vira Mercado Pago (#36)

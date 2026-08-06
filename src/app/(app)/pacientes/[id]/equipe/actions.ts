@@ -53,6 +53,11 @@ export async function editarMembroEquipeAction(
  * perde o acesso ao prontuário na hora (D-A) — e o coordenador precisa ler as
  * duas. Por isso a assinatura é de `useActionState`: o toast é montado a partir
  * de `disciplina`, `horasDevolvidas` e `saldoTexto`.
+ *
+ * `patientId` vem bindado do cliente e serve SÓ de chave de cache no
+ * `revalidatePath` — nunca de autorização. O paciente que importa é o do
+ * `membershipId`, resolvido no servidor sob RLS por `encerrarVinculoEquipe`;
+ * mandar outro id aqui invalida uma rota alheia e nada mais.
  */
 export async function encerrarVinculoAction(
   patientId: string,

@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/toast";
 import { DISCIPLINAS_PADRAO, formatarDisciplina } from "@/lib/disciplinas";
 import { formatarHoras, HORAS_MAX_SEMANA, HORAS_PASSO } from "@/lib/horas";
 import { ancoraCobertura } from "../equipe/cobertura";
+import { ConfirmarSobrealocacaoDialog } from "./confirmar-sobrealocacao-dialog";
 import {
   encerrarPrescricaoAction,
   prescreverDisciplinaAction,
@@ -166,66 +167,78 @@ function NovaPrescricaoForm({
   }
 
   return (
-    <form
-      action={formAction}
-      // `key` derivado da lista de disponíveis: prescrever uma disciplina a
-      // remove da lista, o formulário remonta e volta vazio. Limpar por
-      // `setState` dentro do efeito de sucesso seria render em cascata (e o
-      // lint do repo barra) — remontar é o mesmo resultado sem o ciclo extra.
-      key={disponiveis.map((d) => d.id).join("|")}
-      className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/30 bg-[var(--surface-card)] p-4"
-    >
-      <h3 className="font-display text-sm font-semibold text-[var(--text-primary)]">
-        {temPrescricao
-          ? "Prescrever outra disciplina"
-          : "Prescrever a primeira disciplina"}
-      </h3>
-      {state.error ? (
-        <Alert severidade="erro" destacado={!!state.bloqueioConta}>
-          {state.error}
-        </Alert>
-      ) : null}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Disciplina" htmlFor="disciplina">
-          <Select name="disciplina" required>
-            <SelectTrigger id="disciplina">
-              <SelectValue placeholder="Selecione a disciplina" />
-            </SelectTrigger>
-            <SelectContent>
-              {disponiveis.map((d) => (
-                <SelectItem key={d.id} value={d.id}>
-                  {d.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field
-          label="Carga horária semanal"
-          htmlFor="horasAlvoSemana"
-          // O passo de 30min não é preferência de UI: é o CHECK
-          // `patient_alvo_horas_passo` no banco. Dizer aqui evita que o
-          // coordenador descubra a regra por mensagem de erro.
-          hint={`De 30 em 30 minutos, até ${formatarHoras(HORAS_MAX_SEMANA)} por semana. Ex.: 1,5 = 1h30.`}
-        >
-          <Input
-            id="horasAlvoSemana"
-            name="horasAlvoSemana"
-            type="number"
-            min={HORAS_PASSO}
-            max={HORAS_MAX_SEMANA}
-            step={HORAS_PASSO}
-            inputMode="decimal"
-            required
-          />
-        </Field>
-      </div>
-      <div>
-        <Button type="submit" isLoading={isPending} tamanho="sm">
-          {isPending ? "Salvando prescrição..." : "Salvar prescrição"}
-        </Button>
-      </div>
-    </form>
+    <>
+      {/* Prescrever uma disciplina NOVA também pode sobrealocar: encerrar a
+          prescrição mantém os vínculos já montados (§3.1), e prescrever de novo
+          com carga menor que a alocada cai no mesmo §MV4 da linha vigente. Sem
+          este diálogo aqui, o servidor devolvia a confirmação, este formulário
+          não sabia lê-la, e o submit virava um clique sem efeito e sem aviso. */}
+      <ConfirmarSobrealocacaoDialog
+        confirmacao={state.confirmacao}
+        formAction={formAction}
+        isPending={isPending}
+      />
+      <form
+        action={formAction}
+        // `key` derivado da lista de disponíveis: prescrever uma disciplina a
+        // remove da lista, o formulário remonta e volta vazio. Limpar por
+        // `setState` dentro do efeito de sucesso seria render em cascata (e o
+        // lint do repo barra) — remontar é o mesmo resultado sem o ciclo extra.
+        key={disponiveis.map((d) => d.id).join("|")}
+        className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/30 bg-[var(--surface-card)] p-4"
+      >
+        <h3 className="font-display text-sm font-semibold text-[var(--text-primary)]">
+          {temPrescricao
+            ? "Prescrever outra disciplina"
+            : "Prescrever a primeira disciplina"}
+        </h3>
+        {state.error ? (
+          <Alert severidade="erro" destacado={!!state.bloqueioConta}>
+            {state.error}
+          </Alert>
+        ) : null}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Disciplina" htmlFor="disciplina">
+            <Select name="disciplina" required>
+              <SelectTrigger id="disciplina">
+                <SelectValue placeholder="Selecione a disciplina" />
+              </SelectTrigger>
+              <SelectContent>
+                {disponiveis.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field
+            label="Carga horária semanal"
+            htmlFor="horasAlvoSemana"
+            // O passo de 30min não é preferência de UI: é o CHECK
+            // `patient_alvo_horas_passo` no banco. Dizer aqui evita que o
+            // coordenador descubra a regra por mensagem de erro.
+            hint={`De 30 em 30 minutos, até ${formatarHoras(HORAS_MAX_SEMANA)} por semana. Ex.: 1,5 = 1h30.`}
+          >
+            <Input
+              id="horasAlvoSemana"
+              name="horasAlvoSemana"
+              type="number"
+              min={HORAS_PASSO}
+              max={HORAS_MAX_SEMANA}
+              step={HORAS_PASSO}
+              inputMode="decimal"
+              required
+            />
+          </Field>
+        </div>
+        <div>
+          <Button type="submit" isLoading={isPending} tamanho="sm">
+            {isPending ? "Salvando prescrição..." : "Salvar prescrição"}
+          </Button>
+        </div>
+      </form>
+    </>
   );
 }
 
@@ -323,70 +336,11 @@ function LinhaPrescricao({
         </Button>
       </form>
 
-      {/* §MV4 — reduzir abaixo do que a equipe entrega é LEGÍTIMO: travar
-          obrigaria a desmontar a equipe antes de corrigir a prescrição, ordem
-          que a clínica não segue. O refino é confirmar ANTES, com a frase exata
-          que o coordenador vai reencontrar na barra da tela de equipe. */}
-      <Dialog
-        open={!!confirmacao}
-        onOpenChange={() => {
-          // Fechar sem confirmar = cancelar. Nada foi salvo: o servidor devolveu
-          // a confirmação NO LUGAR de gravar, então não há o que desfazer.
-          if (confirmacao) window.location.hash = "prescricao";
-        }}
-      >
-        <DialogContent>
-          <DialogTitle>
-            Esta redução deixa a disciplina sobrealocada.
-          </DialogTitle>
-          <DialogDescription>
-            {confirmacao ? (
-              <>
-                {formatarDisciplina(confirmacao.disciplina)} passa de{" "}
-                {formatarHoras(confirmacao.horasAtuais)} para{" "}
-                {formatarHoras(confirmacao.horasNovas)}, mas a equipe tem{" "}
-                {formatarHoras(confirmacao.horasAlocadas)} alocadas. A
-                prescrição será salva e a disciplina ficará assim:{" "}
-                <strong>{confirmacao.texto}</strong>
-              </>
-            ) : null}
-          </DialogDescription>
-          <div className="mt-6 flex items-center justify-end gap-3">
-            <Button
-              type="button"
-              variante="neutra"
-              tamanho="sm"
-              onClick={() => window.location.reload()}
-            >
-              Cancelar
-            </Button>
-            {/* Reenvia o MESMO pedido com a flag de confirmação — o servidor
-                revalida o saldo sob o mesmo lock, então uma alocação que
-                aconteça entre o diálogo e o clique não passa despercebida. */}
-            <form action={formAction}>
-              <input
-                type="hidden"
-                name="disciplina"
-                value={confirmacao?.disciplina ?? ""}
-              />
-              <input
-                type="hidden"
-                name="horasAlvoSemana"
-                value={confirmacao?.horasNovas ?? ""}
-              />
-              <input type="hidden" name="confirmarSobrealocacao" value="1" />
-              <Button
-                type="submit"
-                risco="alto"
-                tamanho="sm"
-                isLoading={isPending}
-              >
-                Salvar mesmo assim
-              </Button>
-            </form>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ConfirmarSobrealocacaoDialog
+        confirmacao={confirmacao}
+        formAction={formAction}
+        isPending={isPending}
+      />
 
       <Dialog
         open={confirmandoEncerrar}

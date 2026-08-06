@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import { careTeamMembership, patientAlvoDisciplina } from "@/db/schema";
@@ -8,12 +8,14 @@ import {
   ehCargaValida,
   formatarHoras,
   HORAS_MAX_SEMANA,
+  PAPEIS_QUE_CONSOMEM_SALDO,
   parseHoras,
 } from "@/lib/horas";
 import {
   calcularCobertura,
   chaveDisciplina,
   textoCobertura,
+  textoVinculosSemHoras,
 } from "../equipe/cobertura";
 
 /**
@@ -46,8 +48,13 @@ import {
  */
 export type ConfirmacaoSobrealocacao = {
   disciplina: string;
-  /** Teto vigente hoje, antes da redução. */
-  horasAtuais: number;
+  /**
+   * Teto vigente hoje, antes da redução. `undefined` quando a disciplina NÃO
+   * está prescrita e a equipe já tem vínculos nela (legado de §3.1): não houve
+   * teto anterior, e dizer "passa de 0h" afirmaria uma prescrição que nunca
+   * existiu — o mesmo número inventado que o encerramento se recusa a citar.
+   */
+  horasAtuais?: number;
   /** Teto que o coordenador está pedindo. */
   horasNovas: number;
   /** Soma vigente de quem CONSOME saldo (D-B/D-C). */
@@ -59,6 +66,13 @@ export type ConfirmacaoSobrealocacao = {
    * destino, que é o jeito mais barato de destruir a confiança na barra.
    */
   texto: string;
+  /**
+   * A segunda frase da barra (`textoVinculosSemHoras`), quando a disciplina tem
+   * vínculo vigente sem horas registradas. Sem ela o diálogo mostraria UMA frase
+   * e a tela de destino DUAS — divergência pela omissão, que é a mesma falha que
+   * parafrasear a primeira.
+   */
+  avisoSemHoras?: string;
 };
 
 export type PrescricaoState = {
@@ -153,18 +167,30 @@ async function travarDisciplina(
  * sobrealocação sem que nenhum dos dois coordenadores tivesse errado.
  *
  * Filtros que não são opcionais: `vigencia_fim IS NULL` (histórico encerrado
- * não é entrega) e `papel <> 'coordenador_referencia'` (D-C: gestão não
- * consome). Esquecer qualquer um deles faria a confirmação de MV4 aparecer em
- * redução que não sobrealoca nada.
+ * não é entrega) e o papel que consome saldo (D-C: gestão não consome).
+ * Esquecer qualquer um deles faria a confirmação de MV4 aparecer em redução que
+ * não sobrealoca nada.
+ *
+ * O papel é filtrado por LISTA DE QUEM CONSOME (`PAPEIS_QUE_CONSOMEM_SALDO`), a
+ * mesma constante que `papelConsomeSaldo` usa na barra — nunca por exclusão de
+ * `coordenador_referencia`. Hoje as duas formas dão no mesmo porque o CHECK
+ * `ctm_papel` só admite três papéis; no dia em que entrar um quarto, a exclusão
+ * o contaria aqui e a barra não o contaria, e a divergência apareceria como
+ * confirmação fantasma sem nenhum teste ficar vermelho.
+ *
+ * Vínculo vigente SEM horas não entra na soma (o `SUM` ignora NULL) mas é
+ * contado à parte: é o que permite ao diálogo repetir a segunda frase da barra
+ * em vez de mostrar um número que se apresenta como completo.
  */
 async function somarAlocadoVigente(
   tx: Tx,
   patientId: string,
   disciplina: string,
-): Promise<number> {
+): Promise<{ horasAlocadas: number; vinculosSemHoras: number }> {
   const [linha] = await tx
     .select({
       alocado: sql<string>`COALESCE(SUM(${careTeamMembership.horasSemana}), 0)`,
+      semHoras: sql<string>`COUNT(*) FILTER (WHERE ${careTeamMembership.horasSemana} IS NULL)`,
     })
     .from(careTeamMembership)
     .where(
@@ -172,26 +198,33 @@ async function somarAlocadoVigente(
         eq(careTeamMembership.patientId, patientId),
         sql`lower(btrim(${careTeamMembership.disciplina})) = ${chaveDisciplina(disciplina)}`,
         isNull(careTeamMembership.vigenciaFim),
-        sql`${careTeamMembership.papelNaEquipe} <> 'coordenador_referencia'`,
+        inArray(careTeamMembership.papelNaEquipe, PAPEIS_QUE_CONSOMEM_SALDO),
       ),
     );
-  return parseHoras(linha?.alocado) ?? 0;
+  return {
+    horasAlocadas: parseHoras(linha?.alocado) ?? 0,
+    vinculosSemHoras: Number(linha?.semHoras ?? 0),
+  };
 }
 
 /**
- * A frase de MV3 para o estado em que a disciplina FICARIA com o novo teto.
+ * As frases de MV3 para o estado em que a disciplina FICARIA com o novo teto.
  *
- * Passa pelo `calcularCobertura` real, com uma prescrição e um vínculo
- * sintéticos que somam exatamente o alocado apurado, em vez de montar o
- * `CoberturaDisciplina` na mão: a classificação dos quatro estados e o cálculo
- * do excedente ficam num lugar só. Se a regra de classificação mudar, esta
- * frase muda junto — que é o ponto.
+ * Passa pelo `calcularCobertura` real, com uma prescrição e vínculos sintéticos
+ * que reproduzem exatamente o apurado — um vínculo com o total das horas e um
+ * por vínculo sem horas —, em vez de montar o `CoberturaDisciplina` na mão: a
+ * classificação dos quatro estados, o cálculo do excedente e o aviso de conta
+ * incompleta ficam num lugar só. Se a regra mudar, estas frases mudam junto —
+ * que é o ponto.
  */
-function textoDoEstadoResultante(
+function frasesDoEstadoResultante(
   disciplina: string,
   horasNovas: number,
-  horasAlocadas: number,
-): string {
+  {
+    horasAlocadas,
+    vinculosSemHoras,
+  }: Awaited<ReturnType<typeof somarAlocadoVigente>>,
+): { texto: string; avisoSemHoras?: string } {
   const [cobertura] = calcularCobertura(
     [{ disciplina, horasAlvoSemana: horasNovas }],
     [
@@ -200,9 +233,17 @@ function textoDoEstadoResultante(
         papelNaEquipe: "terapeuta_referencia",
         horasSemana: horasAlocadas,
       },
+      ...Array.from({ length: vinculosSemHoras }, () => ({
+        disciplina,
+        papelNaEquipe: "terapeuta_referencia",
+        horasSemana: null,
+      })),
     ],
   );
-  return textoCobertura(cobertura!);
+  return {
+    texto: textoCobertura(cobertura!),
+    avisoSemHoras: textoVinculosSemHoras(cobertura!) ?? undefined,
+  };
 }
 
 async function prescreverDisciplinaCore(
@@ -262,19 +303,47 @@ async function prescreverDisciplinaCore(
       return { ok: true };
     }
 
+    const horasAtuais = parseHoras(vigente?.horasAlvoSemana) ?? undefined;
+
+    // O advisory lock SERIALIZA a corrida, não a detecta: ele garante que as
+    // duas represcrições não rodem ao mesmo tempo, e nada mais. Entre ler o
+    // diálogo e clicar "Salvar mesmo assim" o outro coordenador pode ter
+    // represcrito — o teto que o coordenador leu na frase já não é o vigente, e
+    // gravar por cima apagaria a decisão do outro sem ninguém ver. Por isso o
+    // confirm carrega o teto que ele viu, e divergência recusa em vez de
+    // sobrescrever.
+    if (confirmado) {
+      const esperadoBruto = String(
+        formData.get("horasAtuaisEsperadas") ?? "",
+      ).trim();
+      const esperado = esperadoBruto ? Number(esperadoBruto) : undefined;
+      if (esperado !== horasAtuais) {
+        return {
+          error: `A prescrição de ${disciplina} mudou enquanto você confirmava (${
+            horasAtuais === undefined
+              ? "ela deixou de estar vigente"
+              : `agora vale ${formatarHoras(horasAtuais)}`
+          }). Recarregue a página e refaça a alteração.`,
+        };
+      }
+    }
+
     // §MV4 — o caso mais caro de errar. Só há o que confirmar quando a equipe
     // já entrega mais do que o novo teto; prescrição nova (sem equipe) e
     // aumento de carga seguem salvando direto, sem diálogo no caminho.
-    const horasAlocadas = await somarAlocadoVigente(tx, patientId, disciplina);
-    const ficaSobrealocada = horasAlocadas > horas;
+    const alocacao = await somarAlocadoVigente(tx, patientId, disciplina);
+    const ficaSobrealocada = alocacao.horasAlocadas > horas;
     if (ficaSobrealocada && !confirmado) {
       return {
         confirmacao: {
           disciplina,
-          horasAtuais: parseHoras(vigente?.horasAlvoSemana) ?? 0,
+          // Ausente de propósito quando não há prescrição vigente: a disciplina
+          // tem equipe mas nunca teve teto (§3.1), e "passa de 0h" inventaria
+          // uma prescrição anterior.
+          horasAtuais,
           horasNovas: horas,
-          horasAlocadas,
-          texto: textoDoEstadoResultante(disciplina, horas, horasAlocadas),
+          horasAlocadas: alocacao.horasAlocadas,
+          ...frasesDoEstadoResultante(disciplina, horas, alocacao),
         },
       };
     }

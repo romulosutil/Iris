@@ -256,19 +256,32 @@ describe.skipIf(!hasDb)("prescrição de disciplinas (fatia 2)", () => {
     async function alocar(
       horas: string | null,
       papel = "terapeuta_referencia",
+      user = U_TERA,
     ) {
       await owner`
         INSERT INTO care_team_membership
           (patient_id, user_id, disciplina, papel_na_equipe, horas_semana, vigencia_inicio)
-        VALUES (${PATIENT_MV4}, ${U_TERA}, 'Fonoaudiologia', ${papel}, ${horas}, CURRENT_DATE)`;
+        VALUES (${PATIENT_MV4}, ${user}, 'Fonoaudiologia', ${papel}, ${horas}, CURRENT_DATE)`;
     }
 
-    async function prescrever(horas: string, confirmar = false) {
+    /**
+     * `confirmar` carrega o teto que o coordenador VIU no diálogo. Não é
+     * cerimônia: o advisory lock serializa a corrida, não a detecta — sem este
+     * eco, confirmar sobrescreveria uma represcrição que outro coordenador fez
+     * enquanto o diálogo estava aberto, sem ninguém ver.
+     */
+    async function prescrever(
+      horas: string,
+      confirmar?: { horasAtuaisEsperadas: string },
+    ) {
       const campos: Record<string, string> = {
         disciplina: "Fonoaudiologia",
         horasAlvoSemana: horas,
       };
-      if (confirmar) campos.confirmarSobrealocacao = "1";
+      if (confirmar) {
+        campos.confirmarSobrealocacao = "1";
+        campos.horasAtuaisEsperadas = confirmar.horasAtuaisEsperadas;
+      }
       return prescreverDisciplina(ctx, PATIENT_MV4, form(campos));
     }
 
@@ -303,12 +316,77 @@ describe.skipIf(!hasDb)("prescrição de disciplinas (fatia 2)", () => {
       await prescrever("15");
       await alocar("15");
 
-      const r = await prescrever("10", true);
+      const r = await prescrever("10", { horasAtuaisEsperadas: "15" });
       expect(r.ok).toBe(true);
       expect(await horasVigentes()).toBe(10);
       // O trabalho termina no ajuste das horas dos membros, não no salvar — a
       // tela usa este campo para levar o coordenador até a barra afetada.
       expect(r.disciplinaSobrealocada).toBe("Fonoaudiologia");
+    });
+
+    test("confirmar RECUSA quando o teto mudou durante o diálogo", async () => {
+      await prescrever("15");
+      await alocar("15");
+      const pedido = await prescrever("10");
+      expect(pedido.confirmacao?.horasAtuais).toBe(15);
+
+      // Outro coordenador represcreve enquanto o diálogo está aberto. O lock
+      // não ajuda aqui: ele impede que as duas transações rodem juntas, não que
+      // a segunda apague a decisão da primeira.
+      await owner`UPDATE patient_alvo_disciplina SET vigencia_fim = CURRENT_DATE
+                   WHERE patient_id = ${PATIENT_MV4} AND vigencia_fim IS NULL`;
+      await owner`
+        INSERT INTO patient_alvo_disciplina
+          (clinic_id, patient_id, disciplina, horas_alvo_semana, vigencia_inicio)
+        VALUES (${CLINIC_A}, ${PATIENT_MV4}, 'Fonoaudiologia', 12.0, CURRENT_DATE)`;
+
+      const r = await prescrever("10", { horasAtuaisEsperadas: "15" });
+      expect(r.ok).toBeUndefined();
+      expect(r.error).toContain("mudou enquanto você confirmava");
+      // O 12h do outro coordenador continua de pé: recusar é o ponto.
+      expect(await horasVigentes()).toBe(12);
+    });
+
+    test("prescrição NOVA sobre equipe legada não inventa teto anterior (§3.1)", async () => {
+      // Disciplina com vínculo e SEM prescrição vigente é o legado de §3.1 — e
+      // é alcançável de propósito: encerrar a prescrição mantém os vínculos.
+      await alocar("15");
+
+      const r = await prescrever("10");
+      expect(r.confirmacao?.horasAlocadas).toBe(15);
+      // Ausente, não zero: "passa de 0h para 10h" afirmaria uma prescrição
+      // anterior que nunca existiu — o mesmo número inventado que o
+      // encerramento de vínculo se recusa a citar.
+      expect(r.confirmacao?.horasAtuais).toBeUndefined();
+      expect(await horasVigentes()).toBeNull();
+    });
+
+    test("vínculo sem horas entra no AVISO, não no número (§4.2)", async () => {
+      await prescrever("15");
+      await alocar("15");
+      await alocar(null, "terapeuta_referencia", U_COORD);
+
+      const r = await prescrever("10");
+      // O número não muda: `SUM` ignora NULL. O que mudaria sem isto é o
+      // diálogo mostrar UMA frase e a barra de destino DUAS — divergência por
+      // omissão, que custa a mesma confiança que parafrasear a primeira.
+      expect(r.confirmacao?.texto).toBe(
+        "15h de 10h alocadas (150%) — sobrealocação de 5h. Reduza as horas de um membro ou aumente a prescrição.",
+      );
+      expect(r.confirmacao?.avisoSemHoras).toBe(
+        "1 vínculo sem horas definidas — a conta acima está incompleta até você defini-las.",
+      );
+    });
+
+    test("substituto consome saldo como terapeuta (D-B)", async () => {
+      await prescrever("15");
+      await alocar("15", "substituto");
+
+      // A soma filtra pela LISTA de quem consome, não por exclusão do
+      // coordenador. Com os três papéis do CHECK atual as duas formas empatam;
+      // este caso é o que impede `substituto` de sair da conta sem ninguém ver.
+      const r = await prescrever("10");
+      expect(r.confirmacao?.horasAlocadas).toBe(15);
     });
 
     test("reduzir SEM estourar o alocado salva direto, sem diálogo no caminho", async () => {

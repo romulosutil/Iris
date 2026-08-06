@@ -67,8 +67,15 @@ export function BarraCobertura({
       // sobrealoca cai direto NESTA barra, não no topo de uma tela com dez
       // disciplinas. `scroll-mt` compensa o cabeçalho fixo.
       id={ancoraCobertura(cobertura.disciplina)}
+      // `tabIndex={-1}` + região rotulada porque o handoff move SCROLL, e scroll
+      // não é foco: sem um alvo focável, quem navega por teclado ou leitor de
+      // tela confirma a redução e continua no contexto antigo, que é
+      // exatamente o "descobrir depois" que a fatia existe para eliminar.
+      tabIndex={-1}
+      role="group"
+      aria-label={`Cobertura de ${nome}`}
       data-estado={cobertura.estado}
-      className="flex scroll-mt-24 flex-col gap-2 rounded-[var(--radius-xs)] border border-[var(--border-brutal)]/30 bg-[var(--surface-elevated)] p-3"
+      className="focus-visible:outline-focus flex scroll-mt-24 flex-col gap-2 rounded-[var(--radius-xs)] border border-[var(--border-brutal)]/30 bg-[var(--surface-elevated)] p-3 focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-bold text-[var(--text-primary)]">

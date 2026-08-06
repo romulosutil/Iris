@@ -50,12 +50,25 @@ export function EncerrarVinculoForm({
   papelNaEquipe: string;
   horasSemana: string | null;
 }) {
-  const [confirmando, setConfirmando] = useState(false);
   const [state, formAction, isPending] = useActionState(
     encerrarVinculoAction.bind(null, patientId, membershipId),
     VAZIO,
   );
   const { addToast } = useToast();
+
+  /**
+   * Qual resultado estava na tela quando o diálogo foi aberto.
+   *
+   * O diálogo fica aberto enquanto `state` for aquele mesmo objeto — ou seja,
+   * até a action responder — e fecha sozinho quando a resposta chega. Fechar no
+   * `onClick` do submit, como estava, desmontava o `<form>` no mesmo clique:
+   * `isLoading` nunca chegava a aparecer numa ação que faz roundtrip para cortar
+   * acesso a prontuário, e o submit dependia de o evento sobreviver ao unmount.
+   * Derivar em vez de `setState` num efeito também mantém o lint
+   * `react-hooks/set-state-in-effect` quieto.
+   */
+  const [pedido, setPedido] = useState<EncerramentoResultado | null>(null);
+  const confirmando = pedido !== null && state === pedido;
 
   const nomeDisciplina = formatarDisciplina(disciplina);
   // Gestão do caso não consome saldo (D-C), então não há hora a devolver — e
@@ -86,7 +99,7 @@ export function EncerrarVinculoForm({
         type="button"
         risco="alto"
         tamanho="sm"
-        onClick={() => setConfirmando(true)}
+        onClick={() => setPedido(state)}
       >
         Encerrar vínculo
       </Button>
@@ -94,7 +107,7 @@ export function EncerrarVinculoForm({
       <Dialog
         open={confirmando}
         onOpenChange={(aberto) => {
-          if (!aberto) setConfirmando(false);
+          if (!aberto) setPedido(null);
         }}
       >
         <DialogContent>
@@ -114,17 +127,19 @@ export function EncerrarVinculoForm({
               type="button"
               variante="neutra"
               tamanho="sm"
-              onClick={() => setConfirmando(false)}
+              onClick={() => setPedido(null)}
             >
               Cancelar
             </Button>
+            {/* Sem `onClick` que feche: o diálogo sai de cena quando a action
+                responde, então `isLoading` cobre o roundtrip inteiro e o submit
+                não corre atrás de um formulário já desmontado. */}
             <form action={formAction}>
               <Button
                 type="submit"
                 risco="alto"
                 tamanho="sm"
                 isLoading={isPending}
-                onClick={() => setConfirmando(false)}
               >
                 Encerrar vínculo
               </Button>
