@@ -47,6 +47,72 @@
 
 ---
 
+## 🏁 Sessão 07/08/2026 — #221 fechada: o vermelho crônico de `listarTerapeutas` era o teste, não a query
+
+O vermelho de `db/tests/agenda2-janela-actions.int.test.ts` estava registrado
+como falha pré-existente desde a Fatia 2, com o diagnóstico invertido: "a lista
+inclui o coordenador, que a asserção espera excluir" descreve o sintoma como se
+a query estivesse errada. Não estava. O commit `eddbf5d` ("filtro de
+disciplinas da equipe e coordenador em agendamentos") **ampliou de propósito**
+`listarTerapeutas` — de `eq(userRole.papel, "terapeuta")` para
+`inArray(userRole.papel, ["terapeuta", "coordenador"])`, e de `.select` para
+`.selectDistinct`. O `expect(...).not.toContain(U_COORD_A)` simplesmente ficou
+para trás.
+
+A regra de produto por trás disso: **em clínica pequena quem coordena também
+atende**. Fora dessa lista o coordenador não tem janela de trabalho e não recebe
+alocação na agenda — ou seja, "corrigir" a query para o que o teste pedia
+apagaria metade da capacidade de atendimento das clínicas menores.
+
+**Lacuna fechada junto, que ninguém cobria:** a PK de `user_role` é
+`(user_id, clinic_id, papel)`, então **papel duplo na mesma clínica é possível**
+— é exatamente por isso que `eddbf5d` trocou `select` por `selectDistinct`.
+Nenhum teste do repo tinha fixture de usuário com dois papéis, então essa metade
+do comportamento nunca foi exercida. Agora tem (`U_DUAL_A`).
+
+**Verificação — medida, não lida:**
+
+- **Cheque de mutação nas duas metades, uma mutação por teste, sem
+  sobreposição:** revertendo `inArray` para `eq(..., "terapeuta")` → falha
+  `listarTerapeutas retorna terapeutas e coordenadores da clínica`; revertendo
+  `selectDistinct` para `select` → falha `listarTerapeutas não duplica quem
+acumula os dois papéis`. Sem esse cheque os dois testes novos passariam
+  também contra a query antiga.
+- Arquivo isolado: **5/5**. `pnpm typecheck` limpo.
+- Suíte `pnpm test:rls` completa: **756/756, 90/90 arquivos, zero vermelho** —
+  primeira vez em semanas. O número só fecha depois de repor à mão as 3 famílias
+  de protocolo que faltavam no banco local (ver #222 abaixo); a suíte roda verde,
+  mas a base local ainda precisa desse conserto até a #222 fechar.
+- `pnpm lint`: os mesmos **2 erros pré-existentes** em
+  `agenda/semana/combobox-entidade.tsx:52` e `popover-alocar.tsx:98`
+  (`setState` síncrono em efeito), arquivos que este diff não toca.
+
+Diff: só `db/tests/agenda2-janela-actions.int.test.ts` (+22/−6). **Nenhuma
+mudança de código de produção** — o que é o resultado esperado quando a falha
+está no oráculo, não no sistema.
+
+### Achado lateral, virou #222 — catálogo de famílias de protocolo truncado por outro teste
+
+Não é regressão deste diff.
+`src/app/(app)/pacientes/[id]/cadastro-clinico/protocolo.int.test.ts` falha no
+**setup**, com
+`PostgresError: insert or update on table "protocol" violates foreign key constraint "protocol_familia_protocol_familia_catalogo_id_fk"`.
+
+Medido: a migração `0001_rls.sql:244-248` semeia **4** famílias; o banco local
+tinha **2** — `aba_marcos_desenvolvimento` e `vbmapp-e`, sendo que `vbmapp-e`
+**não existe no seed**, foi inserida por um teste. Ou seja, algum dos 10
+arquivos que mexem em `protocol_familia_catalogo` trunca o catálogo e repõe só o
+que ele mesmo precisa. Prova: repondo as 3 famílias faltantes, o arquivo passa
+**11/11** sem alterar uma linha de código. Falha igual rodando sozinho — o
+estado sujo **persiste no banco entre execuções**, que é o que torna isso caro
+de diagnosticar.
+
+Nota para quem for pegar a #222: esta é uma causa **diferente** da já registrada
+antes para o mesmo arquivo (o bug de fuso das 21h–0h de Brasília). Mesmo arquivo
+vermelho, dois motivos independentes.
+
+---
+
 ## 🏁 Sessão 07/08/2026 — #215 fechada: `app_conta_somente_leitura()` falha aberta com GUC inválido (abre D16 e D17)
 
 Migração **`0082_conta_somente_leitura_guc_invalido.sql`** (à mão, `when` =
@@ -259,7 +325,12 @@ exercitando cada CHECK), mais 40 testes unitários e 15 de integração.
 Confirmadas por `git stash` — falham igual sem nenhuma alteração desta sessão:
 
 - `agenda2-janela-actions` → `listarTerapeutas retorna o terapeuta da clínica`:
-  a lista inclui o coordenador, que a asserção espera excluir.
+  a lista inclui o coordenador, que a asserção espera excluir. **Resolvido em
+  07/08/2026 (#221)** — não havia bug na query: a asserção é que ficou
+  desatualizada em relação ao commit `eddbf5d`, que ampliou `listarTerapeutas`
+  de `eq(papel, "terapeuta")` para `inArray(papel, ["terapeuta",
+"coordenador"])` de propósito. O teste foi reescrito para a regra vigente —
+  ver a sessão no topo.
 - `conta-somente-leitura-rls` → `sem GUC de tenant a função devolve false`:
   `invalid input syntax for type uuid: ""` — `app_conta_somente_leitura()`
   estoura no cast em vez de falhar fechado, que é exatamente o que o teste
