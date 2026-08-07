@@ -14,10 +14,19 @@
 #   BILLING_HEARTBEAT_DIR  default /heartbeat.
 #
 # POR QUE 3600s E NÃO 60s COMO O ESCALONAMENTO: aqui não há prazo clínico. A
-# apuração roda 3 DIAS antes da renovação do ciclo, então a janela útil é de
-# dias — de hora em hora já é folgado, e o disparo é idempotente do lado da
-# rota (que só fecha ciclo ainda aberto). Um tick de 1 minuto só geraria 60x
-# mais POST sem fechar nada.
+# apuração roda DEPOIS do fim do ciclo — `fecharCiclosVencendo` seleciona por
+# `ciclo_atual_fim <= agora` (src/lib/billing/subscription.ts) —, e o ciclo é de
+# 30 dias, então atrasar o fechamento em até uma hora não muda nada para o
+# cliente. O disparo é idempotente do lado da rota (só fecha ciclo ainda
+# aberto): um tick de 1 minuto só geraria 60x mais POST sem fechar nada.
+#
+# ATENÇÃO ao mexer neste intervalo: essa folga de até 1h entre o fim do ciclo e
+# a apuração é exatamente a janela do defeito da issue #216 — hoje o critério
+# (c) de `billing_apurar_ciclo` lê `arquivado_em IS NULL` no instante da
+# apuração, então a varredura de auto-arquivamento (infra/arquivamento/) caindo
+# dentro dessa fresta tira do ciclo um paciente que ficou ativo o ciclo inteiro.
+# Aumentar o intervalo aqui AUMENTA a janela. Encurtar não fecha o furo — quem
+# fecha é a #216.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

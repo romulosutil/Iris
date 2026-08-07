@@ -46,7 +46,9 @@ async function arquivarPacienteCore(
 export const arquivarPaciente = comEscrita(arquivarPacienteCore);
 
 /**
- * Desarquiva: o paciente volta a contar na fatura do mês.
+ * Desarquiva: o paciente volta a contar na fatura já do ciclo em andamento
+ * (critério (c) de `billing_apurar_ciclo`, 0071 — o ciclo é apurado inteiro,
+ * não a partir da data do desarquivamento).
  *
  * Continua permitido para quem já teve alta clínica: o trigger do banco só age
  * na transição NULL → NOT NULL de `alta_em`, então desarquivar não é desfeito

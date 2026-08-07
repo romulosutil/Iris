@@ -19,7 +19,11 @@ function data(d: Date): string {
  * trilha) para poder ser varrido pelo axe e testado sem banco.
  *
  * Regra de copy: **fato + consequência na contagem, sem alarmismo e sem
- * jargão de cobrança.** Arquivar é ato administrativo, não evento clínico —
+ * jargão de cobrança.** A unidade é o CICLO de cobrança (30 dias ancorados na
+ * assinatura da clínica), nunca o mês civil, e nunca "a partir do próximo":
+ * `billing_apurar_ciclo` (0071) avalia o ciclo inteiro de uma vez, então tanto
+ * o desarquivamento automático quanto o arquivamento por inatividade valem já
+ * para o ciclo em andamento. Arquivar é ato administrativo, não evento clínico —
  * nada aqui pode soar como alta, abandono ou risco ao paciente. E as duas
  * mensagens dizem, em voz alta, que o prontuário continua acessível: sem isso
  * a leitura natural de "arquivado" é "vou perder o registro", que é exatamente
@@ -40,9 +44,9 @@ export function AvisosArquivamento({
           titulo="Este paciente voltou a contar como ativo"
         >
           Um atendimento foi registrado em {data(desarquivadoAutomaticamenteEm)}{" "}
-          e o arquivamento foi desfeito automaticamente. A partir desse dia ele
-          entra de novo na contagem de pacientes ativos do mês. Se não era o
-          esperado, arquive novamente nesta página.
+          e o arquivamento foi desfeito automaticamente. Ele entra de novo na
+          contagem de pacientes ativos já no ciclo de cobrança em andamento. Se
+          não era o esperado, arquive novamente nesta página.
         </Alert>
       ) : null}
 
@@ -54,9 +58,9 @@ export function AvisosArquivamento({
           Não há registro clínico deste paciente há{" "}
           {REGUA_ARQUIVAMENTO.diasAvisoPrevio} dias. Se nenhum for feito até{" "}
           {data(new Date(avisoPrevioEm.getTime() + DIAS_DE_FOLGA * MS_POR_DIA))}
-          , ele sai da contagem de pacientes ativos do mês. O prontuário
-          continua acessível e exportável do mesmo jeito, e registrar um
-          atendimento traz o paciente de volta.
+          , ele sai da contagem de pacientes ativos já no ciclo de cobrança em
+          andamento. O prontuário continua acessível e exportável do mesmo
+          jeito, e registrar um atendimento traz o paciente de volta.
         </Alert>
       ) : null}
     </Stack>
