@@ -32,7 +32,9 @@ export type ConfigEmergencia = {
 const salvarSchema = z.object({
   // O responsável técnico é sempre um usuário COM PAPEL NESTA clínica — nunca
   // um contato externo. Validado de novo no UPDATE (subselect em user_role).
-  responsavelTecnicoId: z.string().uuid("Selecione um responsável técnico válido."),
+  responsavelTecnicoId: z
+    .string()
+    .uuid("Selecione um responsável técnico válido."),
   protocoloInterno: z
     .string()
     .trim()
@@ -89,8 +91,10 @@ export async function lerConfigEmergencia(
 
     const l = linhas[0];
     return {
-      responsavelTecnicoId: (l?.responsavel_tecnico_id as string | null) ?? null,
-      protocoloInterno: (l?.protocolo_emergencia_interno as string | null) ?? null,
+      responsavelTecnicoId:
+        (l?.responsavel_tecnico_id as string | null) ?? null,
+      protocoloInterno:
+        (l?.protocolo_emergencia_interno as string | null) ?? null,
       declaradoEm: (l?.declarado_em as string | null) ?? null,
       declaradoPorNome: (l?.declarado_por_nome as string | null) ?? null,
     };
@@ -126,15 +130,18 @@ export async function salvarConfigEmergencia(
       };
     }
 
+    // #212 — NÃO voltar a fazer `UPDATE clinic` aqui. `clinic` só tem policy
+    // de SELECT para `app_role` (0002, deliberado): o UPDATE cru afetava 0
+    // linhas em silêncio e a tela devolvia `{ ok: true }` sem gravar nada.
+    // A escrita é a função SECURITY DEFINER da 0081, cujo guard interno
+    // espelha `clinic_read` + exige coordenador. A clínica não entra por
+    // parâmetro — a função lê `app.clinic_id` do próprio contexto da
+    // transação, então não há caminho de forjar tenant.
     await tx.execute(sql`
-      UPDATE clinic
-         SET responsavel_tecnico_id = ${p.data.responsavelTecnicoId}::uuid,
-             protocolo_emergencia_interno = ${p.data.protocoloInterno},
-             protocolo_emergencia_declarado_em =
-               COALESCE(protocolo_emergencia_declarado_em, now()),
-             protocolo_emergencia_declarado_por =
-               COALESCE(protocolo_emergencia_declarado_por, ${ctx.userId}::uuid)
-       WHERE id = ${ctx.clinicId}::uuid
+      SELECT app_salvar_config_emergencia(
+        ${p.data.responsavelTecnicoId}::uuid,
+        ${p.data.protocoloInterno}
+      )
     `);
 
     await tx.execute(sql`
