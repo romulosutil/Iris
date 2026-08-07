@@ -10,8 +10,11 @@ import { Stack, Cluster } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import Link from "next/link";
-
+import { ArquivamentoDialog } from "./arquivamento-dialog";
+import { AvisosArquivamento } from "./avisos-arquivamento";
+import { carregarAvisosArquivamento } from "./arquivamento-queries";
 
 interface PacientePageProps {
   params: Promise<{ id: string }>;
@@ -27,6 +30,10 @@ export default async function PacientePage({ params }: PacientePageProps) {
       .select({
         id: patient.id,
         nome: patient.nome,
+        // #174: o estado de arquivamento comercial precisa ser visível aqui —
+        // sem ele a única pista de que o paciente saiu da contagem de ativos
+        // seria a fatura no fim do mês.
+        arquivadoEm: patient.arquivadoEm,
       })
       .from(patient)
       .where(eq(patient.id, id));
@@ -40,6 +47,14 @@ export default async function PacientePage({ params }: PacientePageProps) {
 
   const timeline = await carregarTimeline(ctx, id);
   const temSnapshots = timeline && timeline.snapshots.length > 0;
+
+  const avisos = await carregarAvisosArquivamento(ctx, id);
+
+  // Mesmo predicado do `requireRole` do core (`logic.ts`): mostrar o botão a
+  // quem a policy `patient_update` não deixa escrever produziria um "arquivado"
+  // na tela em cima de 0 linhas afetadas — RLS filtra em silêncio.
+  const podeArquivar =
+    ctx.role === "coordenador" || ctx.role === "admin_recepcao";
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -55,9 +70,20 @@ export default async function PacientePage({ params }: PacientePageProps) {
             />
           }
           title={paciente.nome}
+          badge={
+            paciente.arquivadoEm ? (
+              <StatusBadge variante="neutral">Arquivado</StatusBadge>
+            ) : undefined
+          }
           description="Prontuário e linha do tempo de evolução clínica"
           actions={
             <Cluster gap="sm">
+              {podeArquivar ? (
+                <ArquivamentoDialog
+                  patientId={paciente.id}
+                  arquivado={!!paciente.arquivadoEm}
+                />
+              ) : null}
               <Link href={`/pacientes/${paciente.id}/cadastro-clinico`}>
                 <Button variante="neutra" tamanho="sm">
                   Ficha Clínica
@@ -77,14 +103,18 @@ export default async function PacientePage({ params }: PacientePageProps) {
             "Briefing" ou "Horas" perdia a navegação e só voltava pelo botão do
             browser. Além disso listava 4 das 7 rotas irmãs reais. */}
 
+        {/* #174 — o que o job de arquivamento fez sozinho com a contagem de
+            ativos, dito na tela em vez de só na fatura. */}
+        <AvisosArquivamento {...avisos} />
+
         {/* Estado Vazio ou Timeline */}
         {!temSnapshots ? (
-          <div className="bg-[var(--surface-card)] border-[var(--border-brutal)] mx-auto my-8 max-w-2xl border-2 p-12 text-center rounded-[var(--radius-control)]">
+          <div className="mx-auto my-8 max-w-2xl rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-12 text-center">
             <div className="mb-4 text-4xl">📭</div>
-            <h2 className="text-[var(--text-primary)] mb-2 text-2xl font-black">
+            <h2 className="mb-2 text-2xl font-black text-[var(--text-primary)]">
               Sem sessões registradas
             </h2>
-            <p className="text-[var(--text-secondary)] mb-6 text-sm">
+            <p className="mb-6 text-sm text-[var(--text-secondary)]">
               Este paciente ainda não possui sessões registradas ou snapshots de
               repertório materializados. Assim que a primeira sessão for
               finalizada e consolidada, o histórico e timeline de evolução
@@ -92,7 +122,7 @@ export default async function PacientePage({ params }: PacientePageProps) {
             </p>
             <Link
               href={`/agenda`}
-              className="border-[var(--border-brutal)] bg-[var(--action-primary)] text-[var(--action-primary-fg)] inline-flex items-center justify-center border-2 px-4 py-2 text-sm font-bold focus:outline-none rounded-[var(--radius-control)]"
+              className="inline-flex items-center justify-center rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] px-4 py-2 text-sm font-bold text-[var(--action-primary-fg)] focus:outline-none"
             >
               Agendar Primeira Sessão &rarr;
             </Link>

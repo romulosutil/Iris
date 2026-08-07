@@ -17,9 +17,14 @@ import {
 export async function arquivarPacienteAction(
   patientId: string,
   _prev: ArquivamentoState,
-  _formData: FormData,
+  formData: FormData,
 ): Promise<ArquivamentoState> {
-  const resultado = await arquivarPaciente(await getTenantContext(), patientId);
+  const motivo = lerMotivo(formData);
+  const resultado = await arquivarPaciente(
+    await getTenantContext(),
+    patientId,
+    motivo,
+  );
   if (!resultado.error) revalidarPaciente(patientId);
   return resultado;
 }
@@ -27,14 +32,27 @@ export async function arquivarPacienteAction(
 export async function desarquivarPacienteAction(
   patientId: string,
   _prev: ArquivamentoState,
-  _formData: FormData,
+  formData: FormData,
 ): Promise<ArquivamentoState> {
+  const motivo = lerMotivo(formData);
   const resultado = await desarquivarPaciente(
     await getTenantContext(),
     patientId,
+    motivo,
   );
   if (!resultado.error) revalidarPaciente(patientId);
   return resultado;
+}
+
+/**
+ * O `required`/`minLength` do campo é conveniência de UX, não barreira: um
+ * POST direto na action chega aqui sem passar por HTML nenhum. Quem recusa é o
+ * `motivoArquivamentoSchema` no core — aqui só normalizamos o valor bruto do
+ * `FormData` (que pode ser `null` ou um `File`) para string.
+ */
+function lerMotivo(formData: FormData): string {
+  const bruto = formData.get("motivo");
+  return typeof bruto === "string" ? bruto : "";
 }
 
 /**

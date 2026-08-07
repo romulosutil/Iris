@@ -1,5 +1,6 @@
 import axe from "axe-core";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import type { ReactElement } from "react";
 vi.mock("server-only", () => ({}));
@@ -10,8 +11,16 @@ afterEach(cleanup);
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
   const r = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
-    rules: { region: { enabled: false }, "landmark-one-main": { enabled: false }, "page-has-heading-one": { enabled: false }, "color-contrast": { enabled: false } },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
+    rules: {
+      region: { enabled: false },
+      "landmark-one-main": { enabled: false },
+      "page-has-heading-one": { enabled: false },
+      "color-contrast": { enabled: false },
+    },
   });
   expect(r.violations).toEqual([]);
 }
@@ -30,6 +39,7 @@ test("lista de pacientes sem violações", async () => {
           convenio: "Unimed",
           criadoEm: new Date(),
           temPrescricao: true,
+          arquivadoEm: null,
         },
         // Segundo paciente SEM prescrição: o selo `Sem prescrição` (#203) só é
         // renderizado neste ramo, e um fixture só com o caso feliz deixaria o
@@ -43,8 +53,64 @@ test("lista de pacientes sem violações", async () => {
           convenio: "Bradesco",
           criadoEm: new Date(),
           temPrescricao: false,
+          arquivadoEm: null,
+        },
+        // Terceiro paciente ARQUIVADO (#174): o selo "Arquivado" é outro ramo
+        // do mesmo lugar onde antes ficava um "Ativo" hardcoded para todo
+        // mundo. Sem fixture arquivado, esse ramo nunca entra na varredura.
+        {
+          id: "p3",
+          nome: "Carlos Mendes",
+          nascimento: "2017-11-30",
+          responsavelContato: "Sonia Mendes",
+          escola: "Escola DEF",
+          convenio: null,
+          criadoEm: new Date(),
+          temPrescricao: true,
+          arquivadoEm: new Date("2026-06-01T12:00:00Z"),
         },
       ]}
     />,
   );
 });
+
+test("avisos de arquivamento sem violações", async () => {
+  const { AvisosArquivamento } = await import("./[id]/avisos-arquivamento");
+  await semViolacoes(
+    <AvisosArquivamento
+      desarquivadoAutomaticamenteEm={new Date("2026-07-20T10:00:00Z")}
+      avisoPrevioEm={new Date("2026-07-28T10:00:00Z")}
+    />,
+  );
+});
+
+test("diálogo de arquivamento aberto sem violações", async () => {
+  const user = userEvent.setup();
+  const { ArquivamentoDialog } = await import("./[id]/arquivamento-dialog");
+  const { container } = render(
+    <ArquivamentoDialog patientId="p1" arquivado={false} />,
+  );
+  // O conteúdo do Dialog vive num portal fora do `container`: varrer só o
+  // container acusaria zero violação sobre um formulário que nem foi montado.
+  await user.click(screen.getByRole("button", { name: "Arquivar paciente" }));
+  await screen.findByRole("dialog");
+
+  const r = await axe.run(document.body, {
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
+    rules: {
+      region: { enabled: false },
+      "landmark-one-main": { enabled: false },
+      "page-has-heading-one": { enabled: false },
+      "color-contrast": { enabled: false },
+    },
+  });
+  expect(r.violations).toEqual([]);
+  expect(container).toBeTruthy();
+  // Timeout explícito: a varredura do axe sobre o portal aberto passa de 5s
+  // (o padrão) quando a suíte inteira roda em paralelo, e o teste falhava por
+  // relógio, não por violação. Aumentar aqui em vez de globalmente mantém o
+  // padrão apertado para o resto da suíte.
+}, 30_000);

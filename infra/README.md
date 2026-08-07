@@ -885,12 +885,12 @@ varredura por minuto.
 O envio ao RT não tem fila própria — a retentativa é derivada do estado do
 alerta, e é a mesma consulta que já fazia a reconciliação:
 
-| resultado do envio                        | marcador em `canais_notificados`     | ainda na fila? |
-| ----------------------------------------- | ------------------------------------ | -------------- |
-| sucesso                                   | `email_responsavel_tecnico_enviado`  | não            |
-| falha **transitória** (429/5xx, timeout)  | `email_responsavel_tecnico_adiado`   | **sim**        |
-| falha **permanente** (endereço inválido)  | `email_responsavel_tecnico_falhou`   | não            |
-| transitória após o teto de 3 tentativas   | `email_responsavel_tecnico_falhou`   | não            |
+| resultado do envio                       | marcador em `canais_notificados`    | ainda na fila? |
+| ---------------------------------------- | ----------------------------------- | -------------- |
+| sucesso                                  | `email_responsavel_tecnico_enviado` | não            |
+| falha **transitória** (429/5xx, timeout) | `email_responsavel_tecnico_adiado`  | **sim**        |
+| falha **permanente** (endereço inválido) | `email_responsavel_tecnico_falhou`  | não            |
+| transitória após o teto de 3 tentativas  | `email_responsavel_tecnico_falhou`  | não            |
 
 `app_alertas_estagio2_sem_email()` exclui só `_enviado` e `_falhou`. Um alerta
 `_adiado` continua elegível, então a varredura seguinte (1 min depois) o retenta
@@ -1196,3 +1196,76 @@ DATABASE_URL='postgres://...' node /app/scripts/expurgo-audit-log.mjs
 1. **Pseudonimização de logs órfãos:** invoca `app_pseudonimizar_audit_log_orfao()`, tratando logs onde `ator_id IS NULL` devido ao `ON DELETE SET NULL` no apagamento da conta de um usuário.
 2. **Expurgo físico:** invoca `app_expurgar_audit_log_expirado()`, removendo do banco apenas registros com `criado_em < NOW() - INTERVAL '180 days'`.
 
+---
+
+## Auto-arquivamento por inatividade (#174)
+
+Paciente sem **nenhum registro clínico** há 90 dias sai da contagem de ativos da
+fatura (`arquivado_em = now()`). No 83º dia sai um **aviso prévio**, dando 7 dias
+para a clínica reagir antes de o status mudar sozinho.
+
+| dias sem atividade | o que acontece                                                 |
+| ------------------ | -------------------------------------------------------------- |
+| 83 a 89            | aviso prévio in-app (`audit_log`, `arquivamento_aviso_previo`) |
+| 90 ou mais         | arquivamento comercial (`paciente_arquivado_automaticamente`)  |
+
+Quem faz isso é um **serviço separado** (`infra/arquivamento/`) que roda **uma
+varredura por dia**. A regra vive na função de banco
+`app_auto_arquivar_pacientes()` (migração `0080`); o `.mjs` é gatilho magro, pelo
+mesmo motivo do motor de escalonamento: a varredura **cruza clínicas**, então o
+predicado não pode depender de um contexto de tenant montado em JS.
+
+> **O aviso é IN-APP e só isso.** Uma linha em `audit_log` que a faixa da clínica
+> lê. Nada de e-mail nem SMS: arquivamento é ato administrativo sobre **cobrança**,
+> não evento clínico, e o Iris não fala com o mundo externo sobre paciente. Por
+> isso a imagem deste serviço instala **apenas** `postgres` — sem `resend`, sem
+> cliente HTTP. A ausência é o guardrail.
+
+**A régua 83/90 está escrita em dois lugares** (`REGUA_ARQUIVAMENTO` em
+`src/lib/jobs/auto-arquivamento.ts` e `REGUA` em `scripts/auto-arquivamento.mjs`,
+porque `.mjs` não importa `.ts`). Quem impede a divergência é o teste de paridade
+em `scripts/auto-arquivamento.test.mjs` — mudou um número, mude nos dois, e os
+defaults da função de banco junto.
+
+### Variáveis do serviço
+
+| variável                     | obrigatória | default      |
+| ---------------------------- | ----------- | ------------ |
+| `ARQUIVAMENTO_DATABASE_URL`  | **sim**     | —            |
+| `ARQUIVAMENTO_HEARTBEAT_DIR` | não         | `/heartbeat` |
+| `INTERVALO_S`                | não         | `86400`      |
+
+A role de login herda `iris_arquivamento`, que tem **EXECUTE só na função de
+varredura e SELECT em nenhuma tabela** — credencial vazada não lê paciente nem
+diário. Criada fora das migrações, mesmo padrão de `iris_escalonamento`
+(ver §Motor de escalonamento, Passo 1; a senha vai do seu terminal direto para o
+campo do Easypanel, nunca por chat/issue/PR).
+
+`ARQUIVAMENTO_DATABASE_URL` é validada **antes** do laço: sem ela o container sai
+com erro nomeando a variável, em vez de ficar de pé falhando em silêncio — o que
+com tick de 24h só apareceria no dia seguinte.
+
+### Por que 1x/dia e não 1x/min como o escalonamento
+
+Não há prazo clínico aqui. Os limiares são 83 e 90 **dias**, com 7 dias de folga,
+e a régua conta em dias civis. Varrer de minuto em minuto não antecipa nada e só
+produziria 1440x mais chamadas que não mudam linha nenhuma.
+
+### Heartbeat
+
+`${ARQUIVAMENTO_HEARTBEAT_DIR}/.ultima-varredura`, escrito **só** após varredura
+bem-sucedida — nunca em `--dry-run`, nunca em falha. Um job de arquivamento
+parado é indistinguível, de dentro do produto, de "ninguém passou dos 90 dias":
+a fatura continua cobrando paciente inativo e ninguém percebe. Se o arquivo
+parar de avançar, é isso que está acontecendo.
+
+### Ensaio sem gravar (`--dry-run`)
+
+```bash
+docker compose run --rm arquivamento node /app/scripts/auto-arquivamento.mjs --dry-run
+```
+
+O dry-run roda `app_auto_arquivar_pacientes()` **de verdade**, dentro de uma
+transação, e faz `ROLLBACK` no fim — de propósito não reimplementa o predicado em
+JS, porque um dry-run que reescreve a regra só testa a cópia. Ele **não** atualiza
+o heartbeat, para uma inspeção manual jamais mascarar um job parado.
