@@ -4,6 +4,7 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { auditLog, patient } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { motivoArquivamentoSchema } from "./schemas";
 
 export type ArquivamentoState = {
   error?: string;
@@ -29,8 +30,9 @@ export type ArquivamentoState = {
 async function arquivarPacienteCore(
   ctx: TenantContext,
   patientId: string,
+  motivo: string,
 ): Promise<ArquivamentoState> {
-  return alternarArquivamento(ctx, patientId, "arquivar");
+  return alternarArquivamento(ctx, patientId, "arquivar", motivo);
 }
 
 /**
@@ -55,8 +57,9 @@ export const arquivarPaciente = comEscrita(arquivarPacienteCore);
 async function desarquivarPacienteCore(
   ctx: TenantContext,
   patientId: string,
+  motivo: string,
 ): Promise<ArquivamentoState> {
-  return alternarArquivamento(ctx, patientId, "desarquivar");
+  return alternarArquivamento(ctx, patientId, "desarquivar", motivo);
 }
 
 export const desarquivarPaciente = comEscrita(desarquivarPacienteCore);
@@ -65,9 +68,22 @@ async function alternarArquivamento(
   ctx: TenantContext,
   patientId: string,
   operacao: "arquivar" | "desarquivar",
+  motivo: string,
 ): Promise<ArquivamentoState> {
   requireRole(ctx, "coordenador", "admin_recepcao");
   if (!patientId) return { error: "Paciente não informado." };
+
+  // A validação do motivo é repetida AQUI, e não só na action, porque este core
+  // é chamado direto pelos testes de integração e por qualquer caminho futuro
+  // que não passe por `FormData`. Gravar trilha com motivo vazio é o mesmo que
+  // não ter motivo — e o buraco só apareceria meses depois, na hora de
+  // explicar uma linha da fatura.
+  const motivoValidado = motivoArquivamentoSchema.safeParse(motivo);
+  if (!motivoValidado.success) {
+    return {
+      error: motivoValidado.error.issues[0]?.message ?? "Motivo inválido.",
+    };
+  }
 
   const arquivando = operacao === "arquivar";
 
@@ -107,7 +123,12 @@ async function alternarArquivamento(
         entidade: "patient",
         entidadeId: patientId,
         patientId,
-        detalhe: { origem: "manual" },
+        // `motivo` entra no jsonb, não em coluna nova: a trilha é append-only
+        // e genérica por ação, e o que muda a fatura precisa carregar o porquê
+        // junto do quando. Sem ele, seis meses depois a linha do audit responde
+        // "quem" e "quando" e deixa a pergunta cara ("por que este paciente
+        // parou de ser cobrado?") sem resposta.
+        detalhe: { origem: "manual", motivo: motivoValidado.data },
       });
 
       return { ok: true };

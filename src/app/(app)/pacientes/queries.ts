@@ -12,6 +12,14 @@ export interface PacienteListItem {
   convenio: string | null;
   criadoEm: Date;
   /**
+   * Arquivamento COMERCIAL (#174): fora da contagem de pacientes ativos da
+   * fatura, e nada mais. Não é alta, não é exclusão, e NÃO filtra a lista —
+   * paciente arquivado continua aqui, sinalizado. Esconder empurraria a
+   * clínica a apagar prontuário para não pagar, que é o incentivo que a régua
+   * de arquivamento existe justamente para não criar.
+   */
+  arquivadoEm: Date | null;
+  /**
    * Tem ao menos uma disciplina prescrita VIGENTE (#203). Derivado na leitura,
    * nunca coluna: uma flag persistida passaria a mentir assim que alguém
    * encerrasse a prescrição por outro caminho.
@@ -41,6 +49,7 @@ export async function listarTodosPacientes(
         escola: schema.patient.escola,
         convenio: schema.patient.convenio,
         criadoEm: schema.patient.criadoEm,
+        arquivadoEm: schema.patient.arquivadoEm,
         // EXISTS correlacionado em vez de join: um paciente com três
         // disciplinas prescritas não pode virar três linhas na lista.
         // `vigencia_fim IS NULL` é o mesmo filtro de vigência usado em todo o
