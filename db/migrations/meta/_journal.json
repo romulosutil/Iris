@@ -547,6 +547,13 @@
       "when": 1785422586000,
       "tag": "0077_prescricao_pilar_mestre",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1786067174941,
+      "tag": "0078_reconciliar_snapshot",
+      "breakpoints": true
     }
   ]
 }
