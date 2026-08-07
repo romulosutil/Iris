@@ -136,9 +136,11 @@ async function semearSessao(opts: {
 
 /** Linhas do memorial de um ciclo, lidas pela role DONA — o oráculo do teste. */
 async function memorial(cycleId: string) {
-  return (await owner!<{ patient_id: string; motivo: string }[]>`
+  return (
+    await owner!<{ patient_id: string; motivo: string }[]>`
     SELECT patient_id, motivo FROM billing_cycle_patient
-     WHERE cycle_id = ${cycleId} ORDER BY patient_id`).map((r) => ({
+     WHERE cycle_id = ${cycleId} ORDER BY patient_id`
+  ).map((r) => ({
     patientId: r.patient_id,
     motivo: r.motivo,
   }));
@@ -150,6 +152,24 @@ async function motivoDe(cycleId: string, patientId: string) {
     SELECT motivo FROM billing_cycle_patient
      WHERE cycle_id = ${cycleId} AND patient_id = ${patientId}`;
   return row?.motivo ?? null;
+}
+
+/**
+ * Fotografa o `arquivado_em` de todos os pacientes de uma clínica e devolve o
+ * "desfazer". Os testes do #216 precisam MEXER no arquivamento depois do seed
+ * — e o seed é `beforeAll`, compartilhado com todos os outros casos do
+ * arquivo. Sem restaurar, um teste de arquivamento mudaria o cenário debaixo
+ * dos testes seguintes (a ordem dentro do `describe` é sequencial).
+ */
+async function snapshotArquivado(clinicId: string) {
+  const linhas = await owner!<{ id: string; arquivado_em: Date | null }[]>`
+    SELECT id, arquivado_em FROM patient WHERE clinic_id = ${clinicId}`;
+  return async () => {
+    for (const l of linhas) {
+      await owner!`UPDATE patient SET arquivado_em = ${l.arquivado_em}
+                    WHERE id = ${l.id}`;
+    }
+  };
 }
 
 /** Executa a apuração pela role dona e devolve o inteiro que a função retorna. */
@@ -476,6 +496,106 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
     expect(memorial2).toHaveLength(ESPERADO_A);
   });
 
+  // ─── #216 · a apuração é CONGELADA (arquivar depois não reescreve o ciclo) ─
+  //
+  // Trava de regressão do #216. A issue pedia "congelar o critério (c) de
+  // paciente ativo no fim do ciclo" e sugeria o fix literal
+  // `arquivado_em IS NULL OR arquivado_em >= v_fim` dentro de
+  // `billing_apurar_ciclo`. Aplicar isso HOJE seria REGRESSÃO, não correção:
+  // a `0075` fez `CREATE OR REPLACE` e removeu QUALQUER leitura de
+  // `arquivado_em` da função (DECISÃO 8 de 04/08/2026 — ver
+  // `docs/produto/modelo-de-negocio.md`), e o predicado sugerido reintroduz o
+  // critério (c) por uma porta lateral: passaria a EXCLUIR quem foi arquivado
+  // DENTRO do ciclo, mesmo tendo sido atendido nele.
+  //
+  // A propriedade que a issue realmente queria continua valendo — e é o que
+  // estes testes travam: o resultado da apuração de um ciclo não depende do
+  // INSTANTE em que o job roda. Isso já é verdade sem nenhum `arquivado_em` no
+  // SQL, justamente porque o predicado só olha fatos DATADOS em
+  // `[inicio, fim)`. O arquivamento é um fato de HOJE; o ciclo é história.
+  //
+  // A negativa que prova que (c) não voltou (não-arquivado e PARADO não é
+  // contado) já está travada acima — ver "ATIVO e PARADO no ciclo NÃO é
+  // contado" e "`ativo_nao_arquivado` não é PRODUZIDO". Não é duplicada aqui.
+  test("arquivar DEPOIS do fim do ciclo não muda o ciclo já apurado (#216)", async () => {
+    // O cenário exato do #216: a varredura de 90 dias (#174) arquiva em massa
+    // HOJE, e o job de faturamento reapura um ciclo de março. Se `arquivado_em`
+    // estivesse no predicado como filtro, a fatura de março seria reescrita
+    // retroativamente para R$ 0 — a mesma linha do memorial mudaria de valor
+    // dependendo da hora em que alguém rodou o job.
+    const memorialAntes = await memorial(CYCLE_A);
+    const nAntes = await apurar(CYCLE_A);
+    const restaurar = await snapshotArquivado(CLINIC_A);
+
+    try {
+      await owner!`UPDATE patient SET arquivado_em = now()
+                    WHERE clinic_id = ${CLINIC_A}`;
+
+      const nDepois = await apurar(CYCLE_A);
+      expect(nDepois).toBe(nAntes);
+      expect(nDepois).toBe(ESPERADO_A);
+      expect(await memorial(CYCLE_A)).toEqual(memorialAntes);
+    } finally {
+      // `finally`, não linha solta no fim: a asserção que falha aborta o teste
+      // ANTES de restaurar, e o seed é `beforeAll` compartilhado — sem isto,
+      // uma falha aqui contaminaria em cascata todos os testes seguintes e
+      // esconderia a causa real atrás de vermelhos derivados.
+      await restaurar();
+    }
+  });
+
+  test("arquivar DENTRO do ciclo não isenta quem foi atendido nele", async () => {
+    // Este é o caso que o fix literal do #216 quebraria e o anterior não pega:
+    // com `arquivado_em >= v_fim`, um arquivamento em 10/03 (dentro do ciclo,
+    // portanto < `fim`) reprovaria no predicado e o paciente sumiria da fatura
+    // — apesar de ter tido sessão, check-in ou evolução naquele mesmo mês.
+    // Quem consumiu atendimento no ciclo é faturado; a data em que a clínica
+    // decidiu encerrar o prontuário é irrelevante para o que já aconteceu.
+    const memorialAntes = await memorial(CYCLE_A);
+    const restaurar = await snapshotArquivado(CLINIC_A);
+
+    try {
+      await owner!`UPDATE patient SET arquivado_em = ${DENTRO}
+                    WHERE clinic_id = ${CLINIC_A}`;
+
+      expect(await apurar(CYCLE_A)).toBe(ESPERADO_A);
+      expect(await memorial(CYCLE_A)).toEqual(memorialAntes);
+      expect(await motivoDe(CYCLE_A, P_ARQ_SESSAO)).toBe("interacao_no_ciclo");
+    } finally {
+      await restaurar();
+    }
+  });
+
+  test("o memorial independe do valor de `arquivado_em` (as 4 posições)", async () => {
+    // A forma mais forte da propriedade: varrer `arquivado_em` por todas as
+    // posições relativas ao ciclo e exigir memorial IDÊNTICO em todas. Qualquer
+    // menção a `arquivado_em` no predicado — nas duas direções, como filtro
+    // conjuntivo (`IS NULL`) ou como critério disjuntivo (o antigo (c)) —
+    // muda o resultado em pelo menos uma destas posições e derruba o teste.
+    //
+    // A posição "antes de `inicio`" é o estado de seed da maioria dos
+    // pacientes de A, já exercitado por "(b) arquivado COM sessão no ciclo é
+    // contado"; aqui ela entra só para fechar a varredura.
+    const esperado = await memorial(CYCLE_A);
+    const restaurar = await snapshotArquivado(CLINIC_A);
+
+    try {
+      for (const [rotulo, valor] of [
+        ["nunca arquivado (NULL)", null],
+        ["arquivado antes de `inicio`", ANTES],
+        ["arquivado dentro do ciclo", DENTRO],
+        ["arquivado depois de `fim`", DEPOIS],
+      ] as const) {
+        await owner!`UPDATE patient SET arquivado_em = ${valor}
+                      WHERE clinic_id = ${CLINIC_A}`;
+        expect(await apurar(CYCLE_A), rotulo).toBe(ESPERADO_A);
+        expect(await memorial(CYCLE_A), rotulo).toEqual(esperado);
+      }
+    } finally {
+      await restaurar();
+    }
+  });
+
   // ─── isolamento cross-tenant (o caso mais caro de errar) ──────────────────
   test("clínica vizinha com pacientes ativos não altera a contagem de A", async () => {
     const antes = await apurar(CYCLE_A);
@@ -556,8 +676,9 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
     expect(memoriais).toHaveLength(0);
 
     // E a clínica B enxerga o dela — o isolamento não é cegueira geral.
-    const doB = await withTenant(ctx("coordenador", U_COORD_B, CLINIC_B), (db) =>
-      db.execute(sql`SELECT patient_id FROM billing_cycle_patient`),
+    const doB = await withTenant(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      (db) => db.execute(sql`SELECT patient_id FROM billing_cycle_patient`),
     );
     expect(doB.map((r) => r.patient_id).sort()).toEqual([P_B1, P_B2].sort());
   });
@@ -603,8 +724,9 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
     // `conta-somente-leitura-rls.int.test.ts`; aqui é só o veredito lido pelo
     // produto, pela role de app e com a RLS ligada.
     const somenteLeitura = async (clinicId: string, userId: string) => {
-      const rows = await withTenant(ctx("coordenador", userId, clinicId), (db) =>
-        db.execute(sql`SELECT app_conta_somente_leitura() AS ro`),
+      const rows = await withTenant(
+        ctx("coordenador", userId, clinicId),
+        (db) => db.execute(sql`SELECT app_conta_somente_leitura() AS ro`),
       );
       return rows[0]!.ro as boolean;
     };
