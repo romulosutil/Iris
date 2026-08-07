@@ -575,6 +575,13 @@
       "when": 1786067177941,
       "tag": "0081_config_emergencia_definer",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1786067178941,
+      "tag": "0082_conta_somente_leitura_guc_invalido",
+      "breakpoints": true
     }
   ]
 }
