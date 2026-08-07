@@ -339,7 +339,7 @@ export const patient = pgTable(
     // (MAX(18 anos, alta+10a)). Nullable: em acompanhamento = nunca expurgável.
     altaEm: date("alta_em"),
     // #174 — arquivamento COMERCIAL, independente da alta clínica acima.
-    // NULL = paciente ativo (entra na contagem de faturados do mês).
+    // NULL = paciente ativo (critério (c) da contagem de faturados do ciclo).
     // Dar alta arquiva (trigger `patient_alta_arquiva_trg`, 0065); arquivar
     // nunca dá alta. Arquivado continua legível/exportável — é filtro de
     // negócio, nunca de RLS.

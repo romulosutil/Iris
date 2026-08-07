@@ -32,7 +32,7 @@ export default async function PacientePage({ params }: PacientePageProps) {
         nome: patient.nome,
         // #174: o estado de arquivamento comercial precisa ser visível aqui —
         // sem ele a única pista de que o paciente saiu da contagem de ativos
-        // seria a fatura no fim do mês.
+        // seria a fatura no fechamento do ciclo.
         arquivadoEm: patient.arquivadoEm,
       })
       .from(patient)

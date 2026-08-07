@@ -29,10 +29,22 @@ const INICIAL: ArquivamentoState = {};
  * unilateral do sistema sobre o que a clínica paga.
  *
  * Diálogo (e não botão direto) porque a mudança altera a contagem de pacientes
- * ativos do mês e fica gravada numa trilha append-only — é exatamente o "alto
- * atrito" que o design system reserva para o `Dialog`. O motivo obrigatório é
- * o conteúdo desse atrito: é ele que aparece no `audit_log` quando alguém
- * perguntar meses depois por que este paciente parou (ou voltou) a contar.
+ * ativos do ciclo de cobrança e fica gravada numa trilha append-only — é
+ * exatamente o "alto atrito" que o design system reserva para o `Dialog`. O
+ * motivo obrigatório é o conteúdo desse atrito: é ele que aparece no
+ * `audit_log` quando alguém perguntar meses depois por que este paciente parou
+ * (ou voltou) a contar.
+ *
+ * Por que a copy fala em CICLO e não em "mês": o ciclo são 30 dias ancorados
+ * na assinatura da clínica (`subscription.ciclo_atual_inicio`), não o mês
+ * civil. E o efeito não é "a partir do mês que vem" — `billing_apurar_ciclo`
+ * (0071) avalia o ciclo INTEIRO de uma vez:
+ *   - desarquivar satisfaz o critério (c) `arquivado_em IS NULL` e o paciente
+ *     volta a contar já no ciclo aberto agora, não a partir de hoje;
+ *   - arquivar só o tira do ciclo aberto se ele NÃO teve atendimento nem foi
+ *     criado nele — critérios (a) e (b) continuam contando mesmo arquivado.
+ * Dizer "do mês" faria o coordenador acreditar que arquivar no dia 28 economiza
+ * daqui pra frente, quando pode zerar (ou não mudar em nada) o ciclo corrente.
  *
  * Não existe variante destrutiva de `Button` neste design system, e é
  * coerente: arquivar não destrói nada. O prontuário continua acessível,
@@ -81,8 +93,8 @@ export function ArquivamentoDialog({
         <DialogTitle>{rotulo}</DialogTitle>
         <DialogDescription>
           {arquivado
-            ? "O paciente volta a entrar na contagem de pacientes ativos do mês a partir de hoje. O motivo fica registrado no histórico da clínica."
-            : "O paciente sai da contagem de pacientes ativos do mês. O prontuário continua acessível e exportável, e nada de clínico muda — isto não é alta. O motivo fica registrado no histórico da clínica."}
+            ? "O paciente volta a entrar na contagem de pacientes ativos já no ciclo de cobrança em andamento, não só a partir do próximo. O motivo fica registrado no histórico da clínica."
+            : "O paciente sai da contagem de pacientes ativos: já do ciclo de cobrança em andamento se não houve atendimento nele, ou a partir do próximo se houve. O prontuário continua acessível e exportável, e nada de clínico muda — isto não é alta. O motivo fica registrado no histórico da clínica."}
         </DialogDescription>
         <form action={formAction}>
           <Stack gap="md" className="mt-4">
