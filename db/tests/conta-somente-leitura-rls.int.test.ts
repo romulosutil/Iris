@@ -279,7 +279,10 @@ describe.skipIf(!hasDb)("#163 · barreira da conta em somente-leitura", () => {
       await tx`UPDATE subscription SET status = 'active' WHERE id = ${S_VENCIDA}`;
       await comoApp(tx, C_VENCIDA);
       const ro = await contaSomenteLeitura(tx);
-      return { ro, erro: await tentarCadastrar(tx, C_VENCIDA, "Paciente ok #163") };
+      return {
+        ro,
+        erro: await tentarCadastrar(tx, C_VENCIDA, "Paciente ok #163"),
+      };
     });
 
     expect(ro).toBe(false);
@@ -494,5 +497,51 @@ describe.skipIf(!hasDb)("#163 · barreira da conta em somente-leitura", () => {
     expect(r.roVencida).toBe(true);
     expect(r.erroVencida).not.toBeNull();
     expect(r.erroVencida!.code).toBe("P0001");
+  });
+
+  // ─── 10. GUC presente mas não-UUID: falha ABERTA, sem exceção (#215) ──────
+  test("GUC de tenant inválido devolve false em vez de estourar 22P02", async () => {
+    // O caso 8 cobre a AUSÊNCIA do GUC. Este cobre o GUC PRESENTE e inválido —
+    // string vazia (o valor que `set_config` deixa quando alguém "limpa" o
+    // tenant), lixo, UUID truncado. Sem o `CASE ... ~ '^[0-9a-f]{8}-...'`, o
+    // `::uuid` estoura `invalid input syntax for type uuid` (SQLSTATE 22P02).
+    //
+    // Por que isso é pior que um erro qualquer: a função é chamada de dentro
+    // do trigger `app_barreira_somente_leitura`, logo a exceção não fica na
+    // sonda — ela aborta a transação de escrita inteira, em CLÍNICA PAGANTE,
+    // por um GUC malformado. E é o oposto da decisão de projeto do caso 8:
+    // tenant não resolvível tem que falhar ABERTO, senão o webhook que promove
+    // a assinatura para `active` — a saída do bloqueio — fica trancado.
+    //
+    // Este teste roda contra o banco, não contra o arquivo: o guard existe no
+    // `0073` desde 04/08/2026, mas foi escrito EDITANDO a migração já aplicada,
+    // e o Drizzle nunca reexecuta um `tag` já registrado. Em base que veio
+    // migrando (produção), o guard nunca chegou. A `0082` reaplica.
+    const r = await emTransacao(async (tx) => {
+      await semear(tx);
+      await tx`SELECT set_config('app.user_role', 'coordenador', true)`;
+      await tx`SET LOCAL ROLE app_role`;
+
+      const out: Record<string, boolean | string> = {};
+      for (const [caso, valor] of [
+        ["vazio", ""],
+        ["lixo", "nao-e-uuid"],
+        ["truncado", "00000000-0000-0000-0000-0000001"],
+      ] as const) {
+        try {
+          await tx.savepoint(async (sp) => {
+            await sp`SELECT set_config('app.clinic_id', ${valor}, true)`;
+            const [row] = await sp<{ ro: boolean }[]>`
+              SELECT app_conta_somente_leitura() AS ro`;
+            out[caso] = row!.ro;
+          });
+        } catch (e) {
+          out[caso] = `erro:${(e as postgres.PostgresError).code}`;
+        }
+      }
+      return out;
+    });
+
+    expect(r).toEqual({ vazio: false, lixo: false, truncado: false });
   });
 });

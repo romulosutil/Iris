@@ -41,7 +41,61 @@
 | **D10** | **Assinatura Digital ICP-Brasil A1/A3 (#120)** — integração com certificados ICP-Brasil para relatórios com exigência judicial/pericial.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Melhoria de produto futura: o padrão atual (MFA + SHA-256 + AuditLog) atende ao piso legal, mas certas instâncias judiciais pedem ICP-Brasil.                                                                                                                                                                                                                                                                                                                                                                                                                               | #120 · `src/lib/export/pdf-generator.ts`                                                                      |
 | **D12** | **Conta Asaas de produção bloqueada — não aprovada** (03/08/2026), e **Pix Automático indisponível por até 6 meses** (origem do prazo a confirmar).                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Bloqueia a Fase 7 inteira: sem conta aprovada não há cobrança, webhook de produção nem self-service. Cuidado de leitura: a aba de Webhooks listar os eventos `PIX_AUTOMATIC_*` **não** prova habilitação na conta — é catálogo do produto. Foi assim que 01/08 registrou "habilitado" por engano.                                                                                                                                                                                                                                                                           | #36                                                                                                           |
 | **D15** | ~~Critério (c) de "paciente ativo" não é congelado no fim do ciclo.~~ **Improcedente, fechado em 07/08/2026 — a premissa lia código morto.** O achado citava `0071:320` (`p.arquivado_em IS NULL`), mas a `0075` fez `CREATE OR REPLACE` da `billing_apurar_ciclo` e **removeu qualquer leitura de `arquivado_em`** ao adotar (a)+(b) da DECISÃO 8. Medido no banco, não lido no diff: `SELECT prosrc LIKE '%arquivado_em%' FROM pg_proc WHERE proname='billing_apurar_ciclo'` → **false**. Toda a apuração compara timestamps contra `[v_inicio, v_fim)`: já é congelada, e a hora em que o job roda não muda o resultado. | Aplicar o fix proposto (`arquivado_em IS NULL OR arquivado_em >= v_fim`) seria **regressão**: reintroduziria o critério (c) que a DECISÃO 8 (04/08/2026) removeu de propósito — clínica em recesso voltaria a pagar. Lição repetida: `git log`/diff de uma migração não diz qual é o corpo vivo da função quando outra migração fez `CREATE OR REPLACE` depois. Resíduo consciente: `src/app/(admin)/benjamin/queries.ts:143,208` ainda conta `arquivado_em is null` **no agora** — é termômetro de MRR do backoffice, não fatura, e está documentado como tal em `:17-45`. | #216 · `0075:82-142` · trava de regressão em `db/tests/billing-apuracao.int.test.ts`                          |
+| **D16** | **43 policies fazem `current_setting('app.clinic_id')::uuid` sem `missing_ok` e sem guard de formato.** Medido em `pg_policies` (07/08/2026): `clinic_read`, `patient_*`, `session_*`, `audit_log_*`, `app_user_read` e outras. GUC ausente → `42704`; GUC presente e não-UUID (string vazia, lixo, truncado) → `22P02`.                                                                                                                                                                                                                                                                                                    | Erro de leitura que aborta a transação inteira, com mensagem que não aponta para o tenant. Foi o que fez o guard interno de `app_conta_somente_leitura()` não bastar (#215): a exceção vinha da policy, antes de a função decidir. **Não é fix mecânico:** trocar as 43 por `app_clinic_id_atual()` transforma "estoura" em "não vê linha nenhuma", e num predicado de isolamento multi-tenant a falha silenciosa é o modo pior. Precisa de desenho + trava de teste por tabela.                                                                                            | `pg_policies` · helper já existe: `app_clinic_id_atual()` (`0082`)                                            |
+| **D17** | **Editar migração já aplicada não roda e não avisa.** O guard de UUID de `app_conta_somente_leitura()` foi escrito editando a `0073` **no lugar** (commit `b53b294`), depois de ela já ter sido aplicada — junto com 3 `GRANT EXECUTE`. Drizzle aplica por `tag` do journal e nunca reexecuta tag registrado.                                                                                                                                                                                                                                                                                                               | Primo do **D2**, e mais traiçoeiro: base criada do zero (dev, CI) tem o código novo, base que veio migrando (produção) tem o antigo, e o `git diff` mostra o certo nos dois. Verde local não é evidência. O fim real é o mesmo teste de CI do D2, ampliado para comparar o **hash** de cada `.sql` com o registrado em `drizzle.__drizzle_migrations`.                                                                                                                                                                                                                      | #215 · `0073` reaplicada pela `0082` · `CLAUDE.md` §"Migrações"                                               |
 | **D11** | **Estratégia de Ativo de Dados & Indexação RAG (#120)** — pipeline de tokenização e treinamento de IA sobre históricos exportados.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Diretriz de negócio Iris: preservação integral de evoluções e prontuários no banco para vetorização/RAG e aperfeiçoamento dos modelos clínicos.                                                                                                                                                                                                                                                                                                                                                                                                                             | #120 · `src/lib/extraction/`                                                                                  |
+
+---
+
+## 🏁 Sessão 07/08/2026 — #215 fechada: `app_conta_somente_leitura()` falha aberta com GUC inválido (abre D16 e D17)
+
+Migração **`0082_conta_somente_leitura_guc_invalido.sql`** (à mão, `when` =
+anterior + 1000). Com `app.clinic_id` presente e não-UUID — string vazia (o que
+sobra quando alguém "limpa" o tenant), lixo, UUID truncado — a função estourava
+`invalid input syntax for type uuid` (**22P02**). Como ela é chamada de dentro
+do trigger `app_barreira_somente_leitura`, a exceção **não fica na sonda**:
+aborta a transação de escrita inteira, em clínica pagante, por um GUC
+malformado. E é o oposto da decisão da `0073` — tenant não resolvível tem que
+falhar **aberto**, senão o webhook que promove a assinatura para `active` (a
+única saída do bloqueio) fica trancado e a conta segue em somente-leitura
+**depois de pagar**.
+
+**Dois achados mudaram o desenho do fix:**
+
+1. **O guard já estava no arquivo e nunca chegou no banco.** O
+   `CASE ... ~ '^[0-9a-fA-F]{8}-...'` foi escrito editando a `0073` **no lugar**
+   (`b53b294`), depois de ela já ter sido aplicada — junto com os `GRANT EXECUTE`
+   para `iris_auth`. Drizzle não reexecuta tag já registrado: sem erro, sem
+   aviso. Dev e CI (base do zero) tinham o guard; produção, não. Virou **D17**.
+2. **Só o guard não resolvia.** Medido em `pg_policies`: `clinic_read` é
+   `id = current_setting('app.clinic_id')::uuid`, sem `missing_ok`. Sob
+   `app_role`, o `FROM clinic` da própria função dispara a policy e o 22P02 vem
+   **dela**, antes de o `CASE` decidir qualquer coisa. Guard interno que ainda
+   assim toca a tabela é guard que não guarda. As outras 42 policies no mesmo
+   padrão viraram **D16**.
+
+Desenho final: helper `app_clinic_id_atual()` (`missing_ok` + regex, `NULL` em
+vez de exceção) e a função reescrita em **plpgsql** para curto-circuitar —
+`cid IS NULL → RETURN false` **sem tocar** `clinic`/`subscription`. Regra de
+negócio idêntica à `0073`, linha por linha (inclusive a folga de `+ 1 day` que a
+mantém mais permissiva que `src/lib/trial.ts`). Segue **sem `SECURITY DEFINER`**
+(`prosecdef = false` medido nas três funções).
+
+**Verificação — medida no banco, não lida no diff:**
+
+- **Cheque de mutação:** com a função revertida à versão pré-fix no Postgres
+  local, o caso 10 novo falha com `{vazio, lixo, truncado} = 'erro:22P02'`.
+  Depois da `0082`, os três dão `false`.
+- Suíte `pnpm test:rls`: **754/755**, e o único vermelho é o pré-existente
+  `agenda2-janela-actions` (registrado abaixo, não deste diff). O outro vermelho
+  crônico registrado abaixo — `conta-somente-leitura-rls → sem GUC de tenant a
+função devolve false` — **passou a verde**: era a mesma causa raiz.
+- `pg_proc`/`has_function_privilege`: `prosecdef = false` nas três, `EXECUTE`
+  para `app_role` e `iris_auth` nas três, `PUBLIC` revogado.
+
+`pnpm typecheck` limpo. `pnpm lint`: 2 erros pré-existentes em
+`agenda/semana/combobox-entidade.tsx:52` e `popover-alocar.tsx:98`
+(`setState` síncrono em efeito), ambos em arquivos que este diff não toca.
 
 ---
 
@@ -209,7 +263,8 @@ Confirmadas por `git stash` — falham igual sem nenhuma alteração desta sess�
 - `conta-somente-leitura-rls` → `sem GUC de tenant a função devolve false`:
   `invalid input syntax for type uuid: ""` — `app_conta_somente_leitura()`
   estoura no cast em vez de falhar fechado, que é exatamente o que o teste
-  existe para provar.
+  existe para provar. **Resolvido em 07/08/2026 pela `0082` (#215)** — ver a
+  sessão no topo; a causa raiz estava na policy `clinic_read`, não só na função.
 
 Ficam registradas aqui porque **suíte vermelha crônica é o caminho mais curto
 para vermelho novo passar despercebido**.
