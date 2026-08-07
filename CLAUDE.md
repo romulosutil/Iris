@@ -8,6 +8,7 @@
 ## Stack Tecnológica & Comandos
 
 ### Stack do Projeto
+
 - **Framework**: Next.js 16 (App Router)
 - **Runtime & UI**: Node.js >= 22, React 19, React DOM 19, TypeScript
 - **Estilização**: Tailwind CSS v4, PostCSS
@@ -16,12 +17,14 @@
 - **Qualidade & Testes**: ESLint, Prettier, Vitest, Playwright (E2E), Storybook
 
 ### Comandos de Desenvolvimento e Build
+
 - Servidor de Desenvolvimento: `pnpm dev`
 - Storybook local: `pnpm storybook`
 - Formatar código: `pnpm format`
 - Build do projeto: `pnpm build`
 
 ### Comandos de Testes e Linting
+
 - Rodar ESLint: `pnpm lint`
 - Rodar Typecheck: `pnpm typecheck`
 - Rodar Testes unitários/integração: `pnpm test`
@@ -29,27 +32,47 @@
 - Rodar Testes E2E (Playwright): `pnpm test:e2e`
 
 ### Comandos de Banco de Dados
+
 - Aplicar migrações locais: `pnpm db:migrate`
 - Seed local limpo (clínica + 1º coordenador): `pnpm seed:local`
 - Gerar migrações: `pnpm db:generate` — **⚠️ leia o bloco abaixo antes de usar.**
 
 #### ⚠️ Migrações: como escrever sem derrubar o banco
 
-Duas armadilhas reais deste repo, ambas com incidente no histórico. Elas
-não são teoria — estão registradas como **D1** e **D2** em `BACKLOG.md`.
+Armadilhas reais deste repo, com incidente no histórico. Não são teoria:
+a primeira era o débito **D1**, fechado pela issue #186 (o que sobrou é a
+regra de quando gerar e quando escrever à mão); a segunda segue aberta
+como **D2** em `BACKLOG.md`.
 
-**1. `pnpm db:generate` não serve mais para gerar migração nova.**
-O snapshot do Drizzle (`db/migrations/meta/*_snapshot.json`) está
-dessincronizado das migrações escritas à mão. Rodar `db:generate` hoje
-produz SQL que **recria tabelas, enums e constraints que já existem em
-produção** (na Fase 7 foram 128 linhas: `two_factor`, `auth_throttle`,
-enums de `alerta_risco`…). Aplicar esse arquivo derruba o banco.
+**1. `pnpm db:generate` voltou a funcionar — e é o caminho para mudança de
+schema.** O snapshot foi reconciliado na `0078` (issue #186): hoje
+`db:generate` responde `No schema changes, nothing to migrate`. Ele só
+continua limpo se **toda** mudança de schema passar por ele.
 
-Então: **escreva a migração à mão** em `db/migrations/NNNN_nome.sql`,
-seguindo o estilo dos arquivos vizinhos (comentário explicando o *porquê*
-da mudança, `--> statement-breakpoint` entre statements). Se ainda assim
-rodar `db:generate` para inspecionar o diff, **descarte** o `.sql` e o
-`meta/NNNN_snapshot.json` gerados antes de commitar.
+A regra que separa os dois caminhos é _o que_ está sendo mudado:
+
+- **Está em `src/db/schema.ts`** (tabela, coluna, enum, índice, FK,
+  constraint) → mude o `schema.ts` e rode `pnpm db:generate`. Commite o
+  `.sql` **e** o `meta/NNNN_snapshot.json` juntos. Nunca escreva esse
+  tipo de DDL à mão: foi exatamente isso que dessincronizou o snapshot
+  entre a `0042` e a `0077` e fez o `db:generate` propor 128 linhas
+  recriando `two_factor`, `auth_throttle` e os enums de `alerta_risco`.
+- **Não está no `schema.ts`** (policy de RLS, `GRANT`, função
+  `SECURITY DEFINER`, trigger, view, backfill de dados) → o Drizzle não
+  modela isso, então **escreva à mão** em `db/migrations/NNNN_nome.sql`,
+  no estilo dos arquivos vizinhos (comentário explicando o _porquê_,
+  `--> statement-breakpoint` entre statements). Isso **não** dessincroniza
+  o snapshot, porque o snapshot só descreve o que vem do `schema.ts`.
+
+Uma migração pode misturar as duas coisas: gere a parte de schema com
+`db:generate` e edite o `.sql` gerado para acrescentar policies/grants —
+sem tocar no snapshot.
+
+Nota da reconciliação: as constraints criadas sem nome pelas migrações
+manuais receberam o nome do Postgres (`_fkey`/`_pkey`/`_key`) e foram
+renomeadas na `0078` para o padrão do Drizzle (`_fk`/`_pk`/`_unique`).
+Ao escrever DDL à mão que mexa em constraint, **nomeie explicitamente**
+no padrão do Drizzle, senão a divergência volta.
 
 **2. Migração à mão exige entrada manual no `_journal.json`, com o
 `when` correto.** Se o `when` for **menor ou igual** ao da última migração
@@ -74,7 +97,7 @@ qual coluna — diagnóstico caro.
 policy nova.** Afrouxar uma policy abre todas as colunas mutáveis de uma
 vez. E lembre: um `UPDATE` barrado por RLS **afeta 0 linhas em silêncio**,
 não estoura — o código parece funcionar. Sendo DEFINER, o guard interno
-**é** a fronteira de autorização: copie o predicado *exato* da policy de
+**é** a fronteira de autorização: copie o predicado _exato_ da policy de
 leitura correspondente (precedentes: `0048`, `0064`, `0067`).
 
 ## Onboarding de uma sessão nova (sem memória desta conversa)
