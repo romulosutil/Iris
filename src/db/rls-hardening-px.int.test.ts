@@ -4,8 +4,8 @@
  * DB. Prova DUAS coisas independentes da policy de linha:
  *
  *  (A9) `has_column_privilege` = false nas colunas ditas imutáveis e true nas
- *       mutáveis — prova que a migração 0044 pegou (grant-por-coluna) e FALHA
- *       se alguma coluna imutável ainda for UPDATE-ável.
+ *       mutáveis — prova que as migrações 0044 e 0079 pegaram (grant-por-coluna)
+ *       e FALHA se alguma coluna imutável ainda for UPDATE-ável.
  *  (R6.1.5) reassociação intra-clínica: UPDATE de um FK imutável
  *       (session.patient_id) sob app_role deve ser barrado (permission denied),
  *       enquanto UPDATE de coluna mutável (estado) passa.
@@ -31,13 +31,23 @@ const ctx = (
 ) => ({ role, userId, clinicId }) satisfies TenantContext;
 
 // Colunas imutáveis (deve ser false) e mutáveis (deve ser true) por tabela —
-// espelha exatamente a 0044. Se a migração regredir, o teste quebra.
+// espelha exatamente a 0044 (e a 0079 para `clinic`). Se a migração regredir, o
+// teste quebra.
 const IMMUTABLE: Record<string, string[]> = {
   session: ["patient_id", "terapeuta_id", "clinic_id", "criado_em"],
   patient_clinical_profile: ["patient_id", "criado_em"],
   patient_protocol: ["patient_id", "protocol_id", "ativado_por"],
   care_team_membership: ["patient_id", "user_id"],
   patient: ["clinic_id", "criado_em"],
+  clinic: [
+    "id",
+    "responsavel_conta_id",
+    "is_demo",
+    "trial_comeco_em",
+    "trial_dias",
+    "isento_trial",
+    "criado_em",
+  ],
 };
 const MUTABLE: Record<string, string> = {
   session: "estado",
@@ -45,9 +55,28 @@ const MUTABLE: Record<string, string> = {
   patient_protocol: "desativado_em",
   care_team_membership: "disciplina",
   patient: "nome",
+  clinic: "nome",
 };
 
 let owner: ReturnType<typeof postgres>;
+
+/**
+ * O Drizzle embrulha o erro do Postgres num `DrizzleQueryError` cuja `message` é
+ * só "Failed query: ..." — a razão real (`permission denied` vs. "violates
+ * row-level security policy") fica na `cause`. Asserir só `.rejects.toThrow()`
+ * não distinguiria "barrado por privilégio" de "barrado pela RLS", que é
+ * exatamente a diferença que estes testes existem para provar. Devolve string
+ * vazia se a promessa resolver — aí o `toMatch` falha, como deve.
+ */
+async function erroBruto(p: Promise<unknown>): Promise<string> {
+  try {
+    await p;
+    return "";
+  } catch (e) {
+    const err = e as { message?: string; cause?: { message?: string } };
+    return `${err.cause?.message ?? ""} | ${err.message ?? ""}`;
+  }
+}
 
 describe.skipIf(!hasDb)("Hardening RLS Fase 6.1 (PX1–PX4)", () => {
   beforeAll(async () => {
@@ -91,6 +120,36 @@ describe.skipIf(!hasDb)("Hardening RLS Fase 6.1 (PX1–PX4)", () => {
       expect(row!.priv).toBe(true);
     });
   }
+
+  // ── D3 (#188) · defesa em profundidade em `clinic`, independente de policy ─
+  // A 0002 dá a `app_role` só uma policy `FOR SELECT` em `clinic`, então uma
+  // escrita hoje já não atinge linha. Estes dois testes provam a camada de
+  // BAIXO: mesmo que uma policy de escrita apareça amanhã, o privilégio não
+  // existe — o erro é `permission denied`, levantado antes da RLS ser avaliada.
+  test("D3: app_role NÃO tem INSERT em clinic (privilégio, não policy)", async () => {
+    const [row] = await owner<{ priv: boolean }[]>`
+      SELECT has_table_privilege('app_role', 'clinic'::regclass, 'INSERT') AS priv`;
+    expect(row!.priv).toBe(false);
+    expect(
+      await erroBruto(
+        withTenant(ctx("coordenador", U_COORD), (db) =>
+          db.execute(sql`INSERT INTO clinic (nome) VALUES ('forjada')`),
+        ),
+      ),
+    ).toMatch(/permission denied/i);
+  });
+
+  test("D3: UPDATE de clinic.isento_trial sob app_role é BARRADO por privilégio", async () => {
+    expect(
+      await erroBruto(
+        withTenant(ctx("coordenador", U_COORD), (db) =>
+          db.execute(
+            sql`UPDATE clinic SET isento_trial = true WHERE id = ${CLINIC_A}`,
+          ),
+        ),
+      ),
+    ).toMatch(/permission denied/i);
+  });
 
   // ── R6.1.5 · reassociação por UPDATE de FK imutável ───────────────────────
   test("reassociação: UPDATE de session.patient_id (FK imutável) é BARRADO", async () => {
