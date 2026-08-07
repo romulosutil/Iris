@@ -568,6 +568,13 @@
       "when": 1786067176941,
       "tag": "0080_auto_arquivamento_varredura",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1786067177941,
+      "tag": "0081_config_emergencia_definer",
+      "breakpoints": true
     }
   ]
 }
