@@ -15,6 +15,49 @@ const CLINIC_A = "11111111-1111-1111-1111-111111111111";
 const U_ADMIN = "a0000000-0000-0000-0000-000000000004";
 let owner: ReturnType<typeof postgres>;
 
+// #191 — CPF passou a ser obrigatório. Cada teste abaixo precisa do SEU
+// PRÓPRIO CPF matematicamente válido (Módulo 11): a clínica tem
+// `uq_patient_clinic_cpf`, então dois cadastros de TITULAR ADULTO com o mesmo
+// CPF na mesma clínica colidiriam e o teste falharia por unique_violation, não
+// pelo motivo que ele afirma testar. Lista gerada e conferida contra o
+// algoritmo de `validarEMaterializarCPF` — não são CPFs "de exemplo"
+// reaproveitados de um único valor.
+//
+// `responsavel_cpf` NÃO tem unique (ver o teste dos irmãos lá embaixo), então
+// ali repetir é legítimo e proposital.
+const CPFS = [
+  "10000000019",
+  "10000013773",
+  "10000027480",
+  "10000041122",
+  "10000054887",
+  "10000068594",
+  "10000082236",
+  "10000095990",
+  "10000109614",
+  "10000123366",
+  "10000137073",
+  "10000150762",
+  "10000164470",
+  "10000178187",
+  "10000191876",
+  "10000205508",
+  "10000219207",
+  "10000232904",
+  "10000246603",
+  "10000260355",
+  "10000274062",
+  "10000287717",
+  "10000301485",
+  "10000315192",
+  "10000328847",
+  "10000342599",
+  "10000356204",
+  "10000369950",
+  "10000383600",
+  "10000397300",
+] as const;
+
 function form(fields: Record<string, string>) {
   const fd = new FormData();
   for (const [k, v] of Object.entries(fields)) fd.set(k, v);
@@ -53,6 +96,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
         nome: "Paciente Teste",
         tipoConsentimento: "responsavel_legal",
         responsavelSignatario: "Mãe do Paciente",
+        responsavelCpf: CPFS[0],
       }),
     );
     expect(result.error).toBeUndefined();
@@ -84,7 +128,11 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
   test("responsavel_legal sem responsavelSignatario retorna erro (consent obrigatório antes do paciente)", async () => {
     const result = await criarPacienteEConsent(
       ctx,
-      form({ nome: "Outro Paciente", tipoConsentimento: "responsavel_legal" }),
+      form({
+        nome: "Outro Paciente",
+        tipoConsentimento: "responsavel_legal",
+        responsavelCpf: CPFS[1],
+      }),
     );
     expect(result.error).toMatch(/responsável/i);
     const encontrados = await withTenant(ctx, (db) =>
@@ -101,6 +149,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
       form({
         nome: "Adulto Autoconsente",
         tipoConsentimento: "titular_adulto",
+        cpf: CPFS[2],
       }),
     );
     expect(result.error).toBeUndefined();
@@ -120,6 +169,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
         nome: "Adulto Com Responsavel",
         tipoConsentimento: "titular_adulto",
         responsavelSignatario: "Mãe Indevida",
+        cpf: CPFS[3],
       }),
     );
     expect(result.error).toMatch(
@@ -161,6 +211,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
         nome: "Menor Emancipado",
         nascimento: "2012-05-10",
         tipoConsentimento: "titular_adulto",
+        cpf: CPFS[4],
       }),
     );
     expect(result.error).toBeUndefined();
@@ -181,6 +232,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
         nome: "Bruna",
         tipoConsentimento: "responsavel_legal",
         responsavelSignatario: "Mãe da Bruna",
+        responsavelCpf: CPFS[5],
       }),
     );
     expect(res.error).toBeUndefined();
@@ -198,6 +250,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     fd.set("nome", "Form Antigo");
     fd.set("tipoConsentimento", "responsavel_legal");
     fd.set("responsavelSignatario", "Pai");
+    fd.set("responsavelCpf", CPFS[6]);
     fd.append("alvoDisciplina", "aba");
     fd.append("alvoHorasSemana", "12.0");
     const res = await criarPacienteEConsent(ctx, fd);
@@ -216,6 +269,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     fd.set("nome", "Horas Orfas");
     fd.set("tipoConsentimento", "responsavel_legal");
     fd.set("responsavelSignatario", "Mãe");
+    fd.set("responsavelCpf", CPFS[7]);
     fd.append("alvoDisciplina", "aba");
     fd.append("alvoHorasSemana", "abc");
     const res = await criarPacienteEConsent(ctx, fd);
@@ -231,6 +285,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     const fd = new FormData();
     fd.set("nome", "Paciente Com IA e Exportacao");
     fd.set("tipoConsentimento", "titular_adulto");
+    fd.set("cpf", CPFS[8]);
     fd.set("consentimentoIa", "on");
     fd.set("consentimentoExportacao", "on");
 
@@ -263,6 +318,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     fd.set("nome", "Menor Com IA");
     fd.set("tipoConsentimento", "responsavel_legal");
     fd.set("responsavelSignatario", "Pai do Menor");
+    fd.set("responsavelCpf", CPFS[9]);
     fd.set("consentimentoIa", "on");
 
     const res = await criarPacienteEConsent(ctx, fd);
@@ -313,6 +369,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Paciente Do Trial",
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
+          responsavelCpf: CPFS[10],
         }),
       );
 
@@ -332,6 +389,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Segundo Paciente",
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
+          responsavelCpf: CPFS[11],
         }),
       );
       expect(res.bloqueioConta).toBeUndefined();
@@ -347,6 +405,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Paciente Ativando",
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
+          responsavelCpf: CPFS[12],
         }),
       );
       expect(res.bloqueioConta).toBeUndefined();
@@ -356,7 +415,8 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     test("trial expirado em free_tier bloqueia e NÃO grava paciente nenhum", async () => {
       await porStatus("free_tier");
       await expirarTrial();
-      const antes = await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+      const antes =
+        await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
 
       const res = await criarPacienteEConsent(
         ctx,
@@ -364,13 +424,15 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Paciente Pos Trial",
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
+          responsavelCpf: CPFS[13],
         }),
       );
 
       expect(res.id).toBeUndefined();
       expect(res.bloqueioConta?.estado).toBe("trial_expirado");
       // A transação inteira reverteu: nem paciente, nem consent.
-      const depois = await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+      const depois =
+        await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
       expect(depois[0]!.n).toBe(antes[0]!.n);
     });
 
@@ -383,6 +445,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Paciente Pagando",
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
+          responsavelCpf: CPFS[14],
         }),
       );
       expect(res.id).toBeUndefined();
@@ -398,6 +461,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Paciente Cancelado",
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
+          responsavelCpf: CPFS[15],
         }),
       );
       expect(res.id).toBeUndefined();
@@ -413,6 +477,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Paciente Em Atraso",
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
+          responsavelCpf: CPFS[16],
         }),
       );
       expect(res.bloqueioConta).toBeUndefined();
@@ -430,6 +495,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
             nome: "Paciente Legado",
             tipoConsentimento: "responsavel_legal",
             responsavelSignatario: "Mãe",
+            responsavelCpf: CPFS[17],
           }),
         );
         expect(res.bloqueioConta).toBeUndefined();
@@ -437,6 +503,284 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
       } finally {
         await owner`UPDATE clinic SET isento_trial = false WHERE id = ${CLINIC_A}`;
       }
+    });
+  });
+
+  // ─── #191 — CPF obrigatório + antifraude de trial ──────────────────────────
+  // Oráculo é o BANCO lido pela role dona (`owner`), nunca só `res.error`/
+  // `res.id`: um retorno "amigável" e um banco que não bate são exatamente o
+  // tipo de teste verde que não testa nada (ver histórico do projeto).
+  describe("#191 — CPF obrigatório e antifraude de trial", () => {
+    async function contarPacientes(clinicId: string) {
+      const linhas =
+        await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${clinicId}`;
+      return linhas[0]!.n as number;
+    }
+
+    test("CPF com dígito verificador errado: erro menciona CPF e nada é gravado", async () => {
+      const antes = await contarPacientes(CLINIC_A);
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "CPF Invalido",
+          tipoConsentimento: "titular_adulto",
+          // 52998224725 é válido (Módulo 11); troquei o último dígito.
+          cpf: "52998224724",
+        }),
+      );
+      expect(res.error).toMatch(/CPF/i);
+      expect(res.id).toBeUndefined();
+      expect(await contarPacientes(CLINIC_A)).toBe(antes);
+    });
+
+    test("titular_adulto sem CPF retorna erro", async () => {
+      const antes = await contarPacientes(CLINIC_A);
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({ nome: "Adulto Sem CPF", tipoConsentimento: "titular_adulto" }),
+      );
+      expect(res.error).toMatch(/CPF/i);
+      expect(res.id).toBeUndefined();
+      expect(await contarPacientes(CLINIC_A)).toBe(antes);
+    });
+
+    test("responsavel_legal sem responsavelCpf retorna erro", async () => {
+      const antes = await contarPacientes(CLINIC_A);
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Menor Sem CPF Do Responsavel",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+        }),
+      );
+      expect(res.error).toMatch(/CPF/i);
+      expect(res.id).toBeUndefined();
+      expect(await contarPacientes(CLINIC_A)).toBe(antes);
+    });
+
+    test("CPF com máscara é aceito e gravado sanitizado (sem pontuação)", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "CPF Mascarado",
+          tipoConsentimento: "titular_adulto",
+          cpf: "529.982.247-25",
+        }),
+      );
+      expect(res.error).toBeUndefined();
+      const linhas = await owner`SELECT cpf FROM patient WHERE id = ${res.id!}`;
+      expect(linhas[0]!.cpf).toBe("52998224725");
+    });
+
+    test("titular_adulto grava cpf e deixa responsavel_cpf NULL", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Titular Coluna Certa",
+          tipoConsentimento: "titular_adulto",
+          cpf: CPFS[18],
+        }),
+      );
+      expect(res.error).toBeUndefined();
+      const linhas = await owner`
+        SELECT cpf, responsavel_cpf FROM patient WHERE id = ${res.id!}`;
+      expect(linhas[0]!.cpf).toBe(CPFS[18]);
+      expect(linhas[0]!.responsavel_cpf).toBeNull();
+    });
+
+    test("responsavel_legal grava responsavel_cpf e deixa cpf NULL", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Responsavel Coluna Certa",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Pai",
+          responsavelCpf: CPFS[19],
+        }),
+      );
+      expect(res.error).toBeUndefined();
+      const linhas = await owner`
+        SELECT cpf, responsavel_cpf FROM patient WHERE id = ${res.id!}`;
+      expect(linhas[0]!.responsavel_cpf).toBe(CPFS[19]);
+      expect(linhas[0]!.cpf).toBeNull();
+    });
+
+    /**
+     * Trava de regressão da assimetria entre as duas colunas.
+     *
+     * A spec da issue pedia `UNIQUE(clinic_id, cpf)` "(ou `responsavel_cpf`)",
+     * e a primeira implementação criou os dois. Isso quebra um caso comum e
+     * legítimo: irmãos em terapia na mesma clínica compartilham o CPF do
+     * responsável, então o cadastro do 2º filho batia em unique_violation e
+     * era rejeitado como "CPF já cadastrado". Em TEA irmãos são frequentes
+     * (herdabilidade alta) — não é borda.
+     *
+     * A regra: unicidade só vale onde o CPF identifica o PACIENTE (titular
+     * adulto). No menor o CPF é de OUTRA pessoa e se repete por natureza.
+     *
+     * Sem este teste, restaurar o `unique()` em `responsavel_cpf` no
+     * `schema.ts` passa despercebido — o resto da suíte fica verde.
+     */
+    test("irmãos: mesmo responsável cadastra 2 filhos na mesma clínica", async () => {
+      const cpfDoResponsavel = CPFS[24];
+
+      const primeiro = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Irmão Mais Velho",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe Dos Dois",
+          responsavelCpf: cpfDoResponsavel,
+        }),
+      );
+      expect(primeiro.error).toBeUndefined();
+      expect(primeiro.id).toBeTruthy();
+
+      const segundo = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Irmão Mais Novo",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe Dos Dois",
+          responsavelCpf: cpfDoResponsavel,
+        }),
+      );
+      expect(segundo.error).toBeUndefined();
+      expect(segundo.id).toBeTruthy();
+
+      // Oráculo no banco, não no retorno: as DUAS linhas existem, com o mesmo
+      // CPF de responsável.
+      const linhas = await owner`
+        SELECT count(*)::int AS n FROM patient
+         WHERE clinic_id = ${CLINIC_A} AND responsavel_cpf = ${cpfDoResponsavel}`;
+      expect(linhas[0]!.n).toBe(2);
+    });
+
+    test("CPF duplicado na mesma clínica retorna erro amigável (23505 traduzido)", async () => {
+      const primeiro = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Primeiro Com Este CPF",
+          tipoConsentimento: "titular_adulto",
+          cpf: CPFS[20],
+        }),
+      );
+      expect(primeiro.error).toBeUndefined();
+
+      const segundo = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Segundo Com Mesmo CPF",
+          tipoConsentimento: "titular_adulto",
+          cpf: CPFS[20],
+        }),
+      );
+      expect(segundo.error).toBe("Este CPF já está cadastrado nesta clínica.");
+      expect(segundo.id).toBeUndefined();
+
+      const linhas = await owner`
+        SELECT count(*)::int AS n FROM patient
+        WHERE clinic_id = ${CLINIC_A} AND cpf = ${CPFS[20]}`;
+      expect(linhas[0]!.n).toBe(1);
+    });
+
+    // ── Caso central da issue: fraude de trial via hash cego de CPF ──────────
+    describe("antifraude de trial entre clínicas", () => {
+      const CLINIC_COM_TRIAL = "22222222-2222-2222-2222-222222222222";
+      const CLINIC_SEM_TRIAL = "33333333-3333-3333-3333-333333333333";
+      const CLINIC_ALVO_AGUARDANDO = "44444444-4444-4444-4444-444444444444";
+      const CLINIC_ALVO_ATIVA = "55555555-5555-5555-5555-555555555555";
+      const CPF_JA_USADO_EM_TRIAL = CPFS[21];
+      const CPF_NUNCA_USADO_EM_TRIAL = CPFS[22];
+      const CPF_PARA_ALVO_ATIVA = CPFS[23];
+
+      function ctxPara(clinicId: string) {
+        return { clinicId, userId: U_ADMIN, role: "admin_recepcao" } as const;
+      }
+
+      beforeAll(async () => {
+        const { gerarCpfHash } = await import("@/lib/security/cpf-hash");
+
+        // Clínica que JÁ iniciou o trial (`trial_comeco_em` NOT NULL) com um
+        // paciente cujo CPF vai ser reaproveitado nos testes abaixo. Trial
+        // "consumido" é exatamente o que `app_cpf_hash_usado_em_outro_trial`
+        // enxerga — não importa se o cadastro passou pelo fluxo normal ou foi
+        // inserido direto pela role dona, a função só olha `patient.cpf_hash`
+        // + `clinic.trial_comeco_em`.
+        await owner`INSERT INTO clinic (id, nome, trial_comeco_em)
+          VALUES (${CLINIC_COM_TRIAL}, 'Clínica Com Trial Iniciado', now())`;
+        await owner`INSERT INTO patient (clinic_id, nome, cpf, cpf_hash)
+          VALUES (${CLINIC_COM_TRIAL}, 'Titular Origem', ${CPF_JA_USADO_EM_TRIAL},
+                  ${gerarCpfHash(CPF_JA_USADO_EM_TRIAL)})`;
+        await owner`INSERT INTO patient (clinic_id, nome, cpf, cpf_hash)
+          VALUES (${CLINIC_COM_TRIAL}, 'Titular Origem Ativa', ${CPF_PARA_ALVO_ATIVA},
+                  ${gerarCpfHash(CPF_PARA_ALVO_ATIVA)})`;
+
+        // Contraprova (g): clínica que NUNCA iniciou o trial
+        // (`trial_comeco_em IS NULL`) — o CPF dela não pode contar como fraude.
+        await owner`INSERT INTO clinic (id, nome)
+          VALUES (${CLINIC_SEM_TRIAL}, 'Clínica Sem Trial Iniciado')`;
+        await owner`INSERT INTO patient (clinic_id, nome, cpf, cpf_hash)
+          VALUES (${CLINIC_SEM_TRIAL}, 'Titular Sem Trial', ${CPF_NUNCA_USADO_EM_TRIAL},
+                  ${gerarCpfHash(CPF_NUNCA_USADO_EM_TRIAL)})`;
+
+        // Clínica nova, 1º cadastro pendente (`trial_aguardando`): alvo dos
+        // testes (f) e (g).
+        await owner`INSERT INTO clinic (id, nome)
+          VALUES (${CLINIC_ALVO_AGUARDANDO}, 'Clínica Alvo Aguardando')`;
+
+        // Clínica nova, mas já FORA de `trial_aguardando` (assinatura ativa):
+        // alvo do teste (h) — a checagem só roda no cadastro que inicia o
+        // relógio, então esta clínica passa mesmo usando o CPF "usado".
+        await owner`INSERT INTO clinic (id, nome)
+          VALUES (${CLINIC_ALVO_ATIVA}, 'Clínica Alvo Ativa')`;
+        await owner`INSERT INTO subscription (clinic_id, status)
+          VALUES (${CLINIC_ALVO_ATIVA}, 'active')`;
+      });
+
+      test("(f) clínica em trial_aguardando bloqueada por CPF já usado em trial de OUTRA clínica — nada é gravado", async () => {
+        const antes = await contarPacientes(CLINIC_ALVO_AGUARDANDO);
+        const res = await criarPacienteEConsent(
+          ctxPara(CLINIC_ALVO_AGUARDANDO),
+          form({
+            nome: "Fraude De Trial",
+            tipoConsentimento: "titular_adulto",
+            cpf: CPF_JA_USADO_EM_TRIAL,
+          }),
+        );
+        expect(res.id).toBeUndefined();
+        expect(res.bloqueioConta?.estado).toBe("trial_bloqueado_fraude");
+        // O rollback é PARTE da regra: um cadastro bloqueado não pode deixar
+        // rastro parcial (nem paciente, nem consent).
+        expect(await contarPacientes(CLINIC_ALVO_AGUARDANDO)).toBe(antes);
+      });
+
+      test("(g) contraprova: CPF de clínica que NUNCA iniciou trial não bloqueia", async () => {
+        const res = await criarPacienteEConsent(
+          ctxPara(CLINIC_ALVO_AGUARDANDO),
+          form({
+            nome: "Sem Fraude De Trial",
+            tipoConsentimento: "titular_adulto",
+            cpf: CPF_NUNCA_USADO_EM_TRIAL,
+          }),
+        );
+        expect(res.bloqueioConta).toBeUndefined();
+        expect(res.id).toBeTruthy();
+      });
+
+      test("(h) contraprova: clínica já fora de trial_aguardando (assinatura ativa) passa mesmo com CPF usado em trial alheio", async () => {
+        const res = await criarPacienteEConsent(
+          ctxPara(CLINIC_ALVO_ATIVA),
+          form({
+            nome: "Ativa Sem Checagem De Trial",
+            tipoConsentimento: "titular_adulto",
+            cpf: CPF_PARA_ALVO_ATIVA,
+          }),
+        );
+        expect(res.bloqueioConta).toBeUndefined();
+        expect(res.id).toBeTruthy();
+      });
     });
   });
 });

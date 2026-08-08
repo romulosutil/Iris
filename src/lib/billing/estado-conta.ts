@@ -38,7 +38,13 @@ export type EstadoConta =
   | "pagamento_em_processamento"
   /** `past_due`: renovação falhou, mas a conta continua escrevendo. */
   | "pagamento_atrasado"
-  | "cancelada";
+  | "cancelada"
+  /**
+   * #191 — sintético: nunca produzido por `derivarSituacao`/SQL. Lançado por
+   * `criarPacienteEConsent` quando o CPF do 1º paciente já consumiu trial
+   * gratuito em outra clínica (`app_cpf_hash_usado_em_outro_trial`).
+   */
+  | "trial_bloqueado_fraude";
 
 export interface SituacaoConta {
   estado: EstadoConta;
@@ -170,7 +176,9 @@ export function derivarSituacao(
   }
 
   return somenteLeitura(
-    status === "setup_pending" ? "pagamento_em_processamento" : "trial_expirado",
+    status === "setup_pending"
+      ? "pagamento_em_processamento"
+      : "trial_expirado",
   );
 }
 
@@ -216,6 +224,8 @@ export function mensagemDeEstado(estado: EstadoConta): string {
       return "Estamos aguardando a confirmação do seu pagamento. Assim que o banco confirmar, a conta é liberada automaticamente.";
     case "cancelada":
       return "Sua assinatura está cancelada. Reative para voltar a cadastrar e editar.";
+    case "trial_bloqueado_fraude":
+      return "Este CPF já utilizou o período de teste gratuito em outra conta. Para cadastrar pacientes nesta clínica, ative a assinatura — sem período de teste.";
     case "isenta":
     case "trial_aguardando":
     case "trial_ativo":

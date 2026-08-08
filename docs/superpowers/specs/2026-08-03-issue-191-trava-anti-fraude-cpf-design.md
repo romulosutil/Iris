@@ -109,4 +109,36 @@ export function gerarCpfHash(cpfLimpo: string): string {
 
 ## 📊 Estado de Implementação
 - **Especificação & Desenho de Segurança:** ✅ Concluído.
-- **Migração SQL & Lógica no Backend:** 🚧 Pendente de implementação junto com as Issues #98, #175 e #36.
+- **Migração SQL & Lógica no Backend:** ✅ **Implementado em 07/08/2026** — migrações `0083_patient_cpf_antifraude.sql` (colunas + índices, gerada por `db:generate`) e `0084_cpf_hash_antifraude_definer.sql` (`app_cpf_hash_usado_em_outro_trial`, SECURITY DEFINER).
+
+### Desvios conscientes desta spec, decididos na implementação
+
+**1. O salt NÃO tem fallback.** A seção 3.2 propunha
+`process.env.CPF_HASH_SALT || "iris-anti-abuse-salt-2026"`. Um salt literal no
+código anula a proteção inteira: quem lê o repositório recalcula o hash de
+qualquer CPF conhecido e descobre se aquela pessoa já foi paciente em alguma
+clínica — vazamento cross-tenant justamente pelo mecanismo criado para ser
+cego. `gerarCpfHash` lança se `CPF_HASH_SALT` não estiver setada.
+
+**2. Adulto × menor sai de `tipoConsentimento`, não da idade.** A seção 4
+dizia "se for criança (TEA)" / "se for adulto". Derivar isso de
+`patient.nascimento` erra nos dois sentidos (adolescente emancipado assina por
+si; adulto sob curatela não assina) e `nascimento` é opcional — foi exatamente
+a decisão D1 da #100, já documentada em `logic.ts`. A implementação reusa a
+escolha explícita que o operador já faz no formulário
+(`titular_adulto` | `responsavel_legal`).
+
+**3. A checagem anti-fraude só roda no cadastro que inicia o relógio**
+(`situacao.estado === "trial_aguardando"`). Rodar em todo cadastro puniria
+clínica pagante cujo paciente já foi atendido em outro lugar — o que é comum e
+legítimo, não fraude.
+
+**4. `trial_comeco_em IS NOT NULL` faz parte do predicado.** Só conta como
+"trial consumido" a clínica que de fato iniciou o relógio. Sem essa cláusula,
+um cadastro numa clínica isenta ou que nunca chegou ao 1º paciente já
+queimaria o CPF.
+
+**5. Falha fechada na leitura do oráculo.** Se o `SELECT` da função não
+devolver linha, o cadastro é abortado com erro próprio em vez de seguir como
+"não usou" — precedente direto da #215, onde tratar ausência de evidência como
+liberação foi o bug.

@@ -37,6 +37,10 @@ test("coordenador completa cadastro administrativo, clínico e vê a equipe", as
   await page
     .getByLabel("Responsável que assina o Consentimento LGPD")
     .fill("Mãe E2E");
+  // #191 — CPF do responsável passou a ser obrigatório no ramo do menor.
+  // Cada spec usa um CPF DIFERENTE: `uq_patient_clinic_cpf` impede repetir o
+  // mesmo CPF na mesma clínica, e os specs compartilham a clínica do seed.
+  await page.getByLabel("CPF do responsável").fill("111.444.777-35");
   // Desde a fatia 2 da #203 o cadastro não prescreve mais carga horária: a
   // copy do submit anuncia o próximo passo ("Salvar e prescrever a carga
   // horária") e o destino é a ficha clínica, na âncora #prescricao.
@@ -56,7 +60,9 @@ test("coordenador completa cadastro administrativo, clínico e vê a equipe", as
   // depois do clique e pode abortar a server action em voo: o campo volta
   // vazio e o teste acusa "não persistiu" numa gravação que só não teve tempo
   // de acontecer — flake que aparece como bug de produto (#209).
-  await expect(page.getByText("Ficha clínica salva com sucesso.")).toBeVisible();
+  await expect(
+    page.getByText("Ficha clínica salva com sucesso."),
+  ).toBeVisible();
 
   // Recarrega e confirma persistência (o valor volta do banco via defaultValue).
   await page.reload();
