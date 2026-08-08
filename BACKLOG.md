@@ -123,8 +123,12 @@ mensagem errada — exatamente o tipo de diagnóstico invertido que essa ferrame
 existe para não dar. Achado pelo teste unitário novo, não pela leitura. Corrigido
 com `printf -v` gravando no escopo do chamador.
 
-**A #105 continua ABERTA.** O que esta sessão entregou é o código que faz a
-execução **provar** alguma coisa; fechar a issue exige a prova em si — operador
+**A #105 fecha com o merge da PR #226 (`Closes`), por decisão do Rômulo — mas a
+prova em si migrou para a #227.** O que esta sessão entregou é o código que faz a
+execução **provar** alguma coisa, não a execução. A #227 herda o label
+`P1 · antes de dado real` e o runbook de 6 passos; enquanto ela estiver aberta, a
+terceira camada de backup segue *presumida* restaurável — o estado que é
+indistinguível de uma réplica inútil. A prova exige operador
 com a chave privada age, credencial Oracle **com leitura** (a de produção é
 write-only por desenho; o caminho que funcionou em 28/07 foi conceder
 temporariamente `read objects` ao grupo `iris-backup-writers` e remover depois) e
