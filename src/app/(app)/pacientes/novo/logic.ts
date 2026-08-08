@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
+import { codigoPg } from "@/db/pg-error";
 import { patient, consent } from "@/db/schema";
 import {
   avaliarSituacaoConta,
@@ -97,7 +98,11 @@ export async function criarPacienteEConsent(
   // #191 — CPF do titular adulto ou do responsável legal do menor, conforme a
   // MESMA escolha explícita acima (nunca `nascimento` — motivo no comentário
   // de `TipoConsentimento`, D1). Exatamente um dos dois campos é exigido.
-  let cpfLimpo: string | undefined;
+  // Sem `| undefined`: todos os caminhos que não atribuem retornam antes, então
+  // a análise de atribuição definida do TS garante a string no uso abaixo.
+  // Declarar como opcional obrigaria a um `!` que esconderia justamente um
+  // caminho novo que esquecesse de atribuir.
+  let cpfLimpo: string;
   if (tipoConsentimento === "titular_adulto") {
     const cpfRaw = String(formData.get("cpf") ?? "").trim();
     const resultado = validarEMaterializarCPF(cpfRaw);
@@ -181,11 +186,16 @@ export async function criarPacienteEConsent(
           })
           .returning({ id: patient.id });
       } catch (e) {
-        // #191 — `uq_patient_clinic_cpf`/`uq_patient_clinic_responsavel_cpf`
-        // (23505 = unique_violation). Erro amigável em vez do 500 opaco do
-        // banco — mesmo espírito do aviso em `nascimento` acima.
-        const codigo = (e as { cause?: { code?: string } })?.cause?.code;
-        if (codigo === "23505") {
+        // #191 — `uq_patient_clinic_cpf` (23505 = unique_violation). Erro
+        // amigável em vez do 500 opaco do banco — mesmo espírito do aviso em
+        // `nascimento` acima.
+        //
+        // `codigoPg` (e não `e.cause.code` cru) porque a posição do SQLSTATE
+        // depende da camada: o Drizzle embrulha e joga o original em `.cause`,
+        // o driver puro expõe na raiz. Ler só um dos dois faz este `catch`
+        // parar de reconhecer a violação numa troca de versão — em silêncio,
+        // devolvendo 500 opaco em vez da mensagem.
+        if (codigoPg(e) === "23505") {
           throw new Error("Este CPF já está cadastrado nesta clínica.");
         }
         throw e;
