@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
+import { codigoPg } from "@/db/pg-error";
 import { patient, consent } from "@/db/schema";
 import {
   avaliarSituacaoConta,
@@ -9,6 +10,8 @@ import {
   type EstadoConta,
 } from "@/lib/billing/estado-conta";
 import type { BloqueioConta } from "@/lib/billing/guard-escrita";
+import { validarEMaterializarCPF } from "@/lib/cpf";
+import { gerarCpfHash } from "@/lib/security/cpf-hash";
 
 /**
  * Sinaliza conta em somente-leitura de dentro da transação. Precisa ser um
@@ -92,13 +95,39 @@ export async function criarPacienteEConsent(
   }
   const tipoConsentimento = tipoConsentimentoRaw as TipoConsentimento;
 
+  // #191 — CPF do titular adulto ou do responsável legal do menor, conforme a
+  // MESMA escolha explícita acima (nunca `nascimento` — motivo no comentário
+  // de `TipoConsentimento`, D1). Exatamente um dos dois campos é exigido.
+  // Sem `| undefined`: todos os caminhos que não atribuem retornam antes, então
+  // a análise de atribuição definida do TS garante a string no uso abaixo.
+  // Declarar como opcional obrigaria a um `!` que esconderia justamente um
+  // caminho novo que esquecesse de atribuir.
+  let cpfLimpo: string;
+  if (tipoConsentimento === "titular_adulto") {
+    const cpfRaw = String(formData.get("cpf") ?? "").trim();
+    const resultado = validarEMaterializarCPF(cpfRaw);
+    if (!resultado.valido) {
+      return { error: `CPF do paciente: ${resultado.erro}` };
+    }
+    cpfLimpo = resultado.cpfLimpo;
+  } else {
+    const responsavelCpfRaw = String(
+      formData.get("responsavelCpf") ?? "",
+    ).trim();
+    const resultado = validarEMaterializarCPF(responsavelCpfRaw);
+    if (!resultado.valido) {
+      return { error: `CPF do responsável: ${resultado.erro}` };
+    }
+    cpfLimpo = resultado.cpfLimpo;
+  }
+  const cpfHash = gerarCpfHash(cpfLimpo);
+
   const responsavelSignatario = String(
     formData.get("responsavelSignatario") ?? "",
   ).trim();
   if (tipoConsentimento === "responsavel_legal" && !responsavelSignatario) {
     return {
-      error:
-        "Nome do responsável que assina o consentimento é obrigatório.",
+      error: "Nome do responsável que assina o consentimento é obrigatório.",
     };
   }
   // Rejeita em vez de ignorar: o CHECK do banco barraria de qualquer forma,
@@ -139,17 +168,38 @@ export async function criarPacienteEConsent(
         throw new BloqueioBillingError(situacao.estado);
       }
 
-      const [novo] = await tx
-        .insert(patient)
-        .values({
-          clinicId: ctx.clinicId,
-          nome,
-          nascimento: nascimentoRaw || undefined,
-          responsavelContato,
-          escola,
-          convenio,
-        })
-        .returning({ id: patient.id });
+      let novo: { id: string } | undefined;
+      try {
+        [novo] = await tx
+          .insert(patient)
+          .values({
+            clinicId: ctx.clinicId,
+            nome,
+            nascimento: nascimentoRaw || undefined,
+            responsavelContato,
+            escola,
+            convenio,
+            cpf: tipoConsentimento === "titular_adulto" ? cpfLimpo : undefined,
+            responsavelCpf:
+              tipoConsentimento === "responsavel_legal" ? cpfLimpo : undefined,
+            cpfHash,
+          })
+          .returning({ id: patient.id });
+      } catch (e) {
+        // #191 — `uq_patient_clinic_cpf` (23505 = unique_violation). Erro
+        // amigável em vez do 500 opaco do banco — mesmo espírito do aviso em
+        // `nascimento` acima.
+        //
+        // `codigoPg` (e não `e.cause.code` cru) porque a posição do SQLSTATE
+        // depende da camada: o Drizzle embrulha e joga o original em `.cause`,
+        // o driver puro expõe na raiz. Ler só um dos dois faz este `catch`
+        // parar de reconhecer a violação numa troca de versão — em silêncio,
+        // devolvendo 500 opaco em vez da mensagem.
+        if (codigoPg(e) === "23505") {
+          throw new Error("Este CPF já está cadastrado nesta clínica.");
+        }
+        throw e;
+      }
       const signatario =
         tipoConsentimento === "titular_adulto" ? null : responsavelSignatario;
       const versaoTermo =
@@ -205,6 +255,29 @@ export async function criarPacienteEConsent(
           versaoTermo,
         });
       }
+      // #191 — só faz sentido checar fraude de trial no cadastro que VAI
+      // iniciar o relógio (`trial_aguardando` = ainda não tem 1º paciente).
+      // Fora disso a clínica já pagou ou já está em trial próprio, e o CPF
+      // repetido é só duplicata intra-clínica (já barrada acima pelo 23505).
+      if (situacao.estado === "trial_aguardando") {
+        const linhas = (await tx.execute<{ usado: boolean }>(sql`
+          SELECT app_cpf_hash_usado_em_outro_trial(${cpfHash}) AS usado
+        `)) as unknown as ({ usado: boolean } | undefined)[];
+        const usado = linhas[0]?.usado;
+        // Falha FECHADA. `SELECT f(x)` sempre devolve uma linha; ausência é
+        // bug, e tratá-la como "não usou" seria exatamente a falha aberta que
+        // a #215 fechou. Erro próprio, não `trial_bloqueado_fraude`: acusar
+        // fraude de quem tropeçou num defeito nosso é a mensagem errada.
+        if (typeof usado !== "boolean") {
+          throw new Error(
+            "Não foi possível verificar a elegibilidade do período de teste. Tente novamente.",
+          );
+        }
+        if (usado) {
+          throw new BloqueioBillingError("trial_bloqueado_fraude");
+        }
+      }
+
       // #175: o relógio do trial começa no 1º paciente, na MESMA transação —
       // se o cadastro reverter, o trial não começou. A função é idempotente
       // (só escreve com `trial_comeco_em IS NULL AND isento_trial = false`),
@@ -226,6 +299,8 @@ export async function criarPacienteEConsent(
         bloqueioConta: { estado: e.estado, mensagem: e.message },
       };
     }
-    return { error: e instanceof Error ? e.message : "Falha ao cadastrar paciente." };
+    return {
+      error: e instanceof Error ? e.message : "Falha ao cadastrar paciente.",
+    };
   }
 }

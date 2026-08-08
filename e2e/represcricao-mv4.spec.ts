@@ -42,6 +42,9 @@ test("represcrever para baixo confirma antes e leva à barra da disciplina afeta
   await page
     .getByLabel("Responsável que assina o Consentimento LGPD")
     .fill("Mãe MV4");
+  // #191 — CPF obrigatório. Distinto do usado nos outros specs por causa de
+  // `uq_patient_clinic_cpf` (a clínica do seed é a mesma para todos).
+  await page.getByLabel("CPF do responsável").fill("123.456.789-09");
   await page.getByRole("button", { name: /Salvar e prescrever/ }).click();
 
   await expect(page).toHaveURL(/\/pacientes\/.+\/cadastro-clinico/);
@@ -120,6 +123,9 @@ test("prescrever disciplina nova sobre equipe já montada também pergunta antes
   await page
     .getByLabel("Responsável que assina o Consentimento LGPD")
     .fill("Mãe MV4");
+  // #191 — CPF obrigatório, e o terceiro valor distinto do repo (ver comentário
+  // no spec acima sobre `uq_patient_clinic_cpf`).
+  await page.getByLabel("CPF do responsável").fill("987.654.321-00");
   await page.getByRole("button", { name: /Salvar e prescrever/ }).click();
   await expect(page).toHaveURL(/\/pacientes\/.+\/cadastro-clinico/);
   const patientId = page

@@ -347,6 +347,14 @@ export const patient = pgTable(
     responsavelContato: text("responsavel_contato"),
     escola: text("escola"),
     convenio: text("convenio"),
+    // #191 — CPF do próprio paciente (titular adulto) ou do responsável legal
+    // (menor). Exatamente um dos dois é preenchido, espelhando a escolha de
+    // `tipoConsentimento` no cadastro — nunca os dois, nunca nenhum.
+    cpf: text("cpf"),
+    responsavelCpf: text("responsavel_cpf"),
+    // Hash cego (HMAC-SHA256 + salt fora do repo) do CPF/responsavelCpf acima,
+    // usado só para o EXISTS cross-tenant de #191 — nunca para reidentificar.
+    cpfHash: text("cpf_hash"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -357,6 +365,20 @@ export const patient = pgTable(
     // Alvo das FKs compostas (patient_id, clinic_id) das tabelas da Agenda 2.0
     // (anti-IDOR em nível de banco). PK só em `id` não satisfaz FK de 2 colunas.
     unique("uq_patient_id_clinic").on(t.id, t.clinicId),
+    // #191 — unicidade SÓ no CPF do próprio titular adulto: ali o CPF
+    // identifica o paciente, e repetir significa cadastro duplicado. UNIQUE do
+    // Postgres trata múltiplos NULL como distintos, então as linhas de menores
+    // (sempre NULL aqui) não colidem entre si.
+    unique("uq_patient_clinic_cpf").on(t.clinicId, t.cpf),
+    // `responsavel_cpf` NÃO é único de propósito: o CPF é de OUTRA pessoa, e um
+    // mesmo responsável legitimamente tem mais de um filho em terapia na mesma
+    // clínica — irmãos com TEA são comuns, não borda. UNIQUE aqui bloquearia o
+    // cadastro do 2º filho. Índice simples só para a busca.
+    index("idx_patient_clinic_responsavel_cpf").on(
+      t.clinicId,
+      t.responsavelCpf,
+    ),
+    index("idx_patient_cpf_hash").on(t.cpfHash),
   ],
 );
 

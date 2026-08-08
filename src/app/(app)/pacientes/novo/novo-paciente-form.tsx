@@ -84,11 +84,7 @@ export function NovoPacienteForm() {
   return (
     <Form action={formAction} error={bloqueio ? undefined : state.error}>
       {bloqueio ? (
-        <Alert
-          severidade="erro"
-          destacado
-          titulo="Conta em somente-leitura"
-        >
+        <Alert severidade="erro" destacado titulo="Conta em somente-leitura">
           <p>{bloqueio.mensagem}</p>
           {/* Link SÓ onde ativar/reativar é a saída. Em
               `pagamento_em_processamento` já existe cobrança em voo: devolver a
@@ -136,7 +132,7 @@ export function NovoPacienteForm() {
       {/* Consentimento LGPD. A escolha de quem assina é explícita — nunca
           derivada da data de nascimento (#100, D1). */}
       <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-        <legend className="text-[var(--text-primary)] font-display mb-1.5 text-sm font-semibold">
+        <legend className="font-display mb-1.5 text-sm font-semibold text-[var(--text-primary)]">
           Quem assina o consentimento?
         </legend>
         {/* Sem `aria-label` aqui: o <legend> do fieldset já nomeia o grupo, e
@@ -161,14 +157,15 @@ export function NovoPacienteForm() {
             {
               value: "responsavel_legal",
               label: "Responsável legal",
-              description: "Pai, mãe ou tutor (menor de 18 anos ou sob curatela)",
+              description:
+                "Pai, mãe ou tutor (menor de 18 anos ou sob curatela)",
             },
           ]}
         />
         {erroEhDoTipo ? (
           <p
             id="tipoConsentimento-error"
-            className="text-[var(--status-error-fg)] text-sm font-semibold"
+            className="text-sm font-semibold text-[var(--status-error-fg)]"
           >
             {state.error}
           </p>
@@ -188,6 +185,27 @@ export function NovoPacienteForm() {
         </Alert>
       ) : null}
 
+      {/* #191 — CPF obrigatório, do titular ou do responsável, seguindo a MESMA
+          escolha acima (nunca a data de nascimento). Renderizado por ramo, e
+          não um campo único sempre visível, porque o rótulo precisa dizer de
+          QUEM é o CPF: "CPF" sozinho faz a recepção digitar o do paciente
+          menor, que é justamente quem não tem.
+
+          Sem `required` em campo escondido (a11y): bloquearia o submit sem foco
+          visível. A validação de verdade (Módulo 11) é do servidor — aqui não
+          há máscara nem checagem, e a action aceita com ou sem pontuação. */}
+      {tipoConsentimento === "titular_adulto" ? (
+        <Field label="CPF do paciente" htmlFor="cpf">
+          <Input
+            id="cpf"
+            name="cpf"
+            required
+            inputMode="numeric"
+            placeholder="000.000.000-00"
+          />
+        </Field>
+      ) : null}
+
       {/* Só renderizado no ramo do responsável legal: `required` num campo
           escondido bloquearia o submit sem foco visível (a11y). Nunca usar
           `hidden` + `required` aqui. */}
@@ -204,9 +222,24 @@ export function NovoPacienteForm() {
         </Field>
       ) : null}
 
+      {/* Só renderizado no ramo do responsável legal: `required` num campo
+          escondido bloquearia o submit sem foco visível (a11y). Nunca usar
+          `hidden` + `required` aqui. */}
+      {tipoConsentimento === "responsavel_legal" ? (
+        <Field label="CPF do responsável" htmlFor="responsavelCpf">
+          <Input
+            id="responsavelCpf"
+            name="responsavelCpf"
+            required
+            inputMode="numeric"
+            placeholder="000.000.000-00"
+          />
+        </Field>
+      ) : null}
+
       {/* Consentimentos por finalidade LGPD (#140) — destacados e facultativos. */}
       <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
-        <legend className="text-[var(--text-primary)] font-display mb-1 text-sm font-semibold">
+        <legend className="font-display mb-1 text-sm font-semibold text-[var(--text-primary)]">
           Consentimentos Adicionais por Finalidade (LGPD)
         </legend>
         <div className="flex flex-col gap-3">
@@ -217,8 +250,9 @@ export function NovoPacienteForm() {
               onCheckedChange={(c) => setConsentimentoIa(!!c)}
               label="Autorizar processamento por Inteligência Artificial (IA)"
             />
-            <p className="text-[var(--text-secondary)] text-xs ml-9 mt-0.5">
-              Conforme §8 dos Termos LGPD. Facultativo — autoriza transcrição, resumos e auxílio clínico por IA.
+            <p className="mt-0.5 ml-9 text-xs text-[var(--text-secondary)]">
+              Conforme §8 dos Termos LGPD. Facultativo — autoriza transcrição,
+              resumos e auxílio clínico por IA.
             </p>
           </div>
           <div>
@@ -228,8 +262,9 @@ export function NovoPacienteForm() {
               onCheckedChange={(c) => setConsentimentoExportacao(!!c)}
               label="Autorizar exportação e download de relatórios"
             />
-            <p className="text-[var(--text-secondary)] text-xs ml-9 mt-0.5">
-              Conforme §10 dos Termos LGPD. Facultativo — autoriza a geração e download de relatórios em PDF/CSV.
+            <p className="mt-0.5 ml-9 text-xs text-[var(--text-secondary)]">
+              Conforme §10 dos Termos LGPD. Facultativo — autoriza a geração e
+              download de relatórios em PDF/CSV.
             </p>
           </div>
         </div>
@@ -247,9 +282,7 @@ export function NovoPacienteForm() {
 
       {/* A copy diz o próximo passo, não a tela de destino: o cadastro só
           termina de verdade quando a carga horária está prescrita. */}
-      <Button type="submit">
-        Salvar e prescrever a carga horária
-      </Button>
+      <Button type="submit">Salvar e prescrever a carga horária</Button>
     </Form>
   );
 }

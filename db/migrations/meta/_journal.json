@@ -582,6 +582,20 @@
       "when": 1786067178941,
       "tag": "0082_conta_somente_leitura_guc_invalido",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1786147756186,
+      "tag": "0083_patient_cpf_antifraude",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1786147757186,
+      "tag": "0084_cpf_hash_antifraude_definer",
+      "breakpoints": true
     }
   ]
 }

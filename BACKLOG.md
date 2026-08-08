@@ -43,7 +43,91 @@
 | **D15** | ~~Critério (c) de "paciente ativo" não é congelado no fim do ciclo.~~ **Improcedente, fechado em 07/08/2026 — a premissa lia código morto.** O achado citava `0071:320` (`p.arquivado_em IS NULL`), mas a `0075` fez `CREATE OR REPLACE` da `billing_apurar_ciclo` e **removeu qualquer leitura de `arquivado_em`** ao adotar (a)+(b) da DECISÃO 8. Medido no banco, não lido no diff: `SELECT prosrc LIKE '%arquivado_em%' FROM pg_proc WHERE proname='billing_apurar_ciclo'` → **false**. Toda a apuração compara timestamps contra `[v_inicio, v_fim)`: já é congelada, e a hora em que o job roda não muda o resultado. | Aplicar o fix proposto (`arquivado_em IS NULL OR arquivado_em >= v_fim`) seria **regressão**: reintroduziria o critério (c) que a DECISÃO 8 (04/08/2026) removeu de propósito — clínica em recesso voltaria a pagar. Lição repetida: `git log`/diff de uma migração não diz qual é o corpo vivo da função quando outra migração fez `CREATE OR REPLACE` depois. Resíduo consciente: `src/app/(admin)/benjamin/queries.ts:143,208` ainda conta `arquivado_em is null` **no agora** — é termômetro de MRR do backoffice, não fatura, e está documentado como tal em `:17-45`. | #216 · `0075:82-142` · trava de regressão em `db/tests/billing-apuracao.int.test.ts`                          |
 | **D16** | **43 policies fazem `current_setting('app.clinic_id')::uuid` sem `missing_ok` e sem guard de formato.** Medido em `pg_policies` (07/08/2026): `clinic_read`, `patient_*`, `session_*`, `audit_log_*`, `app_user_read` e outras. GUC ausente → `42704`; GUC presente e não-UUID (string vazia, lixo, truncado) → `22P02`.                                                                                                                                                                                                                                                                                                    | Erro de leitura que aborta a transação inteira, com mensagem que não aponta para o tenant. Foi o que fez o guard interno de `app_conta_somente_leitura()` não bastar (#215): a exceção vinha da policy, antes de a função decidir. **Não é fix mecânico:** trocar as 43 por `app_clinic_id_atual()` transforma "estoura" em "não vê linha nenhuma", e num predicado de isolamento multi-tenant a falha silenciosa é o modo pior. Precisa de desenho + trava de teste por tabela.                                                                                            | `pg_policies` · helper já existe: `app_clinic_id_atual()` (`0082`)                                            |
 | **D17** | **Editar migração já aplicada não roda e não avisa.** O guard de UUID de `app_conta_somente_leitura()` foi escrito editando a `0073` **no lugar** (commit `b53b294`), depois de ela já ter sido aplicada — junto com 3 `GRANT EXECUTE`. Drizzle aplica por `tag` do journal e nunca reexecuta tag registrado.                                                                                                                                                                                                                                                                                                               | Primo do **D2**, e mais traiçoeiro: base criada do zero (dev, CI) tem o código novo, base que veio migrando (produção) tem o antigo, e o `git diff` mostra o certo nos dois. Verde local não é evidência. O fim real é o mesmo teste de CI do D2, ampliado para comparar o **hash** de cada `.sql` com o registrado em `drizzle.__drizzle_migrations`.                                                                                                                                                                                                                      | #215 · `0073` reaplicada pela `0082` · `CLAUDE.md` §"Migrações"                                               |
+| **D18** | **`CPF_HASH_SALT` não provisionada em produção** (#191). Sem a env var, `gerarCpfHash` lança e **o cadastro de paciente para de funcionar**; com ela trocada depois, todos os `cpf_hash` já gravados viram lixo.                                                                                                                                                                                                                                                                                                                                                                                        | Falha barulhenta no deploy (bom) mas total: nenhum paciente é cadastrado até provisionar. O modo silencioso é pior — **rotacionar** o salt depois não quebra nada visível, só desliga a trava anti-fraude: todo CPF vira "inédito" e o trial fica reabusável, sem erro em lugar nenhum. Não há fallback no código de propósito (salt literal no repo permitiria a qualquer leitor descobrir se uma pessoa é paciente).                                                                                                                    | #191 · `src/lib/security/cpf-hash.ts` · Easypanel → Ambiente                                                  |
+| **D19** | ~~Coleta de CPF sem revisão jurídica (#191).~~ **Validada pelo advogado em 07/08/2026** (informado pelo Rômulo). **Resíduo estreito e medido:** `docs/legal/politica-privacidade.md:46` é a ÚNICA linha da tabela de dados que cita CPF, e o descreve como "dados de faturamento … quando exigido para emissão de documento fiscal", finalidade "Cobrança e obrigação fiscal", base legal Art. 7º, II.                                                                                                                                                                                              | Os termos já cobrem a coleta em si — `termo-consentimento-titular-adulto.md:150,385` e `termo-consentimento-curatela.md:130,332` pedem CPF no bloco de identificação. O que não está declarado é a **finalidade nova**: prevenção a fraude/deduplicação não é "emissão de documento fiscal", e a base legal correspondente seria legítimo interesse (Art. 7º, IX), não obrigação legal. Uma linha na tabela resolve. Não foi escrita porque mudança em `docs/legal/` exige aprovação explícita do Rômulo (CLAUDE.md) e a validação relatada não detalhou se cobriu este ponto. | #191 · `docs/legal/politica-privacidade.md:46`                                                                |
 | **D11** | **Estratégia de Ativo de Dados & Indexação RAG (#120)** — pipeline de tokenização e treinamento de IA sobre históricos exportados.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Diretriz de negócio Iris: preservação integral de evoluções e prontuários no banco para vetorização/RAG e aperfeiçoamento dos modelos clínicos.                                                                                                                                                                                                                                                                                                                                                                                                                             | #120 · `src/lib/extraction/`                                                                                  |
+
+---
+
+## 🏁 Sessão 07/08/2026 — #191 fechada: CPF obrigatório + trava anti-fraude de trial (hash cego cross-tenant)
+
+**O que entrou.** Migração `0083_patient_cpf_antifraude.sql` (via `db:generate`:
+colunas `cpf`, `responsavel_cpf`, `cpf_hash`, os dois `UNIQUE(clinic_id, …)` e
+o índice de `cpf_hash`) + `0084_cpf_hash_antifraude_definer.sql` (à mão:
+`app_cpf_hash_usado_em_outro_trial(text)`, SECURITY DEFINER). No app:
+`src/lib/cpf.ts` (Módulo 11), `src/lib/security/cpf-hash.ts` (HMAC-SHA256),
+validação e gravação em `criarPacienteEConsent`, campo novo no formulário e
+estado `trial_bloqueado_fraude` em `estado-conta.ts`.
+
+**A decisão que não era óbvia: esta é a primeira função do repo que LÊ fora do
+próprio tenant.** As DEFINER anteriores (`0064`, `0081`, `0048`, `0067`)
+escrevem no próprio `clinic_id`; nenhuma consultava outra clínica. Detectar que
+um CPF já consumiu trial em OUTRA conta é, por definição, uma pergunta
+cross-tenant — nenhuma policy de RLS deve responder isso, e afrouxar `patient`
+para responder seria abrir leitura de paciente entre clínicas.
+
+O que torna isso aceitável é a **forma do retorno, não a intenção**: a função
+devolve um `boolean` e nada mais. O chamador aprende "este hash já foi titular
+de trial em algum lugar" e nada sobre onde, quem ou quantos. Como a entrada é o
+hash (o CPF em claro nunca cruza a fronteira do banco) e a saída é 1 bit, não há
+consulta que reconstrua dado de outro tenant. **Se algum dia essa função passar
+a retornar linha, id, contagem ou data, ela deixa de ser cega e vira vazamento
+cross-tenant** — é o guardrail a defender em qualquer alteração futura dela.
+
+**Duas armadilhas evitadas, ambas com precedente no repo:**
+
+- **Salt com fallback.** A spec original (`docs/superpowers/specs/2026-08-03-…`)
+  propunha `process.env.CPF_HASH_SALT || "iris-anti-abuse-salt-2026"`. Salt
+  literal no código anula o mecanismo inteiro: qualquer um que leia o repo
+  recalcula o hash de um CPF conhecido e descobre se aquela pessoa é paciente
+  em alguma clínica — vazamento pela porta criada para ser cega. `gerarCpfHash`
+  **lança** sem a env var. `CPF_HASH_SALT` entrou no `.env.example`; **falta
+  provisioná-la no Easypanel antes do deploy** (ver "pendências" abaixo).
+- **Falha aberta na leitura do oráculo.** A primeira versão fazia
+  `const [{ usado }] = …`; linha ausente viraria `undefined` → falsy → trial
+  liberado. É exatamente o modo de falha que a #215 fechou. Hoje ausência de
+  linha aborta o cadastro com erro próprio (e não com acusação de fraude, que
+  seria a mensagem errada para um defeito nosso).
+
+**Por que a checagem só roda em `trial_aguardando`.** Rodar em todo cadastro
+puniria clínica pagante cujo paciente já foi atendido em outro lugar — situação
+comum e legítima. E `trial_comeco_em IS NOT NULL` está no predicado de
+propósito: só queima o CPF a clínica que de fato iniciou o relógio, não a que
+apenas cadastrou alguém sem nunca entrar em trial.
+
+**Verificado medindo, não lendo** (CLAUDE.md §Migrações, regra 3): colunas em
+`information_schema`, constraints em `pg_constraint`, `prosecdef = true` em
+`pg_proc`, `has_function_privilege` confirmando `EXECUTE` para `app_role` e
+**negado** para `PUBLIC`. Probe `BEGIN … ROLLBACK` com 3 casos, incluindo a
+contraprova que separa as duas hipóteses: clínica que tem o mesmo CPF mas
+**nunca iniciou trial** devolve `false`. Sem esse caso, um predicado que
+ignorasse `trial_comeco_em` passaria no teste.
+
+**Quebra deliberada de contrato.** CPF virou **obrigatório** no cadastro, então
+os 17 testes de `actions.int.test.ts` que não mandavam CPF quebraram — quebra
+esperada, não regressão. Corrigidos com CPFs distintos por caso (repetir o mesmo
+esbarraria em `uq_patient_clinic_cpf` e falharia pelo motivo errado). Os 3
+pontos de E2E que preenchem o formulário também foram atualizados. Inserts
+diretos de `patient` nos testes de RLS seguem válidos: a obrigatoriedade é da
+camada de aplicação, a coluna é nullable no banco (paciente já cadastrado antes
+desta migração continua sem CPF).
+
+**Pendências que esta sessão NÃO fechou:**
+1. **`CPF_HASH_SALT` em produção.** Sem ela o cadastro de paciente lança. Tem de
+   ser provisionada no Easypanel **antes** do deploy desta branch, e o valor tem
+   de ser estável para sempre — trocar o salt invalida todos os `cpf_hash` já
+   gravados e zera a trava anti-fraude em silêncio.
+2. **Uma linha na política de privacidade.** O advogado validou a coleta de CPF
+   (07/08/2026), e os termos de consentimento já pedem CPF no bloco de
+   identificação — isso estava coberto. O que ficou de fora, medido e não
+   suposto: `politica-privacidade.md:46` é a única linha que cita CPF e o
+   enquadra como dado de faturamento para documento fiscal (Art. 7º, II). A
+   finalidade nova — prevenção a fraude e deduplicação — não é obrigação legal
+   fiscal, e pede linha própria com base em legítimo interesse (Art. 7º, IX).
+   Não escrita aqui porque `docs/legal/` exige aprovação explícita.
+3. **Sem caminho de edição de CPF.** Deliberado: as colunas novas não ganharam
+   `GRANT UPDATE` (o `UPDATE` de `patient` é coluna a coluna desde a `0044`).
+   Erro de digitação hoje só se corrige pela role dona.
 
 ---
 
