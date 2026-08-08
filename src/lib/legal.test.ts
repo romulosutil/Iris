@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
@@ -33,11 +40,62 @@ describe("VERSAO_TERMO", () => {
   // (ou revisar os documentos sem mudá-la) quebra a rastreabilidade de "qual
   // texto exatamente esta pessoa aceitou".
   it("é exatamente a versão desta fatia", () => {
-    expect(VERSAO_TERMO).toBe("2026-07-30");
+    // 07/08/2026 (#191): subiu junto da revisão que descreveu a coleta de CPF,
+    // a prevenção a fraude no teste (Política, seção 2.1) e a condição nova do
+    // trial (Termos, 7.2). Literal de propósito — é o ponto em que alguém tem
+    // de parar e conferir se documento e string do aceite andaram juntos.
+    expect(VERSAO_TERMO).toBe("2026-08-07");
   });
 
   it("tem formato de data ISO", () => {
     expect(VERSAO_TERMO).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  /**
+   * Fonte única, verificada — não só prometida no comentário de `legal.ts`.
+   *
+   * Até 07/08/2026 `src/app/(auth)/cadastro/logic.ts` redeclarava a string,
+   * e nada apontava isso: os testes acima comparam a constante DAQUI com os
+   * markdown e nunca olhavam a segunda cópia. Subir a versão num lado só faria
+   * o aceite do profissional gravar uma versão que nenhum documento publicado
+   * tem — em `professional_consent`, que é append-only (0058: ninguém tem
+   * DELETE). Evidência jurídica errada e irremovível.
+   *
+   * Varre o código de verdade em vez de confiar na convenção, porque a
+   * duplicata anterior parecia perfeitamente razoável no arquivo onde estava.
+   */
+  it("é declarada em UM só lugar em src/", () => {
+    const raiz = path.join(process.cwd(), "src");
+    const declaracoes: string[] = [];
+
+    const visitar = (dir: string) => {
+      for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+        const caminho = path.join(dir, entrada.name);
+        if (entrada.isDirectory()) {
+          visitar(caminho);
+        } else if (
+          /\.tsx?$/.test(entrada.name) &&
+          // Testes ficam de fora: o que importa é o código que roda em
+          // produção. (E este próprio arquivo carrega o padrão como literal,
+          // então se incluísse testes ele casaria consigo mesmo.)
+          !/\.test\.tsx?$/.test(entrada.name)
+        ) {
+          // Só declaração (`const VERSAO_TERMO =`), não uso nem import. O
+          // sufixo `\b` evita casar `VERSAO_TERMO_MENOR_ATUAL` e os outros
+          // termos de consentimento de paciente, que são versões próprias e
+          // legitimamente separadas desta.
+          if (/\bconst\s+VERSAO_TERMO\b\s*=/.test(readFileSync(caminho, "utf8"))) {
+            declaracoes.push(path.relative(process.cwd(), caminho));
+          }
+        }
+      }
+    };
+    visitar(raiz);
+
+    expect(
+      declaracoes,
+      `VERSAO_TERMO deve ser declarada só em src/lib/legal.ts — quem precisar importa de lá. Encontrada em: ${declaracoes.join(", ")}`,
+    ).toEqual([path.join("src", "lib", "legal.ts")]);
   });
 });
 

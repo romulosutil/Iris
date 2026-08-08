@@ -2,7 +2,7 @@
 
 # Termos de Uso — Iris
 
-**Versão `2026-07-30` — vigente desde 30/07/2026.**
+**Versão `2026-08-07` — vigente desde 07/08/2026.**
 
 Estes Termos regem o uso da plataforma Iris por quem contrata o serviço, em
 dois caminhos de contratação:
@@ -213,6 +213,20 @@ assinatura é ativada sem ato da clínica.
 Encerrado o teste sem ativação da assinatura, aplica-se o disposto na seção
 7.4. Optando a clínica por ativar, a cobrança segue o regime **pós-pago** da
 seção 7.3, em ciclos de 30 (trinta) dias contados a partir da ativação.
+
+**Uma condição, e uma só:** o período de teste é concedido **uma vez por
+pessoa**, e não uma vez por conta criada. No cadastro do primeiro paciente, o
+Iris verifica se o CPF informado (do paciente ou de seu responsável legal) já
+esteve associado a um período de teste iniciado em outra conta. Se já esteve,
+**o teste não é concedido a esta conta** — a clínica pode contratar
+normalmente, pelo mesmo preço da seção 7.1, sem período gratuito. A
+verificação é feita por código irreversível, não expõe dado de paciente entre
+clínicas, e está descrita em `politica-privacidade.md`, seção 2.1.
+
+A verificação **só ocorre no cadastro que inicia o teste**. Clínica que já
+contratou, ou que já está em teste próprio, não passa por ela: paciente
+atendido anteriormente em outro serviço é situação corriqueira e não restringe
+nada.
 
 ### 7.3. Meios de pagamento
 

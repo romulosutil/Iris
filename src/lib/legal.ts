@@ -16,7 +16,7 @@
  * em `docs/legal/` declaram exatamente esta versão — se alguém revisar um
  * documento e esquecer de subir a versão (ou vice-versa), o teste quebra.
  */
-export const VERSAO_TERMO = "2026-07-30";
+export const VERSAO_TERMO = "2026-08-07";
 
 export type SlugLegal = "termos" | "privacidade";
 

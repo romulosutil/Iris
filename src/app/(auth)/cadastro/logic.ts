@@ -6,12 +6,12 @@ import { registrarTentativa } from "@/lib/throttle";
 import { enviarEmailTransacional } from "@/lib/email/transacional";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { criarTemplateTentativaCadastroExistente } from "@/lib/email/templates";
-
+import { VERSAO_TERMO } from "@/lib/legal";
 
 export type EstadoCadastro = { error?: string };
 
 /**
- * Versão do termo aceita neste cadastro. VEM DAQUI, DO SERVIDOR — nunca do
+ * Versão do termo aceita neste cadastro. VEM DO SERVIDOR — nunca do
  * formulário. `professional_consent` é append-only (migração 0058: `iris_auth`
  * só tem SELECT/INSERT, ninguém tem DELETE), então toda linha gravada é
  * permanente. Se o cliente controlasse este valor, o índice único
@@ -19,8 +19,15 @@ export type EstadoCadastro = { error?: string };
  * duplicatas — bastaria variar a string para inserir linhas irremovíveis à
  * vontade, transformando a tabela de evidência jurídica num vetor de poluição
  * sem limite.
+ *
+ * REEXPORTADO, não redeclarado (#191). Até 07/08/2026 esta era uma segunda
+ * cópia literal da string, apesar de `@/lib/legal` se declarar fonte única. A
+ * divergência era invisível: `legal.test.ts` compara a constante DE LÁ com os
+ * markdown, e nunca olhava para esta — então subir a versão num lado só faria
+ * o aceite gravar uma versão que nenhum documento publicado tem, de forma
+ * permanente e irremovível na tabela de evidência jurídica.
  */
-export const VERSAO_TERMO = "2026-07-30";
+export { VERSAO_TERMO };
 
 const CONSELHOS = ["crp", "crfa", "crefito", "crm", "outro"] as const;
 
@@ -466,7 +473,10 @@ export async function executarCadastro(
         texto: template.texto,
         html: template.html,
       }).catch((e) => {
-        console.error("executarCadastro: falha ao notificar conta existente:", e);
+        console.error(
+          "executarCadastro: falha ao notificar conta existente:",
+          e,
+        );
       });
     } else {
       console.error(
@@ -474,7 +484,6 @@ export async function executarCadastro(
         descreverErro(err),
       );
     }
-
   }
 
   await respeitarPiso(iniciadoNucleo);
