@@ -41,8 +41,9 @@
 
 Armadilhas reais deste repo, com incidente no histórico. Não são teoria:
 a primeira era o débito **D1**, fechado pela issue #186 (o que sobrou é a
-regra de quando gerar e quando escrever à mão); a segunda segue aberta
-como **D2** em `BACKLOG.md`.
+regra de quando gerar e quando escrever à mão); a segunda era o **D2**,
+fechado pela issue #187 — a regra continua valendo, mas agora quem cobra
+é o CI (`src/db/migrations.test.ts`), não a sua memória.
 
 **1. `pnpm db:generate` voltou a funcionar — e é o caminho para mudança de
 schema.** O snapshot foi reconciliado na `0078` (issue #186): hoje
@@ -80,6 +81,12 @@ já aplicada, o Drizzle **pula o arquivo em silêncio** — sem erro, sem
 aviso. Use `when` = o da migração anterior **+ 1000**. Foi exatamente
 assim que a `0055` (fix de isolamento cross-tenant, #128) nunca rodou em
 produção e a issue foi fechada olhando o diff (#165).
+
+`src/db/migrations.test.ts` (roda no `pnpm test`, sem banco) derruba o CI
+se você esquecer: `.sql` sem entrada, entrada órfã, `when` não crescente
+ou duplicado, `idx` fora de sequência, tag fora do formato `NNNN_nome`.
+Ele compara journal × disco — **não** journal × banco; o que já foi
+aplicado em produção continua sendo verificado por medição (item 3).
 
 **3. Verifique medindo, não lendo.** Depois de `pnpm db:migrate`, confirme
 no Postgres que o objeto existe e faz o que promete — `information_schema`
