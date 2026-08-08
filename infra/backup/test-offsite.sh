@@ -716,7 +716,7 @@ printf '%s\n' "${AGE_IDENTITY}" | verify_offsite \
 EXIT_CARIMBO_FUTURO=$?
 set -e
 
-if [[ "${EXIT_CARIMBO_FUTURO}" -eq 1 ]] && grep -qiE 'carimbo' /tmp/iris-verify-carimbo-futuro.log \
+if [[ "${EXIT_CARIMBO_FUTURO}" -eq 1 ]] && grep -q 'OFFSITE_MIN_CARIMBO=' /tmp/iris-verify-carimbo-futuro.log \
 	&& ! grep -q 'RÉPLICA OFF-SITE VERIFICADA' /tmp/iris-verify-carimbo-futuro.log; then
 	ok "objeto mais VELHO que OFFSITE_MIN_CARIMBO => exit 1 com mensagem sobre o corte (réplica estagnada não passa)"
 else

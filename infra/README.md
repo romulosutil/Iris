@@ -829,6 +829,13 @@ que **não existe mais** e são lixo permanente. Verificar uma delas não diz na
 — falharia por um motivo já conhecido e gastaria o tempo do ensaio. O corte
 transforma isso em recusa imediata e explícita.
 
+O corte é **opcional, mas recomendado em toda execução**. Procedência provada
+não é recência provada: um objeto de meses atrás, conferido contra o `sha256`
+que o `backup.sh` logou naquele dia, passa em todas as outras checagens e sai 0.
+Sem o corte o script imprime uma linha `ATENÇÃO: OFFSITE_MIN_CARIMBO não foi
+informado` antes do banner, dizendo em voz alta o que não checou — mas quem
+confere que o carimbo é do ciclo esperado é você.
+
 #### Os dois modos de falha, que são problemas diferentes
 
 - **Não conseguir listar o bucket** = credencial de leitura. A credencial de

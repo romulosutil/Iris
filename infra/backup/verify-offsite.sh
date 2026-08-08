@@ -185,8 +185,15 @@ normalizar_sha_esperado() {
 		return 0
 	fi
 
-	valor="${valor#sha256=}"
+	# Ordem importa: minúscula ANTES de tirar o prefixo, senão um `SHA256=`
+	# colado do log passa direto pelo strip e é recusado com a mensagem de
+	# "linha inteira em vez do hash" — rejeição certa, diagnóstico errado.
+	# Espaço em volta some junto: copiar do painel arrasta espaço e quebra de
+	# linha, e isso não é erro do operador, é erro de clipboard.
 	valor="${valor,,}"
+	valor="${valor#"${valor%%[![:space:]]*}"}"
+	valor="${valor%"${valor##*[![:space:]]}"}"
+	valor="${valor#sha256=}"
 
 	if ! [[ "${valor}" =~ ^[0-9a-f]{64}$ ]]; then
 		log_error "${nome} não parece um sha256 (esperado 64 dígitos hexadecimais, com ou sem o prefixo 'sha256='). Conferir o que foi copiado do log do backup.sh — provavelmente veio a linha inteira em vez de só o hash. O valor recebido não é logado."
@@ -202,8 +209,37 @@ normalizar_sha_esperado OFFSITE_EXPECTED_SHA256_GLOBALS SHA_ESPERADO_GLOBALS
 readonly SHA_ESPERADO_GLOBALS
 
 # --- corte de carimbo -------------------------------------------------------------
+# As duas funções abaixo existem como funções, e não inline, para poderem ser
+# extraídas e exercitadas pelo test-verify-offsite-logica.sh sem subir container.
+# Lógica de comparação que só é testável junto com Docker + Postgres + MinIO na
+# prática não é testada — e comparação temporal errada falha para o lado
+# permissivo, que é o lado que ninguém percebe.
+
+# Corte vazio é válido: o parâmetro é opcional.
+corte_carimbo_valido() {
+	local corte="$1"
+	if [[ -z "${corte}" ]]; then
+		return 0
+	fi
+	[[ "${corte}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]]
+}
+
+# Verdadeiro quando o objeto é ANTERIOR ao corte, ou seja: deve ser recusado.
+# Corte vazio nunca recusa nada. O prefixo `iris-` sai antes da comparação —
+# `iris-2026...` comparado contra `2026...` daria sempre "maior", e o corte
+# viraria um no-op silencioso.
+# Comparação lexicográfica é cronológica porque o carimbo é ISO-8601 básico UTC.
+carimbo_abaixo_do_corte() {
+	local carimbo="${1#iris-}"
+	local corte="$2"
+	if [[ -z "${corte}" ]]; then
+		return 1
+	fi
+	[[ "${carimbo}" < "${corte}" ]]
+}
+
 readonly MIN_CARIMBO="${OFFSITE_MIN_CARIMBO:-}"
-if [[ -n "${MIN_CARIMBO}" ]] && ! [[ "${MIN_CARIMBO}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]]; then
+if ! corte_carimbo_valido "${MIN_CARIMBO}"; then
 	log_error "OFFSITE_MIN_CARIMBO inválido: '${MIN_CARIMBO}'. Esperado YYYYMMDDTHHMMSSZ, sem o prefixo 'iris-' (ex.: 20260728T040000Z). Um corte malformado seria comparado como texto e deixaria passar exatamente o objeto que ele deveria barrar."
 	exit 1
 fi
@@ -290,12 +326,9 @@ readonly NOME_GLOBALS="${CARIMBO}.globals.sql.age"
 # desastre de verdade produz. Barrar aqui, com a causa correta no texto, evita
 # que o operador leia um objeto sabidamente lixo como perda de chave nova.
 # Comparação lexicográfica é cronológica: o carimbo é ISO-8601 básico UTC.
-if [[ -n "${MIN_CARIMBO}" ]]; then
-	CARIMBO_NU="${CARIMBO#iris-}"
-	if [[ "${CARIMBO_NU}" < "${MIN_CARIMBO}" ]]; then
-		log_error "o objeto mais recente do bucket é ${CARIMBO}, ANTERIOR ao corte OFFSITE_MIN_CARIMBO=${MIN_CARIMBO}. Objeto anterior ao corte foi cifrado com uma chave age cuja privada não existe mais — é irrecuperável por desenho e não há o que verificar nele. O que isto revela NÃO é uma réplica corrompida: é que NENHUMA réplica nova subiu desde o corte. Investigar o serviço de backup (o scheduler.sh loga a falha e continua o laço — o painel não reflete replicação quebrada) e a cadência OFFSITE_INTERVAL_DAYS antes de qualquer outra coisa."
-		exit 1
-	fi
+if carimbo_abaixo_do_corte "${CARIMBO}" "${MIN_CARIMBO}"; then
+	log_error "o objeto mais recente do bucket é ${CARIMBO}, ANTERIOR ao corte OFFSITE_MIN_CARIMBO=${MIN_CARIMBO}. Objeto anterior ao corte foi cifrado com uma chave age cuja privada não existe mais — é irrecuperável por desenho e não há o que verificar nele. O que isto revela NÃO é uma réplica corrompida: é que NENHUMA réplica nova subiu desde o corte. Investigar o serviço de backup (o scheduler.sh loga a falha e continua o laço — o painel não reflete replicação quebrada) e a cadência OFFSITE_INTERVAL_DAYS antes de qualquer outra coisa."
+	exit 1
 fi
 
 log_info "verificando o par ${NOME_DUMP} + ${NOME_GLOBALS}"
@@ -477,6 +510,15 @@ Par descasado: o dump é do ciclo ${CARIMBO} e os globals não. Restaurar assim 
 		exit 1
 	fi
 	log_info "sha256 dos globals CONFERE com o esperado."
+fi
+
+# Procedência provada não é o mesmo que recência provada: um objeto de meses
+# atrás, com o sha do log daquele dia, passa em tudo acima. O corte é opcional,
+# então quando ele não veio o script diz em voz alta o que NÃO checou, em vez de
+# deixar o banner sugerir mais do que foi medido. O carimbo vai junto na linha de
+# aceite justamente para isso.
+if [[ -z "${MIN_CARIMBO}" ]]; then
+	log_info "ATENÇÃO: OFFSITE_MIN_CARIMBO não foi informado — a RECÊNCIA do objeto não foi checada. Um objeto antigo com o sha daquele dia passa em tudo acima. Conferir à mão que ${CARIMBO_LEGIVEL} é do ciclo esperado, ou rodar de novo com o corte."
 fi
 
 log_info "RÉPLICA OFF-SITE VERIFICADA: ${CARIMBO} é restaurável."

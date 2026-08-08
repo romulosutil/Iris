@@ -99,6 +99,23 @@ enganoso do `backup.sh` tinha um `exit 0` enganoso próprio. O critério de acei
   provada" quando o defeito era o repasse. É a mesma classe de defeito do resto
   desta sessão: a mensagem certa para a causa errada.
 
+**Segundo defeito, pego pela revisão do diff e provado por mutação.** A primeira
+versão do teste unitário novo era **meia vácua**: o cabeçalho afirmava extrair
+tudo do script real, mas as 7 asserções de carimbo testavam reimplementações
+locais. A suíte seguia 14/14 verde com o `<` do script trocado por `>`. Corrigido
+extraindo as funções de verdade (o que exigiu tirar a lógica de inline e nomeá-la
+em `corte_carimbo_valido` / `carimbo_abaixo_do_corte`), e agora as três mutações
+— comparação invertida, regex do formato esvaziado, strip do `iris-` removido —
+derrubam a suíte. 21 asserções. Regra que fica: **se a asserção não lê o arquivo
+sob teste, não é teste** — e a prova disso é rodar a mutação, não afirmar.
+
+**Lacuna deixada aberta de propósito.** Procedência provada não é recência
+provada: um objeto antigo, conferido contra o sha que o `backup.sh` logou
+_naquele_ dia, passa em tudo e sai 0. O `OFFSITE_MIN_CARIMBO` fecha isso, mas é
+opcional — quando ausente, o script agora imprime uma linha `ATENÇÃO` dizendo o
+que não checou, em vez de deixar o banner sugerir mais do que foi medido. Torná-lo
+obrigatório para o exit 0 é decisão do Rômulo, não tomada aqui.
+
 **Bug pego antes do commit, e o padrão vale registro.** A validação do sha
 esperado nasceu dentro de uma substituição `$(...)`, onde `exit 1` mata só a
 subshell: um sha malformado cairia no ramo "não foi fornecido" e sairia 2 com a
