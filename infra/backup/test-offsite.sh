@@ -479,34 +479,79 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log "10/10 · verify-offsite.sh — a ferramenta que prova que a réplica é RESTAURÁVEL"
+log "10/10 · verify-offsite.sh — a ferramenta que prova que a réplica é RESTAURÁVEL e de PROCEDÊNCIA CONHECIDA"
 
 # O verify-offsite.sh é o que o operador roda contra o bucket de PRODUÇÃO, com a
 # chave privada que só existe fora do VPS. Ou seja: é mais uma coisa que só seria
 # exercitada no pior dia. Testá-lo aqui é o que impede que a ferramenta de
 # verificação seja, ela mesma, o próximo item quebrado sem ninguém saber.
+#
+# A partir da issue #105 "restaurável" deixou de ser suficiente para o banner de
+# aceite. Um artefato pode decifrar e restaurar e MESMO ASSIM não ser o que o VPS
+# gerou (objeto de outro carimbo, upload truncado e re-subido, bucket trocado).
+# Por isso o contrato tem três desfechos, e este bloco cobre os três:
+#   0 — decifra + restaura + roles de RLS + sha256 BATE com OFFSITE_EXPECTED_SHA256
+#       (é o ÚNICO caso que imprime "RÉPLICA OFF-SITE VERIFICADA");
+#   2 — decifra e restaura, mas a procedência NÃO foi provada porque ninguém
+#       passou o sha esperado ("VERIFICAÇÃO PARCIAL", sem banner de aceite);
+#   1 — falha de verdade (sha divergente, carimbo velho demais, chave errada...).
 
 verify_offsite() {
 	# A chave privada entra por STDIN, igual ao uso real documentado no
-	# cabeçalho do verify-offsite.sh.
+	# cabeçalho do verify-offsite.sh. Argumentos extras ("$@") são repassados
+	# ao `docker compose run` antes do serviço — é assim que cada caso injeta
+	# seu próprio OFFSITE_EXPECTED_SHA256 / OFFSITE_MIN_CARIMBO.
 	"${COMPOSE[@]}" run --rm --no-deps -T \
 		-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
 		-e OFFSITE_S3_ACCESS_KEY=iris \
 		-e OFFSITE_S3_SECRET_KEY=iris123456 \
 		-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+		"$@" \
 		backup ./verify-offsite.sh
 }
 
-# a) caminho feliz: chave certa => decifra, restaura e sai 0.
+# O sha esperado NÃO pode ser recalculado aqui a partir do artefato baixado —
+# isso seria comparar o arquivo consigo mesmo, um teste vácuo que passaria mesmo
+# se o verify ignorasse a variável. Ele vem de onde vem na vida real: da linha
+# `sha256=` que o backup.sh imprimiu no MOMENTO DE GERAR o dump, antes de cifrar
+# e subir. É a única fonte independente do bucket.
+#
+# Qual log usar: o verify sem argumento pega o par MAIS RECENTE do bucket, e o
+# último upload bem-sucedido foi o da seção 9c (região explícita no MinIO). É
+# desse log, portanto, que sai o carimbo que será verificado.
+readonly LOG_ULTIMO_UPLOAD=/tmp/iris-offsite-regiao-minio.log
+
+sha_do_log() {
+	# $1 = sufixo do arquivo no log ('dump' ou 'globals\.sql')
+	grep -oE "arquivo=iris-[0-9TZ]+\.$1 .*sha256=[0-9a-f]{64}" "${LOG_ULTIMO_UPLOAD}" |
+		grep -oE '[0-9a-f]{64}$' | tail -1
+}
+
+SHA_ESPERADO_DUMP="$(sha_do_log 'dump' || true)"
+SHA_ESPERADO_GLOBALS="$(sha_do_log 'globals\.sql' || true)"
+
+if [[ -n "${SHA_ESPERADO_DUMP}" && -n "${SHA_ESPERADO_GLOBALS}" ]]; then
+	ok "sha256 de referência extraído do log do backup.sh (dump=${SHA_ESPERADO_DUMP:0:12}...)"
+else
+	fail "não achei as linhas 'sha256=' no log do último upload (${LOG_ULTIMO_UPLOAD}) — sem elas as asserções de procedência abaixo seriam vácuo"
+fi
+
+# a) CAMINHO FELIZ FORTE: chave certa + sha esperado do dump E dos globals =>
+#    decifra, restaura, confere procedência e SÓ ENTÃO sai 0 com o banner de
+#    aceite. Rodar sem o sha esperado (como era antes da #105) daria exit 2 e
+#    NÃO é mais caminho feliz: prova menos do que o operador precisa num DR.
 set +e
-printf '%s\n' "${AGE_IDENTITY}" | verify_offsite >/tmp/iris-verify-ok.log 2>&1
+printf '%s\n' "${AGE_IDENTITY}" | verify_offsite \
+	-e OFFSITE_EXPECTED_SHA256="${SHA_ESPERADO_DUMP}" \
+	-e OFFSITE_EXPECTED_SHA256_GLOBALS="${SHA_ESPERADO_GLOBALS}" \
+	>/tmp/iris-verify-ok.log 2>&1
 EXIT_VERIFY=$?
 set -e
 
 if [[ "${EXIT_VERIFY}" -eq 0 ]] && grep -q 'RÉPLICA OFF-SITE VERIFICADA' /tmp/iris-verify-ok.log; then
-	ok "verify-offsite.sh com a chave certa => exit 0 e réplica verificada"
+	ok "verify-offsite.sh com chave certa + sha esperado => exit 0 e réplica verificada (procedência provada)"
 else
-	fail "verify-offsite.sh falhou com a chave certa (exit ${EXIT_VERIFY}) — log:"
+	fail "verify-offsite.sh falhou com a chave certa e o sha correto (exit ${EXIT_VERIFY}) — log:"
 	tail -12 /tmp/iris-verify-ok.log
 fi
 
@@ -623,6 +668,93 @@ if [[ "${EXIT_PATH}" -ne 0 ]] && grep -q 'OFFSITE_S3_PATH_STYLE precisa ser' /tm
 	ok "OFFSITE_S3_PATH_STYLE inválido no verify => erro nomeado, não 'alias falhou'"
 else
 	fail "verify-offsite.sh não validou OFFSITE_S3_PATH_STYLE (exit ${EXIT_PATH})"
+fi
+
+# g) SEM OFFSITE_EXPECTED_SHA256 => exit 2 e "VERIFICAÇÃO PARCIAL", NUNCA o
+#    banner de aceite. Esta é a asserção de mutação da #105: antes dela o banner
+#    era incondicional, então o operador lia "RÉPLICA OFF-SITE VERIFICADA" para
+#    um artefato de procedência desconhecida e encerrava a conferência ali. O
+#    exit distinto (2, não 0 e não 1) é o que permite ao runbook diferenciar
+#    "verificação incompleta" de "réplica quebrada" — desfechos com ações opostas.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | verify_offsite >/tmp/iris-verify-sem-sha.log 2>&1
+EXIT_SEM_SHA=$?
+set -e
+
+if [[ "${EXIT_SEM_SHA}" -eq 2 ]] && grep -q 'VERIFICAÇÃO PARCIAL' /tmp/iris-verify-sem-sha.log \
+	&& ! grep -q 'RÉPLICA OFF-SITE VERIFICADA' /tmp/iris-verify-sem-sha.log; then
+	ok "sem OFFSITE_EXPECTED_SHA256 => exit 2 + 'VERIFICAÇÃO PARCIAL' e NENHUM banner de aceite"
+else
+	fail "sem sha esperado o verify saiu ${EXIT_SEM_SHA} (esperado 2) ou imprimiu o banner de aceite sem provar procedência — log: $(grep -E 'PARCIAL|VERIFICADA' /tmp/iris-verify-sem-sha.log || echo '(nenhuma das duas linhas)')"
+fi
+
+# h) sha ERRADO => exit 1 e nada de banner. É o cenário que a #105 existe para
+#    pegar: o objeto decifra e restaura (todas as outras asserções passariam),
+#    mas NÃO é o artefato que o VPS gerou. Sem esta asserção, o parâmetro poderia
+#    estar sendo lido e jogado fora, e o teste (g) sozinho não perceberia.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | verify_offsite \
+	-e OFFSITE_EXPECTED_SHA256=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
+	>/tmp/iris-verify-sha-errado.log 2>&1
+EXIT_SHA_ERRADO=$?
+set -e
+
+if [[ "${EXIT_SHA_ERRADO}" -eq 1 ]] && ! grep -q 'RÉPLICA OFF-SITE VERIFICADA' /tmp/iris-verify-sha-errado.log; then
+	ok "OFFSITE_EXPECTED_SHA256 divergente => exit 1 e nenhum banner de aceite (artefato restaurável ≠ artefato legítimo)"
+else
+	fail "sha divergente não reprovou (exit ${EXIT_SHA_ERRADO}) — o parâmetro está sendo ignorado"
+fi
+
+# i) OFFSITE_MIN_CARIMBO no futuro => exit 1 ANTES do download. Serve ao caso em
+#    que o bucket responde e tem conteúdo, mas o conteúdo é ANTIGO: a replicação
+#    parou há semanas e ninguém viu. Verificar com sucesso um dump velho é pior
+#    que não verificar, porque produz confiança falsa.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | verify_offsite \
+	-e OFFSITE_MIN_CARIMBO=20990101T000000Z \
+	>/tmp/iris-verify-carimbo-futuro.log 2>&1
+EXIT_CARIMBO_FUTURO=$?
+set -e
+
+if [[ "${EXIT_CARIMBO_FUTURO}" -eq 1 ]] && grep -qiE 'carimbo' /tmp/iris-verify-carimbo-futuro.log \
+	&& ! grep -q 'RÉPLICA OFF-SITE VERIFICADA' /tmp/iris-verify-carimbo-futuro.log; then
+	ok "objeto mais VELHO que OFFSITE_MIN_CARIMBO => exit 1 com mensagem sobre o corte (réplica estagnada não passa)"
+else
+	fail "corte por OFFSITE_MIN_CARIMBO não barrou o objeto velho (exit ${EXIT_CARIMBO_FUTURO}) — log: $(grep -i 'carimbo' /tmp/iris-verify-carimbo-futuro.log || echo '(sem menção a carimbo)')"
+fi
+
+# j) o corte não pode ser um "reprova sempre" disfarçado: com um limite ANTERIOR
+#    ao objeto, o fluxo tem que seguir até o estágio de sha e aceitar. Sem esta,
+#    (i) passaria mesmo com uma comparação invertida.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | verify_offsite \
+	-e OFFSITE_MIN_CARIMBO=20000101T000000Z \
+	-e OFFSITE_EXPECTED_SHA256="${SHA_ESPERADO_DUMP}" \
+	>/tmp/iris-verify-carimbo-antigo.log 2>&1
+EXIT_CARIMBO_ANTIGO=$?
+set -e
+
+if [[ "${EXIT_CARIMBO_ANTIGO}" -eq 0 ]] && grep -q 'RÉPLICA OFF-SITE VERIFICADA' /tmp/iris-verify-carimbo-antigo.log; then
+	ok "OFFSITE_MIN_CARIMBO anterior ao objeto não bloqueia: chega ao estágio de sha e aceita"
+else
+	fail "corte de carimbo bloqueou objeto MAIS NOVO que o limite (exit ${EXIT_CARIMBO_ANTIGO}) — comparação invertida"
+fi
+
+# k) OFFSITE_MIN_CARIMBO fora do formato => exit 1 na validação. Um `2026-07-28`
+#    (formato ISO com hífens, o que qualquer um digita) comparado como string
+#    contra `20260728T...` daria um resultado silenciosamente errado — e do lado
+#    permissivo, que é o que nunca se percebe.
+set +e
+printf '%s\n' "${AGE_IDENTITY}" | verify_offsite \
+	-e OFFSITE_MIN_CARIMBO=2026-07-28 \
+	>/tmp/iris-verify-carimbo-malformado.log 2>&1
+EXIT_CARIMBO_MAL=$?
+set -e
+
+if [[ "${EXIT_CARIMBO_MAL}" -eq 1 ]] && ! grep -q 'RÉPLICA OFF-SITE VERIFICADA' /tmp/iris-verify-carimbo-malformado.log; then
+	ok "OFFSITE_MIN_CARIMBO malformado => exit 1 na validação (não vira comparação de string silenciosa)"
+else
+	fail "OFFSITE_MIN_CARIMBO malformado foi aceito (exit ${EXIT_CARIMBO_MAL}) — corte temporal passa a valer nada"
 fi
 
 # ---------------------------------------------------------------------------

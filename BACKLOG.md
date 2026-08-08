@@ -50,6 +50,72 @@
 
 ---
 
+## 🏁 Sessão 08/08/2026 — #105: o verificador da réplica off-site tinha o mesmo `exit 0` mentiroso que ele existia para desmascarar
+
+**O gap encontrado.** O `infra/backup/verify-offsite.sh` calculava o sha256 do
+dump decifrado, imprimia, mandava o operador conferir **a olho** contra a linha
+`sha256=` que o `backup.sh` logou — e na linha seguinte imprimia o banner de
+aceite `RÉPLICA OFF-SITE VERIFICADA` **incondicionalmente**, tendo a conferência
+acontecido ou não. O script cuja razão de existir é desmascarar o `exit 0`
+enganoso do `backup.sh` tinha um `exit 0` enganoso próprio. O critério de aceite
+3 da issue (carimbo do objeto **posterior** à rotação da chave age de 28/07/2026
+~04:00 UTC) não era checado em lugar nenhum.
+
+**O que mudou** (branch `infra/105-prova-replica-offsite`):
+
+- `verify-offsite.sh` lê `OFFSITE_EXPECTED_SHA256` /
+  `OFFSITE_EXPECTED_SHA256_GLOBALS` (opcionais) e **compara por máquina**, em vez
+  de pedir olho humano; e `OFFSITE_MIN_CARIMBO` (`YYYYMMDDTHHMMSSZ`), que recusa
+  objeto anterior ao corte **antes de baixar**, com mensagem dizendo que o achado
+  real é "nenhuma réplica nova subiu desde o corte", não "a réplica está
+  corrompida".
+- Contrato novo de saída: `0` = verificado de ponta a ponta, e **só então** o
+  banner de aceite é impresso; `1` = falha; `2` = decifra e restaura mas a
+  procedência **não** foi provada porque nenhum sha esperado foi fornecido
+  (imprime `VERIFICAÇÃO PARCIAL`). **Exit 2 não satisfaz o critério de aceite da
+  issue.**
+- `test-offsite.sh`: o caminho feliz agora passa os shas extraídos do próprio log
+  do `backup.sh`; casos novos cobrem sha ausente (exit 2, sem banner — é a trava
+  de mutação que prova que o banner deixou de ser incondicional), sha errado
+  (exit 1), corte posterior ao objeto (exit 1), corte anterior (passa) e corte
+  malformado (exit 1). 29 → 35 asserções.
+- `infra/backup/test-verify-offsite-logica.sh` novo: teste unitário em bash puro
+  das duas peças de lógica novas, sem Docker, roda no Git Bash da máquina do
+  Rômulo. Extrai o código do script real com `sed` e **falha alto** se a extração
+  não achar nada.
+- `infra/README.md`: a verificação ganhou runbook `###` próprio — ela é
+  reexecutada a cada rotação de chave age e no drill trimestral, então enterrá-la
+  como passo 7 do runbook de provisionamento (que roda uma vez) estava errado —
+  mais o clique-a-clique de tirar o sha256 esperado do log do serviço de backup e
+  uma tabela de códigos de saída dizendo explicitamente que **exit 2 não é
+  aprovação**.
+- `.env.example`: as três variáveis novas documentadas como **do operador e de
+  uma execução só** — não são lidas pelo serviço de backup e **não devem** ser
+  setadas na VPS.
+- `infra/docker-compose.yml`: as três precisaram ser declaradas no `environment:`
+  do serviço `backup`. `VAR=x docker compose run backup ...` **não** entrega a
+  variável ao container se ela não estiver declarada lá — sem isso o runbook
+  rodaria com o sha esperado vazio, sairia 2 e o operador leria "procedência não
+  provada" quando o defeito era o repasse. É a mesma classe de defeito do resto
+  desta sessão: a mensagem certa para a causa errada.
+
+**Bug pego antes do commit, e o padrão vale registro.** A validação do sha
+esperado nasceu dentro de uma substituição `$(...)`, onde `exit 1` mata só a
+subshell: um sha malformado cairia no ramo "não foi fornecido" e sairia 2 com a
+mensagem errada — exatamente o tipo de diagnóstico invertido que essa ferramenta
+existe para não dar. Achado pelo teste unitário novo, não pela leitura. Corrigido
+com `printf -v` gravando no escopo do chamador.
+
+**A #105 continua ABERTA.** O que esta sessão entregou é o código que faz a
+execução **provar** alguma coisa; fechar a issue exige a prova em si — operador
+com a chave privada age, credencial Oracle **com leitura** (a de produção é
+write-only por desenho; o caminho que funcionou em 28/07 foi conceder
+temporariamente `read objects` ao grupo `iris-backup-writers` e remover depois) e
+um objeto no bucket com carimbo posterior a 28/07/2026 04:00 UTC — o que depende
+do `OFFSITE_INTERVAL_DAYS` (7 em produção, ou seja, replicação semanal).
+
+---
+
 ## 🏁 Sessão 07/08/2026 — #191 fechada: CPF obrigatório + trava anti-fraude de trial (hash cego cross-tenant)
 
 **O que entrou.** Migração `0083_patient_cpf_antifraude.sql` (via `db:generate`:
@@ -2746,6 +2812,8 @@ pular, fácil de fazer errado. Virou script: baixa o par mais recente do bucket 
 confirma cifra, **decifra**, valida com `pg_restore --list`, exige `app_role` e `iris_auth` nos
 globals (furo do PR #85) e imprime o sha256 do dump decifrado para bater com o log do
 `backup.sh` daquele dia — se bate, o artefato restaurável é comprovadamente o que o VPS gerou.
+(**Atualizado em 08/08/2026:** essa conferência era _a olho_ e o banner de aceite saía de
+qualquer jeito; virou comparação de máquina via `OFFSITE_EXPECTED_SHA256` — ver a sessão do dia.)
 Chave privada só por **stdin**: não é argv (`ps`), não é env var (`docker inspect`) e não é
 volume; o script recusa `AGE_IDENTITY` explicitamente. Coberto pela seção 10 do
 `test-offsite.sh`, **incluindo a asserção de que ele FALHA com a chave errada** — verificador

@@ -714,39 +714,133 @@ fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
    `réplica off-site concluída (dump + globals, cifrados)`.
 
 7. **PROVA OBRIGATÓRIA antes de considerar pronto — decifrar de verdade.** Não
-   pule: uma réplica cifrada com uma chave cuja privada ninguém tem é
-   indistinguível de uma réplica boa — mesmo tamanho, mesmo header, mesmo log de
-   sucesso — até o dia do desastre. `verify-offsite.sh` fecha o laço contra o
-   bucket de **produção**: baixa o par mais recente, confirma que está cifrado,
-   **decifra**, valida o dump com `pg_restore --list`, confere que os globals
-   trazem `app_role` e `iris_auth`, e imprime o sha256 do dump decifrado.
+   pule, e não considere o provisionamento concluído sem ela: uma réplica
+   cifrada com uma chave cuja privada ninguém tem é indistinguível de uma
+   réplica boa — mesmo tamanho, mesmo header, mesmo log de sucesso — até o dia
+   do desastre. O procedimento inteiro está na seção própria logo abaixo,
+   **«Runbook — provar que a réplica off-site é restaurável»**, porque ele se
+   repete (a cada rotação de chave e no ensaio trimestral) e não é um passo de
+   provisionamento.
 
-   ```bash
-   docker compose -f infra/docker-compose.yml --profile backup run --rm --no-deps -T backup ./verify-offsite.sh < /caminho/chave-privada-age.txt
+   Critério para fechar este passo 7: aquele runbook terminando em **exit 0**,
+   com o banner `RÉPLICA OFF-SITE VERIFICADA`. **Exit 2 não fecha** — ver a
+   tabela de exit codes lá.
+
+### Runbook — provar que a réplica off-site é restaurável (repetir sempre)
+
+Esta é a verificação que fecha a issue #105. Ela não é one-shot: rodar **a cada
+rotação da chave `age`**, sempre que o destino off-site mudar, e no **ensaio
+trimestral** de DR.
+
+O que `verify-offsite.sh` faz contra o bucket de **produção**: baixa o par mais
+recente, confirma que está cifrado, **decifra**, valida o dump com
+`pg_restore --list`, confere que os globals trazem `app_role` e `iris_auth`, e
+— este é o ponto da #105 — **compara** o sha256 do dump decifrado com o valor
+que você informa em `OFFSITE_EXPECTED_SHA256`. Antes ele só _imprimia_ o hash e
+mandava você conferir de olho, imprimindo o banner de aceite de qualquer jeito:
+um verificador que sai 0 sem ter comparado nada prova exatamente nada.
+
+#### O comando
+
+```bash
+OFFSITE_EXPECTED_SHA256=<sha256 do dump, do log do backup> \
+OFFSITE_EXPECTED_SHA256_GLOBALS=<sha256 dos globals, opcional> \
+OFFSITE_MIN_CARIMBO=20260728T040000Z \
+docker compose -f infra/docker-compose.yml --profile backup run --rm --no-deps -T backup ./verify-offsite.sh < /caminho/chave-privada-age.txt
+```
+
+As `OFFSITE_S3_*` vêm do ambiente do shell (o compose repassa). Rodar **na
+máquina que guarda a chave privada**, nunca no VPS — o VPS tem só a pública, e
+levar a privada para lá anularia o desenho inteiro da #86. A chave entra por
+**stdin**: não é argumento (apareceria em `ps`), não é env var (`docker inspect`
+mostra o env de qualquer container) e não é volume montado. O script recusa a
+chave por `AGE_IDENTITY` justamente por isso.
+
+As três variáveis novas são **do operador, de uma execução só**. Não são env
+vars do serviço de backup: **não** as coloque no Easypanel. O VPS não tem nada
+a fazer com elas.
+
+#### Como pegar o `OFFSITE_EXPECTED_SHA256`
+
+É o hash que o `backup.sh` calculou **no VPS, antes de cifrar**, para o mesmo
+carimbo que o verificador for baixar. Ele sai no log do serviço de backup:
+
+1. Abrir o Easypanel e entrar no **serviço de backup** (o mesmo em que você
+   preencheu as `OFFSITE_*` no passo 6).
+2. Abrir a visualização de **logs** do serviço (a aba/painel que mostra a saída
+   das execuções; no Easypanel v2.31 ela fica junto das abas do serviço, ao lado
+   de Console e Ambiente).
+3. Procurar no texto por `sha256=`. As duas linhas que interessam começam com
+   `[backup]` e têm esta forma:
+
+   ```
+   [backup] arquivo=iris-20260807T030000Z.dump tamanho_bytes=... duracao_s=... sha256=<64 hexas>
+   [backup] arquivo=iris-20260807T030000Z.globals.sql tamanho_bytes=... sha256=<64 hexas>
    ```
 
-   As `OFFSITE_S3_*` vêm do ambiente do shell (o compose repassa). Rodar **na
-   máquina que guarda a chave privada**, nunca no VPS — o VPS tem só a pública,
-   e levar a privada para lá anularia o desenho inteiro da #86. A chave entra por
-   **stdin**: não é argumento (apareceria em `ps`), não é env var (`docker
-inspect` mostra o env de qualquer container) e não é volume montado. O script
-   recusa a chave por `AGE_IDENTITY` justamente por isso.
+4. Conferir que o `iris-<carimbo>` dessas linhas é **o mesmo carimbo** que o
+   verificador vai baixar (ele baixa o **mais recente** do bucket). Se o off-site
+   está em `OFFSITE_INTERVAL_DAYS=1`, é o do último backup; se não, é o da última
+   execução que replicou.
+5. Copiar o valor depois de `sha256=` da linha do `.dump` (64 caracteres
+   hexadecimais, sem espaço) para `OFFSITE_EXPECTED_SHA256`; e o da linha do
+   `.globals.sql` para `OFFSITE_EXPECTED_SHA256_GLOBALS`, se quiser cruzar os
+   dois.
 
-   Fecho da prova: o `sha256` que ele imprime tem que bater com o `sha256=` que o
-   `backup.sh` logou naquele dia. Batendo, está provado que o artefato
-   restaurável é exatamente o que o VPS gerou — não uma cópia antiga, não outro
-   banco.
+**Como saber que deu certo:** o valor tem exatamente 64 caracteres, só
+`0-9a-f`, e o carimbo da linha bate com o que o verificador imprime ao baixar.
+No fim, exit 0 e o banner `RÉPLICA OFF-SITE VERIFICADA: <carimbo> é
+restaurável.`
 
-   Dois desfechos com diagnóstico próprio, porque são problemas diferentes:
-   **não conseguir listar o bucket** é credencial de leitura (a de produção é
-   write-only por design — gerar uma de leitura só para a verificação e revogar
-   depois); **não conseguir decifrar** é o desastre silencioso, e aí a réplica
-   existe e é inútil.
+**Se der errado:**
 
-   Repetir esta verificação a cada rotação da chave `age` e sempre que o destino
-   off-site mudar. O próprio `verify-offsite.sh` é coberto pelo
-   `test-offsite.sh` (seção 10), inclusive a asserção de que ele **falha** com a
-   chave errada — um verificador que passa com qualquer chave não prova nada.
+- **Não acho `sha256=` no log** — o painel costuma mostrar só a janela recente.
+  Alternativa que não depende do painel: Easypanel → serviço de backup →
+  **Console**, e rodar `sha256sum /backups/iris-<carimbo>.dump` (o dump local
+  ainda está lá dentro da janela de `RETENTION_DAYS`). É o mesmo arquivo, logo o
+  mesmo hash.
+- **O hash não bate** — **não** trate como detalhe. Ou você pegou o carimbo
+  errado (o mais comum: copiou o `sha256` de outro dia), ou o objeto no bucket
+  não é o que o VPS gerou. Confira o carimbo primeiro; persistindo, é incidente.
+- **Copiei e o script recusa o formato** — provavelmente veio espaço, quebra de
+  linha ou o `sha256=` junto. O valor é só o hexa.
+
+#### Exit codes — só 0 é aprovação
+
+| Exit | Significado                                                                                        | O que fazer                                                                                        |
+| ---- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `0`  | Decifrou, é restaurável, os globals trazem as roles **e** o sha256 do dump bateu com o esperado.    | Aprovado. É o único desfecho que imprime `RÉPLICA OFF-SITE VERIFICADA` e o único que fecha a #105. |
+| `1`  | Falha de qualquer checagem — inclusive **sha divergente** e carimbo abaixo do `OFFSITE_MIN_CARIMBO`. | Parar e diagnosticar (ver os dois modos de falha abaixo). Nunca "tentar de novo e seguir".         |
+| `2`  | Decifrou e é restaurável, mas **procedência não provada**: `OFFSITE_EXPECTED_SHA256` não foi informado. | Imprime `VERIFICAÇÃO PARCIAL:` e **não** imprime o banner. **Exit 2 não é aprovação** — repetir com o sha esperado. |
+
+O motivo de `2` existir em vez de virar `0`: rodar sem o hash ainda tem valor
+(prova que a chave decifra), mas não prova que o artefato é _aquele_ que o VPS
+gerou — pode ser uma cópia antiga ou de outro banco. Verde parcial reportado
+como verde é justamente o que a #105 existe para matar.
+
+#### `OFFSITE_MIN_CARIMBO` — corte de época
+
+Formato `YYYYMMDDTHHMMSSZ`, **sem** o prefixo `iris-`. Objeto com carimbo
+anterior ao corte é recusado com exit 1 **antes do download**.
+
+Hoje o valor relevante é **`20260728T040000Z`**: as réplicas escritas antes da
+rotação da chave `age` de 28/07/2026 ~04:00 UTC foram cifradas com uma privada
+que **não existe mais** e são lixo permanente. Verificar uma delas não diz nada
+— falharia por um motivo já conhecido e gastaria o tempo do ensaio. O corte
+transforma isso em recusa imediata e explícita.
+
+#### Os dois modos de falha, que são problemas diferentes
+
+- **Não conseguir listar o bucket** = credencial de leitura. A credencial de
+  produção é **write-only por design**; gerar uma de leitura só para a
+  verificação e revogar depois.
+- **Não conseguir decifrar** = o desastre silencioso: a réplica existe, ocupa
+  espaço, loga sucesso todo dia — e é inútil. É exatamente o cenário que esta
+  verificação existe para descobrir enquanto ainda dá tempo.
+
+O próprio `verify-offsite.sh` é coberto pelo `test-offsite.sh` (seção 10),
+inclusive a asserção de que ele **falha** com a chave errada e com sha
+divergente — um verificador que passa com qualquer chave não prova nada.
 
 ### Runbook — DR a partir do off-site (o VPS não existe mais)
 
