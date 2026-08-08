@@ -40,12 +40,42 @@
 # recente do bucket.
 #   ... backup ./verify-offsite.sh iris-20260728T024929Z.dump.age < chave.txt
 #
+# ENV OPCIONAL — é o que separa "um artefato decifra" de "O NOSSO artefato
+# decifra" (critérios de aceite da #105):
+#
+#   OFFSITE_EXPECTED_SHA256          sha256 esperado do DUMP decifrado, copiado
+#                                    da linha `sha256=` que o backup.sh logou
+#                                    para ESTE mesmo carimbo. Sem ele o script
+#                                    não tem contra o que confrontar e não pode
+#                                    afirmar procedência (ver exit 2).
+#   OFFSITE_EXPECTED_SHA256_GLOBALS  idem para os globals. Se ausente, só o dump
+#                                    é confrontado.
+#   OFFSITE_MIN_CARIMBO              corte, no formato YYYYMMDDTHHMMSSZ. Objeto
+#                                    com carimbo anterior é RECUSADO antes de
+#                                    baixar. Existe porque as réplicas anteriores
+#                                    à rotação da chave age de 2026-07-28 ~04:00
+#                                    UTC foram cifradas com uma privada que não
+#                                    existe mais: são lixo permanente, e verificar
+#                                    uma delas não diz nada sobre a réplica viva.
+#
 # Exit code:
-#   0 = a réplica off-site é restaurável (com o sha256 impresso).
+#   0 = VERIFICADA POR COMPLETO: decifra, restaura, traz as roles de RLS, e o
+#       sha256 do dump confere com OFFSITE_EXPECTED_SHA256. Só neste caso a
+#       linha de aceite `RÉPLICA OFF-SITE VERIFICADA` é impressa.
 #   1 = falhou em algum ponto — a mensagem diz qual, e a distinção importa:
 #       não conseguir LISTAR o bucket é problema de credencial de leitura;
 #       não conseguir DECIFRAR é a chave errada, que é o desastre silencioso
 #       que este script existe para encontrar antes do dia ruim.
+#   2 = o artefato decifra e é restaurável, mas a PROCEDÊNCIA não foi provada
+#       porque OFFSITE_EXPECTED_SHA256 não foi informado. Isto NÃO satisfaz o
+#       critério de aceite da #105.
+#
+# POR QUE O EXIT 2 EXISTE: até a #105, este script imprimia o sha256 e mandava
+# o operador conferir a olho contra o log — e imprimia `RÉPLICA OFF-SITE
+# VERIFICADA` de qualquer jeito, tivesse a conferência acontecido ou não. Ou
+# seja, o próprio script que existe para desmascarar o `exit 0` mentiroso do
+# backup.sh tinha um `exit 0` mentiroso. Um verde que não checou o que promete
+# checar é pior que vermelho: some do radar.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -128,6 +158,92 @@ if ! [[ "${OFFSITE_PATH_STYLE}" =~ ^(auto|on|off)$ ]]; then
 	exit 1
 fi
 
+# --- sha256 esperado ------------------------------------------------------------
+# O operador copia a linha do log do backup.sh, e o que ele copia costuma vir com
+# o prefixo `sha256=` junto e/ou em caixa alta. Aceitar as três formas aqui é
+# ergonomia barata; o que NÃO se pode aceitar é um valor que não é um sha256 —
+# esse cai no ramo de "não confere" lá no fim e o operador conclui que a réplica
+# está corrompida quando na verdade colou a linha errada. Validar na borda faz o
+# diagnóstico ser sobre o que de fato aconteceu.
+# Escreve o valor normalizado na variável `$2` via `printf -v`, em vez de
+# imprimir para ser capturado com `$(...)`. A diferença não é estilo: dentro de
+# uma substituição de comando o `exit 1` da validação abaixo mataria só o
+# SUBSHELL. O script principal seguiria com a variável vazia — ou seja, um sha
+# esperado malformado cairia no ramo "não informado" e sairia 2 (procedência não
+# provada) em vez de 1 (valor errado), com a mensagem errada. Escrever direto no
+# escopo do chamador deixa o `exit` abortar de verdade.
+normalizar_sha_esperado() {
+	local nome="$1"
+	local destino="$2"
+	local valor="${!nome:-}"
+
+	# `if` em vez de `[[ ... ]] && return 0`: com `set -e` a forma curta deixa a
+	# função com status 1 sempre que a variável ESTÁ preenchida, o que dispara o
+	# trap ERR e derruba o script no caminho normal.
+	if [[ -z "${valor}" ]]; then
+		printf -v "${destino}" '%s' ''
+		return 0
+	fi
+
+	# Ordem importa: minúscula ANTES de tirar o prefixo, senão um `SHA256=`
+	# colado do log passa direto pelo strip e é recusado com a mensagem de
+	# "linha inteira em vez do hash" — rejeição certa, diagnóstico errado.
+	# Espaço em volta some junto: copiar do painel arrasta espaço e quebra de
+	# linha, e isso não é erro do operador, é erro de clipboard.
+	valor="${valor,,}"
+	valor="${valor#"${valor%%[![:space:]]*}"}"
+	valor="${valor%"${valor##*[![:space:]]}"}"
+	valor="${valor#sha256=}"
+
+	if ! [[ "${valor}" =~ ^[0-9a-f]{64}$ ]]; then
+		log_error "${nome} não parece um sha256 (esperado 64 dígitos hexadecimais, com ou sem o prefixo 'sha256='). Conferir o que foi copiado do log do backup.sh — provavelmente veio a linha inteira em vez de só o hash. O valor recebido não é logado."
+		exit 1
+	fi
+
+	printf -v "${destino}" '%s' "${valor}"
+}
+
+normalizar_sha_esperado OFFSITE_EXPECTED_SHA256 SHA_ESPERADO_DUMP
+readonly SHA_ESPERADO_DUMP
+normalizar_sha_esperado OFFSITE_EXPECTED_SHA256_GLOBALS SHA_ESPERADO_GLOBALS
+readonly SHA_ESPERADO_GLOBALS
+
+# --- corte de carimbo -------------------------------------------------------------
+# As duas funções abaixo existem como funções, e não inline, para poderem ser
+# extraídas e exercitadas pelo test-verify-offsite-logica.sh sem subir container.
+# Lógica de comparação que só é testável junto com Docker + Postgres + MinIO na
+# prática não é testada — e comparação temporal errada falha para o lado
+# permissivo, que é o lado que ninguém percebe.
+
+# Corte vazio é válido: o parâmetro é opcional.
+corte_carimbo_valido() {
+	local corte="$1"
+	if [[ -z "${corte}" ]]; then
+		return 0
+	fi
+	[[ "${corte}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]]
+}
+
+# Verdadeiro quando o objeto é ANTERIOR ao corte, ou seja: deve ser recusado.
+# Corte vazio nunca recusa nada. O prefixo `iris-` sai antes da comparação —
+# `iris-2026...` comparado contra `2026...` daria sempre "maior", e o corte
+# viraria um no-op silencioso.
+# Comparação lexicográfica é cronológica porque o carimbo é ISO-8601 básico UTC.
+carimbo_abaixo_do_corte() {
+	local carimbo="${1#iris-}"
+	local corte="$2"
+	if [[ -z "${corte}" ]]; then
+		return 1
+	fi
+	[[ "${carimbo}" < "${corte}" ]]
+}
+
+readonly MIN_CARIMBO="${OFFSITE_MIN_CARIMBO:-}"
+if ! corte_carimbo_valido "${MIN_CARIMBO}"; then
+	log_error "OFFSITE_MIN_CARIMBO inválido: '${MIN_CARIMBO}'. Esperado YYYYMMDDTHHMMSSZ, sem o prefixo 'iris-' (ex.: 20260728T040000Z). Um corte malformado seria comparado como texto e deixaria passar exatamente o objeto que ele deveria barrar."
+	exit 1
+fi
+
 # O argumento opcional vira o nome do objeto e a raiz de onde o nome do globals
 # é derivado. Sem validar, um nome digitado pela metade (ou o nome do globals no
 # lugar do dump) faz os dois downloads darem 404 e o operador recebe a mensagem
@@ -203,6 +319,17 @@ fi
 # contra um globals de semana passada e concluir que está tudo bem.
 readonly CARIMBO="${NOME_DUMP%.dump.age}"
 readonly NOME_GLOBALS="${CARIMBO}.globals.sql.age"
+
+# Corte de carimbo, ANTES de baixar: réplica anterior à última rotação da chave
+# age foi cifrada com uma privada que não existe mais. Ela decifra? Não. Então o
+# script sairia 1 com "NÃO FOI POSSÍVEL DECIFRAR" — a mesma mensagem que o
+# desastre de verdade produz. Barrar aqui, com a causa correta no texto, evita
+# que o operador leia um objeto sabidamente lixo como perda de chave nova.
+# Comparação lexicográfica é cronológica: o carimbo é ISO-8601 básico UTC.
+if carimbo_abaixo_do_corte "${CARIMBO}" "${MIN_CARIMBO}"; then
+	log_error "o objeto mais recente do bucket é ${CARIMBO}, ANTERIOR ao corte OFFSITE_MIN_CARIMBO=${MIN_CARIMBO}. Objeto anterior ao corte foi cifrado com uma chave age cuja privada não existe mais — é irrecuperável por desenho e não há o que verificar nele. O que isto revela NÃO é uma réplica corrompida: é que NENHUMA réplica nova subiu desde o corte. Investigar o serviço de backup (o scheduler.sh loga a falha e continua o laço — o painel não reflete replicação quebrada) e a cadência OFFSITE_INTERVAL_DAYS antes de qualquer outra coisa."
+	exit 1
+fi
 
 log_info "verificando o par ${NOME_DUMP} + ${NOME_GLOBALS}"
 
@@ -347,5 +474,51 @@ SHA_GLOBALS="$(sha256sum "${TMP_DIR}/${CARIMBO}.globals.sql" | cut -d' ' -f1)"
 
 log_info "sha256 do dump decifrado    = ${SHA_DUMP}"
 log_info "sha256 dos globals decifrados = ${SHA_GLOBALS}"
-log_info "conferir contra as linhas 'sha256=' do log do backup.sh de ${CARIMBO}: se batem, o artefato restaurável é exatamente o que o VPS gerou."
+
+# Tudo acima prova que ALGUM artefato do bucket decifra e restaura. O que ainda
+# não está provado é que ele é O NOSSO — o que o VPS gerou naquele ciclo, e não
+# uma cópia antiga, um dump de outro banco, ou um objeto de outro ambiente. O
+# único fecho é confrontar com o sha256 que o backup.sh logou no momento da
+# geração. Enquanto isso não acontecer, o script NÃO tem direito de imprimir a
+# linha de aceite.
+if [[ -z "${SHA_ESPERADO_DUMP}" ]]; then
+	log_info "VERIFICAÇÃO PARCIAL: ${CARIMBO} decifra, restaura e traz as roles de RLS — mas a PROCEDÊNCIA não foi provada, porque OFFSITE_EXPECTED_SHA256 não foi informado."
+	log_info "Provado até aqui: existe no bucket um artefato restaurável. NÃO provado: que ele é o que o VPS gerou em ${CARIMBO_LEGIVEL}."
+	log_info "Para fechar: pegar a linha 'sha256=' do dump no log do backup.sh deste mesmo carimbo, exportar OFFSITE_EXPECTED_SHA256 e rodar de novo. Isto NÃO satisfaz o critério de aceite da #105."
+	exit 2
+fi
+
+if [[ "${SHA_DUMP}" != "${SHA_ESPERADO_DUMP}" ]]; then
+	log_error "o dump decifra e é restaurável, mas o sha256 NÃO confere com o esperado.
+  esperado (OFFSITE_EXPECTED_SHA256) = ${SHA_ESPERADO_DUMP}
+  obtido   (dump decifrado do bucket) = ${SHA_DUMP}
+Hipóteses, sem ordem de probabilidade — não afirmar qual é a causa antes de checar:
+  1) o sha esperado foi copiado do log de OUTRO carimbo (o objeto verificado é ${CARIMBO}) — é o erro mais comum e o mais barato de descartar.
+  2) o objeto no bucket não é o que o VPS gerou naquele ciclo: cópia antiga, sobrescrita, ou upload de outro ambiente apontando para o mesmo bucket.
+  3) corrupção em trânsito ou no armazenamento — neste caso o dump normalmente já teria falhado no pg_restore --list, o que não aconteceu."
+	exit 1
+fi
+
+log_info "sha256 do dump CONFERE com o esperado — o artefato restaurável é o que o VPS gerou."
+
+if [[ -n "${SHA_ESPERADO_GLOBALS}" ]]; then
+	if [[ "${SHA_GLOBALS}" != "${SHA_ESPERADO_GLOBALS}" ]]; then
+		log_error "o dump confere, mas os GLOBALS não.
+  esperado (OFFSITE_EXPECTED_SHA256_GLOBALS) = ${SHA_ESPERADO_GLOBALS}
+  obtido   (globals decifrados do bucket)     = ${SHA_GLOBALS}
+Par descasado: o dump é do ciclo ${CARIMBO} e os globals não. Restaurar assim recria as tabelas com as roles erradas — ou sem elas, que é o furo do PR #85 (banco com dado clínico e ZERO policy de RLS)."
+		exit 1
+	fi
+	log_info "sha256 dos globals CONFERE com o esperado."
+fi
+
+# Procedência provada não é o mesmo que recência provada: um objeto de meses
+# atrás, com o sha do log daquele dia, passa em tudo acima. O corte é opcional,
+# então quando ele não veio o script diz em voz alta o que NÃO checou, em vez de
+# deixar o banner sugerir mais do que foi medido. O carimbo vai junto na linha de
+# aceite justamente para isso.
+if [[ -z "${MIN_CARIMBO}" ]]; then
+	log_info "ATENÇÃO: OFFSITE_MIN_CARIMBO não foi informado — a RECÊNCIA do objeto não foi checada. Um objeto antigo com o sha daquele dia passa em tudo acima. Conferir à mão que ${CARIMBO_LEGIVEL} é do ciclo esperado, ou rodar de novo com o corte."
+fi
+
 log_info "RÉPLICA OFF-SITE VERIFICADA: ${CARIMBO} é restaurável."

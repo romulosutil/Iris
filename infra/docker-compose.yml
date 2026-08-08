@@ -89,6 +89,16 @@ services:
       OFFSITE_S3_PATH_STYLE: "${OFFSITE_S3_PATH_STYLE:-auto}"
       OFFSITE_AGE_RECIPIENT: "${OFFSITE_AGE_RECIPIENT:-}"
       OFFSITE_INTERVAL_DAYS: "${OFFSITE_INTERVAL_DAYS:-1}"
+      # Só o verify-offsite.sh lê estas três (#105) — o backup.sh e o
+      # scheduler.sh as ignoram. Precisam estar declaradas aqui mesmo assim:
+      # `VAR=x docker compose run backup ...` NÃO entrega a variável ao
+      # container se ela não estiver no `environment:` do serviço. Sem esta
+      # declaração o runbook do infra/README.md rodaria com o sha esperado
+      # vazio, o script sairia 2 (VERIFICAÇÃO PARCIAL) e o operador leria
+      # "a réplica não prova procedência" quando o defeito era o repasse.
+      OFFSITE_EXPECTED_SHA256: "${OFFSITE_EXPECTED_SHA256:-}"
+      OFFSITE_EXPECTED_SHA256_GLOBALS: "${OFFSITE_EXPECTED_SHA256_GLOBALS:-}"
+      OFFSITE_MIN_CARIMBO: "${OFFSITE_MIN_CARIMBO:-}"
     volumes:
       - backupdata:/backups
 
