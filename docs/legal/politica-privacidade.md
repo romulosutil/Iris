@@ -1,6 +1,6 @@
 # Política de Privacidade — Iris
 
-**Versão `2026-07-30` — vigente desde 30/07/2026.**
+**Versão `2026-08-07` — vigente desde 07/08/2026.**
 
 Esta Política descreve como o Iris — plataforma operada por **R Sutil Correa
 Ltda**, CNPJ **29.811.201/0001-50** — trata dados pessoais. Ela integra e
@@ -22,7 +22,11 @@ mesmo e pela clínica que representa.
 
 Redação original de 09/07/2026, com base em `validacao-legal-prontuario.md` e no
 modelo de dados (`docs/dados/modelo-de-dados.md`). Revisão de 30/07/2026 para
-cobrir o cadastro self-service.
+cobrir o cadastro self-service. Revisão de 07/08/2026 para cobrir a coleta do
+**CPF do paciente ou do responsável** e a **prevenção a fraude no período de
+teste** — que é a primeira finalidade em que o Iris trata dado originado do
+paciente **como controlador**, e não como operador da clínica (seções 1.2, 2.1
+e 3).
 
 Os itens ainda não fechados aparecem marcados como `⟨PENDENTE: …⟩` no corpo do
 texto e estão consolidados na seção **Itens em aberto**, ao final.
@@ -70,6 +74,25 @@ de sessão em texto e áudio (`SessionNote`, `AudioCapture`), evidências
 clínicas estruturadas derivadas do relato do profissional (`Evidence`),
 avaliações formais (`MilestoneAssessment`) e relatórios gerados (`Report`).
 
+#### CPF do paciente ou do responsável legal
+
+Desde 07/08/2026 o cadastro de paciente exige **um** CPF, conforme quem assina
+o consentimento — nunca os dois:
+
+| Dado                             | De quem                                                 | Para quê                                                                                                              |
+| -------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `patient.cpf`                    | do **próprio paciente**, quando titular adulto           | Identificar o paciente com precisão e impedir cadastro duplicado da mesma pessoa dentro da clínica                     |
+| `patient.responsavel_cpf`        | do **responsável legal**, quando o paciente é menor      | Identificar quem consente pelo paciente. **Não é único por clínica**: um mesmo responsável pode ter mais de um filho em acompanhamento |
+| `patient.cpf_hash`               | derivado do CPF acima                                    | Prevenção a fraude no período de teste gratuito — ver seção 2.1                                                        |
+
+O `cpf_hash` **não é o CPF**: é um código irreversível calculado a partir dele
+(HMAC-SHA256 com chave secreta mantida fora do código). Ele não permite
+recuperar o CPF nem descobrir o número a partir do código. Ainda assim é
+tratado como dado pessoal, e por isso está descrito aqui.
+
+O CPF em texto legível **nunca sai da clínica que o cadastrou** — o isolamento
+entre clínicas vale para ele como para qualquer outro dado do prontuário.
+
 ## 2. Base legal do tratamento (dados de paciente)
 
 O Iris opera dois regimes de consentimento coexistentes, nunca derivados da
@@ -99,13 +122,62 @@ regime é sempre decisão explícita do operador no cadastro:
 As bases legais aplicáveis aos dados do **profissional** estão na tabela da
 seção 1.1 — são outras, e não se confundem com estas.
 
+### 2.1. Prevenção a fraude no período de teste gratuito
+
+Esta finalidade é **distinta de todas as acima** e merece leitura separada,
+porque é a única em que o Iris trata dado originado do paciente **por conta
+própria**, e não por ordem da clínica.
+
+**O problema.** O Iris oferece um período de teste gratuito que começa no
+cadastro do primeiro paciente. Sem nenhuma verificação, a mesma pessoa poderia
+abrir contas de clínica sucessivas e renovar o teste indefinidamente, ou
+inflar a contagem de pacientes cobrados com cadastros repetidos.
+
+**O que é feito.** No cadastro do **primeiro** paciente de uma clínica nova, o
+Iris verifica se o código irreversível (`cpf_hash`) daquele CPF já esteve
+associado a um teste gratuito iniciado em outra conta. Se já esteve, o teste
+não é concedido — a clínica pode contratar normalmente, sem período de teste.
+
+**O que essa verificação revela, e o que não revela.** A consulta devolve
+**uma única resposta de sim ou não**. Ela não retorna, nem torna acessível a
+quem consulta, o nome do paciente, a clínica de origem, a data, a quantidade
+de ocorrências ou qualquer outro dado. Nenhuma clínica passa a enxergar
+paciente de outra clínica por causa deste mecanismo, e o CPF em texto legível
+não participa da consulta.
+
+**Quando NÃO é feita.** A verificação só ocorre no cadastro que inicia o
+relógio do teste. Clínica que já contratou, ou que já está em teste próprio,
+não passa por ela — paciente atendido anteriormente em outro serviço é
+situação comum e legítima, não indício de fraude.
+
+**Base legal: legítimo interesse** (LGPD Art. 7º, IX), do Iris, para prevenir
+uso abusivo do próprio período de teste. Não é consentimento — não seria
+honesto pedir ao titular autorização para uma verificação antifraude que o
+Iris faria de qualquer modo —, nem cumprimento de obrigação legal, e não se
+confunde com a finalidade fiscal do CPF/CNPJ da clínica (seção 1.1).
+
+**Quem é o controlador aqui: o Iris**, e não a clínica — porque é o Iris quem
+define esta finalidade, em interesse próprio. É a exceção declarada à regra
+geral da seção 3.
+
+⟨PENDENTE: registro do teste de proporcionalidade do legítimo interesse
+(finalidade, necessidade e salvaguardas — LGPD Art. 10) em documento próprio,
+e decisão sobre por quanto tempo o `cpf_hash` deve ser conservado depois de a
+clínica encerrar a conta.⟩
+
 ## 3. Quem trata os dados (controlador e operador)
 
 A **clínica-contratante é a controladora** dos dados do paciente. O **Iris é
 operador**, tratando os dados por conta e ordem da clínica, exclusivamente
-para prestar o serviço contratado — o Iris não usa dado de paciente para
-finalidade própria fora do contrato (ex.: não vende dado, não usa para
-publicidade; ver seção 6 sobre uso agregado/anonimizado).
+para prestar o serviço contratado — o Iris não vende dado de paciente nem o
+usa para publicidade (ver seção 6 sobre uso agregado/anonimizado).
+
+**Uma exceção, declarada:** a verificação antifraude do período de teste
+(seção 2.1) é finalidade **do próprio Iris**, e naquele recorte — e somente
+nele — o Iris atua como **controlador**, com base em legítimo interesse. A
+exceção é limitada ao código irreversível `cpf_hash` e a uma resposta de sim
+ou não; ela não alcança o prontuário, o CPF legível, nem qualquer outro dado
+de paciente, que seguem integralmente sob a regra de operador acima.
 
 ### 3.1. No cadastro self-service
 
@@ -253,6 +325,18 @@ dados⟩.
 
 ## Itens em aberto
 
+Itens resolvidos em 07/08/2026 (não bloqueiam mais a publicação):
+
+- **CPF do paciente ou do responsável** passou a estar descrito, com finalidade
+  e alcance (seção 1.2).
+- **Prevenção a fraude no teste gratuito** ganhou seção própria (2.1), com base
+  legal de legítimo interesse, o que a verificação revela e o que não revela, e
+  os casos em que ela não é executada.
+- **Divisão de papéis corrigida** (seção 3): a afirmação de que o Iris não usa
+  dado de paciente para finalidade própria passou a conviver com a exceção
+  declarada da seção 2.1, em que o Iris é controlador. Antes desta revisão a
+  frase seria inexata.
+
 Itens resolvidos em 30/07/2026 (não bloqueiam mais a publicação):
 
 - Dados do **profissional** como titular passaram a estar descritos, com
@@ -275,8 +359,19 @@ corpo do documento:
    instrumento de transferência internacional aplicável (seção 7).
 4. **Indicação do encarregado (DPO)** do operador (seção 10).
 5. **Canal oficial de contato** para assuntos de proteção de dados (seção 11).
+6. **Teste de proporcionalidade do legítimo interesse** da verificação
+   antifraude (seção 2.1), em documento próprio (LGPD Art. 10), e **prazo de
+   conservação do `cpf_hash`** depois do encerramento da conta da clínica.
 
 Além destes, permanece pendente a **revisão jurídica completa** do documento,
 em especial das seções 4 (DPA com provedor de IA) e 6 (uso agregado/anonimizado).
 A publicação nesta versão foi autorizada pelo titular do negócio em 30/07/2026,
 com ciência do advogado, que sinalizará o que precisar ser alterado.
+
+A revisão de 07/08/2026 (CPF e antifraude do teste) segue o mesmo método: o
+advogado validou a coleta de CPF, e o texto das seções 1.2, 2.1 e 3 foi
+redigido depois dessa validação, sem passar por ela palavra por palavra. Vale
+a ressalva do parágrafo acima — o advogado sinalizará o que precisar mudar. O
+ponto que mais merece o olhar dele é o **enquadramento como legítimo interesse
+com o Iris na posição de controlador** (seção 2.1): é a primeira vez que o
+produto assume esse papel sobre dado originado do paciente.
