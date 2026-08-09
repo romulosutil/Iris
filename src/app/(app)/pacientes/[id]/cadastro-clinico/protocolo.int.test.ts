@@ -19,6 +19,7 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import postgres from "postgres";
 import { hasDb } from "@tests/integration-env";
+import { seedProtocolFamiliaCatalogo } from "@tests/reference-data";
 
 vi.mock("server-only", () => ({}));
 const { ativarProtocolo, desativarProtocolo } =
@@ -69,6 +70,11 @@ describe.skipIf(!hasDb)(
       await owner`INSERT INTO app_user (id, name, email) VALUES (${U_COORD}, 'Coord', 'coord@a.test')`;
       await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_COORD}, ${CLINIC_A}, 'coordenador')`;
       await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PATIENT}, ${CLINIC_A}, 'Com Prescricao')`;
+      // Famílias do catálogo: semear explicitamente (idempotente). O arquivo
+      // depende de 'aba_marcos_desenvolvimento' e 'fonoaudiologia'; assumir que
+      // o seed da migração continua no banco era a premissa que quebrava em
+      // FK conforme a ORDEM dos arquivos (#222).
+      await seedProtocolFamiliaCatalogo(owner);
       await owner`
       INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
         (${P_VBMAPP}, ${CLINIC_A}, 'VB-MAPP', 'ABA', 'aba_marcos_desenvolvimento'),

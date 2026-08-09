@@ -453,6 +453,41 @@ Nota para quem for pegar a #222: esta é uma causa **diferente** da já registra
 antes para o mesmo arquivo (o bug de fuso das 21h–0h de Brasília). Mesmo arquivo
 vermelho, dois motivos independentes.
 
+#### ✅ Fechado (09/08/2026) — os dois culpados eram nomeáveis
+
+Os arquivos eram `duvidas/actions.int.test.ts:51` e `validacao/actions.int.test.ts:63`:
+ambos listavam `protocol_familia_catalogo` no próprio `TRUNCATE ... CASCADE` e
+repunham só a família sintética que usavam (`vbmapp-e` / `vbmapp-d`). As 4
+famílias do seed sumiam **permanentemente** — nada as repõe, nem re-rodar as
+migrações, que já estão aplicadas.
+
+Fix em três camadas, deliberadamente redundantes porque nenhuma basta sozinha:
+
+1. **Causa:** o catálogo saiu dos dois `TRUNCATE`. É dado de referência da
+   migração, não fixture.
+2. **Regressão:** guard estático `db/tests/no-truncate-reference-data.test.ts`
+   varre todo `*.test.ts` e falha se um TRUNCATE citar tabela de referência.
+   Roda no `pnpm test` (não lê banco) — se só rodasse no `test:rls`, dependeria
+   do ambiente que ele existe para proteger. Tem auto-teste do próprio detector,
+   senão um regex quebrado sairia verde sem checar nada.
+3. **Banco já sujo:** o `globalSetup` repõe o seed antes de qualquer arquivo, via
+   `db/tests/reference-data.ts`. Sem isto a única saída para uma base local já
+   estragada seria dropar o banco.
+
+E `protocolo.int.test.ts` passou a semear as famílias de que depende
+(`ON CONFLICT DO NOTHING`), em vez de assumir que o seed continua lá — padrão que
+`src/db/rls.int.test.ts:108` já usava e que agora é a regra.
+
+Verificação: guard vermelho antes do fix nomeando os 2 arquivos, verde depois.
+`pnpm test:rls` completo **795/795 em 215 suítes**, rodando contra o banco local
+**ainda sujo** (era o que provava a camada 3). `pnpm test` unit **938/938**.
+`pnpm typecheck` limpo, `eslint` limpo nos arquivos tocados.
+
+Sobra conhecida, aceita: as famílias sintéticas dos testes (`vbmapp-d`,
+`vbmapp-e`, `fam-1`…) acumulam no catálogo local. São **aditivas** — a FK só
+exige que a linha-pai exista —, então não quebram ninguém. Limpá-las exigiria
+justamente o DELETE que esta issue proíbe.
+
 ---
 
 ## 🏁 Sessão 07/08/2026 — #215 fechada: `app_conta_somente_leitura()` falha aberta com GUC inválido (abre D16 e D17)

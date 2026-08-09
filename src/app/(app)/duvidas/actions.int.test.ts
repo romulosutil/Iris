@@ -48,7 +48,12 @@ describe.skipIf(!hasDb)("duvidas: responder query (lado do terapeuta)", () => {
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 
-    await owner`TRUNCATE clinic, app_user, user_role, patient, session, extraction, evidence, evidence_revision, evidence_query, audit_log, protocol, protocol_familia_catalogo, patient_protocol, milestone, goal, care_team_membership RESTART IDENTITY CASCADE`;
+    // `protocol_familia_catalogo` NÃO entra aqui: é dado de referência da
+    // migração 0001, não fixture deste arquivo. Truncá-lo apagava as 4 famílias
+    // do seed para todo mundo — nada as repõe — e quebrava, por ordem de
+    // execução, quem dependesse delas (#222). Guard:
+    // db/tests/no-truncate-reference-data.test.ts.
+    await owner`TRUNCATE clinic, app_user, user_role, patient, session, extraction, evidence, evidence_revision, evidence_query, audit_log, protocol, patient_protocol, milestone, goal, care_team_membership RESTART IDENTITY CASCADE`;
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC}, 'Clínica E')`;
     await owner`INSERT INTO app_user (id, email, name) VALUES
       (${U_COORD}, 'coord@e.com', 'Coordenador E'),
