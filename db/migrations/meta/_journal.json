@@ -610,6 +610,13 @@
       "when": 1786239230593,
       "tag": "0086_asaas_webhook_aplicacao",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1786239231593,
+      "tag": "0087_tenant_helper_em_funcoes_e_view",
+      "breakpoints": true
     }
   ]
 }
