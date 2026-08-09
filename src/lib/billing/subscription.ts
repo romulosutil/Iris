@@ -4,8 +4,11 @@ import { authDb } from "@/db/client";
 import { billingCycle, subscription } from "@/db/schema";
 import { calcularMensalidadeCentavos } from "./calculator";
 import {
+  AsaasProvider,
   BillingProviderError,
+  MercadoPagoProvider,
   getBillingProvider,
+  type BillingProvider,
   type MetodoPagamento,
   type StatusAssinaturaProvider,
   type StatusCobranca,
@@ -563,129 +566,154 @@ export async function conciliarPagamentoDeCiclo(
  * lento) — se a aplicação do efeito falhar depois do 200, o gateway não
  * reentrega, e sem esta varredura o evento ficaria perdido.
  *
- * A varredura é UMA só, parametrizada pela tabela de entregas do provedor
- * ATIVO (#36): cada gateway tem a sua (`mercadopago_webhook_event`,
- * `asaas_webhook_event`) porque a chave de dedup é do dialeto dele, mas o
- * tratamento — normalizar, consultar o gateway, aplicar, carimbar — é idêntico.
- * Varrer a tabela do provedor inativo seria pior que inútil: o adapter ativo
- * normalizaria payload de outro dialeto e consultaria ids que não existem na
- * API dele, carimbando eventos legítimos como falha definitiva (4xx).
+ * A varredura passa por **TODOS os gateways suportados**, cada tabela com o
+ * adapter dela (#36) — não só o provedor ativo na env.
+ *
+ * Cada gateway tem a sua tabela (`mercadopago_webhook_event`,
+ * `asaas_webhook_event`) porque a chave de dedup é do dialeto dele. Duas coisas
+ * que precisam ser verdade ao mesmo tempo:
+ *
+ * 1. **Tabela e adapter andam em par.** Deixar o adapter ativo ler a tabela do
+ *    outro faria ele normalizar payload de outro dialeto e consultar ids que
+ *    não existem na API dele — carimbando evento legítimo como falha definitiva
+ *    (4xx) e queimando o faturamento em silêncio.
+ * 2. **Gateway inativo continua tendo pendência.** `subscription.provider` é
+ *    persistido por linha: depois de uma virada de chave, as assinaturas
+ *    antigas seguem amarradas ao gateway de origem e continuam entregando
+ *    webhook. Varrer só a tabela do provedor ATIVO deixaria uma falha
+ *    transitória naquela rota encalhada para sempre — a varredura existe
+ *    exatamente para esse caso. (Achado do Jules na revisão do PR #232.)
+ *
+ * O `limite` é POR TRILHO, não global: um backlog num gateway não pode
+ * consumir a cota do outro e deixá-lo sem varredura nenhuma.
+ *
+ * Instanciar o adapter de um gateway sem env configurada é barato e não
+ * estoura: o construtor não lê `process.env`, e nenhuma chamada acontece se a
+ * tabela dele não tiver pendência. Se tiver e a env faltar, o erro é registrado
+ * em `erro_aplicacao` como transitório — a linha volta na próxima varredura, que
+ * é o comportamento certo para "falta configurar".
  */
 export async function reprocessarEventosPendentes(
   limite = 50,
 ): Promise<{ aplicados: number; falhas: number }> {
   const { asaasWebhookEvent, mercadopagoWebhookEvent } =
     await import("@/db/schema");
-  const provider = getBillingProvider();
-
-  /**
-   * Duas ramificações explícitas em vez de uma tabela em variável: as duas
-   * tabelas do Drizzle são tipos distintos, e uni-las num `const` faria o
-   * `.set()` perder a checagem de campo — exatamente a garantia que impede
-   * carimbar a coluna errada. A projeção explícita (`id`, `payload`) deixa os
-   * dois ramos com o MESMO tipo de linha daqui para baixo.
-   */
-  const ehAsaas = provider.id === "asaas";
-
-  const pendentes = ehAsaas
-    ? await authDb
-        .select({
-          id: asaasWebhookEvent.id,
-          payload: asaasWebhookEvent.payload,
-        })
-        .from(asaasWebhookEvent)
-        .where(isNull(asaasWebhookEvent.aplicadoEm))
-        .limit(limite)
-    : await authDb
-        .select({
-          id: mercadopagoWebhookEvent.id,
-          payload: mercadopagoWebhookEvent.payload,
-        })
-        .from(mercadopagoWebhookEvent)
-        .where(isNull(mercadopagoWebhookEvent.aplicadoEm))
-        .limit(limite);
-
-  const marcar = async (
-    id: string,
-    campos: { aplicadoEm?: Date; erroAplicacao?: string | null },
-  ): Promise<void> => {
-    if (ehAsaas) {
-      await authDb
-        .update(asaasWebhookEvent)
-        .set(campos)
-        .where(eq(asaasWebhookEvent.id, id));
-      return;
-    }
-    await authDb
-      .update(mercadopagoWebhookEvent)
-      .set(campos)
-      .where(eq(mercadopagoWebhookEvent.id, id));
-  };
 
   let aplicados = 0;
   let falhas = 0;
 
-  for (const evento of pendentes) {
-    try {
-      const normalizado = provider.normalizarEvento(evento.payload);
+  /**
+   * Os dois trilhos são escritos como ramos explícitos, não como uma tabela
+   * guardada numa variável: as duas tabelas do Drizzle são tipos distintos, e
+   * uni-las faria o `.set()` perder a checagem de campo — exatamente a garantia
+   * que impede carimbar a coluna errada. A projeção explícita (`id`, `payload`)
+   * deixa os dois ramos com o MESMO tipo de linha daqui para baixo.
+   */
+  for (const ehAsaas of [false, true]) {
+    const provider: BillingProvider = ehAsaas
+      ? new AsaasProvider()
+      : new MercadoPagoProvider();
 
-      if (normalizado.providerChargeId) {
-        // Evento de COBRANÇA de ciclo. Consulta o gateway em vez de confiar no
-        // tipo do evento, pela mesma razão de `aplicarStatusProvider`: a
-        // notificação costuma vir sem estado nenhum.
-        const atual = await provider.consultarCobranca(
-          normalizado.providerChargeId,
-        );
-        await conciliarPagamentoDeCiclo(
-          normalizado.providerChargeId,
-          atual.status,
-        );
-      } else if (normalizado.providerSubscriptionId) {
-        const atual = await provider.consultarVinculo(
-          normalizado.providerSubscriptionId,
-        );
-        await aplicarStatusProvider(
-          normalizado.providerSubscriptionId,
-          atual.status,
-        );
-      } else {
-        // Sem id nenhum não há o que aplicar. Marca como aplicado para não
-        // reprocessar eternamente um evento que nunca terá efeito.
+    const pendentes = ehAsaas
+      ? await authDb
+          .select({
+            id: asaasWebhookEvent.id,
+            payload: asaasWebhookEvent.payload,
+          })
+          .from(asaasWebhookEvent)
+          .where(isNull(asaasWebhookEvent.aplicadoEm))
+          .limit(limite)
+      : await authDb
+          .select({
+            id: mercadopagoWebhookEvent.id,
+            payload: mercadopagoWebhookEvent.payload,
+          })
+          .from(mercadopagoWebhookEvent)
+          .where(isNull(mercadopagoWebhookEvent.aplicadoEm))
+          .limit(limite);
+
+    const marcar = async (
+      id: string,
+      campos: { aplicadoEm?: Date; erroAplicacao?: string | null },
+    ): Promise<void> => {
+      if (ehAsaas) {
+        await authDb
+          .update(asaasWebhookEvent)
+          .set(campos)
+          .where(eq(asaasWebhookEvent.id, id));
+        return;
+      }
+      await authDb
+        .update(mercadopagoWebhookEvent)
+        .set(campos)
+        .where(eq(mercadopagoWebhookEvent.id, id));
+    };
+
+    for (const evento of pendentes) {
+      try {
+        const normalizado = provider.normalizarEvento(evento.payload);
+
+        if (normalizado.providerChargeId) {
+          // Evento de COBRANÇA de ciclo. Consulta o gateway em vez de confiar
+          // no tipo do evento, pela mesma razão de `aplicarStatusProvider`: a
+          // notificação costuma vir sem estado nenhum.
+          const atual = await provider.consultarCobranca(
+            normalizado.providerChargeId,
+          );
+          await conciliarPagamentoDeCiclo(
+            normalizado.providerChargeId,
+            atual.status,
+          );
+        } else if (normalizado.providerSubscriptionId) {
+          const atual = await provider.consultarVinculo(
+            normalizado.providerSubscriptionId,
+          );
+          await aplicarStatusProvider(
+            normalizado.providerSubscriptionId,
+            atual.status,
+          );
+        } else {
+          // Sem id nenhum não há o que aplicar. Marca como aplicado para não
+          // reprocessar eternamente um evento que nunca terá efeito.
+          await marcar(evento.id, {
+            aplicadoEm: new Date(),
+            erroAplicacao: "sem id utilizável",
+          });
+          continue;
+        }
+
         await marcar(evento.id, {
           aplicadoEm: new Date(),
-          erroAplicacao: "sem id utilizável",
+          erroAplicacao: null,
         });
-        continue;
+        aplicados++;
+      } catch (e) {
+        falhas++;
+        // Distinção que decide se a linha volta na próxima varredura: recusa
+        // definitiva do gateway (4xx — recurso inexistente, id que não é de
+        // assinatura) NUNCA vai melhorar com retry, então é carimbada como
+        // aplicada. Sem isso o evento é reselecionado para sempre, queimando uma
+        // chamada ao MP por varredura e ocupando o `limit` que deveria servir a
+        // eventos novos. Falha transitória (rede, timeout, 5xx) fica pendente de
+        // propósito — é exatamente o caso que a varredura existe para recuperar.
+        //
+        // Nem todo 4xx é definitivo. 401 (token rotacionado/expirado), 408 e 429
+        // (rate limit) são transitórios na prática: um pico de 429 carimbaria um
+        // LOTE de eventos legítimos como aplicados e eles nunca mais entrariam na
+        // fila — perda de faturamento silenciosa, o pior modo de falha possível
+        // aqui. Estes três voltam para a fila junto com rede e 5xx.
+        const TRANSITORIOS_APESAR_DE_4XX = new Set([401, 408, 429]);
+        const definitiva =
+          e instanceof BillingProviderError &&
+          typeof e.status === "number" &&
+          e.status >= 400 &&
+          e.status < 500 &&
+          !TRANSITORIOS_APESAR_DE_4XX.has(e.status);
+        await marcar(evento.id, {
+          erroAplicacao: e instanceof Error ? e.message : String(e),
+          ...(definitiva ? { aplicadoEm: new Date() } : {}),
+        });
       }
-
-      await marcar(evento.id, { aplicadoEm: new Date(), erroAplicacao: null });
-      aplicados++;
-    } catch (e) {
-      falhas++;
-      // Distinção que decide se a linha volta na próxima varredura: recusa
-      // definitiva do gateway (4xx — recurso inexistente, id que não é de
-      // assinatura) NUNCA vai melhorar com retry, então é carimbada como
-      // aplicada. Sem isso o evento é reselecionado para sempre, queimando uma
-      // chamada ao MP por varredura e ocupando o `limit` que deveria servir a
-      // eventos novos. Falha transitória (rede, timeout, 5xx) fica pendente de
-      // propósito — é exatamente o caso que a varredura existe para recuperar.
-      //
-      // Nem todo 4xx é definitivo. 401 (token rotacionado/expirado), 408 e 429
-      // (rate limit) são transitórios na prática: um pico de 429 carimbaria um
-      // LOTE de eventos legítimos como aplicados e eles nunca mais entrariam na
-      // fila — perda de faturamento silenciosa, o pior modo de falha possível
-      // aqui. Estes três voltam para a fila junto com rede e 5xx.
-      const TRANSITORIOS_APESAR_DE_4XX = new Set([401, 408, 429]);
-      const definitiva =
-        e instanceof BillingProviderError &&
-        typeof e.status === "number" &&
-        e.status >= 400 &&
-        e.status < 500 &&
-        !TRANSITORIOS_APESAR_DE_4XX.has(e.status);
-      await marcar(evento.id, {
-        erroAplicacao: e instanceof Error ? e.message : String(e),
-        ...(definitiva ? { aplicadoEm: new Date() } : {}),
-      });
     }
   }
 

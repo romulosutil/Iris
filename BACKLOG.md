@@ -78,10 +78,18 @@ realmente apurado.
   `aplicado_em`/`erro_aplicacao` com `GRANT UPDATE` **coluna a coluna** — a
   `0066` só tinha dado `SELECT, INSERT`, e o grant faltando apareceria como
   `permission denied for table`, que não diz qual coluna.
-- `reprocessarEventosPendentes` virou uma varredura só, parametrizada pela tabela
-  do provedor **ativo**. Varrer a do provedor inativo seria pior que inútil: o
-  adapter ativo normalizaria payload de outro dialeto e consultaria ids que não
-  existem na API dele, carimbando eventos legítimos como falha definitiva (4xx).
+- `reprocessarEventosPendentes` passou a varrer **os dois trilhos**, cada tabela
+  com o adapter dela. A primeira versão varria só a do provedor **ativo**, e a
+  revisão do Jules no PR #232 mostrou o furo: `subscription.provider` é
+  persistido por linha, então depois de uma virada de chave as assinaturas
+  antigas continuam amarradas ao gateway de origem e continuam entregando
+  webhook — uma falha transitória naquela rota ficaria encalhada para sempre na
+  tabela do gateway inativo. O cuidado que motivou a versão errada continua
+  valendo e virou invariante testado: **tabela e adapter andam em par**. Cruzá-los
+  faria o adapter errado normalizar payload de outro dialeto e consultar ids
+  inexistentes, carimbando evento legítimo como falha definitiva (4xx) — perda de
+  faturamento em silêncio. O `limite` é por trilho, senão um backlog num gateway
+  consome a cota do outro.
 
 **O que o Pix Automático impõe e não dá para esconder.**
 

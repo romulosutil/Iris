@@ -24,14 +24,26 @@ const { reprocessarEventosPendentes } = await import("./subscription");
  * Varredura de pendentes × PROVEDOR ATIVO (#36, Fase 7).
  *
  * `reprocessarEventosPendentes()` deixou de olhar só `mercadopago_webhook_event`
- * e passou a varrer a tabela de entregas do provedor ATIVO. Este arquivo é o
- * teste dessa generalização, e o caso central NÃO é o caminho feliz: é a
- * NEGATIVA — com `BILLING_PROVIDER=asaas`, uma linha pendente do Mercado Pago
- * não pode ser tocada. Varrer a tabela do provedor inativo faria o adapter ativo
- * normalizar payload de outro dialeto e consultar ids que não existem na API
- * dele; o 404 resultante é classificado como recusa DEFINITIVA e carimbaria
- * `aplicado_em` num evento legítimo — perda silenciosa de faturamento, o pior
- * modo de falha possível aqui.
+ * e passou a varrer **os DOIS trilhos**, cada tabela com o adapter DELA,
+ * independentemente de `BILLING_PROVIDER` (revisão do Jules no PR #232). Este
+ * arquivo é o teste dessa generalização.
+ *
+ * A versão anterior deste arquivo asseria o invariante intermediário — "a tabela
+ * do provedor INATIVO fica intocada". Ele estava errado: `subscription.provider`
+ * é persistido por linha, então depois de uma virada de chave as assinaturas
+ * antigas continuam amarradas ao gateway de origem e continuam entregando
+ * webhook. Varrer só a tabela do provedor ativo deixava uma falha transitória
+ * naquela rota encalhada para sempre — exatamente o caso que a varredura existe
+ * para recuperar.
+ *
+ * O invariante NOVO é mais forte e continua cobrindo o risco original, que nunca
+ * foi "não olhe a outra tabela" e sim **"não cruze tabela com adapter"**: o
+ * adapter errado normalizaria payload de outro dialeto e consultaria ids que não
+ * existem na API dele; o 404 resultante é classificado como recusa DEFINITIVA e
+ * carimbaria `aplicado_em` num evento legítimo — perda silenciosa de
+ * faturamento, o pior modo de falha possível aqui. Daí o teste do par
+ * tabela↔adapter asserir sobre as URLs efetivamente chamadas, e não só sobre as
+ * colunas: a coluna certa pode ter sido escrita pelo caminho errado.
  *
  * ## Por que `.int.test.ts` (roda em `pnpm test:rls`, não em `pnpm test`)
  *
@@ -179,6 +191,42 @@ async function lerMp(chave: string) {
 let respostasGateway: Array<() => Promise<Response>> = [];
 let chamadasGateway: string[] = [];
 
+/**
+ * Respostas roteadas por URL (não consumíveis), consultadas ANTES da fila.
+ *
+ * Existem por causa dos testes de dois trilhos: uma fila FIFO obrigaria o teste
+ * a enfileirar as respostas na ordem em que a produção visita as tabelas — ou
+ * seja, a codificar a ordem do laço. O teste passaria a quebrar (ou, pior, a
+ * responder o corpo do Asaas para uma chamada do MP) só porque a ordem mudou,
+ * que é detalhe interno. Roteando por URL, o dublê responde certo em qualquer
+ * ordem, e a ordem deixa de ser afirmada onde ela não importa.
+ */
+let rotasGateway: Array<{
+  casa: (url: string) => boolean;
+  responde: () => Promise<Response>;
+}> = [];
+
+/** Roteia qualquer `GET /pix/automatic/authorizations/*` do Asaas. */
+function rotaAutorizacaoAsaas(status = "ACTIVE") {
+  rotasGateway.push({
+    casa: (url) => url.includes("/pix/automatic/authorizations/"),
+    responde: async () => Response.json({ id: "auth-dublê", status, value: null }),
+  });
+}
+
+/** Roteia qualquer `GET /preapproval/*` do Mercado Pago. */
+function rotaVinculoMp(status = "authorized") {
+  rotasGateway.push({
+    casa: (url) => url.includes("/preapproval/"),
+    responde: async () =>
+      Response.json({
+        id: "preapproval-dublê",
+        status,
+        auto_recurring: { transaction_amount: 39, currency_id: "BRL" },
+      }),
+  });
+}
+
 /** `GET /pix/automatic/authorizations/{id}` do Asaas. */
 function respondeAutorizacaoAsaas(status = "ACTIVE") {
   respostasGateway.push(async () =>
@@ -207,11 +255,12 @@ function respondeErroDeRede(mensagem: string) {
   });
 }
 
-describe.skipIf(!hasDb)("reprocessarEventosPendentes × provedor ativo", () => {
+describe.skipIf(!hasDb)("reprocessarEventosPendentes × trilhos", () => {
   beforeAll(() => {
-    // Env dos DOIS adapters ligada o tempo todo: o que decide qual roda é
-    // exclusivamente `BILLING_PROVIDER`. Se a seleção dependesse de qual chave
-    // está configurada, o teste da negativa passaria por acidente.
+    // Env dos DOIS adapters ligada o tempo todo: os dois trilhos são varridos
+    // sempre, então os dois precisam conseguir falar com o gateway deles. Se a
+    // varredura dependesse de qual chave está configurada, "varre os dois"
+    // passaria por acidente num ambiente e falharia em outro.
     vi.stubEnv("ASAAS_WEBHOOK_TOKEN", TOKEN_ASAAS);
     vi.stubEnv("BILLING_PROVIDER_API_KEY", API_KEY_ASAAS);
     vi.stubEnv("ASAAS_BASE_URL", BASE_URL_ASAAS);
@@ -222,8 +271,12 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes × provedor ativo", () => {
   beforeEach(async () => {
     respostasGateway = [];
     chamadasGateway = [];
+    rotasGateway = [];
     vi.stubGlobal("fetch", async (entrada: unknown) => {
-      chamadasGateway.push(String(entrada));
+      const url = String(entrada);
+      chamadasGateway.push(url);
+      const rota = rotasGateway.find((r) => r.casa(url));
+      if (rota) return rota.responde();
       const proxima = respostasGateway.shift();
       if (!proxima) {
         throw new Error(
@@ -289,32 +342,32 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes × provedor ativo", () => {
       );
     });
 
-    it("NÃO toca no pendente de `mercadopago_webhook_event` (caso central)", async () => {
-      // Assinatura MP existente: se a linha do MP fosse selecionada, o adapter
-      // do Asaas normalizaria `{type, action, data:{id}}` — dialeto que ele não
-      // entende — e o evento seria carimbado como "sem id utilizável", saindo da
-      // fila para sempre. É essa perda silenciosa que o teste barra.
+    it("TAMBÉM aplica o pendente de `mercadopago_webhook_event` (caso central)", async () => {
+      // `BILLING_PROVIDER=asaas` não isenta o trilho do MP: assinaturas antigas
+      // continuam amarradas ao gateway de origem e a varredura precisa
+      // continuar entregando para elas. Cada tabela usa o adapter DELA
+      // (`MercadoPagoProvider` para esta linha), nunca o provider ativo na env.
       await novaAssinatura({
         providerSubscriptionId: "sub-do-mp",
         provider: "mercado_pago",
       });
       const chaveMp = await semearMpPendente("sub-do-mp");
 
-      // Nenhuma resposta enfileirada: qualquer chamada ao gateway (ou seja,
-      // qualquer seleção da linha do MP) estoura no dublê.
+      rotaVinculoMp("authorized");
       const r = await reprocessarEventosPendentes();
-      expect(r).toEqual({ aplicados: 0, falhas: 0 });
-      expect(chamadasGateway).toHaveLength(0);
+      expect(r).toEqual({ aplicados: 1, falhas: 0 });
+      expect(chamadasGateway).toHaveLength(1);
+      expect(chamadasGateway[0]).toContain("/preapproval/sub-do-mp");
 
       const depois = await lerMp(chaveMp);
-      expect(depois.aplicado_em).toBeNull();
+      expect(depois.aplicado_em).not.toBeNull();
       expect(depois.erro_aplicacao).toBeNull();
     });
 
-    it("com pendentes nas DUAS tabelas, só a do Asaas é consumida", async () => {
+    it("com pendentes nas DUAS tabelas, as DUAS são consumidas — cada uma com o adapter dela", async () => {
       // Variante com as duas linhas presentes ao mesmo tempo: é o estado real de
-      // uma virada de provedor, e é ele que uma varredura fixa na tabela do MP
-      // (o comportamento antigo) atenderia pelo lado errado.
+      // uma virada de provedor. As respostas são roteadas por URL (não por fila
+      // FIFO) porque a ordem em que o laço visita os trilhos é detalhe interno.
       const authId = "auth-da-virada";
       await novaAssinatura({
         providerSubscriptionId: authId,
@@ -327,16 +380,20 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes × provedor ativo", () => {
       const idAsaas = await semearAsaasPendente(authId);
       const chaveMp = await semearMpPendente("sub-mp-da-virada");
 
-      // UMA resposta só: se a varredura tentasse os dois eventos, a segunda
-      // chamada estouraria "fetch inesperado".
-      respondeAutorizacaoAsaas("ACTIVE");
+      rotaAutorizacaoAsaas("ACTIVE");
+      rotaVinculoMp("authorized");
       const r = await reprocessarEventosPendentes();
-      expect(r).toEqual({ aplicados: 1, falhas: 0 });
+      expect(r).toEqual({ aplicados: 2, falhas: 0 });
 
       expect((await lerAsaas(idAsaas)).aplicado_em).not.toBeNull();
-      expect((await lerMp(chaveMp)).aplicado_em).toBeNull();
-      expect(chamadasGateway).toHaveLength(1);
-      expect(chamadasGateway[0]).toContain(BASE_URL_ASAAS);
+      expect((await lerMp(chaveMp)).aplicado_em).not.toBeNull();
+      expect(chamadasGateway).toHaveLength(2);
+      expect(
+        chamadasGateway.some((u) => u.includes(BASE_URL_ASAAS)),
+      ).toBe(true);
+      expect(
+        chamadasGateway.some((u) => u.includes("/preapproval/sub-mp-da-virada")),
+      ).toBe(true);
     });
 
     it("evento Asaas sem id utilizável carimba 'sem id utilizável' (não fica na fila para sempre)", async () => {
@@ -457,9 +514,10 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes × provedor ativo", () => {
       vi.stubEnv("BILLING_PROVIDER", "mercado_pago");
     });
 
-    it("seleciona e aplica o pendente do MP, e NÃO toca no do Asaas", async () => {
-      // Simétrico do caso central. Sem ele, uma varredura que fixasse na tabela
-      // do ASAAS (o erro espelhado) passaria em tudo que está acima.
+    it("aplica o pendente do MP e o do Asaas, mesmo com BILLING_PROVIDER=mercado_pago", async () => {
+      // Simétrico do caso central: `BILLING_PROVIDER` não isenta o trilho do
+      // Asaas. Sem isso, uma varredura que fixasse na tabela do MP (o erro
+      // espelhado) passaria em tudo que está acima.
       await novaAssinatura({
         providerSubscriptionId: "sub-mp-ativo",
         provider: "mercado_pago",
@@ -471,22 +529,23 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes × provedor ativo", () => {
       const chaveMp = await semearMpPendente("sub-mp-ativo");
       const idAsaas = await semearAsaasPendente("auth-asaas-parada");
 
-      respondeVinculoMp("authorized");
+      rotaVinculoMp("authorized");
+      rotaAutorizacaoAsaas("ACTIVE");
       const r = await reprocessarEventosPendentes();
-      expect(r).toEqual({ aplicados: 1, falhas: 0 });
+      expect(r).toEqual({ aplicados: 2, falhas: 0 });
 
       expect((await lerMp(chaveMp)).aplicado_em).not.toBeNull();
       expect((await lerMp(chaveMp)).erro_aplicacao).toBeNull();
+      expect((await lerAsaas(idAsaas)).aplicado_em).not.toBeNull();
+      expect((await lerAsaas(idAsaas)).erro_aplicacao).toBeNull();
 
-      // A linha do Asaas ficou intocada: continua elegível para quando a virada
-      // de provedor acontecer.
-      const asaas = await lerAsaas(idAsaas);
-      expect(asaas.aplicado_em).toBeNull();
-      expect(asaas.erro_aplicacao).toBeNull();
-
-      // Uma única consulta, e ao Mercado Pago.
-      expect(chamadasGateway).toHaveLength(1);
-      expect(chamadasGateway[0]).toContain("/preapproval/sub-mp-ativo");
+      expect(chamadasGateway).toHaveLength(2);
+      expect(
+        chamadasGateway.some((u) => u.includes("/preapproval/sub-mp-ativo")),
+      ).toBe(true);
+      expect(chamadasGateway.some((u) => u.includes(BASE_URL_ASAAS))).toBe(
+        true,
+      );
     });
   });
 });
