@@ -142,7 +142,10 @@ export async function iniciarAtivacao(
     .where(eq(subscription.clinicId, pedido.clinicId))
     .limit(1);
 
-  if (existente?.providerSubscriptionId && existente.status === "setup_pending") {
+  if (
+    existente?.providerSubscriptionId &&
+    existente.status === "setup_pending"
+  ) {
     const atual = await provider.consultarVinculo(
       existente.providerSubscriptionId,
     );
@@ -235,12 +238,12 @@ export async function aplicarStatusProvider(
       status: novo,
       atualizadoEm: agora,
       ativadaEm: virandoAtiva ? (linha.ativadaEm ?? agora) : linha.ativadaEm,
-      canceladaEm: novo === "canceled" ? (linha.canceladaEm ?? agora) : linha.canceladaEm,
+      canceladaEm:
+        novo === "canceled" ? (linha.canceladaEm ?? agora) : linha.canceladaEm,
       // `past_due_desde` só é carimbado na ENTRADA em past_due. Recarimbar a
       // cada reentrega do mesmo evento zeraria a carência para sempre e a
       // assinatura nunca venceria.
-      pastDueDesde:
-        novo === "past_due" ? (linha.pastDueDesde ?? agora) : null,
+      pastDueDesde: novo === "past_due" ? (linha.pastDueDesde ?? agora) : null,
       // A ativação abre o primeiro ciclo, e é a partir DELE que pacientes
       // contam para faturamento. Nada do período de teste entra em fatura por
       // construção: não existe `billing_cycle` antes deste ponto, e o ciclo
@@ -253,7 +256,12 @@ export async function aplicarStatusProvider(
     .where(eq(subscription.id, linha.id));
 
   if (virandoAtiva) {
-    await abrirCiclo(linha.id, linha.clinicId, agora, somarDias(agora, linha.cicloDias));
+    await abrirCiclo(
+      linha.id,
+      linha.clinicId,
+      agora,
+      somarDias(agora, linha.cicloDias),
+    );
   }
 
   return true;
@@ -554,18 +562,65 @@ export async function conciliarPagamentoDeCiclo(
  * webhook grava e responde 200 rápido (o Mercado Pago desabilita endpoint
  * lento) — se a aplicação do efeito falhar depois do 200, o gateway não
  * reentrega, e sem esta varredura o evento ficaria perdido.
+ *
+ * A varredura é UMA só, parametrizada pela tabela de entregas do provedor
+ * ATIVO (#36): cada gateway tem a sua (`mercadopago_webhook_event`,
+ * `asaas_webhook_event`) porque a chave de dedup é do dialeto dele, mas o
+ * tratamento — normalizar, consultar o gateway, aplicar, carimbar — é idêntico.
+ * Varrer a tabela do provedor inativo seria pior que inútil: o adapter ativo
+ * normalizaria payload de outro dialeto e consultaria ids que não existem na
+ * API dele, carimbando eventos legítimos como falha definitiva (4xx).
  */
 export async function reprocessarEventosPendentes(
   limite = 50,
 ): Promise<{ aplicados: number; falhas: number }> {
-  const { mercadopagoWebhookEvent } = await import("@/db/schema");
+  const { asaasWebhookEvent, mercadopagoWebhookEvent } =
+    await import("@/db/schema");
   const provider = getBillingProvider();
 
-  const pendentes = await authDb
-    .select()
-    .from(mercadopagoWebhookEvent)
-    .where(isNull(mercadopagoWebhookEvent.aplicadoEm))
-    .limit(limite);
+  /**
+   * Duas ramificações explícitas em vez de uma tabela em variável: as duas
+   * tabelas do Drizzle são tipos distintos, e uni-las num `const` faria o
+   * `.set()` perder a checagem de campo — exatamente a garantia que impede
+   * carimbar a coluna errada. A projeção explícita (`id`, `payload`) deixa os
+   * dois ramos com o MESMO tipo de linha daqui para baixo.
+   */
+  const ehAsaas = provider.id === "asaas";
+
+  const pendentes = ehAsaas
+    ? await authDb
+        .select({
+          id: asaasWebhookEvent.id,
+          payload: asaasWebhookEvent.payload,
+        })
+        .from(asaasWebhookEvent)
+        .where(isNull(asaasWebhookEvent.aplicadoEm))
+        .limit(limite)
+    : await authDb
+        .select({
+          id: mercadopagoWebhookEvent.id,
+          payload: mercadopagoWebhookEvent.payload,
+        })
+        .from(mercadopagoWebhookEvent)
+        .where(isNull(mercadopagoWebhookEvent.aplicadoEm))
+        .limit(limite);
+
+  const marcar = async (
+    id: string,
+    campos: { aplicadoEm?: Date; erroAplicacao?: string | null },
+  ): Promise<void> => {
+    if (ehAsaas) {
+      await authDb
+        .update(asaasWebhookEvent)
+        .set(campos)
+        .where(eq(asaasWebhookEvent.id, id));
+      return;
+    }
+    await authDb
+      .update(mercadopagoWebhookEvent)
+      .set(campos)
+      .where(eq(mercadopagoWebhookEvent.id, id));
+  };
 
   let aplicados = 0;
   let falhas = 0;
@@ -596,17 +651,14 @@ export async function reprocessarEventosPendentes(
       } else {
         // Sem id nenhum não há o que aplicar. Marca como aplicado para não
         // reprocessar eternamente um evento que nunca terá efeito.
-        await authDb
-          .update(mercadopagoWebhookEvent)
-          .set({ aplicadoEm: new Date(), erroAplicacao: "sem id utilizável" })
-          .where(eq(mercadopagoWebhookEvent.id, evento.id));
+        await marcar(evento.id, {
+          aplicadoEm: new Date(),
+          erroAplicacao: "sem id utilizável",
+        });
         continue;
       }
 
-      await authDb
-        .update(mercadopagoWebhookEvent)
-        .set({ aplicadoEm: new Date(), erroAplicacao: null })
-        .where(eq(mercadopagoWebhookEvent.id, evento.id));
+      await marcar(evento.id, { aplicadoEm: new Date(), erroAplicacao: null });
       aplicados++;
     } catch (e) {
       falhas++;
@@ -630,13 +682,10 @@ export async function reprocessarEventosPendentes(
         e.status >= 400 &&
         e.status < 500 &&
         !TRANSITORIOS_APESAR_DE_4XX.has(e.status);
-      await authDb
-        .update(mercadopagoWebhookEvent)
-        .set({
-          erroAplicacao: e instanceof Error ? e.message : String(e),
-          ...(definitiva ? { aplicadoEm: new Date() } : {}),
-        })
-        .where(eq(mercadopagoWebhookEvent.id, evento.id));
+      await marcar(evento.id, {
+        erroAplicacao: e instanceof Error ? e.message : String(e),
+        ...(definitiva ? { aplicadoEm: new Date() } : {}),
+      });
     }
   }
 
