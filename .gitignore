@@ -85,6 +85,7 @@ scratch/
 .tokensave/
 .headroom/
 .playwright-mcp/
+.worktrees/
 graphify-out/
 skills-lock.json
 .vercel/
