@@ -96,7 +96,11 @@ describe("MercadoPagoProvider", () => {
 
       expect(resultado).toEqual({
         providerVinculoId: "2c938084",
-        checkoutUrl: "https://mp.test/checkout/2c938084",
+        // D21: o trilho do MP é redirect de verdade — `init_point` É uma URL.
+        autorizacao: {
+          forma: "redirect",
+          url: "https://mp.test/checkout/2c938084",
+        },
         status: "pendente",
       });
     });

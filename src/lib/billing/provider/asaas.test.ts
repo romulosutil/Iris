@@ -304,7 +304,12 @@ describe("AsaasProvider", () => {
         "53da5204-8dd1-4cf4-9604-d134e1e6fe04",
       );
       expect(criado.status).toBe("pendente");
-      expect(criado.checkoutUrl).toBe("00020126580014BR.GOV.BCB.PIX...");
+      // D21: o BR Code sai na forma que ele é — não disfarçado de URL de
+      // checkout. Se alguém reintroduzir `checkoutUrl` aqui, isto quebra.
+      expect(criado.autorizacao).toEqual({
+        forma: "pix_copia_e_cola",
+        brCode: "00020126580014BR.GOV.BCB.PIX...",
+      });
 
       const [urlCliente, initCliente] = fetchMock.mock.calls[0]!;
       expect(urlCliente).toBe("https://api-sandbox.asaas.com/v3/customers");

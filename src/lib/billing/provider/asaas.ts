@@ -529,16 +529,14 @@ export class AsaasProvider implements BillingProvider {
 
     const providerVinculoId = comoTexto(autorizacao.id);
     /**
-     * ⚠️ Vazamento consciente do contrato da porta: o Asaas **não devolve URL
-     * de checkout** para uma autorização de Pix Automático — devolve o BR Code
-     * (`payload`, copia-e-cola) e o QR em base64. Como `VinculoCriado.checkoutUrl`
-     * é obrigatório e a porta não pode mudar por causa de um provedor (regra de
-     * ouro de `types.ts`), o campo carrega aqui o copia-e-cola.
+     * O Asaas **não devolve URL de checkout** para uma autorização de Pix
+     * Automático — devolve o BR Code (`payload`, copia-e-cola). Até o D21 isso
+     * era gravado em `VinculoCriado.checkoutUrl` por falta de lugar melhor na
+     * porta; hoje a porta tem a forma certa (`pix_copia_e_cola`) e o adapter
+     * não precisa mais mentir.
      *
-     * Isso está registrado como débito no BACKLOG: a UI que consumir este campo
-     * precisa ramificar por provedor (link para o MP, QR para o Asaas). Enquanto
-     * a UI não existe, o valor persistido continua sendo o suficiente para um
-     * humano concluir a ativação.
+     * `encodedImage` (o QR em base64) segue ignorado de propósito: é uma
+     * renderização deste mesmo `payload`, e a UI desenha o QR localmente.
      */
     const checkout = comoTexto(autorizacao.payload);
     if (!providerVinculoId || !checkout) {
@@ -552,7 +550,7 @@ export class AsaasProvider implements BillingProvider {
 
     return {
       providerVinculoId,
-      checkoutUrl: checkout,
+      autorizacao: { forma: "pix_copia_e_cola", brCode: checkout },
       status: mapearStatusAutorizacao(autorizacao.status),
     };
   }

@@ -1748,7 +1748,14 @@ export const subscription = pgTable(
     // 0075 — estava sendo usado como cache da URL de checkout, que agora tem
     // coluna própria (`checkoutUrl`).
     providerCustomerId: text("provider_customer_id"),
+    /**
+     * URL de checkout — e **só** URL. Até a 0088 esta coluna também carregava o
+     * BR Code do Pix Automático do Asaas, que não é URL nenhuma (débito D21);
+     * o copia-e-cola agora tem coluna própria logo abaixo.
+     */
     checkoutUrl: text("checkout_url"),
+    /** BR Code (copia-e-cola) do Pix Automático. Exclusivo com `checkoutUrl`. */
+    pixCopiaECola: text("pix_copia_e_cola"),
     metodoPagamento: text("metodo_pagamento"),
     cicloDias: integer("ciclo_dias").notNull().default(30),
     cicloAtualInicio: timestamp("ciclo_atual_inicio", { withTimezone: true }),

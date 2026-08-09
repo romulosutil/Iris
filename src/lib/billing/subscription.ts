@@ -8,6 +8,7 @@ import {
   BillingProviderError,
   MercadoPagoProvider,
   getBillingProvider,
+  type AutorizacaoPendente,
   type BillingProvider,
   type MetodoPagamento,
   type StatusAssinaturaProvider,
@@ -101,6 +102,39 @@ function estadoInterno(
   }
 }
 
+/**
+ * Traduz a forma de autorização para as colunas — sempre escrevendo as duas,
+ * uma com valor e a outra `null`.
+ *
+ * Escrever `null` na que não vale é o ponto: no `onConflictDoUpdate`, deixar a
+ * coluna de fora manteria o valor da tentativa anterior, e uma clínica que
+ * refizesse a ativação com o trilho trocado ficaria com URL velha e BR Code
+ * novo convivendo na mesma linha — sem erro, e com a UI ramificando pela
+ * errada.
+ */
+function colunasDaAutorizacao(autorizacao: AutorizacaoPendente): {
+  checkoutUrl: string | null;
+  pixCopiaECola: string | null;
+} {
+  return autorizacao.forma === "redirect"
+    ? { checkoutUrl: autorizacao.url, pixCopiaECola: null }
+    : { checkoutUrl: null, pixCopiaECola: autorizacao.brCode };
+}
+
+/** Reconstrói a forma de autorização a partir da linha persistida. */
+function autorizacaoPersistida(linha: {
+  checkoutUrl: string | null;
+  pixCopiaECola: string | null;
+}): AutorizacaoPendente | null {
+  if (linha.pixCopiaECola) {
+    return { forma: "pix_copia_e_cola", brCode: linha.pixCopiaECola };
+  }
+  if (linha.checkoutUrl) {
+    return { forma: "redirect", url: linha.checkoutUrl };
+  }
+  return null;
+}
+
 export interface PedidoAtivacao {
   clinicId: string;
   nomeClinica: string;
@@ -111,7 +145,13 @@ export interface PedidoAtivacao {
 }
 
 export interface ResultadoAtivacao {
-  checkoutUrl: string;
+  /**
+   * Como a clínica termina de autorizar — URL de checkout ou BR Code do Pix,
+   * conforme o trilho. `null` só acontece reaproveitando um vínculo pendente
+   * antigo cuja forma não ficou guardada; a UI trata isso como "pendente sem
+   * caminho de saída" em vez de renderizar um link vazio (era o `?? ""`).
+   */
+  autorizacao: AutorizacaoPendente | null;
   providerSubscriptionId: string;
 }
 
@@ -157,7 +197,7 @@ export async function iniciarAtivacao(
     // melhor que devolver um checkout de algo já resolvido.
     if (atual.status === "pendente") {
       return {
-        checkoutUrl: existente.checkoutUrl ?? "",
+        autorizacao: autorizacaoPersistida(existente),
         providerSubscriptionId: existente.providerSubscriptionId,
       };
     }
@@ -183,9 +223,9 @@ export async function iniciarAtivacao(
       status: "setup_pending",
       provider: provider.id,
       providerSubscriptionId: criado.providerVinculoId,
-      // Coluna própria (0075). Antes o checkout era guardado em
-      // `provider_customer_id`, que significa outra coisa.
-      checkoutUrl: criado.checkoutUrl,
+      // Colunas próprias (0075 e 0088). Cada forma de autorização na sua: o
+      // BR Code do Pix não é URL, e gravá-lo em `checkout_url` era o D21.
+      ...colunasDaAutorizacao(criado.autorizacao),
       metodoPagamento: pedido.metodo,
       cicloDias: CICLO_DIAS_PADRAO,
     })
@@ -195,14 +235,14 @@ export async function iniciarAtivacao(
         status: "setup_pending",
         provider: provider.id,
         providerSubscriptionId: criado.providerVinculoId,
-        checkoutUrl: criado.checkoutUrl,
+        ...colunasDaAutorizacao(criado.autorizacao),
         metodoPagamento: pedido.metodo,
         atualizadoEm: new Date(),
       },
     });
 
   return {
-    checkoutUrl: criado.checkoutUrl,
+    autorizacao: criado.autorizacao,
     providerSubscriptionId: criado.providerVinculoId,
   };
 }

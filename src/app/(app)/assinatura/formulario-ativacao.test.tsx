@@ -15,10 +15,16 @@ import type { AtivacaoState } from "./logic";
  *    assinaturas criadas no provedor. O teste segura a promise da action
  *    aberta de propósito: com o `disabled` removido, o segundo clique chama a
  *    action de novo e o contador estoura.
- * 3. **`checkoutUrl` vira link visível.** O redirect por
+ * 3. **Autorização `redirect` vira link visível.** O redirect por
  *    `window.location.assign` não existe no jsdom (nem sob bloqueio de popup
  *    no navegador real). Se a UI dependesse só dele, a pessoa ficaria presa
  *    sem caminho para pagar — o link é o que garante a saída.
+ * 4. **Autorização `pix_copia_e_cola` NUNCA vira navegação nem `href`.** É a
+ *    asserção que fecha o D21: o BR Code chegava na UI dentro de um campo
+ *    chamado `checkoutUrl` e era tratado como URL — `window.location.assign`
+ *    num texto EMV e um link quebrado na tela. Aqui o teste prova o negativo
+ *    (`navegar` não é chamado, nenhum link aparece) além do positivo (QR +
+ *    texto copiável). Só asserir o QR passaria mesmo com a navegação viva.
  */
 
 function acaoQueDevolve(state: AtivacaoState) {
@@ -82,7 +88,9 @@ describe("FormularioAtivacao", () => {
     });
 
     // Segundo clique no botão travado não pode disparar a action de novo.
-    await user.click(screen.getByRole("button", { name: /abrindo pagamento/i }));
+    await user.click(
+      screen.getByRole("button", { name: /abrindo pagamento/i }),
+    );
     expect(acao).toHaveBeenCalledTimes(1);
 
     liberar();
@@ -103,24 +111,28 @@ describe("FormularioAtivacao", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /ativar assinatura/i }));
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
 
     const alerta = await screen.findByRole("alert");
     expect(alerta.textContent).toMatch(/escolha a forma de pagamento/i);
   });
 
-  it("com checkoutUrl no state, oferece link visível para o pagamento", async () => {
+  it("com autorização redirect no state, oferece link visível para o pagamento", async () => {
     const user = userEvent.setup();
     const url = "https://pagamento.exemplo/checkout/abc123";
     const navegar = vi.fn();
     render(
       <FormularioAtivacao
-        acao={acaoQueDevolve({ checkoutUrl: url })}
+        acao={acaoQueDevolve({ autorizacao: { forma: "redirect", url } })}
         navegar={navegar}
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /ativar assinatura/i }));
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
 
     const link = await screen.findByRole("link", {
       name: /ir para o pagamento/i,
@@ -138,16 +150,81 @@ describe("FormularioAtivacao", () => {
     const url = "https://pagamento.exemplo/checkout/xyz";
     render(
       <FormularioAtivacao
-        acao={acaoQueDevolve({ checkoutUrl: url })}
+        acao={acaoQueDevolve({ autorizacao: { forma: "redirect", url } })}
         navegar={navegar}
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /ativar assinatura/i }));
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
 
     const link = await screen.findByRole("link", {
       name: /ir para o pagamento/i,
     });
     expect(link.getAttribute("href")).toBe(url);
+  });
+
+  it("com Pix copia-e-cola, mostra QR e código — e NUNCA navega (D21)", async () => {
+    const user = userEvent.setup();
+    const navegar = vi.fn();
+    const brCode =
+      "00020126580014BR.GOV.BCB.PIX0136f5b1c0de-0000-4000-a000-000000000abc5204000053039865802BR5913CLINICA IRIS6008SAOPAULO62070503***6304AB12";
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          autorizacao: { forma: "pix_copia_e_cola", brCode },
+        })}
+        navegar={navegar}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    // O QR é uma renderização do MESMO texto — vem do DS (`QrCode`), com alt
+    // de Pix (o default do componente fala de MFA).
+    const qr = await screen.findByRole("img", { name: /qr code do pix/i });
+    expect(qr).toBeDefined();
+
+    // O BR Code precisa estar visível e selecionável: é o caminho manual de
+    // quem não consegue ler o QR nem usar a área de transferência.
+    expect(screen.getByText(brCode)).toBeDefined();
+
+    // As duas asserções que fecham o débito: BR Code não é URL.
+    expect(navegar).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link")).toBeNull();
+    for (const el of document.querySelectorAll("[href]")) {
+      expect(el.getAttribute("href")).not.toBe(brCode);
+    }
+  });
+
+  it("o botão copiar entrega o BR Code exato à área de transferência", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    const brCode = "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF";
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          autorizacao: { forma: "pix_copia_e_cola", brCode },
+        })}
+        navegar={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /copiar código pix/i }),
+    );
+
+    // Exato: um BR Code truncado ou com espaço a mais é recusado pelo banco.
+    expect(writeText).toHaveBeenCalledWith(brCode);
   });
 });
