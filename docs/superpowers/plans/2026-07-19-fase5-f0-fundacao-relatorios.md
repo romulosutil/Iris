@@ -14,7 +14,7 @@
 - **Numeração de migração:** próxima livre = `0038` (Drizzle-gerada) + `0039` (RLS à mão). Última existente = `0037`.
 - **Journal `when` de migração à mão:** entrada de `0039` em `db/migrations/meta/_journal.json` com `when` = `when` de `0038` **+ 1000** (ver [[drizzle-hand-migration-when-ordering]]). Sem isso a migração é pulada.
 - **RLS é o gargalo único:** todo acesso a dado de paciente passa por `withTenant(ctx, tx => ...)`. Session vars são setadas server-side via `set_config(..., true)`; **nunca** a partir de input de request.
-- **Leitura de session var em SQL:** sempre `current_setting('app.clinic_id')::uuid` / `('app.user_id')::uuid` (com `::uuid`, sem `missing_ok`); papel `current_setting('app.user_role')` sem cast.
+- **Leitura de session var em SQL:** ~~sempre `current_setting('app.clinic_id')::uuid` (com `::uuid`, sem `missing_ok`)~~ — **convenção revogada em 08/08/2026 pela `0085` (D16 / #229)**: policy usa `app_clinic_id_exigido()`, que levanta `P0001` nomeando o tenant em vez de `42704`/`22P02`. `('app.user_id')::uuid` segue com cast direto; papel `current_setting('app.user_role')` sem cast.
 - **Papéis (`user_role_tipo`):** `terapeuta` | `coordenador` | `admin_recepcao`. Não existe `admin` isolado.
 - **Toda tabela nova:** `ENABLE` **e** `FORCE ROW LEVEL SECURITY`. Statements SQL à mão separados por `--> statement-breakpoint`.
 - **Ambiente de teste:** `pnpm test:rls` roda `*.int.test.ts`; conexão de produto via `withTenant`/`sql` (`app_role`, RLS aplica) + conexão owner via `postgres(process.env.MIGRATION_DATABASE_URL!)` (bypassa RLS, p/ seed). Auto-skip com `describe.skipIf(!hasDb)`.
@@ -26,11 +26,13 @@
 ### Task 1: Schema Drizzle — customType `bytea`, enums e as 3 tabelas (migração `0038`)
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (adicionar ao fim: customType, enums, tabelas)
 - Create (gerado): `db/migrations/0038_<random>.sql` via `pnpm db:generate`
 - Test: `db/tests/fase5-report-schema.int.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `bytea` — `customType<{ data: Buffer; default: false }>` para colunas binárias.
   - `reportTipo` = pgEnum `report_tipo` (`familia` | `convenio_bruto` | `convenio_narrativo` | `avaliativo_interdisciplinar`).
@@ -48,7 +50,9 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
 
 const hasDb = !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 
 // UUIDs fixos de seed mínimo (clínica + paciente + user) — reaproveitar de um seed helper se existir.
 const CLINIC = "00000000-0000-0000-0000-0000000000c1";
@@ -61,7 +65,9 @@ describe.skipIf(!hasDb)("report — constraints de banco", () => {
     await owner!`INSERT INTO app_user (id, clinic_id, nome, email) VALUES (${USER}, ${CLINIC}, 'U', 'u@e.com') ON CONFLICT DO NOTHING`;
     await owner!`INSERT INTO patient (id, clinic_id, nome) VALUES (${PATIENT}, ${CLINIC}, 'P') ON CONFLICT DO NOTHING`;
   });
-  afterAll(async () => { await owner?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+  });
 
   test("periodo_fim < periodo_inicio é rejeitado", async () => {
     await expect(
@@ -85,7 +91,8 @@ describe.skipIf(!hasDb)("report — constraints de banco", () => {
   });
 
   test("report rascunho válido insere e payload_versao default = 1", async () => {
-    const [r] = await owner!`INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, payload)
+    const [r] =
+      await owner!`INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, payload)
              VALUES (${CLINIC}, ${PATIENT}, 'familia', '2026-01-01', '2026-01-31', '{"x":1}'::jsonb)
              RETURNING payload_versao, status`;
     expect(r.payload_versao).toBe(1);
@@ -150,7 +157,9 @@ export const report = pgTable(
     revisadoPor: uuid("revisado_por").references(() => appUser.id),
     exportadoPor: uuid("exportado_por").references(() => appUser.id),
     exportadoEm: timestamp("exportado_em", { withTimezone: true }),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     check("report_periodo", sql`${t.periodoFim} >= ${t.periodoInicio}`),
@@ -177,7 +186,9 @@ export const reportPdf = pgTable("report_pdf", {
     .references(() => report.id, { onDelete: "cascade" }),
   bytes: bytea("bytes").notNull(),
   hash: text("hash").notNull(),
-  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  criadoEm: timestamp("criado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 // Trilha de auditoria LGPD (spec §2). entidade_id SEM FK — sobrevive ao delete do alvo.
@@ -196,7 +207,9 @@ export const auditLog = pgTable(
     entidadeId: uuid("entidade_id").notNull(),
     patientId: uuid("patient_id").references(() => patient.id),
     detalhe: jsonb("detalhe"),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [index("idx_audit_log_patient").on(t.patientId, t.criadoEm.desc())],
 );
@@ -231,11 +244,13 @@ git commit -m "feat(db): add report, report_pdf, audit_log tables (fase5 f0)"
 ### Task 2: RLS das 3 tabelas + helper `app_report_visivel` (migração `0039`)
 
 **Files:**
+
 - Create: `db/migrations/0039_fase5_report_audit_rls.sql`
 - Modify: `db/migrations/meta/_journal.json` (entrada manual `idx: 39`, `when` = `when` de 0038 + 1000)
 - Test: `db/tests/fase5-report-rls.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: helpers existentes `app_patient_in_clinic(uuid)`, `app_is_on_team(uuid)`; `withTenant` de `src/db/rls.ts`; tabelas da Task 1.
 - Produces: policies `report_scope`, `report_pdf_scope`, `audit_insert`, `audit_select`; função `app_report_visivel(uuid) RETURNS boolean`.
 
@@ -250,8 +265,11 @@ import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "../../src/db/rls";
 import { report, reportPdf, auditLog } from "../../src/db/schema";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const hasDb =
+  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 
 const CLINIC_A = "00000000-0000-0000-0000-00000000000a";
 const CLINIC_B = "00000000-0000-0000-0000-00000000000b";
@@ -275,7 +293,9 @@ describe.skipIf(!hasDb)("report/report_pdf/audit_log — RLS", () => {
     //     care_team_membership (U_TER_A, P1, vigencia_fim NULL),
     //     report R1(A,P1,familia,rascunho), report R_B(B,P_B,familia,rascunho).
   });
-  afterAll(async () => { await owner?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+  });
 
   test("coordenador da clínica A vê report de A, não de B", async () => {
     const rows = await withTenant(ctx("coordenador", U_COORD_A), (db) =>
@@ -324,7 +344,9 @@ describe.skipIf(!hasDb)("report/report_pdf/audit_log — RLS", () => {
       VALUES (${CLINIC_A}, ${U_COORD_A}, 'relatorio_exportado', 'report', ${R1})`;
     await expect(
       withTenant(ctx("coordenador", U_COORD_A), (db) =>
-        db.execute(sql`DELETE FROM audit_log WHERE clinic_id = ${CLINIC_A}::uuid`),
+        db.execute(
+          sql`DELETE FROM audit_log WHERE clinic_id = ${CLINIC_A}::uuid`,
+        ),
       ),
     ).rejects.toThrow();
   });
@@ -441,10 +463,12 @@ git commit -m "feat(db): RLS for report/report_pdf/audit_log + app_report_visive
 ### Task 3: Purga rastreada — `app_purgar_report` (SECURITY DEFINER, append em `0039`)
 
 **Files:**
+
 - Modify: `db/migrations/0039_fase5_report_audit_rls.sql` (append da função + grants)
 - Test: `db/tests/fase5-report-purga.int.test.ts`
 
 **Interfaces:**
+
 - Produces: `app_purgar_report(p_report uuid, p_motivo text) RETURNS void` — grava `audit_log(acao='relatorio_purgado')` e depois `DELETE` de `report` (cascata em `report_pdf`), na mesma tx. Executável só por coordenador.
 
 > Nota: esta task **acrescenta** statements ao `0039` da Task 2 (mesma migração, mesma entrada de journal). Se a Task 2 já foi aplicada, adicionar a função exige uma nova migração `0040_fase5_purga.sql` em vez de editar a `0039` já commitada (não reescrever migração aplicada — ver CLAUDE.md). Preferir: implementar Task 2 e 3 **antes** do primeiro `db:migrate`, mantendo tudo em `0039`. Se já migrou, criar `0040_fase5_purga_rls.sql` (journal `when` = 0039 + 1000).
@@ -457,8 +481,11 @@ import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "../../src/db/rls";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const hasDb =
+  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 // reusar constantes/seed do fase5-report-rls (extrair p/ um helper se preferir).
 const CLINIC_A = "00000000-0000-0000-0000-00000000000a";
 const U_COORD_A = "00000000-0000-0000-0000-0000000000c1";
@@ -469,7 +496,9 @@ const ctx = (role: string, userId: string, clinicId = CLINIC_A) =>
 
 describe.skipIf(!hasDb)("app_purgar_report", () => {
   // beforeAll: seed clínica/user/paciente/report R1 exportado + report_pdf de R1.
-  afterAll(async () => { await owner?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+  });
 
   test("purga grava audit_log ANTES e remove report + report_pdf (cascata)", async () => {
     await withTenant(ctx("coordenador", U_COORD_A), (db) =>
@@ -477,7 +506,8 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
     );
     const rep = await owner!`SELECT 1 FROM report WHERE id = ${R1}`;
     const pdf = await owner!`SELECT 1 FROM report_pdf WHERE report_id = ${R1}`;
-    const log = await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R1} AND acao = 'relatorio_purgado'`;
+    const log =
+      await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R1} AND acao = 'relatorio_purgado'`;
     expect(rep).toHaveLength(0);
     expect(pdf).toHaveLength(0);
     expect(log).toHaveLength(1); // trilha sobrevive ao delete (entidade_id sem FK)
@@ -550,12 +580,14 @@ git commit -m "feat(db): app_purgar_report — traced retention purge (fase5 f0)
 ### Task 4: Lib de report — hash + interface de renderer + stub + sanitize
 
 **Files:**
+
 - Create: `src/lib/report/hash.ts`
 - Create: `src/lib/report/renderer.ts`
 - Create: `src/lib/report/sanitize.ts`
 - Test: `src/lib/report/hash.test.ts`, `src/lib/report/sanitize.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `sha256Hex(buf: Buffer): string`
   - `interface PdfRenderer { render(html: string): Promise<Buffer> }`
@@ -565,6 +597,7 @@ git commit -m "feat(db): app_purgar_report — traced retention purge (fase5 f0)
 - [ ] **Step 1: Escrever os testes falhos (unit, sem DB)**
 
 `src/lib/report/hash.test.ts`:
+
 ```ts
 import { describe, expect, test } from "vitest";
 import { sha256Hex } from "./hash";
@@ -579,6 +612,7 @@ describe("sha256Hex", () => {
 ```
 
 `src/lib/report/sanitize.test.ts`:
+
 ```ts
 import { describe, expect, test } from "vitest";
 import { escapeHtml } from "./sanitize";
@@ -588,7 +622,9 @@ describe("escapeHtml", () => {
     expect(escapeHtml(`<img src=x onerror=1>`)).toBe(
       "&lt;img src=x onerror=1&gt;",
     );
-    expect(escapeHtml(`a & b "c" 'd'`)).toBe("a &amp; b &quot;c&quot; &#39;d&#39;");
+    expect(escapeHtml(`a & b "c" 'd'`)).toBe(
+      "a &amp; b &quot;c&quot; &#39;d&#39;",
+    );
   });
 });
 ```
@@ -601,6 +637,7 @@ Expected: FAIL — módulos não existem.
 - [ ] **Step 3: Implementar os módulos**
 
 `src/lib/report/hash.ts`:
+
 ```ts
 import { createHash } from "node:crypto";
 
@@ -610,9 +647,14 @@ export function sha256Hex(buf: Buffer): string {
 ```
 
 `src/lib/report/sanitize.ts`:
+
 ```ts
 const MAP: Record<string, string> = {
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
 };
 
 // Texto livre de terapeuta NUNCA vira markup no template (spec §5, red-team #2).
@@ -622,6 +664,7 @@ export function escapeHtml(s: string): string {
 ```
 
 `src/lib/report/renderer.ts`:
+
 ```ts
 import { sha256Hex } from "./hash";
 
@@ -655,10 +698,12 @@ git commit -m "feat(report): hash, sanitize, renderer interface + stub (fase5 f0
 ### Task 5: Serviço de export — transação com trava de race + trilha
 
 **Files:**
+
 - Create: `src/lib/report/export.ts`
 - Test: `src/lib/report/export.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `PdfRenderer` (Task 4), `sha256Hex` (Task 4), `withTenant`/`Tx`, tabelas (Task 1), policies (Task 2).
 - Produces:
   - `type ExportParams = { reportId: string; atorId: string; buildHtml: (payload: unknown) => string; renderer: PdfRenderer }`
@@ -676,8 +721,11 @@ import { withTenant, type TenantContext } from "../../db/rls";
 import { StubPdfRenderer } from "./renderer";
 import { exportReport } from "./export";
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
-const owner = hasDb ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 }) : null;
+const hasDb =
+  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+const owner = hasDb
+  ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
+  : null;
 const CLINIC_A = "00000000-0000-0000-0000-00000000000a";
 const U_COORD_A = "00000000-0000-0000-0000-0000000000c1";
 const P1 = "00000000-0000-0000-0000-0000000000d1";
@@ -693,7 +741,9 @@ async function seedReport(id: string) {
 
 describe.skipIf(!hasDb)("exportReport", () => {
   // beforeAll: seed clínica A + coord + P1 (+ care_team se necessário para coordenador? não — coordenador é clínica-wide)
-  afterAll(async () => { await owner?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+  });
 
   test("congela report_pdf + marca exportado + grava audit_log, atomicamente", async () => {
     const R = "00000000-0000-0000-0000-0000000000e1";
@@ -701,9 +751,12 @@ describe.skipIf(!hasDb)("exportReport", () => {
     const { hash } = await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
       exportReport(tx, { reportId: R, atorId: U_COORD_A, buildHtml, renderer }),
     );
-    const [rep] = await owner!`SELECT status, pdf_hash FROM report WHERE id = ${R}`;
-    const [pdf] = await owner!`SELECT hash FROM report_pdf WHERE report_id = ${R}`;
-    const [log] = await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R} AND acao = 'relatorio_exportado'`;
+    const [rep] =
+      await owner!`SELECT status, pdf_hash FROM report WHERE id = ${R}`;
+    const [pdf] =
+      await owner!`SELECT hash FROM report_pdf WHERE report_id = ${R}`;
+    const [log] =
+      await owner!`SELECT acao FROM audit_log WHERE entidade_id = ${R} AND acao = 'relatorio_exportado'`;
     expect(rep.status).toBe("exportado");
     expect(rep.pdf_hash).toBe(hash);
     expect(pdf.hash).toBe(hash);
@@ -722,7 +775,12 @@ describe.skipIf(!hasDb)("exportReport", () => {
     };
     await expect(
       withTenant(ctx("coordenador", U_COORD_A), (tx) =>
-        exportReport(tx, { reportId: R, atorId: U_COORD_A, buildHtml, renderer: racingRenderer }),
+        exportReport(tx, {
+          reportId: R,
+          atorId: U_COORD_A,
+          buildHtml,
+          renderer: racingRenderer,
+        }),
       ),
     ).rejects.toThrow(/vers/i);
     const [rep] = await owner!`SELECT status FROM report WHERE id = ${R}`;
@@ -733,7 +791,12 @@ describe.skipIf(!hasDb)("exportReport", () => {
     const R = "00000000-0000-0000-0000-0000000000e1"; // já exportado no 1º teste
     await expect(
       withTenant(ctx("coordenador", U_COORD_A), (tx) =>
-        exportReport(tx, { reportId: R, atorId: U_COORD_A, buildHtml, renderer }),
+        exportReport(tx, {
+          reportId: R,
+          atorId: U_COORD_A,
+          buildHtml,
+          renderer,
+        }),
       ),
     ).rejects.toThrow(/status/i);
   });
@@ -765,7 +828,10 @@ export type ExportParams = {
 };
 
 // Export = 1 transação. Render antes do lock; FOR UPDATE + recheck de versão trava a race (spec §5).
-export async function exportReport(tx: Tx, params: ExportParams): Promise<{ hash: string }> {
+export async function exportReport(
+  tx: Tx,
+  params: ExportParams,
+): Promise<{ hash: string }> {
   const { reportId, atorId, buildHtml, renderer } = params;
 
   // Fase 1: ler estado + versão (sem lock). RLS garante tenant.
@@ -789,7 +855,9 @@ export async function exportReport(tx: Tx, params: ExportParams): Promise<{ hash
   const lrow = (locked as unknown as any[])[0];
   if (!lrow) throw new Error(`exportReport: report ${reportId} sumiu`);
   if (lrow.payload_versao !== versao) {
-    throw new Error(`exportReport: payload_versao mudou (${versao} → ${lrow.payload_versao}); reinicie`);
+    throw new Error(
+      `exportReport: payload_versao mudou (${versao} → ${lrow.payload_versao}); reinicie`,
+    );
   }
   if (lrow.status === "exportado") {
     throw new Error(`exportReport: status exportado durante o export`);
@@ -829,10 +897,12 @@ git commit -m "feat(report): transactional export with race-guard + audit trail 
 ### Task 6: Re-download serve o snapshot — `getReportPdf`
 
 **Files:**
+
 - Create: `src/lib/report/download.ts`
 - Test: `src/lib/report/download.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `report_pdf` + RLS (Task 2).
 - Produces: `async function getReportPdf(tx: Tx, reportId: string): Promise<{ bytes: Buffer; hash: string } | null>` — devolve o snapshot congelado; **nunca** re-renderiza.
 
@@ -841,12 +911,16 @@ git commit -m "feat(report): transactional export with race-guard + audit trail 
 ```ts
 // ... imports e seed como export.int.test.ts; usa um report já exportado (R exportado).
 test("getReportPdf devolve os bytes congelados, hash idêntico", async () => {
-  const out = await withTenant(ctx("coordenador", U_COORD_A), (tx) => getReportPdf(tx, R));
+  const out = await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
+    getReportPdf(tx, R),
+  );
   expect(out).not.toBeNull();
   expect(sha256Hex(out!.bytes)).toBe(out!.hash);
 });
 test("report de outra clínica → null (RLS)", async () => {
-  const out = await withTenant(ctx("coordenador", U_COORD_A), (tx) => getReportPdf(tx, R_B));
+  const out = await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
+    getReportPdf(tx, R_B),
+  );
   expect(out).toBeNull();
 });
 ```
@@ -864,8 +938,13 @@ import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 
 type Tx = PostgresJsDatabase<Record<string, never>>;
 
-export async function getReportPdf(tx: Tx, reportId: string): Promise<{ bytes: Buffer; hash: string } | null> {
-  const res = await tx.execute(sql`SELECT bytes, hash FROM report_pdf WHERE report_id = ${reportId}`);
+export async function getReportPdf(
+  tx: Tx,
+  reportId: string,
+): Promise<{ bytes: Buffer; hash: string } | null> {
+  const res = await tx.execute(
+    sql`SELECT bytes, hash FROM report_pdf WHERE report_id = ${reportId}`,
+  );
   const row = (res as unknown as any[])[0];
   if (!row) return null;
   return { bytes: row.bytes as Buffer, hash: row.hash as string };
@@ -891,11 +970,13 @@ git commit -m "feat(report): getReportPdf serves frozen snapshot (fase5 f0)"
 > ⚠️ **Bloqueio de infra (CLAUDE.md "confirmar antes"):** não existe Chromium headless em runtime hoje (só Playwright devDep p/ E2E). Este renderer introduz browser no runtime do app. **Antes de implementar:** confirmar com o Rômulo a estratégia — Playwright core no server, `@sparticuz/chromium` (serverless), ou serviço de render dedicado — à luz do pivô VPS/Easypanel. Até lá, o produto usa `StubPdfRenderer`; toda a lógica de export (Tasks 5-6) já está testada sem browser.
 
 **Files:**
+
 - Create: `src/lib/report/chromium-renderer.ts`
 - Create: `src/lib/report/factory.ts` (resolve renderer por ambiente, espelha `resolveProvider` de extraction)
 - Test: `src/lib/report/chromium-renderer.security.test.ts` (E2E-ish; pode ir p/ `e2e/` se exigir browser real)
 
 **Interfaces:**
+
 - Consumes: `PdfRenderer` (Task 4).
 - Produces: `class ChromiumPdfRenderer implements PdfRenderer`; `resolveRenderer(env): PdfRenderer`.
 
@@ -914,7 +995,9 @@ describe("ChromiumPdfRenderer — sandbox", () => {
     const r = new ChromiumPdfRenderer({ onRequest: (u) => requests.push(u) }); // hook de teste
     const hostil = `<img src="file:///etc/passwd"><iframe src="http://169.254.169.254/latest/meta-data/"></iframe>`;
     await r.render(hostil);
-    expect(requests.filter((u) => !u.startsWith("data:") && !u.startsWith("about:"))).toHaveLength(0);
+    expect(
+      requests.filter((u) => !u.startsWith("data:") && !u.startsWith("about:")),
+    ).toHaveLength(0);
   });
 });
 ```
@@ -940,14 +1023,17 @@ export class ChromiumPdfRenderer implements PdfRenderer {
   async render(html: string): Promise<Buffer> {
     let browser: Browser | null = null;
     try {
-      browser = await chromium.launch({ args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+      browser = await chromium.launch({
+        args: ["--no-sandbox", "--disable-dev-shm-usage"],
+      });
       const context = await browser.newContext({ javaScriptEnabled: false });
       const page = await context.newPage();
       // bloquear TODA saída: só data:/about: passam.
       await page.route("**/*", (route) => {
         const url = route.request().url();
         this.opts.onRequest?.(url);
-        if (url.startsWith("data:") || url.startsWith("about:")) return route.continue();
+        if (url.startsWith("data:") || url.startsWith("about:"))
+          return route.continue();
         return route.abort();
       });
       await page.setContent(html, { waitUntil: "load" });
@@ -961,6 +1047,7 @@ export class ChromiumPdfRenderer implements PdfRenderer {
 ```
 
 `src/lib/report/factory.ts`:
+
 ```ts
 import { StubPdfRenderer, type PdfRenderer } from "./renderer";
 import { ChromiumPdfRenderer } from "./chromium-renderer";
@@ -988,6 +1075,7 @@ git commit -m "feat(report): sandboxed Chromium PDF renderer (fase5 f0)"
 ### Task 8: Reconciliar documentação + BACKLOG
 
 **Files:**
+
 - Modify: `docs/dados/modelo-de-dados.md` (§1.6 e §4.4)
 - Modify: `BACKLOG.md`
 
@@ -1000,6 +1088,7 @@ Atualizar a DDL de `report` (§1.6) para refletir o construído: adicionar `payl
 - [ ] **Step 2: Atualizar `BACKLOG.md`**
 
 Registrar como itens abertos (não implementados em F0):
+
 - Tier-gating de relatório (família=Clínica / narrativo=Convênio / bruto=Diário) — diferido; falta modelo de plano/billing. Decidir onde mora o tier.
 - Prazo concreto de retenção por `tipo` (fonte: `docs/legal/`, CFM/prontuário).
 - **Bloqueador jurídico:** uso secundário de dado clínico de menor ("Iris empresa de dados") — exige 1 página em `docs/legal/` (base legal + anonimização) antes de qualquer pipeline de analytics/treino. F0 não abre nenhum caminho sobre `report`/`report_pdf`.
