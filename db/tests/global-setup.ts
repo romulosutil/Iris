@@ -21,6 +21,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import postgres from "postgres";
 import { REQUIRED_DB_ENV, allowSkip, missingDbEnv } from "./integration-env";
+import { seedProtocolFamiliaCatalogo } from "./reference-data";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 
@@ -336,6 +337,23 @@ export async function setup(): Promise<void> {
         "",
       ].join("\n"),
     );
+  }
+
+  // ── dado de referência ─────────────────────────────────────────────────────
+  // Repõe o seed do catálogo de famílias antes de qualquer arquivo rodar (#222).
+  // Não é redundância inútil com o guard estático: o guard impede que um diff
+  // NOVO trunque a tabela, mas não conserta o banco local que já ficou sem as 4
+  // famílias — e nada mais as repõe, nem re-rodar as migrações (já aplicadas).
+  // Sem isto, a única saída seria dropar o banco.
+  const refSql = postgres(process.env.MIGRATION_DATABASE_URL!, {
+    max: 1,
+    idle_timeout: 1,
+    connect_timeout: 10,
+  });
+  try {
+    await seedProtocolFamiliaCatalogo(refSql);
+  } finally {
+    await refSql.end({ timeout: 5 });
   }
 
   const app = identities.get("DATABASE_URL");
