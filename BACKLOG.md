@@ -8,21 +8,21 @@
 
 ## 🚀 Painel de Fases (Roadmap MVP)
 
-| Fase    | Tópico Principal                                        |                                              Status                                               | GitHub Milestone / Issue |
-| :------ | :------------------------------------------------------ | :-----------------------------------------------------------------------------------------------: | :----------------------- |
-| **0.5** | Design System (Espectro Brutal)                         |                                           ✅ Concluído                                            | PR #1                    |
-| **1**   | Fundação de Dados & Auth (Fase 1a)                      |                                           ✅ Concluído                                            | PR #3                    |
-| **1b**  | Fundação Auth + Multi-tenancy                           |                                           ✅ Concluído                                            | PR #10                   |
-| **1c**  | Cadastro Clínico (ficha + protocolos + equipe)          |                                           ✅ Concluído                                            | Issue #4                 |
-| **1d**  | Agenda Mínima + Check-in                                |                                           ✅ Concluído                                            | Issue #11                |
-| **2**   | Metas & Diário por Texto                                |                                     ✅ Concluído (Planos 1-4)                                     | Issue #5                 |
-| **3**   | Extração de Evidências (IA)                             |                                           ✅ Concluído                                            | Issue #6 (fechada 13/07) |
-| **4**   | Evidências Acumuladas & Gráficos                        |                                           ✅ Concluído                                            | Issue #7                 |
-| **5**   | Relatórios de Convênio & Supervisão                     |                                           ✅ Concluído                                            | Issue #8                 |
-| **6**   | Hardening LGPD (fechamento MVP)                         |                                 ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅)                                 | Issue #9                 |
-| **6b**  | Ditado de Voz (áudio + ASR)                             |                                  📅 Fast-follow · gated por DPA                                   | Issue #72                |
-| **7**   | Self-Service & Growth (onboarding + pagamento autônomo) | 🚧 Em construção (trial #175 ✅ · arquivamento #174 parcial · webhook ✅ · **cobrança pendente**) | Issue #36                |
-| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2 |                                           ✅ Concluído                                            | Issue #126               |
+| Fase    | Tópico Principal                                         |                                                     Status                                                      | GitHub Milestone / Issue |
+| :------ | :------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------: | :----------------------- |
+| **0.5** | Design System (Espectro Brutal)                          |                                                  ✅ Concluído                                                   | PR #1                    |
+| **1**   | Fundação de Dados & Auth (Fase 1a)                       |                                                  ✅ Concluído                                                   | PR #3                    |
+| **1b**  | Fundação Auth + Multi-tenancy                            |                                                  ✅ Concluído                                                   | PR #10                   |
+| **1c**  | Cadastro Clínico (ficha + protocolos + equipe)           |                                                  ✅ Concluído                                                   | Issue #4                 |
+| **1d**  | Agenda Mínima + Check-in                                 |                                                  ✅ Concluído                                                   | Issue #11                |
+| **2**   | Metas & Diário por Texto                                 |                                            ✅ Concluído (Planos 1-4)                                            | Issue #5                 |
+| **3**   | Extração de Evidências (IA)                              |                                                  ✅ Concluído                                                   | Issue #6 (fechada 13/07) |
+| **4**   | Evidências Acumuladas & Gráficos                         |                                                  ✅ Concluído                                                   | Issue #7                 |
+| **5**   | Relatórios de Convênio & Supervisão                      |                                                  ✅ Concluído                                                   | Issue #8                 |
+| **6**   | Hardening LGPD (fechamento MVP)                          |                                        ✅ MVP fecha (6.1/6.2/6.3/6.6 ✅)                                        | Issue #9                 |
+| **6b**  | Iris Audio Companion (Modo Ambiente + Ditado de Voz ASR) |                                📅 Fast-follow · spec atualizada · gated por DPA                                 | Issue #72                |
+| **7**   | Self-Service & Growth (onboarding + pagamento autônomo)  | 🚧 Em construção (trial #175 ✅ · arquivamento #174 parcial · 2 gateways ✅ #231 · **produção não exercitada**) | Issue #36                |
+| **—**   | E-mail transacional (Resend) — canal do RT no estágio 2  |                                                  ✅ Concluído                                                   | Issue #126               |
 
 ## 🧾 Débitos técnicos abertos
 
@@ -39,14 +39,98 @@
 | **D8**  | **Terapeuta de cobertura não desarquiva.** `app_desarquivar_paciente` estoura antes de olhar `arquivado_em`, então há um gate de visibilidade antes da chamada — senão a exceção abortaria a transação e o terapeuta perderia o diário inteiro.                                                                                                                                                                                                                                                                                                                                                                             | Consequência assumida, não acidente: paciente arquivado invisível ao terapeuta de cobertura só volta pela mão do coordenador. Vira problema se cobertura for comum na prática.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | #174 · `0067`                                                                                                 |
 | **D9**  | **Customização White-Label nos PDFs exportados (#120)** — funcionalidade de personalização com logotipo e cores da clínica no cabeçalho do PDF.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Melhoria de produto futura: hoje os PDFs usam o layout auditável padrão da plataforma Iris.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | #120 · `src/lib/export/pdf-generator.ts`                                                                      |
 | **D10** | **Assinatura Digital ICP-Brasil A1/A3 (#120)** — integração com certificados ICP-Brasil para relatórios com exigência judicial/pericial.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Melhoria de produto futura: o padrão atual (MFA + SHA-256 + AuditLog) atende ao piso legal, mas certas instâncias judiciais pedem ICP-Brasil.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | #120 · `src/lib/export/pdf-generator.ts`                                                                      |
-| **D12** | **Conta Asaas de produção bloqueada — não aprovada** (03/08/2026), e **Pix Automático indisponível por até 6 meses** (origem do prazo a confirmar).                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Bloqueia a Fase 7 inteira: sem conta aprovada não há cobrança, webhook de produção nem self-service. Cuidado de leitura: a aba de Webhooks listar os eventos `PIX_AUTOMATIC_*` **não** prova habilitação na conta — é catálogo do produto. Foi assim que 01/08 registrou "habilitado" por engano.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | #36                                                                                                           |
+| **D12** | ~~Conta Asaas de produção bloqueada — não aprovada e Pix Automático indisponível.~~ **Liberada em 08/08/2026** — conta de produção do Asaas foi aprovada e está ativa. O sistema utilizará Asaas e Mercado Pago como opções variadas de pagamento.                                                                                                                                                                                                                                                                                                                                                                          | O bloqueio cadastral e de produto foi superado. Agora as duas opções de gateway (Asaas e Mercado Pago) serão integradas como opções variadas de pagamento para faturamento de clínicas.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | #36                                                                                                           |
 | **D15** | ~~Critério (c) de "paciente ativo" não é congelado no fim do ciclo.~~ **Improcedente, fechado em 07/08/2026 — a premissa lia código morto.** O achado citava `0071:320` (`p.arquivado_em IS NULL`), mas a `0075` fez `CREATE OR REPLACE` da `billing_apurar_ciclo` e **removeu qualquer leitura de `arquivado_em`** ao adotar (a)+(b) da DECISÃO 8. Medido no banco, não lido no diff: `SELECT prosrc LIKE '%arquivado_em%' FROM pg_proc WHERE proname='billing_apurar_ciclo'` → **false**. Toda a apuração compara timestamps contra `[v_inicio, v_fim)`: já é congelada, e a hora em que o job roda não muda o resultado. | Aplicar o fix proposto (`arquivado_em IS NULL OR arquivado_em >= v_fim`) seria **regressão**: reintroduziria o critério (c) que a DECISÃO 8 (04/08/2026) removeu de propósito — clínica em recesso voltaria a pagar. Lição repetida: `git log`/diff de uma migração não diz qual é o corpo vivo da função quando outra migração fez `CREATE OR REPLACE` depois. Resíduo consciente: `src/app/(admin)/benjamin/queries.ts:143,208` ainda conta `arquivado_em is null` **no agora** — é termômetro de MRR do backoffice, não fatura, e está documentado como tal em `:17-45`.                                                                                                                                                                          | #216 · `0075:82-142` · trava de regressão em `db/tests/billing-apuracao.int.test.ts`                          |
 | **D16** | ~~43 policies fazem `current_setting('app.clinic_id')::uuid` sem `missing_ok` e sem guard de formato.~~ **Fechado em 08/08/2026 (#229).** Eram **48**, não 43 — medido em `pg_policies`, não lido. Todas passaram a chamar `app_clinic_id_exigido()` na `0085`.                                                                                                                                                                                                                                                                                                                                                             | O desenho recusou o fix mecânico que o próprio débito alertava: trocar por `app_clinic_id_atual()` (que devolve `NULL`) transformaria "estoura" em "não vê linha nenhuma", e em predicado de isolamento a falha silenciosa é o modo pior. O helper novo **continua falhando barulhento** — só que com um `P0001` único que nomeia o tenant, no lugar de `42704`/`22P02`. Sob `app_role`, GUC ausente ou malformado é sempre bug: `withTenant()` já falha rápido antes de abrir a transação. Mudança deliberada de comportamento: as 4 policies que eram `missing_ok` (billing/consent) ficaram estritas — medido caller a caller que nenhum leitor `app_role` as lê sem GUC (billing/cadastro usam `authDb`/`iris_auth`, que tem policies próprias). | #229 · `0085_policies_tenant_helper.sql` · trava em `db/tests/clinic-id-helper-rls.int.test.ts`               |
 | **D17** | **Editar migração já aplicada não roda e não avisa.** O guard de UUID de `app_conta_somente_leitura()` foi escrito editando a `0073` **no lugar** (commit `b53b294`), depois de ela já ter sido aplicada — junto com 3 `GRANT EXECUTE`. Drizzle aplica por `tag` do journal e nunca reexecuta tag registrado.                                                                                                                                                                                                                                                                                                               | Primo do **D2**, e mais traiçoeiro: base criada do zero (dev, CI) tem o código novo, base que veio migrando (produção) tem o antigo, e o `git diff` mostra o certo nos dois. Verde local não é evidência. O fim real é o mesmo teste de CI do D2, ampliado para comparar o **hash** de cada `.sql` com o registrado em `drizzle.__drizzle_migrations`.                                                                                                                                                                                                                                                                                                                                                                                               | #215 · `0073` reaplicada pela `0082` · `CLAUDE.md` §"Migrações"                                               |
-| **D18** | **`CPF_HASH_SALT` não provisionada em produção** (#191). Sem a env var, `gerarCpfHash` lança e **o cadastro de paciente para de funcionar**; com ela trocada depois, todos os `cpf_hash` já gravados viram lixo.                                                                                                                                                                                                                                                                                                                                                                                                            | Falha barulhenta no deploy (bom) mas total: nenhum paciente é cadastrado até provisionar. O modo silencioso é pior — **rotacionar** o salt depois não quebra nada visível, só desliga a trava anti-fraude: todo CPF vira "inédito" e o trial fica reabusável, sem erro em lugar nenhum. Não há fallback no código de propósito (salt literal no repo permitiria a qualquer leitor descobrir se uma pessoa é paciente).                                                                                                                                                                                                                                                                                                                               | #191 · `src/lib/security/cpf-hash.ts` · Easypanel → Ambiente                                                  |
+| **D18** | ~~`CPF_HASH_SALT` não provisionada em produção.~~ **Fechado em 08/08/2026** — env provisionada no Easypanel, verificada por teste no terminal (não só painel).                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Falha barulhenta no deploy (bom) mas total: nenhum paciente é cadastrado até provisionar. O modo silencioso é pior — **rotacionar** o salt depois não quebra nada visível, só desliga a trava anti-fraude: todo CPF vira "inédito" e o trial fica reabusável, sem erro em lugar nenhum. Não há fallback no código de propósito (salt literal no repo permitiria a qualquer leitor descobrir se uma pessoa é paciente).                                                                                                                                                                                                                                                                                                                               | #191 · `src/lib/security/cpf-hash.ts` · Easypanel → Ambiente                                                  |
 | **D19** | ~~Coleta de CPF sem revisão jurídica (#191).~~ **Escrita em 07/08/2026**, com autorização expressa do Rômulo, na versão `2026-08-07` dos dois documentos: Política seção 1.2 (o dado), **seção 2.1 nova** (prevenção a fraude, legítimo interesse Art. 7º, IX) e seção 3 (exceção declarada ao papel de operador); Termos 7.2 (teste concedido **uma vez por pessoa**, não por conta). **Aguarda leitura do advogado** pelo método de ratificação por silêncio já usado no projeto.                                                                                                                                         | O ponto que precisa do olhar dele está escrito no próprio documento: é a **primeira vez que o Iris é CONTROLADOR de dado originado do paciente** — em todo o resto é operador da clínica. A seção 3 afirmava que o Iris "não usa dado de paciente para finalidade própria fora do contrato"; sem a exceção declarada, a frase teria virado **inexata** no dia do merge. Duas pendências novas nascem daí e estão marcadas `⟨PENDENTE⟩` na seção 2.1: teste de proporcionalidade do legítimo interesse (Art. 10) e prazo de conservação do `cpf_hash` após o encerramento da conta.                                                                                                                                                                   | #191 · `politica-privacidade.md` §1.2/§2.1/§3 · `termos-de-uso.md` §7.2                                       |
 | **D20** | **`VERSAO_TERMO` estava declarado em dois lugares** — `src/lib/legal.ts` (que se diz "fonte única") e `src/app/(auth)/cadastro/logic.ts`. Corrigido na #191: o cadastro passou a importar de `@/lib/legal`.                                                                                                                                                                                                                                                                                                                                                                                                                 | A divergência era **invisível ao teste**: `legal.test.ts` compara a constante de `legal.ts` com os markdown e nunca olhava a segunda cópia. Subir a versão num lado só faria o aceite do profissional gravar uma versão que **nenhum documento publicado tem** — em `professional_consent`, que é append-only (0058: ninguém tem DELETE). Evidência jurídica errada e irremovível. Foi encontrado justamente ao subir para `2026-08-07`. Resíduo: nenhum teste impede uma **terceira** cópia aparecer.                                                                                                                                                                                                                                               | #191 · `src/lib/legal.ts` · `src/app/(auth)/cadastro/logic.ts`                                                |
+| **D21** | **`VinculoCriado.checkoutUrl` vaza o contrato da porta no trilho Asaas.** O Asaas não devolve URL de checkout para autorização de Pix Automático — devolve o BR Code (`payload`, copia-e-cola) e o QR em base64. Como o campo é obrigatório e `types.ts` não pode mudar por causa de um provedor, o adapter grava o copia-e-cola ali.                                                                                                                                                                                                                                                                                       | O nome mente: quem ler `checkoutUrl` esperando `https://…` vai renderizar um link quebrado. A UI de ativação ainda não existe, então hoje ninguém consome — mas quando existir, precisa ramificar por `subscription.provider` (link no Mercado Pago, QR no Asaas). O fim honesto é a porta ter um tipo que admita as duas formas, não o adapter fingir.                                                                                                                                                                                                                                                                                                                                                                                              | #36 · `src/lib/billing/provider/asaas.ts` · `provider/types.ts`                                               |
+| **D22** | **A ativação do Pix Automático cobra de verdade, e o valor é decisão de produto ainda não tomada.** A autorização só vai a `ACTIVE` depois que o QR Code imediato é liquidado: não existe autorização de graça. O adapter usa o menor débito possível (R$ 0,01) como padrão.                                                                                                                                                                                                                                                                                                                                                | O desenho comercial diz "onboarding R$ 0" — e no trilho Asaas isso é impossível por construção do Pix Automático, não por escolha nossa. R$ 0,01 sem explicação na tela vira suporte ("por que me cobraram um centavo?"); um valor simbólico maior precisa ser dito antes. Enquanto o trilho ativo for Mercado Pago, ninguém esbarra nisso — vira bloqueador no dia da virada de chave.                                                                                                                                                                                                                                                                                                                                                              | #36 · `VALOR_ATIVACAO_PADRAO_CENTAVOS` em `provider/asaas.ts`                                                 |
 | **D11** | **Estratégia de Ativo de Dados & Indexação RAG (#120)** — pipeline de tokenização e treinamento de IA sobre históricos exportados.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Diretriz de negócio Iris: preservação integral de evoluções e prontuários no banco para vetorização/RAG e aperfeiçoamento dos modelos clínicos.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | #120 · `src/lib/extraction/`                                                                                  |
+
+---
+
+## 🏁 Sessão 08/08/2026 — Asaas volta a ser trilho possível: adapter implementado e webhook aplicando efeito (#231, avança #36, fecha D12)
+
+**O que destravou.** A conta de produção do Asaas foi aprovada em 08/08/2026 e o
+Pix Automático liberado — o D12, que bloqueava a Fase 7 inteira desde 03/08,
+está fechado. Isso não é só "mais um gateway": o Mercado Pago **não** resolve o
+problema central do modelo comercial. O Iris cobra no FIM do ciclo, somando
+fichas ativas (criada no ciclo **ou** com interação no ciclo), e débito headless
+de valor variável no MP depende de MIT/CoF negociado com o suporte — gate externo
+que continua aberto. No Asaas isso é o desenho do Pix Automático Jornada 3: a
+clínica autoriza uma vez, **sem `value`**, e cada ciclo é debitado com o valor
+realmente apurado.
+
+**O que foi construído.**
+
+- `src/lib/billing/provider/asaas.ts` — os sete métodos da porta. Vínculo =
+  `POST /pix/automatic/authorizations` sem `value`, `paymentCreationMode: MANUAL`
+  (o modo `SUBSCRIPTION` do Asaas EXIGE valor fixo, que é exatamente a armadilha
+  que `types.ts` descreve); cobrança = `POST /payments` com
+  `pixAutomaticAuthorizationId`. `BILLING_PROVIDER=asaas` deixou de lançar.
+- A rota `/api/hooks/asaas` deixou de ser só registro e passou a **aplicar
+  efeito**, no mesmo desenho da do Mercado Pago: grava e responde 200 antes de
+  aplicar, falha de aplicação nunca vira 5xx, recuperação por
+  `reprocessarEventosPendentes`. A migração `0086` acrescenta
+  `aplicado_em`/`erro_aplicacao` com `GRANT UPDATE` **coluna a coluna** — a
+  `0066` só tinha dado `SELECT, INSERT`, e o grant faltando apareceria como
+  `permission denied for table`, que não diz qual coluna.
+- `reprocessarEventosPendentes` passou a varrer **os dois trilhos**, cada tabela
+  com o adapter dela. A primeira versão varria só a do provedor **ativo**, e a
+  revisão do Jules no PR #232 mostrou o furo: `subscription.provider` é
+  persistido por linha, então depois de uma virada de chave as assinaturas
+  antigas continuam amarradas ao gateway de origem e continuam entregando
+  webhook — uma falha transitória naquela rota ficaria encalhada para sempre na
+  tabela do gateway inativo. O cuidado que motivou a versão errada continua
+  valendo e virou invariante testado: **tabela e adapter andam em par**. Cruzá-los
+  faria o adapter errado normalizar payload de outro dialeto e consultar ids
+  inexistentes, carimbando evento legítimo como falha definitiva (4xx) — perda de
+  faturamento em silêncio. O `limite` é por trilho, senão um backlog num gateway
+  consome a cota do outro.
+
+**O que o Pix Automático impõe e não dá para esconder.**
+
+1. **A ativação cobra de verdade.** A autorização só vai a `ACTIVE` depois que o
+   QR imediato é liquidado. Não existe autorização de graça, e o desenho
+   comercial dizia "onboarding R$ 0" — o adapter usa o menor débito possível
+   (R$ 0,01) e a decisão de produto fica aberta como **D22**.
+2. **O Asaas não tem idempotência na criação de cobrança**, e a doc avisa que a
+   API aceita duplicatas. A barreira é procurar por `externalReference`
+   (`cycle:<id>`) antes de emitir. Falha na busca **aborta** a emissão: engolir
+   o erro transformaria "não consegui verificar" em "não existe", que é o caminho
+   exato para cobrar a clínica duas vezes.
+3. **O corpo do webhook não é autenticado** — a entrega usa token fixo no header,
+   não HMAC sobre o corpo. Por isso o efeito vem sempre de uma consulta ao
+   gateway pelo id, nunca do estado que veio no evento.
+4. **A fila para depois de 15 falhas consecutivas** e evento não entregue some em
+   14 dias. É o que torna proibido devolver 5xx por falha de aplicação.
+
+**Verificado por mutação, não por "passou".** O adapter tem 40 testes unitários e
+quatro mutações deliberadas derrubam o vermelho certo: trocar o fuso de
+`America/Sao_Paulo` por `toISOString()` (adiantaria o vencimento em um dia e
+cairia fora da janela de 2 a 10 dias úteis), preencher `value` na autorização
+(travaria o débito no valor de hoje), remover a busca de idempotência (cobrança
+dupla) e tratar `CREATED` como autorizada (liberaria cadastro de clínica que não
+autorizou nada). A rota tem 19 testes de integração contra banco real, e a
+mutação da precedência cobrança-antes-de-vínculo **passou verde na primeira
+tentativa** porque nenhum payload trazia os dois ids ao mesmo tempo — o caso de
+`paymentInstruction` foi acrescentado justamente por isso.
+
+**O dialeto real, não o dublê.** O payload de referência é o evento real do
+sandbox (`docs/evidencias/2026-08-03-asaas-sandbox-evento-real.json`): `id` no
+formato `evt_<hex32>&<int>` com `&` literal, e três formatos de data convivendo
+no mesmo objeto, nenhum com fuso. `new Date("03/08/2026")` leria 8 de MARÇO — um
+erro de cinco meses que não estoura em lugar nenhum, e foi por isso que o parser
+de data é escrito à mão com `-03:00` explícito.
+
+**Continua fora.** A virada de chave: `BILLING_PROVIDER` segue `mercado_pago`.
+Trocar é decisão de produto e exige, antes, provisionar as envs e o webhook de
+produção no painel do Asaas. **Nenhum evento real de PRODUÇÃO foi exercitado
+ponta a ponta em nenhum dos dois trilhos** — sandbox e teste de integração não
+substituem isso, e é a última milha que continua aberta na #36.
 
 ---
 
@@ -1004,11 +1088,7 @@ equipe, #203).
 
 ## 🏁 Sessão 03/08/2026 (3ª) — Billing pay-as-you-grow implementado, trilho vira Mercado Pago (#36)
 
-**Trilho trocado.** Com a conta Asaas bloqueada e o Pix Automático fora por ~6
-meses (D12), o provedor ativo passa a ser o **Mercado Pago** (assinatura
-recorrente `preapproval`). O Asaas continua previsto na porta `BillingProvider`,
-mas **não implementado**: `BILLING_PROVIDER=asaas` lança erro explícito em vez
-de degradar em silêncio.
+**Estratégia de gateway duplo.** O provedor ativo passou a ser o **Mercado Pago** (assinatura recorrente `preapproval`) devido ao bloqueio temporário do Asaas. Em 08/08/2026, com a conta Asaas liberada e aprovada em produção, a nova diretriz de arquitetura prevê o suporte a ambos os gateways (**Asaas** e **Mercado Pago**) como opções variadas de pagamento para as clínicas.
 
 `subscription.provider` é persistido **por linha**, não lido de env — assinatura
 criada num gateway não pode ser reinterpretada por outro porque a env mudou.
@@ -1242,27 +1322,15 @@ Spec atualizada: `docs/superpowers/specs/2026-08-03-issue-36-billing-mercadopago
 
 ## 🚨 Sessão 03/08/2026 (2ª) — Pix Automático cai, conta Asaas bloqueada, trilho muda (#36)
 
-**Dois bloqueadores novos, descobertos no fim da sessão. A Fase 7 para aqui até
-resolverem.**
+**Dois bloqueadores novos foram descobertos no fim da sessão e superados em 08/08/2026 (Asaas liberado/aprovado).**
 
-### 1. Conta Asaas de produção **bloqueada — ainda não aprovada**
+### 1. Conta Asaas de produção **bloqueada — ainda não aprovada (RESOLVIDO em 08/08/2026)**
 
-Descoberto ao tentar cadastrar o webhook de produção. Trabalho no Asaas
-**interrompido imediatamente**; nem a limpeza dos dados de teste do sandbox foi
-feita, para não mexer na conta nesse estado.
+Descoberto ao tentar cadastrar o webhook de produção. Trabalho no Asaas foi interrompido imediatamente na época. Em 08/08/2026, a conta foi devidamente aprovada e liberada pelo Asaas para produção.
 
-Isso é pré-requisito de tudo: sem conta aprovada não há cobrança, não há webhook
-de produção, não há self-service. **Provavelmente também é a causa raiz do item
-2** — vale confirmar com o Asaas se a indisponibilidade do Pix Automático é
-consequência da conta não aprovada, e não um prazo de produto.
+### 2. Pix Automático indisponível por **até 6 meses (RESOLVIDO em 08/08/2026)**
 
-### 2. Pix Automático indisponível por **até 6 meses**
-
-Derruba a premissa central da spec `2026-08-02-issue-36-fase-7-self-service-asaas-design.md`
-e da decisão de gateway de 01/08. Origem do prazo **ainda não confirmada**
-(gerente Asaas? fila do BC? análise cadastral?) — anotar quando souber, porque
-muda o plano: se for da conta, pode acelerar; se for regulatório, não tem o que
-fazer.
+Havia uma restrição/prazo para a liberação do Pix Automático, mas com a aprovação total da conta em 08/08/2026, a restrição foi resolvida. A nova diretriz é utilizar o Asaas e o Mercado Pago como opções variadas de faturamento.
 
 ⚠️ Note que o BACKLOG de 01/08 afirma "Pix Automático **está habilitado na
 conta**", com base na aba de Webhooks expor os 10 eventos. **A lista de eventos

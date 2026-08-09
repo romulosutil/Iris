@@ -73,13 +73,15 @@ describe("MercadoPagoProvider", () => {
         }),
       );
 
-      const resultado = await new MercadoPagoProvider().iniciarVinculoPagamento({
-        assinante: ASSINANTE,
-        metodo: "cartao",
-        urlRetorno: "https://iris.test/billing/retorno",
-        referenciaExterna: "vinculo_clinic-1",
-        tetoCentavos: 15_000,
-      });
+      const resultado = await new MercadoPagoProvider().iniciarVinculoPagamento(
+        {
+          assinante: ASSINANTE,
+          metodo: "cartao",
+          urlRetorno: "https://iris.test/billing/retorno",
+          referenciaExterna: "vinculo_clinic-1",
+          tetoCentavos: 15_000,
+        },
+      );
 
       const chamada = ultimaChamada(fetchMock);
       expect(chamada.url).toBe("https://api.mercadopago.test/preapproval");
@@ -101,7 +103,11 @@ describe("MercadoPagoProvider", () => {
 
     it("sem teto informado usa o piso mínimo, nunca um valor de ciclo", async () => {
       fetchMock.mockResolvedValue(
-        respostaOk({ id: "x", init_point: "https://mp.test/x", status: "pending" }),
+        respostaOk({
+          id: "x",
+          init_point: "https://mp.test/x",
+          status: "pending",
+        }),
       );
 
       await new MercadoPagoProvider().iniciarVinculoPagamento({
@@ -120,7 +126,10 @@ describe("MercadoPagoProvider", () => {
 
     it("HTTP 400 vira BillingProviderError com status e corpo preservados", async () => {
       fetchMock.mockResolvedValue(
-        respostaOk({ message: "invalid payer_email", error: "bad_request" }, 400),
+        respostaOk(
+          { message: "invalid payer_email", error: "bad_request" },
+          400,
+        ),
       );
 
       const promessa = new MercadoPagoProvider().iniciarVinculoPagamento({
@@ -199,12 +208,8 @@ describe("MercadoPagoProvider", () => {
       // um `Math.round` no lugar errado daria 200.
       expect(chamada.corpo.transaction_amount).toBe(199.99);
       expect(chamada.corpo.external_reference).toBe("cycle:ciclo-42");
-      expect(chamada.corpo.description).toBe(
-        "Iris — apuração de julho/2026",
-      );
-      expect(chamada.corpo.date_of_expiration).toBe(
-        "2026-08-10T03:00:00.000Z",
-      );
+      expect(chamada.corpo.description).toBe("Iris — apuração de julho/2026");
+      expect(chamada.corpo.date_of_expiration).toBe("2026-08-10T03:00:00.000Z");
       // Sem esta chave, um retry do job de fechamento cobra o ciclo duas vezes.
       expect(chamada.cabecalhos["X-Idempotency-Key"]).toBe("cycle:ciclo-42");
 
@@ -317,7 +322,9 @@ describe("MercadoPagoProvider", () => {
       const ok = new MercadoPagoProvider().verificarAssinaturaWebhook({
         corpoBruto: "{}",
         url: URL_NOTIF,
-        cabecalhos: headers(`ts=${AGORA},v1=${assinar(AGORA, "outro-segredo")}`),
+        cabecalhos: headers(
+          `ts=${AGORA},v1=${assinar(AGORA, "outro-segredo")}`,
+        ),
       });
       expect(ok).toBe(false);
     });
@@ -417,8 +424,11 @@ describe("MercadoPagoProvider", () => {
       ).toBe("assinatura.cancelada");
 
       expect(
-        provider.normalizarEvento({ id: "e", type: "preapproval", status: "paused" })
-          .tipo,
+        provider.normalizarEvento({
+          id: "e",
+          type: "preapproval",
+          status: "paused",
+        }).tipo,
       ).toBe("assinatura.pausada");
     });
 
@@ -486,8 +496,10 @@ describe("MercadoPagoProvider", () => {
 
       it("cancelled sem expiração continua recusada", () => {
         expect(
-          eventoPagamento({ status: "cancelled", status_detail: "by_collector" })
-            .tipo,
+          eventoPagamento({
+            status: "cancelled",
+            status_detail: "by_collector",
+          }).tipo,
         ).toBe("cobranca.recusada");
       });
     });
@@ -584,17 +596,25 @@ describe("getBillingProvider", () => {
     expect(getBillingProvider().id).toBe("mercado_pago");
   });
 
-  it("BILLING_PROVIDER=asaas lança erro explícito", () => {
-    vi.stubEnv("BILLING_PROVIDER", "asaas");
+  it("BILLING_PROVIDER desconhecido lança erro explícito", () => {
+    // `asaas` deixou de lançar em 08/08/2026 (#231) — a cobertura desse caminho
+    // mudou de casa e mora em `asaas.test.ts`. O que continua tendo de estourar
+    // é valor NÃO reconhecido: `mercadopago` sem underscore derrubou todo POST
+    // do webhook com 500 em produção (04/08/2026), e o erro explícito é a lição
+    // daquele incidente.
+    vi.stubEnv("BILLING_PROVIDER", "mercadopago");
     expect(() => getBillingProvider()).toThrow(
-      "AsaasProvider ainda não implementado (#36)",
+      "BILLING_PROVIDER desconhecido: mercadopago",
     );
   });
 
   it("resolve a cada chamada (sem cache de módulo congelando a env)", () => {
     vi.stubEnv("BILLING_PROVIDER", "mercado_pago");
     expect(getBillingProvider().id).toBe("mercado_pago");
+    // Trocar a env DEPOIS de já ter resolvido uma vez precisa devolver o outro
+    // adapter: uma instância guardada em `const` de módulo congelaria a env e
+    // faria o primeiro teste que importa o módulo decidir o provider de todos.
     vi.stubEnv("BILLING_PROVIDER", "asaas");
-    expect(() => getBillingProvider()).toThrow();
+    expect(getBillingProvider().id).toBe("asaas");
   });
 });

@@ -1,30 +1,55 @@
-import { timingSafeEqual } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { asaasWebhookEvent } from "@/db/schema";
+import { AsaasProvider } from "@/lib/billing/provider";
+import {
+  aplicarStatusProvider,
+  conciliarPagamentoDeCiclo,
+} from "@/lib/billing/subscription";
 
 /**
- * Recepção de webhook do Asaas — Pix Automático (#36, Fase 7).
+ * Webhook do Asaas — Pix Automático (#36, Fase 7).
  *
- * O que este endpoint faz, e SÓ isso: autentica a chamada, deduplica a
- * entrega, persiste o evento bruto e responde 200. Não apura nada.
+ * Até 08/08/2026 esta rota só registrava: autenticava, deduplicava, guardava o
+ * payload bruto e respondia 200, porque a tabela `subscription` e o motor de
+ * apuração ainda não existiam. Os dois existem desde a Fatia B, e a conta de
+ * produção do Asaas foi liberada (D12) — então a rota passa a **aplicar o
+ * efeito**, exatamente como a do Mercado Pago.
  *
- * Por que não apura: o faturamento é por paciente ativo/mês, e a contagem de
- * ativos + o cálculo do valor cobrado dependem da tabela `subscription`, que
- * ainda não existe (#159). Mais importante que a ordem das issues: esta rota
- * roda em `authDb` (role `iris_auth`), e `authDb` NUNCA toca dado de paciente
- * — é o invariante que mantém `withTenant()` como gargalo único de acesso a
- * dado clínico (ver `src/db/client.ts:60`). Contar pacientes aqui furaria
- * exatamente esse gargalo. Quando a #159 chegar, a apuração roda FORA do
- * handler, sobre o histórico bruto guardado aqui.
+ * O que NÃO mudou, e não pode mudar:
  *
- * Por que `authDb` e não `withTenant()`: a requisição vem do Asaas, não de uma
- * sessão de usuário — não existe tenant a resolver. A migração 0066 dá GRANT
- * de SELECT/INSERT em `asaas_webhook_event` só para `iris_auth`; `app_role`
- * não recebe grant nenhum.
+ * - Roda em `authDb` (role `iris_auth`), nunca em `withTenant()`. A requisição
+ *   vem do Asaas, não de uma sessão — não há tenant a resolver. E `iris_auth`
+ *   não tem grant em `patient`, o que mantém `withTenant()` como gargalo único
+ *   de acesso a dado clínico (`src/db/client.ts`).
+ * - A dedup é decidida pelo `UNIQUE (asaas_event_id)` do Postgres dentro de UMA
+ *   instrução atômica. O Asaas entrega **at least once** e reentrega em
+ *   paralelo: `SELECT`-depois-`INSERT` tem janela de corrida, e em faturamento
+ *   a corrida perdida é cobrança duplicada.
+ * - Resposta idêntica para token errado, token ausente e env não configurada.
+ *
+ * Três coisas que o Asaas impõe e o Mercado Pago não:
+ *
+ * 1. **O corpo não é autenticado.** A autenticação é um token fixo no header
+ *    `asaas-access-token`, não um HMAC sobre o corpo — quem tiver o token pode
+ *    mandar qualquer payload. Por isso o efeito é aplicado a partir de uma
+ *    CONSULTA ao gateway pelo id, nunca do estado que veio no evento.
+ * 2. **A fila para depois de 15 falhas consecutivas, e evento não entregue some
+ *    em 14 dias.** É o que torna proibido devolver 5xx por falha de aplicação:
+ *    trocaríamos um efeito atrasado (recuperável pela varredura
+ *    `reprocessarEventosPendentes`) por um webhook desligado e por eventos
+ *    perdidos de vez.
+ * 3. **`AsaasProvider` é instanciado aqui, não resolvido por
+ *    `getBillingProvider()`.** Esta rota é a do Asaas: qual gateway está ATIVO
+ *    na env não muda quem assinou esta entrega. Durante uma virada de chave os
+ *    dois webhooks ficam cadastrados ao mesmo tempo, e resolver pela env faria
+ *    o adapter errado tentar verificar o token — 401 em entrega legítima, com a
+ *    fila do Asaas caminhando para as 15 falhas.
  *
  * Env necessária (secret no Easypanel — nunca versionar):
- *   ASAAS_WEBHOOK_TOKEN  token que o Asaas devolve no header a cada entrega
- *                        (painel: Integrações → Webhooks → Token de autenticação)
+ *   ASAAS_WEBHOOK_TOKEN       token que o Asaas devolve no header a cada entrega
+ *                             (painel: Integrações → Webhooks → Token)
+ *   BILLING_PROVIDER_API_KEY  chave da API, usada nas consultas de conciliação
  */
 
 // node:crypto + driver Postgres: precisa de runtime Node, não edge.
@@ -32,33 +57,11 @@ export const runtime = "nodejs";
 // Sem cache: é webhook, cada POST é efeito colateral.
 export const dynamic = "force-dynamic";
 
-/** Header em que o Asaas devolve o token configurado no painel. */
-const HEADER_TOKEN = "asaas-access-token";
-
 /**
- * Comparação do token em tempo constante.
- *
- * Dois cuidados que a versão ingênua erra:
- * 1. `timingSafeEqual` LANÇA quando os buffers têm tamanhos diferentes — e um
- *    throw aqui viraria 500, que o Asaas reentrega em loop. Compara-se o
- *    tamanho antes e retorna-se false (o tamanho do token não é segredo).
- * 2. Env ausente → false, nunca "passa porque não há token configurado". Um
- *    deploy sem o secret deve rejeitar tudo, não aceitar tudo.
- */
-function tokenConfere(recebido: string | null): boolean {
-  const esperado = process.env.ASAAS_WEBHOOK_TOKEN;
-  if (!esperado || !recebido) return false;
-  const a = Buffer.from(recebido, "utf8");
-  const b = Buffer.from(esperado, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
-/**
- * `id` do evento no Asaas. Vem como string (`evt_...`), mas aceitamos number
- * por robustez de contrato de terceiro — normalizando para text, que é o tipo
- * da coluna com o UNIQUE. Vazio/ausente é 400: sem chave não há dedup, e
- * gravar sem chave é pior que recusar (o Asaas reentrega e nós duplicamos).
+ * `id` do evento no Asaas. Vem como string (`evt_<hex>&<n>` — o `&` é literal,
+ * medido no payload real do sandbox), mas aceitamos number por robustez de
+ * contrato de terceiro. Vazio/ausente é 400: sem chave não há dedup, e gravar
+ * sem chave é pior que recusar.
  */
 function extraiTexto(valor: unknown): string | null {
   if (typeof valor === "string") return valor.trim() || null;
@@ -67,7 +70,25 @@ function extraiTexto(valor: unknown): string | null {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  if (!tokenConfere(request.headers.get(HEADER_TOKEN))) {
+  const provider = new AsaasProvider();
+
+  // Lido como texto para manter a mesma forma da rota do Mercado Pago (onde o
+  // corpo cru é obrigatório porque o HMAC é sobre bytes). Aqui não é
+  // obrigatório, mas reserializar não pode virar hábito numa rota de webhook.
+  let corpoBruto: string;
+  try {
+    corpoBruto = await request.text();
+  } catch {
+    return Response.json({ error: "corpo ilegível" }, { status: 400 });
+  }
+
+  if (
+    !provider.verificarAssinaturaWebhook({
+      corpoBruto,
+      cabecalhos: request.headers,
+      url: request.url,
+    })
+  ) {
     // Corpo curto e IDÊNTICO para token errado, token ausente e env não
     // configurada: a resposta não pode dizer qual dos três aconteceu.
     return Response.json({ error: "não autorizado" }, { status: 401 });
@@ -75,7 +96,7 @@ export async function POST(request: Request): Promise<Response> {
 
   let payload: unknown;
   try {
-    payload = await request.json();
+    payload = JSON.parse(corpoBruto);
   } catch {
     // 400, não 500: corpo malformado não melhora com reentrega.
     return Response.json(
@@ -94,20 +115,14 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  let eventoId: string;
   try {
     /**
-     * Dedup à prova de corrida.
-     *
-     * O Asaas reentrega em paralelo, então SELECT-then-INSERT tem janela: as
-     * duas entregas leem "não existe" antes de qualquer uma gravar, e uma
-     * delas estoura violação de unicidade (→ 500 → mais reentrega) ou, pior,
-     * o processamento roda duas vezes. Aqui quem decide a corrida é o
-     * `UNIQUE (asaas_event_id)` do Postgres, dentro de UMA instrução atômica:
-     * `ON CONFLICT DO NOTHING ... RETURNING` devolve linha só para quem de
-     * fato inseriu. Zero linhas devolvidas = alguém chegou antes = duplicado.
-     *
-     * Preferido a `try/catch` na violação 23505 porque não custa um roundtrip
-     * de erro nem exige acertar o SQLSTATE embrulhado pelo Drizzle.
+     * Dedup à prova de corrida: quem decide é o `UNIQUE (asaas_event_id)`
+     * dentro de UMA instrução atômica. `ON CONFLICT DO NOTHING ... RETURNING`
+     * devolve linha só para quem de fato inseriu; zero linhas = alguém chegou
+     * antes = duplicado. Preferido a `try/catch` no 23505 porque não custa um
+     * roundtrip de erro nem exige acertar o SQLSTATE embrulhado pelo Drizzle.
      */
     const inseridas = await authDb
       .insert(asaasWebhookEvent)
@@ -118,15 +133,7 @@ export async function POST(request: Request): Promise<Response> {
     if (inseridas.length === 0) {
       return Response.json({ received: true, duplicado: true });
     }
-
-    /**
-     * Só eventos `PIX_AUTOMATIC_RECURRING_*` interessam ao faturamento, mas
-     * NÃO filtramos aqui: qualquer evento — conhecido, irrelevante ou novo —
-     * é registrado e responde 200. 5xx em evento que não sabemos tratar vira
-     * loop de reentrega no Asaas, e o payload guardado é o que permite
-     * reprocessar quando a apuração existir (#159).
-     */
-    return Response.json({ received: true });
+    eventoId = inseridas[0]!.id;
   } catch (err) {
     // Falha real de infraestrutura (banco fora) DEVE ser 5xx: aí a reentrega
     // do Asaas é justamente o comportamento desejado.
@@ -140,4 +147,77 @@ export async function POST(request: Request): Promise<Response> {
       { status: 500 },
     );
   }
+
+  // ── A partir daqui a entrega já está durável. Nada abaixo pode virar 5xx. ──
+  try {
+    const normalizado = provider.normalizarEvento(payload);
+
+    // A cobrança tem precedência sobre o vínculo: é ela que carrega o
+    // `cycle:<id>` e é o ÚNICO caminho pelo qual um ciclo vira `pago`. Um
+    // evento de instrução de pagamento traz OS DOIS ids (a instrução aponta
+    // para a autorização), e tratá-lo como evento de vínculo deixaria a fatura
+    // eternamente em `aguardando_pagamento`.
+    if (normalizado.providerChargeId) {
+      const atual = await provider.consultarCobranca(
+        normalizado.providerChargeId,
+      );
+      const aplicou = await conciliarPagamentoDeCiclo(
+        normalizado.providerChargeId,
+        atual.status,
+      );
+      await marcar(eventoId, {
+        aplicadoEm: new Date(),
+        erroAplicacao: aplicou ? null : "cobrança sem ciclo correspondente",
+      });
+    } else if (normalizado.providerSubscriptionId) {
+      const atual = await provider.consultarVinculo(
+        normalizado.providerSubscriptionId,
+      );
+      const aplicou = await aplicarStatusProvider(
+        normalizado.providerSubscriptionId,
+        atual.status,
+      );
+      await marcar(eventoId, {
+        aplicadoEm: new Date(),
+        // Vínculo desconhecido não é erro de infra: pode ser evento de outra
+        // aplicação apontada para o mesmo endpoint, ou um evento de
+        // elegibilidade da conta (`PIX_AUTOMATIC_RECURRING_ELIGIBILITY_UPDATED`),
+        // que não tem assinatura nenhuma. Fica registrado como motivo, sem
+        // repetir a consulta para sempre.
+        erroAplicacao: aplicou ? null : "assinatura desconhecida",
+      });
+    } else {
+      await marcar(eventoId, {
+        aplicadoEm: new Date(),
+        erroAplicacao: "evento sem id utilizável",
+      });
+    }
+  } catch (err) {
+    // Efeito não aplicado, entrega preservada: `aplicado_em` continua NULL e a
+    // varredura de pendentes tenta de novo. Registrar o erro e responder 200.
+    console.error("[asaas-webhook] falha ao aplicar efeito", {
+      asaasEventId,
+      err,
+    });
+    try {
+      await marcar(eventoId, {
+        erroAplicacao: err instanceof Error ? err.message : String(err),
+      });
+    } catch {
+      // Se nem o registro do erro grava, o banco está fora — o 200 já é a
+      // resposta certa: o evento está persistido e será reprocessado.
+    }
+  }
+
+  return Response.json({ received: true });
+}
+
+async function marcar(
+  id: string,
+  campos: { aplicadoEm?: Date; erroAplicacao?: string | null },
+): Promise<void> {
+  await authDb
+    .update(asaasWebhookEvent)
+    .set(campos)
+    .where(eq(asaasWebhookEvent.id, id));
 }

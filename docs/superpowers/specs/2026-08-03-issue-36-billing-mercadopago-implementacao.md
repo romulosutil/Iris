@@ -4,11 +4,7 @@ Data: 03/08/2026. Branch: `docs/36-asaas-sandbox-evento-real`.
 
 ## Decisão de trilho
 
-O provedor ativo passou a ser **Mercado Pago** (`preapproval`, assinatura
-recorrente mensal). O Asaas continua previsto na porta `BillingProvider` mas
-**não está implementado** — `BILLING_PROVIDER=asaas` lança erro explícito, em
-vez de degradar em silêncio. Motivo do pivô: a conta Asaas não foi aprovada e o
-Pix Automático ficou fora por ~6 meses (D12 no `BACKLOG.md`).
+O provedor padrão ativo passou a ser **Mercado Pago** (`preapproval`, assinatura recorrente mensal) após o bloqueio inicial da conta Asaas. Com a liberação e aprovação da conta de produção do Asaas em 08/08/2026 (superando o D12 no `BACKLOG.md`), a arquitetura suporta ambos os gateways (**Asaas** e **Mercado Pago**) como opções variadas de pagamento para o sistema. A porta `BillingProvider` resolverá o gateway correspondente baseado na variável de ambiente `BILLING_PROVIDER` (`mercado_pago` ou `asaas`).
 
 `subscription.provider` é **persistido por linha**, não lido de env. Assinatura
 criada num gateway não pode ser reinterpretada por outro só porque a variável

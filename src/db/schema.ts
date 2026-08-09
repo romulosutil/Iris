@@ -1664,6 +1664,12 @@ export const alertaRiscoClinico = pgTable(
 // `payload` é guardado bruto porque a apuração do valor cobrado só existe a
 // partir da tabela `subscription` (#159) — quando ela chegar, os eventos já
 // recebidos precisam ser reprocessáveis sem pedir reenvio ao Asaas.
+// `aplicadoEm`/`erroAplicacao` chegaram com o adapter Asaas (#36): a rota grava
+// e responde 200 ANTES de aplicar o efeito, então `aplicadoEm` NULL com
+// `processadoEm` preenchido = recebido e ainda não conciliado. É o que
+// `reprocessarEventosPendentes` varre — mesma semântica de
+// `mercadopagoWebhookEvent`, e os nomes são iguais de propósito: a varredura é
+// uma função só, parametrizada pela tabela do provedor ativo.
 // Plano de billing/identidade: só `iris_auth` tem grant; `app_role` não toca.
 export const asaasWebhookEvent = pgTable(
   "asaas_webhook_event",
@@ -1672,6 +1678,8 @@ export const asaasWebhookEvent = pgTable(
     asaasEventId: text("asaas_event_id").notNull().unique(),
     evento: text("evento").notNull(),
     payload: jsonb("payload").notNull(),
+    aplicadoEm: timestamp("aplicado_em", { withTimezone: true }),
+    erroAplicacao: text("erro_aplicacao"),
     processadoEm: timestamp("processado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
