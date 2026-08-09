@@ -107,6 +107,18 @@ não estoura — o código parece funcionar. Sendo DEFINER, o guard interno
 **é** a fronteira de autorização: copie o predicado _exato_ da policy de
 leitura correspondente (precedentes: `0048`, `0064`, `0067`).
 
+**6. Policy nunca resolve o tenant com `current_setting('app.clinic_id')`
+direto — use `app_clinic_id_exigido()`.** O cast cru estoura `42704` (GUC
+ausente) ou `22P02` (GUC presente e não-UUID) **de dentro da policy**, antes
+de qualquer guard interno decidir, e com mensagem que não nomeia o tenant.
+Foi o que fez o guard de `app_conta_somente_leitura()` não bastar (#215). O
+helper (`0085`, D16/#229) levanta um `P0001` único e diagnosticável. E não
+troque por `app_clinic_id_atual()` (que devolve `NULL`) num predicado de
+isolamento: a linha some **em silêncio**, que é o modo de falha pior —
+`app_clinic_id_atual()` é para _dentro_ de função que precisa curto-circuitar
+sem tocar a tabela. `db/tests/clinic-id-helper-rls.int.test.ts` derruba o CI
+se uma policy nova nascer na forma velha.
+
 ## Onboarding de uma sessão nova (sem memória desta conversa)
 
 Ordem de leitura recomendada para uma sessão Claude Code CLI começando do
