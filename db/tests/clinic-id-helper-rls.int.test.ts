@@ -230,6 +230,34 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `qual` —, e essas quatro cobrem os formatos que existem (`id = ...` em
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
+/**
+ * As 13 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16).
+ *
+ * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
+ * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
+ * RLS. O predicado de clínica dentro dela não é uma checagem redundante em cima
+ * do RLS, é a própria fronteira de autorização (CLAUDE.md §Migrações, item 5).
+ * Um `NULL` silencioso ali não "não vê linha": ele decide errado.
+ *
+ * Mesma disciplina do literal de policies: conjunto EXATO, escrito à mão. Uma
+ * função nova que entre no regime tenant-scoped precisa de uma linha aqui.
+ */
+const FUNCOES_COM_HELPER = [
+  "app_alerta_risco_visivel",
+  "app_cpf_hash_usado_em_outro_trial",
+  "app_criar_alerta_risco",
+  "app_iniciar_trial",
+  "app_paciente_expurgavel",
+  "app_patient_in_clinic",
+  "app_protocol_in_clinic",
+  "app_proximo_numero_sequencial",
+  "app_risco_estagio2_ativo",
+  "app_salvar_config_emergencia",
+  "app_session_clinica_visivel",
+  "app_session_terapeuta_id",
+  "app_user_in_clinic",
+];
+
 const TABELAS_COM_DADO = [
   { tabela: "clinic", idA: CLINICA_A, idB: CLINICA_B },
   { tabela: "patient", idA: PAC_A, idB: PAC_B },
@@ -269,6 +297,126 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
     expect(POLICIES_COM_HELPER.length).toBe(48);
+  });
+
+  // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────
+  //
+  // Os casos 1 e 2 varrem `pg_policies` e só. Isso é menos cobertura do que
+  // parece: a maioria das policies tenant-scoped NÃO compara `clinic_id`
+  // direto — ela delega a uma função `SECURITY DEFINER` (`app_patient_in_clinic`,
+  // `app_user_in_clinic`, `app_session_clinica_visivel`, …). O texto dessas
+  // funções nunca aparece em `pg_policies.qual`, então o cast cru sobreviveu
+  // lá dentro à `0085` inteira e ao guard inteiro: o 42704/22P02 continuava
+  // saindo de dentro da avaliação da policy, um frame mais fundo. Mesma
+  // história para VIEW — `audit_log_mascarado` roda com direitos do dono e o
+  // `WHERE` dela É a fronteira de tenant, e ela também é invisível a
+  // `pg_policies`. Corrigido pela `0087`; estes três casos são a trava.
+  test("nenhuma FUNÇÃO resolve o tenant com current_setting('app.clinic_id') cru", async () => {
+    // Regex do Postgres (`~`), não LIKE: aqui o `.` precisa ser escapado, e o
+    // `\s*\)` é o que distingue a forma 1-arg (que levanta 42704) da 2-arg.
+    //
+    // ATENÇÃO à barra DUPLA: isto é um template literal do JS antes de ser
+    // texto SQL. `\(` vira `(` e `\s` vira `s` na conversão — a regex chegaria
+    // mutilada ao Postgres, casaria com nada, e o teste passaria VAZIO em vez
+    // de passar limpo. Foi o que aconteceu na primeira escrita deste caso.
+    const rows = await owner!<{ proname: string }[]>`
+      SELECT p.proname
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public'
+         AND p.prosrc ~ 'current_setting\\(''app\\.clinic_id''\\s*\\)'
+       ORDER BY 1`;
+
+    expect(rows.map((r) => r.proname)).toEqual([]);
+  });
+
+  test("nenhuma FUNÇÃO casta o GUC leniente para uuid sem guard de formato", async () => {
+    // `current_setting('app.clinic_id', true)::uuid` engana: o `missing_ok`
+    // mata o 42704 e faz o código PARECER defendido, mas o GUC presente e fora
+    // do formato (string vazia, lixo, uuid truncado) ainda estoura 22P02. Foi
+    // assim que `app_assinatura_bloqueia_cadastro` passou batido na primeira
+    // varredura da `0087`.
+    //
+    // `app_clinic_id_atual` é a ÚNICA exceção legítima: o cast dela mora dentro
+    // do `CASE` que já validou o formato por regex — é o guard, não um usuário
+    // dele.
+    const rows = await owner!<{ proname: string }[]>`
+      SELECT p.proname
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public'
+         AND p.prosrc ~ 'current_setting\\(''app\\.clinic_id''\\s*,\\s*true\\s*\\)\\s*::'
+       ORDER BY 1`;
+
+    expect(rows.map((r) => r.proname)).toEqual(["app_clinic_id_atual"]);
+  });
+
+  test("nenhuma VIEW resolve o tenant com current_setting('app.clinic_id') cru", async () => {
+    const rows = await owner!<{ relname: string }[]>`
+      SELECT c.relname
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public'
+         AND c.relkind IN ('v', 'm')
+         AND pg_get_viewdef(c.oid) ~ 'current_setting\\(''app\\.clinic_id'''
+       ORDER BY 1`;
+
+    expect(rows.map((r) => r.relname)).toEqual([]);
+  });
+
+  test("as 13 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+    // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
+    // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
+    // linha aqui, no diff, e não passe por osmose.
+    const rows = await owner!<{ proname: string }[]>`
+      SELECT p.proname
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public'
+         AND p.prosrc ~ 'app_clinic_id_exigido\\(\\)'
+       ORDER BY 1`;
+
+    expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
+    expect(FUNCOES_COM_HELPER.length).toBe(13);
+  });
+
+  test("audit_log_mascarado isola por tenant e levanta P0001 sem GUC", async () => {
+    // A view mais perigosa do schema: SEM `security_invoker` de propósito
+    // (0046), logo o RLS de `audit_log` não se aplica e este `WHERE` é tudo o
+    // que separa as clínicas. É também o objeto que nenhum caso anterior
+    // tocava.
+    await emTransacao(async (tx) => {
+      await semear(tx);
+
+      // Oráculo de não-vacuidade: a role dona enxerga as duas linhas. Sem isto,
+      // um `toEqual([AUD_A])` continuaria verde numa tabela vazia por acidente.
+      const todas = await tx<{ id: string }[]>`
+        SELECT id FROM audit_log WHERE id IN (${AUD_A}, ${AUD_B}) ORDER BY id`;
+      expect(todas).toHaveLength(2);
+
+      await comoApp(tx, CLINICA_A);
+      const vistas = await tx<{ id: string }[]>`
+        SELECT id FROM audit_log_mascarado WHERE id IN (${AUD_A}, ${AUD_B})`;
+      expect(vistas.map((r) => r.id)).toEqual([AUD_A]);
+    });
+
+    // GUC ausente: antes da 0087 isto era 42704 vindo de dentro da view.
+    await emTransacao(async (tx) => {
+      await semear(tx);
+      await comoApp(tx, null);
+      await expect(
+        tx`SELECT id FROM audit_log_mascarado`,
+      ).rejects.toMatchObject({ code: "P0001" });
+    });
+
+    // GUC presente e lixo: antes era 22P02. Cobre o outro lado do par.
+    await emTransacao(async (tx) => {
+      await semear(tx);
+      await comoApp(tx, "nao-e-uuid");
+      await expect(
+        tx`SELECT id FROM audit_log_mascarado`,
+      ).rejects.toMatchObject({ code: "P0001" });
+    });
   });
 
   // ─── 3. semântica dos dois helpers, sob app_role ──────────────────────────

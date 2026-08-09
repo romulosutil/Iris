@@ -66,12 +66,16 @@ export async function listarSupervisao(
 ): Promise<{ itens: ItemSupervisao[]; total: number }> {
   return withTenant(ctx, async (tx) => {
     // 1. Config da clínica
+    // `app_clinic_id_exigido()` e não `current_setting('app.clinic_id')::uuid`
+    // (D16): o cast cru levanta 42704/22P02 com mensagem que não nomeia o
+    // tenant. Era a única leitura da aplicação que ainda resolvia a clínica na
+    // mão — todo o resto passa pelas policies, que a `0085` já converteu.
     const clinicRows = (await tx.execute(sql`
       SELECT faltas_limiar, faltas_janela_semanas
       FROM clinic
-      WHERE id = current_setting('app.clinic_id')::uuid
+      WHERE id = app_clinic_id_exigido()
     `)) as unknown as ClinicRow[];
-    
+
     const limit = clinicRows[0]?.faltas_limiar ?? 3;
     const windowWeeks = clinicRows[0]?.faltas_janela_semanas ?? 4;
 
@@ -87,7 +91,10 @@ export async function listarSupervisao(
     const mappedSnapshots: SnapshotRow[] = snapshotRows.map((r) => ({
       patientId: r.patient_id,
       sessionNumero: r.session_numero,
-      segmentacao: typeof r.segmentacao === "string" ? JSON.parse(r.segmentacao) : r.segmentacao,
+      segmentacao:
+        typeof r.segmentacao === "string"
+          ? JSON.parse(r.segmentacao)
+          : r.segmentacao,
     }));
     const snapSignals = sinaisDeSnapshot(mappedSnapshots);
 
@@ -105,7 +112,10 @@ export async function listarSupervisao(
       patientId: r.patient_id,
       faltas: r.faltas,
     }));
-    const absenceSignals = sinaisDeFaltas(mappedAbsences, { limiar: limit, janelaSemanas: windowWeeks });
+    const absenceSignals = sinaisDeFaltas(mappedAbsences, {
+      limiar: limit,
+      janelaSemanas: windowWeeks,
+    });
 
     const liveSignals = [...snapSignals, ...absenceSignals];
 
@@ -116,10 +126,18 @@ export async function listarSupervisao(
 
     // Pegar Goal e Protocol Names
     const goalIds = Array.from(
-      new Set(snapSignals.map((s) => s.goalId).filter((id): id is string => id !== null))
+      new Set(
+        snapSignals
+          .map((s) => s.goalId)
+          .filter((id): id is string => id !== null),
+      ),
     );
     const protocolIds = Array.from(
-      new Set(snapSignals.map((s) => s.protocolId).filter((id): id is string => id !== null))
+      new Set(
+        snapSignals
+          .map((s) => s.protocolId)
+          .filter((id): id is string => id !== null),
+      ),
     );
 
     const goalNames = new Map<string, string>();
@@ -129,7 +147,7 @@ export async function listarSupervisao(
         FROM goal
         WHERE id IN (${sql.join(
           goalIds.map((id) => sql`${id}::uuid`),
-          sql`, `
+          sql`, `,
         )})
       `)) as unknown as NameRow[];
       goals.forEach((g) => goalNames.set(g.id, g.nome));
@@ -142,7 +160,7 @@ export async function listarSupervisao(
         FROM protocol
         WHERE id IN (${sql.join(
           protocolIds.map((id) => sql`${id}::uuid`),
-          sql`, `
+          sql`, `,
         )})
       `)) as unknown as NameRow[];
       protocols.forEach((p) => protocolNames.set(p.id, p.nome));
@@ -177,8 +195,12 @@ export async function listarSupervisao(
             patientNome: patientNames.get(signal.patientId) || "",
             goalId: signal.goalId,
             protocolId: signal.protocolId,
-            goalNome: signal.goalId ? goalNames.get(signal.goalId) || null : null,
-            protocolNome: signal.protocolId ? protocolNames.get(signal.protocolId) || null : null,
+            goalNome: signal.goalId
+              ? goalNames.get(signal.goalId) || null
+              : null,
+            protocolNome: signal.protocolId
+              ? protocolNames.get(signal.protocolId) || null
+              : null,
             detalhe: signal.detalhe,
             estado: "reconhecido",
             alertaId: alert.id,
@@ -194,7 +216,9 @@ export async function listarSupervisao(
           goalId: signal.goalId,
           protocolId: signal.protocolId,
           goalNome: signal.goalId ? goalNames.get(signal.goalId) || null : null,
-          protocolNome: signal.protocolId ? protocolNames.get(signal.protocolId) || null : null,
+          protocolNome: signal.protocolId
+            ? protocolNames.get(signal.protocolId) || null
+            : null,
           detalhe: signal.detalhe,
           estado: "novo",
           alertaId: null,
@@ -205,7 +229,10 @@ export async function listarSupervisao(
 
     // 6. Alerta com status reconhecido mas sem sinal vivo correspondente ("sinal cessou")
     for (const alert of alertaRows) {
-      if (alert.status === "reconhecido" && !liveKeys.has(alert.chave_natural)) {
+      if (
+        alert.status === "reconhecido" &&
+        !liveKeys.has(alert.chave_natural)
+      ) {
         // Enriquecer nomes de paciente, goal, protocol se não estiverem no map
         if (!patientNames.has(alert.patient_id)) {
           const patientRow = (await tx.execute(sql`
@@ -234,7 +261,10 @@ export async function listarSupervisao(
           }
         }
 
-        const det = typeof alert.detalhe === "string" ? JSON.parse(alert.detalhe) : alert.detalhe;
+        const det =
+          typeof alert.detalhe === "string"
+            ? JSON.parse(alert.detalhe)
+            : alert.detalhe;
 
         itens.push({
           chaveNatural: alert.chave_natural,
@@ -244,7 +274,9 @@ export async function listarSupervisao(
           goalId: alert.goal_id,
           protocolId: alert.protocol_id,
           goalNome: alert.goal_id ? goalNames.get(alert.goal_id) || null : null,
-          protocolNome: alert.protocol_id ? protocolNames.get(alert.protocol_id) || null : null,
+          protocolNome: alert.protocol_id
+            ? protocolNames.get(alert.protocol_id) || null
+            : null,
           detalhe: det,
           estado: "reconhecido",
           alertaId: alert.id,

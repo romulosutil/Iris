@@ -119,6 +119,24 @@ isolamento: a linha some **em silêncio**, que é o modo de falha pior —
 sem tocar a tabela. `db/tests/clinic-id-helper-rls.int.test.ts` derruba o CI
 se uma policy nova nascer na forma velha.
 
+E **policy não é o único lugar**: a `0087` (resíduo do D16) achou o cast cru
+vivo em 13 funções `SECURITY DEFINER`, numa view e numa query da aplicação.
+Quase toda policy tenant-scoped delega o isolamento a uma função
+(`app_patient_in_clinic`, `app_user_in_clinic`, …) cujo texto **nunca aparece
+em `pg_policies.qual`** — varrer só `pg_policies` dá um verde que não cobre o
+frame onde a exceção realmente nasce. O guard hoje varre `pg_policies` +
+`pg_proc` + `pg_views`. Duas armadilhas achadas ali, que valem para qualquer
+varredura futura:
+
+- `current_setting('app.clinic_id', true)::uuid` **parece** defendido e não
+  está: `missing_ok` mata o `42704`, mas o GUC presente e fora do formato
+  (vazio, lixo, truncado) ainda estoura `22P02`. Quem precisa de semântica
+  leniente usa `app_clinic_id_atual()`, que tem o guard de formato.
+- Regex de auditoria escrita dentro de template literal do JS chega mutilada ao
+  Postgres (`\(` vira `(`, `\s` vira `s`) e casa com nada — o teste passa
+  **vazio**, não limpo. Dobre as barras, e prove o guard mutando o banco de
+  volta para a forma velha antes de confiar no verde.
+
 ## Onboarding de uma sessão nova (sem memória desta conversa)
 
 Ordem de leitura recomendada para uma sessão Claude Code CLI começando do
