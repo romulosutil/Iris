@@ -88,10 +88,38 @@ export interface NovoVinculo {
   tetoCentavos?: number;
 }
 
-/** Resultado da criação do vínculo — o suficiente para persistir e redirecionar. */
+/**
+ * Como a clínica termina de autorizar o vínculo.
+ *
+ * São duas formas genuinamente diferentes, e não intercambiáveis: um gateway
+ * de checkout devolve uma URL para onde o navegador vai; o Pix Automático
+ * devolve um BR Code (copia-e-cola) que a pessoa lê no app do banco. Tratar as
+ * duas como "uma URL" foi o débito D21 — o adapter do Asaas gravava o
+ * copia-e-cola em `checkoutUrl`, e qualquer leitor que confiasse no nome
+ * renderizaria um link quebrado.
+ *
+ * Nenhuma das duas formas é vocabulário de provedor: "redirecionar o
+ * navegador" e "mostrar um BR Code" são fatos sobre a interação com a pessoa,
+ * não sobre o Asaas ou o Mercado Pago. Um provedor novo cai em uma das duas ou
+ * ganha a sua — o que a porta não admite é fingir.
+ */
+export type AutorizacaoPendente =
+  | { forma: "redirect"; url: string }
+  | {
+      forma: "pix_copia_e_cola";
+      /**
+       * BR Code (EMV) do Pix. O QR **não** vem junto de propósito: ele é uma
+       * renderização deste mesmo texto, e guardar a imagem em base64 seria
+       * duplicar estado (e engordar a linha) para nada — a UI desenha o QR a
+       * partir daqui.
+       */
+      brCode: string;
+    };
+
+/** Resultado da criação do vínculo — o suficiente para persistir e autorizar. */
 export interface VinculoCriado {
   providerVinculoId: string;
-  checkoutUrl: string;
+  autorizacao: AutorizacaoPendente;
   status: StatusAssinaturaProvider;
 }
 

@@ -453,7 +453,7 @@ export class MercadoPagoProvider implements BillingProvider {
 
     return {
       providerVinculoId,
-      checkoutUrl,
+      autorizacao: { forma: "redirect", url: checkoutUrl },
       status: mapearStatus(resposta.status),
     };
   }

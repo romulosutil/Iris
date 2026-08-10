@@ -40,6 +40,7 @@ import { Slider } from "./slider";
 import { Progress } from "./progress";
 import { Avatar, AvatarFallback, AvatarGroup } from "./avatar";
 import { Stat } from "./stat";
+import { BotaoCopiar } from "./botao-copiar";
 
 afterEach(cleanup);
 
@@ -262,12 +263,9 @@ test.each([
   "pendente",
   "reclassificada",
   "devolvida",
-] as const)(
-  "StatusBadge %s — sem violações axe",
-  async (estado) => {
-    await semViolacoes(<StatusBadge estado={estado} />);
-  },
-);
+] as const)("StatusBadge %s — sem violações axe", async (estado) => {
+  await semViolacoes(<StatusBadge estado={estado} />);
+});
 
 test("StatusDot — sem violações axe", async () => {
   await semViolacoes(<StatusDot estado="sugerida" />);
@@ -446,4 +444,10 @@ test("InteractiveCard — sem violações axe", async () => {
 
 test("Indicator — sem violações axe", async () => {
   await semViolacoes(<Indicator variant="conquistado" />);
+});
+
+test("BotaoCopiar — sem violações axe", async () => {
+  await semViolacoes(
+    <BotaoCopiar valor="00020126…6304ABCD" rotulo="Copiar código Pix" />,
+  );
 });

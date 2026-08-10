@@ -4,11 +4,24 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { appUser, clinic } from "@/db/schema";
 import { iniciarAtivacao } from "@/lib/billing/subscription";
-import type { MetodoPagamento } from "@/lib/billing/provider";
+import type {
+  AutorizacaoPendente,
+  MetodoPagamento,
+} from "@/lib/billing/provider";
 
 export type AtivacaoState = {
   error?: string;
-  checkoutUrl?: string;
+  /**
+   * Como a clínica termina de autorizar o vínculo: redirect para o checkout do
+   * gateway OU BR Code do Pix para copiar/ler no app do banco (D21). Não é uma
+   * URL: tratar o copia-e-cola como link foi exatamente o bug que a porta de
+   * billing passou a impedir por tipo.
+   *
+   * Ausente quando o provedor não devolveu forma alguma (vínculo pendente
+   * antigo, cuja forma não ficou guardada) — a tela então não oferece link nem
+   * QR, em vez de renderizar um `href` vazio.
+   */
+  autorizacao?: AutorizacaoPendente;
 };
 
 const METODOS: readonly string[] = ["cartao", "pix"];
@@ -66,14 +79,17 @@ export async function iniciarAtivacaoAssinatura(
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://irisclinica.ia.br";
 
   try {
-    const { checkoutUrl } = await iniciarAtivacao({
+    const { autorizacao } = await iniciarAtivacao({
       clinicId: ctx.clinicId,
       nomeClinica: dados.nome,
       emailResponsavel: dados.email,
       metodo,
       urlRetorno: `${base}/assinatura/retorno`,
     });
-    return { checkoutUrl };
+    // `null` (forma não guardada) vira campo ausente: o state é serializado
+    // para o cliente e `undefined` some — deixar `null` obrigaria a UI a
+    // distinguir dois "vazios" que significam a mesma coisa.
+    return autorizacao ? { autorizacao } : {};
   } catch (e) {
     // O texto real do gateway vai para o log, não para a tela: pode conter
     // identificador de conta. O usuário recebe orientação acionável.

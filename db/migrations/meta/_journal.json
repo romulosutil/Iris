@@ -617,6 +617,13 @@
       "when": 1786239231593,
       "tag": "0087_tenant_helper_em_funcoes_e_view",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1786239232593,
+      "tag": "0088_pix_copia_e_cola",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,8 @@ import { useActionState, useEffect, useId, useState } from "react";
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { QrCode } from "@/components/ui/qr-code";
+import { BotaoCopiar } from "@/components/ui/botao-copiar";
 import { cn } from "@/lib/cn";
 import { ativarAssinatura } from "./actions";
 import type { AtivacaoState } from "./logic";
@@ -30,7 +32,7 @@ export interface FormularioAtivacaoProps {
   /**
    * Só existe como costura de teste: em produção é sempre a server action
    * real. Injetar a ação evita que o teste de componente precise de servidor,
-   * banco e sessão só para exercitar pendência, erro e `checkoutUrl`.
+   * banco e sessão só para exercitar pendência, erro e autorização pendente.
    */
   acao?: AcaoAtivacao;
   /**
@@ -48,30 +50,36 @@ export function FormularioAtivacao({
   acao = ativarAssinatura,
   navegar = navegarPadrao,
 }: FormularioAtivacaoProps) {
-  const [state, formAction, isPending] = useActionState<AtivacaoState, FormData>(
-    acao as (
-      prev: AtivacaoState,
-      formData: FormData,
-    ) => Promise<AtivacaoState>,
+  const [state, formAction, isPending] = useActionState<
+    AtivacaoState,
+    FormData
+  >(
+    acao as (prev: AtivacaoState, formData: FormData) => Promise<AtivacaoState>,
     {},
   );
   const [metodo, setMetodo] = useState<string>("cartao");
   const legendaId = useId();
 
-  const checkoutUrl = state.checkoutUrl;
+  const autorizacao = state.autorizacao;
+  // O efeito depende SÓ da URL do ramo redirect. Derivar aqui (em vez de olhar
+  // `autorizacao` dentro do efeito) é o que garante que o ramo Pix nunca
+  // dispare navegação: no Pix isto é `undefined`, o efeito não roda, e o BR
+  // Code não tem como virar destino de navegação por descuido futuro.
+  const urlRedirect =
+    autorizacao?.forma === "redirect" ? autorizacao.url : undefined;
 
   useEffect(() => {
-    if (!checkoutUrl) return;
+    if (!urlRedirect) return;
     // Redirect de conveniência. NUNCA é o único caminho: bloqueador de popup,
     // navegação bloqueada por política do dispositivo ou jsdom fazem isto
     // falhar em silêncio — por isso o link visível abaixo é renderizado
-    // sempre que há `checkoutUrl`, e não depende deste efeito.
+    // sempre que há URL de checkout, e não depende deste efeito.
     try {
-      navegar(checkoutUrl);
+      navegar(urlRedirect);
     } catch {
       /* o link visível continua sendo o caminho de saída */
     }
-  }, [checkoutUrl, navegar]);
+  }, [urlRedirect, navegar]);
 
   return (
     <Form action={formAction} error={state.error}>
@@ -79,10 +87,10 @@ export function FormularioAtivacao({
         className="m-0 flex flex-col gap-2 border-0 p-0"
         aria-describedby={legendaId}
       >
-        <legend className="text-[var(--text-primary)] font-display mb-1.5 text-sm font-semibold">
+        <legend className="font-display mb-1.5 text-sm font-semibold text-[var(--text-primary)]">
           Como você quer pagar?
         </legend>
-        <p id={legendaId} className="text-[var(--text-secondary)] text-sm">
+        <p id={legendaId} className="text-sm text-[var(--text-secondary)]">
           Você pode trocar a forma de pagamento depois.
         </p>
         {/* Radios nativos de propósito: o `role="radiogroup"` vem do
@@ -99,7 +107,7 @@ export function FormularioAtivacao({
                 key={opcao.value}
                 className={cn(
                   "flex min-h-11 cursor-pointer items-start gap-3 rounded-[var(--radius-control)] border-2 p-3",
-                  "bg-[var(--surface-card)] text-[var(--text-primary)] font-body",
+                  "font-body bg-[var(--surface-card)] text-[var(--text-primary)]",
                   "has-[:focus-visible]:outline-focus has-[:focus-visible]:outline-[length:var(--ring-width)] has-[:focus-visible]:outline-offset-[var(--ring-offset)]",
                   selecionado
                     ? "border-[var(--border-brutal)] shadow-[var(--ds-shadow)]"
@@ -113,11 +121,11 @@ export function FormularioAtivacao({
                   checked={selecionado}
                   onChange={() => setMetodo(opcao.value)}
                   disabled={isPending}
-                  className="accent-[var(--action-primary)] mt-1 size-5 shrink-0"
+                  className="mt-1 size-5 shrink-0 accent-[var(--action-primary)]"
                 />
                 <span className="flex flex-col gap-0.5">
                   <span className="font-semibold">{opcao.label}</span>
-                  <span className="text-[var(--text-secondary)] text-xs">
+                  <span className="text-xs text-[var(--text-secondary)]">
                     {opcao.ajuda}
                   </span>
                 </span>
@@ -127,21 +135,54 @@ export function FormularioAtivacao({
         </div>
       </fieldset>
 
-      {checkoutUrl ? (
+      {autorizacao ? (
         <Alert severidade="info" titulo="Falta pagar para concluir">
-          <p>
-            Abrimos a página de pagamento em seguida. Se ela não abrir sozinha,
-            use o link abaixo — sem concluir o pagamento, a assinatura não é
-            ativada.
-          </p>
-          <p className="mt-2">
-            <a
-              href={checkoutUrl}
-              className="text-[var(--text-primary)] font-semibold underline underline-offset-4"
-            >
-              Ir para o pagamento
-            </a>
-          </p>
+          {autorizacao.forma === "redirect" ? (
+            <>
+              <p>
+                Abrimos a página de pagamento em seguida. Se ela não abrir
+                sozinha, use o link abaixo — sem concluir o pagamento, a
+                assinatura não é ativada.
+              </p>
+              <p className="mt-2">
+                <a
+                  href={autorizacao.url}
+                  className="font-semibold text-[var(--text-primary)] underline underline-offset-4"
+                >
+                  Ir para o pagamento
+                </a>
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                Abra o app do seu banco, escolha Pix e leia o QR Code abaixo —
+                ou copie o código e cole na opção “Pix copia e cola”.
+              </p>
+              <div className="mt-3 flex justify-center">
+                <QrCode
+                  value={autorizacao.brCode}
+                  alt="QR Code do Pix para autorizar a assinatura"
+                />
+              </div>
+              {/* `break-all` de propósito: o BR Code é uma cadeia única sem
+                  espaços — sem isso ele estoura a largura em tela estreita. */}
+              <p className="mt-3 max-w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/40 bg-[var(--surface-muted)] p-2 font-mono text-xs break-all">
+                {autorizacao.brCode}
+              </p>
+              <div className="mt-2">
+                <BotaoCopiar
+                  valor={autorizacao.brCode}
+                  rotulo="Copiar código Pix"
+                />
+              </div>
+              <p className="mt-3">
+                A assinatura só é ativada depois que o banco confirmar o
+                pagamento. A confirmação chega sozinha — você não precisa mandar
+                comprovante nem ficar nesta tela.
+              </p>
+            </>
+          )}
         </Alert>
       ) : null}
 
