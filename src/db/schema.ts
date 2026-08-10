@@ -1756,6 +1756,16 @@ export const subscription = pgTable(
     checkoutUrl: text("checkout_url"),
     /** BR Code (copia-e-cola) do Pix Automático. Exclusivo com `checkoutUrl`. */
     pixCopiaECola: text("pix_copia_e_cola"),
+    /**
+     * Quanto o QR de ativação do Pix Automático cobrou, em centavos (D22, 0089).
+     *
+     * Nulo no trilho de redirect, que não cobra para autorizar. Persistido — e
+     * não recalculado da constante do adapter — porque a reentrada idempotente
+     * de `iniciarAtivacao` devolve o BR Code JÁ EMITIDO: o valor está gravado
+     * dentro do payload EMV, e reler a constante mostraria o preço de hoje para
+     * um QR emitido com o preço de ontem.
+     */
+    valorAtivacaoCentavos: integer("valor_ativacao_centavos"),
     metodoPagamento: text("metodo_pagamento"),
     cicloDias: integer("ciclo_dias").notNull().default(30),
     cicloAtualInicio: timestamp("ciclo_atual_inicio", { withTimezone: true }),

@@ -81,14 +81,19 @@ const USER_AGENT = "iris-clinica";
  *
  * ⚠️ Isto é uma cobrança REAL, não um teto. O Pix Automático (Jornada 3) só
  * ativa a autorização depois que o QR imediato é liquidado — não existe
- * autorização sem débito inicial, e por isso `NovoVinculo.tetoCentavos` (que na
- * porta é "limite autorizado") é usado aqui como **valor da ativação** quando
- * vem preenchido. O default é o menor débito representável, um centavo: a
- * decisão de produto sobre cobrar algo simbólico na ativação está aberta e
- * registrada no BACKLOG — o adapter não a toma sozinho, só escolhe o piso que
- * menos cobra da clínica.
+ * autorização sem débito inicial.
+ *
+ * D22, decisão de produto tomada em 09/08/2026: **fica em um centavo**, o menor
+ * débito representável, e a tela de ativação passa a dizer isso antes do QR. O
+ * valor é constante de módulo, não env: mudá-lo em produção exige expirar as
+ * autorizações pendentes, porque o BR Code já entregue carrega o valor antigo
+ * gravado dentro do payload EMV — não é configuração, é migração.
+ *
+ * `NovoVinculo.tetoCentavos` deliberadamente NÃO entra aqui: teto é limite, não
+ * cobrança, e ler um campo chamado "teto" como valor a debitar foi metade do
+ * D22. Jornada 3 de valor variável não tem teto para respeitar.
  */
-const VALOR_ATIVACAO_PADRAO_CENTAVOS = 1;
+export const VALOR_ATIVACAO_PADRAO_CENTAVOS = 1;
 
 /** Validade do QR imediato de ativação. 24h é o que cabe num onboarding humano. */
 const EXPIRACAO_QR_ATIVACAO_SEGUNDOS = 24 * 60 * 60;
@@ -501,7 +506,7 @@ export class AsaasProvider implements BillingProvider {
       });
     }
 
-    const valorAtivacao = dados.tetoCentavos ?? VALOR_ATIVACAO_PADRAO_CENTAVOS;
+    const valorAtivacao = VALOR_ATIVACAO_PADRAO_CENTAVOS;
 
     const autorizacao = comoRegistro(
       await chamar("POST", "/pix/automatic/authorizations", {
@@ -550,7 +555,14 @@ export class AsaasProvider implements BillingProvider {
 
     return {
       providerVinculoId,
-      autorizacao: { forma: "pix_copia_e_cola", brCode: checkout },
+      // D22: o valor sobe junto com o BR Code. Ele foi cobrado de verdade neste
+      // QR, e quem renderiza precisa dizê-lo antes — devolver só o `brCode`
+      // deixava a cobrança invisível da borda para dentro.
+      autorizacao: {
+        forma: "pix_copia_e_cola",
+        brCode: checkout,
+        valorAtivacaoCentavos: valorAtivacao,
+      },
       status: mapearStatusAutorizacao(autorizacao.status),
     };
   }

@@ -20,7 +20,8 @@
  * O contrato agora separa as duas coisas que de fato existem:
  *
  * 1. **Vínculo de pagamento** — a clínica autoriza uma vez um meio debitável.
- *    Nenhum valor é cobrado nesse momento.
+ *    No trilho de redirect (checkout) nada é cobrado nesse momento; no trilho
+ *    de Pix Automático, cobra — ver `AutorizacaoPendente` abaixo.
  * 2. **Cobrança de ciclo** — emitida por NÓS, no fechamento, com o valor
  *    realmente apurado. É quem tem `referenciaExterna`, e é ela que o webhook
  *    reconcilia.
@@ -70,9 +71,14 @@ export interface DadosAssinante {
 /**
  * Pedido de criação do vínculo de pagamento.
  *
- * Não tem `valorCentavos`: **a ativação não cobra**. Alguns gateways exigem um
- * teto autorizado para o débito futuro — é o que `tetoCentavos` cobre, e é um
- * limite, não uma cobrança.
+ * Não tem `valorCentavos` de mensalidade: o vínculo não é a cobrança do ciclo.
+ * Mas **"não cobra nada" é falso no trilho de Pix Automático**, e essa frase
+ * ficou escrita aqui até o débito D22: a Jornada 3 do Bacen só marca uma
+ * autorização como ativa depois que o QR imediato é LIQUIDADO, então o adapter
+ * do Asaas precisa cobrar algo para que a autorização exista. Quanto ele cobrou
+ * sai em `AutorizacaoPendente`, não entra aqui — o valor é escolha do adapter
+ * (é ele que conhece a exigência do trilho), e o chamador só precisa saber o
+ * que foi cobrado para poder dizer isso à clínica.
  */
 export interface NovoVinculo {
   assinante: DadosAssinante;
@@ -84,7 +90,16 @@ export interface NovoVinculo {
    * Também serve de chave de idempotência na criação.
    */
   referenciaExterna: string;
-  /** Teto autorizado para débitos futuros, em centavos. Opcional. */
+  /**
+   * Teto autorizado para débitos futuros, em centavos. Opcional, e **só um
+   * limite** — nunca o valor de uma cobrança.
+   *
+   * Adapter que não tem teto simplesmente ignora: a autorização de Pix
+   * Automático de valor variável (Jornada 3) não admite limite superior, e o
+   * Asaas descarta este campo de propósito. Até o D22 ele era lido lá como
+   * "valor da ativação", o que fazia um campo chamado _teto_ decidir quanto sai
+   * da conta da clínica.
+   */
   tetoCentavos?: number;
 }
 
@@ -114,6 +129,18 @@ export type AutorizacaoPendente =
        * partir daqui.
        */
       brCode: string;
+      /**
+       * Quanto este QR **cobra de verdade**, em centavos. Obrigatório, e é o
+       * ponto do débito D22: no Pix Automático a autorização só vai a ativa
+       * depois que o QR imediato é liquidado, então produzir esta forma sem
+       * dizer o preço é produzir uma cobrança silenciosa.
+       *
+       * Sendo obrigatório, nenhum adapter consegue emitir um BR Code de
+       * ativação sem declarar o valor, e nenhuma tela consegue renderizá-lo sem
+       * ter o número em mãos para mostrar. Opcional teria deixado exatamente o
+       * estado de hoje representável — e ele foi o débito.
+       */
+      valorAtivacaoCentavos: number;
     };
 
 /** Resultado da criação do vínculo — o suficiente para persistir e autorizar. */
@@ -195,7 +222,17 @@ export interface EntradaVerificacaoWebhook {
 export interface BillingProvider {
   readonly id: ProviderId;
 
-  /** Registra o meio de pagamento. **Não cobra nada.** */
+  /**
+   * Registra o meio de pagamento.
+   *
+   * **Cobra ou não conforme o trilho, e o retorno diz qual foi o caso.** No
+   * trilho de redirect o gateway registra o meio sem debitar. No Pix
+   * Automático isso é impossível: a Jornada 3 do Bacen só ativa a autorização
+   * depois que o QR imediato é liquidado, então a forma `pix_copia_e_cola`
+   * sempre volta com `valorAtivacaoCentavos` — quanto sai da conta da clínica
+   * agora. Nunca é a mensalidade; ela nasce só no fechamento do 1º ciclo, em
+   * `emitirCobrancaDeCiclo`.
+   */
   iniciarVinculoPagamento(dados: NovoVinculo): Promise<VinculoCriado>;
 
   consultarVinculo(providerVinculoId: string): Promise<{

@@ -173,7 +173,11 @@ describe("FormularioAtivacao", () => {
     render(
       <FormularioAtivacao
         acao={acaoQueDevolve({
-          autorizacao: { forma: "pix_copia_e_cola", brCode },
+          autorizacao: {
+            forma: "pix_copia_e_cola",
+            brCode,
+            valorAtivacaoCentavos: 1,
+          },
         })}
         navegar={navegar}
       />,
@@ -211,7 +215,11 @@ describe("FormularioAtivacao", () => {
     render(
       <FormularioAtivacao
         acao={acaoQueDevolve({
-          autorizacao: { forma: "pix_copia_e_cola", brCode },
+          autorizacao: {
+            forma: "pix_copia_e_cola",
+            brCode,
+            valorAtivacaoCentavos: 1,
+          },
         })}
         navegar={vi.fn()}
       />,
@@ -226,5 +234,84 @@ describe("FormularioAtivacao", () => {
 
     // Exato: um BR Code truncado ou com espaço a mais é recusado pelo banco.
     expect(writeText).toHaveBeenCalledWith(brCode);
+  });
+
+  it("diz quanto o QR cobra, e por quê, antes do QR (D22)", async () => {
+    const user = userEvent.setup();
+    const brCode = "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF";
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          autorizacao: {
+            forma: "pix_copia_e_cola",
+            brCode,
+            valorAtivacaoCentavos: 1,
+          },
+        })}
+        navegar={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    // A divulgação vive DENTRO da mesma região do QR: o <Alert severidade=
+    // "info" /> é `role=status` (live region polite), então um leitor de tela
+    // recebe o preço junto com o resto, não como texto órfão ao lado. Por isso
+    // a asserção parte da região, não do documento.
+    const alerta = (
+      await screen.findByText(/falta pagar para concluir/i)
+    ).closest('[role="status"]')!;
+    const texto = alerta.textContent ?? "";
+
+    // O valor formatado, com o espaço não-quebrável do Intl normalizado.
+    expect(texto.replace(/ /g, " ")).toMatch(/R\$ 0,01/);
+    // Cobra AGORA, neste QR — não "pode cobrar", não "em algum momento".
+    expect(texto).toMatch(/cobra .*agora/is);
+    // O motivo: é o pagamento que registra a autorização no banco.
+    expect(texto).toMatch(/registra a autorização/i);
+    // E o que NÃO é: a mensalidade, que só nasce no fim do 1º ciclo.
+    expect(texto).toMatch(/não é a mensalidade/i);
+    expect(texto).toMatch(/primeiro ciclo fecha/i);
+
+    // Ordem importa: dinheiro sai da conta antes de a pessoa ler o QR, então a
+    // frase precisa vir antes dele no DOM — depois é aviso pós-fato.
+    const qr = screen.getByRole("img", { name: /qr code do pix/i });
+    const paragrafoValor = alerta.querySelector("strong")!.closest("p")!;
+    expect(
+      paragrafoValor.compareDocumentPosition(qr) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(paragrafoValor.textContent?.replace(/ /g, " ")).toMatch(/R\$ 0,01/);
+  });
+
+  it("o ramo redirect não fala em cobrança de ativação", async () => {
+    const user = userEvent.setup();
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          autorizacao: {
+            forma: "redirect",
+            url: "https://pagamento.exemplo/checkout/abc123",
+          },
+        })}
+        navegar={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    // Prova do negativo: o checkout registra o meio de pagamento sem debitar.
+    // Herdar a divulgação do Pix aqui seria afirmar uma cobrança que não
+    // existe — mentira simétrica à que o D22 corrigiu.
+    const alerta = (
+      await screen.findByText(/falta pagar para concluir/i)
+    ).closest('[role="status"]')!;
+    const texto = (alerta.textContent ?? "").replace(/ /g, " ");
+    expect(texto).not.toMatch(/R\$/);
+    expect(texto).not.toMatch(/cobra .*agora/is);
   });
 });
