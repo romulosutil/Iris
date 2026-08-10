@@ -89,6 +89,53 @@ GRANT EXECUTE ON FUNCTION app_salvar_cpf_cnpj_clinica(text) TO app_role;
 GRANT SELECT (cpf_cnpj) ON clinic TO app_role;
 --> statement-breakpoint
 
+-- ==================== Backfill das linhas existentes ====================
+--
+-- MEDIÇÃO QUE JUSTIFICA ESTE BLOCO (psql contra produção, 10/08/2026):
+--
+--   SELECT provider, status, count(*) FROM subscription GROUP BY 1,2;
+--   -->  mercado_pago | free_tier      | 1
+--        mercado_pago | setup_pending  | 1
+--
+-- ZERO `active`, ZERO `past_due`. Nenhuma ativação jamais completou e o
+-- Mercado Pago nunca faturou ninguém — não há cobrança viva para preservar.
+--
+-- Linha 1 (`free_tier`): o provedor é FANTASMA. Veio do default da coluna, não
+-- de escolha da clínica; `provider_subscription_id` é NULL, ou seja, não
+-- existe vínculo nenhum do lado do gateway. `free_tier` com provedor é
+-- exatamente o estado que o CHECK abaixo passa a considerar sem sentido.
+UPDATE subscription
+   SET provider = NULL
+ WHERE status = 'free_tier'
+   AND provider_subscription_id IS NULL;
+--> statement-breakpoint
+
+-- Linha 2 (`setup_pending`/`mercado_pago`): DEADLOCK DE CONTA, não só sujeira.
+-- Com o trial vencido, `derivarSituacao` lê `setup_pending` como
+-- `pagamento_em_processamento` → conta em somente-leitura; e
+-- `novo-paciente-form.tsx:92` esconde o link de ativação justamente nesse
+-- estado (para não gerar 2ª cobrança). Resultado: a clínica não cadastra
+-- paciente e não tem por onde sair. O `preapproval` do MP que a linha aponta
+-- nunca será autorizado — o trilho saiu do ar e a rota de webhook dele é
+-- removida na T16 —, então esperar não resolve.
+--
+-- Devolver a `free_tier` recoloca a conta no estado "pode ativar", que é a
+-- única saída real. Os campos do checkout velho vão junto: BR Code e valor de
+-- ativação emitidos por um gateway que não existe mais são pior que nulos —
+-- `iniciarAtivacao` é idempotente e devolveria o QR JÁ EMITIDO (o valor está
+-- dentro do payload EMV), reapresentando à clínica uma cobrança impagável.
+UPDATE subscription
+   SET status = 'free_tier',
+       provider = NULL,
+       provider_subscription_id = NULL,
+       checkout_url = NULL,
+       pix_copia_e_cola = NULL,
+       valor_ativacao_centavos = NULL,
+       metodo_pagamento = NULL
+ WHERE provider = 'mercado_pago'
+   AND status = 'setup_pending';
+--> statement-breakpoint
+
 -- ==================== CHECK de provedor ====================
 --
 -- O invariante que o `NOT NULL DEFAULT 'mercado_pago'` fingia garantir, agora
