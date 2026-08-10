@@ -2,7 +2,8 @@
 
 **Spec**: `.specs/features/billing-ativacao-asaas/spec.md`
 **Design**: `.specs/features/billing-ativacao-asaas/design.md`
-**Status**: Em execução (Fase A) — T1 ✅
+**Status**: Em execução (Fase A) — T1 ✅ T2 ✅ T3 🟡 (escrito, prod pendente)
+T4 ✅ T9 ✅ · próximo: T5 e T6 (paralelos)
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -99,7 +100,17 @@ remover o `.default("mercado_pago")`. Rodar `pnpm db:generate`.
 
 ---
 
-### T2: DDL à mão no mesmo `.sql` — definer, grants e CHECK
+### T2: DDL à mão no mesmo `.sql` — definer, grants e CHECK ✅ FEITO
+
+**Status**: Concluída. Tudo dentro de `0090_documento_clinica_e_provedor.sql`,
+snapshot **não** tocado. Gate quick verde em 1076 = baseline.
+Decisão registrada: a função **não** chama `app_conta_somente_leitura()` — gravar
+o documento é passo da ativação, ou seja, a saída da conta bloqueada; barrar ali
+trancaria a conta em deadlock (sem pagar não grava, sem gravar não paga).
+O `GRANT SELECT (cpf_cnpj)` foi incluído: a 0079 revogou só INSERT/UPDATE/DELETE
+em `clinic`, então o SELECT de tabela já alcançava a coluna nova — o grant é
+redundante de propósito (medido no T4: `has_column_privilege` = `t` para SELECT,
+`f` para UPDATE, que é o desenhado).
 
 **What**: Acrescentar ao `.sql` do T1: função `app_salvar_cpf_cnpj_clinica`
 (SECURITY DEFINER), `GRANT`s de coluna, e o CHECK de provedor.
@@ -131,7 +142,11 @@ guard de tenant + papel); `app_clinic_id_exigido()` da `0085`
 
 ---
 
-### T3: Backfill das 2 linhas de produção ⚠️ GATE RÔMULO
+### T3: Backfill das 2 linhas de produção ⚠️ GATE RÔMULO — 🟡 ESCRITO, NÃO APLICADO
+
+**Status**: SQL escrito e commitado (`fdf8963`), gate quick verde.
+**Aplicado em produção: NÃO.** Aguarda confirmação explícita do Rômulo.
+Aplicado no Postgres local no T4 (livre por regra).
 
 **What**: Statements de backfill no mesmo `.sql`: zerar o provedor fantasma da
 linha `free_tier` e devolver a linha `setup_pending`/`mercado_pago` a `free_tier`.
@@ -154,8 +169,8 @@ MP nunca será autorizado — a rota de webhook dele sai no T16.
 
 - [ ] `UPDATE ... SET provider = NULL WHERE status='free_tier' AND provider_subscription_id IS NULL`
 - [ ] `UPDATE ... SET status='free_tier', provider=NULL, provider_subscription_id=NULL,
-    checkout_url=NULL, pix_copia_e_cola=NULL, valor_ativacao_centavos=NULL,
-    metodo_pagamento=NULL WHERE provider='mercado_pago' AND status='setup_pending'`
+  checkout_url=NULL, pix_copia_e_cola=NULL, valor_ativacao_centavos=NULL,
+  metodo_pagamento=NULL WHERE provider='mercado_pago' AND status='setup_pending'`
 - [ ] Comentário no `.sql` citando a medição de 10/08 que justifica cada UPDATE
 - [ ] Ordem: backfill **antes** do `ADD CONSTRAINT` (senão o CHECK rejeita)
 - [ ] Gate: `pnpm typecheck && pnpm test`
@@ -166,7 +181,73 @@ MP nunca será autorizado — a rota de webhook dele sai no T16.
 
 ---
 
-### T4: Aplicar migração local e **provar medindo**
+### T4: Aplicar migração local e **provar medindo** ✅ FEITO
+
+**Status**: Concluída. `pnpm db:migrate` aplicou a 0090 no Postgres local sem
+erro. Evidência medida colada abaixo (regra 3 do `CLAUDE.md` — "está no git log"
+não é prova).
+
+**Defeito do plano, corrigido na execução**: o T4 declara gate `full`, mas o
+CHECK novo derruba os seeds de teste que só o **T9** conserta. Ou seja, o gate
+do T4 era inalcançável na ordem escrita. T9 foi antecipado (ele depende só do
+T4, nunca do T5-T8) e o gate fechou. Ordem real: T1 → T2 → T3 → T4 → **T9** →
+T5/T6.
+
+**Segundo achado**: o plano listava 5 INSERTs quebrados. São **6 caminhos** — os
+INSERTs mais os **UPDATEs que flipam** `free_tier` → `active`/`past_due`/
+`canceled` (`conta-somente-leitura-rls`, `billing-apuracao`). O CHECK morde no
+UPDATE igual morde no INSERT. E o guard de conjunto exato de funções
+(`clinic-id-helper-rls`) precisou da linha nova, o que é o guard funcionando.
+
+#### Evidência medida (Postgres local, 10/08)
+
+```
+ column_name | data_type | is_nullable | column_default
+-------------+-----------+-------------+----------------
+ cpf_cnpj    | text      | YES         |
+
+ le | escreve            -- has_column_privilege(app_role, clinic, cpf_cnpj, …)
+----+---------
+ t  | f                  -- lê sim, escreve não (escrita só pela definer)
+
+           proname           | prosecdef |      args
+-----------------------------+-----------+-----------------
+ app_salvar_cpf_cnpj_clinica | t         | p_cpf_cnpj text
+
+ column_name | is_nullable | column_default     -- subscription.provider
+-------------+-------------+----------------
+ provider    | YES         |                    -- default REMOVIDO
+
+ conname                                      | pg_get_constraintdef
+----------------------------------------------+----------------------------------
+ subscription_provider_quando_vinculado_check | CHECK (((status = 'free_tier'::subscription_status) OR (provider IS NOT NULL)))
+```
+
+O CHECK morde (`BEGIN … ROLLBACK`):
+
+```
+A) INSERT status='active'    SEM provider -> ERROR: violates check constraint
+                                             "subscription_provider_quando_vinculado_check"
+B) INSERT status='free_tier' SEM provider -> OK, provider_nulo = t
+C) INSERT status='active'    COM 'asaas'  -> OK
+```
+
+Os guards da função definer mordem (`BEGIN … ROLLBACK`, como `app_role`):
+
+```
+A) UPDATE direto de cpf_cnpj por app_role -> ERROR: permission denied for table clinic
+                                             (a 0079 revogou UPDATE; a escrita é só pela definer)
+B) definer + coordenador + '111.444.777-35'    -> grava 11144477735   (só dígitos)
+   definer + coordenador + '29.811.201/0001-50'-> grava 29811201000150 (14 dígitos)
+C) definer + papel 'terapeuta'  -> ERROR: exige papel coordenador (papel do chamador: terapeuta)
+D) definer + documento '123'    -> ERROR: documento deve ter 11 dígitos (CPF) ou 14 (CNPJ);
+                                          recebeu 3 dígito(s)
+E) definer SEM GUC app.clinic_id-> ERROR: tenant não resolvido: GUC app.clinic_id ausente ou
+                                          fora do formato uuid          (P0001, não 42704/22P02)
+```
+
+**Gate full**: `pnpm test` 166 arquivos / **1078** testes · `pnpm test:rls`
+94 arquivos / **803** testes — ambos verdes.
 
 **What**: `pnpm db:migrate` no Postgres local e verificar cada objeto no banco.
 **Where**: nenhum arquivo — é execução e evidência
@@ -310,7 +391,17 @@ costura de teste `acao`/`navegar` que o arquivo já tem
 
 ---
 
-### T9: Corrigir os 5 INSERTs de teste + guard anti-regressão
+### T9: Corrigir os 5 INSERTs de teste + guard anti-regressão ✅ FEITO (antecipado)
+
+**Status**: Concluída, **executada antes do T5-T8** — o gate `full` do T4 não
+fecha sem ela. Commit `6501e42`. Contagem 1076 → **1078** (baseline + 2 do
+guard novo), nenhum teste deletado; RLS 803 verdes.
+
+**Correção do escopo previsto**: eram **6 caminhos**, não 5 —
+os INSERTs mais os UPDATEs que flipam `free_tier` → `active`/`past_due`/
+`canceled`. Mais a linha no oráculo de `clinic-id-helper-rls` (13 → 14 funções).
+Guard escrito em `src/db/schema-billing.test.ts` (arquivo novo, em vez de anexo
+ao `migrations.test.ts`, que é sobre journal e não sobre schema).
 
 **What**: Ajustar os INSERTs que o CHECK quebra e travar o retorno do default.
 **Where**: `src/app/(app)/pacientes/novo/actions.int.test.ts:78,738` ·
