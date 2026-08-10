@@ -595,9 +595,15 @@ describe("getBillingProvider", () => {
     vi.unstubAllEnvs();
   });
 
-  it("default resolve para mercado_pago", () => {
+  it("env ausente ou vazia LANÇA — não há default silencioso", () => {
+    // Havia um default (`mercado_pago`). Ele transformava "perdi a env" em
+    // "troquei de gateway sem avisar" — e o gateway de volta é justamente aquele
+    // onde o Pix nunca foi implementado (D24). Um deploy que perca a variável
+    // precisa quebrar alto, não faturar pelo trilho errado em silêncio.
     vi.stubEnv("BILLING_PROVIDER", "");
-    expect(getBillingProvider().id).toBe("mercado_pago");
+    expect(() => getBillingProvider()).toThrow(
+      /BILLING_PROVIDER não configurada/,
+    );
   });
 
   it("BILLING_PROVIDER desconhecido lança erro explícito", () => {

@@ -40,8 +40,6 @@ export type AtivacaoState = {
   autorizacao?: AutorizacaoPendente;
 };
 
-const METODOS: readonly string[] = ["cartao", "pix"];
-
 /**
  * Núcleo testável da ativação da assinatura (#36).
  *
@@ -58,11 +56,13 @@ export async function iniciarAtivacaoAssinatura(
 ): Promise<AtivacaoState> {
   requireRole(ctx, "coordenador");
 
-  const metodoRaw = String(formData.get("metodo") ?? "").trim();
-  if (!METODOS.includes(metodoRaw)) {
-    return { error: "Escolha a forma de pagamento: cartão ou Pix." };
-  }
-  const metodo = metodoRaw as MetodoPagamento;
+  // Fixo, não vindo do formulário: a escolha cartão/Pix saiu da tela porque
+  // nenhum adapter lê `NovoVinculo.metodo` (o do Asaas sempre emite Pix
+  // Automático, o do Mercado Pago sempre `preapproval`). Ler um campo do corpo
+  // para depois ignorá-lo deixaria a mentira viva um nível abaixo — e o valor
+  // ainda é persistido em `subscription.metodo_pagamento`, então precisa ser
+  // verdadeiro. Volta a ser escolha quando algum adapter honrar o campo.
+  const metodo: MetodoPagamento = "pix";
 
   // Nome da clínica e e-mail do responsável saem por `withTenant` (role
   // `app_role`, RLS ativa) — é dado do tenant. A criação da assinatura, logo

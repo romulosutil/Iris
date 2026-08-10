@@ -7,10 +7,12 @@ import type { AtivacaoState } from "./logic";
 /**
  * O que estes casos discriminam:
  *
- * 1. **Escolha exclusiva de método.** Um `role="group"` de botões
- *    `aria-pressed` (SegmentedControl) passaria numa asserção de texto, mas não
- *    em `getByRole("radio")` — e é a diferença entre o leitor de tela anunciar
- *    "opção 1 de 2" ou dois toggles independentes.
+ * 1. **Ausência de escolha de método.** A tela oferecia cartão e Pix num
+ *    radiogroup, com cartão pré-selecionado — e entregava Pix nos dois casos,
+ *    porque `NovoVinculo.metodo` não é lido por adapter nenhum. O caso agora
+ *    trava o negativo: nenhum controle de escolha e nenhum campo `metodo` no
+ *    corpo enviado. Asserir só `queryAllByRole("radio")` vazio seria fraco —
+ *    um `<select>` ou um SegmentedControl devolveria a ficção passando no teste.
  * 2. **Botão travado durante o envio.** Sem isto, dois cliques = duas
  *    assinaturas criadas no provedor. O teste segura a promise da action
  *    aberta de propósito: com o `disabled` removido, o segundo clique chama a
@@ -42,35 +44,31 @@ function acaoSuspensa() {
 }
 
 describe("FormularioAtivacao", () => {
-  it("oferece cartão e Pix como escolha exclusiva (radiogroup)", () => {
-    render(<FormularioAtivacao acao={acaoQueDevolve({})} />);
+  it("não oferece escolha de método — nenhum controle, nenhum campo `metodo`", () => {
+    const { container } = render(
+      <FormularioAtivacao acao={acaoQueDevolve({})} />,
+    );
 
-    const opcoes = screen.getAllByRole("radio");
-    expect(opcoes).toHaveLength(2);
-    expect(
-      screen.getByRole("radio", { name: /cartão de crédito/i }),
-    ).toBeDefined();
-    expect(screen.getByRole("radio", { name: /pix/i })).toBeDefined();
-    // Todos precisam enviar o mesmo campo, senão a action não recebe `metodo`.
-    for (const opcao of opcoes) {
-      expect(opcao.getAttribute("name")).toBe("metodo");
-    }
+    // Não basta asserir a ausência de `radio`: trocar os radios por um
+    // SegmentedControl (`aria-pressed`), um `<select>` ou um par de botões
+    // passaria naquela asserção sozinha e devolveria a escolha ficcional à tela.
+    expect(screen.queryAllByRole("radio")).toHaveLength(0);
+    expect(screen.queryAllByRole("combobox")).toHaveLength(0);
+    expect(screen.queryByText(/cartão de crédito/i)).toBeNull();
+
+    // O oráculo mais forte é o CORPO enviado: nenhum controle chamado `metodo`
+    // sai deste formulário, então a action não tem o que ignorar.
+    expect(container.querySelectorAll('[name="metodo"]')).toHaveLength(0);
   });
 
-  it("troca de método sem selecionar os dois ao mesmo tempo", async () => {
-    const user = userEvent.setup();
+  it("declara o trilho de pagamento real (Pix Automático) sem citar valor", () => {
     render(<FormularioAtivacao acao={acaoQueDevolve({})} />);
 
-    const pix = screen.getByRole("radio", {
-      name: /pix/i,
-    }) as HTMLInputElement;
-    const cartao = screen.getByRole("radio", {
-      name: /cartão de crédito/i,
-    }) as HTMLInputElement;
-
-    await user.click(pix);
-    expect(pix.checked).toBe(true);
-    expect(cartao.checked).toBe(false);
+    expect(screen.getByText(/pix autom[áa]tico/i)).toBeDefined();
+    // Nenhum valor hardcoded nesta parte da tela: quem diz quanto a ativação
+    // cobra é a autorização devolvida pelo provedor (D22). Um preço escrito aqui
+    // seria uma segunda fonte da verdade, que envelhece sozinha.
+    expect(screen.queryByText(/R\$/)).toBeNull();
   });
 
   it("desabilita o botão enquanto o envio está pendente (duplo clique não vira 2 assinaturas)", async () => {

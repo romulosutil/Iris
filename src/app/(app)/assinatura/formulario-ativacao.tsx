@@ -1,12 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useId, useState } from "react";
+import { useActionState, useEffect } from "react";
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { QrCode } from "@/components/ui/qr-code";
 import { BotaoCopiar } from "@/components/ui/botao-copiar";
-import { cn } from "@/lib/cn";
 import { formatarBRL } from "@/lib/billing/calculator";
 import { ativarAssinatura } from "./actions";
 import type { AtivacaoState } from "./logic";
@@ -15,23 +14,6 @@ type AcaoAtivacao = (
   prev: AtivacaoState,
   formData: FormData,
 ) => Promise<AtivacaoState> | AtivacaoState;
-
-const METODOS = [
-  {
-    value: "cartao",
-    label: "Cartão de crédito",
-    ajuda: "Cobrança automática a cada ciclo, sem precisar lembrar de pagar.",
-  },
-  {
-    value: "pix",
-    label: "Pix",
-    // Sem número aqui de propósito: quem sabe quanto a ativação cobrou é a
-    // autorização devolvida pelo provedor, e repetir a constante nesta lista
-    // criaria uma segunda fonte da verdade que envelhece sozinha (D22).
-    ajuda:
-      "Você recebe um QR Code / código para pagar a cada cobrança. A ativação cobra um valor mínimo, informado na tela antes do QR Code.",
-  },
-] as const;
 
 export interface FormularioAtivacaoProps {
   /**
@@ -62,9 +44,6 @@ export function FormularioAtivacao({
     acao as (prev: AtivacaoState, formData: FormData) => Promise<AtivacaoState>,
     {},
   );
-  const [metodo, setMetodo] = useState<string>("cartao");
-  const legendaId = useId();
-
   const autorizacao = state.autorizacao;
   // O efeito depende SÓ da URL do ramo redirect. Derivar aqui (em vez de olhar
   // `autorizacao` dentro do efeito) é o que garante que o ramo Pix nunca
@@ -88,57 +67,27 @@ export function FormularioAtivacao({
 
   return (
     <Form action={formAction} error={state.error}>
-      <fieldset
-        className="m-0 flex flex-col gap-2 border-0 p-0"
-        aria-describedby={legendaId}
-      >
-        <legend className="font-display mb-1.5 text-sm font-semibold text-[var(--text-primary)]">
-          Como você quer pagar?
-        </legend>
-        <p id={legendaId} className="text-sm text-[var(--text-secondary)]">
-          Você pode trocar a forma de pagamento depois.
+      {/* A escolha "cartão ou Pix" saiu daqui em 10/08/2026, e não por
+          simplificação de layout: ela era FICÇÃO. `NovoVinculo.metodo` nunca foi
+          lido por adapter nenhum — nem pelo Mercado Pago (sempre `preapproval`,
+          sempre cartão) nem pelo Asaas (sempre Pix Automático). Com "Cartão de
+          crédito" pré-selecionado, a clínica escolhia cartão e recebia um QR
+          Code de Pix. Uma tela que promete o que o sistema não entrega é pior
+          que uma tela com uma opção só. Volta quando algum adapter honrar o
+          campo. */}
+      <div className="font-body flex flex-col gap-1.5 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-3 text-[var(--text-primary)]">
+        <p className="font-display text-sm font-semibold">
+          Pagamento por Pix Automático
         </p>
-        {/* Radios nativos de propósito: o `role="radiogroup"` vem do
-            <fieldset>/<legend> e a navegação por setas, o vínculo do nome
-            acessível e o envio do campo `metodo` saem de graça do browser.
-            O SegmentedControl do DS é `aria-pressed` (toggle), não escolha
-            exclusiva — usá-lo aqui anunciaria o grupo errado no leitor de
-            tela. */}
-        <div className="flex flex-col gap-2">
-          {METODOS.map((opcao) => {
-            const selecionado = metodo === opcao.value;
-            return (
-              <label
-                key={opcao.value}
-                className={cn(
-                  "flex min-h-11 cursor-pointer items-start gap-3 rounded-[var(--radius-control)] border-2 p-3",
-                  "font-body bg-[var(--surface-card)] text-[var(--text-primary)]",
-                  "has-[:focus-visible]:outline-focus has-[:focus-visible]:outline-[length:var(--ring-width)] has-[:focus-visible]:outline-offset-[var(--ring-offset)]",
-                  selecionado
-                    ? "border-[var(--border-brutal)] shadow-[var(--ds-shadow)]"
-                    : "border-[var(--border-brutal)]/40",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="metodo"
-                  value={opcao.value}
-                  checked={selecionado}
-                  onChange={() => setMetodo(opcao.value)}
-                  disabled={isPending}
-                  className="mt-1 size-5 shrink-0 accent-[var(--action-primary)]"
-                />
-                <span className="flex flex-col gap-0.5">
-                  <span className="font-semibold">{opcao.label}</span>
-                  <span className="text-xs text-[var(--text-secondary)]">
-                    {opcao.ajuda}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
+        {/* Sem número aqui de propósito: quem sabe quanto a ativação cobra é a
+            autorização devolvida pelo provedor, e repetir a constante nesta tela
+            criaria uma segunda fonte da verdade que envelhece sozinha (D22). */}
+        <p className="text-xs text-[var(--text-secondary)]">
+          Você autoriza uma vez no app do seu banco e as cobranças seguintes são
+          debitadas sozinhas, sempre pelo valor apurado no ciclo. A ativação
+          cobra um valor mínimo, informado nesta tela antes do QR Code.
+        </p>
+      </div>
 
       {autorizacao ? (
         <Alert severidade="info" titulo="Falta pagar para concluir">
