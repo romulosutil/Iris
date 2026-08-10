@@ -215,9 +215,18 @@ export async function iniciarAtivacao(
     .where(eq(subscription.clinicId, pedido.clinicId))
     .limit(1);
 
+  // `existente.provider === provider.id` NÃO é redundante com o status: quando
+  // o trilho ativo muda (`BILLING_PROVIDER`), a linha antiga continua
+  // `setup_pending` com um id que só existe no gateway ANTERIOR. Sem esta
+  // comparação, o id de preapproval do Mercado Pago era consultado no Asaas,
+  // que responde 400 — e o erro sobe antes de qualquer criação, travando a
+  // ativação da clínica para sempre. Vínculo de outro gateway simplesmente não
+  // é reaproveitável: cai no caminho de criação e o `onConflictDoUpdate`
+  // abaixo reescreve `provider` + `providerSubscriptionId` juntos.
   if (
     existente?.providerSubscriptionId &&
-    existente.status === "setup_pending"
+    existente.status === "setup_pending" &&
+    existente.provider === provider.id
   ) {
     const atual = await provider.consultarVinculo(
       existente.providerSubscriptionId,

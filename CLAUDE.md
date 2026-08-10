@@ -180,6 +180,35 @@ ler o documento — não pedir para o Rômulo reexplicar.
   proposta pendente de confirmação — nunca apresentar como travada sem
   ter sido validada com o Rômulo.
 
+## Gestão de tokens: atomização e checkpoint de contexto
+
+Regra criada após post-mortem da D22 (issue #239, PR #240): investigação
+do mesmo tópico duplicada em duas sessões no mesmo dia + 4 passadas
+separadas de formatação nos mesmos arquivos + lint full-repo fora de
+escopo — nenhum bug, só round-trip redundante. Ver memória
+`d22-sessao-gastou-token-em-loops-redundantes`.
+
+**1. Toda issue nova entra atomizada.** Antes de implementar, quebrar em
+passos pequenos e verificáveis:
+
+- Item toca modelo de dados, RLS/policy, ou o schema de saída do agente
+  de extração (as três coisas já sob plan mode obrigatório acima) →
+  `/tlc-spec-driven`.
+- Qualquer outra issue/débito → `/superpowers:writing-plans`.
+
+Objetivo: eliminar a reabertura de investigação já feita e os commits
+inflados por passadas repetidas de retrabalho.
+
+**2. Teto de ~50 mensagens por sessão.** Ao se aproximar desse número
+(estimativa da sessão, não contagem exata de hook — o harness não expõe
+esse contador), parar o trabalho em andamento, gravar checkpoint em
+`checkpoint.md` (o que foi feito, o que falta, decisões-chave, próximo
+passo) ou gerar resumo equivalente na resposta, e avisar o Rômulo que é
+hora de `/clear`. Isso não substitui a compressão automática do harness
+(que existe para não estourar limite de token) — é proteção contra
+degradação de recall em contexto longo, que acontece antes do limite
+técnico.
+
 ## Permissões — o que rodar livremente vs. o que confirmar antes
 
 **Rodar livremente:** lint, testes, build local, Storybook, criar branch,
