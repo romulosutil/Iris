@@ -496,6 +496,15 @@ export async function fecharCiclosVencendo(opcoes?: {
           // uma reexecução do job depois de uma falha parcial emitiria uma
           // segunda cobrança para o mesmo ciclo.
         } else if (assinatura.providerSubscriptionId) {
+          // `provider` é nullable desde a 0090 (representa "sem vínculo de
+          // cobrança"). Aqui a linha TEM vínculo, então nulo é estado
+          // impossível — o CHECK do banco o proíbe. Falhar alto em vez de
+          // cair num default: emitir cobrança pelo gateway errado é dinheiro.
+          if (!assinatura.provider) {
+            throw new Error(
+              `Assinatura ${assinatura.subscriptionId} tem vínculo de cobrança (${assinatura.providerSubscriptionId}) mas nenhum provedor gravado — não dá para saber qual gateway cobrar.`,
+            );
+          }
           // Resolvido AQUI, por linha, e não uma vez no topo da função: a
           // varredura cobre assinaturas de gateways diferentes na mesma passada.
           const provider = getProviderPorId(assinatura.provider);
