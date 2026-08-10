@@ -253,6 +253,8 @@ const FUNCOES_COM_HELPER = [
   "app_proximo_numero_sequencial",
   "app_risco_estagio2_ativo",
   "app_salvar_config_emergencia",
+  // #36 (0090) — grava o CPF/CNPJ da clínica na ativação da assinatura.
+  "app_salvar_cpf_cnpj_clinica",
   "app_session_clinica_visivel",
   "app_session_terapeuta_id",
   "app_user_in_clinic",
@@ -364,7 +366,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 13 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 14 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -377,7 +379,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(13);
+    expect(FUNCOES_COM_HELPER.length).toBe(14);
   });
 
   test("audit_log_mascarado isola por tenant e levanta P0001 sem GUC", async () => {

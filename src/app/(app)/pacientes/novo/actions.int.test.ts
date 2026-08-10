@@ -75,7 +75,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     // exige assinatura ativa. Estes testes são sobre cadastro + consent, não
     // sobre billing, então a clínica entra já paga. A cobertura do gate em si
     // (bloqueio em free_tier/setup_pending) fica no bloco no fim do arquivo.
-    await owner`INSERT INTO subscription (clinic_id, status) VALUES (${CLINIC_A}, 'active')
+    await owner`INSERT INTO subscription (clinic_id, status, provider) VALUES (${CLINIC_A}, 'active', 'asaas')
                 ON CONFLICT (clinic_id) DO UPDATE SET status = 'active'`;
   });
   afterAll(async () => {
@@ -735,8 +735,8 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
         // relógio, então esta clínica passa mesmo usando o CPF "usado".
         await owner`INSERT INTO clinic (id, nome)
           VALUES (${CLINIC_ALVO_ATIVA}, 'Clínica Alvo Ativa')`;
-        await owner`INSERT INTO subscription (clinic_id, status)
-          VALUES (${CLINIC_ALVO_ATIVA}, 'active')`;
+        await owner`INSERT INTO subscription (clinic_id, status, provider)
+          VALUES (${CLINIC_ALVO_ATIVA}, 'active', 'asaas')`;
       });
 
       test("(f) clínica em trial_aguardando bloqueada por CPF já usado em trial de OUTRA clínica — nada é gravado", async () => {

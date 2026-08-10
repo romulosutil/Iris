@@ -30,9 +30,9 @@ describe.skipIf(!hasDb)("Super Admin Queries — Zero-Knowledge LGPD & Metrics (
       (${C1}, 'Clínica Alfa', ${U_DONO1}, true, 7),
       (${C2}, 'Clínica Beta', ${U_DONO2}, false, 14)`;
 
-    await owner`INSERT INTO subscription (clinic_id, status) VALUES
-      (${C1}, 'active'),
-      (${C2}, 'free_tier')`;
+    await owner`INSERT INTO subscription (clinic_id, status, provider) VALUES
+      (${C1}, 'active', 'asaas'),
+      (${C2}, 'free_tier', NULL)`;
 
     await owner`INSERT INTO patient (id, clinic_id, nome, nascimento) VALUES
       (${P1}, ${C1}, 'Paciente Alfa 1 (LGPD)', '2015-01-01'),
