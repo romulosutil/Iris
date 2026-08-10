@@ -60,6 +60,12 @@ export function getBillingProvider(): BillingProvider {
  * Valor fora do enum estoura em vez de cair num default: uma linha com
  * `provider` ilegível é corrupção de estado, e escolher um gateway por palpite
  * significaria cobrar a clínica errada no lugar errado.
+ *
+ * A mensagem do erro NÃO cita `BILLING_PROVIDER`: os dois chamadores chegam aqui
+ * por caminhos diferentes (env, no caso de `getBillingProvider()`; coluna do
+ * banco, no caso do fechamento de ciclo), e nomear a env mandaria quem investiga
+ * uma corrupção de `subscription.provider` conferir variável de ambiente. Quem
+ * precisa apontar a env é `getBillingProvider()`, no erro de env ausente.
  */
 export function getProviderPorId(id: string): BillingProvider {
   switch (id) {
@@ -68,6 +74,6 @@ export function getProviderPorId(id: string): BillingProvider {
     case "asaas":
       return new AsaasProvider();
     default:
-      throw new Error(`BILLING_PROVIDER desconhecido: ${id}`);
+      throw new Error(`Provedor de pagamento desconhecido: ${id}`);
   }
 }

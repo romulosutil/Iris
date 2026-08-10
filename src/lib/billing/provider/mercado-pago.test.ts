@@ -614,7 +614,7 @@ describe("getBillingProvider", () => {
     // daquele incidente.
     vi.stubEnv("BILLING_PROVIDER", "mercadopago");
     expect(() => getBillingProvider()).toThrow(
-      "BILLING_PROVIDER desconhecido: mercadopago",
+      "Provedor de pagamento desconhecido: mercadopago",
     );
   });
 
