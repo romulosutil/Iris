@@ -146,6 +146,24 @@ export type AutorizacaoPendente =
 /** Resultado da criação do vínculo — o suficiente para persistir e autorizar. */
 export interface VinculoCriado {
   providerVinculoId: string;
+  /**
+   * Identificador do **assinante** no gateway, quando o gateway tem um.
+   *
+   * Opcional de propósito, e não por conveniência: nem todo trilho separa
+   * "quem paga" de "o vínculo de pagamento". Há gateways em que criar a
+   * autorização já é criar o cliente — o vínculo é a única entidade, e não
+   * existe segundo id para devolver. Obrigatório forçaria esses adapters a
+   * repetir `providerVinculoId` aqui, que é afirmar uma identidade de assinante
+   * que o gateway nunca emitiu (o mesmo tipo de mentira do D21, onde a porta
+   * exigia uma URL de quem só tinha um BR Code).
+   *
+   * Quando vem, é persistido em `subscription.provider_customer_id` junto com
+   * `provider` — o id só faz sentido dentro do gateway que o emitiu, então
+   * gravar um sem o outro produz uma linha que ninguém consegue reinterpretar.
+   * Ausente, a coluna vai a `null` explicitamente, nunca fica com o resíduo da
+   * tentativa anterior.
+   */
+  providerCustomerId?: string;
   autorizacao: AutorizacaoPendente;
   status: StatusAssinaturaProvider;
 }

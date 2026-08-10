@@ -320,7 +320,7 @@ testes `src/lib/cnpj.test.ts` (9) + `src/lib/documento.test.ts` (6).
 
 ---
 
-### T6: `providerCustomerId` na porta e no adapter Asaas `[P]`
+### T6: `providerCustomerId` na porta e no adapter Asaas `[P]` ✅ FEITO
 
 **What**: `VinculoCriado.providerCustomerId?` na porta; `AsaasProvider` passa a
 devolver o `customerId` que hoje descarta; `iniciarAtivacao` persiste na coluna.
@@ -334,17 +334,35 @@ no INSERT **e** no `onConflictDoUpdate`
 
 **Done when**:
 
-- [ ] Campo opcional na porta, com docblock explicando por que é opcional
+- [x] Campo opcional na porta, com docblock explicando por que é opcional
       (nem todo trilho tem "cliente" separado do vínculo) — sem jargão de provedor
-- [ ] `asaas.ts` devolve `providerCustomerId: customerId`
-- [ ] `subscription.ts` grava `provider_customer_id` no INSERT e no conflict
-- [ ] Teste de integração afirma a coluna preenchida após ativação (dublê de fetch)
-- [ ] Gate: `pnpm typecheck && pnpm test && pnpm test:rls`
-- [ ] Test count: baseline + N
+- [x] `asaas.ts` devolve `providerCustomerId: customerId`
+- [x] `subscription.ts` grava `provider_customer_id` no INSERT e no conflict
+- [x] Teste de integração afirma a coluna preenchida após ativação (dublê de fetch)
+- [x] Gate: `pnpm typecheck && pnpm test && pnpm test:rls`
+- [x] Test count: baseline + N
 
 **Tests**: integration
 **Gate**: full
 **Commit**: `feat(billing): persiste o id do cliente do gateway (D32)`
+
+**Status**: coluna `provider_customer_id` já existia (0071) e foi verificada
+medindo — `information_schema.columns` + `has_column_privilege('iris_auth', …)`
+com INSERT/UPDATE `true`. Nenhuma migração tocada.
+
+Arquivo novo: `src/lib/billing/ativacao-provider-customer-id.int.test.ts`
+(2 testes — INSERT e `onConflictDoUpdate`). Como `vitest.config.ts` exclui
+`**/*.int.test.ts`, ele conta em `test:rls`, não em `test`.
+
+- `pnpm test:rls`: 94 arquivos/803 testes → **95 arquivos/805 testes**, verde.
+- `pnpm test`: 168 arquivos/1093 testes, verde (baseline 166/1078; o delta é de
+  outra tarefa em paralelo, nenhum teste novo meu cai aqui).
+- `pnpm typecheck`: sem erro nos arquivos desta tarefa.
+
+Mutação como prova: removendo as duas linhas `providerCustomerId` de
+`subscription.ts`, os 2 testes falham pelos motivos certos — `expected null`
+no INSERT e `expected 'cus_000000000001'` (resíduo da tentativa anterior) no
+conflito. Restaurado em seguida.
 
 ---
 

@@ -555,6 +555,10 @@ export class AsaasProvider implements BillingProvider {
 
     return {
       providerVinculoId,
+      // O Asaas separa cliente e autorização: sem este id, a única forma de
+      // reencontrar o cliente já criado é criar outro (D32). Ele sobe pela porta
+      // e é gravado junto com `provider`.
+      providerCustomerId: customerId,
       // D22: o valor sobe junto com o BR Code. Ele foi cobrado de verdade neste
       // QR, e quem renderiza precisa dizê-lo antes — devolver só o `brCode`
       // deixava a cobrança invisível da borda para dentro.
