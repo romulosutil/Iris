@@ -4,10 +4,26 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { appUser, clinic } from "@/db/schema";
 import { iniciarAtivacao } from "@/lib/billing/subscription";
+import { BillingProviderError } from "@/lib/billing/provider";
 import type {
   AutorizacaoPendente,
   MetodoPagamento,
 } from "@/lib/billing/provider";
+
+/**
+ * Achata o corpo de erro do gateway em texto para o log. `JSON.stringify` pode
+ * lançar (referência circular) — e um throw DENTRO do handler de erro trocaria
+ * a falha real por outra, apagando o diagnóstico que esta função existe para
+ * preservar.
+ */
+function serializar(valor: unknown): string {
+  if (valor === undefined) return "";
+  try {
+    return JSON.stringify(valor) ?? String(valor);
+  } catch {
+    return String(valor);
+  }
+}
 
 export type AtivacaoState = {
   error?: string;
@@ -93,9 +109,15 @@ export async function iniciarAtivacaoAssinatura(
   } catch (e) {
     // O texto real do gateway vai para o log, não para a tela: pode conter
     // identificador de conta. O usuário recebe orientação acionável.
+    // O corpo do gateway vai SERIALIZADO: `console.error` de objeto aninhado
+    // imprime `{ errors: [Array] }` (o `depth` default do Node), que é
+    // exatamente onde mora a mensagem do Asaas/MP. Um 400 logado assim não
+    // diagnostica nada — foi o que custou uma sessão inteira de investigação.
     console.error("[assinatura] falha ao iniciar ativação", {
       clinicId: ctx.clinicId,
       err: e,
+      corpoGateway:
+        e instanceof BillingProviderError ? serializar(e.corpo) : undefined,
     });
     return {
       error:
