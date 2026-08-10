@@ -169,8 +169,8 @@ MP nunca será autorizado — a rota de webhook dele sai no T16.
 
 - [ ] `UPDATE ... SET provider = NULL WHERE status='free_tier' AND provider_subscription_id IS NULL`
 - [ ] `UPDATE ... SET status='free_tier', provider=NULL, provider_subscription_id=NULL,
-  checkout_url=NULL, pix_copia_e_cola=NULL, valor_ativacao_centavos=NULL,
-  metodo_pagamento=NULL WHERE provider='mercado_pago' AND status='setup_pending'`
+checkout_url=NULL, pix_copia_e_cola=NULL, valor_ativacao_centavos=NULL,
+metodo_pagamento=NULL WHERE provider='mercado_pago' AND status='setup_pending'`
 - [ ] Comentário no `.sql` citando a medição de 10/08 que justifica cada UPDATE
 - [ ] Ordem: backfill **antes** do `ADD CONSTRAINT` (senão o CHECK rejeita)
 - [ ] Gate: `pnpm typecheck && pnpm test`
@@ -276,7 +276,7 @@ E) definer SEM GUC app.clinic_id-> ERROR: tenant não resolvido: GUC app.clinic_
 
 ---
 
-### T5: Validador de documento (CPF ou CNPJ) `[P]`
+### T5: Validador de documento (CPF ou CNPJ) `[P]` ✅ FEITO
 
 **What**: `validarEMaterializarCnpj` + `validarEMaterializarCpfCnpj` que decide a
 interpretação pelo comprimento.
@@ -289,15 +289,30 @@ interpretação pelo comprimento.
 
 **Done when**:
 
-- [ ] CNPJ: mod-11, pesos 5..2 / 6..2; rejeita 14 dígitos repetidos
-- [ ] `validarEMaterializarCpfCnpj`: 11 → CPF, 14 → CNPJ, outro → erro citando os dois formatos
-- [ ] Aceita com e sem máscara; devolve **só dígitos**
-- [ ] Erro em pt-BR nomeia a interpretação que falhou (DV ≠ comprimento)
-- [ ] **Cheque de mutação**: trocar um peso do mod-11 derruba ao menos 1 teste
-- [ ] Comentário registrando a limitação: CNPJ **alfanumérico** (jul/2026) não
+- [x] CNPJ: mod-11, pesos 5..2 / 6..2; rejeita 14 dígitos repetidos
+- [x] `validarEMaterializarCpfCnpj`: 11 → CPF, 14 → CNPJ, outro → erro citando os dois formatos
+- [x] Aceita com e sem máscara; devolve **só dígitos**
+- [x] Erro em pt-BR nomeia a interpretação que falhou (DV ≠ comprimento)
+- [x] **Cheque de mutação**: trocar um peso do mod-11 derruba ao menos 1 teste
+- [x] Comentário registrando a limitação: CNPJ **alfanumérico** (jul/2026) não
       é aceito nesta fase — não verificado se o Asaas o aceita
-- [ ] Gate: `pnpm typecheck && pnpm test`
-- [ ] Test count: baseline + N (declarar N)
+- [x] Gate: `pnpm typecheck && pnpm test`
+- [x] Test count: baseline + N (declarar N)
+
+**Status**: Concluída. Criados `src/lib/cnpj.ts`, `src/lib/documento.ts` e os
+testes `src/lib/cnpj.test.ts` (9) + `src/lib/documento.test.ts` (6).
+
+- Contagem: **166 arquivos / 1078 testes → 168 arquivos / 1093 testes**
+  (**N = +15**), com `pnpm typecheck` limpo.
+- Cheque de mutação (medido): trocando os dois últimos pesos do 1º DV
+  (`[…, 5, 4, 3, 2]` → `[…, 5, 4, 2, 3]` em `PESOS_PRIMEIRO`), a suíte dos dois
+  arquivos foi de `15 passed` para `5 failed | 10 passed` — falharam os 3 casos
+  de CNPJ válido em `cnpj.test.ts` e os 2 de composição em `documento.test.ts`.
+  Peso revertido; verde restaurado.
+- Nota de implementação: sob `noUncheckedIndexedAccess` o laço `for` indexando o
+  array de pesos quebra o typecheck (`TS2532`); os somatórios iteram sobre o
+  próprio array de pesos via `reduce`, o que mantém os pesos explícitos (e
+  portanto mutáveis para o cheque acima).
 
 **Tests**: unit
 **Gate**: quick
@@ -704,7 +719,7 @@ arquivos disjuntos. Nenhum par `[P]` compartilha estado mutável.
 | ID      | Tarefas                 | Status  |
 | ------- | ----------------------- | ------- |
 | ATIV-01 | T1, T2, T4              | Pending |
-| ATIV-02 | T5                      | Pending |
+| ATIV-02 | T5                      | Done    |
 | ATIV-03 | T7, T8                  | Pending |
 | ATIV-04 | T6, T7                  | Pending |
 | ATIV-05 | T1, T2, T3, T4          | Pending |
