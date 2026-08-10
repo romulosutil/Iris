@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { mercadopagoWebhookEvent } from "@/db/schema";
-import { getBillingProvider } from "@/lib/billing/provider";
+import { MercadoPagoProvider } from "@/lib/billing/provider";
 import {
   aplicarStatusProvider,
   conciliarPagamentoDeCiclo,
@@ -32,6 +32,16 @@ import {
  *    evento fica com `aplicado_em` NULL e a varredura
  *    `reprocessarEventosPendentes` o recupera. Devolver 5xx aqui trocaria um
  *    efeito atrasado por um webhook desligado.
+ *
+ * `MercadoPagoProvider` é instanciado aqui, e NÃO resolvido por
+ * `getBillingProvider()` — a rota do Asaas já dizia isso de si mesma
+ * (`../asaas/route.ts`), esta não espelhava e o defeito ficou vivo até 10/08/2026.
+ * Esta rota é a do Mercado Pago: qual gateway está ativo na env não muda quem
+ * assinou esta entrega. Com `BILLING_PROVIDER=asaas`, quem verificava o HMAC do
+ * MP era o `AsaasProvider` — que procura um token fixo em outro header e devolve
+ * `false`. Resultado: **401 em entrega legítima**, indistinguível de ataque
+ * (a resposta é opaca de propósito), num endpoint que o MP desabilita quando
+ * falha demais.
  */
 
 // node:crypto + driver Postgres: precisa de runtime Node, não edge.
@@ -71,7 +81,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "corpo ilegível" }, { status: 400 });
   }
 
-  const provider = getBillingProvider();
+  const provider = new MercadoPagoProvider();
 
   if (
     !provider.verificarAssinaturaWebhook({
@@ -216,7 +226,9 @@ export async function POST(request: Request): Promise<Response> {
     try {
       await authDb
         .update(mercadopagoWebhookEvent)
-        .set({ erroAplicacao: err instanceof Error ? err.message : String(err) })
+        .set({
+          erroAplicacao: err instanceof Error ? err.message : String(err),
+        })
         .where(eqId(eventoId));
     } catch {
       // Se nem o registro do erro grava, o banco está fora — o 200 já é a

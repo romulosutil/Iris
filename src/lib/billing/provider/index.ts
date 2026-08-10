@@ -15,26 +15,65 @@ export { MercadoPagoProvider } from "./mercado-pago";
  * o módulo define o provider de todos os outros) e esconderia troca de env em
  * runtime. O adapter não tem estado, então instanciar é barato.
  *
- * Default `mercado_pago`: continua sendo o trilho ativo em produção enquanto a
- * virada de chave para o Asaas não acontece. Desde 08/08/2026 os DOIS adapters
- * existem (conta Asaas de produção aprovada, D12 fechado) — o que decide é a
- * env, e `subscription.provider` é persistido POR LINHA: assinatura criada num
- * gateway nunca é reinterpretada por outro porque a env mudou.
+ * **Sem default.** Havia um (`mercado_pago`), e ele contradizia o próprio
+ * comentário que o justificava: um deploy que PERCA `BILLING_PROVIDER` — env não
+ * reaplicada no Easypanel, serviço recriado, typo — voltava para o Mercado Pago
+ * em silêncio, ou seja, para o trilho onde o Pix nunca foi implementado (D24) e
+ * onde quem escolhe Pix paga cartão. "Não trocar de gateway em silêncio" e "ter
+ * um default" são requisitos incompatíveis; ficou o primeiro. Faltando a env, o
+ * erro é alto e nomeia o que fazer.
  *
- * O default continua explícito (e não "o que estiver na env") porque um deploy
- * sem `BILLING_PROVIDER` não pode trocar de gateway em silêncio. Valor
- * desconhecido estoura: já custou um incidente em produção — `mercadopago` sem
- * underscore derrubou todo POST do webhook com 500 (04/08/2026).
+ * Valor desconhecido estoura pela mesma razão, e isso já custou um incidente:
+ * `mercadopago` sem underscore derrubou todo POST do webhook com 500
+ * (04/08/2026).
+ *
+ * ## O que esta função decide — e o que ela NÃO decide
+ *
+ * Decide o gateway de vínculo **NOVO**, e só. Não é "o gateway do sistema":
+ * `subscription.provider` é persistido POR LINHA, e assinatura criada num
+ * gateway continua sendo consultada, conciliada e cobrada NAQUELE gateway para
+ * sempre. Quem precisa do adapter de uma linha existente usa
+ * `getProviderPorId(linha.provider)`, nunca esta função — confundir os dois é a
+ * família de bug do D25 (ativação), do D26 (fechamento de ciclo) e do webhook do
+ * MP: em todos, um id de um gateway foi parar na API do outro.
  */
 export function getBillingProvider(): BillingProvider {
-  const id = process.env.BILLING_PROVIDER || "mercado_pago";
+  const id = process.env.BILLING_PROVIDER;
+  if (!id) {
+    throw new Error(
+      "BILLING_PROVIDER não configurada — defina `asaas` (trilho ativo) ou `mercado_pago`",
+    );
+  }
+  return getProviderPorId(id);
+}
 
+/**
+ * Resolve o adapter de uma linha JÁ EXISTENTE, a partir de `subscription.provider`.
+ *
+ * Existe separada de `getBillingProvider()` porque os dois papéis do adapter são
+ * de fato diferentes, e tratá-los como um só foi o que produziu três defeitos
+ * seguidos: gateway de vínculo novo (decidido pela env, hoje Asaas) versus
+ * leitor/liquidador de linha antiga (decidido pelo DADO, imutável). Enquanto
+ * existir uma única assinatura do Mercado Pago viva, o segundo papel não pode
+ * seguir a env — a cobrança dela precisa continuar saindo no MP.
+ *
+ * Valor fora do enum estoura em vez de cair num default: uma linha com
+ * `provider` ilegível é corrupção de estado, e escolher um gateway por palpite
+ * significaria cobrar a clínica errada no lugar errado.
+ *
+ * A mensagem do erro NÃO cita `BILLING_PROVIDER`: os dois chamadores chegam aqui
+ * por caminhos diferentes (env, no caso de `getBillingProvider()`; coluna do
+ * banco, no caso do fechamento de ciclo), e nomear a env mandaria quem investiga
+ * uma corrupção de `subscription.provider` conferir variável de ambiente. Quem
+ * precisa apontar a env é `getBillingProvider()`, no erro de env ausente.
+ */
+export function getProviderPorId(id: string): BillingProvider {
   switch (id) {
     case "mercado_pago":
       return new MercadoPagoProvider();
     case "asaas":
       return new AsaasProvider();
     default:
-      throw new Error(`BILLING_PROVIDER desconhecido: ${id}`);
+      throw new Error(`Provedor de pagamento desconhecido: ${id}`);
   }
 }

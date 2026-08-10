@@ -8,6 +8,7 @@ import {
   BillingProviderError,
   MercadoPagoProvider,
   getBillingProvider,
+  getProviderPorId,
   type AutorizacaoPendente,
   type BillingProvider,
   type MetodoPagamento,
@@ -392,6 +393,20 @@ export interface ResultadoFechamento {
  * Ciclo de valor zero não gera cobrança: com o critério "criou ou interagiu",
  * clínica em recesso apura 0 paciente e a fatura é R$ 0,00. Mandar uma cobrança
  * de zero ao gateway é erro garantido; o ciclo é fechado direto como `pago`.
+ *
+ * ## O adapter sai da LINHA, não da env (D26)
+ *
+ * Cada assinatura é cobrada no gateway em que ela nasceu — `subscription.provider`
+ * — e não no que `BILLING_PROVIDER` aponta hoje. Resolver pela env aqui era o
+ * gêmeo do D25 dentro do job noturno: depois da virada para o Asaas, uma
+ * assinatura ativa do Mercado Pago teria o `preapproval_id` dela mandado para
+ * `emitirCobrancaDeCiclo` do Asaas, que consulta
+ * `GET /pix/automatic/authorizations/{id}` e responde 400.
+ *
+ * O modo de falha é o pior desta base: o D25 quebra na cara da clínica, na tela;
+ * este quebra no job, o ciclo fica com `erro` preenchido, e **ninguém é
+ * cobrado**. É a mesma razão pela qual `reprocessarEventosPendentes` casa cada
+ * tabela de webhook com o adapter dela em vez de olhar a env.
  */
 export async function fecharCiclosVencendo(opcoes?: {
   agora?: Date;
@@ -399,12 +414,12 @@ export async function fecharCiclosVencendo(opcoes?: {
 }): Promise<ResultadoFechamento[]> {
   const agora = opcoes?.agora ?? new Date();
   const dryRun = opcoes?.dryRun ?? false;
-  const provider = getBillingProvider();
 
   const vencendo = await authDb
     .select({
       subscriptionId: subscription.id,
       clinicId: subscription.clinicId,
+      provider: subscription.provider,
       providerSubscriptionId: subscription.providerSubscriptionId,
       cicloInicio: subscription.cicloAtualInicio,
       cicloFim: subscription.cicloAtualFim,
@@ -481,6 +496,9 @@ export async function fecharCiclosVencendo(opcoes?: {
           // uma reexecução do job depois de uma falha parcial emitiria uma
           // segunda cobrança para o mesmo ciclo.
         } else if (assinatura.providerSubscriptionId) {
+          // Resolvido AQUI, por linha, e não uma vez no topo da função: a
+          // varredura cobre assinaturas de gateways diferentes na mesma passada.
+          const provider = getProviderPorId(assinatura.provider);
           const cobranca = await provider.emitirCobrancaDeCiclo({
             vinculoId: assinatura.providerSubscriptionId,
             valorCentavos,

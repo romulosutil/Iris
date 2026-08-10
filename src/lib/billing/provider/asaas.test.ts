@@ -529,7 +529,7 @@ describe("AsaasProvider", () => {
       // em produção (04/08/2026). O erro explícito é a lição daquele incidente.
       vi.stubEnv("BILLING_PROVIDER", "asaas_pix");
       expect(() => getBillingProvider()).toThrow(
-        /BILLING_PROVIDER desconhecido/,
+        /Provedor de pagamento desconhecido/,
       );
     });
   });
