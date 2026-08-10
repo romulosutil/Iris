@@ -112,22 +112,45 @@ function estadoInterno(
  * novo convivendo na mesma linha — sem erro, e com a UI ramificando pela
  * errada.
  */
-function colunasDaAutorizacao(autorizacao: AutorizacaoPendente): {
+export function colunasDaAutorizacao(autorizacao: AutorizacaoPendente): {
   checkoutUrl: string | null;
   pixCopiaECola: string | null;
+  valorAtivacaoCentavos: number | null;
 } {
   return autorizacao.forma === "redirect"
-    ? { checkoutUrl: autorizacao.url, pixCopiaECola: null }
-    : { checkoutUrl: null, pixCopiaECola: autorizacao.brCode };
+    ? {
+        checkoutUrl: autorizacao.url,
+        pixCopiaECola: null,
+        // `null`, não 0: o redirect não cobra para autorizar, e zero afirmaria
+        // "cobrou nada" onde a verdade é "não houve cobrança".
+        valorAtivacaoCentavos: null,
+      }
+    : {
+        checkoutUrl: null,
+        pixCopiaECola: autorizacao.brCode,
+        valorAtivacaoCentavos: autorizacao.valorAtivacaoCentavos,
+      };
 }
 
 /** Reconstrói a forma de autorização a partir da linha persistida. */
-function autorizacaoPersistida(linha: {
+export function autorizacaoPersistida(linha: {
   checkoutUrl: string | null;
   pixCopiaECola: string | null;
+  valorAtivacaoCentavos: number | null;
 }): AutorizacaoPendente | null {
   if (linha.pixCopiaECola) {
-    return { forma: "pix_copia_e_cola", brCode: linha.pixCopiaECola };
+    // Fail-closed (D22): sem o valor não dá para reconstruir a forma Pix, e
+    // inventar um número seria pior que qualquer alternativa — o BR Code já tem
+    // o preço real gravado no payload EMV, então uma tela que exiba o QR
+    // dizendo outro valor mente com aparência de precisão. Devolver `null` cai
+    // no caminho "pendente sem saída", que a UI já trata: a clínica reativa e
+    // recebe um QR novo cujo preço nós sabemos.
+    if (linha.valorAtivacaoCentavos === null) return null;
+    return {
+      forma: "pix_copia_e_cola",
+      brCode: linha.pixCopiaECola,
+      valorAtivacaoCentavos: linha.valorAtivacaoCentavos,
+    };
   }
   if (linha.checkoutUrl) {
     return { forma: "redirect", url: linha.checkoutUrl };
@@ -156,7 +179,14 @@ export interface ResultadoAtivacao {
 }
 
 /**
- * Registra o meio de pagamento da clínica. **Não cobra nada.**
+ * Registra o meio de pagamento da clínica. **Não cobra a mensalidade** — mas
+ * "não cobra nada", que era o que estava escrito aqui, é falso no trilho de Pix
+ * Automático (débito D22). A Jornada 3 do Bacen só ativa a autorização depois
+ * que o QR imediato é liquidado, então o adapter do Asaas cobra um valor
+ * simbólico para que ela exista. Quanto foi cobrado volta em
+ * `ResultadoAtivacao.autorizacao.valorAtivacaoCentavos` e fica gravado em
+ * `subscription.valor_ativacao_centavos`, para que a tela consiga dizer isso à
+ * clínica antes de ela ler o QR.
  *
  * Antes, esta função criava no gateway uma recorrência de valor FIXO
  * `calcularMensalidadeCentavos(1)` = R$ 39 — o que é pré-pago: a clínica

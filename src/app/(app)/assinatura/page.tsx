@@ -66,9 +66,11 @@ export default async function AssinaturaPage() {
             durante o onboarding.
           </li>
           <li>
-            Ativar a assinatura <strong>não cobra nada</strong>: registra o meio
-            de pagamento e libera o cadastro de pacientes. A primeira cobrança
-            só nasce quando o primeiro ciclo fecha.
+            Ativar a assinatura <strong>não cobra mensalidade</strong>: registra
+            o meio de pagamento e libera o cadastro de pacientes. A primeira
+            cobrança pelas fichas ativas só nasce quando o primeiro ciclo fecha.
+            No Pix Automático, o banco exige um pagamento mínimo para registrar
+            a autorização — o valor exato aparece na tela, antes do QR Code.
           </li>
           <li>
             A partir daí, uma única cobrança consolidada a cada 30 dias, pelo

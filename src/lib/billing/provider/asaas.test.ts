@@ -306,9 +306,12 @@ describe("AsaasProvider", () => {
       expect(criado.status).toBe("pendente");
       // D21: o BR Code sai na forma que ele é — não disfarçado de URL de
       // checkout. Se alguém reintroduzir `checkoutUrl` aqui, isto quebra.
+      // D22: o valor cobrado sobe junto. Sem ele a tela mostraria um QR que
+      // debita da clínica sem dizer quanto — era o débito.
       expect(criado.autorizacao).toEqual({
         forma: "pix_copia_e_cola",
         brCode: "00020126580014BR.GOV.BCB.PIX...",
+        valorAtivacaoCentavos: 1,
       });
 
       const [urlCliente, initCliente] = fetchMock.mock.calls[0]!;
@@ -337,6 +340,42 @@ describe("AsaasProvider", () => {
       // `contractId` tem limite de 35 no Asaas; o UUID com hífen tem 36.
       expect(corpo.contractId).toBe("6d82d82e324c4eb1a34574421d2a501c");
       expect(corpo.contractId.length).toBeLessThanOrEqual(35);
+      // D22: `immediateQrCode` É a cobrança que ativa a autorização. O Asaas
+      // fala decimal em reais, então R$ 0,01 = 0.01 — asserir o número exato é
+      // o que faz mexer na constante ficar vermelho aqui, e não passar calado
+      // até a fatura da clínica.
+      // Literal de propósito (disciplina 2 do topo do arquivo): derivar de
+      // `VALOR_ATIVACAO_PADRAO_CENTAVOS` faria o teste seguir a constante em
+      // vez de vigiá-la, e mexer nela passaria verde.
+      expect(corpo.immediateQrCode.originalValue).toBe(0.01);
+      expect(corpo.immediateQrCode.expirationSeconds).toBe(86400);
+    });
+
+    it("ignora `tetoCentavos` — teto não é valor de cobrança (D22)", async () => {
+      // Antes do D22 este campo era lido como valor da ativação: um campo
+      // chamado "teto" decidindo quanto sai da conta da clínica. Na Jornada 3
+      // de valor variável não existe teto para respeitar, e o único jeito de
+      // provar que ele voltou a ser inerte é passá-lo alto e medir a cobrança.
+      fetchMock
+        .mockResolvedValueOnce(resposta({ id: "cus_000008561913" }))
+        .mockResolvedValueOnce(
+          resposta({
+            id: "53da5204-8dd1-4cf4-9604-d134e1e6fe04",
+            status: "CREATED",
+            payload: "00020126580014BR.GOV.BCB.PIX...",
+          }),
+        );
+
+      const criado = await new AsaasProvider().iniciarVinculoPagamento({
+        ...pedido,
+        tetoCentavos: 15_000,
+      });
+
+      const corpo = JSON.parse(fetchMock.mock.calls[1]![1].body);
+      expect(corpo.immediateQrCode.originalValue).toBe(0.01);
+      expect(criado.autorizacao).toMatchObject({
+        valorAtivacaoCentavos: 1,
+      });
     });
 
     it("propaga a recusa do Asaas com status e corpo preservados", async () => {

@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { QrCode } from "@/components/ui/qr-code";
 import { BotaoCopiar } from "@/components/ui/botao-copiar";
 import { cn } from "@/lib/cn";
+import { formatarBRL } from "@/lib/billing/calculator";
 import { ativarAssinatura } from "./actions";
 import type { AtivacaoState } from "./logic";
 
@@ -24,7 +25,11 @@ const METODOS = [
   {
     value: "pix",
     label: "Pix",
-    ajuda: "Você recebe um QR Code / código para pagar a cada cobrança.",
+    // Sem número aqui de propósito: quem sabe quanto a ativação cobrou é a
+    // autorização devolvida pelo provedor, e repetir a constante nesta lista
+    // criaria uma segunda fonte da verdade que envelhece sozinha (D22).
+    ajuda:
+      "Você recebe um QR Code / código para pagar a cada cobrança. A ativação cobra um valor mínimo, informado na tela antes do QR Code.",
   },
 ] as const;
 
@@ -155,7 +160,24 @@ export function FormularioAtivacao({
             </>
           ) : (
             <>
+              {/* D22 — divulgação ANTES do QR, e dentro do mesmo <Alert>: o
+                  leitor de tela recebe a cobrança junto com o resto da região,
+                  não como um parágrafo solto ao lado. O valor vem da
+                  autorização (o que foi cobrado neste QR), nunca da constante
+                  do adapter: o preço está gravado no payload EMV do BR Code, e
+                  um QR emitido ontem não muda porque a constante mudou hoje. */}
               <p>
+                <strong>
+                  Este QR Code cobra{" "}
+                  {formatarBRL(autorizacao.valorAtivacaoCentavos)} agora.
+                </strong>{" "}
+                É esse pagamento que registra a autorização de Pix Automático no
+                seu banco — o banco só passa a aceitar as cobranças seguintes
+                depois que o primeiro Pix é confirmado, e não há como registrar
+                sem ele. Não é a mensalidade: a primeira cobrança pelas fichas
+                ativas só nasce quando o primeiro ciclo fecha.
+              </p>
+              <p className="mt-2">
                 Abra o app do seu banco, escolha Pix e leia o QR Code abaixo —
                 ou copie o código e cole na opção “Pix copia e cola”.
               </p>

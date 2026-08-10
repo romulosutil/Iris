@@ -624,6 +624,13 @@
       "when": 1786239232593,
       "tag": "0088_pix_copia_e_cola",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1786331294867,
+      "tag": "0089_valor_ativacao_pix",
+      "breakpoints": true
     }
   ]
 }
