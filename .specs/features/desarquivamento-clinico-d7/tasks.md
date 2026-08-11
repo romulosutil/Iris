@@ -116,20 +116,20 @@ git commit -m "feat(revisao): desarquiva paciente automaticamente ao aprovar evi
 - Modify: `src/app/(app)/duvidas/logic.ts`
 - Modify/Test: `src/app/(app)/validacao/actions.int.test.ts`
 
-- [ ] **Step 1: Escrever testes de integração em `validacao/actions.int.test.ts`**
+- [x] **Step 1: Escrever testes de integração em `validacao/actions.int.test.ts`**
 
 Testar que `confirmarEvidencia` e `reclassificarEvidencia` desarquivam o paciente com origem `"validacao_evidencia"`.
 
-- [ ] **Step 2: Implementar chamadas em `validacao/logic.ts` e `duvidas/logic.ts`**
+- [x] **Step 2: Implementar chamadas em `validacao/logic.ts` e `duvidas/logic.ts`**
 
 Adicionar `desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia")` em `confirmarEvidenciaCore`, `reclassificarEvidenciaCore` e `responderQueryCore`.
 
-- [ ] **Step 3: Rodar testes de validação**
+- [x] **Step 3: Rodar testes de validação**
 
 Run: `pnpm vitest run src/app/(app)/validacao/actions.int.test.ts`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/(app)/validacao/logic.ts src/app/(app)/duvidas/logic.ts src/app/(app)/validacao/actions.int.test.ts

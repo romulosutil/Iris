@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { comEscrita } from "@/lib/billing/guard-escrita";
+import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
 import type { Alvo } from "@/lib/evidence/resolver";
 import { montarClassificacaoNova, validarAlvo } from "../validacao/alvos";
@@ -175,6 +176,7 @@ async function responderQueryCore(
       `);
     }
 
+    await desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia");
     await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
     return { ok: true };
   });
