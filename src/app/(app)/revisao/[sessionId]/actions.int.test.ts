@@ -116,4 +116,26 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
       await owner`SELECT estado FROM extraction WHERE id = ${EX_ALTA}`;
     expect(row!.estado).toBe("sugerida");
   });
+
+  test("regra 6 · aprovar extração de paciente arquivado desarquiva e grava trilha com aprovacao_evidencia", async () => {
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await owner`UPDATE patient SET arquivado_em = now() - interval '10 days' WHERE id = ${PAC}`;
+    await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
+      VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA') ON CONFLICT DO NOTHING`;
+
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_ALTA,
+      versao: 1,
+    });
+    expect(r.ok).toBe(true);
+
+    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    expect(pac!.arquivado_em).toBeNull();
+
+    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
+    expect(log!.acao).toBe("paciente_desarquivado_automaticamente");
+    expect(log!.detalhe).toEqual({ origem: "aprovacao_evidencia" });
+
+    await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PAC}`;
+  });
 });

@@ -5,6 +5,7 @@ import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { evidence, extraction, reinforcerProfile, session } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
 import { type Alvo, drizzleResolverQueries, resolverAlvoParaFks } from "@/lib/evidence/resolver";
 
@@ -90,6 +91,9 @@ async function inserirEvidenciasOnApprove(
     .from(session)
     .where(eq(session.id, row.sessionId));
   if (!sess) return;
+
+  // #174 regra 6: aprovar evidência clínica desarquiva o paciente se arquivado
+  await desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "aprovacao_evidencia");
 
   // ⚠️ BLINDAGEM DE ADVISORY LOCK: Lock por paciente para serializar recomputações concorrentes de snapshot.
   // Nenhuma chamada externa lenta (como APIs de IA ou rede) pode ocorrer após a aquisição deste lock.

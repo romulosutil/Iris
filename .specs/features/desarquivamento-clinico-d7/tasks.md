@@ -87,20 +87,20 @@ git commit -m "refactor(diario): unifica desarquivamento em notas, audio local e
 - Modify: `src/app/(app)/revisao/[sessionId]/logic.ts`
 - Modify/Test: `src/app/(app)/revisao/[sessionId]/actions.int.test.ts`
 
-- [ ] **Step 1: Escrever teste de integração de desarquivamento na revisão**
+- [x] **Step 1: Escrever teste de integração de desarquivamento na revisão**
 
 Adicionar teste em `actions.int.test.ts` verificando que aprovar extração de paciente arquivado reativa o paciente e grava evento de auditoria com origem `"aprovacao_evidencia"`.
 
-- [ ] **Step 2: Implementar chamada em `revisao/[sessionId]/logic.ts`**
+- [x] **Step 2: Implementar chamada em `revisao/[sessionId]/logic.ts`**
 
 Dentro de `transicionar`, quando `novoEstado === "aprovada" || novoEstado === "editada"`, chamar `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "aprovacao_evidencia")`.
 
-- [ ] **Step 3: Rodar testes de revisão**
+- [x] **Step 3: Rodar testes de revisão**
 
 Run: `pnpm vitest run src/app/(app)/revisao/[sessionId]/actions.int.test.ts`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/(app)/revisao/[sessionId]/logic.ts src/app/(app)/revisao/[sessionId]/actions.int.test.ts
