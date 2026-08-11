@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import Link from "next/link";
 import { Alert } from "@/components/ui/alert";
-import { ativarEhASaida, mensagemDeEstado } from "@/lib/billing/estado-conta";
+import { mensagemDeEstado } from "@/lib/billing/estado-conta";
+import { ativarEhASaida } from "@/lib/billing/estado-conta-ui";
 import { obterSituacaoConta } from "../../queries";
 import { NovoPacienteForm } from "./novo-paciente-form";
 

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { RadioCards } from "@/components/ui/radio-cards";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ativarEhASaida } from "@/lib/billing/estado-conta";
+import { ativarEhASaida } from "@/lib/billing/estado-conta-ui";
 import {
   cadastrarPacienteAdministrativo,
   type CadastroAdminState,
@@ -90,8 +90,9 @@ export function NovoPacienteForm() {
           {/* Link SÓ onde ativar/reativar é a saída. Em
               `pagamento_em_processamento` já existe cobrança em voo: devolver a
               pessoa ao checkout gera uma segunda cobrança para o mesmo mês.
-              O predicado mora em `estado-conta.ts` porque a página que antecede
-              este formulário faz o mesmo aviso e precisa do MESMO critério. */}
+              O predicado mora em `estado-conta-ui.ts` porque a página que
+              antecede este formulário faz o mesmo aviso e precisa do MESMO
+              critério — e em `-ui` porque `estado-conta.ts` é `server-only`. */}
           {ativarEhASaida(bloqueio.estado) ? (
             <p className="mt-2">
               <Link

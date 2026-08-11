@@ -216,22 +216,9 @@ export async function avaliarSituacaoConta(
  * bloqueia mais o cadastro do 1º paciente, ele passa a somente-leitura no fim
  * do teste.
  */
-/**
- * Se oferecer "ativar a assinatura" é a saída deste estado.
- *
- * Mora aqui, e não em cada tela, porque a regra tem uma exceção cara: em
- * `pagamento_em_processamento` já existe cobrança em voo, e devolver a pessoa
- * ao checkout gera uma SEGUNDA cobrança para o mesmo mês. Duas cópias do
- * predicado (formulário e página) divergiriam na primeira vez que um estado
- * novo entrasse no enum.
- */
-export function ativarEhASaida(estado: EstadoConta): boolean {
-  // `trial_bloqueado_fraude` NÃO entra, ainda que a copy dele mande ativar:
-  // incluí-lo mudaria o comportamento do formulário, que é o oráculo desta
-  // extração. Fica registrado como divergência a decidir, não corrigida de
-  // carona numa tarefa de outro escopo.
-  return estado === "trial_expirado" || estado === "cancelada";
-}
+// `ativarEhASaida` mora em `./estado-conta-ui`, e não aqui: este módulo é
+// `server-only` (fala com o banco) e o formulário de novo paciente é client
+// component — importar daqui derruba o `pnpm build`.
 
 export function mensagemDeEstado(estado: EstadoConta): string {
   switch (estado) {
