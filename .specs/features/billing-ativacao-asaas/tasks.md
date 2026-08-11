@@ -703,14 +703,37 @@ união discriminada `AutorizacaoPendente`, que continua tendo as duas formas.
 
 **Done when**:
 
-- [ ] Diretório `retorno/` deletado
-- [ ] `urlRetorno` → `${base}/assinatura`
-- [ ] `grep -r "assinatura/retorno" src/` → zero
-- [ ] Gate: `pnpm typecheck && pnpm test`
+- [x] Diretório `retorno/` deletado
+- [x] `urlRetorno` → `${base}/assinatura`
+- [x] `grep -r "assinatura/retorno" src/` → zero
+- [x] Gate: `pnpm typecheck && pnpm test`
 
 **Tests**: none
 **Gate**: quick
 **Commit**: `tech(assinatura): remove a página de retorno inalcançável`
+
+**Status**: Concluída. `retorno/page.tsx` deletado; `logic.ts` aponta
+`urlRetorno` para `${base}/assinatura`.
+
+**Achado além do previsto**: o `grep` da tarefa cobria só `src/`, mas a string
+literal `https://irisclinica.ia.br/assinatura/retorno` também vivia em dois
+testes de integração (`ativacao-provider-customer-id.int.test.ts:115`,
+`ativacao-troca-de-provedor.int.test.ts:193,238`). Eles passariam verdes
+apontando para rota morta — corrigidos junto. `asaas.test.ts:273` já usava
+`/assinatura`. `NovoVinculo.urlRetorno` e o ramo `redirect` da UI ficam: a união
+`AutorizacaoPendente` continua tendo as duas formas.
+
+Evidência medida:
+
+- `pnpm typecheck` sem erro · `pnpm test`: **169 arquivos / 1102 testes**, verde
+  (igual ao T12 — a tarefa não acrescenta nem remove teste).
+- `pnpm test:rls`: 96 arquivos / 808 testes, **806 passando**. As 2 falhas são as
+  já registradas no T7 (`protocolo.int.test.ts`, `patient_protocol_vigencia`) e
+  **não são desta tarefa**: reproduzem com o arquivo rodando sozinho, e o erro é
+  o `UPDATE … desativado_em = (now() AT TIME ZONE 'America/Sao_Paulo')::date`
+  contra `ativado_em` gravado em UTC — virada de data, sem relação com
+  assinatura.
+- `grep -rn "assinatura/retorno" src/ e2e/ docs/` → zero linhas.
 
 ---
 

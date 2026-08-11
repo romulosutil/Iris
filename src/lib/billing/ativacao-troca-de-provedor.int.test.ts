@@ -190,7 +190,7 @@ describe.skipIf(!hasDb)("iniciarAtivacao × troca de BILLING_PROVIDER", () => {
       emailResponsavel: "coord@example.test",
       cpfCnpj: "29811201000150",
       metodo: "pix",
-      urlRetorno: "https://irisclinica.ia.br/assinatura/retorno",
+      urlRetorno: "https://irisclinica.ia.br/assinatura",
     });
 
     // O bug em uma linha: o id do MP indo para a URL do Asaas.
@@ -235,7 +235,7 @@ describe.skipIf(!hasDb)("iniciarAtivacao × troca de BILLING_PROVIDER", () => {
       emailResponsavel: "coord@example.test",
       cpfCnpj: "29811201000150",
       metodo: "pix",
-      urlRetorno: "https://irisclinica.ia.br/assinatura/retorno",
+      urlRetorno: "https://irisclinica.ia.br/assinatura",
     });
 
     expect(r.providerSubscriptionId).toBe(ID_AUTORIZACAO_NOVA);

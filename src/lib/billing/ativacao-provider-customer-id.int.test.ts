@@ -112,7 +112,7 @@ const PEDIDO = {
   emailResponsavel: "coord@example.test",
   cpfCnpj: "29811201000150",
   metodo: "pix" as const,
-  urlRetorno: "https://irisclinica.ia.br/assinatura/retorno",
+  urlRetorno: "https://irisclinica.ia.br/assinatura",
 };
 
 describe.skipIf(!hasDb)("iniciarAtivacao × provider_customer_id", () => {

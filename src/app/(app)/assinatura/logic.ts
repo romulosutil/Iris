@@ -149,7 +149,12 @@ export async function iniciarAtivacaoAssinatura(
       emailResponsavel: dados.email,
       cpfCnpj: documento.documentoLimpo,
       metodo,
-      urlRetorno: `${base}/assinatura/retorno`,
+      // `/assinatura` e não uma tela própria de retorno: o trilho vivo é Pix
+      // Automático, que nunca tira o navegador desta página — a tela de retorno
+      // existia sem ninguém para alcançá-la. O campo continua no contrato
+      // (`NovoVinculo.urlRetorno`) porque um provedor de checkout futuro precisa
+      // dele, e a `/assinatura` reavalia a situação da conta no próprio request.
+      urlRetorno: `${base}/assinatura`,
     });
     // `null` (forma não guardada) vira campo ausente: o state é serializado
     // para o cliente e `undefined` some — deixar `null` obrigaria a UI a
