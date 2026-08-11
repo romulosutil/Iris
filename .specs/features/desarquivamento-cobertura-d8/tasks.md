@@ -71,20 +71,20 @@ git commit -m "test(rls): adiciona testes de desarquivamento por terapeuta de co
 - Modify: `src/lib/patient/desarquivamento.ts`
 - Modify: `src/lib/patient/desarquivamento.int.test.ts`
 
-- [ ] **Step 1: Atualizar `src/lib/patient/desarquivamento.ts`**
+- [x] **Step 1: Atualizar `src/lib/patient/desarquivamento.ts`**
 
 Chamar `app_desarquivar_paciente` diretamente no `tx`, removendo o `tx.select().from(patient)` que bloqueava terapeutas de cobertura.
 
-- [ ] **Step 2: Atualizar testes em `src/lib/patient/desarquivamento.int.test.ts`**
+- [x] **Step 2: Atualizar testes em `src/lib/patient/desarquivamento.int.test.ts`**
 
 Adicionar caso de teste com terapeuta de cobertura (com sessão cadastrada) executando `desarquivarPacienteSeArquivado`.
 
-- [ ] **Step 3: Rodar testes de integração do helper**
+- [x] **Step 3: Rodar testes de integração do helper**
 
 Gate: `pnpm vitest run src/lib/patient/desarquivamento.int.test.ts`  
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/patient/desarquivamento.ts src/lib/patient/desarquivamento.int.test.ts
