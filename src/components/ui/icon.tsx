@@ -175,3 +175,45 @@ export const CloseIcon = ({ size = "1em", className, ...props }: IconProps) => (
     <path d="M4.5 4.5l11 11M15.5 4.5l-11 11" />
   </svg>
 );
+
+export const AlertTriangleIcon = ({ size = "1em", className, ...props }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    className={className}
+    {...props}
+  >
+    <path
+      d="M8 2l6 11H2L8 2z"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+    />
+    <path d="M8 6.5v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+    <path d="M8 11.2v.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+  </svg>
+);
+
+export const TrashIcon = ({ size = "1em", className, ...props }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    className={className}
+    {...props}
+  >
+    <path d="M2.5 4h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+    <path
+      d="M5.5 4V2.5h5V4M12.5 4v9.5h-9V4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="square"
+      strokeLinejoin="round"
+    />
+    <path d="M6.5 7v4M9.5 7v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+  </svg>
+);
+

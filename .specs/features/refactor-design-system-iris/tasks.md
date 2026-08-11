@@ -112,29 +112,29 @@
 - Create: `src/components/ui/patterns/batch-bar.stories.tsx`
 - Modify: `src/components/ui/a11y.test.tsx`
 
-**Status:** `[ ]`
+**Status:** `[x]`
 
-- [ ] **Step 1: Implementar `ConfidenceCard`**
+- [x] **Step 1: Implementar `ConfidenceCard`**
   - Criar `src/components/ui/patterns/confidence-card.tsx` compondo `Surface` + `Pill` + indicador de fricção/confiança + ações rápidas.
   - Criar `src/components/ui/patterns/confidence-card.stories.tsx` sob `ORGANISMS/ConfidenceCard`.
 
-- [ ] **Step 2: Implementar `CompareRow`**
+- [x] **Step 2: Implementar `CompareRow`**
   - Criar `src/components/ui/patterns/compare-row.tsx` para exibição lado a lado de inconsistências/histórico anterior.
   - Criar `src/components/ui/patterns/compare-row.stories.tsx` sob `ORGANISMS/CompareRow`.
 
-- [ ] **Step 3: Implementar `BatchBar`**
+- [x] **Step 3: Implementar `BatchBar`**
   - Criar `src/components/ui/patterns/batch-bar.tsx` para aprovação em lote de itens elegíveis com contadores e proteção.
   - Criar `src/components/ui/patterns/batch-bar.stories.tsx` sob `ORGANISMS/BatchBar`.
 
-- [ ] **Step 4: Adicionar testes de a11y**
+- [x] **Step 4: Adicionar testes de a11y**
   - Em `src/components/ui/a11y.test.tsx`, adicionar testes para `ConfidenceCard`, `CompareRow` e `BatchBar`.
 
-- [ ] **Step 5: Gate de verificação**
+- [x] **Step 5: Gate de verificação**
   - Rodar `pnpm typecheck`
   - Rodar `pnpm vitest run src/components/ui/a11y.test.tsx`
   - Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   ```bash
   git add src/components/ui/patterns/ src/components/ui/a11y.test.tsx
   git commit -m "feat(ui): implementa componentes de padrão ConfidenceCard, CompareRow e BatchBar (#236)"

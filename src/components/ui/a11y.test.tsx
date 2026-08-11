@@ -5,6 +5,9 @@ import axe from "axe-core";
 import { Button } from "./button";
 import { Card } from "./card";
 import { Pill } from "./primitives/pill";
+import { ConfidenceCard } from "./patterns/confidence-card";
+import { CompareRow } from "./patterns/compare-row";
+import { BatchBar } from "./patterns/batch-bar";
 import { Banner } from "./banner";
 import { InteractiveCard } from "./interactive-card";
 import { Indicator } from "./indicator";
@@ -464,4 +467,43 @@ test("Pill inset — sem violações axe", async () => {
 test("Pill outline — sem violações axe", async () => {
   await semViolacoes(<Pill variant="outline" colorScheme="ouro">Pendente</Pill>);
 });
+
+test("ConfidenceCard — sem violações axe", async () => {
+  await semViolacoes(
+    <ConfidenceCard
+      titulo="Imita bater palmas"
+      protocolo="VB-MAPP"
+      trecho="Paciente imitou palmas 4 vezes."
+      justificativa="Critério atendido."
+      friccao="baixa"
+      confianca={95}
+      onAprovar={() => {}}
+      onEditar={() => {}}
+      onDescartar={() => {}}
+    />,
+  );
+});
+
+test("CompareRow — sem violações axe", async () => {
+  await semViolacoes(
+    <CompareRow
+      rotulo="Nível de Ajuda"
+      dadoAnterior="Gesto"
+      dadoSugerido="Gesto"
+      divergente={false}
+    />,
+  );
+});
+
+test("BatchBar — sem violações axe", async () => {
+  await semViolacoes(
+    <BatchBar
+      selecionados={3}
+      totalElegiveis={5}
+      onAprovarLote={() => {}}
+      onLimparSelecao={() => {}}
+    />,
+  );
+});
+
 
