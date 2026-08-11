@@ -115,23 +115,23 @@
 
 **Files:** Nenhuma modificação.
 
-**Status:** `[ ]`
+**Status:** `[x]`
 
-- [ ] **Step 1: Rodar suíte unitária**
+- [x] **Step 1: Rodar suíte unitária**
 
   Gate: `pnpm test`
   Expected: PASS (nenhum teste regrediu).
 
-- [ ] **Step 2: Rodar suíte RLS completa**
+- [x] **Step 2: Rodar suíte RLS completa**
 
   Gate: `pnpm test:rls`
   Expected: PASS (todos os testes, inclusive os novos da Task 2).
 
-- [ ] **Step 3: Atualizar BACKLOG.md — fechar D23**
+- [x] **Step 3: Atualizar BACKLOG.md — fechar D23**
 
   Marcar D23 como fechado com a data, referência à `0093`, e contagem de funções reescritas.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
   ```bash
   git add BACKLOG.md
