@@ -10,6 +10,9 @@ import { CompareRow } from "./patterns/compare-row";
 import { BatchBar } from "./patterns/batch-bar";
 import { AgendaCalendarGrid } from "./agenda-calendar-grid";
 import { ProtocolProgressBarChart, ProtocolTrendChart } from "./protocol-dashboard-charts";
+import { EmptyState } from "./empty-state";
+import { MicroConquistaBadge } from "./micro-conquista-badge";
+import { CareTeamIllustration } from "./illustrations";
 import { Banner } from "./banner";
 import { InteractiveCard } from "./interactive-card";
 import { Indicator } from "./indicator";
@@ -555,6 +558,26 @@ test("ProtocolTrendChart — sem violações axe", async () => {
     />,
   );
 });
+
+test("EmptyState — sem violações axe", async () => {
+  await semViolacoes(
+    <EmptyState
+      illustration={<CareTeamIllustration size={80} />}
+      title="Sua equipe de cuidado está pronta"
+      description="Prescreva a carga horária para iniciar."
+      action={<Button variante="primaria">Prescrever</Button>}
+    />,
+  );
+});
+
+test("MicroConquistaBadge — sem violações axe", async () => {
+  await semViolacoes(
+    <MicroConquistaBadge icon="sparkle">
+      Marco VB-MAPP Conquistado!
+    </MicroConquistaBadge>,
+  );
+});
+
 
 
 

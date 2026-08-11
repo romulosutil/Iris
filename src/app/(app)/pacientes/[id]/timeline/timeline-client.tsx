@@ -7,6 +7,8 @@ import { carregarDeltaSessaoAction, carregarComparacaoAction, carregarEvidencias
 import type { TimelineSnapshot, TimelineData } from "./queries";
 import type { DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PatientProgressIllustration } from "@/components/ui/illustrations";
 import {
   Dialog,
   DialogContent,
@@ -558,13 +560,19 @@ export function TimelineClient({
         </div>
 
         {!trajetoriaAlvoId ? (
-          <div className="border-ink-anchor text-muted mt-6 flex h-24 items-center justify-center border border-dashed text-xs">
-            Selecione uma meta ou marco acima para visualizar a trajetória clínica.
-          </div>
+          <EmptyState
+            variant="compact"
+            className="mt-6"
+            title="Selecione um alvo"
+            description="Escolha uma meta ou marco acima para visualizar a trajetória de evolução clínica."
+          />
         ) : chunks.length === 0 ? (
-          <div className="border-ink-anchor text-muted mt-6 flex h-24 items-center justify-center border border-dashed text-xs">
-            Nenhum dado histórico registrado para este alvo.
-          </div>
+          <EmptyState
+            variant="compact"
+            className="mt-6"
+            title="Nenhum dado histórico registrado"
+            description="Ainda não há registros de sessões anteriores para este alvo específico."
+          />
         ) : (
           <div className="mt-6 flex flex-col gap-4">
             <div className="text-ink border-ink-anchor border bg-bg-canvas px-3 py-2 text-sm font-bold">
@@ -633,9 +641,12 @@ export function TimelineClient({
         </div>
 
         {Object.keys(milestonesPorDominio).length === 0 ? (
-          <div className="border-ink-anchor text-muted mt-6 flex h-24 items-center justify-center border border-dashed text-xs">
-            Nenhum protocolo ou marco ativo associado a este paciente.
-          </div>
+          <EmptyState
+            className="mt-6"
+            illustration={<PatientProgressIllustration size={90} />}
+            title="Cada pequena conquista conta"
+            description="Nenhum protocolo ou marco ativo associado a este paciente. Vincule um protocolo para iniciar o acompanhamento."
+          />
         ) : (
           <div className="mt-6 flex flex-col gap-6">
             {Object.entries(milestonesPorDominio).map(([dom, items]) => {

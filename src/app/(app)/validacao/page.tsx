@@ -34,8 +34,8 @@ export default async function ValidacaoPage() {
         title="Central de Validação"
         description={
           fila.total === 0
-            ? "Nada represado — fila em dia."
-            : `${fila.total} ${fila.total === 1 ? "item pede" : "itens pedem"} validação.`
+            ? "Tudo em dia! Nenhuma evidência aguardando revisão no momento."
+            : `A IA anotou ${fila.total} ${fila.total === 1 ? "sugestão de sessão" : "sugestões de sessões"}. Pronto para validar com seu olhar clínico?`
         }
       />
       <ValidacaoFila itens={fila.itens} alvosPorPaciente={alvosPorPaciente} />

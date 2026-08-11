@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { CareTeamIllustration } from "@/components/ui/illustrations";
 import { Chip } from "@/components/ui/chip";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -73,19 +75,11 @@ export function PrescricaoDisciplinasSecao({
       </div>
 
       {prescricoes.length === 0 ? (
-        <Alert
-          severidade="info"
-          titulo="Paciente cadastrado. Falta a prescrição."
-          destacado
-        >
-          <div className="flex flex-col gap-2 text-sm leading-relaxed">
-            <p>
-              Prescreva as disciplinas e a carga horária semanal para poder
-              montar a equipe. Sem prescrição, a tela de equipe não tem teto
-              para validar as horas de cada terapeuta.
-            </p>
-          </div>
-        </Alert>
+        <EmptyState
+          illustration={<CareTeamIllustration size={100} />}
+          title="Sua equipe de cuidado está pronta para ser montada"
+          description="Prescreva a carga horária e adicione as disciplinas abaixo para iniciar o plano terapêutico e conectar os terapeutas a este paciente."
+        />
       ) : (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline justify-between gap-3">

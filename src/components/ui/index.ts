@@ -18,6 +18,7 @@ export * from "./slider";
 export * from "./progress";
 export * from "./stat";
 export * from "./icon";
+export * from "./illustrations";
 export * from "./layout";
 
 // Patterns
@@ -26,7 +27,9 @@ export * from "./patterns/confidence-card";
 export * from "./patterns/compare-row";
 export * from "./patterns/batch-bar";
 
-// Organisms
+// Organisms & Feedback
+export * from "./empty-state";
+export * from "./micro-conquista-badge";
 export * from "./agenda-calendar-grid";
 export * from "./protocol-dashboard-charts";
 export * from "./header";
