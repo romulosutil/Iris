@@ -652,6 +652,13 @@
       "when": 1786456848181,
       "tag": "0092_desarquivar_paciente_cobertura",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1786456849181,
+      "tag": "0093_user_role_id_helpers",
+      "breakpoints": true
     }
   ]
 }
