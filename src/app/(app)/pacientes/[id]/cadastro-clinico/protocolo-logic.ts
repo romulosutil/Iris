@@ -4,6 +4,7 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import { protocol, patientProtocol, patientAlvoDisciplina } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { formatarDisciplina } from "@/lib/disciplinas";
 import type { ProtocoloCatalogo } from "./protocolo-agrupamento";
 
@@ -99,6 +100,12 @@ async function ativarProtocoloCore(
     await tx
       .insert(patientProtocol)
       .values({ patientId, protocolId, ativadoPor: ctx.userId });
+    await desarquivarPacienteSeArquivado(
+      tx,
+      ctx,
+      patientId,
+      "ativacao_protocolo",
+    );
     return { ok: true };
   });
 }

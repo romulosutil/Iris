@@ -173,6 +173,30 @@ describe.skipIf(!hasDb)("metas · CRUD + transições", () => {
     const [row] = await owner`SELECT estado FROM goal WHERE id = ${c.id!}`;
     expect(row!.estado).toBe("ativa");
   });
+
+  test("regra 6 · criarMeta para paciente arquivado desarquiva e grava trilha", async () => {
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await owner`UPDATE patient SET arquivado_em = now() - interval '10 days' WHERE id = ${PAC}`;
+
+    const r = await A.criarMeta(ctxT1, {
+      patientId: PAC,
+      descricao: "Meta em paciente arquivado",
+      criterioDominio: CRITERIO,
+      cicloRevisaoSemanas: 10,
+      milestoneIds: [],
+    });
+    expect(r.error).toBeUndefined();
+    expect(r.id).toBeTruthy();
+
+    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    expect(pac!.arquivado_em).toBeNull();
+
+    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC} AND acao = 'paciente_desarquivado_automaticamente'`;
+    expect(log).toBeTruthy();
+    expect(log!.detalhe).toEqual({ origem: "criacao_meta" });
+
+    await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PAC}`;
+  });
 });
 
 describe("schemas - validação unitária", () => {

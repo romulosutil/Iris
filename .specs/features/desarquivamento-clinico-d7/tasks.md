@@ -149,7 +149,7 @@ git commit -m "feat(validacao): desarquiva paciente ao validar evidencias e resp
 - Test: `src/app/(app)/pacientes/[id]/metas/actions.int.test.ts`
 - Test: `src/app/(app)/pacientes/[id]/cadastro-clinico/prescricao.int.test.ts`
 
-- [ ] **Step 1: Escrever testes de integração**
+- [x] **Step 1: Escrever testes de integração**
 
 Garantir testes cobrindo desarquivamento em:
 - `ativarProtocolo` (`"ativacao_protocolo"`)
@@ -157,19 +157,19 @@ Garantir testes cobrindo desarquivamento em:
 - `salvarPrescricao` (`"prescricao_disciplina"`)
 - `salvarFichaClinica` (`"ficha_clinica"`)
 
-- [ ] **Step 2: Implementar chamadas nos módulos clínicos**
+- [x] **Step 2: Implementar chamadas nos módulos clínicos**
 
 Adicionar `desarquivarPacienteSeArquivado` em cada função com sua respectiva origem.
 
-- [ ] **Step 3: Rodar os testes de planejamento clínico**
+- [x] **Step 3: Rodar os testes de planejamento clínico**
 
 Run: `pnpm vitest run src/app/(app)/pacientes/[id]/cadastro-clinico/protocolo.int.test.ts src/app/(app)/pacientes/[id]/metas/actions.int.test.ts src/app/(app)/pacientes/[id]/cadastro-clinico/prescricao.int.test.ts`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
-git add src/app/(app)/pacientes/[id]/cadastro-clinico/protocolo-logic.ts src/app/(app)/pacientes/[id]/metas/logic.ts src/app/(app)/pacientes/[id]/cadastro-clinico/prescricao-logic.ts src/app/(app)/pacientes/[id]/cadastro-clinico/logic.ts src/app/(app)/pacientes/[id]/cadastro-clinico/protocolo.int.test.ts src/app/(app)/pacientes/[id]/metas/actions.int.test.ts src/app/(app)/pacientes/[id]/cadastro-clinico/prescricao.int.test.ts
+git add src/app/(app)/pacientes/[id]/cadastro-clinico/protocolo-logic.ts src/app/(app)/pacientes/[id]/metas/logic.ts src/app/(app)/pacientes/[id]/cadastro-clinico/prescricao-logic.ts src/app/(app)/pacientes/[id]/cadastro-clinico/logic.ts src/app/(app)/pacientes/[id]/cadastro-clinico/protocolo.int.test.ts src/app/(app)/pacientes/[id]/metas/actions.int.test.ts src/app/(app)/pacientes/[id]/cadastro-clinico/prescricao.int.test.ts src/app/(app)/pacientes/[id]/cadastro-clinico/actions.int.test.ts
 git commit -m "feat(paciente): desarquiva paciente em atos de prescricao, metas, protocolos e ficha clinica"
 ```
 

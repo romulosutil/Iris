@@ -4,6 +4,7 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { consent, patientClinicalProfile } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { regimeVigente } from "@/lib/consent/vigencia";
 
 export type FichaClinicaState = {
@@ -71,6 +72,14 @@ async function salvarFichaClinicaCore(
         target: patientClinicalProfile.patientId,
         set: valores,
       });
+
+    await desarquivarPacienteSeArquivado(
+      tx,
+      ctx,
+      patientId,
+      "ficha_clinica",
+    );
+
     return { ok: true };
   });
 }
