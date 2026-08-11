@@ -4,6 +4,7 @@ import { cleanup, render } from "@testing-library/react";
 import axe from "axe-core";
 import { Button } from "./button";
 import { Card } from "./card";
+import { Pill } from "./primitives/pill";
 import { Banner } from "./banner";
 import { InteractiveCard } from "./interactive-card";
 import { Indicator } from "./indicator";
@@ -451,3 +452,16 @@ test("BotaoCopiar — sem violações axe", async () => {
     <BotaoCopiar valor="00020126…6304ABCD" rotulo="Copiar código Pix" />,
   );
 });
+
+test("Pill solid — sem violações axe", async () => {
+  await semViolacoes(<Pill variant="solid" colorScheme="menta">Conquistado</Pill>);
+});
+
+test("Pill inset — sem violações axe", async () => {
+  await semViolacoes(<Pill variant="inset" colorScheme="violeta">Sugerido</Pill>);
+});
+
+test("Pill outline — sem violações axe", async () => {
+  await semViolacoes(<Pill variant="outline" colorScheme="ouro">Pendente</Pill>);
+});
+

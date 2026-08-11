@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { control } from "./primitives/surface";
 
 export interface InputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
@@ -77,9 +78,7 @@ export const Input = React.forwardRef<
     size === "sm" && "px-2.5 py-1 text-base sm:text-sm",
     size === "md" && "px-3.5 py-2 text-base",
     size === "lg" && "px-4 py-3 text-base",
-    !multiline && size === "sm" && "min-h-[var(--input-height-sm)]",
-    !multiline && size === "md" && "min-h-[var(--input-height-md)]",
-    !multiline && size === "lg" && "min-h-[var(--input-height-lg)]",
+    !multiline && control(size),
     disabled && "cursor-not-allowed text-[var(--text-secondary)]",
     inputClassName,
   );
@@ -88,7 +87,7 @@ export const Input = React.forwardRef<
     <div
       onClick={handleWrapperClick}
       className={cn(
-        "group flex w-full items-stretch rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)]",
+        "group flex w-full items-stretch rounded-[var(--radius-control)] border-[length:var(--border-brutal)] border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)]",
         !disabled && "cursor-text",
         "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
         !disabled &&

@@ -97,9 +97,14 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
 
   // Container (estático ou removível). Toggle + remover convivem: rótulo vira
   // um botão interno para não aninhar <button> dentro de <button>.
+  const isDualAction = Boolean(onSelecionar && removivel);
+  const groupLabel = isDualAction && typeof children === "string" ? children : undefined;
+
   return (
     <span
       ref={ref as React.Ref<HTMLSpanElement>}
+      role={isDualAction ? "group" : undefined}
+      aria-label={groupLabel}
       className={cn(base, corClasses, className)}
     >
       {onSelecionar ? (
@@ -107,7 +112,7 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
           type="button"
           aria-pressed={selecionado}
           onClick={onSelecionar}
-          className={cn("-mx-1 px-1", foco)}
+          className={cn("-mx-1 min-h-11 inline-flex items-center px-1", foco)}
         >
           {children}
         </button>
@@ -120,7 +125,7 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
           onClick={onRemover}
           aria-label={rotuloRemover ?? "Remover"}
           className={cn(
-            "text-currentColor -mr-1 grid size-7 shrink-0 place-items-center rounded-[length:var(--radius-pill)]",
+            "text-currentColor -mr-1 grid size-8 shrink-0 place-items-center rounded-[length:var(--radius-pill)]",
             foco,
             "hover:bg-[color:var(--ink-anchor)]/10",
           )}

@@ -63,37 +63,37 @@
 - Modify: `src/components/ui/status-badge.tsx`
 - Modify: `src/components/ui/a11y.test.tsx`
 
-**Status:** `[ ]`
+**Status:** `[x]`
 
-- [ ] **Step 1: Utilitários `surface()` e `control()`**
+- [x] **Step 1: Utilitários `surface()` e `control()`**
   - Implementar `surface()` em `src/components/ui/primitives/surface.ts` com variantes `solida` (levanta com `--ds-shadow`), `sugerida` (tracejada + afunda com `--elevation-inset`), `candidata` (pontilhada + afunda com `--elevation-inset`).
   - Implementar `control()` em `src/components/ui/primitives/control.ts` garantindo `min-h-11 min-w-11` (≥44px), foco visível ortogonal e bordas.
   - Re-exportar em `src/lib/design-system.ts` para fácil consumo.
 
-- [ ] **Step 2: Componente Primitivo `Pill`**
+- [x] **Step 2: Componente Primitivo `Pill`**
   - Criar `src/components/ui/primitives/pill.tsx` com variantes `solid | outline | ghost | inset`, suporte a ícones e children.
 
-- [ ] **Step 3: Migração de `Button`, `Card`, `Input`, `Dialog`**
+- [x] **Step 3: Migração de `Button`, `Card`, `Input`, `Dialog`**
   - `Button`: compor `surface()` e `control()`.
   - `Card`: compor `surface("solida")` e `surface("sugerida" | "candidata")`, remover hachura antiga do Card, usar borda tracejada + inset + ícone `LayersIcon`, substituir selo inline por `Pill`/`StatusBadge`.
   - `Input`: compor `control()`.
   - `Dialog`: compor `surface()`, ajustar botão fechar para `min-h-11 min-w-11` (≥44px) e posição confortável.
 
-- [ ] **Step 4: Vocabulário Único em `StatusBadge` e Regra Espectro Brutal §4C**
+- [x] **Step 4: Vocabulário Único em `StatusBadge` e Regra Espectro Brutal §4C**
   - Atualizar `StatusBadge` para usar `extraction_estado` (`sugerida`, `aprovada`, `editada`, `descartada`, `pendente`, `reclassificada`, `devolvida`).
   - Garantir obrigatoriamente o par **Ícone Redundante + Rótulo Textual**.
 
-- [ ] **Step 5: Correções de Acessibilidade (a11y)**
+- [x] **Step 5: Correções de Acessibilidade (a11y)**
   - Em `src/components/ui/chip.tsx`: adicionar `min-w-11` garantindo alvo de toque ≥44px.
   - Agrupar e rotular botões em chips de ação dupla (selecionável + remoção) para leitores de tela.
   - Atualizar `a11y.test.tsx` com testes de regressão para `Pill`, `Chip`, `Card`, `Dialog`, `Button`.
 
-- [ ] **Step 6: Gate de verificação**
+- [x] **Step 6: Gate de verificação**
   - Rodar `pnpm typecheck`
   - Rodar `pnpm vitest run src/components/ui/a11y.test.tsx`
   - Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
   ```bash
   git add src/components/ui/primitives/ src/lib/design-system.ts src/components/ui/button.tsx src/components/ui/card.tsx src/components/ui/input.tsx src/components/ui/dialog.tsx src/components/ui/chip.tsx src/components/ui/status-badge.tsx src/components/ui/a11y.test.tsx
   git commit -m "feat(ui): implementa surface/control, Pill, refatora Card/Button/Input e corrige a11y (#236)"
