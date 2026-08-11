@@ -2,10 +2,10 @@
 
 **Spec**: `.specs/features/billing-ativacao-asaas/spec.md`
 **Design**: `.specs/features/billing-ativacao-asaas/design.md`
-**Status**: Fase A quase fechada + Fase B fechada — T1 ✅ T2 ✅ T3 🟡 (escrito,
-prod pendente) T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅ T10 🟡 (build verde; ativação
-real bloqueada por falta de `BILLING_PROVIDER_API_KEY` no ambiente local)
-T11 ✅ T12 ✅ T13 ✅ · próximo: T10 quando a chave sandbox entrar, ou Fase C
+**Status**: Fase A fechada (menos o T3 em produção) + Fase B fechada — T1 ✅
+T2 ✅ T3 🟡 (escrito, prod pendente) T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅
+T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅ ·
+próximo: Fase C (T14) — e o T3 quando o Rômulo liberar produção
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -568,23 +568,73 @@ sem mudança. Os testes multi-provedor (`ativacao-troca-de-provedor:83`,
 
 ---
 
-### T10: Prova ponta a ponta contra o Asaas 🟡 BLOQUEADO (falta chave sandbox)
+### T10: Prova ponta a ponta contra o Asaas ✅ FEITO
 
-**Status**: o gate `build` está **feito e verde**; a ativação real **não rodou**,
-por falta de credencial no ambiente local. Medido, não suposto:
+**Status**: gate `build` verde **e** ativação real executada contra o sandbox do
+Asaas (10/08). Evidência medida abaixo.
 
+**A armadilha do nome de env mordeu de novo, e vale registrar**: a chave foi
+salva no `.env.local` como `ASAAS_API_KEY` — nome que **nenhum código lê**
+(`grep` no repo: zero ocorrências fora deste registro). O adapter lê
+`BILLING_PROVIDER_API_KEY` (`src/lib/billing/provider/asaas.ts:114`), sem prefixo
+`ASAAS_`, ao contrário de `ASAAS_BASE_URL` e `ASAAS_WEBHOOK_TOKEN`, que têm. Com
+o nome errado a ativação falha em "BILLING_PROVIDER_API_KEY não configurada", que
+não diz que a chave existe com outro nome. Renomeada no `.env.local`.
+
+#### Evidência medida (Asaas sandbox real, sem dublê de `fetch`)
+
+Execução: um `.int.test.ts` temporário chamando `iniciarAtivacaoAssinatura` com
+`TenantContext` de coordenador, clínica/usuário/`user_role` criados e apagados no
+próprio arquivo, `fetch` **não** dublado, `BILLING_PROVIDER=asaas` +
+`BILLING_PROVIDER_API_KEY` + `ASAAS_BASE_URL=https://api-sandbox.asaas.com/v3`
+vindos do shell. Arquivo apagado depois de colar isto — bate na rede, não pertence
+à suíte.
+
+Retorno da ação:
+
+```json
+{
+  "autorizacao": {
+    "forma": "pix_copia_e_cola",
+    "brCode": "00020101021226810014br.gov.bcb.pix2559pix-h.asaas.com/qr/cob/00a0fde6-…5920R SUTIL CORREA  LTDA6009Guarapari…pix-h.asaas.com/qr/rec/c20edd70-f3e0-4fbe-88fd-6c7dff4616d163045192",
+    "valorAtivacaoCentavos": 1
+  }
+}
 ```
-BILLING_PROVIDER          = "mercado_pago"          <- precisa ser "asaas"
-BILLING_PROVIDER_API_KEY  = AUSENTE                 <- chave que o adapter lê
-ASAAS_BASE_URL            = "https://api-sandbox.asaas.com/v3"   (já sandbox)
-ASAAS_WEBHOOK_TOKEN       = [definido]
+
+Linha em `subscription` × `clinic` (lida pela role `iris_auth`):
+
+```json
+{
+  "status": "setup_pending",
+  "provider": "asaas",
+  "provider_subscription_id": "c20edd70-f3e0-4fbe-88fd-6c7dff4616d1",
+  "provider_customer_id": "cus_000008645284",
+  "metodo_pagamento": "pix",
+  "valor_ativacao_centavos": 1,
+  "pix_prefixo": "00020101021226810014br.gov.bcb.pix2559pi",
+  "pix_tamanho": 259,
+  "cpf_cnpj": "29811201000150"
+}
 ```
 
-(`src/lib/billing/provider/asaas.ts:114` lê `BILLING_PROVIDER_API_KEY`, e não
-uma env com prefixo `ASAAS_` — é o nome que engana.)
+O que cada campo fecha:
 
-Sem as duas primeiras, qualquer "ativação" local cairia no adapter do Mercado
-Pago e provaria o contrário do que a tarefa pede.
+- **BR Code de verdade** (259 chars, host `pix-h.asaas.com` = homologação) com o
+  beneficiário real da conta — não é fixture.
+- **`provider_customer_id` preenchido** (`cus_000008645284`): é o D32 provado
+  contra o gateway real, não contra dublê. Nunca esteve preenchido antes.
+- **`cpf_cnpj` = 29811201000150** na `clinic`: o T7 gravou pela definer antes do
+  gateway, e o `POST /customers` foi aceito — o 400 de produção não reproduz.
+- **`valor_ativacao_centavos` = 1** é o desenhado, não um bug:
+  `VALOR_ATIVACAO_PADRAO_CENTAVOS = 1` (`asaas.ts:96`) — o Pix Automático exige um
+  QR imediato liquidado para a autorização virar ativa, e R$ 0,01 é o mínimo.
+- **`provider_subscription_id`** é o mesmo id que aparece no trecho `/qr/rec/` do
+  BR Code — o BR Code e a linha falam da mesma autorização.
+
+**Não coberto por esta prova** (segue sem evidência de campo): a liquidação do QR
+e o webhook que vira `setup_pending` → `active`. Isso exige pagar o Pix no
+sandbox, que é ação manual do Rômulo no app do banco de homologação.
 
 **O gate `build` achou um defeito real** (registrado aqui porque é exatamente o
 tipo de coisa que o build existe para pegar): o T12 importou `ativarEhASaida`
@@ -598,13 +648,6 @@ server-only"_. Corrigido em `fa6a30f`: o predicado foi para
 Depois do fix: `rm -rf .next && pnpm build` verde, `pnpm test` 169 arquivos /
 1102 testes verde.
 
-**Para destravar** (ação do Rômulo, `.env.local`):
-
-```
-BILLING_PROVIDER=asaas
-BILLING_PROVIDER_API_KEY=<chave sandbox do Asaas>
-```
-
 **What**: Ativação real (sandbox) e evidência de cada elo da cadeia.
 **Where**: nenhum arquivo — é execução e evidência
 **Depends on**: T8, T9
@@ -614,11 +657,11 @@ BILLING_PROVIDER_API_KEY=<chave sandbox do Asaas>
 **Done when**:
 
 - [x] `rm -rf .next && pnpm build` verde (armadilha do `.next/dev/types` stale)
-- [ ] Ativação numa clínica de teste devolve BR Code + valor
-- [ ] Linha em `subscription`: `status='setup_pending'`, `provider='asaas'`,
+- [x] Ativação numa clínica de teste devolve BR Code + valor
+- [x] Linha em `subscription`: `status='setup_pending'`, `provider='asaas'`,
       `pix_copia_e_cola` e `valor_ativacao_centavos` preenchidos,
       `provider_customer_id` **preenchido** (nunca esteve, D32)
-- [ ] Saída dos SELECTs colada no PR
+- [x] Saída dos SELECTs colada no PR
 
 **Tests**: none (verificação manual medida)
 **Gate**: build
