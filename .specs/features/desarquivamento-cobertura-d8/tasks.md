@@ -43,7 +43,7 @@ git commit -m "feat(db): autoriza terapeuta de cobertura a desarquivar paciente 
 **Files:**
 - Modify: `db/tests/patient-arquivado-rls.int.test.ts`
 
-- [ ] **Step 1: Adicionar testes de desarquivamento por terapeuta de cobertura**
+- [x] **Step 1: Adicionar testes de desarquivamento por terapeuta de cobertura**
 
 Em `db/tests/patient-arquivado-rls.int.test.ts`:
 1. Criar sessão atribuída a terapeuta de cobertura para paciente arquivado.
@@ -51,12 +51,12 @@ Em `db/tests/patient-arquivado-rls.int.test.ts`:
 3. Verificar que terapeuta sem equipe E sem sessão continua estourando erro de autorização cross-team (`fora da equipe ou cobertura`).
 4. Verificar que terapeuta com sessão em outra clínica continua estourando isolamento multi-tenant.
 
-- [ ] **Step 2: Rodar teste de RLS**
+- [x] **Step 2: Rodar teste de RLS**
 
 Gate: `pnpm vitest run db/tests/patient-arquivado-rls.int.test.ts`  
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add db/tests/patient-arquivado-rls.int.test.ts
