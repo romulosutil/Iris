@@ -590,7 +590,7 @@ sem mudança. Os testes multi-provedor (`ativacao-troca-de-provedor:83`,
 
 ## FASE B — jornada sem beco
 
-### T11: CTA depois do QR Code `[P]`
+### T11: CTA depois do QR Code `[P]` ✅ FEITO
 
 **What**: Botão "Cadastrar paciente" no ramo `pix_copia_e_cola`, depois do aviso
 de que a confirmação chega sozinha.
@@ -602,18 +602,39 @@ de que a confirmação chega sozinha.
 
 **Done when**:
 
-- [ ] CTA renderizado **só** no ramo `pix_copia_e_cola`
-- [ ] Sem polling de status (a página de destino já reavalia no request)
-- [ ] Teste de componente afirma o link presente com autorização Pix e ausente sem autorização
-- [ ] Gate: `pnpm typecheck && pnpm test` · Test count: baseline + N
+- [x] CTA renderizado **só** no ramo `pix_copia_e_cola`
+- [x] Sem polling de status (a página de destino já reavalia no request)
+- [x] Teste de componente afirma o link presente com autorização Pix e ausente sem autorização
+- [x] Gate: `pnpm typecheck && pnpm test` · Test count: baseline + N
 
 **Tests**: unit
 **Gate**: quick
-**Commit**: `feat(assinatura): caminho de volta ao cadastro depois do Pix`
+**Commit**: `feat(assinatura): caminho de volta ao cadastro depois do Pix` (`7404883`)
+
+**Status**: Concluída. CTA `Button variante="primaria" asChild` + `Link` (padrão
+de `pacientes/page.tsx:21`), dentro do `<Alert>` do ramo Pix, **depois** do
+parágrafo que diz que a confirmação chega sozinha.
+
+**Colisão com o oráculo do D21, resolvida apertando**: o teste
+"com Pix copia-e-cola … NUNCA navega" afirmava `queryByRole("link")` **nulo**.
+Isso era _proxy_ para "BR Code não vira href" e passou a ser falso com o CTA.
+Trocado por três asserções mais fortes que a antiga: nenhum `href` **é** o BR
+Code, nenhum `href` **contém** o BR Code (query string/fragmento seriam a mesma
+falha por outro caminho), e o único link do ramo é `/pacientes/novo`.
+
+Evidência medida:
+
+- `pnpm test`: 168 arquivos / 1097 → 168 arquivos / **1099** (**N = +2**;
+  ambos em `formulario-ativacao.test.tsx`, nenhum arquivo novo, nenhum teste
+  deletado). `pnpm typecheck` limpo.
+- **Cheque de mutação**: trocando o `href` do CTA para `/pacientes`, a suíte foi
+  de `16 passed` para `14 passed | 2 failed`, ambas
+  `expected '/pacientes' to be '/pacientes/novo'` — o teste novo e o teste do
+  D21 apertado. Revertido; verde restaurado.
 
 ---
 
-### T12: Aviso antecipado em `/pacientes/novo` `[P]`
+### T12: Aviso antecipado em `/pacientes/novo` `[P]` ✅ FEITO
 
 **What**: Alert de conta em somente-leitura **antes** do formulário, com link só
 onde ativar é a saída.
@@ -628,15 +649,42 @@ onde ativar é a saída.
 
 **Done when**:
 
-- [ ] `!podeCadastrarPaciente` → Alert destacado antes do formulário
-- [ ] Link de ativação segue o mesmo critério do formulário (não duplicar regra divergente)
-- [ ] Formulário continua renderizado; a defesa no submit permanece intacta
-- [ ] Teste: conta `trial_expirado` mostra aviso + link; `pagamento_em_processamento` mostra aviso **sem** link
-- [ ] Gate: `pnpm typecheck && pnpm test` · Test count: baseline + N
+- [x] `!podeCadastrarPaciente` → Alert destacado antes do formulário
+- [x] Link de ativação segue o mesmo critério do formulário (não duplicar regra divergente)
+- [x] Formulário continua renderizado; a defesa no submit permanece intacta
+- [x] Teste: conta `trial_expirado` mostra aviso + link; `pagamento_em_processamento` mostra aviso **sem** link
+- [x] Gate: `pnpm typecheck && pnpm test` · Test count: baseline + N
 
 **Tests**: unit
 **Gate**: quick
 **Commit**: `feat(pacientes): avisa conta bloqueada antes do formulário`
+
+**Status**: Concluída.
+
+**Extensão de escopo, deliberada**: "não duplicar regra divergente" não é
+alcançável copiando o predicado — duas cópias divergem no primeiro estado novo
+do enum. O predicado virou `ativarEhASaida(estado)` em
+`src/lib/billing/estado-conta.ts`, e `novo-paciente-form.tsx` passou a chamá-lo
+em vez da comparação inline. Comportamento idêntico ao anterior.
+
+**Divergência achada e NÃO corrigida aqui**: `trial_bloqueado_fraude` tem copy
+que manda ativar a assinatura e mesmo assim não ganha link (nem antes, nem
+agora). Incluí-lo mudaria o comportamento do formulário, que é o oráculo desta
+extração — fica registrado no código e aqui, para decidir em tarefa própria.
+
+Evidência medida:
+
+- `pnpm test`: 168 arquivos / 1099 → **169 arquivos / 1102** (**N = +3**, arquivo
+  novo `src/app/(app)/pacientes/novo/page.test.tsx`). `pnpm typecheck` sem erro.
+- O teste afirma a **ordem no DOM** (`compareDocumentPosition`), não só a
+  presença: o valor da tarefa é o aviso vir antes do formulário.
+- **Cheque de mutação**: trocando a condição do Alert por `false`, a suíte foi de
+  `3 passed` para `1 passed | 2 failed` — `Unable to find an element with the
+text: /período de teste terminou/i` e `/aguardando a confirmação/i`.
+  Revertido; verde restaurado.
+- Primeiro teste de página de servidor do repo (não havia precedente): o
+  `page()` é aguardado e o resultado renderizado; `getTenantContext`,
+  `requireRole`, `obterSituacaoConta` e o formulário entram dublados.
 
 ---
 
