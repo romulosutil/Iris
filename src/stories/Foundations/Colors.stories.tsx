@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import React from "react";
 
 const meta = {
-  title: "Foundations/Colors",
+  title: "02. FOUNDATIONS/Colors",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

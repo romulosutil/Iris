@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { MicroConquistaBadge } from "./micro-conquista-badge";
 
 const meta = {
-  title: "Molecules/MicroConquistaBadge",
+  title: "05. PATTERNS/System States & Badges/MicroConquistaBadge",
   component: MicroConquistaBadge,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof MicroConquistaBadge>;

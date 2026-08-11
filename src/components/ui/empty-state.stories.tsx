@@ -11,7 +11,7 @@ import {
 import { MicroConquistaBadge } from "./micro-conquista-badge";
 
 const meta = {
-  title: "Organisms/EmptyState",
+  title: "05. PATTERNS/System States & Badges/EmptyState",
   component: EmptyState,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof EmptyState>;

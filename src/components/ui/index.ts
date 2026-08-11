@@ -26,6 +26,7 @@ export * from "./patterns/status-badge";
 export * from "./patterns/confidence-card";
 export * from "./patterns/compare-row";
 export * from "./patterns/batch-bar";
+export * from "./patterns/copy-button";
 
 // Organisms & Feedback
 export * from "./empty-state";

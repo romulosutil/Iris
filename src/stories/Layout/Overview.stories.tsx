@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import React from "react";
 
 const meta = {
-  title: "Layout/Overview",
+  title: "04. UI COMPONENTS/Layout/Overview",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

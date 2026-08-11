@@ -10,7 +10,7 @@ import {
 import { Button } from "./button";
 
 const meta = {
-  title: "Organisms/Dialog",
+  title: "04. UI COMPONENTS/Layout/Dialog",
   component: Dialog,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof Dialog>;

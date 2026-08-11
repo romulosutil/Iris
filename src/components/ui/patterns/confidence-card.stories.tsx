@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { ConfidenceCard } from "./confidence-card";
 
 const meta = {
-  title: "Organisms/ConfidenceCard",
+  title: "05. PATTERNS/Epistemics & AI/ConfidenceCard",
   component: ConfidenceCard,
   parameters: { layout: "padded" },
   argTypes: {

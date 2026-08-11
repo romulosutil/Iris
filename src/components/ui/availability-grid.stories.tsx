@@ -2,7 +2,7 @@ import type { Meta } from "@storybook/nextjs-vite";
 import { AvailabilityGrid } from "./availability-grid";
 
 const meta = {
-  title: "Molecules/AvailabilityGrid",
+  title: "05. PATTERNS/Clinical & Schedules/AvailabilityGrid",
   component: AvailabilityGrid,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof AvailabilityGrid>;

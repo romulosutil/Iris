@@ -57,7 +57,7 @@ const mockSessoes = [
 ];
 
 const meta = {
-  title: "Organisms/AgendaCalendarGrid",
+  title: "05. PATTERNS/Clinical & Schedules/AgendaCalendarGrid",
   component: AgendaCalendarGrid,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof AgendaCalendarGrid>;

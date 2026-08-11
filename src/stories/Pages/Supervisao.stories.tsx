@@ -6,7 +6,7 @@ import { Chip, ChipGroup } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 
 const meta = {
-  title: "Pages/Supervisão",
+  title: "06. PAGES/Supervisão",
   parameters: { layout: "fullscreen" },
 } satisfies Meta;
 

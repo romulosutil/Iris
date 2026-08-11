@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { CompareRow } from "./compare-row";
 
 const meta = {
-  title: "Organisms/CompareRow",
+  title: "05. PATTERNS/Epistemics & AI/CompareRow",
   component: CompareRow,
   parameters: { layout: "padded" },
   argTypes: {

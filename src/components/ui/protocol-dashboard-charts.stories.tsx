@@ -41,7 +41,7 @@ const mockTrendPontos: TrendSessionPoint[] = [
 ];
 
 const meta = {
-  title: "Organisms/ProtocolDashboardCharts",
+  title: "05. PATTERNS/Clinical & Schedules/ProtocolDashboardCharts",
   component: ProtocolProgressBarChart,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof ProtocolProgressBarChart>;

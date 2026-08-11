@@ -3,7 +3,7 @@ import { Pill } from "./pill";
 import { CheckIcon, SparkleIcon, LayersIcon, ClockIcon } from "@/components/ui/icon";
 
 const meta = {
-  title: "Molecules/Pill",
+  title: "03. PRIMITIVES/Pill",
   component: Pill,
   parameters: { layout: "centered" },
   argTypes: {

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/icon";
 
 const meta = {
-  title: "Foundations/Icons",
+  title: "02. FOUNDATIONS/Icons",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

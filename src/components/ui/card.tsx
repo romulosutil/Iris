@@ -22,7 +22,12 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   destacado?: boolean;
   /** Se true, força a borda esquerda espessa independente do estado */
   bordaEsquerda?: boolean;
-  como?: "div" | "li" | "article" | "section";
+  /** Se true, adiciona hover e feedback de foco tátil */
+  interativo?: boolean;
+  interactive?: boolean;
+  como?: "div" | "li" | "article" | "section" | "button" | "a";
+  href?: string;
+  disabled?: boolean;
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
@@ -33,13 +38,17 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
     titulo,
     destacado = false,
     bordaEsquerda = false,
+    interativo = false,
+    interactive = false,
     como = "div",
     children,
+    disabled = false,
     ...props
   },
   ref,
 ) {
   const Component = como as any;
+  const isInteractive = interativo || interactive || como === "button" || como === "a" || Boolean(props.onClick);
   const resolvedState = epistemicState ?? estado ?? "fact";
 
   // Eixo Estrutural de Profundidade:
@@ -79,6 +88,8 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
       isFact ? "bg-[var(--surface-card)]" : "bg-[var(--surface-card)]/80",
       (bordaEsquerda || resolvedState === "conquistado") &&
         "border-l-[4px] border-l-[var(--status-success-border)]",
+      isInteractive && !disabled && "cursor-pointer text-left select-none transition-[transform,box-shadow] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[var(--ds-shadow-hover)] focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
+      disabled && "opacity-60 cursor-not-allowed pointer-events-none",
     ),
   });
 
@@ -87,6 +98,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
       ref={ref as any}
       data-estado={resolvedState}
       data-destacado={destacado}
+      data-interativo={isInteractive}
       className={cn(
         "flex flex-col gap-2 p-5 text-[var(--text-primary)]",
         destacado && "relative pt-8",

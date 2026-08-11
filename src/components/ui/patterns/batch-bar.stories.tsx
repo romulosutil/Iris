@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { BatchBar } from "./batch-bar";
 
 const meta = {
-  title: "Organisms/BatchBar",
+  title: "05. PATTERNS/Epistemics & AI/BatchBar",
   component: BatchBar,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof BatchBar>;

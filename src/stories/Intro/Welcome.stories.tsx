@@ -8,7 +8,7 @@ const DS_VERSION = "0.1.0";
 const DS_STATUS = "Alpha";
 
 const meta = {
-  title: "Intro/Welcome",
+  title: "01. INTRO/Welcome",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

@@ -2,7 +2,7 @@ import type { Meta } from "@storybook/nextjs-vite";
 import { ScheduleGrid, type BlocoAgendaItem } from "./schedule-grid";
 
 const meta = {
-  title: "Molecules/ScheduleGrid",
+  title: "05. PATTERNS/Clinical & Schedules/ScheduleGrid",
   component: ScheduleGrid,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof ScheduleGrid>;

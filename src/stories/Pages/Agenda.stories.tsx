@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 
 const meta = {
-  title: "Pages/Agenda",
+  title: "06. PAGES/Agenda",
   parameters: { layout: "fullscreen" },
 } satisfies Meta;
 

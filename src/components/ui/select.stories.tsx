@@ -9,7 +9,7 @@ import {
 import { Field } from "./field";
 
 const meta = {
-  title: "Molecules/Select",
+  title: "04. UI COMPONENTS/Navigation & Form Controls/Select",
   component: Select,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof Select>;

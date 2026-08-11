@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import React from "react";
 
 const meta = {
-  title: "Foundations/Typography",
+  title: "02. FOUNDATIONS/Typography",
   parameters: { layout: "padded" },
 } satisfies Meta;
 
