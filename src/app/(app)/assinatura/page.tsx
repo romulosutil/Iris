@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { eq } from "drizzle-orm";
 import { getTenantContext } from "@/auth/tenant";
+import { withTenant } from "@/db/rls";
+import { clinic } from "@/db/schema";
 import { PageHeader } from "@/components/ui/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -49,6 +52,22 @@ export default async function AssinaturaPage() {
   const podeContratar = ctx.role === "coordenador";
   const linhas = faixasParaLinhas();
 
+  // Só quem vê o formulário precisa do documento — evita uma ida ao banco na
+  // renderização de quem não pode contratar. A leitura sai por `withTenant`
+  // (`app_role`, RLS ativa): `clinic.cpf_cnpj` tem SELECT de coluna concedido
+  // na 0090; a ESCRITA continua sendo exclusiva da função SECURITY DEFINER.
+  const documentoAtual = podeContratar
+    ? ((
+        await withTenant(ctx, (tx) =>
+          tx
+            .select({ cpfCnpj: clinic.cpfCnpj })
+            .from(clinic)
+            .where(eq(clinic.id, ctx.clinicId))
+            .limit(1),
+        )
+      )[0]?.cpfCnpj ?? null)
+    : null;
+
   return (
     <main className="flex flex-col gap-6">
       <PageHeader
@@ -57,10 +76,10 @@ export default async function AssinaturaPage() {
       />
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-display text-[var(--text-primary)] text-xl font-semibold">
+        <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
           Como funciona a cobrança
         </h2>
-        <ul className="text-[var(--text-primary)] flex list-disc flex-col gap-2 pl-5 text-sm">
+        <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-[var(--text-primary)]">
           <li>
             Configurar a clínica, a equipe e a agenda é gratuito. Nada é cobrado
             durante o onboarding.
@@ -94,7 +113,7 @@ export default async function AssinaturaPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-display text-[var(--text-primary)] text-xl font-semibold">
+        <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
           Preço por ficha ativa, por mês
         </h2>
         <Table>
@@ -122,11 +141,11 @@ export default async function AssinaturaPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-display text-[var(--text-primary)] text-xl font-semibold">
+        <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
           Ativar a assinatura
         </h2>
         {podeContratar ? (
-          <FormularioAtivacao />
+          <FormularioAtivacao documentoAtual={documentoAtual} />
         ) : (
           <>
             <Alert severidade="info" titulo="Só a coordenação contrata">
@@ -145,4 +164,3 @@ export default async function AssinaturaPage() {
     </main>
   );
 }
-

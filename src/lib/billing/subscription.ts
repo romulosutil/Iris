@@ -263,6 +263,12 @@ export async function iniciarAtivacao(
       status: "setup_pending",
       provider: provider.id,
       providerSubscriptionId: criado.providerVinculoId,
+      // Sempre escrito, junto com `provider` — mesma disciplina do D21/D24: o id
+      // de cliente só vale dentro do gateway que o emitiu, então par misto
+      // (provedor novo, cliente velho) é o estado a evitar. `?? null` porque
+      // trilho sem cliente separado não tem o que gravar, e omitir a coluna
+      // deixaria o resíduo da tentativa anterior.
+      providerCustomerId: criado.providerCustomerId ?? null,
       // Colunas próprias (0075 e 0088). Cada forma de autorização na sua: o
       // BR Code do Pix não é URL, e gravá-lo em `checkout_url` era o D21.
       ...colunasDaAutorizacao(criado.autorizacao),
@@ -275,6 +281,7 @@ export async function iniciarAtivacao(
         status: "setup_pending",
         provider: provider.id,
         providerSubscriptionId: criado.providerVinculoId,
+        providerCustomerId: criado.providerCustomerId ?? null,
         ...colunasDaAutorizacao(criado.autorizacao),
         metodoPagamento: pedido.metodo,
         atualizadoEm: new Date(),
@@ -496,6 +503,15 @@ export async function fecharCiclosVencendo(opcoes?: {
           // uma reexecução do job depois de uma falha parcial emitiria uma
           // segunda cobrança para o mesmo ciclo.
         } else if (assinatura.providerSubscriptionId) {
+          // `provider` é nullable desde a 0090 (representa "sem vínculo de
+          // cobrança"). Aqui a linha TEM vínculo, então nulo é estado
+          // impossível — o CHECK do banco o proíbe. Falhar alto em vez de
+          // cair num default: emitir cobrança pelo gateway errado é dinheiro.
+          if (!assinatura.provider) {
+            throw new Error(
+              `Assinatura ${assinatura.subscriptionId} tem vínculo de cobrança (${assinatura.providerSubscriptionId}) mas nenhum provedor gravado — não dá para saber qual gateway cobrar.`,
+            );
+          }
           // Resolvido AQUI, por linha, e não uma vez no topo da função: a
           // varredura cobre assinaturas de gateways diferentes na mesma passada.
           const provider = getProviderPorId(assinatura.provider);

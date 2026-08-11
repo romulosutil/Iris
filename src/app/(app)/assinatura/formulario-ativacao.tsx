@@ -1,7 +1,10 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
+import Link from "next/link";
 import { Form } from "@/components/ui/form";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { QrCode } from "@/components/ui/qr-code";
@@ -27,6 +30,13 @@ export interface FormularioAtivacaoProps {
    * observável se entrar por aqui. Em produção é sempre a navegação real.
    */
   navegar?: (url: string) => void;
+  /**
+   * Documento já gravado na clínica, para pré-preencher o campo. Continua
+   * editável de propósito: um CPF/CNPJ errado gravado numa tentativa anterior
+   * é justamente o caso em que a pessoa volta a esta tela — travar o campo
+   * transformaria o erro num beco.
+   */
+  documentoAtual?: string | null;
 }
 
 function navegarPadrao(url: string) {
@@ -36,6 +46,7 @@ function navegarPadrao(url: string) {
 export function FormularioAtivacao({
   acao = ativarAssinatura,
   navegar = navegarPadrao,
+  documentoAtual,
 }: FormularioAtivacaoProps) {
   const [state, formAction, isPending] = useActionState<
     AtivacaoState,
@@ -65,8 +76,43 @@ export function FormularioAtivacao({
     }
   }, [urlRedirect, navegar]);
 
+  // O que a pessoa deve ver no campo: o texto que ela acabou de digitar (quando
+  // a action recusou) ou o documento já gravado. `defaultValue` basta: o React
+  // 19 reseta o formulário não-controlado depois da action, o que também limpa
+  // a marca de "campo editado pelo usuário" — o valor volta a seguir o
+  // `defaultValue` novo. Um `key` para forçar remontagem foi tentado e MEDIDO
+  // como inerte (removê-lo não derruba teste nenhum, inclusive o que digita
+  // antes de submeter), então não ficou.
+  const documentoNoCampo = state.documento ?? documentoAtual ?? "";
+
   return (
-    <Form action={formAction} error={state.error}>
+    <Form
+      action={formAction}
+      // Erro de documento não repete no topo: ele já é anunciado no campo, e a
+      // mesma frase em dois lugares faz o leitor de tela lê-la duas vezes.
+      error={state.erroDocumento ? undefined : state.error}
+    >
+      <Field
+        label="CPF ou CNPJ do titular da conta"
+        htmlFor="cpfCnpj"
+        error={state.erroDocumento}
+        hint="O banco exige o documento de quem autoriza para registrar o Pix Automático. Use o CPF ou o CNPJ da própria clínica."
+      >
+        <Input
+          id="cpfCnpj"
+          name="cpfCnpj"
+          defaultValue={documentoNoCampo}
+          // `numeric` e não `required`: o campo aceita máscara (ponto, barra,
+          // traço) e a validação de verdade é a do servidor — `required` no
+          // HTML só duplicaria a regra num lugar que o teclado do celular já
+          // contorna.
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="000.000.000-00 ou 00.000.000/0000-00"
+          aria-invalid={state.erroDocumento ? true : undefined}
+        />
+      </Field>
+
       {/* A escolha "cartão ou Pix" saiu daqui em 10/08/2026, e não por
           simplificação de layout: ela era FICÇÃO. `NovoVinculo.metodo` nunca foi
           lido por adapter nenhum — nem pelo Mercado Pago (sempre `preapproval`,
@@ -152,6 +198,17 @@ export function FormularioAtivacao({
                 pagamento. A confirmação chega sozinha — você não precisa mandar
                 comprovante nem ficar nesta tela.
               </p>
+              {/* Saída da tela, só neste ramo: depois do QR não há mais nada a
+                  fazer aqui, e sem este link a pessoa fica esperando uma
+                  confirmação que chega por webhook. Sem polling de propósito —
+                  a página de destino reavalia a situação da conta no próprio
+                  request, então um `setInterval` aqui só gastaria requisição
+                  para descobrir o mesmo. */}
+              <div className="mt-3">
+                <Button variante="primaria" asChild>
+                  <Link href="/pacientes/novo">Cadastrar paciente</Link>
+                </Button>
+              </div>
             </>
           )}
         </Alert>

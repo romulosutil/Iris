@@ -252,6 +252,12 @@ export const authVerification = pgTable("auth_verification", {
 export const clinic = pgTable("clinic", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull(),
+  // Documento (CPF ou CNPJ) do titular da conta de cobrança. NULLABLE porque a
+  // clínica existe e opera todo o trial sem ele: o documento só é exigido na
+  // ativação da assinatura, onde o Asaas o pede para registrar o cliente do Pix
+  // Automático (a ausência dele era a causa do 400 na ativação — #36). Só
+  // dígitos, sem máscara; validado na aplicação e no guard da função definer.
+  cpfCnpj: text("cpf_cnpj"),
   responsavelContaId: uuid("responsavel_conta_id").references(() => appUser.id),
   politicaRetencaoMeses: integer("politica_retencao_meses"),
   politicaRetencaoConfig: jsonb("politica_retencao_config"),
@@ -1737,10 +1743,16 @@ export const subscription = pgTable(
       .unique()
       .references(() => clinic.id, { onDelete: "restrict" }),
     status: subscriptionStatus("status").notNull().default("free_tier"),
-    // Persistido em vez de lido de env: a conta Asaas ficou bloqueada e o
-    // trilho passou a Mercado Pago. Assinatura criada num provedor não pode ser
-    // reinterpretada por outro só porque a env mudou depois.
-    provider: text("provider").notNull().default("mercado_pago"),
+    // Persistido em vez de lido de env: assinatura criada num provedor não pode
+    // ser reinterpretada por outro só porque a env mudou depois.
+    //
+    // NULLABLE e SEM DEFAULT de propósito (D29/#36). O default
+    // `'mercado_pago'` fazia toda linha nova nascer apontando para um gateway
+    // que a clínica nunca escolheu — inclusive as `free_tier`, que não têm
+    // provedor nenhum. "Sem vínculo de cobrança" precisa ser representável.
+    // O invariante que sobra ("linha vinculada tem provedor") passa a ser um
+    // CHECK no banco: `status = 'free_tier' OR provider IS NOT NULL`.
+    provider: text("provider"),
     // `preapproval_id` no Mercado Pago. UNIQUE porque o webhook resolve a
     // clínica por ele — dois tenants no mesmo id seria cobrança cruzada.
     providerSubscriptionId: text("provider_subscription_id").unique(),

@@ -216,6 +216,10 @@ export async function avaliarSituacaoConta(
  * bloqueia mais o cadastro do 1º paciente, ele passa a somente-leitura no fim
  * do teste.
  */
+// `ativarEhASaida` mora em `./estado-conta-ui`, e não aqui: este módulo é
+// `server-only` (fala com o banco) e o formulário de novo paciente é client
+// component — importar daqui derruba o `pnpm build`.
+
 export function mensagemDeEstado(estado: EstadoConta): string {
   switch (estado) {
     case "trial_expirado":

@@ -64,7 +64,10 @@ describe("FormularioAtivacao", () => {
   it("declara o trilho de pagamento real (Pix Automático) sem citar valor", () => {
     render(<FormularioAtivacao acao={acaoQueDevolve({})} />);
 
-    expect(screen.getByText(/pix autom[áa]tico/i)).toBeDefined();
+    // Casamento exato no título do bloco, não `/pix automático/i` solto: a dica
+    // do campo de documento também nomeia o trilho, e uma regex frouxa passaria
+    // a falhar por ambiguidade em vez de por regressão.
+    expect(screen.getByText("Pagamento por Pix Automático")).toBeDefined();
     // Nenhum valor hardcoded nesta parte da tela: quem diz quanto a ativação
     // cobra é a autorização devolvida pelo provedor (D22). Um preço escrito aqui
     // seria uma segunda fonte da verdade, que envelhece sozinha.
@@ -194,12 +197,83 @@ describe("FormularioAtivacao", () => {
     // quem não consegue ler o QR nem usar a área de transferência.
     expect(screen.getByText(brCode)).toBeDefined();
 
-    // As duas asserções que fecham o débito: BR Code não é URL.
+    // As asserções que fecham o débito: BR Code não é URL.
     expect(navegar).not.toHaveBeenCalled();
-    expect(screen.queryByRole("link")).toBeNull();
     for (const el of document.querySelectorAll("[href]")) {
-      expect(el.getAttribute("href")).not.toBe(brCode);
+      const href = el.getAttribute("href");
+      expect(href).not.toBe(brCode);
+      // Nem embutido: o BR Code virando query string ou fragmento seria a
+      // mesma falha por outro caminho.
+      expect(href ?? "").not.toContain(brCode);
     }
+    // O único link deste ramo é a saída para o cadastro (T11). Antes esta
+    // asserção era `queryByRole("link")` nulo — proxy para "BR Code não vira
+    // href" que deixou de valer quando o CTA entrou. A forma exata abaixo é
+    // mais apertada que a antiga, não mais frouxa.
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toBe("/pacientes/novo");
+  });
+
+  it("depois do Pix, oferece caminho de volta ao cadastro — e não antes (T11)", async () => {
+    const user = userEvent.setup();
+    const brCode = "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF";
+
+    const { unmount } = render(
+      <FormularioAtivacao acao={acaoQueDevolve({})} navegar={vi.fn()} />,
+    );
+    // Antes de qualquer autorização o CTA não existe: oferecer "cadastrar
+    // paciente" a quem ainda não pagou é o beco ao contrário — a tela de
+    // destino recusaria o cadastro.
+    expect(
+      screen.queryByRole("link", { name: /cadastrar paciente/i }),
+    ).toBeNull();
+    unmount();
+
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          autorizacao: {
+            forma: "pix_copia_e_cola",
+            brCode,
+            valorAtivacaoCentavos: 1,
+          },
+        })}
+        navegar={vi.fn()}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    const cta = await screen.findByRole("link", {
+      name: /cadastrar paciente/i,
+    });
+    expect(cta.getAttribute("href")).toBe("/pacientes/novo");
+  });
+
+  it("no ramo redirect não há CTA de cadastro (o pagamento ainda nem abriu)", async () => {
+    const user = userEvent.setup();
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          autorizacao: {
+            forma: "redirect",
+            url: "https://pagamento.exemplo/checkout/abc123",
+          },
+        })}
+        navegar={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    await screen.findByRole("link", { name: /ir para o pagamento/i });
+    expect(
+      screen.queryByRole("link", { name: /cadastrar paciente/i }),
+    ).toBeNull();
   });
 
   it("o botão copiar entrega o BR Code exato à área de transferência", async () => {
@@ -282,6 +356,119 @@ describe("FormularioAtivacao", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(paragrafoValor.textContent?.replace(/ /g, " ")).toMatch(/R\$ 0,01/);
+  });
+
+  /**
+   * T8 — campo de documento. O que estes casos discriminam:
+   *
+   * - O corpo enviado carrega `cpfCnpj`. Sem isto, a ativação inteira responde
+   *   "Documento deve ser um CPF (11 dígitos) ou um CNPJ (14 dígitos)" mesmo
+   *   com tudo o mais certo — que é o bug que o T7 deixou aberto de propósito.
+   * - O erro aparece JUNTO do campo e ligado por `aria-describedby`. Asserir só
+   *   que o texto existe na tela passaria com a mensagem órfã no topo, que é
+   *   exatamente o que o `<Field>` existe para evitar.
+   * - O que foi digitado sobrevive à recusa. Formulário não-controlado + React
+   *   19 limpa o campo depois da action: sem o `key`/`defaultValue`, corrigir
+   *   um dígito viraria redigitar tudo.
+   */
+  it("envia o documento digitado no corpo da action", async () => {
+    const user = userEvent.setup();
+    const acao = vi.fn(
+      async (_prev: AtivacaoState, _formData: FormData) =>
+        ({}) as AtivacaoState,
+    );
+    render(<FormularioAtivacao acao={acao} />);
+
+    await user.type(
+      screen.getByLabelText(/cpf ou cnpj do titular/i),
+      "29.811.201/0001-50",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    await waitFor(() => expect(acao).toHaveBeenCalledTimes(1));
+    const corpo = acao.mock.calls[0]![1];
+    expect(corpo.get("cpfCnpj")).toBe("29.811.201/0001-50");
+  });
+
+  it("erro de documento é renderizado no campo e ligado por aria-describedby", async () => {
+    const user = userEvent.setup();
+    const erro =
+      "Documento deve ser um CPF (11 dígitos) ou um CNPJ (14 dígitos).";
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          error: erro,
+          erroDocumento: erro,
+          documento: "123",
+        })}
+      />,
+    );
+
+    // Digitar ANTES de submeter não é decoração: é o caminho real, e é o único
+    // que exercita o input já "sujo". Renderizar o erro sem passar por aqui
+    // testaria um campo intocado, que o navegador repopula por outro caminho.
+    await user.type(screen.getByLabelText(/cpf ou cnpj do titular/i), "123");
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    const campo = await screen.findByLabelText(/cpf ou cnpj do titular/i);
+    const descritores = (campo.getAttribute("aria-describedby") ?? "").split(
+      /\s+/,
+    );
+    expect(descritores).toContain("cpfCnpj-error");
+    expect(document.getElementById("cpfCnpj-error")?.textContent).toBe(erro);
+    // Não repetido no topo: uma mensagem, um lugar.
+    expect(screen.getAllByText(erro)).toHaveLength(1);
+    // E o que foi digitado volta para o campo, com máscara e tudo.
+    expect(campo).toHaveProperty("value", "123");
+  });
+
+  it("pré-preenche com o documento já gravado, sem travar a edição", async () => {
+    const user = userEvent.setup();
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({})}
+        documentoAtual="29811201000150"
+      />,
+    );
+
+    const campo = screen.getByLabelText(/cpf ou cnpj do titular/i);
+    expect(campo).toHaveProperty("value", "29811201000150");
+    expect(campo).toHaveProperty("readOnly", false);
+    expect(campo).toHaveProperty("disabled", false);
+
+    await user.clear(campo);
+    await user.type(campo, "11144477735");
+    expect(campo).toHaveProperty("value", "11144477735");
+  });
+
+  it("falha de gateway continua no topo, não no campo de documento", async () => {
+    const user = userEvent.setup();
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          error: "Não foi possível abrir o pagamento agora.",
+          documento: "29811201000150",
+        })}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    const alerta = await screen.findByRole("alert");
+    expect(alerta.textContent).toMatch(/não foi possível abrir o pagamento/i);
+    // O campo não fica marcado como inválido por uma falha que não é dele.
+    expect(document.getElementById("cpfCnpj-error")).toBeNull();
+    expect(
+      screen
+        .getByLabelText(/cpf ou cnpj do titular/i)
+        .getAttribute("aria-invalid"),
+    ).toBeNull();
   });
 
   it("o ramo redirect não fala em cobrança de ativação", async () => {

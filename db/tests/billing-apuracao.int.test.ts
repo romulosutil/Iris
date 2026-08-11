@@ -383,10 +383,10 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
               ${DENTRO})`;
 
     // ── assinaturas e ciclos ───────────────────────────────────────────────
-    await owner!`INSERT INTO subscription (id, clinic_id, status) VALUES
-      (${SUB_A}, ${CLINIC_A}, 'free_tier'),
-      (${SUB_B}, ${CLINIC_B}, 'active'),
-      (${SUB_C}, ${CLINIC_C}, 'setup_pending')`;
+    await owner!`INSERT INTO subscription (id, clinic_id, status, provider) VALUES
+      (${SUB_A}, ${CLINIC_A}, 'free_tier', NULL),
+      (${SUB_B}, ${CLINIC_B}, 'active', 'asaas'),
+      (${SUB_C}, ${CLINIC_C}, 'setup_pending', 'asaas')`;
     await owner!`INSERT INTO billing_cycle (id, clinic_id, subscription_id, inicio, fim) VALUES
       (${CYCLE_A}, ${CLINIC_A}, ${SUB_A}, ${INICIO}, ${FIM}),
       (${CYCLE_B}, ${CLINIC_B}, ${SUB_B}, ${INICIO}, ${FIM})`;
@@ -744,7 +744,10 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
     // `setup_pending` NÃO é assinatura ativa: quem começou a assinar e não
     // terminou continua trancado. (Sob a regra antiga era este o estado que
     // "bloqueava o cadastro" mesmo com trial vigente — a inversão do eixo.)
-    await owner!`UPDATE subscription SET status = 'setup_pending' WHERE id = ${SUB_A}`;
+    // `provider` acompanha a saída de `free_tier`: o CHECK da 0090
+    // (`status = 'free_tier' OR provider IS NOT NULL`) diz que assinatura
+    // vinculada tem provedor. Os estados abaixo herdam este `provider`.
+    await owner!`UPDATE subscription SET status = 'setup_pending', provider = 'asaas' WHERE id = ${SUB_A}`;
     expect(await somenteLeitura(CLINIC_A, U_COORD_A)).toBe(true);
 
     // `active` destrava — é a saída do bloqueio.
@@ -769,7 +772,7 @@ describe.skipIf(!hasDb)("#36 · apuração de ciclo de faturamento", () => {
     expect(await somenteLeitura(CLINIC_C, U_COORD_C)).toBe(false);
 
     // Restaura o estado do seed (outros testes deste arquivo leem `SUB_A`).
-    await owner!`UPDATE subscription SET status = 'free_tier' WHERE id = ${SUB_A}`;
+    await owner!`UPDATE subscription SET status = 'free_tier', provider = NULL WHERE id = ${SUB_A}`;
     await owner!`UPDATE clinic SET trial_comeco_em = NULL
                   WHERE id IN (${CLINIC_A}, ${CLINIC_C})`;
   });

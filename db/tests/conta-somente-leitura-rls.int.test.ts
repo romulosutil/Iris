@@ -121,11 +121,11 @@ async function semear(tx: postgres.TransactionSql) {
     -- NULL e ela está a 1 dia do cadastro — dentro do teto de 14 dias.
     (${C_NOVA},     'Nova #163',     now() - interval '1 day',    NULL,                       7, false)`;
 
-  await tx`INSERT INTO subscription (id, clinic_id, status) VALUES
-    (${S_VENCIDA},  ${C_VENCIDA},  'free_tier'),
-    (${S_ISENTA},   ${C_ISENTA},   'free_tier'),
-    (${S_NOVA},     ${C_NOVA},     'free_tier'),
-    (${S_VIZINHA},  ${C_VIZINHA},  'active')`;
+  await tx`INSERT INTO subscription (id, clinic_id, status, provider) VALUES
+    (${S_VENCIDA},  ${C_VENCIDA},  'free_tier', NULL),
+    (${S_ISENTA},   ${C_ISENTA},   'free_tier', NULL),
+    (${S_NOVA},     ${C_NOVA},     'free_tier', NULL),
+    (${S_VIZINHA},  ${C_VIZINHA},  'active', 'asaas')`;
 }
 
 /**
@@ -276,7 +276,7 @@ describe.skipIf(!hasDb)("#163 · barreira da conta em somente-leitura", () => {
     // regra de cobrança.
     const { ro, erro } = await emTransacao(async (tx) => {
       await semear(tx);
-      await tx`UPDATE subscription SET status = 'active' WHERE id = ${S_VENCIDA}`;
+      await tx`UPDATE subscription SET status = 'active', provider = 'asaas' WHERE id = ${S_VENCIDA}`;
       await comoApp(tx, C_VENCIDA);
       const ro = await contaSomenteLeitura(tx);
       return {
@@ -296,7 +296,7 @@ describe.skipIf(!hasDb)("#163 · barreira da conta em somente-leitura", () => {
     // clínico de menor como refém de uma disputa financeira.
     const { ro, erro } = await emTransacao(async (tx) => {
       await semear(tx);
-      await tx`UPDATE subscription SET status = 'past_due' WHERE id = ${S_VENCIDA}`;
+      await tx`UPDATE subscription SET status = 'past_due', provider = 'asaas' WHERE id = ${S_VENCIDA}`;
       await comoApp(tx, C_VENCIDA);
       const ro = await contaSomenteLeitura(tx);
       return {
@@ -316,7 +316,7 @@ describe.skipIf(!hasDb)("#163 · barreira da conta em somente-leitura", () => {
     const { ro, erro } = await emTransacao(async (tx) => {
       await semear(tx);
       await tx`UPDATE clinic SET trial_comeco_em = now() WHERE id = ${C_VENCIDA}`;
-      await tx`UPDATE subscription SET status = 'canceled' WHERE id = ${S_VENCIDA}`;
+      await tx`UPDATE subscription SET status = 'canceled', provider = 'asaas' WHERE id = ${S_VENCIDA}`;
       await comoApp(tx, C_VENCIDA);
       const ro = await contaSomenteLeitura(tx);
       return {

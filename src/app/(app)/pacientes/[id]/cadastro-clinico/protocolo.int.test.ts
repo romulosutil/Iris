@@ -192,7 +192,7 @@ describe.skipIf(!hasDb)(
       // O `comEscrita` (#163+#159) é a diferença entre recusar com CTA de
       // ativação e escrever num tenant que não deveria escrever. Sem este caso,
       // remover o wrapper deixaria a suíte inteira verde.
-      await owner`INSERT INTO subscription (clinic_id, status) VALUES (${CLINIC_A}, 'canceled')`;
+      await owner`INSERT INTO subscription (clinic_id, status, provider) VALUES (${CLINIC_A}, 'canceled', 'asaas')`;
       try {
         const ativacao = await ativarProtocolo(ctx, PATIENT, P_VBMAPP);
         expect(ativacao.bloqueioConta?.estado).toBe("cancelada");
