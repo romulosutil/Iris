@@ -452,5 +452,26 @@ describe.skipIf(!hasDb)("prescrição de disciplinas (fatia 2)", () => {
       expect(r.confirmacao).toBeUndefined();
       expect(r.ok).toBe(true);
     });
+
+    test("regra 6 · prescreverDisciplina para paciente arquivado desarquiva e grava trilha", async () => {
+      await owner`DELETE FROM audit_log WHERE patient_id = ${PATIENT}`;
+      await owner`UPDATE patient SET arquivado_em = now() - interval '10 days' WHERE id = ${PATIENT}`;
+
+      const r = await prescreverDisciplina(
+        ctx,
+        PATIENT,
+        form({ disciplina: "Fonoaudiologia", horasAlvoSemana: "5" }),
+      );
+      expect(r.ok).toBe(true);
+
+      const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PATIENT}`;
+      expect(pac!.arquivado_em).toBeNull();
+
+      const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PATIENT} AND acao = 'paciente_desarquivado_automaticamente'`;
+      expect(log).toBeTruthy();
+      expect(log!.detalhe).toEqual({ origem: "prescricao_disciplina" });
+
+      await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PATIENT}`;
+    });
   });
 });

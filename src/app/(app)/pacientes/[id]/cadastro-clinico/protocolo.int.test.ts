@@ -214,5 +214,28 @@ describe.skipIf(!hasDb)(
         await owner`DELETE FROM subscription WHERE clinic_id = ${CLINIC_A}`;
       }
     });
+
+    test("regra 6 · ativarProtocolo para paciente arquivado desarquiva e grava trilha", async () => {
+      await prescreverDisciplina(
+        ctx,
+        PATIENT,
+        form({ disciplina: "ABA", horasAlvoSemana: "10" }),
+      );
+      await owner`DELETE FROM audit_log WHERE patient_id = ${PATIENT}`;
+      await owner`UPDATE patient SET arquivado_em = now() - interval '10 days' WHERE id = ${PATIENT}`;
+      await owner`DELETE FROM patient_protocol WHERE patient_id = ${PATIENT} AND protocol_id = ${P_AFLS}`;
+
+      const r = await ativarProtocolo(ctx, PATIENT, P_AFLS);
+      expect(r.ok).toBe(true);
+
+      const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PATIENT}`;
+      expect(pac!.arquivado_em).toBeNull();
+
+      const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PATIENT} AND acao = 'paciente_desarquivado_automaticamente'`;
+      expect(log).toBeTruthy();
+      expect(log!.detalhe).toEqual({ origem: "ativacao_protocolo" });
+
+      await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PATIENT}`;
+    });
   },
 );

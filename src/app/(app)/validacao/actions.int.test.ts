@@ -262,4 +262,49 @@ describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
       await owner`SELECT 1 FROM audit_log WHERE entidade_id=${EV3} AND acao='devolucao'`;
     expect(log).toBeTruthy();
   });
+
+  test("regra 6 · confirmarEvidencia para paciente arquivado desarquiva e grava trilha", async () => {
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await owner`UPDATE patient SET arquivado_em = now() - interval '10 days' WHERE id = ${PAC}`;
+
+    const r = await confirmarEvidencia(ctxCoord, { evidenceId: EV5 });
+    expect(r.ok).toBe(true);
+
+    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    expect(pac!.arquivado_em).toBeNull();
+
+    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC} AND acao = 'paciente_desarquivado_automaticamente'`;
+    expect(log).toBeTruthy();
+    expect(log!.detalhe).toEqual({ origem: "validacao_evidencia" });
+
+    await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PAC}`;
+  });
+
+  test("regra 6 · reclassificarEvidencia para paciente arquivado desarquiva e grava trilha", async () => {
+    const EX7 = "00000000-0000-0000-0000-00000000ee07";
+    const EV7 = "00000000-0000-0000-0000-00000000de27";
+    await owner`INSERT INTO extraction (id, session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, inconsistente_com_historico, payload)
+      VALUES (${EX7}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho 7', 'baixa', false, '{"funcao":"mando"}')`;
+    await owner`INSERT INTO evidence (id, extraction_id, patient_id, session_id, session_numero, alvo_ordinal, classificacao_original, aprovado_por)
+      VALUES (${EV7}, ${EX7}, ${PAC}, ${SESS}, 1, 7, '{"nivel_ajuda":"dica_verbal","polaridade":"positiva"}'::jsonb, ${U_COORD})`;
+
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await owner`UPDATE patient SET arquivado_em = now() - interval '10 days' WHERE id = ${PAC}`;
+
+    const r = await reclassificarEvidencia(ctxCoord, {
+      evidenceId: EV7,
+      novoAlvo: ALVO_VALIDO,
+      justificativa: "reclassificando em paciente arquivado",
+    });
+    expect(r.ok).toBe(true);
+
+    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    expect(pac!.arquivado_em).toBeNull();
+
+    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC} AND acao = 'paciente_desarquivado_automaticamente'`;
+    expect(log).toBeTruthy();
+    expect(log!.detalhe).toEqual({ origem: "validacao_evidencia" });
+
+    await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PAC}`;
+  });
 });

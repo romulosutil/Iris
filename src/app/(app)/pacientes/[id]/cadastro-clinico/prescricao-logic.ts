@@ -4,6 +4,7 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import { careTeamMembership, patientAlvoDisciplina } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import {
   ehCargaValida,
   formatarHoras,
@@ -377,6 +378,13 @@ async function prescreverDisciplinaCore(
       horasAlvoSemana: horasTexto,
       vigenciaInicio: HOJE_BR,
     });
+
+    await desarquivarPacienteSeArquivado(
+      tx,
+      ctx,
+      patientId,
+      "prescricao_disciplina",
+    );
 
     // O trabalho não termina aqui: quem confirmou a redução precisa ir ajustar
     // as horas dos membros, e a tela usa este campo para levá-lo até a barra da

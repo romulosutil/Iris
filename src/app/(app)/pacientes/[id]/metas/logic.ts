@@ -5,6 +5,7 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { goal, goalMilestoneMapping } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { atualizarSchema, criarSchema } from "./schemas";
 
 /**
@@ -62,6 +63,12 @@ async function criarMetaCore(
           d.milestoneIds.map((milestoneId) => ({ goalId: row!.id, milestoneId })),
         );
       }
+      await desarquivarPacienteSeArquivado(
+        tx,
+        ctx,
+        d.patientId,
+        "criacao_meta",
+      );
       return { id: row!.id };
     });
   } catch (err) {

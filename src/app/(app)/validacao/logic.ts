@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
 import type { Alvo } from "@/lib/evidence/resolver";
 import { montarClassificacaoNova, validarAlvo } from "./alvos";
@@ -112,6 +113,7 @@ async function confirmarEvidenciaCore(
       INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
       VALUES (${p.data.evidenceId}, 'confirmar', ${JSON.stringify(e.classificacaoAtual)}::jsonb, NULL, 'Confirmado pelo coordenador.', ${ctx.userId}::uuid)
     `);
+    await desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia");
     return { ok: true };
   });
 }
@@ -209,6 +211,7 @@ async function reclassificarEvidenciaCore(
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'reclassificacao', 'evidence', ${p.data.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('de', ${JSON.stringify(e.classificacaoAtual)}::jsonb, 'para', ${JSON.stringify(classificacaoNova)}::jsonb, 'justificativa', ${p.data.justificativa}::text))
     `);
+    await desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia");
     await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
     return { ok: true };
   });
