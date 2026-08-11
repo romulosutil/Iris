@@ -149,9 +149,9 @@
 - Create / Modify: `src/components/ui/agenda-calendar-grid.stories.tsx`
 - Modify: `src/components/ui/a11y.test.tsx`
 
-**Status:** `[ ]`
+**Status:** `[x]`
 
-- [ ] **Step 1: Implementar `AgendaCalendarGrid`**
+- [x] **Step 1: Implementar `AgendaCalendarGrid`**
   - Criar componente com prop `view: 'day' | 'week'`, suporte a terapeutas e disciplinas.
   - Implementar truncamento de texto em nomes longos e disciplinas (`truncate` + atributo `title`/tooltip nativo).
   - Implementar tratamento de slots curtos (<30min) com layout compacto `flex-row`.
@@ -163,22 +163,22 @@
   - Garantir alvos de toque ≥44×44px (`min-h-11 min-w-11`) e foco ortogonal visível (`outline: 3px solid #2274A5`).
   - Usar ícones nativos de `src/components/ui/icon.tsx` e datas com `Intl.DateTimeFormat`.
 
-- [ ] **Step 2: Criar Stories do Storybook**
+- [x] **Step 2: Criar Stories do Storybook**
   - Criar `src/components/ui/agenda-calendar-grid.stories.tsx` sob `ORGANISMS/AgendaCalendarGrid`:
     - `DefaultDayView` (visão diária para terapeuta mobile)
     - `WeekViewCoordinator` (visão semanal multi-coluna desktop)
     - `WithAISuggestedSlots` (com sugestões de encaixe por IA)
     - `EmptyStateAgenda` (estado vazio)
 
-- [ ] **Step 3: Testes de Acessibilidade**
+- [x] **Step 3: Testes de Acessibilidade**
   - Adicionar teste axe em `src/components/ui/a11y.test.tsx`.
 
-- [ ] **Step 4: Gate de verificação**
+- [x] **Step 4: Gate de verificação**
   - Rodar `pnpm typecheck`
   - Rodar `pnpm vitest run src/components/ui/a11y.test.tsx`
   - Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   ```bash
   git add src/components/ui/agenda-calendar-grid.tsx src/components/ui/agenda-calendar-grid.stories.tsx src/components/ui/a11y.test.tsx
   git commit -m "feat(ui): implementa AgendaCalendarGrid com views dia/semana, colisão e stories (#236)"

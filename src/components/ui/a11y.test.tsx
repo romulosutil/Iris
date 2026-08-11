@@ -8,6 +8,7 @@ import { Pill } from "./primitives/pill";
 import { ConfidenceCard } from "./patterns/confidence-card";
 import { CompareRow } from "./patterns/compare-row";
 import { BatchBar } from "./patterns/batch-bar";
+import { AgendaCalendarGrid } from "./agenda-calendar-grid";
 import { Banner } from "./banner";
 import { InteractiveCard } from "./interactive-card";
 import { Indicator } from "./indicator";
@@ -505,5 +506,28 @@ test("BatchBar — sem violações axe", async () => {
     />,
   );
 });
+
+test("AgendaCalendarGrid — sem violações axe", async () => {
+  await semViolacoes(
+    <AgendaCalendarGrid
+      terapeutas={[{ id: "t1", nome: "Dra. Beatriz", disciplina: "Fono" }]}
+      sessoes={[
+        {
+          id: "s1",
+          terapeutaId: "t1",
+          pacienteNome: "Arthur",
+          disciplina: "Fono",
+          agendadaPara: new Date(2026, 7, 12, 8, 0),
+          duracaoMin: 50,
+          statusSemantico: "concluida",
+        },
+      ]}
+      abertura="08:00"
+      fechamento="10:00"
+      passoMin={60}
+    />,
+  );
+});
+
 
 
