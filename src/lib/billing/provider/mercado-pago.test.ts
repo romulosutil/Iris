@@ -619,11 +619,18 @@ describe("getBillingProvider", () => {
   });
 
   it("resolve a cada chamada (sem cache de módulo congelando a env)", () => {
+    // `mercado_pago` saiu do tipo `ProviderId` no T15 (#36, D24) — não é mais
+    // um gateway válido para vínculo NOVO. A prova de "resolve a cada
+    // chamada" passa a ser: uma resolução válida seguida de uma inválida
+    // NÃO fica presa ao resultado anterior (uma instância guardada em
+    // `const` de módulo congelaria a env e faria o primeiro teste que importa
+    // o módulo decidir o provider de todos).
+    vi.stubEnv("BILLING_PROVIDER", "asaas");
+    expect(getBillingProvider().id).toBe("asaas");
     vi.stubEnv("BILLING_PROVIDER", "mercado_pago");
-    expect(getBillingProvider().id).toBe("mercado_pago");
-    // Trocar a env DEPOIS de já ter resolvido uma vez precisa devolver o outro
-    // adapter: uma instância guardada em `const` de módulo congelaria a env e
-    // faria o primeiro teste que importa o módulo decidir o provider de todos.
+    expect(() => getBillingProvider()).toThrow(
+      "Provedor de pagamento desconhecido: mercado_pago",
+    );
     vi.stubEnv("BILLING_PROVIDER", "asaas");
     expect(getBillingProvider().id).toBe("asaas");
   });

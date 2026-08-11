@@ -725,7 +725,13 @@ export async function reprocessarEventosPendentes(
   for (const ehAsaas of [false, true]) {
     const provider: BillingProvider = ehAsaas
       ? new AsaasProvider()
-      : new MercadoPagoProvider();
+      : // `MercadoPagoProvider.id` não é mais um `ProviderId` válido desde o
+        // T15 (#36) — o tipo só admite `"asaas"` porque nenhum vínculo NOVO
+        // pode nascer no MP. Este ramo não cria vínculo, só reconcilia
+        // webhook do trilho legado por `normalizarEvento`/`consultarCobranca`/
+        // `consultarVinculo`, nenhum dos quais lê `.id`; o cast é fiel ao
+        // comportamento de runtime, inalterado.
+        (new MercadoPagoProvider() as unknown as BillingProvider);
 
     const pendentes = ehAsaas
       ? await authDb

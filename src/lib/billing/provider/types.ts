@@ -38,8 +38,14 @@
  * aqui e nunca no chamador. Fonte da verdade interna = centavos.
  */
 
-/** Provedores conhecidos. `asaas` ainda não tem implementação (#36). */
-export type ProviderId = "mercado_pago" | "asaas";
+/**
+ * Provedores conhecidos. Só `asaas` — o Mercado Pago saiu do tipo no T15
+ * (#36, D24). Linha existente com `provider = 'mercado_pago'` continua lida
+ * pelo adapter concreto (`MercadoPagoProvider`, ainda instanciado direto em
+ * `reprocessarEventosPendentes` até o T16), mas o tipo não admite mais criar
+ * vínculo novo nesse gateway.
+ */
+export type ProviderId = "asaas";
 
 /** Meio de pagamento escolhido pela clínica no checkout. */
 export type MetodoPagamento = "cartao" | "pix";

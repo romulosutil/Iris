@@ -6,8 +6,10 @@
 T2 ✅ T3 ✅ conteúdo aprovado pelo Rômulo (10/08), aplicação aguarda deploy
 T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅
 T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅
-T14 ✅ (cobertura multi-provedor com `ProvedorFake`) ·
-próximo: T15 — merge/deploy da branch aplica T1-T13 + backfill do T3 em produção
+T14 ✅ (cobertura multi-provedor com `ProvedorFake`) · T15 ✅ (`ProviderId`
+estreitado p/ `"asaas"`) ·
+próximo: T16 — deletar adapter e rota de webhook do MP; depois merge/deploy
+da branch aplica T1-T13 + backfill do T3 em produção
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -915,20 +917,38 @@ Evidência medida:
 
 ---
 
-### T15: `ProviderId` e resolução de adapter sem MP
+### T15: `ProviderId` e resolução de adapter sem MP ✅ FEITO
 
-**What**: `ProviderId` vira `"asaas"`; ramos do MP saem de `getBillingProvider`
-e `getProviderPorId`.
-**Where**: `src/lib/billing/provider/types.ts:42` · `src/lib/billing/provider/index.ts`
-**Depends on**: T14
-**Requirement**: ATIV-07
-**Tools**: MCP `filesystem` · Skill NONE
+**Status**: Concluída. `ProviderId` estreitado para `"asaas"` (`types.ts:42`);
+`getProviderPorId` perdeu o ramo `"mercado_pago"` (`index.ts`).
+
+`pnpm typecheck` apontou **2** call sites incompatíveis (não 1): a classe
+`MercadoPagoProvider` declarava `implements BillingProvider` com
+`id = "mercado_pago"`, que deixou de casar com `ProviderId`; e
+`reprocessarEventosPendentes` (`subscription.ts:726-731`) instanciava a
+classe atribuindo a uma variável tipada `BillingProvider`. Corrigidos:
+
+- `mercado-pago.ts`: removido `implements BillingProvider` da classe (fica
+  estruturalmente idêntica à porta; só o `implements` nominal saiu). Ela
+  segue existindo — o T16 é quem apaga o arquivo.
+- `subscription.ts:726`: `new MercadoPagoProvider() as unknown as BillingProvider`,
+  com comentário citando por que é seguro — o laço de reprocessamento só
+  chama `normalizarEvento`/`consultarCobranca`/`consultarVinculo` no ramo do
+  MP, nunca lê `.id` (conferido por grep antes do cast: as 4 leituras de
+  `provider.id` em `subscription.ts` estão todas em `iniciarAtivacao`/
+  fechamento de ciclo, fora deste laço).
+- `mercado-pago.test.ts`: o teste "resolve a cada chamada (sem cache de
+  módulo)" stubava `BILLING_PROVIDER=mercado_pago` como resolução válida —
+  não é mais. Reescrito para provar o mesmo invariante (env lida a cada
+  chamada, não cacheada em `const` de módulo) com asaas→mercado_pago(lança)→asaas.
 
 **Done when**:
 
-- [ ] `pnpm typecheck` aponta (e são corrigidos) todos os call sites
-- [ ] `getProviderPorId('mercado_pago')` → erro "Provedor de pagamento desconhecido"
-- [ ] Gate: `pnpm typecheck && pnpm test` · Test count: baseline
+- [x] `pnpm typecheck` aponta (e são corrigidos) todos os call sites
+- [x] `getProviderPorId('mercado_pago')` → erro "Provedor de pagamento desconhecido"
+- [x] Gate: `pnpm typecheck && pnpm test` · Test count: **169 arquivos / 1102
+      testes**, igual ao baseline do T14 (nenhum teste criado nem perdido —
+      só 1 teste reescrito)
 
 **Tests**: unit
 **Gate**: quick

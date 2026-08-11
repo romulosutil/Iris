@@ -404,8 +404,16 @@ function normalizarEventoMP(payload: unknown): EventoWebhookNormalizado {
   };
 }
 
-/** Implementação da porta. Sem estado: pode ser instanciada a cada chamada. */
-export class MercadoPagoProvider implements BillingProvider {
+/**
+ * Implementação da porta. Sem estado: pode ser instanciada a cada chamada.
+ *
+ * Não declara `implements BillingProvider` desde o T15 (#36): `id` deixou de
+ * ser um `ProviderId` válido (o tipo só admite `"asaas"`, pois nenhum vínculo
+ * NOVO pode nascer no MP). A classe continua estruturalmente idêntica à porta
+ * — é usada via cast em `reprocessarEventosPendentes`, único chamador
+ * restante, para reconciliar webhook do trilho legado.
+ */
+export class MercadoPagoProvider {
   readonly id = "mercado_pago" as const;
 
   /**

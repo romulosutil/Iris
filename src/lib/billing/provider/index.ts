@@ -69,8 +69,6 @@ export function getBillingProvider(): BillingProvider {
  */
 export function getProviderPorId(id: string): BillingProvider {
   switch (id) {
-    case "mercado_pago":
-      return new MercadoPagoProvider();
     case "asaas":
       return new AsaasProvider();
     default:
