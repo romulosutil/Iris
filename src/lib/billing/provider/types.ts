@@ -39,11 +39,7 @@
  */
 
 /**
- * Provedores conhecidos. Só `asaas` — o Mercado Pago saiu do tipo no T15
- * (#36, D24). Linha existente com `provider = 'mercado_pago'` continua lida
- * pelo adapter concreto (`MercadoPagoProvider`, ainda instanciado direto em
- * `reprocessarEventosPendentes` até o T16), mas o tipo não admite mais criar
- * vínculo novo nesse gateway.
+ * Provedores conhecidos. Só `asaas` — o Mercado Pago foi removido (#36, D24).
  */
 export type ProviderId = "asaas";
 

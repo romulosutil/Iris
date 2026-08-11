@@ -7,9 +7,8 @@ T2 ✅ T3 ✅ conteúdo aprovado pelo Rômulo (10/08), aplicação aguarda deplo
 T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅
 T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅
 T14 ✅ (cobertura multi-provedor com `ProvedorFake`) · T15 ✅ (`ProviderId`
-estreitado p/ `"asaas"`) ·
-próximo: T16 — deletar adapter e rota de webhook do MP; depois merge/deploy
-da branch aplica T1-T13 + backfill do T3 em produção
+estreitado p/ `"asaas"`) · T16 ✅ (deletados adapter e rota de webhook do MP) ·
+próximo: T17 (limpeza de envs em prod — GATE Rômulo) e T18 (drop da tabela — GATE Rômulo)
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -956,7 +955,15 @@ classe atribuindo a uma variável tipada `BillingProvider`. Corrigidos:
 
 ---
 
-### T16: Deletar adapter e rota de webhook do MP
+### T16: Deletar adapter e rota de webhook do MP ✅ FEITO
+
+**Status**: Concluída. Deletados `mercado-pago.ts`, `mercado-pago.test.ts`, `route.ts` e `route.int.test.ts` de `src/app/api/hooks/mercadopago/`.
+`reprocessarEventosPendentes` simplificado para varrer apenas `asaas_webhook_event` com `AsaasProvider`.
+
+- `pnpm typecheck` verde sem erros.
+- `pnpm test`: 169 arquivos / 1102 testes → **168 arquivos / 1057 testes** (removidos 45 testes do `mercado-pago.test.ts`).
+- `pnpm test:rls`: 96 arquivos / 808 testes → **95 arquivos / 773 testes** (removidos 35 testes do `mercadopago/route.int.test.ts`).
+- `rm -rf .next && pnpm build`: verde, compilação estática e rotas limpas sem `/api/hooks/mercadopago`.
 
 **What**: Remover os arquivos do Mercado Pago.
 **Where**: `src/lib/billing/provider/mercado-pago.ts` + `.test.ts` ·
@@ -967,10 +974,10 @@ classe atribuindo a uma variável tipada `BillingProvider`. Corrigidos:
 
 **Done when**:
 
-- [ ] Arquivos deletados
-- [ ] `grep -ri "mercado.pago\|mercadopago" src/` → só comentário de registro histórico
-- [ ] Gate: `pnpm typecheck && pnpm test && pnpm test:rls` · `rm -rf .next && pnpm build`
-- [ ] Test count: baseline − (testes do MP), com a queda **declarada no PR**
+- [x] Arquivos deletados
+- [x] `grep -ri "mercado.pago\|mercadopago" src/` → só comentário de registro histórico
+- [x] Gate: `pnpm typecheck && pnpm test && pnpm test:rls` · `rm -rf .next && pnpm build`
+- [x] Test count: baseline − (testes do MP), com a queda **declarada no PR**
 
 **Tests**: integration
 **Gate**: build

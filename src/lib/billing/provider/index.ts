@@ -1,10 +1,8 @@
 import type { BillingProvider } from "./types";
 import { AsaasProvider } from "./asaas";
-import { MercadoPagoProvider } from "./mercado-pago";
 
 export * from "./types";
 export { AsaasProvider } from "./asaas";
-export { MercadoPagoProvider } from "./mercado-pago";
 
 /**
  * Resolve o gateway de pagamento ativo a partir de `BILLING_PROVIDER`.
@@ -41,7 +39,7 @@ export function getBillingProvider(): BillingProvider {
   const id = process.env.BILLING_PROVIDER;
   if (!id) {
     throw new Error(
-      "BILLING_PROVIDER não configurada — defina `asaas` (trilho ativo) ou `mercado_pago`",
+      "BILLING_PROVIDER não configurada — defina `asaas` (trilho ativo)",
     );
   }
   return getProviderPorId(id);
