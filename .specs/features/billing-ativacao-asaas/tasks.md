@@ -2,16 +2,12 @@
 
 **Spec**: `.specs/features/billing-ativacao-asaas/spec.md`
 **Design**: `.specs/features/billing-ativacao-asaas/design.md`
-**Status**: Fases A, B e C fechadas em código (menos o T3 em produção) — T1 ✅
-T2 ✅ T3 ✅ conteúdo aprovado pelo Rômulo (10/08), aplicação aguarda deploy
-T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅
-T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅
-T14 ✅ (cobertura multi-provedor com `ProvedorFake`) · T15 ✅ (`ProviderId`
-estreitado p/ `"asaas"`) · T16 ✅ (deletados adapter e rota de webhook do MP) ·
-T17 ✅ (envs limpas no Easypanel pelo Rômulo) · T18 ✅ (`0091` dropa a tabela,
-com guard que aborta o deploy se produção tiver evento) ·
-**próximo passo: merge em `main` + deploy** — é ele que aplica a `0090`
-(backfill aprovado no T3) e a `0091` em produção
+**Status**: FECHADA — T1..T18 completas. PR #244 mergeada em `main` e
+deployada em produção (11/08/2026). `0090` (backfill do T3) e `0091` (T18,
+DROP da tabela do MP) **verificadas por medição em produção** (psql):
+`information_schema.columns` confirma `subscription.provider` sem default;
+`to_regclass('mercadopago_webhook_event')` retorna NULL. T17 (envs) aplicado
+pelo Rômulo direto no Easypanel. Nenhum passo pendente nesta feature.
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -1171,14 +1167,14 @@ arquivos disjuntos. Nenhum par `[P]` compartilha estado mutável.
 
 | ID      | Tarefas                 | Status  |
 | ------- | ----------------------- | ------- |
-| ATIV-01 | T1, T2, T4              | Pending |
+| ATIV-01 | T1, T2, T4              | Done    |
 | ATIV-02 | T5                      | Done    |
 | ATIV-03 | T7, T8                  | Done    |
 | ATIV-04 | T6, T7                  | Done    |
-| ATIV-05 | T1, T2, T3, T4          | Pending |
-| ATIV-06 | T9                      | Pending |
+| ATIV-05 | T1, T2, T3, T4          | Done    |
+| ATIV-06 | T9                      | Done    |
 | ATIV-07 | T14, T15, T16, T17, T18 | Done    |
-| ATIV-08 | T11, T13                | Pending |
-| ATIV-09 | T12                     | Pending |
+| ATIV-08 | T11, T13                | Done    |
+| ATIV-09 | T12                     | Done    |
 
 **Cobertura**: 9 requisitos, 9 mapeados, 0 órfãos.
