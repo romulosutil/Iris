@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
+import Link from "next/link";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -197,6 +198,17 @@ export function FormularioAtivacao({
                 pagamento. A confirmação chega sozinha — você não precisa mandar
                 comprovante nem ficar nesta tela.
               </p>
+              {/* Saída da tela, só neste ramo: depois do QR não há mais nada a
+                  fazer aqui, e sem este link a pessoa fica esperando uma
+                  confirmação que chega por webhook. Sem polling de propósito —
+                  a página de destino reavalia a situação da conta no próprio
+                  request, então um `setInterval` aqui só gastaria requisição
+                  para descobrir o mesmo. */}
+              <div className="mt-3">
+                <Button variante="primaria" asChild>
+                  <Link href="/pacientes/novo">Cadastrar paciente</Link>
+                </Button>
+              </div>
             </>
           )}
         </Alert>

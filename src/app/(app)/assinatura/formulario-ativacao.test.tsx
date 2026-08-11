@@ -197,12 +197,83 @@ describe("FormularioAtivacao", () => {
     // quem não consegue ler o QR nem usar a área de transferência.
     expect(screen.getByText(brCode)).toBeDefined();
 
-    // As duas asserções que fecham o débito: BR Code não é URL.
+    // As asserções que fecham o débito: BR Code não é URL.
     expect(navegar).not.toHaveBeenCalled();
-    expect(screen.queryByRole("link")).toBeNull();
     for (const el of document.querySelectorAll("[href]")) {
-      expect(el.getAttribute("href")).not.toBe(brCode);
+      const href = el.getAttribute("href");
+      expect(href).not.toBe(brCode);
+      // Nem embutido: o BR Code virando query string ou fragmento seria a
+      // mesma falha por outro caminho.
+      expect(href ?? "").not.toContain(brCode);
     }
+    // O único link deste ramo é a saída para o cadastro (T11). Antes esta
+    // asserção era `queryByRole("link")` nulo — proxy para "BR Code não vira
+    // href" que deixou de valer quando o CTA entrou. A forma exata abaixo é
+    // mais apertada que a antiga, não mais frouxa.
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toBe("/pacientes/novo");
+  });
+
+  it("depois do Pix, oferece caminho de volta ao cadastro — e não antes (T11)", async () => {
+    const user = userEvent.setup();
+    const brCode = "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF";
+
+    const { unmount } = render(
+      <FormularioAtivacao acao={acaoQueDevolve({})} navegar={vi.fn()} />,
+    );
+    // Antes de qualquer autorização o CTA não existe: oferecer "cadastrar
+    // paciente" a quem ainda não pagou é o beco ao contrário — a tela de
+    // destino recusaria o cadastro.
+    expect(
+      screen.queryByRole("link", { name: /cadastrar paciente/i }),
+    ).toBeNull();
+    unmount();
+
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          autorizacao: {
+            forma: "pix_copia_e_cola",
+            brCode,
+            valorAtivacaoCentavos: 1,
+          },
+        })}
+        navegar={vi.fn()}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    const cta = await screen.findByRole("link", {
+      name: /cadastrar paciente/i,
+    });
+    expect(cta.getAttribute("href")).toBe("/pacientes/novo");
+  });
+
+  it("no ramo redirect não há CTA de cadastro (o pagamento ainda nem abriu)", async () => {
+    const user = userEvent.setup();
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          autorizacao: {
+            forma: "redirect",
+            url: "https://pagamento.exemplo/checkout/abc123",
+          },
+        })}
+        navegar={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    await screen.findByRole("link", { name: /ir para o pagamento/i });
+    expect(
+      screen.queryByRole("link", { name: /cadastrar paciente/i }),
+    ).toBeNull();
   });
 
   it("o botão copiar entrega o BR Code exato à área de transferência", async () => {
