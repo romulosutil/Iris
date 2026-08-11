@@ -1,8 +1,9 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { appUser, clinic } from "@/db/schema";
+import { validarEMaterializarCpfCnpj } from "@/lib/documento";
 import { iniciarAtivacao } from "@/lib/billing/subscription";
 import { BillingProviderError } from "@/lib/billing/provider";
 import type {
@@ -38,6 +39,14 @@ export type AtivacaoState = {
    * QR, em vez de renderizar um `href` vazio.
    */
   autorizacao?: AutorizacaoPendente;
+  /**
+   * O documento como a clínica digitou, devolvido para repopular o campo. Sem
+   * isto, todo erro (documento inválido, gateway fora do ar) apaga o que foi
+   * digitado — e o formulário não é controlado, então não há outro caminho de
+   * volta. Vai o texto BRUTO, não os dígitos: quem digitou com máscara vê a
+   * máscara de novo.
+   */
+  documento?: string;
 };
 
 /**
@@ -64,6 +73,16 @@ export async function iniciarAtivacaoAssinatura(
   // verdadeiro. Volta a ser escolha quando algum adapter honrar o campo.
   const metodo: MetodoPagamento = "pix";
 
+  // O documento do titular é exigência do gateway, não capricho de cadastro: o
+  // Asaas recusa `POST /customers` sem `cpfCnpj` (400). Validar ANTES de
+  // qualquer chamada é o que evita gastar um round-trip para receber de volta
+  // um erro que a gente já sabia dar em pt-BR.
+  const documentoBruto = String(formData.get("cpfCnpj") ?? "").trim();
+  const documento = validarEMaterializarCpfCnpj(documentoBruto);
+  if (!documento.valido) {
+    return { error: documento.erro, documento: documentoBruto };
+  }
+
   // Nome da clínica e e-mail do responsável saem por `withTenant` (role
   // `app_role`, RLS ativa) — é dado do tenant. A criação da assinatura, logo
   // abaixo, sai por `authDb`: são planos de privilégio distintos de propósito.
@@ -77,11 +96,27 @@ export async function iniciarAtivacaoAssinatura(
       .leftJoin(appUser, eq(appUser.id, clinic.responsavelContaId))
       .where(eq(clinic.id, ctx.clinicId))
       .limit(1);
+
+    if (linha?.nome) {
+      // Grava ANTES do gateway, de propósito: se o Asaas cair no meio, o
+      // documento já está na clínica e a próxima tentativa não pede de novo.
+      // A ordem inversa (gateway primeiro) perderia o dado exatamente no caso
+      // em que ele mais importa — o da retentativa.
+      //
+      // `UPDATE clinic` cru NÃO funciona aqui: a 0079 revogou UPDATE em
+      // `clinic` para `app_role` e um update barrado afeta 0 linhas em
+      // silêncio (#212). A escrita é a função SECURITY DEFINER da 0090, que
+      // resolve o tenant pelo GUC da própria transação — clínica não entra por
+      // parâmetro, então não há caminho de forjar tenant.
+      await tx.execute(
+        sql`SELECT app_salvar_cpf_cnpj_clinica(${documento.documentoLimpo})`,
+      );
+    }
     return linha;
   });
 
   if (!dados?.nome) {
-    return { error: "Clínica não encontrada." };
+    return { error: "Clínica não encontrada.", documento: documentoBruto };
   }
   if (!dados.email) {
     // Sem e-mail o gateway não consegue emitir cobrança nem notificar. Falhar
@@ -89,6 +124,7 @@ export async function iniciarAtivacaoAssinatura(
     return {
       error:
         "Defina o responsável pela conta (com e-mail) antes de contratar a assinatura.",
+      documento: documentoBruto,
     };
   }
 
@@ -99,6 +135,7 @@ export async function iniciarAtivacaoAssinatura(
       clinicId: ctx.clinicId,
       nomeClinica: dados.nome,
       emailResponsavel: dados.email,
+      cpfCnpj: documento.documentoLimpo,
       metodo,
       urlRetorno: `${base}/assinatura/retorno`,
     });
@@ -122,6 +159,7 @@ export async function iniciarAtivacaoAssinatura(
     return {
       error:
         "Não foi possível abrir o pagamento agora. Tente de novo em alguns instantes.",
+      documento: documentoBruto,
     };
   }
 }

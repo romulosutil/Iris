@@ -3,7 +3,7 @@
 **Spec**: `.specs/features/billing-ativacao-asaas/spec.md`
 **Design**: `.specs/features/billing-ativacao-asaas/design.md`
 **Status**: Em execução (Fase A) — T1 ✅ T2 ✅ T3 🟡 (escrito, prod pendente)
-T4 ✅ T9 ✅ · próximo: T5 e T6 (paralelos)
+T4 ✅ T5 ✅ T6 ✅ T7 ✅ T9 ✅ · próximo: T8 (campo no formulário)
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -366,7 +366,7 @@ conflito. Restaurado em seguida.
 
 ---
 
-### T7: `logic.ts` — validar, gravar, enviar
+### T7: `logic.ts` — validar, gravar, enviar ✅ FEITO
 
 **What**: `iniciarAtivacaoAssinatura` passa a ler o documento do formulário,
 validar, gravar via definer **antes** do gateway, e enviar em `PedidoAtivacao`.
@@ -378,20 +378,65 @@ validar, gravar via definer **antes** do gateway, e enviar em `PedidoAtivacao`.
 
 **Done when**:
 
-- [ ] Documento inválido → `{ error }` em pt-BR e **zero** chamada ao gateway
-- [ ] Documento válido → `SELECT app_salvar_cpf_cnpj_clinica($1)` dentro do
+- [x] Documento inválido → `{ error }` em pt-BR e **zero** chamada ao gateway
+- [x] Documento válido → `SELECT app_salvar_cpf_cnpj_clinica($1)` dentro do
       `withTenant` existente, **antes** de `iniciarAtivacao`
-- [ ] `iniciarAtivacao({ ..., cpfCnpj: documento })`
-- [ ] `AtivacaoState` ganha o documento corrente para repopular o formulário no erro
-- [ ] Teste de integração: (a) inválido não chama gateway; (b) válido grava a
+- [x] `iniciarAtivacao({ ..., cpfCnpj: documento })`
+- [x] `AtivacaoState` ganha o documento corrente para repopular o formulário no erro
+- [x] Teste de integração: (a) inválido não chama gateway; (b) válido grava a
       coluna e chega ao adapter com o documento; (c) falha do gateway **não**
       perde o documento gravado
-- [ ] Gate: `pnpm typecheck && pnpm test && pnpm test:rls`
-- [ ] Test count: baseline + N
+- [x] Gate: `pnpm typecheck && pnpm test && pnpm test:rls`
+- [x] Test count: baseline + N
 
 **Tests**: integration
 **Gate**: full
 **Commit**: `feat(billing): ativação envia o CPF/CNPJ da clínica ao gateway (D30)`
+
+**Status**: Concluída. `src/app/(app)/assinatura/logic.ts` valida o campo
+`cpfCnpj` do formulário, grava pela definer da 0090 **dentro** do `withTenant` já
+aberto (antes do gateway) e envia os dígitos em `PedidoAtivacao.cpfCnpj`. Todo
+retorno de erro devolve `documento` com o texto **bruto**, para o campo do T8
+repopular com máscara e tudo.
+
+Decisões de execução:
+
+- A gravação entrou **na mesma transação** do SELECT de nome/e-mail, guardada por
+  `if (linha?.nome)` — uma 2ª `withTenant` só para o UPDATE seria um round-trip a
+  mais sem ganho, e gravar documento de clínica inexistente não é um caso.
+- Ordem gravar→cobrar é deliberada: com o gateway primeiro, a queda dele perderia
+  exatamente o dado que a retentativa precisa. É o 3º teste.
+- Nenhum `try/catch` em volta da definer: erro dela (papel errado, formato) é
+  estado que a camada TS já impede, e engolir viraria no-op silencioso — o modo
+  de falha do #212.
+
+Evidência medida (contagens e mutação, não `git log`):
+
+- `pnpm typecheck` limpo.
+- `pnpm test` (unit): **168 arquivos / 1093 testes**, verde — igual à baseline do
+  T5/T6; o arquivo novo é `.int.test.ts` e o `vitest.config.ts` o exclui.
+- `pnpm test:rls`: 805 → **808 testes** (N = +3, 96 arquivos).
+  ⚠️ Dois testes de `cadastro-clinico/protocolo.int.test.ts` falham nesta rodada
+  (`patient_protocol_vigencia`, `23514`) — **falha pré-existente e alheia ao T7**:
+  reproduz com o arquivo rodando sozinho, sem carregar nada desta tarefa. Sintoma
+  compatível com virada de data: `ativado_em` no default do banco (UTC, já 11/08)
+  contra `desativado_em` calculado em `America/Sao_Paulo` (10/08), o que viola
+  `desativado_em >= ativado_em`. Registrado, não corrigido aqui.
+- Arquivo novo `src/app/(app)/assinatura/logic-documento.int.test.ts` (3 testes),
+  com oráculo duplo: a coluna relida pela role **dona** e o corpo do
+  `POST /customers` capturado no dublê de `fetch`.
+- **Cheque de mutação (2 rodadas, medido)**:
+  - anulando a chamada da definer → `2 failed | 1 passed`, ambas com
+    `expected null to be '29811201000150'` (a coluna);
+  - removendo `cpfCnpj` do `iniciarAtivacao` → `1 failed | 2 passed`, com
+    `expected 'Não foi possível abrir o pagamento ag…' to be undefined` — que é o
+    400 do Asaas por falta de documento chegando de volta como erro de tela,
+    exatamente o bug de produção reproduzido em teste.
+    Restaurado e verde (`3 passed`) depois de cada mutação.
+
+**Pendência que o T8 fecha**: o nome do campo lido é `cpfCnpj`; enquanto o
+formulário não tiver o input, a ativação responde
+"Documento deve ser um CPF (11 dígitos) ou um CNPJ (14 dígitos)."
 
 ---
 
@@ -734,16 +779,16 @@ arquivos disjuntos. Nenhum par `[P]` compartilha estado mutável.
 
 ## Rastreabilidade
 
-| ID      | Tarefas                 | Status  |
-| ------- | ----------------------- | ------- |
-| ATIV-01 | T1, T2, T4              | Pending |
-| ATIV-02 | T5                      | Done    |
-| ATIV-03 | T7, T8                  | Pending |
-| ATIV-04 | T6, T7                  | Pending |
-| ATIV-05 | T1, T2, T3, T4          | Pending |
-| ATIV-06 | T9                      | Pending |
-| ATIV-07 | T14, T15, T16, T17, T18 | Pending |
-| ATIV-08 | T11, T13                | Pending |
-| ATIV-09 | T12                     | Pending |
+| ID      | Tarefas                 | Status              |
+| ------- | ----------------------- | ------------------- |
+| ATIV-01 | T1, T2, T4              | Pending             |
+| ATIV-02 | T5                      | Done                |
+| ATIV-03 | T7, T8                  | T7 done, T8 pending |
+| ATIV-04 | T6, T7                  | Done                |
+| ATIV-05 | T1, T2, T3, T4          | Pending             |
+| ATIV-06 | T9                      | Pending             |
+| ATIV-07 | T14, T15, T16, T17, T18 | Pending             |
+| ATIV-08 | T11, T13                | Pending             |
+| ATIV-09 | T12                     | Pending             |
 
 **Cobertura**: 9 requisitos, 9 mapeados, 0 órfãos.
