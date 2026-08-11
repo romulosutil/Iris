@@ -9,6 +9,7 @@ import { ConfidenceCard } from "./patterns/confidence-card";
 import { CompareRow } from "./patterns/compare-row";
 import { BatchBar } from "./patterns/batch-bar";
 import { AgendaCalendarGrid } from "./agenda-calendar-grid";
+import { ProtocolProgressBarChart, ProtocolTrendChart } from "./protocol-dashboard-charts";
 import { Banner } from "./banner";
 import { InteractiveCard } from "./interactive-card";
 import { Indicator } from "./indicator";
@@ -528,6 +529,33 @@ test("AgendaCalendarGrid — sem violações axe", async () => {
     />,
   );
 });
+
+test("ProtocolProgressBarChart — sem violações axe", async () => {
+  await semViolacoes(
+    <ProtocolProgressBarChart
+      data={{
+        protocoloNome: "VB-MAPP",
+        totalMetas: 30,
+        metasDominadas: 15,
+        metasSugeridasIA: 5,
+        tendenciaSemanal: 2,
+      }}
+    />,
+  );
+});
+
+test("ProtocolTrendChart — sem violações axe", async () => {
+  await semViolacoes(
+    <ProtocolTrendChart
+      titulo="Trajetória"
+      pontos={[
+        { sessaoNumero: 1, evidenciasAcumuladas: 5 },
+        { sessaoNumero: 2, evidenciasAcumuladas: 12, conquistasNoDia: 2 },
+      ]}
+    />,
+  );
+});
+
 
 
 

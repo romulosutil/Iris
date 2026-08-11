@@ -193,9 +193,9 @@
 - Create: `src/components/ui/protocol-dashboard-charts.stories.tsx`
 - Modify: `src/components/ui/a11y.test.tsx`
 
-**Status:** `[ ]`
+**Status:** `[x]`
 
-- [ ] **Step 1: Implementar `ProtocolDashboardCharts` em Soft Neubrutalism**
+- [x] **Step 1: Implementar `ProtocolDashboardCharts` em Soft Neubrutalism**
   - Em `src/components/ui/protocol-dashboard-charts.tsx`:
     - Implementar `ProtocolProgressBarChart`:
       - Barra horizontal dividida proporcionalmente com cantos arredondados de 8px e borda brutalista `#1A1A1A`.
@@ -206,21 +206,21 @@
       - Trajetória temporal de sessões em SVG vetorial nativo + Tailwind v4.
       - Nós de conquista com ícones e tooltip interativo de evidências.
 
-- [ ] **Step 2: Criar Stories do Storybook**
+- [x] **Step 2: Criar Stories do Storybook**
   - Criar `src/components/ui/protocol-dashboard-charts.stories.tsx` sob `ORGANISMS/ProtocolDashboardCharts`:
     - `ProgressByProtocol` (comparativo VB-MAPP, ABLLS-R, Denver)
     - `FactVsSuggestionComparison` (sólido menta vs. hachura violeta)
     - `DashboardExecutiveView` (composição com métricas, tendência e barra acumulada)
 
-- [ ] **Step 3: Testes de Acessibilidade**
+- [x] **Step 3: Testes de Acessibilidade**
   - Adicionar testes axe em `src/components/ui/a11y.test.tsx`.
 
-- [ ] **Step 4: Gate de verificação**
+- [x] **Step 4: Gate de verificação**
   - Rodar `pnpm typecheck`
   - Rodar `pnpm vitest run src/components/ui/a11y.test.tsx`
   - Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   ```bash
   git add src/components/ui/protocol-dashboard-charts.tsx src/components/ui/protocol-dashboard-charts.stories.tsx src/components/ui/a11y.test.tsx
   git commit -m "feat(ui): implementa ProtocolDashboardCharts com hachura densa de IA e stories (#236)"
