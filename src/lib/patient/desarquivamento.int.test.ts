@@ -11,6 +11,8 @@ const U_TER_OUTRO = "00000000-0000-0000-0000-0000000072a1";
 const PAC_ARQUIVADO = "00000000-0000-0000-0000-0000000ac1a1";
 const PAC_ATIVO = "00000000-0000-0000-0000-0000000ac2a1";
 const PAC_OUTRA_CLINICA = "00000000-0000-0000-0000-0000000ac3b1";
+const PAC_COBERTURA = "00000000-0000-0000-0000-0000000ac4a1";
+const S_COBERTURA = "00000000-0000-0000-0000-0000000000s1";
 
 const ctxCoord = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
 const ctxEquipe = { clinicId: CLINIC_A, userId: U_TER_EQUIPE, role: "terapeuta" } as const;
@@ -21,14 +23,14 @@ let desarquivarPacienteSeArquivado: typeof import("./desarquivamento").desarquiv
 let withTenant: typeof import("@/db/rls").withTenant;
 let appSql: typeof import("@/db/client").sql;
 
-describe.skipIf(!hasDb)("desarquivamento · helper central de domínio (D7 / #174)", () => {
+describe.skipIf(!hasDb)("desarquivamento · helper central de domínio (D7 + D8 / #174)", () => {
   beforeAll(async () => {
     ({ desarquivarPacienteSeArquivado } = await import("./desarquivamento"));
     ({ withTenant } = await import("@/db/rls"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 
-    await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership, audit_log RESTART IDENTITY CASCADE`;
+    await owner`TRUNCATE clinic, app_user, user_role, session, patient, care_team_membership, audit_log RESTART IDENTITY CASCADE`;
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'Clínica A'), (${CLINIC_B}, 'Clínica B')`;
     await owner`INSERT INTO app_user (id, email, name) VALUES
       (${U_COORD}, 'coord@x.com', 'Coordenador'),
@@ -41,14 +43,19 @@ describe.skipIf(!hasDb)("desarquivamento · helper central de domínio (D7 / #17
     await owner`INSERT INTO patient (id, clinic_id, nome, arquivado_em) VALUES
       (${PAC_ARQUIVADO}, ${CLINIC_A}, 'Paciente Arquivado', now() - interval '10 days'),
       (${PAC_ATIVO}, ${CLINIC_A}, 'Paciente Ativo', NULL),
-      (${PAC_OUTRA_CLINICA}, ${CLINIC_B}, 'Paciente Clínica B', now() - interval '5 days')`;
+      (${PAC_OUTRA_CLINICA}, ${CLINIC_B}, 'Paciente Clínica B', now() - interval '5 days'),
+      (${PAC_COBERTURA}, ${CLINIC_A}, 'Paciente Cobertura', now() - interval '10 days')`;
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC_ARQUIVADO}, ${U_TER_EQUIPE}, 'terapeuta_referencia', 'ABA')`;
+    // U_TER_OUTRO tem sessão com PAC_COBERTURA (mas não está na equipe)
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, disciplina)
+      VALUES (${S_COBERTURA}, ${CLINIC_A}, ${PAC_COBERTURA}, ${U_TER_OUTRO}, now(), 'ABA')`;
   });
 
   beforeEach(async () => {
     await owner`DELETE FROM audit_log`;
     await owner`UPDATE patient SET arquivado_em = now() - interval '10 days' WHERE id = ${PAC_ARQUIVADO}`;
+    await owner`UPDATE patient SET arquivado_em = now() - interval '10 days' WHERE id = ${PAC_COBERTURA}`;
     await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PAC_ATIVO}`;
   });
 
@@ -77,6 +84,23 @@ describe.skipIf(!hasDb)("desarquivamento · helper central de domínio (D7 / #17
     expect(logs[0]!.detalhe).toEqual({ origem: "registro_clinico" });
   });
 
+  test("D8 · terapeuta de cobertura desarquiva paciente e emite audit_log com seu ator_id", async () => {
+    const transicionou = await withTenant(ctxOutro, (tx) =>
+      desarquivarPacienteSeArquivado(tx, ctxOutro, PAC_COBERTURA, "audio_local"),
+    );
+
+    expect(transicionou).toBe(true);
+
+    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC_COBERTURA}`;
+    expect(pac!.arquivado_em).toBeNull();
+
+    const logs = await owner`SELECT acao, entidade, entidade_id, patient_id, detalhe, ator_id FROM audit_log WHERE patient_id = ${PAC_COBERTURA}`;
+    expect(logs.length).toBe(1);
+    expect(logs[0]!.acao).toBe("paciente_desarquivado_automaticamente");
+    expect(logs[0]!.ator_id).toBe(U_TER_OUTRO);
+    expect(logs[0]!.detalhe).toEqual({ origem: "audio_local" });
+  });
+
   test("idempotência: paciente já ativo retorna false e não emite audit_log", async () => {
     const transicionou = await withTenant(ctxEquipe, (tx) =>
       desarquivarPacienteSeArquivado(tx, ctxEquipe, PAC_ATIVO, "aprovacao_evidencia"),
@@ -103,17 +127,19 @@ describe.skipIf(!hasDb)("desarquivamento · helper central de domínio (D7 / #17
     expect(logs.length).toBe(1);
   });
 
-  test("paciente de outra clínica ou fora do RLS retorna false sem exceção e sem mutação", async () => {
-    const transicionou = await withTenant(ctxEquipe, (tx) =>
-      desarquivarPacienteSeArquivado(tx, ctxEquipe, PAC_OUTRA_CLINICA, "ativacao_protocolo"),
-    );
+  test("terapeuta sem vínculo de equipe nem sessão estoura erro de autorização cross-team", async () => {
+    await expect(
+      withTenant(ctxOutro, (tx) =>
+        desarquivarPacienteSeArquivado(tx, ctxOutro, PAC_ARQUIVADO, "registro_clinico"),
+      ),
+    ).rejects.toThrow(/fora da equipe ou cobertura/);
+  });
 
-    expect(transicionou).toBe(false);
-
-    const [pacB] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC_OUTRA_CLINICA}`;
-    expect(pacB!.arquivado_em).not.toBeNull();
-
-    const logs = await owner`SELECT * FROM audit_log WHERE patient_id = ${PAC_OUTRA_CLINICA}`;
-    expect(logs.length).toBe(0);
+  test("paciente de outra clínica estoura isolamento multi-tenant", async () => {
+    await expect(
+      withTenant(ctxEquipe, (tx) =>
+        desarquivarPacienteSeArquivado(tx, ctxEquipe, PAC_OUTRA_CLINICA, "ativacao_protocolo"),
+      ),
+    ).rejects.toThrow(/isolamento multi-tenant/);
   });
 });

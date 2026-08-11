@@ -36,8 +36,10 @@ const P_SO_ARQUIVA = "00000000-0000-0000-0000-0000000174d4";
 const P_OUTRA_CLINICA = "00000000-0000-0000-0000-0000000174d9";
 // Regra 6 — pacientes dedicados para não acoplar ao estado dos casos acima.
 const P_R6_EQUIPE = "00000000-0000-0000-0000-0000000174d7"; // arquivado, U_TER_A na equipe
-const P_R6_FORA = "00000000-0000-0000-0000-0000000174d8"; // arquivado, U_TER_A fora da equipe
+const P_R6_FORA = "00000000-0000-0000-0000-0000000174d8"; // arquivado, U_TER_A fora da equipe e sem sessão
 const P_R6_ATIVO = "00000000-0000-0000-0000-0000000174da"; // NÃO arquivado, U_TER_A na equipe
+const P_R6_COBERTURA = "00000000-0000-0000-0000-0000000174db"; // arquivado, U_TER_A fora da equipe MAS com sessão atribuída (D8)
+const S_COBERTURA = "00000000-0000-0000-0000-0000000174s1";
 
 const ctx = (role: string, userId: string, clinicId = CLINIC_A) =>
   ({ role, userId, clinicId }) as TenantContext;
@@ -54,7 +56,7 @@ async function estado(patientId: string) {
 
 describe.skipIf(!hasDb)("#174 · patient.arquivado_em sob RLS", () => {
   beforeAll(async () => {
-    await owner!`TRUNCATE audit_log, patient RESTART IDENTITY CASCADE`;
+    await owner!`TRUNCATE audit_log, session, patient RESTART IDENTITY CASCADE`;
     await owner!`TRUNCATE clinic, app_user, user_role RESTART IDENTITY CASCADE`;
     await owner!`INSERT INTO clinic (id, nome) VALUES
       (${CLINIC_A}, 'Clínica A #174'), (${CLINIC_B}, 'Clínica B #174')`;
@@ -75,12 +77,16 @@ describe.skipIf(!hasDb)("#174 · patient.arquivado_em sob RLS", () => {
       (${P_OUTRA_CLINICA}, ${CLINIC_B}, 'Da clínica B'),
       (${P_R6_ATIVO},      ${CLINIC_A}, 'Regra 6 ativo')`;
     await owner!`INSERT INTO patient (id, clinic_id, nome, arquivado_em) VALUES
-      (${P_R6_EQUIPE}, ${CLINIC_A}, 'Regra 6 equipe', now()),
-      (${P_R6_FORA},   ${CLINIC_A}, 'Regra 6 fora',   now())`;
-    // U_TER_A é da equipe de P_R6_EQUIPE e de P_R6_ATIVO — e NÃO de P_R6_FORA.
+      (${P_R6_EQUIPE},    ${CLINIC_A}, 'Regra 6 equipe',    now()),
+      (${P_R6_FORA},      ${CLINIC_A}, 'Regra 6 fora',      now()),
+      (${P_R6_COBERTURA}, ${CLINIC_A}, 'Regra 6 cobertura', now())`;
+    // U_TER_A é da equipe de P_R6_EQUIPE e de P_R6_ATIVO — e NÃO de P_R6_FORA nem P_R6_COBERTURA.
     await owner!`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina) VALUES
       (${P_R6_EQUIPE}, ${U_TER_A}, 'terapeuta_referencia', 'ABA'),
       (${P_R6_ATIVO},  ${U_TER_A}, 'terapeuta_referencia', 'ABA')`;
+    // U_TER_A tem sessão de cobertura com P_R6_COBERTURA (D8).
+    await owner!`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, disciplina) VALUES
+      (${S_COBERTURA}, ${CLINIC_A}, ${P_R6_COBERTURA}, ${U_TER_A}, now(), 'ABA')`;
   });
   afterAll(async () => {
     await owner?.end();
@@ -268,9 +274,19 @@ describe.skipIf(!hasDb)("#174 · patient.arquivado_em sob RLS", () => {
     expect(await desarquivar("terapeuta", U_TER_A, P_R6_EQUIPE)).toBe(false);
   });
 
-  test("regra 6 · terapeuta FORA da equipe estoura (não silencia, não desarquiva)", async () => {
+  test("regra 6 (D8) · terapeuta DE COBERTURA desarquiva, e a 2ª chamada é no-op", async () => {
+    expect((await estado(P_R6_COBERTURA)).arquivado_em).not.toBeNull();
+
+    expect(await desarquivar("terapeuta", U_TER_A, P_R6_COBERTURA)).toBe(true);
+    expect((await estado(P_R6_COBERTURA)).arquivado_em).toBeNull();
+
+    // Idempotência
+    expect(await desarquivar("terapeuta", U_TER_A, P_R6_COBERTURA)).toBe(false);
+  });
+
+  test("regra 6 · terapeuta FORA da equipe e sem cobertura estoura (não silencia, não desarquiva)", async () => {
     expect(await erroAoDesarquivar(U_TER_A, P_R6_FORA)).toMatch(
-      /fora da equipe/,
+      /fora da equipe ou cobertura/,
     );
     expect((await estado(P_R6_FORA)).arquivado_em).not.toBeNull();
   });

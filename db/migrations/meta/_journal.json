@@ -645,6 +645,13 @@
       "when": 1786456847181,
       "tag": "0091_drop_webhook_mercado_pago",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1786456848181,
+      "tag": "0092_desarquivar_paciente_cobertura",
+      "breakpoints": true
     }
   ]
 }
