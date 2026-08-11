@@ -583,6 +583,45 @@ feito à mão, `modelo-de-negocio.md` seção 6).
 
 ---
 
+### 2.12 (i) `Clinic.cpf_cnpj` — documento fiscal exigido pelo gateway de pagamento
+
+**Gap identificado em 10/08/2026 (débito D30, spec `billing-ativacao-asaas`):**
+o Asaas exige `cpfCnpj` para criar o cliente que autoriza o Pix Automático
+(`POST /customers`); a clínica nunca tinha onde declarar esse dado, então
+toda ativação falhava com 400 antes de qualquer coisa acontecer no gateway.
+
+**Por que a coluna, não um campo calculado:** documento fiscal não deriva de
+nenhum outro dado do cadastro (nome da clínica não é razão social, e-mail não
+identifica pessoa física/jurídica). Precisa de armazenamento próprio.
+
+**Formato:** `text`, nullable, **só dígitos** (sem máscara) — mesma
+convenção de `cpf_hash`/`documento.ts`: 11 dígitos = CPF, 14 = CNPJ,
+decidido pelo comprimento (`src/lib/documento.ts`). Nullable porque nem toda
+clínica ativou assinatura ainda (free tier não precisa do dado).
+
+**Por que não é gravável por `UPDATE` direto:** `app_role` não tem policy de
+`UPDATE` em `clinic` (revogado na `0079`). A escrita passa por
+`app_salvar_cpf_cnpj_clinica(p_cpf_cnpj text)`, função `SECURITY DEFINER`
+(migração `0090`) que exige papel `coordenador`, resolve o tenant por
+`app_clinic_id_exigido()` (nunca cast cru — D16) e valida o formato (11 ou 14
+dígitos) antes de gravar. Precedente do padrão: `0081` (config de
+emergência). A leitura (`SELECT`) segue liberada por herança do `GRANT` de
+tabela — a coluna não precisou de `GRANT` próprio (medido: `has_column_privilege`
+já dava `true` para SELECT antes de qualquer grant explícito).
+
+**Por que não é `UNIQUE`:** ao contrário do `cpf_hash` de paciente (que
+identifica a pessoa), o documento da clínica identifica quem recebe a
+cobrança — nada no domínio impede duas clínicas do mesmo grupo empresarial
+compartilharem CNPJ.
+
+**Onde é usado:** gravado em `assinatura/logic.ts` **antes** de chamar o
+gateway (perder o dado gravado numa falha do Asaas custa mais que um SELECT
+extra), e enviado em `PedidoAtivacao.cpfCnpj` para `POST /customers`. Ver
+D30 no `BACKLOG.md` para o registro do fechamento e a pendência restante
+(campo no formulário, T8 de `.specs/features/billing-ativacao-asaas/tasks.md`).
+
+---
+
 ## 3. DDL PostgreSQL — 5 tabelas mais críticas
 
 Escolhidas por concentrarem as decisões mais difíceis do modelo: `extraction`
