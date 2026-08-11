@@ -235,22 +235,22 @@
 - Re-exports / Index: `src/components/ui/index.ts`
 - Modify: arquivos consumidores conforme necessário
 
-**Status:** `[ ]`
+**Status:** `[x]`
 
-- [ ] **Step 1: Consolidar estrutura física**
+- [x] **Step 1: Consolidar estrutura física**
   - Garantir átomos puros em `src/components/ui/primitives/` (`surface.ts`, `control.ts`, `pill.tsx`, etc.).
   - Garantir organismos de domínio em `src/components/ui/patterns/` (`status-badge.tsx`, `confidence-card.tsx`, `compare-row.tsx`, `batch-bar.tsx`).
   - Manter re-exports em `src/components/ui/index.ts` e em arquivos de topo para garantir que nenhuma importação existente na aplicação seja quebrada.
 
-- [ ] **Step 2: Validação completa de qualidade**
+- [x] **Step 2: Validação completa de qualidade**
   - Rodar `pnpm typecheck` (0 erros).
   - Rodar `pnpm vitest run src/components/ui/a11y.test.tsx` (todos os testes axe verdes).
   - Rodar `pnpm lint` (0 avisos/erros).
 
-- [ ] **Step 3: Atualizar BACKLOG.md e fechar checklist**
+- [x] **Step 3: Atualizar BACKLOG.md e fechar checklist**
   - Atualizar entrada da Issue #236 no `BACKLOG.md`.
 
-- [ ] **Step 4: Commit final**
+- [x] **Step 4: Commit final**
   ```bash
   git add src/components/ui/ BACKLOG.md .specs/features/refactor-design-system-iris/
   git commit -m "refactor(ds): conclui reorganização atômica do Design System Iris (#236)"
