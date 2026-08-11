@@ -3,7 +3,7 @@
 **Spec**: `.specs/features/billing-ativacao-asaas/spec.md`
 **Design**: `.specs/features/billing-ativacao-asaas/design.md`
 **Status**: Em execução (Fase A) — T1 ✅ T2 ✅ T3 🟡 (escrito, prod pendente)
-T4 ✅ T5 ✅ T6 ✅ T7 ✅ T9 ✅ · próximo: T8 (campo no formulário)
+T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅ · próximo: T10 (prova E2E contra o Asaas)
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -440,7 +440,7 @@ formulário não tiver o input, a ativação responde
 
 ---
 
-### T8: Campo de documento na tela de ativação
+### T8: Campo de documento na tela de ativação ✅ FEITO
 
 **What**: Campo obrigatório de CPF/CNPJ no formulário, pré-preenchido quando já gravado.
 **Where**: `src/app/(app)/assinatura/formulario-ativacao.tsx` ·
@@ -455,17 +455,71 @@ costura de teste `acao`/`navegar` que o arquivo já tem
 
 **Done when**:
 
-- [ ] Campo com rótulo "CPF ou CNPJ do titular da conta" e copy dizendo que o
+- [x] Campo com rótulo "CPF ou CNPJ do titular da conta" e copy dizendo que o
       banco exige para registrar o Pix Automático
-- [ ] `defaultValue` com o documento gravado; permanece editável
-- [ ] Erro de validação renderizado junto do campo, não só no topo
-- [ ] Teste de componente: vazio → erro; pré-preenchido → valor no input
-- [ ] Gate: `pnpm typecheck && pnpm test`
-- [ ] Test count: baseline + N
+- [x] `defaultValue` com o documento gravado; permanece editável
+- [x] Erro de validação renderizado junto do campo, não só no topo
+- [x] Teste de componente: vazio → erro; pré-preenchido → valor no input
+- [x] Gate: `pnpm typecheck && pnpm test`
+- [x] Test count: baseline + N
 
 **Tests**: unit (componente)
 **Gate**: quick
 **Commit**: `feat(assinatura): campo de CPF/CNPJ na ativação`
+
+**Status**: Concluída. O campo entra por `<Field>` + `<Input>` do design system
+(nada hardcodado), e a `page.tsx` lê `clinic.cpf_cnpj` por `withTenant` para
+pré-preencher — só quando `podeContratar`, para não gastar ida ao banco na
+renderização de quem não vê o formulário.
+
+**Extensão de escopo, deliberada**: o plano listava 2 arquivos, mas "erro junto
+do campo" não é implementável sem discriminar recusa-de-campo de falha-de-
+gateway — os dois chegavam no mesmo `error`. `AtivacaoState` ganhou
+`erroDocumento` (`logic.ts`), preenchido junto de `error` no ramo de documento
+inválido. `error` foi mantido para não quebrar o oráculo do T7
+(`logic-documento.int.test.ts:142`). A tela então renderiza a mensagem no campo
+e **suprime** o alerta do topo nesse caso: mesma frase em dois lugares faz o
+leitor de tela lê-la duas vezes.
+
+Evidência medida:
+
+- `pnpm typecheck` limpo · `npx eslint src/app/(app)/assinatura` sem apontamento.
+- `pnpm test`: 168 arquivos / 1093 → 168 arquivos / **1097** (**N = +4**,
+  nenhum arquivo novo — os casos entraram no `formulario-ativacao.test.tsx`
+  existente). Nenhum teste deletado.
+- Ajuste num teste pré-existente, no sentido de **apertar**: o caso
+  "declara o trilho de pagamento real" usava `getByText(/pix automático/i)`, que
+  passou a casar 2 nós (a dica do campo novo também nomeia o trilho) e falhava
+  por ambiguidade. Virou casamento exato no título do bloco.
+- Leitura nova provada no Postgres local (`BEGIN … ROLLBACK`, role `app_role`
+  com GUC de tenant — o mesmo caminho da `page.tsx`):
+
+  ```
+   le | escreve      -- has_column_privilege(app_role, clinic, cpf_cnpj, …)
+  ----+---------
+   t  | f            -- lê sim, escreve não (escrita só pela definer)
+
+  -- grava pela definer e relê pelo SELECT que a page.tsx faz:
+                    id                  |    cpf_cnpj
+  --------------------------------------+----------------
+   00000000-0000-0000-0000-000000036aaa | 29811201000150
+  ```
+
+- **Cheque de mutação (3 rodadas, medido)**:
+  - remover `defaultValue` do input → `12 passed | 2 failed`, ambas
+    `expected <input> to have property "value"` (o pré-preenchido e o que
+    repopula depois da recusa);
+  - remover `error={state.erroDocumento}` do `<Field>` → `13 passed | 1 failed`,
+    `expected [ 'cpfCnpj-hint' ] to include 'cpfCnpj-error'` — ou seja, o teste
+    mede a ligação de acessibilidade, não a presença do texto;
+  - remover o `key` que eu havia posto no input → **nada falhou**. O `key` era
+    inerte (o reset de formulário do React 19 limpa a marca de "campo editado",
+    então o `defaultValue` novo volta a valer sozinho) e foi **removido** em vez
+    de mantido com um comentário afirmando uma necessidade que a medição negou.
+    O caso de erro passou a digitar antes de submeter, justamente para exercitar
+    o input já "sujo" — e ainda assim o `key` seguiu inerte.
+
+**Pendência que o T8 fecha**: a de T7 — o formulário agora envia `cpfCnpj`.
 
 ---
 
@@ -779,16 +833,16 @@ arquivos disjuntos. Nenhum par `[P]` compartilha estado mutável.
 
 ## Rastreabilidade
 
-| ID      | Tarefas                 | Status              |
-| ------- | ----------------------- | ------------------- |
-| ATIV-01 | T1, T2, T4              | Pending             |
-| ATIV-02 | T5                      | Done                |
-| ATIV-03 | T7, T8                  | T7 done, T8 pending |
-| ATIV-04 | T6, T7                  | Done                |
-| ATIV-05 | T1, T2, T3, T4          | Pending             |
-| ATIV-06 | T9                      | Pending             |
-| ATIV-07 | T14, T15, T16, T17, T18 | Pending             |
-| ATIV-08 | T11, T13                | Pending             |
-| ATIV-09 | T12                     | Pending             |
+| ID      | Tarefas                 | Status  |
+| ------- | ----------------------- | ------- |
+| ATIV-01 | T1, T2, T4              | Pending |
+| ATIV-02 | T5                      | Done    |
+| ATIV-03 | T7, T8                  | Done    |
+| ATIV-04 | T6, T7                  | Done    |
+| ATIV-05 | T1, T2, T3, T4          | Pending |
+| ATIV-06 | T9                      | Pending |
+| ATIV-07 | T14, T15, T16, T17, T18 | Pending |
+| ATIV-08 | T11, T13                | Pending |
+| ATIV-09 | T12                     | Pending |
 
 **Cobertura**: 9 requisitos, 9 mapeados, 0 órfãos.

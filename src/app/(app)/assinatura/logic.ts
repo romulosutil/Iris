@@ -47,6 +47,14 @@ export type AtivacaoState = {
    * máscara de novo.
    */
   documento?: string;
+  /**
+   * O mesmo texto de `error`, mas só quando a recusa é do CAMPO de documento.
+   * Existe para a tela renderizar a mensagem JUNTO do input (o `<Field>` liga o
+   * `aria-describedby` sozinho) em vez de só num alerta no topo, que obriga
+   * quem usa leitor de tela a caçar qual campo errou. Falha de gateway continua
+   * vindo só em `error`: ela não pertence a campo nenhum.
+   */
+  erroDocumento?: string;
 };
 
 /**
@@ -80,7 +88,11 @@ export async function iniciarAtivacaoAssinatura(
   const documentoBruto = String(formData.get("cpfCnpj") ?? "").trim();
   const documento = validarEMaterializarCpfCnpj(documentoBruto);
   if (!documento.valido) {
-    return { error: documento.erro, documento: documentoBruto };
+    return {
+      error: documento.erro,
+      erroDocumento: documento.erro,
+      documento: documentoBruto,
+    };
   }
 
   // Nome da clínica e e-mail do responsável saem por `withTenant` (role
