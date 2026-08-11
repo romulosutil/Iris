@@ -53,13 +53,13 @@ git commit -m "feat(patient): centraliza helper de desarquivamento automatico de
 - Modify: `src/app/(app)/diario/[sessionId]/logic.ts`
 - Modify/Test: `src/app/(app)/diario/[sessionId]/actions.int.test.ts`
 
-- [ ] **Step 1: Escrever testes para áudio local e ajuste de escopo**
+- [x] **Step 1: Escrever testes para áudio local e ajuste de escopo**
 
 Adicionar testes em `src/app/(app)/diario/[sessionId]/actions.int.test.ts` verificando que:
 - `registrarAudioLocal` para paciente arquivado desarquiva e grava `audit_log` com `origem: "audio_local"`.
 - `corrigirEscopoProtocolo` para paciente arquivado desarquiva e grava `audit_log` com `origem: "escopo_protocolo"`.
 
-- [ ] **Step 2: Atualizar `src/app/(app)/diario/[sessionId]/logic.ts`**
+- [x] **Step 2: Atualizar `src/app/(app)/diario/[sessionId]/logic.ts`**
 
 Importar `desarquivarPacienteSeArquivado` e acioná-lo em:
 - `capturarDiarioCore` (`"registro_clinico"`)
@@ -67,12 +67,12 @@ Importar `desarquivarPacienteSeArquivado` e acioná-lo em:
 - `corrigirEscopoProtocoloCore` (`"escopo_protocolo"`)
 - `registrarAudioLocalCore` (`"audio_local"`)
 
-- [ ] **Step 3: Rodar testes de diário**
+- [x] **Step 3: Rodar testes de diário**
 
 Run: `pnpm vitest run src/app/(app)/diario/[sessionId]/actions.int.test.ts`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/(app)/diario/[sessionId]/logic.ts src/app/(app)/diario/[sessionId]/actions.int.test.ts

@@ -5,16 +5,14 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import {
   audioCapture,
-  auditLog,
   clinic,
   extraction,
   goal,
-  patient,
   session,
   sessionNote,
   sessionProtocolScope,
 } from "@/db/schema";
-import { ACAO_DESARQUIVADO_AUTOMATICAMENTE } from "@/lib/jobs/auto-arquivamento";
+import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { resolveProvider } from "@/lib/extraction/provider";
 import type { ExtractionDraft } from "@/lib/extraction/provider";
 import type { AlertaRiscoAgente } from "@/lib/extraction/agent-output-schema";
@@ -65,57 +63,6 @@ const PENDENTE_DRAFT: ExtractionDraft = {
   estado: "pendente_reprocessamento",
 };
 
-/**
- * #174 — regra 6: gravar registro clínico para paciente ARQUIVADO desarquiva
- * automaticamente e deixa rastro na trilha.
- *
- * O UPDATE não pode ser direto daqui: `patient_update` (0001) só admite
- * `coordenador`/`admin_recepcao`, e quem grava diário é o TERAPEUTA. O RLS
- * filtra, não estoura — o UPDATE afetaria 0 linhas em silêncio e o paciente
- * seguiria arquivado (fora da fatura) enquanto a UI diria o contrário. Por
- * isso a escrita mora em `app_desarquivar_paciente` (SECURITY DEFINER), cujo
- * guard interno espelha o predicado de LEITURA `patient_select` e ESTOURA
- * quando não bate — silêncio nenhum.
- *
- * O gate `SELECT ... AND arquivado_em IS NOT NULL` antes da chamada não é
- * otimização: ele reproduz, sob o RLS do próprio chamador, a precondição do
- * guard do definer. Sem ele, o terapeuta de COBERTURA (dono da sessão, fora
- * da care team — cenário real, coberto por teste) levaria a exceção do definer
- * em TODA nota, inclusive de paciente ativo, e perderia o diário. Com o gate,
- * o paciente que esse terapeuta sequer enxerga simplesmente não é desarquivado
- * por aqui; quem desarquiva nesse caso é o coordenador, na tela do paciente.
- */
-async function desarquivarAoRegistrar(
-  tx: Tx,
-  ctx: TenantContext,
-  patientId: string,
-): Promise<void> {
-  const alvo = await tx
-    .select({ id: patient.id })
-    .from(patient)
-    .where(and(eq(patient.id, patientId), isNotNull(patient.arquivadoEm)));
-  if (alvo.length === 0) return;
-
-  const linhas = (await tx.execute(
-    sql`SELECT app_desarquivar_paciente(${patientId}::uuid) AS desarquivou`,
-  )) as unknown as Array<{ desarquivou: boolean }>;
-
-  // `false` = não houve transição (outra nota da mesma sessão já desarquivou).
-  // Só quem transicionou grava a trilha: `audit_log` é append-only para
-  // `app_role`, então uma duplicata gravada por engano não teria como sair.
-  if (!linhas[0]?.desarquivou) return;
-
-  await tx.insert(auditLog).values({
-    clinicId: ctx.clinicId,
-    atorId: ctx.userId,
-    acao: ACAO_DESARQUIVADO_AUTOMATICAMENTE,
-    entidade: "patient",
-    entidadeId: patientId,
-    patientId,
-    detalhe: { origem: "registro_clinico" },
-  });
-}
-
 const capturaSchema = z.object({
   sessionId: z.string().uuid(),
   texto: z.string().trim().min(1, "Escreva algo antes de salvar."),
@@ -157,7 +104,14 @@ async function capturarDiarioCore(
         .select({ patientId: session.patientId })
         .from(session)
         .where(eq(session.id, parsed.data.sessionId));
-      if (sess) await desarquivarAoRegistrar(tx, ctx, sess.patientId);
+      if (sess) {
+        await desarquivarPacienteSeArquivado(
+          tx,
+          ctx,
+          sess.patientId,
+          "registro_clinico",
+        );
+      }
 
       return nota;
     });
@@ -208,6 +162,19 @@ async function corrigirEscopoProtocoloCore(
             set: { origem: "ajustado_manualmente", ajustadoPor: ctx.userId },
           });
       }
+
+      const [sess] = await tx
+        .select({ patientId: session.patientId })
+        .from(session)
+        .where(eq(session.id, parsed.data.sessionId));
+      if (sess) {
+        await desarquivarPacienteSeArquivado(
+          tx,
+          ctx,
+          sess.patientId,
+          "escopo_protocolo",
+        );
+      }
     });
     return {};
   } catch (err) {
@@ -240,8 +207,8 @@ async function registrarAudioLocalCore(
   const parsed = audioSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   try {
-    const [row] = await withTenant(ctx, (tx) =>
-      tx
+    const row = await withTenant(ctx, async (tx) => {
+      const [audioRow] = await tx
         .insert(audioCapture)
         .values({
           sessionId: parsed.data.sessionId,
@@ -249,8 +216,23 @@ async function registrarAudioLocalCore(
           statusUpload: "rascunho_local",
           duracaoSegundos: parsed.data.duracaoSegundos,
         })
-        .returning({ id: audioCapture.id }),
-    );
+        .returning({ id: audioCapture.id });
+
+      const [sess] = await tx
+        .select({ patientId: session.patientId })
+        .from(session)
+        .where(eq(session.id, parsed.data.sessionId));
+      if (sess) {
+        await desarquivarPacienteSeArquivado(
+          tx,
+          ctx,
+          sess.patientId,
+          "audio_local",
+        );
+      }
+
+      return audioRow;
+    });
     return { id: row!.id };
   } catch (err) {
     const msg = await mensagemDeConsentimento(ctx, err, {
@@ -368,7 +350,12 @@ async function consolidarSessaoCore(
 
       // 3) #174 regra 6: a nota consolidada é registro clínico — se o paciente
       //    estava arquivado (comercialmente), ele volta a contar na fatura.
-      await desarquivarAoRegistrar(tx, ctx, sess!.patientId);
+      await desarquivarPacienteSeArquivado(
+        tx,
+        ctx,
+        sess!.patientId,
+        "registro_clinico",
+      );
 
       // 4) política de re-extração (P0): não re-chama o LLM nem apaga extrações
       //    já revisadas quando o texto não mudou (e não há pendência).

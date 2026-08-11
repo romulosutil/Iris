@@ -25,11 +25,13 @@ const ctxCobertura = {
 let owner: ReturnType<typeof postgres>;
 let capturarDiario: typeof import("./logic").capturarDiario;
 let corrigirEscopoProtocolo: typeof import("./logic").corrigirEscopoProtocolo;
+let registrarAudioLocal: typeof import("./logic").registrarAudioLocal;
 let appSql: typeof import("@/db/client").sql;
 
 describe.skipIf(!hasDb)("diário · captura", () => {
   beforeAll(async () => {
-    ({ capturarDiario, corrigirEscopoProtocolo } = await import("./logic"));
+    ({ capturarDiario, corrigirEscopoProtocolo, registrarAudioLocal } =
+      await import("./logic"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, protocol, session,
@@ -227,6 +229,41 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(await arquivadoEm()).toBeNull();
     await capturarDiario(ctxT1, { sessionId: SESS, texto: "Sessão normal." });
     expect(await trilha()).toBe(0);
+  });
+
+  test("regra 6 · registrarAudioLocal para paciente arquivado desarquiva e grava trilha com audio_local", async () => {
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await arquivar();
+    expect(await arquivadoEm()).not.toBeNull();
+
+    const r = await registrarAudioLocal(ctxT1, {
+      sessionId: SESS,
+      duracaoSegundos: 45,
+    });
+    expect(r.error).toBeUndefined();
+    expect(r.id).toBeTruthy();
+    expect(await arquivadoEm()).toBeNull();
+
+    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
+    expect(log!.acao).toBe("paciente_desarquivado_automaticamente");
+    expect(log!.detalhe).toEqual({ origem: "audio_local" });
+  });
+
+  test("regra 6 · corrigirEscopoProtocolo para paciente arquivado desarquiva e grava trilha com escopo_protocolo", async () => {
+    await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
+    await arquivar();
+    expect(await arquivadoEm()).not.toBeNull();
+
+    const r = await corrigirEscopoProtocolo(ctxT1, {
+      sessionId: SESS,
+      protocolIds: [PROTO],
+    });
+    expect(r.error).toBeUndefined();
+    expect(await arquivadoEm()).toBeNull();
+
+    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
+    expect(log!.acao).toBe("paciente_desarquivado_automaticamente");
+    expect(log!.detalhe).toEqual({ origem: "escopo_protocolo" });
   });
 
   test("regra 6 · terapeuta de cobertura (fora da equipe) não perde o diário", async () => {
