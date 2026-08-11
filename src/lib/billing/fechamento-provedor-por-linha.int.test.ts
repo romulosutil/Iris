@@ -11,10 +11,32 @@ import {
   vi,
 } from "vitest";
 import { hasDb } from "@tests/integration-env";
+import {
+  BASE_URL_FAKE,
+  ID_PROVEDOR_FAKE,
+  ProvedorFake,
+} from "@tests/provedor-fake";
 
 // Mesma razão dos demais .int.test.ts do repo: módulos do servidor puxam
 // "server-only", que lança fora do bundle de servidor do Next.
 vi.mock("server-only", () => ({}));
+
+/**
+ * O segundo gateway é um provedor FAKE, não o Mercado Pago (T14 de #36).
+ *
+ * O invariante é "o adapter sai da LINHA, não da env" — ele não fala do MP.
+ * Registrar o fake em `getProviderPorId` mantém a prova viva depois que o
+ * adapter do MP for deletado (D24), sem afrouxar nada: o outro trilho da mesma
+ * passada continua sendo o Asaas real.
+ */
+vi.mock("./provider", async (importarOriginal) => {
+  const real = await importarOriginal<typeof import("./provider")>();
+  return {
+    ...real,
+    getProviderPorId: (id: string) =>
+      id === ID_PROVEDOR_FAKE ? new ProvedorFake() : real.getProviderPorId(id),
+  };
+});
 
 const { authDb } = await import("@/db/client");
 const { fecharCiclosVencendo } = await import("./subscription");
@@ -24,8 +46,8 @@ const { fecharCiclosVencendo } = await import("./subscription");
  *
  * O job resolvia o adapter uma vez, no topo, com `getBillingProvider()` — ou
  * seja, pela env — e o `select` das assinaturas vencendo nem lia
- * `subscription.provider`. Depois da virada para o Asaas, uma assinatura ativa
- * nascida no Mercado Pago teria o `preapproval_id` dela mandado para o
+ * `subscription.provider`. Depois de uma virada de trilho, uma assinatura ativa
+ * nascida no gateway anterior teria o vínculo dela mandado para o
  * `emitirCobrancaDeCiclo` do **Asaas**, que começa consultando
  * `GET /pix/automatic/authorizations/{id}` — id que não existe naquela conta.
  *
@@ -44,12 +66,14 @@ const { fecharCiclosVencendo } = await import("./subscription");
 
 const API_KEY_ASAAS = "chave-api-de-teste-do-asaas-d26";
 const BASE_URL_ASAAS = "https://api-sandbox.asaas.com/v3";
-const ACCESS_TOKEN_MP = "access-token-de-teste-d26";
 
-/** `preapproval_id` do MP: 32 hex sem hífen. */
-const VINCULO_MP = "0282b43596914b36a7bda8a8a3d85c57";
+/** Vínculo no gateway anterior: 32 hex sem hífen. */
+const VINCULO_FAKE = "0282b43596914b36a7bda8a8a3d85c57";
 /** Autorização de Pix Automático do Asaas: UUID. */
 const VINCULO_ASAAS = "53da5204-8dd1-4cf4-9604-d134e1e6fe04";
+
+const ID_COBRANCA_FAKE = "cob_fake_0001";
+const ID_COBRANCA_ASAAS = "pay_000000000001";
 
 const owner = hasDb
   ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 2 })
@@ -67,7 +91,7 @@ const clinicasCriadas: string[] = [];
  * ninguém.
  */
 async function novaAssinaturaVencida(opcoes: {
-  provider: "asaas" | "mercado_pago";
+  provider: string;
   providerSubscriptionId: string;
   inicio: Date;
   fim: Date;
@@ -105,6 +129,10 @@ function instalarGateway(): void {
     const url = String(entrada);
     chamadasGateway.push(url);
 
+    // Gateway FAKE (o outro trilho): emissão de cobrança no dialeto dele.
+    if (url.startsWith(`${BASE_URL_FAKE}/cobrancas`)) {
+      return Response.json({ id: ID_COBRANCA_FAKE, estado: "PENDENTE" });
+    }
     // Asaas: busca de idempotência por `externalReference` (nenhuma cobrança
     // anterior neste teste), leitura da autorização e emissão.
     if (url.includes("/payments?") || url.includes("externalReference")) {
@@ -118,30 +146,25 @@ function instalarGateway(): void {
       });
     }
     if (url.includes(`${BASE_URL_ASAAS}/payments`)) {
-      return Response.json({ id: "pay_000000000001", status: "PENDING" });
-    }
-    // Mercado Pago.
-    if (url.includes("/v1/payments")) {
-      return Response.json({ id: "mp-charge-1", status: "pending" });
+      return Response.json({ id: ID_COBRANCA_ASAAS, status: "PENDING" });
     }
     throw new Error(`fetch inesperado para ${url}`);
   });
 }
 
 /** Só as chamadas que identificam o gateway usado para EMITIR a cobrança. */
-function urlsDe(assinatura: "asaas" | "mercado_pago"): string[] {
+function urlsDe(assinatura: "asaas" | "fake"): string[] {
   return assinatura === "asaas"
     ? chamadasGateway.filter((u) => u.startsWith(BASE_URL_ASAAS))
-    : chamadasGateway.filter((u) => u.includes("/v1/payments"));
+    : chamadasGateway.filter((u) => u.startsWith(BASE_URL_FAKE));
 }
 
 describe.skipIf(!hasDb)("fecharCiclosVencendo × provider da linha", () => {
   beforeAll(() => {
     vi.stubEnv("BILLING_PROVIDER_API_KEY", API_KEY_ASAAS);
     vi.stubEnv("ASAAS_BASE_URL", BASE_URL_ASAAS);
-    vi.stubEnv("MERCADOPAGO_ACCESS_TOKEN", ACCESS_TOKEN_MP);
     // O trilho ATIVO é o Asaas — é exatamente sob esta env que a assinatura
-    // legada do MP não pode ser cobrada no Asaas.
+    // legada do outro gateway não pode ser cobrada no Asaas.
     vi.stubEnv("BILLING_PROVIDER", "asaas");
   });
 
@@ -172,9 +195,9 @@ describe.skipIf(!hasDb)("fecharCiclosVencendo × provider da linha", () => {
     const fim = new Date("2026-08-01T00:00:00Z");
     const inicio = new Date("2026-07-02T00:00:00Z");
 
-    const clinicaMp = await novaAssinaturaVencida({
-      provider: "mercado_pago",
-      providerSubscriptionId: VINCULO_MP,
+    const clinicaFake = await novaAssinaturaVencida({
+      provider: ID_PROVEDOR_FAKE,
+      providerSubscriptionId: VINCULO_FAKE,
       inicio,
       fim,
     });
@@ -196,16 +219,16 @@ describe.skipIf(!hasDb)("fecharCiclosVencendo × provider da linha", () => {
       expect(r.cobrancaEmitida).toBe(true);
     }
 
-    // O bug em uma linha: o id do MP indo para a API do Asaas.
+    // O bug em uma linha: o id do outro gateway indo para a API do Asaas.
     expect(
       chamadasGateway.some((u) =>
-        u.includes(`/pix/automatic/authorizations/${VINCULO_MP}`),
+        u.includes(`/pix/automatic/authorizations/${VINCULO_FAKE}`),
       ),
     ).toBe(false);
 
     // Cada gateway foi de fato acionado — o negativo acima passaria sozinho se
     // o job simplesmente não tivesse cobrado ninguém.
-    expect(urlsDe("mercado_pago").length).toBeGreaterThan(0);
+    expect(urlsDe("fake").length).toBeGreaterThan(0);
     expect(urlsDe("asaas").length).toBeGreaterThan(0);
 
     // E a autorização consultada no Asaas foi a do vínculo ASAAS, não outra.
@@ -234,7 +257,7 @@ describe.skipIf(!hasDb)("fecharCiclosVencendo × provider da linha", () => {
         }[]
       ).map((l) => [l.clinic_id, l.provider_charge_id]),
     );
-    expect(porClinica.get(clinicaMp)).toBe("mp-charge-1");
-    expect(porClinica.get(clinicaAsaas)).toBe("pay_000000000001");
+    expect(porClinica.get(clinicaFake)).toBe(ID_COBRANCA_FAKE);
+    expect(porClinica.get(clinicaAsaas)).toBe(ID_COBRANCA_ASAAS);
   });
 });

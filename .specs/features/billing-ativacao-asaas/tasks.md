@@ -2,11 +2,16 @@
 
 **Spec**: `.specs/features/billing-ativacao-asaas/spec.md`
 **Design**: `.specs/features/billing-ativacao-asaas/design.md`
-**Status**: Fase A fechada (menos o T3 em produção) + Fase B fechada — T1 ✅
+**Status**: Fases A, B e C fechadas em código (menos o T3 em produção) — T1 ✅
 T2 ✅ T3 ✅ conteúdo aprovado pelo Rômulo (10/08), aplicação aguarda deploy
 T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅
-T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅ ·
-próximo: Fase C (T14) — merge/deploy da branch aplica T1-T13 + backfill do T3 em produção
+T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅
+T14 ✅ (cobertura multi-provedor com `ProvedorFake`) · T15 ✅ (`ProviderId`
+estreitado p/ `"asaas"`) · T16 ✅ (deletados adapter e rota de webhook do MP) ·
+T17 ✅ (envs limpas no Easypanel pelo Rômulo) · T18 ✅ (`0091` dropa a tabela,
+com guard que aborta o deploy se produção tiver evento) ·
+**próximo passo: merge em `main` + deploy** — é ele que aplica a `0090`
+(backfill aprovado no T3) e a `0091` em produção
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -827,7 +832,7 @@ Evidência medida:
 > **Pré-requisito duro**: T4 aplicado. Sem o default removido, linha nova nasce
 > apontando para adapter deletado.
 
-### T14: Reescrever a cobertura multi-provedor com dublê
+### T14: Reescrever a cobertura multi-provedor com dublê ✅ FEITO
 
 **What**: Os testes que provam "a linha decide o adapter" (D25/D26) passam a usar
 um provedor fake registrado no teste, em vez do MP real.
@@ -845,32 +850,107 @@ estoura, cai no catch e o teste passa pelo caminho errado.
 
 **Done when**:
 
-- [ ] Provedor fake implementa `BillingProvider` inteira
-- [ ] Os 3 testes seguem provando: reaproveitamento só do mesmo provedor;
+- [x] Provedor fake implementa `BillingProvider` inteira
+- [x] Os 3 testes seguem provando: reaproveitamento só do mesmo provedor;
       fechamento resolve por linha; reprocessamento casa tabela × adapter
-- [ ] Gate: `pnpm typecheck && pnpm test && pnpm test:rls`
-- [ ] Test count: **igual ou maior** que o baseline (nenhuma asserção perdida)
+- [x] Gate: `pnpm typecheck && pnpm test && pnpm test:rls`
+- [x] Test count: **igual ou maior** que o baseline (nenhuma asserção perdida)
 
 **Tests**: integration
 **Gate**: full
 **Commit**: `test(billing): cobertura multi-provedor sem depender do Mercado Pago`
 
+**Status**: Concluída. `ProvedorFake` novo em `db/tests/provedor-fake.ts` (fora de
+`src/`, então não entra no bundle de produção) — **classe** que implementa
+`BillingProvider` inteira, com o TypeScript cobrando método novo da porta. Nada
+de `vi.fn().mockImplementation(() => ({}))`: `new X()` estouraria, cairia no
+`catch` da produção e o teste passaria pelo caminho errado (#154).
+
+Decisões de execução:
+
+- **O fake fala HTTP de verdade**, contra `https://gateway-fake.test/v1`. O
+  oráculo dos 3 arquivos é a URL efetivamente chamada — um fake que só
+  devolvesse objetos apagaria justamente o sinal que interessa.
+- **Dialeto do wire deliberadamente diferente do Asaas** (`estado` em vez de
+  `status`, `vinculoId`/`cobrancaId` em vez de `authorization`/`payment`): com
+  dialetos iguais, "o adapter errado normalizou o payload do outro" passaria por
+  acaso, que é o modo de falha que a cobertura existe para pegar.
+- **Registro sem costura em produção**: `vi.mock("./provider", …)` com
+  `importOriginal`, sobrepondo só `getProviderPorId` (T1/T2) ou só a classe do
+  trilho legado (T3). Nenhum seam de teste foi aberto em `provider/index.ts` —
+  o Asaas do caminho feliz continua sendo o adapter real.
+- `ID_PROVEDOR_FAKE` é tipado como `string`, não como literal: o T15 estreita
+  `ProviderId` para `"asaas"`, e um `as ProviderId` a partir de literal
+  incompatível viraria erro de conversão.
+- **`reprocessamento-provedor` mantém a TABELA real do trilho legado**
+  (`mercadopago_webhook_event`) e troca só o adapter. O invariante sob teste é
+  "cada tabela com o adapter DELA" — fake não tem tabela de webhook. Quem
+  resolve a tabela é o T18 (dropar × manter como histórico).
+
+⚠️ **Consequência para o T16**: `reprocessarEventosPendentes` ainda tem o ramo
+`new MercadoPagoProvider()`, e são esses 3 casos de dois trilhos que dependem
+dele. Deletar a classe no T16 exige decidir junto o que o 2º ramo passa a ser
+(ramo do trilho legado sem adapter próprio × remoção do laço). Está registrado
+aqui para não virar descoberta no meio do T16.
+
+Evidência medida:
+
+- `pnpm typecheck` limpo · `npx eslint` nos 4 arquivos: `No issues found`.
+- `pnpm test`: **169 arquivos / 1102 testes**, verde — igual ao T13 (os 3
+  arquivos são `.int.test.ts`, excluídos do `vitest.config.ts`).
+- `pnpm test:rls`: **96 arquivos / 808 testes, 808 passando** — mesma contagem do
+  T13, agora **sem** as 2 falhas de `protocolo.int.test.ts`: elas eram virada de
+  data (UTC × `America/Sao_Paulo`) e sumiram com a data corrente em 11/08.
+- Contagem dos 3 arquivos: 12 antes → 12 depois (2 + 1 + 9). Nenhuma asserção
+  perdida — as que citavam `/preapproval/` viraram asserções de **igualdade
+  exata** de URL do fake, que são mais apertadas que o `includes` anterior.
+- **Cheque de mutação (3 rodadas, uma por invariante, medido)**:
+  - removendo `existente.provider === provider.id` de `iniciarAtivacao` →
+    `1 passed | 1 failed`, em `expected true to be false`: o id do gateway
+    anterior indo para `/pix/automatic/authorizations/` do Asaas, que é o D25
+    reproduzido;
+  - trocando `getProviderPorId(assinatura.provider)` por `getBillingProvider()`
+    no fechamento → `0 passed | 1 failed` (as duas assinaturas cobradas no mesmo
+    gateway);
+  - fixando `new AsaasProvider()` nos DOIS ramos de
+    `reprocessarEventosPendentes` → `6 passed | 3 failed`, exatamente os 3 casos
+    de trilho legado.
+    Revertido e verde depois de cada rodada.
+
 ---
 
-### T15: `ProviderId` e resolução de adapter sem MP
+### T15: `ProviderId` e resolução de adapter sem MP ✅ FEITO
 
-**What**: `ProviderId` vira `"asaas"`; ramos do MP saem de `getBillingProvider`
-e `getProviderPorId`.
-**Where**: `src/lib/billing/provider/types.ts:42` · `src/lib/billing/provider/index.ts`
-**Depends on**: T14
-**Requirement**: ATIV-07
-**Tools**: MCP `filesystem` · Skill NONE
+**Status**: Concluída. `ProviderId` estreitado para `"asaas"` (`types.ts:42`);
+`getProviderPorId` perdeu o ramo `"mercado_pago"` (`index.ts`).
+
+`pnpm typecheck` apontou **2** call sites incompatíveis (não 1): a classe
+`MercadoPagoProvider` declarava `implements BillingProvider` com
+`id = "mercado_pago"`, que deixou de casar com `ProviderId`; e
+`reprocessarEventosPendentes` (`subscription.ts:726-731`) instanciava a
+classe atribuindo a uma variável tipada `BillingProvider`. Corrigidos:
+
+- `mercado-pago.ts`: removido `implements BillingProvider` da classe (fica
+  estruturalmente idêntica à porta; só o `implements` nominal saiu). Ela
+  segue existindo — o T16 é quem apaga o arquivo.
+- `subscription.ts:726`: `new MercadoPagoProvider() as unknown as BillingProvider`,
+  com comentário citando por que é seguro — o laço de reprocessamento só
+  chama `normalizarEvento`/`consultarCobranca`/`consultarVinculo` no ramo do
+  MP, nunca lê `.id` (conferido por grep antes do cast: as 4 leituras de
+  `provider.id` em `subscription.ts` estão todas em `iniciarAtivacao`/
+  fechamento de ciclo, fora deste laço).
+- `mercado-pago.test.ts`: o teste "resolve a cada chamada (sem cache de
+  módulo)" stubava `BILLING_PROVIDER=mercado_pago` como resolução válida —
+  não é mais. Reescrito para provar o mesmo invariante (env lida a cada
+  chamada, não cacheada em `const` de módulo) com asaas→mercado_pago(lança)→asaas.
 
 **Done when**:
 
-- [ ] `pnpm typecheck` aponta (e são corrigidos) todos os call sites
-- [ ] `getProviderPorId('mercado_pago')` → erro "Provedor de pagamento desconhecido"
-- [ ] Gate: `pnpm typecheck && pnpm test` · Test count: baseline
+- [x] `pnpm typecheck` aponta (e são corrigidos) todos os call sites
+- [x] `getProviderPorId('mercado_pago')` → erro "Provedor de pagamento desconhecido"
+- [x] Gate: `pnpm typecheck && pnpm test` · Test count: **169 arquivos / 1102
+      testes**, igual ao baseline do T14 (nenhum teste criado nem perdido —
+      só 1 teste reescrito)
 
 **Tests**: unit
 **Gate**: quick
@@ -878,7 +958,15 @@ e `getProviderPorId`.
 
 ---
 
-### T16: Deletar adapter e rota de webhook do MP
+### T16: Deletar adapter e rota de webhook do MP ✅ FEITO
+
+**Status**: Concluída. Deletados `mercado-pago.ts`, `mercado-pago.test.ts`, `route.ts` e `route.int.test.ts` de `src/app/api/hooks/mercadopago/`.
+`reprocessarEventosPendentes` simplificado para varrer apenas `asaas_webhook_event` com `AsaasProvider`.
+
+- `pnpm typecheck` verde sem erros.
+- `pnpm test`: 169 arquivos / 1102 testes → **168 arquivos / 1057 testes** (removidos 45 testes do `mercado-pago.test.ts`).
+- `pnpm test:rls`: 96 arquivos / 808 testes → **95 arquivos / 773 testes** (removidos 35 testes do `mercadopago/route.int.test.ts`).
+- `rm -rf .next && pnpm build`: verde, compilação estática e rotas limpas sem `/api/hooks/mercadopago`.
 
 **What**: Remover os arquivos do Mercado Pago.
 **Where**: `src/lib/billing/provider/mercado-pago.ts` + `.test.ts` ·
@@ -889,10 +977,10 @@ e `getProviderPorId`.
 
 **Done when**:
 
-- [ ] Arquivos deletados
-- [ ] `grep -ri "mercado.pago\|mercadopago" src/` → só comentário de registro histórico
-- [ ] Gate: `pnpm typecheck && pnpm test && pnpm test:rls` · `rm -rf .next && pnpm build`
-- [ ] Test count: baseline − (testes do MP), com a queda **declarada no PR**
+- [x] Arquivos deletados
+- [x] `grep -ri "mercado.pago\|mercadopago" src/` → só comentário de registro histórico
+- [x] Gate: `pnpm typecheck && pnpm test && pnpm test:rls` · `rm -rf .next && pnpm build`
+- [x] Test count: baseline − (testes do MP), com a queda **declarada no PR**
 
 **Tests**: integration
 **Gate**: build
@@ -900,7 +988,19 @@ e `getProviderPorId`.
 
 ---
 
-### T17: Limpar envs ⚠️ GATE RÔMULO
+### T17: Limpar envs ✅ FEITO PELO RÔMULO (fora desta sessão)
+
+**Status**: executada e implantada pelo próprio Rômulo (11/08/2026) — envs do
+Mercado Pago removidas do `iris-app` no Easypanel, com "Implantar", e webhook
+desativado no painel do MP. Não medido por esta sessão: o painel não é
+alcançável daqui, e a aba Ambiente expõe segredo em claro (screenshot proibido).
+
+⚠️ **Resíduo que sobra para o próximo commit de documentação, não reaberto aqui**:
+o `.env.example` ainda traz `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_BASE_URL` e
+`MERCADOPAGO_WEBHOOK_SECRET` (linhas 236, 237 e 248), já comentadas dentro do
+bloco "Mercado Pago (DESABILITADO)". Comentadas elas não configuram nada — mas o
+bloco descreve uma rota (`/api/hooks/mercadopago`) e um adapter que o T16
+deletou, então o arquivo documenta código inexistente.
 
 **What**: Remover `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_PUBLIC_KEY`,
 `MERCADOPAGO_WEBHOOK_SECRET` do `.env.example` e do Easypanel (`iris-app`).
@@ -926,7 +1026,7 @@ Desativar o webhook no painel do Mercado Pago é passo manual, fora do código.
 
 ---
 
-### T18: DROP da tabela de webhook do MP ⚠️ GATE RÔMULO
+### T18: DROP da tabela de webhook do MP ✅ FEITO
 
 **What**: Migração que remove a tabela de eventos de webhook do Mercado Pago.
 **Where**: `db/migrations/00NN_*.sql`
@@ -940,12 +1040,92 @@ histórico** e só remover o código — decidir com o Rômulo, não por conta.
 
 **Done when**:
 
-- [ ] `count(*)` medido e registrado
-- [ ] Decisão registrada no `BACKLOG.md` (dropar × manter como histórico)
-- [ ] Se dropar: migração com journal correto + `pnpm test` verde
+- [x] `count(*)` medido e registrado
+- [x] Decisão registrada no `BACKLOG.md` (dropar × manter como histórico)
+- [x] Se dropar: migração com journal correto + `pnpm test` verde
 
 **Tests**: none
 **Gate**: full
+
+**Status**: Concluída. Tabela removida do `schema.ts` e a migração
+`0091_drop_webhook_mercado_pago.sql` gerada por `pnpm db:generate` (regra 1 do
+`CLAUDE.md`: a tabela está no `schema.ts`, então o DDL não é escrito à mão);
+`.sql` + `meta/0091_snapshot.json` commitados juntos, arquivo renomeado do nome
+aleatório (`0091_cooing_johnny_storm`) para o padrão do repo, com a tag do
+`_journal.json` acompanhando. `when` = 1786456847181 > 1786399483924 (0090),
+crescente — o `migrations.test.ts` cobre isso.
+
+**Decisão: DROPAR, não manter como histórico.** O que sustenta:
+
+- O MP nunca faturou ninguém (medição de produção de 10/08 registrada no D24:
+  `free_tier: 1` + `setup_pending: 1`, zero `active`/`past_due`).
+- Depois do T16, **nenhum** caminho de código escreve ou lê a tabela — o único
+  resquício era a declaração no `schema.ts`
+  (`grep -rn "mercadopagoWebhookEvent\|mercadopago_webhook_event" src/ db/ --include=*.ts`
+  → só as 4 linhas do próprio `schema.ts`, hoje zero).
+- Manter tabela vazia com RLS, 4 índices e grants é superfície que todo teste de
+  RLS e todo backup carregam sem nada dentro.
+
+**A parte que eu não consigo medir, e como a migração resolve**: produção não é
+alcançável da máquina de desenvolvimento (o Postgres do Easypanel só responde no
+host interno `espectro-mvp_iris-postgres`), então "colar o `count(*)` de
+produção" era impossível daqui. Em vez de presumir zero, a contagem virou parte
+da própria migração: um bloco `DO` levanta `P0001` e **aborta o stage `migrate`**
+se houver qualquer linha. Se produção tiver evento gravado, o deploy para e a
+decisão dropar × preservar volta para o Rômulo com o número na mão — que é
+exatamente a condição escrita nesta tarefa. `DROP` **sem** `CASCADE` pelo mesmo
+motivo: dependente inesperado derruba o deploy em vez de morrer junto (o
+`db:generate` emitiu `CASCADE`; foi retirado à mão).
+
+#### Evidência medida (Postgres local, 11/08)
+
+Antes da 0091:
+
+```
+tabela existe: true
+count(*): 0
+pendentes (processado_em IS NULL): 0
+policies: [ mercadopago_webhook_event_auth_all ]
+indexes: [ _pkey, _provider_event_id_unique, _processado_idx, _pendente_idx ]
+grants:  [ iris:{SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER},
+           iris_auth:{SELECT,INSERT,UPDATE} ]
+fks apontando p/ ela: []          -- nenhuma; o DROP sem CASCADE basta
+asaas_webhook_event count(*): 1   -- a irmã que fica
+```
+
+Depois de `pnpm db:migrate`:
+
+```
+A) to_regclass('public.mercadopago_webhook_event')  -> null
+B) resíduo — policies / indexes / grants            -> 0  0  0
+C) total de migrações aplicadas                     -> 91
+D) asaas_webhook_event (a irmã que fica)            -> 1     (intacta)
+```
+
+O guard morde (`BEGIN … ROLLBACK`, recriando a tabela e rodando o **mesmo** bloco
+`DO` lido do arquivo da migração):
+
+```
+E) guard com 1 linha -> ERROR P0001 — mercadopago_webhook_event tem 1 evento(s)
+                        gravado(s); o DROP foi desenhado para tabela vazia.
+                        Decidir com o Rômulo entre preservar como histórico e
+                        descartar antes de reaplicar (issue #36, T18).
+E) guard com 0 linha -> PASSOU (não estourou)
+F) to_regclass depois dos ROLLBACKs -> null   (nada vazou dos testes)
+```
+
+**Gate full**: `pnpm typecheck` limpo · `pnpm test` **168 arquivos / 1057
+testes** · `pnpm test:rls` **95 arquivos / 773 testes** — ambos verdes e
+**idênticos** à contagem do T16, o que é o esperado: a tarefa não cria nem apaga
+teste. `pnpm db:generate` responde `No schema changes, nothing to migrate`
+depois da mudança — o snapshot ficou em sincronia.
+
+**Escopo estendido, deliberado**: o resíduo do T17 no `.env.example` foi limpo
+junto (o bloco documentava `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_BASE_URL`,
+`MERCADOPAGO_WEBHOOK_SECRET` e a rota `/api/hooks/mercadopago`, todos
+inexistentes desde o T16). Virou registro histórico sem nome de variável — um
+`.env.example` que descreve env de código deletado convida alguém a reconfigurar
+o que já saiu.
 
 ---
 
@@ -997,7 +1177,7 @@ arquivos disjuntos. Nenhum par `[P]` compartilha estado mutável.
 | ATIV-04 | T6, T7                  | Done    |
 | ATIV-05 | T1, T2, T3, T4          | Pending |
 | ATIV-06 | T9                      | Pending |
-| ATIV-07 | T14, T15, T16, T17, T18 | Pending |
+| ATIV-07 | T14, T15, T16, T17, T18 | Done    |
 | ATIV-08 | T11, T13                | Pending |
 | ATIV-09 | T12                     | Pending |
 

@@ -38,8 +38,10 @@
  * aqui e nunca no chamador. Fonte da verdade interna = centavos.
  */
 
-/** Provedores conhecidos. `asaas` ainda não tem implementação (#36). */
-export type ProviderId = "mercado_pago" | "asaas";
+/**
+ * Provedores conhecidos. Só `asaas` — o Mercado Pago foi removido (#36, D24).
+ */
+export type ProviderId = "asaas";
 
 /** Meio de pagamento escolhido pela clínica no checkout. */
 export type MetodoPagamento = "cartao" | "pix";
