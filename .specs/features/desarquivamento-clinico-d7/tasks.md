@@ -180,19 +180,19 @@ git commit -m "feat(paciente): desarquiva paciente em atos de prescricao, metas,
 **Files:**
 - Modify: `BACKLOG.md`
 
-- [ ] **Step 1: Atualizar entrada D7 no BACKLOG.md**
+- [x] **Step 1: Atualizar entrada D7 no BACKLOG.md**
 
 Marcar **D7** como **Fechado em 11/08/2026** detalhando a cobertura completa de desarquivamento por ato clínico.
 
-- [ ] **Step 2: Rodar typecheck e suíte completa de testes**
+- [x] **Step 2: Rodar typecheck e suíte completa de testes**
 
 Run: `pnpm typecheck`  
 Run: `pnpm test`  
 Expected: 0 erros de tipagem, 100% dos testes verdes.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
-git add BACKLOG.md
+git add BACKLOG.md .specs/features/desarquivamento-clinico-d7/tasks.md
 git commit -m "docs(backlog): fecha debito D7 com cobertura completa de desarquivamento clinico (#174)"
 ```
