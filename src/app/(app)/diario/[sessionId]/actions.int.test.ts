@@ -266,22 +266,28 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(log!.detalhe).toEqual({ origem: "escopo_protocolo" });
   });
 
-  test("regra 6 · terapeuta de cobertura (fora da equipe) não perde o diário", async () => {
-    // O definer ESTOURA para quem não passa no predicado de `patient_select`.
-    // Sem o gate de visibilidade em `desarquivarAoRegistrar`, essa exceção
-    // abortaria a transação e o terapeuta de cobertura perderia a nota — em
-    // TODO paciente, arquivado ou não. Aqui o paciente segue arquivado (quem
-    // desarquiva nesse caso é o coordenador) mas o diário É salvo.
+  test("regra 6 (D8) · terapeuta de cobertura (fora da equipe) salva diário E desarquiva o paciente", async () => {
+    // D8: Terapeuta de cobertura agora desarquiva o paciente ao registrar o diário,
+    // emitindo audit_log com ator_id do terapeuta de cobertura.
     await owner`DELETE FROM audit_log WHERE patient_id = ${PAC}`;
     await arquivar();
+    expect(await arquivadoEm()).not.toBeNull();
+
     const r = await capturarDiario(ctxCobertura, {
       sessionId: SESS_COBERTURA,
       texto: "Cobertura registrou a sessão.",
     });
     expect(r.error).toBeUndefined();
     expect(r.id).toBeTruthy();
-    expect(await arquivadoEm()).not.toBeNull();
-    expect(await trilha()).toBe(0);
+    expect(await arquivadoEm()).toBeNull(); // Desarquivado automaticamente (D8)
+    expect(await trilha()).toBe(1);
+
+    const [log] =
+      await owner`SELECT acao, ator_id, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
+    expect(log!.acao).toBe("paciente_desarquivado_automaticamente");
+    expect(log!.ator_id).toBe(U_COBERTURA);
+    expect(log!.detalhe).toEqual({ origem: "registro_clinico" });
+
     await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PAC}`;
   });
 });

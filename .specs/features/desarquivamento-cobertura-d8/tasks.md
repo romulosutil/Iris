@@ -98,7 +98,7 @@ git commit -m "refactor(patient): delega autorizacao de desarquivamento a proced
 **Files:**
 - Modify: `src/app/(app)/diario/[sessionId]/actions.int.test.ts`
 
-- [ ] **Step 1: Escrever teste de integração para captura de diário por terapeuta de cobertura**
+- [x] **Step 1: Escrever teste de integração para captura de diário por terapeuta de cobertura**
 
 Em `src/app/(app)/diario/[sessionId]/actions.int.test.ts`, adicionar teste onde:
 1. Paciente está arquivado.
@@ -106,12 +106,12 @@ Em `src/app/(app)/diario/[sessionId]/actions.int.test.ts`, adicionar teste onde:
 3. `capturarDiario` ou `registrarAudioLocal` salva a nota e desarquiva o paciente automaticamente.
 4. `audit_log` é criado com `atorId = U_TER_COBERTURA` e origem `"registro_clinico"`.
 
-- [ ] **Step 2: Rodar testes de diário**
+- [x] **Step 2: Rodar testes de diário**
 
 Gate: `pnpm vitest run src/app/(app)/diario/[sessionId]/actions.int.test.ts`  
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/app/(app)/diario/[sessionId]/actions.int.test.ts
