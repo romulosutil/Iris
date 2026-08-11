@@ -3,9 +3,10 @@
 **Spec**: `.specs/features/billing-ativacao-asaas/spec.md`
 **Design**: `.specs/features/billing-ativacao-asaas/design.md`
 **Status**: Fase A fechada (menos o T3 em produção) + Fase B fechada — T1 ✅
-T2 ✅ T3 🟡 (escrito, prod pendente) T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅
+T2 ✅ T3 ✅ conteúdo aprovado pelo Rômulo (10/08), aplicação aguarda deploy
+T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅
 T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅ ·
-próximo: Fase C (T14) — e o T3 quando o Rômulo liberar produção
+próximo: Fase C (T14) — merge/deploy da branch aplica T1-T13 + backfill do T3 em produção
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -144,11 +145,15 @@ guard de tenant + papel); `app_clinic_id_exigido()` da `0085`
 
 ---
 
-### T3: Backfill das 2 linhas de produção ⚠️ GATE RÔMULO — 🟡 ESCRITO, NÃO APLICADO
+### T3: Backfill das 2 linhas de produção ✅ APROVADO (conteúdo) — 🟡 APLICAÇÃO AGUARDA DEPLOY
 
 **Status**: SQL escrito e commitado (`fdf8963`), gate quick verde.
-**Aplicado em produção: NÃO.** Aguarda confirmação explícita do Rômulo.
-Aplicado no Postgres local no T4 (livre por regra).
+**Conteúdo aprovado pelo Rômulo em 10/08/2026** — autoriza o backfill a rodar
+quando a migração `0090` for aplicada em produção (junto do deploy de
+T1-T13, via stage `migrate` do pipeline — não é ação isolada).
+**Aplicado em produção: NÃO** — branch `tech/d26-desabilita-mercado-pago`
+ainda não mergeada em `main` (18 commits à frente, T1..T10 nunca rodaram em
+produção). Aplicado no Postgres local no T4 (livre por regra).
 
 **What**: Statements de backfill no mesmo `.sql`: zerar o provedor fantasma da
 linha `free_tier` e devolver a linha `setup_pending`/`mercado_pago` a `free_tier`.
