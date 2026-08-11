@@ -126,11 +126,11 @@ git commit -m "test(diario): verifica desarquivamento automatico por terapeuta d
 - Modify: `BACKLOG.md`
 - Modify: `.specs/features/desarquivamento-cobertura-d8/tasks.md`
 
-- [ ] **Step 1: Atualizar entrada D8 no BACKLOG.md**
+- [x] **Step 1: Atualizar entrada D8 no BACKLOG.md**
 
 Marcar **D8** como **Fechado em 11/08/2026** detalhando a autorização da procedure `app_desarquivar_paciente` para condutores e substitutos de sessão com evidência de testes.
 
-- [ ] **Step 2: Rodar verificação completa do repositório**
+- [x] **Step 2: Rodar verificação completa do repositório**
 
 Gate:
 - `pnpm typecheck`
@@ -139,7 +139,7 @@ Gate:
 
 Expected: 0 erros, 100% dos testes verdes.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add BACKLOG.md .specs/features/desarquivamento-cobertura-d8/tasks.md
