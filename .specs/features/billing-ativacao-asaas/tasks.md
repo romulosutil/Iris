@@ -2,8 +2,10 @@
 
 **Spec**: `.specs/features/billing-ativacao-asaas/spec.md`
 **Design**: `.specs/features/billing-ativacao-asaas/design.md`
-**Status**: Em execução (Fase A) — T1 ✅ T2 ✅ T3 🟡 (escrito, prod pendente)
-T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅ · próximo: T10 (prova E2E contra o Asaas)
+**Status**: Fase A quase fechada + Fase B fechada — T1 ✅ T2 ✅ T3 🟡 (escrito,
+prod pendente) T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅ T10 🟡 (build verde; ativação
+real bloqueada por falta de `BILLING_PROVIDER_API_KEY` no ambiente local)
+T11 ✅ T12 ✅ T13 ✅ · próximo: T10 quando a chave sandbox entrar, ou Fase C
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -566,7 +568,42 @@ sem mudança. Os testes multi-provedor (`ativacao-troca-de-provedor:83`,
 
 ---
 
-### T10: Prova ponta a ponta contra o Asaas
+### T10: Prova ponta a ponta contra o Asaas 🟡 BLOQUEADO (falta chave sandbox)
+
+**Status**: o gate `build` está **feito e verde**; a ativação real **não rodou**,
+por falta de credencial no ambiente local. Medido, não suposto:
+
+```
+BILLING_PROVIDER          = "mercado_pago"          <- precisa ser "asaas"
+BILLING_PROVIDER_API_KEY  = AUSENTE                 <- chave que o adapter lê
+ASAAS_BASE_URL            = "https://api-sandbox.asaas.com/v3"   (já sandbox)
+ASAAS_WEBHOOK_TOKEN       = [definido]
+```
+
+(`src/lib/billing/provider/asaas.ts:114` lê `BILLING_PROVIDER_API_KEY`, e não
+uma env com prefixo `ASAAS_` — é o nome que engana.)
+
+Sem as duas primeiras, qualquer "ativação" local cairia no adapter do Mercado
+Pago e provaria o contrário do que a tarefa pede.
+
+**O gate `build` achou um defeito real** (registrado aqui porque é exatamente o
+tipo de coisa que o build existe para pegar): o T12 importou `ativarEhASaida`
+de `estado-conta.ts` — que abre com `import "server-only"` — para dentro de um
+client component. `pnpm test` passou (no jsdom o `server-only` resolve normal) e
+o `pnpm build` derrubou com _"You're importing a component that needs
+server-only"_. Corrigido em `fa6a30f`: o predicado foi para
+`src/lib/billing/estado-conta-ui.ts`, importando `EstadoConta` como **type**
+(import de tipo é apagado na compilação e não arrasta o módulo server-only).
+
+Depois do fix: `rm -rf .next && pnpm build` verde, `pnpm test` 169 arquivos /
+1102 testes verde.
+
+**Para destravar** (ação do Rômulo, `.env.local`):
+
+```
+BILLING_PROVIDER=asaas
+BILLING_PROVIDER_API_KEY=<chave sandbox do Asaas>
+```
 
 **What**: Ativação real (sandbox) e evidência de cada elo da cadeia.
 **Where**: nenhum arquivo — é execução e evidência
@@ -576,7 +613,7 @@ sem mudança. Os testes multi-provedor (`ativacao-troca-de-provedor:83`,
 
 **Done when**:
 
-- [ ] `rm -rf .next && pnpm build` verde (armadilha do `.next/dev/types` stale)
+- [x] `rm -rf .next && pnpm build` verde (armadilha do `.next/dev/types` stale)
 - [ ] Ativação numa clínica de teste devolve BR Code + valor
 - [ ] Linha em `subscription`: `status='setup_pending'`, `provider='asaas'`,
       `pix_copia_e_cola` e `valor_ativacao_centavos` preenchidos,
