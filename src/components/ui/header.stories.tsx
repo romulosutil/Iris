@@ -2,7 +2,7 @@ import type { Meta } from "@storybook/nextjs-vite";
 import { Header, type NavItem } from "./header";
 
 const meta = {
-  title: "Templates/Header",
+  title: "Organisms/Header",
   component: Header,
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof Header>;

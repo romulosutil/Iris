@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Card } from "./card";
 
 const meta = {
-  title: "Organisms/Card",
+  title: "Molecules/Card",
   component: Card,
   parameters: { layout: "centered" },
   argTypes: {
