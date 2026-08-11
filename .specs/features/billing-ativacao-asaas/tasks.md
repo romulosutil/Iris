@@ -5,8 +5,9 @@
 **Status**: Fase A fechada (menos o T3 em produção) + Fase B fechada — T1 ✅
 T2 ✅ T3 ✅ conteúdo aprovado pelo Rômulo (10/08), aplicação aguarda deploy
 T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅
-T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅ ·
-próximo: Fase C (T14) — merge/deploy da branch aplica T1-T13 + backfill do T3 em produção
+T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅
+T14 ✅ (cobertura multi-provedor com `ProvedorFake`) ·
+próximo: T15 — merge/deploy da branch aplica T1-T13 + backfill do T3 em produção
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -827,7 +828,7 @@ Evidência medida:
 > **Pré-requisito duro**: T4 aplicado. Sem o default removido, linha nova nasce
 > apontando para adapter deletado.
 
-### T14: Reescrever a cobertura multi-provedor com dublê
+### T14: Reescrever a cobertura multi-provedor com dublê ✅ FEITO
 
 **What**: Os testes que provam "a linha decide o adapter" (D25/D26) passam a usar
 um provedor fake registrado no teste, em vez do MP real.
@@ -845,15 +846,72 @@ estoura, cai no catch e o teste passa pelo caminho errado.
 
 **Done when**:
 
-- [ ] Provedor fake implementa `BillingProvider` inteira
-- [ ] Os 3 testes seguem provando: reaproveitamento só do mesmo provedor;
+- [x] Provedor fake implementa `BillingProvider` inteira
+- [x] Os 3 testes seguem provando: reaproveitamento só do mesmo provedor;
       fechamento resolve por linha; reprocessamento casa tabela × adapter
-- [ ] Gate: `pnpm typecheck && pnpm test && pnpm test:rls`
-- [ ] Test count: **igual ou maior** que o baseline (nenhuma asserção perdida)
+- [x] Gate: `pnpm typecheck && pnpm test && pnpm test:rls`
+- [x] Test count: **igual ou maior** que o baseline (nenhuma asserção perdida)
 
 **Tests**: integration
 **Gate**: full
 **Commit**: `test(billing): cobertura multi-provedor sem depender do Mercado Pago`
+
+**Status**: Concluída. `ProvedorFake` novo em `db/tests/provedor-fake.ts` (fora de
+`src/`, então não entra no bundle de produção) — **classe** que implementa
+`BillingProvider` inteira, com o TypeScript cobrando método novo da porta. Nada
+de `vi.fn().mockImplementation(() => ({}))`: `new X()` estouraria, cairia no
+`catch` da produção e o teste passaria pelo caminho errado (#154).
+
+Decisões de execução:
+
+- **O fake fala HTTP de verdade**, contra `https://gateway-fake.test/v1`. O
+  oráculo dos 3 arquivos é a URL efetivamente chamada — um fake que só
+  devolvesse objetos apagaria justamente o sinal que interessa.
+- **Dialeto do wire deliberadamente diferente do Asaas** (`estado` em vez de
+  `status`, `vinculoId`/`cobrancaId` em vez de `authorization`/`payment`): com
+  dialetos iguais, "o adapter errado normalizou o payload do outro" passaria por
+  acaso, que é o modo de falha que a cobertura existe para pegar.
+- **Registro sem costura em produção**: `vi.mock("./provider", …)` com
+  `importOriginal`, sobrepondo só `getProviderPorId` (T1/T2) ou só a classe do
+  trilho legado (T3). Nenhum seam de teste foi aberto em `provider/index.ts` —
+  o Asaas do caminho feliz continua sendo o adapter real.
+- `ID_PROVEDOR_FAKE` é tipado como `string`, não como literal: o T15 estreita
+  `ProviderId` para `"asaas"`, e um `as ProviderId` a partir de literal
+  incompatível viraria erro de conversão.
+- **`reprocessamento-provedor` mantém a TABELA real do trilho legado**
+  (`mercadopago_webhook_event`) e troca só o adapter. O invariante sob teste é
+  "cada tabela com o adapter DELA" — fake não tem tabela de webhook. Quem
+  resolve a tabela é o T18 (dropar × manter como histórico).
+
+⚠️ **Consequência para o T16**: `reprocessarEventosPendentes` ainda tem o ramo
+`new MercadoPagoProvider()`, e são esses 3 casos de dois trilhos que dependem
+dele. Deletar a classe no T16 exige decidir junto o que o 2º ramo passa a ser
+(ramo do trilho legado sem adapter próprio × remoção do laço). Está registrado
+aqui para não virar descoberta no meio do T16.
+
+Evidência medida:
+
+- `pnpm typecheck` limpo · `npx eslint` nos 4 arquivos: `No issues found`.
+- `pnpm test`: **169 arquivos / 1102 testes**, verde — igual ao T13 (os 3
+  arquivos são `.int.test.ts`, excluídos do `vitest.config.ts`).
+- `pnpm test:rls`: **96 arquivos / 808 testes, 808 passando** — mesma contagem do
+  T13, agora **sem** as 2 falhas de `protocolo.int.test.ts`: elas eram virada de
+  data (UTC × `America/Sao_Paulo`) e sumiram com a data corrente em 11/08.
+- Contagem dos 3 arquivos: 12 antes → 12 depois (2 + 1 + 9). Nenhuma asserção
+  perdida — as que citavam `/preapproval/` viraram asserções de **igualdade
+  exata** de URL do fake, que são mais apertadas que o `includes` anterior.
+- **Cheque de mutação (3 rodadas, uma por invariante, medido)**:
+  - removendo `existente.provider === provider.id` de `iniciarAtivacao` →
+    `1 passed | 1 failed`, em `expected true to be false`: o id do gateway
+    anterior indo para `/pix/automatic/authorizations/` do Asaas, que é o D25
+    reproduzido;
+  - trocando `getProviderPorId(assinatura.provider)` por `getBillingProvider()`
+    no fechamento → `0 passed | 1 failed` (as duas assinaturas cobradas no mesmo
+    gateway);
+  - fixando `new AsaasProvider()` nos DOIS ramos de
+    `reprocessarEventosPendentes` → `6 passed | 3 failed`, exatamente os 3 casos
+    de trilho legado.
+    Revertido e verde depois de cada rodada.
 
 ---
 

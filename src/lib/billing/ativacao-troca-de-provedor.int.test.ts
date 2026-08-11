@@ -11,10 +11,33 @@ import {
   vi,
 } from "vitest";
 import { hasDb } from "@tests/integration-env";
+import {
+  BASE_URL_FAKE,
+  ID_PROVEDOR_FAKE,
+  ProvedorFake,
+} from "@tests/provedor-fake";
 
 // Mesma razão dos demais .int.test.ts do repo: módulos do servidor puxam
 // "server-only", que lança fora do bundle de servidor do Next.
 vi.mock("server-only", () => ({}));
+
+/**
+ * O "outro gateway" é um provedor FAKE, não o Mercado Pago (T14 de #36).
+ *
+ * O invariante sob teste nunca foi sobre o MP — é "vínculo de OUTRO gateway não
+ * é reaproveitável". Amarrá-lo ao MP faria a cobertura morrer junto com o
+ * adapter (D24). Aqui o segundo trilho é `ProvedorFake`, registrado só neste
+ * teste: `getProviderPorId` passa a conhecê-lo, e todo o resto do módulo segue
+ * sendo o real (o Asaas do caminho feliz é o adapter de produção, não um dublê).
+ */
+vi.mock("./provider", async (importarOriginal) => {
+  const real = await importarOriginal<typeof import("./provider")>();
+  return {
+    ...real,
+    getProviderPorId: (id: string) =>
+      id === ID_PROVEDOR_FAKE ? new ProvedorFake() : real.getProviderPorId(id),
+  };
+});
 
 const { authDb } = await import("@/db/client");
 const { iniciarAtivacao } = await import("./subscription");
@@ -24,10 +47,11 @@ const { iniciarAtivacao } = await import("./subscription");
  *
  * O reaproveitamento de vínculo pendente olhava só `status === 'setup_pending'`.
  * Depois que o trilho ativo virou Asaas, a linha de uma clínica que já tinha
- * tentado ativar no Mercado Pago continuava pendente com um
- * `provider_subscription_id` de **preapproval do MP** — 32 hex sem hífen. O
- * `consultarVinculo` do adapter do Asaas mandava esse id para
- * `GET /pix/automatic/authorizations/{id}`, que não existe naquela conta:
+ * tentado ativar no gateway anterior continuava pendente com um
+ * `provider_subscription_id` daquele gateway — 32 hex sem hífen, formato que a
+ * API do Asaas nem reconhece. O `consultarVinculo` do adapter do Asaas mandava
+ * esse id para `GET /pix/automatic/authorizations/{id}`, que não existe naquela
+ * conta:
  *
  *   Asaas respondeu 400 em GET /pix/automatic/authorizations/0282b435…
  *
@@ -50,10 +74,9 @@ const { iniciarAtivacao } = await import("./subscription");
 
 const API_KEY_ASAAS = "chave-api-de-teste-do-asaas-d24";
 const BASE_URL_ASAAS = "https://api-sandbox.asaas.com/v3";
-const ACCESS_TOKEN_MP = "access-token-de-teste-d24";
 
-/** Formato real de um `preapproval_id` do MP: 32 hex sem hífen. */
-const ID_VELHO_DO_MP = "0282b43596914b36a7bda8a8a3d85c57";
+/** Id do gateway anterior: 32 hex sem hífen — formato alheio ao UUID do Asaas. */
+const ID_VELHO_DO_OUTRO_GATEWAY = "0282b43596914b36a7bda8a8a3d85c57";
 
 const owner = hasDb
   ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 2 })
@@ -72,7 +95,7 @@ async function novaClinica(): Promise<string> {
 }
 
 async function semearVinculoPendente(opcoes: {
-  provider: "asaas" | "mercado_pago";
+  provider: string;
   providerSubscriptionId: string;
   checkoutUrl?: string | null;
   pixCopiaECola?: string | null;
@@ -121,15 +144,21 @@ let chamadasGateway: string[] = [];
  * dele, e amarrar o teste a essa ordem faria o arquivo quebrar por refactor que
  * não muda comportamento nenhum.
  *
- * A rota do MP existe SÓ para provar a ausência: se o código voltar a consultar
- * o gateway velho, a chamada aparece em `chamadasGateway` em vez de estourar um
- * fetch inesperado que poderia ser confundido com outra falha.
+ * A rota do gateway FAKE existe SÓ para provar a ausência: se o código voltar a
+ * consultar o gateway velho, a chamada aparece em `chamadasGateway` em vez de
+ * estourar um fetch inesperado que poderia ser confundido com outra falha.
  */
 function instalarGateway(): void {
   vi.stubGlobal("fetch", async (entrada: unknown) => {
     const url = String(entrada);
     chamadasGateway.push(url);
 
+    if (url.startsWith(BASE_URL_FAKE)) {
+      return Response.json({
+        id: ID_VELHO_DO_OUTRO_GATEWAY,
+        estado: "PENDENTE",
+      });
+    }
     if (url.includes("/customers")) {
       return Response.json({ id: "cus_000008561913" });
     }
@@ -141,9 +170,6 @@ function instalarGateway(): void {
         customerId: "cus_000008561913",
       });
     }
-    if (url.includes("/preapproval")) {
-      return Response.json({ id: ID_VELHO_DO_MP, status: "pending" });
-    }
     throw new Error(`fetch inesperado para ${url}`);
   });
 }
@@ -152,7 +178,6 @@ describe.skipIf(!hasDb)("iniciarAtivacao × troca de BILLING_PROVIDER", () => {
   beforeAll(() => {
     vi.stubEnv("BILLING_PROVIDER_API_KEY", API_KEY_ASAAS);
     vi.stubEnv("ASAAS_BASE_URL", BASE_URL_ASAAS);
-    vi.stubEnv("MERCADOPAGO_ACCESS_TOKEN", ACCESS_TOKEN_MP);
     vi.stubEnv("BILLING_PROVIDER", "asaas");
   });
 
@@ -179,9 +204,9 @@ describe.skipIf(!hasDb)("iniciarAtivacao × troca de BILLING_PROVIDER", () => {
 
   it("vínculo pendente do gateway ANTERIOR não é consultado — cria um novo", async () => {
     const clinicId = await semearVinculoPendente({
-      provider: "mercado_pago",
-      providerSubscriptionId: ID_VELHO_DO_MP,
-      checkoutUrl: "https://mp.example/checkout/velho",
+      provider: ID_PROVEDOR_FAKE,
+      providerSubscriptionId: ID_VELHO_DO_OUTRO_GATEWAY,
+      checkoutUrl: "https://gateway-fake.test/checkout/velho",
     });
 
     const r = await iniciarAtivacao({
@@ -193,15 +218,19 @@ describe.skipIf(!hasDb)("iniciarAtivacao × troca de BILLING_PROVIDER", () => {
       urlRetorno: "https://irisclinica.ia.br/assinatura",
     });
 
-    // O bug em uma linha: o id do MP indo para a URL do Asaas.
+    // O bug em uma linha: o id do gateway anterior indo para a URL do Asaas.
     expect(
       chamadasGateway.some((u) =>
-        u.includes(`/pix/automatic/authorizations/${ID_VELHO_DO_MP}`),
+        u.includes(
+          `/pix/automatic/authorizations/${ID_VELHO_DO_OUTRO_GATEWAY}`,
+        ),
       ),
     ).toBe(false);
     // E nem o gateway velho foi consultado: vínculo de outro provedor não é
     // reaproveitável, ponto — não é "consulte lá e decida".
-    expect(chamadasGateway.some((u) => u.includes("/preapproval"))).toBe(false);
+    expect(chamadasGateway.some((u) => u.startsWith(BASE_URL_FAKE))).toBe(
+      false,
+    );
 
     expect(r.providerSubscriptionId).toBe(ID_AUTORIZACAO_NOVA);
     expect(r.autorizacao).toEqual({

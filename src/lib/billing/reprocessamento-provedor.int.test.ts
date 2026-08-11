@@ -12,10 +12,31 @@ import {
   vi,
 } from "vitest";
 import { hasDb } from "@tests/integration-env";
+import {
+  BASE_URL_FAKE,
+  ID_PROVEDOR_FAKE,
+  ProvedorFake,
+} from "@tests/provedor-fake";
 
 // Mesma razão dos demais .int.test.ts do repo: módulos do servidor puxam
 // "server-only", que lança fora do bundle de servidor do Next.
 vi.mock("server-only", () => ({}));
+
+/**
+ * O trilho LEGADO é servido por um provedor FAKE (T14 de #36).
+ *
+ * O que este arquivo prova é o par tabela↔adapter, não o Mercado Pago. Trocando
+ * o adapter do trilho legado pelo `ProvedorFake` — classe de verdade, nunca
+ * `vi.fn().mockImplementation(() => ({}))`, que faria `new X()` estourar e o
+ * teste passar pelo caminho errado (#154) — a cobertura sobrevive à remoção do
+ * MP (D24). A TABELA do trilho legado continua sendo a real, porque é
+ * exatamente "cada tabela com o adapter dela" que está sob teste; ela sai (ou
+ * fica como histórico) só no T18.
+ */
+vi.mock("./provider", async (importarOriginal) => {
+  const real = await importarOriginal<typeof import("./provider")>();
+  return { ...real, MercadoPagoProvider: ProvedorFake };
+});
 
 const { authDb } = await import("@/db/client");
 const { reprocessarEventosPendentes } = await import("./subscription");
@@ -73,8 +94,6 @@ const { reprocessarEventosPendentes } = await import("./subscription");
 const TOKEN_ASAAS = "token-de-teste-do-asaas-36";
 const API_KEY_ASAAS = "chave-api-de-teste-do-asaas-36";
 const BASE_URL_ASAAS = "https://api-sandbox.asaas.com/v3";
-const ACCESS_TOKEN_MP = "access-token-de-teste-36";
-const SEGREDO_MP = "segredo-de-teste-do-mercadopago-36";
 
 /**
  * `iris_auth` não tem DELETE nas tabelas de webhook (trilha não é apagável pelo
@@ -103,7 +122,7 @@ async function novaClinica(): Promise<string> {
 
 async function novaAssinatura(opcoes: {
   providerSubscriptionId: string;
-  provider: "asaas" | "mercado_pago";
+  provider: string;
 }): Promise<string> {
   const clinicId = await novaClinica();
   await owner!`
@@ -137,9 +156,19 @@ function payloadAsaas(idEvento: string, authorizationId: string) {
   };
 }
 
-/** Notificação típica do MP: `{type, action, data:{id}}`. */
-function payloadMp(subId: string) {
-  return { type: "preapproval", action: "updated", data: { id: subId } };
+/**
+ * Notificação do trilho legado, no dialeto do `ProvedorFake`.
+ *
+ * Deliberadamente DIFERENTE do envelope do Asaas: se os dois dialetos fossem
+ * iguais, "o adapter errado normalizou o payload do outro" passaria por acaso —
+ * que é o modo de falha que este arquivo existe para pegar.
+ */
+function payloadLegado(vinculoId: string) {
+  return {
+    id: `evt-legado:${vinculoId}`,
+    tipo: "vinculo.autorizado",
+    vinculoId,
+  };
 }
 
 async function semearAsaasPendente(
@@ -155,11 +184,11 @@ async function semearAsaasPendente(
   return idEvento;
 }
 
-async function semearMpPendente(subId: string): Promise<string> {
-  const chave = `preapproval:${subId}:updated`;
+async function semearLegadoPendente(subId: string): Promise<string> {
+  const chave = `vinculo:${subId}:atualizado`;
   await owner!`
     INSERT INTO mercadopago_webhook_event (provider_event_id, evento, payload)
-    VALUES (${chave}, 'preapproval', ${owner!.json(payloadMp(subId) as never)})`;
+    VALUES (${chave}, 'vinculo', ${owner!.json(payloadLegado(subId) as never)})`;
   return chave;
 }
 
@@ -175,7 +204,7 @@ async function lerAsaas(idEvento: string) {
   )[0]!;
 }
 
-async function lerMp(chave: string) {
+async function lerLegado(chave: string) {
   const r = await authDb.execute(
     sql`SELECT aplicado_em, erro_aplicacao FROM mercadopago_webhook_event
         WHERE provider_event_id = ${chave}`,
@@ -210,20 +239,16 @@ let rotasGateway: Array<{
 function rotaAutorizacaoAsaas(status = "ACTIVE") {
   rotasGateway.push({
     casa: (url) => url.includes("/pix/automatic/authorizations/"),
-    responde: async () => Response.json({ id: "auth-dublê", status, value: null }),
+    responde: async () =>
+      Response.json({ id: "auth-dublê", status, value: null }),
   });
 }
 
-/** Roteia qualquer `GET /preapproval/*` do Mercado Pago. */
-function rotaVinculoMp(status = "authorized") {
+/** Roteia qualquer `GET /vinculos/*` do gateway legado (fake). */
+function rotaVinculoLegado(estado = "AUTORIZADO") {
   rotasGateway.push({
-    casa: (url) => url.includes("/preapproval/"),
-    responde: async () =>
-      Response.json({
-        id: "preapproval-dublê",
-        status,
-        auto_recurring: { transaction_amount: 39, currency_id: "BRL" },
-      }),
+    casa: (url) => url.startsWith(`${BASE_URL_FAKE}/vinculos/`),
+    responde: async () => Response.json({ id: "vinculo-dublê", estado }),
   });
 }
 
@@ -231,17 +256,6 @@ function rotaVinculoMp(status = "authorized") {
 function respondeAutorizacaoAsaas(status = "ACTIVE") {
   respostasGateway.push(async () =>
     Response.json({ id: "auth-dublê", status, value: null }),
-  );
-}
-
-/** `GET /preapproval/{id}` do Mercado Pago. */
-function respondeVinculoMp(status = "authorized") {
-  respostasGateway.push(async () =>
-    Response.json({
-      id: "preapproval-dublê",
-      status,
-      auto_recurring: { transaction_amount: 39, currency_id: "BRL" },
-    }),
   );
 }
 
@@ -264,8 +278,7 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes × trilhos", () => {
     vi.stubEnv("ASAAS_WEBHOOK_TOKEN", TOKEN_ASAAS);
     vi.stubEnv("BILLING_PROVIDER_API_KEY", API_KEY_ASAAS);
     vi.stubEnv("ASAAS_BASE_URL", BASE_URL_ASAAS);
-    vi.stubEnv("MERCADOPAGO_ACCESS_TOKEN", ACCESS_TOKEN_MP);
-    vi.stubEnv("MERCADOPAGO_WEBHOOK_SECRET", SEGREDO_MP);
+    vi.stubEnv("FAKE_WEBHOOK_TOKEN", "token-do-gateway-fake-36");
   });
 
   beforeEach(async () => {
@@ -342,24 +355,26 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes × trilhos", () => {
       );
     });
 
-    it("TAMBÉM aplica o pendente de `mercadopago_webhook_event` (caso central)", async () => {
-      // `BILLING_PROVIDER=asaas` não isenta o trilho do MP: assinaturas antigas
+    it("TAMBÉM aplica o pendente da tabela do trilho LEGADO (caso central)", async () => {
+      // `BILLING_PROVIDER=asaas` não isenta o trilho legado: assinaturas antigas
       // continuam amarradas ao gateway de origem e a varredura precisa
       // continuar entregando para elas. Cada tabela usa o adapter DELA
-      // (`MercadoPagoProvider` para esta linha), nunca o provider ativo na env.
+      // (o do trilho legado para esta linha), nunca o provider ativo na env.
       await novaAssinatura({
-        providerSubscriptionId: "sub-do-mp",
-        provider: "mercado_pago",
+        providerSubscriptionId: "vinculo-legado",
+        provider: ID_PROVEDOR_FAKE,
       });
-      const chaveMp = await semearMpPendente("sub-do-mp");
+      const chaveLegado = await semearLegadoPendente("vinculo-legado");
 
-      rotaVinculoMp("authorized");
+      rotaVinculoLegado("AUTORIZADO");
       const r = await reprocessarEventosPendentes();
       expect(r).toEqual({ aplicados: 1, falhas: 0 });
       expect(chamadasGateway).toHaveLength(1);
-      expect(chamadasGateway[0]).toContain("/preapproval/sub-do-mp");
+      expect(chamadasGateway[0]).toBe(
+        `${BASE_URL_FAKE}/vinculos/vinculo-legado`,
+      );
 
-      const depois = await lerMp(chaveMp);
+      const depois = await lerLegado(chaveLegado);
       expect(depois.aplicado_em).not.toBeNull();
       expect(depois.erro_aplicacao).toBeNull();
     });
@@ -374,25 +389,29 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes × trilhos", () => {
         provider: "asaas",
       });
       await novaAssinatura({
-        providerSubscriptionId: "sub-mp-da-virada",
-        provider: "mercado_pago",
+        providerSubscriptionId: "vinculo-legado-da-virada",
+        provider: ID_PROVEDOR_FAKE,
       });
       const idAsaas = await semearAsaasPendente(authId);
-      const chaveMp = await semearMpPendente("sub-mp-da-virada");
+      const chaveLegado = await semearLegadoPendente(
+        "vinculo-legado-da-virada",
+      );
 
       rotaAutorizacaoAsaas("ACTIVE");
-      rotaVinculoMp("authorized");
+      rotaVinculoLegado("AUTORIZADO");
       const r = await reprocessarEventosPendentes();
       expect(r).toEqual({ aplicados: 2, falhas: 0 });
 
       expect((await lerAsaas(idAsaas)).aplicado_em).not.toBeNull();
-      expect((await lerMp(chaveMp)).aplicado_em).not.toBeNull();
+      expect((await lerLegado(chaveLegado)).aplicado_em).not.toBeNull();
       expect(chamadasGateway).toHaveLength(2);
+      expect(chamadasGateway.some((u) => u.includes(BASE_URL_ASAAS))).toBe(
+        true,
+      );
       expect(
-        chamadasGateway.some((u) => u.includes(BASE_URL_ASAAS)),
-      ).toBe(true);
-      expect(
-        chamadasGateway.some((u) => u.includes("/preapproval/sub-mp-da-virada")),
+        chamadasGateway.some(
+          (u) => u === `${BASE_URL_FAKE}/vinculos/vinculo-legado-da-virada`,
+        ),
       ).toBe(true);
     });
 
@@ -509,39 +528,41 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes × trilhos", () => {
 
   // ── O simétrico ────────────────────────────────────────────────────────────
 
-  describe("BILLING_PROVIDER=mercado_pago", () => {
+  describe("BILLING_PROVIDER apontando para o trilho LEGADO", () => {
     beforeEach(() => {
-      vi.stubEnv("BILLING_PROVIDER", "mercado_pago");
+      vi.stubEnv("BILLING_PROVIDER", ID_PROVEDOR_FAKE);
     });
 
-    it("aplica o pendente do MP e o do Asaas, mesmo com BILLING_PROVIDER=mercado_pago", async () => {
+    it("aplica o pendente do legado e o do Asaas, mesmo com a env no legado", async () => {
       // Simétrico do caso central: `BILLING_PROVIDER` não isenta o trilho do
-      // Asaas. Sem isso, uma varredura que fixasse na tabela do MP (o erro
+      // Asaas. Sem isso, uma varredura que fixasse na tabela do legado (o erro
       // espelhado) passaria em tudo que está acima.
       await novaAssinatura({
-        providerSubscriptionId: "sub-mp-ativo",
-        provider: "mercado_pago",
+        providerSubscriptionId: "vinculo-legado-ativo",
+        provider: ID_PROVEDOR_FAKE,
       });
       await novaAssinatura({
         providerSubscriptionId: "auth-asaas-parada",
         provider: "asaas",
       });
-      const chaveMp = await semearMpPendente("sub-mp-ativo");
+      const chaveLegado = await semearLegadoPendente("vinculo-legado-ativo");
       const idAsaas = await semearAsaasPendente("auth-asaas-parada");
 
-      rotaVinculoMp("authorized");
+      rotaVinculoLegado("AUTORIZADO");
       rotaAutorizacaoAsaas("ACTIVE");
       const r = await reprocessarEventosPendentes();
       expect(r).toEqual({ aplicados: 2, falhas: 0 });
 
-      expect((await lerMp(chaveMp)).aplicado_em).not.toBeNull();
-      expect((await lerMp(chaveMp)).erro_aplicacao).toBeNull();
+      expect((await lerLegado(chaveLegado)).aplicado_em).not.toBeNull();
+      expect((await lerLegado(chaveLegado)).erro_aplicacao).toBeNull();
       expect((await lerAsaas(idAsaas)).aplicado_em).not.toBeNull();
       expect((await lerAsaas(idAsaas)).erro_aplicacao).toBeNull();
 
       expect(chamadasGateway).toHaveLength(2);
       expect(
-        chamadasGateway.some((u) => u.includes("/preapproval/sub-mp-ativo")),
+        chamadasGateway.some(
+          (u) => u === `${BASE_URL_FAKE}/vinculos/vinculo-legado-ativo`,
+        ),
       ).toBe(true);
       expect(chamadasGateway.some((u) => u.includes(BASE_URL_ASAAS))).toBe(
         true,
