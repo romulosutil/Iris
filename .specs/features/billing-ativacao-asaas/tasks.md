@@ -2,13 +2,16 @@
 
 **Spec**: `.specs/features/billing-ativacao-asaas/spec.md`
 **Design**: `.specs/features/billing-ativacao-asaas/design.md`
-**Status**: Fase A fechada (menos o T3 em produção) + Fase B fechada — T1 ✅
+**Status**: Fases A, B e C fechadas em código (menos o T3 em produção) — T1 ✅
 T2 ✅ T3 ✅ conteúdo aprovado pelo Rômulo (10/08), aplicação aguarda deploy
 T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅ T9 ✅
 T10 ✅ (ativação real no sandbox, evidência colada) T11 ✅ T12 ✅ T13 ✅
 T14 ✅ (cobertura multi-provedor com `ProvedorFake`) · T15 ✅ (`ProviderId`
 estreitado p/ `"asaas"`) · T16 ✅ (deletados adapter e rota de webhook do MP) ·
-próximo: T17 (limpeza de envs em prod — GATE Rômulo) e T18 (drop da tabela — GATE Rômulo)
+T17 ✅ (envs limpas no Easypanel pelo Rômulo) · T18 ✅ (`0091` dropa a tabela,
+com guard que aborta o deploy se produção tiver evento) ·
+**próximo passo: merge em `main` + deploy** — é ele que aplica a `0090`
+(backfill aprovado no T3) e a `0091` em produção
 **Issue**: #36 · Débitos: D29, D30, D31, D32
 **Baseline medida (10/08, antes do T1)**: `pnpm test` → **165 arquivos / 1076 testes**, verde.
 
@@ -985,7 +988,19 @@ classe atribuindo a uma variável tipada `BillingProvider`. Corrigidos:
 
 ---
 
-### T17: Limpar envs ⚠️ GATE RÔMULO
+### T17: Limpar envs ✅ FEITO PELO RÔMULO (fora desta sessão)
+
+**Status**: executada e implantada pelo próprio Rômulo (11/08/2026) — envs do
+Mercado Pago removidas do `iris-app` no Easypanel, com "Implantar", e webhook
+desativado no painel do MP. Não medido por esta sessão: o painel não é
+alcançável daqui, e a aba Ambiente expõe segredo em claro (screenshot proibido).
+
+⚠️ **Resíduo que sobra para o próximo commit de documentação, não reaberto aqui**:
+o `.env.example` ainda traz `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_BASE_URL` e
+`MERCADOPAGO_WEBHOOK_SECRET` (linhas 236, 237 e 248), já comentadas dentro do
+bloco "Mercado Pago (DESABILITADO)". Comentadas elas não configuram nada — mas o
+bloco descreve uma rota (`/api/hooks/mercadopago`) e um adapter que o T16
+deletou, então o arquivo documenta código inexistente.
 
 **What**: Remover `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_PUBLIC_KEY`,
 `MERCADOPAGO_WEBHOOK_SECRET` do `.env.example` e do Easypanel (`iris-app`).
@@ -1011,7 +1026,7 @@ Desativar o webhook no painel do Mercado Pago é passo manual, fora do código.
 
 ---
 
-### T18: DROP da tabela de webhook do MP ⚠️ GATE RÔMULO
+### T18: DROP da tabela de webhook do MP ✅ FEITO
 
 **What**: Migração que remove a tabela de eventos de webhook do Mercado Pago.
 **Where**: `db/migrations/00NN_*.sql`
@@ -1025,12 +1040,92 @@ histórico** e só remover o código — decidir com o Rômulo, não por conta.
 
 **Done when**:
 
-- [ ] `count(*)` medido e registrado
-- [ ] Decisão registrada no `BACKLOG.md` (dropar × manter como histórico)
-- [ ] Se dropar: migração com journal correto + `pnpm test` verde
+- [x] `count(*)` medido e registrado
+- [x] Decisão registrada no `BACKLOG.md` (dropar × manter como histórico)
+- [x] Se dropar: migração com journal correto + `pnpm test` verde
 
 **Tests**: none
 **Gate**: full
+
+**Status**: Concluída. Tabela removida do `schema.ts` e a migração
+`0091_drop_webhook_mercado_pago.sql` gerada por `pnpm db:generate` (regra 1 do
+`CLAUDE.md`: a tabela está no `schema.ts`, então o DDL não é escrito à mão);
+`.sql` + `meta/0091_snapshot.json` commitados juntos, arquivo renomeado do nome
+aleatório (`0091_cooing_johnny_storm`) para o padrão do repo, com a tag do
+`_journal.json` acompanhando. `when` = 1786456847181 > 1786399483924 (0090),
+crescente — o `migrations.test.ts` cobre isso.
+
+**Decisão: DROPAR, não manter como histórico.** O que sustenta:
+
+- O MP nunca faturou ninguém (medição de produção de 10/08 registrada no D24:
+  `free_tier: 1` + `setup_pending: 1`, zero `active`/`past_due`).
+- Depois do T16, **nenhum** caminho de código escreve ou lê a tabela — o único
+  resquício era a declaração no `schema.ts`
+  (`grep -rn "mercadopagoWebhookEvent\|mercadopago_webhook_event" src/ db/ --include=*.ts`
+  → só as 4 linhas do próprio `schema.ts`, hoje zero).
+- Manter tabela vazia com RLS, 4 índices e grants é superfície que todo teste de
+  RLS e todo backup carregam sem nada dentro.
+
+**A parte que eu não consigo medir, e como a migração resolve**: produção não é
+alcançável da máquina de desenvolvimento (o Postgres do Easypanel só responde no
+host interno `espectro-mvp_iris-postgres`), então "colar o `count(*)` de
+produção" era impossível daqui. Em vez de presumir zero, a contagem virou parte
+da própria migração: um bloco `DO` levanta `P0001` e **aborta o stage `migrate`**
+se houver qualquer linha. Se produção tiver evento gravado, o deploy para e a
+decisão dropar × preservar volta para o Rômulo com o número na mão — que é
+exatamente a condição escrita nesta tarefa. `DROP` **sem** `CASCADE` pelo mesmo
+motivo: dependente inesperado derruba o deploy em vez de morrer junto (o
+`db:generate` emitiu `CASCADE`; foi retirado à mão).
+
+#### Evidência medida (Postgres local, 11/08)
+
+Antes da 0091:
+
+```
+tabela existe: true
+count(*): 0
+pendentes (processado_em IS NULL): 0
+policies: [ mercadopago_webhook_event_auth_all ]
+indexes: [ _pkey, _provider_event_id_unique, _processado_idx, _pendente_idx ]
+grants:  [ iris:{SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER},
+           iris_auth:{SELECT,INSERT,UPDATE} ]
+fks apontando p/ ela: []          -- nenhuma; o DROP sem CASCADE basta
+asaas_webhook_event count(*): 1   -- a irmã que fica
+```
+
+Depois de `pnpm db:migrate`:
+
+```
+A) to_regclass('public.mercadopago_webhook_event')  -> null
+B) resíduo — policies / indexes / grants            -> 0  0  0
+C) total de migrações aplicadas                     -> 91
+D) asaas_webhook_event (a irmã que fica)            -> 1     (intacta)
+```
+
+O guard morde (`BEGIN … ROLLBACK`, recriando a tabela e rodando o **mesmo** bloco
+`DO` lido do arquivo da migração):
+
+```
+E) guard com 1 linha -> ERROR P0001 — mercadopago_webhook_event tem 1 evento(s)
+                        gravado(s); o DROP foi desenhado para tabela vazia.
+                        Decidir com o Rômulo entre preservar como histórico e
+                        descartar antes de reaplicar (issue #36, T18).
+E) guard com 0 linha -> PASSOU (não estourou)
+F) to_regclass depois dos ROLLBACKs -> null   (nada vazou dos testes)
+```
+
+**Gate full**: `pnpm typecheck` limpo · `pnpm test` **168 arquivos / 1057
+testes** · `pnpm test:rls` **95 arquivos / 773 testes** — ambos verdes e
+**idênticos** à contagem do T16, o que é o esperado: a tarefa não cria nem apaga
+teste. `pnpm db:generate` responde `No schema changes, nothing to migrate`
+depois da mudança — o snapshot ficou em sincronia.
+
+**Escopo estendido, deliberado**: o resíduo do T17 no `.env.example` foi limpo
+junto (o bloco documentava `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_BASE_URL`,
+`MERCADOPAGO_WEBHOOK_SECRET` e a rota `/api/hooks/mercadopago`, todos
+inexistentes desde o T16). Virou registro histórico sem nome de variável — um
+`.env.example` que descreve env de código deletado convida alguém a reconfigurar
+o que já saiu.
 
 ---
 
@@ -1082,7 +1177,7 @@ arquivos disjuntos. Nenhum par `[P]` compartilha estado mutável.
 | ATIV-04 | T6, T7                  | Done    |
 | ATIV-05 | T1, T2, T3, T4          | Pending |
 | ATIV-06 | T9                      | Pending |
-| ATIV-07 | T14, T15, T16, T17, T18 | Pending |
+| ATIV-07 | T14, T15, T16, T17, T18 | Done    |
 | ATIV-08 | T11, T13                | Pending |
 | ATIV-09 | T12                     | Pending |
 

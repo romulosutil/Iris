@@ -1673,9 +1673,10 @@ export const alertaRiscoClinico = pgTable(
 // `aplicadoEm`/`erroAplicacao` chegaram com o adapter Asaas (#36): a rota grava
 // e responde 200 ANTES de aplicar o efeito, então `aplicadoEm` NULL com
 // `processadoEm` preenchido = recebido e ainda não conciliado. É o que
-// `reprocessarEventosPendentes` varre — mesma semântica de
-// `mercadopagoWebhookEvent`, e os nomes são iguais de propósito: a varredura é
-// uma função só, parametrizada pela tabela do provedor ativo.
+// `reprocessarEventosPendentes` varre. Houve uma tabela irmã com os mesmos
+// nomes de coluna (`mercadopago_webhook_event`), justamente para a varredura ser
+// uma função só parametrizada pela tabela do provedor; ela saiu na 0091 com o
+// adapter do Mercado Pago (#36, D24) — hoje a varredura tem um trilho só.
 // Plano de billing/identidade: só `iris_auth` tem grant; `app_role` não toca.
 export const asaasWebhookEvent = pgTable(
   "asaas_webhook_event",
@@ -1877,22 +1878,7 @@ export const billingCyclePatient = pgTable(
   ],
 );
 
-// Espelha `asaasWebhookEvent` (0066): o Mercado Pago reentrega em qualquer 5xx
-// ou timeout, e reentrega é a regra. UNIQUE é a barreira contra efeito
-// duplicado em faturamento. `aplicadoEm` NULL com `processadoEm` preenchido =
-// recebido, efeito ainda não aplicado — reprocessável sem pedir reenvio.
-export const mercadopagoWebhookEvent = pgTable(
-  "mercadopago_webhook_event",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    providerEventId: text("provider_event_id").notNull().unique(),
-    evento: text("evento").notNull(),
-    payload: jsonb("payload").notNull(),
-    aplicadoEm: timestamp("aplicado_em", { withTimezone: true }),
-    erroAplicacao: text("erro_aplicacao"),
-    processadoEm: timestamp("processado_em", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [index("mercadopago_webhook_event_processado_idx").on(t.processadoEm)],
-);
+// `mercadopagoWebhookEvent` (0071) foi removida na 0091 (#36, T18/D24): com o
+// adapter e a rota do Mercado Pago deletados no T16, ninguém mais escrevia nem
+// lia a tabela, e o trilho nunca faturou. A 0091 aborta se houver linha, para
+// que "remoção de código morto" nunca vire descarte de evento não conciliado.
