@@ -62,6 +62,18 @@
 
 ---
 
+## 🏁 Sessão 11/08/2026 — Desarquivamento Clínico Unificado (D7/D8) e Helpers GUC de Papel e Identidade (D23, D5)
+
+**O que foi entregue e verificado nesta sessão:**
+
+1. **D5 Fechado:** Webhook de produção cadastrado na conta de produção do Asaas e token `ASAAS_WEBHOOK_TOKEN` (`dQx2A1mhoaidY2…`) confirmado ativo em produção pelo Rômulo em 11/08.
+2. **D7 Fechado (#174):** Helper central `desarquivarPacienteSeArquivado` em `src/lib/patient/desarquivamento.ts` com gate de RLS prévio e emissão atômica de `audit_log` (`paciente_desarquivado_automaticamente`). Cobertura completa de todos os atos clínicos (diário de sessão, áudio local, consolidação, escopo, aprovação de evidências, confirmação/reclassificação de fila, dúvidas clínicas, ativação de protocolos, metas e ficha clínica).
+3. **D8 Fechado (#174):** Procedure `app_desarquivar_paciente` (`SECURITY DEFINER`, migração `0092`) autoriza condutores e substitutos de sessão (`session.terapeuta_id` ou `session.atendido_por_id` na mesma clínica) a reativar o paciente de forma atômica no ato clínico.
+4. **D23 Fechado:** Migração `0093_user_role_id_helpers.sql` criou 6 helpers com código de erro diagnóstico `P0001` e regex guard. Reescrita de 6 funções DEFINER (`app_alerta_risco_visivel`, `app_session_clinica_visivel`, `app_salvar_config_emergencia`, `app_salvar_cpf_cnpj_clinica`, `app_desarquivar_paciente`, `app_criar_alerta_risco`). Guards de CI em `db/tests/clinic-id-helper-rls.int.test.ts` estendidos.
+5. **PR #247:** Aberta na branch `feat/d7-desarquivamento-clinico` com todas as alterações acima.
+
+---
+
 ## 🏁 Sessão 10/08/2026 (2ª) — #36 especificada: a ativação Asaas nunca funcionou, e a causa raiz é modelo de dados, não adapter
 
 **Medição que muda o quadro (psql, produção):** `SELECT provider, status,
