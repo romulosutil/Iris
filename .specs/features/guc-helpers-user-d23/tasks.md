@@ -66,22 +66,22 @@
 **Files:**
 - Modify: `db/tests/clinic-id-helper-rls.int.test.ts`
 
-**Status:** `[ ]`
+**Status:** `[x]`
 
-- [ ] **Step 1: Testes dos helpers lenientes**
+- [x] **Step 1: Testes dos helpers lenientes**
 
   Novos casos no mesmo `describe`:
   - `app_user_role_atual()` devolve `NULL` nos 3 estados ruins (ausente, vazio, lixo).
   - `app_user_id_atual()` devolve `NULL` nos 4 estados ruins (ausente, vazio, lixo, truncado).
   - Contraprovas: devolvem valor/uuid quando GUC bem formado.
 
-- [ ] **Step 2: Testes dos helpers estritos**
+- [x] **Step 2: Testes dos helpers estritos**
 
   - `app_user_role_exigido()` levanta `P0001` nos 3 estados ruins (não `42704`).
   - `app_user_id_exigido()` levanta `P0001` nos 4 estados ruins (não `42704`, não `22P02`).
   - Contraprovas: devolvem valor/uuid quando GUC bem formado.
 
-- [ ] **Step 3: Guard negativo — nenhuma função DEFINER usa cast cru**
+- [x] **Step 3: Guard negativo — nenhuma função DEFINER usa cast cru**
 
   Novos invariantes (mesmo padrão da `0087`):
   - Nenhuma função pública usa `current_setting('app.user_id')::uuid` cru (exceto `app_user_id_atual` que é o próprio helper).
@@ -89,19 +89,20 @@
   
   **Nota:** Usar regex do Postgres com barras DUPLAS no template literal JS (lição da `0087`).
 
-- [ ] **Step 4: Guard positivo — conjunto exato de funções com helpers**
+- [x] **Step 4: Guard positivo — conjunto exato de funções com helpers**
 
   Arrays literais escritos à mão:
   - `FUNCOES_COM_USER_ROLE_HELPER`: funções que chamam `app_user_role_exigido()`.
-  - `FUNCOES_COM_USER_ID_HELPER`: funções que chamam `app_user_id_exigido()` ou `app_user_id_atual()`.
+  - `FUNCOES_COM_USER_ID_EXIGIDO_HELPER`: funções que chamam `app_user_id_exigido()`.
+  - `FUNCOES_COM_USER_ID_ATUAL_HELPER`: funções que chamam `app_user_id_atual()`.
   - Comparação de conjunto exato com query em `pg_proc`.
 
-- [ ] **Step 5: Rodar gate completo**
+- [x] **Step 5: Rodar gate completo**
 
   Gate: `pnpm test:rls`
   Expected: PASS (novos + existentes).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
   ```bash
   git add db/tests/clinic-id-helper-rls.int.test.ts
