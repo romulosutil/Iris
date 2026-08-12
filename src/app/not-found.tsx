@@ -6,6 +6,8 @@ import { Logo } from "@/components/ui/logo";
  * preta, em inglês) por copy honesta em pt-BR e uma saída óbvia. Renderiza no
  * root layout — sem o header do shell autenticado. O tom segue a personalidade
  * do produto: literal, sem culpa, calibrado para leitura sob pressão.
+ *
+ * Refinado e validado como parte da issue #190 para integridade visual do Design System.
  */
 export default function NotFound() {
   return (
