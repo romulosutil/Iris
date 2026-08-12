@@ -1,0 +1,194 @@
+name: Jules Auto Fix
+on:
+  workflow_run:
+    workflows: ["Jules PR Review"]
+    types:
+      - completed
+
+concurrency:
+  group: jules-auto-fix-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      pull-requests: write
+      contents: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js & pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Execute Jules Auto-Fix Evaluator
+        uses: actions/github-script@v7
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const path = require('path');
+            const { parseReviewFindings, calculateNextAttempt, buildJulesFixPrompt } = require(path.join(process.cwd(), 'src/lib/ci/jules-parser.ts'));
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const headBranch = process.env.HEAD_BRANCH;
+            const headSha = process.env.HEAD_SHA;
+            const julesApiKey = process.env.JULES_API_KEY;
+
+            if (!julesApiKey) {
+              console.log('JULES_API_KEY não configurada. Encerrando auto-fix.');
+              return;
+            }
+
+            // 1. Resolução do PR
+            let pr = context.payload.workflow_run.pull_requests && context.payload.workflow_run.pull_requests[0];
+            if (!pr) {
+              const { data: pulls } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'open',
+                head: `${owner}:${headBranch}`,
+              });
+              pr = pulls.find(p => p.head.sha === headSha) || pulls[0];
+            }
+
+            if (!pr) {
+              console.log(`Nenhum PR aberto associado à branch ${headBranch}.`);
+              return;
+            }
+
+            if (pr.draft) {
+              console.log(`PR #${pr.number} está em estado Draft. Ignorando auto-fix.`);
+              return;
+            }
+
+            // 2. Leitura dos comentários do PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: pr.number,
+            });
+
+            const reviewComment = [...comments].reverse().find(c =>
+              (c.body && (c.body.includes('<!-- jules-pr-reviewer -->') || c.body.includes('## Findings') || c.body.includes('Jules PR Reviewer')))
+            );
+
+            if (!reviewComment || !reviewComment.body) {
+              console.log(`Nenhum comentário de revisão encontrado no PR #${pr.number}.`);
+              return;
+            }
+
+            // 3. Parsing dos Findings
+            const findings = parseReviewFindings(reviewComment.body);
+            if (!findings.hasFindings) {
+              console.log(`PR #${pr.number} não possui findings pendentes. Auto-fix não é necessário.`);
+              return;
+            }
+
+            console.log(`Findings detectados: ${findings.blockingCount} BLOCKING, ${findings.warnCount} WARN, ${findings.nitCount} NIT.`);
+
+            // 4. Verificação de Limite Anti-Loop
+            const attempt = calculateNextAttempt(comments, 3);
+            if (!attempt.canExecute) {
+              const alertBody = `⚠️ **Jules Self-Healing Loop:** Limite de 3 tentativas de auto-cura atingido no PR #${pr.number}.\n\nIntervenção humana necessária para revisar e ajustar os achados pendentes.`;
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
+                body: alertBody,
+              });
+              console.log('Limite de tentativas atingido. Comentário de escalonamento publicado.');
+              return;
+            }
+
+            // 5. Publicação do Comentário de Notificação no PR
+            const notifyBody = `<!-- jules-auto-fix-attempt: ${attempt.currentAttempt} -->\n🔄 **Jules Self-Healing Loop (Tentativa ${attempt.currentAttempt}/3)**: Detectados ${findings.totalFindings} achados na revisão (${findings.blockingCount} blocking, ${findings.warnCount} warn, ${findings.nitCount} nit). Disparando sessão do Jules para auto-correção na branch \`${headBranch}\`...`;
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pr.number,
+              body: notifyBody,
+            });
+
+            // 6. Resolução dinâmica do source na API do Jules
+            let sourceName = `sources/github/${owner}/${repo}`;
+            try {
+              const sourcesRes = await fetch('https://jules.googleapis.com/v1alpha/sources', {
+                headers: {
+                  'x-goog-api-key': julesApiKey,
+                },
+              });
+              if (sourcesRes.ok) {
+                const sourcesData = await sourcesRes.json();
+                if (sourcesData.sources && sourcesData.sources.length > 0) {
+                  const match = sourcesData.sources.find(s =>
+                    s.name?.includes(`${owner}/${repo}`) ||
+                    (s.githubRepo && s.githubRepo.owner === owner && s.githubRepo.repo === repo)
+                  );
+                  if (match && match.name) {
+                    sourceName = match.name;
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn('Erro ao consultar /sources do Jules, usando fallback padrão:', err);
+            }
+
+            // 7. Disparo da Sessão de Auto-Fix na API do Jules
+            const prompt = buildJulesFixPrompt({
+              branch: headBranch,
+              findingsText: findings.findingsText,
+            });
+
+            const sessionPayload = {
+              prompt,
+              title: `Auto-fix PR #${pr.number} (Tentativa ${attempt.currentAttempt})`,
+              sourceContext: {
+                source: sourceName,
+                githubRepoContext: {
+                  startingBranch: headBranch,
+                },
+              },
+            };
+
+            const sessionRes = await fetch('https://jules.googleapis.com/v1alpha/sessions', {
+              method: 'POST',
+              headers: {
+                'x-goog-api-key': julesApiKey,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(sessionPayload),
+            });
+
+            if (!sessionRes.ok) {
+              const errText = await sessionRes.text();
+              console.error('Falha ao criar sessão no Jules:', sessionRes.status, errText);
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
+                body: `❌ **Falha no Jules Self-Healing Loop:** Não foi possível disparar a sessão do Jules (HTTP ${sessionRes.status}).\n\`\`\`\n${errText}\n\`\`\``,
+              });
+              return;
+            }
+
+            const sessionData = await sessionRes.json();
+            console.log('Sessão do Jules criada com sucesso:', sessionData.name || sessionData.id);
