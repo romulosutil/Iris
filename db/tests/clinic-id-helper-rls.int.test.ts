@@ -193,10 +193,13 @@ async function semear(tx: postgres.TransactionSql) {
  * Assume o papel de aplicação para a clínica dada, com os GUCs que as policies
  * exigem. `SET LOCAL` + `set_config(..., true)`: tudo morre no rollback.
  *
- * `app.user_id` recebe um uuid VÁLIDO de propósito, mesmo quando o teste está
- * exercitando um `app.clinic_id` malformado: várias policies também castam o
- * `app.user_id`, e um lixo ali levantaria 22P02 pelo motivo errado — o teste
- * ficaria verde/vermelho por acidente em vez de medir o helper de tenant.
+ * Por padrão `app.user_id` recebe um uuid VÁLIDO de propósito, mesmo quando o
+ * teste está exercitando um `app.clinic_id` malformado: várias policies também
+ * castam o `app.user_id`, e um lixo ali levantaria 22P02 pelo motivo errado —
+ * o teste ficaria verde/vermelho por acidente em vez de medir o helper de
+ * tenant. Passar `null` em `papel`/`userId` PULA o `set_config` daquele GUC:
+ * é o que os testes de semântica GUC-ausente usam para deixar exatamente o
+ * GUC sob teste sem valor, sem contaminar os demais.
  */
 async function comoApp(
   tx: postgres.TransactionSql,
@@ -455,7 +458,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(["app_user_id_atual"]);
   });
 
-  test("as 5 funções de papel chamam app_user_role_exigido() — conjunto exato", async () => {
+  test("as 11 funções de papel chamam app_user_role_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -465,10 +468,10 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ROLE_HELPER);
-    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(5);
+    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(11);
   });
 
-  test("as 3 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
+  test("as 6 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -477,8 +480,10 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
          AND p.prosrc ~ 'app_user_id_exigido\\(\\)'
        ORDER BY 1`;
 
-    expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ID_EXIGIDO_HELPER);
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(3);
+    expect(rows.map((r) => r.proname)).toEqual(
+      FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
+    );
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(6);
   });
 
   test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {
@@ -490,7 +495,9 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
          AND p.prosrc ~ 'app_user_id_atual\\(\\)'
        ORDER BY 1`;
 
-    expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ID_ATUAL_HELPER);
+    expect(rows.map((r) => r.proname)).toEqual(
+      FUNCOES_COM_USER_ID_ATUAL_HELPER,
+    );
     expect(FUNCOES_COM_USER_ID_ATUAL_HELPER.length).toBe(3);
   });
 

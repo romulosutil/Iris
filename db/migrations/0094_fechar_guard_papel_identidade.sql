@@ -271,6 +271,13 @@ CREATE OR REPLACE FUNCTION public.app_is_on_team(p_patient uuid)
 $$;
 --> statement-breakpoint
 
+-- ATENÇÃO (mudança de ACL intencional, além da troca de helper): `app_is_on_team`
+-- era a única das 7 funções que ainda carregava o EXECUTE default de PUBLIC
+-- (ACL medida pré-0094: {=X/iris, iris=X/iris, app_role=X/iris}). Este REVOKE
+-- derruba o acesso indireto de iris_auth, iris_arquivamento, iris_escalonamento
+-- e iris_auth_login via PUBLIC. Hoje nenhum desses papéis chama a função
+-- diretamente (só através de funções SECURITY DEFINER do owner, onde o check de
+-- privilégio é do owner) — endurecimento seguro e proposital.
 REVOKE ALL ON FUNCTION public.app_is_on_team(uuid) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.app_is_on_team(uuid) TO app_role;
