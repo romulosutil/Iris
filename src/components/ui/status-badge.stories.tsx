@@ -12,7 +12,7 @@ const estados: EstadoDado[] = [
 ];
 
 const meta = {
-  title: "Atoms/StatusBadge",
+  title: "ATOMS/StatusBadge",
   component: StatusBadge,
   parameters: { layout: "centered" },
   args: { estado: "sugerida" },

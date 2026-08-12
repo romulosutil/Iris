@@ -1,6 +1,8 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import { surface } from "@/components/ui/primitives/surface";
+import { Pill } from "@/components/ui/primitives/pill";
+import { SparkleIcon, CheckIcon, LayersIcon } from "./icon";
 
 export type EpistemicState = "fact" | "suggestion" | "conquistado" | "candidato";
 
@@ -25,12 +27,57 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
   const resolvedState = epistemicState ?? estado ?? "fact";
   const isFact = resolvedState === "fact" || resolvedState === "conquistado";
 
-  const cardClasses = isFact
-    ? cn(
-        "bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]",
+  let cardClasses = "";
+  if (isFact) {
+    cardClasses = surface("solida", {
+      radius: "control",
+      className: cn(
+        "bg-[var(--surface-card)] text-[var(--text-primary)]",
         (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[var(--status-success-border)]"
       )
-    : "bg-[var(--status-ia-bg)] border-2 border-dashed border-[var(--status-ia-border)] text-[var(--text-primary)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]";
+    });
+  } else if (resolvedState === "candidato") {
+    // "marco-candidato = azul + Layers"
+    cardClasses = surface("sugerida", {
+      radius: "control",
+      className: "bg-transparent border-[var(--status-info-border)] text-[var(--text-primary)]"
+    });
+  } else {
+    // suggestion
+    cardClasses = surface("sugerida", {
+      radius: "control",
+      className: "bg-transparent text-[var(--text-primary)]"
+    });
+  }
+
+  const renderBadge = () => {
+    switch (resolvedState) {
+      case "conquistado":
+      case "fact":
+        return (
+          <Pill className="border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)] gap-1.5">
+            <CheckIcon className="h-3.5 w-3.5" />
+            <span>Conquistado</span>
+          </Pill>
+        );
+      case "suggestion":
+        return (
+          <Pill className="border-[var(--status-ia-border)] bg-transparent text-[var(--status-ia-fg)] gap-1.5">
+            <SparkleIcon className="h-3.5 w-3.5" />
+            <span>Sugerido</span>
+          </Pill>
+        );
+      case "candidato":
+        return (
+          <Pill className="border-[var(--status-info-border)] bg-transparent text-[var(--status-info-fg)] gap-1.5">
+            <LayersIcon className="h-3.5 w-3.5" />
+            <span>Candidato</span>
+          </Pill>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <Component
@@ -57,19 +104,9 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
             {titulo}
           </h3>
         ) : null}
-        <span
-          className={cn(
-            "shrink-0 border-2 px-2 py-0.5 font-mono text-xs font-semibold tracking-wide uppercase rounded-[var(--radius-xs)]",
-            isFact
-              ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
-              : "border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-[var(--status-ia-fg)]",
-          )}
-        >
-          {isFact ? "Conquistado" : "Sugerido"}
-        </span>
+        {renderBadge()}
       </div>
       {children ? <div className="text-[var(--text-primary)] text-sm">{children}</div> : null}
     </Component>
   );
 });
-

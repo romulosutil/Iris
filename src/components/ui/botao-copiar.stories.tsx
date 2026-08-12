@@ -5,7 +5,7 @@ const BR_CODE_EXEMPLO =
   "00020126580014BR.GOV.BCB.PIX0136f5b1c0de-0000-4000-a000-000000000abc5204000053039865802BR5913CLINICA IRIS6008SAOPAULO62070503***6304AB12";
 
 const meta = {
-  title: "Atoms/BotaoCopiar",
+  title: "ATOMS/BotaoCopiar",
   component: BotaoCopiar,
   tags: ["autodocs"],
   parameters: { layout: "centered" },

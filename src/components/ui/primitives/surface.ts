@@ -56,7 +56,7 @@ const elevacoes: Record<ElevationNivel, string> = {
   raise: "shadow-[var(--elevation-1)]",
   base: "shadow-[var(--ds-shadow)]",
   hover: "shadow-[var(--ds-shadow-hover)]",
-  inset: "shadow-[var(--elevation-inset)]",
+  inset: "shadow-[var(--ds-shadow-inset)]",
   overlay: "shadow-[var(--elevation-overlay)]",
 };
 

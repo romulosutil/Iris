@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { control } from "./primitives/surface";
 
 export interface InputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
@@ -88,6 +89,7 @@ export const Input = React.forwardRef<
     <div
       onClick={handleWrapperClick}
       className={cn(
+        control(size),
         "group flex w-full items-stretch rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)]",
         !disabled && "cursor-text",
         "transition-[border-color,box-shadow,background-color] duration-200 ease-out",

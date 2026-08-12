@@ -53,6 +53,7 @@ stack quando a Fase que primeiro precisar de um desses componentes chegar
 | Item de Agenda com status                       | 5.1 Grade do dia                                     | Linha de horário + paciente + estado (✓ feito / ● agora / ○ futuro)    | Estende Content Card                                                                 |
 | Formulário em etapas (administrativo → clínico) | 4.1 Cadastro                                         | Dois donos, dois momentos, mesma jornada (fronteira RLS visível)       | Container estende Card; navegação entre etapas é novo primitivo                      |
 | Seleção múltipla com chip de vigência           | 4.1 (`☑ PROC — desde 09/07/2026`)                    | Selecionar protocolo(s) de referência com nota contextual inline       | Novo primitivo pequeno                                                               |
+| AgendaCalendarGrid                              | 5.1 Grade do dia / 5.2 Agenda                        | Visualização em grade ou dia dos compromissos (mobile e desktop)       | Localização: `src/components/ui/agenda-calendar-grid.tsx` · Status: Em implementação / Formalizado em ui/ |
 
 ### Fase 2 — Metas + diário (sem IA)
 
@@ -77,6 +78,7 @@ stack quando a Fase que primeiro precisar de um desses componentes chegar
 
 | Componente                                       | Tela de origem                   | O que resolve                                                          | Relação com os 3 base                                                                                  |
 | ------------------------------------------------ | -------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| ProtocolDashboardCharts                          | 1.3 Gráfico do protocolo / Dashboard | Gráficos e progresso por metas sólidas (menta) e sugeridas por IA (violeta) | Localização: `src/components/ui/protocol-dashboard-charts.tsx` · Status: Em implementação / Formalizado em ui/ |
 | Barra de progresso do protocolo                  | 1.3 Gráfico do protocolo         | Segmento sólido (conquistado) + hachurado (candidato) por meta/domínio | Novo primitivo — usa diretamente o par de tokens "candidato/conquistado" já definido no briefing       |
 | Scrubber de linha do tempo                       | 1b                               | Arrastar entre sessões, "voltar no tempo" ao snapshot                  | Componente mais complexo do catálogo — Radix Slider como base de comportamento + skin                  |
 | Banner fixo de modo passado                      | 1b (`📍 Vendo sessão 45 de 120`) | Nunca deixar confundir passado com presente                            | Mesma família do banner informativo da Fase 3                                                          |

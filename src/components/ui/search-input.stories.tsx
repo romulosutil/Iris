@@ -3,7 +3,7 @@ import { useState } from "react";
 import { SearchInput } from "./search-input";
 
 const meta = {
-  title: "Molecules/SearchInput",
+  title: "MOLECULES/SearchInput",
   component: SearchInput,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof SearchInput>;

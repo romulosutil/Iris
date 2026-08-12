@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Logo } from "./logo";
 
 const meta = {
-  title: "Foundations/Logo",
+  title: "FOUNDATIONS/Logo",
   component: Logo,
   parameters: { layout: "centered" },
   args: { variante: "completo", tom: "cor", altura: 56, animado: false },

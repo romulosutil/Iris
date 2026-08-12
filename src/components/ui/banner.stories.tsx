@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Banner } from "./banner";
 
 const meta = {
-  title: "Molecules/Banner",
+  title: "MOLECULES/Banner",
   component: Banner,
   parameters: { layout: "centered" },
   args: { className: "w-[480px] max-w-full" },

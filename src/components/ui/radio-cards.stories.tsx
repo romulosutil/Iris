@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { RadioCards } from "./radio-cards";
 
 const meta = {
-  title: "Molecules/RadioCards",
+  title: "MOLECULES/RadioCards",
   component: RadioCards,
   tags: ["autodocs"],
   parameters: { layout: "centered" },

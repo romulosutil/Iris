@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Checkbox } from "./checkbox";
 
 const meta = {
-  title: "Atoms/Checkbox",
+  title: "ATOMS/Checkbox",
   component: Checkbox,
   parameters: { layout: "centered" },
   args: { label: "Consentimento coletado" },

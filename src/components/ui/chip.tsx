@@ -29,6 +29,7 @@ const stylesVariante: Record<string, string> = {
 
 const base = cn(
   "inline-flex items-center gap-2 border-2 border-[var(--border-brutal)] px-3 font-mono text-xs uppercase rounded-sm",
+  "min-h-11 min-w-11", // garante área de toque de no mínimo 44px (Casey)
   control("sm"),
 );
 
@@ -97,9 +98,12 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
 
   // Container (estático ou removível). Toggle + remover convivem: rótulo vira
   // um botão interno para não aninhar <button> dentro de <button>.
+  const isGroup = removivel && onSelecionar;
   return (
     <span
       ref={ref as React.Ref<HTMLSpanElement>}
+      role={isGroup ? "group" : undefined}
+      aria-label={isGroup ? (rotuloRemover ? `Filtro ${rotuloRemover}` : "Opção de filtro removível") : undefined}
       className={cn(base, corClasses, className)}
     >
       {onSelecionar ? (
