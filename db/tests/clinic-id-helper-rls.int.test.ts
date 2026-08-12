@@ -193,22 +193,29 @@ async function semear(tx: postgres.TransactionSql) {
  * Assume o papel de aplicação para a clínica dada, com os GUCs que as policies
  * exigem. `SET LOCAL` + `set_config(..., true)`: tudo morre no rollback.
  *
- * `app.user_id` recebe um uuid VÁLIDO de propósito, mesmo quando o teste está
- * exercitando um `app.clinic_id` malformado: várias policies também castam o
- * `app.user_id`, e um lixo ali levantaria 22P02 pelo motivo errado — o teste
- * ficaria verde/vermelho por acidente em vez de medir o helper de tenant.
+ * Por padrão `app.user_id` recebe um uuid VÁLIDO de propósito, mesmo quando o
+ * teste está exercitando um `app.clinic_id` malformado: várias policies também
+ * castam o `app.user_id`, e um lixo ali levantaria 22P02 pelo motivo errado —
+ * o teste ficaria verde/vermelho por acidente em vez de medir o helper de
+ * tenant. Passar `null` em `papel`/`userId` PULA o `set_config` daquele GUC:
+ * é o que os testes de semântica GUC-ausente usam para deixar exatamente o
+ * GUC sob teste sem valor, sem contaminar os demais.
  */
 async function comoApp(
   tx: postgres.TransactionSql,
   clinicId: string | null,
-  papel = "coordenador",
-  userId = USER_A,
+  papel: string | null = "coordenador",
+  userId: string | null = USER_A,
 ) {
   if (clinicId !== null) {
     await tx`SELECT set_config('app.clinic_id', ${clinicId}, true)`;
   }
-  await tx`SELECT set_config('app.user_role', ${papel}, true)`;
-  await tx`SELECT set_config('app.user_id', ${userId}, true)`;
+  if (papel !== null) {
+    await tx`SELECT set_config('app.user_role', ${papel}, true)`;
+  }
+  if (userId !== null) {
+    await tx`SELECT set_config('app.user_id', ${userId}, true)`;
+  }
   await tx`SET LOCAL ROLE app_role`;
 }
 
@@ -262,22 +269,31 @@ const FUNCOES_COM_HELPER = [
 ];
 
 /**
- * As 5 funções que chamam app_user_role_exigido() (0093, D23).
+ * As 11 funções que chamam app_user_role_exigido() (0093 + 0094, D23).
  */
 const FUNCOES_COM_USER_ROLE_HELPER = [
   "app_alerta_risco_visivel",
+  "app_alerta_visivel",
+  "app_aplicar_candidatura",
+  "app_aplicar_snapshot",
   "app_desarquivar_paciente",
+  "app_purgar_paciente",
+  "app_purgar_report",
+  "app_report_visivel",
   "app_salvar_config_emergencia",
   "app_salvar_cpf_cnpj_clinica",
   "app_session_clinica_visivel",
 ];
 
 /**
- * As 3 funções que chamam app_user_id_exigido() (0093, D23).
+ * As 6 funções que chamam app_user_id_exigido() (0093 + 0094, D23).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
   "app_desarquivar_paciente",
+  "app_is_on_team",
+  "app_purgar_paciente",
+  "app_purgar_report",
   "app_session_clinica_visivel",
 ];
 
@@ -442,7 +458,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(["app_user_id_atual"]);
   });
 
-  test("as 5 funções de papel chamam app_user_role_exigido() — conjunto exato", async () => {
+  test("as 11 funções de papel chamam app_user_role_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -452,10 +468,10 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ROLE_HELPER);
-    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(5);
+    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(11);
   });
 
-  test("as 3 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
+  test("as 6 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -464,8 +480,10 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
          AND p.prosrc ~ 'app_user_id_exigido\\(\\)'
        ORDER BY 1`;
 
-    expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ID_EXIGIDO_HELPER);
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(3);
+    expect(rows.map((r) => r.proname)).toEqual(
+      FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
+    );
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(6);
   });
 
   test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {
@@ -477,7 +495,9 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
          AND p.prosrc ~ 'app_user_id_atual\\(\\)'
        ORDER BY 1`;
 
-    expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ID_ATUAL_HELPER);
+    expect(rows.map((r) => r.proname)).toEqual(
+      FUNCOES_COM_USER_ID_ATUAL_HELPER,
+    );
     expect(FUNCOES_COM_USER_ID_ATUAL_HELPER.length).toBe(3);
   });
 
@@ -788,7 +808,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
 
     test("app_user_id_atual() devolve NULL nos 4 estados ruins de GUC", async () => {
       const r = await emTransacao(async (tx) => {
-        await comoApp(tx, CLINICA_A, "coordenador", USER_A);
+        await comoApp(tx, CLINICA_A, "coordenador", null);
 
         const out: Record<string, string | null> = {};
         for (const [caso, valor] of GUCS_RUINS) {
@@ -814,7 +834,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
 
     test("app_user_id_exigido() levanta P0001 nos 4 estados ruins (nunca 22P02 nem 42704)", async () => {
       const r = await emTransacao(async (tx) => {
-        await comoApp(tx, CLINICA_A, "coordenador", USER_A);
+        await comoApp(tx, CLINICA_A, "coordenador", null);
 
         const out: Record<string, string> = {};
         for (const [caso, valor] of GUCS_RUINS) {
