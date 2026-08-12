@@ -28,6 +28,111 @@ export function calcularHashMigracao(conteudo) {
 }
 
 /**
+ * Derivas históricas conhecidas — pinadas pelos DOIS hashes: só passa se o
+ * banco tiver exatamente o hash aplicado à época E o disco tiver exatamente
+ * o conteúdo atual conhecido. Editar o `.sql` de novo (ou um banco com outro
+ * histórico) volta a acusar divergência.
+ *
+ * Inventário medido em produção em 12/08/2026 (`drizzle.__drizzle_migrations`
+ * completo, 93 linhas — 85 batem, 8 divergem, todas explicadas):
+ *
+ * - 0003/0007/0009: conteúdo IDÊNTICO ao repo; aplicadas de um checkout
+ *   Windows (CRLF) no início do projeto, então o hash gravado é o do mesmo
+ *   arquivo com quebra de linha CRLF. Sem deriva de SQL.
+ * - 0004/0005/0006/0072/0073: editadas in-place DEPOIS de aplicadas
+ *   (precedente #215; a 0073 foi remediada pela 0082 recriando o conteúdo
+ *   como migração nova). O SQL corrigido dessas edições precisa ter chegado
+ *   em prod por migrações posteriores — o que os guards de RLS medem direto
+ *   no pg_proc/pg_policies.
+ *
+ * Nota: rodar este guard num checkout Windows (CRLF) contra um banco migrado
+ * com conteúdo LF acusa falso-positivo local; o gate é para a imagem de
+ * deploy (checkout LF). O fluxo dev usa drizzle-kit direto e não passa aqui.
+ */
+export const DERIVAS_CONHECIDAS = new Map([
+  [
+    "0003_curvy_nick_fury",
+    {
+      hashAplicado:
+        "b9d3f9719499b1c12b123be43ebb250b840187dfadeca4860a5ef0fa6ef8c51f",
+      hashDiscoAtual:
+        "3a06db1babf8f26cc57517c2827447f5995b228424a64d9800caaea334d5c201",
+      motivo: "aplicada com CRLF (checkout Windows); SQL idêntico",
+    },
+  ],
+  [
+    "0004_session_rls",
+    {
+      hashAplicado:
+        "11225eea3d4848e3fbd0885e1c4cdcbc9bc8662ed2b6b6d55f2fdea64215ec54",
+      hashDiscoAtual:
+        "619d168828bba004723b1ba417d19024e2a2b4350bc03c98681a61b373a940e6",
+      motivo: "editada in-place pós-aplicação (fase 1)",
+    },
+  ],
+  [
+    "0005_square_ravenous",
+    {
+      hashAplicado:
+        "c473668901a136991c15817d101a4469ca7e10473202b4cc735c89640a8c6beb",
+      hashDiscoAtual:
+        "10f7d55e08b32936b5cb17e2945cfe0df8ae558881fe8d3b9502120f38c32994",
+      motivo: "editada in-place pós-aplicação (fase 1)",
+    },
+  ],
+  [
+    "0006_fase2_rls",
+    {
+      hashAplicado:
+        "e6c8feb94415d88c8ed657d3d0a9e3cfc43d8a2463f243a4a8089063f4eda6b5",
+      hashDiscoAtual:
+        "00e8c652d1fa7cb762211d10603c4def1f62712471c506897045900217ce8e30",
+      motivo: "editada in-place pós-aplicação (reviews de RLS da fase 2)",
+    },
+  ],
+  [
+    "0007_session_numero_seq",
+    {
+      hashAplicado:
+        "52b05d657e8186aaaa675ad5124ca67f81c8d3ac3af1132c9655c36113fa3f2a",
+      hashDiscoAtual:
+        "49efb299139c0afe73a3305ef2d89686c97140fd31e708934ab761daa2acc645",
+      motivo: "aplicada com CRLF (checkout Windows); SQL idêntico",
+    },
+  ],
+  [
+    "0009_nosy_lenny_balinger",
+    {
+      hashAplicado:
+        "ac31931b59cecdd25c61546dcaddb6f4a479bf6a633dc1da9e4aea81e415d471",
+      hashDiscoAtual:
+        "6790b0bc384ff5a445099ab43d2960f558a400845a446b5c0e281210a5e97914",
+      motivo: "aplicada com CRLF (checkout Windows); SQL idêntico",
+    },
+  ],
+  [
+    "0072_super_admin_role",
+    {
+      hashAplicado:
+        "9b353c4445c4ed13b56d2261743db3e074a88ca2ab0f8c34ae8a1e6e519b8b8b",
+      hashDiscoAtual:
+        "ab71715ce601d6154707af80c6a7748c18392186195cd7e8ae62ca8d7dd1e80b",
+      motivo: "editada in-place pós-aplicação (fix f6e0884)",
+    },
+  ],
+  [
+    "0073_conta_somente_leitura",
+    {
+      hashAplicado:
+        "5f52882de5864bee1896e96427e512651537a851e2ded7895abc2e9a90f32628",
+      hashDiscoAtual:
+        "1c261ad1e19f63047349146d42a411f2d00a11a26a4b6b5d18e05e298c36be23",
+      motivo: "#215 — edição b53b294 nunca rodou; remediada pela 0082",
+    },
+  ],
+]);
+
+/**
  * Função pura: recebe as entradas do journal e as linhas já aplicadas no
  * banco (`{ hash, created_at }`), devolve as que divergem. `lerConteudo` é
  * injetável para o teste unitário não depender de arquivo em disco.
@@ -50,6 +155,14 @@ export function encontrarMigracoesComHashDivergente(
 
     const hashEsperado = calcularHashMigracao(lerConteudo(tag));
     if (hashEsperado !== linha.hash) {
+      const deriva = DERIVAS_CONHECIDAS.get(tag);
+      if (
+        deriva &&
+        deriva.hashAplicado === linha.hash &&
+        deriva.hashDiscoAtual === hashEsperado
+      ) {
+        continue;
+      }
       divergentes.push({ tag, hashAplicado: linha.hash, hashEsperado });
     }
   }
