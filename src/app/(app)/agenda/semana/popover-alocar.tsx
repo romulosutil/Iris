@@ -95,10 +95,10 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
   useEffect(() => {
     if (!patientId && !terapeutaId) return;
     let cancelado = false;
-    setErroCarregarDisciplinas(false);
     listarDisciplinasEquipeAction(patientId, terapeutaId)
       .then((list) => {
         if (!cancelado) {
+          setErroCarregarDisciplinas(false);
           setDisciplinasEquipe(list);
           if (list.length > 0 && !reposicao) {
             setDisciplina((dAtual) => {
