@@ -14,7 +14,9 @@
 > Riscos aceitos e pendências de segurança que **sobrevivem** ao aceite:
 > **#86** (backup no mesmo VPS — `risco-aceito`, reavaliar se o piloto passar da
 > primeira clínica), **#93** (segredos em log de build do Easypanel + PAT
-> classic), **#89** (retenção de 30d do backup vs. expurgo).
+> classic).
+>
+> *Nota: O risco #89 (retenção de 30d do backup vs. expurgo) foi equacionado e resolvido com a formalização da política de retenção de backup, justificativa sob o Art. 46 da LGPD e inclusão da informação na resposta ao titular.*
 
 **Objetivo:** critério único e verificável de "MVP pronto para piloto com dado
 real". É o artefato de aceite da fatia 6.6 e o predecessor de fechar a Issue #9.
@@ -55,6 +57,7 @@ Não recopia conteúdo de outros docs — **linka** e rastreia estado.
 | `clinic.politica_retencao_meses` + regra `MAX(18a, alta+10a)` | ✅              | `app_paciente_expurgavel(uuid)`                               |
 | Verificação síncrona de audit no export                       | ✅ (já existia) | `export.ts:82-85`                                             |
 | Política de retenção redigida                                 | ✅ rascunho     | `docs/legal/politica-retencao-dados.md`                       |
+| Harmonização backup 30d vs. expurgo (LGPD #89)                | ✅              | `docs/legal/politica-retencao-dados.md`, `erasure-response.ts` |
 
 **Diferido (dívida registrada, não bloqueia MVP):**
 

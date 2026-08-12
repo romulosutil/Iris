@@ -683,10 +683,7 @@ fala com ela sem ferramenta nova. O dado fica em São Paulo, mesmo país do VPS.
    (hoje 30 dias). **Isto não é opcional** — o `backup.sh` não poda o off-site
    por design, então sem a regra o bucket cresce até estourar os 10 GiB e os
    uploads passam a falhar (`exit 3` todo dia).
-   > A janela de retenção do off-site é **a mesma discussão da issue #89**
-   > (retenção de backup × direito ao expurgo da Fase 6). Um titular expurgado
-   > continua existindo nos backups pela janela de retenção — agora em três
-   > lugares, um deles fora do host. Alinhar com a decisão da #89.
+   > **Harmonização LGPD (Issue #89):** Um titular expurgado do banco ativo continua existindo nos backups históricos por até 30 dias (ciclo de rotação). Esta janela de 30 dias está documentada e justificada na Política de Retenção de Dados (`docs/legal/politica-retencao-dados.md`) para resiliência e recuperação de desastres (DRP) em conformidade com o Art. 46 da LGPD, e deve ser mencionada na resposta de confirmação de eliminação ao titular.
 4. **Criar credencial dedicada** (na Oracle: _Customer Secret Key_) com política
    de **escrita apenas** — sem `DeleteObject`, sem `CreateBucket`. Não reusar a
    credencial do MinIO: ela vive no host que se assume comprometido.

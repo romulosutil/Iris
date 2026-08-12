@@ -24,7 +24,7 @@ clínica humana.
    qualquer sessão, delta por sessão, trajetória com evolução/estagnação/regressão.
 7. Modelo organizacional é grafo M:N com vigência (coordenadores↔terapeutas↔pacientes).
 8. LGPD para dados de menores: consentimento na admissão, auditoria imutável,
-   métricas transparentes (anti-vigilância).
+   métricas transparentes (anti-vigilância) e harmonização de expurgo com retenção de backup de 30 dias (justificada para resiliência e DRP sob o Art. 46).
 
 ## Estrutura da documentação
 
