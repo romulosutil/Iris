@@ -22,7 +22,7 @@ import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
 import { diagnosticarBloqueioDeConsentimentoSeguro } from "@/lib/consent/diagnostico";
 
 // ─── Schemas de request ──────────────────────────────────────────────────────
-export const gerarFamiliaSchema = z
+const gerarFamiliaSchema = z
   .object({
     patientId: z.string().uuid(),
     periodoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -49,14 +49,14 @@ const draftSchema: z.ZodType<FamilyReportDraft> = z.object({
   status: z.literal("rascunho_para_revisao"),
 });
 
-export const curarFamiliaSchema = z.object({
+const curarFamiliaSchema = z.object({
   reportId: z.string().uuid(),
   versaoEsperada: z.number().int().positive(),
   draftEditado: draftSchema,
 });
 export type CurarFamiliaInput = z.infer<typeof curarFamiliaSchema>;
 
-export const exportarFamiliaSchema = z.object({ reportId: z.string().uuid() });
+const exportarFamiliaSchema = z.object({ reportId: z.string().uuid() });
 export type ExportarFamiliaInput = z.infer<typeof exportarFamiliaSchema>;
 
 function roleError(err: unknown): { error: string } {

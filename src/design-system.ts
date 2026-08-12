@@ -3,8 +3,10 @@
 export * from "./components/ui/accordion";
 export * from "./components/ui/alert";
 export * from "./components/ui/appointment-card";
-export * from "./components/ui/availability-grid";
-export * from "./components/ui/calendar";
+// Calendar, AvailabilityGrid e ScheduleGrid excluídos: acoplados a rotas do app
+// (importam CheckInButton/GerirSessao/actions de src/app), o que puxa código de
+// servidor (auth/db) para o build de d.ts do design-sync e quebra a emissão
+// (TS2742: tipo de `auth` referencia o zod v4 interno do better-auth).
 export * from "./components/ui/avatar";
 export * from "./components/ui/banner";
 export * from "./components/ui/breadcrumb";
@@ -31,7 +33,6 @@ export * from "./components/ui/page-header";
 export * from "./components/ui/pagination";
 export * from "./components/ui/progress";
 export * from "./components/ui/qr-code";
-export * from "./components/ui/schedule-grid";
 export * from "./components/ui/search-input";
 export * from "./components/ui/segmented-control";
 export * from "./components/ui/select";

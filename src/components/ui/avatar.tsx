@@ -26,19 +26,6 @@ export const Avatar = React.forwardRef<
   );
 });
 
-export const AvatarImage = React.forwardRef<
-  React.ComponentRef<typeof AvatarPrimitive.Image>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(function AvatarImage({ className, ...props }, ref) {
-  return (
-    <AvatarPrimitive.Image
-      ref={ref}
-      className={cn("size-full object-cover", className)}
-      {...props}
-    />
-  );
-});
-
 export const AvatarFallback = React.forwardRef<
   React.ComponentRef<typeof AvatarPrimitive.Fallback>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>

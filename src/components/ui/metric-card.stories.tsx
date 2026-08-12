@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { MetricCard } from "./metric-card";
 
 const meta = {
-  title: "Molecules/MetricCard",
+  title: "04. UI COMPONENTS/Navigation & Form Controls/MetricCard",
   component: MetricCard,
   tags: ["autodocs"],
   parameters: { layout: "centered" },

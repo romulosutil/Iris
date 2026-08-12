@@ -49,7 +49,7 @@ async function booleano(tx: Tx, consulta: ReturnType<typeof sql>) {
  * nenhum explicar. Roda numa transação de tenant PRÓPRIA — a transação em que
  * a recusa aconteceu já foi abortada.
  */
-export async function diagnosticarBloqueioDeConsentimento(
+async function diagnosticarBloqueioDeConsentimento(
   tx: Tx,
   alvo: AlvoDiagnostico,
 ): Promise<string | null> {

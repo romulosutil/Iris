@@ -17,6 +17,8 @@ import { GerirSessao } from "./gerir-sessao";
 import { AppointmentCard } from "@/components/ui/appointment-card";
 import { CollapsibleCluster } from "@/components/ui/collapsible-cluster";
 import { AgendaCalendarGrid } from "@/components/ui/agenda-calendar-grid";
+import { EmptyState } from "@/components/ui/empty-state";
+import { CareCalendarIllustration } from "@/components/ui/illustrations";
 import { FUSO_CLINICA } from "./fuso";
 import type { SessaoDoDia } from "./actions";
 
@@ -123,11 +125,14 @@ export function AgendaViewCliente({
 
   if (sessoes.length === 0) {
     return (
-      <Stack className="animate-fade-in-up animate-delay-75 py-4 md:py-8">
-        <Alert severidade="info" destacado>
-          Nenhuma sessão agendada para o dia de hoje.
-        </Alert>
-      </Stack>
+      <div className="py-4 md:py-8">
+        <EmptyState
+          illustration={<CareCalendarIllustration size={120} />}
+          title="Sua rotina do dia está concluída"
+          description="Nenhum atendimento pendente para hoje. Fim do expediente de verdade!"
+          variant="celebration"
+        />
+      </div>
     );
   }
 
@@ -140,7 +145,7 @@ export function AgendaViewCliente({
           <div className="flex items-center justify-between gap-3 pb-3 border-b-2 border-[var(--border-brutal)]">
             <div className="flex items-center gap-2">
               <span className="font-display font-extrabold text-sm sm:text-base text-[var(--text-primary)] flex items-center gap-2 px-3 py-1 bg-[var(--action-primary)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-xs)] shadow-[2px_2px_0_0_#000000] capitalize">
-                📅 HOJE · {diaExtenso}
+                Hoje · {diaExtenso}
               </span>
             </div>
             {diaISO ? (
@@ -229,9 +234,11 @@ export function AgendaViewCliente({
 
       {/* Alerta de Busca Sem Resultados */}
       {sessoesFiltradas.length === 0 ? (
-        <Alert severidade="warning" destacado className="py-4">
-          Nenhuma sessão encontrada para os filtros selecionados.
-        </Alert>
+        <EmptyState
+          variant="compact"
+          title="Nenhuma sessão encontrada para os filtros"
+          description="Ajuste os termos de busca ou filtros de estado para localizar os atendimentos."
+        />
       ) : null}
 
       {/* Visão 1: Matriz Calendário (Horário x Terapeuta) */}
@@ -239,12 +246,16 @@ export function AgendaViewCliente({
         <AgendaCalendarGrid
           sessoes={sessoesFiltradas}
           terapeutas={terapeutas}
-          role={role}
-          userId={userId}
-          podeGerir={podeGerir}
-          onSlotClick={(terapeutaId, horario) => {
-            if (podeGerir || isCoordenador) {
-              router.push(`/agenda/semana?terapeutaId=${terapeutaId}&horario=${horario}`);
+          onSlotClick={
+            podeGerir || isCoordenador
+              ? (terapeutaId, horario) => {
+                  router.push(`/agenda/semana?terapeutaId=${terapeutaId}&horario=${horario}`);
+                }
+              : undefined
+          }
+          onSessaoClick={(sessao) => {
+            if (isCoordenador || sessao.terapeutaId === userId) {
+              router.push(`/diario/${sessao.id}`);
             }
           }}
         />

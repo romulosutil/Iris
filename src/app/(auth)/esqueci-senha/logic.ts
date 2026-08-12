@@ -145,7 +145,7 @@ export function resolverIp(h: { get(nome: string): string | null }): string | nu
 // forma, então truncar aqui não perde nenhum caso legítimo.
 const TAMANHO_MAX_EMAIL = 254;
 
-export function validarEsqueciSenha(
+function validarEsqueciSenha(
   formData: FormData,
 ): { ok: true; email: string } | { ok: false; error: string } {
   const email = String(formData.get("email") ?? "")

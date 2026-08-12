@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import { control } from "./primitives/surface";
+import { surface, control } from "./primitives/surface";
 
 /**
  * Escala de ênfase (Espectro Brutal v3). O PESO é o antídoto contra "wireframe":
@@ -38,29 +38,27 @@ function estiloVariante(v: Variante): string {
     case "primaria":
     case "primary":
       return cn(
+        surface("solida", { radius: "control" }),
         "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold",
-        "border-2 border-[var(--border-brutal)]",
-        "shadow-[var(--ds-shadow)]",
         "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--ds-shadow-hover)]",
-        "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75"
+        "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75",
       );
     case "terciaria":
     case "tertiary":
       return cn(
-        "border-2 border-transparent bg-transparent text-[var(--text-secondary)] shadow-none",
+        "border-[length:var(--border-brutal)] border-transparent bg-transparent text-[var(--text-secondary)] shadow-none rounded-[var(--radius-control)]",
         "hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
-        "disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]"
+        "disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]",
       );
     case "secundaria":
     case "secondary":
     case "neutra":
     default:
       return cn(
+        surface("solida", { radius: "control" }),
         "bg-[var(--action-secondary-bg)] text-[var(--action-secondary-fg)]",
-        "border-2 border-[var(--border-brutal)]",
-        "shadow-[var(--ds-shadow)]",
         "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--ds-shadow-hover)]",
-        "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75"
+        "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75",
       );
   }
 }

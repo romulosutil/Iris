@@ -23,7 +23,7 @@ export type SurfaceVariante =
  * rebuild); os demais são fixos. `inset` é o AFUNDA violeta soft (fiel ao
  * reference e ao card sugerido pela IA), não a sombra reversa legada.
  */
-export type ElevationNivel =
+type ElevationNivel =
   | "flat" // rente — sem sombra
   | "raise" // levanta sutil (--elevation-1)
   | "base" // levanta cheio, mode-aware (--ds-shadow)
@@ -32,7 +32,7 @@ export type ElevationNivel =
   | "overlay"; // flutua acima do canvas — modal/popover (--elevation-overlay)
 
 /** Rampa de raio (indexa --radius-* dos tokens). */
-export type RadiusNivel =
+type RadiusNivel =
   | "none"
   | "xs"
   | "sm"

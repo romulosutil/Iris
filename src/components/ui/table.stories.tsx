@@ -10,7 +10,7 @@ import {
 import { StatusBadge } from "./status-badge";
 
 const meta = {
-  title: "Organisms/Table",
+  title: "04. UI COMPONENTS/Data Display & Feedback/Table",
   component: Table,
   parameters: { layout: "padded" },
 } satisfies Meta<typeof Table>;

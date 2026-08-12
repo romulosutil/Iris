@@ -19,6 +19,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
+import { verificarHashesAplicadas } from "./verificar-hash-migracoes.mjs";
 
 async function main() {
   const url = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -31,6 +32,20 @@ async function main() {
   // max:1 — migração é serial; uma única conexão evita corrida entre statements.
   const sql = postgres(url, { max: 1 });
   try {
+    // Guard D17 (#215): migração já aplicada cujo .sql foi editado no repo
+    // depois disso nunca reroda — Drizzle aplica por tag, não por conteúdo.
+    // Aborta o deploy aqui, antes de tocar em qualquer DDL novo.
+    const divergentes = await verificarHashesAplicadas(sql);
+    if (divergentes.length > 0) {
+      const lista = divergentes
+        .map((d) => `  - ${d.tag} (aplicado=${d.hashAplicado.slice(0, 12)}… disco=${d.hashEsperado.slice(0, 12)}…)`)
+        .join("\n");
+      throw new Error(
+        `Migração(ões) já aplicada(s) foram editadas no repo depois de rodar em produção (D17, #215):\n${lista}\n` +
+          "Reverta o arquivo para o conteúdo aplicado, ou escreva uma migração NOVA — nunca edite uma tag já em drizzle.__drizzle_migrations.",
+      );
+    }
+
     await migrate(drizzle(sql), { migrationsFolder: "./db/migrations" });
     console.log("Migrações aplicadas (db/migrations) — schema em dia.");
   } finally {

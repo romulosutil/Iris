@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 
-export interface GovernancaItem {
+interface GovernancaItem {
   href: string;
   label: string;
   badge?: number;

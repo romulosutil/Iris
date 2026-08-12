@@ -93,7 +93,7 @@ const USER_AGENT = "iris-clinica";
  * cobrança, e ler um campo chamado "teto" como valor a debitar foi metade do
  * D22. Jornada 3 de valor variável não tem teto para respeitar.
  */
-export const VALOR_ATIVACAO_PADRAO_CENTAVOS = 1;
+const VALOR_ATIVACAO_PADRAO_CENTAVOS = 1;
 
 /** Validade do QR imediato de ativação. 24h é o que cabe num onboarding humano. */
 const EXPIRACAO_QR_ATIVACAO_SEGUNDOS = 24 * 60 * 60;

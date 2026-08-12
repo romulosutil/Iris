@@ -22,7 +22,7 @@ function cobertura(
 }
 
 const meta = {
-  title: "Jornadas/Equipe/BarraCobertura",
+  title: "05. PATTERNS/Clinical & Schedules/BarraCobertura",
   component: BarraCobertura,
   parameters: { layout: "padded" },
   decorators: [

@@ -5,7 +5,7 @@ import { Chip } from "./chip";
 import { Button } from "./button";
 
 const meta = {
-  title: "Layout/Layout",
+  title: "04. UI COMPONENTS/Layout/Layout",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

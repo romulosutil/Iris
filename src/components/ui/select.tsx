@@ -11,7 +11,6 @@ import { surface } from "@/components/ui/primitives/surface";
  * equipe. Ligar um <Field> por cima para rótulo + erro acessíveis.
  */
 export const Select = SelectPrimitive.Root;
-export const SelectGroup = SelectPrimitive.Group;
 export const SelectValue = SelectPrimitive.Value;
 
 function ChevronBaixo() {

@@ -14,7 +14,7 @@ export type EmailSendResult =
   | { ok: true; providerMessageId: string }
   | { ok: false; erro: string };
 
-export const ASSUNTO_ALERTA_RT =
+const ASSUNTO_ALERTA_RT =
   "Iris — alerta de risco pendente há mais tempo que o esperado";
 
 /**

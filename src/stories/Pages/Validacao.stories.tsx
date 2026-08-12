@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 
 const meta = {
-  title: "Pages/Validação",
+  title: "06. PAGES/Validação",
   parameters: { layout: "fullscreen" },
 } satisfies Meta;
 

@@ -17,6 +17,8 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ReviewClinicalIllustration } from "@/components/ui/illustrations";
 import { surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
 import {
@@ -308,9 +310,12 @@ export function ValidacaoFila({
 
   if (pendentes.length === 0) {
     return (
-      <Alert severidade="sucesso" titulo="Fila vazia">
-        Nenhuma evidência pede validação no momento — clínica em dia.
-      </Alert>
+      <EmptyState
+        illustration={<ReviewClinicalIllustration size={100} />}
+        title="Tudo em dia na Fila de Revisão!"
+        description="Todas as anotações do dia foram validadas. Seu olhar clínico faz toda a diferença!"
+        variant="celebration"
+      />
     );
   }
 

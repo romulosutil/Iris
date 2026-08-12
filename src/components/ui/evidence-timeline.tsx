@@ -1,9 +1,9 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 
-export type EvidenceKind = "fato-success" | "fato-brand" | "sugestao";
+type EvidenceKind = "fato-success" | "fato-brand" | "sugestao";
 
-export interface EvidenceItem {
+interface EvidenceItem {
   /** Natureza do nó — fato confirmado (círculo cheio) ou sugestão IA (tracejado). */
   tipo: EvidenceKind;
   /** Título do evento (peso 600, cor --deep do estado). */

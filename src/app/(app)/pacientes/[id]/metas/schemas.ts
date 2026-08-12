@@ -14,7 +14,7 @@ import { z } from "zod";
  * deterministicamente. `tipo` fixo por ora; abre espaço p/ outros critérios
  * (ex.: percentual) sem quebrar o payload já gravado.
  */
-export const criterioDominioSchema = z.object({
+const criterioDominioSchema = z.object({
   tipo: z.literal("n_acertos_m_sessoes"),
   n: z.number().int().min(1).max(99),
   m: z.number().int().min(1).max(99),

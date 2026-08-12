@@ -45,7 +45,7 @@ export const PAPEIS_QUE_CONSOMEM_SALDO = [
   "substituto",
 ] as const;
 
-export type PapelQueConsomeSaldo = (typeof PAPEIS_QUE_CONSOMEM_SALDO)[number];
+type PapelQueConsomeSaldo = (typeof PAPEIS_QUE_CONSOMEM_SALDO)[number];
 
 /** O papel deste vínculo desconta do alvo prescrito da disciplina? */
 export function papelConsomeSaldo(papel: string): boolean {

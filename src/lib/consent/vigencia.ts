@@ -26,13 +26,13 @@ export type LinhaConsent = {
  * histórica de um deles é o que torna o prontuário travável — é o caso em que
  * a base legal do tratamento dependia inteiramente do representante.
  */
-export const TIPOS_REGIME_REPRESENTADO = [
+const TIPOS_REGIME_REPRESENTADO = [
   "tratamento_dados_menor",
   "representacao_curador",
 ] as const;
 
 /** Tipos de REGIME por autoconsentimento: o próprio titular assina. */
-export const TIPOS_AUTOCONSENTIMENTO = [
+const TIPOS_AUTOCONSENTIMENTO = [
   "autoconsentimento_titular_adulto",
   "autoconsentimento_titular_emancipado",
 ] as const;
@@ -42,18 +42,18 @@ export const TIPOS_AUTOCONSENTIMENTO = [
  * prontuário). Os tipos de finalidade NÃO entram aqui: consentir uso de IA não
  * é base para tratar o paciente.
  */
-export const TIPOS_REGIME = [
+const TIPOS_REGIME = [
   ...TIPOS_REGIME_REPRESENTADO,
   ...TIPOS_AUTOCONSENTIMENTO,
 ] as const;
 
 /** Tipos de FINALIDADE específica, concedidos/revogados independentemente. */
-export const TIPOS_FINALIDADE = [
+const TIPOS_FINALIDADE = [
   "uso_ia_processamento",
   "exportacao_relatorios",
 ] as const;
 
-export type TipoFinalidade = (typeof TIPOS_FINALIDADE)[number];
+type TipoFinalidade = (typeof TIPOS_FINALIDADE)[number];
 
 /** `true` se alguma linha de revogação aponta para `id`. */
 function foiRevogada(linhas: readonly LinhaConsent[], id: string): boolean {
@@ -85,7 +85,7 @@ function maisRecentePrimeiro(a: LinhaConsent, b: LinhaConsent): number {
  * mais recente foi revogada, uma concessão antiga do mesmo tipo NÃO ressuscita
  * — reconsentir exige linha nova.
  */
-export function consentimentoVigentePorTipo(
+function consentimentoVigentePorTipo(
   linhas: readonly LinhaConsent[],
   tipo: string,
 ): LinhaConsent | null {
@@ -122,7 +122,7 @@ export function regimeVigente(
  * de regime representado foi revogada". São diferentes, e a diferença é
  * exatamente o fluxo da #135 (menor revogado → paciente faz 18 e autoconsente).
  */
-export function prontuarioSomenteLeitura(
+function prontuarioSomenteLeitura(
   linhas: readonly LinhaConsent[],
 ): boolean {
   const houveRepresentacao = linhas.some((c) =>
@@ -137,7 +137,7 @@ export function prontuarioSomenteLeitura(
  * não foi revogada. Finalidade é independente do regime — revogar o uso de IA
  * não trava o prontuário, só cessa aquela finalidade.
  */
-export function finalidadeConsentida(
+function finalidadeConsentida(
   linhas: readonly LinhaConsent[],
   finalidade: TipoFinalidade,
 ): boolean {

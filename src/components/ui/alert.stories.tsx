@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Alert } from "./alert";
 
 const meta = {
-  title: "Molecules/Alert",
+  title: "04. UI COMPONENTS/Data Display & Feedback/Alert",
   component: Alert,
   tags: ["autodocs"],
   parameters: { layout: "centered" },

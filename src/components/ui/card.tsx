@@ -1,8 +1,16 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import { surface } from "@/components/ui/primitives/surface";
+import { surface, type SurfaceVariante } from "@/components/ui/primitives/surface";
+import { Pill } from "@/components/ui/primitives/pill";
+import { CheckIcon, SparkleIcon, LayersIcon } from "@/components/ui/icon";
 
-export type EpistemicState = "fact" | "suggestion" | "conquistado" | "candidato";
+export type EpistemicState =
+  | "fact"
+  | "suggestion"
+  | "conquistado"
+  | "candidato"
+  | "sugerida"
+  | "candidata";
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   /** @deprecated usar `epistemicState` */
@@ -14,36 +22,108 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   destacado?: boolean;
   /** Se true, força a borda esquerda espessa independente do estado */
   bordaEsquerda?: boolean;
-  como?: "div" | "li" | "article" | "section";
+  /** Se true, adiciona hover e feedback de foco tátil */
+  interativo?: boolean;
+  interactive?: boolean;
+  como?: "div" | "li" | "article" | "section" | "button" | "a";
+  href?: string;
+  disabled?: boolean;
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
-  { className, estado, epistemicState, titulo, destacado = false, bordaEsquerda = false, como = "div", children, ...props },
+  {
+    className,
+    estado,
+    epistemicState,
+    titulo,
+    destacado = false,
+    bordaEsquerda = false,
+    interativo = false,
+    interactive = false,
+    como = "div",
+    children,
+    disabled = false,
+    ...props
+  },
   ref,
 ) {
   const Component = como as any;
+  const isInteractive = interativo || interactive || como === "button" || como === "a" || Boolean(props.onClick);
   const resolvedState = epistemicState ?? estado ?? "fact";
-  const isFact = resolvedState === "fact" || resolvedState === "conquistado";
 
-  const cardClasses = isFact
-    ? cn(
-        "bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]",
-        (bordaEsquerda || resolvedState === "conquistado") && "border-l-[4px] border-l-[var(--status-success-border)]"
-      )
-    : "bg-[var(--status-ia-bg)] border-2 border-dashed border-[var(--status-ia-border)] text-[var(--text-primary)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]";
+  // Semântica de botão para elementos não-nativos com onClick: sem isto o card
+  // fica clicável só para mouse (invisível a Tab e leitores de tela).
+  const precisaSemanticaBotao = como !== "button" && como !== "a" && Boolean(props.onClick);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    props.onKeyDown?.(e);
+    if (disabled || e.defaultPrevented) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      e.currentTarget.click();
+    }
+  };
+
+  // Eixo Estrutural de Profundidade:
+  // - fato/conquistado: solida (LEVANTA com --ds-shadow)
+  // - sugerida/suggestion: sugerida (AFUNDA com --elevation-inset + tracejado violeta)
+  // - candidata/candidato: candidata (AFUNDA com --elevation-inset + pontilhado azul)
+  let variante: SurfaceVariante = "solida";
+  let badgeNode: React.ReactNode = null;
+
+  if (resolvedState === "suggestion" || resolvedState === "sugerida") {
+    variante = "sugerida";
+    badgeNode = (
+      <Pill variant="inset" colorScheme="violeta" size="sm" icon={<SparkleIcon size={12} />}>
+        Sugerido
+      </Pill>
+    );
+  } else if (resolvedState === "candidato" || resolvedState === "candidata") {
+    variante = "candidata";
+    badgeNode = (
+      <Pill variant="inset" colorScheme="azul" size="sm" icon={<LayersIcon size={12} />}>
+        Candidato
+      </Pill>
+    );
+  } else {
+    variante = "solida";
+    badgeNode = (
+      <Pill variant="solid" colorScheme="menta" size="sm" icon={<CheckIcon size={12} />}>
+        Conquistado
+      </Pill>
+    );
+  }
+
+  const isFact = variante === "solida";
+  const surfaceStyle = surface(variante, {
+    radius: "control",
+    className: cn(
+      isFact ? "bg-[var(--surface-card)]" : "bg-[var(--surface-card)]/80",
+      (bordaEsquerda || resolvedState === "conquistado") &&
+        "border-l-[4px] border-l-[var(--status-success-border)]",
+      isInteractive && !disabled && "cursor-pointer text-left select-none transition-[transform,box-shadow] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[var(--ds-shadow-hover)] focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
+      disabled && "opacity-60 cursor-not-allowed pointer-events-none",
+    ),
+  });
 
   return (
     <Component
       ref={ref as any}
       data-estado={resolvedState}
       data-destacado={destacado}
+      data-interativo={isInteractive}
       className={cn(
         "flex flex-col gap-2 p-5 text-[var(--text-primary)]",
         destacado && "relative pt-8",
-        cardClasses,
+        surfaceStyle,
         className,
       )}
       {...props}
+      {...(como === "button" ? { disabled } : {})}
+      {...(disabled && como !== "button" ? { "aria-disabled": true } : {})}
+      {...(precisaSemanticaBotao
+        ? { role: "button", tabIndex: disabled ? -1 : 0, onKeyDown: handleKeyDown }
+        : {})}
+      onClick={disabled ? undefined : props.onClick}
     >
       {destacado ? (
         <span
@@ -57,19 +137,9 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
             {titulo}
           </h3>
         ) : null}
-        <span
-          className={cn(
-            "shrink-0 border-2 px-2 py-0.5 font-mono text-xs font-semibold tracking-wide uppercase rounded-[var(--radius-xs)]",
-            isFact
-              ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
-              : "border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-[var(--status-ia-fg)]",
-          )}
-        >
-          {isFact ? "Conquistado" : "Sugerido"}
-        </span>
+        <div className="shrink-0">{badgeNode}</div>
       </div>
       {children ? <div className="text-[var(--text-primary)] text-sm">{children}</div> : null}
     </Component>
   );
 });
-

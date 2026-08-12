@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { InteractiveCard } from "./interactive-card";
 
 const meta = {
-  title: "Organisms/InteractiveCard",
+  title: "04. UI COMPONENTS/Data Display & Feedback/InteractiveCard",
   component: InteractiveCard,
   parameters: { layout: "centered" },
   args: { className: "w-[360px]" },

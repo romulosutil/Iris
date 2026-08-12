@@ -12,7 +12,7 @@ import {
 import { Button } from "./button";
 
 const meta = {
-  title: "Organisms/Drawer",
+  title: "04. UI COMPONENTS/Layout/Drawer",
   component: Drawer,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof Drawer>;

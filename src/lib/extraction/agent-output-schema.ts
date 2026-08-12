@@ -6,9 +6,9 @@ import { z } from "zod";
 // taxonomia vem do protocolo no contexto, não é hardcoded). Só viram enum os
 // campos com domínio fechado e agnóstico de protocolo.
 
-export const confiancaEnum = z.enum(["alta", "media", "baixa"]);
+const confiancaEnum = z.enum(["alta", "media", "baixa"]);
 
-export const tipoExtracaoEnum = z.enum([
+const tipoExtracaoEnum = z.enum([
   "evidencia",
   "registro_abc",
   "ausencia_comportamento",
@@ -109,7 +109,7 @@ const preferenciaSchema = z.object({
   valencia: z.enum(["alta", "baixa", "saciado"]).optional(),
 });
 
-export const extracaoSchema = z.object({
+const extracaoSchema = z.object({
   tipo: tipoExtracaoEnum,
   trecho_fonte: z.string().min(1),
   confianca: confiancaEnum,
@@ -128,7 +128,7 @@ export const extracaoSchema = z.object({
 // inconsistencia_historico | possivel_erro_transcricao | texto_ambiguo, mas o
 // modelo às vezes inventa rótulos — tolerar isso não pode afundar a extração
 // (achado do teste vivo, 12/07/2026).
-export const sinalizacaoSchema = z.object({
+const sinalizacaoSchema = z.object({
   tipo: z.string(),
   detalhe: z.string().optional(),
 });
@@ -138,7 +138,7 @@ export const sinalizacaoSchema = z.object({
 // dispara mesmo com `protocolos_ativos: []`, em qualquer domínio ou protocolo, e
 // não é engolida por nenhuma outra regra. Fora da fila de validação por exceção
 // do coordenador (V1).
-export const alertaRiscoCategoriaEnum = z.enum([
+const alertaRiscoCategoriaEnum = z.enum([
   "ideacao_suicida",
   "autolesao",
   "violencia_sofrida",
@@ -146,7 +146,7 @@ export const alertaRiscoCategoriaEnum = z.enum([
   "risco_a_terceiro",
 ]);
 
-export const alertaRiscoSeveridadeEnum = z.enum([
+const alertaRiscoSeveridadeEnum = z.enum([
   "ideacao_passiva",
   "ideacao_ativa_sem_plano",
   "ideacao_ativa_com_plano",
@@ -157,9 +157,9 @@ export const alertaRiscoSeveridadeEnum = z.enum([
   "risco_a_terceiro",
 ]);
 
-export const alertaRiscoCertezaEnum = z.enum(["explicito", "ambiguo_citado"]);
+const alertaRiscoCertezaEnum = z.enum(["explicito", "ambiguo_citado"]);
 
-export const alertaRiscoSchema = z.object({
+const alertaRiscoSchema = z.object({
   categoria: alertaRiscoCategoriaEnum,
   severidade: alertaRiscoSeveridadeEnum,
   // R20 não tem `certeza`; o default é o lado CONSERVADOR. `ambiguo_citado`

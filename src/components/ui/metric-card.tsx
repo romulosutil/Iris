@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { surface } from "@/components/ui/primitives/surface";
 
-export interface MetricTrend {
+interface MetricTrend {
   /** Direção da tendência — controla o glifo (▲/▼) e a semântica visual. */
   direcao: "alta" | "baixa";
   /** Valor exibido ao lado do glifo (ex.: 3, "12%"). */

@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 
 import { control } from "./primitives/surface";
 
-export interface SegmentedOption {
+interface SegmentedOption {
   value: string;
   label: React.ReactNode;
 }

@@ -62,7 +62,7 @@ export type StatusAssinaturaProvider =
 export type StatusCobranca = "pendente" | "paga" | "recusada" | "estornada";
 
 /** Quem paga. Só o mínimo que qualquer gateway brasileiro exige. */
-export interface DadosAssinante {
+interface DadosAssinante {
   clinicId: string;
   nomeClinica: string;
   emailResponsavel: string;

@@ -6,7 +6,6 @@ import { cn } from "@/lib/cn";
 
 export const Drawer = DialogPrimitive.Root;
 export const DrawerTrigger = DialogPrimitive.Trigger;
-export const DrawerClose = DialogPrimitive.Close;
 
 function IconeX() {
   return (

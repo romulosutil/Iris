@@ -13,7 +13,7 @@ interface BaseEmailProps {
  * Encapsula o conteúdo em um layout HTML responsivo e com a identidade visual do Iris
  * (barra decorativa de espectro, tipografia limpa e botão de ação destacado).
  */
-export function renderizarLayoutEmail({
+function renderizarLayoutEmail({
   tituloHeader,
   conteudoHtml,
   rodapeContexto,

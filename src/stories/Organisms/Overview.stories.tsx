@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import React from "react";
 
 const meta = {
-  title: "Organisms/Overview",
+  title: "05. PATTERNS/Overview",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

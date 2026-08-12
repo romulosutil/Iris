@@ -63,7 +63,7 @@ export const ID_PROVEDOR_FAKE: string = "gateway_fake";
 export const BASE_URL_FAKE = "https://gateway-fake.test/v1";
 
 /** Prefixo do id de cobrança que o fake devolve — reconhecível na asserção. */
-export const PREFIXO_COBRANCA_FAKE = "cob_fake_";
+const PREFIXO_COBRANCA_FAKE = "cob_fake_";
 
 function mapearStatusVinculo(estado: unknown): StatusAssinaturaProvider {
   switch (estado) {

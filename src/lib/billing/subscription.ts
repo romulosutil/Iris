@@ -72,7 +72,7 @@ const DIAS_VENCIMENTO_COBRANCA = 5;
  * Mantida como constante exportada (em vez de sumir) porque é referenciada em
  * teste e o zero explícito documenta a decisão melhor que a ausência.
  */
-export const DIAS_ANTECEDENCIA_APURACAO = 0;
+const DIAS_ANTECEDENCIA_APURACAO = 0;
 
 function somarDias(base: Date, dias: number): Date {
   const d = new Date(base);

@@ -6,9 +6,9 @@ import { CalendarEventCard } from "./calendar-event-card";
 import type { SessaoDoDia } from "@/app/(app)/agenda/actions";
 import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso";
 
-export type CalendarGridMode = "daily-resources" | "weekly-timeline" | "availability-matrix";
+type CalendarGridMode = "daily-resources" | "weekly-timeline" | "availability-matrix";
 
-export interface ResourceColumn {
+interface ResourceColumn {
   id: string;
   nome: string;
   subtitulo?: string;

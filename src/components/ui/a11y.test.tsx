@@ -4,6 +4,15 @@ import { cleanup, render } from "@testing-library/react";
 import axe from "axe-core";
 import { Button } from "./button";
 import { Card } from "./card";
+import { Pill } from "./primitives/pill";
+import { ConfidenceCard } from "./patterns/confidence-card";
+import { CompareRow } from "./patterns/compare-row";
+import { BatchBar } from "./patterns/batch-bar";
+import { AgendaCalendarGrid } from "./agenda-calendar-grid";
+import { ProtocolProgressBarChart, ProtocolTrendChart } from "./protocol-dashboard-charts";
+import { EmptyState } from "./empty-state";
+import { MicroConquistaBadge } from "./micro-conquista-badge";
+import { CareTeamIllustration } from "./illustrations";
 import { Banner } from "./banner";
 import { InteractiveCard } from "./interactive-card";
 import { Indicator } from "./indicator";
@@ -40,7 +49,7 @@ import { Slider } from "./slider";
 import { Progress } from "./progress";
 import { Avatar, AvatarFallback, AvatarGroup } from "./avatar";
 import { Stat } from "./stat";
-import { BotaoCopiar } from "./botao-copiar";
+import { CopyButton } from "./patterns/copy-button";
 
 afterEach(cleanup);
 
@@ -446,8 +455,130 @@ test("Indicator — sem violações axe", async () => {
   await semViolacoes(<Indicator variant="conquistado" />);
 });
 
-test("BotaoCopiar — sem violações axe", async () => {
+test("CopyButton — sem violações axe", async () => {
   await semViolacoes(
-    <BotaoCopiar valor="00020126…6304ABCD" rotulo="Copiar código Pix" />,
+    <CopyButton valor="00020126…6304ABCD" rotulo="Copiar código Pix" />,
   );
 });
+
+test("Pill solid — sem violações axe", async () => {
+  await semViolacoes(<Pill variant="solid" colorScheme="menta">Conquistado</Pill>);
+});
+
+test("Pill inset — sem violações axe", async () => {
+  await semViolacoes(<Pill variant="inset" colorScheme="violeta">Sugerido</Pill>);
+});
+
+test("Pill outline — sem violações axe", async () => {
+  await semViolacoes(<Pill variant="outline" colorScheme="ouro">Pendente</Pill>);
+});
+
+test("ConfidenceCard — sem violações axe", async () => {
+  await semViolacoes(
+    <ConfidenceCard
+      titulo="Imita bater palmas"
+      protocolo="VB-MAPP"
+      trecho="Paciente imitou palmas 4 vezes."
+      justificativa="Critério atendido."
+      friccao="baixa"
+      confianca={95}
+      onAprovar={() => {}}
+      onEditar={() => {}}
+      onDescartar={() => {}}
+    />,
+  );
+});
+
+test("CompareRow — sem violações axe", async () => {
+  await semViolacoes(
+    <CompareRow
+      rotulo="Nível de Ajuda"
+      dadoAnterior="Gesto"
+      dadoSugerido="Gesto"
+      divergente={false}
+    />,
+  );
+});
+
+test("BatchBar — sem violações axe", async () => {
+  await semViolacoes(
+    <BatchBar
+      selecionados={3}
+      totalElegiveis={5}
+      onAprovarLote={() => {}}
+      onLimparSelecao={() => {}}
+    />,
+  );
+});
+
+test("AgendaCalendarGrid — sem violações axe", async () => {
+  await semViolacoes(
+    <AgendaCalendarGrid
+      terapeutas={[{ id: "t1", nome: "Dra. Beatriz", disciplina: "Fono" }]}
+      sessoes={[
+        {
+          id: "s1",
+          terapeutaId: "t1",
+          pacienteNome: "Arthur",
+          disciplina: "Fono",
+          agendadaPara: new Date(2026, 7, 12, 8, 0),
+          duracaoMin: 50,
+          statusSemantico: "concluida",
+        },
+      ]}
+      abertura="08:00"
+      fechamento="10:00"
+      passoMin={60}
+    />,
+  );
+});
+
+test("ProtocolProgressBarChart — sem violações axe", async () => {
+  await semViolacoes(
+    <ProtocolProgressBarChart
+      data={{
+        protocoloNome: "VB-MAPP",
+        totalMetas: 30,
+        metasDominadas: 15,
+        metasSugeridasIA: 5,
+        tendenciaSemanal: 2,
+      }}
+    />,
+  );
+});
+
+test("ProtocolTrendChart — sem violações axe", async () => {
+  await semViolacoes(
+    <ProtocolTrendChart
+      titulo="Trajetória"
+      pontos={[
+        { sessaoNumero: 1, evidenciasAcumuladas: 5 },
+        { sessaoNumero: 2, evidenciasAcumuladas: 12, conquistasNoDia: 2 },
+      ]}
+    />,
+  );
+});
+
+test("EmptyState — sem violações axe", async () => {
+  await semViolacoes(
+    <EmptyState
+      illustration={<CareTeamIllustration size={80} />}
+      title="Sua equipe de cuidado está pronta"
+      description="Prescreva a carga horária para iniciar."
+      action={<Button variante="primaria">Prescrever</Button>}
+    />,
+  );
+});
+
+test("MicroConquistaBadge — sem violações axe", async () => {
+  await semViolacoes(
+    <MicroConquistaBadge icon="sparkle">
+      Marco VB-MAPP Conquistado!
+    </MicroConquistaBadge>,
+  );
+});
+
+
+
+
+

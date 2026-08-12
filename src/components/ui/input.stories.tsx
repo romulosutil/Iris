@@ -3,7 +3,7 @@ import { Input } from "./input";
 import { SparkleIcon, ClockIcon } from "./icon";
 
 const meta = {
-  title: "Atoms/Input",
+  title: "03. PRIMITIVES/Input",
   component: Input,
   parameters: { layout: "centered" },
   args: { placeholder: "nome@clinica.com.br" },

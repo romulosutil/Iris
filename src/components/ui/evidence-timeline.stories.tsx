@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { EvidenceTimeline } from "./evidence-timeline";
 
 const meta = {
-  title: "Molecules/EvidenceTimeline",
+  title: "05. PATTERNS/Clinical & Schedules/EvidenceTimeline",
   component: EvidenceTimeline,
   tags: ["autodocs"],
   parameters: { layout: "centered" },

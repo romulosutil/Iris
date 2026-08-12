@@ -1,4 +1,4 @@
-export interface RepertorioItem {
+interface RepertorioItem {
   nivel_ajuda_recente: number | null;
   contagem: number;
   is_candidata?: boolean;
@@ -6,7 +6,7 @@ export interface RepertorioItem {
 
 export type RepertorioState = Record<string, RepertorioItem>;
 
-export interface DeltaItem {
+interface DeltaItem {
   id: string;
   tipo: "novo" | "evolucao" | "regressao" | "estavel";
   nivelAnterior: number | null;

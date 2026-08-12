@@ -31,7 +31,7 @@ const cabecalhoSchema: z.ZodType<CabecalhoConvenio> = z.object({
   finalidade: z.string().min(1),
 });
 
-export const gerarConvenioNarrativoSchema = z
+const gerarConvenioNarrativoSchema = z
   .object({
     patientId: z.string().uuid(),
     periodoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -58,7 +58,7 @@ const draftSchema: z.ZodType<ConvenioNarrativoDraft> = z.object({
   status: z.literal("rascunho_para_revisao"),
 });
 
-export const curarConvenioNarrativoSchema = z.object({
+const curarConvenioNarrativoSchema = z.object({
   reportId: z.string().uuid(),
   versaoEsperada: z.number().int().positive(),
   cabecalhoEditado: cabecalhoSchema,
@@ -68,7 +68,7 @@ export type CurarConvenioNarrativoInput = z.infer<
   typeof curarConvenioNarrativoSchema
 >;
 
-export const exportarConvenioNarrativoSchema = z.object({
+const exportarConvenioNarrativoSchema = z.object({
   reportId: z.string().uuid(),
 });
 export type ExportarConvenioNarrativoInput = z.infer<

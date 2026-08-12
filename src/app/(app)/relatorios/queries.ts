@@ -55,7 +55,7 @@ export async function previewConvenioBruto(ctx: TenantContext, args: PreviewArgs
  * `requireRole` restringe a leitura ao mesmo papel que já guarda as ações de
  * escrita em `actions.ts` (gerar/curar/exportar).
  */
-export async function previewConvenioNarrativo(
+async function previewConvenioNarrativo(
   ctx: TenantContext,
   reportId: string,
 ): Promise<

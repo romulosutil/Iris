@@ -12,19 +12,18 @@ import {
 } from "@/db/schema";
 import { alertasGraveDe, reforcadoresAtuaisDe, type AlertaManejo, type ReforcadorAtual } from "./logic";
 
-export { alertasGraveDe, reforcadoresAtuaisDe };
 export type { AlertaManejo, ReforcadorAtual };
 
-export type SessionEstado = (typeof sessionEstado.enumValues)[number];
+type SessionEstado = (typeof sessionEstado.enumValues)[number];
 
-export type ProximaSessao = {
+type ProximaSessao = {
   id: string;
   agendadaPara: Date;
   estado: SessionEstado;
   numeroSequencial: number | null;
 };
 
-export type LinhaUltimaSessao = {
+type LinhaUltimaSessao = {
   chave: string;
   rotulo: string;
   metrica: string;
@@ -39,7 +38,7 @@ export type UltimaSessao = {
   episodiosAbc: number;
 };
 
-export type MetaAtiva = {
+type MetaAtiva = {
   id: string;
   descricao: string;
   disciplina: string | null;

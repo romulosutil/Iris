@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import React from "react";
 
 const meta = {
-  title: "Foundations/Spacing & Borders",
+  title: "02. FOUNDATIONS/Spacing & Borders",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

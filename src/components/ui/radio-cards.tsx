@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 
-export interface RadioCardOption {
+interface RadioCardOption {
   value: string;
   label: React.ReactNode;
   description?: React.ReactNode;

@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { BotaoCopiar } from "./botao-copiar";
+import { CopyButton } from "./patterns/copy-button";
 
 const BR_CODE_EXEMPLO =
   "00020126580014BR.GOV.BCB.PIX0136f5b1c0de-0000-4000-a000-000000000abc5204000053039865802BR5913CLINICA IRIS6008SAOPAULO62070503***6304AB12";
 
 const meta = {
-  title: "Atoms/BotaoCopiar",
-  component: BotaoCopiar,
+  title: "05. PATTERNS/System States & Badges/CopyButton",
+  component: CopyButton,
   tags: ["autodocs"],
   parameters: { layout: "centered" },
   args: {
@@ -17,7 +17,7 @@ const meta = {
     valor: { control: "text" },
     rotulo: { control: "text" },
   },
-} satisfies Meta<typeof BotaoCopiar>;
+} satisfies Meta<typeof CopyButton>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -39,7 +39,7 @@ export const ComOValorVisivel: Story = {
       <p className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/40 bg-[var(--surface-muted)] p-2 font-mono text-xs break-all">
         {args.valor}
       </p>
-      <BotaoCopiar {...args} />
+      <CopyButton {...args} />
     </div>
   ),
   parameters: { controls: { disable: true } },

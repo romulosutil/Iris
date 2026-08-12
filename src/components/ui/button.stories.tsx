@@ -4,7 +4,7 @@ import { Button } from "./button";
 import { CheckIcon, PencilIcon, CloseIcon, SparkleIcon } from "./icon";
 
 const meta = {
-  title: "Atoms/Button",
+  title: "03. PRIMITIVES/Button",
   component: Button,
   tags: ["autodocs"],
   parameters: { layout: "centered" },

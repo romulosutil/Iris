@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { surface } from "@/components/ui/primitives/surface";
 
-export type BannerVariant = "info" | "alerta" | "sucesso";
+type BannerVariant = "info" | "alerta" | "sucesso";
 
 export interface BannerProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: BannerVariant;

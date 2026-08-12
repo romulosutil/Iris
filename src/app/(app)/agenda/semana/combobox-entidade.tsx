@@ -44,8 +44,9 @@ export function ComboboxEntidade({
   const [ativo, setAtivo] = useState(-1);
   const fechandoPorSelecaoRef = useRef(false);
 
-  // Sincroniza o termo de busca quando a prop `valor` ou a lista `opcoes` muda externamente
-  useEffect(() => {
+  const [prev, setPrev] = useState({ valor, opcoes, aberto });
+  if (prev.valor !== valor || prev.opcoes !== opcoes || prev.aberto !== aberto) {
+    setPrev({ valor, opcoes, aberto });
     if (!aberto) {
       const selecionada = opcoes.find((o) => o.id === valor);
       if (selecionada) {
@@ -54,7 +55,7 @@ export function ComboboxEntidade({
         setTermo("");
       }
     }
-  }, [valor, opcoes, aberto]);
+  }
 
   const filtradas = useMemo(
     () =>

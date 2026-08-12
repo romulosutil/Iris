@@ -3,7 +3,7 @@
  * Exposes site tools to AI agents via browser navigator.modelContext
  */
 
-export interface WebMCPToolInputSchema {
+interface WebMCPToolInputSchema {
   type: string;
   properties?: Record<string, { type: string; description?: string }>;
   required?: string[];
@@ -16,7 +16,7 @@ export interface WebMCPTool {
   execute: (input: Record<string, unknown>) => Promise<unknown> | unknown;
 }
 
-export interface ModelContext {
+interface ModelContext {
   provideContext: (options: { tools: WebMCPTool[] }) => void;
 }
 

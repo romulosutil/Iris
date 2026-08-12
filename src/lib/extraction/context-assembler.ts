@@ -2,13 +2,13 @@
 // a partir de linhas já carregadas do banco. Função PURA (sem DB) → testável.
 // O loader que consulta o Postgres vive em context-loader.ts (integração).
 
-export type CanonicalDominio = {
+type CanonicalDominio = {
   dominio_id: string;
   nome: string;
   nivel: string | null;
 };
 
-export type CanonicalProtocolo = {
+type CanonicalProtocolo = {
   protocol_id: string; // = protocol.familia (slug do catálogo: "vbmapp", "pedi"...)
   nome: string;
   disciplina: string;
@@ -16,7 +16,7 @@ export type CanonicalProtocolo = {
   dominios: CanonicalDominio[];
 };
 
-export type CanonicalMeta = {
+type CanonicalMeta = {
   goal_id: string;
   descricao: string;
   disciplina: string | null;

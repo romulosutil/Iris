@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Breadcrumb } from "./breadcrumb";
 
 const meta = {
-  title: "Molecules/Breadcrumb",
+  title: "04. UI COMPONENTS/Navigation & Form Controls/Breadcrumb",
   component: Breadcrumb,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof Breadcrumb>;

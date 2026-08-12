@@ -2,11 +2,13 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Card } from "./card";
 
 const meta = {
-  title: "Organisms/Card",
+  title: "04. UI COMPONENTS/Data Display & Feedback/Card",
   component: Card,
   parameters: { layout: "centered" },
   argTypes: {
-    estado: { control: "inline-radio", options: ["conquistado", "candidato"] },
+    estado: { control: "inline-radio", options: ["conquistado", "candidato", "sugerida"] },
+    interativo: { control: "boolean" },
+    destacado: { control: "boolean" },
   },
 } satisfies Meta<typeof Card>;
 
@@ -25,7 +27,16 @@ export const Candidato: Story = {
   args: {
     estado: "candidato",
     titulo: "Aponta para o objeto nomeado",
-    children: "Sugerido pela IA — aguarda aprovação humana.",
+    children: "Sugerido pela IA — aguarda aprovação humana com afundamento visual.",
+  },
+};
+
+export const Interativo: Story = {
+  args: {
+    estado: "conquistado",
+    interativo: true,
+    titulo: "Cartão Clicável de Paciente",
+    children: "Hover e toque com feedback tátil de deslocamento (-2px, -2px) e sombra.",
   },
 };
 

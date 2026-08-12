@@ -2,7 +2,7 @@ import * as React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
-export interface BreadcrumbItem {
+interface BreadcrumbItem {
   rotulo: React.ReactNode;
   href?: string;
   onClick?: () => void;

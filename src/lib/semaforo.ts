@@ -5,7 +5,7 @@ import "server-only";
  * estourou o tempo. Tipo próprio para o chamador poder responder de forma
  * genérica em vez de deixar vazar erro de infraestrutura.
  */
-export class SemaforoSaturado extends Error {
+class SemaforoSaturado extends Error {
   constructor(motivo: "fila-cheia" | "timeout") {
     super(`semáforo saturado: ${motivo}`);
     this.name = "SemaforoSaturado";

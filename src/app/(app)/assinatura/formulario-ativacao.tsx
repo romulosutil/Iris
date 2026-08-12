@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { QrCode } from "@/components/ui/qr-code";
-import { BotaoCopiar } from "@/components/ui/botao-copiar";
+import { CopyButton } from "@/components/ui/patterns/copy-button";
 import { formatarBRL } from "@/lib/billing/calculator";
 import { ativarAssinatura } from "./actions";
 import type { AtivacaoState } from "./logic";
@@ -188,7 +188,7 @@ export function FormularioAtivacao({
                 {autorizacao.brCode}
               </p>
               <div className="mt-2">
-                <BotaoCopiar
+                <CopyButton
                   valor={autorizacao.brCode}
                   rotulo="Copiar código Pix"
                 />
