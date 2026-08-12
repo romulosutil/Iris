@@ -49,9 +49,9 @@ clínica humana.
 | `docs/arquitetura/plano-bootstrap-e-stack-vps.md` | Pivô de hospedagem para VPS Hostinger + Easypanel + **Postgres puro** (não Supabase); redefine deploy/Docker/LGPD, estrutura de pastas feature-first e a sequência de bootstrap até a Fase 0.5. **Ler antes de qualquer setup de infra.** |
 | `docs/arquitetura/checklist-producao-mvp.md`      | Checklist de aceite do MVP (Fase 6.6): critério verificável de "pronto para piloto", rastreia hardening/retenção/família + gates legais/infra. Áudio (6.4/6.5) é fast-follow gated por DPA. |
 | `docs/ux/design-system-espectro-brutal.md`        | Design system (codinome interno "Espectro Brutal"): tokens, princípios e os 3 componentes base — implementado na Fase 0.5, antes da Fase 1                                                                                                |
-| `docs/ux/inventario-componentes.md`               | Componentes de UI previstos por fase (levantados de `fluxos-e-wireframes.md`) — consultar antes de estilizar algo novo em qualquer fase; regra de nunca hardcodear componente está em `HANDOFF-FASE1.md` seção 0                          |
+| `docs/ux/inventario-componentes.md`               | Componentes de UI previstos por fase (levantados de `fluxos-e-wireframes.md`) — consultar antes de estilizar algo novo em qualquer fase; regra de nunca hardcodear componente está em `docs/archive/handoff-fase1.md` seção 0                          |
 | `BACKLOG.md`                                      | O que ainda falta ser feito                                                                                                                                                                                                               |
-| `HANDOFF-FASE1.md`                                | Briefing de início de construção para a sessão de Claude Code CLI que vai codar a Fase 1                                                                                                                                                  |
+| `docs/archive/handoff-fase1.md`                   | Registro histórico do briefing de início da Fase 1 (preservado para auditoria do handoff inicial)                                                                                                                                          |
 | `docs/legal/briefing-para-advogado.md`            | Consolidado de pontos jurídicos em aberto, formatado para revisão informal por advogado                                                                                                                                                   |
 | `docs/legal/dpa-asr-audio.md`                     | DPA e gating de áudio (ASR externo): transferência internacional Art. 33 específica do áudio, retenção 7 dias do áudio bruto, feature flag que mantém ASR real desabilitado até DPA assinado. Predecessor legal de 6.4/6.5. |
 | `docs/legal/termo-consentimento-titular-adulto.md` | Termo de consentimento do **titular adulto capaz** que autoconsente (LGPD Art. 7º I e 11 I) — versão `adulto-v1`. Complementa o regime de menor (Art. 14) das políticas. Caminho crítico dos nichos Terapia Convencional (#98) e TCC (#99). |
@@ -69,13 +69,13 @@ refine, não recomece.
 > `docs/arquitetura/plano-bootstrap-e-stack-vps.md`.
 > Produto, modelo de dados, RLS e plano de fases não mudam.
 
-## Estado atual (atualizado 11/07/2026)
+## Estado atual (atualizado 11/08/2026)
 
-O projeto está com a construção em andamento, com as fases de infraestrutura, auth, multi-tenancy e o cadastro clínico executadas com sucesso (até a Fase 1c):
+O desenvolvimento do MVP do Iris está concluído (Fases 0.5 a 6.6) e a Fase 7 (Faturamento & Growth) está ativa com deploy em produção:
 
-* **Fase 0.5 (Design System)**: Componentes base (Botão, Card, Alerta) implementados no Storybook sob o conceito Espectro Brutal com testes de acessibilidade (axe) e temas.
-* **Fase 1a & 1b (Fundação de Dados, Auth & Multi-tenancy)**: Isolamento multi-tenant robusto com duas conexões no Postgres (`iris_app` sob RLS e `iris_auth` para session bootstrap), login via Better-Auth, e políticas de RLS testadas contra recursão e vazamento de dados.
-* **Fase 1c (Cadastro Clínico)**: Implementação da separação entre cadastro administrativo e clínico (coordenador-only, sob a nova action `criarPacienteEConsent` com LGPD atômico), vinculação de protocolos, equipe de cuidado (vigência histórica) e convite de equipe por senha temporária em tela.
-* **Melhorias**: Enriquecimento do Design System com 12 novos componentes (Radix headless para WAI-ARIA) no branch `melhoria-design-system`.
+* **Fase 0.5 a Fase 6 (MVP Completo)**: Fundação de dados, auth multi-tenant (Better-Auth + RLS), cadastro clínico (LGPD atômico), agenda & check-in, metas & diário em texto livre, extração de evidências por IA, visualização de gráficos/trajetórias, relatórios para convênio/supervisão e hardening LGPD (arquivamento automático, auditoria e consentimento) concluídos com sucesso.
+* **Fase 7 (Self-Service & Faturamento Asaas)**: Faturamento via Asaas (Fases A, B e C) totalmente implementado, testado e verificado com webhooks reais entregues em produção. Auto-arquivamento (90 dias) e desarquivamento automático unificado (#174) com cobertura por testes de integração e RLS.
+* **E-mail Transacional**: Integração com Resend para envio de convites e notificações ativada (#126).
 
-**Próximo passo:** Fase 1d (Agenda Mínima + Check-in, sob a Issue #11).
+**Próximos passos:** Fase 6b (Iris Audio Companion / ASR - fast-follow gated por DPA) e Customização White-Label nos PDFs (#120).
+

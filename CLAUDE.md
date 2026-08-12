@@ -1,6 +1,6 @@
 # CLAUDE.md — Iris
 
-> Ler `AGENTS.md` primeiro: contrato operacional (regra de 3 camadas, guardrails inegociáveis, checklist LGPD, definição de pronto por fase, quando parar e perguntar). Este arquivo cobre regras específicas de sessões Claude Code.
+> **Master Instruction Ledger**. Ler [`AGENTS.md`](AGENTS.md) primeiro: porta de entrada universal, governança em 3 camadas, matriz de responsabilidade (Claude/Gemini = Arquitetos de Produto; Jules = Executor Autônomo), protocolo de colaboração (idioma PT-BR obrigatório para Jules, acionamento via label `jules`, PRs em estado Draft até 100% de aprovação nos testes), guardrails inegociáveis de engenharia, checklist LGPD e definição de pronto.
 
 ## Stack Tecnológica & Comandos
 
@@ -65,20 +65,38 @@ Regra vale para policies, 13 funções `SECURITY DEFINER` (`0087`), views e quer
 Ordem de leitura:
 
 1. Este arquivo + `AGENTS.md`.
-2. `HANDOFF-FASE1.md` — briefing, decisões travadas, escopo da fase.
+2. `docs/archive/handoff-fase1.md` — briefing, decisões travadas, escopo da fase.
 3. `README.md` — 8 princípios inegociáveis + mapa de docs (`docs/**`).
 4. `docs/arquitetura/stack-e-plano-de-construcao.md` — stack, plano fases 0.5 a 6, checklist LGPD mínimo viável.
-5. Docs da fase em construção (mapa em `README.md` — ex: `docs/dados/modelo-de-dados.md` + `docs/ux/fluxos-e-wireframes.md` para Fase 1, `HANDOFF-FASE1.md`).
+5. Docs da fase em construção (mapa em `README.md` — ex: `docs/dados/modelo-de-dados.md` + `docs/ux/fluxos-e-wireframes.md` para Fase 1, `docs/archive/handoff-fase1.md`).
 
 Dúvida documentada: ler doc, não pedir reexplicação ao Rômulo.
 
 ## Como esta sessão deve operar
 
-- Usar task list (todo) para trabalho > 2-3 passos. Checar "Definição de pronto por fase" (`AGENTS.md` §6).
+- Usar task list (todo) para trabalho > 2-3 passos. Checar "Definição de pronto por fase" (`AGENTS.md` §7).
 - Usar plan mode antes de alterar modelo de dados, RLS ou schema de saída do agente de extração (`docs/agente/output-schema.json`).
-- Fim de sessão com decisão nova/gap/resolução: atualizar `BACKLOG.md` (`AGENTS.md` §10).
-- Documentação e copy: pt-BR. Commits: inglês (`docs/arquitetura/convencoes-de-codigo.md`).
+- Fim de sessão com decisão nova/gap/resolução: atualizar `BACKLOG.md` (`AGENTS.md` §8).
+- Documentação e copy: pt-BR. Commits: inglês (`docs/arquitetura/convencoes-de-codigo.md`). Para o agente Jules, commits, PRs, comentários em issues e planos de ação devem ser obrigatoriamente em PT-BR.
 - Decisão nova de arquitetura ou produto: marcar como proposta pendente de validação com Rômulo.
+
+## Protocolo de Colaboração entre Agentes & Jules
+
+- **Ponte de Comando:** `AGENTS.md` é a porta de entrada universal de briefing; `CLAUDE.md` contém os detalhes operacionais e de engenharia (Master Instruction Ledger).
+- **Matriz de Responsabilidade:**
+  - **Estratégia & Design (Claude Code / Gemini):** Arquitetos de produto. Especificações técnicas, visões UX/UI, diagramas de jornada em Mermaid, detalhamento de tarefas em GitHub Issues.
+  - **Execução & Qualidade (Jules):** Executor autônomo. Implementação técnica de issues, análise automatizada de qualidade, segurança e performance em PRs.
+- **Protocolo de Invocação & Resolução:**
+  1. Qualquer dívida técnica ou nova funcionalidade DEVE ser registrada como **GitHub Issue**.
+  2. Adicionar a label `jules` na issue para acionar a execução autônoma do Jules.
+  3. O Jules assume a tarefa, lê `AGENTS.md` e `CLAUDE.md`, constrói o plano, executa e abre o PR.
+- **Estado do Pull Request & Idioma:**
+  - O PR é obrigatoriamente aberto no estado **Draft (Rascunho)**.
+  - O PR só é marcado como pronto para revisão (*Ready for Review*) após **100% de aprovação nos testes automatizados** (`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:rls`).
+  - Todas as interações do Jules destinadas a humanos (descrição do PR, comentários em issues, mensagens de commit, plano de ação) devem ser obrigatoriamente em **Português (PT-BR)**, traduzindo qualquer contexto que venha em inglês.
+- **Contexto de Negócio, Testes e Mocks via `.env.example`:**
+  - O Jules deve obrigatoriamente ler `.env.example` para compreender os serviços (Better-Auth, Asaas, LLMs, Resend, MinIO), as variáveis de ambiente ativas e os papéis de Postgres (`DATABASE_URL`, `AUTH_DATABASE_URL`, `MIGRATION_DATABASE_URL`).
+  - `.env.example` serve de mapa para criar mocks coerentes, entender flags de teste (`ALLOW_SKIP_INTEGRATION`) e garantir que a execução de testes automatizados reflita com precisão o contexto do negócio.
 
 ## Gestão de tokens: atomização e checkpoint de contexto
 
@@ -102,7 +120,8 @@ Regra pós-mortem D22 (#239, PR #240, memória `d22-sessao-gastou-token-em-loops
 
 | Preciso de...                                              | Arquivo                                                                |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Escopo exato da fase atual                                 | `HANDOFF-FASE1.md`                                                     |
+| Escopo exato da fase atual / roadmap viva                  | `BACKLOG.md` (GitHub Issues/Milestones)                                |
+| Histórico do Handoff da Fase 1                             | `docs/archive/handoff-fase1.md`                                        |
 | DDL / modelo de dados (25 entidades)                       | `docs/dados/modelo-de-dados.md`                                        |
 | Telas e wireframes da fase                                 | `docs/ux/fluxos-e-wireframes.md`                                       |
 | Tokens e os 3 componentes do design system                 | `docs/ux/design-system-espectro-brutal.md`                             |
