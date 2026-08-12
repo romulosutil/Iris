@@ -42,22 +42,6 @@ export const TableBody = React.forwardRef<
   );
 });
 
-const TableFooter = React.forwardRef<
-  HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(function TableFooter({ className, ...props }, ref) {
-  return (
-    <tfoot
-      ref={ref}
-      className={cn(
-        "border-t-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] font-semibold text-[var(--text-primary)]",
-        className,
-      )}
-      {...props}
-    />
-  );
-});
-
 export const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>

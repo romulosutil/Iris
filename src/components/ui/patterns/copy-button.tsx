@@ -94,7 +94,7 @@ export function CopyButton({
       </Button>
 
       {/* Região viva anunciada por leitores de tela */}
-      <span className="sr-only" aria-live="polite">
+      <span role="status" className="sr-only" aria-live="polite">
         {mensagemAria}
       </span>
     </div>

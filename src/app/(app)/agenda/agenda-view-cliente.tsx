@@ -246,12 +246,16 @@ export function AgendaViewCliente({
         <AgendaCalendarGrid
           sessoes={sessoesFiltradas}
           terapeutas={terapeutas}
-          role={role}
-          userId={userId}
-          podeGerir={podeGerir}
-          onSlotClick={(terapeutaId, horario) => {
-            if (podeGerir || isCoordenador) {
-              router.push(`/agenda/semana?terapeutaId=${terapeutaId}&horario=${horario}`);
+          onSlotClick={
+            podeGerir || isCoordenador
+              ? (terapeutaId, horario) => {
+                  router.push(`/agenda/semana?terapeutaId=${terapeutaId}&horario=${horario}`);
+                }
+              : undefined
+          }
+          onSessaoClick={(sessao) => {
+            if (isCoordenador || sessao.terapeutaId === userId) {
+              router.push(`/diario/${sessao.id}`);
             }
           }}
         />

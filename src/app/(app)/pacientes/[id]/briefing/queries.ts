@@ -12,7 +12,6 @@ import {
 } from "@/db/schema";
 import { alertasGraveDe, reforcadoresAtuaisDe, type AlertaManejo, type ReforcadorAtual } from "./logic";
 
-export { };
 export type { AlertaManejo, ReforcadorAtual };
 
 type SessionEstado = (typeof sessionEstado.enumValues)[number];

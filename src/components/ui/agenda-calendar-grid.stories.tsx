@@ -67,7 +67,6 @@ type Story = StoryObj<typeof meta>;
 
 export const DefaultDayView: Story = {
   args: {
-    view: "day",
     terapeutas: mockTerapeutas.slice(0, 1),
     sessoes: mockSessoes.filter((s) => s.terapeutaId === "t1"),
     abertura: "08:00",
@@ -79,9 +78,8 @@ export const DefaultDayView: Story = {
   },
 };
 
-export const WeekViewCoordinator: Story = {
+export const MultiResourceCoordinator: Story = {
   args: {
-    view: "week",
     terapeutas: mockTerapeutas,
     sessoes: mockSessoes,
     abertura: "08:00",
@@ -95,7 +93,6 @@ export const WeekViewCoordinator: Story = {
 
 export const WithAISuggestedSlots: Story = {
   args: {
-    view: "week",
     terapeutas: mockTerapeutas,
     sessoes: [
       ...mockSessoes,
@@ -119,7 +116,6 @@ export const WithAISuggestedSlots: Story = {
 
 export const EmptyStateAgenda: Story = {
   args: {
-    view: "day",
     terapeutas: [],
     sessoes: [],
   },

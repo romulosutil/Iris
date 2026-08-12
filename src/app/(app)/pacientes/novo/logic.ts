@@ -42,7 +42,7 @@ export type CadastroAdminState = {
 // config quando houver versionamento de termo (docs/legal). O valor "v1" do
 // termo do menor NÃO muda — há dado gravado com ele em produção.
 const VERSAO_TERMO_MENOR_ATUAL = "v1";
-const VERSAO_TERMO_TITULAR_ADULTO_ATUAL = "adulto-v1";
+export const VERSAO_TERMO_TITULAR_ADULTO_ATUAL = "adulto-v1";
 
 /**
  * Quem assina o consentimento. É ESCOLHA EXPLÍCITA do operador no formulário,

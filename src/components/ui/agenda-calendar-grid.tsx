@@ -29,11 +29,7 @@ export interface AgendaSessaoItem {
 export interface AgendaCalendarGridProps {
   sessoes: AgendaSessaoItem[];
   terapeutas: { id: string; nome: string; disciplina?: string }[];
-  view?: "day" | "week";
   dataReferencia?: Date | string;
-  role?: string;
-  userId?: string;
-  podeGerir?: boolean;
   abertura?: string; // Ex: "07:00"
   fechamento?: string; // Ex: "19:00"
   passoMin?: number; // Ex: 60 ou 30
@@ -64,12 +60,11 @@ function resolverStatusSemantico(sessao: AgendaSessaoItem): SessionSemanticStatu
 
 /**
  * AgendaCalendarGrid — Grade de Horários da Agenda Clínica (Fases 1 e 3).
- * Suporta visualização diária e semanal, slots compactos <30min, colisão visual e estados de IA.
+ * Grade diária de um dia (coluna por recurso), slots compactos <30min, colisão visual e estados de IA.
  */
 export function AgendaCalendarGrid({
   sessoes,
   terapeutas,
-  view = "day",
   dataReferencia = new Date(),
   abertura = "08:00",
   fechamento = "18:00",
@@ -94,22 +89,28 @@ export function AgendaCalendarGrid({
     return slots;
   }, [horaInicioMin, horaFimMin, passoMin]);
 
-  // Agrupamento por terapeuta
-  const sessoesPorTerapeuta = React.useMemo(() => {
+  // Pré-bucketing por célula (terapeuta × slot): cada sessão é parseada e
+  // classificada uma única vez, em vez de refiltrar a lista inteira por célula
+  // a cada render (O(slots × terapeutas × sessões)).
+  const sessoesPorCelula = React.useMemo(() => {
     const map = new Map<string, AgendaSessaoItem[]>();
-    for (const t of terapeutas) {
-      map.set(t.id, []);
-    }
     for (const s of sessoes) {
-      const list = map.get(s.terapeutaId);
+      const d = typeof s.agendadaPara === "string" ? new Date(s.agendadaPara) : s.agendadaPara;
+      const minutoSessao = d.getHours() * 60 + d.getMinutes();
+      if (minutoSessao < horaInicioMin) continue;
+      const inicioSlot =
+        horaInicioMin + Math.floor((minutoSessao - horaInicioMin) / passoMin) * passoMin;
+      if (inicioSlot >= horaFimMin) continue; // fora dos slots gerados
+      const chave = `${s.terapeutaId}|${formatHora(inicioSlot)}`;
+      const list = map.get(chave);
       if (list) {
         list.push(s);
       } else {
-        map.set(s.terapeutaId, [s]);
+        map.set(chave, [s]);
       }
     }
     return map;
-  }, [sessoes, terapeutas]);
+  }, [sessoes, horaInicioMin, horaFimMin, passoMin]);
 
   const dataFormatada = React.useMemo(() => {
     return new Intl.DateTimeFormat("pt-BR", {
@@ -138,7 +139,7 @@ export function AgendaCalendarGrid({
             {dataFormatada}
           </h3>
           <span className="text-xs text-text-secondary">
-            Visão {view === "day" ? "Diária (1 coluna/recurso)" : "Semanal Multi-recurso"} · {slotsHorarios.length} horários
+            Visão diária (1 coluna/recurso) · {slotsHorarios.length} horários
           </span>
         </div>
       </div>
@@ -174,8 +175,6 @@ export function AgendaCalendarGrid({
 
           {/* Linhas de Horário */}
           {slotsHorarios.map((slot) => {
-            const slotMin = parseHora(slot);
-
             return (
               <React.Fragment key={slot}>
                 {/* Coluna de Horário */}
@@ -185,24 +184,17 @@ export function AgendaCalendarGrid({
 
                 {/* Células para cada terapeuta no horário */}
                 {terapeutas.map((t) => {
-                  const sessoesTerapeuta = sessoesPorTerapeuta.get(t.id) ?? [];
-                  const sessoesNoSlot = sessoesTerapeuta.filter((s) => {
-                    const d = typeof s.agendadaPara === "string" ? new Date(s.agendadaPara) : s.agendadaPara;
-                    const horaSessaoMin = d.getHours() * 60 + d.getMinutes();
-                    return horaSessaoMin >= slotMin && horaSessaoMin < slotMin + passoMin;
-                  });
-
+                  const sessoesNoSlot = sessoesPorCelula.get(`${t.id}|${slot}`) ?? [];
                   const temSessoes = sessoesNoSlot.length > 0;
+                  const slotClicavel = !temSessoes && Boolean(onSlotClick);
 
                   return (
                     <div
                       key={`${t.id}-${slot}`}
-                      onClick={() => {
-                        if (!temSessoes) onSlotClick?.(t.id, slot);
-                      }}
+                      onClick={slotClicavel ? () => onSlotClick?.(t.id, slot) : undefined}
                       className={cn(
                         "relative flex min-h-11 flex-col gap-1 border-b border-r border-border-brutal/20 p-1 transition-colors",
-                        !temSessoes && "cursor-pointer hover:bg-surface-elevated/40",
+                        slotClicavel && "cursor-pointer hover:bg-surface-elevated/40",
                       )}
                     >
                       {sessoesNoSlot.map((sessao) => {

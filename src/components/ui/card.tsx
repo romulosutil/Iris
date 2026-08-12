@@ -4,7 +4,7 @@ import { surface, type SurfaceVariante } from "@/components/ui/primitives/surfac
 import { Pill } from "@/components/ui/primitives/pill";
 import { CheckIcon, SparkleIcon, LayersIcon } from "@/components/ui/icon";
 
-type EpistemicState =
+export type EpistemicState =
   | "fact"
   | "suggestion"
   | "conquistado"
@@ -50,6 +50,18 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
   const Component = como as any;
   const isInteractive = interativo || interactive || como === "button" || como === "a" || Boolean(props.onClick);
   const resolvedState = epistemicState ?? estado ?? "fact";
+
+  // Semântica de botão para elementos não-nativos com onClick: sem isto o card
+  // fica clicável só para mouse (invisível a Tab e leitores de tela).
+  const precisaSemanticaBotao = como !== "button" && como !== "a" && Boolean(props.onClick);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    props.onKeyDown?.(e);
+    if (disabled || e.defaultPrevented) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      e.currentTarget.click();
+    }
+  };
 
   // Eixo Estrutural de Profundidade:
   // - fato/conquistado: solida (LEVANTA com --ds-shadow)
@@ -106,6 +118,12 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
         className,
       )}
       {...props}
+      {...(como === "button" ? { disabled } : {})}
+      {...(disabled && como !== "button" ? { "aria-disabled": true } : {})}
+      {...(precisaSemanticaBotao
+        ? { role: "button", tabIndex: disabled ? -1 : 0, onKeyDown: handleKeyDown }
+        : {})}
+      onClick={disabled ? undefined : props.onClick}
     >
       {destacado ? (
         <span
