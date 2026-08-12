@@ -201,14 +201,18 @@ async function semear(tx: postgres.TransactionSql) {
 async function comoApp(
   tx: postgres.TransactionSql,
   clinicId: string | null,
-  papel = "coordenador",
-  userId = USER_A,
+  papel: string | null = "coordenador",
+  userId: string | null = USER_A,
 ) {
   if (clinicId !== null) {
     await tx`SELECT set_config('app.clinic_id', ${clinicId}, true)`;
   }
-  await tx`SELECT set_config('app.user_role', ${papel}, true)`;
-  await tx`SELECT set_config('app.user_id', ${userId}, true)`;
+  if (papel !== null) {
+    await tx`SELECT set_config('app.user_role', ${papel}, true)`;
+  }
+  if (userId !== null) {
+    await tx`SELECT set_config('app.user_id', ${userId}, true)`;
+  }
   await tx`SET LOCAL ROLE app_role`;
 }
 
@@ -262,22 +266,31 @@ const FUNCOES_COM_HELPER = [
 ];
 
 /**
- * As 5 funções que chamam app_user_role_exigido() (0093, D23).
+ * As 11 funções que chamam app_user_role_exigido() (0093 + 0094, D23).
  */
 const FUNCOES_COM_USER_ROLE_HELPER = [
   "app_alerta_risco_visivel",
+  "app_alerta_visivel",
+  "app_aplicar_candidatura",
+  "app_aplicar_snapshot",
   "app_desarquivar_paciente",
+  "app_purgar_paciente",
+  "app_purgar_report",
+  "app_report_visivel",
   "app_salvar_config_emergencia",
   "app_salvar_cpf_cnpj_clinica",
   "app_session_clinica_visivel",
 ];
 
 /**
- * As 3 funções que chamam app_user_id_exigido() (0093, D23).
+ * As 6 funções que chamam app_user_id_exigido() (0093 + 0094, D23).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
   "app_desarquivar_paciente",
+  "app_is_on_team",
+  "app_purgar_paciente",
+  "app_purgar_report",
   "app_session_clinica_visivel",
 ];
 
@@ -788,7 +801,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
 
     test("app_user_id_atual() devolve NULL nos 4 estados ruins de GUC", async () => {
       const r = await emTransacao(async (tx) => {
-        await comoApp(tx, CLINICA_A, "coordenador", USER_A);
+        await comoApp(tx, CLINICA_A, "coordenador", null);
 
         const out: Record<string, string | null> = {};
         for (const [caso, valor] of GUCS_RUINS) {
@@ -814,7 +827,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
 
     test("app_user_id_exigido() levanta P0001 nos 4 estados ruins (nunca 22P02 nem 42704)", async () => {
       const r = await emTransacao(async (tx) => {
-        await comoApp(tx, CLINICA_A, "coordenador", USER_A);
+        await comoApp(tx, CLINICA_A, "coordenador", null);
 
         const out: Record<string, string> = {};
         for (const [caso, valor] of GUCS_RUINS) {

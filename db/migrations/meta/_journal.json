@@ -659,6 +659,13 @@
       "when": 1786456849181,
       "tag": "0093_user_role_id_helpers",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1786456850181,
+      "tag": "0094_fechar_guard_papel_identidade",
+      "breakpoints": true
     }
   ]
 }
