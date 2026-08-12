@@ -45,6 +45,8 @@ const CHEIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]>
       classificacaoAtual: { alvo: { goal_id: "00000000-0000-0000-0000-0000000000g1" } },
       motivo: ["baixa_confianca"],
       protocolId: null,
+      confianca: "baixa",
+      inconsistenteComHistorico: false,
     },
     {
       evidenceId: "00000000-0000-0000-0000-000000000002",
@@ -55,6 +57,8 @@ const CHEIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]>
       classificacaoAtual: { alvo: { protocol_id: "vbmapp", dominio_id: "mand" } },
       motivo: ["inconsistente_historico"],
       protocolId: "vbmapp",
+      confianca: "alta",
+      inconsistenteComHistorico: true,
     },
   ],
   alvosPorPaciente: {

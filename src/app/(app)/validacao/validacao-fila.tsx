@@ -17,7 +17,6 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
 import {
   confirmarEvidenciaAction,
@@ -29,6 +28,10 @@ import {
 import type { ItemFila } from "./queries";
 import type { AlvoValido } from "./alvos";
 import { ClassificacaoAtual, rotuloAlvo } from "./classificacao-atual";
+import { ConfidenceCard } from "@/components/ui/confidence-card";
+import { CompareRow } from "@/components/ui/compare-row";
+import { BatchBar } from "@/components/ui/batch-bar";
+import { avaliarFriccao } from "@/lib/extraction/review-policy";
 
 const rotuloMotivo: Record<ItemFila["motivo"][number], string> = {
   baixa_confianca: "Baixa confiança",
@@ -98,12 +101,10 @@ function ItemCard({
     alvoSelecionadoIdx !== undefined ? JSON.stringify(alvos[Number(alvoSelecionadoIdx)]) : "";
 
   return (
-    <Stack
-      gap="md"
+    <ConfidenceCard
+      confianca={item.confianca}
+      inconsistenteComHistorico={item.inconsistenteComHistorico}
       como="li"
-      className={cn(
-        "bg-[var(--surface-card)] p-5 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
-      )}
       id={`validacao-card-${item.evidenceId}`}
     >
       <Stack gap="sm">
@@ -116,10 +117,22 @@ function ItemCard({
           </Link>
         </h3>
         <p className="text-[var(--text-primary)] text-base">{item.trecho || "(sem trecho registrado)"}</p>
+
         <Cluster gap="sm" className="items-center">
           <span className="text-[var(--text-secondary)] text-sm font-semibold">Classificação atual:</span>
           <ClassificacaoAtual classificacao={item.classificacaoAtual} />
         </Cluster>
+
+        {item.inconsistenteComHistorico ? (
+          <CompareRow
+            leftTitle="Sugerido / Atual"
+            leftContent={<ClassificacaoAtual classificacao={item.classificacaoAtual} />}
+            rightTitle="Histórico Clínico"
+            rightContent="Inconsistente com o histórico do paciente. Nenhuma ocorrência independente registrada anteriormente."
+            className="mt-2"
+          />
+        ) : null}
+
         {item.motivo.length > 0 ? (
           <ChipGroup rotulo="Motivo da validação">
             {item.motivo.map((m) => (
@@ -281,7 +294,7 @@ function ItemCard({
       </Cluster>
 
       {confirmarState.error ? <Alert severidade="erro">{confirmarState.error}</Alert> : null}
-    </Stack>
+    </ConfidenceCard>
   );
 }
 
@@ -300,11 +313,42 @@ export function ValidacaoFila({
   alvosPorPaciente: Record<string, AlvoValido[]>;
 }) {
   const [resolvidos, setResolvidos] = useState<Set<string>>(new Set());
+  const [carregandoLote, setCarregandoLote] = useState(false);
 
   const pendentes = useMemo(
     () => itens.filter((i) => !resolvidos.has(i.evidenceId)),
     [itens, resolvidos],
   );
+
+  const elegiveisLote = useMemo(() => {
+    return pendentes.filter((item) => {
+      const { podeLote } = avaliarFriccao({
+        confianca: item.confianca,
+        inconsistenteComHistorico: item.inconsistenteComHistorico,
+      });
+      return podeLote;
+    });
+  }, [pendentes]);
+
+  const handleAprovarLote = async () => {
+    setCarregandoLote(true);
+    try {
+      for (const item of elegiveisLote) {
+        const fd = new FormData();
+        fd.append("evidenceId", item.evidenceId);
+        const r = await confirmarEvidenciaAction({}, fd);
+        if (r.ok) {
+          setResolvidos((prev) => {
+            const next = new Set(prev);
+            next.add(item.evidenceId);
+            return next;
+          });
+        }
+      }
+    } finally {
+      setCarregandoLote(false);
+    }
+  };
 
   if (pendentes.length === 0) {
     return (
@@ -315,19 +359,29 @@ export function ValidacaoFila({
   }
 
   return (
-    <Stack gap="md" como="ul">
-      {pendentes.map((item, idx) => (
-        <ItemCard
-          key={item.evidenceId}
-          item={item}
-          indice={idx + 1}
-          total={pendentes.length}
-          alvos={alvosPorPaciente[item.patientId] ?? []}
-          onResolvido={() =>
-            setResolvidos((prev) => new Set(prev).add(item.evidenceId))
-          }
-        />
-      ))}
+    <Stack gap="lg" className="relative">
+      <Stack gap="md" como="ul">
+        {pendentes.map((item, idx) => (
+          <ItemCard
+            key={item.evidenceId}
+            item={item}
+            indice={idx + 1}
+            total={pendentes.length}
+            alvos={alvosPorPaciente[item.patientId] ?? []}
+            onResolvido={() =>
+              setResolvidos((prev) => new Set(prev).add(item.evidenceId))
+            }
+          />
+        ))}
+      </Stack>
+
+      <BatchBar
+        total={itens.length}
+        resolvidos={resolvidos.size}
+        elegiveisLote={elegiveisLote.length}
+        onAprovarLote={handleAprovarLote}
+        carregando={carregandoLote}
+      />
     </Stack>
   );
 }

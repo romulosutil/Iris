@@ -1,9 +1,8 @@
 import type { Meta } from "@storybook/nextjs-vite";
 import { Header } from "@/components/ui/header";
-import { Container, Stack, Cluster } from "@/components/ui/layout";
+import { Container, Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Button } from "@/components/ui/button";
+import { ValidacaoFila } from "@/app/(app)/validacao/validacao-fila";
 
 const meta = {
   title: "Pages/Validação",
@@ -12,7 +11,55 @@ const meta = {
 
 export default meta;
 
-export const FilaDeValidacao = {
+// Inline types to avoid bundling server-only / database modules in Storybook/Vite
+interface LocalItemFila {
+  evidenceId: string;
+  patientId: string;
+  patientNome: string;
+  sessionNumero: number;
+  trecho: string;
+  classificacaoAtual: any;
+  motivo: ("baixa_confianca" | "inconsistente_historico")[];
+  protocolId: string | null;
+  confianca: "alta" | "media" | "baixa";
+  inconsistenteComHistorico: boolean;
+}
+
+const ITENS: LocalItemFila[] = [
+  {
+    evidenceId: "ev1",
+    patientId: "p1",
+    patientNome: "Gabriel Costa",
+    sessionNumero: 3,
+    trecho: "A criança apontou para o cartão de bola de forma independente quando mostrei o brinquedo.",
+    classificacaoAtual: { alvo: { protocol_id: "vbmapp", dominio_id: "mand", tipo_estrutura: "marco_simples" } },
+    motivo: ["baixa_confianca"],
+    protocolId: "vbmapp",
+    confianca: "baixa",
+    inconsistenteComHistorico: false,
+  },
+  {
+    evidenceId: "ev2",
+    patientId: "p1",
+    patientNome: "Gabriel Costa",
+    sessionNumero: 4,
+    trecho: "Vitor falou 'au au' ao ver o gato de pelúcia, mas o terapeuta anotou como tato independente.",
+    classificacaoAtual: { alvo: { protocol_id: "vbmapp", dominio_id: "tact", tipo_estrutura: "marco_simples" } },
+    motivo: ["inconsistente_historico"],
+    protocolId: "vbmapp",
+    confianca: "alta",
+    inconsistenteComHistorico: true,
+  }
+];
+
+const ALVOS: Record<string, any[]> = {
+  p1: [
+    { goal_id: null, protocol_id: "vbmapp", dominio_id: "mand", tipo_estrutura: "marco_simples" },
+    { goal_id: null, protocol_id: "vbmapp", dominio_id: "tact", tipo_estrutura: "marco_simples" },
+  ]
+};
+
+export const FilaDeValidacaoReal = {
   render: () => (
     <div className="min-h-dvh bg-[var(--bg-app)]">
       <Header
@@ -27,36 +74,10 @@ export const FilaDeValidacao = {
       <Container largura="md" className="py-8">
         <Stack gap="lg">
           <PageHeader
-            title="Fila de validação"
-            description="1 item pede validação do coordenador."
+            title="Central de Validação"
+            description="2 itens pedem validação do coordenador."
           />
-
-          <Stack gap="md" como="ul">
-            <li className="bg-[var(--surface-card)] p-5 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]">
-              <Stack gap="sm">
-                <Cluster gap="sm" className="items-center justify-between">
-                  <h3 className="font-display text-lg font-bold text-[var(--text-primary)]">
-                    Gabriel Costa — Imita gesto simples
-                  </h3>
-                  <StatusBadge estado="devolvida" />
-                </Cluster>
-                <p className="text-[var(--text-primary)] text-sm">
-                  Terapeuta sugeriu nova marcação de marco clínico. Requer aprovação do coordenador de área.
-                </p>
-                <Cluster gap="sm" className="pt-2">
-                  <Button variante="primaria" tamanho="sm">
-                    Confirmar
-                  </Button>
-                  <Button variante="secundaria" tamanho="sm">
-                    Reclassificar
-                  </Button>
-                  <Button variante="neutra" tamanho="sm">
-                    Devolver dúvida
-                  </Button>
-                </Cluster>
-              </Stack>
-            </li>
-          </Stack>
+          <ValidacaoFila itens={ITENS as any} alvosPorPaciente={ALVOS} />
         </Stack>
       </Container>
     </div>

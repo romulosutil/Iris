@@ -23,6 +23,8 @@ export type ItemFila = {
   classificacaoAtual: unknown;
   motivo: ("baixa_confianca" | "inconsistente_historico")[];
   protocolId: string | null;
+  confianca: "alta" | "media" | "baixa";
+  inconsistenteComHistorico: boolean;
 };
 
 type Row = {
@@ -72,6 +74,8 @@ export async function listarFilaValidacao(
         classificacaoAtual: r.classificacao_atual,
         motivo,
         protocolId: r.protocol_id,
+        confianca: r.confianca as "alta" | "media" | "baixa",
+        inconsistenteComHistorico: r.inconsistente_com_historico,
       };
     });
 
