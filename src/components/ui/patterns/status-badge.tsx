@@ -53,7 +53,7 @@ const estadoToVariante: Record<EstadoDado, BadgesVariantes> = {
   devolvida: "warning",
 };
 
-export const variantStyles: Record<string, string> = {
+const variantStyles: Record<string, string> = {
   success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
   Success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
   warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",

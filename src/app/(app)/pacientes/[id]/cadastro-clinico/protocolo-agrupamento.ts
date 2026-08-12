@@ -44,7 +44,7 @@ export type ProtocoloVinculado = {
   foraDoCatalogo?: boolean;
 };
 
-export type GrupoDisciplina = {
+type GrupoDisciplina = {
   disciplina: string;
   ativos: ProtocoloVinculado[];
   disponiveis: ProtocoloCatalogo[];

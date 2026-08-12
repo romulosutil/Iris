@@ -22,7 +22,7 @@ export async function obterSituacaoConta(
   return withTenant(ctx, (tx) => avaliarSituacaoConta(tx, ctx.clinicId));
 }
 
-export async function obterDadosTrialDaClinica(
+async function obterDadosTrialDaClinica(
   ctx: TenantContext,
 ): Promise<DadosTrialClinica> {
   return withTenant(ctx, async (tx) => {

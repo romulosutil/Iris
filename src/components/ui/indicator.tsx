@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 
-export type IndicatorVariant = "conquistado" | "sugerido" | "erro" | "info";
+type IndicatorVariant = "conquistado" | "sugerido" | "erro" | "info";
 
 export interface IndicatorProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: IndicatorVariant;

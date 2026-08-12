@@ -49,7 +49,7 @@ import { Slider } from "./slider";
 import { Progress } from "./progress";
 import { Avatar, AvatarFallback, AvatarGroup } from "./avatar";
 import { Stat } from "./stat";
-import { BotaoCopiar } from "./botao-copiar";
+import { CopyButton } from "./patterns/copy-button";
 
 afterEach(cleanup);
 
@@ -455,9 +455,9 @@ test("Indicator — sem violações axe", async () => {
   await semViolacoes(<Indicator variant="conquistado" />);
 });
 
-test("BotaoCopiar — sem violações axe", async () => {
+test("CopyButton — sem violações axe", async () => {
   await semViolacoes(
-    <BotaoCopiar valor="00020126…6304ABCD" rotulo="Copiar código Pix" />,
+    <CopyButton valor="00020126…6304ABCD" rotulo="Copiar código Pix" />,
   );
 });
 

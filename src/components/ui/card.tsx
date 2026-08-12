@@ -4,7 +4,7 @@ import { surface, type SurfaceVariante } from "@/components/ui/primitives/surfac
 import { Pill } from "@/components/ui/primitives/pill";
 import { CheckIcon, SparkleIcon, LayersIcon } from "@/components/ui/icon";
 
-export type EpistemicState =
+type EpistemicState =
   | "fact"
   | "suggestion"
   | "conquistado"

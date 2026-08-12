@@ -3,7 +3,7 @@
 import * as React from "react";
 import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso";
 
-export interface CalendarContextValue {
+interface CalendarContextValue {
   fuso: string;
   podeGerir: boolean;
 }
@@ -13,7 +13,7 @@ const CalendarContext = React.createContext<CalendarContextValue>({
   podeGerir: true,
 });
 
-export function useCalendarContext() {
+function useCalendarContext() {
   return React.useContext(CalendarContext);
 }
 

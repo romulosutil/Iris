@@ -42,7 +42,7 @@ export const TableBody = React.forwardRef<
   );
 });
 
-export const TableFooter = React.forwardRef<
+const TableFooter = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(function TableFooter({ className, ...props }, ref) {

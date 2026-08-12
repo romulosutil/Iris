@@ -12,7 +12,6 @@ export interface CopyButtonProps {
   className?: string;
 }
 
-export type BotaoCopiarProps = CopyButtonProps;
 
 type Estado = "repouso" | "copiado" | "falha";
 
@@ -102,5 +101,3 @@ export function CopyButton({
   );
 }
 
-/** @deprecated Use `CopyButton` */
-export const BotaoCopiar = CopyButton;

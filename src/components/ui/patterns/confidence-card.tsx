@@ -5,7 +5,7 @@ import { Pill } from "@/components/ui/primitives/pill";
 import { Button } from "@/components/ui/button";
 import { SparkleIcon, CheckIcon, PencilIcon, TrashIcon, AlertTriangleIcon } from "@/components/ui/icon";
 
-export type FriccaoNivel = "baixa" | "media" | "alta";
+type FriccaoNivel = "baixa" | "media" | "alta";
 
 export interface ConfidenceCardProps extends React.HTMLAttributes<HTMLDivElement> {
   titulo: React.ReactNode;

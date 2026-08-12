@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { BotaoCopiar } from "./botao-copiar";
+import { CopyButton } from "./patterns/copy-button";
 
 /**
  * O que estes casos discriminam:
@@ -32,14 +32,14 @@ afterEach(() => {
   instalarClipboard(undefined);
 });
 
-describe("BotaoCopiar", () => {
+describe("CopyButton", () => {
   it("copia o valor exato para a área de transferência", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn(async () => {});
     instalarClipboard({ writeText });
     const valor = "  código-com-espaços-e-Maiúsculas  ";
 
-    render(<BotaoCopiar valor={valor} rotulo="Copiar chave" />);
+    render(<CopyButton valor={valor} rotulo="Copiar chave" />);
     await user.click(screen.getByRole("button", { name: /copiar chave/i }));
 
     expect(writeText).toHaveBeenCalledTimes(1);
@@ -50,7 +50,7 @@ describe("BotaoCopiar", () => {
     const user = userEvent.setup();
     instalarClipboard({ writeText: vi.fn(async () => {}) });
 
-    render(<BotaoCopiar valor="abc" rotulo="Copiar chave" />);
+    render(<CopyButton valor="abc" rotulo="Copiar chave" />);
 
     const status = screen.getByRole("status");
     expect(status.getAttribute("aria-live")).toBe("polite");
@@ -68,7 +68,7 @@ describe("BotaoCopiar", () => {
     const user = userEvent.setup();
     instalarClipboard(undefined);
 
-    render(<BotaoCopiar valor="abc" rotulo="Copiar chave" />);
+    render(<CopyButton valor="abc" rotulo="Copiar chave" />);
     await user.click(screen.getByRole("button", { name: /copiar chave/i }));
 
     // Nem sucesso silencioso nem tela quebrada: o valor segue na tela e a
@@ -87,7 +87,7 @@ describe("BotaoCopiar", () => {
       }),
     });
 
-    render(<BotaoCopiar valor="abc" rotulo="Copiar chave" />);
+    render(<CopyButton valor="abc" rotulo="Copiar chave" />);
     await user.click(screen.getByRole("button", { name: /copiar chave/i }));
 
     expect(screen.getByRole("status").textContent).toMatch(

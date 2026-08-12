@@ -41,8 +41,8 @@ export type CadastroAdminState = {
 // Versões de termo vigentes, uma por tipo de titular. Fixas por ora; viram
 // config quando houver versionamento de termo (docs/legal). O valor "v1" do
 // termo do menor NÃO muda — há dado gravado com ele em produção.
-export const VERSAO_TERMO_MENOR_ATUAL = "v1";
-export const VERSAO_TERMO_TITULAR_ADULTO_ATUAL = "adulto-v1";
+const VERSAO_TERMO_MENOR_ATUAL = "v1";
+const VERSAO_TERMO_TITULAR_ADULTO_ATUAL = "adulto-v1";
 
 /**
  * Quem assina o consentimento. É ESCOLHA EXPLÍCITA do operador no formulário,
@@ -52,7 +52,7 @@ export const VERSAO_TERMO_TITULAR_ADULTO_ATUAL = "adulto-v1";
  *
  * Adulto sob curatela está fora de escopo (#100) — não existe terceiro valor.
  */
-export type TipoConsentimento = "responsavel_legal" | "titular_adulto";
+type TipoConsentimento = "responsavel_legal" | "titular_adulto";
 
 const TIPOS_CONSENTIMENTO: readonly string[] = [
   "responsavel_legal",

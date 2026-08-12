@@ -12,7 +12,7 @@ export const DISCIPLINAS_PADRAO = [
   { id: "Psicomotricidade", nome: "Psicomotricidade", sigla: "PSM" },
 ] as const;
 
-export type DisciplinaPadraoId = (typeof DISCIPLINAS_PADRAO)[number]["id"];
+type DisciplinaPadraoId = (typeof DISCIPLINAS_PADRAO)[number]["id"];
 
 /**
  * Normaliza o rótulo de uma disciplina para exibição amigável.
@@ -27,7 +27,7 @@ export function formatarDisciplina(disciplina: string): string {
 /**
  * Retorna a sigla amigável para badges compactas de disciplina.
  */
-export function siglaDisciplina(disciplina: string): string {
+function siglaDisciplina(disciplina: string): string {
   const encontrada = DISCIPLINAS_PADRAO.find(
     (d) => d.id.toLowerCase() === disciplina.trim().toLowerCase(),
   );

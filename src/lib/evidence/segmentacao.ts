@@ -23,7 +23,7 @@ export type TipoEstrutura =
   | "escore_composto"
   | "faixa_normativa";
 
-export type Polaridade = "positiva" | "negativa";
+type Polaridade = "positiva" | "negativa";
 
 /**
  * Uma observação de sessão dentro do stream de UM (goal_id, protocol_id).
@@ -39,14 +39,14 @@ export type Observacao = {
   temQueryAberta: boolean;
 };
 
-export type Rotulo =
+type Rotulo =
   | "evolucao"
   | "estagnacao"
   | "regressao"
   | "aguardando_avaliacao_formal"
   | "sem_dado";
 
-export type Metrica = {
+type Metrica = {
   eixo: "nivel_ajuda";
   ordinalRecente: number | null;
 };

@@ -29,7 +29,7 @@ function horaDaSessao(quando: Date): string {
   }).format(new Date(quando));
 }
 
-export function ItemPendenciaClustered({
+function ItemPendenciaClustered({
   sessao,
   tipo,
   terapeutas,

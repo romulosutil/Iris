@@ -1,8 +1,8 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 
-export type PillVariant = "solid" | "outline" | "ghost" | "inset";
-export type PillColorScheme =
+type PillVariant = "solid" | "outline" | "ghost" | "inset";
+type PillColorScheme =
   | "neutral"
   | "brand"
   | "menta"
@@ -10,7 +10,7 @@ export type PillColorScheme =
   | "violeta"
   | "azul"
   | "coral";
-export type PillSize = "sm" | "md";
+type PillSize = "sm" | "md";
 
 export interface PillProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: PillVariant;

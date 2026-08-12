@@ -26,7 +26,7 @@ import "server-only";
 export const NOME_COOKIE_TOKEN = "redefinir_senha_token";
 
 export const CAMINHO_COOKIE = "/redefinir-senha";
-export const MAX_AGE_COOKIE_S = 15 * 60;
+const MAX_AGE_COOKIE_S = 15 * 60;
 
 export function opcoesCookieToken() {
   return {

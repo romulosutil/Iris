@@ -1,9 +1,6 @@
 # CLAUDE.md — Iris
 
-> Leia `AGENTS.md` primeiro — é o contrato operacional completo (a regra
-> de 3 camadas, guardrails inegociáveis, checklist LGPD, definição de
-> pronto por fase, quando parar e perguntar). Este arquivo cobre só o que
-> é específico de sessões Claude Code — não duplica o que já está lá.
+> Ler `AGENTS.md` primeiro: contrato operacional (regra de 3 camadas, guardrails inegociáveis, checklist LGPD, definição de pronto por fase, quando parar e perguntar). Este arquivo cobre regras específicas de sessões Claude Code.
 
 ## Stack Tecnológica & Comandos
 
@@ -18,215 +15,88 @@
 
 ### Comandos de Desenvolvimento e Build
 
-- Servidor de Desenvolvimento: `pnpm dev`
+- Servidor dev: `pnpm dev`
 - Storybook local: `pnpm storybook`
-- Formatar código: `pnpm format`
-- Build do projeto: `pnpm build`
+- Formatar: `pnpm format`
+- Build: `pnpm build`
 
 ### Comandos de Testes e Linting
 
-- Rodar ESLint: `pnpm lint`
-- Rodar Typecheck: `pnpm typecheck`
-- Rodar Testes unitários/integração: `pnpm test`
-- Rodar Testes RLS: `pnpm test:rls`
-- Rodar Testes E2E (Playwright): `pnpm test:e2e`
+- ESLint: `pnpm lint`
+- Typecheck: `pnpm typecheck`
+- Testes unitários/integração: `pnpm test`
+- Testes RLS: `pnpm test:rls`
+- Testes E2E (Playwright): `pnpm test:e2e`
 
 ### Comandos de Banco de Dados
 
-- Aplicar migrações locais: `pnpm db:migrate`
-- Seed local limpo (clínica + 1º coordenador): `pnpm seed:local`
-- Gerar migrações: `pnpm db:generate` — **⚠️ leia o bloco abaixo antes de usar.**
+- Aplicar migrações: `pnpm db:migrate`
+- Seed local limpo: `pnpm seed:local`
+- Gerar migrações: `pnpm db:generate`
 
 #### ⚠️ Migrações: como escrever sem derrubar o banco
 
-Armadilhas reais deste repo, com incidente no histórico. Não são teoria:
-a primeira era o débito **D1**, fechado pela issue #186 (o que sobrou é a
-regra de quando gerar e quando escrever à mão); a segunda era o **D2**,
-fechado pela issue #187 — a regra continua valendo, mas agora quem cobra
-é o CI (`src/db/migrations.test.ts`), não a sua memória.
+Armadilhas reais do repo. Débito **D1** (#186) e **D2** (#187) fechados. CI valida em `src/db/migrations.test.ts` (roda no `pnpm test`).
 
-**1. `pnpm db:generate` voltou a funcionar — e é o caminho para mudança de
-schema.** O snapshot foi reconciliado na `0078` (issue #186): hoje
-`db:generate` responde `No schema changes, nothing to migrate`. Ele só
-continua limpo se **toda** mudança de schema passar por ele.
+**1. `pnpm db:generate` é caminho para mudança de schema.** Snapshot reconciliado em `0078` (#186): `db:generate` responde `No schema changes, nothing to migrate`. Toda mudança de schema deve passar por ele:
 
-A regra que separa os dois caminhos é _o que_ está sendo mudado:
+- **Está em `src/db/schema.ts`** (tabela, coluna, enum, índice, FK, constraint) → mudar `schema.ts`, rodar `pnpm db:generate`. Commitar `.sql` + `meta/NNNN_snapshot.json` juntos. Nunca escrever DDL de `schema.ts` à mão (dessincronizou snapshot entre `0042` e `0077`, gerando 128 linhas de `db:generate` recriando `two_factor`, `auth_throttle` e enums de `alerta_risco`).
+- **Não está no `schema.ts`** (policy de RLS, `GRANT`, função `SECURITY DEFINER`, trigger, view, backfill de dados) → Drizzle não modela: escrever à mão em `db/migrations/NNNN_nome.sql` com comentários e `--> statement-breakpoint`. Não altera snapshot.
+- Se misturar: gerar schema com `db:generate`, editar `.sql` gerado adicionando policies/grants (sem tocar snapshot).
+- Constraints manuais: renomeadas na `0078` de nomes Postgres (`_fkey`/`_pkey`/`_key`) para padrão Drizzle (`_fk`/`_pk`/`_unique`). Nomear explicitamente no padrão Drizzle.
 
-- **Está em `src/db/schema.ts`** (tabela, coluna, enum, índice, FK,
-  constraint) → mude o `schema.ts` e rode `pnpm db:generate`. Commite o
-  `.sql` **e** o `meta/NNNN_snapshot.json` juntos. Nunca escreva esse
-  tipo de DDL à mão: foi exatamente isso que dessincronizou o snapshot
-  entre a `0042` e a `0077` e fez o `db:generate` propor 128 linhas
-  recriando `two_factor`, `auth_throttle` e os enums de `alerta_risco`.
-- **Não está no `schema.ts`** (policy de RLS, `GRANT`, função
-  `SECURITY DEFINER`, trigger, view, backfill de dados) → o Drizzle não
-  modela isso, então **escreva à mão** em `db/migrations/NNNN_nome.sql`,
-  no estilo dos arquivos vizinhos (comentário explicando o _porquê_,
-  `--> statement-breakpoint` entre statements). Isso **não** dessincroniza
-  o snapshot, porque o snapshot só descreve o que vem do `schema.ts`.
+**2. Migração à mão exige entrada manual no `_journal.json`, com o `when` correto.** Se `when` <= última migração, Drizzle pula arquivo em silêncio. Usar `when` = anterior **+ 1000**. (`0055` fix cross-tenant #128 pulou em prod por isso, #165).
+`src/db/migrations.test.ts` falha CI se houver `.sql` sem entrada, entrada órfã, `when` duplicado/não crescente, `idx` fora de sequência, tag fora de `NNNN_nome`.
 
-Uma migração pode misturar as duas coisas: gere a parte de schema com
-`db:generate` e edite o `.sql` gerado para acrescentar policies/grants —
-sem tocar no snapshot.
+**3. Verifique medindo, não lendo.** Após `pnpm db:migrate`, checar Postgres: `information_schema` (coluna/grant), `pg_proc` (função + `prosecdef`), `pg_trigger`, e `BEGIN … ROLLBACK`. `git log` não prova execução.
 
-Nota da reconciliação: as constraints criadas sem nome pelas migrações
-manuais receberam o nome do Postgres (`_fkey`/`_pkey`/`_key`) e foram
-renomeadas na `0078` para o padrão do Drizzle (`_fk`/`_pk`/`_unique`).
-Ao escrever DDL à mão que mexa em constraint, **nomeie explicitamente**
-no padrão do Drizzle, senão a divergência volta.
+**4. Coluna nova quase sempre precisa de `GRANT` explícito.** Tabelas (`patient` na `0044`, `app_user`/`clinic` na `0057`) têm `UPDATE` revogado por tabela e concedido coluna a coluna. Falta de grant gera `permission denied for table X`.
 
-**2. Migração à mão exige entrada manual no `_journal.json`, com o
-`when` correto.** Se o `when` for **menor ou igual** ao da última migração
-já aplicada, o Drizzle **pula o arquivo em silêncio** — sem erro, sem
-aviso. Use `when` = o da migração anterior **+ 1000**. Foi exatamente
-assim que a `0055` (fix de isolamento cross-tenant, #128) nunca rodou em
-produção e a issue foi fechada olhando o diff (#165).
+**5. Escrita fora da RLS: usar `SECURITY DEFINER`, não de policy nova.** `UPDATE` barrado por RLS afeta 0 linhas em silêncio. No DEFINER, guard interno é fronteira: copiar predicado exato da policy de leitura correspondente (`0048`, `0064`, `0067`).
 
-`src/db/migrations.test.ts` (roda no `pnpm test`, sem banco) derruba o CI
-se você esquecer: `.sql` sem entrada, entrada órfã, `when` não crescente
-ou duplicado, `idx` fora de sequência, tag fora do formato `NNNN_nome`.
-Ele compara journal × disco — **não** journal × banco; o que já foi
-aplicado em produção continua sendo verificado por medição (item 3).
+**6. Policy nunca resolve o tenant com `current_setting('app.clinic_id')` direto — use `app_clinic_id_exigido()`.** Cast cru estoura `42704` ou `22P02` dentro da policy sem nomear tenant (guard de `app_conta_somente_leitura()` não bastou, #215). O helper (`0085`, D16/#229) levanta `P0001` diagnosticável. Não usar `app_clinic_id_atual()` em predicado de isolamento (retorna `NULL` e oculta linha em silêncio). `app_clinic_id_atual()` é para dentro de funções. `db/tests/clinic-id-helper-rls.int.test.ts` valida no CI.
 
-**3. Verifique medindo, não lendo.** Depois de `pnpm db:migrate`, confirme
-no Postgres que o objeto existe e faz o que promete — `information_schema`
-para coluna/grant, `pg_proc` para função (incluindo `prosecdef`),
-`pg_trigger` para trigger, e um `BEGIN … ROLLBACK` exercitando a regra.
-"Está no `git log`" não é prova de que rodou.
-
-**4. Coluna nova quase sempre precisa de `GRANT` explícito.** Várias
-tabelas (`patient` na `0044`, `app_user`/`clinic` na `0057`) tiveram o
-`UPDATE` de tabela revogado e recebem privilégio **coluna a coluna**. Um
-grant faltando aparece como `permission denied for table X`, que não diz
-qual coluna — diagnóstico caro.
-
-**5. Escrita fora do que a RLS permite vai de `SECURITY DEFINER`, não de
-policy nova.** Afrouxar uma policy abre todas as colunas mutáveis de uma
-vez. E lembre: um `UPDATE` barrado por RLS **afeta 0 linhas em silêncio**,
-não estoura — o código parece funcionar. Sendo DEFINER, o guard interno
-**é** a fronteira de autorização: copie o predicado _exato_ da policy de
-leitura correspondente (precedentes: `0048`, `0064`, `0067`).
-
-**6. Policy nunca resolve o tenant com `current_setting('app.clinic_id')`
-direto — use `app_clinic_id_exigido()`.** O cast cru estoura `42704` (GUC
-ausente) ou `22P02` (GUC presente e não-UUID) **de dentro da policy**, antes
-de qualquer guard interno decidir, e com mensagem que não nomeia o tenant.
-Foi o que fez o guard de `app_conta_somente_leitura()` não bastar (#215). O
-helper (`0085`, D16/#229) levanta um `P0001` único e diagnosticável. E não
-troque por `app_clinic_id_atual()` (que devolve `NULL`) num predicado de
-isolamento: a linha some **em silêncio**, que é o modo de falha pior —
-`app_clinic_id_atual()` é para _dentro_ de função que precisa curto-circuitar
-sem tocar a tabela. `db/tests/clinic-id-helper-rls.int.test.ts` derruba o CI
-se uma policy nova nascer na forma velha.
-
-E **policy não é o único lugar**: a `0087` (resíduo do D16) achou o cast cru
-vivo em 13 funções `SECURITY DEFINER`, numa view e numa query da aplicação.
-Quase toda policy tenant-scoped delega o isolamento a uma função
-(`app_patient_in_clinic`, `app_user_in_clinic`, …) cujo texto **nunca aparece
-em `pg_policies.qual`** — varrer só `pg_policies` dá um verde que não cobre o
-frame onde a exceção realmente nasce. O guard hoje varre `pg_policies` +
-`pg_proc` + `pg_views`. Duas armadilhas achadas ali, que valem para qualquer
-varredura futura:
-
-- `current_setting('app.clinic_id', true)::uuid` **parece** defendido e não
-  está: `missing_ok` mata o `42704`, mas o GUC presente e fora do formato
-  (vazio, lixo, truncado) ainda estoura `22P02`. Quem precisa de semântica
-  leniente usa `app_clinic_id_atual()`, que tem o guard de formato.
-- Regex de auditoria escrita dentro de template literal do JS chega mutilada ao
-  Postgres (`\(` vira `(`, `\s` vira `s`) e casa com nada — o teste passa
-  **vazio**, não limpo. Dobre as barras, e prove o guard mutando o banco de
-  volta para a forma velha antes de confiar no verde.
+Regra vale para policies, 13 funções `SECURITY DEFINER` (`0087`), views e queries da app. Policies tenant-scoped delegam a funções (`app_patient_in_clinic`, `app_user_in_clinic`, …) cujo texto não aparece em `pg_policies.qual` — varrer só `pg_policies` não cobre o frame real. Guard varre `pg_policies` + `pg_proc` + `pg_views`:
+- `current_setting('app.clinic_id', true)::uuid` com `missing_ok` mata `42704`, mas valor inválido estoura `22P02`. Para leniência usar `app_clinic_id_atual()`.
+- Regex de auditoria em template literal JS: `\(` vira `(` e `\s` vira `s` se não dobrar barras.
 
 ## Onboarding de uma sessão nova (sem memória desta conversa)
 
-Ordem de leitura recomendada para uma sessão Claude Code CLI começando do
-zero — é literalmente o desenho do `HANDOFF-FASE1.md`, formalizado aqui:
+Ordem de leitura:
 
 1. Este arquivo + `AGENTS.md`.
-2. `HANDOFF-FASE1.md` — briefing de início de construção, decisões de
-   arquitetura já travadas, escopo exato da fase em construção agora.
-3. `README.md` — os 8 princípios inegociáveis do produto + mapa completo
-   de toda a documentação (`docs/**`).
-4. `docs/arquitetura/stack-e-plano-de-construcao.md` — stack, plano de
-   fases (0.5 a 6), checklist LGPD mínimo viável.
-5. Os documentos específicos da fase em construção (ver mapa em
-   `README.md` — ex.: `docs/dados/modelo-de-dados.md` +
-   `docs/ux/fluxos-e-wireframes.md` para a Fase 1).
+2. `HANDOFF-FASE1.md` — briefing, decisões travadas, escopo da fase.
+3. `README.md` — 8 princípios inegociáveis + mapa de docs (`docs/**`).
+4. `docs/arquitetura/stack-e-plano-de-construcao.md` — stack, plano fases 0.5 a 6, checklist LGPD mínimo viável.
+5. Docs da fase em construção (mapa em `README.md` — ex: `docs/dados/modelo-de-dados.md` + `docs/ux/fluxos-e-wireframes.md` para Fase 1, `HANDOFF-FASE1.md`).
 
-Se uma dúvida já tem resposta em algum desses documentos, a resposta é
-ler o documento — não pedir para o Rômulo reexplicar.
+Dúvida documentada: ler doc, não pedir reexplicação ao Rômulo.
 
 ## Como esta sessão deve operar
 
-- Use o task list (todo) para qualquer trabalho de mais de 2-3 passos.
-  Trate a "Definição de pronto por fase" (`AGENTS.md` §6) como checklist
-  de verificação antes de marcar uma fase como concluída, não como
-  opinião.
-- Use plan mode antes de qualquer mudança que toque modelo de dados, RLS,
-  ou o schema de saída do agente de extração
-  (`docs/agente/output-schema.json`) — são as três coisas mais caras de
-  errar retroativamente neste projeto: dado de menor, isolamento
-  multi-tenant, contrato do agente de IA.
-- Ao final de qualquer sessão de trabalho com decisão nova, gap
-  encontrado, ou item resolvido: atualizar `BACKLOG.md` antes de encerrar
-  (regra permanente do projeto, ver `AGENTS.md` §10) — não deixar o
-  backlog defasado em relação ao que foi decidido na sessão.
-- Documentação e copy de produto sempre em pt-BR (todo o projeto já é
-  escrito assim). Convenção de commits proposta em inglês — ver
-  `docs/arquitetura/convencoes-de-codigo.md` (ainda não confirmada pelo
-  Rômulo).
-- Ao propor uma decisão nova de arquitetura ou produto (como este próprio
-  arquivo fez com convenções de código), marcá-la explicitamente como
-  proposta pendente de confirmação — nunca apresentar como travada sem
-  ter sido validada com o Rômulo.
+- Usar task list (todo) para trabalho > 2-3 passos. Checar "Definição de pronto por fase" (`AGENTS.md` §6).
+- Usar plan mode antes de alterar modelo de dados, RLS ou schema de saída do agente de extração (`docs/agente/output-schema.json`).
+- Fim de sessão com decisão nova/gap/resolução: atualizar `BACKLOG.md` (`AGENTS.md` §10).
+- Documentação e copy: pt-BR. Commits: inglês (`docs/arquitetura/convencoes-de-codigo.md`).
+- Decisão nova de arquitetura ou produto: marcar como proposta pendente de validação com Rômulo.
 
 ## Gestão de tokens: atomização e checkpoint de contexto
 
-Regra criada após post-mortem da D22 (issue #239, PR #240): investigação
-do mesmo tópico duplicada em duas sessões no mesmo dia + 4 passadas
-separadas de formatação nos mesmos arquivos + lint full-repo fora de
-escopo — nenhum bug, só round-trip redundante. Ver memória
-`d22-sessao-gastou-token-em-loops-redundantes`.
+Regra pós-mortem D22 (#239, PR #240, memória `d22-sessao-gastou-token-em-loops-redundantes`).
 
-**1. Toda issue nova entra atomizada.** Antes de implementar, quebrar em
-passos pequenos e verificáveis:
+**1. Toda issue nova entra atomizada:**
+- Toca modelo de dados, RLS/policy ou schema do agente → `/tlc-spec-driven`.
+- Outros itens → `/superpowers:writing-plans`.
 
-- Item toca modelo de dados, RLS/policy, ou o schema de saída do agente
-  de extração (as três coisas já sob plan mode obrigatório acima) →
-  `/tlc-spec-driven`.
-- Qualquer outra issue/débito → `/superpowers:writing-plans`.
-
-Objetivo: eliminar a reabertura de investigação já feita e os commits
-inflados por passadas repetidas de retrabalho.
-
-**2. Teto de ~50 mensagens por sessão.** Ao se aproximar desse número
-(estimativa da sessão, não contagem exata de hook — o harness não expõe
-esse contador), parar o trabalho em andamento, gravar checkpoint em
-`checkpoint.md` (o que foi feito, o que falta, decisões-chave, próximo
-passo) ou gerar resumo equivalente na resposta, e avisar o Rômulo que é
-hora de `/clear`. Isso não substitui a compressão automática do harness
-(que existe para não estourar limite de token) — é proteção contra
-degradação de recall em contexto longo, que acontece antes do limite
-técnico.
+**2. Teto de ~50 mensagens por sessão:** Ao se aproximar do teto, salvar checkpoint em `checkpoint.md` (feito, pendente, decisões, próximo passo) e avisar Rômulo para `/clear`.
 
 ## Permissões — o que rodar livremente vs. o que confirmar antes
 
-**Rodar livremente:** lint, testes, build local, Storybook, criar branch,
-rodar/ler migrations locais (Drizzle/dbmate contra Postgres local), `pnpm install`.
+**Rodar livremente:** lint, testes, build local, Storybook, criar branch, rodar/ler migrations locais (Drizzle/dbmate contra Postgres local), `pnpm install`.
 
-**Confirmar com o Rômulo antes:** `supabase db push` contra o projeto
-remoto; qualquer DDL que altere tabela que já tenha dado (mesmo que seja
-só dado de teste — para criar o hábito certo desde já); qualquer mudança
-em `docs/legal/`; deletar ou reescrever migrations já commitadas; qualquer
-chamada real à API da Anthropic/Google antes da Fase 3; renomear a
-pasta/repositório (`xpect` → `iris`) ou criar os projetos
-Supabase/Vercel — são decisões de infraestrutura de uma via só.
+**Confirmar com o Rômulo antes:** `supabase db push` remoto; DDL em tabela com dados; mudanças em `docs/legal/`; deletar/reescrever migrations commitadas; chamadas API Anthropic/Google antes da Fase 3; renomear pasta/repositório (`xpect` → `iris`); criar projetos Supabase/Vercel; provisionar VPS + Easypanel.
 
-> ⚠️ **Pivô de infra em avaliação (09/07/2026):** a hospedagem pode migrar de
-> Vercel/Supabase gerenciado para **VPS Hostinger + Easypanel + Postgres puro**
-> (não Supabase; auth in-app + MinIO). Antes de qualquer ação de infra, ler
-> `docs/arquitetura/plano-bootstrap-e-stack-vps.md` (proposta). "Provisionar
-> VPS + Easypanel" entra na mesma categoria "confirmar antes / via única".
+> ⚠️ **Pivô de infra em avaliação (09/07/2026):** migração potencial para VPS Hostinger + Easypanel + Postgres puro (`docs/arquitetura/plano-bootstrap-e-stack-vps.md`). Confirmar antes de agir.
 
 ## Onde procurar o quê (atalho — mapa completo está em README.md)
 

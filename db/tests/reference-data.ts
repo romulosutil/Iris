@@ -30,7 +30,7 @@ import type postgres from "postgres";
  * Espelha `db/migrations/0001_rls.sql:244-249`. Mantenha em sincronia: divergir
  * aqui é pior que não ter, porque o teste passaria com dado que produção não tem.
  */
-export const PROTOCOL_FAMILIA_SEED = [
+const PROTOCOL_FAMILIA_SEED = [
   {
     id: "aba_marcos_desenvolvimento",
     nome: "ABA — marcos de desenvolvimento",

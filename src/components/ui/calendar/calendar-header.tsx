@@ -4,7 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso";
 
-export interface CalendarMetrics {
+interface CalendarMetrics {
   total: number;
   realizadas: number;
   agendadas: number;

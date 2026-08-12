@@ -39,7 +39,7 @@ const CONSELHOS = ["crp", "crfa", "crefito", "crm", "outro"] as const;
  * junto — e o teste de classe de `logic.test.ts` continua valendo de qualquer
  * jeito, porque ele não depende deste número.
  */
-export const MAX_SENHA = 128;
+const MAX_SENHA = 128;
 
 // ─── Dimensionamento do throttle ─────────────────────────────────────────────
 // DIMENSIONADO PARA LOGIN, NÃO PARA CADASTRO. Esta rota verifica senha de
@@ -160,7 +160,7 @@ function ipValido(valor: string): boolean {
  * cadeia com proxy confiável, é o proxy que APENDA o IP real do cliente no
  * fim, e o começo da lista é justamente a parte que o cliente consegue forjar.
  */
-export function resolverIp(h: {
+function resolverIp(h: {
   get(nome: string): string | null;
 }): string | null {
   const encaminhados = (h.get("x-forwarded-for") ?? "")

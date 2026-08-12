@@ -26,7 +26,7 @@ export const Avatar = React.forwardRef<
   );
 });
 
-export const AvatarImage = React.forwardRef<
+const AvatarImage = React.forwardRef<
   React.ComponentRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
 >(function AvatarImage({ className, ...props }, ref) {
