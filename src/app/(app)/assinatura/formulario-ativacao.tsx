@@ -190,7 +190,7 @@ export function FormularioAtivacao({
               <div className="mt-2">
                 <CopyButton
                   valor={autorizacao.brCode}
-                  rotulo="Copiar Pix Copia e Cola"
+                  rotulo="Copiar código Pix"
                 />
               </div>
               <p className="mt-3">
