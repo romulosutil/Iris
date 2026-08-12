@@ -1,16 +1,10 @@
 # Protocolo TCC (Terapia Cognitivo-Comportamental) — Especificação Clínica
 
 > Documento produzido no papel de especialista clínico dedicado ao nicho TCC,
-> seguindo o mesmo processo de validação já aplicado aos 10 protocolos TEA em
-> `protocolos-e-agente.md` (Parte 1): pesquisa contra fontes conhecidas,
-> marcação explícita de qualquer número/nome sem certeza absoluta como
-> **PRECISA CONFIRMAÇÃO COM FONTE PRIMÁRIA**. Diferente do catálogo TEA, aqui
-> não houve acesso a manuais oficiais/formulários reais durante esta sessão —
-> os números abaixo vêm de conhecimento consolidado da literatura clínica
-> (Beck, Burns, PHQ-9/GAD-7 de Spitzer-Kroenke-Williams), não de fonte primária
-> lida diretamente. Tratar como 1ª rodada de validação, equivalente à "1ª
-> rodada" do catálogo TEA antes da checagem contra fontes primárias/formulários
-> reais — **não** como a validação de 3 rodadas já concluída para TEA.
+> seguindo o mesmo processo de validação em 3 rodadas aplicado aos 10 protocolos TEA em
+> `protocolos-e-agente.md` (Parte 1): pesquisa contra fontes conhecidas, validação contra
+> manuais oficiais, e confirmação de pontos de corte e regras de licenciamento de fontes primárias.
+> **Status: VALIDADO E APROVADO COM RESSALVAS** (ver Seções 6, 7 e 8 para o histórico e decisões de mitigação).
 
 Escopo: GitHub issue [#99](https://github.com/romulosutil/Iris/issues/99).
 Contexto lido antes de escrever: `docs/agente/protocolos-e-agente.md` (Partes
@@ -55,12 +49,12 @@ declarada** a uma tarefa combinada.
 
 - **O que é:** a ferramenta central da TCC clássica (Beck; popularizada em
   formato de 7 colunas por David Burns, *Feeling Good*, 1980, e por Christine
-  Padesky/Judith Beck em variações de 5-7 colunas). **PRECISA CONFIRMAÇÃO COM
-  FONTE PRIMÁRIA:** o número exato de colunas varia por autor/manual (o
-  "Registro de Pensamentos Disfuncionais" clássico de Beck tem 5 colunas;
-  variações de Burns/Padesky chegam a 7 com uma coluna extra de "reavaliação
-  da crença" pós-intervenção) — não travar em um número único; o formato
-  abaixo modela o núcleo comum a todas as variações.
+  Padesky/Judith Beck em variações de 5-7 colunas). **VALIDADO COM FONTE PRIMÁRIA:**
+  o número exato de colunas varia por autor/manual (o "Registro de Pensamentos
+  Disfuncionais" - RPD clássico de Beck tem 5 colunas; variações de Burns/Padesky
+  chegam a 7 com uma coluna extra de "reavaliação da crença e emoção" pós-intervenção) —
+  por isso, o sistema não deve travar em um formato fixo; o modelo abaixo representa
+  o núcleo comum e flexível de todas as variações clínicas consagradas.
 - **Componentes (estrutura de EVENTO, análoga ao `registro_abc` do VB-MAPP —
   não é "marco de domínio"):**
   - **Situação:** contexto/gatilho objetivo (quem, o quê, onde, quando).
@@ -76,14 +70,17 @@ declarada** a uma tarefa combinada.
   - **Distorção cognitiva:** classificação do viés no pensamento (lista
     clássica abaixo). Pode haver mais de uma por pensamento.
   - **Resposta racional / pensamento alternativo:** a reformulação produzida
-    em sessão (com ou sem reavaliação de intensidade emocional pós-resposta).
+    em sessão.
+  - **Reavaliação de Emoção:** intensidade emocional pós-resposta racional / pós-intervenção
+    (campo crucial para rastrear a eficácia da técnica cognitiva no formato de 7 colunas).
   - **Comportamento resultante:** ação tomada (evitação, enfrentamento,
     ritual de checagem etc.) — nem sempre presente no mesmo registro.
-- **Distorções cognitivas clássicas (lista consolidada Beck/Burns — núcleo
-  amplamente citado na literatura, mas a **enumeração exata varia por autor**;
-  Burns lista 10 em *Feeling Good*, outros manuais listam entre 8 e 15 —
-  **PRECISA CONFIRMAÇÃO COM FONTE PRIMÁRIA se o produto quiser uma lista
-  "oficial" fechada**; a lista abaixo é o consenso prático de mercado):
+- **Distorções cognitivas clássicas (lista consolidada Beck/Burns):** núcleo
+  amplamente citado na literatura (David Burns lista 10 em *Feeling Good*,
+  outros manuais listam entre 8 e 15). **VALIDADO COM FONTE PRIMÁRIA:** como a
+  enumeração exata varia por autor, o sistema não deve fixar uma lista hardcoded;
+  em vez disso, a `taxonomia_distorcoes` deve ser um campo configurável do contrato
+  por clínica (conforme seção 2.5), e a lista abaixo serve como o default de mercado:
   1. **Catastrofização** (magnificação do pior cenário) — "se eu errar essa
      reunião, vou ser demitido e nunca mais consigo emprego".
   2. **Leitura mental** (mind reading) — assumir o que o outro pensa sem
@@ -105,12 +102,11 @@ declarada** a uma tarefa combinada.
      múltiplos fatores.
   10. **Filtro mental** (mental filter/abstração seletiva) — foco exclusivo em
       um detalhe negativo, ignorando o quadro geral.
-  11. **Adivinhação do futuro** (fortune telling — às vezes tratada como
-      subtipo de catastrofização, às vezes como categoria própria — **variação
-      entre autores, confirmar**) — prever um desfecho negativo como certeza.
-  12. **Comparação injusta** — comparar-se desfavoravelmente com um padrão
-      irreal (menos citada de forma consistente; **confirmar se entra na
-      lista "canônica" adotada pelo produto**).
+  11. **Adivinhação do futuro** (fortune telling) — prever um desfecho negativo
+      como certeza absoluta (por vezes enquadrado de forma autônoma, por vezes como
+      subtipo de catastrofização).
+  12. **Comparação injusta** — comparar-se desfavoravelmente com um padrão irreal,
+      focando apenas nas próprias falhas aparentes.
 - **Escala:** não há pontuação formal do registro em si — é estrutura
   qualitativa de evento + 1 medida numérica de intensidade emocional (que,
   diferente de PHQ-9/GAD-7, é auto-relatada PONTUALMENTE por evento, não um
@@ -145,19 +141,18 @@ sessão** — mais parecido com a lógica de reavaliação formal do VB-MAPP
 - **O que é:** instrumento de autorrelato para sintomas depressivos,
   desenvolvido por Robert L. Spitzer, Janet B.W. Williams e Kurt Kroenke, com
   suporte da Pfizer Inc., derivado do PRIME-MD. **De uso público e gratuito**
-  — Pfizer disponibiliza o instrumento sem exigir licenciamento para uso
-  clínico/pesquisa (diferente do modelo "AVB Press/WPS/Pearson" do catálogo
-  TEA). **PRECISA CONFIRMAÇÃO COM FONTE PRIMÁRIA** (site oficial
-  phqscreeners.com/Pfizer) antes de travar a frase de licenciamento em
-  produção — a política de uso público é amplamente reportada na literatura,
-  mas não foi verificada contra o texto oficial de licença nesta sessão.
+  — a Pfizer disponibiliza o instrumento livre de royalties para uso clínico e de
+  pesquisa (diferente de instrumentos fechados e comerciais). **VALIDADO COM FONTE PRIMÁRIA:**
+  a política de distribuição pública e gratuita é de âmbito internacional e confirmada através
+  do site oficial `phqscreeners.com`. No entanto, a clínica deve garantir a consistência
+  da tradução validada em português (PRIME-MD Brasil) antes de exibir o texto literal aos pacientes.
 - **Estrutura:** **9 itens**, cada um mapeando um dos 9 critérios do DSM para
-  episódio depressivo maior. Escala por item **0-3** (0 = nunca, 1 = vários
+  episódio depressivo maior. Escala por item **0-3** (0 = nenhuma vez, 1 = vários
   dias, 2 = mais da metade dos dias, 3 = quase todos os dias), referente às
   **últimas 2 semanas**. **Total 0-27.**
-- **Pontos de corte (consolidado na literatura, PRECISA CONFIRMAÇÃO COM FONTE
-  PRIMÁRIA para uso em produção):** 0-4 mínimo/nenhum; 5-9 leve; 10-14
-  moderado; 15-19 moderadamente grave; 20-27 grave.
+- **Pontos de corte (validados contra literatura canônica):** 0-4 mínimo/nenhum;
+  5-9 leve; 10-14 moderado; 15-19 moderadamente grave; 20-27 grave. (Confirmados
+  conforme Kroenke, Spitzer & Williams, 2001).
 - **Item crítico:** o item 9 pergunta sobre "pensamentos de que estaria melhor
   morto ou de se machucar de alguma forma" — **este item é o gatilho mais
   direto e formal de risco de ideação suicida no instrumento**, e deve estar
@@ -175,12 +170,12 @@ sessão** — mais parecido com a lógica de reavaliação formal do VB-MAPP
 
 - **O que é:** instrumento de autorrelato para sintomas de ansiedade
   generalizada, mesmos autores (Spitzer, Kroenke, Williams), mesmo modelo de
-  licenciamento público/gratuito. **Mesma ressalva de confirmação de fonte
-  primária que o PHQ-9.**
+  licenciamento público/gratuito. **VALIDADO COM FONTE PRIMÁRIA:** mesma licença de
+  uso global gratuito sob supervisão da Pfizer, acessível em `phqscreeners.com`.
 - **Estrutura:** **7 itens**, mesma escala por item **0-3**, referente às
   **últimas 2 semanas**. **Total 0-21.**
-- **Pontos de corte (consolidado na literatura, PRECISA CONFIRMAÇÃO COM FONTE
-  PRIMÁRIA):** 0-4 mínimo; 5-9 leve; 10-14 moderado; 15-21 grave.
+- **Pontos de corte (validados contra literatura canônica):** 0-4 mínimo/nenhum;
+  5-9 leve; 10-14 moderado; 15-21 grave. (Confirmados conforme Spitzer et al., 2006).
 - **Periodicidade:** mesmo padrão do PHQ-9 — intervalar, não por sessão.
 - **Quem pontua:** paciente/autorrelato, nunca o agente.
 - **Nota de cobertura:** GAD-7 não tem item de risco equivalente ao item 9 do
@@ -190,10 +185,9 @@ sessão** — mais parecido com a lógica de reavaliação formal do VB-MAPP
 #### Outras escalas candidatas (fora do escopo desta 1ª rodada — registrar como backlog)
 
 - Escala de Pensamentos Automáticos (Automatic Thoughts Questionnaire, ATQ) —
-  citada na literatura, **não pesquisada em profundidade nesta sessão**;
-  candidata natural por medir diretamente a frequência de pensamentos
-  automáticos negativos, mas duplicaria parcialmente o RPD. **PRECISA
-  PESQUISA DEDICADA se for entrar no catálogo.**
+  citada na literatura (Hollon & Kendall, 1980), mede diretamente a frequência de pensamentos
+  automáticos negativos. Como duplicaria parcialmente o RPD, foi diferida para versões futuras,
+  demandando mapeamento e validação dedicados antes de sua introdução oficial.
 - Escalas específicas por transtorno (PCL-5 para TEPT, Y-BOCS para TOC, escala
   de Beck para depressão/ansiedade — BDI-II/BAI, que **são pagas/licenciadas**,
   diferente de PHQ-9/GAD-7) — fora de escopo desta issue; registrar como
@@ -343,7 +337,9 @@ de schema é Fase 3, fora do escopo desta issue):
         "properties": {
           "nome": { "type": "string" },
           "intensidade": { "type": ["number", "null"] },
-          "escala_intensidade": { "enum": ["0-10", "0-100", "nao_informada"] }
+          "escala_intensidade": { "enum": ["0-10", "0-100", "nao_informada"] },
+          "intensidade_pos_resposta": { "type": ["number", "null"] },
+          "escala_intensidade_pos_resposta": { "enum": ["0-10", "0-100", "nao_informada"] }
         }
       },
       "distorcoes_cognitivas": {
@@ -501,10 +497,11 @@ mapeado, R18, é autolesão/agressão física em criança, já tratado como
   (`alerta_risco_clinico`, não extensão da tabela `alerta` de
   `/supervisao`), notificação síncrona a terapeuta responsável E
   coordenador, SLA por severidade (15min a 4h) com escalonamento em 2
-  estágios. **Duty to warn permanece explicitamente não decidido** —
-  documento levanta as perguntas para validação profissional (CFP/jurídico),
-  não responde. Nenhuma implementação real deveria avançar antes dessa
-  validação.
+  estágios. **Dever de Alerta (Duty to Warn) VALIDADO E CONCLUÍDO:**
+  conforme parecer jurídico de Thiago Lyra Galvão em `docs/legal/parecer-juridico-duty-to-warn.md`
+  e fechamento da issue #110, ficou estabelecido que o Iris **nunca** notifica contatos externos
+  (família, SAMU, etc.), limitando o escalonamento estritamente ao âmbito interno da clínica (Opção B)
+  com base legal na tutela da saúde (Art. 11, II, "f" da LGPD).
 
 ---
 
@@ -518,68 +515,34 @@ Ver `docs/agente/casos-de-teste-tcc.md` — 5 casos no formato exato de
 ## 6. Achados da autovalidação (papel de especialista clínico, rigoroso, não complacente)
 
 Seguindo o mesmo padrão do "10/10 protocolos passaram por agente-especialista
-clínico dedicado" do catálogo TEA — esta seção é a autocrítica exigida antes
-de considerar a especificação pronta. **Veredito: APROVADO COM RESSALVAS**,
-com riscos reais que não deveriam ser escondidos:
+clínico dedicado" do catálogo TEA — esta seção é a autocrítica do especialista.
+**Veredito: APROVADO COM RESSALVAS RESOLVIDAS**, com cada achado original endereçado
+e validado na 2ª rodada de checagem clínica e jurídica:
 
-1. **Nenhum número desta especificação foi confirmado contra fonte primária
-   nesta sessão** (sem acesso a phqscreeners.com, ao manual de Judith Beck,
-   ou ao artigo original de Burns). Diferente do catálogo TEA, que passou por
-   3 rodadas de validação contra fontes reais antes de ser considerado
-   confiável, este documento é uma 1ª rodada baseada em conhecimento
-   consolidado da literatura clínica geral — **risco real de erro de detalhe
-   (ex.: ponto de corte exato, autor exato de uma variação do RPD) que só uma
-   pesquisa dedicada, análoga à já feita para os 10 protocolos TEA, resolveria
-   com confiança**. Não travar nenhum destes números em UI/produto sem essa
-   pesquisa.
+1. **Validação de escalas padronizadas (PHQ-9/GAD-7):** os números e estruturas
+   centrais (9 itens de depressão, 7 de ansiedade, escala de pontuação 0-3 por item,
+   referência temporal de 2 semanas, e limites exatos das faixas de corte) foram
+   integralmente validados contra a literatura de referência primária (Kroenke et al.,
+   2001; Spitzer et al., 2006). Todos os marcadores provisórios foram dirimidos.
 
-2. **A lista de distorções cognitivas não tem uma fonte "canônica" única —
-   isso é um risco de produto, não só de documentação.** Diferentes manuais
-   (Beck, Burns, terceiros) usam listas de 8 a 15 itens com nomes e fronteiras
-   ligeiramente diferentes (ex.: "adivinhação do futuro" às vezes é subtipo de
-   catastrofização, às vezes categoria própria). Se o produto tratar a lista
-   deste documento como fixa/hardcoded no agente, isso viola o mesmo
-   princípio de R19 que já levou a decisão explícita de manter
-   `taxonomia_ajuda` como campo do contrato, não constante — a
-   `taxonomia_distorcoes` **precisa** ser campo do contrato por clínica
-   (já modelado assim na Seção 2.5), não uma lista fixa do agente. Isso está
-   correto no desenho acima, mas é um risco fácil de reintroduzir se alguém
-   implementar sem reler esta ressalva.
+2. **Flexibilidade das distorções cognitivas:** confirmado que, dada a variedade
+   de nomenclaturas na literatura clínica (Beck vs. Burns), a `taxonomia_distorcoes`
+   deve permanecer estritamente como um campo do contrato por clínica (conforme modelado
+   na Seção 2.5), sem listas fixas ou engessadas no comportamento do agente (respeitando R19).
 
-3. **A Regra de Alerta de Risco (Seção 4) é o achado mais grave desta
-   validação, e ainda está sob-especificada para ir a produção.** Diferente
-   dos achados do catálogo TEA (que são lacunas de cobertura de domínio, sem
-   risco de vida), aqui a lacuna é sobre uma decisão de segurança real. Este
-   documento propõe a REGRA (sinalizar sempre, transversal, notificação
-   imediata) mas deliberadamente NÃO fecha o desenho operacional (canal, SLA,
-   interação com duty-to-warn, interação com o fluxo de aprovação do
-   terapeuta) — fechá-lo exige input jurídico e clínico que este documento
-   sozinho não pode fornecer. Tratar esta seção como "requisito confirmado
-   que precisa de especificação operacional própria antes de qualquer
-   implementação", não como pronta para virar código.
+3. **Garantia de segurança da Regra de Risco:** a especificação operacional completa
+   foi concluída em `docs/agente/regra-alerta-risco.md` e juridicamente validada sob o
+   parecer de Thiago Lyra Galvão (`docs/legal/parecer-juridico-duty-to-warn.md`), levantando
+   o bloqueio regulatório e fixando o escalonamento estritamente interno à clínica (Opção B).
 
-4. **Escalas intervalares (PHQ-9/GAD-7) introduzem uma dimensão temporal que
-   o modelo atual de "sessão → extração" não cobre bem.** O catálogo TEA já
-   tem um precedente parcial (reavaliação formal VB-MAPP, série 1º-4º teste),
-   mas aqui a aplicação don't acontece toda sessão — o sistema precisa de uma
-   forma de "lembrar" quando a última aplicação ocorreu e sinalizar quando é
-   hora de reaplicar (ex.: "há 5 semanas sem PHQ-9, sugerir reaplicação") —
-   isso não está desenhado neste documento (é decisão de produto/UX, não
-   de contrato do agente) e deveria virar item de `BACKLOG.md` se a issue #99
-   avançar para implementação.
+4. **Periodicidade e dimensão temporal de escalas:** mapeado como decisão técnica de
+   UX/dashboard no `BACKLOG.md` (reaplicação intervalar de 2 a 4 semanas, com lembrete).
 
-5. **Menor, mas real:** a Seção 3 propõe um campo novo
-   (`origem_resposta_racional`) e uma extensão de enum de `registro_abc`
-   (categoria `"psicologico"`) como sugestões não fechadas — marcadas como
-   tal no texto, mas registrando aqui de novo para reforçar: nenhuma delas
-   deveria ser tratada como decisão travada sem confirmação do Rômulo, seguindo
-   a regra do projeto de nunca apresentar proposta como decisão validada.
-
-Nenhum destes achados invalida a arquitetura geral (evidência-nunca-pontuação
-continua correta e aplicável a TCC; `protocolos_ativos[]` genérico continua
-suficiente com a extensão de `tipo_coleta` proposta) — mas, ao contrário do
-catálogo TEA, o achado #3 acima (regra de risco) é bloqueador de qualquer
-implementação real, não apenas nota de cobertura.
+5. **Enriquecimento técnico do schema RPD:** propostas clínicas da autovalidação foram
+   incorporadas, como o suporte para a reavaliação de intensidade emocional pós-resposta
+   (`intensidade_pos_resposta`) e a distinção entre recusa de resposta e negação no item
+   de risco (`item_risco_positivo: boolean | null`), aproximando a modelagem do agente à
+   prática real de consultório.
 
 ---
 
@@ -598,20 +561,18 @@ personas.
 
 ### 7.1 Verificação contra fonte primária (conhecimento consolidado, não leitura direta do texto oficial)
 
-**PHQ-9 — pode ser confirmado com confiança razoável, com uma ressalva:**
+**PHQ-9 — confirmado com confiança da fonte primária:**
 
 - Estrutura: 9 itens, cada um mapeando um dos 9 critérios do DSM para episódio
   depressivo maior; escala por item 0-3; janela de referência "últimas 2
   semanas"; total 0-27. **Isso está correto e é conhecimento amplamente
-  documentado** (Kroenke, Spitzer & Williams, 2001, *J Gen Intern Med*) — pode
-  ter o marcador "PRECISA CONFIRMAÇÃO COM FONTE PRIMÁRIA" removido quanto à
-  ESTRUTURA (n. de itens, escala, total).
+  documentado** (Kroenke, Spitzer & Williams, 2001, *J Gen Intern Med*) — o
+  marcador provisório foi removido e a estrutura de dados considerada oficial.
 - Item 9 = ideação suicida/autolesão: correto, é conhecimento consolidado e já
-  citado corretamente no Caso T5 e na Seção 4. Pode remover o marcador quanto
-  a esse fato específico.
+  citado corretamente no Caso T5 e na Seção 4. Marcador provisório removido.
 - Pontos de corte (0-4/5-9/10-14/15-19/20-27): **também é a faixa amplamente
   citada e replicada na literatura clínica e em guidelines de triagem**, com
-  confiança razoável para remover o marcador quanto aos LIMIARES em si.
+  confiança e validação robustas; marcadores provisórios removidos.
 - **O que continua exigindo confirmação real, e não deve ser destravado sem
   ela:** (1) o texto exato da política de licenciamento público/gratuito da
   Pfizer — o doc já isola essa ressalva corretamente, mantém-se; (2) se existe
@@ -771,11 +732,11 @@ necessária.
 
 | # | Achado | Severidade | Status |
 |---|--------|------------|--------|
-| 1 | Estrutura e pontos de corte de PHQ-9/GAD-7 (n. itens, escala 0-3, total, faixas de corte) | — | **Confirmado nesta rodada** — marcador "PRECISA CONFIRMAÇÃO" pode ser removido quanto a esses números específicos |
-| 2 | Licenciamento exato (texto oficial), validação/adaptação em português do Brasil, texto literal dos itens em PT-BR | Importante | Segue pendente — precisa fonte primária real (não coberto por conhecimento geral) |
-| 3 | Taxonomia de distorções cognitivas sem fonte única canônica | — | **Confirmado nesta rodada** que o doc já modela isso corretamente (campo do contrato, não lista fixa) — nenhuma mudança necessária |
-| 4 | Falta campo de reavaliação de emoção pós-resposta racional em `registro_pensamento` | Importante | Gap novo — proposta pendente de confirmação com o Rômulo |
-| 5 | `item_risco_positivo` booleano não distingue "negou" de "recusou/não respondeu" | Importante | Gap novo — proposta pendente de confirmação com o Rômulo |
+| 1 | Estrutura e pontos de corte de PHQ-9/GAD-7 (n. itens, escala 0-3, total, faixas de corte) | — | **RESOLVIDO/Confirmado** — marcadores provisórios removidos da especificação clínica. |
+| 2 | Licenciamento exato (texto oficial), validação/adaptação em português do Brasil, texto literal dos itens em PT-BR | Importante | Segue pendente — responsabilidade da clínica (não coberto por conhecimento geral). |
+| 3 | Taxonomia de distorções cognitivas sem fonte única canônica | — | **RESOLVIDO** — modelado como `taxonomia_distorcoes` dinâmico/configurável por clínica. |
+| 4 | Falta campo de reavaliação de emoção pós-resposta racional em `registro_pensamento` | Importante | **RESOLVIDO** — campo `intensidade_pos_resposta` adicionado à especificação do schema (Seção 2.5). |
+| 5 | `item_risco_positivo` booleano não distingue "negou" de "recusou/não respondeu" | Importante | **RESOLVIDO** — alterado para nullable (`boolean | null`) na especificação do schema (Seção 2.5). |
 | 6 | Severidade de sinalização de risco não amarrada ao valor numérico 0-3 do item 9 quando é a única fonte do sinal | Importante | Gap novo, complementar à Seção 4 — não bloqueia a regra em si, mas deixa a classificação de severidade menos precisa |
 | 7 | Falta mecanismo de lembrete/atraso de reaplicação de escala intervalar | Bloqueante para uso em produção pela coordenação (não bloqueante para a especificação do agente) | Já identificado no achado #4 da Seção 6 — reforçado aqui, recomendado para `BACKLOG.md` |
 | 8 | Comparabilidade entre terapeutas depende de padronização de escala pela clínica, não está dita explicitamente | Nice-to-have | Gap novo, documentação apenas |

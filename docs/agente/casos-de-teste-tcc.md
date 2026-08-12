@@ -73,7 +73,13 @@ no texto, não estimada por adjetivo).
       "registro_pensamento": {
         "situacao": "Convocado para reunião de feedback com a gerente sem aviso prévio do assunto (segunda-feira)",
         "pensamento_automatico": "vou ser demitido, com certeza é isso, e depois disso nunca mais consigo outro emprego nessa área",
-        "emocao": { "nome": "ansiedade", "intensidade": 90, "escala_intensidade": "0-100" },
+        "emocao": {
+          "nome": "ansiedade",
+          "intensidade": 90,
+          "escala_intensidade": "0-100",
+          "intensidade_pos_resposta": null,
+          "escala_intensidade_pos_resposta": "nao_informada"
+        },
         "distorcoes_cognitivas": ["catastrofizacao", "adivinhacao_futuro", "generalizacao_excessiva"],
         "resposta_racional": null,
         "comportamento_resultante": "suou frio"
@@ -125,7 +131,13 @@ catastrofizar sobre o próprio desempenho).
       "registro_pensamento": {
         "situacao": "Reunião de trabalho com apresentação da paciente",
         "pensamento_automatico": "eu estraguei a reunião inteira... todo mundo ali deve ter pensado que eu sou incompetente... uma pessoa competente não erra desse jeito... ele só disse isso para ser gentil",
-        "emocao": { "nome": "nao_informada", "intensidade": null, "escala_intensidade": "nao_informada" },
+        "emocao": {
+          "nome": "nao_informada",
+          "intensidade": null,
+          "escala_intensidade": "nao_informada",
+          "intensidade_pos_resposta": null,
+          "escala_intensidade_pos_resposta": "nao_informada"
+        },
         "distorcoes_cognitivas": [
           "tudo_ou_nada",
           "leitura_mental",
@@ -359,7 +371,13 @@ agente não deve suavizar por causa da negação de intenção).
       "registro_pensamento": {
         "situacao": "Sessão de encaixe de urgência, últimos 3 dias de piora",
         "pensamento_automatico": "seria mais fácil para todo mundo se eu simplesmente não acordasse mais",
-        "emocao": { "nome": "desesperanca", "intensidade": null, "escala_intensidade": "nao_informada" },
+        "emocao": {
+          "nome": "desesperanca",
+          "intensidade": null,
+          "escala_intensidade": "nao_informada",
+          "intensidade_pos_resposta": null,
+          "escala_intensidade_pos_resposta": "nao_informada"
+        },
         "distorcoes_cognitivas": [],
         "resposta_racional": null,
         "comportamento_resultante": null
