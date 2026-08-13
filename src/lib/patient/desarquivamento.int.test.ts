@@ -187,8 +187,8 @@ describe.skipIf(!hasDb)(
     // drizzle-orm envelopa o PostgresError em DrizzleQueryError ("Failed query: …");
     // a mensagem original do definer fica em error.cause.
     const comCausa = (padrao: RegExp) => (e: unknown) => {
-      const err = e as Error & { cause?: { message?: string } };
-      return padrao.test(err.cause?.message ?? err.message);
+      const err = e as { message?: string; cause?: { message?: string } };
+      return padrao.test(err.cause?.message ?? err.message ?? "");
     };
 
     test("terapeuta sem vínculo de equipe nem sessão estoura erro de autorização cross-team", async () => {
