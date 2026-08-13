@@ -62,6 +62,18 @@
 
 ---
 
+## 🏁 Sessão 13/08/2026 — #102: risco de residência/DPA Hostinger aceito pelo Rômulo
+
+**Achado (lido direto de `hostinger.com/br/legal/dpa`, não busca genérica):** o DPA padrão da Hostinger (i) já é aceito automaticamente no aceite dos Termos de Serviço — não existe fluxo de "assinar" separado; (ii) não garante país/data center específico, só cita "REDE HOSTINGER" genérica; (iii) não define prazo de notificação de incidente, só "sem atrasos indevidos"; (iv) se declara documento integral, sem espaço para aditivo customizado por cliente.
+
+**Impacto:** as regras de negócio #1 (garantia geográfica exclusiva BR) e #2 (notificação em 48h) da issue #102 **não têm cláusula correspondente** no documento padrão — T1 ("abrir chamado solicitando DPA assinado") é redundante e T2 ("validar cláusulas") não tem o que validar.
+
+**Decisão do Rômulo (13/08/2026): aceita o risco residual.** Segue sem garantia contratual de residência exclusiva BR — apoiado só na evidência de medição já feita (latência 33ms, sessão 27/07). Não bloqueia entrada de dado real de paciente por este motivo. Mantém alinhado com a régua já registrada na sessão 03/08 (#102 gated por 40 pacientes em prod, não pela entrada inicial).
+
+Comentário registrado na issue: [#102](https://github.com/romulosutil/Iris/issues/102#issuecomment-5275794015). Detalhe completo em memória `hostinger-dpa-padrao-sem-garantia-br-nem-prazo-incidente`.
+
+---
+
 ## 🏁 Sessão 11/08/2026 — Desarquivamento Clínico Unificado (D7/D8) e Helpers GUC de Papel e Identidade (D23, D5)
 
 **O que foi entregue e verificado nesta sessão:**
