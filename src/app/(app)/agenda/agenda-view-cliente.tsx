@@ -71,9 +71,14 @@ export function AgendaViewCliente({
   );
 
   // Back/forward ou link com ?visao= muda a prop sem remontar — sincroniza.
-  React.useEffect(() => {
+  // Ajuste durante o render (padrão "derived state adjustment" do React) em
+  // vez de useEffect: setState síncrono em efeito dispara render em cascata
+  // (regra react-hooks) e ainda pisca um frame com a visão velha.
+  const [visaoAnterior, setVisaoAnterior] = React.useState(visaoInicial);
+  if (visaoInicial !== visaoAnterior) {
+    setVisaoAnterior(visaoInicial);
     if (visaoInicial) setModoVisao(visaoInicial);
-  }, [visaoInicial]);
+  }
 
   // Sessão aberta no modal de detalhe (visão matriz)
   const [sessaoSelecionada, setSessaoSelecionada] =
@@ -367,7 +372,15 @@ export function AgendaViewCliente({
       ) : null}
 
       <AppointmentModal
-        sessao={sessaoSelecionada}
+        sessao={
+          // Re-resolve pela lista atual: após check-in a revalidação atualiza
+          // `sessoes`, mas o snapshot no estado ficaria com `checkInEm` velho
+          // e o modal seguiria mostrando o botão.
+          sessaoSelecionada
+            ? (sessoes.find((x) => x.id === sessaoSelecionada.id) ??
+              sessaoSelecionada)
+            : null
+        }
         aberto={sessaoSelecionada !== null}
         aoFechar={() => setSessaoSelecionada(null)}
         terapeutas={terapeutas}
@@ -471,7 +484,7 @@ export function AgendaViewCliente({
                     </Link>
                   ) : null}
                   {s.estado === "agendada" ? (
-                    <CheckInButton sessionId={s.id} />
+                    <CheckInButton sessionId={s.id} checkInEm={s.checkInEm} />
                   ) : null}
                   {s.estado === "agendada" &&
                   (podeGerir || s.terapeutaId === userId) ? (

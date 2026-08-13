@@ -22,6 +22,7 @@ const { sql: appSql } = await import("@/db/client");
 const CLINIC = "00000000-0000-0000-0000-0000000249aa";
 const U_COORD = "00000000-0000-0000-0000-0000000249c1";
 const U_TER = "00000000-0000-0000-0000-0000000249e1";
+const U_TER2 = "00000000-0000-0000-0000-0000000249e2";
 const P1 = "00000000-0000-0000-0000-0000000249f1";
 const P2 = "00000000-0000-0000-0000-0000000249f2";
 const S_CHECKIN = "00000000-0000-0000-0000-0000000249d1";
@@ -70,10 +71,12 @@ describe.skipIf(!hasDb)("agenda logic (#249)", () => {
       VALUES (${CLINIC}, 'Clínica #249', 'America/Sao_Paulo', true)`;
     await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD}, 'Coord 249', 'coord@i249.test'),
-      (${U_TER},   'Ter 249',   'ter@i249.test')`;
+      (${U_TER},   'Ter 249',   'ter@i249.test'),
+      (${U_TER2},  'Ter2 249',  'ter2@i249.test')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD}, ${CLINIC}, 'coordenador'),
-      (${U_TER},   ${CLINIC}, 'terapeuta')`;
+      (${U_TER},   ${CLINIC}, 'terapeuta'),
+      (${U_TER2},  ${CLINIC}, 'terapeuta')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${P1}, ${CLINIC}, 'Paciente Um 249'),
       (${P2}, ${CLINIC}, 'Paciente Dois 249')`;
@@ -111,7 +114,7 @@ describe.skipIf(!hasDb)("agenda logic (#249)", () => {
   test("check-in idempotente: 2ª chamada não sobrescreve nem duplica audit", async () => {
     const antes = await sessao(S_CHECKIN);
     const r = await checkInSessao(ctx, S_CHECKIN);
-    expect(r).toEqual({ error: "Sessão não encontrada ou já iniciada." });
+    expect(r).toEqual({ error: "Check-in já registrado para esta sessão." });
 
     const depois = await sessao(S_CHECKIN);
     expect(depois.check_in_em?.getTime()).toBe(antes.check_in_em?.getTime());
@@ -198,6 +201,66 @@ describe.skipIf(!hasDb)("agenda logic (#249)", () => {
     expect(Number(contagem[0]?.n)).toBe(1);
   });
 
+  test("conflito avulsa×avulsa atribui o EIXO certo: mesmo paciente, terapeutas diferentes → dimensao 'paciente'", async () => {
+    /**
+     * QA mobile #249: 2 terapeutas livres, mesmo paciente, mesmo horário. O
+     * pré-check em JS só olha regras recorrentes; avulsa×avulsa cai no EXCLUDE
+     * gist — e são DUAS constraints (`session_no_overbook_paciente` /
+     * `_terapeuta`). O catch hardcodava "terapeuta" e mandava o coordenador
+     * checar a agenda errada. Aqui o conflito é exclusivamente do paciente
+     * (U_TER2 não tem nenhuma sessão), então a dimensao TEM que ser "paciente".
+     */
+    const base = {
+      disciplina: "ABA",
+      tipo: "terapia" as const,
+      dataISO: "2026-08-25", // terça: fora do alcance da regra de segunda
+      horaInicio: "09:00",
+      duracaoMin: 60,
+      modalidade: "presencial" as const,
+    };
+    await criarAvulsa(ctx, { ...base, patientId: P1, terapeutaId: U_TER });
+
+    const erro = await criarAvulsa(ctx, {
+      ...base,
+      patientId: P1,
+      terapeutaId: U_TER2,
+    }).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(erro).toBeInstanceOf(ConflitoError);
+    expect((erro as InstanceType<typeof ConflitoError>).dimensao).toBe(
+      "paciente",
+    );
+    expect((erro as Error).message).toBe("Horário em conflito para paciente.");
+  });
+
+  test("conflito avulsa×avulsa no eixo do terapeuta → dimensao 'terapeuta'", async () => {
+    // Contraprova do teste acima: mesmo terapeuta, pacientes diferentes.
+    const base = {
+      disciplina: "ABA",
+      tipo: "terapia" as const,
+      dataISO: "2026-08-25",
+      horaInicio: "16:00",
+      duracaoMin: 60,
+      modalidade: "presencial" as const,
+    };
+    await criarAvulsa(ctx, { ...base, patientId: P1, terapeutaId: U_TER2 });
+
+    const erro = await criarAvulsa(ctx, {
+      ...base,
+      patientId: P2,
+      terapeutaId: U_TER2,
+    }).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(erro).toBeInstanceOf(ConflitoError);
+    expect((erro as InstanceType<typeof ConflitoError>).dimensao).toBe(
+      "terapeuta",
+    );
+  });
+
   test("corrida regra×avulsa: lock dos eixos fecha o buraco que o EXCLUDE não vê", async () => {
     /**
      * O cenário que SÓ o advisory lock do T4 fecha: a regra não tem linha
@@ -245,7 +308,7 @@ describe.skipIf(!hasDb)("agenda logic (#249)", () => {
     // Invariante FORTE no owner: nenhum par de sessões do terapeuta se
     // sobrepõe no tempo — nem materializada×avulsa, nem `pulada` silenciosa
     // deixando buraco: quem perdeu não gravou NADA.
-    const [{ n }] = await owner<{ n: string }[]>`
+    const [sobrepostas] = await owner<{ n: string }[]>`
       SELECT count(*)::text AS n
         FROM session s1
         JOIN session s2
@@ -256,7 +319,7 @@ describe.skipIf(!hasDb)("agenda logic (#249)", () => {
           && tstzrange(s2.agendada_para,
                        s2.agendada_para + s2.duracao_min * interval '1 minute')
        WHERE s1.terapeuta_id = ${U_TER}`;
-    expect(Number(n)).toBe(0);
+    expect(Number(sobrepostas!.n)).toBe(0);
   });
 
   test("audit rows carregam clinic_id e ator_id corretos", async () => {

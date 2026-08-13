@@ -29,6 +29,10 @@ export type SessaoDoDia = {
   patientId: string;
   disciplina: string;
   modalidade?: string;
+  // Presença já registrada (check-in feito): a UI troca o botão "Fazer
+  // check-in" pela confirmação com horário — sem isto o sucesso era invisível
+  // e o terapeuta re-clicava (QA mobile #249).
+  checkInEm?: Date | null;
 };
 
 /**
@@ -63,10 +67,25 @@ async function checkInSessaoCore(
           jsonb_build_object('check_in_em', ${row.checkInEm?.toISOString() ?? null}::text))
       `);
     }
+    if (rows.length === 0) {
+      // Distinguir "já tem check-in" de "não existe/sem acesso": a mensagem
+      // única misturava os dois estados e, como o sucesso era silencioso na
+      // UI, o 2º toque do terapeuta lia um erro ambíguo (QA mobile #249).
+      const existente = await tx
+        .select({ checkInEm: session.checkInEm })
+        .from(session)
+        .where(eq(session.id, sessionId));
+      if (existente[0]?.checkInEm) {
+        return { jaFeito: true } as const;
+      }
+    }
     return rows;
   });
+  if ("jaFeito" in atualizadas) {
+    return { error: "Check-in já registrado para esta sessão." };
+  }
   if (atualizadas.length === 0) {
-    return { error: "Sessão não encontrada ou já iniciada." };
+    return { error: "Sessão não encontrada." };
   }
   return {};
 }
@@ -110,6 +129,7 @@ export async function listarSessoesDoDia(
         pacienteNome: patient.nome,
         patientId: session.patientId,
         disciplina: session.disciplina,
+        checkInEm: session.checkInEm,
       })
       .from(session)
       .leftJoin(patient, eq(patient.id, session.patientId))

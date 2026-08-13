@@ -19,7 +19,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { requireAgendar, requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { codigoPg } from "@/db/pg-error";
+import { codigoPg, constraintPg } from "@/db/pg-error";
 import * as schema from "@/db/schema";
 import type { SessaoDoDia } from "./actions";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
@@ -646,9 +646,17 @@ export async function criarAvulsa(
       return row!;
     });
   } catch (e) {
-    // EXCLUDE gist (btree_gist) → SQLSTATE 23P01 exclusion_violation.
+    // EXCLUDE gist (btree_gist) → SQLSTATE 23P01 exclusion_violation. São DUAS
+    // constraints (`session_no_overbook_terapeuta` e `_paciente`): atribuir o
+    // eixo pela constraint que disparou — hardcodar "terapeuta" mandava o
+    // coordenador checar a agenda errada quando o conflito era do paciente
+    // (QA mobile #249: 2 terapeutas, mesmo paciente, mesmo horário).
     if (codigoPg(e) === "23P01") {
-      throw new ConflitoError("terapeuta");
+      throw new ConflitoError(
+        constraintPg(e) === "session_no_overbook_paciente"
+          ? "paciente"
+          : "terapeuta",
+      );
     }
     throw e;
   }
