@@ -1,7 +1,11 @@
 # Terapia Convencional — Modo do Agente Sem Protocolo
 
-> Especificação do segundo nicho de atendimento do Iris: psicoterapia
-> tradicional, sem instrumento formal e sem pontuação. Referência de origem:
+> Especificação do segundo nicho de atendimento do Iris: psicoterapia em três
+> famílias de abordagem — **psicanálise/psicodinâmica, humanista/existencial,
+> transpessoal/integrativa** — caracterizadas por não ter cronograma rígido,
+> não ter tarefa de casa e não ter pontuação de sintoma (ver §1 para a
+> definição de nicho e a fronteira com o nicho TCC da issue #99).
+> Referência de origem:
 > [issue #98](https://github.com/romulosutil/Iris/issues/98). Este documento
 > segue o mesmo formato de `docs/agente/protocolos-e-agente.md` (catálogo →
 > contrato → regras → schema → validação), mas descreve um **modo diferente**
@@ -14,7 +18,7 @@
 desenhadas para evidência-por-domínio de instrumentos formais — pressupõem
 que existe um domínio contra o qual classificar cada evento. Terapia
 Convencional não tem domínio: o "dado" é a sessão inteira, e o agente atua
-como leitor que resume e sugere direção, nunca como extrator de evidência
+como leitor que resume e sinaliza recorrência, nunca como extrator de evidência
 estruturada por eixo clínico. Por isso este documento define um conjunto de
 regras próprio (seção 2), não uma reinterpretação das R1-R19.
 
@@ -22,17 +26,58 @@ regras próprio (seção 2), não uma reinterpretação das R1-R19.
 
 ## 1. O que é o nicho
 
-Terapia Convencional é o atendimento psicoterapêutico tradicional — escuta,
-elaboração de história de vida, "aprender a viver melhor" — sem instrumento
-de avaliação formal e sem escala de pontuação. Deliberadamente **não
-prescreve uma escola** (psicodinâmica, humanista, cognitivo-comportamental
-sem protocolo estruturado, integrativa, sistêmica etc.): o produto atende
-qualquer abordagem em que o profissional não tenha (ou não use) uma escala
-formal de acompanhamento — é "atendimento genérico convencional", não um
-modelo teórico específico.
+> **Mudança de premissa — 29/07/2026 (decisão do dono, issue #98).** Até esta
+> data este documento definia o nicho como "atendimento convencional
+> genérico" e afirmava explicitamente que **não prescrevia uma escola**,
+> incluindo na lista "cognitivo-comportamental sem protocolo estruturado".
+> **Isso estava errado e foi revertido.** O nicho é agora definido por
+> **três famílias de abordagem nomeadas** (abaixo), e TCC — inclusive
+> TCC-sem-protocolo — **sai deste nicho** e pertence à issue #99. O motivo:
+> "genérico" não é um nicho comercializável nem validável com usuário real,
+> e a ausência de fronteira fazia este modo herdar, por omissão, expectativas
+> de escala pontuada e tarefa de casa que ele não atende.
+
+Terapia Convencional é o atendimento psicoterapêutico conduzido em uma de
+**três famílias de abordagem**:
+
+1. **Psicanálise e Psicoterapia Psicodinâmica** — trabalho com história de
+   vida, transferência, conteúdo latente, associação livre.
+2. **Abordagens Humanistas e Existenciais** — centrada na pessoa, Gestalt-
+   terapia, logoterapia, análise existencial, fenomenologia.
+3. **Abordagens Transpessoais e Integrativas** — abordagens que incorporam
+   dimensão espiritual/transpessoal e composições integrativas que não se
+   organizam por protocolo de sessão.
+
+**Os três critérios de admissão no nicho.** Uma abordagem entra neste modo
+quando as três condições valem simultaneamente. São **critério**, não
+descrição — se uma delas falhar, o atendimento não é deste nicho:
+
+- **Sem cronograma rígido de sessões.** Não há sequência pré-definida de
+  módulos/sessões numeradas com conteúdo previsto por sessão.
+- **Sem tarefa de casa.** Não há prescrição de atividade entre sessões cuja
+  adesão seja acompanhada como dado clínico.
+- **Sem pontuação de sintoma.** Não há escala pontuada aplicada
+  periodicamente (PHQ-9, GAD-7, inventários) como régua de progresso.
+
+O que as três famílias priorizam, em comum, é **autoconhecimento profundo no
+ritmo natural do paciente** — e é exatamente isso que torna o cronograma, a
+tarefa de casa e a pontuação não apenas ausentes, mas incompatíveis com o
+método.
+
+**Fronteira explícita com o nicho TCC (issue #99).** TCC tem, por desenho,
+escala pontuada (PHQ-9/GAD-7) e tarefa de casa com adesão acompanhada —
+falha, portanto, em dois dos três critérios acima. **TCC-sem-protocolo
+também não entra neste nicho**: o que a caracteriza não é a ausência de um
+manual, é a presença de estrutura de sessão, registro de pensamentos e
+mensuração de sintoma, que o modo Terapia Convencional não sabe representar
+(não há `tipo_coleta`, não há `registro_pensamento`, não há
+`escala_padronizada_intervalar` aqui). Um terapeuta cognitivo-comportamental
+que não usa protocolo formal deve ser atendido pelo modo de #99 com escala
+opcional, nunca por este modo.
 
 Diferenças estruturais em relação ao nicho TEA/neurodesenvolvimento infantil
-já coberto pelo Iris:
+já coberto pelo Iris — também aqui lidas como **critério de admissão**, não
+apenas como descrição comparativa:
 
 - **Público majoritariamente adulto**, autoconsentindo — diferente do nicho
   TEA, hoje quase inteiramente infantil com consentimento de responsável.
@@ -48,6 +93,15 @@ já coberto pelo Iris:
   trajetória narrativa ao longo de muitas sessões, mais parecido com "notas
   de evolução" de prontuário tradicional do que com grade de escore.
 
+**Como usar estas 4 diferenças como critério.** Um atendimento candidato a
+este modo precisa satisfazer as quatro: público adulto autoconsentindo (ou
+adolescente com o consentimento correto, nunca por omissão), ausência de meta
+pontuável, ausência de grade de evidência por domínio e cadência narrativa em
+vez de ciclo de reavaliação contra marcos. Falhando qualquer uma, o caso
+pertence a outro modo (TEA com protocolo, ou #99) — não a uma variação deste.
+Isso é o que impede o modo Terapia Convencional de virar o destino-padrão de
+todo atendimento que não caiba nos outros dois.
+
 ### Compatibilidade com os 8 princípios inegociáveis (README.md)
 
 Revisão item a item, conforme pedido na issue:
@@ -58,14 +112,15 @@ Revisão item a item, conforme pedido na issue:
 2. **Governança em 3 camadas (IA→terapeuta→coordenador)** — mantida; a
    diferença é que a Camada 3 aqui não reclassifica "X→Y" de domínio (não
    existe domínio), reclassifica presença/ausência de alerta e adequação do
-   resumo/direção sugerida (ver seção 5).
+   resumo/tema recorrente sinalizado (ver seção 5) — e, neste modo, com
+   acesso deliberadamente reduzido ao corpo do resumo (ver AV-6, §8.4).
 3. **Evidência ≠ pontuação formal** — sustenta o modo sem alteração; aqui
    levado ao extremo, porque não há pontuação de NENHUM tipo, nem
    "candidatos a avaliação".
 4. **Meta individualizada é a unidade central; protocolo é a régua** — **não
    se aplica**. Não há régua. Este é o único dos 8 princípios que não
    generaliza diretamente; ver seção 2 para o que substitui a "unidade
-   central" neste modo (tema recorrente + direção sugerida, não meta
+   central" neste modo (tema da sessão + tema recorrente sinalizado, não meta
    pontuável).
 5. **Protocolo é dado, não código** — sustenta o modo: o motivo de este
    documento existir é justamente que "ausência de protocolo" também precisa
@@ -73,9 +128,9 @@ Revisão item a item, conforme pedido na issue:
    silenciosa tratada como bug.
 6. **Linha do tempo reconstruível** — sustenta, com adaptação: aqui a
    "evolução/estagnação/regressão" não é sobre nível de ajuda num domínio, é
-   sobre recorrência de tema/direção ao longo de sessões (ex.: "mesmo tema
-   de conflito familiar apareceu nas últimas 6 sessões sem mudança de
-   direção sugerida" é o análogo de estagnação).
+   sobre recorrência de tema ao longo de sessões (ex.: "mesmo tema
+   de conflito familiar apareceu nas últimas 6 sessões, sinalizado como
+   recorrente em 4 delas" é o análogo de estagnação).
 7. **Grafo M:N com vigência** — sustenta sem alteração; é modelo
    organizacional, agnóstico de nicho clínico.
 8. **LGPD para dados de menores** — sustenta como piso, mas Terapia
@@ -135,15 +190,32 @@ um campo `modo` no nível raiz do contexto, paralelo a `protocolos_ativos`:
     "resumo_repertorio": "Adulto, 34 anos, em acompanhamento há 8 sessões. Tema recorrente: luto do pai (falecido há 6 meses) e dificuldade de retomar rotina de trabalho."
   },
   "modo": "terapia_convencional",
+  "familia_abordagem": "psicodinamica",
   "protocolos_ativos": [],
   "historico_relevante": [
     {
       "tema": "luto do pai",
-      "resumo": "presente nas últimas 5 sessões; direção sugerida em 3 delas foi 'explorar culpa não resolvida'."
+      "resumo": "presente nas últimas 5 sessões; sinalizado como tema recorrente em 3 delas ('culpa não resolvida' aparece literalmente no relato)."
     }
   ]
 }
 ```
+
+> **PROPOSTA PENDENTE DE CONFIRMAÇÃO — o campo `familia_abordagem`.** A
+> definição de nicho de §1 (3 famílias nomeadas) exige que o agente saiba a
+> qual família o terapeuta pertence, para poder cumprir R9-TC (não importar
+> vocabulário de outra família). O campo acima (`familia_abordagem`, valores
+> `psicodinamica | humanista_existencial | transpessoal_integrativa`) é a
+> forma mais direta de transportar isso, mas **nome do campo, nome dos
+> valores e onde a informação é cadastrada (no profissional? no vínculo
+> profissional-paciente? por sessão?) não foram decididos pelo Rômulo** — as
+> três opções têm implicações diferentes numa clínica com terapeutas de
+> famílias distintas. Fica registrado como proposta; nenhuma migração ou
+> enum foi criado a partir deste documento. Vale notar que R9-TC **funciona
+> mesmo sem este campo** — a regra base é "espelhe só o vocabulário que o
+> terapeuta usou", que não depende de saber a família; o campo serve para
+> transformar a regra em verificação automatizável (detectar jargão da
+> família errada na saída), não para habilitá-la.
 
 Quando `modo: "terapia_convencional"`, o backend NUNCA envia
 `protocolos_ativos` não-vazio (mistura de modos não é suportada nesta
@@ -189,6 +261,17 @@ direção descreve ONDE olhar; prescrever conduta descreve O QUE FAZER
 tecnicamente (ex.: "aplique reestruturação cognitiva sobre essa crença") —
 o segundo é ato técnico do profissional, nunca do agente.
 
+> **Reposicionamento de 29/07/2026.** O campo que carregava isso na saída
+> deixou de se chamar `direcao_sugerida` e passou a `tema_recorrente_sinalizado`
+> (array — ver §3). A mudança não relaxa R3-TC, **estreita** o que o campo pode
+> conter: em vez de "onde olhar clinicamente", ele carrega **recorrência
+> observável no próprio texto do terapeuta e no histórico** ("este tema apareceu
+> em 4 das últimas 6 sessões"). A IA sinaliza um candidato; o humano decide o
+> que fazer com ele — princípio 3 do README. O exemplo do parágrafo acima ("pode
+> valer explorar a relação com a demissão antes de avançar…") continua permitido
+> como formulação hedged, mas só quando ancorado numa recorrência que o texto
+> sustente, nunca como julgamento de ordem clínica inventado pelo agente.
+
 **R4-TC — LINGUAGEM SEMPRE HEDGED (nova, mecanismo de enforcement de R2-TC
 e R3-TC).** Toda sugestão de tema/direção usa formulação hedged
 obrigatória: "pode valer explorar", "chama atenção que", "vale observar se
@@ -215,15 +298,27 @@ O alerta NUNCA é engolido por outra regra (mesmo em sessão de encerramento
 de ciclo, mesmo em sessão de silêncio) e nunca vem acompanhado de sugestão
 de conduta clínica (isso seria R3-TC) — só do fato relatado, com o alerta.
 
-**R6-TC — SILÊNCIO E AUSÊNCIA DE FALA SÃO DADO, NÃO LACUNA (nova, equivalente
-parcial a R6 de evidência negativa).** Uma sessão em que o paciente falou
-pouco, ficou em silêncio, ou resistiu à abordagem de um tema NÃO é uma
-sessão "sem conteúdo a resumir" — o padrão de resistência/silêncio em si é
-o dado clínico relevante (ex.: "terceira sessão consecutiva evitando o
-tema do divórcio ao ser trazido"). Distinto de R1-TC: aqui o texto pode ser
-escasso em conteúdo verbal do paciente mas ainda assim rico em observação
-do terapeuta sobre o padrão — o agente resume o padrão de silêncio, nunca
-inventa conteúdo que o silêncio não revelou.
+**R6-TC — SILÊNCIO E BAIXA PARTICIPAÇÃO VERBAL SÃO DADO, NÃO LACUNA (nova,
+equivalente parcial a R6 de evidência negativa).** Uma sessão em que o
+paciente falou pouco, ficou em silêncio, ou se afastou de um tema quando ele
+foi trazido NÃO é uma sessão "sem conteúdo a resumir" — o próprio **padrão de
+participação verbal** é o dado clínico relevante (ex.: "terceira sessão
+consecutiva em que se afasta do tema do divórcio quando ele é trazido").
+Distinto de R1-TC: aqui o texto pode ser escasso em conteúdo verbal do
+paciente mas ainda assim rico em observação do terapeuta sobre o padrão — o
+agente descreve o padrão observável, nunca inventa conteúdo que o silêncio
+não revelou.
+
+> **Nota de vocabulário (consequência da definição de nicho de §1).** O corpo
+> desta regra **não usa mais a palavra "resistência"**, e o agente também não
+> deve usá-la por conta própria. "Resistência" é conceito da família 1
+> (psicanálise/psicodinâmica); um gestalt-terapeuta descreveria o mesmo
+> fenômeno como interrupção de contato ou baixa awareness, e um terapeuta
+> existencial como evitação de um tema angustiante. Descrever o observável
+> ("falou pouco", "mudou de assunto quando o tema foi trazido") é neutro entre
+> as três famílias; nomear o mecanismo não é. Se o terapeuta escreveu
+> "resistência" no diário, o agente pode espelhar o termo descritivamente
+> (R9-TC) — nunca introduzi-lo.
 
 **R7-TC — TEMA COMO UNIDADE DE CONTINUIDADE (nova, é o análogo de
 `dominio_id`, mas texto livre em vez de enum fechado).** Quando o texto
@@ -240,13 +335,40 @@ nas últimas 4"), mas isso é síntese narrativa de trajetória, nunca um
 "escore de melhora" ou "alta clínica sugerida pelo agente" — decisão de alta
 é sempre do terapeuta.
 
-**R9-TC — AGNOSTICISMO DE ESCOLA (reaproveita o espírito de R19).** O agente
-não pressupõe arcabouço teórico específico (psicanálise, TCC, humanista
-etc.) nem usa vocabulário técnico de uma escola em particular a menos que o
-próprio terapeuta o tenha usado no diário. Se o terapeuta escreveu em
-linguagem psicodinâmica, o resumo pode espelhar esse vocabulário
-descritivamente (nunca interpretativamente além do texto); se o terapeuta
-não usa jargão de escola nenhuma, o agente também não usa.
+**R9-TC — NÃO IMPOR O VOCABULÁRIO DE UMA DAS 3 FAMÍLIAS A TERAPEUTA DE OUTRA
+(reaproveita o espírito de R19; escopo redefinido em 29/07/2026).**
+
+**O que esta regra deixou de ser.** Ela **não** é mais "agnosticismo entre
+todas as escolas de psicoterapia". Esse escopo perdeu sentido quando §1 passou
+a nomear o nicho: o produto agora sabe que o terapeuta pertence a uma de três
+famílias, e "ser agnóstico" em relação a TCC, por exemplo, é irrelevante aqui
+(TCC não é deste nicho — é #99).
+
+**O que ela é agora.** O agente nunca importa o vocabulário técnico de uma das
+três famílias para o relato de um terapeuta de outra. Concretamente:
+
+| Família do terapeuta | Vocabulário que o agente pode espelhar se o terapeuta usou | Vocabulário que o agente **nunca** introduz |
+| --- | --- | --- |
+| 1. Psicanálise / psicodinâmica | transferência, resistência, conteúdo latente, associação livre, defesa | contato, awareness, campo fenomenológico, self-atualização, transpessoal, expansão de consciência |
+| 2. Humanista / existencial | contato, awareness, aqui-e-agora, congruência, sentido, angústia existencial | resistência, transferência, inconsciente, defesa, transpessoal |
+| 3. Transpessoal / integrativa | expansão de consciência, dimensão espiritual, integração, estados ampliados | resistência, transferência, inconsciente (como aparato metapsicológico) |
+
+**Por que o mecanismo continua igual e ficou MAIS necessário.** O mecanismo
+não muda: **espelhar apenas o vocabulário que o próprio terapeuta usou no
+diário**, descritivamente, nunca interpretativamente além do texto; se o
+terapeuta não usa jargão nenhum, o agente também não usa. O que mudou é a
+severidade da falha. Antes, importar jargão errado produzia um resumo
+esquisito. Agora produz um resumo que o terapeuta **lê como leitura teórica
+alheia imposta ao seu paciente** — e os três vocabulários são mutuamente
+hostis em grau incomum: para boa parte da família 2, "resistência" é
+justamente o conceito que a abordagem centrada na pessoa rejeitou; para a
+família 1, "expansão de consciência" não é linguagem clínica. Um resumo com o
+jargão da família errada não é impreciso, é **ofensivo ao método** — e é o
+caminho mais rápido para o terapeuta abandonar o produto.
+
+**Consequência de contrato de dado.** Esta regra vale também para os NOMES DOS
+CAMPOS do schema, não só para o texto gerado — é o que motivou a renomeação de
+`padrao_silencio_resistencia` (ver §3 e AV-1 em §8.4).
 
 ### 2.4 System instructions do modo (rascunho)
 
@@ -264,6 +386,10 @@ registro clínico — o terapeuta é o único responsável pela leitura clínica
 2. Contexto do paciente: idade (se relevante), resumo textual livre (nunca
    estruturado por domínio), histórico de temas de sessões anteriores.
    NUNCA há protocolos_ativos populado neste modo.
+3. A família de abordagem do terapeuta (uma de: psicodinamica |
+   humanista_existencial | transpessoal_integrativa) — usada só para saber
+   qual vocabulário NÃO importar (R9-TC), nunca para escolher uma leitura
+   clínica.
 
 ## Saída
 Exclusivamente o JSON do schema de saída do modo Terapia Convencional. Nada
@@ -280,13 +406,19 @@ R4-TC. Linguagem sempre hedged em qualquer sugestão de direção/tema
 R5-TC. Alerta de risco obrigatório para qualquer menção a ideação suicida,
        autolesão ou violência (sofrida ou praticada) — sempre, sem exceção,
        falso positivo aceitável, falso negativo não.
-R6-TC. Silêncio/resistência é dado clínico, não lacuna — resuma o padrão.
+R6-TC. Silêncio e baixa participação verbal são dado clínico, não lacuna —
+       descreva o padrão observável, sem nomear mecanismo teórico (não use
+       "resistência" se o terapeuta não a usou).
 R7-TC. Tema como texto livre curto, nunca enum fechado; só quando o relato
        sustentar um tema claro.
 R8-TC. Encerramento de ciclo é síntese narrativa de trajetória de temas, nunca
        escore de melhora nem sugestão de alta.
-R9-TC. Agnosticismo de escola — não pressuponha nem imponha vocabulário
-       teórico que o terapeuta não usou.
+R9-TC. Este terapeuta pertence a UMA de três famílias — psicanálise/
+       psicodinâmica, humanista/existencial, transpessoal/integrativa. Nunca
+       importe o vocabulário técnico de uma família para o relato de outra.
+       Espelhe apenas o vocabulário que o próprio terapeuta usou no diário;
+       se ele não usou jargão, você também não usa. Descrever o observável é
+       sempre seguro; nomear o mecanismo não é.
 
 ## Processo
 1. Leia o relato inteiro antes de resumir.
@@ -294,7 +426,9 @@ R9-TC. Agnosticismo de escola — não pressuponha nem imponha vocabulário
    qualquer outra análise.
 3. Identifique tema(s) só se o texto sustentar claramente (R7-TC).
 4. Redija o resumo da sessão em linguagem descritiva, sem diagnóstico.
-5. Se aplicável, redija sugestão de direção em linguagem hedged (R4-TC).
+5. Se aplicável, aponte tema(s) recorrente(s) — recorrência observável no
+   próprio texto/histórico do terapeuta — em linguagem hedged (R4-TC).
+   Nunca rumo clínico, nunca técnica.
 6. Monte o JSON.
 ```
 
@@ -313,13 +447,16 @@ Sem grade/escala, o que fica registrado por sessão de Terapia Convencional:
       "trecho_fonte": "string — trecho literal que sustenta o tema"
     }
   ],
-  "direcao_sugerida": {
-    "texto": "string, sempre em linguagem hedged, ou null se o relato não sustentar sugestão",
-    "trecho_fonte": "string ou null"
-  },
-  "padrao_silencio_resistencia": {
+  "tema_recorrente_sinalizado": [
+    {
+      "tema": "string — o tema cuja recorrência foi observada",
+      "observacao": "string, sempre em linguagem hedged, descrevendo a recorrência observável (nunca rumo clínico)",
+      "trecho_fonte": "string — trecho literal do relato ou do histórico que sustenta a recorrência"
+    }
+  ],
+  "padrao_participacao_verbal": {
     "presente": "boolean",
-    "descricao": "string ou null — ex.: 'terceira sessão evitando o tema X'"
+    "descricao": "string ou null — ex.: 'falou pouco; mudou de assunto quando o tema do divórcio foi trazido, 3ª sessão seguida'"
   },
   "alerta_risco": {
     "presente": "boolean",
@@ -342,10 +479,35 @@ Notas de modelagem:
 - `temas[]` é um array porque uma sessão pode tocar mais de um tema, mas cada
   item é texto livre — nunca um enum fixo de "temas possíveis" (isso
   recriaria uma taxonomia disfarçada, indo contra a proposta do nicho).
-- `alerta_risco` é estruturalmente separado de `direcao_sugerida` de
-  propósito: risco nunca deve competir por atenção com sugestão de tema — a
+- `alerta_risco` é estruturalmente separado de `tema_recorrente_sinalizado` de
+  propósito: risco nunca deve competir por atenção com sinalização de tema — a
   UI deve poder renderizar o alerta com prioridade visual absoluta,
   independentemente do resto do resumo.
+
+### 3.1 Renomeação de dois campos (decisão travada, 29/07/2026)
+
+Decisão do dono, tomada junto com a definição de nicho de §1. O motivo é
+**validação com usuários reais das três famílias**: um nome de campo é
+contrato de dado, aparece em API, em log, em export e eventualmente em tela —
+e um contrato de dado que já decidiu uma leitura teórica não sobrevive ao
+primeiro terapeuta da família errada que o lê.
+
+| Antes | Agora | Por quê |
+| --- | --- | --- |
+| `padrao_silencio_resistencia` (objeto) | `padrao_participacao_verbal` (objeto, mesma forma) | "Resistência" é conceito da família 1 (psicanálise). Humanistas descrevem o mesmo fenômeno como interrupção de contato / baixa awareness. O nome antigo **decidia uma leitura teórica no próprio contrato de dado**, contradizendo R9-TC mesmo quando o texto gerado era neutro. "Participação verbal" descreve o observável e é neutro entre as três famílias. |
+| `direcao_sugerida` (objeto único) | `tema_recorrente_sinalizado` (**array**) | Duas mudanças numa. (a) **Array**, atendendo o achado 4 de §7 — uma sessão pode sustentar mais de um tema recorrente, e o campo único forçava escolher um ou concatenar em texto livre, perdendo o `trecho_fonte` por item. (b) **Reposicionamento**: "direção sugerida" convida a ser lido como rumo clínico, quase prescrição. O campo agora carrega **recorrência observável no próprio texto do terapeuta** — a IA sinaliza um candidato, o humano decide (princípio 3 do README). |
+
+Notas de compatibilidade:
+
+- `tema_recorrente_sinalizado` como array vazio (`[]`) é o análogo correto do
+  antigo `direcao_sugerida: { texto: null }` — não há sinalização a fazer.
+  Array vazio é resposta válida e esperada, não falha (ver Caso TC-4 em
+  `casos-de-teste-terapia-convencional.md`).
+- `padrao_participacao_verbal.presente: false` mantém a semântica anterior:
+  nada de notável no padrão de participação, não "o paciente participou bem".
+- Nenhuma migração, DDL ou código foi escrito a partir desta seção. A
+  renomeação é de contrato documentado; a implementação vem nas fatias de
+  código da issue #98.
 
 ---
 
@@ -364,14 +526,17 @@ modo TEA (lá o risco é "pontuar sem querer"; aqui é "diagnosticar sem
 querer" — violação de prática de psicologia regulada, não só erro de
 produto).
 
-**Risco 2 — Sugestão de direção lida como prescrição.** Um terapeuta
+**Risco 2 — Sinalização de tema lida como prescrição.** Um terapeuta
 sob pressão de tempo pode aceitar "pode valer explorar X" e tratá-lo como
-"a IA disse para eu fazer X" — erodindo a fronteira entre sugestão de tema
-(o que é aceitável) e prescrição de conduta técnica (o que não é). Mitigação
+"a IA disse para eu fazer X" — erodindo a fronteira entre sinalizar tema
+(o que é aceitável) e prescrever conduta técnica (o que não é). Mitigação
 de produto (não deste documento, mas a registrar como requisito de UX):
-toda `direcao_sugerida` deveria ser visualmente marcada na UI como "sugestão
-a avaliar", nunca como "recomendação" — e nunca aprovável com 1 clique sem
-que o terapeuta veja o trecho-fonte ao lado.
+todo item de `tema_recorrente_sinalizado` deveria ser visualmente marcado na
+UI como "recorrência observada — avalie", nunca como "recomendação" — e nunca
+aprovável com 1 clique sem que o terapeuta veja o trecho-fonte ao lado. A
+renomeação de §3.1 **reduz** este risco (o nome do campo não promete mais um
+rumo clínico) mas não o elimina: o texto do item continua sendo prosa hedged
+que pode ser lida como conselho.
 
 **Risco 3 — Alerta de risco engolido por resumo tranquilizador.** Se o
 terapeuta escreve "ela mencionou já ter pensado em desistir de tudo, mas
@@ -439,18 +604,28 @@ como item de escopo.
 Casos completos, no formato exato de `docs/agente/casos-de-teste.md`, ficam em
 `docs/agente/casos-de-teste-terapia-convencional.md` (arquivo separado para não
 misturar com o eval set do modo TEA, que usa um schema de saída diferente).
-Resumo dos 4 casos ali cobertos:
+Resumo dos 5 casos ali cobertos. **Cada caso declara a família de abordagem do
+terapeuta no contexto** — consequência direta da definição de nicho de §1: um
+eval set que não diz de qual família parte o relato não consegue testar R9-TC.
 
-1. **Caso TC-1 — Escuta simples, sem crise.** Sessão de retomada de rotina
-   pós-luto, tema claro, direção sugerida hedged, sem alerta.
-2. **Caso TC-2 — Relato de risco (violência doméstica).** Testa R5-TC —
-   alerta obrigatório mesmo com o terapeuta relativizando ("ela disse que
-   já é assim há anos, não é nada novo").
-3. **Caso TC-3 — Silêncio e resistência.** Testa R6-TC — sessão com pouca
-   fala do paciente, terapeuta registra pouco, mas o PADRÃO de silêncio é o
-   dado.
-4. **Caso TC-4 — Encerramento de ciclo.** Testa R8-TC — revisão de jornada
-   sem meta formal, síntese narrativa de trajetória de temas.
+1. **Caso TC-1 — Escuta simples, sem crise** (família psicodinâmica). Sessão
+   de retomada de rotina pós-luto, tema claro, recorrência sinalizada em
+   linguagem hedged, sem alerta.
+2. **Caso TC-2 — Relato de risco (violência doméstica)** (família humanista/
+   existencial). Testa R5-TC — alerta obrigatório mesmo com o terapeuta
+   relativizando ("ela disse que já é assim há anos, não é nada novo").
+3. **Caso TC-3 — Baixa participação verbal** (família humanista/existencial).
+   Testa R6-TC — sessão com pouca fala do paciente, terapeuta registra pouco,
+   mas o PADRÃO de participação é o dado. Também prova que o agente descreve o
+   observável sem introduzir "resistência".
+4. **Caso TC-4 — Encerramento de ciclo** (família transpessoal/integrativa).
+   Testa R8-TC — revisão de jornada sem meta formal, síntese narrativa de
+   trajetória de temas; `tema_recorrente_sinalizado: []` é a saída correta.
+5. **Caso TC-5 — Mesma sessão, duas famílias (caso cruzado).** Testa R9-TC no
+   seu escopo novo — o MESMO episódio clínico relatado duas vezes, uma em
+   vocabulário psicodinâmico e outra em vocabulário humanista, com duas saídas
+   esperadas que espelham cada relato e **não** importam o vocabulário da outra
+   família. É o caso de regressão que protege a decisão de nicho de §1.
 
 ---
 
@@ -480,7 +655,17 @@ protocolos de `protocolos-e-agente.md` (nenhum "aprovado sem ressalva"):
    o `SessionProtocolScope` escolhe para aquela sessão específica? A resposta
    mais provável (escopar por profissional/disciplina, como já faz o Caso 9)
    não está documentada aqui e deveria ser, antes de tratar este modo como
-   mutuamente exclusivo por padrão. Registrado como lacuna, não resolvido.
+   mutuamente exclusivo por padrão.
+
+   > **Direção decidida pelo dono (29/07/2026) — ver também AV-11 em §8.4.**
+   > No MVE, paciente misto (TEA com protocolo **e** psicoterapia adulta
+   > simultâneas) é **proibido por constraint de banco**, não por convenção nem
+   > por validação de aplicação — a proibição precisa ser inviolável enquanto o
+   > desenho de escopo por profissional não existir, porque a falha silenciosa
+   > (coordenador aplicando julgamento de protocolo TEA sobre um resumo de
+   > psicoterapia) é pior que o bloqueio explícito. O suporte real ao caso misto
+   > ganha **issue própria** e sai do escopo de #98. A constraint em si é
+   > trabalho de migração — não deste PR doc-only, e não desta issue.
 
 3. **R7-TC (tema como texto livre) cria risco de fragmentação sem
    nenhum controle de qualidade.** Ao evitar deliberadamente um enum fechado
@@ -494,9 +679,13 @@ protocolos de `protocolos-e-agente.md` (nenhum "aprovado sem ressalva"):
    resolvida — possível mitigação futura (não decidida): normalização por
    similaridade textual no backend, sem expor um enum ao agente.
 
-4. **Achado menor — `direcao_sugerida` como campo único (não array)
-   pode ser insuficiente.** Diferente de `temas[]` (array), o schema da
-   seção 3 modela só uma direção sugerida por sessão. Uma sessão pode
+4. **✅ RESOLVIDO (29/07/2026) — `direcao_sugerida` como campo único (não
+   array) era insuficiente.** Resolvido pela renomeação de §3.1:
+   `tema_recorrente_sinalizado` é array, com `trecho_fonte` por item. O texto
+   original do achado fica abaixo para registro.
+
+   Diferente de `temas[]` (array), o schema da
+   seção 3 modelava só uma direção sugerida por sessão. Uma sessão pode
    plausivelmente sustentar mais de uma direção plausível (ex.: "vale
    explorar tanto a raiva não processada quanto o padrão de evitação de
    conflito") — o desenho atual forçaria escolher uma ou concatenar em
@@ -537,10 +726,10 @@ citação.
 | **R3-TC** (sem conduta prescrita) | Não corresponde a uma norma formal específica — nenhuma resolução do CFP regula "o que uma ferramenta de apoio pode sugerir". É decisão de produto ancorada no princípio geral de que técnica clínica é ato do profissional. | Sem divergência; sem norma específica a citar (não fabricado). |
 | **R4-TC** (linguagem hedged) | Idem R3-TC — mitigação de produto, não exigência normativa. | Sem divergência; registrar que a regra não tem autoridade normativa própria, só de produto. |
 | **R5-TC** (alerta de risco obrigatório) | Sigilo profissional (Código de Ética Profissional do Psicólogo — **verificar número exato**) tem exceção reconhecida para risco de vida a si ou a terceiros. Essa exceção é o que torna legítima a própria existência do alerta de risco — sem ela, o alerta poderia ser lido como o produto violando sigilo por padrão. | **Gap: o documento nunca cita essa base normativa explicitamente** (nem na seção 2.3, nem na seção 4) — ver achado AV-3. |
-| **R6-TC** (silêncio é dado) | Convenção de prática clínica amplamente ensinada em formação (registrar recusas/resistência do paciente, não só fala verbalizada) — não localizei uma resolução CFP específica que normatize isso; não fabricado. | Alinhado como prática, sem base normativa própria a citar. |
+| **R6-TC** (silêncio e baixa participação verbal são dado) | Convenção de prática clínica amplamente ensinada em formação (registrar recusas/resistência do paciente, não só fala verbalizada) — não localizei uma resolução CFP específica que normatize isso; não fabricado. | Alinhado como prática, sem base normativa própria a citar. |
 | **R7-TC** (tema como texto livre) | Prontuários humanos sofrem do mesmo problema de inconsistência terminológica entre sessões quando o profissional não usa vocabulário padronizado — o achado 3 da seção 7 (fragmentação de tema) **não é exclusivo do agente**, é um problema já presente na prática humana. Isso reduz, mas não elimina, a severidade do achado 3 original. | Tensão de design já registrada; contexto adicional, não gap novo. |
 | **R8-TC** (encerramento como síntese) | Alinhado com a prática de nota/relatório de encerramento em prontuário, tipicamente narrativa. | Alinhado. |
-| **R9-TC** (agnosticismo de escola) | Em tensão com o próprio schema da seção 3 — ver achado AV-1. | **Gap encontrado na modelagem de dado, não no texto gerado.** |
+| **R9-TC** (não impor vocabulário de uma das 3 famílias a terapeuta de outra — escopo redefinido em 29/07/2026, antes era "agnosticismo de escola") | Não há norma do CFP que regule vocabulário teórico — é decisão de produto, e agora também de posicionamento de nicho (§1). A convenção real relevante é de prática: o registro em prontuário usa o vocabulário da abordagem de quem atende, e vocabulário importado de outra escola é lido como leitura clínica alheia. | **Gap AV-1 RESOLVIDO** por renomeação de campo (§3.1): `padrao_silencio_resistencia` → `padrao_participacao_verbal`. A tensão era no contrato de dado, não no texto gerado — e o contrato de dado deixou de embutir vocabulário de família. |
 
 ### 8.2 Entrevista simulada — persona "terapeuta clínico experiente, cético quanto a IA em terapia convencional"
 
@@ -577,11 +766,14 @@ responsabilidade profissional do terapeuta, não só do produto.
 
 **P4. Silêncio na sessão — a IA vai ficar chamando isso de "resistência", um
 termo carregado de teoria psicanalítica que eu nem uso (sou humanista)?**
-R: Achado real e novo: o campo do schema (seção 3) já se chama
-`padrao_silencio_resistencia` — "resistência" é vocabulário de escola
-(psicanalítica) embutido no CONTRATO DE DADO, não só na saída textual. Isso
-contradiz o espírito de R9-TC mesmo que o TEXTO gerado permaneça agnóstico,
-porque o nome do campo em si já pressupõe leitura teórica.
+R: Achado real e novo **— e resolvido em 29/07/2026.** O campo do schema
+chamava-se `padrao_silencio_resistencia`: "resistência" é vocabulário da
+família psicodinâmica embutido no CONTRATO DE DADO, não só na saída textual.
+Isso contradizia o espírito de R9-TC mesmo com o TEXTO gerado neutro, porque o
+nome do campo em si já pressupunha leitura teórica. **O campo passou a
+`padrao_participacao_verbal`** (§3.1), e o corpo de R6-TC deixou de usar a
+palavra. Esta pergunta da persona humanista é literalmente o motivo da
+renomeação — foi validação simulada que virou decisão do dono.
 
 **P5. Se eu seguir uma sugestão da IA e der errado, quem responde?**
 R: R3-TC já limita a IA a sugestão de tema, nunca conduta — o que reduz o
@@ -594,8 +786,9 @@ a sugestão. Hoje isso fica implícito, não declarado.
 coordenador que ele usa pra TEA? Meus pacientes adultos não são crianças
 com TEA — o coordenador não devia ter acesso irrestrito a "traição
 conjugal" só por ser coordenador.**
-R: Pergunta legítima sem resposta neste documento — ver AV-6 (achado que se
-confirma e aprofunda na entrevista da persona coordenador, seção 8.3).
+R: **Pergunta agora respondida — AV-6 virou decisão travada em 29/07/2026.**
+No modo psicoterapia adulta, a Camada 3 vê por padrão só o alerta de risco e
+os metadados da sessão; o corpo do `resumo_sessao` não. Ver AV-6 em §8.4.
 
 **P7. E o direito do meu paciente de ver o que ficou registrado sobre ele?**
 R: Fora do escopo deste documento (é feature genérica de acesso a dado
@@ -622,11 +815,11 @@ gatilho automatizado de auditoria): mesmo onde existir acesso de
 supervisão, dar à Camada 3 acesso ao `resumo_sessao` completo de um adulto
 em terapia convencional levanta um problema de sigilo profissional
 diferente — e mais sensível — do que dar acesso a evidência estruturada por
-domínio de uma criança com TEA. O modelo de acesso da Camada 3 pode
-precisar ser mais restrito neste modo (ex.: auditoria só sobre
-`alerta_risco` e metadados, não sobre `resumo_sessao` completo, salvo
-exigência legal específica) — **isto é decisão de modelo de acesso/RLS,
-proposta pendente de confirmação com o Rômulo, não implementada aqui.**
+domínio de uma criança com TEA. **Isto deixou de ser proposta: em 29/07/2026 o
+dono travou a decisão** — a Camada 3 audita, por padrão, apenas `alerta_risco`
+e metadados da sessão, nunca o `resumo_sessao` completo, salvo escalonamento do
+próprio psicólogo ou exigência legal, sempre com auditoria. Ver AV-6 em §8.4
+para o enunciado completo e a referência de implementação (issue #119).
 
 **P3. Meu contrato de responsabilidade técnica exige que eu, como
 coordenador-psicólogo, tenha ciência de qualquer risco grave dos pacientes
@@ -662,32 +855,88 @@ decidida aqui.
 
 **P6. Terapia convencional reembolsada por convênio tem exigência de
 relatório periódico como a TEA tem (CID F84 como gatilho)?**
-R: Fora do escopo da issue #98 e deste documento — convênio de terapia
-convencional adulta provavelmente segue formato de relatório psicológico
-diferente do TEA (Resolução CFP nº 06/2019, que rege relatório/laudo/parecer
-emitidos, não o modelo de laudo por
-domínio usado no TEA). Registrado como possível fast-follow, não bloqueante
-para este nicho agora.
+R: **Suposição corrigida pelo dono em 29/07/2026.** A resposta anterior tratava
+isso como provável não-requisito ("psicanálise/humanista não tem plano"). Está
+errado: **tem.** Paciente de psicanálise, de abordagem humanista e de abordagem
+integrativa é reembolsado por convênio como qualquer outro, e a operadora exige
+relatório periódico do mesmo jeito. O requisito de relatório para convênio
+**vale também para este nicho** — o que muda é o formato, não a existência da
+exigência: aqui o documento segue o padrão de relatório psicológico narrativo
+(Resolução CFP nº 06/2019, que rege relatório/laudo/parecer emitidos), não o
+modelo de laudo por domínio usado no TEA. Isso interage com um requisito já
+conhecido do produto: operadoras rejeitam narrativo puro e pedem dado
+mensurável — e este nicho, por definição de §1, **não tem número para dar**.
+Registrado como pendência real de produto no `BACKLOG.md`, não como
+fast-follow descartável. Segue fora do escopo desta issue.
 
 ### 8.4 Lista consolidada de achados
 
 | ID | Achado | Severidade | Cobertura |
 | --- | --- | --- | --- |
-| AV-1 | `padrao_silencio_resistencia` embute vocabulário de escola psicanalítica no NOME DO CAMPO do schema (seção 3), em tensão com R9-TC mesmo que o texto gerado seja agnóstico. | Bloqueante | Gap novo — nome de campo é mudança de contrato de dado; se corrigido, entra como proposta pendente de confirmação com o Rômulo. |
+| AV-1 | `padrao_silencio_resistencia` embutia vocabulário da família psicodinâmica no NOME DO CAMPO do schema (seção 3), em tensão com R9-TC mesmo com o texto gerado neutro. | ~~Bloqueante~~ → **✅ RESOLVIDO (29/07/2026), DEIXA DE SER BLOQUEANTE** | **Resolvido por renomeação, decisão do dono:** o campo passou a `padrao_participacao_verbal` (§3.1) e o corpo de R6-TC deixou de usar "resistência". O achado era sobre contrato de dado; o contrato de dado foi corrigido, então não há resíduo — não é "mitigado", é resolvido. A implementação da renomeação vem nas fatias de código de #98; a decisão não depende de mais nada. |
 | AV-2 | Documento não declara que a saída da IA neste modo é sempre rascunho editável pelo terapeuta antes de virar registro oficial de prontuário (Resolução CFP nº 06/2019 responsabiliza quem assina o documento emitido; Resolução CFP nº 001/2009 rege o registro documental). | Bloqueante | Gap novo — parcialmente sustentado pelo princípio geral de governança em 3 camadas (seção 1), mas não formalizado para este modo especificamente. |
 | AV-3 | R5-TC nunca cita a base normativa (exceção de sigilo profissional por risco de vida) que legitima a própria existência do alerta de risco. | Bloqueante | **Referência levantada:** Código de Ética (Res. CFP nº 010/2005), **art. 10** — o psicólogo "poderá decidir pela quebra de sigilo, baseando sua decisão na busca do menor prejuízo", restringindo-se ao estritamente necessário. É **faculdade**, não dever. Confirmação profissional pendente na issue #110; ver `docs/legal/briefing-duty-to-warn.md` Anexo A.2. |
 | AV-4 | Categoria "risco a menores no entorno" de R5-TC não cita a base legal do dever de comunicação (ECA, verificar artigo) nem deixa claro que o dever é do profissional, não do sistema. | Importante | **Referência levantada:** ECA **art. 13** (comunicação obrigatória ao Conselho Tutelar) e Lei 13.431/2017 **art. 13** (dever de qualquer pessoa comunicar imediatamente). Diferente de AV-3: aqui há **dever legal**, não faculdade — e o dever é do profissional, não do sistema. Confirmação pendente na issue #110; ver Anexo A.3 do briefing. |
 | AV-5 | Falta política concreta de amostragem/auditoria da Camada 3 para este modo (quais sessões revisar, sem gatilho estruturado). | Importante | Amplia achado 1/Risco 4 já existentes na seção 7 — não é totalmente novo, mas ganha requisito concreto. |
-| AV-6 | Modelo de acesso da Camada 3 a `resumo_sessao` completo de adulto pode precisar ser mais restrito que o acesso a evidência estruturada de TEA, por sensibilidade de conteúdo (sigilo profissional). | Importante | Gap novo — decisão de modelo de acesso/RLS, proposta pendente de confirmação com o Rômulo. |
+| AV-6 | Modelo de acesso da Camada 3 ao `resumo_sessao` completo de paciente adulto em psicoterapia. | Importante | **✅ DECISÃO TRAVADA (29/07/2026) — deixou de ser proposta.** Ver §8.5 para o enunciado normativo completo. Implementação em RLS é da **issue #119**, não de #98. |
 | AV-7 | Falta disclaimer explícito de que a responsabilidade profissional pela conduta clínica é sempre do terapeuta, independentemente de sugestão da IA. | Importante | Gap novo, complementar ao Risco 2 já registrado (que cobre só a marcação visual, não o texto do disclaimer). |
 | AV-8 | "Validação automatizada de saída" (Risco 1) está descrita como mitigação possível, não como gate obrigatório antes da entrega ao terapeuta. | Importante | Amplia Risco 1 já existente — eleva de sugestão a requisito. |
 | AV-9 | Direito do paciente adulto de acessar o próprio resumo/prontuário não é mencionado neste documento. | Nice-to-have | Provável feature genérica do produto, fora do escopo deste nicho — lembrete de verificação cruzada. |
-| AV-10 | Requisitos de relatório periódico para convênio em Terapia Convencional adulta não abordados. | Nice-to-have | Fora do escopo da issue #98 — possível fast-follow. |
-| AV-11 | Achado 2 da seção 7 (paciente com atendimento misto TEA + terapia convencional) tem severidade subestimada — é cenário plausível e recorrente, não hipotético raro. | Bloqueante (reclassificação) | Reforça achado já existente; eleva sua severidade de "lacuna registrada" para bloqueante em clínicas com os dois públicos. |
+| AV-10 | Requisitos de relatório periódico para convênio em Terapia Convencional adulta não abordados. | ~~Nice-to-have~~ → **Importante (reclassificado 29/07/2026)** | **Suposição corrigida pelo dono:** psicanálise/humanista/integrativa **têm** paciente de convênio e **têm** exigência de relatório periódico. O requisito vale para este nicho; o formato é o do relatório psicológico narrativo, não o laudo por domínio do TEA. Tensão real: operadora pede dado mensurável e este nicho, por definição de §1, não tem número a dar. Registrado no `BACKLOG.md`. Segue fora do escopo de #98. |
+| AV-11 | Achado 2 da seção 7 (paciente com atendimento misto TEA + terapia convencional) tem severidade subestimada — é cenário plausível e recorrente, não hipotético raro. | Bloqueante (reclassificação) | Reforça achado já existente; eleva sua severidade de "lacuna registrada" para bloqueante em clínicas com os dois públicos. **Direção decidida pelo dono (29/07/2026):** no MVE, paciente misto é **proibido por constraint de banco** — bloqueio explícito é preferível à falha silenciosa de aplicar julgamento de um modo sobre a saída do outro. Suporte real ao caso misto ganha **issue própria** e sai do escopo de #98. A constraint é trabalho de migração, não deste PR. |
 | AV-12 | Divergência entre os números de resolução do CFP citados em pontos diferentes da documentação do Iris ("nº 6/2019" na seção 2.3 vs. "nº 001/2009" e "nº 010/2005 — verificar" nesta seção). | Importante | **Resolvido (issue #110).** Não havia divergência: as três resoluções estão vigentes e regulam objetos distintos — 001/2009 (registro documental/prontuário, alterada pela 05/2010), 06/2019 (documentos escritos emitidos), 010/2005 (Código de Ética). As citações deste documento foram corrigidas. Tabela completa em `docs/legal/briefing-duty-to-warn.md`, Anexo A.1. Segue valendo: nenhuma copy user-facing cita resolução até confirmação profissional. |
 
 Nenhum destes 12 achados invalida a arquitetura proposta. Nenhuma mudança de
-schema, DDL, ou modelo de acesso foi implementada a partir desta seção — os
-itens AV-1, AV-2 e AV-6 que tocam contrato de dado ou modelo de acesso estão
-explicitamente marcados como proposta pendente de confirmação com o
-Rômulo, conforme a categoria "confirmar antes" do `CLAUDE.md` do projeto.
+schema, DDL, ou modelo de acesso foi implementada a partir desta seção.
+
+**Estado dos itens após a sessão de 29/07/2026:**
+
+- **AV-1 — resolvido, não mais bloqueante.** Renomeação de campo (§3.1).
+- **AV-6 — decisão travada, não mais proposta.** Enunciado em §8.5;
+  implementação em RLS pela issue #119.
+- **AV-10 — reclassificado para Importante** (convênio vale para este nicho).
+- **AV-11 — direção decidida** (proibir misto por constraint no MVE, issue
+  própria para o suporte real).
+- **AV-2 continua bloqueante** e **segue como proposta pendente de confirmação
+  com o Rômulo**: o documento ainda não declara normativamente que a saída da
+  IA neste modo é rascunho editável até aprovação explícita do terapeuta. Não
+  foi objeto da decisão desta sessão e não deve ser lido como resolvido.
+- AV-3, AV-4, AV-5, AV-7, AV-8, AV-9 seguem no estado registrado acima.
+
+### 8.5 AV-6 — decisão travada: acesso da Camada 3 no modo psicoterapia adulta
+
+**Decisão do dono, 29/07/2026.** Deixa de ser proposta pendente e passa a
+regra do produto:
+
+- No modo psicoterapia adulta (`modo: "terapia_convencional"`), a **Camada 3
+  (coordenação/supervisão) vê por padrão apenas**: o `alerta_risco` e os
+  **metadados da sessão** — data da sessão, terapeuta responsável, e o fato
+  booleano de haver ou não alerta.
+- A Camada 3 **não** vê, por padrão, o corpo do `resumo_sessao`, nem
+  `temas[]`, nem `tema_recorrente_sinalizado`, nem
+  `padrao_participacao_verbal`.
+- O resumo completo é acessível **só** em duas hipóteses: **escalonamento pelo
+  próprio psicólogo** que atende (ato deliberado dele, não do coordenador), ou
+  **exigência legal** específica.
+- Em **ambas** as hipóteses o acesso é **sempre auditado** — quem acessou, o
+  quê, quando e sob qual hipótese. Acesso legítimo e acesso auditado não são
+  alternativas: o acesso excepcional só é legítimo porque fica registrado.
+
+**Por quê.** Sigilo profissional. Auditar qualidade sobre evidência
+estruturada por domínio de uma criança em TEA é uma coisa; ler o relato de
+divórcio, trauma ou infidelidade de um adulto porque se é coordenador é outra.
+O coordenador continua conseguindo cumprir sua responsabilidade técnica — ele
+recebe todo alerta de risco, que é exatamente o que essa responsabilidade
+exige (§8.3, P3) — sem receber, de graça, o conteúdo íntimo da sessão.
+
+**Efeito colateral aceito, e é real.** Esta decisão **agrava AV-5**: a política
+de amostragem da Camada 3 fica ainda mais dependente de `alerta_risco`, porque
+sobra menos superfície auditável. A auditoria de qualidade do resumo neste modo
+passa a depender de escalonamento pelo terapeuta, não de varredura pelo
+coordenador. É uma troca consciente de auditabilidade por sigilo — e é a troca
+certa para conteúdo de psicoterapia adulta.
+
+**Escopo de implementação.** A implementação em RLS/modelo de acesso é da
+**issue #119**, não da #98. Nenhuma policy, migração ou código foi escrito
+aqui — este documento apenas registra a decisão para que #119 a implemente sem
+reabrir o debate.
