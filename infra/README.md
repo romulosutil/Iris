@@ -1430,6 +1430,32 @@ estiver, use o mesmo valor em vez de gerar outro.
 > Salvar env **não aplica sozinho**: é preciso clicar em `Implantar`, e isso
 > reconstrói o serviço a partir do HEAD de `main`.
 
+### Passo 1.5 — confirmar que a rota existe antes de abrir o painel
+
+Trinta segundos que evitam depurar o serviço errado. De qualquer máquina, sem
+credencial nenhuma:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  https://irisclinica.ia.br/api/internal/billing/fechar-ciclos
+
+curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  https://irisclinica.ia.br/api/internal/billing/rota-que-nao-existe
+```
+
+Esperado: **401** na primeira e **404** na segunda. O controle negativo não é
+zelo excessivo — é o que torna o 401 significativo em vez de resposta genérica
+do proxy. Medido assim em 13/08/2026.
+
+Se a primeira devolver **404**, pare: a rota não está no deploy de produção, e
+provisionar o job em cima disso só produziria `HTTP 404` a cada tick. Foi
+exatamente o que aconteceu com o webhook do Mercado Pago em 04/08.
+
+**O que esse 401 NÃO prova:** que `BILLING_JOB_TOKEN` está configurado no serviço
+`App`. Com a env ausente, `autorizado()` devolve `false` e a resposta é um 401
+idêntico — os dois casos são indistinguíveis de fora. Quem separa é olhar a aba
+`Ambiente` do `App`, como manda o Passo 1.
+
 ### Passo 2 — criar o serviço
 
 Mesmo desenho dos serviços de backup e escalonamento. Os nomes de aba abaixo são
@@ -1490,6 +1516,10 @@ Logo depois do primeiro deploy, **Logs** do serviço. Primeira linha esperada:
 ```
 [agendador-billing] 2026-08-13T20:00:00Z ativo. intervalo=3600s · heartbeat=/heartbeat/.ultimo-fechamento
 ```
+
+As duas linhas abaixo não são exemplo inventado: o laço foi exercitado na imagem
+real em 13/08/2026, contra um dublê da rota, com `INTERVALO_S=15`. O formato é
+este, com o intervalo trocado.
 
 E, a cada hora, uma linha JSON única do disparo (aqui quebrada em várias linhas
 para caber na página; no log ela é uma só):
@@ -1604,9 +1634,22 @@ ter pelo menos uma ficha ativa.
 ### O que fazer se der errado
 
 1. **`"status":401` na linha JSON.** O `BILLING_JOB_TOKEN` do serviço `App` está
-   ausente ou diferente do deste serviço. Abra as duas abas `Ambiente` e **olhe**
-   os valores — não confie em "eu já configurei". Depois de corrigir, clique em
-   `Implantar` no serviço alterado.
+   ausente ou diferente do deste serviço. É assim que esse caso aparece —
+   exercitado contra a rota de produção em 13/08/2026, com um token inválido:
+
+   ```
+   [fechamento-ciclo-billing] disparo FALHOU (status): HTTP 401 — corpo recebido: {"error":"não autorizado"}
+   [agendador-billing] ... ATENÇÃO: disparo de fechamento FALHOU (exit 1) — 1 falha(s) seguida(s).
+   [agendador-billing] ... ATENÇÃO: enquanto isso durar, ciclo de faturamento vencido NÃO está sendo fechado.
+   ```
+
+   O corpo `{"error":"não autorizado"}` vem da própria rota (`route.ts`), não do
+   proxy — é a evidência de que o disparo chegou ao app e foi recusado lá dentro.
+   O laço **não** morre: ele conta as falhas seguidas e o heartbeat **não é
+   criado**. Abra as duas abas `Ambiente` e **olhe** os valores — não confie em
+   "eu já configurei". Depois de corrigir, clique em `Implantar` no serviço
+   alterado.
+
 2. **`"falha":"rede"`.** O container não alcança `BILLING_JOB_URL`. Confira a URL
    (é a pública, com `https://`, não host interno).
 3. **`"falha":"timeout"`.** Sem resposta em 30s. **Não conclua que o fechamento
@@ -1622,3 +1665,110 @@ ter pelo menos uma ficha ativa.
    falha aberto de propósito: a varredura olha o estado atual, não um cursor,
    então quando o serviço voltar ele pega tudo que venceu. Falta de cobrança é
    recuperável; cobrança errada não.
+
+### Runbook — ensaio de fechamento com clínica de teste (antes de 12/09/2026)
+
+O dry-run com zero ciclos vencidos não exercita apuração, preço nem emissão. Para
+provar o caminho inteiro contra o Asaas de produção **antes** do vencimento real,
+o ensaio usa uma clínica de teste com ciclo encurtado. Decisão do Rômulo em
+13/08/2026, na #288.
+
+> ⚠️ **A varredura do job é global: ela fecha TODA assinatura ativa com
+> `ciclo_atual_fim <= now()`.** Se o `UPDATE` do Passo 3 pegar a linha errada, o
+> ciclo do cliente real fecha antes da hora e uma cobrança sai para ele. Todo
+> `UPDATE` abaixo vai dentro de `BEGIN`, com o `clinic_id` da clínica de teste
+> explícito e conferência da contagem de linhas antes do `COMMIT`.
+
+**Passo 1 — clínica de teste com uma ficha.** Pelo fluxo normal do produto (não
+por SQL): cadastre uma clínica de teste e crie **1 ficha de paciente** nela. A
+ficha não é detalhe: com `pacientes_contados = 0` o preço é 0, o ciclo é marcado
+`pago` na hora e **o gateway nunca é chamado** — o ensaio passaria verde sem
+exercitar nada. Uma ficha coloca o valor na primeira faixa: **R$ 39,00**
+(`FAIXAS_PRECIFICACAO` em `src/lib/billing/calculator.ts`).
+
+**Passo 2 — ativar a assinatura.** Na clínica de teste, tela `/assinatura`, com
+uma autorização de Pix própria. **Ao definir o teto de valor no app do banco, use
+um teto ≥ R$ 39,00** — o BACEN obriga o banco a perguntar o valor máximo, e um
+teto baixo demais recusa toda cobrança futura, o que só aparece no fechamento
+(#286).
+
+Anote o `clinic_id` da clínica de teste e confirme que ele **não** é o do cliente
+real:
+
+```sql
+SELECT c.id, c.nome, s.status, s.ciclo_atual_inicio, s.ciclo_atual_fim
+  FROM clinic c
+  JOIN subscription s ON s.clinic_id = c.id
+ ORDER BY s.ciclo_atual_fim;
+```
+
+**Passo 3 — encurtar o ciclo da clínica de teste.** Recue `inicio` e `fim` juntos:
+`billing_cycle` tem `CHECK (fim > inicio)`, e mexer só no `fim` viola a
+constraint. `abrirCiclo` casa o ciclo pela chave `(clinic_id, inicio)`, então os
+dois `inicio` (o da `subscription` e o do `billing_cycle`) têm que continuar
+iguais. A janela de 31 dias mantém a ficha criada hoje dentro de `[inicio, fim)`,
+que é o que a apuração conta.
+
+```sql
+BEGIN;
+
+-- Olhe o nome antes de tocar em qualquer coisa.
+SELECT id, nome FROM clinic WHERE id = '<CLINIC_ID_DE_TESTE>';
+
+UPDATE subscription
+   SET ciclo_atual_inicio = ciclo_atual_inicio - interval '31 days',
+       ciclo_atual_fim    = now() - interval '1 minute'
+ WHERE clinic_id = '<CLINIC_ID_DE_TESTE>'
+   AND status = 'active';
+-- Precisa dizer UPDATE 1. Qualquer outro número: ROLLBACK e reveja o clinic_id.
+
+UPDATE billing_cycle
+   SET inicio = inicio - interval '31 days',
+       fim    = now() - interval '1 minute'
+ WHERE clinic_id = '<CLINIC_ID_DE_TESTE>'
+   AND status = 'aberto';
+-- Precisa dizer UPDATE 1.
+
+-- Última barreira: nenhuma OUTRA assinatura pode estar vencida junto.
+SELECT clinic_id, ciclo_atual_fim
+  FROM subscription
+ WHERE status = 'active' AND ciclo_atual_fim <= now();
+-- Precisa devolver EXATAMENTE uma linha, a da clínica de teste.
+
+COMMIT;
+```
+
+Se qualquer conferência sair diferente do esperado, `ROLLBACK;` — o ensaio pode
+ser refeito daqui a cinco minutos, uma cobrança errada no cliente real não.
+
+**Passo 4 — registrar o "antes".** Guarde a saída das duas consultas da seção
+«Ensaio manual» acima. Sem o "antes", o "depois" não prova mudança.
+
+**Passo 5 — disparar.** No Console do serviço `billing`:
+
+```bash
+node /app/scripts/fechamento-ciclo-billing.mjs --once --dry-run   # confira ok:true
+node /app/scripts/fechamento-ciclo-billing.mjs --once             # emite de verdade
+```
+
+**Passo 6 — medir.** Para o ciclo da clínica de teste, o esperado é:
+
+| Coluna                | Esperado               |
+| --------------------- | ---------------------- |
+| `status`              | `aguardando_pagamento` |
+| `pacientes_contados`  | `1`                    |
+| `valor_centavos`      | `3900`                 |
+| `provider_charge_id`  | preenchido             |
+| `cobranca_emitida_em` | preenchido             |
+| `erro`                | `NULL`                 |
+
+E, no painel do Asaas, a cobrança com referência externa `cycle:<id do ciclo>`.
+
+**Passo 7 — fechar o laço do pagamento.** Pague o Pix. O webhook do Asaas deve
+levar `billing_cycle.status` para `pago` e preencher `cobrado_em` — é o único
+trecho do trilho que a ativação de 13/08 não cobriu.
+
+**Se `pacientes_contados` vier 0 com a ficha criada:** não "conserte" o número.
+Leia `billing_apurar_ciclo` (`db/migrations/0071_billing_assinatura_e_ciclo.sql`)
+e confira se a ficha cai dentro de `[inicio, fim)` do ciclo. Nesse caso o job
+está certo e o dado do ensaio é que está errado.
