@@ -275,7 +275,7 @@ function mapearStatusCobranca(status: unknown): StatusCobranca {
  * `reprocessarEventosPendentes` faz entre 4xx definitivo e transitório).
  */
 async function chamar(
-  metodo: "GET" | "POST" | "DELETE",
+  metodo: "GET" | "POST" | "PUT" | "DELETE",
   caminho: string,
   opcoes?: { corpo?: unknown },
 ): Promise<unknown> {
@@ -584,6 +584,42 @@ export class AsaasProvider implements BillingProvider {
     // devolver algum número aqui reintroduziria a confusão que motivou o
     // contrato atual da porta.
     return { status: mapearStatusAutorizacao(resposta.status) };
+  }
+
+  /**
+   * Atualiza os dados cadastrais do cliente no Asaas (#262). Só envia os
+   * campos presentes: mandar `cpfCnpj: null` num PUT poderia apagar o
+   * documento do cadastro — omitir preserva o valor atual no gateway.
+   */
+  async atualizarCliente(dados: {
+    providerCustomerId: string;
+    nome: string;
+    cpfCnpj?: string | null;
+    email?: string | null;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cep?: string | null;
+  }): Promise<void> {
+    const corpo: Record<string, string> = { name: dados.nome };
+    const cpfCnpj = dados.cpfCnpj?.replace(/\D/g, "");
+    if (cpfCnpj) corpo.cpfCnpj = cpfCnpj;
+    if (dados.email) corpo.email = dados.email;
+    // Endereço alimenta boleto/NFS-e no gateway: mesmo padrão truthy-skip dos
+    // demais campos. Cidade/UF o Asaas deriva do postalCode.
+    if (dados.logradouro) corpo.address = dados.logradouro;
+    if (dados.numero) corpo.addressNumber = dados.numero;
+    if (dados.complemento) corpo.complement = dados.complemento;
+    if (dados.bairro) corpo.province = dados.bairro;
+    const cep = dados.cep?.replace(/\D/g, "");
+    if (cep) corpo.postalCode = cep;
+
+    await chamar(
+      "PUT",
+      `/customers/${encodeURIComponent(dados.providerCustomerId)}`,
+      { corpo },
+    );
   }
 
   async cancelarVinculo(providerVinculoId: string): Promise<void> {

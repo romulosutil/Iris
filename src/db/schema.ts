@@ -313,6 +313,21 @@ export const clinic = pgTable("clinic", {
   criadoEm: timestamp("criado_em", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  // #262 (D31) — dados cadastrais e fiscais da clínica. Todos NULLABLE: a
+  // clínica opera sem eles; são exigência do faturamento (Asaas) e do fiscal.
+  // Escrita SOMENTE via app_salvar_dados_clinica (SECURITY DEFINER, 0095) —
+  // sem GRANT UPDATE de coluna para app_role, mesmo padrão de cpf_cnpj (0090).
+  razaoSocial: text("razao_social"),
+  enderecoLogradouro: text("endereco_logradouro"),
+  enderecoNumero: text("endereco_numero"),
+  enderecoComplemento: text("endereco_complemento"),
+  enderecoBairro: text("endereco_bairro"),
+  enderecoCidade: text("endereco_cidade"),
+  // UF em 2 letras maiúsculas; CEP só dígitos (8). Validação na aplicação e
+  // no guard da função definer.
+  enderecoUf: text("endereco_uf"),
+  enderecoCep: text("endereco_cep"),
+  emailFinanceiro: text("email_financeiro"),
 });
 
 export const userRole = pgTable(

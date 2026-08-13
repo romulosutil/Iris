@@ -53,10 +53,7 @@ export type MetodoPagamento = "cartao" | "pix";
  * pagamento, não de uma recorrência de valor fixo).
  */
 export type StatusAssinaturaProvider =
-  | "pendente"
-  | "autorizada"
-  | "pausada"
-  | "cancelada";
+  "pendente" | "autorizada" | "pausada" | "cancelada";
 
 /** Status de uma COBRANÇA de ciclo. */
 export type StatusCobranca = "pendente" | "paga" | "recusada" | "estornada";
@@ -284,6 +281,25 @@ export interface BillingProvider {
 
   /** Traduz o payload do gateway. Nunca lança; desconhecido vira `desconhecido`. */
   normalizarEvento(payload: unknown): EventoWebhookNormalizado;
+
+  /**
+   * Atualiza os dados cadastrais do assinante no gateway (#262 — Dados da
+   * Clínica). **Opcional de propósito**: nem todo gateway tem a entidade
+   * "cliente" separada do vínculo, e obrigar todos os adapters a fingir uma
+   * seria a mesma mentira do D21. Call site guarda com
+   * `if (provider.atualizarCliente)` e pula em silêncio quando não existe.
+   */
+  atualizarCliente?(dados: {
+    providerCustomerId: string;
+    nome: string;
+    cpfCnpj?: string | null;
+    email?: string | null;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cep?: string | null;
+  }): Promise<void>;
 }
 
 /**
