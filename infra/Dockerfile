@@ -27,7 +27,10 @@ ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=${NEXT_PUBLIC_CLARITY_PROJECT_ID}
 ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 RUN pnpm build
-RUN npx esbuild scripts/seed-local.ts --bundle --platform=node --target=node22 --conditions=react-server --outfile=scripts/seed-local.js
+# pnpm exec (não npx): esbuild agora é devDependency pinada — npx baixava
+# esbuild@latest do registry em build time e quebrou no musl (bin nativo em
+# optionalDependency não instalado → "esbuild: not found", exit 127).
+RUN pnpm exec esbuild scripts/seed-local.ts --bundle --platform=node --target=node22 --conditions=react-server --outfile=scripts/seed-local.js
 
 # --- migrate: job de deploy, roda ANTES do app (gate de schema) ---------------
 # Easypanel roda esta imagem como serviço/pre-deploy separado, com
