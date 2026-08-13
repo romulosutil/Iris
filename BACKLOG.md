@@ -62,6 +62,14 @@
 
 ---
 
+## 🏁 Sessão 13/08/2026 — #248: Fila de Validação integrada ao design system (PR #279, draft)
+
+Entregue em `feat/validacao-fila-design-system-248`: migração da fila para `ConfidenceCard`/`CompareRow`/`BatchBar` + `aprovarEvidenciasLote` (transação atômica, elegibilidade re-derivada no servidor via `avaliarFriccao`, locks em ordem determinística, audit por evidência, teto 50). Spec da issue corrigida contra o modelo real (`evidence` append-only — não há `UPDATE ... status`; provável causa da morte do PR #256 do Jules).
+
+**Decisão pendente (Rômulo):** o predicado atual da fila (`baixa_confianca` OU `inconsistente`) torna **zero** itens elegíveis a lote — BatchBar mostra "0 elegíveis / N bloqueados". Ampliar a fila para alta+consistente não confirmadas = mudança de governança separada (tensão com invariante 12/07/2026, `fluxos-e-wireframes.md` §3). Copy da BatchBar ("X de totalItens") também em revisão de produto.
+
+---
+
 ## 🏁 Sessão 13/08/2026 — #102: risco de residência/DPA Hostinger aceito pelo Rômulo
 
 **Achado (lido direto de `hostinger.com/br/legal/dpa`, não busca genérica):** o DPA padrão da Hostinger (i) já é aceito automaticamente no aceite dos Termos de Serviço — não existe fluxo de "assinar" separado; (ii) não garante país/data center específico, só cita "REDE HOSTINGER" genérica; (iii) não define prazo de notificação de incidente, só "sem atrasos indevidos"; (iv) se declara documento integral, sem espaço para aditivo customizado por cliente.
