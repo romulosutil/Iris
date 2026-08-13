@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import { surface, control } from "./primitives/surface";
+import { comporRefs, mesclarPropsSlot } from "./primitives/slot";
 
 /**
  * Escala de ênfase (Espectro Brutal v3). O PESO é o antídoto contra "wireframe":
@@ -63,7 +64,7 @@ function estiloVariante(v: Variante): string {
   }
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+export const Button = React.forwardRef<HTMLElement, ButtonProps>(
   function Button(
     {
       className,
@@ -117,8 +118,22 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       ? "cursor-wait relative"
       : "";
 
-    // Alerta de acessibilidade para Icon Only
-    if (process.env.NODE_ENV !== "production" && iconOnly && !props["aria-label"]) {
+    const filhoAsChild =
+      asChild && React.isValidElement(children)
+        ? (children as React.ReactElement<
+            Record<string, unknown> & { ref?: React.Ref<HTMLElement> }
+          >)
+        : null;
+
+    // Alerta de acessibilidade para Icon Only (o rótulo pode estar no próprio
+    // Button ou, com asChild, no elemento filho).
+    const temRotuloAcessivel = Boolean(
+      props["aria-label"] ??
+        props["aria-labelledby"] ??
+        filhoAsChild?.props["aria-label"] ??
+        filhoAsChild?.props["aria-labelledby"],
+    );
+    if (process.env.NODE_ENV !== "production" && iconOnly && !temRotuloAcessivel) {
       console.warn(
         "Acessibilidade: Botões 'iconOnly' devem possuir um 'aria-label' para leitores de tela."
       );
@@ -144,18 +159,54 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       className
     );
 
-    if (asChild && React.isValidElement(children)) {
-      const child = children as React.ReactElement<any>;
-      return React.cloneElement(child, {
-        ref,
-        className: cn(combinedClassName, child.props.className),
-        ...props,
-      });
+    if (asChild) {
+      if (filhoAsChild) {
+        if (process.env.NODE_ENV !== "production" && (iconLeft || iconRight)) {
+          console.warn(
+            "Button asChild ignora 'iconLeft'/'iconRight' — coloque o ícone dentro do elemento filho.",
+          );
+        }
+        const estaDesabilitado = Boolean(disabled) || isLoading;
+        const mescladas = mesclarPropsSlot(
+          {
+            ...props,
+            onClick,
+            className: combinedClassName,
+            "aria-busy": isLoading || undefined,
+            // O default `type ?? "button"` do branch <button> vale também para
+            // um filho <button> literal (evita submit implícito em <form>).
+            ...(filhoAsChild.type === "button"
+              ? { type: type ?? "button" }
+              : {}),
+          },
+          filhoAsChild.props,
+        );
+        // React 19: ref é prop comum, vive em filho.props.ref.
+        mescladas.ref = comporRefs(ref, filhoAsChild.props.ref);
+        if (estaDesabilitado) {
+          // Espelha o contrato `disabled={disabled || isLoading}` do branch
+          // <button>: sem clique (nem navegação) e sem foco por teclado.
+          mescladas["aria-disabled"] = true;
+          mescladas.tabIndex = -1;
+          mescladas.onClick = (evento: React.SyntheticEvent) => {
+            evento.preventDefault();
+          };
+          if (filhoAsChild.type === "button") {
+            mescladas.disabled = true;
+          }
+        }
+        return React.cloneElement(filhoAsChild, mescladas);
+      }
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          "Button asChild espera exatamente um elemento React como filho; renderizando o <button> padrão.",
+        );
+      }
     }
 
     return (
       <button
-        ref={ref}
+        ref={ref as React.ForwardedRef<HTMLButtonElement>}
         type={type ?? "button"}
         disabled={disabled || isLoading}
         aria-busy={isLoading || undefined}
