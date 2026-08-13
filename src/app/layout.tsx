@@ -1,24 +1,10 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
 import "@/styles/globals.css";
+import { fontVariables } from "@/app/fonts";
 import { WebMCPProvider } from "@/components/webmcp-provider";
 import { Clarity } from "@/components/clarity";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { ToastProvider } from "@/components/ui/toast";
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-space-grotesk",
-  display: "swap",
-});
-
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-jakarta",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Iris",
@@ -33,7 +19,7 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       data-mode="clinico"
-      className={`${spaceGrotesk.variable} ${jakarta.variable}`}
+      className={fontVariables}
     >
       <body>
         <GoogleAnalytics />
