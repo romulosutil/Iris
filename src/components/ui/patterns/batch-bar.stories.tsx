@@ -32,3 +32,16 @@ export const NenhumSelecionado: Story = {
     onSelecionarTodosElegiveis: () => alert("Selecionar todos"),
   },
 };
+
+export const ZeroElegiveis: Story = {
+  name: "Zero elegíveis (todos exigem revisão individual)",
+  args: {
+    selecionados: 0,
+    totalElegiveis: 0,
+    totalItens: 6,
+    bloqueados: 6,
+    onAprovarLote: () => alert("Aprovar lote"),
+    onLimparSelecao: () => alert("Limpar seleção"),
+    onSelecionarTodosElegiveis: () => alert("Selecionar todos"),
+  },
+};

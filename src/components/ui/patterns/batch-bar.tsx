@@ -33,12 +33,44 @@ export function BatchBar({
 }: BatchBarProps) {
   const podeAprovar = selecionados > 0 && !carregando;
 
+  // Nenhum item elegível a lote (`avaliarFriccao` exige alta confiança E
+  // consistência com histórico) — mostrar controles de seleção/aprovação
+  // seria oferecer uma ação que nunca pode ser executada. Estado informativo
+  // em vez de toolbar morta.
+  if (totalElegiveis === 0) {
+    return (
+      <div
+        role="status"
+        className={cn(
+          "text-text-secondary sticky bottom-4 z-30 flex items-center gap-2 p-4 text-sm",
+          surface("solida", {
+            elevation: "overlay",
+            radius: "xl",
+            className: "bg-surface-card",
+          }),
+          className,
+        )}
+        {...props}
+      >
+        <AlertTriangleIcon
+          size={14}
+          className="text-status-warning-fg shrink-0"
+        />
+        <span>
+          Nenhum item elegível para aprovação em lote — todos os{" "}
+          {totalItens ?? bloqueados} itens exigem revisão individual (baixa
+          confiança ou inconsistência com histórico).
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       role="toolbar"
       aria-label="Ações em lote"
       className={cn(
-        "sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 p-4 text-text-primary",
+        "text-text-primary sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 p-4",
         surface("solida", {
           elevation: "overlay",
           radius: "xl",
@@ -51,16 +83,21 @@ export function BatchBar({
       {/* Contadores e status */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-sm font-bold text-text-primary">
-            {selecionados} de {totalItens ?? totalElegiveis} selecionados
+          {/* Denominador é sempre `totalElegiveis`: só itens elegíveis são
+              selecionáveis, então usar o total geral faria a barra reportar
+              "8 de 10" com 100% do selecionável já marcado. */}
+          <span className="text-text-primary font-mono text-sm font-bold">
+            {selecionados} de {totalElegiveis} elegíveis selecionados
           </span>
-          <span className="text-xs text-text-secondary">
-            ({totalElegiveis} elegíveis para lote)
-          </span>
+          {totalItens !== undefined && totalItens > totalElegiveis && (
+            <span className="text-text-secondary text-xs">
+              ({totalItens} itens na fila)
+            </span>
+          )}
         </div>
 
         {bloqueados > 0 && (
-          <div className="flex items-center gap-1.5 rounded bg-status-warning-bg/20 px-2 py-0.5 text-xs text-status-warning-fg font-medium">
+          <div className="bg-status-warning-bg/20 text-status-warning-fg flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium">
             <AlertTriangleIcon size={12} />
             <span>{bloqueados} itens requerem revisão manual</span>
           </div>

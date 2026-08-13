@@ -62,6 +62,26 @@
 
 ---
 
+## 🏁 Sessão 13/08/2026 — #248: Fila de Validação integrada ao design system (PR #279, pronto para revisão)
+
+Entregue em `feat/validacao-fila-design-system-248`: migração da fila para `ConfidenceCard`/`CompareRow`/`BatchBar` + `aprovarEvidenciasLote` (transação atômica, elegibilidade re-derivada no servidor via `avaliarFriccao`, locks em ordem determinística, audit por evidência, teto 50). Spec da issue corrigida contra o modelo real (`evidence` append-only — não há `UPDATE ... status`; provável causa da morte do PR #256 do Jules).
+
+**Decisão do Rômulo (13/08/2026): mantém invariante 12/07/2026.** Predicado da fila (`baixa_confianca` OU `inconsistente`) continua tornando **zero** itens elegíveis a lote — não amplia a fila para incluir alta+consistente não confirmadas, pois isso abriria caminho de aprovação sem abrir cartão para dado clínico extraído por IA, risco julgado maior que o ganho de fricção. `BatchBar` (`src/components/ui/patterns/batch-bar.tsx`) ajustada para estado informativo quando `totalElegiveis === 0`: sem botão morto "Aprovar Lote (0)", copy explica que todos os itens exigem revisão individual. Decisão de lote de verdade (se algum dia fizer sentido) fica como issue de governança própria, não amarrada ao #248.
+
+---
+
+## 🏁 Sessão 13/08/2026 — #102: risco de residência/DPA Hostinger aceito pelo Rômulo
+
+**Achado (lido direto de `hostinger.com/br/legal/dpa`, não busca genérica):** o DPA padrão da Hostinger (i) já é aceito automaticamente no aceite dos Termos de Serviço — não existe fluxo de "assinar" separado; (ii) não garante país/data center específico, só cita "REDE HOSTINGER" genérica; (iii) não define prazo de notificação de incidente, só "sem atrasos indevidos"; (iv) se declara documento integral, sem espaço para aditivo customizado por cliente.
+
+**Impacto:** as regras de negócio #1 (garantia geográfica exclusiva BR) e #2 (notificação em 48h) da issue #102 **não têm cláusula correspondente** no documento padrão — T1 ("abrir chamado solicitando DPA assinado") é redundante e T2 ("validar cláusulas") não tem o que validar.
+
+**Decisão do Rômulo (13/08/2026): aceita o risco residual.** Segue sem garantia contratual de residência exclusiva BR — apoiado só na evidência de medição já feita (latência 33ms, sessão 27/07). Não bloqueia entrada de dado real de paciente por este motivo. Mantém alinhado com a régua já registrada na sessão 03/08 (#102 gated por 40 pacientes em prod, não pela entrada inicial).
+
+Comentário registrado na issue: [#102](https://github.com/romulosutil/Iris/issues/102#issuecomment-5275794015). Detalhe completo em memória `hostinger-dpa-padrao-sem-garantia-br-nem-prazo-incidente`.
+
+---
+
 ## 🏁 Sessão 11/08/2026 — Desarquivamento Clínico Unificado (D7/D8) e Helpers GUC de Papel e Identidade (D23, D5)
 
 **O que foi entregue e verificado nesta sessão:**
