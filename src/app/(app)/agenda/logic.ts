@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import {
@@ -29,6 +29,10 @@ export type SessaoDoDia = {
   patientId: string;
   disciplina: string;
   modalidade?: string;
+  // Presença já registrada (check-in feito): a UI troca o botão "Fazer
+  // check-in" pela confirmação com horário — sem isto o sucesso era invisível
+  // e o terapeuta re-clicava (QA mobile #249).
+  checkInEm?: Date | null;
 };
 
 /**
@@ -43,15 +47,45 @@ async function checkInSessaoCore(
   sessionId: string,
 ): Promise<{ error?: string }> {
   if (!sessionId) return { error: "Sessão não informada." };
-  const atualizadas = await withTenant(ctx, (tx) =>
-    tx
+  const atualizadas = await withTenant(ctx, async (tx) => {
+    const rows = await tx
       .update(session)
       .set({ checkInEm: new Date() })
       .where(and(eq(session.id, sessionId), isNull(session.checkInEm)))
-      .returning({ id: session.id }),
-  );
+      .returning({
+        id: session.id,
+        patientId: session.patientId,
+        checkInEm: session.checkInEm,
+      });
+    // Audit na MESMA tx da escrita (T4 #249): só quando o UPDATE afetou linha
+    // (a guarda `checkInEm IS NULL` torna a repetição um no-op não auditado).
+    const row = rows[0];
+    if (row) {
+      await tx.execute(sql`
+        INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
+        VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'check_in', 'session', ${row.id}::uuid, ${row.patientId}::uuid,
+          jsonb_build_object('check_in_em', ${row.checkInEm?.toISOString() ?? null}::text))
+      `);
+    }
+    if (rows.length === 0) {
+      // Distinguir "já tem check-in" de "não existe/sem acesso": a mensagem
+      // única misturava os dois estados e, como o sucesso era silencioso na
+      // UI, o 2º toque do terapeuta lia um erro ambíguo (QA mobile #249).
+      const existente = await tx
+        .select({ checkInEm: session.checkInEm })
+        .from(session)
+        .where(eq(session.id, sessionId));
+      if (existente[0]?.checkInEm) {
+        return { jaFeito: true } as const;
+      }
+    }
+    return rows;
+  });
+  if ("jaFeito" in atualizadas) {
+    return { error: "Check-in já registrado para esta sessão." };
+  }
   if (atualizadas.length === 0) {
-    return { error: "Sessão não encontrada ou já iniciada." };
+    return { error: "Sessão não encontrada." };
   }
   return {};
 }
@@ -95,6 +129,7 @@ export async function listarSessoesDoDia(
         pacienteNome: patient.nome,
         patientId: session.patientId,
         disciplina: session.disciplina,
+        checkInEm: session.checkInEm,
       })
       .from(session)
       .leftJoin(patient, eq(patient.id, session.patientId))
@@ -149,18 +184,23 @@ async function marcarEstadoCore(
         )
         .limit(1),
     );
-    if (ok.length === 0) return { error: "Substituto não é terapeuta desta clínica." };
+    if (ok.length === 0)
+      return { error: "Substituto não é terapeuta desta clínica." };
   }
 
-  const just = exigeJustificada(input.estado) ? (input.justificada ?? false) : null;
+  const just = exigeJustificada(input.estado)
+    ? (input.justificada ?? false)
+    : null;
 
-  const rows = await withTenant(ctx, (tx) =>
-    tx
+  const rows = await withTenant(ctx, async (tx) => {
+    const atualizadas = await tx
       .update(session)
       .set({
         estado: input.estado,
         justificada: just,
-        ...(input.atendidoPorId !== undefined ? { atendidoPorId: input.atendidoPorId } : {}),
+        ...(input.atendidoPorId !== undefined
+          ? { atendidoPorId: input.atendidoPorId }
+          : {}),
         ...(input.modalidade ? { modalidade: input.modalidade } : {}),
       })
       .where(
@@ -169,11 +209,26 @@ async function marcarEstadoCore(
           eq(session.estado, "agendada"), // CAS: só transiciona de agendada
         ),
       )
-      .returning({ id: session.id }),
-  );
+      .returning({ id: session.id, patientId: session.patientId });
+    // Audit na MESMA tx da escrita (T4 #249): CAS perdido (0 linhas) não gera
+    // trilha — só a transição que de fato aconteceu é auditada.
+    const row = atualizadas[0];
+    if (row) {
+      await tx.execute(sql`
+        INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
+        VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'marcar_estado', 'session', ${row.id}::uuid, ${row.patientId}::uuid,
+          jsonb_build_object('estado', ${input.estado}::text, 'justificada', ${just}::boolean,
+            'atendido_por_id', ${input.atendidoPorId ?? null}::uuid, 'modalidade', ${input.modalidade ?? null}::text))
+      `);
+    }
+    return atualizadas;
+  });
 
   if (rows.length === 0) {
-    return { error: "Esta sessão já foi atualizada por outra pessoa. Recarregue a página." };
+    return {
+      error:
+        "Esta sessão já foi atualizada por outra pessoa. Recarregue a página.",
+    };
   }
   return { ok: true };
 }

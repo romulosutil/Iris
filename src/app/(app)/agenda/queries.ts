@@ -19,7 +19,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { requireAgendar, requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { codigoPg } from "@/db/pg-error";
+import { codigoPg, constraintPg } from "@/db/pg-error";
 import * as schema from "@/db/schema";
 import type { SessaoDoDia } from "./actions";
 import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
@@ -344,6 +344,10 @@ export async function criarRegra(
 
   return withTenant(ctx, async (tx) => {
     await requireEscritaPermitida(tx, ctx.clinicId);
+    // Anti-corrida (#249): mesmo lock dos eixos usado por criarAvulsa e
+    // materializarNaTx — sem ele, o pré-check de conflito abaixo corre contra
+    // uma criação avulsa concorrente e as ocorrências viram `puladas` em silêncio.
+    await travarEixosAgenda(tx, [dados.terapeutaId, dados.patientId]);
     await validarTerapeutaDaClinica(tx, ctx.clinicId, dados.terapeutaId);
     const ativas = await tx
       .select({
@@ -507,6 +511,23 @@ export async function criarRegra(
   });
 }
 
+/**
+ * T4 (#249): advisory locks transacionais nos eixos do conflito (terapeuta e
+ * paciente) ANTES da checagem app-level, fechando a corrida em que duas tx
+ * checam conflito simultaneamente e ambas inserem sobreposição. Dedup + ordem
+ * lexicográfica dos UUIDs para aquisição determinística (evita deadlock entre
+ * tx que travam os mesmos eixos em ordens diferentes). Mesmo padrão de
+ * `validacao/logic.ts` (pg_advisory_xact_lock + hashtextextended).
+ */
+async function travarEixosAgenda(tx: TxMat, ids: string[]): Promise<void> {
+  const ordenados = [...new Set(ids)].sort();
+  for (const id of ordenados) {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${id}::text, 0))`,
+    );
+  }
+}
+
 export interface NovaAvulsa {
   patientId: string;
   terapeutaId: string;
@@ -562,6 +583,9 @@ export async function criarAvulsa(
         dados.horaInicio,
         clinicRow?.timezone ?? "America/Sao_Paulo",
       );
+      // Anti-corrida (T4 #249): serializa criações concorrentes nos mesmos
+      // eixos antes do pré-check app-level regra×avulsa.
+      await travarEixosAgenda(tx, [dados.terapeutaId, dados.patientId]);
       const regrasAtivas = await tx
         .select({
           terapeutaId: schema.agendamentoRecorrente.terapeutaId,
@@ -622,9 +646,17 @@ export async function criarAvulsa(
       return row!;
     });
   } catch (e) {
-    // EXCLUDE gist (btree_gist) → SQLSTATE 23P01 exclusion_violation.
+    // EXCLUDE gist (btree_gist) → SQLSTATE 23P01 exclusion_violation. São DUAS
+    // constraints (`session_no_overbook_terapeuta` e `_paciente`): atribuir o
+    // eixo pela constraint que disparou — hardcodar "terapeuta" mandava o
+    // coordenador checar a agenda errada quando o conflito era do paciente
+    // (QA mobile #249: 2 terapeutas, mesmo paciente, mesmo horário).
     if (codigoPg(e) === "23P01") {
-      throw new ConflitoError("terapeuta");
+      throw new ConflitoError(
+        constraintPg(e) === "session_no_overbook_paciente"
+          ? "paciente"
+          : "terapeuta",
+      );
     }
     throw e;
   }
@@ -730,6 +762,10 @@ export async function materializarNaTx(
   tx: TxMat,
   { regra, bloqueios, fuso, deISO, ateISO }: MaterializarParams,
 ): Promise<ResultadoMaterializacao> {
+  // Anti-corrida (T4 #249): trava os eixos da regra na MESMA tx antes de
+  // inserir as ocorrências — materializações/avulsas concorrentes sobre o
+  // mesmo terapeuta/paciente serializam em vez de correr contra o EXCLUDE.
+  await travarEixosAgenda(tx, [regra.terapeutaId, regra.patientId]);
   const datas = datasDaRegra(
     {
       diaSemana: regra.diaSemana,

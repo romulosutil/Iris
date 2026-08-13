@@ -142,9 +142,10 @@ describe.skipIf(!hasDb)("agenda — sessão + check-in (RLS)", () => {
     expect(depois!.estado).toBe("agendada");
     expect(depois!.checkInEm).not.toBeNull();
 
-    // Segundo check-in não encontra mais uma sessão 'agendada' → no-op seguro.
+    // Segundo check-in é no-op seguro, com mensagem que NOMEIA o estado real
+    // (check-in já feito) — não a ambígua "não encontrada ou já iniciada".
     const denovo = await checkInSessao(ctxT1, id);
-    expect(denovo.error).toMatch(/já iniciada|não encontrada/i);
+    expect(denovo.error).toBe("Check-in já registrado para esta sessão.");
   });
 
   test("UPDATE não reaponta a sessão para paciente/profissional de outra clínica", async () => {

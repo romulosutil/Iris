@@ -19,3 +19,24 @@ export function codigoPg(e: unknown): string | undefined {
     (e as { cause?: { code?: string } } | undefined)?.cause?.code
   );
 }
+
+/**
+ * Nome da constraint violada, quando o Postgres o reporta (23P01/23505/23503).
+ * Mesma dualidade raiz/`.cause` do `codigoPg`, e pelos dois nomes de campo:
+ * `constraint_name` (postgres-js) e `constraint` (node-postgres) — ler só um
+ * faz o chamador cair no fallback e atribuir a violação ao eixo errado.
+ */
+export function constraintPg(e: unknown): string | undefined {
+  const raiz = e as
+    | { constraint_name?: string; constraint?: string; cause?: unknown }
+    | undefined;
+  const causa = raiz?.cause as
+    | { constraint_name?: string; constraint?: string }
+    | undefined;
+  return (
+    raiz?.constraint_name ??
+    raiz?.constraint ??
+    causa?.constraint_name ??
+    causa?.constraint
+  );
+}

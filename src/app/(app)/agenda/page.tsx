@@ -36,8 +36,6 @@ function dataPorExtenso(diaISO: string): string {
   }).format(new Date(`${diaISO}T12:00:00${FUSO_CLINICA_OFFSET}`));
 }
 
-
-
 export function ItemPendencia({
   sessao,
   tipo,
@@ -52,7 +50,7 @@ export function ItemPendencia({
       como="li"
       title={
         <Cluster gap="sm" className="items-center">
-          <span className="font-display font-bold text-lg">
+          <span className="font-display text-lg font-bold">
             {horaDaSessao(sessao.agendadaPara)}
           </span>
           <EstadoBadge estado={sessao.estado} />
@@ -62,7 +60,10 @@ export function ItemPendencia({
         <span>
           {sessao.pacienteNome ?? "Paciente (acesso restrito)"}
           {sessao.terapeutaNome ? (
-            <span className="text-[var(--text-secondary)]"> · {sessao.terapeutaNome}</span>
+            <span className="text-[var(--text-secondary)]">
+              {" "}
+              · {sessao.terapeutaNome}
+            </span>
           ) : null}
         </span>
       }
@@ -113,11 +114,31 @@ export function SecaoPendencias({
   );
 }
 
+// Valida `dia=YYYY-MM-DD` vindo da URL; inválido (formato ou data inexistente)
+// cai no hoje da clínica.
+function diaValidoOuHoje(dia: string | undefined): string {
+  if (!dia || !/^\d{4}-\d{2}-\d{2}$/.test(dia)) return hojeNaClinica();
+  const [ano = 0, mes = 1, d = 1] = dia.split("-").map(Number);
+  const data = new Date(Date.UTC(ano, mes - 1, d));
+  const valida =
+    data.getUTCFullYear() === ano &&
+    data.getUTCMonth() === mes - 1 &&
+    data.getUTCDate() === d;
+  return valida ? dia : hojeNaClinica();
+}
 
-export default async function AgendaPage() {
+const VISOES = ["matriz", "terapeuta", "horario"] as const;
+
+export default async function AgendaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ dia?: string; visao?: string }>;
+}) {
   const ctx = await getTenantContext();
-  const dia = hojeNaClinica();
-  const podeAgendar = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
+  const params = await searchParams;
+  const dia = diaValidoOuHoje(params.dia);
+  const podeAgendar =
+    ctx.role === "coordenador" || ctx.role === "admin_recepcao";
   const podeGerir = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
   const [sessoes, terapeutasRaw, pendentesConsolidacao, pendentesReposicao] =
     await Promise.all([
@@ -126,7 +147,15 @@ export default async function AgendaPage() {
       podeGerir ? pendentesDeConsolidacao(ctx) : Promise.resolve([]),
       podeGerir ? reposicoesPendentes(ctx) : Promise.resolve([]),
     ]);
-  const terapeutas = terapeutasRaw.map((t) => ({ id: t.id, nome: t.name ?? "—" }));
+  const terapeutas = terapeutasRaw.map((t) => ({
+    id: t.id,
+    nome: t.name ?? "—",
+  }));
+  const visaoInicial = VISOES.includes(params.visao as (typeof VISOES)[number])
+    ? (params.visao as (typeof VISOES)[number])
+    : podeGerir
+      ? "matriz"
+      : "terapeuta";
 
   return (
     <Stack gap="lg" className="pt-2 md:pt-4">
@@ -166,8 +195,9 @@ export default async function AgendaPage() {
         podeGerir={podeGerir}
         diaExtenso={dataPorExtenso(dia)}
         diaISO={dia}
+        ehHoje={dia === hojeNaClinica()}
+        visaoInicial={visaoInicial}
       />
     </Stack>
   );
 }
-
