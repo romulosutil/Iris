@@ -87,7 +87,7 @@ export const Input = React.forwardRef<
     <div
       onClick={handleWrapperClick}
       className={cn(
-        "group flex w-full items-stretch rounded-[var(--radius-control)] border-[length:var(--border-brutal)] border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)]",
+        "group flex w-full items-stretch rounded-[var(--radius-control)] border-[length:var(--border-brutal-width)] border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)]",
         !disabled && "cursor-text",
         "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
         !disabled &&

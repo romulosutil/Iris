@@ -46,7 +46,7 @@ function estiloVariante(v: Variante): string {
     case "terciaria":
     case "tertiary":
       return cn(
-        "border-[length:var(--border-brutal)] border-transparent bg-transparent text-[var(--text-secondary)] shadow-none rounded-[var(--radius-control)]",
+        "border-[length:var(--border-brutal-width)] border-transparent bg-transparent text-[var(--text-secondary)] shadow-none rounded-[var(--radius-control)]",
         "hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
         "disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]",
       );

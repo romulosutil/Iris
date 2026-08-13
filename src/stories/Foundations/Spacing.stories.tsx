@@ -245,7 +245,7 @@ export const Spacing: StoryObj = {
                 <strong>Uso da Escala de 4px/8px:</strong> Utilize exclusivamente classes utilitárias de espaçamento baseadas na escala (<code>p-1</code>, <code>p-2</code>, <code>p-4</code>, <code>p-6</code>, <code>p-8</code>).
               </li>
               <li>
-                <strong>Borda Brutal Uniforme:</strong> Use a classe de borda brutalista nativa ou a variável <code>border-[length:var(--border-brutal)]</code> (1.5px) para manter a uniformidade de delineamento.
+                <strong>Borda Brutal Uniforme:</strong> Use a classe de borda brutalista nativa ou a variável <code>border-[length:var(--border-brutal-width)]</code> (2px) para manter a uniformidade de delineamento.
               </li>
               <li>
                 <strong>Sombras Rígidas Físicas:</strong> Aplique <code>shadow-brutal</code> (Modo Clínico) ou <code>shadow-brutal-sm</code> (Modo Família) para refletir o nível correto de elevação mecânica.

@@ -32,7 +32,7 @@ export function CompareRow({
     <div
       data-divergente={divergente}
       className={cn(
-        "flex flex-col gap-2 rounded-[var(--radius-control)] border border-[length:var(--border-brutal)] p-3.5 transition-colors",
+        "flex flex-col gap-2 rounded-[var(--radius-control)] border-[length:var(--border-brutal-width)] p-3.5 transition-colors",
         divergente
           ? "border-status-warning-border bg-status-warning-bg/10"
           : "border-border-brutal/30 bg-surface-card",

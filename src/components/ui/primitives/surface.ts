@@ -44,11 +44,11 @@ type RadiusNivel =
   | "pill";
 
 const bordas: Record<SurfaceVariante, string> = {
-  solida: "border-[length:var(--border-brutal)] border-border-brutal",
+  solida: "border-[length:var(--border-brutal-width)] border-border-brutal",
   sugerida:
-    "border-[length:var(--border-brutal)] border-dashed border-status-ia-border",
+    "border-[length:var(--border-brutal-width)] border-dashed border-status-ia-border",
   candidata:
-    "border-[length:var(--border-brutal)] border-dotted border-status-info-bg",
+    "border-[length:var(--border-brutal-width)] border-dotted border-status-info-bg",
 };
 
 const elevacoes: Record<ElevationNivel, string> = {
