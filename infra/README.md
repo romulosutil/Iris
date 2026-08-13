@@ -1430,6 +1430,32 @@ estiver, use o mesmo valor em vez de gerar outro.
 > Salvar env **não aplica sozinho**: é preciso clicar em `Implantar`, e isso
 > reconstrói o serviço a partir do HEAD de `main`.
 
+### Passo 1.5 — confirmar que a rota existe antes de abrir o painel
+
+Trinta segundos que evitam depurar o serviço errado. De qualquer máquina, sem
+credencial nenhuma:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  https://irisclinica.ia.br/api/internal/billing/fechar-ciclos
+
+curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  https://irisclinica.ia.br/api/internal/billing/rota-que-nao-existe
+```
+
+Esperado: **401** na primeira e **404** na segunda. O controle negativo não é
+zelo excessivo — é o que torna o 401 significativo em vez de resposta genérica
+do proxy. Medido assim em 13/08/2026.
+
+Se a primeira devolver **404**, pare: a rota não está no deploy de produção, e
+provisionar o job em cima disso só produziria `HTTP 404` a cada tick. Foi
+exatamente o que aconteceu com o webhook do Mercado Pago em 04/08.
+
+**O que esse 401 NÃO prova:** que `BILLING_JOB_TOKEN` está configurado no serviço
+`App`. Com a env ausente, `autorizado()` devolve `false` e a resposta é um 401
+idêntico — os dois casos são indistinguíveis de fora. Quem separa é olhar a aba
+`Ambiente` do `App`, como manda o Passo 1.
+
 ### Passo 2 — criar o serviço
 
 Mesmo desenho dos serviços de backup e escalonamento. Os nomes de aba abaixo são
