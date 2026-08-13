@@ -200,11 +200,21 @@ carrega o código lá dentro** em vez de inspecionar o Dockerfile. Roda no CI
 (`.github/workflows/carga-imagens-infra.yml`) e igual na sua máquina:
 
 ```bash
-scripts/ci/carga-imagens-infra.sh                 # os dois serviços
+scripts/ci/carga-imagens-infra.sh                 # os três serviços
 scripts/ci/carga-imagens-infra.sh escalonamento   # só um
+scripts/ci/carga-imagens-infra.sh billing         # só a imagem do job de faturamento
 ```
 
-Como ler o resultado — vale para os dois serviços:
+`infra/billing/Dockerfile` (#288) entra na mesma varredura por um motivo
+**diferente**: ele não instala dependência nenhuma, de propósito — o job é um
+gatilho magro que só faz um POST, e toda a lógica de faturamento mora na rota do
+app, onde ela compartilha o `node_modules`. O que se prova nessa imagem, então,
+não é resolução de pacote: é que os `COPY` acertaram o caminho (o contexto de
+build é a raiz do repo), que o `bash` do agendador continua lá, e que a guarda
+de execução do `.mjs` dispara nas duas formas de invocação. Nessa imagem, um
+`exit 0` silencioso significaria "o faturamento rodou" quando nada rodou.
+
+Como ler o resultado — vale para os três serviços:
 
 | resultado                                       | leitura                                                  |
 | ----------------------------------------------- | -------------------------------------------------------- |
@@ -222,6 +232,12 @@ arquivo dentro da imagem de produção). Sem ele, uma dependência ausente que s
 é usada em `await import()` dentro de `try/catch` — o caso do `resend` em
 `scripts/lib/resend-rt.mjs` — passaria verde no teste de carga e o e-mail ao RT
 falharia **em silêncio** em produção.
+
+Esse passo distingue dois casos que antes ele confundia (corrigido na #288):
+**zero arquivos varridos** continua sendo erro (o `COPY` mudou de caminho e o
+serviço subiria vazio), mas **arquivos varridos com zero specifier externo**
+é verde legítimo — é exatamente o estado desejado da imagem de billing, que não
+tem dependência npm nenhuma por desenho.
 
 > Se uma dependência npm nova entrar no caminho destes serviços, ela precisa ir
 > na linha de instalação do Dockerfile do serviço. Adicionar no `package.json`
@@ -807,10 +823,10 @@ restaurável.`
 
 #### Exit codes — só 0 é aprovação
 
-| Exit | Significado                                                                                        | O que fazer                                                                                        |
-| ---- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `0`  | Decifrou, é restaurável, os globals trazem as roles **e** o sha256 do dump bateu com o esperado.    | Aprovado. É o único desfecho que imprime `RÉPLICA OFF-SITE VERIFICADA` e o único que fecha a #105. |
-| `1`  | Falha de qualquer checagem — inclusive **sha divergente** e carimbo abaixo do `OFFSITE_MIN_CARIMBO`. | Parar e diagnosticar (ver os dois modos de falha abaixo). Nunca "tentar de novo e seguir".         |
+| Exit | Significado                                                                                             | O que fazer                                                                                                         |
+| ---- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Decifrou, é restaurável, os globals trazem as roles **e** o sha256 do dump bateu com o esperado.        | Aprovado. É o único desfecho que imprime `RÉPLICA OFF-SITE VERIFICADA` e o único que fecha a #105.                  |
+| `1`  | Falha de qualquer checagem — inclusive **sha divergente** e carimbo abaixo do `OFFSITE_MIN_CARIMBO`.    | Parar e diagnosticar (ver os dois modos de falha abaixo). Nunca "tentar de novo e seguir".                          |
 | `2`  | Decifrou e é restaurável, mas **procedência não provada**: `OFFSITE_EXPECTED_SHA256` não foi informado. | Imprime `VERIFICAÇÃO PARCIAL:` e **não** imprime o banner. **Exit 2 não é aprovação** — repetir com o sha esperado. |
 
 O motivo de `2` existir em vez de virar `0`: rodar sem o hash ainda tem valor
@@ -1370,3 +1386,239 @@ O dry-run roda `app_auto_arquivar_pacientes()` **de verdade**, dentro de uma
 transação, e faz `ROLLBACK` no fim — de propósito não reimplementa o predicado em
 JS, porque um dry-run que reescreve a regra só testa a cópia. Ele **não** atualiza
 o heartbeat, para uma inspeção manual jamais mascarar um job parado.
+
+## Job de fechamento de ciclo de faturamento (#36, #288)
+
+Quem transforma "cliente usou o produto" em "cliente foi cobrado" é este
+serviço. Ele **não** apura consumo, **não** calcula preço e **não** fala com o
+Asaas: faz um POST autenticado em `/api/internal/billing/fechar-ciclos`, e é
+essa rota, dentro do app, que faz as três coisas. A razão está em
+`infra/billing/Dockerfile` — a imagem de job não herda o `node_modules` do app,
+e duplicar a tabela de preços num `.mjs` paralelo geraria **cobrança errada em
+silêncio**: a mesma classe de bug da #156, com dinheiro no lugar de processo
+morto.
+
+> **Por que isto é P1.** Sem este serviço no ar, um ciclo vencido simplesmente
+> não fecha: `pacientes_contados` fica em 0, nenhuma cobrança é emitida e o
+> cliente ativo nunca é faturado — **sem erro em lugar nenhum**, porque o job
+> que falharia é o job que não existe. Medido em produção em 13/08/2026: existe
+> um ciclo real de um cliente real vencendo em **12/09/2026**.
+
+### Passo 1 — o segredo do disparo, nos DOIS serviços
+
+Gere o token (no seu terminal, nunca em chat):
+
+```bash
+openssl rand -hex 32
+```
+
+Esse valor vai, **idêntico**, em dois lugares:
+
+| Serviço no painel | Variável            | Papel                          |
+| ----------------- | ------------------- | ------------------------------ |
+| `App` (o Next)    | `BILLING_JOB_TOKEN` | **valida** o header do disparo |
+| `billing`         | `BILLING_JOB_TOKEN` | **envia** o header             |
+
+Configurar só um dos dois dá 401 em 100% dos ticks, para sempre — e o log do job
+vai dizer `HTTP 401`, não "faltou o token no App". Antes de criar o serviço,
+abra `App` → aba `Ambiente` e **olhe** se `BILLING_JOB_TOKEN` já está lá; se
+estiver, use o mesmo valor em vez de gerar outro.
+
+> ⚠️ A aba `Ambiente` do Easypanel mostra todos os segredos em texto claro, e o
+> painel roda em HTTP sem TLS. Não tire screenshot dessa tela.
+
+> Salvar env **não aplica sozinho**: é preciso clicar em `Implantar`, e isso
+> reconstrói o serviço a partir do HEAD de `main`.
+
+### Passo 2 — criar o serviço
+
+Mesmo desenho dos serviços de backup e escalonamento. Os nomes de aba abaixo são
+os que aquelas seções já usam e que já foram executados com sucesso; **se o
+painel tiver mudado e você não achar um campo, procure pelo objetivo descrito e
+confira antes de prosseguir — não adivinhe o nome do botão.**
+
+1. **Novo serviço** → tipo **Aplicativo** → nome `billing` → Code Source
+   `romulosutil/Iris` → Builder **Dockerfile**, path `infra/billing/Dockerfile`,
+   build context na **raiz**, branch `main`.
+2. **Volume persistente** (aba `Armazenamento`) montado em **`/heartbeat`**. Sem
+   ele o heartbeat some a cada restart, e "heartbeat parado" passa a significar
+   "o container reiniciou" — ruído que apaga o sinal.
+3. **Env vars** (aba `Ambiente`) — estas quatro, e **só** estas:
+
+   ```
+   BILLING_JOB_URL=https://irisclinica.ia.br/api/internal/billing/fechar-ciclos
+   BILLING_JOB_TOKEN=<o mesmo valor do serviço App>
+   INTERVALO_S=3600
+   BILLING_HEARTBEAT_DIR=/heartbeat
+   ```
+
+   **`BILLING_PROVIDER`, `BILLING_PROVIDER_API_KEY`, `ASAAS_BASE_URL` e
+   `ASAAS_WEBHOOK_TOKEN` NÃO entram aqui.** Elas pertencem ao serviço `App`, que
+   é quem fala com o gateway — e já estão lá desde a virada de chave de
+   10/08/2026. Copiar a chave da API do Asaas para este container espalharia o
+   segredo por mais um lugar sem que nada a usasse.
+
+4. **Comando** (aba `Avançado` → campo **Comando**):
+
+   ```
+   /app/agendador.sh
+   ```
+
+   **Este Easypanel (v2.31.0) não tem cron para serviço de app** — não existe
+   campo "Schedule" nem tipo de serviço "Cron". Por isso o laço é o
+   `agendador.sh` do repo: o container fica de pé dormindo (poucos MB de RSS) e
+   acorda a cada `INTERVALO_S`.
+
+5. **`Réplicas` = 1.** Não é opcional: duas réplicas disparam dois POST no mesmo
+   instante. O `UNIQUE (clinic_id, inicio)` de `billing_cycle` e a guarda de
+   idempotência da emissão protegem contra cobrança duplicada, mas duas réplicas
+   transformam essa proteção em corrida de rotina em vez de barreira de última
+   instância. Não ligar `Tempo de inatividade zero` (não é serviço web).
+
+**Por que 3600s e não 60s como o escalonamento:** aqui não há prazo clínico. A
+apuração roda depois do fim do ciclo, o ciclo é de 30 dias e o disparo é
+idempotente do lado da rota — até uma hora de atraso não muda nada para o
+cliente. Mas **não aumente** esse intervalo: a folga entre o fim do ciclo e a
+apuração é a janela do defeito da #216 (a varredura de auto-arquivamento caindo
+nessa fresta tira do ciclo um paciente que ficou ativo o ciclo inteiro).
+Aumentar aqui aumenta a janela; encurtar não fecha o furo — quem fecha é a #216.
+
+### Como saber que deu certo
+
+Logo depois do primeiro deploy, **Logs** do serviço. Primeira linha esperada:
+
+```
+[agendador-billing] 2026-08-13T20:00:00Z ativo. intervalo=3600s · heartbeat=/heartbeat/.ultimo-fechamento
+```
+
+E, a cada hora, uma linha JSON única do disparo (aqui quebrada em várias linhas
+para caber na página; no log ela é uma só):
+
+```json
+{
+  "job": "fechamento-ciclo-billing",
+  "quando": "2026-08-13T20:00:01.123Z",
+  "dryRun": false,
+  "ok": true,
+  "status": 200,
+  "falha": null,
+  "erro": null,
+  "corpo": "{\"ok\":true,\"ciclosProcessados\":0,\"falhas\":[],\"resultados\":[]}"
+}
+```
+
+`"ciclosProcessados":0` é o resultado normal e saudável quando nenhum ciclo
+venceu. **Cuidado com a leitura:** `ok:true` com `ciclosProcessados:0` prova que
+o disparo chegou na rota e foi autorizado — **não** prova que a apuração conta
+certo, nem que o preço sai certo, nem que a cobrança é emitida, porque com zero
+ciclos vencidos nada disso executou. A prova das três é o ensaio mais abaixo.
+
+Confirme o **heartbeat**. Easypanel → serviço `billing` → Console:
+
+```bash
+cat /heartbeat/.ultimo-fechamento
+```
+
+Timestamp ISO de menos de uma hora atrás. Repita depois do tick seguinte: o
+valor tem que avançar.
+
+### O detector de falha — e por que o heartbeat não basta
+
+O heartbeat só avança em disparo bem-sucedido, então ele pega "o job está
+falhando". Ele **não** pega o modo de falha que originou a #288: **o serviço não
+existir**. Um serviço que nunca foi criado não tem heartbeat para congelar nem
+log para ficar vazio — foi assim que a pendência atravessou de 04/08 a 13/08 sem
+ninguém notar.
+
+O detector que pega os dois casos olha o **efeito**, não o processo. Rode no
+Postgres de produção:
+
+```sql
+-- Qualquer linha aqui = faturamento parado. Zero linhas = saudável.
+SELECT bc.id, bc.clinic_id, bc.status, bc.fim, now() - bc.fim AS atraso, bc.erro
+  FROM billing_cycle bc
+ WHERE bc.status = 'aberto'
+   AND bc.fim <= now() - interval '2 hours'
+ ORDER BY bc.fim;
+```
+
+Duas horas de folga = dois ticks perdidos, o bastante para absorver um redeploy
+normal e curto o bastante para não deixar um mês passar. **Uma linha retornada é
+incidente**, não manutenção: um ciclo venceu e ninguém foi cobrado.
+
+> **Não existe alarme automático para isto hoje.** Não há monitor externo em
+> nenhum serviço deste projeto — backup, escalonamento e arquivamento têm o
+> mesmo buraco, e todos dependem de alguém abrir o painel. Enquanto não houver,
+> a consulta acima é responsabilidade humana, com cadência mínima **mensal, na
+> semana do vencimento do ciclo**. Dizer "o job avisa se falhar" seria falso:
+> ele avisa no log de um painel que ninguém abre por hábito.
+
+### Ensaio manual (é isto que fecha o checkbox da #288)
+
+Não espere o vencimento real. No Console do serviço `billing`:
+
+```bash
+# 1. Ensaio SEM emitir cobrança: apura, calcula preço, NÃO chama o gateway e
+#    NÃO avança o ciclo.
+node /app/scripts/fechamento-ciclo-billing.mjs --once --dry-run
+
+# 2. Disparo real (só depois de o dry-run sair ok:true)
+node /app/scripts/fechamento-ciclo-billing.mjs --once
+```
+
+> **`--dry-run` não é read-only.** Ele pula a emissão da cobrança e o avanço do
+> ciclo, mas a apuração (`billing_apurar_ciclo`) apaga e reinsere
+> `billing_cycle_patient` do ciclo. É recomputação idempotente, não mutação de
+> estado de cobrança — mas não o chame de "consulta".
+
+Depois do disparo real, **meça no banco** (`git log` não prova execução):
+
+```sql
+SELECT bc.status,
+       bc.pacientes_contados,
+       bc.valor_centavos,
+       bc.provider_charge_id IS NOT NULL AS tem_charge,
+       bc.apurado_em, bc.cobranca_emitida_em, bc.cobrado_em, bc.erro,
+       bc.inicio, bc.fim
+  FROM billing_cycle bc
+ ORDER BY bc.fim DESC
+ LIMIT 5;
+```
+
+O que caracteriza um fechamento bem-sucedido:
+
+| Coluna                         | Antes        | Depois                                               |
+| ------------------------------ | ------------ | ---------------------------------------------------- |
+| `status`                       | `aberto`     | `aguardando_pagamento` (ou `pago`, se o valor for 0) |
+| `pacientes_contados`           | `0`          | a contagem real de fichas ativas                     |
+| `valor_centavos`               | `0`          | o preço da faixa correspondente                      |
+| `provider_charge_id`           | `NULL`       | preenchido — **só** se `valor_centavos > 0`          |
+| `subscription.ciclo_atual_fim` | data vencida | +30 dias, encadeado pelo `fim` anterior              |
+
+**Caso de borda que engana:** com `pacientes_contados = 0` o preço é 0, o ciclo é
+marcado `pago` na hora e **nenhuma cobrança é emitida**. Esse é o comportamento
+correto, mas um fechamento assim **não exercita o caminho do gateway** — verde
+ali não é prova de que a emissão funciona. Para provar a emissão, o ciclo precisa
+ter pelo menos uma ficha ativa.
+
+### O que fazer se der errado
+
+1. **`"status":401` na linha JSON.** O `BILLING_JOB_TOKEN` do serviço `App` está
+   ausente ou diferente do deste serviço. Abra as duas abas `Ambiente` e **olhe**
+   os valores — não confie em "eu já configurei". Depois de corrigir, clique em
+   `Implantar` no serviço alterado.
+2. **`"falha":"rede"`.** O container não alcança `BILLING_JOB_URL`. Confira a URL
+   (é a pública, com `https://`, não host interno).
+3. **`"falha":"timeout"`.** Sem resposta em 30s. **Não conclua que o fechamento
+   não rodou** — a rota pode ter concluído do outro lado. Meça no banco antes de
+   disparar de novo. O disparo é idempotente por ciclo, mas o diagnóstico não
+   pode afirmar uma causa que a evidência não distingue.
+4. **`"status":500`.** O corpo inteiro da resposta vem na linha JSON — leia-o. É
+   a rota do app que falhou, não o job.
+5. **`ok:true` com `falhas` não vazio no corpo.** Uma clínica falhou e as outras
+   seguiram, por desenho. O `clinicId` e o erro estão no corpo, e
+   `billing_cycle.erro` guarda o texto.
+6. **Enquanto o job está parado, ninguém é cobrado — e nada é perdido.** O trilho
+   falha aberto de propósito: a varredura olha o estado atual, não um cursor,
+   então quando o serviço voltar ele pega tudo que venceu. Falta de cobrança é
+   recuperável; cobrança errada não.

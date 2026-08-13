@@ -52,6 +52,7 @@ export MSYS_NO_PATHCONV=1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 readonly TAG_ESCALONAMENTO="iris-escalonamento-ci:local"
 readonly TAG_BACKUP="iris-backup-ci:local"
+readonly TAG_BILLING="iris-billing-ci:local"
 
 log_info() { printf '[carga-imagens] %s\n' "$*"; }
 log_ok() { printf '[carga-imagens] OK: %s\n' "$*"; }
@@ -236,17 +237,81 @@ carga_backup() {
 		-- docker run --rm "${TAG_BACKUP}" ./verify-offsite.sh
 }
 
+# --- billing -----------------------------------------------------------------
+# Ponto cego DIFERENTE do escalonamento e do backup: esta imagem não instala
+# NADA de propósito (infra/billing/Dockerfile), então ERR_MODULE_NOT_FOUND por
+# dependência ausente não é o risco de hoje. O risco aqui é COPY com caminho
+# errado (o contexto de build é a RAIZ do repo, não infra/billing/), `apk add
+# bash` sumindo, e a guarda de execução do .mjs não disparando na forma
+# relativa — que foi exatamente o defeito da #153 no escalonamento: o processo
+# saía 0 sem fazer nada, e "saiu 0" é indistinguível de "faturou".
+carga_billing() {
+	log_info "buildando ${TAG_BILLING}..."
+	docker build -f infra/billing/Dockerfile -t "${TAG_BILLING}" .
+
+	# Sem env, o script para na guarda ANTES de qualquer fetch — nenhuma rota de
+	# produção é tocada por este teste. O texto esperado é o do próprio script
+	# (scripts/fechamento-ciclo-billing.mjs), que NOMEIA as variáveis ausentes:
+	# uma mensagem genérica aqui viraria caçada no painel.
+	esperar_falha_com \
+		"billing: carga por caminho ABSOLUTO" \
+		"variável(is) de ambiente ausente(s): BILLING_JOB_URL, BILLING_JOB_TOKEN" \
+		-- docker run --rm "${TAG_BILLING}" \
+		node /app/scripts/fechamento-ciclo-billing.mjs --once
+
+	# Forma RELATIVA: é a documentada em infra/docker-compose.yml e a que a #153
+	# quebrou no gêmeo. Se a guarda `import.meta.url === process.argv[1]`
+	# regredir, o processo sai 0 sem disparar nada — e esta asserção pega o
+	# exit 0, porque `esperar_falha_com` trata exit 0 como falha do teste.
+	esperar_falha_com \
+		"billing: carga por caminho RELATIVO (forma do compose)" \
+		"variável(is) de ambiente ausente(s): BILLING_JOB_URL, BILLING_JOB_TOKEN" \
+		-- docker run --rm -w /app "${TAG_BILLING}" \
+		node scripts/fechamento-ciclo-billing.mjs --once
+
+	# Resolve TODO specifier dos arquivos copiados, dinâmico incluído. Hoje o
+	# script importa só `node:url` — e é justamente por isso que este passo entra
+	# agora: ele é o guarda-corpo do dia em que alguém acrescentar um import aqui
+	# (o que só é seguro se a dependência chegar na imagem, e nesta imagem NADA
+	# chega). O verificador entra por stdin para não virar arquivo na imagem.
+	esperar_sucesso \
+		"billing: todo import resolve na imagem (inclusive os dinâmicos)" \
+		-- bash -c "docker run --rm -i -w /app -e ALVO=/app/scripts '${TAG_BILLING}' node --input-type=module < scripts/ci/verificar-deps-imagem.mjs"
+
+	# O agendador usa `set -Eeuo pipefail` e `[[ ]]`: sem o `apk add bash` do
+	# Dockerfile a imagem sobe e o laço morre na primeira linha.
+	esperar_sucesso \
+		"billing: sintaxe do agendador.sh (bash presente)" \
+		-- docker run --rm "${TAG_BILLING}" bash -n /app/agendador.sh
+
+	# O CMD do Dockerfile aponta /app/agendador.sh por caminho absoluto fixo. Se
+	# o COPY mudar de lugar, o container só falha em produção.
+	esperar_sucesso \
+		"billing: /app/agendador.sh executável (caminho fixo do CMD)" \
+		-- docker run --rm "${TAG_BILLING}" test -x /app/agendador.sh
+
+	# O agendador valida env ANTES de entrar no laço e sai 1. Rodá-lo sem env
+	# prova as duas coisas: que a guarda nomeia a variável, e que este teste não
+	# trava — um agendador que entrasse no laço aqui penduraria o CI.
+	esperar_falha_com \
+		"billing: agendador para na guarda de env (não entra em laço)" \
+		"variável(is) de ambiente ausente(s)" \
+		-- docker run --rm "${TAG_BILLING}" /app/agendador.sh
+}
+
 # --- main --------------------------------------------------------------------
 alvo="${1:-todos}"
 case "${alvo}" in
 escalonamento) carga_escalonamento ;;
 backup) carga_backup ;;
+billing) carga_billing ;;
 todos)
 	carga_escalonamento
 	carga_backup
+	carga_billing
 	;;
 *)
-	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup' ou nenhum (todos)."
+	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing' ou nenhum (todos)."
 	exit 2
 	;;
 esac

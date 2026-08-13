@@ -2,11 +2,17 @@ name: Carga das imagens de infra
 
 # Fecha a #157. `pnpm test`, `pnpm typecheck` e `pnpm lint` rodam contra a
 # ÁRVORE DO REPO — onde o arquivo importado existe e a dependência está no
-# node_modules da raiz. As imagens de `infra/escalonamento/` e `infra/backup/`
-# não compartilham nem uma coisa nem outra (copiam arquivo a arquivo e instalam
-# dependência à mão, de propósito), então os três ficam VERDES com a imagem
-# quebrada. Foi assim que a #126 derrubou o motor de escalonamento em produção
-# por ~20 minutos com ERR_MODULE_NOT_FOUND, com review e CI verdes (PR #156).
+# node_modules da raiz. As imagens de `infra/escalonamento/`, `infra/backup/` e
+# `infra/billing/` não compartilham nem uma coisa nem outra (copiam arquivo a
+# arquivo e instalam dependência à mão, de propósito), então os três ficam
+# VERDES com a imagem quebrada. Foi assim que a #126 derrubou o motor de
+# escalonamento em produção por ~20 minutos com ERR_MODULE_NOT_FOUND, com review
+# e CI verdes (PR #156).
+#
+# A imagem de billing (#288) entra aqui por um motivo distinto: ela não instala
+# NADA de propósito, então o que se prova nela é COPY, `bash` e a guarda de
+# execução do `.mjs` — e um exit 0 silencioso ali significaria "o faturamento
+# rodou" quando nada rodou.
 #
 # Este workflow não inspeciona o Dockerfile: ele CONSTRÓI a imagem e CARREGA o
 # código lá dentro. A lógica toda mora em `scripts/ci/carga-imagens-infra.sh`,
@@ -15,7 +21,7 @@ name: Carga das imagens de infra
 
 on:
   pull_request:
-    # Só os caminhos que ENTRAM nas imagens (o que os dois Dockerfiles copiam ou
+    # Só os caminhos que ENTRAM nas imagens (o que os três Dockerfiles copiam ou
     # instalam), mais o próprio workflow e o script. `pnpm-lock.yaml` está aqui
     # porque as versões de `postgres`/`resend` na imagem do escalonamento são
     # pinadas à mão e precisam acompanhar o lockfile — um bump lá tem que
@@ -24,6 +30,7 @@ on:
       - "scripts/**"
       - "infra/escalonamento/**"
       - "infra/backup/**"
+      - "infra/billing/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   push:
@@ -32,6 +39,7 @@ on:
       - "scripts/**"
       - "infra/escalonamento/**"
       - "infra/backup/**"
+      - "infra/billing/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   # Botão manual: útil para reexercitar as imagens depois de uma mudança de base
@@ -51,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Um job só, sequencial, em vez de matrix por serviço: são dois builds
+      # Um job só, sequencial, em vez de matrix por serviço: são três builds
       # alpine pequenos e o log fica em um lugar só na hora de ler o incidente.
       - name: Buildar e carregar as imagens de infra
         run: bash scripts/ci/carga-imagens-infra.sh
