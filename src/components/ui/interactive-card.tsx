@@ -3,6 +3,10 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import { surface } from "@/components/ui/primitives/surface";
+import {
+  comporRefs,
+  mesclarPropsSlot,
+} from "@/components/ui/primitives/slot";
 
 
 type EpistemicState = "fact" | "suggestion" | "conquistado" | "candidato";
@@ -78,46 +82,47 @@ export const InteractiveCard = React.forwardRef<HTMLElement, InteractiveCardProp
     const isDisabled = disabled;
 
     if (asChild && React.isValidElement(children)) {
-      const child = children as React.ReactElement<any>;
-      const childProps = isLink
-        ? {
-            href: isDisabled ? undefined : href,
-            "aria-disabled": isDisabled ? "true" : undefined,
-            tabIndex: isDisabled ? -1 : undefined,
-            onClick: (e: React.MouseEvent<any>) => {
-              if (isDisabled) {
-                e.preventDefault();
-                return;
-              }
-              child.props.onClick?.(e);
-              onClick?.(e as any);
-            },
-          }
-        : {
-            disabled: isDisabled,
-            onClick: (e: React.MouseEvent<any>) => {
-              child.props.onClick?.(e);
-              onClick?.(e as any);
-            },
-          };
-
-      return React.cloneElement(child, {
-        ref,
-        className: cn(cardClasses, child.props.className),
-        ...props,
-        ...childProps,
-        children: (
-          <>
-            {accentBar}
-            {titleHeading}
-            {child.props.children ? (
-              <span className="block text-text-body w-full">
-                {child.props.children}
-              </span>
-            ) : null}
-          </>
-        ),
-      });
+      const child = children as React.ReactElement<
+        Record<string, unknown> & { ref?: React.Ref<HTMLElement> }
+      >;
+      const mescladas = mesclarPropsSlot(
+        {
+          ...props,
+          onClick,
+          className: cardClasses,
+          ...(isLink ? { href } : {}),
+        },
+        child.props,
+      );
+      // React 19: ref é prop comum, vive em child.props.ref.
+      mescladas.ref = comporRefs(ref, child.props.ref);
+      if (isDisabled) {
+        // Espelha o contrato disabled do branch sem asChild: sem navegação
+        // (href removido), sem clique e sem foco por teclado.
+        mescladas["aria-disabled"] = true;
+        mescladas.tabIndex = -1;
+        mescladas.onClick = (evento: React.SyntheticEvent) => {
+          evento.preventDefault();
+        };
+        if (isLink) {
+          mescladas.href = undefined;
+        }
+        if (child.type === "button") {
+          mescladas.disabled = true;
+        }
+      }
+      mescladas.children = (
+        <>
+          {accentBar}
+          {titleHeading}
+          {child.props.children ? (
+            <span className="block text-text-body w-full">
+              {child.props.children as React.ReactNode}
+            </span>
+          ) : null}
+        </>
+      );
+      return React.cloneElement(child, mescladas);
     }
 
     const Component = isLink ? "a" : "button";
