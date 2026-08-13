@@ -238,7 +238,7 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
 /**
- * As 13 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16).
+ * As 16 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16).
  *
  * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
  * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
@@ -263,13 +263,15 @@ const FUNCOES_COM_HELPER = [
   "app_salvar_config_emergencia",
   // #36 (0090) — grava o CPF/CNPJ da clínica na ativação da assinatura.
   "app_salvar_cpf_cnpj_clinica",
+  // #262 (0095) — grava dados cadastrais/fiscais da clínica (página Dados).
+  "app_salvar_dados_clinica",
   "app_session_clinica_visivel",
   "app_session_terapeuta_id",
   "app_user_in_clinic",
 ];
 
 /**
- * As 11 funções que chamam app_user_role_exigido() (0093 + 0094, D23).
+ * As 12 funções que chamam app_user_role_exigido() (0093 + 0094, D23).
  */
 const FUNCOES_COM_USER_ROLE_HELPER = [
   "app_alerta_risco_visivel",
@@ -282,6 +284,8 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
   "app_report_visivel",
   "app_salvar_config_emergencia",
   "app_salvar_cpf_cnpj_clinica",
+  // #262 (0095) — exige papel coordenador para editar dados da clínica.
+  "app_salvar_dados_clinica",
   "app_session_clinica_visivel",
 ];
 
@@ -412,7 +416,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 15 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 16 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -425,7 +429,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(15);
+    expect(FUNCOES_COM_HELPER.length).toBe(16);
   });
 
   // ─── 2c. D23: guards de papel e identidade (0093) ──────────────────────────
@@ -458,7 +462,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(["app_user_id_atual"]);
   });
 
-  test("as 11 funções de papel chamam app_user_role_exigido() — conjunto exato", async () => {
+  test("as 12 funções de papel chamam app_user_role_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -468,7 +472,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ROLE_HELPER);
-    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(11);
+    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(12);
   });
 
   test("as 6 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {

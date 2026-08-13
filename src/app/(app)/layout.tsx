@@ -20,7 +20,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // #122 §4.2.1, ação 1 — estágio 2 satura a clínica inteira, não só a fila de
   // quem tem acesso ao caso. Sem nome de paciente e sem categoria aqui: quem vê
   // este banner pode não ter acesso clínico ao caso (H3 aplicado à tela).
-  const { quantidade: riscoEstagio2, protocoloInterno } = await estadoEstagio2(ctx);
+  const { quantidade: riscoEstagio2, protocoloInterno } =
+    await estadoEstagio2(ctx);
 
   // Situação da conta: é ela — e não mais só o relógio de trial — que decide o
   // que a faixa mostra. Assinante pagante e trial vencido eram indistinguíveis
@@ -31,10 +32,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   if (ctx.role === "coordenador") {
     itemsNav = [
-      { href: "/validacao", label: "Central de Validação", badge: totalPendencias },
+      {
+        href: "/validacao",
+        label: "Central de Validação",
+        badge: totalPendencias,
+      },
       { href: "/agenda", label: "Agenda" },
       { href: "/pacientes", label: "Pacientes" },
       { href: "/equipe", label: "Equipe" },
+      { href: "/clinica/dados", label: "Dados da Clínica" },
       { href: "/duvidas", label: "Dúvidas" },
     ];
   } else if (ctx.role === "terapeuta") {
@@ -51,7 +57,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       { href: "/pendencias", label: "Pendências", badge: totalPendencias },
     ];
   }
-
 
   return (
     <div className="flex min-h-dvh flex-col bg-[var(--bg-app)]">
@@ -75,7 +80,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             </p>
             {protocoloInterno ? (
               <>
-                <p className="mt-3 font-display font-bold uppercase">
+                <p className="font-display mt-3 font-bold uppercase">
                   Protocolo de Emergência Interno da clínica
                 </p>
                 {/* Texto DA CLÍNICA, exibido como está: o Iris mostra o
@@ -86,7 +91,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               <p className="mt-3">
                 Esta clínica ainda não cadastrou seu Protocolo de Emergência
                 Interno.{" "}
-                <Link href="/clinica/emergencia" className="font-bold underline">
+                <Link
+                  href="/clinica/emergencia"
+                  className="font-bold underline"
+                >
                   Cadastrar o protocolo
                 </Link>
               </p>
