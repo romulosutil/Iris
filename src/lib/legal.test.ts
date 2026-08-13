@@ -51,51 +51,53 @@ describe("VERSAO_TERMO", () => {
     expect(VERSAO_TERMO).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  /**
-   * Fonte única, verificada — não só prometida no comentário de `legal.ts`.
-   *
-   * Até 07/08/2026 `src/app/(auth)/cadastro/logic.ts` redeclarava a string,
-   * e nada apontava isso: os testes acima comparam a constante DAQUI com os
-   * markdown e nunca olhavam a segunda cópia. Subir a versão num lado só faria
-   * o aceite do profissional gravar uma versão que nenhum documento publicado
-   * tem — em `professional_consent`, que é append-only (0058: ninguém tem
-   * DELETE). Evidência jurídica errada e irremovível.
-   *
-   * Varre o código de verdade em vez de confiar na convenção, porque a
-   * duplicata anterior parecia perfeitamente razoável no arquivo onde estava.
-   */
-  it("é declarada em UM só lugar em src/", () => {
+});
+
+describe("Integridade de Fonte Única de Versões Legais", () => {
+  it("garante que VERSAO_TERMO e VERSAO_POLITICA são declaradas exclusivamente em src/lib/legal.ts", () => {
     const raiz = path.join(process.cwd(), "src");
-    const declaracoes: string[] = [];
+    const violacoes: string[] = [];
+    const regexDeclaracao = /\b(const|let|var)\s+(VERSAO_TERMO|VERSAO_POLITICA)\b\s*=/;
 
     const visitar = (dir: string) => {
       for (const entrada of readdirSync(dir, { withFileTypes: true })) {
         const caminho = path.join(dir, entrada.name);
         if (entrada.isDirectory()) {
+          if (entrada.name === "node_modules") continue;
           visitar(caminho);
         } else if (
           /\.tsx?$/.test(entrada.name) &&
-          // Testes ficam de fora: o que importa é o código que roda em
-          // produção. (E este próprio arquivo carrega o padrão como literal,
-          // então se incluísse testes ele casaria consigo mesmo.)
           !/\.test\.tsx?$/.test(entrada.name)
         ) {
-          // Só declaração (`const VERSAO_TERMO =`), não uso nem import. O
-          // sufixo `\b` evita casar `VERSAO_TERMO_MENOR_ATUAL` e os outros
-          // termos de consentimento de paciente, que são versões próprias e
-          // legitimamente separadas desta.
-          if (/\bconst\s+VERSAO_TERMO\b\s*=/.test(readFileSync(caminho, "utf8"))) {
-            declaracoes.push(path.relative(process.cwd(), caminho));
+          const caminhoRelativo = path.relative(process.cwd(), caminho);
+          const caminhoNormalizado = caminhoRelativo.replace(/\\/g, "/");
+          if (caminhoNormalizado === "src/lib/legal.ts") {
+            continue;
+          }
+
+          const conteudo = readFileSync(caminho, "utf8");
+          if (regexDeclaracao.test(conteudo)) {
+            const linhas = conteudo.split(/\r?\n/);
+            for (let i = 0; i < linhas.length; i++) {
+              if (regexDeclaracao.test(linhas[i])) {
+                violacoes.push(`${caminhoNormalizado}:${i + 1} -> ${linhas[i].trim()}`);
+              }
+            }
           }
         }
       }
     };
+
     visitar(raiz);
 
     expect(
-      declaracoes,
-      `VERSAO_TERMO deve ser declarada só em src/lib/legal.ts — quem precisar importa de lá. Encontrada em: ${declaracoes.join(", ")}`,
-    ).toEqual([path.join("src", "lib", "legal.ts")]);
+      violacoes,
+      `[DIAGNOSTICO] Duplicidade de constantes de versão jurídica encontrada!
+As constantes VERSAO_TERMO e VERSAO_POLITICA devem ser declaradas estritamente apenas em src/lib/legal.ts para manter a fonte única da verdade.
+Locais infratores:
+${violacoes.map((v) => `  - ${v}`).join("\n")}
+`,
+    ).toEqual([]);
   });
 });
 

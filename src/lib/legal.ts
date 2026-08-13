@@ -17,6 +17,7 @@
  * documento e esquecer de subir a versão (ou vice-versa), o teste quebra.
  */
 export const VERSAO_TERMO = "2026-08-07";
+export const VERSAO_POLITICA = "2026-08-07";
 
 export type SlugLegal = "termos" | "privacidade";
 
