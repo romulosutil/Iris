@@ -66,7 +66,7 @@
 
 Entregue em `feat/validacao-fila-design-system-248`: migração da fila para `ConfidenceCard`/`CompareRow`/`BatchBar` + `aprovarEvidenciasLote` (transação atômica, elegibilidade re-derivada no servidor via `avaliarFriccao`, locks em ordem determinística, audit por evidência, teto 50). Spec da issue corrigida contra o modelo real (`evidence` append-only — não há `UPDATE ... status`; provável causa da morte do PR #256 do Jules).
 
-**Decisão pendente (Rômulo):** o predicado atual da fila (`baixa_confianca` OU `inconsistente`) torna **zero** itens elegíveis a lote — BatchBar mostra "0 elegíveis / N bloqueados". Ampliar a fila para alta+consistente não confirmadas = mudança de governança separada (tensão com invariante 12/07/2026, `fluxos-e-wireframes.md` §3). Copy da BatchBar ("X de totalItens") também em revisão de produto.
+**Decisão do Rômulo (13/08/2026): mantém invariante 12/07/2026.** Predicado da fila (`baixa_confianca` OU `inconsistente`) continua tornando **zero** itens elegíveis a lote — não amplia a fila para incluir alta+consistente não confirmadas, pois isso abriria caminho de aprovação sem abrir cartão para dado clínico extraído por IA, risco julgado maior que o ganho de fricção. `BatchBar` (`src/components/ui/patterns/batch-bar.tsx`) ajustada para estado informativo quando `totalElegiveis === 0`: sem botão morto "Aprovar Lote (0)", copy explica que todos os itens exigem revisão individual. Decisão de lote de verdade (se algum dia fizer sentido) fica como issue de governança própria, não amarrada ao #248.
 
 ---
 

@@ -33,6 +33,34 @@ export function BatchBar({
 }: BatchBarProps) {
   const podeAprovar = selecionados > 0 && !carregando;
 
+  // Nenhum item elegível a lote (`avaliarFriccao` exige alta confiança E
+  // consistência com histórico) — mostrar controles de seleção/aprovação
+  // seria oferecer uma ação que nunca pode ser executada. Estado informativo
+  // em vez de toolbar morta.
+  if (totalElegiveis === 0) {
+    return (
+      <div
+        role="status"
+        className={cn(
+          "sticky bottom-4 z-30 flex items-center gap-2 p-4 text-sm text-text-secondary",
+          surface("solida", {
+            elevation: "overlay",
+            radius: "xl",
+            className: "bg-surface-card",
+          }),
+          className,
+        )}
+        {...props}
+      >
+        <AlertTriangleIcon size={14} className="shrink-0 text-status-warning-fg" />
+        <span>
+          Nenhum item elegível para aprovação em lote — todos os {totalItens ?? bloqueados}{" "}
+          itens exigem revisão individual (baixa confiança ou inconsistência com histórico).
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       role="toolbar"
