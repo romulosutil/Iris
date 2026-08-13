@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import PrivacidadePage from "@/app/privacidade/page";
 import TermosPage from "@/app/termos/page";
-import { VERSAO_TERMO, type SlugLegal } from "@/lib/legal";
+import { DOCUMENTOS_LEGAIS, type SlugLegal } from "@/lib/legal";
 import { DocumentoLegal } from "./documento-legal";
 
 /**
@@ -57,9 +57,13 @@ describe.each(rotas)("rota pública $nome", ({ Page, slug, titulo }) => {
   it("expõe a versão do documento no texto da página", async () => {
     const { container } = await renderizarRota(Page, slug);
     // Requisito da fatia: a versão precisa estar visível na página renderizada,
-    // não só no markdown — é a string gravada no aceite do profissional.
-    expect(container.textContent).toContain(VERSAO_TERMO);
-    expect(screen.getAllByText(VERSAO_TERMO).length).toBeGreaterThan(0);
+    // não só no markdown. Cada rota é comparada com a constante do SEU
+    // documento (VERSAO_TERMO nos Termos, VERSAO_POLITICA na Política) — se a
+    // página renderizar a constante errada após uma divergência de versões,
+    // este teste cai.
+    const versao = DOCUMENTOS_LEGAIS[slug].versao;
+    expect(container.textContent).toContain(versao);
+    expect(screen.getAllByText(versao).length).toBeGreaterThan(0);
   });
 
   it("tem exatamente um h1, e é o título do documento", async () => {

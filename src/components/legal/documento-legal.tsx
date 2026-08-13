@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import { Container, Stack } from "@/components/ui/layout";
 import { Logo } from "@/components/ui/logo";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { DOCUMENTOS_LEGAIS, VERSAO_TERMO, type SlugLegal } from "@/lib/legal";
+import { DOCUMENTOS_LEGAIS, type SlugLegal } from "@/lib/legal";
 
 /**
  * Renderiza um documento de `docs/legal/` como página pública.
@@ -62,13 +62,16 @@ export async function DocumentoLegal({ slug }: { slug: SlugLegal }) {
             {titulo}
           </h1>
           {/* Versão visível na página renderizada, não só no markdown: é a
-              string gravada no aceite do profissional. */}
+              versão que os testes acoplam ao documento publicado (e, nos
+              Termos, a string gravada no aceite do profissional). A data de
+              vigência deriva da própria versão — a literal solta que morava
+              aqui ficou obsoleta na revisão de 07/08/2026 sem ninguém notar. */}
           <p className="text-sm text-[var(--text-secondary)]">
             Versão{" "}
             <strong className="font-mono font-semibold text-[var(--text-primary)]">
-              {VERSAO_TERMO}
+              {meta.versao}
             </strong>
-            {" — vigente desde 30/07/2026."}
+            {` — vigente desde ${dataBrasileira(meta.versao)}.`}
           </p>
         </Stack>
       </Container>
@@ -98,6 +101,14 @@ export async function DocumentoLegal({ slug }: { slug: SlugLegal }) {
       </Container>
     </Stack>
   );
+}
+
+/**
+ * `2026-08-07` → `07/08/2026`. As versões legais são datas ISO por convenção
+ * (asserido em `legal.test.ts`), então a data de vigência é a própria versão.
+ */
+function dataBrasileira(versaoIso: string): string {
+  return versaoIso.split("-").reverse().join("/");
 }
 
 /**
