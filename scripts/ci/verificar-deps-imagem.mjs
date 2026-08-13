@@ -54,7 +54,21 @@ const RE_DINAMICO = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
 const pendencias = [];
 const vistos = new Set();
 
-for (const arquivo of await listar(ALVO)) {
+const arquivos = await listar(ALVO);
+
+// A varredura não achar ARQUIVO nenhum é o defeito de verdade: significa que o
+// COPY do Dockerfile mudou de caminho e o serviço vai subir vazio. Isso é
+// diferente de achar arquivos sem nenhum import externo — ver o bloco depois do
+// laço, que antes confundia os dois casos.
+if (arquivos.length === 0) {
+  console.error(
+    `[deps-imagem] ERRO: nenhum arquivo .mjs/.js encontrado em ${ALVO} — a varredura não achou nada para ` +
+      `verificar. Verde aqui seria falso: conferir se o COPY do Dockerfile mudou de caminho.`,
+  );
+  process.exit(1);
+}
+
+for (const arquivo of arquivos) {
   const fonte = await readFile(arquivo, "utf8");
   for (const re of [RE_ESTATICO, RE_IMPORT_BARE, RE_DINAMICO]) {
     re.lastIndex = 0;
@@ -70,12 +84,19 @@ for (const arquivo of await listar(ALVO)) {
   }
 }
 
+// Arquivos varridos, zero specifier externo: estado LEGÍTIMO, e na imagem de
+// billing (#288) é o estado desejado — o job é um gatilho magro que só usa o
+// `fetch` nativo e `node:url`, porque duplicar lógica de faturamento num `.mjs`
+// paralelo geraria cobrança errada em silêncio (ver infra/billing/Dockerfile).
+// Tratar isto como erro (o que este arquivo fazia antes da #288) confundiria
+// "o COPY quebrou" com "não há dependência para quebrar". A contagem de
+// arquivos acima é quem guarda o primeiro caso.
 if (pendencias.length === 0) {
-  console.error(
-    `[deps-imagem] ERRO: nenhum import encontrado em ${ALVO} — a varredura não achou arquivo nenhum. ` +
-      `Verde aqui seria falso: conferir se o COPY do Dockerfile mudou de caminho.`,
+  console.log(
+    `[deps-imagem] ${arquivos.length} arquivo(s) varrido(s) em ${ALVO}, nenhum specifier externo — ` +
+      `imagem sem dependência npm. Nada a resolver.`,
   );
-  process.exit(1);
+  process.exit(0);
 }
 
 let falhas = 0;
