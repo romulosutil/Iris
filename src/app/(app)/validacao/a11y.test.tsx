@@ -5,12 +5,14 @@ import axe from "axe-core";
 import { ValidacaoFila } from "./validacao-fila";
 import type { ItemFila } from "./queries";
 import type { AlvoValido } from "./alvos";
+import { avaliarFriccao } from "@/lib/extraction/review-policy";
 
 vi.mock("./actions", () => ({
   confirmarEvidenciaAction: vi.fn(async () => ({})),
   invalidarEvidenciaAction: vi.fn(async () => ({})),
   devolverComDuvidaAction: vi.fn(async () => ({})),
   reclassificarEvidenciaAction: vi.fn(async () => ({})),
+  aprovarLoteAction: vi.fn(async () => ({})),
 }));
 
 afterEach(cleanup);
@@ -34,6 +36,13 @@ const VAZIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]>
   alvosPorPaciente: {},
 };
 
+// Fricção derivada da fonte única (`avaliarFriccao`) — fixture nunca pode
+// carregar combinação impossível (ex.: confiança baixa com podeLote=true).
+function friccao(confianca: "alta" | "media" | "baixa", inconsistenteComHistorico: boolean) {
+  const { podeLote, nivel } = avaliarFriccao({ confianca, inconsistenteComHistorico });
+  return { confianca, inconsistenteComHistorico, nivelFriccao: nivel, podeLote };
+}
+
 const CHEIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]> } = {
   itens: [
     {
@@ -45,6 +54,8 @@ const CHEIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]>
       classificacaoAtual: { alvo: { goal_id: "00000000-0000-0000-0000-0000000000g1" } },
       motivo: ["baixa_confianca"],
       protocolId: null,
+      ...friccao("baixa", false),
+      historicoAnterior: null,
     },
     {
       evidenceId: "00000000-0000-0000-0000-000000000002",
@@ -55,6 +66,12 @@ const CHEIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]>
       classificacaoAtual: { alvo: { protocol_id: "vbmapp", dominio_id: "mand" } },
       motivo: ["inconsistente_historico"],
       protocolId: "vbmapp",
+      ...friccao("media", true),
+      historicoAnterior: {
+        trecho: "Pediu o brinquedo verbalmente sem dica.",
+        classificacao: { alvo: { protocol_id: "vbmapp", dominio_id: "mand" } },
+        criadoEm: "2026-08-01T12:00:00.000Z",
+      },
     },
   ],
   alvosPorPaciente: {
