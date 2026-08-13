@@ -596,11 +596,24 @@ export class AsaasProvider implements BillingProvider {
     nome: string;
     cpfCnpj?: string | null;
     email?: string | null;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cep?: string | null;
   }): Promise<void> {
     const corpo: Record<string, string> = { name: dados.nome };
     const cpfCnpj = dados.cpfCnpj?.replace(/\D/g, "");
     if (cpfCnpj) corpo.cpfCnpj = cpfCnpj;
     if (dados.email) corpo.email = dados.email;
+    // Endereço alimenta boleto/NFS-e no gateway: mesmo padrão truthy-skip dos
+    // demais campos. Cidade/UF o Asaas deriva do postalCode.
+    if (dados.logradouro) corpo.address = dados.logradouro;
+    if (dados.numero) corpo.addressNumber = dados.numero;
+    if (dados.complemento) corpo.complement = dados.complemento;
+    if (dados.bairro) corpo.province = dados.bairro;
+    const cep = dados.cep?.replace(/\D/g, "");
+    if (cep) corpo.postalCode = cep;
 
     await chamar(
       "PUT",

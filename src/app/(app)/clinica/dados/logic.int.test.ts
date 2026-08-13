@@ -290,6 +290,11 @@ describe.skipIf(!hasDb)("#262 · dados cadastrais da clínica", () => {
       nome: "Clínica A Ltda — Sync",
       cpfCnpj: CPF_VALIDO,
       email: "financeiro@clinica-a.test",
+      logradouro: "Rua das Acácias",
+      numero: "123",
+      complemento: "Sala 4",
+      bairro: "Centro",
+      cep: "01310100",
     });
   });
 
@@ -329,5 +334,37 @@ describe.skipIf(!hasDb)("#262 · dados cadastrais da clínica", () => {
     const b = await lerDadosClinica(ctx("coordenador", U_COORD_B, CLINIC_B));
     expect(b.razaoSocial).toBe("Clínica B Ltda");
     expect(b.documentoTravado).toBe(false); // sem cobrança emitida
+  });
+
+  test("documento existente NÃO pode ser apagado por payload sem cpfCnpj", async () => {
+    // O `required` do form é só UI: uma request forjada na Server Action com
+    // cpfCnpj vazio não pode virar cpf_cnpj = NULL no banco.
+    const antes = await estado(CLINIC_B);
+    const audits = await auditCount(CLINIC_B);
+
+    const r = await salvarDadosClinica(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      { ...PAYLOAD, razaoSocial: "Clínica B Ltda", cpfCnpj: "" },
+    );
+    expect(r).toHaveProperty("error");
+    expect((r as { error: string }).error).toContain("não pode ser removido");
+
+    expect((await estado(CLINIC_B)).cpf_cnpj).toBe(antes.cpf_cnpj);
+    expect(await auditCount(CLINIC_B)).toBe(audits);
+  });
+
+  test("no-op: payload idêntico devolve ok SEM gateway e SEM linha de audit", async () => {
+    const chamadas = mockAtualizarCliente.mock.calls.length;
+    const audits = await auditCount(CLINIC_B);
+
+    // Mesmo payload que já está gravado na clínica B.
+    const r = await salvarDadosClinica(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      { ...PAYLOAD, razaoSocial: "Clínica B Ltda", cpfCnpj: CNPJ_VALIDO },
+    );
+    expect(r).toEqual({ ok: true });
+
+    expect(mockAtualizarCliente.mock.calls.length).toBe(chamadas);
+    expect(await auditCount(CLINIC_B)).toBe(audits);
   });
 });

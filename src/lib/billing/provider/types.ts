@@ -294,6 +294,11 @@ export interface BillingProvider {
     nome: string;
     cpfCnpj?: string | null;
     email?: string | null;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cep?: string | null;
   }): Promise<void>;
 }
 

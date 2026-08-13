@@ -179,6 +179,49 @@ export async function salvarDadosClinica(
       // Estado anterior — base do diff do audit_log.
       const antes = await lerDadosDentroDaTx(tx, ctx.clinicId);
 
+      // Diff calculado ANTES de escrever: bloqueia remoção do documento por
+      // payload sem cpfCnpj (o `required` do form é só conveniência de UI) e
+      // permite curto-circuitar o no-op sem PUT no gateway nem audit vazio.
+      const depois: Record<string, string | null> = {
+        razao_social: vazioNulo(d.razaoSocial),
+        cpf_cnpj: vazioNulo(cpfCnpjLimpo),
+        endereco_logradouro: vazioNulo(d.logradouro),
+        endereco_numero: vazioNulo(d.numero),
+        endereco_complemento: vazioNulo(d.complemento),
+        endereco_bairro: vazioNulo(d.bairro),
+        endereco_cidade: vazioNulo(d.cidade),
+        endereco_uf: uf,
+        endereco_cep: cep,
+        email_financeiro: vazioNulo(d.emailFinanceiro),
+      };
+      const anteriores: Record<string, string | null> = {
+        razao_social: antes.razaoSocial,
+        cpf_cnpj: antes.cpfCnpj,
+        endereco_logradouro: antes.logradouro,
+        endereco_numero: antes.numero,
+        endereco_complemento: antes.complemento,
+        endereco_bairro: antes.bairro,
+        endereco_cidade: antes.cidade,
+        endereco_uf: antes.uf,
+        endereco_cep: antes.cep,
+        email_financeiro: antes.emailFinanceiro,
+      };
+
+      if (depois.cpf_cnpj === null && antes.cpfCnpj !== null) {
+        return {
+          error:
+            "O CPF/CNPJ não pode ser removido — informe o documento atual ou um novo.",
+        };
+      }
+
+      const camposAlterados = Object.keys(depois).filter(
+        (campo) => depois[campo] !== anteriores[campo],
+      );
+      if (camposAlterados.length === 0) {
+        // Nada mudou: sem UPDATE, sem PUT no gateway, sem linha de audit vazia.
+        return { ok: true };
+      }
+
       await tx.execute(sql`
         SELECT app_salvar_dados_clinica(
           ${vazioNulo(d.razaoSocial)},
@@ -216,6 +259,11 @@ export async function salvarDadosClinica(
             nome: vazioNulo(d.razaoSocial) ?? antes.nome,
             cpfCnpj: vazioNulo(cpfCnpjLimpo),
             email: vazioNulo(d.emailFinanceiro),
+            logradouro: vazioNulo(d.logradouro),
+            numero: vazioNulo(d.numero),
+            complemento: vazioNulo(d.complemento),
+            bairro: vazioNulo(d.bairro),
+            cep,
           });
         }
       }
@@ -223,30 +271,6 @@ export async function salvarDadosClinica(
       // (trial/free_tier — os dados entram no gateway na ativação).
 
       // Diff só dos campos que mudaram, com mascaramento dos sensíveis.
-      const depois: Record<string, string | null> = {
-        razao_social: vazioNulo(d.razaoSocial),
-        cpf_cnpj: vazioNulo(cpfCnpjLimpo),
-        endereco_logradouro: vazioNulo(d.logradouro),
-        endereco_numero: vazioNulo(d.numero),
-        endereco_complemento: vazioNulo(d.complemento),
-        endereco_bairro: vazioNulo(d.bairro),
-        endereco_cidade: vazioNulo(d.cidade),
-        endereco_uf: uf,
-        endereco_cep: cep,
-        email_financeiro: vazioNulo(d.emailFinanceiro),
-      };
-      const anteriores: Record<string, string | null> = {
-        razao_social: antes.razaoSocial,
-        cpf_cnpj: antes.cpfCnpj,
-        endereco_logradouro: antes.logradouro,
-        endereco_numero: antes.numero,
-        endereco_complemento: antes.complemento,
-        endereco_bairro: antes.bairro,
-        endereco_cidade: antes.cidade,
-        endereco_uf: antes.uf,
-        endereco_cep: antes.cep,
-        email_financeiro: antes.emailFinanceiro,
-      };
       const mascarar = (campo: string, valor: string | null) =>
         campo === "cpf_cnpj"
           ? mascararDocumento(valor)
@@ -258,13 +282,11 @@ export async function salvarDadosClinica(
         string,
         { de: string | null; para: string | null }
       > = {};
-      for (const campo of Object.keys(depois)) {
-        if (depois[campo] !== anteriores[campo]) {
-          detalhe[campo] = {
-            de: mascarar(campo, anteriores[campo] ?? null),
-            para: mascarar(campo, depois[campo] ?? null),
-          };
-        }
+      for (const campo of camposAlterados) {
+        detalhe[campo] = {
+          de: mascarar(campo, anteriores[campo] ?? null),
+          para: mascarar(campo, depois[campo] ?? null),
+        };
       }
 
       await tx.execute(sql`

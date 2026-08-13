@@ -58,7 +58,6 @@ export function FormularioDadosClinica({
         <Input
           id="razaoSocial"
           name="razaoSocial"
-          required
           defaultValue={dados.razaoSocial ?? ""}
           autoComplete="organization"
         />

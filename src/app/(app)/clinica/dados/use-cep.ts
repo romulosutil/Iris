@@ -61,12 +61,19 @@ export function useCep(onEndereco: (endereco: EnderecoViaCep) => void) {
           uf: (dados.uf ?? "").toUpperCase(),
         });
       } catch {
-        // Aborto, offline ou CEP inexistente: seguir manual, sem bloquear.
+        // Superada por uma busca mais nova (abort do CEP corrigido): a nova
+        // requisição é dona do spinner/aviso — não tocar em nada.
+        if (abortRef.current !== controller) return;
+        // Falha real (offline, timeout, CEP inexistente): seguir manual, e
+        // liberar o mesmo CEP para nova tentativa quando a rede voltar.
+        ultimoCepRef.current = null;
         setAviso("Não foi possível buscar o CEP — preencha manualmente.");
       } finally {
         clearTimeout(timeout);
-        if (abortRef.current === controller) abortRef.current = null;
-        setBuscando(false);
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+          setBuscando(false);
+        }
       }
     },
     [onEndereco],
