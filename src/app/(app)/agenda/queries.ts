@@ -344,6 +344,10 @@ export async function criarRegra(
 
   return withTenant(ctx, async (tx) => {
     await requireEscritaPermitida(tx, ctx.clinicId);
+    // Anti-corrida (#249): mesmo lock dos eixos usado por criarAvulsa e
+    // materializarNaTx — sem ele, o pré-check de conflito abaixo corre contra
+    // uma criação avulsa concorrente e as ocorrências viram `puladas` em silêncio.
+    await travarEixosAgenda(tx, [dados.terapeutaId, dados.patientId]);
     await validarTerapeutaDaClinica(tx, ctx.clinicId, dados.terapeutaId);
     const ativas = await tx
       .select({
@@ -507,6 +511,23 @@ export async function criarRegra(
   });
 }
 
+/**
+ * T4 (#249): advisory locks transacionais nos eixos do conflito (terapeuta e
+ * paciente) ANTES da checagem app-level, fechando a corrida em que duas tx
+ * checam conflito simultaneamente e ambas inserem sobreposição. Dedup + ordem
+ * lexicográfica dos UUIDs para aquisição determinística (evita deadlock entre
+ * tx que travam os mesmos eixos em ordens diferentes). Mesmo padrão de
+ * `validacao/logic.ts` (pg_advisory_xact_lock + hashtextextended).
+ */
+async function travarEixosAgenda(tx: TxMat, ids: string[]): Promise<void> {
+  const ordenados = [...new Set(ids)].sort();
+  for (const id of ordenados) {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${id}::text, 0))`,
+    );
+  }
+}
+
 export interface NovaAvulsa {
   patientId: string;
   terapeutaId: string;
@@ -562,6 +583,9 @@ export async function criarAvulsa(
         dados.horaInicio,
         clinicRow?.timezone ?? "America/Sao_Paulo",
       );
+      // Anti-corrida (T4 #249): serializa criações concorrentes nos mesmos
+      // eixos antes do pré-check app-level regra×avulsa.
+      await travarEixosAgenda(tx, [dados.terapeutaId, dados.patientId]);
       const regrasAtivas = await tx
         .select({
           terapeutaId: schema.agendamentoRecorrente.terapeutaId,
@@ -730,6 +754,10 @@ export async function materializarNaTx(
   tx: TxMat,
   { regra, bloqueios, fuso, deISO, ateISO }: MaterializarParams,
 ): Promise<ResultadoMaterializacao> {
+  // Anti-corrida (T4 #249): trava os eixos da regra na MESMA tx antes de
+  // inserir as ocorrências — materializações/avulsas concorrentes sobre o
+  // mesmo terapeuta/paciente serializam em vez de correr contra o EXCLUDE.
+  await travarEixosAgenda(tx, [regra.terapeutaId, regra.patientId]);
   const datas = datasDaRegra(
     {
       diaSemana: regra.diaSemana,
