@@ -1,109 +1,136 @@
-import * as React from "react";
-import { expect, test, describe, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { expect, test, describe, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
-// Mock next/font/google to prevent TypeError during Vitest execution
-vi.mock("next/font/google", () => {
-  return {
-    Space_Grotesk: () => ({
-      variable: "mock-space-grotesk",
-    }),
-    Plus_Jakarta_Sans: () => ({
-      variable: "mock-plus-jakarta-sans",
-    }),
-  };
-});
+// next/font/google explode fora do build do Next (TypeError no vitest).
+vi.mock("next/font/google", () => ({
+  Space_Grotesk: () => ({ variable: "mock-space-grotesk" }),
+  Plus_Jakarta_Sans: () => ({ variable: "mock-plus-jakarta-sans" }),
+}));
 
-// Import via alias to avoid shadowing the native global Error constructor!
+// O canal de observabilidade é o GlitchTip, não o console: o teste garante
+// que o erro CHEGA no captureException e que NADA vaza para o usuário.
+vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
+
+import * as Sentry from "@sentry/nextjs";
 import ErrorPage from "./error";
 import GlobalErrorPage from "./global-error";
 
-describe("Error Page (error.tsx)", () => {
-  test("renders safely without leaking sensitive database information or stack traces", () => {
-    // Create an error that looks like a database leak
-    const dbError = new Error("SELECT * FROM app_user WHERE id = 'lixo';");
-    dbError.stack = "Error: SELECT * FROM app_user WHERE id = 'lixo';\n    at Database.query (/app/src/db/client.ts:46:19)";
-    const resetSpy = vi.fn();
+/** Erro que simula vazamento de banco: SQL na message + stack com caminho interno. */
+function criarErroDeBanco(): Error {
+  const erro = new Error("SELECT * FROM app_user WHERE id = 'lixo';");
+  erro.stack =
+    "Error: SELECT * FROM app_user WHERE id = 'lixo';\n    at Database.query (/app/src/db/client.ts:46:19)";
+  return erro;
+}
 
-    const { container } = render(<ErrorPage error={dbError} reset={resetSpy} />);
+function comDigest(digest: string): Error & { digest?: string } {
+  return Object.assign(new Error("Falha genérica"), { digest });
+}
 
-    // Must show friendly text
-    const heading = screen.getByRole("heading", { name: /Algo deu errado do nosso lado/i });
+beforeEach(() => {
+  // Silencia o validateDOMNesting do <html> dentro do container do RTL e
+  // garante que nenhum código de página voltou a logar o erro no console
+  // do navegador (canal de vazamento — ver docstring do error.tsx).
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.mocked(Sentry.captureException).mockClear();
+});
+
+describe("ErrorPage (error.tsx)", () => {
+  test("não vaza SQL, stack trace ou detalhe de banco em nenhum canal visível", () => {
+    const erro = criarErroDeBanco();
+    render(<ErrorPage error={erro} reset={vi.fn()} />);
+
+    const heading = screen.getByRole("heading", {
+      name: /Algo deu errado do nosso lado/i,
+    });
     expect(heading).not.toBeNull();
 
-    // Must NOT leak database details, SQL queries or stack traces in the HTML
-    const htmlContent = container.innerHTML;
-    expect(htmlContent).not.toContain("SELECT * FROM");
-    expect(htmlContent).not.toContain("app_user");
-    expect(htmlContent).not.toContain("at Database.query");
+    // Página inteira (não só o container) — inclui portais.
+    const html = document.body.innerHTML;
+    expect(html).not.toContain("SELECT * FROM");
+    expect(html).not.toContain("app_user");
+    expect(html).not.toContain("at Database.query");
   });
 
-  test("renders Audit Error ID from digest property if present", () => {
-    const errorWithDigest = new Error("Generic failure");
-    (errorWithDigest as any).digest = "DIGEST-12345-ABCD";
-    const resetSpy = vi.fn();
+  test("reporta o erro ao GlitchTip via captureException, sem console.error próprio", () => {
+    const erro = criarErroDeBanco();
+    render(<ErrorPage error={erro} reset={vi.fn()} />);
 
-    render(<ErrorPage error={errorWithDigest} reset={resetSpy} />);
-
-    const idContainer = screen.getByText(/DIGEST-12345-ABCD/i);
-    expect(idContainer).not.toBeNull();
+    expect(Sentry.captureException).toHaveBeenCalledWith(erro);
+    // Nenhum log da página no console do usuário (chamadas do React, se
+    // houver, não contêm o SQL do erro).
+    const chamadasComSql = vi
+      .mocked(console.error)
+      .mock.calls.filter((args) =>
+        args.some((a) => String(a).includes("SELECT * FROM")),
+      );
+    expect(chamadasComSql).toEqual([]);
   });
 
-  test("renders fallback Audit Error ID if digest is missing", () => {
-    const errorWithoutDigest = new Error("Generic failure");
-    const resetSpy = vi.fn();
-
-    render(<ErrorPage error={errorWithoutDigest} reset={resetSpy} />);
-
-    const idContainer = screen.getByText(/SEC-500-ERR/i);
-    expect(idContainer).not.toBeNull();
+  test("exibe o digest do Next como ID do erro quando presente", () => {
+    render(<ErrorPage error={comDigest("DIGEST-12345-ABCD")} reset={vi.fn()} />);
+    expect(screen.getByText(/DIGEST-12345-ABCD/i)).not.toBeNull();
+    expect(screen.getByRole("alert")).not.toBeNull();
   });
 
-  test("calls reset handler when clicking retry button", () => {
-    const someError = new Error("Some error");
+  test("omite a caixa de ID quando não há digest (constante falsa não é ID)", () => {
+    render(<ErrorPage error={new Error("Falha")} reset={vi.fn()} />);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("chama reset ao clicar em Tentar novamente", () => {
     const resetSpy = vi.fn();
+    render(<ErrorPage error={new Error("Falha")} reset={resetSpy} />);
 
-    render(<ErrorPage error={someError} reset={resetSpy} />);
-
-    const retryBtn = screen.getByRole("button", { name: /Tentar Novamente/i });
-    expect(retryBtn).not.toBeNull();
-
-    fireEvent.click(retryBtn);
+    fireEvent.click(screen.getByRole("button", { name: /Tentar novamente/i }));
     expect(resetSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test("saída aponta para / com navegação completa (escapa da árvore quebrada)", () => {
+    render(<ErrorPage error={new Error("Falha")} reset={vi.fn()} />);
+    const link = screen.getByRole("link", { name: /Voltar ao início/i });
+    expect(link.getAttribute("href")).toBe("/");
   });
 });
 
-describe("Global Error Page (global-error.tsx)", () => {
-  test("renders safely without leaking sensitive information", () => {
-    const dbError = new Error("SELECT * FROM app_user WHERE id = 'lixo';");
-    dbError.stack = "Error: SELECT * FROM app_user WHERE id = 'lixo';\n    at Database.query (/app/src/db/client.ts:46:19)";
-    const resetSpy = vi.fn();
+describe("GlobalErrorPage (global-error.tsx)", () => {
+  test("não vaza informação sensível e reporta ao GlitchTip", () => {
+    const erro = criarErroDeBanco();
+    render(<GlobalErrorPage error={erro} reset={vi.fn()} />);
 
-    const { container } = render(<GlobalErrorPage error={dbError} reset={resetSpy} />);
+    expect(screen.getByText(/Erro crítico de sistema/i)).not.toBeNull();
+    expect(Sentry.captureException).toHaveBeenCalledWith(erro);
 
-    const title = screen.getByText(/Erro Crítico de Sistema/i);
-    expect(title).not.toBeNull();
-
-    const htmlContent = container.innerHTML;
-    expect(htmlContent).not.toContain("SELECT * FROM");
-    expect(htmlContent).not.toContain("app_user");
-    expect(htmlContent).not.toContain("at Database.query");
+    const html = document.body.innerHTML;
+    expect(html).not.toContain("SELECT * FROM");
+    expect(html).not.toContain("app_user");
+    expect(html).not.toContain("at Database.query");
   });
 
-  test("renders Audit Error ID and triggers reset button", () => {
-    const errorWithDigest = new Error("Global failure");
-    (errorWithDigest as any).digest = "DIGEST-GLOBAL-789";
+  test("replica o contrato do root layout: lang, data-mode e variáveis de fonte", () => {
+    render(<GlobalErrorPage error={new Error("Falha global")} reset={vi.fn()} />);
+    // React 19 iça <html> para o document real do jsdom — os atributos
+    // aterrissam em document.documentElement, não dentro do container.
+    const htmlEl = document.documentElement;
+    expect(htmlEl.getAttribute("lang")).toBe("pt-BR");
+    expect(htmlEl.getAttribute("data-mode")).toBe("clinico");
+    expect(htmlEl.className).toContain("mock-space-grotesk");
+    expect(htmlEl.className).toContain("mock-plus-jakarta-sans");
+  });
+
+  test("exibe digest quando presente e chama reset no botão", () => {
     const resetSpy = vi.fn();
+    render(
+      <GlobalErrorPage error={comDigest("DIGEST-GLOBAL-789")} reset={resetSpy} />,
+    );
 
-    render(<GlobalErrorPage error={errorWithDigest} reset={resetSpy} />);
-
-    const idContainer = screen.getByText(/DIGEST-GLOBAL-789/i);
-    expect(idContainer).not.toBeNull();
-
-    const retryBtn = screen.getByRole("button", { name: /Tentar Novamente/i });
-    expect(retryBtn).not.toBeNull();
-
-    fireEvent.click(retryBtn);
+    expect(screen.getByText(/DIGEST-GLOBAL-789/i)).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Tentar novamente/i }));
     expect(resetSpy).toHaveBeenCalledTimes(1);
   });
 });
