@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { DocumentoLegal } from "@/components/legal/documento-legal";
-import { DOCUMENTOS_LEGAIS, VERSAO_TERMO } from "@/lib/legal";
+import { DOCUMENTOS_LEGAIS, VERSAO_POLITICA } from "@/lib/legal";
 
 /**
  * Rota pública `/privacidade`. Mesmas razões de posicionamento e de
@@ -9,7 +9,7 @@ import { DOCUMENTOS_LEGAIS, VERSAO_TERMO } from "@/lib/legal";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: `Política de Privacidade (versão ${VERSAO_TERMO}) — Iris`,
+  title: `Política de Privacidade (versão ${VERSAO_POLITICA}) — Iris`,
   description: DOCUMENTOS_LEGAIS.privacidade.descricao,
 };
 

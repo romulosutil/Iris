@@ -10,7 +10,12 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import { DOCUMENTOS_LEGAIS, VERSAO_TERMO, type SlugLegal } from "./legal";
+import {
+  DOCUMENTOS_LEGAIS,
+  VERSAO_POLITICA,
+  VERSAO_TERMO,
+  type SlugLegal,
+} from "./legal";
 
 const slugs = Object.keys(DOCUMENTOS_LEGAIS) as SlugLegal[];
 
@@ -50,7 +55,23 @@ describe("VERSAO_TERMO", () => {
   it("tem formato de data ISO", () => {
     expect(VERSAO_TERMO).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
+});
 
+describe("VERSAO_POLITICA", () => {
+  // Mesmo contrato de VERSAO_TERMO, para a Política de Privacidade. Hoje as
+  // duas versões coincidem; o dia em que divergirem, este literal é o ponto de
+  // parada consciente — e o aceite continua gravando só `versao_termo` (coluna
+  // única, ver nota em legal.ts).
+  it("é exatamente a versão desta fatia", () => {
+    expect(VERSAO_POLITICA).toBe("2026-08-07");
+  });
+
+  it("tem formato de data ISO", () => {
+    expect(VERSAO_POLITICA).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("integridade de fonte única das versões legais", () => {
   /**
    * Fonte única, verificada — não só prometida no comentário de `legal.ts`.
    *
@@ -61,12 +82,28 @@ describe("VERSAO_TERMO", () => {
    * tem — em `professional_consent`, que é append-only (0058: ninguém tem
    * DELETE). Evidência jurídica errada e irremovível.
    *
-   * Varre o código de verdade em vez de confiar na convenção, porque a
-   * duplicata anterior parecia perfeitamente razoável no arquivo onde estava.
+   * A asserção é positiva de propósito: cada constante tem que aparecer em
+   * `src/lib/legal.ts` E em nenhum outro lugar. Um `toEqual([])` sobre
+   * "violações fora de legal.ts" passaria com a constante deletada — guard
+   * verde afirmando o contrário do que acontece, o pior tipo de teste.
+   *
+   * Limite conhecido: o guard casa declarações `const|let|var NOME =` em
+   * arquivos .ts/.tsx de produção sob src/. Não pega o VALOR duplicado como
+   * literal solta (`versaoTermo: "2026-08-07"` num insert) nem fora de src/.
    */
-  it("é declarada em UM só lugar em src/", () => {
+  it("VERSAO_TERMO e VERSAO_POLITICA são declaradas em src/lib/legal.ts e em nenhum outro lugar", () => {
     const raiz = path.join(process.cwd(), "src");
-    const declaracoes: string[] = [];
+    // Só declaração (`const VERSAO_TERMO =`), não uso nem import. O sufixo
+    // `\b` evita casar `VERSAO_TERMO_MENOR_ATUAL` e os outros termos de
+    // consentimento de paciente, que são versões próprias e legitimamente
+    // separadas destas. `matchAll` no conteúdo inteiro (não linha a linha)
+    // pega inclusive declaração quebrada em múltiplas linhas.
+    const regexDeclaracao =
+      /\b(?:const|let|var)\s+(VERSAO_TERMO|VERSAO_POLITICA)\b\s*=/g;
+    const declaracoes = new Map<string, string[]>([
+      ["VERSAO_TERMO", []],
+      ["VERSAO_POLITICA", []],
+    ]);
 
     const visitar = (dir: string) => {
       for (const entrada of readdirSync(dir, { withFileTypes: true })) {
@@ -80,22 +117,28 @@ describe("VERSAO_TERMO", () => {
           // então se incluísse testes ele casaria consigo mesmo.)
           !/\.test\.tsx?$/.test(entrada.name)
         ) {
-          // Só declaração (`const VERSAO_TERMO =`), não uso nem import. O
-          // sufixo `\b` evita casar `VERSAO_TERMO_MENOR_ATUAL` e os outros
-          // termos de consentimento de paciente, que são versões próprias e
-          // legitimamente separadas desta.
-          if (/\bconst\s+VERSAO_TERMO\b\s*=/.test(readFileSync(caminho, "utf8"))) {
-            declaracoes.push(path.relative(process.cwd(), caminho));
+          const conteudo = readFileSync(caminho, "utf8");
+          for (const m of conteudo.matchAll(regexDeclaracao)) {
+            const nome = m[1];
+            if (nome === undefined) continue;
+            const linha = conteudo.slice(0, m.index).split("\n").length;
+            const relativo = path
+              .relative(process.cwd(), caminho)
+              .replace(/\\/g, "/");
+            declaracoes.get(nome)?.push(`${relativo}:${linha}`);
           }
         }
       }
     };
+
     visitar(raiz);
 
-    expect(
-      declaracoes,
-      `VERSAO_TERMO deve ser declarada só em src/lib/legal.ts — quem precisar importa de lá. Encontrada em: ${declaracoes.join(", ")}`,
-    ).toEqual([path.join("src", "lib", "legal.ts")]);
+    for (const [nome, locais] of declaracoes) {
+      expect(
+        locais.map((l) => l.replace(/:\d+$/, "")),
+        `${nome} deve ser declarada em src/lib/legal.ts, e só lá — quem precisar importa de lá. Encontrada em: ${locais.join(", ") || "lugar nenhum"}`,
+      ).toEqual(["src/lib/legal.ts"]);
+    }
   });
 });
 
@@ -106,10 +149,13 @@ describe.each(slugs)("documento legal %s", (slug) => {
     expect(lerDoc(slug).length).toBeGreaterThan(1000);
   });
 
-  it("declara a mesma versão da constante VERSAO_TERMO", () => {
-    // O acoplamento que importa: o texto publicado e a string gravada no
-    // aceite têm que ser o mesmo documento.
-    expect(lerDoc(slug)).toContain(VERSAO_TERMO);
+  it("declara a mesma versão da sua constante em legal.ts", () => {
+    // O acoplamento que importa: o texto publicado e a versão que o código
+    // carrega (e, nos Termos, grava no aceite) têm que ser o mesmo documento.
+    // Cada slug é comparado com a SUA constante (`meta.versao`), não com
+    // VERSAO_TERMO para ambos — senão VERSAO_POLITICA poderia derivar sem
+    // nenhum teste ficar vermelho.
+    expect(lerDoc(slug)).toContain(meta.versao);
   });
 
   it("não está mais marcado como rascunho pendente de advogado", () => {
