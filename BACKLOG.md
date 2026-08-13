@@ -2690,6 +2690,108 @@ existe". Verde por omissão em cima desse comando encerra a investigação.
 
 ---
 
+## 🏁 Sessão 29/07/2026 — #98 F0: nicho de psicoterapia passa a ser 3 famílias nomeadas (doc-only)
+
+**Mudança de premissa (decisão do dono).** `docs/agente/protocolo-terapia-convencional.md`
+definia o nicho como "atendimento convencional genérico" e dizia explicitamente
+que **não prescrevia uma escola** — incluindo TCC-sem-protocolo na lista. Isso
+estava errado. O nicho passa a ser **três famílias nomeadas**: (1) psicanálise/
+psicodinâmica, (2) humanista/existencial, (3) transpessoal/integrativa. Os três
+**critérios de admissão** são: sem cronograma rígido, sem tarefa de casa, sem
+pontuação de sintoma. As 4 "diferenças estruturais" de §1 deixaram de ser
+descrição e passaram a critério.
+
+**Fronteira com #99 agora explícita:** TCC falha em 2 dos 3 critérios (escala
+pontuada + tarefa de casa). **TCC-sem-protocolo sai deste nicho** — o que a
+caracteriza é a presença de estrutura de sessão e mensuração, não a ausência de
+manual. Vai para #99 com escala opcional.
+
+### Decisões travadas nesta sessão
+
+- **R9-TC muda de escopo.** Deixa de ser "agnosticismo entre todas as escolas" e
+  passa a **"não impor o vocabulário de UMA das 3 famílias a terapeuta de
+  outra"**. O mecanismo (espelhar só o vocabulário que o terapeuta usou) é o
+  mesmo e ficou **mais** necessário: os 3 vocabulários são mutuamente hostis
+  (para a família 2, "resistência" é justamente o conceito que a abordagem
+  centrada na pessoa rejeitou). Jargão da família errada não é impreciso, é
+  ofensivo ao método.
+- **Dois campos do schema de saída renomeados** — motivo é validação com
+  usuários reais das 3 famílias, nome de campo é contrato de dado que aparece em
+  API/log/export:
+  - `padrao_silencio_resistencia` → **`padrao_participacao_verbal`**
+    ("resistência" é conceito psicanalítico; humanistas falam contato/awareness).
+  - `direcao_sugerida` → **`tema_recorrente_sinalizado`**, agora **array**
+    (atende o achado 4 de §7). Reposicionado: aponta **recorrência no próprio
+    texto do terapeuta**, não rumo clínico — alinha com o princípio 3 do README
+    (IA sinaliza candidato, humano decide) e remove o risco de a saída ser lida
+    como prescrição.
+- **AV-1 deixa de ser bloqueante.** Resolvido *por renomeação*, não mitigado: o
+  achado era sobre contrato de dado, e o contrato foi corrigido.
+- **AV-6 deixa de ser proposta e vira decisão travada.** No modo psicoterapia
+  adulta, a Camada 3 vê por padrão **só o alerta de risco + metadados da sessão**
+  (data, terapeuta, houve alerta) — **não** o corpo do `resumo_sessao`. Resumo
+  completo só sob escalonamento do próprio psicólogo ou exigência legal, **sempre
+  com auditoria**. Implementação em RLS é da **issue #119**, não da #98.
+  Efeito colateral aceito: **agrava AV-5** (sobra menos superfície auditável, a
+  amostragem da Camada 3 fica ainda mais dependente de `alerta_risco`). Troca
+  consciente de auditabilidade por sigilo.
+- **AV-11 / paciente misto (TEA + psicoterapia adulta):** no MVE é **proibido por
+  constraint de banco** — bloqueio explícito é melhor que falha silenciosa
+  (coordenador aplicando julgamento de protocolo TEA sobre resumo de
+  psicoterapia). Suporte real ao caso misto **ganha issue própria** e sai de #98.
+- **AV-10 reclassificado de nice-to-have para Importante.** Suposição corrigida
+  pelo dono: psicanálise/humanista/integrativa **têm** paciente de convênio e
+  **têm** exigência de relatório periódico. O requisito vale para este nicho; o
+  formato é relatório psicológico narrativo, não laudo por domínio. Tensão real:
+  operadora rejeita narrativo puro e pede dado mensurável, e este nicho **não tem
+  número a dar** (ver `[[convenio-report-requirements]]`).
+
+### Pendente — não morreu, só não é desta fatia
+
+- **Normalização de `temas[]` por similaridade** (achado 3 de §7). Continua sem
+  solução fechada: enum fecha a taxonomia que o nicho quer evitar; texto livre
+  fragmenta ("luto do pai" ≠ "luto paterno" ≠ "morte do pai"), quebrando a
+  continuidade que R7-TC e `historico_relevante` deveriam sustentar. Mitigação
+  possível não decidida: normalização por similaridade textual no backend, sem
+  expor enum ao agente.
+- **Paciente misto (AV-11):** abrir a issue própria + escrever a constraint.
+- **Relatório de convênio para este nicho (AV-10):** requisito confirmado,
+  formato e fonte do dado mensurável em aberto.
+- **AV-2 continua bloqueante e continua proposta pendente de confirmação:** o
+  doc ainda não declara normativamente que a saída da IA neste modo é rascunho
+  editável até aprovação explícita do terapeuta. Não foi objeto desta decisão.
+
+### Proposta pendente de confirmação criada nesta sessão
+
+- **Campo `familia_abordagem`** (`psicodinamica | humanista_existencial |
+  transpessoal_integrativa`) no contexto do agente. Necessário para verificar
+  R9-TC automaticamente; **nome do campo, nome dos valores e onde a informação é
+  cadastrada (profissional? vínculo profissional-paciente? sessão?) não foram
+  decididos.** Numa clínica com terapeutas de famílias diferentes as três opções
+  não são equivalentes. R9-TC funciona sem o campo — a regra base ("espelhe só o
+  vocabulário que o terapeuta usou") não depende de saber a família; o campo só
+  transforma a regra em verificação automatizável.
+
+### Entregue (doc-only, zero código, zero migração, `docs/legal/**` intocado)
+
+- `docs/agente/protocolo-terapia-convencional.md` — §1 reescrita (3 famílias + 3
+  critérios), R6-TC sem a palavra "resistência" no corpo da regra, R9-TC
+  reescrita com tabela de vocabulário por família, §2.4 (system prompt)
+  ajustado, §3.1 nova (tabela de renomeação), §8.5 nova (enunciado normativo de
+  AV-6), §4/§6/§7/§8.1-8.4 atualizados.
+- `docs/agente/casos-de-teste-terapia-convencional.md` — 4 casos passam a
+  declarar `familia_abordagem` e usam os nomes novos; **+1 caso novo TC-5**
+  (cruzado): o MESMO episódio clínico relatado em vocabulário psicodinâmico
+  (TC-5a) e humanista (TC-5b), com critério de aprovação por comparação das duas
+  saídas — equivalência factual + divergência de vocabulário na direção certa +
+  nenhuma saída inventa mecanismo. É o teste que protege o posicionamento de
+  nicho; sem ele, TC-1..TC-4 passam testando uma família cada isoladamente.
+
+**PR F0 da issue #98** (branch `docs/98-tres-familias-abordagem`). As fatias de
+código (F1-F4) vêm depois — a issue **não** é fechada por este PR.
+
+---
+
 ## 🏁 Sessão 29/07/2026 — Encerramento de revogação, prontuário somente-leitura, curatela/emancipado e transição de maioridade (Issues #133, #117, #134, #135)
 
 **O que foi entregue**
@@ -3335,8 +3437,10 @@ ainda não decidida (LGPD).
 
 - **#98 validada** contra Resolução CFP e entrevistas simuladas
   terapeuta+coordenador (seção 8 anexada ao spec). 2 achados **reclassificados
-  para bloqueante**: `padrao_silencio_resistencia` embute vocabulário
-  psicanalítico no contrato de dados (contradiz R9-TC school-agnostic); doc
+  para bloqueante**: o campo então chamado `padrao_silencio_resistencia` embutia
+  vocabulário psicanalítico no contrato de dados (contradizia R9-TC)
+  — **resolvido em 29/07/2026 por renomeação para `padrao_participacao_verbal`,
+  ver a sessão de #98 F0 no topo deste arquivo**; doc
   não afirma que saída da IA é rascunho exigindo edição/aprovação explícita
   do terapeuta antes de virar prontuário oficial (risco de responsabilidade
   civil, quem assina responde pelo conteúdo). R5-TC também não cita a exceção
