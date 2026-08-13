@@ -1458,6 +1458,9 @@ idêntico — os dois casos são indistinguíveis de fora. Quem separa é olhar 
 
 ### Passo 2 — criar o serviço
 
+> **Já provisionado em 13/08/2026** como `iris-billing`. Esta seção fica como
+> registro do que foi configurado e como refazer, não como pendência.
+
 Mesmo desenho dos serviços de backup e escalonamento. Os nomes de aba abaixo são
 os que aquelas seções já usam e que já foram executados com sucesso; **se o
 painel tiver mudado e você não achar um campo, procure pelo objetivo descrito e
@@ -1517,9 +1520,8 @@ Logo depois do primeiro deploy, **Logs** do serviço. Primeira linha esperada:
 [agendador-billing] 2026-08-13T20:00:00Z ativo. intervalo=3600s · heartbeat=/heartbeat/.ultimo-fechamento
 ```
 
-As duas linhas abaixo não são exemplo inventado: o laço foi exercitado na imagem
-real em 13/08/2026, contra um dublê da rota, com `INTERVALO_S=15`. O formato é
-este, com o intervalo trocado.
+Não é exemplo inventado: é o log de produção do serviço `iris-billing` no
+primeiro deploy bem-sucedido, em 13/08/2026 às 23:49 UTC.
 
 E, a cada hora, uma linha JSON única do disparo (aqui quebrada em várias linhas
 para caber na página; no log ela é uma só):
@@ -1527,13 +1529,13 @@ para caber na página; no log ela é uma só):
 ```json
 {
   "job": "fechamento-ciclo-billing",
-  "quando": "2026-08-13T20:00:01.123Z",
+  "quando": "2026-08-13T23:49:14.495Z",
   "dryRun": false,
   "ok": true,
   "status": 200,
   "falha": null,
   "erro": null,
-  "corpo": "{\"ok\":true,\"ciclosProcessados\":0,\"falhas\":[],\"resultados\":[]}"
+  "corpo": "{\"ok\":true,\"dryRun\":false,\"eventosReprocessados\":{\"aplicados\":0,\"falhas\":0},\"ciclosProcessados\":0,\"falhas\":[],\"resultados\":[]}"
 }
 ```
 
