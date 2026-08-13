@@ -42,7 +42,7 @@ export function BatchBar({
       <div
         role="status"
         className={cn(
-          "sticky bottom-4 z-30 flex items-center gap-2 p-4 text-sm text-text-secondary",
+          "text-text-secondary sticky bottom-4 z-30 flex items-center gap-2 p-4 text-sm",
           surface("solida", {
             elevation: "overlay",
             radius: "xl",
@@ -52,10 +52,14 @@ export function BatchBar({
         )}
         {...props}
       >
-        <AlertTriangleIcon size={14} className="shrink-0 text-status-warning-fg" />
+        <AlertTriangleIcon
+          size={14}
+          className="text-status-warning-fg shrink-0"
+        />
         <span>
-          Nenhum item elegível para aprovação em lote — todos os {totalItens ?? bloqueados}{" "}
-          itens exigem revisão individual (baixa confiança ou inconsistência com histórico).
+          Nenhum item elegível para aprovação em lote — todos os{" "}
+          {totalItens ?? bloqueados} itens exigem revisão individual (baixa
+          confiança ou inconsistência com histórico).
         </span>
       </div>
     );
@@ -66,7 +70,7 @@ export function BatchBar({
       role="toolbar"
       aria-label="Ações em lote"
       className={cn(
-        "sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 p-4 text-text-primary",
+        "text-text-primary sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 p-4",
         surface("solida", {
           elevation: "overlay",
           radius: "xl",
@@ -79,16 +83,21 @@ export function BatchBar({
       {/* Contadores e status */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-sm font-bold text-text-primary">
-            {selecionados} de {totalItens ?? totalElegiveis} selecionados
+          {/* Denominador é sempre `totalElegiveis`: só itens elegíveis são
+              selecionáveis, então usar o total geral faria a barra reportar
+              "8 de 10" com 100% do selecionável já marcado. */}
+          <span className="text-text-primary font-mono text-sm font-bold">
+            {selecionados} de {totalElegiveis} elegíveis selecionados
           </span>
-          <span className="text-xs text-text-secondary">
-            ({totalElegiveis} elegíveis para lote)
-          </span>
+          {totalItens !== undefined && totalItens > totalElegiveis && (
+            <span className="text-text-secondary text-xs">
+              ({totalItens} itens na fila)
+            </span>
+          )}
         </div>
 
         {bloqueados > 0 && (
-          <div className="flex items-center gap-1.5 rounded bg-status-warning-bg/20 px-2 py-0.5 text-xs text-status-warning-fg font-medium">
+          <div className="bg-status-warning-bg/20 text-status-warning-fg flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium">
             <AlertTriangleIcon size={12} />
             <span>{bloqueados} itens requerem revisão manual</span>
           </div>
