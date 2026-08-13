@@ -93,7 +93,7 @@ export function Pill({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 font-medium tracking-tight rounded-full border border-[length:var(--border-brutal)] select-none",
+        "inline-flex items-center gap-1.5 font-medium tracking-tight rounded-full border-[length:var(--border-brutal-width)] select-none",
         sizes[size],
         colorVariants[colorScheme][variant],
         className,

@@ -35,15 +35,15 @@ export function surface(
 
 **Comportamento do Eixo de Profundidade:**
 - `solida` (Fato / Aprovado):
-  - Borda: `border-[length:var(--border-brutal)] border-border-brutal` (sólida `#1A1A1A`)
+  - Borda: `border-[length:var(--border-brutal-width)] border-border-brutal` (sólida `#1A1A1A`)
   - Elevação Default: `base` (`shadow-[var(--ds-shadow)]` — **LEVANTA**)
   - Raio Default: `md` (`rounded-[var(--radius-md)]`)
 - `sugerida` (Sugerido por IA):
-  - Borda: `border-[length:var(--border-brutal)] border-dashed border-status-ia-border` (tracejado violeta)
+  - Borda: `border-[length:var(--border-brutal-width)] border-dashed border-status-ia-border` (tracejado violeta)
   - Elevação Default: `inset` (`shadow-[var(--elevation-inset)]` — **AFUNDA**)
   - Raio Default: `md`
 - `candidata` (Marco Candidato):
-  - Borda: `border-[length:var(--border-brutal)] border-dotted border-status-info-bg` (pontilhado azul)
+  - Borda: `border-[length:var(--border-brutal-width)] border-dotted border-status-info-bg` (pontilhado azul)
   - Elevação Default: `inset` (`shadow-[var(--elevation-inset)]` — **AFUNDA**)
   - Raio Default: `md`
 
