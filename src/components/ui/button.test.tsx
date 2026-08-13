@@ -86,6 +86,77 @@ describe("Button asChild", () => {
     expect(link.className).toContain("do-button");
     expect(link.className).toContain("do-filho");
   });
+
+  it("disabled bloqueia clique/navegação, marca aria-disabled e tira do tab", async () => {
+    const user = userEvent.setup();
+    const doButton = vi.fn();
+    const doFilho = vi.fn();
+    render(
+      <Button asChild disabled onClick={doButton}>
+        <a href="#" onClick={doFilho}>
+          Voltar
+        </a>
+      </Button>,
+    );
+    const link = screen.getByRole("link", { name: "Voltar" });
+    expect(link.getAttribute("aria-disabled")).toBe("true");
+    expect(link.getAttribute("tabindex")).toBe("-1");
+    await user.click(link);
+    expect(doButton).not.toHaveBeenCalled();
+    expect(doFilho).not.toHaveBeenCalled();
+  });
+
+  it("isLoading marca aria-busy e não dispara onClick", async () => {
+    const user = userEvent.setup();
+    const aoClicar = vi.fn();
+    render(
+      <Button asChild isLoading onClick={aoClicar}>
+        <a href="#">Salvar</a>
+      </Button>,
+    );
+    const link = screen.getByRole("link", { name: "Salvar" });
+    expect(link.getAttribute("aria-busy")).toBe("true");
+    await user.click(link);
+    expect(aoClicar).not.toHaveBeenCalled();
+  });
+
+  it("filho <button> recebe type=button por padrão (não submete form)", () => {
+    render(
+      <Button asChild>
+        <button>Cancelar</button>
+      </Button>,
+    );
+    const botao = screen.getByRole("button", { name: "Cancelar" });
+    expect(botao.getAttribute("type")).toBe("button");
+  });
+
+  it("onClick do Button sobrevive a onClick={undefined} no filho", async () => {
+    const user = userEvent.setup();
+    const aoClicar = vi.fn();
+    render(
+      <Button asChild onClick={aoClicar}>
+        <a href="#" onClick={undefined}>
+          Voltar
+        </a>
+      </Button>,
+    );
+    await user.click(screen.getByRole("link", { name: "Voltar" }));
+    expect(aoClicar).toHaveBeenCalledTimes(1);
+  });
+
+  it("cleanup de callback ref do filho roda no unmount (React 19)", () => {
+    const limpeza = vi.fn();
+    const { unmount } = render(
+      <Button asChild>
+        <a href="#" ref={() => limpeza}>
+          Voltar
+        </a>
+      </Button>,
+    );
+    expect(limpeza).not.toHaveBeenCalled();
+    unmount();
+    expect(limpeza).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("Button sem asChild", () => {

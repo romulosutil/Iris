@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import { surface, control } from "./primitives/surface";
+import { comporRefs, mesclarPropsSlot } from "./primitives/slot";
 
 /**
  * Escala de ênfase (Espectro Brutal v3). O PESO é o antídoto contra "wireframe":
@@ -16,59 +17,6 @@ type Variante =
   | "primary"
   | "secondary"
   | "tertiary";
-
-type PropsGenericas = Record<string, unknown>;
-
-/**
- * Mescla de props no padrão Radix Slot: o filho vence em conflitos comuns,
- * `className`/`style` são combinados e handlers `onX` são compostos — o do
- * filho roda primeiro e `event.preventDefault()` cancela o do Button.
- */
-function mesclarPropsSlot(
-  propsDoSlot: PropsGenericas,
-  propsDoFilho: PropsGenericas,
-): PropsGenericas {
-  const mescladas: PropsGenericas = { ...propsDoSlot, ...propsDoFilho };
-  for (const nome of Object.keys(propsDoSlot)) {
-    const doSlot = propsDoSlot[nome];
-    const doFilho = propsDoFilho[nome];
-    if (
-      /^on[A-Z]/.test(nome) &&
-      typeof doSlot === "function" &&
-      typeof doFilho === "function"
-    ) {
-      mescladas[nome] = (...args: unknown[]) => {
-        (doFilho as (...a: unknown[]) => void)(...args);
-        const evento = args[0] as { defaultPrevented?: boolean } | undefined;
-        if (!evento?.defaultPrevented) {
-          (doSlot as (...a: unknown[]) => void)(...args);
-        }
-      };
-    } else if (nome === "className") {
-      mescladas.className = cn(doSlot as string, doFilho as string);
-    } else if (nome === "style") {
-      mescladas.style = {
-        ...(doSlot as React.CSSProperties),
-        ...(doFilho as React.CSSProperties),
-      };
-    }
-  }
-  return mescladas;
-}
-
-function comporRefs<T>(
-  ...refs: Array<React.Ref<T> | undefined | null>
-): React.RefCallback<T> {
-  return (node) => {
-    for (const ref of refs) {
-      if (typeof ref === "function") {
-        ref(node);
-      } else if (ref != null) {
-        (ref as React.MutableRefObject<T | null>).current = node;
-      }
-    }
-  };
-}
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -170,8 +118,22 @@ export const Button = React.forwardRef<HTMLElement, ButtonProps>(
       ? "cursor-wait relative"
       : "";
 
-    // Alerta de acessibilidade para Icon Only
-    if (process.env.NODE_ENV !== "production" && iconOnly && !props["aria-label"]) {
+    const filhoAsChild =
+      asChild && React.isValidElement(children)
+        ? (children as React.ReactElement<
+            Record<string, unknown> & { ref?: React.Ref<HTMLElement> }
+          >)
+        : null;
+
+    // Alerta de acessibilidade para Icon Only (o rótulo pode estar no próprio
+    // Button ou, com asChild, no elemento filho).
+    const temRotuloAcessivel = Boolean(
+      props["aria-label"] ??
+        props["aria-labelledby"] ??
+        filhoAsChild?.props["aria-label"] ??
+        filhoAsChild?.props["aria-labelledby"],
+    );
+    if (process.env.NODE_ENV !== "production" && iconOnly && !temRotuloAcessivel) {
       console.warn(
         "Acessibilidade: Botões 'iconOnly' devem possuir um 'aria-label' para leitores de tela."
       );
@@ -197,17 +159,49 @@ export const Button = React.forwardRef<HTMLElement, ButtonProps>(
       className
     );
 
-    if (asChild && React.isValidElement(children)) {
-      const filho = children as React.ReactElement<
-        PropsGenericas & { ref?: React.Ref<HTMLElement> }
-      >;
-      const mescladas = mesclarPropsSlot(
-        { ...props, onClick, className: combinedClassName },
-        filho.props,
-      );
-      // React 19: ref é prop comum, vive em filho.props.ref.
-      mescladas.ref = comporRefs(ref, filho.props.ref);
-      return React.cloneElement(filho, mescladas);
+    if (asChild) {
+      if (filhoAsChild) {
+        if (process.env.NODE_ENV !== "production" && (iconLeft || iconRight)) {
+          console.warn(
+            "Button asChild ignora 'iconLeft'/'iconRight' — coloque o ícone dentro do elemento filho.",
+          );
+        }
+        const estaDesabilitado = Boolean(disabled) || isLoading;
+        const mescladas = mesclarPropsSlot(
+          {
+            ...props,
+            onClick,
+            className: combinedClassName,
+            "aria-busy": isLoading || undefined,
+            // O default `type ?? "button"` do branch <button> vale também para
+            // um filho <button> literal (evita submit implícito em <form>).
+            ...(filhoAsChild.type === "button"
+              ? { type: type ?? "button" }
+              : {}),
+          },
+          filhoAsChild.props,
+        );
+        // React 19: ref é prop comum, vive em filho.props.ref.
+        mescladas.ref = comporRefs(ref, filhoAsChild.props.ref);
+        if (estaDesabilitado) {
+          // Espelha o contrato `disabled={disabled || isLoading}` do branch
+          // <button>: sem clique (nem navegação) e sem foco por teclado.
+          mescladas["aria-disabled"] = true;
+          mescladas.tabIndex = -1;
+          mescladas.onClick = (evento: React.SyntheticEvent) => {
+            evento.preventDefault();
+          };
+          if (filhoAsChild.type === "button") {
+            mescladas.disabled = true;
+          }
+        }
+        return React.cloneElement(filhoAsChild, mescladas);
+      }
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          "Button asChild espera exatamente um elemento React como filho; renderizando o <button> padrão.",
+        );
+      }
     }
 
     return (
