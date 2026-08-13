@@ -1517,6 +1517,10 @@ Logo depois do primeiro deploy, **Logs** do serviço. Primeira linha esperada:
 [agendador-billing] 2026-08-13T20:00:00Z ativo. intervalo=3600s · heartbeat=/heartbeat/.ultimo-fechamento
 ```
 
+As duas linhas abaixo não são exemplo inventado: o laço foi exercitado na imagem
+real em 13/08/2026, contra um dublê da rota, com `INTERVALO_S=15`. O formato é
+este, com o intervalo trocado.
+
 E, a cada hora, uma linha JSON única do disparo (aqui quebrada em várias linhas
 para caber na página; no log ela é uma só):
 
@@ -1630,9 +1634,22 @@ ter pelo menos uma ficha ativa.
 ### O que fazer se der errado
 
 1. **`"status":401` na linha JSON.** O `BILLING_JOB_TOKEN` do serviço `App` está
-   ausente ou diferente do deste serviço. Abra as duas abas `Ambiente` e **olhe**
-   os valores — não confie em "eu já configurei". Depois de corrigir, clique em
-   `Implantar` no serviço alterado.
+   ausente ou diferente do deste serviço. É assim que esse caso aparece —
+   exercitado contra a rota de produção em 13/08/2026, com um token inválido:
+
+   ```
+   [fechamento-ciclo-billing] disparo FALHOU (status): HTTP 401 — corpo recebido: {"error":"não autorizado"}
+   [agendador-billing] ... ATENÇÃO: disparo de fechamento FALHOU (exit 1) — 1 falha(s) seguida(s).
+   [agendador-billing] ... ATENÇÃO: enquanto isso durar, ciclo de faturamento vencido NÃO está sendo fechado.
+   ```
+
+   O corpo `{"error":"não autorizado"}` vem da própria rota (`route.ts`), não do
+   proxy — é a evidência de que o disparo chegou ao app e foi recusado lá dentro.
+   O laço **não** morre: ele conta as falhas seguidas e o heartbeat **não é
+   criado**. Abra as duas abas `Ambiente` e **olhe** os valores — não confie em
+   "eu já configurei". Depois de corrigir, clique em `Implantar` no serviço
+   alterado.
+
 2. **`"falha":"rede"`.** O container não alcança `BILLING_JOB_URL`. Confira a URL
    (é a pública, com `https://`, não host interno).
 3. **`"falha":"timeout"`.** Sem resposta em 30s. **Não conclua que o fechamento
