@@ -98,7 +98,7 @@ export function AgendaViewCliente({
     const qs = new URLSearchParams();
     if (novoDia) qs.set("dia", novoDia);
     qs.set("visao", modoVisao);
-    router.push(`/agenda?${qs.toString()}`);
+    router.push(`/agenda?${qs.toString()}`, { scroll: false });
   };
 
   // Estados de busca e filtragem
