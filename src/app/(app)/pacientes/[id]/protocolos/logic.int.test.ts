@@ -36,8 +36,10 @@ describe.skipIf(!hasDb)("dashboard de protocolos · agregação e RLS", () => {
     Q = await import("./queries");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
+    // `protocol_familia_catalogo` NÃO entra no TRUNCATE: é dado de referência
+    // da migração 0001 (guard db/tests/no-truncate-reference-data.test.ts, #222).
     await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
-      protocol_familia_catalogo, protocol, patient_protocol, milestone,
+      protocol, patient_protocol, milestone,
       goal, goal_milestone_mapping, goal_candidacy,
       session, extraction, evidence RESTART IDENTITY CASCADE`;
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')`;
@@ -50,7 +52,7 @@ describe.skipIf(!hasDb)("dashboard de protocolos · agregação e RLS", () => {
       (${PAC_B}, ${CLINIC_B}, 'PB')`;
 
     // Protocolo ativo do paciente A + marco.
-    await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES ('vb-mapp', 'VB-MAPP')`;
+    await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES ('vb-mapp', 'VB-MAPP') ON CONFLICT (id) DO NOTHING`;
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia)
       VALUES (${PROTO1}, ${CLINIC_A}, 'VB-MAPP', 'ABA', 'vb-mapp')`;
     await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por)
