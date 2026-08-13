@@ -17,6 +17,59 @@ type Variante =
   | "secondary"
   | "tertiary";
 
+type PropsGenericas = Record<string, unknown>;
+
+/**
+ * Mescla de props no padrão Radix Slot: o filho vence em conflitos comuns,
+ * `className`/`style` são combinados e handlers `onX` são compostos — o do
+ * filho roda primeiro e `event.preventDefault()` cancela o do Button.
+ */
+function mesclarPropsSlot(
+  propsDoSlot: PropsGenericas,
+  propsDoFilho: PropsGenericas,
+): PropsGenericas {
+  const mescladas: PropsGenericas = { ...propsDoSlot, ...propsDoFilho };
+  for (const nome of Object.keys(propsDoSlot)) {
+    const doSlot = propsDoSlot[nome];
+    const doFilho = propsDoFilho[nome];
+    if (
+      /^on[A-Z]/.test(nome) &&
+      typeof doSlot === "function" &&
+      typeof doFilho === "function"
+    ) {
+      mescladas[nome] = (...args: unknown[]) => {
+        (doFilho as (...a: unknown[]) => void)(...args);
+        const evento = args[0] as { defaultPrevented?: boolean } | undefined;
+        if (!evento?.defaultPrevented) {
+          (doSlot as (...a: unknown[]) => void)(...args);
+        }
+      };
+    } else if (nome === "className") {
+      mescladas.className = cn(doSlot as string, doFilho as string);
+    } else if (nome === "style") {
+      mescladas.style = {
+        ...(doSlot as React.CSSProperties),
+        ...(doFilho as React.CSSProperties),
+      };
+    }
+  }
+  return mescladas;
+}
+
+function comporRefs<T>(
+  ...refs: Array<React.Ref<T> | undefined | null>
+): React.RefCallback<T> {
+  return (node) => {
+    for (const ref of refs) {
+      if (typeof ref === "function") {
+        ref(node);
+      } else if (ref != null) {
+        (ref as React.MutableRefObject<T | null>).current = node;
+      }
+    }
+  };
+}
+
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variante?: Variante;
@@ -63,7 +116,7 @@ function estiloVariante(v: Variante): string {
   }
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+export const Button = React.forwardRef<HTMLElement, ButtonProps>(
   function Button(
     {
       className,
@@ -145,17 +198,21 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     );
 
     if (asChild && React.isValidElement(children)) {
-      const child = children as React.ReactElement<any>;
-      return React.cloneElement(child, {
-        ref,
-        className: cn(combinedClassName, child.props.className),
-        ...props,
-      });
+      const filho = children as React.ReactElement<
+        PropsGenericas & { ref?: React.Ref<HTMLElement> }
+      >;
+      const mescladas = mesclarPropsSlot(
+        { ...props, onClick, className: combinedClassName },
+        filho.props,
+      );
+      // React 19: ref é prop comum, vive em filho.props.ref.
+      mescladas.ref = comporRefs(ref, filho.props.ref);
+      return React.cloneElement(filho, mescladas);
     }
 
     return (
       <button
-        ref={ref}
+        ref={ref as React.ForwardedRef<HTMLButtonElement>}
         type={type ?? "button"}
         disabled={disabled || isLoading}
         aria-busy={isLoading || undefined}
