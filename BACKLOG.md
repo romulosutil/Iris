@@ -62,7 +62,7 @@
 
 ---
 
-## 🏁 Sessão 13/08/2026 — #248: Fila de Validação integrada ao design system (PR #279, draft)
+## 🏁 Sessão 13/08/2026 — #248: Fila de Validação integrada ao design system (PR #279, pronto para revisão)
 
 Entregue em `feat/validacao-fila-design-system-248`: migração da fila para `ConfidenceCard`/`CompareRow`/`BatchBar` + `aprovarEvidenciasLote` (transação atômica, elegibilidade re-derivada no servidor via `avaliarFriccao`, locks em ordem determinística, audit por evidência, teto 50). Spec da issue corrigida contra o modelo real (`evidence` append-only — não há `UPDATE ... status`; provável causa da morte do PR #256 do Jules).
 
