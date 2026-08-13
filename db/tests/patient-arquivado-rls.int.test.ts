@@ -39,7 +39,7 @@ const P_R6_EQUIPE = "00000000-0000-0000-0000-0000000174d7"; // arquivado, U_TER_
 const P_R6_FORA = "00000000-0000-0000-0000-0000000174d8"; // arquivado, U_TER_A fora da equipe e sem sessão
 const P_R6_ATIVO = "00000000-0000-0000-0000-0000000174da"; // NÃO arquivado, U_TER_A na equipe
 const P_R6_COBERTURA = "00000000-0000-0000-0000-0000000174db"; // arquivado, U_TER_A fora da equipe MAS com sessão atribuída (D8)
-const S_COBERTURA = "00000000-0000-0000-0000-0000000174s1";
+const S_COBERTURA = "00000000-0000-0000-0000-000000017451";
 
 const ctx = (role: string, userId: string, clinicId = CLINIC_A) =>
   ({ role, userId, clinicId }) as TenantContext;
@@ -205,7 +205,9 @@ describe.skipIf(!hasDb)("#174 · patient.arquivado_em sob RLS", () => {
   // ─── isolamento multi-tenant (não regredir) ───────────────────────────────
   test("paciente de OUTRA clínica continua invisível (arquivado ou não)", async () => {
     const rows = await withTenant(ctx("coordenador", U_COORD_A), (db) =>
-      db.execute(sql`SELECT id FROM patient WHERE id = ${P_OUTRA_CLINICA}::uuid`),
+      db.execute(
+        sql`SELECT id FROM patient WHERE id = ${P_OUTRA_CLINICA}::uuid`,
+      ),
     );
     expect(rows).toHaveLength(0);
   });
