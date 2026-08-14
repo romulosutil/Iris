@@ -494,6 +494,34 @@ describe("AsaasProvider", () => {
       // Decimal do gateway volta a inteiro na entrada do sistema.
       expect(r.valorCentavos).toBe(13700);
     });
+
+    it("devolve o motivo da recusa quando o gateway informa algum", async () => {
+      // Leitura defensiva, não contrato: medido em 13/08/2026, o objeto `payment`
+      // do Asaas NÃO trouxe campo de motivo em nenhuma das cobranças reais do
+      // sandbox. Se um dia trouxer, o motivo tem que chegar ao ciclo — e o teste
+      // documenta os nomes que o adapter aceita.
+      fetchMock.mockResolvedValueOnce(
+        resposta({
+          id: "pay_1",
+          status: "REFUSED",
+          value: 390,
+          refusalReason: "LIMITE_AUTORIZADO_EXCEDIDO",
+        }),
+      );
+      const r = await new AsaasProvider().consultarCobranca("pay_1");
+      expect(r.motivoRecusa).toBe("LIMITE_AUTORIZADO_EXCEDIDO");
+    });
+
+    it("devolve motivoRecusa null quando o gateway não informa nada", async () => {
+      // É este o caso REAL medido. `null` aqui é o que dispara o diagnóstico com
+      // hipóteses ranqueadas na Task 3 — inventar um motivo aqui seria o erro que
+      // a #286 existe para evitar.
+      fetchMock.mockResolvedValueOnce(
+        resposta({ id: "pay_2", status: "REFUSED", value: 390 }),
+      );
+      const r = await new AsaasProvider().consultarCobranca("pay_2");
+      expect(r.motivoRecusa).toBeNull();
+    });
   });
 
   describe("consultarVinculo", () => {

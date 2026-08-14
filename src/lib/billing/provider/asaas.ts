@@ -706,11 +706,25 @@ export class AsaasProvider implements BillingProvider {
   async consultarCobranca(providerChargeId: string): Promise<{
     status: StatusCobranca;
     valorCentavos: number;
+    motivoRecusa: string | null;
   }> {
     const resposta = comoRegistro(
       await chamar("GET", `/payments/${encodeURIComponent(providerChargeId)}`),
     );
     const valor = resposta.value;
+
+    /**
+     * Leitura defensiva: nenhum destes campos foi observado numa resposta real
+     * (medição de 13/08/2026 — o `payment` recusado não trouxe motivo algum, e
+     * `pixTransaction` veio `null`). Tentamos os nomes plausíveis e aceitamos
+     * `null`; o diagnóstico com hipóteses ranqueadas fica em
+     * `conciliarPagamentoDeCiclo`, não aqui. O adapter não adivinha causa.
+     */
+    const motivoRecusa =
+      comoTexto(resposta.refusalReason) ??
+      comoTexto(resposta.failureReason) ??
+      comoTexto(comoRegistro(resposta.pixTransaction).failureReason) ??
+      null;
 
     return {
       status: mapearStatusCobranca(resposta.status),
@@ -719,6 +733,7 @@ export class AsaasProvider implements BillingProvider {
         typeof valor === "number" && Number.isFinite(valor)
           ? reaisParaCentavos(valor)
           : 0,
+      motivoRecusa,
     };
   }
 

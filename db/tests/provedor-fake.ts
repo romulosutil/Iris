@@ -181,13 +181,18 @@ export class ProvedorFake implements BillingProvider {
     };
   }
 
-  async consultarCobranca(
-    providerChargeId: string,
-  ): Promise<{ status: StatusCobranca; valorCentavos: number }> {
+  async consultarCobranca(providerChargeId: string): Promise<{
+    status: StatusCobranca;
+    valorCentavos: number;
+    motivoRecusa: string | null;
+  }> {
     const corpo = await pedir(`${BASE_URL_FAKE}/cobrancas/${providerChargeId}`);
     return {
       status: mapearStatusCobranca(corpo.estado),
       valorCentavos: Number(corpo.centavos ?? 0),
+      // Gateway fake não modela motivo de recusa; mesmo caminho "não informado"
+      // do adapter real do Asaas.
+      motivoRecusa: null,
     };
   }
 

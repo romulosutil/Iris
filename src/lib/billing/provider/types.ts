@@ -268,6 +268,14 @@ export interface BillingProvider {
   consultarCobranca(providerChargeId: string): Promise<{
     status: StatusCobranca;
     valorCentavos: number;
+    /**
+     * Motivo bruto da recusa, do jeito que o gateway mandou, ou `null` quando
+     * ele não informa. Medido em 13/08/2026 contra o Asaas: NENHUM campo de
+     * motivo apareceu no objeto `payment`, e as autorizações recusadas vieram
+     * com `cancellationReason: null`. Por isso `null` é o caso esperado, não a
+     * exceção — quem consome tem que ter um caminho para "não informado".
+     */
+    motivoRecusa: string | null;
   }>;
 
   /**
