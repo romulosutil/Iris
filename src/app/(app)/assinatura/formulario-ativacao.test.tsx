@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FormularioAtivacao } from "./formulario-ativacao";
 import type { AtivacaoState } from "./logic";
+import { formatarBRL } from "@/lib/billing/calculator";
 
 /**
  * O que estes casos discriminam:
@@ -239,6 +240,10 @@ describe("FormularioAtivacao", () => {
     const aviso = await screen.findByText(/valor máximo/i);
     const paragrafoAviso = aviso.closest("p");
     expect(paragrafoAviso?.textContent).toMatch(/R\$ 40/);
+    // E precisa nomear o valor de VERDADE da ativação (via `formatarBRL`,
+    // nunca hardcoded) — sem isso, trocar a interpolação por um texto
+    // estático errado continuaria verde neste teste (D22).
+    expect(paragrafoAviso?.textContent).toContain(formatarBRL(1));
 
     // Está DENTRO do mesmo Alert do QR Code — não é parágrafo solto ao lado.
     // O título do Alert é o âncora estável: `closest("div")` a partir do QR
