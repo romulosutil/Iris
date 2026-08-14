@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { FAIXAS_PRECIFICACAO, formatarBRL } from "@/lib/billing/calculator";
 import { FormularioAtivacao } from "./formulario-ativacao";
+import { obterSituacaoConta } from "../queries";
 
 export const metadata = {
   title: "Assinatura",
@@ -46,6 +47,7 @@ function faixasParaLinhas() {
 
 export default async function AssinaturaPage() {
   const ctx = await getTenantContext();
+  const situacaoConta = await obterSituacaoConta(ctx);
   // Sem `notFound()` para os demais papéis: a recepção é justamente quem
   // esbarra no bloqueio ao cadastrar o 1º paciente e é mandada para cá. Uma
   // tela 404 esconderia o motivo; a tela explica quem pode contratar.
@@ -145,7 +147,10 @@ export default async function AssinaturaPage() {
           Ativar a assinatura
         </h2>
         {podeContratar ? (
-          <FormularioAtivacao documentoAtual={documentoAtual} />
+          <FormularioAtivacao
+            documentoAtual={documentoAtual}
+            situacaoConta={situacaoConta}
+          />
         ) : (
           <>
             <Alert severidade="info" titulo="Só a coordenação contrata">

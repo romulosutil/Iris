@@ -1,8 +1,17 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FormularioAtivacao } from "./formulario-ativacao";
 import type { AtivacaoState } from "./logic";
+
+const refreshMock = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter() {
+    return {
+      refresh: refreshMock,
+    };
+  },
+}));
 
 /**
  * O que estes casos discriminam:
@@ -44,6 +53,10 @@ function acaoSuspensa() {
 }
 
 describe("FormularioAtivacao", () => {
+  beforeEach(() => {
+    refreshMock.mockReset();
+  });
+
   it("não oferece escolha de método — nenhum controle, nenhum campo `metodo`", () => {
     const { container } = render(
       <FormularioAtivacao acao={acaoQueDevolve({})} />,
@@ -498,5 +511,272 @@ describe("FormularioAtivacao", () => {
     const texto = (alerta.textContent ?? "").replace(/ /g, " ");
     expect(texto).not.toMatch(/R\$/);
     expect(texto).not.toMatch(/cobra .*agora/is);
+  });
+
+  it("com Pix pendente, inicia polling de 5s e chama refreshMock (mutação: sem refresh o teste falha)", () => {
+    vi.useFakeTimers();
+    try {
+      const brCode = "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF";
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{
+            autorizacao: {
+              forma: "pix_copia_e_cola",
+              brCode,
+              valorAtivacaoCentavos: 1,
+            },
+          }}
+          situacaoConta={{
+            estado: "trial_expirado",
+            podeEscrever: false,
+            podeCadastrarPaciente: false,
+            diasRestantesTrial: -1,
+            statusAssinatura: "free_tier",
+          }}
+        />,
+      );
+
+      // No Pix pendente, após renderizar o QR code, o polling deve começar.
+      expect(refreshMock).not.toHaveBeenCalled();
+
+      // Avança 5 segundos
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(refreshMock).toHaveBeenCalledTimes(1);
+
+      // Avança mais 5 segundos (total 10s)
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(refreshMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("com Pix pendente, reage a visibilitychange com router.refresh() imediato", () => {
+    const brCode = "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF";
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({})}
+        navegar={vi.fn()}
+        estadoInicial={{
+          autorizacao: {
+            forma: "pix_copia_e_cola",
+            brCode,
+            valorAtivacaoCentavos: 1,
+          },
+        }}
+        situacaoConta={{
+          estado: "trial_expirado",
+          podeEscrever: false,
+          podeCadastrarPaciente: false,
+          diasRestantesTrial: -1,
+          statusAssinatura: "free_tier",
+        }}
+      />,
+    );
+
+    expect(refreshMock).not.toHaveBeenCalled();
+
+    // Simula visibilitychange para 'visible'
+    Object.defineProperty(document, "visibilityState", {
+      value: "visible",
+      writable: true,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("quando situacaoConta indica 'ativa', renderiza mensagem de sucesso de assinatura ativada e botão de cadastrar paciente", () => {
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({})}
+        navegar={vi.fn()}
+        situacaoConta={{
+          estado: "ativa",
+          podeEscrever: true,
+          podeCadastrarPaciente: true,
+          diasRestantesTrial: null,
+          statusAssinatura: "active",
+        }}
+      />,
+    );
+
+    // Verifica que o banner/alerta de sucesso e o botão estão presentes
+    const alert = screen.getByRole("status");
+    expect(alert.textContent).toContain(
+      "Sua assinatura foi ativada com sucesso!",
+    );
+
+    const link = screen.getByRole("link", { name: /cadastrar paciente/i });
+    expect(link.getAttribute("href")).toBe("/pacientes/novo");
+
+    // O formulário de ativação (input/botão de ativação) não deve mais ser exibido
+    expect(screen.queryByLabelText(/cpf ou cnpj do titular/i)).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /ativar assinatura/i }),
+    ).toBeNull();
+  });
+
+  /**
+   * Os três casos abaixo cobrem mutantes que sobreviviam à suíte original: com
+   * `clearInterval`, o guard `estaAtiva` e o guard `document.visibilityState`
+   * REMOVIDOS um a um do efeito, os testes continuavam 19/19 verdes. Ou seja: o
+   * "pare de fazer polling" — que é item da definição de pronto da #285 — não
+   * era verificado por CI nenhum.
+   */
+
+  it("para o polling ao desmontar — sem `clearInterval` o timer vaza e continua chamando refresh", () => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{
+            autorizacao: {
+              forma: "pix_copia_e_cola",
+              brCode: "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF",
+              valorAtivacaoCentavos: 1,
+            },
+          }}
+          situacaoConta={{
+            estado: "trial_expirado",
+            podeEscrever: false,
+            podeCadastrarPaciente: false,
+            diasRestantesTrial: -1,
+            statusAssinatura: "free_tier",
+          }}
+        />,
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(refreshMock).toHaveBeenCalledTimes(1);
+
+      unmount();
+
+      // Três ciclos inteiros depois do desmonte: o intervalo tem de estar morto.
+      // Sem o `clearInterval` da limpeza, o `setInterval` sobrevive ao
+      // componente e fica batendo no servidor até a aba fechar.
+      act(() => {
+        vi.advanceTimersByTime(15000);
+      });
+      expect(refreshMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("para o polling quando a conta vira `ativa` — item 2 da definição de pronto da #285", () => {
+    vi.useFakeTimers();
+    try {
+      const autorizacaoPendente = {
+        autorizacao: {
+          forma: "pix_copia_e_cola" as const,
+          brCode: "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF",
+          valorAtivacaoCentavos: 1,
+        },
+      };
+
+      const { rerender } = render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={autorizacaoPendente}
+          situacaoConta={{
+            estado: "trial_expirado",
+            podeEscrever: false,
+            podeCadastrarPaciente: false,
+            diasRestantesTrial: -1,
+            statusAssinatura: "free_tier",
+          }}
+        />,
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(refreshMock).toHaveBeenCalledTimes(1);
+
+      // É exatamente o que acontece em produção: um `router.refresh()` traz do
+      // Server Component a `situacaoConta` nova, já `ativa`. A autorização Pix
+      // do `useActionState` NÃO some — continua no estado do cliente —, então
+      // quem tem de derrubar o intervalo é o guard `estaAtiva`, não a ausência
+      // de autorização.
+      act(() => {
+        rerender(
+          <FormularioAtivacao
+            acao={acaoQueDevolve({})}
+            navegar={vi.fn()}
+            estadoInicial={autorizacaoPendente}
+            situacaoConta={{
+              estado: "ativa",
+              podeEscrever: true,
+              podeCadastrarPaciente: true,
+              diasRestantesTrial: null,
+              statusAssinatura: "active",
+            }}
+          />,
+        );
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(15000);
+      });
+      expect(refreshMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("não faz refresh no `visibilitychange` quando a aba ficou OCULTA", () => {
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({})}
+        navegar={vi.fn()}
+        estadoInicial={{
+          autorizacao: {
+            forma: "pix_copia_e_cola",
+            brCode: "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF",
+            valorAtivacaoCentavos: 1,
+          },
+        }}
+        situacaoConta={{
+          estado: "trial_expirado",
+          podeEscrever: false,
+          podeCadastrarPaciente: false,
+          diasRestantesTrial: -1,
+          statusAssinatura: "free_tier",
+        }}
+      />,
+    );
+
+    // O jsdom já nasce com `visibilityState === "visible"`, então o caso
+    // "visible" do teste acima passa mesmo se o guard for apagado. Só o caso
+    // OCULTO discrimina o guard.
+    try {
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      expect(refreshMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        writable: true,
+        configurable: true,
+      });
+    }
   });
 });
