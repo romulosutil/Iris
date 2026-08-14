@@ -304,6 +304,48 @@ describe.skipIf(!hasDb)("equipe actions", () => {
   });
 
   describe("edição", () => {
+    test("edição que resulta em duplo vínculo vira erro amigável", async () => {
+      await prescrever("ABA", "10.0");
+
+      await adicionarMembroEquipe(
+        ctx,
+        PATIENT,
+        form({
+          userId: U_TERA,
+          disciplina: "ABA",
+          papelNaEquipe: "terapeuta_referencia",
+          horasSemana: "4",
+        }),
+      );
+
+      await adicionarMembroEquipe(
+        ctx,
+        PATIENT,
+        form({
+          userId: U_TERA,
+          disciplina: "ABA",
+          papelNaEquipe: "substituto",
+          horasSemana: "2",
+        }),
+      );
+
+      const todos = await membros();
+      const substituto = todos.find((m) => m.papelNaEquipe === "substituto")!;
+
+      const result = await editarMembroEquipe(
+        ctx,
+        PATIENT,
+        substituto.id,
+        form({
+          disciplina: "ABA",
+          papelNaEquipe: "terapeuta_referencia",
+          horasSemana: "4",
+        }),
+      );
+
+      expect(result.error).toMatch(/já está na equipe nesta disciplina/);
+    });
+
     test("editar as próprias horas não conta a alocação atual duas vezes", async () => {
       await prescrever("ABA", "10.0");
       await adicionarMembroEquipe(
