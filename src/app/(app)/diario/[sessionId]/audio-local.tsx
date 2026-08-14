@@ -207,7 +207,6 @@ export function AudioLocal({
             <Button
               type="button"
               variante="neutra"
-              risco="alto"
               onClick={() => void descartar()}
               disabled={estado === "enviando"}
             >

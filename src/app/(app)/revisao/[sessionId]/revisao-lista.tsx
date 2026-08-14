@@ -131,7 +131,7 @@ function AcaoForm({
     <form action={formAction} className="contents">
       <input type="hidden" name="sessionId" value={sessionId} />
       <input type="hidden" name="extractionId" value={extractionId} />
-      <Button type="submit" variante={variante} risco="alto" disabled={disabled || pending}>
+      <Button type="submit" variante={variante} disabled={disabled || pending}>
         {pending ? "…" : children}
       </Button>
       {state.error ? (
@@ -161,7 +161,7 @@ function DialogoEditar({
   // — com o diálogo — desmonta. O usuário pode fechar manualmente antes disso.
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <Button type="button" variante="neutra" risco="alto" onClick={() => setAberto(true)}>
+      <Button type="button" variante="neutra" onClick={() => setAberto(true)}>
         Editar
       </Button>
       <DialogContent>
@@ -203,7 +203,7 @@ function DialogoEditar({
             />
           </label>
           {state.error ? <Alert severidade="erro">{state.error}</Alert> : null}
-          <Button type="submit" risco="alto" disabled={pending}>
+          <Button type="submit" disabled={pending}>
             {pending ? "Salvando…" : "Salvar correção"}
           </Button>
         </form>

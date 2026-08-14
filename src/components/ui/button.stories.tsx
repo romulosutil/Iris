@@ -18,7 +18,6 @@ const meta = {
       control: "inline-radio",
       options: ["primaria", "secundaria", "terciaria"],
     },
-    risco: { control: "inline-radio", options: ["baixo", "alto"] },
     disabled: { control: "boolean" },
   },
 } satisfies Meta<typeof Button>;
@@ -31,18 +30,6 @@ export const Primaria: Story = {};
 export const Secundaria: Story = { args: { variante: "secundaria", children: "Editar" } };
 
 export const Terciaria: Story = { args: { variante: "terciaria", children: "Cancelar" } };
-
-export const RiscoAlto: Story = {
-  args: { risco: "alto", children: "Reclassificar evidência" },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          "Deslocamento no clique maior — o atrito escala com o risco da decisão (princípio 2).",
-      },
-    },
-  },
-};
 
 export const Desabilitado: Story = { args: { disabled: true } };
 
@@ -76,9 +63,6 @@ export const EscalaDeEnfase: Story = {
       <Button variante="primaria">Aprovar</Button>
       <Button variante="secundaria">Editar</Button>
       <Button variante="terciaria">Cancelar</Button>
-      <Button variante="primaria" risco="alto">
-        Reclassificar
-      </Button>
       <Button disabled>Desabilitada</Button>
     </div>
   ),

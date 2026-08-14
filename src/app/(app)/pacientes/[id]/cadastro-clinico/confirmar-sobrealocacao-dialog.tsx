@@ -109,7 +109,6 @@ export function ConfirmarSobrealocacaoDialog({
             <input type="hidden" name="confirmarSobrealocacao" value="1" />
             <Button
               type="submit"
-              risco="alto"
               tamanho="sm"
               isLoading={isPending}
             >
