@@ -655,6 +655,19 @@ export async function conciliarPagamentoDeCiclo(
      * explícito do gateway trocaria uma por outra. Medido em 13/08/2026: o
      * Asaas não informou motivo em nenhuma recusa observável, então o ramo
      * `null` é o esperado — e ele diz que a causa é HIPÓTESE, não fato.
+     *
+     * Suposição aberta, NÃO medida: este ramo só é alcançado se a reconsulta
+     * a `GET /payments/{id}` (feita em `route.ts`) devolver
+     * `status: "OVERDUE"` — `mapearStatusCobranca` (`asaas.ts`) só mapeia
+     * `OVERDUE` para `"recusada"`. A recusa de instrução do Pix Automático
+     * (`INSTRUCTION_REFUSED`) chega ao webhook SEM `payment.status`, só com
+     * `paymentInstruction.status` (ver `normalizarEventoAsaas`), e o que a
+     * reconsulta devolve para o `payment` associado a uma recusa de
+     * instrução real não foi observado — o sandbox medido em 13/08/2026 só
+     * tinha cobranças em `PENDING`. Se a primeira recusa real chegar com o
+     * `payment` ainda em `PENDING`, este ramo NÃO dispara e nada é gravado.
+     * Verificação pendente quando a primeira recusa real chegar: runbook em
+     * `infra/README.md` (seção #286).
      */
     const erro = motivoRecusa
       ? `cobrança recusada pelo gateway: ${motivoRecusa}`

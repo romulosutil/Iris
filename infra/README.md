@@ -1775,7 +1775,7 @@ está certo e o dado do ensaio é que está errado.
 
 ### Runbook — medir o teto real do Pix Automático em produção (#286)
 
-A #286 achou que o Pix Automático exige um **teto de valor**, definido pelo
+A #286 constatou que o Pix Automático exige um **teto de valor**, definido pelo
 pagador no app do banco no ato da autorização — e que um teto baixo demais
 (ex.: R$ 0,01, o valor da própria cobrança de ativação) recusa toda mensalidade
 futura em silêncio. O "Ponto aberto" da issue é: **dá para o Iris ler esse teto
@@ -1784,8 +1784,8 @@ preventiva (Task 1 da #286)?**
 
 Isso já foi medido uma vez, em 13/08/2026, contra o **sandbox** do Asaas: o
 objeto `authorization` não tem nenhum campo de teto — só `minLimitValue`
-(mínimo, sempre `null`). Mas as três autorizações do sandbox estavam todas em
-`status: "CREATED"`/`"REFUSED"`, nenhuma em `ACTIVE` — e o teto é escrito pelo
+(mínimo, `null` nas três observadas). As três autorizações do sandbox estavam
+todas em `status: "REFUSED"`, nenhuma em `ACTIVE` — e o teto é escrito pelo
 banco só depois que o pagador autoriza de verdade. Um campo que só apareça pós-
 `ACTIVE` não teria aparecido nessa medição. A autorização real, em `ACTIVE`,
 só existe em **produção** — e a chave de API de produção só existe no
@@ -1881,6 +1881,33 @@ negativa", não só o achado positivo). Antes de colar:
 - Marque o checkbox "Investigado se o teto é legível via API (resposta
   registrada aqui, mesmo que negativa)" na Definição de Pronto da #286 **só
   depois** de o comentário estar colado.
+
+**Passo 6 — quando a primeira recusa real (`INSTRUCTION_REFUSED`) chegar,
+confirmar se o diagnóstico da #286 disparou.** O diagnóstico de
+`conciliarPagamentoDeCiclo` (`src/lib/billing/subscription.ts`) só grava
+`billing_cycle.status = 'falhou'` com a hipótese do teto se a reconsulta a
+`GET /payments/{id}` devolver `status: "OVERDUE"` para a cobrança — isso
+**não foi medido** (o sandbox só tinha cobranças em `PENDING`). Assim que
+uma recusa de instrução real acontecer em produção:
+
+```sql
+SELECT id, status, provider_charge_id, erro
+  FROM billing_cycle
+ WHERE provider_charge_id = '<ID_DA_COBRANÇA_RECUSADA>';
+```
+
+- **Se `status = 'falhou'` e `erro` menciona o teto:** o diagnóstico
+  disparou — a reconsulta devolveu `OVERDUE`. O item 3 da Definição de
+  Pronto da #286 pode ser marcado como medido.
+- **Se o ciclo continuar `aguardando_pagamento` (ou qualquer status que não
+  `falhou`):** a reconsulta devolveu algo diferente de `OVERDUE` (o sinal
+  registrado nesta medição aponta `PENDING`) e o diagnóstico **não** disparou
+  — nada foi gravado, em silêncio. Nesse caso a rota
+  (`src/app/api/hooks/asaas/route.ts`) precisa passar a usar
+  `normalizado.tipo === 'cobranca.recusada'` (calculado em
+  `normalizarEventoAsaas`, que lê `paymentInstruction.status` diretamente,
+  sem depender da reconsulta) como piso adicional para acionar o
+  diagnóstico — não confiar só no status da reconsulta.
 
 **Se der errado:**
 

@@ -187,12 +187,17 @@ export function FormularioAtivacao({
                   banco. `R$ 40` é conta de folga sobre a faixa marginal real
                   (R$ 25 a R$ 39 por paciente ativo), não promessa de preço. */}
               <p className="mt-2">
+                <strong>O banco vai pedir um valor máximo de cobrança.</strong>{" "}
+                Se ele sugerir os{" "}
+                {formatarBRL(autorizacao.valorAtivacaoCentavos)} desta cobrança,
+                não aceite — isso é só a ativação.{" "}
                 <strong>
-                  O banco vai pedir um valor máximo de cobrança — não aceite os{" "}
-                  {formatarBRL(autorizacao.valorAtivacaoCentavos)} sugeridos
-                </strong>
-                , isso é só a ativação. Use um teto com folga: pacientes
-                esperados no mês × <strong>R$ 40</strong>.
+                  Se o teto ficar abaixo da mensalidade, toda cobrança futura é
+                  recusada, sem aviso.
+                </strong>{" "}
+                Defina o maior valor que o banco permitir: o Iris só cobra o que
+                for apurado no ciclo. Se preferir um número, use pacientes
+                esperados no mês multiplicado por <strong>R$ 40</strong>.
               </p>
               <div className="mt-3 flex justify-center">
                 <QrCode

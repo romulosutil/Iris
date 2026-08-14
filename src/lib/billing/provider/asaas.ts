@@ -723,8 +723,7 @@ export class AsaasProvider implements BillingProvider {
     const motivoRecusa =
       comoTexto(resposta.refusalReason) ??
       comoTexto(resposta.failureReason) ??
-      comoTexto(comoRegistro(resposta.pixTransaction).failureReason) ??
-      null;
+      comoTexto(comoRegistro(resposta.pixTransaction).failureReason);
 
     return {
       status: mapearStatusCobranca(resposta.status),

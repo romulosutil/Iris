@@ -251,8 +251,9 @@ function respondeAutorizacao(status: string) {
 /**
  * `GET /payments/{id}` — status e valor (decimal em reais) da cobrança.
  * `extra` mescla campos crus no corpo — usado para simular um gateway que
- * informa `refusalReason` (o caso SEM motivo, sem `extra`, é o medido em
- * produção em 13/08/2026; ver comentário em `asaas.ts:consultarCobranca`).
+ * informa `refusalReason` (o caso SEM motivo, sem `extra`, é medido no
+ * sandbox em 13/08/2026; nenhuma recusa real foi observável — P2 da #286
+ * segue NÃO MEDIDO; ver comentário em `asaas.ts:consultarCobranca`).
  */
 function respondeCobranca(
   status: string,
@@ -649,12 +650,18 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
        * `atual.motivoRecusa` dentro de `route.ts` é código novo, e um teste
        * que chamasse `conciliarPagamentoDeCiclo` direto passaria verde mesmo
        * se a rota não repassasse o motivo. O dublê do gateway não devolve
-       * `refusalReason`/`failureReason`/`pixTransaction`: é o caso medido em
-       * produção em 13/08/2026 — nenhuma recusa observável trouxe motivo.
+       * `refusalReason`/`failureReason`/`pixTransaction`: é o caso medido no
+       * sandbox em 13/08/2026 — nenhuma recusa real foi observável (P2 da
+       * #286 segue NÃO MEDIDO).
        */
       const paymentId = "pay_recusada_286_1";
       const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
       respondeCobranca("OVERDUE");
+
+      // O `console.warn` com tag greppável ("[billing-recusa]") é o mecanismo
+      // pelo qual a primeira recusa real de produção vira sinal em vez de
+      // linha morta na tabela — sem esta asserção, removê-lo seria invisível.
+      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       const id = novoIdEvento();
       const res = await POST(
@@ -672,6 +679,12 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       expect(ciclo.status).toBe("falhou");
       expect(ciclo.erro).toMatch(/teto/i);
       expect(ciclo.erro).toMatch(/sem motivo informado/i);
+
+      expect(aviso).toHaveBeenCalledWith(
+        "[billing-recusa] cobrança de ciclo recusada",
+        expect.objectContaining({ providerChargeId: paymentId }),
+      );
+      aviso.mockRestore();
     });
 
     it("cobrança recusada COM motivo do gateway grava o motivo bruto, sem inventar hipótese (#286)", async () => {

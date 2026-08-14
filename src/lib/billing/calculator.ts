@@ -51,6 +51,10 @@ export interface DetalheFaixa {
  * ao cliente descola do valor cobrado.
  *
  * Ordem crescente de `ateQuantidade` é pré-requisito do algoritmo abaixo.
+ *
+ * `formulario-ativacao.tsx` depende do valor da faixa marginal mais alta: a
+ * copy do teto do Pix Automático usa `R$ 40` como conta de folga sobre ela
+ * (#286) e envelhece em silêncio se esta faixa mudar.
  */
 export const FAIXAS_PRECIFICACAO: readonly Faixa[] = [
   { ateQuantidade: 15, valorCentavos: 3900 },
