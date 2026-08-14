@@ -328,8 +328,23 @@ export async function aplicarStatusProvider(
       status: novo,
       atualizadoEm: agora,
       ativadaEm: virandoAtiva ? (linha.ativadaEm ?? agora) : linha.ativadaEm,
+      // `?? agora` na ENTRADA em canceled, pela mesma razão de `past_due_desde`:
+      // a reentrega do webhook não pode mover o instante de corte, senão o
+      // débito pro-rata muda a cada tentativa.
+      //
+      // E **zerado na reativação** (#290). Sem isto, a clínica que cancela,
+      // volta e cancela de novo tem o SEGUNDO débito apurado contra o corte do
+      // PRIMEIRO: `congelarCiclosComoDebito` lê `cancelada_em`, e um valor
+      // antigo faz `encerradoEm` cair antes do início do ciclo novo, onde
+      // `apurarDebitoProRata` satura no piso de 1 dia. Ciclo de 10 dias usados
+      // sairia por R$ 1,30 em vez de R$ 13,00 — exatamente o dia grátis que a
+      // #290 existe para fechar, reaberto pelo caminho de volta.
       canceladaEm:
-        novo === "canceled" ? (linha.canceladaEm ?? agora) : linha.canceladaEm,
+        novo === "canceled"
+          ? (linha.canceladaEm ?? agora)
+          : virandoAtiva
+            ? null
+            : linha.canceladaEm,
       // `past_due_desde` só é carimbado na ENTRADA em past_due. Recarimbar a
       // cada reentrega do mesmo evento zeraria a carência para sempre e a
       // assinatura nunca venceria.
@@ -768,9 +783,29 @@ export async function conciliarPagamentoDeCiclo(
       .set({ status: "pago", cobradoEm: agora, erro: null })
       .where(eq(billingCycle.id, ciclo.id));
 
+    // Liquidação em cascata do débito agrupado (#290, coluna da 0097).
+    //
+    // Uma cobrança de débito pode cobrir N ciclos `devido`: o valor é a soma, o
+    // id da cobrança fica na ÂNCORA (o ciclo mais antigo) porque
+    // `provider_charge_id` é UNIQUE parcial, e os demais apontam para ela. Sem
+    // esta cascata a clínica pagaria o total e continuaria devendo todos os
+    // ciclos menos um — com o gate de reativação barrando quem já pagou.
+    //
+    // Idempotente por construção: reescrever `pago` com `pago` é no-op, então a
+    // reentrega do webhook não muda nada.
+    await authDb
+      .update(billingCycle)
+      .set({ status: "pago", cobradoEm: agora, erro: null })
+      .where(eq(billingCycle.debitoAgrupadoEm, ciclo.id));
+
     // Pagamento em dia tira a assinatura de `past_due` — e só o pagamento faz
     // isso. `pastDueDesde` volta a NULL para que uma inadimplência futura
     // recomece a carência do zero.
+    //
+    // O `eq(status,'past_due')` também é o que garante que **pagar o débito não
+    // reativa** (#290): a assinatura `canceled` continua `canceled` depois de
+    // quitar. Quitar destrava o gate; voltar continua sendo um ato explícito da
+    // clínica, com autorização nova de Pix Automático.
     await authDb
       .update(subscription)
       .set({ status: "active", pastDueDesde: null, atualizadoEm: agora })
