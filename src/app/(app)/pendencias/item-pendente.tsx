@@ -64,7 +64,7 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
           </Link>
           <form action={formAction} className="contents">
             <input type="hidden" name="sessionId" value={item.sessionId} />
-            <Button type="submit" risco="alto" disabled={pending}>
+            <Button type="submit" disabled={pending}>
               {pending ? "Reprocessando…" : "Reprocessar"}
             </Button>
           </form>

@@ -23,8 +23,6 @@ type Variante =
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variante?: Variante;
-  /** @deprecated O peso do botão agora é uniforme; esta prop não altera o visual. */
-  risco?: "baixo" | "alto";
   iconLeft?: React.ReactNode;
   iconRight?: React.ReactNode;
   iconOnly?: boolean;
@@ -72,7 +70,6 @@ export const Button = React.forwardRef<HTMLElement, ButtonProps>(
       className,
       variante = "primaria",
       type,
-      risco,
       iconLeft,
       iconRight,
       iconOnly = false,

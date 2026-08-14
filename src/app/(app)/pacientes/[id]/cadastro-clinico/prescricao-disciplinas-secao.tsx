@@ -277,7 +277,6 @@ function LinhaPrescricao({
         </div>
         <Button
           type="button"
-          risco="alto"
           tamanho="sm"
           variante="terciaria"
           onClick={() => setConfirmandoEncerrar(true)}
@@ -360,7 +359,7 @@ function LinhaPrescricao({
                 prescricao.disciplina,
               )}
             >
-              <Button type="submit" risco="alto" tamanho="sm">
+              <Button type="submit" tamanho="sm">
                 Encerrar prescrição
               </Button>
             </form>

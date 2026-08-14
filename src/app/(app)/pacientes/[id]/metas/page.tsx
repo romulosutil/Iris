@@ -156,7 +156,7 @@ export default async function MetasPage({
                           {isCoordenador ? (
                             <form action={marcarDominadaAction.bind(null, id)}>
                               <input type="hidden" name="goalId" value={m.id} />
-                              <Button type="submit" risco="alto">
+                              <Button type="submit">
                                 Marcar dominada
                               </Button>
                             </form>

@@ -22,7 +22,7 @@ export const ConfirmarReclassificacao: Story = {
   render: () => (
     <Dialog>
       <DialogTrigger asChild>
-        <Button risco="alto">Reclassificar evidência</Button>
+        <Button>Reclassificar evidência</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogTitle>Reclassificar esta evidência?</DialogTitle>
@@ -35,7 +35,7 @@ export const ConfirmarReclassificacao: Story = {
             <Button variante="neutra">Cancelar</Button>
           </DialogClose>
           <DialogClose asChild>
-            <Button risco="alto">Reclassificar</Button>
+            <Button>Reclassificar</Button>
           </DialogClose>
         </div>
       </DialogContent>

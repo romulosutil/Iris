@@ -97,7 +97,6 @@ export function EncerrarVinculoForm({
     <>
       <Button
         type="button"
-        risco="alto"
         tamanho="sm"
         onClick={() => setPedido(state)}
       >
@@ -137,7 +136,6 @@ export function EncerrarVinculoForm({
             <form action={formAction}>
               <Button
                 type="submit"
-                risco="alto"
                 tamanho="sm"
                 isLoading={isPending}
               >
