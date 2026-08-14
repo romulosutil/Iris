@@ -31,6 +31,35 @@ describe("registrarEventoConsentimento - Tratamento de Erros", () => {
     vi.clearAllMocks();
   });
 
+  it("deve barrar papel não autorizado antes de abrir a transação", async () => {
+    // A guarda REAL de autorização (`requireRole` na primeira linha) só é
+    // exercitada com um papel recusado — os demais testes usam papel permitido
+    // e passariam mesmo se a chamada fosse apagada do `logic.ts`. `terapeuta`
+    // é papel clínico e não consta em `("admin_recepcao", "coordenador")`.
+    const ctxTerapeuta: TenantContext = { ...mockCtx, role: "terapeuta" };
+
+    await expect(
+      registrarEventoConsentimento(ctxTerapeuta, validPatientId, validEvent),
+    ).rejects.toThrow(RoleError);
+
+    // Negar não pode custar uma transação: a guarda roda ANTES do try/withTenant.
+    expect(withTenant).not.toHaveBeenCalled();
+  });
+
+  it("deve recusar patientId fora do formato UUID sem tocar no banco", async () => {
+    // `patientId` vem do segmento de rota `[id]`, portanto é entrada do usuário.
+    // O retorno é `{error}` (não exceção) e acontece antes do try — sem esta
+    // asserção, apagar a guarda deixa a suíte verde e manda lixo para a RLS.
+    const result = await registrarEventoConsentimento(
+      mockCtx,
+      "nao-e-uuid",
+      validEvent,
+    );
+
+    expect(result).toEqual({ error: "Paciente inválido." });
+    expect(withTenant).not.toHaveBeenCalled();
+  });
+
   it("deve re-lançar RoleError vindo de dentro do try", async () => {
     // Em produção o `requireRole` roda ANTES do try, então um RoleError não
     // nasce do bloco protegido — o `if (e instanceof RoleError) throw e` é
@@ -86,6 +115,10 @@ describe("registrarEventoConsentimento - Tratamento de Erros", () => {
       error: "Erro traduzido e amigável para o operador.",
     });
     expect(traduzirErroDeConsentimento).toHaveBeenCalledWith(errorDb);
+    // Com `withTenant` dublado, o isolamento por tenant não é exercitado de
+    // verdade — o mínimo verificável aqui é que o `ctx` recebido chega intacto
+    // ao `withTenant`, que é quem instala `app.clinic_id` na sessão.
+    expect(withTenant).toHaveBeenCalledWith(mockCtx, expect.any(Function));
   });
 
   it("deve usar mensagem fallback quando o tradutor não reconhece o erro", async () => {
