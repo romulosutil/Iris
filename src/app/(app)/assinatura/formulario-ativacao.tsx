@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,8 @@ type AcaoAtivacao = (
   prev: AtivacaoState,
   formData: FormData,
 ) => Promise<AtivacaoState> | AtivacaoState;
+
+import type { SituacaoConta } from "@/lib/billing/estado-conta";
 
 export interface FormularioAtivacaoProps {
   /**
@@ -37,6 +40,14 @@ export interface FormularioAtivacaoProps {
    * transformaria o erro num beco.
    */
   documentoAtual?: string | null;
+  /**
+   * Situação atual da conta vinda do Server Component (leitura viva do banco).
+   */
+  situacaoConta?: SituacaoConta;
+  /**
+   * Só existe como costura de teste para injetar o estado inicial do useActionState.
+   */
+  estadoInicial?: AtivacaoState;
 }
 
 function navegarPadrao(url: string) {
@@ -47,13 +58,16 @@ export function FormularioAtivacao({
   acao = ativarAssinatura,
   navegar = navegarPadrao,
   documentoAtual,
+  situacaoConta,
+  estadoInicial,
 }: FormularioAtivacaoProps) {
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState<
     AtivacaoState,
     FormData
   >(
     acao as (prev: AtivacaoState, formData: FormData) => Promise<AtivacaoState>,
-    {},
+    estadoInicial ?? {},
   );
   const autorizacao = state.autorizacao;
   // O efeito depende SÓ da URL do ramo redirect. Derivar aqui (em vez de olhar
@@ -76,6 +90,33 @@ export function FormularioAtivacao({
     }
   }, [urlRedirect, navegar]);
 
+  // Polling e VisibilityChange para Pix pendente
+  const estaAtiva = situacaoConta?.estado === "ativa";
+  const temAutorizacaoPixPendente = autorizacao?.forma === "pix_copia_e_cola";
+
+  useEffect(() => {
+    if (!temAutorizacaoPixPendente || estaAtiva) return;
+
+    // Polling a cada 5 segundos
+    const intervalo = setInterval(() => {
+      router.refresh();
+    }, 5000);
+
+    // Visibility change
+    const aoMudarVisibilidade = () => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    };
+
+    document.addEventListener("visibilitychange", aoMudarVisibilidade);
+
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", aoMudarVisibilidade);
+    };
+  }, [temAutorizacaoPixPendente, estaAtiva, router]);
+
   // O que a pessoa deve ver no campo: o texto que ela acabou de digitar (quando
   // a action recusou) ou o documento já gravado. `defaultValue` basta: o React
   // 19 reseta o formulário não-controlado depois da action, o que também limpa
@@ -84,6 +125,24 @@ export function FormularioAtivacao({
   // como inerte (removê-lo não derruba teste nenhum, inclusive o que digita
   // antes de submeter), então não ficou.
   const documentoNoCampo = state.documento ?? documentoAtual ?? "";
+
+  if (estaAtiva) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Alert severidade="sucesso" titulo="Assinatura ativa">
+          <p>
+            Sua assinatura foi ativada com sucesso! O pagamento foi confirmado
+            pelo seu banco e o cadastro de pacientes está totalmente liberado.
+          </p>
+        </Alert>
+        <div>
+          <Button variante="primaria" asChild>
+            <Link href="/pacientes/novo">Cadastrar paciente</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Form
@@ -200,10 +259,11 @@ export function FormularioAtivacao({
               </p>
               {/* Saída da tela, só neste ramo: depois do QR não há mais nada a
                   fazer aqui, e sem este link a pessoa fica esperando uma
-                  confirmação que chega por webhook. Sem polling de propósito —
-                  a página de destino reavalia a situação da conta no próprio
-                  request, então um `setInterval` aqui só gastaria requisição
-                  para descobrir o mesmo. */}
+                  confirmação que chega por webhook.
+
+                  Utiliza polling com router.refresh() e visibilitychange no cliente
+                  para que a tela e o layout inteiro revalidem o estado e façam a
+                  tarja sumir automaticamente assim que o Pix for confirmado. */}
               <div className="mt-3">
                 <Button variante="primaria" asChild>
                   <Link href="/pacientes/novo">Cadastrar paciente</Link>
