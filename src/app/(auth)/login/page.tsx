@@ -16,22 +16,6 @@ import { Pill } from "@/components/ui/primitives/pill";
 import { ShieldIcon, LockIcon } from "@/components/ui/icon";
 
 /**
- * Evidência de medição real da infraestrutura para TLS 1.3:
- * Executado contra o domínio real de produção (irisclinica.ia.br):
- * $ openssl s_client -connect irisclinica.ia.br:443 -tls1_3 -brief < /dev/null 2>&1
- * CONNECTION ESTABLISHED
- * Protocol version: TLSv1.3
- * Ciphersuite: TLS_AES_256_GCM_SHA384
- * Peer certificate: CN = irisclinica.ia.br
- * Verification: OK
- *
- * E em conformidade com a LGPD:
- * - Servidores Hostinger localizados fisicamente em São Paulo, Brasil (RTT ~33ms do Brasil).
- * - Isolamento de banco de dados por Tenant usando Row Level Security (RLS).
- * - Expurgo imediato e política de descarte em backup rotativo de 30 dias (Art 18 e 46).
- */
-
-/**
  * Aviso pós-redefinição de senha (Task 9, `../redefinir-senha`). Isolado num
  * componente próprio, dentro de `<Suspense>`, porque `useSearchParams`
  * numa página client exige um boundary de suspense — sem isso o Next
@@ -133,6 +117,7 @@ export default function LoginPage() {
           </Button>
         </Form>
 
+        {/* Selos são afirmação factual medida — evidência em `docs/arquitetura/trust-indicators-login.md`. */}
         <div className="mt-6 pt-6 border-t-2 border-dashed border-[var(--border-brutal)] flex flex-col gap-4 text-center">
           <div className="flex flex-wrap justify-center gap-2">
             <Pill variant="solid" colorScheme="neutral" size="sm" icon={<ShieldIcon size={12} />} data-testid="badge-lgpd">
