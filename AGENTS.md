@@ -53,18 +53,41 @@ Para evitar sobreposição de contextos e otimizar o fluxo de trabalho:
 - **Abrangência:** Descrições de Pull Requests (PRs), comentários em GitHub Issues, mensagens de commit e planos de ação detalhados.
 - **Regra de Tradução:** Mesmo que o contexto técnico, o código ou a issue original esteja em inglês, a resposta e todos os artefatos de texto do Jules devem ser em PT-BR.
 
-### 5.2 Fluxo de Invocação & Resolução de Issues
+### 5.2 Pré-requisito de Handoff: Design tem que fechar TODA decisão antes da label `jules`
+
+Evidência: issue #285 / PR #295 (13-14/08/2026). RCA (causa raiz) estava impecável, mas a fase Design foi pulada — a issue foi direto de "Specify" para a label `jules`. Resultado: implementação 80% correta, mas a revisão (Claude/Opus) encontrou 9 achados, todos rastreáveis a decisões que a spec deixou implícitas ou "a validar" em vez de fechadas. Jules (e qualquer executor autônomo) preenche lacuna de decisão com a escolha mais óbvia, não necessariamente a que o Rômulo queria — o mesmo vale hoje para Gemini via [[delegacao-gemini-spec-pattern]].
+
+Antes de aplicar a label `jules`, a issue (ou a spec/plano anexado via `/tlc-spec-driven` ou `/superpowers:writing-plans`) precisa fechar, por escrito, cada um destes pontos — nenhum pode ficar como "a validar" no momento do handoff:
+
+1. **Limites e condição de parada explícitos.** Todo polling, retry, backoff, timeout ou loop tem número e critério de parada escritos (não "enquanto necessário"). Se o Jules tiver que inferir um número, a spec está incompleta.
+2. **Dono único de cada leitura/escrita.** Quando mais de um componente precisa do mesmo dado, a spec diz quem busca e quem recebe via prop — nunca "cada um busca o seu" (evita leitura duplicada e paga 2x por request).
+3. **Toda decisão de produto/UX como critério de aceite fechado**, nunca como "a validar" ou implícita. Ex.: um estado de sucesso na UI é transiente ou permanente? Decidir antes, não deixar o executor escolher.
+4. **Casos de borda listados por nome** — erro, cancelamento, timeout, reentrância, abandono — além do caminho feliz.
+5. **Régua de mutação por comportamento, não só por linha.** Cada comportamento crítico (iniciar X, **parar X**, mostrar Y, esconder Z) tem 1 teste cuja remoção do código correspondente derruba o teste. "Remover o fix derruba 1 teste" não é suficiente se o fix tem 2 comportamentos (início e parada).
+6. **Convenção de estilo do arquivo-alvo citada quando não-óbvia** — ex.: se os comentários do arquivo explicam o *porquê* (não o *o quê*), dizer isso explicitamente e apontar um exemplo do próprio arquivo.
+7. **Comando de formatação no checklist de saída da task.** CI deste repo não valida Prettier — o task brief tem que instruir explicitamente `pnpm format` antes do push, ou o PR passa 100% verde no CI com arquivo mal formatado.
+
+Se qualquer um destes 7 pontos não estiver fechado no momento de aplicar a label, feche primeiro (você ou a sessão Claude/Gemini que fez o Design) — não delegue a decisão ao Jules torcendo para acertar.
+
+### 5.3 Fluxo de Invocação & Resolução de Issues
 - **Gestão de Backlog:** Toda dívida técnica, bug ou melhoria identificada deve obrigatoriamente ser transformada em uma **GitHub Issue**.
-- **Gatilho de Invocação:** O Jules é acionado exclusivamente através da label `jules` adicionada a uma GitHub Issue aberta.
+- **Gatilho de Invocação:** O Jules é acionado exclusivamente através da label `jules` adicionada a uma GitHub Issue aberta — e só depois do checklist da §5.2 fechado.
 - **Comportamento Autônomo:** Uma vez marcado com a label `jules`, o agente assume a tarefa, lê as instruções do `AGENTS.md` e do `CLAUDE.md`, elabora o plano de ação, executa as alterações e abre o Pull Request sem necessidade de supervisão síncrona.
 
-### 5.3 Pull Requests & Estado de Rascunho (Draft)
+### 5.4 Pull Requests & Estado de Rascunho (Draft)
 - **Estado Inicial:** Ao resolver uma issue, o Jules deve obrigatoriamente criar o Pull Request no estado **"Draft" (Rascunho)**.
 - **Gatilho de Revisão:** O PR não deve ser marcado como pronto para revisão (*Ready for Review*) até que **todos os testes automatizados** (lint, typecheck, unitários, RLS, etc.) passem com 100% de sucesso.
 
-### 5.4 Contexto de Negócio, Testes e Configurações (.env.example)
+### 5.5 Contexto de Negócio, Testes e Configurações (.env.example)
 - **Leitura Obrigatória:** O Jules deve consultar o arquivo [`.env.example`](.env.example) e os documentos da pasta `docs/` para compreender o contexto do negócio, as integrações (ex: Asaas, Better-Auth, LLMs) e as flags de funcionalidade.
 - **Coerência nos Testes:** Utilizar `.env.example` para mapear os papéis do banco de dados (roles com e sem RLS: `DATABASE_URL`, `AUTH_DATABASE_URL`, `MIGRATION_DATABASE_URL`), flags de teste (ex: `ALLOW_SKIP_INTEGRATION`) e criar mocks fiéis à arquitetura real da aplicação.
+
+### 5.6 Revisão Pós-PR: validação substantiva, não CI verde
+
+CI verde não é evidência suficiente de PR pronto — no PR #295, CI passou 5/5 e ainda assim Prettier falhava, um teste vazava estado global sem cleanup, e um comentário satisfazia a letra do DoD sem explicar a causa raiz. Quem revisa PR do Jules (Claude ou Opus) faz **leitura de diff completa contra a Definição de Pronto da issue original**, não só confere status de check.
+
+- **Ajuste cirúrgico, não reescrita.** Se a base do Jules estiver majoritariamente correta (é o caso comum quando §5.2 foi seguido), o revisor corrige os achados pontualmente em cima do que existe — reescrever do zero custa mais caro em token do que a exploração e o esqueleto que o Jules já pagou (externamente) para produzir.
+- **Achado recorrente vira regra, não patch isolado.** Se o mesmo tipo de gap aparecer em mais de um PR do Jules, atualizar o checklist da §5.2 para fechar a lacuna na origem — corrigir só o sintoma repete o custo de revisão a cada PR novo.
 
 ---
 

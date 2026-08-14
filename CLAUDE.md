@@ -106,6 +106,8 @@ Regra pós-mortem D22 (#239, PR #240, memória `d22-sessao-gastou-token-em-loops
 - Toca modelo de dados, RLS/policy ou schema do agente → `/tlc-spec-driven`.
 - Outros itens → `/superpowers:writing-plans`.
 
+**1b. Antes de aplicar a label `jules`, fechar o checklist de handoff (`AGENTS.md` §5.2).** Regra pós-mortem #285/PR #295 (13-14/08/2026): RCA impecável, mas Design incompleto (limites de polling, dono da leitura, decisão de UI, régua de mutação por comportamento — todos "a validar") gerou 9 achados na revisão pós-PR. Fechar os 7 pontos da §5.2 na issue/spec ANTES do label evita que o executor autônomo escolha por você. Revisão pós-PR (Claude/Opus) sempre lê o diff contra a Definição de Pronto original — CI verde sozinho não basta (`AGENTS.md` §5.6).
+
 **2. Teto de ~50 mensagens por sessão:** Ao se aproximar do teto, salvar checkpoint em `checkpoint.md` (feito, pendente, decisões, próximo passo) e avisar Rômulo para `/clear`.
 
 ## Permissões — o que rodar livremente vs. o que confirmar antes
