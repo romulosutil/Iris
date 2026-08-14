@@ -323,8 +323,12 @@ export async function materializarSnapshot(
   // Cache de tipo_estrutura por milestone.
   const milestoneIds = [...new Set(evidencias.map((e) => e.milestoneId).filter((x): x is string => !!x))];
   const tipoEstruturaPorMilestone = new Map<string, TipoEstrutura | null>();
-  for (const mid of milestoneIds) {
-    tipoEstruturaPorMilestone.set(mid, await queries.tipoEstruturaDoMarco(mid));
+  const estruturas = await Promise.all(milestoneIds.map(mid => queries.tipoEstruturaDoMarco(mid)));
+  for (let i = 0; i < milestoneIds.length; i++) {
+    const mid = milestoneIds[i];
+    if (mid) {
+      tipoEstruturaPorMilestone.set(mid, estruturas[i] ?? null);
+    }
   }
 
   function ordinalDe(protocolId: string | null, nivelAjuda: string | null): number | null {
