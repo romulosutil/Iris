@@ -164,6 +164,7 @@ export async function POST(request: Request): Promise<Response> {
       const aplicou = await conciliarPagamentoDeCiclo(
         normalizado.providerChargeId,
         atual.status,
+        atual.motivoRecusa,
       );
       await marcar(eventoId, {
         aplicadoEm: new Date(),

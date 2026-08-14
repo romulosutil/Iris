@@ -19,6 +19,8 @@ vi.mock("server-only", () => ({}));
 
 const { authDb } = await import("@/db/client");
 const { POST } = await import("./route");
+const { conciliarPagamentoDeCiclo } =
+  await import("@/lib/billing/subscription");
 
 /**
  * Webhook do Asaas (#36, Fase 7 — Pix Automático).
@@ -625,6 +627,63 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       // vínculo, o ciclo ficaria eternamente em `aguardando_pagamento`.
       expect(chamadasGateway).toHaveLength(1);
       expect(chamadasGateway[0]).toContain(`/payments/${paymentId}`);
+    });
+
+    it("cobrança recusada sem motivo do gateway grava diagnóstico que nomeia o teto como causa provável (#286)", async () => {
+      /**
+       * O modo de falha mais provável da cobrança recorrente, agora que se
+       * sabe que o teto é obrigatório por diretriz do BACEN: a clínica
+       * autorizou com o teto sugerido em tela na ativação (R$ 0,01) e a
+       * fatura real não passa. Sem nomear a hipótese, o ciclo só dizia
+       * "cobrança recusada pelo gateway", e quem fosse diagnosticar olharia o
+       * adapter e o job antes de olhar a configuração no banco do cliente.
+       *
+       * Este teste passa pelo caminho REAL do webhook — o repasse de
+       * `atual.motivoRecusa` dentro de `route.ts` é código novo, e um teste
+       * que chamasse `conciliarPagamentoDeCiclo` direto passaria verde mesmo
+       * se a rota não repassasse o motivo. O dublê do gateway não devolve
+       * `refusalReason`/`failureReason`/`pixTransaction`: é o caso medido em
+       * produção em 13/08/2026 — nenhuma recusa observável trouxe motivo.
+       */
+      const paymentId = "pay_recusada_286_1";
+      const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
+      respondeCobranca("OVERDUE");
+
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoCobranca(id, paymentId, cicloId, {
+            event: "PAYMENT_OVERDUE",
+            status: "OVERDUE",
+          }),
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const ciclo = await lerCiclo(cicloId);
+      expect(ciclo.status).toBe("falhou");
+      expect(ciclo.erro).toMatch(/teto/i);
+      expect(ciclo.erro).toMatch(/sem motivo informado/i);
+    });
+
+    it("cobrança recusada COM motivo do gateway grava o motivo bruto, sem inventar hipótese (#286)", async () => {
+      const paymentId = "pay_recusada_286_2";
+      const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
+
+      const aplicou = await conciliarPagamentoDeCiclo(
+        paymentId,
+        "recusada",
+        "SALDO_INSUFICIENTE",
+      );
+      expect(aplicou).toBe(true);
+
+      const ciclo = await lerCiclo(cicloId);
+      // Quando o gateway diz a causa, ela manda — o diagnóstico do Iris não
+      // pode sobrepor "provavelmente é o teto" a um "saldo insuficiente"
+      // explícito: a orientação ao cliente é oposta nos dois casos.
+      expect(ciclo.erro).toContain("SALDO_INSUFICIENTE");
+      expect(ciclo.erro).not.toMatch(/teto/i);
     });
 
     it("instrução de débito (traz OS DOIS ids) é tratada como COBRANÇA, não como vínculo", async () => {

@@ -603,6 +603,7 @@ export async function fecharCiclosVencendo(opcoes?: {
 export async function conciliarPagamentoDeCiclo(
   providerChargeId: string,
   status: StatusCobranca,
+  motivoRecusa: string | null = null,
 ): Promise<boolean> {
   const agora = new Date();
 
@@ -640,9 +641,35 @@ export async function conciliarPagamentoDeCiclo(
   }
 
   if (status === "recusada") {
+    /**
+     * #286 — "recusada" sozinho manda quem diagnostica para o lugar errado.
+     * O teto de valor do Pix Automático é OBRIGATÓRIO por diretriz do BACEN:
+     * todo app de banco pergunta, em toda ativação, sugerindo o valor da
+     * cobrança em tela (a ativação, não a mensalidade). Um teto aceito com
+     * essa sugestão recusa toda fatura real — e é o modo de falha mais
+     * provável da cobrança recorrente, não uma hipótese remota.
+     *
+     * Quando o gateway informa a causa, ela MANDA: "avise o cliente para
+     * ajustar o limite no banco" e "avise o cliente para pôr dinheiro na
+     * conta" são orientações opostas, e sobrepor a nossa hipótese a um motivo
+     * explícito do gateway trocaria uma por outra. Medido em 13/08/2026: o
+     * Asaas não informou motivo em nenhuma recusa observável, então o ramo
+     * `null` é o esperado — e ele diz que a causa é HIPÓTESE, não fato.
+     */
+    const erro = motivoRecusa
+      ? `cobrança recusada pelo gateway: ${motivoRecusa}`
+      : "cobrança recusada pelo gateway, sem motivo informado — causa mais provável: teto de valor do Pix Automático definido no app do banco abaixo do valor da fatura (#286); segunda hipótese: saldo insuficiente";
+
+    // Log com tag fixa e greppável: é por ele que a primeira recusa real de
+    // produção vira sinal em vez de linha morta na tabela.
+    console.warn("[billing-recusa] cobrança de ciclo recusada", {
+      providerChargeId,
+      motivoRecusa,
+    });
+
     await authDb
       .update(billingCycle)
-      .set({ status: "falhou", erro: "cobrança recusada pelo gateway" })
+      .set({ status: "falhou", erro })
       .where(eq(billingCycle.id, ciclo.id));
 
     const [assinatura] = await authDb
@@ -729,6 +756,7 @@ export async function reprocessarEventosPendentes(
         await conciliarPagamentoDeCiclo(
           normalizado.providerChargeId,
           atual.status,
+          atual.motivoRecusa,
         );
       } else if (normalizado.providerSubscriptionId) {
         const atual = await provider.consultarVinculo(
