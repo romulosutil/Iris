@@ -55,6 +55,7 @@ export default async function PacienteLayout({
     { href: `${base}/briefing`, rotulo: "Briefing" },
     { href: `${base}/cadastro-clinico`, rotulo: "Ficha Clínica" },
     { href: `${base}/metas`, rotulo: "PEI & Metas" },
+    { href: `${base}/tcc`, rotulo: "TCC" },
     { href: `${base}/equipe`, rotulo: "Equipe" },
     { href: `${base}/horas`, rotulo: "Horas" },
     { href: `${base}/ausencias`, rotulo: "Ausências" },
