@@ -31,11 +31,6 @@ export const Secundaria: Story = { args: { variante: "secundaria", children: "Ed
 
 export const Terciaria: Story = { args: { variante: "terciaria", children: "Cancelar" } };
 
-export const RiscoAlto: Story = {
-  args: { children: "Reclassificar evidência" },
-
-};
-
 export const Desabilitado: Story = { args: { disabled: true } };
 
 /**
