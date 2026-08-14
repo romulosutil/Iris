@@ -4,6 +4,8 @@ import { getTenantContext } from "@/auth/tenant";
 import { Stack } from "@/components/ui/layout";
 import { Alert } from "@/components/ui/alert";
 import { TabsNav, type TabsNavItem } from "@/components/ui/tabs-nav";
+import { Pill } from "@/components/ui/primitives/pill";
+import { Tooltip } from "@/components/ui/tooltip";
 import { mensagemDeEstado } from "@/lib/billing/estado-conta";
 import { obterSituacaoConta } from "../../queries";
 
@@ -66,7 +68,32 @@ export default async function PacienteLayout({
 
   return (
     <Stack gap="md">
-      <TabsNav itens={abas} ariaLabel="Seções do prontuário do paciente" />
+      <div className="flex flex-col gap-2">
+        <TabsNav itens={abas} ariaLabel="Seções do prontuário do paciente" />
+        <div className="-mt-2 flex justify-end">
+          {/*
+            O selo é focalizável (`tabIndex`) porque é o gatilho do tooltip:
+            sem isso a explicação só existiria no hover e sumiria para teclado.
+            O nome acessível vem do próprio texto visível — `aria-label` aqui
+            era ignorado (ARIA proíbe nomear elemento sem role, `<span>` cru
+            resolve para `generic`; axe acusa `aria-prohibited-attr`) e ainda
+            criava divergência com o texto na tela (WCAG 2.5.3). O cadeado vai
+            no slot `icon` com `aria-hidden` para o leitor de tela não soletrar
+            "emoji de cadeado fechado" antes da frase.
+          */}
+          <Tooltip conteudo="Este prontuário está visível apenas para a equipe autorizada desta clínica.">
+            <Pill
+              variant="inset"
+              colorScheme="neutral"
+              className="focus-visible:outline-focus cursor-help outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+              tabIndex={0}
+              icon={<span aria-hidden="true">🔒</span>}
+            >
+              Dados Criptografados (RLS Ativo)
+            </Pill>
+          </Tooltip>
+        </div>
+      </div>
       {!situacao.podeEscrever ? (
         <Alert severidade="info" destacado titulo="Conta em somente-leitura">
           <p>{mensagemDeEstado(situacao.estado)}</p>

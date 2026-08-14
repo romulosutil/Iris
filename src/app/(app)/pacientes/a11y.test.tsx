@@ -1,12 +1,33 @@
 import axe from "axe-core";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import type { ReactElement } from "react";
 vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
 
-afterEach(cleanup);
+const mockObterSituacaoConta = vi.fn();
+
+vi.mock("@/auth/tenant", () => ({
+  getTenantContext: async () => ({
+    clinicId: "c1",
+    userId: "u1",
+    role: "coordenador",
+  }),
+}));
+
+vi.mock("../queries", () => ({
+  obterSituacaoConta: (...args: unknown[]) => mockObterSituacaoConta(...args),
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/pacientes/p1",
+}));
+
+afterEach(() => {
+  cleanup();
+  mockObterSituacaoConta.mockReset();
+});
 
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
@@ -114,3 +135,80 @@ test("diálogo de arquivamento aberto sem violações", async () => {
   // relógio, não por violação. Aumentar aqui em vez de globalmente mantém o
   // padrão apertado para o resto da suíte.
 }, 30_000);
+
+test("layout do paciente com indicador de segurança e sem violações", async () => {
+  const { default: PacienteLayout } = await import("./[id]/layout");
+  mockObterSituacaoConta.mockResolvedValue({
+    estado: "ativa",
+    podeEscrever: true,
+    podeCadastrarPaciente: true,
+    diasRestantesTrial: null,
+    statusAssinatura: "active",
+  });
+
+  const jsx = await PacienteLayout({
+    children: <div data-testid="child">Conteúdo do Prontuário</div>,
+    params: Promise.resolve({ id: "p1" }),
+  });
+
+  const user = userEvent.setup();
+  const { container } = render(jsx);
+
+  // Verifica que o indicador "Dados Criptografados (RLS Ativo)" é exibido
+  expect(screen.getByText(/Dados Criptografados \(RLS Ativo\)/i)).toBeDefined();
+
+  // Verifica se o conteúdo do prontuário (children) é renderizado
+  expect(screen.getByTestId("child")).toBeDefined();
+
+  // O gatilho do tooltip é o selo focalizável. `aria-label` em `<span>` sem
+  // role é proibido pela ARIA (o leitor de tela descarta), então o nome
+  // acessível TEM de vir do texto visível.
+  const selo = container.querySelector<HTMLElement>('[tabindex="0"]');
+  expect(selo).not.toBeNull();
+  expect(selo?.getAttribute("aria-label")).toBeNull();
+  expect(selo?.textContent).toContain("Dados Criptografados (RLS Ativo)");
+
+  // O `aria-describedby` do gatilho precisa resolver JÁ no estado de repouso —
+  // apontar para id inexistente é descrição que nunca chega.
+  const idDescricao = selo?.getAttribute("aria-describedby");
+  expect(idDescricao).toBeTruthy();
+  const bolha = document.getElementById(idDescricao as string);
+  expect(bolha).not.toBeNull();
+  expect(bolha?.textContent).toContain("equipe autorizada desta clínica");
+
+  // Foco abre a bolha (WCAG 1.4.13: o conteúdo tem de existir sem ponteiro).
+  expect(screen.queryByRole("tooltip")).toBeNull();
+  selo?.focus();
+  await screen.findByRole("tooltip");
+
+  // Varredura de acessibilidade com axe — com a bolha aberta, porque o
+  // conteúdo do tooltip só é exposto nesse estado.
+  const r = await axe.run(container, {
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
+    rules: {
+      region: { enabled: false },
+      "landmark-one-main": { enabled: false },
+      "page-has-heading-one": { enabled: false },
+      "color-contrast": { enabled: false },
+    },
+  });
+  expect(r.violations).toEqual([]);
+  // `violations` sozinho é verde falso aqui: as duas falhas reais deste selo
+  // (aria-label proibido e describedby pendurado) caem em `incomplete`, que a
+  // asserção padrão da suíte não olha.
+  expect(
+    r.incomplete
+      .map((i) => i.id)
+      .filter(
+        (id) => id === "aria-prohibited-attr" || id === "aria-valid-attr-value",
+      ),
+  ).toEqual([]);
+
+  // Esc dispensa a bolha sem tirar o foco do gatilho (1.4.13, "Dismissible").
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+  expect(document.activeElement).toBe(selo);
+});
