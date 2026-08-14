@@ -1730,6 +1730,12 @@ export const subscriptionStatus = pgEnum("subscription_status", [
 // quando o job carimbava o ciclo como cobrado no instante em que ajustava o
 // valor da recorrência — sem nenhuma cobrança emitida nem confirmada. Não é
 // removido porque há memorial de fatura gravado com ele.
+//
+// `devido` (0096, #287/#290) é o ramo do CANCELAMENTO: o ciclo foi interrompido
+// no meio, apurado e congelado como débito pro-rata, SEM cobrança emitida — a
+// autorização do Pix Automático acabou de ser revogada e não há trilho para
+// cobrar naquele instante. Não é `falhou` (ali houve cobrança recusada) nem
+// `apurado` (que é estado de passagem do job e seria varrido de novo).
 export const billingCycleStatus = pgEnum("billing_cycle_status", [
   "aberto",
   "apurado",
@@ -1737,6 +1743,7 @@ export const billingCycleStatus = pgEnum("billing_cycle_status", [
   "falhou",
   "aguardando_pagamento",
   "pago",
+  "devido",
 ]);
 
 // `ativo_nao_arquivado` deixou de ser PRODUZIDO na 0075 (o critério de
