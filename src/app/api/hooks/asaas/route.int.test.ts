@@ -248,10 +248,20 @@ function respondeAutorizacao(status: string) {
   );
 }
 
-/** `GET /payments/{id}` — status e valor (decimal em reais) da cobrança. */
-function respondeCobranca(status: string, valorReais = 117) {
+/**
+ * `GET /payments/{id}` — status e valor (decimal em reais) da cobrança.
+ * `extra` mescla campos crus no corpo — usado para simular um gateway que
+ * informa `refusalReason` (o caso SEM motivo, sem `extra`, é medido no
+ * sandbox em 13/08/2026; nenhuma recusa real foi observável — P2 da #286
+ * segue NÃO MEDIDO; ver comentário em `asaas.ts:consultarCobranca`).
+ */
+function respondeCobranca(
+  status: string,
+  valorReais = 117,
+  extra: Record<string, unknown> = {},
+) {
   respostasGateway.push(async () =>
-    Response.json({ id: "pay-dublê", status, value: valorReais }),
+    Response.json({ id: "pay-dublê", status, value: valorReais, ...extra }),
   );
 }
 
@@ -625,6 +635,173 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       // vínculo, o ciclo ficaria eternamente em `aguardando_pagamento`.
       expect(chamadasGateway).toHaveLength(1);
       expect(chamadasGateway[0]).toContain(`/payments/${paymentId}`);
+    });
+
+    it("cobrança recusada sem motivo do gateway grava diagnóstico que nomeia o teto como causa provável (#286)", async () => {
+      /**
+       * O modo de falha mais provável da cobrança recorrente, agora que se
+       * sabe que o teto é obrigatório por diretriz do BACEN: a clínica
+       * autorizou com o teto sugerido em tela na ativação (R$ 0,01) e a
+       * fatura real não passa. Sem nomear a hipótese, o ciclo só dizia
+       * "cobrança recusada pelo gateway", e quem fosse diagnosticar olharia o
+       * adapter e o job antes de olhar a configuração no banco do cliente.
+       *
+       * Este teste passa pelo caminho REAL do webhook — o repasse de
+       * `atual.motivoRecusa` dentro de `route.ts` é código novo, e um teste
+       * que chamasse `conciliarPagamentoDeCiclo` direto passaria verde mesmo
+       * se a rota não repassasse o motivo. O dublê do gateway não devolve
+       * `refusalReason`/`failureReason`/`pixTransaction`: é o caso medido no
+       * sandbox em 13/08/2026 — nenhuma recusa real foi observável (P2 da
+       * #286 segue NÃO MEDIDO).
+       */
+      const paymentId = "pay_recusada_286_1";
+      const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
+      respondeCobranca("OVERDUE");
+
+      // O `console.warn` com tag greppável ("[billing-recusa]") é o mecanismo
+      // pelo qual a primeira recusa real de produção vira sinal em vez de
+      // linha morta na tabela — sem esta asserção, removê-lo seria invisível.
+      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      // `try/finally`: qualquer `expect` que falhe aqui dentro lança, e sem o
+      // `finally` o dublê de `console.warn` vazaria para os testes seguintes
+      // do arquivo (silenciando avisos que eles deveriam ver).
+      try {
+        const id = novoIdEvento();
+        const res = await POST(
+          requisicao({
+            token: TOKEN,
+            corpo: eventoCobranca(id, paymentId, cicloId, {
+              event: "PAYMENT_OVERDUE",
+              status: "OVERDUE",
+            }),
+          }),
+        );
+        expect(res.status).toBe(200);
+
+        const ciclo = await lerCiclo(cicloId);
+        expect(ciclo.status).toBe("falhou");
+        expect(ciclo.erro).toMatch(/teto/i);
+        expect(ciclo.erro).toMatch(/sem motivo informado/i);
+
+        expect(aviso).toHaveBeenCalledWith(
+          "[billing-recusa] cobrança de ciclo recusada",
+          expect.objectContaining({ providerChargeId: paymentId }),
+        );
+      } finally {
+        aviso.mockRestore();
+      }
+    });
+
+    it("cobrança recusada COM motivo do gateway grava o motivo bruto, sem inventar hipótese (#286)", async () => {
+      /**
+       * Fix round 1 (revisão do #286): a versão anterior deste teste chamava
+       * `conciliarPagamentoDeCiclo` direto, o que passa verde mesmo se
+       * `route.ts` parar de repassar `atual.motivoRecusa` — o default `null`
+       * do terceiro parâmetro mascara a regressão (mutação confirmada:
+       * apagar `atual.motivoRecusa,` de `route.ts` não derrubava este teste
+       * na forma antiga). Agora passa pelo caminho REAL do webhook: o dublê
+       * devolve `refusalReason`, e só um repasse de fato correto produz o
+       * motivo bruto no `erro` do ciclo.
+       */
+      const paymentId = "pay_recusada_286_2";
+      const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
+      respondeCobranca("OVERDUE", 117, {
+        refusalReason: "SALDO_INSUFICIENTE",
+      });
+
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoCobranca(id, paymentId, cicloId, {
+            event: "PAYMENT_OVERDUE",
+            status: "OVERDUE",
+          }),
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const ciclo = await lerCiclo(cicloId);
+      expect(ciclo.status).toBe("falhou");
+      // Quando o gateway diz a causa, ela manda — o diagnóstico do Iris não
+      // pode sobrepor "provavelmente é o teto" a um "saldo insuficiente"
+      // explícito: a orientação ao cliente é oposta nos dois casos.
+      expect(ciclo.erro).toContain("SALDO_INSUFICIENTE");
+      expect(ciclo.erro).not.toMatch(/teto/i);
+    });
+
+    it("INSTRUCTION_REFUSED cuja reconsulta NÃO devolve OVERDUE deixa rastro em vez de sumir (#286)", async () => {
+      /**
+       * A metade NÃO MEDIDA da #286. Todo o diagnóstico do teto pendura numa
+       * suposição: que uma recusa de instrução real deixe o `payment` em
+       * `OVERDUE` (único status que `mapearStatusCobranca` leva a `recusada`).
+       * O sandbox de 13/08/2026 só tinha cobrança em `PENDING` — nenhuma recusa
+       * de fato aconteceu, então a suposição segue sem prova.
+       *
+       * Este teste fixa o que acontece se ela estiver ERRADA, e é o cenário que
+       * o PR original deixava mudo: o ciclo NÃO cai em `falhou`, fica parado em
+       * `aguardando_pagamento` (não existe varredura que olhe esse estado), e o
+       * evento é carimbado `aplicado_em` com `erro_aplicacao = NULL` — do banco,
+       * é indistinguível de uma aplicação limpa. Sem o `console.warn`, a
+       * primeira recusa real de produção passaria sem deixar UM único sinal, e
+       * o runbook do `infra/README.md` ("meça na primeira recusa real") não
+       * teria como ser acionado.
+       *
+       * O aviso é observabilidade, não decisão: virar `falhou` um `payment` que
+       * o gateway afirma estar `PENDING` poria a clínica em `past_due` por
+       * suposição — exatamente o erro que a #286 existe para evitar.
+       */
+      const paymentId = "pay_recusa_sem_overdue_286";
+      const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
+      // A reconsulta discorda do evento: para o gateway a cobrança segue viva.
+      respondeCobranca("PENDING");
+
+      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const id = novoIdEvento();
+        const res = await POST(
+          requisicao({
+            token: TOKEN,
+            corpo: {
+              id,
+              event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+              dateCreated: "2026-08-08 21:30:00",
+              payment: {
+                id: paymentId,
+                externalReference: `cycle:${cicloId}`,
+              },
+              paymentInstruction: {
+                id: "pi_0002",
+                paymentId,
+                status: "REFUSED",
+                authorization: { id: "auth-da-instrucao-recusada" },
+              },
+            },
+          }),
+        );
+        expect(res.status).toBe(200);
+
+        // O estado NÃO se move — é essa a parte silenciosa.
+        expect((await lerCiclo(cicloId)).status).toBe("aguardando_pagamento");
+        const evento = (await lerEvento(id))!;
+        expect(evento.aplicado_em).not.toBeNull();
+        expect(evento.erro_aplicacao).toBeNull();
+
+        // ...e é por isso que o sinal tem que vir do log. Mesma tag
+        // `[billing-recusa]` da recusa conciliada: um grep só traz as duas
+        // metades da hipótese.
+        expect(aviso).toHaveBeenCalledWith(
+          "[billing-recusa] evento de recusa NÃO virou recusa na reconsulta (#286)",
+          expect.objectContaining({
+            providerChargeId: paymentId,
+            tipoEvento: "cobranca.recusada",
+            statusReconsultado: "pendente",
+          }),
+        );
+      } finally {
+        aviso.mockRestore();
+      }
     });
 
     it("instrução de débito (traz OS DOIS ids) é tratada como COBRANÇA, não como vínculo", async () => {

@@ -99,6 +99,111 @@ async function semearAsaasPendente(
   return idEvento;
 }
 
+/**
+ * Ciclo já apurado e com cobrança emitida — o estado em que o webhook de
+ * pagamento encontra o ciclo em produção. Espelha `novoCiclo` de
+ * `src/app/api/hooks/asaas/route.int.test.ts` (mesma tabela, mesmo caminho).
+ */
+async function novoCicloAsaas(opcoes: {
+  providerChargeId: string;
+}): Promise<{ clinicId: string; cicloId: string }> {
+  const clinicId = await novaClinica();
+  const assinaturas = await owner!`
+    INSERT INTO subscription
+      (clinic_id, status, provider, provider_subscription_id, ciclo_dias)
+    VALUES (
+      ${clinicId}, 'active'::subscription_status, 'asaas',
+      ${`auth-do-ciclo-${crypto.randomUUID()}`}, 30
+    )
+    RETURNING id`;
+  const subscriptionId = assinaturas[0]!.id as string;
+  const ciclos = await owner!`
+    INSERT INTO billing_cycle
+      (clinic_id, subscription_id, inicio, fim, status,
+       pacientes_contados, valor_centavos, apurado_em, provider_charge_id,
+       cobranca_emitida_em)
+    VALUES (
+      ${clinicId}, ${subscriptionId},
+      now() - interval '30 days', now(),
+      'aguardando_pagamento'::billing_cycle_status,
+      3, 11700, now(), ${opcoes.providerChargeId}, now()
+    )
+    RETURNING id`;
+  return { clinicId, cicloId: ciclos[0]!.id as string };
+}
+
+/** Envelope de evento de COBRANÇA nossa (`externalReference = cycle:<id>`). */
+function payloadCobrancaAsaas(
+  idEvento: string,
+  paymentId: string,
+  cicloId: string,
+  opcoes: { event?: string; status?: string } = {},
+) {
+  return {
+    id: idEvento,
+    event: opcoes.event ?? "PAYMENT_OVERDUE",
+    dateCreated: "2026-08-08 20:01:00",
+    payment: {
+      id: paymentId,
+      status: opcoes.status ?? "OVERDUE",
+      value: 117,
+      billingType: "PIX",
+      externalReference: `cycle:${cicloId}`,
+      dateCreated: "2026-08-08",
+    },
+  };
+}
+
+async function semearCobrancaPendente(
+  paymentId: string,
+  cicloId: string,
+  opcoes: { event?: string; status?: string } = {},
+): Promise<string> {
+  const idEvento = novoIdEventoAsaas();
+  const corpo = payloadCobrancaAsaas(idEvento, paymentId, cicloId, opcoes);
+  await owner!`
+    INSERT INTO asaas_webhook_event (asaas_event_id, evento, payload)
+    VALUES (${idEvento}, ${corpo.event}, ${owner!.json(corpo as never)})`;
+  return idEvento;
+}
+
+/**
+ * Evento de INSTRUÇÃO recusada — a forma real do `INSTRUCTION_REFUSED`: chega
+ * SEM `payment.status`, só com `paymentInstruction.status` (#286).
+ */
+async function semearInstrucaoRecusadaPendente(
+  paymentId: string,
+  cicloId: string,
+): Promise<string> {
+  const idEvento = novoIdEventoAsaas();
+  const corpo = {
+    id: idEvento,
+    event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+    dateCreated: "2026-08-08 21:30:00",
+    payment: { id: paymentId, externalReference: `cycle:${cicloId}` },
+    paymentInstruction: {
+      id: "pi_reproc",
+      paymentId,
+      status: "REFUSED",
+      authorization: { id: "auth-da-instrucao-recusada" },
+    },
+  };
+  await owner!`
+    INSERT INTO asaas_webhook_event (asaas_event_id, evento, payload)
+    VALUES (${idEvento}, ${corpo.event}, ${owner!.json(corpo as never)})`;
+  return idEvento;
+}
+
+async function lerCicloAsaas(
+  cicloId: string,
+): Promise<{ status: string; erro: string | null }> {
+  const r = await authDb.execute(
+    sql`SELECT status::text AS status, erro FROM billing_cycle
+        WHERE id = ${cicloId}::uuid`,
+  );
+  return (r as unknown as { status: string; erro: string | null }[])[0]!;
+}
+
 // ── Leitura (sempre por `authDb`, a role da aplicação) ───────────────────────
 
 async function lerAsaas(idEvento: string) {
@@ -126,6 +231,18 @@ let rotasGateway: Array<{
 function respondeAutorizacaoAsaas(status = "ACTIVE") {
   respostasGateway.push(async () =>
     Response.json({ id: "auth-dublê", status, value: null }),
+  );
+}
+
+/** `GET /payments/{id}` do Asaas. `extra` mescla campos crus no corpo — usado
+ * para simular um gateway que informa `refusalReason` (#286). */
+function respondeCobrancaAsaas(
+  status: string,
+  valorReais = 117,
+  extra: Record<string, unknown> = {},
+) {
+  respostasGateway.push(async () =>
+    Response.json({ id: "pay-dublê", status, value: valorReais, ...extra }),
   );
 }
 
@@ -299,6 +416,77 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes", () => {
       expect(chamadasGateway.length).toBe(antes + 1);
       expect(segunda).toEqual({ aplicados: 1, falhas: 0 });
       expect((await lerAsaas(idEvento)).aplicado_em).not.toBeNull();
+    });
+
+    it("evento de cobrança recusada pendente repassa o motivo do gateway ao ciclo (#286)", async () => {
+      /**
+       * `reprocessarEventosPendentes` é o GÊMEO de `route.ts`: é a varredura,
+       * e não o webhook ao vivo, que aplica o evento quando a entrega original
+       * falhou ou chegou fora de ordem. `atual.motivoRecusa` (linha que
+       * repassa o motivo para `conciliarPagamentoDeCiclo`) é código tão novo
+       * quanto o do webhook, e sem um caso aqui o repasse fica sem cobertura
+       * neste caminho — um `SALDO_INSUFICIENTE` explícito do gateway seria
+       * silenciosamente substituído pela hipótese do teto, invertendo a
+       * orientação dada ao cliente.
+       */
+      const paymentId = `pay-reproc-${crypto.randomUUID()}`;
+      const { cicloId } = await novoCicloAsaas({ providerChargeId: paymentId });
+      const idEvento = await semearCobrancaPendente(paymentId, cicloId);
+
+      respondeCobrancaAsaas("OVERDUE", 117, {
+        refusalReason: "SALDO_INSUFICIENTE",
+      });
+
+      const r = await reprocessarEventosPendentes();
+      expect(r).toEqual({ aplicados: 1, falhas: 0 });
+
+      expect((await lerAsaas(idEvento)).aplicado_em).not.toBeNull();
+
+      const ciclo = await lerCicloAsaas(cicloId);
+      expect(ciclo.status).toBe("falhou");
+      expect(ciclo.erro).toContain("SALDO_INSUFICIENTE");
+    });
+
+    it("recusa de instrução que a reconsulta desmente deixa rastro também na varredura (#286)", async () => {
+      /**
+       * Gêmeo do caso da rota. A varredura é justamente o caminho que roda
+       * quando a entrega ao vivo falhou — ou seja, o cenário em que um guard
+       * que existisse só em `route.ts` sumiria por completo. Se a suposição
+       * `INSTRUCTION_REFUSED → OVERDUE` estiver errada, aqui também nada é
+       * gravado e o evento sai da fila carimbado como aplicado: o log é o
+       * único rastro.
+       */
+      const paymentId = `pay-reproc-mudo-${crypto.randomUUID()}`;
+      const { cicloId } = await novoCicloAsaas({ providerChargeId: paymentId });
+      const idEvento = await semearInstrucaoRecusadaPendente(
+        paymentId,
+        cicloId,
+      );
+
+      // O gateway discorda do evento: para ele a cobrança segue viva.
+      respondeCobrancaAsaas("PENDING");
+
+      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const r = await reprocessarEventosPendentes();
+        expect(r).toEqual({ aplicados: 1, falhas: 0 });
+
+        expect((await lerAsaas(idEvento)).aplicado_em).not.toBeNull();
+        expect((await lerCicloAsaas(cicloId)).status).toBe(
+          "aguardando_pagamento",
+        );
+
+        expect(aviso).toHaveBeenCalledWith(
+          "[billing-recusa] evento de recusa NÃO virou recusa na reconsulta (#286)",
+          expect.objectContaining({
+            providerChargeId: paymentId,
+            tipoEvento: "cobranca.recusada",
+            statusReconsultado: "pendente",
+          }),
+        );
+      } finally {
+        aviso.mockRestore();
+      }
     });
   });
 });

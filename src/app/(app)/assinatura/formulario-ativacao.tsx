@@ -235,6 +235,30 @@ export function FormularioAtivacao({
                 Abra o app do seu banco, escolha Pix e leia o QR Code abaixo —
                 ou copie o código e cole na opção “Pix copia e cola”.
               </p>
+              {/* #286 — o teto de valor é diretriz do BACEN: TODO app de banco
+                  pergunta, em TODA ativação, e sugere o valor em tela (o da
+                  ativação). Aceitar a sugestão faz toda mensalidade futura ser
+                  recusada meses depois, em silêncio. Medido em 13/08/2026, no
+                  sandbox: o teto não apareceu em nenhum campo do objeto
+                  `authorization` — se a API de produção expõe o valor segue em
+                  aberto — `infra/README.md` manda medir na 1ª ativação real.
+                  Até lá não há detecção possível e esta copy é a única
+                  barreira preventiva. Fica antes do QR de propósito: depois de ler o
+                  código a pessoa já está no app do banco. `R$ 40` é conta de folga sobre a faixa marginal real
+                  (R$ 25 a R$ 39 por paciente ativo), não promessa de preço. */}
+              <p className="mt-2">
+                <strong>O banco vai pedir um valor máximo de cobrança.</strong>{" "}
+                Se ele sugerir os{" "}
+                {formatarBRL(autorizacao.valorAtivacaoCentavos)} desta cobrança,
+                não aceite — isso é só a ativação.{" "}
+                <strong>
+                  Se o teto ficar abaixo da mensalidade, toda cobrança futura é
+                  recusada, sem aviso.
+                </strong>{" "}
+                Defina o maior valor que o banco permitir: o Iris só cobra o que
+                for apurado no ciclo. Se preferir um número, use pacientes
+                esperados no mês multiplicado por <strong>R$ 40</strong>.
+              </p>
               <div className="mt-3 flex justify-center">
                 <QrCode
                   value={autorizacao.brCode}

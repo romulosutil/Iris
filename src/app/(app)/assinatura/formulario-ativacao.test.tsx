@@ -3,6 +3,7 @@ import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FormularioAtivacao } from "./formulario-ativacao";
 import type { AtivacaoState } from "./logic";
+import { formatarBRL } from "@/lib/billing/calculator";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -226,6 +227,56 @@ describe("FormularioAtivacao", () => {
     const links = screen.getAllByRole("link");
     expect(links).toHaveLength(1);
     expect(links[0]?.getAttribute("href")).toBe("/pacientes/novo");
+  });
+
+  it("avisa sobre o teto do banco dentro do mesmo Alert e ANTES do QR Code", async () => {
+    const user = userEvent.setup();
+    const brCode = "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF";
+    render(
+      <FormularioAtivacao
+        acao={acaoQueDevolve({
+          autorizacao: {
+            forma: "pix_copia_e_cola",
+            brCode,
+            valorAtivacaoCentavos: 1,
+          },
+        })}
+        navegar={vi.fn()}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /ativar assinatura/i }),
+    );
+
+    // O aviso existe e nomeia as duas coisas que o leitor precisa fazer:
+    // não aceitar o valor da ativação como teto, e usar a conta de folga.
+    const aviso = await screen.findByText(/valor máximo/i);
+    const paragrafoAviso = aviso.closest("p");
+    expect(paragrafoAviso?.textContent).toMatch(/R\$ 40/);
+    // E precisa nomear o valor de VERDADE da ativação (via `formatarBRL`,
+    // nunca hardcoded) — sem isso, trocar a interpolação por um texto
+    // estático errado continuaria verde neste teste (D22).
+    expect(paragrafoAviso?.textContent).toContain(formatarBRL(1));
+
+    // Está DENTRO do mesmo Alert do QR Code — não é parágrafo solto ao lado.
+    // O título do Alert é o âncora estável: `closest("div")` a partir do QR
+    // casaria com a div de layout que só embrulha o QR, nunca com o Alert.
+    const qr = screen.getByRole("img", {
+      name: /QR Code do Pix para autorizar a assinatura/i,
+    });
+    const alerta = screen
+      .getByText("Falta pagar para concluir")
+      .closest("[role='status'], [role='alert']");
+    expect(alerta).not.toBeNull();
+    expect(alerta?.contains(aviso)).toBe(true);
+    expect(alerta?.contains(qr)).toBe(true);
+
+    // E vem ANTES do QR na ordem do DOM: depois de ler o código a pessoa já
+    // está no app do banco e não volta para ler aviso nenhum.
+    // DOCUMENT_POSITION_FOLLOWING = 4 → `qr` vem depois de `aviso`.
+    expect(
+      aviso.compareDocumentPosition(qr) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("depois do Pix, oferece caminho de volta ao cadastro — e não antes (T11)", async () => {

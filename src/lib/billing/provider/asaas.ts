@@ -706,11 +706,26 @@ export class AsaasProvider implements BillingProvider {
   async consultarCobranca(providerChargeId: string): Promise<{
     status: StatusCobranca;
     valorCentavos: number;
+    motivoRecusa: string | null;
   }> {
     const resposta = comoRegistro(
       await chamar("GET", `/payments/${encodeURIComponent(providerChargeId)}`),
     );
     const valor = resposta.value;
+
+    /**
+     * Leitura defensiva: nenhum destes campos foi observado numa resposta real
+     * (medição de 13/08/2026 — no sandbox as cobranças ficaram em `PENDING` e
+     * nenhuma recusa de fato chegou a acontecer; nesse estado o `payment` não
+     * trouxe campo de motivo e `pixTransaction` veio `null`. Como um `payment`
+     * recusado se comporta segue NÃO MEDIDO). Tentamos os nomes plausíveis e
+     * aceitamos `null`; o diagnóstico com hipóteses ranqueadas fica em
+     * `conciliarPagamentoDeCiclo`, não aqui. O adapter não adivinha causa.
+     */
+    const motivoRecusa =
+      comoTexto(resposta.refusalReason) ??
+      comoTexto(resposta.failureReason) ??
+      comoTexto(comoRegistro(resposta.pixTransaction).failureReason);
 
     return {
       status: mapearStatusCobranca(resposta.status),
@@ -719,6 +734,7 @@ export class AsaasProvider implements BillingProvider {
         typeof valor === "number" && Number.isFinite(valor)
           ? reaisParaCentavos(valor)
           : 0,
+      motivoRecusa,
     };
   }
 
