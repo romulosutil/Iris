@@ -1772,3 +1772,121 @@ trecho do trilho que a ativação de 13/08 não cobriu.
 Leia `billing_apurar_ciclo` (`db/migrations/0071_billing_assinatura_e_ciclo.sql`)
 e confira se a ficha cai dentro de `[inicio, fim)` do ciclo. Nesse caso o job
 está certo e o dado do ensaio é que está errado.
+
+### Runbook — medir o teto real do Pix Automático em produção (#286)
+
+A #286 achou que o Pix Automático exige um **teto de valor**, definido pelo
+pagador no app do banco no ato da autorização — e que um teto baixo demais
+(ex.: R$ 0,01, o valor da própria cobrança de ativação) recusa toda mensalidade
+futura em silêncio. O "Ponto aberto" da issue é: **dá para o Iris ler esse teto
+pela API do Asaas e avisar na hora, ou a única barreira possível é a copy
+preventiva (Task 1 da #286)?**
+
+Isso já foi medido uma vez, em 13/08/2026, contra o **sandbox** do Asaas: o
+objeto `authorization` não tem nenhum campo de teto — só `minLimitValue`
+(mínimo, sempre `null`). Mas as três autorizações do sandbox estavam todas em
+`status: "CREATED"`/`"REFUSED"`, nenhuma em `ACTIVE` — e o teto é escrito pelo
+banco só depois que o pagador autoriza de verdade. Um campo que só apareça pós-
+`ACTIVE` não teria aparecido nessa medição. A autorização real, em `ACTIVE`,
+só existe em **produção** — e a chave de API de produção só existe no
+Easypanel, não neste repo nem em nenhum terminal do Rômulo.
+
+**A saída barata: não precisa de chave nova.** Todo evento que o Asaas entrega
+ao webhook de produção já é gravado, bruto, em
+`asaas_webhook_event.payload` (`src/db/schema.ts:1696-1710`) — inclusive o
+evento de ativação, que traz a autorização real em `ACTIVE`. Basta consultar o
+banco de produção, sem chamar a API do Asaas de novo.
+
+**Passo 1 — abrir o console do Postgres de produção.** Easypanel → serviço do
+Postgres (`iris-postgres`) → aba **Console**. É o mesmo console usado no
+`§Passo 1 — criar a role de login em produção` deste arquivo, mais acima — se
+a aba não estiver onde descrito lá, procure pelo objetivo ("abrir um terminal
+dentro do serviço de banco"), não adivinhe o nome do botão.
+
+**Passo 2 — conectar no psql.** No terminal que abrir, digite e pressione
+Enter:
+
+```bash
+psql -U iris
+```
+
+**Como saber que deu certo:** o prompt muda para `iris=#`. Se pedir senha e
+você não tiver uma senha à mão, o Console do Easypanel normalmente já abre
+autenticado como o usuário do sistema operacional do container — feche e
+reabra o Console e tente de novo antes de procurar senha em outro lugar.
+
+**Passo 3 — rodar a consulta.** Cole exatamente isto no prompt `iris=#` e
+pressione Enter:
+
+```sql
+-- Objetivo: ver se o objeto `authorization` REAL, já em ACTIVE, traz algum
+-- campo de teto que o sandbox (todas CREATED/REFUSED) não mostrou.
+SELECT evento,
+       jsonb_pretty(payload)
+  FROM asaas_webhook_event
+ WHERE evento LIKE 'PIX_AUTOMATIC_RECURRING_AUTHORIZATION%'
+ ORDER BY processado_em DESC
+ LIMIT 5;
+```
+
+> A coluna de data é `processado_em`, não `criado_em` — conferido em
+> `src/db/schema.ts:1696-1710`, a tabela não tem coluna `criado_em`. Se você
+> viu `criado_em` em algum plano ou rascunho anterior desta issue, é engano:
+> rodar com `criado_em` devolve `ERRO: column "criado_em" does not exist`.
+
+**Como saber que deu certo:** a consulta devolve até 5 linhas, cada uma com o
+nome do evento e o JSON formatado (indentado, fácil de ler) da coluna
+`payload`. Entre as linhas devolvidas, a que importa é a que tem
+`evento = 'PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED'` — é essa que
+carrega o objeto `authorization` com `"status": "ACTIVE"`. As outras
+(`_CREATED`, etc.) são estados anteriores da mesma autorização e não valem
+para esta medição, porque o teto só é escrito pelo banco depois da ativação.
+
+**Se a consulta devolver zero linhas:** ainda não chegou nenhum evento de
+autorização de Pix Automático no webhook de produção. Não é erro de SQL — é
+sinal de que a ativação real ainda não aconteceu (ou aconteceu antes do
+webhook de produção estar configurado, 10/08/2026) ou de que o evento ainda
+não foi entregue. Repita mais tarde; não force a query a "achar" algo trocando
+a condição do `WHERE`.
+
+**Passo 4 — ler o resultado.** Dentro do JSON da linha `_ACTIVATED`, procure,
+dentro do objeto `authorization`, qualquer chave que pareça um **máximo**:
+`maximumValue`, `maxValue`, `limit`, `maxLimitValue` (ou nome parecido — o
+Asaas não documenta o campo, então o nome exato não está garantido de
+antemão). `minLimitValue` já sabemos que existe e é o **mínimo**, não conta.
+
+- **Se existir uma chave de máximo, com valor preenchido:** o teto é legível
+  pela API/webhook. Abra uma issue de follow-up para o Iris **detectar** teto
+  insuficiente no momento da ativação — essa é a solução real que o "Ponto
+  aberto" da #286 previa, e a copy da Task 1 vira rede de segurança, não a
+  única barreira.
+- **Se não existir nenhuma chave de máximo** (só os campos já conhecidos —
+  `id`, `value`, `status`, `minLimitValue`, etc.): confirma que o teto não é
+  legível. A copy da Task 1 é o teto do que dá para fazer, e a #286 fecha com
+  o que este conjunto de tasks entrega (copy + diagnóstico de
+  `INSTRUCTION_REFUSED` nomeado).
+
+**Passo 5 — registrar o resultado na #286, sempre.** Cole o JSON da linha
+`_ACTIVATED` como comentário na issue — **mesmo que a resposta seja negativa**
+(a Definição de Pronto da #286 pede a resposta registrada "mesmo que
+negativa", não só o achado positivo). Antes de colar:
+
+- **Redija (substitua por `[REDIGIDO]`) qualquer id e qualquer CPF** que
+  aparecer no JSON — `customerId`, `contractId`, `endToEndIdentifier` e
+  qualquer outro identificador de cliente ou pagamento. O objeto
+  `authorization` não costuma trazer CPF em claro (ver
+  `docs/evidencias/2026-08-03-asaas-sandbox-evento-real.json` para o formato
+  de uma medição anterior, no sandbox), mas confira a linha real antes de
+  colar — não assuma pelo exemplo do sandbox.
+- Marque o checkbox "Investigado se o teto é legível via API (resposta
+  registrada aqui, mesmo que negativa)" na Definição de Pronto da #286 **só
+  depois** de o comentário estar colado.
+
+**Se der errado:**
+
+| Sintoma                                       | Causa provável                                                                                                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `psql: command not found` ou console não abre | Você está no console do serviço errado — confirme que é o `iris-postgres`, não `App`/`billing`.                                                                                      |
+| `ERRO: column "criado_em" does not exist`     | Rodou a versão antiga da query (ver aviso no Passo 3). Use `processado_em`.                                                                                                          |
+| Zero linhas                                   | Ver "Se a consulta devolver zero linhas" no Passo 3 — não é falha da query.                                                                                                          |
+| JSON cortado/ilegível no terminal             | Terminal pequeno demais para o `jsonb_pretty`. Redimensione a janela do Console e rode de novo, ou rode `\x` antes do `SELECT` para o modo expandido do psql (uma coluna por linha). |
