@@ -12,6 +12,8 @@ import { Alert } from "@/components/ui/alert";
 import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/cn";
 import { surface } from "@/components/ui/primitives/surface";
+import { Pill } from "@/components/ui/primitives/pill";
+import { ShieldIcon, LockIcon } from "@/components/ui/icon";
 
 /**
  * Aviso pós-redefinição de senha (Task 9, `../redefinir-senha`). Isolado num
@@ -114,6 +116,21 @@ export default function LoginPage() {
             {enviando ? "Entrando…" : "Entrar"}
           </Button>
         </Form>
+
+        {/* Selos são afirmação factual medida — evidência em `docs/arquitetura/trust-indicators-login.md`. */}
+        <div className="mt-6 pt-6 border-t-2 border-dashed border-[var(--border-brutal)] flex flex-col gap-4 text-center">
+          <div className="flex flex-wrap justify-center gap-2">
+            <Pill variant="solid" colorScheme="neutral" size="sm" icon={<ShieldIcon size={12} />} data-testid="badge-lgpd">
+              Conformidade LGPD
+            </Pill>
+            <Pill variant="solid" colorScheme="neutral" size="sm" icon={<LockIcon size={12} />} data-testid="badge-tls">
+              Conexão Criptografada TLS 1.3
+            </Pill>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-[240px] mx-auto">
+            Dados clínicos protegidos por criptografia e isolamento multi-tenant.
+          </p>
+        </div>
       </div>
 
       <p className="text-[var(--text-secondary)] text-center text-sm">
