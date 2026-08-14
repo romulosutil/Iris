@@ -176,6 +176,24 @@ export function FormularioAtivacao({
                 Abra o app do seu banco, escolha Pix e leia o QR Code abaixo —
                 ou copie o código e cole na opção “Pix copia e cola”.
               </p>
+              {/* #286 — o teto de valor é diretriz do BACEN: TODO app de banco
+                  pergunta, em TODA ativação, e sugere o valor em tela (o da
+                  ativação). Aceitar a sugestão faz toda mensalidade futura ser
+                  recusada meses depois, em silêncio. Medido em 13/08/2026: o
+                  teto NÃO é legível pela API do Asaas (nenhum campo de máximo
+                  no objeto `authorization`), então não há detecção possível —
+                  esta copy é a única barreira preventiva. Fica antes do QR de
+                  propósito: depois de ler o código a pessoa já está no app do
+                  banco. `R$ 40` é conta de folga sobre a faixa marginal real
+                  (R$ 25 a R$ 39 por paciente ativo), não promessa de preço. */}
+              <p className="mt-2">
+                <strong>
+                  O banco vai pedir um valor máximo de cobrança — não aceite os{" "}
+                  {formatarBRL(autorizacao.valorAtivacaoCentavos)} sugeridos
+                </strong>
+                , isso é só a ativação. Use um teto com folga: pacientes
+                esperados no mês × <strong>R$ 40</strong>.
+              </p>
               <div className="mt-3 flex justify-center">
                 <QrCode
                   value={autorizacao.brCode}
