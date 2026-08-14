@@ -20,8 +20,12 @@ function linha(opcoes: {
   trialComecoEm?: Date | null;
   trialDias?: number | null;
   criadoEm?: Date;
+  debitoCentavos?: number | string | null;
 }) {
   return {
+    ...(opcoes.debitoCentavos === undefined
+      ? {}
+      : { debito_centavos: opcoes.debitoCentavos }),
     status: opcoes.status ?? null,
     isento_trial: opcoes.isento ?? false,
     trial_comeco_em:
@@ -225,5 +229,75 @@ describe("mensagemDeEstado", () => {
     const msg = mensagemDeEstado("trial_expirado");
     expect(msg).toMatch(/exportando/i);
     expect(msg).toMatch(/ficha[s]? ativa/i);
+  });
+});
+
+/**
+ * Conta devedora (#290).
+ *
+ * O débito é dado de faturamento, não estado: `cancelada` continua sendo
+ * `cancelada`, e `ativa` com dívida é situação NORMAL — reativar com débito
+ * abaixo do piso de cobrança do gateway deixa a dívida viva. Um estado novo
+ * ("cancelada_devedora") teria multiplicado a matriz sem acrescentar decisão
+ * nenhuma: ninguém escreve mais nem menos por dever.
+ */
+describe("débito na situação da conta", () => {
+  test("cancelada com débito continua somente-leitura e carrega o valor", () => {
+    const s = derivarSituacao(
+      linha({ status: "canceled", debitoCentavos: 1300 }),
+      AGORA,
+    );
+    expect(s.estado).toBe("cancelada");
+    expect(s.podeEscrever).toBe(false);
+    expect(s.debitoCentavos).toBe(1300);
+  });
+
+  test("dever não tira a escrita de quem está com a conta ativa", () => {
+    // É o caminho de quem reativou com débito abaixo do piso. Bloquear aqui
+    // seria cobrar duas vezes pelo mesmo atraso: o valor já vai ser cobrado na
+    // próxima reativação.
+    const s = derivarSituacao(
+      linha({ status: "active", debitoCentavos: 260 }),
+      AGORA,
+    );
+    expect(s.estado).toBe("ativa");
+    expect(s.podeEscrever).toBe(true);
+    expect(s.debitoCentavos).toBe(260);
+  });
+
+  test("SUM do Postgres chega como string e vira número, não concatenação", () => {
+    // O driver devolve `numeric` como string. Sem a normalização, `"1300"`
+    // vazaria para a UI e `formatarBRL` receberia texto.
+    const s = derivarSituacao(
+      linha({ status: "canceled", debitoCentavos: "1300" }),
+      AGORA,
+    );
+    expect(s.debitoCentavos).toBe(1300);
+  });
+
+  test("ausência da coluna vira zero, não NaN", () => {
+    const s = derivarSituacao(linha({ status: "canceled" }), AGORA);
+    expect(s.debitoCentavos).toBe(0);
+  });
+
+  test("clínica inexistente para o tenant não inventa dívida", () => {
+    expect(derivarSituacao(undefined, AGORA).debitoCentavos).toBe(0);
+  });
+
+  test("a copy de cancelada só menciona valor quando há valor", () => {
+    const semDebito = mensagemDeEstado("cancelada");
+    expect(semDebito).not.toMatch(/R\$/);
+
+    const comDebito = mensagemDeEstado("cancelada", 1300);
+    expect(comDebito).toMatch(/13,00/);
+    // Continua prometendo o que a conta cancelada de fato permite.
+    expect(comDebito).toMatch(/exportando/i);
+  });
+
+  test("débito zero não altera a copy de nenhum estado", () => {
+    expect(mensagemDeEstado("cancelada", 0)).toBe(
+      mensagemDeEstado("cancelada"),
+    );
+    expect(mensagemDeEstado("ativa", 1300)).toBe("");
   });
 });
