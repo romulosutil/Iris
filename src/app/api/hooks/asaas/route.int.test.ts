@@ -663,28 +663,34 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       // linha morta na tabela — sem esta asserção, removê-lo seria invisível.
       const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-      const id = novoIdEvento();
-      const res = await POST(
-        requisicao({
-          token: TOKEN,
-          corpo: eventoCobranca(id, paymentId, cicloId, {
-            event: "PAYMENT_OVERDUE",
-            status: "OVERDUE",
+      // `try/finally`: qualquer `expect` que falhe aqui dentro lança, e sem o
+      // `finally` o dublê de `console.warn` vazaria para os testes seguintes
+      // do arquivo (silenciando avisos que eles deveriam ver).
+      try {
+        const id = novoIdEvento();
+        const res = await POST(
+          requisicao({
+            token: TOKEN,
+            corpo: eventoCobranca(id, paymentId, cicloId, {
+              event: "PAYMENT_OVERDUE",
+              status: "OVERDUE",
+            }),
           }),
-        }),
-      );
-      expect(res.status).toBe(200);
+        );
+        expect(res.status).toBe(200);
 
-      const ciclo = await lerCiclo(cicloId);
-      expect(ciclo.status).toBe("falhou");
-      expect(ciclo.erro).toMatch(/teto/i);
-      expect(ciclo.erro).toMatch(/sem motivo informado/i);
+        const ciclo = await lerCiclo(cicloId);
+        expect(ciclo.status).toBe("falhou");
+        expect(ciclo.erro).toMatch(/teto/i);
+        expect(ciclo.erro).toMatch(/sem motivo informado/i);
 
-      expect(aviso).toHaveBeenCalledWith(
-        "[billing-recusa] cobrança de ciclo recusada",
-        expect.objectContaining({ providerChargeId: paymentId }),
-      );
-      aviso.mockRestore();
+        expect(aviso).toHaveBeenCalledWith(
+          "[billing-recusa] cobrança de ciclo recusada",
+          expect.objectContaining({ providerChargeId: paymentId }),
+        );
+      } finally {
+        aviso.mockRestore();
+      }
     });
 
     it("cobrança recusada COM motivo do gateway grava o motivo bruto, sem inventar hipótese (#286)", async () => {

@@ -179,12 +179,13 @@ export function FormularioAtivacao({
               {/* #286 — o teto de valor é diretriz do BACEN: TODO app de banco
                   pergunta, em TODA ativação, e sugere o valor em tela (o da
                   ativação). Aceitar a sugestão faz toda mensalidade futura ser
-                  recusada meses depois, em silêncio. Medido em 13/08/2026: o
-                  teto NÃO é legível pela API do Asaas (nenhum campo de máximo
-                  no objeto `authorization`), então não há detecção possível —
-                  esta copy é a única barreira preventiva. Fica antes do QR de
-                  propósito: depois de ler o código a pessoa já está no app do
-                  banco. `R$ 40` é conta de folga sobre a faixa marginal real
+                  recusada meses depois, em silêncio. Medido em 13/08/2026, no
+                  sandbox: o teto não apareceu em nenhum campo do objeto
+                  `authorization` — se a API de produção expõe o valor segue em
+                  aberto — `infra/README.md` manda medir na 1ª ativação real.
+                  Até lá não há detecção possível e esta copy é a única
+                  barreira preventiva. Fica antes do QR de propósito: depois de ler o
+                  código a pessoa já está no app do banco. `R$ 40` é conta de folga sobre a faixa marginal real
                   (R$ 25 a R$ 39 por paciente ativo), não promessa de preço. */}
               <p className="mt-2">
                 <strong>O banco vai pedir um valor máximo de cobrança.</strong>{" "}

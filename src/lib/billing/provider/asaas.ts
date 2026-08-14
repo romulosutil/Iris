@@ -715,9 +715,11 @@ export class AsaasProvider implements BillingProvider {
 
     /**
      * Leitura defensiva: nenhum destes campos foi observado numa resposta real
-     * (medição de 13/08/2026 — o `payment` recusado não trouxe motivo algum, e
-     * `pixTransaction` veio `null`). Tentamos os nomes plausíveis e aceitamos
-     * `null`; o diagnóstico com hipóteses ranqueadas fica em
+     * (medição de 13/08/2026 — no sandbox as cobranças ficaram em `PENDING` e
+     * nenhuma recusa de fato chegou a acontecer; nesse estado o `payment` não
+     * trouxe campo de motivo e `pixTransaction` veio `null`. Como um `payment`
+     * recusado se comporta segue NÃO MEDIDO). Tentamos os nomes plausíveis e
+     * aceitamos `null`; o diagnóstico com hipóteses ranqueadas fica em
      * `conciliarPagamentoDeCiclo`, não aqui. O adapter não adivinha causa.
      */
     const motivoRecusa =
