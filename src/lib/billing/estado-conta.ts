@@ -165,8 +165,21 @@ export function derivarSituacao(
 
   if (status === "active") return permitir("ativa");
   if (status === "past_due") return permitir("pagamento_atrasado");
-  // Cancelada tranca mesmo com trial nominalmente ativo: cancelar é ato
-  // explícito da clínica e vence o relógio.
+  // Cancelada tranca na hora, mesmo com trial nominalmente ativo — e mesmo
+  // sabendo que hoje o único jeito de cancelar é revogar a autorização numa
+  // tela genérica do banco, sem contexto nenhum do Iris.
+  //
+  // O corte instantâneo é DELIBERADO (#287 Problema 2, decidido na #290). A
+  // carência que o Problema 2 propunha — espelhando a de `past_due` logo acima
+  // — reabriria exatamente o buraco que a #290 fecha: com o ciclo cobrado em
+  // pro-rata só na reativação, uma janela de escrita depois do cancelamento é
+  // o dia grátis que o loop cancela-usa-cancela procura. Em `past_due` a
+  // carência não tem esse efeito, porque lá a assinatura continua viva e o
+  // ciclo segue sendo faturado.
+  //
+  // O risco que sobra (revogação por engano no app do banco) é mitigado por
+  // AVISO, não por acesso: e-mail no cancelamento, pendência registrada na
+  // #290. Informar não devolve escrita e por isso não reabre o exploit.
   if (status === "canceled") return somenteLeitura("cancelada");
 
   if (trial.ativo) {

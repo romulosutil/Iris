@@ -91,7 +91,10 @@ describe("derivarSituacao", () => {
 
   test("free_tier com trial vencido vira somente-leitura, não bloqueio de cadastro", () => {
     const s = derivarSituacao(
-      linha({ status: "free_tier", trialComecoEm: new Date("2026-06-01T12:00:00Z") }),
+      linha({
+        status: "free_tier",
+        trialComecoEm: new Date("2026-06-01T12:00:00Z"),
+      }),
       AGORA,
     );
     expect(s.estado).toBe("trial_expirado");
@@ -117,11 +120,54 @@ describe("derivarSituacao", () => {
     expect(s.podeEscrever).toBe(false);
   });
 
+  // ── #287 Problema 2 — o corte sem carência é decisão, não descuido ────────
+  // O Problema 2 pedia uma janela de escrita depois do cancelamento, espelhando
+  // `carencia_dias` do `past_due`. Foi SUPERADO na #290: com o ciclo cobrado em
+  // pro-rata só na reativação, essa janela é o dia grátis que o loop
+  // cancela-usa-cancela procura. Estes casos existem para que reintroduzir a
+  // carência tenha de derrubar um teste que diz o porquê, em vez de passar como
+  // "melhoria de UX".
+
+  test("cancelamento não ganha carência nenhuma — nem no instante seguinte ao corte", () => {
+    // `derivarSituacao` decide por status, sem consultar `cancelada_em`: não há
+    // relógio de carência para consultar, e é essa ausência que é o contrato.
+    // Qualquer instante do calendário devolve o mesmo somente-leitura.
+    for (const agora of [
+      new Date("2026-08-04T15:00:01Z"),
+      new Date("2026-08-05T15:00:00Z"),
+      new Date("2026-08-11T15:00:00Z"),
+      new Date("2027-01-01T00:00:00Z"),
+    ]) {
+      const s = derivarSituacao(linha({ status: "canceled" }), agora);
+      expect(s.estado).toBe("cancelada");
+      expect(s.podeEscrever).toBe(false);
+      expect(s.podeCadastrarPaciente).toBe(false);
+    }
+  });
+
+  test("canceled e past_due são assimétricos de propósito: só o inadimplente escreve", () => {
+    // Mesma clínica, mesmo relógio, só o status muda. `past_due` mantém a
+    // escrita (a assinatura está viva e o ciclo continua sendo faturado);
+    // `canceled` não (o ciclo já foi congelado como débito, ver #290).
+    const relogio = { trialComecoEm: new Date("2020-01-01T00:00:00Z") };
+    expect(
+      derivarSituacao(linha({ status: "past_due", ...relogio }), AGORA)
+        .podeEscrever,
+    ).toBe(true);
+    expect(
+      derivarSituacao(linha({ status: "canceled", ...relogio }), AGORA)
+        .podeEscrever,
+    ).toBe(false);
+  });
+
   // ── Assinatura viva ──────────────────────────────────────────────────────
 
   test("active escreve independentemente do relógio", () => {
     for (const trialComecoEm of [null, new Date("2020-01-01T00:00:00Z")]) {
-      const s = derivarSituacao(linha({ status: "active", trialComecoEm }), AGORA);
+      const s = derivarSituacao(
+        linha({ status: "active", trialComecoEm }),
+        AGORA,
+      );
       expect(s.estado).toBe("ativa");
       expect(s.podeEscrever).toBe(true);
     }
@@ -129,7 +175,10 @@ describe("derivarSituacao", () => {
 
   test("past_due escreve sempre — inadimplência não tranca prontuário", () => {
     const s = derivarSituacao(
-      linha({ status: "past_due", trialComecoEm: new Date("2020-01-01T00:00:00Z") }),
+      linha({
+        status: "past_due",
+        trialComecoEm: new Date("2020-01-01T00:00:00Z"),
+      }),
       AGORA,
     );
     expect(s.estado).toBe("pagamento_atrasado");
@@ -140,7 +189,10 @@ describe("derivarSituacao", () => {
     // Trial de 7 dias iniciado em 28/07 no fuso da clínica → 04/08 é o dia 7,
     // ou seja, `diasRestantes === 0`: último dia, ainda ativo.
     const s = derivarSituacao(
-      linha({ status: "free_tier", trialComecoEm: new Date("2026-07-28T12:00:00Z") }),
+      linha({
+        status: "free_tier",
+        trialComecoEm: new Date("2026-07-28T12:00:00Z"),
+      }),
       AGORA,
     );
     expect(s.estado).toBe("trial_ativo");
@@ -151,10 +203,20 @@ describe("derivarSituacao", () => {
 
 describe("mensagemDeEstado", () => {
   test("só os estados de somente-leitura têm copy", () => {
-    for (const estado of ["trial_expirado", "pagamento_em_processamento", "cancelada"] as const) {
+    for (const estado of [
+      "trial_expirado",
+      "pagamento_em_processamento",
+      "cancelada",
+    ] as const) {
       expect(mensagemDeEstado(estado).length).toBeGreaterThan(0);
     }
-    for (const estado of ["isenta", "trial_aguardando", "trial_ativo", "ativa", "pagamento_atrasado"] as const) {
+    for (const estado of [
+      "isenta",
+      "trial_aguardando",
+      "trial_ativo",
+      "ativa",
+      "pagamento_atrasado",
+    ] as const) {
       expect(mensagemDeEstado(estado)).toBe("");
     }
   });
