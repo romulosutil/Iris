@@ -4,6 +4,8 @@ import { getTenantContext } from "@/auth/tenant";
 import { Stack } from "@/components/ui/layout";
 import { Alert } from "@/components/ui/alert";
 import { TabsNav, type TabsNavItem } from "@/components/ui/tabs-nav";
+import { Pill } from "@/components/ui/primitives/pill";
+import { Tooltip } from "@/components/ui/tooltip";
 import { mensagemDeEstado } from "@/lib/billing/estado-conta";
 import { obterSituacaoConta } from "../../queries";
 
@@ -66,7 +68,22 @@ export default async function PacienteLayout({
 
   return (
     <Stack gap="md">
-      <TabsNav itens={abas} ariaLabel="Seções do prontuário do paciente" />
+      <div className="flex flex-col gap-2">
+        <TabsNav itens={abas} ariaLabel="Seções do prontuário do paciente" />
+        <div className="flex justify-end -mt-2">
+          <Tooltip conteudo="Este prontuário está visível apenas para a equipe autorizada desta clínica.">
+            <Pill
+              variant="inset"
+              colorScheme="neutral"
+              className="cursor-help"
+              tabIndex={0}
+              aria-label="Indicador de proteção de dados: Dados Criptografados (RLS Ativo)"
+            >
+              🔒 Dados Criptografados (RLS Ativo)
+            </Pill>
+          </Tooltip>
+        </div>
+      </div>
       {!situacao.podeEscrever ? (
         <Alert severidade="info" destacado titulo="Conta em somente-leitura">
           <p>{mensagemDeEstado(situacao.estado)}</p>

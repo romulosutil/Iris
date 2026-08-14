@@ -6,7 +6,24 @@ import type { ReactElement } from "react";
 vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
 
-afterEach(cleanup);
+const mockObterSituacaoConta = vi.fn();
+
+vi.mock("@/auth/tenant", () => ({
+  getTenantContext: async () => ({ clinicId: "c1", userId: "u1", role: "coordenador" }),
+}));
+
+vi.mock("../queries", () => ({
+  obterSituacaoConta: (...args: unknown[]) => mockObterSituacaoConta(...args),
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/pacientes/p1",
+}));
+
+afterEach(() => {
+  cleanup();
+  mockObterSituacaoConta.mockReset();
+});
 
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
@@ -114,3 +131,42 @@ test("diálogo de arquivamento aberto sem violações", async () => {
   // relógio, não por violação. Aumentar aqui em vez de globalmente mantém o
   // padrão apertado para o resto da suíte.
 }, 30_000);
+
+test("layout do paciente com indicador de segurança e sem violações", async () => {
+  const { default: PacienteLayout } = await import("./[id]/layout");
+  mockObterSituacaoConta.mockResolvedValue({
+    estado: "ativa",
+    podeEscrever: true,
+    podeCadastrarPaciente: true,
+    diasRestantesTrial: null,
+    statusAssinatura: "active",
+  });
+
+  const jsx = await PacienteLayout({
+    children: <div data-testid="child">Conteúdo do Prontuário</div>,
+    params: Promise.resolve({ id: "p1" }),
+  });
+
+  const { container } = render(jsx);
+
+  // Verifica que o indicador "Dados Criptografados (RLS Ativo)" é exibido
+  expect(screen.getByText(/Dados Criptografados \(RLS Ativo\)/i)).toBeDefined();
+
+  // Verifica se o conteúdo do prontuário (children) é renderizado
+  expect(screen.getByTestId("child")).toBeDefined();
+
+  // Varredura de acessibilidade com axe
+  const r = await axe.run(container, {
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
+    rules: {
+      region: { enabled: false },
+      "landmark-one-main": { enabled: false },
+      "page-has-heading-one": { enabled: false },
+      "color-contrast": { enabled: false },
+    },
+  });
+  expect(r.violations).toEqual([]);
+});
