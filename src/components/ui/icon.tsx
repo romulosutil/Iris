@@ -217,3 +217,51 @@ export const TrashIcon = ({ size = "1em", className, ...props }: IconProps) => (
   </svg>
 );
 
+export const ShieldIcon = ({ size = "1em", className, ...props }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    className={className}
+    {...props}
+  >
+    <path
+      d="M8 1.5l5.5 2v4.5c0 3.4-2.3 6.6-5.5 7.5-3.2-.9-5.5-4.1-5.5-7.5V3.5l5.5-2z"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+export const LockIcon = ({ size = "1em", className, ...props }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    className={className}
+    {...props}
+  >
+    <rect
+      x="3"
+      y="7"
+      width="10"
+      height="7.5"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M4.5 7V4.5a3.5 3.5 0 017 0V7"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
