@@ -167,6 +167,33 @@ async function semearCobrancaPendente(
   return idEvento;
 }
 
+/**
+ * Evento de INSTRUÇÃO recusada — a forma real do `INSTRUCTION_REFUSED`: chega
+ * SEM `payment.status`, só com `paymentInstruction.status` (#286).
+ */
+async function semearInstrucaoRecusadaPendente(
+  paymentId: string,
+  cicloId: string,
+): Promise<string> {
+  const idEvento = novoIdEventoAsaas();
+  const corpo = {
+    id: idEvento,
+    event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+    dateCreated: "2026-08-08 21:30:00",
+    payment: { id: paymentId, externalReference: `cycle:${cicloId}` },
+    paymentInstruction: {
+      id: "pi_reproc",
+      paymentId,
+      status: "REFUSED",
+      authorization: { id: "auth-da-instrucao-recusada" },
+    },
+  };
+  await owner!`
+    INSERT INTO asaas_webhook_event (asaas_event_id, evento, payload)
+    VALUES (${idEvento}, ${corpo.event}, ${owner!.json(corpo as never)})`;
+  return idEvento;
+}
+
 async function lerCicloAsaas(
   cicloId: string,
 ): Promise<{ status: string; erro: string | null }> {
@@ -418,6 +445,48 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes", () => {
       const ciclo = await lerCicloAsaas(cicloId);
       expect(ciclo.status).toBe("falhou");
       expect(ciclo.erro).toContain("SALDO_INSUFICIENTE");
+    });
+
+    it("recusa de instrução que a reconsulta desmente deixa rastro também na varredura (#286)", async () => {
+      /**
+       * Gêmeo do caso da rota. A varredura é justamente o caminho que roda
+       * quando a entrega ao vivo falhou — ou seja, o cenário em que um guard
+       * que existisse só em `route.ts` sumiria por completo. Se a suposição
+       * `INSTRUCTION_REFUSED → OVERDUE` estiver errada, aqui também nada é
+       * gravado e o evento sai da fila carimbado como aplicado: o log é o
+       * único rastro.
+       */
+      const paymentId = `pay-reproc-mudo-${crypto.randomUUID()}`;
+      const { cicloId } = await novoCicloAsaas({ providerChargeId: paymentId });
+      const idEvento = await semearInstrucaoRecusadaPendente(
+        paymentId,
+        cicloId,
+      );
+
+      // O gateway discorda do evento: para ele a cobrança segue viva.
+      respondeCobrancaAsaas("PENDING");
+
+      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const r = await reprocessarEventosPendentes();
+        expect(r).toEqual({ aplicados: 1, falhas: 0 });
+
+        expect((await lerAsaas(idEvento)).aplicado_em).not.toBeNull();
+        expect((await lerCicloAsaas(cicloId)).status).toBe(
+          "aguardando_pagamento",
+        );
+
+        expect(aviso).toHaveBeenCalledWith(
+          "[billing-recusa] evento de recusa NÃO virou recusa na reconsulta (#286)",
+          expect.objectContaining({
+            providerChargeId: paymentId,
+            tipoEvento: "cobranca.recusada",
+            statusReconsultado: "pendente",
+          }),
+        );
+      } finally {
+        aviso.mockRestore();
+      }
     });
   });
 });

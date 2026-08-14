@@ -731,6 +731,79 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       expect(ciclo.erro).not.toMatch(/teto/i);
     });
 
+    it("INSTRUCTION_REFUSED cuja reconsulta NÃO devolve OVERDUE deixa rastro em vez de sumir (#286)", async () => {
+      /**
+       * A metade NÃO MEDIDA da #286. Todo o diagnóstico do teto pendura numa
+       * suposição: que uma recusa de instrução real deixe o `payment` em
+       * `OVERDUE` (único status que `mapearStatusCobranca` leva a `recusada`).
+       * O sandbox de 13/08/2026 só tinha cobrança em `PENDING` — nenhuma recusa
+       * de fato aconteceu, então a suposição segue sem prova.
+       *
+       * Este teste fixa o que acontece se ela estiver ERRADA, e é o cenário que
+       * o PR original deixava mudo: o ciclo NÃO cai em `falhou`, fica parado em
+       * `aguardando_pagamento` (não existe varredura que olhe esse estado), e o
+       * evento é carimbado `aplicado_em` com `erro_aplicacao = NULL` — do banco,
+       * é indistinguível de uma aplicação limpa. Sem o `console.warn`, a
+       * primeira recusa real de produção passaria sem deixar UM único sinal, e
+       * o runbook do `infra/README.md` ("meça na primeira recusa real") não
+       * teria como ser acionado.
+       *
+       * O aviso é observabilidade, não decisão: virar `falhou` um `payment` que
+       * o gateway afirma estar `PENDING` poria a clínica em `past_due` por
+       * suposição — exatamente o erro que a #286 existe para evitar.
+       */
+      const paymentId = "pay_recusa_sem_overdue_286";
+      const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
+      // A reconsulta discorda do evento: para o gateway a cobrança segue viva.
+      respondeCobranca("PENDING");
+
+      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const id = novoIdEvento();
+        const res = await POST(
+          requisicao({
+            token: TOKEN,
+            corpo: {
+              id,
+              event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+              dateCreated: "2026-08-08 21:30:00",
+              payment: {
+                id: paymentId,
+                externalReference: `cycle:${cicloId}`,
+              },
+              paymentInstruction: {
+                id: "pi_0002",
+                paymentId,
+                status: "REFUSED",
+                authorization: { id: "auth-da-instrucao-recusada" },
+              },
+            },
+          }),
+        );
+        expect(res.status).toBe(200);
+
+        // O estado NÃO se move — é essa a parte silenciosa.
+        expect((await lerCiclo(cicloId)).status).toBe("aguardando_pagamento");
+        const evento = (await lerEvento(id))!;
+        expect(evento.aplicado_em).not.toBeNull();
+        expect(evento.erro_aplicacao).toBeNull();
+
+        // ...e é por isso que o sinal tem que vir do log. Mesma tag
+        // `[billing-recusa]` da recusa conciliada: um grep só traz as duas
+        // metades da hipótese.
+        expect(aviso).toHaveBeenCalledWith(
+          "[billing-recusa] evento de recusa NÃO virou recusa na reconsulta (#286)",
+          expect.objectContaining({
+            providerChargeId: paymentId,
+            tipoEvento: "cobranca.recusada",
+            statusReconsultado: "pendente",
+          }),
+        );
+      } finally {
+        aviso.mockRestore();
+      }
+    });
+
     it("instrução de débito (traz OS DOIS ids) é tratada como COBRANÇA, não como vínculo", async () => {
       /**
        * O evento de instrução de pagamento do Pix Automático carrega o id da

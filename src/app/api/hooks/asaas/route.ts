@@ -4,6 +4,7 @@ import { asaasWebhookEvent } from "@/db/schema";
 import { AsaasProvider } from "@/lib/billing/provider";
 import {
   aplicarStatusProvider,
+  avisarRecusaQueNaoConciliou,
   conciliarPagamentoDeCiclo,
 } from "@/lib/billing/subscription";
 
@@ -160,6 +161,14 @@ export async function POST(request: Request): Promise<Response> {
     if (normalizado.providerChargeId) {
       const atual = await provider.consultarCobranca(
         normalizado.providerChargeId,
+      );
+      // #286 — o evento pode dizer "recusa" e a reconsulta discordar. Esse é o
+      // desfecho silencioso: nada é gravado e o evento fica carimbado como
+      // aplicado. Ver `avisarRecusaQueNaoConciliou`.
+      avisarRecusaQueNaoConciliou(
+        normalizado.tipo,
+        normalizado.providerChargeId,
+        atual.status,
       );
       const aplicou = await conciliarPagamentoDeCiclo(
         normalizado.providerChargeId,

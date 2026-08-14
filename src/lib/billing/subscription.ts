@@ -13,6 +13,7 @@ import {
   type MetodoPagamento,
   type StatusAssinaturaProvider,
   type StatusCobranca,
+  type TipoEventoNormalizado,
 } from "./provider";
 
 /**
@@ -600,6 +601,60 @@ export async function fecharCiclosVencendo(opcoes?: {
  * Retorna `false` quando a cobrança não pertence a nenhum ciclo conhecido —
  * evento de outra conta, ou reentrega depois de um expurgo.
  */
+/**
+ * #286 — guarda da suposição NÃO MEDIDA: o evento disse "recusa", a reconsulta
+ * discordou.
+ *
+ * `conciliarPagamentoDeCiclo` só nomeia o teto do Pix Automático como causa
+ * provável no ramo `recusada`, e esse ramo depende inteiramente de a reconsulta
+ * a `GET /payments/{id}` devolver `OVERDUE` — o único status que
+ * `mapearStatusCobranca` mapeia para `recusada`. Que uma
+ * `PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED` real deixe o `payment`
+ * associado em `OVERDUE` é SUPOSIÇÃO: o sandbox medido em 13/08/2026 só tinha
+ * cobranças em `PENDING` e nenhuma recusa de fato chegou a acontecer.
+ *
+ * O problema não é a suposição — é que, se ela estiver errada, o caminho é MUDO
+ * nas quatro camadas ao mesmo tempo:
+ *
+ * - o ciclo continua `aguardando_pagamento`, e não existe varredura nenhuma que
+ *   olhe para ciclos parados nesse estado;
+ * - a assinatura continua `active`, então nem a tarja de cobrança acusa;
+ * - `conciliarPagamentoDeCiclo` cai no `return true` final (`pendente` não move
+ *   nada), então a rota carimba `aplicado_em = now()` com
+ *   `erro_aplicacao = NULL` — indistinguível de uma aplicação limpa;
+ * - e o `console.warn` do ramo `recusada` fica justamente onde o estado JÁ é
+ *   visível no banco, não onde ele some.
+ *
+ * Resultado: o runbook do `infra/README.md` manda medir "quando a primeira
+ * recusa real chegar", mas sem esta linha não há absolutamente nada que avise
+ * que ela chegou. A suposição só seria descoberta por conferência manual.
+ *
+ * Mesma tag `[billing-recusa]` do outro aviso de propósito: um grep só tem que
+ * trazer as duas metades da hipótese — a que conciliou e a que não conciliou.
+ *
+ * Não altera estado, de propósito: transformar em `falhou` um `payment` que o
+ * gateway afirma estar `PENDING` poria a clínica em `past_due` por suposição, e
+ * o que falta aqui é sinal, não decisão.
+ */
+export function avisarRecusaQueNaoConciliou(
+  tipoEvento: TipoEventoNormalizado,
+  providerChargeId: string,
+  statusReconsultado: StatusCobranca,
+): void {
+  // Só os `cobranca.*`: são os que trazem `externalReference = cycle:<id>`, ou
+  // seja, cobrança NOSSA. `pagamento.recusado` é cobrança de outra origem
+  // apontada para o mesmo endpoint — avisar sobre ela seria ruído que treina
+  // quem lê o log a ignorar a tag.
+  const eventoDizRecusa =
+    tipoEvento === "cobranca.recusada" || tipoEvento === "cobranca.vencida";
+  if (!eventoDizRecusa || statusReconsultado === "recusada") return;
+
+  console.warn(
+    "[billing-recusa] evento de recusa NÃO virou recusa na reconsulta (#286)",
+    { providerChargeId, tipoEvento, statusReconsultado },
+  );
+}
+
 export async function conciliarPagamentoDeCiclo(
   providerChargeId: string,
   status: StatusCobranca,
@@ -765,6 +820,14 @@ export async function reprocessarEventosPendentes(
         // notificação costuma vir sem estado nenhum.
         const atual = await provider.consultarCobranca(
           normalizado.providerChargeId,
+        );
+        // Gêmeo do guard da rota (#286): a varredura aplica o evento quando a
+        // entrega ao vivo falhou, e um guard que existe só num dos dois some
+        // exatamente no cenário em que o webhook não chegou.
+        avisarRecusaQueNaoConciliou(
+          normalizado.tipo,
+          normalizado.providerChargeId,
+          atual.status,
         );
         await conciliarPagamentoDeCiclo(
           normalizado.providerChargeId,
