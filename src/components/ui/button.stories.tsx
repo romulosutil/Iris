@@ -63,9 +63,6 @@ export const EscalaDeEnfase: Story = {
       <Button variante="primaria">Aprovar</Button>
       <Button variante="secundaria">Editar</Button>
       <Button variante="terciaria">Cancelar</Button>
-      <Button variante="primaria">
-        Reclassificar
-      </Button>
       <Button disabled>Desabilitada</Button>
     </div>
   ),
