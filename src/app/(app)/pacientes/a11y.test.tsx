@@ -1,5 +1,5 @@
 import axe from "axe-core";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import type { ReactElement } from "react";
@@ -9,7 +9,11 @@ vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
 const mockObterSituacaoConta = vi.fn();
 
 vi.mock("@/auth/tenant", () => ({
-  getTenantContext: async () => ({ clinicId: "c1", userId: "u1", role: "coordenador" }),
+  getTenantContext: async () => ({
+    clinicId: "c1",
+    userId: "u1",
+    role: "coordenador",
+  }),
 }));
 
 vi.mock("../queries", () => ({
@@ -147,6 +151,7 @@ test("layout do paciente com indicador de segurança e sem violações", async (
     params: Promise.resolve({ id: "p1" }),
   });
 
+  const user = userEvent.setup();
   const { container } = render(jsx);
 
   // Verifica que o indicador "Dados Criptografados (RLS Ativo)" é exibido
@@ -155,7 +160,29 @@ test("layout do paciente com indicador de segurança e sem violações", async (
   // Verifica se o conteúdo do prontuário (children) é renderizado
   expect(screen.getByTestId("child")).toBeDefined();
 
-  // Varredura de acessibilidade com axe
+  // O gatilho do tooltip é o selo focalizável. `aria-label` em `<span>` sem
+  // role é proibido pela ARIA (o leitor de tela descarta), então o nome
+  // acessível TEM de vir do texto visível.
+  const selo = container.querySelector<HTMLElement>('[tabindex="0"]');
+  expect(selo).not.toBeNull();
+  expect(selo?.getAttribute("aria-label")).toBeNull();
+  expect(selo?.textContent).toContain("Dados Criptografados (RLS Ativo)");
+
+  // O `aria-describedby` do gatilho precisa resolver JÁ no estado de repouso —
+  // apontar para id inexistente é descrição que nunca chega.
+  const idDescricao = selo?.getAttribute("aria-describedby");
+  expect(idDescricao).toBeTruthy();
+  const bolha = document.getElementById(idDescricao as string);
+  expect(bolha).not.toBeNull();
+  expect(bolha?.textContent).toContain("equipe autorizada desta clínica");
+
+  // Foco abre a bolha (WCAG 1.4.13: o conteúdo tem de existir sem ponteiro).
+  expect(screen.queryByRole("tooltip")).toBeNull();
+  selo?.focus();
+  await screen.findByRole("tooltip");
+
+  // Varredura de acessibilidade com axe — com a bolha aberta, porque o
+  // conteúdo do tooltip só é exposto nesse estado.
   const r = await axe.run(container, {
     runOnly: {
       type: "tag",
@@ -169,4 +196,19 @@ test("layout do paciente com indicador de segurança e sem violações", async (
     },
   });
   expect(r.violations).toEqual([]);
+  // `violations` sozinho é verde falso aqui: as duas falhas reais deste selo
+  // (aria-label proibido e describedby pendurado) caem em `incomplete`, que a
+  // asserção padrão da suíte não olha.
+  expect(
+    r.incomplete
+      .map((i) => i.id)
+      .filter(
+        (id) => id === "aria-prohibited-attr" || id === "aria-valid-attr-value",
+      ),
+  ).toEqual([]);
+
+  // Esc dispensa a bolha sem tirar o foco do gatilho (1.4.13, "Dismissible").
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+  expect(document.activeElement).toBe(selo);
 });

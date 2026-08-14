@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { cn } from "@/lib/cn";
 
@@ -8,7 +10,10 @@ export interface TooltipProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export const Tooltip = React.forwardRef<HTMLDivElement, TooltipProps>(
-  function Tooltip({ className, conteudo, posicao = "top", children, ...props }, ref) {
+  function Tooltip(
+    { className, conteudo, posicao = "top", children, ...props },
+    ref,
+  ) {
     const [visivel, setVisivel] = React.useState(false);
     const tooltipId = React.useId();
 
@@ -27,25 +32,43 @@ export const Tooltip = React.forwardRef<HTMLDivElement, TooltipProps>(
         onMouseLeave={() => setVisivel(false)}
         onFocus={() => setVisivel(true)}
         onBlur={() => setVisivel(false)}
+        // WCAG 2.1 1.4.13 (Content on Hover or Focus) exige que o conteúdo
+        // adicional seja *dispensável* sem tirar o ponteiro nem o foco. Sem
+        // isto, quem navega por teclado fica com a bolha por cima do conteúdo
+        // e sem saída até mudar o foco.
+        onKeyDown={(evento) => {
+          if (evento.key === "Escape" && visivel) {
+            evento.stopPropagation();
+            setVisivel(false);
+          }
+        }}
         {...props}
       >
         {React.cloneElement(children, {
           "aria-describedby": tooltipId,
         } as React.HTMLAttributes<HTMLElement>)}
 
-        {visivel ? (
-          <div
-            id={tooltipId}
-            role="tooltip"
-            className={cn(
-              "absolute z-50 whitespace-nowrap border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-1.5 font-mono text-xs font-semibold text-[var(--text-primary)] shadow-[var(--ds-shadow)] rounded-[var(--radius-xs)] animate-in fade-in-0 duration-150",
-              posClasses[posicao],
-              className,
-            )}
-          >
-            {conteudo}
-          </div>
-        ) : null}
+        {/*
+          O nó fica SEMPRE montado e só alterna `hidden`. Montá-lo apenas
+          quando visível deixava o `aria-describedby` do gatilho apontando para
+          um id inexistente no estado de repouso (axe: `aria-valid-attr-value`
+          em `incomplete`) — e a descrição só passava a existir depois que o
+          foco já tinha sido anunciado. O accname spec inclui nós ocultos
+          referenciados diretamente por `aria-describedby`, então o leitor de
+          tela lê a explicação no mesmo anúncio do foco.
+        */}
+        <div
+          id={tooltipId}
+          role="tooltip"
+          hidden={!visivel}
+          className={cn(
+            "animate-in fade-in-0 absolute z-50 rounded-[var(--radius-xs)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-1.5 font-mono text-xs font-semibold whitespace-nowrap text-[var(--text-primary)] shadow-[var(--ds-shadow)] duration-150",
+            posClasses[posicao],
+            className,
+          )}
+        >
+          {conteudo}
+        </div>
       </div>
     );
   },

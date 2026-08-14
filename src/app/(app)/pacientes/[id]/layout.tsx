@@ -70,16 +70,26 @@ export default async function PacienteLayout({
     <Stack gap="md">
       <div className="flex flex-col gap-2">
         <TabsNav itens={abas} ariaLabel="Seções do prontuário do paciente" />
-        <div className="flex justify-end -mt-2">
+        <div className="-mt-2 flex justify-end">
+          {/*
+            O selo é focalizável (`tabIndex`) porque é o gatilho do tooltip:
+            sem isso a explicação só existiria no hover e sumiria para teclado.
+            O nome acessível vem do próprio texto visível — `aria-label` aqui
+            era ignorado (ARIA proíbe nomear elemento sem role, `<span>` cru
+            resolve para `generic`; axe acusa `aria-prohibited-attr`) e ainda
+            criava divergência com o texto na tela (WCAG 2.5.3). O cadeado vai
+            no slot `icon` com `aria-hidden` para o leitor de tela não soletrar
+            "emoji de cadeado fechado" antes da frase.
+          */}
           <Tooltip conteudo="Este prontuário está visível apenas para a equipe autorizada desta clínica.">
             <Pill
               variant="inset"
               colorScheme="neutral"
-              className="cursor-help"
+              className="focus-visible:outline-focus cursor-help outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
               tabIndex={0}
-              aria-label="Indicador de proteção de dados: Dados Criptografados (RLS Ativo)"
+              icon={<span aria-hidden="true">🔒</span>}
             >
-              🔒 Dados Criptografados (RLS Ativo)
+              Dados Criptografados (RLS Ativo)
             </Pill>
           </Tooltip>
         </div>
