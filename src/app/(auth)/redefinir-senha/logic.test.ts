@@ -262,6 +262,25 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
     expect(rejeitado).toEqual({ ok: false, error: MENSAGEM_SEM_LINK_ATIVO });
   });
 
+  it("trata falha de infraestrutura no throttle como fail-closed, logando erro seguro e bloqueando a tentativa", async () => {
+    cookieStore.set(NOME_COOKIE_TOKEN, "token-qualquer");
+    const erroInfra = new Error("redis offline");
+    registrarTentativa.mockRejectedValueOnce(erroInfra);
+
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await executar(fd(SENHA_VALIDA));
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "executarRedefinirSenha: throttle indisponível, bloqueando (fail-closed):",
+      "Error"
+    );
+    expect(resetPassword).not.toHaveBeenCalled();
+    expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
+
+    consoleSpy.mockRestore();
+  });
+
   it("NÃO apaga o cookie quando o throttle bloqueia (protege a vítima de NAT compartilhado)", async () => {
     cookieStore.set(NOME_COOKIE_TOKEN, "token-da-vitima");
     registrarTentativa.mockResolvedValueOnce({ permitido: false });
