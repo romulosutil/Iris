@@ -121,7 +121,7 @@ export default function LoginPage() {
         <div className="mt-6 pt-6 border-t-2 border-dashed border-[var(--border-brutal)] flex flex-col gap-4 text-center">
           <div className="flex flex-wrap justify-center gap-2">
             <Pill variant="solid" colorScheme="neutral" size="sm" icon={<ShieldIcon size={12} />} data-testid="badge-lgpd">
-              LGPD Compliant
+              Conformidade LGPD
             </Pill>
             <Pill variant="solid" colorScheme="neutral" size="sm" icon={<LockIcon size={12} />} data-testid="badge-tls">
               Conexão Criptografada TLS 1.3

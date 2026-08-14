@@ -31,7 +31,7 @@ describe("LoginPage — Badges de Trust e Segurança", () => {
     // Verifica se os badges estão presentes na tela
     const badgeLgpd = screen.getByTestId("badge-lgpd");
     expect(badgeLgpd).toBeDefined();
-    expect(badgeLgpd.textContent).toContain("LGPD Compliant");
+    expect(badgeLgpd.textContent).toContain("Conformidade LGPD");
 
     const badgeTls = screen.getByTestId("badge-tls");
     expect(badgeTls).toBeDefined();
