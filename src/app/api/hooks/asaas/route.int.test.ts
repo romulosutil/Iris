@@ -19,8 +19,6 @@ vi.mock("server-only", () => ({}));
 
 const { authDb } = await import("@/db/client");
 const { POST } = await import("./route");
-const { conciliarPagamentoDeCiclo } =
-  await import("@/lib/billing/subscription");
 
 /**
  * Webhook do Asaas (#36, Fase 7 — Pix Automático).
@@ -250,10 +248,19 @@ function respondeAutorizacao(status: string) {
   );
 }
 
-/** `GET /payments/{id}` — status e valor (decimal em reais) da cobrança. */
-function respondeCobranca(status: string, valorReais = 117) {
+/**
+ * `GET /payments/{id}` — status e valor (decimal em reais) da cobrança.
+ * `extra` mescla campos crus no corpo — usado para simular um gateway que
+ * informa `refusalReason` (o caso SEM motivo, sem `extra`, é o medido em
+ * produção em 13/08/2026; ver comentário em `asaas.ts:consultarCobranca`).
+ */
+function respondeCobranca(
+  status: string,
+  valorReais = 117,
+  extra: Record<string, unknown> = {},
+) {
   respostasGateway.push(async () =>
-    Response.json({ id: "pay-dublê", status, value: valorReais }),
+    Response.json({ id: "pay-dublê", status, value: valorReais, ...extra }),
   );
 }
 
@@ -668,17 +675,36 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
     });
 
     it("cobrança recusada COM motivo do gateway grava o motivo bruto, sem inventar hipótese (#286)", async () => {
+      /**
+       * Fix round 1 (revisão do #286): a versão anterior deste teste chamava
+       * `conciliarPagamentoDeCiclo` direto, o que passa verde mesmo se
+       * `route.ts` parar de repassar `atual.motivoRecusa` — o default `null`
+       * do terceiro parâmetro mascara a regressão (mutação confirmada:
+       * apagar `atual.motivoRecusa,` de `route.ts` não derrubava este teste
+       * na forma antiga). Agora passa pelo caminho REAL do webhook: o dublê
+       * devolve `refusalReason`, e só um repasse de fato correto produz o
+       * motivo bruto no `erro` do ciclo.
+       */
       const paymentId = "pay_recusada_286_2";
       const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
+      respondeCobranca("OVERDUE", 117, {
+        refusalReason: "SALDO_INSUFICIENTE",
+      });
 
-      const aplicou = await conciliarPagamentoDeCiclo(
-        paymentId,
-        "recusada",
-        "SALDO_INSUFICIENTE",
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoCobranca(id, paymentId, cicloId, {
+            event: "PAYMENT_OVERDUE",
+            status: "OVERDUE",
+          }),
+        }),
       );
-      expect(aplicou).toBe(true);
+      expect(res.status).toBe(200);
 
       const ciclo = await lerCiclo(cicloId);
+      expect(ciclo.status).toBe("falhou");
       // Quando o gateway diz a causa, ela manda — o diagnóstico do Iris não
       // pode sobrepor "provavelmente é o teto" a um "saldo insuficiente"
       // explícito: a orientação ao cliente é oposta nos dois casos.
