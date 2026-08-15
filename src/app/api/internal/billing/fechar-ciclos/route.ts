@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import {
+  aplicarBackstopDePrazo,
   cancelarAssinaturasComCarenciaVencida,
   fecharCiclosVencendo,
   reprocessarEventosPendentes,
@@ -71,6 +72,26 @@ export async function POST(request: Request): Promise<Response> {
     const cortes = await cancelarAssinaturasComCarenciaVencida({ dryRun });
     const cortesComErro = cortes.filter((c) => c.erro);
 
+    // Backstop de D+7 por ÚLTIMO (#318, Decisão 2). Três razões, nesta ordem:
+    //
+    // 1. **Depois de `fecharCiclosVencendo`**, pela mesma regra da #319: o
+    //    fechamento emite as cobranças do dia, e o backstop pode CORTAR (G3
+    //    confirmado). Cortar antes revogaria a autorização de uma clínica cuja
+    //    cobrança ainda ia ser tentada nesta mesma passada.
+    // 2. **Depois de `cancelarAssinaturasComCarenciaVencida`**, e é aqui que a
+    //    ordem deixa de ser cosmética: o backstop CARIMBA `past_due` com
+    //    `past_due_desde = agora`, e a carência é `past_due_desde +
+    //    carencia_dias`. A coluna admite `0` (o CHECK só exige `>= 0`), então
+    //    com o backstop ANTES uma clínica de carência zero seria carimbada e
+    //    cortada no MESMO tick — sem um dia sequer de prazo, e o corte é
+    //    irreversível. Nesta ordem o carimbo só é lido pela passada seguinte,
+    //    qualquer que seja a carência da linha.
+    // 3. `reprocessarEventosPendentes` roda antes de tudo, e isso importa aqui:
+    //    um evento de PAGAMENTO que ficou pendente desde ontem precisa ser
+    //    aplicado antes de o backstop concluir que o ciclo não foi pago.
+    const backstop = await aplicarBackstopDePrazo({ dryRun });
+    const backstopComErro = backstop.filter((b) => b.erro);
+
     const comErro = resultados.filter((r) => r.erro);
     return Response.json({
       ok: true,
@@ -90,6 +111,32 @@ export async function POST(request: Request): Promise<Response> {
       carenciaFalhas: cortesComErro.map((c) => ({
         clinicId: c.clinicId,
         erro: c.erro,
+      })),
+      // Chaves próprias, como as da carência e pela mesma razão: "carimbado por
+      // prazo" e "cortado por carência" são consequências diferentes, e somá-las
+      // tornaria impossível separar depois do fato quantas clínicas entraram em
+      // inadimplência por silêncio do gateway.
+      backstopAvaliados: backstop.length,
+      backstopCarimbados: backstop.filter((b) => b.acao === "carimbada").length,
+      backstopCortados: backstop.filter((b) => b.acao === "cortada").length,
+      backstopIgnoradosG6: backstop.filter((b) => b.acao === "ignorada_g6")
+        .length,
+      backstopTruncado: backstop.some((b) => b.truncado),
+      backstopFalhas: backstopComErro.map((b) => ({
+        clinicId: b.clinicId,
+        cycleId: b.cycleId,
+        // A ação vai junto: um G3 cuja reconsulta falhou é carimbado E traz
+        // erro, e sem este campo o log leria "falhou" onde houve consequência.
+        acao: b.acao,
+        erro: b.erro,
+      })),
+      backstopPorPrazo: backstop.map((b) => ({
+        clinicId: b.clinicId,
+        cycleId: b.cycleId,
+        vencimento: b.vencimento,
+        grupo: b.grupo,
+        recusaCodigo: b.recusaCodigo,
+        acao: b.acao,
       })),
       cortesPorCarencia: cortes.map((c) => ({
         clinicId: c.clinicId,

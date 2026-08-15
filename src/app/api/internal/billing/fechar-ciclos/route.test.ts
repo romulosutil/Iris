@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+  ResultadoBackstopPrazo,
   ResultadoCortePorCarencia,
   ResultadoFechamento,
 } from "@/lib/billing/subscription";
@@ -32,6 +33,16 @@ import type {
  * quando cada dublê foi chamado — e não pela ordem em que as asserções aparecem
  * escritas aqui, que não prova nada sobre o código sob teste.
  *
+ * ## O backstop de D+7 é o QUARTO, e depois da carência (#318)
+ *
+ * `aplicarBackstopDePrazo` carimba `past_due` com `past_due_desde = agora`, e a
+ * carência é `past_due_desde + carencia_dias`. `carencia_dias` admite **zero**
+ * (o CHECK do banco só exige `>= 0`), então com o backstop ANTES da varredura
+ * de carência uma clínica de carência zero seria carimbada e CORTADA no mesmo
+ * tick — sem um dia de prazo, por um ato que revoga a autorização de Pix
+ * Automático e não volta sem novo consentimento no app do banco. Depois dela, o
+ * carimbo só é lido na passada seguinte, qualquer que seja a carência da linha.
+ *
  * ## Ambiente `node`, não `jsdom`
  *
  * A rota declara `runtime = "nodejs"` e responde com `Response.json`. O default
@@ -43,6 +54,7 @@ const dubles = vi.hoisted(() => ({
   fecharCiclosVencendo: vi.fn(),
   cancelarAssinaturasComCarenciaVencida: vi.fn(),
   reprocessarEventosPendentes: vi.fn(),
+  aplicarBackstopDePrazo: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -102,6 +114,21 @@ function corte(
   };
 }
 
+function backstop(
+  over: Partial<ResultadoBackstopPrazo> = {},
+): ResultadoBackstopPrazo {
+  return {
+    clinicId: crypto.randomUUID(),
+    subscriptionId: crypto.randomUUID(),
+    cycleId: crypto.randomUUID(),
+    vencimento: new Date("2026-08-01T03:00:00.000Z"),
+    recusaCodigo: null,
+    grupo: "G0",
+    acao: "carimbada",
+    ...over,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("BILLING_JOB_TOKEN", TOKEN);
@@ -111,6 +138,7 @@ beforeEach(() => {
   });
   dubles.fecharCiclosVencendo.mockResolvedValue([]);
   dubles.cancelarAssinaturasComCarenciaVencida.mockResolvedValue([]);
+  dubles.aplicarBackstopDePrazo.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -149,6 +177,54 @@ describe("POST /api/internal/billing/fechar-ciclos — ordem das etapas", () => 
     expect(ordemFechamento).toBeTypeOf("number");
     expect(ordemFechamento).toBeGreaterThan(ordemReprocesso!);
   });
+
+  it("aplica o backstop de D+7 DEPOIS de varrer a carência (#318)", async () => {
+    // O backstop carimba `past_due_desde = agora`; a carência corta em
+    // `past_due_desde + carencia_dias`, e `carencia_dias` pode ser 0. Invertidas
+    // as duas linhas, uma clínica de carência zero é carimbada e cortada no
+    // mesmo tick — e o corte revoga a autorização de Pix Automático, que não
+    // volta sem novo consentimento no app do banco.
+    await POST(requisicao());
+
+    const ordemCarencia =
+      dubles.cancelarAssinaturasComCarenciaVencida.mock.invocationCallOrder[0];
+    const ordemBackstop =
+      dubles.aplicarBackstopDePrazo.mock.invocationCallOrder[0];
+
+    expect(ordemCarencia).toBeTypeOf("number");
+    expect(ordemBackstop).toBeTypeOf("number");
+    expect(ordemBackstop).toBeGreaterThan(ordemCarencia!);
+  });
+
+  it("aplica o backstop DEPOIS de fechar os ciclos", async () => {
+    // O backstop pode CORTAR (G3 confirmado no gateway). Cortar antes do
+    // fechamento revogaria a autorização de uma clínica cuja cobrança ainda ia
+    // ser emitida nesta mesma passada — mesma regra da #319.
+    await POST(requisicao());
+
+    const ordemFechamento =
+      dubles.fecharCiclosVencendo.mock.invocationCallOrder[0];
+    const ordemBackstop =
+      dubles.aplicarBackstopDePrazo.mock.invocationCallOrder[0];
+
+    expect(ordemFechamento).toBeTypeOf("number");
+    expect(ordemBackstop).toBeTypeOf("number");
+    expect(ordemBackstop).toBeGreaterThan(ordemFechamento!);
+  });
+
+  it("chama cada etapa exatamente uma vez por requisição", async () => {
+    // Guarda contra a correção "óbvia" da ordem: duplicar a chamada em vez de
+    // movê-la satisfaria os `toBeGreaterThan` acima e cortaria/carimbaria duas
+    // vezes na mesma passada.
+    await POST(requisicao());
+
+    expect(dubles.reprocessarEventosPendentes).toHaveBeenCalledTimes(1);
+    expect(dubles.fecharCiclosVencendo).toHaveBeenCalledTimes(1);
+    expect(dubles.cancelarAssinaturasComCarenciaVencida).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(dubles.aplicarBackstopDePrazo).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("POST /api/internal/billing/fechar-ciclos — autorização", () => {
@@ -161,6 +237,7 @@ describe("POST /api/internal/billing/fechar-ciclos — autorização", () => {
     expect(dubles.reprocessarEventosPendentes).not.toHaveBeenCalled();
     expect(dubles.fecharCiclosVencendo).not.toHaveBeenCalled();
     expect(dubles.cancelarAssinaturasComCarenciaVencida).not.toHaveBeenCalled();
+    expect(dubles.aplicarBackstopDePrazo).not.toHaveBeenCalled();
   });
 
   it("recusa token errado de MESMO comprimento", async () => {
@@ -215,6 +292,11 @@ describe("POST /api/internal/billing/fechar-ciclos — dry-run", () => {
 
     expect(dubles.fecharCiclosVencendo).toHaveBeenCalledWith({ dryRun: true });
     expect(dubles.cancelarAssinaturasComCarenciaVencida).toHaveBeenCalledWith({
+      dryRun: true,
+    });
+    // O backstop também corta (G3 confirmado) e carimba `past_due`: um ensaio
+    // que chegasse até ele sem o flag mudaria o estado de verdade.
+    expect(dubles.aplicarBackstopDePrazo).toHaveBeenCalledWith({
       dryRun: true,
     });
   });
@@ -319,6 +401,103 @@ describe("POST /api/internal/billing/fechar-ciclos — corpo da resposta", () =>
     ]);
   });
 
+  it("publica o backstop de D+7 em chaves próprias, separadas da carência", async () => {
+    const carimbada = backstop({ acao: "carimbada", grupo: "G7" });
+    const cortada = backstop({
+      acao: "cortada",
+      grupo: "G3",
+      recusaCodigo: "INVALID_RECURRING_PAYMENT_ID",
+    });
+    const ignorada = backstop({ acao: "ignorada_g6", grupo: "G6" });
+    // G3 cuja reconsulta não respondeu: o corte foi barrado, o carimbo
+    // aconteceu. Tem AÇÃO e tem ERRO ao mesmo tempo — é o caso que prova que
+    // `backstopFalhas` não pode ser lido como "nada aconteceu".
+    const degradada = backstop({
+      acao: "carimbada",
+      grupo: "G3",
+      erro: "[g3] reconsulta da autorização falhou (timeout)",
+    });
+
+    dubles.aplicarBackstopDePrazo.mockResolvedValue([
+      carimbada,
+      cortada,
+      ignorada,
+      degradada,
+    ]);
+
+    const corpo = await (await POST(requisicao())).json();
+
+    expect(corpo).toMatchObject({
+      backstopAvaliados: 4,
+      backstopCarimbados: 2,
+      backstopCortados: 1,
+      backstopIgnoradosG6: 1,
+      backstopTruncado: false,
+      // As contagens do outro ramo NÃO mudam: somar corte por carência com
+      // carimbo por prazo tornaria as duas leituras inseparáveis no log do job.
+      carenciaAvaliadas: 0,
+      carenciaCortadas: 0,
+    });
+
+    expect(corpo.backstopFalhas).toEqual([
+      {
+        clinicId: degradada.clinicId,
+        cycleId: degradada.cycleId,
+        acao: "carimbada",
+        erro: "[g3] reconsulta da autorização falhou (timeout)",
+      },
+    ]);
+
+    expect(corpo.backstopPorPrazo).toEqual([
+      {
+        clinicId: carimbada.clinicId,
+        cycleId: carimbada.cycleId,
+        vencimento: carimbada.vencimento.toISOString(),
+        grupo: "G7",
+        recusaCodigo: null,
+        acao: "carimbada",
+      },
+      {
+        clinicId: cortada.clinicId,
+        cycleId: cortada.cycleId,
+        vencimento: cortada.vencimento.toISOString(),
+        grupo: "G3",
+        recusaCodigo: "INVALID_RECURRING_PAYMENT_ID",
+        acao: "cortada",
+      },
+      {
+        clinicId: ignorada.clinicId,
+        cycleId: ignorada.cycleId,
+        vencimento: ignorada.vencimento.toISOString(),
+        grupo: "G6",
+        recusaCodigo: null,
+        acao: "ignorada_g6",
+      },
+      {
+        clinicId: degradada.clinicId,
+        cycleId: degradada.cycleId,
+        vencimento: degradada.vencimento.toISOString(),
+        grupo: "G3",
+        recusaCodigo: null,
+        acao: "carimbada",
+      },
+    ]);
+  });
+
+  it("sobe `backstopTruncado: true` quando a passada bateu o teto", async () => {
+    // Mesmo motivo do truncamento da carência: o job só registra este JSON, e
+    // uma passada que parou no teto com fila atrás é indistinguível de uma que
+    // cobriu tudo.
+    dubles.aplicarBackstopDePrazo.mockResolvedValue([
+      backstop(),
+      backstop({ truncado: true }),
+    ]);
+
+    const corpo = await (await POST(requisicao())).json();
+
+    expect(corpo.backstopTruncado).toBe(true);
+  });
+
   it("sobe `carenciaTruncado: true` quando a passada bateu o teto", async () => {
     // O job só registra este JSON. Sem o flag no corpo, uma passada que parou
     // no teto com fila atrás é indistinguível de uma que cobriu tudo — e o
@@ -376,6 +555,21 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
     // Consequência da ordem, e o lado seguro: se o fechamento morreu, ninguém
     // sabe quais recusas o dia produziria, então ninguém é cortado.
     expect(dubles.cancelarAssinaturasComCarenciaVencida).not.toHaveBeenCalled();
+    expect(dubles.aplicarBackstopDePrazo).not.toHaveBeenCalled();
+  });
+
+  it("não aplica o backstop quando a varredura de carência lança", async () => {
+    // Também consequência da ordem: o backstop é o último, e uma falha antes
+    // dele o impede de carimbar/cortar às cegas.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    dubles.cancelarAssinaturasComCarenciaVencida.mockRejectedValue(
+      new Error("timeout ao revogar vínculo"),
+    );
+
+    const resposta = await POST(requisicao());
+
+    expect(resposta.status).toBe(500);
+    expect(dubles.aplicarBackstopDePrazo).not.toHaveBeenCalled();
   });
 
   it("descarta o relatório do fechamento quando o corte lança (comportamento atual)", async () => {

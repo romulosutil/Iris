@@ -12,7 +12,7 @@ import {
 import { authDb } from "@/db/client";
 import { billingCycle, subscription } from "@/db/schema";
 import { apurarDebitoProRata, calcularMensalidadeCentavos } from "./calculator";
-import { classificarRecusa } from "./classificacao-recusa";
+import { classificarRecusa, type GrupoRecusa } from "./classificacao-recusa";
 import {
   AsaasProvider,
   BillingProviderError,
@@ -697,12 +697,18 @@ export async function fecharCiclosVencendo(opcoes?: {
           // Resolvido AQUI, por linha, e não uma vez no topo da função: a
           // varredura cobre assinaturas de gateways diferentes na mesma passada.
           const provider = getProviderPorId(assinatura.provider);
+          // Calculado UMA vez e persistido logo abaixo, em vez de ficar inline
+          // no argumento: o backstop de D+7 (#318) mede a partir do vencimento
+          // que de fato saiu daqui, e recalculá-lo depois o faria depender do
+          // calendário bancário vigente NAQUELE dia — ver o comentário da
+          // coluna `vencimento_cobranca` em `schema.ts`.
+          const vencimento = vencimentoCobrancaDeCiclo(agora);
           const cobranca = await provider.emitirCobrancaDeCiclo({
             vinculoId: assinatura.providerSubscriptionId,
             valorCentavos,
             referenciaExterna: `cycle:${ciclo.id}`,
             descricao: `Iris — ficha(s) ativa(s) no ciclo encerrado em ${assinatura.cicloFim.toISOString().slice(0, 10)}`,
-            vencimento: vencimentoCobrancaDeCiclo(agora),
+            vencimento,
           });
           providerChargeId = cobranca.providerChargeId;
           cobrancaEmitida = true;
@@ -711,6 +717,11 @@ export async function fecharCiclosVencendo(opcoes?: {
             .set({
               providerChargeId: cobranca.providerChargeId,
               cobrancaEmitidaEm: new Date(),
+              // O marco do backstop de D+7. Gravado JUNTO com o id da cobrança
+              // e na mesma escrita: um ciclo com `provider_charge_id` e sem
+              // vencimento seria uma cobrança viva que a varredura nunca
+              // alcança — o buraco que o backstop existe para tapar.
+              vencimentoCobranca: vencimento,
               // NÃO é `pago`. Quem confirma é o webhook — este estado diz
               // exatamente o que aconteceu: a cobrança saiu, o dinheiro não
               // chegou.
@@ -946,85 +957,14 @@ export async function cancelarAssinaturasComCarenciaVencida(opcoes?: {
       continue;
     }
 
-    // Onde a passada estava quando falhou. Sem isto, falha do gateway (nada
-    // aconteceu) e falha do congelamento/escrita (autorização JÁ revogada) caem
-    // no mesmo `cortada: false` e ninguém sabe qual das duas leu.
-    let etapa: EtapaCorteCarencia = "gateway";
-
     try {
-      // Fail-closed: sem gateway identificável não há como revogar, então não
-      // há corte. Vale para `provider` nulo (assinatura sem vínculo de
-      // cobrança, permitido desde a 0090) e para o id ausente.
-      if (!assinatura.provider || !assinatura.providerSubscriptionId) {
-        throw new Error(
-          `Assinatura ${assinatura.subscriptionId} está em past_due vencido mas não tem vínculo cancelável no gateway (provider=${assinatura.provider ?? "null"}, id=${assinatura.providerSubscriptionId ?? "null"}) — corte abortado para não deixar autorização viva.`,
-        );
-      }
-
-      // Adapter da LINHA (D26): a varredura cobre assinaturas de gateways
-      // diferentes na mesma passada, e revogar no gateway errado responde 400
-      // — o que aqui significaria não revogar nada.
-      const provider = getProviderPorId(assinatura.provider);
-      await revogarVinculoIdempotente(
-        provider,
-        assinatura.providerSubscriptionId,
-      );
-
-      await authDb.transaction(async (tx) => {
-        // Congelar ANTES do UPDATE, e na mesma transação: ver "A ORDEM DA
-        // ESCRITA É O DESENHO" no cabeçalho. Com `incluirFalhou`, porque aqui o
-        // ciclo que motivou o past_due é justamente a dívida.
-        etapa = "congelamento";
-        await congelarCiclosComoDebito(tx, assinatura.subscriptionId, agora, {
-          incluirFalhou: true,
-        });
-
-        etapa = "escrita";
-        const [cortada] = await tx
-          .update(subscription)
-          .set({
-            status: "canceled",
-            // O MESMO `agora` que foi para `encerradoEm` do congelamento: dois
-            // relógios aqui fariam o débito ser apurado contra um instante e o
-            // carimbo do corte registrar outro.
-            canceladaEm: agora,
-            // Zerar `past_due_desde` NÃO é cosmético. Se o carimbo
-            // sobrevivesse, a clínica que reativasse mais tarde e sofresse UMA
-            // recusa voltaria a `past_due` — e o `?? agora` de
-            // `conciliarPagamentoDeCiclo` preserva o carimbo EXISTENTE, ou
-            // seja, o antigo. A carência já nasceria vencida e a próxima
-            // passada desta varredura cortaria na primeira recusa, sem
-            // carência nenhuma. É a mesma classe de defeito do `cancelada_em`
-            // não limpo na reativação (#290).
-            pastDueDesde: null,
-            atualizadoEm: agora,
-          })
-          .where(
-            and(
-              eq(subscription.id, assinatura.subscriptionId),
-              // Compare-and-set: entre a seleção e aqui cabe o webhook de
-              // pagamento que tira a assinatura de `past_due`. Sem esta
-              // condição o corte atropelaria uma quitação já conciliada.
-              eq(subscription.status, "past_due"),
-            ),
-          )
-          .returning({ id: subscription.id });
-
-        if (!cortada) {
-          // Estado que precisa de olho humano: o vínculo JÁ foi revogado no
-          // gateway e a assinatura saiu de `past_due` no meio do caminho. O
-          // throw derruba a transação inteira, então o congelamento feito
-          // acima volta atrás — quem acabou de PAGAR não fica com os ciclos
-          // congelados como dívida.
-          throw new Error(
-            `Assinatura ${assinatura.subscriptionId} saiu de past_due entre a seleção e o corte (pagamento conciliado no mesmo tick?) — o vínculo no gateway JÁ foi cancelado e precisa de reativação manual.`,
-          );
-        }
+      await revogarECortarAssinatura(assinatura, agora, {
+        motivo: "past_due vencido",
+        statusEsperado: "past_due",
       });
-
       resultados.push({ ...base, cortada: true });
     } catch (e) {
-      const detalhe = detalharErro(e);
+      const etapa = etapaDoErro(e);
       resultados.push({
         ...base,
         cortada: false,
@@ -1032,12 +972,156 @@ export async function cancelarAssinaturasComCarenciaVencida(opcoes?: {
         // A etapa vai PARA DENTRO da mensagem, e não só no campo ao lado: a
         // rota (`/api/internal/billing/fechar-ciclos`) publica `erro` e mais
         // nada em `carenciaFalhas`, e é esse JSON que o job registra no log.
-        erro: `[${etapa}] ${detalhe}`,
+        erro: `[${etapa}] ${detalharErro(e)}`,
       });
     }
   }
 
   return resultados;
+}
+
+/**
+ * Falha de corte carimbada com a ETAPA em que a passada parou.
+ *
+ * Existe porque o corte passou a ter DOIS chamadores (a carência vencida da
+ * #319 e o backstop de D+7 da #318) e a etapa é a informação que separa "nada
+ * aconteceu" de "a autorização de Pix Automático JÁ foi revogada". Devolvê-la
+ * por variável mutável funcionava enquanto o corte morava dentro de um único
+ * laço; num helper compartilhado ela precisa viajar com o erro.
+ *
+ * `cause` preservada de propósito: `detalharErro` desce a cadeia até a raiz, e é
+ * de lá que saem `code`/`detail`/`hint` do Postgres.
+ */
+class ErroDeCorte extends Error {
+  constructor(
+    readonly etapa: EtapaCorteCarencia,
+    causa: unknown,
+  ) {
+    super(causa instanceof Error ? causa.message : String(causa), {
+      cause: causa,
+    });
+    this.name = "ErroDeCorte";
+  }
+}
+
+/**
+ * Etapa de um erro de corte. `gateway` é o default porque é a etapa em que
+ * NADA foi escrito — atribuir uma etapa mais avançada a um erro que não sabemos
+ * classificar afirmaria que a autorização já foi revogada, que é a leitura cara.
+ */
+function etapaDoErro(e: unknown): EtapaCorteCarencia {
+  return e instanceof ErroDeCorte ? e.etapa : "gateway";
+}
+
+/**
+ * Revoga o vínculo no gateway e mata a assinatura — o corte, inteiro (#319).
+ *
+ * Extraído do laço de `cancelarAssinaturasComCarenciaVencida` quando o backstop
+ * de D+7 (#318) passou a precisar do MESMO corte para o G3 (autorização morta
+ * confirmada pelo gateway). Duplicar as três escritas seria reimplementar a
+ * ordem que é o desenho — e a cópia divergiria justamente no lugar em que a
+ * divergência é irrecuperável (ver "A ORDEM DA ESCRITA É O DESENHO" acima).
+ *
+ * Lança `ErroDeCorte` com a etapa; nunca devolve falha em silêncio.
+ */
+async function revogarECortarAssinatura(
+  assinatura: {
+    subscriptionId: string;
+    provider: string | null;
+    providerSubscriptionId: string | null;
+  },
+  agora: Date,
+  contexto: {
+    /** Vai para a mensagem de erro. É o que o log do job mostra ao operador. */
+    motivo: string;
+    /** Status que a linha tinha na SELEÇÃO. Vira o compare-and-set do UPDATE. */
+    statusEsperado: "active" | "past_due";
+  },
+): Promise<void> {
+  // Onde a passada estava quando falhou. Sem isto, falha do gateway (nada
+  // aconteceu) e falha do congelamento/escrita (autorização JÁ revogada) caem
+  // no mesmo `cortada: false` e ninguém sabe qual das duas leu.
+  let etapa: EtapaCorteCarencia = "gateway";
+
+  try {
+    // Fail-closed: sem gateway identificável não há como revogar, então não
+    // há corte. Vale para `provider` nulo (assinatura sem vínculo de
+    // cobrança, permitido desde a 0090) e para o id ausente.
+    if (!assinatura.provider || !assinatura.providerSubscriptionId) {
+      throw new Error(
+        `Assinatura ${assinatura.subscriptionId} seria cortada (${contexto.motivo}) mas não tem vínculo cancelável no gateway (provider=${assinatura.provider ?? "null"}, id=${assinatura.providerSubscriptionId ?? "null"}) — corte abortado para não deixar autorização viva.`,
+      );
+    }
+
+    // Adapter da LINHA (D26): a varredura cobre assinaturas de gateways
+    // diferentes na mesma passada, e revogar no gateway errado responde 400
+    // — o que aqui significaria não revogar nada.
+    const provider = getProviderPorId(assinatura.provider);
+    await revogarVinculoIdempotente(
+      provider,
+      assinatura.providerSubscriptionId,
+    );
+
+    await authDb.transaction(async (tx) => {
+      // Congelar ANTES do UPDATE, e na mesma transação: ver "A ORDEM DA
+      // ESCRITA É O DESENHO" no cabeçalho. Com `incluirFalhou`, porque aqui o
+      // ciclo que motivou o corte é justamente a dívida.
+      etapa = "congelamento";
+      await congelarCiclosComoDebito(tx, assinatura.subscriptionId, agora, {
+        incluirFalhou: true,
+      });
+
+      etapa = "escrita";
+      const [cortada] = await tx
+        .update(subscription)
+        .set({
+          status: "canceled",
+          // O MESMO `agora` que foi para `encerradoEm` do congelamento: dois
+          // relógios aqui fariam o débito ser apurado contra um instante e o
+          // carimbo do corte registrar outro.
+          canceladaEm: agora,
+          // Zerar `past_due_desde` NÃO é cosmético. Se o carimbo
+          // sobrevivesse, a clínica que reativasse mais tarde e sofresse UMA
+          // recusa voltaria a `past_due` — e o `?? agora` de
+          // `conciliarPagamentoDeCiclo` preserva o carimbo EXISTENTE, ou
+          // seja, o antigo. A carência já nasceria vencida e a próxima
+          // passada desta varredura cortaria na primeira recusa, sem
+          // carência nenhuma. É a mesma classe de defeito do `cancelada_em`
+          // não limpo na reativação (#290).
+          pastDueDesde: null,
+          atualizadoEm: agora,
+        })
+        .where(
+          and(
+            eq(subscription.id, assinatura.subscriptionId),
+            // Compare-and-set: entre a seleção e aqui cabe o webhook de
+            // pagamento que tira a assinatura do estado selecionado. Sem esta
+            // condição o corte atropelaria uma quitação já conciliada.
+            //
+            // O estado esperado vem do CHAMADOR e não é uma lista: a carência
+            // vencida seleciona `past_due`, o backstop de D+7 seleciona
+            // `active` (G3 não carimba). Aceitar os dois de uma vez faria a
+            // carência cortar uma clínica que ACABOU de pagar — `liquidarCiclo`
+            // devolve a assinatura para `active`, que é o outro item da lista.
+            eq(subscription.status, contexto.statusEsperado),
+          ),
+        )
+        .returning({ id: subscription.id });
+
+      if (!cortada) {
+        // Estado que precisa de olho humano: o vínculo JÁ foi revogado no
+        // gateway e a assinatura saiu do estado elegível no meio do caminho. O
+        // throw derruba a transação inteira, então o congelamento feito
+        // acima volta atrás — quem acabou de PAGAR não fica com os ciclos
+        // congelados como dívida.
+        throw new Error(
+          `Assinatura ${assinatura.subscriptionId} saiu do estado elegível entre a seleção e o corte (pagamento conciliado no mesmo tick?) — o vínculo no gateway JÁ foi cancelado e precisa de reativação manual.`,
+        );
+      }
+    });
+  } catch (e) {
+    throw e instanceof ErroDeCorte ? e : new ErroDeCorte(etapa, e);
+  }
 }
 
 /**
@@ -1132,6 +1216,399 @@ async function revogarVinculoIdempotente(
       "[billing-corte] vínculo já inexistente no gateway; corte prossegue",
       { providerVinculoId },
     );
+  }
+}
+
+/**
+ * Dias após o vencimento em que o backstop carimba (#318, Decisão 2).
+ *
+ * **Não é um número escolhido.** Em D+7 do vencimento o
+ * `POST /pix/automatic/paymentInstructions/{id}/retries` passa a devolver 400
+ * pelo limite `7D` da política `ALLOW_THREE_IN_SEVEN_DAYS` (#317): a partir
+ * dali o trilho automático está PROVADAMENTE esgotado, qualquer que tenha sido
+ * o motivo da recusa. Mexer aqui não é afinar um parâmetro — é descolar o
+ * produto do limite do gateway.
+ *
+ * Não exportada de propósito: um teste que importasse a constante concordaria
+ * com qualquer valor que ela tivesse, inclusive com um errado. Os casos de D+6
+ * e D+7 usam datas escritas à mão.
+ */
+const DIAS_ATE_BACKSTOP = 7;
+
+/**
+ * Teto de ciclos avaliados pelo backstop por execução.
+ *
+ * Mesmo orçamento de 30s do cliente do job que motivou
+ * `TETO_CORTES_POR_PASSADA`, e o mesmo número pela pior hipótese: um ciclo G3
+ * faz de uma a duas chamadas SEQUENCIAIS ao gateway (a reconsulta da
+ * autorização e a revogação), e uma passada inteira de G3 custa o mesmo que
+ * uma passada de cortes por carência. O resto não se perde — a ordenação é
+ * determinística (vencimento crescente) e a passada seguinte retoma de onde
+ * esta parou, com o excedente sinalizado em `truncado`.
+ */
+export const TETO_BACKSTOP_POR_PASSADA = 20;
+
+/** O que o backstop fez com um ciclo vencido há mais de 7 dias. */
+export type AcaoBackstop =
+  /** A assinatura entrou em `past_due` agora; a carência começa a correr. */
+  | "carimbada"
+  /** G3 com autorização morta CONFIRMADA pelo gateway: assinatura cortada. */
+  | "cortada"
+  /** G6 — defeito nosso. Custo nosso: o backstop não toca na clínica. */
+  | "ignorada_g6"
+  /** Nada mudou: dry-run, ciclo que saiu do conjunto elegível, ou falha. */
+  | "nenhuma";
+
+export interface ResultadoBackstopPrazo {
+  clinicId: string;
+  subscriptionId: string;
+  cycleId: string;
+  /** O vencimento que MANDAMOS ao gateway — a origem do D+7. */
+  vencimento: Date;
+  /** Código cru persistido na recusa, ou `null` (silêncio, ou G6/G7/G0). */
+  recusaCodigo: string | null;
+  /** Grupo derivado do código. `G0` também é o grupo do `null`. */
+  grupo: GrupoRecusa;
+  acao: AcaoBackstop;
+  /**
+   * Preenchido quando algo falhou — inclusive quando a ação REALIZADA foi a
+   * degradada: um G3 cuja reconsulta ao gateway não respondeu é carimbado (ação
+   * reversível) e traz aqui o motivo de o corte não ter acontecido.
+   */
+  erro?: string;
+  /** `true` em todos os itens quando a passada bateu o teto. */
+  truncado?: boolean;
+}
+
+/**
+ * Texto de diagnóstico do backstop em `billing_cycle.erro`.
+ *
+ * Escrito com `coalesce` no UPDATE: só preenche quando o ciclo ainda não tem
+ * diagnóstico. Um ciclo G3 já foi a `falhou` com o motivo REAL da recusa, e
+ * sobrescrevê-lo trocaria a causa pela consequência.
+ */
+const ERRO_BACKSTOP =
+  "não pago até 7 dias após o vencimento; a janela de retentativa automática do Pix Automático se esgotou";
+
+/**
+ * Backstop de prazo: **o que a recusa operacional compra é tempo, não
+ * imunidade** (#318, Decisão 2).
+ *
+ * ## O buraco que isto fecha
+ *
+ * A #318 fez a classificação governar o desfecho, e três grupos deixaram de
+ * carimbar `past_due` no ato: G7 (falha do banco), G0 (código desconhecido — e
+ * `null`, que é o estado de PRODUÇÃO enquanto o D35 não for medido lá) e G3
+ * (autorização morta, que precisa de confirmação antes de qualquer ato
+ * irreversível). Sem esta varredura, uma recusa desses três grupos não produz
+ * consequência nenhuma: a assinatura segue `active`, a clínica segue
+ * escrevendo, e ninguém é cobrado nunca mais. Assinatura gratuita vitalícia,
+ * sem erro em lugar nenhum.
+ *
+ * ## Por que PRAZO e não contador de tentativas
+ *
+ * O desenho original escalava em 3 recusas. Caiu por três defeitos medidos:
+ * contar TENTATIVAS NOSSAS conta a coisa errada (a clínica não controla quantas
+ * vezes tentamos); contar WEBHOOKS RECEBIDOS é uma régua que se move sozinha
+ * (depende do que o gateway resolve mandar, fato não medido em #321); e as duas
+ * exigiriam persistir um contador — mais schema para medir a coisa errada. O
+ * prazo não tem nenhum dos três, e o número não é escolha: ver
+ * `DIAS_ATE_BACKSTOP`.
+ *
+ * ## O relógio começa no CARIMBO, não na recusa
+ *
+ * `past_due_desde` recebe `agora` (o instante de D+7), e não a data da recusa:
+ * a carência começa quando concluímos que a clínica deve. Ela fica com 7 + 10 =
+ * 17 dias, e isso é intencional — quem foi recusado por falha do banco não
+ * perde o prazo que a falha consumiu.
+ *
+ * ## O ciclo vai para `falhou`, e isso NÃO é cosmético
+ *
+ * `congelarCiclosComoDebito` congela `aberto`/`apurado`/`falhou` — e
+ * **`aguardando_pagamento` não está na lista**. Um ciclo carimbado aqui e
+ * deixado em `aguardando_pagamento` produziria `past_due`, corte por carência
+ * 10 dias depois e `levantarDebito` = **0**: o gate de reativação da #290
+ * abriria e a clínica cortada voltaria de graça. É exatamente o buraco que a
+ * D-4 da #319 fechou para o outro ramo.
+ *
+ * ## G6 não tem backstop, deliberadamente
+ *
+ * Defeito nosso é custo nosso. Os códigos de G6 dizem que a INSTRUÇÃO estava
+ * errada (`DUE_DATE_MISMATCH`, `RECEIVED_TOO_LATE`, `AMOUNT_MISMATCH`…), e o
+ * vencimento a partir do qual este backstop conta é justamente o que NÓS
+ * calculamos: cobrar D+7 de um `dueDate` que o gateway recusou por ser nosso
+ * erro seria carimbar a clínica de inadimplente pelo nosso bug.
+ *
+ * ⚠️ **Residual conhecido:** hoje G6 não persiste `recusa_codigo` (o ramo
+ * `!marcaCicloFalhou` de `conciliarPagamentoDeCiclo` não escreve nada, para não
+ * apagar o diagnóstico correto de uma recusa anterior). Um ciclo cuja PRIMEIRA
+ * recusa foi G6 chega aqui indistinguível do silêncio total, e é carimbado. O
+ * guard abaixo é o que decide quando o código ESTÁ persistido — o que a #322
+ * (orquestração de retentativa) passa a produzir, sendo
+ * `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` um G6.
+ *
+ * ## Fail-closed do G3
+ *
+ * G3 é o único grupo cujo desfecho é o CORTE, e o corte revoga a autorização de
+ * Pix Automático — o ato mais irreversível deste repositório, que não volta sem
+ * novo consentimento da clínica no app do banco. Por isso o corte só acontece
+ * se o gateway DISSER que a autorização está morta
+ * (`CANCELLED`/`EXPIRED`/`REFUSED`, que o adapter mapeia para `cancelada`). Se
+ * responder `ACTIVE`, o código mentiu e o caso vira G7 — carimbo, não corte.
+ * Rede, timeout e 5xx barram o CORTE (não se age sobre o que não se leu), e o
+ * ciclo cai no carimbo, que é reversível por pagamento. Toda degradação leva ao
+ * mesmo lugar seguro: cortar 10 dias depois, pela carência, em vez de cortar
+ * agora sem prova.
+ *
+ * ## Ordem na rota: por ÚLTIMO
+ *
+ * Ver o comentário em `/api/internal/billing/fechar-ciclos/route.ts`.
+ */
+export async function aplicarBackstopDePrazo(opcoes?: {
+  agora?: Date;
+  dryRun?: boolean;
+}): Promise<ResultadoBackstopPrazo[]> {
+  const agora = opcoes?.agora ?? new Date();
+  const agoraIso = agora.toISOString();
+  const dryRun = opcoes?.dryRun ?? false;
+
+  const elegiveis = await authDb
+    .select({
+      cycleId: billingCycle.id,
+      clinicId: billingCycle.clinicId,
+      subscriptionId: billingCycle.subscriptionId,
+      cicloStatus: billingCycle.status,
+      vencimento: billingCycle.vencimentoCobranca,
+      recusaCodigo: billingCycle.recusaCodigo,
+      provider: subscription.provider,
+      providerSubscriptionId: subscription.providerSubscriptionId,
+    })
+    .from(billingCycle)
+    .innerJoin(subscription, eq(subscription.id, billingCycle.subscriptionId))
+    .where(
+      and(
+        // Os dois estados de "cobrança emitida e não liquidada". `pago` e
+        // `devido` estão fora porque já têm desfecho; `aberto`/`apurado` nunca
+        // tiveram cobrança e por isso não têm vencimento.
+        inArray(billingCycle.status, ["aguardando_pagamento", "falhou"]),
+        // Redundante com a soma abaixo (NULL nunca satisfaz a comparação) e
+        // mantido pelo mesmo motivo da #319: é o que deixa o índice
+        // `billing_cycle_backstop_idx` utilizável e o predicado legível.
+        isNotNull(billingCycle.vencimentoCobranca),
+        sql`${billingCycle.vencimentoCobranca} + make_interval(days => ${DIAS_ATE_BACKSTOP}::int) <= ${agoraIso}::timestamptz`,
+        // Só assinatura VIVA e ainda não carimbada. `past_due` já tem
+        // consequência e relógio próprio (a carência), e agir de novo sobre ela
+        // aqui só poderia adiantar um corte por um caminho que não é o da
+        // carência. `canceled` já foi cortada.
+        eq(subscription.status, "active"),
+      ),
+    )
+    // Mais antigo primeiro, pelo mesmo motivo da #319: com teto, sem ORDER BY
+    // cada passada varreria um subconjunto arbitrário e uma linha azarada
+    // poderia nunca sair.
+    .orderBy(asc(billingCycle.vencimentoCobranca))
+    // +1 é sonda, não cota: uma linha ALÉM do teto significa truncamento.
+    .limit(TETO_BACKSTOP_POR_PASSADA + 1);
+
+  const truncado = elegiveis.length > TETO_BACKSTOP_POR_PASSADA;
+  const avaliaveis = truncado
+    ? elegiveis.slice(0, TETO_BACKSTOP_POR_PASSADA)
+    : elegiveis;
+
+  if (truncado) {
+    console.warn("[billing-backstop-truncado] elegíveis além do teto", {
+      teto: TETO_BACKSTOP_POR_PASSADA,
+      agora: agoraIso,
+    });
+  }
+
+  const resultados: ResultadoBackstopPrazo[] = [];
+  const marcaTruncado = truncado ? { truncado: true } : {};
+
+  for (const linha of avaliaveis) {
+    // Impossível pelo predicado; estreita o tipo sem um `!`.
+    if (!linha.vencimento) continue;
+
+    const politica = classificarRecusa(linha.recusaCodigo);
+    const base = {
+      ...marcaTruncado,
+      clinicId: linha.clinicId,
+      subscriptionId: linha.subscriptionId,
+      cycleId: linha.cycleId,
+      vencimento: linha.vencimento,
+      recusaCodigo: linha.recusaCodigo,
+      grupo: politica.grupo,
+    };
+
+    if (politica.grupo === "G6") {
+      // Ver "G6 não tem backstop" no cabeçalho. Sai ANTES do dry-run porque
+      // não é uma ação suprimida pelo ensaio — é a ausência de ação.
+      resultados.push({ ...base, acao: "ignorada_g6" });
+      continue;
+    }
+
+    // Dry-run responde QUEM seria alcançado e para por aqui: não fala com o
+    // gateway e não escreve nada. Mesmo idioma da #319, e pela mesma razão —
+    // este caminho pode revogar autorização de Pix Automático.
+    if (dryRun) {
+      resultados.push({ ...base, acao: "nenhuma" });
+      continue;
+    }
+
+    // G3: tenta o CORTE, que é a única ação irreversível daqui. Qualquer
+    // resposta que não seja "o gateway disse que a autorização está morta"
+    // degrada para o carimbo, que é reversível por pagamento.
+    if (politica.corteImediato) {
+      const veredito = await confirmarAutorizacaoMorta(linha);
+      if (veredito.morta) {
+        try {
+          await revogarECortarAssinatura(linha, agora, {
+            motivo: `G3 confirmado no gateway (${linha.recusaCodigo ?? "sem código"})`,
+            statusEsperado: "active",
+          });
+          resultados.push({ ...base, acao: "cortada" });
+        } catch (e) {
+          resultados.push({
+            ...base,
+            acao: "nenhuma",
+            erro: `[${etapaDoErro(e)}] ${detalharErro(e)}`,
+          });
+        }
+        continue;
+      }
+      // Cai no carimbo, carregando o motivo de o corte não ter acontecido.
+      const carimbo = await carimbarPorPrazo(linha, agora);
+      resultados.push({ ...base, ...carimbo, erro: veredito.erro });
+      continue;
+    }
+
+    const carimbo = await carimbarPorPrazo(linha, agora);
+    resultados.push({ ...base, ...carimbo });
+  }
+
+  return resultados;
+}
+
+/**
+ * Leitura pura que decide se o corte do G3 pode acontecer.
+ *
+ * Só `cancelada` (o adapter mapeia `CANCELLED`/`REFUSED`/`EXPIRED` para lá)
+ * autoriza. `autorizada` é o caso em que o CÓDIGO MENTIU: existe autorização
+ * viva e o desfecho correto é o de G7 — carimbo. Qualquer outro estado, e
+ * qualquer erro de leitura, também barram: o padrão de `mapearStatusAutorizacao`
+ * é `pendente`, então status novo do gateway nunca vira permissão para revogar.
+ *
+ * Nunca lança: o erro vira texto no resultado, e a decisão é sempre "não
+ * cortar".
+ */
+async function confirmarAutorizacaoMorta(assinatura: {
+  subscriptionId: string;
+  provider: string | null;
+  providerSubscriptionId: string | null;
+}): Promise<{ morta: boolean; erro?: string }> {
+  if (!assinatura.provider || !assinatura.providerSubscriptionId) {
+    return {
+      morta: false,
+      erro: `[g3] assinatura ${assinatura.subscriptionId} sem vínculo consultável no gateway — corte de G3 não confirmado`,
+    };
+  }
+
+  try {
+    const provider = getProviderPorId(assinatura.provider);
+    const { status } = await provider.consultarVinculo(
+      assinatura.providerSubscriptionId,
+    );
+    if (status === "cancelada") return { morta: true };
+    // Greppável: é a linha que prova, em produção, se o catálogo de G3 é
+    // confiável ou se o gateway devolve códigos de autorização morta com a
+    // autorização viva.
+    console.warn(
+      "[billing-backstop-g3] gateway não confirmou autorização morta",
+      {
+        providerVinculoId: assinatura.providerSubscriptionId,
+        status,
+      },
+    );
+    return {
+      morta: false,
+      erro: `[g3] gateway respondeu \`${status}\`, não \`cancelada\` — corte não confirmado, tratado como G7`,
+    };
+  } catch (e) {
+    return {
+      morta: false,
+      erro: `[g3] reconsulta da autorização falhou (${detalharErro(e)}) — corte barrado, ciclo tratado como G7`,
+    };
+  }
+}
+
+/**
+ * O carimbo em si: ciclo para `falhou`, assinatura para `past_due`.
+ *
+ * Numa transação só porque as duas escritas são a MESMA decisão: um ciclo
+ * `falhou` sem `past_due` não cobra ninguém, e um `past_due` cujo ciclo ficou em
+ * `aguardando_pagamento` nunca vira dívida congelada (ver o cabeçalho da
+ * varredura).
+ *
+ * O ciclo é atualizado PRIMEIRO e com compare-and-set. Entre a seleção e aqui
+ * cabe o webhook que liquida a cobrança: `liquidarCiclo` leva o ciclo a `pago` e
+ * a assinatura continua `active`, então um carimbo que olhasse só a assinatura
+ * poria em `past_due` uma clínica que acabou de pagar. Ciclo fora do conjunto
+ * elegível ⇒ nada acontece.
+ */
+async function carimbarPorPrazo(
+  linha: { cycleId: string; subscriptionId: string },
+  agora: Date,
+): Promise<{ acao: AcaoBackstop; erro?: string }> {
+  try {
+    let carimbou = false;
+
+    await authDb.transaction(async (tx) => {
+      const [ciclo] = await tx
+        .update(billingCycle)
+        .set({
+          status: "falhou",
+          // `coalesce` e não sobrescrita: o ciclo G3 já foi a `falhou` com o
+          // motivo REAL, e trocá-lo pelo texto do backstop apagaria a causa
+          // em favor da consequência. `recusa_codigo` nunca é tocado aqui —
+          // ele é fato do gateway, e o backstop é decisão nossa.
+          erro: sql`coalesce(${billingCycle.erro}, ${ERRO_BACKSTOP})`,
+        })
+        .where(
+          and(
+            eq(billingCycle.id, linha.cycleId),
+            inArray(billingCycle.status, ["aguardando_pagamento", "falhou"]),
+          ),
+        )
+        .returning({ id: billingCycle.id });
+
+      if (!ciclo) return;
+
+      const [assinatura] = await tx
+        .update(subscription)
+        .set({
+          status: "past_due",
+          // O instante do CARIMBO, não a data da recusa: a carência começa
+          // quando concluímos que a clínica deve. Escrito sem `??` de
+          // propósito — preservar um resíduo de `past_due_desde` numa linha
+          // `active` faria a carência nascer vencida, que é a classe de
+          // defeito do `cancelada_em` não limpo na reativação (#290).
+          pastDueDesde: agora,
+          atualizadoEm: agora,
+        })
+        .where(
+          and(
+            eq(subscription.id, linha.subscriptionId),
+            eq(subscription.status, "active"),
+          ),
+        )
+        .returning({ id: subscription.id });
+
+      carimbou = Boolean(assinatura);
+    });
+
+    return carimbou ? { acao: "carimbada" } : { acao: "nenhuma" };
+  } catch (e) {
+    return { acao: "nenhuma", erro: `[carimbo] ${detalharErro(e)}` };
   }
 }
 
