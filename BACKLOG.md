@@ -77,6 +77,36 @@
 
 ---
 
+## 🏁 Sessão 15/08/2026 (2ª) — #317: parâmetros irreversíveis da autorização (passo 2 da linha de billing)
+
+Branch `feat/317-parametros-autorizacao-pix`, 4 commits (`a2b3e36`, `792bff1`, `dd9efb7`, `597128c`), **sem push**. Plano versionado em `docs/superpowers/plans/2026-08-15-317-parametros-autorizacao-pix.md`; DoD consolidada postada como comentário na própria issue, porque corpo + comentários 1 e 2 tinham três versões sobrepostas e o comentário 3 (medição #321) declarou impossíveis vários itens de "medir no sandbox".
+
+**O que entrou:** `minLimitValue` (R$ 39,00) e `retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS"` no payload de criação da autorização; `PISO_COBRANCA_CENTAVOS` → `PISO_COBRANCA_AVULSA_CENTAVOS`; `vencimentoCobrancaDeCiclo` + calendário bancário brasileiro novo.
+
+**O bug sazonal que apareceu no caminho.** `vencimento: somarDias(agora, 5)` somava **dias corridos**. Atravessando Carnaval, feriado prolongado ou o cluster de fim de ano, cinco corridos podem deixar **menos de dois dias úteis** de antecedência — recusa `RECEIVED_TOO_LATE`. Verde o ano inteiro, vermelho em fevereiro e dezembro; nenhum teste que usa a data de hoje o veria. A unidade da janela é genuinamente indeterminada (doc de Implementação do Asaas diz "2 a 10 dias **úteis**", Motivos de Recusa dizem "2 dias"/"10 dias" sem qualificar, BACEN diz corridos) e **não é mensurável no sandbox** (#321). A regra nova satisfaz a metade mais restritiva de cada leitura: **piso em dias úteis bancários, teto em dias corridos** — 10 corridos é sempre ≤ 10 úteis, então o resultado está dentro sob qualquer interpretação. Feriados móveis são **calculados** da Páscoa, não tabelados: tabela chumbada vence em silêncio, que é exatamente o modo de falha que a entrega remove.
+
+**Decisões de produto (detalhe no plano e no comentário da issue):**
+
+- **D-A** — `minLimitValue` deriva de `FAIXAS_PRECIFICACAO[0]`, **não** de `VALOR_PRIMEIRO_PACIENTE_CENTAVOS`, que o próprio docblock declara LEGADO e fora de produção. Derivar da constante morta, como o corpo da issue pedia, a ressuscitaria em produção contra o que ela mesma diz.
+- **D-B** — entra só a flag; a orquestração extradia (quem comanda cada retentativa é o recebedor, via API) é a **#322**. A flag sozinha é inerte **e irreversível** — o Asaas não permite habilitá-la depois, e o conserto seria novo QR e novo consentimento, cliente a cliente. É isso, não a gravidade, que colocou este passo antes dos outros.
+- **D-D** — `carencia_dias` **fica em 7**: sem a orquestração, o comportamento não muda. Redimensionar é pauta da #319.
+- **D-E** — rename do piso, senão nascem dois "piso" opostos no mesmo domínio: o do que **nós cobramos** (gate de reativação) e o do teto que o **pagador** autoriza.
+
+**Revisão adversarial pegou 4 defeitos que os testes verdes não pegaram:**
+
+1. **Faltavam 24/12 e 31/12** no calendário — justamente os dois dias bancários-e-não-civis, que é a distinção que o módulo declara fazer. Sem eles, 8 fechamentos em 2026-27 caíam para **1 dia útil** de antecedência (fechar em 22/12/2026 → vencer em 28/12, com só o dia 23 no meio). O bug sazonal teria sobrevivido à entrega que existia para matá-lo.
+2. **A varredura de 730 dias era tautológica** — importava as constantes que deveria vigiar e asseria a própria condição de saída da implementação. Mutar o piso de 2 para 0 a deixava **verde**. Nova entrada no catálogo de "teste verde que não testa nada": _asserir com a constante que o código usa_. Limites agora são literais.
+3. **Teto da janela e `diasCorridosEntre` com cobertura zero** — o ramo do `RangeError` é inalcançável a partir de fechamento real (o pior caso é 9 corridos), e `diasCorridosEntre` poderia devolver `0` constante com a suíte inteira verde. A checagem virou `verificarTetoDaJanela`, exportada e testada direto.
+4. **Faltava o teste de cluster de fim de ano** que o comentário 2 da issue pedia textualmente — a ausência dele é o que deixou o defeito 1 passar.
+
+Cada asserção nova foi provada por mutação, com a mutação revertida **por patch inverso à mão** (nunca `git checkout`, que apagaria o código novo junto).
+
+**Achados abertos que ficaram sem dono** — tabela completa no `checkpoint.md` §4: qual calendário de feriados o Asaas usa (o nosso é o nacional; estadual/municipal não entra — suposição não medida); o teto de 10 corridos é vigiado por um único teste; `.specs/features/debito-reativacao-290/design.md:56` cita o nome antigo da constante (registro de época, não corrigido de propósito); `moveisPorAno` é cache global sem limite.
+
+**Ambiente:** `pnpm test` completo **não fecha verde nesta máquina** — 7 falhas `ECONNREFUSED :5433` em `src/app/(app)/equipe/convidar/logic.test.ts`, com Postgres local fora do ar e daemon do Docker que não sobe. Verificado pré-existente e alheio ao diff (que não toca `equipe/`). `typecheck` e `lint` limpos; 133 testes verdes em `src/lib/billing`.
+
+---
+
 ## 🏁 Sessão 15/08/2026 — #321: sessão de medição no sandbox do Asaas (passo 1 da linha de billing)
 
 Executado o passo 1 da [ordem de conclusão](https://claude.ai/code/artifact/59b6c2d8-ea6c-401a-b62f-9572ed26d243). Sete perguntas que vinham de leitura de doc (guia BACEN + MCP do Asaas) foram levadas à API real de homologação. Registro cru em `infra/README.md:1921` (`### Runbook — sessão de medição no sandbox do Asaas (#321)`), commit `838d5be`, branch `feat/290-gate-debito-reativacao` **sem push**.
@@ -87,7 +117,7 @@ Executado o passo 1 da [ordem de conclusão](https://claude.ai/code/artifact/59b
 
 - `minLimitValue: 39.00` **sem** `value` é aceito (200, persiste, `value: null`, `status: CREATED`).
 - `retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS"` é **aceito na criação**, com eco na resposta — logo o `NOT_ALLOWED` que o adapter manda hoje (`asaas.ts:513-533`) é escolha, não limitação da API.
-- Piso real de cobrança PIX avulsa: **R$ 5,00** (0,01 / 0,50 / 1,00 / 3,00 → 400 nomeado; 5,00 → 200). A regra é sobre **`value − discount`**, líquido de desconto. Confirma `PISO_COBRANCA_CENTAVOS = 500`.
+- Piso real de cobrança PIX avulsa: **R$ 5,00** (0,01 / 0,50 / 1,00 / 3,00 → 400 nomeado; 5,00 → 200). A regra é sobre **`value − discount`**, líquido de desconto. Confirma o `500` da constante — que desde a #317 se chama `PISO_COBRANCA_AVULSA_CENTAVOS`.
 - No trilho avulso, `dueDate` em sábado, domingo e feriado 07/09 foram os três aceitos, com a data devolvida igual — sem empurrão para dia útil.
 - O código de recusa vive em **`paymentInstruction.refusalReason`**, via `GET /pix/automatic/paymentInstructions/{id}` (endpoint confirmado no ar). O `/pix/automatic/payments` que se supunha antes dá 404.
 - O piso de R$ 5,00 **não** se aplica ao QR de ativação: `originalValue: 0.01` foi aceito. `VALOR_ATIVACAO_PADRAO_CENTAVOS = 1` segue viável.

@@ -1,8 +1,8 @@
 # Checkpoint — Iris
 
 > **Data:** 15/08/2026
-> **Branch:** `feat/290-gate-debito-reativacao` (commit `838d5be`, sem push)
-> **Status:** 🟢 Passo 1 da linha de billing (#321) executado e registrado. Cinco perguntas ficaram **não medidas por impossibilidade estrutural do sandbox** — resolvem-se só no ensaio em produção.
+> **Branch:** `feat/317-parametros-autorizacao-pix` (4 commits, **sem push**, sem PR)
+> **Status:** 🟢 Passos 1 e 2 da linha de billing executados. **#321** (medição no sandbox) e **#317** (parâmetros da autorização) entregues. O próximo é o passo 3 — **#319**, que destrava metade da lista.
 
 ---
 
@@ -29,9 +29,45 @@
 
 ---
 
-## 1. Resumo da Sessão (15/08/2026)
+## 1. Resumo da Sessão (15/08/2026, 2ª) — passo 2: #317
 
-Executado o **passo 1 da ordem de conclusão do Pix Automático**: issue [#321](https://github.com/romulosutil/Iris/issues/321) — sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave de homologação `$aact_hmlg_`).
+Executado o **passo 2 da ordem de conclusão**: issue [#317](https://github.com/romulosutil/Iris/issues/317) — os parâmetros que só existem na criação da autorização de Pix Automático. Orquestração em subagents (recon → dois builders em paralelo → builder da janela → revisão adversarial → correção), com a DoD consolidada postada num comentário da própria issue.
+
+### O que entrou
+
+| Commit    | O quê                                                                                                            |
+| :-------- | :--------------------------------------------------------------------------------------------------------------- |
+| `a2b3e36` | `minLimitValue` (R$ 39,00, derivado da tabela de preços) + `retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS"` no payload |
+| `792bff1` | `PISO_COBRANCA_CENTAVOS` → `PISO_COBRANCA_AVULSA_CENTAVOS`                                                       |
+| `dd9efb7` | `vencimentoCobrancaDeCiclo` + `calendario-bancario.ts` (feriados móveis calculados da Páscoa)                    |
+| `597128c` | Correção dos 4 achados da revisão adversarial + o plano versionado                                               |
+
+### O bug sazonal que apareceu no caminho
+
+`vencimento: somarDias(agora, 5)` somava **dias corridos**. Atravessando Carnaval, feriado prolongado ou o cluster de fim de ano, cinco corridos podem deixar **menos de dois dias úteis** de antecedência — recusa `RECEIVED_TOO_LATE`. Verde o ano inteiro, vermelho em fevereiro e dezembro; teste que usa a data de hoje nunca o veria. A regra nova satisfaz a metade mais restritiva de cada leitura da doc: **piso em dias úteis bancários, teto em dias corridos**.
+
+### Revisão adversarial: 4 defeitos, todos corrigidos antes do fechamento
+
+1. **Faltavam 24/12 e 31/12** no calendário — os dois dias bancários-e-não-civis, que é exatamente a distinção que o módulo diz fazer. Sem eles, 8 fechamentos em 2026-27 caíam para 1 dia útil (fechar em 22/12/2026 → vencer em 28/12).
+2. **A varredura de 730 dias era tautológica** — importava as constantes que deveria vigiar; mutar o piso de 2 para 0 a deixava verde. Limites agora são literais.
+3. **Teto da janela e `diasCorridosEntre` sem cobertura** — a checagem do teto virou `verificarTetoDaJanela`, exportada e testada direto.
+4. **Faltava o teste de cluster de fim de ano** que o comentário 2 da issue pedia — é o que teria pego o defeito 1.
+
+Toda asserção nova foi provada por mutação, com a mutação revertida por patch inverso à mão.
+
+### Decisões registradas (detalhe no comentário da #317 e no plano)
+
+- **D-A** `minLimitValue` deriva de `FAIXAS_PRECIFICACAO[0]`, não de `VALOR_PRIMEIRO_PACIENTE_CENTAVOS` (marcada LEGADO, fora de produção).
+- **D-B** Só a flag; orquestração extradia é a **#322**.
+- **D-C** Janela conservadora sem medição — a unidade continua indeterminada e só o ensaio em produção decide.
+- **D-D** `carencia_dias` **fica em 7**; redimensionar é pauta da **#319**.
+- **D-E** Rename do piso; o valor e o comentário "escolha conservadora → medido" seguem sendo escopo da **#311**.
+
+---
+
+## 1b. Sessão anterior (15/08/2026, 1ª) — passo 1: #321
+
+Executado o **passo 1**: issue [#321](https://github.com/romulosutil/Iris/issues/321) — sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave de homologação `$aact_hmlg_`).
 
 ### Achado estrutural que muda o planejamento
 
@@ -62,8 +98,8 @@ Consequência: **todo o trilho de débito headless é imensurável fora de produ
 
 ### Efeitos nas issues dependentes
 
-- **#317** — `retryPolicy` é aceito na criação (destrava o escopo). A contradição úteis × corridos **continua aberta** e só se resolve no ensaio em produção.
-- **#311** — `PISO_COBRANCA_CENTAVOS = 500` está **correto, mantém-se**. A entrega vira trocar o comentário de "escolha conservadora, NÃO medição" (`src/lib/billing/debito.ts:41-55`) por "medido em 15/08/2026", acrescentando a precisão do líquido de desconto. Não é mais candidata a remoção.
+- **#317** — `retryPolicy` é aceito na criação (destravou o escopo). **Entregue na 2ª sessão de 15/08** — ver §1. A contradição úteis × corridos continua aberta; a regra conservadora está de pé esperando o ensaio.
+- **#311** — o valor `500` está **correto, mantém-se**. A entrega vira trocar o comentário de "escolha conservadora, NÃO medição" (`src/lib/billing/debito.ts`) por "medido em 15/08/2026", acrescentando a precisão do líquido de desconto. Não é mais candidata a remoção. ⚠️ A constante **mudou de nome** para `PISO_COBRANCA_AVULSA_CENTAVOS` (#317, D-E) — o rename já está feito, sobra o número e o comentário.
 - **#289** — o discriminador **não pode ser `externalReference`**. Candidatos disponíveis antes do pagamento: `immediateQrCode.conciliationIdentifier` e `endToEndIdentifier` da autorização. **A escolha entre os dois segue decisão de produto em aberto** — a issue ainda não pode ir para o Jules.
 - **#318** — o campo é `paymentInstruction.refusalReason`. Achado colateral: `consultarCobranca` (`src/lib/billing/provider/asaas.ts:799`, fallback em 818-821) procura em `pixTransaction.failureReason`, que **não existe** no recurso `payment` (medido num payment OVERDUE forçado: `pixTransaction: null`).
 
@@ -71,19 +107,35 @@ Consequência: **todo o trilho de débito headless é imensurável fora de produ
 
 ## 2. Estado do Repositório & Branch
 
-- **Branch:** `feat/290-gate-debito-reativacao` — **sem push**, sem PR.
-- **Commit:** `838d5be` — `docs(infra): log Asaas sandbox measurement (#321)` · 1 arquivo, 326 inserções, só `infra/README.md`.
-- **Seção nova:** `infra/README.md:1921` — `### Runbook — sessão de medição no sandbox do Asaas (#321)`, no padrão do runbook vizinho da #286.
+- **Branch:** `feat/317-parametros-autorizacao-pix` — **sem push, sem PR**. Nasceu do HEAD da `feat/290-gate-debito-reativacao`, então carrega junto os dois commits de docs que também nunca subiram (`838d5be`, `e229a19`).
+- **Commits desta sessão:** `a2b3e36`, `792bff1`, `dd9efb7`, `597128c` (ver tabela na §1).
+- **Arquivos novos:** `src/lib/billing/calendario-bancario.ts` (+ teste), `src/lib/billing/vencimento.ts` (+ teste), `docs/superpowers/plans/2026-08-15-317-parametros-autorizacao-pix.md`.
+- **Verde:** `pnpm typecheck` limpo · `pnpm lint` 0 erros (10 warnings pré-existentes em `src/stories/**`) · `src/lib/billing` 133 testes passando.
+- ⚠️ **`pnpm test` completo não está verde nesta máquina:** 7 falhas em `src/app/(app)/equipe/convidar/logic.test.ts`, todas `ECONNREFUSED :5433` — Postgres local fora do ar e o daemon do Docker não sobe aqui. **Pré-existente e alheio a este diff** (verificado: o diff não toca `equipe/`). Antes de abrir PR, subir o banco e rerodar aquele arquivo.
 - **Não versionado (pendente de decisão do Rômulo):** `.mcp.json` (aponta para o MCP de docs do Asaas) e `docs/daily-summary/2026-08-14.md`.
-- **Comentários postados:** #317, #311, #289, #318 e o de fechamento na #321.
+- **Comentários postados:** DoD consolidada na #317 (esta sessão); #317, #311, #289, #318 e o de fechamento na #321 (sessão anterior).
 - **Memória gravada:** `sandbox-asaas-nao-ativa-pix-automatico.md` + entrada no `MEMORY.md`.
 
 ---
 
 ## 3. Próximos Passos Sugeridos
 
-1. **Fechar a #321** — as 5 caixas da Definição de Pronto estão cumpridas (o "não medido" documentado com motivo estrutural é resultado válido, não pendência).
-2. **Push do `838d5be`** — decisão do Rômulo, a branch está local.
-3. **Passo 2 — #317 (irreversível, urgente):** `/superpowers:writing-plans` com Opus 5. Escopo: `minLimitValue` + `retryPolicy` (só a flag) + cálculo do vencimento + rename de `PISO_COBRANCA_CENTAVOS`. ⚠️ A unidade da janela (úteis × corridos) entra no plano **como suposição declarada**, não como fato — não foi medida.
-4. **Agendar o ensaio com clínica de teste em produção.** É o único caminho para as 5 perguntas remanescentes: unidade da janela, recorrência com dois valores diferentes, pagador concluir sem teto, identificador da cobrança de ativação e payload do webhook de recusa. Bloqueia o fechamento honesto de #317, #289 e #318. Contexto na memória `ensaio-fechamento-ciclo-clinica-teste`.
-5. **Passo 3 — #319** (`past_due` terminal, a carência nunca corre): `/superpowers:brainstorming` antes de planejar — 5 decisões abertas.
+1. **Push da branch e PR da #317.** Decisão do Rômulo — está tudo local. Antes: subir o Postgres e fechar as 7 falhas de ambiente (§2).
+2. **Fechar #321 e #317.** As duas DoD estão cumpridas; na #317 vale a lista consolidada do comentário de 15/08, não o corpo original. ⚠️ Keyword de fechamento **em inglês** no PR (`Closes #317`) — "Fecha #317" mergeia e deixa a issue aberta em silêncio.
+3. **Passo 3 — #319** (`past_due` é terminal, a carência nunca corre): `/superpowers:brainstorming` **antes** de planejar — 5 decisões abertas, e uma delas é o dimensionamento da carência que a D-D desta sessão deixou explicitamente para lá. Destrava #318 e #310.
+4. **Agendar o ensaio com clínica de teste em produção.** Único caminho para as 5 perguntas remanescentes: unidade da janela (agora com a regra conservadora esperando confirmação), recorrência com dois valores diferentes, pagador concluir sem teto, identificador da cobrança de ativação e payload do webhook de recusa. Contexto na memória `ensaio-fechamento-ciclo-clinica-teste`.
+
+---
+
+## 4. Achados abertos (não são pendência de issue nenhuma)
+
+Registrados aqui porque nasceram no caminho e não têm dono. Detalhe no `BACKLOG.md`.
+
+| Achado                                                                                                                     | Onde                                                          | Estado                                                                                                                         |
+| :------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------- |
+| **Qual calendário de feriados o Asaas usa** — o nosso é o nacional; bancário estadual/municipal não entra                  | `src/lib/billing/calendario-bancario.ts`                      | Suposição não medida, mesma classe do `INSTRUCTION_REFUSED → OVERDUE` da #286. Entra no ensaio em produção.                    |
+| **O teto de 10 dias corridos só é vigiado por um teste** — nenhum fechamento real passa de 9, então a varredura não o mata | `src/lib/billing/vencimento.test.ts`                          | Aceito e documentado. Apagar aquele caso solta a constante sem nada ficar vermelho.                                            |
+| **`consultarCobranca` lê `pixTransaction.failureReason`, campo que não existe** no recurso `payment`                       | `src/lib/billing/provider/asaas.ts:799` (fallback em 818-821) | Achado da #321. É escopo da **#318**, já comentado lá.                                                                         |
+| **Discriminador do `erro_aplicacao` continua indefinido** — `externalReference` não serve                                  | #289                                                          | Decisão de produto em aberto entre `immediateQrCode.conciliationIdentifier` e `endToEndIdentifier`. **Trava a label `jules`.** |
+| **`.specs/features/debito-reativacao-290/design.md:56` cita `PISO_COBRANCA_CENTAVOS`**, nome que não existe mais           | spec histórica                                                | Registro de época, não corrigido de propósito. O nome vivo é `PISO_COBRANCA_AVULSA_CENTAVOS`.                                  |
+| **`moveisPorAno` é cache global sem limite** no calendário bancário                                                        | `src/lib/billing/calendario-bancario.ts`                      | Irrelevante no uso atual (o job toca 2-3 anos); é estado global não limpável entre testes.                                     |
