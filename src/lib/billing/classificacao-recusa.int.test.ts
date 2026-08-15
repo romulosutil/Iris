@@ -1,5 +1,13 @@
 import postgres from "postgres";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { hasDb } from "@tests/integration-env";
 
 // Mesma razão dos demais .int.test.ts do repo: módulos do servidor puxam
@@ -148,9 +156,41 @@ async function limpar(): Promise<void> {
   await owner!`DELETE FROM clinic WHERE id = ANY(${CLINICAS}::uuid[])`;
 }
 
+/**
+ * Espião do `console.warn`.
+ *
+ * Não é zelo: para **G6, G7 e G0 o log é o único canal que existe**. Os três não
+ * escrevem nada no banco (a tabela da #318 diz "a clínica vê: nada"), então sem
+ * observar o aviso os três casos ficariam indistinguíveis entre si — e um mapa
+ * que jogasse G6 em G0 passaria verde medindo só o banco. É exatamente o defeito
+ * [teste-verde-que-nao-testa-nada].
+ */
+let aviso: ReturnType<typeof vi.spyOn>;
+
+/** O grupo que a linha `[billing-recusa]` publicou. */
+function grupoAvisado(): unknown {
+  const chamada = aviso.mock.calls.find(
+    (c) => c[0] === "[billing-recusa] cobrança de ciclo recusada",
+  );
+  return (chamada?.[1] as { grupo?: unknown } | undefined)?.grupo;
+}
+
+/** Se a tag PRÓPRIA do código desconhecido saiu. */
+function avisouDesconhecida(): boolean {
+  return aviso.mock.calls.some(
+    (c) =>
+      c[0] === "[billing-recusa-desconhecida] código fora do catálogo da #318",
+  );
+}
+
 describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
   beforeEach(async () => {
     await limpar();
+    aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    aviso.mockRestore();
   });
 
   afterAll(async () => {
@@ -163,16 +203,6 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
   // ── Os grupos que PROVAM um fato sobre a clínica: carimbam `past_due` ──────
 
   it("G1 · teto insuficiente carimba past_due e registra o código no ciclo", async () => {
-    for (const codigo of ["MAXIMUM_AMOUNT_EXCEEDED"]) {
-      expect(classificarRecusa(codigo).grupo).toBe("G1");
-    }
-    // O que separa G1 de G2 não é o relógio: é a copy e o fato de que retentar
-    // só faz sentido depois que a clínica agir. Sem isto os dois grupos
-    // voltariam a compartilhar desfecho, que é o defeito que a #318 mata.
-    const politica = classificarRecusa("MAXIMUM_AMOUNT_EXCEEDED");
-    expect(politica.copy).not.toBeNull();
-    expect(politica.copy).not.toBe(classificarRecusa("PAYMENT_OVERDUE").copy);
-
     const { subscriptionId, chargeId, cicloId } = await cenario({
       clinicId: CLINICA_G1,
       statusAssinatura: "active",
@@ -196,17 +226,20 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     // O carimbo é o marco zero da carência de 10 dias — sem ele a assinatura
     // nunca é cortada e um teto baixo demais vira assinatura gratuita vitalícia.
     expect(assinatura.past_due_desde).not.toBeNull();
+
+    expect(grupoAvisado()).toBe("G1");
+    for (const codigo of ["MAXIMUM_AMOUNT_EXCEEDED"]) {
+      expect(classificarRecusa(codigo).grupo).toBe("G1");
+    }
+    // O que separa G1 de G2 não é o relógio: é a copy e o fato de que retentar
+    // só faz sentido depois que a clínica agir. Sem isto os dois grupos
+    // voltariam a compartilhar desfecho, que é o defeito que a #318 mata.
+    const politica = classificarRecusa("MAXIMUM_AMOUNT_EXCEEDED");
+    expect(politica.copy).not.toBeNull();
+    expect(politica.copy).not.toBe(classificarRecusa("PAYMENT_OVERDUE").copy);
   });
 
   it("G2 · saldo insuficiente carimba past_due e registra o código no ciclo", async () => {
-    for (const codigo of ["PAYMENT_OVERDUE"]) {
-      expect(classificarRecusa(codigo).grupo).toBe("G2");
-    }
-    // Único grupo em que retentar é o caso canônico do `3R_7D`.
-    expect(classificarRecusa("PAYMENT_OVERDUE").valeGastarRetentativa).toBe(
-      true,
-    );
-
     const { subscriptionId, chargeId, cicloId } = await cenario({
       clinicId: CLINICA_G2,
       statusAssinatura: "active",
@@ -222,23 +255,18 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     const assinatura = await lerAssinatura(subscriptionId);
     expect(assinatura.status).toBe("past_due");
     expect(assinatura.past_due_desde).not.toBeNull();
+
+    expect(grupoAvisado()).toBe("G2");
+    for (const codigo of ["PAYMENT_OVERDUE"]) {
+      expect(classificarRecusa(codigo).grupo).toBe("G2");
+    }
+    // Único grupo em que retentar é o caso canônico do `3R_7D`.
+    expect(classificarRecusa("PAYMENT_OVERDUE").valeGastarRetentativa).toBe(
+      true,
+    );
   });
 
   it("G4 · divergência cadastral carimba past_due e registra o código no ciclo", async () => {
-    for (const codigo of [
-      "PAYER_CPF_CNPJ_MISMATCH",
-      "INVALID_CUSTOMER_CPF_CNPJ",
-      "INCORRECT_CUSTOMER_CPF_CNPJ",
-    ]) {
-      expect(classificarRecusa(codigo).grupo).toBe("G4");
-    }
-    // `RECEIVER_CPF_CNPJ_MISMATCH` parece do mesmo assunto e NÃO é deste grupo:
-    // é o CNPJ do RECEBEDOR (nós). Trocar os dois cobraria a clínica pelo nosso
-    // cadastro errado.
-    expect(classificarRecusa("RECEIVER_CPF_CNPJ_MISMATCH").grupo).not.toBe(
-      "G4",
-    );
-
     const { subscriptionId, chargeId, cicloId } = await cenario({
       clinicId: CLINICA_G4,
       statusAssinatura: "active",
@@ -258,22 +286,24 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     const assinatura = await lerAssinatura(subscriptionId);
     expect(assinatura.status).toBe("past_due");
     expect(assinatura.past_due_desde).not.toBeNull();
+
+    expect(grupoAvisado()).toBe("G4");
+    for (const codigo of [
+      "PAYER_CPF_CNPJ_MISMATCH",
+      "INVALID_CUSTOMER_CPF_CNPJ",
+      "INCORRECT_CUSTOMER_CPF_CNPJ",
+    ]) {
+      expect(classificarRecusa(codigo).grupo).toBe("G4");
+    }
+    // `RECEIVER_CPF_CNPJ_MISMATCH` parece do mesmo assunto e NÃO é deste grupo:
+    // é o CNPJ do RECEBEDOR (nós). Trocar os dois cobraria a clínica pelo nosso
+    // cadastro errado.
+    expect(classificarRecusa("RECEIVER_CPF_CNPJ_MISMATCH").grupo).not.toBe(
+      "G4",
+    );
   });
 
   it("G5 · conta terminal carimba past_due, mas NÃO dispara corte imediato", async () => {
-    for (const codigo of ["ACCOUNT_CLOSED", "ACCOUNT_BLOCKED"]) {
-      expect(classificarRecusa(codigo).grupo).toBe("G5");
-    }
-    // Restrição inegociável da Decisão 1: bloqueio é frequentemente temporário
-    // (judicial, antifraude, revisão cadastral). Cortar na hora trocaria um
-    // problema reversível pela revogação da autorização, que não volta sem novo
-    // consentimento no app do banco.
-    expect(classificarRecusa("ACCOUNT_BLOCKED").corteImediato).toBe(false);
-    // E retentar é desperdício garantido: a conta não debita em tentativa alguma.
-    expect(classificarRecusa("ACCOUNT_CLOSED").valeGastarRetentativa).toBe(
-      false,
-    );
-
     const { subscriptionId, chargeId, cicloId } = await cenario({
       clinicId: CLINICA_G5,
       statusAssinatura: "active",
@@ -289,24 +319,25 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     const assinatura = await lerAssinatura(subscriptionId);
     expect(assinatura.status).toBe("past_due");
     expect(assinatura.past_due_desde).not.toBeNull();
+
+    expect(grupoAvisado()).toBe("G5");
+    for (const codigo of ["ACCOUNT_CLOSED", "ACCOUNT_BLOCKED"]) {
+      expect(classificarRecusa(codigo).grupo).toBe("G5");
+    }
+    // Restrição inegociável da Decisão 1: bloqueio é frequentemente temporário
+    // (judicial, antifraude, revisão cadastral). Cortar na hora trocaria um
+    // problema reversível pela revogação da autorização, que não volta sem novo
+    // consentimento no app do banco.
+    expect(classificarRecusa("ACCOUNT_BLOCKED").corteImediato).toBe(false);
+    // E retentar é desperdício garantido: a conta não debita em tentativa alguma.
+    expect(classificarRecusa("ACCOUNT_CLOSED").valeGastarRetentativa).toBe(
+      false,
+    );
   });
 
   // ── G3: registra, mas NUNCA corta por conta do código ──────────────────────
 
   it("G3 · autorização morta registra o ciclo e não corta nem carimba pelo código", async () => {
-    for (const codigo of [
-      "RECURRING_PAYMENT_NOT_CONFIRMED",
-      "PAYMENT_INSTRUCTION_WITHOUT_AUTHORIZATION",
-      "INVALID_RECURRING_PAYMENT_ID",
-    ]) {
-      expect(classificarRecusa(codigo).grupo).toBe("G3");
-    }
-    // Único grupo cujo desfecho é o corte — e por isso o único que exige
-    // confirmação do gateway antes de qualquer escrita irreversível.
-    expect(
-      classificarRecusa("INVALID_RECURRING_PAYMENT_ID").corteImediato,
-    ).toBe(true);
-
     const { subscriptionId, chargeId, cicloId } = await cenario({
       clinicId: CLINICA_G3,
       statusAssinatura: "active",
@@ -331,12 +362,26 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     const assinatura = await lerAssinatura(subscriptionId);
     expect(assinatura.status).toBe("active");
     expect(assinatura.past_due_desde).toBeNull();
+
+    expect(grupoAvisado()).toBe("G3");
+    for (const codigo of [
+      "RECURRING_PAYMENT_NOT_CONFIRMED",
+      "PAYMENT_INSTRUCTION_WITHOUT_AUTHORIZATION",
+      "INVALID_RECURRING_PAYMENT_ID",
+    ]) {
+      expect(classificarRecusa(codigo).grupo).toBe("G3");
+    }
+    // Único grupo cujo desfecho é o corte — e por isso o único que exige
+    // confirmação do gateway antes de qualquer escrita irreversível.
+    expect(
+      classificarRecusa("INVALID_RECURRING_PAYMENT_ID").corteImediato,
+    ).toBe(true);
   });
 
   // ── Os grupos que não provam nada sobre a clínica: não movem estado ────────
 
   it("G6 · defeito nosso não apaga o estado que a recusa anterior gravou certo", async () => {
-    for (const codigo of [
+    const codigosG6 = [
       "RECEIVED_TOO_EARLY",
       "RECEIVED_TOO_LATE",
       "DUE_DATE_MISMATCH",
@@ -346,13 +391,7 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
       "OUT_OF_TIME_FRAME_FOR_RETRY",
       "EXCEEDED_MAXIMUM_RETRY_ATTEMPTS",
       "PAYMENT_ALREADY_SCHEDULED",
-    ]) {
-      expect(classificarRecusa(codigo).grupo).toBe("G6");
-    }
-    // A clínica não vê nada: defeito nosso é custo nosso.
-    expect(
-      classificarRecusa("EXCEEDED_MAXIMUM_RETRY_ATTEMPTS").copy,
-    ).toBeNull();
+    ];
 
     // O cenário concreto da Decisão do §1: a recusa de SALDO já aconteceu e
     // carimbou o estado certo. Depois dela chega o refugo da retentativa que
@@ -386,19 +425,24 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     expect(assinatura.past_due_desde?.toISOString()).toBe(
       PAST_DUE_ANTIGO.toISOString(),
     );
+
+    // G6 e G0 são INDISTINGUÍVEIS no banco — os dois não escrevem nada. O log é
+    // o único observável que os separa, então é ele que faz este caso morrer se
+    // a linha do G6 sumir do mapa: o grupo publicado muda, e a tag do
+    // desconhecido, que G6 nunca emite, passa a sair.
+    expect(grupoAvisado()).toBe("G6");
+    expect(avisouDesconhecida()).toBe(false);
+
+    for (const codigo of codigosG6) {
+      expect(classificarRecusa(codigo).grupo).toBe("G6");
+    }
+    // A clínica não vê nada: defeito nosso é custo nosso.
+    expect(
+      classificarRecusa("EXCEEDED_MAXIMUM_RETRY_ATTEMPTS").copy,
+    ).toBeNull();
   });
 
   it("G7 · falha do banco não é inadimplência da clínica: nada é escrito", async () => {
-    for (const codigo of [
-      "EXTERNAL_INSTITUTION_ERROR",
-      "PARTICIPANT_NOT_REGISTERED",
-      "PARTICIPANT_ISPB_INVALID",
-      "SAME_INSTITUTION_ERROR",
-      "OTHER",
-    ]) {
-      expect(classificarRecusa(codigo).grupo).toBe("G7");
-    }
-
     const { subscriptionId, chargeId, cicloId } = await cenario({
       clinicId: CLINICA_G7,
       statusAssinatura: "active",
@@ -420,18 +464,25 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     const assinatura = await lerAssinatura(subscriptionId);
     expect(assinatura.status).toBe("active");
     expect(assinatura.past_due_desde).toBeNull();
+
+    // Mesma razão do G6: no banco, G7 e G0 são idênticos. O que os separa é o
+    // grupo publicado e o fato de que uma falha CONHECIDA do banco não sai como
+    // "código desconhecido".
+    expect(grupoAvisado()).toBe("G7");
+    expect(avisouDesconhecida()).toBe(false);
+
+    for (const codigo of [
+      "EXTERNAL_INSTITUTION_ERROR",
+      "PARTICIPANT_NOT_REGISTERED",
+      "PARTICIPANT_ISPB_INVALID",
+      "SAME_INSTITUTION_ERROR",
+      "OTHER",
+    ]) {
+      expect(classificarRecusa(codigo).grupo).toBe("G7");
+    }
   });
 
   it("G0 · código fora do catálogo (e motivo ausente) não pune a clínica", async () => {
-    // O catálogo é ABERTO: `refusalReason` é `string` sem `enum` no OpenAPI e a
-    // doc avisa que valores entram sem aviso prévio. Um código novo tem que
-    // cair aqui, não em `undefined`.
-    expect(
-      classificarRecusa("CODIGO_QUE_O_ASAAS_AINDA_NAO_INVENTOU").grupo,
-    ).toBe("G0");
-    // `null` é o estado de PRODUÇÃO enquanto o D35 não estiver medido em prod.
-    expect(classificarRecusa(null).grupo).toBe("G0");
-
     const desconhecido = await cenario({
       clinicId: CLINICA_G0,
       statusAssinatura: "active",
@@ -462,15 +513,25 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     expect(
       (await lerAssinatura(desconhecido.subscriptionId)).past_due_desde,
     ).toBeNull();
+
+    // A tag PRÓPRIA sai — é ela que transforma "o catálogo cresceu" (ou "o
+    // motivo não está chegando", D35) em trabalho agendado em vez de incidente.
+    expect(grupoAvisado()).toBe("G0");
+    expect(avisouDesconhecida()).toBe(true);
+
+    // O catálogo é ABERTO: `refusalReason` é `string` sem `enum` no OpenAPI e a
+    // doc avisa que valores entram sem aviso prévio. Um código novo tem que
+    // cair aqui, não em `undefined`.
+    expect(
+      classificarRecusa("CODIGO_QUE_O_ASAAS_AINDA_NAO_INVENTOU").grupo,
+    ).toBe("G0");
+    // `null` é o estado de PRODUÇÃO enquanto o D35 não estiver medido em prod.
+    expect(classificarRecusa(null).grupo).toBe("G0");
   });
 
   // ── G8: a correção de dinheiro ────────────────────────────────────────────
 
   it("G8 · cobrança já liquidada concilia como PAGA, sem gerar dívida", async () => {
-    for (const codigo of ["PAYMENT_ALREADY_DONE"]) {
-      expect(classificarRecusa(codigo).grupo).toBe("G8");
-    }
-
     // A clínica JÁ pagou e já estava em `past_due` por uma recusa anterior do
     // mesmo ciclo. Antes da #318 este código virava `falhou` → `past_due` →
     // dívida congelada contra clínica adimplente, com o gate da #290 barrando
@@ -515,6 +576,11 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     const assinatura = await lerAssinatura(subscriptionId);
     expect(assinatura.status).toBe("active");
     expect(assinatura.past_due_desde).toBeNull();
+
+    expect(grupoAvisado()).toBe("G8");
+    for (const codigo of ["PAYMENT_ALREADY_DONE"]) {
+      expect(classificarRecusa(codigo).grupo).toBe("G8");
+    }
   });
 
   // ── Regra de copy, transversal aos 9 grupos ───────────────────────────────
