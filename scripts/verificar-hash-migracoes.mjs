@@ -45,9 +45,24 @@ export function calcularHashMigracao(conteudo) {
  *   em prod por migrações posteriores — o que os guards de RLS medem direto
  *   no pg_proc/pg_policies.
  *
- * Nota: rodar este guard num checkout Windows (CRLF) contra um banco migrado
- * com conteúdo LF acusa falso-positivo local; o gate é para a imagem de
- * deploy (checkout LF). O fluxo dev usa drizzle-kit direto e não passa aqui.
+ * Nota sobre falso-positivo em máquina Windows — medido em 15/08/2026 contra o
+ * Postgres local (98 aplicadas, 37 divergentes), diagnóstico completo em
+ * `docs/arquitetura/diagnostico-deriva-hash-migracoes.md`:
+ *
+ * - 35 das 37 são divergência SÓ de fim de linha, nas DUAS direções (banco
+ *   CRLF/disco LF e banco LF/disco CRLF). Causa: `core.autocrlf=true` vem do
+ *   gitconfig de sistema do Git for Windows e, com `* text=auto`, o EOL de
+ *   cada arquivo no working tree depende de o Git tê-lo rematerializado num
+ *   checkout ou não — enquanto o índice é 100% LF (`git ls-files --eol`).
+ *   Não chega à imagem de deploy: lá o checkout é Linux e o `.sql` é o LF do
+ *   índice, na aplicação e na conferência.
+ * - As 2 restantes são `0072`/`0073`, já pinadas abaixo. As pinagens NÃO
+ *   passam num checkout Windows, porque `hashDiscoAtual` guarda o sha256 LF e
+ *   o disco local está em CRLF.
+ *
+ * O gate é para a imagem de deploy (checkout LF). O fluxo dev usa drizzle-kit
+ * direto (`pnpm db:migrate`) e não passa por aqui — por isso o ruído local
+ * nunca apareceu antes.
  */
 export const DERIVAS_CONHECIDAS = new Map([
   [
@@ -117,6 +132,14 @@ export const DERIVAS_CONHECIDAS = new Map([
         "9b353c4445c4ed13b56d2261743db3e074a88ca2ab0f8c34ae8a1e6e519b8b8b",
       hashDiscoAtual:
         "ab71715ce601d6154707af80c6a7748c18392186195cd7e8ae62ca8d7dd1e80b",
+      // O `hashAplicado` é o sha256 LF do blob de `a00008e7` — a versão
+      // ANTERIOR ao fix `f6e0884`. Medido em 15/08/2026: o delta do fix é
+      // só a policy `alerta_risco_auth_select` em `alerta_risco_clinico`,
+      // que nenhuma outra migração recria. Sem ela, a leitura do painel de
+      // Super Admin por `iris_auth` devolve zero linhas em silêncio (os
+      // GRANT de coluna já vinham da versão original). Fecha por migração
+      // nova, nunca editando esta. Ver
+      // `docs/arquitetura/diagnostico-deriva-hash-migracoes.md` §5.2.
       motivo: "editada in-place pós-aplicação (fix f6e0884)",
     },
   ],
