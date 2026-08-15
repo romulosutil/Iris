@@ -1807,7 +1807,12 @@ export const subscription = pgTable(
     cicloAtualFim: timestamp("ciclo_atual_fim", { withTimezone: true }),
     // Falha de Pix Automático/cartão costuma ser do banco do cliente; derrubar
     // acesso a prontuário por isso é dano desproporcional.
-    carenciaDias: integer("carencia_dias").notNull().default(7),
+    // 10 = 7 da janela de retentativa do Pix Automático
+    // (`ALLOW_THREE_IN_SEVEN_DAYS`, #317) + 3 de folga: a retentativa corre
+    // DENTRO da carência, porque `pastDueDesde` é carimbado na primeira recusa
+    // e preservado nas seguintes — a última tentativa precisa de margem para
+    // liquidar antes do corte.
+    carenciaDias: integer("carencia_dias").notNull().default(10),
     pastDueDesde: timestamp("past_due_desde", { withTimezone: true }),
     ativadaEm: timestamp("ativada_em", { withTimezone: true }),
     canceladaEm: timestamp("cancelada_em", { withTimezone: true }),
@@ -1820,6 +1825,10 @@ export const subscription = pgTable(
   },
   (t) => [
     index("subscription_renovacao_idx").on(t.status, t.cicloAtualFim),
+    // Varredura de carência vencida: filtra `status = 'past_due'` e
+    // ordena/filtra por `pastDueDesde`. O índice de renovação acima é
+    // (status, ciclo_atual_fim) e não cobre essa segunda coluna.
+    index("subscription_carencia_idx").on(t.status, t.pastDueDesde),
     check(
       "subscription_ciclo_valido",
       sql`${t.cicloAtualFim} IS NULL OR ${t.cicloAtualInicio} IS NULL OR ${t.cicloAtualFim} > ${t.cicloAtualInicio}`,

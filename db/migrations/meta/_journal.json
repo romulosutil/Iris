@@ -687,6 +687,13 @@
       "when": 1786736757645,
       "tag": "0097_billing_cycle_debito_agrupado",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1786811394539,
+      "tag": "0098_subscription_carencia_dez_dias",
+      "breakpoints": true
     }
   ]
 }
