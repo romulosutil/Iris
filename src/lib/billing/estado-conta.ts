@@ -116,10 +116,13 @@ function paraData(valor: Date | string): Date {
  *   "ativar". Invariante nova: **iniciar o pagamento nunca pode piorar a
  *   situação**.
  * - **`past_due` → pode escrever sempre.** Preserva a intenção do gate antigo:
- *   a carência (`subscription.carencia_dias`) é aplicada pelo job de cobrança,
- *   que é quem transiciona para `canceled` quando ela vence. Falha de
- *   Pix/cartão costuma ser do banco do cliente, e travar a clínica por isso
- *   pune o paciente, não o inadimplente.
+ *   a carência (`subscription.carencia_dias`, por linha) é aplicada pelo job de
+ *   cobrança — desde a #319 por
+ *   `cancelarAssinaturasComCarenciaVencida` (`subscription.ts`), que é quem
+ *   transiciona para `canceled` quando ela vence. Até ela existir, este ramo
+ *   liberava escrita indefinidamente: nada cortava. Falha de Pix/cartão costuma
+ *   ser do banco do cliente, e travar a clínica por isso pune o paciente, não o
+ *   inadimplente — mas o prazo agora de fato acaba.
  */
 export function derivarSituacao(
   linha: LinhaSituacao | undefined,

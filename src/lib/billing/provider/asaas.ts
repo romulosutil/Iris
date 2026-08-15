@@ -643,11 +643,71 @@ export class AsaasProvider implements BillingProvider {
     );
   }
 
+  /**
+   * Revoga a autorização de Pix Automático. **Idempotente de propósito**: se a
+   * autorização não existe mais no gateway, ou já está cancelada lá, o objetivo
+   * desta chamada já está atingido e ela retorna normalmente.
+   *
+   * ## Por que a tolerância existe (#319)
+   *
+   * `chamar` traduz TODO não-2xx em `BillingProviderError`, e o corte por
+   * carência vencida é fail-closed: falha aqui aborta o corte daquela
+   * assinatura. Com o `DELETE` cru, dois cenários rotineiros viravam loop
+   * preso — o Asaas processa o DELETE e a resposta se perde no timeout, ou a
+   * clínica revoga a autorização pelo app do banco antes de nós. Nos dois a
+   * autorização JÁ está morta, mas toda passada diária responderia erro e a
+   * assinatura NUNCA seria cortada. Como `past_due` libera escrita
+   * (`estado-conta.ts`), o resultado é a clínica inadimplente escrevendo para
+   * sempre — exatamente o defeito que a #319 existe para matar, de volta com
+   * cara de fail-closed.
+   *
+   * ## ⚠️ Desenho defensivo, NÃO medição
+   *
+   * O status que o `DELETE` devolve para uma autorização **já cancelada** não
+   * foi medido contra o Asaas (o sandbox não leva autorização nenhuma a
+   * `ACTIVE`, memória `sandbox-asaas-nao-ativa-pix-automatico`). O que a doc do
+   * endpoint declara é 200, 400 (`{errors:[{code,description}]}`), 401 e 404
+   * ("Not found"). Daí a régua:
+   *
+   * - **404** → sucesso direto: não existe autorização para revogar;
+   * - **400** → ambíguo (pode ser `invalid_environment`, chave do ambiente
+   *   errado, que NÃO pode virar corte). Então reconsulta o `GET` e só aceita
+   *   como sucesso se o próprio gateway disser que a autorização está cancelada
+   *   (`CANCELLED`/`REFUSED`/`EXPIRED`). É medição do estado real, não palpite
+   *   sobre o código de erro;
+   * - qualquer outra coisa — rede, timeout, 401, 5xx — sobe intacta. Aí ninguém
+   *   sabe se o DELETE chegou, e fail-closed é a resposta certa.
+   */
   async cancelarVinculo(providerVinculoId: string): Promise<void> {
-    await chamar(
-      "DELETE",
-      `/pix/automatic/authorizations/${encodeURIComponent(providerVinculoId)}`,
-    );
+    try {
+      await chamar(
+        "DELETE",
+        `/pix/automatic/authorizations/${encodeURIComponent(providerVinculoId)}`,
+      );
+    } catch (e) {
+      if (!(e instanceof BillingProviderError)) throw e;
+      if (e.status === 404) return;
+      if (e.status !== 400) throw e;
+
+      // Leitura pura: repeti-la não muda nada no gateway, e é a única forma de
+      // distinguir "já estava cancelada" de uma recusa real.
+      let atual: { status: StatusAssinaturaProvider };
+      try {
+        atual = await this.consultarVinculo(providerVinculoId);
+      } catch (erroConsulta) {
+        // A autorização sumiu entre o DELETE e o GET: mesmo caso do 404 acima.
+        if (
+          erroConsulta instanceof BillingProviderError &&
+          erroConsulta.status === 404
+        ) {
+          return;
+        }
+        // Reconsulta inconclusiva não vira permissão para cortar: sobe o erro
+        // ORIGINAL, que é o que descreve a recusa do gateway.
+        throw e;
+      }
+      if (atual.status !== "cancelada") throw e;
+    }
   }
 
   /**

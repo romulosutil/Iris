@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import {
+  cancelarAssinaturasComCarenciaVencida,
   fecharCiclosVencendo,
   reprocessarEventosPendentes,
 } from "@/lib/billing/subscription";
@@ -60,12 +61,42 @@ export async function POST(request: Request): Promise<Response> {
     const pendentes = await reprocessarEventosPendentes();
     const resultados = await fecharCiclosVencendo({ dryRun });
 
+    // Corte por carência vencida por ÚLTIMO, e a ordem é a regra (#319):
+    // `fecharCiclosVencendo` é quem emite as cobranças do dia e, portanto, quem
+    // produz as recusas que carimbam `past_due`. Varrendo a carência antes,
+    // cortaríamos no mesmo tick uma clínica cuja cobrança ainda ia ser tentada
+    // — e o corte revoga a autorização de Pix Automático, que é irreversível
+    // sem uma nova autorização da clínica no app do banco. Depois, o pior caso
+    // é um dia a mais de carência, que é o lado seguro.
+    const cortes = await cancelarAssinaturasComCarenciaVencida({ dryRun });
+    const cortesComErro = cortes.filter((c) => c.erro);
+
     const comErro = resultados.filter((r) => r.erro);
     return Response.json({
       ok: true,
       dryRun,
       eventosReprocessados: pendentes,
       ciclosProcessados: resultados.length,
+      // Chaves próprias, e não somadas às do fechamento: `ciclosProcessados` e
+      // `falhas` são lidas no log do job como "faturamento do dia", e misturar
+      // corte de inadimplente ali tornaria as duas leituras impossíveis de
+      // separar depois do fato.
+      carenciaAvaliadas: cortes.length,
+      carenciaCortadas: cortes.filter((c) => c.cortada).length,
+      // Truncamento vai no corpo, não só no `console.warn`: o job só registra
+      // o JSON, e uma passada que parou no teto com fila atrás é
+      // indistinguível de uma que cobriu tudo se esse sinal não subir.
+      carenciaTruncado: cortes.some((c) => c.truncado),
+      carenciaFalhas: cortesComErro.map((c) => ({
+        clinicId: c.clinicId,
+        erro: c.erro,
+      })),
+      cortesPorCarencia: cortes.map((c) => ({
+        clinicId: c.clinicId,
+        pastDueDesde: c.pastDueDesde,
+        carenciaDias: c.carenciaDias,
+        cortada: c.cortada,
+      })),
       // Falha de UMA clínica não derruba a varredura, mas também não pode
       // sumir: vai no corpo, e o job registra a linha inteira no log.
       falhas: comErro.map((r) => ({ clinicId: r.clinicId, erro: r.erro })),
