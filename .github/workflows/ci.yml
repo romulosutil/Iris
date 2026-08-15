@@ -158,6 +158,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      # src/lib/report/playwright-renderer.int.test.ts renderiza PDF de
+      # verdade — sem o binário do Chromium a suíte inteira desse arquivo
+      # falha com "Executable doesn't exist", não com um erro de asserção.
+      - name: instalar navegador do Playwright (chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: aplicar migrações (role dona, BYPASSRLS)
         run: pnpm db:migrate
 
