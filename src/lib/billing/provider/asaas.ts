@@ -44,11 +44,18 @@ import {
  * 1. **A autorização só fica `ACTIVE` depois que o QR Code imediato é pago.**
  *    Ou seja, existe um débito REAL no momento da ativação — não é possível
  *    autorizar "de graça". Ver `VALOR_ATIVACAO_PADRAO_CENTAVOS`.
- * 2. **A cobrança do ciclo só é aceita entre 2 e 10 dias úteis antes do
- *    vencimento.** Fora da janela o Asaas recusa com 400. Quem escolhe o
- *    vencimento é `fecharCiclosVencendo`, não este adapter — aqui a data só é
- *    formatada; a recusa sobe como `BillingProviderError` 4xx, que a varredura
- *    já sabe classificar como definitiva.
+ * 2. **A cobrança do ciclo só é aceita dentro de uma janela antes do
+ *    vencimento** — e a unidade da janela é indeterminada: a doc de
+ *    Implementação do Asaas diz "entre 2 e 10 dias **úteis**", os Motivos de
+ *    Recusa dizem "menos de 2 dias" / "superior a 10 dias" sem qualificar, e o
+ *    BACEN fala em dias corridos. A medição no sandbox (#321, 15/08/2026) não
+ *    resolveu: autorização não ativa lá, e todo `POST /payments` devolve o
+ *    mesmo 400 de autorização inativa, inclusive dentro da janela. Fora dela o
+ *    Asaas recusa com 400. Quem escolhe o vencimento é
+ *    `vencimentoCobrancaDeCiclo` (`../vencimento.ts`), que satisfaz a leitura
+ *    mais restritiva das duas; aqui a data só é formatada, e a recusa sobe
+ *    como `BillingProviderError` 4xx, que a varredura já sabe classificar como
+ *    definitiva.
  *
  * ## Env — lidas por função, nunca no escopo do módulo
  *
@@ -141,8 +148,9 @@ function reaisParaCentavos(valorReais: number): number {
  *
  * `toISOString().slice(0, 10)` daria o dia em UTC: um fechamento rodando às
  * 22h de Brasília viraria o dia seguinte, e o vencimento sairia 24h adiantado —
- * o suficiente para cair fora da janela de 2 a 10 dias úteis que o Pix
- * Automático exige. `en-CA` é usado porque é o locale cujo formato de data
+ * o suficiente para cair fora da janela que o Pix Automático exige (unidade
+ * indeterminada — ver o topo do arquivo). `en-CA` é usado porque é o locale
+ * cujo formato de data
  * curta É `YYYY-MM-DD`; o fuso vem explícito, não do relógio do servidor.
  */
 function dataAsaas(d: Date): string {

@@ -15,6 +15,7 @@ import {
   type StatusCobranca,
   type TipoEventoNormalizado,
 } from "./provider";
+import { vencimentoCobrancaDeCiclo } from "./vencimento";
 
 /**
  * Estado da assinatura e do ciclo de faturamento (#36, revisto em #163).
@@ -52,12 +53,17 @@ import {
 /** Ciclo padrão. Fica na coluna `subscription.ciclo_dias` por clínica. */
 const CICLO_DIAS_PADRAO = 30;
 
-/**
- * Prazo de vencimento da cobrança emitida no fechamento, em dias.
- * Esgotado sem pagamento, o ciclo vai a `falhou` e a assinatura a `past_due`,
- * onde a carência (`subscription.carencia_dias`) começa a correr.
+/*
+ * O prazo de vencimento da cobrança do ciclo NÃO mora mais aqui. Era
+ * `DIAS_VENCIMENTO_COBRANCA = 5`, somado em dias corridos; agora vem de
+ * `vencimentoCobrancaDeCiclo` (#317): 5 dias corridos continuam sendo o alvo,
+ * mas a data é empurrada até satisfazer a janela do Pix Automático em dias
+ * úteis bancários — a constante ficaria sem referência e um "5" solto no
+ * arquivo convidaria a religar a conta antiga. Esgotado o prazo sem pagamento,
+ * o ciclo vai a `falhou` e a assinatura a `past_due`, onde a carência
+ * (`subscription.carencia_dias`) começa a correr — dimensionamento da carência
+ * é escopo da #319.
  */
-const DIAS_VENCIMENTO_COBRANCA = 5;
 
 /**
  * Antecedência da apuração: **zero**, e é o ponto do trilho pós-pago.
@@ -623,7 +629,7 @@ export async function fecharCiclosVencendo(opcoes?: {
             valorCentavos,
             referenciaExterna: `cycle:${ciclo.id}`,
             descricao: `Iris — ficha(s) ativa(s) no ciclo encerrado em ${assinatura.cicloFim.toISOString().slice(0, 10)}`,
-            vencimento: somarDias(agora, DIAS_VENCIMENTO_COBRANCA),
+            vencimento: vencimentoCobrancaDeCiclo(agora),
           });
           providerChargeId = cobranca.providerChargeId;
           cobrancaEmitida = true;
