@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { codigoPg } from "@/db/pg-error";
-import { patient, consent } from "@/db/schema";
+import { patient, consent, clinicalModalityEnum } from "@/db/schema";
 import {
   avaliarSituacaoConta,
   mensagemDeEstado,
@@ -146,11 +146,26 @@ export async function criarPacienteEConsent(
   const escola = String(formData.get("escola") ?? "").trim() || undefined;
   const convenio = String(formData.get("convenio") ?? "").trim() || undefined;
 
+  // Campo ainda sem UI (B4/#305 fora de escopo): formulário hoje nunca manda
+  // esse campo, então "" é o único valor que ocorre na prática e precisa
+  // continuar default para protocol_driven. Mas qualquer valor NÃO-vazio que
+  // não seja do enum (dado corrompido/adulterado) é rejeitado explicitamente
+  // — nunca coagido em silêncio (W4/#305, mesmo padrão de TIPOS_CONSENTIMENTO).
   const clinicalModalityRaw = String(
     formData.get("clinicalModality") ?? "",
   ).trim();
+  if (
+    clinicalModalityRaw !== "" &&
+    !clinicalModalityEnum.enumValues.includes(
+      clinicalModalityRaw as (typeof clinicalModalityEnum.enumValues)[number],
+    )
+  ) {
+    return { error: "Modalidade clínica inválida." };
+  }
   const clinicalModality =
-    clinicalModalityRaw === "conventional" ? "conventional" : "protocol_driven";
+    clinicalModalityRaw === ""
+      ? "protocol_driven"
+      : (clinicalModalityRaw as (typeof clinicalModalityEnum.enumValues)[number]);
 
   // #203 (fatia 2): o cadastro NÃO prescreve mais. Disciplina e carga horária
   // migraram para a ficha clínica, onde nascem com vigência própria (SCD2) e
