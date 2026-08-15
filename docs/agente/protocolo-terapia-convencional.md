@@ -459,10 +459,11 @@ Sem grade/escala, o que fica registrado por sessão de Terapia Convencional:
     "descricao": "string ou null — ex.: 'falou pouco; mudou de assunto quando o tema do divórcio foi trazido, 3ª sessão seguida'"
   },
   "alerta_risco": {
-    "presente": "boolean",
-    "categoria": "ideacao_suicida | autolesao | violencia_sofrida | violencia_praticada | risco_a_terceiro | null",
-    "trecho_fonte": "string ou null",
-    "detalhe": "string ou null — descrição literal, nunca interpretação de gravidade além do relatado"
+    "categoria": "ideacao_suicida | autolesao | violencia_sofrida | violencia_praticada | risco_a_terceiro",
+    "severidade": "ideacao_passiva | ideacao_ativa_sem_plano | ideacao_ativa_com_plano | autolesao_recente | tentativa_relatada | violencia_sofrida | violencia_praticada | risco_a_terceiro",
+    "certeza": "explicito | ambiguo_citado (default: explicito)",
+    "trecho_fonte": "string — trecho literal, obrigatório",
+    "detalhe": "string — descrição literal, nunca interpretação de gravidade além do relatado"
   },
   "sinalizacoes": [
     { "tipo": "texto_ambiguo | possivel_erro_transcricao", "detalhe": "string" }
@@ -483,6 +484,36 @@ Notas de modelagem:
   propósito: risco nunca deve competir por atenção com sinalização de tema — a
   UI deve poder renderizar o alerta com prioridade visual absoluta,
   independentemente do resto do resumo.
+
+**Reconciliação com o R20 implementado (decisão do dono, 15/08/2026 — achado B3
+do PR #305).** A forma de `alerta_risco` escrita acima nas versões anteriores
+deste doc (`presente: boolean` + campos anuláveis, sem `severidade` nem
+`certeza`) **nunca existiu no código**. O que está implementado desde a #122 —
+`src/lib/extraction/agent-output-schema.ts`, regra R20 — é a forma agora
+documentada, e **o doc cede ao código**, não o contrário:
+
+- **`severidade` é obrigatório** porque é o campo que
+  `app_criar_alerta_risco` usa para resolver o prazo do alerta no banco
+  (`src/lib/risco/registrar.ts`). Trocar o contrato para a forma antiga
+  quebraria o cálculo de prazo — um efeito clínico real, não cosmético.
+- **Não existe `presente: boolean`.** Ausência de risco = **campo `alerta_risco`
+  omitido** (ou `null`). Um booleano redundante convida a saída inconsistente
+  (`presente: false` com `categoria` preenchida, ou vice-versa) e obriga todo
+  leitor a checar dois campos onde um basta.
+- **`trecho_fonte` e `detalhe` são obrigatórios quando o objeto existe** (§6: o
+  trecho fica sempre visível ao lado do alerta; alerta sem trecho seria veredito
+  da IA sem evidência).
+- **`certeza`** (`explicito` | `ambiguo_citado`) tem default conservador
+  `explicito` e afeta só a prioridade visual — o prazo é o mesmo nos dois casos.
+- Para `violencia_sofrida`, `violencia_praticada` e `risco_a_terceiro` o
+  mapeamento categoria→severidade é **1:1**. Para `ideacao_suicida` e
+  `autolesao` a severidade é o eixo que o modelo precisa julgar, e por isso ela
+  é ensinada explicitamente no `CONVENTIONAL_SYSTEM_PROMPT` (R5-TC).
+
+O contrato de saída deste modo vive em
+`src/lib/extraction/conventional-output-schema.ts` (arquivo irmão do contrato
+ABA, que permanece intocado) e em `docs/agente/output-schema.json`, sob a chave
+`terapia_convencional`.
 
 ### 3.1 Renomeação de dois campos (decisão travada, 29/07/2026)
 

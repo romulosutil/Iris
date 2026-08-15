@@ -26,6 +26,13 @@ cruzado entre famílias de abordagem**.
    `padrao_silencio_resistencia` → `padrao_participacao_verbal`, e
    `direcao_sugerida` (objeto único) → `tema_recorrente_sinalizado` (**array**,
    com `trecho_fonte` por item). Todos os casos abaixo já usam os nomes novos.
+3. **(15/08/2026, achado B3 do PR #305) `alerta_risco` passou a usar a forma
+   implementada do R20** (`categoria` + `severidade` + `certeza` +
+   `trecho_fonte` + `detalhe`), e **ausência de risco = campo omitido** — não
+   existe `presente: boolean`. Ver §3 do protocolo para o porquê (`severidade`
+   é o que resolve o prazo do alerta no banco). Sem essa reconciliação as 5
+   saídas abaixo não parseavam no contrato real, incluindo a do TC-2, que é
+   violência.
 
 ---
 
@@ -104,12 +111,6 @@ o vocabulário dela).
   "padrao_participacao_verbal": {
     "presente": false,
     "descricao": null
-  },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
   },
   "sinalizacoes": []
 }
@@ -193,8 +194,9 @@ família psicodinâmica. Descreve o observável: "minimizou", "mudou de assunto"
     "descricao": "Paciente mudou de assunto rapidamente após o relato do episódio, passando a falar do novo emprego — deslocamento do tema registrado como observável, sem inferência sobre o motivo."
   },
   "alerta_risco": {
-    "presente": true,
     "categoria": "violencia_sofrida",
+    "severidade": "violencia_sofrida",
+    "certeza": "explicito",
     "trecho_fonte": "ele a segurou pelo braço com força para impedi-la de sair de casa e deixou marca",
     "detalhe": "Paciente relata episódio recente de violência física por parte do cônjuge, com marca visível, e confirma recorrência ('algumas vezes por ano, desde o casamento'). Paciente minimiza a gravidade e não expressa intenção de buscar afastamento — registrado literalmente, sem inferir risco além do relatado."
   },
@@ -208,12 +210,16 @@ família psicodinâmica. Descreve o observável: "minimizou", "mudou de assunto"
 ```
 
 **Nota de produto:** este é o caso mais importante do eval set deste modo —
-o alerta precisa dar `presente: true` mesmo com o texto do próprio
+o objeto `alerta_risco` precisa **existir** mesmo com o texto do próprio
 terapeuta relativizando a gravidade. Um modelo que "aprende" a seguir o tom
-relativizado do relato (em vez do fato relatado) e deixa de marcar o alerta
+relativizado do relato (em vez do fato relatado) e omite o objeto
 é uma falha de regressão crítica, equivalente em gravidade ao Caso 5 do
 conjunto principal (retornar vazio quando deveria) — aqui o erro é na
-direção oposta: NÃO retornar `alerta_risco: true` quando deveria.
+direção oposta: **omitir** `alerta_risco` quando ele deveria estar presente.
+A cobertura mecânica deste caso está em
+`src/lib/extraction/claude-provider.test.ts` (o JSON acima é passado literal a
+um invoker fake e o teste exige `alertaRisco` não-nulo com a categoria e a
+severidade corretas).
 
 **Nota sobre `padrao_participacao_verbal` neste caso.** O campo renomeado
 cobre naturalmente um fenômeno que o nome antigo tornava desconfortável de
@@ -303,12 +309,6 @@ assunto", "se afasta do tema" — e **nunca** "resistência", "defesa" ou
     "presente": true,
     "descricao": "Paciente verbalizou pouco durante toda a sessão, levou cerca de 5 minutos para começar a falar, respondeu de forma breve e evasiva ao ser questionado diretamente, e encerrou por conta própria o aprofundamento tanto do estado emocional geral quanto do tema da separação — padrão que se repete pela 4ª sessão consecutiva."
   },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
-  },
   "sinalizacoes": []
 }
 ```
@@ -388,12 +388,6 @@ consciência" ou "dimensão espiritual", que ela não usou; e tampouco importa
   "padrao_participacao_verbal": {
     "presente": false,
     "descricao": null
-  },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
   },
   "sinalizacoes": []
 }
@@ -502,12 +496,6 @@ participação verbal).
     "presente": true,
     "descricao": "Paciente deslocou o assunto para o trabalho quando o tema do pai foi retomado, não respondeu diretamente à interpretação verbalizada pela terapeuta, e trouxe a menção ao 'aperto no peito' apenas ao final da sessão, já se levantando."
   },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
-  },
   "sinalizacoes": []
 }
 ```
@@ -583,12 +571,6 @@ fenômeno descrito seja o mesmo do TC-5a. Também R1-TC e R6-TC, idem TC-5a.
   "padrao_participacao_verbal": {
     "presente": true,
     "descricao": "Paciente saiu do contato e passou a falar de trabalho quando o tema do pai foi devolvido, não respondeu ao comentário da terapeuta sobre a dificuldade de sustentar o tema, e trouxe a menção ao 'aperto no peito' apenas ao final, já de pé para sair."
-  },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
   },
   "sinalizacoes": []
 }
