@@ -332,11 +332,18 @@ describe("AsaasProvider", () => {
       // travaria o débito mensal no valor de hoje — a origem exata do
       // subfaturamento silencioso descrito em `types.ts`.
       expect(corpo).not.toHaveProperty("value");
-      expect(corpo).not.toHaveProperty("minLimitValue");
+      // #317: piso do teto que o pagador autoriza no app do banco. Literal de
+      // propósito (disciplina 2 do topo): 39 é o que sai NA REQUISIÇÃO. Derivar
+      // de `PISO_TETO_AUTORIZACAO_CENTAVOS` faria o teste seguir a constante em
+      // vez de vigiá-la. Medido em 15/08/2026 (#321): aceito com 200 e eco na
+      // resposta, sem `value` — a Jornada 3 de valor variável continua de pé.
+      expect(corpo.minLimitValue).toBe(39);
       // `SUBSCRIPTION` exigiria `value` fixo; `MANUAL` é o que permite variável.
       expect(corpo.paymentCreationMode).toBe("MANUAL");
-      // Retentativa é decisão de cobrança do Iris, não do gateway.
-      expect(corpo.retryPolicy).toBe("NOT_ALLOWED");
+      // #317: irreversível. O Asaas não permite habilitar retentativa depois da
+      // criação; autorização criada sem isto fica permanentemente sem direito a
+      // retentativa, e o conserto é novo QR + novo consentimento do cliente.
+      expect(corpo.retryPolicy).toBe("ALLOW_THREE_IN_SEVEN_DAYS");
       // `contractId` tem limite de 35 no Asaas; o UUID com hífen tem 36.
       expect(corpo.contractId).toBe("6d82d82e324c4eb1a34574421d2a501c");
       expect(corpo.contractId.length).toBeLessThanOrEqual(35);
@@ -373,6 +380,11 @@ describe("AsaasProvider", () => {
 
       const corpo = JSON.parse(fetchMock.mock.calls[1]![1].body);
       expect(corpo.immediateQrCode.originalValue).toBe(0.01);
+      // #317: agora existe UM campo de teto no payload — `minLimitValue`. Ele é
+      // o piso do teto (derivado do preço de uma ficha), nunca o `tetoCentavos`
+      // que o chamador manda. Sem esta linha, alguém "conserta" o D22 ligando
+      // um no outro e o valor do cliente volta a mandar no payload.
+      expect(corpo.minLimitValue).toBe(39);
       expect(criado.autorizacao).toMatchObject({
         valorAtivacaoCentavos: 1,
       });

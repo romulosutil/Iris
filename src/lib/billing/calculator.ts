@@ -73,6 +73,23 @@ export const FAIXAS_PRECIFICACAO: readonly Faixa[] = [
 export const VALOR_PRIMEIRO_PACIENTE_CENTAVOS = 3900;
 
 /**
+ * Piso do teto (`minLimitValue`) enviado na criação da autorização de Pix
+ * Automático (#317). É o menor valor máximo que o pagador pode definir no app
+ * do banco — quem escolhe abaixo do preço de uma ficha ativa recusaria a
+ * primeira mensalidade que existe.
+ *
+ * Deriva da faixa marginal mais alta, não de `VALOR_PRIMEIRO_PACIENTE_CENTAVOS`
+ * (legado, fora de produção). É a mesma verdade — o preço de uma ficha — vinda
+ * da fonte que ainda é cobrada.
+ *
+ * Medido em 15/08/2026 (#321): a API **não expõe nem aceita** o teto escolhido
+ * pelo pagador; `minLimitValue` é a única alavanca do recebedor, e a copy da
+ * tela de ativação (#286) é a única barreira restante.
+ */
+export const PISO_TETO_AUTORIZACAO_CENTAVOS =
+  FAIXAS_PRECIFICACAO[0]!.valorCentavos;
+
+/**
  * Rejeita entrada inválida em vez de degradar para 0. Uma contagem de
  * fichas corrompida que vira "R$ 0,00" silenciosamente é uma fatura errada
  * emitida ao cliente — falha barulhenta é mais barata que receita perdida.

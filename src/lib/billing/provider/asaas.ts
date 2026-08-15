@@ -1,6 +1,7 @@
 import "server-only";
 
 import { timingSafeEqual } from "node:crypto";
+import { PISO_TETO_AUTORIZACAO_CENTAVOS } from "../calculator";
 import {
   BillingProviderError,
   type BillingProvider,
@@ -475,9 +476,16 @@ export class AsaasProvider implements BillingProvider {
    * `paymentCreationMode: MANUAL` é obrigatório aqui: o modo `SUBSCRIPTION` do
    * Asaas exige `value` fixo, que é exatamente a armadilha descrita em
    * `types.ts` (gateway gerando a cobrança do próximo ciclo com antecedência e
-   * com o valor velho). `retryPolicy: NOT_ALLOWED` porque a retentativa de
-   * débito é decisão de cobrança do Iris, não do gateway — quem decide o que
-   * acontece com um ciclo recusado é `conciliarPagamentoDeCiclo`.
+   * com o valor velho).
+   *
+   * `retryPolicy: ALLOW_THREE_IN_SEVEN_DAYS` **não pode ser mudado depois**: o
+   * Asaas só aceita a configuração na criação da autorização. Autorização
+   * criada sem ela fica permanentemente sem direito a retentativa, e não há
+   * migração — só recriar, o que significa novo QR e novo consentimento do
+   * cliente, um a um. Por isso a flag entrou antes da orquestração: ela é
+   * inerte sozinha (quem comanda cada retentativa extradia é o recebedor, via
+   * `POST /pix/automatic/paymentInstructions/{id}/retries` — issue #322), mas
+   * a ausência dela é irreparável. NÃO REMOVER achando que dá para religar.
    */
   async iniciarVinculoPagamento(dados: NovoVinculo): Promise<VinculoCriado> {
     const cpfCnpj = dados.assinante.cpfCnpj?.replace(/\D/g, "");
@@ -520,15 +528,19 @@ export class AsaasProvider implements BillingProvider {
           customerId,
           description: "Iris — mensalidade por ficha ativa",
           paymentCreationMode: "MANUAL",
-          retryPolicy: "NOT_ALLOWED",
+          retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS",
           immediateQrCode: {
             expirationSeconds: EXPIRACAO_QR_ATIVACAO_SEGUNDOS,
             originalValue: centavosParaReais(valorAtivacao),
           },
           // `value` OMITIDO de propósito: é o que caracteriza a Jornada 3 de
-          // valor variável. `value` e `minLimitValue` são mutuamente
-          // exclusivos no Asaas, e qualquer um dos dois travaria o valor do
-          // débito mensal — que é justamente o que muda a cada apuração.
+          // valor variável. Preenchê-lo travaria o débito mensal no valor de
+          // hoje — a origem exata do subfaturamento descrito em `types.ts`.
+          //
+          // `minLimitValue` só é incompatível com autorização de valor FIXO
+          // (com `value`). Sem `value`, convivem: medido em 15/08/2026 (#321),
+          // HTTP 200 com `"minLimitValue":39` e `"value":null` na resposta.
+          minLimitValue: centavosParaReais(PISO_TETO_AUTORIZACAO_CENTAVOS),
         },
       }),
     );
