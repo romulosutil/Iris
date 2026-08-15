@@ -1862,6 +1862,43 @@ export const billingCycle = pgTable(
     providerChargeId: text("provider_charge_id"),
     cobrancaEmitidaEm: timestamp("cobranca_emitida_em", { withTimezone: true }),
     /**
+     * O **vencimento que mandamos ao gateway** nesta cobrança (#318, 0100).
+     *
+     * É o marco do backstop de D+7 (`aplicarBackstopDePrazo`), e por isso
+     * precisa ser um FATO PERSISTIDO, não um cálculo refeito. Os candidatos que
+     * já existiam nesta tabela foram descartados por erro de sinal, não por
+     * gosto:
+     *
+     * - `cobranca_emitida_em` e `apurado_em` são o instante da EMISSÃO, e a
+     *   emissão acontece de 2 a 10 dias ANTES do vencimento
+     *   (`vencimentoCobrancaDeCiclo`). D+7 a partir deles cairia, no cluster de
+     *   fim de ano, ANTES da data em que a clínica tinha de pagar — carimbar
+     *   inadimplência antes do vencimento;
+     * - `fim` é o fim do PERÍODO apurado, e a cobrança nasce depois dele: mesmo
+     *   erro de sinal, com a mesma sazonalidade do bug que a #317 fechou;
+     * - `criado_em` é a abertura do ciclo, ~30 dias antes de haver cobrança;
+     * - `cobrado_em` só existe depois de PAGO — o backstop trata do não pago.
+     *
+     * Recalcular `vencimentoCobrancaDeCiclo(cobranca_emitida_em)` também não
+     * serve: a função depende do calendário bancário e das constantes da janela,
+     * então uma mudança nelas reescreveria retroativamente o vencimento de
+     * cobranças JÁ emitidas — o backstop passaria a medir de uma data que nunca
+     * foi enviada a gateway nenhum. Guardar o valor que saiu é a única leitura
+     * que não se move sozinha.
+     *
+     * Nullable: ciclo sem cobrança emitida (`aberto`, `apurado`, o de valor zero
+     * fechado direto como `pago`) não tem vencimento nenhum — e é exatamente o
+     * que o mantém FORA do backstop, que só cobra o que foi de fato cobrado.
+     *
+     * `timestamptz` e não `date`: a janela do gateway é contada em dias, mas o
+     * predicado do backstop compara instantes, e é o tipo que o resto da tabela
+     * usa. Truncar para data aqui reintroduziria a ambiguidade de fuso que
+     * `calendario-bancario.ts` existe para resolver.
+     */
+    vencimentoCobranca: timestamp("vencimento_cobranca", {
+      withTimezone: true,
+    }),
+    /**
      * Âncora do agrupamento de débito (#290, 0097).
      *
      * O débito de uma reativação pode somar mais de um ciclo `devido` — a #290
@@ -1915,6 +1952,11 @@ export const billingCycle = pgTable(
     // fechamento não consegue abrir um segundo ciclo com o mesmo início.
     uniqueIndex("billing_cycle_clinic_inicio_uq").on(t.clinicId, t.inicio),
     index("billing_cycle_clinic_fim_idx").on(t.clinicId, t.fim.desc()),
+    // Backstop de D+7 (#318): filtra `status IN ('aguardando_pagamento',
+    // 'falhou')` e compara `vencimento_cobranca`. Nenhum dos índices acima
+    // começa por `status`, e a varredura roda todo dia sobre a tabela inteira —
+    // mesmo motivo (e mesmo formato) de `subscription_carencia_idx` na 0098.
+    index("billing_cycle_backstop_idx").on(t.status, t.vencimentoCobranca),
     // Autorreferência (0097). `foreignKey` no array em vez de `.references()`
     // na coluna porque a tabela ainda não existe no escopo quando a coluna é
     // definida — self-FK inline vira referência circular em TypeScript.

@@ -701,6 +701,13 @@
       "when": 1786819013377,
       "tag": "0099_billing_cycle_recusa_codigo",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1786820981475,
+      "tag": "0100_billing_cycle_vencimento_cobranca",
+      "breakpoints": true
     }
   ]
 }
