@@ -1884,6 +1884,28 @@ export const billingCycle = pgTable(
      */
     debitoAgrupadoEm: uuid("debito_agrupado_em"),
     erro: text("erro"),
+    /**
+     * Código CRU da recusa, do jeito que o gateway mandou (#318, 0099).
+     *
+     * Não é redundante com `erro`: `erro` é texto livre de diagnóstico, e texto
+     * livre cobrindo situações distintas é justamente o defeito que a #318
+     * existe para matar — `LIKE '%teto%'` não é consulta, é adivinhação. A
+     * classificação acontece na ESCRITA (webhook) e a tela lê DEPOIS, noutro
+     * request: sem o código persistido o app não tem como saber por que o ciclo
+     * falhou, e os 9 grupos de desfecho passam a diferir só em log.
+     *
+     * Guarda o **código**, nunca o grupo. Do código sempre se re-deriva o grupo
+     * (`classificarRecusa`, que evolui com o catálogo); do grupo não se recupera
+     * o código. E o catálogo é ABERTO — o OpenAPI do Asaas declara
+     * `refusalReason` como `string` sem `enum` —, então nada de tipar isto como
+     * enum do Postgres: código novo do gateway viraria erro de escrita num
+     * caminho que não pode falhar.
+     *
+     * Nullable e sem default, igual a `erro`: ciclo que nunca foi recusado não
+     * tem código, e `NULL` é exatamente isso. Só os grupos que levam o ciclo a
+     * `falhou` escrevem aqui — ver `conciliarPagamentoDeCiclo`.
+     */
+    recusaCodigo: text("recusa_codigo"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
