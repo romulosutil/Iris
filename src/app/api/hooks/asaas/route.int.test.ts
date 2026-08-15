@@ -304,10 +304,12 @@ function respondeAutorizacao(status: string) {
 
 /**
  * `GET /payments/{id}` — status e valor (decimal em reais) da cobrança.
- * `extra` mescla campos crus no corpo — usado para simular um gateway que
- * informa `refusalReason` (o caso SEM motivo, sem `extra`, é medido no
- * sandbox em 13/08/2026; nenhuma recusa real foi observável — P2 da #286
- * segue NÃO MEDIDO; ver comentário em `asaas.ts:consultarCobranca`).
+ * `extra` mescla campos crus no corpo.
+ *
+ * ⚠️ O corpo daqui NÃO tem campo de motivo de recusa, e isso é o contrato, não
+ * economia de dublê: o `PaymentGetResponseDTO` do Asaas não declara
+ * `refusalReason` (D35). Quem tem o motivo é a INSTRUÇÃO — ver
+ * `respondeInstrucao`.
  */
 function respondeCobranca(
   status: string,
@@ -317,6 +319,29 @@ function respondeCobranca(
   respostasGateway.push(async () =>
     Response.json({ id: "pay-dublê", status, value: valorReais, ...extra }),
   );
+}
+
+/**
+ * `GET /pix/automatic/paymentInstructions/{id}` — o recurso que de fato tem o
+ * `refusalReason`. Códigos são os reais do catálogo do Asaas (inglês,
+ * `MAXIMUM_AMOUNT_EXCEEDED`/`PAYMENT_OVERDUE`/…), nunca inventados em
+ * português: um dublê com código inventado passa por passthrough de string e
+ * não prova nada sobre o campo que a produção devolve.
+ */
+function respondeInstrucao(refusalReason: string | null) {
+  respostasGateway.push(async () =>
+    Response.json({
+      id: "pi-dublê",
+      status: "REFUSED",
+      paymentId: "pay-dublê",
+      ...(refusalReason === null ? {} : { refusalReason }),
+    }),
+  );
+}
+
+/** `GET /pix/automatic/paymentInstructions?paymentId=…&status=REFUSED`. */
+function respondeInstrucoes(itens: Array<Record<string, unknown>>) {
+  respostasGateway.push(async () => Response.json({ data: itens }));
 }
 
 /** Resposta HTTP de erro (vira `BillingProviderError` com `status`). */
@@ -850,14 +875,17 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
        * Este teste passa pelo caminho REAL do webhook — o repasse de
        * `atual.motivoRecusa` dentro de `route.ts` é código novo, e um teste
        * que chamasse `conciliarPagamentoDeCiclo` direto passaria verde mesmo
-       * se a rota não repassasse o motivo. O dublê do gateway não devolve
-       * `refusalReason`/`failureReason`/`pixTransaction`: é o caso medido no
-       * sandbox em 13/08/2026 — nenhuma recusa real foi observável (P2 da
-       * #286 segue NÃO MEDIDO).
+       * se a rota não repassasse o motivo.
+       *
+       * Aqui o evento é de COBRANÇA (sem instrução), então o adapter cai no
+       * índice por `paymentId` — e a lista volta vazia, que é o caso "o
+       * gateway não informou". É esse `null` que faz o diagnóstico nomear o
+       * teto como hipótese.
        */
       const paymentId = "pay_recusada_286_1";
       const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
       respondeCobranca("OVERDUE");
+      respondeInstrucoes([]);
 
       // O `console.warn` com tag greppável ("[billing-recusa]") é o mecanismo
       // pelo qual a primeira recusa real de produção vira sinal em vez de
@@ -894,41 +922,79 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       }
     });
 
-    it("cobrança recusada COM motivo do gateway grava o motivo bruto, sem inventar hipótese (#286)", async () => {
+    it("recusa de instrução: o motivo vem da INSTRUÇÃO e chega ao ciclo (D35)", async () => {
       /**
-       * Fix round 1 (revisão do #286): a versão anterior deste teste chamava
-       * `conciliarPagamentoDeCiclo` direto, o que passa verde mesmo se
-       * `route.ts` parar de repassar `atual.motivoRecusa` — o default `null`
-       * do terceiro parâmetro mascara a regressão (mutação confirmada:
-       * apagar `atual.motivoRecusa,` de `route.ts` não derrubava este teste
-       * na forma antiga). Agora passa pelo caminho REAL do webhook: o dublê
-       * devolve `refusalReason`, e só um repasse de fato correto produz o
-       * motivo bruto no `erro` do ciclo.
+       * O teste do trilho inteiro do D35, ponta a ponta: envelope de webhook →
+       * `normalizarEventoAsaas` preserva `paymentInstruction.id` → `route.ts`
+       * repassa esse id → o adapter consulta
+       * `GET /pix/automatic/paymentInstructions/{id}` → o código bruto pousa em
+       * `billing_cycle.erro`.
+       *
+       * É a régua de comportamento, não de eco: o dublê da COBRANÇA não tem
+       * campo de motivo nenhum (como a produção), então o único jeito de
+       * `PAYMENT_OVERDUE` aparecer no ciclo é o adapter ter ido ao recurso
+       * certo com o id certo. Duas mutações confirmadas derrubam este teste:
+       *
+       *  - apagar `providerInstructionId: idInstrucao` de `normalizarEventoAsaas`;
+       *  - apagar `{ providerInstructionId }` da chamada em `route.ts`.
+       *
+       * Nos dois casos o adapter cai no índice por `paymentId`, a URL muda e o
+       * corpo enfileirado deixa de casar — o motivo volta `null` e o `erro`
+       * regride para o texto de hipótese do #286.
+       *
+       * Fix round 1 (revisão do #286), preservado: passa pelo caminho REAL do
+       * webhook. Chamar `conciliarPagamentoDeCiclo` direto passaria verde mesmo
+       * com `route.ts` sem repassar o motivo (o default `null` do 3º parâmetro
+       * mascara a regressão — mutação confirmada na forma antiga).
        */
       const paymentId = "pay_recusada_286_2";
+      const instrucaoId = "pi_recusada_286_2";
       const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
-      respondeCobranca("OVERDUE", 117, {
-        refusalReason: "SALDO_INSUFICIENTE",
-      });
+      respondeCobranca("OVERDUE");
+      // Código REAL do catálogo do Asaas (`PAYMENT_OVERDUE` = "charge overdue
+      // due to insufficient balance or available limit"). O código inventado em
+      // português que estava aqui só provava passthrough de string.
+      respondeInstrucao("PAYMENT_OVERDUE");
 
       const id = novoIdEvento();
       const res = await POST(
         requisicao({
           token: TOKEN,
-          corpo: eventoCobranca(id, paymentId, cicloId, {
-            event: "PAYMENT_OVERDUE",
-            status: "OVERDUE",
-          }),
+          corpo: {
+            id,
+            event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+            dateCreated: "2026-08-08 21:30:00",
+            payment: {
+              id: paymentId,
+              status: "OVERDUE",
+              value: 117,
+              externalReference: `cycle:${cicloId}`,
+            },
+            paymentInstruction: {
+              id: instrucaoId,
+              paymentId,
+              status: "REFUSED",
+              authorization: { id: "auth-da-instrucao-recusada-286" },
+            },
+          },
         }),
       );
       expect(res.status).toBe(200);
 
+      // O recurso consultado é o oráculo: a segunda chamada tem que ser a da
+      // INSTRUÇÃO, pelo id que veio no evento.
+      expect(chamadasGateway).toHaveLength(2);
+      expect(chamadasGateway[0]).toContain(`/payments/${paymentId}`);
+      expect(chamadasGateway[1]).toContain(
+        `/pix/automatic/paymentInstructions/${instrucaoId}`,
+      );
+
       const ciclo = await lerCiclo(cicloId);
       expect(ciclo.status).toBe("falhou");
       // Quando o gateway diz a causa, ela manda — o diagnóstico do Iris não
-      // pode sobrepor "provavelmente é o teto" a um "saldo insuficiente"
-      // explícito: a orientação ao cliente é oposta nos dois casos.
-      expect(ciclo.erro).toContain("SALDO_INSUFICIENTE");
+      // pode sobrepor "provavelmente é o teto" a um motivo explícito: a
+      // orientação ao cliente é oposta nos dois casos.
+      expect(ciclo.erro).toContain("PAYMENT_OVERDUE");
       expect(ciclo.erro).not.toMatch(/teto/i);
     });
 
@@ -957,6 +1023,9 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
       // A reconsulta discorda do evento: para o gateway a cobrança segue viva.
       respondeCobranca("PENDING");
+      // A instrução é consultada mesmo assim (o evento trouxe o id dela): é
+      // justamente na divergência que o motivo importa para o diagnóstico.
+      respondeInstrucao("MAXIMUM_AMOUNT_EXCEEDED");
 
       const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
       try {

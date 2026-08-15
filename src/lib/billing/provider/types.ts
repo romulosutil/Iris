@@ -252,6 +252,20 @@ export interface EventoWebhookNormalizado {
   providerSubscriptionId: string | null;
   /** Id da COBRANÇA de ciclo, quando o evento é de pagamento avulso. */
   providerChargeId: string | null;
+  /**
+   * Id da INSTRUÇÃO de débito, quando o gateway modela o débito automático como
+   * um recurso separado da cobrança (é o caso do Pix Automático).
+   *
+   * Não é redundante com `providerChargeId`, e a diferença é o débito D35: o
+   * motivo da recusa **não mora na cobrança** — mora na instrução. O evento traz
+   * os dois ids, o normalizador descartava este, e a consulta do motivo ficava
+   * sem o único identificador que a torna possível.
+   *
+   * `null` quando o evento não é de instrução (cobrança comum, autorização) ou
+   * quando o gateway não tem essa entidade. Quem consome trata como "sem
+   * instrução para consultar", nunca como erro.
+   */
+  providerInstructionId: string | null;
   referenciaExterna: string | null;
   ocorridoEm: Date | null;
   bruto: unknown;
@@ -314,15 +328,36 @@ export interface BillingProvider {
    */
   emitirCobrancaAvulsa(dados: NovaCobrancaAvulsa): Promise<CobrancaEmitida>;
 
-  consultarCobranca(providerChargeId: string): Promise<{
+  consultarCobranca(
+    providerChargeId: string,
+    /**
+     * Contexto opcional vindo do evento. Existe porque em alguns trilhos o
+     * motivo da recusa **não é um campo da cobrança**: é de outro recurso, que
+     * só o evento sabe identificar (`providerInstructionId`). Sem isto o
+     * adapter não tem como buscá-lo — foi exatamente o D35, em que três campos
+     * eram lidos de um recurso que não os tem e `motivoRecusa` era `null` por
+     * construção.
+     *
+     * Opcional, e não obrigatório, porque a consulta continua válida sem ele:
+     * quem não tem o id perde o motivo, não a conciliação.
+     */
+    opcoes?: { providerInstructionId?: string | null },
+  ): Promise<{
     status: StatusCobranca;
     valorCentavos: number;
     /**
      * Motivo bruto da recusa, do jeito que o gateway mandou, ou `null` quando
-     * ele não informa. Medido em 13/08/2026 contra o Asaas: NENHUM campo de
-     * motivo apareceu no objeto `payment`, e as autorizações recusadas vieram
-     * com `cancellationReason: null`. Por isso `null` é o caso esperado, não a
-     * exceção — quem consome tem que ter um caminho para "não informado".
+     * ele não informa.
+     *
+     * **`string`, nunca uma union de literais.** O catálogo é aberto por
+     * contrato: o OpenAPI do Asaas declara `refusalReason` como `string` sem
+     * `enum`, e a doc avisa que a lista cresce sem versionar. Fechar o tipo aqui
+     * transformaria um código novo do gateway em erro de compilação num lado, e
+     * em `default` silencioso no outro. Classificação (se um dia houver) é
+     * decisão de camada acima, sempre com ramo para o desconhecido.
+     *
+     * `null` continua sendo caso esperado, não exceção: a instrução pode não
+     * existir, a busca pode falhar, e o trilho pode simplesmente não informar.
      */
     motivoRecusa: string | null;
   }>;

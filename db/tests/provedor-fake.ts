@@ -238,6 +238,10 @@ export class ProvedorFake implements BillingProvider {
       providerSubscriptionId:
         typeof p.vinculoId === "string" ? p.vinculoId : null,
       providerChargeId: typeof p.cobrancaId === "string" ? p.cobrancaId : null,
+      // O gateway fake não modela instrução de débito separada da cobrança —
+      // essa entidade é do Pix Automático. `null` é o caminho "não há instrução
+      // para consultar", que a porta exige que exista.
+      providerInstructionId: null,
       referenciaExterna: typeof p.referencia === "string" ? p.referencia : null,
       ocorridoEm: null,
       bruto: payload,

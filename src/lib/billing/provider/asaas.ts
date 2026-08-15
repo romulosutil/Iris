@@ -405,6 +405,19 @@ function normalizarEventoAsaas(payload: unknown): EventoWebhookNormalizado {
     comoTexto(pagamento.id) ?? comoTexto(instrucao.paymentId) ?? null;
 
   /**
+   * Id da INSTRUÇÃO. É um id diferente do da cobrança e serve para OUTRA coisa:
+   * `GET /pix/automatic/paymentInstructions/{id}`, que é o único recurso do
+   * Asaas que expõe `refusalReason`.
+   *
+   * Até o D35 esta linha não existia — o normalizador enxergava o objeto
+   * `paymentInstruction`, lia dele status e `paymentId`, e jogava o `id` fora.
+   * Sem ele, `consultarCobranca` só tinha o `payment` para consultar, e o
+   * `payment` não tem campo de motivo nenhum: o motivo era `null` por
+   * construção, não por o gateway não informar.
+   */
+  const idInstrucao = comoTexto(instrucao.id);
+
+  /**
    * Id do VÍNCULO (autorização). Nos eventos de autorização é `authorization.id`;
    * nos de instrução, a autorização vem aninhada em
    * `paymentInstruction.authorization.id`.
@@ -466,6 +479,7 @@ function normalizarEventoAsaas(payload: unknown): EventoWebhookNormalizado {
     tipo,
     providerSubscriptionId: idVinculo,
     providerChargeId: idCobranca,
+    providerInstructionId: idInstrucao,
     referenciaExterna,
     ocorridoEm: parsarDataAsaas(p.dateCreated),
     bruto: payload,
@@ -876,7 +890,10 @@ export class AsaasProvider implements BillingProvider {
     }
   }
 
-  async consultarCobranca(providerChargeId: string): Promise<{
+  async consultarCobranca(
+    providerChargeId: string,
+    opcoes?: { providerInstructionId?: string | null },
+  ): Promise<{
     status: StatusCobranca;
     valorCentavos: number;
     motivoRecusa: string | null;
@@ -885,30 +902,135 @@ export class AsaasProvider implements BillingProvider {
       await chamar("GET", `/payments/${encodeURIComponent(providerChargeId)}`),
     );
     const valor = resposta.value;
-
-    /**
-     * Leitura defensiva: nenhum destes campos foi observado numa resposta real
-     * (medição de 13/08/2026 — no sandbox as cobranças ficaram em `PENDING` e
-     * nenhuma recusa de fato chegou a acontecer; nesse estado o `payment` não
-     * trouxe campo de motivo e `pixTransaction` veio `null`. Como um `payment`
-     * recusado se comporta segue NÃO MEDIDO). Tentamos os nomes plausíveis e
-     * aceitamos `null`; o diagnóstico com hipóteses ranqueadas fica em
-     * `conciliarPagamentoDeCiclo`, não aqui. O adapter não adivinha causa.
-     */
-    const motivoRecusa =
-      comoTexto(resposta.refusalReason) ??
-      comoTexto(resposta.failureReason) ??
-      comoTexto(comoRegistro(resposta.pixTransaction).failureReason);
+    const status = mapearStatusCobranca(resposta.status);
 
     return {
-      status: mapearStatusCobranca(resposta.status),
+      status,
       // Volta ao inteiro na entrada do sistema: nenhum decimal atravessa a porta.
       valorCentavos:
         typeof valor === "number" && Number.isFinite(valor)
           ? reaisParaCentavos(valor)
           : 0,
-      motivoRecusa,
+      // O motivo NÃO sai daqui: `payment` não tem campo de motivo (ver
+      // `motivoDaRecusa`). Sai do recurso que tem.
+      motivoRecusa: await this.motivoDaRecusa(
+        providerChargeId,
+        opcoes?.providerInstructionId ?? null,
+        status,
+      ),
     };
+  }
+
+  /**
+   * Motivo da recusa — lido da INSTRUÇÃO DE PAGAMENTO, que é o recurso que o
+   * possui. Fecha o débito D35.
+   *
+   * ## Por que não é lido da cobrança
+   *
+   * A versão anterior lia `refusalReason`, `failureReason` e
+   * `pixTransaction.failureReason` do corpo de `GET /payments/{id}`. Medido
+   * contra o OpenAPI do Asaas: o `PaymentGetResponseDTO` **não declara nenhum
+   * dos três**, e `pixTransaction` é `string` (o id da transação), não objeto —
+   * o terceiro fallback não tinha nem onde procurar. Não era leitura defensiva:
+   * era vazia por construção, e em produção `motivoRecusa` seria `null` sempre,
+   * com o teste passando porque o dublê devolvia o literal esperado.
+   *
+   * `PixAutomaticRecurringPaymentInstructionGetResponseDTO` declara
+   * `refusalReason` (string, descrição: "Reason why the payment instruction was
+   * refused"). É esse o dono do campo.
+   *
+   * ## Dois caminhos, um destino
+   *
+   * 1. **Com o id da instrução** (veio no evento, via `providerInstructionId`):
+   *    `GET /pix/automatic/paymentInstructions/{id}`. Uma chamada, sem
+   *    ambiguidade.
+   * 2. **Sem ele** — é o caso da varredura de pendentes, que recebe só o id da
+   *    cobrança: `GET /pix/automatic/paymentInstructions?paymentId=…&status=REFUSED`.
+   *    Não é um segundo mecanismo, é o mesmo recurso pelo índice que o Asaas
+   *    oferece. Sem este caminho, o gêmeo do webhook (`reprocessarEventosPendentes`)
+   *    ficaria permanentemente sem motivo.
+   *
+   * ## Quando NÃO busca
+   *
+   * Cobrança paga ou estornada não tem recusa para explicar, e cobrança
+   * pendente sem instrução no evento também não (é o `PAYMENT_CREATED` de
+   * sempre). Sem essas duas guardas, todo evento de cobrança do dia a dia
+   * pagaria uma chamada HTTP extra para receber `null`.
+   *
+   * ## Falha na busca degrada para "sem motivo", e grita
+   *
+   * **Escolha deliberada: nunca lança.** O motivo é ENRIQUECIMENTO — quem
+   * decide o destino do ciclo é o `status` da cobrança, que já veio. Deixar uma
+   * falha aqui derrubar `consultarCobranca` faria a conciliação inteira falhar
+   * por causa do campo acessório: o ciclo não cairia em `falhou`, o evento
+   * voltaria para a fila e a clínica ficaria em `aguardando_pagamento` — trocar
+   * um motivo ausente por uma cobrança não conciliada é o pior negócio possível
+   * (mesmo raciocínio de `brCodeDe`).
+   *
+   * O que NÃO se faz é engolir em silêncio: 404/4xx aqui significa contrato
+   * quebrado (id que não resolve, endpoint mudado), e vai para o log com a tag
+   * fixa `[billing-recusa]` — a mesma que `conciliarPagamentoDeCiclo` usa, para
+   * que um grep só traga as duas metades.
+   *
+   * ## O retorno é `string`, e continua sendo
+   *
+   * O catálogo de motivos é ABERTO: o OpenAPI declara `refusalReason` sem
+   * `enum`, e a doc de Motivos de Recusa lista ~24 códigos avisando que a lista
+   * cresce sem versionar. O adapter repassa o código bruto e não interpreta;
+   * qualquer classificação futura precisa de ramo para o desconhecido.
+   */
+  private async motivoDaRecusa(
+    providerChargeId: string,
+    providerInstructionId: string | null,
+    status: StatusCobranca,
+  ): Promise<string | null> {
+    if (status === "paga" || status === "estornada") return null;
+    if (!providerInstructionId && status !== "recusada") return null;
+
+    try {
+      const instrucao = providerInstructionId
+        ? comoRegistro(
+            await chamar(
+              "GET",
+              `/pix/automatic/paymentInstructions/${encodeURIComponent(providerInstructionId)}`,
+            ),
+          )
+        : await this.instrucaoRecusadaDaCobranca(providerChargeId);
+
+      return comoTexto(instrucao.refusalReason);
+    } catch (e) {
+      console.warn("[billing-recusa] falha ao ler a instrução de pagamento", {
+        providerChargeId,
+        providerInstructionId,
+        err: e instanceof Error ? e.message : String(e),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * A instrução recusada de uma cobrança, quando só se tem o id da cobrança.
+   *
+   * `status=REFUSED` no filtro é o que evita ler a instrução errada: uma mesma
+   * cobrança pode ter VÁRIAS instruções (a política de retentativa em vigor é
+   * `ALLOW_THREE_IN_SEVEN_DAYS`), e as agendadas não têm motivo nenhum. Sem o
+   * filtro, a primeira da lista poderia ser uma `SCHEDULED` e o motivo voltaria
+   * `null` com a recusa existindo ao lado.
+   *
+   * Lista vazia devolve `{}` — "nenhuma instrução recusada" é resposta válida,
+   * não erro.
+   */
+  private async instrucaoRecusadaDaCobranca(
+    providerChargeId: string,
+  ): Promise<Record<string, unknown>> {
+    const resposta = comoRegistro(
+      await chamar(
+        "GET",
+        `/pix/automatic/paymentInstructions?paymentId=${encodeURIComponent(providerChargeId)}&status=REFUSED`,
+      ),
+    );
+    const lista = Array.isArray(resposta.data) ? resposta.data : [];
+    return comoRegistro(lista[0]);
   }
 
   verificarAssinaturaWebhook(input: EntradaVerificacaoWebhook): boolean {
