@@ -1,9 +1,9 @@
 import "server-only";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { tccRpdEntry } from "@/db/schema";
+import { session as sessionTable, tccRpdEntry } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 
@@ -30,6 +30,25 @@ async function salvarRPDCore(
 
   try {
     return await withTenant(ctx, async (tx) => {
+      if (d.sessionId) {
+        // sessionId chega direto do form (hidden input) sem passar pelo RLS
+        // até o INSERT: sem este check, um sessionId de OUTRO paciente da
+        // mesma clínica seria aceito silenciosamente (RLS só barra
+        // clínica/equipe, não vínculo sessão↔paciente).
+        const [sessaoDoPaciente] = await tx
+          .select({ id: sessionTable.id })
+          .from(sessionTable)
+          .where(
+            and(
+              eq(sessionTable.id, d.sessionId),
+              eq(sessionTable.patientId, d.patientId),
+            ),
+          );
+        if (!sessaoDoPaciente) {
+          return { error: "Sessão informada não pertence a este paciente." };
+        }
+      }
+
       const [row] = await tx
         .insert(tccRpdEntry)
         .values({
