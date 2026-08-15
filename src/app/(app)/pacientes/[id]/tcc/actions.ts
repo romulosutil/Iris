@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { RoleError } from "@/auth/require-role";
 import { salvarRPD } from "./logic";
+import type { DISTORCOES_COGNITIVAS_OPCOES } from "./constants";
 
 export type SalvarRpdState = { error?: string; ok?: boolean };
 
@@ -19,7 +20,13 @@ export async function salvarRPDAction(
     const emocao = String(formData.get("emocao") ?? "");
     const intensidadeRaw = formData.get("intensidade");
     const intensidade = intensidadeRaw ? Number(intensidadeRaw) : NaN;
-    const distorcaoCognitiva = String(formData.get("distorcaoCognitiva") ?? "");
+    // Cast de fronteira: FormData é string livre; zod (salvarRpdSchema, em
+    // logic.ts) valida em runtime se o valor pertence ao enum e devolve
+    // res.error se não pertencer — o cast só satisfaz o tipo estrito de
+    // SalvarRpdInput sem reimplementar a validação aqui.
+    const distorcaoCognitiva = String(
+      formData.get("distorcaoCognitiva") ?? "",
+    ) as (typeof DISTORCOES_COGNITIVAS_OPCOES)[number];
     const respostaRacional = String(formData.get("respostaRacional") ?? "");
     const intensidadePosRaw = formData.get("intensidadePos");
     const intensidadePos =

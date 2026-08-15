@@ -25,7 +25,9 @@ export const salvarRpdSchema = z.object({
     .int("Intensidade deve ser um número inteiro")
     .min(0, "Intensidade deve ser no mínimo 0")
     .max(100, "Intensidade deve ser no máximo 100"),
-  distorcaoCognitiva: z.string().min(1, "Distorção cognitiva é obrigatória"),
+  distorcaoCognitiva: z.enum(DISTORCOES_COGNITIVAS_OPCOES, {
+    errorMap: () => ({ message: "Distorção cognitiva inválida" }),
+  }),
   respostaRacional: z.string().min(1, "Resposta racional é obrigatória"),
   intensidadePos: z
     .number({ invalid_type_error: "Informe um número entre 0 e 100" })
