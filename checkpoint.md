@@ -1,8 +1,8 @@
 # Checkpoint — Iris
 
 > **Data:** 15/08/2026
-> **Branch:** `feat/317-parametros-autorizacao-pix` (8 commits, **sem push**, sem PR)
-> **Status:** 🟡 Passos 1, 2 e 3 executados em código; **passo 4 (#318) executado como decisão de produto, sem código** — tabela de desfechos e as 3 decisões pendentes **fechadas**, nada em aberto. A #318 sai da rota `jules` e vai para `/tlc-spec-driven` (coluna nova). A dívida que domina segue sendo a **#319 sem uma única linha verificada contra banco** (Postgres local fora do ar, Docker não sobe nesta máquina). Próximo passo concreto: §1, "O que falta".
+> **Branch:** `feat/317-parametros-autorizacao-pix` (13 commits nesta sessão, 28 à frente de `main`, **sem push**, sem PR)
+> **Status:** 🟢 Passos 1, 2, 3 e 4 executados **em código**. O Postgres local voltou: a **D33 fechou na parte mensurável** (`0098` aplicada e medida, 12/12 casos de integração, `test:rls` 102/102 sem pular) — **resta não exercitado só o backfill**, porque `subscription` tem 0 linhas neste banco. A **D35 fechou**: o motivo da recusa passou a ser lido do recurso que o tem. A #318 entrou inteira (classificação por código + coluna `recusa_codigo` + backstop de D+7). **D34 e D36 seguem abertos**, e o D36 ficou **mais** urgente. Achado novo e grave, de produção: **`alerta_risco_auth_select` não existe** — o painel Super Admin reporta zero em silêncio (§1, "A deriva de hash"). Próximo passo concreto: §3.
 
 ---
 
@@ -15,13 +15,13 @@
 | **1** | [**Ordem de conclusão**](https://claude.ai/code/artifact/59b6c2d8-ea6c-401a-b62f-9572ed26d243) (artifact) | A sequência dos 9 passos e **por que essa ordem** — irreversibilidade, não gravidade. Grafo de dependência, modelo indicado e prompt pronto de cada passo.                                                     |
 | **2** | **A issue do passo corrente** (GitHub)                                                                    | Escopo exato, Definição de Pronto e os comentários com as medições já feitas. ⚠️ `gh issue view --comments` **retorna vazio neste ambiente** — usar `gh api repos/romulosutil/iris/issues/N` e `.../comments`. |
 | **3** | `checkpoint.md` (este arquivo)                                                                            | Estado da última sessão: o que foi medido, o que ficou aberto **e por qual motivo**, e o próximo passo concreto.                                                                                               |
-| **4** | [`BACKLOG.md`](BACKLOG.md)                                                                                | Débitos vivos (D1–D36) e log de sessões. Consulta, não leitura linear — venha buscar o histórico de uma decisão específica.                                                                                    |
+| **4** | [`BACKLOG.md`](BACKLOG.md)                                                                                | Débitos vivos (D1–D39) e log de sessões. Consulta, não leitura linear — venha buscar o histórico de uma decisão específica.                                                                                    |
 
 ### Instruções para o próximo
 
 1. **Leia na ordem acima.** O artifact é o ponto de entrada — ele decide qual issue é a próxima, com qual modelo e com qual skill. Não escolha o passo por conta própria.
-2. **Leia os comentários da issue — e desconfie deles também.** Nas issues desta linha os comentários **corrigem o corpo original** em pontos materiais, e planejar pelo corpo sozinho já produziu retrabalho (na #319 o próprio corpo tinha uma conta errada, §1b). Mas na #318 um **comentário** afirmava que o pipe de captura já funcionava, e isso caiu na medição (§1). Comentário é a melhor fonte disponível, não é prova.
-3. **Não replaneje medição contra o sandbox do Asaas.** Autorização de Pix Automático não ativa lá (§1d). Toda pergunta sobre o trilho headless só se responde no ensaio com clínica de teste **em produção**.
+2. **Leia os comentários da issue — e desconfie deles também.** Nas issues desta linha os comentários **corrigem o corpo original** em pontos materiais, e planejar pelo corpo sozinho já produziu retrabalho (na #319 o próprio corpo tinha uma conta errada, §1c). Mas na #318 um **comentário** afirmava que o pipe de captura já funcionava, e isso caiu na medição (§1). Comentário é a melhor fonte disponível, não é prova.
+3. **Não replaneje medição contra o sandbox do Asaas.** Autorização de Pix Automático não ativa lá (§1e). Toda pergunta sobre o trilho headless só se responde no ensaio com clínica de teste **em produção**.
 4. **"Não medido" é resultado, não pendência.** Propague com o motivo. Nunca converta em suposição pelo caminho — foi exatamente esse defeito que criou a #289.
 5. **Antes de aplicar a label `jules`**, feche o checklist de handoff (`AGENTS.md` §5.2). A #289 está bloqueada nisso hoje: falta decidir o discriminador.
 6. **Ao fechar um passo:** atualize este arquivo **e** acrescente a sessão no `BACKLOG.md`, nessa ordem. O artifact só muda quando a ordem dos passos mudar.
@@ -29,7 +29,126 @@
 
 ---
 
-## 1. Resumo da Sessão (15/08/2026, 4ª) — passo 4: #318
+## 1. Resumo da Sessão (15/08/2026, 5ª) — #318 em código, D33 e D35 fechados
+
+Orquestração em **6 subagentes**. 13 commits, **sem push, sem PR**. Três frentes: fechar a dívida de medição da #319 (**D33**), consertar o pipe do motivo de recusa (**D35**) e implementar a #318 inteira — classificação por código, coluna nova e o backstop de D+7 da Decisão 2.
+
+| Commit    | O quê                                                                                |
+| :-------- | :----------------------------------------------------------------------------------- |
+| `30a2b11` | `test(billing): cover the fechar-ciclos route, ordering first (#319)`                |
+| `448b404` | `fix(billing): read the Pix refusal reason from the payment instruction`             |
+| `adc39c4` | `fix(billing): bind grace-period deadline as timestamptz (#319)`                     |
+| `d2424e4` | `fix(billing): report the root cause of a failed cutoff, not the wrapped SQL (#319)` |
+| `633623f` | `test(billing): assert the refusal reason before the resource it came from`          |
+| `8f497ff` | `docs(migrations): diagnose the 37-migration hash drift on the local DB`             |
+| `6a6bc27` | `docs(migrations): correct the hash guard docstring with measured numbers`           |
+| `92aadb2` | `feat(billing): persist the raw refusal code on the billing cycle (#318)`            |
+| `1c83ec1` | `feat(billing): route the refusal outcome by its gateway code (#318)`                |
+| `c5480ee` | `test(billing): make the refusal log the oracle for the silent groups (#318)`        |
+| `89bb61c` | `fix(test): type the console.warn spy by inference (#318)`                           |
+| `dbd7cae` | `feat(db): store the due date we send to the gateway (0100, #318)`                   |
+| `f0c1773` | `feat(billing): close the refusal hole with a D+7 backstop (#318)`                   |
+
+### D33 — fechado na parte mensurável, e o que continua não medido
+
+O Postgres local voltou. A `0098` **já estava aplicada** (pela sessão anterior, não por esta). Medido em `information_schema`/`pg_indexes`, não lido no diff: `column_default = '10'`, `is_nullable = NO`, e `subscription_carencia_idx` = `btree (status, past_due_desde)`.
+
+- **12 casos de integração: 12/12, 0 pulados.** Armadilha que vale registrar porque custou uma passada: `pnpm vitest run <arquivo>.int.test.ts` **coleta zero testes e sai verde** — `vitest.config.ts` tem `exclude: ["**/*.int.test.ts"]`. O caminho é `--config vitest.integration.config.ts`. Suíte que não coleta nada é indistinguível de suíte que passa.
+- **`pnpm test:rls`: 102 arquivos, 102 executados, 0 pulados**, 869 testes. O medo registrado em [[suite-rls-rodando-como-superusuario]] ("verde com 64/68 pulados") **não se materializou**.
+- As 7 falhas de `src/app/(app)/equipe/convidar/logic.test.ts` eram só `ECONNREFUSED :5433` e **sumiram**: 7/7.
+
+**Continua não medido, e o motivo importa: o backfill.** `subscription` tem **0 linhas** neste banco, então o `UPDATE … WHERE carencia_dias = 7` da `0098` tocou 0 linhas. Em base **com** dados — produção — o backfill segue não exercitado. Não converter isso em "funcionou": o que se mediu foi o DDL, não a migração de dado.
+
+**Duas correções de código saíram da execução real, e nenhuma das duas era alcançável sem banco:**
+
+- **`adc39c4` — o template `sql` do Drizzle não codifica `Date`** (`ERR_INVALID_ARG_TYPE` em runtime). O predicado de carência precisa de `${iso}::timestamptz`. **`toSQL()` nunca poderia ter pego isso**: ele renderiza o statement sem codificar parâmetro nenhum. É literalmente o buraco que o D33 nomeava — "provado por `toSQL()`, não por execução" era a descrição exata do defeito que estava lá.
+- **`d2424e4` — a cadeia `??` herdada sobre `(e as any).detail ?? .hint ?? .originalError` era placebo.** `DrizzleQueryError` não tem nenhum dos três, então caía em `.message`, **que é o SQL que nós mesmos emitimos** — o job reportava a própria query como causa. Virou `detalharErro()`, que anda a cadeia `cause` até a raiz (teto de 8 níveis) e **anexa** `code`/`detail`/`hint` em vez de substituir `message`. Princípio que fica: `detail`/`hint` do Postgres **complementam** a mensagem, nunca a substituem.
+
+**Correção metodológica:** `created_at` em `drizzle.__drizzle_migrations` **é o `when` do journal**, não o instante em que a migração rodou. Não serve para datar aplicação — nem para ordenar por tempo real.
+
+### D35 — fechado: o motivo passou a ser lido do recurso que o tem
+
+Confirmado no MCP de docs do Asaas: `GET /v3/pix/automatic/paymentInstructions/{id}` devolve `refusalReason` com `type: "string"` e **sem `enum`** — catálogo aberto **por contrato**, não por precaução nossa. O DTO tem `id`, `authorization{id,…}`, `paymentId`, `retryAttempt`, `purpose` e um `status` com enum **fechado** (`AWAITING_REQUEST|SCHEDULED|DONE|CANCELLED|REFUSED`).
+
+Saíram as três leituras vazias de `asaas.ts:898-901`. Entraram:
+
+- `EventoWebhookNormalizado.providerInstructionId` — o normalizador **já enxergava** `paymentInstruction.id` e o descartava;
+- `consultarCobranca(id, { providerInstructionId })`, que consulta a instrução quando o id veio junto;
+- fallback por `GET /pix/automatic/paymentInstructions?paymentId=…&status=REFUSED`. **O filtro `status=REFUSED` é load-bearing:** sob `ALLOW_THREE_IN_SEVEN_DAYS` uma cobrança tem **várias** instruções, e uma `SCHEDULED` não tem motivo nenhum para devolver.
+
+**Degradação documentada, e é escolha:** falha ao buscar ⇒ `motivoRecusa: null` + `console.warn("[billing-recusa] …")`. O motivo é **enriquecimento**; quem decide o destino do ciclo é o `status`, que já veio no evento. Deixar o 404 subir faria a conciliação inteira falhar por um campo acessório — trocar dinheiro conciliado por diagnóstico.
+
+**Fixtures inventadas migradas** para os códigos reais (`LIMITE_AUTORIZADO_EXCEDIDO` → `MAXIMUM_AMOUNT_EXCEEDED`, `SALDO_INSUFICIENTE` → `PAYMENT_OVERDUE`): `asaas.test.ts` (2), `route.int.test.ts` (2), `reprocessamento-provedor.int.test.ts` (2), `docs/superpowers/plans/2026-08-13-286-teto-pix-automatico.md` (4). E os dublês de **cobrança** passaram a **não ter campo de motivo nenhum**, como a produção — o dublê que devolvia o literal esperado era metade do defeito.
+
+### #318, núcleo: a coluna e a classificação
+
+**Migração `0099_billing_cycle_recusa_codigo`**, idx 99, `when` 1786819013377. Medido no banco: `text`, nullable, sem default; `column_privileges` = `app_role SELECT` · `iris_auth SELECT,INSERT,UPDATE`.
+
+`src/lib/billing/classificacao-recusa.ts` separa **de propósito** duas coisas que a tabela da sessão anterior misturava:
+
+- **`CATALOGO`** — fato do gateway: 9 grupos, 25 códigos.
+- **`POLITICAS`** — decisão nossa: `marcaCicloFalhou`, `carimbaPastDue`, `conciliaComoPago`, `valeGastarRetentativa`, `corteImediato`, `diagnostico`, `copy`.
+
+O catálogo muda quando o Asaas publica código novo; a política muda quando **nós** mudamos de ideia. Misturados, toda revisão de produto viraria edição de fato de gateway.
+
+Assinatura: `classificarRecusa(codigo: string | null): PoliticaRecusa`. **G0 é o `?? "G0"` do lookup**, então código desconhecido **e** `null` caem no mesmo lugar sem ramo especial. Comparação **exata** (`trim` + caixa alta), sem `includes`/`LIKE` — casar por substring é o defeito que a issue existe para matar, um nível abaixo.
+
+**G8 é correção de dinheiro, não classificação.** `liquidarCiclo` foi extraído e é o **mesmo** caminho do pagamento confirmado: ciclo → `pago` + `cobrado_em`, cascata de `debito_agrupado_em`, saída de `past_due` com `past_due_desde` zerado. Antes, `PAYMENT_ALREADY_DONE` virava `falhou` → `past_due` → **dívida congelada contra clínica adimplente**, com o gate da #290 barrando exatamente quem já tinha pago.
+
+`reprocessarEventosPendentes` passou a informar `{ providerInstructionId }`, então a varredura de reprocessamento deixou de cair no fallback por índice.
+
+**O achado que mudou o desenho dos testes:** no banco, **G6, G7 e G0 são indistinguíveis** — os três não escrevem nada. Medir só tabelas deixaria passar um mapa que jogasse G6 em G0. O **log virou o oráculo** desses três, com as asserções de pertinência ao grupo **no fim** de cada caso, para o oráculo comportamental morrer primeiro. 4 mutantes provados, entre eles `POLITICAS.G6.marcaCicloFalhou: false→true`, que mostra literalmente o dano que G6 evita.
+
+### O backstop de D+7 (Decisão 2 implementada)
+
+**Migração `0100`**: `billing_cycle.vencimento_cobranca timestamptz`, nullable **sem backfill**, `when` 1786820981475. Índice `billing_cycle_backstop_idx = btree (status, vencimento_cobranca)`. Escrita na **mesma instrução** que `provider_charge_id`/`cobranca_emitida_em`, com o **exato `Date`** passado a `emitirCobrancaDeCiclo` — não uma recomputação.
+
+**Por que coluna nova, e não um marco existente — é erro de sinal, não gosto.** A emissão acontece de 2 a 10 dias úteis **antes** do vencimento (regra da #317), então D+7 contado de `cobranca_emitida_em` ou `apurado_em` cairia **antes** da data em que a clínica tinha de pagar — com folga no cluster de fim de ano, **a mesma sazonalidade do bug que a #317 fechou**. `cobrado_em` só existe depois de pago, e ciclo pago não precisa de backstop. Recalcular `vencimentoCobrancaDeCiclo(cobranca_emitida_em)` foi recusado por outro motivo: mexer no calendário bancário **reescreveria retroativamente** o vencimento de cobranças já emitidas.
+
+**Ordem na rota interna: quarta e última** — reprocessar → fechar ciclos → carência → backstop. O argumento não é cosmético:
+
+> O backstop carimba `past_due_desde = agora`; a carência é `past_due_desde + carencia_dias`; o CHECK só exige `>= 0`. Com o backstop **antes** da carência, uma clínica de carência **zero** seria carimbada e cortada **no mesmo tick**, sem um único dia de prazo — por um ato irreversível.
+
+**O `falhou` é o elo que faltava.** `congelarCiclosComoDebito` não congela `aguardando_pagamento`; carimbar `past_due` sem levar o ciclo a `falhou` produziria corte com `levantarDebito = 0` e o gate da #290 aberto — exatamente a perda que a D-4 da #319 fechou no outro ramo.
+
+**Fail-closed do G3:** corta só se `consultarVinculo` responder `cancelada` (mapeamento de `CANCELLED`/`REFUSED`/`EXPIRED`, `asaas.ts:225`). Barram o corte: `autorizada` (o código mentiu ⇒ vira G7), qualquer outro status incluindo o default `pendente`, rede/timeout/5xx, e ausência de `provider`/`provider_subscription_id`. **Toda degradação leva ao mesmo lugar seguro:** carimba (reversível por pagamento) e deixa o corte para a carência, 10 dias depois.
+
+`route.test.ts` foi de **16 para 22** casos. Além da ordem, passou a provar **cada etapa chamada exatamente 1×** — o que mata a "correção" que duplica a chamada em vez de movê-la.
+
+**Baselines finais, medidas:** unit `src/lib/billing` **138/138** · unit total **1251/1251** · integração **104 arquivos / 896 testes / 0 pulados** · `pnpm typecheck` limpo · `pnpm lint` 0 erros / 10 warnings pré-existentes.
+
+### A deriva de hash: a premissa da sessão anterior estava invertida
+
+Das **37 divergências** de hash no Postgres local: **35 são só fim de linha** (não 3, como se supunha), **2 são de conteúdo** (`0072`, `0073`), **0 sem arquivo em disco**.
+
+**Causa medida:** `core.autocrlf=true` vindo do `gitconfig` do instalador do Git for Windows contra `* text=auto` — índice 100% LF, worktree misto (117 crlf / 14 lf), e `__drizzle_migrations` congelou o EOL vivo **no momento de cada aplicação**. A divergência corre **nos dois sentidos**. Falsificadas com evidência, não descartadas por plausibilidade: o algoritmo do drizzle-orm 0.45.2 é idêntico ao nosso; Prettier está fora (conteúdo byte-idêntico módulo `\r`); dump-restore está fora.
+
+Medido de passagem: `0055_fix_purga_report_oracle` está no journal e **nunca foi aplicado aqui** — é o sintoma da #165, remediado pela `0063`, que **está** aplicada.
+
+`0073` é **não-problema**: o hash local é byte-idêntico ao `hashAplicado` **de produção**; a edição do `b53b294` não rodou em lugar nenhum e a `0082` remediou.
+
+**`0072_super_admin_role` é defeito real, e é de produção.** O hash local não corresponde a **nenhum blob do repositório** — varredura exaustiva de `git cat-file --batch-all-objects`, 919 candidatos, testados em LF **e** CRLF. Ou seja: rodou de working tree não commitado. O commit `f6e0884` acrescenta exatamente uma coisa: `CREATE POLICY alerta_risco_auth_select ON alerta_risco_clinico … TO iris_auth`.
+
+Medido no banco local:
+
+- policy **ausente** (`pg_policies` só tem `alerta_risco_scope`, para `{app_role}`);
+- `relrowsecurity` e `relforcerowsecurity` ambos `true`;
+- `has_column_privilege('iris_auth', …)` **`true`**.
+
+**Grant presente + policy ausente = zero linhas, sem erro de permissão.** `src/app/(admin)/benjamin/queries.ts` lê por `authDb` (role `iris_auth`), então o painel Super Admin reporta `totalAlertas: 0` **em silêncio**. Não é provável por `count(*)`: a tabela está vazia e `0` é a resposta dos dois jeitos — a prova é `pg_policies` + `has_column_privilege`, não a contagem.
+
+**Produção corre o mesmo risco, por inferência forte — e isso NÃO é medição.** O `hashAplicado` pinado de produção é exatamente o sha256 LF do blob **pré-fix**, e `alerta_risco_auth_select` é criada num único lugar em todo o repo. **Não medido** (sem acesso a produção nesta sessão): se a policy existe lá. Fecha com uma consulta read-only, via console Bash do `iris-postgres`, `psql -U iris -d iris`:
+
+```sql
+SELECT policyname, roles, cmd FROM pg_policies
+ WHERE schemaname = 'public' AND tablename = 'alerta_risco_clinico';
+```
+
+**Varredura de schema:** os 170 objetos declarados pelas 37 migrações divergentes foram conferidos em `information_schema`/`pg_policies`/`pg_proc`/`pg_indexes`/`pg_type` — **1 ausência genuína**, a de cima. Billing limpo. Diagnóstico completo em `docs/arquitetura/diagnostico-deriva-hash-migracoes.md`. **Nada foi pinado em `DERIVAS_CONHECIDAS`** — silenciar 35 rótulos de EOL esconderia o 36º que for real.
+
+---
+
+## 1b. Sessão anterior (15/08/2026, 4ª) — passo 4: #318, a decisão de produto
 
 Executado o **passo 4**: issue [#318](https://github.com/romulosutil/Iris/issues/318) — `REFUSED` colapsa causas distintas num único desfecho. O passo era **decisão de produto antes de código**: fechar a tabela código → desfecho e o checklist §5.2, depois aplicar a label `jules`.
 
@@ -115,7 +234,7 @@ Um teste por grupo, com régua de comportamento: apagar a linha daquele grupo no
 
 ---
 
-## 1b. Sessão anterior (15/08/2026, 3ª) — passo 3: #319
+## 1c. Sessão anterior (15/08/2026, 3ª) — passo 3: #319
 
 Executado o **passo 3**: issue [#319](https://github.com/romulosutil/Iris/issues/319) — `past_due` era terminal, a carência nunca corria, e a máquina de dívida da #287/#290 era alcançável **só** por revogação voluntária no app do banco. Quem simplesmente parava de pagar escrevia para sempre.
 
@@ -165,7 +284,7 @@ Verde do que roda: `pnpm typecheck` limpo · `pnpm lint` 0 erros (10 warnings pr
 
 ---
 
-## 1c. Sessão anterior (15/08/2026, 2ª) — passo 2: #317
+## 1d. Sessão anterior (15/08/2026, 2ª) — passo 2: #317
 
 Parâmetros que só existem na criação da autorização: `minLimitValue` (R$ 39,00, derivado de `FAIXAS_PRECIFICACAO[0]`) + `retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS"`; `PISO_COBRANCA_CENTAVOS` → `PISO_COBRANCA_AVULSA_CENTAVOS`; `vencimentoCobrancaDeCiclo` + `calendario-bancario.ts` com feriados móveis calculados da Páscoa. Commits `a2b3e36`, `792bff1`, `dd9efb7`, `597128c`.
 
@@ -177,7 +296,7 @@ Decisões: **D-A** `minLimitValue` deriva de `FAIXAS_PRECIFICACAO[0]`, não de `
 
 ---
 
-## 1d. Sessão anterior (15/08/2026, 1ª) — passo 1: #321
+## 1e. Sessão anterior (15/08/2026, 1ª) — passo 1: #321
 
 Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aact_hmlg_`).
 
@@ -207,12 +326,16 @@ Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aa
 
 ## 2. Estado do Repositório & Branch
 
-- **Branch:** `feat/317-parametros-autorizacao-pix` — **sem push, sem PR**. Nasceu do HEAD da `feat/290-gate-debito-reativacao`, então carrega junto os dois commits de docs que também nunca subiram (`838d5be`, `e229a19`). Acumula agora **#317 e #319** — considerar separar antes do PR, ou abrir um PR só, deixando claro na descrição que são dois passos.
-- **Sessão de 15/08 (4ª, passo 4 / #318): nenhum código alterado.** A entrega foi decisão de produto, publicada como comentário na issue. O único commit é o de docs que fecha a sessão (`checkpoint.md` + `BACKLOG.md`).
+- **Branch:** `feat/317-parametros-autorizacao-pix` — **sem push, sem PR**, 28 commits à frente de `main`. Nasceu do HEAD da `feat/290-gate-debito-reativacao`, então carrega junto os dois commits de docs que também nunca subiram (`838d5be`, `e229a19`). Acumula agora **#317, #319 e #318** — considerar separar antes do PR, ou abrir um PR só, deixando claro na descrição que são três passos.
+- **Commits da sessão de 15/08 (5ª), 13:** `30a2b11`, `448b404`, `adc39c4`, `d2424e4`, `633623f`, `8f497ff`, `6a6bc27`, `92aadb2`, `1c83ec1`, `c5480ee`, `89bb61c`, `dbd7cae`, `f0c1773` (+ o de docs que fecha a sessão). Tabela com os subjects em §1.
+- **Sessão de 15/08 (4ª, passo 4 / #318): nenhum código alterado** — a entrega foi decisão de produto, publicada como comentário na issue.
 - **Commits da sessão de 15/08 (3ª):** `eea42ea`, `061a147`, `2d9e486` (+ o de docs que fecha a sessão).
-- **Arquivos novos:** `db/migrations/0098_subscription_carencia_dez_dias.sql` (+ snapshot), `src/lib/billing/carencia-vencida.int.test.ts`, `docs/superpowers/plans/2026-08-15-319-carencia-que-nunca-corre.md`.
-- ⚠️ **`pnpm test` completo não está verde nesta máquina:** 7 falhas em `src/app/(app)/equipe/convidar/logic.test.ts`, todas `ECONNREFUSED :5433`. **Pré-existente e alheio a estes diffs.** Antes de abrir PR, subir o banco e rerodar.
-- ⚠️ **`pnpm test:rls` e `pnpm db:migrate` não rodaram** nesta sessão, pelo mesmo motivo. A `0098` está escrita, não aplicada.
+- **Arquivos novos da 5ª sessão:** `db/migrations/0099_billing_cycle_recusa_codigo.sql` e `0100_billing_cycle_vencimento_cobranca.sql` (+ snapshots e journal), `src/lib/billing/classificacao-recusa.ts`, `src/lib/billing/classificacao-recusa.int.test.ts`, `src/lib/billing/backstop-prazo.int.test.ts`, `src/app/api/internal/billing/fechar-ciclos/route.test.ts`, `docs/arquitetura/diagnostico-deriva-hash-migracoes.md`.
+- **Arquivos novos das sessões anteriores:** `db/migrations/0098_subscription_carencia_dez_dias.sql` (+ snapshot), `src/lib/billing/carencia-vencida.int.test.ts`, `docs/superpowers/plans/2026-08-15-319-carencia-que-nunca-corre.md`.
+- ✅ **O Postgres local está no ar e as migrações estão aplicadas** — `0098`, `0099` e `0100` verificadas em `information_schema`/`pg_indexes`/`column_privileges`. As 7 falhas de `src/app/(app)/equipe/convidar/logic.test.ts` eram `ECONNREFUSED :5433` e **sumiram** (7/7).
+- **Baselines medidas nesta sessão:** unit `src/lib/billing` **138/138** · unit total **1251/1251** · integração **104 arquivos / 896 testes / 0 pulados** · `pnpm test:rls` **102 arquivos / 102 executados / 0 pulados**, 869 testes · `typecheck` limpo · `lint` 0 erros / 10 warnings pré-existentes em `src/stories/**`.
+- ⚠️ **`pnpm vitest run <arquivo>.int.test.ts` coleta ZERO testes e sai verde** — `vitest.config.ts` tem `exclude: ["**/*.int.test.ts"]`. Integração só roda com `--config vitest.integration.config.ts`. Conferir o número de testes coletados, não a cor.
+- ⚠️ **`git status` mostra 5 arquivos modificados com `git diff` vazio** — é o `core.autocrlf` da deriva de hash (§1), não mudança pendente.
 - **Não versionado (pendente de decisão do Rômulo):** `.mcp.json` (aponta para o MCP de docs do Asaas) e `docs/daily-summary/2026-08-14.md`.
 - **Memória gravada:** `sandbox-asaas-nao-ativa-pix-automatico.md`, `janela-dia-util-24-12-e-31-12.md`, `carencia-nunca-corria-e-ordem-de-escrita.md`.
 
@@ -220,11 +343,23 @@ Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aa
 
 ## 3. Próximos Passos Sugeridos
 
-1. **Subir o Postgres e rodar o que não rodou.** É a dívida mais cara desta sessão, não uma formalidade: `pnpm db:migrate` (aplica a `0098`), `pnpm vitest run src/lib/billing/carencia-vencida.int.test.ts` (os 12 casos), `pnpm test:rls`, e as 7 falhas de ambiente do `equipe/convidar`. Depois, medir no banco: `information_schema.columns.column_default` = 10, `pg_indexes` com `subscription_carencia_idx`, e a contagem do backfill.
-2. **Push da branch e PR.** Decisão do Rômulo — está tudo local. ⚠️ Keyword de fechamento **em inglês** (`Closes #317`, `Closes #319`) — "Fecha #317" mergeia e deixa a issue aberta em silêncio.
-3. **Decidir os 2 pontos da #318 que travam o passo 4** (§1, "O que falta"): ratificar ou reverter a divergência de G5 e o limite de 3 de G7/G0; e decidir **coluna nova `billing_cycle.recusa_codigo` × abrir mão da consulta da DoD**. Se coluna, a #318 sai da rota `jules` e vai para `/tlc-spec-driven`. A tabela completa já está publicada na issue — não refazer.
-4. **Migrar as fixtures inventadas** (`LIMITE_AUTORIZADO_EXCEDIDO` → `MAXIMUM_AMOUNT_EXCEEDED`, `SALDO_INSUFICIENTE` → `PAYMENT_OVERDUE`) em 3 arquivos de teste + 1 plano. Não depende de decisão nenhuma e é pré-requisito de qualquer classificação por código.
-5. **Agendar o ensaio com clínica de teste em produção.** Único caminho para as perguntas remanescentes: unidade da janela, recorrência com dois valores diferentes, pagador concluir sem teto, identificador da cobrança de ativação, `DELETE` de autorização já cancelada e — novos desta sessão — **em que campo do payload de webhook o código de recusa pousa** (a doc não documenta) e **se o envelope que `normalizarEventoAsaas` assume é o real**.
+1. **Medir `alerta_risco_auth_select` em produção.** É o item mais barato e o de maior dano por token gasto: uma consulta read-only (§1, "A deriva de hash") separa "o painel Super Admin está mentindo zero há semanas" de "só o banco local está torto". Enquanto não se mede, o estado correto é **não medido**, não "provavelmente afetado".
+2. **Push da branch e PR.** Decisão do Rômulo — está tudo local, e agora são três passos empilhados. ⚠️ Keyword de fechamento **em inglês** (`Closes #317`, `Closes #319`, `Closes #318`) — "Fecha #317" mergeia e deixa a issue aberta em silêncio.
+3. **Passo 5 da linha: #310** (cobrança dupla). A #319 abriu a janela — ciclo vira `devido` no Iris e a cobrança antiga segue `OVERDUE` e pagável no Asaas — e o backstop desta sessão a **alarga**, porque agora existe um segundo caminho para o ciclo virar `falhou`.
+4. **#312 / D36 — a clínica continua sem ver nada, e agora é pior.** Os 9 grupos passaram a diferir de verdade no banco (`recusa_codigo` persistido, políticas distintas), mas nenhuma tela lê. Sem a UI, toda a #318 rende apenas log melhor.
+5. **Exercitar o backfill da `0098` em base com dados.** Não é reabrir o D33: é a parte dele que ficou fora do alcance da medição, e o ensaio com clínica de teste em produção é a primeira oportunidade real.
+6. **Agendar o ensaio com clínica de teste em produção.** Único caminho para as perguntas remanescentes: unidade da janela, recorrência com dois valores diferentes, pagador concluir sem teto, identificador da cobrança de ativação, `DELETE` de autorização já cancelada, **em que campo do payload de webhook o código de recusa pousa** e **se o envelope que `normalizarEventoAsaas` assume é o real**.
+
+---
+
+## 3b. Decisões que ficam com o Rômulo
+
+Quatro, todas nascidas nesta sessão. Nenhuma tem recomendação embutida — a escolha é dele.
+
+1. **`alerta_risco_auth_select`:** escrever a migração agora, ou aceitar o zero silencioso do painel Super Admin até o reset pré-go-live (o `.sql` em disco já tem o fix, então o banco zerado cura sozinho)?
+2. **D34:** o corte por inadimplência passa a escrever trilha em `audit_log`, e o job ganha um limiar de `carenciaFalhas` que derruba o `exit code`?
+3. **Perda do relatório da rota sob falha parcial:** mudar o contrato da rota — `try` próprio na última etapa e campo `carenciaAbortada` no corpo 200 — sabendo que isso muda também o formato do log do job?
+4. **Resíduo do G6:** reabrir a decisão de que G6 não escreve `recusa_codigo`, para que o backstop consiga distinguir "primeira recusa foi defeito nosso" de "silêncio total"?
 
 ---
 
@@ -232,29 +367,37 @@ Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aa
 
 Registrados aqui porque nasceram no caminho e não têm dono. Detalhe no `BACKLOG.md`.
 
-| Achado                                                                                                                                     | Onde                                                                                                   | Estado                                                                                                                                                                                           |
-| :----------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Nada da #319 foi verificado contra banco** — `0098` não aplicada, 12 casos de integração nunca executados                                | Postgres local em 5433 recusa; Docker não sobe                                                         | **Continua o achado mais grave da linha** (é o **D33**). Está no topo dos próximos passos. Não fechar a issue antes disso.                                                                       |
-| **A varredura de corte não escreve `audit_log`** — é a 1ª ação **irreversível** dirigida por job no repo                                   | `src/lib/billing/subscription.ts`                                                                      | Coerente com o módulo (nenhum `billing/*.ts` audita), mas revogar autorização sem trilha não tem precedente. Decisão de produto pendente.                                                        |
-| **O job sai `exit 0` mesmo com `carenciaFalhas` cheio** — clínica que falha o corte todo dia não alerta ninguém                            | `scripts/fechamento-ciclo-billing.mjs`                                                                 | O `.mjs` só loga o corpo. Vale um limiar que derrube o exit code, ou o corte silencioso vira permanente.                                                                                         |
-| **`billing_apurar_ciclo` reescreve `pacientes_contados`** ao congelar ciclo `falhou` já faturado                                           | `db/migrations/0075` + `congelarCiclosComoDebito`                                                      | O piso `Math.max` protege o **valor**; o memorial de quem foi contado, não. Nenhum teste mede `pacientes_contados`.                                                                              |
-| **`past_due` com `past_due_desde` NULL nunca é cortado e não aparece em `carenciaAvaliadas`**                                              | `src/lib/billing/subscription.ts`                                                                      | Silêncio, não erro. Estado não deveria existir (os dois produtores carimbam juntos), mas nada o impede.                                                                                          |
-| **O predicado corta por instante, não por dia civil** — quem entra em `past_due` às 23h é cortado às 23h do 10º dia                        | `src/lib/billing/subscription.ts`                                                                      | Diverge de `calendario-bancario.ts`, que normaliza para horário civil de SP. Inerte hoje (SP sem DST, container UTC); quebra em fuso com DST.                                                    |
-| **Status real do `DELETE` de autorização já cancelada no Asaas não medido** — a tolerância a 404 é desenho defensivo, não medição          | `src/lib/billing/provider/asaas.ts`                                                                    | Entra no ensaio em produção. Se o Asaas responder 200 idempotente, o cuidado sobra; se responder outra coisa, o loop preso volta.                                                                |
-| **A ordem da rota (varrer carência depois de fechar ciclos) é decisão declarada e sem teste**                                              | `src/app/api/internal/billing/fechar-ciclos/route.ts`                                                  | Nenhum arquivo de teste cobre a rota; o mutante que inverte a ordem sobrevive a tudo.                                                                                                            |
-| **`billing_apurar_ciclo` carimba `apurado` antes do `UPDATE` do TS** — crash entre as duas escritas converte `falhou` em `apurado`         | `db/migrations/0075`                                                                                   | E `apurado` está na lista padrão do congelamento, então a revogação voluntária passaria a pegá-lo. Sem cobertura.                                                                                |
-| **Qual calendário de feriados o Asaas usa** — o nosso é o nacional; bancário estadual/municipal não entra                                  | `src/lib/billing/calendario-bancario.ts`                                                               | Suposição não medida, mesma classe do `INSTRUCTION_REFUSED → OVERDUE` da #286. Entra no ensaio em produção.                                                                                      |
-| **O teto de 10 dias corridos só é vigiado por um teste** — nenhum fechamento real passa de 9                                               | `src/lib/billing/vencimento.test.ts`                                                                   | Aceito e documentado. Apagar aquele caso solta a constante sem nada ficar vermelho.                                                                                                              |
-| **O motivo da recusa nunca chega** — os 3 campos lidos não existem no recurso `payment`, e o normalizador de webhook descarta o que existe | `asaas.ts:898-901` · `asaas.ts:378-473`                                                                | **Agravado na 4ª sessão** (era "achado da #321"): não é leitura defensiva, é vazia por construção — `pixTransaction` é `string`, não objeto. `motivoRecusa` é `null` em produção. Virou **D35**. |
-| **Uma recusa não produz nada na interface** — `faixa-trial.tsx:68-73` devolve `null` para `pagamento_atrasado`                             | `faixa-trial.tsx` · `estado-conta.ts:40,197`                                                           | Piorou com a #319: a clínica é carimbada `past_due` e cortada em 10 dias **sem ver uma linha**. A tarja só aparece se já houver débito. Virou **D36**.                                           |
-| **O docstring de `fecharCiclosVencendo` afirma que o erro é persistido em `billing_cycle.erro`** — o `catch` real não faz `UPDATE`         | `subscription.ts:576-579` × `:756-766`                                                                 | `subscription.ts:1250` é o **único** ponto do repo que grava `erro` não-nulo. Corrigir o comentário ou fazer o `catch` gravar — decisão à parte.                                                 |
-| **Fixtures de recusa usam 2 códigos inventados**, em português, num campo que o gateway devolve em inglês                                  | `asaas.test.ts:598,602` · `route.int.test.ts:911,931` · `reprocessamento-provedor.int.test.ts:437,447` | Passam por passthrough de string: o dublê devolve o literal que o teste espera. Quebram no dia da classificação, e para o lado errado. Migrar antes.                                             |
-| **O catálogo de recusa é aberto** — `string` sem `enum` no OpenAPI, e a doc avisa que valores entram sem aviso prévio                      | doc do Asaas, "Motivos de Recusa"                                                                      | Ramo default deixa de ser zelo e vira requisito (é o G0 da tabela da #318).                                                                                                                      |
-| **`refusalReason` no payload de webhook não é documentado** — a página de motivos diz que vem "no evento"; o exemplo não o mostra          | doc do Asaas, "Eventos para Pix Automático"                                                            | O caminho garantido é `GET /pix/automatic/paymentInstructions/{id}` disparado pelo evento. Não desenhar contando com o campo no envelope.                                                        |
-| **O envelope que `normalizarEventoAsaas` assume não aparece na doc e não foi medido**                                                      | `asaas.ts:385-453`                                                                                     | Assume `paymentInstruction.status`, `.paymentId` e `.authorization.id`. Entra no ensaio em produção antes de empilhar mais desenho em cima.                                                      |
-| **O FAQ do Asaas contradiz a página de retentativas** — nega a existência de tentativas em dias posteriores                                | doc do Asaas, FAQ item 5                                                                               | O FAQ é anterior à Jornada 3. Registrado para não virar "descoberta" numa próxima sessão. Não usar como fonte para `3R_7D`.                                                                      |
-| **A premissa do artifact "nenhum passo desta linha toca modelo de dados" caiu**                                                            | artifact de ordem de conclusão                                                                         | A consulta que a DoD da #318 exige precisa de coluna (`billing_cycle.recusa_codigo`) ⇒ `/tlc-spec-driven`, não label `jules`. Decisão do Rômulo.                                                 |
-| **Discriminador do `erro_aplicacao` continua indefinido** — `externalReference` não serve                                                  | #289                                                                                                   | Decisão de produto em aberto entre `immediateQrCode.conciliationIdentifier` e `endToEndIdentifier`. **Trava a label `jules`.**                                                                   |
-| **`.specs/features/debito-reativacao-290/design.md:56` cita `PISO_COBRANCA_CENTAVOS`**, nome que não existe mais                           | spec histórica                                                                                         | Registro de época, não corrigido de propósito. O nome vivo é `PISO_COBRANCA_AVULSA_CENTAVOS`.                                                                                                    |
-| **`moveisPorAno` é cache global sem limite** no calendário bancário                                                                        | `src/lib/billing/calendario-bancario.ts`                                                               | Irrelevante no uso atual (o job toca 2-3 anos); é estado global não limpável entre testes.                                                                                                       |
-| **`carencia_dias` pode precisar de `GRANT UPDATE` de coluna** se a app um dia escrever nela                                                | `subscription`                                                                                         | Não medido. O backfill roda na role de migração, então a `0098` passa; nada na app escreve essa coluna hoje.                                                                                     |
+**Saíram na 5ª sessão de 15/08, por terem fechado:** a #319 sem verificação contra banco (D33, resíduo do backfill abaixo), o motivo de recusa que nunca chegava (D35), a ordem da rota sem teste (`route.test.ts`, 22 casos), as fixtures inventadas (migradas), o catálogo aberto (virou o G0 implementado) e a premissa do artifact sobre modelo de dados (consumada nas `0099`/`0100`).
+
+| Achado                                                                                                                             | Onde                                              | Estado                                                                                                                                                                                                                                                                                                                |
+| :--------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A varredura de corte não escreve `audit_log`** — é a 1ª ação **irreversível** dirigida por job no repo                           | `src/lib/billing/subscription.ts`                 | Coerente com o módulo (nenhum `billing/*.ts` audita), mas revogar autorização sem trilha não tem precedente. **Continua aberto (D34)**, e o backstop da #318 acrescentou um segundo caminho automático até o corte. Decisão de produto pendente (§3b).                                                                |
+| **O job sai `exit 0` mesmo com `carenciaFalhas` cheio** — clínica que falha o corte todo dia não alerta ninguém                    | `scripts/fechamento-ciclo-billing.mjs`            | O `.mjs` só loga o corpo. **Continua aberto (D34).** Vale um limiar que derrube o exit code, ou o corte silencioso vira permanente.                                                                                                                                                                                   |
+| **`billing_apurar_ciclo` reescreve `pacientes_contados`** ao congelar ciclo `falhou` já faturado                                   | `db/migrations/0075` + `congelarCiclosComoDebito` | O piso `Math.max` protege o **valor**; o memorial de quem foi contado, não. Nenhum teste mede `pacientes_contados`.                                                                                                                                                                                                   |
+| **`past_due` com `past_due_desde` NULL nunca é cortado e não aparece em `carenciaAvaliadas`**                                      | `src/lib/billing/subscription.ts`                 | Silêncio, não erro. Estado não deveria existir (os dois produtores carimbam juntos), mas nada o impede.                                                                                                                                                                                                               |
+| **O predicado corta por instante, não por dia civil** — quem entra em `past_due` às 23h é cortado às 23h do 10º dia                | `src/lib/billing/subscription.ts`                 | Diverge de `calendario-bancario.ts`, que normaliza para horário civil de SP. Inerte hoje (SP sem DST, container UTC); quebra em fuso com DST.                                                                                                                                                                         |
+| **Status real do `DELETE` de autorização já cancelada no Asaas não medido** — a tolerância a 404 é desenho defensivo, não medição  | `src/lib/billing/provider/asaas.ts`               | Entra no ensaio em produção. Se o Asaas responder 200 idempotente, o cuidado sobra; se responder outra coisa, o loop preso volta.                                                                                                                                                                                     |
+| **`billing_apurar_ciclo` carimba `apurado` antes do `UPDATE` do TS** — crash entre as duas escritas converte `falhou` em `apurado` | `db/migrations/0075`                              | E `apurado` está na lista padrão do congelamento, então a revogação voluntária passaria a pegá-lo. Sem cobertura.                                                                                                                                                                                                     |
+| **Qual calendário de feriados o Asaas usa** — o nosso é o nacional; bancário estadual/municipal não entra                          | `src/lib/billing/calendario-bancario.ts`          | Suposição não medida, mesma classe do `INSTRUCTION_REFUSED → OVERDUE` da #286. Entra no ensaio em produção.                                                                                                                                                                                                           |
+| **O teto de 10 dias corridos só é vigiado por um teste** — nenhum fechamento real passa de 9                                       | `src/lib/billing/vencimento.test.ts`              | Aceito e documentado. Apagar aquele caso solta a constante sem nada ficar vermelho.                                                                                                                                                                                                                                   |
+| **Uma recusa não produz nada na interface** — `faixa-trial.tsx:68-73` devolve `null` para `pagamento_atrasado`                     | `faixa-trial.tsx` · `estado-conta.ts:40,197`      | Piorou com a #319 e **de novo com a #318**: os 9 grupos agora diferem de verdade no banco (`recusa_codigo` persistido, políticas distintas) e **nenhuma tela lê**. A clínica é carimbada `past_due` e cortada em 10 dias sem ver uma linha; a tarja só aparece se já houver débito. **D36**, mais urgente, não menos. |
+| **O docstring de `fecharCiclosVencendo` afirma que o erro é persistido em `billing_cycle.erro`** — o `catch` real não faz `UPDATE` | `subscription.ts:576-579` × `:756-766`            | `subscription.ts:1250` é o **único** ponto do repo que grava `erro` não-nulo. Corrigir o comentário ou fazer o `catch` gravar — decisão à parte.                                                                                                                                                                      |
+| **`refusalReason` no payload de webhook não é documentado** — a página de motivos diz que vem "no evento"; o exemplo não o mostra  | doc do Asaas, "Eventos para Pix Automático"       | O caminho garantido é `GET /pix/automatic/paymentInstructions/{id}` disparado pelo evento. Não desenhar contando com o campo no envelope.                                                                                                                                                                             |
+| **O envelope que `normalizarEventoAsaas` assume não aparece na doc e não foi medido**                                              | `asaas.ts:385-453`                                | Assume `paymentInstruction.status`, `.paymentId` e `.authorization.id`. Entra no ensaio em produção antes de empilhar mais desenho em cima.                                                                                                                                                                           |
+| **O FAQ do Asaas contradiz a página de retentativas** — nega a existência de tentativas em dias posteriores                        | doc do Asaas, FAQ item 5                          | O FAQ é anterior à Jornada 3. Registrado para não virar "descoberta" numa próxima sessão. Não usar como fonte para `3R_7D`.                                                                                                                                                                                           |
+| **Discriminador do `erro_aplicacao` continua indefinido** — `externalReference` não serve                                          | #289                                              | Decisão de produto em aberto entre `immediateQrCode.conciliationIdentifier` e `endToEndIdentifier`. **Trava a label `jules`.**                                                                                                                                                                                        |
+| **`.specs/features/debito-reativacao-290/design.md:56` cita `PISO_COBRANCA_CENTAVOS`**, nome que não existe mais                   | spec histórica                                    | Registro de época, não corrigido de propósito. O nome vivo é `PISO_COBRANCA_AVULSA_CENTAVOS`.                                                                                                                                                                                                                         |
+| **`moveisPorAno` é cache global sem limite** no calendário bancário                                                                | `src/lib/billing/calendario-bancario.ts`          | Irrelevante no uso atual (o job toca 2-3 anos); é estado global não limpável entre testes.                                                                                                                                                                                                                            |
+| **`carencia_dias` pode precisar de `GRANT UPDATE` de coluna** se a app um dia escrever nela                                        | `subscription`                                    | Não medido. O backfill roda na role de migração, então a `0098` passa; nada na app escreve essa coluna hoje.                                                                                                                                                                                                          |
+
+**Novos nesta sessão (15/08, 5ª):**
+
+| Achado                                                                                                                                                                                              | Onde                                                                                           | Estado                                                                                                                                                                                                                                                                                                                        |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A policy `alerta_risco_auth_select` não existe** — grant de coluna presente, policy ausente ⇒ `iris_auth` lê **zero linhas sem erro**; o painel Super Admin reporta `totalAlertas: 0` em silêncio | `0072_super_admin_role` × `f6e0884` · `src/app/(admin)/benjamin/queries.ts`                    | **Medido no banco local** (`pg_policies` + `has_column_privilege`, não por `count(*)` — a tabela está vazia). **Produção: não medido**, afetada por inferência forte (o `hashAplicado` pinado é o sha256 LF do blob pré-fix). Consulta de fechamento em §1. Virou **D37**.                                                    |
+| **A rota descarta `resultados` sob falha parcial** — se `cancelarAssinaturasComCarenciaVencida` lançar, o 500 leva junto o corpo com o `providerChargeId` de cada cobrança já emitida no gateway    | `src/app/api/internal/billing/fechar-ciclos/route.ts` · `scripts/fechamento-ciclo-billing.mjs` | Mesma classe que o `carenciaTruncado` existe para evitar: **perder o registro de um ato irreversível é pior que cortar devagar**. O job só grava esse JSON. Correção natural (`try` próprio na última etapa + `carenciaAbortada` no 200) **muda o contrato da rota e o log do job** ⇒ decisão do Rômulo (§3b). Virou **D38**. |
+| **Resíduo do G6 no backstop** — ciclo cuja **primeira** recusa foi G6 chega a D+7 indistinguível do silêncio total, e **é carimbado**                                                               | `src/lib/billing/classificacao-recusa.ts` · `subscription.ts`                                  | Consequência direta da decisão fechada da #318 (G6 não persiste `recusa_codigo`, senão apagaria o diagnóstico correto de uma recusa anterior). Fechar exige **reabrir** aquela decisão. A **#322** passa a produzir exatamente esse caso: `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` é G6. Virou **D39**.                              |
+| **O backfill da `0098` nunca foi exercitado** — `subscription` tem 0 linhas neste banco, então o `UPDATE … WHERE carencia_dias = 7` tocou 0 linhas                                                  | `db/migrations/0098_subscription_carencia_dez_dias.sql`                                        | **Não medido**, e é o resíduo declarado do D33. O DDL está provado; a migração de dado não. Só se fecha em base com linhas.                                                                                                                                                                                                   |
+| **`pnpm vitest run <arquivo>.int.test.ts` coleta zero e sai verde**                                                                                                                                 | `vitest.config.ts` (`exclude: ["**/*.int.test.ts"]`)                                           | Nota de processo, não débito de produto. Integração exige `--config vitest.integration.config.ts`. Conferir o **número coletado**, nunca a cor — irmão de [[teste-verde-que-nao-testa-nada]].                                                                                                                                 |
+| **`created_at` em `drizzle.__drizzle_migrations` é o `when` do journal**, não o instante da aplicação                                                                                               | `drizzle.__drizzle_migrations`                                                                 | Nota de processo. Não serve para datar nem para ordenar por tempo real — foi tentado nesta sessão e produziu conclusão errada antes de ser falsificado.                                                                                                                                                                       |
+| **O guard de hash acusa 37 divergências nesta máquina, 35 delas só de fim de linha**                                                                                                                | `scripts/verificar-hash-migracoes.mjs` · `core.autocrlf=true` × `* text=auto`                  | **Nada foi pinado em `DERIVAS_CONHECIDAS` de propósito:** silenciar 35 rótulos de EOL esconderia o 36º que for real — foi exatamente assim que a `0072` apareceu. Diagnóstico em `docs/arquitetura/diagnostico-deriva-hash-migracoes.md`.                                                                                     |
