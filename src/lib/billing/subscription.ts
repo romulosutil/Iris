@@ -875,6 +875,7 @@ export async function cancelarAssinaturasComCarenciaVencida(opcoes?: {
   dryRun?: boolean;
 }): Promise<ResultadoCortePorCarencia[]> {
   const agora = opcoes?.agora ?? new Date();
+  const agoraIso = agora.toISOString();
   const dryRun = opcoes?.dryRun ?? false;
 
   const elegiveis = await authDb
@@ -894,7 +895,7 @@ export async function cancelarAssinaturasComCarenciaVencida(opcoes?: {
         // mantido: é o que deixa o índice `subscription_carencia_idx`
         // (status, past_due_desde) utilizável e o predicado legível.
         isNotNull(subscription.pastDueDesde),
-        sql`${subscription.pastDueDesde} + make_interval(days => ${subscription.carenciaDias}) <= ${agora}`,
+        sql`${subscription.pastDueDesde} + make_interval(days => ${subscription.carenciaDias}) <= ${agoraIso}::timestamptz`,
       ),
     )
     // Mais antigo primeiro. Sem ORDER BY o Postgres devolve na ordem que quiser,
