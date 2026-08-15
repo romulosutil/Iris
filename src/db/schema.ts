@@ -1730,6 +1730,12 @@ export const subscriptionStatus = pgEnum("subscription_status", [
 // quando o job carimbava o ciclo como cobrado no instante em que ajustava o
 // valor da recorrência — sem nenhuma cobrança emitida nem confirmada. Não é
 // removido porque há memorial de fatura gravado com ele.
+//
+// `devido` (0096, #287/#290) é o ramo do CANCELAMENTO: o ciclo foi interrompido
+// no meio, apurado e congelado como débito pro-rata, SEM cobrança emitida — a
+// autorização do Pix Automático acabou de ser revogada e não há trilho para
+// cobrar naquele instante. Não é `falhou` (ali houve cobrança recusada) nem
+// `apurado` (que é estado de passagem do job e seria varrido de novo).
 export const billingCycleStatus = pgEnum("billing_cycle_status", [
   "aberto",
   "apurado",
@@ -1737,6 +1743,7 @@ export const billingCycleStatus = pgEnum("billing_cycle_status", [
   "falhou",
   "aguardando_pagamento",
   "pago",
+  "devido",
 ]);
 
 // `ativo_nao_arquivado` deixou de ser PRODUZIDO na 0075 (o critério de
@@ -1845,6 +1852,28 @@ export const billingCycle = pgTable(
     // da emissão.
     providerChargeId: text("provider_charge_id"),
     cobrancaEmitidaEm: timestamp("cobranca_emitida_em", { withTimezone: true }),
+    /**
+     * Âncora do agrupamento de débito (#290, 0097).
+     *
+     * O débito de uma reativação pode somar mais de um ciclo `devido` — a #290
+     * decidiu que débito abaixo do piso de cobrança do gateway ACUMULA em vez de
+     * caducar ou travar a volta. Cobrar isso como N cobranças seria N QR Codes
+     * para a mesma dívida, e gravar o mesmo `provider_charge_id` nas N linhas
+     * esbarra no UNIQUE parcial da 0075 (que é a guarda de idempotência da
+     * emissão, e não se abre mão dela por um agrupamento).
+     *
+     * Então: uma cobrança só, do total, em `provider_charge_id` do ciclo
+     * `devido` mais ANTIGO — a âncora. Os demais apontam para ela aqui e são
+     * liquidados junto quando o webhook confirma o pagamento dela.
+     *
+     * Mais antigo, e não mais recente, por determinismo: a mesma entrada elege
+     * sempre a mesma âncora, então a reentrada do gate encontra a cobrança já
+     * emitida (`debito:<ancora>`) em vez de eleger outro ciclo e emitir uma
+     * segunda cobrança da mesma dívida.
+     *
+     * `NULL` no ciclo normal e na própria âncora.
+     */
+    debitoAgrupadoEm: uuid("debito_agrupado_em"),
     erro: text("erro"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
@@ -1855,7 +1884,23 @@ export const billingCycle = pgTable(
     // fechamento não consegue abrir um segundo ciclo com o mesmo início.
     uniqueIndex("billing_cycle_clinic_inicio_uq").on(t.clinicId, t.inicio),
     index("billing_cycle_clinic_fim_idx").on(t.clinicId, t.fim.desc()),
+    // Autorreferência (0097). `foreignKey` no array em vez de `.references()`
+    // na coluna porque a tabela ainda não existe no escopo quando a coluna é
+    // definida — self-FK inline vira referência circular em TypeScript.
+    foreignKey({
+      columns: [t.debitoAgrupadoEm],
+      foreignColumns: [t.id],
+      name: "billing_cycle_debito_agrupado_em_fk",
+    }).onDelete("set null"),
+    index("billing_cycle_debito_agrupado_idx").on(t.debitoAgrupadoEm),
     check("billing_cycle_intervalo_valido", sql`${t.fim} > ${t.inicio}`),
+    // Um ciclo não pode ser a própria âncora: `debito_agrupado_em` significa
+    // "cobrado JUNTO COM a linha X", e a autorreferência faria a liquidação em
+    // cascata do webhook se morder o próprio rabo.
+    check(
+      "billing_cycle_debito_agrupado_nao_reflexivo",
+      sql`${t.debitoAgrupadoEm} IS NULL OR ${t.debitoAgrupadoEm} <> ${t.id}`,
+    ),
     check("billing_cycle_valor_nao_negativo", sql`${t.valorCentavos} >= 0`),
     check(
       "billing_cycle_contagem_nao_negativa",
