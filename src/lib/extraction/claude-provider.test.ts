@@ -50,13 +50,18 @@ describe("ClaudeProvider", () => {
 
     const arg = invoker.mock.calls[0]![0] as { system: string; user: string };
     expect(arg.system).toContain("R1.");
-    expect(arg.user).toContain("<diario_do_terapeuta>");
+    expect(arg.user).toMatch(/<diario_do_terapeuta_[a-f0-9-]+>/);
     expect(arg.user).toContain("puxava minha mão");
   });
 
   test("saída vazia (nenhuma evidência) devolve zero drafts — sucesso, não falha", async () => {
-    const vazio: AgentOutput = { extracoes: [], resumo_sessao: "Nada a extrair." };
-    const { drafts } = await new ClaudeProvider(vi.fn().mockResolvedValue(vazio)).extrair(ctx);
+    const vazio: AgentOutput = {
+      extracoes: [],
+      resumo_sessao: "Nada a extrair.",
+    };
+    const { drafts } = await new ClaudeProvider(
+      vi.fn().mockResolvedValue(vazio),
+    ).extrair(ctx);
     expect(drafts).toHaveLength(0);
   });
 
