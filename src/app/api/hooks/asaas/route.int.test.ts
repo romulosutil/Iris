@@ -863,24 +863,29 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       expect(chamadasGateway[0]).toContain(`/payments/${paymentId}`);
     });
 
-    it("cobrança recusada sem motivo do gateway grava diagnóstico que nomeia o teto como causa provável (#286)", async () => {
+    it("cobrança recusada SEM motivo do gateway não move estado nenhum e avisa como desconhecida (#286 → #318)", async () => {
       /**
-       * O modo de falha mais provável da cobrança recorrente, agora que se
-       * sabe que o teto é obrigatório por diretriz do BACEN: a clínica
-       * autorizou com o teto sugerido em tela na ativação (R$ 0,01) e a
-       * fatura real não passa. Sem nomear a hipótese, o ciclo só dizia
-       * "cobrança recusada pelo gateway", e quem fosse diagnosticar olharia o
-       * adapter e o job antes de olhar a configuração no banco do cliente.
+       * ⚠️ ESTE CASO MUDOU DE LADO NA #318, e a razão é o que importa.
        *
-       * Este teste passa pelo caminho REAL do webhook — o repasse de
-       * `atual.motivoRecusa` dentro de `route.ts` é código novo, e um teste
-       * que chamasse `conciliarPagamentoDeCiclo` direto passaria verde mesmo
-       * se a rota não repassasse o motivo.
+       * Antes, sem motivo o ciclo ia para `falhou` com um texto que nomeava o
+       * teto do Pix Automático como causa mais provável (#286). A #318 derrubou
+       * isso: escrever uma HIPÓTESE ranqueada no campo de diagnóstico é
+       * exatamente o defeito que a coluna `recusa_codigo` existe para acabar —
+       * e, pela regra que gera a tabela de desfechos, uma recusa sem motivo não
+       * prova nada sobre a clínica, então não pode puni-la no ato.
+       *
+       * Motivo ausente é **G0**, igual a código desconhecido: nada é escrito, e
+       * o sinal fica no log com tag PRÓPRIA. Em produção essa linha com
+       * `motivoRecusa: null` é o termômetro do D35 — enquanto ela aparecer, a
+       * classificação inteira está rodando às cegas.
+       *
+       * Este caso passa pelo caminho REAL do webhook: um teste que chamasse
+       * `conciliarPagamentoDeCiclo` direto passaria verde mesmo se a rota
+       * parasse de repassar o motivo.
        *
        * Aqui o evento é de COBRANÇA (sem instrução), então o adapter cai no
        * índice por `paymentId` — e a lista volta vazia, que é o caso "o
-       * gateway não informou". É esse `null` que faz o diagnóstico nomear o
-       * teto como hipótese.
+       * gateway não informou".
        */
       const paymentId = "pay_recusada_286_1";
       const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
@@ -908,14 +913,24 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
         );
         expect(res.status).toBe(200);
 
+        // Nada foi escrito: o ciclo segue esperando pagamento e sem código.
         const ciclo = await lerCiclo(cicloId);
-        expect(ciclo.status).toBe("falhou");
-        expect(ciclo.erro).toMatch(/teto/i);
-        expect(ciclo.erro).toMatch(/sem motivo informado/i);
+        expect(ciclo.status).toBe("aguardando_pagamento");
+        expect(ciclo.erro).toBeNull();
 
         expect(aviso).toHaveBeenCalledWith(
           "[billing-recusa] cobrança de ciclo recusada",
-          expect.objectContaining({ providerChargeId: paymentId }),
+          expect.objectContaining({ providerChargeId: paymentId, grupo: "G0" }),
+        );
+        // A tag PRÓPRIA do desconhecido, com o literal recebido (`null` aqui):
+        // é assim que "o catálogo cresceu" — ou "o motivo não está chegando" —
+        // vira trabalho agendado em vez de incidente.
+        expect(aviso).toHaveBeenCalledWith(
+          "[billing-recusa-desconhecida] código fora do catálogo da #318",
+          expect.objectContaining({
+            providerChargeId: paymentId,
+            motivoRecusa: null,
+          }),
         );
       } finally {
         aviso.mockRestore();

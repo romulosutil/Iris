@@ -609,7 +609,15 @@ describe.skipIf(!hasDb)("#319 · corte por carência vencida", () => {
     });
 
     const antesDaRecusa = new Date();
-    await conciliarPagamentoDeCiclo("pay-fake-319-recusa-nova", "recusada");
+    // O CÓDIGO é obrigatório desde a #318: o desfecho depende dele. Sem motivo
+    // a recusa é G0 (desconhecido) e não carimba `past_due` nenhum — este caso
+    // mede a carência, então precisa de uma recusa que a produza. `PAYMENT_OVERDUE`
+    // é G2, saldo insuficiente: o caso canônico de inadimplência.
+    await conciliarPagamentoDeCiclo(
+      "pay-fake-319-recusa-nova",
+      "recusada",
+      "PAYMENT_OVERDUE",
+    );
     const depoisDaRecusa = new Date();
 
     const aposRecusa = await lerAssinatura(SUB_A);
@@ -905,8 +913,14 @@ describe.skipIf(!hasDb)("#319 · corte por carência vencida", () => {
     await cancelarAssinaturasComCarenciaVencida({ agora: AGORA });
     expect(await lerAssinatura(SUB_A).then((l) => l.status)).toBe("canceled");
 
-    // A cobrança da dívida vence sem pagamento.
-    await conciliarPagamentoDeCiclo("pay-fake-319-debito", "recusada");
+    // A cobrança da dívida vence sem pagamento. Código G2 (#318): o que este
+    // caso prova é que nem uma recusa que CARIMBA ressuscita a assinatura já
+    // cortada — com G0 o guard nem seria exercitado, porque nada seria escrito.
+    await conciliarPagamentoDeCiclo(
+      "pay-fake-319-debito",
+      "recusada",
+      "PAYMENT_OVERDUE",
+    );
 
     const depois = await lerAssinatura(SUB_A);
     expect(depois.status).toBe("canceled");

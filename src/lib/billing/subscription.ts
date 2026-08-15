@@ -12,6 +12,7 @@ import {
 import { authDb } from "@/db/client";
 import { billingCycle, subscription } from "@/db/schema";
 import { apurarDebitoProRata, calcularMensalidadeCentavos } from "./calculator";
+import { classificarRecusa } from "./classificacao-recusa";
 import {
   AsaasProvider,
   BillingProviderError,
@@ -1203,6 +1204,60 @@ export function avisarRecusaQueNaoConciliou(
   );
 }
 
+/**
+ * Liquida o ciclo: `pago`, cascata do débito agrupado e saída de `past_due`.
+ *
+ * Extraído para ser chamado por DOIS caminhos que precisam ser idênticos: o
+ * pagamento confirmado (`status === "paga"`) e o **G8** da #318
+ * (`PAYMENT_ALREADY_DONE`, a cobrança já estava liquidada quando o gateway
+ * recusou o débito). Duplicar as três escritas faria o G8 conciliar "quase"
+ * como pago — e o pedaço que faltasse seria exatamente o que gera dívida contra
+ * clínica adimplente.
+ */
+async function liquidarCiclo(
+  cicloId: string,
+  subscriptionId: string,
+  agora: Date,
+): Promise<void> {
+  await authDb
+    .update(billingCycle)
+    .set({ status: "pago", cobradoEm: agora, erro: null })
+    .where(eq(billingCycle.id, cicloId));
+
+  // Liquidação em cascata do débito agrupado (#290, coluna da 0097).
+  //
+  // Uma cobrança de débito pode cobrir N ciclos `devido`: o valor é a soma, o
+  // id da cobrança fica na ÂNCORA (o ciclo mais antigo) porque
+  // `provider_charge_id` é UNIQUE parcial, e os demais apontam para ela. Sem
+  // esta cascata a clínica pagaria o total e continuaria devendo todos os
+  // ciclos menos um — com o gate de reativação barrando quem já pagou.
+  //
+  // Idempotente por construção: reescrever `pago` com `pago` é no-op, então a
+  // reentrega do webhook não muda nada.
+  await authDb
+    .update(billingCycle)
+    .set({ status: "pago", cobradoEm: agora, erro: null })
+    .where(eq(billingCycle.debitoAgrupadoEm, cicloId));
+
+  // Pagamento em dia tira a assinatura de `past_due` — e só o pagamento faz
+  // isso. `pastDueDesde` volta a NULL para que uma inadimplência futura
+  // recomece a carência do zero.
+  //
+  // O `eq(status,'past_due')` também é o que garante que **pagar o débito não
+  // reativa** (#290): a assinatura `canceled` continua `canceled` depois de
+  // quitar. Quitar destrava o gate; voltar continua sendo um ato explícito da
+  // clínica, com autorização nova de Pix Automático.
+  await authDb
+    .update(subscription)
+    .set({ status: "active", pastDueDesde: null, atualizadoEm: agora })
+    .where(
+      and(
+        eq(subscription.id, subscriptionId),
+        eq(subscription.status, "past_due"),
+      ),
+    );
+}
+
 export async function conciliarPagamentoDeCiclo(
   providerChargeId: string,
   status: StatusCobranca,
@@ -1223,43 +1278,7 @@ export async function conciliarPagamentoDeCiclo(
   if (!ciclo) return false;
 
   if (status === "paga") {
-    await authDb
-      .update(billingCycle)
-      .set({ status: "pago", cobradoEm: agora, erro: null })
-      .where(eq(billingCycle.id, ciclo.id));
-
-    // Liquidação em cascata do débito agrupado (#290, coluna da 0097).
-    //
-    // Uma cobrança de débito pode cobrir N ciclos `devido`: o valor é a soma, o
-    // id da cobrança fica na ÂNCORA (o ciclo mais antigo) porque
-    // `provider_charge_id` é UNIQUE parcial, e os demais apontam para ela. Sem
-    // esta cascata a clínica pagaria o total e continuaria devendo todos os
-    // ciclos menos um — com o gate de reativação barrando quem já pagou.
-    //
-    // Idempotente por construção: reescrever `pago` com `pago` é no-op, então a
-    // reentrega do webhook não muda nada.
-    await authDb
-      .update(billingCycle)
-      .set({ status: "pago", cobradoEm: agora, erro: null })
-      .where(eq(billingCycle.debitoAgrupadoEm, ciclo.id));
-
-    // Pagamento em dia tira a assinatura de `past_due` — e só o pagamento faz
-    // isso. `pastDueDesde` volta a NULL para que uma inadimplência futura
-    // recomece a carência do zero.
-    //
-    // O `eq(status,'past_due')` também é o que garante que **pagar o débito não
-    // reativa** (#290): a assinatura `canceled` continua `canceled` depois de
-    // quitar. Quitar destrava o gate; voltar continua sendo um ato explícito da
-    // clínica, com autorização nova de Pix Automático.
-    await authDb
-      .update(subscription)
-      .set({ status: "active", pastDueDesde: null, atualizadoEm: agora })
-      .where(
-        and(
-          eq(subscription.id, ciclo.subscriptionId),
-          eq(subscription.status, "past_due"),
-        ),
-      );
+    await liquidarCiclo(ciclo.id, ciclo.subscriptionId, agora);
     return true;
   }
 
@@ -1275,9 +1294,15 @@ export async function conciliarPagamentoDeCiclo(
      * Quando o gateway informa a causa, ela MANDA: "avise o cliente para
      * ajustar o limite no banco" e "avise o cliente para pôr dinheiro na
      * conta" são orientações opostas, e sobrepor a nossa hipótese a um motivo
-     * explícito do gateway trocaria uma por outra. Medido em 13/08/2026: o
-     * Asaas não informou motivo em nenhuma recusa observável, então o ramo
-     * `null` é o esperado — e ele diz que a causa é HIPÓTESE, não fato.
+     * explícito do gateway trocaria uma por outra.
+     *
+     * ⚠️ ATUALIZADO PELA #318: a hipótese do teto **deixou de ser escrita**. O
+     * ramo `null` não grava mais o texto que ranqueava "teto, depois saldo" —
+     * ele agora é G0, e G0 não move estado nenhum. Escrever uma causa provável
+     * como se fosse diagnóstico é exatamente o que a coluna `recusa_codigo`
+     * existe para acabar. Enquanto `motivoRecusa` chegar `null` em produção
+     * (D35 não medido em prod), o sinal é a linha `[billing-recusa-desconhecida]`
+     * — e nada mais acontece.
      *
      * Suposição aberta, NÃO medida: este ramo só é alcançado se a reconsulta
      * a `GET /payments/{id}` (feita em `route.ts`) devolver
@@ -1292,21 +1317,92 @@ export async function conciliarPagamentoDeCiclo(
      * Verificação pendente quando a primeira recusa real chegar: runbook em
      * `infra/README.md` (seção #286).
      */
-    const erro = motivoRecusa
-      ? `cobrança recusada pelo gateway: ${motivoRecusa}`
-      : "cobrança recusada pelo gateway, sem motivo informado — causa mais provável: teto de valor do Pix Automático definido no app do banco abaixo do valor da fatura (#286); segunda hipótese: saldo insuficiente";
+    /**
+     * #318 — o desfecho passa a depender do MOTIVO. Antes daqui os 25 códigos
+     * publicados caíam no mesmo lugar (`falhou` + `past_due`): o motivo chegava,
+     * era interpolado num texto e descartado na decisão. A política governa as
+     * três decisões que eram incondicionais logo abaixo — o texto do `erro`, se
+     * o ciclo vai a `falhou`, e se o bloco de carimbo de `past_due` roda — mais
+     * a conciliação como pago do G8.
+     *
+     * `motivoRecusa` desconhecido, ou `null`, é **G0**: não pune a clínica no
+     * ato, porque não prova nada sobre ela. Ver `classificacao-recusa.ts`.
+     */
+    const politica = classificarRecusa(motivoRecusa);
 
     // Log com tag fixa e greppável: é por ele que a primeira recusa real de
-    // produção vira sinal em vez de linha morta na tabela.
+    // produção vira sinal em vez de linha morta na tabela. O grupo entra junto
+    // porque é ele que explica por que o estado mudou (ou não mudou).
     console.warn("[billing-recusa] cobrança de ciclo recusada", {
       providerChargeId,
       motivoRecusa,
+      grupo: politica.grupo,
     });
+
+    if (politica.grupo === "G0") {
+      // Tag PRÓPRIA, e não a de cima: é assim que "o catálogo cresceu" vira
+      // trabalho agendado em vez de incidente. O literal recebido vai junto —
+      // é o único jeito de descobrir o código novo.
+      //
+      // `motivoRecusa: null` aqui NÃO é um código novo: é o D35 ainda vazio em
+      // produção (sem id de instrução, o adapter não tem onde buscar o motivo).
+      // Enquanto essa linha aparecer com `null`, a classificação inteira está
+      // rodando às cegas e NENHUMA recusa produz consequência.
+      console.warn(
+        "[billing-recusa-desconhecida] código fora do catálogo da #318",
+        { providerChargeId, motivoRecusa },
+      );
+    }
+
+    if (politica.conciliaComoPago) {
+      // G8 (`PAYMENT_ALREADY_DONE`): a cobrança FOI liquidada. Não é falha, é
+      // conciliação perdida — e o caminho antigo gerava dívida congelada contra
+      // clínica adimplente, com o gate da #290 barrando quem já tinha pago.
+      await liquidarCiclo(ciclo.id, ciclo.subscriptionId, agora);
+      return true;
+    }
+
+    if (!politica.marcaCicloFalhou) {
+      // G6 (defeito nosso), G7 (falha do banco) e G0 (desconhecido) não movem
+      // estado NENHUM, e isso inclui não reescrever `erro`/`recusa_codigo`: uma
+      // retentativa nossa mal emitida chega DEPOIS da recusa de saldo que já
+      // gravou o diagnóstico certo, e sobrescrevê-lo trocaria a causa real pelo
+      // nosso bug.
+      //
+      // ⚠️ Enquanto o backstop de D+7 (Decisão 2 da #318) não existir, G7 e G0
+      // não produzem consequência nenhuma. É buraco de receita conhecido e
+      // sequenciado — não subir para produção sem ele.
+      return true;
+    }
+
+    const erro = `${politica.diagnostico} [${politica.grupo}]${
+      motivoRecusa ? ` (código do gateway: ${motivoRecusa})` : ""
+    }`;
 
     await authDb
       .update(billingCycle)
-      .set({ status: "falhou", erro })
+      .set({
+        status: "falhou",
+        erro,
+        // O código CRU, do jeito que o gateway mandou (0099). O grupo NÃO é
+        // persistido: dele não se recupera o código, e o mapa evolui.
+        recusaCodigo: motivoRecusa,
+      })
       .where(eq(billingCycle.id, ciclo.id));
+
+    if (!politica.carimbaPastDue) {
+      // Hoje só G3 (autorização morta): o desfecho dele é CORTE, não carência.
+      // Mas o corte exige reconsultar `GET /pix/automatic/authorizations/{id}`
+      // e só vale se o gateway DISSER `CANCELLED`/`EXPIRED`/`REFUSED` — se
+      // responder `ACTIVE`, o código mente e o caso é G7. Essa reconsulta não
+      // existe neste caminho (aqui não há handle de provider), então G3 registra
+      // e espera: o corte fica com o backstop de D+7, que decide com o gateway
+      // na mão. Carimbar `past_due` daria à clínica uma tarja de devedora por um
+      // problema de autorização, e cortar sem confirmação revogaria autorização
+      // viva por um código espúrio — irreversível sem novo consentimento no app
+      // do banco.
+      return true;
+    }
 
     const [assinatura] = await authDb
       .select({ id: subscription.id, pastDueDesde: subscription.pastDueDesde })
@@ -1401,8 +1497,16 @@ export async function reprocessarEventosPendentes(
         // Evento de COBRANÇA de ciclo. Consulta o gateway em vez de confiar
         // no tipo do evento, pela mesma razão de `aplicarStatusProvider`: a
         // notificação costuma vir sem estado nenhum.
+        // O id da INSTRUÇÃO vai junto, igual à rota do webhook (D35): o motivo
+        // da recusa não é campo da cobrança, mora na instrução. Sem ele o
+        // adapter cai no fallback por índice
+        // (`?paymentId=…&status=REFUSED`) — uma chamada a mais e um resultado
+        // que depende de a listagem trazer a instrução certa. E é aqui que a
+        // classificação da #318 mais precisa do motivo: esta varredura é o
+        // caminho que roda quando a entrega ao vivo falhou.
         const atual = await provider.consultarCobranca(
           normalizado.providerChargeId,
+          { providerInstructionId: normalizado.providerInstructionId },
         );
         // Gêmeo do guard da rota (#286): a varredura aplica o evento quando a
         // entrega ao vivo falhou, e um guard que existe só num dos dois some
