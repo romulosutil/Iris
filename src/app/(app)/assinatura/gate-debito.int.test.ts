@@ -41,7 +41,7 @@ vi.mock("server-only", () => ({}));
 const { iniciarAtivacaoAssinatura } = await import("./logic");
 const { aplicarStatusProvider, conciliarPagamentoDeCiclo } =
   await import("@/lib/billing/subscription");
-const { PISO_COBRANCA_CENTAVOS } = await import("@/lib/billing/debito");
+const { PISO_COBRANCA_AVULSA_CENTAVOS } = await import("@/lib/billing/debito");
 const { sql: appSql } = await import("@/db/client");
 
 const CLINIC = "00000000-0000-0000-0000-000000290aaa";
@@ -374,11 +374,11 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
   });
 
   it("recusa 4xx do gateway adia o débito em vez de trancar a clínica fora", async () => {
-    // O cenário do piso mal calibrado: `PISO_COBRANCA_CENTAVOS` é escolha
+    // O cenário do piso mal calibrado: `PISO_COBRANCA_AVULSA_CENTAVOS` é escolha
     // conservadora, não medição. Falhar fechado aqui protegeria a receita de um
     // ciclo e destruiria a de todos os seguintes.
     await assinaturaCancelada();
-    await cicloDevido(PISO_COBRANCA_CENTAVOS + 100, 30);
+    await cicloDevido(PISO_COBRANCA_AVULSA_CENTAVOS + 100, 30);
     instalarGateway({ cobrancaRecusada: true });
 
     const r = await iniciarAtivacaoAssinatura(ctx, formulario());

@@ -36,8 +36,12 @@ import {
  */
 
 /**
- * Piso de cobrança, em centavos. Abaixo dele o débito ACUMULA — não é perdoado,
- * não caduca e não trava a reativação.
+ * Piso da cobrança AVULSA que o Iris emite (gate de reativação, #290). Não
+ * confundir com `PISO_TETO_AUTORIZACAO_CENTAVOS`, que é o piso do teto que o
+ * PAGADOR autoriza no banco (#317) — sentidos opostos, mesmo domínio.
+ *
+ * Abaixo dele o débito ACUMULA — não é perdoado, não caduca e não trava a
+ * reativação.
  *
  * **Este número é escolha conservadora, NÃO medição.** O valor mínimo de uma
  * cobrança Pix no Asaas não foi verificado contra a API nem contra a
@@ -52,7 +56,7 @@ import {
  * R$ 3,00 contra um cliente de teste e registrar a resposta no runbook do
  * `infra/README.md`.
  */
-export const PISO_COBRANCA_CENTAVOS = 500;
+export const PISO_COBRANCA_AVULSA_CENTAVOS = 500;
 
 /** Prazo de vencimento da cobrança de débito, em dias. */
 const DIAS_VENCIMENTO_DEBITO = 5;
@@ -106,7 +110,7 @@ export type ResultadoGateDebito =
  */
 export function decidirGate(
   totalCentavos: number,
-  piso: number = PISO_COBRANCA_CENTAVOS,
+  piso: number = PISO_COBRANCA_AVULSA_CENTAVOS,
 ): "sem_debito" | "adiar" | "cobrar" {
   if (totalCentavos <= 0) return "sem_debito";
   if (totalCentavos < piso) return "adiar";

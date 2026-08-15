@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decidirGate, PISO_COBRANCA_CENTAVOS } from "./debito";
+import { decidirGate, PISO_COBRANCA_AVULSA_CENTAVOS } from "./debito";
 
 /**
  * A decisão do gate de reativação (#290), isolada do banco e do gateway.
@@ -39,11 +39,11 @@ describe("decidirGate", () => {
   });
 
   it("um centavo abaixo do piso ainda é adiamento", () => {
-    expect(decidirGate(PISO_COBRANCA_CENTAVOS - 1)).toBe("adiar");
+    expect(decidirGate(PISO_COBRANCA_AVULSA_CENTAVOS - 1)).toBe("adiar");
   });
 
   it("EXATAMENTE no piso já cobra", () => {
-    expect(decidirGate(PISO_COBRANCA_CENTAVOS)).toBe("cobrar");
+    expect(decidirGate(PISO_COBRANCA_AVULSA_CENTAVOS)).toBe("cobrar");
   });
 
   it("acima do piso cobra", () => {
@@ -58,7 +58,7 @@ describe("decidirGate", () => {
   });
 
   it("aceita piso injetado, para o dia em que o valor real do gateway for medido", () => {
-    // `PISO_COBRANCA_CENTAVOS` é escolha conservadora, não medição. O parâmetro
+    // `PISO_COBRANCA_AVULSA_CENTAVOS` é escolha conservadora, não medição. O parâmetro
     // existe para que corrigir o número não exija tocar na regra.
     expect(decidirGate(300, 100)).toBe("cobrar");
     expect(decidirGate(300, 1000)).toBe("adiar");
