@@ -2,7 +2,7 @@
 
 > **Data:** 15/08/2026
 > **Branch:** `feat/317-parametros-autorizacao-pix` (8 commits, **sem push**, sem PR)
-> **Status:** 🟡 Passos 1, 2 e 3 executados em código; **passo 4 (#318) executado como decisão de produto, sem código**. Duas dívidas abertas dominam: a **#319 não tem uma única linha verificada contra banco** (Postgres local fora do ar, Docker não sobe nesta máquina), e a **#318 não pode ir para o Jules** — apareceu um pré-requisito de adapter e uma coluna nova de modelo de dados. O próximo passo depende de ratificação do Rômulo (§1, item "O que falta").
+> **Status:** 🟡 Passos 1, 2 e 3 executados em código; **passo 4 (#318) executado como decisão de produto, sem código** — tabela de desfechos e as 3 decisões pendentes **fechadas**, nada em aberto. A #318 sai da rota `jules` e vai para `/tlc-spec-driven` (coluna nova). A dívida que domina segue sendo a **#319 sem uma única linha verificada contra banco** (Postgres local fora do ar, Docker não sobe nesta máquina). Próximo passo concreto: §1, "O que falta".
 
 ---
 
@@ -33,7 +33,7 @@
 
 Executado o **passo 4**: issue [#318](https://github.com/romulosutil/Iris/issues/318) — `REFUSED` colapsa causas distintas num único desfecho. O passo era **decisão de produto antes de código**: fechar a tabela código → desfecho e o checklist §5.2, depois aplicar a label `jules`.
 
-A tabela está fechada e publicada na issue ([comentário](https://github.com/romulosutil/Iris/issues/318#issuecomment-5303443178)). **A label não foi aplicada** — o recon derrubou premissas que mudam o roteamento da issue.
+A tabela está fechada e publicada na issue ([comentário](https://github.com/romulosutil/Iris/issues/318#issuecomment-5303443178)), e as três decisões que sobraram foram fechadas pelo tech lead num [segundo comentário](https://github.com/romulosutil/Iris/issues/318#issuecomment-5303503322), a pedido do Rômulo. **A label não foi aplicada, e não será** — o recon derrubou premissas que mudam o roteamento da issue para `/tlc-spec-driven`.
 
 Orquestração em 3 subagentes paralelos: recon da issue e comentários (via `gh api`) × mapeamento do caminho da recusa no código × levantamento do catálogo oficial contra o MCP de docs do Asaas. Nenhum código alterado nesta sessão.
 
@@ -55,16 +55,22 @@ Grupos definidos por **desfecho**, não por origem: dois códigos ficam juntos s
 | **G4** Cadastral da clínica (3 códigos)             | Sim                                       | Sim                | Depois da correção             | CPF/CNPJ não confere + corrigir                                     |
 | **G5** Conta terminal (`ACCOUNT_CLOSED`/`_BLOCKED`) | Sim                                       | Sim                | **Não**                        | Conta encerrada + outra conta                                       |
 | **G6** Defeito nosso (9 códigos)                    | Não                                       | Não                | Só depois do conserto          | **Nada**                                                            |
-| **G7** Operacional (5 códigos)                      | Não, até a 3ª                             | Não, até a 3ª      | Sim                            | Nada até a 3ª; depois igual a G2                                    |
+| **G7** Operacional (5 códigos)                      | Não — só o backstop de D+7                | Só a partir de D+7 | Sim                            | Nada até D+7; depois igual a G2                                     |
 | **G8** Já resolvido (`PAYMENT_ALREADY_DONE`)        | Não                                       | Não                | Não                            | Ciclo concilia como **pago**                                        |
-| **G0** Desconhecido (default)                       | Não, até a 3ª                             | Não, até a 3ª      | Sim                            | Igual a G7                                                          |
+| **G0** Desconhecido (default)                       | Não — só o backstop de D+7                | Só a partir de D+7 | Sim                            | Igual a G7                                                          |
+
+**A regra que gera a 1ª coluna** (vale para a tabela inteira, e é o que a torna ensinável):
+
+> Carimba `past_due` no ato quando a recusa é, **por si só, prova de um fato sobre a clínica sobre o qual ela pode agir**. Não carimba quando a recusa não prova nada sobre ela.
+
+G1 (o limite é dela), G2 (a conta dela não tinha saldo), G4 (o documento é dela) e G5 (a conta é dela) provam. G6 prova algo sobre **nós**; G7 prova algo sobre o **banco**; G0 não se sabe.
 
 Quatro decisões que sustentam a tabela e não são óbvias:
 
 - **G1 carimba `past_due` de propósito.** O instinto é poupar quem "tem saldo e quer pagar", mas sem carimbo a assinatura nunca é cortada e um teto baixo demais vira assinatura gratuita vitalícia, sem erro em lugar nenhum. Os 10 dias **são** o prazo para subir o limite. O que muda em relação a G2 não é o relógio — é a copy e o estado de UI.
 - **G3 corta na hora, mas nunca só pelo código.** Antes de cancelar, reconsultar `GET /pix/automatic/authorizations/{id}` e só cortar se o gateway **disser** `CANCELLED`/`EXPIRED`/`REFUSED`; se responder `ACTIVE`, o código mente e o caso vira G7. É o mesmo fail-closed que a #319 construiu em `cancelarVinculo`. Sem o guard, código espúrio revoga autorização — e revogação não volta sem novo consentimento no app do banco.
 - **G6 não move estado nenhum**, e não é só "não carimba `past_due`": o ciclo **não vai para `falhou`**. Motivo concreto: `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` (retentativa nossa mal emitida) chega **depois** da recusa de saldo que já carimbou `past_due` corretamente. Deixar G6 escrever apagaria o estado certo com erro nosso.
-- **G7/G0 escalam na 3ª recusa operacional do mesmo ciclo**, passando ao desfecho de G2. Sem limite, banco que erra sempre vira assinatura gratuita vitalícia. Três porque é o mesmo orçamento do `3R_7D`. Contagem por **ciclo**, zera quando o ciclo é pago.
+- **G7/G0 não escalam por contador, escalam por prazo** — ver a Decisão 2 abaixo, que substituiu o desenho original.
 
 E uma correção de dinheiro que a classificação encontrou de brinde: **`PAYMENT_ALREADY_DONE` significa cobrança liquidada.** Hoje viraria `falhou` → `past_due` → dívida contra clínica adimplente.
 
@@ -72,27 +78,40 @@ E uma correção de dinheiro que a classificação encontrou de brinde: **`PAYME
 
 - **Metade cara (reemissão) não entra na #318** — vira issue própria, junto da #322. Mas as decisões abaixo ficam fechadas agora porque determinam o estado de UI que a #318 já precisa desenhar.
 - **Quem dispara: a clínica, por botão** ("Já ajustei o limite"), nunca varredura. O guia **proíbe** o banco de notificar que o cliente ajustou o teto — não existe sinal para varredura observar, e varredura cega queimaria as 3 tentativas sem informação. A clínica é o único sensor que existe.
-- **Limites: 3 por ciclo, no máx. 1 por dia, nenhuma depois de D+7 do vencimento.** Não é escolha nossa — é o teto do `3R_7D`, e o gateway devolve 400 em cada borda. Botão **desabilitado com motivo escrito** ao atingir qualquer uma, em vez de deixar a clínica tocar para receber erro de gateway.
+- **Limites da reemissão: 3 por ciclo, no máx. 1 por dia, nenhuma depois de D+7 do vencimento.** Não é escolha nossa — é o teto do `3R_7D`, e o gateway devolve 400 em cada borda. Botão **desabilitado com motivo escrito** ao atingir qualquer uma, em vez de deixar a clínica tocar para receber erro de gateway.
 - **Idempotência:** não comandar se já houver instrução pendente (`AWAITING_REQUEST`/`SCHEDULED`) — o gateway recusaria com `PAYMENT_ALREADY_SCHEDULED`, que é G6, defeito nosso.
 - **Copy sem citar valor** (o teto é ilegível por regulação). Regra que vale para os 9 grupos: **dizer o que fazer e onde, nunca o código** — a própria doc do Asaas orienta não expor o código bruto.
 
-### ⚠️ Por que a label `jules` NÃO foi aplicada
+### As 3 decisões que ficaram pendentes, fechadas pelo tech lead
 
-O passo 4 previa "fecha a tabela → aplica a label". Três motivos derrubaram isso:
+Rômulo pediu a decisão em vez da consulta. Nenhuma volta como "a validar" — o §5.2 existe para que o executor não escolha por nós. **Duas das três mudaram ao serem decididas de verdade**, e a razão da mudança é a parte que importa.
 
-1. **A tarefa 0 não é mecânica.** Passar a ler o motivo do recurso certo é mudança de adapter num caminho **não verificável em sandbox** (nenhuma autorização ativa lá ⇒ nenhuma instrução ⇒ nenhuma recusa, #321). O executor autônomo escreveria contra um dublê que ele mesmo desenha — exatamente o padrão que produziu as fixtures inventadas.
-2. **A DoD pede uma consulta, e consulta exige coluna.** "Listar ciclos que falharam por teto" não se resolve com `LIKE` em `billing_cycle.erro` — texto livre cobrindo situações distintas é o defeito que a issue existe para matar. Proposta: **`billing_cycle.recusa_codigo text`**, guardando o literal do gateway e derivando o grupo em código (o grupo evolui; o código recebido é fato imutável). Isso toca modelo de dados ⇒ pela regra do `CLAUDE.md` a issue roteia por **`/tlc-spec-driven`**, não pela label. Some-se `GRANT` de coluna (`app_role` só tem `SELECT` em `billing_cycle`). **Derruba a premissa do artifact** de que nenhum passo desta linha toca modelo de dados.
-3. **Duas decisões são minhas, não do Rômulo:** a divergência deliberada da DoD em G5 (ver abaixo) e o limite de 3 de G7/G0. Ambas mudam quando uma clínica real perde acesso. Marcadas como proposta pendente.
+**Decisão 1 — G5 RATIFICADA, por outro motivo.** `ACCOUNT_CLOSED`/`ACCOUNT_BLOCKED` seguem carimbando, consumindo carência e nunca gastando retentativa. Mas a justificativa "implemento a intenção da DoD, não a letra" era **fraca** — vira licença para reinterpretar qualquer DoD. Substituída pela regra geral da 1ª coluna (acima): conta encerrada é fato sobre a clínica tanto quanto saldo zerado, e por isso carimba. **Restrição inegociável que sai junto:** `ACCOUNT_BLOCKED` **não** pode disparar o corte imediato do G3 — bloqueio é frequentemente temporário (judicial, antifraude, revisão cadastral), e o corte revoga a autorização, que não volta sem novo consentimento. Cortar na hora por um bloqueio que se resolve em 3 dias troca problema reversível por irreversível.
 
-**A divergência de G5, explícita:** a DoD escrita diz "recusa terminal de conta não consome carência esperando um pagamento que não vem". Implementei a **intenção** e não a letra — o que não pode acontecer é **retentar**; consumir a carência é o que dá à clínica um prazo com data para refazer a autorização com outra conta. Não carimbar deixaria a assinatura `active` para sempre. É o único ponto em que divirjo da DoD; reverter é trocar uma linha da tabela, não o desenho.
+**Decisão 2 — o contador de 3 CAI. Entra prazo: um ciclo não pago em D+7 do vencimento carimba `past_due`, qualquer que tenha sido o motivo — exceto G6.** O contador tinha três defeitos que só apareceram ao tentar defendê-lo:
+
+1. **Não conta nada enquanto a #322 não existir.** Sem orquestração de retentativa, cada ciclo produz **uma** recusa; o contador nunca chegaria a 3 e o banco que erra sempre viraria assinatura gratuita vitalícia — exatamente o buraco que ele foi inventado para tapar. Guard que só funciona depois de outra issue entrar não é guard.
+2. **Depende de quantos webhooks o gateway resolve mandar**, fato não medido (#321) e fora do nosso controle. Régua que se move sozinha.
+3. **Precisaria de persistência** — uma coluna de contador, mais schema para medir a coisa errada.
+
+O prazo não tem nenhum dos três, e **o número não é escolha**: em D+7 o `POST .../retries` passa a devolver 400 pelo limite `7D`, então o trilho automático está **provadamente** esgotado, seja qual for o motivo original. O que a recusa operacional compra é **tempo, não imunidade** — o banco ter falhado não faz a mensalidade deixar de ser devida. `past_due_desde` recebe o instante do carimbo (D+7), não a data da recusa: o relógio começa quando concluímos que a clínica deve, então ela fica com 7 + 10 = 17 dias, e isso é intencional. **G6 não tem backstop, deliberadamente:** defeito nosso é custo nosso, e cobrar a clínica por um `dueDate` que **nós** calculamos seria carimbá-la de inadimplente pelo nosso bug. Roda como varredura na rota interna, **depois** de `fecharCiclosVencendo` (mesma regra de ordem da #319). Régua de mutação: um teste em D+6 que não carimba, um em D+7 que carimba, medindo a coluna.
+
+**Decisão 3 — coluna `billing_cycle.recusa_codigo text` APROVADA, e a razão não é relatório.** A justificativa pela consulta da DoD também era fraca (DoD se afrouxa). A razão real é que a coluna é **estrutural para a 4ª coluna da tabela**: a classificação acontece na escrita, a tela lê depois, noutro request — sem o código persistido o app não sabe por que o ciclo falhou, o G1 nunca renderiza "suba o limite no seu banco", e os 9 grupos passam a diferir só em log. A consulta da DoD é sintoma; o requisito é a UI. `LIKE` sobre `erro` está descartado sem discussão: texto livre cobrindo situações distintas **é o defeito que a issue existe para matar**. Guarda o **código cru**, grupo derivado em código — do cru sempre se re-deriva o grupo, do grupo não se recupera o cru.
+
+SQL medido nas migrações (não em `information_schema` — sem Postgres nesta máquina): `billing_cycle` tem privilégio **de tabela** (`0071:237` para `app_role`, `0071:244` + `0075:67` para `iris_auth`) e **nenhum `REVOKE` jamais tocou esta tabela**, então a coluna nova já entra coberta. Emitir os `GRANT` explícitos mesmo assim, seguindo o idioma de `subscription` (`0088:28-29`, `0089:33-34`) e não o da própria `billing_cycle` (`0097` não emitiu nenhum): custo de uma linha, e sobrevive ao dia em que alguém converter a tabela para granular. Nullable sem default, igual a `erro` (`0071:106`). Nenhuma policy muda (são por linha, só citam `clinic_id`); não há view sobre a tabela; `billing_apurar_ciclo` faz `SELECT` com lista explícita, sem `CREATE OR REPLACE`. Caminho canônico é `pnpm db:generate` e depois editar o `.sql` para os `GRANT`, **sem tocar no snapshot**. Próxima tag `0099`, idx 99.
+
+**Consequência de processo:** a #318 sai da rota `jules` e vai para **`/tlc-spec-driven`**. Não é perda — a tarefa 0 também não era entregável por executor autônomo, por não ser verificável em sandbox.
 
 ### O que falta, em ordem
 
-1. Rômulo ratificar (ou reverter) as duas decisões marcadas como proposta.
-2. Decidir **coluna nova × abrir mão da consulta da DoD**. Se coluna: `/tlc-spec-driven`.
-3. Migrar as fixtures inventadas para os códigos reais (não depende de nada, pode ir antes).
-4. Tarefa 0: ler `paymentInstruction.refusalReason` pelo recurso certo, com o `paymentInstruction.id` que o webhook já entrega e o normalizador descarta.
-5. Só então a tabela, com um teste por grupo cuja remoção da linha correspondente do mapa derrube **aquele** teste (régua §5.2 ponto 5).
+1. Migrar as fixtures inventadas para os códigos reais (não depende de nada, pode ir primeiro).
+2. Tarefa 0: ler `paymentInstruction.refusalReason` pelo recurso certo, com o `paymentInstruction.id` que o webhook já entrega e o normalizador descarta. Remover a leitura sobre `GET /payments/{id}` — não é defensiva, é vazia.
+3. Migração `0099_billing_cycle_recusa_codigo` + gravação de `recusa_codigo` no ramo `recusada`.
+4. `classificarRecusa(codigo) → grupo` em `subscription.ts:1236`, governando as três decisões que hoje são incondicionais: texto do `erro`, se o ciclo vai a `falhou`, se o bloco de carimbo roda.
+5. Varredura do backstop de D+7 na rota interna, depois de `fecharCiclosVencendo`.
+6. UI por grupo — sem ela os 9 grupos diferem só em log. Cruza com a #312 e com o **D36**.
+
+Um teste por grupo, com régua de comportamento: apagar a linha daquele grupo no mapa derruba **aquele** teste e nenhum outro.
 
 ---
 
