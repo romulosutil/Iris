@@ -474,6 +474,84 @@ describe("AsaasProvider", () => {
     });
   });
 
+  /**
+   * #290 — cobrança do débito de reativação.
+   *
+   * A diferença que importa em relação a `emitirCobrancaDeCiclo` é o NEGATIVO:
+   * aqui `pixAutomaticAuthorizationId` **não pode** ir no corpo. A autorização
+   * de Pix Automático foi revogada — é o ato que produziu o cancelamento — e
+   * anexá-la mandaria o Asaas debitar um trilho morto, produzindo uma cobrança
+   * que ninguém consegue pagar. Também não há consulta à autorização: o cliente
+   * vem por parâmetro, de `subscription.provider_customer_id`.
+   */
+  describe("emitirCobrancaAvulsa", () => {
+    const debito = {
+      clienteId: "cus_000008561913",
+      valorCentavos: 1300,
+      referenciaExterna: "debito:22222222-2222-2222-2222-222222222222",
+      descricao: "Iris — débito do ciclo interrompido",
+      vencimento: new Date("2026-10-09T01:00:00.000Z"),
+    };
+
+    it("cobra Pix comum contra o cliente, sem tocar na autorização revogada", async () => {
+      fetchMock
+        // 1) busca de idempotência: nada emitido ainda
+        .mockResolvedValueOnce(resposta({ object: "list", data: [] }))
+        // 2) a cobrança
+        .mockResolvedValueOnce(
+          resposta({
+            id: "pay_debito_290",
+            status: "PENDING",
+            invoiceUrl: "https://www.asaas.com/i/debito290",
+          }),
+        )
+        // 3) o BR Code
+        .mockResolvedValueOnce(resposta({ payload: "00020126…debito" }));
+
+      const emitida = await new AsaasProvider().emitirCobrancaAvulsa(debito);
+
+      expect(emitida.providerChargeId).toBe("pay_debito_290");
+      expect(emitida.pixCopiaECola).toBe("00020126…debito");
+
+      const [url, init] = fetchMock.mock.calls[1]!;
+      expect(url).toBe("https://api-sandbox.asaas.com/v3/payments");
+      const corpo = JSON.parse(init.body);
+      expect(corpo.customer).toBe(debito.clienteId);
+      expect(corpo.billingType).toBe("PIX");
+      expect(corpo.value).toBe(13);
+      // O ponto do método existir separado.
+      expect(corpo.pixAutomaticAuthorizationId).toBeUndefined();
+      // E nenhuma ida à autorização revogada.
+      expect(
+        fetchMock.mock.calls.filter(([u]) =>
+          String(u).includes("/pix/automatic/authorizations"),
+        ),
+      ).toHaveLength(0);
+    });
+
+    it("falha ao buscar o BR Code não derruba a cobrança já criada", async () => {
+      fetchMock
+        .mockResolvedValueOnce(resposta({ object: "list", data: [] }))
+        .mockResolvedValueOnce(
+          resposta({
+            id: "pay_debito_290",
+            status: "PENDING",
+            invoiceUrl: "https://www.asaas.com/i/debito290",
+          }),
+        )
+        .mockResolvedValueOnce(resposta({ errors: [] }, 500));
+
+      const emitida = await new AsaasProvider().emitirCobrancaAvulsa(debito);
+
+      // A cobrança EXISTE no gateway neste ponto. Lançar aqui obrigaria a
+      // próxima tentativa a reconciliar uma cobrança órfã — troca um QR
+      // ausente por um problema pior. `invoiceUrl` é a saída de contingência.
+      expect(emitida.providerChargeId).toBe("pay_debito_290");
+      expect(emitida.pixCopiaECola).toBeUndefined();
+      expect(emitida.urlPagamento).toBe("https://www.asaas.com/i/debito290");
+    });
+  });
+
   describe("consultarCobranca", () => {
     it.each([
       ["RECEIVED", "paga"],

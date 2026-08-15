@@ -585,6 +585,7 @@ describe("FormularioAtivacao", () => {
             podeCadastrarPaciente: false,
             diasRestantesTrial: -1,
             statusAssinatura: "free_tier",
+            debitoCentavos: 0,
           }}
         />,
       );
@@ -627,6 +628,7 @@ describe("FormularioAtivacao", () => {
           podeCadastrarPaciente: false,
           diasRestantesTrial: -1,
           statusAssinatura: "free_tier",
+          debitoCentavos: 0,
         }}
       />,
     );
@@ -655,6 +657,7 @@ describe("FormularioAtivacao", () => {
           podeCadastrarPaciente: true,
           diasRestantesTrial: null,
           statusAssinatura: "active",
+          debitoCentavos: 0,
         }}
       />,
     );
@@ -703,6 +706,7 @@ describe("FormularioAtivacao", () => {
             podeCadastrarPaciente: false,
             diasRestantesTrial: -1,
             statusAssinatura: "free_tier",
+            debitoCentavos: 0,
           }}
         />,
       );
@@ -748,6 +752,7 @@ describe("FormularioAtivacao", () => {
             podeCadastrarPaciente: false,
             diasRestantesTrial: -1,
             statusAssinatura: "free_tier",
+            debitoCentavos: 0,
           }}
         />,
       );
@@ -774,6 +779,7 @@ describe("FormularioAtivacao", () => {
               podeCadastrarPaciente: true,
               diasRestantesTrial: null,
               statusAssinatura: "active",
+              debitoCentavos: 0,
             }}
           />,
         );
@@ -806,6 +812,7 @@ describe("FormularioAtivacao", () => {
           podeCadastrarPaciente: false,
           diasRestantesTrial: -1,
           statusAssinatura: "free_tier",
+          debitoCentavos: 0,
         }}
       />,
     );
@@ -829,5 +836,134 @@ describe("FormularioAtivacao", () => {
         configurable: true,
       });
     }
+  });
+  /**
+   * Débito de reativação (#290).
+   *
+   * O caso que fecha o beco sem saída é o do **polling**: pagar o débito NÃO
+   * move `subscription.status` — a assinatura continua `canceled` até a clínica
+   * autorizar o Pix Automático de novo. Um polling que esperasse
+   * `estado === "ativa"` giraria para sempre sobre um QR já pago, a pessoa
+   * concluiria que falhou e pagaria de novo. O sinal correto é
+   * `debitoCentavos` chegando a zero, e é isso que os dois últimos casos
+   * discriminam: com o guard trocado por `estado`, eles falham.
+   */
+  describe("débito de reativação", () => {
+    const situacao = (debitoCentavos: number) => ({
+      estado: "cancelada" as const,
+      podeEscrever: false,
+      podeCadastrarPaciente: false,
+      diasRestantesTrial: -1,
+      statusAssinatura: "canceled",
+      debitoCentavos,
+    });
+
+    const DEBITO = {
+      valorCentavos: 1300,
+      pagamento: {
+        forma: "pix_copia_e_cola" as const,
+        brCode: "00020126…debito-290",
+      },
+    };
+
+    it("avisa o valor em aberto ANTES de a pessoa clicar em ativar", () => {
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          situacaoConta={situacao(1300)}
+        />,
+      );
+
+      expect(screen.getByText(/há um valor em aberto/i)).toBeTruthy();
+      expect(document.body.textContent).toMatch(/13,00/);
+    });
+
+    it("quem não deve nada não vê aviso de débito", () => {
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          situacaoConta={situacao(0)}
+        />,
+      );
+
+      expect(screen.queryByText(/valor em aberto/i)).toBeNull();
+    });
+
+    it("com débito cobrado, mostra o copia-e-cola e NÃO o QR de ativação", () => {
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{ debito: DEBITO }}
+          situacaoConta={situacao(1300)}
+        />,
+      );
+
+      expect(screen.getByText(/pague o valor em aberto/i)).toBeTruthy();
+      expect(document.body.textContent).toMatch(/00020126…debito-290/);
+      // A autorização de R$ 0,01 não pode existir ainda: o gate barrou antes.
+      expect(screen.queryByText(/falta pagar para concluir/i)).toBeNull();
+    });
+
+    it("quitado o débito, troca o QR por confirmação em vez de girar para sempre", () => {
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{ debito: DEBITO }}
+          // O sinal que muda é o DÉBITO. `estado` continua `cancelada`.
+          situacaoConta={situacao(0)}
+        />,
+      );
+
+      expect(screen.getByText(/débito quitado/i)).toBeTruthy();
+      expect(screen.queryByText(/pague o valor em aberto/i)).toBeNull();
+      expect(document.body.textContent).not.toMatch(/00020126…debito-290/);
+    });
+
+    it("faz polling enquanto o débito não é quitado", () => {
+      vi.useFakeTimers();
+      try {
+        render(
+          <FormularioAtivacao
+            acao={acaoQueDevolve({})}
+            navegar={vi.fn()}
+            estadoInicial={{ debito: DEBITO }}
+            situacaoConta={situacao(1300)}
+          />,
+        );
+
+        act(() => {
+          vi.advanceTimersByTime(5000);
+        });
+        expect(refreshMock).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("para o polling assim que o débito zera — a assinatura segue cancelada", () => {
+      vi.useFakeTimers();
+      try {
+        render(
+          <FormularioAtivacao
+            acao={acaoQueDevolve({})}
+            navegar={vi.fn()}
+            estadoInicial={{ debito: DEBITO }}
+            situacaoConta={situacao(0)}
+          />,
+        );
+
+        act(() => {
+          vi.advanceTimersByTime(20000);
+        });
+        // Zero: sem este guard o timer vaza girando sobre um débito já pago.
+        expect(refreshMock).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

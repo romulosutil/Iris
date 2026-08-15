@@ -1,8 +1,8 @@
 import "server-only";
-import { and, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { billingCycle, subscription } from "@/db/schema";
-import { calcularMensalidadeCentavos } from "./calculator";
+import { apurarDebitoProRata, calcularMensalidadeCentavos } from "./calculator";
 import {
   AsaasProvider,
   BillingProviderError,
@@ -328,8 +328,23 @@ export async function aplicarStatusProvider(
       status: novo,
       atualizadoEm: agora,
       ativadaEm: virandoAtiva ? (linha.ativadaEm ?? agora) : linha.ativadaEm,
+      // `?? agora` na ENTRADA em canceled, pela mesma razão de `past_due_desde`:
+      // a reentrega do webhook não pode mover o instante de corte, senão o
+      // débito pro-rata muda a cada tentativa.
+      //
+      // E **zerado na reativação** (#290). Sem isto, a clínica que cancela,
+      // volta e cancela de novo tem o SEGUNDO débito apurado contra o corte do
+      // PRIMEIRO: `congelarCiclosComoDebito` lê `cancelada_em`, e um valor
+      // antigo faz `encerradoEm` cair antes do início do ciclo novo, onde
+      // `apurarDebitoProRata` satura no piso de 1 dia. Ciclo de 10 dias usados
+      // sairia por R$ 1,30 em vez de R$ 13,00 — exatamente o dia grátis que a
+      // #290 existe para fechar, reaberto pelo caminho de volta.
       canceladaEm:
-        novo === "canceled" ? (linha.canceladaEm ?? agora) : linha.canceladaEm,
+        novo === "canceled"
+          ? (linha.canceladaEm ?? agora)
+          : virandoAtiva
+            ? null
+            : linha.canceladaEm,
       // `past_due_desde` só é carimbado na ENTRADA em past_due. Recarimbar a
       // cada reentrega do mesmo evento zeraria a carência para sempre e a
       // assinatura nunca venceria.
@@ -354,7 +369,95 @@ export async function aplicarStatusProvider(
     );
   }
 
+  if (novo === "canceled") {
+    // Depois do UPDATE, e lendo `cancelada_em` do valor já persistido: se esta
+    // chamada falhar aqui, o webhook é reentregue e a reexecução precisa apurar
+    // contra o MESMO instante de corte, senão o débito muda a cada tentativa.
+    await congelarCiclosComoDebito(linha.id, linha.canceladaEm ?? agora);
+  }
+
   return true;
+}
+
+/**
+ * Fecha os ciclos vivos de uma assinatura cancelada como DÉBITO pro-rata
+ * (#287 Problema 1, desenho na #290).
+ *
+ * O bug que isto conserta: `fecharCiclosVencendo` varre
+ * `subscription.status = 'active'`. Assinatura cancelada sai da varredura para
+ * sempre, e o `billing_cycle` em `aberto` do ciclo interrompido nunca mais era
+ * olhado — pacientes apurados, nenhuma fatura, nada vermelho em lugar nenhum.
+ * É o caminho normal de todo cancelamento: ninguém revoga a autorização no app
+ * do banco exatamente na virada do ciclo.
+ *
+ * ## Não emite cobrança, de propósito
+ *
+ * A autorização do Pix Automático acabou de ser revogada — é justamente o ato
+ * que produziu este cancelamento. Não existe trilho para cobrar neste instante.
+ * O ciclo fica congelado em `devido` e quem cobra é o gate de reativação
+ * (#290): pagar o que deve é a porta de entrada de volta.
+ *
+ * ## A idempotência é por STATUS DO CICLO, não pela transição da assinatura
+ *
+ * Guardar por "estava active e virou canceled" seria uma armadilha: o UPDATE da
+ * assinatura já commitou quando esta função roda, então uma falha aqui (rede,
+ * `billing_apurar_ciclo` indisponível) deixaria a linha `canceled` e a
+ * reentrega do webhook — que é como o Asaas se recupera — encontraria
+ * `status === 'canceled'` e pularia o congelamento para sempre. Filtrando por
+ * `status IN ('aberto','apurado')` a reexecução se auto-limita: ciclo já
+ * congelado está em `devido` e não é encontrado de novo.
+ *
+ * `apurado` entra junto com `aberto` porque é o resíduo de um fechamento que
+ * morreu no meio (apurou, falhou ao emitir); ele também nunca mais seria
+ * varrido. `aguardando_pagamento`/`falhou`/`pago` ficam de fora: ali já existe
+ * cobrança emitida no gateway, e reescrever o valor descolaria o memorial da
+ * fatura que a clínica recebeu.
+ */
+async function congelarCiclosComoDebito(
+  subscriptionId: string,
+  canceladaEm: Date,
+): Promise<void> {
+  const vivos = await authDb
+    .select({
+      id: billingCycle.id,
+      inicio: billingCycle.inicio,
+      fim: billingCycle.fim,
+    })
+    .from(billingCycle)
+    .where(
+      and(
+        eq(billingCycle.subscriptionId, subscriptionId),
+        inArray(billingCycle.status, ["aberto", "apurado"]),
+      ),
+    );
+
+  for (const ciclo of vivos) {
+    // Mesma separação do fechamento normal: a CONTAGEM vem do banco (SECURITY
+    // DEFINER, `iris_auth` não tem grant em `patient`), o PREÇO vem daqui.
+    const apuracao = await authDb.execute<{ total: number }>(
+      sql`SELECT billing_apurar_ciclo(${ciclo.id}::uuid) AS total`,
+    );
+    const fichasContadas =
+      (apuracao as unknown as { total: number }[])[0]?.total ?? 0;
+
+    const debito = apurarDebitoProRata({
+      fichasAtivas: fichasContadas,
+      inicio: ciclo.inicio,
+      fim: ciclo.fim,
+      encerradoEm: canceladaEm,
+    });
+
+    await authDb
+      .update(billingCycle)
+      .set({
+        // `billing_apurar_ciclo` deixou o ciclo em `apurado`; `devido` é o
+        // estado terminal, e é o que o tira da varredura de fechamento.
+        status: "devido",
+        valorCentavos: debito.valorCentavos,
+        erro: null,
+      })
+      .where(eq(billingCycle.id, ciclo.id));
+  }
 }
 
 /**
@@ -680,9 +783,29 @@ export async function conciliarPagamentoDeCiclo(
       .set({ status: "pago", cobradoEm: agora, erro: null })
       .where(eq(billingCycle.id, ciclo.id));
 
+    // Liquidação em cascata do débito agrupado (#290, coluna da 0097).
+    //
+    // Uma cobrança de débito pode cobrir N ciclos `devido`: o valor é a soma, o
+    // id da cobrança fica na ÂNCORA (o ciclo mais antigo) porque
+    // `provider_charge_id` é UNIQUE parcial, e os demais apontam para ela. Sem
+    // esta cascata a clínica pagaria o total e continuaria devendo todos os
+    // ciclos menos um — com o gate de reativação barrando quem já pagou.
+    //
+    // Idempotente por construção: reescrever `pago` com `pago` é no-op, então a
+    // reentrega do webhook não muda nada.
+    await authDb
+      .update(billingCycle)
+      .set({ status: "pago", cobradoEm: agora, erro: null })
+      .where(eq(billingCycle.debitoAgrupadoEm, ciclo.id));
+
     // Pagamento em dia tira a assinatura de `past_due` — e só o pagamento faz
     // isso. `pastDueDesde` volta a NULL para que uma inadimplência futura
     // recomece a carência do zero.
+    //
+    // O `eq(status,'past_due')` também é o que garante que **pagar o débito não
+    // reativa** (#290): a assinatura `canceled` continua `canceled` depois de
+    // quitar. Quitar destrava o gate; voltar continua sendo um ato explícito da
+    // clínica, com autorização nova de Pix Automático.
     await authDb
       .update(subscription)
       .set({ status: "active", pastDueDesde: null, atualizadoEm: agora })

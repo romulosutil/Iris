@@ -7,6 +7,7 @@ import {
   type CobrancaEmitida,
   type EntradaVerificacaoWebhook,
   type EventoWebhookNormalizado,
+  type NovaCobrancaAvulsa,
   type NovaCobrancaDeCiclo,
   type NovoVinculo,
   type StatusAssinaturaProvider,
@@ -701,6 +702,98 @@ export class AsaasProvider implements BillingProvider {
       status: mapearStatusCobranca(resposta.status),
       ...(urlPagamento ? { urlPagamento } : {}),
     };
+  }
+
+  /**
+   * Cobrança avulsa contra o cliente (#290 — débito de reativação).
+   *
+   * Difere de `emitirCobrancaDeCiclo` em dois pontos, e os dois são o motivo de
+   * o método existir separado:
+   *
+   * 1. **O cliente vem por parâmetro, não da autorização.** Lá o `customerId` é
+   *    lido de `GET /pix/automatic/authorizations/{id}` porque a autorização é a
+   *    fonte da verdade. Aqui essa autorização foi REVOGADA — é o ato que
+   *    produziu o cancelamento — e consultá-la seria pedir 404 (ou pior, um
+   *    `customerId` de um trilho morto). O id vem de
+   *    `subscription.provider_customer_id`, gravado na ativação.
+   * 2. **Sem `pixAutomaticAuthorizationId`.** Anexar o id da autorização faria o
+   *    Asaas tentar debitar automaticamente algo que a clínica revogou. Esta
+   *    cobrança é Pix comum: a pessoa lê o QR e paga à mão.
+   */
+  async emitirCobrancaAvulsa(
+    dados: NovaCobrancaAvulsa,
+  ): Promise<CobrancaEmitida> {
+    const jaEmitida = await this.buscarCobrancaPorReferencia(
+      dados.referenciaExterna,
+    );
+    if (jaEmitida) {
+      return {
+        ...jaEmitida,
+        ...(jaEmitida.pixCopiaECola
+          ? {}
+          : await this.brCodeDe(jaEmitida.providerChargeId)),
+      };
+    }
+
+    const resposta = comoRegistro(
+      await chamar("POST", "/payments", {
+        corpo: {
+          customer: dados.clienteId,
+          billingType: "PIX",
+          value: centavosParaReais(dados.valorCentavos),
+          dueDate: dataAsaas(dados.vencimento),
+          description: dados.descricao,
+          externalReference: dados.referenciaExterna,
+        },
+      }),
+    );
+
+    const providerChargeId = comoTexto(resposta.id);
+    if (!providerChargeId) {
+      throw new BillingProviderError("resposta do Asaas sem `id` de cobrança", {
+        corpo: resposta,
+      });
+    }
+
+    const urlPagamento = comoTexto(resposta.invoiceUrl) ?? undefined;
+    return {
+      providerChargeId,
+      status: mapearStatusCobranca(resposta.status),
+      ...(urlPagamento ? { urlPagamento } : {}),
+      ...(await this.brCodeDe(providerChargeId)),
+    };
+  }
+
+  /**
+   * BR Code de uma cobrança Pix já criada (`GET /payments/{id}/pixQrCode`).
+   *
+   * **Nunca lança.** A cobrança já existe neste ponto — deixar uma falha na
+   * busca do QR derrubar a emissão obrigaria a próxima tentativa a reconciliar
+   * uma cobrança órfã, trocando um QR ausente por um problema pior. Sem o
+   * copia-e-cola a tela cai no `invoiceUrl`, que é a fatura hospedada do Asaas.
+   *
+   * `encodedImage` (o QR em base64) segue ignorado, mesmo motivo da autorização:
+   * é uma renderização deste mesmo `payload`, e a UI desenha o QR localmente.
+   */
+  private async brCodeDe(
+    providerChargeId: string,
+  ): Promise<{ pixCopiaECola?: string }> {
+    try {
+      const qr = comoRegistro(
+        await chamar(
+          "GET",
+          `/payments/${encodeURIComponent(providerChargeId)}/pixQrCode`,
+        ),
+      );
+      const payload = comoTexto(qr.payload);
+      return payload ? { pixCopiaECola: payload } : {};
+    } catch (e) {
+      console.warn("[billing-debito] falha ao obter BR Code da cobrança", {
+        providerChargeId,
+        err: e instanceof Error ? e.message : String(e),
+      });
+      return {};
+    }
   }
 
   async consultarCobranca(providerChargeId: string): Promise<{

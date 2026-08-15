@@ -112,7 +112,7 @@ export default async function PacienteLayout({
       </div>
       {!situacao.podeEscrever ? (
         <Alert severidade="info" destacado titulo="Conta em somente-leitura">
-          <p>{mensagemDeEstado(situacao.estado)}</p>
+          <p>{mensagemDeEstado(situacao.estado, situacao.debitoCentavos)}</p>
           {comLinkParaAssinatura ? (
             <p className="mt-2">
               <Link
