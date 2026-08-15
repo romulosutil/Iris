@@ -165,28 +165,37 @@ async function limpar(): Promise<void> {
  * que jogasse G6 em G0 passaria verde medindo só o banco. É exatamente o defeito
  * [teste-verde-que-nao-testa-nada].
  */
-let aviso: ReturnType<typeof vi.spyOn>;
+function espiarWarn() {
+  return vi.spyOn(console, "warn").mockImplementation(() => {});
+}
+
+let aviso: ReturnType<typeof espiarWarn>;
+
+/** As linhas de `console.warn` publicadas no caso corrente. */
+function linhasDeAviso(): [string, Record<string, unknown>?][] {
+  return aviso.mock.calls as unknown as [string, Record<string, unknown>?][];
+}
 
 /** O grupo que a linha `[billing-recusa]` publicou. */
 function grupoAvisado(): unknown {
-  const chamada = aviso.mock.calls.find(
-    (c) => c[0] === "[billing-recusa] cobrança de ciclo recusada",
+  const chamada = linhasDeAviso().find(
+    ([msg]) => msg === "[billing-recusa] cobrança de ciclo recusada",
   );
-  return (chamada?.[1] as { grupo?: unknown } | undefined)?.grupo;
+  return chamada?.[1]?.grupo;
 }
 
 /** Se a tag PRÓPRIA do código desconhecido saiu. */
 function avisouDesconhecida(): boolean {
-  return aviso.mock.calls.some(
-    (c) =>
-      c[0] === "[billing-recusa-desconhecida] código fora do catálogo da #318",
+  return linhasDeAviso().some(
+    ([msg]) =>
+      msg === "[billing-recusa-desconhecida] código fora do catálogo da #318",
   );
 }
 
 describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
   beforeEach(async () => {
     await limpar();
-    aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+    aviso = espiarWarn();
   });
 
   afterEach(() => {
