@@ -981,21 +981,23 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       );
       expect(res.status).toBe(200);
 
-      // O recurso consultado é o oráculo: a segunda chamada tem que ser a da
-      // INSTRUÇÃO, pelo id que veio no evento.
+      // Comportamento PRIMEIRO: o código chegou ao ciclo. Quando o gateway diz
+      // a causa, ela manda — o diagnóstico do Iris não pode sobrepor
+      // "provavelmente é o teto" a um motivo explícito: a orientação ao cliente
+      // é oposta nos dois casos.
+      const ciclo = await lerCiclo(cicloId);
+      expect(ciclo.status).toBe("falhou");
+      expect(ciclo.erro).toContain("PAYMENT_OVERDUE");
+      expect(ciclo.erro).not.toMatch(/teto/i);
+
+      // ...e por qual recurso ele chegou: a segunda chamada tem que ser a da
+      // INSTRUÇÃO, pelo id que veio no evento. Sem esta asserção, uma leitura
+      // do recurso errado que por acaso devolvesse o campo passaria verde.
       expect(chamadasGateway).toHaveLength(2);
       expect(chamadasGateway[0]).toContain(`/payments/${paymentId}`);
       expect(chamadasGateway[1]).toContain(
         `/pix/automatic/paymentInstructions/${instrucaoId}`,
       );
-
-      const ciclo = await lerCiclo(cicloId);
-      expect(ciclo.status).toBe("falhou");
-      // Quando o gateway diz a causa, ela manda — o diagnóstico do Iris não
-      // pode sobrepor "provavelmente é o teto" a um motivo explícito: a
-      // orientação ao cliente é oposta nos dois casos.
-      expect(ciclo.erro).toContain("PAYMENT_OVERDUE");
-      expect(ciclo.erro).not.toMatch(/teto/i);
     });
 
     it("INSTRUCTION_REFUSED cuja reconsulta NÃO devolve OVERDUE deixa rastro em vez de sumir (#286)", async () => {

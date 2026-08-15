@@ -26,10 +26,12 @@
 ### Task 1: Copy preventiva do teto na `/assinatura`
 
 **Files:**
+
 - Modify: `src/app/(app)/assinatura/formulario-ativacao.tsx:178-179` (entre o `</p>` do "Abra o app do seu banco…" e a `<div>` do `QrCode`)
 - Test: `src/app/(app)/assinatura/formulario-ativacao.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `autorizacao.valorAtivacaoCentavos` (number, centavos) e `formatarBRL(centavos: number): string` — ambos já em escopo no mesmo bloco (uso existente em `formulario-ativacao.tsx:167`).
 - Produces: nada consumido por outras tasks. Alteração isolada de UI.
 
@@ -40,8 +42,7 @@ Adicionar em `src/app/(app)/assinatura/formulario-ativacao.test.tsx`, dentro do 
 ```tsx
 it("avisa sobre o teto do banco dentro do mesmo Alert e ANTES do QR Code", async () => {
   const user = userEvent.setup();
-  const brCode =
-    "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF";
+  const brCode = "00020126330014BR.GOV.BCB.PIX0111copiaecola6304FFFF";
   render(
     <FormularioAtivacao
       acao={acaoQueDevolve({
@@ -54,9 +55,7 @@ it("avisa sobre o teto do banco dentro do mesmo Alert e ANTES do QR Code", async
       navegar={vi.fn()}
     />,
   );
-  await user.click(
-    screen.getByRole("button", { name: /ativar assinatura/i }),
-  );
+  await user.click(screen.getByRole("button", { name: /ativar assinatura/i }));
 
   // O aviso existe e nomeia as duas coisas que o leitor precisa fazer:
   // não aceitar o valor da ativação como teto, e usar a conta de folga.
@@ -89,7 +88,8 @@ Expected: FAIL — `Unable to find an element with the text: /valor máximo/i`
 Em `src/app/(app)/assinatura/formulario-ativacao.tsx`, logo depois do `</p>` da linha 178 e **antes** da `<div className="mt-3 flex justify-center">` da linha 179:
 
 ```tsx
-              {/* #286 — o teto de valor é diretriz do BACEN: TODO app de banco
+{
+  /* #286 — o teto de valor é diretriz do BACEN: TODO app de banco
                   pergunta, em TODA ativação, e sugere o valor em tela (o da
                   ativação). Aceitar a sugestão faz toda mensalidade futura ser
                   recusada meses depois, em silêncio. Medido em 13/08/2026: o
@@ -98,15 +98,16 @@ Em `src/app/(app)/assinatura/formulario-ativacao.tsx`, logo depois do `</p>` da 
                   esta copy é a única barreira preventiva. Fica antes do QR de
                   propósito: depois de ler o código a pessoa já está no app do
                   banco. `R$ 40` é conta de folga sobre a faixa marginal real
-                  (R$ 25 a R$ 39 por paciente ativo), não promessa de preço. */}
-              <p className="mt-2">
-                <strong>
-                  O banco vai pedir um valor máximo de cobrança — não aceite os{" "}
-                  {formatarBRL(autorizacao.valorAtivacaoCentavos)} sugeridos
-                </strong>
-                , isso é só a ativação. Use um teto com folga: pacientes
-                esperados no mês × <strong>R$ 40</strong>.
-              </p>
+                  (R$ 25 a R$ 39 por paciente ativo), não promessa de preço. */
+}
+<p className="mt-2">
+  <strong>
+    O banco vai pedir um valor máximo de cobrança — não aceite os{" "}
+    {formatarBRL(autorizacao.valorAtivacaoCentavos)} sugeridos
+  </strong>
+  , isso é só a ativação. Use um teto com folga: pacientes esperados no mês ×{" "}
+  <strong>R$ 40</strong>.
+</p>;
 ```
 
 - [ ] **Step 4: Rodar o teste e conferir que passa, junto com o arquivo inteiro**
@@ -121,6 +122,7 @@ pnpm prettier --write "src/app/(app)/assinatura/formulario-ativacao.tsx" "src/ap
 pnpm typecheck
 pnpm lint
 ```
+
 `pnpm format` sem argumento reformata o repo inteiro (incluindo `.agents/` e o worktree aninhado) — não usar.
 
 - [ ] **Step 6: Commit**
@@ -135,17 +137,27 @@ git commit -m "feat(billing): warn about the bank's value ceiling before the Pix
 ### Task 2: Adapter passa a devolver o motivo da recusa (quando existir)
 
 **Files:**
+
 - Modify: `src/lib/billing/provider/types.ts:268-271` (retorno de `consultarCobranca` na porta)
 - Modify: `src/lib/billing/provider/asaas.ts:706-723` (`AsaasProvider.consultarCobranca`)
 - Test: `src/lib/billing/provider/asaas.test.ts` (bloco `describe("consultarCobranca")`, a partir de `:477`)
 
 **Interfaces:**
+
 - Consumes: helpers já existentes em `asaas.ts` — `comoRegistro(v: unknown): Record<string, unknown>`, `comoTexto(v: unknown): string | null`, `mapearStatusCobranca`, `reaisParaCentavos`.
 - Produces: `consultarCobranca(providerChargeId: string): Promise<{ status: StatusCobranca; valorCentavos: number; motivoRecusa: string | null }>` — a Task 3 consome `motivoRecusa`.
 
 - [ ] **Step 1: Escrever os testes que falham**
 
 Adicionar dentro do `describe("consultarCobranca")` em `src/lib/billing/provider/asaas.test.ts`:
+
+> ⚠️ **Superado pelo débito D35 (15/08/2026).** A premissa deste passo — "o
+> motivo pode vir no corpo de `GET /payments/{id}`" — foi medida contra o
+> OpenAPI e é falsa: o `PaymentGetResponseDTO` não declara `refusalReason`,
+> `failureReason` nem um `pixTransaction` objeto. O dono do motivo é
+> `GET /v3/pix/automatic/paymentInstructions/{id}`. Os códigos abaixo foram
+> migrados para os REAIS do catálogo do Asaas (inglês); o código do adapter
+> está em `asaas.ts:motivoDaRecusa`.
 
 ```ts
 it("devolve o motivo da recusa quando o gateway informa algum", async () => {
@@ -157,10 +169,10 @@ it("devolve o motivo da recusa quando o gateway informa algum", async () => {
     id: "pay_1",
     status: "REFUSED",
     value: 390,
-    refusalReason: "LIMITE_AUTORIZADO_EXCEDIDO",
+    refusalReason: "MAXIMUM_AMOUNT_EXCEEDED",
   });
   const r = await new AsaasProvider().consultarCobranca("pay_1");
-  expect(r.motivoRecusa).toBe("LIMITE_AUTORIZADO_EXCEDIDO");
+  expect(r.motivoRecusa).toBe("MAXIMUM_AMOUNT_EXCEEDED");
 });
 
 it("devolve motivoRecusa null quando o gateway não informa nada", async () => {
@@ -259,12 +271,14 @@ git commit -m "feat(billing): surface the gateway refusal reason through the pro
 ### Task 3: `billing_cycle.erro` nomeia a causa provável da recusa
 
 **Files:**
+
 - Modify: `src/lib/billing/subscription.ts:603-660` (`conciliarPagamentoDeCiclo`, ramo `status === "recusada"`, `:642-646`)
 - Modify: `src/app/api/hooks/asaas/route.ts:160-171` (a rota passa o motivo adiante)
 - Modify: `src/lib/billing/subscription.ts:726-732` (a varredura `reprocessarEventosPendentes` passa o motivo adiante também)
 - Test: `src/lib/billing/fechamento-provedor-por-linha.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `consultarCobranca(...) => { status, valorCentavos, motivoRecusa }` (Task 2).
 - Produces: `conciliarPagamentoDeCiclo(providerChargeId: string, status: StatusCobranca, motivoRecusa?: string | null): Promise<boolean>` — terceiro parâmetro **opcional**, default `null`, para não quebrar chamada existente nenhuma.
 
@@ -298,7 +312,7 @@ it("recusa COM motivo do gateway grava o motivo bruto, sem inventar hipótese", 
   await conciliarPagamentoDeCiclo(
     "pay_recusada_2",
     "recusada",
-    "SALDO_INSUFICIENTE",
+    "PAYMENT_OVERDUE",
   );
 
   const [ciclo] = await authDb
@@ -308,7 +322,7 @@ it("recusa COM motivo do gateway grava o motivo bruto, sem inventar hipótese", 
   // Quando o gateway diz a causa, ela manda — o diagnóstico do Iris não pode
   // sobrepor "provavelmente é o teto" a um "saldo insuficiente" explícito: a
   // orientação ao cliente é oposta nos dois casos.
-  expect(ciclo!.erro).toContain("SALDO_INSUFICIENTE");
+  expect(ciclo!.erro).toContain("PAYMENT_OVERDUE");
   expect(ciclo!.erro).not.toMatch(/teto/i);
 });
 ```
@@ -375,21 +389,21 @@ O restante do ramo (`past_due` + `pastDueDesde` na entrada) fica **exatamente** 
 Em `src/app/api/hooks/asaas/route.ts`, no ramo `if (normalizado.providerChargeId)` (`:160-167`):
 
 ```ts
-      const aplicou = await conciliarPagamentoDeCiclo(
-        normalizado.providerChargeId,
-        atual.status,
-        atual.motivoRecusa,
-      );
+const aplicou = await conciliarPagamentoDeCiclo(
+  normalizado.providerChargeId,
+  atual.status,
+  atual.motivoRecusa,
+);
 ```
 
 Em `src/lib/billing/subscription.ts:729-732` (varredura de pendentes):
 
 ```ts
-        await conciliarPagamentoDeCiclo(
-          normalizado.providerChargeId,
-          atual.status,
-          atual.motivoRecusa,
-        );
+await conciliarPagamentoDeCiclo(
+  normalizado.providerChargeId,
+  atual.status,
+  atual.motivoRecusa,
+);
 ```
 
 - [ ] **Step 5: Rodar a suíte que cobre este caminho**
@@ -401,6 +415,7 @@ pnpm test -- src/lib/billing/reprocessamento-provedor.int.test.ts
 pnpm typecheck
 pnpm lint
 ```
+
 Expected: PASS em todos. Se o teste da rota tiver um dublê de provider, ele precisa devolver `motivoRecusa` — devolver `null` é a forma certa (é o que produção faz hoje).
 
 - [ ] **Step 6: Commit**
@@ -415,9 +430,11 @@ git commit -m "feat(billing): name the likely cause when a cycle charge is refus
 ### Task 4: Medição de produção que fecha o ponto aberto (ação de campo, sem código)
 
 **Files:**
+
 - Modify: `docs/infra/` — acrescentar o passo ao runbook de faturamento existente (o mesmo arquivo onde está o procedimento do job de fechamento). Se não houver seção adequada, criar `docs/infra/medicao-teto-pix-automatico.md`.
 
 **Interfaces:**
+
 - Consumes: nada. Produces: a resposta definitiva de P1, a ser colada como comentário na #286.
 
 Esta task não tem ciclo de teste porque não tem código: é medição contra produção, e só o Rômulo tem acesso ao painel (`infra/README.md:26`).
