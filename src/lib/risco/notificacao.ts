@@ -170,7 +170,7 @@ export async function assertDestinatariosNoTenant(
   const linhas = (await tx.execute(sql`
     SELECT DISTINCT ur.user_id FROM user_role ur
      WHERE ur.clinic_id = ${args.clinicId}
-       AND ur.user_id = ANY(${ids}::uuid[])
+       AND ur.user_id = ANY(${sql.param(ids)}::uuid[])
   `)) as unknown as Array<{ user_id: string }>;
   const noTenant = new Set(linhas.map((l) => l.user_id));
   const forasteiros = ids.filter((i) => !noTenant.has(i));
