@@ -1,0 +1,5 @@
+🔒 fix: replace insecure Math.random with crypto.randomUUID
+
+🎯 **What:** The id generation in the Toast component used `Math.random().toString(36).substring(2, 9)`, which is not cryptographically secure and prone to collisions.
+⚠️ **Risk:** While the impact in a Toast component is generally low, using predictable identifiers can cause DOM state conflicts if collision occurs (e.g., closing the wrong toast). Using predictable IDs is also a bad security practice across the codebase.
+🛡️ **Solution:** Replaced the insecure `Math.random()` call with the standard Web Crypto API `crypto.randomUUID()`.
