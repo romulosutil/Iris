@@ -60,7 +60,9 @@ async function salvarRPDCore(
 export const salvarRPD = comEscrita(salvarRPDCore);
 
 export async function obterRPDEntries(ctx: TenantContext, patientId: string) {
-  requireRole(ctx, "coordenador", "terapeuta", "admin_recepcao");
+  // admin_recepcao não vê dado clínico (RLS já barra a leitura; aqui evitamos
+  // vazar o dado no retorno da função antes mesmo da policy ser avaliada).
+  requireRole(ctx, "coordenador", "terapeuta");
   return await withTenant(ctx, async (tx) => {
     return await tx
       .select()

@@ -55,7 +55,11 @@ export default async function PacienteLayout({
     { href: `${base}/briefing`, rotulo: "Briefing" },
     { href: `${base}/cadastro-clinico`, rotulo: "Ficha Clínica" },
     { href: `${base}/metas`, rotulo: "PEI & Metas" },
-    { href: `${base}/tcc`, rotulo: "TCC" },
+    // TCC não é visível para admin_recepcao (dado clínico, mesma régua de
+    // logic.ts/page.tsx): sem esse filtro a aba levaria a um 404.
+    ...(ctx.role === "admin_recepcao"
+      ? []
+      : [{ href: `${base}/tcc`, rotulo: "TCC" }]),
     { href: `${base}/equipe`, rotulo: "Equipe" },
     { href: `${base}/horas`, rotulo: "Horas" },
     { href: `${base}/ausencias`, rotulo: "Ausências" },

@@ -1,4 +1,6 @@
+import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
+import { requireRole } from "@/auth/require-role";
 import { obterRPDEntries } from "./logic";
 import { RpdForm } from "./rpd-form";
 import { GraficoEvolucaoCrencas } from "./grafico-evolucao-crencas";
@@ -11,6 +13,14 @@ interface TccPageProps {
 export default async function TccPage({ params }: TccPageProps) {
   const { id: patientId } = await params;
   const ctx = await getTenantContext();
+  try {
+    // admin_recepcao não vê dado clínico (RLS já barra a leitura; aqui
+    // evitamos renderizar a casca da tela p/ um papel que nunca deveria
+    // chegar nela — mesmo padrão de metas/page.tsx e pei/page.tsx).
+    requireRole(ctx, "coordenador", "terapeuta");
+  } catch {
+    notFound();
+  }
 
   const entries = await obterRPDEntries(ctx, patientId);
 
