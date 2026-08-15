@@ -1,6 +1,7 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { hasDb } from "@tests/integration-env";
+import { RoleError } from "@/auth/require-role";
 
 vi.mock("server-only", () => ({}));
 
@@ -9,6 +10,7 @@ const CLINIC_B = "00000000-0000-0000-0000-0000000000b1";
 const U_COORD = "00000000-0000-0000-0000-0000000c01a1";
 const U_T1 = "00000000-0000-0000-0000-0000000071a1"; // na equipe de PAC
 const U_T2 = "00000000-0000-0000-0000-0000000072a1"; // NÃO na equipe de PAC
+const U_RECEP = "00000000-0000-0000-0000-0000000073a1"; // admin_recepcao, sem acesso clínico
 const PAC = "00000000-0000-0000-0000-0000000ac1a1";
 const PAC_B = "00000000-0000-0000-0000-0000000ac1b1"; // outra clínica
 
@@ -19,6 +21,11 @@ const ctxCoord = {
 } as const;
 const ctxT1 = { clinicId: CLINIC_A, userId: U_T1, role: "terapeuta" } as const;
 const ctxT2 = { clinicId: CLINIC_A, userId: U_T2, role: "terapeuta" } as const;
+const ctxRecep = {
+  clinicId: CLINIC_A,
+  userId: U_RECEP,
+  role: "admin_recepcao",
+} as const;
 const ctxCoordB = {
   clinicId: CLINIC_B,
   userId: U_COORD,
@@ -34,15 +41,31 @@ describe.skipIf(!hasDb)("TCC · Registro de Pensamentos Distorcidos (RPD)", () =
     L = await import("./logic");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
-    await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
-      tcc_rpd_entry RESTART IDENTITY CASCADE`;
+    // TRUNCATE ... CASCADE (não DELETE escopado): PAC/CLINIC_A são o mesmo
+    // UUID literal reusado por várias outras suítes .int.test.ts (diario,
+    // protocolos, metas, arquivamento, desarquivamento) como "paciente
+    // canônico" de fixture. Suítes anteriores na ordem de execução (ex.:
+    // diario/actions.int.test.ts, que roda antes por ordem alfabética)
+    // deixam linhas residuais em tabelas-filhas de patient (ex.: session)
+    // que um DELETE escopado só a tcc_rpd_entry/care_team_membership/patient
+    // não limpa, estourando FK. `fileParallelism: false` no
+    // vitest.integration.config.ts ("uma conexão/DB por vez") é o que torna
+    // TRUNCATE seguro aqui — arquivos rodam em série, não em paralelo, então
+    // a colisão que a memória "TRUNCATE extra colide com int-test paralelo"
+    // descreve (deadlock entre arquivos concorrentes) não se aplica a esta
+    // config. CASCADE cobre session/extraction/goal/etc. sem enumerar cada
+    // tabela-filha à mão.
+    await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership, tcc_rpd_entry RESTART IDENTITY CASCADE`;
+
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')`;
     await owner`INSERT INTO app_user (id, email, name) VALUES
-      (${U_COORD}, 'c@x.com', 'Coord'), (${U_T1}, 't1@x.com', 'T1'), (${U_T2}, 't2@x.com', 'T2')`;
+      (${U_COORD}, 'c@x.com', 'Coord'), (${U_T1}, 't1@x.com', 'T1'), (${U_T2}, 't2@x.com', 'T2'),
+      (${U_RECEP}, 'recep@x.com', 'Recep')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD}, ${CLINIC_A}, 'coordenador'),
       (${U_T1}, ${CLINIC_A}, 'terapeuta'),
       (${U_T2}, ${CLINIC_A}, 'terapeuta'),
+      (${U_RECEP}, ${CLINIC_A}, 'admin_recepcao'),
       (${U_COORD}, ${CLINIC_B}, 'coordenador')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${PAC}, ${CLINIC_A}, 'Paciente A'), (${PAC_B}, ${CLINIC_B}, 'Paciente B')`;
@@ -91,7 +114,7 @@ describe.skipIf(!hasDb)("TCC · Registro de Pensamentos Distorcidos (RPD)", () =
       respostaRacional: "Resposta",
     });
 
-    expect(resInvalido.error).toBeTruthy();
+    expect(resInvalido.error).toBe("Intensidade deve ser no máximo 100");
     expect(resInvalido.id).toBeUndefined();
   });
 
@@ -106,7 +129,22 @@ describe.skipIf(!hasDb)("TCC · Registro de Pensamentos Distorcidos (RPD)", () =
       respostaRacional: "Não posso prever a reação de todos.",
     });
 
-    expect(res.error).toBeTruthy();
+    // RLS bloqueia silenciosamente (0 linhas afetadas), não lança — o motivo
+    // real é a policy, não um erro de validação. Ver logic.ts/withTenant.
+    expect(res.error).toBe("Não foi possível salvar o RPD.");
+    expect(res.id).toBeUndefined();
+  });
+
+  test("terapeuta FORA da equipe não lê RPD do paciente (RLS filtra em silêncio)", async () => {
+    // Entradas de PAC já existem (criadas por T1 no teste anterior).
+    // app_is_on_team(PAC) é falso para T2 e T2 não é coordenador — a policy
+    // de SELECT devolve 0 linhas, sem lançar.
+    const entries = await L.obterRPDEntries(ctxT2, PAC);
+    expect(entries).toEqual([]);
+  });
+
+  test("admin_recepcao é barrado na camada de aplicação antes de tocar o banco", async () => {
+    await expect(L.obterRPDEntries(ctxRecep, PAC)).rejects.toThrow(RoleError);
   });
 
   test("isolamento multi-tenant: clínica B não enxerga nem salva RPD de paciente da clínica A", async () => {
@@ -121,7 +159,8 @@ describe.skipIf(!hasDb)("TCC · Registro de Pensamentos Distorcidos (RPD)", () =
       respostaRacional: "Invasão bloqueada",
     });
 
-    expect(resSalvar.error).toBeTruthy();
+    expect(resSalvar.error).toBe("Não foi possível salvar o RPD.");
+    expect(resSalvar.id).toBeUndefined();
 
     // Consulta do coordenador B não retorna dados do paciente A
     const entriesB = await L.obterRPDEntries(ctxCoordB, PAC);
