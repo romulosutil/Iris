@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  diasCorridosEntre,
   diasUteisEntre,
   ehDiaUtilBancario,
   proximoDiaUtilBancario,
@@ -18,6 +19,20 @@ describe("calendário bancário brasileiro", () => {
     expect(ehDiaUtilBancario(dia("2026-09-07"))).toBe(false);
     expect(ehDiaUtilBancario(dia("2026-11-20"))).toBe(false); // Lei 14.759/2023
     expect(ehDiaUtilBancario(dia("2026-12-25"))).toBe(false);
+  });
+
+  it("fecha 24/12 e 31/12, que não são feriado civil", () => {
+    // Quinta 24/12/2026 e quinta 31/12/2026: dias de semana comuns no
+    // calendário civil, banco fechado. Sem eles o cluster de fim de ano
+    // entrega vencimento com 1 dia útil de antecedência.
+    expect(ehDiaUtilBancario(dia("2026-12-24"))).toBe(false);
+    expect(ehDiaUtilBancario(dia("2026-12-31"))).toBe(false);
+    // Outro ano, outro dia da semana: 24/12/2025 é quarta, 31/12/2025 quinta.
+    expect(ehDiaUtilBancario(dia("2025-12-24"))).toBe(false);
+    expect(ehDiaUtilBancario(dia("2025-12-31"))).toBe(false);
+    // Vizinhos continuam úteis — o conjunto não engoliu a semana inteira.
+    expect(ehDiaUtilBancario(dia("2026-12-23"))).toBe(true); // quarta
+    expect(ehDiaUtilBancario(dia("2026-12-30"))).toBe(true); // quarta
   });
 
   it("deriva os feriados móveis da Páscoa", () => {
@@ -48,5 +63,19 @@ describe("calendário bancário brasileiro", () => {
     expect(diasUteisEntre(dia("2026-08-21"), dia("2026-08-24"))).toBe(0);
     // ordem invertida ou mesma data: 0, nunca negativo
     expect(diasUteisEntre(dia("2026-08-28"), dia("2026-08-24"))).toBe(0);
+  });
+
+  it("conta dias corridos, ignorando feriado e fim de semana", () => {
+    // Valores diferentes de zero e diferentes entre si: um `return 0` fixo,
+    // ou um resultado colado em `diasUteisEntre`, morre aqui.
+    expect(diasCorridosEntre(dia("2026-08-14"), dia("2026-08-19"))).toBe(5);
+    expect(diasCorridosEntre(dia("2026-08-24"), dia("2026-08-25"))).toBe(1);
+    // Atravessa mês e ano, e cai numa janela cheia de não-úteis: corridos
+    // conta os 9 dias mesmo assim (só 3 seriam úteis).
+    expect(diasCorridosEntre(dia("2026-12-26"), dia("2027-01-04"))).toBe(9);
+    expect(diasUteisEntre(dia("2026-12-26"), dia("2027-01-04"))).toBe(3);
+    // ordem invertida ou mesma data: 0, nunca negativo
+    expect(diasCorridosEntre(dia("2026-08-19"), dia("2026-08-14"))).toBe(0);
+    expect(diasCorridosEntre(dia("2026-08-19"), dia("2026-08-19"))).toBe(0);
   });
 });

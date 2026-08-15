@@ -40,15 +40,15 @@ export const ANTECEDENCIA_MAXIMA_DIAS_CORRIDOS = 10;
 /** Antecedência desejada quando o calendário não atrapalha. Era o valor único. */
 export const ANTECEDENCIA_PADRAO_DIAS_CORRIDOS = 5;
 
-export function vencimentoCobrancaDeCiclo(base: Date): Date {
-  let candidato = proximoDiaUtilBancario(
-    somarCorridos(base, ANTECEDENCIA_PADRAO_DIAS_CORRIDOS),
-  );
-
-  while (diasUteisEntre(base, candidato) < ANTECEDENCIA_MINIMA_DIAS_UTEIS) {
-    candidato = proximoDiaUtilBancario(somarCorridos(candidato, 1));
-  }
-
+/**
+ * Guarda o teto de dias CORRIDOS da janela. Exportada e não embutida em
+ * `vencimentoCobrancaDeCiclo` porque nenhum fechamento real do calendário
+ * brasileiro a faz lançar (a maior antecedência medida em 3 anos é 9): dentro
+ * da função, o ramo do `throw` seria código sem cobertura nenhuma, vivo só na
+ * leitura. Como função pura dá para alimentá-la com um candidato fora da
+ * janela e provar que ela morde.
+ */
+export function verificarTetoDaJanela(base: Date, candidato: Date): void {
   const corridos = diasCorridosEntre(base, candidato);
   if (corridos > ANTECEDENCIA_MAXIMA_DIAS_CORRIDOS) {
     // Estado impossível no calendário brasileiro (a maior sequência de
@@ -60,6 +60,18 @@ export function vencimentoCobrancaDeCiclo(base: Date): Date {
       `Vencimento calculado a ${corridos} dias corridos da emissão excede o teto de ${ANTECEDENCIA_MAXIMA_DIAS_CORRIDOS} da janela do Pix Automático`,
     );
   }
+}
+
+export function vencimentoCobrancaDeCiclo(base: Date): Date {
+  let candidato = proximoDiaUtilBancario(
+    somarCorridos(base, ANTECEDENCIA_PADRAO_DIAS_CORRIDOS),
+  );
+
+  while (diasUteisEntre(base, candidato) < ANTECEDENCIA_MINIMA_DIAS_UTEIS) {
+    candidato = proximoDiaUtilBancario(somarCorridos(candidato, 1));
+  }
+
+  verificarTetoDaJanela(base, candidato);
   return candidato;
 }
 

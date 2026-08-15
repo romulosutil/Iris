@@ -19,7 +19,7 @@
 
 const TIMEZONE = "America/Sao_Paulo";
 
-/** `01-01` … `12-25`. Feriados nacionais de data fixa. */
+/** `01-01` … `12-31`. Feriados nacionais de data fixa. */
 const FERIADOS_FIXOS = new Set([
   "01-01", // Confraternização Universal
   "04-21", // Tiradentes
@@ -29,7 +29,16 @@ const FERIADOS_FIXOS = new Set([
   "11-02", // Finados
   "11-15", // Proclamação da República
   "11-20", // Consciência Negra (nacional desde a Lei 14.759/2023)
+  // 24/12 e 31/12 NÃO são feriado civil — são fechamento bancário: o
+  // expediente não abre e nada liquida. São exatamente os dois dias que o
+  // docblock acima justifica incluir, e sem eles o cluster de fim de ano
+  // entrega vencimento com 1 dia útil de antecedência (fechamento em
+  // 22/12/2026 → 28/12, com só 23/12 de útil no meio). Medido: com os dois,
+  // a maior antecedência em 3 anos é 9 dias corridos — o teto de 10 continua
+  // folgado.
+  "12-24", // Fechamento bancário (véspera de Natal)
   "12-25", // Natal
+  "12-31", // Fechamento bancário (último dia útil do ano)
 ]);
 
 /** Data civil de São Paulo, normalizada ao meio-dia UTC. */
