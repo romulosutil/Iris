@@ -1023,7 +1023,7 @@ export async function cancelarAssinaturasComCarenciaVencida(opcoes?: {
 
       resultados.push({ ...base, cortada: true });
     } catch (e) {
-      const detalhe = e instanceof Error ? e.message : String(e);
+      const detalhe = detalharErro(e);
       resultados.push({
         ...base,
         cortada: false,
@@ -1037,6 +1037,63 @@ export async function cancelarAssinaturasComCarenciaVencida(opcoes?: {
   }
 
   return resultados;
+}
+
+/**
+ * Mensagem diagnosticável de um erro que pode chegar EMBRULHADO (#319, D33).
+ *
+ * `e.message` cru não serve aqui. O Drizzle converte toda falha de query em
+ * `DrizzleQueryError`, cuja `message` é `Failed query: <SQL>\nparams: <...>` —
+ * o SQL que nós mesmos escrevemos, nunca o que o Postgres respondeu. O erro
+ * real (violação de constraint, `RAISE EXCEPTION` de trigger, deadlock) fica em
+ * `cause`, encadeado. Medido: no caso de congelamento que falha por trigger, a
+ * `message` externa é o `UPDATE` inteiro e a palavra que identifica a causa só
+ * existe na `cause`.
+ *
+ * Por que a causa RAIZ e não a externa: quem lê isto é o log do job
+ * (`scripts/fechamento-ciclo-billing.mjs` publica `carenciaFalhas[].erro` e mais
+ * nada), e a etapa já vai no prefixo `[gateway|congelamento|escrita]`. O SQL
+ * emitido não acrescenta nada que a etapa não diga.
+ *
+ * Por que `detail`/`hint` ENTRAM DEPOIS da `message`, e não no lugar dela: são
+ * campos do Postgres que COMPLEMENTAM. Numa violação de FK, `message` é
+ * "insert or update on table X violates foreign key constraint Y" e `detail` é
+ * "Key (a)=(b) is not present in table Z" — trocar um pelo outro perde metade
+ * do diagnóstico, e num `RAISE EXCEPTION` sem `DETAIL`/`HINT` (o caso comum)
+ * uma cadeia de `??` que os prefira cai direto na `message` do embrulho.
+ */
+function detalharErro(e: unknown): string {
+  // Teto de profundidade: `cause` pode ser cíclica e não há contrato que o
+  // impeça. Oito níveis cobrem com folga o encadeamento real (app → Drizzle →
+  // driver).
+  let raiz: unknown = e;
+  for (let i = 0; i < 8; i++) {
+    if (!(raiz instanceof Error) || raiz.cause == null) break;
+    raiz = raiz.cause;
+  }
+
+  if (!(raiz instanceof Error)) return String(raiz);
+
+  // Campos do protocolo do Postgres tal como o driver `postgres` os anexa.
+  // Ausentes em erro nosso (`new Error(...)`) e em `BillingProviderError`.
+  const pg = raiz as Error & {
+    code?: unknown;
+    detail?: unknown;
+    hint?: unknown;
+  };
+  const extras = (
+    [
+      ["code", pg.code],
+      ["detail", pg.detail],
+      ["hint", pg.hint],
+    ] as const
+  )
+    .filter(([, v]) => typeof v === "string" && v.trim() !== "")
+    .map(([nome, v]) => `${nome}=${v as string}`);
+
+  return extras.length > 0
+    ? `${raiz.message} (${extras.join("; ")})`
+    : raiz.message;
 }
 
 /**
