@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, inArray } from "drizzle-orm";
 import type { withTenant } from "@/db/rls";
 import {
   goal,
@@ -9,7 +9,10 @@ import {
   protocol,
   sessionProtocolScope,
 } from "@/db/schema";
-import { buildCanonicalContext, type AssemblerInput } from "./context-assembler";
+import {
+  buildCanonicalContext,
+  type AssemblerInput,
+} from "./context-assembler";
 
 // Tipo da transação que withTenant entrega ao callback (evita reimportar o tipo
 // interno do drizzle/postgres).
@@ -61,7 +64,9 @@ export async function loadCanonicalContext(
         isNull(patientProtocol.desativadoEm),
       ),
     );
-  const ativos = pps.filter((p) => scopeIds.size === 0 || scopeIds.has(p.protocolId));
+  const ativos = pps.filter(
+    (p) => scopeIds.size === 0 || scopeIds.has(p.protocolId),
+  );
 
   const protocolos: AssemblerInput["protocolos"] = [];
   for (const p of ativos) {
@@ -74,10 +79,17 @@ export async function loadCanonicalContext(
       .from(milestone)
       .where(eq(milestone.protocolId, p.protocolId));
     // um item por dominio_id (marcos podem ter vários níveis do mesmo domínio)
-    const porDominio = new Map<string, { dominioId: string; nome: string; nivel: string | null }>();
+    const porDominio = new Map<
+      string,
+      { dominioId: string; nome: string; nivel: string | null }
+    >();
     for (const d of doms) {
       if (!porDominio.has(d.dominioId)) {
-        porDominio.set(d.dominioId, { dominioId: d.dominioId, nome: d.nome, nivel: d.nivel });
+        porDominio.set(d.dominioId, {
+          dominioId: d.dominioId,
+          nome: d.nome,
+          nivel: d.nivel,
+        });
       }
     }
     protocolos.push({
@@ -90,7 +102,11 @@ export async function loadCanonicalContext(
   }
 
   const metasRows = await tx
-    .select({ id: goal.id, descricao: goal.descricao, disciplina: goal.disciplina })
+    .select({
+      id: goal.id,
+      descricao: goal.descricao,
+      disciplina: goal.disciplina,
+    })
     .from(goal)
     .where(
       and(
@@ -101,9 +117,12 @@ export async function loadCanonicalContext(
     );
 
   const metas: AssemblerInput["metas"] = [];
-  for (const m of metasRows) {
-    const maps = await tx
+
+  if (metasRows.length > 0) {
+    const goalIds = metasRows.map((m) => m.id);
+    const allMaps = await tx
       .select({
+        goalId: goalMilestoneMapping.goalId,
         familia: protocol.familia,
         dominioId: milestone.dominioId,
         nivel: milestone.nivel,
@@ -111,13 +130,34 @@ export async function loadCanonicalContext(
       .from(goalMilestoneMapping)
       .innerJoin(milestone, eq(goalMilestoneMapping.milestoneId, milestone.id))
       .innerJoin(protocol, eq(milestone.protocolId, protocol.id))
-      .where(eq(goalMilestoneMapping.goalId, m.id));
-    metas.push({
-      id: m.id,
-      descricao: m.descricao,
-      disciplina: m.disciplina,
-      mapeamentos: maps,
-    });
+      .where(inArray(goalMilestoneMapping.goalId, goalIds));
+
+    // Agrupa em memória
+    const mapsByGoal = new Map<
+      string,
+      Array<{ familia: string; dominioId: string; nivel: string | null }>
+    >();
+    for (const row of allMaps) {
+      let arr = mapsByGoal.get(row.goalId);
+      if (!arr) {
+        arr = [];
+        mapsByGoal.set(row.goalId, arr);
+      }
+      arr.push({
+        familia: row.familia,
+        dominioId: row.dominioId,
+        nivel: row.nivel,
+      });
+    }
+
+    for (const m of metasRows) {
+      metas.push({
+        id: m.id,
+        descricao: m.descricao,
+        disciplina: m.disciplina,
+        mapeamentos: mapsByGoal.get(m.id) || [],
+      });
+    }
   }
 
   return buildCanonicalContext({
