@@ -8,6 +8,13 @@ export type ExtractionContext = {
   // Contrato canônico montado pelo assembler (protocolos-e-agente.md Parte 2).
   // Opcional: stubs demo/null ignoram; o ClaudeProvider real o envia ao LLM.
   contextoCanonico?: unknown;
+  // Modo do agente, EXPLÍCITO e tipado. Antes o modo viajava só como um campo
+  // não tipado dentro de `contextoCanonico: unknown`, e o fallback
+  // `ctx.contextoCanonico ?? { metas_ativas }` do ClaudeProvider o apagava em
+  // silêncio sempre que o contexto não fosse montado — um paciente convencional
+  // caía no prompt/tool ABA sem nenhum sinal. Default seguro quando ausente:
+  // "protocol_driven" (o caminho que roda em produção hoje).
+  modo?: "terapia_convencional" | "protocol_driven";
 };
 
 export type ExtractionSubtipo =
@@ -16,6 +23,7 @@ export type ExtractionSubtipo =
   | "ausencia_comportamento"
   | "cadeia"
   | "preferencia_reforcador"
+  | "resumo_terapia_convencional" // artefato único do modo Terapia Convencional
   | "pendente"; // sentinela do NullProvider (pendente de reprocessamento)
 
 export type ExtractionDraft = {
@@ -59,7 +67,9 @@ import { ClaudeProvider, createAnthropicInvoker } from "./claude-provider";
 //   paciente real sai para a Anthropic enquanto o DPA + zero-data-retention não
 //   estiverem confirmados (a flag só é ligada no Easypanel depois disso).
 //   Sem a flag/chave → NullProvider (marca pendente, não chama LLM).
-export function resolveProvider(clinic: { isDemo: boolean }): ExtractionProvider {
+export function resolveProvider(clinic: {
+  isDemo: boolean;
+}): ExtractionProvider {
   if (clinic.isDemo) return new DemoStubProvider();
   const llmHabilitado =
     process.env.EXTRACTION_LLM_ENABLED === "true" &&

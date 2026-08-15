@@ -158,7 +158,10 @@ async function corrigirEscopoProtocoloCore(
             ajustadoPor: ctx.userId,
           })
           .onConflictDoUpdate({
-            target: [sessionProtocolScope.sessionId, sessionProtocolScope.protocolId],
+            target: [
+              sessionProtocolScope.sessionId,
+              sessionProtocolScope.protocolId,
+            ],
             set: { origem: "ajustado_manualmente", ajustadoPor: ctx.userId },
           });
       }
@@ -266,7 +269,11 @@ const consolidarSchema = z.object({
 async function consolidarSessaoCore(
   ctx: TenantContext,
   input: { sessionId: string; texto: string },
-): Promise<{ error?: string; numeroSequencial?: number; bloqueioConta?: BloqueioConta }> {
+): Promise<{
+  error?: string;
+  numeroSequencial?: number;
+  bloqueioConta?: BloqueioConta;
+}> {
   requireRole(ctx, "terapeuta");
   const parsed = consolidarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -315,7 +322,10 @@ async function consolidarSessaoCore(
       //    entre duas consolidações concorrentes: se o UPDATE colidir, relemos
       //    o número já gravado pela outra transação (idempotente).
       const [sess] = await tx
-        .select({ patientId: session.patientId, numero: session.numeroSequencialPaciente })
+        .select({
+          patientId: session.patientId,
+          numero: session.numeroSequencialPaciente,
+        })
         .from(session)
         .where(eq(session.id, sid));
       let numero = sess!.numero ?? null;
@@ -366,7 +376,9 @@ async function consolidarSessaoCore(
       const reextrair = deveReextrair({
         textoMudou,
         temExtracoes: exEstados.length > 0,
-        temPendente: exEstados.some((e) => e.estado === "pendente_reprocessamento"),
+        temPendente: exEstados.some(
+          (e) => e.estado === "pendente_reprocessamento",
+        ),
       });
 
       const [cl] = await tx
@@ -420,6 +432,9 @@ async function consolidarSessaoCore(
         notaConsolidada: novoTexto,
         metasAtivas: prep.metas,
         contextoCanonico: prep.contexto,
+        // Modo explícito: o provider não pode depender de farejar `modo` dentro
+        // do contexto canônico, que é `unknown` e pode nem ter sido montado.
+        modo: prep.contexto?.modo,
       });
       drafts = saida.drafts;
       alertaRisco = saida.alertaRisco;
@@ -431,12 +446,17 @@ async function consolidarSessaoCore(
     // ── Fase C: regrava só sugestões/pendências; PRESERVA linhas já revisadas
     //    (aprovada/editada/descartada, quando existirem — Plano 2).
     await withTenant(ctx, async (tx) => {
-      await tx.delete(extraction).where(
-        and(
-          eq(extraction.sessionId, sid),
-          inArray(extraction.estado, ["sugerida", "pendente_reprocessamento"]),
-        ),
-      );
+      await tx
+        .delete(extraction)
+        .where(
+          and(
+            eq(extraction.sessionId, sid),
+            inArray(extraction.estado, [
+              "sugerida",
+              "pendente_reprocessamento",
+            ]),
+          ),
+        );
       if (drafts.length > 0) {
         await tx.insert(extraction).values(
           drafts.map((d) => ({

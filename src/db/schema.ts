@@ -116,6 +116,12 @@ export const extractionSubtipo = pgEnum("extraction_subtipo", [
   "ausencia_comportamento",
   "cadeia",
   "preferencia_reforcador",
+  // Artefato único do modo Terapia Convencional (#98): o objeto inteiro do
+  // contrato TC (resumo_sessao, temas[], tema_recorrente_sinalizado[],
+  // padrao_participacao_verbal) vai no `payload` jsonb já existente. UM valor
+  // novo, não um por campo — o contrato TC não tem `trecho_fonte` nem eixo de
+  // confiança por item, e as duas colunas são NOT NULL.
+  "resumo_terapia_convencional",
   "pendente",
 ]);
 

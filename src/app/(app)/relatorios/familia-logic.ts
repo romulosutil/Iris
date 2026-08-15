@@ -78,12 +78,40 @@ async function nomePaciente(tx: Tx, patientId: string): Promise<string | null> {
   return rows[0]?.nome ?? null;
 }
 
+/**
+ * O Relatório de Família é EXCLUSIVO do modo dirigido a protocolo, e a exclusão
+ * é EXPLÍCITA de propósito.
+ *
+ * `buildFamiliaInput` lê `evidence`, `goal` e `reinforcer_profile` — três
+ * tabelas em que um paciente de Terapia Convencional nunca tem linha (o modo
+ * não gera evidência nem meta). A entrada sairia inteiramente vazia, e o F6
+ * ("honestidade em platôs") transformaria esse vazio num relatório afirmando à
+ * família que NADA aconteceu, para um paciente que teve 8 sessões. Exclusão por
+ * consequência acidental de query vazia é exatamente o tipo de silêncio que não
+ * se pode deixar num artefato que a família lê.
+ */
+async function modalidadePaciente(
+  tx: Tx,
+  patientId: string,
+): Promise<string | null> {
+  const rows = (await tx.execute(sql`
+    SELECT clinical_modality FROM patient WHERE id = ${patientId}::uuid
+  `)) as unknown as Array<{ clinical_modality: string }>;
+  return rows[0]?.clinical_modality ?? null;
+}
+
+const ERRO_MODALIDADE_CONVENCIONAL =
+  "Relatório de família não se aplica a paciente em Terapia Convencional: " +
+  "o modo não registra evidências nem metas, e o relatório afirmaria à família " +
+  "que nada foi trabalhado.";
+
 // ─── 1. Gerar rascunho (IA) — coordenador OU terapeuta on-team ───────────────
 export async function gerarRascunhoFamilia(
   ctx: TenantContext,
   input: GerarFamiliaInput,
 ): Promise<
-  { reportId: string; versao: number; draft: FamilyReportDraft } | { error: string }
+  | { reportId: string; versao: number; draft: FamilyReportDraft }
+  | { error: string }
 > {
   const parsed = gerarFamiliaSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -96,44 +124,49 @@ export async function gerarRascunhoFamilia(
 
   try {
     return await withTenant(ctx, async (tx) => {
-    // RLS já escopa o paciente: terapeuta fora da equipe não o enxerga → null.
-    const nome = await nomePaciente(tx, patientId);
-    if (!nome) return { error: "Paciente não encontrado ou fora do seu acesso." };
+      // RLS já escopa o paciente: terapeuta fora da equipe não o enxerga → null.
+      const nome = await nomePaciente(tx, patientId);
+      if (!nome)
+        return { error: "Paciente não encontrado ou fora do seu acesso." };
 
-    const isDemo = await clinicaDemo(tx, ctx.clinicId);
-    const provider = resolveFamilyReportProvider({ isDemo });
-    const entrada = await buildFamiliaInput(tx, {
-      patientId,
-      nomeCrianca: nome,
-      periodoInicio,
-      periodoFim,
-    });
-    const iaOriginal = await provider.gerar(entrada);
+      if ((await modalidadePaciente(tx, patientId)) === "conventional") {
+        return { error: ERRO_MODALIDADE_CONVENCIONAL };
+      }
 
-    const payload: PayloadFamilia = {
-      versao: 1,
-      crianca: { nome },
-      periodo: { inicio: periodoInicio, fim: periodoFim },
-      geradoEm: new Date().toISOString(),
-      // sempre "stub" até o ClaudeProvider ser habilitado pós-DPA (spec §5)
-      provider: "stub",
-      iaOriginal,
-      curado: null,
-    };
+      const isDemo = await clinicaDemo(tx, ctx.clinicId);
+      const provider = resolveFamilyReportProvider({ isDemo });
+      const entrada = await buildFamiliaInput(tx, {
+        patientId,
+        nomeCrianca: nome,
+        periodoInicio,
+        periodoFim,
+      });
+      const iaOriginal = await provider.gerar(entrada);
 
-    const rows = (await tx.execute(sql`
+      const payload: PayloadFamilia = {
+        versao: 1,
+        crianca: { nome },
+        periodo: { inicio: periodoInicio, fim: periodoFim },
+        geradoEm: new Date().toISOString(),
+        // sempre "stub" até o ClaudeProvider ser habilitado pós-DPA (spec §5)
+        provider: "stub",
+        iaOriginal,
+        curado: null,
+      };
+
+      const rows = (await tx.execute(sql`
       INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, status, payload, gerado_por_ia)
       VALUES (${ctx.clinicId}::uuid, ${patientId}::uuid, 'familia', ${periodoInicio}::date, ${periodoFim}::date, 'rascunho', ${JSON.stringify(payload)}::jsonb, true)
       RETURNING id
     `)) as unknown as Array<{ id: string }>;
-    const reportId = rows[0]!.id;
+      const reportId = rows[0]!.id;
 
-    await tx.execute(sql`
+      await tx.execute(sql`
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'relatorio_rascunho_gerado', 'report', ${reportId}::uuid, ${patientId}::uuid,
               jsonb_build_object('tipo', 'familia'::text))
     `);
-    return { reportId, versao: 1, draft: iaOriginal };
+      return { reportId, versao: 1, draft: iaOriginal };
     });
   } catch (err) {
     // Tradutor puro primeiro (constraints/RAISE, inequívocos); depois o

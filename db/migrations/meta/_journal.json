@@ -694,6 +694,13 @@
       "when": 1786737757645,
       "tag": "0098_patient_clinical_modality",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1786738757645,
+      "tag": "0099_extraction_subtipo_resumo_tc",
+      "breakpoints": true
     }
   ]
 }
