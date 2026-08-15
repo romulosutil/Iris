@@ -92,7 +92,7 @@ export default async function TccPage({ params }: TccPageProps) {
 
                     <div>
                       <strong className="text-[var(--text-primary)] block">2. Pensamento Automático:</strong>
-                      <span className="italic text-black font-medium">&quot;{item.pensamentoAutomatico}&quot;</span>
+                      <span className="italic text-[var(--text-primary)] font-medium">&quot;{item.pensamentoAutomatico}&quot;</span>
                     </div>
 
                     <div>
@@ -111,7 +111,7 @@ export default async function TccPage({ params }: TccPageProps) {
                       <span className="text-[var(--text-secondary)]">
                         {item.intensidadePos !== null ? (
                           <>
-                            <strong className="text-black">{item.intensidadePos}%</strong> (Redução de{" "}
+                            <strong className="text-[var(--text-primary)]">{item.intensidadePos}%</strong> (Redução de{" "}
                             {item.intensidade - item.intensidadePos}%)
                           </>
                         ) : (
