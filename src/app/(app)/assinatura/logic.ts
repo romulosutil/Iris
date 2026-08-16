@@ -7,7 +7,7 @@ import { validarEMaterializarCpfCnpj } from "@/lib/documento";
 import { iniciarAtivacao } from "@/lib/billing/subscription";
 import {
   resolverGateDeDebito,
-  type FormaPagamentoDebito,
+  type CobrancaDoDebito,
 } from "@/lib/billing/debito";
 import { BillingProviderError } from "@/lib/billing/provider";
 import type {
@@ -72,8 +72,13 @@ export type AtivacaoState = {
    * exatamente o que impede embutir o débito no QR de ativação.
    */
   debito?: {
+    /** Total do débito — a soma, mesmo quando há mais de uma cobrança. */
     valorCentavos: number;
-    pagamento: FormaPagamentoDebito;
+    /**
+     * Uma entrada por cobrança a pagar. Mais de uma quando parte do débito já
+     * tinha cobrança viva no gateway e foi reapresentada (#310).
+     */
+    cobrancas: CobrancaDoDebito[];
   };
 };
 
@@ -187,8 +192,28 @@ export async function iniciarAtivacaoAssinatura(
       return {
         debito: {
           valorCentavos: gate.totalCentavos,
-          pagamento: gate.pagamento,
+          cobrancas: gate.cobrancas,
         },
+      };
+    }
+    /**
+     * `bloqueado` NÃO segue para a ativação, ao contrário de `adiado` (#310,
+     * D-3 e P-2). Ali a clínica volta a usar o Iris com a dívida adiada; aqui
+     * nada foi emitido e nada foi decidido, então reabrir seria reativar sem
+     * cobrar — o oposto do pedido.
+     *
+     * Duas copies porque as orientações são OPOSTAS: gateway fora do ar pede
+     * "tente de novo em alguns instantes"; cobrança irrecuperável pede
+     * suporte. Mandar quem caiu num 500 falar com o suporte é ruído, e mandar
+     * quem tem estorno insistir é um beco sem saída.
+     */
+    if (gate.tipo === "bloqueado") {
+      return {
+        error:
+          gate.motivo === "gateway_indisponivel"
+            ? "Não conseguimos confirmar agora as cobranças em aberto da sua conta. Nada foi cobrado, e nenhuma cobrança nova foi criada. Tente novamente em alguns instantes."
+            : "A cobrança em aberto da sua conta precisa de revisão manual antes de a assinatura ser reaberta. Fale com o suporte informando o CNPJ da clínica.",
+        documento: documentoBruto,
       };
     }
   } catch (e) {

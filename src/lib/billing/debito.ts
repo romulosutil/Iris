@@ -7,6 +7,7 @@ import {
   BillingProviderError,
   getProviderPorId,
   type CobrancaEmitida,
+  type FormaPagamentoCobranca,
 } from "./provider";
 
 /**
@@ -89,10 +90,46 @@ export interface DebitoLevantado {
   ciclos: CicloDevido[];
 }
 
-/** Forma de pagamento do débito, do jeito que a tela precisa renderizar. */
-export type FormaPagamentoDebito =
-  | { forma: "pix_copia_e_cola"; brCode: string; urlPagamento?: string }
-  | { forma: "link"; urlPagamento: string };
+/**
+ * Forma de pagamento do débito, do jeito que a tela precisa renderizar.
+ *
+ * Reexportado da porta (#310): quem sabe montar a forma de pagamento é o
+ * adapter, que é quem tem o `invoiceUrl` e o copia-e-cola na mão. O nome antigo
+ * fica de propósito, para não mexer no import de `logic.ts`.
+ */
+export type FormaPagamentoDebito = FormaPagamentoCobranca;
+
+/**
+ * UMA cobrança do débito. O débito pode ter mais de uma (#310).
+ *
+ * ## Por que mais de uma
+ *
+ * Um ciclo `devido` pode já carregar uma cobrança VIVA e pagável no gateway.
+ * Consolidar tudo numa cobrança nova exigiria cancelar a antiga, e o Asaas não
+ * documenta quais status o `DELETE /payments/{id}` aceita — emitir por cima da
+ * viva É a cobrança dupla que a #310 existe para evitar. Então cada cobrança
+ * viva é reapresentada como está, e só o resto vira uma cobrança consolidada.
+ *
+ * Enquanto a política de reuso não entra (fatia seguinte), a lista sai sempre
+ * com um elemento: o contrato muda de FORMA aqui, e de POLÍTICA depois.
+ */
+export interface CobrancaDoDebito {
+  /** Ciclo âncora desta cobrança. */
+  cicloId: string;
+  providerChargeId: string;
+  /** Quanto ESTA cobrança cobra — não o total do débito. */
+  valorCentavos: number;
+  /** `true` = reapresentada do gateway; `false` = emitida agora. */
+  reaproveitada: boolean;
+  situacao:
+    | { estado: "pagavel"; pagamento: FormaPagamentoDebito }
+    /**
+     * Débito automático a caminho: há instrução `AWAITING_REQUEST`/`SCHEDULED`
+     * nesta cobrança. Apresentar o copia-e-cola aqui é pedir pagamento em
+     * duplicidade dentro da janela crítica do Pix Automático.
+     */
+    | { estado: "em_processamento" };
+}
 
 export type ResultadoGateDebito =
   /** Nada devido: segue o fluxo de ativação normal. */
@@ -107,11 +144,22 @@ export type ResultadoGateDebito =
       totalCentavos: number;
       motivo: "abaixo_do_piso" | "recusa_do_gateway";
     }
-  /** Cobrança na mesa: só depois de paga a reativação segue. */
+  /**
+   * Não deu para decidir com segurança: NADA foi emitido e a reativação NÃO
+   * segue. É diferente de `adiado` — ali a clínica volta a usar o Iris, aqui
+   * não. Reativação barrada é reversível por nova tentativa; cobrança dupla
+   * não é (#310, D-3).
+   */
+  | {
+      tipo: "bloqueado";
+      totalCentavos: number;
+      motivo: "gateway_indisponivel" | "cobranca_irrecuperavel";
+    }
+  /** Cobrança(s) na mesa: só depois de pagas a reativação segue. */
   | {
       tipo: "cobranca";
       totalCentavos: number;
-      pagamento: FormaPagamentoDebito;
+      cobrancas: CobrancaDoDebito[];
     };
 
 /**
@@ -275,7 +323,8 @@ export async function resolverGateDeDebito(
   }
 
   /**
-   * Cobrança estornada é o único estado do qual não há saída automática.
+   * Cobrança estornada é o único estado do qual não há saída automática — e
+   * agora ela BARRA em vez de LANÇAR (#310, D-7 e P-5).
    *
    * A idempotência do adapter é por `externalReference`, e ela é o que impede
    * cobrar duas vezes a mesma dívida — inclusive no caso em que o processo morre
@@ -286,7 +335,11 @@ export async function resolverGateDeDebito(
    * Emitir outra automaticamente seria pior: o estorno é decisão comercial
    * humana (é o que `conciliarPagamentoDeCiclo` já diz sobre `estornada`), e
    * cobrar de novo por cima dela é justamente o que ninguém quer que um job
-   * faça sozinho. Então o caminho é barulhento: log greppável e erro explícito.
+   * faça sozinho. O que mudou é a FORMA de barrar: o `throw` daqui atravessava
+   * as camadas e caía na copy genérica de "fale com o suporte", que também
+   * serve para queda de rede. `bloqueado` diz exatamente o que é, com a copy
+   * certa, e sem exceção — mesma semântica (barulhento, exige decisão humana,
+   * não reativa).
    *
    * `recusada` NÃO entra aqui: no Asaas ela vem de `OVERDUE`, e cobrança Pix
    * vencida continua pagável — devolver o mesmo copia-e-cola é o certo.
@@ -297,15 +350,31 @@ export async function resolverGateDeDebito(
       providerChargeId: cobranca.providerChargeId,
       totalCentavos: debito.totalCentavos,
     });
-    throw new BillingProviderError(
-      `Cobrança de débito ${cobranca.providerChargeId} está estornada — reativação da clínica ${clinicId} exige decisão comercial antes de nova emissão.`,
-    );
+    return {
+      tipo: "bloqueado",
+      totalCentavos: debito.totalCentavos,
+      motivo: "cobranca_irrecuperavel",
+    };
   }
 
+  /**
+   * Uma entrada só: a política continua a de hoje — todo o débito vira UMA
+   * cobrança nova, ancorada no ciclo mais antigo. A lista existe porque o
+   * reuso da cobrança viva (#310) produz N, e mudar a forma antes da política
+   * é o que deixa o teste do reuso falhar por um motivo só.
+   */
   return {
     tipo: "cobranca",
     totalCentavos: debito.totalCentavos,
-    pagamento: formaDePagamento(cobranca),
+    cobrancas: [
+      {
+        cicloId: ancoraId,
+        providerChargeId: cobranca.providerChargeId,
+        valorCentavos: debito.totalCentavos,
+        reaproveitada: false,
+        situacao: { estado: "pagavel", pagamento: formaDePagamento(cobranca) },
+      },
+    ],
   };
 }
 

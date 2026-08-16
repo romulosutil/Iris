@@ -858,12 +858,25 @@ describe("FormularioAtivacao", () => {
       debitoCentavos,
     });
 
+    // Lista de uma entrada: o contrato do gate já é `cobrancas[]` (#310), mas a
+    // política ainda emite uma cobrança só.
     const DEBITO = {
       valorCentavos: 1300,
-      pagamento: {
-        forma: "pix_copia_e_cola" as const,
-        brCode: "00020126…debito-290",
-      },
+      cobrancas: [
+        {
+          cicloId: "ciclo-1",
+          providerChargeId: "pay_290",
+          valorCentavos: 1300,
+          reaproveitada: false,
+          situacao: {
+            estado: "pagavel" as const,
+            pagamento: {
+              forma: "pix_copia_e_cola" as const,
+              brCode: "00020126…debito-290",
+            },
+          },
+        },
+      ],
     };
 
     it("avisa o valor em aberto ANTES de a pessoa clicar em ativar", () => {

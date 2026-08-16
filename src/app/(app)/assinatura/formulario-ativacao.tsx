@@ -104,6 +104,13 @@ export function FormularioAtivacao({
    * concluiria que falhou e pagaria de novo. Quem zera é `debitoCentavos`.
    */
   const debitoCobrado = state.debito;
+  /**
+   * A cobrança única de hoje. O contrato já é uma LISTA (#310) porque o débito
+   * pode se partir em mais de uma cobrança quando parte dele já tem cobrança
+   * viva no gateway — mas enquanto a política de reuso não entra, o gate emite
+   * uma só e a lista tem sempre um elemento. Renderizar N é a fatia seguinte.
+   */
+  const cobrancaDoDebito = debitoCobrado?.cobrancas[0];
   const debitoQuitado =
     debitoCobrado != null && (situacaoConta?.debitoCentavos ?? 0) === 0;
   const aguardandoPagamentoDeDebito = debitoCobrado != null && !debitoQuitado;
@@ -265,34 +272,41 @@ export function FormularioAtivacao({
             A assinatura só é reaberta depois deste pagamento. Confirmado o Pix,
             esta tela avisa sozinha e você segue para a autorização.
           </p>
-          {debitoCobrado.pagamento.forma === "pix_copia_e_cola" ? (
-            <>
-              <div className="mt-3 flex justify-center">
-                <QrCode
-                  value={debitoCobrado.pagamento.brCode}
-                  alt="QR Code do Pix para quitar o valor em aberto"
-                />
-              </div>
-              <p className="mt-3 max-w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/40 bg-[var(--surface-muted)] p-2 font-mono text-xs break-all">
-                {debitoCobrado.pagamento.brCode}
+          {/* Só o ramo `pagavel` renderiza forma de pagamento. `em_processamento`
+              (débito automático a caminho) ainda não é produzido pelo gate e
+              ganha copy própria na fatia da renderização de N — até lá, o
+              estreitamento existe para que um QR com `brCode` indefinido não
+              tenha como chegar à tela. */}
+          {cobrancaDoDebito?.situacao.estado === "pagavel" ? (
+            cobrancaDoDebito.situacao.pagamento.forma === "pix_copia_e_cola" ? (
+              <>
+                <div className="mt-3 flex justify-center">
+                  <QrCode
+                    value={cobrancaDoDebito.situacao.pagamento.brCode}
+                    alt="QR Code do Pix para quitar o valor em aberto"
+                  />
+                </div>
+                <p className="mt-3 max-w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/40 bg-[var(--surface-muted)] p-2 font-mono text-xs break-all">
+                  {cobrancaDoDebito.situacao.pagamento.brCode}
+                </p>
+                <div className="mt-2">
+                  <CopyButton
+                    valor={cobrancaDoDebito.situacao.pagamento.brCode}
+                    rotulo="Copiar código Pix"
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="mt-2">
+                <a
+                  href={cobrancaDoDebito.situacao.pagamento.urlPagamento}
+                  className="font-semibold text-[var(--text-primary)] underline underline-offset-4"
+                >
+                  Abrir a cobrança para pagar
+                </a>
               </p>
-              <div className="mt-2">
-                <CopyButton
-                  valor={debitoCobrado.pagamento.brCode}
-                  rotulo="Copiar código Pix"
-                />
-              </div>
-            </>
-          ) : (
-            <p className="mt-2">
-              <a
-                href={debitoCobrado.pagamento.urlPagamento}
-                className="font-semibold text-[var(--text-primary)] underline underline-offset-4"
-              >
-                Abrir a cobrança para pagar
-              </a>
-            </p>
-          )}
+            )
+          ) : null}
         </Alert>
       ) : null}
 

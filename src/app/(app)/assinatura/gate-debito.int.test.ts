@@ -76,7 +76,16 @@ type Chamada = { url: string; metodo: string; corpo: Record<string, unknown> };
  * sempre.
  */
 function instalarGateway(
-  opcoes: { cobrancaRecusada?: boolean; cobrancaJaPaga?: boolean } = {},
+  opcoes: {
+    cobrancaRecusada?: boolean;
+    cobrancaJaPaga?: boolean;
+    /**
+     * Cobrança devolvida ESTORNADA pelo gateway (#310, D-7/P-5). É o estado do
+     * qual não há saída automática: a idempotência por `externalReference`
+     * devolveria a mesma cobrança para sempre.
+     */
+    cobrancaEstornada?: boolean;
+  } = {},
 ): { chamadas: Chamada[] } {
   const chamadas: Chamada[] = [];
   vi.stubGlobal("fetch", async (entrada: unknown, init?: RequestInit) => {
@@ -108,7 +117,11 @@ function instalarGateway(
       }
       return Response.json({
         id: ID_COBRANCA_DEBITO,
-        status: opcoes.cobrancaJaPaga ? "RECEIVED" : "PENDING",
+        status: opcoes.cobrancaEstornada
+          ? "REFUNDED"
+          : opcoes.cobrancaJaPaga
+            ? "RECEIVED"
+            : "PENDING",
         invoiceUrl: "https://sandbox.asaas.com/i/290",
       });
     }
@@ -235,11 +248,25 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
 
     // 1º oráculo: o retorno traz a cobrança, e NÃO a autorização.
     expect(r.debito?.valorCentavos).toBe(1300);
-    expect(r.debito?.pagamento).toEqual({
-      forma: "pix_copia_e_cola",
-      brCode: BR_CODE_DEBITO,
-      urlPagamento: "https://sandbox.asaas.com/i/290",
-    });
+    // Lista de uma entrada: o contrato já é `cobrancas[]` (#310), a política
+    // ainda emite uma cobrança só, e `reaproveitada: false` é o que registra
+    // que ela nasceu agora — não foi reapresentada.
+    expect(r.debito?.cobrancas).toEqual([
+      {
+        cicloId: expect.any(String),
+        providerChargeId: ID_COBRANCA_DEBITO,
+        valorCentavos: 1300,
+        reaproveitada: false,
+        situacao: {
+          estado: "pagavel",
+          pagamento: {
+            forma: "pix_copia_e_cola",
+            brCode: BR_CODE_DEBITO,
+            urlPagamento: "https://sandbox.asaas.com/i/290",
+          },
+        },
+      },
+    ]);
     expect(r.autorizacao).toBeUndefined();
     expect(r.error).toBeUndefined();
 
@@ -388,6 +415,43 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
     expect(await statusAssinatura()).toBe("setup_pending");
     // Adiado NÃO é perdoado: o ciclo continua `devido` e volta a ser cobrado na
     // próxima reativação, somado ao que vier depois.
+    const [ciclo] = await lerCiclos();
+    expect(ciclo!.status).toBe("devido");
+  });
+
+  /**
+   * #310 (D-7/P-5) — estorno BARRA sem lançar.
+   *
+   * Qual mutação este teste mata: manter o `throw` de `estornada` em
+   * `resolverGateDeDebito`. Com o throw, a exceção atravessa as camadas, cai no
+   * `catch` genérico de `logic.ts` e a clínica recebe "Não foi possível apurar
+   * o valor em aberto" — a MESMA frase de uma queda de rede. Por isso a
+   * asserção é no texto que só o ramo `bloqueado` produz ("revisão manual",
+   * "informando o CNPJ"), e não num `/fale com o suporte/` que as duas copies
+   * compartilham.
+   *
+   * Mata também a variante que roteia `bloqueado` como `adiado`: ali a clínica
+   * seria reativada (`setup_pending` + autorização nova) sem ter pago nada.
+   */
+  it("cobrança estornada barra a reativação com copy própria, sem lançar", async () => {
+    await assinaturaCancelada();
+    await cicloDevido(1300, 30);
+    const { chamadas } = instalarGateway({ cobrancaEstornada: true });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(r.error).toMatch(/revisão manual/i);
+    expect(r.error).toMatch(/informando o CNPJ da clínica/i);
+    expect(r.debito).toBeUndefined();
+    expect(r.autorizacao).toBeUndefined();
+
+    // Não reativou: nenhum vínculo novo e a assinatura segue cancelada.
+    expect(
+      chamadas.filter((c) => c.url.includes("/pix/automatic/authorizations")),
+    ).toHaveLength(0);
+    expect(await statusAssinatura()).toBe("canceled");
+
+    // E a dívida continua viva, para a decisão humana resolver o estorno.
     const [ciclo] = await lerCiclos();
     expect(ciclo!.status).toBe("devido");
   });
