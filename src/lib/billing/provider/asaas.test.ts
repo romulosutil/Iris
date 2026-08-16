@@ -785,4 +785,240 @@ describe("AsaasProvider", () => {
       );
     });
   });
+
+  describe("consultarCobrancaParaReuso (#310)", () => {
+    /**
+     * Roteador de `fetch` por URL. Escrito aqui e não derivado do adapter: se o
+     * teste montasse as rotas a partir do módulo sob teste, trocar o endpoint
+     * passaria verde.
+     */
+    function rotear(mapa: {
+      payment?: { corpo: unknown; status?: number };
+      instrucoes?: Record<string, unknown[]>;
+      qr?: { corpo: unknown; status?: number };
+    }) {
+      fetchMock.mockImplementation(async (url: string) => {
+        const u = String(url);
+        if (u.includes("/pixQrCode")) {
+          return resposta(mapa.qr?.corpo ?? {}, mapa.qr?.status ?? 200);
+        }
+        if (u.includes("/pix/automatic/paymentInstructions")) {
+          const filtro = new URL(u).searchParams.get("status") ?? "";
+          return resposta({ data: mapa.instrucoes?.[filtro] ?? [] });
+        }
+        if (u.includes("/payments/")) {
+          return resposta(
+            mapa.payment?.corpo ?? {},
+            mapa.payment?.status ?? 200,
+          );
+        }
+        throw new Error(`fetch inesperado: ${u}`);
+      });
+    }
+
+    /** Mutação morta: restringir o reuso a PENDING. OVERDUE é o estado real
+     * depois de esgotadas as retentativas, e é o caso central da #310. */
+    it("OVERDUE não removida é reaproveitável, com copia-e-cola", async () => {
+      rotear({
+        payment: {
+          corpo: {
+            id: "pay_1",
+            status: "OVERDUE",
+            deleted: false,
+            invoiceUrl: "https://asaas/i/1",
+          },
+        },
+        qr: { corpo: { payload: "00020126-brcode-1" } },
+      });
+
+      const r = await new AsaasProvider().consultarCobrancaParaReuso("pay_1");
+
+      expect(r).toEqual({
+        reuso: "pagavel",
+        pagamento: {
+          forma: "pix_copia_e_cola",
+          brCode: "00020126-brcode-1",
+          urlPagamento: "https://asaas/i/1",
+        },
+      });
+    });
+
+    /** Mutação morta: decidir só pelo `status`. O Asaas NÃO tem status
+     * "cancelada" — `deleted` é o único marcador de remoção, e uma cobrança
+     * removida com status PENDING passaria como pagável. */
+    it("cobrança removida (`deleted`) não é reaproveitável, mesmo PENDING", async () => {
+      rotear({
+        payment: { corpo: { id: "pay_2", status: "PENDING", deleted: true } },
+      });
+
+      expect(
+        await new AsaasProvider().consultarCobrancaParaReuso("pay_2"),
+      ).toEqual({
+        reuso: "morta",
+        motivo: "removida",
+      });
+    });
+
+    /** Mutação morta: classificar cobrança paga como pagável e reapresentar o
+     * QR de uma dívida já quitada. */
+    it("RECEIVED volta como paga, para o chamador liquidar o ciclo", async () => {
+      rotear({
+        payment: { corpo: { id: "pay_3", status: "RECEIVED", deleted: false } },
+      });
+
+      expect(
+        await new AsaasProvider().consultarCobrancaParaReuso("pay_3"),
+      ).toEqual({
+        reuso: "paga",
+      });
+    });
+
+    /** Mutação morta: trocar a allow-list {PENDING,OVERDUE} por deny-list
+     * (`status !== "REFUNDED"`). Todo status desconhecido passaria a pagável. */
+    it("status fora da allow-list não é reaproveitável", async () => {
+      rotear({
+        payment: {
+          corpo: {
+            id: "pay_4",
+            status: "AWAITING_RISK_ANALYSIS",
+            deleted: false,
+          },
+        },
+      });
+
+      expect(
+        await new AsaasProvider().consultarCobrancaParaReuso("pay_4"),
+      ).toEqual({
+        reuso: "morta",
+        motivo: "status_nao_pagavel",
+      });
+    });
+
+    /** Mutação morta: herdar o `throw` de `estornada` no caminho novo (D-7).
+     * Com o throw, o gate ficaria travado para sempre. */
+    it("estorno é ramo explícito, não exceção", async () => {
+      rotear({
+        payment: { corpo: { id: "pay_5", status: "REFUNDED", deleted: false } },
+      });
+
+      expect(
+        await new AsaasProvider().consultarCobrancaParaReuso("pay_5"),
+      ).toEqual({
+        reuso: "morta",
+        motivo: "estornada",
+      });
+    });
+
+    /** Mutação morta: propagar o 404 e trancar a reativação por causa de um id
+     * órfão que ninguém consegue pagar. */
+    it("404 é cobrança morta, não indisponibilidade", async () => {
+      rotear({
+        payment: {
+          corpo: { errors: [{ description: "not found" }] },
+          status: 404,
+        },
+      });
+
+      expect(
+        await new AsaasProvider().consultarCobrancaParaReuso("pay_6"),
+      ).toEqual({
+        reuso: "morta",
+        motivo: "nao_encontrada",
+      });
+    });
+
+    /** Mutação morta: tratar qualquer erro como "não encontrada". É o
+     * degradar-em-silêncio do #157, e aqui o preço é cobrança dupla. */
+    it("5xx SOBE — não vira cobrança morta", async () => {
+      rotear({ payment: { corpo: { errors: [] }, status: 500 } });
+
+      await expect(
+        new AsaasProvider().consultarCobrancaParaReuso("pay_7"),
+      ).rejects.toBeInstanceOf(BillingProviderError);
+    });
+
+    /** Mutação morta: ignorar as instruções e devolver o copia-e-cola dentro da
+     * janela crítica — pagamento em duplicidade. O "zero chamada a /pixQrCode"
+     * mata também a variante que consulta e devolve o código assim mesmo. */
+    it("instrução SCHEDULED bloqueia a apresentação, e nem busca o QR", async () => {
+      rotear({
+        payment: {
+          corpo: {
+            id: "pay_8",
+            status: "OVERDUE",
+            deleted: false,
+            invoiceUrl: "https://asaas/i/8",
+          },
+        },
+        instrucoes: { SCHEDULED: [{ id: "ins_8", status: "SCHEDULED" }] },
+        qr: { corpo: { payload: "00020126-nao-deve-aparecer" } },
+      });
+
+      expect(
+        await new AsaasProvider().consultarCobrancaParaReuso("pay_8"),
+      ).toEqual({
+        reuso: "em_processamento",
+      });
+      expect(
+        fetchMock.mock.calls.filter(([u]) => String(u).includes("/pixQrCode")),
+      ).toHaveLength(0);
+    });
+
+    /** Mutação morta: tratar QUALQUER instrução como pendente. O gate nunca
+     * mais apresentaria cobrança nenhuma — fail-closed demais é gate morto. */
+    it("instruções DONE/REFUSED não bloqueiam", async () => {
+      rotear({
+        payment: {
+          corpo: {
+            id: "pay_9",
+            status: "OVERDUE",
+            deleted: false,
+            invoiceUrl: "https://asaas/i/9",
+          },
+        },
+        instrucoes: { AWAITING_REQUEST: [], SCHEDULED: [] },
+        qr: { corpo: { payload: "00020126-brcode-9" } },
+      });
+
+      const r = await new AsaasProvider().consultarCobrancaParaReuso("pay_9");
+      expect(r.reuso).toBe("pagavel");
+    });
+
+    /** Mutação morta: engolir a falha da listagem e apresentar o código sem
+     * saber se há débito automático a caminho. */
+    it("falha ao listar instruções SOBE", async () => {
+      fetchMock.mockImplementation(async (url: string) => {
+        const u = String(url);
+        if (u.includes("/pix/automatic/paymentInstructions")) {
+          return resposta({ errors: [] }, 500);
+        }
+        return resposta({
+          id: "pay_10",
+          status: "OVERDUE",
+          deleted: false,
+          invoiceUrl: "https://a/10",
+        });
+      });
+
+      await expect(
+        new AsaasProvider().consultarCobrancaParaReuso("pay_10"),
+      ).rejects.toBeInstanceOf(BillingProviderError);
+    });
+
+    /** Mutação morta: devolver `pagavel` com QR vazio. A clínica acharia que
+     * pagou o que não pagou — mesmo raciocínio de `formaDePagamento`. */
+    it("sem link e sem copia-e-cola não é reaproveitável", async () => {
+      rotear({
+        payment: { corpo: { id: "pay_11", status: "PENDING", deleted: false } },
+        qr: { corpo: {} },
+      });
+
+      expect(
+        await new AsaasProvider().consultarCobrancaParaReuso("pay_11"),
+      ).toEqual({
+        reuso: "morta",
+        motivo: "sem_forma_de_pagamento",
+      });
+    });
+  });
 });

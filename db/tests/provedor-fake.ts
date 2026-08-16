@@ -1,6 +1,7 @@
 import type {
   BillingProvider,
   CobrancaEmitida,
+  CobrancaParaReuso,
   EntradaVerificacaoWebhook,
   EventoWebhookNormalizado,
   NovaCobrancaAvulsa,
@@ -220,6 +221,30 @@ export class ProvedorFake implements BillingProvider {
       // Gateway fake não modela motivo de recusa; mesmo caminho "não informado"
       // do adapter real do Asaas.
       motivoRecusa: null,
+    };
+  }
+
+  /**
+   * Reuso de cobrança (#310). O fake modela só o que os testes de integração
+   * dele precisam observar: o `estado` do wire decide, e o copia-e-cola é
+   * derivado do id, igual ao de `emitirCobrancaAvulsa`.
+   *
+   * O gateway fake NÃO modela instrução de débito nem `deleted`: essas duas
+   * entidades são do Pix Automático do Asaas e é lá que são testadas.
+   */
+  async consultarCobrancaParaReuso(
+    providerChargeId: string,
+  ): Promise<CobrancaParaReuso> {
+    const corpo = await pedir(`${BASE_URL_FAKE}/cobrancas/${providerChargeId}`);
+    const status = mapearStatusCobranca(corpo.estado);
+    if (status === "paga") return { reuso: "paga" };
+    if (status === "estornada") return { reuso: "morta", motivo: "estornada" };
+    return {
+      reuso: "pagavel",
+      pagamento: {
+        forma: "pix_copia_e_cola",
+        brCode: `00020126-fake-debito-${providerChargeId}`,
+      },
     };
   }
 
