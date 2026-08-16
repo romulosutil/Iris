@@ -50,7 +50,7 @@ describe("ClaudeProvider", () => {
 
     const arg = invoker.mock.calls[0]![0] as { system: string; user: string };
     expect(arg.system).toContain("R1.");
-    expect(arg.user).toContain("<diario_do_terapeuta>");
+    expect(arg.user).toMatch(/<diario_do_terapeuta_[a-f0-9-]+>/);
     expect(arg.user).toContain("puxava minha mão");
   });
 

@@ -34,18 +34,33 @@ describe.skipIf(!hasDb)("TCC · Registro de Pensamentos Distorcidos (RPD)", () =
     L = await import("./logic");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
-    await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
-      tcc_rpd_entry RESTART IDENTITY CASCADE`;
-    await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')`;
+    // Limpeza ESCOPADA (nunca `TRUNCATE ... CASCADE`): as tabelas de base
+    // (`clinic`, `app_user`, `patient`) são compartilhadas com outros arquivos
+    // de integração que rodam contra o mesmo Postgres. Truncar aqui derruba a
+    // fixture do vizinho — na prática dá deadlock e violação de FK em arquivos
+    // que nada têm a ver com TCC. Apagamos só as linhas DESTE arquivo, na ordem
+    // das FKs, e reinserimos com `ON CONFLICT DO NOTHING` para o caso de a
+    // fixture já existir de uma execução anterior (reexecutabilidade).
+    // Só as linhas que ESTE arquivo escreve são apagadas. `patient`, `clinic` e
+    // `app_user` ficam de pé e são reinseridos com `ON CONFLICT DO NOTHING`:
+    // apagar paciente esbarra na FK de `audit_log` (a trilha de auditoria da
+    // 1ª execução aponta para ele) e derrubaria o teste na 2ª rodada.
+    await owner`DELETE FROM tcc_rpd_entry WHERE patient_id IN (${PAC}, ${PAC_B})`;
+    await owner`DELETE FROM care_team_membership WHERE patient_id IN (${PAC}, ${PAC_B})`;
+    await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')
+      ON CONFLICT (id) DO NOTHING`;
     await owner`INSERT INTO app_user (id, email, name) VALUES
-      (${U_COORD}, 'c@x.com', 'Coord'), (${U_T1}, 't1@x.com', 'T1'), (${U_T2}, 't2@x.com', 'T2')`;
+      (${U_COORD}, 'c@x.com', 'Coord'), (${U_T1}, 't1@x.com', 'T1'), (${U_T2}, 't2@x.com', 'T2')
+      ON CONFLICT (id) DO NOTHING`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD}, ${CLINIC_A}, 'coordenador'),
       (${U_T1}, ${CLINIC_A}, 'terapeuta'),
       (${U_T2}, ${CLINIC_A}, 'terapeuta'),
-      (${U_COORD}, ${CLINIC_B}, 'coordenador')`;
+      (${U_COORD}, ${CLINIC_B}, 'coordenador')
+      ON CONFLICT (user_id, clinic_id, papel) DO NOTHING`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
-      (${PAC}, ${CLINIC_A}, 'Paciente A'), (${PAC_B}, ${CLINIC_B}, 'Paciente B')`;
+      (${PAC}, ${CLINIC_A}, 'Paciente A'), (${PAC_B}, ${CLINIC_B}, 'Paciente B')
+      ON CONFLICT (id) DO NOTHING`;
     // T1 está na equipe de PAC; T2 não.
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'Psicologia')`;
