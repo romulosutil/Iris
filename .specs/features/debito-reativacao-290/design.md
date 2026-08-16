@@ -7,7 +7,7 @@ Cobre `DEB-01`…`DEB-08` da `spec.md`.
 O débito **não ganha tabela nova**. Ele já está modelado: é a soma dos
 `billing_cycle` em `devido` da assinatura. Criar uma entidade "débito" paralela
 duplicaria a fonte da verdade do valor e do memorial (`pacientes_contados`,
-`inicio`, `fim`), que é exatamente o que a `0096` acabou de consolidar na linha
+`inicio`, `fim`), que é exatamente o que a `0097` acabou de consolidar na linha
 do ciclo.
 
 O que falta na modelagem é **uma cobrança que cobre N ciclos**. Hoje
@@ -17,7 +17,7 @@ com tabela nova.
 
 ---
 
-## 1. Schema — migração `0097`
+## 1. Schema — migração `0098`
 
 ```sql
 ALTER TABLE billing_cycle
@@ -252,7 +252,7 @@ reativação continua sendo um ato explícito da clínica.
 
 ## 7. Ordem de implementação
 
-1. Migração `0097` + `schema.ts` + journal.
+1. Migração `0098` + `schema.ts` + journal.
 2. `debito.ts` com testes de unidade da regra do gate (piso, zero, acumulação).
 3. Porta + adapter Asaas (`emitirCobrancaAvulsa`), com teste de adapter.
 4. `estado-conta.ts` + `mensagemDeEstado` + testes.

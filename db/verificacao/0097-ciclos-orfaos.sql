@@ -1,8 +1,8 @@
--- Verificação pós-deploy da 0096 + diagnóstico dos ciclos já órfãos
+-- Verificação pós-deploy da 0097 + diagnóstico dos ciclos já órfãos
 -- (#287 Problema 1). Leitura pura: nenhum INSERT/UPDATE/DDL.
 --
 -- Duas perguntas, nesta ordem:
---   (1) a 0096 rodou? (o valor `devido` existe no enum em produção)
+--   (1) a 0097 rodou? (o valor `devido` existe no enum em produção)
 --   (2) sobrou lixo do período anterior ao fix? (ciclo em `aberto`/`apurado`
 --       cuja assinatura já está `canceled` — o estado que ficava invisível
 --       para sempre, porque `fecharCiclosVencendo` varre `status = 'active'`)
@@ -18,7 +18,7 @@
 SELECT item, esperado, encontrado,
        CASE WHEN ok THEN 'PASSOU' ELSE '>>> FALHOU <<<' END AS veredito
 FROM (
-  SELECT '0096 billing_cycle_status.devido' AS item,
+  SELECT '0097 billing_cycle_status.devido' AS item,
          'existe' AS esperado,
          coalesce((SELECT 'existe'
                      FROM pg_enum e
@@ -36,7 +36,7 @@ FROM (
 
 -- ─── (2) Ciclos órfãos anteriores ao fix ─────────────────────────────────────
 -- Zero linha = nada a fazer. Cada linha que aparecer é receita que ficou sem
--- fatura antes da 0096; o destino (congelar como `devido` com o pro-rata,
+-- fatura antes da 0097; o destino (congelar como `devido` com o pro-rata,
 -- perdoar, ou cobrar na reativação) é decisão do Rômulo, não deste arquivo.
 SELECT bc.id                                   AS cycle_id,
        bc.clinic_id,

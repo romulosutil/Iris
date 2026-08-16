@@ -227,7 +227,7 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     const ciclo = await lerCiclo(cicloId);
     expect(ciclo.status).toBe("falhou");
     // O código CRU, não o grupo: do código se re-deriva o grupo, do grupo não
-    // se recupera o código (0099).
+    // se recupera o código (0100).
     expect(ciclo.recusa_codigo).toBe("MAXIMUM_AMOUNT_EXCEEDED");
 
     const assinatura = await lerAssinatura(subscriptionId);
@@ -552,7 +552,7 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
       statusCiclo: "aguardando_pagamento",
     });
 
-    // Um segundo ciclo agrupado NA MESMA cobrança (#290, coluna da 0097): se o
+    // Um segundo ciclo agrupado NA MESMA cobrança (#290, coluna da 0098): se o
     // G8 não usar o caminho completo de liquidação, este fica devendo sozinho.
     const agrupado = (await owner!`
       INSERT INTO billing_cycle

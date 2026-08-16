@@ -1,4 +1,4 @@
--- 0096 — `billing_cycle_status.devido`: o destino do ciclo interrompido pelo
+-- 0097 — `billing_cycle_status.devido`: o destino do ciclo interrompido pelo
 -- cancelamento (#287 Problema 1, desenho decidido na #290).
 --
 -- Antes desta migração o cancelamento só trocava `subscription.status` para
@@ -24,4 +24,4 @@
 ALTER TYPE "public"."billing_cycle_status" ADD VALUE IF NOT EXISTS 'devido';--> statement-breakpoint
 
 COMMENT ON TYPE "public"."billing_cycle_status" IS
-  'Fluxo pós-pago: aberto → apurado → aguardando_pagamento → pago, com `falhou` no ramo de recusa. `cobrado` é legado (0075). `devido` (0096) é o ciclo interrompido pelo cancelamento: apurado, congelado em pro-rata e sem cobrança emitida — quem cobra é o gate de reativação (#287/#290).';
+  'Fluxo pós-pago: aberto → apurado → aguardando_pagamento → pago, com `falhou` no ramo de recusa. `cobrado` é legado (0075). `devido` (0097) é o ciclo interrompido pelo cancelamento: apurado, congelado em pro-rata e sem cobrança emitida — quem cobra é o gate de reativação (#287/#290).';

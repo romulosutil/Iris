@@ -18,7 +18,7 @@
 ALTER TABLE "billing_cycle" ADD COLUMN "recusa_codigo" text;--> statement-breakpoint
 
 -- GRANTs explícitos, no idioma da `subscription` (0088:28-29, 0089:33-34) e não
--- no da própria `billing_cycle` (a 0097 não emitiu nenhum).
+-- no da própria `billing_cycle` (a 0098 não emitiu nenhum).
 --
 -- São REDUNDANTES hoje: `billing_cycle` tem privilégio DE TABELA (0071:237 para
 -- `app_role`, 0071:244 + 0075:67 para `iris_auth`) e nenhum REVOKE jamais tocou

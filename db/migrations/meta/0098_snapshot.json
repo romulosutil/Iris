@@ -1,6 +1,6 @@
 {
-  "id": "0c2ed031-e4ee-4f9b-866f-052a99601cb5",
-  "prevId": "1d832103-1f4c-48e9-8553-043f618a39a5",
+  "id": "1d832103-1f4c-48e9-8553-043f618a39a5",
+  "prevId": "c73ef69c-11cb-4502-bcb0-88c0036db1d5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5552,7 +5552,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": 10
+          "default": 7
         },
         "past_due_desde": {
           "name": "past_due_desde",
@@ -5599,27 +5599,6 @@
             },
             {
               "expression": "ciclo_atual_fim",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "subscription_carencia_idx": {
-          "name": "subscription_carencia_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "past_due_desde",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

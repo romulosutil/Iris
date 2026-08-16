@@ -22,7 +22,7 @@ import {
  *
  * Ele É a soma dos `billing_cycle` em `devido` da assinatura. Uma entidade
  * "débito" paralela duplicaria a fonte da verdade do valor e do memorial
- * (`pacientes_contados`, `inicio`, `fim`) que a `0096` acabou de consolidar na
+ * (`pacientes_contados`, `inicio`, `fim`) que a `0097` acabou de consolidar na
  * linha do ciclo — e valor de cobrança em dois lugares é valor que descola.
  *
  * ## Por que cobrar na PORTA DE ENTRADA

@@ -140,7 +140,7 @@ async function assinaturaCancelada(): Promise<void> {
     )`;
 }
 
-/** Ciclo já congelado como débito pelo cancelamento (0096). */
+/** Ciclo já congelado como débito pelo cancelamento (0097). */
 async function cicloDevido(
   valorCentavos: number,
   diasAtras: number,

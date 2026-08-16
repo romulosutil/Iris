@@ -28,11 +28,11 @@ ALTER TABLE "billing_cycle" ADD COLUMN "vencimento_cobranca" timestamp with time
 -- A varredura do backstop filtra por `status` e compara `vencimento_cobranca`.
 -- Nenhum índice desta tabela começa por `status` (os que há são por
 -- `clinic_id`), e ela roda todo dia sobre a tabela inteira. Mesmo formato e
--- mesma razão de `subscription_carencia_idx` (0098).
+-- mesma razão de `subscription_carencia_idx` (0099).
 CREATE INDEX "billing_cycle_backstop_idx" ON "billing_cycle" USING btree ("status","vencimento_cobranca");--> statement-breakpoint
 
 -- GRANTs explícitos, no idioma da `subscription` (0088:28-29, 0089:33-34) e da
--- 0099 logo antes desta.
+-- 0100 logo antes desta.
 --
 -- São REDUNDANTES hoje: `billing_cycle` tem privilégio DE TABELA (0071:237 para
 -- `app_role`, 0071:244 + 0075:67 para `iris_auth`) e nenhum REVOKE jamais tocou

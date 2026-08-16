@@ -1,6 +1,6 @@
 {
-  "id": "c73ef69c-11cb-4502-bcb0-88c0036db1d5",
-  "prevId": "36108352-df0c-484d-af55-97da21649ddb",
+  "id": "89f6e36b-a2b2-44d4-9a27-6b4b8f67d97b",
+  "prevId": "97ace975-924b-4e8a-bcb4-659e91342895",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1508,8 +1508,26 @@
           "primaryKey": false,
           "notNull": false
         },
+        "vencimento_cobranca": {
+          "name": "vencimento_cobranca",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "debito_agrupado_em": {
+          "name": "debito_agrupado_em",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "erro": {
           "name": "erro",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recusa_codigo": {
+          "name": "recusa_codigo",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1564,6 +1582,42 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "billing_cycle_backstop_idx": {
+          "name": "billing_cycle_backstop_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "vencimento_cobranca",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "billing_cycle_debito_agrupado_idx": {
+          "name": "billing_cycle_debito_agrupado_idx",
+          "columns": [
+            {
+              "expression": "debito_agrupado_em",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1592,6 +1646,19 @@
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
+        },
+        "billing_cycle_debito_agrupado_em_fk": {
+          "name": "billing_cycle_debito_agrupado_em_fk",
+          "tableFrom": "billing_cycle",
+          "tableTo": "billing_cycle",
+          "columnsFrom": [
+            "debito_agrupado_em"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1601,6 +1668,10 @@
         "billing_cycle_intervalo_valido": {
           "name": "billing_cycle_intervalo_valido",
           "value": "\"billing_cycle\".\"fim\" > \"billing_cycle\".\"inicio\""
+        },
+        "billing_cycle_debito_agrupado_nao_reflexivo": {
+          "name": "billing_cycle_debito_agrupado_nao_reflexivo",
+          "value": "\"billing_cycle\".\"debito_agrupado_em\" IS NULL OR \"billing_cycle\".\"debito_agrupado_em\" <> \"billing_cycle\".\"id\""
         },
         "billing_cycle_valor_nao_negativo": {
           "name": "billing_cycle_valor_nao_negativo",
@@ -5514,7 +5585,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": 7
+          "default": 10
         },
         "past_due_desde": {
           "name": "past_due_desde",
@@ -5561,6 +5632,27 @@
             },
             {
               "expression": "ciclo_atual_fim",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "subscription_carencia_idx": {
+          "name": "subscription_carencia_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "past_due_desde",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

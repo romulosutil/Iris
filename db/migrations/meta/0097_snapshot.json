@@ -1,6 +1,6 @@
 {
-  "id": "1d832103-1f4c-48e9-8553-043f618a39a5",
-  "prevId": "c73ef69c-11cb-4502-bcb0-88c0036db1d5",
+  "id": "c73ef69c-11cb-4502-bcb0-88c0036db1d5",
+  "prevId": "36108352-df0c-484d-af55-97da21649ddb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1508,12 +1508,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "debito_agrupado_em": {
-          "name": "debito_agrupado_em",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "erro": {
           "name": "erro",
           "type": "text",
@@ -1570,21 +1564,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "billing_cycle_debito_agrupado_idx": {
-          "name": "billing_cycle_debito_agrupado_idx",
-          "columns": [
-            {
-              "expression": "debito_agrupado_em",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1613,19 +1592,6 @@
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
-        },
-        "billing_cycle_debito_agrupado_em_fk": {
-          "name": "billing_cycle_debito_agrupado_em_fk",
-          "tableFrom": "billing_cycle",
-          "tableTo": "billing_cycle",
-          "columnsFrom": [
-            "debito_agrupado_em"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1635,10 +1601,6 @@
         "billing_cycle_intervalo_valido": {
           "name": "billing_cycle_intervalo_valido",
           "value": "\"billing_cycle\".\"fim\" > \"billing_cycle\".\"inicio\""
-        },
-        "billing_cycle_debito_agrupado_nao_reflexivo": {
-          "name": "billing_cycle_debito_agrupado_nao_reflexivo",
-          "value": "\"billing_cycle\".\"debito_agrupado_em\" IS NULL OR \"billing_cycle\".\"debito_agrupado_em\" <> \"billing_cycle\".\"id\""
         },
         "billing_cycle_valor_nao_negativo": {
           "name": "billing_cycle_valor_nao_negativo",

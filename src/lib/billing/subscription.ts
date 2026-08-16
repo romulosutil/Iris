@@ -1701,7 +1701,7 @@ async function liquidarCiclo(
     .set({ status: "pago", cobradoEm: agora, erro: null })
     .where(eq(billingCycle.id, cicloId));
 
-  // Liquidação em cascata do débito agrupado (#290, coluna da 0097).
+  // Liquidação em cascata do débito agrupado (#290, coluna da 0098).
   //
   // Uma cobrança de débito pode cobrir N ciclos `devido`: o valor é a soma, o
   // id da cobrança fica na ÂNCORA (o ciclo mais antigo) porque
@@ -1861,7 +1861,7 @@ export async function conciliarPagamentoDeCiclo(
       .set({
         status: "falhou",
         erro,
-        // O código CRU, do jeito que o gateway mandou (0099). O grupo NÃO é
+        // O código CRU, do jeito que o gateway mandou (0100). O grupo NÃO é
         // persistido: dele não se recupera o código, e o mapa evolui.
         recusaCodigo: motivoRecusa,
       })

@@ -2,7 +2,7 @@
 
 > Continuação da #287. A **mecânica 1** da #290 (congelar o ciclo interrompido
 > como `devido`, pro-rata dos dias usados) já foi entregue no PR #307 — migração
-> `0096`, `apurarDebitoProRata`, `congelarCiclosComoDebito`. Esta spec cobre o
+> `0097`, `apurarDebitoProRata`, `congelarCiclosComoDebito`. Esta spec cobre o
 > que sobrou: **mecânica 2 (tarja de devedor)** e **mecânica 3 (gate de débito na
 > reativação)**, mais a pendência do piso de cobrança.
 

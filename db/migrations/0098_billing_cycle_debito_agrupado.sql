@@ -1,9 +1,9 @@
--- 0097 — `billing_cycle.debito_agrupado_em`: uma cobrança que cobre N ciclos
+-- 0098 — `billing_cycle.debito_agrupado_em`: uma cobrança que cobre N ciclos
 -- devidos (#290, gate de débito na reativação).
 --
 -- ## O problema que esta coluna resolve
 --
--- A `0096` criou `devido`: o ciclo interrompido pelo cancelamento, congelado em
+-- A `0097` criou `devido`: o ciclo interrompido pelo cancelamento, congelado em
 -- pro-rata e SEM cobrança emitida. Quem cobra é o gate de reativação — pagar o
 -- que se deve é a porta de entrada de volta.
 --
@@ -34,7 +34,7 @@
 --
 -- O débito já está modelado: é a soma dos ciclos em `devido`. Uma entidade
 -- paralela duplicaria a fonte da verdade do valor e do memorial
--- (`pacientes_contados`, `inicio`, `fim`) que a `0096` acabou de consolidar na
+-- (`pacientes_contados`, `inicio`, `fim`) que a `0097` acabou de consolidar na
 -- linha do ciclo — e valor de cobrança em dois lugares é valor que descola.
 --
 -- ## Notas de execução

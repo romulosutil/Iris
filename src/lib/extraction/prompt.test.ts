@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { SYSTEM_PROMPT, buildUserMessage } from "./prompt";
+import { CONVENTIONAL_SYSTEM_PROMPT, SYSTEM_PROMPT, buildUserMessage } from "./prompt";
 
 describe("SYSTEM_PROMPT", () => {
   test("carrega as regras invioláveis R1 e R19", () => {
@@ -18,6 +18,15 @@ describe("SYSTEM_PROMPT", () => {
       "evidencia | registro_abc | ausencia_comportamento | cadeia | preferencia_reforcador",
     );
     expect(SYSTEM_PROMPT).toContain("alta | media | baixa");
+  });
+});
+
+describe("CONVENTIONAL_SYSTEM_PROMPT", () => {
+  test("carrega as regras do modo Terapia Convencional R1-TC a R8-TC", () => {
+    expect(CONVENTIONAL_SYSTEM_PROMPT).toContain("R1-TC.");
+    expect(CONVENTIONAL_SYSTEM_PROMPT).toContain("R8-TC.");
+    expect(CONVENTIONAL_SYSTEM_PROMPT).toContain("NÃO diagnostica, NÃO");
+    expect(CONVENTIONAL_SYSTEM_PROMPT).toContain("pontua");
   });
 });
 
@@ -50,5 +59,11 @@ describe("buildUserMessage — hardening contra prompt injection", () => {
     // o payload aparece verbatim, mas contido entre os delimitadores
     expect(posPayload).toBeGreaterThan(abre);
     expect(posPayload).toBeLessThan(fecha);
+  });
+
+  test("formata instrução para o modo terapia_convencional", () => {
+    const ctxConvencional = { modo: "terapia_convencional", paciente: { id: "pt_2" } };
+    const msg = buildUserMessage({ notaConsolidada: "Relato livre.", contexto: ctxConvencional });
+    expect(msg).toContain("regras do modo Terapia Convencional (R1-TC a R8-TC)");
   });
 });

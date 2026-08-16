@@ -654,7 +654,7 @@ describe.skipIf(!hasDb)("#318 · backstop de D+7", () => {
 
   it("ciclo sem `vencimento_cobranca` nunca é varrido", async () => {
     // Coluna nula = nunca houve cobrança emitida (ou a linha é anterior à
-    // 0100). Sem vencimento não há D+7 nenhum para medir, e inventar um a
+    // 0101). Sem vencimento não há D+7 nenhum para medir, e inventar um a
     // partir de outro carimbo é o que a coluna existe para evitar.
     await criarAssinatura({
       clinicId: CLINICA_A,

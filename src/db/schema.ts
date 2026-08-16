@@ -34,6 +34,11 @@ export const userRoleTipo = pgEnum("user_role_tipo", [
   "admin_recepcao",
 ]);
 
+export const clinicalModalityEnum = pgEnum("clinical_modality", [
+  "conventional",
+  "protocol_driven",
+]);
+
 // `tratamento_dados_menor` = responsável legal assina pelo paciente menor.
 // `autoconsentimento_titular_adulto` (#100) = o próprio titular adulto assina.
 // `representacao_curador` (#134) = curador assina pelo adulto sob curatela.
@@ -376,6 +381,9 @@ export const patient = pgTable(
     // Hash cego (HMAC-SHA256 + salt fora do repo) do CPF/responsavelCpf acima,
     // usado só para o EXISTS cross-tenant de #191 — nunca para reidentificar.
     cpfHash: text("cpf_hash"),
+    clinicalModality: clinicalModalityEnum("clinical_modality")
+      .notNull()
+      .default("protocol_driven"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1731,7 +1739,7 @@ export const subscriptionStatus = pgEnum("subscription_status", [
 // valor da recorrência — sem nenhuma cobrança emitida nem confirmada. Não é
 // removido porque há memorial de fatura gravado com ele.
 //
-// `devido` (0096, #287/#290) é o ramo do CANCELAMENTO: o ciclo foi interrompido
+// `devido` (0097, #287/#290) é o ramo do CANCELAMENTO: o ciclo foi interrompido
 // no meio, apurado e congelado como débito pro-rata, SEM cobrança emitida — a
 // autorização do Pix Automático acabou de ser revogada e não há trilho para
 // cobrar naquele instante. Não é `falhou` (ali houve cobrança recusada) nem
@@ -1862,7 +1870,7 @@ export const billingCycle = pgTable(
     providerChargeId: text("provider_charge_id"),
     cobrancaEmitidaEm: timestamp("cobranca_emitida_em", { withTimezone: true }),
     /**
-     * O **vencimento que mandamos ao gateway** nesta cobrança (#318, 0100).
+     * O **vencimento que mandamos ao gateway** nesta cobrança (#318, 0101).
      *
      * É o marco do backstop de D+7 (`aplicarBackstopDePrazo`), e por isso
      * precisa ser um FATO PERSISTIDO, não um cálculo refeito. Os candidatos que
@@ -1899,7 +1907,7 @@ export const billingCycle = pgTable(
       withTimezone: true,
     }),
     /**
-     * Âncora do agrupamento de débito (#290, 0097).
+     * Âncora do agrupamento de débito (#290, 0098).
      *
      * O débito de uma reativação pode somar mais de um ciclo `devido` — a #290
      * decidiu que débito abaixo do piso de cobrança do gateway ACUMULA em vez de
@@ -1922,7 +1930,7 @@ export const billingCycle = pgTable(
     debitoAgrupadoEm: uuid("debito_agrupado_em"),
     erro: text("erro"),
     /**
-     * Código CRU da recusa, do jeito que o gateway mandou (#318, 0099).
+     * Código CRU da recusa, do jeito que o gateway mandou (#318, 0100).
      *
      * Não é redundante com `erro`: `erro` é texto livre de diagnóstico, e texto
      * livre cobrindo situações distintas é justamente o defeito que a #318
@@ -1955,9 +1963,9 @@ export const billingCycle = pgTable(
     // Backstop de D+7 (#318): filtra `status IN ('aguardando_pagamento',
     // 'falhou')` e compara `vencimento_cobranca`. Nenhum dos índices acima
     // começa por `status`, e a varredura roda todo dia sobre a tabela inteira —
-    // mesmo motivo (e mesmo formato) de `subscription_carencia_idx` na 0098.
+    // mesmo motivo (e mesmo formato) de `subscription_carencia_idx` na 0099.
     index("billing_cycle_backstop_idx").on(t.status, t.vencimentoCobranca),
-    // Autorreferência (0097). `foreignKey` no array em vez de `.references()`
+    // Autorreferência (0098). `foreignKey` no array em vez de `.references()`
     // na coluna porque a tabela ainda não existe no escopo quando a coluna é
     // definida — self-FK inline vira referência circular em TypeScript.
     foreignKey({
