@@ -1,13 +1,9 @@
--- 0097: nicho TCC — tabela `tcc_rpd_entry` (Registro de Pensamentos
+-- 0103: nicho TCC — tabela `tcc_rpd_entry` (Registro de Pensamentos
 -- Disfuncionais) + GRANTs e RLS.
 --
--- O bloco de DDL abaixo saiu de `pnpm db:generate` (snapshot 0097). O enum
--- `clinical_modality` e a coluna `patient.clinical_modality` que o generate
--- também emitiu foram REMOVIDOS daqui: já foram aplicados pela 0096
--- (`0096_patient_clinical_modality`), que entrou à mão e sem snapshot. Repetir
--- o DDL aqui abortaria o estágio `migrate` do Dockerfile com "type already
--- exists". O snapshot 0097 sim contém as duas coisas — é ele que passa a ser a
--- base do próximo `db:generate`, fechando a deriva deixada pela 0096.
+-- O bloco de DDL abaixo saiu de `pnpm db:generate` (snapshot 0103, gerado em
+-- cima do 0102 que reconciliou `clinical_modality`). GRANT e RLS vêm à mão
+-- depois: o Drizzle não os modela e eles não entram no snapshot.
 CREATE TABLE "tcc_rpd_entry" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"clinic_id" uuid NOT NULL,
@@ -33,8 +29,7 @@ ALTER TABLE "tcc_rpd_entry" ADD CONSTRAINT "tcc_rpd_entry_criado_por_app_user_id
 CREATE INDEX "idx_tcc_rpd_patient" ON "tcc_rpd_entry" USING btree ("patient_id","criado_em" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "idx_tcc_rpd_clinic" ON "tcc_rpd_entry" USING btree ("clinic_id");--> statement-breakpoint
 
--- A partir daqui é escrito à mão: GRANT e RLS não são modelados pelo Drizzle e
--- não entram no snapshot.
+-- A partir daqui é escrito à mão.
 GRANT SELECT, INSERT, UPDATE, DELETE ON "tcc_rpd_entry" TO app_role;--> statement-breakpoint
 
 ALTER TABLE "tcc_rpd_entry" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

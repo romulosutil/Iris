@@ -234,8 +234,11 @@ function respondeAutorizacaoAsaas(status = "ACTIVE") {
   );
 }
 
-/** `GET /payments/{id}` do Asaas. `extra` mescla campos crus no corpo — usado
- * para simular um gateway que informa `refusalReason` (#286). */
+/** `GET /payments/{id}` do Asaas. `extra` mescla campos crus no corpo.
+ *
+ * ⚠️ Sem campo de motivo de recusa, e isso é o contrato: o
+ * `PaymentGetResponseDTO` não declara `refusalReason` (D35). O motivo é da
+ * INSTRUÇÃO — ver `respondeInstrucoesAsaas`. */
 function respondeCobrancaAsaas(
   status: string,
   valorReais = 117,
@@ -244,6 +247,17 @@ function respondeCobrancaAsaas(
   respostasGateway.push(async () =>
     Response.json({ id: "pay-dublê", status, value: valorReais, ...extra }),
   );
+}
+
+/**
+ * `GET /pix/automatic/paymentInstructions?paymentId=…&status=REFUSED`.
+ *
+ * É por aqui que a VARREDURA acha o motivo: diferente do webhook, ela só tem o
+ * id da cobrança em mãos — o id da instrução não sobrevive à ida ao banco.
+ * Códigos são os reais do catálogo do Asaas, em inglês.
+ */
+function respondeInstrucoesAsaas(itens: Array<Record<string, unknown>>) {
+  respostasGateway.push(async () => Response.json({ data: itens }));
 }
 
 function respondeHttp(status: number, corpo: unknown = { errors: [] }) {
@@ -425,26 +439,37 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes", () => {
        * falhou ou chegou fora de ordem. `atual.motivoRecusa` (linha que
        * repassa o motivo para `conciliarPagamentoDeCiclo`) é código tão novo
        * quanto o do webhook, e sem um caso aqui o repasse fica sem cobertura
-       * neste caminho — um `SALDO_INSUFICIENTE` explícito do gateway seria
-       * silenciosamente substituído pela hipótese do teto, invertendo a
-       * orientação dada ao cliente.
+       * neste caminho — um motivo explícito do gateway seria silenciosamente
+       * substituído pela hipótese do teto, invertendo a orientação dada ao
+       * cliente.
+       *
+       * D35: a varredura não tem o id da instrução (ela lê o evento do banco e
+       * chama `consultarCobranca` só com o id da cobrança), então o motivo vem
+       * pelo índice `paymentId` + `status=REFUSED`. O dublê da cobrança segue
+       * SEM campo de motivo, como a produção — se o adapter voltasse a lê-lo do
+       * `payment`, este teste ficaria vermelho.
        */
       const paymentId = `pay-reproc-${crypto.randomUUID()}`;
       const { cicloId } = await novoCicloAsaas({ providerChargeId: paymentId });
       const idEvento = await semearCobrancaPendente(paymentId, cicloId);
 
-      respondeCobrancaAsaas("OVERDUE", 117, {
-        refusalReason: "SALDO_INSUFICIENTE",
-      });
+      respondeCobrancaAsaas("OVERDUE");
+      respondeInstrucoesAsaas([
+        { id: "pi-reproc-recusada", refusalReason: "PAYMENT_OVERDUE" },
+      ]);
 
       const r = await reprocessarEventosPendentes();
       expect(r).toEqual({ aplicados: 1, falhas: 0 });
 
       expect((await lerAsaas(idEvento)).aplicado_em).not.toBeNull();
 
+      expect(chamadasGateway[1]).toContain(
+        `/pix/automatic/paymentInstructions?paymentId=${paymentId}&status=REFUSED`,
+      );
+
       const ciclo = await lerCicloAsaas(cicloId);
       expect(ciclo.status).toBe("falhou");
-      expect(ciclo.erro).toContain("SALDO_INSUFICIENTE");
+      expect(ciclo.erro).toContain("PAYMENT_OVERDUE");
     });
 
     it("recusa de instrução que a reconsulta desmente deixa rastro também na varredura (#286)", async () => {

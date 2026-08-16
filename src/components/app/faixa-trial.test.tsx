@@ -34,7 +34,11 @@ describe("FaixaTrial", () => {
   describe("estados silenciosos", () => {
     // Tabela e não três `it` copiados: o conjunto "estados que não comunicam
     // nada" é a regra em si, e um estado novo entrando aqui deve ser uma linha.
-    const silenciosos: EstadoConta[] = ["isenta", "ativa", "pagamento_atrasado"];
+    const silenciosos: EstadoConta[] = [
+      "isenta",
+      "ativa",
+      "pagamento_atrasado",
+    ];
 
     it.each(silenciosos)("não renderiza nada em %s", (estado) => {
       const { container } = render(
@@ -172,6 +176,69 @@ describe("FaixaTrial", () => {
       render(<FaixaTrial estado={estado} diasRestantes={1} />);
 
       expect(cta()).toBeNull();
+    });
+  });
+
+  /**
+   * Débito de reativação (#290).
+   *
+   * O caso que mais facilmente regride é o de conta ATIVA com dívida: ele é a
+   * exceção ao "estados silenciosos" logo acima, e existe porque reativar com
+   * débito abaixo do piso de cobrança do gateway é caminho normal. Sem esta
+   * exceção, a dívida sumiria da tela justamente no intervalo em que a clínica
+   * poderia pagá-la, e reapareceria somada no cancelamento seguinte — cobrança
+   * legítima que a pessoa não lembra de ter contraído vira contestação.
+   */
+  describe("débito em aberto", () => {
+    it("mostra o valor devido na conta cancelada, sem tirar a saída", () => {
+      render(
+        <FaixaTrial
+          estado="cancelada"
+          diasRestantes={-1}
+          debitoCentavos={1300}
+        />,
+      );
+
+      expect(textoDaFaixa()).toMatch(/13,00/);
+      expect(textoDaFaixa()).toMatch(/somente-leitura/i);
+      expect(cta()).not.toBeNull();
+    });
+
+    it("cancelada sem débito não inventa valor", () => {
+      render(<FaixaTrial estado="cancelada" diasRestantes={-1} />);
+
+      expect(textoDaFaixa()).not.toMatch(/R\$/);
+    });
+
+    it("conta ATIVA com dívida deixa de ser silenciosa", () => {
+      render(
+        <FaixaTrial estado="ativa" diasRestantes={null} debitoCentavos={260} />,
+      );
+
+      expect(textoDaFaixa()).toMatch(/2,60/);
+      // Sem CTA: a conta já está ativa, não há o que reativar. O valor é
+      // informação, não interrupção.
+      expect(cta()).toBeNull();
+    });
+
+    it("conta ativa sem dívida continua silenciosa", () => {
+      const { container } = render(
+        <FaixaTrial estado="ativa" diasRestantes={null} debitoCentavos={0} />,
+      );
+
+      expect(container.firstChild).toBeNull();
+    });
+
+    it("dívida não vira alerta — cobrança nunca interrompe leitor de tela", () => {
+      render(
+        <FaixaTrial
+          estado="cancelada"
+          diasRestantes={-1}
+          debitoCentavos={1300}
+        />,
+      );
+
+      expect(screen.queryByRole("alert")).toBeNull();
     });
   });
 

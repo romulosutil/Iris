@@ -3,6 +3,7 @@ import type {
   CobrancaEmitida,
   EntradaVerificacaoWebhook,
   EventoWebhookNormalizado,
+  NovaCobrancaAvulsa,
   NovaCobrancaDeCiclo,
   NovoVinculo,
   ProviderId,
@@ -181,6 +182,32 @@ export class ProvedorFake implements BillingProvider {
     };
   }
 
+  /**
+   * Cobrança avulsa contra o cliente (#290 — débito de reativação).
+   *
+   * O fake usa o MESMO endpoint de cobrança, com `vinculoId` no lugar do
+   * cliente: o que o teste precisa observar é a cobrança existindo e sendo
+   * conciliável, não a diferença de trilho — essa distinção é do adapter real
+   * (Pix comum × débito da autorização revogada) e é lá que ela é testada.
+   */
+  async emitirCobrancaAvulsa(
+    dados: NovaCobrancaAvulsa,
+  ): Promise<CobrancaEmitida> {
+    const corpo = await pedir(`${BASE_URL_FAKE}/cobrancas`, {
+      method: "POST",
+      body: JSON.stringify({
+        vinculoId: dados.clienteId,
+        centavos: dados.valorCentavos,
+        referencia: dados.referenciaExterna,
+      }),
+    });
+    return {
+      providerChargeId: String(corpo.id),
+      status: mapearStatusCobranca(corpo.estado),
+      pixCopiaECola: `00020126-fake-debito-${corpo.id}`,
+    };
+  }
+
   async consultarCobranca(providerChargeId: string): Promise<{
     status: StatusCobranca;
     valorCentavos: number;
@@ -211,6 +238,10 @@ export class ProvedorFake implements BillingProvider {
       providerSubscriptionId:
         typeof p.vinculoId === "string" ? p.vinculoId : null,
       providerChargeId: typeof p.cobrancaId === "string" ? p.cobrancaId : null,
+      // O gateway fake não modela instrução de débito separada da cobrança —
+      // essa entidade é do Pix Automático. `null` é o caminho "não há instrução
+      // para consultar", que a porta exige que exista.
+      providerInstructionId: null,
       referenciaExterna: typeof p.referencia === "string" ? p.referencia : null,
       ocorridoEm: null,
       bruto: payload,

@@ -1738,6 +1738,12 @@ export const subscriptionStatus = pgEnum("subscription_status", [
 // quando o job carimbava o ciclo como cobrado no instante em que ajustava o
 // valor da recorrência — sem nenhuma cobrança emitida nem confirmada. Não é
 // removido porque há memorial de fatura gravado com ele.
+//
+// `devido` (0097, #287/#290) é o ramo do CANCELAMENTO: o ciclo foi interrompido
+// no meio, apurado e congelado como débito pro-rata, SEM cobrança emitida — a
+// autorização do Pix Automático acabou de ser revogada e não há trilho para
+// cobrar naquele instante. Não é `falhou` (ali houve cobrança recusada) nem
+// `apurado` (que é estado de passagem do job e seria varrido de novo).
 export const billingCycleStatus = pgEnum("billing_cycle_status", [
   "aberto",
   "apurado",
@@ -1745,6 +1751,7 @@ export const billingCycleStatus = pgEnum("billing_cycle_status", [
   "falhou",
   "aguardando_pagamento",
   "pago",
+  "devido",
 ]);
 
 // `ativo_nao_arquivado` deixou de ser PRODUZIDO na 0075 (o critério de
@@ -1808,7 +1815,12 @@ export const subscription = pgTable(
     cicloAtualFim: timestamp("ciclo_atual_fim", { withTimezone: true }),
     // Falha de Pix Automático/cartão costuma ser do banco do cliente; derrubar
     // acesso a prontuário por isso é dano desproporcional.
-    carenciaDias: integer("carencia_dias").notNull().default(7),
+    // 10 = 7 da janela de retentativa do Pix Automático
+    // (`ALLOW_THREE_IN_SEVEN_DAYS`, #317) + 3 de folga: a retentativa corre
+    // DENTRO da carência, porque `pastDueDesde` é carimbado na primeira recusa
+    // e preservado nas seguintes — a última tentativa precisa de margem para
+    // liquidar antes do corte.
+    carenciaDias: integer("carencia_dias").notNull().default(10),
     pastDueDesde: timestamp("past_due_desde", { withTimezone: true }),
     ativadaEm: timestamp("ativada_em", { withTimezone: true }),
     canceladaEm: timestamp("cancelada_em", { withTimezone: true }),
@@ -1821,6 +1833,10 @@ export const subscription = pgTable(
   },
   (t) => [
     index("subscription_renovacao_idx").on(t.status, t.cicloAtualFim),
+    // Varredura de carência vencida: filtra `status = 'past_due'` e
+    // ordena/filtra por `pastDueDesde`. O índice de renovação acima é
+    // (status, ciclo_atual_fim) e não cobre essa segunda coluna.
+    index("subscription_carencia_idx").on(t.status, t.pastDueDesde),
     check(
       "subscription_ciclo_valido",
       sql`${t.cicloAtualFim} IS NULL OR ${t.cicloAtualInicio} IS NULL OR ${t.cicloAtualFim} > ${t.cicloAtualInicio}`,
@@ -1853,7 +1869,88 @@ export const billingCycle = pgTable(
     // da emissão.
     providerChargeId: text("provider_charge_id"),
     cobrancaEmitidaEm: timestamp("cobranca_emitida_em", { withTimezone: true }),
+    /**
+     * O **vencimento que mandamos ao gateway** nesta cobrança (#318, 0101).
+     *
+     * É o marco do backstop de D+7 (`aplicarBackstopDePrazo`), e por isso
+     * precisa ser um FATO PERSISTIDO, não um cálculo refeito. Os candidatos que
+     * já existiam nesta tabela foram descartados por erro de sinal, não por
+     * gosto:
+     *
+     * - `cobranca_emitida_em` e `apurado_em` são o instante da EMISSÃO, e a
+     *   emissão acontece de 2 a 10 dias ANTES do vencimento
+     *   (`vencimentoCobrancaDeCiclo`). D+7 a partir deles cairia, no cluster de
+     *   fim de ano, ANTES da data em que a clínica tinha de pagar — carimbar
+     *   inadimplência antes do vencimento;
+     * - `fim` é o fim do PERÍODO apurado, e a cobrança nasce depois dele: mesmo
+     *   erro de sinal, com a mesma sazonalidade do bug que a #317 fechou;
+     * - `criado_em` é a abertura do ciclo, ~30 dias antes de haver cobrança;
+     * - `cobrado_em` só existe depois de PAGO — o backstop trata do não pago.
+     *
+     * Recalcular `vencimentoCobrancaDeCiclo(cobranca_emitida_em)` também não
+     * serve: a função depende do calendário bancário e das constantes da janela,
+     * então uma mudança nelas reescreveria retroativamente o vencimento de
+     * cobranças JÁ emitidas — o backstop passaria a medir de uma data que nunca
+     * foi enviada a gateway nenhum. Guardar o valor que saiu é a única leitura
+     * que não se move sozinha.
+     *
+     * Nullable: ciclo sem cobrança emitida (`aberto`, `apurado`, o de valor zero
+     * fechado direto como `pago`) não tem vencimento nenhum — e é exatamente o
+     * que o mantém FORA do backstop, que só cobra o que foi de fato cobrado.
+     *
+     * `timestamptz` e não `date`: a janela do gateway é contada em dias, mas o
+     * predicado do backstop compara instantes, e é o tipo que o resto da tabela
+     * usa. Truncar para data aqui reintroduziria a ambiguidade de fuso que
+     * `calendario-bancario.ts` existe para resolver.
+     */
+    vencimentoCobranca: timestamp("vencimento_cobranca", {
+      withTimezone: true,
+    }),
+    /**
+     * Âncora do agrupamento de débito (#290, 0098).
+     *
+     * O débito de uma reativação pode somar mais de um ciclo `devido` — a #290
+     * decidiu que débito abaixo do piso de cobrança do gateway ACUMULA em vez de
+     * caducar ou travar a volta. Cobrar isso como N cobranças seria N QR Codes
+     * para a mesma dívida, e gravar o mesmo `provider_charge_id` nas N linhas
+     * esbarra no UNIQUE parcial da 0075 (que é a guarda de idempotência da
+     * emissão, e não se abre mão dela por um agrupamento).
+     *
+     * Então: uma cobrança só, do total, em `provider_charge_id` do ciclo
+     * `devido` mais ANTIGO — a âncora. Os demais apontam para ela aqui e são
+     * liquidados junto quando o webhook confirma o pagamento dela.
+     *
+     * Mais antigo, e não mais recente, por determinismo: a mesma entrada elege
+     * sempre a mesma âncora, então a reentrada do gate encontra a cobrança já
+     * emitida (`debito:<ancora>`) em vez de eleger outro ciclo e emitir uma
+     * segunda cobrança da mesma dívida.
+     *
+     * `NULL` no ciclo normal e na própria âncora.
+     */
+    debitoAgrupadoEm: uuid("debito_agrupado_em"),
     erro: text("erro"),
+    /**
+     * Código CRU da recusa, do jeito que o gateway mandou (#318, 0100).
+     *
+     * Não é redundante com `erro`: `erro` é texto livre de diagnóstico, e texto
+     * livre cobrindo situações distintas é justamente o defeito que a #318
+     * existe para matar — `LIKE '%teto%'` não é consulta, é adivinhação. A
+     * classificação acontece na ESCRITA (webhook) e a tela lê DEPOIS, noutro
+     * request: sem o código persistido o app não tem como saber por que o ciclo
+     * falhou, e os 9 grupos de desfecho passam a diferir só em log.
+     *
+     * Guarda o **código**, nunca o grupo. Do código sempre se re-deriva o grupo
+     * (`classificarRecusa`, que evolui com o catálogo); do grupo não se recupera
+     * o código. E o catálogo é ABERTO — o OpenAPI do Asaas declara
+     * `refusalReason` como `string` sem `enum` —, então nada de tipar isto como
+     * enum do Postgres: código novo do gateway viraria erro de escrita num
+     * caminho que não pode falhar.
+     *
+     * Nullable e sem default, igual a `erro`: ciclo que nunca foi recusado não
+     * tem código, e `NULL` é exatamente isso. Só os grupos que levam o ciclo a
+     * `falhou` escrevem aqui — ver `conciliarPagamentoDeCiclo`.
+     */
+    recusaCodigo: text("recusa_codigo"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1863,7 +1960,28 @@ export const billingCycle = pgTable(
     // fechamento não consegue abrir um segundo ciclo com o mesmo início.
     uniqueIndex("billing_cycle_clinic_inicio_uq").on(t.clinicId, t.inicio),
     index("billing_cycle_clinic_fim_idx").on(t.clinicId, t.fim.desc()),
+    // Backstop de D+7 (#318): filtra `status IN ('aguardando_pagamento',
+    // 'falhou')` e compara `vencimento_cobranca`. Nenhum dos índices acima
+    // começa por `status`, e a varredura roda todo dia sobre a tabela inteira —
+    // mesmo motivo (e mesmo formato) de `subscription_carencia_idx` na 0099.
+    index("billing_cycle_backstop_idx").on(t.status, t.vencimentoCobranca),
+    // Autorreferência (0098). `foreignKey` no array em vez de `.references()`
+    // na coluna porque a tabela ainda não existe no escopo quando a coluna é
+    // definida — self-FK inline vira referência circular em TypeScript.
+    foreignKey({
+      columns: [t.debitoAgrupadoEm],
+      foreignColumns: [t.id],
+      name: "billing_cycle_debito_agrupado_em_fk",
+    }).onDelete("set null"),
+    index("billing_cycle_debito_agrupado_idx").on(t.debitoAgrupadoEm),
     check("billing_cycle_intervalo_valido", sql`${t.fim} > ${t.inicio}`),
+    // Um ciclo não pode ser a própria âncora: `debito_agrupado_em` significa
+    // "cobrado JUNTO COM a linha X", e a autorreferência faria a liquidação em
+    // cascata do webhook se morder o próprio rabo.
+    check(
+      "billing_cycle_debito_agrupado_nao_reflexivo",
+      sql`${t.debitoAgrupadoEm} IS NULL OR ${t.debitoAgrupadoEm} <> ${t.id}`,
+    ),
     check("billing_cycle_valor_nao_negativo", sql`${t.valorCentavos} >= 0`),
     check(
       "billing_cycle_contagem_nao_negativa",

@@ -94,6 +94,37 @@ export function FormularioAtivacao({
   const estaAtiva = situacaoConta?.estado === "ativa";
   const temAutorizacaoPixPendente = autorizacao?.forma === "pix_copia_e_cola";
 
+  /**
+   * Débito de reativação (#290). O sinal observado aqui é o DÉBITO, e não
+   * `situacaoConta.estado`.
+   *
+   * Pagar o débito **não** reativa a assinatura: ela continua `canceled` até a
+   * clínica autorizar o Pix Automático de novo. Um polling que esperasse
+   * `estado === "ativa"` giraria para sempre sobre um QR já pago — a pessoa
+   * concluiria que falhou e pagaria de novo. Quem zera é `debitoCentavos`.
+   */
+  const debitoCobrado = state.debito;
+  const debitoQuitado =
+    debitoCobrado != null && (situacaoConta?.debitoCentavos ?? 0) === 0;
+  const aguardandoPagamentoDeDebito = debitoCobrado != null && !debitoQuitado;
+
+  useEffect(() => {
+    if (!aguardandoPagamentoDeDebito) return;
+
+    const intervalo = setInterval(() => {
+      router.refresh();
+    }, 5000);
+    const aoMudarVisibilidade = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    document.addEventListener("visibilitychange", aoMudarVisibilidade);
+
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", aoMudarVisibilidade);
+    };
+  }, [aguardandoPagamentoDeDebito, router]);
+
   useEffect(() => {
     if (!temAutorizacaoPixPendente || estaAtiva) return;
 
@@ -193,6 +224,77 @@ export function FormularioAtivacao({
           cobra um valor mínimo, informado nesta tela antes do QR Code.
         </p>
       </div>
+
+      {/* #290 — a clínica que cancelou vira devedora, e o valor aparece ANTES
+          do botão: quem clica em "Ativar" precisa saber que vai encontrar uma
+          cobrança do lado de lá, não descobrir depois. Some assim que o débito
+          zera, e não aparece para quem nunca deveu. */}
+      {!debitoCobrado && (situacaoConta?.debitoCentavos ?? 0) > 0 ? (
+        <Alert severidade="info" titulo="Há um valor em aberto">
+          <p>
+            O ciclo interrompido no cancelamento deixou{" "}
+            <strong>{formatarBRL(situacaoConta?.debitoCentavos ?? 0)}</strong>{" "}
+            em aberto — proporcional aos dias em que você usou o Iris naquele
+            ciclo. Ao continuar, esse valor é cobrado por Pix antes de a
+            assinatura ser reaberta.
+          </p>
+        </Alert>
+      ) : null}
+
+      {debitoCobrado && debitoQuitado ? (
+        <Alert severidade="sucesso" titulo="Débito quitado">
+          <p>
+            Recebemos o pagamento de {formatarBRL(debitoCobrado.valorCentavos)}.
+            Agora é só concluir a reativação no botão abaixo — o próximo passo é
+            autorizar o Pix Automático no app do seu banco.
+          </p>
+        </Alert>
+      ) : null}
+
+      {debitoCobrado && !debitoQuitado ? (
+        <Alert severidade="info" titulo="Pague o valor em aberto para reativar">
+          <p>
+            <strong>
+              Esta cobrança é de {formatarBRL(debitoCobrado.valorCentavos)}
+            </strong>{" "}
+            — o ciclo que ficou aberto quando a assinatura foi cancelada,
+            proporcional aos dias usados. Não é mensalidade nem taxa: é o
+            período que já foi utilizado.
+          </p>
+          <p className="mt-2">
+            A assinatura só é reaberta depois deste pagamento. Confirmado o Pix,
+            esta tela avisa sozinha e você segue para a autorização.
+          </p>
+          {debitoCobrado.pagamento.forma === "pix_copia_e_cola" ? (
+            <>
+              <div className="mt-3 flex justify-center">
+                <QrCode
+                  value={debitoCobrado.pagamento.brCode}
+                  alt="QR Code do Pix para quitar o valor em aberto"
+                />
+              </div>
+              <p className="mt-3 max-w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/40 bg-[var(--surface-muted)] p-2 font-mono text-xs break-all">
+                {debitoCobrado.pagamento.brCode}
+              </p>
+              <div className="mt-2">
+                <CopyButton
+                  valor={debitoCobrado.pagamento.brCode}
+                  rotulo="Copiar código Pix"
+                />
+              </div>
+            </>
+          ) : (
+            <p className="mt-2">
+              <a
+                href={debitoCobrado.pagamento.urlPagamento}
+                className="font-semibold text-[var(--text-primary)] underline underline-offset-4"
+              >
+                Abrir a cobrança para pagar
+              </a>
+            </p>
+          )}
+        </Alert>
+      ) : null}
 
       {autorizacao ? (
         <Alert severidade="info" titulo="Falta pagar para concluir">

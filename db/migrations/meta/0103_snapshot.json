@@ -1,6 +1,6 @@
 {
-  "id": "c73ef69c-11cb-4502-bcb0-88c0036db1d5",
-  "prevId": "36108352-df0c-484d-af55-97da21649ddb",
+  "id": "468df30c-515b-4479-b2f9-855720b3506d",
+  "prevId": "dfb37549-adee-45ec-829f-8dab25a0b38f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1508,8 +1508,26 @@
           "primaryKey": false,
           "notNull": false
         },
+        "vencimento_cobranca": {
+          "name": "vencimento_cobranca",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "debito_agrupado_em": {
+          "name": "debito_agrupado_em",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "erro": {
           "name": "erro",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recusa_codigo": {
+          "name": "recusa_codigo",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1564,6 +1582,42 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "billing_cycle_backstop_idx": {
+          "name": "billing_cycle_backstop_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "vencimento_cobranca",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "billing_cycle_debito_agrupado_idx": {
+          "name": "billing_cycle_debito_agrupado_idx",
+          "columns": [
+            {
+              "expression": "debito_agrupado_em",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1592,6 +1646,19 @@
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
+        },
+        "billing_cycle_debito_agrupado_em_fk": {
+          "name": "billing_cycle_debito_agrupado_em_fk",
+          "tableFrom": "billing_cycle",
+          "tableTo": "billing_cycle",
+          "columnsFrom": [
+            "debito_agrupado_em"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1601,6 +1668,10 @@
         "billing_cycle_intervalo_valido": {
           "name": "billing_cycle_intervalo_valido",
           "value": "\"billing_cycle\".\"fim\" > \"billing_cycle\".\"inicio\""
+        },
+        "billing_cycle_debito_agrupado_nao_reflexivo": {
+          "name": "billing_cycle_debito_agrupado_nao_reflexivo",
+          "value": "\"billing_cycle\".\"debito_agrupado_em\" IS NULL OR \"billing_cycle\".\"debito_agrupado_em\" <> \"billing_cycle\".\"id\""
         },
         "billing_cycle_valor_nao_negativo": {
           "name": "billing_cycle_valor_nao_negativo",
@@ -3703,6 +3774,14 @@
           "primaryKey": false,
           "notNull": false
         },
+        "clinical_modality": {
+          "name": "clinical_modality",
+          "type": "clinical_modality",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'protocol_driven'"
+        },
         "criado_em": {
           "name": "criado_em",
           "type": "timestamp with time zone",
@@ -5514,7 +5593,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": 7
+          "default": 10
         },
         "past_due_desde": {
           "name": "past_due_desde",
@@ -5561,6 +5640,27 @@
             },
             {
               "expression": "ciclo_atual_fim",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "subscription_carencia_idx": {
+          "name": "subscription_carencia_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "past_due_desde",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5617,6 +5717,198 @@
         "subscription_ciclo_dias_positivo": {
           "name": "subscription_ciclo_dias_positivo",
           "value": "\"subscription\".\"ciclo_dias\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.tcc_rpd_entry": {
+      "name": "tcc_rpd_entry",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "clinic_id": {
+          "name": "clinic_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "patient_id": {
+          "name": "patient_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "situacao": {
+          "name": "situacao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pensamento_automatico": {
+          "name": "pensamento_automatico",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "emocao": {
+          "name": "emocao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "intensidade": {
+          "name": "intensidade",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "distorcao_cognitiva": {
+          "name": "distorcao_cognitiva",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resposta_racional": {
+          "name": "resposta_racional",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "intensidade_pos": {
+          "name": "intensidade_pos",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criado_por": {
+          "name": "criado_por",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_tcc_rpd_patient": {
+          "name": "idx_tcc_rpd_patient",
+          "columns": [
+            {
+              "expression": "patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "criado_em",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_tcc_rpd_clinic": {
+          "name": "idx_tcc_rpd_clinic",
+          "columns": [
+            {
+              "expression": "clinic_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tcc_rpd_entry_clinic_id_clinic_id_fk": {
+          "name": "tcc_rpd_entry_clinic_id_clinic_id_fk",
+          "tableFrom": "tcc_rpd_entry",
+          "tableTo": "clinic",
+          "columnsFrom": [
+            "clinic_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "tcc_rpd_entry_patient_id_patient_id_fk": {
+          "name": "tcc_rpd_entry_patient_id_patient_id_fk",
+          "tableFrom": "tcc_rpd_entry",
+          "tableTo": "patient",
+          "columnsFrom": [
+            "patient_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tcc_rpd_entry_session_id_session_id_fk": {
+          "name": "tcc_rpd_entry_session_id_session_id_fk",
+          "tableFrom": "tcc_rpd_entry",
+          "tableTo": "session",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tcc_rpd_entry_criado_por_app_user_id_fk": {
+          "name": "tcc_rpd_entry_criado_por_app_user_id_fk",
+          "tableFrom": "tcc_rpd_entry",
+          "tableTo": "app_user",
+          "columnsFrom": [
+            "criado_por"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "tcc_rpd_intensidade_range": {
+          "name": "tcc_rpd_intensidade_range",
+          "value": "\"tcc_rpd_entry\".\"intensidade\" BETWEEN 0 AND 100"
+        },
+        "tcc_rpd_intensidade_pos_range": {
+          "name": "tcc_rpd_intensidade_pos_range",
+          "value": "\"tcc_rpd_entry\".\"intensidade_pos\" IS NULL OR (\"tcc_rpd_entry\".\"intensidade_pos\" BETWEEN 0 AND 100)"
         }
       },
       "isRLSEnabled": false
@@ -5889,6 +6181,14 @@
         "clinica",
         "terapeuta",
         "paciente"
+      ]
+    },
+    "public.clinical_modality": {
+      "name": "clinical_modality",
+      "schema": "public",
+      "values": [
+        "conventional",
+        "protocol_driven"
       ]
     },
     "public.consent_tipo": {
