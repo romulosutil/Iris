@@ -25,7 +25,7 @@ describe("src/proxy.ts — segurança e navegação", () => {
   });
 
   describe("Interceptação de /redefinir-senha", () => {
-    it("redireciona em GET /redefinir-senha com token na query e define cookie", () => {
+    it("redireciona em GET /redefinir-senha com token na query e define cookie httpOnly com as opções de segurança corretas", () => {
       const req = new NextRequest("http://localhost:3000/redefinir-senha?token=xyz123", {
         method: "GET",
       });
@@ -33,41 +33,58 @@ describe("src/proxy.ts — segurança e navegação", () => {
       expect(res.status).toBe(307);
       expect(res.headers.get("location")).toBe("http://localhost:3000/redefinir-senha");
 
-      const cookies = res.cookies.get(NOME_COOKIE_TOKEN);
-      expect(cookies?.value).toBe("xyz123");
+      // Propriedade de segurança central do middleware (finding C1, ver
+      // src/app/(auth)/redefinir-senha/cookie.ts): o token só deixa de vazar via
+      // Referer/analytics se o cookie for httpOnly. Valores literais e
+      // independentes de cookie.ts — reusar as constantes exportadas de lá faria
+      // teste e código errarem juntos numa mutação que alterasse o valor na fonte.
+      expect(res.cookies.get(NOME_COOKIE_TOKEN)).toMatchObject({
+        value: "xyz123",
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/redefinir-senha",
+        maxAge: 15 * 60,
+      });
     });
 
-    it("não redireciona em GET /redefinir-senha sem token na query", () => {
+    it("não redireciona em GET /redefinir-senha sem token na query e não define o cookie", () => {
       const req = new NextRequest("http://localhost:3000/redefinir-senha", {
         method: "GET",
       });
       const res = proxy(req);
       // NextResponse.next() returns a generic response, no location header
       expect(res.headers.get("location")).toBeNull();
+      expect(res.cookies.get(NOME_COOKIE_TOKEN)).toBeUndefined();
     });
 
-    it("não redireciona em GET para outra rota mesmo com token na query", () => {
+    it("não redireciona em GET para outra rota mesmo com token na query e não define o cookie", () => {
       const req = new NextRequest("http://localhost:3000/outra-rota?token=xyz123", {
         method: "GET",
       });
       const res = proxy(req);
       expect(res.headers.get("location")).toBeNull();
+      expect(res.cookies.get(NOME_COOKIE_TOKEN)).toBeUndefined();
     });
   });
 
   describe("Injeção de cabeçalhos Link", () => {
-    it("utiliza append para o header Link sem sobrescrever headers nativos existentes em rotas normais", () => {
+    it("injeta cabeçalho Link com os 5 rels de descoberta para agentes de IA em rotas normais (GET)", () => {
       const req = new NextRequest("http://localhost:3000/redefinir-senha", {
         method: "GET",
         headers: { accept: "text/markdown" },
       });
       const res = proxy(req);
       expect(res.status).toBe(200);
-      expect(res.headers.get("Link")).toContain("api-catalog");
+      const link = res.headers.get("Link");
+      expect(link).toContain('</.well-known/api-catalog>; rel="api-catalog"');
+      expect(link).toContain('</docs/api>; rel="service-doc"');
+      expect(link).toContain('</auth.md>; rel="authorizing-agent"');
+      expect(link).toContain('</.well-known/mcp/server-card.json>; rel="mcp-server-card"');
+      expect(link).toContain('</.well-known/agent-skills/index.json>; rel="agent-skills"');
     });
 
-    it("não injeta cabeçalho Link em rotas /_next", () => {
-      const req = new NextRequest("http://localhost:3000/_next/static/css/app.css", {
+    it("não injeta cabeçalho Link em rotas /_next alcançáveis pelo matcher (path sem ponto)", () => {
+      const req = new NextRequest("http://localhost:3000/_next/webpack-hmr", {
         method: "GET",
       });
       const res = proxy(req);
@@ -90,8 +107,8 @@ describe("src/proxy.ts — segurança e navegação", () => {
       expect(res.headers.get("Link")).toBeNull();
     });
 
-    it("não injeta cabeçalho Link em arquivos estáticos com extensão (.)", () => {
-      const req = new NextRequest("http://localhost:3000/favicon.ico", {
+    it("não injeta cabeçalho Link em arquivos estáticos com extensão (.) alcançáveis pelo matcher", () => {
+      const req = new NextRequest("http://localhost:3000/robots.txt", {
         method: "GET",
       });
       const res = proxy(req);
