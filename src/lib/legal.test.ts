@@ -71,6 +71,46 @@ describe("VERSAO_POLITICA", () => {
   });
 });
 
+/**
+ * Definição ÚNICA da regex do guard de declaração. Não copiar.
+ *
+ * Içada para o escopo do módulo de propósito. Até a revisão do PR #337 o teste
+ * que exercita o padrão mantinha uma segunda cópia colada dele: afrouxar a
+ * regex da varredura não derrubava teste nenhum, porque a cópia seguia verde
+ * exercitando um padrão morto — o anti-padrão "reimplementar em vez de
+ * extrair". Com uma definição só, a varredura e o teste de comportamento
+ * falham juntos.
+ *
+ * Compartilhar um objeto `RegExp` com flag `g` entre os dois testes é seguro
+ * porque o único uso é `String.prototype.matchAll`, que opera sobre um clone
+ * interno e não avança o `lastIndex` do original.
+ *
+ * Só declaração (`const VERSAO_TERMO =`), não uso nem import. O sufixo `\b`
+ * evita casar `VERSAO_TERMO_MENOR_ATUAL` e os outros termos de consentimento
+ * de paciente, que são versões próprias e legitimamente separadas destas. O
+ * grupo opcional aceita anotação de tipo TypeScript (`: string =`), e a
+ * classe negada é `[^=;\n]` — não `[^=]`. Com `[^=]` a anotação atravessa `;`
+ * e quebra de linha e engole a declaração seguinte; ver o teste "a anotação de
+ * tipo não engole a declaração seguinte".
+ */
+const regexDeclaracao =
+  /\b(?:const|let|var)\s+(VERSAO_TERMO|VERSAO_POLITICA)\b(?:\s*:\s*[^=;\n]+)?\s*=/g;
+
+/**
+ * Raízes varridas pelo guard: todo diretório do repositório que carrega código
+ * executável, não só `src/`.
+ *
+ * Opção (a) da revisão do PR #337 — estender a varredura em vez de encolher a
+ * promessa da mensagem. Motivo: `src/**` sozinho reproduz o buraco do #329 —
+ * o job de billing roda de `scripts/*.mjs`, que o TypeScript nem enxerga, e
+ * uma terceira cópia da versão legal ali passaria batida enquanto a mensagem
+ * de falha afirma "e em nenhum outro lugar". Medido em 16/08/2026 antes de
+ * decidir: a varredura estendida acusa exatamente as duas declarações de
+ * `src/lib/legal.ts` (502 arquivos, ~0,4s) — estender não custa falso
+ * positivo nenhum.
+ */
+const RAIZES_VARRIDAS = ["src", "scripts", "db", "e2e", "ops", "infra"];
+
 describe("integridade de fonte única das versões legais", () => {
   /**
    * Fonte única, verificada — não só prometida no comentário de `legal.ts`.
@@ -87,19 +127,13 @@ describe("integridade de fonte única das versões legais", () => {
    * "violações fora de legal.ts" passaria com a constante deletada — guard
    * verde afirmando o contrário do que acontece, o pior tipo de teste.
    *
-   * Limite conhecido: o guard casa declarações `const|let|var NOME =` em
-   * arquivos .ts/.tsx de produção sob src/. Não pega o VALOR duplicado como
-   * literal solta (`versaoTermo: "2026-08-07"` num insert) nem fora de src/.
+   * Limite conhecido, e agora escrito com o alcance real: o guard casa
+   * declarações `const|let|var NOME =` em arquivos .ts/.tsx/.mjs/.cjs de
+   * produção sob as raízes de `RAIZES_VARRIDAS`. Não pega o VALOR duplicado
+   * como literal solta (`versaoTermo: "2026-08-07"` num insert), nem dentro de
+   * .sql, .json ou markdown.
    */
   it("VERSAO_TERMO e VERSAO_POLITICA são declaradas em src/lib/legal.ts e em nenhum outro lugar", () => {
-    const raiz = path.join(process.cwd(), "src");
-    // Só declaração (`const VERSAO_TERMO =`), não uso nem import. O sufixo
-    // `\b` evita casar `VERSAO_TERMO_MENOR_ATUAL` e os outros termos de
-    // consentimento de paciente, que são versões próprias e legitimamente
-    // separadas destas. `matchAll` no conteúdo inteiro (não linha a linha)
-    // pega inclusive declaração quebrada em múltiplas linhas.
-    const regexDeclaracao =
-      /\b(?:const|let|var)\s+(VERSAO_TERMO|VERSAO_POLITICA)\b\s*=/g;
     const declaracoes = new Map<string, string[]>([
       ["VERSAO_TERMO", []],
       ["VERSAO_POLITICA", []],
@@ -109,15 +143,23 @@ describe("integridade de fonte única das versões legais", () => {
       for (const entrada of readdirSync(dir, { withFileTypes: true })) {
         const caminho = path.join(dir, entrada.name);
         if (entrada.isDirectory()) {
+          // Dependências e bundles não são código nosso; varrê-los só gera
+          // ruído e custo. (Nenhuma raiz tem hoje, mas `e2e/` e `ops/` podem
+          // ganhar um `node_modules` próprio a qualquer momento.)
+          if (entrada.name === "node_modules" || entrada.name === ".next") {
+            continue;
+          }
           visitar(caminho);
         } else if (
-          /\.tsx?$/.test(entrada.name) &&
+          /\.(tsx?|mjs|cjs)$/.test(entrada.name) &&
           // Testes ficam de fora: o que importa é o código que roda em
           // produção. (E este próprio arquivo carrega o padrão como literal,
           // então se incluísse testes ele casaria consigo mesmo.)
-          !/\.test\.tsx?$/.test(entrada.name)
+          !/\.test\.(tsx?|mjs|cjs)$/.test(entrada.name)
         ) {
           const conteudo = readFileSync(caminho, "utf8");
+          // `matchAll` no conteúdo inteiro (não linha a linha) pega inclusive
+          // declaração quebrada em múltiplas linhas.
           for (const m of conteudo.matchAll(regexDeclaracao)) {
             const nome = m[1];
             if (nome === undefined) continue;
@@ -131,14 +173,68 @@ describe("integridade de fonte única das versões legais", () => {
       }
     };
 
-    visitar(raiz);
+    for (const raiz of RAIZES_VARRIDAS) {
+      visitar(path.join(process.cwd(), raiz));
+    }
 
     for (const [nome, locais] of declaracoes) {
       expect(
         locais.map((l) => l.replace(/:\d+$/, "")),
-        `${nome} deve ser declarada em src/lib/legal.ts, e só lá — quem precisar importa de lá. Encontrada em: ${locais.join(", ") || "lugar nenhum"}`,
+        `${nome} deve ser declarada em src/lib/legal.ts, e só lá — quem precisar importa de lá. Varridos os arquivos .ts/.tsx/.mjs/.cjs (exceto testes) sob ${RAIZES_VARRIDAS.map((r) => `${r}/`).join(", ")}. Encontrada em: ${locais.join(", ") || "lugar nenhum"}`,
       ).toEqual(["src/lib/legal.ts"]);
     }
+  });
+
+  it("regex de guarda estática detecta declarações tipadas, exportações e ignora imports e termos de pacientes", () => {
+    // Mesmo identificador que a varredura acima usa — de propósito. Se alguém
+    // afrouxar `regexDeclaracao`, é aqui que estoura.
+    const testar = (codigo: string) =>
+      Array.from(codigo.matchAll(regexDeclaracao)).map((m) => m[1]);
+
+    // Casos de erro (devem ser detectados)
+    expect(testar('const VERSAO_TERMO = "2026-08-07";')).toEqual([
+      "VERSAO_TERMO",
+    ]);
+    expect(testar('export const VERSAO_TERMO: string = "2026-08-07";')).toEqual(
+      ["VERSAO_TERMO"],
+    );
+    expect(
+      testar('let VERSAO_POLITICA: Readonly<string> = "2026-08-07";'),
+    ).toEqual(["VERSAO_POLITICA"]);
+    expect(testar('var VERSAO_TERMO: string | undefined = "foo";')).toEqual([
+      "VERSAO_TERMO",
+    ]);
+
+    // Casos legítimos (não devem ser detectados como nova declaração)
+    expect(testar('import { VERSAO_TERMO } from "@/lib/legal";')).toEqual([]);
+    expect(testar("export { VERSAO_TERMO };")).toEqual([]);
+    expect(
+      testar('const VERSAO_TERMO_TITULAR_ADULTO_ATUAL = "adulto-v1";'),
+    ).toEqual([]);
+    expect(testar('const VERSAO_TERMO_MENOR_ATUAL = "v1";')).toEqual([]);
+  });
+
+  it("a anotação de tipo não engole a declaração seguinte", () => {
+    // Falso negativo real, medido na revisão do PR #337: com `[^=]+` na
+    // anotação de tipo, o casamento atravessa `;` e quebra de linha e engole a
+    // declaração de baixo. Neste fixture o guard devolvia `["VERSAO_TERMO"]` —
+    // ele casava o `let` sem valor com o `=` da linha SEGUINTE, e
+    // VERSAO_POLITICA, que é a declaração de verdade, SUMIA do conjunto
+    // varrido. Nada ficava vermelho. Um guard que perde constante em silêncio
+    // é pior que guard nenhum: a segunda cópia poderia nascer justamente ali.
+    //
+    // Com `[^=;\n]+` a anotação para no `;`: `let VERSAO_TERMO: string;` deixa
+    // de casar (não tem inicializador, não é cópia de versão nenhuma) e
+    // VERSAO_POLITICA volta a ser vista. Os dois resultados são diferentes
+    // entre si, então esta asserção discrimina o antes do depois.
+    const duasDeclaracoes = [
+      "let VERSAO_TERMO: string;",
+      'export const VERSAO_POLITICA = "b";',
+    ].join("\n");
+
+    expect(
+      Array.from(duasDeclaracoes.matchAll(regexDeclaracao)).map((m) => m[1]),
+    ).toEqual(["VERSAO_POLITICA"]);
   });
 });
 
