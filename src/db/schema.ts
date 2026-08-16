@@ -34,11 +34,6 @@ export const userRoleTipo = pgEnum("user_role_tipo", [
   "admin_recepcao",
 ]);
 
-export const clinicalModalityEnum = pgEnum("clinical_modality", [
-  "conventional",
-  "protocol_driven",
-]);
-
 // `tratamento_dados_menor` = responsável legal assina pelo paciente menor.
 // `autoconsentimento_titular_adulto` (#100) = o próprio titular adulto assina.
 // `representacao_curador` (#134) = curador assina pelo adulto sob curatela.
@@ -381,9 +376,6 @@ export const patient = pgTable(
     // Hash cego (HMAC-SHA256 + salt fora do repo) do CPF/responsavelCpf acima,
     // usado só para o EXISTS cross-tenant de #191 — nunca para reidentificar.
     cpfHash: text("cpf_hash"),
-    clinicalModality: clinicalModalityEnum("clinical_modality")
-      .notNull()
-      .default("protocol_driven"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),

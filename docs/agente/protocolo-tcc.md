@@ -660,21 +660,17 @@ resposta)**. Comparando com `registro_pensamento` proposto na Seção 2.1/2.5:
   racional, comportamento resultante** — cobre bem as colunas centrais usadas
   na prática (situação/pensamento/emoção/resposta são universais em qualquer
   variação do RPD, seja de 5 ou 7 colunas).
-- **Gap FECHADO (#306) — reavaliação da emoção pós-resposta racional.**
-  Formatos de 7 colunas (Burns/Padesky) incluem tipicamente uma coluna final de
-  "reavaliar a intensidade da emoção depois de formular a resposta racional"
-  (ex.: ansiedade caiu de 90 para 40 depois do questionamento socrático) — esse
-  número é o principal indicador de eficácia da técnica sessão a sessão, e o
-  schema proposto original só tinha `emocao.intensidade` (um valor,
-  pré-resposta) e `resposta_racional` (texto).
-  O RPD implementado na tabela `tcc_rpd_entry` (migração `0102_tcc_rpd_entry`)
-  fechou o gap com a coluna **`intensidade_pos`** (`integer`, anulável,
-  `CHECK … BETWEEN 0 AND 100` — nula quando o terapeuta não reavaliou). O nome
-  que valeu foi `intensidade_pos`, não `intensidade_pos_resposta` da proposta
-  original: o schema e a migração já estavam escritos quando a divergência
-  apareceu na revisão do PR #306, e renomear coluna por cosmética não se
-  paga. **Esta seção é o registro do nome canônico** — em `src/db/schema.ts` o
-  campo é `intensidadePos`, no Postgres é `intensidade_pos`.
+- **Gap identificado — reavaliação da emoção pós-resposta racional não está
+  no schema proposto.** Formatos de 7 colunas (Burns/Padesky) incluem
+  tipicamente uma coluna final de "reavaliar a intensidade da emoção depois de
+  formular a resposta racional" (ex.: ansiedade caiu de 90 para 40 depois do
+  questionamento socrático) — esse número é o principal indicador de eficácia
+  da técnica sessão a sessão, e o schema atual só tem `emocao.intensidade`
+  (um valor, pré-resposta) e `resposta_racional` (texto), sem campo para a
+  intensidade pós-resposta. **Severidade: importante — gap novo, não coberto
+  pelo doc atual.** Proposta (pendente de confirmação com o Rômulo, não
+  decisão travada): adicionar `emocao.intensidade_pos_resposta: number | null`
+  ao objeto `registro_pensamento`.
 - **Formato de coluna vs. objeto único:** o schema modela um evento por
   registro (um pensamento = um objeto), que corresponde a uma LINHA do
   formulário de coluna real — isso está coerente com a prática (cada linha do

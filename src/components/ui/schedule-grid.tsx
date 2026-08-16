@@ -3,7 +3,6 @@
 import * as React from "react";
 import { Calendar } from "@/components/ui/calendar";
 import type { SessaoDoDia } from "@/app/(app)/agenda/actions";
-import { FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
 
 export interface FaixaJanela {
   diaSemana: number;
@@ -63,14 +62,8 @@ export function ScheduleGrid({
 
     return blocos.map((b) => {
       const horaStr = minParaHora(b.inicioMin);
-      // O dia da semana é escolhido em cima do relógio local (só precisa achar
-      // "esta semana"), mas a hora é ancorada no fuso da clínica — não no fuso
-      // da máquina que roda o código — senão obterHorarioSlot() (que sempre lê
-      // em FUSO_CLINICA) devolve um horário diferente do que foi passado aqui,
-      // e a sessão cai fora da célula/janela visível da grade.
-      const diaDate = new Date(hoje.getFullYear(), hoje.getMonth(), inicioSemanaDia + b.diaSemana);
-      const dataISO = `${diaDate.getFullYear()}-${String(diaDate.getMonth() + 1).padStart(2, "0")}-${String(diaDate.getDate()).padStart(2, "0")}`;
-      const dt = new Date(`${dataISO}T${horaStr}:00${FUSO_CLINICA_OFFSET}`);
+      const [hh, mm] = horaStr.split(":").map(Number);
+      const dt = new Date(hoje.getFullYear(), hoje.getMonth(), inicioSemanaDia + b.diaSemana, hh, mm);
 
       return {
         id: b.id,

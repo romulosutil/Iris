@@ -40,12 +40,11 @@ const owner = hasDb
   : null;
 
 /**
- * As 52 policies tenant-scoped, escritas à mão como literal (48 da 0085 + 4 de
- * `tcc_rpd_entry`, #306).
+ * As 48 policies tenant-scoped, escritas à mão como literal.
  *
  * Por que literal e não `SELECT ... FROM pg_policies` em runtime: computar o
  * esperado a partir da mesma fonte que se está medindo faz o teste concordar
- * consigo mesmo — passaria com 52, com 51 e com 3. Este array é o oráculo, e
+ * consigo mesmo — passaria com 48, com 47 e com 3. Este array é o oráculo, e
  * ele só muda por decisão humana registrada no diff.
  *
  * A comparação de CONJUNTO EXATO (não `toContain`) pega os dois lados do erro:
@@ -104,10 +103,6 @@ const POLICIES_COM_HELPER = [
   "session_note.session_note_select",
   "session_note.session_note_update",
   "subscription.subscription_select",
-  "tcc_rpd_entry.tcc_rpd_entry_delete",
-  "tcc_rpd_entry.tcc_rpd_entry_insert",
-  "tcc_rpd_entry.tcc_rpd_entry_select",
-  "tcc_rpd_entry.tcc_rpd_entry_update",
   "user_role.user_role_read",
 ];
 
@@ -341,7 +336,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
   });
 
   // ─── 2. trava por policy: conjunto EXATO ──────────────────────────────────
-  test("as 52 policies tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 48 policies tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ alvo: string }[]>`
       SELECT tablename || '.' || policyname AS alvo
         FROM pg_policies
@@ -353,7 +348,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Redundante de propósito: se o literal for editado por engano (linha
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
-    expect(POLICIES_COM_HELPER.length).toBe(52);
+    expect(POLICIES_COM_HELPER.length).toBe(48);
   });
 
   // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────

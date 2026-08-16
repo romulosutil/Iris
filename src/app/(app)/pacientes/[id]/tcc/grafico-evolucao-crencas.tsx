@@ -153,14 +153,7 @@ export function GraficoEvolucaoCrencas({
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="w-full h-auto overflow-visible select-none"
-          role="img"
-          aria-labelledby="grafico-rpd-titulo"
         >
-          <title id="grafico-rpd-titulo">
-            Gráfico de evolução da intensidade emocional: {total} registro(s),
-            média inicial {mediaInicial}%
-            {mediaPos !== null ? `, média pós-resposta ${mediaPos}%` : ""}.
-          </title>
           {/* Linhas de Grade de Fundo (100%, 75%, 50%, 25%, 0%) */}
           {[100, 75, 50, 25, 0].map((val) => {
             const y = height - paddingY - (val / 100) * innerHeight;
@@ -196,7 +189,7 @@ export function GraficoEvolucaoCrencas({
           <path
             d={pathInicial}
             fill="none"
-            stroke="var(--status-error-border)"
+            stroke="var(--color-raw-coral-500, #e05252)"
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -242,20 +235,12 @@ export function GraficoEvolucaoCrencas({
                 key={item.id}
                 tabIndex={0}
                 role="button"
-                aria-pressed={isSelected}
                 aria-label={`Registro ${idx}: ${item.emocao} (${item.intensidade}% → ${item.intensidadePos ?? "N/A"}%)`}
                 onMouseEnter={() => setAtivo(item)}
                 onMouseLeave={() => setAtivo(null)}
                 onFocus={() => setAtivo(item)}
                 onBlur={() => setAtivo(null)}
-                onClick={() => setAtivo(isSelected ? null : item)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setAtivo(isSelected ? null : item);
-                  }
-                }}
-                className="cursor-pointer outline-none focus-visible:outline-focus focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+                className="cursor-pointer focus:outline-none"
               >
                 {/* Ponto Inicial */}
                 {isSelected && (
@@ -263,7 +248,7 @@ export function GraficoEvolucaoCrencas({
                     cx={x}
                     cy={yInicial}
                     r="10"
-                    fill="var(--status-error-border)"
+                    fill="var(--color-raw-coral-500, #e05252)"
                     opacity="0.3"
                   />
                 )}
@@ -271,8 +256,8 @@ export function GraficoEvolucaoCrencas({
                   cx={x}
                   cy={yInicial}
                   r="5"
-                  fill="var(--status-error-border)"
-                  stroke="var(--border-brutal)"
+                  fill="var(--color-raw-coral-500, #e05252)"
+                  stroke="#1A1A1A"
                   strokeWidth="2"
                   className="transition-transform duration-100 hover:scale-125"
                 />
@@ -294,7 +279,7 @@ export function GraficoEvolucaoCrencas({
                       cy={yPos}
                       r="5"
                       fill="var(--color-raw-mint-500, #14857a)"
-                      stroke="var(--border-brutal)"
+                      stroke="#1A1A1A"
                       strokeWidth="2"
                       className="transition-transform duration-100 hover:scale-125"
                     />
@@ -320,14 +305,14 @@ export function GraficoEvolucaoCrencas({
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-[var(--border-brutal)]/20 pt-3">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
-            <span className="size-3 rounded-full border border-[var(--border-brutal)] bg-[var(--status-error-border)]" />
+            <span className="size-3 rounded-full border border-black bg-[var(--color-raw-coral-500,#e05252)]" />
             <span className="text-[var(--text-secondary)] font-medium">
               Intensidade Inicial (Pensamento Automático)
             </span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="size-3 rounded-full border border-[var(--border-brutal)] bg-[var(--color-raw-mint-500,#14857a)]" />
+            <span className="size-3 rounded-full border border-black bg-[var(--color-raw-mint-500,#14857a)]" />
             <span className="text-[var(--text-secondary)] font-medium">
               Reavaliação de Humor (Pós-Resposta Racional)
             </span>
@@ -352,7 +337,7 @@ export function GraficoEvolucaoCrencas({
           </div>
           <div>
             <strong className="text-[var(--text-primary)]">Distorção Cognitiva:</strong>{" "}
-            <span className="font-semibold text-[var(--text-primary)]">{ativo.distorcaoCognitiva}</span>
+            <span className="font-semibold text-black">{ativo.distorcaoCognitiva}</span>
           </div>
           <div>
             <strong className="text-[var(--text-primary)]">Resposta Racional:</strong>{" "}

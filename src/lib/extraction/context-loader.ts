@@ -33,10 +33,7 @@ export async function loadCanonicalContext(
   args: { sessionId: string; patientId: string; clinicId: string },
 ) {
   const [pac] = await tx
-    .select({
-      nascimento: patient.nascimento,
-      clinicalModality: patient.clinicalModality,
-    })
+    .select({ nascimento: patient.nascimento })
     .from(patient)
     .where(eq(patient.id, args.patientId));
 
@@ -123,14 +120,8 @@ export async function loadCanonicalContext(
     });
   }
 
-  const modo =
-    pac?.clinicalModality === "conventional"
-      ? "terapia_convencional"
-      : "protocol_driven";
-
   return buildCanonicalContext({
     paciente: { idadeMeses: idadeEmMeses(pac?.nascimento ?? null) },
-    modo,
     protocolos,
     metas,
     historico: [],

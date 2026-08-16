@@ -1,7 +1,5 @@
-import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
-import { requireRole } from "@/auth/require-role";
-import { formatarDataHoraRpd, obterRPDEntries } from "./logic";
+import { obterRPDEntries } from "./logic";
 import { RpdForm } from "./rpd-form";
 import { GraficoEvolucaoCrencas } from "./grafico-evolucao-crencas";
 import { Pill } from "@/components/ui/primitives/pill";
@@ -13,14 +11,6 @@ interface TccPageProps {
 export default async function TccPage({ params }: TccPageProps) {
   const { id: patientId } = await params;
   const ctx = await getTenantContext();
-  try {
-    // admin_recepcao não vê dado clínico (RLS já barra a leitura; aqui
-    // evitamos renderizar a casca da tela p/ um papel que nunca deveria
-    // chegar nela — mesmo padrão de metas/page.tsx e pei/page.tsx).
-    requireRole(ctx, "coordenador", "terapeuta");
-  } catch {
-    notFound();
-  }
 
   const entries = await obterRPDEntries(ctx, patientId);
 
@@ -62,7 +52,13 @@ export default async function TccPage({ params }: TccPageProps) {
         ) : (
           <div className="flex flex-col gap-4">
             {entries.map((item, idx) => {
-              const dataFmt = formatarDataHoraRpd(item.criadoEm);
+              const dataFmt = new Date(item.criadoEm).toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
 
               return (
                 <div
@@ -86,7 +82,7 @@ export default async function TccPage({ params }: TccPageProps) {
 
                     <div>
                       <strong className="text-[var(--text-primary)] block">2. Pensamento Automático:</strong>
-                      <span className="italic text-[var(--text-primary)] font-medium">&quot;{item.pensamentoAutomatico}&quot;</span>
+                      <span className="italic text-black font-medium">&quot;{item.pensamentoAutomatico}&quot;</span>
                     </div>
 
                     <div>
@@ -105,7 +101,7 @@ export default async function TccPage({ params }: TccPageProps) {
                       <span className="text-[var(--text-secondary)]">
                         {item.intensidadePos !== null ? (
                           <>
-                            <strong className="text-[var(--text-primary)]">{item.intensidadePos}%</strong> (Redução de{" "}
+                            <strong className="text-black">{item.intensidadePos}%</strong> (Redução de{" "}
                             {item.intensidade - item.intensidadePos}%)
                           </>
                         ) : (

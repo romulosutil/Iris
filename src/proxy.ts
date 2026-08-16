@@ -36,9 +36,6 @@ export function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
   // Injeção de cabeçalhos Link para descoberta por agentes de IA (preservando preload headers nativos)
-  // `/.well-known` sempre tem "." no path (ex.: "/.well-known/..."), então o
-  // `includes(".")` abaixo já cobriria essa checagem sozinho — mantida por
-  // clareza de intenção, mas nenhum teste pode cobri-la isoladamente (W2).
   const isApiOrStatic =
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||

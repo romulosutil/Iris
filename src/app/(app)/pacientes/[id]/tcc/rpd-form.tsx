@@ -6,14 +6,6 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { salvarRPDAction, type SalvarRpdState } from "./actions";
 import { DISTORCOES_COGNITIVAS_OPCOES } from "./constants";
 
@@ -100,23 +92,20 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
             hint="Escala de 0% a 100%"
           >
             <div className="flex items-center gap-3">
-              <Slider
-                aria-label="Intensidade emocional inicial"
-                aria-describedby="intensidade-hint"
-                min={0}
-                max={100}
-                step={1}
-                value={[intensidade]}
-                onValueChange={([v]) => v !== undefined && setIntensidade(v)}
-                className="w-full"
-              />
-              <Input
+              <input
                 id="intensidade"
                 name="intensidade"
+                type="range"
+                min={0}
+                max={100}
+                value={intensidade}
+                onChange={(e) => setIntensidade(Number(e.target.value))}
+                className="w-full accent-[var(--action-primary)] cursor-pointer h-3 rounded-lg border-2 border-[var(--border-brutal)]"
+              />
+              <Input
                 type="number"
                 min={0}
                 max={100}
-                aria-describedby="intensidade-hint"
                 value={intensidade}
                 onChange={(e) => setIntensidade(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
                 className="w-20 text-center font-bold"
@@ -131,18 +120,19 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
             hint="Selecione o viés cognitivo principal"
             className="md:col-span-2"
           >
-            <Select name="distorcaoCognitiva" defaultValue={DISTORCOES_COGNITIVAS_OPCOES[0]} required>
-              <SelectTrigger id="distorcaoCognitiva">
-                <SelectValue placeholder="Selecione a distorção" />
-              </SelectTrigger>
-              <SelectContent>
-                {DISTORCOES_COGNITIVAS_OPCOES.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <select
+              id="distorcaoCognitiva"
+              name="distorcaoCognitiva"
+              required
+              defaultValue={DISTORCOES_COGNITIVAS_OPCOES[0]}
+              className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] rounded-[var(--radius-control)] font-body flex min-h-11 w-full items-center justify-between px-4 py-2.5 text-base focus-visible:outline-focus outline-none"
+            >
+              {DISTORCOES_COGNITIVAS_OPCOES.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
           </Field>
 
           {/* Resposta Racional */}
@@ -168,23 +158,20 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
             className="md:col-span-2"
           >
             <div className="flex items-center gap-3">
-              <Slider
-                aria-label="Intensidade emocional pós-resposta racional"
-                aria-describedby="intensidadePos-hint"
-                min={0}
-                max={100}
-                step={1}
-                value={[intensidadePos]}
-                onValueChange={([v]) => v !== undefined && setIntensidadePos(v)}
-                className="w-full"
-              />
-              <Input
+              <input
                 id="intensidadePos"
                 name="intensidadePos"
+                type="range"
+                min={0}
+                max={100}
+                value={intensidadePos}
+                onChange={(e) => setIntensidadePos(Number(e.target.value))}
+                className="w-full accent-[var(--action-primary)] cursor-pointer h-3 rounded-lg border-2 border-[var(--border-brutal)]"
+              />
+              <Input
                 type="number"
                 min={0}
                 max={100}
-                aria-describedby="intensidadePos-hint"
                 value={intensidadePos}
                 onChange={(e) => setIntensidadePos(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
                 className="w-20 text-center font-bold"

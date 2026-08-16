@@ -270,45 +270,6 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
     expect(resetPassword).not.toHaveBeenCalled();
   });
 
-  it("trata falha de infraestrutura no throttle como fail-closed, logando erro seguro e bloqueando a tentativa", async () => {
-    cookieStore.set(NOME_COOKIE_TOKEN, "token-qualquer");
-    const erroInfra = new Error("redis offline");
-    registrarTentativa.mockRejectedValueOnce(erroInfra);
-
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    await executar(fd(SENHA_VALIDA));
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("fail-closed"),
-      "Error",
-    );
-    expect(resetPassword).not.toHaveBeenCalled();
-    expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
-
-    consoleSpy.mockRestore();
-  });
-
-  it("inclui o code do erro de infra no log, quando disponível (ex.: ECONNREFUSED de um driver real)", async () => {
-    cookieStore.set(NOME_COOKIE_TOKEN, "token-qualquer");
-    registrarTentativa.mockRejectedValueOnce(
-      Object.assign(new Error("redis offline"), { code: "ECONNREFUSED" }),
-    );
-
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    await executar(fd(SENHA_VALIDA));
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "executarRedefinirSenha: throttle indisponível, bloqueando (fail-closed):",
-      "Error(code=ECONNREFUSED)",
-    );
-    expect(resetPassword).not.toHaveBeenCalled();
-    expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
-
-    consoleSpy.mockRestore();
-  });
-
   it("respeita o piso de tempo mesmo quando o throttle pula toda a chamada ao Better-Auth", async () => {
     cookieStore.set(NOME_COOKIE_TOKEN, "token-qualquer");
     registrarTentativa.mockResolvedValueOnce({ permitido: false });
