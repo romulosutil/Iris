@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.iris.app",
+      "sha256_cert_fingerprints": [
+        "10:04:80:C9:FA:65:B2:D6:39:69:B5:E3:69:B0:1B:77:43:25:D1:D7:BF:02:AE:F5:BD:A8:14:4E:91:21:40:AA"
+      ]
+    }
+  }
+]

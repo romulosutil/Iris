@@ -30,6 +30,7 @@
     "seed:clinic": "tsx --conditions=react-server --env-file=.env scripts/seed-local.ts",
     "seed:superadmin": "tsx --conditions=react-server --env-file=.env scripts/seed-super-admin.ts",
     "backfill:evidence": "tsx --conditions=react-server --env-file=.env scripts/backfill-evidence.ts",
+    "build:twa": "tsx scripts/build-twa.ts",
     "prepare": "husky"
   },
   "dependencies": {

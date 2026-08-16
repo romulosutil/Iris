@@ -1,0 +1,18 @@
+{
+  "packageId": "com.iris.app",
+  "host": "iris.app",
+  "name": "Iris — Governança Clínica Infantil",
+  "launcherName": "Iris",
+  "display": "standalone",
+  "themeColor": "#6A4C93",
+  "navigationColor": "#F8FAFC",
+  "backgroundColor": "#F8FAFC",
+  "enableNotifications": false,
+  "startUrl": "/agenda",
+  "iconUrl": "https://iris.app/icon-512.png",
+  "maskableIconUrl": "https://iris.app/icon-maskable.png",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli"
+}
