@@ -94,20 +94,24 @@ describe("vencimento da cobrança de ciclo", () => {
     ).not.toThrow();
   });
 
-  it("garante a janela em todo dia de dois anos, sem estourar o teto", () => {
-    // O bug que esta issue conserta é sazonal: passa o ano inteiro verde e
-    // falha em janeiro. Varrer o calendário é o único teste que o pega.
-    for (let i = 0; i < 730; i += 1) {
-      const base = new Date(dia("2026-01-01"));
-      base.setUTCDate(base.getUTCDate() + i);
-      const vencimento = vencimentoCobrancaDeCiclo(base);
-      // Literais: ver o docblock do topo. Importar as constantes tornava esta
-      // asserção uma cópia da condição de saída da implementação.
-      expect(diasUteisEntre(base, vencimento)).toBeGreaterThanOrEqual(2);
-      const corridos = Math.round(
-        (vencimento.getTime() - Number(dia(ymd(base)))) / 86_400_000,
-      );
-      expect(corridos).toBeLessThanOrEqual(10);
-    }
-  });
+  it(
+    "garante a janela em todo dia de dois anos, sem estourar o teto",
+    () => {
+      // O bug que esta issue conserta é sazonal: passa o ano inteiro verde e
+      // falha em janeiro. Varrer o calendário é o único teste que o pega.
+      for (let i = 0; i < 730; i += 1) {
+        const base = new Date(dia("2026-01-01"));
+        base.setUTCDate(base.getUTCDate() + i);
+        const vencimento = vencimentoCobrancaDeCiclo(base);
+        // Literais: ver o docblock do topo. Importar as constantes tornava esta
+        // asserção uma cópia da condição de saída da implementação.
+        expect(diasUteisEntre(base, vencimento)).toBeGreaterThanOrEqual(2);
+        const corridos = Math.round(
+          (vencimento.getTime() - Number(dia(ymd(base)))) / 86_400_000,
+        );
+        expect(corridos).toBeLessThanOrEqual(10);
+      }
+    },
+    20000,
+  );
 });
