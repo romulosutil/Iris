@@ -19,6 +19,8 @@ vi.mock("server-only", () => ({}));
 
 const { authDb } = await import("@/db/client");
 const { POST } = await import("./route");
+const { listarCobrancasDeCicloNaoConciliadas } =
+  await import("@/lib/billing/erro-aplicacao");
 
 /**
  * Webhook do Asaas (#36, Fase 7 — Pix Automático).
@@ -1131,7 +1133,13 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       expect((await lerEvento(id))!.erro_aplicacao).toBeNull();
     });
 
-    it("cobrança sem ciclo correspondente → 200 e erro_aplicacao nomeado (sai da fila)", async () => {
+    it("cobrança de CICLO sem ciclo correspondente → 200 e ALARME nomeado (sai da fila)", async () => {
+      /**
+       * Caso 1 dos três desfechos da #289: a cobrança traz a NOSSA referência
+       * (`cycle:<id>`) e mesmo assim nenhum ciclo casa por `provider_charge_id`
+       * — o único desfecho em que a falta de ciclo pode significar dinheiro
+       * recebido e não conciliado. É a linha que a consulta da DoD acha.
+       */
       respondeCobranca("RECEIVED");
       const id = novoIdEvento();
       const res = await POST(
@@ -1144,7 +1152,135 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
 
       const evento = (await lerEvento(id))!;
       expect(evento.aplicado_em).not.toBeNull();
-      expect(evento.erro_aplicacao).toBe("cobrança sem ciclo correspondente");
+      // Literal, e não a constante que o código usa: comparar a constante com
+      // ela mesma passaria contra o texto único e ambíguo que a #289 removeu.
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança de ciclo sem ciclo correspondente",
+      );
+    });
+
+    it("cobrança de ATIVAÇÃO (sem externalReference) → desfecho ESPERADO, não alarme", async () => {
+      /**
+       * Caso 2. A cobrança de ativação nasce do `immediateQrCode` da
+       * autorização, que **não aceita `externalReference`** (medido na #321) —
+       * então ela chega sem referência POR CONSTRUÇÃO, em toda ativação, para
+       * sempre. Antes da #289 esta linha gravava o mesmo texto do caso 1 e
+       * afogava o alarme no ruído.
+       */
+      respondeCobranca("RECEIVED");
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: {
+            id,
+            event: "PAYMENT_RECEIVED",
+            dateCreated: "2026-08-08 20:01:00",
+            payment: {
+              id: "pay_da_ativacao",
+              status: "RECEIVED",
+              value: 1,
+              billingType: "PIX",
+              dateCreated: "2026-08-08",
+            },
+          },
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const evento = (await lerEvento(id))!;
+      expect(evento.aplicado_em).not.toBeNull();
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança fora do ciclo (ativação ou avulsa)",
+      );
+    });
+
+    it("cobrança com referência de TERCEIRO → esperado, e o texto diz que é de terceiro", async () => {
+      /**
+       * Caso 3. Referência presente, prefixo que não é nosso: outra aplicação
+       * apontada para o mesmo endpoint, ou cobrança criada à mão no painel.
+       * Não é alarme (a cobrança não é nossa de ciclo), mas também não é
+       * "ativação ou avulsa" — dizer isso seria afirmação falsa na trilha, e
+       * mandaria quem diagnostica procurar no lugar errado.
+       */
+      respondeCobranca("RECEIVED");
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: {
+            id,
+            event: "PAYMENT_RECEIVED",
+            dateCreated: "2026-08-08 20:01:00",
+            payment: {
+              id: "pay_de_terceiro",
+              status: "RECEIVED",
+              value: 42,
+              billingType: "PIX",
+              externalReference: "pedido-4711",
+              dateCreated: "2026-08-08",
+            },
+          },
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const evento = (await lerEvento(id))!;
+      expect(evento.aplicado_em).not.toBeNull();
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança fora do ciclo (referência externa de terceiro)",
+      );
+    });
+
+    it("DoD 2: a consulta de não conciliadas ignora a ativação e acha só o alarme", async () => {
+      /**
+       * Prova a promessa central da #289: depois de uma ativação normal
+       * (cobrança sem referência), a consulta que a operação vai usar volta
+       * VAZIA. E a mesma consulta, com uma cobrança de ciclo órfã na tabela,
+       * volta exatamente uma linha — a que tem dinheiro em jogo.
+       *
+       * A consulta casa por IGUALDADE com a constante de alarme. Um
+       * `LIKE '%ciclo%'` traria a ativação de volta e o teste ficaria vermelho
+       * aqui: é este caso que trava o predicado.
+       */
+      respondeCobranca("RECEIVED");
+      const idAtivacao = novoIdEvento();
+      await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: {
+            id: idAtivacao,
+            event: "PAYMENT_RECEIVED",
+            dateCreated: "2026-08-08 20:01:00",
+            payment: {
+              id: "pay_ativacao_dod",
+              status: "RECEIVED",
+              value: 1,
+              billingType: "PIX",
+              dateCreated: "2026-08-08",
+            },
+          },
+        }),
+      );
+
+      expect(await listarCobrancasDeCicloNaoConciliadas()).toEqual([]);
+
+      // Agora a cobrança de ciclo órfã — a que a operação precisa enxergar.
+      respondeCobranca("RECEIVED");
+      const idOrfa = novoIdEvento();
+      const cicloInexistente = crypto.randomUUID();
+      await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoCobranca(idOrfa, "pay_orfa_dod", cicloInexistente),
+        }),
+      );
+
+      const achadas = await listarCobrancasDeCicloNaoConciliadas();
+      expect(achadas).toHaveLength(1);
+      expect(achadas[0]!.asaasEventId).toBe(idOrfa);
+      expect(achadas[0]!.providerChargeId).toBe("pay_orfa_dod");
+      expect(achadas[0]!.referenciaExterna).toBe(`cycle:${cicloInexistente}`);
     });
 
     it("evento sem id utilizável carimba aplicado_em com motivo (não fica na fila para sempre)", async () => {

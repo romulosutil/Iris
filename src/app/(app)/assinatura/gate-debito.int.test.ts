@@ -746,7 +746,8 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
    *
    * Qual mutação este teste mata: a mesma de cima, medida pelo efeito. Com o id
    * sobrescrito, o webhook do pagamento ANTIGO não acha ciclo, vira
-   * `erroAplicacao: "cobrança sem ciclo correspondente"`, e a clínica fica com
+   * `erroAplicacao: "cobrança de ciclo sem ciclo correspondente"` (#289 — o
+   * ALARME, não o ruído da ativação), e a clínica fica com
    * dinheiro recebido e dívida viva — barrada por uma dívida que já pagou.
    */
   it("pagar a cobrança antiga concilia o ciclo — sem dinheiro recebido com dívida viva", async () => {

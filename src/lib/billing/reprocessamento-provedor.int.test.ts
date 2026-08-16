@@ -342,7 +342,7 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes", () => {
       );
     });
 
-    it("evento Asaas sem id utilizável carimba 'sem id utilizável' (não fica na fila para sempre)", async () => {
+    it("evento Asaas sem id utilizável carimba 'evento sem id utilizável' (não fica na fila para sempre)", async () => {
       const idEvento = novoIdEventoAsaas();
       await owner!`
         INSERT INTO asaas_webhook_event (asaas_event_id, evento, payload)
@@ -359,7 +359,10 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes", () => {
 
       const depois = await lerAsaas(idEvento);
       expect(depois.aplicado_em).not.toBeNull();
-      expect(depois.erro_aplicacao).toBe("sem id utilizável");
+      // Texto UNIFICADO com o da rota na #289: a varredura gravava
+      // `"sem id utilizável"` e a rota `"evento sem id utilizável"` — duas
+      // cópias do mesmo desfecho que já tinham derivado.
+      expect(depois.erro_aplicacao).toBe("evento sem id utilizável");
     });
 
     it("404 do Asaas é DEFINITIVO: carimba aplicado_em e a linha não volta", async () => {
@@ -430,6 +433,83 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes", () => {
       expect(chamadasGateway.length).toBe(antes + 1);
       expect(segunda).toEqual({ aplicados: 1, falhas: 0 });
       expect((await lerAsaas(idEvento)).aplicado_em).not.toBeNull();
+    });
+
+    it("conciliação falha na varredura: MANTÉM o motivo classificado em vez de apagá-lo (#289)", async () => {
+      /**
+       * O gêmeo defeituoso da rota. A varredura chamava
+       * `conciliarPagamentoDeCiclo` **descartando o retorno** e carimbava
+       * `erro_aplicacao = null` em todo evento que não estourasse exceção.
+       * Efeito: reprocessar um evento cuja cobrança de ciclo não achou ciclo
+       * APAGAVA o motivo — curava o sintoma (a linha sai da fila) e matava o
+       * sinal. E como esta varredura é justamente o caminho que roda quando a
+       * entrega ao vivo falhou, o alarme sumia no cenário em que ele importa.
+       *
+       * O evento entra com um motivo já gravado por uma tentativa anterior,
+       * para que "apagou" e "nunca escreveu" sejam distinguíveis: a asserção
+       * final vale contra os dois defeitos.
+       */
+      const paymentId = `pay-orfa-${crypto.randomUUID()}`;
+      // Ciclo que NÃO existe: a referência é nossa, mas nenhum
+      // `billing_cycle.provider_charge_id` casa.
+      const cicloInexistente = crypto.randomUUID();
+      const idEvento = await semearCobrancaPendente(
+        paymentId,
+        cicloInexistente,
+        { event: "PAYMENT_RECEIVED", status: "RECEIVED" },
+      );
+      await owner!`
+        UPDATE asaas_webhook_event
+        SET erro_aplicacao = 'cobrança de ciclo sem ciclo correspondente'
+        WHERE asaas_event_id = ${idEvento}`;
+
+      respondeCobrancaAsaas("RECEIVED");
+
+      const r = await reprocessarEventosPendentes();
+      expect(r).toEqual({ aplicados: 1, falhas: 0 });
+
+      const depois = await lerAsaas(idEvento);
+      expect(depois.aplicado_em).not.toBeNull();
+      // Literal, e não a constante importada: o teste tem que travar o texto,
+      // não concordar com ele.
+      expect(depois.erro_aplicacao).toBe(
+        "cobrança de ciclo sem ciclo correspondente",
+      );
+    });
+
+    it("ativação sem externalReference reprocessada NÃO vira alarme (mesma classificação da rota)", async () => {
+      /**
+       * A outra metade do D-4: a varredura tem que gravar o MESMO motivo que a
+       * rota gravaria, e não um texto próprio. Uma cobrança sem referência é a
+       * ativação — desfecho esperado, nunca alarme, nos dois caminhos.
+       */
+      const paymentId = `pay-ativacao-${crypto.randomUUID()}`;
+      const idEvento = novoIdEventoAsaas();
+      await owner!`
+        INSERT INTO asaas_webhook_event (asaas_event_id, evento, payload)
+        VALUES (${idEvento}, 'PAYMENT_RECEIVED',
+                ${owner!.json({
+                  id: idEvento,
+                  event: "PAYMENT_RECEIVED",
+                  dateCreated: "2026-08-08 20:01:00",
+                  payment: {
+                    id: paymentId,
+                    status: "RECEIVED",
+                    value: 1,
+                    billingType: "PIX",
+                  },
+                } as never)})`;
+
+      respondeCobrancaAsaas("RECEIVED");
+
+      const r = await reprocessarEventosPendentes();
+      expect(r).toEqual({ aplicados: 1, falhas: 0 });
+
+      const depois = await lerAsaas(idEvento);
+      expect(depois.aplicado_em).not.toBeNull();
+      expect(depois.erro_aplicacao).toBe(
+        "cobrança fora do ciclo (ativação ou avulsa)",
+      );
     });
 
     it("evento de cobrança recusada pendente repassa o motivo do gateway ao ciclo (#286)", async () => {

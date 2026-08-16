@@ -1,6 +1,11 @@
 import { eq } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { asaasWebhookEvent } from "@/db/schema";
+import {
+  classificarFalhaDeConciliacao,
+  MOTIVO_ASSINATURA_DESCONHECIDA,
+  MOTIVO_EVENTO_SEM_ID,
+} from "@/lib/billing/erro-aplicacao";
 import { AsaasProvider } from "@/lib/billing/provider";
 import {
   aplicarStatusProvider,
@@ -182,7 +187,19 @@ export async function POST(request: Request): Promise<Response> {
       );
       await marcar(eventoId, {
         aplicadoEm: new Date(),
-        erroAplicacao: aplicou ? null : "cobrança sem ciclo correspondente",
+        /**
+         * #289 — o motivo é CLASSIFICADO, não um texto único.
+         *
+         * `aplicou === false` significa só "não achei ciclo por
+         * `provider_charge_id`", e isso cobre desfechos opostos: a cobrança de
+         * ativação do Pix Automático nunca tem ciclo (e nunca terá), enquanto
+         * uma mensalidade nossa sem ciclo é dinheiro recebido e não conciliado.
+         * Quem separa os dois é a NOSSA `externalReference`, que vem no
+         * envelope — ver `classificarFalhaDeConciliacao`.
+         */
+        erroAplicacao: aplicou
+          ? null
+          : classificarFalhaDeConciliacao(normalizado.referenciaExterna),
       });
     } else if (normalizado.providerSubscriptionId) {
       const atual = await provider.consultarVinculo(
@@ -199,12 +216,12 @@ export async function POST(request: Request): Promise<Response> {
         // elegibilidade da conta (`PIX_AUTOMATIC_RECURRING_ELIGIBILITY_UPDATED`),
         // que não tem assinatura nenhuma. Fica registrado como motivo, sem
         // repetir a consulta para sempre.
-        erroAplicacao: aplicou ? null : "assinatura desconhecida",
+        erroAplicacao: aplicou ? null : MOTIVO_ASSINATURA_DESCONHECIDA,
       });
     } else {
       await marcar(eventoId, {
         aplicadoEm: new Date(),
-        erroAplicacao: "evento sem id utilizável",
+        erroAplicacao: MOTIVO_EVENTO_SEM_ID,
       });
     }
   } catch (err) {
@@ -227,6 +244,32 @@ export async function POST(request: Request): Promise<Response> {
   return Response.json({ received: true });
 }
 
+/**
+ * Carimba o desfecho da aplicação no evento já persistido.
+ *
+ * ## `aplicado_em` e `erro_aplicacao` juntos é estado LEGÍTIMO (#289, item 3)
+ *
+ * As duas colunas respondem perguntas diferentes, e não são um par
+ * sucesso/erro:
+ *
+ * - **`aplicado_em` preenchido = "não voltar a processar".** É o único critério
+ *   de `reprocessarEventosPendentes`, que varre por `aplicado_em IS NULL`. Ele
+ *   diz que o evento chegou ao fim do seu ciclo de vida, não que deu certo.
+ * - **`erro_aplicacao` é o DIAGNÓSTICO do desfecho.** Descreve o que aconteceu,
+ *   inclusive quando o desfecho é esperado e definitivo (cobrança de ativação
+ *   sem ciclo, evento de outra aplicação, evento sem id utilizável).
+ *
+ * Por isso a combinação "carimbado E com motivo" é a forma normal de registrar
+ * um evento que não tem mais nada a fazer mas também não aplicou efeito nenhum
+ * — e é justamente o que impede a fila de crescer para sempre com eventos que
+ * nunca vão conciliar. As outras combinações também são válidas:
+ * `aplicado_em NULL` + motivo = falha transitória, volta na varredura;
+ * `aplicado_em` + `NULL` = aplicou limpo.
+ *
+ * Consequência para quem consulta: "deu errado" NÃO é `erro_aplicacao IS NOT
+ * NULL`. É igualdade com o motivo específico que representa falha — ver
+ * `listarCobrancasDeCicloNaoConciliadas`.
+ */
 async function marcar(
   id: string,
   campos: { aplicadoEm?: Date; erroAplicacao?: string | null },
