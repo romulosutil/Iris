@@ -101,6 +101,15 @@ function instalarGateway(
       httpStatus?: number;
       /** Instruções de Pix Automático pendentes, por filtro de status. */
       instrucoes?: Record<string, unknown[]>;
+      /**
+       * `value` da cobrança no gateway, em REAIS (é assim que o Asaas fala).
+       *
+       * Configurável porque uma cobrança de débito consolidada cobre N ciclos:
+       * o valor dela é a SOMA, e a linha da âncora sozinha vale menos. É essa
+       * diferença que separa "mostra o valor do gateway" de "mostra o valor da
+       * linha" — com os dois iguais, o caso não distingue nada.
+       */
+      valorReais?: number;
     };
   } = {},
 ): { chamadas: Chamada[] } {
@@ -134,9 +143,12 @@ function instalarGateway(
         );
       }
       return Response.json({
-        id: ID_COBRANCA_ANTIGA,
+        // Ecoa o id pedido: na reentrada do gate a cobrança consultada é a que
+        // NÓS emitimos na primeira volta, não a `ID_COBRANCA_ANTIGA`.
+        id: url.split("/payments/")[1],
         status: opcoes.antiga?.status ?? "OVERDUE",
         deleted: opcoes.antiga?.deleted ?? false,
+        value: opcoes.antiga?.valorReais ?? 13,
         invoiceUrl: URL_ANTIGA,
       });
     }
@@ -672,12 +684,17 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
   });
 
   /**
-   * Qual mutação este teste mata: deixar o ponteiro `debito_agrupado_em` velho
-   * na âncora nova (P-6). A cascata de `liquidarCiclo` liquidaria o ciclo novo
-   * quando alguém pagasse a cobrança do ciclo antigo — dívida quitada sem
-   * dinheiro nenhum ter entrado por ela.
+   * P-6 — ponteiro PENDURADO (a âncora não deve mais nada) volta a ser âncora.
+   *
+   * Qual mutação este teste mata: deixar o `debito_agrupado_em` velho na âncora
+   * nova. A cascata de `liquidarCiclo` liquidaria o ciclo novo quando alguém
+   * pagasse a cobrança do ciclo antigo — dívida quitada sem dinheiro nenhum ter
+   * entrado por ela. Mata também a variante oposta, de tratar todo ciclo com
+   * ponteiro como "coberto por outra cobrança": aqui a âncora está `pago`, não
+   * há cobrança nossa em aberto cobrindo o ciclo de 60 dias, e ignorá-lo o
+   * transformaria em dívida que nunca mais é cobrada.
    */
-  it("âncora nova sai limpa do agrupamento antigo, e pagar (a) não liquida (b)", async () => {
+  it("ponteiro pendurado volta a ser âncora e sai limpo do agrupamento antigo", async () => {
     await assinaturaCancelada();
     const antigo = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
     const agrupado = await cicloDevido(700, 60);
@@ -685,20 +702,268 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
     await owner`
       UPDATE billing_cycle SET debito_agrupado_em = ${antigo}
        WHERE id = ${agrupado}`;
-    instalarGateway({ antiga: { status: "OVERDUE" } });
+    // ...e o de 90 já foi liquidado sem a cascata ter alcançado o de 60. O
+    // ponteiro virou lixo: a cobrança dele não cobre mais dívida nenhuma.
+    await owner`
+      UPDATE billing_cycle SET status = 'pago'::billing_cycle_status,
+             cobrado_em = now() WHERE id = ${antigo}`;
+    const { chamadas } = instalarGateway();
 
     await iniciarAtivacaoAssinatura(ctx, formulario());
 
+    // A dívida de 60 dias É cobrada — e por uma âncora com referência virgem.
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(emissoes(chamadas)[0]!.corpo.value).toBe(7);
     const depois = await lerCiclos();
     const novaAncora = depois.find((c) => c.id === agrupado)!;
     expect(novaAncora.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
     expect(novaAncora.debito_agrupado_em).toBeNull();
 
-    // O oráculo que importa: pagar a REAPROVEITADA liquida só o ciclo dela.
+    // O oráculo que importa: pagar a cobrança ANTIGA não liquida o ciclo novo.
     await conciliarPagamentoDeCiclo(ID_COBRANCA_ANTIGA, "paga");
     const final = await lerCiclos();
-    expect(final.find((c) => c.id === antigo)!.status).toBe("pago");
     expect(final.find((c) => c.id === agrupado)!.status).toBe("devido");
+  });
+
+  /**
+   * #310 — REENTRADA: o ciclo agrupado não pode virar uma segunda cobrança.
+   *
+   * O caso que derrubou a entrega. Dois ciclos sem cobrança viram UMA cobrança
+   * de R$ 20,00 na primeira chamada (âncora A, B agrupado). A clínica recarrega
+   * a tela e o gate roda de novo: como o ciclo agrupado NUNCA recebe
+   * `provider_charge_id` (a coluna é UNIQUE parcial), ler só aquela coluna faz B
+   * parecer "ciclo sem cobrança". Ele virava âncora nova, a referência
+   * `debito:B` era virgem — a idempotência do gateway não barra — e saía um
+   * SEGUNDO POST de R$ 7,00. Fim: duas cobranças vivas somando R$ 27,00 para uma
+   * dívida de R$ 20,00, e pagar a de R$ 20,00 quitava só R$ 13,00, porque
+   * `registrarCobrancaDeDebito` zerava o `debito_agrupado_em` de B (P-6) e
+   * quebrava a cascata da primeira cobrança.
+   *
+   * Qual mutação este teste mata: `levantarDebito` não selecionar
+   * `debito_agrupado_em` (ou o laço tratar ciclo agrupado como ciclo solto). Os
+   * oráculos são a CONTAGEM e o VALOR dos POSTs entre as duas chamadas, mais o
+   * estado das duas linhas: um retorno correto na segunda chamada é
+   * perfeitamente compatível com a cobrança extra tendo sido criada ao lado.
+   */
+  it("reentrada do gate não emite segunda cobrança pelo ciclo agrupado", async () => {
+    await assinaturaCancelada();
+    const ancora = await cicloDevido(1300, 90);
+    const agrupado = await cicloDevido(700, 60);
+    const { chamadas } = instalarGateway({
+      antiga: { status: "OVERDUE", valorReais: 20 },
+    });
+
+    const primeira = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(emissoes(chamadas)[0]!.corpo.value).toBe(20);
+    expect(primeira.debito?.valorCentavos).toBe(2000);
+
+    // A clínica recarrega a tela: o MESMO débito, decidido de novo do zero.
+    const segunda = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    // O oráculo: nenhum POST novo. Total continua UM entre as duas chamadas.
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(segunda.debito?.cobrancas).toHaveLength(1);
+    expect(segunda.debito?.cobrancas[0]!.providerChargeId).toBe(
+      ID_COBRANCA_DEBITO,
+    );
+    expect(segunda.debito?.cobrancas[0]!.reaproveitada).toBe(true);
+    // E o valor é o da cobrança inteira, não o da linha da âncora.
+    expect(segunda.debito?.cobrancas[0]!.valorCentavos).toBe(2000);
+    expect(segunda.debito?.valorCentavos).toBe(2000);
+
+    // O banco: o agrupamento da primeira volta sobreviveu intacto, que é o que
+    // faz a cascata quitar os dois quando a clínica pagar.
+    const ciclos = await lerCiclos();
+    expect(ciclos.find((c) => c.id === ancora)!.provider_charge_id).toBe(
+      ID_COBRANCA_DEBITO,
+    );
+    expect(
+      ciclos.find((c) => c.id === agrupado)!.provider_charge_id,
+    ).toBeNull();
+    expect(ciclos.find((c) => c.id === agrupado)!.debito_agrupado_em).toBe(
+      ancora,
+    );
+    expect(await statusAssinatura()).toBe("canceled");
+
+    // Prova final: uma cobrança paga quita a dívida INTEIRA. Com a segunda
+    // cobrança viva, pagar a de R$ 20,00 deixaria o ciclo de R$ 7,00 devendo.
+    await conciliarPagamentoDeCiclo(ID_COBRANCA_DEBITO, "paga");
+    expect((await lerCiclos()).map((c) => c.status)).toEqual(["pago", "pago"]);
+  });
+
+  /**
+   * #310 (D-4) — o débito é RECOMPUTADO depois de uma liquidação no gate.
+   *
+   * Qual mutação este teste mata: iterar o SNAPSHOT de `levantarDebito` e montar
+   * o conjunto (b) com ele. A cobrança da âncora volta `RECEIVED`,
+   * `conciliarPagamentoDeCiclo` liquida a âncora **e o agrupado** pela cascata —
+   * mas o agrupado já estava na lista, e viraria um POST por um ciclo que acabou
+   * de ficar `pago`. O oráculo é o VALOR do POST (R$ 9,00, só o ciclo solto):
+   * a contagem sozinha não pega, porque o POST do ciclo solto existe nos dois
+   * mundos e só o valor denuncia o agrupado embarcado nele.
+   */
+  it("ciclo agrupado liquidado pela cascata sai do débito antes de virar cobrança", async () => {
+    await assinaturaCancelada();
+    const ancora = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
+    const agrupado = await cicloDevido(700, 60);
+    await owner`
+      UPDATE billing_cycle SET debito_agrupado_em = ${ancora}
+       WHERE id = ${agrupado}`;
+    const solto = await cicloDevido(900, 30);
+    const { chamadas } = instalarGateway({
+      antiga: { status: "RECEIVED", valorReais: 20 },
+    });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(emissoes(chamadas)[0]!.corpo.value).toBe(9);
+    expect(r.debito?.valorCentavos).toBe(900);
+    expect(r.debito?.cobrancas).toHaveLength(1);
+    expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_DEBITO);
+
+    const ciclos = await lerCiclos();
+    expect(ciclos.find((c) => c.id === ancora)!.status).toBe("pago");
+    expect(ciclos.find((c) => c.id === agrupado)!.status).toBe("pago");
+    // O agrupado não pode ter sido reapontado nem recebido cobrança: ele já
+    // estava quitado quando a cobrança do ciclo solto foi emitida.
+    expect(
+      ciclos.find((c) => c.id === agrupado)!.provider_charge_id,
+    ).toBeNull();
+    expect(ciclos.find((c) => c.id === solto)!.provider_charge_id).toBe(
+      ID_COBRANCA_DEBITO,
+    );
+    expect(ciclos.find((c) => c.id === solto)!.status).toBe("devido");
+  });
+
+  /**
+   * #310 — "não reaproveitável" NÃO é "não pagável pelo cliente".
+   *
+   * Qual mutação este teste mata: mandar o ciclo para o conjunto (b) em
+   * qualquer motivo de "morta" que não seja o 404. `DUNNING_REQUESTED` vira
+   * `em_cobranca_terceirizada` — cobrança que a gente não reapresenta, mas que o
+   * pagador CONTINUA podendo pagar pelo trilho da recuperação. Consolidar por
+   * cima dela emite uma segunda cobrança sobre uma viva, que é a cobrança dupla
+   * que a #310 existe para fechar. O status é escolhido de propósito fora do
+   * `REFUNDED`/`deleted` óbvio: é o motivo em que "não reaproveitável" e "não
+   * pagável" mais claramente divergem.
+   *
+   * O débito é MISTO de propósito — a cobrança viva de R$ 13,00 mais um ciclo de
+   * R$ 7,00 sem cobrança nenhuma —, e sem essa segunda linha o caso não mede
+   * nada: com um ciclo só, mandá-lo para (b) mantendo o id também termina em
+   * `bloqueado/cobranca_irrecuperavel` (não há âncora de referência virgem), e
+   * os dois comportamentos ficam indistinguíveis. Com o ciclo virgem na mesa é
+   * que a diferença aparece: ele viraria âncora e sairia um POST de R$ 20,00 —
+   * a segunda cobrança por cima da viva.
+   *
+   * Os oráculos são independentes de propósito: a copy certa é compatível com um
+   * POST tendo saído ao lado, e zero POST é compatível com a assinatura já
+   * reaberta.
+   */
+  it("cobrança existente e não reaproveitável barra, sem consolidar por cima", async () => {
+    await assinaturaCancelada();
+    const comCobranca = await cicloDevidoComCobranca(
+      1300,
+      90,
+      ID_COBRANCA_ANTIGA,
+    );
+    const virgem = await cicloDevido(700, 30);
+    const { chamadas } = instalarGateway({
+      antiga: { status: "DUNNING_REQUESTED" },
+    });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(r.error).toMatch(/revisão manual/i);
+    expect(r.error).toMatch(/informando o CNPJ da clínica/i);
+    expect(r.debito).toBeUndefined();
+    expect(emissoes(chamadas)).toHaveLength(0);
+    expect(
+      chamadas.filter((c) => c.url.includes("/pix/automatic/authorizations")),
+    ).toHaveLength(0);
+    expect(await statusAssinatura()).toBe("canceled");
+
+    const ciclos = await lerCiclos();
+    expect(ciclos.find((c) => c.id === comCobranca)!.status).toBe("devido");
+    expect(ciclos.find((c) => c.id === comCobranca)!.provider_charge_id).toBe(
+      ID_COBRANCA_ANTIGA,
+    );
+    // O ciclo virgem não foi tocado: nada de virar âncora de uma cobrança nova
+    // que somaria a dívida da cobrança viva.
+    expect(ciclos.find((c) => c.id === virgem)!.status).toBe("devido");
+    expect(ciclos.find((c) => c.id === virgem)!.provider_charge_id).toBeNull();
+    expect(ciclos.find((c) => c.id === virgem)!.debito_agrupado_em).toBeNull();
+  });
+
+  /**
+   * #310 — cobrança REMOVIDA no painel bloqueia de propósito.
+   *
+   * Qual mutação este teste mata: soltar o `provider_charge_id` (como o 404 faz)
+   * para os demais motivos de "morta". Aqui a cobrança EXISTE no gateway, e a
+   * idempotência do adapter é por `externalReference`: emitir `debito:<âncora>`
+   * de novo pode devolver a MESMA cobrança deletada — e se devolve ou não NÃO
+   * está medido. Entre supor e barrar, revisão humana é o desfecho honesto.
+   *
+   * Asserir que o id continua na linha é o que separa este ramo do 404: os dois
+   * "não reaproveitam", e só o id no banco mostra qual regra rodou. O ciclo
+   * virgem ao lado é o que torna o zero-POST observável — ver o caso anterior.
+   */
+  it("cobrança removida no painel bloqueia e mantém o id na linha do ciclo", async () => {
+    await assinaturaCancelada();
+    const removida = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
+    const virgem = await cicloDevido(700, 30);
+    const { chamadas } = instalarGateway({
+      antiga: { status: "PENDING", deleted: true },
+    });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(r.error).toMatch(/revisão manual/i);
+    expect(emissoes(chamadas)).toHaveLength(0);
+    expect(await statusAssinatura()).toBe("canceled");
+
+    const ciclos = await lerCiclos();
+    expect(ciclos.find((c) => c.id === removida)!.status).toBe("devido");
+    expect(ciclos.find((c) => c.id === removida)!.provider_charge_id).toBe(
+      ID_COBRANCA_ANTIGA,
+    );
+    expect(ciclos.find((c) => c.id === virgem)!.provider_charge_id).toBeNull();
+  });
+
+  /**
+   * #310 — o valor apresentado é o do GATEWAY, não o da linha da âncora.
+   *
+   * Qual mutação este teste mata: usar `ciclo.valorCentavos` na cobrança
+   * reaproveitada. A cobrança viva foi consolidada sobre dois ciclos e vale
+   * R$ 20,00; a linha da âncora vale R$ 13,00. Com o valor da linha, a tela
+   * mostraria R$ 13,00 num QR de R$ 20,00 e a copy "pagar todas quita o total
+   * de {total}" ficaria factualmente falsa — a clínica pagaria e continuaria
+   * barrada sem entender por quê.
+   *
+   * Os dois valores são DIFERENTES de propósito: com o `valorReais` igual ao da
+   * linha, o caso passaria pelos dois caminhos e não mataria nada.
+   */
+  it("cobrança reaproveitada mostra o valor do gateway, não o da linha", async () => {
+    await assinaturaCancelada();
+    const ancora = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
+    const agrupado = await cicloDevido(700, 60);
+    await owner`
+      UPDATE billing_cycle SET debito_agrupado_em = ${ancora}
+       WHERE id = ${agrupado}`;
+    const { chamadas } = instalarGateway({
+      antiga: { status: "OVERDUE", valorReais: 20 },
+    });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    // Nada emitido: o agrupado já está coberto pela cobrança da âncora.
+    expect(emissoes(chamadas)).toHaveLength(0);
+    expect(r.debito?.cobrancas).toHaveLength(1);
+    expect(r.debito?.cobrancas[0]!.valorCentavos).toBe(2000);
+    expect(r.debito?.valorCentavos).toBe(2000);
+    expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
   });
 
   /**

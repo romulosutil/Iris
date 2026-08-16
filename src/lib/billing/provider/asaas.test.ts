@@ -794,7 +794,20 @@ describe("AsaasProvider", () => {
      */
     function rotear(mapa: {
       payment?: { corpo: unknown; status?: number };
-      instrucoes?: Record<string, unknown[]>;
+      /**
+       * TODAS as instruções que a cobrança tem no gateway — não uma lista já
+       * filtrada pelo teste. O roteador aplica `?status=` como o índice real
+       * aplica, e sem `status` devolve tudo.
+       *
+       * Escrito assim de propósito: com listas pré-filtradas por chave, o
+       * adapter que consultasse o índice SEM filtro receberia `[]` (a chave
+       * vazia) e passaria verde, e o caso "instruções DONE/REFUSED não
+       * bloqueiam" ficaria idêntico ao de lista vazia — ele não teria nenhuma
+       * instrução DONE para não bloquear.
+       */
+      instrucoes?: Array<Record<string, unknown>>;
+      /** Status HTTP do índice de instruções, para os casos de erro. */
+      instrucoesStatus?: number;
       qr?: { corpo: unknown; status?: number };
     }) {
       fetchMock.mockImplementation(async (url: string) => {
@@ -803,8 +816,19 @@ describe("AsaasProvider", () => {
           return resposta(mapa.qr?.corpo ?? {}, mapa.qr?.status ?? 200);
         }
         if (u.includes("/pix/automatic/paymentInstructions")) {
-          const filtro = new URL(u).searchParams.get("status") ?? "";
-          return resposta({ data: mapa.instrucoes?.[filtro] ?? [] });
+          const status = mapa.instrucoesStatus ?? 200;
+          if (status >= 400) {
+            // Dialeto real do Asaas para 4xx: `{errors:[{code, description}]}`.
+            return resposta(
+              { errors: [{ code: "invalid_payment", description: "no" }] },
+              status,
+            );
+          }
+          const filtro = new URL(u).searchParams.get("status");
+          const todas = mapa.instrucoes ?? [];
+          return resposta({
+            data: filtro ? todas.filter((i) => i.status === filtro) : todas,
+          });
         }
         if (u.includes("/payments/")) {
           return resposta(
@@ -825,6 +849,7 @@ describe("AsaasProvider", () => {
             id: "pay_1",
             status: "OVERDUE",
             deleted: false,
+            value: 137,
             invoiceUrl: "https://asaas/i/1",
           },
         },
@@ -835,12 +860,59 @@ describe("AsaasProvider", () => {
 
       expect(r).toEqual({
         reuso: "pagavel",
+        valorCentavos: 13700,
         pagamento: {
           forma: "pix_copia_e_cola",
           brCode: "00020126-brcode-1",
           urlPagamento: "https://asaas/i/1",
         },
       });
+    });
+
+    /** Mutação morta: descartar o `value` da cobrança e deixar a tela somar os
+     * ciclos por conta própria. Uma cobrança consolidada sobre 3 ciclos cobra o
+     * total dela, não o de um ciclo — o número tem que vir do gateway.
+     * O literal (411 ↔ 41100) é escrito aqui, nunca derivado do conversor. */
+    it("valor da cobrança vem do gateway, em centavos", async () => {
+      rotear({
+        payment: {
+          corpo: {
+            id: "pay_12",
+            status: "OVERDUE",
+            deleted: false,
+            // Três ciclos consolidados: 137 × 3. O `value` do Asaas é decimal.
+            value: 411,
+            invoiceUrl: "https://asaas/i/12",
+          },
+        },
+        qr: { corpo: { payload: "00020126-brcode-12" } },
+      });
+
+      const r = await new AsaasProvider().consultarCobrancaParaReuso("pay_12");
+
+      expect(r).toMatchObject({ reuso: "pagavel", valorCentavos: 41100 });
+    });
+
+    /** Mutação morta: cair para `0` quando o gateway não manda `value` (é o que
+     * `consultarCobranca` faz, e ali é inócuo). Aqui viraria "R$ 0,00" na tela
+     * ao lado de um copia-e-cola de verdade. E não é `nao_encontrada`: a
+     * cobrança segue viva, então ninguém pode emitir outra por cima. */
+    it("cobrança pagável sem valor legível não é apresentada", async () => {
+      rotear({
+        payment: {
+          corpo: {
+            id: "pay_13",
+            status: "PENDING",
+            deleted: false,
+            invoiceUrl: "https://asaas/i/13",
+          },
+        },
+        qr: { corpo: { payload: "00020126-brcode-13" } },
+      });
+
+      expect(
+        await new AsaasProvider().consultarCobrancaParaReuso("pay_13"),
+      ).toEqual({ reuso: "morta", motivo: "valor_indeterminado" });
     });
 
     /** Mutação morta: decidir só pelo `status`. O Asaas NÃO tem status
@@ -893,6 +965,32 @@ describe("AsaasProvider", () => {
         motivo: "status_nao_pagavel",
       });
     });
+
+    /** Mutação morta: devolver `nao_encontrada` (o único motivo que libera
+     * emitir outra cobrança) para status de cobrança terceirizada. `DUNNING_*`
+     * segue pagável pelo pagador no trilho da recuperação — emitir a segunda
+     * cobrança por cima é a cobrança dupla. O motivo tem que ser distinguível
+     * do 404, e não pode ser confundido com "morreu". */
+    it.each(["DUNNING_REQUESTED", "DUNNING_RECEIVED"])(
+      "%s é cobrança terceirizada — não reaproveitável e não substituível",
+      async (statusCru) => {
+        rotear({
+          payment: {
+            corpo: {
+              id: "pay_14",
+              status: statusCru,
+              deleted: false,
+              value: 137,
+              invoiceUrl: "https://asaas/i/14",
+            },
+          },
+        });
+
+        expect(
+          await new AsaasProvider().consultarCobrancaParaReuso("pay_14"),
+        ).toEqual({ reuso: "morta", motivo: "em_cobranca_terceirizada" });
+      },
+    );
 
     /** Mutação morta: herdar o `throw` de `estornada` no caminho novo (D-7).
      * Com o throw, o gate ficaria travado para sempre. */
@@ -947,10 +1045,11 @@ describe("AsaasProvider", () => {
             id: "pay_8",
             status: "OVERDUE",
             deleted: false,
+            value: 137,
             invoiceUrl: "https://asaas/i/8",
           },
         },
-        instrucoes: { SCHEDULED: [{ id: "ins_8", status: "SCHEDULED" }] },
+        instrucoes: [{ id: "ins_8", status: "SCHEDULED" }],
         qr: { corpo: { payload: "00020126-nao-deve-aparecer" } },
       });
 
@@ -964,25 +1063,68 @@ describe("AsaasProvider", () => {
       ).toHaveLength(0);
     });
 
-    /** Mutação morta: tratar QUALQUER instrução como pendente. O gate nunca
-     * mais apresentaria cobrança nenhuma — fail-closed demais é gate morto. */
-    it("instruções DONE/REFUSED não bloqueiam", async () => {
+    /** Mutação morta: tratar QUALQUER instrução como pendente — listar o índice
+     * sem `?status=`, ou ignorar o filtro. A cobrança AQUI TEM instruções, duas,
+     * ambas terminais; só não tem nenhuma pendente. Com a lista já filtrada por
+     * chave que o caso usava antes, esta fixture era literalmente a de lista
+     * vazia e o mutante passava verde. */
+    it("instruções DONE/REFUSED existentes não bloqueiam a apresentação", async () => {
       rotear({
         payment: {
           corpo: {
             id: "pay_9",
             status: "OVERDUE",
             deleted: false,
+            value: 137,
             invoiceUrl: "https://asaas/i/9",
           },
         },
-        instrucoes: { AWAITING_REQUEST: [], SCHEDULED: [] },
+        instrucoes: [
+          { id: "ins_9a", status: "DONE" },
+          { id: "ins_9b", status: "REFUSED" },
+        ],
         qr: { corpo: { payload: "00020126-brcode-9" } },
       });
 
       const r = await new AsaasProvider().consultarCobrancaParaReuso("pay_9");
       expect(r.reuso).toBe("pagavel");
     });
+
+    /** Mutação morta: fazer 4xx da LISTAGEM de instruções subir. A cobrança de
+     * débito que o gate emite é Pix comum, sem instrução de Pix Automático
+     * nenhuma — este é o caminho mais comum, não uma borda. Com o throw, o gate
+     * ia a `bloqueado/gateway_indisponivel` e a clínica lia "tente novamente em
+     * alguns instantes" em TODA reentrada, para sempre. */
+    it.each([404, 400])(
+      "%i na listagem de instruções significa 'sem instrução', não indisponibilidade",
+      async (statusHttp) => {
+        rotear({
+          payment: {
+            corpo: {
+              id: "pay_15",
+              status: "OVERDUE",
+              deleted: false,
+              value: 137,
+              invoiceUrl: "https://asaas/i/15",
+            },
+          },
+          instrucoesStatus: statusHttp,
+          qr: { corpo: { payload: "00020126-brcode-15" } },
+        });
+
+        expect(
+          await new AsaasProvider().consultarCobrancaParaReuso("pay_15"),
+        ).toEqual({
+          reuso: "pagavel",
+          valorCentavos: 13700,
+          pagamento: {
+            forma: "pix_copia_e_cola",
+            brCode: "00020126-brcode-15",
+            urlPagamento: "https://asaas/i/15",
+          },
+        });
+      },
+    );
 
     /** Mutação morta: engolir a falha da listagem e apresentar o código sem
      * saber se há débito automático a caminho. */
@@ -1009,7 +1151,14 @@ describe("AsaasProvider", () => {
      * pagou o que não pagou — mesmo raciocínio de `formaDePagamento`. */
     it("sem link e sem copia-e-cola não é reaproveitável", async () => {
       rotear({
-        payment: { corpo: { id: "pay_11", status: "PENDING", deleted: false } },
+        payment: {
+          corpo: {
+            id: "pay_11",
+            status: "PENDING",
+            deleted: false,
+            value: 137,
+          },
+        },
         qr: { corpo: {} },
       });
 

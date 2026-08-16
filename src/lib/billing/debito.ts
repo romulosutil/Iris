@@ -10,6 +10,8 @@ import {
   type CobrancaEmitida,
   type CobrancaParaReuso,
   type FormaPagamentoCobranca,
+  type MotivoCobrancaInexistente,
+  type MotivoNaoReuso,
 } from "./provider";
 
 /**
@@ -79,6 +81,18 @@ export interface CicloDevido {
    * (`congelarCiclosComoDebito` preserva a coluna).
    */
   providerChargeId: string | null;
+  /**
+   * Âncora sob a qual este ciclo já foi agrupado numa cobrança anterior.
+   *
+   * **Sem este campo o gate cobra duas vezes na reentrada.** Uma cobrança de
+   * débito cobre N ciclos: o id fica só na âncora (`provider_charge_id` é UNIQUE
+   * parcial, `0075`) e os demais apontam para ela por `debito_agrupado_em`. Quem
+   * lê apenas `providerChargeId` vê o ciclo agrupado como "ciclo sem cobrança",
+   * elege-o âncora de uma cobrança NOVA — com `referenciaExterna` virgem, que a
+   * idempotência do gateway não barra — e a clínica termina com duas cobranças
+   * vivas somando mais do que deve, sendo que pagar a maior quita só uma parte.
+   */
+  agrupadoEm: string | null;
 }
 
 export interface DebitoLevantado {
@@ -186,7 +200,11 @@ export function decidirGate(
  * a mesma âncora, então a reentrada do gate encontra a cobrança já emitida em
  * vez de eleger outro ciclo e emitir uma segunda cobrança da mesma dívida.
  * Quem escolhe a âncora é `emitirConsolidada`, e ela escolhe o mais antigo SEM
- * cobrança prévia — ver o P-4 lá.
+ * cobrança prévia e NÃO agrupado — ver o P-4 lá.
+ *
+ * `debito_agrupado_em` entra na seleção porque é metade do vínculo ciclo↔cobrança:
+ * a outra metade (`provider_charge_id`) mora só na âncora. Levantar um sem o
+ * outro faz todo ciclo agrupado passar por "ciclo sem cobrança" na reentrada.
  */
 export async function levantarDebito(
   subscriptionId: string,
@@ -196,6 +214,7 @@ export async function levantarDebito(
       id: billingCycle.id,
       valorCentavos: billingCycle.valorCentavos,
       providerChargeId: billingCycle.providerChargeId,
+      agrupadoEm: billingCycle.debitoAgrupadoEm,
     })
     .from(billingCycle)
     .where(
@@ -243,6 +262,11 @@ export async function levantarDebito(
  * resto vira uma cobrança nova consolidada. Falha ao CONSULTAR é fail-closed
  * (`bloqueado`, nada emitido, nada reativado); falha ao EMITIR mantém a régua
  * de sempre (recusa 4xx adia, o resto propaga).
+ *
+ * Do lado do "não reaproveitável", **só o 404 segue para a cobrança nova**;
+ * todo outro desfecho barra. A cobrança existir no gateway e não ser
+ * REAPROVEITÁVEL por nós não significa que o cliente não consiga pagá-la — ver
+ * o comentário do ramo `morta` lá embaixo.
  */
 export async function resolverGateDeDebito(
   clinicId: string,
@@ -289,17 +313,28 @@ export async function resolverGateDeDebito(
    *     antigas, e o Asaas não documenta quais status o `DELETE /payments/{id}`
    *     aceita — emitir por cima da viva É a cobrança dupla que a issue existe
    *     para evitar.
-   * (b) todo o resto (sem cobrança, ou com cobrança morta) → UMA cobrança nova
+   * (b) todo o resto (sem cobrança, ou com cobrança 404) → UMA cobrança nova
    *     consolidada, exatamente como antes desta issue.
+   *
+   * A divisão percorre só as ÂNCORAS. Ciclo agrupado não é uma terceira
+   * categoria: ele já pertence à cobrança da âncora dele, e o destino dele é o
+   * destino dela — cobrança reapresentada cobre os agrupados junto (o valor vem
+   * do gateway, não da linha), cobrança liquidada os liquida pela cascata de
+   * `liquidarCiclo`, cobrança 404 os arrasta para (b) atrás da mesma âncora.
    */
-  const reaproveitadas: CobrancaDoDebito[] = [];
-  const paraConsolidar: CicloDevido[] = [];
+  const porAncora = indexarAgrupados(debito.ciclos);
+  let reaproveitadas: CobrancaDoDebito[] = [];
+  let paraConsolidar: CicloDevido[] = [];
+  /** Alguma cobrança voltou já paga e foi liquidada dentro deste laço (D-4). */
+  let houveLiquidacao = false;
 
-  for (const ciclo of debito.ciclos) {
+  for (const ciclo of porAncora.ancoras) {
+    const agrupados = porAncora.filhosDe.get(ciclo.id) ?? [];
+
     // Quem nunca teve cobrança não tem o que consultar: uma ida ao gateway por
     // ciclo é latência na porta de entrada da clínica, paga por quem não usa.
     if (!ciclo.providerChargeId) {
-      paraConsolidar.push(ciclo);
+      paraConsolidar.push(ciclo, ...agrupados);
       continue;
     }
 
@@ -332,9 +367,19 @@ export async function resolverGateDeDebito(
     }
 
     if (estado.reuso === "paga") {
-      // D-4 — dinheiro já recebido, webhook ainda não chegou. Liquida no mesmo
-      // caminho do webhook (cascata de agrupados incluída) e sai do débito.
+      /**
+       * D-4 — dinheiro já recebido, webhook ainda não chegou. Liquida no mesmo
+       * caminho do webhook (cascata de agrupados incluída) e sai do débito.
+       *
+       * Os agrupados entram em (b) e são retirados depois pela recontagem, em
+       * vez de simplesmente sumirem aqui. A diferença aparece quando a cascata
+       * NÃO alcança um deles: sumindo, ele viraria dívida que nunca mais é
+       * cobrada; passando pela recontagem, quem continuar `devido` no banco é
+       * cobrado. O banco decide, não a nossa expectativa sobre a cascata.
+       */
       await conciliarPagamentoDeCiclo(ciclo.providerChargeId, "paga");
+      houveLiquidacao = true;
+      paraConsolidar.push(...agrupados);
       continue;
     }
     if (estado.reuso === "morta") {
@@ -347,37 +392,71 @@ export async function resolverGateDeDebito(
         motivo: estado.motivo,
       });
       /**
-       * `nao_encontrada` (404) devolve o ciclo ao conjunto (b) COMO SE ele nunca
-       * tivesse tido cobrança — e essa distinção é o que impede o D-3 de virar
-       * o seu próprio oposto.
+       * **Só `nao_encontrada` (404) segue para (b). Todo outro desfecho
+       * não-pagável BLOQUEIA** — nunca consolida por cima.
        *
-       * A âncora de (b) precisa de referência externa virgem (P-4), e o teste de
+       * O 404 devolve o ciclo a (b) COMO SE ele nunca tivesse tido cobrança, e
+       * essa distinção é o que impede o D-3 de virar o seu próprio oposto: a
+       * âncora de (b) precisa de referência externa virgem (P-4), e o teste de
        * virgindade é `providerChargeId == null`. Um débito de um ciclo só, cujo
-       * id o gateway não reconhece, não teria âncora nenhuma: `emitirConsolidada`
-       * devolveria `irrecuperavel` e a clínica ficaria travada em "fale com o
-       * suporte" para sempre — exatamente o "trancar a clínica fora por um id
-       * órfão" que o D-3 proíbe, um passo adiante.
+       * id o gateway não reconhece, não teria âncora nenhuma, cairia em
+       * `irrecuperavel` e travaria a clínica em "fale com o suporte" para
+       * sempre. É seguro porque o perigo do P-4 é a idempotência do adapter
+       * (`GET /payments?externalReference=`) devolver a MESMA cobrança morta, e
+       * isso exige que ela exista: um 404 é o gateway afirmando que não existe.
        *
-       * E é seguro, porque o perigo do P-4 é a idempotência do adapter
-       * (`GET /payments?externalReference=`) devolver a MESMA cobrança morta.
-       * Isso exige que a cobrança exista no gateway. Um 404 é o gateway
-       * afirmando que ela não existe: não há o que ressuscitar. Os demais
-       * motivos (`removida`, `estornada`, `status_nao_pagavel`,
-       * `sem_forma_de_pagamento`) descrevem cobranças que EXISTEM, e para eles a
-       * regra do P-4 continua valendo intacta.
+       * Os demais motivos descrevem cobranças que EXISTEM no gateway, e mandar
+       * o ciclo para (b) mantendo o id era duplamente errado:
+       *
+       * - **"não reaproveitável" não é "não pagável pelo cliente".** O adapter
+       *   classifica por allow-list (`PENDING`/`OVERDUE`), então
+       *   `status_nao_pagavel` engloba `DUNNING_REQUESTED`/`DUNNING_RECEIVED` —
+       *   cobranças em cobrança automática que o cliente CONTINUA podendo pagar.
+       *   Consolidar por cima delas emite uma segunda cobrança sobre uma viva:
+       *   exatamente a cobrança dupla que a #310 existe para fechar.
+       * - **Mantendo o id, a emissão nem chega a acontecer**: sem âncora virgem
+       *   `emitirConsolidada` devolve `irrecuperavel`, e o resultado prático era
+       *   `bloqueado/cobranca_irrecuperavel` permanente — a mesma parada, só que
+       *   por acidente e sem log que a nomeasse.
+       *
+       * `removida` (cobrança apagada no painel) fica bloqueando DE PROPÓSITO.
+       * Libertar o id ali arriscaria a idempotência de `debito:<âncora>`
+       * ressuscitar a cobrança deletada, e **isso não está medido** — o Asaas
+       * não documenta se `GET /payments?externalReference=` devolve removidas.
+       * Entre supor e barrar, revisão humana é o desfecho honesto: barrar é
+       * reversível, cobrança dupla não é.
        */
-      paraConsolidar.push(
-        estado.motivo === "nao_encontrada"
-          ? { ...ciclo, providerChargeId: null }
-          : ciclo,
-      );
+      if (!provaQueNaoExisteMais(estado.motivo)) {
+        return {
+          tipo: "bloqueado",
+          totalCentavos: debito.totalCentavos,
+          motivo: "cobranca_irrecuperavel",
+        };
+      }
+      paraConsolidar.push({ ...ciclo, providerChargeId: null }, ...agrupados);
       continue;
     }
 
     reaproveitadas.push({
       cicloId: ciclo.id,
       providerChargeId: ciclo.providerChargeId,
-      valorCentavos: ciclo.valorCentavos,
+      /**
+       * O valor é o que o GATEWAY diz que esta cobrança cobra, não o do ciclo.
+       *
+       * Uma cobrança de débito pode ter sido consolidada sobre N ciclos: o
+       * valor dela é a soma, e só a linha da âncora carrega o id. Ler
+       * `ciclo.valorCentavos` mostraria na tela o valor de UM ciclo, e a copy
+       * "pagar todas quita o total de {total}" ficaria factualmente falsa —
+       * a clínica pagaria o QR e continuaria devendo, sem entender por quê.
+       *
+       * `em_processamento` não traz valor (não há forma de pagamento a exibir),
+       * então ali a soma local — âncora + agrupados — é a melhor aproximação
+       * que temos do que aquela cobrança cobre.
+       */
+      valorCentavos:
+        estado.reuso === "pagavel"
+          ? estado.valorCentavos
+          : ciclo.valorCentavos + somaDe(agrupados.map((c) => c.valorCentavos)),
       reaproveitada: true,
       situacao:
         estado.reuso === "pagavel"
@@ -386,7 +465,24 @@ export async function resolverGateDeDebito(
     });
   }
 
-  // D-4 — o débito muda quando uma cobrança já paga é liquidada aqui dentro.
+  /**
+   * D-4 — recomputar o débito ANTES de montar (b), e não confiar no snapshot.
+   *
+   * `debito.ciclos` foi lido antes do laço. Liquidar uma cobrança já paga lá
+   * dentro derruba a âncora **e os agrupados dela** (cascata de `liquidarCiclo`),
+   * e qualquer um desses ciclos que já estivesse na mão viraria uma cobrança
+   * nova por um débito que acabou de ser quitado — POST emitido por ciclo já
+   * `pago`, com o gate ainda devolvendo `cobranca` em vez de liberar a
+   * reativação. O banco é o oráculo do que sobrou; o snapshot não é.
+   */
+  if (houveLiquidacao) {
+    const aindaDevido = new Set(
+      (await levantarDebito(assinatura.id)).ciclos.map((c) => c.id),
+    );
+    paraConsolidar = paraConsolidar.filter((c) => aindaDevido.has(c.id));
+    reaproveitadas = reaproveitadas.filter((c) => aindaDevido.has(c.cicloId));
+  }
+
   const totalVivo =
     somaDe(reaproveitadas.map((c) => c.valorCentavos)) +
     somaDe(paraConsolidar.map((c) => c.valorCentavos));
@@ -457,6 +553,71 @@ function somaDe(valores: number[]): number {
   return valores.reduce((soma, v) => soma + v, 0);
 }
 
+/**
+ * O motivo prova que a cobrança não existe mais PARA NINGUÉM?
+ *
+ * Só quem passa aqui pode virar cobrança nova. A porta divide os motivos em dois
+ * grupos justamente para esta pergunta (`MotivoCobrancaInexistente` versus
+ * `MotivoReusoIndeterminado`), e o mapa abaixo é a tradução do grupo em código:
+ * o `Record` sobre a união é o que faz o compilador exigir uma decisão explícita
+ * se um motivo novo entrar no grupo "não existe mais". Uma comparação solta
+ * (`motivo !== "nao_encontrada"`) aceitaria o motivo novo em silêncio — no lado
+ * errado, que é o que emite cobrança em cima de cobrança viva.
+ */
+function provaQueNaoExisteMais(
+  motivo: MotivoNaoReuso,
+): motivo is MotivoCobrancaInexistente {
+  const INEXISTENTES: Record<MotivoCobrancaInexistente, true> = {
+    nao_encontrada: true,
+  };
+  return Object.hasOwn(INEXISTENTES, motivo);
+}
+
+/**
+ * Separa os ciclos `devido` entre ÂNCORAS e AGRUPADOS (#310).
+ *
+ * Agrupado é ciclo que uma cobrança anterior já cobre: ele aponta para a âncora
+ * por `debito_agrupado_em` e não carrega `provider_charge_id` (a coluna é UNIQUE
+ * parcial, `0075`). Decidir sobre ele isoladamente é o que produz a segunda
+ * cobrança na reentrada do gate.
+ *
+ * ## Ponteiro pendurado volta a ser âncora, de propósito
+ *
+ * Se a âncora apontada NÃO está mais entre os ciclos `devido` (foi paga, e a
+ * cascata deveria ter liquidado este junto), o ponteiro é lixo: não há cobrança
+ * NOSSA em aberto cobrindo este ciclo. Ele volta a ser âncora candidata, com o
+ * ponteiro zerado aqui — deixá-lo em silêncio o tornaria dívida que nunca é
+ * cobrada, e mantê-lo como agrupado de uma âncora inexistente derrubaria o gate
+ * em `irrecuperavel` permanente, que é o "trancar a clínica fora" do D-3.
+ * Zerar a coluna no banco é trabalho de `registrarCobrancaDeDebito` (P-6).
+ */
+function indexarAgrupados(ciclos: CicloDevido[]): {
+  ancoras: CicloDevido[];
+  filhosDe: Map<string, CicloDevido[]>;
+} {
+  const devidos = new Set(ciclos.map((c) => c.id));
+  const ancoras: CicloDevido[] = [];
+  const filhosDe = new Map<string, CicloDevido[]>();
+
+  for (const ciclo of ciclos) {
+    if (ciclo.agrupadoEm && devidos.has(ciclo.agrupadoEm)) {
+      const filhos = filhosDe.get(ciclo.agrupadoEm) ?? [];
+      filhos.push(ciclo);
+      filhosDe.set(ciclo.agrupadoEm, filhos);
+      continue;
+    }
+    if (ciclo.agrupadoEm) {
+      console.warn("[billing-reuso] ciclo agrupado sob âncora que não deve", {
+        cicloId: ciclo.id,
+        agrupadoEm: ciclo.agrupadoEm,
+      });
+    }
+    ancoras.push({ ...ciclo, agrupadoEm: null });
+  }
+
+  return { ancoras, filhosDe };
+}
+
 type ResultadoEmissao = {
   tipo: "ok" | "irrecuperavel";
   cobrancas: CobrancaDoDebito[];
@@ -507,7 +668,16 @@ async function emitirConsolidada(dados: {
     return { tipo: "ok", cobrancas: [], motivoAdiamento: "abaixo_do_piso" };
   }
 
-  const ancora = dados.ciclos.find((c) => !c.providerChargeId);
+  /**
+   * Âncora = mais antigo SEM cobrança prévia e NÃO agrupado.
+   *
+   * O `!c.agrupadoEm` é a metade nova (#310): um ciclo agrupado também tem
+   * `provider_charge_id` nulo — o id mora na âncora dele —, então sem esta
+   * cláusula ele passaria no teste de "referência virgem", viraria âncora de uma
+   * cobrança nova e a dívida dele seria cobrada duas vezes: uma pela cobrança da
+   * âncora antiga, que continua viva, outra por esta.
+   */
+  const ancora = dados.ciclos.find((c) => !c.providerChargeId && !c.agrupadoEm);
   if (!ancora) {
     console.warn("[billing-reuso] sem âncora de referência virgem no débito", {
       clinicId: dados.clinicId,
@@ -623,10 +793,10 @@ async function registrarCobrancaDeDebito(
       cobrancaEmitidaEm: new Date(),
       erro: null,
       // P-6/#310: a âncora pode ter sido, num gate anterior, um ciclo AGRUPADO
-      // sob outra âncora cuja cobrança agora morreu. Se o ponteiro velho ficar,
-      // o ciclo aponta para a âncora antiga E carrega a cobrança nova, e a
-      // cascata de `liquidarCiclo` o liquida de graça quando alguém pagar a
-      // cobrança daquela outra âncora.
+      // sob outra âncora que não deve mais nada (ponteiro pendurado, ver
+      // `indexarAgrupados`). Se o ponteiro velho ficar, o ciclo aponta para a
+      // âncora antiga E carrega a cobrança nova, e a cascata de `liquidarCiclo`
+      // o liquida de graça quando alguém pagar a cobrança daquela outra âncora.
       debitoAgrupadoEm: null,
     })
     .where(eq(billingCycle.id, ancoraId));

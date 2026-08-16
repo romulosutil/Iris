@@ -225,22 +225,58 @@ export class ProvedorFake implements BillingProvider {
   }
 
   /**
-   * Reuso de cobrança (#310). O fake modela só o que os testes de integração
-   * dele precisam observar: o `estado` do wire decide, e o copia-e-cola é
+   * Reuso de cobrança (#310). O `estado` do wire decide, e o copia-e-cola é
    * derivado do id, igual ao de `emitirCobrancaAvulsa`.
    *
-   * O gateway fake NÃO modela instrução de débito nem `deleted`: essas duas
-   * entidades são do Pix Automático do Asaas e é lá que são testadas.
+   * ## Todos os desfechos são expressáveis, e por qual opção
+   *
+   * A versão anterior devolvia `pagavel` para tudo que não fosse paga ou
+   * estornada: nenhum teste que usa o fake conseguia produzir
+   * `em_processamento`, `removida` ou `status_nao_pagavel`, e os ramos novos do
+   * chamador ficavam sem exercício nenhum. Agora cada desfecho tem uma opção de
+   * construção, no idioma que este arquivo já usa — o corpo do wire:
+   *
+   * | Corpo devolvido pelo `fetch` do teste | Desfecho             |
+   * | ------------------------------------- | -------------------- |
+   * | `{ estado: "LIQUIDADA" }`             | `paga`               |
+   * | `{ estado: "ESTORNADA" }`             | `morta/estornada`    |
+   * | `{ removida: true }`                  | `morta/removida`     |
+   * | `{ estado: "EM_DEBITO" }`             | `em_processamento`   |
+   * | `{ estado: "PENDENTE" \| "VENCIDA", centavos }` | `pagavel`   |
+   * | qualquer outro `estado`               | `morta/status_nao_pagavel` |
+   *
+   * A opção é o corpo do wire, e não um parâmetro de construtor, porque o
+   * oráculo deste dublê é a URL efetivamente chamada (ver docstring do topo):
+   * uma resposta enlatada no construtor faria o teste passar sem que o
+   * chamador lesse coisa alguma do gateway.
+   *
+   * **Allow-list, igual ao adapter real**: estado desconhecido cai em
+   * não-pagável. Uma deny-list aqui deixaria o dublê mais permissivo que a
+   * produção, que é a pior direção possível para um dublê.
    */
   async consultarCobrancaParaReuso(
     providerChargeId: string,
   ): Promise<CobrancaParaReuso> {
     const corpo = await pedir(`${BASE_URL_FAKE}/cobrancas/${providerChargeId}`);
+
+    // Checado antes do estado: uma cobrança removida continua carregando o
+    // estado que tinha na remoção (mesma armadilha do `deleted` do Asaas).
+    if (corpo.removida === true) return { reuso: "morta", motivo: "removida" };
+
     const status = mapearStatusCobranca(corpo.estado);
     if (status === "paga") return { reuso: "paga" };
     if (status === "estornada") return { reuso: "morta", motivo: "estornada" };
+    // Débito automático a caminho: não apresentar forma de pagamento nenhuma.
+    if (corpo.estado === "EM_DEBITO") return { reuso: "em_processamento" };
+    if (corpo.estado !== "PENDENTE" && corpo.estado !== "VENCIDA") {
+      return { reuso: "morta", motivo: "status_nao_pagavel" };
+    }
+
     return {
       reuso: "pagavel",
+      // Vem do wire pelo mesmo campo de `consultarCobranca`: o valor de uma
+      // cobrança reaproveitada é o dela, nunca o que o chamador supõe.
+      valorCentavos: Number(corpo.centavos ?? 0),
       pagamento: {
         forma: "pix_copia_e_cola",
         brCode: `00020126-fake-debito-${providerChargeId}`,

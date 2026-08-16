@@ -237,18 +237,57 @@ export type FormaPagamentoCobranca =
   | { forma: "pix_copia_e_cola"; brCode: string; urlPagamento?: string }
   | { forma: "link"; urlPagamento: string };
 
-/** Por que uma cobrança já emitida NÃO pode ser reapresentada. */
-export type MotivoNaoReuso =
+/**
+ * Motivo que prova que a cobrança **não existe mais para ninguém** — nem para
+ * nós, nem para o pagador. É o único grupo em que emitir OUTRA cobrança por
+ * cima é seguro.
+ *
+ * Hoje tem um membro só, e isso é o ponto: só o 404 é uma prova. Todo o resto
+ * é "não consigo reapresentar", que é uma frase sobre NÓS, não sobre a
+ * cobrança.
+ */
+export type MotivoCobrancaInexistente =
   /** O gateway não reconhece o id (404). Ninguém consegue pagar aquilo. */
-  | "nao_encontrada"
+  "nao_encontrada";
+
+/**
+ * Motivo em que a cobrança **não é reapresentável por nós**, mas pode
+ * perfeitamente seguir pagável pelo pagador.
+ *
+ * Emitir uma segunda cobrança em qualquer um destes casos é o risco de
+ * **cobrança dupla**: o cliente paga a que está viva no gateway e a nova que a
+ * gente acabou de criar. Quem consome trata este grupo como "não sei / não
+ * emita nada", nunca como "morreu".
+ */
+export type MotivoReusoIndeterminado =
   /** Removida no gateway. No Asaas não há status "cancelada": é o boolean `deleted`. */
   | "removida"
   /** Estornada/chargeback — decisão comercial humana, nunca reapresentada. */
   | "estornada"
+  /**
+   * Em cobrança terceirizada (`DUNNING_*` no Asaas). Segue pagável pelo
+   * pagador pelo trilho da recuperação, e é justamente por isso que não é um
+   * "morta, pode emitir outra": seria a segunda cobrança por cima de uma viva.
+   */
+  | "em_cobranca_terceirizada"
   /** Status fora da allow-list de pagáveis (inclui todo status futuro desconhecido). */
   | "status_nao_pagavel"
+  /** Viva e pagável, mas o gateway não devolveu um valor legível. */
+  | "valor_indeterminado"
   /** Existe e é pagável, mas o gateway não devolveu link nem copia-e-cola. */
   | "sem_forma_de_pagamento";
+
+/**
+ * Por que uma cobrança já emitida NÃO pode ser reapresentada por nós.
+ *
+ * **A união é deliberadamente dividida em dois grupos**, e a divisão vale
+ * dinheiro: "não reaproveitável" ≠ "não pagável pelo cliente". Quem decide
+ * emitir uma cobrança nova tem que perguntar a qual grupo o motivo pertence —
+ * `MotivoCobrancaInexistente` libera, `MotivoReusoIndeterminado` bloqueia.
+ * Tratar os dois como a mesma coisa é fail-OPEN para cobrança dupla.
+ */
+export type MotivoNaoReuso =
+  MotivoCobrancaInexistente | MotivoReusoIndeterminado;
 
 /**
  * Estado de uma cobrança JÁ EMITIDA, do ponto de vista de quem quer
@@ -269,7 +308,21 @@ export type MotivoNaoReuso =
  */
 export type CobrancaParaReuso =
   /** Viva, pagável, e com forma de pagamento na mão. */
-  | { reuso: "pagavel"; pagamento: FormaPagamentoCobranca }
+  | {
+      reuso: "pagavel";
+      pagamento: FormaPagamentoCobranca;
+      /**
+       * Quanto ESTA cobrança cobra, em centavos, do jeito que o gateway a
+       * emitiu.
+       *
+       * Obrigatório, e não opcional: uma cobrança reaproveitada pode ter sido
+       * consolidada sobre N ciclos, e sem este número a tela só tem o valor
+       * apurado de UM ciclo para mostrar. A copy "pagar todas quita o total de
+       * {total}" fica então falsa — soma de ciclos que não é o que o cliente
+       * vai pagar. Opcional deixaria exatamente esse estado representável.
+       */
+      valorCentavos: number;
+    }
   /**
    * Viva, mas com débito automático a caminho (instrução `AWAITING_REQUEST` ou
    * `SCHEDULED`). Não apresentar como pagável: a janela crítica do Pix
