@@ -10,7 +10,7 @@ on:
 
 jobs:
   base-must-be-main:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Base branch precisa ser main
         if: github.base_ref != 'main'
