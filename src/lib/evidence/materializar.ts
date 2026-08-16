@@ -243,9 +243,18 @@ export function postgresMaterializarQueries(
     },
     async tiposEstruturaDosMarcos(milestoneIds) {
       if (milestoneIds.length === 0) return new Map();
+      // ⚠️ Array CRU, NUNCA `sql.array(...)`. Medido: numa conexão FRIA (a
+      // query de array sendo a PRIMEIRA da conexão — exatamente o caso de um
+      // script de backfill, que é para quem este adapter existe)
+      // `sql.array(ids)` serializa como junção por vírgula sem chaves e o
+      // Postgres estoura `malformed array literal: "uuid1,uuid2"`. Na segunda
+      // query da mesma conexão passa a funcionar — ou seja, o bug é invisível
+      // em qualquer teste que reuse uma conexão já aquecida. Passar o array
+      // direto (`${milestoneIds}`) o postgres.js codifica certo em conexão
+      // fria ou quente, com 0, 1 ou N elementos.
       const rows = await sql`
         SELECT id, tipo_estrutura FROM milestone
-        WHERE id = ANY(${sql.array(milestoneIds)}::uuid[])
+        WHERE id = ANY(${milestoneIds}::uuid[])
       `;
       const mapa = new Map<string, TipoEstrutura | null>();
       for (const row of rows) {
