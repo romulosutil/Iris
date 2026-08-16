@@ -50,7 +50,7 @@ env:
 
 jobs:
   typecheck:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +63,7 @@ jobs:
       - run: pnpm typecheck
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -76,7 +76,7 @@ jobs:
       - run: pnpm lint
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
     # `withTenant`/`comEscrita` (src/db/rls.ts) abrem uma transação REAL mesmo
     # quando o teste "unitário" mocka a lógica de negócio chamada dentro dela
@@ -128,7 +128,7 @@ jobs:
         run: node scripts/ci/verificar-cobertura-testes.mjs unit-report.json --min-tests=1000 --min-files=110 --label=unit
 
   test-rls:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 20
     services:
       postgres:
