@@ -736,6 +736,13 @@
       "when": 1786849221929,
       "tag": "0104_comentario_billing_cycle_status_0097",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1786849222929,
+      "tag": "0105_guard_destinatario_no_tenant",
+      "breakpoints": true
     }
   ]
 }

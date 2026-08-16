@@ -13,6 +13,7 @@ import { authDb } from "@/db/client";
 import { billingCycle, subscription } from "@/db/schema";
 import { apurarDebitoProRata, calcularMensalidadeCentavos } from "./calculator";
 import { classificarRecusa, type GrupoRecusa } from "./classificacao-recusa";
+import { notificarCancelamentoAssinatura } from "./notificacao-cancelamento";
 import {
   AsaasProvider,
   BillingProviderError,
@@ -338,6 +339,7 @@ export async function aplicarStatusProvider(
   if (!linha) return false;
 
   const virandoAtiva = novo === "active" && linha.status !== "active";
+  const virandoCancelada = novo === "canceled" && linha.status !== "canceled";
 
   await authDb
     .update(subscription)
@@ -398,6 +400,21 @@ export async function aplicarStatusProvider(
     await authDb.transaction((tx) =>
       congelarCiclosComoDebito(tx, linha.id, linha.canceladaEm ?? agora),
     );
+  }
+
+  if (virandoCancelada) {
+    // Notifica o responsável da clínica por e-mail sobre o cancelamento, corte
+    // imediato de escrita e valor em aberto do ciclo interrompido (#312).
+    // Disparado APÓS a transação de congelamento commitada e protegido por
+    // try/catch para que falhas de rede/e-mail nunca afetem o faturamento.
+    try {
+      await notificarCancelamentoAssinatura(linha.clinicId, linha.id);
+    } catch (err) {
+      console.error(
+        "[billing-cancelamento] falha ao despachar aviso por e-mail:",
+        err,
+      );
+    }
   }
 
   return true;
@@ -1026,6 +1043,7 @@ function etapaDoErro(e: unknown): EtapaCorteCarencia {
  */
 async function revogarECortarAssinatura(
   assinatura: {
+    clinicId: string;
     subscriptionId: string;
     provider: string | null;
     providerSubscriptionId: string | null;
@@ -1119,6 +1137,20 @@ async function revogarECortarAssinatura(
         );
       }
     });
+
+    // Notifica o responsável da clínica por e-mail sobre o corte por carência/backstop (#312).
+    // Disparado APÓS a transação de congelamento e corte commitada.
+    try {
+      await notificarCancelamentoAssinatura(
+        assinatura.clinicId,
+        assinatura.subscriptionId,
+      );
+    } catch (err) {
+      console.error(
+        "[billing-cancelamento] falha ao despachar aviso por e-mail no corte por carência/backstop:",
+        err,
+      );
+    }
   } catch (e) {
     throw e instanceof ErroDeCorte ? e : new ErroDeCorte(etapa, e);
   }
