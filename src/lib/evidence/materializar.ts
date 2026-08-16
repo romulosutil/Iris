@@ -68,7 +68,10 @@ export type EvidenciaObservada = {
   temQueryAberta: boolean;
 };
 
-export type CriterioDominio = { tipo: string; valor: number } & Record<string, unknown>;
+export type CriterioDominio = { tipo: string; valor: number } & Record<
+  string,
+  unknown
+>;
 
 /** Interface mínima de consulta — implementável sobre uma tx Drizzle
  * (RLS aplicado, mesmo padrão de `resolver.ts`). */
@@ -86,7 +89,9 @@ export type MaterializarQueries = {
    * ids, não N. IDs que não existem em `milestone` simplesmente não aparecem
    * no Map (chamador trata ausência como null). Array vazio: nem consulta o
    * banco, retorna Map vazio. */
-  tiposEstruturaDosMarcos(milestoneIds: string[]): Promise<Map<string, TipoEstrutura | null>>;
+  tiposEstruturaDosMarcos(
+    milestoneIds: string[],
+  ): Promise<Map<string, TipoEstrutura | null>>;
   /** goal.criterio_dominio, por id. */
   criterioDominioDaMeta(goalId: string): Promise<CriterioDominio | null>;
   /** Estado ATUAL de goal_candidacy (para preservar `candidacy_since` quando o
@@ -145,7 +150,10 @@ export function drizzleMaterializarQueries(tx: any): MaterializarQueries {
       const rows = (await tx.execute(dsql`
         SELECT id, tipo_estrutura FROM milestone
         WHERE id = ANY(${dsql.param(milestoneIds)}::uuid[])
-      `)) as unknown as Array<{ id: string; tipo_estrutura: TipoEstrutura | null }>;
+      `)) as unknown as Array<{
+        id: string;
+        tipo_estrutura: TipoEstrutura | null;
+      }>;
       const mapa = new Map<string, TipoEstrutura | null>();
       for (const row of rows) {
         mapa.set(row.id, row.tipo_estrutura ?? null);
@@ -168,16 +176,35 @@ export function drizzleMaterializarQueries(tx: any): MaterializarQueries {
         .from(goalCandidacyTable)
         .where(eq(goalCandidacyTable.goalId, goalId));
       if (!row) return null;
-      return { isCandidate: row.isCandidate, candidacySince: row.candidacySince ?? null };
+      return {
+        isCandidate: row.isCandidate,
+        candidacySince: row.candidacySince ?? null,
+      };
     },
-    async aplicarSnapshot({ patientId, sessionNumero, repertorio, segmentacao }) {
+    async aplicarSnapshot({
+      patientId,
+      sessionNumero,
+      repertorio,
+      segmentacao,
+    }) {
       await tx.execute(
         sqlAplicarSnapshot(patientId, sessionNumero, repertorio, segmentacao),
       );
     },
-    async aplicarCandidaturaGoal({ patientId, goalId, isCandidate, candidacySince }) {
+    async aplicarCandidaturaGoal({
+      patientId,
+      goalId,
+      isCandidate,
+      candidacySince,
+    }) {
       await tx.execute(
-        sqlAplicarCandidatura(patientId, null, goalId, isCandidate, candidacySince),
+        sqlAplicarCandidatura(
+          patientId,
+          null,
+          goalId,
+          isCandidate,
+          candidacySince,
+        ),
       );
     },
   };
@@ -185,7 +212,9 @@ export function drizzleMaterializarQueries(tx: any): MaterializarQueries {
 
 /** Adapter sobre uma conexão `postgres.Sql` crua (owner/backfill — bypassa RLS,
  * exige `clinicId`/filtros explícitos; usado por scripts administrativos). */
-export function postgresMaterializarQueries(sql: postgres.Sql): MaterializarQueries {
+export function postgresMaterializarQueries(
+  sql: postgres.Sql,
+): MaterializarQueries {
   return {
     async evidenciasDoPaciente(patientId) {
       const rows = await sql`
@@ -202,12 +231,14 @@ export function postgresMaterializarQueries(sql: postgres.Sql): MaterializarQuer
       return rows.map((r) => rowParaObservacao(r));
     },
     async taxonomiaDoProtocolo(protocolId) {
-      const [row] = await sql`SELECT taxonomia_ajuda FROM protocol WHERE id = ${protocolId}`;
+      const [row] =
+        await sql`SELECT taxonomia_ajuda FROM protocol WHERE id = ${protocolId}`;
       const arr = row?.taxonomia_ajuda;
       return Array.isArray(arr) ? (arr as string[]) : [];
     },
     async tipoEstruturaDoMarco(milestoneId) {
-      const [row] = await sql`SELECT tipo_estrutura FROM milestone WHERE id = ${milestoneId}`;
+      const [row] =
+        await sql`SELECT tipo_estrutura FROM milestone WHERE id = ${milestoneId}`;
       return (row?.tipo_estrutura as TipoEstrutura | undefined) ?? null;
     },
     async tiposEstruturaDosMarcos(milestoneIds) {
@@ -218,12 +249,16 @@ export function postgresMaterializarQueries(sql: postgres.Sql): MaterializarQuer
       `;
       const mapa = new Map<string, TipoEstrutura | null>();
       for (const row of rows) {
-        mapa.set(row.id as string, (row.tipo_estrutura as TipoEstrutura | undefined) ?? null);
+        mapa.set(
+          row.id as string,
+          (row.tipo_estrutura as TipoEstrutura | undefined) ?? null,
+        );
       }
       return mapa;
     },
     async criterioDominioDaMeta(goalId) {
-      const [row] = await sql`SELECT criterio_dominio FROM goal WHERE id = ${goalId}`;
+      const [row] =
+        await sql`SELECT criterio_dominio FROM goal WHERE id = ${goalId}`;
       return (row?.criterio_dominio as CriterioDominio | undefined) ?? null;
     },
     async lerCandidaturaGoalAtual(goalId) {
@@ -236,10 +271,20 @@ export function postgresMaterializarQueries(sql: postgres.Sql): MaterializarQuer
         candidacySince: row.candidacy_since ?? null,
       };
     },
-    async aplicarSnapshot({ patientId, sessionNumero, repertorio, segmentacao }) {
+    async aplicarSnapshot({
+      patientId,
+      sessionNumero,
+      repertorio,
+      segmentacao,
+    }) {
       await sql`SELECT app_aplicar_snapshot(${patientId}, ${sessionNumero}, ${sql.json(repertorio as never)}, ${sql.json(segmentacao as never)})`;
     },
-    async aplicarCandidaturaGoal({ patientId, goalId, isCandidate, candidacySince }) {
+    async aplicarCandidaturaGoal({
+      patientId,
+      goalId,
+      isCandidate,
+      candidacySince,
+    }) {
       await sql`SELECT app_aplicar_candidatura(${patientId}, NULL, ${goalId}, ${isCandidate}, ${candidacySince ? candidacySince.toISOString() : null}, NULL, NULL)`;
     },
   };
@@ -248,10 +293,14 @@ export function postgresMaterializarQueries(sql: postgres.Sql): MaterializarQuer
 function rowParaObservacao(r: any): EvidenciaObservada {
   const classificacao = r.classificacaoAtual ?? r.classificacao_atual ?? {};
   const nivelAjuda: string | null =
-    typeof classificacao?.nivel_ajuda === "string" ? classificacao.nivel_ajuda : null;
+    typeof classificacao?.nivel_ajuda === "string"
+      ? classificacao.nivel_ajuda
+      : null;
   const polaridadeRaw = classificacao?.polaridade;
   const polaridade: "positiva" | "negativa" | null =
-    polaridadeRaw === "positiva" || polaridadeRaw === "negativa" ? polaridadeRaw : null;
+    polaridadeRaw === "positiva" || polaridadeRaw === "negativa"
+      ? polaridadeRaw
+      : null;
   // Task 3b: reclassificar o ALVO (via evidence_revision) grava as FKs
   // resolvidas em `classificacao_atual.alvo_resolvido` — preferimos essas
   // FKs sobre as colunas estáticas de `evidence_current` (congeladas de
@@ -260,9 +309,11 @@ function rowParaObservacao(r: any): EvidenciaObservada {
   const alvoResolvido = classificacao?.alvo_resolvido;
   return {
     sessionNumero: Number(r.sessionNumero ?? r.session_numero),
-    goalId: alvoResolvido?.goal_id ?? (r.goalId ?? r.goal_id) ?? null,
-    milestoneId: alvoResolvido?.milestone_id ?? (r.milestoneId ?? r.milestone_id) ?? null,
-    protocolId: alvoResolvido?.protocol_id ?? (r.protocolId ?? r.protocol_id) ?? null,
+    goalId: alvoResolvido?.goal_id ?? r.goalId ?? r.goal_id ?? null,
+    milestoneId:
+      alvoResolvido?.milestone_id ?? r.milestoneId ?? r.milestone_id ?? null,
+    protocolId:
+      alvoResolvido?.protocol_id ?? r.protocolId ?? r.protocol_id ?? null,
     nivelAjuda,
     polaridade,
     temQueryAberta: Boolean(r.temQueryAberta ?? r.tem_query_aberta),
@@ -350,7 +401,11 @@ export async function materializarSnapshot(
   if (evidencias.length === 0) return;
 
   // Cache de taxonomia por protocolo (ordinal = índice no array).
-  const protocolIds = [...new Set(evidencias.map((e) => e.protocolId).filter((x): x is string => !!x))];
+  const protocolIds = [
+    ...new Set(
+      evidencias.map((e) => e.protocolId).filter((x): x is string => !!x),
+    ),
+  ];
   const taxonomiaPorProtocolo = new Map<string, string[]>();
   for (const pid of protocolIds) {
     taxonomiaPorProtocolo.set(pid, await queries.taxonomiaDoProtocolo(pid));
@@ -360,10 +415,18 @@ export async function materializarSnapshot(
   // não N (achado de perf: #316/PR original trocava N round-trips
   // sequenciais por N round-trips concorrentes numa mesma conexão, que
   // continua sendo N queries no Postgres — sem ganho a partir de N grande).
-  const milestoneIds = [...new Set(evidencias.map((e) => e.milestoneId).filter((x): x is string => !!x))];
-  const tipoEstruturaPorMilestone = await queries.tiposEstruturaDosMarcos(milestoneIds);
+  const milestoneIds = [
+    ...new Set(
+      evidencias.map((e) => e.milestoneId).filter((x): x is string => !!x),
+    ),
+  ];
+  const tipoEstruturaPorMilestone =
+    await queries.tiposEstruturaDosMarcos(milestoneIds);
 
-  function ordinalDe(protocolId: string | null, nivelAjuda: string | null): number | null {
+  function ordinalDe(
+    protocolId: string | null,
+    nivelAjuda: string | null,
+  ): number | null {
     if (!protocolId || !nivelAjuda) return null;
     const taxonomia = taxonomiaPorProtocolo.get(protocolId) ?? [];
     const idx = taxonomia.indexOf(nivelAjuda);
@@ -395,7 +458,8 @@ export async function materializarSnapshot(
       temQueryAberta: e.temQueryAberta,
     };
     const chaveGoalProtocolo = `${e.goalId}::${e.protocolId ?? "sem_protocolo"}`;
-    if (!streamsPorGoalProtocolo.has(chaveGoalProtocolo)) streamsPorGoalProtocolo.set(chaveGoalProtocolo, []);
+    if (!streamsPorGoalProtocolo.has(chaveGoalProtocolo))
+      streamsPorGoalProtocolo.set(chaveGoalProtocolo, []);
     streamsPorGoalProtocolo.get(chaveGoalProtocolo)!.push(obs);
 
     if (!streamsPorGoal.has(e.goalId)) streamsPorGoal.set(e.goalId, []);
@@ -403,16 +467,23 @@ export async function materializarSnapshot(
   }
 
   // segmentacaoPorGoalProtocolo[goalId][protocolId] = ResultadoSessao[]
-  const segmentacaoResultados = new Map<string, ReturnType<typeof computarSegmentacao>>();
+  const segmentacaoResultados = new Map<
+    string,
+    ReturnType<typeof computarSegmentacao>
+  >();
   for (const [chave, obs] of streamsPorGoalProtocolo) {
     segmentacaoResultados.set(chave, computarSegmentacao(obs));
   }
 
-  const repertorioPorGoal = computarRepertorio(Object.fromEntries(streamsPorGoal));
+  const repertorioPorGoal = computarRepertorio(
+    Object.fromEntries(streamsPorGoal),
+  );
 
   // Números de sessão a materializar: todos os que aparecem em QUALQUER
   // evidência do paciente (achado #1 — ver cabeçalho), filtrados por >= desde.
-  const todosOsNumeros = [...new Set(evidencias.map((e) => e.sessionNumero))].sort((a, b) => a - b);
+  const todosOsNumeros = [
+    ...new Set(evidencias.map((e) => e.sessionNumero)),
+  ].sort((a, b) => a - b);
   const numerosAMaterializar = todosOsNumeros.filter((n) => n >= desdeNumero);
 
   for (const numero of numerosAMaterializar) {
@@ -421,7 +492,9 @@ export async function materializarSnapshot(
     for (const [chave, resultados] of segmentacaoResultados) {
       const [goalId, protocolId] = chave.split("::");
       // Última observação com sessionNumero <= numero (estado corrente naquele ponto).
-      const ultimaAteAqui = [...resultados].reverse().find((r) => r.sessionNumero <= numero);
+      const ultimaAteAqui = [...resultados]
+        .reverse()
+        .find((r) => r.sessionNumero <= numero);
       if (!ultimaAteAqui) continue;
       segmentacao[goalId!] ??= {};
       segmentacao[goalId!]![protocolId!] = {
@@ -443,7 +516,12 @@ export async function materializarSnapshot(
       };
     }
 
-    await queries.aplicarSnapshot({ patientId, sessionNumero: numero, repertorio, segmentacao });
+    await queries.aplicarSnapshot({
+      patientId,
+      sessionNumero: numero,
+      repertorio,
+      segmentacao,
+    });
   }
 
   // ── goal_candidacy: avalia Goal.criterio_dominio contra o histórico completo ──
@@ -455,9 +533,16 @@ export async function materializarSnapshot(
     // contagem de "há quanto tempo é candidato" a cada recompute); só marca
     // a data quando a transição é false→true agora.
     const candidacySince = isCandidate
-      ? (atual?.isCandidate ? atual.candidacySince : new Date())
+      ? atual?.isCandidate
+        ? atual.candidacySince
+        : new Date()
       : null;
-    await queries.aplicarCandidaturaGoal({ patientId, goalId, isCandidate, candidacySince });
+    await queries.aplicarCandidaturaGoal({
+      patientId,
+      goalId,
+      isCandidate,
+      candidacySince,
+    });
   }
 
   // TODO(4B — milestone_candidacy): critério por Milestone/família ainda não

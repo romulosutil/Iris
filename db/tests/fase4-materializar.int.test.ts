@@ -506,13 +506,20 @@ describe.skipIf(!hasDb)(
           },
         });
         try {
-          const countingDb = drizzle(countingSql, { schema, casing: "snake_case" });
+          const countingDb = drizzle(countingSql, {
+            schema,
+            casing: "snake_case",
+          });
           await countingDb.transaction(async (tx) => {
             await tx.execute(dsql`select
               set_config('app.clinic_id', ${CLINIC_A}, true),
               set_config('app.user_id', ${U_COORD_A}, true),
               set_config('app.user_role', 'coordenador', true)`);
-            await materializarSnapshot(drizzleMaterializarQueries(tx), PAC_A1, 1);
+            await materializarSnapshot(
+              drizzleMaterializarQueries(tx),
+              PAC_A1,
+              1,
+            );
           });
         } finally {
           await countingSql.end();
