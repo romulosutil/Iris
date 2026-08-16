@@ -483,8 +483,9 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
   });
 
   it("recusa 4xx do gateway adia o débito em vez de trancar a clínica fora", async () => {
-    // O cenário do piso mal calibrado: `PISO_COBRANCA_AVULSA_CENTAVOS` é escolha
-    // conservadora, não medição. Falhar fechado aqui protegeria a receita de um
+    // O cenário do piso descalibrado: `PISO_COBRANCA_AVULSA_CENTAVOS` é medição
+    // (R$ 5,00, sandbox do Asaas em 15/08/2026), mas o piso é do gateway e pode
+    // mudar sem nos avisar. Falhar fechado aqui protegeria a receita de um
     // ciclo e destruiria a de todos os seguintes.
     await assinaturaCancelada();
     await cicloDevido(PISO_COBRANCA_AVULSA_CENTAVOS + 100, 30);

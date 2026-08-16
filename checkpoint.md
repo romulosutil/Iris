@@ -1,8 +1,10 @@
 # Checkpoint — Iris
 
 > **Data:** 16/08/2026
-> **Branch:** `feat/310-reaproveitar-cobranca-gate` (8 commits nesta sessão, nascida de `main`, **sem push**, sem PR)
-> **Status:** 🟢 **Passo 5 (#310) executado em código e verificado.** O gate de reativação deixou de emitir cobrança por cima de cobrança viva: ciclo cuja cobrança o Asaas ainda mantém pagável é reapresentado, o resto vira uma consolidada. A revisão adversarial derrubou a 1ª versão em **3 GRAVES** — um deles **regressão desta branch** — e todos foram corrigidos e cobertos (§1). Verde medido: `pnpm test` **197 arquivos / 1316 testes** · `pnpm test:rls` **106 / 934, 0 pulados** · `typecheck` limpo · `lint` **0 erros / 10 warnings**. Também nesta sessão: **`main` mudou embaixo de nós** — a **#312 fechou isolada** (PR #334) e a **#329** entrou (PR #335); as duas já foram mergeadas para cá e validadas por medição, não pela ausência de conflito. Próximo passo concreto: §3.
+> **Branch:** `feat/311-piso-cobranca-medido` (1 commit nesta sessão, **empilhada** sobre `feat/310-reaproveitar-cobranca-gate`, que segue **sem push** e sem PR)
+> **Status:** 🟢 **Passo 6 (#311) executado e verificado.** O piso de cobrança deixou de se declarar não medido: `PISO_COBRANCA_AVULSA_CENTAVOS = 500` **coincide com o piso real** do `POST /payments` PIX (R$ 5,00, medido na #321 em 15/08), então o número não muda — o que muda é o código parar de pedir uma verificação que já tinha sido feita, e o número **ganhar oráculo**: os dois testes de fronteira que existiam importavam a própria constante e sobreviviam à mutação `500 → 400`. Decisão fechada: a constante **não** é renomeada (o comentário que pede isso é anterior à D-E da #317, e executá-lo desfaria uma entrega). Verde medido: `pnpm test` **197 arquivos / 1317 testes** · `typecheck` limpo · `lint` **0 erros / 10 warnings**. Nenhuma migração, nenhuma mudança de comportamento. Próximo passo concreto: §3.
+>
+> **Sessão anterior (16/08/2026, 1ª):** 🟢 **Passo 5 (#310) executado em código e verificado.** O gate de reativação deixou de emitir cobrança por cima de cobrança viva: ciclo cuja cobrança o Asaas ainda mantém pagável é reapresentado, o resto vira uma consolidada. A revisão adversarial derrubou a 1ª versão em **3 GRAVES** — um deles **regressão desta branch** — e todos foram corrigidos e cobertos (§1). Verde medido: `pnpm test` **197 arquivos / 1316 testes** · `pnpm test:rls` **106 / 934, 0 pulados** · `typecheck` limpo · `lint` **0 erros / 10 warnings**. Também nesta sessão: **`main` mudou embaixo de nós** — a **#312 fechou isolada** (PR #334) e a **#329** entrou (PR #335); as duas já foram mergeadas para cá e validadas por medição, não pela ausência de conflito. Próximo passo concreto: §3.
 >
 > **Histórico anterior (15/08/2026):** passos 1, 2, 3 e 4 executados **em código**. O Postgres local voltou: a **D33 fechou na parte mensurável** (`0098` aplicada e medida, 12/12 casos de integração, `test:rls` 102/102 sem pular) — **resta não exercitado só o backfill**, porque `subscription` tem 0 linhas neste banco. A **D35 fechou**: o motivo da recusa passou a ser lido do recurso que o tem. A #318 entrou inteira (classificação por código + coluna `recusa_codigo` + backstop de D+7). **D34 e D36 seguem abertos**, e o D36 ficou **mais** urgente. Achado novo e grave, de produção: **`alerta_risco_auth_select` não existe** — o painel Super Admin reporta zero em silêncio (§1, "A deriva de hash"). Próximo passo concreto: §3.
 
@@ -31,7 +33,49 @@
 
 ---
 
-## 1. Resumo da Sessão (16/08/2026) — passo 5: #310, a cobrança que já existia
+## 1. Resumo da Sessão (16/08/2026, 2ª) — passo 6: #311, o piso que já estava certo
+
+Orquestração em **4 subagentes** (recon → builder → revisão adversarial com mutação → reparo). Branch nova `feat/311-piso-cobranca-medido`, **empilhada** sobre a `feat/310-…` (que segue sem push e sem PR). 1 commit. Nenhuma migração, nenhuma mudança de comportamento: o diff é de **verdade documental** e de **oráculo de teste**.
+
+### A entrega não era o número — o número já estava certo
+
+O passo 6 previa "ajustar a constante com a medição do passo 1 na mão", com a cláusula "se o Asaas não tiver mínimo próprio, a entrega vira **remover** a constante". A cláusula está **resolvida contra a remoção**: a Medição 6 da #321 (15/08, sandbox) sondou `POST /payments` PIX em `0.01`, `0.50`, `1.00`, `3.00` — todos **HTTP 400** com `invalid_object` e mensagem nomeada — e `5.00` → **HTTP 200**. O piso real é **exatamente R$ 5,00**, e `PISO_COBRANCA_AVULSA_CENTAVOS = 500` **coincide** com ele. Não é folga por cima.
+
+O que estava errado, então, não era o valor: era o código **declarar-se não medido**. O docblock dizia "Este número é escolha conservadora, NÃO medição" e terminava pedindo, como verificação pendente, exatamente a medição que já tinha sido feita e escrita no runbook um dia antes.
+
+**Dos 3 itens da DoD da issue, 2 já estavam cumpridos antes desta sessão** (o registro no `infra/README.md` veio com o runbook da #321; o teste de fronteira seguia verde porque o número não mudou). A substância real da entrega está fora da DoD: dar **oráculo** ao número.
+
+### O que a mutação derrubou
+
+Os dois casos de fronteira que já existiam (`decidirGate(PISO - 1)` → `adiar`, `decidirGate(PISO)` → `cobrar`) **importam a própria constante**. Medido: com `500 → 400`, os dois seguem **verdes** — eles provam `<` vs `<=`, nunca o número. Um caso novo com literais (`499` → `adiar`, `500` → `cobrar`) mata a mutação sozinho. A mutação de operador (`<` → `<=`) é morta por dois casos. Sem o literal, "medição" seria uma palavra no comentário sem nada que a defendesse — irmão direto de [[teste-verde-que-nao-testa-nada]].
+
+### A regra é sobre o líquido, e essa parte é dedução
+
+A mensagem crua do gateway enuncia `value − discount >= R$ 5,00`, não `value >= R$ 5,00`. Hoje as duas coincidem **só porque nenhum caminho de emissão do Iris envia `discount`** (verificado: o `POST /payments` do adapter monta cinco campos, e `discount` não aparece em `src/lib/billing/`). A consequência — uma cobrança de R$ 5,00 com R$ 1,00 de desconto passaria neste piso e seria recusada lá — é **dedução da mensagem, não medição**: as cinco sondagens rodaram todas com desconto R$ 0,00.
+
+A primeira versão do docblock escreveu essa consequência no **indicativo**, junto dos fatos medidos e sem marcador. A revisão pegou, e o motivo é o próprio motivo da issue existir: **trocar "não medido" por afirmação não marcada reintroduz o defeito em escala menor**. Agora a fronteira entre medido e deduzido está escrita.
+
+### Decisão fechada: a constante NÃO é renomeada
+
+O comentário 1 da issue (14/08) pede `VALOR_MINIMO_COBRANCA_CENTAVOS`, "deixando 'piso' reservado ao conceito do Pix Automático". **Recusado**, e não por preferência: aquele comentário é **anterior** à D-E da #317, que já resolveu a mesma colisão com o par `PISO_COBRANCA_AVULSA_CENTAVOS` (o que **nós** cobramos) × `PISO_TETO_AUTORIZACAO_CENTAVOS` (o teto que o **pagador** autoriza). Executar o comentário ao pé da letra hoje **desfaria** uma decisão já entregue. Medido que os dois nomes não colidem: nunca aparecem no mesmo arquivo e nunca são importados juntos.
+
+O que a revisão achou de verdade ali foi que a desambiguação era **unidirecional** — só `debito.ts` avisava "não confundir". Depois da #317 os dois passaram a carregar "medido em 15/08/2026 (#321)" com **sentidos opostos**, e quem chegasse por `calculator.ts` não recebia aviso nenhum. Agora as duas pontas se nomeiam.
+
+### O registro cru é imutável — e a 1ª versão o contaminou
+
+Em `infra/README.md`, só a **conclusão** da Medição 6 podia mudar (nome morto `PISO_COBRANCA_CENTAVOS`, ponteiro de linha `:41-55` que já não existia). A tabela e as respostas cruas foram preservadas byte a byte, confirmado no diff.
+
+Mas a 1ª versão escreveu na conclusão "**A #311 foi fechada por esta medição, em 16/08/2026**" — duas coisas erradas de uma vez: a issue está **`open`** (o runbook afirmava consumado um evento que não ocorreu, sendo ele a âncora que o código cita), e a data injetada **colide com a da medição** (15/08), passando a ser a única data dentro daquele bloco. Corrigido para registrar a data da medição e não afirmar estado de issue que o arquivo não controla.
+
+Também marcado como fechado o **RISCO-1** (`piso não medido`) em `.specs/features/debito-reativacao-290/design.md`, que continuava listado como aberto. `spec.md`, `premortem.md` e os planos em `docs/superpowers/plans/` **não** foram tocados de propósito: são registros point-in-time, e citam o nome morto por época, não por descuido.
+
+### Verde medido
+
+`pnpm test` **197 arquivos / 1317 testes** (era 1316 — o +1 é o oráculo literal) · `pnpm test:rls` **106 arquivos / 934 testes, 0 pulados** (idêntico à baseline da #310, como tinha de ser — nada tocou banco) · `debito.test.ts` **10/10** (eram 9) · `gate-debito.int.test.ts` **27 coletados / 27** (com `--config vitest.integration.config.ts`; sem ele coleta zero e sai verde) · `pnpm typecheck` limpo · `pnpm lint` **0 erros / 10 warnings** pré-existentes em `src/stories/**`.
+
+---
+
+## 1b. Sessão anterior (16/08/2026, 1ª) — passo 5: #310, a cobrança que já existia
 
 Orquestração em **11 subagentes**. 8 commits, **sem push, sem PR**. O passo 5 da ordem de conclusão: o gate de reativação da #290 emitia cobrança nova sempre, inclusive para o ciclo cuja cobrança o Asaas **ainda mantém pagável** — as duas ficavam vivas, e a clínica podia pagar o mesmo ciclo duas vezes.
 
@@ -105,7 +149,7 @@ As duas foram mergeadas para esta branch e **validadas por medição** — typec
 
 ---
 
-## 1b. Sessão anterior (15/08/2026, 5ª) — #318 em código, D33 e D35 fechados
+## 1c. Sessão anterior (15/08/2026, 5ª) — #318 em código, D33 e D35 fechados
 
 Orquestração em **6 subagentes**. 13 commits, **sem push, sem PR**. Três frentes: fechar a dívida de medição da #319 (**D33**), consertar o pipe do motivo de recusa (**D35**) e implementar a #318 inteira — classificação por código, coluna nova e o backstop de D+7 da Decisão 2.
 
@@ -224,7 +268,7 @@ SELECT policyname, roles, cmd FROM pg_policies
 
 ---
 
-## 1c. Sessão anterior (15/08/2026, 4ª) — passo 4: #318, a decisão de produto
+## 1d. Sessão anterior (15/08/2026, 4ª) — passo 4: #318, a decisão de produto
 
 Executado o **passo 4**: issue [#318](https://github.com/romulosutil/Iris/issues/318) — `REFUSED` colapsa causas distintas num único desfecho. O passo era **decisão de produto antes de código**: fechar a tabela código → desfecho e o checklist §5.2, depois aplicar a label `jules`.
 
@@ -310,7 +354,7 @@ Um teste por grupo, com régua de comportamento: apagar a linha daquele grupo no
 
 ---
 
-## 1d. Sessão anterior (15/08/2026, 3ª) — passo 3: #319
+## 1e. Sessão anterior (15/08/2026, 3ª) — passo 3: #319
 
 Executado o **passo 3**: issue [#319](https://github.com/romulosutil/Iris/issues/319) — `past_due` era terminal, a carência nunca corria, e a máquina de dívida da #287/#290 era alcançável **só** por revogação voluntária no app do banco. Quem simplesmente parava de pagar escrevia para sempre.
 
@@ -360,7 +404,7 @@ Verde do que roda: `pnpm typecheck` limpo · `pnpm lint` 0 erros (10 warnings pr
 
 ---
 
-## 1e. Sessão anterior (15/08/2026, 2ª) — passo 2: #317
+## 1f. Sessão anterior (15/08/2026, 2ª) — passo 2: #317
 
 Parâmetros que só existem na criação da autorização: `minLimitValue` (R$ 39,00, derivado de `FAIXAS_PRECIFICACAO[0]`) + `retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS"`; `PISO_COBRANCA_CENTAVOS` → `PISO_COBRANCA_AVULSA_CENTAVOS`; `vencimentoCobrancaDeCiclo` + `calendario-bancario.ts` com feriados móveis calculados da Páscoa. Commits `a2b3e36`, `792bff1`, `dd9efb7`, `597128c`.
 
@@ -372,7 +416,7 @@ Decisões: **D-A** `minLimitValue` deriva de `FAIXAS_PRECIFICACAO[0]`, não de `
 
 ---
 
-## 1f. Sessão anterior (15/08/2026, 1ª) — passo 1: #321
+## 1g. Sessão anterior (15/08/2026, 1ª) — passo 1: #321
 
 Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aact_hmlg_`).
 
@@ -402,8 +446,9 @@ Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aa
 
 ## 2. Estado do Repositório & Branch
 
-- **Branch:** `feat/310-reaproveitar-cobranca-gate` — **sem push, sem PR**, 8 commits próprios, nascida de `main` e com `origin/main` já mergeada (traz #312 e #329). Só a #310; não acumula passos.
-  - ⚠️ **Keyword de fechamento em inglês** no PR: `Closes #310`. "Fecha #310" mergeia e deixa a issue **aberta em silêncio**.
+- **Branch atual:** `feat/311-piso-cobranca-medido` — **sem push, sem PR**, 1 commit próprio. ⚠️ **Nasceu da `feat/310-…`, não de `main`** (empilhada). Foi escolha: a `feat/310-…` continua sem push, e o `checkpoint.md`/`BACKLOG.md` da #310 só existem lá — sair de `origin/main` teria produzido dois históricos de doc divergentes, que é como se apaga trabalho num merge limpo ([[merge-sem-conflito-apaga-feature-mergeada]]). Consequência: **a `feat/311` contém os 11 commits da `feat/310`**. Se a #310 for mergeada primeiro, a #311 rebasa sozinha; se o Rômulo quiser as duas separadas, a #311 precisa ser recortada.
+- **Branch anterior:** `feat/310-reaproveitar-cobranca-gate` — **sem push, sem PR**, 8 commits próprios + docs, nascida de `main` e com `origin/main` já mergeada (traz #312 e #329). Só a #310; não acumula passos.
+  - ⚠️ **Keyword de fechamento em inglês** nos PRs: `Closes #310`, `Closes #311`. "Fecha #310" mergeia e deixa a issue **aberta em silêncio**.
 - **O passo 5 anterior (`feat/317-parametros-autorizacao-pix`) já foi mergeado:** está 0 commits à frente de `main` e 24 atrás. #317, #319 e #318 estão em `main`, com as migrações renumeradas para `0099`/`0100`/`0101`. O checkpoint anterior dizia "28 commits sem push" — **desatualizado, não confiar**.
 - **`fix/329-escalonamento-guard-tenant` também já entrou** (PR #335), e a **#312 fechou isolada** (PR #334, 16/08 14:20).
 - **Commits da sessão de 15/08 (5ª), 13:** `30a2b11`, `448b404`, `adc39c4`, `d2424e4`, `633623f`, `8f497ff`, `6a6bc27`, `92aadb2`, `1c83ec1`, `c5480ee`, `89bb61c`, `dbd7cae`, `f0c1773` (+ o de docs que fecha a sessão). Tabela com os subjects em §1.
@@ -423,9 +468,9 @@ Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aa
 ## 3. Próximos Passos Sugeridos
 
 1. **Medir `alerta_risco_auth_select` em produção.** É o item mais barato e o de maior dano por token gasto: uma consulta read-only (§1, "A deriva de hash") separa "o painel Super Admin está mentindo zero há semanas" de "só o banco local está torto". Enquanto não se mede, o estado correto é **não medido**, não "provavelmente afetado".
-2. **Push da branch `feat/310-...` e PR.** Decisão do Rômulo — está tudo local. ⚠️ `Closes #310`, **em inglês**.
-3. **Passo 6 da linha: #311** (piso de cobrança). O rename já foi feito no passo 2; sobra ajustar a constante com a medição do passo 1 na mão — piso real do Pix avulso é **R$ 5,00**, sobre `value − discount`. Se o Asaas não tiver mínimo próprio, a entrega vira **remover** a constante, não ajustá-la. É item de label `jules`, depois de colar a medição num comentário da issue.
-4. **Passo 7: #289** (`erro_aplicacao` ambíguo) — **continua travado** no mesmo ponto: falta decidir o discriminador, e `externalReference` foi **medido como imprestável**. Não aplicar a label antes disso.
+2. **Push das branches `feat/310-...` e `feat/311-...`, e os PRs.** Decisão do Rômulo — está tudo local. ⚠️ `Closes #310` / `Closes #311`, **em inglês**. A `feat/311` está empilhada sobre a `feat/310` (§2): ou a #310 vai primeiro, ou a #311 precisa ser recortada.
+3. ~~**Passo 6: #311**~~ — **feito nesta sessão** (§1). O piso real é exatamente R$ 5,00, então o `500` ficou; a entrega foi verdade documental + oráculo de teste. A cláusula "se o Asaas não tiver mínimo próprio, remover a constante" está **resolvida contra a remoção**: o mínimo é do Asaas, medido, e a API o impõe com mensagem nomeada. **A issue #311 continua `open`** e sem label — fecha pelo `Closes #311` do PR.
+4. **Passo 7: #289** (`erro_aplicacao` ambíguo) — **continua travado** no mesmo ponto: falta decidir o discriminador, e `externalReference` foi **medido como imprestável**. Não aplicar a label antes disso. Com a #312 fechada isolada (passo 8) e a #311 entregue, **a #289 é o único passo da linha que ainda não começou** — o passo 9 (orquestração de retentativa, #322) depende dela só por vizinhança, não por código.
 5. **D36 — a clínica continua sem ver nada.** A #310 acrescentou tela para as cobranças em aberto, mas a recusa em si (`recusa_codigo`, os 9 grupos da #318) segue sem leitor: `faixa-trial.tsx` devolve `null` para `pagamento_atrasado`. É o maior buraco de produto vivo hoje.
 6. **Exercitar o backfill da `0098` em base com dados.** Não é reabrir o D33: é a parte dele que ficou fora do alcance da medição, e o ensaio com clínica de teste em produção é a primeira oportunidade real.
 7. **Agendar o ensaio com clínica de teste em produção.** Único caminho para as perguntas remanescentes: unidade da janela, recorrência com dois valores diferentes, pagador concluir sem teto, identificador da cobrança de ativação, `DELETE` de autorização já cancelada, **em que campo do payload de webhook o código de recusa pousa** e **se o envelope que `normalizarEventoAsaas` assume é o real**.
@@ -434,8 +479,9 @@ Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aa
 
 ## 3b. Decisões que ficam com o Rômulo
 
-As três primeiras nasceram nesta sessão de 16/08; as demais vêm da anterior e **seguem abertas**. Nenhuma tem recomendação embutida — a escolha é dele.
+A primeira nasceu na 2ª sessão de 16/08; as três seguintes, na 1ª; as demais vêm de antes e **seguem abertas**. Nenhuma tem recomendação embutida — a escolha é dele.
 
+0. **A `feat/311` está empilhada sobre a `feat/310`** (§2), então contém os commits dela. Manter as duas assim e mergear na ordem (#310 → #311), ou recortar a #311 para sair de `main` sozinha? Recortar é barato — o diff da #311 são 6 arquivos e nenhuma migração — mas perde o `checkpoint.md`/`BACKLOG.md` da #310, que só existem na branch dela.
 1. **Cobrança apagada no painel tranca a clínica, de propósito.** Hoje, `deleted: true` bloqueia com "fale com o suporte" e não libera o id, porque libertá-lo arriscaria a idempotência de `debito:<ancora>` **ressuscitar** a cobrança deletada — e isso não está medido. Aceitar a revisão manual, ou medir se `GET /payments?externalReference=` devolve cobrança deletada e então liberar?
 2. **A clínica pode ver duas formas de pagamento na mesma tela.** É a consequência direta da D-2, e foi a escolha certa contra cobrança dupla — mas é uma tela mais confusa do que a de hoje. Aceita, ou prefere que a reativação exija quitar a cobrança antiga **primeiro**, uma de cada vez?
 3. **Fase 7 do plano da #310 não foi executada** (comentário de módulo consolidando o desenho + abertura do PR). Fecho numa próxima sessão, ou o PR sai como está?
@@ -450,7 +496,16 @@ As três primeiras nasceram nesta sessão de 16/08; as demais vêm da anterior e
 
 Registrados aqui porque nasceram no caminho e não têm dono. Detalhe no `BACKLOG.md`.
 
-**Saíram em 16/08, por terem fechado:** o ruído de 39 erros de lint (era `.next` aninhado em worktree, não código), o timeout de `vencimento.test.ts`, a janela de cobrança dupla que a #319 abriu (é o que a #310 fecha) e a perda do relatório da rota sob falha parcial (D38, PR #323).
+**Saíram em 16/08, por terem fechado:** o ruído de 39 erros de lint (era `.next` aninhado em worktree, não código), o timeout de `vencimento.test.ts`, a janela de cobrança dupla que a #319 abriu (é o que a #310 fecha), a perda do relatório da rota sob falha parcial (D38, PR #323) e — na 2ª sessão — **o piso de cobrança declarado como não medido** (RISCO-1 da spec da #290; era o `500` sem prova, agora medido e com oráculo).
+
+### Novos em 16/08 (sessão da #311)
+
+| Achado                                                                                                                                                                                   | Onde                                                                                 | Estado                                                                                                                                                                                                                                                                                                                |
+| :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A regra `value − discount >= 500` é dedução da mensagem do gateway, não medição** — as 5 sondagens da Medição 6 rodaram todas com desconto R$ 0,00, e `discount ≠ 0` nunca foi enviado | `src/lib/billing/debito.ts` (docblock do piso) · `infra/README.md` Medição 6         | **Não medido, e mensurável barato:** ao contrário do trilho de Pix Automático, `POST /payments` avulso funciona no sandbox — bastaria uma sondagem com `discount`. Inerte hoje (nenhum caminho de emissão do Iris envia desconto), e a fronteira medido × deduzido está escrita no docblock. Não vale sessão própria. |
+| **A degradação 4xx do gate tem um único teste, e ele some sem banco** — `gate-debito.int.test.ts:485` roda sob `describe.skipIf(!hasDb)`                                                 | `src/lib/billing/debito.ts` (`resolverGateDeDebito`) · `gate-debito.int.test.ts`     | **Pré-existente, mas o peso mudou:** com o piso medido, o docblock promove essa degradação à **única** rede restante contra o Asaas mudar o piso — e a suíte unitária que a DoD aponta não prova nada dela. Irmão de [[vitest-int-test-coleta-zero]]: sem banco, a rede não é testada, e a cor da suíte não muda.     |
+| **A issue #311 (corpo e os 2 comentários) fala de `PISO_COBRANCA_CENTAVOS`**, nome morto desde a D-E da #317                                                                             | GitHub #311 · `.specs/features/debito-reativacao-290/*` · `docs/superpowers/plans/*` | Quem planejar pela issue sozinha procura um símbolo que não existe. As specs e os planos foram deixados intactos **de propósito** (registro point-in-time), mas isso significa que uma busca pelo nome **vivo** não os encontra. O `infra/README.md` foi corrigido por ser documento operacional, não histórico.      |
+| **O parâmetro `piso` de `decidirGate` perdeu a justificativa original**                                                                                                                  | `src/lib/billing/debito.ts` (`decidirGate`)                                          | Existia "para o dia em que o valor real do gateway for medido". Esse dia chegou. Mantido, com a justificativa trocada: o piso é **do gateway**, e acompanhar uma mudança dele não pode exigir tocar na regra. Nota, não débito — mas se um dia ninguém souber por que o parâmetro existe, a resposta está aqui.       |
 
 ### Novos em 16/08 (sessão da #310)
 
