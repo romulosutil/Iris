@@ -1,0 +1,21 @@
+-- 0104 — reemite o `COMMENT ON TYPE billing_cycle_status` com o número certo.
+--
+-- A migração que criou o valor `devido` nasceu como `0096_billing_cycle_devido`
+-- e foi renumerada para `0097_...` no merge `0bca538`, para caber depois da
+-- `0096_patient_clinical_modality` que veio de main. A renumeração trocou o
+-- número dentro do arquivo, inclusive no literal do `COMMENT ON TYPE` — mas o
+-- `when` do journal ficou igual (de propósito: assim nada reaplica), e produção
+-- já tinha rodado a versão antiga. Resultado: em prod o comentário do tipo diz
+-- "(0096)" e em base criada do zero diz "(0097)".
+--
+-- Não dá para consertar editando a `0097`: o Drizzle aplica por tag e nunca
+-- reexecuta uma já registrada em `drizzle.__drizzle_migrations` — e o guard D17
+-- (#215, `scripts/verificar-hash-migracoes.mjs`) aborta o deploy justamente por
+-- essa edição. A deriva está pinada lá pelos dois hashes; aqui é a reconciliação
+-- do único efeito observável dela.
+--
+-- Idempotente por natureza: `COMMENT ON TYPE` sobrescreve, então rodar contra
+-- prod (que tem "0096") e contra base nova (que já tem "0097") deixa as duas no
+-- mesmo texto. Não toca em valor de enum, não pega lock de tabela.
+COMMENT ON TYPE "public"."billing_cycle_status" IS
+  'Fluxo pós-pago: aberto → apurado → aguardando_pagamento → pago, com `falhou` no ramo de recusa. `cobrado` é legado (0075). `devido` (0097) é o ciclo interrompido pelo cancelamento: apurado, congelado em pro-rata e sem cobrança emitida — quem cobra é o gate de reativação (#287/#290).';

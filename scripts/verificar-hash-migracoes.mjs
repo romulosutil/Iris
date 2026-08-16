@@ -153,6 +153,33 @@ export const DERIVAS_CONHECIDAS = new Map([
       motivo: "#215 — edição b53b294 nunca rodou; remediada pela 0082",
     },
   ],
+  [
+    "0097_billing_cycle_devido",
+    {
+      hashAplicado:
+        "16112a1aa2d49e0e31b8336759040d41f6220b36e9a1b192644e39bd4668f0df",
+      hashDiscoAtual:
+        "4e51d527d7de5edd09526ca6569a1d9a368185e00de1d6751616493e55315b6c",
+      // Deriva por RENUMERAÇÃO, não por edição de conteúdo: o merge `0bca538`
+      // moveu `0096_billing_cycle_devido` para `0097_...` para caber depois da
+      // `0096_patient_clinical_modality` de main, e trocou junto as duas
+      // ocorrências do número dentro do arquivo. O `when` (1786731685223) ficou
+      // igual de propósito — nada reaplica —, mas é por ele que este guard casa
+      // `created_at` com tag, então a linha que prod rodou como `0096_...`
+      // passou a ser conferida contra o arquivo `0097_...`.
+      //
+      // `hashAplicado` é o sha256 LF do blob `83fcd27:0096_billing_cycle_devido.sql`
+      // (o que rodou em prod); `hashDiscoAtual`, o do arquivo renumerado. O delta
+      // é 2 linhas de comentário: o cabeçalho e o número citado dentro do texto
+      // do `COMMENT ON TYPE`. Nenhum DDL mudou — o `ALTER TYPE ... ADD VALUE
+      // 'devido'` é byte a byte o mesmo.
+      //
+      // O único efeito real é o texto do comentário do tipo em prod, que ficou
+      // dizendo "(0096)"; a `0104_comentario_billing_cycle_status_0097` reemite
+      // o `COMMENT ON TYPE` com o número certo, em vez de editar esta tag.
+      motivo: "renumerada 0096→0097 no merge 0bca538; delta só no comentário",
+    },
+  ],
 ]);
 
 /**
@@ -208,7 +235,8 @@ export async function verificarHashesAplicadas(
 
   let linhasAplicadas;
   try {
-    linhasAplicadas = await sql`select hash, created_at from drizzle.__drizzle_migrations`;
+    linhasAplicadas =
+      await sql`select hash, created_at from drizzle.__drizzle_migrations`;
   } catch (err) {
     if (err?.code === "42P01") return []; // relation does not exist
     throw err;

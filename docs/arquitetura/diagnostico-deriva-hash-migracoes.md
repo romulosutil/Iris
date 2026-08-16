@@ -359,3 +359,46 @@ Três armadilhas conhecidas do repo se materializaram aqui e valem para a próxi
   "Grant de coluna nega no nível de tabela".)
 - **Contar linhas numa tabela vazia é um teste vácuo.** Prova de RLS é `pg_policies` e
   as funções de privilégio, não `count(*)`.
+
+---
+
+## 10. Adendo (16/08/2026) — 9ª deriva, e ela veio de renumeração
+
+O deploy de `main` abortou no guard com uma tag que ninguém editou de propósito:
+
+```
+0097_billing_cycle_devido (aplicado=16112a1aa2d4… disco=4e51d527d7de…)
+```
+
+**O que aconteceu.** O merge `0bca538` renumerou cinco migrações desta linha de
+billing para caberem depois da `0096_patient_clinical_modality` que veio de `main`
+(`0096_billing_cycle_devido` → `0097`, e assim por diante). O `when` de cada uma
+ficou intacto — decisão certa, é o que impede reaplicação. Só que o **`when` é
+exatamente a chave por onde este guard casa `created_at` com tag**: a linha que
+produção rodou como `0096_billing_cycle_devido` passou a ser conferida contra o
+arquivo `0097_billing_cycle_devido.sql`, e a renumeração trocou junto as duas
+citações do número dentro do arquivo (o cabeçalho e o número no literal do
+`COMMENT ON TYPE`).
+
+**Medido, sem tocar em produção.** Os dois hashes do erro saem do próprio git:
+`16112a1a…` é o sha256 LF do blob `83fcd27:db/migrations/0096_billing_cycle_devido.sql`
+e `4e51d527…` o do arquivo renumerado. Bateram exato — o que também prova que
+nenhum DDL mudou: o delta é 2 linhas de comentário, e o `ALTER TYPE … ADD VALUE
+'devido'` é byte a byte o mesmo.
+
+Só a `0097` acusou porque as outras quatro renumeradas (`0098`–`0101`) ainda não
+tinham sido aplicadas em produção — a lista do erro é a medição, o guard reporta
+todas as divergentes de uma vez.
+
+**Como ficou.** `0097_billing_cycle_devido` entrou em `DERIVAS_CONHECIDAS` pinada
+pelos dois hashes (9ª entrada; o inventário do §3 continua valendo para a medição
+de 15/08). O único efeito observável — o comentário do tipo em produção dizendo
+"(0096)" — é reconciliado pela `0104_comentario_billing_cycle_status_0097`, que
+reemite o `COMMENT ON TYPE`. Editar a `0097` estava fora de questão: é a tag que o
+guard existe para proteger.
+
+**A lição nova.** Renumerar migração já aplicada é uma edição de tag aplicada,
+mesmo que a intenção seja só cosmética e o `when` fique parado. Se a renumeração
+for inevitável, o arquivo tem que sair da renomeação **byte a byte idêntico** — ou
+já entra pinado no guard, junto da migração que reconcilia o que o texto antigo
+afirma no banco.
