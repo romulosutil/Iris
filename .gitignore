@@ -90,7 +90,42 @@ graphify-out/
 skills-lock.json
 .vercel/
 
+# --- Repositório público: só entra o que o produto precisa para buildar,
+# testar e rodar (#repo-publico). Todo o material de método, planejamento,
+# documentação interna e ferramental de agente sai do versionamento e fica
+# APENAS local — os arquivos continuam no disco de quem já os tinha, só
+# deixam de ser publicados. Para voltar a versionar (repo privado de novo),
+# apagar o bloco e `git add` de volta.
+BACKLOG.md
+checkpoint.md
+PRODUCT.md
+DESIGN.md
+.specs/
+.agents/
+.impeccable/
+ops/
+scripts/bakeoff/
+infra/README.md
+db/verificacao/README.md
+.claudeignore
+.antigravityignore
+.geminiignore
+.codexignore
+.ignore
+
+# `docs/` inteiro sai, MENOS os dois markdown que o app lê em runtime:
+# src/components/legal/documento-legal.tsx faz readFile deles durante o
+# `next build` para servir /termos-de-uso e /politica-privacidade. Mesmo
+# padrão do .dockerignore (negação não vence ancestral excluído: é preciso
+# reabrir cada nível da cadeia).
+docs/*
+!docs/legal
+docs/legal/*
+!docs/legal/termos-de-uso.md
+!docs/legal/politica-privacidade.md
+
 # design-sync
+.design-sync/
 .design-sync/sb-reference/
 .design-sync/learnings/
 .design-sync/.cache/
@@ -98,3 +133,6 @@ skills-lock.json
 .ds-sync/
 ds-bundle/
 .design-sync/dts/
+
+# Config local de MCP (pode conter token de servidor) — nunca versionar
+.mcp.json

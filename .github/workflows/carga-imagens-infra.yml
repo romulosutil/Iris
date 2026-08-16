@@ -52,7 +52,7 @@ concurrency:
 
 jobs:
   carga:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
