@@ -13,8 +13,10 @@
  *    anterior ao ponto de recompute.
  */
 import { sql as dsql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import * as schema from "@/db/schema";
 import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
@@ -482,6 +484,172 @@ describe.skipIf(!hasDb)(
         expect(snap4!.segmentacao[GOAL_A]).toBeUndefined();
         expect(snap4!.repertorio_state[GOAL_B]).toBeDefined();
         expect(snap4!.repertorio_state[GOAL_A]).toBeUndefined();
+      });
+    });
+
+    describe("oráculo de contagem de queries (#316 — o N+1 tem que ficar morto)", () => {
+      // Hook `debug` do postgres.js: chamado 1x por query de fato enviada ao
+      // Postgres (não por linha de resultado). A fixture de beforeAll tem 2
+      // marcos distintos (MARCO_SIMPLES_ID, MARCO_BARREIRA_ID) — se a busca de
+      // tipo_estrutura voltasse a ser N+1 (sequencial OU `Promise.all`, que só
+      // faz pipelining na mesma conexão e continua sendo N queries no
+      // Postgres), este teste contaria >= 2 aqui, nunca 1.
+      test("tipo_estrutura por marco é 1 query em lote — nunca N", async () => {
+        let queriesNaMilestone = 0;
+        const countingSql = postgres(process.env.DATABASE_URL!, {
+          max: 1,
+          debug: (_connId, query) => {
+            // Drizzle quota identificadores (`from "milestone"`), então casa só
+            // no nome da tabela — \b evita colidir com `milestone_candidacy`
+            // (sem fronteira de palavra entre "e" e "_").
+            if (/\bmilestone\b/i.test(query)) queriesNaMilestone++;
+          },
+        });
+        try {
+          const countingDb = drizzle(countingSql, {
+            schema,
+            casing: "snake_case",
+          });
+          await countingDb.transaction(async (tx) => {
+            await tx.execute(dsql`select
+              set_config('app.clinic_id', ${CLINIC_A}, true),
+              set_config('app.user_id', ${U_COORD_A}, true),
+              set_config('app.user_role', 'coordenador', true)`);
+            await materializarSnapshot(
+              drizzleMaterializarQueries(tx),
+              PAC_A1,
+              1,
+            );
+          });
+        } finally {
+          await countingSql.end();
+        }
+        expect(queriesNaMilestone).toBe(1);
+      });
+
+      test("lista vazia não vai ao banco — 0 queries, Map vazio", async () => {
+        // O guard `if (milestoneIds.length === 0) return new Map()` não é
+        // proteção contra erro (medido: `ANY($1::uuid[])` com `[]` é SQL
+        // válido e devolve 0 linhas) — é o que evita uma ida inútil ao
+        // Postgres quando NENHUMA evidência tem marco resolvido. Só um
+        // oráculo de CONTAGEM enxerga isso; asserir `Map.size === 0` passaria
+        // igual com o guard removido.
+        let queriesNaMilestone = 0;
+        const countingSql = postgres(process.env.DATABASE_URL!, {
+          max: 1,
+          debug: (_connId, query) => {
+            if (/\bmilestone\b/i.test(query)) queriesNaMilestone++;
+          },
+        });
+        try {
+          const countingDb = drizzle(countingSql, {
+            schema,
+            casing: "snake_case",
+          });
+          const mapa = await countingDb.transaction(async (tx) => {
+            await tx.execute(dsql`select
+              set_config('app.clinic_id', ${CLINIC_A}, true),
+              set_config('app.user_id', ${U_COORD_A}, true),
+              set_config('app.user_role', 'coordenador', true)`);
+            return drizzleMaterializarQueries(tx).tiposEstruturaDosMarcos([]);
+          });
+          expect(mapa.size).toBe(0);
+        } finally {
+          await countingSql.end();
+        }
+        expect(queriesNaMilestone).toBe(0);
+      });
+    });
+
+    describe("contrato de `tiposEstruturaDosMarcos` (query em lote, #316)", () => {
+      const NAO_EXISTE = "00000000-0000-0000-0000-0000000000ff";
+
+      test("remapeia por CHAVE, não por ordem — com duplicata e id inexistente na entrada", async () => {
+        // O id INEXISTENTE vem PRIMEIRO de propósito. Só reordenar os dois
+        // marcos reais não basta: medido (mutante M2, remapeamento posicional
+        // `mapa.set(milestoneIds[i], rows[i]…)`) o Postgres devolveu as linhas
+        // na mesma ordem do array do `ANY(...)`, então o mutante SOBREVIVEU —
+        // teste verde pelo motivo errado. Com um id que NUNCA pode voltar na
+        // primeira posição, nenhuma ordem de linhas salva o posicional: ele
+        // obrigatoriamente carimba o tipo do 1º marco real no id inexistente
+        // e deixa MARCO_SIMPLES_ID de fora.
+        const mapa = await withTenant(ctxCoordA, (tx) =>
+          drizzleMaterializarQueries(tx).tiposEstruturaDosMarcos([
+            NAO_EXISTE,
+            MARCO_BARREIRA_ID,
+            MARCO_SIMPLES_ID,
+            MARCO_SIMPLES_ID,
+          ]),
+        );
+
+        expect(mapa.get(MARCO_BARREIRA_ID)).toBe("marco_com_barreira");
+        expect(mapa.get(MARCO_SIMPLES_ID)).toBe("marco_simples");
+        // Ausente do Map (não `null`): o chamador trata a ausência com o
+        // fallback `?? "marco_simples"`, mesmo comportamento da versão N+1.
+        expect(mapa.has(NAO_EXISTE)).toBe(false);
+        // Duplicata colapsa — 2 chaves, não 3.
+        expect(mapa.size).toBe(2);
+      });
+
+      test("continua sob RLS — tenant B não enxerga marco da clínica A", async () => {
+        // A query em lote é SQL cru (`FROM milestone`) sem predicado de
+        // clínica: quem isola é a policy `milestone_select`
+        // (`app_protocol_in_clinic(protocol_id)`). Se alguém trocar a `tx`
+        // por uma conexão dona/BYPASSRLS "pra ir mais rápido", isto fica
+        // vermelho — os marcos são da CLINIC_A, o tenant aqui é a CLINIC_B.
+        const ctxCoordB = {
+          clinicId: CLINIC_B,
+          userId: U_COORD_B,
+          role: "coordenador",
+        } as const;
+        const mapa = await withTenant(ctxCoordB, (tx) =>
+          drizzleMaterializarQueries(tx).tiposEstruturaDosMarcos([
+            MARCO_SIMPLES_ID,
+            MARCO_BARREIRA_ID,
+          ]),
+        );
+        expect(mapa.size).toBe(0);
+      });
+
+      test("adapter `postgres.Sql` (owner/backfill) binda o array em conexão FRIA", async () => {
+        // Este adapter usa OUTRO mecanismo de bind que o de Drizzle
+        // (`dsql.param`), não tem chamador hoje e não tinha teste nenhum.
+        //
+        // A conexão é aberta AQUI e esta é a PRIMEIRA query que ela roda —
+        // isso não é cerimônia, é o oráculo. Medido: com `sql.array(ids)`
+        // (a forma original do PR) a conexão fria manda o array como
+        // "uuid1,uuid2" e o Postgres estoura `malformed array literal`;
+        // na 2ª query da MESMA conexão o mesmo código passa. Reusar o
+        // `owner` do beforeAll (já aquecido por dezenas de queries) faz este
+        // teste passar sem testar nada — que é como o bug entraria em
+        // produção pelo primeiro script de backfill.
+        const { postgresMaterializarQueries } =
+          await import("@/lib/evidence/materializar");
+        const fria = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
+        try {
+          const mapa = await postgresMaterializarQueries(
+            fria,
+          ).tiposEstruturaDosMarcos([
+            NAO_EXISTE,
+            MARCO_BARREIRA_ID,
+            MARCO_SIMPLES_ID,
+            MARCO_SIMPLES_ID,
+          ]);
+          expect(mapa.get(MARCO_BARREIRA_ID)).toBe("marco_com_barreira");
+          expect(mapa.get(MARCO_SIMPLES_ID)).toBe("marco_simples");
+          expect(mapa.has(NAO_EXISTE)).toBe(false);
+          expect(mapa.size).toBe(2);
+          // Conexão dona: sem RLS, mas o contrato de lista vazia é o mesmo.
+          expect(
+            (
+              await postgresMaterializarQueries(fria).tiposEstruturaDosMarcos(
+                [],
+              )
+            ).size,
+          ).toBe(0);
+        } finally {
+          await fria.end();
+        }
       });
     });
   },
