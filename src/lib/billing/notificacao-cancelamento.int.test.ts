@@ -9,7 +9,11 @@ import {
   vi,
 } from "vitest";
 import { hasDb } from "@tests/integration-env";
-import { ID_PROVEDOR_FAKE, ProvedorFake } from "@tests/provedor-fake";
+import {
+  BASE_URL_FAKE,
+  ID_PROVEDOR_FAKE,
+  ProvedorFake,
+} from "@tests/provedor-fake";
 
 vi.mock("server-only", () => ({}));
 
@@ -35,9 +39,47 @@ const CLINICA_CANCELAMENTO = "00000000-0000-0000-0000-000000312001";
 const USUARIO_RESPONSAVEL = "00000000-0000-0000-0000-000000312002";
 const ID_VINCULO = "sub_teste_312";
 
+/**
+ * Valor do ciclo interrompido — e o oráculo do e-mail.
+ *
+ * O ciclo da fixture nasce `apurado` COM `provider_charge_id` porque é assim que
+ * `congelarCiclosComoDebito` PRESERVA um valor: onde há cobrança emitida, o
+ * valor dela é o piso (`Math.max`). Sem esse piso, o pro-rata de uma clínica sem
+ * fichas devolve 0 — que é exatamente o valor que o e-mail mostraria se fosse
+ * despachado ANTES do congelamento. Com 0 nas duas ordens, o caso não distingue
+ * uma da outra: medido, o mutante "notifica antes de congelar" sobrevivia à
+ * suíte inteira (158 unitários + 3 de integração, todos verdes).
+ *
+ * `levantarDebito` só soma ciclos em `devido`. Asserir o VALOR no corpo do
+ * e-mail é, portanto, a única forma de provar que o congelamento veio primeiro.
+ */
+const VALOR_CICLO_CENTAVOS = 3900;
+const VALOR_CICLO_FORMATADO = /R\$[\s ]*39,00/;
+const COBRANCA_EMITIDA = "chg-fake-312";
+
 const owner = hasDb
   ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 2 })
   : null;
+
+/**
+ * Dublê HTTP do gateway fake. `ProvedorFake` chama `fetch` de verdade contra um
+ * host próprio, então "o vínculo foi revogado no gateway" vira observação — é o
+ * oráculo do caminho de carência, onde a revogação precisa acontecer ANTES da
+ * escrita para não deixar autorização de Pix Automático viva.
+ */
+let chamadasGateway: string[] = [];
+
+function instalarGateway(): void {
+  chamadasGateway = [];
+  vi.stubGlobal("fetch", async (entrada: unknown) => {
+    const url = String(entrada);
+    chamadasGateway.push(url);
+    if (url.endsWith("/cancelamento")) {
+      return Response.json({ estado: "CANCELADO" });
+    }
+    throw new Error(`fetch inesperado para ${url}`);
+  });
+}
 
 describe.skipIf(!hasDb)(
   "Disparo de aviso por e-mail no cancelamento da assinatura (#312)",
@@ -73,6 +115,7 @@ describe.skipIf(!hasDb)(
           status,
           provider,
           provider_subscription_id,
+          provider_customer_id,
           ciclo_dias,
           carencia_dias,
           ciclo_atual_inicio,
@@ -82,6 +125,7 @@ describe.skipIf(!hasDb)(
           'active',
           ${ID_PROVEDOR_FAKE},
           ${ID_VINCULO},
+          'cli-fake-312',
           30,
           10,
           NOW() - interval '10 days',
@@ -89,23 +133,33 @@ describe.skipIf(!hasDb)(
         )
       `;
 
-      // Abre ciclo vigente
+      // Ciclo vigente COM cobrança emitida — ver VALOR_CICLO_CENTAVOS.
       const [sub] =
         await owner`SELECT id FROM subscription WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       expect(sub).toBeDefined();
       await owner`
-        INSERT INTO billing_cycle (subscription_id, clinic_id, inicio, fim, status)
-        VALUES (
+        INSERT INTO billing_cycle (
+          subscription_id,
+          clinic_id,
+          inicio,
+          fim,
+          status,
+          valor_centavos,
+          provider_charge_id
+        ) VALUES (
           ${sub!.id},
           ${CLINICA_CANCELAMENTO},
           NOW() - interval '10 days',
           NOW() + interval '20 days',
-          'aberto'
+          'apurado',
+          ${VALOR_CICLO_CENTAVOS},
+          ${COBRANCA_EMITIDA}
         )
       `;
     });
 
     afterEach(async () => {
+      vi.unstubAllGlobals();
       if (!owner) return;
       await owner`DELETE FROM billing_cycle WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       await owner`DELETE FROM subscription WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
@@ -127,12 +181,17 @@ describe.skipIf(!hasDb)(
         await owner!`SELECT status FROM subscription WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       expect(sub?.status).toBe("canceled");
 
-      // Verifica que o ciclo virou devido
+      // Verifica que o ciclo virou devido, com o valor da cobrança preservado
       const [ciclo] =
-        await owner!`SELECT status FROM billing_cycle WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
+        await owner!`SELECT status, valor_centavos FROM billing_cycle WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       expect(ciclo?.status).toBe("devido");
+      expect(ciclo?.valor_centavos).toBe(VALOR_CICLO_CENTAVOS);
 
-      // Verifica que enviarEmailTransacional foi disparado para o responsável
+      // Verifica que enviarEmailTransacional foi disparado para o responsável.
+      //
+      // O VALOR é a asserção que importa: ele só existe no corpo do e-mail se o
+      // congelamento tiver rodado ANTES do disparo — `levantarDebito` lê ciclos
+      // em `devido`, e antes do congelamento não há nenhum.
       expect(mockEnviarEmailTransacional).toHaveBeenCalledTimes(1);
       expect(mockEnviarEmailTransacional).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -142,6 +201,11 @@ describe.skipIf(!hasDb)(
           html: expect.stringContaining("somente-leitura"),
         }),
       );
+      const [{ texto, html }] = mockEnviarEmailTransacional.mock.calls.at(
+        -1,
+      ) as [{ texto: string; html: string }];
+      expect(texto).toMatch(VALOR_CICLO_FORMATADO);
+      expect(html).toMatch(VALOR_CICLO_FORMATADO);
     });
 
     it("é idempotente: reentrega de webhook com status canceled NÃO envia segundo e-mail", async () => {
@@ -172,6 +236,59 @@ describe.skipIf(!hasDb)(
       const [ciclo] =
         await owner!`SELECT status FROM billing_cycle WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       expect(ciclo?.status).toBe("devido");
+    });
+
+    /**
+     * O OUTRO caminho de cancelamento (#319 / #318).
+     *
+     * `aplicarStatusProvider` cobre a revogação feita pela clínica no app do
+     * banco. Este cobre o corte que o Iris inicia: carência vencida e backstop de
+     * D+7 passam por `revogarECortarAssinatura`, que escreve `canceled` direto,
+     * sem webhook nenhum. Sem este caso, metade da entrega da #312 não tinha
+     * cobertura — e o e-mail podia deixar de sair no corte por inadimplência sem
+     * nenhum teste ficar vermelho.
+     */
+    it("envia e-mail no corte por carência vencida (revogarECortarAssinatura)", async () => {
+      instalarGateway();
+
+      // Joga a assinatura para past_due com a carência de 10 dias já vencida.
+      await owner!`
+        UPDATE subscription
+           SET status = 'past_due',
+               past_due_desde = NOW() - interval '30 days'
+         WHERE clinic_id = ${CLINICA_CANCELAMENTO}
+      `;
+
+      const resultados = await cancelarAssinaturasComCarenciaVencida();
+
+      const desta = resultados.filter(
+        (r) => r.clinicId === CLINICA_CANCELAMENTO,
+      );
+      expect(desta).toHaveLength(1);
+      expect(desta[0]!.cortada).toBe(true);
+
+      // O vínculo foi revogado no gateway ANTES da escrita.
+      expect(chamadasGateway).toContain(
+        `${BASE_URL_FAKE}/vinculos/${ID_VINCULO}/cancelamento`,
+      );
+
+      // O oráculo é o banco relido, não o retorno.
+      const [sub] =
+        await owner!`SELECT status FROM subscription WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
+      expect(sub?.status).toBe("canceled");
+
+      const [ciclo] =
+        await owner!`SELECT status, valor_centavos FROM billing_cycle WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
+      expect(ciclo?.status).toBe("devido");
+      expect(ciclo?.valor_centavos).toBe(VALOR_CICLO_CENTAVOS);
+
+      // E o e-mail saiu, com o valor congelado dentro.
+      expect(mockEnviarEmailTransacional).toHaveBeenCalledTimes(1);
+      const [{ para, texto }] = mockEnviarEmailTransacional.mock.calls.at(
+        -1,
+      ) as [{ para: string; texto: string }];
+      expect(para).toBe("renato@clinica312.com");
+      expect(texto).toMatch(VALOR_CICLO_FORMATADO);
     });
   },
 );
