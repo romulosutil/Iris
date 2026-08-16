@@ -2,6 +2,7 @@
  * Templates HTML e Texto de E-mails Transacionais do Iris.
  * Escrevendo com tom de voz de UX Writer Sênior: direto, empático, seguro e profissional.
  */
+import { formatarBRL } from "@/lib/billing/calculator";
 
 interface BaseEmailProps {
   tituloHeader: string;
@@ -275,6 +276,103 @@ export function criarTemplateConviteUsuarioExistente({
       </p>
     `,
     rodapeContexto: "Você pode trocar entre as clínicas atribuídas a você no menu superior após fazer login.",
+  });
+
+  return { assunto, texto, html };
+}
+
+export interface TemplateAvisoCancelamentoProps {
+  nomeResponsavel?: string | null;
+  nomeClinica: string;
+  debitoCentavos: number;
+  urlAssinatura: string;
+}
+
+/**
+ * E-mail 6: Aviso no Cancelamento da Assinatura (#312)
+ *
+ * Disparado quando a assinatura vai para `canceled`. Informa com transparência:
+ * 1. O corte imediato de escrita e passagem para o modo somente-leitura (com consulta e exportação livres);
+ * 2. O valor pro-rata em aberto do ciclo interrompido (`billing_cycle` em `devido`), se houver;
+ * 3. A necessidade de quitação desse valor para reativação;
+ * 4. O link direto para a tela de assinatura caso o cancelamento tenha ocorrido por engano.
+ */
+export function criarTemplateAvisoCancelamentoAssinatura({
+  nomeResponsavel,
+  nomeClinica,
+  debitoCentavos,
+  urlAssinatura,
+}: TemplateAvisoCancelamentoProps) {
+  const nomeResponsavelEscapado = nomeResponsavel
+    ? escapeHtml(nomeResponsavel)
+    : null;
+  const nomeClinicaEscapado = escapeHtml(nomeClinica);
+  const temDebito = debitoCentavos > 0;
+  const valorFormatado = temDebito ? formatarBRL(debitoCentavos) : "";
+
+  const assunto =
+    "Aviso: sua assinatura do Iris foi cancelada — conta em modo somente-leitura";
+
+  const saudacaoTexto = nomeResponsavel
+    ? `Olá, ${nomeResponsavel}!`
+    : "Olá!";
+  const saudacaoHtml = nomeResponsavelEscapado
+    ? `Olá, <strong>${nomeResponsavelEscapado}</strong>!`
+    : "Olá!";
+
+  const blocoDebitoTexto = temDebito
+    ? `\n\nIdentificamos que há um valor em aberto de ${valorFormatado} referente aos dias utilizados no ciclo interrompido. Para reativar sua assinatura e liberar novos cadastros e edições, será necessário quitar este valor pendente.`
+    : "";
+
+  const blocoDebitoHtml = temDebito
+    ? `
+      <div style="background-color: #FFF5F5; border-left: 4px solid #E53E3E; padding: 16px; margin: 20px 0; border-radius: 4px;">
+        <p style="margin: 0; font-size: 14px; color: #742A2A; font-weight: 600;">
+          Valor em aberto do ciclo interrompido:
+        </p>
+        <p style="margin: 6px 0 0 0; font-size: 20px; font-weight: 800; color: #9B2C2C;">
+          ${valorFormatado}
+        </p>
+        <p style="margin: 8px 0 0 0; font-size: 13px; color: #742A2A; line-height: 1.4;">
+          Para reativar sua assinatura e liberar novos registros, será necessário quitar este valor pendente.
+        </p>
+      </div>
+    `
+    : "";
+
+  const texto = `${saudacaoTexto}
+
+A assinatura da clínica ${nomeClinica} no Iris foi cancelada.
+
+A partir de agora, a conta passou para o modo somente-leitura. Você e sua equipe continuam com acesso completo para consultar, visualizar e exportar todos os dados e prontuários já registrados — nenhuma informação foi perdida.${blocoDebitoTexto}
+
+Se o cancelamento foi realizado por engano ou revogação involuntária no aplicativo do banco, você pode regularizar e reativar sua assinatura a qualquer momento acessando o link:
+${urlAssinatura}
+
+Seus dados e históricos permanecem protegidos.`;
+
+  const html = renderizarLayoutEmail({
+    tituloHeader: "Sua assinatura foi cancelada",
+    conteudoHtml: `
+      <p style="margin-top: 0;">${saudacaoHtml}</p>
+      <p>A assinatura da clínica <strong>${nomeClinicaEscapado}</strong> na plataforma Iris foi cancelada.</p>
+      <p>A partir deste momento, sua conta passou para o modo <strong>somente-leitura</strong>. Você e sua equipe mantêm acesso completo para consultar, visualizar e exportar todos os prontuários, evoluções e relatórios já cadastrados — nenhum dado foi apagado.</p>
+      ${blocoDebitoHtml}
+      <p>Se o cancelamento ocorreu por engano ou revogação involuntária no aplicativo do banco, você pode regularizar e reativar sua conta a qualquer momento:</p>
+      
+      <p style="margin: 32px 0; text-align: center;">
+        <a href="${urlAssinatura}" style="background-color: #1A1A1A; color: #FFFFFF; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 2px 2px 0px #718096;">
+          Reativar assinatura
+        </a>
+      </p>
+
+      <p style="font-size: 14px; color: #718096;">
+        Link direto:<br>
+        <a href="${urlAssinatura}" style="color: #2B6CB0; word-break: break-all;">${urlAssinatura}</a>
+      </p>
+    `,
+    rodapeContexto:
+      "A exportação e consulta de prontuários continuam liberadas a qualquer momento.",
   });
 
   return { assunto, texto, html };
