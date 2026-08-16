@@ -159,8 +159,13 @@ export async function POST(request: Request): Promise<Response> {
     // para a autorização), e tratá-lo como evento de vínculo deixaria a fatura
     // eternamente em `aguardando_pagamento`.
     if (normalizado.providerChargeId) {
+      // O id da INSTRUÇÃO vai junto de propósito (D35): o motivo da recusa não
+      // é campo da cobrança — mora na instrução de pagamento, e este é o único
+      // ponto do fluxo em que o identificador dela existe. Omiti-lo aqui
+      // devolve o adapter ao estado em que `motivoRecusa` era `null` sempre.
       const atual = await provider.consultarCobranca(
         normalizado.providerChargeId,
+        { providerInstructionId: normalizado.providerInstructionId },
       );
       // #286 — o evento pode dizer "recusa" e a reconsulta discordar. Esse é o
       // desfecho silencioso: nada é gravado e o evento fica carimbado como

@@ -134,6 +134,52 @@ async function novoCiclo(opcoes: {
   return { clinicId, cicloId: linhas[0]!.id as string };
 }
 
+/**
+ * Assinatura ATIVA no meio do ciclo, com ciclo `aberto` e pacientes que já
+ * entrariam na fatura — o estado real de quem revoga a autorização no app do
+ * banco no dia 10 (#287).
+ *
+ * `inicio` é 9 dias e 12 horas atrás, e não "10 dias": a janela de uso é medida
+ * contra o instante em que o handler roda, alguns milissegundos depois do
+ * INSERT. Com 10 dias cravados, o `ceil` do pro-rata cairia no dia 11 por causa
+ * desses milissegundos, e o valor esperado do teste dependeria da latência da
+ * máquina. Com a meia hora de folga, qualquer instante dentro de ~12h dá o
+ * mesmo décimo dia.
+ */
+async function assinaturaAtivaNoMeioDoCiclo(opcoes: {
+  providerSubscriptionId: string;
+  pacientes: number;
+}): Promise<{ clinicId: string; subscriptionId: string; cicloId: string }> {
+  const { clinicId, subscriptionId } = await novaAssinatura({
+    providerSubscriptionId: opcoes.providerSubscriptionId,
+    status: "active",
+  });
+
+  await owner!`
+    UPDATE subscription
+       SET ciclo_atual_inicio = now() - interval '9 days 12 hours',
+           ciclo_atual_fim    = now() + interval '20 days 12 hours',
+           ativada_em         = now() - interval '9 days 12 hours'
+     WHERE id = ${subscriptionId}`;
+
+  // Pacientes criados AGORA caem dentro de `[inicio, fim)` e são contados por
+  // `billing_apurar_ciclo` pelo critério `criado_no_ciclo`.
+  for (let i = 0; i < opcoes.pacientes; i += 1) {
+    await owner!`
+      INSERT INTO patient (clinic_id, nome)
+      VALUES (${clinicId}, ${`Paciente ${i + 1} do ciclo`})`;
+  }
+
+  const linhas = await owner!`
+    INSERT INTO billing_cycle (clinic_id, subscription_id, inicio, fim, status)
+    SELECT ${clinicId}, ${subscriptionId}, s.ciclo_atual_inicio, s.ciclo_atual_fim,
+           'aberto'::billing_cycle_status
+      FROM subscription s WHERE s.id = ${subscriptionId}
+    RETURNING id`;
+
+  return { clinicId, subscriptionId, cicloId: linhas[0]!.id as string };
+}
+
 // ── Requisição ───────────────────────────────────────────────────────────────
 
 function requisicao(opcoes: {
@@ -179,7 +225,7 @@ async function lerEvento(asaasEventId: string) {
 
 async function lerAssinatura(providerSubscriptionId: string) {
   const r = await authDb.execute(
-    sql`SELECT status::text AS status, ativada_em, past_due_desde,
+    sql`SELECT status::text AS status, ativada_em, past_due_desde, cancelada_em,
                ciclo_atual_inicio, ciclo_atual_fim
         FROM subscription WHERE provider_subscription_id = ${providerSubscriptionId}`,
   );
@@ -191,6 +237,7 @@ async function lerAssinatura(providerSubscriptionId: string) {
       status: string;
       ativada_em: unknown;
       past_due_desde: unknown;
+      cancelada_em: unknown;
       ciclo_atual_inicio: unknown;
       ciclo_atual_fim: unknown;
     }[]
@@ -199,7 +246,9 @@ async function lerAssinatura(providerSubscriptionId: string) {
 
 async function lerCiclo(cicloId: string) {
   const r = await authDb.execute(
-    sql`SELECT status::text AS status, cobrado_em, erro
+    sql`SELECT status::text AS status, cobrado_em, erro,
+               pacientes_contados, valor_centavos, apurado_em,
+               provider_charge_id, cobranca_emitida_em
         FROM billing_cycle WHERE id = ${cicloId}::uuid`,
   );
   return (
@@ -207,6 +256,11 @@ async function lerCiclo(cicloId: string) {
       status: string;
       cobrado_em: unknown;
       erro: string | null;
+      pacientes_contados: number;
+      valor_centavos: number;
+      apurado_em: unknown;
+      provider_charge_id: string | null;
+      cobranca_emitida_em: unknown;
     }[]
   )[0]!;
 }
@@ -250,10 +304,12 @@ function respondeAutorizacao(status: string) {
 
 /**
  * `GET /payments/{id}` — status e valor (decimal em reais) da cobrança.
- * `extra` mescla campos crus no corpo — usado para simular um gateway que
- * informa `refusalReason` (o caso SEM motivo, sem `extra`, é medido no
- * sandbox em 13/08/2026; nenhuma recusa real foi observável — P2 da #286
- * segue NÃO MEDIDO; ver comentário em `asaas.ts:consultarCobranca`).
+ * `extra` mescla campos crus no corpo.
+ *
+ * ⚠️ O corpo daqui NÃO tem campo de motivo de recusa, e isso é o contrato, não
+ * economia de dublê: o `PaymentGetResponseDTO` do Asaas não declara
+ * `refusalReason` (D35). Quem tem o motivo é a INSTRUÇÃO — ver
+ * `respondeInstrucao`.
  */
 function respondeCobranca(
   status: string,
@@ -263,6 +319,29 @@ function respondeCobranca(
   respostasGateway.push(async () =>
     Response.json({ id: "pay-dublê", status, value: valorReais, ...extra }),
   );
+}
+
+/**
+ * `GET /pix/automatic/paymentInstructions/{id}` — o recurso que de fato tem o
+ * `refusalReason`. Códigos são os reais do catálogo do Asaas (inglês,
+ * `MAXIMUM_AMOUNT_EXCEEDED`/`PAYMENT_OVERDUE`/…), nunca inventados em
+ * português: um dublê com código inventado passa por passthrough de string e
+ * não prova nada sobre o campo que a produção devolve.
+ */
+function respondeInstrucao(refusalReason: string | null) {
+  respostasGateway.push(async () =>
+    Response.json({
+      id: "pi-dublê",
+      status: "REFUSED",
+      paymentId: "pay-dublê",
+      ...(refusalReason === null ? {} : { refusalReason }),
+    }),
+  );
+}
+
+/** `GET /pix/automatic/paymentInstructions?paymentId=…&status=REFUSED`. */
+function respondeInstrucoes(itens: Array<Record<string, unknown>>) {
+  respostasGateway.push(async () => Response.json({ data: itens }));
 }
 
 /** Resposta HTTP de erro (vira `BillingProviderError` com `status`). */
@@ -356,6 +435,10 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       await owner`TRUNCATE billing_cycle, subscription, asaas_webhook_event
                   RESTART IDENTITY CASCADE`;
       if (clinicasCriadas.length > 0) {
+        // Pacientes ANTES das clínicas: `patient.clinic_id` é `ON DELETE
+        // restrict`, então a limpeza falharia calada no `afterAll` e deixaria
+        // lixo para o próximo arquivo.
+        await owner`DELETE FROM patient WHERE clinic_id = ANY(${clinicasCriadas}::uuid[])`;
         await owner`DELETE FROM clinic WHERE id = ANY(${clinicasCriadas}::uuid[])`;
       }
       await owner.end();
@@ -588,6 +671,149 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       );
     });
 
+    /**
+     * #287 Problema 1 — o ciclo aberto não pode sobreviver ao cancelamento.
+     *
+     * Antes desta suíte não havia teste nenhum do caminho de revogação, que é o
+     * caminho de TODO cancelamento hoje (a UI in-app não existe; a clínica
+     * revoga a autorização no app do banco). O ciclo ficava em `aberto` para
+     * sempre: `fecharCiclosVencendo` varre `status = 'active'` e nunca mais
+     * enxerga uma assinatura `canceled`. Receita perdida sem nada vermelho.
+     *
+     * A saída implementada é a (b) da #287, decidida na #290: congela o ciclo
+     * como DÉBITO pro-rata (`devido`) e não emite cobrança nenhuma — o trilho do
+     * Pix Automático acabou de ser revogado, não há como cobrar naquele
+     * instante. Quem cobra é o gate de reativação (#290).
+     */
+    it("autorização CANCELADA fecha o ciclo aberto como débito pro-rata, sem emitir cobrança", async () => {
+      const authId = "8f3a9a2e-1f6a-4e2b-9f77-1b2c3d4e5f60";
+      const { cicloId } = await assinaturaAtivaNoMeioDoCiclo({
+        providerSubscriptionId: authId,
+        pacientes: 1,
+      });
+      respondeAutorizacao("CANCELLED");
+
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoAutorizacao(id, authId, {
+            event: "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED",
+            status: "CANCELLED",
+          }),
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const assinatura = await lerAssinatura(authId);
+      expect(assinatura.status).toBe("canceled");
+      expect(assinatura.cancelada_em).not.toBeNull();
+
+      const ciclo = await lerCiclo(cicloId);
+      // O estado terminal do ciclo interrompido. `aberto` aqui é o bug da #287.
+      expect(ciclo.status).toBe("devido");
+      expect(ciclo.apurado_em).not.toBeNull();
+      expect(ciclo.pacientes_contados).toBe(1);
+      // 1 ficha = 3900 cheios; 10 dias usados de 30 → 3900 x 10 / 30 = 1300.
+      // Constante literal, não a fórmula: com a fórmula no expect, um pro-rata
+      // errado passaria por concordar consigo mesmo.
+      expect(ciclo.valor_centavos).toBe(1300);
+
+      // Nem cobrança emitida, nem ciclo dado como pago. Só o débito congelado.
+      expect(ciclo.provider_charge_id).toBeNull();
+      expect(ciclo.cobranca_emitida_em).toBeNull();
+      expect(ciclo.cobrado_em).toBeNull();
+      expect(ciclo.erro).toBeNull();
+
+      const evento = (await lerEvento(id))!;
+      expect(evento.aplicado_em).not.toBeNull();
+      expect(evento.erro_aplicacao).toBeNull();
+
+      // Uma única ida ao gateway: a consulta da autorização. Qualquer POST em
+      // `/payments` aqui seria uma cobrança num trilho já revogado.
+      expect(chamadasGateway).toHaveLength(1);
+      expect(chamadasGateway[0]).toContain(
+        `/pix/automatic/authorizations/${authId}`,
+      );
+    });
+
+    it("reentrega do cancelamento não reabre nem recalcula o débito já congelado", async () => {
+      // O Asaas reentrega o mesmo fato com ids de evento diferentes. Sem guarda
+      // de transição, a segunda passada reapuraria o ciclo com `cancelada_em`
+      // mais recente e o valor mudaria depois de congelado.
+      const authId = "0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f";
+      const { cicloId } = await assinaturaAtivaNoMeioDoCiclo({
+        providerSubscriptionId: authId,
+        pacientes: 1,
+      });
+
+      respondeAutorizacao("CANCELLED");
+      await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoAutorizacao(novoIdEvento(), authId, {
+            status: "CANCELLED",
+          }),
+        }),
+      );
+      const primeiro = await lerCiclo(cicloId);
+      expect(primeiro.status).toBe("devido");
+
+      respondeAutorizacao("CANCELLED");
+      await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoAutorizacao(novoIdEvento(), authId, {
+            status: "CANCELLED",
+          }),
+        }),
+      );
+
+      const segundo = await lerCiclo(cicloId);
+      expect(segundo.status).toBe("devido");
+      expect(segundo.valor_centavos).toBe(primeiro.valor_centavos);
+      expect(segundo.apurado_em).toEqual(primeiro.apurado_em);
+    });
+
+    it("cancelamento NÃO mexe em ciclo com cobrança já emitida — o dinheiro está em trânsito", async () => {
+      // `aguardando_pagamento` significa cobrança viva no gateway. Regravar o
+      // valor como pro-rata aqui descolaria o memorial da fatura que a clínica
+      // recebeu, e o webhook de pagamento chegaria para um ciclo remarcado.
+      const authId = "5b6c7d8e-9f0a-1b2c-3d4e-5f6a7b8c9d0e";
+      const { clinicId, subscriptionId } = await novaAssinatura({
+        providerSubscriptionId: authId,
+        status: "active",
+      });
+      const linhas = await owner!`
+        INSERT INTO billing_cycle
+          (clinic_id, subscription_id, inicio, fim, status,
+           pacientes_contados, valor_centavos, apurado_em, provider_charge_id,
+           cobranca_emitida_em)
+        VALUES (
+          ${clinicId}, ${subscriptionId},
+          now() - interval '30 days', now(),
+          'aguardando_pagamento'::billing_cycle_status,
+          3, 11700, now(), 'pay_ja_emitida_287', now()
+        )
+        RETURNING id`;
+      const cicloId = linhas[0]!.id as string;
+
+      respondeAutorizacao("CANCELLED");
+      await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoAutorizacao(novoIdEvento(), authId, {
+            status: "CANCELLED",
+          }),
+        }),
+      );
+
+      const ciclo = await lerCiclo(cicloId);
+      expect(ciclo.status).toBe("aguardando_pagamento");
+      expect(ciclo.valor_centavos).toBe(11700);
+      expect(ciclo.provider_charge_id).toBe("pay_ja_emitida_287");
+    });
+
     it("autorização de vínculo desconhecido → 200 e erro_aplicacao 'assinatura desconhecida'", async () => {
       // Nenhuma linha em `subscription` para este id (TRUNCATE no beforeEach).
       // Não é erro de infra: pode ser evento de outra aplicação apontada para o
@@ -637,26 +863,34 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       expect(chamadasGateway[0]).toContain(`/payments/${paymentId}`);
     });
 
-    it("cobrança recusada sem motivo do gateway grava diagnóstico que nomeia o teto como causa provável (#286)", async () => {
+    it("cobrança recusada SEM motivo do gateway não move estado nenhum e avisa como desconhecida (#286 → #318)", async () => {
       /**
-       * O modo de falha mais provável da cobrança recorrente, agora que se
-       * sabe que o teto é obrigatório por diretriz do BACEN: a clínica
-       * autorizou com o teto sugerido em tela na ativação (R$ 0,01) e a
-       * fatura real não passa. Sem nomear a hipótese, o ciclo só dizia
-       * "cobrança recusada pelo gateway", e quem fosse diagnosticar olharia o
-       * adapter e o job antes de olhar a configuração no banco do cliente.
+       * ⚠️ ESTE CASO MUDOU DE LADO NA #318, e a razão é o que importa.
        *
-       * Este teste passa pelo caminho REAL do webhook — o repasse de
-       * `atual.motivoRecusa` dentro de `route.ts` é código novo, e um teste
-       * que chamasse `conciliarPagamentoDeCiclo` direto passaria verde mesmo
-       * se a rota não repassasse o motivo. O dublê do gateway não devolve
-       * `refusalReason`/`failureReason`/`pixTransaction`: é o caso medido no
-       * sandbox em 13/08/2026 — nenhuma recusa real foi observável (P2 da
-       * #286 segue NÃO MEDIDO).
+       * Antes, sem motivo o ciclo ia para `falhou` com um texto que nomeava o
+       * teto do Pix Automático como causa mais provável (#286). A #318 derrubou
+       * isso: escrever uma HIPÓTESE ranqueada no campo de diagnóstico é
+       * exatamente o defeito que a coluna `recusa_codigo` existe para acabar —
+       * e, pela regra que gera a tabela de desfechos, uma recusa sem motivo não
+       * prova nada sobre a clínica, então não pode puni-la no ato.
+       *
+       * Motivo ausente é **G0**, igual a código desconhecido: nada é escrito, e
+       * o sinal fica no log com tag PRÓPRIA. Em produção essa linha com
+       * `motivoRecusa: null` é o termômetro do D35 — enquanto ela aparecer, a
+       * classificação inteira está rodando às cegas.
+       *
+       * Este caso passa pelo caminho REAL do webhook: um teste que chamasse
+       * `conciliarPagamentoDeCiclo` direto passaria verde mesmo se a rota
+       * parasse de repassar o motivo.
+       *
+       * Aqui o evento é de COBRANÇA (sem instrução), então o adapter cai no
+       * índice por `paymentId` — e a lista volta vazia, que é o caso "o
+       * gateway não informou".
        */
       const paymentId = "pay_recusada_286_1";
       const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
       respondeCobranca("OVERDUE");
+      respondeInstrucoes([]);
 
       // O `console.warn` com tag greppável ("[billing-recusa]") é o mecanismo
       // pelo qual a primeira recusa real de produção vira sinal em vez de
@@ -679,56 +913,106 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
         );
         expect(res.status).toBe(200);
 
+        // Nada foi escrito: o ciclo segue esperando pagamento e sem código.
         const ciclo = await lerCiclo(cicloId);
-        expect(ciclo.status).toBe("falhou");
-        expect(ciclo.erro).toMatch(/teto/i);
-        expect(ciclo.erro).toMatch(/sem motivo informado/i);
+        expect(ciclo.status).toBe("aguardando_pagamento");
+        expect(ciclo.erro).toBeNull();
 
         expect(aviso).toHaveBeenCalledWith(
           "[billing-recusa] cobrança de ciclo recusada",
-          expect.objectContaining({ providerChargeId: paymentId }),
+          expect.objectContaining({ providerChargeId: paymentId, grupo: "G0" }),
+        );
+        // A tag PRÓPRIA do desconhecido, com o literal recebido (`null` aqui):
+        // é assim que "o catálogo cresceu" — ou "o motivo não está chegando" —
+        // vira trabalho agendado em vez de incidente.
+        expect(aviso).toHaveBeenCalledWith(
+          "[billing-recusa-desconhecida] código fora do catálogo da #318",
+          expect.objectContaining({
+            providerChargeId: paymentId,
+            motivoRecusa: null,
+          }),
         );
       } finally {
         aviso.mockRestore();
       }
     });
 
-    it("cobrança recusada COM motivo do gateway grava o motivo bruto, sem inventar hipótese (#286)", async () => {
+    it("recusa de instrução: o motivo vem da INSTRUÇÃO e chega ao ciclo (D35)", async () => {
       /**
-       * Fix round 1 (revisão do #286): a versão anterior deste teste chamava
-       * `conciliarPagamentoDeCiclo` direto, o que passa verde mesmo se
-       * `route.ts` parar de repassar `atual.motivoRecusa` — o default `null`
-       * do terceiro parâmetro mascara a regressão (mutação confirmada:
-       * apagar `atual.motivoRecusa,` de `route.ts` não derrubava este teste
-       * na forma antiga). Agora passa pelo caminho REAL do webhook: o dublê
-       * devolve `refusalReason`, e só um repasse de fato correto produz o
-       * motivo bruto no `erro` do ciclo.
+       * O teste do trilho inteiro do D35, ponta a ponta: envelope de webhook →
+       * `normalizarEventoAsaas` preserva `paymentInstruction.id` → `route.ts`
+       * repassa esse id → o adapter consulta
+       * `GET /pix/automatic/paymentInstructions/{id}` → o código bruto pousa em
+       * `billing_cycle.erro`.
+       *
+       * É a régua de comportamento, não de eco: o dublê da COBRANÇA não tem
+       * campo de motivo nenhum (como a produção), então o único jeito de
+       * `PAYMENT_OVERDUE` aparecer no ciclo é o adapter ter ido ao recurso
+       * certo com o id certo. Duas mutações confirmadas derrubam este teste:
+       *
+       *  - apagar `providerInstructionId: idInstrucao` de `normalizarEventoAsaas`;
+       *  - apagar `{ providerInstructionId }` da chamada em `route.ts`.
+       *
+       * Nos dois casos o adapter cai no índice por `paymentId`, a URL muda e o
+       * corpo enfileirado deixa de casar — o motivo volta `null` e o `erro`
+       * regride para o texto de hipótese do #286.
+       *
+       * Fix round 1 (revisão do #286), preservado: passa pelo caminho REAL do
+       * webhook. Chamar `conciliarPagamentoDeCiclo` direto passaria verde mesmo
+       * com `route.ts` sem repassar o motivo (o default `null` do 3º parâmetro
+       * mascara a regressão — mutação confirmada na forma antiga).
        */
       const paymentId = "pay_recusada_286_2";
+      const instrucaoId = "pi_recusada_286_2";
       const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
-      respondeCobranca("OVERDUE", 117, {
-        refusalReason: "SALDO_INSUFICIENTE",
-      });
+      respondeCobranca("OVERDUE");
+      // Código REAL do catálogo do Asaas (`PAYMENT_OVERDUE` = "charge overdue
+      // due to insufficient balance or available limit"). O código inventado em
+      // português que estava aqui só provava passthrough de string.
+      respondeInstrucao("PAYMENT_OVERDUE");
 
       const id = novoIdEvento();
       const res = await POST(
         requisicao({
           token: TOKEN,
-          corpo: eventoCobranca(id, paymentId, cicloId, {
-            event: "PAYMENT_OVERDUE",
-            status: "OVERDUE",
-          }),
+          corpo: {
+            id,
+            event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+            dateCreated: "2026-08-08 21:30:00",
+            payment: {
+              id: paymentId,
+              status: "OVERDUE",
+              value: 117,
+              externalReference: `cycle:${cicloId}`,
+            },
+            paymentInstruction: {
+              id: instrucaoId,
+              paymentId,
+              status: "REFUSED",
+              authorization: { id: "auth-da-instrucao-recusada-286" },
+            },
+          },
         }),
       );
       expect(res.status).toBe(200);
 
+      // Comportamento PRIMEIRO: o código chegou ao ciclo. Quando o gateway diz
+      // a causa, ela manda — o diagnóstico do Iris não pode sobrepor
+      // "provavelmente é o teto" a um motivo explícito: a orientação ao cliente
+      // é oposta nos dois casos.
       const ciclo = await lerCiclo(cicloId);
       expect(ciclo.status).toBe("falhou");
-      // Quando o gateway diz a causa, ela manda — o diagnóstico do Iris não
-      // pode sobrepor "provavelmente é o teto" a um "saldo insuficiente"
-      // explícito: a orientação ao cliente é oposta nos dois casos.
-      expect(ciclo.erro).toContain("SALDO_INSUFICIENTE");
+      expect(ciclo.erro).toContain("PAYMENT_OVERDUE");
       expect(ciclo.erro).not.toMatch(/teto/i);
+
+      // ...e por qual recurso ele chegou: a segunda chamada tem que ser a da
+      // INSTRUÇÃO, pelo id que veio no evento. Sem esta asserção, uma leitura
+      // do recurso errado que por acaso devolvesse o campo passaria verde.
+      expect(chamadasGateway).toHaveLength(2);
+      expect(chamadasGateway[0]).toContain(`/payments/${paymentId}`);
+      expect(chamadasGateway[1]).toContain(
+        `/pix/automatic/paymentInstructions/${instrucaoId}`,
+      );
     });
 
     it("INSTRUCTION_REFUSED cuja reconsulta NÃO devolve OVERDUE deixa rastro em vez de sumir (#286)", async () => {
@@ -756,6 +1040,9 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       const { cicloId } = await novoCiclo({ providerChargeId: paymentId });
       // A reconsulta discorda do evento: para o gateway a cobrança segue viva.
       respondeCobranca("PENDING");
+      // A instrução é consultada mesmo assim (o evento trouxe o id dela): é
+      // justamente na divergência que o motivo importa para o diagnóstico.
+      respondeInstrucao("MAXIMUM_AMOUNT_EXCEEDED");
 
       const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
       try {

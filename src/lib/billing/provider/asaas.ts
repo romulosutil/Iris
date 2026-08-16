@@ -1,12 +1,14 @@
 import "server-only";
 
 import { timingSafeEqual } from "node:crypto";
+import { PISO_TETO_AUTORIZACAO_CENTAVOS } from "../calculator";
 import {
   BillingProviderError,
   type BillingProvider,
   type CobrancaEmitida,
   type EntradaVerificacaoWebhook,
   type EventoWebhookNormalizado,
+  type NovaCobrancaAvulsa,
   type NovaCobrancaDeCiclo,
   type NovoVinculo,
   type StatusAssinaturaProvider,
@@ -42,11 +44,18 @@ import {
  * 1. **A autorização só fica `ACTIVE` depois que o QR Code imediato é pago.**
  *    Ou seja, existe um débito REAL no momento da ativação — não é possível
  *    autorizar "de graça". Ver `VALOR_ATIVACAO_PADRAO_CENTAVOS`.
- * 2. **A cobrança do ciclo só é aceita entre 2 e 10 dias úteis antes do
- *    vencimento.** Fora da janela o Asaas recusa com 400. Quem escolhe o
- *    vencimento é `fecharCiclosVencendo`, não este adapter — aqui a data só é
- *    formatada; a recusa sobe como `BillingProviderError` 4xx, que a varredura
- *    já sabe classificar como definitiva.
+ * 2. **A cobrança do ciclo só é aceita dentro de uma janela antes do
+ *    vencimento** — e a unidade da janela é indeterminada: a doc de
+ *    Implementação do Asaas diz "entre 2 e 10 dias **úteis**", os Motivos de
+ *    Recusa dizem "menos de 2 dias" / "superior a 10 dias" sem qualificar, e o
+ *    BACEN fala em dias corridos. A medição no sandbox (#321, 15/08/2026) não
+ *    resolveu: autorização não ativa lá, e todo `POST /payments` devolve o
+ *    mesmo 400 de autorização inativa, inclusive dentro da janela. Fora dela o
+ *    Asaas recusa com 400. Quem escolhe o vencimento é
+ *    `vencimentoCobrancaDeCiclo` (`../vencimento.ts`), que satisfaz a leitura
+ *    mais restritiva das duas; aqui a data só é formatada, e a recusa sobe
+ *    como `BillingProviderError` 4xx, que a varredura já sabe classificar como
+ *    definitiva.
  *
  * ## Env — lidas por função, nunca no escopo do módulo
  *
@@ -139,8 +148,9 @@ function reaisParaCentavos(valorReais: number): number {
  *
  * `toISOString().slice(0, 10)` daria o dia em UTC: um fechamento rodando às
  * 22h de Brasília viraria o dia seguinte, e o vencimento sairia 24h adiantado —
- * o suficiente para cair fora da janela de 2 a 10 dias úteis que o Pix
- * Automático exige. `en-CA` é usado porque é o locale cujo formato de data
+ * o suficiente para cair fora da janela que o Pix Automático exige (unidade
+ * indeterminada — ver o topo do arquivo). `en-CA` é usado porque é o locale
+ * cujo formato de data
  * curta É `YYYY-MM-DD`; o fuso vem explícito, não do relógio do servidor.
  */
 function dataAsaas(d: Date): string {
@@ -395,6 +405,19 @@ function normalizarEventoAsaas(payload: unknown): EventoWebhookNormalizado {
     comoTexto(pagamento.id) ?? comoTexto(instrucao.paymentId) ?? null;
 
   /**
+   * Id da INSTRUÇÃO. É um id diferente do da cobrança e serve para OUTRA coisa:
+   * `GET /pix/automatic/paymentInstructions/{id}`, que é o único recurso do
+   * Asaas que expõe `refusalReason`.
+   *
+   * Até o D35 esta linha não existia — o normalizador enxergava o objeto
+   * `paymentInstruction`, lia dele status e `paymentId`, e jogava o `id` fora.
+   * Sem ele, `consultarCobranca` só tinha o `payment` para consultar, e o
+   * `payment` não tem campo de motivo nenhum: o motivo era `null` por
+   * construção, não por o gateway não informar.
+   */
+  const idInstrucao = comoTexto(instrucao.id);
+
+  /**
    * Id do VÍNCULO (autorização). Nos eventos de autorização é `authorization.id`;
    * nos de instrução, a autorização vem aninhada em
    * `paymentInstruction.authorization.id`.
@@ -456,6 +479,7 @@ function normalizarEventoAsaas(payload: unknown): EventoWebhookNormalizado {
     tipo,
     providerSubscriptionId: idVinculo,
     providerChargeId: idCobranca,
+    providerInstructionId: idInstrucao,
     referenciaExterna,
     ocorridoEm: parsarDataAsaas(p.dateCreated),
     bruto: payload,
@@ -474,9 +498,16 @@ export class AsaasProvider implements BillingProvider {
    * `paymentCreationMode: MANUAL` é obrigatório aqui: o modo `SUBSCRIPTION` do
    * Asaas exige `value` fixo, que é exatamente a armadilha descrita em
    * `types.ts` (gateway gerando a cobrança do próximo ciclo com antecedência e
-   * com o valor velho). `retryPolicy: NOT_ALLOWED` porque a retentativa de
-   * débito é decisão de cobrança do Iris, não do gateway — quem decide o que
-   * acontece com um ciclo recusado é `conciliarPagamentoDeCiclo`.
+   * com o valor velho).
+   *
+   * `retryPolicy: ALLOW_THREE_IN_SEVEN_DAYS` **não pode ser mudado depois**: o
+   * Asaas só aceita a configuração na criação da autorização. Autorização
+   * criada sem ela fica permanentemente sem direito a retentativa, e não há
+   * migração — só recriar, o que significa novo QR e novo consentimento do
+   * cliente, um a um. Por isso a flag entrou antes da orquestração: ela é
+   * inerte sozinha (quem comanda cada retentativa extradia é o recebedor, via
+   * `POST /pix/automatic/paymentInstructions/{id}/retries` — issue #322), mas
+   * a ausência dela é irreparável. NÃO REMOVER achando que dá para religar.
    */
   async iniciarVinculoPagamento(dados: NovoVinculo): Promise<VinculoCriado> {
     const cpfCnpj = dados.assinante.cpfCnpj?.replace(/\D/g, "");
@@ -519,15 +550,19 @@ export class AsaasProvider implements BillingProvider {
           customerId,
           description: "Iris — mensalidade por ficha ativa",
           paymentCreationMode: "MANUAL",
-          retryPolicy: "NOT_ALLOWED",
+          retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS",
           immediateQrCode: {
             expirationSeconds: EXPIRACAO_QR_ATIVACAO_SEGUNDOS,
             originalValue: centavosParaReais(valorAtivacao),
           },
           // `value` OMITIDO de propósito: é o que caracteriza a Jornada 3 de
-          // valor variável. `value` e `minLimitValue` são mutuamente
-          // exclusivos no Asaas, e qualquer um dos dois travaria o valor do
-          // débito mensal — que é justamente o que muda a cada apuração.
+          // valor variável. Preenchê-lo travaria o débito mensal no valor de
+          // hoje — a origem exata do subfaturamento descrito em `types.ts`.
+          //
+          // `minLimitValue` só é incompatível com autorização de valor FIXO
+          // (com `value`). Sem `value`, convivem: medido em 15/08/2026 (#321),
+          // HTTP 200 com `"minLimitValue":39` e `"value":null` na resposta.
+          minLimitValue: centavosParaReais(PISO_TETO_AUTORIZACAO_CENTAVOS),
         },
       }),
     );
@@ -622,11 +657,71 @@ export class AsaasProvider implements BillingProvider {
     );
   }
 
+  /**
+   * Revoga a autorização de Pix Automático. **Idempotente de propósito**: se a
+   * autorização não existe mais no gateway, ou já está cancelada lá, o objetivo
+   * desta chamada já está atingido e ela retorna normalmente.
+   *
+   * ## Por que a tolerância existe (#319)
+   *
+   * `chamar` traduz TODO não-2xx em `BillingProviderError`, e o corte por
+   * carência vencida é fail-closed: falha aqui aborta o corte daquela
+   * assinatura. Com o `DELETE` cru, dois cenários rotineiros viravam loop
+   * preso — o Asaas processa o DELETE e a resposta se perde no timeout, ou a
+   * clínica revoga a autorização pelo app do banco antes de nós. Nos dois a
+   * autorização JÁ está morta, mas toda passada diária responderia erro e a
+   * assinatura NUNCA seria cortada. Como `past_due` libera escrita
+   * (`estado-conta.ts`), o resultado é a clínica inadimplente escrevendo para
+   * sempre — exatamente o defeito que a #319 existe para matar, de volta com
+   * cara de fail-closed.
+   *
+   * ## ⚠️ Desenho defensivo, NÃO medição
+   *
+   * O status que o `DELETE` devolve para uma autorização **já cancelada** não
+   * foi medido contra o Asaas (o sandbox não leva autorização nenhuma a
+   * `ACTIVE`, memória `sandbox-asaas-nao-ativa-pix-automatico`). O que a doc do
+   * endpoint declara é 200, 400 (`{errors:[{code,description}]}`), 401 e 404
+   * ("Not found"). Daí a régua:
+   *
+   * - **404** → sucesso direto: não existe autorização para revogar;
+   * - **400** → ambíguo (pode ser `invalid_environment`, chave do ambiente
+   *   errado, que NÃO pode virar corte). Então reconsulta o `GET` e só aceita
+   *   como sucesso se o próprio gateway disser que a autorização está cancelada
+   *   (`CANCELLED`/`REFUSED`/`EXPIRED`). É medição do estado real, não palpite
+   *   sobre o código de erro;
+   * - qualquer outra coisa — rede, timeout, 401, 5xx — sobe intacta. Aí ninguém
+   *   sabe se o DELETE chegou, e fail-closed é a resposta certa.
+   */
   async cancelarVinculo(providerVinculoId: string): Promise<void> {
-    await chamar(
-      "DELETE",
-      `/pix/automatic/authorizations/${encodeURIComponent(providerVinculoId)}`,
-    );
+    try {
+      await chamar(
+        "DELETE",
+        `/pix/automatic/authorizations/${encodeURIComponent(providerVinculoId)}`,
+      );
+    } catch (e) {
+      if (!(e instanceof BillingProviderError)) throw e;
+      if (e.status === 404) return;
+      if (e.status !== 400) throw e;
+
+      // Leitura pura: repeti-la não muda nada no gateway, e é a única forma de
+      // distinguir "já estava cancelada" de uma recusa real.
+      let atual: { status: StatusAssinaturaProvider };
+      try {
+        atual = await this.consultarVinculo(providerVinculoId);
+      } catch (erroConsulta) {
+        // A autorização sumiu entre o DELETE e o GET: mesmo caso do 404 acima.
+        if (
+          erroConsulta instanceof BillingProviderError &&
+          erroConsulta.status === 404
+        ) {
+          return;
+        }
+        // Reconsulta inconclusiva não vira permissão para cortar: sobe o erro
+        // ORIGINAL, que é o que descreve a recusa do gateway.
+        throw e;
+      }
+      if (atual.status !== "cancelada") throw e;
+    }
   }
 
   /**
@@ -703,7 +798,102 @@ export class AsaasProvider implements BillingProvider {
     };
   }
 
-  async consultarCobranca(providerChargeId: string): Promise<{
+  /**
+   * Cobrança avulsa contra o cliente (#290 — débito de reativação).
+   *
+   * Difere de `emitirCobrancaDeCiclo` em dois pontos, e os dois são o motivo de
+   * o método existir separado:
+   *
+   * 1. **O cliente vem por parâmetro, não da autorização.** Lá o `customerId` é
+   *    lido de `GET /pix/automatic/authorizations/{id}` porque a autorização é a
+   *    fonte da verdade. Aqui essa autorização foi REVOGADA — é o ato que
+   *    produziu o cancelamento — e consultá-la seria pedir 404 (ou pior, um
+   *    `customerId` de um trilho morto). O id vem de
+   *    `subscription.provider_customer_id`, gravado na ativação.
+   * 2. **Sem `pixAutomaticAuthorizationId`.** Anexar o id da autorização faria o
+   *    Asaas tentar debitar automaticamente algo que a clínica revogou. Esta
+   *    cobrança é Pix comum: a pessoa lê o QR e paga à mão.
+   */
+  async emitirCobrancaAvulsa(
+    dados: NovaCobrancaAvulsa,
+  ): Promise<CobrancaEmitida> {
+    const jaEmitida = await this.buscarCobrancaPorReferencia(
+      dados.referenciaExterna,
+    );
+    if (jaEmitida) {
+      return {
+        ...jaEmitida,
+        ...(jaEmitida.pixCopiaECola
+          ? {}
+          : await this.brCodeDe(jaEmitida.providerChargeId)),
+      };
+    }
+
+    const resposta = comoRegistro(
+      await chamar("POST", "/payments", {
+        corpo: {
+          customer: dados.clienteId,
+          billingType: "PIX",
+          value: centavosParaReais(dados.valorCentavos),
+          dueDate: dataAsaas(dados.vencimento),
+          description: dados.descricao,
+          externalReference: dados.referenciaExterna,
+        },
+      }),
+    );
+
+    const providerChargeId = comoTexto(resposta.id);
+    if (!providerChargeId) {
+      throw new BillingProviderError("resposta do Asaas sem `id` de cobrança", {
+        corpo: resposta,
+      });
+    }
+
+    const urlPagamento = comoTexto(resposta.invoiceUrl) ?? undefined;
+    return {
+      providerChargeId,
+      status: mapearStatusCobranca(resposta.status),
+      ...(urlPagamento ? { urlPagamento } : {}),
+      ...(await this.brCodeDe(providerChargeId)),
+    };
+  }
+
+  /**
+   * BR Code de uma cobrança Pix já criada (`GET /payments/{id}/pixQrCode`).
+   *
+   * **Nunca lança.** A cobrança já existe neste ponto — deixar uma falha na
+   * busca do QR derrubar a emissão obrigaria a próxima tentativa a reconciliar
+   * uma cobrança órfã, trocando um QR ausente por um problema pior. Sem o
+   * copia-e-cola a tela cai no `invoiceUrl`, que é a fatura hospedada do Asaas.
+   *
+   * `encodedImage` (o QR em base64) segue ignorado, mesmo motivo da autorização:
+   * é uma renderização deste mesmo `payload`, e a UI desenha o QR localmente.
+   */
+  private async brCodeDe(
+    providerChargeId: string,
+  ): Promise<{ pixCopiaECola?: string }> {
+    try {
+      const qr = comoRegistro(
+        await chamar(
+          "GET",
+          `/payments/${encodeURIComponent(providerChargeId)}/pixQrCode`,
+        ),
+      );
+      const payload = comoTexto(qr.payload);
+      return payload ? { pixCopiaECola: payload } : {};
+    } catch (e) {
+      console.warn("[billing-debito] falha ao obter BR Code da cobrança", {
+        providerChargeId,
+        err: e instanceof Error ? e.message : String(e),
+      });
+      return {};
+    }
+  }
+
+  async consultarCobranca(
+    providerChargeId: string,
+    opcoes?: { providerInstructionId?: string | null },
+  ): Promise<{
     status: StatusCobranca;
     valorCentavos: number;
     motivoRecusa: string | null;
@@ -712,30 +902,135 @@ export class AsaasProvider implements BillingProvider {
       await chamar("GET", `/payments/${encodeURIComponent(providerChargeId)}`),
     );
     const valor = resposta.value;
-
-    /**
-     * Leitura defensiva: nenhum destes campos foi observado numa resposta real
-     * (medição de 13/08/2026 — no sandbox as cobranças ficaram em `PENDING` e
-     * nenhuma recusa de fato chegou a acontecer; nesse estado o `payment` não
-     * trouxe campo de motivo e `pixTransaction` veio `null`. Como um `payment`
-     * recusado se comporta segue NÃO MEDIDO). Tentamos os nomes plausíveis e
-     * aceitamos `null`; o diagnóstico com hipóteses ranqueadas fica em
-     * `conciliarPagamentoDeCiclo`, não aqui. O adapter não adivinha causa.
-     */
-    const motivoRecusa =
-      comoTexto(resposta.refusalReason) ??
-      comoTexto(resposta.failureReason) ??
-      comoTexto(comoRegistro(resposta.pixTransaction).failureReason);
+    const status = mapearStatusCobranca(resposta.status);
 
     return {
-      status: mapearStatusCobranca(resposta.status),
+      status,
       // Volta ao inteiro na entrada do sistema: nenhum decimal atravessa a porta.
       valorCentavos:
         typeof valor === "number" && Number.isFinite(valor)
           ? reaisParaCentavos(valor)
           : 0,
-      motivoRecusa,
+      // O motivo NÃO sai daqui: `payment` não tem campo de motivo (ver
+      // `motivoDaRecusa`). Sai do recurso que tem.
+      motivoRecusa: await this.motivoDaRecusa(
+        providerChargeId,
+        opcoes?.providerInstructionId ?? null,
+        status,
+      ),
     };
+  }
+
+  /**
+   * Motivo da recusa — lido da INSTRUÇÃO DE PAGAMENTO, que é o recurso que o
+   * possui. Fecha o débito D35.
+   *
+   * ## Por que não é lido da cobrança
+   *
+   * A versão anterior lia `refusalReason`, `failureReason` e
+   * `pixTransaction.failureReason` do corpo de `GET /payments/{id}`. Medido
+   * contra o OpenAPI do Asaas: o `PaymentGetResponseDTO` **não declara nenhum
+   * dos três**, e `pixTransaction` é `string` (o id da transação), não objeto —
+   * o terceiro fallback não tinha nem onde procurar. Não era leitura defensiva:
+   * era vazia por construção, e em produção `motivoRecusa` seria `null` sempre,
+   * com o teste passando porque o dublê devolvia o literal esperado.
+   *
+   * `PixAutomaticRecurringPaymentInstructionGetResponseDTO` declara
+   * `refusalReason` (string, descrição: "Reason why the payment instruction was
+   * refused"). É esse o dono do campo.
+   *
+   * ## Dois caminhos, um destino
+   *
+   * 1. **Com o id da instrução** (veio no evento, via `providerInstructionId`):
+   *    `GET /pix/automatic/paymentInstructions/{id}`. Uma chamada, sem
+   *    ambiguidade.
+   * 2. **Sem ele** — é o caso da varredura de pendentes, que recebe só o id da
+   *    cobrança: `GET /pix/automatic/paymentInstructions?paymentId=…&status=REFUSED`.
+   *    Não é um segundo mecanismo, é o mesmo recurso pelo índice que o Asaas
+   *    oferece. Sem este caminho, o gêmeo do webhook (`reprocessarEventosPendentes`)
+   *    ficaria permanentemente sem motivo.
+   *
+   * ## Quando NÃO busca
+   *
+   * Cobrança paga ou estornada não tem recusa para explicar, e cobrança
+   * pendente sem instrução no evento também não (é o `PAYMENT_CREATED` de
+   * sempre). Sem essas duas guardas, todo evento de cobrança do dia a dia
+   * pagaria uma chamada HTTP extra para receber `null`.
+   *
+   * ## Falha na busca degrada para "sem motivo", e grita
+   *
+   * **Escolha deliberada: nunca lança.** O motivo é ENRIQUECIMENTO — quem
+   * decide o destino do ciclo é o `status` da cobrança, que já veio. Deixar uma
+   * falha aqui derrubar `consultarCobranca` faria a conciliação inteira falhar
+   * por causa do campo acessório: o ciclo não cairia em `falhou`, o evento
+   * voltaria para a fila e a clínica ficaria em `aguardando_pagamento` — trocar
+   * um motivo ausente por uma cobrança não conciliada é o pior negócio possível
+   * (mesmo raciocínio de `brCodeDe`).
+   *
+   * O que NÃO se faz é engolir em silêncio: 404/4xx aqui significa contrato
+   * quebrado (id que não resolve, endpoint mudado), e vai para o log com a tag
+   * fixa `[billing-recusa]` — a mesma que `conciliarPagamentoDeCiclo` usa, para
+   * que um grep só traga as duas metades.
+   *
+   * ## O retorno é `string`, e continua sendo
+   *
+   * O catálogo de motivos é ABERTO: o OpenAPI declara `refusalReason` sem
+   * `enum`, e a doc de Motivos de Recusa lista ~24 códigos avisando que a lista
+   * cresce sem versionar. O adapter repassa o código bruto e não interpreta;
+   * qualquer classificação futura precisa de ramo para o desconhecido.
+   */
+  private async motivoDaRecusa(
+    providerChargeId: string,
+    providerInstructionId: string | null,
+    status: StatusCobranca,
+  ): Promise<string | null> {
+    if (status === "paga" || status === "estornada") return null;
+    if (!providerInstructionId && status !== "recusada") return null;
+
+    try {
+      const instrucao = providerInstructionId
+        ? comoRegistro(
+            await chamar(
+              "GET",
+              `/pix/automatic/paymentInstructions/${encodeURIComponent(providerInstructionId)}`,
+            ),
+          )
+        : await this.instrucaoRecusadaDaCobranca(providerChargeId);
+
+      return comoTexto(instrucao.refusalReason);
+    } catch (e) {
+      console.warn("[billing-recusa] falha ao ler a instrução de pagamento", {
+        providerChargeId,
+        providerInstructionId,
+        err: e instanceof Error ? e.message : String(e),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * A instrução recusada de uma cobrança, quando só se tem o id da cobrança.
+   *
+   * `status=REFUSED` no filtro é o que evita ler a instrução errada: uma mesma
+   * cobrança pode ter VÁRIAS instruções (a política de retentativa em vigor é
+   * `ALLOW_THREE_IN_SEVEN_DAYS`), e as agendadas não têm motivo nenhum. Sem o
+   * filtro, a primeira da lista poderia ser uma `SCHEDULED` e o motivo voltaria
+   * `null` com a recusa existindo ao lado.
+   *
+   * Lista vazia devolve `{}` — "nenhuma instrução recusada" é resposta válida,
+   * não erro.
+   */
+  private async instrucaoRecusadaDaCobranca(
+    providerChargeId: string,
+  ): Promise<Record<string, unknown>> {
+    const resposta = comoRegistro(
+      await chamar(
+        "GET",
+        `/pix/automatic/paymentInstructions?paymentId=${encodeURIComponent(providerChargeId)}&status=REFUSED`,
+      ),
+    );
+    const lista = Array.isArray(resposta.data) ? resposta.data : [];
+    return comoRegistro(lista[0]);
   }
 
   verificarAssinaturaWebhook(input: EntradaVerificacaoWebhook): boolean {

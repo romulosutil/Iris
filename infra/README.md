@@ -1917,3 +1917,329 @@ SELECT id, status, provider_charge_id, erro
 | `ERRO: column "criado_em" does not exist`     | Rodou a versão antiga da query (ver aviso no Passo 3). Use `processado_em`.                                                                                                          |
 | Zero linhas                                   | Ver "Se a consulta devolver zero linhas" no Passo 3 — não é falha da query.                                                                                                          |
 | JSON cortado/ilegível no terminal             | Terminal pequeno demais para o `jsonb_pretty`. Redimensione a janela do Console e rode de novo, ou rode `\x` antes do `SELECT` para o modo expandido do psql (uma coluna por linha). |
+
+### Runbook — sessão de medição no sandbox do Asaas (#321)
+
+A #321 existia porque sete afirmações da linha de billing do Pix Automático
+vinham de leitura de documentação, não de medição — e duas delas se
+contradiziam entre páginas do próprio Asaas. Esta seção registra a sessão que
+mediu o que dava para medir, e nomeia com todas as letras o que **não** deu.
+
+**Quando:** 15/08/2026, 11:36–11:47 (UTC−3) — um **sábado**, o que importa para
+as medições de fim de semana abaixo.
+**Contra quê:** `https://api-sandbox.asaas.com/v3` (sandbox), com chave de
+**homologação** (prefixo `$aact_hmlg_`). A chave nunca aparece neste arquivo,
+nem parcialmente, nem em URL, nem em log commitado. Produção não foi tocada.
+**Guarda-corpo:** o script de medição aborta se `ASAAS_BASE_URL` não contiver
+`sandbox` **ou** se a chave não começar com `$aact_hmlg_`. O guard passou nas
+três execuções.
+**Objetos criados no sandbox:** um `customer` de teste
+(`cus_000008723016`), três autorizações de Pix Automático
+(`f9a60bba-…` com `minLimitValue`, `1d8580c4-…` com o campo inventado
+`maxLimitValue`, `2daa4bfc-…` com `retryPolicy` permissiva) e seis cobranças
+PIX avulsas. As duas transferências pendentes geradas nas sondagens foram
+canceladas (`DELETE /transfers/{id}/cancel` → `CANCELLED`) para não deixar
+lixo. Os logs brutos das 44 chamadas (fases 1 e 2) ficaram fora do repositório,
+de propósito: carregam payloads de QR e identificadores de sandbox.
+
+---
+
+#### ⚠️ Bloqueio estrutural — 4 das 7 medições morrem aqui
+
+**Não é possível ativar uma autorização de Pix Automático no sandbox do Asaas
+por API.** Isso não é opinião nem tentativa frustrada de uma via só; é a cadeia
+inteira, medida passo a passo:
+
+1. A autorização nasce `status: "CREATED"`. Só vira `ACTIVE` depois que o
+   **QR imediato** dela é liquidado.
+2. O único simulador de pagamento de QR do sandbox é `POST /pix/qrCodes/pay`,
+   e ele debita **do saldo da própria conta sandbox**. Com
+   `GET /finance/balance` = `{"balance":0}`, a primeira tentativa devolveu
+   `400 {"code":"invalid_action","description":"Saldo insuficiente para
+realizar a operação."}`.
+3. Gerei saldo pelo caminho documentado — `POST /sandbox/payment/{id}/confirm`
+   em quatro cobranças — e o saldo passou a `{"balance":118.04}`.
+4. Com saldo, `POST /pix/qrCodes/pay` devolveu **HTTP 200**, mas a transação
+   parou em `status: "AWAITING_CRITICAL_ACTION_AUTHORIZATION"`, com a
+   transferência em `"authorized": false`. O pagamento **não é executado**.
+5. A liberação de "ação crítica" **não tem endpoint na API**. Sondado:
+   `POST /transfers/{id}/authorize` → **404**; token de sandbox `000000` no
+   header `asaas-critical-action-token` → transação segue
+   `AWAITING_CRITICAL_ACTION_AUTHORIZATION`; o mesmo token no corpo
+   (`criticalActionToken`) → idem. E os **únicos três endpoints exclusivos de
+   sandbox** que existem são `/sandbox/myAccount/approve`,
+   `/sandbox/payment/{id}/confirm` e `/sandbox/payment/{id}/overdue` —
+   nenhum deles ativa autorização.
+
+**Consequência medida:** todo `POST /payments` que carregue
+`pixAutomaticAuthorizationId` devolve, sem exceção:
+
+```json
+{
+  "errors": [
+    {
+      "code": "invalid_object",
+      "description": "A autorização deve estar ativa para criar uma instrução de pagamento automático."
+    }
+  ]
+}
+```
+
+Esse 400 dispara **antes** de qualquer validação de janela, de data ou de
+valor. É por isso que as medições 1 (segunda metade), 4, 5b e 7b terminam em
+**não medido**, e não em "recusado".
+
+> **A consequência que atravessa o roadmap:** nenhuma medição do **trilho
+> automático** (o débito headless, sem intervenção do pagador) é possível no
+> sandbox do Asaas. Não existe atalho, endpoint escondido ou header mágico —
+> a jornada de autorização acontece dentro do app do banco do pagador, e o
+> sandbox não a simula. O **único** caminho para medir esse trilho é o ensaio
+> com **clínica de teste em produção**, com um pagador real autorizando de
+> verdade. Qualquer plano que dependa de "medir isso no sandbox depois" está
+> planejando algo impossível.
+
+---
+
+#### Medição 1 — `minLimitValue` sem `value` (recorrência de valor variável)
+
+**Pergunta:** `POST /pix/automatic/authorizations` com `minLimitValue` e
+**sem** `value` é aceito? A recorrência segue aceitando cobranças de valores
+diferentes?
+
+**Request** — `POST /pix/automatic/authorizations` (chave no header,
+**REDIGIDA**):
+
+```json
+{
+  "frequency": "MONTHLY",
+  "contractId": "M321msuhbqnsA",
+  "startDate": "2026-08-15",
+  "customerId": "cus_000008723016",
+  "description": "Iris — medicao 321 minLimit",
+  "paymentCreationMode": "MANUAL",
+  "retryPolicy": "NOT_ALLOWED",
+  "minLimitValue": 39,
+  "immediateQrCode": { "expirationSeconds": 86400, "originalValue": 0.01 }
+}
+```
+
+**Resposta — HTTP 200.** Essencial do corpo:
+`"id":"f9a60bba-0c2c-4efd-ac45-6231e0561837"`, `"minLimitValue":39`,
+`"value":null`, `"status":"CREATED"`,
+`"endToEndIdentifier":"RN1954055020260815OTtkwols6iR"`,
+`"immediateQrCode":{"conciliationIdentifier":"RSUTILCORREALTDA0000000001670476ASA","expirationDate":"2026-08-16 11:36:50"}`.
+
+Segunda metade (`POST /payments` com `value: 39.00` e depois `value: 57.00`
+contra a mesma autorização): **HTTP 400** idêntico nas duas, o erro de
+autorização inativa. `GET` na autorização no mesmo instante confirmou
+`"status":"CREATED"`.
+
+**Conclusão:** `minLimitValue: 39.00` sem `value` é **aceito e persistido**,
+com `value: null` — o desenho de valor variável passa na criação. Que a
+recorrência de fato aceite duas cobranças de valores diferentes segue
+**não medido** — motivo: a autorização nunca saiu de `CREATED` (bloqueio
+estrutural), e a API rejeita por estado antes de olhar o `value`.
+
+De tabela: `immediateQrCode.originalValue: 0.01` foi **aceito**, ainda que
+`POST /payments` recuse qualquer valor abaixo de R$ 5,00 (Medição 6) — o piso
+de R$ 5,00 **não** se aplica ao QR imediato da autorização.
+
+#### Medição 2 — o pagador consegue autorizar sem preencher teto?
+
+**Pergunta:** com `minLimitValue` definido, o pagador conclui a autorização
+**sem** definir valor máximo?
+
+**Request/resposta (a):** `GET /pix/automatic/authorizations/f9a60bba-…` —
+**HTTP 200**. O recurso **não tem campo nenhum de teto do pagador**. O único
+campo de limite é `minLimitValue`, e ele é o **mínimo que o recebedor exige**,
+não o teto que o pagador define.
+
+**Request (b):** `POST /pix/automatic/authorizations` com
+`"maxLimitValue": 100.00` — campo **inventado** por mim — junto de
+`"minLimitValue": 39`.
+
+**Resposta — HTTP 200**, autorização `1d8580c4-c994-44c3-ade1-b709fae5010b`
+criada normalmente, e `maxLimitValue` **não volta** no corpo.
+
+**Conclusão:** medido que a API **não expõe nem aceita** teto do pagador. Se o
+pagador consegue concluir sem preencher teto segue **não medido** — motivo: o
+preenchimento acontece **dentro do app do banco do pagador**, e a única ponte
+para esse passo no sandbox é a liquidação do QR imediato, que trava no
+bloqueio estrutural. Não existe endpoint de simulação de jornada do pagador.
+Isso confirma o achado da #286: **a copy preventiva é a única barreira**,
+porque não há nada mensurável por API.
+
+#### Medição 3 — `retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS"`
+
+**Pergunta:** a política permissiva de retentativa é aceita na criação?
+
+**Request** — `POST /pix/automatic/authorizations`, corpo igual ao da Medição 1
+trocando `"retryPolicy": "NOT_ALLOWED"` por
+`"retryPolicy": "ALLOW_THREE_IN_SEVEN_DAYS"` e `contractId` para
+`M321msuhbqnsR`.
+
+**Resposta — HTTP 200**, autorização `2daa4bfc-ab15-4e72-942a-123106cc893b`,
+com **eco na resposta**: `"retryPolicy":"ALLOW_THREE_IN_SEVEN_DAYS"`.
+
+**Conclusão:** **aceito e persistido**, grafia exata confirmada. O código hoje
+manda `NOT_ALLOWED` (`src/lib/billing/provider/asaas.ts:523`) — isso é
+**decisão de produto, não limitação da API**.
+
+#### Medição 4 — janela de comando (2 dias corridos atravessando fim de semana)
+
+**Pergunta:** antecedência de 2 dias **corridos** cruzando o fim de semana
+passa, ou volta `RECEIVED_TOO_LATE`? (a contradição: o comentário do adapter,
+`asaas.ts:46`, afirma "2 a 10 dias **úteis**"; a página "Motivos de Recusa" e o
+guia BACEN falam em dias, sem qualificar.)
+
+**Request** — `POST /payments` com `pixAutomaticAuthorizationId`, quatro
+cenários mudando só `dueDate`: `2026-08-17` (segunda, +2 corridos atravessando
+o domingo, zero dias úteis de folga), `2026-08-26` (quarta, ~8 dias úteis à
+frente — **controle dentro da janela**), `2026-08-15` (hoje, 0 dias) e
+`2026-09-14` (30 dias corridos, muito acima do teto).
+
+**Resposta — HTTP 400 nos quatro**, corpo idêntico: o erro de autorização
+inativa. Não veio `RECEIVED_TOO_LATE` nem `RECEIVED_TOO_EARLY`.
+
+**Conclusão: não medido** — motivo: a validação de autorização inativa dispara
+antes da validação de janela. E há prova de que não dá para inferir nada da
+resposta: **o controle dentro da janela recebeu exatamente o mesmo 400** que os
+cenários fora dela. A resposta não carrega informação de janela nenhuma. A
+contradição "dias úteis × dias corridos" continua **aberta** e só se resolve no
+ensaio em produção.
+
+#### Medição 5 — `dueDate` em sábado, domingo e feriado nacional
+
+**Pergunta:** o Asaas aceita vencimento em dia não útil, ou empurra a data?
+
+Rodei os três cenários nos **dois trilhos**, justamente para separar "o Asaas
+recusa a data" de "o Asaas recusa a autorização".
+
+**(a) Trilho AVULSO** — `POST /payments` **sem** `pixAutomaticAuthorizationId`,
+`value: 39`:
+
+| Cenário                     | `dueDate` enviado | Status       | `dueDate` devolvido | `originalDueDate` |
+| --------------------------- | ----------------- | ------------ | ------------------- | ----------------- |
+| Sábado                      | `2026-08-22`      | **HTTP 200** | `2026-08-22`        | `2026-08-22`      |
+| Domingo                     | `2026-08-23`      | **HTTP 200** | `2026-08-23`        | `2026-08-23`      |
+| Feriado (Independência, 2ª) | `2026-09-07`      | **HTTP 200** | `2026-09-07`        | `2026-09-07`      |
+
+Ids criados: `pay_0b5s4mgi6fkqnc2f`, `pay_90rkdmahfkccmcbw`,
+`pay_eub5ppxej3t2rjnw`. Todos com `"status":"PENDING"`, `"value":39.0`,
+`"netValue":38.01`.
+
+**(b) Trilho AUTOMÁTICO** — mesmos três `dueDate`, com
+`pixAutomaticAuthorizationId`: **HTTP 400** idêntico nos três (autorização
+inativa).
+
+**Conclusão:** no trilho **avulso**, sábado, domingo e feriado nacional são
+os três **aceitos**, com a data devolvida **igual à enviada** — o Asaas **não
+empurra** o vencimento para o próximo dia útil na criação. No trilho
+**automático**: **não medido**, mesmo motivo da Medição 4.
+
+#### Medição 6 — menor `value` aceito num `POST /payments` PIX avulso
+
+**Pergunta:** existe piso de valor? Qual?
+
+**Request** — sondagem crescente, mesmo `customer`, mesmo
+`dueDate: 2026-08-20`, `billingType: "PIX"`, sem `pixAutomaticAuthorizationId`.
+
+| `value` | Status       | Corpo (essencial)                                                                                                      |
+| ------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `0.01`  | **HTTP 400** | `invalid_object` — "O valor da cobrança (R$ 0,01) menos o valor do desconto (R$ 0,00) não pode ser menor que R$ 5,00." |
+| `0.50`  | **HTTP 400** | idem, com R$ 0,50                                                                                                      |
+| `1.00`  | **HTTP 400** | idem, com R$ 1,00                                                                                                      |
+| `3.00`  | **HTTP 400** | idem, com R$ 3,00                                                                                                      |
+| `5.00`  | **HTTP 200** | `pay_ki9rpdu6kcmri5af`, `"value":5.0`, `"netValue":4.01`, `"status":"PENDING"`                                         |
+
+**Conclusão:** o piso real é **exatamente R$ 5,00**, imposto pela API com
+mensagem nomeada. `PISO_COBRANCA_CENTAVOS = 500`
+(`src/lib/billing/debito.ts:41-55`) **está correto e se mantém** — o que muda é
+o comentário acima dele, que se declara "escolha conservadora, NÃO medição" e
+pede exatamente esta verificação (#311).
+
+#### Medição 7a — o discriminador da cobrança de ativação
+
+**Pergunta:** o que a cobrança de ativação (QR imediato de R$ 0,01) traz em
+`externalReference`?
+
+**Request/resposta:** `GET /payments?customer=cus_000008723016&limit=100` —
+**HTTP 200**, `"totalCount":4`, e as quatro são exatamente as cobranças que
+**eu** criei. Isso **depois** de já existirem **três** autorizações criadas,
+todas com `immediateQrCode.originalValue: 0.01`. **Nenhuma cobrança de
+R$ 0,01.**
+
+Somado ao schema da criação — o `immediateQrCode` do
+`POST /pix/automatic/authorizations` aceita só `pixKey`, `expirationSeconds`,
+`originalValue` e `description`; `externalReference` existe no nível do
+`customer` e do `payment`, **não** do QR de ativação.
+
+**Conclusão:** medido que o discriminador **não pode ser
+`externalReference`** — não há onde carimbá-lo, e a cobrança de ativação nem
+existe até o QR ser pago (bate com o fluxo documentado
+`AUTHORIZATION_CREATED → PAYMENT_CREATED → PAYMENT_RECEIVED →
+AUTHORIZATION_ACTIVATED`). Os candidatos disponíveis **antes** do pagamento,
+únicos por autorização e devolvidos na criação, são
+`immediateQrCode.conciliationIdentifier`
+(`"RSUTILCORREALTDA0000000001670476ASA"`) e o `endToEndIdentifier` da
+autorização (`"RN1954055020260815OTtkwols6iR"`). Qual campo a cobrança de
+ativação de fato traz segue **não medido** — motivo: esse `payment` só nasce
+quando o QR imediato é liquidado.
+
+#### Medição 7b — em qual campo pousa o código de recusa
+
+**Pergunta:** em que campo o Iris lê o motivo de uma recusa de débito?
+
+**Request/resposta (a):** `GET /pix/automatic/paymentInstructions?limit=20` —
+**HTTP 200**, `{"object":"list","hasMore":false,"totalCount":0,…,"data":[]}`.
+O endpoint **existe e responde**. Os paths chutados na fase 1 —
+`/pix/automatic/payments` e `/pix/automatic/recurring/payments` — deram
+**404** nos dois. O path certo é `paymentInstructions`. O schema de
+`GET /v3/pix/automatic/paymentInstructions/{id}` traz `id`, `paymentId`,
+`status` (`AWAITING_REQUEST` | `SCHEDULED` | `DONE` | `CANCELLED` |
+`REFUSED`), **`refusalReason`**, `purpose`, `retryAttempt`, `authorization.{id,
+endToEndIdentifier, customerId}`, `dueDate` e `endToEndIdentifier`.
+
+**Request/resposta (b):** forcei um vencimento com
+`POST /sandbox/payment/pay_2qwnb3r9yd0l553n/overdue` — **HTTP 200**,
+`"status":"OVERDUE"`, `"pixTransaction":null`. `GET /payments/{id}` devolve o
+mesmo. **Nenhum** `refusalReason`, `failureReason` ou
+`pixTransaction.failureReason` no recurso `payment`.
+
+**Conclusão:** o código de recusa vive em `paymentInstruction.refusalReason`,
+lido por `GET /pix/automatic/paymentInstructions/{id}`. O recurso `payment`
+**não tem** campo de recusa nenhum — o que torna errada a leitura defensiva de
+`consultarCobranca` (`src/lib/billing/provider/asaas.ts:799`, bloco de fallback
+em `818-821`), que procura em `resposta.refusalReason`,
+`resposta.failureReason` e `pixTransaction.failureReason`. Existe ainda um
+terceiro `refusalReason`, o da transação Pix (`GET /pix/transactions/{id}`),
+distinto do da instrução — três lugares com nomes parecidos.
+
+Em qual campo do **payload de webhook** o código chega segue **não medido** —
+motivo duplo: (a) nenhuma instrução de pagamento chegou a existir, porque a
+autorização nunca ficou ativa; e (b) não há endpoint público de teste
+recebendo os webhooks deste sandbox, então nenhum payload de
+`…_INSTRUCTION_REFUSED` foi observado.
+
+---
+
+#### Armadilhas medidas — leia antes de medir qualquer coisa no Asaas
+
+1. **O Asaas aceita e descarta campo desconhecido em silêncio.** O
+   `maxLimitValue` inventado passou com **HTTP 200** e simplesmente **não
+   voltou** na resposta. A API não valida corpo estrito. Portanto: **o eco na
+   resposta é o único teste de que um campo existe**. Status 200 não prova
+   nada. (Compare com o `retryPolicy` da Medição 3, que voltou ecoado — esse
+   existe de verdade.)
+2. **Forçar vencimento REESCREVE o `dueDate`.** `POST
+/sandbox/payment/{id}/overdue` mudou `dueDate` de `2026-08-20` para
+   `2026-08-14` e preservou `originalDueDate: "2026-08-20"`. Quem comparar
+   `dueDate` com a data planejada **depois** de um vencimento vai ler a data
+   errada — o campo estável é `originalDueDate`.
+3. **O piso de R$ 5,00 é sobre o valor LÍQUIDO, não sobre o `value`.** A
+   mensagem crua entrega a regra de graça: `value − discount >= 5,00`. Um
+   `discount` configurado na cobrança pode reprovar um `value` que sozinho
+   passaria.
+4. **A taxa Pix do sandbox é R$ 0,99, fixa.** Numa cobrança de R$ 5,00 o
+   `netValue` volta `4.01` — a taxa come ~20% do valor. Cobrança pequena é
+   cara em termos relativos; isso é insumo de produto, não detalhe de infra.

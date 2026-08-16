@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { executarFechamento, montarRequisicao } from "./fechamento-ciclo-billing.mjs";
+import {
+  executarFechamento,
+  montarRequisicao,
+  resumoDoCorpo,
+} from "./fechamento-ciclo-billing.mjs";
 
 const URL_ALVO = "https://irisclinica.ia.br/api/internal/billing/fechar-ciclos";
 const TOKEN = "token-secreto-de-teste-nao-deve-vazar";
@@ -28,10 +32,16 @@ describe("fechamento-ciclo-billing — montarRequisicao", () => {
   });
 
   it("o body reflete o dryRun recebido", () => {
-    expect(JSON.parse(montarRequisicao(URL_ALVO, TOKEN, { dryRun: true }).init.body)).toEqual({
+    expect(
+      JSON.parse(montarRequisicao(URL_ALVO, TOKEN, { dryRun: true }).init.body),
+    ).toEqual({
       dryRun: true,
     });
-    expect(JSON.parse(montarRequisicao(URL_ALVO, TOKEN, { dryRun: false }).init.body)).toEqual({
+    expect(
+      JSON.parse(
+        montarRequisicao(URL_ALVO, TOKEN, { dryRun: false }).init.body,
+      ),
+    ).toEqual({
       dryRun: false,
     });
   });
@@ -41,7 +51,10 @@ describe("fechamento-ciclo-billing — executarFechamento", () => {
   it("200: ok true, status e corpo propagados", async () => {
     const fetchImpl = fetchDe({ status: 200, corpo: '{"ciclosFechados":3}' });
 
-    const res = await executarFechamento(fetchImpl, { url: URL_ALVO, token: TOKEN });
+    const res = await executarFechamento(fetchImpl, {
+      url: URL_ALVO,
+      token: TOKEN,
+    });
 
     expect(res.ok).toBe(true);
     expect(res.status).toBe(200);
@@ -52,7 +65,11 @@ describe("fechamento-ciclo-billing — executarFechamento", () => {
   it("passa method/authorization/body reais ao fetch (não só monta em memória)", async () => {
     const fetchImpl = fetchDe();
 
-    await executarFechamento(fetchImpl, { url: URL_ALVO, token: TOKEN, dryRun: true });
+    await executarFechamento(fetchImpl, {
+      url: URL_ALVO,
+      token: TOKEN,
+      dryRun: true,
+    });
 
     const [alvo, init] = fetchImpl.mock.calls[0];
     expect(alvo).toBe(URL_ALVO);
@@ -65,9 +82,15 @@ describe("fechamento-ciclo-billing — executarFechamento", () => {
   // O corpo REAL tem que chegar ao operador. Sem isso, um 500 com a causa do
   // lado do Next vira "falhou" e nada mais — diagnóstico caro por omissão.
   it("500 com corpo de texto: ok false e o corpo real aparece no resultado", async () => {
-    const fetchImpl = fetchDe({ status: 500, corpo: "erro: conexao com asaas recusada" });
+    const fetchImpl = fetchDe({
+      status: 500,
+      corpo: "erro: conexao com asaas recusada",
+    });
 
-    const res = await executarFechamento(fetchImpl, { url: URL_ALVO, token: TOKEN });
+    const res = await executarFechamento(fetchImpl, {
+      url: URL_ALVO,
+      token: TOKEN,
+    });
 
     expect(res.ok).toBe(false);
     expect(res.status).toBe(500);
@@ -81,7 +104,10 @@ describe("fechamento-ciclo-billing — executarFechamento", () => {
       throw new TypeError("fetch failed: ECONNREFUSED");
     });
 
-    const res = await executarFechamento(fetchImpl, { url: URL_ALVO, token: TOKEN });
+    const res = await executarFechamento(fetchImpl, {
+      url: URL_ALVO,
+      token: TOKEN,
+    });
 
     expect(res.ok).toBe(false);
     expect(res.falha).toBe("rede");
@@ -116,8 +142,75 @@ describe("fechamento-ciclo-billing — executarFechamento", () => {
         throw new TypeError("fetch failed");
       }),
     ]) {
-      const res = await executarFechamento(fetchImpl, { url: URL_ALVO, token: TOKEN });
+      const res = await executarFechamento(fetchImpl, {
+        url: URL_ALVO,
+        token: TOKEN,
+      });
       expect(JSON.stringify(res)).not.toContain(TOKEN);
     }
+  });
+});
+
+describe("resumoDoCorpo", () => {
+  // O que este bloco protege: numa falha 500 cujo faturamento JÁ rodou, a
+  // reação certa NÃO é reexecutar o job (isso reemitiria cobrança). Quem
+  // separa os dois casos no log é `cobrancasEmitidas` — se ele voltar `null`
+  // por um corpo mal lido, o operador perde exatamente esse sinal.
+  it("levanta as etapas abortadas e o que já foi cobrado (D38)", () => {
+    const corpo = JSON.stringify({
+      ok: false,
+      carenciaAbortada: "timeout ao revogar vínculo",
+      backstopAbortado: null,
+      ciclosProcessados: 2,
+      resultados: [
+        { clinicId: "a", cobrancaEmitida: true },
+        { clinicId: "b", cobrancaEmitida: false },
+      ],
+    });
+
+    expect(resumoDoCorpo(corpo)).toEqual({
+      carenciaAbortada: "timeout ao revogar vínculo",
+      backstopAbortado: null,
+      ciclosProcessados: 2,
+      // Conta as EMITIDAS, não o tamanho de `resultados`: um ciclo apurado sem
+      // cobrança não é ato irreversível e não pode inflar o aviso.
+      cobrancasEmitidas: 1,
+    });
+  });
+
+  it("devolve tudo `null` sem lançar quando o corpo não é JSON", () => {
+    // Um HTML de proxy ou um corpo truncado não pode derrubar o log: perder a
+    // linha inteira seria pior que perder os campos levantados.
+    for (const corpo of [
+      "<html>502 Bad Gateway</html>",
+      "",
+      "null",
+      "[1,2]",
+      undefined,
+    ]) {
+      expect(resumoDoCorpo(corpo)).toEqual({
+        carenciaAbortada: null,
+        backstopAbortado: null,
+        ciclosProcessados: null,
+        cobrancasEmitidas: null,
+      });
+    }
+  });
+
+  it("caminho feliz: nenhuma etapa abortada", () => {
+    const corpo = JSON.stringify({
+      ok: true,
+      carenciaAbortada: null,
+      backstopAbortado: null,
+      ciclosProcessados: 0,
+      resultados: [],
+    });
+
+    expect(resumoDoCorpo(corpo)).toEqual({
+      carenciaAbortada: null,
+      backstopAbortado: null,
+      ciclosProcessados: 0,
+      cobrancasEmitidas: 0,
+    });
   });
 });

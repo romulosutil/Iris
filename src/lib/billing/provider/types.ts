@@ -181,11 +181,49 @@ export interface NovaCobrancaDeCiclo {
   vencimento: Date;
 }
 
+/**
+ * Cobrança avulsa contra o CLIENTE, sem passar por vínculo de recorrência
+ * (#290 — débito de reativação).
+ *
+ * Existe separada de `NovaCobrancaDeCiclo` porque as duas cobram por trilhos
+ * incompatíveis, e a diferença não é cosmética: a cobrança de ciclo debita a
+ * autorização de Pix Automático (`vinculoId`), e no cancelamento essa
+ * autorização acabou de ser REVOGADA — é literalmente o ato que produziu o
+ * cancelamento. Reaproveitar `NovaCobrancaDeCiclo` aqui mandaria o adapter
+ * consultar uma autorização morta e anexar `pixAutomaticAuthorizationId` a uma
+ * cobrança que ninguém consegue pagar por débito automático.
+ *
+ * O que sobra é Pix comum: QR que a pessoa lê no app do banco e paga à mão.
+ */
+export interface NovaCobrancaAvulsa {
+  /** Cliente no gateway (`subscription.provider_customer_id`). */
+  clienteId: string;
+  valorCentavos: number;
+  /**
+   * `debito:${cycleIdAncora}`. Mesmo papel do `cycle:` da cobrança de ciclo:
+   * reconciliar o webhook com a linha certa, e servir de chave de idempotência
+   * na reemissão.
+   */
+  referenciaExterna: string;
+  descricao: string;
+  vencimento: Date;
+}
+
 export interface CobrancaEmitida {
   providerChargeId: string;
   status: StatusCobranca;
   /** Presente quando o pagamento exige ação do usuário (ex.: Pix). */
   urlPagamento?: string;
+  /**
+   * BR Code (copia-e-cola) do Pix, quando o gateway o fornece. Só a cobrança
+   * AVULSA produz isto: a cobrança de ciclo é debitada automaticamente e não
+   * tem ninguém para ler QR nenhum.
+   *
+   * `undefined` não é erro — é o caso em que a busca do QR falhou ou o trilho
+   * não tem copia-e-cola. A cobrança existe do mesmo jeito, e `urlPagamento` é
+   * a saída de contingência.
+   */
+  pixCopiaECola?: string;
 }
 
 /** Tipos de evento que o Iris sabe tratar. Tudo mais é `desconhecido`. */
@@ -214,6 +252,20 @@ export interface EventoWebhookNormalizado {
   providerSubscriptionId: string | null;
   /** Id da COBRANÇA de ciclo, quando o evento é de pagamento avulso. */
   providerChargeId: string | null;
+  /**
+   * Id da INSTRUÇÃO de débito, quando o gateway modela o débito automático como
+   * um recurso separado da cobrança (é o caso do Pix Automático).
+   *
+   * Não é redundante com `providerChargeId`, e a diferença é o débito D35: o
+   * motivo da recusa **não mora na cobrança** — mora na instrução. O evento traz
+   * os dois ids, o normalizador descartava este, e a consulta do motivo ficava
+   * sem o único identificador que a torna possível.
+   *
+   * `null` quando o evento não é de instrução (cobrança comum, autorização) ou
+   * quando o gateway não tem essa entidade. Quem consome trata como "sem
+   * instrução para consultar", nunca como erro.
+   */
+  providerInstructionId: string | null;
   referenciaExterna: string | null;
   ocorridoEm: Date | null;
   bruto: unknown;
@@ -265,15 +317,47 @@ export interface BillingProvider {
    */
   emitirCobrancaDeCiclo(dados: NovaCobrancaDeCiclo): Promise<CobrancaEmitida>;
 
-  consultarCobranca(providerChargeId: string): Promise<{
+  /**
+   * Emite cobrança avulsa contra o CLIENTE, fora de qualquer vínculo de
+   * recorrência (#290). É o trilho do débito de reativação: a autorização de
+   * Pix Automático foi revogada, então só resta Pix comum, pago à mão.
+   *
+   * Obrigatório na porta, e não opcional como `atualizarCliente`: um gateway
+   * que não saiba cobrar avulso não consegue implementar o gate de reativação,
+   * e degradar isso em silêncio abriria a conta sem cobrar o débito.
+   */
+  emitirCobrancaAvulsa(dados: NovaCobrancaAvulsa): Promise<CobrancaEmitida>;
+
+  consultarCobranca(
+    providerChargeId: string,
+    /**
+     * Contexto opcional vindo do evento. Existe porque em alguns trilhos o
+     * motivo da recusa **não é um campo da cobrança**: é de outro recurso, que
+     * só o evento sabe identificar (`providerInstructionId`). Sem isto o
+     * adapter não tem como buscá-lo — foi exatamente o D35, em que três campos
+     * eram lidos de um recurso que não os tem e `motivoRecusa` era `null` por
+     * construção.
+     *
+     * Opcional, e não obrigatório, porque a consulta continua válida sem ele:
+     * quem não tem o id perde o motivo, não a conciliação.
+     */
+    opcoes?: { providerInstructionId?: string | null },
+  ): Promise<{
     status: StatusCobranca;
     valorCentavos: number;
     /**
      * Motivo bruto da recusa, do jeito que o gateway mandou, ou `null` quando
-     * ele não informa. Medido em 13/08/2026 contra o Asaas: NENHUM campo de
-     * motivo apareceu no objeto `payment`, e as autorizações recusadas vieram
-     * com `cancellationReason: null`. Por isso `null` é o caso esperado, não a
-     * exceção — quem consome tem que ter um caminho para "não informado".
+     * ele não informa.
+     *
+     * **`string`, nunca uma union de literais.** O catálogo é aberto por
+     * contrato: o OpenAPI do Asaas declara `refusalReason` como `string` sem
+     * `enum`, e a doc avisa que a lista cresce sem versionar. Fechar o tipo aqui
+     * transformaria um código novo do gateway em erro de compilação num lado, e
+     * em `default` silencioso no outro. Classificação (se um dia houver) é
+     * decisão de camada acima, sempre com ramo para o desconhecido.
+     *
+     * `null` continua sendo caso esperado, não exceção: a instrução pode não
+     * existir, a busca pode falhar, e o trilho pode simplesmente não informar.
      */
     motivoRecusa: string | null;
   }>;

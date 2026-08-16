@@ -73,6 +73,23 @@ export const FAIXAS_PRECIFICACAO: readonly Faixa[] = [
 export const VALOR_PRIMEIRO_PACIENTE_CENTAVOS = 3900;
 
 /**
+ * Piso do teto (`minLimitValue`) enviado na criação da autorização de Pix
+ * Automático (#317). É o menor valor máximo que o pagador pode definir no app
+ * do banco — quem escolhe abaixo do preço de uma ficha ativa recusaria a
+ * primeira mensalidade que existe.
+ *
+ * Deriva da faixa marginal mais alta, não de `VALOR_PRIMEIRO_PACIENTE_CENTAVOS`
+ * (legado, fora de produção). É a mesma verdade — o preço de uma ficha — vinda
+ * da fonte que ainda é cobrada.
+ *
+ * Medido em 15/08/2026 (#321): a API **não expõe nem aceita** o teto escolhido
+ * pelo pagador; `minLimitValue` é a única alavanca do recebedor, e a copy da
+ * tela de ativação (#286) é a única barreira restante.
+ */
+export const PISO_TETO_AUTORIZACAO_CENTAVOS =
+  FAIXAS_PRECIFICACAO[0]!.valorCentavos;
+
+/**
  * Rejeita entrada inválida em vez de degradar para 0. Uma contagem de
  * fichas corrompida que vira "R$ 0,00" silenciosamente é uma fatura errada
  * emitida ao cliente — falha barulhenta é mais barata que receita perdida.
@@ -159,6 +176,81 @@ export function calcularMensalidadeCentavos(fichasAtivas: number): number {
  */
 export function calculateMonthlyFee(fichasAtivas: number): number {
   return calcularMensalidadeCentavos(fichasAtivas) / 100;
+}
+
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+/** Memorial do débito pro-rata: o valor gravado e como ele foi obtido. */
+export interface DebitoProRata {
+  /** Dias efetivamente usados do ciclo, com o dia iniciado contando cheio. */
+  diasUsados: number;
+  /** Duração do ciclo em dias, derivada do próprio `[inicio, fim)`. */
+  diasDoCiclo: number;
+  /** Quanto o ciclo custaria se tivesse ido até o fim. */
+  valorCheioCentavos: number;
+  /** O que fica devido: o cheio, proporcional aos dias usados. */
+  valorCentavos: number;
+}
+
+/**
+ * Débito do ciclo interrompido no meio pelo cancelamento (#287 P1 / #290).
+ *
+ * ```
+ * débito = valor_cheio_do_ciclo x (dias_usados / dias_do_ciclo)
+ * ```
+ *
+ * Três escolhas que o teste fixa, e que não são deriváveis da fórmula:
+ *
+ * - **O dia iniciado conta cheio** (`ceil`, com piso de 1). Cancelar três horas
+ *   depois de renovar não pode sair de graça: dia grátis é exatamente o que o
+ *   loop cancela-reativa-cancela da #290 procura.
+ * - **Centavos truncados** (`floor`). A divisão quase nunca é exata; quando
+ *   sobra fração de centavo, ela fica com a clínica. Arredondar para cima seria
+ *   cobrar por um serviço não prestado, e a diferença máxima é de R$ 0,01.
+ * - **A fração satura em 1.** Cancelamento observado depois do fim do ciclo
+ *   (job atrasado, reentrega tardia de webhook) paga o ciclo inteiro, nunca
+ *   mais que ele. E `encerradoEm` anterior ao início — relógio do gateway para
+ *   trás — cai no piso de 1 dia, em vez de virar crédito negativo.
+ *
+ * O denominador vem do `[inicio, fim)` do PRÓPRIO ciclo, e não de
+ * `subscription.ciclo_dias`: são o mesmo número enquanto o ciclo é aberto por
+ * `abrirCiclo`, mas uma clínica que teve `ciclo_dias` alterado no meio do ciclo
+ * vigente seria cobrada por uma régua que o ciclo dela nunca teve.
+ *
+ * @throws {RangeError} se o ciclo não tiver duração positiva, ou se
+ * `fichasAtivas` não for inteiro finito >= 0.
+ */
+export function apurarDebitoProRata(entrada: {
+  fichasAtivas: number;
+  inicio: Date;
+  fim: Date;
+  encerradoEm: Date;
+}): DebitoProRata {
+  const duracaoMs = entrada.fim.getTime() - entrada.inicio.getTime();
+  if (!Number.isFinite(duracaoMs) || duracaoMs <= 0) {
+    throw new RangeError(
+      "apurarDebitoProRata: ciclo sem duração positiva (`fim` precisa ser posterior a `inicio`)",
+    );
+  }
+
+  const usadosMs = entrada.encerradoEm.getTime() - entrada.inicio.getTime();
+  if (!Number.isFinite(usadosMs)) {
+    throw new RangeError("apurarDebitoProRata: `encerradoEm` inválido");
+  }
+
+  const diasDoCiclo = Math.max(1, Math.round(duracaoMs / MS_POR_DIA));
+  const diasUsados = Math.min(
+    diasDoCiclo,
+    Math.max(1, Math.ceil(usadosMs / MS_POR_DIA)),
+  );
+  const valorCheioCentavos = calcularMensalidadeCentavos(entrada.fichasAtivas);
+
+  return {
+    diasUsados,
+    diasDoCiclo,
+    valorCheioCentavos,
+    valorCentavos: Math.floor((valorCheioCentavos * diasUsados) / diasDoCiclo),
+  };
 }
 
 /**

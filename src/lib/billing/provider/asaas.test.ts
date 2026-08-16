@@ -247,6 +247,25 @@ describe("AsaasProvider", () => {
         "53da5204-8dd1-4cf4-9604-d134e1e6fe04",
       );
       expect(e.tipo).toBe("pagamento.recusado");
+      // ...e PRESERVA o id da instrução (D35). Ele não substitui o da cobrança
+      // — serve para outro recurso: é o único endereço do `refusalReason`.
+      // Descartá-lo (o estado até o D35) deixava `motivoRecusa` `null` por
+      // construção, sem nada no fluxo capaz de recuperá-lo depois.
+      expect(e.providerInstructionId).toBe(
+        "9b0b1a10-0000-4000-8000-000000000000",
+      );
+    });
+
+    it("evento de cobrança comum não inventa id de instrução", () => {
+      // `providerInstructionId` só existe quando o gateway modela a instrução.
+      // Cair no id da cobrança aqui faria a consulta do motivo bater em
+      // `/paymentInstructions/pay_…` e tomar 404 em toda recusa.
+      const e = new AsaasProvider().normalizarEvento({
+        id: "evt_sem_instrucao&1",
+        event: "PAYMENT_OVERDUE",
+        payment: { id: "pay_9", status: "OVERDUE" },
+      });
+      expect(e.providerInstructionId).toBeNull();
     });
 
     it.each([null, undefined, 42, "texto", {}, { event: "COISA_NOVA" }])(
@@ -332,11 +351,18 @@ describe("AsaasProvider", () => {
       // travaria o débito mensal no valor de hoje — a origem exata do
       // subfaturamento silencioso descrito em `types.ts`.
       expect(corpo).not.toHaveProperty("value");
-      expect(corpo).not.toHaveProperty("minLimitValue");
+      // #317: piso do teto que o pagador autoriza no app do banco. Literal de
+      // propósito (disciplina 2 do topo): 39 é o que sai NA REQUISIÇÃO. Derivar
+      // de `PISO_TETO_AUTORIZACAO_CENTAVOS` faria o teste seguir a constante em
+      // vez de vigiá-la. Medido em 15/08/2026 (#321): aceito com 200 e eco na
+      // resposta, sem `value` — a Jornada 3 de valor variável continua de pé.
+      expect(corpo.minLimitValue).toBe(39);
       // `SUBSCRIPTION` exigiria `value` fixo; `MANUAL` é o que permite variável.
       expect(corpo.paymentCreationMode).toBe("MANUAL");
-      // Retentativa é decisão de cobrança do Iris, não do gateway.
-      expect(corpo.retryPolicy).toBe("NOT_ALLOWED");
+      // #317: irreversível. O Asaas não permite habilitar retentativa depois da
+      // criação; autorização criada sem isto fica permanentemente sem direito a
+      // retentativa, e o conserto é novo QR + novo consentimento do cliente.
+      expect(corpo.retryPolicy).toBe("ALLOW_THREE_IN_SEVEN_DAYS");
       // `contractId` tem limite de 35 no Asaas; o UUID com hífen tem 36.
       expect(corpo.contractId).toBe("6d82d82e324c4eb1a34574421d2a501c");
       expect(corpo.contractId.length).toBeLessThanOrEqual(35);
@@ -373,6 +399,11 @@ describe("AsaasProvider", () => {
 
       const corpo = JSON.parse(fetchMock.mock.calls[1]![1].body);
       expect(corpo.immediateQrCode.originalValue).toBe(0.01);
+      // #317: agora existe UM campo de teto no payload — `minLimitValue`. Ele é
+      // o piso do teto (derivado do preço de uma ficha), nunca o `tetoCentavos`
+      // que o chamador manda. Sem esta linha, alguém "conserta" o D22 ligando
+      // um no outro e o valor do cliente volta a mandar no payload.
+      expect(corpo.minLimitValue).toBe(39);
       expect(criado.autorizacao).toMatchObject({
         valorAtivacaoCentavos: 1,
       });
@@ -474,6 +505,84 @@ describe("AsaasProvider", () => {
     });
   });
 
+  /**
+   * #290 — cobrança do débito de reativação.
+   *
+   * A diferença que importa em relação a `emitirCobrancaDeCiclo` é o NEGATIVO:
+   * aqui `pixAutomaticAuthorizationId` **não pode** ir no corpo. A autorização
+   * de Pix Automático foi revogada — é o ato que produziu o cancelamento — e
+   * anexá-la mandaria o Asaas debitar um trilho morto, produzindo uma cobrança
+   * que ninguém consegue pagar. Também não há consulta à autorização: o cliente
+   * vem por parâmetro, de `subscription.provider_customer_id`.
+   */
+  describe("emitirCobrancaAvulsa", () => {
+    const debito = {
+      clienteId: "cus_000008561913",
+      valorCentavos: 1300,
+      referenciaExterna: "debito:22222222-2222-2222-2222-222222222222",
+      descricao: "Iris — débito do ciclo interrompido",
+      vencimento: new Date("2026-10-09T01:00:00.000Z"),
+    };
+
+    it("cobra Pix comum contra o cliente, sem tocar na autorização revogada", async () => {
+      fetchMock
+        // 1) busca de idempotência: nada emitido ainda
+        .mockResolvedValueOnce(resposta({ object: "list", data: [] }))
+        // 2) a cobrança
+        .mockResolvedValueOnce(
+          resposta({
+            id: "pay_debito_290",
+            status: "PENDING",
+            invoiceUrl: "https://www.asaas.com/i/debito290",
+          }),
+        )
+        // 3) o BR Code
+        .mockResolvedValueOnce(resposta({ payload: "00020126…debito" }));
+
+      const emitida = await new AsaasProvider().emitirCobrancaAvulsa(debito);
+
+      expect(emitida.providerChargeId).toBe("pay_debito_290");
+      expect(emitida.pixCopiaECola).toBe("00020126…debito");
+
+      const [url, init] = fetchMock.mock.calls[1]!;
+      expect(url).toBe("https://api-sandbox.asaas.com/v3/payments");
+      const corpo = JSON.parse(init.body);
+      expect(corpo.customer).toBe(debito.clienteId);
+      expect(corpo.billingType).toBe("PIX");
+      expect(corpo.value).toBe(13);
+      // O ponto do método existir separado.
+      expect(corpo.pixAutomaticAuthorizationId).toBeUndefined();
+      // E nenhuma ida à autorização revogada.
+      expect(
+        fetchMock.mock.calls.filter(([u]) =>
+          String(u).includes("/pix/automatic/authorizations"),
+        ),
+      ).toHaveLength(0);
+    });
+
+    it("falha ao buscar o BR Code não derruba a cobrança já criada", async () => {
+      fetchMock
+        .mockResolvedValueOnce(resposta({ object: "list", data: [] }))
+        .mockResolvedValueOnce(
+          resposta({
+            id: "pay_debito_290",
+            status: "PENDING",
+            invoiceUrl: "https://www.asaas.com/i/debito290",
+          }),
+        )
+        .mockResolvedValueOnce(resposta({ errors: [] }, 500));
+
+      const emitida = await new AsaasProvider().emitirCobrancaAvulsa(debito);
+
+      // A cobrança EXISTE no gateway neste ponto. Lançar aqui obrigaria a
+      // próxima tentativa a reconciliar uma cobrança órfã — troca um QR
+      // ausente por um problema pior. `invoiceUrl` é a saída de contingência.
+      expect(emitida.providerChargeId).toBe("pay_debito_290");
+      expect(emitida.pixCopiaECola).toBeUndefined();
+      expect(emitida.urlPagamento).toBe("https://www.asaas.com/i/debito290");
+    });
+  });
+
   describe("consultarCobranca", () => {
     it.each([
       ["RECEIVED", "paga"],
@@ -486,40 +595,155 @@ describe("AsaasProvider", () => {
       ["AWAITING_RISK_ANALYSIS", "pendente"],
       ["ESTADO_NOVO_DO_GATEWAY", "pendente"],
     ])("%s → %s", async (statusAsaas, esperado) => {
-      fetchMock.mockResolvedValueOnce(
-        resposta({ id: "pay_1", status: statusAsaas, value: 137 }),
-      );
+      fetchMock
+        .mockResolvedValueOnce(
+          resposta({ id: "pay_1", status: statusAsaas, value: 137 }),
+        )
+        // Status que mapeia para `recusada` dispara a busca do motivo na
+        // instrução (D35). Aqui o foco é o mapeamento de status, então a lista
+        // volta vazia: sem motivo, sem ruído.
+        .mockResolvedValue(resposta({ data: [] }));
       const r = await new AsaasProvider().consultarCobranca("pay_1");
       expect(r.status).toBe(esperado);
       // Decimal do gateway volta a inteiro na entrada do sistema.
       expect(r.valorCentavos).toBe(13700);
     });
 
-    it("devolve o motivo da recusa quando o gateway informa algum", async () => {
-      // Leitura defensiva, não contrato: medido em 13/08/2026, o objeto `payment`
-      // do Asaas NÃO trouxe campo de motivo em nenhuma das cobranças reais do
-      // sandbox. Se um dia trouxer, o motivo tem que chegar ao ciclo — e o teste
-      // documenta os nomes que o adapter aceita.
-      fetchMock.mockResolvedValueOnce(
-        resposta({
-          id: "pay_1",
-          status: "REFUSED",
-          value: 390,
-          refusalReason: "LIMITE_AUTORIZADO_EXCEDIDO",
-        }),
+    it("lê o motivo da INSTRUÇÃO, não da cobrança (D35)", async () => {
+      /**
+       * O defeito que este teste fixa: até o D35 o motivo era procurado em
+       * `refusalReason`/`failureReason`/`pixTransaction.failureReason` do corpo
+       * de `GET /payments/{id}` — três campos que o `PaymentGetResponseDTO` não
+       * declara (e `pixTransaction` é `string`, não objeto). O dono do
+       * `refusalReason` é `GET /pix/automatic/paymentInstructions/{id}`.
+       *
+       * Por isso a cobrança aqui vem SEM campo de motivo algum: se o adapter
+       * voltasse a lê-lo do `payment`, não teria de onde tirar nada. E a URL é
+       * asserida porque "o motivo chegou" e "o motivo veio do recurso certo"
+       * são coisas diferentes — a segunda é a que estava quebrada.
+       */
+      fetchMock
+        .mockResolvedValueOnce(
+          resposta({ id: "pay_1", status: "OVERDUE", value: 390 }),
+        )
+        .mockResolvedValueOnce(
+          resposta({
+            id: "pi_1",
+            status: "REFUSED",
+            paymentId: "pay_1",
+            refusalReason: "MAXIMUM_AMOUNT_EXCEEDED",
+          }),
+        );
+
+      const r = await new AsaasProvider().consultarCobranca("pay_1", {
+        providerInstructionId: "pi_1",
+      });
+
+      expect(r.motivoRecusa).toBe("MAXIMUM_AMOUNT_EXCEEDED");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(String(fetchMock.mock.calls[1]![0])).toBe(
+        "https://api-sandbox.asaas.com/v3/pix/automatic/paymentInstructions/pi_1",
       );
-      const r = await new AsaasProvider().consultarCobranca("pay_1");
-      expect(r.motivoRecusa).toBe("LIMITE_AUTORIZADO_EXCEDIDO");
     });
 
-    it("devolve motivoRecusa null quando o gateway não informa nada", async () => {
-      // É este o caso REAL medido. `null` aqui é o que dispara o diagnóstico com
-      // hipóteses ranqueadas na Task 3 — inventar um motivo aqui seria o erro que
-      // a #286 existe para evitar.
-      fetchMock.mockResolvedValueOnce(
-        resposta({ id: "pay_2", status: "REFUSED", value: 390 }),
-      );
+    it("código novo do gateway atravessa inteiro, sem union fechada", async () => {
+      // O catálogo é ABERTO: o OpenAPI declara `refusalReason` como `string` sem
+      // `enum` e a doc avisa que a lista cresce sem versionar. Um código que o
+      // Iris nunca viu tem que chegar bruto ao ciclo — filtrar por lista
+      // conhecida transformaria motivo novo em "sem motivo informado", que é o
+      // diagnóstico ERRADO (aponta o teto do #286 como causa provável).
+      fetchMock
+        .mockResolvedValueOnce(
+          resposta({ id: "pay_novo", status: "OVERDUE", value: 390 }),
+        )
+        .mockResolvedValueOnce(
+          resposta({ refusalReason: "MOTIVO_QUE_AINDA_NAO_EXISTE" }),
+        );
+
+      const r = await new AsaasProvider().consultarCobranca("pay_novo", {
+        providerInstructionId: "pi_novo",
+      });
+      expect(r.motivoRecusa).toBe("MOTIVO_QUE_AINDA_NAO_EXISTE");
+    });
+
+    it("sem id de instrução, acha a instrução recusada pelo id da cobrança", async () => {
+      // Caminho da varredura de pendentes (`reprocessarEventosPendentes`), que
+      // só tem o id da cobrança em mãos. `status=REFUSED` no filtro é o que
+      // impede pegar uma instrução `SCHEDULED` (a política em vigor permite até
+      // 3 tentativas, então várias instruções por cobrança é o caso normal).
+      fetchMock
+        .mockResolvedValueOnce(
+          resposta({ id: "pay_2", status: "OVERDUE", value: 390 }),
+        )
+        .mockResolvedValueOnce(
+          resposta({
+            data: [{ id: "pi_2", refusalReason: "PAYMENT_OVERDUE" }],
+          }),
+        );
+
       const r = await new AsaasProvider().consultarCobranca("pay_2");
+
+      expect(r.motivoRecusa).toBe("PAYMENT_OVERDUE");
+      expect(String(fetchMock.mock.calls[1]![0])).toContain(
+        "/pix/automatic/paymentInstructions?paymentId=pay_2&status=REFUSED",
+      );
+    });
+
+    it("cobrança paga não gasta chamada procurando motivo", async () => {
+      // Recusa não existe em cobrança liquidada. Sem esta guarda, todo webhook
+      // de pagamento aprovado pagaria um GET extra para receber `null`.
+      fetchMock.mockResolvedValueOnce(
+        resposta({ id: "pay_ok", status: "RECEIVED", value: 137 }),
+      );
+      const r = await new AsaasProvider().consultarCobranca("pay_ok", {
+        providerInstructionId: "pi_ok",
+      });
+      expect(r.motivoRecusa).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("falha ao ler a instrução NÃO derruba a conciliação — degrada e avisa", async () => {
+      // O motivo é enriquecimento; quem decide o destino do ciclo é o `status`,
+      // que já veio. Deixar o 404 subir faria a conciliação inteira falhar por
+      // causa do campo acessório, e o ciclo ficaria em `aguardando_pagamento`.
+      // Mas o erro indica contrato quebrado, então NÃO é engolido em silêncio:
+      // vai ao log com a tag `[billing-recusa]`.
+      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        fetchMock
+          .mockResolvedValueOnce(
+            resposta({ id: "pay_3", status: "OVERDUE", value: 390 }),
+          )
+          .mockResolvedValueOnce(resposta({ errors: [] }, 404));
+
+        const r = await new AsaasProvider().consultarCobranca("pay_3", {
+          providerInstructionId: "pi_3",
+        });
+
+        expect(r.status).toBe("recusada");
+        expect(r.valorCentavos).toBe(39000);
+        expect(r.motivoRecusa).toBeNull();
+        expect(aviso).toHaveBeenCalledWith(
+          "[billing-recusa] falha ao ler a instrução de pagamento",
+          expect.objectContaining({ providerInstructionId: "pi_3" }),
+        );
+      } finally {
+        aviso.mockRestore();
+      }
+    });
+
+    it("devolve motivoRecusa null quando a instrução não traz motivo", async () => {
+      // `null` é caso esperado, não exceção: é ele que dispara o diagnóstico
+      // com hipóteses ranqueadas em `conciliarPagamentoDeCiclo`. Inventar um
+      // motivo aqui seria o erro que a #286 existe para evitar.
+      fetchMock
+        .mockResolvedValueOnce(
+          resposta({ id: "pay_4", status: "OVERDUE", value: 390 }),
+        )
+        .mockResolvedValueOnce(resposta({ id: "pi_4", status: "REFUSED" }));
+      const r = await new AsaasProvider().consultarCobranca("pay_4", {
+        providerInstructionId: "pi_4",
+      });
       expect(r.motivoRecusa).toBeNull();
     });
   });
