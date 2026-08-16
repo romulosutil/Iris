@@ -146,12 +146,6 @@ export async function criarPacienteEConsent(
   const escola = String(formData.get("escola") ?? "").trim() || undefined;
   const convenio = String(formData.get("convenio") ?? "").trim() || undefined;
 
-  const clinicalModalityRaw = String(
-    formData.get("clinicalModality") ?? "",
-  ).trim();
-  const clinicalModality =
-    clinicalModalityRaw === "conventional" ? "conventional" : "protocol_driven";
-
   // #203 (fatia 2): o cadastro NÃO prescreve mais. Disciplina e carga horária
   // migraram para a ficha clínica, onde nascem com vigência própria (SCD2) e
   // são o teto que a equipe consome. Campos `alvoDisciplina`/`alvoHorasSemana`
@@ -189,7 +183,6 @@ export async function criarPacienteEConsent(
             responsavelCpf:
               tipoConsentimento === "responsavel_legal" ? cpfLimpo : undefined,
             cpfHash,
-            clinicalModality,
           })
           .returning({ id: patient.id });
       } catch (e) {

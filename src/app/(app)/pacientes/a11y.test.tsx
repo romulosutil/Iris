@@ -6,25 +6,6 @@ import type { ReactElement } from "react";
 vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
 
-// `PacienteLayout` passou a ler `patient.clinicalModality` dentro de
-// `withTenant` (#305) para esconder a aba "PEI & Metas" no modo convencional.
-// O dublê de `@/db/client` acima é um objeto vazio — sem este mock, `withTenant`
-// chama `db.transaction` e o teste morre com TypeError antes de renderizar
-// qualquer coisa (não é falha de acessibilidade, é ausência de dublê).
-vi.mock("@/db/rls", () => ({
-  withTenant: async (
-    _ctx: unknown,
-    fn: (tx: unknown) => Promise<unknown>,
-  ): Promise<unknown> =>
-    fn({
-      select: () => ({
-        from: () => ({
-          where: async () => [{ clinicalModality: "protocol_driven" }],
-        }),
-      }),
-    }),
-}));
-
 const mockObterSituacaoConta = vi.fn();
 
 vi.mock("@/auth/tenant", () => ({

@@ -97,19 +97,9 @@ async function ativarProtocoloCore(
     // aqui faria duplo-clique parecer falha e convidaria a desvincular.
     if (jaAtivo) return { ok: true };
 
-    await tx.insert(patientProtocol).values({
-      patientId,
-      protocolId,
-      ativadoPor: ctx.userId,
-      // O default da coluna é `now()::date`, resolvido no fuso do SERVIDOR
-      // (UTC em CI e em produção), enquanto `desativadoEm` abaixo grava a data
-      // de America/Sao_Paulo. Entre 00:00 e 03:00 UTC as duas discordam em um
-      // dia e o CHECK `patient_protocol_vigencia` (desativado_em >=
-      // ativado_em) rejeita o desencaixe — o coordenador que encaixa às 22h de
-      // Brasília não consegue desfazer no mesmo dia. As duas pontas têm de ler
-      // o MESMO relógio; o relógio canônico é o de Brasília.
-      ativadoEm: sql`(now() AT TIME ZONE 'America/Sao_Paulo')::date`,
-    });
+    await tx
+      .insert(patientProtocol)
+      .values({ patientId, protocolId, ativadoPor: ctx.userId });
     await desarquivarPacienteSeArquivado(
       tx,
       ctx,

@@ -28,7 +28,6 @@ export type CanonicalContext = {
     idade_meses: number | null;
     metas_ativas: CanonicalMeta[];
   };
-  modo?: "terapia_convencional" | "protocol_driven";
   protocolos_ativos: CanonicalProtocolo[];
   historico_relevante: Array<{
     dominio_id: string;
@@ -39,7 +38,6 @@ export type CanonicalContext = {
 
 export type AssemblerInput = {
   paciente: { idadeMeses: number | null };
-  modo?: "terapia_convencional" | "protocol_driven";
   protocolos: Array<{
     familia: string;
     nome: string;
@@ -57,7 +55,7 @@ export type AssemblerInput = {
 };
 
 export function buildCanonicalContext(input: AssemblerInput): CanonicalContext {
-  const ctx: CanonicalContext = {
+  return {
     paciente: {
       idade_meses: input.paciente.idadeMeses,
       metas_ativas: input.metas.map((m) => ({
@@ -88,10 +86,4 @@ export function buildCanonicalContext(input: AssemblerInput): CanonicalContext {
       resumo: h.resumo,
     })),
   };
-
-  if (input.modo) {
-    ctx.modo = input.modo;
-  }
-
-  return ctx;
 }
