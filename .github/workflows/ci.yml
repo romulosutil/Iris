@@ -184,11 +184,11 @@ jobs:
       - name: suíte de integração/RLS (com relatório JSON)
         run: pnpm vitest run --config vitest.integration.config.ts --reporter=json --reporter=default --outputFile=int-report.json
 
-      # Piso medido em 15/08/2026 contra um Postgres isolado, do zero:
-      # 101 arquivos, 857 testes, 0 falha, 0 pending. Depois do merge de
-      # origin/main são 100 arquivos `*.int.test.ts` em disco (main removeu
-      # `src/app/(app)/assinatura/gate-debito.int.test.ts`) — o piso de 95
-      # continua válido, mas a folga agora é de 5 arquivos, não 6.
+      # Piso medido em 15/08/2026 contra um Postgres isolado, do zero. Valor
+      # do próprio job, em `main` mergeada (run 31919854357):
+      # 100 arquivos, 846 testes, 0 falha, 0 pending. São 100 e não 101 porque
+      # `main` removeu `src/app/(app)/assinatura/gate-debito.int.test.ts` — o
+      # piso de 95 continua válido, com folga de 5 arquivos.
       # `numPendingTests > 0`
       # é o sintoma exato do incidente de 64/68 arquivos pulados em
       # silêncio (DATABASE_URL apontando pra role BYPASSRLS) — o script
