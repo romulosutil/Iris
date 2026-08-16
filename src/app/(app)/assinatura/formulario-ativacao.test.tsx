@@ -862,6 +862,8 @@ describe("FormularioAtivacao", () => {
     // política ainda emite uma cobrança só.
     const DEBITO = {
       valorCentavos: 1300,
+      // Caso normal: tudo o que se deve está na tela (revisão do PR #339).
+      residuoCentavos: 0,
       cobrancas: [
         {
           cicloId: "ciclo-1",
@@ -975,6 +977,7 @@ describe("FormularioAtivacao", () => {
           estadoInicial={{
             debito: {
               valorCentavos: 2000,
+              residuoCentavos: 0,
               cobrancas: [
                 cobranca("pay_a", 1300, "00020126-codigo-a"),
                 cobranca("pay_b", 700, "00020126-codigo-b", false),
@@ -1003,6 +1006,60 @@ describe("FormularioAtivacao", () => {
      * achando que era o da outra. Os nomes são o que cada bloco É (valor +
      * origem), não "cobrança 1 de 2": posição não diz qual delas pagar.
      */
+    /**
+     * Revisão do PR #339 — o resíduo é DITO, não escondido.
+     *
+     * Há estados em que parte da dívida não vira cobrança nesta tela (a
+     * consolidada volta estornada, o gateway recusa, o resto fica abaixo do
+     * piso) e outra parte é pagável. O total mostrado passou a ser o do que
+     * está na mesa; sem esta frase a clínica pagaria o QR de R$ 13,00
+     * acreditando ter quitado tudo, e continuaria barrada.
+     *
+     * Qual mutação este teste mata: apagar o parágrafo do resíduo (ou renderizá-lo
+     * só quando há mais de uma cobrança). O valor é asserido junto do texto
+     * porque uma frase genérica de "ainda há pendências" não diz quanto falta.
+     */
+    it("resíduo sem cobrança na tela é dito, com o valor", () => {
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{
+            debito: {
+              valorCentavos: 1300,
+              residuoCentavos: 700,
+              cobrancas: [cobranca("pay_a", 1300, "00020126-codigo-a")],
+            },
+          }}
+          situacaoConta={situacao(2000)}
+        />,
+      );
+
+      // O total da cobrança na mesa continua sendo o do QR.
+      expect(document.body.textContent).toMatch(
+        /Esta cobrança é de R\$\s*13,00/,
+      );
+      // ...e o que sobrou aparece nomeado, com valor.
+      expect(document.body.textContent).toMatch(/não estão nesta tela/i);
+      expect(document.body.textContent).toMatch(/7,00/);
+    });
+
+    it("sem resíduo, a tela não inventa pendência nenhuma", () => {
+      // O negativo do caso acima: com `residuoCentavos: 0` (o caminho de toda
+      // clínica), a frase não pode aparecer — um aviso permanente de "ainda há
+      // valor em aberto" treinaria a pessoa a ignorá-lo justamente quando é real.
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{ debito: DEBITO }}
+          situacaoConta={situacao(1300)}
+        />,
+      );
+
+      expect(document.body.textContent).not.toMatch(/não estão nesta tela/i);
+    });
+
     it("cada cobrança é um bloco nomeado, distinguível por leitor de tela", () => {
       render(
         <FormularioAtivacao
@@ -1011,6 +1068,7 @@ describe("FormularioAtivacao", () => {
           estadoInicial={{
             debito: {
               valorCentavos: 2000,
+              residuoCentavos: 0,
               cobrancas: [
                 cobranca("pay_a", 1300, "00020126-codigo-a"),
                 cobranca("pay_b", 700, "00020126-codigo-b", false),
@@ -1048,7 +1106,11 @@ describe("FormularioAtivacao", () => {
           acao={acaoQueDevolve({})}
           navegar={vi.fn()}
           estadoInicial={{
-            debito: { valorCentavos: 1300, cobrancas: [EM_PROCESSAMENTO] },
+            debito: {
+              valorCentavos: 1300,
+              residuoCentavos: 0,
+              cobrancas: [EM_PROCESSAMENTO],
+            },
           }}
           situacaoConta={situacao(1300)}
         />,
@@ -1086,7 +1148,11 @@ describe("FormularioAtivacao", () => {
             acao={acaoQueDevolve({})}
             navegar={vi.fn()}
             estadoInicial={{
-              debito: { valorCentavos: 1300, cobrancas: [EM_PROCESSAMENTO] },
+              debito: {
+                valorCentavos: 1300,
+                residuoCentavos: 0,
+                cobrancas: [EM_PROCESSAMENTO],
+              },
             }}
             situacaoConta={situacao(1300)}
           />,

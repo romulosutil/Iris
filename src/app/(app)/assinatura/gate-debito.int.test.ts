@@ -38,6 +38,97 @@ import { hasDb } from "@tests/integration-env";
 // lança fora do bundle de servidor do Next.
 vi.mock("server-only", () => ({}));
 
+/**
+ * Injeção de falha nas escritas em `billing_cycle` feitas por `authDb`.
+ *
+ * Existe porque duas afirmações desta revisão só são mensuráveis quando uma
+ * escrita do meio do caminho NÃO acontece:
+ *
+ * 1. **atomicidade de `registrarCobrancaDeDebito`** — o processo morre entre
+ *    gravar a cobrança na âncora e carimbar os agrupados. Sem transação, a
+ *    primeira escrita fica commitada e a reentrada emite uma SEGUNDA cobrança;
+ * 2. **cascata de `liquidarCiclo` que não alcança um agrupado** — é a premissa
+ *    escrita no docblock de `resolverGateDeDebito` ("quando a cascata NÃO
+ *    alcança um deles"), e é ela que produz o ciclo `devido` com ponteiro para
+ *    uma âncora já `pago`.
+ *
+ * O ponto de injeção é o `update` do Drizzle, contado só quando o alvo é
+ * `billing_cycle`, porque ele é o MESMO nos dois mundos: hoje as escritas saem
+ * por `authDb.update`, e com a transação saem por `tx.update` de dentro de
+ * `authDb.transaction`. Um dublê que só interceptasse um dos dois mediria a
+ * refatoração, não o comportamento.
+ *
+ * Desarmado (zeros), o proxy é passagem pura — todos os outros casos deste
+ * arquivo rodam contra o `authDb` real.
+ */
+const controle = vi.hoisted(() => ({
+  /** Faz a N-ésima escrita em `billing_cycle` LANÇAR. 0 = desarmado. */
+  falharNaEscritaDeCiclo: 0,
+  /** Faz a N-ésima escrita em `billing_cycle` virar no-op. 0 = desarmado. */
+  neutralizarEscritaDeCiclo: 0,
+  escritasDeCiclo: 0,
+}));
+
+vi.mock("@/db/client", async () => {
+  const real =
+    await vi.importActual<typeof import("@/db/client")>("@/db/client");
+  const schema =
+    await vi.importActual<typeof import("@/db/schema")>("@/db/schema");
+
+  /** Builder que engole a escrita: `.set().where()` resolve sem tocar no banco. */
+  const escritaEngolida = { set: () => ({ where: async () => [] }) };
+
+  const instrumentar = <T extends object>(alvo: T): T =>
+    new Proxy(alvo, {
+      get(_alvoProxy, prop) {
+        const valor = (alvo as Record<PropertyKey, unknown>)[prop];
+        if (typeof valor !== "function") return valor;
+        // Bind no alvo REAL: o Drizzle usa campos privados, e deixar o `this`
+        // cair no Proxy derruba o método com TypeError.
+        const metodo = valor.bind(alvo) as (...a: unknown[]) => unknown;
+
+        if (prop === "update") {
+          return (tabela: unknown, ...resto: unknown[]) => {
+            if (tabela === schema.billingCycle) {
+              controle.escritasDeCiclo += 1;
+              if (
+                controle.escritasDeCiclo === controle.falharNaEscritaDeCiclo
+              ) {
+                throw new Error(
+                  "[teste] falha simulada entre as escritas do registro de cobrança",
+                );
+              }
+              if (
+                controle.escritasDeCiclo === controle.neutralizarEscritaDeCiclo
+              ) {
+                return escritaEngolida;
+              }
+            }
+            return metodo(tabela, ...resto);
+          };
+        }
+
+        if (prop === "transaction") {
+          return (cb: (tx: object) => unknown, ...resto: unknown[]) =>
+            metodo((tx: object) => cb(instrumentar(tx)), ...resto);
+        }
+
+        return metodo;
+      },
+    });
+
+  return { ...real, authDb: instrumentar(real.authDb) };
+});
+
+/** Zera e arma a injeção para a chamada seguinte. */
+function armar(
+  opcoes: { falharNaEscrita?: number; neutralizar?: number } = {},
+) {
+  controle.escritasDeCiclo = 0;
+  controle.falharNaEscritaDeCiclo = opcoes.falharNaEscrita ?? 0;
+  controle.neutralizarEscritaDeCiclo = opcoes.neutralizar ?? 0;
+}
+
 const { iniciarAtivacaoAssinatura } = await import("./logic");
 const { aplicarStatusProvider, conciliarPagamentoDeCiclo } =
   await import("@/lib/billing/subscription");
@@ -114,6 +205,19 @@ function instalarGateway(
   } = {},
 ): { chamadas: Chamada[] } {
   const chamadas: Chamada[] = [];
+  /**
+   * Idempotência do gateway por `externalReference` — o que o Asaas de verdade
+   * faz, e o que o adapter consulta em `buscarCobrancaPorReferencia` ANTES de
+   * todo `POST /payments`.
+   *
+   * Antes desta revisão o dublê respondia `{ data: [] }` para toda busca e
+   * devolvia sempre o MESMO id no POST. Nesse mundo "emitiu de novo" e
+   * "reencontrou a de antes" ficam indistinguíveis, e é exatamente essa
+   * distinção que separa a reentrada segura da cobrança dupla: a `0075` deixa
+   * a referência `debito:<âncora>` estável, e é o gateway que se recusa a
+   * criar a segunda cobrança sobre ela.
+   */
+  const porReferencia = new Map<string, Record<string, unknown>>();
   vi.stubGlobal("fetch", async (entrada: unknown, init?: RequestInit) => {
     const url = String(entrada);
     const metodo = (init?.method ?? "GET").toUpperCase();
@@ -152,10 +256,14 @@ function instalarGateway(
         invoiceUrl: URL_ANTIGA,
       });
     }
-    // Busca de idempotência da emissão. Sempre vazia: cada teste começa sem
-    // cobrança no gateway, e o que interessa medir é a emissão em si.
+    // Busca de idempotência da emissão: devolve a cobrança já criada sob a
+    // MESMA `externalReference`, como o Asaas faz. Cada teste começa com o
+    // registro vazio.
     if (url.includes("/payments?") && metodo === "GET") {
-      return Response.json({ data: [] });
+      const referencia =
+        new URL(url).searchParams.get("externalReference") ?? "";
+      const ja = porReferencia.get(referencia);
+      return Response.json({ data: ja ? [ja] : [] });
     }
     if (url.includes("/payments") && metodo === "POST") {
       if (opcoes.cobrancaRecusada) {
@@ -164,15 +272,31 @@ function instalarGateway(
           { status: 400 },
         );
       }
-      return Response.json({
-        id: ID_COBRANCA_DEBITO,
+      // Id NOVO a cada POST aceito, e não o mesmo literal sempre: duas
+      // cobranças vivas com o mesmo id esconderiam a cobrança dupla dentro de
+      // uma coluna que parece correta. O primeiro mantém o id histórico para
+      // não reescrever os casos que já mediam a emissão única.
+      const emitidas = chamadas.filter(
+        (c) => c.metodo === "POST" && c.url.includes("/payments"),
+      ).length;
+      const corpoResposta = {
+        id:
+          emitidas === 1
+            ? ID_COBRANCA_DEBITO
+            : `${ID_COBRANCA_DEBITO}_${emitidas}`,
         status: opcoes.cobrancaEstornada
           ? "REFUNDED"
           : opcoes.cobrancaJaPaga
             ? "RECEIVED"
             : "PENDING",
         invoiceUrl: "https://sandbox.asaas.com/i/290",
-      });
+      };
+      const referencia = String(
+        (init?.body ? JSON.parse(String(init.body)) : {}).externalReference ??
+          "",
+      );
+      if (referencia) porReferencia.set(referencia, corpoResposta);
+      return Response.json(corpoResposta);
     }
     if (url.includes("/customers")) {
       return Response.json({ id: ID_CLIENTE });
@@ -313,6 +437,9 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    // Desarma a injeção: um caso que esqueça de limpar contaminaria o
+    // seguinte com uma escrita fantasma, e o verde sairia pelo motivo errado.
+    armar();
   });
 
   afterAll(async () => {
@@ -1189,6 +1316,184 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
     expect(gate).toEqual({ tipo: "sem_debito" });
     const [ciclo] = await lerCiclos();
     expect(ciclo!.status).toBe("pago");
+  });
+
+  /**
+   * #310 (revisão do PR #339, achado 1) — ESCRITA PARCIAL no registro da
+   * cobrança não pode virar uma segunda cobrança na reentrada.
+   *
+   * `registrarCobrancaDeDebito` faz DUAS escritas: grava a cobrança na âncora e
+   * carimba `debito_agrupado_em` nos demais. Antes desta correção elas saíam
+   * fora de transação, e a da âncora ia PRIMEIRO. O processo morrendo no meio
+   * deixava o pior dos dois estados: a âncora aparece reaproveitada e os
+   * agrupados aparecem virgens.
+   *
+   * Por que isso reabre justamente o buraco que a #310 fechou: até a #310 a
+   * âncora era sempre `ciclos[0]`, então a reentrada reemitia com a MESMA
+   * `referenciaExterna` e a idempotência do gateway devolvia a mesma cobrança —
+   * o estado parcial se autocurava. Com a âncora sendo "o mais antigo SEM
+   * cobrança" (P-4), o ciclo sem carimbo vira âncora NOVA, `debito:<outro>` é
+   * uma referência virgem que a idempotência não barra, e sai o segundo POST.
+   *
+   * Qual mutação este teste mata: tirar a transação (ou inverter só a ordem
+   * das duas escritas sem atomicidade). O oráculo é a CONTAGEM de POSTs entre
+   * as duas chamadas — o retorno da segunda chamada é idêntico nos dois
+   * mundos, porque nos dois há uma cobrança apresentável na tela; o que muda é
+   * quantas cobranças vivas ficaram no gateway.
+   *
+   * A prova final é o pagamento: com duas cobranças, pagar a de R$ 20,00
+   * deixaria o ciclo de R$ 7,00 devendo.
+   */
+  it("escrita parcial do registro não vira segunda cobrança na reentrada", async () => {
+    await assinaturaCancelada();
+    const ancora = await cicloDevido(1300, 90);
+    const agrupado = await cicloDevido(700, 60);
+    const { chamadas } = instalarGateway({
+      antiga: { status: "OVERDUE", valorReais: 20 },
+    });
+
+    // O processo morre ao iniciar a SEGUNDA escrita em `billing_cycle` — que é
+    // exatamente o carimbo de `debito_agrupado_em` dos demais ciclos.
+    armar({ falharNaEscrita: 2 });
+    const primeira = await iniciarAtivacaoAssinatura(ctx, formulario());
+    armar();
+
+    // A cobrança JÁ EXISTE no gateway: o POST aconteceu antes da queda, e é
+    // por isso que a reentrada não pode criar outra.
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(emissoes(chamadas)[0]!.corpo.value).toBe(20);
+    expect(primeira.debito).toBeUndefined();
+
+    // A clínica tenta de novo — o caminho real depois de um erro na tela.
+    const segunda = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    // O oráculo: nenhum POST novo. Com as escritas fora de transação, a âncora
+    // ficava carimbada, o agrupado virgem virava âncora de `debito:<agrupado>`
+    // e saía um SEGUNDO POST de R$ 7,00 — duas cobranças vivas somando
+    // R$ 27,00 para uma dívida de R$ 20,00.
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(segunda.error).toBeUndefined();
+    expect(segunda.debito?.cobrancas).toHaveLength(1);
+    expect(segunda.debito?.valorCentavos).toBe(2000);
+
+    // E no banco os dois ciclos estão sob UMA cobrança só.
+    const ciclos = await lerCiclos();
+    const linhaAncora = ciclos.find((c) => c.id === ancora)!;
+    const linhaAgrupado = ciclos.find((c) => c.id === agrupado)!;
+    expect(linhaAncora.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
+    expect(linhaAgrupado.provider_charge_id).toBeNull();
+    expect(linhaAgrupado.debito_agrupado_em).toBe(ancora);
+
+    // Prova final: uma cobrança paga quita a dívida INTEIRA.
+    await conciliarPagamentoDeCiclo(ID_COBRANCA_DEBITO, "paga");
+    expect((await lerCiclos()).map((c) => c.status)).toEqual(["pago", "pago"]);
+  });
+
+  /**
+   * #310 (revisão do PR #339, achado 2) — agrupado que SOBREVIVE à cascata
+   * volta a ser âncora, em vez de travar o gate para sempre.
+   *
+   * O docblock de `resolverGateDeDebito` afirma que os agrupados de uma
+   * cobrança liquidada dentro do laço entram em (b) e são retirados pela
+   * recontagem, "e quem continuar `devido` no banco é cobrado". A recontagem
+   * FILTRAVA o snapshot antigo em vez de reconstruí-lo: o sobrevivente
+   * continuava com `agrupadoEm` apontando para uma âncora agora `pago`,
+   * `emitirConsolidada` exige `!c.agrupadoEm` para a âncora (P-4), não achava
+   * nenhuma e devolvia `irrecuperavel` — `bloqueado/cobranca_irrecuperavel`
+   * PERMANENTE, porque toda reentrada repete a mesma conta.
+   *
+   * A cascata que não alcança é injetada de propósito: é a premissa que o
+   * docblock descreve, e sem ela não há como distinguir a defesa que ele
+   * promete da que o código tinha.
+   *
+   * Qual mutação este teste mata: voltar ao `filter` sobre o snapshot. Os
+   * oráculos são o POST (que não existia) e a ausência da copy de suporte —
+   * asserir só o `r.debito` deixaria passar um gate que barra em silêncio.
+   */
+  it("agrupado que a cascata não alcançou volta a ser âncora, sem travar o gate", async () => {
+    await assinaturaCancelada();
+    const ancora = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
+    const sobrevivente = await cicloDevido(700, 60);
+    await owner`
+      UPDATE billing_cycle SET debito_agrupado_em = ${ancora}
+       WHERE id = ${sobrevivente}`;
+    const { chamadas } = instalarGateway({
+      antiga: { status: "RECEIVED", valorReais: 20 },
+    });
+
+    // A 1ª escrita em `billing_cycle` é a âncora virando `pago`; a 2ª é a
+    // cascata do agrupado. Engolir a 2ª é a cascata que não alcança.
+    armar({ neutralizar: 2 });
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+    armar();
+
+    // A âncora foi liquidada e o agrupado NÃO — o estado que o docblock prevê.
+    const ciclos = await lerCiclos();
+    expect(ciclos.find((c) => c.id === ancora)!.status).toBe("pago");
+
+    // O que a correção garante: a dívida sobrevivente É cobrada, por uma âncora
+    // de referência virgem. Antes, o gate devolvia "revisão manual" para sempre.
+    expect(r.error).toBeUndefined();
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(emissoes(chamadas)[0]!.corpo.value).toBe(7);
+    expect(r.debito?.valorCentavos).toBe(700);
+    expect(r.debito?.cobrancas).toHaveLength(1);
+    expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_DEBITO);
+
+    const depois = await lerCiclos();
+    const linha = depois.find((c) => c.id === sobrevivente)!;
+    expect(linha.status).toBe("devido");
+    expect(linha.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
+    // Ponteiro morto zerado no banco (P-6): mantê-lo faria a cascata da âncora
+    // já paga liquidar este ciclo de graça numa reentrega do webhook.
+    expect(linha.debito_agrupado_em).toBeNull();
+  });
+
+  /**
+   * #310 (revisão do PR #339, achado 3) — o total exibido é o que está NA MESA.
+   *
+   * Com a cobrança consolidada voltando ESTORNADA e uma cobrança viva ao lado,
+   * o gate segue apresentando a viva (melhor pagar o pagável do que barrar
+   * tudo) — mas o total não pode continuar sendo a dívida inteira. A tela
+   * renderiza "Esta cobrança é de {total}" com uma cobrança só: com o total da
+   * dívida, ela afirmaria que o QR de R$ 13,00 é de R$ 20,00. É o estado que o
+   * docblock de `CobrancaParaReuso.valorCentavos` proíbe, montado uma camada
+   * acima.
+   *
+   * Qual mutação este teste mata: devolver `totalVivo` em `totalCentavos`. Os
+   * dois valores são diferentes de propósito — com a dívida inteira igual à
+   * soma das cobranças o caso passaria pelos dois caminhos e não mataria nada.
+   *
+   * O `residuoCentavos` é asserido JUNTO porque a alternativa "sumir com o
+   * resíduo" também acertaria o total e deixaria a clínica achando que pagar
+   * aquele QR quita tudo.
+   */
+  it("total exibido é a soma das cobranças na mesa, com o resíduo à parte", async () => {
+    await assinaturaCancelada();
+    const viva = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
+    const semCobranca = await cicloDevido(700, 30);
+    const { chamadas } = instalarGateway({
+      antiga: { status: "OVERDUE" },
+      cobrancaEstornada: true,
+    });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    // A emissão aconteceu e voltou estornada: nada dela vai para a tela.
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(r.debito?.cobrancas).toHaveLength(1);
+    expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
+    expect(r.debito?.cobrancas[0]!.valorCentavos).toBe(1300);
+
+    // O ponto: o total é o que a clínica consegue pagar nesta tela.
+    expect(r.debito?.valorCentavos).toBe(1300);
+    // ...e o que sobrou é dito, não escondido.
+    expect(r.debito?.residuoCentavos).toBe(700);
+
+    // A dívida residual continua viva no banco — não foi perdoada.
+    const ciclos = await lerCiclos();
+    expect(ciclos.find((c) => c.id === semCobranca)!.status).toBe("devido");
+    expect(ciclos.find((c) => c.id === viva)!.status).toBe("devido");
   });
 
   /**
