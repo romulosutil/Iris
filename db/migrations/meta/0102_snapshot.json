@@ -1,6 +1,6 @@
 {
-  "id": "bef0c846-9b23-44ea-9e91-c927829f8cca",
-  "prevId": "1d832103-1f4c-48e9-8553-043f618a39a5",
+  "id": "26bba26c-dd68-41e5-b937-c1196839d87c",
+  "prevId": "36108352-df0c-484d-af55-97da21649ddb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1508,12 +1508,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "debito_agrupado_em": {
-          "name": "debito_agrupado_em",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "erro": {
           "name": "erro",
           "type": "text",
@@ -1570,21 +1564,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "billing_cycle_debito_agrupado_idx": {
-          "name": "billing_cycle_debito_agrupado_idx",
-          "columns": [
-            {
-              "expression": "debito_agrupado_em",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1613,19 +1592,6 @@
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
-        },
-        "billing_cycle_debito_agrupado_em_fk": {
-          "name": "billing_cycle_debito_agrupado_em_fk",
-          "tableFrom": "billing_cycle",
-          "tableTo": "billing_cycle",
-          "columnsFrom": [
-            "debito_agrupado_em"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1635,10 +1601,6 @@
         "billing_cycle_intervalo_valido": {
           "name": "billing_cycle_intervalo_valido",
           "value": "\"billing_cycle\".\"fim\" > \"billing_cycle\".\"inicio\""
-        },
-        "billing_cycle_debito_agrupado_nao_reflexivo": {
-          "name": "billing_cycle_debito_agrupado_nao_reflexivo",
-          "value": "\"billing_cycle\".\"debito_agrupado_em\" IS NULL OR \"billing_cycle\".\"debito_agrupado_em\" <> \"billing_cycle\".\"id\""
         },
         "billing_cycle_valor_nao_negativo": {
           "name": "billing_cycle_valor_nao_negativo",
@@ -3740,6 +3702,14 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "clinical_modality": {
+          "name": "clinical_modality",
+          "type": "clinical_modality",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'protocol_driven'"
         },
         "criado_em": {
           "name": "criado_em",
@@ -6099,8 +6069,7 @@
         "cobrado",
         "falhou",
         "aguardando_pagamento",
-        "pago",
-        "devido"
+        "pago"
       ]
     },
     "public.billing_motivo_ativo": {
@@ -6119,6 +6088,14 @@
         "clinica",
         "terapeuta",
         "paciente"
+      ]
+    },
+    "public.clinical_modality": {
+      "name": "clinical_modality",
+      "schema": "public",
+      "values": [
+        "conventional",
+        "protocol_driven"
       ]
     },
     "public.consent_tipo": {

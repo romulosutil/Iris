@@ -41,34 +41,43 @@ describe.skipIf(!hasDb)("TCC · Registro de Pensamentos Distorcidos (RPD)", () =
     L = await import("./logic");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
-    // TRUNCATE ... CASCADE (não DELETE escopado): PAC/CLINIC_A são o mesmo
-    // UUID literal reusado por várias outras suítes .int.test.ts (diario,
-    // protocolos, metas, arquivamento, desarquivamento) como "paciente
-    // canônico" de fixture. Suítes anteriores na ordem de execução (ex.:
-    // diario/actions.int.test.ts, que roda antes por ordem alfabética)
-    // deixam linhas residuais em tabelas-filhas de patient (ex.: session)
-    // que um DELETE escopado só a tcc_rpd_entry/care_team_membership/patient
-    // não limpa, estourando FK. `fileParallelism: false` no
-    // vitest.integration.config.ts ("uma conexão/DB por vez") é o que torna
-    // TRUNCATE seguro aqui — arquivos rodam em série, não em paralelo, então
-    // a colisão que a memória "TRUNCATE extra colide com int-test paralelo"
-    // descreve (deadlock entre arquivos concorrentes) não se aplica a esta
-    // config. CASCADE cobre session/extraction/goal/etc. sem enumerar cada
-    // tabela-filha à mão.
-    await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership, tcc_rpd_entry RESTART IDENTITY CASCADE`;
+    // Limpeza ESCOPADA, nunca `TRUNCATE ... CASCADE`. CLINIC_A/PAC são UUIDs
+    // literais reusados por várias outras suítes (diario, protocolos, metas,
+    // arquivamento, desarquivamento) como fixture canônica, e o Postgres de
+    // integração é compartilhado — um TRUNCATE CASCADE aqui apaga tabela-filha
+    // (session, extraction, goal…) de suíte vizinha e derruba execução que
+    // ninguém invocou. Medido: com o TRUNCATE, a suíte de integração ia de
+    // 1 arquivo vermelho para 6-9; sem ele, os vizinhos voltam ao verde.
+    //
+    // Por isso as tabelas-mãe (clinic, app_user, patient) são semeadas por
+    // UPSERT em vez de recriadas: apagá-las exigiria arrastar toda a árvore de
+    // filhas — exatamente o CASCADE que estamos evitando. Só o que é
+    // ESTADO desta suíte é apagado de fato.
+    await owner`DELETE FROM tcc_rpd_entry WHERE clinic_id IN (${CLINIC_A}, ${CLINIC_B})`;
+    await owner`DELETE FROM care_team_membership WHERE patient_id IN (${PAC}, ${PAC_B})`;
+    await owner`DELETE FROM user_role
+      WHERE clinic_id IN (${CLINIC_A}, ${CLINIC_B})
+        AND user_id IN (${U_COORD}, ${U_T1}, ${U_T2}, ${U_RECEP})`;
 
-    await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')`;
+    await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')
+      ON CONFLICT (id) DO NOTHING`;
+    // E-mails com prefixo `tcc-` para não colidirem com o UNIQUE de e-mail de
+    // outra suíte que tenha semeado os mesmos ids com outro endereço.
     await owner`INSERT INTO app_user (id, email, name) VALUES
-      (${U_COORD}, 'c@x.com', 'Coord'), (${U_T1}, 't1@x.com', 'T1'), (${U_T2}, 't2@x.com', 'T2'),
-      (${U_RECEP}, 'recep@x.com', 'Recep')`;
+      (${U_COORD}, 'tcc-c@x.com', 'Coord'), (${U_T1}, 'tcc-t1@x.com', 'T1'), (${U_T2}, 'tcc-t2@x.com', 'T2'),
+      (${U_RECEP}, 'tcc-recep@x.com', 'Recep')
+      ON CONFLICT DO NOTHING`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD}, ${CLINIC_A}, 'coordenador'),
       (${U_T1}, ${CLINIC_A}, 'terapeuta'),
       (${U_T2}, ${CLINIC_A}, 'terapeuta'),
       (${U_RECEP}, ${CLINIC_A}, 'admin_recepcao'),
       (${U_COORD}, ${CLINIC_B}, 'coordenador')`;
+    // `arquivado_em = NULL` no UPDATE do upsert: o último teste arquiva PAC de
+    // propósito, e sem zerar aqui a suíte não é reexecutável no mesmo banco.
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
-      (${PAC}, ${CLINIC_A}, 'Paciente A'), (${PAC_B}, ${CLINIC_B}, 'Paciente B')`;
+      (${PAC}, ${CLINIC_A}, 'Paciente A'), (${PAC_B}, ${CLINIC_B}, 'Paciente B')
+      ON CONFLICT (id) DO UPDATE SET clinic_id = EXCLUDED.clinic_id, arquivado_em = NULL`;
     // T1 está na equipe de PAC; T2 não.
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'Psicologia')`;

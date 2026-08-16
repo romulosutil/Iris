@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
-import { obterRPDEntries } from "./logic";
+import { formatarDataHoraRpd, obterRPDEntries } from "./logic";
 import { RpdForm } from "./rpd-form";
 import { GraficoEvolucaoCrencas } from "./grafico-evolucao-crencas";
 import { Pill } from "@/components/ui/primitives/pill";
@@ -62,13 +62,7 @@ export default async function TccPage({ params }: TccPageProps) {
         ) : (
           <div className="flex flex-col gap-4">
             {entries.map((item, idx) => {
-              const dataFmt = new Date(item.criadoEm).toLocaleDateString("pt-BR", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
+              const dataFmt = formatarDataHoraRpd(item.criadoEm);
 
               return (
                 <div

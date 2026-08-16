@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { session as sessionTable, tccRpdEntry } from "@/db/schema";
@@ -77,6 +78,30 @@ async function salvarRPDCore(
 }
 
 export const salvarRPD = comEscrita(salvarRPDCore);
+
+/**
+ * Carimbo de data/hora de um RPD no fuso da clínica.
+ *
+ * `toLocaleDateString` sem `timeZone` usa o fuso do PROCESSO. O histórico é
+ * renderizado num Server Component, e o processo em nuvem roda em UTC — um RPD
+ * salvo às 23h30 de São Paulo aparecia com a data do dia SEGUINTE para a
+ * terapeuta que acabou de digitá-lo (#306, achado [NIT] da revisão). Fixar o
+ * fuso reutiliza `FUSO_CLINICA` (a mesma constante da agenda) em vez de
+ * recriar o literal aqui.
+ *
+ * Extraído da `page.tsx` para ser testável: `Intl` dentro do JSX de um
+ * componente assíncrono não tem oráculo barato.
+ */
+export function formatarDataHoraRpd(instante: Date | string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: FUSO_CLINICA,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(instante));
+}
 
 export async function obterRPDEntries(ctx: TenantContext, patientId: string) {
   // admin_recepcao não vê dado clínico (RLS já barra a leitura; aqui evitamos
