@@ -67,7 +67,10 @@ export async function executarFechamento(
 
   let resposta;
   try {
-    resposta = await fetchImpl(alvo, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    resposta = await fetchImpl(alvo, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
   } catch (err) {
     const timeout = err?.name === "TimeoutError" || err?.name === "AbortError";
     return {
@@ -105,6 +108,47 @@ export async function executarFechamento(
   return { ok: true, status: resposta.status, corpo };
 }
 
+/**
+ * Levanta do corpo os campos que mudam a REAÇÃO do operador, para que fiquem no
+ * primeiro nível da linha de log em vez de enterrados na string `corpo`.
+ *
+ * O caso que justifica isto: a rota responde 500 quando uma etapa POSTERIOR ao
+ * faturamento aborta (corte por carência, backstop de D+7). Nesse cenário o
+ * faturamento JÁ EMITIU cobrança de verdade no gateway, e o corpo carrega
+ * `resultados`. Ler só `ok: false` levaria a "reexecutar o job", que é
+ * exatamente a reação errada — daí `cobrancasEmitidas` subir como número.
+ *
+ * Nunca lança: corpo não-JSON (um HTML de proxy, por exemplo) volta com tudo
+ * `null`, e a string crua continua no campo `corpo`.
+ */
+export function resumoDoCorpo(corpo) {
+  const vazio = {
+    carenciaAbortada: null,
+    backstopAbortado: null,
+    ciclosProcessados: null,
+    cobrancasEmitidas: null,
+  };
+  if (typeof corpo !== "string") return vazio;
+  let dados;
+  try {
+    dados = JSON.parse(corpo);
+  } catch {
+    return vazio;
+  }
+  if (dados === null || typeof dados !== "object") return vazio;
+  return {
+    carenciaAbortada: dados.carenciaAbortada ?? null,
+    backstopAbortado: dados.backstopAbortado ?? null,
+    ciclosProcessados:
+      typeof dados.ciclosProcessados === "number"
+        ? dados.ciclosProcessados
+        : null,
+    cobrancasEmitidas: Array.isArray(dados.resultados)
+      ? dados.resultados.filter((r) => r?.cobrancaEmitida).length
+      : null,
+  };
+}
+
 async function main() {
   const url = process.env.BILLING_JOB_URL;
   const token = process.env.BILLING_JOB_TOKEN;
@@ -115,13 +159,21 @@ async function main() {
   if (!url) faltando.push("BILLING_JOB_URL");
   if (!token) faltando.push("BILLING_JOB_TOKEN");
   if (faltando.length > 0) {
-    console.error(`${PREFIXO} ERRO: variável(is) de ambiente ausente(s): ${faltando.join(", ")}.`);
+    console.error(
+      `${PREFIXO} ERRO: variável(is) de ambiente ausente(s): ${faltando.join(", ")}.`,
+    );
     process.exit(1);
   }
 
   const dryRun = process.argv.includes("--dry-run");
 
-  const resultado = await executarFechamento(globalThis.fetch, { url, token, dryRun });
+  const resultado = await executarFechamento(globalThis.fetch, {
+    url,
+    token,
+    dryRun,
+  });
+
+  const resumo = resumoDoCorpo(resultado.corpo);
 
   // UMA linha JSON: o log do Easypanel é o único observador deste processo, e
   // linha única sobrevive a interleaving de stdout. O token não entra aqui —
@@ -135,12 +187,30 @@ async function main() {
       status: resultado.status,
       falha: resultado.falha ?? null,
       erro: resultado.erro ?? null,
+      // Primeiro nível: qual etapa caiu, e quanto de irreversível já havia
+      // acontecido quando ela caiu.
+      carenciaAbortada: resumo.carenciaAbortada,
+      backstopAbortado: resumo.backstopAbortado,
+      ciclosProcessados: resumo.ciclosProcessados,
+      cobrancasEmitidas: resumo.cobrancasEmitidas,
       corpo: resultado.corpo ?? null,
     }),
   );
 
   if (!resultado.ok) {
-    console.error(`${PREFIXO} disparo FALHOU (${resultado.falha}): ${resultado.erro}`);
+    console.error(
+      `${PREFIXO} disparo FALHOU (${resultado.falha}): ${resultado.erro}`,
+    );
+    // Aviso separado, porque muda a reação: reexecutar o job aqui REEMITIRIA
+    // cobrança. A etapa que caiu é a que precisa ser reexecutada, não a
+    // varredura inteira.
+    if (resumo.cobrancasEmitidas) {
+      console.error(
+        `${PREFIXO} ATENÇÃO: ${resumo.cobrancasEmitidas} cobrança(s) JÁ foram emitidas nesta passada` +
+          ` (carenciaAbortada=${resumo.carenciaAbortada ?? "não"}, backstopAbortado=${resumo.backstopAbortado ?? "não"}).` +
+          ` NÃO reexecute o fechamento sem antes conferir o estado dos ciclos.`,
+      );
+    }
     process.exit(1);
   }
 

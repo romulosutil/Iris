@@ -548,8 +548,13 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
     const resposta = await POST(requisicao());
 
     expect(resposta.status).toBe(500);
+    // Falha ANTES de o faturamento terminar: não há cobrança emitida para
+    // relatar, e os dois discriminadores vão `null` — "nem chegou a ser
+    // tentada", que é diferente de "tentou e caiu".
     expect(await resposta.json()).toEqual({
       ok: false,
+      carenciaAbortada: null,
+      backstopAbortado: null,
       error: "connection terminated unexpectedly",
     });
     // Consequência da ordem, e o lado seguro: se o fechamento morreu, ninguém
@@ -558,23 +563,9 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
     expect(dubles.aplicarBackstopDePrazo).not.toHaveBeenCalled();
   });
 
-  it("não aplica o backstop quando a varredura de carência lança", async () => {
-    // Também consequência da ordem: o backstop é o último, e uma falha antes
-    // dele o impede de carimbar/cortar às cegas.
+  it("preserva `resultados` no corpo quando o corte por carência lança (D38)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    dubles.cancelarAssinaturasComCarenciaVencida.mockRejectedValue(
-      new Error("timeout ao revogar vínculo"),
-    );
-
-    const resposta = await POST(requisicao());
-
-    expect(resposta.status).toBe(500);
-    expect(dubles.aplicarBackstopDePrazo).not.toHaveBeenCalled();
-  });
-
-  it("descarta o relatório do fechamento quando o corte lança (comportamento atual)", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const emitida = fechamento();
+    const emitida = fechamento({ cobrancaEmitida: true });
     dubles.fecharCiclosVencendo.mockResolvedValue([emitida]);
     dubles.cancelarAssinaturasComCarenciaVencida.mockRejectedValue(
       new Error("timeout ao revogar vínculo"),
@@ -583,14 +574,102 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
     const resposta = await POST(requisicao());
     const corpo = await resposta.json();
 
-    // NÃO é o comportamento desejável, e está medido aqui para que a mudança
-    // seja deliberada: as cobranças do dia JÁ foram emitidas no gateway quando
-    // esta exceção sobe, e o único registro delas (`resultados`) some do corpo.
-    // O job registra apenas "falhou", e o operador fica sem saber quem foi
-    // cobrado. Ver relatório da issue — decisão de produto, não conserto local.
+    // O ponto do débito D38: quando esta exceção sobe, a cobrança JÁ saiu no
+    // gateway e já foi persistida. O job só grava este JSON, então perder
+    // `resultados` aqui apagaria o único registro de um ato irreversível.
+    expect(corpo.resultados).toEqual([
+      {
+        clinicId: emitida.clinicId,
+        fichasContadas: emitida.fichasContadas,
+        valorCentavos: emitida.valorCentavos,
+        cobrancaEmitida: true,
+        providerChargeId: emitida.providerChargeId,
+      },
+    ]);
+    expect(corpo.ciclosProcessados).toBe(1);
+    // …e o alarme continua de pé: perder o 500 seria trocar um problema por
+    // outro (D34 — o job já sai `exit 0` demais).
     expect(resposta.status).toBe(500);
-    expect(corpo).toEqual({ ok: false, error: "timeout ao revogar vínculo" });
-    expect(corpo.resultados).toBeUndefined();
+    expect(corpo.ok).toBe(false);
+    // A etapa que caiu é nomeada, com a mensagem de raiz.
+    expect(corpo.carenciaAbortada).toBe("timeout ao revogar vínculo");
+    expect(corpo.backstopAbortado).toBeNull();
     expect(dubles.fecharCiclosVencendo).toHaveBeenCalledTimes(1);
+  });
+
+  it("ainda aplica o backstop quando a varredura de carência lança", async () => {
+    // Uma etapa não derruba a outra. É seguro: a invariante da ordem é que o
+    // backstop não carimbe ANTES de a carência ter passado neste tick, e uma
+    // carência que estourou não cortou ninguém. O carimbo só é lido na passada
+    // seguinte.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    dubles.cancelarAssinaturasComCarenciaVencida.mockRejectedValue(
+      new Error("timeout ao revogar vínculo"),
+    );
+    dubles.aplicarBackstopDePrazo.mockResolvedValue([
+      backstop({ acao: "carimbada" }),
+    ]);
+
+    const resposta = await POST(requisicao());
+    const corpo = await resposta.json();
+
+    expect(dubles.aplicarBackstopDePrazo).toHaveBeenCalledTimes(1);
+    expect(corpo.backstopAvaliados).toBe(1);
+    expect(corpo.backstopCarimbados).toBe(1);
+    // A carência que caiu não vira "zero avaliadas" em silêncio: quem separa
+    // "não havia ninguém a cortar" de "a varredura estourou" é este campo.
+    expect(corpo.carenciaAvaliadas).toBe(0);
+    expect(corpo.carenciaAbortada).toBe("timeout ao revogar vínculo");
+    expect(resposta.status).toBe(500);
+  });
+
+  it("nomeia o backstop quando é ele que lança, sem contaminar a carência", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    dubles.cancelarAssinaturasComCarenciaVencida.mockResolvedValue([
+      corte({ cortada: true }),
+    ]);
+    dubles.aplicarBackstopDePrazo.mockRejectedValue(
+      new Error("gateway 503 na reconsulta"),
+    );
+
+    const corpo = await (await POST(requisicao())).json();
+
+    expect(corpo.backstopAbortado).toBe("gateway 503 na reconsulta");
+    expect(corpo.carenciaAbortada).toBeNull();
+    // O trabalho da carência, que correu inteiro, continua relatado.
+    expect(corpo.carenciaCortadas).toBe(1);
+  });
+
+  it("registra as DUAS etapas quando ambas lançam", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    dubles.fecharCiclosVencendo.mockResolvedValue([fechamento()]);
+    dubles.cancelarAssinaturasComCarenciaVencida.mockRejectedValue(
+      new Error("timeout ao revogar vínculo"),
+    );
+    dubles.aplicarBackstopDePrazo.mockRejectedValue(
+      new Error("gateway 503 na reconsulta"),
+    );
+
+    const resposta = await POST(requisicao());
+    const corpo = await resposta.json();
+
+    expect(corpo.carenciaAbortada).toBe("timeout ao revogar vínculo");
+    expect(corpo.backstopAbortado).toBe("gateway 503 na reconsulta");
+    expect(resposta.status).toBe(500);
+    expect(corpo.resultados).toHaveLength(1);
+  });
+
+  it("mantém 200 e os dois discriminadores `null` quando tudo corre", async () => {
+    // O contrapeso dos casos acima: se `etapaAbortou` fosse constante, o 500
+    // apareceria também no caminho feliz e nenhum teste acima notaria.
+    dubles.fecharCiclosVencendo.mockResolvedValue([fechamento()]);
+
+    const resposta = await POST(requisicao());
+    const corpo = await resposta.json();
+
+    expect(resposta.status).toBe(200);
+    expect(corpo.ok).toBe(true);
+    expect(corpo.carenciaAbortada).toBeNull();
+    expect(corpo.backstopAbortado).toBeNull();
   });
 });

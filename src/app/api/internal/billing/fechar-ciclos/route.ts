@@ -4,6 +4,8 @@ import {
   cancelarAssinaturasComCarenciaVencida,
   fecharCiclosVencendo,
   reprocessarEventosPendentes,
+  type ResultadoBackstopPrazo,
+  type ResultadoCortePorCarencia,
 } from "@/lib/billing/subscription";
 
 /**
@@ -23,6 +25,11 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** Texto de erro sem inventar causa: `Error.message` quando há, senão o valor cru. */
+function mensagemDoErro(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 /**
  * Bearer em tempo constante. Env ausente → false, nunca "passa porque não há
@@ -69,7 +76,21 @@ export async function POST(request: Request): Promise<Response> {
     // — e o corte revoga a autorização de Pix Automático, que é irreversível
     // sem uma nova autorização da clínica no app do banco. Depois, o pior caso
     // é um dia a mais de carência, que é o lado seguro.
-    const cortes = await cancelarAssinaturasComCarenciaVencida({ dryRun });
+    //
+    // `try/catch` PRÓPRIO, e a razão é o que já aconteceu acima: quando esta
+    // linha é alcançada, `fecharCiclosVencendo` já emitiu cobrança de verdade no
+    // gateway e já persistiu o ciclo. Deixar a exceção subir para o `catch` do
+    // fim descartaria `resultados` inteiro num 500 seco — e o job
+    // (`scripts/fechamento-ciclo-billing.mjs`) só grava este JSON, então o
+    // registro de um ato IRREVERSÍVEL sumiria com ele (débito D38).
+    let cortes: ResultadoCortePorCarencia[] = [];
+    let carenciaAbortada: string | null = null;
+    try {
+      cortes = await cancelarAssinaturasComCarenciaVencida({ dryRun });
+    } catch (err) {
+      carenciaAbortada = mensagemDoErro(err);
+      console.error("[billing-fechamento] etapa de carência abortou", err);
+    }
     const cortesComErro = cortes.filter((c) => c.erro);
 
     // Backstop de D+7 por ÚLTIMO (#318, Decisão 2). Três razões, nesta ordem:
@@ -89,81 +110,122 @@ export async function POST(request: Request): Promise<Response> {
     // 3. `reprocessarEventosPendentes` roda antes de tudo, e isso importa aqui:
     //    um evento de PAGAMENTO que ficou pendente desde ontem precisa ser
     //    aplicado antes de o backstop concluir que o ciclo não foi pago.
-    const backstop = await aplicarBackstopDePrazo({ dryRun });
+    //
+    // `try/catch` próprio pela mesma razão da carência, e roda MESMO se a
+    // carência abortou: a invariante da ordem é "o backstop não carimba antes de
+    // a carência ter passado neste tick", e uma carência que estourou não cortou
+    // ninguém. O carimbo de `past_due_desde` feito aqui só será lido na passada
+    // seguinte, então nada de irreversível acontece cedo demais.
+    let backstop: ResultadoBackstopPrazo[] = [];
+    let backstopAbortado: string | null = null;
+    try {
+      backstop = await aplicarBackstopDePrazo({ dryRun });
+    } catch (err) {
+      backstopAbortado = mensagemDoErro(err);
+      console.error("[billing-fechamento] etapa de backstop abortou", err);
+    }
     const backstopComErro = backstop.filter((b) => b.erro);
 
     const comErro = resultados.filter((r) => r.erro);
-    return Response.json({
-      ok: true,
-      dryRun,
-      eventosReprocessados: pendentes,
-      ciclosProcessados: resultados.length,
-      // Chaves próprias, e não somadas às do fechamento: `ciclosProcessados` e
-      // `falhas` são lidas no log do job como "faturamento do dia", e misturar
-      // corte de inadimplente ali tornaria as duas leituras impossíveis de
-      // separar depois do fato.
-      carenciaAvaliadas: cortes.length,
-      carenciaCortadas: cortes.filter((c) => c.cortada).length,
-      // Truncamento vai no corpo, não só no `console.warn`: o job só registra
-      // o JSON, e uma passada que parou no teto com fila atrás é
-      // indistinguível de uma que cobriu tudo se esse sinal não subir.
-      carenciaTruncado: cortes.some((c) => c.truncado),
-      carenciaFalhas: cortesComErro.map((c) => ({
-        clinicId: c.clinicId,
-        erro: c.erro,
-      })),
-      // Chaves próprias, como as da carência e pela mesma razão: "carimbado por
-      // prazo" e "cortado por carência" são consequências diferentes, e somá-las
-      // tornaria impossível separar depois do fato quantas clínicas entraram em
-      // inadimplência por silêncio do gateway.
-      backstopAvaliados: backstop.length,
-      backstopCarimbados: backstop.filter((b) => b.acao === "carimbada").length,
-      backstopCortados: backstop.filter((b) => b.acao === "cortada").length,
-      backstopIgnoradosG6: backstop.filter((b) => b.acao === "ignorada_g6")
-        .length,
-      backstopTruncado: backstop.some((b) => b.truncado),
-      backstopFalhas: backstopComErro.map((b) => ({
-        clinicId: b.clinicId,
-        cycleId: b.cycleId,
-        // A ação vai junto: um G3 cuja reconsulta falhou é carimbado E traz
-        // erro, e sem este campo o log leria "falhou" onde houve consequência.
-        acao: b.acao,
-        erro: b.erro,
-      })),
-      backstopPorPrazo: backstop.map((b) => ({
-        clinicId: b.clinicId,
-        cycleId: b.cycleId,
-        vencimento: b.vencimento,
-        grupo: b.grupo,
-        recusaCodigo: b.recusaCodigo,
-        acao: b.acao,
-      })),
-      cortesPorCarencia: cortes.map((c) => ({
-        clinicId: c.clinicId,
-        pastDueDesde: c.pastDueDesde,
-        carenciaDias: c.carenciaDias,
-        cortada: c.cortada,
-      })),
-      // Falha de UMA clínica não derruba a varredura, mas também não pode
-      // sumir: vai no corpo, e o job registra a linha inteira no log.
-      falhas: comErro.map((r) => ({ clinicId: r.clinicId, erro: r.erro })),
-      resultados: resultados.map((r) => ({
-        clinicId: r.clinicId,
-        fichasContadas: r.fichasContadas,
-        valorCentavos: r.valorCentavos,
-        cobrancaEmitida: r.cobrancaEmitida,
-        providerChargeId: r.providerChargeId,
-      })),
-    });
+
+    // Uma etapa posterior ao faturamento que aborta continua sendo 500 e
+    // `ok: false` — perder o alarme seria trocar um problema por outro (D34: o
+    // job já sai `exit 0` demais). O que muda em relação ao 500 seco é que o
+    // corpo vai INTEIRO: `resultados` (as cobranças que de fato saíram) e um
+    // discriminador por etapa dizendo qual delas caiu e por quê. Assim o log do
+    // job separa "não faturou" de "faturou e a varredura seguinte caiu", que
+    // exigem reações opostas.
+    const etapaAbortou = carenciaAbortada !== null || backstopAbortado !== null;
+
+    return Response.json(
+      {
+        ok: !etapaAbortou,
+        // `null` quando a etapa correu — presente em toda resposta para que o
+        // job possa ler a chave sem adivinhar se ela existe.
+        carenciaAbortada,
+        backstopAbortado,
+        dryRun,
+        eventosReprocessados: pendentes,
+        ciclosProcessados: resultados.length,
+        // Chaves próprias, e não somadas às do fechamento: `ciclosProcessados` e
+        // `falhas` são lidas no log do job como "faturamento do dia", e misturar
+        // corte de inadimplente ali tornaria as duas leituras impossíveis de
+        // separar depois do fato.
+        carenciaAvaliadas: cortes.length,
+        carenciaCortadas: cortes.filter((c) => c.cortada).length,
+        // Truncamento vai no corpo, não só no `console.warn`: o job só registra
+        // o JSON, e uma passada que parou no teto com fila atrás é
+        // indistinguível de uma que cobriu tudo se esse sinal não subir.
+        carenciaTruncado: cortes.some((c) => c.truncado),
+        carenciaFalhas: cortesComErro.map((c) => ({
+          clinicId: c.clinicId,
+          erro: c.erro,
+        })),
+        // Chaves próprias, como as da carência e pela mesma razão: "carimbado por
+        // prazo" e "cortado por carência" são consequências diferentes, e somá-las
+        // tornaria impossível separar depois do fato quantas clínicas entraram em
+        // inadimplência por silêncio do gateway.
+        backstopAvaliados: backstop.length,
+        backstopCarimbados: backstop.filter((b) => b.acao === "carimbada")
+          .length,
+        backstopCortados: backstop.filter((b) => b.acao === "cortada").length,
+        backstopIgnoradosG6: backstop.filter((b) => b.acao === "ignorada_g6")
+          .length,
+        backstopTruncado: backstop.some((b) => b.truncado),
+        backstopFalhas: backstopComErro.map((b) => ({
+          clinicId: b.clinicId,
+          cycleId: b.cycleId,
+          // A ação vai junto: um G3 cuja reconsulta falhou é carimbado E traz
+          // erro, e sem este campo o log leria "falhou" onde houve consequência.
+          acao: b.acao,
+          erro: b.erro,
+        })),
+        backstopPorPrazo: backstop.map((b) => ({
+          clinicId: b.clinicId,
+          cycleId: b.cycleId,
+          vencimento: b.vencimento,
+          grupo: b.grupo,
+          recusaCodigo: b.recusaCodigo,
+          acao: b.acao,
+        })),
+        cortesPorCarencia: cortes.map((c) => ({
+          clinicId: c.clinicId,
+          pastDueDesde: c.pastDueDesde,
+          carenciaDias: c.carenciaDias,
+          cortada: c.cortada,
+        })),
+        // Falha de UMA clínica não derruba a varredura, mas também não pode
+        // sumir: vai no corpo, e o job registra a linha inteira no log.
+        falhas: comErro.map((r) => ({ clinicId: r.clinicId, erro: r.erro })),
+        resultados: resultados.map((r) => ({
+          clinicId: r.clinicId,
+          fichasContadas: r.fichasContadas,
+          valorCentavos: r.valorCentavos,
+          cobrancaEmitida: r.cobrancaEmitida,
+          providerChargeId: r.providerChargeId,
+        })),
+      },
+      { status: etapaAbortou ? 500 : 200 },
+    );
   } catch (err) {
-    // 5xx só para falha que impediu a varredura inteira. O texto real do erro
-    // vai no corpo: uma mensagem genérica aqui transformaria o diagnóstico de
-    // faturamento parado numa caçada às cegas.
+    // Este `catch` agora significa uma coisa só: caiu ANTES de o faturamento
+    // terminar (`reprocessarEventosPendentes` ou `fecharCiclosVencendo`). As
+    // etapas posteriores têm guarda própria e respondem com o corpo completo,
+    // justamente para não descartar cobrança já emitida.
+    //
+    // Os dois discriminadores vão como `null` e não omitidos: o job lê as mesmas
+    // chaves nos dois caminhos, e chave ausente exigiria que ele adivinhasse se
+    // a etapa correu ou nem chegou a ser tentada.
+    //
+    // O texto real do erro vai no corpo: uma mensagem genérica aqui
+    // transformaria o diagnóstico de faturamento parado numa caçada às cegas.
     console.error("[billing-fechamento] falha na varredura", err);
     return Response.json(
       {
         ok: false,
-        error: err instanceof Error ? err.message : String(err),
+        carenciaAbortada: null,
+        backstopAbortado: null,
+        error: mensagemDoErro(err),
       },
       { status: 500 },
     );
