@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import type { Tx } from "@/db/rls";
+import { codigoPg, mensagemPg } from "@/db/pg-error";
 
 /**
  * #122 — despacho de notificação do alerta de risco clínico.
@@ -10,12 +11,18 @@ import type { Tx } from "@/db/rls";
  * emergência, não SAMU, não polícia, não Conselho Tutelar. Todo o fluxo encerra
  * na notificação e responsabilização dos gestores da própria clínica.
  *
- * Este módulo é o único ponto do código que resolve "para quem" um alerta de
- * risco é notificado. Ele é deliberadamente estreito: só devolve `userId` de
- * usuários com papel ATIVO na clínica do alerta. Não existe caminho aqui para
- * um endereço, telefone ou destinatário arbitrário — não é uma política que
- * alguém precise lembrar de respeitar, é a única coisa que o tipo permite
- * expressar.
+ * Este módulo resolve "para quem" um alerta de risco é notificado NO CAMINHO DE
+ * CRIAÇÃO (in-app, dentro do processo Next). Ele é deliberadamente estreito: só
+ * devolve `userId` de usuários com papel ATIVO na clínica do alerta. Não existe
+ * caminho aqui para um endereço, telefone ou destinatário arbitrário — não é uma
+ * política que alguém precise lembrar de respeitar, é a única coisa que o tipo
+ * permite expressar.
+ *
+ * #329 — o caminho de ESCALONAMENTO (e-mail ao RT no estágio 2) resolve
+ * destinatário em outro processo, `scripts/escalonamento-risco.mjs`, que não
+ * importa este módulo e nem pode. O que os dois têm em comum é o predicado de
+ * tenant, que vive em SQL (`app_destinatarios_fora_do_tenant`, migração 0105) —
+ * ver `assertDestinatariosNoTenant` no fim deste arquivo.
  */
 
 /** Estágio do escalonamento. 0 = notificação inicial, na criação do alerta. */
@@ -160,6 +167,32 @@ export async function destinatariosEstagio2(
  * notificação para destinatário fora do tenant". As funções acima já só
  * produzem usuários do tenant; esta é a rede de segurança que quebra alto se
  * alguém introduzir um caminho novo que não passe por elas.
+ *
+ * #329 — ESCOPO REAL DESTA FUNÇÃO, sem promessa a mais. Ela cobre o caminho de
+ * CRIAÇÃO do alerta, que roda dentro do app Next. Ela NÃO cobre o motor de
+ * escalonamento (`scripts/escalonamento-risco.mjs`): aquilo é Node `.mjs` puro,
+ * sem TS e sem build, e a imagem `infra/escalonamento/Dockerfile` não copia
+ * `src/` — importar este módulo de lá é impossível, não é descuido.
+ *
+ * O que os dois caminhos compartilham é o PREDICADO, não o código: ele mora em
+ * SQL, em `app_destinatarios_fora_do_tenant` (migração 0105). O caminho do
+ * escalonamento consome o mesmo predicado através de `app_rt_do_alerta`, que
+ * passou a devolver `motivo_bloqueio` em vez de filtrar o RT forasteiro em
+ * silêncio. Um predicado só, duas portas de entrada — reimplementar a regra aqui
+ * em TypeScript era o jeito de ela divergir sem ninguém notar.
+ *
+ * E não só o predicado: a DECISÃO DE ESTOURAR e a mensagem também moram lá, em
+ * `app_assert_destinatarios_no_tenant`. Esta função chama a asserção e traduz o
+ * `P0001` de volta para `Error` — o `throw` continua sendo `Error` com o mesmo
+ * texto de sempre, mas quem decide "isto é forasteiro, morra" é o banco. Manter
+ * o `RAISE` no SQL e um `if` equivalente em TS deixava a regra em dois lugares:
+ * o helper SQL viraria código morto e os dois divergiriam sem ninguém notar,
+ * repetindo em miniatura o problema que a #329 fechou.
+ *
+ * Efeito colateral desejado: o `RAISE` aborta a transação. Todo chamador já
+ * trata a falha como fatal (`registrar.ts` deixa o `withTenant` inteiro fazer
+ * rollback), então o alerta não é criado — que é o comportamento que já existia
+ * quando o `throw` era do lado do TypeScript.
  */
 export async function assertDestinatariosNoTenant(
   tx: Tx,
@@ -167,17 +200,22 @@ export async function assertDestinatariosNoTenant(
 ): Promise<void> {
   if (args.destinatarios.length === 0) return;
   const ids = args.destinatarios.map((d) => d.userId);
-  const linhas = (await tx.execute(sql`
-    SELECT DISTINCT ur.user_id FROM user_role ur
-     WHERE ur.clinic_id = ${args.clinicId}
-       AND ur.user_id = ANY(${sql.param(ids)}::uuid[])
-  `)) as unknown as Array<{ user_id: string }>;
-  const noTenant = new Set(linhas.map((l) => l.user_id));
-  const forasteiros = ids.filter((i) => !noTenant.has(i));
-  if (forasteiros.length > 0) {
+  try {
+    await tx.execute(sql`
+      SELECT app_assert_destinatarios_no_tenant(
+        ${args.clinicId}::uuid, ${sql.param(ids)}::uuid[]
+      )
+    `);
+  } catch (e) {
+    // Só o P0001 do guard é traduzido. Qualquer outro erro (conexão, permissão,
+    // uuid inválido) sobe cru: engolir e reetiquetar como "fora do tenant" seria
+    // afirmar uma causa que não foi medida.
+    if (codigoPg(e) !== "P0001") throw e;
     throw new Error(
-      `notificacao de risco: destinatário fora do tenant (${forasteiros.join(", ")}) — ` +
-        "o Iris nunca notifica fora da clínica (regra de ouro §4.2.1).",
+      mensagemPg(e) ??
+        `notificacao de risco: destinatário fora do tenant (${ids.join(", ")}) — ` +
+          "o Iris nunca notifica fora da clínica (regra de ouro §4.2.1).",
+      { cause: e },
     );
   }
 }

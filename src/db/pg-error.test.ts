@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { codigoPg } from "./pg-error";
+import { codigoPg, mensagemPg } from "./pg-error";
 
 /**
  * O ponto destes testes é a ASSIMETRIA das duas formas.
@@ -36,5 +36,40 @@ describe("codigoPg", () => {
     expect(codigoPg(undefined)).toBeUndefined();
     expect(codigoPg(null)).toBeUndefined();
     expect(codigoPg("string solta")).toBeUndefined();
+  });
+});
+
+/**
+ * A precedência aqui é o INVERSO do `codigoPg`, e é o ponto do teste: o
+ * `DrizzleQueryError` guarda em `.message` o SQL que o app emitiu, e a exceção
+ * do banco só existe em `.cause`. Uma leitura que preferisse a raiz devolveria
+ * `Failed query: SELECT app_assert_...` como se fosse o diagnóstico — texto
+ * errado, sem nenhum erro visível.
+ */
+describe("mensagemPg", () => {
+  test("prefere a mensagem do banco em .cause à do embrulho Drizzle", () => {
+    const embrulhado = Object.assign(
+      new Error(
+        "Failed query: SELECT app_assert_destinatarios_no_tenant($1,$2)",
+      ),
+      {
+        cause: Object.assign(new Error("destinatário fora do tenant"), {
+          code: "P0001",
+        }),
+      },
+    );
+    expect(mensagemPg(embrulhado)).toBe("destinatário fora do tenant");
+  });
+
+  test("erro cru do driver (sem .cause) cai na raiz", () => {
+    expect(
+      mensagemPg(Object.assign(new Error("fora do tenant"), { code: "P0001" })),
+    ).toBe("fora do tenant");
+  });
+
+  test("valor sem mensagem devolve undefined em vez de estourar", () => {
+    expect(mensagemPg(undefined)).toBeUndefined();
+    expect(mensagemPg(null)).toBeUndefined();
+    expect(mensagemPg({})).toBeUndefined();
   });
 });

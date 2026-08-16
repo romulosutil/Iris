@@ -120,7 +120,8 @@ async function dryRun(sql) {
  */
 export async function processarEmailRt(sql, alertaId) {
   const apiKey = process.env.EMAIL_PROVIDER_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "notificacoes@irisclinica.ia.br";
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ?? "notificacoes@irisclinica.ia.br";
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
 
   const rts = await sql`SELECT * FROM app_rt_do_alerta(${alertaId})`;
@@ -129,16 +130,40 @@ export async function processarEmailRt(sql, alertaId) {
     // resolve em 3 varreduras de 5 minutos — depende de alguém arrumar o
     // cadastro. Adiar aqui só atrasaria o registro do problema na trilha.
     await sql`SELECT app_registrar_email_rt(${alertaId}, false, false, ${"RT nao encontrado ou sem papel vigente na clinica"})`;
-    log(`e-mail RT: alerta_id=${alertaId} sem RT resolvido — falha registrada.`);
+    log(
+      `e-mail RT: alerta_id=${alertaId} sem RT resolvido — falha registrada.`,
+    );
     return;
   }
 
-  const { rt_email: rtEmail } = rts[0];
+  // #329 — bloqueio de tenant. `app_rt_do_alerta` (migração 0105) devolve o RT
+  // resolvido MAS com `motivo_bloqueio` preenchido e `rt_email` NULL quando o
+  // responsável técnico da clínica não tem papel naquela clínica. Antes da 0105
+  // esse caso era filtrado dentro do WHERE da função e saía como zero linhas —
+  // gravava "RT nao encontrado", indistinguível de clínica sem RT cadastrado.
+  //
+  // Aqui NÃO se envia nada e se registra falha PERMANENTE (p_transitorio=false):
+  // um RT fora do tenant não se conserta em 3 varreduras de 5 minutos, depende
+  // de alguém arrumar o cadastro. E registrar é obrigatório — sem marcador o
+  // alerta continua elegível em `app_alertas_estagio2_sem_email()` e a varredura
+  // volta nele para sempre.
+  const { rt_email: rtEmail, motivo_bloqueio: motivoBloqueio } = rts[0];
+  if (motivoBloqueio) {
+    await sql`SELECT app_registrar_email_rt(${alertaId}, false, false, ${motivoBloqueio})`;
+    log(
+      `e-mail RT NÃO enviado por bloqueio de tenant (§4.2.1): alerta_id=${alertaId} ` +
+        `motivo=${motivoBloqueio} — falha permanente registrada.`,
+    );
+    return;
+  }
+
   const resultado = await enviarEmailRt({ apiKey, fromEmail, appUrl, rtEmail });
 
   if (resultado.ok) {
     await sql`SELECT app_registrar_email_rt(${alertaId}, true, false, ${resultado.providerMessageId})`;
-    log(`e-mail RT enviado: alerta_id=${alertaId} providerMessageId=${resultado.providerMessageId}`);
+    log(
+      `e-mail RT enviado: alerta_id=${alertaId} providerMessageId=${resultado.providerMessageId}`,
+    );
   } else {
     await sql`SELECT app_registrar_email_rt(${alertaId}, false, ${resultado.transitorio === true}, ${resultado.erro})`;
     log(
@@ -266,7 +291,10 @@ async function main() {
 // processo sairia 0 sem varrer nada. Falha silenciosa disfarçada de sucesso é
 // exatamente o que este motor não pode fazer. (Também quebrava no Windows, em
 // que argv[1] vem com barra invertida e a URL não.)
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().catch((err) => {
     // Erro COMPLETO em stderr, incluindo stack e `cause`. Não engolir stderr é
     // regra deste repo: mensagem que afirma UMA causa provável produz
