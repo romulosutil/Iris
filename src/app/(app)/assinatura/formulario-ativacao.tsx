@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useId } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Form } from "@/components/ui/form";
@@ -13,6 +13,9 @@ import { CopyButton } from "@/components/ui/patterns/copy-button";
 import { formatarBRL } from "@/lib/billing/calculator";
 import { ativarAssinatura } from "./actions";
 import type { AtivacaoState } from "./logic";
+// `import type` de propósito: `debito.ts` puxa Drizzle e o banco, e um import de
+// valor arrastaria código de servidor para o bundle deste componente cliente.
+import type { CobrancaDoDebito } from "@/lib/billing/debito";
 
 type AcaoAtivacao = (
   prev: AtivacaoState,
@@ -104,13 +107,6 @@ export function FormularioAtivacao({
    * concluiria que falhou e pagaria de novo. Quem zera é `debitoCentavos`.
    */
   const debitoCobrado = state.debito;
-  /**
-   * A cobrança única de hoje. O contrato já é uma LISTA (#310) porque o débito
-   * pode se partir em mais de uma cobrança quando parte dele já tem cobrança
-   * viva no gateway — mas enquanto a política de reuso não entra, o gate emite
-   * uma só e a lista tem sempre um elemento. Renderizar N é a fatia seguinte.
-   */
-  const cobrancaDoDebito = debitoCobrado?.cobrancas[0];
   const debitoQuitado =
     debitoCobrado != null && (situacaoConta?.debitoCentavos ?? 0) === 0;
   const aguardandoPagamentoDeDebito = debitoCobrado != null && !debitoQuitado;
@@ -260,53 +256,45 @@ export function FormularioAtivacao({
 
       {debitoCobrado && !debitoQuitado ? (
         <Alert severidade="info" titulo="Pague o valor em aberto para reativar">
-          <p>
-            <strong>
-              Esta cobrança é de {formatarBRL(debitoCobrado.valorCentavos)}
-            </strong>{" "}
-            — o ciclo que ficou aberto quando a assinatura foi cancelada,
-            proporcional aos dias usados. Não é mensalidade nem taxa: é o
-            período que já foi utilizado.
-          </p>
+          {/* Duas intros porque o pedido é outro. Com uma cobrança, o que a
+              pessoa precisa saber é O QUE ela está pagando. Com mais de uma, o
+              que ela precisa saber primeiro é que pagar UMA não basta — é o
+              erro que a tela precisa impedir, e o total aparece justamente para
+              ela conferir que as parcelas somam a dívida. */}
+          {debitoCobrado.cobrancas.length > 1 ? (
+            <p>
+              Há mais de uma cobrança em aberto e{" "}
+              <strong>cada uma se paga separadamente</strong>. Uma delas já
+              tinha sido enviada antes e continua válida — pagar todas quita o
+              total de{" "}
+              <strong>{formatarBRL(debitoCobrado.valorCentavos)}</strong>.
+            </p>
+          ) : (
+            <p>
+              <strong>
+                Esta cobrança é de {formatarBRL(debitoCobrado.valorCentavos)}
+              </strong>{" "}
+              — o ciclo que ficou aberto quando a assinatura foi cancelada,
+              proporcional aos dias usados. Não é mensalidade nem taxa: é o
+              período que já foi utilizado.
+            </p>
+          )}
           <p className="mt-2">
             A assinatura só é reaberta depois deste pagamento. Confirmado o Pix,
             esta tela avisa sozinha e você segue para a autorização.
           </p>
-          {/* Só o ramo `pagavel` renderiza forma de pagamento. `em_processamento`
-              (débito automático a caminho) ainda não é produzido pelo gate e
-              ganha copy própria na fatia da renderização de N — até lá, o
-              estreitamento existe para que um QR com `brCode` indefinido não
-              tenha como chegar à tela. */}
-          {cobrancaDoDebito?.situacao.estado === "pagavel" ? (
-            cobrancaDoDebito.situacao.pagamento.forma === "pix_copia_e_cola" ? (
-              <>
-                <div className="mt-3 flex justify-center">
-                  <QrCode
-                    value={cobrancaDoDebito.situacao.pagamento.brCode}
-                    alt="QR Code do Pix para quitar o valor em aberto"
-                  />
-                </div>
-                <p className="mt-3 max-w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/40 bg-[var(--surface-muted)] p-2 font-mono text-xs break-all">
-                  {cobrancaDoDebito.situacao.pagamento.brCode}
-                </p>
-                <div className="mt-2">
-                  <CopyButton
-                    valor={cobrancaDoDebito.situacao.pagamento.brCode}
-                    rotulo="Copiar código Pix"
-                  />
-                </div>
-              </>
-            ) : (
-              <p className="mt-2">
-                <a
-                  href={cobrancaDoDebito.situacao.pagamento.urlPagamento}
-                  className="font-semibold text-[var(--text-primary)] underline underline-offset-4"
-                >
-                  Abrir a cobrança para pagar
-                </a>
-              </p>
-            )
-          ) : null}
+
+          {debitoCobrado.cobrancas.map((cobranca) => (
+            <BlocoDeCobranca
+              key={cobranca.providerChargeId}
+              cobranca={cobranca}
+              // Agrupar só quando há mais de uma: com uma cobrança só, o título
+              // do próprio <Alert> já nomeia o bloco inteiro, e um grupo
+              // nomeado como filho único de uma região seria mais uma parada de
+              // navegação sem informação nova.
+              agrupado={debitoCobrado.cobrancas.length > 1}
+            />
+          ))}
         </Alert>
       ) : null}
 
@@ -423,5 +411,115 @@ export function FormularioAtivacao({
         {isPending ? "Abrindo pagamento…" : "Ativar assinatura"}
       </Button>
     </Form>
+  );
+}
+
+/**
+ * Uma cobrança do débito (#310). O débito pode se partir em várias quando parte
+ * dele já tinha cobrança viva no gateway e foi reapresentada.
+ *
+ * ## Por que é componente próprio, e não JSX dentro do `.map`
+ *
+ * Cada bloco precisa de um `id` único para o `aria-labelledby`, e `useId` só
+ * entrega um id por instância de componente — dentro do `.map` daria o mesmo id
+ * para todos. Derivar o id do `providerChargeId` também não serve: dois
+ * formulários na mesma página colariam os dois no mesmo id.
+ */
+function BlocoDeCobranca({
+  cobranca,
+  agrupado,
+}: {
+  cobranca: CobrancaDoDebito;
+  agrupado: boolean;
+}) {
+  const idTitulo = useId();
+
+  /**
+   * O nome do bloco é o que ele É — valor e origem —, nunca "cobrança 1 de 2".
+   * Duas cobranças podem ter o mesmo valor, e a posição na lista não diz nada
+   * sobre qual delas pagar; a origem diz. Quem navega por leitor de tela entra
+   * no grupo já sabendo de qual das duas se trata, em vez de ter que reconstruir
+   * isso a partir de dois QR Codes e dois botões "Copiar código Pix" seguidos.
+   */
+  const nome = `Cobrança de ${formatarBRL(cobranca.valorCentavos)} — ${
+    cobranca.reaproveitada ? "enviada antes e ainda válida" : "criada agora"
+  }`;
+
+  return (
+    <div
+      role={agrupado ? "group" : undefined}
+      aria-labelledby={agrupado ? idTitulo : undefined}
+      className={
+        agrupado
+          ? "mt-4 border-t-2 border-[var(--border-brutal)]/30 pt-3 first:border-t-0 first:pt-0"
+          : "mt-3"
+      }
+    >
+      {agrupado ? (
+        <p id={idTitulo} className="font-display text-sm font-semibold">
+          {nome}
+        </p>
+      ) : null}
+
+      {cobranca.situacao.estado === "em_processamento" ? (
+        /* D-6: há débito automático a caminho para ESTA cobrança. Dentro da
+           janela crítica do Pix Automático o banco bloqueia o recebimento por
+           outro meio, então oferecer o copia-e-cola aqui é pedir pagamento em
+           duplicidade — ou uma recusa que a pessoa não saberia interpretar.
+
+           O estado é anunciado por TEXTO, e o texto nasce dentro do <Alert>,
+           que é `role="status"`: quando o bloco aparece, o leitor de tela
+           recebe o aviso junto com o resto da região. Sem `aria-live` próprio
+           de propósito — região viva aninhada faz o anúncio sair duas vezes. E
+           sem cor própria: aqui a cor não carrega significado nenhum, o que
+           some é o código de pagamento, e isso só se diz com palavra. */
+        <>
+          <p className="font-display mt-1 text-sm font-semibold">
+            Cobrança em processamento no seu banco
+          </p>
+          <p className="mt-1 text-sm">
+            O débito automático desta cobrança já foi enviado ao seu banco e
+            está sendo processado.{" "}
+            <strong>Não pague por outro meio agora</strong> — enquanto o débito
+            está a caminho, o pagamento por fora pode ser recusado pelo banco e,
+            se cair, você paga duas vezes. É só aguardar: esta tela avisa
+            sozinha quando o banco responder. Se o débito falhar, o código para
+            pagar aparece aqui mesmo.
+          </p>
+        </>
+      ) : cobranca.situacao.pagamento.forma === "pix_copia_e_cola" ? (
+        <>
+          <div className="mt-3 flex justify-center">
+            <QrCode
+              value={cobranca.situacao.pagamento.brCode}
+              // O valor entra no rótulo porque com N cobranças na tela é ele
+              // que diz QUAL QR Code é este — "QR Code do Pix" repetido duas
+              // vezes não distingue nada.
+              alt={`QR Code do Pix para quitar ${formatarBRL(cobranca.valorCentavos)} em aberto`}
+            />
+          </div>
+          {/* `break-all` de propósito: o BR Code é uma cadeia única sem
+              espaços — sem isso ele estoura a largura em tela estreita. */}
+          <p className="mt-3 max-w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/40 bg-[var(--surface-muted)] p-2 font-mono text-xs break-all">
+            {cobranca.situacao.pagamento.brCode}
+          </p>
+          <div className="mt-2">
+            <CopyButton
+              valor={cobranca.situacao.pagamento.brCode}
+              rotulo="Copiar código Pix"
+            />
+          </div>
+        </>
+      ) : (
+        <p className="mt-2">
+          <a
+            href={cobranca.situacao.pagamento.urlPagamento}
+            className="font-semibold text-[var(--text-primary)] underline underline-offset-4"
+          >
+            Abrir a cobrança para pagar
+          </a>
+        </p>
+      )}
+    </div>
   );
 }
