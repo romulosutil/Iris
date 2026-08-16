@@ -2153,10 +2153,14 @@ empurra** o vencimento para o próximo dia útil na criação. No trilho
 | `5.00`  | **HTTP 200** | `pay_ki9rpdu6kcmri5af`, `"value":5.0`, `"netValue":4.01`, `"status":"PENDING"`                                         |
 
 **Conclusão:** o piso real é **exatamente R$ 5,00**, imposto pela API com
-mensagem nomeada. `PISO_COBRANCA_CENTAVOS = 500`
-(`src/lib/billing/debito.ts:41-55`) **está correto e se mantém** — o que muda é
-o comentário acima dele, que se declara "escolha conservadora, NÃO medição" e
-pede exatamente esta verificação (#311).
+mensagem nomeada. `PISO_COBRANCA_AVULSA_CENTAVOS = 500`
+(`src/lib/billing/debito.ts`) **está correto e se mantém** — o que muda é o
+comentário acima dele, que se declarava "escolha conservadora, NÃO medição" e
+pedia exatamente esta verificação. Note que a regra é sobre o líquido
+(`value − discount`), e não sobre o `value`: hoje as duas coincidem só porque
+nenhuma emissão do Iris envia `discount`. O piso vale para o `POST /payments` e
+**não** para o QR imediato da autorização, aceito com `originalValue: 0.01`.
+**Medido em 15/08/2026; a #311 se apoia neste registro.**
 
 #### Medição 7a — o discriminador da cobrança de ativação
 

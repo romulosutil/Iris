@@ -46,6 +46,16 @@ describe("decidirGate", () => {
     expect(decidirGate(PISO_COBRANCA_AVULSA_CENTAVOS)).toBe("cobrar");
   });
 
+  it("a fronteira está em R$ 5,00 — o literal existe porque o piso é medido", () => {
+    // Os dois casos acima importam a constante, então provam `<` vs `<=` e não
+    // o NÚMERO: trocar 500 por 400 os mantém verdes. R$ 5,00 é o piso medido no
+    // sandbox do Asaas (15/08/2026, Medição 6 do runbook em `infra/README.md`);
+    // mudar a constante tem que ficar vermelho aqui, porque quem muda o número
+    // está contradizendo uma medição do gateway, não uma escolha nossa.
+    expect(decidirGate(499)).toBe("adiar");
+    expect(decidirGate(500)).toBe("cobrar");
+  });
+
   it("acima do piso cobra", () => {
     expect(decidirGate(1300)).toBe("cobrar");
   });
@@ -57,9 +67,11 @@ describe("decidirGate", () => {
     expect(decidirGate(260 + 260)).toBe("cobrar");
   });
 
-  it("aceita piso injetado, para o dia em que o valor real do gateway for medido", () => {
-    // `PISO_COBRANCA_AVULSA_CENTAVOS` é escolha conservadora, não medição. O parâmetro
-    // existe para que corrigir o número não exija tocar na regra.
+  it("aceita piso injetado, para o dia em que o gateway mudar o piso", () => {
+    // `PISO_COBRANCA_AVULSA_CENTAVOS` é medição (R$ 5,00, sandbox do Asaas em
+    // 15/08/2026), não escolha conservadora. O parâmetro segue existindo porque
+    // o piso é do gateway: se o Asaas mudá-lo, acompanhar o número não pode
+    // exigir tocar na regra.
     expect(decidirGate(300, 100)).toBe("cobrar");
     expect(decidirGate(300, 1000)).toBe("adiar");
   });

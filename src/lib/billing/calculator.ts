@@ -85,6 +85,10 @@ export const VALOR_PRIMEIRO_PACIENTE_CENTAVOS = 3900;
  * Medido em 15/08/2026 (#321): a API **não expõe nem aceita** o teto escolhido
  * pelo pagador; `minLimitValue` é a única alavanca do recebedor, e a copy da
  * tela de ativação (#286) é a única barreira restante.
+ *
+ * Não confundir com `PISO_COBRANCA_AVULSA_CENTAVOS`
+ * (`src/lib/billing/debito.ts`), o valor abaixo do qual o débito de reativação
+ * não vira cobrança — sentidos opostos, mesmo domínio.
  */
 export const PISO_TETO_AUTORIZACAO_CENTAVOS =
   FAIXAS_PRECIFICACAO[0]!.valorCentavos;
