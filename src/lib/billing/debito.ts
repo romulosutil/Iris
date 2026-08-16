@@ -59,8 +59,11 @@ import {
  *
  * A regra que o Asaas impõe é sobre o LÍQUIDO — `value − discount >= 500`, não
  * `value >= 500`. Hoje as duas coincidem apenas porque nenhum caminho de
- * emissão do Iris envia `discount` (ver o `POST /payments` montado no adapter
- * do Asaas). Quem acrescentar desconto a uma emissão quebra a coincidência: uma
+ * emissão do Iris envia `discount` — são só dois, e os dois montam o corpo do
+ * `POST /payments` sem esse campo: `emitirCobrancaDeCiclo` e
+ * `emitirCobrancaAvulsa`, em `./provider/asaas.ts`. Verificado por varredura:
+ * `discount` não aparece em nenhum outro ponto de `src/lib/billing/`. Quem
+ * acrescentar desconto a uma emissão quebra a coincidência: uma
  * cobrança de R$ 5,00 com R$ 1,00 de desconto passa neste piso e — **pela regra
  * que a própria mensagem do gateway enuncia** — seria recusada lá. Isso é
  * dedução, não medição: as cinco sondagens da Medição 6 rodaram todas com

@@ -53,7 +53,7 @@ CREATE INDEX IF NOT EXISTS billing_cycle_debito_agrupado_idx
 Módulo puro-ish (`server-only`, fala com `authDb`), dono de tudo que é débito:
 
 ```ts
-export const PISO_COBRANCA_CENTAVOS = 500;
+export const PISO_COBRANCA_AVULSA_CENTAVOS = 500;
 
 export interface DebitoLevantado {
   totalCentavos: number;
@@ -262,7 +262,7 @@ reativação continua sendo um ato explícito da clínica.
 
 ## Riscos conhecidos
 
-- **RISCO-1 — piso não medido.** `PISO_COBRANCA_CENTAVOS` é escolha
+- **RISCO-1 — piso não medido.** `PISO_COBRANCA_AVULSA_CENTAVOS` é escolha
   conservadora, não medição (ver `spec.md`). Erro para baixo é inofensivo; para
   cima o gate degrada em vez de trancar a clínica fora. Medição em #311.
   **Encerrado em 15/08/2026:** o piso real é R$ 5,00, medido no sandbox do Asaas
