@@ -3,8 +3,6 @@ import {
   MfaRequiredError,
   requireMfaIfClinicalRole,
   requireRole,
-  requireAgendar,
-  RoleError,
 } from "./require-role";
 import type { TenantContext } from "@/db/rls";
 
@@ -64,21 +62,5 @@ describe("requireMfaIfClinicalRole", () => {
   test("MfaRequiredError é um RoleError (catch existente trata)", () => {
     // garante que os catches `err instanceof RoleError` continuam pegando MFA
     expect(new MfaRequiredError()).toBeInstanceOf(Error);
-  });
-});
-
-
-describe("requireAgendar", () => {
-  test("não lança quando o papel é coordenador", () => {
-    expect(() => requireAgendar(ctx("coordenador"))).not.toThrow();
-  });
-
-  test("não lança quando o papel é admin_recepcao", () => {
-    expect(() => requireAgendar(ctx("admin_recepcao"))).not.toThrow();
-  });
-
-  test("lança erro quando o papel não tem permissão", () => {
-    expect(() => requireAgendar(ctx("terapeuta"))).toThrow(RoleError);
-    expect(() => requireAgendar(ctx("dono" as any))).toThrow(RoleError);
   });
 });

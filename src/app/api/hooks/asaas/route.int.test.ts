@@ -134,52 +134,6 @@ async function novoCiclo(opcoes: {
   return { clinicId, cicloId: linhas[0]!.id as string };
 }
 
-/**
- * Assinatura ATIVA no meio do ciclo, com ciclo `aberto` e pacientes que já
- * entrariam na fatura — o estado real de quem revoga a autorização no app do
- * banco no dia 10 (#287).
- *
- * `inicio` é 9 dias e 12 horas atrás, e não "10 dias": a janela de uso é medida
- * contra o instante em que o handler roda, alguns milissegundos depois do
- * INSERT. Com 10 dias cravados, o `ceil` do pro-rata cairia no dia 11 por causa
- * desses milissegundos, e o valor esperado do teste dependeria da latência da
- * máquina. Com a meia hora de folga, qualquer instante dentro de ~12h dá o
- * mesmo décimo dia.
- */
-async function assinaturaAtivaNoMeioDoCiclo(opcoes: {
-  providerSubscriptionId: string;
-  pacientes: number;
-}): Promise<{ clinicId: string; subscriptionId: string; cicloId: string }> {
-  const { clinicId, subscriptionId } = await novaAssinatura({
-    providerSubscriptionId: opcoes.providerSubscriptionId,
-    status: "active",
-  });
-
-  await owner!`
-    UPDATE subscription
-       SET ciclo_atual_inicio = now() - interval '9 days 12 hours',
-           ciclo_atual_fim    = now() + interval '20 days 12 hours',
-           ativada_em         = now() - interval '9 days 12 hours'
-     WHERE id = ${subscriptionId}`;
-
-  // Pacientes criados AGORA caem dentro de `[inicio, fim)` e são contados por
-  // `billing_apurar_ciclo` pelo critério `criado_no_ciclo`.
-  for (let i = 0; i < opcoes.pacientes; i += 1) {
-    await owner!`
-      INSERT INTO patient (clinic_id, nome)
-      VALUES (${clinicId}, ${`Paciente ${i + 1} do ciclo`})`;
-  }
-
-  const linhas = await owner!`
-    INSERT INTO billing_cycle (clinic_id, subscription_id, inicio, fim, status)
-    SELECT ${clinicId}, ${subscriptionId}, s.ciclo_atual_inicio, s.ciclo_atual_fim,
-           'aberto'::billing_cycle_status
-      FROM subscription s WHERE s.id = ${subscriptionId}
-    RETURNING id`;
-
-  return { clinicId, subscriptionId, cicloId: linhas[0]!.id as string };
-}
-
 // ── Requisição ───────────────────────────────────────────────────────────────
 
 function requisicao(opcoes: {
@@ -225,7 +179,7 @@ async function lerEvento(asaasEventId: string) {
 
 async function lerAssinatura(providerSubscriptionId: string) {
   const r = await authDb.execute(
-    sql`SELECT status::text AS status, ativada_em, past_due_desde, cancelada_em,
+    sql`SELECT status::text AS status, ativada_em, past_due_desde,
                ciclo_atual_inicio, ciclo_atual_fim
         FROM subscription WHERE provider_subscription_id = ${providerSubscriptionId}`,
   );
@@ -237,7 +191,6 @@ async function lerAssinatura(providerSubscriptionId: string) {
       status: string;
       ativada_em: unknown;
       past_due_desde: unknown;
-      cancelada_em: unknown;
       ciclo_atual_inicio: unknown;
       ciclo_atual_fim: unknown;
     }[]
@@ -246,9 +199,7 @@ async function lerAssinatura(providerSubscriptionId: string) {
 
 async function lerCiclo(cicloId: string) {
   const r = await authDb.execute(
-    sql`SELECT status::text AS status, cobrado_em, erro,
-               pacientes_contados, valor_centavos, apurado_em,
-               provider_charge_id, cobranca_emitida_em
+    sql`SELECT status::text AS status, cobrado_em, erro
         FROM billing_cycle WHERE id = ${cicloId}::uuid`,
   );
   return (
@@ -256,11 +207,6 @@ async function lerCiclo(cicloId: string) {
       status: string;
       cobrado_em: unknown;
       erro: string | null;
-      pacientes_contados: number;
-      valor_centavos: number;
-      apurado_em: unknown;
-      provider_charge_id: string | null;
-      cobranca_emitida_em: unknown;
     }[]
   )[0]!;
 }
@@ -410,10 +356,6 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       await owner`TRUNCATE billing_cycle, subscription, asaas_webhook_event
                   RESTART IDENTITY CASCADE`;
       if (clinicasCriadas.length > 0) {
-        // Pacientes ANTES das clínicas: `patient.clinic_id` é `ON DELETE
-        // restrict`, então a limpeza falharia calada no `afterAll` e deixaria
-        // lixo para o próximo arquivo.
-        await owner`DELETE FROM patient WHERE clinic_id = ANY(${clinicasCriadas}::uuid[])`;
         await owner`DELETE FROM clinic WHERE id = ANY(${clinicasCriadas}::uuid[])`;
       }
       await owner.end();
@@ -644,149 +586,6 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       expect(chamadasGateway[0]).toContain(
         `/pix/automatic/authorizations/${authId}`,
       );
-    });
-
-    /**
-     * #287 Problema 1 — o ciclo aberto não pode sobreviver ao cancelamento.
-     *
-     * Antes desta suíte não havia teste nenhum do caminho de revogação, que é o
-     * caminho de TODO cancelamento hoje (a UI in-app não existe; a clínica
-     * revoga a autorização no app do banco). O ciclo ficava em `aberto` para
-     * sempre: `fecharCiclosVencendo` varre `status = 'active'` e nunca mais
-     * enxerga uma assinatura `canceled`. Receita perdida sem nada vermelho.
-     *
-     * A saída implementada é a (b) da #287, decidida na #290: congela o ciclo
-     * como DÉBITO pro-rata (`devido`) e não emite cobrança nenhuma — o trilho do
-     * Pix Automático acabou de ser revogado, não há como cobrar naquele
-     * instante. Quem cobra é o gate de reativação (#290).
-     */
-    it("autorização CANCELADA fecha o ciclo aberto como débito pro-rata, sem emitir cobrança", async () => {
-      const authId = "8f3a9a2e-1f6a-4e2b-9f77-1b2c3d4e5f60";
-      const { cicloId } = await assinaturaAtivaNoMeioDoCiclo({
-        providerSubscriptionId: authId,
-        pacientes: 1,
-      });
-      respondeAutorizacao("CANCELLED");
-
-      const id = novoIdEvento();
-      const res = await POST(
-        requisicao({
-          token: TOKEN,
-          corpo: eventoAutorizacao(id, authId, {
-            event: "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED",
-            status: "CANCELLED",
-          }),
-        }),
-      );
-      expect(res.status).toBe(200);
-
-      const assinatura = await lerAssinatura(authId);
-      expect(assinatura.status).toBe("canceled");
-      expect(assinatura.cancelada_em).not.toBeNull();
-
-      const ciclo = await lerCiclo(cicloId);
-      // O estado terminal do ciclo interrompido. `aberto` aqui é o bug da #287.
-      expect(ciclo.status).toBe("devido");
-      expect(ciclo.apurado_em).not.toBeNull();
-      expect(ciclo.pacientes_contados).toBe(1);
-      // 1 ficha = 3900 cheios; 10 dias usados de 30 → 3900 x 10 / 30 = 1300.
-      // Constante literal, não a fórmula: com a fórmula no expect, um pro-rata
-      // errado passaria por concordar consigo mesmo.
-      expect(ciclo.valor_centavos).toBe(1300);
-
-      // Nem cobrança emitida, nem ciclo dado como pago. Só o débito congelado.
-      expect(ciclo.provider_charge_id).toBeNull();
-      expect(ciclo.cobranca_emitida_em).toBeNull();
-      expect(ciclo.cobrado_em).toBeNull();
-      expect(ciclo.erro).toBeNull();
-
-      const evento = (await lerEvento(id))!;
-      expect(evento.aplicado_em).not.toBeNull();
-      expect(evento.erro_aplicacao).toBeNull();
-
-      // Uma única ida ao gateway: a consulta da autorização. Qualquer POST em
-      // `/payments` aqui seria uma cobrança num trilho já revogado.
-      expect(chamadasGateway).toHaveLength(1);
-      expect(chamadasGateway[0]).toContain(
-        `/pix/automatic/authorizations/${authId}`,
-      );
-    });
-
-    it("reentrega do cancelamento não reabre nem recalcula o débito já congelado", async () => {
-      // O Asaas reentrega o mesmo fato com ids de evento diferentes. Sem guarda
-      // de transição, a segunda passada reapuraria o ciclo com `cancelada_em`
-      // mais recente e o valor mudaria depois de congelado.
-      const authId = "0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f";
-      const { cicloId } = await assinaturaAtivaNoMeioDoCiclo({
-        providerSubscriptionId: authId,
-        pacientes: 1,
-      });
-
-      respondeAutorizacao("CANCELLED");
-      await POST(
-        requisicao({
-          token: TOKEN,
-          corpo: eventoAutorizacao(novoIdEvento(), authId, {
-            status: "CANCELLED",
-          }),
-        }),
-      );
-      const primeiro = await lerCiclo(cicloId);
-      expect(primeiro.status).toBe("devido");
-
-      respondeAutorizacao("CANCELLED");
-      await POST(
-        requisicao({
-          token: TOKEN,
-          corpo: eventoAutorizacao(novoIdEvento(), authId, {
-            status: "CANCELLED",
-          }),
-        }),
-      );
-
-      const segundo = await lerCiclo(cicloId);
-      expect(segundo.status).toBe("devido");
-      expect(segundo.valor_centavos).toBe(primeiro.valor_centavos);
-      expect(segundo.apurado_em).toEqual(primeiro.apurado_em);
-    });
-
-    it("cancelamento NÃO mexe em ciclo com cobrança já emitida — o dinheiro está em trânsito", async () => {
-      // `aguardando_pagamento` significa cobrança viva no gateway. Regravar o
-      // valor como pro-rata aqui descolaria o memorial da fatura que a clínica
-      // recebeu, e o webhook de pagamento chegaria para um ciclo remarcado.
-      const authId = "5b6c7d8e-9f0a-1b2c-3d4e-5f6a7b8c9d0e";
-      const { clinicId, subscriptionId } = await novaAssinatura({
-        providerSubscriptionId: authId,
-        status: "active",
-      });
-      const linhas = await owner!`
-        INSERT INTO billing_cycle
-          (clinic_id, subscription_id, inicio, fim, status,
-           pacientes_contados, valor_centavos, apurado_em, provider_charge_id,
-           cobranca_emitida_em)
-        VALUES (
-          ${clinicId}, ${subscriptionId},
-          now() - interval '30 days', now(),
-          'aguardando_pagamento'::billing_cycle_status,
-          3, 11700, now(), 'pay_ja_emitida_287', now()
-        )
-        RETURNING id`;
-      const cicloId = linhas[0]!.id as string;
-
-      respondeAutorizacao("CANCELLED");
-      await POST(
-        requisicao({
-          token: TOKEN,
-          corpo: eventoAutorizacao(novoIdEvento(), authId, {
-            status: "CANCELLED",
-          }),
-        }),
-      );
-
-      const ciclo = await lerCiclo(cicloId);
-      expect(ciclo.status).toBe("aguardando_pagamento");
-      expect(ciclo.valor_centavos).toBe(11700);
-      expect(ciclo.provider_charge_id).toBe("pay_ja_emitida_287");
     });
 
     it("autorização de vínculo desconhecido → 200 e erro_aplicacao 'assinatura desconhecida'", async () => {

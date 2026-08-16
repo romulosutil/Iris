@@ -47,7 +47,7 @@ export default async function NovoPacientePage() {
           permanece intacta — este aviso é informação, nunca a barreira). */}
       {!situacao.podeCadastrarPaciente ? (
         <Alert severidade="erro" destacado titulo="Conta em somente-leitura">
-          <p>{mensagemDeEstado(situacao.estado, situacao.debitoCentavos)}</p>
+          <p>{mensagemDeEstado(situacao.estado)}</p>
           {/* Mesmo critério do formulário, pelo mesmo predicado: em
               `pagamento_em_processamento` há cobrança em voo e o link geraria
               uma segunda cobrança no mesmo mês. */}
