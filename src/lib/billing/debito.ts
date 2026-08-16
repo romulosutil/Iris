@@ -346,7 +346,31 @@ export async function resolverGateDeDebito(
         providerChargeId: ciclo.providerChargeId,
         motivo: estado.motivo,
       });
-      paraConsolidar.push(ciclo);
+      /**
+       * `nao_encontrada` (404) devolve o ciclo ao conjunto (b) COMO SE ele nunca
+       * tivesse tido cobrança — e essa distinção é o que impede o D-3 de virar
+       * o seu próprio oposto.
+       *
+       * A âncora de (b) precisa de referência externa virgem (P-4), e o teste de
+       * virgindade é `providerChargeId == null`. Um débito de um ciclo só, cujo
+       * id o gateway não reconhece, não teria âncora nenhuma: `emitirConsolidada`
+       * devolveria `irrecuperavel` e a clínica ficaria travada em "fale com o
+       * suporte" para sempre — exatamente o "trancar a clínica fora por um id
+       * órfão" que o D-3 proíbe, um passo adiante.
+       *
+       * E é seguro, porque o perigo do P-4 é a idempotência do adapter
+       * (`GET /payments?externalReference=`) devolver a MESMA cobrança morta.
+       * Isso exige que a cobrança exista no gateway. Um 404 é o gateway
+       * afirmando que ela não existe: não há o que ressuscitar. Os demais
+       * motivos (`removida`, `estornada`, `status_nao_pagavel`,
+       * `sem_forma_de_pagamento`) descrevem cobranças que EXISTEM, e para eles a
+       * regra do P-4 continua valendo intacta.
+       */
+      paraConsolidar.push(
+        estado.motivo === "nao_encontrada"
+          ? { ...ciclo, providerChargeId: null }
+          : ciclo,
+      );
       continue;
     }
 
@@ -394,6 +418,28 @@ export async function resolverGateDeDebito(
 
   const cobrancas = [...reaproveitadas, ...novas.cobrancas];
   if (cobrancas.length === 0) {
+    /**
+     * Nada na mesa — mas por DUAS razões que não são o mesmo estado.
+     *
+     * Se a cobrança recém-emitida voltou já paga, `emitirConsolidada` a
+     * conciliou ali mesmo: os ciclos de (b) estão `pago` e não sobrou dívida
+     * nenhuma. O estado verdadeiro é `sem_debito`.
+     *
+     * `totalVivo` é somado ANTES da emissão e por isso não enxerga essa
+     * liquidação — quem enxerga é o sinal que a emissão devolve. Sem ele, o
+     * caso caía em `adiado` com `motivo: "abaixo_do_piso"`, e as duas metades
+     * eram falsas: `adiado` afirma que sobrou dívida a cobrar na próxima volta
+     * (não sobrou, o ciclo está `pago`), e `abaixo_do_piso` afirma que o valor
+     * não alcançou o piso (alcançou — foi justamente por isso que a cobrança
+     * chegou a ser emitida).
+     *
+     * A correção não é cosmética por os dois ramos seguirem hoje para a
+     * ativação: `adiado.totalCentavos` é o campo que responde "quanto esta
+     * clínica ainda deve", e devolver ali um valor de dívida viva para uma
+     * dívida quitada é mentira que o próximo leitor do gate consome sem
+     * reconferir no banco.
+     */
+    if (novas.conciliada) return { tipo: "sem_debito" };
     // Nada vivo e nada emitido: o conjunto (b) foi recusado pelo gateway ou
     // ficou abaixo do piso. A dívida NÃO é perdoada — os ciclos continuam
     // `devido` e voltam somados na próxima volta.
@@ -415,6 +461,15 @@ type ResultadoEmissao = {
   tipo: "ok" | "irrecuperavel";
   cobrancas: CobrancaDoDebito[];
   motivoAdiamento?: "abaixo_do_piso" | "recusa_do_gateway";
+  /**
+   * A cobrança emitida voltou JÁ PAGA e foi conciliada aqui dentro.
+   *
+   * Existe porque "lista de cobranças vazia" tem dois significados opostos —
+   * "não deu para cobrar" (a dívida sobrevive) e "acabou de ser quitada" (não
+   * sobrou dívida) — e o chamador não consegue distingui-los pela lista nem
+   * pelo total, que é somado antes da emissão.
+   */
+  conciliada?: boolean;
 };
 
 /**
@@ -502,7 +557,7 @@ async function emitirConsolidada(dados: {
   // princípio do reaproveitamento de vínculo em `iniciarAtivacao`.
   if (cobranca.status === "paga") {
     await conciliarPagamentoDeCiclo(cobranca.providerChargeId, "paga");
-    return { tipo: "ok", cobrancas: [] };
+    return { tipo: "ok", cobrancas: [], conciliada: true };
   }
 
   /**

@@ -41,7 +41,8 @@ vi.mock("server-only", () => ({}));
 const { iniciarAtivacaoAssinatura } = await import("./logic");
 const { aplicarStatusProvider, conciliarPagamentoDeCiclo } =
   await import("@/lib/billing/subscription");
-const { PISO_COBRANCA_AVULSA_CENTAVOS } = await import("@/lib/billing/debito");
+const { PISO_COBRANCA_AVULSA_CENTAVOS, resolverGateDeDebito } =
+  await import("@/lib/billing/debito");
 const { sql: appSql } = await import("@/db/client");
 
 const CLINIC = "00000000-0000-0000-0000-000000290aaa";
@@ -714,6 +715,215 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
 
     expect(emissoes(chamadas)).toHaveLength(1);
     expect(consultasDeReuso(chamadas)).toHaveLength(0);
+  });
+
+  /**
+   * #310 (D-3) — indisponibilidade é fail-closed, e o lado oposto do 404.
+   *
+   * Qual mutação este teste mata: tratar QUALQUER erro da consulta de reuso
+   * como "cobrança morta" e seguir para (b). Ali o gate emitiria uma segunda
+   * cobrança sem saber se a primeira ainda está viva — a cobrança dupla que a
+   * issue existe para evitar, agora criada pelo tratamento de erro.
+   *
+   * Os quatro oráculos são independentes de propósito: o `error` certo é
+   * compatível com um POST tendo saído ao lado, e a ausência de POST é
+   * compatível com a assinatura já reaberta. Só medindo os quatro se distingue
+   * "barrou" de "barrou depois de já ter feito estrago".
+   */
+  it("gateway fora do ar na consulta de reuso barra a reativação e não emite nada", async () => {
+    await assinaturaCancelada();
+    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+    const { chamadas } = instalarGateway({ antiga: { httpStatus: 500 } });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    // A copy é a de "tente de novo", NÃO a de suporte: quem caiu num 500 tem
+    // que insistir, e mandá-lo abrir chamado é ruído. Asserir o texto que só
+    // `gateway_indisponivel` produz também separa este ramo do `catch` genérico
+    // de `logic.ts`, que diria "Fale com o suporte".
+    expect(r.error).toMatch(/tente novamente em alguns instantes/i);
+    expect(r.debito).toBeUndefined();
+    expect(r.autorizacao).toBeUndefined();
+    expect(emissoes(chamadas)).toHaveLength(0);
+    expect(
+      chamadas.filter((c) => c.url.includes("/pix/automatic/authorizations")),
+    ).toHaveLength(0);
+
+    // A dívida sobrevive intacta, com o id antigo, para a próxima tentativa
+    // reabrir a decisão. Bloqueio é reversível; cobrança dupla não é.
+    const [ciclo] = await lerCiclos();
+    expect(ciclo!.status).toBe("devido");
+    expect(ciclo!.provider_charge_id).toBe(ID_COBRANCA_ANTIGA);
+    expect(await statusAssinatura()).toBe("canceled");
+  });
+
+  /**
+   * #310 (D-3) — o OUTRO lado: 404 é cobrança morta, não indisponibilidade.
+   *
+   * Qual mutação este teste mata: tratar o 404 como o 500 e devolver
+   * `bloqueado`. Um id órfão — cobrança apagada no painel, chave de ambiente
+   * trocada — trancaria a clínica fora para sempre por algo que ninguém
+   * consegue pagar. Sem este caso, o teste do 500 acima passaria igual se
+   * alguém trocasse um ramo pelo outro.
+   *
+   * Mata também a variante que manda o ciclo para (b) SEM soltar o id órfão:
+   * ali `emitirConsolidada` não acharia âncora de referência virgem (P-4),
+   * devolveria `irrecuperavel`, e a clínica cairia em "fale com o suporte" —
+   * o mesmo trancar-fora, uma etapa adiante.
+   */
+  it("id que o gateway não reconhece vira cobrança nova, sem barrar", async () => {
+    await assinaturaCancelada();
+    const ciclo = await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+    const { chamadas } = instalarGateway({ antiga: { httpStatus: 404 } });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(r.error).toBeUndefined();
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(emissoes(chamadas)[0]!.corpo.value).toBe(13);
+    expect(r.debito?.cobrancas).toHaveLength(1);
+    expect(r.debito?.cobrancas[0]!.reaproveitada).toBe(false);
+    expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_DEBITO);
+
+    // O id órfão foi SUBSTITUÍDO: ele não protege ciclo nenhum (D-5 protege o
+    // id REAPROVEITADO, e este não foi), e deixá-lo faria o webhook da cobrança
+    // nova não achar ciclo.
+    const linha = (await lerCiclos()).find((c) => c.id === ciclo)!;
+    expect(linha.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
+    expect(linha.status).toBe("devido");
+  });
+
+  /**
+   * #310 (D-4) — cobrança antiga já paga liquida o ciclo no gate.
+   *
+   * Qual mutação este teste mata: classificar a cobrança paga como pagável e
+   * devolver o copia-e-cola de uma dívida já quitada (ou, pior, emitir outra
+   * por cima dela). O webhook pode simplesmente não ter chegado ainda — mandar
+   * a clínica pagar de novo é o dobro do valor pelo mesmo ciclo.
+   *
+   * `CONFIRMED` e não `RECEIVED` de propósito: são status DIFERENTES do Asaas e
+   * os dois significam dinheiro recebido. Usar o mesmo dos outros casos deixaria
+   * passar uma allow-list de pagos com um item só.
+   */
+  it("cobrança antiga já paga liquida o ciclo no gate e libera a reativação", async () => {
+    await assinaturaCancelada();
+    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+    const { chamadas } = instalarGateway({ antiga: { status: "CONFIRMED" } });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(r.debito).toBeUndefined();
+    expect(emissoes(chamadas)).toHaveLength(0);
+    // Liberou de verdade: seguiu para a autorização nova e a assinatura saiu de
+    // `canceled`. Sem estas duas linhas, um gate que devolvesse `bloqueado`
+    // também deixaria `r.debito` indefinido e passaria vácuo.
+    expect(r.autorizacao?.forma).toBe("pix_copia_e_cola");
+    expect(await statusAssinatura()).toBe("setup_pending");
+
+    const [ciclo] = await lerCiclos();
+    expect(ciclo!.status).toBe("pago");
+  });
+
+  /**
+   * #310 (D-4) — o débito ENCOLHE quando parte dele já estava paga.
+   *
+   * Qual mutação este teste mata: seguir contando o ciclo já pago no valor da
+   * cobrança consolidada (empurrá-lo para (b) em vez de conciliar e sair). A
+   * clínica pagaria R$ 20,00 por uma dívida de R$ 7,00 — e o caso anterior, de
+   * ciclo único, não pega isso: lá o total encolhe para ZERO e qualquer erro de
+   * soma some junto. O oráculo é o VALOR do POST, não a contagem.
+   */
+  it("ciclo já pago sai do débito e não entra no valor da cobrança nova", async () => {
+    await assinaturaCancelada();
+    const jaPago = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
+    const emAberto = await cicloDevido(700, 30);
+    const { chamadas } = instalarGateway({ antiga: { status: "RECEIVED" } });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(emissoes(chamadas)[0]!.corpo.value).toBe(7);
+    expect(r.debito?.valorCentavos).toBe(700);
+    expect(r.debito?.cobrancas).toHaveLength(1);
+
+    const ciclos = await lerCiclos();
+    expect(ciclos.find((c) => c.id === jaPago)!.status).toBe("pago");
+    expect(ciclos.find((c) => c.id === emAberto)!.status).toBe("devido");
+    // O ciclo pago NÃO pode ter sido agrupado sob a cobrança nova: seria pagar
+    // R$ 7,00 e ver quitado um ciclo de R$ 13,00 que já estava quitado por fora.
+    expect(ciclos.find((c) => c.id === jaPago)!.debito_agrupado_em).toBeNull();
+    expect(ciclos.find((c) => c.id === jaPago)!.provider_charge_id).toBe(
+      ID_COBRANCA_ANTIGA,
+    );
+  });
+
+  /**
+   * #310 (D-6) — instrução pendente é o sinal da janela crítica.
+   *
+   * Qual mutação este teste mata: ignorar as instruções de Pix Automático e
+   * apresentar o copia-e-cola assim mesmo. Dentro da janela crítica (das 22h de
+   * D-1 até D) o Asaas bloqueia o recebimento por outro meio: quem paga por
+   * fora paga, e o débito automático cobra de novo. A existência da instrução É
+   * o fato — não se calcula hora nem fuso.
+   *
+   * O oráculo forte é `not.toContain(BR_CODE_DEBITO)` sobre o retorno inteiro:
+   * asserir só `situacao.estado` deixaria passar a variante que carimba
+   * `em_processamento` e ainda anexa o código ao lado, que é justamente o
+   * pagamento em duplicidade. O `emissoes = 0` mata a variante oposta, de
+   * "esconder o código emitindo uma cobrança nova".
+   */
+  it("instrução pendente esconde o código de pagamento, sem reativar", async () => {
+    await assinaturaCancelada();
+    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+    const { chamadas } = instalarGateway({
+      antiga: {
+        status: "OVERDUE",
+        instrucoes: { SCHEDULED: [{ id: "ins_310", status: "SCHEDULED" }] },
+      },
+    });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(r.debito?.cobrancas).toHaveLength(1);
+    expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
+    expect(r.debito?.cobrancas[0]!.situacao).toEqual({
+      estado: "em_processamento",
+    });
+    expect(JSON.stringify(r.debito)).not.toContain(BR_CODE_DEBITO);
+    expect(JSON.stringify(r.debito)).not.toContain(URL_ANTIGA);
+    expect(emissoes(chamadas)).toHaveLength(0);
+
+    // Débito automático a caminho não é débito pago: a porta continua fechada.
+    expect(r.autorizacao).toBeUndefined();
+    expect(await statusAssinatura()).toBe("canceled");
+  });
+
+  /**
+   * #310 — dívida quitada dentro do gate é `sem_debito`, nunca `adiado`.
+   *
+   * Qual mutação este teste mata: devolver `adiado/abaixo_do_piso` quando a
+   * cobrança recém-emitida volta JÁ PAGA e é conciliada dentro de
+   * `emitirConsolidada` (era o comportamento antes desta correção). `totalVivo`
+   * é somado ANTES da emissão, então ele ainda vale R$ 13,00 depois da
+   * liquidação, e as duas metades do retorno ficavam falsas: `adiado` afirma que
+   * sobrou dívida para a próxima volta (o ciclo está `pago`) e `abaixo_do_piso`
+   * afirma que o valor não alcançou o piso (alcançou — foi por isso que a
+   * cobrança chegou a ser emitida).
+   *
+   * A asserção é sobre `resolverGateDeDebito` direto, e não sobre a Server
+   * Action, porque os dois ramos seguem para a ativação: pela tela eles são
+   * indistinguíveis, e um teste que não distingue não mata mutação nenhuma.
+   */
+  it("cobrança emitida que volta já paga devolve sem_debito, não adiado", async () => {
+    await assinaturaCancelada();
+    await cicloDevido(1300, 30);
+    instalarGateway({ cobrancaJaPaga: true });
+
+    const gate = await resolverGateDeDebito(CLINIC);
+
+    expect(gate).toEqual({ tipo: "sem_debito" });
+    const [ciclo] = await lerCiclos();
+    expect(ciclo!.status).toBe("pago");
   });
 
   /**
