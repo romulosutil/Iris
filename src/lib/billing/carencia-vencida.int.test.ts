@@ -507,7 +507,7 @@ describe.skipIf(!hasDb)("#319 · corte por carência vencida", () => {
     // E é isto que fecha o gate da #290: o débito existe e vale o mesmo.
     const debito = await levantarDebito(SUB_A);
     expect(debito.totalCentavos).toBe(3900);
-    expect(debito.ancoraId).toBe(cicloFalhou);
+    expect(debito.ciclos[0]?.id).toBe(cicloFalhou);
   });
 
   // ── 6. O negativo do 5: revogação voluntária não leva `falhou` junto ───────

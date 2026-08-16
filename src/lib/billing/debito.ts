@@ -64,14 +64,29 @@ const DIAS_VENCIMENTO_DEBITO = 5;
 /** Estados de ciclo que compõem o débito. Só `devido` — ver `RISCO-2` da spec. */
 const STATUS_DEVIDO = "devido" as const;
 
+/** Um ciclo `devido`, com o que o gate precisa saber para decidir sobre ele. */
+export interface CicloDevido {
+  id: string;
+  valorCentavos: number;
+  /**
+   * Cobrança já emitida para este ciclo, se houver.
+   *
+   * Chega povoado por dois caminhos — cobrança de débito de um gate anterior, e
+   * cobrança de CICLO de um ciclo `falhou` congelado no corte por carência
+   * (`congelarCiclosComoDebito` preserva a coluna).
+   */
+  providerChargeId: string | null;
+}
+
 export interface DebitoLevantado {
   totalCentavos: number;
-  /** Ciclo `devido` mais antigo — quem carrega a cobrança consolidada. */
-  ancoraId: string | null;
-  /** Os demais ciclos `devido`, que serão agrupados na âncora. */
-  outrosIds: string[];
-  /** Cobrança já emitida na âncora, se houver. */
-  providerChargeId: string | null;
+  /**
+   * Ordenados por `inicio`, depois `id`. O primeiro é o mais antigo — a âncora.
+   * A ordem é determinística de propósito: é ela que faz a reentrada do gate
+   * eleger sempre a mesma âncora, em vez de eleger outra e emitir uma segunda
+   * cobrança da mesma dívida.
+   */
+  ciclos: CicloDevido[];
 }
 
 /** Forma de pagamento do débito, do jeito que a tela precisa renderizar. */
@@ -142,14 +157,9 @@ export async function levantarDebito(
     )
     .orderBy(asc(billingCycle.inicio), asc(billingCycle.id));
 
-  const totalCentavos = ciclos.reduce((soma, c) => soma + c.valorCentavos, 0);
-  const [ancora, ...outros] = ciclos;
-
   return {
-    totalCentavos,
-    ancoraId: ancora?.id ?? null,
-    outrosIds: outros.map((c) => c.id),
-    providerChargeId: ancora?.providerChargeId ?? null,
+    totalCentavos: ciclos.reduce((soma, c) => soma + c.valorCentavos, 0),
+    ciclos,
   };
 }
 
@@ -205,7 +215,7 @@ export async function resolverGateDeDebito(
     };
   }
 
-  const ancoraId = debito.ancoraId;
+  const ancoraId = debito.ciclos[0]?.id ?? null;
   if (!ancoraId) {
     // Total > 0 sem âncora é impossível: o total vem das mesmas linhas.
     throw new Error(
@@ -250,7 +260,11 @@ export async function resolverGateDeDebito(
     throw e;
   }
 
-  await registrarCobrancaDeDebito(ancoraId, debito.outrosIds, cobranca);
+  await registrarCobrancaDeDebito(
+    ancoraId,
+    debito.ciclos.slice(1).map((c) => c.id),
+    cobranca,
+  );
 
   // Webhook atrasado: a cobrança já está paga no gateway e o estado local ainda
   // não sabe. Conciliar aqui (em vez de mandar a clínica esperar) é o mesmo
