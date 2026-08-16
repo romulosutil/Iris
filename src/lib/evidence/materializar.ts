@@ -82,6 +82,11 @@ export type MaterializarQueries = {
   taxonomiaDoProtocolo(protocolId: string): Promise<string[]>;
   /** milestone.tipo_estrutura, por id (null se marco não existir). */
   tipoEstruturaDoMarco(milestoneId: string): Promise<TipoEstrutura | null>;
+  /** milestone.tipo_estrutura em LOTE — 1 query (`= ANY(...)`) para todos os
+   * ids, não N. IDs que não existem em `milestone` simplesmente não aparecem
+   * no Map (chamador trata ausência como null). Array vazio: nem consulta o
+   * banco, retorna Map vazio. */
+  tiposEstruturaDosMarcos(milestoneIds: string[]): Promise<Map<string, TipoEstrutura | null>>;
   /** goal.criterio_dominio, por id. */
   criterioDominioDaMeta(goalId: string): Promise<CriterioDominio | null>;
   /** Estado ATUAL de goal_candidacy (para preservar `candidacy_since` quando o
@@ -127,6 +132,25 @@ export function drizzleMaterializarQueries(tx: any): MaterializarQueries {
         .from(milestoneTable)
         .where(eq(milestoneTable.id, milestoneId));
       return (row?.tipoEstrutura as TipoEstrutura | undefined) ?? null;
+    },
+    async tiposEstruturaDosMarcos(milestoneIds) {
+      if (milestoneIds.length === 0) return new Map();
+      // ⚠️ ANY(${ids}::uuid[]) direto NÃO é bind de array no Drizzle — ele
+      // achata os elementos em parâmetros escalares dentro de parênteses,
+      // virando um row constructor (`ANY(($2, $3)::uuid[])`), que o Postgres
+      // rejeita ("cannot cast type record to uuid[]" com n>=2, "malformed
+      // array literal" com n=1). `dsql.param(ids)` emite `ANY($2::uuid[])`
+      // com UM placeholder de array, correto para qualquer n. Mesmo padrão de
+      // `src/lib/risco/notificacao.ts` (assertDestinatariosNoTenant).
+      const rows = (await tx.execute(dsql`
+        SELECT id, tipo_estrutura FROM milestone
+        WHERE id = ANY(${dsql.param(milestoneIds)}::uuid[])
+      `)) as unknown as Array<{ id: string; tipo_estrutura: TipoEstrutura | null }>;
+      const mapa = new Map<string, TipoEstrutura | null>();
+      for (const row of rows) {
+        mapa.set(row.id, row.tipo_estrutura ?? null);
+      }
+      return mapa;
     },
     async criterioDominioDaMeta(goalId) {
       const [row] = await tx
@@ -185,6 +209,18 @@ export function postgresMaterializarQueries(sql: postgres.Sql): MaterializarQuer
     async tipoEstruturaDoMarco(milestoneId) {
       const [row] = await sql`SELECT tipo_estrutura FROM milestone WHERE id = ${milestoneId}`;
       return (row?.tipo_estrutura as TipoEstrutura | undefined) ?? null;
+    },
+    async tiposEstruturaDosMarcos(milestoneIds) {
+      if (milestoneIds.length === 0) return new Map();
+      const rows = await sql`
+        SELECT id, tipo_estrutura FROM milestone
+        WHERE id = ANY(${sql.array(milestoneIds)}::uuid[])
+      `;
+      const mapa = new Map<string, TipoEstrutura | null>();
+      for (const row of rows) {
+        mapa.set(row.id as string, (row.tipo_estrutura as TipoEstrutura | undefined) ?? null);
+      }
+      return mapa;
     },
     async criterioDominioDaMeta(goalId) {
       const [row] = await sql`SELECT criterio_dominio FROM goal WHERE id = ${goalId}`;
@@ -320,16 +356,12 @@ export async function materializarSnapshot(
     taxonomiaPorProtocolo.set(pid, await queries.taxonomiaDoProtocolo(pid));
   }
 
-  // Cache de tipo_estrutura por milestone.
+  // Cache de tipo_estrutura por milestone — 1 query em lote (`= ANY(...)`),
+  // não N (achado de perf: #316/PR original trocava N round-trips
+  // sequenciais por N round-trips concorrentes numa mesma conexão, que
+  // continua sendo N queries no Postgres — sem ganho a partir de N grande).
   const milestoneIds = [...new Set(evidencias.map((e) => e.milestoneId).filter((x): x is string => !!x))];
-  const tipoEstruturaPorMilestone = new Map<string, TipoEstrutura | null>();
-  const estruturas = await Promise.all(milestoneIds.map(mid => queries.tipoEstruturaDoMarco(mid)));
-  for (let i = 0; i < milestoneIds.length; i++) {
-    const mid = milestoneIds[i];
-    if (mid) {
-      tipoEstruturaPorMilestone.set(mid, estruturas[i] ?? null);
-    }
-  }
+  const tipoEstruturaPorMilestone = await queries.tiposEstruturaDosMarcos(milestoneIds);
 
   function ordinalDe(protocolId: string | null, nivelAjuda: string | null): number | null {
     if (!protocolId || !nivelAjuda) return null;

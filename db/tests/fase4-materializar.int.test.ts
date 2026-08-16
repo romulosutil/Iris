@@ -13,8 +13,10 @@
  *    anterior ao ponto de recompute.
  */
 import { sql as dsql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import * as schema from "@/db/schema";
 import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
@@ -482,6 +484,40 @@ describe.skipIf(!hasDb)(
         expect(snap4!.segmentacao[GOAL_A]).toBeUndefined();
         expect(snap4!.repertorio_state[GOAL_B]).toBeDefined();
         expect(snap4!.repertorio_state[GOAL_A]).toBeUndefined();
+      });
+    });
+
+    describe("oráculo de contagem de queries (#316 — o N+1 tem que ficar morto)", () => {
+      // Hook `debug` do postgres.js: chamado 1x por query de fato enviada ao
+      // Postgres (não por linha de resultado). A fixture de beforeAll tem 2
+      // marcos distintos (MARCO_SIMPLES_ID, MARCO_BARREIRA_ID) — se a busca de
+      // tipo_estrutura voltasse a ser N+1 (sequencial OU `Promise.all`, que só
+      // faz pipelining na mesma conexão e continua sendo N queries no
+      // Postgres), este teste contaria >= 2 aqui, nunca 1.
+      test("tipo_estrutura por marco é 1 query em lote — nunca N", async () => {
+        let queriesNaMilestone = 0;
+        const countingSql = postgres(process.env.DATABASE_URL!, {
+          max: 1,
+          debug: (_connId, query) => {
+            // Drizzle quota identificadores (`from "milestone"`), então casa só
+            // no nome da tabela — \b evita colidir com `milestone_candidacy`
+            // (sem fronteira de palavra entre "e" e "_").
+            if (/\bmilestone\b/i.test(query)) queriesNaMilestone++;
+          },
+        });
+        try {
+          const countingDb = drizzle(countingSql, { schema, casing: "snake_case" });
+          await countingDb.transaction(async (tx) => {
+            await tx.execute(dsql`select
+              set_config('app.clinic_id', ${CLINIC_A}, true),
+              set_config('app.user_id', ${U_COORD_A}, true),
+              set_config('app.user_role', 'coordenador', true)`);
+            await materializarSnapshot(drizzleMaterializarQueries(tx), PAC_A1, 1);
+          });
+        } finally {
+          await countingSql.end();
+        }
+        expect(queriesNaMilestone).toBe(1);
       });
     });
   },
