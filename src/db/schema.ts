@@ -1700,16 +1700,6 @@ export const alertaRiscoClinico = pgTable(
 // nomes de coluna (`mercadopago_webhook_event`), justamente para a varredura ser
 // uma função só parametrizada pela tabela do provedor; ela saiu na 0091 com o
 // adapter do Mercado Pago (#36, D24) — hoje a varredura tem um trilho só.
-//
-// ⚠️ `aplicadoEm` + `erroAplicacao` PREENCHIDOS ao mesmo tempo é estado
-// LEGÍTIMO, não contradição (#289). Elas respondem perguntas diferentes:
-// `aplicadoEm` é "não voltar a processar" (único critério da varredura, que
-// filtra por `aplicado_em IS NULL`), e `erroAplicacao` é o DIAGNÓSTICO do
-// desfecho — que pode ser esperado e definitivo, como a cobrança de ativação
-// do Pix Automático, que nunca tem ciclo a conciliar. Por isso "deu errado"
-// NÃO é `erro_aplicacao IS NOT NULL`: é igualdade com o motivo específico
-// (`src/lib/billing/erro-aplicacao.ts`), nunca `LIKE`/substring.
-//
 // Plano de billing/identidade: só `iris_auth` tem grant; `app_role` não toca.
 export const asaasWebhookEvent = pgTable(
   "asaas_webhook_event",
@@ -2063,7 +2053,10 @@ export const tccRpdEntry = pgTable(
       .defaultNow(),
   },
   (t) => [
-    check("tcc_rpd_intensidade_range", sql`${t.intensidade} BETWEEN 0 AND 100`),
+    check(
+      "tcc_rpd_intensidade_range",
+      sql`${t.intensidade} BETWEEN 0 AND 100`,
+    ),
     check(
       "tcc_rpd_intensidade_pos_range",
       sql`${t.intensidadePos} IS NULL OR (${t.intensidadePos} BETWEEN 0 AND 100)`,

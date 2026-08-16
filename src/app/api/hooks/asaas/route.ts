@@ -269,6 +269,12 @@ export async function POST(request: Request): Promise<Response> {
  * Consequência para quem consulta: "deu errado" NÃO é `erro_aplicacao IS NOT
  * NULL`. É igualdade com o motivo específico que representa falha — ver
  * `listarCobrancasDeCicloNaoConciliadas`.
+ *
+ * A mesma nota está no docblock de `src/lib/billing/erro-aplicacao.ts`, e NÃO
+ * no comentário da tabela em `schema.ts`: o guard
+ * `src/db/migrations-vs-main.test.ts` exige snapshot novo de Drizzle para
+ * qualquer diff em `schema.ts`, comentário incluso, e esta entrega não tem
+ * migração.
  */
 async function marcar(
   id: string,

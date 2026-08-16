@@ -53,6 +53,25 @@ import { asaasWebhookEvent } from "@/db/schema";
  * envelope, ela será classificada como "fora do ciclo" e o alarme não aparece.
  * A evidência crua para desempatar continua existindo em
  * `asaas_webhook_event.payload`, que é gravado bruto e nunca é reescrito.
+ *
+ * ## `aplicado_em` + `erro_aplicacao` preenchidos é estado LEGÍTIMO
+ *
+ * As duas colunas respondem perguntas diferentes, e não formam um par
+ * sucesso/erro: `aplicado_em` é "não voltar a processar" (único critério de
+ * `reprocessarEventosPendentes`, que varre por `aplicado_em IS NULL`), e
+ * `erro_aplicacao` é o DIAGNÓSTICO do desfecho — que pode ser esperado e
+ * definitivo, como a cobrança de ativação. Carimbado E com motivo é a forma
+ * normal de registrar um evento que não tem mais nada a fazer e também não
+ * aplicou efeito nenhum.
+ *
+ * Consequência direta para quem consulta: **"deu errado" NÃO é
+ * `erro_aplicacao IS NOT NULL`** — é igualdade com o motivo específico. É por
+ * isso que `listarCobrancasDeCicloNaoConciliadas` filtra por `eq`.
+ *
+ * Esta nota mora aqui e no docblock de `marcar` (`route.ts`), e não no
+ * comentário de `schema.ts`: o guard `src/db/migrations-vs-main.test.ts` exige
+ * snapshot novo de Drizzle para QUALQUER diff em `schema.ts`, comentário
+ * incluso, e esta entrega não tem migração.
  */
 
 /** Prefixo da referência externa de uma cobrança de CICLO (`cycle:<id>`). */
