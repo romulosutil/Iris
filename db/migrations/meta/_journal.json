@@ -677,29 +677,8 @@
     {
       "idx": 96,
       "version": "7",
-      "when": 1786731685223,
-      "tag": "0096_billing_cycle_devido",
-      "breakpoints": true
-    },
-    {
-      "idx": 97,
-      "version": "7",
-      "when": 1786736757645,
-      "tag": "0097_billing_cycle_debito_agrupado",
-      "breakpoints": true
-    },
-    {
-      "idx": 98,
-      "version": "7",
-      "when": 1786737757645,
-      "tag": "0098_patient_clinical_modality",
-      "breakpoints": true
-    },
-    {
-      "idx": 99,
-      "version": "7",
-      "when": 1786738757645,
-      "tag": "0099_extraction_subtipo_resumo_tc",
+      "when": 1786625656975,
+      "tag": "0096_patient_clinical_modality",
       "breakpoints": true
     }
   ]

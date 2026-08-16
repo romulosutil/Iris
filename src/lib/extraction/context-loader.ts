@@ -1,4 +1,4 @@
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { withTenant } from "@/db/rls";
 import {
   goal,
@@ -9,10 +9,7 @@ import {
   protocol,
   sessionProtocolScope,
 } from "@/db/schema";
-import {
-  buildCanonicalContext,
-  type AssemblerInput,
-} from "./context-assembler";
+import { buildCanonicalContext, type AssemblerInput } from "./context-assembler";
 
 // Tipo da transação que withTenant entrega ao callback (evita reimportar o tipo
 // interno do drizzle/postgres).
@@ -43,138 +40,93 @@ export async function loadCanonicalContext(
     .from(patient)
     .where(eq(patient.id, args.patientId));
 
+  // Escopo de protocolos desta sessão (SessionProtocolScope). Se houver linhas,
+  // restringe os protocolos ativos aos escopados (Caso 9 — sessão de TO só vê PEDI).
+  const scopes = await tx
+    .select({ protocolId: sessionProtocolScope.protocolId })
+    .from(sessionProtocolScope)
+    .where(eq(sessionProtocolScope.sessionId, args.sessionId));
+  const scopeIds = new Set(scopes.map((s) => s.protocolId));
+
+  const pps = await tx
+    .select({
+      protocolId: protocol.id,
+      familia: protocol.familia,
+      nome: protocol.nome,
+      disciplina: protocol.disciplina,
+      taxonomiaAjuda: protocol.taxonomiaAjuda,
+    })
+    .from(patientProtocol)
+    .innerJoin(protocol, eq(patientProtocol.protocolId, protocol.id))
+    .where(
+      and(
+        eq(patientProtocol.patientId, args.patientId),
+        isNull(patientProtocol.desativadoEm),
+      ),
+    );
+  const ativos = pps.filter((p) => scopeIds.size === 0 || scopeIds.has(p.protocolId));
+
+  const protocolos: AssemblerInput["protocolos"] = [];
+  for (const p of ativos) {
+    const doms = await tx
+      .select({
+        dominioId: milestone.dominioId,
+        nome: milestone.nome,
+        nivel: milestone.nivel,
+      })
+      .from(milestone)
+      .where(eq(milestone.protocolId, p.protocolId));
+    // um item por dominio_id (marcos podem ter vários níveis do mesmo domínio)
+    const porDominio = new Map<string, { dominioId: string; nome: string; nivel: string | null }>();
+    for (const d of doms) {
+      if (!porDominio.has(d.dominioId)) {
+        porDominio.set(d.dominioId, { dominioId: d.dominioId, nome: d.nome, nivel: d.nivel });
+      }
+    }
+    protocolos.push({
+      familia: p.familia,
+      nome: p.nome,
+      disciplina: p.disciplina,
+      taxonomiaAjuda: (p.taxonomiaAjuda as string[]) ?? [],
+      dominios: [...porDominio.values()],
+    });
+  }
+
+  const metasRows = await tx
+    .select({ id: goal.id, descricao: goal.descricao, disciplina: goal.disciplina })
+    .from(goal)
+    .where(
+      and(
+        eq(goal.patientId, args.patientId),
+        eq(goal.clinicId, args.clinicId),
+        eq(goal.estado, "ativa"),
+      ),
+    );
+
+  const metas: AssemblerInput["metas"] = [];
+  for (const m of metasRows) {
+    const maps = await tx
+      .select({
+        familia: protocol.familia,
+        dominioId: milestone.dominioId,
+        nivel: milestone.nivel,
+      })
+      .from(goalMilestoneMapping)
+      .innerJoin(milestone, eq(goalMilestoneMapping.milestoneId, milestone.id))
+      .innerJoin(protocol, eq(milestone.protocolId, protocol.id))
+      .where(eq(goalMilestoneMapping.goalId, m.id));
+    metas.push({
+      id: m.id,
+      descricao: m.descricao,
+      disciplina: m.disciplina,
+      mapeamentos: maps,
+    });
+  }
+
   const modo =
     pac?.clinicalModality === "conventional"
       ? "terapia_convencional"
       : "protocol_driven";
-
-  const protocolos: AssemblerInput["protocolos"] = [];
-  const metas: AssemblerInput["metas"] = [];
-
-  // Modo Terapia Convencional NUNCA carrega protocolos_ativos nem
-  // metas_ativas — o prompt do modo (CONVENTIONAL_SYSTEM_PROMPT) afirma essa
-  // invariante e o código precisa garanti-la, não só declará-la (W1/#305).
-  if (modo !== "terapia_convencional") {
-    // Escopo de protocolos desta sessão (SessionProtocolScope). Se houver linhas,
-    // restringe os protocolos ativos aos escopados (Caso 9 — sessão de TO só vê PEDI).
-    const scopes = await tx
-      .select({ protocolId: sessionProtocolScope.protocolId })
-      .from(sessionProtocolScope)
-      .where(eq(sessionProtocolScope.sessionId, args.sessionId));
-    const scopeIds = new Set(scopes.map((s) => s.protocolId));
-
-    const pps = await tx
-      .select({
-        protocolId: protocol.id,
-        familia: protocol.familia,
-        nome: protocol.nome,
-        disciplina: protocol.disciplina,
-        taxonomiaAjuda: protocol.taxonomiaAjuda,
-      })
-      .from(patientProtocol)
-      .innerJoin(protocol, eq(patientProtocol.protocolId, protocol.id))
-      .where(
-        and(
-          eq(patientProtocol.patientId, args.patientId),
-          isNull(patientProtocol.desativadoEm),
-        ),
-      );
-    const ativos = pps.filter(
-      (p) => scopeIds.size === 0 || scopeIds.has(p.protocolId),
-    );
-
-    for (const p of ativos) {
-      const doms = await tx
-        .select({
-          dominioId: milestone.dominioId,
-          nome: milestone.nome,
-          nivel: milestone.nivel,
-        })
-        .from(milestone)
-        .where(eq(milestone.protocolId, p.protocolId));
-      // um item por dominio_id (marcos podem ter vários níveis do mesmo domínio)
-      const porDominio = new Map<
-        string,
-        { dominioId: string; nome: string; nivel: string | null }
-      >();
-      for (const d of doms) {
-        if (!porDominio.has(d.dominioId)) {
-          porDominio.set(d.dominioId, {
-            dominioId: d.dominioId,
-            nome: d.nome,
-            nivel: d.nivel,
-          });
-        }
-      }
-      protocolos.push({
-        familia: p.familia,
-        nome: p.nome,
-        disciplina: p.disciplina,
-        taxonomiaAjuda: (p.taxonomiaAjuda as string[]) ?? [],
-        dominios: [...porDominio.values()],
-      });
-    }
-
-    const metasRows = await tx
-      .select({
-        id: goal.id,
-        descricao: goal.descricao,
-        disciplina: goal.disciplina,
-      })
-      .from(goal)
-      .where(
-        and(
-          eq(goal.patientId, args.patientId),
-          eq(goal.clinicId, args.clinicId),
-          eq(goal.estado, "ativa"),
-        ),
-      );
-
-    if (metasRows.length > 0) {
-      const goalIds = metasRows.map((m) => m.id);
-      const allMaps = await tx
-        .select({
-          goalId: goalMilestoneMapping.goalId,
-          familia: protocol.familia,
-          dominioId: milestone.dominioId,
-          nivel: milestone.nivel,
-        })
-        .from(goalMilestoneMapping)
-        .innerJoin(
-          milestone,
-          eq(goalMilestoneMapping.milestoneId, milestone.id),
-        )
-        .innerJoin(protocol, eq(milestone.protocolId, protocol.id))
-        .where(inArray(goalMilestoneMapping.goalId, goalIds));
-
-      // Agrupa em memória
-      const mapsByGoal = new Map<
-        string,
-        Array<{ familia: string; dominioId: string; nivel: string | null }>
-      >();
-      for (const row of allMaps) {
-        let arr = mapsByGoal.get(row.goalId);
-        if (!arr) {
-          arr = [];
-          mapsByGoal.set(row.goalId, arr);
-        }
-        arr.push({
-          familia: row.familia,
-          dominioId: row.dominioId,
-          nivel: row.nivel,
-        });
-      }
-
-      for (const m of metasRows) {
-        metas.push({
-          id: m.id,
-          descricao: m.descricao,
-          disciplina: m.disciplina,
-          mapeamentos: mapsByGoal.get(m.id) || [],
-        });
-      }
-    }
-  }
 
   return buildCanonicalContext({
     paciente: { idadeMeses: idadeEmMeses(pac?.nascimento ?? null) },

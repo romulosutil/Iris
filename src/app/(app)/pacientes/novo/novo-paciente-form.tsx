@@ -8,13 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { RadioCards } from "@/components/ui/radio-cards";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ativarEhASaida } from "@/lib/billing/estado-conta-ui";
 import {
   cadastrarPacienteAdministrativo,
@@ -22,7 +15,6 @@ import {
 } from "./actions";
 
 type TipoConsentimento = "responsavel_legal" | "titular_adulto";
-type ClinicalModality = "conventional" | "protocol_driven";
 
 /**
  * Idade em anos completos na data de hoje. Só serve para o AVISO
@@ -55,11 +47,6 @@ export function NovoPacienteForm() {
     TipoConsentimento | ""
   >("");
   const [nascimento, setNascimento] = useState("");
-  // Default casa com a coluna (`clinical_modality` default `protocol_driven`,
-  // #305/schema.ts) — trocar aqui sem trocar lá reabre a divergência que o
-  // B4 fechou.
-  const [clinicalModality, setClinicalModality] =
-    useState<ClinicalModality>("protocol_driven");
   const [consentimentoIa, setConsentimentoIa] = useState(false);
   const [consentimentoExportacao, setConsentimentoExportacao] = useState(false);
 
@@ -139,47 +126,6 @@ export function NovoPacienteForm() {
       <Field label="Convênio" htmlFor="convenio">
         <Input id="convenio" name="convenio" />
       </Field>
-
-      {/* Modalidade clínica (#98/B4): decide o modo do agente de extração —
-          Terapia Convencional (sem protocolo, três famílias de abordagem,
-          docs/agente/protocolo-terapia-convencional.md) ou Protocolos de
-          Marcos (TEA/neurodesenvolvimento, com PEI e grade de domínios). A
-          `logic.ts` já valida contra o enum e cai no default `protocol_driven`
-          quando o campo não chega — este Select é o único jeito de escolher
-          `conventional` pela UI. `aria-describedby` é ligado à mão no
-          `SelectTrigger` (o input de verdade): o hint mora FORA do `<Field>`
-          (é um `<p>` irmão, não filho), então o clone automático do `<Field>`
-          nunca alcançaria o Select mesmo que ele repassasse props — a ligação
-          manual é a via segura, no mesmo padrão do `RadioCards` acima. */}
-      <Field label="Modalidade clínica" htmlFor="clinicalModality">
-        <Select
-          name="clinicalModality"
-          value={clinicalModality}
-          onValueChange={(v) => setClinicalModality(v as ClinicalModality)}
-        >
-          <SelectTrigger
-            id="clinicalModality"
-            aria-describedby="clinicalModality-hint"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="protocol_driven">
-              Protocolos de Marcos
-            </SelectItem>
-            <SelectItem value="conventional">Terapia Convencional</SelectItem>
-          </SelectContent>
-        </Select>
-      </Field>
-      <p
-        id="clinicalModality-hint"
-        className="-mt-2 text-sm text-[var(--text-secondary)]"
-      >
-        Protocolos de Marcos: acompanhamento estruturado por protocolo (TEA e
-        neurodesenvolvimento). Terapia Convencional: psicoterapia sem protocolo
-        estruturado (psicodinâmica, humanista/existencial, transpessoal).
-      </p>
-
       {/* Disciplina e carga horária saíram daqui (#203, fatia 2). Cadastro é
           cadastral + consentimento LGPD; prescrever é ato clínico, mora na
           ficha clínica com vigência própria (SCD2) e é o teto que a equipe

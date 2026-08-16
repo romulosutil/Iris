@@ -128,10 +128,7 @@ const extracaoSchema = z.object({
 // inconsistencia_historico | possivel_erro_transcricao | texto_ambiguo, mas o
 // modelo às vezes inventa rótulos — tolerar isso não pode afundar a extração
 // (achado do teste vivo, 12/07/2026).
-// Exportado para o contrato irmão do modo Terapia Convencional
-// (conventional-output-schema.ts): sinalização é metadado de UI e tem a MESMA
-// semântica nos dois modos — duplicar a definição criaria duas verdades.
-export const sinalizacaoSchema = z.object({
+const sinalizacaoSchema = z.object({
   tipo: z.string(),
   detalhe: z.string().optional(),
 });
@@ -162,12 +159,7 @@ const alertaRiscoSeveridadeEnum = z.enum([
 
 const alertaRiscoCertezaEnum = z.enum(["explicito", "ambiguo_citado"]);
 
-// Exportado para o contrato do modo Terapia Convencional: o R5-TC é o MESMO
-// sinal do R20, com o mesmo consumidor a jusante (`app_criar_alerta_risco`, que
-// resolve o prazo a partir de `severidade`). Um segundo schema de risco, ainda
-// que idêntico hoje, poderia divergir amanhã e mandar severidade fora do
-// domínio que o banco entende.
-export const alertaRiscoSchema = z.object({
+const alertaRiscoSchema = z.object({
   categoria: alertaRiscoCategoriaEnum,
   severidade: alertaRiscoSeveridadeEnum,
   // R20 não tem `certeza`; o default é o lado CONSERVADOR. `ambiguo_citado`
@@ -192,7 +184,7 @@ export const alertaRiscoSchema = z.object({
  * malformado invalida a saída inteira (estado `erro_validacao`, visível), que é
  * o comportamento alto e não o baixo.
  */
-export function levantarRiscoDeSinalizacoes(entrada: unknown): unknown {
+function levantarRiscoDeSinalizacoes(entrada: unknown): unknown {
   if (typeof entrada !== "object" || entrada === null) return entrada;
   const obj = entrada as Record<string, unknown>;
   if (obj.alerta_risco != null) return entrada;

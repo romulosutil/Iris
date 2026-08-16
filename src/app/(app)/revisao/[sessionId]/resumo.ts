@@ -26,10 +26,7 @@ function push(linhas: LinhaResumo[], rotulo: string, valor: string | null) {
  * funcional (dominio_id do alvo, ou a função). Para os demais subtipos, o
  * próprio subtipo já é a chave (não há alvo mapeado).
  */
-export function chaveDominio(
-  subtipo: ExtractionSubtipo,
-  payload: unknown,
-): string | null {
+export function chaveDominio(subtipo: ExtractionSubtipo, payload: unknown): string | null {
   const p = (payload ?? {}) as Payload;
   if (subtipo === "evidencia") {
     const alvos = Array.isArray(p.alvos) ? (p.alvos as Payload[]) : [];
@@ -52,15 +49,9 @@ export function rotuloSubtipo(subtipo: ExtractionSubtipo): string {
       return "Cadeia comportamental";
     case "preferencia_reforcador":
       return "Preferência / reforçador";
-    case "resumo_terapia_convencional":
-      return "Resumo da sessão";
     case "pendente":
       return "Extração pendente";
     default:
-      // Guard de exaustividade: subtipo novo sem `case` acima vira erro de
-      // COMPILAÇÃO aqui, em vez de cair no fallback e renderizar o token cru
-      // do banco na tela do terapeuta.
-      subtipo satisfies never;
       return subtipo;
   }
 }
@@ -70,10 +61,7 @@ export function rotuloSubtipo(subtipo: ExtractionSubtipo): string {
  * aprovar. Retorna a lista de linhas na ordem de leitura clínica. Nunca inclui
  * nota/pontuação (Camada 1: a IA não pontua) — só descreve o que observou.
  */
-export function resumirPayload(
-  subtipo: ExtractionSubtipo,
-  payload: unknown,
-): LinhaResumo[] {
+export function resumirPayload(subtipo: ExtractionSubtipo, payload: unknown): LinhaResumo[] {
   const p = (payload ?? {}) as Payload;
   const linhas: LinhaResumo[] = [];
 
@@ -126,64 +114,7 @@ export function resumirPayload(
       push(linhas, "Valência", str(p.valencia));
       break;
     }
-    case "resumo_terapia_convencional": {
-      // Artefato único do modo Terapia Convencional: o payload é o objeto
-      // inteiro do contrato TC. Ordem de leitura clínica = resumo primeiro,
-      // depois os temas ancorados em trecho, depois o padrão de participação.
-      // O `alerta_risco` NÃO é renderizado aqui de propósito: ele viaja fora
-      // desta fila (#122) e tem prioridade visual própria — repeti-lo dentro de
-      // um cartão de revisão o faria competir por atenção com o resumo.
-      push(linhas, "Resumo da sessão", str(p.resumo_sessao));
-
-      const temas = Array.isArray(p.temas) ? (p.temas as Payload[]) : [];
-      temas.forEach((t, i) => {
-        const tema = str(t.tema);
-        const trecho = str(t.trecho_fonte);
-        if (tema) {
-          push(
-            linhas,
-            `Tema ${i + 1}`,
-            trecho ? `${tema} — "${trecho}"` : tema,
-          );
-        }
-      });
-
-      const recorrentes = Array.isArray(p.tema_recorrente_sinalizado)
-        ? (p.tema_recorrente_sinalizado as Payload[])
-        : [];
-      recorrentes.forEach((t, i) => {
-        const tema = str(t.tema);
-        const obs = str(t.observacao);
-        const trecho = str(t.trecho_fonte);
-        if (tema) {
-          const partes = [tema, obs, trecho ? `"${trecho}"` : null].filter(
-            (x): x is string => x !== null,
-          );
-          push(linhas, `Tema recorrente ${i + 1}`, partes.join(" — "));
-        }
-      });
-
-      const padrao = (p.padrao_participacao_verbal ?? null) as Payload | null;
-      if (padrao) {
-        // `presente: false` significa "nada de notável", não "participou bem"
-        // (§3.1 do protocolo) — a copy tem que dizer isso, senão a ausência de
-        // linha vira leitura positiva por conta do leitor.
-        push(
-          linhas,
-          "Padrão de participação verbal",
-          padrao.presente === true
-            ? (str(padrao.descricao) ?? "observado, sem descrição")
-            : "nada de notável registrado",
-        );
-      }
-      break;
-    }
     case "pendente":
-      break;
-    default:
-      // Guard de exaustividade — ver rotuloSubtipo. Sem isto, subtipo novo
-      // renderiza VAZIO em silêncio, sem erro de compilação.
-      subtipo satisfies never;
       break;
   }
 

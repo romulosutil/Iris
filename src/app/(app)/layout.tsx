@@ -105,7 +105,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <FaixaTrial
         estado={situacaoConta.estado}
         diasRestantes={situacaoConta.diasRestantesTrial}
-        debitoCentavos={situacaoConta.debitoCentavos}
       />
       <Container como="main" largura="md" className="flex-1 py-6 sm:py-10">
         {children}

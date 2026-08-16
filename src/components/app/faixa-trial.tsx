@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Banner } from "@/components/ui/banner";
 import { Container } from "@/components/ui/layout";
-import { formatarBRL } from "@/lib/billing/calculator";
 import type { EstadoConta } from "@/lib/billing/estado-conta";
 
 interface FaixaTrialProps {
@@ -11,13 +10,6 @@ interface FaixaTrialProps {
    * não é relevante para o estado.
    */
   diasRestantes: number | null;
-  /**
-   * Soma dos ciclos `devido`, em centavos (#290). `0` quando não há dívida.
-   *
-   * Default zero para não obrigar todo call site (e todo teste) a passar um
-   * número que quase sempre é o mesmo.
-   */
-  debitoCentavos?: number;
 }
 
 /**
@@ -52,34 +44,10 @@ interface FaixaTrialProps {
  *   carrega `role="alert"`, reservado ao risco clínico. Cobrança não interrompe
  *   leitor de tela.
  */
-export function FaixaTrial({
-  estado,
-  diasRestantes,
-  debitoCentavos = 0,
-}: FaixaTrialProps) {
-  const temDebito = debitoCentavos > 0;
-
-  // Conta em dia (ou fora do modelo comercial) não tem o que comunicar aqui —
-  // EXCETO quando sobrou dívida (#290). Reativar com débito abaixo do piso de
-  // cobrança do gateway é caminho normal, e sem esta exceção a dívida sumiria
-  // da tela justamente no intervalo em que a clínica poderia pagá-la,
-  // reaparecendo somada no cancelamento seguinte. Débito invisível é o que
-  // transforma cobrança legítima em contestação.
-  if (
-    estado === "isenta" ||
-    estado === "ativa" ||
-    estado === "pagamento_atrasado"
-  ) {
-    if (!temDebito) return null;
-    return (
-      <Container largura="md" className="py-4">
-        <Banner variant="info">
-          Há {formatarBRL(debitoCentavos)} em aberto de um ciclo interrompido em
-          cancelamento anterior. O valor não vence nem expira: ele é cobrado na
-          próxima vez que você reativar a assinatura.
-        </Banner>
-      </Container>
-    );
+export function FaixaTrial({ estado, diasRestantes }: FaixaTrialProps) {
+  // Conta em dia (ou fora do modelo comercial) não tem o que comunicar aqui.
+  if (estado === "isenta" || estado === "ativa" || estado === "pagamento_atrasado") {
+    return null;
   }
 
   const dias = diasRestantes ?? 0;
@@ -96,9 +64,7 @@ export function FaixaTrial({
         : estado === "pagamento_em_processamento"
           ? "Estamos aguardando a confirmação do seu pagamento. A conta está em somente-leitura até o banco confirmar."
           : estado === "cancelada"
-            ? temDebito
-              ? `Sua assinatura está cancelada e há ${formatarBRL(debitoCentavos)} em aberto do ciclo interrompido. A conta está em somente-leitura; seus dados continuam acessíveis e exportáveis. Para voltar a cadastrar e editar, quite o valor e reative.`
-              : "Sua assinatura está cancelada e a conta está em somente-leitura. Seus dados continuam acessíveis e exportáveis."
+            ? "Sua assinatura está cancelada e a conta está em somente-leitura. Seus dados continuam acessíveis e exportáveis."
             : "Seu período de teste terminou. A conta está em somente-leitura.";
 
   // CTA só onde ativar/reativar é de fato a saída. Em
