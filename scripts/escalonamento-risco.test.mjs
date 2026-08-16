@@ -1,17 +1,24 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { processarEmailRt, varrer } from "./escalonamento-risco.mjs";
 
 // Fake mínimo do postgres.js: só precisa responder ao shape de tagged
 // template usado por processarEmailRt, e registrar as chamadas pra
 // verificação. Sem banco real (nenhum vi.mock no repo — convenção).
-function makeFakeSql({ rtRows = [], escalados = [], pendentes = [], aoRegistrar } = {}) {
+function makeFakeSql({
+  rtRows = [],
+  escalados = [],
+  pendentes = [],
+  aoRegistrar,
+} = {}) {
   const chamadas = [];
   const registros = [];
   function sql(strings, ...valores) {
     const texto = strings.join("?");
     chamadas.push(texto);
-    if (texto.includes("app_escalonar_risco_vencidos")) return Promise.resolve(escalados);
-    if (texto.includes("app_alertas_estagio2_sem_email")) return Promise.resolve(pendentes);
+    if (texto.includes("app_escalonar_risco_vencidos"))
+      return Promise.resolve(escalados);
+    if (texto.includes("app_alertas_estagio2_sem_email"))
+      return Promise.resolve(pendentes);
     if (texto.includes("app_rt_do_alerta")) return Promise.resolve(rtRows);
     if (texto.includes("app_registrar_email_rt")) {
       // Assinatura #154: (p_alerta, p_sucesso, p_transitorio, p_detalhe).
@@ -19,8 +26,14 @@ function makeFakeSql({ rtRows = [], escalados = [], pendentes = [], aoRegistrar 
       // são LITERAIS no template SQL — não chegam em `valores`. Só no caminho
       // de falha de envio o `p_transitorio` é interpolado (vira `?`). Por isso
       // a posição do detalhe em `valores` depende do formato do texto.
-      const m = /app_registrar_email_rt\(\?,\s*(true|false),\s*(true|false|\?),/.exec(texto);
-      if (!m) throw new Error(`chamada a app_registrar_email_rt não reconhecida: ${texto}`);
+      const m =
+        /app_registrar_email_rt\(\?,\s*(true|false),\s*(true|false|\?),/.exec(
+          texto,
+        );
+      if (!m)
+        throw new Error(
+          `chamada a app_registrar_email_rt não reconhecida: ${texto}`,
+        );
       const transitorioLiteral = m[2] !== "?";
       registros.push({
         alerta: valores[0],
@@ -47,15 +60,21 @@ describe("escalonamento-risco.mjs — processarEmailRt (#126)", () => {
   test("sem RT resolvido: registra falha explícita, não lança", async () => {
     const sql = makeFakeSql({ rtRows: [] });
     await expect(processarEmailRt(sql, "alerta-1")).resolves.toBeUndefined();
-    expect(sql.chamadas.some((c) => c.includes("app_registrar_email_rt"))).toBe(true);
+    expect(sql.chamadas.some((c) => c.includes("app_registrar_email_rt"))).toBe(
+      true,
+    );
     expect(sql.chamadas.some((c) => c.includes("app_rt_do_alerta"))).toBe(true);
   });
 
   test("com RT mas sem EMAIL_PROVIDER_API_KEY: registra falha (canal indisponível), não lança", async () => {
     delete process.env.EMAIL_PROVIDER_API_KEY;
-    const sql = makeFakeSql({ rtRows: [{ rt_email: "rt@clinica.example", rt_nome: "RT" }] });
+    const sql = makeFakeSql({
+      rtRows: [{ rt_email: "rt@clinica.example", rt_nome: "RT" }],
+    });
     await expect(processarEmailRt(sql, "alerta-2")).resolves.toBeUndefined();
-    expect(sql.chamadas.some((c) => c.includes("app_registrar_email_rt"))).toBe(true);
+    expect(sql.chamadas.some((c) => c.includes("app_registrar_email_rt"))).toBe(
+      true,
+    );
   });
 
   // O e-mail não carrega nada de clínico de propósito, então o link pro painel
@@ -66,13 +85,72 @@ describe("escalonamento-risco.mjs — processarEmailRt (#126)", () => {
   test("com key mas sem NEXT_PUBLIC_APP_URL: registra falha, não envia e-mail com link vazio", async () => {
     process.env.EMAIL_PROVIDER_API_KEY = "re_chave_de_teste";
     delete process.env.NEXT_PUBLIC_APP_URL;
-    const sql = makeFakeSql({ rtRows: [{ rt_email: "rt@clinica.example", rt_nome: "RT" }] });
+    const sql = makeFakeSql({
+      rtRows: [{ rt_email: "rt@clinica.example", rt_nome: "RT" }],
+    });
 
     await expect(processarEmailRt(sql, "alerta-3")).resolves.toBeUndefined();
 
     expect(sql.registros).toHaveLength(1);
     expect(sql.registros[0].sucesso).toBe(false);
     expect(sql.registros[0].detalhe).toContain("NEXT_PUBLIC_APP_URL");
+  });
+});
+
+// #329 — o motor de escalonamento é o único caminho que dispara notificação
+// para fora do processo, e era o único que NÃO passava pelo guard de tenant
+// (`assertDestinatariosNoTenant` vive em TS, e este arquivo é `.mjs` puro numa
+// imagem que nem copia `src/`). O predicado desceu para o banco: a partir da
+// migração 0105 `app_rt_do_alerta` devolve `motivo_bloqueio` em vez de sumir com
+// a linha, e aqui o job tem que RECUSAR o envio.
+describe("escalonamento-risco.mjs — guard de tenant no envio ao RT (#329)", () => {
+  const MOTIVO =
+    "destinatario fora do tenant: 00000000-0000-0000-0000-0000000013b1";
+  let fetchOriginal;
+  let chamadasDeRede;
+
+  beforeEach(() => {
+    // Ambiente COMPLETO de envio: com key e URL, o caminho feliz chamaria a
+    // Resend de verdade. Se o guard não existisse, este teste bateria na rede —
+    // e é justamente isso que o espião abaixo transforma em asserção.
+    process.env.EMAIL_PROVIDER_API_KEY = "re_chave_de_teste";
+    process.env.NEXT_PUBLIC_APP_URL = "https://painel.example";
+    chamadasDeRede = [];
+    fetchOriginal = globalThis.fetch;
+    globalThis.fetch = (...args) => {
+      chamadasDeRede.push(args[0]);
+      throw new Error("nenhuma chamada de rede deveria acontecer neste teste");
+    };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = fetchOriginal;
+    delete process.env.EMAIL_PROVIDER_API_KEY;
+    delete process.env.NEXT_PUBLIC_APP_URL;
+  });
+
+  test("RT fora do tenant: não tenta enviar e registra falha PERMANENTE com o motivo exato", async () => {
+    const sql = makeFakeSql({
+      rtRows: [{ rt_email: null, motivo_bloqueio: MOTIVO }],
+    });
+
+    await expect(processarEmailRt(sql, "alerta-329")).resolves.toBeUndefined();
+
+    // 1. Nenhum envio tentado. Com a key e a URL setadas, o único motivo para a
+    //    rede ficar em silêncio é o guard ter recusado antes do adapter.
+    expect(chamadasDeRede).toEqual([]);
+
+    // 2. Falha registrada, permanente (transitorio=false): RT sem papel na
+    //    clínica não se conserta retentando — e sem registro o alerta voltaria
+    //    para sempre em `app_alertas_estagio2_sem_email()`.
+    expect(sql.registros).toHaveLength(1);
+    expect(sql.registros[0].alerta).toBe("alerta-329");
+    expect(sql.registros[0].sucesso).toBe(false);
+    expect(sql.registros[0].transitorio).toBe(false);
+    // 3. Motivo EXATO, não a mensagem genérica de "RT nao encontrado": um
+    //    bloqueio de isolamento tem que ser distinguível de cadastro incompleto
+    //    na trilha de auditoria.
+    expect(sql.registros[0].detalhe).toBe(MOTIVO);
   });
 });
 
@@ -93,7 +171,9 @@ describe("escalonamento-risco.mjs — retentativa e isolamento de laço (#154)",
 
   test("canal não configurado (sem API key): grava p_transitorio=false", async () => {
     delete process.env.EMAIL_PROVIDER_API_KEY;
-    const sql = makeFakeSql({ rtRows: [{ rt_email: "rt@clinica.example", rt_nome: "RT" }] });
+    const sql = makeFakeSql({
+      rtRows: [{ rt_email: "rt@clinica.example", rt_nome: "RT" }],
+    });
     await processarEmailRt(sql, "alerta-2");
 
     expect(sql.registros).toHaveLength(1);
@@ -104,9 +184,13 @@ describe("escalonamento-risco.mjs — retentativa e isolamento de laço (#154)",
     const sql = makeFakeSql({ rtRows: [] });
     await processarEmailRt(sql, "alerta-3");
 
-    const chamada = sql.chamadas.find((c) => c.includes("app_registrar_email_rt"));
+    const chamada = sql.chamadas.find((c) =>
+      c.includes("app_registrar_email_rt"),
+    );
     // 4 args = 3 vírgulas de topo dentro dos parênteses.
-    expect(chamada).toMatch(/app_registrar_email_rt\(\?,\s*(true|false),\s*(true|false|\?),\s*\?\)/);
+    expect(chamada).toMatch(
+      /app_registrar_email_rt\(\?,\s*(true|false),\s*(true|false|\?),\s*\?\)/,
+    );
   });
 
   // O bug: um alerta que estourasse exceção derrubava a varredura inteira e
@@ -116,8 +200,20 @@ describe("escalonamento-risco.mjs — retentativa e isolamento de laço (#154)",
     const sql = makeFakeSql({
       rtRows: [],
       escalados: [
-        { out_alerta_id: "a1", out_clinic_id: "c1", out_estagio: 2, out_severidade: "alta", out_prazo_minutos: 30 },
-        { out_alerta_id: "a2", out_clinic_id: "c2", out_estagio: 2, out_severidade: "alta", out_prazo_minutos: 30 },
+        {
+          out_alerta_id: "a1",
+          out_clinic_id: "c1",
+          out_estagio: 2,
+          out_severidade: "alta",
+          out_prazo_minutos: 30,
+        },
+        {
+          out_alerta_id: "a2",
+          out_clinic_id: "c2",
+          out_estagio: 2,
+          out_severidade: "alta",
+          out_prazo_minutos: 30,
+        },
       ],
       aoRegistrar: (alerta) => {
         if (alerta === "a1") throw new Error("conexão com o Postgres caiu");

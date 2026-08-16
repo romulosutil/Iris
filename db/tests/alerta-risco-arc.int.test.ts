@@ -409,6 +409,135 @@ describe.skipIf(!hasDb)(
   },
 );
 
+/**
+ * #329 — o predicado de "destinatário no tenant" desceu para o SQL (migração
+ * 0105) porque os dois caminhos que notificam não podem compartilhar código:
+ * a criação roda em TypeScript, dentro do Next; o escalonamento roda em
+ * `scripts/escalonamento-risco.mjs`, Node puro numa imagem que não copia `src/`.
+ * Estes testes exercitam o predicado no ponto em que ele é único — o banco.
+ */
+describe.skipIf(!hasDb)(
+  "#329 — predicado único de destinatário no tenant (0105)",
+  () => {
+    beforeAll(semear);
+
+    /** Leva um alerta novo até `escalado_estagio_2` (mesmo caminho do ARC-4b). */
+    async function alertaEmEstagio2(): Promise<string> {
+      const id = await criar({
+        autor: ctx("terapeuta", U_PSICO),
+        sessionId: S_TERCA,
+        categoria: "autolesao",
+        severidade: "autolesao_recente",
+        certeza: "explicito",
+        trecho: "trecho do #329",
+        detalhe: "d",
+      });
+      await envelhecer(id, 61);
+      await varrer(); // → estágio 1
+      await envelhecer(id, 61);
+      await varrer(); // → estágio 2
+      expect((await ler(id)).status).toBe("escalado_estagio_2");
+      return id;
+    }
+
+    test("app_destinatarios_fora_do_tenant devolve só o forasteiro; array vazio quando todos pertencem", async () => {
+      await semear();
+
+      const [misto] = await owner!<{ forasteiros: string[] }[]>`
+        SELECT app_destinatarios_fora_do_tenant(
+          ${CLINIC}::uuid, ARRAY[${U_COORD}, ${U_COORD2}, ${U_ESTRANHO}]::uuid[]
+        ) AS forasteiros`;
+      expect(misto!.forasteiros).toEqual([U_ESTRANHO]);
+
+      const [todosDentro] = await owner!<{ forasteiros: string[] }[]>`
+        SELECT app_destinatarios_fora_do_tenant(
+          ${CLINIC}::uuid, ARRAY[${U_COORD}, ${U_PSICO}, ${U_RT}]::uuid[]
+        ) AS forasteiros`;
+      expect(todosDentro!.forasteiros).toEqual([]);
+
+      // Lista vazia é "nada a verificar", não erro — espelha o early-return do TS.
+      const [vazio] = await owner!<{ forasteiros: string[] }[]>`
+        SELECT app_destinatarios_fora_do_tenant(
+          ${CLINIC}::uuid, ARRAY[]::uuid[]
+        ) AS forasteiros`;
+      expect(vazio!.forasteiros).toEqual([]);
+    });
+
+    test("app_assert_destinatarios_no_tenant estoura P0001 nomeando o forasteiro", async () => {
+      await semear();
+
+      const erro = await owner!`
+        SELECT app_assert_destinatarios_no_tenant(
+          ${CLINIC}::uuid, ARRAY[${U_COORD}, ${U_ESTRANHO}]::uuid[]
+        )`.catch((e: unknown) => e as { code?: string; message?: string });
+
+      expect((erro as { code?: string }).code).toBe("P0001");
+      // O id do forasteiro tem que estar na mensagem: guard que só diz "algo
+      // deu errado" não é diagnosticável no incidente.
+      expect((erro as { message?: string }).message).toContain(U_ESTRANHO);
+      expect((erro as { message?: string }).message).toContain(
+        "fora do tenant",
+      );
+
+      // E o caminho feliz não estoura.
+      await expect(
+        owner!`SELECT app_assert_destinatarios_no_tenant(
+          ${CLINIC}::uuid, ARRAY[${U_COORD}, ${U_RT}]::uuid[]
+        )`,
+      ).resolves.toBeDefined();
+    });
+
+    test("app_rt_do_alerta: RT com papel na clínica devolve e-mail e motivo_bloqueio NULL", async () => {
+      await semear();
+      const id = await alertaEmEstagio2();
+
+      const linhas = await owner!<
+        { rt_email: string | null; motivo_bloqueio: string | null }[]
+      >`SELECT * FROM app_rt_do_alerta(${id})`;
+
+      expect(linhas).toHaveLength(1);
+      expect(linhas[0]!.rt_email).toBe("rt@arc.test");
+      expect(linhas[0]!.motivo_bloqueio).toBeNull();
+    });
+
+    test("app_rt_do_alerta: RT sem papel na clínica devolve motivo_bloqueio e NUNCA o e-mail", async () => {
+      await semear();
+      const id = await alertaEmEstagio2();
+
+      // O RT da clínica passa a ser alguém que só tem papel em CLINIC_X. Antes
+      // da 0105 isto sumia com a linha inteira e o job gravava "RT nao
+      // encontrado" — indistinguível de clínica sem RT cadastrado.
+      await owner!`UPDATE clinic SET responsavel_tecnico_id = ${U_ESTRANHO} WHERE id = ${CLINIC}`;
+
+      const linhas = await owner!<
+        { rt_email: string | null; motivo_bloqueio: string | null }[]
+      >`SELECT * FROM app_rt_do_alerta(${id})`;
+
+      expect(linhas).toHaveLength(1);
+      expect(linhas[0]!.motivo_bloqueio).toContain("fora do tenant");
+      expect(linhas[0]!.motivo_bloqueio).toContain(U_ESTRANHO);
+      // O e-mail do forasteiro não sai da função em hipótese alguma: quem
+      // bloqueia não precisa do endereço para bloquear.
+      expect(linhas[0]!.rt_email).toBeNull();
+
+      // Volta o cadastro ao estado semeado (limpeza escopada — nada de tabela
+      // nova no TRUNCATE, que colide com os int-tests paralelos).
+      await owner!`UPDATE clinic SET responsavel_tecnico_id = ${U_RT} WHERE id = ${CLINIC}`;
+    });
+
+    test("app_rt_do_alerta: clínica sem RT segue devolvendo ZERO linhas (comportamento preservado)", async () => {
+      await semear();
+      const id = await alertaEmEstagio2();
+      await owner!`UPDATE clinic SET responsavel_tecnico_id = NULL WHERE id = ${CLINIC}`;
+
+      const linhas = await owner!`SELECT * FROM app_rt_do_alerta(${id})`;
+      expect(linhas).toHaveLength(0);
+
+      await owner!`UPDATE clinic SET responsavel_tecnico_id = ${U_RT} WHERE id = ${CLINIC}`;
+    });
+  },
+);
+
 describe.skipIf(!hasDb)("#122 — reconhecer ≠ resolver ≠ descartar", () => {
   beforeAll(semear);
 
