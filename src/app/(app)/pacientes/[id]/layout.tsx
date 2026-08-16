@@ -66,12 +66,15 @@ export default async function PacienteLayout({
   // entram aqui: aba que leva a 404 é pior que aba ausente.
   // Pacientes na modalidade convencional têm as abas de pontuação de protocolos (PEI & Metas)
   // ocultadas da navegação para uma interface limpa focada no diário de evolução.
+  // O RPD (TCC) é o espelho disso: só aparece na modalidade convencional, onde a
+  // conversa clínica é o registro — na modalidade por protocolo o dado nasce da
+  // pontuação de domínio, não de um registro de pensamento.
   const abas: TabsNavItem[] = [
     { href: base, rotulo: "Evolução", exato: true },
     { href: `${base}/briefing`, rotulo: "Briefing" },
     { href: `${base}/cadastro-clinico`, rotulo: "Ficha Clínica" },
     ...(!eConvencional ? [{ href: `${base}/metas`, rotulo: "PEI & Metas" }] : []),
-    { href: `${base}/tcc`, rotulo: "TCC" },
+    ...(eConvencional ? [{ href: `${base}/tcc`, rotulo: "TCC" }] : []),
     { href: `${base}/equipe`, rotulo: "Equipe" },
     { href: `${base}/horas`, rotulo: "Horas" },
     { href: `${base}/ausencias`, rotulo: "Ausências" },

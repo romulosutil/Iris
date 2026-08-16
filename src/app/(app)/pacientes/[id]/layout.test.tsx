@@ -60,6 +60,8 @@ describe("PacienteLayout - Abas do Prontuário", () => {
 
     expect(screen.getByText("Evolução")).not.toBeNull();
     expect(screen.getByText("PEI & Metas")).not.toBeNull();
+    // O RPD é o espelho de PEI & Metas: some onde a pontuação de protocolo manda.
+    expect(screen.queryByText("TCC")).toBeNull();
   });
 
   it("oculta a aba PEI & Metas para paciente na modalidade conventional", async () => {
@@ -81,5 +83,6 @@ describe("PacienteLayout - Abas do Prontuário", () => {
 
     expect(screen.getByText("Evolução")).not.toBeNull();
     expect(screen.queryByText("PEI & Metas")).toBeNull();
+    expect(screen.getByText("TCC")).not.toBeNull();
   });
 });
