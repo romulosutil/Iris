@@ -262,6 +262,14 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
     expect(rejeitado).toEqual({ ok: false, error: MENSAGEM_SEM_LINK_ATIVO });
   });
 
+  it("NÃO apaga o cookie quando o throttle bloqueia (protege a vítima de NAT compartilhado)", async () => {
+    cookieStore.set(NOME_COOKIE_TOKEN, "token-da-vitima");
+    registrarTentativa.mockResolvedValueOnce({ permitido: false });
+    await executar(fd(SENHA_VALIDA));
+    expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
+    expect(resetPassword).not.toHaveBeenCalled();
+  });
+
   it("trata falha de infraestrutura no throttle como fail-closed, logando erro seguro e bloqueando a tentativa", async () => {
     cookieStore.set(NOME_COOKIE_TOKEN, "token-qualquer");
     const erroInfra = new Error("redis offline");
@@ -272,8 +280,8 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
     await executar(fd(SENHA_VALIDA));
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      "executarRedefinirSenha: throttle indisponível, bloqueando (fail-closed):",
-      "Error"
+      expect.stringContaining("fail-closed"),
+      "Error",
     );
     expect(resetPassword).not.toHaveBeenCalled();
     expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
@@ -281,12 +289,24 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
     consoleSpy.mockRestore();
   });
 
-  it("NÃO apaga o cookie quando o throttle bloqueia (protege a vítima de NAT compartilhado)", async () => {
-    cookieStore.set(NOME_COOKIE_TOKEN, "token-da-vitima");
-    registrarTentativa.mockResolvedValueOnce({ permitido: false });
+  it("inclui o code do erro de infra no log, quando disponível (ex.: ECONNREFUSED de um driver real)", async () => {
+    cookieStore.set(NOME_COOKIE_TOKEN, "token-qualquer");
+    registrarTentativa.mockRejectedValueOnce(
+      Object.assign(new Error("redis offline"), { code: "ECONNREFUSED" }),
+    );
+
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     await executar(fd(SENHA_VALIDA));
-    expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "executarRedefinirSenha: throttle indisponível, bloqueando (fail-closed):",
+      "Error(code=ECONNREFUSED)",
+    );
     expect(resetPassword).not.toHaveBeenCalled();
+    expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
+
+    consoleSpy.mockRestore();
   });
 
   it("respeita o piso de tempo mesmo quando o throttle pula toda a chamada ao Better-Auth", async () => {
