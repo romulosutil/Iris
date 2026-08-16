@@ -5,7 +5,7 @@ import {
   agentOutputSchema,
   type ExtracaoAgente,
 } from "./agent-output-schema";
-import { SYSTEM_PROMPT, buildUserMessage } from "./prompt";
+import { SYSTEM_PROMPT, CONVENTIONAL_SYSTEM_PROMPT, buildUserMessage } from "./prompt";
 
 // Tool schema DERIVADO do contrato zod (fonte única de verdade) — guia o modelo
 // aos enums/campos obrigatórios exatos. Sem isto, o modelo inventa formas (ex.:
@@ -52,8 +52,14 @@ export class ClaudeProvider implements ExtractionProvider {
       contexto,
     });
 
+    const modoObj = contexto as { modo?: string } | undefined;
+    const systemPrompt =
+      modoObj?.modo === "terapia_convencional"
+        ? CONVENTIONAL_SYSTEM_PROMPT
+        : SYSTEM_PROMPT;
+
     // Lança em erro de LLM (o caller trata como pendente_reprocessamento).
-    const bruto = await this.invoker({ system: SYSTEM_PROMPT, user });
+    const bruto = await this.invoker({ system: systemPrompt, user });
 
     // Valida contra o contrato (output-schema.json em zod). Lança se o modelo
     // alucinou a forma — nunca gravamos saída fora do schema.
