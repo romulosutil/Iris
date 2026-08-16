@@ -159,11 +159,20 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # src/lib/report/playwright-renderer.int.test.ts renderiza PDF de
-      # verdade — sem o binário do Chromium a suíte inteira desse arquivo
-      # falha com "Executable doesn't exist", não com um erro de asserção.
-      - name: instalar navegador do Playwright (chromium)
-        run: pnpm exec playwright install --with-deps chromium
+      # Cache do binário do Chromium para evitar download repetitivo de ~150MB
+      - name: cache dos navegadores do Playwright
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: instalar dependências do SO para o Playwright
+        run: pnpm exec playwright install-deps chromium
+
+      - name: instalar binário do Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install chromium
 
       - name: aplicar migrações (role dona, BYPASSRLS)
         run: pnpm db:migrate
@@ -195,3 +204,17 @@ jobs:
       # reprova o job nesse caso mesmo com exit code 0 do vitest.
       - name: gate anti-pulo-silencioso (integração/RLS)
         run: node scripts/ci/verificar-cobertura-testes.mjs int-report.json --min-tests=800 --min-files=95 --label=integração
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: build de produção da aplicação (Next.js)
+        run: pnpm build
