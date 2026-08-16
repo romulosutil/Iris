@@ -96,10 +96,10 @@ describe("integridade de fonte única das versões legais", () => {
     // Só declaração (`const VERSAO_TERMO =`), não uso nem import. O sufixo
     // `\b` evita casar `VERSAO_TERMO_MENOR_ATUAL` e os outros termos de
     // consentimento de paciente, que são versões próprias e legitimamente
-    // separadas destas. `matchAll` no conteúdo inteiro (não linha a linha)
-    // pega inclusive declaração quebrada em múltiplas linhas.
+    // separadas destas. Suporta anotações de tipo TypeScript (`: string =`).
+    // `matchAll` no conteúdo inteiro pega inclusive declarações quebradas.
     const regexDeclaracao =
-      /\b(?:const|let|var)\s+(VERSAO_TERMO|VERSAO_POLITICA)\b\s*=/g;
+      /\b(?:const|let|var)\s+(VERSAO_TERMO|VERSAO_POLITICA)\b(?:\s*:\s*[^=]+)?\s*=/g;
     const declaracoes = new Map<string, string[]>([
       ["VERSAO_TERMO", []],
       ["VERSAO_POLITICA", []],
@@ -139,6 +139,38 @@ describe("integridade de fonte única das versões legais", () => {
         `${nome} deve ser declarada em src/lib/legal.ts, e só lá — quem precisar importa de lá. Encontrada em: ${locais.join(", ") || "lugar nenhum"}`,
       ).toEqual(["src/lib/legal.ts"]);
     }
+  });
+
+  it("regex de guarda estática detecta declarações tipadas, exportações e ignora imports e termos de pacientes", () => {
+    const regexDeclaracao =
+      /\b(?:const|let|var)\s+(VERSAO_TERMO|VERSAO_POLITICA)\b(?:\s*:\s*[^=]+)?\s*=/g;
+
+    const testar = (codigo: string) =>
+      Array.from(codigo.matchAll(regexDeclaracao)).map((m) => m[1]);
+
+    // Casos de erro (devem ser detectados)
+    expect(testar('const VERSAO_TERMO = "2026-08-07";')).toEqual([
+      "VERSAO_TERMO",
+    ]);
+    expect(testar('export const VERSAO_TERMO: string = "2026-08-07";')).toEqual(
+      ["VERSAO_TERMO"],
+    );
+    expect(
+      testar('let VERSAO_POLITICA: Readonly<string> = "2026-08-07";'),
+    ).toEqual(["VERSAO_POLITICA"]);
+    expect(testar('var VERSAO_TERMO: string | undefined = "foo";')).toEqual([
+      "VERSAO_TERMO",
+    ]);
+
+    // Casos legítimos (não devem ser detectados como nova declaração)
+    expect(
+      testar('import { VERSAO_TERMO } from "@/lib/legal";'),
+    ).toEqual([]);
+    expect(testar("export { VERSAO_TERMO };")).toEqual([]);
+    expect(
+      testar('const VERSAO_TERMO_TITULAR_ADULTO_ATUAL = "adulto-v1";'),
+    ).toEqual([]);
+    expect(testar('const VERSAO_TERMO_MENOR_ATUAL = "v1";')).toEqual([]);
   });
 });
 
