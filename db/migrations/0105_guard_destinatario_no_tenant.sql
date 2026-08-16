@@ -76,6 +76,11 @@ GRANT EXECUTE ON FUNCTION app_destinatarios_fora_do_tenant(uuid, uuid[]) TO iris
 -- o caminho MORRA chama esta. Estourar é o comportamento correto — um
 -- destinatário fora do tenant não é um caso de borda a tratar, é um bug de
 -- código novo que precisa aparecer alto e cedo.
+--
+-- Esta é a ÚNICA definição do "quando estourar" e da mensagem: o TS
+-- (`assertDestinatariosNoTenant`) chama esta função e só traduz o `P0001` de
+-- volta para `Error`. Reimplementar o `RAISE` em TypeScript deixava a decisão em
+-- dois lugares — que é exatamente o modo de falha que esta migração fecha.
 CREATE OR REPLACE FUNCTION app_assert_destinatarios_no_tenant(
   p_clinic_id uuid,
   p_user_ids  uuid[]
@@ -85,7 +90,12 @@ DECLARE
   v_forasteiros uuid[];
 BEGIN
   v_forasteiros := app_destinatarios_fora_do_tenant(p_clinic_id, p_user_ids);
-  IF array_length(v_forasteiros, 1) > 0 THEN
+  -- `cardinality`, não `array_length(..., 1)`: em array vazio o segundo devolve
+  -- NULL (e `NULL > 0` é NULL, que o `IF` trata como falso). Funciona aqui por
+  -- acidente da semântica de três valores; `cardinality` devolve 0 e o predicado
+  -- fica verdadeiro-ou-falso de verdade. Mesma forma usada em `app_rt_do_alerta`
+  -- logo abaixo — as duas leituras do mesmo array não podem divergir de estilo.
+  IF cardinality(v_forasteiros) > 0 THEN
     RAISE EXCEPTION
       'notificacao de risco: destinatário fora do tenant (%) — o Iris nunca notifica fora da clínica (regra de ouro §4.2.1).',
       array_to_string(v_forasteiros, ', ')

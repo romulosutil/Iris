@@ -361,6 +361,11 @@ describe.skipIf(!hasDb)(
     });
 
     test("o guard quebra alto se alguém injetar destinatário de outra clínica", async () => {
+      // #329 — a mensagem tem que NOMEAR o forasteiro, e ela vem do `RAISE` da
+      // `app_assert_destinatarios_no_tenant`. É isso que prova que o TS delega
+      // ao helper SQL e traduz o `P0001`: se ele deixasse o `DrizzleQueryError`
+      // subir cru, `.message` seria o SQL emitido — sem o id e sem "fora do
+      // tenant" — e este teste falharia.
       await expect(
         withTenant(ctx("coordenador", U_COORD), (tx) =>
           assertDestinatariosNoTenant(tx, {
@@ -370,7 +375,7 @@ describe.skipIf(!hasDb)(
             ],
           }),
         ),
-      ).rejects.toThrow(/fora do tenant/);
+      ).rejects.toThrow(new RegExp(`fora do tenant \\(${U_ESTRANHO}\\)`));
     });
 
     test("o guard quebra alto com múltiplos destinatários, alguns do tenant e um forasteiro (n≥2)", async () => {
@@ -385,7 +390,9 @@ describe.skipIf(!hasDb)(
             ],
           }),
         ),
-      ).rejects.toThrow(/fora do tenant/);
+        // Só o forasteiro é nomeado: o `)` logo depois do id prova que os dois
+        // que TÊM papel na clínica ficaram de fora da lista.
+      ).rejects.toThrow(new RegExp(`fora do tenant \\(${U_ESTRANHO}\\)`));
     });
 
     test("nenhum canal declarado endereça destinatário externo à clínica", async () => {

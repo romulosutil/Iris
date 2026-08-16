@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import type { Tx } from "@/db/rls";
+import { codigoPg, mensagemPg } from "@/db/pg-error";
 
 /**
  * #122 — despacho de notificação do alerta de risco clínico.
@@ -174,12 +175,24 @@ export async function destinatariosEstagio2(
  * `src/` — importar este módulo de lá é impossível, não é descuido.
  *
  * O que os dois caminhos compartilham é o PREDICADO, não o código: ele mora em
- * SQL, em `app_destinatarios_fora_do_tenant` (migração 0105), e esta função
- * apenas delega a ele. O caminho do escalonamento consome o mesmo predicado
- * através de `app_rt_do_alerta`, que passou a devolver `motivo_bloqueio` em vez
- * de filtrar o RT forasteiro em silêncio. Um predicado só, duas portas de
- * entrada — reimplementar a regra aqui em TypeScript era o jeito de ela divergir
- * sem ninguém notar.
+ * SQL, em `app_destinatarios_fora_do_tenant` (migração 0105). O caminho do
+ * escalonamento consome o mesmo predicado através de `app_rt_do_alerta`, que
+ * passou a devolver `motivo_bloqueio` em vez de filtrar o RT forasteiro em
+ * silêncio. Um predicado só, duas portas de entrada — reimplementar a regra aqui
+ * em TypeScript era o jeito de ela divergir sem ninguém notar.
+ *
+ * E não só o predicado: a DECISÃO DE ESTOURAR e a mensagem também moram lá, em
+ * `app_assert_destinatarios_no_tenant`. Esta função chama a asserção e traduz o
+ * `P0001` de volta para `Error` — o `throw` continua sendo `Error` com o mesmo
+ * texto de sempre, mas quem decide "isto é forasteiro, morra" é o banco. Manter
+ * o `RAISE` no SQL e um `if` equivalente em TS deixava a regra em dois lugares:
+ * o helper SQL viraria código morto e os dois divergiriam sem ninguém notar,
+ * repetindo em miniatura o problema que a #329 fechou.
+ *
+ * Efeito colateral desejado: o `RAISE` aborta a transação. Todo chamador já
+ * trata a falha como fatal (`registrar.ts` deixa o `withTenant` inteiro fazer
+ * rollback), então o alerta não é criado — que é o comportamento que já existia
+ * quando o `throw` era do lado do TypeScript.
  */
 export async function assertDestinatariosNoTenant(
   tx: Tx,
@@ -187,16 +200,22 @@ export async function assertDestinatariosNoTenant(
 ): Promise<void> {
   if (args.destinatarios.length === 0) return;
   const ids = args.destinatarios.map((d) => d.userId);
-  const linhas = (await tx.execute(sql`
-    SELECT app_destinatarios_fora_do_tenant(
-      ${args.clinicId}::uuid, ${sql.param(ids)}::uuid[]
-    ) AS forasteiros
-  `)) as unknown as Array<{ forasteiros: string[] | null }>;
-  const forasteiros = linhas[0]?.forasteiros ?? [];
-  if (forasteiros.length > 0) {
+  try {
+    await tx.execute(sql`
+      SELECT app_assert_destinatarios_no_tenant(
+        ${args.clinicId}::uuid, ${sql.param(ids)}::uuid[]
+      )
+    `);
+  } catch (e) {
+    // Só o P0001 do guard é traduzido. Qualquer outro erro (conexão, permissão,
+    // uuid inválido) sobe cru: engolir e reetiquetar como "fora do tenant" seria
+    // afirmar uma causa que não foi medida.
+    if (codigoPg(e) !== "P0001") throw e;
     throw new Error(
-      `notificacao de risco: destinatário fora do tenant (${forasteiros.join(", ")}) — ` +
-        "o Iris nunca notifica fora da clínica (regra de ouro §4.2.1).",
+      mensagemPg(e) ??
+        `notificacao de risco: destinatário fora do tenant (${ids.join(", ")}) — ` +
+          "o Iris nunca notifica fora da clínica (regra de ouro §4.2.1).",
+      { cause: e },
     );
   }
 }
