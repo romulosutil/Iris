@@ -7,6 +7,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
 
 const mockObterSituacaoConta = vi.fn();
+const mockWithTenant = vi.fn();
 
 vi.mock("@/auth/tenant", () => ({
   getTenantContext: async () => ({
@@ -20,6 +21,14 @@ vi.mock("../queries", () => ({
   obterSituacaoConta: (...args: unknown[]) => mockObterSituacaoConta(...args),
 }));
 
+// `[id]/layout.tsx` abre uma segunda transação via `withTenant` (6715dbf) só
+// para ler `clinicalModality` e decidir se mostra a aba "PEI & Metas". O
+// mock de `@/db/client` acima (`db: {}`) não cobre isso — sem este mock,
+// `withTenant` real chama `db.transaction`, que não existe no dublê.
+vi.mock("@/db/rls", () => ({
+  withTenant: (...args: unknown[]) => mockWithTenant(...args),
+}));
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/pacientes/p1",
 }));
@@ -27,6 +36,7 @@ vi.mock("next/navigation", () => ({
 afterEach(() => {
   cleanup();
   mockObterSituacaoConta.mockReset();
+  mockWithTenant.mockReset();
 });
 
 async function semViolacoes(ui: ReactElement) {
@@ -144,6 +154,14 @@ test("layout do paciente com indicador de segurança e sem violações", async (
     podeCadastrarPaciente: true,
     diasRestantesTrial: null,
     statusAssinatura: "active",
+  });
+  mockWithTenant.mockImplementation(async (_ctx, fn) => {
+    const mockTx = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([{ clinicalModality: "protocol_driven" }]),
+    };
+    return fn(mockTx);
   });
 
   const jsx = await PacienteLayout({
