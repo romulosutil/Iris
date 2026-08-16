@@ -19,7 +19,7 @@ on:
       - 'THIRD-PARTY-NOTICES.md'
 jobs:
   review:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event.pull_request.draft == false
     permissions:
       pull-requests: write
