@@ -6,7 +6,9 @@ import { conciliarPagamentoDeCiclo } from "./subscription";
 import {
   BillingProviderError,
   getProviderPorId,
+  type BillingProvider,
   type CobrancaEmitida,
+  type CobrancaParaReuso,
   type FormaPagamentoCobranca,
 } from "./provider";
 
@@ -109,9 +111,6 @@ export type FormaPagamentoDebito = FormaPagamentoCobranca;
  * documenta quais status o `DELETE /payments/{id}` aceita — emitir por cima da
  * viva É a cobrança dupla que a #310 existe para evitar. Então cada cobrança
  * viva é reapresentada como está, e só o resto vira uma cobrança consolidada.
- *
- * Enquanto a política de reuso não entra (fatia seguinte), a lista sai sempre
- * com um elemento: o contrato muda de FORMA aqui, e de POLÍTICA depois.
  */
 export interface CobrancaDoDebito {
   /** Ciclo âncora desta cobrança. */
@@ -183,9 +182,11 @@ export function decidirGate(
 /**
  * Levanta o débito de uma assinatura a partir dos ciclos `devido`.
  *
- * A âncora é o ciclo mais ANTIGO, por determinismo: a mesma entrada elege sempre
+ * A ordem é determinística (mais antigo primeiro): a mesma entrada elege sempre
  * a mesma âncora, então a reentrada do gate encontra a cobrança já emitida em
  * vez de eleger outro ciclo e emitir uma segunda cobrança da mesma dívida.
+ * Quem escolhe a âncora é `emitirConsolidada`, e ela escolhe o mais antigo SEM
+ * cobrança prévia — ver o P-4 lá.
  */
 export async function levantarDebito(
   subscriptionId: string,
@@ -233,6 +234,15 @@ export async function levantarDebito(
  * - **Rede, timeout, 5xx, 401/408/429** continuam propagando. Instabilidade do
  *   Asaas não pode virar reativação grátis para quem estiver tentando naquele
  *   minuto — é a mesma régua de `reprocessarEventosPendentes`.
+ *
+ * ## Reuso da cobrança viva (#310)
+ *
+ * Antes de emitir, cada ciclo que já carrega `provider_charge_id` é consultado
+ * no gateway. O que ainda é pagável é REAPRESENTADO como está — emitir por cima
+ * de uma cobrança viva é a cobrança dupla que a issue existe para evitar. Só o
+ * resto vira uma cobrança nova consolidada. Falha ao CONSULTAR é fail-closed
+ * (`bloqueado`, nada emitido, nada reativado); falha ao EMITIR mantém a régua
+ * de sempre (recusa 4xx adia, o resto propaga).
  */
 export async function resolverGateDeDebito(
   clinicId: string,
@@ -263,14 +273,6 @@ export async function resolverGateDeDebito(
     };
   }
 
-  const ancoraId = debito.ciclos[0]?.id ?? null;
-  if (!ancoraId) {
-    // Total > 0 sem âncora é impossível: o total vem das mesmas linhas.
-    throw new Error(
-      `Débito de ${debito.totalCentavos} centavos sem ciclo âncora na assinatura ${assinatura.id}`,
-    );
-  }
-
   if (!assinatura.provider || !assinatura.providerCustomerId) {
     throw new BillingProviderError(
       `Assinatura ${assinatura.id} deve ${debito.totalCentavos} centavos mas não tem provedor/cliente gravado — não dá para saber onde cobrar.`,
@@ -279,14 +281,194 @@ export async function resolverGateDeDebito(
 
   const provider = getProviderPorId(assinatura.provider);
 
+  /**
+   * Divisão do débito em dois conjuntos (#310, D-2).
+   *
+   * (a) ciclos com cobrança VIVA e pagável no gateway → cada um reapresenta a
+   *     SUA cobrança. Consolidá-los numa cobrança nova exigiria cancelar as
+   *     antigas, e o Asaas não documenta quais status o `DELETE /payments/{id}`
+   *     aceita — emitir por cima da viva É a cobrança dupla que a issue existe
+   *     para evitar.
+   * (b) todo o resto (sem cobrança, ou com cobrança morta) → UMA cobrança nova
+   *     consolidada, exatamente como antes desta issue.
+   */
+  const reaproveitadas: CobrancaDoDebito[] = [];
+  const paraConsolidar: CicloDevido[] = [];
+
+  for (const ciclo of debito.ciclos) {
+    // Quem nunca teve cobrança não tem o que consultar: uma ida ao gateway por
+    // ciclo é latência na porta de entrada da clínica, paga por quem não usa.
+    if (!ciclo.providerChargeId) {
+      paraConsolidar.push(ciclo);
+      continue;
+    }
+
+    let estado: CobrancaParaReuso;
+    try {
+      estado = await provider.consultarCobrancaParaReuso(
+        ciclo.providerChargeId,
+      );
+    } catch (e) {
+      /**
+       * Fail-closed (D-3). Não dá para saber se a cobrança antiga está viva, e
+       * emitir sem saber é cobrar duas vezes. NADA é emitido e a reativação NÃO
+       * segue — os ciclos ficam `devido` e a próxima tentativa reabre a decisão.
+       * Reativação barrada é reversível; cobrança dupla não é.
+       */
+      console.warn(
+        "[billing-reuso] gateway indisponível na consulta de reuso",
+        {
+          clinicId,
+          cicloId: ciclo.id,
+          providerChargeId: ciclo.providerChargeId,
+          err: e instanceof Error ? e.message : String(e),
+        },
+      );
+      return {
+        tipo: "bloqueado",
+        totalCentavos: debito.totalCentavos,
+        motivo: "gateway_indisponivel",
+      };
+    }
+
+    if (estado.reuso === "paga") {
+      // D-4 — dinheiro já recebido, webhook ainda não chegou. Liquida no mesmo
+      // caminho do webhook (cascata de agrupados incluída) e sai do débito.
+      await conciliarPagamentoDeCiclo(ciclo.providerChargeId, "paga");
+      continue;
+    }
+    if (estado.reuso === "morta") {
+      // D-7 — estado terminal é ramo explícito, nunca exceção: um `throw` aqui
+      // travaria o gate desta clínica para sempre.
+      console.warn("[billing-reuso] cobrança antiga não é reaproveitável", {
+        clinicId,
+        cicloId: ciclo.id,
+        providerChargeId: ciclo.providerChargeId,
+        motivo: estado.motivo,
+      });
+      paraConsolidar.push(ciclo);
+      continue;
+    }
+
+    reaproveitadas.push({
+      cicloId: ciclo.id,
+      providerChargeId: ciclo.providerChargeId,
+      valorCentavos: ciclo.valorCentavos,
+      reaproveitada: true,
+      situacao:
+        estado.reuso === "pagavel"
+          ? { estado: "pagavel", pagamento: estado.pagamento }
+          : { estado: "em_processamento" },
+    });
+  }
+
+  // D-4 — o débito muda quando uma cobrança já paga é liquidada aqui dentro.
+  const totalVivo =
+    somaDe(reaproveitadas.map((c) => c.valorCentavos)) +
+    somaDe(paraConsolidar.map((c) => c.valorCentavos));
+  if (totalVivo <= 0) return { tipo: "sem_debito" };
+
+  const totalConsolidar = somaDe(paraConsolidar.map((c) => c.valorCentavos));
+  const novas = await emitirConsolidada({
+    // O provider vai por PARÂMETRO, já resolvido. Resolver de novo lá dentro
+    // reintroduziria a leitura da env que o D26 proíbe: o adapter é resolvido
+    // POR LINHA (`subscription.provider`), nunca pelo ambiente.
+    provider,
+    clinicId,
+    clienteId: assinatura.providerCustomerId,
+    ciclos: paraConsolidar,
+    totalCentavos: totalConsolidar,
+  });
+
+  if (novas.tipo === "irrecuperavel" && reaproveitadas.length === 0) {
+    // Sem âncora de referência virgem, ou cobrança nova devolvida estornada:
+    // toda emissão cairia na mesma cobrança morta por idempotência (P-4/P-5).
+    // Se há cobrança viva, ela ainda vale — melhor a clínica pagar o que é
+    // pagável do que barrar tudo.
+    return {
+      tipo: "bloqueado",
+      totalCentavos: totalVivo,
+      motivo: "cobranca_irrecuperavel",
+    };
+  }
+
+  const cobrancas = [...reaproveitadas, ...novas.cobrancas];
+  if (cobrancas.length === 0) {
+    // Nada vivo e nada emitido: o conjunto (b) foi recusado pelo gateway ou
+    // ficou abaixo do piso. A dívida NÃO é perdoada — os ciclos continuam
+    // `devido` e voltam somados na próxima volta.
+    return {
+      tipo: "adiado",
+      totalCentavos: totalVivo,
+      motivo: novas.motivoAdiamento ?? "abaixo_do_piso",
+    };
+  }
+
+  return { tipo: "cobranca", totalCentavos: totalVivo, cobrancas };
+}
+
+function somaDe(valores: number[]): number {
+  return valores.reduce((soma, v) => soma + v, 0);
+}
+
+type ResultadoEmissao = {
+  tipo: "ok" | "irrecuperavel";
+  cobrancas: CobrancaDoDebito[];
+  motivoAdiamento?: "abaixo_do_piso" | "recusa_do_gateway";
+};
+
+/**
+ * Emite UMA cobrança consolidada para o conjunto (b).
+ *
+ * ## A âncora é o mais antigo SEM cobrança prévia (#310, P-4)
+ *
+ * A `referenciaExterna` é `debito:<âncora>`, e é ela que dá idempotência no
+ * gateway. Se a âncora fosse um ciclo que já carrega uma cobrança MORTA, o
+ * adapter encontraria aquela mesma cobrança pela referência e a devolveria —
+ * ressuscitando exatamente o estado que acabamos de classificar como não
+ * pagável, e travando o gate para sempre. Uma âncora sem cobrança prévia
+ * garante uma referência externa virgem.
+ *
+ * ## O erro de EMISSÃO continua com a régua de antes da #310 (P-9)
+ *
+ * `recusaDefinitivaDoGateway` ⇒ adia; 5xx/rede/4xx transitório ⇒ `throw`. O
+ * fail-closed do D-3 fala da CONSULTA, que é caminho novo. A assimetria é
+ * deliberada: instabilidade na emissão nunca virou reativação grátis, e mudar
+ * isso aqui alargaria o diff sem a issue pedir.
+ */
+async function emitirConsolidada(dados: {
+  provider: BillingProvider;
+  clinicId: string;
+  clienteId: string;
+  ciclos: CicloDevido[];
+  totalCentavos: number;
+}): Promise<ResultadoEmissao> {
+  if (dados.ciclos.length === 0) return { tipo: "ok", cobrancas: [] };
+  if (decidirGate(dados.totalCentavos) !== "cobrar") {
+    // Piso: só governa a EMISSÃO (P-8). Cobrança que já existe é apresentada
+    // mesmo com total pequeno — ela já foi aceita pelo gateway uma vez, e
+    // esconder um código de pagamento vivo seria pedir que a clínica pague por
+    // um canal que a tela não mostra.
+    return { tipo: "ok", cobrancas: [], motivoAdiamento: "abaixo_do_piso" };
+  }
+
+  const ancora = dados.ciclos.find((c) => !c.providerChargeId);
+  if (!ancora) {
+    console.warn("[billing-reuso] sem âncora de referência virgem no débito", {
+      clinicId: dados.clinicId,
+      cicloIds: dados.ciclos.map((c) => c.id),
+    });
+    return { tipo: "irrecuperavel", cobrancas: [] };
+  }
+
   let cobranca: CobrancaEmitida;
   try {
-    cobranca = await provider.emitirCobrancaAvulsa({
-      clienteId: assinatura.providerCustomerId,
-      valorCentavos: debito.totalCentavos,
+    cobranca = await dados.provider.emitirCobrancaAvulsa({
+      clienteId: dados.clienteId,
+      valorCentavos: dados.totalCentavos,
       // Determinística por âncora: é ela que torna a reentrada idempotente no
       // gateway, mesmo que o processo morra entre o POST e o UPDATE local.
-      referenciaExterna: `debito:${ancoraId}`,
+      referenciaExterna: `debito:${ancora.id}`,
       descricao:
         "Iris — débito do ciclo interrompido no cancelamento, para reativar a assinatura",
       vencimento: somarDias(new Date(), DIAS_VENCIMENTO_DEBITO),
@@ -294,37 +476,38 @@ export async function resolverGateDeDebito(
   } catch (e) {
     if (recusaDefinitivaDoGateway(e)) {
       console.warn("[billing-debito] gateway recusou a cobrança de débito", {
-        clinicId,
-        totalCentavos: debito.totalCentavos,
+        clinicId: dados.clinicId,
+        totalCentavos: dados.totalCentavos,
         status: e instanceof BillingProviderError ? e.status : undefined,
         err: e instanceof Error ? e.message : String(e),
       });
       return {
-        tipo: "adiado",
-        totalCentavos: debito.totalCentavos,
-        motivo: "recusa_do_gateway",
+        tipo: "ok",
+        cobrancas: [],
+        motivoAdiamento: "recusa_do_gateway",
       };
     }
+    // 5xx, rede e 4xx transitório continuam propagando, como antes da #310:
+    // instabilidade do gateway não pode virar reativação grátis.
     throw e;
   }
 
-  await registrarCobrancaDeDebito(
-    ancoraId,
-    debito.ciclos.slice(1).map((c) => c.id),
-    cobranca,
-  );
+  const outros = dados.ciclos
+    .filter((c) => c.id !== ancora.id)
+    .map((c) => c.id);
+  await registrarCobrancaDeDebito(ancora.id, outros, cobranca);
 
   // Webhook atrasado: a cobrança já está paga no gateway e o estado local ainda
   // não sabe. Conciliar aqui (em vez de mandar a clínica esperar) é o mesmo
   // princípio do reaproveitamento de vínculo em `iniciarAtivacao`.
   if (cobranca.status === "paga") {
     await conciliarPagamentoDeCiclo(cobranca.providerChargeId, "paga");
-    return { tipo: "sem_debito" };
+    return { tipo: "ok", cobrancas: [] };
   }
 
   /**
-   * Cobrança estornada é o único estado do qual não há saída automática — e
-   * agora ela BARRA em vez de LANÇAR (#310, D-7 e P-5).
+   * Cobrança estornada é o único estado do qual não há saída automática — e ela
+   * BARRA em vez de LANÇAR (#310, D-7 e P-5).
    *
    * A idempotência do adapter é por `externalReference`, e ela é o que impede
    * cobrar duas vezes a mesma dívida — inclusive no caso em que o processo morre
@@ -337,40 +520,28 @@ export async function resolverGateDeDebito(
    * cobrar de novo por cima dela é justamente o que ninguém quer que um job
    * faça sozinho. O que mudou é a FORMA de barrar: o `throw` daqui atravessava
    * as camadas e caía na copy genérica de "fale com o suporte", que também
-   * serve para queda de rede. `bloqueado` diz exatamente o que é, com a copy
-   * certa, e sem exceção — mesma semântica (barulhento, exige decisão humana,
-   * não reativa).
+   * serve para queda de rede. `irrecuperavel` sobe para o chamador, que decide
+   * entre barrar tudo (nada vivo) e apresentar só o que é pagável.
    *
    * `recusada` NÃO entra aqui: no Asaas ela vem de `OVERDUE`, e cobrança Pix
    * vencida continua pagável — devolver o mesmo copia-e-cola é o certo.
    */
   if (cobranca.status === "estornada") {
     console.warn("[billing-debito] cobrança de débito estornada trava o gate", {
-      clinicId,
+      clinicId: dados.clinicId,
       providerChargeId: cobranca.providerChargeId,
-      totalCentavos: debito.totalCentavos,
+      totalCentavos: dados.totalCentavos,
     });
-    return {
-      tipo: "bloqueado",
-      totalCentavos: debito.totalCentavos,
-      motivo: "cobranca_irrecuperavel",
-    };
+    return { tipo: "irrecuperavel", cobrancas: [] };
   }
 
-  /**
-   * Uma entrada só: a política continua a de hoje — todo o débito vira UMA
-   * cobrança nova, ancorada no ciclo mais antigo. A lista existe porque o
-   * reuso da cobrança viva (#310) produz N, e mudar a forma antes da política
-   * é o que deixa o teste do reuso falhar por um motivo só.
-   */
   return {
-    tipo: "cobranca",
-    totalCentavos: debito.totalCentavos,
+    tipo: "ok",
     cobrancas: [
       {
-        cicloId: ancoraId,
+        cicloId: ancora.id,
         providerChargeId: cobranca.providerChargeId,
-        valorCentavos: debito.totalCentavos,
+        valorCentavos: dados.totalCentavos,
         reaproveitada: false,
         situacao: { estado: "pagavel", pagamento: formaDePagamento(cobranca) },
       },
@@ -396,6 +567,12 @@ async function registrarCobrancaDeDebito(
       providerChargeId: cobranca.providerChargeId,
       cobrancaEmitidaEm: new Date(),
       erro: null,
+      // P-6/#310: a âncora pode ter sido, num gate anterior, um ciclo AGRUPADO
+      // sob outra âncora cuja cobrança agora morreu. Se o ponteiro velho ficar,
+      // o ciclo aponta para a âncora antiga E carrega a cobrança nova, e a
+      // cascata de `liquidarCiclo` o liquida de graça quando alguém pagar a
+      // cobrança daquela outra âncora.
+      debitoAgrupadoEm: null,
     })
     .where(eq(billingCycle.id, ancoraId));
 

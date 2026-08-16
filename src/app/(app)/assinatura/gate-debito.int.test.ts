@@ -56,6 +56,10 @@ const ID_AUTORIZACAO_NOVA = "bbbbbbbb-0000-4000-8000-000000000290";
 const ID_COBRANCA_DEBITO = "pay_000000000290";
 const BR_CODE_DEBITO = "00020126…debito-290";
 
+/** Cobrança que JÁ existia no gateway antes de o gate rodar (#310). */
+const ID_COBRANCA_ANTIGA = "pay_000000000310";
+const URL_ANTIGA = "https://sandbox.asaas.com/i/310";
+
 let owner: ReturnType<typeof postgres>;
 
 const ctx = { role: "coordenador", userId: U_COORD, clinicId: CLINIC } as never;
@@ -74,6 +78,9 @@ type Chamada = { url: string; metodo: string; corpo: Record<string, unknown> };
  * `cobrancaRecusada` reproduz o piso mal calibrado: o Asaas devolve 400 para o
  * valor pedido. É o cenário em que falhar fechado trancaria a clínica fora para
  * sempre.
+ *
+ * `antiga` descreve a cobrança que JÁ existia antes de o gate rodar (#310): é
+ * ela que `GET /payments/{id}` devolve no caminho do reuso.
  */
 function instalarGateway(
   opcoes: {
@@ -85,6 +92,15 @@ function instalarGateway(
      * devolveria a mesma cobrança para sempre.
      */
     cobrancaEstornada?: boolean;
+    /** Estado da cobrança ANTIGA em `GET /payments/{id}` (#310). */
+    antiga?: {
+      status?: string;
+      deleted?: boolean;
+      /** >= 400 faz a consulta de reuso falhar com esse status HTTP. */
+      httpStatus?: number;
+      /** Instruções de Pix Automático pendentes, por filtro de status. */
+      instrucoes?: Record<string, unknown[]>;
+    };
   } = {},
 ): { chamadas: Chamada[] } {
   const chamadas: Chamada[] = [];
@@ -100,8 +116,28 @@ function instalarGateway(
           : {},
     });
 
+    if (url.includes("/pix/automatic/paymentInstructions")) {
+      const filtro = new URL(url).searchParams.get("status") ?? "";
+      return Response.json({ data: opcoes.antiga?.instrucoes?.[filtro] ?? [] });
+    }
     if (url.includes("/pixQrCode")) {
       return Response.json({ payload: BR_CODE_DEBITO });
+    }
+    // Consulta de UMA cobrança (`/payments/{id}`) — o caminho do reuso (#310).
+    // Distinguida da busca por referência (`/payments?…`) pelo separador.
+    if (url.includes("/payments/") && metodo === "GET") {
+      if (opcoes.antiga?.httpStatus && opcoes.antiga.httpStatus >= 400) {
+        return Response.json(
+          { errors: [] },
+          { status: opcoes.antiga.httpStatus },
+        );
+      }
+      return Response.json({
+        id: ID_COBRANCA_ANTIGA,
+        status: opcoes.antiga?.status ?? "OVERDUE",
+        deleted: opcoes.antiga?.deleted ?? false,
+        invoiceUrl: URL_ANTIGA,
+      });
     }
     // Busca de idempotência da emissão. Sempre vazia: cada teste começa sem
     // cobrança no gateway, e o que interessa medir é a emissão em si.
@@ -141,6 +177,26 @@ function instalarGateway(
   return { chamadas };
 }
 
+/** Conta quantas cobranças NOVAS foram emitidas. O oráculo da #310. */
+function emissoes(chamadas: Chamada[]): Chamada[] {
+  return chamadas.filter(
+    (c) => c.metodo === "POST" && c.url.includes("/payments"),
+  );
+}
+
+/**
+ * Conta as consultas de REUSO — `GET /payments/{id}`, e só elas.
+ *
+ * O `[^/?]+$` é o que separa a consulta de reuso do `GET /payments/{id}/pixQrCode`
+ * que TODA emissão faz: sem ele, o caso "quem nunca teve cobrança não é
+ * consultado" passaria contando o QR da cobrança que ele mesmo acabou de emitir.
+ */
+function consultasDeReuso(chamadas: Chamada[]): Chamada[] {
+  return chamadas.filter(
+    (c) => c.metodo === "GET" && /\/payments\/[^/?]+$/.test(c.url),
+  );
+}
+
 /** Assinatura cancelada, com cliente no gateway — o estado de quem já ativou. */
 async function assinaturaCancelada(): Promise<void> {
   await owner`
@@ -169,6 +225,19 @@ async function cicloDevido(
     )
     RETURNING id`;
   return linhas[0]!.id;
+}
+
+/** Ciclo `devido` que JÁ carrega uma cobrança emitida (o caso da #310). */
+async function cicloDevidoComCobranca(
+  valorCentavos: number,
+  diasAtras: number,
+  providerChargeId: string,
+): Promise<string> {
+  const id = await cicloDevido(valorCentavos, diasAtras);
+  await owner`
+    UPDATE billing_cycle SET provider_charge_id = ${providerChargeId}
+     WHERE id = ${id}`;
+  return id;
 }
 
 async function lerCiclos(): Promise<
@@ -469,6 +538,182 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
     expect(r.autorizacao?.forma).toBe("pix_copia_e_cola");
     const [ciclo] = await lerCiclos();
     expect(ciclo!.status).toBe("pago");
+  });
+
+  /**
+   * #310 — reaproveitar a cobrança que já existe, em vez de emitir uma segunda.
+   *
+   * O gateway falso responde `GET /payments/{id}` com a cobrança ANTIGA
+   * (`OVERDUE` por padrão, que é o estado real depois de esgotadas as
+   * retentativas do Pix Automático), e continua respondendo o `POST /payments`
+   * de sempre. Os oráculos são a CONTAGEM de POSTs e o estado no banco.
+   */
+  /**
+   * Qual mutação este teste mata: emitir SEMPRE (o bug de hoje). O oráculo é a
+   * CONTAGEM de POSTs, não o retorno — um retorno com a cobrança certa é
+   * perfeitamente compatível com uma segunda cobrança tendo sido criada ao
+   * lado, que é exatamente o defeito que a issue existe para fechar.
+   */
+  it("cobrança viva é reapresentada, sem emitir uma segunda", async () => {
+    await assinaturaCancelada();
+    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+    const { chamadas } = instalarGateway({ antiga: { status: "OVERDUE" } });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(emissoes(chamadas)).toHaveLength(0);
+    expect(r.debito?.valorCentavos).toBe(1300);
+    expect(r.debito?.cobrancas).toHaveLength(1);
+    expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
+    expect(r.debito?.cobrancas[0]!.reaproveitada).toBe(true);
+    expect(r.debito?.cobrancas[0]!.situacao).toEqual({
+      estado: "pagavel",
+      pagamento: {
+        forma: "pix_copia_e_cola",
+        brCode: BR_CODE_DEBITO,
+        urlPagamento: URL_ANTIGA,
+      },
+    });
+    // Reapresentar não reativa: a dívida continua na frente da porta.
+    expect(r.autorizacao).toBeUndefined();
+    expect(await statusAssinatura()).toBe("canceled");
+  });
+
+  /**
+   * Qual mutação este teste mata: sobrescrever o `provider_charge_id` da âncora
+   * reaproveitada (D-5). Sem este caso, o teste seguinte não teria como falhar
+   * — e é este id que o webhook do pagamento antigo procura.
+   *
+   * O `reaproveitada` é asserido JUNTO de propósito: sem ele o caso passaria
+   * vácuo por qualquer caminho em que o gate não faz nada (bloqueado, adiado),
+   * já que "não fez nada" também deixa o id intacto.
+   */
+  it("o id da cobrança reaproveitada NÃO é sobrescrito no ciclo", async () => {
+    await assinaturaCancelada();
+    const ciclo = await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+    instalarGateway({ antiga: { status: "OVERDUE" } });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(r.debito?.cobrancas[0]!.reaproveitada).toBe(true);
+    const linha = (await lerCiclos()).find((c) => c.id === ciclo)!;
+    expect(linha.provider_charge_id).toBe(ID_COBRANCA_ANTIGA);
+  });
+
+  /**
+   * O NEGATIVO DO DoD, e a razão de a issue existir.
+   *
+   * Qual mutação este teste mata: a mesma de cima, medida pelo efeito. Com o id
+   * sobrescrito, o webhook do pagamento ANTIGO não acha ciclo, vira
+   * `erroAplicacao: "cobrança sem ciclo correspondente"`, e a clínica fica com
+   * dinheiro recebido e dívida viva — barrada por uma dívida que já pagou.
+   */
+  it("pagar a cobrança antiga concilia o ciclo — sem dinheiro recebido com dívida viva", async () => {
+    await assinaturaCancelada();
+    instalarGateway({ antiga: { status: "OVERDUE" } });
+    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+    const conciliou = await conciliarPagamentoDeCiclo(
+      ID_COBRANCA_ANTIGA,
+      "paga",
+    );
+
+    // O gate REALMENTE apresentou a cobrança antiga: sem esta linha, um gate
+    // que barrasse sem fazer nada também deixaria o id intacto e o webhook
+    // conciliaria — verde sem que o reuso tivesse acontecido.
+    expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
+    expect(conciliou).toBe(true);
+    const [ciclo] = await lerCiclos();
+    expect(ciclo!.status).toBe("pago");
+  });
+
+  /**
+   * Qual mutação este teste mata: consolidar tudo numa cobrança nova por cima
+   * da viva — a cobrança dupla que a #310 existe para evitar. Mata também a
+   * variante que agrupa o ciclo de (b) sob a âncora de (a): ali pagar a
+   * cobrança reaproveitada liquidaria o ciclo novo de graça.
+   */
+  it("débito misto vira duas formas de pagamento: a viva e a consolidada", async () => {
+    await assinaturaCancelada();
+    const comCobranca = await cicloDevidoComCobranca(
+      1300,
+      90,
+      ID_COBRANCA_ANTIGA,
+    );
+    const semCobranca = await cicloDevido(700, 30);
+    const { chamadas } = instalarGateway({ antiga: { status: "OVERDUE" } });
+
+    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    // Uma emissão só, e o valor dela é o do conjunto (b) — não o total.
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(emissoes(chamadas)[0]!.corpo.value).toBe(7);
+
+    expect(r.debito?.valorCentavos).toBe(2000);
+    expect(r.debito?.cobrancas).toHaveLength(2);
+    const reaproveitada = r.debito!.cobrancas.find((c) => c.reaproveitada)!;
+    const nova = r.debito!.cobrancas.find((c) => !c.reaproveitada)!;
+    expect(reaproveitada.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
+    expect(reaproveitada.valorCentavos).toBe(1300);
+    expect(nova.providerChargeId).toBe(ID_COBRANCA_DEBITO);
+    expect(nova.valorCentavos).toBe(700);
+
+    const ciclos = await lerCiclos();
+    const a = ciclos.find((c) => c.id === comCobranca)!;
+    const b = ciclos.find((c) => c.id === semCobranca)!;
+    expect(a.provider_charge_id).toBe(ID_COBRANCA_ANTIGA);
+    expect(b.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
+    // O ciclo de (b) NÃO pode pendurar na âncora de (a): pagar a reaproveitada
+    // liquidaria de graça um ciclo que ela não cobre.
+    expect(b.debito_agrupado_em).toBeNull();
+    expect(a.debito_agrupado_em).toBeNull();
+  });
+
+  /**
+   * Qual mutação este teste mata: deixar o ponteiro `debito_agrupado_em` velho
+   * na âncora nova (P-6). A cascata de `liquidarCiclo` liquidaria o ciclo novo
+   * quando alguém pagasse a cobrança do ciclo antigo — dívida quitada sem
+   * dinheiro nenhum ter entrado por ela.
+   */
+  it("âncora nova sai limpa do agrupamento antigo, e pagar (a) não liquida (b)", async () => {
+    await assinaturaCancelada();
+    const antigo = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
+    const agrupado = await cicloDevido(700, 60);
+    // Estado que um gate anterior deixou: o de 60 dias pendurado no de 90.
+    await owner`
+      UPDATE billing_cycle SET debito_agrupado_em = ${antigo}
+       WHERE id = ${agrupado}`;
+    instalarGateway({ antiga: { status: "OVERDUE" } });
+
+    await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    const depois = await lerCiclos();
+    const novaAncora = depois.find((c) => c.id === agrupado)!;
+    expect(novaAncora.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
+    expect(novaAncora.debito_agrupado_em).toBeNull();
+
+    // O oráculo que importa: pagar a REAPROVEITADA liquida só o ciclo dela.
+    await conciliarPagamentoDeCiclo(ID_COBRANCA_ANTIGA, "paga");
+    const final = await lerCiclos();
+    expect(final.find((c) => c.id === antigo)!.status).toBe("pago");
+    expect(final.find((c) => c.id === agrupado)!.status).toBe("devido");
+  });
+
+  /**
+   * Qual mutação este teste mata: passar a consultar o gateway para todo mundo.
+   * Quem nunca teve cobrança não tem o que consultar, e uma ida a mais por
+   * ciclo é latência na porta de entrada da clínica, paga por quem não usa.
+   */
+  it("ciclo sem cobrança nenhuma segue o fluxo de hoje, sem consulta de reuso", async () => {
+    await assinaturaCancelada();
+    await cicloDevido(1300, 30);
+    const { chamadas } = instalarGateway();
+
+    await iniciarAtivacaoAssinatura(ctx, formulario());
+
+    expect(emissoes(chamadas)).toHaveLength(1);
+    expect(consultasDeReuso(chamadas)).toHaveLength(0);
   });
 
   /**
