@@ -98,3 +98,6 @@ skills-lock.json
 .ds-sync/
 ds-bundle/
 .design-sync/dts/
+
+# Config local de MCP (pode conter token de servidor) — nunca versionar
+.mcp.json
