@@ -858,12 +858,53 @@ describe("FormularioAtivacao", () => {
       debitoCentavos,
     });
 
+    // Lista de uma entrada: o contrato do gate já é `cobrancas[]` (#310), mas a
+    // política ainda emite uma cobrança só.
     const DEBITO = {
       valorCentavos: 1300,
-      pagamento: {
-        forma: "pix_copia_e_cola" as const,
-        brCode: "00020126…debito-290",
+      // Caso normal: tudo o que se deve está na tela (revisão do PR #339).
+      residuoCentavos: 0,
+      cobrancas: [
+        {
+          cicloId: "ciclo-1",
+          providerChargeId: "pay_290",
+          valorCentavos: 1300,
+          reaproveitada: false,
+          situacao: {
+            estado: "pagavel" as const,
+            pagamento: {
+              forma: "pix_copia_e_cola" as const,
+              brCode: "00020126…debito-290",
+            },
+          },
+        },
+      ],
+    };
+
+    /** Cobrança pagável por copia-e-cola. `reaproveitada` é parâmetro porque é
+     *  ele que muda o nome do bloco na árvore de acessibilidade (#310). */
+    const cobranca = (
+      id: string,
+      valorCentavos: number,
+      brCode: string,
+      reaproveitada = true,
+    ) => ({
+      cicloId: `ciclo-${id}`,
+      providerChargeId: id,
+      valorCentavos,
+      reaproveitada,
+      situacao: {
+        estado: "pagavel" as const,
+        pagamento: { forma: "pix_copia_e_cola" as const, brCode },
       },
+    });
+
+    const EM_PROCESSAMENTO = {
+      cicloId: "ciclo-x",
+      providerChargeId: "pay_x",
+      valorCentavos: 1300,
+      reaproveitada: true,
+      situacao: { estado: "em_processamento" as const },
     };
 
     it("avisa o valor em aberto ANTES de a pessoa clicar em ativar", () => {
@@ -923,14 +964,196 @@ describe("FormularioAtivacao", () => {
       expect(document.body.textContent).not.toMatch(/00020126…debito-290/);
     });
 
-    it("faz polling enquanto o débito não é quitado", () => {
+    /**
+     * Qual mutação este teste mata: renderizar só `cobrancas[0]`. A segunda
+     * cobrança ficaria invisível, a clínica pagaria metade do que deve e
+     * continuaria barrada por uma dívida que a tela não mostra.
+     */
+    it("com duas cobranças, mostra os dois códigos e os dois valores", () => {
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{
+            debito: {
+              valorCentavos: 2000,
+              residuoCentavos: 0,
+              cobrancas: [
+                cobranca("pay_a", 1300, "00020126-codigo-a"),
+                cobranca("pay_b", 700, "00020126-codigo-b", false),
+              ],
+            },
+          }}
+          situacaoConta={situacao(2000)}
+        />,
+      );
+
+      expect(document.body.textContent).toMatch(/00020126-codigo-a/);
+      expect(document.body.textContent).toMatch(/00020126-codigo-b/);
+      expect(document.body.textContent).toMatch(/13,00/);
+      expect(document.body.textContent).toMatch(/7,00/);
+      expect(
+        screen.getAllByRole("button", { name: /copiar código pix/i }),
+      ).toHaveLength(2);
+    });
+
+    /**
+     * Qual mutação este teste mata: empilhar as cobranças como parágrafos soltos
+     * dentro do mesmo bloco (sem `role="group"` + `aria-labelledby`). Visualmente
+     * a separação continuaria de pé pela borda, mas quem usa leitor de tela
+     * receberia dois QR Codes, dois valores e dois botões "Copiar código Pix"
+     * numa sequência sem fronteira — e copiaria o código de uma cobrança
+     * achando que era o da outra. Os nomes são o que cada bloco É (valor +
+     * origem), não "cobrança 1 de 2": posição não diz qual delas pagar.
+     */
+    /**
+     * Revisão do PR #339 — o resíduo é DITO, não escondido.
+     *
+     * Há estados em que parte da dívida não vira cobrança nesta tela (a
+     * consolidada volta estornada, o gateway recusa, o resto fica abaixo do
+     * piso) e outra parte é pagável. O total mostrado passou a ser o do que
+     * está na mesa; sem esta frase a clínica pagaria o QR de R$ 13,00
+     * acreditando ter quitado tudo, e continuaria barrada.
+     *
+     * Qual mutação este teste mata: apagar o parágrafo do resíduo (ou renderizá-lo
+     * só quando há mais de uma cobrança). O valor é asserido junto do texto
+     * porque uma frase genérica de "ainda há pendências" não diz quanto falta.
+     */
+    it("resíduo sem cobrança na tela é dito, com o valor", () => {
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{
+            debito: {
+              valorCentavos: 1300,
+              residuoCentavos: 700,
+              cobrancas: [cobranca("pay_a", 1300, "00020126-codigo-a")],
+            },
+          }}
+          situacaoConta={situacao(2000)}
+        />,
+      );
+
+      // O total da cobrança na mesa continua sendo o do QR.
+      expect(document.body.textContent).toMatch(
+        /Esta cobrança é de R\$\s*13,00/,
+      );
+      // ...e o que sobrou aparece nomeado, com valor.
+      expect(document.body.textContent).toMatch(/não estão nesta tela/i);
+      expect(document.body.textContent).toMatch(/7,00/);
+    });
+
+    it("sem resíduo, a tela não inventa pendência nenhuma", () => {
+      // O negativo do caso acima: com `residuoCentavos: 0` (o caminho de toda
+      // clínica), a frase não pode aparecer — um aviso permanente de "ainda há
+      // valor em aberto" treinaria a pessoa a ignorá-lo justamente quando é real.
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{ debito: DEBITO }}
+          situacaoConta={situacao(1300)}
+        />,
+      );
+
+      expect(document.body.textContent).not.toMatch(/não estão nesta tela/i);
+    });
+
+    it("cada cobrança é um bloco nomeado, distinguível por leitor de tela", () => {
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{
+            debito: {
+              valorCentavos: 2000,
+              residuoCentavos: 0,
+              cobrancas: [
+                cobranca("pay_a", 1300, "00020126-codigo-a"),
+                cobranca("pay_b", 700, "00020126-codigo-b", false),
+              ],
+            },
+          }}
+          situacaoConta={situacao(2000)}
+        />,
+      );
+
+      expect(screen.getAllByRole("group")).toHaveLength(2);
+      // Sem `R$` nas expressões: o separador do `Intl` pt-BR é espaço
+      // inquebrável, e casá-lo aqui tornaria o teste refém do runtime de ICU.
+      expect(
+        screen.getByRole("group", {
+          name: /13,00.*enviada antes e ainda válida/i,
+        }),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("group", { name: /7,00.*criada agora/i }),
+      ).toBeTruthy();
+    });
+
+    /**
+     * Qual mutação este teste mata: cair no ramo do QR com `brCode` indefinido —
+     * um QR vazio e um copia-e-cola em branco, dentro exatamente da janela em
+     * que pagar por fora significa pagar duas vezes. A asserção da região viva
+     * mata a segunda mutação: mover a copy para fora do `<Alert>` (um `<div>`
+     * qualquer) deixaria o estado visível mas NÃO anunciado — quem não olha a
+     * tela nunca saberia que o código sumiu de propósito.
+     */
+    it("cobrança em processamento não mostra QR nem botão de copiar", () => {
+      render(
+        <FormularioAtivacao
+          acao={acaoQueDevolve({})}
+          navegar={vi.fn()}
+          estadoInicial={{
+            debito: {
+              valorCentavos: 1300,
+              residuoCentavos: 0,
+              cobrancas: [EM_PROCESSAMENTO],
+            },
+          }}
+          situacaoConta={situacao(1300)}
+        />,
+      );
+
+      expect(screen.getByText(/em processamento no seu banco/i)).toBeTruthy();
+      expect(document.body.textContent).toMatch(/não pague por outro meio/i);
+      expect(
+        screen.queryByRole("button", { name: /copiar código pix/i }),
+      ).toBeNull();
+      expect(screen.queryByRole("img", { name: /qr code do pix/i })).toBeNull();
+
+      const regioesVivas = screen.getAllByRole("status");
+      expect(
+        regioesVivas.some((el) =>
+          /em processamento no seu banco/i.test(el.textContent ?? ""),
+        ),
+      ).toBe(true);
+    });
+
+    /**
+     * Qual mutação este teste mata: parar o polling quando não há código de
+     * pagamento na tela (guard trocado por `situacao.estado === "pagavel"` ou
+     * pela presença do BR Code). A cobrança aqui é `em_processamento` de
+     * propósito — não há QR nenhum — e é justamente nesse estado que a tela
+     * PRECISA continuar girando: o único jeito de a clínica saber que o débito
+     * automático foi confirmado é esta tela revalidar sozinha. Com a mutação, a
+     * pessoa fica olhando "em processamento" para sempre.
+     */
+    it("faz polling enquanto o débito não é quitado, mesmo sem código na tela", () => {
       vi.useFakeTimers();
       try {
         render(
           <FormularioAtivacao
             acao={acaoQueDevolve({})}
             navegar={vi.fn()}
-            estadoInicial={{ debito: DEBITO }}
+            estadoInicial={{
+              debito: {
+                valorCentavos: 1300,
+                residuoCentavos: 0,
+                cobrancas: [EM_PROCESSAMENTO],
+              },
+            }}
             situacaoConta={situacao(1300)}
           />,
         );

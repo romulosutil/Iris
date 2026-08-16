@@ -7,7 +7,7 @@ import { validarEMaterializarCpfCnpj } from "@/lib/documento";
 import { iniciarAtivacao } from "@/lib/billing/subscription";
 import {
   resolverGateDeDebito,
-  type FormaPagamentoDebito,
+  type CobrancaDoDebito,
 } from "@/lib/billing/debito";
 import { BillingProviderError } from "@/lib/billing/provider";
 import type {
@@ -72,8 +72,28 @@ export type AtivacaoState = {
    * exatamente o que impede embutir o débito no QR de ativação.
    */
   debito?: {
+    /**
+     * Soma das cobranças NA TELA — a soma quando há mais de uma, o valor da
+     * única quando há uma só.
+     *
+     * Não é "o total da dívida": os dois divergem quando parte do débito não
+     * pôde virar cobrança agora (ver `residuoCentavos`). A copy afirma sobre um
+     * QR, então o número tem que ser o que aquele pagamento quita.
+     */
     valorCentavos: number;
-    pagamento: FormaPagamentoDebito;
+    /**
+     * Dívida viva que ficou SEM cobrança nesta tela. `0` no caso normal.
+     *
+     * Existe para a tela poder dizer que pagar tudo o que está à vista ainda
+     * não reabre a assinatura — omitir seria deixar a clínica pagar achando que
+     * quitou.
+     */
+    residuoCentavos: number;
+    /**
+     * Uma entrada por cobrança a pagar. Mais de uma quando parte do débito já
+     * tinha cobrança viva no gateway e foi reapresentada (#310).
+     */
+    cobrancas: CobrancaDoDebito[];
   };
 };
 
@@ -187,8 +207,29 @@ export async function iniciarAtivacaoAssinatura(
       return {
         debito: {
           valorCentavos: gate.totalCentavos,
-          pagamento: gate.pagamento,
+          residuoCentavos: gate.residuoCentavos,
+          cobrancas: gate.cobrancas,
         },
+      };
+    }
+    /**
+     * `bloqueado` NÃO segue para a ativação, ao contrário de `adiado` (#310,
+     * D-3 e P-2). Ali a clínica volta a usar o Iris com a dívida adiada; aqui
+     * nada foi emitido e nada foi decidido, então reabrir seria reativar sem
+     * cobrar — o oposto do pedido.
+     *
+     * Duas copies porque as orientações são OPOSTAS: gateway fora do ar pede
+     * "tente de novo em alguns instantes"; cobrança irrecuperável pede
+     * suporte. Mandar quem caiu num 500 falar com o suporte é ruído, e mandar
+     * quem tem estorno insistir é um beco sem saída.
+     */
+    if (gate.tipo === "bloqueado") {
+      return {
+        error:
+          gate.motivo === "gateway_indisponivel"
+            ? "Não conseguimos confirmar agora as cobranças em aberto da sua conta. Nada foi cobrado, e nenhuma cobrança nova foi criada. Tente novamente em alguns instantes."
+            : "A cobrança em aberto da sua conta precisa de revisão manual antes de a assinatura ser reaberta. Fale com o suporte informando o CNPJ da clínica.",
+        documento: documentoBruto,
       };
     }
   } catch (e) {

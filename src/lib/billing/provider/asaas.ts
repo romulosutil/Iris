@@ -6,6 +6,7 @@ import {
   BillingProviderError,
   type BillingProvider,
   type CobrancaEmitida,
+  type CobrancaParaReuso,
   type EntradaVerificacaoWebhook,
   type EventoWebhookNormalizado,
   type NovaCobrancaAvulsa,
@@ -919,6 +920,205 @@ export class AsaasProvider implements BillingProvider {
         status,
       ),
     };
+  }
+
+  /**
+   * Status crus do Asaas em que uma cobrança AINDA PODE SER PAGA (#310).
+   *
+   * ALLOW-LIST, não deny-list, e a diferença é o modo de falha: o catálogo de
+   * status do Asaas cresce sem versionar (`DUNNING_*`, `AWAITING_RISK_ANALYSIS`
+   * já estão lá), e uma deny-list deixaria todo status futuro passar como
+   * pagável. Errar para "não é pagável" custa uma cobrança nova consolidada;
+   * errar para "é pagável" custa uma cobrança que o cliente paga duas vezes.
+   *
+   * `OVERDUE` está aqui de propósito, e é o coração da issue: esgotadas as
+   * retentativas do Pix Automático o `Payment` vai a OVERDUE, a autorização
+   * segue Ativa, e o Asaas MANTÉM o link com boleto e Pix Copia e Cola. É essa
+   * cobrança que estava sendo duplicada.
+   */
+  private static readonly STATUS_PAGAVEIS = new Set(["PENDING", "OVERDUE"]);
+
+  /** Status crus que significam dinheiro já recebido. */
+  private static readonly STATUS_PAGOS = new Set([
+    "RECEIVED",
+    "CONFIRMED",
+    "RECEIVED_IN_CASH",
+  ]);
+
+  /**
+   * Status crus de cobrança terceirizada (recuperação de crédito do Asaas).
+   *
+   * Ficam FORA de `STATUS_PAGAVEIS` porque nós não os reapresentamos — a
+   * cobrança está em outro trilho, com outro cobrador. Mas eles seguem
+   * **pagáveis pelo pagador**, e é por isso que ganham motivo próprio em vez de
+   * cair no `status_nao_pagavel` genérico: quem lê o motivo precisa saber que
+   * emitir uma segunda cobrança aqui é cobrança dupla, não substituição.
+   *
+   * A doc do Asaas não deixa claro se `DUNNING_RECEIVED` é "recuperada"
+   * (dinheiro entrou) ou "em recuperação" — não medimos. Os dois desfechos
+   * proíbem emitir outra cobrança, então o grupo é o mesmo e a ignorância não
+   * muda a decisão.
+   */
+  private static readonly STATUS_COBRANCA_TERCEIRIZADA = new Set([
+    "DUNNING_REQUESTED",
+    "DUNNING_RECEIVED",
+  ]);
+
+  async consultarCobrancaParaReuso(
+    providerChargeId: string,
+  ): Promise<CobrancaParaReuso> {
+    let resposta: Record<string, unknown>;
+    try {
+      resposta = comoRegistro(
+        await chamar(
+          "GET",
+          `/payments/${encodeURIComponent(providerChargeId)}`,
+        ),
+      );
+    } catch (e) {
+      // 404 é o ÚNICO erro que vira "morta": o gateway não reconhece o id, e
+      // ninguém consegue pagar o que não existe. Todo o resto (rede, timeout,
+      // 5xx, 401/408/429) SOBE — "não consegui verificar" virando "não existe"
+      // é o caminho direto para a cobrança dupla (precedente #157).
+      if (e instanceof BillingProviderError && e.status === 404) {
+        console.warn("[billing-reuso] cobrança não encontrada no gateway", {
+          providerChargeId,
+        });
+        return { reuso: "morta", motivo: "nao_encontrada" };
+      }
+      throw e;
+    }
+
+    // O Asaas não tem status "cancelada": remoção é o boolean `deleted`. Checar
+    // antes do status, porque uma removida continua carregando o status que
+    // tinha quando foi removida.
+    if (resposta.deleted === true) {
+      return { reuso: "morta", motivo: "removida" };
+    }
+
+    const statusCru = comoTexto(resposta.status) ?? "";
+    if (AsaasProvider.STATUS_PAGOS.has(statusCru)) return { reuso: "paga" };
+    if (!AsaasProvider.STATUS_PAGAVEIS.has(statusCru)) {
+      // O motivo distingue "morta, pode emitir outra" de "não sei / ainda
+      // pagável, não emita nada" — ver `MotivoNaoReuso`. Nenhum dos três aqui é
+      // do primeiro grupo: nem estorno, nem cobrança terceirizada, nem status
+      // que o Asaas inventou depois provam que ninguém consegue pagar aquilo.
+      const motivo = AsaasProvider.STATUS_COBRANCA_TERCEIRIZADA.has(statusCru)
+        ? "em_cobranca_terceirizada"
+        : mapearStatusCobranca(statusCru) === "estornada"
+          ? "estornada"
+          : "status_nao_pagavel";
+      return { reuso: "morta", motivo };
+    }
+
+    // D-6: instrução pendente É o sinal da janela crítica. Não se calcula hora
+    // nem fuso — a existência da instrução é o fato. Duas consultas com filtro
+    // explícito, e não uma sem filtro: `?paymentId=..&status=..` é a forma já
+    // medida e em uso (`instrucaoRecusadaDaCobranca`), e passar vários status
+    // num parâmetro só não foi medido.
+    if (await this.temInstrucaoPendente(providerChargeId)) {
+      return { reuso: "em_processamento" };
+    }
+
+    // O valor sai do MESMO `GET /payments/{id}` que já foi feito, pela MESMA
+    // conversão de `consultarCobranca` — nenhum arredondamento novo. Sem ele a
+    // tela mostra o valor de UM ciclo para uma cobrança que pode ter sido
+    // consolidada sobre N, e a copy do total fica falsa.
+    const valorBruto = resposta.value;
+    if (typeof valorBruto !== "number" || !Number.isFinite(valorBruto)) {
+      // Viva e pagável no gateway, mas sem valor legível. Não é `pagavel`:
+      // apresentar um copia-e-cola ao lado de "R$ 0,00" é a mesma mentira do QR
+      // vazio. E não é do grupo "pode emitir outra" — a cobrança segue viva.
+      console.warn("[billing-reuso] cobrança pagável sem valor legível", {
+        providerChargeId,
+        valor: valorBruto,
+      });
+      return { reuso: "morta", motivo: "valor_indeterminado" };
+    }
+    const valorCentavos = reaisParaCentavos(valorBruto);
+
+    const urlPagamento = comoTexto(resposta.invoiceUrl) ?? undefined;
+    const { pixCopiaECola } = await this.brCodeDe(providerChargeId);
+
+    if (pixCopiaECola) {
+      return {
+        reuso: "pagavel",
+        valorCentavos,
+        pagamento: {
+          forma: "pix_copia_e_cola",
+          brCode: pixCopiaECola,
+          ...(urlPagamento ? { urlPagamento } : {}),
+        },
+      };
+    }
+    if (urlPagamento) {
+      return {
+        reuso: "pagavel",
+        valorCentavos,
+        pagamento: { forma: "link", urlPagamento },
+      };
+    }
+    // Existe e está pagável no gateway, mas não veio forma nenhuma de pagar.
+    // Não é `pagavel`: renderizar um QR vazio faria a clínica achar que pagou o
+    // que não pagou. Vira cobrança nova consolidada.
+    console.warn("[billing-reuso] cobrança pagável sem link nem copia-e-cola", {
+      providerChargeId,
+    });
+    return { reuso: "morta", motivo: "sem_forma_de_pagamento" };
+  }
+
+  /**
+   * Há débito automático a caminho para esta cobrança?
+   *
+   * **Não engole erro de propósito.** Se a listagem falha, não sabemos se
+   * existe instrução pendente — e apresentar o copia-e-cola sem saber é
+   * exatamente o pagamento em duplicidade que o D-6 existe para evitar. Difere
+   * de `motivoDaRecusa`, que degrada porque o motivo é ENRIQUECIMENTO; aqui a
+   * resposta decide se um código de pagamento vai para a tela.
+   *
+   * ## A assimetria 4xx × 5xx, e por que ela não é frouxidão
+   *
+   * `404` e `400` da listagem viram "não há instrução pendente"; `5xx`, rede e
+   * timeout continuam subindo. A razão é o caso MAIS COMUM deste método: a
+   * cobrança de débito que o próprio gate emite é **Pix comum**
+   * (`emitirCobrancaAvulsa`, `billingType: "PIX"`, sem
+   * `pixAutomaticAuthorizationId`) — ela não tem instrução de Pix Automático
+   * nenhuma, e um índice que responde 404/400 para "instruções de um pagamento
+   * que não é do trilho" está dizendo justamente isso. Fazer esse caso lançar
+   * mandava o gate para `bloqueado/gateway_indisponivel` com a copy "tente
+   * novamente em alguns instantes" — que NUNCA resolveria, em toda reentrada.
+   *
+   * `5xx`/rede/timeout são outra coisa: ali o gateway não respondeu à pergunta,
+   * e é exatamente onde a ignorância é perigosa (pode haver instrução a caminho
+   * e não sabemos). Esses seguem fail-closed.
+   */
+  private async temInstrucaoPendente(
+    providerChargeId: string,
+  ): Promise<boolean> {
+    for (const status of ["AWAITING_REQUEST", "SCHEDULED"]) {
+      let resposta: Record<string, unknown>;
+      try {
+        resposta = comoRegistro(
+          await chamar(
+            "GET",
+            `/pix/automatic/paymentInstructions?paymentId=${encodeURIComponent(providerChargeId)}&status=${status}`,
+          ),
+        );
+      } catch (e) {
+        if (
+          e instanceof BillingProviderError &&
+          (e.status === 404 || e.status === 400)
+        ) {
+          // "Esta cobrança não tem instrução deste tipo" — resposta à pergunta,
+          // não falha em respondê-la. Segue para o próximo filtro.
+          continue;
+        }
+        throw e;
+      }
+      const lista = Array.isArray(resposta.data) ? resposta.data : [];
+      if (lista.length > 0) return true;
+    }
+    return false;
   }
 
   /**

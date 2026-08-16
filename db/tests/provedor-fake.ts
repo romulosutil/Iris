@@ -1,6 +1,7 @@
 import type {
   BillingProvider,
   CobrancaEmitida,
+  CobrancaParaReuso,
   EntradaVerificacaoWebhook,
   EventoWebhookNormalizado,
   NovaCobrancaAvulsa,
@@ -220,6 +221,83 @@ export class ProvedorFake implements BillingProvider {
       // Gateway fake não modela motivo de recusa; mesmo caminho "não informado"
       // do adapter real do Asaas.
       motivoRecusa: null,
+    };
+  }
+
+  /**
+   * Reuso de cobrança (#310). O `estado` do wire decide, e o copia-e-cola é
+   * derivado do id, igual ao de `emitirCobrancaAvulsa`.
+   *
+   * ## Todos os desfechos são expressáveis, e por qual opção
+   *
+   * A versão anterior devolvia `pagavel` para tudo que não fosse paga ou
+   * estornada: nenhum teste que usa o fake conseguia produzir
+   * `em_processamento`, `removida` ou `status_nao_pagavel`, e os ramos novos do
+   * chamador ficavam sem exercício nenhum. Agora cada desfecho tem uma opção de
+   * construção, no idioma que este arquivo já usa — o corpo do wire:
+   *
+   * | Corpo devolvido pelo `fetch` do teste | Desfecho             |
+   * | ------------------------------------- | -------------------- |
+   * | `{ estado: "LIQUIDADA" }`             | `paga`               |
+   * | `{ estado: "ESTORNADA" }`             | `morta/estornada`    |
+   * | `{ removida: true }`                  | `morta/removida`     |
+   * | `{ estado: "EM_DEBITO" }`             | `em_processamento`   |
+   * | `{ estado: "PENDENTE" \| "VENCIDA", centavos }` | `pagavel`   |
+   * | `{ estado: "PENDENTE" }` (sem `centavos` legível) | `morta/valor_indeterminado` |
+   * | qualquer outro `estado`               | `morta/status_nao_pagavel` |
+   *
+   * A opção é o corpo do wire, e não um parâmetro de construtor, porque o
+   * oráculo deste dublê é a URL efetivamente chamada (ver docstring do topo):
+   * uma resposta enlatada no construtor faria o teste passar sem que o
+   * chamador lesse coisa alguma do gateway.
+   *
+   * **Allow-list, igual ao adapter real**: estado desconhecido cai em
+   * não-pagável. Uma deny-list aqui deixaria o dublê mais permissivo que a
+   * produção, que é a pior direção possível para um dublê.
+   */
+  async consultarCobrancaParaReuso(
+    providerChargeId: string,
+  ): Promise<CobrancaParaReuso> {
+    const corpo = await pedir(`${BASE_URL_FAKE}/cobrancas/${providerChargeId}`);
+
+    // Checado antes do estado: uma cobrança removida continua carregando o
+    // estado que tinha na remoção (mesma armadilha do `deleted` do Asaas).
+    if (corpo.removida === true) return { reuso: "morta", motivo: "removida" };
+
+    const status = mapearStatusCobranca(corpo.estado);
+    if (status === "paga") return { reuso: "paga" };
+    if (status === "estornada") return { reuso: "morta", motivo: "estornada" };
+    // Débito automático a caminho: não apresentar forma de pagamento nenhuma.
+    if (corpo.estado === "EM_DEBITO") return { reuso: "em_processamento" };
+    if (corpo.estado !== "PENDENTE" && corpo.estado !== "VENCIDA") {
+      return { reuso: "morta", motivo: "status_nao_pagavel" };
+    }
+
+    /**
+     * Valor ausente ou ilegível é `morta/valor_indeterminado`, igual ao adapter
+     * real — e NÃO `pagavel` de R$ 0,00.
+     *
+     * O `Number(corpo.centavos ?? 0)` de antes deixava o dublê mais permissivo
+     * que a produção, que é a pior direção possível: o `AsaasProvider` recusa
+     * a cobrança sem `value` numérico ("apresentar um copia-e-cola ao lado de
+     * R$ 0,00 é a mesma mentira do QR vazio"), e o chamador só tem esse ramo
+     * porque ele existe lá. Com o dublê frouxo, o ramo nunca era exercitado e
+     * o `NaN` de um `"20,00"` chegaria à tela.
+     */
+    const valorCentavos = corpo.centavos;
+    if (typeof valorCentavos !== "number" || !Number.isFinite(valorCentavos)) {
+      return { reuso: "morta", motivo: "valor_indeterminado" };
+    }
+
+    return {
+      reuso: "pagavel",
+      // Vem do wire pelo mesmo campo de `consultarCobranca`: o valor de uma
+      // cobrança reaproveitada é o dela, nunca o que o chamador supõe.
+      valorCentavos,
+      pagamento: {
+        forma: "pix_copia_e_cola",
+        brCode: `00020126-fake-debito-${providerChargeId}`,
+      },
     };
   }
 

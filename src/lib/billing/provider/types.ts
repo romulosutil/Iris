@@ -226,6 +226,116 @@ export interface CobrancaEmitida {
   pixCopiaECola?: string;
 }
 
+/**
+ * Como uma cobrança se paga, do jeito que a tela precisa renderizar.
+ *
+ * Mora aqui, e não em `debito.ts`, porque agora é a PORTA que devolve isto:
+ * quem sabe montar a forma de pagamento é o adapter, que tem o `invoiceUrl` e o
+ * copia-e-cola. `debito.ts` reexporta como `FormaPagamentoDebito`.
+ */
+export type FormaPagamentoCobranca =
+  | { forma: "pix_copia_e_cola"; brCode: string; urlPagamento?: string }
+  | { forma: "link"; urlPagamento: string };
+
+/**
+ * Motivo que prova que a cobrança **não existe mais para ninguém** — nem para
+ * nós, nem para o pagador. É o único grupo em que emitir OUTRA cobrança por
+ * cima é seguro.
+ *
+ * Hoje tem um membro só, e isso é o ponto: só o 404 é uma prova. Todo o resto
+ * é "não consigo reapresentar", que é uma frase sobre NÓS, não sobre a
+ * cobrança.
+ */
+export type MotivoCobrancaInexistente =
+  /** O gateway não reconhece o id (404). Ninguém consegue pagar aquilo. */
+  "nao_encontrada";
+
+/**
+ * Motivo em que a cobrança **não é reapresentável por nós**, mas pode
+ * perfeitamente seguir pagável pelo pagador.
+ *
+ * Emitir uma segunda cobrança em qualquer um destes casos é o risco de
+ * **cobrança dupla**: o cliente paga a que está viva no gateway e a nova que a
+ * gente acabou de criar. Quem consome trata este grupo como "não sei / não
+ * emita nada", nunca como "morreu".
+ */
+export type MotivoReusoIndeterminado =
+  /** Removida no gateway. No Asaas não há status "cancelada": é o boolean `deleted`. */
+  | "removida"
+  /** Estornada/chargeback — decisão comercial humana, nunca reapresentada. */
+  | "estornada"
+  /**
+   * Em cobrança terceirizada (`DUNNING_*` no Asaas). Segue pagável pelo
+   * pagador pelo trilho da recuperação, e é justamente por isso que não é um
+   * "morta, pode emitir outra": seria a segunda cobrança por cima de uma viva.
+   */
+  | "em_cobranca_terceirizada"
+  /** Status fora da allow-list de pagáveis (inclui todo status futuro desconhecido). */
+  | "status_nao_pagavel"
+  /** Viva e pagável, mas o gateway não devolveu um valor legível. */
+  | "valor_indeterminado"
+  /** Existe e é pagável, mas o gateway não devolveu link nem copia-e-cola. */
+  | "sem_forma_de_pagamento";
+
+/**
+ * Por que uma cobrança já emitida NÃO pode ser reapresentada por nós.
+ *
+ * **A união é deliberadamente dividida em dois grupos**, e a divisão vale
+ * dinheiro: "não reaproveitável" ≠ "não pagável pelo cliente". Quem decide
+ * emitir uma cobrança nova tem que perguntar a qual grupo o motivo pertence —
+ * `MotivoCobrancaInexistente` libera, `MotivoReusoIndeterminado` bloqueia.
+ * Tratar os dois como a mesma coisa é fail-OPEN para cobrança dupla.
+ */
+export type MotivoNaoReuso =
+  MotivoCobrancaInexistente | MotivoReusoIndeterminado;
+
+/**
+ * Estado de uma cobrança JÁ EMITIDA, do ponto de vista de quem quer
+ * reapresentá-la em vez de emitir outra (#310).
+ *
+ * ## Por que não é `consultarCobranca` alargada
+ *
+ * `consultarCobranca` devolve `StatusCobranca`, cujo `default` é `pendente`:
+ * `DUNNING_*`, `AWAITING_RISK_ANALYSIS` e todo status que o gateway inventar
+ * chegariam como "pendente" e seriam reaproveitados. Decidir reuso por ali é
+ * fail-OPEN por construção, e o modo de falha é cobrança dupla. Aqui a decisão
+ * é por ALLOW-LIST de status cru, dentro do adapter, que é o único lugar que vê
+ * o vocabulário do gateway.
+ *
+ * Os dois chamadores de `consultarCobranca` (a rota do webhook e a varredura de
+ * pendentes) também ficam intocados — eles não devem pagar as chamadas extras
+ * de QR e de instrução que só o gate precisa.
+ */
+export type CobrancaParaReuso =
+  /** Viva, pagável, e com forma de pagamento na mão. */
+  | {
+      reuso: "pagavel";
+      pagamento: FormaPagamentoCobranca;
+      /**
+       * Quanto ESTA cobrança cobra, em centavos, do jeito que o gateway a
+       * emitiu.
+       *
+       * Obrigatório, e não opcional: uma cobrança reaproveitada pode ter sido
+       * consolidada sobre N ciclos, e sem este número a tela só tem o valor
+       * apurado de UM ciclo para mostrar. A copy "pagar todas quita o total de
+       * {total}" fica então falsa — soma de ciclos que não é o que o cliente
+       * vai pagar. Opcional deixaria exatamente esse estado representável.
+       */
+      valorCentavos: number;
+    }
+  /**
+   * Viva, mas com débito automático a caminho (instrução `AWAITING_REQUEST` ou
+   * `SCHEDULED`). Não apresentar como pagável: a janela crítica do Pix
+   * Automático bloqueia o recebimento por outro meio das 22h de D-1 até D, e
+   * quem paga por fora paga duas vezes. A existência da instrução pendente É o
+   * fato — não se calcula hora nem fuso.
+   */
+  | { reuso: "em_processamento" }
+  /** Já paga no gateway. Quem chama liquida o ciclo e recomputa o débito. */
+  | { reuso: "paga" }
+  /** Não reapresentável. Quem chama manda o ciclo para a cobrança consolidada. */
+  | { reuso: "morta"; motivo: MotivoNaoReuso };
+
 /** Tipos de evento que o Iris sabe tratar. Tudo mais é `desconhecido`. */
 export type TipoEventoNormalizado =
   | "assinatura.autorizada"
@@ -361,6 +471,22 @@ export interface BillingProvider {
      */
     motivoRecusa: string | null;
   }>;
+
+  /**
+   * Estado de uma cobrança já emitida, para decidir se ela pode ser
+   * REAPRESENTADA em vez de emitirmos outra (#310).
+   *
+   * Obrigatório na porta: um gateway que não saiba responder isto obrigaria o
+   * gate a emitir cobrança nova por cima de uma cobrança viva — a cobrança
+   * dupla que esta pergunta existe para evitar.
+   *
+   * **Nunca devolve "morta" por indisponibilidade.** Erro de rede, timeout, 5xx
+   * e 4xx transitório SOBEM. "Não consegui verificar" virando "não existe" é
+   * exatamente o caminho para cobrar duas vezes.
+   */
+  consultarCobrancaParaReuso(
+    providerChargeId: string,
+  ): Promise<CobrancaParaReuso>;
 
   /**
    * Autentica a entrega do webhook. **Nunca lança e nunca revela o motivo da
