@@ -88,7 +88,7 @@
 
 ## 🏁 Sessão 16/08/2026 (2ª) — #311: o piso que já estava certo (passo 6 da linha de billing)
 
-Executado o **passo 6**: issue [#311](https://github.com/romulosutil/Iris/issues/311) — `PISO_COBRANCA_AVULSA_CENTAVOS = 500` era, pelo próprio docblock, "escolha conservadora, **NÃO** medição". Orquestração em **4 subagentes** (recon → builder → revisão adversarial com mutação → reparo); 1 commit na `feat/311-piso-cobranca-medido`, sem push e sem PR. Nenhuma migração e **nenhuma mudança de comportamento**: o diff é verdade documental e oráculo de teste.
+Executado o **passo 6**: issue [#311](https://github.com/romulosutil/Iris/issues/311) — `PISO_COBRANCA_AVULSA_CENTAVOS = 500` era, pelo próprio docblock, "escolha conservadora, **NÃO** medição". Orquestração em **4 subagentes** (recon → builder → revisão adversarial com mutação → reparo); 1 commit na `feat/311-piso-cobranca-medido`, PR [#340](https://github.com/romulosutil/Iris/pull/340) — **encadeada** sobre a PR [#339](https://github.com/romulosutil/Iris/pull/339) (#310), que subiu na mesma sessão. Mergear na ordem: a base da #340 só vira `main` quando a #339 fechar, e a keyword `Closes #311` só dispara nesse momento. Nenhuma migração e **nenhuma mudança de comportamento**: o diff é verdade documental e oráculo de teste.
 
 ### O número já estava certo — o que estava errado era o código não saber disso
 
@@ -124,7 +124,7 @@ Fechado junto o **RISCO-1** (`piso não medido`) em `.specs/features/debito-reat
 
 ### O que fica aberto
 
-Nenhum débito novo (segue D1–D41). Quatro achados sem dono, detalhados no `checkpoint.md` §4: `discount ≠ 0` nunca sondado (barato de medir no sandbox, inerte hoje); a degradação 4xx com um único teste, gated por banco, agora promovida a única rede contra o Asaas mudar o piso; a issue e as specs falando do nome morto; e o parâmetro `piso` de `decidirGate` sobrevivendo por uma justificativa nova. **Decisão do Rômulo:** a `feat/311` nasceu **empilhada** sobre a `feat/310` (que segue sem push) — mergear na ordem, ou recortar.
+Nenhum débito novo (segue D1–D41). Quatro achados sem dono, detalhados no `checkpoint.md` §4: `discount ≠ 0` nunca sondado (barato de medir no sandbox, inerte hoje); a degradação 4xx com um único teste, gated por banco, agora promovida a única rede contra o Asaas mudar o piso; a issue e as specs falando do nome morto; e o parâmetro `piso` de `decidirGate` sobrevivendo por uma justificativa nova. **Decisão de tech lead tomada:** manter a `feat/311` empilhada em vez de recortá-la — o `checkpoint.md`/`BACKLOG.md` da #310 só existem naquela branch, e refazer a #311 a partir de `main` produziria dois históricos de doc divergentes, que é o modo de falha do #305/#306. O custo é a ordem de merge, que já estava determinada de qualquer jeito.
 
 ---
 
