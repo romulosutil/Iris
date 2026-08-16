@@ -5,10 +5,6 @@ import { withTenant, type TenantContext } from "@/db/rls";
 import { appUser, clinic } from "@/db/schema";
 import { validarEMaterializarCpfCnpj } from "@/lib/documento";
 import { iniciarAtivacao } from "@/lib/billing/subscription";
-import {
-  resolverGateDeDebito,
-  type FormaPagamentoDebito,
-} from "@/lib/billing/debito";
 import { BillingProviderError } from "@/lib/billing/provider";
 import type {
   AutorizacaoPendente,
@@ -59,22 +55,6 @@ export type AtivacaoState = {
    * vindo só em `error`: ela não pertence a campo nenhum.
    */
   erroDocumento?: string;
-  /**
-   * Débito de reativação a pagar ANTES de a autorização existir (#290). Presente
-   * só quando o gate barrou: a assinatura continua `canceled` e nenhum vínculo
-   * novo foi criado no gateway.
-   *
-   * É deliberadamente um campo SEPARADO de `autorizacao`, e não uma variante
-   * dela: são duas cobranças com naturezas opostas — a autorização é mecanismo
-   * de autorização da Jornada 3 do Bacen (R$ 0,01, cria o trilho), o débito é
-   * cobrança de verdade (Pix comum, quita dívida). Misturar as duas num campo só
-   * é a mesma confusão do D21, e o teto de valor do Pix Automático (#286) é
-   * exatamente o que impede embutir o débito no QR de ativação.
-   */
-  debito?: {
-    valorCentavos: number;
-    pagamento: FormaPagamentoDebito;
-  };
 };
 
 /**
@@ -161,49 +141,6 @@ export async function iniciarAtivacaoAssinatura(
   }
 
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://irisclinica.ia.br";
-
-  /**
-   * Gate de débito, ANTES de qualquer coisa no gateway (#290).
-   *
-   * Cliente que cancela vira devedor: para voltar a usar, paga o que deve.
-   * Cobrar aqui — e não somando o débito à primeira fatura do ciclo novo — é o
-   * que fecha o loop cancela-usa-cancela: diluído na fatura seguinte, bastaria
-   * cancelar de novo antes daquele fechamento e repetir. Na porta de entrada,
-   * cada volta custa exatamente os dias usados na ida.
-   *
-   * `adiado` (débito abaixo do piso do gateway, ou recusado por ele) SEGUE para
-   * a ativação de propósito: os ciclos continuam `devido` e serão cobrados
-   * somados na próxima volta. A dívida não é perdoada — só adiada.
-   *
-   * `try` PRÓPRIO, e não o mesmo da ativação: as duas falhas pedem orientações
-   * diferentes. "Tente de novo em alguns instantes" é verdade para uma queda do
-   * gateway na criação do vínculo, e mentira para uma cobrança de débito
-   * estornada — ali retentar não resolve nunca, e mandar a pessoa insistir é
-   * pior que dizer que precisa de ajuda.
-   */
-  try {
-    const gate = await resolverGateDeDebito(ctx.clinicId);
-    if (gate.tipo === "cobranca") {
-      return {
-        debito: {
-          valorCentavos: gate.totalCentavos,
-          pagamento: gate.pagamento,
-        },
-      };
-    }
-  } catch (e) {
-    console.error("[assinatura] falha no gate de débito de reativação", {
-      clinicId: ctx.clinicId,
-      err: e,
-      corpoGateway:
-        e instanceof BillingProviderError ? serializar(e.corpo) : undefined,
-    });
-    return {
-      error:
-        "Não foi possível apurar o valor em aberto da sua conta. Fale com o suporte para reativar a assinatura.",
-      documento: documentoBruto,
-    };
-  }
 
   try {
     const { autorizacao } = await iniciarAtivacao({

@@ -6,6 +6,9 @@ import { Alert } from "@/components/ui/alert";
 import { TabsNav, type TabsNavItem } from "@/components/ui/tabs-nav";
 import { Pill } from "@/components/ui/primitives/pill";
 import { Tooltip } from "@/components/ui/tooltip";
+import { eq } from "drizzle-orm";
+import { withTenant } from "@/db/rls";
+import { patient } from "@/db/schema";
 import { mensagemDeEstado } from "@/lib/billing/estado-conta";
 import { obterSituacaoConta } from "../../queries";
 
@@ -43,20 +46,35 @@ export default async function PacienteLayout({
 }: PacienteLayoutProps) {
   const { id } = await params;
   const ctx = await getTenantContext();
-  const situacao = await obterSituacaoConta(ctx);
+  const [situacao, dadosPaciente] = await Promise.all([
+    obterSituacaoConta(ctx),
+    withTenant(ctx, async (tx) => {
+      const [p] = await tx
+        .select({ clinicalModality: patient.clinicalModality })
+        .from(patient)
+        .where(eq(patient.id, id));
+      return p;
+    }),
+  ]);
+
+  const eConvencional = dadosPaciente?.clinicalModality === "conventional";
 
   const base = `/pacientes/${id}`;
   // Todas as rotas irmãs que de fato existem sob `[id]/` (as que têm
   // `page.tsx`). `consentimento/` e `timeline/` são pastas de lógica sem tela
   // própria — a timeline é renderizada dentro da aba Evolução — e por isso não
   // entram aqui: aba que leva a 404 é pior que aba ausente.
+  // Pacientes na modalidade convencional têm as abas de pontuação de protocolos (PEI & Metas)
+  // ocultadas da navegação para uma interface limpa focada no diário de evolução.
   const abas: TabsNavItem[] = [
     { href: base, rotulo: "Evolução", exato: true },
     { href: `${base}/briefing`, rotulo: "Briefing" },
     { href: `${base}/cadastro-clinico`, rotulo: "Ficha Clínica" },
-    { href: `${base}/metas`, rotulo: "PEI & Metas" },
+    ...(!eConvencional ? [{ href: `${base}/metas`, rotulo: "PEI & Metas" }] : []),
     // TCC não é visível para admin_recepcao (dado clínico, mesma régua de
-    // logic.ts/page.tsx): sem esse filtro a aba levaria a um 404.
+    // logic.ts/page.tsx): sem esse filtro a aba levaria a um 404. O eixo é o
+    // papel, não a modalidade — o RPD serve tanto o paciente convencional
+    // quanto o protocolar, então este filtro é ortogonal ao de `metas`.
     ...(ctx.role === "admin_recepcao"
       ? []
       : [{ href: `${base}/tcc`, rotulo: "TCC" }]),
@@ -101,7 +119,7 @@ export default async function PacienteLayout({
       </div>
       {!situacao.podeEscrever ? (
         <Alert severidade="info" destacado titulo="Conta em somente-leitura">
-          <p>{mensagemDeEstado(situacao.estado, situacao.debitoCentavos)}</p>
+          <p>{mensagemDeEstado(situacao.estado)}</p>
           {comLinkParaAssinatura ? (
             <p className="mt-2">
               <Link

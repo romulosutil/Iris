@@ -28,10 +28,9 @@ tratado como incompleto mesmo que o job de migração tenha saído com `exit 0`.
 
 ## Scripts
 
-| Arquivo                    | Cobre                                                                                                                                                                                                                                                                                                                              |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0076-0077-pos-deploy.sql` | #203 fatias 1 e 2 (PR #204): coluna `horas_semana`, os três CHECKs, os dois índices únicos parciais, o drop do índice antigo, e os grants dos dois lados — incluindo as **negativas** (`UPDATE` de tabela e `DELETE` revogados, policy de delete derrubada), que são a parte que um grant esquecido não denuncia                   |
-| `0096-ciclos-orfaos.sql`   | #287 Problema 1: a 0096 rodou (valor `devido` no enum) **e** o diagnóstico dos ciclos que já ficaram órfãos antes do fix (`billing_cycle` em `aberto`/`apurado` com `subscription.status = 'canceled'`). Zero linha na segunda consulta = nada a tratar; qualquer linha é receita sem fatura, e o destino dela é decisão do Rômulo |
+| Arquivo | Cobre |
+| --- | --- |
+| `0076-0077-pos-deploy.sql` | #203 fatias 1 e 2 (PR #204): coluna `horas_semana`, os três CHECKs, os dois índices únicos parciais, o drop do índice antigo, e os grants dos dois lados — incluindo as **negativas** (`UPDATE` de tabela e `DELETE` revogados, policy de delete derrubada), que são a parte que um grant esquecido não denuncia |
 
 Os CHECKs em si são exercitados por `BEGIN … ROLLBACK` na suíte de integração
 local (`pnpm test:rls`); aqui só se mede DDL e privilégio, porque escrever em

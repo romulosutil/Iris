@@ -373,6 +373,21 @@ describe.skipIf(!hasDb)(
       ).rejects.toThrow(/fora do tenant/);
     });
 
+    test("o guard quebra alto com múltiplos destinatários, alguns do tenant e um forasteiro (n≥2)", async () => {
+      await expect(
+        withTenant(ctx("coordenador", U_COORD), (tx) =>
+          assertDestinatariosNoTenant(tx, {
+            clinicId: CLINIC,
+            destinatarios: [
+              { userId: U_COORD, canal: "in_app_coordenador" as const },
+              { userId: U_COORD2, canal: "in_app_coordenador" as const },
+              { userId: U_ESTRANHO, canal: "in_app_coordenador" as const },
+            ],
+          }),
+        ),
+      ).rejects.toThrow(/fora do tenant/);
+    });
+
     test("nenhum canal declarado endereça destinatário externo à clínica", async () => {
       const canais = await withTenant(ctx("coordenador", U_COORD), async (tx) =>
         [

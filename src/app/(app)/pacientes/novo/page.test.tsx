@@ -44,7 +44,6 @@ function situacao(parcial: Partial<SituacaoConta>): SituacaoConta {
     podeCadastrarPaciente: true,
     diasRestantesTrial: null,
     statusAssinatura: "active",
-    debitoCentavos: 0,
     ...parcial,
   };
 }

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  apurarDebitoProRata,
   calcularMensalidadeCentavos,
   calculateMonthlyFee,
   detalharMensalidade,
@@ -93,9 +92,9 @@ describe("curva de preço", () => {
   });
 
   it("cobra o preço da primeira faixa no salto de 0 para 1 paciente", () => {
-    expect(
-      calcularMensalidadeCentavos(1) - calcularMensalidadeCentavos(0),
-    ).toBe(VALOR_PRIMEIRO_PACIENTE_CENTAVOS);
+    expect(calcularMensalidadeCentavos(1) - calcularMensalidadeCentavos(0)).toBe(
+      VALOR_PRIMEIRO_PACIENTE_CENTAVOS,
+    );
   });
 
   it("mantém todos os valores em centavos inteiros", () => {
@@ -197,121 +196,5 @@ describe("validação de entrada", () => {
     expect(() => calcularMensalidadeCentavos(-1)).toThrow(
       /não pode ser negativa/,
     );
-  });
-});
-
-/**
- * Pro-rata do ciclo interrompido pelo cancelamento (#287 P1, desenho na #290).
- *
- * Mesma regra do arquivo: valor esperado é constante literal, com a conta à mão
- * no comentário. Aqui isso importa ainda mais — reescrever
- * `valorCheio * dias / total` dentro do `expect` provaria só que a
- * implementação concorda consigo mesma, inclusive no arredondamento.
- */
-describe("apurarDebitoProRata — ciclo interrompido pelo cancelamento", () => {
-  const inicio = new Date("2026-08-01T12:00:00Z");
-  /** Ciclo de 30 dias: 01/08 12:00 → 31/08 12:00. */
-  const fim = new Date("2026-08-31T12:00:00Z");
-
-  it("cobra a fração de dias usados sobre o valor cheio do ciclo (exemplo do produto)", () => {
-    // 1 ficha ativa = 3900 cheios; cancelou no 10º dia de um ciclo de 30
-    // → 3900 x 10 / 30 = 1300  (R$ 13,00, exemplo dado na #290)
-    const r = apurarDebitoProRata({
-      fichasAtivas: 1,
-      inicio,
-      fim,
-      encerradoEm: new Date("2026-08-11T12:00:00Z"),
-    });
-    expect(r.valorCentavos).toBe(1300);
-    expect(r.diasUsados).toBe(10);
-    expect(r.diasDoCiclo).toBe(30);
-    expect(r.valorCheioCentavos).toBe(3900);
-  });
-
-  it("trunca centavos em favor da clínica quando a divisão não é exata", () => {
-    // 1 ficha = 3900; 1 dia usado de um ciclo de 7 → 3900 / 7 = 557,14…
-    // Truncado: 557. Arredondar para cima daria 558 e cobraria a mais.
-    const r = apurarDebitoProRata({
-      fichasAtivas: 1,
-      inicio,
-      fim: new Date("2026-08-08T12:00:00Z"),
-      encerradoEm: new Date("2026-08-02T12:00:00Z"),
-    });
-    expect(r.valorCentavos).toBe(557);
-    expect(r.diasDoCiclo).toBe(7);
-    expect(r.diasUsados).toBe(1);
-  });
-
-  it("conta o dia iniciado como dia cheio — cancelar horas depois não é de graça", () => {
-    // 20 fichas = 74500 cheios; 3h30 de uso viram 1 dia de 30
-    // → 74500 x 1 / 30 = 2483,33… → 2483
-    const r = apurarDebitoProRata({
-      fichasAtivas: 20,
-      inicio,
-      fim,
-      encerradoEm: new Date("2026-08-01T15:30:00Z"),
-    });
-    expect(r.diasUsados).toBe(1);
-    expect(r.valorCentavos).toBe(2483);
-  });
-
-  it("cancelamento depois do fim do ciclo paga o ciclo inteiro, sem extrapolar", () => {
-    // O ciclo já venceu: a fração satura em 1. 1 ficha → 3900 cheios.
-    const r = apurarDebitoProRata({
-      fichasAtivas: 1,
-      inicio,
-      fim,
-      encerradoEm: new Date("2026-09-20T12:00:00Z"),
-    });
-    expect(r.diasUsados).toBe(30);
-    expect(r.valorCentavos).toBe(3900);
-  });
-
-  it("ciclo sem ficha ativa não gera débito nenhum", () => {
-    const r = apurarDebitoProRata({
-      fichasAtivas: 0,
-      inicio,
-      fim,
-      encerradoEm: new Date("2026-08-11T12:00:00Z"),
-    });
-    expect(r.valorCheioCentavos).toBe(0);
-    expect(r.valorCentavos).toBe(0);
-  });
-
-  it("ciclo de 1 dia cobra o valor cheio", () => {
-    // Não é caso hipotético: `ciclo_dias` é coluna por clínica, com CHECK > 0.
-    const r = apurarDebitoProRata({
-      fichasAtivas: 1,
-      inicio,
-      fim: new Date("2026-08-02T12:00:00Z"),
-      encerradoEm: new Date("2026-08-01T18:00:00Z"),
-    });
-    expect(r.diasDoCiclo).toBe(1);
-    expect(r.diasUsados).toBe(1);
-    expect(r.valorCentavos).toBe(3900);
-  });
-
-  it("relógio para trás (cancelamento antes do início) ainda cobra 1 dia, nunca negativo", () => {
-    // Defensivo: `cancelada_em` vem do gateway/`now()` e o início do ciclo é
-    // nosso. Deixar a fração ficar negativa viraria crédito silencioso.
-    const r = apurarDebitoProRata({
-      fichasAtivas: 1,
-      inicio,
-      fim,
-      encerradoEm: new Date("2026-07-25T12:00:00Z"),
-    });
-    expect(r.diasUsados).toBe(1);
-    expect(r.valorCentavos).toBe(130); // 3900 x 1 / 30
-  });
-
-  it("lança RangeError quando o ciclo não tem duração positiva", () => {
-    expect(() =>
-      apurarDebitoProRata({
-        fichasAtivas: 1,
-        inicio,
-        fim: inicio,
-        encerradoEm: new Date("2026-08-11T12:00:00Z"),
-      }),
-    ).toThrow(RangeError);
   });
 });
