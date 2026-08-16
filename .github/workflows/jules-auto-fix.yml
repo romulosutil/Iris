@@ -11,8 +11,17 @@ concurrency:
 
 jobs:
   auto-fix:
-    runs-on: self-hosted
-    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    # `workflow_run` roda no contexto do repo BASE, com token de escrita e
+    # acesso a `secrets.JULES_API_KEY` — inclusive quando o run que o disparou
+    # veio de um fork. Em repositório PÚBLICO isso é o vetor clássico de
+    # escalação: qualquer pessoa abre PR de fork, o "Jules PR Review" completa
+    # e este job privilegiado dispara. O guard de `head_repository` abaixo
+    # exige que o run de origem seja deste mesmo repositório; fork nenhum
+    # chega aqui. Não remover ao tornar o repo público.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     permissions:
       pull-requests: write
       contents: write
