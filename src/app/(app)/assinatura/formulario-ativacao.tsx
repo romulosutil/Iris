@@ -279,6 +279,23 @@ export function FormularioAtivacao({
               período que já foi utilizado.
             </p>
           )}
+          {/* Resíduo: dívida viva que NÃO tem cobrança nesta tela (revisão do
+              PR #339). Sem esta frase, o total acima seria lido como "é isso
+              que eu devo", a clínica pagaria e continuaria barrada sem
+              entender por quê — a mesma mentira que o valor do gateway
+              (`CobrancaParaReuso.valorCentavos`) existe para impedir uma
+              camada abaixo. Só aparece quando existe: no caso normal é zero. */}
+          {(debitoCobrado.residuoCentavos ?? 0) > 0 ? (
+            <p className="mt-2">
+              Ainda há{" "}
+              <strong>{formatarBRL(debitoCobrado.residuoCentavos ?? 0)}</strong>{" "}
+              em aberto que não estão nesta tela: não foi possível emitir a
+              cobrança desse valor agora. Ele não é perdoado, e a assinatura só
+              reabre quando todo o valor em aberto estiver quitado — fale com o
+              suporte informando o CNPJ da clínica.
+            </p>
+          ) : null}
+
           <p className="mt-2">
             A assinatura só é reaberta depois deste pagamento. Confirmado o Pix,
             esta tela avisa sozinha e você segue para a autorização.

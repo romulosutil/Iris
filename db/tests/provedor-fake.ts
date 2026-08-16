@@ -243,6 +243,7 @@ export class ProvedorFake implements BillingProvider {
    * | `{ removida: true }`                  | `morta/removida`     |
    * | `{ estado: "EM_DEBITO" }`             | `em_processamento`   |
    * | `{ estado: "PENDENTE" \| "VENCIDA", centavos }` | `pagavel`   |
+   * | `{ estado: "PENDENTE" }` (sem `centavos` legível) | `morta/valor_indeterminado` |
    * | qualquer outro `estado`               | `morta/status_nao_pagavel` |
    *
    * A opção é o corpo do wire, e não um parâmetro de construtor, porque o
@@ -272,11 +273,27 @@ export class ProvedorFake implements BillingProvider {
       return { reuso: "morta", motivo: "status_nao_pagavel" };
     }
 
+    /**
+     * Valor ausente ou ilegível é `morta/valor_indeterminado`, igual ao adapter
+     * real — e NÃO `pagavel` de R$ 0,00.
+     *
+     * O `Number(corpo.centavos ?? 0)` de antes deixava o dublê mais permissivo
+     * que a produção, que é a pior direção possível: o `AsaasProvider` recusa
+     * a cobrança sem `value` numérico ("apresentar um copia-e-cola ao lado de
+     * R$ 0,00 é a mesma mentira do QR vazio"), e o chamador só tem esse ramo
+     * porque ele existe lá. Com o dublê frouxo, o ramo nunca era exercitado e
+     * o `NaN` de um `"20,00"` chegaria à tela.
+     */
+    const valorCentavos = corpo.centavos;
+    if (typeof valorCentavos !== "number" || !Number.isFinite(valorCentavos)) {
+      return { reuso: "morta", motivo: "valor_indeterminado" };
+    }
+
     return {
       reuso: "pagavel",
       // Vem do wire pelo mesmo campo de `consultarCobranca`: o valor de uma
       // cobrança reaproveitada é o dela, nunca o que o chamador supõe.
-      valorCentavos: Number(corpo.centavos ?? 0),
+      valorCentavos,
       pagamento: {
         forma: "pix_copia_e_cola",
         brCode: `00020126-fake-debito-${providerChargeId}`,

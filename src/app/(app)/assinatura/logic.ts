@@ -72,8 +72,23 @@ export type AtivacaoState = {
    * exatamente o que impede embutir o débito no QR de ativação.
    */
   debito?: {
-    /** Total do débito — a soma, mesmo quando há mais de uma cobrança. */
+    /**
+     * Soma das cobranças NA TELA — a soma quando há mais de uma, o valor da
+     * única quando há uma só.
+     *
+     * Não é "o total da dívida": os dois divergem quando parte do débito não
+     * pôde virar cobrança agora (ver `residuoCentavos`). A copy afirma sobre um
+     * QR, então o número tem que ser o que aquele pagamento quita.
+     */
     valorCentavos: number;
+    /**
+     * Dívida viva que ficou SEM cobrança nesta tela. `0` no caso normal.
+     *
+     * Existe para a tela poder dizer que pagar tudo o que está à vista ainda
+     * não reabre a assinatura — omitir seria deixar a clínica pagar achando que
+     * quitou.
+     */
+    residuoCentavos: number;
     /**
      * Uma entrada por cobrança a pagar. Mais de uma quando parte do débito já
      * tinha cobrança viva no gateway e foi reapresentada (#310).
@@ -192,6 +207,7 @@ export async function iniciarAtivacaoAssinatura(
       return {
         debito: {
           valorCentavos: gate.totalCentavos,
+          residuoCentavos: gate.residuoCentavos,
           cobrancas: gate.cobrancas,
         },
       };

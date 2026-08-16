@@ -190,7 +190,32 @@ export type ResultadoGateDebito =
   /** Cobrança(s) na mesa: só depois de pagas a reativação segue. */
   | {
       tipo: "cobranca";
+      /**
+       * Soma das cobranças que estão NA MESA — nunca a dívida inteira.
+       *
+       * A distinção existe porque os dois números podem divergir (revisão do
+       * PR #339): quando a cobrança consolidada volta ESTORNADA e há uma
+       * cobrança viva ao lado, o gate apresenta a viva (melhor pagar o que é
+       * pagável do que barrar tudo) e o pedaço estornado fica sem cobrança
+       * nenhuma na tela. A copy da tela diz "Esta cobrança é de {total}" e
+       * "pagar todas quita o total de {total}": com a dívida inteira aqui, as
+       * duas frases afirmam sobre um QR um valor que não é o dele.
+       *
+       * É o mesmo invariante que `CobrancaParaReuso.valorCentavos` fixa uma
+       * camada abaixo — o número mostrado é sempre o que o pagamento quita —,
+       * agora fechado também na soma.
+       */
       totalCentavos: number;
+      /**
+       * Dívida VIVA que ficou sem cobrança nesta tela, em centavos.
+       *
+       * `0` no caso normal. Positivo só quando parte do débito não pôde virar
+       * cobrança agora (estorno da consolidada, recusa do gateway, valor abaixo
+       * do piso) e outra parte é pagável. Vai para a tela porque o silêncio
+       * aqui é que produz a mentira: quitar o que está na mesa não reabre a
+       * assinatura, e a clínica precisa saber disso antes de pagar.
+       */
+      residuoCentavos: number;
       cobrancas: CobrancaDoDebito[];
     };
 
@@ -308,6 +333,21 @@ export async function resolverGateDeDebito(
   const decisao = decidirGate(debito.totalCentavos);
 
   if (decisao === "sem_debito") return { tipo: "sem_debito" };
+  /**
+   * ⚠️ Este `adiar` roda ANTES do laço de reuso, e é por isso que uma cobrança
+   * VIVA de total abaixo do piso não chega a ser apresentada: o gate sai aqui
+   * sem consultar o gateway. É o comportamento desde a #290 e ele DIVERGE do
+   * P-8 que `emitirConsolidada` documenta ("cobrança que já existe é
+   * apresentada mesmo com total pequeno") — lá o piso governa só a emissão, e
+   * aqui ele governa a decisão inteira.
+   *
+   * Fica como está de propósito nesta revisão: mudar a ordem é mudança de
+   * comportamento, e o caso só existe para uma cobrança viva cujo total ficou
+   * abaixo de R$ 5,00 — que hoje ninguém emite (o próprio piso barra). A dívida
+   * não é perdoada em nenhum dos dois desenhos; o que muda é se o copia-e-cola
+   * antigo aparece na tela enquanto ela não alcança o piso. Registrado como
+   * dívida no `BACKLOG.md` (D42) em vez de resolvido de carona.
+   */
   if (decisao === "adiar") {
     return {
       tipo: "adiado",
@@ -493,13 +533,34 @@ export async function resolverGateDeDebito(
    * nova por um débito que acabou de ser quitado — POST emitido por ciclo já
    * `pago`, com o gate ainda devolvendo `cobranca` em vez de liberar a
    * reativação. O banco é o oráculo do que sobrou; o snapshot não é.
+   *
+   * ## Reindexar, não filtrar (revisão do PR #339)
+   *
+   * O filtro sobre o snapshot tirava os ciclos que a cascata alcançou e deixava
+   * o resto **com o ponteiro velho**. Um agrupado que sobreviva à cascata
+   * continua apontando para uma âncora agora `pago`; `emitirConsolidada` exige
+   * `!c.agrupadoEm` para eleger âncora (P-4), não acharia nenhuma e o gate
+   * ficaria em `bloqueado/cobranca_irrecuperavel` PERMANENTE — toda reentrada
+   * refaz a mesma conta. `indexarAgrupados` sobre os ciclos RELIDOS é a defesa
+   * que este bloco já dizia ter: é ela que reconhece o ponteiro pendurado e o
+   * zera, devolvendo o sobrevivente à condição de âncora candidata.
    */
   if (houveLiquidacao) {
-    const aindaDevido = new Set(
-      (await levantarDebito(assinatura.id)).ciclos.map((c) => c.id),
+    const relidos = indexarAgrupados(
+      (await levantarDebito(assinatura.id)).ciclos,
     );
-    paraConsolidar = paraConsolidar.filter((c) => aindaDevido.has(c.id));
-    reaproveitadas = reaproveitadas.filter((c) => aindaDevido.has(c.cicloId));
+    const porIdRelido = new Map<string, CicloDevido>();
+    for (const ancora of relidos.ancoras) porIdRelido.set(ancora.id, ancora);
+    for (const filhos of relidos.filhosDe.values()) {
+      for (const filho of filhos) porIdRelido.set(filho.id, filho);
+    }
+    // A versão RELIDA substitui a do snapshot: é ela que carrega o ponteiro já
+    // avaliado contra o estado de agora.
+    paraConsolidar = paraConsolidar.flatMap((c) => {
+      const atual = porIdRelido.get(c.id);
+      return atual ? [atual] : [];
+    });
+    reaproveitadas = reaproveitadas.filter((c) => porIdRelido.has(c.cicloId));
   }
 
   const totalVivo =
@@ -565,7 +626,29 @@ export async function resolverGateDeDebito(
     };
   }
 
-  return { tipo: "cobranca", totalCentavos: totalVivo, cobrancas };
+  /**
+   * O total apresentado é a soma do que está NA MESA, não `totalVivo`.
+   *
+   * `totalVivo` inclui o conjunto (b) mesmo quando a emissão dele não produziu
+   * cobrança nenhuma — é o caso `irrecuperavel` com cobrança viva ao lado, que
+   * cai aqui em vez de barrar. Devolvê-lo faria a tela afirmar sobre um QR de
+   * R$ 13,00 que ele é de R$ 20,00.
+   *
+   * O resíduo é o (b) inteiro quando ele não virou cobrança: `emitirConsolidada`
+   * emite UMA cobrança para todo o conjunto ou nenhuma, então não há meio-termo
+   * a ratear. Somar por diferença (`totalVivo - naMesa`) seria pior: o valor de
+   * uma cobrança reaproveitada vem do GATEWAY e pode ser maior que a soma dos
+   * ciclos que conhecemos, e a diferença sairia negativa.
+   */
+  const totalNaMesa = somaDe(cobrancas.map((c) => c.valorCentavos));
+  const residuoCentavos = novas.cobrancas.length === 0 ? totalConsolidar : 0;
+
+  return {
+    tipo: "cobranca",
+    totalCentavos: totalNaMesa,
+    residuoCentavos,
+    cobrancas,
+  };
 }
 
 function somaDe(valores: number[]): number {
@@ -680,10 +763,19 @@ async function emitirConsolidada(dados: {
 }): Promise<ResultadoEmissao> {
   if (dados.ciclos.length === 0) return { tipo: "ok", cobrancas: [] };
   if (decidirGate(dados.totalCentavos) !== "cobrar") {
-    // Piso: só governa a EMISSÃO (P-8). Cobrança que já existe é apresentada
-    // mesmo com total pequeno — ela já foi aceita pelo gateway uma vez, e
-    // esconder um código de pagamento vivo seria pedir que a clínica pague por
-    // um canal que a tela não mostra.
+    /**
+     * Piso do conjunto (b): aqui ele governa só a EMISSÃO. As cobranças já
+     * reaproveitadas continuam na mesa mesmo quando o resto fica abaixo do
+     * piso — esconder um código de pagamento vivo seria pedir que a clínica
+     * pague por um canal que a tela não mostra.
+     *
+     * ⚠️ O P-8 original afirmava isso como regra do gate INTEIRO, e não é
+     * verdade: `resolverGateDeDebito` decide `adiar` pelo TOTAL antes de
+     * consultar o gateway, então um débito cujo total não alcança o piso nunca
+     * chega até aqui — nem a cobrança viva dele é apresentada. A divergência
+     * está anotada no ramo `adiar` de `resolverGateDeDebito` e no `BACKLOG.md`
+     * (D42). Esta linha descreve o que ESTE bloco faz, e só isso.
+     */
     return { tipo: "ok", cobrancas: [], motivoAdiamento: "abaixo_do_piso" };
   }
 
@@ -799,40 +891,61 @@ async function emitirConsolidada(dados: {
  * Uma cobrança só para N ciclos: `provider_charge_id` é UNIQUE parcial (`0075`),
  * então o id não cabe nas N linhas — os outros apontam para a âncora por
  * `debito_agrupado_em` e são liquidados junto quando o webhook confirma.
+ *
+ * ## As duas escritas são UMA transação, e não é zelo genérico
+ *
+ * Fora de transação, o processo morrendo entre elas deixa exatamente o pior
+ * dos estados possíveis: a âncora já carrega a cobrança e os demais ciclos
+ * ainda parecem virgens. Na reentrada, a âncora é reaproveitada (tem id) e cada
+ * ciclo sem carimbo vira âncora NOVA — com `referenciaExterna` virgem, que a
+ * idempotência do gateway não barra — e sai um SEGUNDO POST pela mesma dívida.
+ *
+ * A ordem inversa (carimbar os agrupados antes) reduziria o dano, mas não é
+ * suficiente: o estado espelhado — ciclos carimbados sob uma âncora que não
+ * recebeu a cobrança — deixa `emitirConsolidada` sem âncora de referência
+ * virgem (P-4) e o gate cai em `irrecuperavel`. Só a atomicidade tira os dois
+ * estados do mapa: ou a cobrança inteira está registrada, ou nada está e a
+ * reentrada reemite com a MESMA referência, que a idempotência resolve.
+ *
+ * Antes da #310 o buraco não existia porque a âncora era sempre `ciclos[0]`;
+ * ele reapareceu junto com "a âncora é o mais antigo SEM cobrança".
  */
 async function registrarCobrancaDeDebito(
   ancoraId: string,
   outrosIds: string[],
   cobranca: CobrancaEmitida,
 ): Promise<void> {
-  await authDb
-    .update(billingCycle)
-    .set({
-      providerChargeId: cobranca.providerChargeId,
-      cobrancaEmitidaEm: new Date(),
-      erro: null,
-      // P-6/#310: a âncora pode ter sido, num gate anterior, um ciclo AGRUPADO
-      // sob outra âncora que não deve mais nada (ponteiro pendurado, ver
-      // `indexarAgrupados`). Se o ponteiro velho ficar, o ciclo aponta para a
-      // âncora antiga E carrega a cobrança nova, e a cascata de `liquidarCiclo`
-      // o liquida de graça quando alguém pagar a cobrança daquela outra âncora.
-      debitoAgrupadoEm: null,
-    })
-    .where(eq(billingCycle.id, ancoraId));
+  await authDb.transaction(async (tx) => {
+    await tx
+      .update(billingCycle)
+      .set({
+        providerChargeId: cobranca.providerChargeId,
+        cobrancaEmitidaEm: new Date(),
+        erro: null,
+        // P-6/#310: a âncora pode ter sido, num gate anterior, um ciclo
+        // AGRUPADO sob outra âncora que não deve mais nada (ponteiro pendurado,
+        // ver `indexarAgrupados`). Se o ponteiro velho ficar, o ciclo aponta
+        // para a âncora antiga E carrega a cobrança nova, e a cascata de
+        // `liquidarCiclo` o liquida de graça quando alguém pagar a cobrança
+        // daquela outra âncora.
+        debitoAgrupadoEm: null,
+      })
+      .where(eq(billingCycle.id, ancoraId));
 
-  if (outrosIds.length === 0) return;
+    if (outrosIds.length === 0) return;
 
-  await authDb
-    .update(billingCycle)
-    .set({ debitoAgrupadoEm: ancoraId })
-    .where(
-      and(
-        // `ne(id, ancora)` além do `inArray`: o CHECK do banco proíbe a
-        // autorreferência, e uma lista malformada derrubaria o UPDATE inteiro.
-        ne(billingCycle.id, ancoraId),
-        inArray(billingCycle.id, outrosIds),
-      ),
-    );
+    await tx
+      .update(billingCycle)
+      .set({ debitoAgrupadoEm: ancoraId })
+      .where(
+        and(
+          // `ne(id, ancora)` além do `inArray`: o CHECK do banco proíbe a
+          // autorreferência, e uma lista malformada derrubaria o UPDATE inteiro.
+          ne(billingCycle.id, ancoraId),
+          inArray(billingCycle.id, outrosIds),
+        ),
+      );
+  });
 }
 
 function formaDePagamento(cobranca: CobrancaEmitida): FormaPagamentoDebito {
