@@ -87,7 +87,49 @@
 
 ---
 
-## 🏁 Sessão 16/08/2026 — #310: a cobrança que já existia (passo 5 da linha de billing)
+## 🏁 Sessão 16/08/2026 (2ª) — #311: o piso que já estava certo (passo 6 da linha de billing)
+
+Executado o **passo 6**: issue [#311](https://github.com/romulosutil/Iris/issues/311) — `PISO_COBRANCA_AVULSA_CENTAVOS = 500` era, pelo próprio docblock, "escolha conservadora, **NÃO** medição". Orquestração em **4 subagentes** (recon → builder → revisão adversarial com mutação → reparo); 1 commit na `feat/311-piso-cobranca-medido`, PR [#340](https://github.com/romulosutil/Iris/pull/340) — **encadeada** sobre a PR [#339](https://github.com/romulosutil/Iris/pull/339) (#310), que subiu na mesma sessão. Mergear na ordem: a base da #340 só vira `main` quando a #339 fechar, e a keyword `Closes #311` só dispara nesse momento. Nenhuma migração e **nenhuma mudança de comportamento**: o diff é verdade documental e oráculo de teste.
+
+### O número já estava certo — o que estava errado era o código não saber disso
+
+A Medição 6 da #321 (15/08, sandbox) sondou `POST /payments` PIX em `0.01`, `0.50`, `1.00` e `3.00` — todos **HTTP 400** com `invalid_object` e mensagem nomeada — e `5.00` → **HTTP 200**. O piso real do gateway é **exatamente R$ 5,00**, e o `500` **coincide** com ele; não é folga por cima. A cláusula do plano ("se o Asaas não tiver mínimo próprio, a entrega vira **remover** a constante") está resolvida **contra** a remoção: o mínimo existe, é do Asaas, e a API o impõe.
+
+Consequência: **dos 3 itens da DoD, 2 já estavam cumpridos antes da sessão** — o registro no `infra/README.md` veio junto com o runbook da #321, e o teste de fronteira seguia verde porque o número não mudou. A substância real ficou **fora** da DoD.
+
+### O que a mutação derrubou: os dois testes de fronteira eram tautológicos
+
+`decidirGate(PISO - 1)` → `adiar` e `decidirGate(PISO)` → `cobrar` **importam a própria constante**. Medido: com `500 → 400` os dois seguem **verdes** — provam `<` vs `<=`, nunca o número. Entrou um caso com literais (`499` → `adiar`, `500` → `cobrar`), que mata a mutação de valor sozinho; a mutação de operador (`<` → `<=`) morre por dois casos. Sem esse literal, "medição" seria uma palavra no comentário sem nada que a defendesse — o padrão de [[teste-verde-que-nao-testa-nada]] ("asserir com a constante que o código usa").
+
+### A fronteira entre medido e deduzido, que a 1ª versão apagou
+
+A mensagem crua do gateway enuncia a regra sobre o **líquido**: `value − discount >= R$ 5,00`. Hoje isso coincide com `value >= 500` **só porque nenhum caminho de emissão do Iris envia `discount`** (verificado: o `POST /payments` do adapter monta cinco campos, e `discount` não aparece em `src/lib/billing/`). Mas a consequência — R$ 5,00 com R$ 1,00 de desconto passaria neste piso e seria recusada lá — é **dedução da mensagem**, não medição: as cinco sondagens rodaram todas com desconto R$ 0,00.
+
+A primeira versão do docblock escreveu isso no indicativo, junto dos fatos medidos. A revisão pegou, e a regra que sai vale além da issue: **trocar "não medido" por afirmação não marcada reintroduz, em escala menor, exatamente o defeito que a issue existe para consertar.**
+
+### A constante NÃO é renomeada — e por quê
+
+O comentário 1 da issue (14/08) pede `VALOR_MINIMO_COBRANCA_CENTAVOS`, "deixando 'piso' reservado ao conceito do Pix Automático". **Recusado**: aquele comentário é **anterior** à **D-E da #317**, que já resolveu a mesma colisão com o par `PISO_COBRANCA_AVULSA_CENTAVOS` (o que **nós** cobramos) × `PISO_TETO_AUTORIZACAO_CENTAVOS` (o teto que o **pagador** autoriza). Executar o comentário ao pé da letra hoje **desfaria uma entrega**. Medido que os dois não colidem: nunca aparecem no mesmo arquivo nem são importados juntos.
+
+O defeito real ali era outro: a desambiguação era **unidirecional**. Depois da #317 os dois passaram a carregar "medido em 15/08/2026 (#321)" com sentidos **opostos**, e só `debito.ts` avisava "não confundir" — quem chegasse por `calculator.ts` não recebia aviso nenhum. Agora as duas pontas se nomeiam.
+
+### O registro cru é imutável, e a 1ª versão o contaminou
+
+Em `infra/README.md` só a **conclusão** da Medição 6 podia mudar (citava o nome morto `PISO_COBRANCA_CENTAVOS` e o intervalo `debito.ts:41-55`, que já não existia). Tabela e respostas cruas preservadas byte a byte, confirmado no diff. Mas a 1ª versão escreveu ali "**A #311 foi fechada por esta medição, em 16/08/2026**" — e as duas metades estavam erradas: a issue está **`open`** (o runbook afirmando consumado um evento que não ocorreu, sendo ele a âncora que o código cita), e a data injetada **colide com a da medição** (15/08), virando a única data dentro daquele bloco. Corrigido.
+
+Fechado junto o **RISCO-1** (`piso não medido`) em `.specs/features/debito-reativacao-290/design.md`, que seguia listado como aberto. `spec.md`, `premortem.md` e os planos em `docs/superpowers/plans/` **não** foram tocados: são registros point-in-time, e citam o nome morto por época. Efeito colateral aceito: uma busca pelo nome **vivo** não os encontra.
+
+### Verde medido
+
+`pnpm test` **197 arquivos / 1317 testes** (era 1316 — o +1 é o oráculo literal) · `pnpm test:rls` **106 arquivos / 934 testes, 0 pulados** (idêntico à baseline da #310 — nada aqui toca banco) · `debito.test.ts` **10/10** · `gate-debito.int.test.ts` **27 coletados / 27** (com `--config vitest.integration.config.ts`; sem ele **coleta zero e sai verde**) · `pnpm typecheck` limpo · `pnpm lint` **0 erros / 10 warnings** pré-existentes.
+
+### O que fica aberto
+
+Nenhum débito novo (segue D1–D41). Quatro achados sem dono, detalhados no `checkpoint.md` §4: `discount ≠ 0` nunca sondado (barato de medir no sandbox, inerte hoje); a degradação 4xx com um único teste, gated por banco, agora promovida a única rede contra o Asaas mudar o piso; a issue e as specs falando do nome morto; e o parâmetro `piso` de `decidirGate` sobrevivendo por uma justificativa nova. **Decisão de tech lead tomada:** manter a `feat/311` empilhada em vez de recortá-la — o `checkpoint.md`/`BACKLOG.md` da #310 só existem naquela branch, e refazer a #311 a partir de `main` produziria dois históricos de doc divergentes, que é o modo de falha do #305/#306. O custo é a ordem de merge, que já estava determinada de qualquer jeito.
+
+---
+
+## 🏁 Sessão 16/08/2026 (1ª) — #310: a cobrança que já existia (passo 5 da linha de billing)
 
 Executado o **passo 5**: issue [#310](https://github.com/romulosutil/Iris/issues/310) — o gate de reativação da #290 emitia cobrança nova **sempre**, inclusive para o ciclo cuja cobrança o Asaas ainda mantém pagável. As duas ficavam vivas e a clínica podia pagar o mesmo ciclo duas vezes. Orquestração em **11 subagentes**; 8 commits na `feat/310-reaproveitar-cobranca-gate`, sem push e sem PR. Plano versionado em `docs/superpowers/plans/2026-08-16-310-reaproveitar-cobranca-do-gate.md`.
 

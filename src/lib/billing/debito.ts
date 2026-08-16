@@ -48,18 +48,37 @@ import {
  * Abaixo dele o débito ACUMULA — não é perdoado, não caduca e não trava a
  * reativação.
  *
- * **Este número é escolha conservadora, NÃO medição.** O valor mínimo de uma
- * cobrança Pix no Asaas não foi verificado contra a API nem contra a
- * documentação. A direção do erro é segura por construção:
+ * **Este número é medição, não estimativa** (15/08/2026, sandbox do Asaas —
+ * registro cru em `infra/README.md`, seção "Runbook — sessão de medição no
+ * sandbox do Asaas (#321)", Medição 6). Sondando `POST /payments` com
+ * `billingType: "PIX"` em valores crescentes, a API recusa com `invalid_object`
+ * e mensagem nomeada ("O valor da cobrança … menos o valor do desconto … não
+ * pode ser menor que R$ 5,00") em R$ 0,01, R$ 0,50, R$ 1,00 e R$ 3,00, e aceita
+ * exatamente em R$ 5,00. Ou seja: o `500` daqui **coincide com o piso real do
+ * gateway**, não é folga por cima dele.
  *
- * - piso real MENOR que R$ 5,00 → o único efeito é que débitos entre o piso real
- *   e R$ 5,00 esperam mais um cancelamento para serem cobrados;
- * - piso real MAIOR → a emissão volta 4xx, e o gate degrada (ver
- *   `resolverGateDeDebito`) em vez de trancar a clínica fora.
+ * A regra que o Asaas impõe é sobre o LÍQUIDO — `value − discount >= 500`, não
+ * `value >= 500`. Hoje as duas coincidem apenas porque nenhum caminho de
+ * emissão do Iris envia `discount` — são só dois, e os dois montam o corpo do
+ * `POST /payments` sem esse campo: `emitirCobrancaDeCiclo` e
+ * `emitirCobrancaAvulsa`, em `./provider/asaas.ts`. Verificado por varredura:
+ * `discount` não aparece em nenhum outro ponto de `src/lib/billing/`. Quem
+ * acrescentar desconto a uma emissão quebra a coincidência: uma
+ * cobrança de R$ 5,00 com R$ 1,00 de desconto passa neste piso e — **pela regra
+ * que a própria mensagem do gateway enuncia** — seria recusada lá. Isso é
+ * dedução, não medição: as cinco sondagens da Medição 6 rodaram todas com
+ * desconto R$ 0,00, e `discount ≠ 0` **não foi sondado**.
  *
- * Verificação pendente: emitir no sandbox uma cobrança de R$ 1,00 e uma de
- * R$ 3,00 contra um cliente de teste e registrar a resposta no runbook do
- * `infra/README.md`.
+ * O piso é do `POST /payments` e **não** vale para o QR imediato da autorização
+ * de Pix Automático — lá a mesma sessão de medição criou autorizações com
+ * `immediateQrCode.originalValue: 0.01` aceitas.
+ *
+ * Com o piso real conhecido, o que sobra é a consequência viva: o ramo `adiar`
+ * existe porque o gateway recusa de fato abaixo daqui (não por precaução), e a
+ * degradação 4xx de `resolverGateDeDebito` deixa de ser rede contra a nossa
+ * ignorância do piso para ser rede contra o Asaas **mudá-lo** — se o piso subir
+ * lá e não aqui, a emissão volta 4xx e o gate adia em vez de trancar a clínica
+ * fora.
  */
 export const PISO_COBRANCA_AVULSA_CENTAVOS = 500;
 
