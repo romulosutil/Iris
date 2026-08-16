@@ -103,6 +103,10 @@ const POLICIES_COM_HELPER = [
   "session_note.session_note_select",
   "session_note.session_note_update",
   "subscription.subscription_select",
+  "tcc_rpd_entry.tcc_rpd_entry_delete",
+  "tcc_rpd_entry.tcc_rpd_entry_insert",
+  "tcc_rpd_entry.tcc_rpd_entry_select",
+  "tcc_rpd_entry.tcc_rpd_entry_update",
   "user_role.user_role_read",
 ];
 
@@ -348,7 +352,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Redundante de propósito: se o literal for editado por engano (linha
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
-    expect(POLICIES_COM_HELPER.length).toBe(48);
+    expect(POLICIES_COM_HELPER.length).toBe(52);
   });
 
   // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────

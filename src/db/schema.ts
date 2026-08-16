@@ -2023,3 +2023,45 @@ export const billingCyclePatient = pgTable(
 // adapter e a rota do Mercado Pago deletados no T16, ninguém mais escrevia nem
 // lia a tabela, e o trilho nunca faturou. A 0091 aborta se houver linha, para
 // que "remoção de código morto" nunca vire descarte de evento não conciliado.
+
+// ─── Nicho TCC (Terapia Cognitivo-Comportamental) — Registro de Pensamentos Distorcidos (RPD) ───
+export const tccRpdEntry = pgTable(
+  "tcc_rpd_entry",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => session.id, {
+      onDelete: "set null",
+    }),
+    situacao: text("situacao").notNull(),
+    pensamentoAutomatico: text("pensamento_automatico").notNull(),
+    emocao: text("emocao").notNull(),
+    intensidade: integer("intensidade").notNull(),
+    distorcaoCognitiva: text("distorcao_cognitiva").notNull(),
+    respostaRacional: text("resposta_racional").notNull(),
+    intensidadePos: integer("intensidade_pos"),
+    criadoPor: uuid("criado_por")
+      .notNull()
+      .references(() => appUser.id),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "tcc_rpd_intensidade_range",
+      sql`${t.intensidade} BETWEEN 0 AND 100`,
+    ),
+    check(
+      "tcc_rpd_intensidade_pos_range",
+      sql`${t.intensidadePos} IS NULL OR (${t.intensidadePos} BETWEEN 0 AND 100)`,
+    ),
+    index("idx_tcc_rpd_patient").on(t.patientId, t.criadoEm.desc()),
+    index("idx_tcc_rpd_clinic").on(t.clinicId),
+  ],
+);
