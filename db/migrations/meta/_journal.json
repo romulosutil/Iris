@@ -715,6 +715,13 @@
       "when": 1786820981475,
       "tag": "0101_billing_cycle_vencimento_cobranca",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1786843152851,
+      "tag": "0102_reconciliar_snapshot_clinical_modality",
+      "breakpoints": true
     }
   ]
 }
