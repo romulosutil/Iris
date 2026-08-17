@@ -9,9 +9,11 @@ import {
   type CobrancaParaReuso,
   type EntradaVerificacaoWebhook,
   type EventoWebhookNormalizado,
+  type MotivoRecusaDeRetentativa,
   type NovaCobrancaAvulsa,
   type NovaCobrancaDeCiclo,
   type NovoVinculo,
+  type ResultadoRetentativa,
   type StatusAssinaturaProvider,
   type StatusCobranca,
   type TipoEventoNormalizado,
@@ -342,6 +344,88 @@ function comoTexto(valor: unknown): string | null {
 }
 
 /**
+ * A mensagem humana de um erro do Asaas, extraída do corpo
+ * `{errors:[{code, description}]}`.
+ *
+ * Junta TODAS as descrições porque o Asaas pode devolver mais de uma; perder a
+ * segunda apagaria metade do diagnóstico. Corpo sem `errors` legível cai no
+ * texto cru — HTML de proxy também é diagnóstico, e é melhor que string vazia.
+ */
+function mensagemDeErroAsaas(corpo: unknown): string {
+  const erros = comoRegistro(corpo).errors;
+  if (Array.isArray(erros)) {
+    const descricoes = erros
+      .map((erro) => comoTexto(comoRegistro(erro).description))
+      .filter((d): d is string => d !== null);
+    if (descricoes.length > 0) return descricoes.join(" | ");
+  }
+  if (typeof corpo === "string") return corpo;
+  try {
+    return JSON.stringify(corpo) ?? "";
+  } catch {
+    return String(corpo);
+  }
+}
+
+/**
+ * As CINCO validações que o Asaas aplica ao comando de retentativa extradia
+ * (`POST /pix/automatic/paymentInstructions/{id}/retries`), todas devolvidas
+ * como `400` (issue #317, comentário "As validações que a orquestração tem que
+ * respeitar"; #322 §1/D-3).
+ *
+ * | Regra                                              | Mensagem literal do Asaas |
+ * | :------------------------------------------------- | :------------------------ |
+ * | Máximo 3 tentativas                                | `Limite de retentativas excedido. A regra permite no máximo 3 tentativas.` |
+ * | 7 dias corridos do vencimento original             | `A data solicitada ultrapassa o limite de 7 dias corridos permitidos após o vencimento original.` |
+ * | Comando até 23h59 do dia **anterior** à data       | `O agendamento da retentativa deve ser enviado até as 23h59 do dia anterior à data desejada para liquidação.` |
+ * | Não coincidir nem passar do início do próximo ciclo| `A data da retentativa não pode coincidir ou ultrapassar o dia de início do próximo ciclo da recorrência.` |
+ * | Autorização sem política de retentativa            | `A autorização desta cobrança não permite retentativas extradia (Política N).` |
+ *
+ * ## Por que o casamento é por TRECHO, e não pela mensagem inteira
+ *
+ * O Asaas **não publica código de erro dedicado** para estas cinco: o que chega
+ * é `code: "invalid_object"`/`"invalid_action"` genérico e uma `description` em
+ * português. Comparar a frase inteira quebraria com qualquer ajuste de
+ * pontuação, plural ou acentuação do lado deles — e o modo de falha seria mudo
+ * (tudo viraria `desconhecido`). Cada trecho abaixo é a parte estável e
+ * discriminante da frase, e nenhum deles aparece em duas mensagens diferentes.
+ *
+ * ## O que NÃO se faz aqui
+ *
+ * **Nunca inventar código de erro do gateway.** Mensagem que não casa vira
+ * `desconhecido` e sobe com o texto cru em `mensagemGateway` — que é o único
+ * jeito de a sexta validação (quando existir) aparecer no relatório em vez de
+ * ser silenciosamente classificada como uma das cinco.
+ *
+ * A comparação é feita sobre texto **sem acento e em caixa baixa** porque a
+ * mensagem vem em português e transporte/normalização de acento não é contrato.
+ */
+const TRECHOS_DE_VALIDACAO: ReadonlyArray<
+  readonly [string, MotivoRecusaDeRetentativa]
+> = [
+  ["limite de retentativas excedido", "limite_de_tentativas"],
+  ["7 dias corridos", "fora_da_janela_de_7_dias"],
+  ["23h59", "fora_do_horario_de_comando"],
+  ["proximo ciclo", "colide_com_proximo_ciclo"],
+  ["nao permite retentativas extradia", "autorizacao_sem_politica"],
+];
+
+/** Caixa baixa + sem diacrítico. Só para COMPARAR; nada normalizado é exibido. */
+function semAcento(texto: string): string {
+  return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+function classificarRecusaDeRetentativa(
+  mensagem: string,
+): MotivoRecusaDeRetentativa {
+  const normalizada = semAcento(mensagem);
+  for (const [trecho, motivo] of TRECHOS_DE_VALIDACAO) {
+    if (normalizada.includes(trecho)) return motivo;
+  }
+  return "desconhecido";
+}
+
+/**
  * Verificação da entrega de webhook do Asaas.
  *
  * O Asaas não assina o corpo: ele devolve, no header `asaas-access-token`, o
@@ -369,6 +453,67 @@ function verificarEntregaAsaas(input: EntradaVerificacaoWebhook): boolean {
   const b = Buffer.from(esperado, "utf8");
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+}
+
+/**
+ * `paymentInstruction.purpose` → `retentativa.proposito` (#322, D-5).
+ *
+ * ## ⚠️ NENHUM DOS DOIS CAMPOS FOI OBSERVADO EM PAYLOAD REAL
+ *
+ * `purpose` e `retryAttempt` são **contrato lido da doc** do Asaas ("Processo de
+ * retentativas — Jornada 3 API", registrado no comentário da #317), não medição.
+ * E não é descuido de método: no sandbox **nenhuma autorização de Pix Automático
+ * chega a `ACTIVE`** (medido em 15/08/2026, #321 — quatro tentativas de criar
+ * instrução devolveram o mesmo 400 de "autorização deve estar ativa"), então não
+ * existe instrução, não existe retentativa e não existe evento de retentativa
+ * para inspecionar. O primeiro payload real só aparece em PRODUÇÃO.
+ *
+ * ## O que acontece se a doc estiver errada
+ *
+ * Nome de campo diferente, aninhamento diferente, ou vocabulário diferente
+ * (`RETRY` em vez de `RETRY_AFTER_DUE_DATE`) produzem todos o **mesmo desfecho
+ * silencioso**: `proposito` volta `null`, o consumidor não distingue a
+ * retentativa da instrução original, e o mesmo ciclo é recarimbado `past_due` a
+ * cada recusa — até três vezes. **Não há exceção, não há log, e o teste continua
+ * verde**, porque o teste mede o normalizador contra o payload que a doc
+ * descreve.
+ *
+ * Por isso o `bruto` do evento é a rede de segurança: o payload inteiro fica
+ * gravado, e a conferência em produção é ler o `bruto` do primeiro
+ * `..._INSTRUCTION_REFUSED` que chegar depois de uma retentativa comandada por
+ * nós. Enquanto isso não for feito, este mapeamento é **suposição declarada**.
+ *
+ * Valor fora do vocabulário conhecido vira `null` e **nunca** é repassado cru:
+ * uma string desconhecida chegando ao consumidor viraria comparação por
+ * adivinhação, que é o defeito que a #318 existe para matar.
+ */
+function propositoDaInstrucao(
+  valor: unknown,
+): "SCHEDULE" | "RETRY_AFTER_DUE_DATE" | null {
+  return valor === "SCHEDULE" || valor === "RETRY_AFTER_DUE_DATE"
+    ? valor
+    : null;
+}
+
+/**
+ * `paymentInstruction.retryAttempt` → `retentativa.tentativa` (#322, D-5).
+ *
+ * Vale a mesma ressalva de medição de `propositoDaInstrucao`: não observado em
+ * payload real.
+ *
+ * Só vira número se for **inteiro entre 1 e 3**, que é o teto da política
+ * `ALLOW_THREE_IN_SEVEN_DAYS`. Tudo mais — `0`, `4`, `"2"` (string), decimal,
+ * ausente — vira `null`. A régua é estrita de propósito: `Number("2")` daria 2 e
+ * um `4` aceito significaria que a doc mudou, o que é justamente a informação
+ * que não pode ser apagada por uma coerção complacente.
+ */
+function tentativaDaInstrucao(valor: unknown): number | null {
+  return typeof valor === "number" &&
+    Number.isInteger(valor) &&
+    valor >= 1 &&
+    valor <= 3
+    ? valor
+    : null;
 }
 
 /**
@@ -430,6 +575,11 @@ function normalizarEventoAsaas(payload: unknown): EventoWebhookNormalizado {
 
   const referenciaExterna = comoTexto(pagamento.externalReference);
 
+  const retentativa = {
+    proposito: propositoDaInstrucao(instrucao.purpose),
+    tentativa: tentativaDaInstrucao(instrucao.retryAttempt),
+  };
+
   if (idCobranca) {
     const statusCobranca = mapearStatusCobranca(
       comoTexto(pagamento.status) ?? comoTexto(instrucao.status),
@@ -482,6 +632,7 @@ function normalizarEventoAsaas(payload: unknown): EventoWebhookNormalizado {
     providerChargeId: idCobranca,
     providerInstructionId: idInstrucao,
     referenciaExterna,
+    retentativa,
     ocorridoEm: parsarDataAsaas(p.dateCreated),
     bruto: payload,
   };
@@ -1231,6 +1382,57 @@ export class AsaasProvider implements BillingProvider {
     );
     const lista = Array.isArray(resposta.data) ? resposta.data : [];
     return comoRegistro(lista[0]);
+  }
+
+  /**
+   * Comanda UMA retentativa extradia da instrução recusada (#322).
+   *
+   * ## O que este método é, e o que ele não é
+   *
+   * `retryPolicy: ALLOW_THREE_IN_SEVEN_DAYS` na autorização **apenas permite** a
+   * retentativa extradia; ela não acontece sozinha. Quem dispara cada uma das 3
+   * é o RECEBEDOR, por este endpoint. (A retentativa **intradia** — 18h–21h do
+   * mesmo dia — é outra coisa: o PSP Pagador executa por conta própria e ela
+   * **não consome** nenhuma das 3.)
+   *
+   * O adapter **não escolhe data**: `dueDate` chega pronta, já calculada contra
+   * as quatro restrições (D-3 da #322). Corrigir data aqui esconderia da
+   * varredura o fato de que a janela acabou.
+   *
+   * ## A fronteira entre `{ok:false}` e exceção
+   *
+   * - **2xx** ⇒ `{ ok: true }`. Comandada.
+   * - **400** ⇒ `{ ok: false, motivo, mensagemGateway }`. O gateway respondeu e
+   *   disse não: é uma das cinco validações (ver `TRECHOS_DE_VALIDACAO`), e a
+   *   varredura registra o motivo nomeado sem insistir.
+   * - **Qualquer outra coisa — rede, timeout, 5xx, 401, 404 — SOBE.** Não vira
+   *   `{ok:false}`, e a razão é a mesma de `consultarCobrancaParaReuso`: "não
+   *   consegui perguntar" não pode virar "o gateway recusou". Um 5xx traduzido
+   *   em recusa faria a varredura gravar um desfecho definitivo sobre uma
+   *   pergunta que nunca foi respondida — e o comando pode ter sido aceito do
+   *   outro lado. Quem decide o que fazer com indisponibilidade é a varredura,
+   *   que tem o contador de tentativas em mãos.
+   */
+  async comandarRetentativa(
+    providerInstructionId: string,
+    dueDate: string,
+  ): Promise<ResultadoRetentativa> {
+    try {
+      await chamar(
+        "POST",
+        `/pix/automatic/paymentInstructions/${encodeURIComponent(providerInstructionId)}/retries`,
+        { corpo: { dueDate } },
+      );
+      return { ok: true };
+    } catch (e) {
+      if (!(e instanceof BillingProviderError) || e.status !== 400) throw e;
+      const mensagemGateway = mensagemDeErroAsaas(e.corpo);
+      return {
+        ok: false,
+        motivo: classificarRecusaDeRetentativa(mensagemGateway),
+        mensagemGateway,
+      };
+    }
   }
 
   verificarAssinaturaWebhook(input: EntradaVerificacaoWebhook): boolean {

@@ -8,6 +8,7 @@ import type {
   NovaCobrancaDeCiclo,
   NovoVinculo,
   ProviderId,
+  ResultadoRetentativa,
   StatusAssinaturaProvider,
   StatusCobranca,
   TipoEventoNormalizado,
@@ -321,8 +322,66 @@ export class ProvedorFake implements BillingProvider {
       // para consultar", que a porta exige que exista.
       providerInstructionId: null,
       referenciaExterna: typeof p.referencia === "string" ? p.referencia : null,
+      // Mesma razão de `providerInstructionId`: sem instrução no wire do fake,
+      // não há propósito nem número de tentativa. O objeto existe SEMPRE (a
+      // porta não o declara opcional), com os dois campos `null` — que é o
+      // caminho "este evento não é de retentativa".
+      retentativa: { proposito: null, tentativa: null },
       ocorridoEm: null,
       bruto: payload,
     };
   }
+
+  /**
+   * Comando de retentativa extradia (#322).
+   *
+   * ## Por que este método NÃO fala HTTP, ao contrário dos demais
+   *
+   * O oráculo dos outros métodos deste fake é a URL efetivamente chamada (ver
+   * docstring do topo): o que se prova ali é "a linha resolveu o adapter certo".
+   * Aqui a pergunta é outra e é da VARREDURA: *ela comandou? para qual instrução
+   * e qual `dueDate`? e o que ela faz com cada desfecho?* Isso exige duas coisas
+   * que um corpo de wire não dá bem: um registro ordenado das chamadas e um
+   * desfecho **diferente a cada chamada** (a mesma passada comanda várias
+   * assinaturas, e o teste de esgotamento precisa que a 3ª recuse).
+   *
+   * Daí a fila programável. Ela é FIFO e, esvaziada, devolve `{ ok: true }` — o
+   * caminho feliz é o default, e um teste que se esqueça de programar não recebe
+   * uma recusa fantasma.
+   */
+  async comandarRetentativa(
+    providerInstructionId: string,
+    dueDate: string,
+  ): Promise<ResultadoRetentativa> {
+    chamadasDeRetentativaFake.push({ providerInstructionId, dueDate });
+    return respostasDeRetentativaFake.shift() ?? { ok: true };
+  }
+}
+
+/**
+ * Registro ordenado de tudo que foi comandado — é este o oráculo do teste de
+ * idempotência (duas passadas concorrentes ⇒ **uma** entrada aqui).
+ */
+export const chamadasDeRetentativaFake: Array<{
+  providerInstructionId: string;
+  dueDate: string;
+}> = [];
+
+/** Fila FIFO de desfechos. Vazia ⇒ `{ ok: true }`. */
+const respostasDeRetentativaFake: ResultadoRetentativa[] = [];
+
+/** Programa os próximos desfechos, na ordem em que serão consumidos. */
+export function enfileirarRetentativasFake(
+  ...respostas: ResultadoRetentativa[]
+): void {
+  respostasDeRetentativaFake.push(...respostas);
+}
+
+/**
+ * Zera fila e registro. Chamar no `beforeEach` — estado de módulo que atravessa
+ * casos é a receita de teste que passa sozinho e falha em suíte.
+ */
+export function limparRetentativasFake(): void {
+  chamadasDeRetentativaFake.length = 0;
+  respostasDeRetentativaFake.length = 0;
 }

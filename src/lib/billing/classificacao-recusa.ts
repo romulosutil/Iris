@@ -52,7 +52,8 @@
  *   Enquanto essa reconsulta não existir no caminho de conciliação, G3 se
  *   comporta como "registra e espera" — o corte fica com o backstop de D+7.
  * - **Não comanda retentativa.** `valeGastarRetentativa` descreve se vale
- *   queimar uma das 3 tentativas do `3R_7D`; quem executa é a #322.
+ *   queimar uma das 3 tentativas do `3R_7D` e `retentavelAutomaticamente` diz
+ *   se a varredura pode fazê-lo sem clínica no meio; quem executa é a #322.
  * - **Não renderiza nada.** `copy` é o texto que a clínica deve ver quando a
  *   #312/D36 existir — hoje nenhuma tela lê. Regra que vale para os 9 grupos:
  *   **dizer o que fazer e onde, nunca o código** (a própria doc do Asaas
@@ -78,6 +79,37 @@ export interface PoliticaRecusa {
   conciliaComoPago: boolean;
   /** Vale gastar uma das 3 tentativas do `3R_7D` (orçamento finito, #322). */
   valeGastarRetentativa: boolean;
+  /**
+   * A **varredura** pode comandar a retentativa extradia **sozinha, agora** —
+   * sem clínica no meio (#322, decisão D-2).
+   *
+   * ## Não é sinônimo de `valeGastarRetentativa`, e a diferença é o ponto
+   *
+   * `valeGastarRetentativa` responde *"vale a pena gastar uma tentativa **algum
+   * dia**?"* — e em G1, G4 e G6 a resposta vem com uma condição colada:
+   * **depois** que a clínica subir o limite (G1), **depois** que ela corrigir o
+   * documento (G4), **depois** que nós consertarmos a emissão (G6). Uma
+   * varredura não sobe limite, não corrige cadastro e não conserta bug.
+   *
+   * Este campo responde outra pergunta: *"a varredura pode comandar sozinha,
+   * agora?"*. Por isso é `true` **só em G2** (`PAYMENT_OVERDUE`, falta de
+   * saldo), o caso em que o mero passar do tempo pode mudar o resultado.
+   *
+   * ## Por que não reusar `valeGastarRetentativa` como gatilho
+   *
+   * Seria confundir **flag habilitadora com mecanismo**, e o custo é concreto:
+   * o orçamento do `3R_7D` é de 3 tentativas por cobrança, e queimá-lo em casos
+   * que **não se resolvem retentando** deixa o caso de saldo — o único que se
+   * resolve sozinho — sem tentativa nenhuma. O exemplo é o que a própria #318
+   * nomeia: `ACCOUNT_CLOSED` (conta encerrada) recusa igual na 1ª, na 2ª e na
+   * 3ª tentativa.
+   *
+   * G7 fica de fora de propósito, apesar de transitório: o balde inclui `OTHER`,
+   * que é desconhecido disfarçado de transitório, e a retentativa **intradia**
+   * (que o PSP Pagador executa sozinho entre 18h e 21h e que não consome nenhuma
+   * das 3) já cobre o transitório do mesmo dia.
+   */
+  retentavelAutomaticamente: boolean;
   /**
    * O desfecho deste grupo é o corte imediato — e ele **exige** confirmação da
    * autorização no gateway antes de qualquer escrita irreversível. Só G3.
@@ -171,6 +203,8 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       // Só depois que a clínica agir: retentar antes de o limite subir queima
       // tentativa com resultado conhecido.
       valeGastarRetentativa: true,
+      // ...e por isso a varredura NÃO comanda: ela não sobe limite nenhum.
+      retentavelAutomaticamente: false,
       corteImediato: false,
       diagnostico:
         "recusada: o limite da autorização de Pix Automático é menor que o valor da cobrança",
@@ -181,6 +215,9 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       carimbaPastDue: true,
       conciliaComoPago: false,
       valeGastarRetentativa: true,
+      // O ÚNICO `true` da tabela: falta de saldo é o caso em que o simples
+      // passar do tempo muda o resultado, sem ninguém agir.
+      retentavelAutomaticamente: true,
       corteImediato: false,
       diagnostico:
         "recusada: sem saldo ou limite na conta no momento do débito",
@@ -198,6 +235,7 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       conciliaComoPago: false,
       // Não há trilho de débito: retentar é 400 garantido.
       valeGastarRetentativa: false,
+      retentavelAutomaticamente: false,
       corteImediato: true,
       diagnostico:
         "recusada: não há autorização de Pix Automático válida para este débito",
@@ -209,6 +247,9 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       conciliaComoPago: false,
       // Depois da correção do cadastro; antes dela, o resultado é o mesmo.
       valeGastarRetentativa: true,
+      // A varredura não corrige `clinic.cpf_cnpj`; comandar antes disso é
+      // gastar tentativa para receber a mesma recusa.
+      retentavelAutomaticamente: false,
       corteImediato: false,
       diagnostico:
         "recusada: o CPF/CNPJ enviado não confere com o titular da conta pagadora",
@@ -230,6 +271,7 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       conciliaComoPago: false,
       // Desperdício garantido: a conta não vai debitar em tentativa nenhuma.
       valeGastarRetentativa: false,
+      retentavelAutomaticamente: false,
       corteImediato: false,
       diagnostico: "recusada: conta bancária encerrada ou bloqueada",
       copy: "A conta bancária usada no débito automático está encerrada ou bloqueada. Refaça a autorização de Pix Automático com outra conta.",
@@ -253,6 +295,10 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       // Só depois do conserto — retentar o mesmo comando errado repete a recusa e
       // queima tentativa.
       valeGastarRetentativa: true,
+      // A varredura não conserta bug nosso. E é aqui que a confusão sairia mais
+      // cara: `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` é G6 e é o resultado de já ter
+      // gastado o orçamento — retentar por causa dele é o defeito se alimentando.
+      retentavelAutomaticamente: false,
       corteImediato: false,
       diagnostico: "recusada por defeito do Iris na emissão da instrução",
       copy: null,
@@ -272,6 +318,10 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       carimbaPastDue: false,
       conciliaComoPago: false,
       valeGastarRetentativa: true,
+      // Fora do automático DE PROPÓSITO (D-2 da #322): `OTHER` mora neste balde
+      // e é desconhecido disfarçado de transitório; a intradia do PSP já cobre o
+      // transitório do mesmo dia, de graça.
+      retentavelAutomaticamente: false,
       corteImediato: false,
       diagnostico: "recusada por falha operacional do banco pagador ou do SPI",
       copy: null,
@@ -287,6 +337,7 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       carimbaPastDue: false,
       conciliaComoPago: true,
       valeGastarRetentativa: false,
+      retentavelAutomaticamente: false,
       corteImediato: false,
       diagnostico:
         "cobrança já liquidada no gateway; ciclo conciliado como pago",
@@ -302,6 +353,9 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       carimbaPastDue: false,
       conciliaComoPago: false,
       valeGastarRetentativa: true,
+      // Desconhecido não vira comando automático: G0 é justamente o balde de
+      // "não se sabe", e gastar orçamento por palpite é o oposto de fail-closed.
+      retentavelAutomaticamente: false,
       corteImediato: false,
       diagnostico: "recusada por motivo que o Iris ainda não sabe classificar",
       copy: null,
