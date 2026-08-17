@@ -477,6 +477,65 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes", () => {
       );
     });
 
+    it("conciliação que DÁ CERTO na varredura deixa `erro_aplicacao` NULL", async () => {
+      /**
+       * O oráculo que faltava do lado do sucesso. Os casos de falha desta
+       * varredura travam o texto gravado, mas nenhum exigia a AUSÊNCIA de
+       * texto quando a conciliação funciona: trocar `aplicou ? null : motivo`
+       * por `motivo` incondicional passava verde, e toda mensalidade conciliada
+       * com sucesso sairia carimbada como cobrança órfã — o alarme voltaria a
+       * ser ruído, com sinal invertido em relação ao defeito original da #289.
+       *
+       * O status do ciclo entra junto: sem ele, "erro nulo" também seria
+       * verdade num caminho que não conciliou nada.
+       */
+      const paymentId = `pay-sucesso-${crypto.randomUUID()}`;
+      const { cicloId } = await novoCicloAsaas({ providerChargeId: paymentId });
+      const idEvento = await semearCobrancaPendente(paymentId, cicloId, {
+        event: "PAYMENT_RECEIVED",
+        status: "RECEIVED",
+      });
+
+      respondeCobrancaAsaas("RECEIVED");
+
+      const r = await reprocessarEventosPendentes();
+      expect(r).toEqual({ aplicados: 1, falhas: 0 });
+
+      const depois = await lerAsaas(idEvento);
+      expect(depois.aplicado_em).not.toBeNull();
+      expect(depois.erro_aplicacao).toBeNull();
+      // A conciliação realmente aconteceu — o ciclo foi liquidado.
+      expect((await lerCicloAsaas(cicloId)).status).toBe("pago");
+    });
+
+    it("vínculo DESCONHECIDO na varredura carimba 'assinatura desconhecida'", async () => {
+      /**
+       * A rota tem três testes cobrindo a classificação de motivo; a varredura
+       * não tinha nenhum para o ramo de VÍNCULO. A assimetria importa porque a
+       * varredura é o caminho que roda quando a entrega ao vivo falhou: um
+       * diagnóstico que existe só em `route.ts` some exatamente no cenário em
+       * que o webhook não chegou.
+       *
+       * Sem este oráculo, trocar o motivo por `null` (ou por qualquer outro
+       * texto) passava verde, e um evento de vínculo de outra aplicação sairia
+       * da fila sem dizer por quê.
+       */
+      const authId = `auth-sem-assinatura-${crypto.randomUUID()}`;
+      // Nenhuma `subscription` com este `provider_subscription_id`: é o caso do
+      // evento de outra aplicação apontada para o mesmo endpoint.
+      const idEvento = await semearAsaasPendente(authId);
+      respondeAutorizacaoAsaas("ACTIVE");
+
+      const r = await reprocessarEventosPendentes();
+      expect(r).toEqual({ aplicados: 1, falhas: 0 });
+
+      const depois = await lerAsaas(idEvento);
+      expect(depois.aplicado_em).not.toBeNull();
+      // Literal, e não a constante importada: comparar a constante com ela
+      // mesma passaria contra qualquer texto, inclusive contra nenhum.
+      expect(depois.erro_aplicacao).toBe("assinatura desconhecida");
+    });
+
     it("ativação sem externalReference reprocessada NÃO vira alarme (mesma classificação da rota)", async () => {
       /**
        * A outra metade do D-4: a varredura tem que gravar o MESMO motivo que a
