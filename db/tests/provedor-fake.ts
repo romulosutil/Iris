@@ -4,6 +4,7 @@ import type {
   CobrancaParaReuso,
   EntradaVerificacaoWebhook,
   EventoWebhookNormalizado,
+  InstrucaoParaRetentativa,
   NovaCobrancaAvulsa,
   NovaCobrancaDeCiclo,
   NovoVinculo,
@@ -356,6 +357,57 @@ export class ProvedorFake implements BillingProvider {
     chamadasDeRetentativaFake.push({ providerInstructionId, dueDate });
     return respostasDeRetentativaFake.shift() ?? { ok: true };
   }
+
+  /**
+   * Instrução a retentar (#322, D-4 — Guarda 1 e argumento do comando).
+   *
+   * Deriva o id da instrução do id da cobrança para que a asserção mostre QUAL
+   * cobrança foi retentada; o estado (`pendente`, "sem instrução recusada") é
+   * programável por cobrança porque é ele que distingue os três caminhos que a
+   * varredura tem de tomar, e nenhum deles é observável no valor de retorno da
+   * outra chamada.
+   *
+   * Não fala HTTP pela mesma razão de `comandarRetentativa`: aqui o oráculo é o
+   * comportamento da VARREDURA, não a URL que o adapter monta.
+   */
+  async instrucaoParaRetentativa(
+    providerChargeId: string,
+  ): Promise<InstrucaoParaRetentativa> {
+    const programado = instrucoesFake.get(providerChargeId);
+    if (programado === "pendente") {
+      return { providerInstructionId: null, pendente: true };
+    }
+    if (programado === "sem_instrucao") {
+      return { providerInstructionId: null, pendente: false };
+    }
+    if (programado === "falha") {
+      // Indisponibilidade: sobe, exatamente como o adapter real faz com 5xx e
+      // rede. É o caminho em que a varredura registra `erro` sem gastar
+      // tentativa.
+      throw new Error(`gateway fake indisponível para ${providerChargeId}`);
+    }
+    return {
+      providerInstructionId: `${PREFIXO_INSTRUCAO_FAKE}${providerChargeId}`,
+      pendente: false,
+    };
+  }
+}
+
+/** Prefixo do id de instrução que o fake devolve — reconhecível na asserção. */
+export const PREFIXO_INSTRUCAO_FAKE = "instr_fake_";
+
+/** Desfechos programáveis de `instrucaoParaRetentativa`, por cobrança. */
+export type EstadoInstrucaoFake =
+  "retentavel" | "pendente" | "sem_instrucao" | "falha";
+
+const instrucoesFake = new Map<string, EstadoInstrucaoFake>();
+
+/** Programa o desfecho da consulta de instrução para UMA cobrança. */
+export function definirInstrucaoFake(
+  providerChargeId: string,
+  estado: EstadoInstrucaoFake,
+): void {
+  instrucoesFake.set(providerChargeId, estado);
 }
 
 /**
@@ -384,4 +436,5 @@ export function enfileirarRetentativasFake(
 export function limparRetentativasFake(): void {
   chamadasDeRetentativaFake.length = 0;
   respostasDeRetentativaFake.length = 0;
+  instrucoesFake.clear();
 }

@@ -394,6 +394,43 @@ export type ResultadoRetentativa =
       mensagemGateway: string;
     };
 
+/**
+ * O que a varredura de retentativa precisa saber sobre a INSTRUÇÃO de débito de
+ * uma cobrança, quando tudo o que ela tem é o id da COBRANÇA (#322, D-4).
+ *
+ * ## Por que a porta ganhou isto
+ *
+ * `comandarRetentativa` recebe o id da **instrução**, e esse id não existe em
+ * lugar nenhum do Iris: `billing_cycle` persiste `provider_charge_id`, não o da
+ * instrução, e o único ponto do fluxo em que o id da instrução aparece é o
+ * envelope do webhook — que a varredura não tem em mãos, e cuja entrega não é
+ * garantida (é justamente por isso que a D-1 escolheu varredura em vez de
+ * reação a evento). Sem este método a varredura fica sem o argumento
+ * obrigatório da chamada.
+ *
+ * Devolve as DUAS respostas na mesma ida ao gateway porque as duas saem da
+ * mesma listagem (`GET /pix/automatic/paymentInstructions?paymentId=…`), e
+ * porque a varredura precisa das duas antes de reservar a tentativa.
+ *
+ * Erro de transporte **sobe**, como em `consultarCobrancaParaReuso`: "não
+ * consegui perguntar" não pode virar "não há instrução pendente" — seria
+ * comandar uma retentativa por cima de outra já agendada.
+ */
+export interface InstrucaoParaRetentativa {
+  /**
+   * Id da instrução RECUSADA — o argumento de `comandarRetentativa`. `null`
+   * quando o gateway não tem nenhuma recusada para esta cobrança (nada a
+   * retentar).
+   */
+  providerInstructionId: string | null;
+  /**
+   * `true` quando já existe instrução a caminho (`AWAITING_REQUEST` /
+   * `SCHEDULED`). É a **Guarda 1** da D-4: comandar por cima de uma tentativa
+   * ainda não executada queima orçamento sem nenhuma informação nova.
+   */
+  pendente: boolean;
+}
+
 /** Tipos de evento que o Iris sabe tratar. Tudo mais é `desconhecido`. */
 export type TipoEventoNormalizado =
   | "assinatura.autorizada"
@@ -619,6 +656,22 @@ export interface BillingProvider {
     providerInstructionId: string,
     dueDate: string,
   ): Promise<ResultadoRetentativa>;
+
+  /**
+   * Resolve, a partir do id da COBRANÇA, a instrução a retentar e se já existe
+   * uma a caminho (#322, D-4). Ver `InstrucaoParaRetentativa`.
+   *
+   * **Opcional pelo mesmo critério de `comandarRetentativa`**, e na prática o
+   * par é indivisível: sem este método não há como obter o argumento daquele,
+   * então a varredura trata a ausência de qualquer um dos dois como
+   * "provedor sem suporte" e simplesmente não comanda.
+   *
+   * Falha de transporte **sobe** — a varredura registra a linha com `erro` e
+   * tenta de novo na passada seguinte, sem ter gasto tentativa.
+   */
+  instrucaoParaRetentativa?(
+    providerChargeId: string,
+  ): Promise<InstrucaoParaRetentativa>;
 }
 
 /**

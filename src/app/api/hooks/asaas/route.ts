@@ -184,6 +184,12 @@ export async function POST(request: Request): Promise<Response> {
         normalizado.providerChargeId,
         atual.status,
         atual.motivoRecusa,
+        // #322 (D-5) — `purpose`/`retryAttempt` da instrução entram na
+        // conciliação. É o que impede a 2ª e a 3ª retentativa de reescreverem o
+        // diagnóstico da recusa ORIGINAL e de recarimbarem `past_due`. Omitir
+        // aqui devolveria a conciliação ao comportamento de carimbar o mesmo
+        // ciclo três vezes.
+        normalizado.retentativa,
       );
       await marcar(eventoId, {
         aplicadoEm: new Date(),

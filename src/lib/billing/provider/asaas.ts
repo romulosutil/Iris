@@ -9,6 +9,7 @@ import {
   type CobrancaParaReuso,
   type EntradaVerificacaoWebhook,
   type EventoWebhookNormalizado,
+  type InstrucaoParaRetentativa,
   type MotivoRecusaDeRetentativa,
   type NovaCobrancaAvulsa,
   type NovaCobrancaDeCiclo,
@@ -1433,6 +1434,44 @@ export class AsaasProvider implements BillingProvider {
         mensagemGateway,
       };
     }
+  }
+
+  /**
+   * A instrução a retentar de uma cobrança, e se já existe uma a caminho
+   * (#322, D-4 — Guarda 1 e o argumento de `comandarRetentativa`).
+   *
+   * ## Duas listagens, e a ordem importa
+   *
+   * `AWAITING_REQUEST`/`SCHEDULED` é perguntado ANTES de procurar a recusada:
+   * havendo instrução a caminho, o id da recusada é irrelevante — a varredura
+   * não vai comandar nada, e uma segunda ida ao gateway seria round-trip
+   * desperdiçado dentro do orçamento de 30s do job.
+   *
+   * ## Por que reusa os dois privados em vez de uma consulta nova
+   *
+   * `temInstrucaoPendente` e `instrucaoRecusadaDaCobranca` já existem, já
+   * filtram por `status` (uma cobrança tem VÁRIAS instruções sob
+   * `ALLOW_THREE_IN_SEVEN_DAYS`, e pegar a primeira da lista traria uma
+   * `SCHEDULED` sem motivo nenhum) e já têm a assimetria 4xx × 5xx medida. O
+   * que faltava era um ponto PÚBLICO por onde a varredura os alcançasse — ela
+   * não pode depender de detalhe interno do adapter, e nenhum outro adapter é
+   * obrigado a ter instrução de débito (por isso o método é opcional na porta).
+   *
+   * Instrução recusada ausente devolve `providerInstructionId: null` em vez de
+   * lançar: "esta cobrança não tem nada a retentar" é resposta à pergunta, e
+   * quem decide o que fazer com ela é a varredura.
+   */
+  async instrucaoParaRetentativa(
+    providerChargeId: string,
+  ): Promise<InstrucaoParaRetentativa> {
+    if (await this.temInstrucaoPendente(providerChargeId)) {
+      return { providerInstructionId: null, pendente: true };
+    }
+    const instrucao = await this.instrucaoRecusadaDaCobranca(providerChargeId);
+    return {
+      providerInstructionId: comoTexto(instrucao.id),
+      pendente: false,
+    };
   }
 
   verificarAssinaturaWebhook(input: EntradaVerificacaoWebhook): boolean {
