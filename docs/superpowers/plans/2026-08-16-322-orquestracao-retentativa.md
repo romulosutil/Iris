@@ -68,17 +68,19 @@ Esse custo **não** trava o ciclo: a elegibilidade continua sendo `contador < 3 
 
 ### D-6 — Esgotar as 3 tentativas não antecipa nem adia o corte
 
-A carência de 10 dias foi dimensionada exatamente como `7 (janela de retentativa) + 3 (folga)`. Esgotar antes não muda o relógio: quem esgotou em D+3 continua com carência até D+10. O que muda é **visibilidade** — o relatório do job passa a dizer quantas foram comandadas e quantas esgotaram, para que o esgotamento apareça antes do corte, e não junto com ele.
+A carência de 10 dias foi dimensionada exatamente como `7 (janela de retentativa) + 3 (folga)`. Esgotar antes não muda o relógio: quem esgotou em D+3 continua com carência até D+10. O que muda é **visibilidade** — o relatório do job passa a dizer quantas foram comandadas.
+
+> **Corrigido depois da revisão:** a primeira redação prometia que o relatório diria também **quantas esgotaram**. A correção do GRAVE 1 (filtros para o `WHERE`) tornou isso impossível sem trabalho extra: o ciclo com as 3 tentativas gastas é barrado no SQL e não gera linha nenhuma. O número segue legível em `billing_cycle.retentativas_comandadas`, e ninguém o lê — está na §3b do `checkpoint.md` como decisão do Rômulo.
 
 ### D-7 — Nenhum estado novo, nenhum enum novo. Três colunas.
 
 `billing_cycle` ganha, via `schema.ts` + `pnpm db:generate`:
 
-| Coluna                          | Tipo                   | Papel                                            |
-| :------------------------------ | :--------------------- | :----------------------------------------------- |
-| `retentativas_comandadas`       | `integer NOT NULL 0`   | orçamento gasto; base do CAS da D-4              |
-| `ultima_retentativa_em`         | `timestamptz`          | instante da reserva                              |
-| `ultima_retentativa_vencimento` | `date`                 | data já comandada; alimenta o passo 2 da D-3     |
+| Coluna                          | Tipo                 | Papel                                        |
+| :------------------------------ | :------------------- | :------------------------------------------- |
+| `retentativas_comandadas`       | `integer NOT NULL 0` | orçamento gasto; base do CAS da D-4          |
+| `ultima_retentativa_em`         | `timestamptz`        | instante da reserva                          |
+| `ultima_retentativa_vencimento` | `date`               | data já comandada; alimenta o passo 2 da D-3 |
 
 `GRANT` explícito das três colunas no `.sql` gerado, **seguindo o precedente medido da própria tabela** (`0100:29-30` e `0101:42-43`): em `billing_cycle` quem escreve é **`iris_auth`** (`SELECT/INSERT/UPDATE`); `app_role` recebe **só `SELECT`**. A primeira versão desta decisão dizia `UPDATE` para `app_role` — errado, e corrigido depois de medir `information_schema.column_privileges`, não depois de reler o plano.
 
@@ -96,16 +98,16 @@ Botão da clínica (é o D36 / UI), retentativa dos grupos G0/G1/G4/G6/G7, medi�
 
 ## 2. Fases
 
-| Fase | Entrega                                                                                             | Arquivos                                                                        |
-| :--- | :-------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
-| F1   | 3 colunas + migração gerada + `GRANT` + aplicada e medida no Postgres                               | `src/db/schema.ts`, `db/migrations/0106_*`                                       |
-| F2   | `retentavelAutomaticamente` na política (só G2) + oráculo                                           | `classificacao-recusa.ts` (+ `.test.ts`)                                         |
-| F3   | `comandarRetentativa` na porta + `AsaasProvider` + dublê                                            | `provider/types.ts`, `provider/asaas.ts`, `db/tests/provedor-fake.ts` (+ testes) |
-| F4   | `purpose`/`retryAttempt` normalizados                                                               | `provider/asaas.ts`, `provider/types.ts` (+ testes)                              |
-| F5   | Guard de conciliação sob retentativa                                                                | `subscription.ts`, `hooks/asaas/route.ts` (+ testes)                             |
-| F6   | Varredura `comandarRetentativasPendentes` + cálculo da `dueDate` + CAS                              | `subscription.ts` (+ `.int.test.ts` novo)                                        |
-| F7   | Etapa no relatório da rota + `resumoDoCorpo`                                                        | `fechar-ciclos/route.ts`, `scripts/fechamento-ciclo-billing.mjs` (+ testes)      |
-| F8   | Integração ponta a ponta: recusa → 3 retentativas → esgotamento → carência                          | `retentativa-extradia.int.test.ts`                                               |
+| Fase | Entrega                                                                    | Arquivos                                                                         |
+| :--- | :------------------------------------------------------------------------- | :------------------------------------------------------------------------------- |
+| F1   | 3 colunas + migração gerada + `GRANT` + aplicada e medida no Postgres      | `src/db/schema.ts`, `db/migrations/0106_*`                                       |
+| F2   | `retentavelAutomaticamente` na política (só G2) + oráculo                  | `classificacao-recusa.ts` (+ `.test.ts`)                                         |
+| F3   | `comandarRetentativa` na porta + `AsaasProvider` + dublê                   | `provider/types.ts`, `provider/asaas.ts`, `db/tests/provedor-fake.ts` (+ testes) |
+| F4   | `purpose`/`retryAttempt` normalizados                                      | `provider/asaas.ts`, `provider/types.ts` (+ testes)                              |
+| F5   | Guard de conciliação sob retentativa                                       | `subscription.ts`, `hooks/asaas/route.ts` (+ testes)                             |
+| F6   | Varredura `comandarRetentativasPendentes` + cálculo da `dueDate` + CAS     | `subscription.ts` (+ `.int.test.ts` novo)                                        |
+| F7   | Etapa no relatório da rota + `resumoDoCorpo`                               | `fechar-ciclos/route.ts`, `scripts/fechamento-ciclo-billing.mjs` (+ testes)      |
+| F8   | Integração ponta a ponta: recusa → 3 retentativas → esgotamento → carência | `retentativa-extradia.int.test.ts`                                               |
 
 ## 3. Definição de Pronto (da issue, com o que prova cada item)
 
