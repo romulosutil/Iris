@@ -1951,6 +1951,48 @@ export const billingCycle = pgTable(
      * `falhou` escrevem aqui — ver `conciliarPagamentoDeCiclo`.
      */
     recusaCodigo: text("recusa_codigo"),
+    /**
+     * Orçamento de retentativa extradia já GASTO neste ciclo (#322, D-7).
+     *
+     * O Asaas permite no máximo 3 comandos de retentativa por cobrança, então
+     * este contador é o teto — e é também a base do compare-and-set da D-4:
+     * a reserva é `SET retentativas_comandadas = n + 1 WHERE ... = n`, e zero
+     * linhas afetadas significa que outra passada do job ganhou a corrida e
+     * esta tem de pular sem chamar o gateway.
+     *
+     * `NOT NULL DEFAULT 0` porque "nunca retentou" é 0, não desconhecido:
+     * `NULL` aqui quebraria a aritmética do CAS em toda linha pré-existente.
+     */
+    retentativasComandadas: integer("retentativas_comandadas")
+      .notNull()
+      .default(0),
+    /**
+     * Instante em que a reserva da última retentativa foi gravada (#322, D-7).
+     *
+     * Marca o ATO de comandar, não o desfecho: a ordem da D-4 é reserva →
+     * chamada → desfecho, então este carimbo existe mesmo quando a chamada ao
+     * gateway falha depois. É o que permite ler no relatório do job quando a
+     * tentativa foi gasta.
+     *
+     * `timestamptz` como o resto da tabela; nullable porque ciclo sem
+     * retentativa nenhuma não tem instante.
+     */
+    ultimaRetentativaEm: timestamp("ultima_retentativa_em", {
+      withTimezone: true,
+    }),
+    /**
+     * A `dueDate` já comandada na última retentativa (#322, D-7).
+     *
+     * A validação 1 do Asaas exige datas DIFERENTES entre retentativas da mesma
+     * cobrança, então o passo 2 do cálculo da D-3 compara a candidata com este
+     * valor e anda +1 dia se colidir. Sem persistir a data comandada, a segunda
+     * passada repetiria a primeira e levaria 400.
+     *
+     * `date` e não `timestamptz`: o que o gateway aceita é dia civil, e é dia
+     * civil que se compara aqui — guardar instante reintroduziria fuso numa
+     * comparação que não tem hora.
+     */
+    ultimaRetentativaVencimento: date("ultima_retentativa_vencimento"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -2053,10 +2095,7 @@ export const tccRpdEntry = pgTable(
       .defaultNow(),
   },
   (t) => [
-    check(
-      "tcc_rpd_intensidade_range",
-      sql`${t.intensidade} BETWEEN 0 AND 100`,
-    ),
+    check("tcc_rpd_intensidade_range", sql`${t.intensidade} BETWEEN 0 AND 100`),
     check(
       "tcc_rpd_intensidade_pos_range",
       sql`${t.intensidadePos} IS NULL OR (${t.intensidadePos} BETWEEN 0 AND 100)`,

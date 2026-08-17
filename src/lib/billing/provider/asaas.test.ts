@@ -268,6 +268,108 @@ describe("AsaasProvider", () => {
       expect(e.providerInstructionId).toBeNull();
     });
 
+    /**
+     * #322 · D-5 — `purpose`/`retryAttempt`.
+     *
+     * ⚠️ Estes payloads são **contrato lido da doc**, não evento medido: o
+     * sandbox não ativa Pix Automático (#321), então nenhuma instrução — logo
+     * nenhuma retentativa — existe lá. O que os casos abaixo fixam é o
+     * NORMALIZADOR (vocabulário fechado, faixa 1..3, objeto sempre presente);
+     * que o Asaas mande de fato estes nomes só a produção prova.
+     */
+    it("instrução REFUSED de RETENTATIVA traz propósito e número da tentativa", () => {
+      const e = new AsaasProvider().normalizarEvento({
+        id: "evt_retry&2",
+        event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+        paymentInstruction: {
+          id: "pi_retry_2",
+          status: "REFUSED",
+          paymentId: "pay_778",
+          purpose: "RETRY_AFTER_DUE_DATE",
+          retryAttempt: 2,
+          authorization: { id: "auth_1" },
+        },
+      });
+
+      expect(e.tipo).toBe("pagamento.recusado");
+      expect(e.retentativa).toEqual({
+        proposito: "RETRY_AFTER_DUE_DATE",
+        tentativa: 2,
+      });
+    });
+
+    it("evento sem paymentInstruction traz o objeto com os dois nulos", () => {
+      // O campo existe SEMPRE. Se fosse opcional, todo consumidor precisaria de
+      // `?.` — e o guard que impede recarimbar `past_due` é justamente o que não
+      // pode depender de alguém ter lembrado do encadeamento opcional.
+      const e = new AsaasProvider().normalizarEvento({
+        id: "evt_sem_instrucao&2",
+        event: "PAYMENT_OVERDUE",
+        payment: { id: "pay_9", status: "OVERDUE" },
+      });
+      expect(e.retentativa).toEqual({ proposito: null, tentativa: null });
+    });
+
+    it("purpose fora do vocabulário conhecido vira null, sem repassar a string crua", () => {
+      // Repassar cru faria o consumidor comparar contra um valor que ele não
+      // conhece — adivinhação, que é o defeito que a #318 existe para matar.
+      const e = new AsaasProvider().normalizarEvento({
+        id: "evt_purpose_novo&1",
+        event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+        paymentInstruction: {
+          id: "pi_novo",
+          status: "REFUSED",
+          paymentId: "pay_779",
+          purpose: "PROPOSITO_QUE_A_DOC_NAO_LISTA",
+          retryAttempt: 1,
+        },
+      });
+      expect(e.retentativa.proposito).toBeNull();
+      // ...e o campo vizinho continua sendo lido: um valor novo num campo não
+      // pode apagar o outro.
+      expect(e.retentativa.tentativa).toBe(1);
+    });
+
+    it("SCHEDULE é a instrução original do ciclo, não uma retentativa", () => {
+      const e = new AsaasProvider().normalizarEvento({
+        id: "evt_schedule&1",
+        event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+        paymentInstruction: {
+          id: "pi_sched",
+          status: "REFUSED",
+          paymentId: "pay_780",
+          purpose: "SCHEDULE",
+        },
+      });
+      expect(e.retentativa).toEqual({ proposito: "SCHEDULE", tentativa: null });
+    });
+
+    it.each([
+      ["zero", 0],
+      ["acima do teto de 3", 4],
+      ["string numérica", "2"],
+      ["decimal", 1.5],
+      ["ausente", undefined],
+      ["nulo", null],
+    ])("retryAttempt %s vira null", (_rotulo, retryAttempt) => {
+      // A régua é estrita: `Number("2")` daria 2, e um `4` aceito significaria
+      // que a doc mudou — informação que uma coerção complacente apagaria.
+      const e = new AsaasProvider().normalizarEvento({
+        id: "evt_attempt&1",
+        event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+        paymentInstruction: {
+          id: "pi_attempt",
+          status: "REFUSED",
+          paymentId: "pay_781",
+          purpose: "RETRY_AFTER_DUE_DATE",
+          retryAttempt,
+        },
+      });
+      expect(e.retentativa.tentativa).toBeNull();
+      // O propósito continua legível: um campo ilegível não contamina o outro.
+      expect(e.retentativa.proposito).toBe("RETRY_AFTER_DUE_DATE");
+    });
+
     it.each([null, undefined, 42, "texto", {}, { event: "COISA_NOVA" }])(
       "nunca lança com payload inesperado (%p)",
       (payload) => {
@@ -1168,6 +1270,209 @@ describe("AsaasProvider", () => {
         reuso: "morta",
         motivo: "sem_forma_de_pagamento",
       });
+    });
+  });
+
+  describe("comandarRetentativa (#322)", () => {
+    /**
+     * As CINCO mensagens são escritas aqui **literalmente**, copiadas da doc do
+     * Asaas (registradas no comentário da #317), e nunca importadas de
+     * `asaas.ts`. Derivá-las da tabela do módulo sob teste reproduziria o
+     * defeito [teste-verde-que-nao-testa-nada]: o caso passaria contra qualquer
+     * trecho, inclusive contra um que nunca casasse com a mensagem real.
+     *
+     * O Asaas **não publica código de erro dedicado** para estas validações — o
+     * `code` é genérico e o que discrimina é a `description`. Por isso não há
+     * (e não pode haver) asserção sobre um código inventado.
+     */
+    const MENSAGENS_DAS_CINCO_VALIDACOES = [
+      [
+        "Limite de retentativas excedido. A regra permite no máximo 3 tentativas.",
+        "limite_de_tentativas",
+      ],
+      [
+        "A data solicitada ultrapassa o limite de 7 dias corridos permitidos após o vencimento original.",
+        "fora_da_janela_de_7_dias",
+      ],
+      [
+        "O agendamento da retentativa deve ser enviado até as 23h59 do dia anterior à data desejada para liquidação.",
+        "fora_do_horario_de_comando",
+      ],
+      [
+        "A data da retentativa não pode coincidir ou ultrapassar o dia de início do próximo ciclo da recorrência.",
+        "colide_com_proximo_ciclo",
+      ],
+      [
+        "A autorização desta cobrança não permite retentativas extradia (Política N).",
+        "autorizacao_sem_politica",
+      ],
+    ] as const;
+
+    it("monta a URL do recurso de retentativa e manda só a dueDate", async () => {
+      // "comandou" e "comandou no endereço certo" são coisas diferentes — e a
+      // segunda é a que quebra em silêncio (o D35 é o precedente: três campos
+      // lidos de um recurso que não os tem). A URL é do recurso RETRIES da
+      // INSTRUÇÃO, não da cobrança.
+      fetchMock.mockResolvedValueOnce(resposta({ id: "pi_1" }, 200));
+
+      const r = await new AsaasProvider().comandarRetentativa(
+        "pi_1",
+        "2026-08-20",
+      );
+
+      expect(r).toEqual({ ok: true });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(String(fetchMock.mock.calls[0]![0])).toBe(
+        "https://api-sandbox.asaas.com/v3/pix/automatic/paymentInstructions/pi_1/retries",
+      );
+      const init = fetchMock.mock.calls[0]![1] as RequestInit;
+      expect(init.method).toBe("POST");
+      // Corpo EXATO: um campo a mais aqui é campo que o Asaas engole em silêncio
+      // (medido na #321 com `maxLimitValue`), e um a menos é 400.
+      expect(JSON.parse(String(init.body))).toEqual({ dueDate: "2026-08-20" });
+    });
+
+    it.each(MENSAGENS_DAS_CINCO_VALIDACOES)(
+      "400 «%s» vira motivo fechado",
+      async (descricao, motivoEsperado) => {
+        fetchMock.mockResolvedValueOnce(
+          resposta(
+            { errors: [{ code: "invalid_action", description: descricao }] },
+            400,
+          ),
+        );
+
+        const r = await new AsaasProvider().comandarRetentativa(
+          "pi_2",
+          "2026-08-20",
+        );
+
+        expect(r).toEqual({
+          ok: false,
+          motivo: motivoEsperado,
+          mensagemGateway: descricao,
+        });
+      },
+    );
+
+    it("400 de mensagem desconhecida cai em `desconhecido`, com o texto cru", async () => {
+      // NUNCA inventar código de erro do gateway: uma sexta validação (ou uma
+      // reescrita de frase do lado deles) tem que aparecer no relatório, não ser
+      // classificada por semelhança como uma das cinco.
+      fetchMock.mockResolvedValueOnce(
+        resposta(
+          {
+            errors: [
+              {
+                code: "invalid_object",
+                description: "Validação nova que o Iris nunca viu.",
+              },
+            ],
+          },
+          400,
+        ),
+      );
+
+      expect(
+        await new AsaasProvider().comandarRetentativa("pi_3", "2026-08-20"),
+      ).toEqual({
+        ok: false,
+        motivo: "desconhecido",
+        mensagemGateway: "Validação nova que o Iris nunca viu.",
+      });
+    });
+
+    it("500 SOBE — indisponibilidade não é recusa", async () => {
+      // "não consegui perguntar" virando "o gateway recusou" faria a varredura
+      // gravar desfecho definitivo sobre pergunta não respondida — e o comando
+      // pode ter sido aceito do outro lado. Mesma disciplina de
+      // `consultarCobrancaParaReuso`.
+      fetchMock.mockResolvedValueOnce(resposta({ errors: [] }, 500));
+
+      await expect(
+        new AsaasProvider().comandarRetentativa("pi_4", "2026-08-20"),
+      ).rejects.toBeInstanceOf(BillingProviderError);
+    });
+
+    it("erro de rede SOBE cru, sem virar BillingProviderError", async () => {
+      // A distinção existe para o chamador decidir retry: 4xx é definitivo,
+      // timeout/DNS é transitório. Embrulhar aqui apagaria a diferença.
+      fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+      await expect(
+        new AsaasProvider().comandarRetentativa("pi_5", "2026-08-20"),
+      ).rejects.toBeInstanceOf(TypeError);
+    });
+  });
+
+  describe("instrucaoParaRetentativa (#322)", () => {
+    /**
+     * Roteador do índice de instruções, no mesmo idioma do de
+     * `consultarCobrancaParaReuso`: recebe TODAS as instruções da cobrança e
+     * aplica o `?status=` como o índice real aplica.
+     *
+     * Listas já filtradas pelo teste seriam o dublê escrevendo o predicado do
+     * código sob teste: um adapter que consultasse o status ERRADO receberia a
+     * mesma lista e passaria verde.
+     */
+    function rotearInstrucoes(todas: Array<Record<string, unknown>>): void {
+      fetchMock.mockImplementation(async (url: string) => {
+        const u = String(url);
+        if (!u.includes("/pix/automatic/paymentInstructions")) {
+          throw new Error(`fetch inesperado: ${u}`);
+        }
+        const filtro = new URL(u).searchParams.get("status");
+        return resposta({
+          data: filtro ? todas.filter((i) => i.status === filtro) : todas,
+        });
+      });
+    }
+
+    it("instrução SCHEDULED é `pendente`, e a listagem das RECUSADAS não acontece", async () => {
+      rotearInstrucoes([{ id: "pi_8", status: "SCHEDULED" }]);
+
+      expect(
+        await new AsaasProvider().instrucaoParaRetentativa("pay_9"),
+      ).toEqual({ providerInstructionId: null, pendente: true });
+
+      // A ORDEM é o que o docblock promete, e ela só é observável na contagem:
+      // havendo instrução a caminho, o id da recusada é irrelevante e a
+      // consulta a `status=REFUSED` seria round-trip desperdiçado dentro do
+      // orçamento de 30s do job. As URLs são escritas à mão — derivá-las do
+      // adapter faria trocar o endpoint passar verde.
+      //
+      // São DUAS, e não uma: "instrução a caminho" é `AWAITING_REQUEST` **ou**
+      // `SCHEDULED`, e o índice do Asaas filtra um `status` por consulta. A
+      // terceira chamada — a das recusadas — é a que não pode existir.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls.map((c) => String(c[0]))).toEqual([
+        "https://api-sandbox.asaas.com/v3/pix/automatic/paymentInstructions?paymentId=pay_9&status=AWAITING_REQUEST",
+        "https://api-sandbox.asaas.com/v3/pix/automatic/paymentInstructions?paymentId=pay_9&status=SCHEDULED",
+      ]);
+    });
+
+    it("sem instrução a caminho, devolve o id da RECUSADA", async () => {
+      rotearInstrucoes([
+        { id: "pi_9", status: "REFUSED", dateCreated: "2026-08-10 09:00:00" },
+      ]);
+
+      expect(
+        await new AsaasProvider().instrucaoParaRetentativa("pay_9"),
+      ).toEqual({ providerInstructionId: "pi_9", pendente: false });
+
+      // As duas do pendente + a das recusadas.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it("cobrança sem pendente e sem recusada devolve `null` SEM lançar", async () => {
+      // A instrução `DONE` está aqui de propósito: o índice não está vazio, e
+      // mesmo assim não há nada a retentar. Devolver o id dela seria comandar
+      // retentativa sobre uma instrução que já liquidou.
+      rotearInstrucoes([{ id: "pi_10", status: "DONE" }]);
+
+      expect(
+        await new AsaasProvider().instrucaoParaRetentativa("pay_9"),
+      ).toEqual({ providerInstructionId: null, pendente: false });
     });
   });
 });

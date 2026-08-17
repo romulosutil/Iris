@@ -2,9 +2,11 @@ import { timingSafeEqual } from "node:crypto";
 import {
   aplicarBackstopDePrazo,
   cancelarAssinaturasComCarenciaVencida,
+  comandarRetentativasPendentes,
   fecharCiclosVencendo,
   reprocessarEventosPendentes,
   type ResultadoBackstopPrazo,
+  type ResultadoComandoRetentativa,
   type ResultadoCortePorCarencia,
 } from "@/lib/billing/subscription";
 
@@ -68,6 +70,35 @@ export async function POST(request: Request): Promise<Response> {
     // clínica recém-ativada fica de fora deste fechamento.
     const pendentes = await reprocessarEventosPendentes();
     const resultados = await fecharCiclosVencendo({ dryRun });
+
+    // Retentativa extradia DEPOIS do fechamento e ANTES da carência (#322, D-8).
+    //
+    // Depois do fechamento pela mesma regra da #319: é ele que emite as
+    // cobranças do dia e, portanto, quem produz as recusas de saldo (G2) que
+    // esta varredura recupera. Rodando antes, a recusa desta passada só seria
+    // vista amanhã — um dia inteiro de janela jogado fora numa janela que já é
+    // de 7 dias.
+    //
+    // Antes da carência porque comandar antes de cortar é a ordem certa: o
+    // corte revoga a autorização de Pix Automático, e uma retentativa comandada
+    // sobre uma autorização revogada é tentativa gasta em quem já saiu. A
+    // própria varredura ainda exclui a assinatura cuja carência vence NESTA
+    // passada (`carencia_vence_nesta_passada`), então nem o round-trip acontece
+    // para quem o corte leva logo em seguida.
+    //
+    // `try/catch` próprio pela mesma razão da carência e do backstop: quando
+    // esta linha é alcançada, `fecharCiclosVencendo` já emitiu cobrança de
+    // verdade no gateway. Deixar a exceção subir descartaria `resultados`
+    // inteiro num 500 seco, e o job só grava este JSON (D38).
+    let retentativas: ResultadoComandoRetentativa[] = [];
+    let retentativaAbortada: string | null = null;
+    try {
+      retentativas = await comandarRetentativasPendentes({ dryRun });
+    } catch (err) {
+      retentativaAbortada = mensagemDoErro(err);
+      console.error("[billing-fechamento] etapa de retentativa abortou", err);
+    }
+    const retentativasComErro = retentativas.filter((r) => r.erro);
 
     // Corte por carência vencida por ÚLTIMO, e a ordem é a regra (#319):
     // `fecharCiclosVencendo` é quem emite as cobranças do dia e, portanto, quem
@@ -135,18 +166,63 @@ export async function POST(request: Request): Promise<Response> {
     // discriminador por etapa dizendo qual delas caiu e por quê. Assim o log do
     // job separa "não faturou" de "faturou e a varredura seguinte caiu", que
     // exigem reações opostas.
-    const etapaAbortou = carenciaAbortada !== null || backstopAbortado !== null;
+    const etapaAbortou =
+      retentativaAbortada !== null ||
+      carenciaAbortada !== null ||
+      backstopAbortado !== null;
 
     return Response.json(
       {
         ok: !etapaAbortou,
         // `null` quando a etapa correu — presente em toda resposta para que o
         // job possa ler a chave sem adivinhar se ela existe.
+        retentativaAbortada,
         carenciaAbortada,
         backstopAbortado,
         dryRun,
         eventosReprocessados: pendentes,
         ciclosProcessados: resultados.length,
+        // Chaves próprias da retentativa extradia (#322, D-8), NUNCA somadas às
+        // do fechamento: uma retentativa comandada não é cobrança nova emitida,
+        // e contá-la em `ciclosProcessados` faria o faturamento do dia parecer
+        // maior do que foi — exatamente o número que se confere contra o extrato.
+        retentativasAvaliadas: retentativas.length,
+        retentativasComandadas: retentativas.filter(
+          (r) => r.acao === "comandada",
+        ).length,
+        // Mesmo motivo do truncamento das outras etapas: o job só registra este
+        // JSON, e uma passada que parou no teto com fila atrás é indistinguível
+        // de uma que cobriu tudo se o sinal não subir aqui.
+        retentativasTruncado: retentativas.some((r) => r.truncado),
+        retentativasFalhas: retentativasComErro.map((r) => ({
+          clinicId: r.clinicId,
+          cicloId: r.cicloId,
+          // A ação vai junto, como em `backstopFalhas`: a reserva da tentativa é
+          // gravada ANTES da chamada ao gateway (D-4), então existe linha que
+          // reservou e falhou depois. Sem este campo o log leria "falhou" onde
+          // uma das 3 tentativas do ciclo já foi consumida.
+          acao: r.acao,
+          tentativa: r.tentativa,
+          erro: r.erro,
+        })),
+        retentativas: retentativas.map((r) => ({
+          clinicId: r.clinicId,
+          cicloId: r.cicloId,
+          providerChargeId: r.providerChargeId,
+          providerInstructionId: r.providerInstructionId,
+          recusaCodigo: r.recusaCodigo,
+          grupo: r.grupo,
+          tentativa: r.tentativa,
+          dueDate: r.dueDate,
+          acao: r.acao,
+          // `motivo` é o que dá visibilidade ao fim da janela ANTES do corte
+          // (D-6): `sem_data_possivel` e `carencia_vence_nesta_passada`
+          // aparecem aqui na passada em que acontecem, e não junto com o
+          // cancelamento dias depois. O esgotamento do orçamento NÃO passa por
+          // aqui — o ciclo que gastou as 3 é barrado no `WHERE` da varredura,
+          // para não ocupar vaga da passada para sempre.
+          motivo: r.motivo,
+        })),
         // Chaves próprias, e não somadas às do fechamento: `ciclosProcessados` e
         // `falhas` são lidas no log do job como "faturamento do dia", e misturar
         // corte de inadimplente ali tornaria as duas leituras impossíveis de
@@ -213,9 +289,9 @@ export async function POST(request: Request): Promise<Response> {
     // etapas posteriores têm guarda própria e respondem com o corpo completo,
     // justamente para não descartar cobrança já emitida.
     //
-    // Os dois discriminadores vão como `null` e não omitidos: o job lê as mesmas
-    // chaves nos dois caminhos, e chave ausente exigiria que ele adivinhasse se
-    // a etapa correu ou nem chegou a ser tentada.
+    // Os três discriminadores vão como `null` e não omitidos: o job lê as
+    // mesmas chaves nos dois caminhos, e chave ausente exigiria que ele
+    // adivinhasse se a etapa correu ou nem chegou a ser tentada.
     //
     // O texto real do erro vai no corpo: uma mensagem genérica aqui
     // transformaria o diagnóstico de faturamento parado numa caçada às cegas.
@@ -223,6 +299,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json(
       {
         ok: false,
+        retentativaAbortada: null,
         carenciaAbortada: null,
         backstopAbortado: null,
         error: mensagemDoErro(err),

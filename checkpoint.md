@@ -1,8 +1,10 @@
 # Checkpoint — Iris
 
-> **Data:** 16/08/2026
-> **Branch:** `fix/289-erro-aplicacao-discriminador` — nascida de `main`, **7 commits**, 0 atrás de `origin/main`, **sem push e sem PR**.
-> **Status:** 🟢 **Passo 7 (#289) executado, revisado adversarialmente e reparado.** `erro_aplicacao` deixou de gravar a mesma frase para dois desfechos opostos: ruído de ativação (esperado para sempre) × mensalidade paga e não conciliada (dinheiro recebido e não creditado). A revisão derrubou o discriminador original **no caminho principal**: evento de `paymentInstruction` (débito mensal headless — exatamente o modo de falha que a issue existe para denunciar) chega **sem objeto `payment`**, então classificar só por `externalReference` mandava o alarme para o balde da ativação. Regra nova, fail-closed: **a instrução decide antes da referência**. E a consulta da DoD parou de ler carimbo histórico — passou a reavaliar o estado vivo do `billing_cycle`, o que mata uma corrida que gerava alarme falso permanente e traz de volta as falhas por exceção, que a versão anterior não enxergava. 3 mutantes sobreviventes da campanha viraram 3 oráculos. Verde medido: `pnpm test` **199 arquivos / 1339 testes** · integração dos 4 arquivos tocados **13 suites / 74 testes, 0 falhas** · `typecheck` limpo · `lint` **0 erros / 10 warnings** pré-existentes. Nenhuma migração. **A label `jules` não foi aplicada — a issue foi executada aqui**, e o que sobra dela é uma decisão do Rômulo (§3b). Próximo passo concreto: §3.
+> **Data:** 17/08/2026
+> **Branch:** `feat/322-orquestracao-retentativa` — nascida de `main` (`a7d6e4e`), **6 commits**, 0 atrás de `origin/main`.
+> **Status:** 🟢 **Passo 9 (#322) executado, revisado adversarialmente e reparado — a linha de billing do Pix Automático fecha aqui.** A retentativa extradia deixou de ser uma flag inerte: `retryPolicy: ALLOW_THREE_IN_SEVEN_DAYS` só **permite**, e até esta sessão nada no Iris comandava tentativa nenhuma — um único dia sem saldo matava o ciclo. Agora a varredura do job de fechamento comanda `POST /pix/automatic/paymentInstructions/{id}/retries`, até 3 em 7 dias corridos, **só para recusa por saldo (G2)**, com a data calculada contra as 4 restrições do gateway; e a conciliação passou a ler `purpose`/`retryAttempt`, então uma retentativa recusada não carimba `past_due` pela segunda e terceira vez sobre o mesmo ciclo. A revisão adversarial derrubou a 1ª versão em **3 GRAVES** (§1) e a campanha de mutação achou **6 oráculos faltando**; tudo corrigido e coberto. Verde medido: `pnpm test` **201 arquivos / 1396 testes** · integração **242 suites / 971 testes** · `pnpm test:rls` **107 arquivos / 971 testes, 0 pulados** · `typecheck` limpo · `lint` **0 erros / 10 warnings** pré-existentes. Migração **`0106`** aplicada e medida. Próximo passo concreto: §3.
+>
+> **Sessão anterior (16/08/2026, 3ª):** 🟢 **Passo 7 (#289) executado, revisado adversarialmente e reparado.** `erro_aplicacao` deixou de gravar a mesma frase para dois desfechos opostos: ruído de ativação (esperado para sempre) × mensalidade paga e não conciliada (dinheiro recebido e não creditado). A revisão derrubou o discriminador original **no caminho principal**: evento de `paymentInstruction` (débito mensal headless — exatamente o modo de falha que a issue existe para denunciar) chega **sem objeto `payment`**, então classificar só por `externalReference` mandava o alarme para o balde da ativação. Regra nova, fail-closed: **a instrução decide antes da referência**. E a consulta da DoD parou de ler carimbo histórico — passou a reavaliar o estado vivo do `billing_cycle`, o que mata uma corrida que gerava alarme falso permanente e traz de volta as falhas por exceção, que a versão anterior não enxergava. 3 mutantes sobreviventes da campanha viraram 3 oráculos. Verde medido: `pnpm test` **199 arquivos / 1339 testes** · integração dos 4 arquivos tocados **13 suites / 74 testes, 0 falhas** · `typecheck` limpo · `lint` **0 erros / 10 warnings** pré-existentes. Nenhuma migração. **A label `jules` não foi aplicada — a issue foi executada aqui**, e o que sobra dela é uma decisão do Rômulo (§3b). Próximo passo concreto: §3.
 >
 > **Sessão anterior (16/08/2026, 2ª):** branch `feat/311-piso-cobranca-medido` (1 commit nesta sessão, **empilhada** sobre `feat/310-reaproveitar-cobranca-gate`). As duas foram **pushadas** e viraram PR: [#339](https://github.com/romulosutil/Iris/pull/339) (#310 → `main`) e [#340](https://github.com/romulosutil/Iris/pull/340) (#311 → `feat/310-…`, encadeada). ✅ **As duas foram mergeadas em 16/08** (#339 às 21:23, #340 às 21:28) e as issues **#310 e #311 fecharam** — o `Closes` disparou, conferido por `gh api`.
 > **Status:** 🟢 **Passo 6 (#311) executado e verificado.** O piso de cobrança deixou de se declarar não medido: `PISO_COBRANCA_AVULSA_CENTAVOS = 500` **coincide com o piso real** do `POST /payments` PIX (R$ 5,00, medido na #321 em 15/08), então o número não muda — o que muda é o código parar de pedir uma verificação que já tinha sido feita, e o número **ganhar oráculo**: os dois testes de fronteira que existiam importavam a própria constante e sobreviviam à mutação `500 → 400`. Decisão fechada: a constante **não** é renomeada (o comentário que pede isso é anterior à D-E da #317, e executá-lo desfaria uma entrega). Verde medido: `pnpm test` **197 arquivos / 1317 testes** · `typecheck` limpo · `lint` **0 erros / 10 warnings**. Nenhuma migração, nenhuma mudança de comportamento. Próximo passo concreto: §3.
@@ -22,7 +24,7 @@
 | **1** | [**Ordem de conclusão**](https://claude.ai/code/artifact/59b6c2d8-ea6c-401a-b62f-9572ed26d243) (artifact) | A sequência dos 9 passos e **por que essa ordem** — irreversibilidade, não gravidade. Grafo de dependência, modelo indicado e prompt pronto de cada passo.                                                     |
 | **2** | **A issue do passo corrente** (GitHub)                                                                    | Escopo exato, Definição de Pronto e os comentários com as medições já feitas. ⚠️ `gh issue view --comments` **retorna vazio neste ambiente** — usar `gh api repos/romulosutil/iris/issues/N` e `.../comments`. |
 | **3** | `checkpoint.md` (este arquivo)                                                                            | Estado da última sessão: o que foi medido, o que ficou aberto **e por qual motivo**, e o próximo passo concreto.                                                                                               |
-| **4** | [`BACKLOG.md`](BACKLOG.md)                                                                                | Débitos vivos (D1–D39) e log de sessões. Consulta, não leitura linear — venha buscar o histórico de uma decisão específica.                                                                                    |
+| **4** | [`BACKLOG.md`](BACKLOG.md)                                                                                | Débitos vivos (D1–D46) e log de sessões. Consulta, não leitura linear — venha buscar o histórico de uma decisão específica.                                                                                    |
 
 ### Instruções para o próximo
 
@@ -36,7 +38,62 @@
 
 ---
 
-## 1. Resumo da Sessão (16/08/2026, 3ª) — passo 7: #289, o alarme que calava no caminho do dinheiro
+## 1. Resumo da Sessão (17/08/2026) — passo 9: #322, a flag que não recuperava um centavo
+
+Orquestração em subagentes (2 de pesquisa → 4 builders → revisão adversarial + campanha de mutação em paralelo → reparo → oráculos). Branch nova `feat/322-orquestracao-retentativa`, nascida de `main`. **6 commits.** Uma migração: a `0106`.
+
+| Commit    | O quê                                                                 |
+| :-------- | :-------------------------------------------------------------------- |
+| `a869a0f` | `feat(billing): add extradia retry columns to billing_cycle`          |
+| `a827b59` | `feat(billing): add retry command port and read retry webhook fields` |
+| `aaa396f` | `feat(billing): command extradia retries from the closing sweep`      |
+| `de017f6` | `feat(billing): report the retry stage in the closing job`            |
+| `0e22f2b` | `fix(billing): repair three grave defects in the retry sweep`         |
+| `e0f5772` | `test(billing): add the oracles the mutation campaign proved missing` |
+
+### O corpo da issue estava errado em quatro pontos, e três deles mudariam o desenho
+
+Planejar pelo corpo sozinho teria produzido retrabalho — de novo. O que a leitura dos comentários das #317/#318/#319 corrigiu:
+
+1. **"7 de retentativa + 7 de carência = 14 dias de escrita livre"** — falso duas vezes. A carência é **10** dias desde a `0098`, e as janelas **se sobrepõem**: `pastDueDesde` recebe `?? agora` na **primeira** recusa, então a retentativa corre **dentro** da carência. A "pendência" que a #322 manda decidir já tinha sido fechada na #319.
+2. **"Só retentar `PAYMENT_OVERDUE`"** — mais restritivo que a tabela da #318, que marca `valeGastarRetentativa` também em G0, G1, G4, G6 e G7. O desenho converge com o corpo mesmo assim, mas **por outro motivo** (D-2 abaixo), e isso importa: a diferença é exatamente o defeito que o mutante 7 encontrou.
+3. **A dependência da #317 já estava satisfeita** — a flag entrou em 15/08.
+4. O FAQ do Asaas (item 5) **nega** a existência da retentativa extradia. É anterior à Jornada 3. Não é fonte.
+
+### As decisões que fixaram o desenho
+
+O plano inteiro, com o porquê de cada uma, está em `docs/superpowers/plans/2026-08-16-322-orquestracao-retentativa.md`. As três que mudam o que o sistema faz:
+
+- **D-1, o gatilho é varredura, não webhook.** A validação das 23h59 do dia anterior transforma horário de execução em parte da regra; uma varredura que só comanda `dueDate ≥ amanhã` a satisfaz **por construção**. E o envelope de `paymentInstruction` que `normalizarEventoAsaas` assume **nunca foi medido** — pendurar recuperação de receita nele seria empilhar desenho sobre suposição. Contrapartida assumida: até ~1 dia de latência, que custa zero porque o dia da recusa já é coberto pela retentativa **intradia**, executada pelo PSP e que não consome nenhuma das 3.
+- **D-2, elegibilidade automática por campo novo.** `valeGastarRetentativa` responde "vale a pena **algum dia**", e em G1/G4/G6 vem com "**depois** que a clínica agir". Varredura não age nem conserta. Reusar aquele campo como gatilho seria confundir **flag habilitadora com mecanismo** — o defeito exato de [[pipe-que-le-o-recurso-errado]] — e queimaria tentativas que o caso de saldo precisa. Nasceu `retentavelAutomaticamente`, `true` **só em G2**.
+- **D-4, a reserva vem antes da chamada.** O contador é reservado por compare-and-set **antes** do `POST /retries`, o **contrário** da regra da #319 ([[varredura-escreve-o-proprio-predicado]]). A inversão vale só aqui: lá o efeito era interno e reversível, aqui é **externo e irreversível**, e a doc do Asaas nomeia a chamada concorrente como modo de falha primário. O custo — perder 1 das 3 tentativas numa falha de rede — não trava o ciclo, porque a elegibilidade continua sendo `contador < 3 ∧ sem instrução pendente ∧ existe data possível`.
+
+### O que a revisão adversarial derrubou: 3 GRAVES, e o pior deles não tinha nada a ver com retentativa
+
+- **A fila nunca drenava.** Os filtros baratos (grupo, orçamento, janela de 7 dias) rodavam **depois** do `LIMIT 20`. Ciclo permanentemente inelegível **não muda de estado** — então 20 deles ordenados por vencimento ASC ocupavam a passada inteira, todo dia, para sempre, e a recusa de saldo de hoje nunca era avaliada. É pior que o caso análogo do backstop justamente porque lá a linha avaliada muda de estado e sai do conjunto. Os três predicados foram para o `WHERE`; o pré-filtro grosso da janela foi **medido contra o Postgres** para provar que é conservador (00:00 SP de `hoje−6` passa, 23:59 SP de `hoje−7` não), e a autoridade da data exata continua na função pura.
+- **Cobrança já paga era retentada.** A guarda perguntava se havia instrução pendente; nunca se a **cobrança liquidou**. Com o webhook perdido — premissa explícita da própria D-1 — a passada seguinte comandava um **segundo débito da mesma mensalidade**. E "cobrança já liquidada" **não está** entre as 5 validações documentadas do Asaas: nada garante que o gateway recusaria. Agora a varredura consulta o status antes de reservar e, se pago, **concilia** em vez de retentar — auto-cura do webhook perdido.
+- **O guard de `RETRY_AFTER_DUE_DATE` engolia recusa de causa diferente.** Cenário: recusa original por saldo; a clínica revoga a autorização no app do banco; a retentativa volta G3 (`corteImediato`). O guard descartava, `recusa_codigo` seguia dizendo "sem saldo", e `aplicarBackstopDePrazo` — que decide o corte lendo essa coluna — ficava cego para uma autorização morta. **Dois testes de integração consagravam o defeito**, e foram invertidos. Ressalva honesta: o guard é **inerte em produção** hoje, porque `purpose` nunca foi observado em payload real; o defeito acordaria junto com o campo.
+
+Mais dois MÉDIOS: a `dueDate` podia cair **no dia do corte** por carência (clínica pagaria e ficaria `canceled`) — virou o teto C; e o predicado de carência dizia no comentário ser cópia fiel e tinha perdido o `status = 'past_due'`.
+
+### A mutação: 19 mutantes, 13 mortos, 6 sobreviventes — e o sobrevivente nº 1 era a decisão D-2
+
+O mutante que trocou `retentavelAutomaticamente` por `valeGastarRetentativa` no filtro **não matou nenhum teste**. Motivo medido: o único caso de grupo não-retentável usava **G5**, em que os dois campos são `false`. A decisão mais importante do desenho não tinha oráculo. Os grupos que **divergem** (G1, G6) entraram como caso.
+
+Os outros cinco sobreviventes cobriam assinatura `canceled`, ciclo que não está `falhou`, `instrucaoParaRetentativa` (método público sem teste nenhum), teto de 20 por passada com a sonda `+1`, e a borda **exata** da carência — o caso existente usava um dia além, onde `<` e `<=` empatam. Cada oráculo novo foi validado **aplicando o mutante e contando os mortos**, não presumindo.
+
+### Achados de ferramenta que custaram tempo
+
+- **Um `sql<Date>` cru num select do Drizzle volta como _string_** (`2026-08-20 12:00:00+00`): o caminho `.values()` do `postgres-js` pula a decodificação, e `civilSp` estourou `Invalid time value`. Resolvido com `.mapWith(...)`.
+- **`git diff` sob o hook do RTK devolve resumo, não patch aplicável** — de novo. Para reverter mutante, `rtk proxy git diff`; nunca `git checkout -- .`, que apagaria a entrega ([[mutacao-reverter-sem-git-checkout]]).
+
+### O que continua não medido — e não vira suposição
+
+**Nada do trilho headless foi exercitado contra gateway real.** O sandbox não ativa Pix Automático ([[sandbox-asaas-nao-ativa-pix-automatico]]), então `purpose`, `retryAttempt`, o corpo de sucesso do `POST /retries` e o alinhamento entre a recorrência do Asaas e o ciclo do Iris seguem sem medição. Os dois de maior consequência estão escritos no docblock da varredura e viraram **D44** e **D45**: se o alinhamento estiver um ciclo atrás, **toda** retentativa volta 400 e o orçamento é queimado; se o contador de 3 do Asaas for por instrução e não por cobrança, escolher sempre a instrução mais recente abre orçamento além de 3.
+
+---
+
+## 1b. Resumo da sessão de 16/08/2026 (3ª) — passo 7: #289, o alarme que calava no caminho do dinheiro
 
 Orquestração em subagentes (spec → builder → duas revisões adversariais em paralelo + campanha de mutação → reparo). Branch nova `fix/289-erro-aplicacao-discriminador`, nascida de `main`. **7 commits**, sem push e sem PR. Nenhuma migração: a entrega inteira cabe em código e teste.
 
@@ -97,7 +154,7 @@ Armadilha de processo que custou uma passada e vale registrar: **`git diff` sob 
 
 ---
 
-## 1b. Resumo da sessão de 16/08/2026 (2ª) — passo 6: #311, o piso que já estava certo
+## 1c. Resumo da sessão de 16/08/2026 (2ª) — passo 6: #311, o piso que já estava certo
 
 Orquestração em **4 subagentes** (recon → builder → revisão adversarial com mutação → reparo). Branch nova `feat/311-piso-cobranca-medido`, **empilhada** sobre a `feat/310-…` (que segue sem push e sem PR). 1 commit. Nenhuma migração, nenhuma mudança de comportamento: o diff é de **verdade documental** e de **oráculo de teste**.
 
@@ -139,7 +196,7 @@ Também marcado como fechado o **RISCO-1** (`piso não medido`) em `.specs/featu
 
 ---
 
-## 1c. Sessão anterior (16/08/2026, 1ª) — passo 5: #310, a cobrança que já existia
+## 1d. Sessão anterior (16/08/2026, 1ª) — passo 5: #310, a cobrança que já existia
 
 Orquestração em **11 subagentes**. 8 commits, **sem push, sem PR**. O passo 5 da ordem de conclusão: o gate de reativação da #290 emitia cobrança nova sempre, inclusive para o ciclo cuja cobrança o Asaas **ainda mantém pagável** — as duas ficavam vivas, e a clínica podia pagar o mesmo ciclo duas vezes.
 
@@ -213,7 +270,7 @@ As duas foram mergeadas para esta branch e **validadas por medição** — typec
 
 ---
 
-## 1d. Sessão anterior (15/08/2026, 5ª) — #318 em código, D33 e D35 fechados
+## 1e. Sessão anterior (15/08/2026, 5ª) — #318 em código, D33 e D35 fechados
 
 Orquestração em **6 subagentes**. 13 commits, **sem push, sem PR**. Três frentes: fechar a dívida de medição da #319 (**D33**), consertar o pipe do motivo de recusa (**D35**) e implementar a #318 inteira — classificação por código, coluna nova e o backstop de D+7 da Decisão 2.
 
@@ -332,7 +389,7 @@ SELECT policyname, roles, cmd FROM pg_policies
 
 ---
 
-## 1e. Sessão anterior (15/08/2026, 4ª) — passo 4: #318, a decisão de produto
+## 1f. Sessão anterior (15/08/2026, 4ª) — passo 4: #318, a decisão de produto
 
 Executado o **passo 4**: issue [#318](https://github.com/romulosutil/Iris/issues/318) — `REFUSED` colapsa causas distintas num único desfecho. O passo era **decisão de produto antes de código**: fechar a tabela código → desfecho e o checklist §5.2, depois aplicar a label `jules`.
 
@@ -418,7 +475,7 @@ Um teste por grupo, com régua de comportamento: apagar a linha daquele grupo no
 
 ---
 
-## 1f. Sessão anterior (15/08/2026, 3ª) — passo 3: #319
+## 1g. Sessão anterior (15/08/2026, 3ª) — passo 3: #319
 
 Executado o **passo 3**: issue [#319](https://github.com/romulosutil/Iris/issues/319) — `past_due` era terminal, a carência nunca corria, e a máquina de dívida da #287/#290 era alcançável **só** por revogação voluntária no app do banco. Quem simplesmente parava de pagar escrevia para sempre.
 
@@ -468,7 +525,7 @@ Verde do que roda: `pnpm typecheck` limpo · `pnpm lint` 0 erros (10 warnings pr
 
 ---
 
-## 1g. Sessão anterior (15/08/2026, 2ª) — passo 2: #317
+## 1h. Sessão anterior (15/08/2026, 2ª) — passo 2: #317
 
 Parâmetros que só existem na criação da autorização: `minLimitValue` (R$ 39,00, derivado de `FAIXAS_PRECIFICACAO[0]`) + `retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS"`; `PISO_COBRANCA_CENTAVOS` → `PISO_COBRANCA_AVULSA_CENTAVOS`; `vencimentoCobrancaDeCiclo` + `calendario-bancario.ts` com feriados móveis calculados da Páscoa. Commits `a2b3e36`, `792bff1`, `dd9efb7`, `597128c`.
 
@@ -480,7 +537,7 @@ Decisões: **D-A** `minLimitValue` deriva de `FAIXAS_PRECIFICACAO[0]`, não de `
 
 ---
 
-## 1h. Sessão anterior (15/08/2026, 1ª) — passo 1: #321
+## 1i. Sessão anterior (15/08/2026, 1ª) — passo 1: #321
 
 Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aact_hmlg_`).
 
@@ -510,7 +567,15 @@ Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aa
 
 ## 2. Estado do Repositório & Branch
 
-- **Branch atual:** `fix/289-erro-aplicacao-discriminador` — nascida de `main`, **7 commits próprios**, `origin/main...HEAD = 0 3` (0 atrás, nada para mergear), árvore limpa. **Sem push e sem PR** — decisão de abertura de PR fica com o Rômulo (§3b).
+- **Branch atual:** `feat/322-orquestracao-retentativa` — nascida de `main` (`a7d6e4e`), **6 commits próprios**, 0 atrás de `origin/main`, árvore limpa.
+- **Arquivos novos desta sessão:** `db/migrations/0106_billing_cycle_retentativa_extradia.sql` (+ snapshot e journal), `src/lib/billing/retentativa-data.ts` (+ `.test.ts`), `src/lib/billing/retentativa-extradia.int.test.ts`, `src/lib/billing/classificacao-recusa.test.ts`, `docs/superpowers/plans/2026-08-16-322-orquestracao-retentativa.md`. **Tocados:** `src/db/schema.ts`, `src/lib/billing/{subscription,classificacao-recusa,calendario-bancario}.ts`, `src/lib/billing/provider/{types,asaas}.ts` (+ `asaas.test.ts`), `src/app/api/hooks/asaas/route.ts`, `src/app/api/internal/billing/fechar-ciclos/route.ts` (+ `.test.ts`), `scripts/fechamento-ciclo-billing.mjs` (+ `.test.mjs`), `db/tests/provedor-fake.ts`.
+- ✅ **Migração `0106` aplicada e medida** no Postgres local: as 3 colunas conferidas em `information_schema.columns` (`retentativas_comandadas integer NOT NULL DEFAULT 0`, `ultima_retentativa_em timestamptz`, `ultima_retentativa_vencimento date`), grants em `column_privileges` e `created_at` do `__drizzle_migrations` batendo com o `when` do journal. ⚠️ **Correção do plano medida no banco:** em `billing_cycle` quem escreve é **`iris_auth`** (`SELECT/INSERT/UPDATE`); `app_role` recebe **só `SELECT`** — o plano dizia `UPDATE` para `app_role` e estava errado. Precedente nas `0100`/`0101`.
+- **Baselines medidas nesta sessão:** `pnpm test` **201 arquivos / 1396 testes** · integração **242 suites / 971 testes, 0 falhas** · `pnpm test:rls` **107 arquivos / 971 testes, 0 pulados** · `typecheck` limpo · `lint` **0 erros / 10 warnings** pré-existentes (`src/stories/**`, `app/error.tsx`, `header.tsx` — não tocados).
+- ⚠️ **A #322 continuava dizendo que dependia da #317** e que a carência era de 7 dias. Os dois pontos estão superados; quem reler a issue depois do merge precisa do §1 para não replanejar contra o corpo.
+
+### Estado da branch anterior
+
+- **`fix/289-erro-aplicacao-discriminador`** — **mergeada**: PR [#347](https://github.com/romulosutil/Iris/pull/347) entrou em `main` (`a7d6e4e`) e a **issue #289 fechou**, conferido por `gh api` ([[pr-em-pt-br-nao-fecha-issue]]). Os itens 4 e 9 do checkpoint anterior estão **consumados**.
 - **Commits desta sessão (7):** `52b188d`, `6e70935`, `d63c2fe` (núcleo, sessão anterior interrompida) + `ab05a04`, `8b1e9c5`, `b16da8c`, `2d63e1c` (reparo dos 5 achados). Tabela com os subjects em §1.
 - **Arquivos novos:** `src/lib/billing/erro-aplicacao.ts`, `src/lib/billing/erro-aplicacao.test.ts`. Tocados: `src/app/api/hooks/asaas/route.ts` (+ `route.int.test.ts`), `src/lib/billing/subscription.ts`, `src/lib/billing/debito.ts`, `reprocessamento-provedor.int.test.ts`, `fechamento-provedor-por-linha.int.test.ts`, `src/app/(app)/assinatura/gate-debito.int.test.ts`. **Nenhuma migração** — `src/db/schema.ts` volta ao estado de `main` (a nota do `d63c2fe` saiu de lá para o módulo).
 - ✅ **`#310` e `#311` fecharam** (PRs #339 e #340 mergeados em 16/08 às 21:23 e 21:28). Conferido por `gh api`, não presumido pelo `Closes` ([[pr-em-pt-br-nao-fecha-issue]]). Os itens 2 e 3 da §3 do checkpoint anterior estão **consumados**.
@@ -537,11 +602,11 @@ Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aa
 
 ## 3. Próximos Passos Sugeridos
 
-1. **Medir `alerta_risco_auth_select` em produção.** É o item mais barato e o de maior dano por token gasto: uma consulta read-only (§1, "A deriva de hash") separa "o painel Super Admin está mentindo zero há semanas" de "só o banco local está torto". Enquanto não se mede, o estado correto é **não medido**, não "provavelmente afetado".
+1. ✅ ~~**Medir `alerta_risco_auth_select` em produção.**~~ — **feito em 16/08 por Rômulo via psql**. A query `SELECT policyname, roles, cmd FROM pg_policies WHERE schemaname='public' AND tablename='alerta_risco_clinico'` retornou `alerta_risco_auth_select | {iris_auth} | SELECT` (e `alerta_risco_scope | {app_role} | ALL`). A policy **existe em produção**. A suspeita de que produção rodava sem a policy foi falsificada por evidência direta; **D37 fechado por medição**. O defeito estava restrito ao banco de dados de desenvolvimento local.
 2. ✅ ~~Mergear PR #339 e PR #340~~ — **feito em 16/08** (21:23 e 21:28); **#310 e #311 fecharam**, conferido por `gh api`. Registro original abaixo, para quem vier atrás do encadeamento: ~~**Mergear na ordem: PR [#339](https://github.com/romulosutil/Iris/pull/339) (#310 → `main`) e depois PR [#340](https://github.com/romulosutil/Iris/pull/340) (#311).**~~ As duas branches foram **pushadas e as PRs abertas em 16/08**. A #340 é **encadeada**: `base = feat/310-…`, para que o diff dela mostre só os 6 arquivos da #311 — o GitHub reaponta para `main` sozinho quando a #339 fechar. ⚠️ **A keyword `Closes #311` só dispara no merge para `main`**, então conferir `gh issue view 311` depois do merge; o mesmo vale para o `Closes #310` da #339 ([[pr-em-pt-br-nao-fecha-issue]]).
 3. ~~**Passo 6: #311**~~ — **feito nesta sessão** (§1). O piso real é exatamente R$ 5,00, então o `500` ficou; a entrega foi verdade documental + oráculo de teste. A cláusula "se o Asaas não tiver mínimo próprio, remover a constante" está **resolvida contra a remoção**: o mínimo é do Asaas, medido, e a API o impõe com mensagem nomeada. **A issue #311 continua `open`** e sem label — fecha pelo `Closes #311` do PR.
-4. ~~**Passo 7: #289**~~ — **executado nesta sessão** (§1), com revisão adversarial e reparo. O discriminador foi decidido e é **duplo**: `externalReference` no trilho que tem objeto `payment`, **id de instrução** (fail-closed) no trilho headless. ⚠️ **Isso diverge do comentário 1 da issue**, que descartava `externalReference` e apontava `conciliationIdentifier`/`endToEndIdentifier` — nenhum dos dois foi usado, e nenhum é necessário para o alarme. **A issue #289 continua `open` e sem label `jules`**: ela foi executada aqui, não delegada. Fecha por `Closes #289` quando a PR sair (§3b).
-5. **Passo 9: #322** (orquestração de retentativa extradia, `3R_7D`) — é o **único passo da linha que ainda não começou**. Depende da #317 (a flag, já em `main`) e produz o caso do **D39** (`EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` é G6): planejar já sabendo disso.
+4. ~~**Passo 7: #289**~~ — **executado em 16/08**. PR [#347](https://github.com/romulosutil/Iris/pull/347) aberto, mergeado e issue **#289 fechada**.
+5. ~~**Passo 9: #322**~~ — **executado nesta sessão** (§1), PR [#348](https://github.com/romulosutil/Iris/pull/348) aberto. Com ele **a ordem de conclusão da linha de billing termina**: os 9 passos estão fechados. O que sobra da linha não é passo, é medição em produção (itens 7 e 8) e leitura na interface (item 6). ⚠️ O **D39** ficou **mais** concreto, não menos: a varredura agora produz `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS`, que é G6 e não persiste `recusa_codigo` — o caso hipotético virou caminho de código vivo.
 6. **D36 — a clínica continua sem ver nada.** A #310 acrescentou tela para as cobranças em aberto, mas a recusa em si (`recusa_codigo`, os 9 grupos da #318) segue sem leitor: `faixa-trial.tsx` devolve `null` para `pagamento_atrasado`. É o maior buraco de produto vivo hoje.
 7. **Exercitar o backfill da `0098` em base com dados.** Não é reabrir o D33: é a parte dele que ficou fora do alcance da medição, e o ensaio com clínica de teste em produção é a primeira oportunidade real.
 8. **Agendar o ensaio com clínica de teste em produção.** Único caminho para as perguntas remanescentes: unidade da janela, recorrência com dois valores diferentes, pagador concluir sem teto, identificador da cobrança de ativação, `DELETE` de autorização já cancelada, **em que campo do payload de webhook o código de recusa pousa** e **se o envelope que `normalizarEventoAsaas` assume é o real**.
@@ -555,12 +620,15 @@ As três primeiras nasceram na 1ª sessão de 16/08; as demais vêm de antes e *
 1. **Cobrança apagada no painel tranca a clínica, de propósito.** Hoje, `deleted: true` bloqueia com "fale com o suporte" e não libera o id, porque libertá-lo arriscaria a idempotência de `debito:<ancora>` **ressuscitar** a cobrança deletada — e isso não está medido. Aceitar a revisão manual, ou medir se `GET /payments?externalReference=` devolve cobrança deletada e então liberar?
 2. **A clínica pode ver duas formas de pagamento na mesma tela.** É a consequência direta da D-2, e foi a escolha certa contra cobrança dupla — mas é uma tela mais confusa do que a de hoje. Aceita, ou prefere que a reativação exija quitar a cobrança antiga **primeiro**, uma de cada vez?
 3. **Fase 7 do plano da #310 não foi executada** (comentário de módulo consolidando o desenho + abertura do PR). Fecho numa próxima sessão, ou o PR sai como está?
-4. **`alerta_risco_auth_select`:** escrever a migração agora, ou aceitar o zero silencioso do painel Super Admin até o reset pré-go-live (o `.sql` em disco já tem o fix, então o banco zerado cura sozinho)?
+4. ~~**`alerta_risco_auth_select` (D37):**~~ — **Fechado por medição em produção** (16/08). A policy existe em produção (`SELECT TO iris_auth`). Nenhuma migração necessária.
 5. **D34:** o corte por inadimplência passa a escrever trilha em `audit_log`, e o job ganha um limiar de `carenciaFalhas` que derruba o `exit code`?
 6. ~~**Perda do relatório da rota sob falha parcial**~~ — **fechada**: virou o **D38** e já foi resolvida no PR #323 (a rota mantém o 500 com o corpo completo, e ganhou `carenciaAbortada`/`backstopAbortado`).
 7. **Resíduo do G6:** reabrir a decisão de que G6 não escreve `recusa_codigo`, para que o backstop consiga distinguir "primeira recusa foi defeito nosso" de "silêncio total"?
 8. **O discriminador da #289 diverge do comentário 1 da própria issue.** Aquele comentário (medição 7a da #321) declara `externalReference` **descartado** como discriminador e aponta `immediateQrCode.conciliationIdentifier` ou `endToEndIdentifier`. A entrega **manteve** `externalReference` — mas só como discriminador do trilho que tem objeto `payment` — e resolveu o trilho headless pela **presença da instrução**, que é prova por construção e não exige identificador novo nenhum. Nenhum dos dois candidatos do comentário foi usado, e nenhum é necessário para o alarme. Ratificar a divergência, ou exigir a leitura de `conciliationIdentifier`?
-9. **A PR da `fix/289-…` sai agora, ou espera?** A branch está pronta e verde, 0 atrás de `origin/main`, mas **não foi pushada**: abrir PR é ato externo e fica com você. Lembrete duro: a keyword de fechamento tem de ser **`Closes #289`, em inglês** — "Fecha #289" mergeia e deixa a issue aberta em silêncio ([[pr-em-pt-br-nao-fecha-issue]]).
+9. ~~**A PR da `fix/289-…` sai agora, ou espera?**~~ — **consumada**: PR #347 aberta, mergeada e issue #289 fechada em 16/08.
+10. **G7 (operacional/transitório) ficou de fora da retentativa automática.** A tabela da #318 diz "sim" para ele, e o desenho desta sessão diz "não" — porque o balde inclui `OTHER`, que é desconhecido disfarçado de transitório, e porque a retentativa **intradia** do PSP já cobre o transitório do mesmo dia. Ratificar a exclusão, ou aceitar gastar tentativa em `EXTERNAL_INSTITUTION_ERROR`?
+11. **O esgotamento do orçamento deixou de aparecer no relatório do job.** É consequência direta da correção do GRAVE 1: o ciclo com 3 tentativas gastas é barrado no `WHERE`, então não sai mais linha nenhuma dizendo "esgotou". O número continua legível em `billing_cycle.retentativas_comandadas`, mas ninguém o lê. Aceitar, ou o relatório precisa de um contador próprio de esgotados?
+12. **A retentativa não tem leitor.** Nenhuma tela mostra que houve retentativa, quantas restam ou quando é a próxima — é o mesmo **D36** que já engolia a recusa. A clínica passa a ser debitada até 3 vezes em 7 dias sem ver uma linha sobre isso. Entra no escopo do D36, ou vira issue própria?
 
 ---
 
@@ -571,6 +639,21 @@ Registrados aqui porque nasceram no caminho e não têm dono. Detalhe no `BACKLO
 **Saiu na 3ª sessão de 16/08, por ter fechado:** o **discriminador indefinido do `erro_aplicacao`** — que era o que travava a #289 e a label `jules`.
 
 **Saíram em 16/08, por terem fechado:** o ruído de 39 erros de lint (era `.next` aninhado em worktree, não código), o timeout de `vencimento.test.ts`, a janela de cobrança dupla que a #319 abriu (é o que a #310 fecha), a perda do relatório da rota sob falha parcial (D38, PR #323) e — na 2ª sessão — **o piso de cobrança declarado como não medido** (RISCO-1 da spec da #290; era o `500` sem prova, agora medido e com oráculo).
+
+### Novos em 17/08 (sessão da #322)
+
+| Achado                                                                                                                                                                              | Onde                                                                      | Estado                                                                                                                                                                                                                                                                                                                       |
+| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **O "início do próximo ciclo" da validação 4 do Asaas é lido de `subscription.ciclo_atual_fim`, e o alinhamento entre a recorrência do gateway e o ciclo do Iris nunca foi medido** | `subscription.ts` (teto B da varredura)                                   | **Não medido, e o pior caso é total:** se a recorrência do Asaas estiver um ciclo atrás, **toda** retentativa volta 400 `colide_com_proximo_ciclo` e o orçamento das 3 é queimado sem debitar nada. Escrito no docblock. Virou **D44**; primeira medição possível é o ensaio com clínica de teste.                           |
+| **O contador de 3 tentativas do Asaas pode ser por instrução, não por cobrança** — a varredura escolhe sempre a instrução recusada **mais recente**                                 | `provider/asaas.ts` (escolha determinística da instrução `REFUSED`)       | **Não medido.** A escolha deixou de ser `lista[0]` (arbitrária) e passou a ser a mais recente com desempate estável — mas se o contador for por instrução, retentar sempre a mais nova **abre orçamento além de 3**. Virou **D45**.                                                                                          |
+| **`purpose` e `retryAttempt` nunca apareceram em payload real** — o guard que impede o carimbo triplo depende dos dois                                                              | `provider/asaas.ts` (`normalizarEventoAsaas`) · `subscription.ts` (guard) | **Não medido, bloqueio estrutural** (sandbox não ativa Pix Automático). Se a doc estiver errada, os dois voltam `null` **em silêncio**, o guard nunca dispara e o mesmo ciclo é carimbado `past_due` até 3 vezes. A conferência é ler o `bruto` do primeiro `INSTRUCTION_REFUSED` de retentativa em produção. Virou **D46**. |
+| **O esgotamento do orçamento não aparece mais no relatório do job**                                                                                                                 | `subscription.ts` (`WHERE` da varredura) · `fechar-ciclos/route.ts`       | Consequência direta da correção do GRAVE 1 — o ciclo esgotado é barrado no SQL, então não gera linha. O número segue legível em `billing_cycle.retentativas_comandadas`, e **ninguém o lê**. Decisão 11 da §3b.                                                                                                              |
+| **A retentativa não tem leitor: nenhuma tela diz que houve, quantas restam ou quando é a próxima**                                                                                  | UI · `faixa-trial.tsx`                                                    | Deliberado — é o **D36**, que já engolia a recusa. Mas o peso mudou: a clínica passa a ser debitada até 3 vezes em 7 dias sem ver uma linha sobre isso. Decisão 12 da §3b.                                                                                                                                                   |
+| **`isNotNull(vencimento_cobranca)` no predicado é redundante** — o pré-filtro grosso da janela já exclui `NULL`                                                                     | `subscription.ts` (elegibilidade)                                         | Medido pela mutação: só amputando as três cláusulas juntas o caso fica vermelho. O oráculo fixa o comportamento fail-closed, mas **não isola aquela linha** — irmão de [[teste-verde-que-nao-testa-nada]]. Mantido por ser a regra literal.                                                                                  |
+| **O guard de `RETRY_AFTER_DUE_DATE` é inerte em produção hoje**                                                                                                                     | `subscription.ts` (`conciliarPagamentoDeCiclo`)                           | Só dispara se `paymentInstruction.purpose` existir, e isso nunca foi observado. O defeito que a revisão achou nele (engolir recusa de causa diferente) foi corrigido, mas o **acerto** também só acorda quando o campo chegar. Parte do **D46**.                                                                             |
+| **`mensagemDeErroAsaas` junta N descrições com `" \| "`, e a classificação casa na ordem de `TRECHOS_DE_VALIDACAO`**                                                                | `provider/asaas.ts`                                                       | Corpo com dois erros classifica pelo primeiro trecho **da nossa lista**, não pelo primeiro erro **do gateway**. Inerte hoje (as 5 validações são mutuamente exclusivas na prática), mas é ordem nossa disfarçada de ordem deles.                                                                                             |
+| **Um `sql<Date>` cru num select do Drizzle volta como _string_**                                                                                                                    | ferramental (`postgres-js` + Drizzle)                                     | `.values()` pula a decodificação, e o valor chega como `2026-08-20 12:00:00+00`; `civilSp` estourou `Invalid time value`. Resolvido com `.mapWith(...)`. Nota de processo, custou uma passada.                                                                                                                               |
+| **No instante exato do corte por carência, "comandada" é inalcançável**                                                                                                             | `retentativa-extradia.int.test.ts`                                        | Nota de teste: com o corte hoje, a candidata mínima (`hoje+1`) sempre cai no dia do corte ou depois, e o teto C barra. O par de casos prova que o predicado devolveu falso, não que a retentativa sairia.                                                                                                                    |
 
 ### Novos em 16/08 (sessão da #289, 3ª)
 

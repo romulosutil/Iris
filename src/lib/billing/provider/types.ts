@@ -336,6 +336,101 @@ export type CobrancaParaReuso =
   /** Não reapresentável. Quem chama manda o ciclo para a cobrança consolidada. */
   | { reuso: "morta"; motivo: MotivoNaoReuso };
 
+/**
+ * Por que o gateway recusou o COMANDO de retentativa extradia (#322).
+ *
+ * União **fechada**, ao contrário de `motivoRecusa` da cobrança — e a diferença
+ * não é descuido. `refusalReason` é catálogo do BANCO PAGADOR, declarado como
+ * `string` sem `enum` no OpenAPI e crescendo sem versionar. Isto aqui é outra
+ * coisa: são as **validações do próprio Asaas** sobre um comando NOSSO, uma
+ * lista curta e conhecida, e cada item exige uma decisão diferente da varredura.
+ * `desconhecido` é o ramo obrigatório para o que não casar — nunca se inventa
+ * código de erro do gateway a partir de texto.
+ */
+export type MotivoRecusaDeRetentativa =
+  /** "Limite de retentativas excedido. A regra permite no máximo 3 tentativas." */
+  | "limite_de_tentativas"
+  /**
+   * "A data solicitada ultrapassa o limite de 7 dias corridos permitidos após o
+   * vencimento original."
+   */
+  | "fora_da_janela_de_7_dias"
+  /**
+   * "O agendamento da retentativa deve ser enviado até as 23h59 do dia anterior
+   * à data desejada para liquidação."
+   */
+  | "fora_do_horario_de_comando"
+  /**
+   * "A data da retentativa não pode coincidir ou ultrapassar o dia de início do
+   * próximo ciclo da recorrência."
+   */
+  | "colide_com_proximo_ciclo"
+  /**
+   * "A autorização desta cobrança não permite retentativas extradia (Política
+   * N)." — autorização criada sem `retryPolicy`. É **irreparável**: o Asaas só
+   * aceita a política na criação, então o conserto é novo QR e novo
+   * consentimento da clínica no app do banco.
+   */
+  | "autorizacao_sem_politica"
+  /** 400 cuja mensagem não casa com nenhuma das cinco validações conhecidas. */
+  | "desconhecido";
+
+/**
+ * Desfecho do comando de retentativa extradia. União discriminada por `ok`:
+ * quem chama não consegue ler o motivo sem antes provar que houve recusa.
+ *
+ * ⚠️ `{ ok: false }` significa **o gateway respondeu e disse não** — decisão
+ * definitiva, sobre a qual a varredura age (registra o motivo nomeado e não
+ * insiste). Indisponibilidade NÃO vem por aqui: erro de rede, timeout e 5xx
+ * SOBEM como exceção, porque "não consegui perguntar" virando "o gateway
+ * recusou" é a mesma troca que `consultarCobrancaParaReuso` proíbe.
+ */
+export type ResultadoRetentativa =
+  | { ok: true }
+  | {
+      ok: false;
+      motivo: MotivoRecusaDeRetentativa;
+      /** A mensagem do gateway, crua, para o log e o relatório do job. */
+      mensagemGateway: string;
+    };
+
+/**
+ * O que a varredura de retentativa precisa saber sobre a INSTRUÇÃO de débito de
+ * uma cobrança, quando tudo o que ela tem é o id da COBRANÇA (#322, D-4).
+ *
+ * ## Por que a porta ganhou isto
+ *
+ * `comandarRetentativa` recebe o id da **instrução**, e esse id não existe em
+ * lugar nenhum do Iris: `billing_cycle` persiste `provider_charge_id`, não o da
+ * instrução, e o único ponto do fluxo em que o id da instrução aparece é o
+ * envelope do webhook — que a varredura não tem em mãos, e cuja entrega não é
+ * garantida (é justamente por isso que a D-1 escolheu varredura em vez de
+ * reação a evento). Sem este método a varredura fica sem o argumento
+ * obrigatório da chamada.
+ *
+ * Devolve as DUAS respostas na mesma ida ao gateway porque as duas saem da
+ * mesma listagem (`GET /pix/automatic/paymentInstructions?paymentId=…`), e
+ * porque a varredura precisa das duas antes de reservar a tentativa.
+ *
+ * Erro de transporte **sobe**, como em `consultarCobrancaParaReuso`: "não
+ * consegui perguntar" não pode virar "não há instrução pendente" — seria
+ * comandar uma retentativa por cima de outra já agendada.
+ */
+export interface InstrucaoParaRetentativa {
+  /**
+   * Id da instrução RECUSADA — o argumento de `comandarRetentativa`. `null`
+   * quando o gateway não tem nenhuma recusada para esta cobrança (nada a
+   * retentar).
+   */
+  providerInstructionId: string | null;
+  /**
+   * `true` quando já existe instrução a caminho (`AWAITING_REQUEST` /
+   * `SCHEDULED`). É a **Guarda 1** da D-4: comandar por cima de uma tentativa
+   * ainda não executada queima orçamento sem nenhuma informação nova.
+   */
+  pendente: boolean;
+}
+
 /** Tipos de evento que o Iris sabe tratar. Tudo mais é `desconhecido`. */
 export type TipoEventoNormalizado =
   | "assinatura.autorizada"
@@ -377,6 +472,26 @@ export interface EventoWebhookNormalizado {
    */
   providerInstructionId: string | null;
   referenciaExterna: string | null;
+  /**
+   * Onde este evento cai dentro da política de retentativa `3R_7D` (#322, D-5).
+   *
+   * **Existe SEMPRE**, com os dois campos `null` quando não há instrução no
+   * evento (cobrança comum, autorização) ou quando o gateway não modela isso.
+   * Opcional (`retentativa?`) obrigaria todo consumidor a escrever `?.`, e o
+   * caminho que importa — "esta recusa é de uma RETENTATIVA, então não
+   * recarimbe `past_due`" — é justamente o que não pode depender de o
+   * consumidor ter lembrado do encadeamento opcional.
+   *
+   * - `proposito`: `SCHEDULE` é a instrução original do ciclo;
+   *   `RETRY_AFTER_DUE_DATE` é uma retentativa extradia comandada por nós.
+   *   Qualquer outro valor vira `null` — vocabulário desconhecido nunca é
+   *   repassado cru, senão a comparação do consumidor vira adivinhação.
+   * - `tentativa`: 1, 2 ou 3. Fora disso, `null`.
+   */
+  retentativa: {
+    proposito: "SCHEDULE" | "RETRY_AFTER_DUE_DATE" | null;
+    tentativa: number | null;
+  };
   ocorridoEm: Date | null;
   bruto: unknown;
 }
@@ -518,6 +633,45 @@ export interface BillingProvider {
     bairro?: string | null;
     cep?: string | null;
   }): Promise<void>;
+
+  /**
+   * Comanda UMA retentativa extradia da instrução de débito recusada (#322).
+   *
+   * **Opcional pelo mesmo critério de `atualizarCliente`**: "instrução de débito
+   * automático retentável" é entidade do Pix Automático, não de todo gateway.
+   * Obrigar todos os adapters a fingir uma seria a mentira do D21. Call site
+   * guarda com `if (provider.comandarRetentativa)` e, sem o método, apenas não
+   * comanda — a assinatura continua caindo na carência normal, que é o
+   * comportamento de hoje.
+   *
+   * @param providerInstructionId id da INSTRUÇÃO recusada (não o da cobrança).
+   * @param dueDate data desejada de liquidação, no formato `YYYY-MM-DD` — o
+   *   mesmo do wire do Asaas. Quem chama já calculou contra as quatro
+   *   restrições de data (D-3 da #322); o adapter não corrige data nenhuma.
+   *
+   * Devolve `{ ok: false }` só quando o gateway RESPONDEU recusando. Falha de
+   * transporte sobe, e é a varredura que decide o que fazer com ela.
+   */
+  comandarRetentativa?(
+    providerInstructionId: string,
+    dueDate: string,
+  ): Promise<ResultadoRetentativa>;
+
+  /**
+   * Resolve, a partir do id da COBRANÇA, a instrução a retentar e se já existe
+   * uma a caminho (#322, D-4). Ver `InstrucaoParaRetentativa`.
+   *
+   * **Opcional pelo mesmo critério de `comandarRetentativa`**, e na prática o
+   * par é indivisível: sem este método não há como obter o argumento daquele,
+   * então a varredura trata a ausência de qualquer um dos dois como
+   * "provedor sem suporte" e simplesmente não comanda.
+   *
+   * Falha de transporte **sobe** — a varredura registra a linha com `erro` e
+   * tenta de novo na passada seguinte, sem ter gasto tentativa.
+   */
+  instrucaoParaRetentativa?(
+    providerChargeId: string,
+  ): Promise<InstrucaoParaRetentativa>;
 }
 
 /**

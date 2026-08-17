@@ -6,13 +6,18 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   sql,
 } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { billingCycle, subscription } from "@/db/schema";
 import { apurarDebitoProRata, calcularMensalidadeCentavos } from "./calculator";
-import { classificarRecusa, type GrupoRecusa } from "./classificacao-recusa";
+import {
+  classificarRecusa,
+  CODIGOS_RETENTAVEIS_AUTOMATICAMENTE,
+  type GrupoRecusa,
+} from "./classificacao-recusa";
 import {
   classificarFalhaDeConciliacao,
   MOTIVO_ASSINATURA_DESCONHECIDA,
@@ -21,13 +26,19 @@ import {
 } from "./erro-aplicacao";
 import { notificarCancelamentoAssinatura } from "./notificacao-cancelamento";
 import {
+  calcularDueDateDeRetentativa,
+  JANELA_RETENTATIVA_DIAS_CORRIDOS,
+} from "./retentativa-data";
+import {
   AsaasProvider,
   BillingProviderError,
   getBillingProvider,
   getProviderPorId,
   type AutorizacaoPendente,
   type BillingProvider,
+  type EventoWebhookNormalizado,
   type MetodoPagamento,
+  type MotivoRecusaDeRetentativa,
   type StatusAssinaturaProvider,
   type StatusCobranca,
   type TipoEventoNormalizado,
@@ -1654,6 +1665,543 @@ async function carimbarPorPrazo(
 }
 
 /**
+ * Orçamento de retentativa extradia por cobrança, imposto pelo Asaas
+ * (`ALLOW_THREE_IN_SEVEN_DAYS`). Passar disto devolve 400
+ * (`limite_de_tentativas`), então o contador local existe para nunca chegar lá.
+ */
+const MAXIMO_RETENTATIVAS_POR_CICLO = 3;
+
+/**
+ * Teto de ciclos AVALIADOS pela varredura de retentativa por execução (#322).
+ *
+ * Mesmo orçamento de 30s do cliente do job que motivou
+ * `TETO_CORTES_POR_PASSADA` e `TETO_BACKSTOP_POR_PASSADA`, e o mesmo número
+ * pela mesma pior hipótese: cada ciclo elegível faz até TRÊS chamadas
+ * sequenciais ao gateway — a consulta da instrução (Guarda 1), a reconsulta da
+ * cobrança (Guarda 1b) e o comando da retentativa. A terceira entrou com a
+ * proteção contra o débito em duplicidade; o teto não subiu junto de propósito,
+ * porque o orçamento que ele guarda é o de TEMPO, e ele encolheu.
+ *
+ * "Avaliados", e não "comandados": um ciclo que sai por `instrucao_pendente`
+ * ou por `sem_data_possivel` consome cota do mesmo jeito, exatamente como o
+ * `ignorada_g6` do backstop. Contar só os comandados faria o teto deixar de
+ * limitar o tempo da passada, que é a única coisa que ele existe para limitar.
+ *
+ * O que NÃO entra mais na cota é o inelegível PERMANENTE (grupo que não retenta
+ * sozinho, orçamento gasto, vencimento velho demais para qualquer data caber):
+ * esses são barrados no `WHERE`, porque um ciclo que nunca muda de estado
+ * ocupava vaga em toda passada — para sempre — e a fila não drenava.
+ */
+export const TETO_RETENTATIVAS_POR_PASSADA = 20;
+
+/**
+ * Por que um ciclo elegível a olho nu NÃO teve retentativa comandada.
+ *
+ * Só entra aqui o que a varredura decide DEPOIS de selecionar a linha. O que o
+ * `WHERE` já barra (grupo não retentável, orçamento gasto, vencimento fora da
+ * janela grossa) não tem membro nenhum: motivo que nunca sai é código sem
+ * oráculo, e o SQL passou a ser a única autoridade daquelas três regras.
+ */
+export type MotivoNaoComandada =
+  /** Guarda 1: já existe instrução a caminho (`AWAITING_REQUEST`/`SCHEDULED`). */
+  | "instrucao_pendente"
+  /** A cobrança já foi liquidada no gateway — webhook perdido, auto-cura. */
+  | "cobranca_ja_liquidada"
+  /** Nenhuma data satisfaz as quatro restrições da D-3. */
+  | "sem_data_possivel"
+  /** A carência desta assinatura vence nesta mesma passada — vai ser cortada. */
+  | "carencia_vence_nesta_passada"
+  /** Guarda 2 (CAS): outra passada reservou a tentativa primeiro. */
+  | "reserva_perdida"
+  /** O adapter da linha não modela instrução de débito retentável. */
+  | "provedor_sem_suporte"
+  /** Ensaio: a linha TERIA sido comandada, e parou por ser `dryRun`. */
+  | "dry_run";
+
+export interface ResultadoComandoRetentativa {
+  cicloId: string;
+  clinicId: string;
+  subscriptionId: string;
+  providerChargeId: string | null;
+  /** Resolvido no gateway a partir da cobrança; `null` quando não se chegou lá. */
+  providerInstructionId: string | null;
+  recusaCodigo: string | null;
+  grupo: GrupoRecusa;
+  /** 1..3 — a tentativa RESERVADA. `null` quando nada foi reservado. */
+  tentativa: number | null;
+  /**
+   * `YYYY-MM-DD` calculada para esta passada.
+   *
+   * Preenchida sempre que o cálculo chegou a uma data — inclusive quando a
+   * reserva foi perdida ou o gateway recusou depois. Zerá-la nesses casos
+   * esconderia do relatório do job justamente a data que o gateway avaliou,
+   * que é o dado com que se investiga um `fora_da_janela_de_7_dias`.
+   */
+  dueDate: string | null;
+  acao: "comandada" | "nao_comandada" | "recusada_pelo_gateway";
+  motivo: MotivoNaoComandada | MotivoRecusaDeRetentativa | null;
+  truncado: boolean;
+  /** Falha de transporte/banco. Não é recusa: a passada segue e retenta amanhã. */
+  erro: string | null;
+}
+
+/**
+ * Varredura de retentativa extradia do Pix Automático (#322).
+ *
+ * ## Por que VARREDURA e não reação ao webhook (D-1)
+ *
+ * A validação 3 do Asaas — "o agendamento deve ser enviado até as 23h59 do dia
+ * anterior à data desejada" — transforma o horário de execução em parte da
+ * regra. Uma varredura que só comanda `dueDate >= amanhã` a satisfaz **por
+ * construção**, a qualquer hora do dia. E há três razões que reforçam:
+ *
+ * - o envelope de recusa que `normalizarEventoAsaas` assume **não foi medido**
+ *   (nenhuma autorização chega a `ACTIVE` no sandbox, #321) — pendurar a
+ *   recuperação de receita nele é empilhar desenho sobre suposição;
+ * - entrega de webhook não é garantida; varredura reavalia o predicado toda
+ *   passada e **se auto-cura**, reação a evento perde o caso para sempre;
+ * - dois webhooks do mesmo ciclo é o modo de falha que a própria doc do Asaas
+ *   nomeia.
+ *
+ * A contrapartida assumida é até ~1 dia de latência entre a recusa e a 1ª
+ * retentativa extradia. Custo real ≈ zero: o dia da recusa já é coberto pela
+ * retentativa **intradia**, que o PSP Pagador executa sozinho entre 18h e 21h e
+ * que **não consome** nenhuma das 3.
+ *
+ * ## Só G2 comanda sozinho (D-2), e quem impõe isso é o SQL
+ *
+ * O gatilho é `retentavelAutomaticamente`, campo próprio da política — nunca
+ * `valeGastarRetentativa`, que responde outra pergunta ("vale algum dia?", com
+ * um "depois que a clínica agir" colado em G1, G4 e G6). Uma varredura não sobe
+ * limite, não corrige cadastro e não conserta bug; reusar aquele campo aqui
+ * queimaria em `ACCOUNT_CLOSED` as tentativas que o caso de saldo precisa.
+ *
+ * A regra mora no `WHERE` (via `CODIGOS_RETENTAVEIS_AUTOMATICAMENTE`), junto com
+ * o orçamento de 3 e o piso grosso da janela. Filtrar depois do `LIMIT` fazia o
+ * inelegível permanente ocupar vaga em toda passada — e como ele nunca muda de
+ * estado, a fila **não drenava**: a recusa nova ficava atrás dele para sempre.
+ *
+ * ## A cobrança pode já ter sido paga (Guarda 1b)
+ *
+ * A premissa da D-1 é que webhook se perde. A consequência que faltava tratar é
+ * que o ciclo continua `falhou` com o `recusa_codigo` retentável, e a passada
+ * seguinte comandaria um SEGUNDO débito da mesma mensalidade. Por isso a
+ * varredura reconsulta a cobrança antes de reservar; achando-a paga, concilia
+ * (auto-cura) e sai sem gastar tentativa.
+ *
+ * ## A ordem é reserva → chamada → desfecho, o CONTRÁRIO da #319 (D-4)
+ *
+ * A #319 estabeleceu "gravar o estado por último", para que uma falha parcial
+ * deixe a linha dentro do conjunto elegível e a passada seguinte se cure. Aqui
+ * a ordem é invertida **de propósito**, e a inversão vale só aqui: lá o efeito
+ * era interno e reversível; aqui o efeito é **externo e irreversível** (uma
+ * instrução de débito agendada no banco pagador), e a doc do Asaas nomeia a
+ * chamada concorrente como modo de falha primário. Reservar depois de chamar
+ * significaria duas passadas simultâneas comandando duas retentativas para a
+ * mesma cobrança.
+ *
+ * O custo assumido é que uma falha de rede pode consumir 1 das 3 tentativas sem
+ * ter comandado nada. **Esse custo não trava o ciclo**: a elegibilidade continua
+ * sendo `contador < 3 ∧ sem instrução pendente ∧ existe data possível`, então a
+ * passada seguinte segue tentando com o orçamento restante. Perde-se uma
+ * tentativa, nunca a auto-cura.
+ *
+ * ## Esgotar as 3 não antecipa nem adia o corte (D-6)
+ *
+ * A carência de 10 dias foi dimensionada como `7 (janela de retentativa) + 3
+ * (folga)`. Quem esgota em D+3 continua com carência até D+10.
+ *
+ * ⚠️ O esgotamento deixou de aparecer no relatório do job: o ciclo que gastou as
+ * 3 é barrado no `WHERE`, e um motivo que nunca sai seria código sem oráculo. A
+ * troca é deliberada — a fila drenar vale mais que a linha informativa —, e o
+ * contador continua legível em `billing_cycle.retentativas_comandadas`.
+ *
+ * E o inverso também vale: assinatura cuja carência vence NESTA passada sai com
+ * `carencia_vence_nesta_passada` sem chamar o gateway — gastar tentativa em
+ * quem vai ser cortado logo em seguida é pagar round-trip por nada. O predicado
+ * é o MESMO de `cancelarAssinaturasComCarenciaVencida`, reusado literalmente
+ * abaixo em vez de reescrito.
+ *
+ * Uma clínica que falha não derruba a varredura das outras — mesmo isolamento
+ * por linha e mesmo adapter-por-linha (D26) de `fecharCiclosVencendo`, que
+ * nunca faz `throw`.
+ *
+ * ## ⚠️ Duas coisas NÃO MEDIDAS de que esta varredura depende
+ *
+ * **(a) O teto B lê `subscription.ciclo_atual_fim` como "início do próximo
+ * ciclo", e o alinhamento entre a recorrência do Asaas e o ciclo do Iris nunca
+ * foi medido.** A dedução é que, quando a cobrança é emitida,
+ * `fecharCiclosVencendo` já avançou a assinatura, então `ciclo_atual_fim` é a
+ * próxima virada. Se na prática a coluna estiver um ciclo ATRÁS da recorrência
+ * do gateway, o teto B barra tudo e a varredura devolve `sem_data_possivel` para
+ * sempre; se estiver um ciclo À FRENTE, toda retentativa volta 400
+ * `colide_com_proximo_ciclo` — com a tentativa já reservada, ou seja, queimando
+ * o orçamento das três. O sinal de qualquer um dos dois é o motivo nomeado no
+ * relatório do job; o ensaio em produção é quem mede.
+ *
+ * **(b) `purpose` e `retryAttempt` nunca apareceram em payload real.** O
+ * normalizador os lê de `paymentInstruction`, mas nenhuma autorização de Pix
+ * Automático chega a `ACTIVE` no sandbox (#321) — então o guard da D-5, que
+ * depende de `proposito === "RETRY_AFTER_DUE_DATE"`, nunca foi exercido contra
+ * um envelope do gateway. Se os campos vierem com outro nome, o guard some em
+ * silêncio e a conciliação volta ao comportamento pré-#322.
+ */
+export async function comandarRetentativasPendentes(opcoes?: {
+  agora?: Date;
+  dryRun?: boolean;
+}): Promise<ResultadoComandoRetentativa[]> {
+  const agora = opcoes?.agora ?? new Date();
+  const agoraIso = agora.toISOString();
+  const dryRun = opcoes?.dryRun ?? false;
+
+  const elegiveis = await authDb
+    .select({
+      cycleId: billingCycle.id,
+      clinicId: billingCycle.clinicId,
+      subscriptionId: billingCycle.subscriptionId,
+      providerChargeId: billingCycle.providerChargeId,
+      recusaCodigo: billingCycle.recusaCodigo,
+      vencimento: billingCycle.vencimentoCobranca,
+      retentativasComandadas: billingCycle.retentativasComandadas,
+      ultimaRetentativaVencimento: billingCycle.ultimaRetentativaVencimento,
+      provider: subscription.provider,
+      // Início do PRÓXIMO ciclo da recorrência, e é ele mesmo: quando a cobrança
+      // é emitida, `fecharCiclosVencendo` já avançou a assinatura para o ciclo
+      // seguinte, então o ciclo que falhou é o ANTERIOR e `ciclo_atual_inicio`
+      // é uma data no passado. O teto B da D-3 é a próxima virada, que é
+      // `ciclo_atual_fim`.
+      proximoCicloInicio: subscription.cicloAtualFim,
+      // Predicado da carência COPIADO de `cancelarAssinaturasComCarenciaVencida`
+      // em vez de reescrito: são a mesma regra, e duas cópias que divergem
+      // fariam a varredura gastar tentativa exatamente em quem o corte leva na
+      // mesma passada. `carencia_dias` sai da LINHA, nunca de constante local.
+      //
+      // O `status = 'past_due'` é parte da cópia, e não decoração: sem ele um
+      // `past_due_desde` residual numa assinatura que voltou para `active`
+      // faria esta varredura recusar-se a retentar por um corte que o outro
+      // predicado — que exige `past_due` — jamais executaria. É a mesma classe
+      // de defeito do `cancelada_em` não limpo na reativação (#290).
+      carenciaVenceNestaPassada: sql<boolean>`${subscription.status} = 'past_due' AND ${subscription.pastDueDesde} IS NOT NULL AND ${subscription.pastDueDesde} + make_interval(days => ${subscription.carenciaDias}) <= ${agoraIso}::timestamptz`,
+      /**
+       * Teto C da `dueDate`: o INSTANTE em que o corte por carência acontece
+       * (`past_due_desde + carencia_dias`), ou `null` quando não há carência
+       * correndo.
+       *
+       * Medido no mesmo `make_interval` do predicado acima, e não em
+       * milissegundos no JS, para que não existam duas réguas do mesmo prazo.
+       *
+       * O `mapWith` NÃO é zelo: expressão crua no `select` do Drizzle volta pelo
+       * caminho `.values()` do postgres-js **sem decodificação**, ou seja, o
+       * timestamptz chega como a string `2026-08-20 12:00:00+00`. Sem ele o
+       * `civilSp` do teto C recebia texto e estourava `Invalid time value`
+       * (medido).
+       */
+      cortePorCarencia:
+        sql`CASE WHEN ${subscription.status} = 'past_due' AND ${subscription.pastDueDesde} IS NOT NULL THEN ${subscription.pastDueDesde} + make_interval(days => ${subscription.carenciaDias}) END`.mapWith(
+          (valor: unknown): Date | null =>
+            valor === null || valor === undefined
+              ? null
+              : new Date(String(valor)),
+        ),
+    })
+    .from(billingCycle)
+    .innerJoin(subscription, eq(subscription.id, billingCycle.subscriptionId))
+    .where(
+      and(
+        // Só o ciclo que JÁ falhou: retentativa extradia é sobre instrução
+        // recusada. `aguardando_pagamento` ainda não teve recusa nenhuma.
+        eq(billingCycle.status, "falhou"),
+        // Sem cobrança no gateway não há instrução a retentar.
+        isNotNull(billingCycle.providerChargeId),
+        // Sem vencimento persistido o teto A (`vencimento + 7 dias corridos`)
+        // é imensurável, e recalculá-lo mediria de uma data que nunca foi
+        // enviada a gateway nenhum (ver o docblock da coluna em `schema.ts`).
+        // Fail-closed: fora do conjunto.
+        isNotNull(billingCycle.vencimentoCobranca),
+        // Assinatura VIVA. `canceled` já foi cortada e teve a autorização de
+        // Pix Automático revogada — comandar retentativa ali seria pedir débito
+        // de quem o produto já desligou, e a chamada só poderia voltar 400.
+        inArray(subscription.status, ["active", "past_due"]),
+        // ── Os três filtros do inelegível PERMANENTE ────────────────────────
+        //
+        // Moravam no laço, DEPOIS do `LIMIT`, e é por isso que estão aqui
+        // agora: um ciclo que nunca vai ser comandado também nunca muda de
+        // estado, então ele reaparecia na frente da fila em toda passada, para
+        // sempre, ocupando uma das 20 vagas — e a recusa G2 de hoje, que fica
+        // atrás dele na ordem por vencimento, jamais chegava a ser avaliada.
+        //
+        // Só G2 comanda sozinho (D-2). A lista de códigos é derivada do
+        // `CATALOGO` da política, nunca redigitada aqui.
+        inArray(billingCycle.recusaCodigo, CODIGOS_RETENTAVEIS_AUTOMATICAMENTE),
+        // O orçamento de 3 do `ALLOW_THREE_IN_SEVEN_DAYS`, pela MESMA constante
+        // que o resto do arquivo usa — um `3` literal no SQL seria a segunda
+        // régua do mesmo limite.
+        lt(billingCycle.retentativasComandadas, MAXIMO_RETENTATIVAS_POR_CICLO),
+        /**
+         * Pré-filtro GROSSO da janela de 7 dias corridos.
+         *
+         * A autoridade sobre a `dueDate` continua sendo `calcularDueDateDeRetentativa`
+         * — este predicado é só DRENAGEM DE FILA, e por isso só pode errar para
+         * o lado conservador: ele nunca pode excluir uma linha que a função pura
+         * aceitaria. O piso é exatamente a fronteira dela: a candidata mínima é
+         * `hoje + 1`, o teto A é `vencimento + 7 dias corridos`, logo nenhum
+         * vencimento anterior a `hoje - 6` admite data possível — e um que caia
+         * exatamente em `hoje - 6` ainda admite.
+         *
+         * `hoje` é o dia civil de SÃO PAULO, e o piso é o INÍCIO desse dia:
+         * comparar contra meio-dia UTC (a normalização de `civilSp`) deixaria de
+         * fora as cobranças vencidas na madrugada brasileira do dia limítrofe.
+         *
+         * Os 6 dias são `JANELA_RETENTATIVA_DIAS_CORRIDOS - 1`, derivados da
+         * mesma constante que a função pura usa: um `6` literal aqui viraria a
+         * segunda régua da janela, e mexer numa deixaria a outra parada.
+         */
+        sql`${billingCycle.vencimentoCobranca} >= ((date_trunc('day', ${agoraIso}::timestamptz AT TIME ZONE 'America/Sao_Paulo') - make_interval(days => ${JANELA_RETENTATIVA_DIAS_CORRIDOS - 1})) AT TIME ZONE 'America/Sao_Paulo')`,
+      ),
+    )
+    // Mais antigo primeiro, pela mesma razão da #318/#319: com teto, sem ORDER
+    // BY cada passada varreria um subconjunto arbitrário e uma linha azarada
+    // poderia nunca sair. É também a ordem do índice `billing_cycle_backstop_idx`.
+    .orderBy(asc(billingCycle.vencimentoCobranca))
+    // +1 é sonda, não cota: uma linha ALÉM do teto significa truncamento.
+    .limit(TETO_RETENTATIVAS_POR_PASSADA + 1);
+
+  const truncado = elegiveis.length > TETO_RETENTATIVAS_POR_PASSADA;
+  const avaliaveis = truncado
+    ? elegiveis.slice(0, TETO_RETENTATIVAS_POR_PASSADA)
+    : elegiveis;
+
+  if (truncado) {
+    console.warn(
+      "[billing-retentativa-truncado] elegíveis além do teto da passada",
+      { teto: TETO_RETENTATIVAS_POR_PASSADA, agora: agoraIso },
+    );
+  }
+
+  const resultados: ResultadoComandoRetentativa[] = [];
+
+  for (const linha of avaliaveis) {
+    // Impossíveis pelo predicado; estreitam o tipo sem um `!`.
+    if (!linha.providerChargeId || !linha.vencimento) continue;
+
+    const politica = classificarRecusa(linha.recusaCodigo);
+    // `acao`/`motivo` ficam DE FORA do comum: são exatamente o que cada saída
+    // decide, e um default aqui deixaria uma saída esquecida sair com a ação
+    // errada em vez de erro de compilação.
+    const base: Omit<ResultadoComandoRetentativa, "acao" | "motivo"> = {
+      truncado,
+      cicloId: linha.cycleId,
+      clinicId: linha.clinicId,
+      subscriptionId: linha.subscriptionId,
+      providerChargeId: linha.providerChargeId,
+      providerInstructionId: null,
+      recusaCodigo: linha.recusaCodigo,
+      grupo: politica.grupo,
+      tentativa: null,
+      dueDate: null,
+      erro: null,
+    };
+
+    const naoComandada = (
+      motivo: MotivoNaoComandada,
+    ): ResultadoComandoRetentativa => ({
+      ...base,
+      acao: "nao_comandada",
+      motivo,
+    });
+
+    if (linha.carenciaVenceNestaPassada) {
+      resultados.push(naoComandada("carencia_vence_nesta_passada"));
+      continue;
+    }
+
+    const dueDate = calcularDueDateDeRetentativa({
+      agora,
+      vencimentoCobranca: linha.vencimento,
+      proximoCicloInicio: linha.proximoCicloInicio,
+      ultimaRetentativaVencimento: linha.ultimaRetentativaVencimento,
+      cortePorCarencia: linha.cortePorCarencia,
+    });
+
+    if (!dueDate) {
+      resultados.push(naoComandada("sem_data_possivel"));
+      continue;
+    }
+
+    // Dry-run responde QUEM seria comandado e para por aqui: não fala com o
+    // gateway e não escreve nada. Mesmo idioma da #318/#319 — e aqui a razão é
+    // ainda mais direta, porque a Guarda 2 GRAVA antes de chamar: um ensaio que
+    // fosse além deste ponto consumiria tentativa de verdade.
+    if (dryRun) {
+      // O motivo é NOMEADO: `null` aqui punha a linha que TERIA sido comandada
+      // no mesmo balde da que foi pulada por falha muda, e o relatório do
+      // ensaio — que é o único produto do dry-run — não distinguia as duas.
+      resultados.push({
+        ...base,
+        dueDate,
+        acao: "nao_comandada",
+        motivo: "dry_run",
+      });
+      continue;
+    }
+
+    // `provider` é nullable desde a 0090 ("sem vínculo de cobrança"), e aqui a
+    // linha TEM cobrança emitida — nulo é estado impossível. Sai como falta de
+    // suporte em vez de estourar: um dado corrompido numa clínica não pode
+    // derrubar a passada das outras.
+    if (!linha.provider) {
+      resultados.push(naoComandada("provedor_sem_suporte"));
+      continue;
+    }
+
+    try {
+      // Adapter resolvido POR LINHA (D26), nunca pela env: a varredura cobre
+      // assinaturas de gateways diferentes na mesma passada. Dentro do `try`
+      // porque `getProviderPorId` estoura em `provider` fora do enum.
+      const provider = getProviderPorId(linha.provider);
+
+      // Os dois métodos são um par indivisível — sem `instrucaoParaRetentativa`
+      // não existe o argumento de `comandarRetentativa`. Verificado ANTES da
+      // reserva: gastar tentativa por um provedor que não sabe comandar seria
+      // queimar orçamento sem nunca ter chamado ninguém.
+      if (!provider.comandarRetentativa || !provider.instrucaoParaRetentativa) {
+        resultados.push(naoComandada("provedor_sem_suporte"));
+        continue;
+      }
+
+      // ── Guarda 1 (D-4): instrução já a caminho ──────────────────────────
+      const instrucao = await provider.instrucaoParaRetentativa(
+        linha.providerChargeId,
+      );
+      if (instrucao.pendente) {
+        resultados.push(naoComandada("instrucao_pendente"));
+        continue;
+      }
+      if (!instrucao.providerInstructionId) {
+        // Nem pendente nem recusada: não há o que retentar. Não vira motivo
+        // nomeado porque não é decisão da varredura — é o gateway dizendo que
+        // esta cobrança não tem instrução de débito nenhuma (cobrança de Pix
+        // comum, por exemplo). Vai como `erro` para aparecer no relatório sem
+        // ser confundido com uma guarda nossa.
+        resultados.push({
+          ...base,
+          dueDate,
+          acao: "nao_comandada",
+          motivo: null,
+          erro: "cobrança sem instrução de débito recusada no gateway",
+        });
+        continue;
+      }
+
+      // ── Guarda 1b: a cobrança já LIQUIDOU? ──────────────────────────────
+      //
+      // A Guarda 1 pergunta se há instrução a caminho; nenhuma pergunta se o
+      // dinheiro já entrou. E a D-1 assume explicitamente que webhook se perde
+      // — é o argumento inteiro a favor da varredura. Sem esta consulta, um
+      // `PAYMENT_RECEIVED` que não chegou deixa o ciclo em `falhou` com
+      // `recusa_codigo = PAYMENT_OVERDUE`, ou seja, dentro do conjunto
+      // elegível, e a passada seguinte comanda um SEGUNDO débito da mesma
+      // mensalidade na conta da clínica.
+      //
+      // ⚠️ "Cobrança já liquidada" NÃO está entre as cinco validações
+      // documentadas do `POST .../retries` (data no passado, data repetida,
+      // fora dos 7 dias, colisão com o próximo ciclo, autorização sem política)
+      // — não há garantia nenhuma de que o gateway recusaria o débito
+      // duplicado. A proteção é NOSSA, e é por isso que ela vem antes da
+      // reserva em vez de depender do 400.
+      //
+      // Achar a cobrança paga também CURA o estado: `conciliarPagamentoDeCiclo`
+      // é o mesmo caminho do webhook, então o ciclo vira `pago` e a assinatura
+      // sai de `past_due` — a auto-cura que a D-1 promete, agora exercida.
+      const cobranca = await provider.consultarCobranca(linha.providerChargeId);
+      if (cobranca.status === "paga") {
+        await conciliarPagamentoDeCiclo(linha.providerChargeId, "paga");
+        resultados.push({
+          ...naoComandada("cobranca_ja_liquidada"),
+          dueDate,
+        });
+        continue;
+      }
+
+      // ── Guarda 2 (D-4): reserva por compare-and-set, ANTES de chamar ────
+      const tentativa = linha.retentativasComandadas + 1;
+      const reservadas = await authDb
+        .update(billingCycle)
+        .set({
+          retentativasComandadas: tentativa,
+          ultimaRetentativaEm: agora,
+          ultimaRetentativaVencimento: dueDate,
+        })
+        .where(
+          and(
+            eq(billingCycle.id, linha.cycleId),
+            // O CAS em si. Zero linhas ⇒ outra passada reservou entre o SELECT
+            // e este UPDATE, e ela é quem vai chamar o gateway.
+            eq(
+              billingCycle.retentativasComandadas,
+              linha.retentativasComandadas,
+            ),
+          ),
+        )
+        .returning({ id: billingCycle.id });
+
+      if (reservadas.length === 0) {
+        resultados.push({
+          ...naoComandada("reserva_perdida"),
+          dueDate,
+        });
+        continue;
+      }
+
+      const desfecho = await provider.comandarRetentativa(
+        instrucao.providerInstructionId,
+        dueDate,
+      );
+
+      if (!desfecho.ok) {
+        // O gateway RESPONDEU e disse não — decisão definitiva. A tentativa
+        // fica gasta de propósito: insistir na mesma passada repetiria a mesma
+        // recusa, e o motivo nomeado é o que faz a validação estourada aparecer
+        // no relatório do job em vez de virar linha muda.
+        resultados.push({
+          ...base,
+          providerInstructionId: instrucao.providerInstructionId,
+          tentativa,
+          dueDate,
+          acao: "recusada_pelo_gateway",
+          motivo: desfecho.motivo,
+          erro: desfecho.mensagemGateway,
+        });
+        continue;
+      }
+
+      resultados.push({
+        ...base,
+        providerInstructionId: instrucao.providerInstructionId,
+        tentativa,
+        dueDate,
+        acao: "comandada",
+        motivo: null,
+      });
+    } catch (e) {
+      // Rede, timeout, 5xx, banco. Não derruba a passada — mesmo isolamento por
+      // linha de `fecharCiclosVencendo`, que nunca faz `throw`. Se a exceção
+      // veio DEPOIS da reserva, uma das 3 tentativas foi gasta sem comandar; é
+      // o custo declarado da D-4, e a passada seguinte segue com o restante.
+      resultados.push({
+        ...base,
+        dueDate,
+        acao: "nao_comandada",
+        motivo: null,
+        erro: detalharErro(e),
+      });
+    }
+  }
+
+  return resultados;
+}
+
+/**
  * Reconcilia o pagamento de um ciclo a partir do webhook. É a peça que não
  * existia: o vínculo é identificado por um id que não diz respeito a ciclo
  * nenhum, então sem `provider_charge_id` não havia como saber QUAL fatura foi
@@ -1776,10 +2324,59 @@ async function liquidarCiclo(
     );
 }
 
+/**
+ * "Este evento é a instrução original do ciclo, ou uma retentativa extradia?"
+ *
+ * Default de TODO call site que não sabe responder — e é o mesmo objeto que
+ * `EventoWebhookNormalizado.retentativa` traz quando o gateway não modela
+ * instrução (ver o dublê e o normalizador). Com os dois campos `null` a
+ * conciliação se comporta exatamente como antes da #322, que é o que preserva
+ * os chamadores existentes.
+ */
+const SEM_RETENTATIVA: EventoWebhookNormalizado["retentativa"] = {
+  proposito: null,
+  tentativa: null,
+};
+
+/**
+ * @param retentativa onde este evento cai dentro da política `3R_7D` (#322,
+ *   D-5), lido de `paymentInstruction` pelo normalizador.
+ *
+ * ## O guard da retentativa: recusa de RETENTATIVA não recarimba nada
+ *
+ * Uma recusa com `proposito === "RETRY_AFTER_DUE_DATE"` sobre um ciclo que já
+ * está `falhou` **pelo mesmo grupo** não reescreve `erro` nem `recusa_codigo` e
+ * **não** recarimba `past_due`. É a mesma regra que já protege G6 logo abaixo, e
+ * pelo mesmo motivo: o diagnóstico correto é o da recusa ORIGINAL (a falta de
+ * saldo que motivou a retentativa), e a retentativa que falhou pelo mesmo motivo
+ * só repetiria o carimbo.
+ *
+ * **"Pelo mesmo grupo" é condição, não adorno.** Entre a recusa original e a
+ * retentativa a clínica pode ter revogado a autorização no app do banco, e aí a
+ * retentativa volta com causa NOVA (G3, `corteImediato`). Um guard que olhasse
+ * só o propósito engoliria esse fato: `recusa_codigo` ficaria em
+ * `PAYMENT_OVERDUE` e o backstop de prazo, que decide lendo essa coluna, nunca
+ * veria o G3. Grupo diferente segue o caminho normal e reescreve o estado.
+ *
+ * **Sem isto o mesmo ciclo é carimbado até 3 vezes** — uma por retentativa da
+ * política `ALLOW_THREE_IN_SEVEN_DAYS` —, cada passagem reescrevendo `erro` e
+ * `recusa_codigo` com o que a última tentativa devolveu e reemitindo o
+ * `UPDATE subscription` de `past_due`. O relógio da carência sobrevive por
+ * acidente (o `?? agora` só grava na entrada); tudo o mais é ruído gravado por
+ * cima do fato.
+ *
+ * O guard fica **depois** de `conciliaComoPago`, de propósito: um
+ * `PAYMENT_ALREADY_DONE` que chega numa retentativa continua liquidando o
+ * ciclo. Sair antes trocaria a única boa notícia do fluxo por silêncio.
+ *
+ * **Pagamento** com `RETRY_AFTER_DUE_DATE` liquida normalmente, sem ramo
+ * nenhum: é a receita recuperada, e é o desfecho que justifica a #322 inteira.
+ */
 export async function conciliarPagamentoDeCiclo(
   providerChargeId: string,
   status: StatusCobranca,
   motivoRecusa: string | null = null,
+  retentativa: EventoWebhookNormalizado["retentativa"] = SEM_RETENTATIVA,
 ): Promise<boolean> {
   const agora = new Date();
 
@@ -1788,6 +2385,10 @@ export async function conciliarPagamentoDeCiclo(
       id: billingCycle.id,
       subscriptionId: billingCycle.subscriptionId,
       status: billingCycle.status,
+      // Lido porque o guard da retentativa (D-5) compara o GRUPO da recusa nova
+      // com o da recusa já registrada: sem a coluna, o guard só conseguiria
+      // perguntar "é retentativa?" e engoliria causa diferente.
+      recusaCodigo: billingCycle.recusaCodigo,
     })
     .from(billingCycle)
     .where(eq(billingCycle.providerChargeId, providerChargeId))
@@ -1877,6 +2478,45 @@ export async function conciliarPagamentoDeCiclo(
       // conciliação perdida — e o caminho antigo gerava dívida congelada contra
       // clínica adimplente, com o gate da #290 barrando quem já tinha pago.
       await liquidarCiclo(ciclo.id, ciclo.subscriptionId, agora);
+      return true;
+    }
+
+    if (
+      retentativa.proposito === "RETRY_AFTER_DUE_DATE" &&
+      ciclo.status === "falhou" &&
+      // A recusa NOVA tem que ser do MESMO grupo da recusa já registrada.
+      politica.grupo === classificarRecusa(ciclo.recusaCodigo).grupo &&
+      // ...e nunca se engole um grupo cujo desfecho é o corte.
+      !politica.corteImediato
+    ) {
+      // #322 (D-5). Ver o guard descrito no cabeçalho desta função: o
+      // diagnóstico que vale é o da recusa ORIGINAL, e este ramo existe para
+      // não deixar a 2ª e a 3ª retentativa reescreverem por cima dele.
+      //
+      // `ciclo.status === "falhou"` é parte da condição, e não um detalhe: uma
+      // retentativa sobre ciclo `aguardando_pagamento` significa que a recusa
+      // original NÃO foi registrada (webhook perdido, ou reconsulta que
+      // discordou), e aí a recusa da retentativa é o único diagnóstico que
+      // existe — deixar passar é o que faz a varredura se auto-curar.
+      //
+      // ⚠️ A comparação de GRUPO é o que impede o guard de engolir uma causa
+      // NOVA. A retentativa não repete só o resultado: entre a recusa original
+      // e ela, a clínica pode ter revogado a autorização no app do banco. Aí a
+      // retentativa volta G3 (`corteImediato`) e, sem esta condição, o guard
+      // descartava o fato — `recusa_codigo` continuava `PAYMENT_OVERDUE` e
+      // `aplicarBackstopDePrazo`, que lê exatamente essa coluna, nunca via o
+      // G3. O mesmo vale para G5/G1: a copy seguiria dizendo "sem saldo" para
+      // uma conta encerrada ou um teto baixo.
+      //
+      // Grupo IGUAL é a única situação em que não se perde informação: a 2ª e a
+      // 3ª tentativa falharam pelo mesmo motivo da 1ª, e reescrever só trocaria
+      // o carimbo por um carimbo idêntico.
+      console.warn("[billing-recusa] recusa de RETENTATIVA preservada", {
+        providerChargeId,
+        motivoRecusa,
+        grupo: politica.grupo,
+        tentativa: retentativa.tentativa,
+      });
       return true;
     }
 
@@ -2052,6 +2692,12 @@ export async function reprocessarEventosPendentes(
           normalizado.providerChargeId,
           atual.status,
           atual.motivoRecusa,
+          // Gêmeo do repasse na rota do webhook (#322, D-5), e pelo mesmo
+          // motivo do guard de `avisarRecusaQueNaoConciliou` logo acima: um
+          // guard que existe só num dos dois caminhos some exatamente no
+          // cenário em que a entrega ao vivo falhou — que é quando ESTA
+          // varredura roda.
+          normalizado.retentativa,
         );
         // MESMA função da rota, e não uma segunda cópia: os textos da rota e da
         // varredura já divergiram uma vez (`"evento sem id utilizável"` vs.

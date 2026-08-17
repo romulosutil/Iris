@@ -41,8 +41,16 @@ const FERIADOS_FIXOS = new Set([
   "12-31", // Fechamento bancário (último dia útil do ano)
 ]);
 
-/** Data civil de São Paulo, normalizada ao meio-dia UTC. */
-function civilSp(data: Date): Date {
+/**
+ * Data civil de São Paulo, normalizada ao meio-dia UTC.
+ *
+ * Exportada desde a #322: o cálculo da `dueDate` de retentativa
+ * (`retentativa-data.ts`) precisa da MESMA normalização de fuso que o resto da
+ * janela de cobrança usa. Reimplementá-la lá criaria uma segunda régua de dia
+ * civil, e é justamente esse tipo de divergência que este arquivo existe para
+ * não ter.
+ */
+export function civilSp(data: Date): Date {
   const [ano, mes, dia] = new Intl.DateTimeFormat("en-CA", {
     timeZone: TIMEZONE,
     year: "numeric",
@@ -54,7 +62,8 @@ function civilSp(data: Date): Date {
   return new Date(`${ano}-${mes}-${dia}T12:00:00Z`);
 }
 
-function somarDiasCivis(data: Date, dias: number): Date {
+/** Soma dias CIVIS (não instantes) sobre a data civil de São Paulo. */
+export function somarDiasCivis(data: Date, dias: number): Date {
   const d = new Date(civilSp(data));
   d.setUTCDate(d.getUTCDate() + dias);
   return d;

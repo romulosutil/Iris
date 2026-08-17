@@ -743,6 +743,13 @@
       "when": 1786849222929,
       "tag": "0105_guard_destinatario_no_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1786930303361,
+      "tag": "0106_billing_cycle_retentativa_extradia",
+      "breakpoints": true
     }
   ]
 }

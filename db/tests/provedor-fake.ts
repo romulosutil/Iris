@@ -4,10 +4,12 @@ import type {
   CobrancaParaReuso,
   EntradaVerificacaoWebhook,
   EventoWebhookNormalizado,
+  InstrucaoParaRetentativa,
   NovaCobrancaAvulsa,
   NovaCobrancaDeCiclo,
   NovoVinculo,
   ProviderId,
+  ResultadoRetentativa,
   StatusAssinaturaProvider,
   StatusCobranca,
   TipoEventoNormalizado,
@@ -321,8 +323,118 @@ export class ProvedorFake implements BillingProvider {
       // para consultar", que a porta exige que exista.
       providerInstructionId: null,
       referenciaExterna: typeof p.referencia === "string" ? p.referencia : null,
+      // Mesma razão de `providerInstructionId`: sem instrução no wire do fake,
+      // não há propósito nem número de tentativa. O objeto existe SEMPRE (a
+      // porta não o declara opcional), com os dois campos `null` — que é o
+      // caminho "este evento não é de retentativa".
+      retentativa: { proposito: null, tentativa: null },
       ocorridoEm: null,
       bruto: payload,
     };
   }
+
+  /**
+   * Comando de retentativa extradia (#322).
+   *
+   * ## Por que este método NÃO fala HTTP, ao contrário dos demais
+   *
+   * O oráculo dos outros métodos deste fake é a URL efetivamente chamada (ver
+   * docstring do topo): o que se prova ali é "a linha resolveu o adapter certo".
+   * Aqui a pergunta é outra e é da VARREDURA: *ela comandou? para qual instrução
+   * e qual `dueDate`? e o que ela faz com cada desfecho?* Isso exige duas coisas
+   * que um corpo de wire não dá bem: um registro ordenado das chamadas e um
+   * desfecho **diferente a cada chamada** (a mesma passada comanda várias
+   * assinaturas, e o teste de esgotamento precisa que a 3ª recuse).
+   *
+   * Daí a fila programável. Ela é FIFO e, esvaziada, devolve `{ ok: true }` — o
+   * caminho feliz é o default, e um teste que se esqueça de programar não recebe
+   * uma recusa fantasma.
+   */
+  async comandarRetentativa(
+    providerInstructionId: string,
+    dueDate: string,
+  ): Promise<ResultadoRetentativa> {
+    chamadasDeRetentativaFake.push({ providerInstructionId, dueDate });
+    return respostasDeRetentativaFake.shift() ?? { ok: true };
+  }
+
+  /**
+   * Instrução a retentar (#322, D-4 — Guarda 1 e argumento do comando).
+   *
+   * Deriva o id da instrução do id da cobrança para que a asserção mostre QUAL
+   * cobrança foi retentada; o estado (`pendente`, "sem instrução recusada") é
+   * programável por cobrança porque é ele que distingue os três caminhos que a
+   * varredura tem de tomar, e nenhum deles é observável no valor de retorno da
+   * outra chamada.
+   *
+   * Não fala HTTP pela mesma razão de `comandarRetentativa`: aqui o oráculo é o
+   * comportamento da VARREDURA, não a URL que o adapter monta.
+   */
+  async instrucaoParaRetentativa(
+    providerChargeId: string,
+  ): Promise<InstrucaoParaRetentativa> {
+    const programado = instrucoesFake.get(providerChargeId);
+    if (programado === "pendente") {
+      return { providerInstructionId: null, pendente: true };
+    }
+    if (programado === "sem_instrucao") {
+      return { providerInstructionId: null, pendente: false };
+    }
+    if (programado === "falha") {
+      // Indisponibilidade: sobe, exatamente como o adapter real faz com 5xx e
+      // rede. É o caminho em que a varredura registra `erro` sem gastar
+      // tentativa.
+      throw new Error(`gateway fake indisponível para ${providerChargeId}`);
+    }
+    return {
+      providerInstructionId: `${PREFIXO_INSTRUCAO_FAKE}${providerChargeId}`,
+      pendente: false,
+    };
+  }
+}
+
+/** Prefixo do id de instrução que o fake devolve — reconhecível na asserção. */
+export const PREFIXO_INSTRUCAO_FAKE = "instr_fake_";
+
+/** Desfechos programáveis de `instrucaoParaRetentativa`, por cobrança. */
+export type EstadoInstrucaoFake =
+  "retentavel" | "pendente" | "sem_instrucao" | "falha";
+
+const instrucoesFake = new Map<string, EstadoInstrucaoFake>();
+
+/** Programa o desfecho da consulta de instrução para UMA cobrança. */
+export function definirInstrucaoFake(
+  providerChargeId: string,
+  estado: EstadoInstrucaoFake,
+): void {
+  instrucoesFake.set(providerChargeId, estado);
+}
+
+/**
+ * Registro ordenado de tudo que foi comandado — é este o oráculo do teste de
+ * idempotência (duas passadas concorrentes ⇒ **uma** entrada aqui).
+ */
+export const chamadasDeRetentativaFake: Array<{
+  providerInstructionId: string;
+  dueDate: string;
+}> = [];
+
+/** Fila FIFO de desfechos. Vazia ⇒ `{ ok: true }`. */
+const respostasDeRetentativaFake: ResultadoRetentativa[] = [];
+
+/** Programa os próximos desfechos, na ordem em que serão consumidos. */
+export function enfileirarRetentativasFake(
+  ...respostas: ResultadoRetentativa[]
+): void {
+  respostasDeRetentativaFake.push(...respostas);
+}
+
+/**
+ * Zera fila e registro. Chamar no `beforeEach` — estado de módulo que atravessa
+ * casos é a receita de teste que passa sozinho e falha em suíte.
+ */
+export function limparRetentativasFake(): void {
+  chamadasDeRetentativaFake.length = 0;
+  respostasDeRetentativaFake.length = 0;
+  instrucoesFake.clear();
 }
