@@ -45,7 +45,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Execute Jules Auto-Fix Evaluator
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
