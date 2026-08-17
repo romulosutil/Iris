@@ -3,10 +3,11 @@ import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import axe from "axe-core";
 
-// next/font/google explode fora do build do Next (TypeError no vitest).
-vi.mock("next/font/google", () => ({
-  Space_Grotesk: () => ({ variable: "mock-space-grotesk" }),
-  Plus_Jakarta_Sans: () => ({ variable: "mock-plus-jakarta-sans" }),
+// next/font/local explode fora do build do Next (TypeError no vitest).
+vi.mock("next/font/local", () => ({
+  default: ({ src }: { src: string }) => ({
+    variable: `mock-${src.replace(/^.*\//, "").replace("-latin.woff2", "")}`,
+  }),
 }));
 vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
 
@@ -45,6 +46,11 @@ test("ErrorPage — sem violações axe (com digest)", async () => {
 // container do RTL; o shell compartilhado cobre o mesmo DOM do body.
 test("PaginaErro (shell do global-error) — sem violações axe", async () => {
   await semViolacoes(
-    <PaginaErro codigo="Erro 500" titulo="Falha" descricao="Descrição." auditId="X-1" />,
+    <PaginaErro
+      codigo="Erro 500"
+      titulo="Falha"
+      descricao="Descrição."
+      auditId="X-1"
+    />,
   );
 });

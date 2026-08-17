@@ -5,6 +5,16 @@
 FROM node:22-alpine AS base
 RUN corepack enable
 WORKDIR /app
+# `corepack enable` só instala os shims — o tarball do pnpm é baixado do npm
+# registry na PRIMEIRA invocação de `pnpm`, e uma vez por stage (cada stage
+# tem seu próprio filesystem). Isso punha o registry no caminho crítico do
+# `pnpm build`, que roda depois de `COPY . .` e portanto quase nunca vem do
+# cache — mesma classe de falha de rede que derrubou o deploy de 17/08/2026
+# pelo fonts.gstatic.com. `corepack install` materializa a versão de
+# `packageManager` aqui, num layer que só invalida quando o package.json
+# muda; `deps`, `build` e `migrate` o herdam e nunca voltam ao registry.
+COPY package.json ./
+RUN corepack install
 
 # --- deps: instala com lockfile congelado -------------------------------------
 FROM base AS deps
