@@ -273,7 +273,12 @@ export async function POST(request: Request): Promise<Response> {
  * `aplicado_em` + `NULL` = aplicou limpo.
  *
  * Consequência para quem consulta: "deu errado" NÃO é `erro_aplicacao IS NOT
- * NULL`. É igualdade com o motivo específico que representa falha — ver
+ * NULL` — e também não é igualdade com o motivo de alarme. O que fica aqui é um
+ * carimbo HISTÓRICO, verdade do instante da gravação e nunca reavaliado: a
+ * corrida em que o evento chega antes de `billing_cycle.provider_charge_id`
+ * persistir deixaria um alarme falso gravado para sempre, e a falha por exceção
+ * grava a mensagem do erro em vez do motivo classificado. Por isso a consulta
+ * operacional reavalia o estado vivo do ciclo e não lê esta coluna — ver
  * `listarCobrancasDeCicloNaoConciliadas`.
  *
  * A mesma nota está no docblock de `src/lib/billing/erro-aplicacao.ts`, e NÃO

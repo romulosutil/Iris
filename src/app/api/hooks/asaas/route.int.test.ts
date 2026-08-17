@@ -1281,9 +1281,10 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
        * VAZIA. E a mesma consulta, com uma cobrança de ciclo órfã na tabela,
        * volta exatamente uma linha — a que tem dinheiro em jogo.
        *
-       * A consulta casa por IGUALDADE com a constante de alarme. Um
-       * `LIKE '%ciclo%'` traria a ativação de volta e o teste ficaria vermelho
-       * aqui: é este caso que trava o predicado.
+       * A consulta reavalia o estado VIVO (cobrança nossa + nenhum ciclo com
+       * aquele `provider_charge_id`), nunca o texto de `erro_aplicacao`. É este
+       * caso que trava o lado "sem ruído" do predicado; os dois testes abaixo
+       * travam o lado que a leitura do texto histórico errava.
        */
       respondeCobranca("RECEIVED");
       const idAtivacao = novoIdEvento();
@@ -1323,6 +1324,79 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       expect(achadas[0]!.asaasEventId).toBe(idOrfa);
       expect(achadas[0]!.providerChargeId).toBe("pay_orfa_dod");
       expect(achadas[0]!.referenciaExterna).toBe(`cycle:${cicloInexistente}`);
+    });
+
+    it("CORRIDA: ciclo que aparece depois APAGA o alarme, mesmo com o texto gravado", async () => {
+      /**
+       * O defeito da versão que lia `erro_aplicacao`: o texto é carimbo
+       * histórico, verdade do instante da gravação e nunca reavaliada.
+       *
+       * `PAYMENT_CREATED` chega em segundos, e a emissão persiste
+       * `billing_cycle.provider_charge_id` logo depois. Quando o evento vence a
+       * escrita — a mesma corrida medida em produção na #289, onde o pagamento
+       * chegou 1,3 s antes de existir ciclo nenhum — o webhook grava o texto de
+       * alarme e ele fica lá PARA SEMPRE, mesmo com o ciclo já apontando para a
+       * cobrança e o dinheiro devidamente creditado. Uma consulta que lê o texto
+       * denuncia essa linha todo dia, sem nada errado acontecendo.
+       */
+      respondeCobranca("RECEIVED");
+      const id = novoIdEvento();
+      const cicloId = crypto.randomUUID();
+      await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoCobranca(id, "pay_da_corrida", cicloId, {
+            event: "PAYMENT_CREATED",
+          }),
+        }),
+      );
+
+      // O carimbo histórico É o de alarme — a consulta não pode se apoiar nele.
+      const evento = (await lerEvento(id))!;
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança de ciclo sem ciclo correspondente",
+      );
+
+      // Agora a escrita perdida chega: o ciclo passa a apontar para a cobrança.
+      await novoCiclo({ providerChargeId: "pay_da_corrida" });
+
+      // E o alarme some sozinho, sem reprocessar evento nenhum.
+      expect(await listarCobrancasDeCicloNaoConciliadas()).toEqual([]);
+    });
+
+    it("CEGUEIRA: falha por EXCEÇÃO de uma cobrança nossa aparece na consulta", async () => {
+      /**
+       * O segundo defeito da versão que lia o texto: quando a aplicação falha
+       * por exceção (gateway 500, banco fora), a coluna recebe a MENSAGEM DA
+       * EXCEÇÃO, não o motivo classificado — e a igualdade com a constante de
+       * alarme nunca casa. Uma cobrança nossa sem ciclo ficava invisível
+       * exatamente no cenário em que o sistema já estava com problema.
+       */
+      respondeHttp(500, { errors: [{ code: "internal", description: "boom" }] });
+      const id = novoIdEvento();
+      const cicloInexistente = crypto.randomUUID();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoCobranca(id, "pay_da_excecao", cicloInexistente),
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const evento = (await lerEvento(id))!;
+      // Nem carimbado como aplicado, nem com o motivo classificado.
+      expect(evento.aplicado_em).toBeNull();
+      expect(evento.erro_aplicacao).toContain("500");
+      expect(evento.erro_aplicacao).not.toBe(
+        "cobrança de ciclo sem ciclo correspondente",
+      );
+
+      const achadas = await listarCobrancasDeCicloNaoConciliadas();
+      expect(achadas).toHaveLength(1);
+      expect(achadas[0]!.asaasEventId).toBe(id);
+      // `aplicado_em` volta na linha justamente para separar "ainda na fila de
+      // retentativa" de "desistiu" — é a diferença entre esperar e agir.
+      expect(achadas[0]!.aplicadoEm).toBeNull();
     });
 
     it("evento sem id utilizável carimba aplicado_em com motivo (não fica na fila para sempre)", async () => {

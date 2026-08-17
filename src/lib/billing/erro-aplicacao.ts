@@ -1,7 +1,7 @@
 import "server-only";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, or, sql } from "drizzle-orm";
 import { authDb } from "@/db/client";
-import { asaasWebhookEvent } from "@/db/schema";
+import { asaasWebhookEvent, billingCycle } from "@/db/schema";
 
 /**
  * Motivos de `asaas_webhook_event.erro_aplicacao` — vocabulário fechado, num
@@ -72,8 +72,10 @@ import { asaasWebhookEvent } from "@/db/schema";
  * aplicou efeito nenhum.
  *
  * Consequência direta para quem consulta: **"deu errado" NÃO é
- * `erro_aplicacao IS NOT NULL`** — é igualdade com o motivo específico. É por
- * isso que `listarCobrancasDeCicloNaoConciliadas` filtra por `eq`.
+ * `erro_aplicacao IS NOT NULL`**, e também NÃO é igualdade com o motivo de
+ * alarme. O texto é um carimbo HISTÓRICO — verdade do instante em que foi
+ * gravado, nunca reavaliada. A consulta operacional reavalia o estado vivo do
+ * `billing_cycle`; ver `listarCobrancasDeCicloNaoConciliadas`.
  *
  * Esta nota mora aqui e no docblock de `marcar` (`route.ts`), e não no
  * comentário de `schema.ts`: o guard `src/db/migrations-vs-main.test.ts` exige
@@ -96,8 +98,9 @@ export const PREFIXO_REFERENCIA_DEBITO = "debito:";
  * encontrado por `provider_charge_id`. É o único desfecho em que a ausência de
  * ciclo pode significar dinheiro recebido e não conciliado.
  *
- * É por IGUALDADE com esta constante que `listarCobrancasDeCicloNaoConciliadas`
- * varre a tabela — nunca por `LIKE`/substring.
+ * É o texto de DIAGNÓSTICO gravado na trilha, não o predicado de busca:
+ * `listarCobrancasDeCicloNaoConciliadas` reavalia o estado vivo e nunca filtra
+ * por esta constante — ver o docblock daquela função.
  */
 export const MOTIVO_CICLO_SEM_CICLO_CORRESPONDENTE =
   "cobrança de ciclo sem ciclo correspondente";
@@ -205,7 +208,7 @@ export function classificarFalhaDeConciliacao(
   return MOTIVO_COBRANCA_DE_TERCEIRO;
 }
 
-/** Uma cobrança de ciclo que chegou ao webhook e não achou ciclo. */
+/** Uma cobrança nossa que, AGORA, não tem ciclo correspondente. */
 export interface CobrancaDeCicloNaoConciliada {
   /** PK do evento em `asaas_webhook_event`. */
   id: string;
@@ -217,52 +220,114 @@ export interface CobrancaDeCicloNaoConciliada {
   providerChargeId: string | null;
   /** A referência que nós emitimos (`cycle:<id>` / `debito:<âncora>`). */
   referenciaExterna: string | null;
+  /** Id da instrução do Pix Automático, quando o evento é do trilho headless. */
+  providerInstructionId: string | null;
+  /**
+   * O carimbo histórico, se houver. Vem como EVIDÊNCIA, nunca como filtro — é
+   * ele que diz se a linha parou por falta de ciclo, por exceção de infra ou se
+   * nem chegou a ser processada.
+   */
+  erroAplicacao: string | null;
   processadoEm: Date;
   aplicadoEm: Date | null;
 }
 
 /**
- * Lista as cobranças de ciclo que o webhook não conseguiu conciliar (#289,
- * DoD 1) — e SÓ elas.
+ * Lista as cobranças NOSSAS que, no estado de AGORA, não têm ciclo
+ * correspondente (#289, DoD 1) — e só elas.
  *
- * O filtro é `erro_aplicacao = MOTIVO_CICLO_SEM_CICLO_CORRESPONDENTE`, por
- * IGUALDADE. Nunca `LIKE`/substring: os três motivos de cobrança compartilham
- * palavras de propósito (são o mesmo assunto), e um `LIKE '%ciclo%'` traria a
- * ativação de volta — o ruído que a issue existe para remover.
+ * ## Por que esta consulta não lê `erro_aplicacao` (e a versão antiga lia)
  *
- * Roda em `authDb` (`iris_auth`), a única role com grant nesta tabela. Grants
- * medidos em 16/08/2026 contra o Postgres local: `SELECT` concedido em todas as
- * 7 colunas, RLS ligada com policy `asaas_webhook_event_auth_all` (`USING
- * true`) para `iris_auth`. Nenhuma migração é necessária.
+ * A primeira versão filtrava `erro_aplicacao = MOTIVO_CICLO_SEM_CICLO_
+ * CORRESPONDENTE`, por igualdade. Ler o texto é ler um carimbo HISTÓRICO:
+ * verdade do instante em que foi gravado, jamais reavaliada. Dois defeitos
+ * medidos vieram daí, e cada um sozinho já invalidava a consulta como oráculo
+ * da Definição de Pronto:
+ *
+ * 1. **Corrida → alarme falso permanente.** `PAYMENT_CREATED` chega em
+ *    segundos, e a emissão da cobrança persiste `billing_cycle.
+ *    provider_charge_id` logo depois. Se o evento vence a escrita, o webhook
+ *    grava o texto de alarme — e continua gravado para sempre, mesmo depois de
+ *    o ciclo aparecer e o pagamento ser conciliado normalmente. A #289 já
+ *    documenta a corrida gêmea medida em produção (pagamento 1,3 s antes do
+ *    primeiro ciclo existir).
+ * 2. **Cegueira → alarme que não aparece.** Quando a aplicação falha por
+ *    exceção (gateway 500, banco fora), a coluna recebe a MENSAGEM DA EXCEÇÃO,
+ *    não o motivo classificado. Uma cobrança nossa nessa situação nunca casava
+ *    com a igualdade, e a consulta jurava que estava tudo bem.
+ *
+ * ## O predicado novo: o mesmo teste do webhook, avaliado AGORA
+ *
+ * Duas condições, ambas relidas do estado vivo:
+ *
+ * - **a cobrança é nossa** — id de instrução presente (trilho headless do
+ *   débito mensal) OU `externalReference` com um dos nossos prefixos. É o mesmo
+ *   fato que `classificarFalhaDeConciliacao` usa, lido do `payload` bruto, que
+ *   nunca é reescrito;
+ * - **não existe ciclo com aquele `provider_charge_id`** — o predicado literal
+ *   de `conciliarPagamentoDeCiclo`, executado no instante da consulta em vez do
+ *   instante do webhook. É isto que faz a linha da corrida SUMIR sozinha assim
+ *   que o ciclo passa a apontar para a cobrança, sem nenhum reprocessamento.
+ *
+ * Como o texto saiu do predicado, entram também as linhas que falharam por
+ * exceção e as que ainda estão pendentes (`aplicado_em IS NULL`) — as duas
+ * classes que a versão antiga não enxergava. `erroAplicacao` e `aplicadoEm`
+ * voltam na linha para separar "ainda na fila de retentativa" de "desistiu".
+ *
+ * O `LIKE` aqui é de PREFIXO sobre a referência (equivalente ao `startsWith` do
+ * classificador), nunca substring sobre o texto do motivo: `LIKE '%ciclo%'` em
+ * `erro_aplicacao` traria a ativação de volta — o ruído que a issue remove.
+ *
+ * Roda em `authDb` (`iris_auth`): a role tem `SELECT` em `asaas_webhook_event`
+ * (7 colunas, policy `asaas_webhook_event_auth_all`, `USING true`) e é a mesma
+ * role com que `conciliarPagamentoDeCiclo` lê `billing_cycle`. Nenhuma migração
+ * é necessária.
  *
  * Sem tela nesta entrega: a UI é o D36.
  */
 export async function listarCobrancasDeCicloNaoConciliadas(
   limite = 100,
 ): Promise<CobrancaDeCicloNaoConciliada[]> {
+  // O id da cobrança mora em `payment.id` nos eventos de cobrança e em
+  // `paymentInstruction.paymentId` nos de instrução — o mesmo `coalesce` que
+  // `normalizarEventoAsaas` faz em TypeScript.
+  const idCobranca = sql<string | null>`coalesce(
+    ${asaasWebhookEvent.payload} #>> '{payment,id}',
+    ${asaasWebhookEvent.payload} #>> '{paymentInstruction,paymentId}'
+  )`;
+  const idInstrucao = sql<
+    string | null
+  >`${asaasWebhookEvent.payload} #>> '{paymentInstruction,id}'`;
+  const referencia = sql<
+    string | null
+  >`${asaasWebhookEvent.payload} #>> '{payment,externalReference}'`;
+
   const linhas = await authDb
     .select({
       id: asaasWebhookEvent.id,
       asaasEventId: asaasWebhookEvent.asaasEventId,
       evento: asaasWebhookEvent.evento,
-      // O id da cobrança mora em `payment.id` nos eventos de cobrança e em
-      // `paymentInstruction.paymentId` nos de instrução — o mesmo `coalesce`
-      // que `normalizarEventoAsaas` faz em TypeScript.
-      providerChargeId: sql<string | null>`coalesce(
-        ${asaasWebhookEvent.payload} #>> '{payment,id}',
-        ${asaasWebhookEvent.payload} #>> '{paymentInstruction,paymentId}'
-      )`,
-      referenciaExterna: sql<
-        string | null
-      >`${asaasWebhookEvent.payload} #>> '{payment,externalReference}'`,
+      providerChargeId: idCobranca,
+      referenciaExterna: referencia,
+      providerInstructionId: idInstrucao,
+      erroAplicacao: asaasWebhookEvent.erroAplicacao,
       processadoEm: asaasWebhookEvent.processadoEm,
       aplicadoEm: asaasWebhookEvent.aplicadoEm,
     })
     .from(asaasWebhookEvent)
     .where(
-      eq(
-        asaasWebhookEvent.erroAplicacao,
-        MOTIVO_CICLO_SEM_CICLO_CORRESPONDENTE,
+      and(
+        // Cobrança nossa, pelos mesmos fatos que o classificador usa.
+        or(
+          sql`${idInstrucao} IS NOT NULL`,
+          sql`${referencia} LIKE ${`${PREFIXO_REFERENCIA_CICLO}%`}`,
+          sql`${referencia} LIKE ${`${PREFIXO_REFERENCIA_DEBITO}%`}`,
+        ),
+        // …e sem ciclo apontando para ela AGORA.
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${billingCycle}
+          WHERE ${billingCycle.providerChargeId} = ${idCobranca}
+        )`,
       ),
     )
     .orderBy(desc(asaasWebhookEvent.processadoEm))
