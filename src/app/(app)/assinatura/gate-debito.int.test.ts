@@ -746,7 +746,8 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
    *
    * Qual mutação este teste mata: a mesma de cima, medida pelo efeito. Com o id
    * sobrescrito, o webhook do pagamento ANTIGO não acha ciclo, vira
-   * `erroAplicacao: "cobrança sem ciclo correspondente"`, e a clínica fica com
+   * `erroAplicacao: "cobrança de ciclo sem ciclo correspondente"` (#289 — o
+   * ALARME, não o ruído da ativação), e a clínica fica com
    * dinheiro recebido e dívida viva — barrada por uma dívida que já pagou.
    */
   it("pagar a cobrança antiga concilia o ciclo — sem dinheiro recebido com dívida viva", async () => {
@@ -790,6 +791,22 @@ describe.skipIf(!hasDb)("#290 · gate de débito na reativação", () => {
     // Uma emissão só, e o valor dela é o do conjunto (b) — não o total.
     expect(emissoes(chamadas)).toHaveLength(1);
     expect(emissoes(chamadas)[0]!.corpo.value).toBe(7);
+    /**
+     * E o FORMATO da referência emitida (#289): `debito:<âncora>`, literal.
+     *
+     * É este prefixo que faz o webhook reconhecer a cobrança consolidada como
+     * NOSSA e classificar a falta de ciclo como alarme. Sem oráculo sobre o
+     * formato, perder o prefixo aqui passa verde em todo o repo — a
+     * idempotência por referência continua funcionando, porque só depende de a
+     * string ser estável — e o efeito aparece meses depois, no webhook, como
+     * dinheiro recebido classificado de "cobrança de terceiro".
+     *
+     * Literal `debito:`, e não a constante importada: comparar a constante com
+     * ela mesma acompanha qualquer mudança e não trava nada.
+     */
+    expect(emissoes(chamadas)[0]!.corpo.externalReference).toBe(
+      `debito:${semCobranca}`,
+    );
 
     expect(r.debito?.valorCentavos).toBe(2000);
     expect(r.debito?.cobrancas).toHaveLength(2);

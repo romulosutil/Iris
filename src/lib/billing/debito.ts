@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { billingCycle, subscription } from "@/db/schema";
+import { PREFIXO_REFERENCIA_DEBITO } from "./erro-aplicacao";
 import { conciliarPagamentoDeCiclo } from "./subscription";
 import {
   BillingProviderError,
@@ -804,7 +805,10 @@ async function emitirConsolidada(dados: {
       valorCentavos: dados.totalCentavos,
       // Determinística por âncora: é ela que torna a reentrada idempotente no
       // gateway, mesmo que o processo morra entre o POST e o UPDATE local.
-      referenciaExterna: `debito:${ancora.id}`,
+      // Prefixo da constante compartilhada (#289): é por ele que o webhook
+      // reconhece esta cobrança como NOSSA e classifica a falta de ciclo como
+      // alarme, em vez de confundi-la com a cobrança de ativação.
+      referenciaExterna: `${PREFIXO_REFERENCIA_DEBITO}${ancora.id}`,
       descricao:
         "Iris — débito do ciclo interrompido no cancelamento, para reativar a assinatura",
       vencimento: somarDias(new Date(), DIAS_VENCIMENTO_DEBITO),

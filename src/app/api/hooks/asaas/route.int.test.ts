@@ -19,6 +19,8 @@ vi.mock("server-only", () => ({}));
 
 const { authDb } = await import("@/db/client");
 const { POST } = await import("./route");
+const { listarCobrancasDeCicloNaoConciliadas } =
+  await import("@/lib/billing/erro-aplicacao");
 
 /**
  * Webhook do Asaas (#36, Fase 7 — Pix Automático).
@@ -1131,7 +1133,13 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       expect((await lerEvento(id))!.erro_aplicacao).toBeNull();
     });
 
-    it("cobrança sem ciclo correspondente → 200 e erro_aplicacao nomeado (sai da fila)", async () => {
+    it("cobrança de CICLO sem ciclo correspondente → 200 e ALARME nomeado (sai da fila)", async () => {
+      /**
+       * Caso 1 dos três desfechos da #289: a cobrança traz a NOSSA referência
+       * (`cycle:<id>`) e mesmo assim nenhum ciclo casa por `provider_charge_id`
+       * — o único desfecho em que a falta de ciclo pode significar dinheiro
+       * recebido e não conciliado. É a linha que a consulta da DoD acha.
+       */
       respondeCobranca("RECEIVED");
       const id = novoIdEvento();
       const res = await POST(
@@ -1144,7 +1152,251 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
 
       const evento = (await lerEvento(id))!;
       expect(evento.aplicado_em).not.toBeNull();
-      expect(evento.erro_aplicacao).toBe("cobrança sem ciclo correspondente");
+      // Literal, e não a constante que o código usa: comparar a constante com
+      // ela mesma passaria contra o texto único e ambíguo que a #289 removeu.
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança de ciclo sem ciclo correspondente",
+      );
+    });
+
+    it("cobrança de ATIVAÇÃO (sem externalReference) → desfecho ESPERADO, não alarme", async () => {
+      /**
+       * Caso 2. A cobrança de ativação nasce do `immediateQrCode` da
+       * autorização, que **não aceita `externalReference`** (medido na #321) —
+       * então ela chega sem referência POR CONSTRUÇÃO, em toda ativação, para
+       * sempre. Antes da #289 esta linha gravava o mesmo texto do caso 1 e
+       * afogava o alarme no ruído.
+       */
+      respondeCobranca("RECEIVED");
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: {
+            id,
+            event: "PAYMENT_RECEIVED",
+            dateCreated: "2026-08-08 20:01:00",
+            payment: {
+              id: "pay_da_ativacao",
+              status: "RECEIVED",
+              value: 1,
+              billingType: "PIX",
+              dateCreated: "2026-08-08",
+            },
+          },
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const evento = (await lerEvento(id))!;
+      expect(evento.aplicado_em).not.toBeNull();
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança fora do ciclo (ativação ou avulsa)",
+      );
+    });
+
+    it("cobrança com referência de TERCEIRO → esperado, e o texto diz que é de terceiro", async () => {
+      /**
+       * Caso 3. Referência presente, prefixo que não é nosso: outra aplicação
+       * apontada para o mesmo endpoint, ou cobrança criada à mão no painel.
+       * Não é alarme (a cobrança não é nossa de ciclo), mas também não é
+       * "ativação ou avulsa" — dizer isso seria afirmação falsa na trilha, e
+       * mandaria quem diagnostica procurar no lugar errado.
+       */
+      respondeCobranca("RECEIVED");
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: {
+            id,
+            event: "PAYMENT_RECEIVED",
+            dateCreated: "2026-08-08 20:01:00",
+            payment: {
+              id: "pay_de_terceiro",
+              status: "RECEIVED",
+              value: 42,
+              billingType: "PIX",
+              externalReference: "pedido-4711",
+              dateCreated: "2026-08-08",
+            },
+          },
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const evento = (await lerEvento(id))!;
+      expect(evento.aplicado_em).not.toBeNull();
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança fora do ciclo (referência externa de terceiro)",
+      );
+    });
+
+    it("débito mensal HEADLESS (só `paymentInstruction`, sem `payment`) é ALARME", async () => {
+      /**
+       * Caso 4, e o mais caro dos quatro: é assim que a MENSALIDADE entra.
+       *
+       * O envelope do débito do Pix Automático não tem objeto `payment` — traz
+       * `paymentInstruction`, e o id da cobrança mora em
+       * `paymentInstruction.paymentId`. Logo `payment.externalReference` é
+       * `undefined` aqui POR CONSTRUÇÃO, e um discriminador que dependa só da
+       * referência classificaria este evento como "ativação ou avulsa": o
+       * alarme calaria no caminho principal do dinheiro, que é exatamente o
+       * modo de falha que a #289 existe para denunciar.
+       *
+       * Quem decide é o id da INSTRUÇÃO, fail-closed — ver
+       * `classificarFalhaDeConciliacao`.
+       */
+      respondeCobranca("RECEIVED");
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: {
+            id,
+            event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_PAID",
+            dateCreated: "2026-08-08 20:01:00",
+            paymentInstruction: {
+              id: "pay_inst_000000123",
+              paymentId: "pay_do_debito_mensal",
+              status: "PAID",
+              authorization: { id: "auth-do-debito-mensal" },
+            },
+          },
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const evento = (await lerEvento(id))!;
+      expect(evento.aplicado_em).not.toBeNull();
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança de ciclo sem ciclo correspondente",
+      );
+    });
+
+    it("DoD 2: a consulta de não conciliadas ignora a ativação e acha só o alarme", async () => {
+      /**
+       * Prova a promessa central da #289: depois de uma ativação normal
+       * (cobrança sem referência), a consulta que a operação vai usar volta
+       * VAZIA. E a mesma consulta, com uma cobrança de ciclo órfã na tabela,
+       * volta exatamente uma linha — a que tem dinheiro em jogo.
+       *
+       * A consulta reavalia o estado VIVO (cobrança nossa + nenhum ciclo com
+       * aquele `provider_charge_id`), nunca o texto de `erro_aplicacao`. É este
+       * caso que trava o lado "sem ruído" do predicado; os dois testes abaixo
+       * travam o lado que a leitura do texto histórico errava.
+       */
+      respondeCobranca("RECEIVED");
+      const idAtivacao = novoIdEvento();
+      await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: {
+            id: idAtivacao,
+            event: "PAYMENT_RECEIVED",
+            dateCreated: "2026-08-08 20:01:00",
+            payment: {
+              id: "pay_ativacao_dod",
+              status: "RECEIVED",
+              value: 1,
+              billingType: "PIX",
+              dateCreated: "2026-08-08",
+            },
+          },
+        }),
+      );
+
+      expect(await listarCobrancasDeCicloNaoConciliadas()).toEqual([]);
+
+      // Agora a cobrança de ciclo órfã — a que a operação precisa enxergar.
+      respondeCobranca("RECEIVED");
+      const idOrfa = novoIdEvento();
+      const cicloInexistente = crypto.randomUUID();
+      await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoCobranca(idOrfa, "pay_orfa_dod", cicloInexistente),
+        }),
+      );
+
+      const achadas = await listarCobrancasDeCicloNaoConciliadas();
+      expect(achadas).toHaveLength(1);
+      expect(achadas[0]!.asaasEventId).toBe(idOrfa);
+      expect(achadas[0]!.providerChargeId).toBe("pay_orfa_dod");
+      expect(achadas[0]!.referenciaExterna).toBe(`cycle:${cicloInexistente}`);
+    });
+
+    it("CORRIDA: ciclo que aparece depois APAGA o alarme, mesmo com o texto gravado", async () => {
+      /**
+       * O defeito da versão que lia `erro_aplicacao`: o texto é carimbo
+       * histórico, verdade do instante da gravação e nunca reavaliada.
+       *
+       * `PAYMENT_CREATED` chega em segundos, e a emissão persiste
+       * `billing_cycle.provider_charge_id` logo depois. Quando o evento vence a
+       * escrita — a mesma corrida medida em produção na #289, onde o pagamento
+       * chegou 1,3 s antes de existir ciclo nenhum — o webhook grava o texto de
+       * alarme e ele fica lá PARA SEMPRE, mesmo com o ciclo já apontando para a
+       * cobrança e o dinheiro devidamente creditado. Uma consulta que lê o texto
+       * denuncia essa linha todo dia, sem nada errado acontecendo.
+       */
+      respondeCobranca("RECEIVED");
+      const id = novoIdEvento();
+      const cicloId = crypto.randomUUID();
+      await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoCobranca(id, "pay_da_corrida", cicloId, {
+            event: "PAYMENT_CREATED",
+          }),
+        }),
+      );
+
+      // O carimbo histórico É o de alarme — a consulta não pode se apoiar nele.
+      const evento = (await lerEvento(id))!;
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança de ciclo sem ciclo correspondente",
+      );
+
+      // Agora a escrita perdida chega: o ciclo passa a apontar para a cobrança.
+      await novoCiclo({ providerChargeId: "pay_da_corrida" });
+
+      // E o alarme some sozinho, sem reprocessar evento nenhum.
+      expect(await listarCobrancasDeCicloNaoConciliadas()).toEqual([]);
+    });
+
+    it("CEGUEIRA: falha por EXCEÇÃO de uma cobrança nossa aparece na consulta", async () => {
+      /**
+       * O segundo defeito da versão que lia o texto: quando a aplicação falha
+       * por exceção (gateway 500, banco fora), a coluna recebe a MENSAGEM DA
+       * EXCEÇÃO, não o motivo classificado — e a igualdade com a constante de
+       * alarme nunca casa. Uma cobrança nossa sem ciclo ficava invisível
+       * exatamente no cenário em que o sistema já estava com problema.
+       */
+      respondeHttp(500, { errors: [{ code: "internal", description: "boom" }] });
+      const id = novoIdEvento();
+      const cicloInexistente = crypto.randomUUID();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: eventoCobranca(id, "pay_da_excecao", cicloInexistente),
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const evento = (await lerEvento(id))!;
+      // Nem carimbado como aplicado, nem com o motivo classificado.
+      expect(evento.aplicado_em).toBeNull();
+      expect(evento.erro_aplicacao).toContain("500");
+      expect(evento.erro_aplicacao).not.toBe(
+        "cobrança de ciclo sem ciclo correspondente",
+      );
+
+      const achadas = await listarCobrancasDeCicloNaoConciliadas();
+      expect(achadas).toHaveLength(1);
+      expect(achadas[0]!.asaasEventId).toBe(id);
+      // `aplicado_em` volta na linha justamente para separar "ainda na fila de
+      // retentativa" de "desistiu" — é a diferença entre esperar e agir.
+      expect(achadas[0]!.aplicadoEm).toBeNull();
     });
 
     it("evento sem id utilizável carimba aplicado_em com motivo (não fica na fila para sempre)", async () => {

@@ -13,6 +13,12 @@ import { authDb } from "@/db/client";
 import { billingCycle, subscription } from "@/db/schema";
 import { apurarDebitoProRata, calcularMensalidadeCentavos } from "./calculator";
 import { classificarRecusa, type GrupoRecusa } from "./classificacao-recusa";
+import {
+  classificarFalhaDeConciliacao,
+  MOTIVO_ASSINATURA_DESCONHECIDA,
+  MOTIVO_EVENTO_SEM_ID,
+  PREFIXO_REFERENCIA_CICLO,
+} from "./erro-aplicacao";
 import { notificarCancelamentoAssinatura } from "./notificacao-cancelamento";
 import {
   AsaasProvider,
@@ -723,7 +729,10 @@ export async function fecharCiclosVencendo(opcoes?: {
           const cobranca = await provider.emitirCobrancaDeCiclo({
             vinculoId: assinatura.providerSubscriptionId,
             valorCentavos,
-            referenciaExterna: `cycle:${ciclo.id}`,
+            // Prefixo vindo da constante, e não de um literal solto: é ele que
+            // o webhook usa para decidir se a falta de ciclo é alarme ou
+            // desfecho esperado (#289). Duas cópias do mesmo prefixo derivam.
+            referenciaExterna: `${PREFIXO_REFERENCIA_CICLO}${ciclo.id}`,
             descricao: `Iris — ficha(s) ativa(s) no ciclo encerrado em ${assinatura.cicloFim.toISOString().slice(0, 10)}`,
             vencimento,
           });
@@ -2002,6 +2011,20 @@ export async function reprocessarEventosPendentes(
     try {
       const normalizado = provider.normalizarEvento(evento.payload);
 
+      /**
+       * Motivo classificado do desfecho, gravado no carimbo final.
+       *
+       * #289 — antes desta variável a varredura DESCARTAVA o retorno de
+       * `conciliarPagamentoDeCiclo` e carimbava `erro_aplicacao = null` em
+       * todo evento que não estourasse exceção. Efeito: reprocessar um evento
+       * cuja conciliação falhou **apagava o motivo** que a rota tinha gravado
+       * — curava o sintoma (a linha sai da fila) e matava o sinal (some o
+       * único registro de que uma cobrança nossa não achou ciclo). E como a
+       * varredura é justamente o caminho que roda quando a entrega ao vivo
+       * falhou, o alarme sumia no cenário em que ele é mais necessário.
+       */
+      let erroAplicacao: string | null = null;
+
       if (normalizado.providerChargeId) {
         // Evento de COBRANÇA de ciclo. Consulta o gateway em vez de confiar
         // no tipo do evento, pela mesma razão de `aplicarStatusProvider`: a
@@ -2025,32 +2048,46 @@ export async function reprocessarEventosPendentes(
           normalizado.providerChargeId,
           atual.status,
         );
-        await conciliarPagamentoDeCiclo(
+        const aplicou = await conciliarPagamentoDeCiclo(
           normalizado.providerChargeId,
           atual.status,
           atual.motivoRecusa,
         );
+        // MESMA função da rota, e não uma segunda cópia: os textos da rota e da
+        // varredura já divergiram uma vez (`"evento sem id utilizável"` vs.
+        // `"sem id utilizável"`), e um alarme cujo texto depende do caminho que
+        // gravou não é pesquisável por igualdade.
+        // O id da INSTRUÇÃO vai junto pela mesma razão da rota: o débito mensal
+        // headless chega sem objeto `payment`, e classificar só pela referência
+        // mandaria a mensalidade para o balde da ativação.
+        erroAplicacao = aplicou
+          ? null
+          : classificarFalhaDeConciliacao(
+              normalizado.referenciaExterna,
+              normalizado.providerInstructionId,
+            );
       } else if (normalizado.providerSubscriptionId) {
         const atual = await provider.consultarVinculo(
           normalizado.providerSubscriptionId,
         );
-        await aplicarStatusProvider(
+        const aplicou = await aplicarStatusProvider(
           normalizado.providerSubscriptionId,
           atual.status,
         );
+        erroAplicacao = aplicou ? null : MOTIVO_ASSINATURA_DESCONHECIDA;
       } else {
         // Sem id nenhum não há o que aplicar. Marca como aplicado para não
         // reprocessar eternamente um evento que nunca terá efeito.
         await marcar(evento.id, {
           aplicadoEm: new Date(),
-          erroAplicacao: "sem id utilizável",
+          erroAplicacao: MOTIVO_EVENTO_SEM_ID,
         });
         continue;
       }
 
       await marcar(evento.id, {
         aplicadoEm: new Date(),
-        erroAplicacao: null,
+        erroAplicacao,
       });
       aplicados++;
     } catch (e) {

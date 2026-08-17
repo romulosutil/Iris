@@ -123,11 +123,22 @@ async function novaAssinaturaVencida(opcoes: {
 // ── Dublê do gateway ─────────────────────────────────────────────────────────
 
 let chamadasGateway: string[] = [];
+/**
+ * Corpos dos POSTs, para que o FORMATO do que sai daqui seja verificável — a
+ * URL sozinha não diz o que foi enviado.
+ */
+let corposGateway: Array<{ url: string; corpo: Record<string, unknown> }> = [];
 
 function instalarGateway(): void {
-  vi.stubGlobal("fetch", async (entrada: unknown) => {
+  vi.stubGlobal("fetch", async (entrada: unknown, init?: RequestInit) => {
     const url = String(entrada);
     chamadasGateway.push(url);
+    if (typeof init?.body === "string") {
+      corposGateway.push({
+        url,
+        corpo: JSON.parse(init.body) as Record<string, unknown>,
+      });
+    }
 
     // Gateway FAKE (o outro trilho): emissão de cobrança no dialeto dele.
     if (url.startsWith(`${BASE_URL_FAKE}/cobrancas`)) {
@@ -170,6 +181,7 @@ describe.skipIf(!hasDb)("fecharCiclosVencendo × provider da linha", () => {
 
   beforeEach(async () => {
     chamadasGateway = [];
+    corposGateway = [];
     instalarGateway();
     await owner!`TRUNCATE audit_log, billing_cycle, subscription, patient
                  RESTART IDENTITY CASCADE`;
@@ -246,18 +258,43 @@ describe.skipIf(!hasDb)("fecharCiclosVencendo × provider da linha", () => {
     // SEGUINTE, então cada clínica tem duas linhas em `billing_cycle` e a nova
     // tem `provider_charge_id` NULL de direito.
     const cobrancas = await authDb.execute(
-      sql`SELECT clinic_id, provider_charge_id FROM billing_cycle
+      sql`SELECT id, clinic_id, provider_charge_id FROM billing_cycle
           WHERE inicio = ${inicio.toISOString()}::timestamptz`,
     );
+    const linhas = cobrancas as unknown as {
+      id: string;
+      clinic_id: string;
+      provider_charge_id: string | null;
+    }[];
     const porClinica = new Map(
-      (
-        cobrancas as unknown as {
-          clinic_id: string;
-          provider_charge_id: string | null;
-        }[]
-      ).map((l) => [l.clinic_id, l.provider_charge_id]),
+      linhas.map((l) => [l.clinic_id, l.provider_charge_id]),
     );
     expect(porClinica.get(clinicaFake)).toBe(ID_COBRANCA_FAKE);
     expect(porClinica.get(clinicaAsaas)).toBe(ID_COBRANCA_ASAAS);
+
+    /**
+     * O FORMATO da referência que saiu na cobrança (#289).
+     *
+     * `externalReference` é o discriminador que o webhook usa para decidir se
+     * uma cobrança sem ciclo é alarme ou o desfecho esperado da ativação. Sem
+     * oráculo aqui, mudar o formato emitido — perder o prefixo, trocar `cycle:`
+     * por outra coisa, mandar só o id — passa verde em todo o repo, e o efeito
+     * só aparece meses depois, no webhook, como mensalidade classificada de
+     * "cobrança fora do ciclo (referência externa de terceiro)": o alarme
+     * calado, que é o defeito que a #289 fechou.
+     *
+     * Literal `cycle:`, e NÃO `PREFIXO_REFERENCIA_CICLO` importado: comparar a
+     * constante com ela mesma acompanharia qualquer mudança e não travaria
+     * nada. É este literal que tem que ser mudado à mão junto com o predicado
+     * da consulta de não conciliadas, se um dia o formato mudar de verdade.
+     */
+    const cicloAsaas = linhas.find((l) => l.clinic_id === clinicaAsaas)!;
+    const emissaoAsaas = corposGateway.find((c) =>
+      c.url.startsWith(`${BASE_URL_ASAAS}/payments`),
+    );
+    expect(emissaoAsaas).toBeDefined();
+    expect(emissaoAsaas!.corpo.externalReference).toBe(
+      `cycle:${cicloAsaas.id}`,
+    );
   });
 });
