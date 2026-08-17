@@ -159,9 +159,12 @@ describe("resumoDoCorpo", () => {
   it("levanta as etapas abortadas e o que já foi cobrado (D38)", () => {
     const corpo = JSON.stringify({
       ok: false,
+      retentativaAbortada: null,
       carenciaAbortada: "timeout ao revogar vínculo",
       backstopAbortado: null,
       ciclosProcessados: 2,
+      retentativasComandadas: 0,
+      retentativasTruncado: false,
       resultados: [
         { clinicId: "a", cobrancaEmitida: true },
         { clinicId: "b", cobrancaEmitida: false },
@@ -169,12 +172,88 @@ describe("resumoDoCorpo", () => {
     });
 
     expect(resumoDoCorpo(corpo)).toEqual({
+      retentativaAbortada: null,
       carenciaAbortada: "timeout ao revogar vínculo",
       backstopAbortado: null,
       ciclosProcessados: 2,
       // Conta as EMITIDAS, não o tamanho de `resultados`: um ciclo apurado sem
       // cobrança não é ato irreversível e não pode inflar o aviso.
       cobrancasEmitidas: 1,
+      retentativasComandadas: 0,
+      retentativasTruncado: false,
+    });
+  });
+
+  it("levanta a retentativa extradia comandada e o truncamento (#322)", () => {
+    // Cada retentativa comandada é uma instrução de débito agendada no banco
+    // pagador — irreversível — e uma das 3 tentativas da cobrança, gasta. Este
+    // JSON é a única memória do ato: chave nova não lida aqui vira `undefined`
+    // no log de produção e o orçamento consumido some.
+    const corpo = JSON.stringify({
+      ok: false,
+      retentativaAbortada: null,
+      carenciaAbortada: "timeout ao revogar vínculo",
+      backstopAbortado: null,
+      ciclosProcessados: 0,
+      retentativasAvaliadas: 20,
+      retentativasComandadas: 4,
+      retentativasTruncado: true,
+      resultados: [],
+    });
+
+    expect(resumoDoCorpo(corpo)).toEqual({
+      retentativaAbortada: null,
+      carenciaAbortada: "timeout ao revogar vínculo",
+      backstopAbortado: null,
+      ciclosProcessados: 0,
+      cobrancasEmitidas: 0,
+      retentativasComandadas: 4,
+      retentativasTruncado: true,
+    });
+  });
+
+  it("nomeia a própria etapa de retentativa quando é ela que aborta", () => {
+    const corpo = JSON.stringify({
+      ok: false,
+      retentativaAbortada: "gateway 503 ao consultar instrução",
+      carenciaAbortada: null,
+      backstopAbortado: null,
+      ciclosProcessados: 1,
+      retentativasComandadas: 0,
+      retentativasTruncado: false,
+      resultados: [{ clinicId: "a", cobrancaEmitida: true }],
+    });
+
+    const resumo = resumoDoCorpo(corpo);
+    expect(resumo.retentativaAbortada).toBe(
+      "gateway 503 ao consultar instrução",
+    );
+    // Sem contaminar os outros discriminadores: as três etapas exigem reações
+    // diferentes, e um `??` encadeado sobre a chave errada as fundiria.
+    expect(resumo.carenciaAbortada).toBeNull();
+    expect(resumo.backstopAbortado).toBeNull();
+  });
+
+  it("cai no default sem quebrar quando o corpo é ANTIGO, sem as chaves novas", () => {
+    // Rota antiga (ou deploy da rota atrasado em relação ao job): o corpo não
+    // tem a etapa de retentativa. `null` é a leitura certa — `0` afirmaria que
+    // nada foi comandado, e ninguém mediu isso; a etapa nem existia.
+    const corpo = JSON.stringify({
+      ok: true,
+      carenciaAbortada: null,
+      backstopAbortado: null,
+      ciclosProcessados: 3,
+      resultados: [{ clinicId: "a", cobrancaEmitida: true }],
+    });
+
+    expect(resumoDoCorpo(corpo)).toEqual({
+      retentativaAbortada: null,
+      carenciaAbortada: null,
+      backstopAbortado: null,
+      ciclosProcessados: 3,
+      cobrancasEmitidas: 1,
+      retentativasComandadas: null,
+      retentativasTruncado: null,
     });
   });
 
@@ -189,10 +268,13 @@ describe("resumoDoCorpo", () => {
       undefined,
     ]) {
       expect(resumoDoCorpo(corpo)).toEqual({
+        retentativaAbortada: null,
         carenciaAbortada: null,
         backstopAbortado: null,
         ciclosProcessados: null,
         cobrancasEmitidas: null,
+        retentativasComandadas: null,
+        retentativasTruncado: null,
       });
     }
   });
@@ -200,17 +282,25 @@ describe("resumoDoCorpo", () => {
   it("caminho feliz: nenhuma etapa abortada", () => {
     const corpo = JSON.stringify({
       ok: true,
+      retentativaAbortada: null,
       carenciaAbortada: null,
       backstopAbortado: null,
       ciclosProcessados: 0,
+      retentativasComandadas: 0,
+      retentativasTruncado: false,
       resultados: [],
     });
 
     expect(resumoDoCorpo(corpo)).toEqual({
+      retentativaAbortada: null,
       carenciaAbortada: null,
       backstopAbortado: null,
       ciclosProcessados: 0,
       cobrancasEmitidas: 0,
+      // `0` e `false` sobrevivem: um `?? null` sobre `retentativasComandadas`
+      // faria o zero legítimo virar "a rota não relatou", que é outra coisa.
+      retentativasComandadas: 0,
+      retentativasTruncado: false,
     });
   });
 });

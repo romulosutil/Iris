@@ -123,10 +123,13 @@ export async function executarFechamento(
  */
 export function resumoDoCorpo(corpo) {
   const vazio = {
+    retentativaAbortada: null,
     carenciaAbortada: null,
     backstopAbortado: null,
     ciclosProcessados: null,
     cobrancasEmitidas: null,
+    retentativasComandadas: null,
+    retentativasTruncado: null,
   };
   if (typeof corpo !== "string") return vazio;
   let dados;
@@ -137,6 +140,7 @@ export function resumoDoCorpo(corpo) {
   }
   if (dados === null || typeof dados !== "object") return vazio;
   return {
+    retentativaAbortada: dados.retentativaAbortada ?? null,
     carenciaAbortada: dados.carenciaAbortada ?? null,
     backstopAbortado: dados.backstopAbortado ?? null,
     ciclosProcessados:
@@ -146,6 +150,25 @@ export function resumoDoCorpo(corpo) {
     cobrancasEmitidas: Array.isArray(dados.resultados)
       ? dados.resultados.filter((r) => r?.cobrancaEmitida).length
       : null,
+    // Retentativa extradia (#322). É ato IRREVERSÍVEL no gateway — uma
+    // instrução de débito agendada no banco pagador, e cada uma consome 1 das 3
+    // que a cobrança tem. Este JSON é a única memória do ato: chave nova não
+    // lida aqui vira `undefined` no log de produção, e o número de tentativas
+    // gastas some.
+    //
+    // `typeof === "number"`, e não `?? null`: um corpo ANTIGO (rota sem a etapa)
+    // não tem a chave, e `0` é resposta diferente de "a rota nem relatou". Ler
+    // `undefined` como zero afirmaria que nada foi comandado sem ter medido.
+    retentativasComandadas:
+      typeof dados.retentativasComandadas === "number"
+        ? dados.retentativasComandadas
+        : null,
+    // Truncamento no primeiro nível porque muda a REAÇÃO: passada que parou no
+    // teto com fila atrás pede outra passada; passada que cobriu tudo, não.
+    retentativasTruncado:
+      typeof dados.retentativasTruncado === "boolean"
+        ? dados.retentativasTruncado
+        : null,
   };
 }
 
@@ -189,10 +212,16 @@ async function main() {
       erro: resultado.erro ?? null,
       // Primeiro nível: qual etapa caiu, e quanto de irreversível já havia
       // acontecido quando ela caiu.
+      retentativaAbortada: resumo.retentativaAbortada,
       carenciaAbortada: resumo.carenciaAbortada,
       backstopAbortado: resumo.backstopAbortado,
       ciclosProcessados: resumo.ciclosProcessados,
       cobrancasEmitidas: resumo.cobrancasEmitidas,
+      // Irreversível como `cobrancasEmitidas`, e pelo mesmo motivo sobe junto:
+      // cada retentativa comandada é uma instrução de débito agendada no banco
+      // pagador e uma das 3 tentativas da cobrança, gasta.
+      retentativasComandadas: resumo.retentativasComandadas,
+      retentativasTruncado: resumo.retentativasTruncado,
       corpo: resultado.corpo ?? null,
     }),
   );
@@ -204,13 +233,25 @@ async function main() {
     // Aviso separado, porque muda a reação: reexecutar o job aqui REEMITIRIA
     // cobrança. A etapa que caiu é a que precisa ser reexecutada, não a
     // varredura inteira.
-    if (resumo.cobrancasEmitidas) {
+    //
+    // A retentativa extradia entra no MESMO aviso (#322): ela agenda uma
+    // instrução de débito no banco pagador — irreversível — e consome 1 das 3
+    // tentativas que a cobrança tem para o resto da janela. Uma passada que
+    // comandou retentativa e caiu depois é indistinguível de uma que não fez
+    // nada se o gatilho do aviso continuar sendo só `cobrancasEmitidas`.
+    if (resumo.cobrancasEmitidas || resumo.retentativasComandadas) {
       console.error(
-        `${PREFIXO} ATENÇÃO: ${resumo.cobrancasEmitidas} cobrança(s) JÁ foram emitidas nesta passada` +
-          ` (carenciaAbortada=${resumo.carenciaAbortada ?? "não"}, backstopAbortado=${resumo.backstopAbortado ?? "não"}).` +
+        `${PREFIXO} ATENÇÃO: ${resumo.cobrancasEmitidas ?? "?"} cobrança(s) e` +
+          ` ${resumo.retentativasComandadas ?? "?"} retentativa(s) JÁ foram comandadas nesta passada` +
+          ` (retentativaAbortada=${resumo.retentativaAbortada ?? "não"}, carenciaAbortada=${resumo.carenciaAbortada ?? "não"}, backstopAbortado=${resumo.backstopAbortado ?? "não"}).` +
           ` NÃO reexecute o fechamento sem antes conferir o estado dos ciclos.`,
       );
     }
+    // `process.exit(1)` NÃO precisou de ramo novo para `retentativaAbortada`: a
+    // rota já responde 500 quando qualquer etapa aborta, e 500 vira
+    // `resultado.ok === false` em `executarFechamento`. Um `if` extra aqui seria
+    // uma segunda régua para o mesmo fato — e divergiria da rota no dia em que
+    // uma das duas mudasse.
     process.exit(1);
   }
 

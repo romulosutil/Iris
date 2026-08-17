@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ResultadoBackstopPrazo,
+  ResultadoComandoRetentativa,
   ResultadoCortePorCarencia,
   ResultadoFechamento,
 } from "@/lib/billing/subscription";
@@ -55,6 +56,7 @@ const dubles = vi.hoisted(() => ({
   cancelarAssinaturasComCarenciaVencida: vi.fn(),
   reprocessarEventosPendentes: vi.fn(),
   aplicarBackstopDePrazo: vi.fn(),
+  comandarRetentativasPendentes: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -129,6 +131,27 @@ function backstop(
   };
 }
 
+function retentativa(
+  over: Partial<ResultadoComandoRetentativa> = {},
+): ResultadoComandoRetentativa {
+  return {
+    cicloId: crypto.randomUUID(),
+    clinicId: crypto.randomUUID(),
+    subscriptionId: crypto.randomUUID(),
+    providerChargeId: `pay_${crypto.randomUUID()}`,
+    providerInstructionId: `pi_${crypto.randomUUID()}`,
+    recusaCodigo: "PAYMENT_OVERDUE",
+    grupo: "G2",
+    tentativa: 1,
+    dueDate: "2026-08-18",
+    acao: "comandada",
+    motivo: null,
+    truncado: false,
+    erro: null,
+    ...over,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("BILLING_JOB_TOKEN", TOKEN);
@@ -139,6 +162,7 @@ beforeEach(() => {
   dubles.fecharCiclosVencendo.mockResolvedValue([]);
   dubles.cancelarAssinaturasComCarenciaVencida.mockResolvedValue([]);
   dubles.aplicarBackstopDePrazo.mockResolvedValue([]);
+  dubles.comandarRetentativasPendentes.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -212,6 +236,29 @@ describe("POST /api/internal/billing/fechar-ciclos — ordem das etapas", () => 
     expect(ordemBackstop).toBeGreaterThan(ordemFechamento!);
   });
 
+  it("comanda a retentativa DEPOIS de fechar os ciclos e ANTES da carência (#322, D-8)", async () => {
+    // Depois do fechamento: é ele que emite as cobranças do dia e produz as
+    // recusas de saldo que esta varredura recupera — invertido, a recusa de
+    // hoje só seria vista amanhã, e a janela já é de 7 dias.
+    // Antes da carência: o corte revoga a autorização de Pix Automático, e
+    // comandar retentativa sobre autorização revogada gasta uma das 3 em quem
+    // já saiu. Nenhuma das duas inversões levanta erro em lugar nenhum.
+    await POST(requisicao());
+
+    const ordemFechamento =
+      dubles.fecharCiclosVencendo.mock.invocationCallOrder[0];
+    const ordemRetentativa =
+      dubles.comandarRetentativasPendentes.mock.invocationCallOrder[0];
+    const ordemCarencia =
+      dubles.cancelarAssinaturasComCarenciaVencida.mock.invocationCallOrder[0];
+
+    expect(ordemFechamento).toBeTypeOf("number");
+    expect(ordemRetentativa).toBeTypeOf("number");
+    expect(ordemCarencia).toBeTypeOf("number");
+    expect(ordemRetentativa).toBeGreaterThan(ordemFechamento!);
+    expect(ordemCarencia).toBeGreaterThan(ordemRetentativa!);
+  });
+
   it("chama cada etapa exatamente uma vez por requisição", async () => {
     // Guarda contra a correção "óbvia" da ordem: duplicar a chamada em vez de
     // movê-la satisfaria os `toBeGreaterThan` acima e cortaria/carimbaria duas
@@ -224,6 +271,10 @@ describe("POST /api/internal/billing/fechar-ciclos — ordem das etapas", () => 
       1,
     );
     expect(dubles.aplicarBackstopDePrazo).toHaveBeenCalledTimes(1);
+    // Duplicar esta chamada comandaria DUAS retentativas para a mesma cobrança
+    // na mesma passada — duas instruções de débito no banco pagador e duas das
+    // 3 tentativas gastas de uma vez.
+    expect(dubles.comandarRetentativasPendentes).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -238,6 +289,9 @@ describe("POST /api/internal/billing/fechar-ciclos — autorização", () => {
     expect(dubles.fecharCiclosVencendo).not.toHaveBeenCalled();
     expect(dubles.cancelarAssinaturasComCarenciaVencida).not.toHaveBeenCalled();
     expect(dubles.aplicarBackstopDePrazo).not.toHaveBeenCalled();
+    // A retentativa agenda débito no banco pagador: um 401 depois do efeito
+    // deixaria um não autorizado comandar cobrança na conta da clínica.
+    expect(dubles.comandarRetentativasPendentes).not.toHaveBeenCalled();
   });
 
   it("recusa token errado de MESMO comprimento", async () => {
@@ -297,6 +351,13 @@ describe("POST /api/internal/billing/fechar-ciclos — dry-run", () => {
     // O backstop também corta (G3 confirmado) e carimba `past_due`: um ensaio
     // que chegasse até ele sem o flag mudaria o estado de verdade.
     expect(dubles.aplicarBackstopDePrazo).toHaveBeenCalledWith({
+      dryRun: true,
+    });
+    // A retentativa é o ato MAIS irreversível da passada: agenda uma instrução
+    // de débito no banco pagador e consome 1 das 3 tentativas que a cobrança
+    // tem para o resto da janela. Um ensaio que a alcançasse sem o flag gastaria
+    // orçamento real que nenhuma reexecução devolve.
+    expect(dubles.comandarRetentativasPendentes).toHaveBeenCalledWith({
       dryRun: true,
     });
   });
@@ -549,16 +610,18 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
 
     expect(resposta.status).toBe(500);
     // Falha ANTES de o faturamento terminar: não há cobrança emitida para
-    // relatar, e os dois discriminadores vão `null` — "nem chegou a ser
+    // relatar, e os TRÊS discriminadores vão `null` — "nem chegou a ser
     // tentada", que é diferente de "tentou e caiu".
     expect(await resposta.json()).toEqual({
       ok: false,
+      retentativaAbortada: null,
       carenciaAbortada: null,
       backstopAbortado: null,
       error: "connection terminated unexpectedly",
     });
     // Consequência da ordem, e o lado seguro: se o fechamento morreu, ninguém
     // sabe quais recusas o dia produziria, então ninguém é cortado.
+    expect(dubles.comandarRetentativasPendentes).not.toHaveBeenCalled();
     expect(dubles.cancelarAssinaturasComCarenciaVencida).not.toHaveBeenCalled();
     expect(dubles.aplicarBackstopDePrazo).not.toHaveBeenCalled();
   });
@@ -659,7 +722,7 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
     expect(corpo.resultados).toHaveLength(1);
   });
 
-  it("mantém 200 e os dois discriminadores `null` quando tudo corre", async () => {
+  it("mantém 200 e os três discriminadores `null` quando tudo corre", async () => {
     // O contrapeso dos casos acima: se `etapaAbortou` fosse constante, o 500
     // apareceria também no caminho feliz e nenhum teste acima notaria.
     dubles.fecharCiclosVencendo.mockResolvedValue([fechamento()]);
@@ -669,7 +732,219 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
 
     expect(resposta.status).toBe(200);
     expect(corpo.ok).toBe(true);
+    expect(corpo.retentativaAbortada).toBeNull();
     expect(corpo.carenciaAbortada).toBeNull();
     expect(corpo.backstopAbortado).toBeNull();
+  });
+});
+
+describe("POST /api/internal/billing/fechar-ciclos — retentativa extradia (#322)", () => {
+  it("publica a etapa em chaves próprias, NUNCA somadas às do fechamento", async () => {
+    const comandada = retentativa({ tentativa: 2, dueDate: "2026-08-19" });
+    const esgotada = retentativa({
+      acao: "nao_comandada",
+      motivo: "orcamento_esgotado",
+      tentativa: null,
+      dueDate: null,
+      providerInstructionId: null,
+    });
+    const recusada = retentativa({
+      acao: "recusada_pelo_gateway",
+      motivo: "fora_da_janela_de_7_dias",
+      tentativa: 3,
+      dueDate: "2026-08-25",
+      providerInstructionId: null,
+    });
+
+    dubles.fecharCiclosVencendo.mockResolvedValue([fechamento()]);
+    dubles.comandarRetentativasPendentes.mockResolvedValue([
+      comandada,
+      esgotada,
+      recusada,
+    ]);
+
+    const resposta = await POST(requisicao());
+    expect(resposta.status).toBe(200);
+    const corpo = await resposta.json();
+
+    expect(corpo).toMatchObject({
+      ok: true,
+      retentativaAbortada: null,
+      retentativasAvaliadas: 3,
+      // Só a `comandada` conta: uma recusada pelo gateway não agendou débito
+      // nenhum, e somá-la aqui faria o log afirmar receita em recuperação que
+      // não existe.
+      retentativasComandadas: 1,
+      retentativasTruncado: false,
+      // A contagem do faturamento NÃO se mexe: uma retentativa não é cobrança
+      // nova, e inflá-la aqui quebraria a conferência contra o extrato.
+      ciclosProcessados: 1,
+    });
+    expect(corpo.retentativasFalhas).toEqual([]);
+
+    expect(corpo.retentativas).toEqual([
+      {
+        clinicId: comandada.clinicId,
+        cicloId: comandada.cicloId,
+        providerChargeId: comandada.providerChargeId,
+        providerInstructionId: comandada.providerInstructionId,
+        recusaCodigo: "PAYMENT_OVERDUE",
+        grupo: "G2",
+        tentativa: 2,
+        dueDate: "2026-08-19",
+        acao: "comandada",
+        motivo: null,
+      },
+      {
+        clinicId: esgotada.clinicId,
+        cicloId: esgotada.cicloId,
+        providerChargeId: esgotada.providerChargeId,
+        providerInstructionId: null,
+        recusaCodigo: "PAYMENT_OVERDUE",
+        grupo: "G2",
+        tentativa: null,
+        dueDate: null,
+        acao: "nao_comandada",
+        // O que dá visibilidade ao esgotamento ANTES do corte (D-6).
+        motivo: "orcamento_esgotado",
+      },
+      {
+        clinicId: recusada.clinicId,
+        cicloId: recusada.cicloId,
+        providerChargeId: recusada.providerChargeId,
+        providerInstructionId: null,
+        recusaCodigo: "PAYMENT_OVERDUE",
+        grupo: "G2",
+        tentativa: 3,
+        // A data calculada fica no relatório mesmo na recusa: é com ela que se
+        // investiga um `fora_da_janela_de_7_dias`.
+        dueDate: "2026-08-25",
+        acao: "recusada_pelo_gateway",
+        motivo: "fora_da_janela_de_7_dias",
+      },
+    ]);
+  });
+
+  it("separa a falha de transporte, com a ação e a tentativa já reservada", async () => {
+    // A reserva é gravada ANTES da chamada ao gateway (D-4): existe linha que
+    // consumiu 1 das 3 e falhou depois. Sem `acao` e `tentativa` aqui, o log
+    // leria "falhou" onde houve orçamento gasto.
+    const falhou = retentativa({
+      acao: "nao_comandada",
+      motivo: null,
+      tentativa: 1,
+      providerInstructionId: null,
+      erro: "gateway respondeu 502",
+    });
+    dubles.comandarRetentativasPendentes.mockResolvedValue([
+      retentativa(),
+      falhou,
+    ]);
+
+    const corpo = await (await POST(requisicao())).json();
+
+    expect(corpo.retentativasAvaliadas).toBe(2);
+    expect(corpo.retentativasComandadas).toBe(1);
+    expect(corpo.retentativasFalhas).toEqual([
+      {
+        clinicId: falhou.clinicId,
+        cicloId: falhou.cicloId,
+        acao: "nao_comandada",
+        tentativa: 1,
+        erro: "gateway respondeu 502",
+      },
+    ]);
+  });
+
+  it("sobe `retentativasTruncado: true` mesmo se um único item o carimbar", async () => {
+    // Mesmo motivo das outras etapas, e mesma guarda contra `some` → `every`:
+    // o job só registra este JSON, e uma passada que parou no teto com fila
+    // atrás é indistinguível de uma que cobriu tudo.
+    dubles.comandarRetentativasPendentes.mockResolvedValue([
+      retentativa(),
+      retentativa({ truncado: true }),
+    ]);
+
+    const corpo = await (await POST(requisicao())).json();
+
+    expect(corpo.retentativasTruncado).toBe(true);
+  });
+
+  it("nomeia a etapa quando ela lança, responde 500 e NÃO derruba as outras", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const emitida = fechamento({ cobrancaEmitida: true });
+    dubles.fecharCiclosVencendo.mockResolvedValue([emitida]);
+    dubles.comandarRetentativasPendentes.mockRejectedValue(
+      new Error("gateway 503 ao consultar instrução"),
+    );
+    dubles.cancelarAssinaturasComCarenciaVencida.mockResolvedValue([
+      corte({ cortada: true }),
+    ]);
+    dubles.aplicarBackstopDePrazo.mockResolvedValue([
+      backstop({ acao: "carimbada" }),
+    ]);
+
+    const resposta = await POST(requisicao());
+    const corpo = await resposta.json();
+
+    // O alarme sobe (D34: o job já sai `exit 0` demais)…
+    expect(resposta.status).toBe(500);
+    expect(corpo.ok).toBe(false);
+    expect(corpo.retentativaAbortada).toBe(
+      "gateway 503 ao consultar instrução",
+    );
+    // …sem contaminar os outros discriminadores.
+    expect(corpo.carenciaAbortada).toBeNull();
+    expect(corpo.backstopAbortado).toBeNull();
+
+    // As etapas seguintes AINDA RODAM e AINDA aparecem no corpo: uma
+    // retentativa que estourou não cortou nem carimbou ninguém, então nada da
+    // invariante de ordem foi violado — e o corpo é a única memória do ato.
+    expect(dubles.cancelarAssinaturasComCarenciaVencida).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(dubles.aplicarBackstopDePrazo).toHaveBeenCalledTimes(1);
+    expect(corpo.carenciaAvaliadas).toBe(1);
+    expect(corpo.carenciaCortadas).toBe(1);
+    expect(corpo.backstopAvaliados).toBe(1);
+    expect(corpo.backstopCarimbados).toBe(1);
+
+    // E a cobrança já emitida continua relatada: perdê-la aqui apagaria o único
+    // registro de um ato irreversível (D38).
+    expect(corpo.ciclosProcessados).toBe(1);
+    expect(corpo.resultados).toHaveLength(1);
+
+    // A etapa que caiu não vira "zero avaliadas" em silêncio: quem separa "não
+    // havia ninguém a retentar" de "a varredura estourou" é `retentativaAbortada`.
+    expect(corpo.retentativasAvaliadas).toBe(0);
+    expect(corpo.retentativasComandadas).toBe(0);
+    expect(corpo.retentativasTruncado).toBe(false);
+    expect(corpo.retentativasFalhas).toEqual([]);
+    expect(corpo.retentativas).toEqual([]);
+  });
+
+  it("registra as TRÊS etapas quando todas lançam", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    dubles.fecharCiclosVencendo.mockResolvedValue([fechamento()]);
+    dubles.comandarRetentativasPendentes.mockRejectedValue(
+      new Error("gateway 503 ao consultar instrução"),
+    );
+    dubles.cancelarAssinaturasComCarenciaVencida.mockRejectedValue(
+      new Error("timeout ao revogar vínculo"),
+    );
+    dubles.aplicarBackstopDePrazo.mockRejectedValue(
+      new Error("gateway 503 na reconsulta"),
+    );
+
+    const resposta = await POST(requisicao());
+    const corpo = await resposta.json();
+
+    expect(corpo.retentativaAbortada).toBe(
+      "gateway 503 ao consultar instrução",
+    );
+    expect(corpo.carenciaAbortada).toBe("timeout ao revogar vínculo");
+    expect(corpo.backstopAbortado).toBe("gateway 503 na reconsulta");
+    expect(resposta.status).toBe(500);
+    expect(corpo.resultados).toHaveLength(1);
   });
 });
