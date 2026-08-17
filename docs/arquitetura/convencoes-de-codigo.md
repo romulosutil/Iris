@@ -53,11 +53,10 @@ lint-staged, para nunca commitar código quebrando lint.
   completo do `addon-a11y` do Storybook (Fase 0.5) e para os fluxos
   críticos ponta a ponta (Fase 1: cadastro administrativo → clínico →
   protocolo → agenda).
-- **RLS (crítico para LGPD, não opcional):** `pgTAP` via
-  `supabase test db` — testa as policies diretamente no Postgres,
-  simulando cada papel (`admin_recepcao`, `terapeuta`, `coordenador`)
-  tentando acessar dado fora do escopo dele. Ver checklist LGPD mínimo
-  viável em `stack-e-plano-de-construcao.md` §4 e em `AGENTS.md` §8 — "RLS
+- **RLS (crítico para LGPD, não opcional):** `pnpm test:rls` (via
+  Vitest contra banco PostgreSQL real, simulando papéis restritos `iris_app`
+  sob `app_clinic_id_exigido()` e `user_role`). Ver checklist LGPD mínimo
+  viável em `stack-e-plano-de-construcao.md` §4 e em `AGENTS.md` §2 — "RLS
   habilitado e testado" não é satisfeito só por policies existirem no
   schema.
 

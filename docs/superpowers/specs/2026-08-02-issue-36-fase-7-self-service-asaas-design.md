@@ -1,19 +1,12 @@
-# Design Spec — Issue #36: Fase 7 - Integração de Billing com Asaas (Pix Automático & Paciente Ativo)
+# Design Spec — Issue #36: Fase 7 - Integração de Billing com Asaas (Pix Automático & Ficha Ativa)
 
-> **Status:** 🟢 **PREMISSAS RESOLVIDAS EM 08/08/2026 — Conta Asaas Aprovada/Liberada**
+> **Status:** 🟢 **CONCLUÍDO EM PRODUÇÃO (11/08/2026, PR #244 / D24 / D43 / D44)**
 >
-> As restrições que bloquearam a premissa central foram superadas:
+> 1. **Conta Asaas de produção ativa:** O faturamento opera exclusivamente via **Asaas com Pix Automático** (`immediateQrCode` com autorização de R$ 0,01 + apuração mensal pós-paga por ficha ativa).
+> 2. **Mercado Pago Descontinuado (D24):** O suporte a Mercado Pago foi formalmente removido e a tabela `mercadopago_webhook_event` foi dropada via migração `0091_drop_webhook_mercado_pago.sql`.
+> 3. **Trilho de cobrança:** Cobrança pós-paga mensal baseada no volume de fichas ativas apuradas no ciclo (`billing_apurar_ciclo`, `0075`).
 >
-> 1. **Conta Asaas de produção liberada:** A conta foi aprovada e está ativa em produção.
-> 2. **Opções Variadas de Pagamento:** O sistema utilizará tanto o Asaas quanto o Mercado Pago como gateways ativos, permitindo opções de cobrança variadas para as clínicas.
-> 3. **Trilho de cobrança:** Mantido o desenho de cobrança avulsa mensal pós-paga por ciclo de apuração (cobrança baseada no volume de pacientes ativos calculados no fechamento).
->
-> Contexto completo em `BACKLOG.md`, sessões de 03/08/2026 e 08/08/2026.
-
-> **Status anterior:** 🚧 Em Construção (Fatia 1 Webhook ✅ · Sandbox Real ✅ · Subscription/Apuração Pendentes)  
-> **Data:** 02/08/2026 (Atualizado em 03/08/2026)  
-> **Autor:** Tech Lead & Rômulo Sutil  
-> **Issue GitHub:** [#36](https://github.com/romulosutil/Iris/issues/36)
+> Contexto completo em `BACKLOG.md` e `docs/GO_LIVE.md`.
 
 ---
 
@@ -21,43 +14,38 @@
 
 ### 1.1 O Problema
 
-Na Fase 7, o Iris necessita de um sistema de cobrança recorrente automatizado para faturamento mensal por paciente ativo.
+Na Fase 7, o Iris necessita de um sistema de cobrança recorrente automatizado para faturamento mensal por ficha ativa.
 
 ### 1.2 A Solução
 
-Integração com o gateway **Asaas** via **Pix Automático (Jornada 3)** como trilho primário (sem limitação de valor fixo, aceitando cobrança variável apurada por paciente) e cartão de crédito como fallback.
+Integração com o gateway **Asaas** via **Pix Automático** (`immediateQrCode` com autorização de R$ 0,01) como trilho homologado em produção, com cobrança variável mensal pós-paga calculada por ficha ativa.
 
 ---
 
 ## 2. Especificação Técnica & Arquitetura de Pagamentos
 
-### 2.1 Fluxo Pix Automático Jornada 3
+### 2.1 Fluxo Pix Automático
 
-1. **Autorização sem Valor Fixo:** Solicitação de autorização sem o campo `value` preenchido no Asaas, permitindo cobrança variável mensal com base na quantidade de pacientes ativos apurados no ciclo.
-2. **Janela de Apuração:** Apuração realizada entre 2 e 10 dias úteis antes do vencimento da fatura.
+1. **Autorização de R$ 0,01:** Solicitação de autorização via Pix Automático com QR Code imediato de ativação de R$ 0,01.
+2. **Janela de Apuração:** Apuração realizada no encerramento do ciclo de 30 dias (`billing_apurar_ciclo`).
 3. **Webhooks (`/api/hooks/asaas`):** Recepção dos eventos `PIX_AUTOMATIC_RECURRING_*` protegidos por token de cabeçalho (`ASAAS_WEBHOOK_TOKEN`).
 
-### 2.2 Apuração de Pacientes Ativos
+### 2.2 Apuração de Fichas Ativas
 
-> ⚠️ **Superado.** Esta seção descrevia o critério "não arquivado", que a
-> DECISÃO 8 (04/08/2026) **removeu de propósito**. O critério vivo é o de
-> `billing_apurar_ciclo` (`0075`): conta a **ficha ativa** — paciente criado no
-> ciclo **ou** com interação no ciclo (`session`, `session_note`, `evidence`),
-> dentro da janela semiaberta `[início, fim)`. Consequência aceita: clínica em
-> recesso paga R$ 0. Ver `BACKLOG.md`, D15.
+> ⚠️ **Critério Vigente:** A apuração (`0075`) conta a **ficha ativa** — paciente criado no ciclo **ou** com interação no ciclo (`session`, `session_note`, `evidence`), dentro da janela semiaberta `[início, fim)`. Consequência aceita: clínica em recesso paga R$ 0. Ver `BACKLOG.md`, Decisões 8 e 9.
 
 ---
 
-## 3. Estado Atual de Implementação (atualizado em 08/08/2026)
+## 3. Estado Atual de Implementação (11/08/2026)
 
 - [x] **Recepção de Webhook & Banco (`0066`):** Endpoint `POST /api/hooks/asaas` com verificação `timingSafeEqual` de token e dedup atômica via `UNIQUE` em `asaas_webhook_event(asaas_event_id)` (PR #177).
-- [x] **Validação no Sandbox Real Asaas:** Teste ponta a ponta exercitado contra o ambiente de Sandbox com evento real de autorização (`PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED`), comprovando que a API Asaas aceita a criação de autorizações sem `value` na raiz (`value: null`). Payload salvo em `docs/evidencias/2026-08-03-asaas-sandbox-evento-real.json`.
-- [x] **Tabela `subscription` & Gate de Pagamento:** entregue no trilho Mercado Pago (`0071`/`0075`), agnóstica de gateway — `subscription.provider` é persistido por linha.
+- [x] **Validação no Sandbox Real Asaas:** Teste ponta a ponta exercitado contra o ambiente de Sandbox com evento real de autorização (`PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED`).
+- [x] **Tabela `subscription` & Gate de Pagamento:** `subscription` ativa sob Asaas, com enum atualizado (migração `0090`/`0091`).
 - [x] **Motor de Apuração:** `billing_apurar_ciclo` (`SECURITY DEFINER`, `0075`) conta fichas ativas; o preço sai de `src/lib/billing/calculator.ts`, em centavos inteiros. SQL nunca calcula preço.
-- [x] **`AsaasProvider` (08/08/2026):** `src/lib/billing/provider/asaas.ts` implementa os sete métodos da porta. Vínculo = `POST /pix/automatic/authorizations` **sem `value`** (Jornada 3, `paymentCreationMode: MANUAL`); cobrança do ciclo = `POST /payments` com `pixAutomaticAuthorizationId`. `BILLING_PROVIDER=asaas` deixou de lançar.
-- [x] **Webhook aplica efeito (08/08/2026):** a rota deixou de ser só registro — concilia o ciclo (`conciliarPagamentoDeCiclo`) e o vínculo (`aplicarStatusProvider`), com `aplicado_em`/`erro_aplicacao` (migração `0086`) e recuperação por `reprocessarEventosPendentes`.
-- [ ] **Provisionamento de Produção:** cadastro do webhook de produção no painel do Asaas e das envs (`BILLING_PROVIDER_API_KEY`, `ASAAS_BASE_URL`, `ASAAS_WEBHOOK_TOKEN`) no Easypanel.
-- [ ] **Virada de chave:** `BILLING_PROVIDER` continua `mercado_pago`. Trocar é decisão de produto, não consequência deste PR.
+- [x] **`AsaasProvider`:** `src/lib/billing/provider/asaas.ts` implementa a porta `BillingProvider`.
+- [x] **Webhook com Reconciliação Atômica:** concilia o ciclo (`conciliarPagamentoDeCiclo`) e o vínculo (`aplicarStatusProvider`), com `aplicado_em`/`erro_aplicacao` (migração `0086`) e recuperação por `reprocessarEventosPendentes`.
+- [x] **Provisionamento de Produção (11/08/2026):** Webhook cadastrado e token ativo em produção.
+- [x] **Virada de Chave (11/08/2026, PR #244):** Asaas ativado como provedor exclusivo em produção.
 
 ---
 

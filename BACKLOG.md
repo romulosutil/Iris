@@ -1782,7 +1782,7 @@ lento); falha ao aplicar deixa `aplicado_em` NULL para reprocessamento, nunca
   `profiles: ["billing"]`.
 - Sem tela de cancelamento de assinatura (a porta tem `cancelarAssinatura`).
 
-Spec: `docs/superpowers/specs/2026-08-03-issue-36-billing-mercadopago-implementacao.md`
+Spec (arquivada): `docs/archive/specs/2026-08-03-issue-36-billing-mercadopago-legado.md`
 
 ---
 
@@ -1825,7 +1825,7 @@ precedente do Asaas (D5): simulador de gateway não reproduz o dialeto real
 (timestamp vivo) do evento de produção. **Pendência que continua aberta:**
 só uma assinatura real criada/atualizada no MP prova essa última milha.
 
-Spec atualizada: `docs/superpowers/specs/2026-08-03-issue-36-billing-mercadopago-implementacao.md`.
+Spec (arquivada): `docs/archive/specs/2026-08-03-issue-36-billing-mercadopago-legado.md`.
 
 ---
 
