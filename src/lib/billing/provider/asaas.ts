@@ -1369,6 +1369,27 @@ export class AsaasProvider implements BillingProvider {
    * filtro, a primeira da lista poderia ser uma `SCHEDULED` e o motivo voltaria
    * `null` com a recusa existindo ao lado.
    *
+   * ## Qual das recusadas, quando há mais de uma
+   *
+   * O filtro por `status` não desempata: sob `ALLOW_THREE_IN_SEVEN_DAYS` uma
+   * cobrança pode acumular até três instruções `REFUSED`, e a API não promete
+   * ordem nenhuma. Pegar `lista[0]` fazia tanto o motivo da recusa quanto o
+   * alvo do `POST .../retries` dependerem do humor do índice do gateway — dois
+   * desfechos diferentes para o mesmo estado.
+   *
+   * A escolha é a **mais recente por data de criação**, com o `id` como
+   * desempate estável: é a última coisa que aconteceu com a cobrança, e é dela
+   * que sai o diagnóstico atual. Instrução sem data legível vai para o fim da
+   * ordem em vez de virar `NaN` no meio da comparação.
+   *
+   * ⚠️ **NÃO MEDIDO:** se o contador de 3 do Asaas for por INSTRUÇÃO e não por
+   * cobrança, retentar sempre a instrução mais nova abre orçamento além das 3 —
+   * cada retentativa criaria a instrução que a próxima passada escolheria. A
+   * doc fala em "3 tentativas em 7 dias" sem dizer de que entidade é o contador,
+   * e o endpoint nunca foi exercitado (nenhuma autorização chega a `ACTIVE` no
+   * sandbox, #321). Entra no ensaio em produção; o sinal seria a 4ª retentativa
+   * ser aceita, ou um 400 `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` antes da 3ª.
+   *
    * Lista vazia devolve `{}` — "nenhuma instrução recusada" é resposta válida,
    * não erro.
    */
@@ -1381,8 +1402,33 @@ export class AsaasProvider implements BillingProvider {
         `/pix/automatic/paymentInstructions?paymentId=${encodeURIComponent(providerChargeId)}&status=REFUSED`,
       ),
     );
-    const lista = Array.isArray(resposta.data) ? resposta.data : [];
-    return comoRegistro(lista[0]);
+    const lista: unknown[] = Array.isArray(resposta.data) ? resposta.data : [];
+
+    // Sem data legível ⇒ `-Infinity`: a instrução vai para o fim da ordem sem
+    // contaminar a comparação, e o desempate por `id` ainda a torna estável.
+    const criadaEm = (item: Record<string, unknown>): number =>
+      parsarDataAsaas(item.dateCreated)?.getTime() ?? -Infinity;
+
+    let escolhida: Record<string, unknown> | null = null;
+    for (const bruto of lista) {
+      const atual = comoRegistro(bruto);
+      if (!escolhida) {
+        escolhida = atual;
+        continue;
+      }
+      const [novaEm, atualEm] = [criadaEm(atual), criadaEm(escolhida)];
+      if (novaEm !== atualEm) {
+        if (novaEm > atualEm) escolhida = atual;
+        continue;
+      }
+      // Empate de data (ou duas sem data): o maior `id` vence. Arbitrário de
+      // propósito — o que importa é ser o MESMO em toda passada.
+      const idNovo = comoTexto(atual.id) ?? "";
+      const idAtual = comoTexto(escolhida.id) ?? "";
+      if (idNovo > idAtual) escolhida = atual;
+    }
+
+    return escolhida ?? {};
   }
 
   /**

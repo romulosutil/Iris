@@ -14,20 +14,25 @@ import {
  * reservada). Isolada, ela ganha um teste unitário por restrição; embutida no
  * laço da varredura, só seria alcançável por integração com Postgres no ar.
  *
- * ## As quatro restrições, na ordem da D-3
+ * ## As restrições, na ordem da D-3 (quatro do Asaas, uma nossa)
  *
  * 1. **Candidata mínima = `hoje + 1 dia`.** Consequência direta da validação 3
  *    do Asaas ("o agendamento deve ser enviado até as 23h59 do dia anterior à
  *    data desejada"): uma varredura que só comanda para amanhã satisfaz essa
  *    validação **por construção**, a qualquer hora em que o job rode.
  * 2. **Nunca repetir data já comandada** (validação 1 exige datas diferentes
- *    entre as retentativas da mesma cobrança): candidata igual à
- *    `ultima_retentativa_vencimento` anda +1 dia.
+ *    entre as retentativas da mesma cobrança): a candidata tem de ser
+ *    ESTRITAMENTE maior que `ultima_retentativa_vencimento`. "Diferente" não
+ *    basta — três passadas no mesmo dia civil produziriam D+1, D+2 e D+1 de
+ *    novo.
  * 3. **Teto A = `vencimento_cobranca + 7 dias corridos`** (validação 2), medido
  *    com `diasCorridosEntre` — a mesma régua de dias corridos do resto da
  *    janela, e não uma subtração de milissegundos que ignora fuso.
  * 4. **Teto B = estritamente ANTES do início do próximo ciclo** (validação 4:
  *    "não pode coincidir ou ultrapassar o dia de início do próximo ciclo").
+ * 5. **Teto C = estritamente ANTES do corte por carência.** Esta é NOSSA, não
+ *    do Asaas: comandar débito para o dia em que a assinatura é cortada faz a
+ *    clínica pagar e ficar `canceled` no mesmo dia.
  *
  * Estourou qualquer teto ⇒ devolve `null`, e a varredura NÃO chama o gateway.
  * Fail-closed: não existe "chuta uma data" — chutar gastaria uma das 3
@@ -75,6 +80,16 @@ export interface EntradaDueDateRetentativa {
   proximoCicloInicio: Date | null;
   /** `billing_cycle.ultima_retentativa_vencimento` (`YYYY-MM-DD`) ou `null`. */
   ultimaRetentativaVencimento: string | null;
+  /**
+   * Teto C: o INSTANTE do corte por carência
+   * (`subscription.past_due_desde + carencia_dias`), ou `null` quando não há
+   * carência correndo.
+   *
+   * Obrigatório, e não opcional, de propósito: um call site que esquecesse o
+   * campo comandaria débito para depois do corte em silêncio — que é o defeito
+   * que este teto existe para fechar.
+   */
+  cortePorCarencia: Date | null;
 }
 
 /** Dia civil no formato do wire do Asaas (`YYYY-MM-DD`). */
@@ -94,8 +109,17 @@ export function calcularDueDateDeRetentativa(
 
   // Passo 2 — a validação 1 exige datas DIFERENTES. Sem isto a segunda passada
   // repetiria a data da primeira e levaria 400 com a tentativa já reservada.
-  if (comoDiaCivil(candidata) === entrada.ultimaRetentativaVencimento) {
-    candidata = somarDiasCivis(candidata, 1);
+  //
+  // A candidata tem de ser ESTRITAMENTE MAIOR que a última comandada, e não
+  // apenas "diferente dela": comparar por igualdade e andar um dia produzia
+  // D+1, D+2 e de novo **D+1** em três passadas do mesmo dia civil (a terceira
+  // vê `ultima = D+2`, não colide com D+1, e repete a data da primeira). A
+  // comparação lexicográfica é válida porque os dois lados são `YYYY-MM-DD`.
+  const ultima = entrada.ultimaRetentativaVencimento;
+  if (ultima && comoDiaCivil(candidata) <= ultima) {
+    // Salto direto para o dia seguinte à última comandada — um `while` daria o
+    // mesmo resultado gastando iterações proporcionais à distância.
+    candidata = somarDiasCivis(new Date(`${ultima}T12:00:00Z`), 1);
   }
 
   // Passo 3 — teto A. `diasCorridosEntre` devolve 0 quando a candidata é
@@ -119,6 +143,27 @@ export function calcularDueDateDeRetentativa(
   if (
     entrada.proximoCicloInicio &&
     candidata.getTime() >= civilSp(entrada.proximoCicloInicio).getTime()
+  ) {
+    return null;
+  }
+
+  // Passo 5 — teto C: a data comandada tem de cair ESTRITAMENTE ANTES do corte
+  // por carência.
+  //
+  // Restrição NOSSA, não do Asaas — e é a única que protege a clínica de pagar
+  // por um serviço que o produto desliga no mesmo dia. O CHECK do banco só
+  // exige `carencia_dias >= 0`: com carência curta, a passada de hoje comandava
+  // `dueDate` para o próprio dia do corte, o corte revogava a autorização de
+  // Pix Automático, e um débito que liquidasse antes disso deixava a clínica
+  // paga e `canceled`.
+  //
+  // Comparado por DIA CIVIL, igual ao teto B: o corte é um instante que pode
+  // cair a qualquer hora do dia dele, e uma `dueDate` é um dia inteiro. Exigir
+  // que o dia da retentativa seja anterior ao dia do corte é o que garante, sem
+  // depender do horário do job, que o débito acontece com a autorização viva.
+  if (
+    entrada.cortePorCarencia &&
+    candidata.getTime() >= civilSp(entrada.cortePorCarencia).getTime()
   ) {
     return null;
   }

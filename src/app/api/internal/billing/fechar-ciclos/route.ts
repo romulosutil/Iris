@@ -215,9 +215,12 @@ export async function POST(request: Request): Promise<Response> {
           tentativa: r.tentativa,
           dueDate: r.dueDate,
           acao: r.acao,
-          // `motivo` é o que dá visibilidade ao esgotamento ANTES do corte
-          // (D-6): `orcamento_esgotado` aparece aqui na passada em que acontece,
-          // e não junto com o cancelamento dias depois.
+          // `motivo` é o que dá visibilidade ao fim da janela ANTES do corte
+          // (D-6): `sem_data_possivel` e `carencia_vence_nesta_passada`
+          // aparecem aqui na passada em que acontecem, e não junto com o
+          // cancelamento dias depois. O esgotamento do orçamento NÃO passa por
+          // aqui — o ciclo que gastou as 3 é barrado no `WHERE` da varredura,
+          // para não ocupar vaga da passada para sempre.
           motivo: r.motivo,
         })),
         // Chaves próprias, e não somadas às do fechamento: `ciclosProcessados` e

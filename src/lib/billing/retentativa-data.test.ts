@@ -36,6 +36,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-08-14T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBe("2026-08-17");
   });
@@ -49,6 +50,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-08-14T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBe("2026-08-17");
   });
@@ -60,6 +62,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-08-14T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: "2026-08-17",
+        cortePorCarencia: null,
       }),
     ).toBe("2026-08-18");
   });
@@ -72,6 +75,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         proximoCicloInicio: null,
         // A da passada anterior, já no passado — não colide com a candidata.
         ultimaRetentativaVencimento: "2026-08-15",
+        cortePorCarencia: null,
       }),
     ).toBe("2026-08-17");
   });
@@ -86,6 +90,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-08-10T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBe("2026-08-17");
   });
@@ -98,6 +103,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-08-09T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBeNull();
   });
@@ -112,6 +118,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-08-10T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: "2026-08-17",
+        cortePorCarencia: null,
       }),
     ).toBeNull();
   });
@@ -125,6 +132,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-08-20T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBe("2026-08-17");
   });
@@ -148,6 +156,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         // Civil de São Paulo: 17/08 — o mesmo dia da candidata.
         proximoCicloInicio: new Date("2026-08-18T00:00:00.000Z"),
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBeNull();
   });
@@ -161,6 +170,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         // antes.
         proximoCicloInicio: new Date("2026-08-19T00:00:00.000Z"),
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBe("2026-08-17");
   });
@@ -172,6 +182,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-08-14T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBe("2026-08-17");
   });
@@ -187,6 +198,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-08-20T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBe("2026-08-22");
   });
@@ -199,6 +211,7 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         vencimentoCobranca: new Date("2026-09-05T12:00:00.000Z"),
         proximoCicloInicio: null,
         ultimaRetentativaVencimento: null,
+        cortePorCarencia: null,
       }),
     ).toBe("2026-09-07");
   });

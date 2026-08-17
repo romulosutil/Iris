@@ -362,6 +362,31 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
     },
   };
 
+/**
+ * Os códigos que a varredura da #322 pode retentar SOZINHA — hoje, só os de G2.
+ *
+ * Existe porque o predicado de elegibilidade da varredura mora no **SQL**, e não
+ * no laço em JS: filtrar por grupo depois do `LIMIT` fazia um ciclo
+ * permanentemente inelegível ocupar vaga em toda passada, para sempre. O `WHERE`
+ * precisa de códigos literais, e é isto que os fornece.
+ *
+ * **Derivado, nunca redigitado.** A lista sai do cruzamento do `CATALOGO` (fato
+ * do gateway) com `POLITICAS` (decisão nossa): marcar um grupo novo como
+ * `retentavelAutomaticamente` já move o `WHERE` da varredura junto. Uma segunda
+ * cópia de `PAYMENT_OVERDUE` em `subscription.ts` seria exatamente a divergência
+ * silenciosa que este módulo existe para não ter.
+ *
+ * ⚠️ A comparação no SQL é pelo literal CRU da coluna `recusa_codigo`, sem o
+ * `trim`/caixa-alta que `classificarRecusa` aplica. É uma diferença fail-closed
+ * — um código com espaço em volta fica de fora da varredura, nunca dentro dela.
+ */
+export const CODIGOS_RETENTAVEIS_AUTOMATICAMENTE: readonly string[] =
+  Object.entries(CATALOGO)
+    .filter(
+      ([grupo]) => POLITICAS[grupo as GrupoRecusa].retentavelAutomaticamente,
+    )
+    .flatMap(([, codigos]) => codigos);
+
 /** Índice reverso código → grupo, montado uma vez a partir do `CATALOGO`. */
 const GRUPO_POR_CODIGO: ReadonlyMap<string, GrupoRecusa> = new Map(
   Object.entries(CATALOGO).flatMap(([grupo, codigos]) =>

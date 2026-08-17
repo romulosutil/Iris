@@ -132,10 +132,20 @@ const owner = hasDb
 // ── Dublê do gateway (só o corte por carência fala HTTP) ─────────────────────
 
 /**
+ * Estado que a consulta de cobrança devolve na Guarda 1b da varredura.
+ *
+ * `PENDENTE` é o default — "a cobrança não liquidou", o caminho de toda
+ * retentativa legítima. Um caso que precise medir a auto-cura do webhook
+ * perdido troca por `LIQUIDADA` antes de chamar a varredura.
+ */
+let estadoCobrancaNoGateway = "PENDENTE";
+
+/**
  * `cancelarAssinaturasComCarenciaVencida` revoga a autorização no gateway antes
- * de escrever, e o `ProvedorFake` faz isso por `fetch` de verdade. A varredura
- * de retentativa não passa por aqui — `comandarRetentativa` e
- * `instrucaoParaRetentativa` são programáveis no próprio fake.
+ * de escrever, e o `ProvedorFake` faz isso por `fetch` de verdade. O mesmo vale
+ * para a Guarda 1b da varredura, que reconsulta a cobrança antes de reservar —
+ * `comandarRetentativa` e `instrucaoParaRetentativa` continuam programáveis no
+ * próprio fake, sem HTTP.
  */
 function instalarGateway(): void {
   vi.stubGlobal("fetch", async (entrada: unknown) => {
@@ -145,6 +155,9 @@ function instalarGateway(): void {
     }
     if (url.includes("/vinculos/")) {
       return Response.json({ estado: "CANCELADO" });
+    }
+    if (url.includes("/cobrancas/")) {
+      return Response.json({ estado: estadoCobrancaNoGateway, centavos: 3900 });
     }
     throw new Error(`fetch inesperado para ${url}`);
   });
@@ -262,6 +275,7 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
   beforeEach(async () => {
     limparRetentativasFake();
     barreiraDeInstrucao = null;
+    estadoCobrancaNoGateway = "PENDENTE";
     instalarGateway();
     await limpar();
   });
@@ -314,14 +328,16 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
     expect(depoisDa1.ultima_retentativa_vencimento).toBe("2026-08-12");
     expect(depoisDa1.ultima_retentativa_em).not.toBeNull();
 
-    // A retentativa é recusada pelo mesmo motivo: o webhook chega com
-    // `purpose: RETRY_AFTER_DUE_DATE` e NÃO pode reescrever o diagnóstico
-    // original nem recarimbar a assinatura (F5).
+    // A retentativa é recusada pelo MESMO motivo (mesmo grupo): o webhook chega
+    // com `purpose: RETRY_AFTER_DUE_DATE` e NÃO pode reescrever o diagnóstico
+    // original nem recarimbar a assinatura (F5). Um código de OUTRO grupo aqui
+    // não provaria preservação — provaria o guard engolindo causa nova, que é
+    // o defeito consertado na revisão.
     const antesDoWebhook = await lerAssinatura(SUB_A);
     await conciliarPagamentoDeCiclo(
       providerChargeId!,
       "recusada",
-      "MAXIMUM_AMOUNT_EXCEEDED",
+      "PAYMENT_OVERDUE",
       { proposito: "RETRY_AFTER_DUE_DATE", tentativa: 1 },
     );
     const depoisDoWebhook = await lerCiclo(cicloId);
@@ -355,15 +371,15 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
       "2026-08-16",
     ]);
 
-    // ── Passada 4: orçamento esgotado, e NENHUMA chamada nova ─────────────
+    // ── Passada 4: orçamento esgotado ─────────────────────────────────────
+    // O ciclo sai do conjunto elegível no PRÓPRIO `WHERE` (contador = 3), e não
+    // depois do `LIMIT`: enquanto o filtro morava no laço, este ciclo — que
+    // nunca mais muda de estado — ocupava uma das 20 vagas da passada para
+    // sempre, e uma recusa nova atrás dele na fila jamais era avaliada.
     const passada4 = await comandarRetentativasPendentes({
       agora: meioDiaSp("2026-08-17"),
     });
-    expect(passada4[0]).toMatchObject({
-      acao: "nao_comandada",
-      motivo: "orcamento_esgotado",
-      tentativa: null,
-    });
+    expect(passada4).toEqual([]);
     expect(chamadasDeRetentativaFake).toHaveLength(3);
 
     // ── D-6: esgotar não antecipa o corte ─────────────────────────────────
@@ -386,7 +402,7 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
 
   // ── 2. Grupo não retentável ───────────────────────────────────────────────
 
-  it("G5 (ACCOUNT_CLOSED) é avaliado e reportado, mas NUNCA chama o gateway", async () => {
+  it("G5 (ACCOUNT_CLOSED) não entra no conjunto elegível — nem ocupa vaga da passada", async () => {
     await criarAssinatura({ clinicId: CLINICA_B, subscriptionId: SUB_B });
     const { cicloId } = await criarCicloRecusado({
       clinicId: CLINICA_B,
@@ -398,15 +414,10 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
       agora: meioDiaSp("2026-08-11"),
     });
 
-    expect(resultado).toHaveLength(1);
-    expect(resultado[0]).toMatchObject({
-      cicloId,
-      grupo: "G5",
-      acao: "nao_comandada",
-      motivo: "grupo_nao_retentavel",
-      tentativa: null,
-      dueDate: null,
-    });
+    // O filtro por grupo mora no `WHERE` (`CODIGOS_RETENTAVEIS_AUTOMATICAMENTE`).
+    // Reportar a linha como "avaliada" era o defeito: conta encerrada nunca
+    // muda de estado, então ela reaparecia na frente da fila em toda passada.
+    expect(resultado).toEqual([]);
     // O oráculo do "nunca chama": conta encerrada recusa igual na 1ª, na 2ª e
     // na 3ª — gastar tentativa aqui é queimar o orçamento do caso de saldo.
     expect(chamadasDeRetentativaFake).toEqual([]);
@@ -491,12 +502,20 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
       clinicId: CLINICA_E,
       subscriptionId: SUB_E,
       recusaCodigo: "PAYMENT_OVERDUE",
+      retentativasComandadas: 1,
+      ultimaRetentativaVencimento: "2026-08-17",
     });
 
-    // Vencimento 10/08 + 7 = 17/08. A candidata mínima de uma passada em 17/08
-    // é 18/08 — já fora. Comandar assim levaria 400 com a tentativa reservada.
+    // Vencimento 10/08 + 7 = 17/08, o último dia comandável. A passada de 16/08
+    // tem 17/08 como candidata mínima, mas 17/08 JÁ foi comandada — o passo que
+    // evita repetir data empurra para 18/08, que estoura a janela. Comandar
+    // assim levaria 400 com a tentativa reservada.
+    //
+    // O pré-filtro do `WHERE` é grosso de propósito: ele deixa esta linha
+    // passar (vencimento 10/08 ≥ 16/08 − 6), e quem diz "não há data" continua
+    // sendo a função pura.
     const resultado = await comandarRetentativasPendentes({
-      agora: meioDiaSp("2026-08-17"),
+      agora: meioDiaSp("2026-08-16"),
     });
 
     expect(resultado[0]).toMatchObject({
@@ -505,7 +524,7 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
       dueDate: null,
     });
     expect(chamadasDeRetentativaFake).toEqual([]);
-    expect((await lerCiclo(cicloId)).retentativas_comandadas).toBe(0);
+    expect((await lerCiclo(cicloId)).retentativas_comandadas).toBe(1);
   });
 
   // ── 6. Carência vencendo na mesma passada ─────────────────────────────────
@@ -584,7 +603,9 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
 
     expect(resultado[0]).toMatchObject({
       acao: "nao_comandada",
-      motivo: null,
+      // Motivo NOMEADO: `null` punha "teria sido comandada" no mesmo balde de
+      // "pulada por falha muda", e o relatório do ensaio não distinguia as duas.
+      motivo: "dry_run",
       dueDate: "2026-08-12",
       tentativa: null,
     });
@@ -597,7 +618,7 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
 
   // ── 9. F5 — conciliação sob retentativa ───────────────────────────────────
 
-  it("recusa de RETENTATIVA não reescreve o diagnóstico nem recarimba past_due", async () => {
+  it("recusa de RETENTATIVA com causa DIFERENTE reescreve — o guard não engole fato novo", async () => {
     await criarAssinatura({ clinicId: CLINICA_D, subscriptionId: SUB_D });
     const { cicloId, providerChargeId } = await criarCicloRecusado({
       clinicId: CLINICA_D,
@@ -606,24 +627,28 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
       erro: "diagnóstico da recusa original",
     });
 
-    const assinaturaAntes = await lerAssinatura(SUB_D);
-
+    // Entre a recusa original (G2, sem saldo) e a retentativa, a clínica
+    // revogou a autorização no app do banco: a retentativa volta G3. Este caso
+    // AFIRMAVA que preservar `PAYMENT_OVERDUE` era o certo — e era o defeito:
+    // `recusa_codigo` ficava mentindo e o backstop de prazo, que decide lendo
+    // exatamente essa coluna, nunca veria a autorização morta.
     const aplicou = await conciliarPagamentoDeCiclo(
       providerChargeId!,
       "recusada",
-      // Código DIFERENTE do persistido, e de um grupo que também escreveria
-      // (G1): é o que torna a preservação observável.
-      "MAXIMUM_AMOUNT_EXCEEDED",
+      "PAYMENT_INSTRUCTION_WITHOUT_AUTHORIZATION",
       { proposito: "RETRY_AFTER_DUE_DATE", tentativa: 2 },
     );
 
     expect(aplicou).toBe(true);
     const ciclo = await lerCiclo(cicloId);
-    expect(ciclo.recusa_codigo).toBe("PAYMENT_OVERDUE");
-    expect(ciclo.erro).toBe("diagnóstico da recusa original");
-    // `atualizado_em` intacto prova que o UPDATE de `past_due` nem chegou a
-    // rodar — não é só o valor de `past_due_desde` que ficou igual.
-    expect(await lerAssinatura(SUB_D)).toEqual(assinaturaAntes);
+    expect(ciclo.recusa_codigo).toBe(
+      "PAYMENT_INSTRUCTION_WITHOUT_AUTHORIZATION",
+    );
+    expect(ciclo.erro).toContain("[G3]");
+    // G3 não carimba `past_due` (o desfecho dele é corte, não carência), então
+    // a assinatura fica como estava — mas pelo motivo certo, e não por o fato
+    // ter sido descartado.
+    expect((await lerAssinatura(SUB_D)).status).toBe("past_due");
   });
 
   it("a MESMA recusa como instrução original (SCHEDULE) reescreve — é o que prova o guard", async () => {

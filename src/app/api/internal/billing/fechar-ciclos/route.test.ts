@@ -741,9 +741,9 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
 describe("POST /api/internal/billing/fechar-ciclos — retentativa extradia (#322)", () => {
   it("publica a etapa em chaves próprias, NUNCA somadas às do fechamento", async () => {
     const comandada = retentativa({ tentativa: 2, dueDate: "2026-08-19" });
-    const esgotada = retentativa({
+    const semData = retentativa({
       acao: "nao_comandada",
-      motivo: "orcamento_esgotado",
+      motivo: "sem_data_possivel",
       tentativa: null,
       dueDate: null,
       providerInstructionId: null,
@@ -759,7 +759,7 @@ describe("POST /api/internal/billing/fechar-ciclos — retentativa extradia (#32
     dubles.fecharCiclosVencendo.mockResolvedValue([fechamento()]);
     dubles.comandarRetentativasPendentes.mockResolvedValue([
       comandada,
-      esgotada,
+      semData,
       recusada,
     ]);
 
@@ -796,17 +796,19 @@ describe("POST /api/internal/billing/fechar-ciclos — retentativa extradia (#32
         motivo: null,
       },
       {
-        clinicId: esgotada.clinicId,
-        cicloId: esgotada.cicloId,
-        providerChargeId: esgotada.providerChargeId,
+        clinicId: semData.clinicId,
+        cicloId: semData.cicloId,
+        providerChargeId: semData.providerChargeId,
         providerInstructionId: null,
         recusaCodigo: "PAYMENT_OVERDUE",
         grupo: "G2",
         tentativa: null,
         dueDate: null,
         acao: "nao_comandada",
-        // O que dá visibilidade ao esgotamento ANTES do corte (D-6).
-        motivo: "orcamento_esgotado",
+        // O que dá visibilidade ao fim da janela ANTES do corte (D-6). O
+        // esgotamento do orçamento não aparece mais aqui: o ciclo que gastou as
+        // 3 é barrado no `WHERE` da varredura, para não ocupar vaga da passada.
+        motivo: "sem_data_possivel",
       },
       {
         clinicId: recusada.clinicId,
