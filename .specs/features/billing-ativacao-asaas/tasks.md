@@ -1165,16 +1165,16 @@ arquivos disjuntos. Nenhum par `[P]` compartilha estado mutável.
 
 ## Rastreabilidade
 
-| ID      | Tarefas                 | Status  |
-| ------- | ----------------------- | ------- |
-| ATIV-01 | T1, T2, T4              | Done    |
-| ATIV-02 | T5                      | Done    |
-| ATIV-03 | T7, T8                  | Done    |
-| ATIV-04 | T6, T7                  | Done    |
-| ATIV-05 | T1, T2, T3, T4          | Done    |
-| ATIV-06 | T9                      | Done    |
-| ATIV-07 | T14, T15, T16, T17, T18 | Done    |
-| ATIV-08 | T11, T13                | Done    |
-| ATIV-09 | T12                     | Done    |
+| ID      | Tarefas                 | Status |
+| ------- | ----------------------- | ------ |
+| ATIV-01 | T1, T2, T4              | Done   |
+| ATIV-02 | T5                      | Done   |
+| ATIV-03 | T7, T8                  | Done   |
+| ATIV-04 | T6, T7                  | Done   |
+| ATIV-05 | T1, T2, T3, T4          | Done   |
+| ATIV-06 | T9                      | Done   |
+| ATIV-07 | T14, T15, T16, T17, T18 | Done   |
+| ATIV-08 | T11, T13                | Done   |
+| ATIV-09 | T12                     | Done   |
 
 **Cobertura**: 9 requisitos, 9 mapeados, 0 órfãos.

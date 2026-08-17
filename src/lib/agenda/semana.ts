@@ -25,13 +25,19 @@ export function diasDaSemana(segundaISO: string): string[] {
 }
 
 /** C7: vigência nunca começa no passado — max(segunda visível, segunda atual). */
-export function vigenciaInicioC7(semanaVisivelISO: string, hojeISO: string): string {
+export function vigenciaInicioC7(
+  semanaVisivelISO: string,
+  hojeISO: string,
+): string {
   const segVisivel = segundaDaSemana(semanaVisivelISO);
   const segAtual = segundaDaSemana(hojeISO);
   return segVisivel > segAtual ? segVisivel : segAtual;
 }
 
 /** C7: alocação em semana passada é desabilitada na UI. */
-export function semanaEhPassada(semanaVisivelISO: string, hojeISO: string): boolean {
+export function semanaEhPassada(
+  semanaVisivelISO: string,
+  hojeISO: string,
+): boolean {
   return segundaDaSemana(semanaVisivelISO) < segundaDaSemana(hojeISO);
 }

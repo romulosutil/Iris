@@ -34,8 +34,8 @@ export function EmptyState({
       role="region"
       aria-label={title}
       className={cn(
-        "flex flex-col items-center justify-center text-center rounded-[var(--radius-control)] border-2 border-border-brutal bg-surface-card text-text-primary shadow-[var(--ds-shadow)]",
-        isCompact ? "p-4 sm:p-6 gap-3" : "p-6 sm:p-10 gap-4",
+        "border-border-brutal bg-surface-card text-text-primary flex flex-col items-center justify-center rounded-[var(--radius-control)] border-2 text-center shadow-[var(--ds-shadow)]",
+        isCompact ? "gap-3 p-4 sm:p-6" : "gap-4 p-6 sm:p-10",
         isCelebration && "border-accent-mint bg-status-success-bg/15",
         className,
       )}
@@ -52,17 +52,22 @@ export function EmptyState({
       )}
 
       {/* Textos: Título e Descrição Empática */}
-      <div className={cn("flex flex-col gap-1.5", isCompact ? "max-w-sm" : "max-w-md")}>
+      <div
+        className={cn(
+          "flex flex-col gap-1.5",
+          isCompact ? "max-w-sm" : "max-w-md",
+        )}
+      >
         <h3
           className={cn(
-            "font-display font-bold text-text-primary",
+            "font-display text-text-primary font-bold",
             isCompact ? "text-sm sm:text-base" : "text-base sm:text-lg",
           )}
         >
           {title}
         </h3>
         {description && (
-          <p className="font-body text-xs sm:text-sm text-text-secondary leading-relaxed">
+          <p className="font-body text-text-secondary text-xs leading-relaxed sm:text-sm">
             {description}
           </p>
         )}

@@ -29,9 +29,17 @@ export async function listarPacientesParaRelatorio(
   );
 }
 
-type PreviewArgs = { patientId: string; nomePaciente: string; periodoInicio: string; periodoFim: string };
+type PreviewArgs = {
+  patientId: string;
+  nomePaciente: string;
+  periodoInicio: string;
+  periodoFim: string;
+};
 
-export async function previewConvenioBruto(ctx: TenantContext, args: PreviewArgs): Promise<{
+export async function previewConvenioBruto(
+  ctx: TenantContext,
+  args: PreviewArgs,
+): Promise<{
   sessoesRealizadas: number;
   faltasJustificadas: number;
   evidenciasAprovadas: number;
@@ -80,7 +88,8 @@ async function previewConvenioNarrativo(
       .from(schema.report)
       .where(eq(schema.report.id, reportId));
     const row = rows[0];
-    if (!row) return { error: "Relatório não encontrado ou fora do seu acesso." };
+    if (!row)
+      return { error: "Relatório não encontrado ou fora do seu acesso." };
     const payload = row.payload as PayloadConvenioNarrativo;
     return {
       versao: row.payloadVersao,

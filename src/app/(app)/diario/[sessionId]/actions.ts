@@ -29,7 +29,8 @@ export async function capturarDiarioAction(
     revalidatePath(`/diario/${formData.get("sessionId")}`);
     return { id: r.id };
   } catch (err) {
-    if (err instanceof RoleError) return { error: "Só o terapeuta da sessão registra a captura." };
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão registra a captura." };
     console.error("capturarDiarioAction:", err);
     return { error: "Não foi possível salvar a captura." };
   }
@@ -51,7 +52,8 @@ export async function corrigirEscopoProtocoloAction(
     revalidatePath(`/diario/${formData.get("sessionId")}`);
     return { ok: true };
   } catch (err) {
-    if (err instanceof RoleError) return { error: "Só o terapeuta da sessão ajusta os protocolos." };
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão ajusta os protocolos." };
     console.error("corrigirEscopoProtocoloAction:", err);
     return { error: "Não foi possível ajustar os protocolos." };
   }
@@ -77,7 +79,8 @@ export async function registrarAudioLocalAction(
     revalidatePath(`/diario/${formData.get("sessionId")}`);
     return { id: r.id };
   } catch (err) {
-    if (err instanceof RoleError) return { error: "Só o terapeuta da sessão registra o áudio." };
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão registra o áudio." };
     console.error("registrarAudioLocalAction:", err);
     return { error: "Não foi possível registrar o áudio." };
   }
@@ -99,7 +102,8 @@ export async function consolidarSessaoAction(
     revalidatePath(`/diario/${formData.get("sessionId")}`);
     return { ok: true, numero: r.numeroSequencial };
   } catch (err) {
-    if (err instanceof RoleError) return { error: "Só o terapeuta da sessão consolida." };
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão consolida." };
     console.error("consolidarSessaoAction:", err);
     return { error: "Não foi possível consolidar." };
   }

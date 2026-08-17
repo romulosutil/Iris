@@ -20,7 +20,11 @@ type CanonicalMeta = {
   goal_id: string;
   descricao: string;
   disciplina: string | null;
-  mapeamentos: Array<{ protocol_id: string; dominio_id: string; nivel: string | null }>;
+  mapeamentos: Array<{
+    protocol_id: string;
+    dominio_id: string;
+    nivel: string | null;
+  }>;
 };
 
 export type CanonicalContext = {
@@ -51,9 +55,17 @@ export type AssemblerInput = {
     id: string;
     descricao: string;
     disciplina: string | null;
-    mapeamentos: Array<{ familia: string; dominioId: string; nivel: string | null }>;
+    mapeamentos: Array<{
+      familia: string;
+      dominioId: string;
+      nivel: string | null;
+    }>;
   }>;
-  historico: Array<{ dominioId: string; protocolFamilia: string; resumo: string }>;
+  historico: Array<{
+    dominioId: string;
+    protocolFamilia: string;
+    resumo: string;
+  }>;
 };
 
 export function buildCanonicalContext(input: AssemblerInput): CanonicalContext {

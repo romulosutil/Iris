@@ -17,7 +17,8 @@ const gapClasse: Record<Gap, string> = {
 
 type ComoProp = { como?: React.ElementType };
 
-export interface StackProps extends React.HTMLAttributes<HTMLElement>, ComoProp {
+export interface StackProps
+  extends React.HTMLAttributes<HTMLElement>, ComoProp {
   gap?: Gap;
 }
 
@@ -36,8 +37,7 @@ export const Stack = React.forwardRef<HTMLElement, StackProps>(function Stack(
 });
 
 export interface ClusterProps
-  extends React.HTMLAttributes<HTMLElement>,
-    ComoProp {
+  extends React.HTMLAttributes<HTMLElement>, ComoProp {
   gap?: Gap;
 }
 
@@ -57,7 +57,8 @@ export const Cluster = React.forwardRef<HTMLElement, ClusterProps>(
   },
 );
 
-export interface SplitProps extends React.HTMLAttributes<HTMLElement>, ComoProp {
+export interface SplitProps
+  extends React.HTMLAttributes<HTMLElement>, ComoProp {
   gap?: Gap;
   /** Alinhamento vertical dos dois lados. */
   alinha?: "start" | "center";
@@ -111,7 +112,8 @@ export const Grid = React.forwardRef<HTMLElement, GridProps>(function Grid(
   );
 });
 
-export interface ContainerProps extends React.HTMLAttributes<HTMLElement>, ComoProp {
+export interface ContainerProps
+  extends React.HTMLAttributes<HTMLElement>, ComoProp {
   largura?: "sm" | "md" | "lg" | "full";
 }
 
@@ -123,15 +125,21 @@ const larguraClasses = {
 };
 
 /** Container de página com padding responsivo e largura máxima controlada. */
-export const Container = React.forwardRef<HTMLElement, ContainerProps>(function Container(
-  { className, largura = "md", como: Como = "div", ...props },
-  ref,
-) {
-  return (
-    <Como
-      ref={ref}
-      className={cn("mx-auto w-full px-4 sm:px-6 md:px-8", larguraClasses[largura], className)}
-      {...props}
-    />
-  );
-});
+export const Container = React.forwardRef<HTMLElement, ContainerProps>(
+  function Container(
+    { className, largura = "md", como: Como = "div", ...props },
+    ref,
+  ) {
+    return (
+      <Como
+        ref={ref}
+        className={cn(
+          "mx-auto w-full px-4 sm:px-6 md:px-8",
+          larguraClasses[largura],
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
+);

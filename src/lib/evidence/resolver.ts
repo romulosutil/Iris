@@ -60,7 +60,11 @@ export type ResolverQueries = {
   /** true se `goalId` existir em `goal` para este paciente. */
   goalExists(patientId: string, goalId: string): Promise<boolean>;
   /** ids de `protocol` ativos (via patient_protocol) desta família/clínica/paciente. */
-  protocolosAtivos(clinicId: string, patientId: string, familia: string): Promise<string[]>;
+  protocolosAtivos(
+    clinicId: string,
+    patientId: string,
+    familia: string,
+  ): Promise<string[]>;
   /** ids de `milestone` para (protocolId, dominioId). */
   marcos(protocolId: string, dominioId: string): Promise<string[]>;
 };
@@ -98,7 +102,12 @@ export function drizzleResolverQueries(tx: any): ResolverQueries {
       const rows = await tx
         .select({ id: milestone.id })
         .from(milestone)
-        .where(and(eq(milestone.protocolId, protocolId), eq(milestone.dominioId, dominioId)));
+        .where(
+          and(
+            eq(milestone.protocolId, protocolId),
+            eq(milestone.dominioId, dominioId),
+          ),
+        );
       return rows.map((r: { id: string }) => r.id);
     },
   };
@@ -144,17 +153,26 @@ export async function resolverAlvoParaFks(
   alvo: Alvo,
 ): Promise<ResolvedFks> {
   const goalRef = typeof alvo.goal_id === "string" ? alvo.goal_id : null;
-  const protocolSlug = typeof alvo.protocol_id === "string" ? alvo.protocol_id : null;
-  const dominioId = typeof alvo.dominio_id === "string" ? alvo.dominio_id : null;
+  const protocolSlug =
+    typeof alvo.protocol_id === "string" ? alvo.protocol_id : null;
+  const dominioId =
+    typeof alvo.dominio_id === "string" ? alvo.dominio_id : null;
 
   let goalId: string | null = null;
-  if (isUuid(alvo.goal_id) && (await queries.goalExists(ctx.patientId, alvo.goal_id))) {
+  if (
+    isUuid(alvo.goal_id) &&
+    (await queries.goalExists(ctx.patientId, alvo.goal_id))
+  ) {
     goalId = alvo.goal_id;
   }
 
   let protocolId: string | null = null;
   if (protocolSlug) {
-    const ativos = await queries.protocolosAtivos(ctx.clinicId, ctx.patientId, protocolSlug);
+    const ativos = await queries.protocolosAtivos(
+      ctx.clinicId,
+      ctx.patientId,
+      protocolSlug,
+    );
     if (ativos.length === 1) protocolId = ativos[0]!;
   }
 

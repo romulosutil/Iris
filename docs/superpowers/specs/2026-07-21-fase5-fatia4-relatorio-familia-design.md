@@ -15,6 +15,7 @@ o **primeiro relatório gerado por IA** — o Relatório de Família (Agente 2,
 relatórios IA vão reusar.
 
 ### Dentro do escopo
+
 - `report.tipo = familia`, `gerado_por_ia = true`.
 - Provider do Agente 2 atrás de interface, com **stub determinístico** (demo/testes
   sem LLM) e `ClaudeProvider` real atrás de flag + gate LGPD (§6).
@@ -24,6 +25,7 @@ relatórios IA vão reusar.
 - Extensão da rota/actions `src/app/(app)/relatorios/`.
 
 ### Fora do escopo
+
 - `convenio_narrativo`, `avaliativo_interdisciplinar` (contratos de agente ainda
   não escritos; fatias seguintes).
 - `MilestoneAssessment` formal (deferido desde a Fase 4). O relatório consome
@@ -32,15 +34,15 @@ relatórios IA vão reusar.
 
 ## 2. Decisões travadas
 
-| # | Decisão | Motivo |
-|---|---------|--------|
-| D1 | Só `familia` nesta PR; 1 branch = 1 PR | Padrão Fatias 1–3; único agente com contrato F1–F9 + golden cases prontos |
-| D2 | **Sem migração** | `report` já tem `familia`, `gerado_por_ia`, status `rascunho/revisado/exportado`, `revisado_por`, `payload_versao`. Schema F0 já previu curadoria IA |
-| D3 | IA-original **e** curado no mesmo `payload` jsonb | Evita DDL; preserva rascunho da IA imutável p/ auditoria (F2/governança). `build-html` renderiza `curado ?? iaOriginal` |
-| D4 | Rascunho **durável** (difere do bruto transiente) | F9: relatório de família exige revisão humana entre geração e export |
-| D5 | **Gerar rascunho:** coordenador **ou** terapeuta (on-team via RLS). **Curar + exportar:** só coordenador | F9: o rascunho pode ser redigido pela equipe; a **revisão/aprovação** que libera à família é do coordenador. `admin_recepcao` fora de tudo |
-| D6 | Export só aceita `revisado` (gate na action) | `exportReport` aceita `rascunho`/`revisado`; a action **exige `revisado`** p/ impor a curadoria (F9). Bruto continua usando tx-única |
-| D7 | Provider stub determinístico honra F1/F3/F6 | Demo e testes rodam sem LLM e sem fabricar dado; IA nunca gera número (F2) |
+| #   | Decisão                                                                                                  | Motivo                                                                                                                                               |
+| --- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Só `familia` nesta PR; 1 branch = 1 PR                                                                   | Padrão Fatias 1–3; único agente com contrato F1–F9 + golden cases prontos                                                                            |
+| D2  | **Sem migração**                                                                                         | `report` já tem `familia`, `gerado_por_ia`, status `rascunho/revisado/exportado`, `revisado_por`, `payload_versao`. Schema F0 já previu curadoria IA |
+| D3  | IA-original **e** curado no mesmo `payload` jsonb                                                        | Evita DDL; preserva rascunho da IA imutável p/ auditoria (F2/governança). `build-html` renderiza `curado ?? iaOriginal`                              |
+| D4  | Rascunho **durável** (difere do bruto transiente)                                                        | F9: relatório de família exige revisão humana entre geração e export                                                                                 |
+| D5  | **Gerar rascunho:** coordenador **ou** terapeuta (on-team via RLS). **Curar + exportar:** só coordenador | F9: o rascunho pode ser redigido pela equipe; a **revisão/aprovação** que libera à família é do coordenador. `admin_recepcao` fora de tudo           |
+| D6  | Export só aceita `revisado` (gate na action)                                                             | `exportReport` aceita `rascunho`/`revisado`; a action **exige `revisado`** p/ impor a curadoria (F9). Bruto continua usando tx-única                 |
+| D7  | Provider stub determinístico honra F1/F3/F6                                                              | Demo e testes rodam sem LLM e sem fabricar dado; IA nunca gera número (F2)                                                                           |
 
 ## 3. Arquitetura por camada
 
@@ -68,30 +70,30 @@ src/app/(app)/relatorios/
 // Entrada factual que o provider recebe (nada de PII além do nome).
 type FamilyReportInput = {
   crianca: { nome: string };
-  periodo: { inicio: string; fim: string };          // ISO date
+  periodo: { inicio: string; fim: string }; // ISO date
   evidenciasAprovadas: Array<{
-    data: string;                                     // aprovadoEm ISO
-    metaOuDominio: string;                            // nome curto, SEM jargão de protocolo
-    nivelAjuda: string | null;                        // p/ detectar salto de independência (F3)
+    data: string; // aprovadoEm ISO
+    metaOuDominio: string; // nome curto, SEM jargão de protocolo
+    nivelAjuda: string | null; // p/ detectar salto de independência (F3)
     polaridade: "positiva" | "negativa" | null;
   }>;
-  metasAtivas: string[];                              // nomes curtos (F4)
-  reforcadoresAtuais: string[];                       // p/ derivar apoio em casa (F5)
-  avaliacoesFormais: string[];                        // MilestoneAssessment concluídas (hoje: [])
+  metasAtivas: string[]; // nomes curtos (F4)
+  reforcadoresAtuais: string[]; // p/ derivar apoio em casa (F5)
+  avaliacoesFormais: string[]; // MilestoneAssessment concluídas (hoje: [])
 };
 
 // Saída do agente = schema F1–F9 de agente-2-relatorio-familia.md.
 type FamilyReportDraft = {
-  conquistaDestaque: string;                          // F3
-  trabalhandoAgora: string[];                         // F4, max 4
-  comoApoiarEmCasa: string[];                         // F5, max 3
-  periodoSemAvancoVisivel: boolean;                   // F6
-  notaHonestidade: string | null;                     // F6, só quando true
+  conquistaDestaque: string; // F3
+  trabalhandoAgora: string[]; // F4, max 4
+  comoApoiarEmCasa: string[]; // F5, max 3
+  periodoSemAvancoVisivel: boolean; // F6
+  notaHonestidade: string | null; // F6, só quando true
   anexoDados: {
     evidenciasPorMeta: Array<{ meta: string; contagemPeriodo: number }>;
     avaliacoesFormaisPeriodo: string[];
   };
-  status: "rascunho_para_revisao";                    // F9
+  status: "rascunho_para_revisao"; // F9
 };
 
 // Forma persistida em report.payload (jsonb). SEM DDL.
@@ -99,10 +101,10 @@ type PayloadFamilia = {
   versao: 1;
   crianca: { nome: string };
   periodo: { inicio: string; fim: string };
-  geradoEm: string;                                   // ISO
+  geradoEm: string; // ISO
   provider: "stub" | "claude";
-  iaOriginal: FamilyReportDraft;                       // imutável (auditoria)
-  curado: FamilyReportDraft | null;                    // null até o coordenador revisar
+  iaOriginal: FamilyReportDraft; // imutável (auditoria)
+  curado: FamilyReportDraft | null; // null até o coordenador revisar
 };
 ```
 
@@ -116,7 +118,9 @@ Interface + roteamento espelhando `resolveProvider` da extração:
 interface FamilyReportProvider {
   gerar(input: FamilyReportInput): Promise<FamilyReportDraft>;
 }
-function resolveFamilyReportProvider(clinic: { isDemo: boolean }): FamilyReportProvider;
+function resolveFamilyReportProvider(clinic: {
+  isDemo: boolean;
+}): FamilyReportProvider;
 ```
 
 - **Demo → StubFamilyReportProvider.** Determinístico, sem LLM. Deriva o draft
@@ -144,13 +148,13 @@ function resolveFamilyReportProvider(clinic: { isDemo: boolean }): FamilyReportP
    - `withTenant(ctx, tx)`: `build-input` agrega o recorte → `FamilyReportInput`;
      `resolveFamilyReportProvider(...).gerar(input)` → draft;
      `INSERT report(tipo='familia', gerado_por_ia=true, status='rascunho',
-     payload={versao:1, iaOriginal:draft, curado:null, ...})` → `reportId`.
+payload={versao:1, iaOriginal:draft, curado:null, ...})` → `reportId`.
    - `audit_log(acao='relatorio_rascunho_gerado')`.
 2. **`curarFamilia({ reportId, draftEditado, versaoEsperada })`** (`"use server"`):
    - `requireRole(coordenador)`; `withTenant`:
      `UPDATE report SET payload = jsonb_set(payload,'{curado}', ...),
-     payload_versao = payload_versao + 1, status = 'revisado', revisado_por = ctx.userId
-     WHERE id = :reportId AND payload_versao = :versaoEsperada` (trava otimista).
+payload_versao = payload_versao + 1, status = 'revisado', revisado_por = ctx.userId
+WHERE id = :reportId AND payload_versao = :versaoEsperada` (trava otimista).
    - Falha se `payload_versao` divergir (edição concorrente) → erro limpo.
    - `audit_log(acao='relatorio_revisado')`.
 3. **`exportarFamilia({ reportId })`** (`"use server"`):
@@ -163,6 +167,7 @@ function resolveFamilyReportProvider(clinic: { isDemo: boolean }): FamilyReportP
 
 Função **pura** `buildFamiliaHtml(payload: PayloadFamilia): string`. Mirror de
 `convenio-bruto/build-html.ts`:
+
 - Renderiza `payload.curado ?? payload.iaOriginal`.
 - **Todo texto livre passa por `escapeHtml`** (`src/lib/report/sanitize.ts`).
 - Fontes locais embutidas, **sem `<script>`, sem asset remoto** (o sandbox SSRF da
@@ -191,10 +196,10 @@ Função **pura** `buildFamiliaHtml(payload: PayloadFamilia): string`. Mirror de
   `curado` quando presente e `iaOriginal` quando `curado=null`; bloco `anexo_dados`
   aparece só quando há dados e fica separado do resumo; snapshot estrutural.
 - **Unit `stub-provider`** (Claude): F6 (entrada sem avanço → `periodoSemAvancoVisivel`
-  + `notaHonestidade` não-vazia, sem narrativa de progresso); F3 (escolhe o maior
-  salto de independência); F1 (nenhum termo de jargão — assert contra lista
-  proibida: nome de protocolo/operante/"nível de ajuda"/"evidência"); F2/F8
-  (contagens = entrada, nada inventado).
+  - `notaHonestidade` não-vazia, sem narrativa de progresso); F3 (escolhe o maior
+    salto de independência); F1 (nenhum termo de jargão — assert contra lista
+    proibida: nome de protocolo/operante/"nível de ajuda"/"evidência"); F2/F8
+    (contagens = entrada, nada inventado).
 - **Unit `build-input`** (contract): agrega evidências aprovadas/metas/reforçadores
   do período; não vaza fora do período.
 - **Int** geração→curadoria→export: gera rascunho (`status=rascunho`, `gerado_por_ia=true`,
@@ -208,6 +213,7 @@ Função **pura** `buildFamiliaHtml(payload: PayloadFamilia): string`. Mirror de
 - **a11y**: preview + form de curadoria (0 violações axe).
 
 ### DoD da fatia (AGENTS.md §6)
+
 - [ ] `familia` gera rascunho IA, é curado por humano e exporta PDF real, respeitando
       `gerado_por_ia=true` e o gate `revisado` antes do export (F9).
 - [ ] Stub honra F1/F2/F3/F6 provado por teste; IA nunca fabrica número.
@@ -227,9 +233,9 @@ o diff (escape em todos os campos, sem asset remoto, snapshot).
 
 ## 11. Dívidas / riscos
 
-| Risco | Mitigação |
-|-------|-----------|
-| Stub não é narrativa "real" | Aceito: é trilho; qualidade vem do ClaudeProvider pós-DPA. Stub é honesto (F2/F6) |
+| Risco                                   | Mitigação                                                                                |
+| --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Stub não é narrativa "real"             | Aceito: é trilho; qualidade vem do ClaudeProvider pós-DPA. Stub é honesto (F2/F6)        |
 | Coordenador edita p/ texto que viola F1 | Fora do escopo automatizar; curadoria humana é responsável. Rodapé deixa a autoria clara |
-| `MilestoneAssessment` ausente | Array vazio; stub não fabrica; encaixa quando a Fase 5 formalizar a série |
-| Export de rascunho não curado | Gate `revisado` na action (D6) além do check de `exportReport` |
+| `MilestoneAssessment` ausente           | Array vazio; stub não fabrica; encaixa quando a Fase 5 formalizar a série                |
+| Export de rascunho não curado           | Gate `revisado` na action (D6) além do check de `exportReport`                           |

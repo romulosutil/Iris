@@ -107,7 +107,10 @@ export function AppointmentModal({
             className="flex-wrap [&_a]:min-h-11 [&_button]:min-h-11 [&_button]:min-w-11"
           >
             {sessao.estado === "agendada" && (podeGerir || ehPropria) ? (
-              <CheckInButton sessionId={sessao.id} checkInEm={sessao.checkInEm} />
+              <CheckInButton
+                sessionId={sessao.id}
+                checkInEm={sessao.checkInEm}
+              />
             ) : null}
             {sessao.estado === "agendada" && (podeGerir || ehPropria) ? (
               <GerirSessao sessionId={sessao.id} terapeutas={terapeutas} />

@@ -6,11 +6,7 @@ import { Pill } from "@/components/ui/primitives/pill";
 import { SparkleIcon, CheckIcon, ClockIcon } from "@/components/ui/icon";
 
 export type SessionSemanticStatus =
-  | "concluida"
-  | "em_andamento"
-  | "sugerida_ia"
-  | "agendada"
-  | "cancelada";
+  "concluida" | "em_andamento" | "sugerida_ia" | "agendada" | "cancelada";
 
 export interface AgendaSessaoItem {
   id: string;
@@ -49,12 +45,15 @@ function formatHora(minutos: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-function resolverStatusSemantico(sessao: AgendaSessaoItem): SessionSemanticStatus {
+function resolverStatusSemantico(
+  sessao: AgendaSessaoItem,
+): SessionSemanticStatus {
   if (sessao.statusSemantico) return sessao.statusSemantico;
   if (sessao.isAISuggestion) return "sugerida_ia";
   if (sessao.estado === "realizada") return "concluida";
   if (sessao.estado === "em_andamento") return "em_andamento";
-  if (sessao.estado === "cancelada" || sessao.estado === "falta") return "cancelada";
+  if (sessao.estado === "cancelada" || sessao.estado === "falta")
+    return "cancelada";
   return "agendada";
 }
 
@@ -74,7 +73,10 @@ export function AgendaCalendarGrid({
   className,
 }: AgendaCalendarGridProps) {
   const refDate = React.useMemo(
-    () => (typeof dataReferencia === "string" ? new Date(dataReferencia) : dataReferencia),
+    () =>
+      typeof dataReferencia === "string"
+        ? new Date(dataReferencia)
+        : dataReferencia,
     [dataReferencia],
   );
 
@@ -95,11 +97,15 @@ export function AgendaCalendarGrid({
   const sessoesPorCelula = React.useMemo(() => {
     const map = new Map<string, AgendaSessaoItem[]>();
     for (const s of sessoes) {
-      const d = typeof s.agendadaPara === "string" ? new Date(s.agendadaPara) : s.agendadaPara;
+      const d =
+        typeof s.agendadaPara === "string"
+          ? new Date(s.agendadaPara)
+          : s.agendadaPara;
       const minutoSessao = d.getHours() * 60 + d.getMinutes();
       if (minutoSessao < horaInicioMin) continue;
       const inicioSlot =
-        horaInicioMin + Math.floor((minutoSessao - horaInicioMin) / passoMin) * passoMin;
+        horaInicioMin +
+        Math.floor((minutoSessao - horaInicioMin) / passoMin) * passoMin;
       if (inicioSlot >= horaFimMin) continue; // fora dos slots gerados
       const chave = `${s.terapeutaId}|${formatHora(inicioSlot)}`;
       const list = map.get(chave);
@@ -123,29 +129,33 @@ export function AgendaCalendarGrid({
 
   if (terapeutas.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-[var(--radius-control)] border-2 border-dashed border-border-brutal p-8 text-center bg-surface-card">
-        <p className="font-display font-semibold text-text-primary">Nenhum profissional cadastrado.</p>
-        <p className="text-xs text-text-secondary mt-1">Cadastre terapeutas na aba Equipe para visualizar a grade.</p>
+      <div className="border-border-brutal bg-surface-card flex flex-col items-center justify-center rounded-[var(--radius-control)] border-2 border-dashed p-8 text-center">
+        <p className="font-display text-text-primary font-semibold">
+          Nenhum profissional cadastrado.
+        </p>
+        <p className="text-text-secondary mt-1 text-xs">
+          Cadastre terapeutas na aba Equipe para visualizar a grade.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className={cn("flex flex-col gap-3 font-body", className)}>
+    <div className={cn("font-body flex flex-col gap-3", className)}>
       {/* Cabeçalho da grade */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-brutal/30 pb-2">
+      <div className="border-border-brutal/30 flex flex-wrap items-center justify-between gap-2 border-b pb-2">
         <div>
-          <h3 className="font-display text-base font-bold capitalize text-text-primary">
+          <h3 className="font-display text-text-primary text-base font-bold capitalize">
             {dataFormatada}
           </h3>
-          <span className="text-xs text-text-secondary">
+          <span className="text-text-secondary text-xs">
             Visão diária (1 coluna/recurso) · {slotsHorarios.length} horários
           </span>
         </div>
       </div>
 
       {/* Grade com rolagem horizontal no mobile */}
-      <div className="overflow-x-auto rounded-[var(--radius-control)] border-2 border-border-brutal bg-surface-card shadow-[var(--ds-shadow)]">
+      <div className="border-border-brutal bg-surface-card overflow-x-auto rounded-[var(--radius-control)] border-2 shadow-[var(--ds-shadow)]">
         <div
           className="grid min-w-[640px]"
           style={{
@@ -153,20 +163,26 @@ export function AgendaCalendarGrid({
           }}
         >
           {/* Header row: Horário + Terapeutas */}
-          <div className="sticky top-0 z-10 flex min-h-11 items-center justify-center border-b-2 border-r-2 border-border-brutal bg-surface-elevated font-mono text-xs font-bold uppercase text-text-secondary">
+          <div className="border-border-brutal bg-surface-elevated text-text-secondary sticky top-0 z-10 flex min-h-11 items-center justify-center border-r-2 border-b-2 font-mono text-xs font-bold uppercase">
             Hora
           </div>
 
           {terapeutas.map((t) => (
             <div
               key={t.id}
-              className="sticky top-0 z-10 flex min-h-11 flex-col justify-center border-b-2 border-r border-border-brutal bg-surface-elevated px-3 py-1 text-left"
+              className="border-border-brutal bg-surface-elevated sticky top-0 z-10 flex min-h-11 flex-col justify-center border-r border-b-2 px-3 py-1 text-left"
             >
-              <span className="truncate font-display text-xs font-bold text-text-primary" title={t.nome}>
+              <span
+                className="font-display text-text-primary truncate text-xs font-bold"
+                title={t.nome}
+              >
                 {t.nome}
               </span>
               {t.disciplina && (
-                <span className="truncate font-mono text-[10px] uppercase text-text-secondary" title={t.disciplina}>
+                <span
+                  className="text-text-secondary truncate font-mono text-[10px] uppercase"
+                  title={t.disciplina}
+                >
                   {t.disciplina}
                 </span>
               )}
@@ -178,23 +194,29 @@ export function AgendaCalendarGrid({
             return (
               <React.Fragment key={slot}>
                 {/* Coluna de Horário */}
-                <div className="flex min-h-11 items-center justify-center border-b border-r-2 border-border-brutal/40 bg-surface-elevated/30 font-mono text-xs font-semibold text-text-secondary">
+                <div className="border-border-brutal/40 bg-surface-elevated/30 text-text-secondary flex min-h-11 items-center justify-center border-r-2 border-b font-mono text-xs font-semibold">
                   {slot}
                 </div>
 
                 {/* Células para cada terapeuta no horário */}
                 {terapeutas.map((t) => {
-                  const sessoesNoSlot = sessoesPorCelula.get(`${t.id}|${slot}`) ?? [];
+                  const sessoesNoSlot =
+                    sessoesPorCelula.get(`${t.id}|${slot}`) ?? [];
                   const temSessoes = sessoesNoSlot.length > 0;
                   const slotClicavel = !temSessoes && Boolean(onSlotClick);
 
                   return (
                     <div
                       key={`${t.id}-${slot}`}
-                      onClick={slotClicavel ? () => onSlotClick?.(t.id, slot) : undefined}
+                      onClick={
+                        slotClicavel
+                          ? () => onSlotClick?.(t.id, slot)
+                          : undefined
+                      }
                       className={cn(
-                        "relative flex min-h-11 flex-col gap-1 border-b border-r border-border-brutal/20 p-1 transition-colors",
-                        slotClicavel && "cursor-pointer hover:bg-surface-elevated/40",
+                        "border-border-brutal/20 relative flex min-h-11 flex-col gap-1 border-r border-b p-1 transition-colors",
+                        slotClicavel &&
+                          "hover:bg-surface-elevated/40 cursor-pointer",
                       )}
                     >
                       {sessoesNoSlot.map((sessao) => {
@@ -203,17 +225,21 @@ export function AgendaCalendarGrid({
                         const isCurto = duracao < 30;
 
                         // Estilos semânticos do bloco
-                        let blockStyle = "bg-surface-card border-border-brutal text-text-primary";
+                        let blockStyle =
+                          "bg-surface-card border-border-brutal text-text-primary";
                         let statusIcon = <ClockIcon size={12} />;
 
                         if (status === "concluida") {
-                          blockStyle = "bg-status-success-bg border-border-brutal text-status-success-fg font-medium";
+                          blockStyle =
+                            "bg-status-success-bg border-border-brutal text-status-success-fg font-medium";
                           statusIcon = <CheckIcon size={12} />;
                         } else if (status === "em_andamento") {
-                          blockStyle = "bg-status-warning-bg border-border-brutal shadow-[2px_2px_0px_#1A1A1A] text-status-warning-fg font-bold";
+                          blockStyle =
+                            "bg-status-warning-bg border-border-brutal shadow-[2px_2px_0px_#1A1A1A] text-status-warning-fg font-bold";
                           statusIcon = <ClockIcon size={12} />;
                         } else if (status === "sugerida_ia") {
-                          blockStyle = "bg-status-ia-bg/25 border-dashed border-status-ia-border text-status-ia-fg";
+                          blockStyle =
+                            "bg-status-ia-bg/25 border-dashed border-status-ia-border text-status-ia-fg";
                           statusIcon = <SparkleIcon size={12} />;
                         }
 
@@ -226,17 +252,19 @@ export function AgendaCalendarGrid({
                               onSessaoClick?.(sessao);
                             }}
                             className={cn(
-                              "group relative w-full text-left rounded border p-1.5 transition-all select-none",
+                              "group relative w-full rounded border p-1.5 text-left transition-all select-none",
                               "min-h-11 min-w-11",
                               "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
                               "hover:-translate-x-px hover:-translate-y-px",
                               blockStyle,
-                              isCurto ? "flex items-center gap-1.5 py-0.5" : "flex flex-col gap-0.5",
+                              isCurto
+                                ? "flex items-center gap-1.5 py-0.5"
+                                : "flex flex-col gap-0.5",
                             )}
                           >
                             <div className="flex w-full items-center justify-between gap-1">
                               <span
-                                className="truncate text-xs font-bold text-text-primary"
+                                className="text-text-primary truncate text-xs font-bold"
                                 title={sessao.pacienteNome ?? "Paciente"}
                               >
                                 {sessao.pacienteNome ?? "Paciente"}
@@ -245,12 +273,19 @@ export function AgendaCalendarGrid({
                             </div>
 
                             {!isCurto && (
-                              <div className="flex items-center justify-between gap-1 text-[10px] text-text-secondary">
-                                <span className="truncate" title={sessao.disciplina ?? ""}>
+                              <div className="text-text-secondary flex items-center justify-between gap-1 text-[10px]">
+                                <span
+                                  className="truncate"
+                                  title={sessao.disciplina ?? ""}
+                                >
                                   {sessao.disciplina ?? "Atendimento"}
                                 </span>
                                 {status === "sugerida_ia" && (
-                                  <Pill variant="inset" colorScheme="violeta" size="sm">
+                                  <Pill
+                                    variant="inset"
+                                    colorScheme="violeta"
+                                    size="sm"
+                                  >
                                     IA
                                   </Pill>
                                 )}

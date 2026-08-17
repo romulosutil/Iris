@@ -31,5 +31,7 @@ function siglaDisciplina(disciplina: string): string {
   const encontrada = DISCIPLINAS_PADRAO.find(
     (d) => d.id.toLowerCase() === disciplina.trim().toLowerCase(),
   );
-  return encontrada ? encontrada.sigla : disciplina.substring(0, 3).toUpperCase();
+  return encontrada
+    ? encontrada.sigla
+    : disciplina.substring(0, 3).toUpperCase();
 }

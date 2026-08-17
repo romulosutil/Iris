@@ -28,9 +28,7 @@ describe("assertMfaBypassSafe (A5 — fail-closed)", () => {
   test("produção + bypass=true durante next build ⇒ ok (falso-positivo)", () => {
     // next build seta NEXT_PHASE numa máquina de dev; o boot NÃO seta.
     expect(() =>
-      assertMfaBypassSafe(
-        env("production", "true", "phase-production-build"),
-      ),
+      assertMfaBypassSafe(env("production", "true", "phase-production-build")),
     ).not.toThrow();
   });
 

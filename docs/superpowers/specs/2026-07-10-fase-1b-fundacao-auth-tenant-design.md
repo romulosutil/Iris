@@ -32,6 +32,7 @@ troca de clínica (e de papel quando aplicável). O acesso a dado de produto
 continua passando exclusivamente pelo `withTenant`.
 
 **Critério de pronto:**
+
 1. Um coordenador semeado por script faz login e chega ao shell protegido.
 2. Um usuário com papel em 2 clínicas troca de clínica pelo switcher e o
    escopo de dado muda de acordo (verificado por teste).
@@ -41,12 +42,12 @@ continua passando exclusivamente pelo `withTenant`.
 
 ## Decisões travadas nesta rodada de brainstorming
 
-| Decisão | Escolha | Nota |
-| --- | --- | --- |
-| Escopo da 1b | Só fundação auth/tenant | Cadastro=1c, agenda=1d |
-| Clínica ativa | Cookie de seleção + switcher | **Cookie só seleciona; papel re-derivado server-side** |
-| RLS tabelas globais | Resolver na 1b | Fecha o item diferido das 4 rodadas Jules |
-| Provisioning | Seed script (1b) | Convite UI movido p/ 1c |
+| Decisão             | Escolha                      | Nota                                                   |
+| ------------------- | ---------------------------- | ------------------------------------------------------ |
+| Escopo da 1b        | Só fundação auth/tenant      | Cadastro=1c, agenda=1d                                 |
+| Clínica ativa       | Cookie de seleção + switcher | **Cookie só seleciona; papel re-derivado server-side** |
+| RLS tabelas globais | Resolver na 1b               | Fecha o item diferido das 4 rodadas Jules              |
+| Provisioning        | Seed script (1b)             | Convite UI movido p/ 1c                                |
 
 ## Achados do red-team incorporados ao design
 
@@ -80,7 +81,7 @@ Uma conexão = uma role. Duas roles são necessárias porque `auth_*` é revogad
 de `app_role`:
 
 - **`iris_auth`** (`NOLOGIN NOBYPASSRLS`, com um usuário `LOGIN ... IN ROLE
-  iris_auth` criado por ambiente): usada **só** pelo adapter do Better-Auth e
+iris_auth` criado por ambiente): usada **só** pelo adapter do Better-Auth e
   pela função `resolveTenant()`. GRANTs em `auth_*` + policies permissivas
   `TO iris_auth` em `app_user`/`clinic`/`user_role`. Nenhum acesso a tabela de
   dado clínico de paciente.
@@ -111,8 +112,8 @@ Escrita à mão (mesma disciplina do `0001_rls.sql`). Conteúdo:
   - Policy `app_user_auth_all TO iris_auth USING (true) WITH CHECK (true)`
     (bootstrap + provisionamento).
   - Policy `app_user_read TO app_role FOR SELECT USING (EXISTS (SELECT 1 FROM
-    user_role r WHERE r.user_id = app_user.id AND r.clinic_id =
-    current_setting('app.clinic_id')::uuid))` — produto vê só nomes/identidade
+user_role r WHERE r.user_id = app_user.id AND r.clinic_id =
+current_setting('app.clinic_id')::uuid))` — produto vê só nomes/identidade
     de gente da clínica ativa.
 - `clinic`: `ENABLE`/`FORCE` RLS.
   - `TO iris_auth USING (true)` (bootstrap lê clínicas do usuário).
@@ -120,7 +121,7 @@ Escrita à mão (mesma disciplina do `0001_rls.sql`). Conteúdo:
 - `user_role`: `ENABLE`/`FORCE` RLS.
   - `TO iris_auth USING (true)` (resolver lê papéis pré-GUC).
   - `TO app_role FOR SELECT USING (clinic_id =
-    current_setting('app.clinic_id')::uuid)`.
+current_setting('app.clinic_id')::uuid)`.
   - Escrita de `user_role` por `app_role` fica **fora do escopo da 1b** (é o
     convite, 1c). Na 1b só `iris_auth` escreve `user_role` (seed/provisioning).
 - `current_setting('app.clinic_id')` permanece de **um argumento** (estoura se
@@ -173,7 +174,7 @@ existem. Cada um com story + matriz de estados + `addon-a11y` limpo.
   credencial Better-Auth) + `user_role`. Roda via `authDb`/`iris_auth`.
   Idempotente por email.
 - Função de provisionamento reutilizável (`provisionUser({ email, nome,
-  clinicId, papel })`) em `src/auth/provisioning.ts`, chamada pelo seed e, na
+clinicId, papel })`) em `src/auth/provisioning.ts`, chamada pelo seed e, na
   1c, pelo convite UI. Upsert de `app_user` por email + insert de `user_role`.
   Escreve via `authDb`. **Sem UI na 1b.**
 
@@ -188,6 +189,7 @@ existem. Cada um com story + matriz de estados + `addon-a11y` limpo.
 ## Testes
 
 **Integração (Postgres real, padrão do `rls.int.test.ts`):**
+
 1. `app_role` faz `SELECT` em `auth_session` → erro/zero linhas (revogado).
 2. `app_role` com `app.clinic_id = A` lê só `app_user`/`user_role`/`clinic` de A.
 3. `iris_auth` lê `user_role` de qualquer clínica do usuário (bootstrap).

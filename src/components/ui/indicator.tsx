@@ -20,7 +20,7 @@ export const Indicator = React.forwardRef<HTMLSpanElement, IndicatorProps>(
       <span
         ref={ref}
         className={cn(
-          "inline-block h-3.5 w-3.5 rounded-full border border-border-brutal shadow-brutal-xs shrink-0",
+          "border-border-brutal shadow-brutal-xs inline-block h-3.5 w-3.5 shrink-0 rounded-full border",
           estiloIndicator[variant],
           className,
         )}

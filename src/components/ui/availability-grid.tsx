@@ -26,7 +26,7 @@ export function AvailabilityGrid({
   salvando = false,
 }: AvailabilityGridProps) {
   const [interno, setInterno] = React.useState<Set<string>>(
-    () => celulasProps ?? celulasIniciais ?? new Set<string>()
+    () => celulasProps ?? celulasIniciais ?? new Set<string>(),
   );
 
   const celulasAtivas = celulasProps ?? interno;
@@ -64,7 +64,7 @@ export function AvailabilityGrid({
             variante="neutra"
             size="sm"
             onClick={limparTudo}
-            className="border-2 border-black font-display font-bold text-xs shadow-[1px_1px_0_#000]"
+            className="font-display border-2 border-black text-xs font-bold shadow-[1px_1px_0_#000]"
           >
             Limpar grade
           </Button>
@@ -73,7 +73,7 @@ export function AvailabilityGrid({
             variante="neutra"
             size="sm"
             onClick={copiarSegunda}
-            className="border-2 border-black font-display font-bold text-xs shadow-[1px_1px_0_#000]"
+            className="font-display border-2 border-black text-xs font-bold shadow-[1px_1px_0_#000]"
           >
             Copiar Segunda
           </Button>
@@ -89,7 +89,7 @@ export function AvailabilityGrid({
               variante="primaria"
               onClick={onSalvar}
               disabled={salvando}
-              className="border-2 border-black bg-[#f2b705] font-display font-bold text-xs text-black shadow-[2px_2px_0_#000] hover:bg-[#d29e04]"
+              className="font-display border-2 border-black bg-[#f2b705] text-xs font-bold text-black shadow-[2px_2px_0_#000] hover:bg-[#d29e04]"
             >
               {salvando ? "Salvando..." : "Salvar disponibilidade"}
             </Button>

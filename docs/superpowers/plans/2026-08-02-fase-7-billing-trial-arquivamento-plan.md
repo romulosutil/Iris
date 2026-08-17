@@ -39,6 +39,7 @@
 ### Task 1: Relógio de Trial Disparado no 1º Paciente (Issue #175)
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (`clinic.trialComecoEm` → nullable)
 - Modify: `src/lib/trial.ts` (nova função `calcularStatusTrial`; remover `CORTE_TRIAL_REAL`)
 - Modify: `src/lib/trial.test.ts`
@@ -46,10 +47,12 @@
 - Create: migração via `pnpm db:generate`
 
 **Interfaces:**
+
 - Produces: `calcularStatusTrial(criadoEm: Date, trialComecoEm: Date | null, trialDias: number, agora?: Date): StatusTrial` — usado por `resolverDiasRestantesParaFaixa` (Task 1 Step 6) e por qualquer server action que precise checar trial ativo.
 - Consumes: nenhuma dependência de outra task deste plano.
 
 **Regras Levantadas:**
+
 1. `clinic.trial_comeco_em` vira `nullable`.
 2. Quando a clínica é criada, `trial_comeco_em` permanece `NULL`.
 3. Ao cadastrar o 1º paciente real, se `trial_comeco_em` for `NULL`, a Server Action grava `NOW()` atomicamente na mesma transação.
@@ -58,6 +61,7 @@
 - [ ] **Step 1: Escrever teste unitário falho para `calcularStatusTrial`**
 
 File: `src/lib/trial.test.ts` (adicionar ao arquivo existente, não sobrescrever os testes de `diasRestantesDeTrial`)
+
 ```typescript
 import { describe, it, expect } from "vitest";
 import { calcularStatusTrial } from "./trial";
@@ -97,6 +101,7 @@ Expected: FAIL com "calcularStatusTrial não definido" ou erro de tipo.
 - [ ] **Step 3: Alterar Schema `src/db/schema.ts`**
 
 File: `src/db/schema.ts` — trocar a definição atual de `trialComecoEm` (hoje `.notNull()`, coluna `clinic`) para nullable:
+
 ```typescript
 // era: trialComecoEm: timestamp("trial_comeco_em", { withTimezone: true }).notNull(),
 trialComecoEm: timestamp("trial_comeco_em", { withTimezone: true }),
@@ -115,6 +120,7 @@ Expected: migração aplicada sem erro contra o Postgres local (`docker compose 
 - [ ] **Step 6: Implementar `calcularStatusTrial` e remover sentinela obsoleto**
 
 File: `src/lib/trial.ts`
+
 ```typescript
 export interface StatusTrial {
   ativo: boolean;
@@ -131,7 +137,9 @@ export function calcularStatusTrial(
   trialDias: number = 7,
   agora: Date = new Date(),
 ): StatusTrial {
-  const dataTetoMaximo = new Date(criadoEm.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const dataTetoMaximo = new Date(
+    criadoEm.getTime() + 14 * 24 * 60 * 60 * 1000,
+  );
   let dataInicioEfetiva: Date;
   let aguardandoPrimeiroPaciente = false;
 
@@ -144,7 +152,9 @@ export function calcularStatusTrial(
     dataInicioEfetiva = agora;
   }
 
-  const dataFim = new Date(dataInicioEfetiva.getTime() + trialDias * 24 * 60 * 60 * 1000);
+  const dataFim = new Date(
+    dataInicioEfetiva.getTime() + trialDias * 24 * 60 * 60 * 1000,
+  );
   const diffMs = dataFim.getTime() - agora.getTime();
   const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
@@ -185,6 +195,7 @@ Expected: PASS.
 - [ ] **Step 9: Atualizar Server Action de criação de paciente**
 
 File: `src/app/(app)/pacientes/novo/actions.ts`
+
 ```typescript
 // Dentro da mesma transação que insere o paciente:
 await tx
@@ -205,6 +216,7 @@ git commit -m "feat(billing): relógio de trial disparado no 1º paciente com te
 ### Task 2: Campo `patient.arquivado_em` e Auto-Arquivamento em 90 Dias (Issue #174)
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (nova coluna `patient.arquivadoEm`)
 - Create: migração via `pnpm db:generate`
 - Create: `src/lib/jobs/auto-arquivamento.ts`, `src/lib/jobs/auto-arquivamento.test.ts`
@@ -213,10 +225,12 @@ git commit -m "feat(billing): relógio de trial disparado no 1º paciente com te
 - Modify: `db/tests/patient-arquivado-rls.int.test.ts`
 
 **Interfaces:**
+
 - Produces: `calcularStatusArquivamento(ultimaAtividade: Date, agora?: Date): { diasSemAtividade: number; deveNotificarAviso: boolean; deveArquivar: boolean }` — consumido pelo job cron (fora de escopo deste plano; job runner segue padrão de `scripts/escalonamento-risco.mjs`, varredura única + agendador externo) e por qualquer teste de integração.
 - Consumes: `auditLog` de `src/db/schema.ts` (Task 1 não altera essa tabela).
 
 **Regras Levantadas:**
+
 1. `alta_em` (decisão clínica) é mantida 100% independente de `arquivado_em` (decisão comercial).
 2. Dar alta arquiva automaticamente (`alta_em != null => arquivado_em = NOW()`).
 3. Arquivar nunca dá alta clínica.
@@ -227,6 +241,7 @@ git commit -m "feat(billing): relógio de trial disparado no 1º paciente com te
 - [ ] **Step 1: Adicionar coluna `arquivado_em` no Schema**
 
 File: `src/db/schema.ts`
+
 ```typescript
 export const patient = pgTable(
   "patient",
@@ -256,6 +271,7 @@ Expected: aplica sem erro.
 - [ ] **Step 4: Escrever teste unitário do Job de Auto-Arquivamento**
 
 File: `src/lib/jobs/auto-arquivamento.test.ts`
+
 ```typescript
 import { describe, it, expect } from "vitest";
 import { calcularStatusArquivamento } from "./auto-arquivamento";
@@ -290,6 +306,7 @@ describe("calcularStatusArquivamento", () => {
 Run: `pnpm test src/lib/jobs/auto-arquivamento.test.ts` → Expected: FAIL.
 
 File: `src/lib/jobs/auto-arquivamento.ts`
+
 ```typescript
 export function calcularStatusArquivamento(
   ultimaAtividade: Date,
@@ -310,11 +327,12 @@ Run: `pnpm test src/lib/jobs/auto-arquivamento.test.ts` → Expected: PASS.
 
 - [ ] **Step 6: Localizar e atualizar a action de dar alta clínica (regra 2 — alta arquiva)**
 
-Run: `grep -rn "altaEm" "src/app/(app)/pacientes"` para achar a Server Action que grava `altaEm`. Editar essa action para, na mesma transação, setar `arquivadoEm: sql\`NOW()\`` quando `altaEm` deixa de ser `null`. Escrever teste de integração cobrindo: dar alta → `patient.arquivadoEm` não-nulo; arquivar manualmente → `patient.altaEm` continua `null` (regra 3).
+Run: `grep -rn "altaEm" "src/app/(app)/pacientes"` para achar a Server Action que grava `altaEm`. Editar essa action para, na mesma transação, setar `arquivadoEm: sql\`NOW()\``quando`altaEm`deixa de ser`null`. Escrever teste de integração cobrindo: dar alta → `patient.arquivadoEm`não-nulo; arquivar manualmente →`patient.altaEm`continua`null` (regra 3).
 
 - [ ] **Step 7: Localizar a action de criação de sessão e implementar desarquivamento automático (regra 6)**
 
 Run: `grep -rln "insert(session)" src` (ou equivalente) para achar onde uma nova `session`/`sessionNote` é criada para um paciente. Dentro dessa transação, adicionar:
+
 ```typescript
 const [pacienteAtual] = await tx
   .select({ arquivadoEm: patient.arquivadoEm })
@@ -337,6 +355,7 @@ if (pacienteAtual?.arquivadoEm !== null) {
   });
 }
 ```
+
 Escrever teste de integração: paciente arquivado recebe nova sessão → `arquivadoEm` volta a `null` e existe linha em `audit_log` com `acao: "paciente_desarquivado_automaticamente"`.
 
 - [ ] **Step 8: Teste RLS — paciente arquivado continua legível (regra 4)**
@@ -358,15 +377,18 @@ git commit -m "feat(patient): arquivado_em desatrelado de alta_em, desarquivamen
 ### Task 3: Webhook Asaas para Faturamento por Paciente Ativo (Issue #36)
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (nova tabela `asaasWebhookEvent` para idempotência)
 - Create: migração via `pnpm db:generate`
 - Create: `src/app/api/hooks/asaas/route.ts`, `src/app/api/hooks/asaas/route.test.ts`
 
 **Interfaces:**
+
 - Consumes: `patient.arquivadoEm` (Task 2), `patient.clinicId`, `clinic` (Task 1) — usados para apurar pacientes ativos.
 - Produces: `POST /api/hooks/asaas` — contrato externo (Asaas), não consumido por outra task deste plano.
 
 **Regras Levantadas:**
+
 1. Validar o cabeçalho HTTP de autenticação do webhook (`ASAAS_WEBHOOK_TOKEN`) com comparação resistente a timing attack.
 2. Tratar eventos `PIX_AUTOMATIC_RECURRING_*` sem interromper a execução com 500; idempotente — reprocessar o mesmo `event.id` não duplica efeito.
 3. Apurar pacientes ativos ignorando registros onde `arquivado_em IS NOT NULL` ou `deletado_em IS NOT NULL`.
@@ -374,12 +396,15 @@ git commit -m "feat(patient): arquivado_em desatrelado de alta_em, desarquivamen
 - [ ] **Step 1: Adicionar tabela de idempotência**
 
 File: `src/db/schema.ts`
+
 ```typescript
 export const asaasWebhookEvent = pgTable("asaas_webhook_event", {
   id: uuid("id").primaryKey().defaultRandom(),
   asaasEventId: text("asaas_event_id").notNull().unique(),
   evento: text("evento").notNull(),
-  processadoEm: timestamp("processado_em", { withTimezone: true }).notNull().defaultNow(),
+  processadoEm: timestamp("processado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 ```
 
@@ -390,6 +415,7 @@ Run: `pnpm db:generate` → revisar SQL gerado → `pnpm db:migrate`.
 - [ ] **Step 3: Escrever testes do Webhook Asaas (falha primeiro)**
 
 File: `src/app/api/hooks/asaas/route.test.ts`
+
 ```typescript
 import { describe, it, expect, vi } from "vitest";
 import { POST } from "./route";
@@ -404,20 +430,31 @@ function req(body: unknown, token = process.env.ASAAS_WEBHOOK_TOKEN) {
 
 describe("Webhook Asaas Route", () => {
   it("recusa requisição sem token de autenticação válido", async () => {
-    const res = await POST(req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZED", id: "evt_1" }, "token-invalido"));
+    const res = await POST(
+      req(
+        { event: "PIX_AUTOMATIC_RECURRING_AUTHORIZED", id: "evt_1" },
+        "token-invalido",
+      ),
+    );
     expect(res.status).toBe(401);
   });
 
   it("aceita requisição com token válido e evento conhecido", async () => {
-    const res = await POST(req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZED", id: "evt_2" }));
+    const res = await POST(
+      req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZED", id: "evt_2" }),
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.received).toBe(true);
   });
 
   it("é idempotente — mesmo event.id processado duas vezes não duplica efeito", async () => {
-    const primeiro = await POST(req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZED", id: "evt_3" }));
-    const segundo = await POST(req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZED", id: "evt_3" }));
+    const primeiro = await POST(
+      req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZED", id: "evt_3" }),
+    );
+    const segundo = await POST(
+      req({ event: "PIX_AUTOMATIC_RECURRING_AUTHORIZED", id: "evt_3" }),
+    );
     expect(primeiro.status).toBe(200);
     expect(segundo.status).toBe(200);
     const bodySegundo = await segundo.json();
@@ -433,6 +470,7 @@ Run: `pnpm test src/app/api/hooks/asaas/route.test.ts` → Expected: FAIL (`rout
 - [ ] **Step 5: Implementar endpoint `src/app/api/hooks/asaas/route.ts`**
 
 File: `src/app/api/hooks/asaas/route.ts`
+
 ```typescript
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
@@ -440,7 +478,10 @@ import { db } from "@/db";
 import { asaasWebhookEvent, patient } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 
-function tokenValido(recebido: string | null, esperado: string | undefined): boolean {
+function tokenValido(
+  recebido: string | null,
+  esperado: string | undefined,
+): boolean {
   if (!esperado || !recebido) return false;
   const a = Buffer.from(recebido);
   const b = Buffer.from(esperado);
@@ -463,7 +504,10 @@ export async function POST(req: Request) {
     .where(eq(asaasWebhookEvent.asaasEventId, asaasEventId));
 
   if (jaProcessado) {
-    return NextResponse.json({ received: true, duplicado: true }, { status: 200 });
+    return NextResponse.json(
+      { received: true, duplicado: true },
+      { status: 200 },
+    );
   }
 
   if (event.startsWith("PIX_AUTOMATIC_RECURRING_")) {

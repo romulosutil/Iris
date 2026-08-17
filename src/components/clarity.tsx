@@ -22,7 +22,7 @@ export function Clarity() {
       });
     } else if (!projectId && process.env.NODE_ENV === "development") {
       console.warn(
-        "[Clarity] NEXT_PUBLIC_CLARITY_PROJECT_ID não definido em .env.local. Reinicie o pnpm dev após definir."
+        "[Clarity] NEXT_PUBLIC_CLARITY_PROJECT_ID não definido em .env.local. Reinicie o pnpm dev após definir.",
       );
     }
   }, [projectId]);

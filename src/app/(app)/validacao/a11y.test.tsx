@@ -20,7 +20,10 @@ afterEach(cleanup);
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
   const resultado = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
     rules: {
       region: { enabled: false },
       "landmark-one-main": { enabled: false },
@@ -31,19 +34,36 @@ async function semViolacoes(ui: ReactElement) {
   expect(resultado.violations).toEqual([]);
 }
 
-const VAZIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]> } = {
+const VAZIA: {
+  itens: ItemFila[];
+  alvosPorPaciente: Record<string, AlvoValido[]>;
+} = {
   itens: [],
   alvosPorPaciente: {},
 };
 
 // Fricção derivada da fonte única (`avaliarFriccao`) — fixture nunca pode
 // carregar combinação impossível (ex.: confiança baixa com podeLote=true).
-function friccao(confianca: "alta" | "media" | "baixa", inconsistenteComHistorico: boolean) {
-  const { podeLote, nivel } = avaliarFriccao({ confianca, inconsistenteComHistorico });
-  return { confianca, inconsistenteComHistorico, nivelFriccao: nivel, podeLote };
+function friccao(
+  confianca: "alta" | "media" | "baixa",
+  inconsistenteComHistorico: boolean,
+) {
+  const { podeLote, nivel } = avaliarFriccao({
+    confianca,
+    inconsistenteComHistorico,
+  });
+  return {
+    confianca,
+    inconsistenteComHistorico,
+    nivelFriccao: nivel,
+    podeLote,
+  };
 }
 
-const CHEIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]> } = {
+const CHEIA: {
+  itens: ItemFila[];
+  alvosPorPaciente: Record<string, AlvoValido[]>;
+} = {
   itens: [
     {
       evidenceId: "00000000-0000-0000-0000-000000000001",
@@ -51,7 +71,9 @@ const CHEIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]>
       patientNome: "Paciente A",
       sessionNumero: 3,
       trecho: "A criança apontou para o cartão quando solicitada.",
-      classificacaoAtual: { alvo: { goal_id: "00000000-0000-0000-0000-0000000000g1" } },
+      classificacaoAtual: {
+        alvo: { goal_id: "00000000-0000-0000-0000-0000000000g1" },
+      },
       motivo: ["baixa_confianca"],
       protocolId: null,
       ...friccao("baixa", false),
@@ -63,7 +85,9 @@ const CHEIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]>
       patientNome: "Paciente B",
       sessionNumero: 5,
       trecho: "Recusou a tarefa após duas tentativas.",
-      classificacaoAtual: { alvo: { protocol_id: "vbmapp", dominio_id: "mand" } },
+      classificacaoAtual: {
+        alvo: { protocol_id: "vbmapp", dominio_id: "mand" },
+      },
       motivo: ["inconsistente_historico"],
       protocolId: "vbmapp",
       ...friccao("media", true),
@@ -76,10 +100,20 @@ const CHEIA: { itens: ItemFila[]; alvosPorPaciente: Record<string, AlvoValido[]>
   ],
   alvosPorPaciente: {
     "00000000-0000-0000-0000-0000000000a1": [
-      { goal_id: "00000000-0000-0000-0000-0000000000g1", protocol_id: null, dominio_id: null, tipo_estrutura: null },
+      {
+        goal_id: "00000000-0000-0000-0000-0000000000g1",
+        protocol_id: null,
+        dominio_id: null,
+        tipo_estrutura: null,
+      },
     ],
     "00000000-0000-0000-0000-0000000000a2": [
-      { goal_id: null, protocol_id: "vbmapp", dominio_id: "mand", tipo_estrutura: "marco_simples" },
+      {
+        goal_id: null,
+        protocol_id: "vbmapp",
+        dominio_id: "mand",
+        tipo_estrutura: "marco_simples",
+      },
     ],
   },
 };

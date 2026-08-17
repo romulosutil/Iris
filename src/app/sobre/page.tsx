@@ -48,7 +48,7 @@ export default function Home() {
     <Stack
       como="main"
       gap="lg"
-      className="mx-auto min-h-dvh max-w-5xl px-6 py-12 md:py-20 bg-[var(--bg-app)]"
+      className="mx-auto min-h-dvh max-w-5xl bg-[var(--bg-app)] px-6 py-12 md:py-20"
     >
       {/* Régua-espectro: assinatura de marca (neurodiversidade). */}
       <div
@@ -69,10 +69,10 @@ export default function Home() {
           ]}
         />
         <Stack gap="md">
-          <h1 className="font-display text-[var(--text-primary)] max-w-[16ch] text-4xl font-bold text-balance md:text-6xl">
+          <h1 className="font-display max-w-[16ch] text-4xl font-bold text-balance text-[var(--text-primary)] md:text-6xl">
             Chegue na avaliação com o dossiê pronto.
           </h1>
-          <p className="text-[var(--text-secondary)] max-w-[60ch] text-lg md:text-xl">
+          <p className="max-w-[60ch] text-lg text-[var(--text-secondary)] md:text-xl">
             O Iris transforma o diário de sessão em evidência clínica rastreável
             até a frase de origem. A IA sugere; quem decide é você.
           </p>
@@ -83,7 +83,7 @@ export default function Home() {
       <Stack como="section" gap="md" aria-labelledby="governanca">
         <h2
           id="governanca"
-          className="font-display text-[var(--text-secondary)] text-xs font-mono font-semibold tracking-wide uppercase"
+          className="font-display font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase"
         >
           Governança em três camadas
         </h2>
@@ -94,36 +94,42 @@ export default function Home() {
               key={c.n}
               gap="sm"
               className={cn(
-                "bg-[var(--surface-card)] relative p-5 border-2 rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
+                "relative rounded-[var(--radius-control)] border-2 bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]",
                 c.destaque
-                  ? cn(surface("solida"), "border-[var(--border-brutal)] md:-mt-3 md:pt-8")
-                  : "border-[var(--border-brutal)]"
+                  ? cn(
+                      surface("solida"),
+                      "border-[var(--border-brutal)] md:-mt-3 md:pt-8",
+                    )
+                  : "border-[var(--border-brutal)]",
               )}
             >
               {/* Passo humano em destaque: barra-topo ouro. */}
               {c.destaque ? (
                 <span
                   aria-hidden
-                  className="bg-[var(--action-primary)] absolute inset-x-0 top-0 h-2 rounded-t-[var(--radius-control)]"
+                  className="absolute inset-x-0 top-0 h-2 rounded-t-[var(--radius-control)] bg-[var(--action-primary)]"
                 />
               ) : null}
               <span
                 aria-hidden
                 style={hexClip}
-                className={`${c.cor} font-display flex size-12 items-center justify-center text-xl font-bold border border-[var(--border-brutal)]`}
+                className={`${c.cor} font-display flex size-12 items-center justify-center border border-[var(--border-brutal)] text-xl font-bold`}
               >
                 {c.n}
               </span>
-              <h3 className="font-display text-[var(--text-primary)] text-lg font-semibold">
+              <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
                 {c.titulo}
               </h3>
-              <p className="text-[var(--text-primary)] text-base">{c.texto}</p>
+              <p className="text-base text-[var(--text-primary)]">{c.texto}</p>
             </Stack>
           ))}
         </ol>
       </Stack>
 
-      <Split como="footer" className="text-[var(--text-secondary)] mt-auto text-sm">
+      <Split
+        como="footer"
+        className="mt-auto text-sm text-[var(--text-secondary)]"
+      >
         <span>Iris — evidência clínica que não mente.</span>
         <span className="font-display font-semibold">
           Design system: Storybook

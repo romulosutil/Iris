@@ -14,7 +14,7 @@ export const metadata = {
  */
 export default function CadastroPage() {
   return (
-    <div className="flex w-full max-w-xl flex-col gap-6 my-4">
+    <div className="my-4 flex w-full max-w-xl flex-col gap-6">
       <div className="flex flex-col items-center gap-3 text-center">
         <Logo altura={44} aria-label="Iris" />
         <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">

@@ -10,13 +10,17 @@ import { mensagemUniforme } from "./mensagem";
 // `cadastro/logic.test.ts`: desfechos estruturalmente distintos colapsam no
 // MESMO objeto de resposta.
 
-const { requestPasswordReset, registrarTentativa, consumirTentativa, cabecalhos } =
-  vi.hoisted(() => ({
-    requestPasswordReset: vi.fn(),
-    registrarTentativa: vi.fn(),
-    consumirTentativa: vi.fn(),
-    cabecalhos: new Map<string, string>(),
-  }));
+const {
+  requestPasswordReset,
+  registrarTentativa,
+  consumirTentativa,
+  cabecalhos,
+} = vi.hoisted(() => ({
+  requestPasswordReset: vi.fn(),
+  registrarTentativa: vi.fn(),
+  consumirTentativa: vi.fn(),
+  cabecalhos: new Map<string, string>(),
+}));
 
 vi.mock("@/auth/auth", () => ({
   auth: { api: { requestPasswordReset } },

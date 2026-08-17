@@ -31,10 +31,10 @@ export function CapturaForm({
   protocolos: Protocolo[];
   protocolIdsPreSelecionados: string[];
 }) {
-  const [textoState, textoAction] = useActionState<CapturarDiarioState, FormData>(
-    capturarDiarioAction,
-    {},
-  );
+  const [textoState, textoAction] = useActionState<
+    CapturarDiarioState,
+    FormData
+  >(capturarDiarioAction, {});
   const [escopoState, escopoAction, escopoPending] = useActionState<
     CorrigirEscopoState,
     FormData
@@ -76,7 +76,9 @@ export function CapturaForm({
           </ChipGroup>
         </Stack>
       ) : null}
-      {escopoState.error ? <Alert severidade="erro">{escopoState.error}</Alert> : null}
+      {escopoState.error ? (
+        <Alert severidade="erro">{escopoState.error}</Alert>
+      ) : null}
       {escopoPending ? (
         <p className="text-ink-muted text-sm" role="status">
           Salvando protocolos…
@@ -92,14 +94,18 @@ export function CapturaForm({
         <TabsContent value="texto">
           <form action={textoAction} className="flex flex-col gap-4">
             <input type="hidden" name="sessionId" value={sessionId} />
-            <Field label="Anotação rápida" htmlFor="texto" error={textoState.error}>
+            <Field
+              label="Anotação rápida"
+              htmlFor="texto"
+              error={textoState.error}
+            >
               <textarea
                 id="texto"
                 name="texto"
                 required
                 rows={4}
                 aria-describedby={textoState.error ? "texto-error" : undefined}
-                className="bg-[var(--surface-card)] text-[var(--text-primary)] font-body border-[var(--border-brutal)] focus-visible:outline-focus min-h-24 w-full border-2 px-4 py-2.5 text-base outline-none rounded-[var(--radius-control)] focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+                className="font-body focus-visible:outline-focus min-h-24 w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-4 py-2.5 text-base text-[var(--text-primary)] outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
               />
             </Field>
             <Button type="submit">Salvar captura</Button>

@@ -42,11 +42,15 @@ export function diasRestantesDeTrial(
   const [anoInicio, mesInicio, diaInicio] = inicioString.split("-");
   const [anoAgora, mesAgora, diaAgora] = agoraString.split("-");
 
-  const dateInicio = new Date(`${anoInicio}-${mesInicio}-${diaInicio}T00:00:00Z`);
+  const dateInicio = new Date(
+    `${anoInicio}-${mesInicio}-${diaInicio}T00:00:00Z`,
+  );
   const dateAgora = new Date(`${anoAgora}-${mesAgora}-${diaAgora}T00:00:00Z`);
 
   // Diferença em dias
-  const diferenca = Math.floor((dateAgora.getTime() - dateInicio.getTime()) / (1000 * 60 * 60 * 24));
+  const diferenca = Math.floor(
+    (dateAgora.getTime() - dateInicio.getTime()) / (1000 * 60 * 60 * 24),
+  );
 
   // Dias restantes: retorna valores negativos quando o trial já terminou.
   // Isso permite distinguir entre "dia 0 (último dia)" e "já passou" no shell.
@@ -122,13 +126,22 @@ export function calcularStatusTrial(
 
   const dentroDoTeto =
     trialComecoEm == null &&
-    diasRestantesDeTrial(criadoEm, DIAS_ATE_INICIO_AUTOMATICO, timezone, agora_) >= 0;
+    diasRestantesDeTrial(
+      criadoEm,
+      DIAS_ATE_INICIO_AUTOMATICO,
+      timezone,
+      agora_,
+    ) >= 0;
 
   if (dentroDoTeto) {
     // Relógio parado: o trial inteiro continua disponível. `dataFim` é a data
     // em que o relógio dispara sozinho, não uma data de vencimento — por isso
     // a UI deste estado não exibe contagem (ver FaixaTrial).
-    const dataFim = somarDiasCivis(criadoEm, DIAS_ATE_INICIO_AUTOMATICO, timezone);
+    const dataFim = somarDiasCivis(
+      criadoEm,
+      DIAS_ATE_INICIO_AUTOMATICO,
+      timezone,
+    );
     return {
       ativo: true,
       expirado: false,
@@ -140,8 +153,14 @@ export function calcularStatusTrial(
   }
 
   const dataInicio =
-    trialComecoEm ?? somarDiasCivis(criadoEm, DIAS_ATE_INICIO_AUTOMATICO, timezone);
-  const restantes = diasRestantesDeTrial(dataInicio, trialDias, timezone, agora_);
+    trialComecoEm ??
+    somarDiasCivis(criadoEm, DIAS_ATE_INICIO_AUTOMATICO, timezone);
+  const restantes = diasRestantesDeTrial(
+    dataInicio,
+    trialDias,
+    timezone,
+    agora_,
+  );
   // `expirado` sai do valor BRUTO: `diasRestantes === 0` é o último dia (ainda
   // ativo), e só o negativo significa acabou. Derivar depois do clamp
   // confundiria os dois.
@@ -216,7 +235,10 @@ export function resolverFaixaTrial(
   );
 
   if (status.aguardandoPrimeiroPaciente) {
-    return { diasRestantes: dadosTrial.trialDias, aguardandoPrimeiroPaciente: true };
+    return {
+      diasRestantes: dadosTrial.trialDias,
+      aguardandoPrimeiroPaciente: true,
+    };
   }
 
   return {

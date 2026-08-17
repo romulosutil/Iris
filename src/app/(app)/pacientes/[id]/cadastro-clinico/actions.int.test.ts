@@ -64,11 +64,7 @@ describe.skipIf(!hasDb)("salvarFichaClinica", () => {
       userId: U_COORD,
       role: "coordenador",
     } as const;
-    const result = await salvarFichaClinica(
-      ctx,
-      P_COM_CONSENT,
-      form({}),
-    );
+    const result = await salvarFichaClinica(ctx, P_COM_CONSENT, form({}));
     expect(result.error).toBeUndefined();
     expect(result.ok).toBe(true);
   });
@@ -116,10 +112,12 @@ describe.skipIf(!hasDb)("salvarFichaClinica", () => {
     expect(result.error).toBeUndefined();
     expect(result.ok).toBe(true);
 
-    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${P_COM_CONSENT}`;
+    const [pac] =
+      await owner`SELECT arquivado_em FROM patient WHERE id = ${P_COM_CONSENT}`;
     expect(pac!.arquivado_em).toBeNull();
 
-    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${P_COM_CONSENT} AND acao = 'paciente_desarquivado_automaticamente'`;
+    const [log] =
+      await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${P_COM_CONSENT} AND acao = 'paciente_desarquivado_automaticamente'`;
     expect(log).toBeTruthy();
     expect(log!.detalhe).toEqual({ origem: "ficha_clinica" });
 

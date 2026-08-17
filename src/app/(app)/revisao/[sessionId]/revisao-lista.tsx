@@ -61,13 +61,19 @@ const confiancaRotulo: Record<ExtracaoRevisavel["confianca"], string> = {
 
 function ResumoDefinicoes({ linhas }: { linhas: LinhaResumo[] }) {
   if (linhas.length === 0) {
-    return <p className="text-[var(--text-secondary)] text-sm">Sem detalhes estruturados.</p>;
+    return (
+      <p className="text-sm text-[var(--text-secondary)]">
+        Sem detalhes estruturados.
+      </p>
+    );
   }
   return (
     <dl className="grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-4 gap-y-1.5 text-sm">
       {linhas.map((l, i) => (
         <React.Fragment key={`${l.rotulo}-${i}`}>
-          <dt className="text-[var(--text-secondary)] font-semibold">{l.rotulo}</dt>
+          <dt className="font-semibold text-[var(--text-secondary)]">
+            {l.rotulo}
+          </dt>
           <dd className="text-[var(--text-primary)]">{l.valor}</dd>
         </React.Fragment>
       ))}
@@ -79,23 +85,28 @@ function PainelHistorico({ itens }: { itens: HistoricoItem[] }) {
   return (
     <section
       aria-label="Histórico do paciente no mesmo domínio"
-      className="border-[var(--border-brutal)] bg-[var(--surface-elevated)] border-2 border-dashed p-4 rounded-[var(--radius-xs)]"
+      className="rounded-[var(--radius-xs)] border-2 border-dashed border-[var(--border-brutal)] bg-[var(--surface-elevated)] p-4"
     >
-      <h4 className="font-display text-[var(--text-primary)] mb-2 text-sm font-bold uppercase tracking-wide">
+      <h4 className="font-display mb-2 text-sm font-bold tracking-wide text-[var(--text-primary)] uppercase">
         Histórico do paciente (mesmo domínio)
       </h4>
       {itens.length === 0 ? (
-        <p className="text-[var(--text-secondary)] text-sm">
+        <p className="text-sm text-[var(--text-secondary)]">
           Sem registro anterior aprovado neste domínio para comparar. A IA
           sinalizou inconsistência — confirme manualmente antes de aprovar.
         </p>
       ) : (
         <Stack gap="md" como="ul">
           {itens.map((h) => (
-            <li key={h.id} className="border-[var(--text-secondary)] border-l-2 pl-3">
-              <p className="text-[var(--text-primary)] text-sm italic">&quot;{h.trechoFonte}&quot;</p>
+            <li
+              key={h.id}
+              className="border-l-2 border-[var(--text-secondary)] pl-3"
+            >
+              <p className="text-sm text-[var(--text-primary)] italic">
+                &quot;{h.trechoFonte}&quot;
+              </p>
               {h.revisadoEm ? (
-                <p className="text-[var(--text-secondary)] mt-0.5 text-xs">
+                <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
                   aprovado em {dataFmt.format(h.revisadoEm)}
                 </p>
               ) : null}
@@ -126,7 +137,10 @@ function AcaoForm({
   variante?: "primaria" | "neutra";
   disabled?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState<RevisaoState, FormData>(action, {});
+  const [state, formAction, pending] = useActionState<RevisaoState, FormData>(
+    action,
+    {},
+  );
   return (
     <form action={formAction} className="contents">
       <input type="hidden" name="sessionId" value={sessionId} />
@@ -179,7 +193,9 @@ function DialogoEditar({
             value={JSON.stringify(payloadOriginalDe(ex))}
           />
           <label className="flex flex-col gap-1">
-            <span className="text-[var(--text-primary)] text-sm font-semibold">Função</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">
+              Função
+            </span>
             <input
               name="funcao"
               defaultValue={valorDe(ex, "funcao")}
@@ -187,7 +203,9 @@ function DialogoEditar({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[var(--text-primary)] text-sm font-semibold">Nível de ajuda</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">
+              Nível de ajuda
+            </span>
             <input
               name="nivel_ajuda"
               defaultValue={valorDe(ex, "nivel_ajuda")}
@@ -195,7 +213,9 @@ function DialogoEditar({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[var(--text-primary)] text-sm font-semibold">Resultado</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">
+              Resultado
+            </span>
             <input
               name="resultado"
               defaultValue={valorDe(ex, "resultado")}
@@ -259,25 +279,25 @@ function CartaoRevisao({
   const podeAprovar = ehDono && (!info.exigeConfirmacao || confirmado);
 
   return (
-    <article className="border-[var(--border-brutal)] bg-[var(--surface-card)] border-2 shadow-[var(--ds-shadow)] rounded-[var(--radius-control)]">
+    <article className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]">
       <div className={cn("h-2 w-full", info.faixa)} aria-hidden />
       <div className="flex flex-col gap-3 p-5">
         <Split alinha="start">
           <Stack gap="sm">
             <Cluster gap="sm">
               <StatusBadge estado="sugerida" />
-              <span className="font-display text-[var(--text-primary)] text-sm font-semibold">
+              <span className="font-display text-sm font-semibold text-[var(--text-primary)]">
                 {rotuloSubtipo(ex.subtipo)}
               </span>
             </Cluster>
-            <p className="text-[var(--text-secondary)] text-sm">
+            <p className="text-sm text-[var(--text-secondary)]">
               {info.alerta ? "⚠ " : ""}
               {info.rotulo} · {confiancaRotulo[ex.confianca]}
             </p>
           </Stack>
         </Split>
 
-        <blockquote className="border-[var(--text-secondary)] text-[var(--text-primary)] border-l-2 pl-3 text-base italic">
+        <blockquote className="border-l-2 border-[var(--text-secondary)] pl-3 text-base text-[var(--text-primary)] italic">
           “{ex.trechoFonte}”
         </blockquote>
 
@@ -286,7 +306,7 @@ function CartaoRevisao({
             <ResumoDefinicoes linhas={ex.resumo} />
 
             {ex.justificativaConfianca ? (
-              <p className="text-[var(--text-secondary)] text-sm">
+              <p className="text-sm text-[var(--text-secondary)]">
                 <span className="font-semibold">Por que esta confiança: </span>
                 {ex.justificativaConfianca}
               </p>
@@ -297,12 +317,12 @@ function CartaoRevisao({
             ) : null}
 
             {info.exigeConfirmacao && ehDono ? (
-              <label className="text-[var(--text-primary)] flex items-start gap-2 text-sm">
+              <label className="flex items-start gap-2 text-sm text-[var(--text-primary)]">
                 <input
                   type="checkbox"
                   checked={confirmado}
                   onChange={(e) => setConfirmado(e.target.checked)}
-                  className="border-[var(--border-brutal)] mt-0.5 size-5 shrink-0 border-2 accent-[color:var(--color-suggested)]"
+                  className="mt-0.5 size-5 shrink-0 border-2 border-[var(--border-brutal)] accent-[color:var(--color-suggested)]"
                 />
                 <span>
                   Confirmo que revisei o nível de ajuda observado e o alvo antes
@@ -333,7 +353,7 @@ function CartaoRevisao({
                 </AcaoForm>
               </Cluster>
             ) : (
-              <p className="text-[var(--text-secondary)] text-sm">
+              <p className="text-sm text-[var(--text-secondary)]">
                 Só o terapeuta da sessão pode aprovar — você está acompanhando.
               </p>
             )}
@@ -373,7 +393,7 @@ export function RevisaoLista({
 }) {
   if (extracoes.length === 0) {
     return (
-      <p className="text-[var(--text-primary)] border-[var(--border-brutal)] bg-[var(--surface-card)] border-2 border-dashed p-6 rounded-[var(--radius-control)]">
+      <p className="rounded-[var(--radius-control)] border-2 border-dashed border-[var(--border-brutal)] bg-[var(--surface-card)] p-6 text-[var(--text-primary)]">
         Nenhuma sugestão pendente nesta sessão — tudo revisado.
       </p>
     );

@@ -43,14 +43,12 @@ function ItemCard({
   total: number;
   onResolvido: () => void;
 }) {
-  const [reconhecerState, reconhecerFormAction, reconhecerPendente] = useActionState<
-    SupervisaoState,
-    FormData
-  >(async (prev, fd) => {
-    const r = await reconhecerAlertaAction(prev, fd);
-    if (r.ok) onResolvido();
-    return r;
-  }, {});
+  const [reconhecerState, reconhecerFormAction, reconhecerPendente] =
+    useActionState<SupervisaoState, FormData>(async (prev, fd) => {
+      const r = await reconhecerAlertaAction(prev, fd);
+      if (r.ok) onResolvido();
+      return r;
+    }, {});
 
   const [resolverState, resolverFormAction, resolverPendente] = useActionState<
     SupervisaoState,
@@ -61,77 +59,107 @@ function ItemCard({
     return r;
   }, {});
 
-  const [descartarState, descartarFormAction, descartarPendente] = useActionState<
-    SupervisaoState,
-    FormData
-  >(async (prev, fd) => {
-    const r = await descartarAlertaAction(prev, fd);
-    if (r.ok) onResolvido();
-    return r;
-  }, {});
+  const [descartarState, descartarFormAction, descartarPendente] =
+    useActionState<SupervisaoState, FormData>(async (prev, fd) => {
+      const r = await descartarAlertaAction(prev, fd);
+      if (r.ok) onResolvido();
+      return r;
+    }, {});
 
   const [resolverAberto, setResolverAberto] = useState(false);
   const [descartarAberto, setDescartarAberto] = useState(false);
 
   const formatDetalhe = () => {
     if (item.tipo === "faltas_excessivas") {
-      const d = item.detalhe as { faltas: number; janelaSemanas: number; limiar: number };
+      const d = item.detalhe as {
+        faltas: number;
+        janelaSemanas: number;
+        limiar: number;
+      };
       return `${d.faltas} faltas do paciente nas últimas ${d.janelaSemanas} semanas (limiar ${d.limiar})`;
     } else {
-      const d = item.detalhe as { metrica: string; tipoEstrutura: string; sessionNumero: number };
+      const d = item.detalhe as {
+        metrica: string;
+        tipoEstrutura: string;
+        sessionNumero: number;
+      };
       const rot = item.tipo === "estagnacao" ? "estagnação" : "regressão";
       return `${item.goalNome} — ${item.protocolNome}: ${rot} (métrica ${d.metrica}, sessão ${d.sessionNumero})`;
     }
   };
 
-  const hasError = reconhecerState.error || resolverState.error || descartarState.error;
-  const errorMsg = reconhecerState.error || resolverState.error || descartarState.error;
+  const hasError =
+    reconhecerState.error || resolverState.error || descartarState.error;
+  const errorMsg =
+    reconhecerState.error || resolverState.error || descartarState.error;
 
-  const renderedError = errorMsg === "CONCURRENCY_ERROR" 
-    ? "Este alerta mudou. Recarregue a página." 
-    : errorMsg;
+  const renderedError =
+    errorMsg === "CONCURRENCY_ERROR"
+      ? "Este alerta mudou. Recarregue a página."
+      : errorMsg;
 
   return (
     <Stack
       gap="md"
       como="li"
       className={cn(
-        "bg-[var(--surface-card)] p-5 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]",
+        "rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]",
       )}
       id={`item-card-${item.chaveNatural}`}
     >
       <Stack gap="sm">
-        <span className="text-[var(--text-secondary)] font-mono text-xs font-semibold tracking-wide uppercase">
+        <span className="font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
           Item {indice} de {total}
         </span>
-        <h3 className="text-[var(--text-primary)] text-lg font-semibold font-display">
-          <Link href={`/pacientes/${item.patientId}`} className="hover:underline">
+        <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
+          <Link
+            href={`/pacientes/${item.patientId}`}
+            className="hover:underline"
+          >
             {item.patientNome}
           </Link>
         </h3>
-        <p className="text-[var(--text-primary)] text-base">{formatDetalhe()}</p>
+        <p className="text-base text-[var(--text-primary)]">
+          {formatDetalhe()}
+        </p>
 
         <ChipGroup rotulo="Status e Tipo do Alerta">
           <Chip>{rotuloTipo[item.tipo]}</Chip>
           {item.sinalPresente === false ? (
-            <Chip className="border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]">sinal cessou</Chip>
+            <Chip className="border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]">
+              sinal cessou
+            </Chip>
           ) : null}
-          {item.estado === "reconhecido" ? (
-            <Chip>Reconhecido</Chip>
-          ) : null}
+          {item.estado === "reconhecido" ? <Chip>Reconhecido</Chip> : null}
         </ChipGroup>
       </Stack>
 
       <Cluster gap="sm">
         {item.estado === "novo" && item.sinalPresente && (
           <form action={reconhecerFormAction} className="contents">
-            <input type="hidden" name="chaveNatural" value={item.chaveNatural} />
+            <input
+              type="hidden"
+              name="chaveNatural"
+              value={item.chaveNatural}
+            />
             <input type="hidden" name="tipo" value={item.tipo} />
             <input type="hidden" name="patientId" value={item.patientId} />
             <input type="hidden" name="goalId" value={item.goalId || ""} />
-            <input type="hidden" name="protocolId" value={item.protocolId || ""} />
-            <input type="hidden" name="detalhe" value={JSON.stringify(item.detalhe)} />
-            <Button type="submit" variante="primaria" disabled={reconhecerPendente}>
+            <input
+              type="hidden"
+              name="protocolId"
+              value={item.protocolId || ""}
+            />
+            <input
+              type="hidden"
+              name="detalhe"
+              value={JSON.stringify(item.detalhe)}
+            />
+            <Button
+              type="submit"
+              variante="primaria"
+              disabled={reconhecerPendente}
+            >
               {reconhecerPendente ? "Reconhecendo…" : "Reconhecer"}
             </Button>
           </form>
@@ -146,18 +174,34 @@ function ItemCard({
           <DialogContent>
             <DialogTitle>Resolver alerta</DialogTitle>
             <DialogDescription>
-              Esta ação registra que a condição foi tratada e suprime futuros alertas.
+              Esta ação registra que a condição foi tratada e suprime futuros
+              alertas.
             </DialogDescription>
             <form action={resolverFormAction}>
               <Stack gap="md" className="mt-4">
-                <input type="hidden" name="chaveNatural" value={item.chaveNatural} />
+                <input
+                  type="hidden"
+                  name="chaveNatural"
+                  value={item.chaveNatural}
+                />
                 <input type="hidden" name="tipo" value={item.tipo} />
                 <input type="hidden" name="patientId" value={item.patientId} />
                 <input type="hidden" name="goalId" value={item.goalId || ""} />
-                <input type="hidden" name="protocolId" value={item.protocolId || ""} />
-                <input type="hidden" name="detalhe" value={JSON.stringify(item.detalhe)} />
+                <input
+                  type="hidden"
+                  name="protocolId"
+                  value={item.protocolId || ""}
+                />
+                <input
+                  type="hidden"
+                  name="detalhe"
+                  value={JSON.stringify(item.detalhe)}
+                />
 
-                <Field label="Nota de resolução" htmlFor={`nota-${item.chaveNatural}`}>
+                <Field
+                  label="Nota de resolução"
+                  htmlFor={`nota-${item.chaveNatural}`}
+                >
                   <Input
                     id={`nota-${item.chaveNatural}`}
                     name="nota"
@@ -167,14 +211,18 @@ function ItemCard({
 
                 {resolverState.error ? (
                   <Alert severidade="erro">
-                    {resolverState.error === "CONCURRENCY_ERROR" 
-                      ? "Este alerta mudou. Recarregue a página." 
+                    {resolverState.error === "CONCURRENCY_ERROR"
+                      ? "Este alerta mudou. Recarregue a página."
                       : resolverState.error}
                   </Alert>
                 ) : null}
 
                 <Cluster gap="sm">
-                  <Button type="submit" variante="primaria" disabled={resolverPendente}>
+                  <Button
+                    type="submit"
+                    variante="primaria"
+                    disabled={resolverPendente}
+                  >
                     {resolverPendente ? "Resolvendo…" : "Confirmar resolução"}
                   </Button>
                   <DialogClose asChild>
@@ -198,18 +246,42 @@ function ItemCard({
             <DialogContent>
               <DialogTitle>Descartar alerta</DialogTitle>
               <DialogDescription>
-                Esta ação descarta a notificação e suprime novos alertas para esta condição.
+                Esta ação descarta a notificação e suprime novos alertas para
+                esta condição.
               </DialogDescription>
               <form action={descartarFormAction}>
                 <Stack gap="md" className="mt-4">
-                  <input type="hidden" name="chaveNatural" value={item.chaveNatural} />
+                  <input
+                    type="hidden"
+                    name="chaveNatural"
+                    value={item.chaveNatural}
+                  />
                   <input type="hidden" name="tipo" value={item.tipo} />
-                  <input type="hidden" name="patientId" value={item.patientId} />
-                  <input type="hidden" name="goalId" value={item.goalId || ""} />
-                  <input type="hidden" name="protocolId" value={item.protocolId || ""} />
-                  <input type="hidden" name="detalhe" value={JSON.stringify(item.detalhe)} />
+                  <input
+                    type="hidden"
+                    name="patientId"
+                    value={item.patientId}
+                  />
+                  <input
+                    type="hidden"
+                    name="goalId"
+                    value={item.goalId || ""}
+                  />
+                  <input
+                    type="hidden"
+                    name="protocolId"
+                    value={item.protocolId || ""}
+                  />
+                  <input
+                    type="hidden"
+                    name="detalhe"
+                    value={JSON.stringify(item.detalhe)}
+                  />
 
-                  <Field label="Motivo do descarte" htmlFor={`motivo-${item.chaveNatural}`}>
+                  <Field
+                    label="Motivo do descarte"
+                    htmlFor={`motivo-${item.chaveNatural}`}
+                  >
                     <Input
                       id={`motivo-${item.chaveNatural}`}
                       name="motivo"
@@ -219,15 +291,21 @@ function ItemCard({
 
                   {descartarState.error ? (
                     <Alert severidade="erro">
-                      {descartarState.error === "CONCURRENCY_ERROR" 
-                        ? "Este alerta mudou. Recarregue a página." 
+                      {descartarState.error === "CONCURRENCY_ERROR"
+                        ? "Este alerta mudou. Recarregue a página."
                         : descartarState.error}
                     </Alert>
                   ) : null}
 
                   <Cluster gap="sm">
-                    <Button type="submit" variante="primaria" disabled={descartarPendente}>
-                      {descartarPendente ? "Descartando…" : "Confirmar descarte"}
+                    <Button
+                      type="submit"
+                      variante="primaria"
+                      disabled={descartarPendente}
+                    >
+                      {descartarPendente
+                        ? "Descartando…"
+                        : "Confirmar descarte"}
                     </Button>
                     <DialogClose asChild>
                       <Button type="button" variante="terciaria">
@@ -252,11 +330,7 @@ function ItemCard({
   );
 }
 
-export function SupervisaoFila({
-  itens,
-}: {
-  itens: ItemSupervisao[];
-}) {
+export function SupervisaoFila({ itens }: { itens: ItemSupervisao[] }) {
   const [resolvidos, setResolvidos] = useState<Set<string>>(new Set());
 
   const pendentes = itens.filter((i) => !resolvidos.has(i.chaveNatural));

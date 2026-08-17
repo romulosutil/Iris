@@ -75,14 +75,20 @@ describe("agentOutputSchema", () => {
       extracoes: [],
       resumo_sessao: "Registro pobre.",
       sinalizacoes: [
-        { tipo: "registro_pobre_em_detalhes", detalhe: "Poucos eventos concretos." },
+        {
+          tipo: "registro_pobre_em_detalhes",
+          detalhe: "Poucos eventos concretos.",
+        },
       ],
     };
     expect(agentOutputSchema.safeParse(drift).success).toBe(true);
   });
 
   test("rejeita extração sem trecho_fonte (R2: sem trecho, não há extração)", () => {
-    const semTrecho = { ...comEvidencia.extracoes[0] } as Record<string, unknown>;
+    const semTrecho = { ...comEvidencia.extracoes[0] } as Record<
+      string,
+      unknown
+    >;
     delete semTrecho.trecho_fonte;
     const bad = { ...comEvidencia, extracoes: [semTrecho] };
     expect(agentOutputSchema.safeParse(bad).success).toBe(false);

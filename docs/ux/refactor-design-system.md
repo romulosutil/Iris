@@ -12,7 +12,7 @@ ortogonal), stories + gate axe. O problema não é qualidade, é **estrutura e
 duplicação**:
 
 1. **Superfície brutalista copiada** — a base `border-ink-anchor border-2
-   shadow-[var(--ds-shadow)]` (sólida) e a variante tracejada se repetem à mão em
+shadow-[var(--ds-shadow)]` (sólida) e a variante tracejada se repetem à mão em
    `Button`, `Card`, `StatusBadge`, `Input`. Sem fonte única → deriva garantida.
 2. **"Pílula de estado" duplicada** — `Card` tem um selo inline
    (conquistado/candidato) e `StatusBadge` tem outro, com **vocabulários de estado
@@ -29,11 +29,12 @@ duplicação**:
 ## Decisões de design (Design Lead)
 
 **D1 — Atômico pragmático, não dogmático.** 3 camadas, não 5:
+
 - `ui/primitives/` — átomos sem domínio: `Surface`, `Pill`, `Text`, `VisuallyHidden`.
 - `ui/` — átomos/moléculas de forma: Button, Input, Field, Checkbox, Select, Dialog…
 - `ui/patterns/` (ou `components/domain/`) — organismos cientes de domínio:
   StatusBadge, e os novos cartões de revisão.
-Sem churn de renomear tudo — mover só o que ganha clareza.
+  Sem churn de renomear tudo — mover só o que ganha clareza.
 
 **D2 — `Surface`/`control` são o MECANISMO de enforcement (P1/Q3 da crítica).**
 Evidência: `--border-brutal` e `--control-md/lg` têm **0 consumidores**; 17×
@@ -48,12 +49,13 @@ componentes COMPÕEM esses utils; o review vê a composição, não classe recop
 tipo por hue+ícone+label.** A crítica alertou: formalizar dois tipos de
 "ainda-não-fato" (violeta vs azul) pode reabrir a ambiguidade que o produto
 existe pra fechar. Decisão melhor:
+
 - **Fato (aprovado)** = fill sólido + borda cheia + **sombra que LEVANTA** (`--ds-shadow`).
 - **Ainda-não-fato** = sem fill + tracejado + **sombra INSET que AFUNDA** (`--ds-shadow-inset`).
-O eixo profundidade (levanta/afunda) é o aprendizado ÚNICO e daltônico-seguro. O
-*tipo* de não-fato é leitura secundária: **IA-sugerido = violeta + Sparkle**;
-**marco-candidato = azul + Layers**. Hachura do Card removida (o inset já carrega
-"tentativo"). Isto resolve P0 (fork) + P1 (sink vaporware) juntos.
+  O eixo profundidade (levanta/afunda) é o aprendizado ÚNICO e daltônico-seguro. O
+  _tipo_ de não-fato é leitura secundária: **IA-sugerido = violeta + Sparkle**;
+  **marco-candidato = azul + Layers**. Hachura do Card removida (o inset já carrega
+  "tentativo"). Isto resolve P0 (fork) + P1 (sink vaporware) juntos.
 
 **D3b — Construir o "sink" (P1 da crítica).** `--shadow-brutal-inset`
 ("sugerido afunda / aprovado levanta", `globals.css:56-59`) hoje tem **0
@@ -67,6 +69,7 @@ ter selo inline próprio — usa `Pill`/`StatusBadge`.
 
 **D5 — Peças novas que a tela de revisão precisa** (a aceleração concreta),
 construídas dos primitivos:
+
 - `ConfidenceCard` — cartão de extração por nível de confiança/fricção (§3),
   compõe `Surface` + `Pill` + `avaliarFriccao` (já existe no backend).
 - `CompareRow` — histórico anterior lado-a-lado (estado inconsistente).
@@ -82,6 +85,7 @@ construídas dos primitivos:
 - **Um PR** revisável; commits por incremento.
 
 ## Bugs de a11y achados pela crítica (corrigir no refactor)
+
 - **[P2] Casey** — `Chip` (`chip.tsx:14`) tem `min-h-11` mas **sem `min-w-11`** →
   toggle curto fura 44px em largura. `Dialog` close (`dialog.tsx:51`) = 36px no
   canto hostil ao polegar → ≥44px + reconsiderar posição p/ uma mão.

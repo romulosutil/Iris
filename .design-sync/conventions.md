@@ -11,8 +11,12 @@ Não existe React Provider obrigatório. O tema é dirigido por **dois atributos
 no elemento raiz**, lidos por `styles.css`:
 
 ```html
-<html data-mode="clinico">              <!-- claro (default) -->
-<html data-mode="familia" data-theme="dark">   <!-- modo família, escuro -->
+<html data-mode="clinico">
+  <!-- claro (default) -->
+  <html data-mode="familia" data-theme="dark">
+    <!-- modo família, escuro -->
+  </html>
+</html>
 ```
 
 - `data-mode="clinico"` (padrão) — sombra brutalista cheia (`--ds-offset: 4px`),
@@ -48,14 +52,14 @@ Tailwind (`bg-slate-100`, `text-gray-700`) — elas ignoram tema e modo.
 
 Tokens que você vai usar de fato:
 
-| Papel | Tokens |
-| --- | --- |
-| Superfície | `--bg-app`, `--surface-card`, `--surface-elevated` |
-| Texto | `--text-primary`, `--text-secondary` |
-| Borda / sombra | `--border-brutal`, `--ds-shadow`, `--ds-shadow-hover`, `--ds-shadow-inset`, `--ds-offset` |
-| Ação | `--action-primary`, `--action-primary-fg`, `--action-secondary-bg`, `--action-secondary-fg` |
-| Estado | `--status-{success,warning,error,info,ia}-{bg,fg,border}` |
-| Raio | `--radius-xs`, `--radius-sm`, `--radius-control`, `--radius-md`, `--radius-lg`, `--radius-pill` |
+| Papel          | Tokens                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| Superfície     | `--bg-app`, `--surface-card`, `--surface-elevated`                                              |
+| Texto          | `--text-primary`, `--text-secondary`                                                            |
+| Borda / sombra | `--border-brutal`, `--ds-shadow`, `--ds-shadow-hover`, `--ds-shadow-inset`, `--ds-offset`       |
+| Ação           | `--action-primary`, `--action-primary-fg`, `--action-secondary-bg`, `--action-secondary-fg`     |
+| Estado         | `--status-{success,warning,error,info,ia}-{bg,fg,border}`                                       |
+| Raio           | `--radius-xs`, `--radius-sm`, `--radius-control`, `--radius-md`, `--radius-lg`, `--radius-pill` |
 
 `--status-ia-*` é o estado **sugerido pela IA** — sempre violeta e sempre com
 borda tracejada (`border-dashed`). Essa distinção é semântica, não decorativa:
@@ -102,7 +106,7 @@ Os grupos são `atoms`, `molecules`, `organisms`, `layout`, `templates`,
       Aprove ou ajuste cada sugestão antes de virar registro.
     </Alert>
 
-    <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)] rounded-[var(--radius-control)]">
+    <div className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]">
       <h3 className="font-display text-base font-bold text-[var(--text-primary)]">
         Evidências pendentes
       </h3>
@@ -119,6 +123,6 @@ Os grupos são `atoms`, `molecules`, `organisms`, `layout`, `templates`,
 </Container>
 ```
 
-O `<div>` acima é *sua* cola de layout, escrita no idioma do DS. O `Container`,
+O `<div>` acima é _sua_ cola de layout, escrita no idioma do DS. O `Container`,
 `Stack`, `Cluster`, `Alert`, `StatusBadge` e `Button` vêm da biblioteca — para
 qualquer controle que exista como componente, use o componente.

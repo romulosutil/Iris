@@ -1,7 +1,10 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { avaliarFriccao, type FriccaoNivel } from "@/lib/extraction/review-policy";
+import {
+  avaliarFriccao,
+  type FriccaoNivel,
+} from "@/lib/extraction/review-policy";
 
 // Fila de validação do coordenador (Fase 5 · Fatia 1). Derivada por LEITURA
 // (sem coluna nova, sem migração) a partir de `evidence_current` (view de
@@ -69,7 +72,10 @@ type HistRow = {
 // Chave de casamento com o histórico: mesmo protocolo + mesmo domínio do alvo
 // (refs da própria `evidence`; NULL casa com NULL — item sem alvo resolvido
 // compara com histórico igualmente sem alvo).
-function chaveHistorico(r: { protocol_id: string | null; dominio_id: string | null }): string {
+function chaveHistorico(r: {
+  protocol_id: string | null;
+  dominio_id: string | null;
+}): string {
   return `${r.protocol_id ?? ""}|${r.dominio_id ?? ""}`;
 }
 
@@ -114,7 +120,9 @@ export async function listarFilaValidacao(
             JOIN extraction x ON x.id = ec.extraction_id
             WHERE ec.invalidada = false
               AND ec.patient_id IN (${sql.join(
-                [...new Set(inconsistentes.map((r) => r.patient_id))].map((id) => sql`${id}::uuid`),
+                [...new Set(inconsistentes.map((r) => r.patient_id))].map(
+                  (id) => sql`${id}::uuid`,
+                ),
                 sql`, `,
               )})
               AND ec.id NOT IN (${sql.join(
@@ -157,7 +165,8 @@ export async function listarFilaValidacao(
         nivelFriccao: nivel,
         podeLote,
         historicoAnterior: r.inconsistente_com_historico
-          ? (historicoPorChave.get(`${r.patient_id}|${chaveHistorico(r)}`) ?? null)
+          ? (historicoPorChave.get(`${r.patient_id}|${chaveHistorico(r)}`) ??
+            null)
           : null,
       };
     });

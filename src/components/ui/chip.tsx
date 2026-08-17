@@ -15,16 +15,22 @@ export type ChipVariante =
   | "Info";
 
 const stylesVariante: Record<string, string> = {
-  success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
-  Success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
-  warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
-  Warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
+  success:
+    "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
+  Success:
+    "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
+  warning:
+    "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
+  Warning:
+    "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
   ai: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
   AI: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
   info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
   Info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
-  brand: "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)]",
-  neutral: "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)]",
+  brand:
+    "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)]",
+  neutral:
+    "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)]",
 };
 
 const base = cn(
@@ -57,14 +63,34 @@ export interface ChipProps {
 
 function IconeX() {
   return (
-    <svg width={14} height={14} viewBox="0 0 16 16" fill="none" aria-hidden focusable="false">
-      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="square" />
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden
+      focusable="false"
+    >
+      <path
+        d="M4 4l8 8M12 4l-8 8"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="square"
+      />
     </svg>
   );
 }
 
 export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
-  { children, onSelecionar, selecionado = false, onRemover, rotuloRemover, className, variante = "neutral" },
+  {
+    children,
+    onSelecionar,
+    selecionado = false,
+    onRemover,
+    rotuloRemover,
+    className,
+    variante = "neutral",
+  },
   ref,
 ) {
   const removivel = typeof onRemover === "function";
@@ -98,7 +124,8 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
   // Container (estático ou removível). Toggle + remover convivem: rótulo vira
   // um botão interno para não aninhar <button> dentro de <button>.
   const isDualAction = Boolean(onSelecionar && removivel);
-  const groupLabel = isDualAction && typeof children === "string" ? children : undefined;
+  const groupLabel =
+    isDualAction && typeof children === "string" ? children : undefined;
 
   return (
     <span
@@ -112,7 +139,7 @@ export const Chip = React.forwardRef<HTMLElement, ChipProps>(function Chip(
           type="button"
           aria-pressed={selecionado}
           onClick={onSelecionar}
-          className={cn("-mx-1 min-h-11 inline-flex items-center px-1", foco)}
+          className={cn("-mx-1 inline-flex min-h-11 items-center px-1", foco)}
         >
           {children}
         </button>

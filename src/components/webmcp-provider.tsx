@@ -8,7 +8,8 @@ export function WebMCPProvider() {
     const irisTools: WebMCPTool[] = [
       {
         name: "search_clinical_evidence",
-        description: "Busca critérios clínicos e marcadores comportamentais na base de conhecimento do Iris.",
+        description:
+          "Busca critérios clínicos e marcadores comportamentais na base de conhecimento do Iris.",
         inputSchema: {
           type: "object",
           properties: {
@@ -25,7 +26,8 @@ export function WebMCPProvider() {
               {
                 id: "ev-001",
                 topic: `Evidências para ${query}`,
-                summary: "Indicadores comportamentais compilados de acordo com os critérios clínicos.",
+                summary:
+                  "Indicadores comportamentais compilados de acordo com os critérios clínicos.",
               },
             ],
           };
@@ -33,7 +35,8 @@ export function WebMCPProvider() {
       },
       {
         name: "get_iris_overview",
-        description: "Retorna a descrição geral do sistema Iris e fluxo de dossiê clínico.",
+        description:
+          "Retorna a descrição geral do sistema Iris e fluxo de dossiê clínico.",
         inputSchema: {
           type: "object",
           properties: {},

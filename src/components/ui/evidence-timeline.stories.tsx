@@ -37,7 +37,11 @@ export const Padrao: Story = {
 export const ApenasFatos: Story = {
   args: {
     itens: [
-      { tipo: "fato-success", titulo: "Sentou na roda", descricao: "Sem apoio." },
+      {
+        tipo: "fato-success",
+        titulo: "Sentou na roda",
+        descricao: "Sem apoio.",
+      },
       { tipo: "fato-success", titulo: "Seguiu instrução simples" },
     ],
   },

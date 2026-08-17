@@ -106,7 +106,10 @@ export async function criarContaEClinica(
   // Normaliza como o Better-Auth normaliza ao gravar (sign-up.mjs:164,
   // `email.toLowerCase()`) — sem isso, "Foo@x.com" e "foo@x.com" não seriam
   // reconhecidos como o mesmo cadastro na retomada.
-  const e: EntradaCadastro = { ...entrada, email: entrada.email.trim().toLowerCase() };
+  const e: EntradaCadastro = {
+    ...entrada,
+    email: entrada.email.trim().toLowerCase(),
+  };
 
   const [existente] = await authDb
     .select({ id: appUser.id })
@@ -186,7 +189,9 @@ export async function criarContaEClinica(
         ),
       )
       .orderBy(
-        desc(sql`coalesce(${clinic.responsavelContaId} = ${existente.id}, false)`),
+        desc(
+          sql`coalesce(${clinic.responsavelContaId} = ${existente.id}, false)`,
+        ),
         asc(userRole.clinicId),
       )
       .limit(1);
@@ -400,7 +405,10 @@ async function verificarPossePorSenha(
  * aceite para uma versão de termo nova é fluxo de outra tela (fora do
  * escopo desta função de cadastro).
  */
-async function contaEstaCompleta(userId: string, clinicId: string): Promise<boolean> {
+async function contaEstaCompleta(
+  userId: string,
+  clinicId: string,
+): Promise<boolean> {
   const [user] = await authDb
     .select({
       conselho: appUser.conselho,

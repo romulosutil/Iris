@@ -16,7 +16,11 @@ export interface DadosEixoRadar {
 export interface MilestoneMetadata {
   dominioId: string;
   protocolId: string;
-  tipoEstrutura: "marco_simples" | "marco_com_barreira" | "escore_composto" | "faixa_normativa";
+  tipoEstrutura:
+    | "marco_simples"
+    | "marco_com_barreira"
+    | "escore_composto"
+    | "faixa_normativa";
   totalNiveisAjuda: number; // máximo ordinal configurado na taxonomia do protocolo
 }
 
@@ -30,7 +34,7 @@ export interface GoalMetadata {
  */
 export function mapearEixo(
   dominioId: string,
-  disciplina: string | null
+  disciplina: string | null,
 ): EixoEspectro {
   const dom = dominioId.toLowerCase().trim();
 
@@ -44,13 +48,32 @@ export function mapearEixo(
   if (["social", "brincar", "jogo", "interação social"].includes(dom)) {
     return "social_brincar";
   }
-  if (["pareamento", "leitura", "escrita", "matematica", "linguagem_social", "cognitivo"].includes(dom)) {
+  if (
+    [
+      "pareamento",
+      "leitura",
+      "escrita",
+      "matematica",
+      "linguagem_social",
+      "cognitivo",
+    ].includes(dom)
+  ) {
     return "cognicao_aprendizado";
   }
-  if (["imitacao", "motora", "motor", "independencia", "autonomia"].includes(dom)) {
+  if (
+    ["imitacao", "motora", "motor", "independencia", "autonomia"].includes(dom)
+  ) {
     return "autonomia_motor";
   }
-  if (["barreiras", "regulacao", "comportamento", "cooperacao", "cooperação"].includes(dom)) {
+  if (
+    [
+      "barreiras",
+      "regulacao",
+      "comportamento",
+      "cooperacao",
+      "cooperação",
+    ].includes(dom)
+  ) {
     return "regulacao_barreiras";
   }
 
@@ -72,16 +95,38 @@ export function mapearEixo(
  * Tratamento rigoroso de divisão por zero (NaN) e inversão do eixo de regulação/barreiras.
  */
 export function computarDadosEspectro(
-  repertorioState: Record<string, { nivel_ajuda_recente?: number | null; contagem: number; is_candidata?: boolean }>,
+  repertorioState: Record<
+    string,
+    {
+      nivel_ajuda_recente?: number | null;
+      contagem: number;
+      is_candidata?: boolean;
+    }
+  >,
   mapeamentoMilestones: Record<string, MilestoneMetadata>,
-  metas: GoalMetadata[]
+  metas: GoalMetadata[],
 ): DadosEixoRadar[] {
   // Inicializa acumuladores para os 6 eixos
-  const eixos: Record<EixoEspectro, { somaProgresso: number; pesoTotal: number; totalEvidencias: number }> = {
-    comunicacao_expressiva: { somaProgresso: 0, pesoTotal: 0, totalEvidencias: 0 },
-    comunicacao_receptiva: { somaProgresso: 0, pesoTotal: 0, totalEvidencias: 0 },
+  const eixos: Record<
+    EixoEspectro,
+    { somaProgresso: number; pesoTotal: number; totalEvidencias: number }
+  > = {
+    comunicacao_expressiva: {
+      somaProgresso: 0,
+      pesoTotal: 0,
+      totalEvidencias: 0,
+    },
+    comunicacao_receptiva: {
+      somaProgresso: 0,
+      pesoTotal: 0,
+      totalEvidencias: 0,
+    },
     social_brincar: { somaProgresso: 0, pesoTotal: 0, totalEvidencias: 0 },
-    cognicao_aprendizado: { somaProgresso: 0, pesoTotal: 0, totalEvidencias: 0 },
+    cognicao_aprendizado: {
+      somaProgresso: 0,
+      pesoTotal: 0,
+      totalEvidencias: 0,
+    },
     autonomia_motor: { somaProgresso: 0, pesoTotal: 0, totalEvidencias: 0 },
     regulacao_barreiras: { somaProgresso: 0, pesoTotal: 0, totalEvidencias: 0 },
   };
@@ -102,7 +147,11 @@ export function computarDadosEspectro(
 
       if (milestone.tipoEstrutura === "marco_simples") {
         const ord = estado.nivel_ajuda_recente;
-        if (ord !== undefined && ord !== null && milestone.totalNiveisAjuda > 0) {
+        if (
+          ord !== undefined &&
+          ord !== null &&
+          milestone.totalNiveisAjuda > 0
+        ) {
           // Nível de ajuda: menor ordinal = mais independente (melhor).
           // Se totalNiveisAjuda = 4, ordinais [0, 1, 2, 3, 4]
           // Independente (0) -> progresso 100%
@@ -158,9 +207,11 @@ export function computarDadosEspectro(
   return (Object.keys(eixos) as EixoEspectro[]).map((e) => {
     const { somaProgresso, pesoTotal, totalEvidencias } = eixos[e];
     const valorRaw = pesoTotal > 0 ? (somaProgresso / pesoTotal) * 100 : 0;
-    
+
     // Tratamento estrito contra NaN ou estouro de limites
-    const valor = isNaN(valorRaw) ? 0 : Math.max(0, Math.min(100, Math.round(valorRaw)));
+    const valor = isNaN(valorRaw)
+      ? 0
+      : Math.max(0, Math.min(100, Math.round(valorRaw)));
 
     return {
       eixo: e,

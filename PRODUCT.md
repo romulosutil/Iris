@@ -9,31 +9,26 @@ web
 ## Users
 
 Dois públicos profissionais adultos, sob pressão, operam a interface — nenhum
-deles é o paciente (o paciente, criança em intervenção para TEA, é sobre quem
+deles é o paciente (o paciente — seja criança em intervenção para TEA/desenvolvimento infantil, seja adolescente/adulto em TCC e terapia convencional — é sobre quem
 os dados falam, não quem usa o software).
 
-O **terapeuta** trabalha mobile-first, uma mão, em corredor de clínica, sob luz
+O **terapeuta** (psicólogo, terapeuta ocupacional, fonoaudiólogo, aplicador ABA) trabalha mobile-first, uma mão, em corredor de clínica ou consultório, sob luz
 ambiente incontrolável, com atenção interrompida a cada poucos minutos entre 7-8
 sessões por dia. Seu trabalho no Iris: escrever o diário de sessão em linguagem
 natural e revisar/aprovar as evidências que a IA extraiu dele.
 
-O **coordenador** trabalha desktop, em sessão de revisão mais pausada, e valida
+O **coordenador / supervisor clínico** trabalha desktop, em sessão de revisão mais pausada, e valida
 por exceção — reclassifica evidências (versionado, com justificativa). Tolera
 mais densidade de informação, mas o volume da fila é o próprio risco (rubber
 stamping por cansaço).
 
-O **responsável pelo paciente** é um público futuro (portal da família, ainda no
-backlog): lê sobre o progresso do próprio filho em contexto emocionalmente
-carregado. Entra como modo/tema ("Modo Família") dentro do mesmo sistema de
-tokens, não como produto separado.
+O **responsável pelo paciente** recebe relatórios clínicos e da família (Relatório da Família em PDF já entregue no MVP); a área logada interativa (Portal da Família) é uma evolução prevista no roadmap para leitura do progresso do dependente em contexto de transparência e acolhimento.
 
 ## Product Purpose
 
-Iris é um SaaS para clínicas de terapia infantil (foco inicial: intervenção para
-TEA no Brasil) que substitui o preenchimento manual de planilhas de protocolos
-clínicos por um diário de sessão em linguagem natural, do qual uma IA extrai
+Iris é um SaaS para clínicas de terapia e saúde mental multidisciplinar (intervenção comportamental/TEA, TCC, Fonoaudiologia e Terapia Ocupacional) que substitui o preenchimento manual de planilhas e formulários rígidos por um diário de sessão em linguagem natural, do qual uma IA extrai
 evidências estruturadas que o terapeuta revisa e aprova. A IA nunca pontua
-protocolos; ela acumula evidências rastreáveis (até a frase de origem) que
+protocolos nem toma decisões clínicas; ela acumula evidências rastreáveis (até a frase de origem) que
 abastecem a decisão clínica humana. Sucesso é o terapeuta chegar na janela de
 avaliação com o dossiê pronto, e a taxa de "aprovação sem edição" na tela de
 revisão subir (meta de ativação ≥70%).
@@ -76,9 +71,7 @@ Emocionalmente, o produto deve evocar confiança e controle, não ansiedade.
   tem tratamento estruturalmente diferente de "aprovado" (não só cor: borda,
   peso de sombra, selo de estado sempre visível). "Candidato" nunca se parece com
   "conquistado".
-- **Fricção é ferramenta, não bug.** O peso do gesto escala com o risco da
-  decisão: aprovação em lote de alta confiança é leve; revisão unitária de baixa
-  confiança pede confirmação e mais atrito.
+- **Fricção é ferramenta, não bug.** O sistema proíbe aprovações mecânicas ou em lote ("rubber-stamping"). Toda evidência requer revisão individual consciente; o peso do gesto e a confirmação escalam com o risco da decisão clínica.
 - **Transparência sem vigilância.** O que o coordenador vê do terapeuta usa
   exatamente os mesmos componentes que o terapeuta vê de si — nunca uma variante
   "modo supervisor" com informação escondida.

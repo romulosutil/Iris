@@ -1,7 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { ScheduleGrid, type FaixaJanela, type BloqueioData } from "@/components/ui/schedule-grid";
+import {
+  ScheduleGrid,
+  type FaixaJanela,
+  type BloqueioData,
+} from "@/components/ui/schedule-grid";
 import type { BlocoAgenda } from "@/lib/agenda/projecao";
 import type { FaixaDia } from "@/lib/agenda/janela";
 

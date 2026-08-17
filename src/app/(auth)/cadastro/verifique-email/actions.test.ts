@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { consumirTentativa, enviarEmailTransacional, findFirst } = vi.hoisted(() => ({
-  consumirTentativa: vi.fn(),
-  enviarEmailTransacional: vi.fn(),
-  findFirst: vi.fn(),
-}));
+const { consumirTentativa, enviarEmailTransacional, findFirst } = vi.hoisted(
+  () => ({
+    consumirTentativa: vi.fn(),
+    enviarEmailTransacional: vi.fn(),
+    findFirst: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/rate-limit", () => ({
   consumirTentativa,
@@ -60,7 +62,10 @@ describe("reenviarEmailVerificacao", () => {
   it("retorna mensagem uniforme de sucesso mesmo quando nenhum token pendente for encontrado (anti-enumeração)", async () => {
     findFirst.mockResolvedValueOnce(undefined); // Sem token pendente
 
-    const res = await reenviarEmailVerificacao({}, fd("desconhecido@exemplo.com"));
+    const res = await reenviarEmailVerificacao(
+      {},
+      fd("desconhecido@exemplo.com"),
+    );
     expect(res.success).toBe(true);
     expect(res.message).toContain("Se este e-mail estiver cadastrado");
     expect(enviarEmailTransacional).not.toHaveBeenCalled();

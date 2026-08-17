@@ -16,7 +16,9 @@ const AGORA = new Date("2026-07-28T12:00:00.000Z");
 
 describe("copy.ts — textos literais da §6", () => {
   test("título do alerta", () => {
-    expect(TITULO_ALERTA).toBe("Sinal identificado no relato requer revisão prioritária");
+    expect(TITULO_ALERTA).toBe(
+      "Sinal identificado no relato requer revisão prioritária",
+    );
   });
 
   test("corpo interpola a categoria legível", () => {
@@ -26,7 +28,9 @@ describe("copy.ts — textos literais da §6", () => {
   });
 
   test("push não traz categoria nem nome de paciente (H3)", () => {
-    expect(TEXTO_PUSH).toBe("Iris: sinal prioritário requer revisão imediata. Abrir agora.");
+    expect(TEXTO_PUSH).toBe(
+      "Iris: sinal prioritário requer revisão imediata. Abrir agora.",
+    );
     for (const legivel of Object.values(CATEGORIA_LEGIVEL)) {
       expect(TEXTO_PUSH).not.toContain(legivel);
     }
@@ -70,11 +74,15 @@ describe("copy.ts — ehMenorDeIdade", () => {
 
 describe("copy.ts — avisoLegal (§5.2)", () => {
   test("violência sofrida + menor → aviso do ECA", () => {
-    expect(avisoLegal("violencia_sofrida", "2015-05-10", AGORA)).toBe(AVISO_ECA_MENOR);
+    expect(avisoLegal("violencia_sofrida", "2015-05-10", AGORA)).toBe(
+      AVISO_ECA_MENOR,
+    );
   });
 
   test("violência sofrida + nascimento não cadastrado → aviso condicional", () => {
-    expect(avisoLegal("violencia_sofrida", null, AGORA)).toBe(AVISO_ECA_IDADE_DESCONHECIDA);
+    expect(avisoLegal("violencia_sofrida", null, AGORA)).toBe(
+      AVISO_ECA_IDADE_DESCONHECIDA,
+    );
   });
 
   test("violência sofrida + adulto → sem aviso (copy hedged padrão)", () => {

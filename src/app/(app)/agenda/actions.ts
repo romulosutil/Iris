@@ -25,12 +25,15 @@ export async function marcarEstadoAction(
       estado: formData.get("estado") as SessionEstado,
       justificada: formData.get("justificada") === "true",
       atendidoPorId: atendido === "" ? undefined : atendido,
-      modalidade: (formData.get("modalidade") as MarcarEstadoInput["modalidade"]) || undefined,
+      modalidade:
+        (formData.get("modalidade") as MarcarEstadoInput["modalidade"]) ||
+        undefined,
     });
     if (r.ok) revalidatePath("/agenda");
     return r;
   } catch (err) {
-    if (err instanceof RoleError) return { error: "Você não tem permissão para atualizar a sessão." };
+    if (err instanceof RoleError)
+      return { error: "Você não tem permissão para atualizar a sessão." };
     console.error("marcarEstadoAction:", err);
     return { error: "Não foi possível atualizar a sessão." };
   }

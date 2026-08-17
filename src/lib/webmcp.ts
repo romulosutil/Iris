@@ -32,16 +32,22 @@ export function registerWebMCPTools(tools: WebMCPTool[]) {
   if ("navigator" in window && window.navigator.modelContext) {
     try {
       window.navigator.modelContext.provideContext({ tools });
-      console.log("[WebMCP] Registered tools with navigator.modelContext:", tools.map((t) => t.name));
+      console.log(
+        "[WebMCP] Registered tools with navigator.modelContext:",
+        tools.map((t) => t.name),
+      );
     } catch (err) {
-      console.warn("[WebMCP] Failed to register tools with navigator.modelContext:", err);
+      console.warn(
+        "[WebMCP] Failed to register tools with navigator.modelContext:",
+        err,
+      );
     }
   } else {
     // Polyfill / fallback event broadcast for browser extensions supporting WebMCP
     window.dispatchEvent(
       new CustomEvent("webmcp:register", {
         detail: { tools },
-      })
+      }),
     );
   }
 }

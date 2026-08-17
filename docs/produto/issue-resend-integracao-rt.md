@@ -21,8 +21,8 @@ A mesma infraestrutura serviria depois para convites de equipe
 
 1. **Zero dado clínico no corpo do e-mail** (LGPD; cláusula 10.3 dos Termos).
    O e-mail **nunca** carrega nome do paciente, trecho literal da sessão ou
-   categoria do risco. Ele diz apenas que *um alerta de risco clínico teve o
-   prazo de reconhecimento expirado* e manda o RT abrir o painel autenticado.
+   categoria do risco. Ele diz apenas que _um alerta de risco clínico teve o
+   prazo de reconhecimento expirado_ e manda o RT abrir o painel autenticado.
    É o mesmo princípio já aplicado ao push (H3): urgência viaja pelo canal,
    conteúdo clínico só atrás de autenticação.
 2. **Destinatário estritamente do tenant** (Regra de Ouro §4.2.1). O endereço

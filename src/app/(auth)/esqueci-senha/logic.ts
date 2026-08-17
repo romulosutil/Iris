@@ -120,7 +120,9 @@ function ipValido(valor: string): boolean {
 }
 
 /** Resolve o IP do cliente, ou `null` quando não dá para saber (ver nota acima). */
-export function resolverIp(h: { get(nome: string): string | null }): string | null {
+export function resolverIp(h: {
+  get(nome: string): string | null;
+}): string | null {
   const encaminhados = (h.get("x-forwarded-for") ?? "")
     .split(",")
     .map((p) => p.trim())

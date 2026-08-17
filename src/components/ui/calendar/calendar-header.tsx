@@ -44,7 +44,9 @@ export function CalendarHeader({
             </span>
           </div>
           {subtitulo && (
-            <p className="font-body text-xs text-[var(--text-secondary)]">{subtitulo}</p>
+            <p className="font-body text-xs text-[var(--text-secondary)]">
+              {subtitulo}
+            </p>
           )}
         </div>
 
@@ -58,10 +60,10 @@ export function CalendarHeader({
                   key={v.id}
                   onClick={() => aoMudarVisao?.(v.id)}
                   className={cn(
-                    "px-3 py-1.5 font-display text-xs font-bold transition-all rounded-[var(--radius-xs)]",
+                    "font-display rounded-[var(--radius-xs)] px-3 py-1.5 text-xs font-bold transition-all",
                     ativo
-                      ? "bg-[var(--action-primary,#f2b705)] text-black border border-black shadow-[1px_1px_0_#000]"
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      ? "border border-black bg-[var(--action-primary,#f2b705)] text-black shadow-[1px_1px_0_#000]"
+                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
                   )}
                 >
                   {v.label}
@@ -74,22 +76,38 @@ export function CalendarHeader({
 
       {/* Métricas Operacionais (se fornecidas) */}
       {metricas && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 border-t-2 border-black pt-3">
+        <div className="grid grid-cols-2 gap-3 border-t-2 border-black pt-3 sm:grid-cols-4">
           <div className="rounded-[var(--radius-control)] border-2 border-black bg-[var(--bg-app)] p-2.5 shadow-[1px_1px_0_#000]">
-            <span className="font-mono text-[10px] font-bold uppercase text-[var(--text-secondary)]">Total Sessões</span>
-            <p className="font-display text-lg font-bold text-[var(--text-primary)]">{metricas.total}</p>
+            <span className="font-mono text-[10px] font-bold text-[var(--text-secondary)] uppercase">
+              Total Sessões
+            </span>
+            <p className="font-display text-lg font-bold text-[var(--text-primary)]">
+              {metricas.total}
+            </p>
           </div>
           <div className="rounded-[var(--radius-control)] border-2 border-black bg-[#e6f4f1] p-2.5 shadow-[1px_1px_0_#000]">
-            <span className="font-mono text-[10px] font-bold uppercase text-[#0a5c54]">Realizadas</span>
-            <p className="font-display text-lg font-bold text-[#0a5c54]">{metricas.realizadas}</p>
+            <span className="font-mono text-[10px] font-bold text-[#0a5c54] uppercase">
+              Realizadas
+            </span>
+            <p className="font-display text-lg font-bold text-[#0a5c54]">
+              {metricas.realizadas}
+            </p>
           </div>
           <div className="rounded-[var(--radius-control)] border-2 border-black bg-[#e7f0fb] p-2.5 shadow-[1px_1px_0_#000]">
-            <span className="font-mono text-[10px] font-bold uppercase text-[#124a78]">Agendadas</span>
-            <p className="font-display text-lg font-bold text-[#124a78]">{metricas.agendadas}</p>
+            <span className="font-mono text-[10px] font-bold text-[#124a78] uppercase">
+              Agendadas
+            </span>
+            <p className="font-display text-lg font-bold text-[#124a78]">
+              {metricas.agendadas}
+            </p>
           </div>
           <div className="rounded-[var(--radius-control)] border-2 border-black bg-[#fbe9e9] p-2.5 shadow-[1px_1px_0_#000]">
-            <span className="font-mono text-[10px] font-bold uppercase text-[#7e1f16]">Faltas / Canceladas</span>
-            <p className="font-display text-lg font-bold text-[#7e1f16]">{metricas.faltas}</p>
+            <span className="font-mono text-[10px] font-bold text-[#7e1f16] uppercase">
+              Faltas / Canceladas
+            </span>
+            <p className="font-display text-lg font-bold text-[#7e1f16]">
+              {metricas.faltas}
+            </p>
           </div>
         </div>
       )}

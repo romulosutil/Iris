@@ -14,7 +14,11 @@ describe("schema do cadastro self-service", () => {
       where table_name = 'clinic'
         and column_name in ('trial_comeco_em', 'trial_dias', 'isento_trial')
       order by column_name`);
-    const linhas = r as unknown as { column_name: string; column_default: string | null; is_nullable: string }[];
+    const linhas = r as unknown as {
+      column_name: string;
+      column_default: string | null;
+      is_nullable: string;
+    }[];
     expect(linhas.map((l) => l.column_name)).toEqual([
       "isento_trial",
       "trial_comeco_em",

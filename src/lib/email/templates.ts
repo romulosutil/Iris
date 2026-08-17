@@ -98,7 +98,8 @@ export function criarTemplateVerificacaoEmail(linkVerificacao: string) {
         <a href="${linkVerificacao}" style="color: #2B6CB0; word-break: break-all;">${linkVerificacao}</a>
       </p>
     `,
-    rodapeContexto: "Se você não criou uma conta no Iris, nenhuma ação adicional é necessária.",
+    rodapeContexto:
+      "Se você não criou uma conta no Iris, nenhuma ação adicional é necessária.",
   });
 
   return { assunto, texto, html };
@@ -128,7 +129,8 @@ export function criarTemplateReenvioVerificacao(linkVerificacao: string) {
         <a href="${linkVerificacao}" style="color: #2B6CB0; word-break: break-all;">${linkVerificacao}</a>
       </p>
     `,
-    rodapeContexto: "Caso não tenha feito este pedido, sua conta permanece protegida e você pode desconsiderar esta mensagem.",
+    rodapeContexto:
+      "Caso não tenha feito este pedido, sua conta permanece protegida e você pode desconsiderar esta mensagem.",
   });
 
   return { assunto, texto, html };
@@ -158,7 +160,8 @@ export function criarTemplateRedefinicaoSenha(linkReset: string) {
         <a href="${linkReset}" style="color: #2B6CB0; word-break: break-all;">${linkReset}</a>
       </p>
     `,
-    rodapeContexto: "Se você não solicitou a alteração de senha, fique tranquilo: nenhuma mudança foi feita na sua conta.",
+    rodapeContexto:
+      "Se você não solicitou a alteração de senha, fique tranquilo: nenhuma mudança foi feita na sua conta.",
   });
 
   return { assunto, texto, html };
@@ -193,7 +196,8 @@ export function criarTemplateTentativaCadastroExistente({
         Esqueceu sua senha? <a href="${esqueciSenhaUrl}" style="color: #2B6CB0;">Clique aqui para redefinir</a>.
       </p>
     `,
-    rodapeContexto: "Se você não realizou esta tentativa, fique tranquilo: sua conta permanece totalmente protegida.",
+    rodapeContexto:
+      "Se você não realizou esta tentativa, fique tranquilo: sua conta permanece totalmente protegida.",
   });
 
   return { assunto, texto, html };
@@ -242,7 +246,8 @@ export function criarTemplateConviteNovoUsuario({
         </a>
       </p>
     `,
-    rodapeContexto: "Por razões de segurança, recomendamos alterar sua senha temporária no primeiro acesso.",
+    rodapeContexto:
+      "Por razões de segurança, recomendamos alterar sua senha temporária no primeiro acesso.",
   });
 
   return { assunto, texto, html };
@@ -275,7 +280,8 @@ export function criarTemplateConviteUsuarioExistente({
         </a>
       </p>
     `,
-    rodapeContexto: "Você pode trocar entre as clínicas atribuídas a você no menu superior após fazer login.",
+    rodapeContexto:
+      "Você pode trocar entre as clínicas atribuídas a você no menu superior após fazer login.",
   });
 
   return { assunto, texto, html };
@@ -313,9 +319,7 @@ export function criarTemplateAvisoCancelamentoAssinatura({
   const assunto =
     "Aviso: sua assinatura do Iris foi cancelada — conta em modo somente-leitura";
 
-  const saudacaoTexto = nomeResponsavel
-    ? `Olá, ${nomeResponsavel}!`
-    : "Olá!";
+  const saudacaoTexto = nomeResponsavel ? `Olá, ${nomeResponsavel}!` : "Olá!";
   const saudacaoHtml = nomeResponsavelEscapado
     ? `Olá, <strong>${nomeResponsavelEscapado}</strong>!`
     : "Olá!";

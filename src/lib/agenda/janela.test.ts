@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { fundirFaixasPorDia, horasDisponiveisSemana, horaParaMin, minParaHora } from "./janela";
+import {
+  fundirFaixasPorDia,
+  horasDisponiveisSemana,
+  horaParaMin,
+  minParaHora,
+} from "./janela";
 
 describe("janela.ts — helpers de hora", () => {
   test("horaParaMin tolera HH:MM e HH:MM:SS", () => {
@@ -19,14 +24,18 @@ describe("janela.ts — fundirFaixasPorDia (I-B1)", () => {
       { diaSemana: 1, horaInicio: "08:00", horaFim: "12:00" },
       { diaSemana: 1, horaInicio: "10:00", horaFim: "14:00" },
     ]);
-    expect(r).toEqual([{ diaSemana: 1, horaInicio: "08:00", horaFim: "14:00" }]);
+    expect(r).toEqual([
+      { diaSemana: 1, horaInicio: "08:00", horaFim: "14:00" },
+    ]);
   });
   test("funde faixas encostadas (fim == início)", () => {
     const r = fundirFaixasPorDia([
       { diaSemana: 1, horaInicio: "08:00", horaFim: "12:00" },
       { diaSemana: 1, horaInicio: "12:00", horaFim: "17:00" },
     ]);
-    expect(r).toEqual([{ diaSemana: 1, horaInicio: "08:00", horaFim: "17:00" }]);
+    expect(r).toEqual([
+      { diaSemana: 1, horaInicio: "08:00", horaFim: "17:00" },
+    ]);
   });
   test("mantém faixas separadas com intervalo (almoço)", () => {
     const r = fundirFaixasPorDia([
@@ -43,7 +52,9 @@ describe("janela.ts — fundirFaixasPorDia (I-B1)", () => {
     expect(r).toHaveLength(2);
   });
   test("descarta faixa invertida/vazia", () => {
-    const r = fundirFaixasPorDia([{ diaSemana: 1, horaInicio: "12:00", horaFim: "12:00" }]);
+    const r = fundirFaixasPorDia([
+      { diaSemana: 1, horaInicio: "12:00", horaFim: "12:00" },
+    ]);
     expect(r).toEqual([]);
   });
 });
@@ -51,12 +62,18 @@ describe("janela.ts — fundirFaixasPorDia (I-B1)", () => {
 describe("janela.ts — horasDisponiveisSemana", () => {
   test("soma sobre faixas já fundidas (não conta sobreposição dobrada)", () => {
     // 08-12 + 10-14 no mesmo dia = 08-14 = 6h, não 8h
-    expect(horasDisponiveisSemana([
-      { diaSemana: 1, horaInicio: "08:00", horaFim: "12:00" },
-      { diaSemana: 1, horaInicio: "10:00", horaFim: "14:00" },
-    ])).toBe(6);
+    expect(
+      horasDisponiveisSemana([
+        { diaSemana: 1, horaInicio: "08:00", horaFim: "12:00" },
+        { diaSemana: 1, horaInicio: "10:00", horaFim: "14:00" },
+      ]),
+    ).toBe(6);
   });
   test("arredonda a 1 casa", () => {
-    expect(horasDisponiveisSemana([{ diaSemana: 1, horaInicio: "08:00", horaFim: "08:30" }])).toBe(0.5);
+    expect(
+      horasDisponiveisSemana([
+        { diaSemana: 1, horaInicio: "08:00", horaFim: "08:30" },
+      ]),
+    ).toBe(0.5);
   });
 });

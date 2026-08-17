@@ -28,17 +28,17 @@ export function KpiCard({
 
   return (
     <div
-      className={`rounded-xl border p-5 transition-all shadow-sm ${
+      className={`rounded-xl border p-5 shadow-sm transition-all ${
         highlight
           ? "border-teal-500/40 bg-slate-900/90 shadow-teal-950/20"
           : "border-slate-800 bg-slate-900/60"
       }`}
     >
       <div className="flex items-center justify-between">
-        <span className="font-medium text-slate-400 text-sm">{titulo}</span>
+        <span className="text-sm font-medium text-slate-400">{titulo}</span>
         {badge && (
           <span
-            className={`rounded px-2 py-0.5 font-medium text-xs border ${
+            className={`rounded border px-2 py-0.5 text-xs font-medium ${
               badgeColors[badge.cor || "slate"]
             }`}
           >
@@ -48,14 +48,12 @@ export function KpiCard({
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="font-bold text-slate-100 text-2xl sm:text-3xl tracking-tight">
+        <span className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
           {valor}
         </span>
       </div>
 
-      {subtitulo && (
-        <p className="mt-1 text-slate-400 text-xs">{subtitulo}</p>
-      )}
+      {subtitulo && <p className="mt-1 text-xs text-slate-400">{subtitulo}</p>}
     </div>
   );
 }

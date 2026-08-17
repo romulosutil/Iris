@@ -65,13 +65,15 @@ function formatarDataBR(dataISO: string): string {
 
 export function PopoverAlocar(props: PopoverAlocarProps) {
   const reposicao = props.reposicao;
-  const [modo, setModo] = useState<"recorrente" | "avulsa">(reposicao ? "avulsa" : "recorrente");
+  const [modo, setModo] = useState<"recorrente" | "avulsa">(
+    reposicao ? "avulsa" : "recorrente",
+  );
   const [disciplina, setDisciplina] = useState(
     reposicao?.disciplinaFixa ?? props.disciplinas[0] ?? "",
   );
-  const [tipo, setTipo] = useState<"terapia" | (typeof TIPOS_AVULSA)[number]["v"]>(
-    reposicao ? "terapia" : "avaliacao",
-  );
+  const [tipo, setTipo] = useState<
+    "terapia" | (typeof TIPOS_AVULSA)[number]["v"]
+  >(reposicao ? "terapia" : "avaliacao");
   const [entidadeVar, setEntidadeVar] = useState<string | null>(
     reposicao ? reposicao.pacienteFixo.id : null,
   );
@@ -103,7 +105,9 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
           if (list.length > 0 && !reposicao) {
             setDisciplina((dAtual) => {
               const matched = props.disciplinas.find(
-                (d) => d.toLowerCase() === dAtual.toLowerCase() || list.includes(d.toLowerCase()),
+                (d) =>
+                  d.toLowerCase() === dAtual.toLowerCase() ||
+                  list.includes(d.toLowerCase()),
               );
               return matched ?? list[0]!;
             });
@@ -112,7 +116,10 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
       })
       .catch((err) => {
         if (!cancelado) {
-          console.error("Erro ao listar disciplinas da equipe para agendamento:", err);
+          console.error(
+            "Erro ao listar disciplinas da equipe para agendamento:",
+            err,
+          );
           setDisciplinasEquipe([]);
           setErroCarregarDisciplinas(true);
         }
@@ -157,7 +164,11 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
         {/* Toggle Recorrente | Avulsa (C6) — reposição não é regra, sempre
             grava avulsa com repostaDe; toggle não faz sentido aqui. */}
         {!reposicao && (
-          <div role="group" aria-label="Tipo de alocação" className="my-3 flex gap-2">
+          <div
+            role="group"
+            aria-label="Tipo de alocação"
+            className="my-3 flex gap-2"
+          >
             <Button
               type="button"
               variante={modo === "recorrente" ? "primaria" : "secundaria"}
@@ -179,7 +190,8 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
 
         {erroCarregarDisciplinas && (
           <Alert severidade="warning" titulo="Atenção">
-            Não foi possível carregar as disciplinas vinculadas à equipe. Exibindo a lista completa de disciplinas.
+            Não foi possível carregar as disciplinas vinculadas à equipe.
+            Exibindo a lista completa de disciplinas.
           </Alert>
         )}
 
@@ -197,21 +209,35 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
           </Alert>
         )}
 
-        <form action={formAction} className="space-y-4 mt-2">
+        <form action={formAction} className="mt-2 space-y-4">
           <input type="hidden" name="patientId" value={patientId ?? ""} />
           <input type="hidden" name="terapeutaId" value={terapeutaId ?? ""} />
           <input type="hidden" name="diaSemana" value={props.diaSemana} />
-          <input type="hidden" name="horaInicio" value={minParaHora(props.inicioMin)} />
+          <input
+            type="hidden"
+            name="horaInicio"
+            value={minParaHora(props.inicioMin)}
+          />
           <input type="hidden" name="duracaoMin" value={duracao} />
-          <input type="hidden" name="semanaVisivelISO" value={props.semanaVisivelISO} />
+          <input
+            type="hidden"
+            name="semanaVisivelISO"
+            value={props.semanaVisivelISO}
+          />
           <input type="hidden" name="hojeISO" value={props.hojeISO} />
           <input type="hidden" name="dataISO" value={props.dataISO} />
           {/* Radix Select não emite valor nativo no FormData — hidden inputs
               espelham o estado controlado para `disciplina`/`tipo`. */}
           <input type="hidden" name="disciplina" value={disciplina} />
-          {modo === "avulsa" && <input type="hidden" name="tipo" value={tipo} />}
+          {modo === "avulsa" && (
+            <input type="hidden" name="tipo" value={tipo} />
+          )}
           <input type="hidden" name="modalidade" value="presencial" />
-          <input type="hidden" name="repostaDe" value={reposicao?.repostaDe ?? ""} />
+          <input
+            type="hidden"
+            name="repostaDe"
+            value={reposicao?.repostaDe ?? ""}
+          />
 
           {reposicao ? (
             <Field label="Paciente" htmlFor="popover-alocar-paciente-fixo">
@@ -229,7 +255,11 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
               valor={entidadeVar}
               aoSelecionar={setEntidadeVar}
               aoBuscar={pedePaciente ? props.aoBuscarEntidadeVar : undefined}
-              placeholder={pedePaciente ? "Selecione ou busque um paciente..." : "Selecione um terapeuta..."}
+              placeholder={
+                pedePaciente
+                  ? "Selecione ou busque um paciente..."
+                  : "Selecione um terapeuta..."
+              }
             />
           )}
 
@@ -250,10 +280,13 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
                 </SelectTrigger>
                 <SelectContent>
                   {disciplinasDisponiveis.map((d) => {
-                    const ehDaEquipe = disciplinasEquipe.includes(d.toLowerCase());
+                    const ehDaEquipe = disciplinasEquipe.includes(
+                      d.toLowerCase(),
+                    );
                     return (
                       <SelectItem key={d} value={d}>
-                        {d.toUpperCase()} {ehDaEquipe ? " (Equipe de Cuidado)" : ""}
+                        {d.toUpperCase()}{" "}
+                        {ehDaEquipe ? " (Equipe de Cuidado)" : ""}
                       </SelectItem>
                     );
                   })}
@@ -263,7 +296,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
                 <button
                   type="button"
                   onClick={() => setMostrarTodasDisciplinas((v) => !v)}
-                  className="text-xs text-[var(--text-secondary)] underline hover:text-[var(--text-primary)] mt-1 font-body text-left cursor-pointer"
+                  className="font-body mt-1 cursor-pointer text-left text-xs text-[var(--text-secondary)] underline hover:text-[var(--text-primary)]"
                 >
                   {mostrarTodasDisciplinas
                     ? "Filtrar por disciplinas da equipe do paciente"
@@ -298,7 +331,10 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
               value={String(duracao)}
               onValueChange={(v) => setDuracao(Number(v))}
             >
-              <SelectTrigger id="popover-alocar-duracao" aria-label="Duração da Sessão">
+              <SelectTrigger
+                id="popover-alocar-duracao"
+                aria-label="Duração da Sessão"
+              >
                 <SelectValue placeholder="Selecione a duração..." />
               </SelectTrigger>
               <SelectContent>
@@ -312,7 +348,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
             </Select>
           </Field>
 
-          <Button type="submit" variante="primaria" className="w-full mt-2">
+          <Button type="submit" variante="primaria" className="mt-2 w-full">
             Confirmar alocação
           </Button>
         </form>

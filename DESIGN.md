@@ -77,6 +77,7 @@ O Iris é um SaaS para clínicas de terapia infantil (foco em intervenção para
 O conceito "Espectro Brutal" adota o neobrutalismo não como tendência decorativa, mas como metáfora de integridade de dados: uma interface transparente que expõe a estrutura, diferencia o fato da hipótese e se recusa a maquiar incerteza como certeza. O ouro (símbolo do infinito autista, Au) atua como acento primário de ação, enquanto a régua espectro arco-íris é reservada exclusivamente para a assinatura da marca.
 
 **Key Characteristics:**
+
 - **Honestidade Epistêmica:** Tratamento visual estruturalmente diferente entre "sugestão da IA" (inset/violeta/tracejado) e "fato aprovado" (elevado/menta/sólido).
 - **Fricção Tátil Útil:** A profundidade (sombras 2px/4px e deslocamento no clique) funciona como indicador de peso e confirmação da decisão clínica.
 - **Ergonomia sob Pressão:** Alvo de toque de no mínimo 44px (`--control-sm`), fundo `#F8F9FA` anti-glare e tipografia de alto contraste para leitura veloz.
@@ -87,11 +88,13 @@ O conceito "Espectro Brutal" adota o neobrutalismo não como tendência decorati
 A paleta é estruturada em papéis semânticos estritos, garantindo conformidade WCAG 2.1 AA (com foco em AAA nos pares principais).
 
 ### Primary
+
 - **Ouro Brutal (`#F2B705`)**: Cor primária da marca e de ações principais (borda preta, texto preto `#000000`, contraste 8:1).
 - **Ouro Hover (`#D29E04`)**: Estado de interatividade / foco ativo.
 - **Ouro Tint (`#FFF6DB`)**: Fundo sutil de destaque e contêineres de marca.
 
 ### Neutral
+
 - **Canvas App (`#F8F9FA`)**: Fundo off-white que reduz o glare em telas sob luz solar/corredor.
 - **Superfície Card (`#FFFFFF`)**: Fundo dos cards e contêineres de informação.
 - **Tinta Primária (`#09090B`)**: Texto de corpo e títulos de alto contraste.
@@ -99,12 +102,14 @@ A paleta é estruturada em papéis semânticos estritos, garantindo conformidade
 - **Borda Brutal (`#000000`)**: Preto puro em 1-2 elementos âncora; grafite `#1A1A1A` nos contornos secundários.
 
 ### Status & Evidências
+
 - **Menta / Sucesso (`#059669` / bg `#ECFDF5`)**: Fato aprovado / conquista consolidada.
 - **Violeta / Sugestão IA (`#6A4C93` / bg `#F1E9F6`)**: Candidato extraído por IA (minΔE=39 vs outros acentos para daltonismo).
 - **Azul / Informação (`#2563EB` / bg `#EFF6FF`)**: Notificações e atalhos contextuais.
 - **Terracota / Alerta (`#DC2626` / bg `#FEF2F2`)**: Erros e bloqueios que exigem atenção imediata.
 
 ### Named Rules
+
 **The Epistemic Honesty Rule.** Nenhum componente pode exibir o estado "Sugerido pela IA" com a mesma geometria, sombra ou preenchimento de um dado "Aprovado pelo Humano".
 **The Spectrum Reserve Rule.** A régua de cores arco-íris é exclusiva do logotipo/brand mark. É proibido usar o espectro arco-íris em componentes cromáticos da UI (botões, cards, badges).
 
@@ -119,6 +124,7 @@ A tipografia combina uma fonte display geométrica expressiva para títulos ânc
 **Character:** Hierarquia assertiva e direta, otimizada para varredura visual em pé (mobile) ou em listas densas de validação (desktop).
 
 ### Hierarchy
+
 - **Display** (Bold 700, `clamp(2rem, 5vw, 3rem)`, line-height 1.1): Títulos de topo e métricas de destaque.
 - **Headline** (Bold 700, 1.5rem, line-height 1.2): Cabeçalhos de seção e títulos de cards principais.
 - **Title** (SemiBold 600, 1.125rem, line-height 1.3): Subseções e rótulos de tabelas/cards.
@@ -126,6 +132,7 @@ A tipografia combina uma fonte display geométrica expressiva para títulos ânc
 - **Label** (Medium 500, 0.875rem, uppercase/tracking 0.05em): Rótulos de formulário, chips e indicadores de estado.
 
 ### Named Rules
+
 **The Display Limit Rule.** A fonte Space Grotesk é estritamente proibida em corpos de texto abaixo de 20px ou em parágrafos corridos.
 
 ## Layout
@@ -142,6 +149,7 @@ O layout segue um modelo adaptativo que prioriza acessibilidade com uma mão no 
 Profundidade no Espectro Brutal é bidirecional e tátil: superfícies aprovadas LEVANTA-SE com sombras duras sólidas; sugestões da IA AFUNDAM com sombras inset.
 
 ### Shadow Vocabulary
+
 - **Elevation 1 (Raise Sutil):** `2px 2px 0 0 #000000` — Botões secundários e cards em repouso.
 - **Elevation 2 (Base Brutalista):** `2px 2px 0 0 #000000` — Componentes padrão do Modo Clínico.
 - **Elevation 3 (Hover / Destaque):** `4px 4px 0 0 #000000` — Estado de hover em botões primários e cards interativos.
@@ -149,6 +157,7 @@ Profundidade no Espectro Brutal é bidirecional e tátil: superfícies aprovadas
 - **Overlay (Modais):** `0 20px 44px -24px rgba(20, 20, 20, 0.4)` — Modais e diálogos.
 
 ### Named Rules
+
 **The Tactile Friction Rule.** Botões e cards primários devem deslocar fisicamente (`translate(2px, 2px)`) e achatar a sombra ao clique para feedback tátil inequívoco.
 **The Orthogonal Focus Rule.** O anel de foco (`#2274A5`, 3px, offset 2px) é ortogonal e nunca funde com os estados de hover ou clique.
 
@@ -164,35 +173,41 @@ A linguagem de formas equilibra bordas duras brutalistas (1.5px / 2px) com canto
 ## Components
 
 ### Buttons
+
 - **Shape:** Raio de canto 5px (`--radius-control`), borda preta 2px.
 - **Primary:** Fundo Ouro (`#F2B705`), texto preto, sombra dura 2px. Hover desloca -1px e expande sombra para 4px. Active desloca +2px e zera sombra.
 - **Secondary:** Fundo Branco (`#FFFFFF`), texto preto, borda preta 2px, mesma mecânica de sombra.
 - **Tertiary:** Fundo transparente, sem sombra, hover com fundo elevado (`#F1F3F5`).
 
 ### Cards / Containers
+
 - **Corner Style:** 6px (`--radius-md`).
 - **Background:** `#FFFFFF` sobre canvas `#F8F9FA`.
 - **Aprovado:** Borda sólida 2px, elevação 2px.
 - **Sugerido IA:** Borda tracejada violeta `#6A4C93`, fundo `#F1E9F6`, sombra inset.
 
 ### Inputs / Fields
+
 - **Style:** Fundo `#FFFFFF`, borda 2px grafite/preta, altura 40px/48px.
 - **Focus:** Anel de foco azul `#2274A5` de 3px com offset 2px.
 - **Error:** Borda terracota `#DC2626`, mensagem com ícone estático + texto literal.
 
 ### Status Badges & Chips
+
 - **Style:** Formato pílula (`--radius-pill`), borda 1.5px.
 - **Variantes:** Aprovado (Menta), Sugerido (Violeta com ícone Sparkles), Alerta (Terracota), Info (Azul).
 
 ## Do's and Don'ts
 
 ### Do:
+
 - **Do** manter a altura dos elementos interativos em no mínimo 44px no mobile.
 - **Do** acompanhar toda cor de estado por um ícone e texto explicativo redundante.
 - **Do** utilizar `prefers-reduced-motion` para trocar o deslocamento do clique por uma transição instantânea de sombra.
 - **Do** testar o contraste de todos os textos para atingir no mínimo 4.5:1 (WCAG AA).
 
 ### Don't:
+
 - **Don't** utilizar a régua espectro arco-íris como plano de fundo, borda ou preenchimento de componentes de interface.
 - **Don't** usar gradientes roxos, efeitos glassmorphism ou sombras difusas em elementos de tomada de decisão da IA.
 - **Don't** ocultar avisos de erro em toasts temporários que somem automaticamente.

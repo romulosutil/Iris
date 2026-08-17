@@ -3,13 +3,7 @@ import { cn } from "@/lib/cn";
 
 type PillVariant = "solid" | "outline" | "ghost" | "inset";
 type PillColorScheme =
-  | "neutral"
-  | "brand"
-  | "menta"
-  | "ouro"
-  | "violeta"
-  | "azul"
-  | "coral";
+  "neutral" | "brand" | "menta" | "ouro" | "violeta" | "azul" | "coral";
 type PillSize = "sm" | "md";
 
 export interface PillProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -37,14 +31,16 @@ const colorVariants: Record<PillColorScheme, Record<PillVariant, string>> = {
   },
   ouro: {
     solid: "bg-status-warning-bg text-status-warning-fg border-border-brutal",
-    outline: "bg-transparent text-status-warning-fg border-status-warning-border",
+    outline:
+      "bg-transparent text-status-warning-fg border-status-warning-border",
     ghost: "bg-status-warning-bg/20 text-status-warning-fg border-transparent",
     inset:
       "bg-status-warning-bg/10 text-status-warning-fg border-dashed border-status-warning-border shadow-[var(--elevation-inset)]",
   },
   menta: {
     solid: "bg-status-success-bg text-status-success-fg border-border-brutal",
-    outline: "bg-transparent text-status-success-fg border-status-success-border",
+    outline:
+      "bg-transparent text-status-success-fg border-status-success-border",
     ghost: "bg-status-success-bg/20 text-status-success-fg border-transparent",
     inset:
       "bg-status-success-bg/10 text-status-success-fg border-dashed border-status-success-border shadow-[var(--elevation-inset)]",
@@ -93,14 +89,18 @@ export function Pill({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 font-medium tracking-tight rounded-full border-[length:var(--border-brutal-width)] select-none",
+        "inline-flex items-center gap-1.5 rounded-full border-[length:var(--border-brutal-width)] font-medium tracking-tight select-none",
         sizes[size],
         colorVariants[colorScheme][variant],
         className,
       )}
       {...props}
     >
-      {icon && <span className="inline-flex shrink-0 items-center justify-center">{icon}</span>}
+      {icon && (
+        <span className="inline-flex shrink-0 items-center justify-center">
+          {icon}
+        </span>
+      )}
       <span>{children}</span>
     </span>
   );

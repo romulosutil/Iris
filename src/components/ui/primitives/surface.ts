@@ -33,15 +33,7 @@ type ElevationNivel =
 
 /** Rampa de raio (indexa --radius-* dos tokens). */
 type RadiusNivel =
-  | "none"
-  | "xs"
-  | "sm"
-  | "control"
-  | "md"
-  | "lg"
-  | "xl"
-  | "2xl"
-  | "pill";
+  "none" | "xs" | "sm" | "control" | "md" | "lg" | "xl" | "2xl" | "pill";
 
 const bordas: Record<SurfaceVariante, string> = {
   solida: "border-[length:var(--border-brutal-width)] border-border-brutal",

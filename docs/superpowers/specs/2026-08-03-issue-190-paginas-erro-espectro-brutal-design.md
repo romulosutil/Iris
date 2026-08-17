@@ -23,11 +23,13 @@
 ## 📊 Estado de Implementação
 
 ### 1. Página 404 (`src/app/not-found.tsx`) — ✅ Concluído
+
 - **Commit:** `e9d5d20` (`feat(ui): página 404 on-brand (pt-BR, espectro-brutal)`).
 - **Localização:** `src/app/not-found.tsx`.
 - **Status:** Entregue e integrado ao Design System.
 
 ### 2. Página 500 (`src/app/error.tsx`) — 🚧 Pendente
+
 - **Localização:** `src/app/error.tsx`.
 - **Requisitos de código:**
   - Diretiva `"use client"`.
@@ -36,9 +38,11 @@
   - UI com marca (`Logo`), indicador de erro (ex: `Erro 500` / `Erro de Sistema`), copy amigável em pt-BR e botões de ação (`reset()` + voltar à agenda).
 
 ### 3. Página de Erro Global (`src/app/global-error.tsx`) — 🚧 Pendente (Opcional/Recomendado)
+
 - **Localização:** `src/app/global-error.tsx`.
 - Captura falhas críticas que ocorram dentro do próprio `root layout.tsx`. Renderiza tags `<html>` e `<body>` próprias.
 
 ### 4. Suíte de Testes Automatizados (`vitest`) — 🚧 Pendente
+
 - **Localização:** `src/app/not-found.test.tsx` e `src/app/error.test.tsx`.
 - Validação de renderização, copy em pt-BR e acionamento da função `reset()`.

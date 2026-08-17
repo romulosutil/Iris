@@ -94,7 +94,7 @@ Mapeados por nome divergente: `Toast` → `ToastProvider`, `Layout` → `Contain
   com dedupe por hash (as variáveis compartilham arquivo). Se o app trocar de
   família/peso em `layout.tsx`, o `ds-fonts.css` fica defasado sem avisar.
 - **Verificação parcial por design das stories**: `Dialog`, `Drawer`,
-  `ToastProvider` e `Tooltip` só renderizam o *gatilho* — o conteúdo depende de
+  `ToastProvider` e `Tooltip` só renderizam o _gatilho_ — o conteúdo depende de
   clique/hover. Os dois lados mostram o mesmo estado fechado, então o grade
   `match` é honesto, mas **o corpo do overlay nunca foi comparado**. Se algum
   desses componentes regredir por dentro, esta suíte não pega. Uma story com

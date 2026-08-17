@@ -66,10 +66,10 @@ export function Scrubber({
   const isSessaoPassada = sessaoVisual !== ultimaSessaoDisponivel;
 
   return (
-    <div className="bg-[var(--surface-card)] border-[var(--border-brutal)] flex flex-col gap-4 border-2 p-4 rounded-[var(--radius-control)]">
+    <div className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4">
       {/* Banner de Sessão Passada */}
       {isSessaoPassada && (
-        <div className="bg-[var(--color-gold)] text-[var(--text-primary)] border-[var(--border-brutal)] -mx-4 -mt-4 flex items-center justify-center gap-2 border-b-2 p-2 text-center text-sm font-bold">
+        <div className="-mx-4 -mt-4 flex items-center justify-center gap-2 border-b-2 border-[var(--border-brutal)] bg-[var(--color-gold)] p-2 text-center text-sm font-bold text-[var(--text-primary)]">
           <span>⚠️</span>
           <span>Visualizando histórico passado: Sessão {sessaoVisual}</span>
         </div>
@@ -90,11 +90,14 @@ export function Scrubber({
         </Button>
 
         <div className="text-center">
-          <div className="text-[var(--text-primary)] text-lg font-black">
+          <div className="text-lg font-black text-[var(--text-primary)]">
             Sessão {sessaoVisual}
           </div>
           {dataSessaoSelecionada && (
-            <div className="text-[var(--text-secondary)] text-xs" suppressHydrationWarning>
+            <div
+              className="text-xs text-[var(--text-secondary)]"
+              suppressHydrationWarning
+            >
               {formatarData(dataSessaoSelecionada)}
             </div>
           )}
@@ -130,7 +133,7 @@ export function Scrubber({
           onValueCommit={handleSliderChange}
           aria-label="Selecionar sessão histórica"
         />
-        <div className="text-[var(--text-secondary)] mt-1 flex justify-between text-xs">
+        <div className="mt-1 flex justify-between text-xs text-[var(--text-secondary)]">
           <span>Início (Sessão {sessoesDisponiveis[0]})</span>
           <span>Atual (Sessão {ultimaSessaoDisponivel})</span>
         </div>

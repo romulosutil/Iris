@@ -73,7 +73,8 @@ export async function carregarHorasPaciente(
         ),
       );
     const alvoPorDisc: Record<string, number> = {};
-    for (const r of alvoRows) alvoPorDisc[r.disciplina] = Number(r.horasAlvoSemana);
+    for (const r of alvoRows)
+      alvoPorDisc[r.disciplina] = Number(r.horasAlvoSemana);
 
     // agendado: regras ativas vigentes do paciente → horas por disciplina.
     const regraRows = await tx
@@ -128,16 +129,14 @@ export async function carregarHorasPaciente(
       ...Object.keys(realizadoPorDisc),
     ]);
 
-    return [...disciplinas]
-      .sort()
-      .map((disciplina) => {
-        const alvo = alvoPorDisc[disciplina] ?? null;
-        const agendado = agendadoPorDisc[disciplina] ?? 0;
-        const realizado = realizadoPorDisc[disciplina] ?? 0;
-        const alerta =
-          alvo != null && temDefasagemSustentada([{ alvo, agendado }], 1);
-        return { disciplina, alvo, agendado, realizado, alerta };
-      });
+    return [...disciplinas].sort().map((disciplina) => {
+      const alvo = alvoPorDisc[disciplina] ?? null;
+      const agendado = agendadoPorDisc[disciplina] ?? 0;
+      const realizado = realizadoPorDisc[disciplina] ?? 0;
+      const alerta =
+        alvo != null && temDefasagemSustentada([{ alvo, agendado }], 1);
+      return { disciplina, alvo, agendado, realizado, alerta };
+    });
   });
 }
 
@@ -163,7 +162,9 @@ export async function carregarHorasTerapeuta(
   terapeutaId: string,
 ): Promise<HorasTerapeuta> {
   requireLeituraHoras(ctx);
-  const dias = diasDaSemana(segundaDaSemana(new Date().toISOString().slice(0, 10)));
+  const dias = diasDaSemana(
+    segundaDaSemana(new Date().toISOString().slice(0, 10)),
+  );
   const semanaInicio = dias[0]!;
   const semanaFim = dias[6]!;
 
@@ -205,12 +206,16 @@ export async function carregarHorasTerapeuta(
         ),
       );
     const alocado = alocadoTerapeuta(
-      regraRows.map((r) => ({ disciplina: r.disciplina, duracaoMin: r.duracaoMin })),
+      regraRows.map((r) => ({
+        disciplina: r.disciplina,
+        duracaoMin: r.duracaoMin,
+      })),
     );
 
     // pacientes fixos distintos (preserva 1ª aparição, ordena por nome).
     const vistos = new Map<string, string>();
-    for (const r of regraRows) if (!vistos.has(r.patientId)) vistos.set(r.patientId, r.pacienteNome);
+    for (const r of regraRows)
+      if (!vistos.has(r.patientId)) vistos.set(r.patientId, r.pacienteNome);
     const pacientes = [...vistos.entries()]
       .map(([id, nome]) => ({ id, nome }))
       .sort((a, b) => a.nome.localeCompare(b.nome));

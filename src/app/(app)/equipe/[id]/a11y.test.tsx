@@ -15,7 +15,10 @@ afterEach(cleanup);
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
   const r = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
     rules: {
       region: { enabled: false },
       "landmark-one-main": { enabled: false },
@@ -29,7 +32,11 @@ async function semViolacoes(ui: ReactElement) {
 test("editor de disponibilidade (grade) sem violações de a11y estrutural", async () => {
   const { DisponibilidadeEditor } = await import("./disponibilidade-editor");
   await semViolacoes(
-    <DisponibilidadeEditor terapeutaId="t1" passoMin={30} celulasIniciais={new Set()} />,
+    <DisponibilidadeEditor
+      terapeutaId="t1"
+      passoMin={30}
+      celulasIniciais={new Set()}
+    />,
   );
 }, 15000);
 
@@ -50,7 +57,9 @@ test("bloco de horas do terapeuta sem violações de a11y", async () => {
 
 test("bloco de horas mostra capacidade/alocado/vago e lista de pacientes", async () => {
   const { HorasTerapeutaBloco } = await import("./horas-terapeuta");
-  const { getByText, getByRole } = render(<HorasTerapeutaBloco horas={horasFixture} />);
+  const { getByText, getByRole } = render(
+    <HorasTerapeutaBloco horas={horasFixture} />,
+  );
   expect(getByText("Capacidade")).toBeTruthy();
   expect(getByText("Alocado")).toBeTruthy();
   expect(getByText("Vago")).toBeTruthy();
@@ -61,7 +70,9 @@ test("bloco de horas mostra capacidade/alocado/vago e lista de pacientes", async
 test("bloco de horas com lista vazia mostra estado vazio discreto", async () => {
   const { HorasTerapeutaBloco } = await import("./horas-terapeuta");
   const vazio = { capacidade: 0, alocado: 0, vago: 0, pacientes: [] };
-  const { getByText, queryAllByRole } = render(<HorasTerapeutaBloco horas={vazio} />);
+  const { getByText, queryAllByRole } = render(
+    <HorasTerapeutaBloco horas={vazio} />,
+  );
   expect(getByText("Nenhum paciente fixo")).toBeTruthy();
   expect(queryAllByRole("listitem")).toHaveLength(0);
 });

@@ -24,7 +24,11 @@ const input = {
     },
   ],
   historico: [
-    { dominioId: "tato", protocolFamilia: "vbmapp", resumo: "nunca sem dica ecoica" },
+    {
+      dominioId: "tato",
+      protocolFamilia: "vbmapp",
+      resumo: "nunca sem dica ecoica",
+    },
   ],
 };
 

@@ -50,7 +50,7 @@ export function TabsNav({ itens, ariaLabel, className }: TabsNavProps) {
     <nav
       aria-label={ariaLabel}
       className={cn(
-        "border-[var(--border-brutal)] flex items-stretch border-b-2 overflow-x-auto scrollbar-none",
+        "flex scrollbar-none items-stretch overflow-x-auto border-b-2 border-[var(--border-brutal)]",
         className,
       )}
     >
@@ -65,11 +65,11 @@ export function TabsNav({ itens, ariaLabel, className }: TabsNavProps) {
             href={item.href}
             aria-current={ativo ? "page" : undefined}
             className={cn(
-              "text-[var(--text-secondary)] font-display -mb-0.5 inline-flex min-h-11 shrink-0 items-center border-b-2 border-transparent px-4 py-2 text-base font-semibold",
+              "font-display -mb-0.5 inline-flex min-h-11 shrink-0 items-center border-b-2 border-transparent px-4 py-2 text-base font-semibold text-[var(--text-secondary)]",
               "hover:text-[var(--text-primary)]",
-              "focus-visible:outline-focus outline-none focus-visible:-outline-offset-[var(--ring-offset)] focus-visible:outline-[length:var(--ring-width)]",
+              "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:-outline-offset-[var(--ring-offset)]",
               ativo &&
-                "border-[var(--border-brutal)] bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold",
+                "border-[var(--border-brutal)] bg-[var(--action-primary)] font-bold text-[var(--action-primary-fg)]",
             )}
           >
             {item.rotulo}

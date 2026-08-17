@@ -26,7 +26,10 @@ export interface FormProps extends Omit<
  * um detalhe de ambiente que nada tem a ver com o comportamento testado.
  */
 function comportamentoDeRolagem(): ScrollBehavior {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+  if (
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
+  ) {
     return "auto";
   }
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches

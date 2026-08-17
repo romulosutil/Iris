@@ -14,7 +14,10 @@ export type EstadoReenvio = {
   error?: string;
 };
 
-const esquemaEmail = z.string().trim().email("Informe um endereço de e-mail válido.");
+const esquemaEmail = z
+  .string()
+  .trim()
+  .email("Informe um endereço de e-mail válido.");
 
 /**
  * Reenvia o e-mail de verificação de conta (#168).
@@ -50,7 +53,8 @@ export async function reenviarEmailVerificacao(
 
   if (!rateLimit.permitido) {
     return {
-      error: "Muitas solicitações de reenvio. Aguarde alguns minutos antes de tentar novamente.",
+      error:
+        "Muitas solicitações de reenvio. Aguarde alguns minutos antes de tentar novamente.",
     };
   }
 
@@ -75,16 +79,23 @@ export async function reenviarEmailVerificacao(
         texto: template.texto,
         html: template.html,
       }).catch((err) => {
-        console.error("reenviarEmailVerificacao: falha ao enviar e-mail transacional:", err);
+        console.error(
+          "reenviarEmailVerificacao: falha ao enviar e-mail transacional:",
+          err,
+        );
       });
     }
   } catch (err) {
-    console.error("reenviarEmailVerificacao: exceção no banco/processamento:", err);
+    console.error(
+      "reenviarEmailVerificacao: exceção no banco/processamento:",
+      err,
+    );
   }
 
   // Resposta uniforme estrita (não vaza se o token existia ou não)
   return {
     success: true,
-    message: "Se este e-mail estiver cadastrado e pendente de verificação, enviamos um novo link.",
+    message:
+      "Se este e-mail estiver cadastrado e pendente de verificação, enviamos um novo link.",
   };
 }

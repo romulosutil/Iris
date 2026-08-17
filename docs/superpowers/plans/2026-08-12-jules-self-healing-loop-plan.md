@@ -13,21 +13,22 @@
 ### Task 1: Parser de Achados do Jules e Lógica Anti-Loop
 
 **Files:**
+
 - Create: `src/lib/ci/jules-parser.ts`
 - Test: `src/lib/ci/jules-parser.test.ts`
 
 - [ ] **Step 1: Escrever testes unitários para detecção de achados, veredito e contador de tentativas**
 
 ```typescript
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 import {
   parseReviewFindings,
   calculateNextAttempt,
   buildJulesFixPrompt,
-} from './jules-parser';
+} from "./jules-parser";
 
-describe('jules-parser', () => {
-  it('detecta achados [BLOCKING], [WARN] e [NIT]', () => {
+describe("jules-parser", () => {
+  it("detecta achados [BLOCKING], [WARN] e [NIT]", () => {
     const comment = `
 <!-- jules-pr-reviewer -->
 ## Summary
@@ -47,10 +48,10 @@ VERDICT: block
     expect(result.warnCount).toBe(1);
     expect(result.nitCount).toBe(1);
     expect(result.totalFindings).toBe(3);
-    expect(result.findingsText).toContain('[BLOCKING]');
+    expect(result.findingsText).toContain("[BLOCKING]");
   });
 
-  it('retorna hasFindings: false quando não há achados ou PR aprovado', () => {
+  it("retorna hasFindings: false quando não há achados ou PR aprovado", () => {
     const comment = `
 <!-- jules-pr-reviewer -->
 ## Summary
@@ -67,34 +68,34 @@ VERDICT: approve
     expect(result.totalFindings).toBe(0);
   });
 
-  it('calcula o número de tentativas e aplica teto máximo de 3', () => {
+  it("calcula o número de tentativas e aplica teto máximo de 3", () => {
     const comments = [
-      { body: '<!-- jules-auto-fix-attempt: 1 -->' },
-      { body: '<!-- jules-auto-fix-attempt: 2 -->' },
+      { body: "<!-- jules-auto-fix-attempt: 1 -->" },
+      { body: "<!-- jules-auto-fix-attempt: 2 -->" },
     ];
     const attempt = calculateNextAttempt(comments);
     expect(attempt.currentAttempt).toBe(3);
     expect(attempt.canExecute).toBe(true);
 
     const maxComments = [
-      { body: '<!-- jules-auto-fix-attempt: 1 -->' },
-      { body: '<!-- jules-auto-fix-attempt: 2 -->' },
-      { body: '<!-- jules-auto-fix-attempt: 3 -->' },
+      { body: "<!-- jules-auto-fix-attempt: 1 -->" },
+      { body: "<!-- jules-auto-fix-attempt: 2 -->" },
+      { body: "<!-- jules-auto-fix-attempt: 3 -->" },
     ];
     const maxAttempt = calculateNextAttempt(maxComments);
     expect(maxAttempt.currentAttempt).toBe(4);
     expect(maxAttempt.canExecute).toBe(false);
   });
 
-  it('constrói prompt estruturado com guardrails do Iris em PT-BR', () => {
+  it("constrói prompt estruturado com guardrails do Iris em PT-BR", () => {
     const prompt = buildJulesFixPrompt({
-      branch: 'feature/auth-guard',
-      findingsText: '- [BLOCKING] Corrigir RLS',
+      branch: "feature/auth-guard",
+      findingsText: "- [BLOCKING] Corrigir RLS",
     });
-    expect(prompt).toContain('app_clinic_id_exigido()');
-    expect(prompt).toContain('Espectro Brutal');
-    expect(prompt).toContain('pnpm typecheck');
-    expect(prompt).toContain('feature/auth-guard');
+    expect(prompt).toContain("app_clinic_id_exigido()");
+    expect(prompt).toContain("Espectro Brutal");
+    expect(prompt).toContain("pnpm typecheck");
+    expect(prompt).toContain("feature/auth-guard");
   });
 });
 ```
@@ -130,18 +131,23 @@ export function parseReviewFindings(commentBody: string): ParseFindingsResult {
       warnCount: 0,
       nitCount: 0,
       totalFindings: 0,
-      findingsText: '',
+      findingsText: "",
     };
   }
 
-  const findingsSectionMatch = commentBody.match(/##\s+Findings([\s\S]*?)(?:##\s+Verdict|$)/i);
-  const targetText = findingsSectionMatch ? findingsSectionMatch[1] : commentBody;
+  const findingsSectionMatch = commentBody.match(
+    /##\s+Findings([\s\S]*?)(?:##\s+Verdict|$)/i,
+  );
+  const targetText = findingsSectionMatch
+    ? findingsSectionMatch[1]
+    : commentBody;
 
   const blockingMatches = targetText.match(/\[BLOCKING\]/gi) || [];
   const warnMatches = targetText.match(/\[WARN\]/gi) || [];
   const nitMatches = targetText.match(/\[(?:NIT|init)\]/gi) || [];
 
-  const totalFindings = blockingMatches.length + warnMatches.length + nitMatches.length;
+  const totalFindings =
+    blockingMatches.length + warnMatches.length + nitMatches.length;
 
   return {
     hasFindings: totalFindings > 0,
@@ -155,12 +161,14 @@ export function parseReviewFindings(commentBody: string): ParseFindingsResult {
 
 export function calculateNextAttempt(
   comments: Array<{ body?: string }>,
-  maxAttempts = 3
+  maxAttempts = 3,
 ): AttemptResult {
   let highestAttempt = 0;
 
   for (const comment of comments) {
-    const match = (comment.body || '').match(/<!--\s*jules-auto-fix-attempt:\s*(\d+)\s*-->/);
+    const match = (comment.body || "").match(
+      /<!--\s*jules-auto-fix-attempt:\s*(\d+)\s*-->/,
+    );
     if (match) {
       const num = parseInt(match[1], 10);
       if (!isNaN(num) && num > highestAttempt) {
@@ -217,6 +225,7 @@ git commit -m "feat(ci): adicionar parser de findings e gerador de prompt do jul
 ### Task 2: Criar Workflow `.github/workflows/jules-auto-fix.yml`
 
 **Files:**
+
 - Create: `.github/workflows/jules-auto-fix.yml`
 
 - [ ] **Step 1: Criar o arquivo `.github/workflows/jules-auto-fix.yml` com integração completa**
@@ -254,7 +263,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: Execute Jules Auto-Fix Evaluator
         uses: actions/github-script@v7
@@ -431,6 +440,7 @@ git commit -m "feat(ci): criar workflow jules-auto-fix para self-healing loop"
 ### Task 3: Validação Completa e Testes do Repositório
 
 **Files:**
+
 - Test: `src/lib/ci/jules-parser.test.ts`
 
 - [ ] **Step 1: Rodar suíte de testes unitários**

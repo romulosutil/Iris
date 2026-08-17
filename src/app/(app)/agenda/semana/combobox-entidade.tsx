@@ -7,8 +7,21 @@ import { cn } from "@/lib/cn";
 
 function ChevronBaixo({ className }: { className?: string }) {
   return (
-    <svg width={16} height={16} viewBox="0 0 20 20" fill="none" aria-hidden focusable="false" className={className}>
-      <path d="M5 7.5l5 5 5-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="square" />
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      focusable="false"
+      className={className}
+    >
+      <path
+        d="M5 7.5l5 5 5-5"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="square"
+      />
     </svg>
   );
 }
@@ -45,7 +58,11 @@ export function ComboboxEntidade({
   const fechandoPorSelecaoRef = useRef(false);
 
   const [prev, setPrev] = useState({ valor, opcoes, aberto });
-  if (prev.valor !== valor || prev.opcoes !== opcoes || prev.aberto !== aberto) {
+  if (
+    prev.valor !== valor ||
+    prev.opcoes !== opcoes ||
+    prev.aberto !== aberto
+  ) {
     setPrev({ valor, opcoes, aberto });
     if (!aberto) {
       const selecionada = opcoes.find((o) => o.id === valor);
@@ -131,9 +148,13 @@ export function ComboboxEntidade({
             aria-expanded={aberto}
             aria-controls={listId}
             aria-autocomplete="list"
-            aria-activedescendant={opcaoAtiva ? `${listId}-${opcaoAtiva.id}` : undefined}
+            aria-activedescendant={
+              opcaoAtiva ? `${listId}-${opcaoAtiva.id}` : undefined
+            }
             autoComplete="off"
-            placeholder={placeholder ?? `Selecione ou busque ${label.toLowerCase()}...`}
+            placeholder={
+              placeholder ?? `Selecione ou busque ${label.toLowerCase()}...`
+            }
             value={termo}
             onChange={(e) => aoMudarTexto(e.target.value)}
             onFocus={abrir}
@@ -146,8 +167,8 @@ export function ComboboxEntidade({
           />
           <ChevronBaixo
             className={cn(
-              "w-4 h-4 text-[var(--text-secondary)] absolute right-3 pointer-events-none transition-transform duration-200",
-              aberto && "rotate-180 text-[var(--text-primary)]"
+              "pointer-events-none absolute right-3 h-4 w-4 text-[var(--text-secondary)] transition-transform duration-200",
+              aberto && "rotate-180 text-[var(--text-primary)]",
             )}
           />
         </div>
@@ -158,11 +179,11 @@ export function ComboboxEntidade({
             role="listbox"
             aria-label={label}
             className={cn(
-              "absolute top-full left-0 right-0 z-50 mt-1.5 max-h-60 overflow-y-auto rounded-[var(--radius-control)] bg-[var(--surface-elevated)] border-2 border-[var(--border-brutal)] shadow-[var(--ds-shadow-hover)] p-1",
+              "absolute top-full right-0 left-0 z-50 mt-1.5 max-h-60 overflow-y-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] p-1 shadow-[var(--ds-shadow-hover)]",
             )}
           >
             {filtradas.length === 0 ? (
-              <li className="font-body text-[var(--text-secondary)] px-4 py-3 text-sm italic">
+              <li className="font-body px-4 py-3 text-sm text-[var(--text-secondary)] italic">
                 Nenhum {label.toLowerCase()} encontrado...
               </li>
             ) : (
@@ -176,9 +197,10 @@ export function ComboboxEntidade({
                     role="option"
                     aria-selected={ehAtivo || ehSelecionado}
                     className={cn(
-                      "font-body text-[var(--text-primary)] rounded-[var(--radius-xs)] min-h-10 cursor-pointer px-3.5 py-2 text-sm flex items-center justify-between transition-colors",
-                      ehSelecionado && "font-bold bg-[var(--color-gold)]/20",
-                      ehAtivo && "bg-[var(--action-primary)] text-[var(--text-primary)] font-semibold",
+                      "font-body flex min-h-10 cursor-pointer items-center justify-between rounded-[var(--radius-xs)] px-3.5 py-2 text-sm text-[var(--text-primary)] transition-colors",
+                      ehSelecionado && "bg-[var(--color-gold)]/20 font-bold",
+                      ehAtivo &&
+                        "bg-[var(--action-primary)] font-semibold text-[var(--text-primary)]",
                     )}
                     onMouseDown={(e) => {
                       e.preventDefault();
@@ -188,7 +210,7 @@ export function ComboboxEntidade({
                   >
                     <span>{o.nome}</span>
                     {ehSelecionado && (
-                      <span className="text-xs font-mono bg-[var(--border-brutal)] text-white px-1.5 py-0.5 rounded">
+                      <span className="rounded bg-[var(--border-brutal)] px-1.5 py-0.5 font-mono text-xs text-white">
                         Atual
                       </span>
                     )}

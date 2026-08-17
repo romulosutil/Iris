@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { computarDadosEspectro, mapearEixo, type MilestoneMetadata, type GoalMetadata } from "./espectro";
+import {
+  computarDadosEspectro,
+  mapearEixo,
+  type MilestoneMetadata,
+  type GoalMetadata,
+} from "./espectro";
 
 describe("espectro.ts (mapearEixo)", () => {
   test("mapeia domínios do VB-MAPP para eixos do Espectro", () => {
@@ -33,8 +38,18 @@ describe("espectro.ts (computarDadosEspectro)", () => {
     };
 
     const mapeamento: Record<string, MilestoneMetadata> = {
-      "milestone-1": { dominioId: "mando", protocolId: "p1", tipoEstrutura: "marco_simples", totalNiveisAjuda: 4 },
-      "milestone-2": { dominioId: "mando", protocolId: "p1", tipoEstrutura: "marco_simples", totalNiveisAjuda: 4 },
+      "milestone-1": {
+        dominioId: "mando",
+        protocolId: "p1",
+        tipoEstrutura: "marco_simples",
+        totalNiveisAjuda: 4,
+      },
+      "milestone-2": {
+        dominioId: "mando",
+        protocolId: "p1",
+        tipoEstrutura: "marco_simples",
+        totalNiveisAjuda: 4,
+      },
     };
 
     const radar = computarDadosEspectro(repertorio, mapeamento, []);
@@ -51,7 +66,12 @@ describe("espectro.ts (computarDadosEspectro)", () => {
     };
 
     const mapeamento: Record<string, MilestoneMetadata> = {
-      "milestone-barreira": { dominioId: "barreiras", protocolId: "p1", tipoEstrutura: "marco_com_barreira", totalNiveisAjuda: 4 },
+      "milestone-barreira": {
+        dominioId: "barreiras",
+        protocolId: "p1",
+        tipoEstrutura: "marco_com_barreira",
+        totalNiveisAjuda: 4,
+      },
     };
 
     const radar = computarDadosEspectro(repertorio, mapeamento, []);
@@ -65,7 +85,7 @@ describe("espectro.ts (computarDadosEspectro)", () => {
   test("calcula progresso de metas com base na candidatura/acúmulo", () => {
     const repertorio = {
       "goal-1": { contagem: 2, is_candidata: false }, // progresso: 2/3 = 67%
-      "goal-2": { contagem: 1, is_candidata: true },  // is_candidata -> 100%
+      "goal-2": { contagem: 1, is_candidata: true }, // is_candidata -> 100%
     };
 
     const metas: GoalMetadata[] = [

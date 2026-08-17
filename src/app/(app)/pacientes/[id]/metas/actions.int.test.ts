@@ -188,10 +188,12 @@ describe.skipIf(!hasDb)("metas · CRUD + transições", () => {
     expect(r.error).toBeUndefined();
     expect(r.id).toBeTruthy();
 
-    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    const [pac] =
+      await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
     expect(pac!.arquivado_em).toBeNull();
 
-    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC} AND acao = 'paciente_desarquivado_automaticamente'`;
+    const [log] =
+      await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC} AND acao = 'paciente_desarquivado_automaticamente'`;
     expect(log).toBeTruthy();
     expect(log!.detalhe).toEqual({ origem: "criacao_meta" });
 

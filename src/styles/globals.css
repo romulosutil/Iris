@@ -114,8 +114,8 @@
   --radius-pill: 999px;
 
   /* Cores Adicionais Tokenizadas para Componentes */
-  --border-neutral-light: #C9C6BC;
-  --gray-light-hover: #F1EFE9;
+  --border-neutral-light: #c9c6bc;
+  --gray-light-hover: #f1efe9;
 
   /* ==========================================================================
      2. Semânticas (Papéis de Sistema)
@@ -152,7 +152,7 @@
   --color-bg-canvas: var(--bg-app);
   --color-bg-surface: var(--surface-card);
   --color-border-brutal: var(--border-brutal);
-  
+
   /* Textos */
   --color-text-body: var(--text-primary);
   --color-text-heading: var(--text-primary);
@@ -204,7 +204,8 @@
     var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
   --font-body: var(--font-jakarta), "Plus Jakarta Sans", system-ui, sans-serif;
   --font-mono:
-    var(--font-space-mono), "Space Mono", ui-monospace, SFMono-Regular, monospace;
+    var(--font-space-mono), "Space Mono", ui-monospace, SFMono-Regular,
+    monospace;
 
   /* ==========================================================================
      Escala de Elevação — índice semântico → sombra (perpetua)
@@ -217,10 +218,8 @@
 
   --elevation-0: none;
   --elevation-1: 2px 2px 0 0 var(--border-brutal); /* raise sutil */
-  --elevation-2:
-    2px 2px 0 0 var(--border-brutal); /* base: dura brutalista */
-  --elevation-3:
-    4px 4px 0 0 var(--border-brutal); /* hover / lg */
+  --elevation-2: 2px 2px 0 0 var(--border-brutal); /* base: dura brutalista */
+  --elevation-3: 4px 4px 0 0 var(--border-brutal); /* hover / lg */
   --elevation-inset: inset 0 2px 8px rgba(106, 76, 147, 0.1); /* afunda (IA / tentativo) */
   --elevation-overlay: 0 20px 44px -24px rgba(20, 20, 20, 0.4); /* modal / popover — só suave */
 
@@ -255,12 +254,10 @@
 
   /* Escala de Espaçamento Interno / Padding (Cards & Containers) */
   --spacing-card-sm: 0.75rem; /* 12px - micro-cards / chips */
-  --spacing-card-md: 1rem;    /* 16px - padding padrão de superfície */
+  --spacing-card-md: 1rem; /* 16px - padding padrão de superfície */
   --spacing-card-lg: 1.25rem; /* 20px - cards principais */
-  --spacing-card-xl: 1.5rem;  /* 24px - contêineres e modais */
-  --spacing-container: 2rem;  /* 32px - seções e painéis de destaque */
-
-
+  --spacing-card-xl: 1.5rem; /* 24px - contêineres e modais */
+  --spacing-container: 2rem; /* 32px - seções e painéis de destaque */
 
   /* Animações de abrir/fechar (Radix Accordion). Duração curta de produto
      (150-250ms); o prefers-reduced-motion abaixo zera a duration. */
@@ -284,54 +281,58 @@
   color-scheme: light;
 
   /* Superfícies e Layout */
-  --bg-app: #F8F9FA;
-  --surface-card: #FFFFFF;
-  --surface-elevated: #FFFFFF;
+  --bg-app: #f8f9fa;
+  --surface-card: #ffffff;
+  --surface-elevated: #ffffff;
 
   /* Bordas e Sombras Brutalistas */
   --border-brutal: #000000;
   --shadow-brutal: 2px 2px 0px #000000;
 
   /* Tipografia */
-  --text-primary: #09090B;
-  --text-secondary: #71717A;
+  --text-primary: #09090b;
+  --text-secondary: #71717a;
 
   /* Ações Primárias e Secundárias */
   --action-primary: var(--brand-primary);
   --action-primary-fg: #000000; /* WCAG AA mantido fixo */
-  --action-secondary-bg: #FFFFFF;
+  --action-secondary-bg: #ffffff;
   --action-secondary-fg: #000000;
 
   /* Estados e Feedbacks Semânticos */
-  --status-success-bg: #ECFDF5;
-  --status-success-fg: #065F46;
+  --status-success-bg: #ecfdf5;
+  --status-success-fg: #065f46;
   --status-success-border: #059669;
 
-  --status-warning-bg: #FFFBEB;
-  --status-warning-fg: #92400E;
-  --status-warning-border: #D97706;
+  --status-warning-bg: #fffbeb;
+  --status-warning-fg: #92400e;
+  --status-warning-border: #d97706;
 
-  --status-error-bg: #FEF2F2;
-  --status-error-fg: #991B1B;
-  --status-error-border: #DC2626;
+  --status-error-bg: #fef2f2;
+  --status-error-fg: #991b1b;
+  --status-error-border: #dc2626;
 
-  --status-info-bg: #EFF6FF;
-  --status-info-fg: #1E40AF;
-  --status-info-border: #2563EB;
+  --status-info-bg: #eff6ff;
+  --status-info-fg: #1e40af;
+  --status-info-border: #2563eb;
 
-  --status-ia-bg: #F1E9F6;
-  --status-ia-fg: #45286E;
-  --status-ia-border: #6A4C93;
+  --status-ia-bg: #f1e9f6;
+  --status-ia-fg: #45286e;
+  --status-ia-border: #6a4c93;
 
   --ds-shadow: var(--shadow-brutal);
-  --ds-shadow-hover: var(--elevation-3);   /* +1 nível acima do base: elevation-2 → 3 */
+  --ds-shadow-hover: var(
+    --elevation-3
+  ); /* +1 nível acima do base: elevation-2 → 3 */
   --ds-shadow-inset: var(--shadow-brutal-inset);
   --ds-offset: 4px;
 }
 
 [data-mode="familia"] {
   --ds-shadow: var(--shadow-brutal-sm);
-  --ds-shadow-hover: var(--elevation-2);   /* +1 nível acima do base: elevation-1 → 2 */
+  --ds-shadow-hover: var(
+    --elevation-2
+  ); /* +1 nível acima do base: elevation-1 → 2 */
   --ds-shadow-inset: var(--shadow-brutal-inset-sm);
   --ds-offset: 2px;
 
@@ -347,7 +348,7 @@
      Reusa token existente, sem hex novo. Consumido por Button variante
      primária e pela barra de destaque do Card. Menta #B2DFDB = "Sucesso/
      conquistado" documentado em §3.A. */
-  --action-primary: #B2DFDB;
+  --action-primary: #b2dfdb;
 }
 
 html {
@@ -421,47 +422,47 @@ html {
   color-scheme: dark;
 
   /* Superfícies e Layout */
-  --bg-app: #09090B;
-  --surface-card: #18181B;
-  --surface-elevated: #27272A;
+  --bg-app: #09090b;
+  --surface-card: #18181b;
+  --surface-elevated: #27272a;
 
   /* Bordas e Sombras Brutalistas */
-  --border-brutal: #E4E4E7;
-  --shadow-brutal: 2px 2px 0px #E4E4E7;
+  --border-brutal: #e4e4e7;
+  --shadow-brutal: 2px 2px 0px #e4e4e7;
 
   /* Tipografia */
-  --text-primary: #FAFAFA;
-  --text-secondary: #A1A1AA;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
 
   /* Ações Primárias e Secundárias */
-  --action-primary: #FBBF24;
+  --action-primary: #fbbf24;
   --action-primary-fg: #000000; /* WCAG AA mantido fixo */
-  --action-secondary-bg: #27272A;
-  --action-secondary-fg: #FAFAFA;
+  --action-secondary-bg: #27272a;
+  --action-secondary-fg: #fafafa;
 
   /* Estados e Feedbacks Semânticos (Ajustados para Dark Mode) */
   --status-success-bg: rgba(6, 78, 59, 0.4);
-  --status-success-fg: #A7F3D0;
+  --status-success-fg: #a7f3d0;
   --status-success-border: #059669;
 
   --status-warning-bg: rgba(120, 53, 15, 0.4);
-  --status-warning-fg: #FDE68A;
-  --status-warning-border: #D97706;
+  --status-warning-fg: #fde68a;
+  --status-warning-border: #d97706;
 
   --status-error-bg: rgba(127, 29, 29, 0.4);
-  --status-error-fg: #FECACA;
-  --status-error-border: #DC2626;
+  --status-error-fg: #fecaca;
+  --status-error-border: #dc2626;
 
   --status-info-bg: rgba(30, 58, 138, 0.4);
-  --status-info-fg: #BFDBFE;
-  --status-info-border: #2563EB;
+  --status-info-fg: #bfdbfe;
+  --status-info-border: #2563eb;
 
   --status-ia-bg: rgba(106, 76, 147, 0.4);
-  --status-ia-fg: #E9D5FF;
-  --status-ia-border: #9333EA;
+  --status-ia-fg: #e9d5ff;
+  --status-ia-border: #9333ea;
   --ai-tint: rgba(106, 76, 147, 0.4);
-  --ai-deep: #E9D5FF;
-  --ai-accent: #9333EA;
+  --ai-deep: #e9d5ff;
+  --ai-accent: #9333ea;
 }
 
 /*

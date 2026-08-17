@@ -17,7 +17,10 @@ export interface CalendarEventCardProps {
   podeGerir?: boolean;
 }
 
-const ESTADO_ESTILOS: Record<SessionEstado, { bg: string; border: string; text: string }> = {
+const ESTADO_ESTILOS: Record<
+  SessionEstado,
+  { bg: string; border: string; text: string }
+> = {
   agendada: {
     bg: "bg-[#f1e9f6]",
     border: "border-black",
@@ -71,21 +74,23 @@ export function CalendarEventCard({
           }
         }}
         className={cn(
-          "group relative flex items-center justify-between gap-1.5 rounded-[var(--radius-control)] border-2 px-2 py-1 font-display transition-all cursor-pointer shadow-[1px_1px_0_#000] hover:shadow-[2px_2px_0_#000] hover:-translate-y-0.5 focus-visible:outline-focus",
+          "group font-display focus-visible:outline-focus relative flex cursor-pointer items-center justify-between gap-1.5 rounded-[var(--radius-control)] border-2 px-2 py-1 shadow-[1px_1px_0_#000] transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_#000]",
           estilo.bg,
           estilo.border,
-          estilo.text
+          estilo.text,
         )}
       >
         <div className="flex items-center gap-1.5 overflow-hidden">
           <span className="h-2 w-2 shrink-0 rounded-full border border-black bg-current" />
-          <span className="truncate font-semibold text-xs">
+          <span className="truncate text-xs font-semibold">
             {pacienteNome}
             {disciplinaNome ? ` · ${disciplinaNome}` : ""}
           </span>
         </div>
         {horarioStr && (
-          <span className="font-mono text-[10px] font-bold opacity-80 shrink-0">{horarioStr}</span>
+          <span className="shrink-0 font-mono text-[10px] font-bold opacity-80">
+            {horarioStr}
+          </span>
         )}
       </div>
     );
@@ -103,34 +108,40 @@ export function CalendarEventCard({
         }
       }}
       className={cn(
-        "group relative flex flex-col justify-between rounded-[var(--radius-control)] border-2 p-2.5 font-display transition-all cursor-pointer shadow-[2px_2px_0_#000] hover:shadow-[3px_3px_0_#000] hover:-translate-y-0.5 focus-visible:outline-focus",
+        "group font-display focus-visible:outline-focus relative flex cursor-pointer flex-col justify-between rounded-[var(--radius-control)] border-2 p-2.5 shadow-[2px_2px_0_#000] transition-all hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#000]",
         estilo.bg,
         estilo.border,
-        estilo.text
+        estilo.text,
       )}
     >
       <div>
         <div className="flex items-center justify-between gap-2">
           {horarioStr && (
-            <span className="font-mono text-xs font-bold tracking-tight">{horarioStr}</span>
+            <span className="font-mono text-xs font-bold tracking-tight">
+              {horarioStr}
+            </span>
           )}
           <span className="h-2.5 w-2.5 rounded-full border border-black bg-current" />
         </div>
-        <h4 className="mt-1 font-bold text-sm leading-tight text-balance">{pacienteNome}</h4>
+        <h4 className="mt-1 text-sm leading-tight font-bold text-balance">
+          {pacienteNome}
+        </h4>
         {disciplinaNome && (
-          <p className="mt-0.5 font-mono text-[11px] font-medium opacity-85 uppercase">
+          <p className="mt-0.5 font-mono text-[11px] font-medium uppercase opacity-85">
             {disciplinaNome}
           </p>
         )}
         {terapeutaNome && (
-          <p className="mt-1 font-body text-xs text-[var(--text-secondary)]">{terapeutaNome}</p>
+          <p className="font-body mt-1 text-xs text-[var(--text-secondary)]">
+            {terapeutaNome}
+          </p>
         )}
       </div>
 
       {/* Botão de Check-in em 1-Clique no Hover (se agendada) */}
       {estado === "agendada" && podeGerir && (
         <div
-          className="mt-2 hidden group-hover:block transition-all"
+          className="mt-2 hidden transition-all group-hover:block"
           onClick={(e) => e.stopPropagation()}
         >
           <CheckInButton sessionId={id} />

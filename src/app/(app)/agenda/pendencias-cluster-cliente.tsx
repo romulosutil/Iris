@@ -45,7 +45,7 @@ function ItemPendenciaClustered({
       como="li"
       title={
         <Cluster gap="sm" className="items-center">
-          <span className="font-display font-bold text-lg text-[var(--text-primary)]">
+          <span className="font-display text-lg font-bold text-[var(--text-primary)]">
             {horaDaSessao(sessao.agendadaPara)}
           </span>
           <EstadoBadge estado={sessao.estado} />
@@ -55,7 +55,10 @@ function ItemPendenciaClustered({
         <span className="text-sm font-medium text-[var(--text-primary)]">
           {sessao.pacienteNome ?? "Paciente (acesso restrito)"}
           {!ocultarNomeTerapeuta && sessao.terapeutaNome ? (
-            <span className="text-[var(--text-secondary)]"> · {sessao.terapeutaNome}</span>
+            <span className="text-[var(--text-secondary)]">
+              {" "}
+              · {sessao.terapeutaNome}
+            </span>
           ) : null}
         </span>
       }
@@ -83,7 +86,8 @@ export function PendenciasClusterCliente({
   tipo,
   terapeutas,
 }: PendenciasClusterClienteProps) {
-  const [filtroTerapeutaId, setFiltroTerapeutaId] = React.useState<string>("todos");
+  const [filtroTerapeutaId, setFiltroTerapeutaId] =
+    React.useState<string>("todos");
   const [recolhido, setRecolhido] = React.useState<boolean>(true);
 
   // Agrupar itens por terapeuta
@@ -115,13 +119,16 @@ export function PendenciasClusterCliente({
       : gruposPorTerapeuta.filter((g) => g.terapeutaId === filtroTerapeutaId);
 
   return (
-    <div className="p-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]">
-      <div className="flex items-center justify-between pb-3 border-b-2 border-[var(--border-brutal)]">
+    <div className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]">
+      <div className="flex items-center justify-between border-b-2 border-[var(--border-brutal)] pb-3">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-xs font-bold text-[var(--status-warning-fg)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] px-2 py-0.5 rounded-[var(--radius-xs)]">
+          <span className="rounded-[var(--radius-xs)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--status-warning-fg)]">
             [PENDÊNCIAS]
           </span>
-          <h2 id={tituloId} className="font-display font-bold text-base text-[var(--text-primary)]">
+          <h2
+            id={tituloId}
+            className="font-display text-base font-bold text-[var(--text-primary)]"
+          >
             {titulo}
           </h2>
         </div>
@@ -139,7 +146,7 @@ export function PendenciasClusterCliente({
         <div className="divide-y border-b border-[var(--border-brutal)]/10 pt-2">
           {gruposExibidos.map((grupo) => (
             <div key={grupo.terapeutaId} className="py-3">
-              <div className="text-xs font-mono font-bold text-[var(--text-secondary)] uppercase mb-2">
+              <div className="mb-2 font-mono text-xs font-bold text-[var(--text-secondary)] uppercase">
                 {grupo.terapeutaNome} ({grupo.sessoes.length})
               </div>
               <Stack gap="xs" como="ul">

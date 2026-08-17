@@ -37,7 +37,10 @@ const descartarSchema = idSchema.extend({
   motivo: z
     .string()
     .trim()
-    .min(10, "Descreva por que o sinal não é risco. Descarte nunca é silencioso."),
+    .min(
+      10,
+      "Descreva por que o sinal não é risco. Descarte nunca é silencioso.",
+    ),
 });
 
 /** Só transições a partir de estados vivos; terminal não volta atrás. */

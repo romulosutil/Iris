@@ -18,14 +18,25 @@ const dossie: PayloadConvenioNarrativo["dossie"] = {
     },
   ],
   evidencias: [
-    { data: "2026-06-10", metaOuDominio: "Mando", classificacao: '{"rotulo":"adquirido"}', autor: "Dra. Ana" },
+    {
+      data: "2026-06-10",
+      metaOuDominio: "Mando",
+      classificacao: '{"rotulo":"adquirido"}',
+      autor: "Dra. Ana",
+    },
   ],
-  presenca: { sessoesRealizadas: 8, faltasJustificadas: 1, faltasNaoJustificadas: 0 },
+  presenca: {
+    sessoesRealizadas: 8,
+    faltasJustificadas: 1,
+    faltasNaoJustificadas: 0,
+  },
 };
 
 const iaOriginal: ConvenioNarrativoDraft = {
   resumoClinico: "Resumo IA original",
-  evolucaoPorDominio: [{ dominio: "Comunicação", narrativa: "Narrativa IA original" }],
+  evolucaoPorDominio: [
+    { dominio: "Comunicação", narrativa: "Narrativa IA original" },
+  ],
   justificativaContinuidade: "Justificativa IA original",
   objetivosProximoPeriodo: ["Objetivo IA 1"],
   periodoSemAvancoVisivel: false,
@@ -37,7 +48,11 @@ const base: PayloadConvenioNarrativo = {
   versao: 1,
   paciente: { nome: "Miguel S." },
   periodo: { inicio: "2026-06-01", fim: "2026-06-30" },
-  cabecalho: { operadora: "Amil", cid: "F84.0", finalidade: "Renovação de guia" },
+  cabecalho: {
+    operadora: "Amil",
+    cid: "F84.0",
+    finalidade: "Renovação de guia",
+  },
   geradoEm: "2026-07-20T12:00:00.000Z",
   provider: "stub",
   dossie,
@@ -62,7 +77,9 @@ test("monta HTML com bloco factual e bloco narrativo (iaOriginal quando curado �
 test("usa curado quando presente, ignorando iaOriginal", () => {
   const curado: ConvenioNarrativoDraft = {
     resumoClinico: "Resumo curado",
-    evolucaoPorDominio: [{ dominio: "Comunicação", narrativa: "Narrativa curada" }],
+    evolucaoPorDominio: [
+      { dominio: "Comunicação", narrativa: "Narrativa curada" },
+    ],
     justificativaContinuidade: "Justificativa curada",
     objetivosProximoPeriodo: ["Objetivo curado 1"],
     periodoSemAvancoVisivel: false,
@@ -91,13 +108,19 @@ test("renderiza nota de honestidade quando período sem avanço visível", () =>
 test("escapa texto livre no cabeçalho e na narrativa (anti-injeção de markup)", () => {
   const html = buildConvenioNarrativoHtml({
     ...base,
-    cabecalho: { operadora: "<script>x1</script>", cid: "F84", finalidade: '<script>x2</script>' },
+    cabecalho: {
+      operadora: "<script>x1</script>",
+      cid: "F84",
+      finalidade: "<script>x2</script>",
+    },
     iaOriginal: {
       ...iaOriginal,
       resumoClinico: "<script>x3</script>",
-      evolucaoPorDominio: [{ dominio: "Comunicação", narrativa: "<script>x4</script>" }],
+      evolucaoPorDominio: [
+        { dominio: "Comunicação", narrativa: "<script>x4</script>" },
+      ],
       periodoSemAvancoVisivel: true,
-      notaHonestidade: '<script>x5</script>',
+      notaHonestidade: "<script>x5</script>",
     },
   });
   expect(html).not.toContain("<script>x1</script>");

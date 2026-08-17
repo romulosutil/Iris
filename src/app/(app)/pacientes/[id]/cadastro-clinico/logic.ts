@@ -73,12 +73,7 @@ async function salvarFichaClinicaCore(
         set: valores,
       });
 
-    await desarquivarPacienteSeArquivado(
-      tx,
-      ctx,
-      patientId,
-      "ficha_clinica",
-    );
+    await desarquivarPacienteSeArquivado(tx, ctx, patientId, "ficha_clinica");
 
     return { ok: true };
   });

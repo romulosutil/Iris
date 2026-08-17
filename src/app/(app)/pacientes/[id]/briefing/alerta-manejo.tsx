@@ -22,7 +22,9 @@ export function AlertaManejoBanner({ alertas }: { alertas: AlertaManejo[] }) {
           <li key={a.extractionId}>
             {a.comportamento ?? "Comportamento não descrito"}
             {a.antecedente ? ` — antecedente: ${a.antecedente}` : ""}
-            {a.consequenciaRegulacao ? ` · regulação: ${a.consequenciaRegulacao}` : ""}
+            {a.consequenciaRegulacao
+              ? ` · regulação: ${a.consequenciaRegulacao}`
+              : ""}
           </li>
         ))}
       </ul>

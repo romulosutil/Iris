@@ -118,35 +118,48 @@ export default function LoginPage() {
         </Form>
 
         {/* Selos são afirmação factual medida — evidência em `docs/arquitetura/trust-indicators-login.md`. */}
-        <div className="mt-6 pt-6 border-t-2 border-dashed border-[var(--border-brutal)] flex flex-col gap-4 text-center">
+        <div className="mt-6 flex flex-col gap-4 border-t-2 border-dashed border-[var(--border-brutal)] pt-6 text-center">
           <div className="flex flex-wrap justify-center gap-2">
-            <Pill variant="solid" colorScheme="neutral" size="sm" icon={<ShieldIcon size={12} />} data-testid="badge-lgpd">
+            <Pill
+              variant="solid"
+              colorScheme="neutral"
+              size="sm"
+              icon={<ShieldIcon size={12} />}
+              data-testid="badge-lgpd"
+            >
               Conformidade LGPD
             </Pill>
-            <Pill variant="solid" colorScheme="neutral" size="sm" icon={<LockIcon size={12} />} data-testid="badge-tls">
+            <Pill
+              variant="solid"
+              colorScheme="neutral"
+              size="sm"
+              icon={<LockIcon size={12} />}
+              data-testid="badge-tls"
+            >
               Conexão Criptografada TLS 1.3
             </Pill>
           </div>
-          <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-[240px] mx-auto">
-            Dados clínicos protegidos por criptografia e isolamento multi-tenant.
+          <p className="mx-auto max-w-[240px] text-xs leading-relaxed text-[var(--text-secondary)]">
+            Dados clínicos protegidos por criptografia e isolamento
+            multi-tenant.
           </p>
         </div>
       </div>
 
-      <p className="text-[var(--text-secondary)] text-center text-sm">
+      <p className="text-center text-sm text-[var(--text-secondary)]">
         <Link
           href="/esqueci-senha"
-          className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
+          className="font-semibold text-[var(--text-primary)] underline underline-offset-2"
         >
           Esqueceu sua senha?
         </Link>
       </p>
 
-      <p className="text-[var(--text-secondary)] text-center text-sm">
+      <p className="text-center text-sm text-[var(--text-secondary)]">
         Ainda não tem conta?{" "}
         <Link
           href="/cadastro"
-          className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
+          className="font-semibold text-[var(--text-primary)] underline underline-offset-2"
         >
           Criar conta
         </Link>

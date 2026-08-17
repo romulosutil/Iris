@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { PayloadConvenioBruto } from "../convenio-bruto/types";
-import { resolveConvenioNarrativoProvider, validarDraftContraDossie } from "./provider";
+import {
+  resolveConvenioNarrativoProvider,
+  validarDraftContraDossie,
+} from "./provider";
 import { StubConvenioNarrativoProvider } from "./stub-provider";
 import type { ConvenioNarrativoDraft } from "./types";
 
@@ -11,9 +14,18 @@ function buildDossie(): PayloadConvenioBruto {
     geradoEm: "2026-02-01T00:00:00.000Z",
     sessoes: [],
     evidencias: [
-      { data: "2026-01-05", metaOuDominio: "Comunicação", classificacao: "independente", autor: "A" },
+      {
+        data: "2026-01-05",
+        metaOuDominio: "Comunicação",
+        classificacao: "independente",
+        autor: "A",
+      },
     ],
-    presenca: { sessoesRealizadas: 8, faltasJustificadas: 1, faltasNaoJustificadas: 0 },
+    presenca: {
+      sessoesRealizadas: 8,
+      faltasJustificadas: 1,
+      faltasNaoJustificadas: 0,
+    },
   };
 }
 
@@ -33,12 +45,17 @@ describe("validarDraftContraDossie", () => {
   it("rejeita número ausente no dossiê", () => {
     const dossie = buildDossie();
     const draft = buildDraft("Paciente realizou 42 sessões no período.");
-    expect(validarDraftContraDossie(draft, dossie)).toEqual({ ok: false, numeroOrfao: "42" });
+    expect(validarDraftContraDossie(draft, dossie)).toEqual({
+      ok: false,
+      numeroOrfao: "42",
+    });
   });
 
   it("aceita draft que só usa números presentes no dossiê", () => {
     const dossie = buildDossie();
-    const draft = buildDraft("Paciente realizou 8 sessões no período, com 1 falta justificada.");
+    const draft = buildDraft(
+      "Paciente realizou 8 sessões no período, com 1 falta justificada.",
+    );
     expect(validarDraftContraDossie(draft, dossie)).toEqual({ ok: true });
   });
 
@@ -56,10 +73,17 @@ describe("validarDraftContraDossie", () => {
           terapeuta: "T",
         },
       ],
-      presenca: { sessoesRealizadas: 8, faltasJustificadas: 1, faltasNaoJustificadas: 0 },
+      presenca: {
+        sessoesRealizadas: 8,
+        faltasJustificadas: 1,
+        faltasNaoJustificadas: 0,
+      },
     };
     const draft = buildDraft("Foram realizadas 12 sessões no período.");
-    expect(validarDraftContraDossie(draft, dossie)).toEqual({ ok: false, numeroOrfao: "12" });
+    expect(validarDraftContraDossie(draft, dossie)).toEqual({
+      ok: false,
+      numeroOrfao: "12",
+    });
   });
 
   it("aceita draft citando apenas contagens reais (total e por domínio)", () => {
@@ -77,17 +101,34 @@ describe("validarDraftContraDossie", () => {
         },
       ],
       evidencias: [
-        { data: "2026-01-05", metaOuDominio: "Comunicação", classificacao: "independente", autor: "A" },
-        { data: "2026-01-12", metaOuDominio: "Comunicação", classificacao: "dica_verbal", autor: "A" },
+        {
+          data: "2026-01-05",
+          metaOuDominio: "Comunicação",
+          classificacao: "independente",
+          autor: "A",
+        },
+        {
+          data: "2026-01-12",
+          metaOuDominio: "Comunicação",
+          classificacao: "dica_verbal",
+          autor: "A",
+        },
       ],
-      presenca: { sessoesRealizadas: 8, faltasJustificadas: 1, faltasNaoJustificadas: 0 },
+      presenca: {
+        sessoesRealizadas: 8,
+        faltasJustificadas: 1,
+        faltasNaoJustificadas: 0,
+      },
     };
     const draft: ConvenioNarrativoDraft = {
       ...buildDraft(
         "Paciente realizou 8 sessões no período, com 1 falta justificada e 0 não justificadas.",
       ),
       evolucaoPorDominio: [
-        { dominio: "Comunicação", narrativa: "Foram registradas 2 evidências no domínio Comunicação." },
+        {
+          dominio: "Comunicação",
+          narrativa: "Foram registradas 2 evidências no domínio Comunicação.",
+        },
       ],
     };
     expect(validarDraftContraDossie(draft, dossie)).toEqual({ ok: true });

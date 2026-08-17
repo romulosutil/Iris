@@ -1,7 +1,10 @@
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { listarTerapeutas } from "@/app/(app)/equipe/[id]/queries";
-import { carregarConfigClinica, pacientePorId } from "@/app/(app)/agenda/queries";
+import {
+  carregarConfigClinica,
+  pacientePorId,
+} from "@/app/(app)/agenda/queries";
 import { segundaDaSemana } from "@/lib/agenda/semana";
 import { SemanaCliente, type Prefill } from "./semana-cliente";
 
@@ -18,7 +21,14 @@ function primeiro(v: string | string[] | undefined): string | undefined {
  * presentes — parcial é tratado como ausente. */
 function paramsPrefill(
   sp: Record<string, string | string[] | undefined>,
-): { repostaDe: string; patientId: string; terapeutaId: string; disciplina: string } | undefined {
+):
+  | {
+      repostaDe: string;
+      patientId: string;
+      terapeutaId: string;
+      disciplina: string;
+    }
+  | undefined {
   const repostaDe = primeiro(sp.repor);
   const patientId = primeiro(sp.patientId);
   const terapeutaId = primeiro(sp.terapeutaId);

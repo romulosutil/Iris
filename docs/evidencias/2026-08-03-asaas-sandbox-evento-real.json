@@ -1,34 +1,34 @@
 {
-    "id": "evt_a81765ea346714f51a9656a8c74aefa8&17706514",
-    "event": "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED",
-    "account": {
-        "id": "6d82d82e-324c-4eb1-a345-74421d2a501c",
-        "ownerId": null
+  "id": "evt_a81765ea346714f51a9656a8c74aefa8&17706514",
+  "event": "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED",
+  "account": {
+    "id": "6d82d82e-324c-4eb1-a345-74421d2a501c",
+    "ownerId": null
+  },
+  "dateCreated": "2026-08-03 19:55:12",
+  "authorization": {
+    "id": "53da5204-8dd1-4cf4-9604-d134e1e6fe04",
+    "value": null,
+    "status": "CREATED",
+    "payload": null,
+    "frequency": "MONTHLY",
+    "startDate": "08/09/2026",
+    "contractId": "IRIS-SANDBOX-001",
+    "customerId": "cus_000008561913",
+    "finishDate": null,
+    "originType": "IMMEDIATE_PAYMENT_AND_RECURRING_QR_CODE",
+    "description": "Iris sandbox",
+    "retryPolicy": "NOT_ALLOWED",
+    "encodedImage": null,
+    "minLimitValue": null,
+    "subscriptionId": null,
+    "immediateQrCode": {
+      "expirationDate": "03/08/2026 20:55:10",
+      "conciliationIdentifier": "RSUTILCORREALTDA0000000001613059ASA"
     },
-    "dateCreated": "2026-08-03 19:55:12",
-    "authorization": {
-        "id": "53da5204-8dd1-4cf4-9604-d134e1e6fe04",
-        "value": null,
-        "status": "CREATED",
-        "payload": null,
-        "frequency": "MONTHLY",
-        "startDate": "08/09/2026",
-        "contractId": "IRIS-SANDBOX-001",
-        "customerId": "cus_000008561913",
-        "finishDate": null,
-        "originType": "IMMEDIATE_PAYMENT_AND_RECURRING_QR_CODE",
-        "description": "Iris sandbox",
-        "retryPolicy": "NOT_ALLOWED",
-        "encodedImage": null,
-        "minLimitValue": null,
-        "subscriptionId": null,
-        "immediateQrCode": {
-            "expirationDate": "03/08/2026 20:55:10",
-            "conciliationIdentifier": "RSUTILCORREALTDA0000000001613059ASA"
-        },
-        "cancellationDate": null,
-        "cancellationReason": null,
-        "endToEndIdentifier": "RN1954055020260803u6vpeEldo22",
-        "paymentCreationMode": "MANUAL"
-    }
+    "cancellationDate": null,
+    "cancellationReason": null,
+    "endToEndIdentifier": "RN1954055020260803u6vpeEldo22",
+    "paymentCreationMode": "MANUAL"
+  }
 }

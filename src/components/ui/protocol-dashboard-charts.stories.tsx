@@ -32,12 +32,42 @@ const mockDenver: ProtocolProgressData = {
 };
 
 const mockTrendPontos: TrendSessionPoint[] = [
-  { sessaoNumero: 40, evidenciasAcumuladas: 18, conquistasNoDia: 1, descricaoDestaque: "Início do protocolo de imitação motora" },
-  { sessaoNumero: 41, evidenciasAcumuladas: 21, conquistasNoDia: 3, descricaoDestaque: "Domínio de 3 gestos simples" },
-  { sessaoNumero: 42, evidenciasAcumuladas: 24, conquistasNoDia: 3, descricaoDestaque: "Primeiro mando independente registrado" },
-  { sessaoNumero: 43, evidenciasAcumuladas: 25, conquistasNoDia: 1, descricaoDestaque: "Manutenção de contato visual consistente" },
-  { sessaoNumero: 44, evidenciasAcumuladas: 28, conquistasNoDia: 3, descricaoDestaque: "Consolidação de resposta ao nome" },
-  { sessaoNumero: 45, evidenciasAcumuladas: 32, conquistasNoDia: 4, descricaoDestaque: "Conquista de marco VB-MAPP VP-MTS 3-M" },
+  {
+    sessaoNumero: 40,
+    evidenciasAcumuladas: 18,
+    conquistasNoDia: 1,
+    descricaoDestaque: "Início do protocolo de imitação motora",
+  },
+  {
+    sessaoNumero: 41,
+    evidenciasAcumuladas: 21,
+    conquistasNoDia: 3,
+    descricaoDestaque: "Domínio de 3 gestos simples",
+  },
+  {
+    sessaoNumero: 42,
+    evidenciasAcumuladas: 24,
+    conquistasNoDia: 3,
+    descricaoDestaque: "Primeiro mando independente registrado",
+  },
+  {
+    sessaoNumero: 43,
+    evidenciasAcumuladas: 25,
+    conquistasNoDia: 1,
+    descricaoDestaque: "Manutenção de contato visual consistente",
+  },
+  {
+    sessaoNumero: 44,
+    evidenciasAcumuladas: 28,
+    conquistasNoDia: 3,
+    descricaoDestaque: "Consolidação de resposta ao nome",
+  },
+  {
+    sessaoNumero: 45,
+    evidenciasAcumuladas: 32,
+    conquistasNoDia: 4,
+    descricaoDestaque: "Conquista de marco VB-MAPP VP-MTS 3-M",
+  },
 ];
 
 const meta = {
@@ -54,7 +84,7 @@ export const ProgressByProtocol: Story = {
     data: mockVbMapp,
   },
   render: () => (
-    <div className="flex flex-col gap-4 max-w-xl">
+    <div className="flex max-w-xl flex-col gap-4">
       <ProtocolProgressBarChart data={mockVbMapp} />
       <ProtocolProgressBarChart data={mockAblls} />
       <ProtocolProgressBarChart data={mockDenver} />
@@ -73,9 +103,11 @@ export const FactVsSuggestionComparison: Story = {
     },
   },
   render: (args) => (
-    <div className="flex flex-col gap-4 max-w-xl">
-      <div className="p-3 bg-surface-elevated rounded border border-border-brutal text-xs text-text-secondary">
-        Comparação visual: <strong>Sólido Menta</strong> indica fatos aprovados por terapeutas; <strong>Hachura Densa Violeta</strong> indica sugestões de IA candidatas a domínio aguardando revisão clínica.
+    <div className="flex max-w-xl flex-col gap-4">
+      <div className="bg-surface-elevated border-border-brutal text-text-secondary rounded border p-3 text-xs">
+        Comparação visual: <strong>Sólido Menta</strong> indica fatos aprovados
+        por terapeutas; <strong>Hachura Densa Violeta</strong> indica sugestões
+        de IA candidatas a domínio aguardando revisão clínica.
       </div>
       <ProtocolProgressBarChart data={args.data} />
     </div>
@@ -87,19 +119,15 @@ export const DashboardExecutiveView: Story = {
     data: mockVbMapp,
   },
   render: () => (
-    <div className="flex flex-col gap-5 max-w-3xl">
+    <div className="flex max-w-3xl flex-col gap-5">
       {/* Linha de KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <MetricCard
           titulo="Metas Dominadas"
           valor="84"
           tendencia={{ direcao: "alta", valor: "+8" }}
         />
-        <MetricCard
-          titulo="Sugestões IA"
-          valor="23"
-          progresso={45}
-        />
+        <MetricCard titulo="Sugestões IA" valor="23" progresso={45} />
         <MetricCard
           titulo="Aderência Geral"
           valor="78%"
@@ -116,7 +144,7 @@ export const DashboardExecutiveView: Story = {
 
       {/* Barras de Progresso por Protocolo */}
       <div className="flex flex-col gap-3">
-        <h4 className="font-display text-sm font-bold text-text-primary">
+        <h4 className="font-display text-text-primary text-sm font-bold">
           Progresso Detalhado por Protocolo
         </h4>
         <ProtocolProgressBarChart data={mockVbMapp} />

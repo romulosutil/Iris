@@ -2,8 +2,10 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { control } from "./primitives/surface";
 
-export interface InputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
+export interface InputProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "size"
+> {
   /**
    * Variações de tamanho do controle.
    * sm (32px), md (40px - padrão), lg (48px)
@@ -27,10 +29,7 @@ export interface InputProps
   inputClassName?: string;
 }
 
-export const Input = React.forwardRef<
-  any,
-  InputProps
->(function Input(
+export const Input = React.forwardRef<any, InputProps>(function Input(
   {
     className,
     inputClassName,
@@ -93,7 +92,8 @@ export const Input = React.forwardRef<
         !disabled &&
           "focus-within:outline-focus outline-none focus-within:outline-[length:var(--ring-width)] focus-within:outline-offset-[var(--ring-offset)]",
         ariaInvalid && "border-[var(--status-error-border)]",
-        disabled && "cursor-not-allowed opacity-50 bg-[var(--surface-elevated)]",
+        disabled &&
+          "cursor-not-allowed bg-[var(--surface-elevated)] opacity-50",
         className,
       )}
     >
@@ -123,7 +123,10 @@ export const Input = React.forwardRef<
         )}
       >
         {prefixIcon && (
-          <span aria-hidden="true" className="flex shrink-0 items-center justify-center pl-3 text-[var(--text-secondary)]">
+          <span
+            aria-hidden="true"
+            className="flex shrink-0 items-center justify-center pl-3 text-[var(--text-secondary)]"
+          >
             {prefixIcon}
           </span>
         )}
@@ -147,7 +150,10 @@ export const Input = React.forwardRef<
           />
         )}
         {suffixIcon && (
-          <span aria-hidden="true" className="flex shrink-0 items-center justify-center pr-3 text-[var(--text-secondary)]">
+          <span
+            aria-hidden="true"
+            className="flex shrink-0 items-center justify-center pr-3 text-[var(--text-secondary)]"
+          >
             {suffixIcon}
           </span>
         )}
@@ -176,7 +182,17 @@ export const Input = React.forwardRef<
 
 function IconeOlhoAberto() {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
@@ -185,7 +201,17 @@ function IconeOlhoAberto() {
 
 function IconeOlhoFechado() {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
       <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
       <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
@@ -207,7 +233,7 @@ export const InputSenha = React.forwardRef<any, InputProps>(
             type="button"
             disabled={props.disabled}
             onClick={() => setVisivel((v) => !v)}
-            className="flex items-center justify-center p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:outline-focus rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            className="focus-visible:outline-focus flex items-center justify-center rounded p-1.5 text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={visivel ? "Ocultar senha" : "Exibir senha em texto"}
           >
             {visivel ? <IconeOlhoFechado /> : <IconeOlhoAberto />}

@@ -73,7 +73,9 @@ export default async function PacienteLayout({
     { href: base, rotulo: "Evolução", exato: true },
     { href: `${base}/briefing`, rotulo: "Briefing" },
     { href: `${base}/cadastro-clinico`, rotulo: "Ficha Clínica" },
-    ...(!eConvencional ? [{ href: `${base}/metas`, rotulo: "PEI & Metas" }] : []),
+    ...(!eConvencional
+      ? [{ href: `${base}/metas`, rotulo: "PEI & Metas" }]
+      : []),
     ...(eConvencional ? [{ href: `${base}/tcc`, rotulo: "TCC" }] : []),
     { href: `${base}/equipe`, rotulo: "Equipe" },
     { href: `${base}/horas`, rotulo: "Horas" },

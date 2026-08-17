@@ -129,10 +129,12 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
     });
     expect(r.ok).toBe(true);
 
-    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    const [pac] =
+      await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
     expect(pac!.arquivado_em).toBeNull();
 
-    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
+    const [log] =
+      await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
     expect(log!.acao).toBe("paciente_desarquivado_automaticamente");
     expect(log!.detalhe).toEqual({ origem: "aprovacao_evidencia" });
 

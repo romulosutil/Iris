@@ -43,11 +43,7 @@ export const Grade: Story = {
         tendencia={{ direcao: "alta", valor: 3 }}
         progresso={68}
       />
-      <MetricCard
-        titulo="Sessões pendentes"
-        valor={7}
-        progresso={20}
-      />
+      <MetricCard titulo="Sessões pendentes" valor={7} progresso={20} />
       <MetricCard
         titulo="Reclassificações"
         valor="12%"

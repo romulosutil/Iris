@@ -38,7 +38,10 @@ async function semViolacoes(ui: ReactElement) {
 const SESSION_ID = "00000000-0000-0000-0000-000000000000";
 const PROTOCOLOS = [
   { id: "11111111-1111-1111-1111-111111111111", nome: "ABA — Programa 1" },
-  { id: "22222222-2222-2222-2222-222222222222", nome: "TO — Integração sensorial" },
+  {
+    id: "22222222-2222-2222-2222-222222222222",
+    nome: "TO — Integração sensorial",
+  },
 ];
 
 test("CapturaForm — sem violações axe (com protocolos)", async () => {
@@ -53,7 +56,11 @@ test("CapturaForm — sem violações axe (com protocolos)", async () => {
 
 test("CapturaForm — sem violações axe (sem protocolos)", async () => {
   await semViolacoes(
-    <CapturaForm sessionId={SESSION_ID} protocolos={[]} protocolIdsPreSelecionados={[]} />,
+    <CapturaForm
+      sessionId={SESSION_ID}
+      protocolos={[]}
+      protocolIdsPreSelecionados={[]}
+    />,
   );
 });
 

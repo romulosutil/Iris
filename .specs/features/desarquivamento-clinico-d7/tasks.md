@@ -13,12 +13,14 @@
 ### Task 1: Criar o Módulo Central de Desarquivamento e Testes de Integração
 
 **Files:**
+
 - Create: `src/lib/patient/desarquivamento.ts`
 - Create: `src/lib/patient/desarquivamento.int.test.ts`
 
 - [x] **Step 1: Escrever o teste de integração para o helper central**
 
 Criar `src/lib/patient/desarquivamento.int.test.ts` cobrindo:
+
 1. Desarquivamento de paciente arquivado com emissão de `audit_log` contendo `acao: "paciente_desarquivado_automaticamente"` e a `origem` especificada.
 2. Idempotência: paciente já ativo (`arquivado_em IS NULL`) retorna `false` e não insere `audit_log`.
 3. Autorização: Coordenador e Terapeuta da Equipe desarquivam com sucesso.
@@ -50,18 +52,21 @@ git commit -m "feat(patient): centraliza helper de desarquivamento automatico de
 ### Task 2: Integrar o Helper no Módulo de Diário (Notas, Áudio e Escopo)
 
 **Files:**
+
 - Modify: `src/app/(app)/diario/[sessionId]/logic.ts`
 - Modify/Test: `src/app/(app)/diario/[sessionId]/actions.int.test.ts`
 
 - [x] **Step 1: Escrever testes para áudio local e ajuste de escopo**
 
 Adicionar testes em `src/app/(app)/diario/[sessionId]/actions.int.test.ts` verificando que:
+
 - `registrarAudioLocal` para paciente arquivado desarquiva e grava `audit_log` com `origem: "audio_local"`.
 - `corrigirEscopoProtocolo` para paciente arquivado desarquiva e grava `audit_log` com `origem: "escopo_protocolo"`.
 
 - [x] **Step 2: Atualizar `src/app/(app)/diario/[sessionId]/logic.ts`**
 
 Importar `desarquivarPacienteSeArquivado` e acioná-lo em:
+
 - `capturarDiarioCore` (`"registro_clinico"`)
 - `consolidarSessaoCore` (`"registro_clinico"`)
 - `corrigirEscopoProtocoloCore` (`"escopo_protocolo"`)
@@ -84,6 +89,7 @@ git commit -m "refactor(diario): unifica desarquivamento em notas, audio local e
 ### Task 3: Integrar Desarquivamento na Aprovação de Evidências Clínicas (Revisão)
 
 **Files:**
+
 - Modify: `src/app/(app)/revisao/[sessionId]/logic.ts`
 - Modify/Test: `src/app/(app)/revisao/[sessionId]/actions.int.test.ts`
 
@@ -112,6 +118,7 @@ git commit -m "feat(revisao): desarquiva paciente automaticamente ao aprovar evi
 ### Task 4: Integrar Desarquivamento na Fila de Validação e Dúvidas de Evidência
 
 **Files:**
+
 - Modify: `src/app/(app)/validacao/logic.ts`
 - Modify: `src/app/(app)/duvidas/logic.ts`
 - Modify/Test: `src/app/(app)/validacao/actions.int.test.ts`
@@ -141,6 +148,7 @@ git commit -m "feat(validacao): desarquiva paciente ao validar evidencias e resp
 ### Task 5: Integrar Desarquivamento no Planejamento Clínico (Protocolos, Metas, Prescrição e Ficha)
 
 **Files:**
+
 - Modify: `src/app/(app)/pacientes/[id]/cadastro-clinico/protocolo-logic.ts`
 - Modify: `src/app/(app)/pacientes/[id]/metas/logic.ts`
 - Modify: `src/app/(app)/pacientes/[id]/cadastro-clinico/prescricao-logic.ts`
@@ -152,6 +160,7 @@ git commit -m "feat(validacao): desarquiva paciente ao validar evidencias e resp
 - [x] **Step 1: Escrever testes de integração**
 
 Garantir testes cobrindo desarquivamento em:
+
 - `ativarProtocolo` (`"ativacao_protocolo"`)
 - `criarMeta` (`"criacao_meta"`)
 - `salvarPrescricao` (`"prescricao_disciplina"`)
@@ -178,6 +187,7 @@ git commit -m "feat(paciente): desarquiva paciente em atos de prescricao, metas,
 ### Task 6: Atualizar BACKLOG e Verificação Geral do Repositório
 
 **Files:**
+
 - Modify: `BACKLOG.md`
 
 - [x] **Step 1: Atualizar entrada D7 no BACKLOG.md**

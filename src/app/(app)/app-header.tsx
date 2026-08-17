@@ -47,7 +47,6 @@ export function AppHeader({
     };
   });
 
-
   const handleTrocarClinica = async (clinicId: string) => {
     const { definirClinicaAtiva } = await import("@/auth/actions");
     await definirClinicaAtiva(clinicId);

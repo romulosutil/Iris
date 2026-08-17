@@ -9,7 +9,10 @@ export const Table = React.forwardRef<
     <div className="relative w-full overflow-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]">
       <table
         ref={ref}
-        className={cn("w-full caption-bottom text-sm font-body text-left", className)}
+        className={cn(
+          "font-body w-full caption-bottom text-left text-sm",
+          className,
+        )}
         {...props}
       />
     </div>
@@ -23,7 +26,10 @@ export const TableHeader = React.forwardRef<
   return (
     <thead
       ref={ref}
-      className={cn("border-b-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)]", className)}
+      className={cn(
+        "border-b-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)]",
+        className,
+      )}
       {...props}
     />
   );
@@ -66,7 +72,7 @@ export const TableHead = React.forwardRef<
     <th
       ref={ref}
       className={cn(
-        "h-11 px-4 text-left align-middle font-display text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]",
+        "font-display h-11 px-4 text-left align-middle text-xs font-bold tracking-wider text-[var(--text-secondary)] uppercase",
         className,
       )}
       {...props}

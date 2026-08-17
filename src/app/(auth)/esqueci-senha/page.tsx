@@ -20,9 +20,9 @@ export default function EsqueciSenhaPage() {
         <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">
           Recuperar senha
         </h1>
-        <p className="text-[var(--text-secondary)] font-body text-sm">
-          Informe o e-mail da sua conta para receber um link de redefinição
-          de senha.
+        <p className="font-body text-sm text-[var(--text-secondary)]">
+          Informe o e-mail da sua conta para receber um link de redefinição de
+          senha.
         </p>
       </div>
 
@@ -35,11 +35,11 @@ export default function EsqueciSenhaPage() {
         <EsqueciSenhaForm />
       </div>
 
-      <p className="text-[var(--text-secondary)] text-center text-sm">
+      <p className="text-center text-sm text-[var(--text-secondary)]">
         Lembrou a senha?{" "}
         <Link
           href="/login"
-          className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
+          className="font-semibold text-[var(--text-primary)] underline underline-offset-2"
         >
           Entrar
         </Link>

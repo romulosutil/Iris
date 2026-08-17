@@ -15,7 +15,7 @@
 - `audit_log` é imutável para `app_role` (REVOKE UPDATE aplicado em 0039) — qualquer mutação de linha de `audit_log` (incl. pseudonimização) só pode passar por função `SECURITY DEFINER` do owner do banco. Nunca `UPDATE audit_log` direto de código de app.
 - Toda função `SECURITY DEFINER` que lê/filtra por paciente ou clínica precisa de guard de tenant explícito (`clinic_id = current_setting('app.clinic_id')::uuid` ou equivalente) — o DEFINER ignora RLS, então o guard é o único isolamento restante.
 - Este projeto não tem cron nativo no host (Easypanel v2.31). Todo job periódico é um script Node standalone em `scripts/`, agendado via campo "Comando" do Easypanel — não usar `setInterval`/loop interno.
-- Toda migração SQL nova segue o padrão de comentário-motivo das migrações existentes (ex.: 0045, 0049) — explicar o *porquê*, não só o *o quê*.
+- Toda migração SQL nova segue o padrão de comentário-motivo das migrações existentes (ex.: 0045, 0049) — explicar o _porquê_, não só o _o quê_.
 - Documento jurídico novo em `docs/legal/` é sempre rascunho até leitura ao vivo do advogado sem apontamento — nunca comitar como "final" sem essa etapa registrada no próprio doc.
 - `pnpm db:generate` + `pnpm db:migrate` são etapas obrigatórias após qualquer edição em `src/db/schema.ts` — nenhuma migração fica só commitada sem aplicar localmente e sem entrar no `_journal.json` (issue #165 — migração commitada não aplicada).
 
@@ -34,14 +34,17 @@
 ### Task 1: Exportação Auditável em PDF/A (Issue #120)
 
 **Files:**
+
 - Create: `src/lib/export/pdf-generator.ts`
 - Test: `src/lib/export/pdf-generator.test.ts`
 - Modify: `package.json` (adiciona `pdfkit` — não há dependência de PDF no projeto hoje)
 
 **Interfaces:**
+
 - Produces: `gerarHashPdf(pdfBuffer: Buffer): string`, `gerarPdfProntuario(dados: DadosProntuarioExport): Promise<{ buffer: Buffer; hash: string }>` — consumido pela rota de export do prontuário (fora de escopo desta task).
 
 **Regras Levantadas:**
+
 1. Exportação do prontuário integral em formato PDF/A-2b.
 2. Marca d'água semitransparente em todas as páginas: `"EMITIDO PARA: [NOME] - CPF: [CPF] EM [TIMESTAMP]"`
 3. Hash SHA-256 impresso no rodapé de cada página e retornado na resposta da API.
@@ -53,6 +56,7 @@ Run: `pnpm add pdfkit && pnpm add -D @types/pdfkit`
 - [ ] **Step 2: Escrever teste falho de `gerarHashPdf`**
 
 File: `src/lib/export/pdf-generator.test.ts`
+
 ```typescript
 import { describe, it, expect } from "vitest";
 import { gerarHashPdf, gerarPdfProntuario } from "./pdf-generator";
@@ -74,6 +78,7 @@ Expected: FAIL com "gerarHashPdf não definido" ou erro de import.
 - [ ] **Step 4: Implementar `gerarHashPdf`**
 
 File: `src/lib/export/pdf-generator.ts`
+
 ```typescript
 import crypto from "node:crypto";
 
@@ -90,6 +95,7 @@ Expected: PASS.
 - [ ] **Step 6: Escrever teste falho de `gerarPdfProntuario` (marca d'água + rodapé + hash)**
 
 File: `src/lib/export/pdf-generator.test.ts` (adicionar ao describe existente)
+
 ```typescript
 describe("gerarPdfProntuario", () => {
   const dados = {
@@ -117,7 +123,9 @@ describe("gerarPdfProntuario", () => {
 
   it("gera uma página por seção mais a página de rosto (marcador /Type /Page)", async () => {
     const { buffer } = await gerarPdfProntuario(dados);
-    const contagemPaginas = (buffer.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+    const contagemPaginas = (
+      buffer.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []
+    ).length;
     expect(contagemPaginas).toBe(dados.secoes.length + 1);
   });
 });
@@ -131,6 +139,7 @@ Expected: FAIL com "gerarPdfProntuario não definido".
 - [ ] **Step 8: Implementar `gerarPdfProntuario`**
 
 File: `src/lib/export/pdf-generator.ts` (adicionar ao arquivo existente)
+
 ```typescript
 import PDFDocument from "pdfkit";
 
@@ -160,7 +169,12 @@ function desenharMarcaDagua(doc: PDFKit.PDFDocument, texto: string) {
   doc.opacity(1).restore();
 }
 
-function desenharRodapeComHash(doc: PDFKit.PDFDocument, hashParcial: string, pagina: number, totalPaginas: number) {
+function desenharRodapeComHash(
+  doc: PDFKit.PDFDocument,
+  hashParcial: string,
+  pagina: number,
+  totalPaginas: number,
+) {
   doc
     .fontSize(7)
     .fillColor("black")
@@ -193,9 +207,15 @@ export async function gerarPdfProntuario(
   const fim = new Promise<void>((resolve) => doc.on("end", () => resolve()));
 
   // Página de rosto
-  doc.fontSize(18).text(`Prontuário Clínico — ${dados.nomeTitular}`, { align: "center" });
+  doc
+    .fontSize(18)
+    .text(`Prontuário Clínico — ${dados.nomeTitular}`, { align: "center" });
   doc.moveDown();
-  doc.fontSize(10).text(`Emitido em ${dados.timestampEmissao.toISOString()}`, { align: "center" });
+  doc
+    .fontSize(10)
+    .text(`Emitido em ${dados.timestampEmissao.toISOString()}`, {
+      align: "center",
+    });
   desenharMarcaDagua(doc, marcaDagua);
   desenharRodapeComHash(doc, "pendente-ver-resposta-da-api", 1, totalPaginas);
 
@@ -205,7 +225,12 @@ export async function gerarPdfProntuario(
     doc.moveDown(0.5);
     doc.fontSize(11).text(secao.conteudo);
     desenharMarcaDagua(doc, marcaDagua);
-    desenharRodapeComHash(doc, "pendente-ver-resposta-da-api", i + 2, totalPaginas);
+    desenharRodapeComHash(
+      doc,
+      "pendente-ver-resposta-da-api",
+      i + 2,
+      totalPaginas,
+    );
   });
 
   doc.end();
@@ -237,6 +262,7 @@ git commit -m "feat(export): implementar gerador PDF/A auditável com marca d'á
 ### Task 2: Retenção Marco Civil (6 Meses) Desatrelada de Expurgo (Issue #116)
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (FK `audit_log.user_id` → `onDelete: "set null"`)
 - Create: `db/migrations/00XX_audit_log_user_set_null.sql`
 - Create: `db/migrations/00XY_pseudonimiza_audit_log_expirado.sql`
@@ -244,10 +270,12 @@ git commit -m "feat(export): implementar gerador PDF/A auditável com marca d'á
 - Modify: `infra/README.md` (documentar agendamento no Easypanel)
 
 **Interfaces:**
+
 - Produces: `verificarElegibilidadeExpurgoAuditLog(criadoEm: Date, agora?: Date): boolean` (lógica pura, testável sem banco), função SQL `app_pseudonimiza_expurgar_audit_log_expirado()` `SECURITY DEFINER`.
 - Consumes (padrão a seguir): `app_purgar_paciente` (migração `db/migrations/0045_expurgo_retencao.sql`) — mesmo padrão de trilha-antes-de-mutar e pseudonimização via `jsonb_build_object`.
 
 **Regras Levantadas:**
+
 1. `audit_log.user_id` vira `ON DELETE SET NULL` para impedir exclusão em cascata.
 2. Deletar a conta do usuário pseudonimiza os logs de acesso, mantendo-os por 180 dias.
 3. Job diário deleta apenas logs com `criado_em < NOW() - INTERVAL '6 MONTHS'` — e antes disso, pseudonimiza (regra 2) os logs cujo usuário já foi deletado.
@@ -255,6 +283,7 @@ git commit -m "feat(export): implementar gerador PDF/A auditável com marca d'á
 - [ ] **Step 1: Alterar FK no schema Drizzle**
 
 File: `src/db/schema.ts`
+
 ```typescript
 // Localizar a definição atual da coluna user_id em auditLog e trocar a FK:
 export const auditLog = pgTable("audit_log", {
@@ -273,6 +302,7 @@ Expected: nova migração criada refletindo `ON DELETE SET NULL` em `audit_log.u
 - [ ] **Step 3: Escrever teste falho de `verificarElegibilidadeExpurgoAuditLog`**
 
 File: `scripts/expurgo-audit-log.test.mjs`
+
 ```javascript
 import { describe, it, expect } from "vitest";
 import { verificarElegibilidadeExpurgoAuditLog } from "./expurgo-audit-log.mjs";
@@ -300,8 +330,12 @@ Expected: FAIL com "verificarElegibilidadeExpurgoAuditLog não definido".
 - [ ] **Step 5: Implementar função pura de elegibilidade**
 
 File: `scripts/expurgo-audit-log.mjs` (parte 1 do arquivo)
+
 ```javascript
-export function verificarElegibilidadeExpurgoAuditLog(criadoEm, agora = new Date()) {
+export function verificarElegibilidadeExpurgoAuditLog(
+  criadoEm,
+  agora = new Date(),
+) {
   const seisMesesMs = 180 * 24 * 60 * 60 * 1000;
   return agora.getTime() - criadoEm.getTime() >= seisMesesMs;
 }
@@ -317,6 +351,7 @@ Expected: PASS.
 Segue exatamente o padrão de `db/migrations/0045_expurgo_retencao.sql` (trilha primeiro, pseudonimização via `jsonb_build_object`, DEFINER porque `audit_log` é imutável para `app_role`).
 
 File: `db/migrations/00XY_pseudonimiza_audit_log_expirado.sql`
+
 ```sql
 -- Fase LGPD — pseudonimização + expurgo de audit_log (Marco Civil, #116).
 -- audit_log é imutável para app_role (REVOKE UPDATE em 0039) — esta função
@@ -370,6 +405,7 @@ Expected: migração aplicada sem erro. Se a role `iris_expurgo_audit_log` ainda
 - [ ] **Step 9: Implementar o script de job (parte 2 do arquivo)**
 
 File: `scripts/expurgo-audit-log.mjs` (adicionar ao arquivo existente, guarda de execução no mesmo estilo de `scripts/escalonamento-risco.mjs`)
+
 ```javascript
 import postgres from "postgres";
 import { pathToFileURL } from "node:url";
@@ -406,7 +442,10 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().catch((err) => {
     console.error("[expurgo-audit-log] FALHA na execução:");
     console.error(err);
@@ -418,6 +457,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 - [ ] **Step 10: Documentar agendamento no Easypanel**
 
 File: `infra/README.md` (adicionar seção ao lado da já existente do escalonamento)
+
 ```markdown
 ### Job: Expurgo de Audit Log (Marco Civil, 180 dias)
 
@@ -448,20 +488,24 @@ git commit -m "feat(compliance): desatrelar expurgo de audit_log, pseudonimizar 
 ### Task 3: DPA Hostinger & Harmonização de Backup LGPD (Issues #102, #89)
 
 **Files:**
+
 - Create: `docs/legal/dpa-hostinger.md`
 - Create: `src/lib/lgpd/erasure-response.ts`, `src/lib/lgpd/erasure-response.test.ts`
 - Modify: `docs/legal/politica-retencao-dados.md` (referenciar o novo DPA)
 
 **Interfaces:**
+
 - Produces: `gerarMensagemConfirmacaoEliminacao(nomeTitular: string, dataHora: Date): string`
 
 **Regras Levantadas:**
+
 1. Registrar o DPA da Hostinger em `docs/legal/dpa-hostinger.md`.
 2. Padronizar resposta ao titular sobre ciclo de backup de 30 dias.
 
 - [ ] **Step 1: Rascunhar `docs/legal/dpa-hostinger.md`**
 
 File: `docs/legal/dpa-hostinger.md`
+
 ```markdown
 # DPA — Hostinger (Data Processing Agreement)
 
@@ -490,16 +534,16 @@ File: `docs/legal/dpa-hostinger.md`
 ## Retenção e Localização
 
 - [ ] PENDENTE — confirmar com a Hostinger/contrato de VPS o país/região do
-  datacenter contratado antes de fechar este documento (gate já registrado
-  em memória de sessão: "gate aberto: provedor de IA + país na seção 9" —
-  mesma pendência se aplica aqui para infraestrutura).
+      datacenter contratado antes de fechar este documento (gate já registrado
+      em memória de sessão: "gate aberto: provedor de IA + país na seção 9" —
+      mesma pendência se aplica aqui para infraestrutura).
 - Backups: ciclo de rotação de 30 dias (ver Task 2 abaixo / `erasure-response.ts`).
 
 ## Obrigações do Processor
 
 - [ ] PENDENTE — anexar/linkar o DPA padrão publicado pela Hostinger (se
-  existir) ou registrar aqui a ausência de um DPA formal disponibilizado
-  pelo provedor, o que muda a análise de risco.
+      existir) ou registrar aqui a ausência de um DPA formal disponibilizado
+      pelo provedor, o que muda a análise de risco.
 
 ## Aprovação
 
@@ -509,6 +553,7 @@ File: `docs/legal/dpa-hostinger.md`
 - [ ] **Step 2: Escrever teste falho de `gerarMensagemConfirmacaoEliminacao`**
 
 File: `src/lib/lgpd/erasure-response.test.ts`
+
 ```typescript
 import { describe, it, expect } from "vitest";
 import { gerarMensagemConfirmacaoEliminacao } from "./erasure-response";
@@ -534,8 +579,12 @@ Expected: FAIL com "gerarMensagemConfirmacaoEliminacao não definido".
 - [ ] **Step 4: Implementar `erasure-response.ts`**
 
 File: `src/lib/lgpd/erasure-response.ts`
+
 ```typescript
-export function gerarMensagemConfirmacaoEliminacao(nomeTitular: string, dataHora: Date): string {
+export function gerarMensagemConfirmacaoEliminacao(
+  nomeTitular: string,
+  dataHora: Date,
+): string {
   return `Prezado(a) ${nomeTitular}, confirmamos que seus dados pessoais foram eliminados do banco de dados ativo da plataforma Iris em ${dataHora.toISOString()}. Em conformidade com as diretrizes de segurança da informação, réplicas cifradas de segurança em backups expiram no ciclo de rotação em até 30 dias.`;
 }
 ```

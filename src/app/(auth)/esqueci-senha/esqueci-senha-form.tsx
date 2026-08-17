@@ -37,7 +37,9 @@ export function EsqueciSenhaForm() {
 
   React.useEffect(() => {
     if (!estado?.error && !estado?.mensagem) return;
-    const alerta = containerRef.current?.querySelector('[role="alert"], [role="status"]');
+    const alerta = containerRef.current?.querySelector(
+      '[role="alert"], [role="status"]',
+    );
     if (alerta instanceof HTMLElement) {
       alerta.setAttribute("tabindex", "-1");
       alerta.focus();
@@ -52,7 +54,7 @@ export function EsqueciSenhaForm() {
         </Alert>
         <Link
           href="/login"
-          className="text-[var(--text-primary)] text-center text-sm font-semibold underline underline-offset-2"
+          className="text-center text-sm font-semibold text-[var(--text-primary)] underline underline-offset-2"
         >
           Voltar para o login
         </Link>

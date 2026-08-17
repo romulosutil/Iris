@@ -31,7 +31,7 @@ export const Desktop = {
         itemsNav={itemsNavExemplo}
         onSignOut={() => alert("Sair")}
       />
-      <div className="p-8 text-center text-[var(--text-secondary)] font-body">
+      <div className="font-body p-8 text-center text-[var(--text-secondary)]">
         Visualização de Header em Desktop (≥ 640px)
       </div>
     </div>
@@ -53,8 +53,9 @@ export const Mobile = {
         itemsNav={itemsNavExemplo}
         onSignOut={() => alert("Sair")}
       />
-      <div className="p-6 text-center text-sm text-[var(--text-secondary)] font-body">
-        Visualização de Header em Celular (375px). Toque no botão hambúrguer para abrir o menu deslizante.
+      <div className="font-body p-6 text-center text-sm text-[var(--text-secondary)]">
+        Visualização de Header em Celular (375px). Toque no botão hambúrguer
+        para abrir o menu deslizante.
       </div>
     </div>
   ),

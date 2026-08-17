@@ -47,7 +47,12 @@ async function salvarRPDCore(
         })
         .returning({ id: tccRpdEntry.id });
 
-      await desarquivarPacienteSeArquivado(tx, ctx, d.patientId, "registro_clinico");
+      await desarquivarPacienteSeArquivado(
+        tx,
+        ctx,
+        d.patientId,
+        "registro_clinico",
+      );
 
       return { id: row!.id };
     });

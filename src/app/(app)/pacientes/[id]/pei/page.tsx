@@ -75,8 +75,11 @@ export default async function PeiPage({
         />
       ) : (
         <>
-          <section aria-label="Progresso por disciplina" className="flex flex-col gap-4">
-            <h2 className="font-display text-xl font-semibold text-text-primary">
+          <section
+            aria-label="Progresso por disciplina"
+            className="flex flex-col gap-4"
+          >
+            <h2 className="font-display text-text-primary text-xl font-semibold">
               Progresso por disciplina
             </h2>
             <div className="grid gap-4 lg:grid-cols-2">
@@ -86,8 +89,11 @@ export default async function PeiPage({
             </div>
           </section>
 
-          <section aria-label="Trajetória de evolução" className="flex flex-col gap-4">
-            <h2 className="font-display text-xl font-semibold text-text-primary">
+          <section
+            aria-label="Trajetória de evolução"
+            className="flex flex-col gap-4"
+          >
+            <h2 className="font-display text-text-primary text-xl font-semibold">
               Trajetória de evolução
             </h2>
             <ProtocolTrendChart

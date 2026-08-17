@@ -61,15 +61,15 @@ critica e refina, como o próprio README pede.
 
   `consent_tipo` tem **7 valores**, em três grupos:
 
-  | Grupo | Valor | Semântica |
-  | :--- | :--- | :--- |
-  | Regime | `tratamento_dados_menor` | Responsável legal consente por menor (LGPD Art. 14, §1º). Exige `responsavel_signatario`. |
-  | Regime | `autoconsentimento_titular_adulto` | Adulto capaz consente por si. Exige `responsavel_signatario` **nulo**. |
-  | Regime | `representacao_curador` | Curador consente por adulto sob curatela. Exige `responsavel_signatario` **e** `instrumento_representacao`. |
-  | Regime | `autoconsentimento_titular_emancipado` | Emancipado consente por si (CC Art. 5º, p. único). Exige `responsavel_signatario` nulo **e** `instrumento_representacao` (comprovação da emancipação). |
-  | Finalidade | `uso_ia_processamento` | Estruturação assistida por IA. |
-  | Finalidade | `exportacao_relatorios` | Exportação de relatório a convênio/terceiro. |
-  | Evento | `revogacao_consentimento` | Revoga **um** consentimento anterior. Exige `consent_revogado_id`. |
+  | Grupo      | Valor                                  | Semântica                                                                                                                                              |
+  | :--------- | :------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Regime     | `tratamento_dados_menor`               | Responsável legal consente por menor (LGPD Art. 14, §1º). Exige `responsavel_signatario`.                                                              |
+  | Regime     | `autoconsentimento_titular_adulto`     | Adulto capaz consente por si. Exige `responsavel_signatario` **nulo**.                                                                                 |
+  | Regime     | `representacao_curador`                | Curador consente por adulto sob curatela. Exige `responsavel_signatario` **e** `instrumento_representacao`.                                            |
+  | Regime     | `autoconsentimento_titular_emancipado` | Emancipado consente por si (CC Art. 5º, p. único). Exige `responsavel_signatario` nulo **e** `instrumento_representacao` (comprovação da emancipação). |
+  | Finalidade | `uso_ia_processamento`                 | Estruturação assistida por IA.                                                                                                                         |
+  | Finalidade | `exportacao_relatorios`                | Exportação de relatório a convênio/terceiro.                                                                                                           |
+  | Evento     | `revogacao_consentimento`              | Revoga **um** consentimento anterior. Exige `consent_revogado_id`.                                                                                     |
 
   Colunas novas:
   - **`consentRevogadoId`** (`uuid`, nulo nas concessões) — ponteiro para o
@@ -376,8 +376,8 @@ assistencia_moderada(3) < assistencia_maxima(4)`; Fono e demais famílias
       **delta de idade-equivalente relativo à idade cronológica**; ESTAGNAÇÃO =
       ganho equivalente < passagem de tempo; abertura de gap = REGRESSÃO
       relativa. Muitas vezes `nivel_ajuda` nem é coletado.
-    As três definições abaixo usam "melhora/piora na **métrica-alvo do tipo**"
-    onde antes liam "ordinal de `nivel_ajuda`".
+      As três definições abaixo usam "melhora/piora na **métrica-alvo do tipo**"
+      onde antes liam "ordinal de `nivel_ajuda`".
   - **EVOLUÇÃO**: nova Evidence positiva para um goal/domínio que representa
     primeira ocorrência OU melhora na **métrica-alvo do tipo** (ver acima) —
     sempre dentro da taxonomia/estrutura do PRÓPRIO protocolo de origem daquela

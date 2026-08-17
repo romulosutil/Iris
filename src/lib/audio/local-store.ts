@@ -20,7 +20,10 @@ function abrir(): Promise<IDBDatabase> {
   });
 }
 
-function tx<T>(modo: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+function tx<T>(
+  modo: IDBTransactionMode,
+  fn: (s: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
   return abrir().then(
     (db) =>
       new Promise<T>((resolve, reject) => {

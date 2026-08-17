@@ -141,13 +141,15 @@ export function computarSegmentacao(
     const isFirstPositive = obs.polaridade === "positiva" && !sawPositive;
     const isImprovement = bestOrdinal !== null && ordinal < bestOrdinal;
     const wasIndependent = bestOrdinal === 0;
-    const negativeOnIndependent = obs.polaridade === "negativa" && wasIndependent;
+    const negativeOnIndependent =
+      obs.polaridade === "negativa" && wasIndependent;
     const sustainedRegression = worseStreak >= 2;
 
     let rotulo: Rotulo;
     if (isFirstPositive || isImprovement) {
       rotulo = "evolucao";
-      bestOrdinal = bestOrdinal === null ? ordinal : Math.min(bestOrdinal, ordinal);
+      bestOrdinal =
+        bestOrdinal === null ? ordinal : Math.min(bestOrdinal, ordinal);
       sessionsSinceImprovement = 0;
       worseStreak = 0;
     } else if (negativeOnIndependent || sustainedRegression) {

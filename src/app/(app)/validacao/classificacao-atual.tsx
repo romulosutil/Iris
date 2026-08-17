@@ -29,39 +29,56 @@ const rotuloPolaridade: Record<string, string> = {
  * Compartilhado entre a fila de validação do coordenador e o card de dúvida
  * do terapeuta — ambos precisam mostrar a mesma classificação atual.
  */
-export function ClassificacaoAtual({ classificacao }: { classificacao: unknown }) {
+export function ClassificacaoAtual({
+  classificacao,
+}: {
+  classificacao: unknown;
+}) {
   if (!classificacao || typeof classificacao !== "object") {
-    return <span className="text-[var(--text-secondary)] text-sm">Classificação não disponível.</span>;
+    return (
+      <span className="text-sm text-[var(--text-secondary)]">
+        Classificação não disponível.
+      </span>
+    );
   }
 
   const c = classificacao as Record<string, unknown>;
-  const alvo = c.alvo && typeof c.alvo === "object" ? (c.alvo as AlvoValido) : null;
+  const alvo =
+    c.alvo && typeof c.alvo === "object" ? (c.alvo as AlvoValido) : null;
   const nivelAjuda = typeof c.nivel_ajuda === "string" ? c.nivel_ajuda : null;
   const polaridade = typeof c.polaridade === "string" ? c.polaridade : null;
   const funcao = typeof c.funcao === "string" ? c.funcao : null;
 
   return (
     <Stack gap="sm">
-      <p className="text-[var(--text-secondary)] text-sm">
-        Alvo: <span className="text-[var(--text-primary)] font-medium">{alvo ? rotuloAlvo(alvo) : "—"}</span>
+      <p className="text-sm text-[var(--text-secondary)]">
+        Alvo:{" "}
+        <span className="font-medium text-[var(--text-primary)]">
+          {alvo ? rotuloAlvo(alvo) : "—"}
+        </span>
       </p>
       {nivelAjuda ? (
-        <p className="text-[var(--text-secondary)] text-sm">
+        <p className="text-sm text-[var(--text-secondary)]">
           Nível de ajuda:{" "}
-          <span className="text-[var(--text-primary)] font-medium">
+          <span className="font-medium text-[var(--text-primary)]">
             {rotuloNivelAjuda[nivelAjuda] ?? nivelAjuda}
           </span>
         </p>
       ) : null}
       {polaridade ? (
-        <p className="text-[var(--text-secondary)] text-sm">
+        <p className="text-sm text-[var(--text-secondary)]">
           Polaridade:{" "}
-          <span className="text-[var(--text-primary)] font-medium">{rotuloPolaridade[polaridade] ?? polaridade}</span>
+          <span className="font-medium text-[var(--text-primary)]">
+            {rotuloPolaridade[polaridade] ?? polaridade}
+          </span>
         </p>
       ) : null}
       {funcao ? (
-        <p className="text-[var(--text-secondary)] text-sm">
-          Função: <span className="text-[var(--text-primary)] font-medium">{funcao}</span>
+        <p className="text-sm text-[var(--text-secondary)]">
+          Função:{" "}
+          <span className="font-medium text-[var(--text-primary)]">
+            {funcao}
+          </span>
         </p>
       ) : null}
     </Stack>

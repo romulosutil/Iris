@@ -22,8 +22,16 @@ const SESS2 = "40000000-0000-0000-0000-000000000002";
 const EXT1 = "50000000-0000-0000-0000-000000000001";
 const EXT2 = "50000000-0000-0000-0000-000000000002";
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD, role: "coordenador" } as const;
-const ctxCoordB = { clinicId: CLINIC_B, userId: U_COORD, role: "coordenador" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
+const ctxCoordB = {
+  clinicId: CLINIC_B,
+  userId: U_COORD,
+  role: "coordenador",
+} as const;
 
 const CRITERIO = JSON.stringify({ tipo: "n_acertos_m_sessoes", n: 3, m: 3 });
 
@@ -109,9 +117,17 @@ describe.skipIf(!hasDb)("dashboard de protocolos · agregação e RLS", () => {
   test("visão por disciplina: Fono sem candidacy → metasSugeridasIA = 0", async () => {
     const r = await Q.getProtocolDashboardMetrics(ctxCoordA, PAC);
     const fono = r!.porDisciplina.find((d) => d.protocoloNome === "Fono");
-    expect(fono).toMatchObject({ totalMetas: 1, metasDominadas: 0, metasSugeridasIA: 0 });
+    expect(fono).toMatchObject({
+      totalMetas: 1,
+      metasDominadas: 0,
+      metasSugeridasIA: 0,
+    });
     const aba = r!.porDisciplina.find((d) => d.protocoloNome === "ABA");
-    expect(aba).toMatchObject({ totalMetas: 3, metasDominadas: 1, metasSugeridasIA: 1 });
+    expect(aba).toMatchObject({
+      totalMetas: 3,
+      metasDominadas: 1,
+      metasSugeridasIA: 1,
+    });
   });
 
   test("tendência cumulativa por sessionNumero", async () => {

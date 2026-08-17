@@ -62,7 +62,11 @@ export default async function DiarioPage({
     // Protocolos ativos do paciente — o filtro por disciplina só decide a
     // pré-seleção do chip, nunca esconde protocolos de outra disciplina.
     const protocolos = await tx
-      .select({ id: protocol.id, nome: protocol.nome, disciplina: protocol.disciplina })
+      .select({
+        id: protocol.id,
+        nome: protocol.nome,
+        disciplina: protocol.disciplina,
+      })
       .from(patientProtocol)
       .innerJoin(protocol, eq(protocol.id, patientProtocol.protocolId))
       .where(
@@ -72,7 +76,12 @@ export default async function DiarioPage({
         ),
       );
 
-    return { sess, pacienteNome: pac?.nome, protocolos, disciplina: membro?.disciplina };
+    return {
+      sess,
+      pacienteNome: pac?.nome,
+      protocolos,
+      disciplina: membro?.disciplina,
+    };
   });
 
   if (!dados) notFound();
@@ -92,9 +101,9 @@ export default async function DiarioPage({
   const daDisciplina = dados.disciplina
     ? dados.protocolos.filter((p) => p.disciplina === dados.disciplina)
     : [];
-  const preSelecionados = (daDisciplina.length > 0 ? daDisciplina : dados.protocolos).map(
-    (p) => p.id,
-  );
+  const preSelecionados = (
+    daDisciplina.length > 0 ? daDisciplina : dados.protocolos
+  ).map((p) => p.id);
 
   return (
     <Stack gap="lg">
@@ -119,7 +128,7 @@ export default async function DiarioPage({
       <Stack gap="md" como="section" aria-labelledby="captura-titulo">
         <h2
           id="captura-titulo"
-          className="font-display text-[var(--text-primary)] text-2xl font-bold"
+          className="font-display text-2xl font-bold text-[var(--text-primary)]"
         >
           Captura rápida
         </h2>
@@ -133,7 +142,7 @@ export default async function DiarioPage({
       <Stack gap="md" como="section" aria-labelledby="consolidar-titulo">
         <h2
           id="consolidar-titulo"
-          className="font-display text-[var(--text-primary)] text-2xl font-bold"
+          className="font-display text-2xl font-bold text-[var(--text-primary)]"
         >
           Consolidar sessão
         </h2>

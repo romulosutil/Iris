@@ -1,4 +1,8 @@
-import type { ExtractionContext, ExtractionProvider, ExtractionResult } from "./provider";
+import type {
+  ExtractionContext,
+  ExtractionProvider,
+  ExtractionResult,
+} from "./provider";
 
 // Produção sem agente real ainda (Fase 3). Registra uma linha marcando que a
 // extração ficou pendente de reprocessamento — mesmo estado do caminho de falha

@@ -24,10 +24,10 @@ export function FichaClinicaForm({
   patientId: string;
   perfil?: Perfil;
 }) {
-  const [state, formAction, isPending] = useActionState<FichaClinicaState, FormData>(
-    salvarFichaClinicaAction.bind(null, patientId),
-    {},
-  );
+  const [state, formAction, isPending] = useActionState<
+    FichaClinicaState,
+    FormData
+  >(salvarFichaClinicaAction.bind(null, patientId), {});
   const { addToast } = useToast();
 
   useEffect(() => {

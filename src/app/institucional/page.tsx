@@ -13,7 +13,9 @@ export const metadata: Metadata = {
   title: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
   description:
     "Sua equipe escreve o diário da sessão em texto livre; o Iris organiza em evidência ligada às metas do PEI, com a frase de origem anexa. 10 protocolos mapeados (VB-MAPP, ABLLS-R, Denver, PROC, MBGR e outros). Conta grátis, equipe ilimitada, cobrança por ficha ativa.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br"),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br",
+  ),
   alternates: {
     canonical: "/",
   },
@@ -45,7 +47,7 @@ export const metadata: Metadata = {
 
 export default function InstitutionalLandingPage() {
   return (
-    <div className="min-h-dvh flex flex-col bg-[var(--bg-app,#FBF9F5)] text-[var(--text-primary,#1A1A1A)]">
+    <div className="flex min-h-dvh flex-col bg-[var(--bg-app,#FBF9F5)] text-[var(--text-primary,#1A1A1A)]">
       <LandingHeader />
       <main className="flex-grow">
         <LandingHeroSection />

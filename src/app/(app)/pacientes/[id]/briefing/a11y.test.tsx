@@ -37,8 +37,18 @@ test("UltimaSessaoSection (com linhas + candidata + ABC) — sem violações axe
         geradoEm: new Date(),
         episodiosAbc: 1,
         linhas: [
-          { chave: "g1", rotulo: "Mando independente", metrica: "5/5", isCandidata: true },
-          { chave: "g2", rotulo: "Tato de animais", metrica: "dica gestual", isCandidata: false },
+          {
+            chave: "g1",
+            rotulo: "Mando independente",
+            metrica: "5/5",
+            isCandidata: true,
+          },
+          {
+            chave: "g2",
+            rotulo: "Tato de animais",
+            metrica: "dica gestual",
+            isCandidata: false,
+          },
         ],
       }}
     />,
