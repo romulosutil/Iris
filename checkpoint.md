@@ -615,20 +615,20 @@ Sessão de medição no sandbox do Asaas (`api-sandbox.asaas.com/v3`, chave `$aa
 
 ## 3b. Decisões que ficam com o Rômulo
 
-As três primeiras nasceram na 1ª sessão de 16/08; as demais vêm de antes e **seguem abertas**. Nenhuma tem recomendação embutida — a escolha é dele.
+As decisões marcadas com ✅ foram fechadas pelo Rômulo em 17/08/2026; as demais seguem abertas. Nenhuma tem recomendação embutida — a escolha é dele.
 
 1. **Cobrança apagada no painel tranca a clínica, de propósito.** Hoje, `deleted: true` bloqueia com "fale com o suporte" e não libera o id, porque libertá-lo arriscaria a idempotência de `debito:<ancora>` **ressuscitar** a cobrança deletada — e isso não está medido. Aceitar a revisão manual, ou medir se `GET /payments?externalReference=` devolve cobrança deletada e então liberar?
-2. **A clínica pode ver duas formas de pagamento na mesma tela.** É a consequência direta da D-2, e foi a escolha certa contra cobrança dupla — mas é uma tela mais confusa do que a de hoje. Aceita, ou prefere que a reativação exija quitar a cobrança antiga **primeiro**, uma de cada vez?
+2. ✅ **A clínica pode ver duas formas de pagamento na mesma tela?** — **Fechado em 17/08 pelo Rômulo**: **Pagamento único.** A reativação de R$ 0,01 vira a cobrança no valor devido (o QR code / ativação do Pix Automático assume o valor total do débito consolidado). Aplica-se inclusive a quem passou o prazo de carência e foi cancelado por inadimplência.
 3. **Fase 7 do plano da #310 não foi executada** (comentário de módulo consolidando o desenho + abertura do PR). Fecho numa próxima sessão, ou o PR sai como está?
 4. ~~**`alerta_risco_auth_select` (D37):**~~ — **Fechado por medição em produção** (16/08). A policy existe em produção (`SELECT TO iris_auth`). Nenhuma migração necessária.
-5. **D34:** o corte por inadimplência passa a escrever trilha em `audit_log`, e o job ganha um limiar de `carenciaFalhas` que derruba o `exit code`?
+5. ✅ **D34 (Auditoria e exit code do corte):** — **Fechado em 17/08 pelo Rômulo**: **Aprovado.** O corte por inadimplência passa a registrar evento atômico em `audit_log` e o job ganha limiar de `carenciaFalhas` que derruba o `exit code` (`exit 1` sob falhas de corte), alertando a infraestrutura.
 6. ~~**Perda do relatório da rota sob falha parcial**~~ — **fechada**: virou o **D38** e já foi resolvida no PR #323 (a rota mantém o 500 com o corpo completo, e ganhou `carenciaAbortada`/`backstopAbortado`).
-7. **Resíduo do G6:** reabrir a decisão de que G6 não escreve `recusa_codigo`, para que o backstop consiga distinguir "primeira recusa foi defeito nosso" de "silêncio total"?
+7. ✅ **Resíduo do G6 (D39):** — **Fechado em 17/08 pelo Rômulo**: **Aprovado.** Reabrir a decisão de persistência do G6 para gravar o código cru de recusa (`recusa_codigo`), permitindo que a varredura de backstop de D+7 identifique que foi defeito interno nosso e **não** carimbe `past_due` nem penalize a clínica.
 8. **O discriminador da #289 diverge do comentário 1 da própria issue.** Aquele comentário (medição 7a da #321) declara `externalReference` **descartado** como discriminador e aponta `immediateQrCode.conciliationIdentifier` ou `endToEndIdentifier`. A entrega **manteve** `externalReference` — mas só como discriminador do trilho que tem objeto `payment` — e resolveu o trilho headless pela **presença da instrução**, que é prova por construção e não exige identificador novo nenhum. Nenhum dos dois candidatos do comentário foi usado, e nenhum é necessário para o alarme. Ratificar a divergência, ou exigir a leitura de `conciliationIdentifier`?
 9. ~~**A PR da `fix/289-…` sai agora, ou espera?**~~ — **consumada**: PR #347 aberta, mergeada e issue #289 fechada em 16/08.
 10. **G7 (operacional/transitório) ficou de fora da retentativa automática.** A tabela da #318 diz "sim" para ele, e o desenho desta sessão diz "não" — porque o balde inclui `OTHER`, que é desconhecido disfarçado de transitório, e porque a retentativa **intradia** do PSP já cobre o transitório do mesmo dia. Ratificar a exclusão, ou aceitar gastar tentativa em `EXTERNAL_INSTITUTION_ERROR`?
 11. **O esgotamento do orçamento deixou de aparecer no relatório do job.** É consequência direta da correção do GRAVE 1: o ciclo com 3 tentativas gastas é barrado no `WHERE`, então não sai mais linha nenhuma dizendo "esgotou". O número continua legível em `billing_cycle.retentativas_comandadas`, mas ninguém o lê. Aceitar, ou o relatório precisa de um contador próprio de esgotados?
-12. **A retentativa não tem leitor.** Nenhuma tela mostra que houve retentativa, quantas restam ou quando é a próxima — é o mesmo **D36** que já engolia a recusa. A clínica passa a ser debitada até 3 vezes em 7 dias sem ver uma linha sobre isso. Entra no escopo do D36, ou vira issue própria?
+12. ✅ **A retentativa não tem leitor (Escopo do D36):** — **Fechado em 17/08 pelo Rômulo**: **Opção B (Separar).** O D36 focará exclusivamente na entrega urgente da faixa de alerta de recusa e prazo de carência/bloqueio para a clínica; o mostrador detalhado de histórico/status de retentativas automáticas vira uma issue dedicada.
 
 ---
 
