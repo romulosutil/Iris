@@ -67,6 +67,42 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
     ).toBe("2026-08-18");
   });
 
+  it("última comandada POSTERIOR à candidata: salta para o dia seguinte a ELA", () => {
+    // A terceira passada do mesmo dia civil é o caso que "diferente basta" não
+    // cobre: a candidata natural (17/08) NÃO colide com a última comandada
+    // (18/08), e mesmo assim devolvê-la repetiria a data da primeira passada —
+    // 400 do Asaas (validação 1) com uma das 3 tentativas já reservada. Só a
+    // comparação ESTRITAMENTE MAIOR chega em 19/08.
+    expect(
+      calcularDueDateDeRetentativa({
+        agora: AGORA,
+        // Teto A em 21/08 (14/08 + 7): folgado de propósito, para que o
+        // oráculo seja o salto e não a janela.
+        vencimentoCobranca: new Date("2026-08-14T12:00:00.000Z"),
+        proximoCicloInicio: null,
+        ultimaRetentativaVencimento: "2026-08-18",
+        cortePorCarencia: null,
+      }),
+    ).toBe("2026-08-19");
+  });
+
+  it("o salto atravessa a virada de mês", () => {
+    // 31/08 + 1 dia é 01/09, e não "32/08": o salto anda em data civil, não em
+    // texto. Escrito à mão porque é justamente o dia em que uma aritmética de
+    // string passaria despercebida.
+    expect(
+      calcularDueDateDeRetentativa({
+        // 30/08/2026, 12:00 em São Paulo.
+        agora: new Date("2026-08-30T15:00:00.000Z"),
+        // Teto A em 04/09 (28/08 + 7): a data saltada ainda cabe.
+        vencimentoCobranca: new Date("2026-08-28T12:00:00.000Z"),
+        proximoCicloInicio: null,
+        ultimaRetentativaVencimento: "2026-08-31",
+        cortePorCarencia: null,
+      }),
+    ).toBe("2026-09-01");
+  });
+
   it("data já comandada DIFERENTE da candidata não desloca nada", () => {
     expect(
       calcularDueDateDeRetentativa({
@@ -185,6 +221,65 @@ describe("#322 · cálculo da dueDate da retentativa extradia", () => {
         cortePorCarencia: null,
       }),
     ).toBe("2026-08-17");
+  });
+
+  // ── Teto C: estritamente antes do corte por carência ──────────────────────
+
+  /*
+   * ⚠️ Este teto é NOSSO, não do Asaas: comandar débito para o dia em que a
+   * assinatura é cortada faz a clínica pagar e ficar `canceled` no mesmo dia.
+   * Como o teto B, ele compara DIA CIVIL de São Paulo — o corte é um instante
+   * que cai a qualquer hora, e uma `dueDate` é um dia inteiro.
+   */
+
+  it("teto C: sendo o mais restritivo dos três, é ele que decide — e a data cai ANTES do corte", () => {
+    const data = calcularDueDateDeRetentativa({
+      agora: AGORA,
+      // Teto A permitiria até 21/08 (14/08 + 7)...
+      vencimentoCobranca: new Date("2026-08-14T12:00:00.000Z"),
+      // ...e o teto B, até 31/08 (01/09 03:00Z é 01/09 00:00 em São Paulo, e o
+      // dia de início do próximo ciclo já está fora).
+      proximoCicloInicio: new Date("2026-09-01T03:00:00.000Z"),
+      ultimaRetentativaVencimento: null,
+      // O corte é 18/08, então o último dia comandável é 17/08 — o mais
+      // apertado dos três limites, e o único que a candidata encosta.
+      cortePorCarencia: new Date("2026-08-18T12:00:00.000Z"),
+    });
+
+    expect(data).toBe("2026-08-17");
+    // O dia do corte é escrito à mão, e a comparação lexicográfica vale porque
+    // os dois lados são `YYYY-MM-DD`: a data comandada é ESTRITAMENTE anterior.
+    expect(data! < "2026-08-18").toBe(true);
+  });
+
+  it("teto C: candidata no DIA do corte não tem data possível", () => {
+    // Coincidir com o corte é o caso que o teto existe para barrar: o débito
+    // liquidaria com a autorização de Pix Automático já revogada — ou, pior,
+    // liquidaria e a clínica ficaria paga e `canceled` no mesmo dia.
+    expect(
+      calcularDueDateDeRetentativa({
+        agora: AGORA,
+        vencimentoCobranca: new Date("2026-08-14T12:00:00.000Z"),
+        proximoCicloInicio: null,
+        ultimaRetentativaVencimento: null,
+        cortePorCarencia: new Date("2026-08-17T12:00:00.000Z"),
+      }),
+    ).toBeNull();
+  });
+
+  it("teto C: o corte é lido em dia civil de São Paulo, não como instante cru", () => {
+    // 18/08 00:00Z é 17/08 21:00 no Brasil: o corte acontece no dia 17, que é
+    // a candidata. Comparar instantes crus (17/08 12:00Z < 18/08 00:00Z)
+    // deixaria passar um débito comandado para o próprio dia do corte.
+    expect(
+      calcularDueDateDeRetentativa({
+        agora: AGORA,
+        vencimentoCobranca: new Date("2026-08-14T12:00:00.000Z"),
+        proximoCicloInicio: null,
+        ultimaRetentativaVencimento: null,
+        cortePorCarencia: new Date("2026-08-18T00:00:00.000Z"),
+      }),
+    ).toBeNull();
   });
 
   // ── O que NÃO se faz: empurrar para dia útil bancário ─────────────────────

@@ -1404,4 +1404,75 @@ describe("AsaasProvider", () => {
       ).rejects.toBeInstanceOf(TypeError);
     });
   });
+
+  describe("instrucaoParaRetentativa (#322)", () => {
+    /**
+     * Roteador do índice de instruções, no mesmo idioma do de
+     * `consultarCobrancaParaReuso`: recebe TODAS as instruções da cobrança e
+     * aplica o `?status=` como o índice real aplica.
+     *
+     * Listas já filtradas pelo teste seriam o dublê escrevendo o predicado do
+     * código sob teste: um adapter que consultasse o status ERRADO receberia a
+     * mesma lista e passaria verde.
+     */
+    function rotearInstrucoes(todas: Array<Record<string, unknown>>): void {
+      fetchMock.mockImplementation(async (url: string) => {
+        const u = String(url);
+        if (!u.includes("/pix/automatic/paymentInstructions")) {
+          throw new Error(`fetch inesperado: ${u}`);
+        }
+        const filtro = new URL(u).searchParams.get("status");
+        return resposta({
+          data: filtro ? todas.filter((i) => i.status === filtro) : todas,
+        });
+      });
+    }
+
+    it("instrução SCHEDULED é `pendente`, e a listagem das RECUSADAS não acontece", async () => {
+      rotearInstrucoes([{ id: "pi_8", status: "SCHEDULED" }]);
+
+      expect(
+        await new AsaasProvider().instrucaoParaRetentativa("pay_9"),
+      ).toEqual({ providerInstructionId: null, pendente: true });
+
+      // A ORDEM é o que o docblock promete, e ela só é observável na contagem:
+      // havendo instrução a caminho, o id da recusada é irrelevante e a
+      // consulta a `status=REFUSED` seria round-trip desperdiçado dentro do
+      // orçamento de 30s do job. As URLs são escritas à mão — derivá-las do
+      // adapter faria trocar o endpoint passar verde.
+      //
+      // São DUAS, e não uma: "instrução a caminho" é `AWAITING_REQUEST` **ou**
+      // `SCHEDULED`, e o índice do Asaas filtra um `status` por consulta. A
+      // terceira chamada — a das recusadas — é a que não pode existir.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls.map((c) => String(c[0]))).toEqual([
+        "https://api-sandbox.asaas.com/v3/pix/automatic/paymentInstructions?paymentId=pay_9&status=AWAITING_REQUEST",
+        "https://api-sandbox.asaas.com/v3/pix/automatic/paymentInstructions?paymentId=pay_9&status=SCHEDULED",
+      ]);
+    });
+
+    it("sem instrução a caminho, devolve o id da RECUSADA", async () => {
+      rotearInstrucoes([
+        { id: "pi_9", status: "REFUSED", dateCreated: "2026-08-10 09:00:00" },
+      ]);
+
+      expect(
+        await new AsaasProvider().instrucaoParaRetentativa("pay_9"),
+      ).toEqual({ providerInstructionId: "pi_9", pendente: false });
+
+      // As duas do pendente + a das recusadas.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it("cobrança sem pendente e sem recusada devolve `null` SEM lançar", async () => {
+      // A instrução `DONE` está aqui de propósito: o índice não está vazio, e
+      // mesmo assim não há nada a retentar. Devolver o id dela seria comandar
+      // retentativa sobre uma instrução que já liquidou.
+      rotearInstrucoes([{ id: "pi_10", status: "DONE" }]);
+
+      expect(
+        await new AsaasProvider().instrucaoParaRetentativa("pay_9"),
+      ).toEqual({ providerInstructionId: null, pendente: false });
+    });
+  });
 });

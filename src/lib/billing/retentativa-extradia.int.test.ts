@@ -203,6 +203,12 @@ async function criarCicloRecusado(opcoes: {
   retentativasComandadas?: number;
   ultimaRetentativaVencimento?: string | null;
   providerChargeId?: string | null;
+  /**
+   * `undefined` usa o `VENCIMENTO` do arquivo; `null` grava a coluna vazia —
+   * que é o estado em que o teto A é imensurável e a varredura tem de sair
+   * fail-closed.
+   */
+  vencimentoCobranca?: Date | null;
 }): Promise<{ cicloId: string; providerChargeId: string | null }> {
   const providerChargeId =
     opcoes.providerChargeId === undefined
@@ -219,7 +225,8 @@ async function criarCicloRecusado(opcoes: {
       ${opcoes.clinicId}, ${opcoes.subscriptionId},
       ${new Date("2026-07-05T00:00:00.000Z")}, ${new Date("2026-08-05T00:00:00.000Z")},
       ${opcoes.status ?? "falhou"}::billing_cycle_status, 3900,
-      ${providerChargeId}, ${new Date("2026-08-05T00:00:00.000Z")}, ${VENCIMENTO},
+      ${providerChargeId}, ${new Date("2026-08-05T00:00:00.000Z")},
+      ${opcoes.vencimentoCobranca === undefined ? VENCIMENTO : opcoes.vencimentoCobranca},
       ${opcoes.recusaCodigo}, ${opcoes.erro ?? "recusa original"},
       ${opcoes.retentativasComandadas ?? 0},
       ${opcoes.ultimaRetentativaVencimento ?? null}
@@ -227,6 +234,50 @@ async function criarCicloRecusado(opcoes: {
     RETURNING id`) as unknown as { id: string }[];
 
   return { cicloId: linhas[0]!.id, providerChargeId };
+}
+
+/**
+ * Início dos ciclos do LOTE, longe do ciclo avulso (05/07/2026) porque
+ * `(clinic_id, inicio)` é UNIQUE: cada linha do lote anda um dia a partir daqui.
+ */
+const INICIO_BASE_DO_LOTE = new Date("2024-01-01T00:00:00.000Z");
+
+/**
+ * N ciclos `falhou`/G2 da MESMA assinatura, todos elegíveis, para os casos do
+ * teto por passada.
+ *
+ * `generate_series` em vez de N `INSERT`s porque o que o caso mede é a fila com
+ * 21 linhas dentro, não a inserção — e 21 idas ao banco por caso deixariam o
+ * arquivo lento sem medir nada a mais. O deslocamento serve às duas colunas
+ * únicas da tabela: `inicio` (UNIQUE com a clínica) e `provider_charge_id`
+ * (UNIQUE parcial da 0075).
+ */
+async function criarCiclosRecusadosEmLote(opcoes: {
+  clinicId: string;
+  subscriptionId: string;
+  quantidade: number;
+  vencimento: Date;
+  deslocamento: number;
+}): Promise<string[]> {
+  const linhas = (await owner!`
+    INSERT INTO billing_cycle
+      (clinic_id, subscription_id, inicio, fim, status, valor_centavos,
+       provider_charge_id, cobranca_emitida_em, vencimento_cobranca,
+       recusa_codigo, erro)
+    SELECT ${opcoes.clinicId}, ${opcoes.subscriptionId},
+           ${INICIO_BASE_DO_LOTE}::timestamptz + make_interval(days => g),
+           ${INICIO_BASE_DO_LOTE}::timestamptz + make_interval(days => g + 30),
+           'falhou'::billing_cycle_status, 3900,
+           'pay_322_lote_' || g,
+           ${new Date("2026-08-05T00:00:00.000Z")}, ${opcoes.vencimento},
+           'PAYMENT_OVERDUE', 'recusa original'
+      FROM generate_series(
+        ${opcoes.deslocamento}::int,
+        ${opcoes.deslocamento + opcoes.quantidade - 1}::int
+      ) AS g
+    RETURNING id`) as unknown as { id: string }[];
+
+  return linhas.map((linha) => linha.id);
 }
 
 interface LinhaCiclo {
@@ -424,6 +475,187 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
     expect((await lerCiclo(cicloId)).retentativas_comandadas).toBe(0);
   });
 
+  /**
+   * O caso do G5 acima NÃO distingue os dois campos da política: em G5
+   * `valeGastarRetentativa` e `retentavelAutomaticamente` são AMBOS `false`, e
+   * trocar um pelo outro no `CODIGOS_RETENTAVEIS_AUTOMATICAMENTE` deixaria o
+   * conjunto elegível idêntico.
+   *
+   * Os dois códigos abaixo são exatamente onde os campos DIVERGEM
+   * (`valeGastar = true`, `retentavel = false`): vale gastar tentativa **depois
+   * que alguém agir** — a clínica sobe o limite no app do banco (G1), nós
+   * consertamos o comando mal emitido (G6) —, e uma varredura não sobe limite
+   * nem conserta bug nosso. Comandar aqui queima em teto baixo e em defeito
+   * nosso as 3 tentativas de que o caso de saldo precisa.
+   */
+  it.each([
+    ["MAXIMUM_AMOUNT_EXCEEDED", "G1"],
+    ["RECEIVED_TOO_EARLY", "G6"],
+  ])(
+    "%s (%s) vale tentativa depois que a clínica agir, mas a varredura NÃO comanda sozinha",
+    async (codigo) => {
+      await criarAssinatura({ clinicId: CLINICA_B, subscriptionId: SUB_B });
+      const { cicloId } = await criarCicloRecusado({
+        clinicId: CLINICA_B,
+        subscriptionId: SUB_B,
+        recusaCodigo: codigo,
+      });
+
+      const resultado = await comandarRetentativasPendentes({
+        agora: meioDiaSp("2026-08-11"),
+      });
+
+      expect(resultado).toEqual([]);
+      expect(chamadasDeRetentativaFake).toEqual([]);
+      expect((await lerCiclo(cicloId)).retentativas_comandadas).toBe(0);
+    },
+  );
+
+  // ── 2b. O que o `WHERE` exige da LINHA ────────────────────────────────────
+
+  it("assinatura `canceled` nunca é retentada, mesmo com ciclo `falhou` de G2", async () => {
+    // Cortada, a autorização de Pix Automático já foi revogada: comandar aqui
+    // é pedir débito de quem o produto desligou, e a chamada só poderia voltar
+    // 400 — com a tentativa reservada antes dela (D-4).
+    await criarAssinatura({
+      clinicId: CLINICA_C,
+      subscriptionId: SUB_C,
+      status: "canceled",
+    });
+    const { cicloId } = await criarCicloRecusado({
+      clinicId: CLINICA_C,
+      subscriptionId: SUB_C,
+      recusaCodigo: "PAYMENT_OVERDUE",
+    });
+
+    const resultado = await comandarRetentativasPendentes({
+      agora: meioDiaSp("2026-08-11"),
+    });
+
+    expect(resultado).toEqual([]);
+    expect(chamadasDeRetentativaFake).toEqual([]);
+    expect((await lerCiclo(cicloId)).retentativas_comandadas).toBe(0);
+  });
+
+  it("ciclo `aguardando_pagamento` não é elegível — retentativa extradia é sobre instrução RECUSADA", async () => {
+    // O código de recusa está gravado e a cobrança existe; o que falta é a
+    // recusa ter acontecido de fato. Retentar um débito que ninguém recusou
+    // gastaria tentativa contra uma cobrança que ainda pode liquidar sozinha.
+    await criarAssinatura({ clinicId: CLINICA_D, subscriptionId: SUB_D });
+    const { cicloId } = await criarCicloRecusado({
+      clinicId: CLINICA_D,
+      subscriptionId: SUB_D,
+      status: "aguardando_pagamento",
+      recusaCodigo: "PAYMENT_OVERDUE",
+    });
+
+    const resultado = await comandarRetentativasPendentes({
+      agora: meioDiaSp("2026-08-11"),
+    });
+
+    expect(resultado).toEqual([]);
+    expect(chamadasDeRetentativaFake).toEqual([]);
+    expect((await lerCiclo(cicloId)).retentativas_comandadas).toBe(0);
+  });
+
+  it("ciclo sem `provider_charge_id` não é elegível — não há cobrança de onde sair instrução", async () => {
+    await criarAssinatura({ clinicId: CLINICA_E, subscriptionId: SUB_E });
+    const { cicloId } = await criarCicloRecusado({
+      clinicId: CLINICA_E,
+      subscriptionId: SUB_E,
+      recusaCodigo: "PAYMENT_OVERDUE",
+      providerChargeId: null,
+    });
+
+    const resultado = await comandarRetentativasPendentes({
+      agora: meioDiaSp("2026-08-11"),
+    });
+
+    expect(resultado).toEqual([]);
+    expect(chamadasDeRetentativaFake).toEqual([]);
+    expect((await lerCiclo(cicloId)).retentativas_comandadas).toBe(0);
+  });
+
+  it("ciclo sem `vencimento_cobranca` não é elegível (fail-closed do teto A)", async () => {
+    // Sem o vencimento persistido, `vencimento + 7 dias corridos` é
+    // imensurável — e recalculá-lo mediria de uma data que nunca foi enviada a
+    // gateway nenhum. Fora do conjunto é o único desfecho seguro.
+    await criarAssinatura({ clinicId: CLINICA_A, subscriptionId: SUB_A });
+    const { cicloId } = await criarCicloRecusado({
+      clinicId: CLINICA_A,
+      subscriptionId: SUB_A,
+      recusaCodigo: "PAYMENT_OVERDUE",
+      vencimentoCobranca: null,
+    });
+
+    const resultado = await comandarRetentativasPendentes({
+      agora: meioDiaSp("2026-08-11"),
+    });
+
+    expect(resultado).toEqual([]);
+    expect(chamadasDeRetentativaFake).toEqual([]);
+    expect((await lerCiclo(cicloId)).retentativas_comandadas).toBe(0);
+  });
+
+  // ── 2c. Teto de ciclos AVALIADOS por passada, e a ordem da fila ───────────
+
+  it("21 elegíveis: a passada avalia 20, marca todos como truncados, e leva os de vencimento MAIS ANTIGO", async () => {
+    // Os números são escritos à mão: importar `TETO_RETENTATIVAS_POR_PASSADA`
+    // faria o caso concordar com qualquer valor que a constante tivesse.
+    await criarAssinatura({ clinicId: CLINICA_B, subscriptionId: SUB_B });
+    const antigos = await criarCiclosRecusadosEmLote({
+      clinicId: CLINICA_B,
+      subscriptionId: SUB_B,
+      quantidade: 20,
+      vencimento: new Date("2026-08-08T12:00:00.000Z"),
+      deslocamento: 0,
+    });
+    const [maisNovo] = await criarCiclosRecusadosEmLote({
+      clinicId: CLINICA_B,
+      subscriptionId: SUB_B,
+      quantidade: 1,
+      // Dois dias DEPOIS dos outros vinte: é ele que sobra na ordem por
+      // vencimento, e é ele que a passada seguinte pega.
+      vencimento: new Date("2026-08-10T12:00:00.000Z"),
+      deslocamento: 100,
+    });
+
+    const resultado = await comandarRetentativasPendentes({
+      agora: meioDiaSp("2026-08-11"),
+    });
+
+    expect(resultado).toHaveLength(20);
+    expect(chamadasDeRetentativaFake).toHaveLength(20);
+    expect(resultado.every((r) => r.truncado === true)).toBe(true);
+    // Sem `ORDER BY` cada passada varreria um subconjunto arbitrário e uma
+    // linha azarada poderia nunca sair da fila.
+    expect([...resultado.map((r) => r.cicloId)].sort()).toEqual(
+      [...antigos].sort(),
+    );
+    expect(resultado.map((r) => r.cicloId)).not.toContain(maisNovo);
+  });
+
+  it("20 elegíveis NÃO são truncados — é a sonda `+1` que distingue cheio de estourado", async () => {
+    await criarAssinatura({ clinicId: CLINICA_C, subscriptionId: SUB_C });
+    await criarCiclosRecusadosEmLote({
+      clinicId: CLINICA_C,
+      subscriptionId: SUB_C,
+      quantidade: 20,
+      vencimento: new Date("2026-08-08T12:00:00.000Z"),
+      deslocamento: 0,
+    });
+
+    const resultado = await comandarRetentativasPendentes({
+      agora: meioDiaSp("2026-08-11"),
+    });
+
+    expect(resultado).toHaveLength(20);
+    expect(chamadasDeRetentativaFake).toHaveLength(20);
+    // Um `LIMIT` sem o `+1` daria exatamente estas 20 linhas e chamaria a
+    // passada de truncada: é este caso, e não o de 21, que prova a sonda.
+    expect(resultado.every((r) => r.truncado === false)).toBe(true);
+  });
+
   // ── 3. Idempotência sob concorrência (D-4) ────────────────────────────────
 
   it("duas passadas concorrentes sobre o mesmo ciclo produzem UMA única chamada ao gateway", async () => {
@@ -494,6 +726,46 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
     expect((await lerCiclo(cicloId)).retentativas_comandadas).toBe(1);
   });
 
+  // ── 4b. Guarda 1b: a cobrança já liquidou (auto-cura do webhook perdido) ──
+
+  it("cobrança já liquidada no gateway não vira SEGUNDO débito — e o ciclo se concilia sozinho", async () => {
+    // A D-1 assume que webhook se perde. A consequência é que o ciclo continua
+    // `falhou` com um `recusa_codigo` retentável, ou seja, dentro do conjunto
+    // elegível — e a passada seguinte debitaria a mesma mensalidade de novo na
+    // conta da clínica. "Cobrança já liquidada" não está entre as cinco
+    // validações do `POST .../retries`: nada garante que o gateway recusaria.
+    await criarAssinatura({ clinicId: CLINICA_A, subscriptionId: SUB_A });
+    const { cicloId } = await criarCicloRecusado({
+      clinicId: CLINICA_A,
+      subscriptionId: SUB_A,
+      recusaCodigo: "PAYMENT_OVERDUE",
+    });
+    estadoCobrancaNoGateway = "LIQUIDADA";
+
+    const resultado = await comandarRetentativasPendentes({
+      agora: meioDiaSp("2026-08-11"),
+    });
+
+    expect(resultado[0]).toMatchObject({
+      acao: "nao_comandada",
+      motivo: "cobranca_ja_liquidada",
+      // A data calculada vai junto: o relatório do job mostra o que TERIA sido
+      // comandado, e é por ela que se enxerga a janela que não foi usada.
+      dueDate: "2026-08-12",
+      tentativa: null,
+    });
+    expect(chamadasDeRetentativaFake).toEqual([]);
+
+    const ciclo = await lerCiclo(cicloId);
+    // A guarda sai ANTES do compare-and-set: nenhuma das 3 é gasta.
+    expect(ciclo.retentativas_comandadas).toBe(0);
+    // ...e o estado se cura pelo mesmo caminho do webhook.
+    expect(ciclo.status).toBe("pago");
+    const assinatura = await lerAssinatura(SUB_A);
+    expect(assinatura.status).toBe("active");
+    expect(assinatura.past_due_desde).toBeNull();
+  });
+
   // ── 5. Fora da janela de 7 dias ───────────────────────────────────────────
 
   it("não chama o gateway quando nenhuma data cabe na janela (fail-closed)", async () => {
@@ -549,6 +821,70 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
     expect(resultado[0]).toMatchObject({
       acao: "nao_comandada",
       motivo: "carencia_vence_nesta_passada",
+    });
+    expect(chamadasDeRetentativaFake).toEqual([]);
+  });
+
+  /**
+   * A borda EXATA do predicado da carência.
+   *
+   * O caso acima roda com `agora` um dia além do vencimento da carência, e ali
+   * `<` e `<=` dão o mesmo resultado — o limite inclusivo do predicado copiado
+   * de `cancelarAssinaturasComCarenciaVencida` fica sem oráculo. O par abaixo
+   * usa o INSTANTE do corte (05/08 12:00Z + 10 dias = 15/08 12:00Z) e o
+   * segundo antes dele.
+   *
+   * ⚠️ Um segundo ANTES do corte o desfecho não é `comandada`, e não pode ser:
+   * a candidata mínima é `hoje + 1` e o teto C exige `dueDate` estritamente
+   * anterior ao DIA do corte — com o corte hoje, nenhuma data satisfaz as duas
+   * coisas. O que o segundo caso prova é que o predicado da carência devolveu
+   * FALSO (a linha andou até o cálculo da data), e não que a passada comandou.
+   */
+  it("carência que vence NO INSTANTE da passada já é `carencia_vence_nesta_passada`", async () => {
+    await criarAssinatura({
+      clinicId: CLINICA_D,
+      subscriptionId: SUB_D,
+      pastDueDesde: new Date("2026-08-05T12:00:00.000Z"),
+    });
+    await criarCicloRecusado({
+      clinicId: CLINICA_D,
+      subscriptionId: SUB_D,
+      recusaCodigo: "PAYMENT_OVERDUE",
+    });
+
+    const resultado = await comandarRetentativasPendentes({
+      agora: new Date("2026-08-15T12:00:00.000Z"),
+    });
+
+    expect(resultado[0]).toMatchObject({
+      acao: "nao_comandada",
+      motivo: "carencia_vence_nesta_passada",
+    });
+    expect(chamadasDeRetentativaFake).toEqual([]);
+  });
+
+  it("um segundo ANTES do corte a carência ainda não venceu — o motivo passa a ser a data", async () => {
+    await criarAssinatura({
+      clinicId: CLINICA_E,
+      subscriptionId: SUB_E,
+      pastDueDesde: new Date("2026-08-05T12:00:00.000Z"),
+    });
+    await criarCicloRecusado({
+      clinicId: CLINICA_E,
+      subscriptionId: SUB_E,
+      recusaCodigo: "PAYMENT_OVERDUE",
+    });
+
+    const resultado = await comandarRetentativasPendentes({
+      agora: new Date("2026-08-15T11:59:59.000Z"),
+    });
+
+    // Motivo DIFERENTE do caso acima: a linha passou pelo predicado da carência
+    // e parou no teto C, que barra `dueDate` no próprio dia do corte.
+    expect(resultado[0]).toMatchObject({
+      acao: "nao_comandada",
+      motivo: "sem_data_possivel",
+      dueDate: null,
     });
     expect(chamadasDeRetentativaFake).toEqual([]);
   });
@@ -670,6 +1006,89 @@ describe.skipIf(!hasDb)("#322 · retentativa extradia", () => {
     const ciclo = await lerCiclo(cicloId);
     expect(ciclo.recusa_codigo).toBe("MAXIMUM_AMOUNT_EXCEEDED");
     expect(ciclo.erro).not.toBe("diagnóstico da recusa original");
+  });
+
+  /**
+   * O guard da D-5 exige TRÊS coisas ao mesmo tempo: propósito de retentativa,
+   * ciclo já `falhou` e MESMO grupo. Os casos acima cobrem o grupo; o par
+   * abaixo cobre o `ciclo.status === "falhou"`, que nada exercitava.
+   *
+   * Um ciclo que não está `falhou` significa que a recusa ORIGINAL não foi
+   * registrada (webhook perdido, ou reconsulta que discordou) — e aí a recusa
+   * da retentativa é o único diagnóstico que existe. Engoli-la deixaria o ciclo
+   * parado em `aguardando_pagamento` para sempre: não há varredura nenhuma que
+   * olhe para ciclos nesse estado.
+   */
+  it("recusa de retentativa do MESMO grupo sobre ciclo `aguardando_pagamento` REGISTRA o estado", async () => {
+    // Mesmo grupo (G2 dos dois lados) de propósito: com grupos diferentes o
+    // guard já sairia pela comparação de grupo, e o caso não diria nada sobre
+    // a condição de status. Aqui a única coisa que impede o guard de engolir a
+    // recusa é o ciclo não estar `falhou`.
+    await criarAssinatura({
+      clinicId: CLINICA_A,
+      subscriptionId: SUB_A,
+      status: "active",
+      pastDueDesde: null,
+    });
+    const { cicloId, providerChargeId } = await criarCicloRecusado({
+      clinicId: CLINICA_A,
+      subscriptionId: SUB_A,
+      status: "aguardando_pagamento",
+      recusaCodigo: "PAYMENT_OVERDUE",
+      erro: "recusa original",
+    });
+
+    const aplicou = await conciliarPagamentoDeCiclo(
+      providerChargeId!,
+      "recusada",
+      "PAYMENT_OVERDUE",
+      { proposito: "RETRY_AFTER_DUE_DATE", tentativa: 2 },
+    );
+
+    expect(aplicou).toBe(true);
+    const ciclo = await lerCiclo(cicloId);
+    expect(ciclo.status).toBe("falhou");
+    expect(ciclo.recusa_codigo).toBe("PAYMENT_OVERDUE");
+    expect(ciclo.erro).not.toBe("recusa original");
+    expect(ciclo.erro).toContain("[G2]");
+    // A carência começa a correr AGORA: sem este carimbo o ciclo ficaria
+    // devendo sem relógio nenhum, e a assinatura nunca seria cortada.
+    const assinatura = await lerAssinatura(SUB_A);
+    expect(assinatura.status).toBe("past_due");
+    expect(assinatura.past_due_desde).not.toBeNull();
+  });
+
+  it("recusa de retentativa com causa NOVA sobre ciclo `aguardando_pagamento` também registra", async () => {
+    await criarAssinatura({
+      clinicId: CLINICA_B,
+      subscriptionId: SUB_B,
+      status: "active",
+      pastDueDesde: null,
+    });
+    const { cicloId, providerChargeId } = await criarCicloRecusado({
+      clinicId: CLINICA_B,
+      subscriptionId: SUB_B,
+      status: "aguardando_pagamento",
+      recusaCodigo: "PAYMENT_OVERDUE",
+      erro: "recusa original",
+    });
+
+    await conciliarPagamentoDeCiclo(
+      providerChargeId!,
+      "recusada",
+      "MAXIMUM_AMOUNT_EXCEEDED",
+      { proposito: "RETRY_AFTER_DUE_DATE", tentativa: 1 },
+    );
+
+    const ciclo = await lerCiclo(cicloId);
+    expect(ciclo.status).toBe("falhou");
+    expect(ciclo.recusa_codigo).toBe("MAXIMUM_AMOUNT_EXCEEDED");
+    expect(ciclo.erro).not.toBe("recusa original");
+    // G1 carimba `past_due` como G2: o teto baixo também precisa do relógio da
+    // carência, que é o prazo para a clínica subir o limite no app do banco.
+    const assinatura = await lerAssinatura(SUB_B);
+    expect(assinatura.status).toBe("past_due");
+    expect(assinatura.past_due_desde).not.toBeNull();
   });
 
   it("pagamento de retentativa liquida o ciclo e tira a assinatura de past_due", async () => {
