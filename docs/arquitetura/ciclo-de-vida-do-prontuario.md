@@ -21,7 +21,7 @@ acompanhamento não mudam o estado do prontuário — mudam a contagem do prazo
 de guarda, que é assunto de `politica-retencao-dados.md`. Expurgo é
 operação separada (`app_purgar_paciente`), não um estado.
 
-*(Nota operacional: O campo `patient.arquivado_em`, introduzido na Issue #174 / migração `0080`, trata estritamente da suspensão cadastral/faturamento de pacientes inativos há mais de 90 dias, e não altera as regras de consentimento ou guarda do prontuário aqui descritas).*
+_(Nota operacional: O campo `patient.arquivado_em`, introduzido na Issue #174 / migração `0080`, trata estritamente da suspensão cadastral/faturamento de pacientes inativos há mais de 90 dias, e não altera as regras de consentimento ou guarda do prontuário aqui descritas)._
 
 ## 2. O estado é derivado, nunca armazenado
 

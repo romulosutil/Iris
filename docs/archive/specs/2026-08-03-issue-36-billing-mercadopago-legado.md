@@ -22,10 +22,10 @@ Faixas **marginais** — cadastrar mais um paciente nunca reprecifica os
 anteriores:
 
 | Faixa | Preço/paciente/mês |
-| --- | --- |
-| 1–15 | R$ 39,00 |
-| 16–40 | R$ 32,00 |
-| 41+ | R$ 25,00 |
+| ----- | ------------------ |
+| 1–15  | R$ 39,00           |
+| 16–40 | R$ 32,00           |
+| 41+   | R$ 25,00           |
 
 Onboarding da clínica: R$ 0. A cobrança nasce no cadastro do 1º paciente
 (Mês 1 = R$ 39,00). Mês 2+ = **uma** cobrança consolidada a cada 30 dias.
@@ -54,6 +54,7 @@ não. Ambos os lados verificados por teste.
 ## Arquitetura
 
 ### Plano de privilégios
+
 Billing é **plano de identidade**, como `auth_throttle` (0061) e
 `asaas_webhook_event` (0066).
 
@@ -73,6 +74,7 @@ Billing é **plano de identidade**, como `auth_throttle` (0061) e
 `billing_cycle`, nunca de parâmetro — não há caminho para forjar tenant.
 
 ### Por que o job é um POST, não um script com lógica
+
 `scripts/fechamento-ciclo-billing.mjs` é um gatilho magro que faz um POST
 autenticado em `/api/internal/billing/fechar-ciclos`. A apuração, o cálculo e a
 chamada ao gateway ficam no app.
@@ -84,6 +86,7 @@ Uma tabela de preços duplicada num `.mjs` seria a mesma classe de bug, com a
 agravante de cobrar valor errado em silêncio.
 
 ### Webhook: gravar antes de aplicar
+
 O Mercado Pago desabilita endpoint lento, então a rota grava a entrega, responde
 200, e só então aplica o efeito. Falha ao aplicar **não** vira 5xx: deixa
 `aplicado_em` NULL e `reprocessarEventosPendentes` recupera. Devolver 5xx
@@ -98,6 +101,7 @@ Dedup: chave composta `type:data.id:action`, decidida pelo UNIQUE do Postgres em
 uma instrução atômica (`ON CONFLICT DO NOTHING ... RETURNING`).
 
 ### Gate do 1º paciente
+
 Avaliado **dentro da mesma transação** do cadastro
 (`avaliarGateCadastroPaciente`), antes do primeiro INSERT. Fora dela, dois
 cadastros simultâneos numa clínica virgem leriam ambos "sem paciente" e
@@ -107,6 +111,7 @@ Bloqueio é sinalizado por `throw` (não `return`) para garantir o ROLLBACK — 
 cadastro bloqueado não pode deixar rastro parcial.
 
 Decisões de política:
+
 - `past_due` **não** bloqueia. Falha de Pix/cartão costuma ser do banco do
   cliente; travar cadastro de paciente por isso pune o paciente, não o
   inadimplente. A carência (`subscription.carencia_dias`) é aplicada pelo job.
@@ -166,7 +171,7 @@ Achados por revisão adversarial dos próprios testes, todos com prova de mutaç
    rota exige `body.data.id === query data.id` antes de aplicar qualquer efeito.
 
    Limite honesto: o corpo continua **não autenticado**. O que passou a ser
-   amarrado é o *alvo* do efeito. O dano residual é baixo porque o efeito vem da
+   amarrado é o _alvo_ do efeito. O dano residual é baixo porque o efeito vem da
    consulta ao gateway, não do payload — o corpo só influencia a chave de dedup
    e o campo `evento`.
 

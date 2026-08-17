@@ -214,101 +214,40 @@ pequeno, que é exatamente o canal orgânico do §6. Em avaliação como substit
 protegendo o CAC sem punir o pequeno. Na venda assistida (#36) o piso continua
 válido.
 
-## 4. Empacotamento: 3 tiers mapeados às fases do MVP
+## 4. Empacotamento e Precificação (DECISÃO CONSOLIDADA)
 
-| Tier         | Para quem                                     | O que entrega                                                                                                                                                                                                                                                                                   | Fases                                    | Preço (HIPÓTESE)    |
-| ------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------- |
-| **Diário**   | Terapeuta autônomo / clínica que quer começar | Ficha+consentimento, agenda mínima, diário 2 tempos, extração+revisão, metas/PEI, linha do tempo, briefing pré-sessão, perfil de reforçadores, **dossiê bruto de auditoria de convênio** (escopado aos próprios pacientes do profissional)                                                      | 1–4                                      | R$ 39–49 /paciente  |
-| **Clínica**  | Clínica com supervisão                        | + módulo coordenador: exceções, pacote de supervisão, fila de validação/reclassificação, revisão de ciclo de metas, relatório da família (PDF), métricas transparentes                                                                                                                          | 5                                        | R$ 69–79 /paciente  |
-| **Convênio** | Clínica que vive de operadora                 | + relatório de convênio NARRATIVO (síntese com IA + revisão do coordenador, pronto para autorização de continuidade) — **agora Fase 5 (MVP)**; avaliação formal assistida (janela de pontuação com dossiê), série de reavaliações, relatório avaliativo interdisciplinar continuam fast-follows | **5** (narrativo) + fast-follows (resto) | R$ 99–119 /paciente |
+O modelo de negócio evoluiu da hipótese inicial de três tiers isolados para uma **oferta completa unificada com precificação marginal regressiva por ficha ativa/mês**, com usuários e terapeutas ilimitados.
 
-**Decisão confirmada por Rômulo (09/07/2026):** o dossiê bruto de auditoria
-entra no MVP (Fase 5), não fica preso ao tier Convênio. Motivo: risco de
-auditoria de operadora não é exclusivo de quem já vive de convênio — qualquer
-profissional/clínica dos tiers Diário/Clínica com paciente de convênio pode
-ser auditada e precisa produzir documentação sob demanda. É tecnicamente
-barato (reaproveita o pipeline de export/`audit_log` já construído para o
-relatório da família — `Report.tipo='convenio_bruto'`, distinto de
-`convenio_narrativo`, seção 1.6 de `modelo-de-dados.md`) e ataca a mesma dor
-"analgésica" já validada (linha 15 da tabela de validação acima), reforçada
-por sinal de campo: uma terapeuta, ao ver o protótipo, perguntou primeiro se
-dava para exportar relatório de convênio. O que permanece exclusivo do tier
-Convênio é a versão NARRATIVA (síntese com IA + revisão do coordenador,
-pronta para justificar autorização de continuidade) — essa sim exige o
-pipeline de geração de texto e a curadoria do coordenador, diferenciação real
-de valor que sustenta o preço mais alto do tier.
+### 4.1 Por que o produto unificou a oferta no Self-Service?
 
-**Revisão da decisão (09/07/2026) — dossiê bruto também no tier Diário:** o
-empacotamento original prendia o dossiê bruto ao tier Clínica (dentro do
-módulo coordenador), o que contradizia o próprio motivo acima — um terapeuta
-autônomo no tier Diário que fatura convênio direto (persona plausível: Aline
-ou Diego antes de crescer) ficava sem a proteção que justificou trazer o
-dossiê pro MVP. Rômulo confirmou a correção: destravar a tela de exportação
-do dossiê bruto (seção 4.6 de `fluxos-e-wireframes.md`) também no tier
-Diário, escopada aos próprios pacientes do profissional, SEM o resto do
-módulo coordenador. Custo técnico é baixo — é uma regra de acesso sobre uma
-tela e um pipeline já construídos, não um módulo novo. O tier Clínica não
-perde diferenciação: continua exclusivo dele o módulo coordenador inteiro
-(exceções, pacote de supervisão, fila de validação/reclassificação, revisão
-de ciclo de metas, relatório da família, métricas transparentes) — o dossiê
-bruto sozinho nunca foi o que sustentava o salto de preço Diário→Clínica.
+1. **Dossiê e Relatório Narrativo no MVP (Fase 5):** O dossiê bruto de auditoria e o relatório de convênio narrativo com IA foram ambos integrados ao núcleo da Fase 5 para atender à dor analgésica das clínicas-piloto.
+2. **Sem barreiras artificiais de governança:** A governança clínica em 3 camadas (terapeuta registra em linguagem natural, IA sugere evidências, coordenador supervisiona e valida) gera mais valor quando utilizada de ponta a ponta pela equipe interdisciplinar.
+3. **Escala justa:** O cliente não precisa escolher planos complexos no momento do cadastro — o valor adapta-se organicamente ao tamanho da clínica através de faixas marginais.
 
-**Relatório de convênio NARRATIVO promovido de fast-follow para MVP (09/07/2026)
-— atuando como Especialista de Produto + Especialista de Vendas, a pedido de
-Rômulo:** Rômulo já encontrou clínicas-piloto interessadas, mas para elas
-relatório não pode ser um "fast-follow" — precisa estar no produto que
-assinam. Revisão completa da seção F do backlog (10 itens pós-MVP) contra dois
-critérios — (1) reaproveita infraestrutura JÁ prevista na Fase 5? (2) é a dor
-que já valida pagamento, com sinal de cliente real, não só hipótese? — só o
-relatório narrativo de convênio bate os dois ao mesmo tempo: o "segundo
-agente" (gerar rascunho com IA → coordenador edita/aprova → exporta PDF) já
-está desenhado para o relatório da família e o `Report.tipo='convenio_narrativo'`
-já tem DDL própria (split de `convenio_bruto`, seção A do backlog) — o custo
-marginal de trazer para a Fase 5 é essencialmente um novo conjunto de regras/
-prompt (o que o relatório precisa dizer para justificar continuidade de
-tratamento a uma operadora, não "como apoiar em casa") e um template de PDF,
-não uma arquitetura nova. Sem isso, o tier Convênio — o mais caro — ficava sem
-o artefato que sustenta o preço até um fast-follow sem data, o que é
-inaceitável com cliente concreto pedindo agora. **O que NÃO foi promovido, e
-por quê:** avaliação formal assistida e relatório avaliativo interdisciplinar
-exigem UI/lógica nova (janela de pontuação, síntese cross-protocolo) sem sinal
-de cliente pedindo isso especificamente — promovê-los junto diluiria o foco da
-Fase 5 sem receita adicional comprovada; ficam como próxima leva se as
-clínicas-piloto sinalizarem que também são bloqueadores de venda (decisão
-revisável, não definitiva). Os outros 8 itens da seção F (2º protocolo,
-anamnese, relatório escolar, transição/alta, reunião interdisciplinar, treino
-parental, dataset de divergência) não têm pedido de cliente nem urgência de
-receita identificados nesta rodada — continuam pós-MVP sem mudança.
+### 4.2 Tabela de Precificação Marginal Oficial
 
-**Revisão 01/08/2026 — régua marginal para o self-service (PROPOSTA, não
-fechada).** O preço linear por paciente explode na conta média: 30 pacientes a
-R$ 39 dá R$ 1.170/mês, contra ~R$ 387 do ABA Digital (que cobra por terapeuta,
-pacientes ilimitados) — o piso de preço da categoria. Proposta em avaliação:
-desconto **marginal** por degrau, sem salto ao cadastrar mais um paciente —
-R$ 39 até 15 pacientes, R$ 32 de 16 a 40, R$ 25 de 41 em diante. Resultado:
-8 pacientes = R$ 312 · 30 = R$ 1.065 · 80 = R$ 2.385, ~40–50% abaixo da tabela
-pública do ComportaTUDO.
+Implementada em [`src/lib/billing/calculator.ts`](file:///c:/Users/sutil/Documents/dev/PESSOAL/apps/iris/src/lib/billing/calculator.ts) como fonte única da verdade (`FAIXAS_PRECIFICACAO`):
 
-**O que impede fechar o número:** ele está ancorado na única tabela pública do
-mercado, e os outros três concorrentes praticam "sob consulta" — preço de tabela
-não é preço praticado. Nenhum real foi faturado até hoje. Até haver cliente
-pagante, o valor vive em coluna versionada por assinatura (nunca em constante no
-código) e as primeiras clínicas entram com **preço de fundador**. Medição
-proposta: cobrar as duas primeiras clínicas com valores diferentes e observar
-aceitação — a única evidência real disponível antes do Van Westendorp do
-Roteiro C.
+| Faixa (Fichas Ativas no Mês) | Valor Unitário por Ficha (Mensal) | Valor em Centavos |
+| :--------------------------- | :-------------------------------- | :---------------- |
+| **1ª até a 15ª ficha**       | **R$ 39,00**                      | 3.900 centavos    |
+| **16ª até a 40ª ficha**      | **R$ 32,00**                      | 3.200 centavos    |
+| **41ª ficha em diante**      | **R$ 25,00**                      | 2.500 centavos    |
 
-Racional dos números: ancorados na régua pública do ComportaTUDO (59,90–99,90),
-com o tier de entrada ABAIXO deles (escopo menor — não temos financeiro/agenda
-completa) e o tier Convênio ACIMA (o relatório de operadora vale dias de
-trabalho do dono; valor econômico direto). Números finais só após Roteiro C
-(usar Van Westendorp; perguntar preço SÓ depois de mostrar o pacote de
-supervisão e o relatório de convênio).
+- **Regra Marginal Estrita:** O cadastro da 16ª ficha ativa não reprecifica as 15 anteriores — a clínica que cresce tem custo marginal decrescente e previsível, sem saltos regressivos.
+- **Simulações de Mensalidade Real:**
+  - **8 fichas ativas:** $8 \times 39 = \mathbf{R\$\ 312,00/mês}$
+  - **30 fichas ativas:** $(15 \times 39) + (15 \times 32) = \mathbf{R\$\ 1.065,00/mês}$ (~40% abaixo da tabela pública do ComportaTUDO)
+  - **80 fichas ativas:** $(15 \times 39) + (25 \times 32) + (40 \times 25) = \mathbf{R\$\ 2.385,00/mês}$
 
-Conta de padaria do comprador: clínica do Diego (6 terapeutas, ~30 pacientes)
-no tier Convênio ≈ R$ 3.000/mês contra dias de trabalho dele por trimestre +
-risco de glosa. Clínica da Fernanda (80 pacientes) no Clínica ≈ R$ 5.600/mês —
-menos que meio salário de auxiliar administrativo.
+### 4.3 Mecânica Operacional de Faturamento & Pagamento
+
+- **Pós-Pago com Apuração Automática:** O ciclo de 30 dias apura o total de fichas ativas via `billing_apurar_ciclo` (`db/migrations/0075_billing_pos_pago.sql`) e emite a cobrança no fechamento.
+- **Trilho Principal de Cobrança:** **Pix Automático** (Bacen Jornada 3 via Asaas) com autorização via QR Code de ativação no onboarding e débito automático no fechamento.
+- **Cancelamento Pro-Rata:** Em cancelamento antecipado, apura-se o débito pro-rata correspondente aos dias decorridos (`apurarDebitoProRata`), com o dia iniciado contando cheio e centavos truncados a favor do cliente.
+- **Tolerância e Carência (Past Due):** Carência de 10 dias para regularização de falhas de pagamento sem suspensão imediata de prontuário, cobrindo o ciclo de 3 retentativas em 7 dias do Pix Automático.
+
+---
 
 ## 5. Custo unitário e margem (estimativa de engenharia)
 
@@ -317,7 +256,7 @@ Por sessão processada: diário (~500 tokens) + contexto do paciente
 (1–2k tokens). Com modelo de tier médio, R$ 0,05–0,20/sessão; briefing
 pré-sessão é resumo curto sobre dados já estruturados (mais barato). Paciente
 intensivo (20 sessões/mês) ≈ **R$ 2–5/mês de custo de IA por paciente** contra
-R$ 39–119 de receita → margem de IA >90%. ASR para ditado (Fase 6) adiciona
+R$ 25–39 de receita por ficha → margem de IA >90%. ASR para ditado (Fase 6) adiciona
 centavos por minuto. Conclusão: **o custo de IA não pressiona o preço; o risco
 econômico está em CAC e churn, não em COGS.** Medir custo real por sessão desde
 o primeiro dia (item já no backlog D).
@@ -360,18 +299,8 @@ Sequência de receita: piloto pago com desconto → 5–10 clínicas por indica�
 
 ## 8. O que segue em aberto (vai para pesquisa real / piloto)
 
-1. Números finais de preço (a definição da unidade faturável está fechada: ver Decisões 8 e 9 na §3).
-2. Peso real do relatório de convênio na decisão de compra (Tema 6) — se
-   confirmado, ele pode ANTECIPAR: cobrar caro pelo tier Convênio desde o
-   fast-follow em vez de tratá-lo como expansão.
-3. ~~Decidir o non-goal de coleta por tentativa~~ — **decisão de produto tomada
-   em 09/07/2026** (ver §2 acima: mantém narrativa como modo primário, campo
-   `tentativas` já cobre o meio-termo, condição de reversão documentada). O que
-   segue em aberto é só a VALIDAÇÃO real nos Roteiros A/C — se supervisores ou
-   operadoras exigirem trial-by-trial como bloqueador (não preferência), a
-   reversão já está desenhada (registro estruturado opcional dentro da sessão,
-   sem trair a tese narrativa).
-4. ~~Nome/marca e domínio~~ — **decidido por Rômulo em 10/07/2026: Iris,
-   domínio `irisclinica.ia.br`.** Rebranding já aplicado em toda a
-   documentação (este documento incluído).
+1. ~~Definição da métrica e tabela de precificação~~ — **DECIDIDO E IMPLEMENTADO:** Cobrança por ficha ativa/mês com régua marginal (R$ 39 / R$ 32 / R$ 25) consolidada em [`src/lib/billing/calculator.ts`](file:///c:/Users/sutil/Documents/dev/PESSOAL/apps/iris/src/lib/billing/calculator.ts). Em aberto apenas a validação empírica da conversão nos pilotos e políticas de desconto de fundador.
+2. ~~Inclusão do relatório de convênio~~ — **DECIDIDO E IMPLEMENTADO:** Dossiê Bruto de auditoria e Relatório Narrativo com IA integrados no MVP (Fase 5) e codificados no schema (`report.tipo`).
+3. ~~Decidir o non-goal de coleta por tentativa~~ — **DECISÃO DE PRODUTO TOMADA (09/07/2026):** Mantém narrativa como modo primário, campo `tentativas` cobre menções espontâneas, sem UI rígida trial-by-trial.
+4. ~~Nome/marca e domínio~~ — **DECIDIDO POR RÔMULO (10/07/2026):** Iris, domínio `irisclinica.ia.br`.
 5. ~~Gateway de pagamento e trilho de cobrança~~ — **homologado em produção (11/08/2026, D24/D43/D44):** Faturamento ativo opera exclusivamente via **Asaas com Pix Automático** (`immediateQrCode` com autorização de R$ 0,01 + apuração mensal pós-paga por ficha ativa). Mercado Pago foi formalmente descontinuado (migração `0091_drop_webhook_mercado_pago.sql`).

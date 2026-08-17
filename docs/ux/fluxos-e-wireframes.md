@@ -522,71 +522,57 @@ não erro pessoal.
 
 ### 4.6 Exportação: relatório da família (narrativo) e dossiê de convênio (bruto)
 
-**Decisão confirmada (09/07/2026):** os dois caminhos ficam no MVP (Fase 5), mas
-são artefatos DIFERENTES — relatório da família é narrativo (IA sintetiza
+**Decisão consolidada (Fase 5 / MVP):** Os relatórios integram o núcleo do MVP em uma oferta unificada, com papéis e artefatos bem diferenciados:
 
-- coordenador edita); dossiê de convênio é LISTAGEM bruta do período, sem
-  síntese de IA, porque o consumidor é auditor de operadora, não a família — ele
-  quer verificar que o cobrado bate com o registrado, não uma história de
-  progresso.
+1. **Relatório para a Família** (`familia`): Narrativo e orientativo (IA sintetiza conquistas e orientações para casa → coordenador revisa/aprova).
+2. **Dossiê Bruto de Auditoria** (`convenio_bruto`): Listagem factual do período, sem síntese de IA, com sessões, presenças e evidências aprovadas (com autor/timestamp).
+3. **Relatório Narrativo de Convênio** (`convenio_narrativo`): Síntese clínica estruturada com IA + curadoria do coordenador, orientada à autorização de continuidade de tratamento.
 
-**Acesso por tier (revisado 09/07/2026):** **dossiê para convênio** também é
-visível no tier Diário — quem abre a tela de Exportar ali é o próprio
-profissional (não "coordenador" formal; no freelancer/autônomo é a mesma pessoa,
-ver `Clinic.responsavel_conta_id` em `modelo-de-dados.md` decisão 2.11), e só o
-tile "Dossiê para convênio" aparece, escopado aos próprios pacientes.
-**Relatório da família** continua exclusivo do tier Clínica (depende do módulo
-coordenador). Nos wireframes abaixo, "Coordenador" no fluxo do dossiê deve ser
-lido como "profissional com acesso de exportação" (coordenador no tier Clínica,
-o próprio terapeuta no tier Diário) — relatório da família mantém "Coordenador"
-estrito.
+**Controle de Acesso por Papel Clínico:**
+O acesso aos relatórios é baseado no papel do profissional (`user_role_tipo`), e não em tiers comerciais de assinatura:
+
+- **Coordenador:** Acesso completo a todos os tipos de relatório (Família, Dossiê Bruto e Convênio Narrativo) e ações de edição/aprovação.
+- **Terapeuta:** Acesso à emissão de Dossiê Bruto factual escopado aos pacientes da sua Equipe de Cuidado.
 
 ```mermaid
 flowchart TD
-    A[Profissional abre\nExportar] --> B{Qual exportação?}
-    B -->|Família| C[Gera rascunho com IA\na partir de Evidence/\nMilestoneAssessment do período]
+    A[Profissional abre\nExportar / Relatórios] --> B{Qual tipo de relatório?}
+    B -->|Família| C[Gera rascunho com IA\na partir de Evidence/\nMilestones do período]
     C --> D{Período teve evolução?}
     D -->|Sim| E[1 conquista em destaque\n+ trabalho atual\n+ como apoiar em casa]
-    D -->|Não, platô| F["Rascunho orienta:\n'sem marco novo neste\nperíodo' + o que SEGUE\nsendo trabalhado"]
-    E --> G[Coordenador edita/aprova]
+    D -->|Não, platô| F["Rascunho orienta:\n'sem marco novo no período'\n+ o que segue trabalhado"]
+    E --> G[Coordenador revisa/aprova]
     F --> G
     G --> H[Exporta PDF]
-    B -->|Convênio| I[Seleciona paciente\n+ período]
+    B -->|Dossiê Bruto de Convênio| I[Seleciona paciente\n+ período]
     I --> J[Preview: lista de sessões,\nEvidences aprovadas,\npresença/falta do período\nSEM síntese de IA]
-    J --> K{Profissional confirma\nque quer exportar\nesse recorte?}
-    K -->|Sim| L[Exporta PDF —\nlistagem factual,\nautor/timestamp por item]
+    J --> K{Confirma recorte?}
+    K -->|Sim| L[Exporta PDF factual\nautor/timestamp por item]
     K -->|Ajustar período| I
+    B -->|Convênio Narrativo| O[Gera síntese técnica com IA\njustificativa clínica de continuidade]
+    O --> G
     H --> M[AuditLog registra\nANTES de liberar download]
     L --> M
     M --> N[Download / envio]
 ```
 
-Tela **Exportar** — tier Clínica (as duas opções):
+Tela **Exportar / Relatórios** (Visão da Coordenação):
 
 ```
 ┌───────────────────────────────────────────┐
-│ Exportar · Miguel S.                         │
+│ Relatórios & Dossiês · Miguel S.          │
 ├───────────────────────────────────────────┤
 │  [ 👪 Relatório para a família ]             │
 │      PDF narrativo · conquistas + apoio      │
 │      em casa · via IA, você revisa e aprova  │
 │                                                │
-│  [ 🏥 Dossiê para convênio ]                 │
+│  [ 🏥 Dossiê bruto para convênio ]           │
 │      PDF factual · sessões, evidências e      │
 │      presença de um período — sem síntese     │
-└───────────────────────────────────────────┘
-```
-
-Tela **Exportar** — tier Diário (só o dossiê, sem o relatório da família,
-que depende do módulo coordenador):
-
-```
-┌───────────────────────────────────────────┐
-│ Exportar · Miguel S.                         │
-├───────────────────────────────────────────┤
-│  [ 🏥 Dossiê para convênio ]                 │
-│      PDF factual · sessões, evidências e      │
-│      presença de um período — sem síntese     │
+│                                                │
+│  [ 📄 Relatório narrativo de convênio ]      │
+│      PDF técnico com IA · justificativa de   │
+│      continuidade para operadora de saúde    │
 └───────────────────────────────────────────┘
 ```
 

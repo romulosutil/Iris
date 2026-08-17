@@ -1,15 +1,6 @@
 # Stack e Plano de Construção Incremental (Prompt 4)
 
-> ⚠️ **PIVÔ DE HOSPEDAGEM EM AVALIAÇÃO (09/07/2026) — NÃO TRAVADO.** Camada
-> **hospedagem/deploy** deste doc (Vercel `gru1` + Supabase gerenciado
-> `sa-east-1`, "sem containers") sob revisão. Nova premissa:
-> **VPS Hostinger + Easypanel (Docker), Postgres puro** (não Supabase). Enquanto não
-> confirmado, trate tabela §1 (linhas Host/Deploy) e "não usar
-> containers" (§2) como **candidatos a substituição** — proposta detalhada +
-> decisões tech lead em
-> [`plano-bootstrap-e-stack-vps.md`](plano-bootstrap-e-stack-vps.md). **Resto
-> deste doc (framework, modelo de dados, RLS, plano fases 0.5→6,
-> definição de pronto) permanece válido, intacto.**
+> ⚠️ **DOCUMENTO HISTÓRICO / PIVÔ CONSOLIDADO:** A arquitetura de hospedagem e banco do Iris migrou definitivamente de Supabase/Vercel para **VPS Hostinger + Easypanel (Docker) + Postgres puro (RLS) + MinIO + Better-Auth**, conforme consolidado em [`plano-bootstrap-e-stack-vps.md`](plano-bootstrap-e-stack-vps.md) e operacionalizado em [`infra/README.md`](../../infra/README.md). As referências nesta tabela a Supabase, Supabase Auth e Vercel são registros históricos do design original (Prompt 4). Framework (Next.js App Router), modelo de dados (RLS) e plano de fases permanecem canônicos.
 
 Resultado execução Prompt 4 (`docs/prompts/serie-de-prompts.md`), com
 ajustes já incorporados ao prompt antes de rodar (ver `BACKLOG.md`,

@@ -7,20 +7,13 @@ import { convidarUsuario } from "./logic";
 vi.mock("server-only", () => ({}));
 
 // `convidarUsuario` passou a ser envolvido por `comEscrita` (#163): antes de
-// executar, o guard consulta a situação da conta. Sem este dublê, a clínica
-// fictícia deste teste não existe no banco, `derivarSituacao` cai no ramo "sem
-// linha → somente-leitura" e TODOS os casos abaixo passariam a testar o guard
-// em vez do envio de e-mail. A regra do guard tem cobertura própria em
-// `src/lib/billing/estado-conta.test.ts` e nos testes de integração.
-vi.mock("@/lib/billing/estado-conta", async (original) => ({
-  ...(await original<typeof import("@/lib/billing/estado-conta")>()),
-  avaliarSituacaoConta: vi.fn(async () => ({
-    estado: "ativa" as const,
-    podeEscrever: true,
-    podeCadastrarPaciente: true,
-    diasRestantesTrial: null,
-    statusAssinatura: "active",
-  })),
+// executar, o guard consulta a situação da conta via `withTenant`.
+// Em teste unitário isolado (sem banco de dados), dublamos `comEscrita` como
+// passthrough para exercitar a lógica pura de negócio e envio de e-mails.
+// A regra do guard tem cobertura própria em `src/lib/billing/estado-conta.test.ts`
+// e nos testes de integração.
+vi.mock("@/lib/billing/guard-escrita", () => ({
+  comEscrita: (fn: any) => fn,
 }));
 
 const ctxCoord: TenantContext = {

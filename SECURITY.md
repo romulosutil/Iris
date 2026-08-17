@@ -8,10 +8,10 @@ A segurança dos dados clínicos e o sigilo de menores no espectro autista (TEA)
 
 Apenas a versão ativa em produção na branch `main` recebe correções de segurança.
 
-| Versão | Suportada |
-| :--- | :--- |
-| `main` (Produção) | :white_check_mark: |
-| Outras branches / tags legadas | :x: |
+| Versão                         | Suportada          |
+| :----------------------------- | :----------------- |
+| `main` (Produção)              | :white_check_mark: |
+| Outras branches / tags legadas | :x:                |
 
 ---
 
@@ -27,6 +27,7 @@ Utilize um dos seguintes canais privados de divulgação coordenada:
    - Envie um relatório técnico detalhado para: `seguranca@irisclinica.ia.br` (ou contato direto com o mantenedor no GitHub).
 
 ### Informações essenciais no relatório:
+
 - **Classificação:** Tipo de vulnerabilidade (ex: RLS bypass, XSS, SSRF, Autenticação/Sessão, Escalação de privilégios).
 - **Reprodução:** Passo a passo detalhado ou prova de conceito (PoC).
 - **Impacto:** Avaliação do risco potencial a tenants ou dados de pacientes.

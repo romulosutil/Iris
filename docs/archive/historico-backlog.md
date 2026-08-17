@@ -756,7 +756,7 @@ resolvidas — cobertura de domínio`): **PEDI** ganhou o campo genérico
       falso-positivos do Jules (ele só vê o diff, sem contexto do projeto).
   - **Config do Jules reformulada p/ matar o falso-positivo na raiz (10/07/2026):**
     o `.github/workflows/pr-review.yml` passava a régua por `rules_file:
-    .github/jules-review-rules.md` — e o revisor lia a própria régua como
+.github/jules-review-rules.md` — e o revisor lia a própria régua como
     "arquivo de regras não confiável", marcando os imperativos dirigidos à IA
     ("Escreva TODO o output", "NÃO classifique") como prompt injection. Fix:
     removido o `rules_file` e o arquivo `.github/jules-review-rules.md`; todo o

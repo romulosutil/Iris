@@ -1,5 +1,7 @@
 # Checklist de Produção — Aceite do MVP (Fase 6)
 
+> 📌 **DOCUMENTO DE REFERÊNCIA OPERACIONAL VIGENTE:** Para o manual mestre de prontidão operacional, cutover e go-live atualizado, consulte [`docs/GO_LIVE.md`](../GO_LIVE.md). Este arquivo preserva o registro histórico de aceite da Fase 6 (25/07/2026).
+
 > ## ✅ MVP VALIDADO — 25/07/2026
 >
 > Etapas 0–5 da issue **#75** (trilha de go-live) verdes; **#75 fechada**. O MVP

@@ -1,5 +1,7 @@
 # Modelo de Domínio e Arquitetura de Dados — Iris (Prompt 1)
 
+> 📌 **GOVERNANÇA & FONTE ÚNICA DA VERDADE (SSOT):** Este documento descreve as entidades de domínio, relações conceituais e invariantes de negócio. A definição viva, tipada e canônica das tabelas, colunas, enums e constraints do banco de dados é mantida em [`src/db/schema.ts`](../../src/db/schema.ts) e nas migrações do Drizzle em [`db/migrations/`](../../db/migrations/).
+
 Resultado da execução do Prompt 1 (`docs/prompts/serie-de-prompts.md`). Cobre:
 modelo de domínio com justificativa por entidade, os 6 problemas de lógica
 pedidos (a, b, b2, b3, b4, c, d, e), DDL PostgreSQL das tabelas mais críticas,
@@ -1204,25 +1206,9 @@ documento de validação legal). O termo de responsabilidade da clínica (parte
 do Prompt 3/4 — onboarding) precisa deixar claro que a clínica é quem escolhe
 e assume essa configuração, não o Iris.
 
-**Exportação bruta para auditoria de convênio — decisão CONFIRMADA por Rômulo
-(09/07/2026):** entra no MVP, Fase 5, dentro do tier Clínica (não fica preso ao
-fast-follow do tier Convênio, ver `modelo-de-negocio.md` seção 4). Racional:
-quando a operadora audita, a clínica precisa produzir documentação bruta
-(sessões, evidências, presença) de um paciente/período sob demanda — mesmo
-clínicas do tier Diário/Clínica com pacientes de convênio podem ser auditadas
-a qualquer momento, não só as do tier Convênio. Reaproveita dado que o modelo
-JÁ tem (`Session`, `SessionNote`, `Evidence`, `Appointment`) e o mesmo pipeline
-de export/`audit_log` do relatório da família — é bem mais barato que o
-relatório narrativo (sem etapa de geração/edição de texto) e ataca a mesma dor
-analgésica já validada em `modelo-de-negocio.md`. Especificação:
-`Report.tipo='convenio_bruto'` (valor próprio, ver correção na seção 1.6 —
-distinto de `convenio_narrativo`) com `payload` estruturado por listagem
-(não narrativa) — sessões do período com nota consolidada,
-Evidences aprovadas com autor/timestamp, registro de presença/falta; exportado
-em PDF, mesma trilha de `audit_log` do relatório da família (seção 4.4).
-Detalhamento de UX em `docs/ux/fluxos-e-wireframes.md` seção 4.6. O relatório
-de convênio NARRATIVO (síntese com IA) segue como fast-follow do tier
-Convênio, sem mudança.
+**Exportação e Relatórios de Convênio (Bruto e Narrativo) — decisão CONSOLIDADA (Fase 5 / MVP):**
+Tanto o **Dossiê Bruto de Auditoria** (`Report.tipo='convenio_bruto'`, sem IA) quanto o **Relatório de Convênio Narrativo** (`Report.tipo='convenio_narrativo'`, gerado com IA + revisão do coordenador) foram integrados ao MVP (Fase 5) como parte da oferta unificada do Iris (ver `modelo-de-negocio.md` seção 4). Racional:
+quando a operadora audita ou exige justificativa para continuidade de tratamento, a clínica precisa produzir documentação rastreável e auditável sob demanda. O Dossiê Bruto reaproveita os dados factuais (`Session`, `SessionNote`, `Evidence`, `Appointment`) em listagem factual, enquanto o Narrativo utiliza a inteligência clínica para síntese com aprovação humana obrigatória. Ambos compartilham a mesma tabela `report`, `report_pdf` e trilha de auditoria imutável em `audit_log`. Detalhamento de UX em `docs/ux/fluxos-e-wireframes.md` seção 4.6.
 
 ## 6. O que fica para os próximos prompts
 
@@ -1232,10 +1218,10 @@ Convênio, sem mudança.
   UI comunica o responsável técnico (seção 5 acima) sem parecer burocracia
   extra para o AT, o fluxo de CADASTRO do paciente (administrativo vs. clínico,
   incluindo configuração de `PatientProtocol` pelo coordenador — decisão 2.9) e
-  o fluxo de exportação bruta para auditoria de convênio (confirmado, acima) —
+  o fluxo de exportação para relatórios e auditoria de convênio (confirmado, acima) —
   os três já desenhados em `docs/ux/fluxos-e-wireframes.md`.
-- Prompt 4 (fases): alocar o dossiê bruto de auditoria de convênio à Fase 5
-  (confirmado no MVP, tier Clínica — ver `modelo-de-negocio.md` seção 4).
+- Prompt 4 (fases): alocar os relatórios da família, dossiê bruto e relatório narrativo de convênio à Fase 5
+  (confirmados no MVP — ver `modelo-de-negocio.md` seção 4).
 - Prompt 4 (stack): escolha de banco gerenciado com RLS nativo (Postgres),
   estratégia de job assíncrono para `milestone_candidacy` / `goal_candidacy` /
   `session_snapshot` (fila? cron? trigger + outbox?), região de hospedagem
