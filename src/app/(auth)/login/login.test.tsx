@@ -4,9 +4,10 @@ import axe from "axe-core";
 import LoginPage from "./page";
 
 // Mocks obrigatórios para evitar erros de ambiente/Next
-vi.mock("next/font/google", () => ({
-  Space_Grotesk: () => ({ variable: "mock-space-grotesk" }),
-  Plus_Jakarta_Sans: () => ({ variable: "mock-plus-jakarta-sans" }),
+vi.mock("next/font/local", () => ({
+  default: ({ src }: { src: string }) => ({
+    variable: `mock-${src.replace(/^.*\//, "").replace("-latin.woff2", "")}`,
+  }),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -39,7 +40,7 @@ describe("LoginPage — Badges de Trust e Segurança", () => {
 
     // Verifica a micro-copy
     const microCopy = screen.getByText(
-      /Dados clínicos protegidos por criptografia e isolamento multi-tenant/i
+      /Dados clínicos protegidos por criptografia e isolamento multi-tenant/i,
     );
     expect(microCopy).toBeDefined();
   });

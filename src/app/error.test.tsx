@@ -1,10 +1,11 @@
 import { expect, test, describe, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
-// next/font/google explode fora do build do Next (TypeError no vitest).
-vi.mock("next/font/google", () => ({
-  Space_Grotesk: () => ({ variable: "mock-space-grotesk" }),
-  Plus_Jakarta_Sans: () => ({ variable: "mock-plus-jakarta-sans" }),
+// next/font/local explode fora do build do Next (TypeError no vitest).
+vi.mock("next/font/local", () => ({
+  default: ({ src }: { src: string }) => ({
+    variable: `mock-${src.replace(/^.*\//, "").replace("-latin.woff2", "")}`,
+  }),
 }));
 
 // O canal de observabilidade é o GlitchTip, não o console: o teste garante
@@ -73,7 +74,9 @@ describe("ErrorPage (error.tsx)", () => {
   });
 
   test("exibe o digest do Next como ID do erro quando presente", () => {
-    render(<ErrorPage error={comDigest("DIGEST-12345-ABCD")} reset={vi.fn()} />);
+    render(
+      <ErrorPage error={comDigest("DIGEST-12345-ABCD")} reset={vi.fn()} />,
+    );
     expect(screen.getByText(/DIGEST-12345-ABCD/i)).not.toBeNull();
     expect(screen.getByRole("alert")).not.toBeNull();
   });
@@ -113,7 +116,9 @@ describe("GlobalErrorPage (global-error.tsx)", () => {
   });
 
   test("replica o contrato do root layout: lang, data-mode e variáveis de fonte", () => {
-    render(<GlobalErrorPage error={new Error("Falha global")} reset={vi.fn()} />);
+    render(
+      <GlobalErrorPage error={new Error("Falha global")} reset={vi.fn()} />,
+    );
     // React 19 iça <html> para o document real do jsdom — os atributos
     // aterrissam em document.documentElement, não dentro do container.
     const htmlEl = document.documentElement;
@@ -126,7 +131,10 @@ describe("GlobalErrorPage (global-error.tsx)", () => {
   test("exibe digest quando presente e chama reset no botão", () => {
     const resetSpy = vi.fn();
     render(
-      <GlobalErrorPage error={comDigest("DIGEST-GLOBAL-789")} reset={resetSpy} />,
+      <GlobalErrorPage
+        error={comDigest("DIGEST-GLOBAL-789")}
+        reset={resetSpy}
+      />,
     );
 
     expect(screen.getByText(/DIGEST-GLOBAL-789/i)).not.toBeNull();

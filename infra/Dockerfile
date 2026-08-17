@@ -5,6 +5,12 @@
 FROM node:22-alpine AS base
 RUN corepack enable
 WORKDIR /app
+# `corepack enable` só instala os shims; o binário do pnpm baixa do npm
+# registry na 1ª invocação por stage. `corepack install` materializa a
+# versão de `packageManager` aqui, num layer cacheado por `deps`/`build`/
+# `migrate`, tirando o registry do caminho crítico do build.
+COPY package.json ./
+RUN corepack install
 
 # --- deps: instala com lockfile congelado -------------------------------------
 FROM base AS deps
