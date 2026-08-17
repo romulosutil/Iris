@@ -17,5 +17,7 @@ export interface Slot extends Intervalo {
  * paciente). C5: o chamador roda para ambas dimensões e faz OR do resultado.
  */
 export function conflita(nova: Slot, existentes: Slot[]): boolean {
-  return existentes.some((e) => e.diaSemana === nova.diaSemana && sobrepoe(nova, e));
+  return existentes.some(
+    (e) => e.diaSemana === nova.diaSemana && sobrepoe(nova, e),
+  );
 }

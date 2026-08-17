@@ -44,10 +44,16 @@ export type StatusRisco =
   | "descartado";
 
 /** Severidades com prazo de 15 minutos para reconhecimento. */
-const PRAZO_15: readonly SeveridadeRisco[] = ["ideacao_ativa_com_plano", "tentativa_relatada"];
+const PRAZO_15: readonly SeveridadeRisco[] = [
+  "ideacao_ativa_com_plano",
+  "tentativa_relatada",
+];
 
 /** Severidades com prazo de 1 hora para reconhecimento. */
-const PRAZO_60: readonly SeveridadeRisco[] = ["ideacao_ativa_sem_plano", "autolesao_recente"];
+const PRAZO_60: readonly SeveridadeRisco[] = [
+  "ideacao_ativa_sem_plano",
+  "autolesao_recente",
+];
 
 /**
  * Prazo, em minutos, para reconhecimento humano do alerta (§4.1).
@@ -58,7 +64,10 @@ const PRAZO_60: readonly SeveridadeRisco[] = ["ideacao_ativa_sem_plano", "autole
  * tempo. Manter o parâmetro na assinatura torna a regra explícita no ponto de
  * chamada, em vez de deixá-la implícita por omissão.
  */
-export function prazoMinutos(severidade: SeveridadeRisco, certeza: CertezaRisco): number {
+export function prazoMinutos(
+  severidade: SeveridadeRisco,
+  certeza: CertezaRisco,
+): number {
   void certeza; // intencional: a ambiguidade não relaxa o prazo.
   if (PRAZO_15.includes(severidade)) return 15;
   if (PRAZO_60.includes(severidade)) return 60;
@@ -72,7 +81,9 @@ export function rotuloPrazo(minutos: number): string {
   if (minutos === 240) return "4 horas";
   if (minutos < 60) return `${minutos} minutos`;
   const horas = minutos / 60;
-  const texto = Number.isInteger(horas) ? String(horas) : horas.toFixed(1).replace(".", ",");
+  const texto = Number.isInteger(horas)
+    ? String(horas)
+    : horas.toFixed(1).replace(".", ",");
   return `${texto} ${horas === 1 ? "hora" : "horas"}`;
 }
 
@@ -84,7 +95,10 @@ export const DECLARACAO_PRAZOS =
   "Estes prazos regem apenas o envio de alertas dentro do sistema Iris para os gestores da clínica. O Iris não realiza atendimento e não garante a presença de profissionais logados.";
 
 /** Milissegundos restantes até o prazo de reconhecimento (negativo se vencido). */
-export function prazoRestanteMs(prazoReconhecimento: Date, agora: Date): number {
+export function prazoRestanteMs(
+  prazoReconhecimento: Date,
+  agora: Date,
+): number {
   return prazoReconhecimento.getTime() - agora.getTime();
 }
 
@@ -98,6 +112,9 @@ export function vencido(prazoReconhecimento: Date, agora: Date): boolean {
  * original contado da criação — ou seja, o prazo original acrescido de mais um
  * intervalo igual.
  */
-export function prazoEstagio2(prazoReconhecimento: Date, prazoEmMinutos: number): Date {
+export function prazoEstagio2(
+  prazoReconhecimento: Date,
+  prazoEmMinutos: number,
+): Date {
   return new Date(prazoReconhecimento.getTime() + prazoEmMinutos * 60_000);
 }

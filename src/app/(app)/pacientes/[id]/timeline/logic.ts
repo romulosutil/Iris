@@ -27,7 +27,7 @@ export interface DeltaSessao {
  */
 export function calcularDelta(
   snapA: RepertorioState | null,
-  snapB: RepertorioState | null
+  snapB: RepertorioState | null,
 ): DeltaSessao {
   const itens: DeltaItem[] = [];
   let evidenciasNovas = 0;
@@ -120,7 +120,7 @@ export function calcularDelta(
  */
 export function verificarProtocoloMudou(
   segA: Record<string, Record<string, any>> | null,
-  segB: Record<string, Record<string, any>> | null
+  segB: Record<string, Record<string, any>> | null,
 ): boolean {
   const safeA = segA || {};
   const safeB = segB || {};

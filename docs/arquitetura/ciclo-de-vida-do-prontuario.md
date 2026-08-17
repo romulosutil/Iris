@@ -11,17 +11,17 @@ Contrapartes jurídicas: `docs/legal/procedimento-revogacao-consentimento.md`,
 
 ## 1. Os estados
 
-| Estado | Significado |
-| :--- | :--- |
-| **Ativo** | Registro clínico permitido: sessão, diário, extração por IA (se a finalidade estiver consentida), exportação (idem). |
-| **Somente-leitura por revogação** | Escrita clínica bloqueada. Leitura integral preservada. Reversível. |
+| Estado                            | Significado                                                                                                          |
+| :-------------------------------- | :------------------------------------------------------------------------------------------------------------------- |
+| **Ativo**                         | Registro clínico permitido: sessão, diário, extração por IA (se a finalidade estiver consentida), exportação (idem). |
+| **Somente-leitura por revogação** | Escrita clínica bloqueada. Leitura integral preservada. Reversível.                                                  |
 
 Não há estado "arquivado", "encerrado" ou "excluído" **no sentido de consentimento clínico**. Alta e fim de
 acompanhamento não mudam o estado do prontuário — mudam a contagem do prazo
 de guarda, que é assunto de `politica-retencao-dados.md`. Expurgo é
 operação separada (`app_purgar_paciente`), não um estado.
 
-*(Nota operacional: O campo `patient.arquivado_em`, introduzido na Issue #174 / migração `0080`, trata estritamente da suspensão cadastral/faturamento de pacientes inativos há mais de 90 dias, e não altera as regras de consentimento ou guarda do prontuário aqui descritas).*
+_(Nota operacional: O campo `patient.arquivado_em`, introduzido na Issue #174 / migração `0080`, trata estritamente da suspensão cadastral/faturamento de pacientes inativos há mais de 90 dias, e não altera as regras de consentimento ou guarda do prontuário aqui descritas)._
 
 ## 2. O estado é derivado, nunca armazenado
 
@@ -97,12 +97,12 @@ causa deste mecanismo é bug.
 
 ## 4. Matriz de efeito após a revogação do consentimento de regime
 
-| Regime | Sessão / diário | Extração por IA | Exportação de relatório | Leitura |
-| :--- | :--- | :--- | :--- | :--- |
-| **Menor** | bloqueado | bloqueado | bloqueado | **permitida** |
-| **Curatelado** | bloqueado | bloqueado | bloqueado | **permitida** |
-| **Adulto capaz** | permitido | bloqueado | bloqueado | **permitida** |
-| **Emancipado** | permitido | bloqueado | bloqueado | **permitida** |
+| Regime           | Sessão / diário | Extração por IA | Exportação de relatório | Leitura       |
+| :--------------- | :-------------- | :-------------- | :---------------------- | :------------ |
+| **Menor**        | bloqueado       | bloqueado       | bloqueado               | **permitida** |
+| **Curatelado**   | bloqueado       | bloqueado       | bloqueado               | **permitida** |
+| **Adulto capaz** | permitido       | bloqueado       | bloqueado               | **permitida** |
+| **Emancipado**   | permitido       | bloqueado       | bloqueado               | **permitida** |
 
 Menor e curatelado bloqueiam porque o consentimento do representante **é** a
 base do tratamento. Adulto e emancipado não bloqueiam porque o registro

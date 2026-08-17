@@ -10,7 +10,10 @@ afterEach(cleanup);
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
   const resultado = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
     rules: {
       region: { enabled: false },
       "landmark-one-main": { enabled: false },

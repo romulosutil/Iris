@@ -3,7 +3,12 @@ import { transicaoPermitida, exigeJustificada } from "./transicoes";
 
 describe("transicaoPermitida", () => {
   it("agendada → realizada/falta_*/cancelada é permitido", () => {
-    for (const p of ["realizada","falta_paciente","falta_terapeuta","cancelada"] as const)
+    for (const p of [
+      "realizada",
+      "falta_paciente",
+      "falta_terapeuta",
+      "cancelada",
+    ] as const)
       expect(transicaoPermitida("agendada", p)).toBe(true);
   });
   it("agendada → agendada não é transição", () => {

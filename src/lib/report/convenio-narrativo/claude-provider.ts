@@ -6,6 +6,8 @@ import type { ConvenioNarrativoDraft, ConvenioNarrativoInput } from "./types";
 
 export class ClaudeConvenioNarrativoProvider implements ConvenioNarrativoProvider {
   async gerar(_input: ConvenioNarrativoInput): Promise<ConvenioNarrativoDraft> {
-    throw new Error("ClaudeConvenioNarrativoProvider não habilitado (pendente DPA/CONVENIO_REPORT_LLM_ENABLED).");
+    throw new Error(
+      "ClaudeConvenioNarrativoProvider não habilitado (pendente DPA/CONVENIO_REPORT_LLM_ENABLED).",
+    );
   }
 }

@@ -22,7 +22,8 @@ export const Destacado: Story = {
   args: {
     destacado: true,
     titulo: "Ação Urgente Requerida",
-    children: "Você tem 1 consolidação pendente que precisa ser realizada hoje.",
+    children:
+      "Você tem 1 consolidação pendente que precisa ser realizada hoje.",
   },
 };
 

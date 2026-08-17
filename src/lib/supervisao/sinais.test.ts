@@ -69,9 +69,21 @@ describe("sinais - logic unit tests", () => {
           sessionNumero: 42,
           segmentacao: {
             "goal-1": {
-              "protocol-1": { tipo_estrutura: "motor", metrica: "tempo", rotulo: "evolucao" },
-              "protocol-2": { tipo_estrutura: "motor", metrica: "tempo", rotulo: "sem_dado" },
-              "protocol-3": { tipo_estrutura: "motor", metrica: "tempo", rotulo: "aguardando_avaliacao_formal" },
+              "protocol-1": {
+                tipo_estrutura: "motor",
+                metrica: "tempo",
+                rotulo: "evolucao",
+              },
+              "protocol-2": {
+                tipo_estrutura: "motor",
+                metrica: "tempo",
+                rotulo: "sem_dado",
+              },
+              "protocol-3": {
+                tipo_estrutura: "motor",
+                metrica: "tempo",
+                rotulo: "aguardando_avaliacao_formal",
+              },
             },
           },
         },
@@ -88,8 +100,16 @@ describe("sinais - logic unit tests", () => {
           sessionNumero: 10,
           segmentacao: {
             "goal-1": {
-              "protocol-2": { tipo_estrutura: "a", metrica: "m", rotulo: "estagnacao" },
-              "protocol-1": { tipo_estrutura: "a", metrica: "m", rotulo: "regressao" },
+              "protocol-2": {
+                tipo_estrutura: "a",
+                metrica: "m",
+                rotulo: "estagnacao",
+              },
+              "protocol-1": {
+                tipo_estrutura: "a",
+                metrica: "m",
+                rotulo: "regressao",
+              },
             },
           },
         },
@@ -98,10 +118,18 @@ describe("sinais - logic unit tests", () => {
           sessionNumero: 12,
           segmentacao: {
             "goal-2": {
-              "protocol-1": { tipo_estrutura: "a", metrica: "m", rotulo: "estagnacao" },
+              "protocol-1": {
+                tipo_estrutura: "a",
+                metrica: "m",
+                rotulo: "estagnacao",
+              },
             },
             "goal-1": {
-              "protocol-1": { tipo_estrutura: "a", metrica: "m", rotulo: "regressao" },
+              "protocol-1": {
+                tipo_estrutura: "a",
+                metrica: "m",
+                rotulo: "regressao",
+              },
             },
           },
         },

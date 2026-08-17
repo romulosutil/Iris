@@ -42,16 +42,21 @@ export interface GerirSessaoProps {
 
 export function GerirSessao({ sessionId, terapeutas }: GerirSessaoProps) {
   const [aberto, setAberto] = useState(false);
-  const [estadoEscolhido, setEstadoEscolhido] = useState<SessionEstado>("realizada");
+  const [estadoEscolhido, setEstadoEscolhido] =
+    useState<SessionEstado>("realizada");
   const [justificada, setJustificada] = useState(false);
   const [substitutoId, setSubstitutoId] = useState<string | null>(null);
-  const [modalidade, setModalidade] = useState<(typeof MODALIDADES)[number]["v"]>(
-    "presencial",
+  const [modalidade, setModalidade] =
+    useState<(typeof MODALIDADES)[number]["v"]>("presencial");
+
+  const [state, formAction] = useActionState(
+    marcarEstadoAction,
+    ESTADO_INICIAL,
   );
 
-  const [state, formAction] = useActionState(marcarEstadoAction, ESTADO_INICIAL);
-
-  const ehFalta = estadoEscolhido === "falta_paciente" || estadoEscolhido === "falta_terapeuta";
+  const ehFalta =
+    estadoEscolhido === "falta_paciente" ||
+    estadoEscolhido === "falta_terapeuta";
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
@@ -77,8 +82,16 @@ export function GerirSessao({ sessionId, terapeutas }: GerirSessaoProps) {
           {/* Radix Select não emite valor nativo no FormData — hidden inputs
               espelham o estado controlado. */}
           <input type="hidden" name="estado" value={estadoEscolhido} />
-          <input type="hidden" name="justificada" value={justificada ? "true" : ""} />
-          <input type="hidden" name="atendidoPorId" value={substitutoId ?? ""} />
+          <input
+            type="hidden"
+            name="justificada"
+            value={justificada ? "true" : ""}
+          />
+          <input
+            type="hidden"
+            name="atendidoPorId"
+            value={substitutoId ?? ""}
+          />
           <input type="hidden" name="modalidade" value={modalidade} />
 
           <Field label="Estado" htmlFor="gerir-sessao-estado">
@@ -101,7 +114,7 @@ export function GerirSessao({ sessionId, terapeutas }: GerirSessaoProps) {
 
           {ehFalta && (
             <div role="group" aria-label="Justificada" className="flex gap-2">
-              <span className="text-ink font-display text-sm font-semibold self-center">
+              <span className="text-ink font-display self-center text-sm font-semibold">
                 Justificada
               </span>
               <Button
@@ -135,7 +148,10 @@ export function GerirSessao({ sessionId, terapeutas }: GerirSessaoProps) {
               value={modalidade}
               onValueChange={(v) => setModalidade(v as typeof modalidade)}
             >
-              <SelectTrigger id="gerir-sessao-modalidade" aria-label="Modalidade">
+              <SelectTrigger
+                id="gerir-sessao-modalidade"
+                aria-label="Modalidade"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

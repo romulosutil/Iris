@@ -17,14 +17,14 @@ plugar o provider real do Claude.
 
 ### 1.1 Fora de escopo (deliberado)
 
-| Item | Onde vai |
-| --- | --- |
-| Chamada real ao Claude, regras R1–R19, hardening prompt-injection | Fase 3 |
-| Tabelas `evidence`/`evidence_revision`/`evidence_query` + tela de Revisão completa | Fase 3 |
-| Jobs de candidatura (goal/milestone) — cálculo determinístico | Fase 3 (dependem de `evidence`) |
-| `session_snapshot` (linha do tempo, decisão 2.5) | Fase 4 |
-| Upload de áudio para object storage (MinIO/S3), fila de reenvio confirmada | Fase 6 (Ditado de Voz) — depende da infra |
-| `appointment` (recorrência) | Fase futura |
+| Item                                                                               | Onde vai                                  |
+| ---------------------------------------------------------------------------------- | ----------------------------------------- |
+| Chamada real ao Claude, regras R1–R19, hardening prompt-injection                  | Fase 3                                    |
+| Tabelas `evidence`/`evidence_revision`/`evidence_query` + tela de Revisão completa | Fase 3                                    |
+| Jobs de candidatura (goal/milestone) — cálculo determinístico                      | Fase 3 (dependem de `evidence`)           |
+| `session_snapshot` (linha do tempo, decisão 2.5)                                   | Fase 4                                    |
+| Upload de áudio para object storage (MinIO/S3), fila de reenvio confirmada         | Fase 6 (Ditado de Voz) — depende da infra |
+| `appointment` (recorrência)                                                        | Fase futura                               |
 
 ## 2. Decisões travadas (brainstorming 2026-07-11)
 
@@ -50,18 +50,18 @@ em migração SQL escrita à mão. Duas migrações novas:
 
 ### 3.1 Tabelas e estado na Fase 2
 
-| Tabela | Papel | Estado F2 |
-| --- | --- | --- |
-| `session_note` | `captura_rapida` + `nota_consolidada` por sessão | ativa |
-| `audio_capture` | ref do áudio + `status_upload` | criada; só `rascunho_local`/`pendente` |
-| `session_protocol_scope` | protocolos que a sessão alimenta (chip) | ativa |
-| `goal` | meta + `criterio_dominio` JSONB | ativa (CRUD + ciclo) |
-| `goal_milestone_mapping` | meta↔marco M:N (opcional) | ativa |
-| `milestone` | marcos por protocolo (JSONB heterogêneo) | ativa (via seed) |
-| `extraction` | saída da extração, estado `sugerida` | ativa (stub grava) |
-| `goal_candidacy` | materialização "candidata a dominada" | dormente (schema só) |
-| `milestone_candidacy` | materialização "candidato a avaliação" | dormente (schema só) |
-| `clinic.is_demo` | flag de clínica de demonstração (coluna nova) | ativa |
+| Tabela                   | Papel                                            | Estado F2                              |
+| ------------------------ | ------------------------------------------------ | -------------------------------------- |
+| `session_note`           | `captura_rapida` + `nota_consolidada` por sessão | ativa                                  |
+| `audio_capture`          | ref do áudio + `status_upload`                   | criada; só `rascunho_local`/`pendente` |
+| `session_protocol_scope` | protocolos que a sessão alimenta (chip)          | ativa                                  |
+| `goal`                   | meta + `criterio_dominio` JSONB                  | ativa (CRUD + ciclo)                   |
+| `goal_milestone_mapping` | meta↔marco M:N (opcional)                        | ativa                                  |
+| `milestone`              | marcos por protocolo (JSONB heterogêneo)         | ativa (via seed)                       |
+| `extraction`             | saída da extração, estado `sugerida`             | ativa (stub grava)                     |
+| `goal_candidacy`         | materialização "candidata a dominada"            | dormente (schema só)                   |
+| `milestone_candidacy`    | materialização "candidato a avaliação"           | dormente (schema só)                   |
+| `clinic.is_demo`         | flag de clínica de demonstração (coluna nova)    | ativa                                  |
 
 `session_snapshot` **não** é criada nesta fase (adiada F4).
 
@@ -174,6 +174,7 @@ linha; Fila e tela de Revisão já exercitadas pelo stub.
 ### 5.3 Fila de pendências (`/pendencias` + banner no topo da agenda)
 
 Itens da Fase 2:
+
 - **capturas a consolidar** (captura_rapida sem nota_consolidada),
 - **extração pendente de reprocessamento** (produção),
 - **N sugestões prontas / Revisar** (só demo, do stub).

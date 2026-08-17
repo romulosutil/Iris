@@ -6,7 +6,11 @@ import type { ReforcadorAtual } from "./queries";
  * (mais recente por item, "saciado" excluído, "alta" primeiro — R17). Aqui só
  * renderiza; nenhuma leitura ou recomputo de série acontece na UI.
  */
-export function ReforcadoresAtuaisSection({ itens }: { itens: ReforcadorAtual[] }) {
+export function ReforcadoresAtuaisSection({
+  itens,
+}: {
+  itens: ReforcadorAtual[];
+}) {
   if (itens.length === 0) {
     return (
       <p className="text-text-body text-sm">

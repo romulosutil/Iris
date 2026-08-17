@@ -107,11 +107,7 @@ export function ConfirmarSobrealocacaoDialog({
               value={confirmacao?.horasAtuais ?? ""}
             />
             <input type="hidden" name="confirmarSobrealocacao" value="1" />
-            <Button
-              type="submit"
-              tamanho="sm"
-              isLoading={isPending}
-            >
+            <Button type="submit" tamanho="sm" isLoading={isPending}>
               Salvar mesmo assim
             </Button>
           </form>

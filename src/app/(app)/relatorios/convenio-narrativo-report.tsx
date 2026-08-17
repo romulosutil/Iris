@@ -92,10 +92,17 @@ export function ConvenioNarrativoReport({
   const [nota, setNota] = useState("");
 
   const selecaoCompleta = Boolean(
-    patientId && periodoInicio && periodoFim && operadora.trim() && finalidade.trim(),
+    patientId &&
+    periodoInicio &&
+    periodoFim &&
+    operadora.trim() &&
+    finalidade.trim(),
   );
 
-  function preencherFormulario(d: ConvenioNarrativoDraft, c: CabecalhoConvenio) {
+  function preencherFormulario(
+    d: ConvenioNarrativoDraft,
+    c: CabecalhoConvenio,
+  ) {
     setResumoClinico(d.resumoClinico);
     setEvolucao(evolucaoParaTexto(d.evolucaoPorDominio));
     setJustificativa(d.justificativaContinuidade);
@@ -186,10 +193,10 @@ export function ConvenioNarrativoReport({
   return (
     <Card titulo="Relatório narrativo de convênio">
       <Stack gap="md">
-        <p className="text-[var(--text-primary)] text-base">
+        <p className="text-base text-[var(--text-primary)]">
           Rascunho narrativo gerado pela IA a partir do dossiê factual do
-          período, para o coordenador revisar e aprovar antes de exportar
-          para o convênio.
+          período, para o coordenador revisar e aprovar antes de exportar para o
+          convênio.
         </p>
 
         <Field label="Paciente" htmlFor="convenio-narrativo-paciente">
@@ -217,7 +224,10 @@ export function ConvenioNarrativoReport({
         </Field>
 
         <Cluster gap="md">
-          <Field label="Início do período" htmlFor="convenio-narrativo-periodo-inicio">
+          <Field
+            label="Início do período"
+            htmlFor="convenio-narrativo-periodo-inicio"
+          >
             <Input
               id="convenio-narrativo-periodo-inicio"
               name="periodoInicio"
@@ -227,7 +237,10 @@ export function ConvenioNarrativoReport({
               required
             />
           </Field>
-          <Field label="Fim do período" htmlFor="convenio-narrativo-periodo-fim">
+          <Field
+            label="Fim do período"
+            htmlFor="convenio-narrativo-periodo-fim"
+          >
             <Input
               id="convenio-narrativo-periodo-fim"
               name="periodoFim"
@@ -288,12 +301,12 @@ export function ConvenioNarrativoReport({
 
         {draft ? (
           <Stack gap="md">
-            <p className="text-[var(--text-primary)] text-lg font-semibold">
+            <p className="text-lg font-semibold text-[var(--text-primary)]">
               Revisão do coordenador
             </p>
 
             {geradoEm ? (
-              <p className="text-[var(--text-secondary)] text-sm">
+              <p className="text-sm text-[var(--text-secondary)]">
                 Dados extraídos em {new Date(geradoEm).toLocaleString("pt-BR")}.
               </p>
             ) : null}
@@ -363,7 +376,10 @@ export function ConvenioNarrativoReport({
             />
 
             {semAvanco ? (
-              <Field label="Nota de honestidade" htmlFor="convenio-narrativo-nota">
+              <Field
+                label="Nota de honestidade"
+                htmlFor="convenio-narrativo-nota"
+              >
                 <Input
                   id="convenio-narrativo-nota"
                   multiline

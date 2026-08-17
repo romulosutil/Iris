@@ -86,7 +86,8 @@ export const MultiResourceCoordinator: Story = {
     fechamento: "14:00",
     passoMin: 60,
     dataReferencia: new Date(2026, 7, 12),
-    onSlotClick: (tId, h) => alert(`Novo agendamento: Terapeuta ${tId} às ${h}`),
+    onSlotClick: (tId, h) =>
+      alert(`Novo agendamento: Terapeuta ${tId} às ${h}`),
     onSessaoClick: (s) => alert(`Detalhes da sessão: ${s.pacienteNome}`),
   },
 };

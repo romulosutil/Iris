@@ -66,12 +66,19 @@ export default async function MetasPage({
       .select({ protocolId: patientProtocol.protocolId })
       .from(patientProtocol)
       .where(
-        and(eq(patientProtocol.patientId, id), isNull(patientProtocol.desativadoEm)),
+        and(
+          eq(patientProtocol.patientId, id),
+          isNull(patientProtocol.desativadoEm),
+        ),
       );
     const protocolIds = ativos.map((a) => a.protocolId);
     const marcos = protocolIds.length
       ? await tx
-          .select({ id: milestone.id, nome: milestone.nome, nivel: milestone.nivel })
+          .select({
+            id: milestone.id,
+            nome: milestone.nome,
+            nivel: milestone.nivel,
+          })
           .from(milestone)
           .where(inArray(milestone.protocolId, protocolIds))
           .orderBy(asc(milestone.nome))
@@ -82,7 +89,10 @@ export default async function MetasPage({
 
   const hoje = new Date().toISOString().slice(0, 10);
   const revisaoVencida = metas.filter(
-    (m) => m.estado === "ativa" && m.proximaRevisaoEm != null && m.proximaRevisaoEm <= hoje,
+    (m) =>
+      m.estado === "ativa" &&
+      m.proximaRevisaoEm != null &&
+      m.proximaRevisaoEm <= hoje,
   );
 
   const opcoesMarco: MilestoneOpcao[] = marcos.map((m) => ({
@@ -114,11 +124,13 @@ export default async function MetasPage({
       ) : null}
 
       <section className="flex flex-col gap-4">
-        <h2 className="font-display text-[var(--text-primary)] text-xl font-semibold">
+        <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
           Metas do paciente
         </h2>
         {metas.length === 0 ? (
-          <p className="text-[var(--text-primary)] text-sm">Nenhuma meta criada ainda.</p>
+          <p className="text-sm text-[var(--text-primary)]">
+            Nenhuma meta criada ainda.
+          </p>
         ) : (
           <ul className="flex flex-col gap-4">
             {metas.map((m) => {
@@ -129,23 +141,25 @@ export default async function MetasPage({
               return (
                 <li
                   key={m.id}
-                  className="border-[var(--border-brutal)] bg-[var(--surface-card)] flex flex-col gap-2 border-2 p-5 shadow-[var(--ds-shadow)] rounded-[var(--radius-control)]"
+                  className="flex flex-col gap-2 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-display text-[var(--text-primary)] text-lg font-semibold">
+                    <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
                       {m.descricao}
                     </h3>
-                    <span className="border-[var(--border-brutal)] bg-[var(--surface-elevated)] text-[var(--text-primary)] shrink-0 border px-2 py-0.5 text-xs font-semibold tracking-wide uppercase rounded-[var(--radius-xs)]">
+                    <span className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-2 py-0.5 text-xs font-semibold tracking-wide text-[var(--text-primary)] uppercase">
                       {ESTADO_ROTULO[m.estado] ?? m.estado}
                     </span>
                   </div>
-                  <p className="text-[var(--text-primary)] text-sm">
+                  <p className="text-sm text-[var(--text-primary)]">
                     {m.disciplina ? `${m.disciplina} · ` : ""}
                     {criterioTexto(m.criterioDominio)}
                   </p>
-                  <p className="text-[var(--text-primary)] text-sm">
+                  <p className="text-sm text-[var(--text-primary)]">
                     Ciclo de revisão: {m.cicloRevisaoSemanas} semanas
-                    {m.proximaRevisaoEm ? ` · próxima: ${m.proximaRevisaoEm}` : ""}
+                    {m.proximaRevisaoEm
+                      ? ` · próxima: ${m.proximaRevisaoEm}`
+                      : ""}
                     {vencida ? " (vencida)" : ""}
                   </p>
 
@@ -156,9 +170,7 @@ export default async function MetasPage({
                           {isCoordenador ? (
                             <form action={marcarDominadaAction.bind(null, id)}>
                               <input type="hidden" name="goalId" value={m.id} />
-                              <Button type="submit">
-                                Marcar dominada
-                              </Button>
+                              <Button type="submit">Marcar dominada</Button>
                             </form>
                           ) : null}
                           <form action={manterMetaAtivaAction.bind(null, id)}>
@@ -167,16 +179,24 @@ export default async function MetasPage({
                               Manter (adiar revisão)
                             </Button>
                           </form>
-                          <form action={transicionarEstadoMetaAction.bind(null, id)}>
+                          <form
+                            action={transicionarEstadoMetaAction.bind(null, id)}
+                          >
                             <input type="hidden" name="goalId" value={m.id} />
-                            <input type="hidden" name="estado" value="pausada" />
+                            <input
+                              type="hidden"
+                              name="estado"
+                              value="pausada"
+                            />
                             <Button type="submit" variante="neutra">
                               Pausar
                             </Button>
                           </form>
                         </>
                       ) : (
-                        <form action={transicionarEstadoMetaAction.bind(null, id)}>
+                        <form
+                          action={transicionarEstadoMetaAction.bind(null, id)}
+                        >
                           <input type="hidden" name="goalId" value={m.id} />
                           <input type="hidden" name="estado" value="ativa" />
                           <Button type="submit" variante="neutra">
@@ -194,7 +214,7 @@ export default async function MetasPage({
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="font-display text-[var(--text-primary)] text-xl font-semibold">
+        <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
           Nova meta
         </h2>
         <NovaMetaForm patientId={id} milestones={opcoesMarco} />

@@ -19,7 +19,9 @@ async function seedSuperAdmin() {
 
   if (existente) {
     userId = existente.id;
-    console.log(`Usuário ${SUPER_ADMIN_EMAIL} já existente. Atualizando flag is_super_admin...`);
+    console.log(
+      `Usuário ${SUPER_ADMIN_EMAIL} já existente. Atualizando flag is_super_admin...`,
+    );
   } else {
     console.log(`Criando conta para ${SUPER_ADMIN_EMAIL}...`);
     const created = await auth.api.signUpEmail({

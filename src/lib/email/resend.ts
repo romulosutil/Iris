@@ -11,8 +11,7 @@ export type RtAlertaEmailInput = {
 // categoria/trecho por construção do tipo (§4.2.1, regra de ouro).
 
 export type EmailSendResult =
-  | { ok: true; providerMessageId: string }
-  | { ok: false; erro: string };
+  { ok: true; providerMessageId: string } | { ok: false; erro: string };
 
 const ASSUNTO_ALERTA_RT =
   "Iris — alerta de risco pendente há mais tempo que o esperado";
@@ -36,7 +35,10 @@ export interface EmailProvider {
 
 export class NullEmailProvider implements EmailProvider {
   async enviarAlertaRiscoRt(): Promise<EmailSendResult> {
-    return { ok: false, erro: "email nao configurado (EMAIL_PROVIDER_API_KEY ausente)" };
+    return {
+      ok: false,
+      erro: "email nao configurado (EMAIL_PROVIDER_API_KEY ausente)",
+    };
   }
 }
 
@@ -46,13 +48,18 @@ export class ResendEmailProvider implements EmailProvider {
     private readonly fromEmail: string,
   ) {}
 
-  async enviarAlertaRiscoRt(input: RtAlertaEmailInput): Promise<EmailSendResult> {
+  async enviarAlertaRiscoRt(
+    input: RtAlertaEmailInput,
+  ): Promise<EmailSendResult> {
     // Sem URL do painel o e-mail não cumpre a função dele: o corpo não carrega
     // nada de clínico de propósito, então o link é a única ação possível pro
     // RT. Falha explícita é melhor que e-mail com link vazio registrado como
     // entregue na trilha (#108).
     if (!input.appUrl) {
-      return { ok: false, erro: "email nao enviado (NEXT_PUBLIC_APP_URL ausente)" };
+      return {
+        ok: false,
+        erro: "email nao enviado (NEXT_PUBLIC_APP_URL ausente)",
+      };
     }
 
     const { Resend } = await import("resend");
@@ -65,7 +72,10 @@ export class ResendEmailProvider implements EmailProvider {
     });
 
     if (error) {
-      return { ok: false, erro: error.message ?? "erro desconhecido do provedor" };
+      return {
+        ok: false,
+        erro: error.message ?? "erro desconhecido do provedor",
+      };
     }
     return { ok: true, providerMessageId: data?.id ?? "" };
   }
@@ -77,5 +87,8 @@ export class ResendEmailProvider implements EmailProvider {
 export function resolveEmailProvider(): EmailProvider {
   const key = process.env.EMAIL_PROVIDER_API_KEY;
   if (!key) return new NullEmailProvider();
-  return new ResendEmailProvider(key, process.env.RESEND_FROM_EMAIL ?? "notificacoes@irisclinica.ia.br");
+  return new ResendEmailProvider(
+    key,
+    process.env.RESEND_FROM_EMAIL ?? "notificacoes@irisclinica.ia.br",
+  );
 }

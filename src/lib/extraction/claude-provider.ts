@@ -1,11 +1,19 @@
 import { zodToJsonSchema } from "zod-to-json-schema";
-import type { ExtractionContext, ExtractionProvider, ExtractionResult } from "./provider";
+import type {
+  ExtractionContext,
+  ExtractionProvider,
+  ExtractionResult,
+} from "./provider";
 import {
   agentOutputObjectSchema,
   agentOutputSchema,
   type ExtracaoAgente,
 } from "./agent-output-schema";
-import { SYSTEM_PROMPT, CONVENTIONAL_SYSTEM_PROMPT, buildUserMessage } from "./prompt";
+import {
+  SYSTEM_PROMPT,
+  CONVENTIONAL_SYSTEM_PROMPT,
+  buildUserMessage,
+} from "./prompt";
 
 // Tool schema DERIVADO do contrato zod (fonte única de verdade) — guia o modelo
 // aos enums/campos obrigatórios exatos. Sem isto, o modelo inventa formas (ex.:
@@ -45,8 +53,7 @@ export class ClaudeProvider implements ExtractionProvider {
   constructor(private readonly invoker: AgentInvoker) {}
 
   async extrair(ctx: ExtractionContext): Promise<ExtractionResult> {
-    const contexto =
-      ctx.contextoCanonico ?? { metas_ativas: ctx.metasAtivas };
+    const contexto = ctx.contextoCanonico ?? { metas_ativas: ctx.metasAtivas };
     const user = buildUserMessage({
       notaConsolidada: ctx.notaConsolidada,
       contexto,
@@ -84,7 +91,9 @@ export class ClaudeProvider implements ExtractionProvider {
 // Invoker de produção: chama a API da Anthropic com tool_use forçado. NÃO é
 // coberto por unit test (chamada viva) — é validado pela bake-off (dado
 // fictício) e pelo teste de integração inline. Modelo default: Claude Sonnet.
-export function createAnthropicInvoker(model = "claude-sonnet-5"): AgentInvoker {
+export function createAnthropicInvoker(
+  model = "claude-sonnet-5",
+): AgentInvoker {
   return async ({ system, user }) => {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic();

@@ -46,7 +46,9 @@ describe("prazos.ts — ambiguidade não relaxa o prazo (§4.1)", () => {
     (severidade) => {
       const explicito: CertezaRisco = "explicito";
       const ambiguo: CertezaRisco = "ambiguo_citado";
-      expect(prazoMinutos(severidade, ambiguo)).toBe(prazoMinutos(severidade, explicito));
+      expect(prazoMinutos(severidade, ambiguo)).toBe(
+        prazoMinutos(severidade, explicito),
+      );
     },
   );
 });
@@ -69,8 +71,12 @@ describe("prazos.ts — contagem de tempo", () => {
   const agora = new Date("2026-07-28T10:00:00.000Z");
 
   test("prazoRestanteMs positivo antes do prazo, negativo depois", () => {
-    expect(prazoRestanteMs(new Date("2026-07-28T10:15:00.000Z"), agora)).toBe(15 * 60_000);
-    expect(prazoRestanteMs(new Date("2026-07-28T09:45:00.000Z"), agora)).toBe(-15 * 60_000);
+    expect(prazoRestanteMs(new Date("2026-07-28T10:15:00.000Z"), agora)).toBe(
+      15 * 60_000,
+    );
+    expect(prazoRestanteMs(new Date("2026-07-28T09:45:00.000Z"), agora)).toBe(
+      -15 * 60_000,
+    );
   });
 
   test("vencido é verdadeiro no instante exato do prazo", () => {
@@ -96,9 +102,9 @@ describe("prazos.ts — prazoEstagio2 (§4.2)", () => {
     const criacao = new Date("2026-07-28T08:00:00.000Z");
     const minutos = prazoMinutos("ideacao_passiva", "explicito");
     const prazoOriginal = new Date(criacao.getTime() + minutos * 60_000);
-    expect(prazoEstagio2(prazoOriginal, minutos).getTime() - criacao.getTime()).toBe(
-      2 * minutos * 60_000,
-    );
+    expect(
+      prazoEstagio2(prazoOriginal, minutos).getTime() - criacao.getTime(),
+    ).toBe(2 * minutos * 60_000);
   });
 });
 

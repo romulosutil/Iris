@@ -50,10 +50,12 @@
 ## Task 1: Costura `ExtractionProvider` (interface + Null + DemoStub + roteamento)
 
 **Files:**
+
 - Create: `src/lib/extraction/provider.ts`, `src/lib/extraction/null-provider.ts`, `src/lib/extraction/demo-stub-provider.ts`
 - Test: `src/lib/extraction/provider.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `type ExtractionContext = { sessionId: string; clinicId: string; notaConsolidada: string; metasAtivas: Array<{ id: string; descricao: string }> }`
   - `interface ExtractionProvider { extrair(ctx: ExtractionContext): Promise<ExtractionDraft[]> }`
@@ -70,8 +72,10 @@ import { DemoStubProvider } from "./demo-stub-provider";
 import { NullProvider } from "./null-provider";
 
 const ctx = {
-  sessionId: "s1", clinicId: "c1",
-  notaConsolidada: "Pediu água apontando; falou 'á' sozinho. Depois não respondeu à pergunta.",
+  sessionId: "s1",
+  clinicId: "c1",
+  notaConsolidada:
+    "Pediu água apontando; falou 'á' sozinho. Depois não respondeu à pergunta.",
   metasAtivas: [{ id: "g1", descricao: "Pedir água sozinho" }],
 };
 
@@ -143,7 +147,9 @@ import { NullProvider } from "./null-provider";
 
 // Roteamento por flag de clínica. Fase 3 troca o ramo de produção pelo
 // ClaudeProvider real (R1-R19 + hardening prompt-injection) — mudança de 1 linha.
-export function resolveProvider(clinic: { isDemo: boolean }): ExtractionProvider {
+export function resolveProvider(clinic: {
+  isDemo: boolean;
+}): ExtractionProvider {
   return clinic.isDemo ? new DemoStubProvider() : new NullProvider();
 }
 ```
@@ -152,7 +158,11 @@ export function resolveProvider(clinic: { isDemo: boolean }): ExtractionProvider
 
 ```ts
 // src/lib/extraction/null-provider.ts
-import type { ExtractionContext, ExtractionDraft, ExtractionProvider } from "./provider";
+import type {
+  ExtractionContext,
+  ExtractionDraft,
+  ExtractionProvider,
+} from "./provider";
 
 // Produção sem agente real ainda (Fase 3). Registra uma linha marcando que a
 // extração ficou pendente de reprocessamento — mesmo estado do caminho de falha
@@ -178,7 +188,11 @@ export class NullProvider implements ExtractionProvider {
 
 ```ts
 // src/lib/extraction/demo-stub-provider.ts
-import type { ExtractionContext, ExtractionDraft, ExtractionProvider } from "./provider";
+import type {
+  ExtractionContext,
+  ExtractionDraft,
+  ExtractionProvider,
+} from "./provider";
 
 // Gera extrações fake plausíveis para clínicas de demonstração, de forma
 // DETERMINÍSTICA (sem Math.random) — pega frases reais da nota consolidada como
@@ -198,7 +212,10 @@ export class DemoStubProvider implements ExtractionProvider {
       justificativaConfianca: "Sugestão de demonstração (dados fictícios).",
       inconsistenteComHistorico: false,
       parContrasteId: null,
-      payload: { alvos: meta ? [{ goal_id: meta }] : [], polaridade: i % 2 === 0 ? "positiva" : "negativa" },
+      payload: {
+        alvos: meta ? [{ goal_id: meta }] : [],
+        polaridade: i % 2 === 0 ? "positiva" : "negativa",
+      },
       estado: "sugerida",
     }));
   }
@@ -222,10 +239,12 @@ git commit -m "feat(fase-2): costura ExtractionProvider (stub demo + null produ�
 ## Task 2: Actions de captura de diário (`capturarDiario`, `corrigirEscopoProtocolo`, `registrarAudioLocal`)
 
 **Files:**
+
 - Create: `src/app/(app)/diario/[sessionId]/actions.ts`
 - Test: `src/app/(app)/diario/[sessionId]/actions.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `withTenant`, `getTenantContext`, `requireRole`/`RoleError`, `session`/`sessionNote`/`sessionProtocolScope`/`audioCapture` de `@/db/schema`.
 - Produces:
   - `capturarDiario(ctx, { sessionId, texto }): Promise<{ error?: string; id?: string }>` — grava `session_note` `captura_rapida`.
@@ -240,7 +259,8 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+const hasDb =
+  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
 const U_T1 = "00000000-0000-0000-0000-0000000071a1";
 const U_T2 = "00000000-0000-0000-0000-0000000072a1";
@@ -277,23 +297,36 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA')`;
   });
-  afterAll(async () => { await owner?.end(); await appSql?.end(); });
+  afterAll(async () => {
+    await owner?.end();
+    await appSql?.end();
+  });
 
   test("terapeuta dono grava captura rápida", async () => {
-    const r = await capturarDiario(ctxT1, { sessionId: SESS, texto: "Pediu água apontando" });
+    const r = await capturarDiario(ctxT1, {
+      sessionId: SESS,
+      texto: "Pediu água apontando",
+    });
     expect(r.error).toBeUndefined();
     expect(r.id).toBeTruthy();
   });
 
   test("terapeuta que não é dono da sessão é barrado", async () => {
-    const r = await capturarDiario(ctxT2, { sessionId: SESS, texto: "indevido" });
+    const r = await capturarDiario(ctxT2, {
+      sessionId: SESS,
+      texto: "indevido",
+    });
     expect(r.error).toBeTruthy(); // RLS WITH CHECK bloqueia
   });
 
   test("corrigir escopo grava protocolo com origem ajustada", async () => {
-    const r = await corrigirEscopoProtocolo(ctxT1, { sessionId: SESS, protocolIds: [PROTO] });
+    const r = await corrigirEscopoProtocolo(ctxT1, {
+      sessionId: SESS,
+      protocolIds: [PROTO],
+    });
     expect(r.error).toBeUndefined();
-    const rows = await owner`SELECT origem, ajustado_por FROM session_protocol_scope WHERE session_id = ${SESS}`;
+    const rows =
+      await owner`SELECT origem, ajustado_por FROM session_protocol_scope WHERE session_id = ${SESS}`;
     expect(rows[0]!.origem).toBe("ajustado_manualmente");
     expect(rows[0]!.ajustado_por).toBe(U_T1);
   });
@@ -374,7 +407,10 @@ export async function corrigirEscopoProtocolo(
             ajustadoPor: ctx.userId,
           })
           .onConflictDoUpdate({
-            target: [sessionProtocolScope.sessionId, sessionProtocolScope.protocolId],
+            target: [
+              sessionProtocolScope.sessionId,
+              sessionProtocolScope.protocolId,
+            ],
             set: { origem: "ajustado_manualmente", ajustadoPor: ctx.userId },
           });
       }
@@ -432,46 +468,63 @@ git commit -m "feat(fase-2): actions de captura de diário (texto, escopo de pro
 ## Task 3: `consolidarSessao` — nota consolidada, `numero_sequencial_paciente`, dispara provider
 
 **Files:**
+
 - Modify: `src/app/(app)/diario/[sessionId]/actions.ts` (adicionar `consolidarSessao` + wrappers Action)
 - Modify: `src/app/(app)/diario/[sessionId]/actions.int.test.ts` (casos de consolidação)
 
 **Interfaces:**
+
 - Consumes: `resolveProvider` (`@/lib/extraction/provider`), `extraction`/`goal`/`clinic`/`session`/`sessionNote` de schema.
 - Produces: `consolidarSessao(ctx, { sessionId, texto }): Promise<{ error?: string; numeroSequencial?: number }>`.
 
 - [ ] **Step 1: Escrever os testes** (adicionar ao describe existente)
 
 ```ts
-  test("consolidar grava nota, popula numero_sequencial e é idempotente", async () => {
-    const { consolidarSessao } = await import("./actions");
-    const r1 = await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota final revisada da sessão." });
-    expect(r1.error).toBeUndefined();
-    expect(r1.numeroSequencial).toBe(1);
-    // reconsolidar NÃO incrementa o sequencial
-    const r2 = await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota final corrigida." });
-    expect(r2.numeroSequencial).toBe(1);
-    const s = await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${SESS}`;
-    expect(s[0]!.numero_sequencial_paciente).toBe(1);
+test("consolidar grava nota, popula numero_sequencial e é idempotente", async () => {
+  const { consolidarSessao } = await import("./actions");
+  const r1 = await consolidarSessao(ctxT1, {
+    sessionId: SESS,
+    texto: "Nota final revisada da sessão.",
   });
+  expect(r1.error).toBeUndefined();
+  expect(r1.numeroSequencial).toBe(1);
+  // reconsolidar NÃO incrementa o sequencial
+  const r2 = await consolidarSessao(ctxT1, {
+    sessionId: SESS,
+    texto: "Nota final corrigida.",
+  });
+  expect(r2.numeroSequencial).toBe(1);
+  const s =
+    await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${SESS}`;
+  expect(s[0]!.numero_sequencial_paciente).toBe(1);
+});
 
-  test("clínica demo gera extrações sugeridas ao consolidar", async () => {
-    await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
-    const { consolidarSessao } = await import("./actions");
-    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Pediu água. Falou 'á' sozinho. Não respondeu depois." });
-    const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
-    expect(ex.length).toBeGreaterThanOrEqual(1);
-    expect(ex.every((e) => e.estado === "sugerida")).toBe(true);
-    await owner`UPDATE clinic SET is_demo = false WHERE id = ${CLINIC_A}`;
+test("clínica demo gera extrações sugeridas ao consolidar", async () => {
+  await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
+  const { consolidarSessao } = await import("./actions");
+  await consolidarSessao(ctxT1, {
+    sessionId: SESS,
+    texto: "Pediu água. Falou 'á' sozinho. Não respondeu depois.",
   });
+  const ex =
+    await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
+  expect(ex.length).toBeGreaterThanOrEqual(1);
+  expect(ex.every((e) => e.estado === "sugerida")).toBe(true);
+  await owner`UPDATE clinic SET is_demo = false WHERE id = ${CLINIC_A}`;
+});
 
-  test("clínica de produção fica pendente de reprocessamento (sem LLM)", async () => {
-    // limpa extrações da sessão do caso anterior
-    await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
-    const { consolidarSessao } = await import("./actions");
-    await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Nota de produção." });
-    const ex = await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
-    expect(ex.some((e) => e.estado === "pendente_reprocessamento")).toBe(true);
+test("clínica de produção fica pendente de reprocessamento (sem LLM)", async () => {
+  // limpa extrações da sessão do caso anterior
+  await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
+  const { consolidarSessao } = await import("./actions");
+  await consolidarSessao(ctxT1, {
+    sessionId: SESS,
+    texto: "Nota de produção.",
   });
+  const ex =
+    await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
+  expect(ex.some((e) => e.estado === "pendente_reprocessamento")).toBe(true);
+});
 ```
 
 - [ ] **Step 2: Rodar (falha)** — Expected: FAIL (`consolidarSessao` não existe).
@@ -502,8 +555,11 @@ export async function consolidarSessao(
       await tx
         .insert(sessionNote)
         .values({
-          sessionId: parsed.data.sessionId, clinicId: ctx.clinicId,
-          tipo: "nota_consolidada", texto: parsed.data.texto, autorId: ctx.userId,
+          sessionId: parsed.data.sessionId,
+          clinicId: ctx.clinicId,
+          tipo: "nota_consolidada",
+          texto: parsed.data.texto,
+          autorId: ctx.userId,
         })
         .onConflictDoUpdate({
           target: [sessionNote.sessionId, sessionNote.tipo],
@@ -513,7 +569,10 @@ export async function consolidarSessao(
       // 2) popula numero_sequencial_paciente só se ainda nulo (idempotente):
       //    próximo inteiro por paciente, resolvido no banco.
       const [sess] = await tx
-        .select({ patientId: session.patientId, numero: session.numeroSequencialPaciente })
+        .select({
+          patientId: session.patientId,
+          numero: session.numeroSequencialPaciente,
+        })
         .from(session)
         .where(eq(session.id, parsed.data.sessionId));
       let numero = sess!.numero ?? null;
@@ -528,26 +587,38 @@ export async function consolidarSessao(
       }
 
       // 3) dispara a extração via costura (stub demo / null produção).
-      const [cl] = await tx.select({ isDemo: clinic.isDemo }).from(clinic).where(eq(clinic.id, ctx.clinicId));
+      const [cl] = await tx
+        .select({ isDemo: clinic.isDemo })
+        .from(clinic)
+        .where(eq(clinic.id, ctx.clinicId));
       const metas = await tx
         .select({ id: goal.id, descricao: goal.descricao })
         .from(goal)
         .where(and(eq(goal.clinicId, ctx.clinicId), eq(goal.estado, "ativa")));
       const provider = resolveProvider({ isDemo: cl!.isDemo });
       const drafts = await provider.extrair({
-        sessionId: parsed.data.sessionId, clinicId: ctx.clinicId,
-        notaConsolidada: parsed.data.texto, metasAtivas: metas,
+        sessionId: parsed.data.sessionId,
+        clinicId: ctx.clinicId,
+        notaConsolidada: parsed.data.texto,
+        metasAtivas: metas,
       });
       // regrava extrações desta sessão (consolidação re-roda o provider)
-      await tx.delete(extraction).where(eq(extraction.sessionId, parsed.data.sessionId));
+      await tx
+        .delete(extraction)
+        .where(eq(extraction.sessionId, parsed.data.sessionId));
       if (drafts.length > 0) {
         await tx.insert(extraction).values(
           drafts.map((d) => ({
-            sessionId: parsed.data.sessionId, clinicId: ctx.clinicId,
-            estado: d.estado, subtipo: d.subtipo, trechoFonte: d.trechoFonte,
-            confianca: d.confianca, justificativaConfianca: d.justificativaConfianca,
+            sessionId: parsed.data.sessionId,
+            clinicId: ctx.clinicId,
+            estado: d.estado,
+            subtipo: d.subtipo,
+            trechoFonte: d.trechoFonte,
+            confianca: d.confianca,
+            justificativaConfianca: d.justificativaConfianca,
             inconsistenteComHistorico: d.inconsistenteComHistorico,
-            parContrasteId: d.parContrasteId, payload: d.payload as object,
+            parContrasteId: d.parContrasteId,
+            payload: d.payload as object,
           })),
         );
       }
@@ -567,7 +638,8 @@ export async function consolidarSessao(
 ```ts
 export type ConsolidarState = { error?: string; ok?: boolean; numero?: number };
 export async function consolidarSessaoAction(
-  _prev: ConsolidarState, formData: FormData,
+  _prev: ConsolidarState,
+  formData: FormData,
 ): Promise<ConsolidarState> {
   const ctx = await getTenantContext();
   try {
@@ -580,12 +652,14 @@ export async function consolidarSessaoAction(
     revalidatePath(`/diario/${formData.get("sessionId")}`);
     return { ok: true, numero: r.numeroSequencial };
   } catch (err) {
-    if (err instanceof RoleError) return { error: "Só o terapeuta da sessão consolida." };
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão consolida." };
     console.error("consolidarSessaoAction:", err);
     return { error: "Não foi possível consolidar." };
   }
 }
 ```
+
 (análogo: `capturarDiarioAction`, `corrigirEscopoProtocoloAction`, `registrarAudioLocalAction`.)
 
 - [ ] **Step 5: Rodar (passa)** — Run: `"/c/Program Files/nodejs/corepack" pnpm test:rls -- src/app/(app)/diario/[sessionId]/actions.int.test.ts` · Expected: PASS.
@@ -602,10 +676,12 @@ git commit -m "feat(fase-2): consolidação da sessão (numero sequencial + cost
 ## Task 4: Áudio local (IndexedDB store + gravador com ouvir/descartar/regravar)
 
 **Files:**
+
 - Create: `src/lib/audio/local-store.ts`, `src/app/(app)/diario/[sessionId]/audio-local.tsx`
 - Test: `src/lib/audio/local-store.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `local-store.ts`: `salvarAudioLocal(id: string, blob: Blob): Promise<void>`, `lerAudioLocal(id: string): Promise<Blob | null>`, `apagarAudioLocal(id: string): Promise<void>` (IndexedDB, store `iris-audio-rascunho`).
   - `audio-local.tsx`: componente client `<AudioLocal sessionId aoConfirmar={(audioCaptureId) => void} />` que grava via `MediaRecorder`, permite **ouvir** (playback do blob), **descartar** (apaga blob local + reseta) e **regravar**, e só ao confirmar chama `registrarAudioLocalAction` + `salvarAudioLocal(id, blob)`.
@@ -616,7 +692,11 @@ git commit -m "feat(fase-2): consolidação da sessão (numero sequencial + cost
 // src/lib/audio/local-store.test.ts
 import "fake-indexeddb/auto";
 import { describe, expect, test } from "vitest";
-import { apagarAudioLocal, lerAudioLocal, salvarAudioLocal } from "./local-store";
+import {
+  apagarAudioLocal,
+  lerAudioLocal,
+  salvarAudioLocal,
+} from "./local-store";
 
 describe("audio local store (IndexedDB)", () => {
   test("salvar → ler → apagar um blob", async () => {
@@ -637,19 +717,25 @@ describe("audio local store (IndexedDB)", () => {
 - [ ] **Step 3: Implementar `local-store.ts`** (IndexedDB puro, sem lib externa em runtime)
 
 ```ts
-const DB = "iris-audio", STORE = "iris-audio-rascunho", VERSAO = 1;
+const DB = "iris-audio",
+  STORE = "iris-audio-rascunho",
+  VERSAO = 1;
 
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB, VERSAO);
     req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+      if (!req.result.objectStoreNames.contains(STORE))
+        req.result.createObjectStore(STORE);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
-function tx<T>(modo: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+function tx<T>(
+  modo: IDBTransactionMode,
+  fn: (s: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
   return abrir().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
@@ -683,6 +769,7 @@ git commit -m "feat(fase-2): áudio local (IndexedDB) com ouvir/descartar/regrav
 ## Task 5: Tela de captura (`page.tsx` + `captura-form.tsx`) + consolidação (`consolidar-form.tsx`)
 
 **Files:**
+
 - Create: `src/app/(app)/diario/[sessionId]/page.tsx`, `captura-form.tsx`, `consolidar-form.tsx`
 - Test: `src/app/(app)/diario/a11y.test.tsx`
 
@@ -708,11 +795,13 @@ git commit -m "feat(fase-2): telas de captura e consolidação do diário (DS, m
 ## Task 6: Fila de pendências (`page.tsx` + `queries.ts`) + banner no shell
 
 **Files:**
+
 - Create: `src/app/(app)/pendencias/page.tsx`, `src/app/(app)/pendencias/queries.ts`, `src/app/(app)/pendencias/a11y.test.tsx`
 - Modify: `src/app/(app)/layout.tsx` (link + banner de contagem)
 - Test: `src/app/(app)/pendencias/queries.int.test.ts`
 
 **Interfaces:**
+
 - Produces: `listarPendencias(ctx): Promise<{ capturasAConsolidar: {...}[]; extracaoPendente: {...}[]; sugestoesDemo: {...}[] }>`.
 
 - [ ] **Step 1: Teste de integração das queries** (sessão com `captura_rapida` sem `nota_consolidada` → aparece em `capturasAConsolidar`; extração `pendente_reprocessamento` → `extracaoPendente`; extração `sugerida` (demo) → `sugestoesDemo`). Harness owner-seed padrão.
@@ -737,6 +826,7 @@ git commit -m "feat(fase-2): fila de pendências + banner no shell"
 ## Task 7: Dívida de teste (isolar J2, cobrir M-c) + E2E demo
 
 **Files:**
+
 - Modify: `db/tests/fase2-rls.int.test.ts`
 - Create: `e2e/diario-demo.spec.ts`
 
@@ -774,6 +864,7 @@ git commit -m "test(fase-2): e2e do fluxo demo diário→consolidação→fila"
 ## Self-Review (feito na escrita)
 
 **Cobertura do spec (§4, §5.1-5.3):**
+
 - Costura ExtractionProvider (DemoStub/Null, roteamento is_demo) → Task 1 + integração na Task 3. ✅
 - Captura texto + chip de protocolo (session_protocol_scope, origem ajustada) → Task 2 + Task 5. ✅
 - Áudio local ouvir/descartar/regravar → Task 4. ✅
@@ -787,5 +878,6 @@ git commit -m "test(fase-2): e2e do fluxo demo diário→consolidação→fila"
 **Consistência de tipos:** `ExtractionDraft`/`ExtractionContext`/`resolveProvider` usados igual entre Task 1 e Task 3; actions retornam `{ error?, id? }`/`{ error?, numeroSequencial? }` consistentes.
 
 ## Fora deste plano
+
 - **Plano 3** — Metas (CRUD, critério N/M, ciclo, transição `dominada`). Inclui M-b (extraction subtipo/confianca → pgEnum).
 - **Plano 4** — Seed demo alta-fidelidade das 4 famílias + clínica demo (destrava o E2E da Task 7 Step 4).

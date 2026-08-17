@@ -13,14 +13,14 @@ export function ListaTerapeutas({ terapeutas }: { terapeutas: Terapeuta[] }) {
     <ul className="flex flex-col gap-2.5">
       {terapeutas.map((t) => (
         <li key={t.id}>
-          <div className="flex items-center justify-between p-3.5 bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] border-l-4 border-l-[var(--action-primary)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] transition-transform duration-100 hover:translate-x-1">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex flex-col min-w-0">
+          <div className="flex items-center justify-between rounded-[var(--radius-control)] border-2 border-l-4 border-[var(--border-brutal)] border-l-[var(--action-primary)] bg-[var(--surface-card)] p-3.5 shadow-[var(--ds-shadow)] transition-transform duration-100 hover:translate-x-1">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex min-w-0 flex-col">
                 <div className="flex items-center gap-2">
-                  <span className="font-display font-bold text-base text-[var(--text-primary)]">
+                  <span className="font-display text-base font-bold text-[var(--text-primary)]">
                     {t.name}
                   </span>
-                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-[var(--radius-pill)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)] border border-[var(--status-success-border)] font-semibold">
+                  <span className="rounded-[var(--radius-pill)] border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--status-success-fg)] uppercase">
                     Ativo
                   </span>
                 </div>

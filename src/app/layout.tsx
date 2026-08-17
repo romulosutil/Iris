@@ -16,11 +16,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="pt-BR"
-      data-mode="clinico"
-      className={fontVariables}
-    >
+    <html lang="pt-BR" data-mode="clinico" className={fontVariables}>
       <body>
         <GoogleAnalytics />
         <Clarity />
@@ -34,4 +30,3 @@ export default function RootLayout({
     </html>
   );
 }
-

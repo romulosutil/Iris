@@ -93,7 +93,11 @@ function desenharMarcaDagua(doc: PDFKit.PDFDocument, texto: string) {
   doc.y = savedY;
 }
 
-function desenharRodapeAuditavel(doc: PDFKit.PDFDocument, pagina: number, totalPaginas: number) {
+function desenharRodapeAuditavel(
+  doc: PDFKit.PDFDocument,
+  pagina: number,
+  totalPaginas: number,
+) {
   const savedY = doc.y;
   doc.save();
   doc
@@ -142,9 +146,17 @@ export async function gerarPdfProntuario(
   });
 
   // Página 1: Capa do Prontuário
-  doc.fontSize(20).text(`Prontuário Clínico — ${dados.nomePaciente}`, { align: "center" });
+  doc
+    .fontSize(20)
+    .text(`Prontuário Clínico — ${dados.nomePaciente}`, { align: "center" });
   doc.moveDown(0.5);
-  doc.fontSize(10).fillColor("#444444").text(`Documento emitido conforme LGPD (Lei 13.709/2018, Art. 18, II e V)`, { align: "center" });
+  doc
+    .fontSize(10)
+    .fillColor("#444444")
+    .text(
+      `Documento emitido conforme LGPD (Lei 13.709/2018, Art. 18, II e V)`,
+      { align: "center" },
+    );
   doc.moveDown(1.5);
 
   doc.fontSize(11).fillColor("black");

@@ -5,7 +5,9 @@ import {
   type Observacao,
 } from "./segmentacao";
 
-function obs(partial: Partial<Observacao> & { sessionNumero: number }): Observacao {
+function obs(
+  partial: Partial<Observacao> & { sessionNumero: number },
+): Observacao {
   return {
     tipoEstrutura: "marco_simples",
     nivelAjudaOrdinal: null,
@@ -24,11 +26,25 @@ describe("computarSegmentacao — despacho por tipo_estrutura", () => {
     expect(r[0]!.metrica).toEqual({ eixo: "nivel_ajuda", ordinalRecente: 3 });
   });
 
-  for (const tipo of ["marco_com_barreira", "escore_composto", "faixa_normativa"] as const) {
+  for (const tipo of [
+    "marco_com_barreira",
+    "escore_composto",
+    "faixa_normativa",
+  ] as const) {
     test(`${tipo} → sempre aguardando_avaliacao_formal, nunca número fabricado`, () => {
       const r = computarSegmentacao([
-        obs({ sessionNumero: 1, tipoEstrutura: tipo, nivelAjudaOrdinal: 2, polaridade: "positiva" }),
-        obs({ sessionNumero: 2, tipoEstrutura: tipo, nivelAjudaOrdinal: 0, polaridade: "positiva" }),
+        obs({
+          sessionNumero: 1,
+          tipoEstrutura: tipo,
+          nivelAjudaOrdinal: 2,
+          polaridade: "positiva",
+        }),
+        obs({
+          sessionNumero: 2,
+          tipoEstrutura: tipo,
+          nivelAjudaOrdinal: 0,
+          polaridade: "positiva",
+        }),
       ]);
       for (const linha of r) {
         expect(linha.rotulo).toBe("aguardando_avaliacao_formal");
@@ -70,7 +86,9 @@ describe("computarSegmentacao — ESTAGNAÇÃO (janela W=5)", () => {
       obs({ sessionNumero: 1, nivelAjudaOrdinal: 2, polaridade: "positiva" }), // evolucao (1ª positiva)
     ];
     for (let n = 2; n <= 6; n++) {
-      observacoes.push(obs({ sessionNumero: n, nivelAjudaOrdinal: 2, polaridade: "positiva" }));
+      observacoes.push(
+        obs({ sessionNumero: n, nivelAjudaOrdinal: 2, polaridade: "positiva" }),
+      );
     }
     const r = computarSegmentacao(observacoes);
     expect(r[0]!.rotulo).toBe("evolucao");
@@ -129,7 +147,12 @@ describe("computarSegmentacao — V1e: evidence_query aberta excluída", () => {
   test("observação com temQueryAberta=true não conta nem aparece no resultado", () => {
     const r = computarSegmentacao([
       obs({ sessionNumero: 1, nivelAjudaOrdinal: 3, polaridade: "positiva" }),
-      obs({ sessionNumero: 2, nivelAjudaOrdinal: 1, polaridade: "positiva", temQueryAberta: true }),
+      obs({
+        sessionNumero: 2,
+        nivelAjudaOrdinal: 1,
+        polaridade: "positiva",
+        temQueryAberta: true,
+      }),
       obs({ sessionNumero: 3, nivelAjudaOrdinal: 2, polaridade: "positiva" }),
     ]);
     expect(r).toHaveLength(2);
@@ -167,7 +190,12 @@ describe("computarRepertorio", () => {
     const r = computarRepertorio({
       "goal-1": [
         obs({ sessionNumero: 1, nivelAjudaOrdinal: 3, polaridade: "positiva" }),
-        obs({ sessionNumero: 2, nivelAjudaOrdinal: 1, polaridade: "positiva", temQueryAberta: true }),
+        obs({
+          sessionNumero: 2,
+          nivelAjudaOrdinal: 1,
+          polaridade: "positiva",
+          temQueryAberta: true,
+        }),
         obs({ sessionNumero: 3, nivelAjudaOrdinal: 2, polaridade: "positiva" }),
       ],
     });
@@ -177,10 +205,14 @@ describe("computarRepertorio", () => {
 
   test("nunca retorna texto livre — só numérico/enum (LGPD G6b)", () => {
     const r = computarRepertorio({
-      "goal-1": [obs({ sessionNumero: 1, nivelAjudaOrdinal: 2, polaridade: "positiva" })],
+      "goal-1": [
+        obs({ sessionNumero: 1, nivelAjudaOrdinal: 2, polaridade: "positiva" }),
+      ],
     });
     for (const valor of Object.values(r["goal-1"]!)) {
-      expect(["number", "boolean"]).toContain(typeof valor === null ? "object" : typeof valor);
+      expect(["number", "boolean"]).toContain(
+        typeof valor === null ? "object" : typeof valor,
+      );
     }
   });
 });

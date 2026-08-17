@@ -18,7 +18,7 @@ export type { SupervisaoState };
 // ─── Wrappers para useActionState ──────────────────────────────────────────
 
 async function comCtx(
-  fn: (ctx: TenantContext) => Promise<SupervisaoResult>
+  fn: (ctx: TenantContext) => Promise<SupervisaoResult>,
 ): Promise<SupervisaoState> {
   try {
     const ctx = await getTenantContext();
@@ -29,7 +29,8 @@ async function comCtx(
     }
     return { error: r.error };
   } catch (err) {
-    if (err instanceof RoleError) return { error: "Só o coordenador supervisiona." };
+    if (err instanceof RoleError)
+      return { error: "Só o coordenador supervisiona." };
     console.error("wrapper supervisao:", err);
     return { error: "Erro interno no servidor." };
   }
@@ -37,50 +38,68 @@ async function comCtx(
 
 export async function reconhecerAlertaAction(
   _prev: SupervisaoState,
-  fd: FormData
+  fd: FormData,
 ): Promise<SupervisaoState> {
   return comCtx((ctx) =>
     reconhecerAlerta(ctx, {
       chaveNatural: String(fd.get("chaveNatural") ?? ""),
       tipo: String(fd.get("tipo") ?? "") as SinalTipo,
       patientId: String(fd.get("patientId") ?? ""),
-      goalId: fd.get("goalId") && String(fd.get("goalId")) !== "" ? String(fd.get("goalId")) : null,
-      protocolId: fd.get("protocolId") && String(fd.get("protocolId")) !== "" ? String(fd.get("protocolId")) : null,
+      goalId:
+        fd.get("goalId") && String(fd.get("goalId")) !== ""
+          ? String(fd.get("goalId"))
+          : null,
+      protocolId:
+        fd.get("protocolId") && String(fd.get("protocolId")) !== ""
+          ? String(fd.get("protocolId"))
+          : null,
       detalhe: JSON.parse(String(fd.get("detalhe") ?? "{}")),
-    })
+    }),
   );
 }
 
 export async function resolverAlertaAction(
   _prev: SupervisaoState,
-  fd: FormData
+  fd: FormData,
 ): Promise<SupervisaoState> {
   return comCtx((ctx) =>
     resolverAlerta(ctx, {
       chaveNatural: String(fd.get("chaveNatural") ?? ""),
       tipo: String(fd.get("tipo") ?? "") as SinalTipo,
       patientId: String(fd.get("patientId") ?? ""),
-      goalId: fd.get("goalId") && String(fd.get("goalId")) !== "" ? String(fd.get("goalId")) : null,
-      protocolId: fd.get("protocolId") && String(fd.get("protocolId")) !== "" ? String(fd.get("protocolId")) : null,
+      goalId:
+        fd.get("goalId") && String(fd.get("goalId")) !== ""
+          ? String(fd.get("goalId"))
+          : null,
+      protocolId:
+        fd.get("protocolId") && String(fd.get("protocolId")) !== ""
+          ? String(fd.get("protocolId"))
+          : null,
       detalhe: JSON.parse(String(fd.get("detalhe") ?? "{}")),
       nota: String(fd.get("nota") ?? ""),
-    })
+    }),
   );
 }
 
 export async function descartarAlertaAction(
   _prev: SupervisaoState,
-  fd: FormData
+  fd: FormData,
 ): Promise<SupervisaoState> {
   return comCtx((ctx) =>
     descartarAlerta(ctx, {
       chaveNatural: String(fd.get("chaveNatural") ?? ""),
       tipo: String(fd.get("tipo") ?? "") as SinalTipo,
       patientId: String(fd.get("patientId") ?? ""),
-      goalId: fd.get("goalId") && String(fd.get("goalId")) !== "" ? String(fd.get("goalId")) : null,
-      protocolId: fd.get("protocolId") && String(fd.get("protocolId")) !== "" ? String(fd.get("protocolId")) : null,
+      goalId:
+        fd.get("goalId") && String(fd.get("goalId")) !== ""
+          ? String(fd.get("goalId"))
+          : null,
+      protocolId:
+        fd.get("protocolId") && String(fd.get("protocolId")) !== ""
+          ? String(fd.get("protocolId"))
+          : null,
       detalhe: JSON.parse(String(fd.get("detalhe") ?? "{}")),
       motivo: String(fd.get("motivo") ?? ""),
-    })
+    }),
   );
 }

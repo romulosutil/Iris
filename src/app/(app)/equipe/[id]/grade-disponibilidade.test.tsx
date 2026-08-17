@@ -9,7 +9,13 @@ describe("GradeDisponibilidade — teclado", () => {
   test("Enter na célula focada alterna disponibilidade e chama onChange", () => {
     const onChange = vi.fn();
     render(
-      <GradeDisponibilidade passoMin={60} abertura="08:00" fechamento="10:00" celulasIniciais={new Set()} onChange={onChange} />,
+      <GradeDisponibilidade
+        passoMin={60}
+        abertura="08:00"
+        fechamento="10:00"
+        celulasIniciais={new Set()}
+        onChange={onChange}
+      />,
     );
     const cel = screen.getByRole("gridcell", { name: /segunda.*08:00/i });
     cel.focus();
@@ -30,7 +36,9 @@ describe("GradeDisponibilidade — teclado", () => {
         onChange={onChange}
       />,
     );
-    const cel = screen.getByRole("gridcell", { name: /segunda.*08:00.*disponível/i });
+    const cel = screen.getByRole("gridcell", {
+      name: /segunda.*08:00.*disponível/i,
+    });
     cel.focus();
     fireEvent.keyDown(cel, { key: " " });
     const ultima: Set<string> = onChange.mock.calls.at(-1)![0];
@@ -58,28 +66,50 @@ describe("GradeDisponibilidade — teclado", () => {
 describe("GradeDisponibilidade — navegação por setas (roving tabindex)", () => {
   test("ArrowRight move o foco para a próxima coluna", () => {
     render(
-      <GradeDisponibilidade passoMin={60} abertura="08:00" fechamento="10:00" celulasIniciais={new Set()} onChange={vi.fn()} />,
+      <GradeDisponibilidade
+        passoMin={60}
+        abertura="08:00"
+        fechamento="10:00"
+        celulasIniciais={new Set()}
+        onChange={vi.fn()}
+      />,
     );
     const cel = screen.getByRole("gridcell", { name: /segunda 08:00/i });
     cel.focus();
     fireEvent.keyDown(cel, { key: "ArrowRight" });
-    expect(document.activeElement).toBe(screen.getByRole("gridcell", { name: /segunda 09:00/i }));
+    expect(document.activeElement).toBe(
+      screen.getByRole("gridcell", { name: /segunda 09:00/i }),
+    );
   });
 
   test("ArrowDown move o foco para o mesmo horário no dia seguinte", () => {
     render(
-      <GradeDisponibilidade passoMin={60} abertura="08:00" fechamento="10:00" celulasIniciais={new Set()} onChange={vi.fn()} />,
+      <GradeDisponibilidade
+        passoMin={60}
+        abertura="08:00"
+        fechamento="10:00"
+        celulasIniciais={new Set()}
+        onChange={vi.fn()}
+      />,
     );
     const cel = screen.getByRole("gridcell", { name: /segunda 08:00/i });
     cel.focus();
     fireEvent.keyDown(cel, { key: "ArrowDown" });
-    expect(document.activeElement).toBe(screen.getByRole("gridcell", { name: /terça 08:00/i }));
+    expect(document.activeElement).toBe(
+      screen.getByRole("gridcell", { name: /terça 08:00/i }),
+    );
   });
 
   test("Shift+ArrowRight pinta a célula de destino", () => {
     const onChange = vi.fn();
     render(
-      <GradeDisponibilidade passoMin={60} abertura="08:00" fechamento="10:00" celulasIniciais={new Set()} onChange={onChange} />,
+      <GradeDisponibilidade
+        passoMin={60}
+        abertura="08:00"
+        fechamento="10:00"
+        celulasIniciais={new Set()}
+        onChange={onChange}
+      />,
     );
     const cel = screen.getByRole("gridcell", { name: /segunda 08:00/i });
     cel.focus();

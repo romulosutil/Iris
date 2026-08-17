@@ -16,10 +16,19 @@ type Args = {
   cabecalho: CabecalhoConvenio;
 };
 
-export async function buildConvenioNarrativoInput(tx: Tx, args: Args): Promise<ConvenioNarrativoInput> {
-  const { patientId, nomePaciente, periodoInicio, periodoFim, cabecalho } = args;
+export async function buildConvenioNarrativoInput(
+  tx: Tx,
+  args: Args,
+): Promise<ConvenioNarrativoInput> {
+  const { patientId, nomePaciente, periodoInicio, periodoFim, cabecalho } =
+    args;
 
-  const dossie = await buildConvenioBrutoPayload(tx, { patientId, nomePaciente, periodoInicio, periodoFim });
+  const dossie = await buildConvenioBrutoPayload(tx, {
+    patientId,
+    nomePaciente,
+    periodoInicio,
+    periodoFim,
+  });
 
   return {
     paciente: { nome: nomePaciente },

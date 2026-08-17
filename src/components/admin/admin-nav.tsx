@@ -11,12 +11,25 @@ export function AdminNav({ userEmail }: AdminNavProps) {
   const pathname = usePathname();
 
   const isExactActive = (path: string) => pathname === path;
-  const isSubActive = (path: string) => path !== "/benjamin" && pathname.startsWith(path);
+  const isSubActive = (path: string) =>
+    path !== "/benjamin" && pathname.startsWith(path);
 
   const links = [
-    { href: "/benjamin", label: "Visão Geral", active: isExactActive("/benjamin") },
-    { href: "/benjamin/clinicas", label: "Clínicas", active: isSubActive("/benjamin/clinicas") },
-    { href: "/benjamin/saude", label: "Saúde & Integrações", active: isSubActive("/benjamin/saude") },
+    {
+      href: "/benjamin",
+      label: "Visão Geral",
+      active: isExactActive("/benjamin"),
+    },
+    {
+      href: "/benjamin/clinicas",
+      label: "Clínicas",
+      active: isSubActive("/benjamin/clinicas"),
+    },
+    {
+      href: "/benjamin/saude",
+      label: "Saúde & Integrações",
+      active: isSubActive("/benjamin/saude"),
+    },
   ];
 
   return (
@@ -24,8 +37,10 @@ export function AdminNav({ userEmail }: AdminNavProps) {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-teal-400 text-lg tracking-tight">IRIS</span>
-            <span className="rounded bg-rose-950/80 px-2 py-0.5 font-medium text-rose-300 text-xs tracking-wider uppercase border border-rose-800/50">
+            <span className="text-lg font-bold tracking-tight text-teal-400">
+              IRIS
+            </span>
+            <span className="rounded border border-rose-800/50 bg-rose-950/80 px-2 py-0.5 text-xs font-medium tracking-wider text-rose-300 uppercase">
               Super Admin
             </span>
           </div>
@@ -35,9 +50,9 @@ export function AdminNav({ userEmail }: AdminNavProps) {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`rounded-md px-3 py-1.5 font-medium text-sm transition-colors ${
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   link.active
-                    ? "bg-slate-800 text-white font-semibold"
+                    ? "bg-slate-800 font-semibold text-white"
                     : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
                 }`}
               >
@@ -48,12 +63,12 @@ export function AdminNav({ userEmail }: AdminNavProps) {
         </div>
 
         <div className="flex items-center gap-4 text-xs text-slate-400">
-          <span className="hidden sm:inline-block font-mono bg-slate-900 px-2.5 py-1 rounded text-slate-300">
+          <span className="hidden rounded bg-slate-900 px-2.5 py-1 font-mono text-slate-300 sm:inline-block">
             {userEmail}
           </span>
           <Link
             href="/agenda"
-            className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+            className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
           >
             Voltar ao App
           </Link>

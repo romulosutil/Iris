@@ -55,15 +55,15 @@ Sobre `evidence_current` (classificação viva), em grão de alvo resolvido, por
 protocol_id)`, usando o ordinal de `protocol.taxonomia_ajuda[nivel_ajuda]`:
 
 - **repertorio_state**: por goal/milestone → `{ nivel_ajuda_recente (ordinal), contagem,
-  is_candidata }`. Só numérico/enum (G6b).
+is_candidata }`. Só numérico/enum (G6b).
 - **EVOLUÇÃO**: 1ª ocorrência positiva OU melhora de ordinal no próprio protocolo vs snapshot(n-1).
 - **ESTAGNAÇÃO**: janela W=5 sessões tocando o goal, mesma família, sem evidência nova.
 - **REGRESSÃO**: piora sustentada ≥2 sessões no ordinal, mesmo protocolo, OU negativa em habilidade
   antes independente.
 - Evidência com `evidence_query` aberta **não** conta (V1e).
 - `segmentacao` = `{goal_id: {protocol_id: {tipo_estrutura, metrica: {eixo:'nivel_ajuda',
-  ordinal_recente, ...}, rotulo}}}`; para tipos não-`marco_simples` sem métrica: `rotulo:
-  'aguardando_avaliacao_formal'`.
+ordinal_recente, ...}, rotulo}}}`; para tipos não-`marco_simples` sem métrica: `rotulo:
+'aguardando_avaliacao_formal'`.
 
 ## 4. Candidatura (reativação)
 

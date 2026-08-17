@@ -35,9 +35,12 @@ async function semViolacoes(ui: ReactElement) {
   expect(resultado.violations).toEqual([]);
 }
 
-test.each(SESSION_ESTADOS)("EstadoBadge %s — sem violações axe", async (estado) => {
-  await semViolacoes(<EstadoBadge estado={estado} />);
-});
+test.each(SESSION_ESTADOS)(
+  "EstadoBadge %s — sem violações axe",
+  async (estado) => {
+    await semViolacoes(<EstadoBadge estado={estado} />);
+  },
+);
 
 test("CheckInButton — sem violações axe", async () => {
   await semViolacoes(
@@ -62,7 +65,11 @@ const sessaoFalta = { ...sessaoPendente, estado: "falta_paciente" as const };
 test("ItemPendencia (consolidação) — sem violações axe", async () => {
   await semViolacoes(
     <ul>
-      <ItemPendencia sessao={sessaoPendente} tipo="consolidacao" terapeutas={terapeutas} />
+      <ItemPendencia
+        sessao={sessaoPendente}
+        tipo="consolidacao"
+        terapeutas={terapeutas}
+      />
     </ul>,
   );
 });
@@ -70,7 +77,11 @@ test("ItemPendencia (consolidação) — sem violações axe", async () => {
 test("ItemPendencia (reposição) — sem violações axe", async () => {
   await semViolacoes(
     <ul>
-      <ItemPendencia sessao={sessaoFalta} tipo="reposicao" terapeutas={terapeutas} />
+      <ItemPendencia
+        sessao={sessaoFalta}
+        tipo="reposicao"
+        terapeutas={terapeutas}
+      />
     </ul>,
   );
 });

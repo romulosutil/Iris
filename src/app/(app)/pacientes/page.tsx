@@ -9,7 +9,8 @@ export default async function PacientesPage() {
   const ctx = await getTenantContext();
   const pacientes = await listarTodosPacientes(ctx);
 
-  const podeCadastrar = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
+  const podeCadastrar =
+    ctx.role === "coordenador" || ctx.role === "admin_recepcao";
 
   return (
     <main className="flex flex-col gap-6">

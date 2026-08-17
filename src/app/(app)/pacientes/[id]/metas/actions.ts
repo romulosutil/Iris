@@ -20,7 +20,9 @@ function parseCriterio(formData: FormData): CriterioDominio | null {
   return { tipo: "n_acertos_m_sessoes", n, m };
 }
 
-function parseDisciplina(formData: FormData): (typeof DISCIPLINAS)[number] | undefined {
+function parseDisciplina(
+  formData: FormData,
+): (typeof DISCIPLINAS)[number] | undefined {
   const d = String(formData.get("disciplina") ?? "");
   return (DISCIPLINAS as readonly string[]).includes(d)
     ? (d as (typeof DISCIPLINAS)[number])
@@ -36,7 +38,8 @@ export async function criarMetaAction(
   const ctx = await getTenantContext();
   try {
     const criterio = parseCriterio(formData);
-    if (!criterio) return { error: "Preencha os números do critério de domínio." };
+    if (!criterio)
+      return { error: "Preencha os números do critério de domínio." };
     const r = await criarMeta(ctx, {
       patientId,
       descricao: String(formData.get("descricao") ?? ""),
@@ -76,7 +79,9 @@ export async function manterMetaAtivaAction(
 ): Promise<void> {
   const ctx = await getTenantContext();
   try {
-    await manterMetaAtiva(ctx, { goalId: String(formData.get("goalId") ?? "") });
+    await manterMetaAtiva(ctx, {
+      goalId: String(formData.get("goalId") ?? ""),
+    });
     revalidatePath(`/pacientes/${patientId}/metas`);
   } catch (err) {
     console.error("manterMetaAtivaAction:", err);
@@ -91,7 +96,9 @@ export async function transicionarEstadoMetaAction(
   try {
     await transicionarEstadoMeta(ctx, {
       goalId: String(formData.get("goalId") ?? ""),
-      estado: String(formData.get("estado") ?? "") as (typeof TRANSICOES_EQUIPE)[number],
+      estado: String(
+        formData.get("estado") ?? "",
+      ) as (typeof TRANSICOES_EQUIPE)[number],
     });
     revalidatePath(`/pacientes/${patientId}/metas`);
   } catch (err) {

@@ -51,7 +51,9 @@ export const sql: Sql = lazy(() => {
 
 // db "cru" (sem contexto de tenant). NÃO usar para dados de paciente —
 // use withTenant() de ./rls. Existe para health-checks e queries fora de tenant.
-export const db: Db = lazy(() => drizzle(sql, { schema, casing: "snake_case" }));
+export const db: Db = lazy(() =>
+  drizzle(sql, { schema, casing: "snake_case" }),
+);
 
 // ─── Conexão de AUTH/bootstrap (role iris_auth, NOBYPASSRLS) ─────────────────
 // Usada SÓ pelo adapter do Better-Auth e por src/auth/{tenant,provisioning}.ts.

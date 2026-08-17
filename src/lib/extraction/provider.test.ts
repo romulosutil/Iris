@@ -5,8 +5,10 @@ import { DemoStubProvider } from "./demo-stub-provider";
 import { NullProvider } from "./null-provider";
 
 const ctx = {
-  sessionId: "s1", clinicId: "c1",
-  notaConsolidada: "Pediu água apontando; falou 'á' sozinho. Depois não respondeu à pergunta.",
+  sessionId: "s1",
+  clinicId: "c1",
+  notaConsolidada:
+    "Pediu água apontando; falou 'á' sozinho. Depois não respondeu à pergunta.",
   metasAtivas: [{ id: "g1", descricao: "Pedir água sozinho" }],
 };
 

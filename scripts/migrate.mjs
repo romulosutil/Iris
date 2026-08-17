@@ -38,7 +38,10 @@ async function main() {
     const divergentes = await verificarHashesAplicadas(sql);
     if (divergentes.length > 0) {
       const lista = divergentes
-        .map((d) => `  - ${d.tag} (aplicado=${d.hashAplicado.slice(0, 12)}… disco=${d.hashEsperado.slice(0, 12)}…)`)
+        .map(
+          (d) =>
+            `  - ${d.tag} (aplicado=${d.hashAplicado.slice(0, 12)}… disco=${d.hashEsperado.slice(0, 12)}…)`,
+        )
         .join("\n");
       throw new Error(
         `Migração(ões) já aplicada(s) foram editadas no repo depois de rodar em produção (D17, #215):\n${lista}\n` +

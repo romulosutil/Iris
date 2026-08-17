@@ -75,7 +75,7 @@ Constraints:
 
 - `CHECK (periodo_fim >= periodo_inicio)` (canônico).
 - `CHECK (status != 'exportado' OR (exportado_por IS NOT NULL AND exportado_em IS NOT NULL AND
-  pdf_hash IS NOT NULL))` — **exportado ⇒ tem hash congelado**. Presença dos bytes garantida pela
+pdf_hash IS NOT NULL))` — **exportado ⇒ tem hash congelado**. Presença dos bytes garantida pela
   FK obrigatória de `report_pdf` no momento do export (§5), na mesma transação.
 - `CHECK (tipo != 'convenio_bruto' OR gerado_por_ia = false)` (canônico — bruto nunca é síntese
   de IA; ver [[convenio-report-requirements]]: IA nunca gera o número).
@@ -130,7 +130,7 @@ criado_em   timestamptz not null default now()
 
 Índice: `(patient_id, criado_em DESC)`.
 
-> **Efeito colateral:** a Fase 4 já *previa* gravar `audit_log` em reclassificação/invalidação
+> **Efeito colateral:** a Fase 4 já _previa_ gravar `audit_log` em reclassificação/invalidação
 > (DoD da spec `2026-07-13-fase-4-ddl-4a-4b.md`), mas a tabela nunca foi criada — a escrita
 > ficou pendente. F0 cria a tabela e **destrava retroativamente** essa gravação. F0 não
 > retrofita o código de reclassificação (fica para a fatia 1, que já mexe em governança); só
@@ -175,7 +175,7 @@ CREATE POLICY report_scope ON report FOR ALL TO app_role USING (
   `exportado ⇒ pdf_hash NOT NULL` já impede um exportado voltar a rascunho sem quebrar invariante.
 - **Purga (retenção/erasure):** `app_purgar_report(p_report uuid, p_motivo text)` `SECURITY DEFINER`
   — recebe **um único** report id (nunca lote), grava `audit_log(acao='relatorio_purgado',
-  detalhe={motivo, hash})` **primeiro** e **só então** `DELETE` físico de `report` + `report_pdf`
+detalhe={motivo, hash})` **primeiro** e **só então** `DELETE` físico de `report` + `report_pdf`
   (cascata), tudo na mesma tx (red-team #4: ordem log-antes-de-delete é invariante, não convenção;
   `audit_log.entidade_id` não tem FK a `report`, então o log sobrevive ao delete). Definer filtra
   explicitamente pelo `p_report` passado; `REVOKE ALL … FROM PUBLIC` + `GRANT EXECUTE` só ao role de
@@ -279,9 +279,9 @@ nunca reescrever `pdf_hash`. Sem trigger necessário.
      `payload_versao = V`**. Se mudou (alguém editou durante o render) → **rollback e reinicia** do
      passo 1. Isso impede congelar um PDF de payload obsoleto.
   5. Ainda na tx: `INSERT report_pdf(report_id, bytes, hash)` **+** `UPDATE report SET
-     status='exportado', pdf_hash=hash, exportado_por=…, exportado_em=now()` **+** `INSERT
-     audit_log(acao='relatorio_exportado', entidade='report', entidade_id, patient_id, ator_id,
-     detalhe={tipo, periodo, hash})`.
+status='exportado', pdf_hash=hash, exportado_por=…, exportado_em=now()` **+** `INSERT
+audit_log(acao='relatorio_exportado', entidade='report', entidade_id, patient_id, ator_id,
+detalhe={tipo, periodo, hash})`.
   6. **Só após COMMIT** os bytes são liberados para download.
 - **Concorrência:** um único relatório por paciente, agregando todas as disciplinas, é editado por
   coordenador + terapeutas → várias mãos na **mesma linha**. Por isso o `FOR UPDATE` + `payload_versao`
@@ -302,8 +302,8 @@ nunca reescrever `pdf_hash`. Sem trigger necessário.
    fundação. → decisão para o Rômulo: onde mora o tier (coluna em `clinic`? tabela `subscription`?)
    e em que fase. Registrar no BACKLOG.
 2. **Leitor da trilha de auditoria** (§3.2): `admin_recepcao` inclui-se? DPO é papel à parte?
-3. **Política de retenção concreta** (§3.1): F0 entrega a *capacidade* (soft-delete + purga com
-   trilha), mas o *prazo* (quantos anos até poder purgar, por `tipo`) vem de `docs/legal/` — CFM/
+3. **Política de retenção concreta** (§3.1): F0 entrega a _capacidade_ (soft-delete + purga com
+   trilha), mas o _prazo_ (quantos anos até poder purgar, por `tipo`) vem de `docs/legal/` — CFM/
    prontuário. Aberto; não trava F0 (default = manter).
 4. **Uso secundário do acervo — "Iris empresa de dados" — DECISÃO JURÍDICA, MAIOR QUE F0.** O
    Rômulo quer usar dados para melhorar o produto. **Não pode** rodar sobre o PDF/prontuário bruto
@@ -330,7 +330,7 @@ nunca reescrever `pdf_hash`. Sem trigger necessário.
 - [ ] **`report_pdf` RLS (red-team #1):** `SELECT … FROM report_pdf WHERE report_id=?` de outra
       clínica → 0 linhas; terapeuta fora da equipe → 0; report soft-deletado → PDF invisível.
 - [ ] **Sandbox de render (red-team #2):** payload com `<img src=file:///…>` / `<iframe
-      src=http://169.254.169.254/…>` → nenhuma requisição de saída do Chromium; conteúdo interpolado
+    src=http://169.254.169.254/…>` → nenhuma requisição de saída do Chromium; conteúdo interpolado
       escapado (markup do usuário não vira HTML).
 - [ ] CHECK `exportado ⇒ pdf_hash NOT NULL` impede export sem snapshot; FK de `report_pdf` garante
       bytes presentes.

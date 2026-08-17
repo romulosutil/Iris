@@ -5,7 +5,10 @@ let emUso = 0;
 const fila: Array<() => void> = [];
 
 function adquirir(): Promise<void> {
-  if (emUso < MAX) { emUso++; return Promise.resolve(); }
+  if (emUso < MAX) {
+    emUso++;
+    return Promise.resolve();
+  }
   return new Promise((resolve) => fila.push(resolve));
 }
 

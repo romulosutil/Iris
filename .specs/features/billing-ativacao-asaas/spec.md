@@ -28,12 +28,12 @@ buraco no modelo de dados atrás de um `?`.
 
 ## Out of Scope
 
-| Item                                       | Motivo                                                                                                      |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Exigir assinatura antes do 1º paciente     | Decidido 10/08/2026: trial irrestrito (#163/#175) **mantido**. Foi esse desenho que causou o deadlock antigo. |
-| Página "Dados da clínica"                  | O documento entra na própria tela de ativação. Página dedicada vira item de backlog separado.                |
-| Cartão como trilho de cobrança de ciclo    | `emitirCobrancaDeCiclo` só emite `billingType: "PIX"`. Continua assim.                                       |
-| Portal de assinatura (upgrade/downgrade)   | Componente distinto da Fase 7. Não é pré-requisito de cobrar.                                                |
+| Item                                     | Motivo                                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Exigir assinatura antes do 1º paciente   | Decidido 10/08/2026: trial irrestrito (#163/#175) **mantido**. Foi esse desenho que causou o deadlock antigo. |
+| Página "Dados da clínica"                | O documento entra na própria tela de ativação. Página dedicada vira item de backlog separado.                 |
+| Cartão como trilho de cobrança de ciclo  | `emitirCobrancaDeCiclo` só emite `billingType: "PIX"`. Continua assim.                                        |
+| Portal de assinatura (upgrade/downgrade) | Componente distinto da Fase 7. Não é pré-requisito de cobrar.                                                 |
 
 ---
 
@@ -171,17 +171,17 @@ com link antes de digitar qualquer coisa.
 
 ## Requirement Traceability
 
-| ID      | História                        | Fase   | Status  |
-| ------- | ------------------------------- | ------ | ------- |
-| ATIV-01 | P1: documento — coluna + GRANT  | Design | Pending |
-| ATIV-02 | P1: documento — validador CNPJ  | Design | Pending |
-| ATIV-03 | P1: documento — campo na tela   | Design | Pending |
-| ATIV-04 | P1: documento — wiring do logic | Design | Pending |
-| ATIV-05 | P1: provedor fantasma — default | Design | Pending |
-| ATIV-06 | P1: provedor fantasma — guard   | Design | Pending |
-| ATIV-07 | P2: remoção do Mercado Pago     | -      | Pending |
-| ATIV-08 | P2: retorno pós-Pix             | -      | Pending |
-| ATIV-09 | P2: aviso antecipado no cadastro| -      | Pending |
+| ID      | História                         | Fase   | Status  |
+| ------- | -------------------------------- | ------ | ------- |
+| ATIV-01 | P1: documento — coluna + GRANT   | Design | Pending |
+| ATIV-02 | P1: documento — validador CNPJ   | Design | Pending |
+| ATIV-03 | P1: documento — campo na tela    | Design | Pending |
+| ATIV-04 | P1: documento — wiring do logic  | Design | Pending |
+| ATIV-05 | P1: provedor fantasma — default  | Design | Pending |
+| ATIV-06 | P1: provedor fantasma — guard    | Design | Pending |
+| ATIV-07 | P2: remoção do Mercado Pago      | -      | Pending |
+| ATIV-08 | P2: retorno pós-Pix              | -      | Pending |
+| ATIV-09 | P2: aviso antecipado no cadastro | -      | Pending |
 
 **Cobertura:** 9 total, 0 mapeados para tarefas ainda.
 

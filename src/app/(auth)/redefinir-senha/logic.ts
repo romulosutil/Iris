@@ -6,9 +6,7 @@ import { registrarTentativa } from "@/lib/throttle";
 import { resolverIp } from "../esqueci-senha/logic";
 import { NOME_COOKIE_TOKEN, CAMINHO_COOKIE } from "./cookie";
 
-export type EstadoRedefinirSenha =
-  | { ok: true }
-  | { ok: false; error: string };
+export type EstadoRedefinirSenha = { ok: true } | { ok: false; error: string };
 
 const SENHA_MIN = 12;
 const SENHA_MAX = 128;
@@ -46,18 +44,26 @@ export const MENSAGEM_SEM_LINK_ATIVO =
  * erro de formato pode ter mensagem própria porque não vaza nada sobre conta
  * ou token.
  */
-export function validarNovaSenha(formData: FormData): {
-  ok: true;
-  novaSenha: string;
-} | { ok: false; error: string } {
+export function validarNovaSenha(formData: FormData):
+  | {
+      ok: true;
+      novaSenha: string;
+    }
+  | { ok: false; error: string } {
   const novaSenha = String(formData.get("senha") ?? "");
   const confirmacao = String(formData.get("confirmacao") ?? "");
 
   if (novaSenha.length < SENHA_MIN) {
-    return { ok: false, error: `A senha precisa ter ao menos ${SENHA_MIN} caracteres.` };
+    return {
+      ok: false,
+      error: `A senha precisa ter ao menos ${SENHA_MIN} caracteres.`,
+    };
   }
   if (novaSenha.length > SENHA_MAX) {
-    return { ok: false, error: `A senha pode ter no máximo ${SENHA_MAX} caracteres.` };
+    return {
+      ok: false,
+      error: `A senha pode ter no máximo ${SENHA_MAX} caracteres.`,
+    };
   }
   if (novaSenha !== confirmacao) {
     return { ok: false, error: "As senhas não conferem." };
@@ -184,7 +190,9 @@ export async function executarRedefinirSenha(
     // apagá-lo é o usuário ter que recomeçar o fluxo por falha nossa.
     let definitivo = false;
     try {
-      await auth.api.resetPassword({ body: { token, newPassword: validado.novaSenha } });
+      await auth.api.resetPassword({
+        body: { token, newPassword: validado.novaSenha },
+      });
       sucesso = true;
       definitivo = true;
     } catch (err) {

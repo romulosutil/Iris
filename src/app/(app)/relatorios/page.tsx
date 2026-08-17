@@ -24,10 +24,10 @@ export default async function RelatoriosPage() {
   return (
     <Stack gap="lg">
       <Stack gap="sm">
-        <h1 className="font-display text-[var(--text-primary)] text-3xl font-bold">
+        <h1 className="font-display text-3xl font-bold text-[var(--text-primary)]">
           Relatórios
         </h1>
-        <p className="text-[var(--text-primary)] text-lg">
+        <p className="text-lg text-[var(--text-primary)]">
           Dossiê para convênio: dados factuais de presença e evidências
           aprovadas no período — sem narrativa gerada por IA.
         </p>

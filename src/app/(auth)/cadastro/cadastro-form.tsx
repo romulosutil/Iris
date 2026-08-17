@@ -89,15 +89,18 @@ export function CadastroForm() {
 
   return (
     <div ref={containerRef}>
-      <Form action={formAction} error={estado?.error} className="flex flex-col gap-6">
-        
+      <Form
+        action={formAction}
+        error={estado?.error}
+        className="flex flex-col gap-6"
+      >
         {/* Seção 1: Credenciais de Acesso */}
         <fieldset className="flex flex-col gap-4 border-b border-[var(--border-subtle)] pb-6">
-          <legend className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] font-display mb-1">
+          <legend className="font-display mb-1 text-xs font-bold tracking-wider text-[var(--text-secondary)] uppercase">
             1. Credenciais de Acesso
           </legend>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="Nome completo" htmlFor="nome">
               <Input
                 id="nome"
@@ -135,11 +138,13 @@ export function CadastroForm() {
                 <span
                   className={
                     senhaTamanhoOk
-                      ? "text-[var(--status-success-fg)] font-semibold"
+                      ? "font-semibold text-[var(--status-success-fg)]"
                       : "text-[var(--text-secondary)]"
                   }
                 >
-                  {senhaTamanhoOk ? "✓ Mínimo 12 caracteres atendido" : "Mínimo 12 caracteres."}
+                  {senhaTamanhoOk
+                    ? "✓ Mínimo 12 caracteres atendido"
+                    : "Mínimo 12 caracteres."}
                 </span>
               </span>
             }
@@ -161,7 +166,7 @@ export function CadastroForm() {
 
         {/* Seção 2: Organização & Registro Profissional */}
         <fieldset className="flex flex-col gap-4 border-b border-[var(--border-subtle)] pb-6">
-          <legend className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] font-display mb-1">
+          <legend className="font-display mb-1 text-xs font-bold tracking-wider text-[var(--text-secondary)] uppercase">
             2. Clínica & Registro Profissional
           </legend>
 
@@ -180,7 +185,7 @@ export function CadastroForm() {
           </Field>
 
           {/* Registro Profissional Inline em Grid de 3 Colunas */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+          <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-12">
             <div className="md:col-span-4">
               <Field label="Conselho" htmlFor="conselho-trigger">
                 <Select
@@ -261,7 +266,8 @@ export function CadastroForm() {
                 rel="noopener noreferrer"
                 className="font-semibold underline underline-offset-2"
               >
-                Termos de Uso <span className="sr-only">(abre em nova aba)</span>
+                Termos de Uso{" "}
+                <span className="sr-only">(abre em nova aba)</span>
               </Link>{" "}
               e a{" "}
               <Link
@@ -270,7 +276,8 @@ export function CadastroForm() {
                 rel="noopener noreferrer"
                 className="font-semibold underline underline-offset-2"
               >
-                Política de Privacidade <span className="sr-only">(abre em nova aba)</span>
+                Política de Privacidade{" "}
+                <span className="sr-only">(abre em nova aba)</span>
               </Link>{" "}
               do Iris.
             </span>

@@ -15,8 +15,21 @@ export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
 
 function SeparatorIcon() {
   return (
-    <svg width={14} height={14} viewBox="0 0 20 20" fill="none" aria-hidden focusable="false" className="text-[var(--text-secondary)] shrink-0">
-      <path d="M7.5 4.5l5 5.5-5 5.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="square" />
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      focusable="false"
+      className="shrink-0 text-[var(--text-secondary)]"
+    >
+      <path
+        d="M7.5 4.5l5 5.5-5 5.5"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="square"
+      />
     </svg>
   );
 }
@@ -27,7 +40,7 @@ export const Breadcrumb = React.forwardRef<HTMLElement, BreadcrumbProps>(
       <nav
         ref={ref}
         aria-label="Navegação estrutural"
-        className={cn("flex items-center text-sm font-body", className)}
+        className={cn("font-body flex items-center text-sm", className)}
         {...props}
       >
         <ol className="flex flex-wrap items-center gap-2">
@@ -40,7 +53,7 @@ export const Breadcrumb = React.forwardRef<HTMLElement, BreadcrumbProps>(
                 {item.href && !isCurrent ? (
                   <Link
                     href={item.href}
-                    className="font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline focus-visible:outline-focus rounded-xs"
+                    className="focus-visible:outline-focus rounded-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
                   >
                     {item.rotulo}
                   </Link>
@@ -48,7 +61,7 @@ export const Breadcrumb = React.forwardRef<HTMLElement, BreadcrumbProps>(
                   <button
                     type="button"
                     onClick={item.onClick}
-                    className="font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline focus-visible:outline-focus rounded-xs cursor-pointer bg-transparent border-0 p-0"
+                    className="focus-visible:outline-focus cursor-pointer rounded-xs border-0 bg-transparent p-0 font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
                   >
                     {item.rotulo}
                   </button>

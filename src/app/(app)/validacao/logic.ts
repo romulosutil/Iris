@@ -6,7 +6,10 @@ import { withTenant, type TenantContext } from "@/db/rls";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { avaliarFriccao } from "@/lib/extraction/review-policy";
-import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
+import {
+  drizzleMaterializarQueries,
+  materializarSnapshot,
+} from "@/lib/evidence/materializar";
 import type { Alvo } from "@/lib/evidence/resolver";
 import { montarClassificacaoNova, validarAlvo } from "./alvos";
 
@@ -83,14 +86,15 @@ async function lerEvidenciaParaValidar(
   if (!e) return { erro: "NAO_ENCONTRADA" };
   if (e.invalidada) return { erro: "CONCURRENCY_ERROR" };
 
-  const tratada = (
-    (await tx.execute(sql`
+  const tratada =
+    (
+      (await tx.execute(sql`
       SELECT 1 FROM evidence_revision WHERE evidence_id = ${evidenceId}
       UNION ALL
       SELECT 1 FROM evidence_query WHERE evidence_id = ${evidenceId} AND respondido_em IS NULL
       LIMIT 1
     `)) as unknown as unknown[]
-  ).length > 0;
+    ).length > 0;
   if (tratada) return { erro: "CONCURRENCY_ERROR" };
 
   return {
@@ -114,12 +118,18 @@ async function inserirRevisaoConfirmar(
   tx: TxDeTenant,
   ctx: TenantContext,
   evidenceId: string,
-  args: { classificacaoAnterior: unknown; classificacaoNova: unknown | null; justificativa: string },
+  args: {
+    classificacaoAnterior: unknown;
+    classificacaoNova: unknown | null;
+    justificativa: string;
+  },
 ): Promise<void> {
   await tx.execute(sql`
     INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
     VALUES (${evidenceId}, 'confirmar', ${JSON.stringify(args.classificacaoAnterior)}::jsonb, ${
-      args.classificacaoNova === null ? null : JSON.stringify(args.classificacaoNova)
+      args.classificacaoNova === null
+        ? null
+        : JSON.stringify(args.classificacaoNova)
     }::jsonb, ${args.justificativa}, ${ctx.userId}::uuid)
   `);
 }
@@ -140,14 +150,24 @@ async function confirmarEvidenciaCore(
   return withTenant(ctx, async (tx) => {
     const e = await lerEvidenciaParaValidar(tx, p.data.evidenceId);
     if ("erro" in e) {
-      return { error: e.erro === "NAO_ENCONTRADA" ? "Evidência não encontrada." : "CONCURRENCY_ERROR" };
+      return {
+        error:
+          e.erro === "NAO_ENCONTRADA"
+            ? "Evidência não encontrada."
+            : "CONCURRENCY_ERROR",
+      };
     }
     await inserirRevisaoConfirmar(tx, ctx, p.data.evidenceId, {
       classificacaoAnterior: e.classificacaoAtual,
       classificacaoNova: null,
       justificativa: "Confirmado pelo coordenador.",
     });
-    await desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia");
+    await desarquivarPacienteSeArquivado(
+      tx,
+      ctx,
+      e.patientId,
+      "validacao_evidencia",
+    );
     return { ok: true };
   });
 }
@@ -169,7 +189,10 @@ const loteSchema = z.object({
   evidenceIds: z
     .array(z.string().uuid())
     .min(1, "Lote vazio.")
-    .max(LOTE_MAX, `Lote acima do limite de ${LOTE_MAX} evidências — divida em levas menores.`),
+    .max(
+      LOTE_MAX,
+      `Lote acima do limite de ${LOTE_MAX} evidências — divida em levas menores.`,
+    ),
 });
 
 /** Sentinela interna: aborta (rollback) o lote e vira `{ error }` na borda. */
@@ -211,7 +234,10 @@ async function aprovarEvidenciasLoteCore(
       const porId = new Map(elegRows.map((r) => [r.id, r]));
       for (const id of ids) {
         const r = porId.get(id);
-        if (!r) throw new LoteAbortadoError("Evidência não encontrada — nada foi aplicado.");
+        if (!r)
+          throw new LoteAbortadoError(
+            "Evidência não encontrada — nada foi aplicado.",
+          );
         const { podeLote } = avaliarFriccao({
           confianca: r.confianca,
           inconsistenteComHistorico: r.inconsistente_com_historico,
@@ -236,7 +262,10 @@ async function aprovarEvidenciasLoteCore(
 
       // 2) Confirmação por evidência sob o mesmo lock/guarda de concorrência
       // da confirmação individual.
-      const snapshots = new Map<string, { patientId: string; sessionNumero: number }>();
+      const snapshots = new Map<
+        string,
+        { patientId: string; sessionNumero: number }
+      >();
       for (const id of idsOrdenados) {
         const e = await lerEvidenciaParaValidar(tx, id);
         if ("erro" in e) {
@@ -266,12 +295,23 @@ async function aprovarEvidenciasLoteCore(
 
       // 3) Efeitos por paciente/sessão, uma vez só: desarquivamento (paridade
       // com a confirmação individual) e rematerialização do snapshot.
-      const pacientes = new Set([...snapshots.values()].map((s) => s.patientId));
+      const pacientes = new Set(
+        [...snapshots.values()].map((s) => s.patientId),
+      );
       for (const patientId of pacientes) {
-        await desarquivarPacienteSeArquivado(tx, ctx, patientId, "validacao_evidencia");
+        await desarquivarPacienteSeArquivado(
+          tx,
+          ctx,
+          patientId,
+          "validacao_evidencia",
+        );
       }
       for (const s of snapshots.values()) {
-        await materializarSnapshot(drizzleMaterializarQueries(tx), s.patientId, s.sessionNumero);
+        await materializarSnapshot(
+          drizzleMaterializarQueries(tx),
+          s.patientId,
+          s.sessionNumero,
+        );
       }
 
       return { ok: true, aprovadas: ids.length };
@@ -305,7 +345,12 @@ async function invalidarEvidenciaCore(
   return withTenant(ctx, async (tx) => {
     const e = await lerEvidenciaParaValidar(tx, p.data.evidenceId);
     if ("erro" in e) {
-      return { error: e.erro === "NAO_ENCONTRADA" ? "Evidência não encontrada." : "CONCURRENCY_ERROR" };
+      return {
+        error:
+          e.erro === "NAO_ENCONTRADA"
+            ? "Evidência não encontrada."
+            : "CONCURRENCY_ERROR",
+      };
     }
     await tx.execute(sql`
       INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
@@ -315,7 +360,11 @@ async function invalidarEvidenciaCore(
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'invalidacao', 'evidence', ${p.data.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('motivo', ${p.data.motivo}::text))
     `);
-    await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
+    await materializarSnapshot(
+      drizzleMaterializarQueries(tx),
+      e.patientId,
+      e.sessionNumero,
+    );
     return { ok: true };
   });
 }
@@ -350,7 +399,12 @@ async function reclassificarEvidenciaCore(
   return withTenant(ctx, async (tx) => {
     const e = await lerEvidenciaParaValidar(tx, p.data.evidenceId);
     if ("erro" in e) {
-      return { error: e.erro === "NAO_ENCONTRADA" ? "Evidência não encontrada." : "CONCURRENCY_ERROR" };
+      return {
+        error:
+          e.erro === "NAO_ENCONTRADA"
+            ? "Evidência não encontrada."
+            : "CONCURRENCY_ERROR",
+      };
     }
 
     const validacao = await validarAlvo(
@@ -375,8 +429,17 @@ async function reclassificarEvidenciaCore(
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'reclassificacao', 'evidence', ${p.data.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('de', ${JSON.stringify(e.classificacaoAtual)}::jsonb, 'para', ${JSON.stringify(classificacaoNova)}::jsonb, 'justificativa', ${p.data.justificativa}::text))
     `);
-    await desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia");
-    await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
+    await desarquivarPacienteSeArquivado(
+      tx,
+      ctx,
+      e.patientId,
+      "validacao_evidencia",
+    );
+    await materializarSnapshot(
+      drizzleMaterializarQueries(tx),
+      e.patientId,
+      e.sessionNumero,
+    );
     return { ok: true };
   });
 }
@@ -404,7 +467,12 @@ async function devolverComDuvidaCore(
   return withTenant(ctx, async (tx) => {
     const e = await lerEvidenciaParaValidar(tx, p.data.evidenceId);
     if ("erro" in e) {
-      return { error: e.erro === "NAO_ENCONTRADA" ? "Evidência não encontrada." : "CONCURRENCY_ERROR" };
+      return {
+        error:
+          e.erro === "NAO_ENCONTRADA"
+            ? "Evidência não encontrada."
+            : "CONCURRENCY_ERROR",
+      };
     }
     await tx.execute(sql`
       INSERT INTO evidence_query (evidence_id, coordenador_id, pergunta)
@@ -414,7 +482,11 @@ async function devolverComDuvidaCore(
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'devolucao', 'evidence', ${p.data.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('pergunta', ${p.data.pergunta}::text))
     `);
-    await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
+    await materializarSnapshot(
+      drizzleMaterializarQueries(tx),
+      e.patientId,
+      e.sessionNumero,
+    );
     return { ok: true };
   });
 }

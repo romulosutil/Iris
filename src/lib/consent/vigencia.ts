@@ -122,9 +122,7 @@ export function regimeVigente(
  * de regime representado foi revogada". São diferentes, e a diferença é
  * exatamente o fluxo da #135 (menor revogado → paciente faz 18 e autoconsente).
  */
-function prontuarioSomenteLeitura(
-  linhas: readonly LinhaConsent[],
-): boolean {
+function prontuarioSomenteLeitura(linhas: readonly LinhaConsent[]): boolean {
   const houveRepresentacao = linhas.some((c) =>
     (TIPOS_REGIME_REPRESENTADO as readonly string[]).includes(c.tipo),
   );

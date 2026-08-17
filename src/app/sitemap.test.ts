@@ -3,7 +3,8 @@ import sitemap from "./sitemap";
 
 describe("Sitemap dinâmico (/sitemap.xml)", () => {
   it("retorna URLs públicas principais com prioridades e frequências válidas", async () => {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br";
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br";
     const items = await sitemap();
     const urls = items.map((i) => i.url);
     expect(urls).toContain(baseUrl);

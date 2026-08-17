@@ -3,7 +3,7 @@ name: Security Audit
 on:
   schedule:
     # Executa toda segunda-feira às 06:00 UTC (03:00 BRT)
-    - cron: '0 6 * * 1'
+    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 concurrency:

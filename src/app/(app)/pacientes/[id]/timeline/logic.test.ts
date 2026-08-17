@@ -14,7 +14,7 @@ describe("timeline/logic.ts (calcularDelta)", () => {
       "item-1": { nivel_ajuda_recente: 2, contagem: 3, is_candidata: true },
     };
     const delta = calcularDelta(null, snapB);
-    
+
     expect(delta.itens).toHaveLength(1);
     expect(delta.itens[0]).toEqual({
       id: "item-1",
@@ -30,20 +30,44 @@ describe("timeline/logic.ts (calcularDelta)", () => {
 
   test("detecta evolução, regressão e aumento de evidências", () => {
     const snapA = {
-      "item-evolucao": { nivel_ajuda_recente: 3, contagem: 5, is_candidata: false },
-      "item-regressao": { nivel_ajuda_recente: 1, contagem: 2, is_candidata: false },
-      "item-estavel": { nivel_ajuda_recente: 2, contagem: 4, is_candidata: false },
+      "item-evolucao": {
+        nivel_ajuda_recente: 3,
+        contagem: 5,
+        is_candidata: false,
+      },
+      "item-regressao": {
+        nivel_ajuda_recente: 1,
+        contagem: 2,
+        is_candidata: false,
+      },
+      "item-estavel": {
+        nivel_ajuda_recente: 2,
+        contagem: 4,
+        is_candidata: false,
+      },
     };
     const snapB = {
-      "item-evolucao": { nivel_ajuda_recente: 1, contagem: 6, is_candidata: true }, // evoluiu (3 -> 1) + cand + ev
-      "item-regressao": { nivel_ajuda_recente: 4, contagem: 2, is_candidata: false }, // regrediu (1 -> 4)
-      "item-estavel": { nivel_ajuda_recente: 2, contagem: 5, is_candidata: false }, // mesmo nível, +1 evidência
+      "item-evolucao": {
+        nivel_ajuda_recente: 1,
+        contagem: 6,
+        is_candidata: true,
+      }, // evoluiu (3 -> 1) + cand + ev
+      "item-regressao": {
+        nivel_ajuda_recente: 4,
+        contagem: 2,
+        is_candidata: false,
+      }, // regrediu (1 -> 4)
+      "item-estavel": {
+        nivel_ajuda_recente: 2,
+        contagem: 5,
+        is_candidata: false,
+      }, // mesmo nível, +1 evidência
     };
 
     const delta = calcularDelta(snapA, snapB);
 
     expect(delta.itens).toHaveLength(3);
-    
+
     const ev = delta.itens.find((i) => i.id === "item-evolucao");
     expect(ev?.tipo).toBe("evolucao");
     expect(ev?.nivelAnterior).toBe(3);
@@ -67,11 +91,23 @@ describe("timeline/logic.ts (calcularDelta)", () => {
 
   test("detecta itens removidos/arquivados como regressão", () => {
     const snapA = {
-      "item-removido": { nivel_ajuda_recente: 2, contagem: 4, is_candidata: false },
-      "item-permanece": { nivel_ajuda_recente: 1, contagem: 3, is_candidata: false },
+      "item-removido": {
+        nivel_ajuda_recente: 2,
+        contagem: 4,
+        is_candidata: false,
+      },
+      "item-permanece": {
+        nivel_ajuda_recente: 1,
+        contagem: 3,
+        is_candidata: false,
+      },
     };
     const snapB = {
-      "item-permanece": { nivel_ajuda_recente: 1, contagem: 3, is_candidata: false },
+      "item-permanece": {
+        nivel_ajuda_recente: 1,
+        contagem: 3,
+        is_candidata: false,
+      },
     };
 
     const delta = calcularDelta(snapA, snapB);

@@ -15,7 +15,10 @@ export type TenantResolution =
   | { status: "unauthenticated" }
   | { status: "no_access" }
   | { status: "cadastro_incompleto"; userId: string }
-  | { status: "needs_clinic_selection"; opcoes: { clinicId: string; nome: string }[] }
+  | {
+      status: "needs_clinic_selection";
+      opcoes: { clinicId: string; nome: string }[];
+    }
   | { status: "needs_role_selection"; clinicId: string; papeis: Papel[] }
   | { status: "ok"; ctx: TenantContext };
 
@@ -39,7 +42,11 @@ export async function resolveTenant(
 
   // Papéis do usuário em TODAS as clínicas (bootstrap via iris_auth, pré-GUC).
   const vinculos = await authDb
-    .select({ clinicId: userRole.clinicId, papel: userRole.papel, nome: clinic.nome })
+    .select({
+      clinicId: userRole.clinicId,
+      papel: userRole.papel,
+      nome: clinic.nome,
+    })
     .from(userRole)
     .innerJoin(clinic, eq(clinic.id, userRole.clinicId))
     .where(eq(userRole.userId, userId));
@@ -91,7 +98,10 @@ export async function resolveTenant(
     const nomePorId = new Map(vinculos.map((v) => [v.clinicId, v.nome]));
     return {
       status: "needs_clinic_selection",
-      opcoes: clinicasIds.map((id) => ({ clinicId: id, nome: nomePorId.get(id)! })),
+      opcoes: clinicasIds.map((id) => ({
+        clinicId: id,
+        nome: nomePorId.get(id)!,
+      })),
     };
   }
 
@@ -101,12 +111,25 @@ export async function resolveTenant(
     .map((v) => v.papel as Papel);
   const resolvido = papelAtivo(papeis);
   if ("needsSelection" in resolvido) {
-    if (ck.activeRole && (resolvido.needsSelection as string[]).includes(ck.activeRole)) {
-      return { status: "ok", ctx: { clinicId, userId, role: ck.activeRole as Papel, mfaEnrolled } };
+    if (
+      ck.activeRole &&
+      (resolvido.needsSelection as string[]).includes(ck.activeRole)
+    ) {
+      return {
+        status: "ok",
+        ctx: { clinicId, userId, role: ck.activeRole as Papel, mfaEnrolled },
+      };
     }
-    return { status: "needs_role_selection", clinicId, papeis: resolvido.needsSelection };
+    return {
+      status: "needs_role_selection",
+      clinicId,
+      papeis: resolvido.needsSelection,
+    };
   }
-  return { status: "ok", ctx: { clinicId, userId, role: resolvido.papel, mfaEnrolled } };
+  return {
+    status: "ok",
+    ctx: { clinicId, userId, role: resolvido.papel, mfaEnrolled },
+  };
 }
 
 /**
@@ -142,7 +165,8 @@ export async function getTenantContext(): Promise<TenantContext> {
       // mandado ao onboarding. BYPASS_MFA_FOR_DEV pula isto em dev (o boot já
       // impede a flag em produção — src/auth/mfa-gate.ts).
       const bypass = process.env.BYPASS_MFA_FOR_DEV === "true";
-      const clinico = r.ctx.role === "terapeuta" || r.ctx.role === "coordenador";
+      const clinico =
+        r.ctx.role === "terapeuta" || r.ctx.role === "coordenador";
       if (clinico && !r.ctx.mfaEnrolled && !bypass) redirect("/mfa/setup");
       return r.ctx;
     }

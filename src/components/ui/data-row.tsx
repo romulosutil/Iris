@@ -1,8 +1,10 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 
-export interface DataRowProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+export interface DataRowProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "title"
+> {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   leading?: React.ReactNode;
@@ -33,7 +35,7 @@ export const DataRow = React.forwardRef<HTMLDivElement, DataRowProps>(
         ref={ref as any}
         onClick={onClick}
         className={cn(
-          "flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 p-4 rounded-[var(--radius-control)]",
+          "flex flex-col items-start justify-between gap-3 rounded-[var(--radius-control)] p-4 sm:flex-row sm:items-center sm:gap-4",
           "border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]",
           interactive &&
             "cursor-pointer transition-transform duration-100 ease-out hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--elevation-3)] active:translate-x-0 active:translate-y-0 active:shadow-none",
@@ -41,10 +43,10 @@ export const DataRow = React.forwardRef<HTMLDivElement, DataRowProps>(
         )}
         {...props}
       >
-        <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto flex-1">
+        <div className="flex w-full min-w-0 flex-1 items-center gap-3 sm:w-auto">
           {leading ? <div className="shrink-0">{leading}</div> : null}
-          <div className="flex flex-col min-w-0 flex-1">
-            <div className="font-display font-semibold text-base text-[var(--text-primary)]">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="font-display text-base font-semibold text-[var(--text-primary)]">
               {title}
             </div>
             {subtitle ? (
@@ -56,11 +58,10 @@ export const DataRow = React.forwardRef<HTMLDivElement, DataRowProps>(
           </div>
         </div>
         {trailing ? (
-          <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--border-brutal)]/20 sm:border-transparent">
+          <div className="flex w-full shrink-0 flex-wrap items-center gap-2 border-t border-[var(--border-brutal)]/20 pt-2 sm:w-auto sm:justify-end sm:border-t-0 sm:border-transparent sm:pt-0">
             {trailing}
           </div>
         ) : null}
-
       </Component>
     );
   },

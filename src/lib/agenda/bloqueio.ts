@@ -23,8 +23,13 @@ export function validarBloqueio(input: {
   }
   const dataInicio = (input.dataInicio ?? "").trim();
   const dataFim = (input.dataFim ?? "").trim();
-  if (!dataInicio || !dataFim) return { ok: false, error: "Informe data de início e fim." };
-  if (dataFim < dataInicio) return { ok: false, error: "A data de fim não pode ser anterior à de início." };
+  if (!dataInicio || !dataFim)
+    return { ok: false, error: "Informe data de início e fim." };
+  if (dataFim < dataInicio)
+    return {
+      ok: false,
+      error: "A data de fim não pode ser anterior à de início.",
+    };
   const motivo = (input.motivo ?? "").trim();
   if (!motivo) return { ok: false, error: "Informe o motivo do bloqueio." };
 
@@ -32,10 +37,15 @@ export function validarBloqueio(input: {
   let patientId: string | null = null;
   if (escopo === "terapeuta") {
     terapeutaId = (input.terapeutaId ?? "").trim() || null;
-    if (!terapeutaId) return { ok: false, error: "Bloqueio de terapeuta exige um terapeuta." };
+    if (!terapeutaId)
+      return { ok: false, error: "Bloqueio de terapeuta exige um terapeuta." };
   } else if (escopo === "paciente") {
     patientId = (input.patientId ?? "").trim() || null;
-    if (!patientId) return { ok: false, error: "Bloqueio de paciente exige um paciente." };
+    if (!patientId)
+      return { ok: false, error: "Bloqueio de paciente exige um paciente." };
   }
-  return { ok: true, valor: { escopo, terapeutaId, patientId, dataInicio, dataFim, motivo } };
+  return {
+    ok: true,
+    valor: { escopo, terapeutaId, patientId, dataInicio, dataFim, motivo },
+  };
 }

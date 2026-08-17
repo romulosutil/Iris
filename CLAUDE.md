@@ -57,6 +57,7 @@ Armadilhas reais do repo. Débito **D1** (#186) e **D2** (#187) fechados. CI val
 **6. Policy nunca resolve o tenant com `current_setting('app.clinic_id')` direto — use `app_clinic_id_exigido()`.** Cast cru estoura `42704` ou `22P02` dentro da policy sem nomear tenant (guard de `app_conta_somente_leitura()` não bastou, #215). O helper (`0085`, D16/#229) levanta `P0001` diagnosticável. Não usar `app_clinic_id_atual()` em predicado de isolamento (retorna `NULL` e oculta linha em silêncio). `app_clinic_id_atual()` é para dentro de funções. `db/tests/clinic-id-helper-rls.int.test.ts` valida no CI.
 
 Regra vale para policies, 13 funções `SECURITY DEFINER` (`0087`), views e queries da app. Policies tenant-scoped delegam a funções (`app_patient_in_clinic`, `app_user_in_clinic`, …) cujo texto não aparece em `pg_policies.qual` — varrer só `pg_policies` não cobre o frame real. Guard varre `pg_policies` + `pg_proc` + `pg_views`:
+
 - `current_setting('app.clinic_id', true)::uuid` com `missing_ok` mata `42704`, mas valor inválido estoura `22P02`. Para leniência usar `app_clinic_id_atual()`.
 - Regex de auditoria em template literal JS: `\(` vira `(` e `\s` vira `s` se não dobrar barras.
 
@@ -92,7 +93,7 @@ Dúvida documentada: ler doc, não pedir reexplicação ao Rômulo.
   3. O Jules assume a tarefa, lê `AGENTS.md` e `CLAUDE.md`, constrói o plano, executa e abre o PR.
 - **Estado do Pull Request & Idioma:**
   - O PR é obrigatoriamente aberto no estado **Draft (Rascunho)**.
-  - O PR só é marcado como pronto para revisão (*Ready for Review*) após **100% de aprovação nos testes automatizados** (`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:rls`).
+  - O PR só é marcado como pronto para revisão (_Ready for Review_) após **100% de aprovação nos testes automatizados** (`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:rls`).
   - Todas as interações do Jules destinadas a humanos (descrição do PR, comentários em issues, mensagens de commit, plano de ação) devem ser obrigatoriamente em **Português (PT-BR)**, traduzindo qualquer contexto que venha em inglês.
 - **Contexto de Negócio, Testes e Mocks via `.env.example`:**
   - O Jules deve obrigatoriamente ler `.env.example` para compreender os serviços (Better-Auth, Asaas, LLMs, Resend, MinIO), as variáveis de ambiente ativas e os papéis de Postgres (`DATABASE_URL`, `AUTH_DATABASE_URL`, `MIGRATION_DATABASE_URL`).
@@ -103,6 +104,7 @@ Dúvida documentada: ler doc, não pedir reexplicação ao Rômulo.
 Regra pós-mortem D22 (#239, PR #240, memória `d22-sessao-gastou-token-em-loops-redundantes`).
 
 **1. Toda issue nova entra atomizada:**
+
 - Toca modelo de dados, RLS/policy ou schema do agente → `/tlc-spec-driven`.
 - Outros itens → `/superpowers:writing-plans`.
 

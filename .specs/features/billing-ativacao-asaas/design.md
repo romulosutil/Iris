@@ -273,15 +273,15 @@ defesa no submit permanece — o banner é aviso antecipado, não gate novo.
 
 Sai, nesta ordem (cada passo compila e testa verde):
 
-| Passo | O quê | Nota |
-| --- | --- | --- |
-| 1 | `ProviderId` → `"asaas"` só | typecheck aponta todo call site restante |
-| 2 | `getProviderPorId`/`getBillingProvider`: ramo MP fora | mensagem "Provedor de pagamento desconhecido" continua — agora dispara para `mercado_pago` |
-| 3 | `provider/mercado-pago.ts` + `mercado-pago.test.ts` deletados | |
-| 4 | `src/app/api/hooks/mercadopago/` (rota + int.test) deletados | webhook do painel MP: desativar manualmente no painel (gate manual, fora do código) |
-| 5 | Tabela de evento de webhook do MP: **migração de DROP só depois de `SELECT count(*)` na produção e confirmação do Rômulo** | regra "DDL em tabela com dado"; alternativa barata: manter a tabela como histórico e só remover o código |
-| 6 | Envs: `MERCADOPAGO_ACCESS_TOKEN/PUBLIC_KEY/WEBHOOK_SECRET` fora do `.env.example` e do Easypanel | Easypanel: salvar ≠ aplicar — exige "Implantar" |
-| 7 | Testes de integração que encenam MP (`ativacao-troca-de-provedor`, `reprocessamento-provedor`, `fechamento-provedor-por-linha`) | **não deletar a cobertura**: eles provam invariantes multi-provedor (D25/D26). Reescrever com provedor fake registrado no teste, ou dublê local — decidir na implementação; o invariante "linha decide o adapter" tem de continuar coberto |
+| Passo | O quê                                                                                                                           | Nota                                                                                                                                                                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | `ProviderId` → `"asaas"` só                                                                                                     | typecheck aponta todo call site restante                                                                                                                                                                                                   |
+| 2     | `getProviderPorId`/`getBillingProvider`: ramo MP fora                                                                           | mensagem "Provedor de pagamento desconhecido" continua — agora dispara para `mercado_pago`                                                                                                                                                 |
+| 3     | `provider/mercado-pago.ts` + `mercado-pago.test.ts` deletados                                                                   |                                                                                                                                                                                                                                            |
+| 4     | `src/app/api/hooks/mercadopago/` (rota + int.test) deletados                                                                    | webhook do painel MP: desativar manualmente no painel (gate manual, fora do código)                                                                                                                                                        |
+| 5     | Tabela de evento de webhook do MP: **migração de DROP só depois de `SELECT count(*)` na produção e confirmação do Rômulo**      | regra "DDL em tabela com dado"; alternativa barata: manter a tabela como histórico e só remover o código                                                                                                                                   |
+| 6     | Envs: `MERCADOPAGO_ACCESS_TOKEN/PUBLIC_KEY/WEBHOOK_SECRET` fora do `.env.example` e do Easypanel                                | Easypanel: salvar ≠ aplicar — exige "Implantar"                                                                                                                                                                                            |
+| 7     | Testes de integração que encenam MP (`ativacao-troca-de-provedor`, `reprocessamento-provedor`, `fechamento-provedor-por-linha`) | **não deletar a cobertura**: eles provam invariantes multi-provedor (D25/D26). Reescrever com provedor fake registrado no teste, ou dublê local — decidir na implementação; o invariante "linha decide o adapter" tem de continuar coberto |
 
 **Pré-requisito duro:** ATIV-05 aplicado antes (D29) — senão linha nova nasce
 apontando para adapter removido.

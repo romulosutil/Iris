@@ -10,6 +10,7 @@
 Para satisfazer o critério WCAG 1.4.12 (Text Spacing) que exige que a altura de linha seja de pelo menos 1.5 vezes o tamanho da fonte, as variáveis globais de tamanho de fonte do Tailwind v4 (`--font-size-*`) para corpo de texto receberão uma definição explícita de `1.5` para o line-height.
 
 ### Tokens Modificados:
+
 - `text-xs` (12px / 0.75rem): Altura de linha ajustada de 16px (1.33) para 18px (1.5).
 - `text-sm` (14px / 0.875rem): Altura de linha ajustada de 20px (1.43) para 21px (1.5).
 - `text-base` (16px / 1rem): Altura de linha ajustada de 24px (1.5) para 24px (1.5) (explicitado).
@@ -22,6 +23,7 @@ Para satisfazer o critério WCAG 1.4.12 (Text Spacing) que exige que a altura de
 Telas móveis estreitas (ex: 320px a 360px de largura) quebravam títulos longos em caixa alta de forma indesejada devido ao tamanho estático de 48px (`text-5xl`). Usando `clamp()`, o tamanho do título se ajustará suavemente conforme a largura da viewport.
 
 ### Equações Fluidas Globais via Tailwind v4 Theme:
+
 - **Display Hero (`text-5xl`)**:
   - Mínimo: `2rem` (32px) em `320px`
   - Máximo: `3rem` (48px) em `768px` (e superiores)
@@ -36,9 +38,11 @@ Telas móveis estreitas (ex: 320px a 360px de largura) quebravam títulos longos
 ## 3. Plano de Verificação
 
 ### Storybook
+
 1. Validar a rampa visual em `Foundations/Typography` do Storybook.
 2. Utilizar o addon de acessibilidade (`addon-a11y`) para auditar as regras aplicadas.
 
 ### Testes Automatizados
+
 1. Rodar `pnpm lint` e `pnpm typecheck` para garantir que o projeto não possui erros de compilação.
 2. Rodar os testes existentes de acessibilidade (`pnpm test` ou `a11y.test.tsx` relevantes).

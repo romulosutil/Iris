@@ -20,7 +20,9 @@ export type SinalCru = {
   detalhe: DetalheEstagnacao | DetalheFaltas;
 };
 
-export function chaveNatural(s: Pick<SinalCru, "tipo" | "patientId" | "goalId" | "protocolId">): string {
+export function chaveNatural(
+  s: Pick<SinalCru, "tipo" | "patientId" | "goalId" | "protocolId">,
+): string {
   return s.tipo === "faltas_excessivas"
     ? `faltas_excessivas:${s.patientId}`
     : `${s.tipo}:${s.patientId}:${s.goalId}:${s.protocolId}`;
@@ -29,7 +31,10 @@ export function chaveNatural(s: Pick<SinalCru, "tipo" | "patientId" | "goalId" |
 export type SnapshotRow = {
   patientId: string;
   sessionNumero: number;
-  segmentacao: Record<string, Record<string, { tipo_estrutura: string; metrica: string; rotulo: string }>>;
+  segmentacao: Record<
+    string,
+    Record<string, { tipo_estrutura: string; metrica: string; rotulo: string }>
+  >;
 };
 
 export function sinaisDeSnapshot(rows: SnapshotRow[]): SinalCru[] {
@@ -39,7 +44,10 @@ export function sinaisDeSnapshot(rows: SnapshotRow[]): SinalCru[] {
     for (const [goalId, protocols] of Object.entries(row.segmentacao)) {
       if (!protocols) continue;
       for (const [protocolId, data] of Object.entries(protocols)) {
-        if (data && (data.rotulo === "estagnacao" || data.rotulo === "regressao")) {
+        if (
+          data &&
+          (data.rotulo === "estagnacao" || data.rotulo === "regressao")
+        ) {
           sinais.push({
             tipo: data.rotulo as SinalTipo,
             patientId: row.patientId,
@@ -56,7 +64,8 @@ export function sinaisDeSnapshot(rows: SnapshotRow[]): SinalCru[] {
     }
   }
   return sinais.sort((a, b) => {
-    if (a.patientId !== b.patientId) return a.patientId.localeCompare(b.patientId);
+    if (a.patientId !== b.patientId)
+      return a.patientId.localeCompare(b.patientId);
     const aGoal = a.goalId || "";
     const bGoal = b.goalId || "";
     if (aGoal !== bGoal) return aGoal.localeCompare(bGoal);

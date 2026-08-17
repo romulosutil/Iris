@@ -49,8 +49,7 @@ export function RedefinirSenhaForm() {
   );
   const alertaRef = React.useRef<HTMLDivElement>(null);
 
-  const erroServidor =
-    estado && !estado.ok ? estado.error : undefined;
+  const erroServidor = estado && !estado.ok ? estado.error : undefined;
   const erro = erroFormato ?? erroServidor;
 
   // Fix round 1 (finding M2 do review): antes o efeito só reagia a MUDANÇA
@@ -157,7 +156,8 @@ export function RedefinirSenhaForm() {
             // Agora cada campo só é marcado inválido pela classe de erro que
             // é REALMENTE sobre ele.
             aria-invalid={
-              erro === `A senha precisa ter ao menos ${SENHA_MIN} caracteres.` ||
+              erro ===
+                `A senha precisa ter ao menos ${SENHA_MIN} caracteres.` ||
               erro === `A senha pode ter no máximo ${SENHA_MAX} caracteres.` ||
               erro === "As senhas não conferem."
                 ? true
@@ -186,10 +186,10 @@ export function RedefinirSenhaForm() {
         </Button>
       </Form>
 
-      <p className="text-[var(--text-secondary)] mt-4 text-center text-sm">
+      <p className="mt-4 text-center text-sm text-[var(--text-secondary)]">
         <Link
           href="/login"
-          className="text-[var(--text-primary)] font-semibold underline underline-offset-2"
+          className="font-semibold text-[var(--text-primary)] underline underline-offset-2"
         >
           Voltar para o login
         </Link>

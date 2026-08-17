@@ -7,7 +7,8 @@ export function LandingBentoGrid() {
       role: "🏥 QUEM DECIDE A COMPRA",
       emoji: "💼",
       roleBg: "bg-[var(--color-gold-tint,#FFE082)]",
-      title: "O relatório fica pronto quando a operadora pedir — não depois de dias de garimpo.",
+      title:
+        "O relatório fica pronto quando a operadora pedir — não depois de dias de garimpo.",
       description:
         "A evolução do período já está montada a partir do que a equipe registrou e a coordenação aprovou. Cada afirmação leva anexa a frase do diário que a sustenta, com data e autor.",
       bullets: [
@@ -48,36 +49,38 @@ export function LandingBentoGrid() {
     <section
       id="recursos"
       aria-labelledby="recursos-title"
-      className="w-full py-16 sm:py-20 px-4 sm:px-8 lg:px-12 2xl:px-20 max-w-[1800px] mx-auto space-y-12 md:space-y-16"
+      className="mx-auto w-full max-w-[1800px] space-y-12 px-4 py-16 sm:px-8 sm:py-20 md:space-y-16 lg:px-12 2xl:px-20"
     >
-      <div className="text-center max-w-3xl mx-auto space-y-4">
-        <div className="inline-block font-mono text-xs font-bold uppercase bg-[var(--status-info-bg,#B2DFDB)] px-3.5 py-1 rounded-[var(--radius-control,5px)] border-2 border-[var(--border-brutal,#1A1A1A)] shadow-[var(--ds-shadow,2px_2px_0px_#1A1A1A)]">
+      <div className="mx-auto max-w-3xl space-y-4 text-center">
+        <div className="inline-block rounded-[var(--radius-control,5px)] border-2 border-[var(--border-brutal,#1A1A1A)] bg-[var(--status-info-bg,#B2DFDB)] px-3.5 py-1 font-mono text-xs font-bold uppercase shadow-[var(--ds-shadow,2px_2px_0px_#1A1A1A)]">
           Comprar é fácil. Fazer a clínica usar é o problema real.
         </div>
         <h2
           id="recursos-title"
-          className="font-display font-extrabold text-2xl sm:text-3xl md:text-4xl text-[var(--text-primary,#1A1A1A)]"
+          className="font-display text-2xl font-extrabold text-[var(--text-primary,#1A1A1A)] sm:text-3xl md:text-4xl"
         >
           Três pessoas precisam ganhar alguma coisa no primeiro mês
         </h2>
-        <p className="text-[var(--text-secondary,#71717A)] font-medium text-sm sm:text-base">
-          Se o terapeuta não adota, o coordenador não confia e o dono não vê o relatório sair, o sistema vira licença parada. O Iris foi desenhado a partir dessas três contas.
+        <p className="text-sm font-medium text-[var(--text-secondary,#71717A)] sm:text-base">
+          Se o terapeuta não adota, o coordenador não confia e o dono não vê o
+          relatório sair, o sistema vira licença parada. O Iris foi desenhado a
+          partir dessas três contas.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 2xl:gap-10 items-stretch">
+      <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:gap-10">
         {personas.map((p, index) => (
           <Card
             key={index}
             epistemicState="fact"
-            className={`p-6 sm:p-7 flex flex-col justify-between hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[var(--ds-shadow-hover,6px_6px_0px_#1A1A1A)] transition-all duration-150 border-2 border-[var(--border-brutal,#1A1A1A)] bg-white rounded-[var(--radius-md,6px)] ${
+            className={`flex flex-col justify-between rounded-[var(--radius-md,6px)] border-2 border-[var(--border-brutal,#1A1A1A)] bg-white p-6 transition-all duration-150 hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[var(--ds-shadow-hover,6px_6px_0px_#1A1A1A)] sm:p-7 ${
               index === 2 ? "md:col-span-2 lg:col-span-1" : ""
             }`}
           >
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <span
-                  className={`font-mono text-xs font-black ${p.roleBg} text-[var(--text-primary,#1A1A1A)] px-3 py-1 rounded border border-[var(--border-brutal,#1A1A1A)] shadow-[1px_1px_0px_#1A1A1A]`}
+                  className={`font-mono text-xs font-black ${p.roleBg} rounded border border-[var(--border-brutal,#1A1A1A)] px-3 py-1 text-[var(--text-primary,#1A1A1A)] shadow-[1px_1px_0px_#1A1A1A]`}
                 >
                   {p.role}
                 </span>
@@ -86,19 +89,22 @@ export function LandingBentoGrid() {
                 </span>
               </div>
 
-              <h3 className="font-display font-black text-xl sm:text-2xl text-[var(--text-primary,#1A1A1A)] leading-tight">
+              <h3 className="font-display text-xl leading-tight font-black text-[var(--text-primary,#1A1A1A)] sm:text-2xl">
                 {p.title}
               </h3>
 
-              <p className="text-sm text-gray-700 leading-relaxed font-medium">
+              <p className="text-sm leading-relaxed font-medium text-gray-700">
                 {p.description}
               </p>
             </div>
 
-            <div className="pt-6 mt-6 border-t-2 border-dashed border-[var(--border-brutal,#1A1A1A)] space-y-2.5 font-mono text-xs font-bold text-gray-800">
+            <div className="mt-6 space-y-2.5 border-t-2 border-dashed border-[var(--border-brutal,#1A1A1A)] pt-6 font-mono text-xs font-bold text-gray-800">
               {p.bullets.map((b, bIdx) => (
                 <div key={bIdx} className="flex items-center gap-2">
-                  <span className="text-emerald-600 shrink-0" aria-hidden="true">
+                  <span
+                    className="shrink-0 text-emerald-600"
+                    aria-hidden="true"
+                  >
                     ✓
                   </span>{" "}
                   <span>{b}</span>

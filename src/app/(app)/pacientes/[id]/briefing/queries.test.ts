@@ -13,7 +13,11 @@ describe("reforcadoresAtuaisDe", () => {
   test("saciado DEMOVE/exclui o item mesmo que fosse alta antes (R17 recência)", () => {
     const r = reforcadoresAtuaisDe([
       { itemAtividade: "bolhas de sabão", valencia: "alta", sessionNumero: 40 },
-      { itemAtividade: "bolhas de sabão", valencia: "saciado", sessionNumero: 46 },
+      {
+        itemAtividade: "bolhas de sabão",
+        valencia: "saciado",
+        sessionNumero: 46,
+      },
     ]);
     expect(r).toEqual([]);
   });

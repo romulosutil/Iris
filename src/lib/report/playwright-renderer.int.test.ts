@@ -14,7 +14,10 @@ const VETORES: Array<[string, string]> = [
     `<style>@font-face{font-family:x;src:url(http://attacker.test/f.woff)}</style><p style="font-family:x">a</p>`,
   ],
   ["css import", `<style>@import url(http://attacker.test/x.css);</style>`],
-  ["meta refresh", `<meta http-equiv="refresh" content="0;url=http://attacker.test/">`],
+  [
+    "meta refresh",
+    `<meta http-equiv="refresh" content="0;url=http://attacker.test/">`,
+  ],
   [
     "meta refresh entity-encoded",
     `<meta http-equiv="&#x72;efresh" content="0;url=http://attacker.test/">`,
@@ -33,7 +36,9 @@ test.each(VETORES)("zero request de saída — %s", async (_nome, corpo) => {
 });
 
 test("render de HTML factual gera PDF real", async () => {
-  const pdf = await renderer.render(`<!doctype html><html><body><h1>Dossiê</h1></body></html>`);
+  const pdf = await renderer.render(
+    `<!doctype html><html><body><h1>Dossiê</h1></body></html>`,
+  );
   expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
   expect(pdf.length).toBeGreaterThan(500);
 });

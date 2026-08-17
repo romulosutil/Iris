@@ -24,7 +24,9 @@ export type DuvidaAberta = {
   classificacaoAtual: unknown;
 };
 
-export async function listarDuvidasAbertas(ctx: TenantContext): Promise<DuvidaAberta[]> {
+export async function listarDuvidasAbertas(
+  ctx: TenantContext,
+): Promise<DuvidaAberta[]> {
   return withTenant(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       SELECT eq.id AS evidence_query_id, e.id AS evidence_id, e.patient_id,

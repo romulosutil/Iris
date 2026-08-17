@@ -11,7 +11,7 @@ import type {
   ListaPendencias,
   SugestaoDemo,
 } from "./queries";
- 
+
 // correto (evita botão aninhado dentro de âncora).
 const acaoClasses = cn(
   control("sm"),
@@ -23,12 +23,16 @@ const acaoClasses = cn(
   "active:translate-x-0 active:translate-y-0 active:shadow-none",
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
 );
- 
+
 function ItemCaptura({ item }: { item: CapturaAConsolidar }) {
   return (
-    <Card estado="conquistado" destacado={true} titulo="Captura rápida sem nota consolidada">
+    <Card
+      estado="conquistado"
+      destacado={true}
+      titulo="Captura rápida sem nota consolidada"
+    >
       <Split alinha="center">
-        <span className="text-[var(--text-primary)] text-base">
+        <span className="text-base text-[var(--text-primary)]">
           {item.pacienteNome ?? "Paciente (acesso restrito)"}
         </span>
         <Link href={`/diario/${item.sessionId}`} className={acaoClasses}>
@@ -38,7 +42,7 @@ function ItemCaptura({ item }: { item: CapturaAConsolidar }) {
     </Card>
   );
 }
- 
+
 function ItemExtracao({
   item,
   titulo,
@@ -54,7 +58,7 @@ function ItemExtracao({
   return (
     <Card estado={estado} titulo={titulo}>
       <Split alinha="center">
-        <span className="text-[var(--text-primary)] text-base">
+        <span className="text-base text-[var(--text-primary)]">
           {item.pacienteNome ?? "Paciente (acesso restrito)"} ·{" "}
           <span className="text-[var(--text-secondary)]">{item.subtipo}</span>
         </span>
@@ -65,7 +69,7 @@ function ItemExtracao({
     </Card>
   );
 }
- 
+
 /**
  * Componente puramente apresentacional — recebe o resultado já pronto de
  * `listarPendencias` e desenha a fila. Nenhum acesso a banco aqui (mantém a
@@ -86,14 +90,14 @@ export function PendenciasList({
       </Stack>
     );
   }
- 
+
   return (
     <Stack gap="lg">
       {capturasAConsolidar.length > 0 ? (
         <Stack gap="md" como="section" aria-labelledby="capturas-titulo">
           <h2
             id="capturas-titulo"
-            className="font-display text-[var(--text-primary)] text-2xl font-bold"
+            className="font-display text-2xl font-bold text-[var(--text-primary)]"
           >
             Capturas a consolidar
           </h2>
@@ -105,7 +109,7 @@ export function PendenciasList({
                   "animate-fade-in-up",
                   idx === 0 && "animate-delay-75",
                   idx === 1 && "animate-delay-150",
-                  idx >= 2 && "animate-delay-225"
+                  idx >= 2 && "animate-delay-225",
                 )}
               >
                 <ItemCaptura item={item} />
@@ -114,17 +118,17 @@ export function PendenciasList({
           </Stack>
         </Stack>
       ) : null}
- 
+
       {extracaoPendente.length > 0 ? (
         <Stack
           gap="md"
           como="section"
           aria-labelledby="extracao-titulo"
-          className="pt-6 border-t-2 border-dashed border-[var(--text-secondary)]"
+          className="border-t-2 border-dashed border-[var(--text-secondary)] pt-6"
         >
           <h2
             id="extracao-titulo"
-            className="font-display text-[var(--text-primary)] text-2xl font-bold"
+            className="font-display text-2xl font-bold text-[var(--text-primary)]"
           >
             Extração pendente de reprocessamento
           </h2>
@@ -136,7 +140,7 @@ export function PendenciasList({
                   "animate-fade-in-up",
                   idx === 0 && "animate-delay-75",
                   idx === 1 && "animate-delay-150",
-                  idx >= 2 && "animate-delay-225"
+                  idx >= 2 && "animate-delay-225",
                 )}
               >
                 <ItemPendente item={item} />
@@ -145,17 +149,17 @@ export function PendenciasList({
           </Stack>
         </Stack>
       ) : null}
- 
+
       {sugestoesDemo.length > 0 ? (
         <Stack
           gap="md"
           como="section"
           aria-labelledby="sugestoes-titulo"
-          className="pt-6 border-t-2 border-dashed border-[var(--text-secondary)]"
+          className="border-t-2 border-dashed border-[var(--text-secondary)] pt-6"
         >
           <h2
             id="sugestoes-titulo"
-            className="font-display text-[var(--text-primary)] text-2xl font-bold"
+            className="font-display text-2xl font-bold text-[var(--text-primary)]"
           >
             Sugestões da IA (candidatas)
           </h2>
@@ -167,7 +171,7 @@ export function PendenciasList({
                   "animate-fade-in-up",
                   idx === 0 && "animate-delay-75",
                   idx === 1 && "animate-delay-150",
-                  idx >= 2 && "animate-delay-225"
+                  idx >= 2 && "animate-delay-225",
                 )}
               >
                 <ItemExtracao

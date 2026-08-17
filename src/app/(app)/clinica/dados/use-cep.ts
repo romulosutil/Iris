@@ -41,10 +41,9 @@ export function useCep(onEndereco: (endereco: EnderecoViaCep) => void) {
       setBuscando(true);
       setAviso(null);
       try {
-        const resposta = await fetch(
-          `https://viacep.com.br/ws/${cep}/json/`,
-          { signal: controller.signal },
-        );
+        const resposta = await fetch(`https://viacep.com.br/ws/${cep}/json/`, {
+          signal: controller.signal,
+        });
         if (!resposta.ok) throw new Error(`ViaCEP HTTP ${resposta.status}`);
         const dados = (await resposta.json()) as {
           erro?: boolean;

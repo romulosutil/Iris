@@ -77,44 +77,44 @@ Todas geradas de `pg_get_functiondef()` com substituição textual **apenas** do
 
 ### 2.1 `app_alerta_risco_visivel` (user_role E user_id)
 
-| Antes | Depois |
-|-------|--------|
+| Antes                                              | Depois                                    |
+| -------------------------------------------------- | ----------------------------------------- |
 | `current_setting('app.user_role') = 'coordenador'` | `app_user_role_exigido() = 'coordenador'` |
-| `current_setting('app.user_id')::uuid` | `app_user_id_exigido()` |
+| `current_setting('app.user_id')::uuid`             | `app_user_id_exigido()`                   |
 
 ### 2.2 `app_session_clinica_visivel` (user_role E user_id)
 
-| Antes | Depois |
-|-------|--------|
+| Antes                                              | Depois                                    |
+| -------------------------------------------------- | ----------------------------------------- |
 | `current_setting('app.user_role') = 'coordenador'` | `app_user_role_exigido() = 'coordenador'` |
-| `current_setting('app.user_id')::uuid` | `app_user_id_exigido()` |
+| `current_setting('app.user_id')::uuid`             | `app_user_id_exigido()`                   |
 
 ### 2.3 `app_salvar_config_emergencia` (user_role E user_id)
 
-| Antes | Depois |
-|-------|--------|
-| `current_setting('app.user_role') <> 'coordenador'` | `app_user_role_exigido() <> 'coordenador'` |
-| `current_setting('app.user_role')` (msg) | `app_user_role_exigido()` |
-| `current_setting('app.user_id')::uuid` | `app_user_id_atual()` (leniente — no COALESCE de `declarado_por`, NULL é aceitável) |
+| Antes                                               | Depois                                                                              |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `current_setting('app.user_role') <> 'coordenador'` | `app_user_role_exigido() <> 'coordenador'`                                          |
+| `current_setting('app.user_role')` (msg)            | `app_user_role_exigido()`                                                           |
+| `current_setting('app.user_id')::uuid`              | `app_user_id_atual()` (leniente — no COALESCE de `declarado_por`, NULL é aceitável) |
 
 ### 2.4 `app_salvar_cpf_cnpj_clinica` (user_role)
 
-| Antes | Depois |
-|-------|--------|
+| Antes                                               | Depois                                     |
+| --------------------------------------------------- | ------------------------------------------ |
 | `current_setting('app.user_role') <> 'coordenador'` | `app_user_role_exigido() <> 'coordenador'` |
-| `current_setting('app.user_role')` (msg) | `app_user_role_exigido()` |
+| `current_setting('app.user_role')` (msg)            | `app_user_role_exigido()`                  |
 
 ### 2.5 `app_desarquivar_paciente` (user_role E user_id)
 
-| Antes | Depois |
-|-------|--------|
-| `current_setting('app.user_role') IN (...)` | `app_user_role_exigido() IN (...)` |
-| `(current_setting('app.user_id'))::uuid` (2x) | `app_user_id_exigido()` |
+| Antes                                         | Depois                             |
+| --------------------------------------------- | ---------------------------------- |
+| `current_setting('app.user_role') IN (...)`   | `app_user_role_exigido() IN (...)` |
+| `(current_setting('app.user_id'))::uuid` (2x) | `app_user_id_exigido()`            |
 
 ### 2.6 `app_criar_alerta_risco` (user_id, forma leniente)
 
-| Antes | Depois |
-|-------|--------|
+| Antes                                                                    | Depois                |
+| ------------------------------------------------------------------------ | --------------------- |
 | `nullif(current_setting('app.user_id', true), '')::uuid` (2 ocorrências) | `app_user_id_atual()` |
 
 **Nota:** Esta função usa a forma leniente (`nullif(..., '')`) de propósito — os INSERTs de `alerta_risco_clinico` e `audit_log` aceitam `NULL` no `ator_id` e `atualizado_por`. Trocar por `app_user_id_atual()` é semanticamente idêntico e elimina o cast cru que sobrevive a um GUC malformado (que não é empty string).
@@ -123,13 +123,13 @@ Todas geradas de `pg_get_functiondef()` com substituição textual **apenas** do
 
 ## 3. Funções NÃO Tocadas (E Por Quê)
 
-| Função | Motivo |
-|--------|--------|
-| `app_purgar_paciente` | Sem cast cru: usa `current_setting('app.user_id')::uuid` em INSERT audit, mas é chamada **apenas** via owner role (scripts). Fora do caminho `app_role`. |
-| `app_purgar_report` | Idem ao `app_purgar_paciente`. |
-| `app_aplicar_snapshot` | Idem — owner-only. |
-| `app_barreira_somente_leitura` | Sem cast, sem GUC de user_role/user_id. Usa `app.clinic_id` apenas, já tratado na `0087`. |
-| `app_assinatura_bloqueia_cadastro` | Idem — só `app.clinic_id`, tratado na `0087`. |
+| Função                             | Motivo                                                                                                                                                   |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app_purgar_paciente`              | Sem cast cru: usa `current_setting('app.user_id')::uuid` em INSERT audit, mas é chamada **apenas** via owner role (scripts). Fora do caminho `app_role`. |
+| `app_purgar_report`                | Idem ao `app_purgar_paciente`.                                                                                                                           |
+| `app_aplicar_snapshot`             | Idem — owner-only.                                                                                                                                       |
+| `app_barreira_somente_leitura`     | Sem cast, sem GUC de user_role/user_id. Usa `app.clinic_id` apenas, já tratado na `0087`.                                                                |
+| `app_assinatura_bloqueia_cadastro` | Idem — só `app.clinic_id`, tratado na `0087`.                                                                                                            |
 
 ---
 

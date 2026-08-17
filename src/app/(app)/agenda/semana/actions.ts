@@ -111,7 +111,8 @@ export async function criarAvulsaAction(
     dataISO: String(formData.get("dataISO")),
     horaInicio: String(formData.get("horaInicio")),
     duracaoMin: Number(formData.get("duracaoMin")),
-    modalidade: (formData.get("modalidade") as NovaAvulsa["modalidade"]) ?? "presencial",
+    modalidade:
+      (formData.get("modalidade") as NovaAvulsa["modalidade"]) ?? "presencial",
     repostaDe: (() => {
       const v = String(formData.get("repostaDe") ?? "").trim();
       return v === "" ? undefined : v;
@@ -126,7 +127,10 @@ export async function criarAvulsaAction(
   return { ok: true };
 }
 
-export type EstadoEstender = EstadoAcao & { geradas?: number; puladas?: number };
+export type EstadoEstender = EstadoAcao & {
+  geradas?: number;
+  puladas?: number;
+};
 
 export async function estenderAction(
   _prev: EstadoEstender,
@@ -136,7 +140,11 @@ export async function estenderAction(
   const regraId = String(formData.get("regraId"));
   const hojeISO = String(formData.get("hojeISO"));
   try {
-    const { geradas, puladas } = await materializarRegra(ctx, regraId, horizontePadrao(hojeISO));
+    const { geradas, puladas } = await materializarRegra(
+      ctx,
+      regraId,
+      horizontePadrao(hojeISO),
+    );
     revalidatePath("/agenda/semana");
     return { ok: true, geradas, puladas: puladas.length };
   } catch (e) {
@@ -150,7 +158,11 @@ export async function encerrarRegraAction(
 ): Promise<EstadoAcao> {
   const ctx = await getTenantContext();
   try {
-    await encerrarRegra(ctx, String(formData.get("regraId")), String(formData.get("ateFimISO")));
+    await encerrarRegra(
+      ctx,
+      String(formData.get("regraId")),
+      String(formData.get("ateFimISO")),
+    );
   } catch (e) {
     return trata(e);
   }
@@ -159,13 +171,18 @@ export async function encerrarRegraAction(
 }
 
 /** Leitura fina p/ a confirmação de encerramento (F5): quantas futuras sairão. */
-export async function contarFuturasAction(regraId: string, ateFimISO: string): Promise<number> {
+export async function contarFuturasAction(
+  regraId: string,
+  ateFimISO: string,
+): Promise<number> {
   const ctx = await getTenantContext();
   return contarFuturasDaRegra(ctx, regraId, ateFimISO);
 }
 
 /** Leitura fina p/ o rótulo honesto "próxima sessão" no popover de regra (F4). */
-export async function proximaSessaoAction(regraId: string): Promise<string | null> {
+export async function proximaSessaoAction(
+  regraId: string,
+): Promise<string | null> {
   const ctx = await getTenantContext();
   return proximaSessaoDaRegra(ctx, regraId);
 }

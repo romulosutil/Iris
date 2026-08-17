@@ -8,7 +8,11 @@ import type { UltimaSessao } from "./queries";
  * (is_candidata) — reforça visualmente "candidato ≠ conquistado" mesmo num
  * resumo de 3 linhas.
  */
-export function UltimaSessaoSection({ ultimaSessao }: { ultimaSessao: UltimaSessao | null }) {
+export function UltimaSessaoSection({
+  ultimaSessao,
+}: {
+  ultimaSessao: UltimaSessao | null;
+}) {
   if (!ultimaSessao) {
     return (
       <p className="text-text-body text-sm">
@@ -20,13 +24,18 @@ export function UltimaSessaoSection({ ultimaSessao }: { ultimaSessao: UltimaSess
   return (
     <Stack gap="sm" como="ul">
       {linhas.length === 0 ? (
-        <li className="text-text-body text-sm">Sem itens registrados na última sessão.</li>
+        <li className="text-text-body text-sm">
+          Sem itens registrados na última sessão.
+        </li>
       ) : (
         linhas.map((l) => (
           <li key={l.chave} className="text-text-body text-sm">
             {l.rotulo} — {l.metrica}
             {l.isCandidata ? (
-              <span aria-label="candidato — ainda não consolidado" className="ml-1">
+              <span
+                aria-label="candidato — ainda não consolidado"
+                className="ml-1"
+              >
                 🆕
               </span>
             ) : null}

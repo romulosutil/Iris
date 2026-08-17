@@ -24,8 +24,12 @@ const META_TAG = /<meta\b[^>]*>/gi;
 
 function decodificarEntidadesHtml(texto: string): string {
   return texto
-    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/&#(\d+);?/g, (_, dec: string) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) =>
+      String.fromCharCode(parseInt(hex, 16)),
+    )
+    .replace(/&#(\d+);?/g, (_, dec: string) =>
+      String.fromCharCode(parseInt(dec, 10)),
+    )
     .replace(/&amp;?/gi, "&");
 }
 
@@ -35,13 +39,18 @@ function ehMetaRefresh(tag: string): boolean {
 }
 
 function sanitizarParaRender(html: string): string {
-  const semMetaRefresh = html.replace(META_TAG, (tag) => (ehMetaRefresh(tag) ? "" : tag));
+  const semMetaRefresh = html.replace(META_TAG, (tag) =>
+    ehMetaRefresh(tag) ? "" : tag,
+  );
   const meta = `<meta http-equiv="Content-Security-Policy" content="${CSP}">`;
   if (/<head[^>]*>/i.test(semMetaRefresh)) {
     return semMetaRefresh.replace(/<head([^>]*)>/i, `<head$1>${meta}`);
   }
   if (/<html[^>]*>/i.test(semMetaRefresh)) {
-    return semMetaRefresh.replace(/<html([^>]*)>/i, `<html$1><head>${meta}</head>`);
+    return semMetaRefresh.replace(
+      /<html([^>]*)>/i,
+      `<html$1><head>${meta}</head>`,
+    );
   }
   return `${meta}${semMetaRefresh}`;
 }
@@ -55,7 +64,9 @@ export class PlaywrightPdfRenderer implements PdfRenderer {
   }
 
   /** Render com auditoria de rede — usado nos testes SSRF. */
-  async renderComAuditoria(html: string): Promise<{ buffer: Buffer; requestsExternas: string[] }> {
+  async renderComAuditoria(
+    html: string,
+  ): Promise<{ buffer: Buffer; requestsExternas: string[] }> {
     return withRenderLock(async () => {
       const browser = await this.getBrowser();
       const context = await browser.newContext({ javaScriptEnabled: false });
@@ -66,7 +77,10 @@ export class PlaywrightPdfRenderer implements PdfRenderer {
           requestsExternas.push(route.request().url());
           void route.abort();
         });
-        await page.setContent(sanitizarParaRender(html), { waitUntil: "load", timeout: 30_000 });
+        await page.setContent(sanitizarParaRender(html), {
+          waitUntil: "load",
+          timeout: 30_000,
+        });
         const buffer = await page.pdf({ format: "A4", printBackground: true });
         return { buffer, requestsExternas };
       } finally {

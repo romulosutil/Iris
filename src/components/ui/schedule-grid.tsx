@@ -40,7 +40,9 @@ export interface ScheduleGridProps {
 }
 
 function minParaHora(m: number): string {
-  const hh = Math.floor(m / 60).toString().padStart(2, "0");
+  const hh = Math.floor(m / 60)
+    .toString()
+    .padStart(2, "0");
   const mm = (m % 60).toString().padStart(2, "0");
   return `${hh}:${mm}`;
 }
@@ -68,7 +70,11 @@ export function ScheduleGrid({
       // da máquina que roda o código — senão obterHorarioSlot() (que sempre lê
       // em FUSO_CLINICA) devolve um horário diferente do que foi passado aqui,
       // e a sessão cai fora da célula/janela visível da grade.
-      const diaDate = new Date(hoje.getFullYear(), hoje.getMonth(), inicioSemanaDia + b.diaSemana);
+      const diaDate = new Date(
+        hoje.getFullYear(),
+        hoje.getMonth(),
+        inicioSemanaDia + b.diaSemana,
+      );
       const dataISO = `${diaDate.getFullYear()}-${String(diaDate.getMonth() + 1).padStart(2, "0")}-${String(diaDate.getDate()).padStart(2, "0")}`;
       const dt = new Date(`${dataISO}T${horaStr}:00${FUSO_CLINICA_OFFSET}`);
 

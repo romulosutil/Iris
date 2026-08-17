@@ -4,7 +4,11 @@ import { getTenantContext } from "@/auth/tenant";
 import { RoleError } from "@/auth/require-role";
 import { type TenantContext } from "@/db/rls";
 import type { Alvo } from "@/lib/evidence/resolver";
-import { responderQuery, type ValidacaoResult, type ValidacaoState } from "./logic";
+import {
+  responderQuery,
+  type ValidacaoResult,
+  type ValidacaoState,
+} from "./logic";
 export type { ValidacaoState };
 
 // ─── Wrapper para `useActionState` ─────────────────────────────────────────
@@ -20,7 +24,8 @@ async function comCtx(
     revalidatePath("/duvidas");
     return { ok: true };
   } catch (err) {
-    if (err instanceof RoleError) return { error: "Só terapeuta da equipe ou coordenador respondem." };
+    if (err instanceof RoleError)
+      return { error: "Só terapeuta da equipe ou coordenador respondem." };
     console.error("wrapper duvidas:", err);
     return { error: "Não foi possível registrar a resposta." };
   }

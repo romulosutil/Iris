@@ -70,16 +70,21 @@ export async function entrarComMfa(
     data: { email, password: senha },
     headers,
   });
-  for (let tentativa = 0; tentativa < 3 && login.status() === 429; tentativa++) {
+  for (
+    let tentativa = 0;
+    tentativa < 3 && login.status() === 429;
+    tentativa++
+  ) {
     await page.waitForTimeout(6000);
     login = await api.post("/api/auth/sign-in/email", {
       data: { email, password: senha },
       headers,
     });
   }
-  expect(login.ok(), `sign-in falhou para ${email}: ${await login.text()}`).toBe(
-    true,
-  );
+  expect(
+    login.ok(),
+    `sign-in falhou para ${email}: ${await login.text()}`,
+  ).toBe(true);
 
   // `enable` é idempotente do ponto de vista do teste: se a conta já tem
   // segundo fator, o Better-Auth responde com erro e seguimos para o desafio.
@@ -96,9 +101,10 @@ export async function entrarComMfa(
     data: { code: totpDe(totpURI) },
     headers,
   });
-  expect(verificado.ok(), `verify-totp falhou: ${await verificado.text()}`).toBe(
-    true,
-  );
+  expect(
+    verificado.ok(),
+    `verify-totp falhou: ${await verificado.text()}`,
+  ).toBe(true);
 
   // Depois do enrollment a sessão já vale; a navegação seguinte carrega o shell
   // com o cookie que o contexto do Playwright acabou de receber.

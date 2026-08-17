@@ -213,7 +213,8 @@ describe.skipIf(!hasDb)("validação: aprovação em lote (#248)", () => {
   });
 
   test("cross-tenant: coordenador da clínica A não aprova evidência da clínica B", async () => {
-    const antesRev = await owner`SELECT count(*)::int AS n FROM evidence_revision`;
+    const antesRev =
+      await owner`SELECT count(*)::int AS n FROM evidence_revision`;
     const antesAudit = await owner`SELECT count(*)::int AS n FROM audit_log`;
 
     const r = await aprovarEvidenciasLote(ctxCoord, { evidenceIds: [EV_XB] });
@@ -221,7 +222,8 @@ describe.skipIf(!hasDb)("validação: aprovação em lote (#248)", () => {
     expect(r.error).toBeTruthy();
     expect(r.ok).toBeUndefined();
 
-    const depoisRev = await owner`SELECT count(*)::int AS n FROM evidence_revision`;
+    const depoisRev =
+      await owner`SELECT count(*)::int AS n FROM evidence_revision`;
     const depoisAudit = await owner`SELECT count(*)::int AS n FROM audit_log`;
     expect(depoisRev[0]!.n).toBe(antesRev[0]!.n);
     expect(depoisAudit[0]!.n).toBe(antesAudit[0]!.n);

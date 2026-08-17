@@ -83,7 +83,8 @@ export async function gerarRascunhoFamilia(
   ctx: TenantContext,
   input: GerarFamiliaInput,
 ): Promise<
-  { reportId: string; versao: number; draft: FamilyReportDraft } | { error: string }
+  | { reportId: string; versao: number; draft: FamilyReportDraft }
+  | { error: string }
 > {
   const parsed = gerarFamiliaSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
@@ -96,44 +97,45 @@ export async function gerarRascunhoFamilia(
 
   try {
     return await withTenant(ctx, async (tx) => {
-    // RLS já escopa o paciente: terapeuta fora da equipe não o enxerga → null.
-    const nome = await nomePaciente(tx, patientId);
-    if (!nome) return { error: "Paciente não encontrado ou fora do seu acesso." };
+      // RLS já escopa o paciente: terapeuta fora da equipe não o enxerga → null.
+      const nome = await nomePaciente(tx, patientId);
+      if (!nome)
+        return { error: "Paciente não encontrado ou fora do seu acesso." };
 
-    const isDemo = await clinicaDemo(tx, ctx.clinicId);
-    const provider = resolveFamilyReportProvider({ isDemo });
-    const entrada = await buildFamiliaInput(tx, {
-      patientId,
-      nomeCrianca: nome,
-      periodoInicio,
-      periodoFim,
-    });
-    const iaOriginal = await provider.gerar(entrada);
+      const isDemo = await clinicaDemo(tx, ctx.clinicId);
+      const provider = resolveFamilyReportProvider({ isDemo });
+      const entrada = await buildFamiliaInput(tx, {
+        patientId,
+        nomeCrianca: nome,
+        periodoInicio,
+        periodoFim,
+      });
+      const iaOriginal = await provider.gerar(entrada);
 
-    const payload: PayloadFamilia = {
-      versao: 1,
-      crianca: { nome },
-      periodo: { inicio: periodoInicio, fim: periodoFim },
-      geradoEm: new Date().toISOString(),
-      // sempre "stub" até o ClaudeProvider ser habilitado pós-DPA (spec §5)
-      provider: "stub",
-      iaOriginal,
-      curado: null,
-    };
+      const payload: PayloadFamilia = {
+        versao: 1,
+        crianca: { nome },
+        periodo: { inicio: periodoInicio, fim: periodoFim },
+        geradoEm: new Date().toISOString(),
+        // sempre "stub" até o ClaudeProvider ser habilitado pós-DPA (spec §5)
+        provider: "stub",
+        iaOriginal,
+        curado: null,
+      };
 
-    const rows = (await tx.execute(sql`
+      const rows = (await tx.execute(sql`
       INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, status, payload, gerado_por_ia)
       VALUES (${ctx.clinicId}::uuid, ${patientId}::uuid, 'familia', ${periodoInicio}::date, ${periodoFim}::date, 'rascunho', ${JSON.stringify(payload)}::jsonb, true)
       RETURNING id
     `)) as unknown as Array<{ id: string }>;
-    const reportId = rows[0]!.id;
+      const reportId = rows[0]!.id;
 
-    await tx.execute(sql`
+      await tx.execute(sql`
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'relatorio_rascunho_gerado', 'report', ${reportId}::uuid, ${patientId}::uuid,
               jsonb_build_object('tipo', 'familia'::text))
     `);
-    return { reportId, versao: 1, draft: iaOriginal };
+      return { reportId, versao: 1, draft: iaOriginal };
     });
   } catch (err) {
     // Tradutor puro primeiro (constraints/RAISE, inequívocos); depois o

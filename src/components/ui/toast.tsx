@@ -18,7 +18,9 @@ interface ToastContextType {
   removeToast: (id: string) => void;
 }
 
-const ToastContext = React.createContext<ToastContextType | undefined>(undefined);
+const ToastContext = React.createContext<ToastContextType | undefined>(
+  undefined,
+);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<ToastItem[]>([]);
@@ -27,19 +29,22 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const addToast = React.useCallback((toast: Omit<ToastItem, "id">) => {
-    const id = Math.random().toString(36).substring(2, 9);
-    const novoToast: ToastItem = { ...toast, id };
+  const addToast = React.useCallback(
+    (toast: Omit<ToastItem, "id">) => {
+      const id = Math.random().toString(36).substring(2, 9);
+      const novoToast: ToastItem = { ...toast, id };
 
-    setToasts((prev) => [...prev, novoToast]);
+      setToasts((prev) => [...prev, novoToast]);
 
-    const duracao = toast.duracaoMs ?? 5000;
-    if (duracao > 0) {
-      setTimeout(() => {
-        removeToast(id);
-      }, duracao);
-    }
-  }, [removeToast]);
+      const duracao = toast.duracaoMs ?? 5000;
+      if (duracao > 0) {
+        setTimeout(() => {
+          removeToast(id);
+        }, duracao);
+      }
+    },
+    [removeToast],
+  );
 
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
@@ -70,10 +75,13 @@ function ToastViewport({
     <div
       aria-live="polite"
       aria-atomic="true"
-      className="fixed bottom-4 right-4 z-50 flex max-w-md flex-col gap-2 pointer-events-none"
+      className="pointer-events-none fixed right-4 bottom-4 z-50 flex max-w-md flex-col gap-2"
     >
       {toasts.map((t) => (
-        <div key={t.id} className="pointer-events-auto shadow-[var(--ds-shadow)] rounded-[var(--radius-control)]">
+        <div
+          key={t.id}
+          className="pointer-events-auto rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]"
+        >
           <Alert severidade={t.severidade ?? "info"} titulo={t.titulo}>
             <div className="flex items-center justify-between gap-4">
               <div>{t.mensagem}</div>
@@ -81,7 +89,7 @@ function ToastViewport({
                 type="button"
                 onClick={() => onDismiss(t.id)}
                 aria-label="Fechar notificação"
-                className="ml-auto shrink-0 text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                className="ml-auto shrink-0 text-xs font-semibold tracking-wider text-[var(--text-secondary)] uppercase hover:text-[var(--text-primary)]"
               >
                 ✕
               </button>

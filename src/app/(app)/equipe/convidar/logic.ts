@@ -68,8 +68,10 @@ async function convidarUsuarioCore(
   }
 
   const conselho = String(formData.get("conselho") ?? "").trim() || undefined;
-  const registroNumero = String(formData.get("registroNumero") ?? "").trim() || undefined;
-  const registroUf = String(formData.get("registroUf") ?? "").trim() || undefined;
+  const registroNumero =
+    String(formData.get("registroNumero") ?? "").trim() || undefined;
+  const registroUf =
+    String(formData.get("registroUf") ?? "").trim() || undefined;
 
   const senhaTemporaria = crypto.randomBytes(12).toString("base64url");
   const { userId, isNewUser } = await provisionUser({
@@ -82,11 +84,14 @@ async function convidarUsuarioCore(
 
   // Atualizar registro profissional se informado e for usuário recém-criado
   if (isNewUser && (conselho || registroNumero || registroUf)) {
-    await authDb.update(appUser).set({
-      conselho,
-      registroNumero,
-      registroUf,
-    }).where(eq(appUser.id, userId));
+    await authDb
+      .update(appUser)
+      .set({
+        conselho,
+        registroNumero,
+        registroUf,
+      })
+      .where(eq(appUser.id, userId));
   }
 
   const appUrl = getAppBaseUrl();

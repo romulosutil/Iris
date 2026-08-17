@@ -8,7 +8,7 @@ export function GoogleAnalytics() {
   if (!measurementId) {
     if (process.env.NODE_ENV === "development") {
       console.warn(
-        "[Google Analytics] NEXT_PUBLIC_GA_ID not defined in .env.local"
+        "[Google Analytics] NEXT_PUBLIC_GA_ID not defined in .env.local",
       );
     }
     return null;

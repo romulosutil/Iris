@@ -26,8 +26,9 @@ export default async function TccPage({ params }: TccPageProps) {
             Nicho Clínico
           </Pill>
         </div>
-        <p className="text-sm text-[var(--text-secondary)] font-body">
-          Instrumentos estruturados, Registro de Pensamentos Distorcidos (RPD) e acompanhamento gráfico de reestruturação cognitiva.
+        <p className="font-body text-sm text-[var(--text-secondary)]">
+          Instrumentos estruturados, Registro de Pensamentos Distorcidos (RPD) e
+          acompanhamento gráfico de reestruturação cognitiva.
         </p>
       </div>
 
@@ -38,27 +39,30 @@ export default async function TccPage({ params }: TccPageProps) {
       <RpdForm patientId={patientId} />
 
       {/* Histórico de Registros de Pensamentos */}
-      <div className="flex flex-col gap-4 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
+      <div className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
         <div className="flex items-center justify-between border-b-2 border-[var(--border-brutal)] pb-3">
-          <h3 className="font-display text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+          <h3 className="font-display flex items-center gap-2 text-lg font-bold text-[var(--text-primary)]">
             <span>📚</span> Histórico de RPD ({entries.length})
           </h3>
         </div>
 
         {entries.length === 0 ? (
-          <p className="text-sm text-[var(--text-secondary)] py-4 text-center">
+          <p className="py-4 text-center text-sm text-[var(--text-secondary)]">
             Nenhum RPD registrado até o momento.
           </p>
         ) : (
           <div className="flex flex-col gap-4">
             {entries.map((item, idx) => {
-              const dataFmt = new Date(item.criadoEm).toLocaleDateString("pt-BR", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
+              const dataFmt = new Date(item.criadoEm).toLocaleDateString(
+                "pt-BR",
+                {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                },
+              );
 
               return (
                 <div
@@ -74,19 +78,27 @@ export default async function TccPage({ params }: TccPageProps) {
                     </Pill>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 text-xs">
+                  <div className="grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
                     <div>
-                      <strong className="text-[var(--text-primary)] block">1. Situação / Gatilho:</strong>
-                      <span className="text-[var(--text-secondary)]">{item.situacao}</span>
+                      <strong className="block text-[var(--text-primary)]">
+                        1. Situação / Gatilho:
+                      </strong>
+                      <span className="text-[var(--text-secondary)]">
+                        {item.situacao}
+                      </span>
                     </div>
 
                     <div>
-                      <strong className="text-[var(--text-primary)] block">2. Pensamento Automático:</strong>
-                      <span className="italic text-black font-medium">&quot;{item.pensamentoAutomatico}&quot;</span>
+                      <strong className="block text-[var(--text-primary)]">
+                        2. Pensamento Automático:
+                      </strong>
+                      <span className="font-medium text-black italic">
+                        &quot;{item.pensamentoAutomatico}&quot;
+                      </span>
                     </div>
 
                     <div>
-                      <strong className="text-[var(--text-primary)] block">
+                      <strong className="block text-[var(--text-primary)]">
                         3. Emoção & Intensidade Inicial:
                       </strong>
                       <span className="text-[var(--text-secondary)]">
@@ -95,14 +107,17 @@ export default async function TccPage({ params }: TccPageProps) {
                     </div>
 
                     <div>
-                      <strong className="text-[var(--text-primary)] block">
+                      <strong className="block text-[var(--text-primary)]">
                         4. Reavaliação Pós-Resposta:
                       </strong>
                       <span className="text-[var(--text-secondary)]">
                         {item.intensidadePos !== null ? (
                           <>
-                            <strong className="text-black">{item.intensidadePos}%</strong> (Redução de{" "}
-                            {item.intensidade - item.intensidadePos}%)
+                            <strong className="text-black">
+                              {item.intensidadePos}%
+                            </strong>{" "}
+                            (Redução de {item.intensidade - item.intensidadePos}
+                            %)
                           </>
                         ) : (
                           "Não informada"
@@ -111,8 +126,12 @@ export default async function TccPage({ params }: TccPageProps) {
                     </div>
 
                     <div className="md:col-span-2">
-                      <strong className="text-[var(--text-primary)] block">5. Resposta Racional:</strong>
-                      <span className="text-[var(--text-secondary)]">{item.respostaRacional}</span>
+                      <strong className="block text-[var(--text-primary)]">
+                        5. Resposta Racional:
+                      </strong>
+                      <span className="text-[var(--text-secondary)]">
+                        {item.respostaRacional}
+                      </span>
                     </div>
                   </div>
                 </div>

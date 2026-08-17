@@ -1,7 +1,11 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
-import { exportarConvenioBruto, exportarSchema, type ExportarInput } from "./export-logic";
+import {
+  exportarConvenioBruto,
+  exportarSchema,
+  type ExportarInput,
+} from "./export-logic";
 import { previewConvenioBruto } from "./queries";
 import {
   gerarRascunhoFamilia,
@@ -37,7 +41,11 @@ export async function exportarConvenioBrutoAction(input: ExportarInput) {
 export async function previewConvenioBrutoAction(
   input: ExportarInput,
 ): Promise<
-  | { sessoesRealizadas: number; faltasJustificadas: number; evidenciasAprovadas: number }
+  | {
+      sessoesRealizadas: number;
+      faltasJustificadas: number;
+      evidenciasAprovadas: number;
+    }
   | { error: string }
 > {
   const parsed = exportarSchema.safeParse(input);

@@ -16,8 +16,7 @@ export interface RpdGraficoEntry {
   intensidadePos: number | null;
 }
 
-export interface GraficoEvolucaoCrencasProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export interface GraficoEvolucaoCrencasProps extends React.HTMLAttributes<HTMLDivElement> {
   entries: RpdGraficoEntry[];
   className?: string;
 }
@@ -37,8 +36,7 @@ export function GraficoEvolucaoCrencas({
   // Ordena por data de criação crescente para a linha do tempo
   const ordenados = React.useMemo(() => {
     return [...entries].sort(
-      (a, b) =>
-        new Date(a.criadoEm).getTime() - new Date(b.criadoEm).getTime(),
+      (a, b) => new Date(a.criadoEm).getTime() - new Date(b.criadoEm).getTime(),
     );
   }, [entries]);
 
@@ -51,12 +49,13 @@ export function GraficoEvolucaoCrencas({
         )}
         {...props}
       >
-        <span className="text-3xl mb-2">📊</span>
+        <span className="mb-2 text-3xl">📊</span>
         <p className="font-display font-bold text-[var(--text-primary)]">
           Nenhum registro de pensamentos cadastrado.
         </p>
         <p className="text-xs text-[var(--text-secondary)]">
-          Preencha o formulário de RPD para visualizar o gráfico de reestruturação cognitiva e evolução temporal.
+          Preencha o formulário de RPD para visualizar o gráfico de
+          reestruturação cognitiva e evolução temporal.
         </p>
       </div>
     );
@@ -90,8 +89,7 @@ export function GraficoEvolucaoCrencas({
       ordenados.length === 1
         ? width / 2
         : paddingX + (idx / (ordenados.length - 1)) * innerWidth;
-    const yInicial =
-      height - paddingY - (item.intensidade / 100) * innerHeight;
+    const yInicial = height - paddingY - (item.intensidade / 100) * innerHeight;
     const yPos =
       item.intensidadePos !== null
         ? height - paddingY - (item.intensidadePos / 100) * innerHeight
@@ -123,10 +121,10 @@ export function GraficoEvolucaoCrencas({
       {/* Header do Gráfico */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-brutal)]/20 pb-3">
         <div>
-          <h4 className="font-display text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+          <h4 className="font-display flex items-center gap-2 text-base font-bold text-[var(--text-primary)]">
             <span>📈</span> Gráfico de Reestruturação Cognitiva
           </h4>
-          <p className="text-xs text-[var(--text-secondary)] font-body">
+          <p className="font-body text-xs text-[var(--text-secondary)]">
             Redução da intensidade emocional disfuncional ao longo dos registros
           </p>
         </div>
@@ -152,7 +150,7 @@ export function GraficoEvolucaoCrencas({
       <div className="relative w-full overflow-hidden">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-auto overflow-visible select-none"
+          className="h-auto w-full overflow-visible select-none"
         >
           {/* Linhas de Grade de Fundo (100%, 75%, 50%, 25%, 0%) */}
           {[100, 75, 50, 25, 0].map((val) => {
@@ -302,18 +300,18 @@ export function GraficoEvolucaoCrencas({
       </div>
 
       {/* Legenda */}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-[var(--border-brutal)]/20 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-brutal)]/20 pt-3 text-xs">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <span className="size-3 rounded-full border border-black bg-[var(--color-raw-coral-500,#e05252)]" />
-            <span className="text-[var(--text-secondary)] font-medium">
+            <span className="font-medium text-[var(--text-secondary)]">
               Intensidade Inicial (Pensamento Automático)
             </span>
           </div>
 
           <div className="flex items-center gap-1.5">
             <span className="size-3 rounded-full border border-black bg-[var(--color-raw-mint-500,#14857a)]" />
-            <span className="text-[var(--text-secondary)] font-medium">
+            <span className="font-medium text-[var(--text-secondary)]">
               Reavaliação de Humor (Pós-Resposta Racional)
             </span>
           </div>
@@ -322,8 +320,8 @@ export function GraficoEvolucaoCrencas({
 
       {/* Tooltip do Nó Selecionado */}
       {ativo && (
-        <div className="rounded-[var(--radius-sm)] border-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] p-3 text-xs flex flex-col gap-1 shadow-[var(--ds-shadow-sm)]">
-          <div className="flex items-center justify-between font-bold text-[var(--text-primary)] border-b border-[var(--border-brutal)]/20 pb-1">
+        <div className="flex flex-col gap-1 rounded-[var(--radius-sm)] border-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] p-3 text-xs shadow-[var(--ds-shadow-sm)]">
+          <div className="flex items-center justify-between border-b border-[var(--border-brutal)]/20 pb-1 font-bold text-[var(--text-primary)]">
             <span>
               Gatilho: &quot;{ativo.situacao}&quot; ({ativo.emocao})
             </span>
@@ -332,16 +330,28 @@ export function GraficoEvolucaoCrencas({
             </span>
           </div>
           <div>
-            <strong className="text-[var(--text-primary)]">Pensamento Automático:</strong>{" "}
-            <span className="italic text-[var(--text-secondary)]">&quot;{ativo.pensamentoAutomatico}&quot;</span>
+            <strong className="text-[var(--text-primary)]">
+              Pensamento Automático:
+            </strong>{" "}
+            <span className="text-[var(--text-secondary)] italic">
+              &quot;{ativo.pensamentoAutomatico}&quot;
+            </span>
           </div>
           <div>
-            <strong className="text-[var(--text-primary)]">Distorção Cognitiva:</strong>{" "}
-            <span className="font-semibold text-black">{ativo.distorcaoCognitiva}</span>
+            <strong className="text-[var(--text-primary)]">
+              Distorção Cognitiva:
+            </strong>{" "}
+            <span className="font-semibold text-black">
+              {ativo.distorcaoCognitiva}
+            </span>
           </div>
           <div>
-            <strong className="text-[var(--text-primary)]">Resposta Racional:</strong>{" "}
-            <span className="text-[var(--text-secondary)]">&quot;{ativo.respostaRacional}&quot;</span>
+            <strong className="text-[var(--text-primary)]">
+              Resposta Racional:
+            </strong>{" "}
+            <span className="text-[var(--text-secondary)]">
+              &quot;{ativo.respostaRacional}&quot;
+            </span>
           </div>
         </div>
       )}

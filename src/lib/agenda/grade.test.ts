@@ -1,13 +1,28 @@
 // src/lib/agenda/grade.test.ts
 import { describe, expect, test } from "vitest";
-import { celulasParaFaixas, chaveCelula, colunasDaGrade, copiarDia, faixasParaCelulas } from "./grade";
+import {
+  celulasParaFaixas,
+  chaveCelula,
+  colunasDaGrade,
+  copiarDia,
+  faixasParaCelulas,
+} from "./grade";
 
 describe("grade.ts — colunasDaGrade", () => {
   test("gera colunas do passo, fim exclusivo", () => {
-    expect(colunasDaGrade(30, "08:00", "10:00")).toEqual(["08:00", "08:30", "09:00", "09:30"]);
+    expect(colunasDaGrade(30, "08:00", "10:00")).toEqual([
+      "08:00",
+      "08:30",
+      "09:00",
+      "09:30",
+    ]);
   });
   test("respeita passo de 60", () => {
-    expect(colunasDaGrade(60, "08:00", "11:00")).toEqual(["08:00", "09:00", "10:00"]);
+    expect(colunasDaGrade(60, "08:00", "11:00")).toEqual([
+      "08:00",
+      "09:00",
+      "10:00",
+    ]);
   });
 });
 
@@ -21,8 +36,14 @@ describe("grade.ts — faixasParaCelulas / celulasParaFaixas (round-trip)", () =
     expect(celulasParaFaixas(cel, 30)).toEqual(faixas);
   });
   test("células contíguas fundem numa faixa (I-B3 snap)", () => {
-    const cel = new Set([chaveCelula(2, "08:00"), chaveCelula(2, "08:30"), chaveCelula(2, "09:00")]);
-    expect(celulasParaFaixas(cel, 30)).toEqual([{ diaSemana: 2, horaInicio: "08:00", horaFim: "09:30" }]);
+    const cel = new Set([
+      chaveCelula(2, "08:00"),
+      chaveCelula(2, "08:30"),
+      chaveCelula(2, "09:00"),
+    ]);
+    expect(celulasParaFaixas(cel, 30)).toEqual([
+      { diaSemana: 2, horaInicio: "08:00", horaFim: "09:30" },
+    ]);
   });
 });
 

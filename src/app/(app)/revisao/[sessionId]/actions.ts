@@ -19,7 +19,11 @@ export type RevisaoState = { error?: string; ok?: boolean };
 
 async function comCtx(
   formData: FormData,
-  fn: (ctx: TenantContext, extractionId: string, versao: number) => Promise<ReviewResult>,
+  fn: (
+    ctx: TenantContext,
+    extractionId: string,
+    versao: number,
+  ) => Promise<ReviewResult>,
 ): Promise<RevisaoState> {
   const ctx = await getTenantContext();
   const sessionId = String(formData.get("sessionId") ?? "");
@@ -49,14 +53,18 @@ export async function aprovarExtracaoAction(
   _prev: RevisaoState,
   formData: FormData,
 ): Promise<RevisaoState> {
-  return comCtx(formData, (ctx, id, versao) => aprovarExtracao(ctx, { extractionId: id, versao }));
+  return comCtx(formData, (ctx, id, versao) =>
+    aprovarExtracao(ctx, { extractionId: id, versao }),
+  );
 }
 
 export async function descartarExtracaoAction(
   _prev: RevisaoState,
   formData: FormData,
 ): Promise<RevisaoState> {
-  return comCtx(formData, (ctx, id, versao) => descartarExtracao(ctx, { extractionId: id, versao }));
+  return comCtx(formData, (ctx, id, versao) =>
+    descartarExtracao(ctx, { extractionId: id, versao }),
+  );
 }
 
 export async function editarExtracaoAction(
@@ -70,7 +78,8 @@ export async function editarExtracaoAction(
   try {
     const raw = String(formData.get("payloadOriginal") ?? "{}");
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") base = parsed as Record<string, unknown>;
+    if (parsed && typeof parsed === "object")
+      base = parsed as Record<string, unknown>;
   } catch {
     base = {};
   }

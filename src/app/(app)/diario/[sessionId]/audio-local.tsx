@@ -47,7 +47,10 @@ export function AudioLocal({
   }, []);
 
   const gerarIdLocal = useCallback((): string => {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
       return crypto.randomUUID();
     }
     contadorIdRef.current += 1;
@@ -123,7 +126,10 @@ export function AudioLocal({
     setEstado("enviando");
     setErro(null);
     try {
-      const duracaoSegundos = Math.max(1, Math.round((Date.now() - inicioRef.current) / 1000));
+      const duracaoSegundos = Math.max(
+        1,
+        Math.round((Date.now() - inicioRef.current) / 1000),
+      );
       const formData = new FormData();
       formData.set("sessionId", sessionId);
       formData.set("duracaoSegundos", String(duracaoSegundos));
@@ -167,7 +173,11 @@ export function AudioLocal({
       {erro ? <Alert severidade="erro">{erro}</Alert> : null}
 
       {estado === "vazio" ? (
-        <Button type="button" variante="neutra" onClick={() => void iniciarGravacao()}>
+        <Button
+          type="button"
+          variante="neutra"
+          onClick={() => void iniciarGravacao()}
+        >
           Gravar áudio
         </Button>
       ) : null}

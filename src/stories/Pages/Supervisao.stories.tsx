@@ -31,16 +31,17 @@ export const FilaDeSupervisao = {
           />
 
           <Stack gap="md" como="ul">
-            <li className="bg-[var(--surface-card)] p-5 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]">
+            <li className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
               <Stack gap="sm">
-                <span className="text-[var(--text-secondary)] font-mono text-xs font-semibold tracking-wide uppercase">
+                <span className="font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
                   Item 1 de 2
                 </span>
-                <h3 className="text-[var(--text-primary)] text-lg font-semibold font-display">
+                <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
                   Lucas Gabriel Silva
                 </h3>
-                <p className="text-[var(--text-primary)] text-base">
-                  Imitação de Gestos Simples — Protocolo ABA: Estagnação (métrica VBMAPP, sessão 14)
+                <p className="text-base text-[var(--text-primary)]">
+                  Imitação de Gestos Simples — Protocolo ABA: Estagnação
+                  (métrica VBMAPP, sessão 14)
                 </p>
                 <ChipGroup rotulo="Status e Tipo do Alerta">
                   <Chip>Estagnação</Chip>
@@ -59,15 +60,15 @@ export const FilaDeSupervisao = {
               </Stack>
             </li>
 
-            <li className="bg-[var(--surface-card)] p-5 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]">
+            <li className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
               <Stack gap="sm">
-                <span className="text-[var(--text-secondary)] font-mono text-xs font-semibold tracking-wide uppercase">
+                <span className="font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
                   Item 2 de 2
                 </span>
-                <h3 className="text-[var(--text-primary)] text-lg font-semibold font-display">
+                <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
                   Beatriz Lima
                 </h3>
-                <p className="text-[var(--text-primary)] text-base">
+                <p className="text-base text-[var(--text-primary)]">
                   3 faltas seguidas do paciente nas últimas 2 semanas (limiar 2)
                 </p>
                 <ChipGroup rotulo="Status e Tipo do Alerta">

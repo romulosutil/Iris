@@ -13,6 +13,7 @@
 ### Task 1: Criar Migração `0092_desarquivar_paciente_cobertura.sql` e Atualizar Journal
 
 **Files:**
+
 - Create: `db/migrations/0092_desarquivar_paciente_cobertura.sql`
 - Modify: `db/migrations/meta/_journal.json`
 
@@ -41,11 +42,13 @@ git commit -m "feat(db): autoriza terapeuta de cobertura a desarquivar paciente 
 ### Task 2: Atualizar Testes de RLS para Cobertura de Terapeuta
 
 **Files:**
+
 - Modify: `db/tests/patient-arquivado-rls.int.test.ts`
 
 - [x] **Step 1: Adicionar testes de desarquivamento por terapeuta de cobertura**
 
 Em `db/tests/patient-arquivado-rls.int.test.ts`:
+
 1. Criar sessão atribuída a terapeuta de cobertura para paciente arquivado.
 2. Verificar que terapeuta de cobertura consegue invocar `app_desarquivar_paciente` e desarquivar com sucesso.
 3. Verificar que terapeuta sem equipe E sem sessão continua estourando erro de autorização cross-team (`fora da equipe ou cobertura`).
@@ -68,6 +71,7 @@ git commit -m "test(rls): adiciona testes de desarquivamento por terapeuta de co
 ### Task 3: Refatorar Helper de Domínio e Atualizar Testes de Integração
 
 **Files:**
+
 - Modify: `src/lib/patient/desarquivamento.ts`
 - Modify: `src/lib/patient/desarquivamento.int.test.ts`
 
@@ -96,11 +100,13 @@ git commit -m "refactor(patient): delega autorizacao de desarquivamento a proced
 ### Task 4: Testar Desarquivamento por Terapeuta de Cobertura no Fluxo de Diário
 
 **Files:**
+
 - Modify: `src/app/(app)/diario/[sessionId]/actions.int.test.ts`
 
 - [x] **Step 1: Escrever teste de integração para captura de diário por terapeuta de cobertura**
 
 Em `src/app/(app)/diario/[sessionId]/actions.int.test.ts`, adicionar teste onde:
+
 1. Paciente está arquivado.
 2. Sessão é atribuída a terapeuta substituto / cobertura (`session.terapeuta_id = U_TER_COBERTURA`).
 3. `capturarDiario` ou `registrarAudioLocal` salva a nota e desarquiva o paciente automaticamente.
@@ -123,6 +129,7 @@ git commit -m "test(diario): verifica desarquivamento automatico por terapeuta d
 ### Task 5: Fechar Débito D8 no BACKLOG e Validação Completa
 
 **Files:**
+
 - Modify: `BACKLOG.md`
 - Modify: `.specs/features/desarquivamento-cobertura-d8/tasks.md`
 
@@ -133,6 +140,7 @@ Marcar **D8** como **Fechado em 11/08/2026** detalhando a autorização da proce
 - [x] **Step 2: Rodar verificação completa do repositório**
 
 Gate:
+
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm test:rls`

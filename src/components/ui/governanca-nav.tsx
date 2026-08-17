@@ -24,25 +24,27 @@ export function GovernancaNav() {
   return (
     <nav
       aria-label="Navegação da Central de Governança"
-      className="flex items-center gap-1 border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-1.5 rounded-[var(--radius-card)] shadow-xs overflow-x-auto scrollbar-none mb-4"
+      className="mb-4 flex scrollbar-none items-center gap-1 overflow-x-auto rounded-[var(--radius-card)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-1.5 shadow-xs"
     >
       {items.map((item) => {
-        const isActive = pathname === item.href || (item.href !== "/validacao" && pathname.startsWith(item.href));
+        const isActive =
+          pathname === item.href ||
+          (item.href !== "/validacao" && pathname.startsWith(item.href));
         return (
           <Link
             key={item.href}
             href={item.href}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "font-display text-sm font-semibold px-3 py-1.5 rounded-[var(--radius-control)] transition-all duration-100 ease-out inline-flex items-center gap-2 border-2 shrink-0",
+              "font-display inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-control)] border-2 px-3 py-1.5 text-sm font-semibold transition-all duration-100 ease-out",
               isActive
-                ? "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold border-[var(--border-brutal)] shadow-[var(--ds-shadow)]"
-                : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-brutal)]/40 hover:bg-[var(--surface-elevated)]",
+                ? "border-[var(--border-brutal)] bg-[var(--action-primary)] font-bold text-[var(--action-primary-fg)] shadow-[var(--ds-shadow)]"
+                : "border-transparent text-[var(--text-secondary)] hover:border-[var(--border-brutal)]/40 hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
             )}
           >
             <span>{item.label}</span>
             {item.badge !== undefined && item.badge > 0 ? (
-              <span className="font-mono text-xs px-2 py-0.5 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)] font-bold">
+              <span className="rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--status-warning-fg)]">
                 {item.badge}
               </span>
             ) : null}

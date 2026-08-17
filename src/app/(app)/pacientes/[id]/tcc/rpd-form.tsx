@@ -15,28 +15,30 @@ interface RpdFormProps {
 }
 
 export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
-  const [state, formAction, isPending] = useActionState<SalvarRpdState, FormData>(
-    salvarRPDAction.bind(null, patientId),
-    estadoInicial ?? {},
-  );
+  const [state, formAction, isPending] = useActionState<
+    SalvarRpdState,
+    FormData
+  >(salvarRPDAction.bind(null, patientId), estadoInicial ?? {});
 
   const [intensidade, setIntensidade] = useState<number>(80);
   const [intensidadePos, setIntensidadePos] = useState<number>(30);
 
   return (
-    <div className="flex flex-col gap-4 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
+    <div className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
       <div className="flex flex-col gap-1 border-b-2 border-[var(--border-brutal)] pb-3">
         <h3 className="font-display text-lg font-bold text-[var(--text-primary)]">
           📝 Novo Registro de Pensamentos Distorcidos (RPD)
         </h3>
-        <p className="text-xs text-[var(--text-secondary)] font-body">
-          Preencha a reestruturação cognitiva: situação, pensamento automático, emoção, distorção e resposta racional.
+        <p className="font-body text-xs text-[var(--text-secondary)]">
+          Preencha a reestruturação cognitiva: situação, pensamento automático,
+          emoção, distorção e resposta racional.
         </p>
       </div>
 
       {state.ok ? (
         <Alert severidade="sucesso" titulo="RPD Registrado com Sucesso">
-          O registro de pensamentos distorcidos foi salvo no prontuário do paciente e incorporado ao gráfico de evolução cognitiva.
+          O registro de pensamentos distorcidos foi salvo no prontuário do
+          paciente e incorporado ao gráfico de evolução cognitiva.
         </Alert>
       ) : null}
 
@@ -100,14 +102,18 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
                 max={100}
                 value={intensidade}
                 onChange={(e) => setIntensidade(Number(e.target.value))}
-                className="w-full accent-[var(--action-primary)] cursor-pointer h-3 rounded-lg border-2 border-[var(--border-brutal)]"
+                className="h-3 w-full cursor-pointer rounded-lg border-2 border-[var(--border-brutal)] accent-[var(--action-primary)]"
               />
               <Input
                 type="number"
                 min={0}
                 max={100}
                 value={intensidade}
-                onChange={(e) => setIntensidade(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                onChange={(e) =>
+                  setIntensidade(
+                    Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                  )
+                }
                 className="w-20 text-center font-bold"
               />
             </div>
@@ -125,7 +131,7 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
               name="distorcaoCognitiva"
               required
               defaultValue={DISTORCOES_COGNITIVAS_OPCOES[0]}
-              className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)] rounded-[var(--radius-control)] font-body flex min-h-11 w-full items-center justify-between px-4 py-2.5 text-base focus-visible:outline-focus outline-none"
+              className="font-body focus-visible:outline-focus flex min-h-11 w-full items-center justify-between rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-4 py-2.5 text-base text-[var(--text-primary)] outline-none"
             >
               {DISTORCOES_COGNITIVAS_OPCOES.map((d) => (
                 <option key={d} value={d}>
@@ -166,14 +172,18 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
                 max={100}
                 value={intensidadePos}
                 onChange={(e) => setIntensidadePos(Number(e.target.value))}
-                className="w-full accent-[var(--action-primary)] cursor-pointer h-3 rounded-lg border-2 border-[var(--border-brutal)]"
+                className="h-3 w-full cursor-pointer rounded-lg border-2 border-[var(--border-brutal)] accent-[var(--action-primary)]"
               />
               <Input
                 type="number"
                 min={0}
                 max={100}
                 value={intensidadePos}
-                onChange={(e) => setIntensidadePos(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                onChange={(e) =>
+                  setIntensidadePos(
+                    Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                  )
+                }
                 className="w-20 text-center font-bold"
               />
             </div>

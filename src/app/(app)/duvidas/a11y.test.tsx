@@ -15,7 +15,10 @@ afterEach(cleanup);
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
   const resultado = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
     rules: {
       region: { enabled: false },
       "landmark-one-main": { enabled: false },
@@ -26,12 +29,18 @@ async function semViolacoes(ui: ReactElement) {
   expect(resultado.violations).toEqual([]);
 }
 
-const VAZIA: { itens: DuvidaAberta[]; alvosPorPaciente: Record<string, AlvoValido[]> } = {
+const VAZIA: {
+  itens: DuvidaAberta[];
+  alvosPorPaciente: Record<string, AlvoValido[]>;
+} = {
   itens: [],
   alvosPorPaciente: {},
 };
 
-const CHEIA: { itens: DuvidaAberta[]; alvosPorPaciente: Record<string, AlvoValido[]> } = {
+const CHEIA: {
+  itens: DuvidaAberta[];
+  alvosPorPaciente: Record<string, AlvoValido[]>;
+} = {
   itens: [
     {
       evidenceQueryId: "00000000-0000-0000-0000-000000000010",
@@ -40,9 +49,15 @@ const CHEIA: { itens: DuvidaAberta[]; alvosPorPaciente: Record<string, AlvoValid
       sessionNumero: 3,
       pergunta: "O apontar foi espontâneo ou com dica gestual?",
       criadoEm: "2026-07-10T12:00:00.000Z",
-      trecho: "Paciente apontou para o brinquedo após o terapeuta perguntar \"o que você quer?\".",
+      trecho:
+        'Paciente apontou para o brinquedo após o terapeuta perguntar "o que você quer?".',
       classificacaoAtual: {
-        alvo: { goal_id: "00000000-0000-0000-0000-0000000000g1", protocol_id: null, dominio_id: null, tipo_estrutura: null },
+        alvo: {
+          goal_id: "00000000-0000-0000-0000-0000000000g1",
+          protocol_id: null,
+          dominio_id: null,
+          tipo_estrutura: null,
+        },
         nivel_ajuda: "dica_verbal",
         polaridade: "positivo",
       },
@@ -54,9 +69,15 @@ const CHEIA: { itens: DuvidaAberta[]; alvosPorPaciente: Record<string, AlvoValid
       sessionNumero: 5,
       pergunta: "A recusa foi registrada no protocolo correto?",
       criadoEm: "2026-07-11T09:30:00.000Z",
-      trecho: "Paciente recusou a atividade proposta virando o rosto e empurrando o material.",
+      trecho:
+        "Paciente recusou a atividade proposta virando o rosto e empurrando o material.",
       classificacaoAtual: {
-        alvo: { goal_id: null, protocol_id: "vbmapp", dominio_id: "mand", tipo_estrutura: "marco_simples" },
+        alvo: {
+          goal_id: null,
+          protocol_id: "vbmapp",
+          dominio_id: "mand",
+          tipo_estrutura: "marco_simples",
+        },
         nivel_ajuda: "independente",
         polaridade: "negativo",
       },
@@ -64,10 +85,20 @@ const CHEIA: { itens: DuvidaAberta[]; alvosPorPaciente: Record<string, AlvoValid
   ],
   alvosPorPaciente: {
     "00000000-0000-0000-0000-0000000000a1": [
-      { goal_id: "00000000-0000-0000-0000-0000000000g1", protocol_id: null, dominio_id: null, tipo_estrutura: null },
+      {
+        goal_id: "00000000-0000-0000-0000-0000000000g1",
+        protocol_id: null,
+        dominio_id: null,
+        tipo_estrutura: null,
+      },
     ],
     "00000000-0000-0000-0000-0000000000a2": [
-      { goal_id: null, protocol_id: "vbmapp", dominio_id: "mand", tipo_estrutura: "marco_simples" },
+      {
+        goal_id: null,
+        protocol_id: "vbmapp",
+        dominio_id: "mand",
+        tipo_estrutura: "marco_simples",
+      },
     ],
   },
 };

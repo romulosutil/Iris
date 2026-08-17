@@ -42,7 +42,10 @@ export function CalendarSlotDialog({
       const found = pacientes.find((p) => p.id === pacienteId);
       return { id: pacienteId, nome: found?.nome ?? "Paciente" };
     }
-    return { id: terapeutas[0]?.id ?? "padrao", nome: terapeutas[0]?.nome ?? "Profissional" };
+    return {
+      id: terapeutas[0]?.id ?? "padrao",
+      nome: terapeutas[0]?.nome ?? "Profissional",
+    };
   }, [terapeutaId, pacienteId, terapeutas, pacientes]);
 
   return (

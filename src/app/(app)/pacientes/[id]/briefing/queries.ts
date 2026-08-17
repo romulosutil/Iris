@@ -10,7 +10,12 @@ import {
   sessionSnapshot,
   type sessionEstado,
 } from "@/db/schema";
-import { alertasGraveDe, reforcadoresAtuaisDe, type AlertaManejo, type ReforcadorAtual } from "./logic";
+import {
+  alertasGraveDe,
+  reforcadoresAtuaisDe,
+  type AlertaManejo,
+  type ReforcadorAtual,
+} from "./logic";
 
 export type { AlertaManejo, ReforcadorAtual };
 
@@ -89,7 +94,9 @@ export async function carregarBriefing(
         numeroSequencial: session.numeroSequencialPaciente,
       })
       .from(session)
-      .where(and(eq(session.patientId, patientId), eq(session.estado, "agendada")))
+      .where(
+        and(eq(session.patientId, patientId), eq(session.estado, "agendada")),
+      )
       .orderBy(session.agendadaPara)
       .limit(1);
 
@@ -110,11 +117,18 @@ export async function carregarBriefing(
     if (snap) {
       const repertorio = (snap.repertorioState ?? {}) as Record<
         string,
-        { metrica_recente?: unknown; contagem?: unknown; is_candidata?: boolean }
+        {
+          metrica_recente?: unknown;
+          contagem?: unknown;
+          is_candidata?: boolean;
+        }
       >;
       const segmentacao = (snap.segmentacao ?? {}) as Record<
         string,
-        Record<string, { tipo_estrutura?: string; metrica?: unknown; rotulo?: string }>
+        Record<
+          string,
+          { tipo_estrutura?: string; metrica?: unknown; rotulo?: string }
+        >
       >;
 
       const idsGoal = Object.keys(repertorio);
@@ -130,12 +144,17 @@ export async function carregarBriefing(
         const estado = repertorio[chave] ?? {};
         const segPorProtocolo = segmentacao[chave] ?? {};
         const primeiroSeg = Object.values(segPorProtocolo)[0];
-        const rotulo = descricaoPorGoal.get(chave) ?? primeiroSeg?.rotulo ?? chave;
-        const metricaBruta = primeiroSeg?.metrica ?? estado.metrica_recente ?? estado.contagem;
+        const rotulo =
+          descricaoPorGoal.get(chave) ?? primeiroSeg?.rotulo ?? chave;
+        const metricaBruta =
+          primeiroSeg?.metrica ?? estado.metrica_recente ?? estado.contagem;
         return {
           chave,
           rotulo,
-          metrica: metricaBruta != null ? String(metricaBruta) : "sem métrica registrada",
+          metrica:
+            metricaBruta != null
+              ? String(metricaBruta)
+              : "sem métrica registrada",
           isCandidata: estado.is_candidata === true,
         };
       });
@@ -144,7 +163,12 @@ export async function carregarBriefing(
       const [sessAquela] = await tx
         .select({ id: session.id })
         .from(session)
-        .where(and(eq(session.patientId, patientId), eq(session.numeroSequencialPaciente, snap.sessionNumero)));
+        .where(
+          and(
+            eq(session.patientId, patientId),
+            eq(session.numeroSequencialPaciente, snap.sessionNumero),
+          ),
+        );
 
       let episodiosAbc = 0;
       if (sessAquela) {
@@ -171,14 +195,20 @@ export async function carregarBriefing(
 
     // METAS DE HOJE: metas ativas do paciente.
     const metasAtivasRows = await tx
-      .select({ id: goal.id, descricao: goal.descricao, disciplina: goal.disciplina })
+      .select({
+        id: goal.id,
+        descricao: goal.descricao,
+        disciplina: goal.disciplina,
+      })
       .from(goal)
       .where(and(eq(goal.patientId, patientId), eq(goal.estado, "ativa")))
       .orderBy(goal.criadoEm);
 
     // ⚠ ALERTA DE MANEJO: registro_abc aprovado/editado, severidade grave,
     // sessões recentes (janela de dias, ver constante acima).
-    const desde = new Date(Date.now() - JANELA_ALERTA_MANEJO_DIAS * 24 * 60 * 60 * 1000);
+    const desde = new Date(
+      Date.now() - JANELA_ALERTA_MANEJO_DIAS * 24 * 60 * 60 * 1000,
+    );
     const abcRecentes = await tx
       .select({
         id: extraction.id,

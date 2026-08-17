@@ -19,7 +19,8 @@ export const Padrao: Story = {
   parameters: {
     docs: {
       description: {
-        story: "Thumb quadrado (canto vivo), trilho borda âncora, preenchimento ouro.",
+        story:
+          "Thumb quadrado (canto vivo), trilho borda âncora, preenchimento ouro.",
       },
     },
   },

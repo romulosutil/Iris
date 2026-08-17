@@ -95,10 +95,14 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
     // 1) Report inexistente
     const msgInexistente = await mensagemDoBanco(
       withTenant(ctx("coordenador", U_COORD_A), (db) =>
-        db.execute(sql`SELECT app_purgar_report(${INEXISTENTE}::uuid, 'teste')`),
+        db.execute(
+          sql`SELECT app_purgar_report(${INEXISTENTE}::uuid, 'teste')`,
+        ),
       ),
     );
-    expect(msgInexistente).toContain(`app_purgar_report: report ${INEXISTENTE} não encontrado`);
+    expect(msgInexistente).toContain(
+      `app_purgar_report: report ${INEXISTENTE} não encontrado`,
+    );
 
     // 2) Report de outra clínica (cross-tenant) — MESMA mensagem genérica, sem vazar existência
     const msgCrossTenant = await mensagemDoBanco(
@@ -106,7 +110,9 @@ describe.skipIf(!hasDb)("app_purgar_report", () => {
         db.execute(sql`SELECT app_purgar_report(${R2}::uuid, 'teste')`),
       ),
     );
-    expect(msgCrossTenant).toContain(`app_purgar_report: report ${R2} não encontrado`);
+    expect(msgCrossTenant).toContain(
+      `app_purgar_report: report ${R2} não encontrado`,
+    );
 
     // O oráculo da 0040 dizia "fora da clínica" no caso cross-tenant e
     // "inexistente" no outro. Nenhuma das duas palavras pode sobreviver.

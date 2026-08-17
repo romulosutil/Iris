@@ -14,7 +14,7 @@
 A `0087` corrigiu o `current_setting('app.clinic_id')::uuid` cru em 14 funções DEFINER e na view `audit_log_mascarado`. Mas **deliberadamente** deixou fora `app.user_role` e `app.user_id`, registrado como D23 (antes D21) no `BACKLOG.md`, pela razão:
 
 - São gates de **papel**, não de tenant.
-- `current_setting('app.user_role', true)` troca "estoura" por "`NULL` → nega", que é fail-closed e *portanto seguro*.
+- `current_setting('app.user_role', true)` troca "estoura" por "`NULL` → nega", que é fail-closed e _portanto seguro_.
 - Dentro de `SECURITY DEFINER` — onde o guard interno **é** a fronteira de autorização — é mudança de semântica, e merece decisão própria.
 - `app.user_id` é mais delicado: é castado para `uuid`, então `missing_ok` sozinho não elimina o `22P02` — precisa de um helper irmão.
 
@@ -28,10 +28,10 @@ A `0087` corrigiu o `current_setting('app.clinic_id')::uuid` cru em 14 funções
 
 ### 1.3 Escopo
 
-| GUC | Uso atual | Tipo de uso | Helper necessário |
-|-----|-----------|-------------|-------------------|
-| `app.user_role` | ~39 policies + ~11 funções + 1 view | Comparação string (sem cast) | `app_user_role_exigido()` → `text` |
-| `app.user_id` | ~25 policies + ~5 funções | Cast `::uuid` | `app_user_id_exigido()` → `uuid` + `app_user_id_atual()` → `uuid` (leniente) |
+| GUC             | Uso atual                           | Tipo de uso                  | Helper necessário                                                            |
+| --------------- | ----------------------------------- | ---------------------------- | ---------------------------------------------------------------------------- |
+| `app.user_role` | ~39 policies + ~11 funções + 1 view | Comparação string (sem cast) | `app_user_role_exigido()` → `text`                                           |
+| `app.user_id`   | ~25 policies + ~5 funções           | Cast `::uuid`                | `app_user_id_exigido()` → `uuid` + `app_user_id_atual()` → `uuid` (leniente) |
 
 ---
 
@@ -40,16 +40,19 @@ A `0087` corrigiu o `current_setting('app.clinic_id')::uuid` cru em 14 funções
 ### 2.1 O Par de Helpers (Mesmo Desenho da `0085`)
 
 **`app_user_role_exigido()`** — `text`, SQL/STABLE:
+
 - `current_setting('app.user_role', true)` → se não-nulo e não-vazio, devolve.
 - Senão → `app_user_role_nao_resolvido()` (plpgsql, RAISE P0001).
 - Sem cast (é text), logo não há `22P02` — o `missing_ok` é suficiente para evitar o `42704`.
 - Não valida se o valor é um papel válido: isso é responsabilidade do `withTenant()` e da tabela `user_role`.
 
 **`app_user_id_atual()`** — `uuid`, SQL/STABLE, leniente:
+
 - Mesma lógica da `app_clinic_id_atual()`: regex de UUID, cast dentro do CASE, devolve `NULL` se malformado.
 - Para uso dentro de INSERT/audit_log onde `NULL` é aceitável (precedente: `app_criar_alerta_risco` já usa `nullif(current_setting('app.user_id', true), '')::uuid`).
 
 **`app_user_id_exigido()`** — `uuid`, SQL/STABLE:
+
 - `COALESCE(app_user_id_atual(), app_user_id_nao_resolvido())`.
 - Para uso dentro de guards de autorização e comparações de identidade.
 
@@ -83,25 +86,25 @@ Dentro de SECURITY DEFINER o cenário é diferente: a função roda com direitos
 
 ## 3. Matriz de Requisitos
 
-| # | Requisito | Verificação |
-|---|-----------|-------------|
-| **R1** | `app_user_role_exigido()` devolve o valor quando GUC bem formado | Teste de contraprova |
-| **R2** | `app_user_role_exigido()` levanta `P0001` (não `42704`) nos 3 estados ruins (ausente, vazio, lixo) | Teste por estado |
-| **R3** | `app_user_id_atual()` devolve `NULL` nos 4 estados ruins de GUC (mesmo padrão da `app_clinic_id_atual`) | Teste por estado |
-| **R4** | `app_user_id_exigido()` levanta `P0001` (não `42704`/`22P02`) nos 4 estados ruins | Teste por estado |
-| **R5** | `app_user_id_exigido()` devolve o uuid quando GUC bem formado | Teste de contraprova |
-| **R6** | Guard de CI: nenhuma função DEFINER pública usa `current_setting('app.user_id')::uuid` cru | Query em `pg_proc`, mesmo padrão da `0087` |
-| **R7** | Guard de CI: nenhuma função DEFINER pública usa `current_setting('app.user_role')` 1-arg (sem `missing_ok`) | Query em `pg_proc` |
-| **R8** | Conjunto exato de funções que chamam `app_user_role_exigido()` e `app_user_id_exigido()` | Array literal, comparação de conjunto |
-| **R9** | Testes unitários existentes (`pnpm test`) continuam verdes | Gate de CI |
-| **R10** | Testes RLS existentes (`pnpm test:rls`) continuam verdes | Gate de CI |
+| #       | Requisito                                                                                                   | Verificação                                |
+| ------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| **R1**  | `app_user_role_exigido()` devolve o valor quando GUC bem formado                                            | Teste de contraprova                       |
+| **R2**  | `app_user_role_exigido()` levanta `P0001` (não `42704`) nos 3 estados ruins (ausente, vazio, lixo)          | Teste por estado                           |
+| **R3**  | `app_user_id_atual()` devolve `NULL` nos 4 estados ruins de GUC (mesmo padrão da `app_clinic_id_atual`)     | Teste por estado                           |
+| **R4**  | `app_user_id_exigido()` levanta `P0001` (não `42704`/`22P02`) nos 4 estados ruins                           | Teste por estado                           |
+| **R5**  | `app_user_id_exigido()` devolve o uuid quando GUC bem formado                                               | Teste de contraprova                       |
+| **R6**  | Guard de CI: nenhuma função DEFINER pública usa `current_setting('app.user_id')::uuid` cru                  | Query em `pg_proc`, mesmo padrão da `0087` |
+| **R7**  | Guard de CI: nenhuma função DEFINER pública usa `current_setting('app.user_role')` 1-arg (sem `missing_ok`) | Query em `pg_proc`                         |
+| **R8**  | Conjunto exato de funções que chamam `app_user_role_exigido()` e `app_user_id_exigido()`                    | Array literal, comparação de conjunto      |
+| **R9**  | Testes unitários existentes (`pnpm test`) continuam verdes                                                  | Gate de CI                                 |
+| **R10** | Testes RLS existentes (`pnpm test:rls`) continuam verdes                                                    | Gate de CI                                 |
 
 ---
 
 ## 4. Riscos & Mitigações
 
-| Risco | Mitigação |
-|-------|-----------|
-| Reescrita de corpo de função pode mutar uma query (D-CREATE-OR-REPLACE) | Gerar corpos de `pg_get_functiondef()`, trocar **apenas** o cast cru, comparação normalizada |
-| Funções `app_criar_alerta_risco` usam `nullif(current_setting('app.user_id', true), '')::uuid` que já é parcialmente protegida | Trocar por `app_user_id_atual()` (leniente) nos INSERTs e `app_user_id_exigido()` nos guards |
-| Policy que delega a função reescrita pode mudar de comportamento | Políticas NÃO são tocadas; funções mantêm contrato idêntico: levantam nos mesmos casos, devolvem os mesmos tipos |
+| Risco                                                                                                                          | Mitigação                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Reescrita de corpo de função pode mutar uma query (D-CREATE-OR-REPLACE)                                                        | Gerar corpos de `pg_get_functiondef()`, trocar **apenas** o cast cru, comparação normalizada                     |
+| Funções `app_criar_alerta_risco` usam `nullif(current_setting('app.user_id', true), '')::uuid` que já é parcialmente protegida | Trocar por `app_user_id_atual()` (leniente) nos INSERTs e `app_user_id_exigido()` nos guards                     |
+| Policy que delega a função reescrita pode mudar de comportamento                                                               | Políticas NÃO são tocadas; funções mantêm contrato idêntico: levantam nos mesmos casos, devolvem os mesmos tipos |

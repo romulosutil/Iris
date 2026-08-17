@@ -12,7 +12,6 @@ export interface CopyButtonProps {
   className?: string;
 }
 
-
 type Estado = "repouso" | "copiado" | "falha";
 
 const MS_CONFIRMACAO = 2500;
@@ -100,4 +99,3 @@ export function CopyButton({
     </div>
   );
 }
-

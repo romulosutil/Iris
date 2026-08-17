@@ -40,28 +40,30 @@
 
 ## Tabelas a criar (resumo de responsabilidade)
 
-| Tabela | Responsabilidade | RLS-classe |
-| --- | --- | --- |
-| `session_note` | texto do diário (captura/consolidada) | clínica (filha de session) |
-| `session_protocol_scope` | protocolos que a sessão alimenta | clínica (filha de session) |
-| `audio_capture` | ref do áudio local + status | clínica (filha de session) |
-| `extraction` | saída da extração (estado sugerida) | clínica (filha de session) |
-| `goal` | meta + criterio_dominio | clínica (paciente) |
-| `goal_milestone_mapping` | meta↔marco M:N | clínica (via goal) |
-| `milestone` | marcos por protocolo | catálogo (via protocol) |
-| `goal_candidacy` | candidatura a dominada (dormente) | clínica (via goal) |
-| `milestone_candidacy` | candidatura a avaliação (dormente) | clínica (paciente) |
-| `clinic.is_demo` | flag de clínica demo (coluna) | — |
+| Tabela                   | Responsabilidade                      | RLS-classe                 |
+| ------------------------ | ------------------------------------- | -------------------------- |
+| `session_note`           | texto do diário (captura/consolidada) | clínica (filha de session) |
+| `session_protocol_scope` | protocolos que a sessão alimenta      | clínica (filha de session) |
+| `audio_capture`          | ref do áudio local + status           | clínica (filha de session) |
+| `extraction`             | saída da extração (estado sugerida)   | clínica (filha de session) |
+| `goal`                   | meta + criterio_dominio               | clínica (paciente)         |
+| `goal_milestone_mapping` | meta↔marco M:N                        | clínica (via goal)         |
+| `milestone`              | marcos por protocolo                  | catálogo (via protocol)    |
+| `goal_candidacy`         | candidatura a dominada (dormente)     | clínica (via goal)         |
+| `milestone_candidacy`    | candidatura a avaliação (dormente)    | clínica (paciente)         |
+| `clinic.is_demo`         | flag de clínica demo (coluna)         | —                          |
 
 ---
 
 ## Task 1: Enums, coluna `is_demo` e tabelas em `schema.ts` + migração gerada
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (adicionar ao fim, antes de nenhum export circular; enums no topo junto dos outros `pgEnum`)
 - Create (gerado): `db/migrations/0005_*.sql`
 
 **Interfaces:**
+
 - Consumes: `clinic`, `patient`, `appUser`, `protocol`, `session` (tabelas já existentes em `schema.ts`).
 - Produces: exports Drizzle `sessionNote`, `sessionProtocolScope`, `audioCapture`, `extraction`, `goal`, `goalMilestoneMapping`, `milestone`, `goalCandidacy`, `milestoneCandidacy`; enums `sessionNoteTipo`, `audioStatusUpload`, `extractionEstado`, `goalEstado`, `sessionProtocolScopeOrigem`, `milestoneTipoEstrutura`; coluna `clinic.isDemo`.
 
@@ -69,27 +71,40 @@
 
 ```ts
 export const goalEstado = pgEnum("goal_estado", [
-  "rascunho", "ativa", "dominada", "pausada", "descontinuada",
+  "rascunho",
+  "ativa",
+  "dominada",
+  "pausada",
+  "descontinuada",
 ]);
 
-export const sessionProtocolScopeOrigem = pgEnum("session_protocol_scope_origem", [
-  "inferido_disciplina", "ajustado_manualmente",
-]);
+export const sessionProtocolScopeOrigem = pgEnum(
+  "session_protocol_scope_origem",
+  ["inferido_disciplina", "ajustado_manualmente"],
+);
 
 export const sessionNoteTipo = pgEnum("session_note_tipo", [
-  "captura_rapida", "nota_consolidada",
+  "captura_rapida",
+  "nota_consolidada",
 ]);
 
 export const audioStatusUpload = pgEnum("audio_status_upload", [
-  "rascunho_local", "pendente", "confirmado", "falhou",
+  "rascunho_local",
+  "pendente",
+  "confirmado",
+  "falhou",
 ]);
 
 export const extractionEstado = pgEnum("extraction_estado", [
-  "sugerida", "pendente_reprocessamento",
+  "sugerida",
+  "pendente_reprocessamento",
 ]);
 
 export const milestoneTipoEstrutura = pgEnum("milestone_tipo_estrutura", [
-  "marco_simples", "marco_com_barreira", "escore_composto", "faixa_normativa",
+  "marco_simples",
+  "marco_com_barreira",
+  "escore_composto",
+  "faixa_normativa",
 ]);
 ```
 
@@ -119,8 +134,12 @@ export const sessionNote = pgTable(
     autorId: uuid("autor_id")
       .notNull()
       .references(() => appUser.id),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
-    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     // 1 captura_rapida + 1 nota_consolidada por sessão
@@ -139,7 +158,9 @@ export const sessionProtocolScope = pgTable(
     protocolId: uuid("protocol_id")
       .notNull()
       .references(() => protocol.id, { onDelete: "restrict" }),
-    origem: sessionProtocolScopeOrigem("origem").notNull().default("inferido_disciplina"),
+    origem: sessionProtocolScopeOrigem("origem")
+      .notNull()
+      .default("inferido_disciplina"),
     ajustadoPor: uuid("ajustado_por").references(() => appUser.id),
   },
   (t) => [unique("uq_session_protocol_scope").on(t.sessionId, t.protocolId)],
@@ -155,11 +176,15 @@ export const audioCapture = pgTable(
     clinicId: uuid("clinic_id")
       .notNull()
       .references(() => clinic.id, { onDelete: "restrict" }),
-    statusUpload: audioStatusUpload("status_upload").notNull().default("rascunho_local"),
+    statusUpload: audioStatusUpload("status_upload")
+      .notNull()
+      .default("rascunho_local"),
     // Referência ao objeto no storage — nulo enquanto o áudio vive só local (Fase 2).
     objetoRef: text("objeto_ref"),
     duracaoSegundos: integer("duracao_segundos"),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [index("idx_audio_capture_session").on(t.sessionId)],
 );
@@ -175,14 +200,18 @@ export const extraction = pgTable(
       .notNull()
       .references(() => clinic.id, { onDelete: "restrict" }),
     estado: extractionEstado("estado").notNull().default("sugerida"),
-    subtipo: text("subtipo").notNull(),          // evidencia | registro_abc | ...
+    subtipo: text("subtipo").notNull(), // evidencia | registro_abc | ...
     trechoFonte: text("trecho_fonte").notNull(),
-    confianca: text("confianca").notNull(),        // alta | media | baixa
+    confianca: text("confianca").notNull(), // alta | media | baixa
     justificativaConfianca: text("justificativa_confianca"),
-    inconsistenteComHistorico: boolean("inconsistente_com_historico").notNull().default(false),
+    inconsistenteComHistorico: boolean("inconsistente_com_historico")
+      .notNull()
+      .default(false),
     parContrasteId: uuid("par_contraste_id"),
-    payload: jsonb("payload").notNull(),           // a forma do subtipo (output-schema.json)
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    payload: jsonb("payload").notNull(), // a forma do subtipo (output-schema.json)
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [index("idx_extraction_session").on(t.sessionId)],
 );
@@ -198,15 +227,19 @@ export const milestone = pgTable(
     protocolId: uuid("protocol_id")
       .notNull()
       .references(() => protocol.id, { onDelete: "cascade" }),
-    dominioId: text("dominio_id").notNull(),       // 'mando','tato',... chave estável do agente
+    dominioId: text("dominio_id").notNull(), // 'mando','tato',... chave estável do agente
     nome: text("nome").notNull(),
     nivel: text("nivel"),
     tipoEstrutura: milestoneTipoEstrutura("tipo_estrutura").notNull(),
-    estrutura: jsonb("estrutura").notNull(),       // escala/critério formal/componentes
+    estrutura: jsonb("estrutura").notNull(), // escala/critério formal/componentes
     ordem: integer("ordem"),
   },
   (t) => [
-    unique("uq_milestone_protocol_dominio_nivel").on(t.protocolId, t.dominioId, t.nivel),
+    unique("uq_milestone_protocol_dominio_nivel").on(
+      t.protocolId,
+      t.dominioId,
+      t.nivel,
+    ),
     index("idx_milestone_protocol_dominio").on(t.protocolId, t.dominioId),
   ],
 );
@@ -221,7 +254,7 @@ export const goal = pgTable(
     clinicId: uuid("clinic_id")
       .notNull()
       .references(() => clinic.id, { onDelete: "restrict" }),
-    descricao: text("descricao").notNull(),        // linguagem simples (família também vê)
+    descricao: text("descricao").notNull(), // linguagem simples (família também vê)
     estado: goalEstado("estado").notNull().default("rascunho"),
     criterioDominio: jsonb("criterio_dominio").notNull(), // {"tipo":"...","valor":3}
     cicloRevisaoSemanas: integer("ciclo_revisao_semanas").notNull().default(10),
@@ -229,8 +262,12 @@ export const goal = pgTable(
     criadoPor: uuid("criado_por")
       .notNull()
       .references(() => appUser.id),
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
-    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [index("idx_goal_patient_estado").on(t.patientId, t.estado)],
 );
@@ -252,7 +289,9 @@ export const goalCandidacy = pgTable("goal_candidacy", {
   goalId: uuid("goal_id")
     .primaryKey()
     .references(() => goal.id, { onDelete: "cascade" }),
-  isCandidateDominada: boolean("is_candidate_dominada").notNull().default(false),
+  isCandidateDominada: boolean("is_candidate_dominada")
+    .notNull()
+    .default(false),
   since: timestamp("since", { withTimezone: true }),
 });
 
@@ -280,8 +319,19 @@ O bloco de imports de `drizzle-orm/pg-core` deve incluir `unique`. Se não estiv
 
 ```ts
 import {
-  boolean, check, date, index, integer, jsonb, pgEnum, pgTable,
-  primaryKey, text, timestamp, unique, uuid,
+  boolean,
+  check,
+  date,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uuid,
 } from "drizzle-orm/pg-core";
 ```
 
@@ -307,9 +357,11 @@ git commit -m "feat(db): tabelas de metas e diário da Fase 2 (schema + migraç�
 ## Task 2: RLS manual das tabelas novas (`0006_fase2_rls.sql`)
 
 **Files:**
+
 - Create: `db/migrations/0006_fase2_rls.sql`
 
 **Interfaces:**
+
 - Consumes: helpers `SECURITY DEFINER` da 0001 (`app_patient_in_clinic`, `app_is_on_team`, `app_user_in_clinic`, `app_protocol_in_clinic`); role `app_role`; GUCs `app.clinic_id`/`app.user_id`/`app.user_role`.
 - Produces: helpers novos `app_session_clinica_visivel(uuid)`, `app_session_terapeuta_id(uuid)`; RLS habilitada + policies + GRANT nas 9 tabelas.
 
@@ -613,9 +665,11 @@ Expected: aplica `0005_*` e `0006_fase2_rls.sql` sem erro. Se faltar `DATABASE_U
 - [ ] **Step 3: Conferir que RLS está ativa**
 
 Run:
+
 ```bash
 psql "$MIGRATION_DATABASE_URL" -c "SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname IN ('session_note','goal','milestone','extraction','audio_capture','session_protocol_scope','goal_milestone_mapping','goal_candidacy','milestone_candidacy') ORDER BY relname;"
 ```
+
 Expected: todas com `relrowsecurity = t` e `relforcerowsecurity = t`.
 
 - [ ] **Step 4: Commit**
@@ -630,9 +684,11 @@ git commit -m "feat(db): RLS das tabelas de metas e diário (Fase 2)"
 ## Task 3: Harness de teste RLS + isolamento de `session_note`
 
 **Files:**
+
 - Create: `db/tests/fase2-rls.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `withTenant` (`@/db/rls`), `sql`/`db` (`@/db/client`), tabelas de `@/db/schema`; env `DATABASE_URL` + `MIGRATION_DATABASE_URL`.
 - Produces: constantes de seed (`CLINIC_A`, `CLINIC_B`, `U_COORD_A`, `U_T1_A`, `U_T2_A`, `U_RECEP_A`, `PAC_A1`, `SESS_A1`, `PROTO_A`, ...) e ctx literais reusados pelas tasks 4-8.
 
@@ -652,7 +708,8 @@ import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
+const hasDb =
+  !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;
 
 // IDs fixos do seed
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
@@ -667,11 +724,31 @@ const PROTO_A = "00000000-0000-0000-0000-00000070c0a1";
 const SESS_A1 = "00000000-0000-0000-0000-00000005e1a1"; // terapeuta = T1
 const MILE_A = "00000000-0000-0000-0000-000000m1cea1".replace(/m/g, "d"); // sanitize
 
-const ctxCoordA = { clinicId: CLINIC_A, userId: U_COORD_A, role: "coordenador" } as const;
-const ctxT1A = { clinicId: CLINIC_A, userId: U_T1_A, role: "terapeuta" } as const;
-const ctxT2A = { clinicId: CLINIC_A, userId: U_T2_A, role: "terapeuta" } as const;
-const ctxRecepA = { clinicId: CLINIC_A, userId: U_RECEP_A, role: "admin_recepcao" } as const;
-const ctxT1B = { clinicId: CLINIC_B, userId: U_T1_B, role: "terapeuta" } as const;
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
+const ctxT1A = {
+  clinicId: CLINIC_A,
+  userId: U_T1_A,
+  role: "terapeuta",
+} as const;
+const ctxT2A = {
+  clinicId: CLINIC_A,
+  userId: U_T2_A,
+  role: "terapeuta",
+} as const;
+const ctxRecepA = {
+  clinicId: CLINIC_A,
+  userId: U_RECEP_A,
+  role: "admin_recepcao",
+} as const;
+const ctxT1B = {
+  clinicId: CLINIC_B,
+  userId: U_T1_B,
+  role: "terapeuta",
+} as const;
 
 let owner: ReturnType<typeof postgres>;
 let withTenant: typeof import("@/db/rls").withTenant;
@@ -723,10 +800,16 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
   // ---------- session_note ----------
   test("terapeuta dono escreve e lê a própria nota da sessão", async () => {
     const [nota] = await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.sessionNote).values({
-        sessionId: SESS_A1, clinicId: CLINIC_A, tipo: "captura_rapida",
-        texto: "Pediu água e apontou", autorId: U_T1_A,
-      }).returning({ id: schema.sessionNote.id }),
+      tx
+        .insert(schema.sessionNote)
+        .values({
+          sessionId: SESS_A1,
+          clinicId: CLINIC_A,
+          tipo: "captura_rapida",
+          texto: "Pediu água e apontou",
+          autorId: U_T1_A,
+        })
+        .returning({ id: schema.sessionNote.id }),
     );
     expect(nota?.id).toBeTruthy();
 
@@ -754,8 +837,11 @@ describe.skipIf(!hasDb)("Fase 2 · RLS das tabelas de metas e diário", () => {
     await expect(
       withTenant(ctxT2A, (tx) =>
         tx.insert(schema.sessionNote).values({
-          sessionId: SESS_A1, clinicId: CLINIC_A, tipo: "nota_consolidada",
-          texto: "tentativa indevida", autorId: U_T2_A,
+          sessionId: SESS_A1,
+          clinicId: CLINIC_A,
+          tipo: "nota_consolidada",
+          texto: "tentativa indevida",
+          autorId: U_T2_A,
         }),
       ),
     ).rejects.toThrow();
@@ -785,67 +871,88 @@ git commit -m "test(db): isolamento RLS de session_note (Fase 2)"
 ## Task 4: Isolamento RLS de `goal` + `goal_milestone_mapping`
 
 **Files:**
+
 - Modify: `db/tests/fase2-rls.int.test.ts` (adicionar bloco de testes de goal ao `describe`)
 
 **Interfaces:**
+
 - Consumes: seed e ctx da Task 3; `MILE_A`, `PROTO_A`.
 
 - [ ] **Step 1: Semear 1 milestone no `beforeAll`** (adicionar ao final do `beforeAll`, após o protocolo)
 
 ```ts
-    await owner`INSERT INTO milestone (id, protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+await owner`INSERT INTO milestone (id, protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
       VALUES (${MILE_A}, ${PROTO_A}, 'mando', 'Pedir item preferido', 'marco_simples', ${owner.json({ escala: [] })})`;
 ```
 
 - [ ] **Step 2: Adicionar os casos de goal**
 
 ```ts
-  // ---------- goal ----------
-  test("coordenador cria meta; terapeuta da equipe lê", async () => {
-    const [g] = await withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.goal).values({
-        patientId: PAC_A1, clinicId: CLINIC_A, descricao: "Pedir água sozinho",
-        criterioDominio: { tipo: "sessoes_consecutivas_independente", valor: 3 },
+// ---------- goal ----------
+test("coordenador cria meta; terapeuta da equipe lê", async () => {
+  const [g] = await withTenant(ctxCoordA, (tx) =>
+    tx
+      .insert(schema.goal)
+      .values({
+        patientId: PAC_A1,
+        clinicId: CLINIC_A,
+        descricao: "Pedir água sozinho",
+        criterioDominio: {
+          tipo: "sessoes_consecutivas_independente",
+          valor: 3,
+        },
         criadoPor: U_COORD_A,
-      }).returning({ id: schema.goal.id }),
-    );
-    expect(g?.id).toBeTruthy();
+      })
+      .returning({ id: schema.goal.id }),
+  );
+  expect(g?.id).toBeTruthy();
 
-    const lidasT1 = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goal));
-    expect(lidasT1.length).toBe(1);
-  });
+  const lidasT1 = await withTenant(ctxT1A, (tx) =>
+    tx.select().from(schema.goal),
+  );
+  expect(lidasT1.length).toBe(1);
+});
 
-  test("recepção não vê meta (dado clínico)", async () => {
-    const lidas = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.goal));
-    expect(lidas.length).toBe(0);
-  });
+test("recepção não vê meta (dado clínico)", async () => {
+  const lidas = await withTenant(ctxRecepA, (tx) =>
+    tx.select().from(schema.goal),
+  );
+  expect(lidas.length).toBe(0);
+});
 
-  test("terapeuta de outra clínica não vê meta (cross-tenant)", async () => {
-    const lidas = await withTenant(ctxT1B, (tx) => tx.select().from(schema.goal));
-    expect(lidas.length).toBe(0);
-  });
+test("terapeuta de outra clínica não vê meta (cross-tenant)", async () => {
+  const lidas = await withTenant(ctxT1B, (tx) => tx.select().from(schema.goal));
+  expect(lidas.length).toBe(0);
+});
 
-  test("insert de meta com criado_por falsificado é barrado pelo WITH CHECK", async () => {
-    await expect(
-      withTenant(ctxT1A, (tx) =>
-        tx.insert(schema.goal).values({
-          patientId: PAC_A1, clinicId: CLINIC_A, descricao: "meta forjada",
-          criterioDominio: { tipo: "x", valor: 1 }, criadoPor: U_COORD_A, // != app.user_id
-        }),
-      ),
-    ).rejects.toThrow();
-  });
+test("insert de meta com criado_por falsificado é barrado pelo WITH CHECK", async () => {
+  await expect(
+    withTenant(ctxT1A, (tx) =>
+      tx.insert(schema.goal).values({
+        patientId: PAC_A1,
+        clinicId: CLINIC_A,
+        descricao: "meta forjada",
+        criterioDominio: { tipo: "x", valor: 1 },
+        criadoPor: U_COORD_A, // != app.user_id
+      }),
+    ),
+  ).rejects.toThrow();
+});
 
-  test("mapear meta a marco e ler o mapeamento", async () => {
-    const [g] = await withTenant(ctxCoordA, (tx) =>
-      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
-    );
-    await withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.goalMilestoneMapping).values({ goalId: g!.id, milestoneId: MILE_A }),
-    );
-    const maps = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goalMilestoneMapping));
-    expect(maps.length).toBe(1);
-  });
+test("mapear meta a marco e ler o mapeamento", async () => {
+  const [g] = await withTenant(ctxCoordA, (tx) =>
+    tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+  );
+  await withTenant(ctxCoordA, (tx) =>
+    tx
+      .insert(schema.goalMilestoneMapping)
+      .values({ goalId: g!.id, milestoneId: MILE_A }),
+  );
+  const maps = await withTenant(ctxT1A, (tx) =>
+    tx.select().from(schema.goalMilestoneMapping),
+  );
+  expect(maps.length).toBe(1);
+});
 ```
 
 - [ ] **Step 3: Rodar**
@@ -865,67 +972,85 @@ git commit -m "test(db): isolamento RLS de goal e goal_milestone_mapping (Fase 2
 ## Task 5: Isolamento RLS de `session_protocol_scope`, `audio_capture` e `extraction`
 
 **Files:**
+
 - Modify: `db/tests/fase2-rls.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: seed/ctx das tasks anteriores; `SESS_A1`, `PROTO_A`.
 
 - [ ] **Step 1: Adicionar os casos**
 
 ```ts
-  // ---------- session_protocol_scope ----------
-  test("terapeuta dono grava e lê escopo de protocolo da sessão", async () => {
-    await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.sessionProtocolScope).values({
-        sessionId: SESS_A1, protocolId: PROTO_A, origem: "inferido_disciplina",
-      }),
-    );
-    const lidas = await withTenant(ctxT1A, (tx) =>
-      tx.select().from(schema.sessionProtocolScope),
-    );
-    expect(lidas.length).toBe(1);
-  });
+// ---------- session_protocol_scope ----------
+test("terapeuta dono grava e lê escopo de protocolo da sessão", async () => {
+  await withTenant(ctxT1A, (tx) =>
+    tx.insert(schema.sessionProtocolScope).values({
+      sessionId: SESS_A1,
+      protocolId: PROTO_A,
+      origem: "inferido_disciplina",
+    }),
+  );
+  const lidas = await withTenant(ctxT1A, (tx) =>
+    tx.select().from(schema.sessionProtocolScope),
+  );
+  expect(lidas.length).toBe(1);
+});
 
-  test("recepção não vê escopo de protocolo (dado clínico)", async () => {
-    const lidas = await withTenant(ctxRecepA, (tx) =>
-      tx.select().from(schema.sessionProtocolScope),
-    );
-    expect(lidas.length).toBe(0);
-  });
+test("recepção não vê escopo de protocolo (dado clínico)", async () => {
+  const lidas = await withTenant(ctxRecepA, (tx) =>
+    tx.select().from(schema.sessionProtocolScope),
+  );
+  expect(lidas.length).toBe(0);
+});
 
-  // ---------- audio_capture ----------
-  test("terapeuta dono grava rascunho local de áudio e lê", async () => {
-    await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.audioCapture).values({
-        sessionId: SESS_A1, clinicId: CLINIC_A, statusUpload: "rascunho_local",
-      }),
-    );
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.audioCapture));
-    expect(lidas.length).toBe(1);
-  });
+// ---------- audio_capture ----------
+test("terapeuta dono grava rascunho local de áudio e lê", async () => {
+  await withTenant(ctxT1A, (tx) =>
+    tx.insert(schema.audioCapture).values({
+      sessionId: SESS_A1,
+      clinicId: CLINIC_A,
+      statusUpload: "rascunho_local",
+    }),
+  );
+  const lidas = await withTenant(ctxT1A, (tx) =>
+    tx.select().from(schema.audioCapture),
+  );
+  expect(lidas.length).toBe(1);
+});
 
-  test("terapeuta de outra clínica não vê áudio (cross-tenant)", async () => {
-    const lidas = await withTenant(ctxT1B, (tx) => tx.select().from(schema.audioCapture));
-    expect(lidas.length).toBe(0);
-  });
+test("terapeuta de outra clínica não vê áudio (cross-tenant)", async () => {
+  const lidas = await withTenant(ctxT1B, (tx) =>
+    tx.select().from(schema.audioCapture),
+  );
+  expect(lidas.length).toBe(0);
+});
 
-  // ---------- extraction ----------
-  test("extração gravada no contexto do terapeuta da sessão é lida por ele", async () => {
-    await withTenant(ctxT1A, (tx) =>
-      tx.insert(schema.extraction).values({
-        sessionId: SESS_A1, clinicId: CLINIC_A, estado: "sugerida",
-        subtipo: "evidencia", trechoFonte: "falou á sozinho", confianca: "alta",
-        payload: { alvos: [] },
-      }),
-    );
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.extraction));
-    expect(lidas.length).toBe(1);
-  });
+// ---------- extraction ----------
+test("extração gravada no contexto do terapeuta da sessão é lida por ele", async () => {
+  await withTenant(ctxT1A, (tx) =>
+    tx.insert(schema.extraction).values({
+      sessionId: SESS_A1,
+      clinicId: CLINIC_A,
+      estado: "sugerida",
+      subtipo: "evidencia",
+      trechoFonte: "falou á sozinho",
+      confianca: "alta",
+      payload: { alvos: [] },
+    }),
+  );
+  const lidas = await withTenant(ctxT1A, (tx) =>
+    tx.select().from(schema.extraction),
+  );
+  expect(lidas.length).toBe(1);
+});
 
-  test("recepção não vê extração (dado clínico)", async () => {
-    const lidas = await withTenant(ctxRecepA, (tx) => tx.select().from(schema.extraction));
-    expect(lidas.length).toBe(0);
-  });
+test("recepção não vê extração (dado clínico)", async () => {
+  const lidas = await withTenant(ctxRecepA, (tx) =>
+    tx.select().from(schema.extraction),
+  );
+  expect(lidas.length).toBe(0);
+});
 ```
 
 - [ ] **Step 2: Rodar**
@@ -945,44 +1070,56 @@ git commit -m "test(db): isolamento RLS de escopo, áudio e extração (Fase 2)"
 ## Task 6: Isolamento RLS de `milestone` (catálogo) e tabelas de candidatura dormentes
 
 **Files:**
+
 - Modify: `db/tests/fase2-rls.int.test.ts`
 
 - [ ] **Step 1: Adicionar os casos**
 
 ```ts
-  // ---------- milestone (catálogo) ----------
-  test("qualquer papel da clínica lê o catálogo de marcos do protocolo", async () => {
-    const lidasT1 = await withTenant(ctxT1A, (tx) => tx.select().from(schema.milestone));
-    expect(lidasT1.length).toBeGreaterThanOrEqual(1);
-  });
+// ---------- milestone (catálogo) ----------
+test("qualquer papel da clínica lê o catálogo de marcos do protocolo", async () => {
+  const lidasT1 = await withTenant(ctxT1A, (tx) =>
+    tx.select().from(schema.milestone),
+  );
+  expect(lidasT1.length).toBeGreaterThanOrEqual(1);
+});
 
-  test("terapeuta não insere marco no catálogo (só coordenador)", async () => {
-    await expect(
-      withTenant(ctxT1A, (tx) =>
-        tx.insert(schema.milestone).values({
-          protocolId: PROTO_A, dominioId: "tato", nome: "nomear objeto",
-          tipoEstrutura: "marco_simples", estrutura: { escala: [] },
-        }),
-      ),
-    ).rejects.toThrow();
-  });
+test("terapeuta não insere marco no catálogo (só coordenador)", async () => {
+  await expect(
+    withTenant(ctxT1A, (tx) =>
+      tx.insert(schema.milestone).values({
+        protocolId: PROTO_A,
+        dominioId: "tato",
+        nome: "nomear objeto",
+        tipoEstrutura: "marco_simples",
+        estrutura: { escala: [] },
+      }),
+    ),
+  ).rejects.toThrow();
+});
 
-  test("marco de protocolo de outra clínica não é visível (cross-tenant)", async () => {
-    const lidasB = await withTenant(ctxT1B, (tx) => tx.select().from(schema.milestone));
-    expect(lidasB.length).toBe(0);
-  });
+test("marco de protocolo de outra clínica não é visível (cross-tenant)", async () => {
+  const lidasB = await withTenant(ctxT1B, (tx) =>
+    tx.select().from(schema.milestone),
+  );
+  expect(lidasB.length).toBe(0);
+});
 
-  // ---------- candidatura dormente ----------
-  test("tabelas de candidatura existem e respeitam escopo (dormentes)", async () => {
-    const [g] = await withTenant(ctxCoordA, (tx) =>
-      tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
-    );
-    await withTenant(ctxCoordA, (tx) =>
-      tx.insert(schema.goalCandidacy).values({ goalId: g!.id, isCandidateDominada: false }),
-    );
-    const lidas = await withTenant(ctxT1A, (tx) => tx.select().from(schema.goalCandidacy));
-    expect(lidas.length).toBe(1);
-  });
+// ---------- candidatura dormente ----------
+test("tabelas de candidatura existem e respeitam escopo (dormentes)", async () => {
+  const [g] = await withTenant(ctxCoordA, (tx) =>
+    tx.select({ id: schema.goal.id }).from(schema.goal).limit(1),
+  );
+  await withTenant(ctxCoordA, (tx) =>
+    tx
+      .insert(schema.goalCandidacy)
+      .values({ goalId: g!.id, isCandidateDominada: false }),
+  );
+  const lidas = await withTenant(ctxT1A, (tx) =>
+    tx.select().from(schema.goalCandidacy),
+  );
+  expect(lidas.length).toBe(1);
+});
 ```
 
 - [ ] **Step 2: Rodar a suíte RLS inteira**
@@ -1040,6 +1177,7 @@ git commit -m "chore(fase-2): fecha fundação de dados — typecheck/lint/teste
 ## Self-Review (feito na escrita deste plano)
 
 **Cobertura do spec (§3 do design):**
+
 - session_note, session_protocol_scope, audio_capture, extraction, goal, goal_milestone_mapping, milestone, goal_candidacy, milestone_candidacy, `clinic.is_demo` → todas na Task 1; RLS na Task 2; testes nas Tasks 3-6. ✅
 - `session_snapshot` adiado (F4) → corretamente ausente. ✅
 - Reconciliação `terapeuta_id` (não `profissional_id`) → helpers usam `s.terapeuta_id`. ✅
@@ -1052,6 +1190,7 @@ git commit -m "chore(fase-2): fecha fundação de dados — typecheck/lint/teste
 **Consistência de tipos/nomes:** exports Drizzle em camelCase (`sessionNote`, `goalMilestoneMapping`), colunas snake_case; ctx literais reusados; helpers SQL nomeados de forma única. ✅
 
 ## Fora deste plano (próximos planos da Fase 2)
+
 - **Plano 2** — Diário (captura texto/áudio local, consolidação → `numero_sequencial_paciente`), Fila de pendências, costura `ExtractionProvider` (DemoStub/Null), roteamento por `is_demo`. Telas + a11y + E2E demo.
 - **Plano 3** — Metas: Server Actions de CRUD, form de critério N/M, ciclo de revisão, transição `dominada` (coordenador), telas + a11y.
 - **Plano 4** — Seed de demonstração alta-fidelidade das 4 famílias + montagem da clínica demo (`is_demo=true`).

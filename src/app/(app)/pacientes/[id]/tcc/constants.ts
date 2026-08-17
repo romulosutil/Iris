@@ -18,7 +18,9 @@ export const DISTORCOES_COGNITIVAS_OPCOES = [
 export const salvarRpdSchema = z.object({
   patientId: z.string().uuid("ID do paciente inválido"),
   situacao: z.string().min(1, "Situação/gatilho é obrigatória"),
-  pensamentoAutomatico: z.string().min(1, "Pensamento automático é obrigatório"),
+  pensamentoAutomatico: z
+    .string()
+    .min(1, "Pensamento automático é obrigatório"),
   emocao: z.string().min(1, "Emoção é obrigatória"),
   intensidade: z
     .number({ invalid_type_error: "Informe um número entre 0 e 100" })

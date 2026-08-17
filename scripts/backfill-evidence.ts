@@ -44,7 +44,11 @@
  * Uso:  pnpm backfill:evidence
  */
 import postgres from "postgres";
-import { type Alvo, postgresResolverQueries, resolverAlvoParaFks } from "@/lib/evidence/resolver";
+import {
+  type Alvo,
+  postgresResolverQueries,
+  resolverAlvoParaFks,
+} from "@/lib/evidence/resolver";
 
 type ExtractionRow = {
   id: string;
@@ -133,12 +137,18 @@ async function main() {
 
     for (let ordinal = 0; ordinal < alvos.length; ordinal++) {
       const alvo = alvos[ordinal]!;
-      const { protocolId, goalId, milestoneId, protocolSlug, dominioId, goalRef } =
-        await resolverAlvoParaFks(
-          resolverQueries,
-          { clinicId: ext.clinic_id, patientId: sessao.patient_id },
-          alvo,
-        );
+      const {
+        protocolId,
+        goalId,
+        milestoneId,
+        protocolSlug,
+        dominioId,
+        goalRef,
+      } = await resolverAlvoParaFks(
+        resolverQueries,
+        { clinicId: ext.clinic_id, patientId: sessao.patient_id },
+        alvo,
+      );
       // classificacao_original: cópia congelada do alvo aprovado, mesclada com
       // o conteúdo clínico de `evidencia` (sem o array `alvos` completo, que
       // não é escopo desta linha) — ver nota de desvio no topo do arquivo.

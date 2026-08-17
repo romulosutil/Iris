@@ -52,7 +52,9 @@ const base = {
 
 describe("CalendarioSemana", () => {
   test("é um grid sem violações axe (color-contrast desligado — jsdom sem canvas)", async () => {
-    const { container } = render(<CalendarioSemana {...base} aoAlocar={() => {}} />);
+    const { container } = render(
+      <CalendarioSemana {...base} aoAlocar={() => {}} />,
+    );
     expect(screen.getByRole("grid")).not.toBeNull();
     await semViolacoes(container);
   });
@@ -61,7 +63,9 @@ describe("CalendarioSemana", () => {
     const aoAlocar = vi.fn();
     render(<CalendarioSemana {...base} aoAlocar={aoAlocar} />);
     // célula seg 10:00 (livre)
-    await userEvent.click(screen.getByRole("gridcell", { name: /segunda.*10:00/i }));
+    await userEvent.click(
+      screen.getByRole("gridcell", { name: /segunda.*10:00/i }),
+    );
     expect(aoAlocar).toHaveBeenCalledWith(1, 600);
   });
 
@@ -83,7 +87,9 @@ describe("CalendarioSemana", () => {
   test("navegação por teclado move o foco (roving tabIndex) e Enter aloca", async () => {
     const aoAlocar = vi.fn();
     render(<CalendarioSemana {...base} aoAlocar={aoAlocar} />);
-    const celulaInicial = screen.getByRole("gridcell", { name: /segunda.*08:00/i });
+    const celulaInicial = screen.getByRole("gridcell", {
+      name: /segunda.*08:00/i,
+    });
     celulaInicial.focus();
     await userEvent.keyboard("{ArrowRight}{ArrowRight}{Enter}");
     expect(aoAlocar).toHaveBeenCalledWith(1, 600);
@@ -97,7 +103,9 @@ describe("CalendarioSemana", () => {
     });
     expect(celulaOcupada).not.toBeNull();
     // célula livre vizinha não ganha o sufixo de ocupação.
-    const celulaLivre = screen.getByRole("gridcell", { name: /^segunda 10:00$/i });
+    const celulaLivre = screen.getByRole("gridcell", {
+      name: /^segunda 10:00$/i,
+    });
     expect(celulaLivre).not.toBeNull();
   });
 
@@ -105,7 +113,9 @@ describe("CalendarioSemana", () => {
     render(<CalendarioSemana {...base} aoAlocar={() => {}} />);
     // fixture: abertura=08:00 (480min), passoMin=60, bloco inicioMin=540 duracaoMin=60
     // deslocamento = (540-480)/60 = 1 coluna; largura = 60/60 = 1 coluna
-    const bloco = screen.getByText(/Ana.*aba/).closest('[data-testid="bloco-overlay"]');
+    const bloco = screen
+      .getByText(/Ana.*aba/)
+      .closest('[data-testid="bloco-overlay"]');
     expect(bloco).not.toBeNull();
     // jsdom normaliza a expressão calc() constante para um único valor em rem
     // (6rem rótulo + 1*5rem coluna = 11rem; largura 1*5rem = 5rem).

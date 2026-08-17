@@ -20,7 +20,9 @@ import { Input } from "./input";
  * nada a mais.
  */
 function regiaoDeErro(container: HTMLElement): HTMLElement {
-  const regiao = container.querySelector<HTMLElement>('[aria-live="assertive"]');
+  const regiao = container.querySelector<HTMLElement>(
+    '[aria-live="assertive"]',
+  );
   if (!regiao) throw new Error("região de erro (aria-live) não encontrada");
   return regiao;
 }
@@ -32,7 +34,8 @@ describe("Form — erro visível e alcançável", () => {
     // jsdom não implementa `scrollIntoView`. O dublê serve para os dois lados:
     // deixa o componente rodar e permite asserir COMO ele foi chamado.
     scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView =
+      scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
   });
 
   afterEach(() => {
@@ -79,7 +82,9 @@ describe("Form — erro visível e alcançável", () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     // `center` e não `start`: alinhar no topo esconde a mensagem atrás de
     // header fixo.
-    expect(scrollIntoView.mock.calls[0]?.[0]).toMatchObject({ block: "center" });
+    expect(scrollIntoView.mock.calls[0]?.[0]).toMatchObject({
+      block: "center",
+    });
   });
 
   it("respeita prefers-reduced-motion: reduce (salto instantâneo)", () => {
@@ -95,7 +100,9 @@ describe("Form — erro visível e alcançável", () => {
 
     // Rolagem animada é gatilho vestibular (WCAG 2.3.3). Quem pediu menos
     // movimento recebe `auto`.
-    expect(scrollIntoView.mock.calls[0]?.[0]).toMatchObject({ behavior: "auto" });
+    expect(scrollIntoView.mock.calls[0]?.[0]).toMatchObject({
+      behavior: "auto",
+    });
   });
 
   it("anima a rolagem quando não há preferência por menos movimento", () => {

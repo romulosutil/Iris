@@ -32,14 +32,14 @@ Verification: OK
 
 ## LGPD — o que sustenta o selo
 
-| Controle | Estado | Onde está a medição |
-| :-- | :-- | :-- |
-| Dado armazenado em território brasileiro | Verificado | `docs/arquitetura/plano-bootstrap-e-stack-vps.md` — `irisclinica.ia.br` → `31.97.170.105`, AS47583 Hostinger, **RTT 33 ms** contra baseline Europa de 231 ms (piso físico Brasil↔Europa ~210 ms), `tracert` saindo por backbone BR (`200.25.x`) |
-| Isolamento de dados por clínica via Row Level Security | Verificado | `pnpm test:rls` no CI; guard de `app_clinic_id_exigido()` em `db/tests/clinic-id-helper-rls.int.test.ts` |
-| Expurgo do `audit_log` após 6 meses (Marco Civil) | Verificado | `db/migrations/0070_expurgo_audit_log_marco_civil.sql` + `scripts/expurgo-audit-log.mjs`, agendado no Easypanel (#116) |
-| Descarte de backup local em 30 dias | Verificado | `infra/backup/backup.sh` (`RETENTION_DAYS`, default 30) |
+| Controle                                               | Estado     | Onde está a medição                                                                                                                                                                                                                             |
+| :----------------------------------------------------- | :--------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dado armazenado em território brasileiro               | Verificado | `docs/arquitetura/plano-bootstrap-e-stack-vps.md` — `irisclinica.ia.br` → `31.97.170.105`, AS47583 Hostinger, **RTT 33 ms** contra baseline Europa de 231 ms (piso físico Brasil↔Europa ~210 ms), `tracert` saindo por backbone BR (`200.25.x`) |
+| Isolamento de dados por clínica via Row Level Security | Verificado | `pnpm test:rls` no CI; guard de `app_clinic_id_exigido()` em `db/tests/clinic-id-helper-rls.int.test.ts`                                                                                                                                        |
+| Expurgo do `audit_log` após 6 meses (Marco Civil)      | Verificado | `db/migrations/0070_expurgo_audit_log_marco_civil.sql` + `scripts/expurgo-audit-log.mjs`, agendado no Easypanel (#116)                                                                                                                          |
+| Descarte de backup local em 30 dias                    | Verificado | `infra/backup/backup.sh` (`RETENTION_DAYS`, default 30)                                                                                                                                                                                         |
 
-> ⚠️ O domicílio societário da *Hostinger International Ltd* é a UE
+> ⚠️ O domicílio societário da _Hostinger International Ltd_ é a UE
 > (Chipre/Lituânia). O **dado** está em São Paulo; a **empresa** não é
 > brasileira — são coisas distintas e só a primeira sustenta o selo.
 
@@ -56,8 +56,8 @@ neste bloco:
   Fase 6.
 - **Descarte do backup off-site (OCI S3) em 30 dias (Art. 46).** O bucket
   off-site **não é podado pelo script, de propósito** — depende de uma Lifecycle
-  Rule configurada no provedor, que a própria política manda *"confirmar no
-  console do bucket — não presumir pelo texto desta política"* (#89).
+  Rule configurada no provedor, que a própria política manda _"confirmar no
+  console do bucket — não presumir pelo texto desta política"_ (#89).
 
 ## Como revalidar
 

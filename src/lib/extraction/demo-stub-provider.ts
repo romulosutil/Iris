@@ -24,7 +24,10 @@ export class DemoStubProvider implements ExtractionProvider {
         justificativaConfianca: "Sugestão de demonstração (dados fictícios).",
         inconsistenteComHistorico: false,
         parContrasteId: null,
-        payload: { alvos: meta ? [{ goal_id: meta }] : [], polaridade: i % 2 === 0 ? "positiva" : "negativa" },
+        payload: {
+          alvos: meta ? [{ goal_id: meta }] : [],
+          polaridade: i % 2 === 0 ? "positiva" : "negativa",
+        },
         estado: "sugerida",
       })),
       // O stub de demonstração NUNCA fabrica alerta de risco. Um alerta de risco

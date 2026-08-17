@@ -23,7 +23,7 @@ Quatro travas, uma causa raiz comum.
   append-only por privilégio de banco e o enum `consent_tipo` não tem
   nenhum valor de evento de revogação — a promessa... não é apenas
   não-implementada, é não-registrável" (linhas 325-329). `REVOKE UPDATE,
-  DELETE ON consent FROM app_role` (`db/migrations/0001_rls.sql:23`) —
+DELETE ON consent FROM app_role` (`db/migrations/0001_rls.sql:23`) —
   correto por design (append-only, LGPD) — é exatamente o que impede
   qualquer solução por `UPDATE`.
 - **#134 — Curatela e emancipado não têm caminho.** `consentTipo`
@@ -259,8 +259,8 @@ search_path = public`, no mesmo padrão de
   (D6 — curatelado segue o regime de menor) vigente **e** uma linha
   `revogacao_consentimento` apontando para ela.
 - `app_finalidade_consentida(p_patient uuid, p_finalidade text) RETURNS
-  boolean` — para `p_finalidade IN ('uso_ia_processamento',
-  'exportacao_relatorios')`: `true` se existe linha `tipo = p_finalidade`
+boolean` — para `p_finalidade IN ('uso_ia_processamento',
+'exportacao_relatorios')`: `true` se existe linha `tipo = p_finalidade`
   vigente (concedida e não revogada) para o paciente.
 
 Policies de `WITH CHECK` em `session`, `sessionNote`, `extraction`,
@@ -318,7 +318,7 @@ Cobre três eventos, unificados numa action porque os três são, no fim,
 - **Renovação por maioridade (#135):** `evento: "renovacao_maioridade"`,
   grava `tipo = 'autoconsentimento_titular_adulto'` sem responsável.
 - **Consentimento de curatela/emancipado (#134):** `evento:
-  "representacao"`, grava `representacao_curador` ou
+"representacao"`, grava `representacao_curador` ou
   `autoconsentimento_titular_emancipado` (D6).
 
 `requireRole(ctx, "admin_recepcao", "coordenador")` — mesmo par de
@@ -380,8 +380,8 @@ existe... já está decidido que curatela terá termo próprio") —
 registrar um adulto sob curatela como `tratamento_dados_menor` numa
 trilha append-only afirmaria um fato falso e permanente sobre a pessoa
 (que ela é menor de idade, quando não é). O valor de enum próprio é o
-que torna o registro juridicamente honesto; o *regime de bloqueio*
-(D4) pode ser compartilhado com o do menor sem que o *tipo* seja
+que torna o registro juridicamente honesto; o _regime de bloqueio_
+(D4) pode ser compartilhado com o do menor sem que o _tipo_ seja
 compartilhado.
 
 ---
@@ -624,10 +624,9 @@ escrever a migração real. Ver §10.
     implementar — auto-FK é um padrão menos comum no schema atual, sem
     precedente direto em `schema.ts` para copiar).
   - novo campo `instrumentoRepresentacao: text("instrumento_representacao")`.
-  - `check("consent_responsavel_por_tipo", sql\`...\`)` (linhas 344-351):
-    substituir pelo SQL completo de 6 arms de `0053` acima (espelho
-    exato, mesmo `::text` — ver nota de custo já documentada em
-    `schema.ts:334-337`, que continua valendo).
+  - `check("consent_responsavel_por_tipo", sql\`...\`)`(linhas 344-351):
+substituir pelo SQL completo de 6 arms de`0053`acima (espelho
+exato, mesmo`::text`— ver nota de custo já documentada em`schema.ts:334-337`, que continua valendo).
 - Comentário da tabela (linhas 308-311): atualizar para mencionar que
   revogação também é linha nova, referenciando este spec.
 
@@ -691,13 +690,13 @@ export async function finalidadeConsentida(
 - `src/app/(app)/diario/[sessionId]/logic.ts:45,87,128,169` —
   `capturarDiario`, `corrigirEscopoProtocolo`, `registrarAudioLocal`,
   `consolidarSessao`: cada um ganha `if (await
-  prontuarioSomenteLeitura(ctx, patientId)) return { error: "..." }`
+prontuarioSomenteLeitura(ctx, patientId)) return { error: "..." }`
   antes de escrever.
 - `src/app/(app)/relatorios/familia-logic.ts:80,138,179` —
   `gerarRascunhoFamilia`, `curarFamilia`: gate de
   `prontuarioSomenteLeitura` (é escrita clínica); `exportarFamilia`
   (linha 179): gate de `finalidadeConsentida(ctx, patientId,
-  "exportacao_relatorios")`.
+"exportacao_relatorios")`.
 - `src/app/(app)/relatorios/convenio-narrativo-logic.ts:96,158,202` —
   mesmo padrão: `gerarRascunhoConvenioNarrativo`,
   `curarConvenioNarrativo` → `prontuarioSomenteLeitura`;
@@ -738,12 +737,12 @@ export async function listarPendenciasMaioridade(
 
 ## 7. Matriz de comportamento após revogação
 
-| Regime do titular | Prontuário / diário (escrita) | Extração IA | Exportação | Leitura |
-| :--- | :--- | :--- | :--- | :--- |
-| **Menor** (revogou `tratamento_dados_menor`) | **Bloqueado** (Read-Only Locked, §1.2) | Bloqueado (dependia de consentimento; e prontuário já travado) | Bloqueado | **Permitida** (§1.2 linha 30) |
-| **Adulto** (revogou `autoconsentimento_titular_adulto`) | Continua (§13 linha 318-321 — não depende de consentimento) | Bloqueado só se revogou `uso_ia_processamento` especificamente | Bloqueado só se revogou `exportacao_relatorios` especificamente | Permitida (nunca foi restrita) |
-| **Curatelado** (revogou `representacao_curador`) | **Bloqueado** (mesmo regime do menor — D6, representado) | Bloqueado | Bloqueado | Permitida |
-| **Emancipado** (revogou `autoconsentimento_titular_emancipado`) | Continua (mesmo regime do adulto — D6, capaz) | Bloqueado só se revogou `uso_ia_processamento` | Bloqueado só se revogou `exportacao_relatorios` | Permitida |
+| Regime do titular                                               | Prontuário / diário (escrita)                               | Extração IA                                                    | Exportação                                                      | Leitura                        |
+| :-------------------------------------------------------------- | :---------------------------------------------------------- | :------------------------------------------------------------- | :-------------------------------------------------------------- | :----------------------------- |
+| **Menor** (revogou `tratamento_dados_menor`)                    | **Bloqueado** (Read-Only Locked, §1.2)                      | Bloqueado (dependia de consentimento; e prontuário já travado) | Bloqueado                                                       | **Permitida** (§1.2 linha 30)  |
+| **Adulto** (revogou `autoconsentimento_titular_adulto`)         | Continua (§13 linha 318-321 — não depende de consentimento) | Bloqueado só se revogou `uso_ia_processamento` especificamente | Bloqueado só se revogou `exportacao_relatorios` especificamente | Permitida (nunca foi restrita) |
+| **Curatelado** (revogou `representacao_curador`)                | **Bloqueado** (mesmo regime do menor — D6, representado)    | Bloqueado                                                      | Bloqueado                                                       | Permitida                      |
+| **Emancipado** (revogou `autoconsentimento_titular_emancipado`) | Continua (mesmo regime do adulto — D6, capaz)               | Bloqueado só se revogou `uso_ia_processamento`                 | Bloqueado só se revogou `exportacao_relatorios`                 | Permitida                      |
 
 Nota: para adulto/emancipado, "revogar `uso_ia_processamento`" e
 "revogar `exportacao_relatorios`" são eventos **independentes** — cada
@@ -769,10 +768,10 @@ diário/extração já param por causa do Read-Only Locked.
    `app_role` falha com erro de privilégio. Prova que 0053 não
    reintroduziu escrita em linha existente (D2).
 3. **CHECK rejeita revogação sem ponteiro** — `INSERT tipo =
-   'revogacao_consentimento'` com `consent_revogado_id IS NULL` viola a
+'revogacao_consentimento'` com `consent_revogado_id IS NULL` viola a
    constraint `consent_responsavel_por_tipo`. Prova arm 4 de D1.
 4. **CHECK rejeita concessão COM ponteiro** — `INSERT tipo =
-   'tratamento_dados_menor'` (ou qualquer tipo de concessão) com
+'tratamento_dados_menor'` (ou qualquer tipo de concessão) com
    `consent_revogado_id` preenchido viola a constraint. Prova a guarda
    simétrica dos arms 1-3/5-6.
 5. **CHECK rejeita curatela sem instrumento / com responsável vazio** —
@@ -781,7 +780,7 @@ diário/extração já param por causa do Read-Only Locked.
    (só espaço), viola a constraint. Prova arm 5 de D6, mesmo padrão
    `btrim` de 0051.
 6. **CHECK rejeita emancipado com responsável preenchido** — `INSERT
-   tipo = 'autoconsentimento_titular_emancipado'` com
+tipo = 'autoconsentimento_titular_emancipado'` com
    `responsavel_signatario` não-nulo viola a constraint. Prova arm 6.
 7. **Escrita clínica bloqueada em prontuário de menor revogado** —
    fixture: paciente menor com `tratamento_dados_menor` vigente,
@@ -819,7 +818,7 @@ diário/extração já param por causa do Read-Only Locked.
     linha de revogação (que tem que ser da clínica do operador); o
     teste confirma que o FK `consent_revogado_id` **não** cria um
     caminho de leitura/gravação cruzando clínica — a policy de INSERT
-    não valida a clínica da linha *apontada*, só a da linha sendo
+    não valida a clínica da linha _apontada_, só a da linha sendo
     inserida, e isso é suficiente porque ambas as linhas pertencem ao
     mesmo `patientId` por construção de app (a UI só oferece revogar
     consentimentos do próprio paciente sendo editado). ⚠️ **EM
@@ -896,7 +895,7 @@ diário/extração já param por causa do Read-Only Locked.
    fechar. Mitigação: grep obrigatório antes de escrever `0053` de
    verdade.
 2. **`consent_revogado_id` não valida mesmo paciente.** O CHECK de 0053
-   garante que o ponteiro aponta para *alguma* linha de `consent`, mas
+   garante que o ponteiro aponta para _alguma_ linha de `consent`, mas
    não que essa linha pertence ao mesmo `patient_id` da linha de
    revogação. Hoje isso é garantido só pela UI (a tela só lista
    consentimentos do paciente que está sendo editado) — não pelo banco.
@@ -905,7 +904,7 @@ diário/extração já param por causa do Read-Only Locked.
    impeçam. Mitigação recomendada, fora do escopo travado deste spec:
    avaliar CHECK adicional ou trigger que valide
    `(SELECT patient_id FROM consent WHERE id = consent_revogado_id) =
-   patient_id` na própria linha.
+patient_id` na própria linha.
 3. **`app_prontuario_somente_leitura` incluindo `representacao_curador`
    depende de D6 ser implementado junto.** Se `0052`/`0053` forem
    aplicados em etapas separadas (ex.: só revogação primeiro, curatela
@@ -914,7 +913,7 @@ diário/extração já param por causa do Read-Only Locked.
    tempo de execução, não em tempo de migração (comparação com string
    via `::text` não falha por enum ausente, mas o predicado nunca vai
    casar até o valor existir, o que é inofensivo — só um risco de
-   *sequenciamento*, não de erro).
+   _sequenciamento_, não de erro).
 4. **Read-Only Locked para menor bloqueia diário mas o comentário do
    parecer (§1.2, linha 29) também cita "chamadas de modelos LLM"** —
    D4 cobre isso via `uso_ia_processamento` já cessar (finalidade

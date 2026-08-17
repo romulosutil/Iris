@@ -25,11 +25,13 @@
 ### Task 1: Segunda conexão de banco (`authDb`) + env + runbook de infra
 
 **Files:**
+
 - Modify: `src/db/client.ts`
 - Modify: `.env.example`
 - Modify: `infra/README.md` (ou criar se não existir a seção)
 
 **Interfaces:**
+
 - Produces: `authDb` (Drizzle sobre conexão `iris_auth`), `authSql` (pool postgres-js), exportados de `@/db/client`. Assinatura idêntica ao `db` existente.
 
 - [ ] **Step 1: Adicionar a conexão `authDb` ao client**
@@ -89,10 +91,12 @@ git commit -m "feat(db): adiciona conexão authDb (role iris_auth) p/ auth e boo
 ### Task 2: Migração `0002` — RLS das tabelas globais (crux de segurança)
 
 **Files:**
+
 - Create: `db/migrations/0002_rls_globais.sql`
 - Create: `db/tests/rls_globais.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `authDb`, `authSql` de `@/db/client` (Task 1); `sql as appSql` (app_role) de `@/db/client`.
 - Produces: role `iris_auth`; RLS ativa em `app_user`/`clinic`/`user_role`; `auth_*` revogada de `app_role`.
 
@@ -111,7 +115,12 @@ Criar `db/tests/rls_globais.int.test.ts`:
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
 import { withTenant } from "../../src/db/rls";
-import { careTeamMembership, appUser, userRole, clinic } from "../../src/db/schema";
+import {
+  careTeamMembership,
+  appUser,
+  userRole,
+  clinic,
+} from "../../src/db/schema";
 import { sql as appSql, authSql, authDb } from "../../src/db/client";
 
 const hasDb =
@@ -178,9 +187,7 @@ describe.skipIf(!hasDb)("RLS tabelas globais — Fase 1b", () => {
   });
 
   test("iris_auth (bootstrap) lê user_role de qualquer clínica do usuário", async () => {
-    const rows = await authDb
-      .select({ cid: userRole.clinicId })
-      .from(userRole);
+    const rows = await authDb.select({ cid: userRole.clinicId }).from(userRole);
     const clinicas = new Set(rows.map((r) => r.cid));
     expect(clinicas.has(CLINIC_A)).toBe(true);
     expect(clinicas.has(CLINIC_B)).toBe(true); // vê além da clínica ativa
@@ -289,10 +296,12 @@ CREATE POLICY user_role_read ON user_role FOR SELECT TO app_role
 - [ ] **Step 4: Aplicar a migração + criar o login user local**
 
 Run:
+
 ```bash
 pnpm db:migrate
 psql "$MIGRATION_DATABASE_URL" -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='iris_auth_login') THEN CREATE ROLE iris_auth_login LOGIN PASSWORD 'iris' IN ROLE iris_auth; END IF; END \$\$;"
 ```
+
 Expected: migração aplicada; role de login criada (idempotente). Garantir que `AUTH_DATABASE_URL` no `.env` aponta pra `iris_auth_login`.
 
 - [ ] **Step 5: Rodar o teste para confirmar que passa**
@@ -317,11 +326,13 @@ git commit -m "feat(db): RLS nas tabelas globais + role iris_auth (fecha item di
 ### Task 3: Better-Auth usa `authDb` + route handler + client
 
 **Files:**
+
 - Modify: `src/auth/auth.ts:23` (troca `db` por `authDb`)
 - Create: `src/app/api/auth/[...all]/route.ts`
 - Create: `src/auth/client.ts`
 
 **Interfaces:**
+
 - Consumes: `authDb` de `@/db/client`; `auth` de `@/auth/auth`.
 - Produces: rota `/api/auth/*`; `authClient` (com `signIn`, `signOut`, `useSession`) de `@/auth/client`.
 
@@ -380,10 +391,12 @@ git commit -m "feat(auth): route handler Better-Auth + client; adapter usa authD
 ### Task 4: Regra de papel ativo (`papelAtivo`) — função pura + unit test (A2)
 
 **Files:**
+
 - Create: `src/auth/papel-ativo.ts`
 - Test: `src/auth/papel-ativo.test.ts`
 
 **Interfaces:**
+
 - Produces: `type Papel = "coordenador" | "terapeuta" | "admin_recepcao"`; `papelAtivo(papeis: Papel[]): PapelResolvido` onde `type PapelResolvido = { papel: Papel } | { needsSelection: Papel[] }`.
 
 - [ ] **Step 1: Escrever o teste (falha primeiro)**
@@ -472,10 +485,12 @@ git commit -m "feat(auth): regra determinística de papel ativo (A2)"
 ### Task 5: `resolveTenant` + `getTenantContext` + integração (A1)
 
 **Files:**
+
 - Create: `src/auth/tenant.ts`
 - Test: `src/auth/tenant.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `authDb` de `@/db/client`; `auth` de `@/auth/auth`; `papelAtivo`, `Papel` de `@/auth/papel-ativo`; `withTenant`, `TenantContext` de `@/db/rls`.
 - Produces:
   - `type TenantResolution =`
@@ -617,7 +632,10 @@ export const COOKIE_PAPEL = "iris_active_role";
 export type TenantResolution =
   | { status: "unauthenticated" }
   | { status: "no_access" }
-  | { status: "needs_clinic_selection"; opcoes: { clinicId: string; nome: string }[] }
+  | {
+      status: "needs_clinic_selection";
+      opcoes: { clinicId: string; nome: string }[];
+    }
   | { status: "needs_role_selection"; clinicId: string; papeis: Papel[] }
   | { status: "ok"; ctx: TenantContext };
 
@@ -635,7 +653,11 @@ export async function resolveTenant(
 
   // Papéis do usuário em TODAS as clínicas (bootstrap via iris_auth, pré-GUC).
   const vinculos = await authDb
-    .select({ clinicId: userRole.clinicId, papel: userRole.papel, nome: clinic.nome })
+    .select({
+      clinicId: userRole.clinicId,
+      papel: userRole.papel,
+      nome: clinic.nome,
+    })
     .from(userRole)
     .innerJoin(clinic, eq(clinic.id, userRole.clinicId))
     .where(eq(userRole.userId, userId));
@@ -655,7 +677,10 @@ export async function resolveTenant(
     const nomePorId = new Map(vinculos.map((v) => [v.clinicId, v.nome]));
     return {
       status: "needs_clinic_selection",
-      opcoes: clinicasIds.map((id) => ({ clinicId: id, nome: nomePorId.get(id)! })),
+      opcoes: clinicasIds.map((id) => ({
+        clinicId: id,
+        nome: nomePorId.get(id)!,
+      })),
     };
   }
 
@@ -665,10 +690,20 @@ export async function resolveTenant(
     .map((v) => v.papel as Papel);
   const resolvido = papelAtivo(papeis);
   if ("needsSelection" in resolvido) {
-    if (ck.activeRole && (resolvido.needsSelection as string[]).includes(ck.activeRole)) {
-      return { status: "ok", ctx: { clinicId, userId, role: ck.activeRole as Papel } };
+    if (
+      ck.activeRole &&
+      (resolvido.needsSelection as string[]).includes(ck.activeRole)
+    ) {
+      return {
+        status: "ok",
+        ctx: { clinicId, userId, role: ck.activeRole as Papel },
+      };
     }
-    return { status: "needs_role_selection", clinicId, papeis: resolvido.needsSelection };
+    return {
+      status: "needs_role_selection",
+      clinicId,
+      papeis: resolvido.needsSelection,
+    };
   }
   return { status: "ok", ctx: { clinicId, userId, role: resolvido.papel } };
 }
@@ -722,10 +757,12 @@ git commit -m "feat(auth): resolveTenant + getTenantContext (A1 cookie é seleç
 ### Task 6: `provisionUser` (upsert por email) + integração (A6)
 
 **Files:**
+
 - Create: `src/auth/provisioning.ts`
 - Test: `src/auth/provisioning.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `authDb` de `@/db/client`; `auth` de `@/auth/auth`; `appUser`, `userRole` de `@/db/schema`; `Papel` de `@/auth/papel-ativo`.
 - Produces: `provisionUser(input: { email: string; nome: string; senha: string; clinicId: string; papel: Papel }): Promise<{ userId: string }>`.
 
@@ -768,25 +805,45 @@ describe.skipIf(!hasDb)("provisionUser — A6 upsert por email", () => {
 
   test("cria user novo + user_role", async () => {
     const { userId } = await provisionUser({
-      email: "novo@x.test", nome: "Novo", senha: "senha-forte-123",
-      clinicId: CLINIC_A, papel: "coordenador",
+      email: "novo@x.test",
+      nome: "Novo",
+      senha: "senha-forte-123",
+      clinicId: CLINIC_A,
+      papel: "coordenador",
     });
-    const users = await authDb.select().from(appUser).where(eq(appUser.email, "novo@x.test"));
+    const users = await authDb
+      .select()
+      .from(appUser)
+      .where(eq(appUser.email, "novo@x.test"));
     expect(users).toHaveLength(1);
     expect(users[0].id).toBe(userId);
-    const papeis = await authDb.select().from(userRole).where(eq(userRole.userId, userId));
+    const papeis = await authDb
+      .select()
+      .from(userRole)
+      .where(eq(userRole.userId, userId));
     expect(papeis).toHaveLength(1);
   });
 
   test("email existente NÃO duplica app_user; anexa novo user_role", async () => {
     const { userId } = await provisionUser({
-      email: "novo@x.test", nome: "Novo", senha: "ignorada",
-      clinicId: CLINIC_B, papel: "terapeuta",
+      email: "novo@x.test",
+      nome: "Novo",
+      senha: "ignorada",
+      clinicId: CLINIC_B,
+      papel: "terapeuta",
     });
-    const users = await authDb.select().from(appUser).where(eq(appUser.email, "novo@x.test"));
+    const users = await authDb
+      .select()
+      .from(appUser)
+      .where(eq(appUser.email, "novo@x.test"));
     expect(users).toHaveLength(1); // ainda 1 app_user
-    const papeis = await authDb.select().from(userRole).where(eq(userRole.userId, userId));
-    expect(papeis.map((p) => p.clinicId).sort()).toEqual([CLINIC_A, CLINIC_B].sort());
+    const papeis = await authDb
+      .select()
+      .from(userRole)
+      .where(eq(userRole.userId, userId));
+    expect(papeis.map((p) => p.clinicId).sort()).toEqual(
+      [CLINIC_A, CLINIC_B].sort(),
+    );
   });
 });
 ```
@@ -867,10 +924,12 @@ git commit -m "feat(auth): provisionUser upsert por email (A6)"
 ### Task 7: Script de seed de clínica
 
 **Files:**
+
 - Create: `scripts/seed-clinic.ts`
 - Modify: `package.json` (script `seed:clinic`)
 
 **Interfaces:**
+
 - Consumes: `provisionUser` de `@/auth/provisioning`; `authDb`, `authSql` de `@/db/client`; `clinic` de `@/db/schema`.
 
 - [ ] **Step 1: Escrever o script**
@@ -889,22 +948,33 @@ import { clinic } from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
 
 async function main() {
-  const [nome, email, senha, nomeCoord = "Coordenador(a)"] = process.argv.slice(2);
+  const [nome, email, senha, nomeCoord = "Coordenador(a)"] =
+    process.argv.slice(2);
   if (!nome || !email || !senha) {
     throw new Error('Uso: pnpm seed:clinic "<clínica>" <email> <senha> [nome]');
   }
 
-  const existente = await authDb.select().from(clinic).where(eq(clinic.nome, nome)).limit(1);
+  const existente = await authDb
+    .select()
+    .from(clinic)
+    .where(eq(clinic.nome, nome))
+    .limit(1);
   const [c] =
     existente.length > 0
       ? existente
       : await authDb.insert(clinic).values({ nome }).returning();
 
   const { userId } = await provisionUser({
-    email, nome: nomeCoord, senha, clinicId: c.id, papel: "coordenador",
+    email,
+    nome: nomeCoord,
+    senha,
+    clinicId: c.id,
+    papel: "coordenador",
   });
 
-  console.log(`Clínica "${nome}" (${c.id}) + coordenador ${email} (${userId}) prontos.`);
+  console.log(
+    `Clínica "${nome}" (${c.id}) + coordenador ${email} (${userId}) prontos.`,
+  );
   await authSql.end();
 }
 
@@ -941,12 +1011,14 @@ git commit -m "feat(scripts): seed de clínica + 1º coordenador"
 ### Task 8: Componentes de design system — `Input`, `Field`, `Form`
 
 **Files:**
+
 - Create: `src/components/ui/input.tsx`, `src/components/ui/input.stories.tsx`
 - Create: `src/components/ui/field.tsx`, `src/components/ui/field.stories.tsx`
 - Create: `src/components/ui/form.tsx`
 - Modify: `src/components/ui/a11y.test.tsx` (incluir os novos no gate axe)
 
 **Interfaces:**
+
 - Produces: `<Input>` (input estilizado por tokens, estados default/focus/erro/disabled); `<Field label htmlFor error>` (label + slot + mensagem de erro acessível via `aria-describedby`); `<Form>` (wrapper `<form>` com `onSubmit` que trata submitting/erro).
 
 **Nota:** seguir o padrão dos componentes existentes (`button.tsx`, `card.tsx`) — tokens do `globals.css`, `cn` de `@/lib/cn`, contraste AAA, `forced-colors`. Ler `button.tsx` e `button.stories.tsx` antes de escrever para copiar convenção de props/variantes/story.
@@ -993,10 +1065,12 @@ git commit -m "feat(ds): componentes Input, Field e Form (Storybook + a11y)"
 ### Task 9: Tela de login
 
 **Files:**
+
 - Create: `src/app/(auth)/login/page.tsx`
 - Create: `src/app/(auth)/layout.tsx`
 
 **Interfaces:**
+
 - Consumes: `signIn` de `@/auth/client`; `Input`/`Field`/`Form` (Task 8); `Botão` de `@/components/ui/button`.
 
 - [ ] **Step 1: Layout do grupo (auth)**
@@ -1029,12 +1103,14 @@ git commit -m "feat(ui): tela de login (Better-Auth + design system)"
 ### Task 10: Telas de seleção de clínica e de papel + escrita do cookie
 
 **Files:**
+
 - Create: `src/app/(auth)/selecionar-clinica/page.tsx`
 - Create: `src/app/(auth)/selecionar-papel/page.tsx`
 - Create: `src/app/(auth)/sem-acesso/page.tsx`
 - Create: `src/auth/actions.ts` (server actions que gravam os cookies)
 
 **Interfaces:**
+
 - Consumes: `resolveTenant` de `@/auth/tenant`; `COOKIE_CLINICA`/`COOKIE_PAPEL` de `@/auth/tenant`.
 - Produces: server actions `definirClinicaAtiva(clinicId: string)` e `definirPapelAtivo(papel: string)` que setam cookie httpOnly + `redirect("/")`.
 
@@ -1100,12 +1176,14 @@ git commit -m "feat(ui): seleção de clínica/papel ativos + cookies de seleç�
 ### Task 11: Shell protegido `(app)` + switcher
 
 **Files:**
+
 - Create: `src/app/(app)/layout.tsx`
 - Create: `src/app/(app)/page.tsx`
 - Create: `src/components/app/clinic-switcher.tsx`
 - Modify: `src/app/page.tsx` (redireciona `/` conforme sessão — ver nota)
 
 **Interfaces:**
+
 - Consumes: `getTenantContext` de `@/auth/tenant`; `resolveTenant` (para listar opções no switcher); `definirClinicaAtiva` de `@/auth/actions`; `signOut` de `@/auth/client`.
 
 **Nota de roteamento:** a raiz `/` deve cair no shell `(app)`. Como `(auth)` e `(app)` são route groups (não afetam o path), definir a home dentro de `(app)` e remover/ajustar o `src/app/page.tsx` atual (a home institucional da Fase 0.5) para viver noutra rota (ex.: mover para `(marketing)` fora de escopo, ou simplesmente deixar `(app)/page.tsx` responder por `/`). Confirmar que não há duas `page.tsx` resolvendo `/`.
@@ -1145,9 +1223,11 @@ git commit -m "feat(ui): shell protegido + switcher de clínica"
 ### Task 12: E2E de login (Playwright)
 
 **Files:**
+
 - Create: `e2e/login.spec.ts` (ou o diretório que `playwright.config` já usa — confirmar)
 
 **Interfaces:**
+
 - Consumes: app rodando + DB semeado (coordenador de clínica única).
 
 - [ ] **Step 1: Confirmar a config do Playwright**
@@ -1190,6 +1270,7 @@ git commit -m "test(e2e): login de coordenador → shell protegido"
 ### Task 13: Atualizar BACKLOG + abrir PR
 
 **Files:**
+
 - Modify: `BACKLOG.md` (progresso da Fase 1, sub-bloco 1b)
 
 **Interfaces:** nenhuma (documentação + PR).
@@ -1227,6 +1308,7 @@ Expected: grafo reflete o código novo.
 ## Self-Review
 
 **Spec coverage:**
+
 - Duas conexões (crux) → Task 1 (client) + Task 2 (migração/grants). ✅
 - RLS tabelas globais (auth_* revoke, app_user/clinic/user_role scoped, `TO iris_auth`) → Task 2. ✅
 - Route handler + client Better-Auth → Task 3. ✅
@@ -1245,6 +1327,7 @@ Expected: grafo reflete o código novo.
 **Type consistency:** `Papel` (papel-ativo.ts) ≡ `UserRole`/`TenantContext.role` (rls.ts) — mesma união de strings; cast documentado na Task 5. `resolveTenant(headers, cookies)` — assinatura idêntica em Interfaces (Task 5) e chamadas (Tasks 10, 11). `provisionUser` input idêntico em Tasks 6 e 7. `COOKIE_CLINICA`/`COOKIE_PAPEL` definidos na Task 5, consumidos na Task 10. `definirClinicaAtiva`/`definirPapelAtivo` definidos na Task 10, consumidos na Task 11.
 
 **Riscos de execução conhecidos:**
+
 - Better-Auth `auth.api.signUpEmail` / `getSession` — confirmar a assinatura exata na versão 1.6.23 ao implementar (Tasks 5, 6); a forma `{ body: {...} }` / `{ headers }` é a de 1.x, mas validar contra os tipos.
 - `playwright.config.ts` pode não subir o app nem semear — Task 12 Step 1 obriga confirmar antes de escrever o teste.
 - Conflito de `/` entre a home da Fase 0.5 e o shell (app) — tratado explicitamente na Task 11 Step 4.

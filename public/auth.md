@@ -46,12 +46,12 @@ To register an AI agent or service account programmatically:
 
 ## 4. Supported Scopes
 
-| Scope | Description | Access Level |
-| :--- | :--- | :--- |
-| `read:patients` | Read anonymized patient dossier summaries | Restricted |
-| `write:evaluations` | Submit pre-evaluation observations & questionnaires | Write |
-| `read:reports` | Fetch generated clinical reports | Restricted |
-| `agent:interact` | Interact via WebMCP browser API or MCP Server | Interactive |
+| Scope               | Description                                         | Access Level |
+| :------------------ | :-------------------------------------------------- | :----------- |
+| `read:patients`     | Read anonymized patient dossier summaries           | Restricted   |
+| `write:evaluations` | Submit pre-evaluation observations & questionnaires | Write        |
+| `read:reports`      | Fetch generated clinical reports                    | Restricted   |
+| `agent:interact`    | Interact via WebMCP browser API or MCP Server       | Interactive  |
 
 ---
 

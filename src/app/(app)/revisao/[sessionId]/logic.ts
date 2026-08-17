@@ -6,8 +6,15 @@ import { withTenant, type TenantContext } from "@/db/rls";
 import { evidence, extraction, reinforcerProfile, session } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
-import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
-import { type Alvo, drizzleResolverQueries, resolverAlvoParaFks } from "@/lib/evidence/resolver";
+import {
+  drizzleMaterializarQueries,
+  materializarSnapshot,
+} from "@/lib/evidence/materializar";
+import {
+  type Alvo,
+  drizzleResolverQueries,
+  resolverAlvoParaFks,
+} from "@/lib/evidence/resolver";
 
 // ─── Inserção de `evidence` on-approve (Fase 4 · §4 da spec de resolução
 // slug→UUID) ───────────────────────────────────────────────────────────────
@@ -39,11 +46,13 @@ type ExtracaoAprovadaRow = {
 // depois. Mesmo padrão de idempotência de `evidence` (chave estável,
 // discriminador de re-aprovação), aqui `(extraction_id, item_atividade)`.
 type ReinforcerValencia = "alta" | "baixa" | "saciado";
-const REINFORCER_VALENCIAS: readonly ReinforcerValencia[] = ["alta", "baixa", "saciado"];
+const REINFORCER_VALENCIAS: readonly ReinforcerValencia[] = [
+  "alta",
+  "baixa",
+  "saciado",
+];
 type PreferenciaReforcadorConteudo =
-  | { item_atividade?: string; valencia?: string }
-  | null
-  | undefined;
+  { item_atividade?: string; valencia?: string } | null | undefined;
 
 async function inserirReforcadoresOnApprove(
   tx: Parameters<Parameters<typeof withTenant>[1]>[0],
@@ -61,7 +70,8 @@ async function inserirReforcadoresOnApprove(
   const itemAtividade = pref?.item_atividade?.trim();
   const valenciaBruta = pref?.valencia;
   if (!itemAtividade || !valenciaBruta) return;
-  if (!REINFORCER_VALENCIAS.includes(valenciaBruta as ReinforcerValencia)) return;
+  if (!REINFORCER_VALENCIAS.includes(valenciaBruta as ReinforcerValencia))
+    return;
   const valencia = valenciaBruta as ReinforcerValencia;
 
   await tx
@@ -87,17 +97,27 @@ async function inserirEvidenciasOnApprove(
   row: ExtracaoAprovadaRow,
 ): Promise<void> {
   const [sess] = await tx
-    .select({ patientId: session.patientId, numero: session.numeroSequencialPaciente })
+    .select({
+      patientId: session.patientId,
+      numero: session.numeroSequencialPaciente,
+    })
     .from(session)
     .where(eq(session.id, row.sessionId));
   if (!sess) return;
 
   // #174 regra 6: aprovar evidência clínica desarquiva o paciente se arquivado
-  await desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "aprovacao_evidencia");
+  await desarquivarPacienteSeArquivado(
+    tx,
+    ctx,
+    sess.patientId,
+    "aprovacao_evidencia",
+  );
 
   // ⚠️ BLINDAGEM DE ADVISORY LOCK: Lock por paciente para serializar recomputações concorrentes de snapshot.
   // Nenhuma chamada externa lenta (como APIs de IA ou rede) pode ocorrer após a aquisição deste lock.
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${sess.patientId}::text, 0))`);
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${sess.patientId}::text, 0))`,
+  );
 
   if (sess.numero == null) {
     // TODO(Fase 4): sessão ainda não consolidada (numero_sequencial_paciente
@@ -116,7 +136,9 @@ async function inserirEvidenciasOnApprove(
 
   if (row.subtipo !== "evidencia") return;
 
-  const conteudo = (row.payloadEditado ?? row.payload) as { evidencia?: EvidenciaConteudo | null };
+  const conteudo = (row.payloadEditado ?? row.payload) as {
+    evidencia?: EvidenciaConteudo | null;
+  };
   const evidenciaObj = conteudo?.evidencia;
   const alvos = Array.isArray(evidenciaObj?.alvos) ? evidenciaObj!.alvos! : [];
   if (alvos.length === 0) return;
@@ -126,12 +148,18 @@ async function inserirEvidenciasOnApprove(
 
   for (let ordinal = 0; ordinal < alvos.length; ordinal++) {
     const alvo = alvos[ordinal]!;
-    const { protocolId, goalId, milestoneId, protocolSlug, dominioId, goalRef } =
-      await resolverAlvoParaFks(
-        resolverQueries,
-        { clinicId: ctx.clinicId, patientId: sess.patientId },
-        alvo,
-      );
+    const {
+      protocolId,
+      goalId,
+      milestoneId,
+      protocolSlug,
+      dominioId,
+      goalRef,
+    } = await resolverAlvoParaFks(
+      resolverQueries,
+      { clinicId: ctx.clinicId, patientId: sess.patientId },
+      alvo,
+    );
     // classificacao_original: cópia congelada do alvo aprovado, mesclada com o
     // conteúdo clínico de `evidencia` (sem o array `alvos` completo, que não é
     // escopo desta linha) — mesmo padrão do backfill.
@@ -156,14 +184,20 @@ async function inserirEvidenciasOnApprove(
       })
       // idempotente: (extraction_id, alvo_ordinal) é a chave — re-aprovar (ou
       // reprocessar) não duplica.
-      .onConflictDoNothing({ target: [evidence.extractionId, evidence.alvoOrdinal] });
+      .onConflictDoNothing({
+        target: [evidence.extractionId, evidence.alvoOrdinal],
+      });
   }
 
   // Materialização real (4B — segmentação/repertório em TS puro, ver
   // src/lib/evidence/materializar.ts). Recompute a partir de `sess.numero`
   // (a sessão recém-aprovada) em diante, na mesma transação da inserção de
   // evidence acima.
-  await materializarSnapshot(drizzleMaterializarQueries(tx), sess.patientId, sess.numero);
+  await materializarSnapshot(
+    drizzleMaterializarQueries(tx),
+    sess.patientId,
+    sess.numero,
+  );
 }
 
 // Revisão humana das extrações sugeridas pela IA (Fase 3 Plano 2). Cada ação
@@ -179,7 +213,11 @@ const idSchema = z.object({ extractionId: z.string().uuid() });
 // `bloqueioConta` viaja junto de `error` (e não no lugar dele) porque a tela de
 // revisão já sabe renderizar `error`; sem o campo estruturado ela não teria como
 // distinguir "conta em somente-leitura" (CTA de ativação) de erro de validação.
-export type ReviewResult = { error?: string; ok?: boolean; bloqueioConta?: BloqueioConta };
+export type ReviewResult = {
+  error?: string;
+  ok?: boolean;
+  bloqueioConta?: BloqueioConta;
+};
 
 async function transicionar(
   ctx: TenantContext,
@@ -267,9 +305,13 @@ async function aprovarExtracaoCore(
   ctx: TenantContext,
   input: { extractionId: string; versao: number },
 ): Promise<ReviewResult> {
-  const p = z.object({ extractionId: z.string().uuid(), versao: z.number() }).safeParse(input);
+  const p = z
+    .object({ extractionId: z.string().uuid(), versao: z.number() })
+    .safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
-  return transicionar(ctx, p.data.extractionId, p.data.versao, { estado: "aprovada" });
+  return transicionar(ctx, p.data.extractionId, p.data.versao, {
+    estado: "aprovada",
+  });
 }
 
 export const aprovarExtracao = comEscrita(aprovarExtracaoCore);
@@ -278,9 +320,13 @@ async function descartarExtracaoCore(
   ctx: TenantContext,
   input: { extractionId: string; versao: number },
 ): Promise<ReviewResult> {
-  const p = z.object({ extractionId: z.string().uuid(), versao: z.number() }).safeParse(input);
+  const p = z
+    .object({ extractionId: z.string().uuid(), versao: z.number() })
+    .safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
-  return transicionar(ctx, p.data.extractionId, p.data.versao, { estado: "descartada" });
+  return transicionar(ctx, p.data.extractionId, p.data.versao, {
+    estado: "descartada",
+  });
 }
 
 // Descartar também escreve (transição + `revisado_por`/`revisado_em`), então
@@ -295,7 +341,11 @@ const editarSchema = z.object({
 
 async function editarExtracaoCore(
   ctx: TenantContext,
-  input: { extractionId: string; payloadEditado: Record<string, unknown>; versao: number },
+  input: {
+    extractionId: string;
+    payloadEditado: Record<string, unknown>;
+    versao: number;
+  },
 ): Promise<ReviewResult> {
   const p = editarSchema.safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };

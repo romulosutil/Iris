@@ -65,35 +65,37 @@ coordenador e aceite de termos de forma **idempotente e retomável**, porque
 
 ## Estrutura de arquivos
 
-| Arquivo | Responsabilidade |
-|---|---|
-| `db/migrations/0057_cadastro_self_service.sql` | Colunas de trial em `clinic`, registro profissional em `app_user`, grants |
-| `db/migrations/0058_professional_consent.sql` | Tabela de aceite de termos do profissional + RLS |
-| `db/migrations/0059_email_verificado_backfill.sql` | Backfill de `email_verified` das contas pré-existentes |
-| `src/db/schema.ts` | Declaração Drizzle das colunas/tabela novas |
-| `src/lib/email/transacional.ts` | Adapter de e-mail genérico (verificação, reset). **Não** toca `resend.ts` do alerta de risco |
-| `src/auth/auth.ts` | Liga `requireEmailVerification`, `sendVerificationEmail`, `sendResetPassword` |
-| `src/auth/cadastro.ts` | Núcleo `server-only` do cadastro: idempotente e retomável |
-| `src/app/(auth)/cadastro/actions.ts` | Action fina `"use server"` |
-| `src/app/(auth)/cadastro/page.tsx` + `cadastro-form.tsx` | UI do cadastro |
-| `src/app/(auth)/cadastro/verifique-email/page.tsx` | Tela de "confira seu e-mail" |
-| `src/app/(auth)/esqueci-senha/…` e `redefinir-senha/…` | Fluxo de recuperação |
-| `src/lib/rate-limit.ts` | Contador de tentativas por IP e por e-mail |
-| `src/lib/trial.ts` | Dias restantes de trial no timezone da clínica |
-| `src/components/app/faixa-trial.tsx` | Faixa persistente no shell |
-| `e2e/cadastro.spec.ts` | Jornada completa |
+| Arquivo                                                  | Responsabilidade                                                                             |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `db/migrations/0057_cadastro_self_service.sql`           | Colunas de trial em `clinic`, registro profissional em `app_user`, grants                    |
+| `db/migrations/0058_professional_consent.sql`            | Tabela de aceite de termos do profissional + RLS                                             |
+| `db/migrations/0059_email_verificado_backfill.sql`       | Backfill de `email_verified` das contas pré-existentes                                       |
+| `src/db/schema.ts`                                       | Declaração Drizzle das colunas/tabela novas                                                  |
+| `src/lib/email/transacional.ts`                          | Adapter de e-mail genérico (verificação, reset). **Não** toca `resend.ts` do alerta de risco |
+| `src/auth/auth.ts`                                       | Liga `requireEmailVerification`, `sendVerificationEmail`, `sendResetPassword`                |
+| `src/auth/cadastro.ts`                                   | Núcleo `server-only` do cadastro: idempotente e retomável                                    |
+| `src/app/(auth)/cadastro/actions.ts`                     | Action fina `"use server"`                                                                   |
+| `src/app/(auth)/cadastro/page.tsx` + `cadastro-form.tsx` | UI do cadastro                                                                               |
+| `src/app/(auth)/cadastro/verifique-email/page.tsx`       | Tela de "confira seu e-mail"                                                                 |
+| `src/app/(auth)/esqueci-senha/…` e `redefinir-senha/…`   | Fluxo de recuperação                                                                         |
+| `src/lib/rate-limit.ts`                                  | Contador de tentativas por IP e por e-mail                                                   |
+| `src/lib/trial.ts`                                       | Dias restantes de trial no timezone da clínica                                               |
+| `src/components/app/faixa-trial.tsx`                     | Faixa persistente no shell                                                                   |
+| `e2e/cadastro.spec.ts`                                   | Jornada completa                                                                             |
 
 ---
 
 ### Task 1: Schema do trial e do registro profissional
 
 **Files:**
+
 - Create: `db/migrations/0057_cadastro_self_service.sql`
 - Modify: `db/migrations/meta/_journal.json`
 - Modify: `src/db/schema.ts` (tabela `clinic`, ~linha 215; tabela `appUser`)
 - Test: `src/db/cadastro-self-service.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: nada.
 - Produces: `clinic.trialComecoEm: Date`, `clinic.trialDias: number`,
   `appUser.conselho: string | null`, `appUser.registroNumero: string | null`,
@@ -116,8 +118,15 @@ describe("schema do cadastro self-service", () => {
       where table_name = 'clinic'
         and column_name in ('trial_comeco_em', 'trial_dias')
       order by column_name`);
-    const linhas = r as unknown as { column_name: string; column_default: string | null; is_nullable: string }[];
-    expect(linhas.map((l) => l.column_name)).toEqual(["trial_comeco_em", "trial_dias"]);
+    const linhas = r as unknown as {
+      column_name: string;
+      column_default: string | null;
+      is_nullable: string;
+    }[];
+    expect(linhas.map((l) => l.column_name)).toEqual([
+      "trial_comeco_em",
+      "trial_dias",
+    ]);
     expect(linhas.every((l) => l.is_nullable === "NO")).toBe(true);
     expect(linhas[1]!.column_default).toContain("7");
   });
@@ -224,11 +233,13 @@ git commit -m "feat(db): relógio de trial em clinic e registro profissional em 
 ### Task 2: Tabela `professional_consent`
 
 **Files:**
+
 - Create: `db/migrations/0058_professional_consent.sql`
 - Modify: `db/migrations/meta/_journal.json`, `src/db/schema.ts`
 - Test: `src/db/professional-consent.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1 (nada além do banco migrado).
 - Produces: `professionalConsent` (Drizzle) com colunas `id`, `userId`,
   `clinicId`, `versaoTermo`, `aceitoEm`, `ip`, `userAgent`.
@@ -252,14 +263,18 @@ describe("professional_consent", () => {
   it("tem RLS habilitada", async () => {
     const r = await db.execute(sql`
       select relrowsecurity from pg_class where relname = 'professional_consent'`);
-    expect((r as unknown as { relrowsecurity: boolean }[])[0]?.relrowsecurity).toBe(true);
+    expect(
+      (r as unknown as { relrowsecurity: boolean }[])[0]?.relrowsecurity,
+    ).toBe(true);
   });
 
   it("app_role não tem UPDATE nem DELETE (aceite é imutável)", async () => {
     const r = await db.execute(sql`
       select privilege_type from information_schema.role_table_grants
       where table_name = 'professional_consent' and grantee = 'app_role'`);
-    const privs = (r as unknown as { privilege_type: string }[]).map((p) => p.privilege_type);
+    const privs = (r as unknown as { privilege_type: string }[]).map(
+      (p) => p.privilege_type,
+    );
     expect(privs).not.toContain("UPDATE");
     expect(privs).not.toContain("DELETE");
   });
@@ -333,7 +348,9 @@ export const professionalConsent = pgTable("professional_consent", {
     .notNull()
     .references(() => clinic.id),
   versaoTermo: text("versao_termo").notNull(),
-  aceitoEm: timestamp("aceito_em", { withTimezone: true }).notNull().defaultNow(),
+  aceitoEm: timestamp("aceito_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   ip: text("ip"),
   userAgent: text("user_agent"),
 });
@@ -356,10 +373,12 @@ git commit -m "feat(db): professional_consent — aceite de termos do profission
 ### Task 3: Adapter de e-mail transacional
 
 **Files:**
+
 - Create: `src/lib/email/transacional.ts`
 - Test: `src/lib/email/transacional.test.ts`
 
 **Interfaces:**
+
 - Consumes: nada.
 - Produces: `enviarEmailTransacional(input: EmailTransacionalInput): Promise<{ enviado: boolean }>`
   onde `EmailTransacionalInput = { para: string; assunto: string; texto: string; html: string }`.
@@ -400,7 +419,10 @@ describe("enviarEmailTransacional", () => {
     });
     expect(r.enviado).toBe(true);
     expect(enviar).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "pessoa@exemplo.com.br", subject: "Confirme seu e-mail" }),
+      expect.objectContaining({
+        to: "pessoa@exemplo.com.br",
+        subject: "Confirme seu e-mail",
+      }),
     );
   });
 
@@ -408,7 +430,12 @@ describe("enviarEmailTransacional", () => {
     enviar.mockResolvedValue({ data: null, error: { message: "limite" } });
     const { enviarEmailTransacional } = await import("./transacional");
     await expect(
-      enviarEmailTransacional({ para: "a@b.com", assunto: "x", texto: "y", html: "<p>y</p>" }),
+      enviarEmailTransacional({
+        para: "a@b.com",
+        assunto: "x",
+        texto: "y",
+        html: "<p>y</p>",
+      }),
     ).resolves.toEqual({ enviado: false });
   });
 });
@@ -491,12 +518,14 @@ git commit -m "feat(email): adapter transacional genérico para verificação e 
 ### Task 4: Better Auth — verificação de e-mail e reset, com backfill
 
 **Files:**
+
 - Modify: `src/auth/auth.ts`
 - Create: `db/migrations/0059_email_verificado_backfill.sql`
 - Modify: `db/migrations/meta/_journal.json`
 - Test: `src/auth/verificacao.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `enviarEmailTransacional` (Task 3).
 - Produces: `auth` com `emailVerification` e `sendResetPassword` configurados.
 
@@ -596,21 +625,32 @@ git commit -m "feat(auth): verificação de e-mail e reset de senha, com backfil
 ### Task 5: Núcleo do cadastro — idempotente e retomável
 
 **Files:**
+
 - Create: `src/auth/cadastro.ts`
 - Test: `src/auth/cadastro.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `provisionUser` (`src/auth/provisioning.ts`), `professionalConsent`,
   colunas da Task 1.
 - Produces:
   ```ts
   type EntradaCadastro = {
-    email: string; senha: string; nome: string; nomeClinica: string;
-    conselho: string; registroNumero: string; registroUf: string;
-    versaoTermo: string; ip?: string; userAgent?: string;
+    email: string;
+    senha: string;
+    nome: string;
+    nomeClinica: string;
+    conselho: string;
+    registroNumero: string;
+    registroUf: string;
+    versaoTermo: string;
+    ip?: string;
+    userAgent?: string;
   };
   type ResultadoCadastro = { userId: string; clinicId: string };
-  async function criarContaEClinica(e: EntradaCadastro): Promise<ResultadoCadastro>
+  async function criarContaEClinica(
+    e: EntradaCadastro,
+  ): Promise<ResultadoCadastro>;
   ```
 
 > Este módulo é `server-only` e **não** leva `"use server"`. Ele é o núcleo; o
@@ -642,7 +682,10 @@ describe("criarContaEClinica", () => {
     const email = `t${Date.now()}@exemplo.com.br`;
     const { userId, clinicId } = await criarContaEClinica({ ...base, email });
 
-    const papeis = await authDb.select().from(userRole).where(eq(userRole.userId, userId));
+    const papeis = await authDb
+      .select()
+      .from(userRole)
+      .where(eq(userRole.userId, userId));
     expect(papeis).toHaveLength(1);
     expect(papeis[0]!.papel).toBe("coordenador");
     expect(papeis[0]!.clinicId).toBe(clinicId);
@@ -663,19 +706,30 @@ describe("criarContaEClinica", () => {
     expect(b.userId).toBe(a.userId);
     expect(b.clinicId).toBe(a.clinicId);
 
-    const papeis = await authDb.select().from(userRole).where(eq(userRole.userId, a.userId));
+    const papeis = await authDb
+      .select()
+      .from(userRole)
+      .where(eq(userRole.userId, a.userId));
     expect(papeis).toHaveLength(1);
 
-    const clinicas = await authDb.select().from(clinic).where(eq(clinic.id, a.clinicId));
+    const clinicas = await authDb
+      .select()
+      .from(clinic)
+      .where(eq(clinic.id, a.clinicId));
     expect(clinicas).toHaveLength(1);
   });
 
   it("inicia o trial no momento do cadastro", async () => {
     const email = `t${Date.now()}c@exemplo.com.br`;
     const { clinicId } = await criarContaEClinica({ ...base, email });
-    const [c] = await authDb.select().from(clinic).where(eq(clinic.id, clinicId));
+    const [c] = await authDb
+      .select()
+      .from(clinic)
+      .where(eq(clinic.id, clinicId));
     expect(c!.trialDias).toBe(7);
-    expect(Date.now() - new Date(c!.trialComecoEm).getTime()).toBeLessThan(60_000);
+    expect(Date.now() - new Date(c!.trialComecoEm).getTime()).toBeLessThan(
+      60_000,
+    );
   });
 });
 ```
@@ -814,10 +868,12 @@ git commit -m "feat(auth): núcleo de cadastro self-service idempotente e retom�
 ### Task 6: Rate limit e resposta uniforme (anti-enumeração)
 
 **Files:**
+
 - Create: `src/lib/rate-limit.ts`
 - Test: `src/lib/rate-limit.test.ts`
 
 **Interfaces:**
+
 - Consumes: nada.
 - Produces: `consumirTentativa(chave: string, limite: number, janelaMs: number): { permitido: boolean }`
 
@@ -921,16 +977,23 @@ git commit -m "feat(seguranca): contador de tentativas por IP e por e-mail"
 ### Task 7: Action de cadastro (endpoint público)
 
 **Files:**
+
 - Create: `src/app/(auth)/cadastro/logic.ts`, `src/app/(auth)/cadastro/actions.ts`
 - Test: `src/app/(auth)/cadastro/logic.test.ts`
 
 **Interfaces:**
+
 - Consumes: `criarContaEClinica` (Task 5), `consumirTentativa` (Task 6).
 - Produces:
   ```ts
   type EstadoCadastro = { error?: string };
-  async function cadastrar(_prev: EstadoCadastro, formData: FormData): Promise<EstadoCadastro>
-  function validarCadastro(formData: FormData): { ok: true; dados: EntradaCadastroForm } | { ok: false; error: string }
+  async function cadastrar(
+    _prev: EstadoCadastro,
+    formData: FormData,
+  ): Promise<EstadoCadastro>;
+  function validarCadastro(
+    formData: FormData,
+  ): { ok: true; dados: EntradaCadastroForm } | { ok: false; error: string };
   ```
 
 > A action é o **único** ponto invocável pelo cliente. Ela não recebe `ctx` nem
@@ -970,7 +1033,10 @@ describe("validarCadastro", () => {
   it("exige aceite dos termos", () => {
     const { termos: _, ...semTermos } = completo;
     const r = validarCadastro(fd(semTermos));
-    expect(r).toEqual({ ok: false, error: "É preciso aceitar os termos de uso para criar a conta." });
+    expect(r).toEqual({
+      ok: false,
+      error: "É preciso aceitar os termos de uso para criar a conta.",
+    });
   });
 
   it("exige conselho válido", () => {
@@ -980,7 +1046,10 @@ describe("validarCadastro", () => {
 
   it("exige senha de no mínimo 12 caracteres", () => {
     const r = validarCadastro(fd({ ...completo, senha: "curta123" }));
-    expect(r).toEqual({ ok: false, error: "A senha precisa ter ao menos 12 caracteres." });
+    expect(r).toEqual({
+      ok: false,
+      error: "A senha precisa ter ao menos 12 caracteres.",
+    });
   });
 });
 ```
@@ -1030,17 +1099,24 @@ export function validarCadastro(
     registroUf: texto("registroUf").toUpperCase(),
   };
 
-  if (!dados.email.includes("@")) return { ok: false, error: "Informe um e-mail válido." };
+  if (!dados.email.includes("@"))
+    return { ok: false, error: "Informe um e-mail válido." };
   if (dados.senha.length < 12)
     return { ok: false, error: "A senha precisa ter ao menos 12 caracteres." };
   if (!dados.nome) return { ok: false, error: "Informe seu nome completo." };
-  if (!dados.nomeClinica) return { ok: false, error: "Informe o nome da clínica." };
+  if (!dados.nomeClinica)
+    return { ok: false, error: "Informe o nome da clínica." };
   if (!(CONSELHOS as readonly string[]).includes(dados.conselho))
     return { ok: false, error: "Selecione seu conselho profissional." };
-  if (!dados.registroNumero) return { ok: false, error: "Informe o número do seu registro." };
-  if (dados.registroUf.length !== 2) return { ok: false, error: "Informe a UF do seu registro." };
+  if (!dados.registroNumero)
+    return { ok: false, error: "Informe o número do seu registro." };
+  if (dados.registroUf.length !== 2)
+    return { ok: false, error: "Informe a UF do seu registro." };
   if (formData.get("termos") !== "on")
-    return { ok: false, error: "É preciso aceitar os termos de uso para criar a conta." };
+    return {
+      ok: false,
+      error: "É preciso aceitar os termos de uso para criar a conta.",
+    };
 
   return { ok: true, dados };
 }
@@ -1050,7 +1126,9 @@ export function validarCadastro(
  * que impede a tela de virar oráculo de enumeração de e-mail cadastrado. Quem
  * já tem conta recebe, por e-mail, um aviso de tentativa com link de recuperação.
  */
-export async function executarCadastro(formData: FormData): Promise<EstadoCadastro> {
+export async function executarCadastro(
+  formData: FormData,
+): Promise<EstadoCadastro> {
   const validado = validarCadastro(formData);
   if (!validado.ok) return { error: validado.error };
 
@@ -1059,7 +1137,11 @@ export async function executarCadastro(formData: FormData): Promise<EstadoCadast
   const userAgent = h.get("user-agent") ?? undefined;
 
   const porIp = consumirTentativa(`cadastro:ip:${ip}`, 10, 60 * 60 * 1000);
-  const porEmail = consumirTentativa(`cadastro:email:${validado.dados.email}`, 3, 60 * 60 * 1000);
+  const porEmail = consumirTentativa(
+    `cadastro:email:${validado.dados.email}`,
+    3,
+    60 * 60 * 1000,
+  );
   if (!porIp.permitido || !porEmail.permitido)
     return { error: "Muitas tentativas. Tente novamente em uma hora." };
 
@@ -1117,11 +1199,13 @@ git commit -m "feat(cadastro): action pública com validação, rate limit e res
 ### Task 8: Telas de cadastro e verificação
 
 **Files:**
+
 - Create: `src/app/(auth)/cadastro/page.tsx`, `src/app/(auth)/cadastro/cadastro-form.tsx`,
   `src/app/(auth)/cadastro/verifique-email/page.tsx`
 - Modify: `src/app/(auth)/login/page.tsx` (link "Criar conta")
 
 **Interfaces:**
+
 - Consumes: `cadastrar`, `EstadoCadastro` (Task 7).
 - Produces: rota `/cadastro` e `/cadastro/verifique-email`.
 
@@ -1178,11 +1262,13 @@ git commit -m "feat(cadastro): telas de criação de conta e verificação de e-
 ### Task 9: Recuperação de senha
 
 **Files:**
+
 - Create: `src/app/(auth)/esqueci-senha/page.tsx`, `src/app/(auth)/esqueci-senha/actions.ts`,
   `src/app/(auth)/redefinir-senha/page.tsx`
 - Test: `src/app/(auth)/esqueci-senha/actions.test.ts`
 
 **Interfaces:**
+
 - Consumes: `authClient.forgetPassword` / `resetPassword` (`src/auth/client.ts`),
   `consumirTentativa` (Task 6), `sendResetPassword` (Task 4).
 - Produces: rotas `/esqueci-senha` e `/redefinir-senha`.
@@ -1238,10 +1324,12 @@ git commit -m "feat(auth): fluxo de recuperação de senha com resposta uniforme
 ### Task 10: `/sem-acesso` distingue cadastro incompleto
 
 **Files:**
+
 - Modify: `src/auth/tenant.ts:46`, `src/app/(auth)/sem-acesso/page.tsx`
 - Test: `src/auth/tenant-cadastro-incompleto.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `resolveTenant`.
 - Produces: `TenantResolution` ganha o status
   `{ status: "cadastro_incompleto"; userId: string }`.
@@ -1268,11 +1356,11 @@ Em `src/auth/tenant.ts`, acrescente o membro ao union `TenantResolution` e troqu
 a linha 46:
 
 ```ts
-  // Usuário autenticado sem NENHUM vínculo: no self-service isto significa que o
-  // cadastro morreu entre criar a conta e criar a clínica (o provisionamento não
-  // é atômico — ver src/auth/cadastro.ts). Devolver "sem acesso" aqui seria beco
-  // sem saída com o e-mail já queimado.
-  if (vinculos.length === 0) return { status: "cadastro_incompleto", userId };
+// Usuário autenticado sem NENHUM vínculo: no self-service isto significa que o
+// cadastro morreu entre criar a conta e criar a clínica (o provisionamento não
+// é atômico — ver src/auth/cadastro.ts). Devolver "sem acesso" aqui seria beco
+// sem saída com o e-mail já queimado.
+if (vinculos.length === 0) return { status: "cadastro_incompleto", userId };
 ```
 
 Em `getTenantContext`, trate o caso novo com
@@ -1299,11 +1387,13 @@ git commit -m "feat(auth): distingue cadastro incompleto de falta de acesso"
 ### Task 11: Faixa de trial no shell
 
 **Files:**
+
 - Create: `src/lib/trial.ts`, `src/components/app/faixa-trial.tsx`
 - Modify: o layout do shell protegido (`src/app/(app)/layout.tsx`)
 - Test: `src/lib/trial.test.ts`
 
 **Interfaces:**
+
 - Consumes: `clinic.trialComecoEm`, `clinic.trialDias`, `clinic.timezone`.
 - Produces: `diasRestantesDeTrial(inicio: Date, dias: number, timezone: string, agora?: Date): number`
 
@@ -1320,24 +1410,54 @@ const TZ = "America/Sao_Paulo";
 describe("diasRestantesDeTrial", () => {
   it("no dia do cadastro restam 7 dias", () => {
     const inicio = new Date("2026-08-01T14:00:00-03:00");
-    expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-08-01T20:00:00-03:00"))).toBe(7);
+    expect(
+      diasRestantesDeTrial(
+        inicio,
+        7,
+        TZ,
+        new Date("2026-08-01T20:00:00-03:00"),
+      ),
+    ).toBe(7);
   });
 
   it("na véspera do vencimento resta 1 dia", () => {
     const inicio = new Date("2026-08-01T14:00:00-03:00");
-    expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-08-07T23:00:00-03:00"))).toBe(1);
+    expect(
+      diasRestantesDeTrial(
+        inicio,
+        7,
+        TZ,
+        new Date("2026-08-07T23:00:00-03:00"),
+      ),
+    ).toBe(1);
   });
 
   it("no dia do vencimento resta 0 e nunca fica negativo", () => {
     const inicio = new Date("2026-08-01T14:00:00-03:00");
-    expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-08-08T01:00:00-03:00"))).toBe(0);
-    expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-09-30T01:00:00-03:00"))).toBe(0);
+    expect(
+      diasRestantesDeTrial(
+        inicio,
+        7,
+        TZ,
+        new Date("2026-08-08T01:00:00-03:00"),
+      ),
+    ).toBe(0);
+    expect(
+      diasRestantesDeTrial(
+        inicio,
+        7,
+        TZ,
+        new Date("2026-09-30T01:00:00-03:00"),
+      ),
+    ).toBe(0);
   });
 
   it("usa a fronteira de dia do timezone da clínica, não do servidor", () => {
     const inicio = new Date("2026-08-01T14:00:00-03:00");
     // 02:00 UTC de 08/08 ainda é 23:00 de 07/08 em São Paulo → ainda resta 1 dia.
-    expect(diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-08-08T02:00:00Z"))).toBe(1);
+    expect(
+      diasRestantesDeTrial(inicio, 7, TZ, new Date("2026-08-08T02:00:00Z")),
+    ).toBe(1);
   });
 });
 ```
@@ -1381,9 +1501,11 @@ git commit -m "feat(trial): faixa de dias restantes com fronteira de dia no time
 ### Task 12: E2E da jornada completa
 
 **Files:**
+
 - Create: `e2e/cadastro.spec.ts`
 
 **Interfaces:**
+
 - Consumes: todas as rotas anteriores.
 - Produces: nada consumido por outra task.
 
@@ -1396,6 +1518,7 @@ e-mail único (`t${Date.now()}@exemplo.com.br`) → aceita os termos → espera
 usuário cai em `/mfa/setup` (enforcement de papel clínico já existente).
 
 Asserções obrigatórias:
+
 - A tela de verificação **não** diz se o e-mail já existia.
 - Reenviar o mesmo cadastro duas vezes não cria clínica duplicada (consulta ao
   banco por `nome` da clínica devolve 1 linha).
@@ -1417,6 +1540,7 @@ git commit -m "test(e2e): jornada de cadastro até o enrollment de MFA"
 ### Task 13: Remover as envs do `iris-migrate`
 
 **Files:**
+
 - Modify: `docs/arquitetura/*` (onde as envs do serviço estiverem documentadas)
 
 **Interfaces:** nenhuma — é infraestrutura.

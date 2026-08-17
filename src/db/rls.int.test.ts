@@ -671,7 +671,7 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
             INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, justificativa, autor_id)
             VALUES (${ev2!.id}::uuid, 'invalidar'::evidence_revision_acao, '{}'::jsonb, 'Tentativa em EV2', ${U_TERA}::uuid)
           `);
-        })
+        }),
       );
       expect(erroEV2).toMatch(/row-level security policy/i);
 
@@ -750,4 +750,3 @@ describe.skipIf(!hasDb)("RLS multi-tenant — Fase 1", () => {
     });
   });
 });
-

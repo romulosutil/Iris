@@ -46,12 +46,12 @@ export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
         )}
         {...props}
       >
-        <p className="font-display text-[12px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+        <p className="font-display text-[12px] font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
           {titulo}
         </p>
 
         <div className="mt-2 flex items-center gap-3">
-          <span className="font-display text-[40px] font-bold leading-none text-[var(--text-primary)]">
+          <span className="font-display text-[40px] leading-none font-bold text-[var(--text-primary)]">
             {valor}
           </span>
 
@@ -64,7 +64,9 @@ export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
                   : "border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]",
               )}
             >
-              <span aria-hidden>{tendencia.direcao === "alta" ? "▲" : "▼"}</span>
+              <span aria-hidden>
+                {tendencia.direcao === "alta" ? "▲" : "▼"}
+              </span>
               {tendencia.valor}
             </span>
           )}

@@ -79,7 +79,11 @@ export function FamiliaReport({
     setResultado(null);
     setRevisado(false);
     iniciar(async () => {
-      const r = await gerarRascunhoFamiliaAction({ patientId, periodoInicio, periodoFim });
+      const r = await gerarRascunhoFamiliaAction({
+        patientId,
+        periodoInicio,
+        periodoFim,
+      });
       if ("error" in r) {
         setErro(r.error);
         return;
@@ -104,7 +108,11 @@ export function FamiliaReport({
       status: "rascunho_para_revisao",
     };
     iniciar(async () => {
-      const r = await curarFamiliaAction({ reportId, versaoEsperada: versao, draftEditado });
+      const r = await curarFamiliaAction({
+        reportId,
+        versaoEsperada: versao,
+        draftEditado,
+      });
       if ("error" in r) {
         setErro(r.error);
         return;
@@ -130,7 +138,7 @@ export function FamiliaReport({
   return (
     <Card titulo="Relatório da família">
       <Stack gap="md">
-        <p className="text-[var(--text-primary)] text-base">
+        <p className="text-base text-[var(--text-primary)]">
           Rascunho gerado pela IA a partir das evidências aprovadas do período,
           para o coordenador revisar e aprovar antes de enviar à família.
         </p>
@@ -195,11 +203,14 @@ export function FamiliaReport({
 
         {draft ? (
           <Stack gap="md">
-            <p className="text-[var(--text-primary)] text-lg font-semibold">
+            <p className="text-lg font-semibold text-[var(--text-primary)]">
               Revisão do coordenador
             </p>
 
-            <Field label="A conquista deste período" htmlFor="familia-conquista">
+            <Field
+              label="A conquista deste período"
+              htmlFor="familia-conquista"
+            >
               <Input
                 id="familia-conquista"
                 multiline

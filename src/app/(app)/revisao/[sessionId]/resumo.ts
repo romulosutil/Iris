@@ -26,7 +26,10 @@ function push(linhas: LinhaResumo[], rotulo: string, valor: string | null) {
  * funcional (dominio_id do alvo, ou a função). Para os demais subtipos, o
  * próprio subtipo já é a chave (não há alvo mapeado).
  */
-export function chaveDominio(subtipo: ExtractionSubtipo, payload: unknown): string | null {
+export function chaveDominio(
+  subtipo: ExtractionSubtipo,
+  payload: unknown,
+): string | null {
   const p = (payload ?? {}) as Payload;
   if (subtipo === "evidencia") {
     const alvos = Array.isArray(p.alvos) ? (p.alvos as Payload[]) : [];
@@ -61,7 +64,10 @@ export function rotuloSubtipo(subtipo: ExtractionSubtipo): string {
  * aprovar. Retorna a lista de linhas na ordem de leitura clínica. Nunca inclui
  * nota/pontuação (Camada 1: a IA não pontua) — só descreve o que observou.
  */
-export function resumirPayload(subtipo: ExtractionSubtipo, payload: unknown): LinhaResumo[] {
+export function resumirPayload(
+  subtipo: ExtractionSubtipo,
+  payload: unknown,
+): LinhaResumo[] {
   const p = (payload ?? {}) as Payload;
   const linhas: LinhaResumo[] = [];
 

@@ -36,15 +36,18 @@
 ### Task 1: Psicologia Generalista / Sem Protocolo (Issue #98)
 
 **Regras Levantadas:**
+
 1. `patient_protocol.protocol_id` vira `nullable`.
 2. Quando `protocol_id = null`, o agente de IA desativa a busca por domínios/marcos e gera apenas: Resumo Clínico, Temas Emergentes, Insights e Alertas de Risco.
 3. Usa o consentimento de paciente adulto já existente (`consent.tipo = 'autoconsentimento_titular_adulto'`, issue #100 — sem migração nova nesta task).
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (`patientProtocol.protocolId` nullable)
 - Create: `src/lib/agent/generalist-mode.ts`, `src/lib/agent/generalist-mode.test.ts`, `src/lib/agent/generalist-prompt.ts`
 
 **Interfaces:**
+
 - Consumes: `AgentInvoker` (assinatura `(input: { system: string; user: string }) => Promise<unknown>`, definida em `src/lib/extraction/claude-provider.ts:24-27`); `createAnthropicInvoker()` do mesmo arquivo.
 - Produces: `processarSessaoGeneralista(invoker: AgentInvoker, notaConsolidada: string): Promise<ResultadoGeneralista>` — usado por nenhuma task futura deste plano, mas deve seguir a mesma forma de retorno (`{ resumoClinico, temasEmergentes, insightsEvolutivos, alertasRisco }`) que o dossiê narrativo do paciente já espera (ver `docs/superpowers/specs/2026-08-02-issue-98-terapia-convencional-design.md` §3.2).
 
@@ -57,6 +60,7 @@ Run: `pnpm db:generate` (gera `db/migrations/0064_...sql`), depois `pnpm db:migr
 - [ ] **Step 2: Escrever teste unitário falho para o agente generalista, injetando um `AgentInvoker` fake**
 
 File: `src/lib/agent/generalist-mode.test.ts`
+
 ```typescript
 import { describe, it, expect, vi } from "vitest";
 import { processarSessaoGeneralista } from "./generalist-mode";
@@ -106,6 +110,7 @@ Expected: FAIL — `generalist-mode` não existe.
 - [ ] **Step 3: Escrever o prompt e o schema zod de saída**
 
 File: `src/lib/agent/generalist-prompt.ts`
+
 ```typescript
 import { z } from "zod";
 
@@ -143,6 +148,7 @@ export function buildGeneralistUserMessage(notaConsolidada: string): string {
 - [ ] **Step 4: Implementar `generalist-mode.ts` chamando o `AgentInvoker` real**
 
 File: `src/lib/agent/generalist-mode.ts`
+
 ```typescript
 import type { AgentInvoker } from "@/lib/extraction/claude-provider";
 import {
@@ -207,35 +213,51 @@ git commit -m "feat(clinical): implementar modo de psicologia generalista via Ag
 ### Task 2: Prontuário Multidisciplinar & Audit Log de Acesso (Issue #119)
 
 **Regras Levantadas:**
+
 1. Equipe de cuidado (papéis `terapeuta`, `coordenador`) enxerga 100% das notas clínicas do paciente quando está na equipe (`app_is_on_team`) ou é `coordenador` (bypassa checagem de equipe, mesmo padrão de `alerta`/`report`).
 2. Papel não clínico `admin_recepcao` tem RLS bloqueado para `session_note`, `evidence`, `report` (relatório à família).
 3. Toda abertura de nota clínica por profissional insere uma linha em `clinical_access_log`.
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (tabela `clinicalAccessLog`), `src/app/(app)/diario/[sessionId]/logic.ts` (ou onde a leitura da nota é servida — confirmar caminho exato no código antes de editar)
 - Create: `db/migrations/0065_clinical_access_log_rls.sql`, `src/lib/audit/clinical-access.ts`, `src/lib/audit/clinical-access.test.ts`, `db/tests/prontuario-roles-rls.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `withTenant(ctx: TenantContext, cb)` de `src/db/rls.ts`; `app_is_on_team(patient_id)` (função SQL existente).
 - Produces: `registrarAcessoClinico(params: { clinicId: string; userId: string; patientId: string; resourceType: "SESSION_NOTE" | "EVIDENCE" | "REPORT"; resourceId: string; ipAddress?: string }): Promise<void>` — chamado pela Server Action de leitura de nota clínica (Step 5).
 
 - [ ] **Step 1: Criar schema da tabela `clinical_access_log`**
 
 File: `src/db/schema.ts`
+
 ```typescript
-export const clinicalAccessLog = pgTable("clinical_access_log", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  clinicId: uuid("clinic_id").notNull().references(() => clinic.id, { onDelete: "cascade" }),
-  userId: uuid("user_id").notNull().references(() => user.id),
-  patientId: uuid("patient_id").notNull().references(() => patient.id, { onDelete: "cascade" }),
-  resourceType: varchar("resource_type", { length: 50 }).notNull(),
-  resourceId: uuid("resource_id").notNull(),
-  accessedAt: timestamp("accessed_at", { withTimezone: true }).notNull().defaultNow(),
-  ipAddress: varchar("ip_address", { length: 45 }),
-}, (t) => [
-  index("clinical_access_patient_idx").on(t.patientId, t.accessedAt),
-  index("clinical_access_user_idx").on(t.userId, t.accessedAt),
-]);
+export const clinicalAccessLog = pgTable(
+  "clinical_access_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "cascade" }),
+    resourceType: varchar("resource_type", { length: 50 }).notNull(),
+    resourceId: uuid("resource_id").notNull(),
+    accessedAt: timestamp("accessed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    ipAddress: varchar("ip_address", { length: 45 }),
+  },
+  (t) => [
+    index("clinical_access_patient_idx").on(t.patientId, t.accessedAt),
+    index("clinical_access_user_idx").on(t.userId, t.accessedAt),
+  ],
+);
 ```
 
 - [ ] **Step 2: Gerar e aplicar a migração da tabela**
@@ -246,6 +268,7 @@ Expected: novo arquivo `db/migrations/00XX_clinical_access_log.sql` (confirmar n
 - [ ] **Step 3: Escrever a migração de RLS restringindo `admin_recepcao` em `session_note`/`evidence`/`report`, reusando `app_is_on_team`**
 
 File: `db/migrations/00XX_clinical_access_log_rls.sql` (número seguinte ao da Step 2)
+
 ```sql
 -- clinical_access_log: append-only (trilha de auditoria).
 REVOKE UPDATE, DELETE ON clinical_access_log FROM app_role;
@@ -300,6 +323,7 @@ CREATE POLICY evidence_select ON evidence FOR SELECT TO app_role USING (
 - [ ] **Step 4: Escrever teste de RLS real (mirror de `db/tests/fase6-recepcao-isolation.int.test.ts`)**
 
 File: `db/tests/prontuario-roles-rls.int.test.ts`
+
 ```typescript
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
@@ -321,48 +345,57 @@ const SESSION = "00000000-0000-0000-0000-0000000000e1";
 const ctx = (role: string, userId: string) =>
   ({ role, userId, clinicId: CLINIC_A }) as TenantContext;
 
-describe.skipIf(!hasDb)("prontuário multidisciplinar · bloqueio de recepção", () => {
-  beforeAll(async () => {
-    await owner!`TRUNCATE session_note, session, care_team_membership, patient, clinic, app_user, user_role RESTART IDENTITY CASCADE`;
-    await owner!`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'Clínica A')`;
-    await owner!`INSERT INTO app_user (id, name, email) VALUES
+describe.skipIf(!hasDb)(
+  "prontuário multidisciplinar · bloqueio de recepção",
+  () => {
+    beforeAll(async () => {
+      await owner!`TRUNCATE session_note, session, care_team_membership, patient, clinic, app_user, user_role RESTART IDENTITY CASCADE`;
+      await owner!`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'Clínica A')`;
+      await owner!`INSERT INTO app_user (id, name, email) VALUES
       (${U_TER_A}, 'Ter A', 'ter-a@prontuario.test'),
       (${U_RECEP_A}, 'Recep A', 'recep-a@prontuario.test'),
       (${U_COORD_A}, 'Coord A', 'coord-a@prontuario.test')`;
-    await owner!`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
+      await owner!`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_TER_A}, ${CLINIC_A}, 'terapeuta'),
       (${U_RECEP_A}, ${CLINIC_A}, 'admin_recepcao'),
       (${U_COORD_A}, ${CLINIC_A}, 'coordenador')`;
-    await owner!`INSERT INTO patient (id, clinic_id, nome) VALUES (${PATIENT}, ${CLINIC_A}, 'Paciente 1')`;
-    await owner!`INSERT INTO care_team_membership (user_id, patient_id, papel_na_equipe) VALUES (${U_TER_A}, ${PATIENT}, 'terapeuta_referencia')`;
-    await owner!`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, status) VALUES (${SESSION}, ${CLINIC_A}, ${PATIENT}, ${U_TER_A}, 'realizada')`;
-    await owner!`INSERT INTO session_note (session_id, clinic_id, autor_id, tipo, texto) VALUES (${SESSION}, ${CLINIC_A}, ${U_TER_A}, 'diario', 'Nota clínica')`;
-  });
-  afterAll(async () => {
-    await owner?.end();
-  });
+      await owner!`INSERT INTO patient (id, clinic_id, nome) VALUES (${PATIENT}, ${CLINIC_A}, 'Paciente 1')`;
+      await owner!`INSERT INTO care_team_membership (user_id, patient_id, papel_na_equipe) VALUES (${U_TER_A}, ${PATIENT}, 'terapeuta_referencia')`;
+      await owner!`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, status) VALUES (${SESSION}, ${CLINIC_A}, ${PATIENT}, ${U_TER_A}, 'realizada')`;
+      await owner!`INSERT INTO session_note (session_id, clinic_id, autor_id, tipo, texto) VALUES (${SESSION}, ${CLINIC_A}, ${U_TER_A}, 'diario', 'Nota clínica')`;
+    });
+    afterAll(async () => {
+      await owner?.end();
+    });
 
-  test("terapeuta da equipe lê session_note", async () => {
-    const rows = await withTenant(ctx("terapeuta", U_TER_A), (db) =>
-      db.execute(sql`SELECT id FROM session_note WHERE session_id = ${SESSION}::uuid`),
-    );
-    expect(rows.length).toBeGreaterThan(0);
-  });
+    test("terapeuta da equipe lê session_note", async () => {
+      const rows = await withTenant(ctx("terapeuta", U_TER_A), (db) =>
+        db.execute(
+          sql`SELECT id FROM session_note WHERE session_id = ${SESSION}::uuid`,
+        ),
+      );
+      expect(rows.length).toBeGreaterThan(0);
+    });
 
-  test("coordenador lê session_note mesmo fora da equipe explícita", async () => {
-    const rows = await withTenant(ctx("coordenador", U_COORD_A), (db) =>
-      db.execute(sql`SELECT id FROM session_note WHERE session_id = ${SESSION}::uuid`),
-    );
-    expect(rows.length).toBeGreaterThan(0);
-  });
+    test("coordenador lê session_note mesmo fora da equipe explícita", async () => {
+      const rows = await withTenant(ctx("coordenador", U_COORD_A), (db) =>
+        db.execute(
+          sql`SELECT id FROM session_note WHERE session_id = ${SESSION}::uuid`,
+        ),
+      );
+      expect(rows.length).toBeGreaterThan(0);
+    });
 
-  test("admin_recepcao NÃO lê session_note", async () => {
-    const rows = await withTenant(ctx("admin_recepcao", U_RECEP_A), (db) =>
-      db.execute(sql`SELECT id FROM session_note WHERE session_id = ${SESSION}::uuid`),
-    );
-    expect(rows).toHaveLength(0);
-  });
-});
+    test("admin_recepcao NÃO lê session_note", async () => {
+      const rows = await withTenant(ctx("admin_recepcao", U_RECEP_A), (db) =>
+        db.execute(
+          sql`SELECT id FROM session_note WHERE session_id = ${SESSION}::uuid`,
+        ),
+      );
+      expect(rows).toHaveLength(0);
+    });
+  },
+);
 ```
 
 - [ ] **Step 4b: Executar teste RLS**
@@ -373,6 +406,7 @@ Expected: PASS (skip automático sem `MIGRATION_DATABASE_URL`, roda de verdade c
 - [ ] **Step 5: Implementar `registrarAcessoClinico` e conectar na leitura real da nota**
 
 File: `src/lib/audit/clinical-access.ts`
+
 ```typescript
 import { sql } from "@/db/client";
 import { clinicalAccessLog } from "@/db/schema";
@@ -401,6 +435,7 @@ Then: localizar em `src/app/(app)/diario/[sessionId]/logic.ts` (ou Server Action
 - [ ] **Step 6: Teste unitário do audit log**
 
 File: `src/lib/audit/clinical-access.test.ts`
+
 ```typescript
 import { describe, it, expect, vi } from "vitest";
 import { registrarAcessoClinico } from "./clinical-access";
@@ -441,21 +476,25 @@ git commit -m "feat(security): implementar clinical_access_log e endurecer RLS d
 ### Task 3: Módulo de TCC e Registro de Pensamentos RPD (Issue #99)
 
 **Regras Levantadas:**
+
 1. Extração da estrutura RPD (Situação, Pensamento Automático, Emoção, Distorção Cognitiva, Resposta Racional).
 2. Distorção Cognitiva entra com status `PENDENTE_REVISAO` até aprovação do terapeuta — precisa de coluna de status e Server Action de aprovação, não só schema.
 3. Suporte a escalas isentas PHQ-9 e GAD-7 — modelagem mínima de catálogo de escala + pontuação por sessão (sem gráfico, fica pra fatia de UI).
 
 **Files:**
+
 - Modify: `src/db/schema.ts` (tabela `tccThoughtRecord` + tabela `tccScaleScore`)
 - Create: `db/migrations/00XX_tcc_thought_record.sql`, `src/lib/agent/tcc-mode.ts`, `src/lib/agent/tcc-mode.test.ts`, `src/app/(app)/pacientes/[id]/tcc/actions.ts`, `src/app/(app)/pacientes/[id]/tcc/actions.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AgentInvoker` (mesma interface da Task 1).
 - Produces: `processarSessaoTCC(invoker: AgentInvoker, relato: string): Promise<ResultadoTCC>`; `aprovarDistorcaoCognitiva(recordId: string, distorcaoFinal: string, aprovadorId: string): Promise<void>`.
 
 - [ ] **Step 1: Criar schema das tabelas `tcc_thought_record` (com status) e `tcc_scale_score`**
 
 File: `src/db/schema.ts`
+
 ```typescript
 export const tccStatusRevisao = pgEnum("tcc_status_revisao", [
   "PENDENTE_REVISAO",
@@ -465,18 +504,26 @@ export const tccStatusRevisao = pgEnum("tcc_status_revisao", [
 
 export const tccThoughtRecord = pgTable("tcc_thought_record", {
   id: uuid("id").primaryKey().defaultRandom(),
-  clinicId: uuid("clinic_id").notNull().references(() => clinic.id, { onDelete: "cascade" }),
-  patientId: uuid("patient_id").notNull().references(() => patient.id, { onDelete: "cascade" }),
+  clinicId: uuid("clinic_id")
+    .notNull()
+    .references(() => clinic.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id")
+    .notNull()
+    .references(() => patient.id, { onDelete: "cascade" }),
   sessionNoteId: uuid("session_note_id").references(() => sessionNote.id),
   situacao: text("situacao").notNull(),
   pensamentoAutomatico: text("pensamento_automatico").notNull(),
   emocaoNome: varchar("emocao_nome", { length: 50 }),
   emocaoIntensidade: integer("emocao_intensidade"),
   distorcaoCognitiva: varchar("distorcao_cognitiva", { length: 50 }),
-  statusRevisao: tccStatusRevisao("status_revisao").notNull().default("PENDENTE_REVISAO"),
+  statusRevisao: tccStatusRevisao("status_revisao")
+    .notNull()
+    .default("PENDENTE_REVISAO"),
   aprovadoPor: uuid("aprovado_por").references(() => user.id),
   respostaRacional: text("resposta_racional"),
-  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  criadoEm: timestamp("criado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 // PHQ-9 e GAD-7 são de domínio público (issue-99 design §2.1) — nenhuma outra
@@ -485,13 +532,19 @@ export const tccEscalaSigla = pgEnum("tcc_escala_sigla", ["PHQ-9", "GAD-7"]);
 
 export const tccScaleScore = pgTable("tcc_scale_score", {
   id: uuid("id").primaryKey().defaultRandom(),
-  clinicId: uuid("clinic_id").notNull().references(() => clinic.id, { onDelete: "cascade" }),
-  patientId: uuid("patient_id").notNull().references(() => patient.id, { onDelete: "cascade" }),
+  clinicId: uuid("clinic_id")
+    .notNull()
+    .references(() => clinic.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id")
+    .notNull()
+    .references(() => patient.id, { onDelete: "cascade" }),
   sessionNoteId: uuid("session_note_id").references(() => sessionNote.id),
   sigla: tccEscalaSigla("sigla").notNull(),
   pontuacao: integer("pontuacao").notNull(),
   classificacao: varchar("classificacao", { length: 50 }),
-  aplicadaEm: timestamp("aplicada_em", { withTimezone: true }).notNull().defaultNow(),
+  aplicadaEm: timestamp("aplicada_em", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 ```
 
@@ -503,6 +556,7 @@ Expected: migração criando `tcc_thought_record`, `tcc_scale_score` e os dois e
 - [ ] **Step 3: RLS das duas tabelas (mesmo padrão de `evidence`/`session_note` pós-Task 2 — só equipe clínica)**
 
 File: `db/migrations/00XX_tcc_rls.sql`
+
 ```sql
 GRANT SELECT, INSERT ON tcc_thought_record TO app_role;
 --> statement-breakpoint
@@ -550,6 +604,7 @@ CREATE POLICY tcc_scale_score_insert ON tcc_scale_score FOR INSERT TO app_role W
 - [ ] **Step 4: Escrever teste de extração RPD com `AgentInvoker` fake**
 
 File: `src/lib/agent/tcc-mode.test.ts`
+
 ```typescript
 import { describe, it, expect, vi } from "vitest";
 import { processarSessaoTCC } from "./tcc-mode";
@@ -573,8 +628,12 @@ describe("processarSessaoTCC", () => {
 
     const resultado = await processarSessaoTCC(invokerFake, "relato qualquer");
     expect(resultado.registrosPensamento.length).toBeGreaterThan(0);
-    expect(resultado.registrosPensamento[0].distorcaoCognitiva).toBe("CATASTROFIZACAO");
-    expect(resultado.registrosPensamento[0].statusRevisao).toBe("PENDENTE_REVISAO");
+    expect(resultado.registrosPensamento[0].distorcaoCognitiva).toBe(
+      "CATASTROFIZACAO",
+    );
+    expect(resultado.registrosPensamento[0].statusRevisao).toBe(
+      "PENDENTE_REVISAO",
+    );
   });
 
   it("só aceita escalas PHQ-9 e GAD-7", async () => {
@@ -591,6 +650,7 @@ describe("processarSessaoTCC", () => {
 - [ ] **Step 5: Implementar `tcc-mode.ts` via `AgentInvoker` real + zod**
 
 File: `src/lib/agent/tcc-mode.ts`
+
 ```typescript
 import { z } from "zod";
 import type { AgentInvoker } from "@/lib/extraction/claude-provider";
@@ -623,7 +683,10 @@ Só reconheça escalas de domínio público PHQ-9 e GAD-7; nunca aceite outras
 siglas de escala (direitos autorais). Retorne exclusivamente o JSON do
 schema fornecido.`;
 
-export async function processarSessaoTCC(invoker: AgentInvoker, relato: string) {
+export async function processarSessaoTCC(
+  invoker: AgentInvoker,
+  relato: string,
+) {
   const bruto = await invoker({ system: TCC_SYSTEM_PROMPT, user: relato });
   const saida = tccOutputSchema.parse(bruto);
 
@@ -645,6 +708,7 @@ export async function processarSessaoTCC(invoker: AgentInvoker, relato: string) 
 - [ ] **Step 6: Server Action de aprovação da distorção cognitiva pelo terapeuta**
 
 File: `src/app/(app)/pacientes/[id]/tcc/actions.ts`
+
 ```typescript
 "use server";
 import { sql } from "@/db/client";

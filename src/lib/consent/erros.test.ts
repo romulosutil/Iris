@@ -61,21 +61,27 @@ describe("traduzirErroDeConsentimento", () => {
       'insert or update on table "consent" violates foreign key constraint "consent_revogado_mesmo_paciente"',
       "23503",
     );
-    expect(traduzirErroDeConsentimento(err)).toMatch(/não pertence a este paciente/i);
+    expect(traduzirErroDeConsentimento(err)).toMatch(
+      /não pertence a este paciente/i,
+    );
   });
 
   test("traduz RAISE EXCEPTION do trigger app_consent_valida_revogacao (revogar revogação)", () => {
     const err = new ErroPostgresSimulado(
       "Não é possível revogar uma revogação (consent 123): para restabelecer o tratamento, registre uma nova concessão de consentimento",
     );
-    expect(traduzirErroDeConsentimento(err)).toMatch(/não é possível revogar uma revogação/i);
+    expect(traduzirErroDeConsentimento(err)).toMatch(
+      /não é possível revogar uma revogação/i,
+    );
   });
 
   test("traduz RAISE EXCEPTION do trigger app_consent_valida_revogacao (auto-referência)", () => {
     const err = new ErroPostgresSimulado(
       "Revogação não pode apontar para si mesma (consent 123)",
     );
-    expect(traduzirErroDeConsentimento(err)).toMatch(/não pode apontar para si mesma/i);
+    expect(traduzirErroDeConsentimento(err)).toMatch(
+      /não pode apontar para si mesma/i,
+    );
   });
 
   test("devolve null para erro de constraint não relacionada a consent", () => {
@@ -87,7 +93,9 @@ describe("traduzirErroDeConsentimento", () => {
   });
 
   test("devolve null para erro genérico não reconhecido", () => {
-    expect(traduzirErroDeConsentimento(new Error("conexão perdida"))).toBeNull();
+    expect(
+      traduzirErroDeConsentimento(new Error("conexão perdida")),
+    ).toBeNull();
   });
 
   test("não quebra com undefined, null ou string", () => {

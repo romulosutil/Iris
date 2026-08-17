@@ -25,7 +25,10 @@ describe("enviarEmailTransacional", () => {
     });
     expect(r.enviado).toBe(true);
     expect(enviar).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "pessoa@exemplo.com.br", subject: "Confirme seu e-mail" }),
+      expect.objectContaining({
+        to: "pessoa@exemplo.com.br",
+        subject: "Confirme seu e-mail",
+      }),
     );
   });
 
@@ -33,7 +36,12 @@ describe("enviarEmailTransacional", () => {
     enviar.mockResolvedValue({ data: null, error: { message: "limite" } });
     const { enviarEmailTransacional } = await import("./transacional");
     await expect(
-      enviarEmailTransacional({ para: "a@b.com", assunto: "x", texto: "y", html: "<p>y</p>" }),
+      enviarEmailTransacional({
+        para: "a@b.com",
+        assunto: "x",
+        texto: "y",
+        html: "<p>y</p>",
+      }),
     ).resolves.toEqual({ enviado: false });
   });
 

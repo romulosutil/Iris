@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useTransition } from "react";
 import { Scrubber } from "./scrubber";
 import { DeltaSessaoLateral } from "./delta-sessao";
-import { carregarDeltaSessaoAction, carregarComparacaoAction, carregarEvidenciasAction } from "./actions";
+import {
+  carregarDeltaSessaoAction,
+  carregarComparacaoAction,
+  carregarEvidenciasAction,
+} from "./actions";
 import type { TimelineSnapshot, TimelineData } from "./queries";
 import type { DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
@@ -88,7 +92,10 @@ export function TimelineClient({
 
   // Estatísticas de conquistas e candidatos na sessão atual
   const estatisticasDominio = React.useMemo(() => {
-    const stats: Record<string, { total: number; conquistados: number; candidatos: number }> = {};
+    const stats: Record<
+      string,
+      { total: number; conquistados: number; candidatos: number }
+    > = {};
     for (const [dom, items] of Object.entries(milestonesPorDominio)) {
       let conquistados = 0;
       let candidatos = 0;
@@ -144,7 +151,8 @@ export function TimelineClient({
     const g = initialData.metasAtivas.find((m) => m.id === id);
     if (g) return `Meta: ${g.descricao}`;
     const m = initialData.milestonesAtivos.find((mi) => mi.id === id);
-    if (m) return `Marco: ${m.nome} (${m.dominioId.toUpperCase()}${m.nivel ? ` - ${m.nivel}` : ""})`;
+    if (m)
+      return `Marco: ${m.nome} (${m.dominioId.toUpperCase()}${m.nivel ? ` - ${m.nivel}` : ""})`;
     return "Alvo Clínico";
   };
 
@@ -175,7 +183,11 @@ export function TimelineClient({
 
     for (const sessao of trajetoriaSessoes) {
       const ultimoTrecho = chunks[chunks.length - 1];
-      if (ultimoTrecho && ultimoTrecho.rotulo === sessao.rotulo && ultimoTrecho.nivel === sessao.nivel) {
+      if (
+        ultimoTrecho &&
+        ultimoTrecho.rotulo === sessao.rotulo &&
+        ultimoTrecho.nivel === sessao.nivel
+      ) {
         ultimoTrecho.fim = sessao.sessionNumero;
         ultimoTrecho.sessoes.push(sessao.sessionNumero);
       } else {
@@ -520,10 +532,10 @@ export function TimelineClient({
     return (
       <div className="bg-canvas border-ink-anchor flex flex-col border-2 p-6">
         <div className="border-ink-anchor border-b-2 pb-4">
-          <h3 className="text-ink text-lg font-black font-display">
+          <h3 className="text-ink font-display text-lg font-black">
             Trajetória Clínica de Metas
           </h3>
-          <p className="text-muted text-sm mt-1">
+          <p className="text-muted mt-1 text-sm">
             Selecione uma meta ou marco para visualizar o andamento clínico e
             explorar evidências do trecho.
           </p>
@@ -575,19 +587,23 @@ export function TimelineClient({
           />
         ) : (
           <div className="mt-6 flex flex-col gap-4">
-            <div className="text-ink border-ink-anchor border bg-bg-canvas px-3 py-2 text-sm font-bold">
+            <div className="text-ink border-ink-anchor bg-bg-canvas border px-3 py-2 text-sm font-bold">
               Trajetória: {targetNome}
             </div>
             {/* Visualização de Chunks como linha temporal */}
             <div className="flex flex-col gap-3">
               {chunks.map((chunk, idx) => {
-                let colorClass = "bg-[var(--surface-elevated)] border-dashed border-[var(--border-brutal)] text-[var(--text-secondary)] shadow-[var(--ds-shadow)]";
+                let colorClass =
+                  "bg-[var(--surface-elevated)] border-dashed border-[var(--border-brutal)] text-[var(--text-secondary)] shadow-[var(--ds-shadow)]";
                 if (chunk.rotulo === "evolucao") {
-                  colorClass = "bg-[var(--status-success-bg)] border-[var(--border-brutal)] text-[var(--status-success-fg)] shadow-[var(--ds-shadow)]";
+                  colorClass =
+                    "bg-[var(--status-success-bg)] border-[var(--border-brutal)] text-[var(--status-success-fg)] shadow-[var(--ds-shadow)]";
                 } else if (chunk.rotulo === "regressao") {
-                  colorClass = "bg-[var(--status-error-bg)] border-[var(--border-brutal)] text-[var(--status-error-fg)] shadow-[var(--ds-shadow)]";
+                  colorClass =
+                    "bg-[var(--status-error-bg)] border-[var(--border-brutal)] text-[var(--status-error-fg)] shadow-[var(--ds-shadow)]";
                 } else if (chunk.rotulo === "estagnacao") {
-                  colorClass = "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]";
+                  colorClass =
+                    "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]";
                 }
 
                 return (
@@ -596,24 +612,28 @@ export function TimelineClient({
                     onClick={() =>
                       handleAbrirDrilldown(chunk, trajetoriaAlvoId, targetNome)
                     }
-                    className={`border-2 p-4 text-left transition-all duration-75 active:translate-y-0.5 focus:outline-none flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-[var(--radius-control)] ${colorClass}`}
+                    className={`flex flex-col gap-2 rounded-[var(--radius-control)] border-2 p-4 text-left transition-all duration-75 focus:outline-none active:translate-y-0.5 sm:flex-row sm:items-center sm:justify-between ${colorClass}`}
                   >
                     <div>
-                      <span className="font-display font-black text-base uppercase tracking-tight">
+                      <span className="font-display text-base font-black tracking-tight uppercase">
                         {deparaTraducaoRotulo[chunk.rotulo] || chunk.rotulo}
                       </span>
-                      <div className="text-xs font-bold mt-1">
-                        Sessão {chunk.inicio} {chunk.fim !== chunk.inicio ? `até a Sessão ${chunk.fim}` : ""}
+                      <div className="mt-1 text-xs font-bold">
+                        Sessão {chunk.inicio}{" "}
+                        {chunk.fim !== chunk.inicio
+                          ? `até a Sessão ${chunk.fim}`
+                          : ""}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {chunk.nivel !== null && (
-                        <span className="border border-black bg-white px-2 py-0.5 text-xs font-black rounded">
+                        <span className="rounded border border-black bg-white px-2 py-0.5 text-xs font-black">
                           Nível {chunk.nivel}
                         </span>
                       )}
                       <span className="text-xs font-black underline">
-                        Ver {chunk.sessoes.length} {chunk.sessoes.length === 1 ? "sessão" : "sessões"} →
+                        Ver {chunk.sessoes.length}{" "}
+                        {chunk.sessoes.length === 1 ? "sessão" : "sessões"} →
                       </span>
                     </div>
                   </button>
@@ -632,11 +652,12 @@ export function TimelineClient({
     return (
       <div className="bg-canvas border-ink-anchor flex flex-col border-2 p-6">
         <div className="border-ink-anchor border-b-2 pb-4">
-          <h3 className="text-ink text-lg font-black font-display">
+          <h3 className="text-ink font-display text-lg font-black">
             Acompanhamento de Marcos e Protocolos
           </h3>
-          <p className="text-muted text-sm mt-1">
-            Estatísticas e progresso de marcos por domínio do protocolo ativo na Sessão {sessaoAtiva}.
+          <p className="text-muted mt-1 text-sm">
+            Estatísticas e progresso de marcos por domínio do protocolo ativo na
+            Sessão {sessaoAtiva}.
           </p>
         </div>
 
@@ -650,33 +671,45 @@ export function TimelineClient({
         ) : (
           <div className="mt-6 flex flex-col gap-6">
             {Object.entries(milestonesPorDominio).map(([dom, items]) => {
-              const stats = estatisticasDominio[dom] ?? { total: 0, conquistados: 0, candidatos: 0 };
-              const percConquistados = stats.total > 0 ? (stats.conquistados / stats.total) * 100 : 0;
-              const percCandidatos = stats.total > 0 ? (stats.candidatos / stats.total) * 100 : 0;
+              const stats = estatisticasDominio[dom] ?? {
+                total: 0,
+                conquistados: 0,
+                candidatos: 0,
+              };
+              const percConquistados =
+                stats.total > 0 ? (stats.conquistados / stats.total) * 100 : 0;
+              const percCandidatos =
+                stats.total > 0 ? (stats.candidatos / stats.total) * 100 : 0;
 
               return (
-                <div key={dom} className="border-ink-anchor border-2 bg-bg-canvas p-4 shadow-[4px_4px_0px_#000000]">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-black pb-2 mb-4">
+                <div
+                  key={dom}
+                  className="border-ink-anchor bg-bg-canvas border-2 p-4 shadow-[4px_4px_0px_#000000]"
+                >
+                  <div className="mb-4 flex flex-col gap-2 border-b border-black pb-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <span className="font-display font-black text-sm uppercase tracking-tight">
+                      <span className="font-display text-sm font-black tracking-tight uppercase">
                         Domínio: {dom.toUpperCase()}
                       </span>
                       <div className="text-xxs text-muted mt-0.5">
-                        {stats.total} {stats.total === 1 ? "marco catalogado" : "marcos catalogados"}
+                        {stats.total}{" "}
+                        {stats.total === 1
+                          ? "marco catalogado"
+                          : "marcos catalogados"}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs font-black">
-                      <span className="text-status-success-text bg-status-success-bg px-1.5 py-0.5 rounded border border-black">
+                      <span className="text-status-success-text bg-status-success-bg rounded border border-black px-1.5 py-0.5">
                         Conquistados: {stats.conquistados}
                       </span>
-                      <span className="text-status-info-text bg-status-info-bg px-1.5 py-0.5 rounded border border-black">
+                      <span className="text-status-info-text bg-status-info-bg rounded border border-black px-1.5 py-0.5">
                         Candidatos: {stats.candidatos}
                       </span>
                     </div>
                   </div>
 
                   {/* Barra de Progresso Neobrutalista Stacked */}
-                  <div className="border-2 border-black h-4 bg-gray-200 flex overflow-hidden mb-4 rounded-sm">
+                  <div className="mb-4 flex h-4 overflow-hidden rounded-sm border-2 border-black bg-gray-200">
                     {percConquistados > 0 && (
                       <div
                         style={{ width: `${percConquistados}%` }}
@@ -694,10 +727,11 @@ export function TimelineClient({
                   </div>
 
                   {/* Grid de Milestones */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6">
                     {items.map((m) => {
                       const entry = snapSelecionado.repertorioState?.[m.id];
-                      let status: "conquistado" | "candidato" | "nao_atingido" = "nao_atingido";
+                      let status: "conquistado" | "candidato" | "nao_atingido" =
+                        "nao_atingido";
                       if (entry) {
                         if (entry.nivelAjudaRecente === 0) {
                           status = "conquistado";
@@ -709,29 +743,40 @@ export function TimelineClient({
                       return (
                         <div
                           key={m.id}
-                          className="border-ink-anchor border bg-canvas p-2 flex flex-col items-center justify-between text-center gap-2 group relative cursor-help"
+                          className="border-ink-anchor bg-canvas group relative flex cursor-help flex-col items-center justify-between gap-2 border p-2 text-center"
                           title={`${m.nome} ${m.nivel ? `(Nível ${m.nivel})` : ""}`}
                         >
-                          <span className="text-xxs font-black line-clamp-1">
+                          <span className="text-xxs line-clamp-1 font-black">
                             {m.nivel ? `Nível ${m.nivel}` : "Marco"}
                           </span>
-                          
+
                           {/* Indicador Visual do Milestone */}
                           {status === "conquistado" ? (
-                            <div className="w-8 h-8 rounded-full bg-status-success-bg border-2 border-black flex items-center justify-center font-black text-xs text-status-success-text" title="Conquistado">
+                            <div
+                              className="bg-status-success-bg text-status-success-text flex h-8 w-8 items-center justify-center rounded-full border-2 border-black text-xs font-black"
+                              title="Conquistado"
+                            >
                               ✓
                             </div>
                           ) : status === "candidato" ? (
-                            <div className="w-8 h-8 bg-status-info-bg border-2 border-dashed border-black flex items-center justify-center font-black text-xs text-status-info-text transform rotate-45" title="Candidato">
-                              <span className="transform -rotate-45 block">★</span>
+                            <div
+                              className="bg-status-info-bg text-status-info-text flex h-8 w-8 rotate-45 transform items-center justify-center border-2 border-dashed border-black text-xs font-black"
+                              title="Candidato"
+                            >
+                              <span className="block -rotate-45 transform">
+                                ★
+                              </span>
                             </div>
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gray-100 border-2 border-dashed border-gray-400 flex items-center justify-center text-gray-400 font-bold text-xs" title="Não Atingido">
+                            <div
+                              className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-dashed border-gray-400 bg-gray-100 text-xs font-bold text-gray-400"
+                              title="Não Atingido"
+                            >
                               ○
                             </div>
                           )}
 
-                          <span className="text-[10px] text-muted line-clamp-2 leading-tight">
+                          <span className="text-muted line-clamp-2 text-[10px] leading-tight">
                             {m.nome}
                           </span>
                         </div>
@@ -849,7 +894,7 @@ export function TimelineClient({
                     <div className="border-ink-anchor flex flex-col gap-3 border-t-2 pt-3">
                       {/* Alerta Clínico Guard G7 */}
                       {comparacaoData.protocoloMudou ? (
-                        <div className="flex items-start gap-2 border-2 border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-2.5 text-xs font-bold text-[var(--status-error-fg)] rounded-[var(--radius-control)]">
+                        <div className="flex items-start gap-2 rounded-[var(--radius-control)] border-2 border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-2.5 text-xs font-bold text-[var(--status-error-fg)]">
                           <span>⚠️</span>
                           <div>
                             <strong>Guard G7 Ativado:</strong> Houve mudança nos
@@ -863,7 +908,7 @@ export function TimelineClient({
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2">
-                          <div className="text-[var(--action-primary-fg)] bg-[var(--action-primary)] border-[var(--border-brutal)] border-2 p-1.5 text-center text-xs font-bold rounded-[var(--radius-control)]">
+                          <div className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] p-1.5 text-center text-xs font-bold text-[var(--action-primary-fg)]">
                             Resultados da Comparação
                           </div>
                           <div className="text-xs text-[var(--text-secondary)]">
@@ -873,7 +918,7 @@ export function TimelineClient({
                             {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)}:
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-center text-xs">
-                            <div className="border-[var(--status-success-border)] border-2 bg-[var(--status-success-bg)] p-2 font-bold text-[var(--status-success-fg)] rounded-[var(--radius-control)]">
+                            <div className="rounded-[var(--radius-control)] border-2 border-[var(--status-success-border)] bg-[var(--status-success-bg)] p-2 font-bold text-[var(--status-success-fg)]">
                               +
                               {comparacaoData.delta?.itens?.filter(
                                 (i) =>
@@ -881,7 +926,7 @@ export function TimelineClient({
                               ).length ?? 0}{" "}
                               Avanços
                             </div>
-                            <div className="border-[var(--status-error-border)] border-2 bg-[var(--status-error-bg)] p-2 font-bold text-[var(--status-error-fg)] rounded-[var(--radius-control)]">
+                            <div className="rounded-[var(--radius-control)] border-2 border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-2 font-bold text-[var(--status-error-fg)]">
                               +
                               {comparacaoData.delta?.itens?.filter(
                                 (i) => i.tipo === "regressao",
@@ -902,60 +947,73 @@ export function TimelineClient({
 
       {/* Dialog de Drilldown de Evidências por Trecho */}
       <Dialog open={drilldownOpen} onOpenChange={setDrilldownOpen}>
-        <DialogContent className="max-w-2xl bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] shadow-[var(--ds-shadow)]">
-          <DialogTitle className="font-display font-black text-xl text-[var(--text-primary)]">
+        <DialogContent className="max-w-2xl border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]">
+          <DialogTitle className="font-display text-xl font-black text-[var(--text-primary)]">
             Evidências Clínicas do Trecho
           </DialogTitle>
           <DialogDescription className="text-sm font-bold text-[var(--text-secondary)]">
-            Sessões {drilldownChunk?.inicio} até {drilldownChunk?.fim} para {drilldownChunk?.targetNome}
+            Sessões {drilldownChunk?.inicio} até {drilldownChunk?.fim} para{" "}
+            {drilldownChunk?.targetNome}
           </DialogDescription>
 
-          <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2 flex flex-col gap-4">
+          <div className="mt-4 flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-2">
             {carregandoEvidencias ? (
-              <div className="py-8 text-center text-sm font-black text-[var(--text-secondary)] animate-pulse">
+              <div className="animate-pulse py-8 text-center text-sm font-black text-[var(--text-secondary)]">
                 Buscando evidências no histórico do paciente...
               </div>
             ) : drilldownEvidencias.length === 0 ? (
-              <div className="py-8 text-center text-sm font-bold text-[var(--text-secondary)] border-2 border-dashed border-[var(--border-brutal)]/40 bg-[var(--surface-elevated)] rounded-[var(--radius-control)]">
-                Nenhuma evidência registrada para este trecho nas sessões selecionadas.
+              <div className="rounded-[var(--radius-control)] border-2 border-dashed border-[var(--border-brutal)]/40 bg-[var(--surface-elevated)] py-8 text-center text-sm font-bold text-[var(--text-secondary)]">
+                Nenhuma evidência registrada para este trecho nas sessões
+                selecionadas.
               </div>
             ) : (
               drilldownEvidencias.map((ev: any) => (
                 <div
                   key={ev.id}
-                  className={`border-2 border-[var(--border-brutal)] p-4 bg-[var(--surface-card)] shadow-[var(--ds-shadow)] flex flex-col gap-2 rounded-[var(--radius-control)] ${
-                    ev.polaridade === "positiva" ? "border-l-4 border-l-[var(--status-success-border)]" : "border-l-4 border-l-[var(--status-error-border)]"
+                  className={`flex flex-col gap-2 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)] ${
+                    ev.polaridade === "positiva"
+                      ? "border-l-4 border-l-[var(--status-success-border)]"
+                      : "border-l-4 border-l-[var(--status-error-border)]"
                   }`}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-[var(--border-brutal)]/20 pb-1 text-xs">
+                  <div className="flex flex-col gap-1 border-b border-[var(--border-brutal)]/20 pb-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                     <span className="font-black text-[var(--text-primary)]">
-                      Sessão {ev.sessionNumero} • {ev.dataSessao ? new Date(ev.dataSessao).toLocaleDateString("pt-BR") : "Sem data"}
+                      Sessão {ev.sessionNumero} •{" "}
+                      {ev.dataSessao
+                        ? new Date(ev.dataSessao).toLocaleDateString("pt-BR")
+                        : "Sem data"}
                     </span>
-                    <span className="text-[var(--text-secondary)] font-bold">
+                    <span className="font-bold text-[var(--text-secondary)]">
                       Aprovado por: {ev.aprovadorNome}
                     </span>
                   </div>
-                  <p className="text-sm text-[var(--text-primary)] leading-relaxed font-medium">
+                  <p className="text-sm leading-relaxed font-medium text-[var(--text-primary)]">
                     {ev.descricao}
                   </p>
-                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] ${
-                      ev.polaridade === "positiva"
-                        ? "bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
-                        : "bg-[var(--status-error-bg)] text-[var(--status-error-fg)]"
-                    }`}>
-                      {ev.polaridade === "positiva" ? "Evolução" : "Dificuldade"}
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-[var(--radius-pill)] border border-[var(--border-brutal)] px-2 py-0.5 text-xs font-bold ${
+                        ev.polaridade === "positiva"
+                          ? "bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
+                          : "bg-[var(--status-error-bg)] text-[var(--status-error-fg)]"
+                      }`}
+                    >
+                      {ev.polaridade === "positiva"
+                        ? "Evolução"
+                        : "Dificuldade"}
                     </span>
                     {ev.nivelAjuda && (
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--surface-elevated)] text-[var(--text-primary)]">
+                      <span className="rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-2 py-0.5 text-xs font-bold text-[var(--text-primary)]">
                         Nível de Ajuda: {ev.nivelAjuda}
                       </span>
                     )}
                   </div>
                   {ev.revisao && (
-                    <p className="text-xs text-[var(--text-secondary)] font-medium border-t border-[var(--border-brutal)]/20 pt-1 mt-1">
+                    <p className="mt-1 border-t border-[var(--border-brutal)]/20 pt-1 text-xs font-medium text-[var(--text-secondary)]">
                       Revisado por {ev.revisao.autorNome ?? "coordenador"}
-                      {ev.revisao.justificativa ? `: ${ev.revisao.justificativa}` : ""}
+                      {ev.revisao.justificativa
+                        ? `: ${ev.revisao.justificativa}`
+                        : ""}
                     </p>
                   )}
                 </div>

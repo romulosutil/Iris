@@ -16,7 +16,10 @@ afterEach(cleanup);
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
   const resultado = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
     rules: {
       region: { enabled: false },
       "landmark-one-main": { enabled: false },
@@ -95,7 +98,8 @@ const CHEIA: ItemRisco[] = [
   base({
     id: "77777777-7777-4777-8777-777777777777",
     status: "descartado",
-    motivoDescarte: "Trecho é citação de letra de música, revisto com o paciente.",
+    motivoDescarte:
+      "Trecho é citação de letra de música, revisto com o paciente.",
   }),
 ];
 

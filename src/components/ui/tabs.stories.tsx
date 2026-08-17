@@ -18,7 +18,9 @@ export const PainelDoCoordenador: Story = {
         <TabsTrigger value="perfil">Perfil</TabsTrigger>
         <TabsTrigger value="historico">Histórico</TabsTrigger>
       </TabsList>
-      <TabsContent value="fila">12 evidências aguardando validação.</TabsContent>
+      <TabsContent value="fila">
+        12 evidências aguardando validação.
+      </TabsContent>
       <TabsContent value="perfil">Dados clínicos do paciente.</TabsContent>
       <TabsContent value="historico">Versões e reclassificações.</TabsContent>
     </Tabs>

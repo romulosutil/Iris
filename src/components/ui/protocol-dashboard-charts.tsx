@@ -25,17 +25,29 @@ export function ProtocolProgressBarChart({
   className,
   ...props
 }: ProtocolProgressBarChartProps) {
-  const { protocoloNome, totalMetas, metasDominadas, metasSugeridasIA, tendenciaSemanal } = data;
+  const {
+    protocoloNome,
+    totalMetas,
+    metasDominadas,
+    metasSugeridasIA,
+    tendenciaSemanal,
+  } = data;
 
   const total = Math.max(totalMetas, 1);
-  const pctDominadas = Math.min(Math.round((metasDominadas / total) * 100), 100);
-  const pctSugeridas = Math.min(Math.round((metasSugeridasIA / total) * 100), 100 - pctDominadas);
+  const pctDominadas = Math.min(
+    Math.round((metasDominadas / total) * 100),
+    100,
+  );
+  const pctSugeridas = Math.min(
+    Math.round((metasSugeridasIA / total) * 100),
+    100 - pctDominadas,
+  );
   const pctRestante = Math.max(100 - pctDominadas - pctSugeridas, 0);
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-2.5 rounded-[var(--radius-control)] border-2 border-border-brutal bg-surface-card p-4 text-text-primary shadow-[var(--ds-shadow)]",
+        "border-border-brutal bg-surface-card text-text-primary flex flex-col gap-2.5 rounded-[var(--radius-control)] border-2 p-4 shadow-[var(--ds-shadow)]",
         className,
       )}
       {...props}
@@ -43,10 +55,10 @@ export function ProtocolProgressBarChart({
       {/* Título do Protocolo e Tendência */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="font-display text-sm font-bold text-text-primary">
+          <span className="font-display text-text-primary text-sm font-bold">
             {protocoloNome}
           </span>
-          <span className="font-mono text-xs text-text-secondary">
+          <span className="text-text-secondary font-mono text-xs">
             ({metasDominadas + metasSugeridasIA}/{totalMetas} metas)
           </span>
         </div>
@@ -57,7 +69,8 @@ export function ProtocolProgressBarChart({
             colorScheme={tendenciaSemanal >= 0 ? "menta" : "coral"}
             size="sm"
           >
-            {tendenciaSemanal >= 0 ? `+${tendenciaSemanal}` : tendenciaSemanal} esta semana
+            {tendenciaSemanal >= 0 ? `+${tendenciaSemanal}` : tendenciaSemanal}{" "}
+            esta semana
           </Pill>
         )}
       </div>
@@ -69,13 +82,13 @@ export function ProtocolProgressBarChart({
         aria-valuemin={0}
         aria-valuemax={totalMetas}
         aria-label={`Progresso do protocolo ${protocoloNome}`}
-        className="relative flex h-6 w-full overflow-hidden rounded-md border-2 border-border-brutal bg-surface-elevated"
+        className="border-border-brutal bg-surface-elevated relative flex h-6 w-full overflow-hidden rounded-md border-2"
       >
         {/* Segmento Sólido: Metas Dominadas */}
         {pctDominadas > 0 && (
           <div
             style={{ width: `${pctDominadas}%` }}
-            className="flex h-full items-center justify-center bg-accent-mint text-ink-anchor transition-all duration-300"
+            className="bg-accent-mint text-ink-anchor flex h-full items-center justify-center transition-all duration-300"
             title={`${metasDominadas} metas dominadas (${pctDominadas}%)`}
           >
             {pctDominadas >= 12 && (
@@ -93,11 +106,11 @@ export function ProtocolProgressBarChart({
               width: `${pctSugeridas}%`,
               background: `repeating-linear-gradient(-45deg, var(--color-raw-violet-100, #f1e9f6), var(--color-raw-violet-100, #f1e9f6) 3px, var(--color-raw-violet-500, #6a4c93) 3px, var(--color-raw-violet-500, #6a4c93) 6px)`,
             }}
-            className="flex h-full items-center justify-center border-l border-border-brutal/40 transition-all duration-300"
+            className="border-border-brutal/40 flex h-full items-center justify-center border-l transition-all duration-300"
             title={`${metasSugeridasIA} sugestões IA candidatas a domínio (${pctSugeridas}%)`}
           >
             {pctSugeridas >= 12 && (
-              <span className="truncate rounded bg-surface-card/90 px-1 font-mono text-[10px] font-bold text-status-ia-fg">
+              <span className="bg-surface-card/90 text-status-ia-fg truncate rounded px-1 font-mono text-[10px] font-bold">
                 +{metasSugeridasIA}
               </span>
             )}
@@ -108,7 +121,7 @@ export function ProtocolProgressBarChart({
         {pctRestante > 0 && (
           <div
             style={{ width: `${pctRestante}%` }}
-            className="h-full bg-surface-elevated/40"
+            className="bg-surface-elevated/40 h-full"
             title={`${totalMetas - metasDominadas - metasSugeridasIA} metas a desenvolver`}
           />
         )}
@@ -117,25 +130,27 @@ export function ProtocolProgressBarChart({
       {/* Legenda Exata */}
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-1.5">
-          <span className="size-3 rounded-xs border border-border-brutal bg-accent-mint" />
+          <span className="border-border-brutal bg-accent-mint size-3 rounded-xs border" />
           <span className="text-text-secondary">
-            <strong className="text-text-primary">{metasDominadas}</strong> Dominadas
+            <strong className="text-text-primary">{metasDominadas}</strong>{" "}
+            Dominadas
           </span>
         </div>
 
         <div className="flex items-center gap-1.5">
           <span
-            className="size-3 rounded-xs border border-status-ia-border"
+            className="border-status-ia-border size-3 rounded-xs border"
             style={{
               background: `repeating-linear-gradient(-45deg, #f1e9f6, #f1e9f6 2px, #6a4c93 2px, #6a4c93 4px)`,
             }}
           />
           <span className="text-text-secondary">
-            <strong className="text-text-primary">{metasSugeridasIA}</strong> Candidatas IA
+            <strong className="text-text-primary">{metasSugeridasIA}</strong>{" "}
+            Candidatas IA
           </span>
         </div>
 
-        <div className="font-mono text-xs font-semibold text-text-secondary">
+        <div className="text-text-secondary font-mono text-xs font-semibold">
           {pctDominadas + pctSugeridas}% Total
         </div>
       </div>
@@ -168,12 +183,16 @@ export function ProtocolTrendChart({
   className,
   ...props
 }: ProtocolTrendChartProps) {
-  const [pontoAtivo, setPontoAtivo] = React.useState<TrendSessionPoint | null>(null);
+  const [pontoAtivo, setPontoAtivo] = React.useState<TrendSessionPoint | null>(
+    null,
+  );
 
   if (pontos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-[var(--radius-control)] border-2 border-dashed border-border-brutal p-8 text-center bg-surface-card">
-        <p className="font-display font-semibold text-text-primary">Nenhum dado de evolução registrado.</p>
+      <div className="border-border-brutal bg-surface-card flex flex-col items-center justify-center rounded-[var(--radius-control)] border-2 border-dashed p-8 text-center">
+        <p className="font-display text-text-primary font-semibold">
+          Nenhum dado de evolução registrado.
+        </p>
       </div>
     );
   }
@@ -213,28 +232,30 @@ export function ProtocolTrendChart({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-[var(--radius-control)] border-2 border-border-brutal bg-surface-card p-4 text-text-primary shadow-[var(--ds-shadow)]",
+        "border-border-brutal bg-surface-card text-text-primary flex flex-col gap-3 rounded-[var(--radius-control)] border-2 p-4 shadow-[var(--ds-shadow)]",
         className,
       )}
       {...props}
     >
       {/* Header do Gráfico */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-brutal/20 pb-2">
+      <div className="border-border-brutal/20 flex flex-wrap items-center justify-between gap-2 border-b pb-2">
         <div>
-          <h4 className="font-display text-sm font-bold text-text-primary">{titulo}</h4>
+          <h4 className="font-display text-text-primary text-sm font-bold">
+            {titulo}
+          </h4>
           {protocoloNome && (
-            <span className="font-mono text-xs text-text-secondary uppercase">
+            <span className="text-text-secondary font-mono text-xs uppercase">
               {protocoloNome}
             </span>
           )}
         </div>
 
         {pontoAtivo && (
-          <div className="flex items-center gap-2 rounded bg-surface-elevated px-2 py-1 text-xs">
-            <span className="font-bold text-text-primary">
+          <div className="bg-surface-elevated flex items-center gap-2 rounded px-2 py-1 text-xs">
+            <span className="text-text-primary font-bold">
               Sessão {pontoAtivo.sessaoNumero}:
             </span>
-            <span className="font-mono text-status-success-fg font-semibold">
+            <span className="text-status-success-fg font-mono font-semibold">
               {pontoAtivo.evidenciasAcumuladas} evidências
             </span>
             {pontoAtivo.conquistasNoDia ? (
@@ -250,7 +271,7 @@ export function ProtocolTrendChart({
       <div className="relative w-full overflow-hidden">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-auto overflow-visible select-none"
+          className="h-auto w-full overflow-visible select-none"
         >
           {/* Linhas de Grade de Fundo */}
           <line
@@ -282,7 +303,11 @@ export function ProtocolTrendChart({
           />
 
           {/* Área Suave */}
-          <path d={areaD} fill="var(--color-raw-mint-100, #e6f4f1)" opacity="0.6" />
+          <path
+            d={areaD}
+            fill="var(--color-raw-mint-100, #e6f4f1)"
+            opacity="0.6"
+          />
 
           {/* Linha Principal */}
           <path
@@ -296,7 +321,9 @@ export function ProtocolTrendChart({
 
           {/* Nós de Conquista Interativos */}
           {coords.map(({ x, y, ponto }) => {
-            const hasConquista = Boolean(ponto.conquistasNoDia && ponto.conquistasNoDia > 0);
+            const hasConquista = Boolean(
+              ponto.conquistasNoDia && ponto.conquistasNoDia > 0,
+            );
             const isSelected = pontoAtivo?.sessaoNumero === ponto.sessaoNumero;
 
             return (
@@ -313,7 +340,13 @@ export function ProtocolTrendChart({
               >
                 {/* Halo de foco/hover */}
                 {isSelected && (
-                  <circle cx={x} y={y} r="10" fill="var(--color-raw-mint-700, #80cbc4)" opacity="0.4" />
+                  <circle
+                    cx={x}
+                    y={y}
+                    r="10"
+                    fill="var(--color-raw-mint-700, #80cbc4)"
+                    opacity="0.4"
+                  />
                 )}
 
                 {/* Nó Principal */}
@@ -321,7 +354,11 @@ export function ProtocolTrendChart({
                   cx={x}
                   cy={y}
                   r={hasConquista ? "6.5" : "5"}
-                  fill={hasConquista ? "var(--color-raw-gold-500, #f2b705)" : "var(--color-raw-mint-500, #14857a)"}
+                  fill={
+                    hasConquista
+                      ? "var(--color-raw-gold-500, #f2b705)"
+                      : "var(--color-raw-mint-500, #14857a)"
+                  }
                   stroke="#1A1A1A"
                   strokeWidth="2"
                   className="transition-transform duration-100 hover:scale-125"
@@ -332,7 +369,7 @@ export function ProtocolTrendChart({
                   x={x}
                   y={height - 10}
                   textAnchor="middle"
-                  className="fill-current text-text-secondary font-mono text-[10px]"
+                  className="text-text-secondary fill-current font-mono text-[10px]"
                 >
                   S{ponto.sessaoNumero}
                 </text>
@@ -344,8 +381,8 @@ export function ProtocolTrendChart({
 
       {/* Detalhe do Nó Selecionado */}
       {pontoAtivo?.descricaoDestaque && (
-        <div className="rounded border border-border-brutal/30 bg-surface-elevated/40 p-2 text-xs text-text-secondary">
-          <span className="font-semibold text-text-primary">Destaque: </span>
+        <div className="border-border-brutal/30 bg-surface-elevated/40 text-text-secondary rounded border p-2 text-xs">
+          <span className="text-text-primary font-semibold">Destaque: </span>
           {pontoAtivo.descricaoDestaque}
         </div>
       )}

@@ -6,15 +6,24 @@ function offsetMs(ts: number, fuso: string): number {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
       timeZone: fuso,
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
     })
       .formatToParts(new Date(ts))
       .map((x) => [x.type, x.value]),
   );
   const asUTC = Date.UTC(
-    Number(p.year), Number(p.month) - 1, Number(p.day),
-    p.hour === "24" ? 0 : Number(p.hour), Number(p.minute), Number(p.second),
+    Number(p.year),
+    Number(p.month) - 1,
+    Number(p.day),
+    p.hour === "24" ? 0 : Number(p.hour),
+    Number(p.minute),
+    Number(p.second),
   );
   return asUTC - ts;
 }
@@ -23,10 +32,20 @@ function offsetMs(ts: number, fuso: string): number {
  * Instante absoluto cujo wall-clock em `fuso` é o naive `dataISO`+`horaHHMM`.
  * Inverso de `paraMinutosLocais`. Ponto-fixo de 2 iterações cobre a virada de DST.
  */
-export function resolverInstante(dataISO: string, horaHHMM: string, fuso: string): Date {
+export function resolverInstante(
+  dataISO: string,
+  horaHHMM: string,
+  fuso: string,
+): Date {
   const [h, m] = horaHHMM.split(":");
   const [Y, Mo, D] = dataISO.split("-");
-  const naive = Date.UTC(Number(Y), Number(Mo) - 1, Number(D), Number(h), Number(m));
+  const naive = Date.UTC(
+    Number(Y),
+    Number(Mo) - 1,
+    Number(D),
+    Number(h),
+    Number(m),
+  );
   let ts = naive;
   for (let i = 0; i < 2; i++) ts = naive - offsetMs(ts, fuso);
   return new Date(ts);
@@ -69,7 +88,10 @@ export function datasDaRegra(
   bloqueios: BloqueioPeriodo[],
 ): string[] {
   const inicio = deISO > regra.vigenciaInicio ? deISO : regra.vigenciaInicio;
-  const fim = regra.vigenciaFim && regra.vigenciaFim < ateISO ? regra.vigenciaFim : ateISO;
+  const fim =
+    regra.vigenciaFim && regra.vigenciaFim < ateISO
+      ? regra.vigenciaFim
+      : ateISO;
   const datas: string[] = [];
   const cur = new Date(`${inicio}T00:00:00Z`);
   const limite = new Date(`${fim}T00:00:00Z`);

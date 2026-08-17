@@ -56,7 +56,10 @@ describe("buildFamiliaHtml", () => {
 
   it("renderiza iaOriginal quando curado é null", () => {
     const html = buildFamiliaHtml(
-      payload({ iaOriginal: draft({ conquistaDestaque: "SO_IA" }), curado: null }),
+      payload({
+        iaOriginal: draft({ conquistaDestaque: "SO_IA" }),
+        curado: null,
+      }),
     );
     expect(html).toContain("SO_IA");
   });
@@ -67,7 +70,9 @@ describe("buildFamiliaHtml", () => {
       payload({
         iaOriginal: draft({
           anexoDados: {
-            evidenciasPorMeta: [{ meta: "Pedir o que quer", contagemPeriodo: 4 }],
+            evidenciasPorMeta: [
+              { meta: "Pedir o que quer", contagemPeriodo: 4 },
+            ],
             avaliacoesFormaisPeriodo: [],
           },
         }),

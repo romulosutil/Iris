@@ -1,12 +1,12 @@
 /**
  * Seed Local Limpo (Iris)
- * 
+ *
  * 1. Limpa todas as tabelas do banco de dados local (bypassing RLS via ownerSql)
  * 2. Cadastra o catálogo mestre de protocolos
  * 3. Cria 1 clínica padrão ("Clínica Iris")
  * 4. Cadastra os protocolos padrão da clínica
  * 5. Provisiona 1 único usuário Coordenador com e-mail verificado
- * 
+ *
  * Uso:
  *   pnpm seed:local
  *   pnpm seed:local "Nome da Clínica" "email@coord.test" "Senha123!" "Nome Coordenador"
@@ -24,9 +24,12 @@ async function main() {
   const senhaCoord = process.argv[4] || "SenhaLocal123!";
   const nomeCoord = process.argv[5] || "Coordenador Local";
 
-  const migrationUrl = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
+  const migrationUrl =
+    process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!migrationUrl) {
-    throw new Error("MIGRATION_DATABASE_URL / DATABASE_URL não definida nas variáveis de ambiente.");
+    throw new Error(
+      "MIGRATION_DATABASE_URL / DATABASE_URL não definida nas variáveis de ambiente.",
+    );
   }
 
   console.log("🔄 Conectando ao Postgres com perfil de owner (bypassa RLS)...");
@@ -45,11 +48,13 @@ async function main() {
   `;
 
   if (tableRows.length > 0) {
-    const tableNames = tableRows
-      .map((r) => `"${r.table_name}"`)
-      .join(", ");
-    await ownerSql.unsafe(`TRUNCATE TABLE ${tableNames} RESTART IDENTITY CASCADE;`);
-    console.log(`✅ Banco de dados limpo (${tableRows.length} tabelas truncadas).`);
+    const tableNames = tableRows.map((r) => `"${r.table_name}"`).join(", ");
+    await ownerSql.unsafe(
+      `TRUNCATE TABLE ${tableNames} RESTART IDENTITY CASCADE;`,
+    );
+    console.log(
+      `✅ Banco de dados limpo (${tableRows.length} tabelas truncadas).`,
+    );
   }
 
   // 2. Seed do catálogo mestre de protocolos

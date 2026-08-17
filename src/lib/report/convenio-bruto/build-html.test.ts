@@ -7,13 +7,29 @@ const base: PayloadConvenioBruto = {
   periodo: { inicio: "2026-06-01", fim: "2026-06-30" },
   geradoEm: "2026-07-20T12:00:00.000Z",
   sessoes: [
-    { numeroSequencial: 8, data: "2026-06-10", disciplina: "ABA", modalidade: "presencial",
-      estado: "realizada", justificada: null, terapeuta: "Dra. Ana" },
+    {
+      numeroSequencial: 8,
+      data: "2026-06-10",
+      disciplina: "ABA",
+      modalidade: "presencial",
+      estado: "realizada",
+      justificada: null,
+      terapeuta: "Dra. Ana",
+    },
   ],
   evidencias: [
-    { data: "2026-06-10", metaOuDominio: "Mando", classificacao: '{"rotulo":"adquirido"}', autor: "Dra. Ana" },
+    {
+      data: "2026-06-10",
+      metaOuDominio: "Mando",
+      classificacao: '{"rotulo":"adquirido"}',
+      autor: "Dra. Ana",
+    },
   ],
-  presenca: { sessoesRealizadas: 8, faltasJustificadas: 1, faltasNaoJustificadas: 0 },
+  presenca: {
+    sessoesRealizadas: 8,
+    faltasJustificadas: 1,
+    faltasNaoJustificadas: 0,
+  },
 };
 
 test("monta HTML com dados factuais do período", () => {
@@ -24,7 +40,10 @@ test("monta HTML com dados factuais do período", () => {
 });
 
 test("escapa texto livre (anti-injeção de markup)", () => {
-  const html = buildConvenioBrutoHtml({ ...base, paciente: { nome: '<script>x</script>' } });
+  const html = buildConvenioBrutoHtml({
+    ...base,
+    paciente: { nome: "<script>x</script>" },
+  });
   expect(html).not.toContain("<script>x</script>");
   expect(html).toContain("&lt;script&gt;");
 });

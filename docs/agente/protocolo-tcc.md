@@ -54,7 +54,7 @@ declarada** a uma tarefa combinada.
 ### 2.1 Registro de Pensamentos (Thought Record / RPD) — unidade central
 
 - **O que é:** a ferramenta central da TCC clássica (Beck; popularizada em
-  formato de 7 colunas por David Burns, *Feeling Good*, 1980, e por Christine
+  formato de 7 colunas por David Burns, _Feeling Good_, 1980, e por Christine
   Padesky/Judith Beck em variações de 5-7 colunas). **PRECISA CONFIRMAÇÃO COM
   FONTE PRIMÁRIA:** o número exato de colunas varia por autor/manual (o
   "Registro de Pensamentos Disfuncionais" clássico de Beck tem 5 colunas;
@@ -81,7 +81,7 @@ declarada** a uma tarefa combinada.
     ritual de checagem etc.) — nem sempre presente no mesmo registro.
 - **Distorções cognitivas clássicas (lista consolidada Beck/Burns — núcleo
   amplamente citado na literatura, mas a **enumeração exata varia por autor**;
-  Burns lista 10 em *Feeling Good*, outros manuais listam entre 8 e 15 —
+  Burns lista 10 em _Feeling Good_, outros manuais listam entre 8 e 15 —
   **PRECISA CONFIRMAÇÃO COM FONTE PRIMÁRIA se o produto quiser uma lista
   "oficial" fechada**; a lista abaixo é o consenso prático de mercado):
   1. **Catastrofização** (magnificação do pior cenário) — "se eu errar essa
@@ -125,7 +125,7 @@ declarada** a uma tarefa combinada.
   clínica genérica, sem titular de direitos autorais restritivo conhecido —
   **diferente de VB-MAPP/ABLLS-R** (não há "kit" comercial protegido para o
   RPD). Formulários específicos publicados em livros de autoajuda/manuais
-  (ex.: o formulário exato de 7 colunas do *Feeling Good Handbook* de Burns)
+  (ex.: o formulário exato de 7 colunas do _Feeling Good Handbook_ de Burns)
   podem ter direitos autorais sobre o LAYOUT/texto do formulário — mas a
   ESTRUTURA conceitual (situação→pensamento→emoção→distorção→resposta) é de
   domínio público clínico. Modelo "clínica cadastra o texto do formulário
@@ -284,7 +284,12 @@ PEDI ganhou `eixos_avaliacao`; VB-MAPP Barreiras usa `componente_extra` tipo
           "dominio_id": "ansiedade_desempenho",
           "nome": "Ansiedade de desempenho (trabalho)",
           "definicao_funcional": "pensamentos automáticos disparados por avaliação de desempenho profissional",
-          "sinais_no_texto": ["reunião", "avaliação", "chefe", "vou ser demitido"]
+          "sinais_no_texto": [
+            "reunião",
+            "avaliação",
+            "chefe",
+            "vou ser demitido"
+          ]
         }
       ],
       "componentes_extras": [
@@ -332,7 +337,18 @@ de schema é Fase 3, fora do escopo desta issue):
 
 ```json
 {
-  "tipo": { "enum": ["evidencia", "registro_abc", "ausencia_comportamento", "cadeia", "preferencia_reforcador", "registro_pensamento", "aplicacao_escala_relatada", "tarefa_casa"] },
+  "tipo": {
+    "enum": [
+      "evidencia",
+      "registro_abc",
+      "ausencia_comportamento",
+      "cadeia",
+      "preferencia_reforcador",
+      "registro_pensamento",
+      "aplicacao_escala_relatada",
+      "tarefa_casa"
+    ]
+  },
   "registro_pensamento": {
     "type": ["object", "null"],
     "properties": {
@@ -360,7 +376,13 @@ de schema é Fase 3, fora do escopo desta issue):
     "properties": {
       "protocol_id": { "type": "string" },
       "escore_relatado": { "type": ["number", "null"] },
-      "fonte_do_escore": { "enum": ["paciente_informou", "terapeuta_calculou_na_sessao", "nao_informado"] },
+      "fonte_do_escore": {
+        "enum": [
+          "paciente_informou",
+          "terapeuta_calculou_na_sessao",
+          "nao_informado"
+        ]
+      },
       "item_risco_positivo": { "type": ["boolean", "null"] }
     }
   },
@@ -603,7 +625,7 @@ personas.
 - Estrutura: 9 itens, cada um mapeando um dos 9 critérios do DSM para episódio
   depressivo maior; escala por item 0-3; janela de referência "últimas 2
   semanas"; total 0-27. **Isso está correto e é conhecimento amplamente
-  documentado** (Kroenke, Spitzer & Williams, 2001, *J Gen Intern Med*) — pode
+  documentado** (Kroenke, Spitzer & Williams, 2001, _J Gen Intern Med_) — pode
   ter o marcador "PRECISA CONFIRMAÇÃO COM FONTE PRIMÁRIA" removido quanto à
   ESTRUTURA (n. de itens, escala, total).
 - Item 9 = ideação suicida/autolesão: correto, é conhecimento consolidado e já
@@ -626,7 +648,7 @@ personas.
 
 - Estrutura (7 itens, 0-3 por item, últimas 2 semanas, total 0-21) e pontos de
   corte (0-4/5-9/10-14/15-21) **podem ser confirmados com a mesma confiança
-  razoável** (Spitzer et al., 2006, *Arch Intern Med*) — remover o marcador
+  razoável** (Spitzer et al., 2006, _Arch Intern Med_) — remover o marcador
   quanto a esses números.
 - Ausência de item de risco equivalente ao item 9 do PHQ-9: correto, GAD-7 não
   tem item de ideação — a Seção 4 já modela isso certo (regra de risco não
@@ -638,7 +660,7 @@ personas.
 não fechar isso, confirmado nesta rodada:**
 
 - Não existe fonte única canônica. Beck (formulário clássico, ~5 colunas) e
-  Burns (*Feeling Good*, 1980, lista de 10 distorções e formulário de coluna
+  Burns (_Feeling Good_, 1980, lista de 10 distorções e formulário de coluna
   dupla/tripla) divergem tanto em número de colunas do registro quanto em
   enumeração de distorções — isso é consenso bem documentado na literatura
   sobre TCC, não uma lacuna deste documento. **Confirmado: manter
@@ -769,17 +791,17 @@ necessária.
 
 ### 7.5 Consolidação dos achados
 
-| # | Achado | Severidade | Status |
-|---|--------|------------|--------|
-| 1 | Estrutura e pontos de corte de PHQ-9/GAD-7 (n. itens, escala 0-3, total, faixas de corte) | — | **Confirmado nesta rodada** — marcador "PRECISA CONFIRMAÇÃO" pode ser removido quanto a esses números específicos |
-| 2 | Licenciamento exato (texto oficial), validação/adaptação em português do Brasil, texto literal dos itens em PT-BR | Importante | Segue pendente — precisa fonte primária real (não coberto por conhecimento geral) |
-| 3 | Taxonomia de distorções cognitivas sem fonte única canônica | — | **Confirmado nesta rodada** que o doc já modela isso corretamente (campo do contrato, não lista fixa) — nenhuma mudança necessária |
-| 4 | Falta campo de reavaliação de emoção pós-resposta racional em `registro_pensamento` | Importante | Gap novo — proposta pendente de confirmação com o Rômulo |
-| 5 | `item_risco_positivo` booleano não distingue "negou" de "recusou/não respondeu" | Importante | Gap novo — proposta pendente de confirmação com o Rômulo |
-| 6 | Severidade de sinalização de risco não amarrada ao valor numérico 0-3 do item 9 quando é a única fonte do sinal | Importante | Gap novo, complementar à Seção 4 — não bloqueia a regra em si, mas deixa a classificação de severidade menos precisa |
-| 7 | Falta mecanismo de lembrete/atraso de reaplicação de escala intervalar | Bloqueante para uso em produção pela coordenação (não bloqueante para a especificação do agente) | Já identificado no achado #4 da Seção 6 — reforçado aqui, recomendado para `BACKLOG.md` |
-| 8 | Comparabilidade entre terapeutas depende de padronização de escala pela clínica, não está dita explicitamente | Nice-to-have | Gap novo, documentação apenas |
-| 9 | Portabilidade de histórico clínico entre terapeutas na troca de caso | Nice-to-have | Gap novo, caso de borda de produto |
+| #   | Achado                                                                                                            | Severidade                                                                                       | Status                                                                                                                             |
+| --- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Estrutura e pontos de corte de PHQ-9/GAD-7 (n. itens, escala 0-3, total, faixas de corte)                         | —                                                                                                | **Confirmado nesta rodada** — marcador "PRECISA CONFIRMAÇÃO" pode ser removido quanto a esses números específicos                  |
+| 2   | Licenciamento exato (texto oficial), validação/adaptação em português do Brasil, texto literal dos itens em PT-BR | Importante                                                                                       | Segue pendente — precisa fonte primária real (não coberto por conhecimento geral)                                                  |
+| 3   | Taxonomia de distorções cognitivas sem fonte única canônica                                                       | —                                                                                                | **Confirmado nesta rodada** que o doc já modela isso corretamente (campo do contrato, não lista fixa) — nenhuma mudança necessária |
+| 4   | Falta campo de reavaliação de emoção pós-resposta racional em `registro_pensamento`                               | Importante                                                                                       | Gap novo — proposta pendente de confirmação com o Rômulo                                                                           |
+| 5   | `item_risco_positivo` booleano não distingue "negou" de "recusou/não respondeu"                                   | Importante                                                                                       | Gap novo — proposta pendente de confirmação com o Rômulo                                                                           |
+| 6   | Severidade de sinalização de risco não amarrada ao valor numérico 0-3 do item 9 quando é a única fonte do sinal   | Importante                                                                                       | Gap novo, complementar à Seção 4 — não bloqueia a regra em si, mas deixa a classificação de severidade menos precisa               |
+| 7   | Falta mecanismo de lembrete/atraso de reaplicação de escala intervalar                                            | Bloqueante para uso em produção pela coordenação (não bloqueante para a especificação do agente) | Já identificado no achado #4 da Seção 6 — reforçado aqui, recomendado para `BACKLOG.md`                                            |
+| 8   | Comparabilidade entre terapeutas depende de padronização de escala pela clínica, não está dita explicitamente     | Nice-to-have                                                                                     | Gap novo, documentação apenas                                                                                                      |
+| 9   | Portabilidade de histórico clínico entre terapeutas na troca de caso                                              | Nice-to-have                                                                                     | Gap novo, caso de borda de produto                                                                                                 |
 
 **Conclusão desta rodada:** nenhum achado invalida a arquitetura proposta.
 PHQ-9/GAD-7 tiveram sua estrutura numérica central confirmada com confiança

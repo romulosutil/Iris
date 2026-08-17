@@ -70,9 +70,7 @@ function parseGlitchtip(payload: unknown): ParsedAlert {
     (typeof p.text === "string" && p.text) ||
     "";
 
-  const glitchtipId = url
-    ? (url.match(/issues\/(\d+)/)?.[1] ?? null)
-    : null;
+  const glitchtipId = url ? (url.match(/issues\/(\d+)/)?.[1] ?? null) : null;
 
   return { title: title.slice(0, 240), url, body: extra, glitchtipId };
 }
@@ -105,7 +103,9 @@ async function findExistingIssue(
   ctx: GithubCtx,
   marker: string,
 ): Promise<number | null> {
-  const q = encodeURIComponent(`repo:${ctx.repo} in:body state:open "${marker}"`);
+  const q = encodeURIComponent(
+    `repo:${ctx.repo} in:body state:open "${marker}"`,
+  );
   const res = await githubFetch(ctx, `/search/issues?q=${q}`);
   if (!res.ok) return null;
   const data = (await res.json()) as { items?: Array<{ number: number }> };
@@ -118,7 +118,10 @@ export async function POST(request: Request): Promise<Response> {
   if (!secret || !token) {
     // Não configurado ainda: 503 explícito em vez de 500 silencioso.
     return Response.json(
-      { error: "relay não configurado (faltam GLITCHTIP_WEBHOOK_SECRET/GITHUB_TOKEN)" },
+      {
+        error:
+          "relay não configurado (faltam GLITCHTIP_WEBHOOK_SECRET/GITHUB_TOKEN)",
+      },
       { status: 503 },
     );
   }
@@ -132,14 +135,18 @@ export async function POST(request: Request): Promise<Response> {
   try {
     payload = await request.json();
   } catch {
-    return Response.json({ error: "corpo inválido (JSON esperado)" }, { status: 400 });
+    return Response.json(
+      { error: "corpo inválido (JSON esperado)" },
+      { status: 400 },
+    );
   }
 
   const alert = parseGlitchtip(payload);
-  const ctx: GithubCtx = { token, repo: process.env.GITHUB_REPO || DEFAULT_REPO };
-  const marker = alert.glitchtipId
-    ? `glitchtip-id:${alert.glitchtipId}`
-    : null;
+  const ctx: GithubCtx = {
+    token,
+    repo: process.env.GITHUB_REPO || DEFAULT_REPO,
+  };
+  const marker = alert.glitchtipId ? `glitchtip-id:${alert.glitchtipId}` : null;
 
   const bodyLines = [
     alert.body || "_(sem detalhes no payload do GlitchTip)_",
@@ -180,7 +187,11 @@ export async function POST(request: Request): Promise<Response> {
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     return Response.json(
-      { error: "falha ao criar issue no GitHub", status: res.status, detail: detail.slice(0, 500) },
+      {
+        error: "falha ao criar issue no GitHub",
+        status: res.status,
+        detail: detail.slice(0, 500),
+      },
       { status: 502 },
     );
   }

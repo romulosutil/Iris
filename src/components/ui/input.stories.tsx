@@ -40,7 +40,8 @@ export const Hover: Story = {
   parameters: {
     docs: {
       description: {
-        story: "Passe o mouse por cima do campo para ver a transição de background e borda mais escura.",
+        story:
+          "Passe o mouse por cima do campo para ver a transição de background e borda mais escura.",
       },
     },
   },
@@ -68,15 +69,21 @@ export const VariacoesDeTamanho: Story = {
   render: () => (
     <div className="flex w-72 flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Pequeno (sm - 32px)</span>
+        <span className="text-graphite/60 text-xs font-semibold">
+          Pequeno (sm - 32px)
+        </span>
         <Input size="sm" placeholder="Nome do paciente" />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Médio (md - 40px)</span>
+        <span className="text-graphite/60 text-xs font-semibold">
+          Médio (md - 40px)
+        </span>
         <Input size="md" placeholder="Nome do paciente" />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Grande (lg - 48px)</span>
+        <span className="text-graphite/60 text-xs font-semibold">
+          Grande (lg - 48px)
+        </span>
         <Input size="lg" placeholder="Nome do paciente" />
       </div>
     </div>
@@ -89,23 +96,39 @@ export const SlotsEAddons: Story = {
   render: () => (
     <div className="flex w-80 flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Ícone à Esquerda</span>
-        <Input prefixIcon={<SparkleIcon className="text-base" />} placeholder="Buscar terapia..." />
+        <span className="text-graphite/60 text-xs font-semibold">
+          Ícone à Esquerda
+        </span>
+        <Input
+          prefixIcon={<SparkleIcon className="text-base" />}
+          placeholder="Buscar terapia..."
+        />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Ícone à Direita</span>
-        <Input suffixIcon={<ClockIcon className="text-base" />} placeholder="Selecione o horário" />
+        <span className="text-graphite/60 text-xs font-semibold">
+          Ícone à Direita
+        </span>
+        <Input
+          suffixIcon={<ClockIcon className="text-base" />}
+          placeholder="Selecione o horário"
+        />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Addon à Esquerda</span>
+        <span className="text-graphite/60 text-xs font-semibold">
+          Addon à Esquerda
+        </span>
         <Input leftAddon="R$" placeholder="0,00" />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Addon à Direita</span>
+        <span className="text-graphite/60 text-xs font-semibold">
+          Addon à Direita
+        </span>
         <Input rightAddon=".com.br" placeholder="minhaclinica" />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Misto (Addon + Ícone)</span>
+        <span className="text-graphite/60 text-xs font-semibold">
+          Misto (Addon + Ícone)
+        </span>
         <Input
           leftAddon="https://"
           prefixIcon={<SparkleIcon className="text-sm" />}
@@ -123,27 +146,32 @@ export const MatrizDeEstados: Story = {
   render: () => (
     <div className="flex w-72 flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Default</span>
+        <span className="text-graphite/60 text-xs font-semibold">Default</span>
         <Input placeholder="Escreva algo..." />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Com Valor</span>
+        <span className="text-graphite/60 text-xs font-semibold">
+          Com Valor
+        </span>
         <Input defaultValue="Paciente Ativo" />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Hover (Simulado/Instrução)</span>
+        <span className="text-graphite/60 text-xs font-semibold">
+          Hover (Simulado/Instrução)
+        </span>
         <Input placeholder="Passe o mouse para ver a transição" />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Erro</span>
+        <span className="text-graphite/60 text-xs font-semibold">Erro</span>
         <Input aria-invalid defaultValue="Valor inválido" />
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-graphite/60 font-semibold">Desabilitado</span>
+        <span className="text-graphite/60 text-xs font-semibold">
+          Desabilitado
+        </span>
         <Input disabled defaultValue="Campo bloqueado" />
       </div>
     </div>
   ),
   parameters: { controls: { disable: true } },
 };
-

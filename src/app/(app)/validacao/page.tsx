@@ -17,12 +17,17 @@ export default async function ValidacaoPage() {
 
   const fila = await listarFilaValidacao(ctx);
 
-  const pacientesUnicos = Array.from(new Set(fila.itens.map((i) => i.patientId)));
+  const pacientesUnicos = Array.from(
+    new Set(fila.itens.map((i) => i.patientId)),
+  );
   const alvosPorPaciente: Record<string, AlvoValido[]> = {};
   if (pacientesUnicos.length > 0) {
     await withTenant(ctx, async (tx) => {
       for (const patientId of pacientesUnicos) {
-        alvosPorPaciente[patientId] = await alvosValidosDoPaciente(tx, patientId);
+        alvosPorPaciente[patientId] = await alvosValidosDoPaciente(
+          tx,
+          patientId,
+        );
       }
     });
   }
@@ -42,4 +47,3 @@ export default async function ValidacaoPage() {
     </Stack>
   );
 }
-

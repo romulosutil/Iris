@@ -40,30 +40,30 @@ export function TabelaHoras({ linhas }: { linhas: HorasDisciplina[] }) {
         </Alert>
       ) : null}
       <div className="overflow-x-auto">
-        <table className="border-[var(--border-brutal)] w-full border-collapse border-2 text-sm">
+        <table className="w-full border-collapse border-2 border-[var(--border-brutal)] text-sm">
           <thead>
-            <tr className="border-[var(--border-brutal)] border-b-2">
+            <tr className="border-b-2 border-[var(--border-brutal)]">
               <th
                 scope="col"
-                className="font-display text-[var(--text-primary)] px-4 py-2 text-left font-black"
+                className="font-display px-4 py-2 text-left font-black text-[var(--text-primary)]"
               >
                 Disciplina
               </th>
               <th
                 scope="col"
-                className="font-display text-[var(--text-primary)] px-4 py-2 text-right font-black"
+                className="font-display px-4 py-2 text-right font-black text-[var(--text-primary)]"
               >
                 Alvo
               </th>
               <th
                 scope="col"
-                className="font-display text-[var(--text-primary)] px-4 py-2 text-right font-black"
+                className="font-display px-4 py-2 text-right font-black text-[var(--text-primary)]"
               >
                 Agendado
               </th>
               <th
                 scope="col"
-                className="font-display text-[var(--text-primary)] px-4 py-2 text-right font-black"
+                className="font-display px-4 py-2 text-right font-black text-[var(--text-primary)]"
               >
                 Realizado
               </th>
@@ -80,11 +80,11 @@ export function TabelaHoras({ linhas }: { linhas: HorasDisciplina[] }) {
               linhas.map((l) => (
                 <tr
                   key={l.disciplina}
-                  className="border-[var(--border-brutal)]/20 border-b last:border-b-0"
+                  className="border-b border-[var(--border-brutal)]/20 last:border-b-0"
                 >
                   <th
                     scope="row"
-                    className="text-[var(--text-primary)] px-4 py-2 text-left font-semibold"
+                    className="px-4 py-2 text-left font-semibold text-[var(--text-primary)]"
                   >
                     {l.disciplina}
                     {l.alerta ? (

@@ -58,8 +58,15 @@ function dispararEmail(
 
 const appUrl = getAppBaseUrl();
 
-if (process.env.NODE_ENV === "production" && !process.env.BETTER_AUTH_URL && !process.env.NEXT_PUBLIC_APP_URL) {
-  console.warn("ALERTA PRODUÇÃO: Nem BETTER_AUTH_URL nem NEXT_PUBLIC_APP_URL foram informadas. Usando URL fallback:", appUrl);
+if (
+  process.env.NODE_ENV === "production" &&
+  !process.env.BETTER_AUTH_URL &&
+  !process.env.NEXT_PUBLIC_APP_URL
+) {
+  console.warn(
+    "ALERTA PRODUÇÃO: Nem BETTER_AUTH_URL nem NEXT_PUBLIC_APP_URL foram informadas. Usando URL fallback:",
+    appUrl,
+  );
 }
 
 const origensPadrao = [
@@ -73,7 +80,9 @@ const origensPadrao = [
 ];
 
 const origensExtras = process.env.TRUSTED_ORIGINS
-  ? process.env.TRUSTED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  ? process.env.TRUSTED_ORIGINS.split(",")
+      .map((o) => o.trim())
+      .filter(Boolean)
   : [];
 
 export const auth = betterAuth({

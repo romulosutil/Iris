@@ -16,17 +16,33 @@ export function GET() {
       "agent:interact",
     ],
     response_types_supported: ["code", "token"],
-    grant_types_supported: ["authorization_code", "client_credentials", "refresh_token"],
-    token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post"],
+    grant_types_supported: [
+      "authorization_code",
+      "client_credentials",
+      "refresh_token",
+    ],
+    token_endpoint_auth_methods_supported: [
+      "client_secret_basic",
+      "client_secret_post",
+    ],
     service_documentation: `${baseUrl}/auth.md`,
-    
+
     // Auth.md draft extension for AI Agent Registration
     agent_auth: {
       documentation_uri: `${baseUrl}/auth.md`,
       register_uri: `${baseUrl}/api/auth/register/agent`,
-      supported_identity_types: ["ai_agent", "autonomous_system", "service_account"],
+      supported_identity_types: [
+        "ai_agent",
+        "autonomous_system",
+        "service_account",
+      ],
       supported_credential_types: ["bearer_token", "mTLS", "jwt_assertion"],
-      scopes_supported: ["read:patients", "write:evaluations", "read:reports", "agent:interact"],
+      scopes_supported: [
+        "read:patients",
+        "write:evaluations",
+        "read:reports",
+        "agent:interact",
+      ],
     },
   };
 

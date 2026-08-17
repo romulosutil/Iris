@@ -9,13 +9,13 @@
 ## 1. Architectural Decisions
 
 1. **Pragmatic 3-Tier Hierarchy:**
-   * **Primitives (Tier 1):** Define only active colors with a 4-step ramp: `100` (Light/Bg), `500` (Base), `700` (Hover/Dark), `900` / `950` (Extreme contrast).
-   * **Semantics (Tier 2):** Connect colors to system roles (`action-primary`, `bg-canvas`, `status-success`). Components consume these roles directly.
-   * **Aliases (Compatibility):** Keep legacy tokens (`--color-gold`, `--color-mint`, `--color-blue`) pointing to semantic values to prevent runtime breaking changes.
+   - **Primitives (Tier 1):** Define only active colors with a 4-step ramp: `100` (Light/Bg), `500` (Base), `700` (Hover/Dark), `900` / `950` (Extreme contrast).
+   - **Semantics (Tier 2):** Connect colors to system roles (`action-primary`, `bg-canvas`, `status-success`). Components consume these roles directly.
+   - **Aliases (Compatibility):** Keep legacy tokens (`--color-gold`, `--color-mint`, `--color-blue`) pointing to semantic values to prevent runtime breaking changes.
 2. **Missing Components (Tier 4):**
-   * **`<Banner>`:** Prominent alert boxes for coordenação actions.
-   * **`<InteractiveCard>`:** Native card wrappers combining layout and mechanical click states.
-   * **`<Indicator>`:** Solid semantic dots for compact clinical statuses.
+   - **`<Banner>`:** Prominent alert boxes for coordenação actions.
+   - **`<InteractiveCard>`:** Native card wrappers combining layout and mechanical click states.
+   - **`<Indicator>`:** Solid semantic dots for compact clinical statuses.
 
 ---
 
@@ -84,13 +84,16 @@
 ## 3. Component Specification & Interfaces
 
 ### A. `<Banner>`
-* **Props:** `variant?: "info" | "alerta" | "sucesso"`, `titulo?: ReactNode`, `children?: ReactNode`.
-* **Design:** Styled with thick borders and a top-accent bar corresponding to the status.
+
+- **Props:** `variant?: "info" | "alerta" | "sucesso"`, `titulo?: ReactNode`, `children?: ReactNode`.
+- **Design:** Styled with thick borders and a top-accent bar corresponding to the status.
 
 ### B. `<InteractiveCard>`
-* **Props:** Standard `HTMLAttributes<HTMLAnchorElement | HTMLButtonElement>` depending on whether a URL/action is provided.
-* **Design:** Embedded mechanical hover transition and active collapse.
+
+- **Props:** Standard `HTMLAttributes<HTMLAnchorElement | HTMLButtonElement>` depending on whether a URL/action is provided.
+- **Design:** Embedded mechanical hover transition and active collapse.
 
 ### C. `<Indicator>`
-* **Props:** `variant?: "conquistado" | "sugerido" | "erro" | "info"`.
-* **Design:** Compact 3D solid sphere with black outline.
+
+- **Props:** `variant?: "conquistado" | "sugerido" | "erro" | "info"`.
+- **Design:** Compact 3D solid sphere with black outline.

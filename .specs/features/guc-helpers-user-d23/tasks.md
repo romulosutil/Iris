@@ -13,6 +13,7 @@
 ### Task 1: Criar migração `0093_user_role_id_helpers.sql` — helpers de GUC
 
 **Files:**
+
 - Create: `db/migrations/0093_user_role_id_helpers.sql`
 - Modify: `db/migrations/meta/_journal.json`
 
@@ -34,14 +35,14 @@
 
   Gerar corpos atuais de `pg_get_functiondef()` no banco local (após `pnpm db:migrate`), substituir **apenas** os casts crus:
 
-  | Função | `user_role` | `user_id` |
-  |--------|-------------|-----------|
-  | `app_alerta_risco_visivel` | → `app_user_role_exigido()` | → `app_user_id_exigido()` |
-  | `app_session_clinica_visivel` | → `app_user_role_exigido()` | → `app_user_id_exigido()` |
+  | Função                         | `user_role`                 | `user_id`                                       |
+  | ------------------------------ | --------------------------- | ----------------------------------------------- |
+  | `app_alerta_risco_visivel`     | → `app_user_role_exigido()` | → `app_user_id_exigido()`                       |
+  | `app_session_clinica_visivel`  | → `app_user_role_exigido()` | → `app_user_id_exigido()`                       |
   | `app_salvar_config_emergencia` | → `app_user_role_exigido()` | → `app_user_id_atual()` (leniente, no COALESCE) |
-  | `app_salvar_cpf_cnpj_clinica` | → `app_user_role_exigido()` | N/A |
-  | `app_desarquivar_paciente` | → `app_user_role_exigido()` | → `app_user_id_exigido()` |
-  | `app_criar_alerta_risco` | N/A | `nullif(...)::uuid` → `app_user_id_atual()` |
+  | `app_salvar_cpf_cnpj_clinica`  | → `app_user_role_exigido()` | N/A                                             |
+  | `app_desarquivar_paciente`     | → `app_user_role_exigido()` | → `app_user_id_exigido()`                       |
+  | `app_criar_alerta_risco`       | N/A                         | `nullif(...)::uuid` → `app_user_id_atual()`     |
 
 - [x] **Step 3: Adicionar entrada no `_journal.json`**
 
@@ -64,6 +65,7 @@
 ### Task 2: Ampliar guard de CI — testes de helpers e invariantes
 
 **Files:**
+
 - Modify: `db/tests/clinic-id-helper-rls.int.test.ts`
 
 **Status:** `[x]`
@@ -86,7 +88,7 @@
   Novos invariantes (mesmo padrão da `0087`):
   - Nenhuma função pública usa `current_setting('app.user_id')::uuid` cru (exceto `app_user_id_atual` que é o próprio helper).
   - Nenhuma função pública usa `current_setting('app.user_role')` 1-arg (sem `missing_ok`), exceto onde já protegido.
-  
+
   **Nota:** Usar regex do Postgres com barras DUPLAS no template literal JS (lição da `0087`).
 
 - [x] **Step 4: Guard positivo — conjunto exato de funções com helpers**

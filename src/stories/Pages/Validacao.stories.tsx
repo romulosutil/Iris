@@ -32,7 +32,7 @@ export const FilaDeValidacao = {
           />
 
           <Stack gap="md" como="ul">
-            <li className="bg-[var(--surface-card)] p-5 border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] shadow-[var(--ds-shadow)]">
+            <li className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
               <Stack gap="sm">
                 <Cluster gap="sm" className="items-center justify-between">
                   <h3 className="font-display text-lg font-bold text-[var(--text-primary)]">
@@ -40,8 +40,9 @@ export const FilaDeValidacao = {
                   </h3>
                   <StatusBadge estado="devolvida" />
                 </Cluster>
-                <p className="text-[var(--text-primary)] text-sm">
-                  Terapeuta sugeriu nova marcação de marco clínico. Requer aprovação do coordenador de área.
+                <p className="text-sm text-[var(--text-primary)]">
+                  Terapeuta sugeriu nova marcação de marco clínico. Requer
+                  aprovação do coordenador de área.
                 </p>
                 <Cluster gap="sm" className="pt-2">
                   <Button variante="primaria" tamanho="sm">

@@ -1,6 +1,12 @@
 "use client";
 
-import { useActionState, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useActionState,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import Link from "next/link";
 import { Stack, Cluster } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
@@ -17,7 +23,13 @@ import {
   DialogDescription,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ReviewClinicalIllustration } from "@/components/ui/illustrations";
 import { ConfidenceCard } from "@/components/ui/patterns/confidence-card";
@@ -41,7 +53,10 @@ const rotuloMotivo: Record<ItemFila["motivo"][number], string> = {
 };
 
 /** Mapeia a fricção do domínio (masc.) para o contrato do ConfidenceCard (fem.). */
-const friccaoParaCard: Record<ItemFila["nivelFriccao"], "baixa" | "media" | "alta"> = {
+const friccaoParaCard: Record<
+  ItemFila["nivelFriccao"],
+  "baixa" | "media" | "alta"
+> = {
   baixo: "baixa",
   medio: "media",
   alto: "alta",
@@ -85,23 +100,19 @@ function ItemCard({
   onToggleSelecao: (evidenceId: string, marcado: boolean) => void;
   onResolvido: () => void;
 }) {
-  const [confirmarState, confirmarFormAction, confirmarPendente] = useActionState<
-    ValidacaoState,
-    FormData
-  >(async (prev, fd) => {
-    const r = await confirmarEvidenciaAction(prev, fd);
-    if (r.ok) onResolvido();
-    return r;
-  }, {});
+  const [confirmarState, confirmarFormAction, confirmarPendente] =
+    useActionState<ValidacaoState, FormData>(async (prev, fd) => {
+      const r = await confirmarEvidenciaAction(prev, fd);
+      if (r.ok) onResolvido();
+      return r;
+    }, {});
 
-  const [invalidarState, invalidarFormAction, invalidarPendente] = useActionState<
-    ValidacaoState,
-    FormData
-  >(async (prev, fd) => {
-    const r = await invalidarEvidenciaAction(prev, fd);
-    if (r.ok) onResolvido();
-    return r;
-  }, {});
+  const [invalidarState, invalidarFormAction, invalidarPendente] =
+    useActionState<ValidacaoState, FormData>(async (prev, fd) => {
+      const r = await invalidarEvidenciaAction(prev, fd);
+      if (r.ok) onResolvido();
+      return r;
+    }, {});
 
   const [devolverState, devolverFormAction, devolverPendente] = useActionState<
     ValidacaoState,
@@ -122,14 +133,19 @@ function ItemCard({
   const [, startTransition] = useTransition();
   const [reclassificarAberto, setReclassificarAberto] = useState(false);
   const [invalidarAberto, setInvalidarAberto] = useState(false);
-  const [alvoSelecionadoIdx, setAlvoSelecionadoIdx] = useState<string | undefined>(
-    undefined,
-  );
+  const [alvoSelecionadoIdx, setAlvoSelecionadoIdx] = useState<
+    string | undefined
+  >(undefined);
   const novoAlvoJson =
-    alvoSelecionadoIdx !== undefined ? JSON.stringify(alvos[Number(alvoSelecionadoIdx)]) : "";
+    alvoSelecionadoIdx !== undefined
+      ? JSON.stringify(alvos[Number(alvoSelecionadoIdx)])
+      : "";
 
   const pendente =
-    confirmarPendente || invalidarPendente || devolverPendente || reclassificarPendente;
+    confirmarPendente ||
+    invalidarPendente ||
+    devolverPendente ||
+    reclassificarPendente;
 
   function aprovar() {
     const fd = new FormData();
@@ -139,7 +155,7 @@ function ItemCard({
 
   return (
     <Stack gap="sm" como="li" id={`validacao-card-${item.evidenceId}`}>
-      <span className="text-[var(--text-secondary)] font-mono text-xs font-semibold tracking-wide uppercase">
+      <span className="font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
         Item {indice} de {total}
       </span>
 
@@ -147,13 +163,18 @@ function ItemCard({
         <Checkbox
           label={`Selecionar evidência de ${item.patientNome} para aprovação em lote`}
           checked={selecionado}
-          onCheckedChange={(marcado) => onToggleSelecao(item.evidenceId, marcado === true)}
+          onCheckedChange={(marcado) =>
+            onToggleSelecao(item.evidenceId, marcado === true)
+          }
         />
       ) : null}
 
       <ConfidenceCard
         titulo={
-          <Link href={`/pacientes/${item.patientId}`} className="hover:underline">
+          <Link
+            href={`/pacientes/${item.patientId}`}
+            className="hover:underline"
+          >
             {item.patientNome}
           </Link>
         }
@@ -178,11 +199,12 @@ function ItemCard({
           <DialogContent>
             <DialogTitle>Detalhes da evidência</DialogTitle>
             <DialogDescription>
-              Classificação sugerida pela IA e comparação com o histórico do paciente.
+              Classificação sugerida pela IA e comparação com o histórico do
+              paciente.
             </DialogDescription>
             <Stack gap="md" className="mt-4">
               <Stack gap="sm">
-                <span className="text-[var(--text-secondary)] text-sm font-semibold">
+                <span className="text-sm font-semibold text-[var(--text-secondary)]">
                   Classificação atual
                 </span>
                 <ClassificacaoAtual classificacao={item.classificacaoAtual} />
@@ -201,9 +223,15 @@ function ItemCard({
                   rotulo="Classificação"
                   divergente
                   dadoAnterior={
-                    <ClassificacaoAtual classificacao={item.historicoAnterior.classificacao} />
+                    <ClassificacaoAtual
+                      classificacao={item.historicoAnterior.classificacao}
+                    />
                   }
-                  dadoSugerido={<ClassificacaoAtual classificacao={item.classificacaoAtual} />}
+                  dadoSugerido={
+                    <ClassificacaoAtual
+                      classificacao={item.classificacaoAtual}
+                    />
+                  }
                   dataAnterior={formatarData(item.historicoAnterior.criadoEm)}
                   motivoDivergencia="A sugestão diverge do histórico recente — confirme antes de aprovar."
                 />
@@ -233,15 +261,27 @@ function ItemCard({
             </DialogDescription>
             <form action={devolverFormAction}>
               <Stack gap="md" className="mt-4">
-                <input type="hidden" name="evidenceId" value={item.evidenceId} />
+                <input
+                  type="hidden"
+                  name="evidenceId"
+                  value={item.evidenceId}
+                />
                 <Field label="Pergunta" htmlFor={`pergunta-${item.evidenceId}`}>
-                  <Input id={`pergunta-${item.evidenceId}`} name="pergunta" required />
+                  <Input
+                    id={`pergunta-${item.evidenceId}`}
+                    name="pergunta"
+                    required
+                  />
                 </Field>
                 {devolverState.error ? (
                   <Alert severidade="erro">{devolverState.error}</Alert>
                 ) : null}
                 <Cluster gap="sm">
-                  <Button type="submit" variante="primaria" disabled={devolverPendente}>
+                  <Button
+                    type="submit"
+                    variante="primaria"
+                    disabled={devolverPendente}
+                  >
                     {devolverPendente ? "Devolvendo…" : "Devolver"}
                   </Button>
                   <DialogClose asChild>
@@ -292,7 +332,10 @@ function ItemCard({
                 </Select>
               </Field>
 
-              <Field label="Justificativa" htmlFor={`justificativa-${item.evidenceId}`}>
+              <Field
+                label="Justificativa"
+                htmlFor={`justificativa-${item.evidenceId}`}
+              >
                 <Input
                   id={`justificativa-${item.evidenceId}`}
                   name="justificativa"
@@ -308,9 +351,13 @@ function ItemCard({
                 <Button
                   type="submit"
                   variante="primaria"
-                  disabled={reclassificarPendente || alvoSelecionadoIdx === undefined}
+                  disabled={
+                    reclassificarPendente || alvoSelecionadoIdx === undefined
+                  }
                 >
-                  {reclassificarPendente ? "Reclassificando…" : "Confirmar reclassificação"}
+                  {reclassificarPendente
+                    ? "Reclassificando…"
+                    : "Confirmar reclassificação"}
                 </Button>
                 <DialogClose asChild>
                   <Button type="button" variante="terciaria">
@@ -333,13 +380,21 @@ function ItemCard({
             <Stack gap="md" className="mt-4">
               <input type="hidden" name="evidenceId" value={item.evidenceId} />
               <Field label="Motivo" htmlFor={`motivo-${item.evidenceId}`}>
-                <Input id={`motivo-${item.evidenceId}`} name="motivo" required />
+                <Input
+                  id={`motivo-${item.evidenceId}`}
+                  name="motivo"
+                  required
+                />
               </Field>
               {invalidarState.error ? (
                 <Alert severidade="erro">{invalidarState.error}</Alert>
               ) : null}
               <Cluster gap="sm">
-                <Button type="submit" variante="primaria" disabled={invalidarPendente}>
+                <Button
+                  type="submit"
+                  variante="primaria"
+                  disabled={invalidarPendente}
+                >
                   {invalidarPendente ? "Invalidando…" : "Invalidar"}
                 </Button>
                 <DialogClose asChild>
@@ -353,7 +408,9 @@ function ItemCard({
         </DialogContent>
       </Dialog>
 
-      {confirmarState.error ? <Alert severidade="erro">{confirmarState.error}</Alert> : null}
+      {confirmarState.error ? (
+        <Alert severidade="erro">{confirmarState.error}</Alert>
+      ) : null}
     </Stack>
   );
 }
@@ -384,7 +441,10 @@ export function ValidacaoFila({
     [itens, resolvidos],
   );
 
-  const elegiveis = useMemo(() => pendentes.filter((i) => i.podeLote), [pendentes]);
+  const elegiveis = useMemo(
+    () => pendentes.filter((i) => i.podeLote),
+    [pendentes],
+  );
   const bloqueados = pendentes.length - elegiveis.length;
 
   const [loteState, loteFormAction, lotePendente] = useActionState<
@@ -473,7 +533,9 @@ export function ValidacaoFila({
             ))}
           </Stack>
 
-          {loteState.error ? <Alert severidade="erro">{loteState.error}</Alert> : null}
+          {loteState.error ? (
+            <Alert severidade="erro">{loteState.error}</Alert>
+          ) : null}
 
           <BatchBar
             className="fixed inset-x-4 bottom-4"

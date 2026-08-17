@@ -70,9 +70,14 @@ export function validarDraftContraDossie(
   return { ok: true };
 }
 
-export function resolveConvenioNarrativoProvider(clinic: { isDemo: boolean }): ConvenioNarrativoProvider {
+export function resolveConvenioNarrativoProvider(clinic: {
+  isDemo: boolean;
+}): ConvenioNarrativoProvider {
   if (clinic.isDemo) return new StubConvenioNarrativoProvider();
-  if (process.env.CONVENIO_REPORT_LLM_ENABLED === "true" && process.env.ANTHROPIC_API_KEY) {
+  if (
+    process.env.CONVENIO_REPORT_LLM_ENABLED === "true" &&
+    process.env.ANTHROPIC_API_KEY
+  ) {
     return new ClaudeConvenioNarrativoProvider();
   }
   return new StubConvenioNarrativoProvider();

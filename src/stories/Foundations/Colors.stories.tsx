@@ -30,113 +30,325 @@ type StateRow = {
 };
 
 const BRAND_TOKENS: ColorToken[] = [
-  { name: "brand.primary", variable: "var(--color-brand-primary)", hex: "#F2B705", description: "Cor principal da marca e ações primárias." },
-  { name: "primary.hover", variable: "var(--color-brand-primary-hover)", hex: "#D29E04", description: "Estado de hover das ações primárias." },
-  { name: "primary.tint", variable: "var(--color-brand-primary-tint)", hex: "#FFF6DB", description: "Fundo suave de marca para destaque sutil." },
-  { name: "ink.anchor", variable: "var(--color-ink-anchor)", hex: "#0A0A0A", description: "Âncora de tipografia e elementos de alto contraste." },
+  {
+    name: "brand.primary",
+    variable: "var(--color-brand-primary)",
+    hex: "#F2B705",
+    description: "Cor principal da marca e ações primárias.",
+  },
+  {
+    name: "primary.hover",
+    variable: "var(--color-brand-primary-hover)",
+    hex: "#D29E04",
+    description: "Estado de hover das ações primárias.",
+  },
+  {
+    name: "primary.tint",
+    variable: "var(--color-brand-primary-tint)",
+    hex: "#FFF6DB",
+    description: "Fundo suave de marca para destaque sutil.",
+  },
+  {
+    name: "ink.anchor",
+    variable: "var(--color-ink-anchor)",
+    hex: "#0A0A0A",
+    description: "Âncora de tipografia e elementos de alto contraste.",
+  },
 ];
 
 const DATA_STATES: StateRow[] = [
   {
     label: "Sucesso",
-    tint: { label: "tint", variable: "var(--status-success-bg)", hex: "#ECFDF5", textColor: "text-[#065F46]" },
-    accent: { label: "accent", variable: "var(--status-success-border)", hex: "#059669", textColor: "text-white" },
-    deep: { label: "deep", variable: "var(--status-success-fg)", hex: "#065F46", textColor: "text-white" },
+    tint: {
+      label: "tint",
+      variable: "var(--status-success-bg)",
+      hex: "#ECFDF5",
+      textColor: "text-[#065F46]",
+    },
+    accent: {
+      label: "accent",
+      variable: "var(--status-success-border)",
+      hex: "#059669",
+      textColor: "text-white",
+    },
+    deep: {
+      label: "deep",
+      variable: "var(--status-success-fg)",
+      hex: "#065F46",
+      textColor: "text-white",
+    },
   },
   {
     label: "Informação",
-    tint: { label: "tint", variable: "var(--status-info-bg)", hex: "#EFF6FF", textColor: "text-[#1E40AF]" },
-    accent: { label: "accent", variable: "var(--status-info-border)", hex: "#2563EB", textColor: "text-white" },
-    deep: { label: "deep", variable: "var(--status-info-fg)", hex: "#1E40AF", textColor: "text-white" },
+    tint: {
+      label: "tint",
+      variable: "var(--status-info-bg)",
+      hex: "#EFF6FF",
+      textColor: "text-[#1E40AF]",
+    },
+    accent: {
+      label: "accent",
+      variable: "var(--status-info-border)",
+      hex: "#2563EB",
+      textColor: "text-white",
+    },
+    deep: {
+      label: "deep",
+      variable: "var(--status-info-fg)",
+      hex: "#1E40AF",
+      textColor: "text-white",
+    },
   },
   {
     label: "IA / sugerida",
-    tint: { label: "tint", variable: "var(--status-ia-bg)", hex: "#F1E9F6", textColor: "text-[#45286E]" },
-    accent: { label: "accent", variable: "var(--status-ia-border)", hex: "#6A4C93", textColor: "text-white" },
-    deep: { label: "deep", variable: "var(--status-ia-fg)", hex: "#45286E", textColor: "text-white" },
+    tint: {
+      label: "tint",
+      variable: "var(--status-ia-bg)",
+      hex: "#F1E9F6",
+      textColor: "text-[#45286E]",
+    },
+    accent: {
+      label: "accent",
+      variable: "var(--status-ia-border)",
+      hex: "#6A4C93",
+      textColor: "text-white",
+    },
+    deep: {
+      label: "deep",
+      variable: "var(--status-ia-fg)",
+      hex: "#45286E",
+      textColor: "text-white",
+    },
   },
   {
     label: "Aviso",
-    tint: { label: "tint", variable: "var(--status-warning-bg)", hex: "#FFFBEB", textColor: "text-[#92400E]" },
-    accent: { label: "accent", variable: "var(--status-warning-border)", hex: "#D97706", textColor: "text-white" },
-    deep: { label: "deep", variable: "var(--status-warning-fg)", hex: "#92400E", textColor: "text-white" },
+    tint: {
+      label: "tint",
+      variable: "var(--status-warning-bg)",
+      hex: "#FFFBEB",
+      textColor: "text-[#92400E]",
+    },
+    accent: {
+      label: "accent",
+      variable: "var(--status-warning-border)",
+      hex: "#D97706",
+      textColor: "text-white",
+    },
+    deep: {
+      label: "deep",
+      variable: "var(--status-warning-fg)",
+      hex: "#92400E",
+      textColor: "text-white",
+    },
   },
   {
     label: "Erro / Perigo",
-    tint: { label: "tint", variable: "var(--status-error-bg)", hex: "#FEF2F2", textColor: "text-[#991B1B]" },
-    accent: { label: "accent", variable: "var(--status-error-border)", hex: "#DC2626", textColor: "text-white" },
-    deep: { label: "deep", variable: "var(--status-error-fg)", hex: "#991B1B", textColor: "text-white" },
+    tint: {
+      label: "tint",
+      variable: "var(--status-error-bg)",
+      hex: "#FEF2F2",
+      textColor: "text-[#991B1B]",
+    },
+    accent: {
+      label: "accent",
+      variable: "var(--status-error-border)",
+      hex: "#DC2626",
+      textColor: "text-white",
+    },
+    deep: {
+      label: "deep",
+      variable: "var(--status-error-fg)",
+      hex: "#991B1B",
+      textColor: "text-white",
+    },
   },
 ];
 
 const ESTRUTURA_TOKENS: ColorToken[] = [
-  { name: "Canvas BG", variable: "var(--color-bg-canvas)", hex: "#F8F9FA", description: "Fundo principal da tela, off-white para reduzir o brilho (glare)." },
-  { name: "Surface BG", variable: "var(--color-bg-surface)", hex: "#FFFFFF", description: "Fundo de elementos sobrepostos (cards, modais, inputs)." },
-  { name: "Border Brutal", variable: "var(--color-border-brutal)", hex: "#1A1A1A", description: "Bordas neobrutalistas marcantes de componentes." },
-  { name: "Body Text", variable: "var(--color-text-body)", hex: "#2B2B2B", description: "Texto padrão corrido para alta legibilidade." },
-  { name: "Heading Text", variable: "var(--color-text-heading)", hex: "#0A0A0A", description: "Preto puro para títulos principais e âncoras visuais." },
+  {
+    name: "Canvas BG",
+    variable: "var(--color-bg-canvas)",
+    hex: "#F8F9FA",
+    description:
+      "Fundo principal da tela, off-white para reduzir o brilho (glare).",
+  },
+  {
+    name: "Surface BG",
+    variable: "var(--color-bg-surface)",
+    hex: "#FFFFFF",
+    description: "Fundo de elementos sobrepostos (cards, modais, inputs).",
+  },
+  {
+    name: "Border Brutal",
+    variable: "var(--color-border-brutal)",
+    hex: "#1A1A1A",
+    description: "Bordas neobrutalistas marcantes de componentes.",
+  },
+  {
+    name: "Body Text",
+    variable: "var(--color-text-body)",
+    hex: "#2B2B2B",
+    description: "Texto padrão corrido para alta legibilidade.",
+  },
+  {
+    name: "Heading Text",
+    variable: "var(--color-text-heading)",
+    hex: "#0A0A0A",
+    description: "Preto puro para títulos principais e âncoras visuais.",
+  },
 ];
 
 const ESPECTRO_TOKENS: ColorToken[] = [
-  { name: "Spectrum Red", variable: "var(--color-spectrum-red)", hex: "#E4572E", description: "Stop vermelho do arco-íris." },
-  { name: "Spectrum Orange", variable: "var(--color-spectrum-orange)", hex: "#F2A71B", description: "Stop laranja do arco-íris." },
-  { name: "Spectrum Yellow", variable: "var(--color-spectrum-yellow)", hex: "#F2B705", description: "Stop amarelo do arco-íris." },
-  { name: "Spectrum Green", variable: "var(--color-spectrum-green)", hex: "#3FA34D", description: "Stop verde do arco-íris." },
-  { name: "Spectrum Blue", variable: "var(--color-spectrum-blue)", hex: "#2274A5", description: "Stop azul do arco-íris." },
-  { name: "Spectrum Violet", variable: "var(--color-spectrum-violet)", hex: "#6A4C93", description: "Stop violeta do arco-íris." },
+  {
+    name: "Spectrum Red",
+    variable: "var(--color-spectrum-red)",
+    hex: "#E4572E",
+    description: "Stop vermelho do arco-íris.",
+  },
+  {
+    name: "Spectrum Orange",
+    variable: "var(--color-spectrum-orange)",
+    hex: "#F2A71B",
+    description: "Stop laranja do arco-íris.",
+  },
+  {
+    name: "Spectrum Yellow",
+    variable: "var(--color-spectrum-yellow)",
+    hex: "#F2B705",
+    description: "Stop amarelo do arco-íris.",
+  },
+  {
+    name: "Spectrum Green",
+    variable: "var(--color-spectrum-green)",
+    hex: "#3FA34D",
+    description: "Stop verde do arco-íris.",
+  },
+  {
+    name: "Spectrum Blue",
+    variable: "var(--color-spectrum-blue)",
+    hex: "#2274A5",
+    description: "Stop azul do arco-íris.",
+  },
+  {
+    name: "Spectrum Violet",
+    variable: "var(--color-spectrum-violet)",
+    hex: "#6A4C93",
+    description: "Stop violeta do arco-íris.",
+  },
 ];
 
 const ACTION_TOKENS: ColorToken[] = [
-  { name: "action.primary", variable: "var(--color-action-primary)", hex: "#F2B705", description: "Fundo dos botões primários (ouro alinhado à marca)." },
-  { name: "action.primary.fg", variable: "var(--color-action-primary-fg)", hex: "#000000", description: "Texto/ícone dos botões primários (alto contraste)." },
-  { name: "action.secondary.bg", variable: "var(--color-action-secondary-bg)", hex: "#FFFFFF", description: "Fundo dos botões secundários." },
-  { name: "action.secondary.fg", variable: "var(--color-action-secondary-fg)", hex: "#000000", description: "Texto/ícone dos botões secundários." },
+  {
+    name: "action.primary",
+    variable: "var(--color-action-primary)",
+    hex: "#F2B705",
+    description: "Fundo dos botões primários (ouro alinhado à marca).",
+  },
+  {
+    name: "action.primary.fg",
+    variable: "var(--color-action-primary-fg)",
+    hex: "#000000",
+    description: "Texto/ícone dos botões primários (alto contraste).",
+  },
+  {
+    name: "action.secondary.bg",
+    variable: "var(--color-action-secondary-bg)",
+    hex: "#FFFFFF",
+    description: "Fundo dos botões secundários.",
+  },
+  {
+    name: "action.secondary.fg",
+    variable: "var(--color-action-secondary-fg)",
+    hex: "#000000",
+    description: "Texto/ícone dos botões secundários.",
+  },
 ];
 
 const RAW_PRIMITIVE_TOKENS: ColorToken[] = [
-  { name: "Gold 100", variable: "var(--color-raw-gold-100)", hex: "#FFF6DB", description: "Tint suave de marca." },
-  { name: "Gold 500", variable: "var(--color-raw-gold-500)", hex: "#F2B705", description: "Ouro primário (infinito autismo)." },
-  { name: "Gold 700", variable: "var(--color-raw-gold-700)", hex: "#D29E04", description: "Hover de marca." },
-  { name: "Mint 500", variable: "var(--color-raw-mint-500)", hex: "#14857A", description: "Acento de sucesso." },
-  { name: "Blue 500", variable: "var(--color-raw-blue-500)", hex: "#1F6FB2", description: "Acento de informação." },
-  { name: "Violet 500", variable: "var(--color-raw-violet-500)", hex: "#6A4C93", description: "Acento de IA / sugestão." },
-  { name: "Terracotta 500", variable: "var(--color-raw-terracotta-500)", hex: "#C0392B", description: "Acento de erro / perigo." },
-  { name: "Gray 900", variable: "var(--color-raw-gray-900)", hex: "#1A1A1A", description: "Âncora gráfica brutalista." },
+  {
+    name: "Gold 100",
+    variable: "var(--color-raw-gold-100)",
+    hex: "#FFF6DB",
+    description: "Tint suave de marca.",
+  },
+  {
+    name: "Gold 500",
+    variable: "var(--color-raw-gold-500)",
+    hex: "#F2B705",
+    description: "Ouro primário (infinito autismo).",
+  },
+  {
+    name: "Gold 700",
+    variable: "var(--color-raw-gold-700)",
+    hex: "#D29E04",
+    description: "Hover de marca.",
+  },
+  {
+    name: "Mint 500",
+    variable: "var(--color-raw-mint-500)",
+    hex: "#14857A",
+    description: "Acento de sucesso.",
+  },
+  {
+    name: "Blue 500",
+    variable: "var(--color-raw-blue-500)",
+    hex: "#1F6FB2",
+    description: "Acento de informação.",
+  },
+  {
+    name: "Violet 500",
+    variable: "var(--color-raw-violet-500)",
+    hex: "#6A4C93",
+    description: "Acento de IA / sugestão.",
+  },
+  {
+    name: "Terracotta 500",
+    variable: "var(--color-raw-terracotta-500)",
+    hex: "#C0392B",
+    description: "Acento de erro / perigo.",
+  },
+  {
+    name: "Gray 900",
+    variable: "var(--color-raw-gray-900)",
+    hex: "#1A1A1A",
+    description: "Âncora gráfica brutalista.",
+  },
 ];
 
 export const Palette: StoryObj = {
   render: () => (
-    <div className="space-y-12 max-w-6xl font-sans text-stone-900 bg-[#FAF9F5] p-6 md:p-8 border-4 border-black shadow-brutal">
+    <div className="shadow-brutal max-w-6xl space-y-12 border-4 border-black bg-[#FAF9F5] p-6 font-sans text-stone-900 md:p-8">
       {/* Banner Superior Brutalista */}
-      <div className="border-4 border-black p-8 bg-[#F2B705] shadow-brutal relative overflow-hidden">
-        <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight text-black font-mono">
+      <div className="shadow-brutal relative overflow-hidden border-4 border-black bg-[#F2B705] p-8">
+        <h1 className="font-mono text-4xl font-black tracking-tight text-black uppercase md:text-5xl">
           Cores &amp; Paleta
         </h1>
-        <p className="mt-4 text-lg md:text-xl font-bold max-w-3xl text-black">
-          Design System Espectro Brutal — Paleta de cores semântica e primitivas brutais baseadas na neurodiversidade-afirmativa.
+        <p className="mt-4 max-w-3xl text-lg font-bold text-black md:text-xl">
+          Design System Espectro Brutal — Paleta de cores semântica e primitivas
+          brutais baseadas na neurodiversidade-afirmativa.
         </p>
       </div>
 
       {/* PRIMITIVAS BRUTALISTAS */}
       <section className="space-y-4">
-        <h2 className="text-xl font-black font-mono text-stone-500 uppercase tracking-wider">
+        <h2 className="font-mono text-xl font-black tracking-wider text-stone-500 uppercase">
           PRIMITIVAS DE CORES BRUTALISTAS
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-8">
           {RAW_PRIMITIVE_TOKENS.map((token) => (
-            <div 
-              key={token.variable} 
-              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-brutal-sm"
+            <div
+              key={token.variable}
+              className="shadow-brutal-sm overflow-hidden rounded-lg border-2 border-black bg-white"
             >
-              <div 
-                className="w-full h-12 border-b border-black" 
+              <div
+                className="h-12 w-full border-b border-black"
                 style={{ backgroundColor: token.variable }}
               />
               <div className="p-2 text-center">
-                <span className="font-mono text-xs font-bold text-black block truncate">
+                <span className="block truncate font-mono text-xs font-bold text-black">
                   {token.name}
                 </span>
-                <span className="font-mono text-[10px] text-stone-400 block uppercase">
+                <span className="block font-mono text-[10px] text-stone-400 uppercase">
                   {token.hex}
                 </span>
               </div>
@@ -147,30 +359,30 @@ export const Palette: StoryObj = {
 
       {/* MARCA & AÇÃO INSTITUCIONAL */}
       <section className="space-y-4">
-        <h2 className="text-xl font-black font-mono text-stone-500 uppercase tracking-wider">
+        <h2 className="font-mono text-xl font-black tracking-wider text-stone-500 uppercase">
           MARCA &amp; AÇÃO INSTITUCIONAL
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           {BRAND_TOKENS.map((token) => (
-            <div 
-              key={token.variable} 
-              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-brutal hover:shadow-brutal-hover hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150"
+            <div
+              key={token.variable}
+              className="shadow-brutal hover:shadow-brutal-hover overflow-hidden rounded-lg border-2 border-black bg-white transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
             >
-              <div 
-                className="w-full h-24 border-b-2 border-black" 
+              <div
+                className="h-24 w-full border-b-2 border-black"
                 style={{ backgroundColor: token.variable }}
               />
-              <div className="p-4 bg-white">
-                <span className="font-mono text-base font-extrabold text-black block mb-0.5">
+              <div className="bg-white p-4">
+                <span className="mb-0.5 block font-mono text-base font-extrabold text-black">
                   {token.name}
                 </span>
-                <span className="font-mono text-sm text-stone-400 block uppercase">
+                <span className="block font-mono text-sm text-stone-400 uppercase">
                   {token.hex}
                 </span>
-                <code className="text-[10px] text-rose-600 font-semibold bg-stone-50 px-1 py-0.5 border border-stone-200 block mt-2 break-all rounded w-fit">
+                <code className="mt-2 block w-fit rounded border border-stone-200 bg-stone-50 px-1 py-0.5 text-[10px] font-semibold break-all text-rose-600">
                   {token.variable}
                 </code>
-                <p className="text-stone-600 text-xs mt-2 leading-relaxed">
+                <p className="mt-2 text-xs leading-relaxed text-stone-600">
                   {token.description}
                 </p>
               </div>
@@ -181,32 +393,32 @@ export const Palette: StoryObj = {
 
       {/* TOKENS SEMÂNTICOS DE AÇÃO (COMPONENTES / BOTÕES) */}
       <section className="space-y-4">
-        <h2 className="text-xl font-black font-mono text-stone-500 uppercase tracking-wider">
+        <h2 className="font-mono text-xl font-black tracking-wider text-stone-500 uppercase">
           AÇÕES SEMÂNTICAS (BOTÕES &amp; CONTROLES)
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           {ACTION_TOKENS.map((token) => (
-            <div 
-              key={token.variable} 
-              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-brutal hover:shadow-brutal-hover hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150"
+            <div
+              key={token.variable}
+              className="shadow-brutal hover:shadow-brutal-hover overflow-hidden rounded-lg border-2 border-black bg-white transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
             >
-              <div 
-                className="w-full h-24 border-b-2 border-black flex items-center justify-center font-bold text-sm" 
+              <div
+                className="flex h-24 w-full items-center justify-center border-b-2 border-black text-sm font-bold"
                 style={{ backgroundColor: token.variable }}
               >
-                <span className="bg-black/10 px-2 py-1 rounded">Amostra</span>
+                <span className="rounded bg-black/10 px-2 py-1">Amostra</span>
               </div>
-              <div className="p-4 bg-white">
-                <span className="font-mono text-base font-extrabold text-black block mb-0.5">
+              <div className="bg-white p-4">
+                <span className="mb-0.5 block font-mono text-base font-extrabold text-black">
                   {token.name}
                 </span>
-                <span className="font-mono text-sm text-stone-400 block uppercase">
+                <span className="block font-mono text-sm text-stone-400 uppercase">
                   {token.hex}
                 </span>
-                <code className="text-[10px] text-rose-600 font-semibold bg-stone-50 px-1 py-0.5 border border-stone-200 block mt-2 break-all rounded w-fit">
+                <code className="mt-2 block w-fit rounded border border-stone-200 bg-stone-50 px-1 py-0.5 text-[10px] font-semibold break-all text-rose-600">
                   {token.variable}
                 </code>
-                <p className="text-stone-600 text-xs mt-2 leading-relaxed">
+                <p className="mt-2 text-xs leading-relaxed text-stone-600">
                   {token.description}
                 </p>
               </div>
@@ -217,45 +429,60 @@ export const Palette: StoryObj = {
 
       {/* ESTADOS DO DADO */}
       <section className="space-y-4">
-        <h2 className="text-xl font-black font-mono text-stone-500 uppercase tracking-wider">
+        <h2 className="font-mono text-xl font-black tracking-wider text-stone-500 uppercase">
           ESTADOS DO DADO — TINTA · ACENTO · PROFUNDO
         </h2>
-        
-        <div className="border-2 border-black rounded-lg bg-white p-6 shadow-brutal space-y-6">
+
+        <div className="shadow-brutal space-y-6 rounded-lg border-2 border-black bg-white p-6">
           {DATA_STATES.map((row) => (
-            <div key={row.label} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-stone-100 last:border-0 pb-6 last:pb-0">
+            <div
+              key={row.label}
+              className="grid grid-cols-1 items-center gap-4 border-b border-stone-100 pb-6 last:border-0 last:pb-0 md:grid-cols-12"
+            >
               {/* Nome do Estado */}
-              <div className="md:col-span-3 text-lg font-bold text-black font-sans">
+              <div className="font-sans text-lg font-bold text-black md:col-span-3">
                 {row.label}
               </div>
 
               {/* Grid das Cores (tint, accent, deep) */}
-              <div className="md:col-span-9 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:col-span-9">
                 {/* TINT */}
-                <div 
-                  className={`border-2 border-black rounded-lg p-4 flex flex-col justify-between h-18 shadow-brutal-sm ${row.tint.textColor}`}
+                <div
+                  className={`shadow-brutal-sm flex h-18 flex-col justify-between rounded-lg border-2 border-black p-4 ${row.tint.textColor}`}
                   style={{ backgroundColor: row.tint.variable }}
                 >
-                  <span className="font-mono text-xs font-bold uppercase tracking-wider">{row.tint.label}</span>
-                  <span className="font-mono text-sm font-black uppercase">{row.tint.hex}</span>
+                  <span className="font-mono text-xs font-bold tracking-wider uppercase">
+                    {row.tint.label}
+                  </span>
+                  <span className="font-mono text-sm font-black uppercase">
+                    {row.tint.hex}
+                  </span>
                 </div>
 
                 {/* ACCENT */}
-                <div 
-                  className={`border-2 border-black rounded-lg p-4 flex flex-col justify-between h-18 shadow-brutal-sm ${row.accent.textColor}`}
+                <div
+                  className={`shadow-brutal-sm flex h-18 flex-col justify-between rounded-lg border-2 border-black p-4 ${row.accent.textColor}`}
                   style={{ backgroundColor: row.accent.variable }}
                 >
-                  <span className="font-mono text-xs font-bold uppercase tracking-wider">{row.accent.label}</span>
-                  <span className="font-mono text-sm font-black uppercase">{row.accent.hex}</span>
+                  <span className="font-mono text-xs font-bold tracking-wider uppercase">
+                    {row.accent.label}
+                  </span>
+                  <span className="font-mono text-sm font-black uppercase">
+                    {row.accent.hex}
+                  </span>
                 </div>
 
                 {/* DEEP */}
-                <div 
-                  className={`border-2 border-black rounded-lg p-4 flex flex-col justify-between h-18 shadow-brutal-sm ${row.deep.textColor}`}
+                <div
+                  className={`shadow-brutal-sm flex h-18 flex-col justify-between rounded-lg border-2 border-black p-4 ${row.deep.textColor}`}
                   style={{ backgroundColor: row.deep.variable }}
                 >
-                  <span className="font-mono text-xs font-bold uppercase tracking-wider">{row.deep.label}</span>
-                  <span className="font-mono text-sm font-black uppercase">{row.deep.hex}</span>
+                  <span className="font-mono text-xs font-bold tracking-wider uppercase">
+                    {row.deep.label}
+                  </span>
+                  <span className="font-mono text-sm font-black uppercase">
+                    {row.deep.hex}
+                  </span>
                 </div>
               </div>
             </div>
@@ -265,30 +492,32 @@ export const Palette: StoryObj = {
 
       {/* ESTRUTURA E TIPOGRAFIA */}
       <section className="space-y-4">
-        <h2 className="text-xl font-black font-mono text-stone-500 uppercase tracking-wider">
+        <h2 className="font-mono text-xl font-black tracking-wider text-stone-500 uppercase">
           ESTRUTURA & TIPOGRAFIA
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {ESTRUTURA_TOKENS.map((token) => (
-            <div 
-              key={token.variable} 
-              className="border-2 border-black p-4 flex flex-col justify-between bg-white shadow-brutal-sm hover:shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-150 rounded-lg"
+            <div
+              key={token.variable}
+              className="shadow-brutal-sm hover:shadow-brutal flex flex-col justify-between rounded-lg border-2 border-black bg-white p-4 transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
             >
               <div>
-                <div 
-                  className="w-full h-16 border-2 border-black mb-4 relative rounded" 
+                <div
+                  className="relative mb-4 h-16 w-full rounded border-2 border-black"
                   style={{ backgroundColor: token.variable }}
                 >
-                  <span className="absolute bottom-2 right-2 bg-black text-white text-[10px] px-2 py-0.5 font-bold uppercase font-mono border border-white">
+                  <span className="absolute right-2 bottom-2 border border-white bg-black px-2 py-0.5 font-mono text-[10px] font-bold text-white uppercase">
                     {token.hex}
                   </span>
                 </div>
-                <h3 className="font-extrabold text-base mb-1 text-black">{token.name}</h3>
-                <code className="text-xs text-rose-600 font-semibold bg-stone-50 px-1 py-0.5 border border-stone-200 block mb-2 break-all rounded w-fit">
+                <h3 className="mb-1 text-base font-extrabold text-black">
+                  {token.name}
+                </h3>
+                <code className="mb-2 block w-fit rounded border border-stone-200 bg-stone-50 px-1 py-0.5 text-xs font-semibold break-all text-rose-600">
                   {token.variable}
                 </code>
               </div>
-              <p className="text-stone-600 text-xs mt-2 leading-relaxed">
+              <p className="mt-2 text-xs leading-relaxed text-stone-600">
                 {token.description}
               </p>
             </div>
@@ -298,27 +527,29 @@ export const Palette: StoryObj = {
 
       {/* ESPECTRO DE MARCA */}
       <section className="space-y-4">
-        <h2 className="text-xl font-black font-mono text-stone-500 uppercase tracking-wider">
+        <h2 className="font-mono text-xl font-black tracking-wider text-stone-500 uppercase">
           ESPECTRO (ASSINATURA DE MARCA)
         </h2>
-        <p className="text-stone-600 font-medium text-sm">
-          Régua fina arco-íris representando a neurodivergência. Usada exclusivamente para fins institucionais e identidade de marca (nunca em botões ou status).
+        <p className="text-sm font-medium text-stone-600">
+          Régua fina arco-íris representando a neurodivergência. Usada
+          exclusivamente para fins institucionais e identidade de marca (nunca
+          em botões ou status).
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-6">
           {ESPECTRO_TOKENS.map((token) => (
-            <div 
-              key={token.variable} 
-              className="border-2 border-black rounded-lg overflow-hidden bg-white shadow-brutal-sm"
+            <div
+              key={token.variable}
+              className="shadow-brutal-sm overflow-hidden rounded-lg border-2 border-black bg-white"
             >
-              <div 
-                className="w-full h-8 border-b border-black" 
+              <div
+                className="h-8 w-full border-b border-black"
                 style={{ backgroundColor: token.variable }}
               />
               <div className="p-3">
-                <span className="font-mono text-xs font-bold text-black block truncate">
+                <span className="block truncate font-mono text-xs font-bold text-black">
                   {token.name}
                 </span>
-                <span className="font-mono text-[10px] text-stone-400 block uppercase">
+                <span className="block font-mono text-[10px] text-stone-400 uppercase">
                   {token.hex}
                 </span>
               </div>
@@ -328,60 +559,83 @@ export const Palette: StoryObj = {
       </section>
 
       {/* DO'S & DON'TS */}
-      <section className="space-y-4 pt-6 border-t-2 border-dashed border-stone-200">
-        <h2 className="text-2xl font-black font-mono text-black uppercase tracking-wider">
+      <section className="space-y-4 border-t-2 border-dashed border-stone-200 pt-6">
+        <h2 className="font-mono text-2xl font-black tracking-wider text-black uppercase">
           Do&apos;s &amp; Don&apos;ts (Boas Práticas de Cores)
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {/* DO */}
-          <div className="border-2 border-black rounded-lg p-6 bg-emerald-50 shadow-brutal-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="bg-emerald-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
+          <div className="shadow-brutal-sm rounded-lg border-2 border-black bg-emerald-50 p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="border-2 border-black bg-emerald-500 px-2.5 py-1 font-mono text-xs font-bold text-white uppercase shadow-[1px_1px_0_0_#000000]">
                 DO (SIM)
               </span>
-              <h3 className="text-lg font-black text-emerald-950">Práticas Recomendadas</h3>
+              <h3 className="text-lg font-black text-emerald-950">
+                Práticas Recomendadas
+              </h3>
             </div>
-            <ul className="space-y-3 text-emerald-900 text-sm list-disc pl-5">
+            <ul className="list-disc space-y-3 pl-5 text-sm text-emerald-900">
               <li>
-                <strong>Contraste Seguro na Cor Primária:</strong> Use sempre <code>ink.anchor</code> (<code>#0A0A0A</code>) ou <code>Heading Text</code> sobre fundos <code>brand.primary</code> (amarelo).
+                <strong>Contraste Seguro na Cor Primária:</strong> Use sempre{" "}
+                <code>ink.anchor</code> (<code>#0A0A0A</code>) ou{" "}
+                <code>Heading Text</code> sobre fundos{" "}
+                <code>brand.primary</code> (amarelo).
               </li>
               <li>
-                <strong>Tríade de Estados:</strong> Utilize a estrutura semântica <code>Tint</code> (fundo), <code>Accent</code> (borda/detalhe) e <code>Deep</code> (texto) para representar estados de dados clínicos.
+                <strong>Tríade de Estados:</strong> Utilize a estrutura
+                semântica <code>Tint</code> (fundo), <code>Accent</code>{" "}
+                (borda/detalhe) e <code>Deep</code> (texto) para representar
+                estados de dados clínicos.
               </li>
               <li>
-                <strong>Redundância Visual:</strong> Combine cor com ícones e rótulos textuais para que o significado nunca dependa apenas da cor.
+                <strong>Redundância Visual:</strong> Combine cor com ícones e
+                rótulos textuais para que o significado nunca dependa apenas da
+                cor.
               </li>
             </ul>
-            <div className="mt-4 p-3 bg-white border border-emerald-300 rounded text-xs flex items-center justify-between">
-              <span className="font-bold text-emerald-950">Exemplo Correto:</span>
-              <div className="bg-[#F2B705] text-[#0A0A0A] font-bold px-3 py-1 border border-black rounded font-mono">
+            <div className="mt-4 flex items-center justify-between rounded border border-emerald-300 bg-white p-3 text-xs">
+              <span className="font-bold text-emerald-950">
+                Exemplo Correto:
+              </span>
+              <div className="rounded border border-black bg-[#F2B705] px-3 py-1 font-mono font-bold text-[#0A0A0A]">
                 Texto Escuro no Amarelo (OK)
               </div>
             </div>
           </div>
 
           {/* DON'T */}
-          <div className="border-2 border-black rounded-lg p-6 bg-rose-50 shadow-brutal-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="bg-rose-500 text-white font-mono font-bold text-xs uppercase px-2.5 py-1 border-2 border-black shadow-[1px_1px_0_0_#000000]">
+          <div className="shadow-brutal-sm rounded-lg border-2 border-black bg-rose-50 p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="border-2 border-black bg-rose-500 px-2.5 py-1 font-mono text-xs font-bold text-white uppercase shadow-[1px_1px_0_0_#000000]">
                 DON&apos;T (NÃO)
               </span>
-              <h3 className="text-lg font-black text-rose-950">Práticas Proibidas</h3>
+              <h3 className="text-lg font-black text-rose-950">
+                Práticas Proibidas
+              </h3>
             </div>
-            <ul className="space-y-3 text-rose-900 text-sm list-disc pl-5">
+            <ul className="list-disc space-y-3 pl-5 text-sm text-rose-900">
               <li>
-                <strong>Texto Claro no Amarelo:</strong> Nunca utilize texto branco (<code>#FFFFFF</code>) ou tons claros sobre fundos <code>brand.primary</code>. A acessibilidade WCAG falha severamente.
+                <strong>Texto Claro no Amarelo:</strong> Nunca utilize texto
+                branco (<code>#FFFFFF</code>) ou tons claros sobre fundos{" "}
+                <code>brand.primary</code>. A acessibilidade WCAG falha
+                severamente.
               </li>
               <li>
-                <strong>Spectrum como Chrome:</strong> Nunca aplique as cores da régua <code>Spectrum</code> em botões ou status badges interativos, pois gera confusão e ruído visual.
+                <strong>Spectrum como Chrome:</strong> Nunca aplique as cores da
+                régua <code>Spectrum</code> em botões ou status badges
+                interativos, pois gera confusão e ruído visual.
               </li>
               <li>
-                <strong>Cores Puras para Status:</strong> Evite utilizar vermelho ou verde puro de alta saturação sem mitigação estrutural (como hachuras ou bordas diferenciadas).
+                <strong>Cores Puras para Status:</strong> Evite utilizar
+                vermelho ou verde puro de alta saturação sem mitigação
+                estrutural (como hachuras ou bordas diferenciadas).
               </li>
             </ul>
-            <div className="mt-4 p-3 bg-white border border-rose-300 rounded text-xs flex items-center justify-between">
-              <span className="font-bold text-rose-950">Exemplo Incorreto:</span>
-              <div className="bg-[#F2B705] text-white font-bold px-3 py-1 border border-black rounded font-mono line-through opacity-70">
+            <div className="mt-4 flex items-center justify-between rounded border border-rose-300 bg-white p-3 text-xs">
+              <span className="font-bold text-rose-950">
+                Exemplo Incorreto:
+              </span>
+              <div className="rounded border border-black bg-[#F2B705] px-3 py-1 font-mono font-bold text-white line-through opacity-70">
                 Texto Branco no Amarelo (FALHA)
               </div>
             </div>

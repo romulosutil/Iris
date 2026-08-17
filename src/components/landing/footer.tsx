@@ -21,26 +21,37 @@ export function LandingFooter() {
   };
 
   return (
-    <footer className="w-full bg-[var(--border-brutal,#1A1A1A)] text-white border-t-2 border-[var(--border-brutal,#1A1A1A)] pt-12 sm:pt-16 pb-10 sm:pb-12">
-      <div className="max-w-[1800px] mx-auto px-4 sm:px-8 lg:px-12 2xl:px-20 space-y-10 sm:space-y-12">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+    <footer className="w-full border-t-2 border-[var(--border-brutal,#1A1A1A)] bg-[var(--border-brutal,#1A1A1A)] pt-12 pb-10 text-white sm:pt-16 sm:pb-12">
+      <div className="mx-auto max-w-[1800px] space-y-10 px-4 sm:space-y-12 sm:px-8 lg:px-12 2xl:px-20">
+        <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-12">
           {/* Coluna 1: Logo & Proposta de Valor Humanizada */}
-          <div className="md:col-span-5 space-y-4">
+          <div className="space-y-4 md:col-span-5">
             <Link
               href="/institucional"
-              className="inline-block focus-visible:outline-focus outline-none"
+              className="focus-visible:outline-focus inline-block outline-none"
               aria-label="Ir para a página inicial do IRIS"
             >
-              <Logo altura={40} tom="mono" className="text-white" aria-label="Iris Logo Footer" />
+              <Logo
+                altura={40}
+                tom="mono"
+                className="text-white"
+                aria-label="Iris Logo Footer"
+              />
             </Link>
 
-            <p className="text-sm text-gray-300 max-w-sm leading-relaxed font-body">
-              Prontuário para clínicas de terapia infantil que transforma o diário da sessão em evidência rastreável até a frase que a originou. ABA, Terapia Ocupacional e Fonoaudiologia no mesmo prontuário.
+            <p className="font-body max-w-sm text-sm leading-relaxed text-gray-300">
+              Prontuário para clínicas de terapia infantil que transforma o
+              diário da sessão em evidência rastreável até a frase que a
+              originou. ABA, Terapia Ocupacional e Fonoaudiologia no mesmo
+              prontuário.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button variante="primaria" tamanho="sm" asChild>
-                <Link href="/cadastro" aria-label="Criar conta gratuita no Iris">
+                <Link
+                  href="/cadastro"
+                  aria-label="Criar conta gratuita no Iris"
+                >
                   Criar conta grátis
                 </Link>
               </Button>
@@ -53,33 +64,48 @@ export function LandingFooter() {
           </div>
 
           {/* Coluna 2: Navegação Rápida */}
-          <div className="md:col-span-3 space-y-3 font-body text-sm">
-            <h3 className="font-display font-bold text-base text-[var(--action-primary,#F2B705)] uppercase tracking-wider font-mono">
+          <div className="font-body space-y-3 text-sm md:col-span-3">
+            <h3 className="font-display font-mono text-base font-bold tracking-wider text-[var(--action-primary,#F2B705)] uppercase">
               Navegação
             </h3>
             <ul className="space-y-2 text-gray-300">
               <li>
-                <a href="#protocolos" className="hover:text-white transition-colors focus-visible:outline-focus outline-none">
+                <a
+                  href="#protocolos"
+                  className="focus-visible:outline-focus transition-colors outline-none hover:text-white"
+                >
                   Protocolos (VB-MAPP, Denver, PEI)
                 </a>
               </li>
               <li>
-                <a href="#relatorios-convenio" className="hover:text-white transition-colors focus-visible:outline-focus outline-none">
+                <a
+                  href="#relatorios-convenio"
+                  className="focus-visible:outline-focus transition-colors outline-none hover:text-white"
+                >
                   Relatórios de evolução
                 </a>
               </li>
               <li>
-                <a href="#recursos" className="hover:text-white transition-colors focus-visible:outline-focus outline-none">
+                <a
+                  href="#recursos"
+                  className="focus-visible:outline-focus transition-colors outline-none hover:text-white"
+                >
                   O que muda para cada papel
                 </a>
               </li>
               <li>
-                <a href="#diferenciais" className="hover:text-white transition-colors focus-visible:outline-focus outline-none">
+                <a
+                  href="#diferenciais"
+                  className="focus-visible:outline-focus transition-colors outline-none hover:text-white"
+                >
                   Perguntas para fazer a qualquer fornecedor
                 </a>
               </li>
               <li>
-                <a href="#calculadora" className="hover:text-white transition-colors focus-visible:outline-focus outline-none">
+                <a
+                  href="#calculadora"
+                  className="focus-visible:outline-focus transition-colors outline-none hover:text-white"
+                >
                   Simule o custo da sua clínica
                 </a>
               </li>
@@ -87,12 +113,13 @@ export function LandingFooter() {
           </div>
 
           {/* Coluna 3: Fale Conosco */}
-          <div className="md:col-span-4 space-y-3">
-            <h3 className="font-display font-bold text-base text-[var(--action-primary,#F2B705)] uppercase tracking-wider font-mono">
+          <div className="space-y-3 md:col-span-4">
+            <h3 className="font-display font-mono text-base font-bold tracking-wider text-[var(--action-primary,#F2B705)] uppercase">
               Fale com quem constrói o produto
             </h3>
             <p className="text-xs text-gray-300">
-              Dúvida sobre relatório de convênio, carga inicial do histórico ou preço de fundador? Deixe seu e-mail que retornamos.
+              Dúvida sobre relatório de convênio, carga inicial do histórico ou
+              preço de fundador? Deixe seu e-mail que retornamos.
             </p>
 
             <form onSubmit={handleContactSubmit} className="space-y-2">
@@ -106,14 +133,14 @@ export function LandingFooter() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Seu e-mail de trabalho..."
-                className="w-full bg-gray-900 border border-gray-700 text-white rounded-[var(--radius-control,5px)] px-3.5 py-2.5 text-xs focus:outline-none focus:border-[var(--action-primary,#F2B705)] min-h-[44px]"
+                className="min-h-[44px] w-full rounded-[var(--radius-control,5px)] border border-gray-700 bg-gray-900 px-3.5 py-2.5 text-xs text-white focus:border-[var(--action-primary,#F2B705)] focus:outline-none"
               />
               <Button
                 type="submit"
                 variante="primaria"
                 tamanho="sm"
                 isLoading={isSubmitting}
-                className="w-full text-xs py-2 min-h-[44px] justify-center"
+                className="min-h-[44px] w-full justify-center py-2 text-xs"
               >
                 Quero falar com alguém
               </Button>
@@ -122,8 +149,10 @@ export function LandingFooter() {
         </div>
 
         {/* Divisor e Copyright */}
-        <div className="pt-8 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 font-mono gap-4 text-center sm:text-left">
-          <span>© 2026 Iris · R Sutil Correa Ltda · CNPJ 29.811.201/0001-50</span>
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-800 pt-8 text-center font-mono text-xs text-gray-400 sm:flex-row sm:text-left">
+          <span>
+            © 2026 Iris · R Sutil Correa Ltda · CNPJ 29.811.201/0001-50
+          </span>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Link href="/termos" className="hover:underline">
               Termos de Uso

@@ -15,7 +15,10 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select";
-import { previewConvenioBrutoAction, exportarConvenioBrutoAction } from "./actions";
+import {
+  previewConvenioBrutoAction,
+  exportarConvenioBrutoAction,
+} from "./actions";
 
 type Preview = {
   sessoesRealizadas: number;
@@ -44,9 +47,10 @@ export function RelatoriosExport({ pacientes }: { pacientes: Paciente[] }) {
   const [previewErro, setPreviewErro] = useState<string | null>(null);
   const [buscandoPreview, iniciarBuscaPreview] = useTransition();
 
-  const [resultado, setResultado] = useState<
-    { reportId: string; hash: string } | null
-  >(null);
+  const [resultado, setResultado] = useState<{
+    reportId: string;
+    hash: string;
+  } | null>(null);
   const [exportErro, setExportErro] = useState<string | null>(null);
   const [exportando, iniciarExportacao] = useTransition();
 
@@ -95,7 +99,7 @@ export function RelatoriosExport({ pacientes }: { pacientes: Paciente[] }) {
   return (
     <Card titulo="Dossiê para convênio">
       <Stack gap="md">
-        <p className="text-[var(--text-primary)] text-base">
+        <p className="text-base text-[var(--text-primary)]">
           Sessões realizadas, faltas justificadas e evidências aprovadas do
           período — sem texto gerado por IA.
         </p>
@@ -170,9 +174,18 @@ export function RelatoriosExport({ pacientes }: { pacientes: Paciente[] }) {
         {preview ? (
           <Stack gap="md">
             <Cluster gap="md">
-              <Stat rotulo="Sessões realizadas" valor={preview.sessoesRealizadas} />
-              <Stat rotulo="Faltas justificadas" valor={preview.faltasJustificadas} />
-              <Stat rotulo="Evidências aprovadas" valor={preview.evidenciasAprovadas} />
+              <Stat
+                rotulo="Sessões realizadas"
+                valor={preview.sessoesRealizadas}
+              />
+              <Stat
+                rotulo="Faltas justificadas"
+                valor={preview.faltasJustificadas}
+              />
+              <Stat
+                rotulo="Evidências aprovadas"
+                valor={preview.evidenciasAprovadas}
+              />
             </Cluster>
 
             <Cluster gap="sm">

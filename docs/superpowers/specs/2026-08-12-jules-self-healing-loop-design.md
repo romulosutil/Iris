@@ -3,6 +3,7 @@
 ## 1. Contexto e Objetivo
 
 No ecossistema do Iris, o fluxo de revisão de Pull Requests é executado automaticamente pelo workflow `.github/workflows/pr-review.yml` (`Jules PR Review`), utilizando a action `sanjay3290/jules-pr-reviewer@v1`. Ao concluir, o revisor adiciona um comentário estruturado no PR contendo um resumo, veredito e uma seção de achados (**Findings**) categorizados em três níveis de severidade:
+
 - `[BLOCKING]`: Falhas críticas de segurança, corretude ou violações graves de guardrails.
 - `[WARN]`: Preocupações relevantes não-bloqueantes.
 - `[NIT]` (ou variações como `init`): Sugestões de legibilidade, consistência ou melhorias menores.
@@ -44,9 +45,10 @@ sequenceDiagram
 ## 3. Especificação do Workflow (`jules-auto-fix.yml`)
 
 ### 3.1 Gatilho, Concorrência e Permissões
+
 - **Trigger:** `on: workflow_run` monitorando `workflows: ["Jules PR Review"]` com `types: [completed]`.
 - **Condição:** `if: github.event.workflow_run.conclusion == 'success'` (garante que a revisão foi concluída com sucesso e o comentário já foi publicado).
-- **Concorrência:** 
+- **Concorrência:**
   ```yaml
   concurrency:
     group: jules-auto-fix-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch }}
@@ -62,7 +64,7 @@ sequenceDiagram
 1. **Resolução de Contexto do PR com Fallback (GitHub Script):**
    - Extrai o PR associado via `github.event.workflow_run.pull_requests[0]`.
    - Caso `pull_requests` esteja vazio (edge-case de re-runs), consulta `octokit.rest.pulls.list` filtrando por `head: `${owner}:${head_branch}`` ou `head_sha`.
-   - Valida se o PR não é rascunho (*draft*). Se for draft, encerra silenciosamente.
+   - Valida se o PR não é rascunho (_draft_). Se for draft, encerra silenciosamente.
 
 2. **Extração e Análise de Findings:**
    - Lista os comentários do PR e localiza o comentário mais recente do revisor Jules (identificado pelo marcador `<!-- jules-pr-reviewer -->` ou cabeçalho `## Findings` / `Jules PR Reviewer`).
@@ -93,7 +95,7 @@ sequenceDiagram
      - Guardrails mandatórios do Iris (`AGENTS.md` e `CLAUDE.md`):
        - Commits convencionais e mensagens em Português (PT-BR).
        - Isolamento multi-tenant com `app_clinic_id_exigido()`.
-       - Design System *Espectro Brutal* (sem estilo ad-hoc).
+       - Design System _Espectro Brutal_ (sem estilo ad-hoc).
        - Execução e validação de `pnpm typecheck`, `pnpm lint` e `pnpm test`.
        - Push direto na branch de trabalho do PR.
 
@@ -101,14 +103,14 @@ sequenceDiagram
 
 ## 4. Tratamento de Erros e Casos de Borda
 
-| Cenário de Borda | Comportamento Esperado |
-| :--- | :--- |
-| **PR sem achados (Aprovado / Limpo)** | O script identifica 0 findings e encerra com sucesso sem chamar o Jules. |
-| **PR em estado Draft** | Ignorado conforme guardrail do Iris. |
-| **Erro na chamada à API do Jules** | Adiciona comentário de falha no PR com detalhes do erro para diagnóstico. |
-| **Loop infinito de revisões** | Travamento rígido no 3º ciclo com comentário de escalonamento humano. |
-| **Novo commit humano** | Reseta o contador de tentativas consecutivas para 0. |
-| **PR de fork externo** | Não executa (secrets não compartilhados, segurança LGPD e isolamento). |
+| Cenário de Borda                      | Comportamento Esperado                                                    |
+| :------------------------------------ | :------------------------------------------------------------------------ |
+| **PR sem achados (Aprovado / Limpo)** | O script identifica 0 findings e encerra com sucesso sem chamar o Jules.  |
+| **PR em estado Draft**                | Ignorado conforme guardrail do Iris.                                      |
+| **Erro na chamada à API do Jules**    | Adiciona comentário de falha no PR com detalhes do erro para diagnóstico. |
+| **Loop infinito de revisões**         | Travamento rígido no 3º ciclo com comentário de escalonamento humano.     |
+| **Novo commit humano**                | Reseta o contador de tentativas consecutivas para 0.                      |
+| **PR de fork externo**                | Não executa (secrets não compartilhados, segurança LGPD e isolamento).    |
 
 ---
 

@@ -12,7 +12,7 @@ export default meta;
 
 export const Padrao = {
   render: () => (
-    <div className="p-12 flex justify-center">
+    <div className="flex justify-center p-12">
       <Tooltip conteudo="Confiança da IA: 98% (Alta precisão)">
         <Button variante="secundaria">Passe o mouse aqui</Button>
       </Tooltip>

@@ -228,10 +228,12 @@ describe.skipIf(!hasDb)(
       const r = await ativarProtocolo(ctx, PATIENT, P_AFLS);
       expect(r.ok).toBe(true);
 
-      const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PATIENT}`;
+      const [pac] =
+        await owner`SELECT arquivado_em FROM patient WHERE id = ${PATIENT}`;
       expect(pac!.arquivado_em).toBeNull();
 
-      const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PATIENT} AND acao = 'paciente_desarquivado_automaticamente'`;
+      const [log] =
+        await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PATIENT} AND acao = 'paciente_desarquivado_automaticamente'`;
       expect(log).toBeTruthy();
       expect(log!.detalhe).toEqual({ origem: "ativacao_protocolo" });
 

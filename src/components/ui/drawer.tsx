@@ -9,8 +9,20 @@ export const DrawerTrigger = DialogPrimitive.Trigger;
 
 function IconeX() {
   return (
-    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" aria-hidden focusable="false">
-      <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square" />
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      focusable="false"
+    >
+      <path
+        d="M5 5l10 10M15 5L5 15"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="square"
+      />
     </svg>
   );
 }
@@ -23,7 +35,13 @@ export const DrawerContent = React.forwardRef<
     rotuloFechar?: string;
   }
 >(function DrawerContent(
-  { className, children, posicao = "right", rotuloFechar = "Fechar painel", ...props },
+  {
+    className,
+    children,
+    posicao = "right",
+    rotuloFechar = "Fechar painel",
+    ...props
+  },
   ref,
 ) {
   return (
@@ -42,7 +60,7 @@ export const DrawerContent = React.forwardRef<
         {children}
         <DialogPrimitive.Close
           aria-label={rotuloFechar}
-          className="absolute top-4 right-4 grid size-11 place-items-center rounded-[var(--radius-pill)] text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] focus-visible:outline-focus outline-none"
+          className="focus-visible:outline-focus absolute top-4 right-4 grid size-11 place-items-center rounded-[var(--radius-pill)] text-[var(--text-primary)] outline-none hover:bg-[var(--surface-elevated)]"
         >
           <IconeX />
         </DialogPrimitive.Close>
@@ -57,7 +75,10 @@ export const DrawerHeader = function DrawerHeader({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex flex-col gap-1.5 pb-4 border-b-2 border-dashed border-[var(--border-brutal)] pr-8", className)}
+      className={cn(
+        "flex flex-col gap-1.5 border-b-2 border-dashed border-[var(--border-brutal)] pr-8 pb-4",
+        className,
+      )}
       {...props}
     />
   );
@@ -70,7 +91,10 @@ export const DrawerTitle = React.forwardRef<
   return (
     <DialogPrimitive.Title
       ref={ref}
-      className={cn("font-display text-xl font-bold text-[var(--text-primary)]", className)}
+      className={cn(
+        "font-display text-xl font-bold text-[var(--text-primary)]",
+        className,
+      )}
       {...props}
     />
   );
@@ -95,7 +119,10 @@ export const DrawerFooter = function DrawerFooter({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("mt-auto flex flex-wrap items-center justify-end gap-3 pt-4 border-t-2 border-dashed border-[var(--border-brutal)]", className)}
+      className={cn(
+        "mt-auto flex flex-wrap items-center justify-end gap-3 border-t-2 border-dashed border-[var(--border-brutal)] pt-4",
+        className,
+      )}
       {...props}
     />
   );

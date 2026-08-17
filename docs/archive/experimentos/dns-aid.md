@@ -18,6 +18,7 @@ DNS-AID records are published under the `_agents` namespace:
 - `_a2a._agents.iris.app`: Agent-to-Agent communication endpoint.
 
 ### Record Parameters (RFC 9460):
+
 - **ALPN**: Application-Layer Protocol Negotiation (`h2,h3`).
 - **Endpoint**: Relative URI path pointing to agent discovery metadata (`/.well-known/api-catalog`).
 
@@ -51,6 +52,7 @@ _a2a._agents.iris.app. IN HTTPS 1 iris.app. (
 ## 4. DNSSEC Validation Requirement
 
 Per DNS-AID specification, all public DNS-AID records MUST be signed with **DNSSEC**:
+
 1. Ensure `dnssec-enable yes;` and `dnssec-validation auto;` are configured in your DNS resolver.
 2. Sign the zone using RRSIG and publish DS records at your TLD registrar.
 3. Resolvers will return the `AD` (Authenticated Data) flag, confirming authentic agent discovery metadata.

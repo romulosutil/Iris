@@ -43,8 +43,13 @@ export function reforcadoresAtuaisDe(rows: ReinforcerRow[]): ReforcadorAtual[] {
     }
   }
   return [...maisRecentePorItem.values()]
-    .filter((r): r is ReinforcerRow & { valencia: "alta" | "baixa" } => r.valencia !== "saciado")
-    .sort((a, b) => (a.valencia === b.valencia ? 0 : a.valencia === "alta" ? -1 : 1))
+    .filter(
+      (r): r is ReinforcerRow & { valencia: "alta" | "baixa" } =>
+        r.valencia !== "saciado",
+    )
+    .sort((a, b) =>
+      a.valencia === b.valencia ? 0 : a.valencia === "alta" ? -1 : 1,
+    )
     .map((r) => ({ item: r.itemAtividade, valencia: r.valencia }));
 }
 
