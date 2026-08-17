@@ -194,12 +194,18 @@ export async function POST(request: Request): Promise<Response> {
          * `provider_charge_id`", e isso cobre desfechos opostos: a cobrança de
          * ativação do Pix Automático nunca tem ciclo (e nunca terá), enquanto
          * uma mensalidade nossa sem ciclo é dinheiro recebido e não conciliado.
-         * Quem separa os dois é a NOSSA `externalReference`, que vem no
-         * envelope — ver `classificarFalhaDeConciliacao`.
+         *
+         * Quem separa os dois são DOIS fatos do envelope, nesta ordem: o id da
+         * INSTRUÇÃO (trilho headless do débito mensal, que chega sem objeto
+         * `payment` e portanto sem referência nenhuma) e, na ausência dele, a
+         * NOSSA `externalReference` — ver `classificarFalhaDeConciliacao`.
          */
         erroAplicacao: aplicou
           ? null
-          : classificarFalhaDeConciliacao(normalizado.referenciaExterna),
+          : classificarFalhaDeConciliacao(
+              normalizado.referenciaExterna,
+              normalizado.providerInstructionId,
+            ),
       });
     } else if (normalizado.providerSubscriptionId) {
       const atual = await provider.consultarVinculo(

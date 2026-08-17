@@ -37,22 +37,29 @@ import { asaasWebhookEvent } from "@/db/schema";
  * `clinic:<id>` NÃO entra na lista: é a referência do CLIENTE (customer), não
  * de cobrança, e nunca aparece em `payment.externalReference`.
  *
- * ## Fail-open: de onde vem a referência, e o que acontece se ela faltar
+ * ## O trilho headless não tem `payment` — e é por isso que a instrução decide
  *
- * A classificação lê a referência do **envelope do evento**
- * (`payment.externalReference`, normalizado em `EventoWebhookNormalizado`).
+ * A referência resolve o trilho em que o envelope traz o objeto `payment`. O
+ * débito mensal do Pix Automático NÃO traz: ele chega como
+ * `paymentInstruction`, e `payment.externalReference` é `undefined` nele. Um
+ * discriminador que dependa só da referência classifica o débito mensal —
+ * exatamente o caminho pelo qual a mensalidade entra — como ruído de ativação.
+ *
+ * Por isso `classificarFalhaDeConciliacao` testa o **id da instrução primeiro**,
+ * fail-closed: instrução existe só dentro da autorização de Pix Automático que
+ * nós criamos, logo a cobrança é nossa e a falta de ciclo é ALARME. A prova é
+ * por construção e o docblock da função lista o que a torna falsa.
  *
  * MEDIDO (16/08/2026): `BillingProvider.consultarCobranca` devolve
  * `{ status, valorCentavos, motivoRecusa }` e **não expõe** a referência
  * externa — o recurso cru do Asaas tem o campo, a PORTA não. Portanto não há
- * fallback disponível hoje, e inventar um campo na porta é decisão de contrato
- * que esta entrega não tem mandato para tomar.
+ * fallback de referência disponível hoje, e inventar um campo na porta é decisão
+ * de contrato que esta entrega não tem mandato para tomar.
  *
- * Consequência assumida, escrita aqui porque é onde ela é lida: se um dia uma
- * cobrança NOSSA de ciclo chegar ao webhook sem `externalReference` no
- * envelope, ela será classificada como "fora do ciclo" e o alarme não aparece.
- * A evidência crua para desempatar continua existindo em
- * `asaas_webhook_event.payload`, que é gravado bruto e nunca é reescrito.
+ * Consequência assumida do que sobra: uma cobrança NOSSA de ciclo que chegue sem
+ * referência E sem instrução (trilho `payment`, referência perdida) ainda cai em
+ * "fora do ciclo". A evidência crua para desempatar continua existindo em
+ * `asaas_webhook_event.payload`, gravado bruto e nunca reescrito.
  *
  * ## `aplicado_em` + `erro_aplicacao` preenchidos é estado LEGÍTIMO
  *
@@ -145,12 +152,48 @@ export const MOTIVO_EVENTO_SEM_ID = "evento sem id utilizável";
  * rota `POST /api/hooks/asaas` e `reprocessarEventosPendentes`. Duas cópias
  * derivam — ver `MOTIVO_EVENTO_SEM_ID`.
  *
+ * ## Por que a INSTRUÇÃO decide antes da referência (fail-closed)
+ *
+ * O débito mensal do Pix Automático é headless: o Asaas cria a instrução, debita
+ * e notifica. Esses eventos chegam com o objeto `paymentInstruction` e **sem o
+ * objeto `payment`** no envelope — logo `payment.externalReference` é
+ * `undefined` neles. Classificar por referência sozinha mandaria o débito mensal
+ * (o modo de falha que a #289 existe para denunciar) para o balde da ATIVAÇÃO:
+ * o alarme calaria justamente no caminho principal do dinheiro.
+ *
+ * A presença de `providerInstructionId` é prova **por construção** de que a
+ * cobrança é nossa: instrução de pagamento só existe dentro de uma autorização
+ * de Pix Automático, e a única autorização que este sistema cria é a da
+ * mensalidade (`iniciarVinculoPagamento`, `asaas.ts`). Não há instrução de
+ * ativação — a cobrança de R$ 0,01 nasce do `immediateQrCode`, que não é
+ * instrução (medido na #321).
+ *
+ * **O que torna essa prova falsa** (e portanto quando esta regra passa a gerar
+ * alarme de mentira, sem parar de ser o lado seguro do erro):
+ *
+ * 1. outra aplicação passar a usar a MESMA conta Asaas com Pix Automático e
+ *    apontar para este endpoint — as instruções dela chegariam aqui;
+ * 2. este sistema passar a criar autorização de Pix Automático para algo que
+ *    não seja a mensalidade (cobrança avulsa recorrente, teste em produção);
+ * 3. o Asaas passar a modelar a cobrança de ativação como instrução.
+ *
+ * Nos três casos o erro é para o lado do alarme, nunca para o lado do silêncio:
+ * uma linha a mais para conferir, em vez de dinheiro recebido e não creditado
+ * sem registro nenhum. Trocar a ordem destes dois testes reintroduz o defeito.
+ *
  * @param referenciaExterna `payment.externalReference` do envelope, como o
- *   normalizador o entregou. `null`/`undefined`/vazio = ausente.
+ *   normalizador o entregou. `null`/`undefined`/vazio = ausente. Continua sendo
+ *   o discriminador do trilho que TEM objeto `payment`.
+ * @param providerInstructionId `paymentInstruction.id` do envelope. Presente =
+ *   trilho headless do débito mensal = cobrança nossa.
  */
 export function classificarFalhaDeConciliacao(
   referenciaExterna: string | null | undefined,
+  providerInstructionId?: string | null,
 ): string {
+  if (providerInstructionId?.trim()) {
+    return MOTIVO_CICLO_SEM_CICLO_CORRESPONDENTE;
+  }
   const referencia = referenciaExterna?.trim();
   if (!referencia) return MOTIVO_COBRANCA_FORA_DO_CICLO;
   if (

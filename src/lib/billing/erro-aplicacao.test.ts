@@ -62,6 +62,42 @@ describe("classificarFalhaDeConciliacao", () => {
     ).toBe("cobrança fora do ciclo (referência externa de terceiro)");
   });
 
+  it("instrução de pagamento SEM referência nenhuma é ALARME, não ativação", () => {
+    // O débito mensal do Pix Automático é headless: o envelope traz
+    // `paymentInstruction` e NÃO traz `payment`, então a referência é
+    // `undefined` ali por construção. Sem esta regra o caminho principal do
+    // dinheiro — a mensalidade — seria classificado como ruído de ativação, e o
+    // alarme calaria exatamente onde a #289 existe para fazê-lo tocar.
+    expect(classificarFalhaDeConciliacao(null, "pay_inst_000000123")).toBe(
+      "cobrança de ciclo sem ciclo correspondente",
+    );
+    expect(classificarFalhaDeConciliacao(undefined, "pay_inst_000000123")).toBe(
+      "cobrança de ciclo sem ciclo correspondente",
+    );
+  });
+
+  it("instrução presente VENCE referência de terceiro (fail-closed)", () => {
+    // Instrução só existe dentro da autorização de Pix Automático que NÓS
+    // criamos: a cobrança é nossa, e o erro tem que cair do lado do alarme.
+    // Uma linha a mais para conferir é barata; dinheiro recebido e não
+    // creditado sem registro nenhum não é.
+    expect(classificarFalhaDeConciliacao("pedido-4711", "pay_inst_9")).toBe(
+      "cobrança de ciclo sem ciclo correspondente",
+    );
+  });
+
+  it.each([null, undefined, "", "   "])(
+    "id de instrução ausente (%p) não prova nada: a referência volta a decidir",
+    (instrucao) => {
+      expect(classificarFalhaDeConciliacao(null, instrucao)).toBe(
+        "cobrança fora do ciclo (ativação ou avulsa)",
+      );
+      expect(classificarFalhaDeConciliacao("pedido-4711", instrucao)).toBe(
+        "cobrança fora do ciclo (referência externa de terceiro)",
+      );
+    },
+  );
+
   it("prefixo nosso só casa no COMEÇO da referência", () => {
     // `startsWith`, não `includes`: uma referência de terceiro que contenha
     // "cycle:" no meio não pode virar alarme — seria o mesmo ruído que a issue

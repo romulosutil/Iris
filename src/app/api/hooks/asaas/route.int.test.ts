@@ -1232,6 +1232,48 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       );
     });
 
+    it("débito mensal HEADLESS (só `paymentInstruction`, sem `payment`) é ALARME", async () => {
+      /**
+       * Caso 4, e o mais caro dos quatro: é assim que a MENSALIDADE entra.
+       *
+       * O envelope do débito do Pix Automático não tem objeto `payment` — traz
+       * `paymentInstruction`, e o id da cobrança mora em
+       * `paymentInstruction.paymentId`. Logo `payment.externalReference` é
+       * `undefined` aqui POR CONSTRUÇÃO, e um discriminador que dependa só da
+       * referência classificaria este evento como "ativação ou avulsa": o
+       * alarme calaria no caminho principal do dinheiro, que é exatamente o
+       * modo de falha que a #289 existe para denunciar.
+       *
+       * Quem decide é o id da INSTRUÇÃO, fail-closed — ver
+       * `classificarFalhaDeConciliacao`.
+       */
+      respondeCobranca("RECEIVED");
+      const id = novoIdEvento();
+      const res = await POST(
+        requisicao({
+          token: TOKEN,
+          corpo: {
+            id,
+            event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_PAID",
+            dateCreated: "2026-08-08 20:01:00",
+            paymentInstruction: {
+              id: "pay_inst_000000123",
+              paymentId: "pay_do_debito_mensal",
+              status: "PAID",
+              authorization: { id: "auth-do-debito-mensal" },
+            },
+          },
+        }),
+      );
+      expect(res.status).toBe(200);
+
+      const evento = (await lerEvento(id))!;
+      expect(evento.aplicado_em).not.toBeNull();
+      expect(evento.erro_aplicacao).toBe(
+        "cobrança de ciclo sem ciclo correspondente",
+      );
+    });
+
     it("DoD 2: a consulta de não conciliadas ignora a ativação e acha só o alarme", async () => {
       /**
        * Prova a promessa central da #289: depois de uma ativação normal

@@ -2057,9 +2057,15 @@ export async function reprocessarEventosPendentes(
         // varredura já divergiram uma vez (`"evento sem id utilizável"` vs.
         // `"sem id utilizável"`), e um alarme cujo texto depende do caminho que
         // gravou não é pesquisável por igualdade.
+        // O id da INSTRUÇÃO vai junto pela mesma razão da rota: o débito mensal
+        // headless chega sem objeto `payment`, e classificar só pela referência
+        // mandaria a mensalidade para o balde da ativação.
         erroAplicacao = aplicou
           ? null
-          : classificarFalhaDeConciliacao(normalizado.referenciaExterna);
+          : classificarFalhaDeConciliacao(
+              normalizado.referenciaExterna,
+              normalizado.providerInstructionId,
+            );
       } else if (normalizado.providerSubscriptionId) {
         const atual = await provider.consultarVinculo(
           normalizado.providerSubscriptionId,
