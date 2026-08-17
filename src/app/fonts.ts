@@ -2,17 +2,13 @@ import localFont from "next/font/local";
 
 /**
  * Fonte única dos loaders de fonte do app. `layout.tsx` e `global-error.tsx`
- * precisam declarar o MESMO par de famílias/pesos/variáveis — duplicar a
- * chamada de loader em dois módulos gera dois módulos CSS e duas listas de
- * pesos para sincronizar à mão (drift só aparece na página de crash, em
- * produção). Importar daqui torna o drift impossível.
+ * precisam declarar o MESMO par de famílias/pesos/variáveis — importar
+ * daqui evita drift entre os dois módulos.
  *
- * `next/font/local` (não `next/font/google`): o loader do Google BAIXA os
- * .woff2 de fonts.gstatic.com em build time. Quando a VPS não alcançou o
- * host (deploy de 17/08/2026), o fetch falhou e o Turbopack derrubou o build
- * com 25× `Module not found: Can't resolve
- * '@vercel/turbopack-next/internal/font/google/font'` — sem nenhuma mudança
- * de código. Com os arquivos versionados aqui, `pnpm build` não toca a rede.
+ * `next/font/local` (não `next/font/google`): o loader do Google baixa os
+ * .woff2 de fonts.gstatic.com em build time, o que quebra em ambientes sem
+ * saída de rede nesse estágio. Com os arquivos versionados aqui, `pnpm
+ * build` não toca a rede.
  *
  * Ambas as famílias são variable fonts: um arquivo cobre toda a faixa de
  * peso declarada em `weight`. Subset: apenas `latin` (U+0000-00FF), que
