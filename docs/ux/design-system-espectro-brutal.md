@@ -46,10 +46,9 @@ aqui regras de token, não apenas de fluxo:
    — nunca a mesma "moldura brutal" para os dois).
 2. **Fricção é ferramenta, não bug** → a "sombra dura + deslocamento no
    clique", a assinatura visual do neobrutalismo, é literalmente o
-   mecanismo de fricção do produto: aprovação em lote (alta confiança) usa
-   deslocamento curto/leve; revisão unitária (baixa confiança/inconsistente)
-   usa deslocamento maior e uma etapa de confirmação — a "dureza" do clique
-   escala com o risco da decisão, não é decorativa.
+   mecanismo de fricção do produto: o sistema proíbe aprovações mecânicas ou
+   em lote ("rubber-stamping"); toda evidência exige revisão individual consciente,
+   e a "dureza" do clique e confirmação escalam com o risco da decisão clínica.
 3. **O diário nunca se perde** → indicador de estado "salvo localmente"
    é um componente persistente (chip fixo com borda e ícone), nunca um
    toast que desaparece — a interface nunca deixa implícito algo que pode

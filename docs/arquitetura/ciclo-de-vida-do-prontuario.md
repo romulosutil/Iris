@@ -16,10 +16,12 @@ Contrapartes jurídicas: `docs/legal/procedimento-revogacao-consentimento.md`,
 | **Ativo**                         | Registro clínico permitido: sessão, diário, extração por IA (se a finalidade estiver consentida), exportação (idem). |
 | **Somente-leitura por revogação** | Escrita clínica bloqueada. Leitura integral preservada. Reversível.                                                  |
 
-Não há estado "arquivado", "encerrado" ou "excluído". Alta e fim de
+Não há estado "arquivado", "encerrado" ou "excluído" **no sentido de consentimento clínico**. Alta e fim de
 acompanhamento não mudam o estado do prontuário — mudam a contagem do prazo
 de guarda, que é assunto de `politica-retencao-dados.md`. Expurgo é
 operação separada (`app_purgar_paciente`), não um estado.
+
+*(Nota operacional: O campo `patient.arquivado_em`, introduzido na Issue #174 / migração `0080`, trata estritamente da suspensão cadastral/faturamento de pacientes inativos há mais de 90 dias, e não altera as regras de consentimento ou guarda do prontuário aqui descritas).*
 
 ## 2. O estado é derivado, nunca armazenado
 
