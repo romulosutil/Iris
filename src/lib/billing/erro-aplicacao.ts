@@ -23,7 +23,7 @@ import { asaasWebhookEvent, billingCycle } from "@/db/schema";
  * tabela encontra o alarme afogado no ruído da ativação, e a única saída é
  * conferir evento por evento no payload bruto.
  *
- * ## O discriminador é a NOSSA `externalReference`
+ * ## No trilho com `payment`, o discriminador é a NOSSA `externalReference`
  *
  * Não um identificador do gateway. A referência externa é fato sobre **o que
  * nós emitimos**, medido dos dois lados e sem coluna nova:
