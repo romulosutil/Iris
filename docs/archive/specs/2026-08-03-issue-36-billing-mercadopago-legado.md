@@ -1,4 +1,10 @@
-# #36 — Billing pay-as-you-grow via Mercado Pago (implementação)
+# [ARQUIVADO] #36 — Billing pay-as-you-grow via Mercado Pago (implementação legada)
+
+> ⚠️ **DOCUMENTO ARQUIVADO / SUPERSEDED (17/08/2026)**  
+> **Motivo:** O Mercado Pago foi formalmente descontinuado e removido da base pela migração `0091_drop_webhook_mercado_pago.sql` e Débito D24. O sistema opera exclusivamente com faturamento via **Asaas com Pix Automático** ([`docs/GO_LIVE.md`](../../GO_LIVE.md)).  
+> Este arquivo é mantido estritamente para memória técnica e registro histórico. **NÃO implementar nem utilizar este arquivo como referência ativa.**
+
+---
 
 Data: 03/08/2026. Branch: `docs/36-asaas-sandbox-evento-real`.
 

@@ -230,15 +230,11 @@ nada.
 
 ### 7.3. Meios de pagamento
 
-Os meios de pagamento aceitos são **cartão de crédito e Pix**.
+Os meios de pagamento aceitos são **cartão de crédito e Pix** (com suporte a Pix Automático e débito recorrente via operador de pagamento terceiro).
 
-A cobrança é **pós-paga**: a fatura é emitida **ao final de cada ciclo de 30
-(trinta) dias**, pelo uso efetivamente apurado no período — isto é, pelas
-fichas ativas conforme o critério da seção 7.1 —, **sem valor mínimo**.
+A cobrança é **pós-paga**: no ato da contratação da assinatura, é realizada uma autorização de recorrência Pix no valor de R$ 0,01; subsequentemente, a fatura é emitida **ao final de cada ciclo de 30 (trinta) dias**, pelo uso efetivamente apurado no período — isto é, pelas fichas ativas conforme o critério da seção 7.1 —, **sem valor mínimo**.
 
-O processamento dos pagamentos é feito por operador de pagamento terceiro (ver
-`politica-privacidade.md`, seção 7); o Iris **não armazena dados de meio de
-pagamento**.
+O processamento dos pagamentos é feito por operador de pagamento terceiro (ver `politica-privacidade.md`, seção 7); o Iris **não armazena dados de meio de pagamento**.
 
 ### 7.4. O que acontece ao fim do teste sem pagamento
 
@@ -276,7 +272,7 @@ da seção 6 sobrevive ao encerramento pelo prazo referido na seção 7.4 (c).
 **8.3. Rescisão ou suspensão pelo Iris.** O Iris pode suspender ou encerrar a
 conta em caso de: (i) declaração falsa de habilitação profissional (seção 2.2);
 (ii) violação da seção 4 (uso aceitável); (iii) inadimplência, observado aviso
-prévio de ⟨PENDENTE: prazo de aviso prévio por inadimplência antes da suspensão⟩;
+prévio e prazo de carência de **10 (dez) dias corridos** antes da suspensão ou cancelamento do vínculo;
 (iv) uso que exponha dados de pacientes a risco. Em qualquer hipótese, o acesso
 somente-leitura e a exportação da seção 6 são preservados.
 
@@ -384,6 +380,8 @@ Itens resolvidos em 30/07/2026 (não bloqueiam mais a publicação):
 - Referência formal cruzada com `politica-privacidade.md` e
   `politica-retencao-dados.md` (seção 11).
 
+- Prazo de aviso prévio e carência por inadimplência (seção 8.3) — fixado em 10 (dez) dias corridos.
+
 Itens **ainda em aberto** — cada um corresponde a um marcador `⟨PENDENTE⟩` no
 corpo do documento e depende de um dado que ainda não existe no projeto:
 
@@ -392,11 +390,10 @@ corpo do documento e depende de um dado que ainda não existe no projeto:
 3. **Valor unitário final do tier "Diário" e dos demais tiers** (seção 7.1).
 4. **Prazo de permanência em modo somente-leitura antes de qualquer eliminação,
    e a forma de aviso prévio** (seção 7.4 c).
-5. **Prazo de aviso prévio por inadimplência antes da suspensão** (seção 8.3).
-6. **Prazo de antecedência para comunicar alteração relevante dos Termos**
+5. **Prazo de antecedência para comunicar alteração relevante dos Termos**
    (seção 8.4).
-7. **Foro de eleição** (seção 9).
-8. **Canal oficial de contato do operador** (seção 12).
+6. **Foro de eleição** (seção 9).
+7. **Canal oficial de contato do operador** (seção 12).
 
 Além destes, permanece pendente a **revisão jurídica completa** do documento.
 A publicação nesta versão foi autorizada pelo titular do negócio em 30/07/2026,

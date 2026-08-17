@@ -303,3 +303,4 @@ Sequência de receita: piloto pago com desconto → 5–10 clínicas por indica�
 2. ~~Inclusão do relatório de convênio~~ — **DECIDIDO E IMPLEMENTADO:** Dossiê Bruto de auditoria e Relatório Narrativo com IA integrados no MVP (Fase 5) e codificados no schema (`report.tipo`).
 3. ~~Decidir o non-goal de coleta por tentativa~~ — **DECISÃO DE PRODUTO TOMADA (09/07/2026):** Mantém narrativa como modo primário, campo `tentativas` cobre menções espontâneas, sem UI rígida trial-by-trial.
 4. ~~Nome/marca e domínio~~ — **DECIDIDO POR RÔMULO (10/07/2026):** Iris, domínio `irisclinica.ia.br`.
+5. ~~Gateway de pagamento e trilho de cobrança~~ — **homologado em produção (11/08/2026, D24/D43/D44):** Faturamento ativo opera exclusivamente via **Asaas com Pix Automático** (`immediateQrCode` com autorização de R$ 0,01 + apuração mensal pós-paga por ficha ativa). Mercado Pago foi formalmente descontinuado (migração `0091_drop_webhook_mercado_pago.sql`).

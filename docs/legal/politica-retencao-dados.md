@@ -89,10 +89,11 @@ regra escrita e regra implementada está na seção 8.
 
 | Categoria de dado                                                              | Prazo                                                                       | Fundamento                                                                      | Comportamento no fim do prazo                                                                                                                                                 | Estado                                                              |
 | :----------------------------------------------------------------------------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------ |
-| **Prontuário multidisciplinar** (`Patient`, `Session`, `Extraction`, `Report`) | Default `MAX(18 anos do menor, alta + 10 anos)`, configurável para estender | CFP (Res. 01/2009 e 04/2020), COFFITO, CFFa. LGPD Art. 16, I                    | Eliminação ou anonimização, sempre por decisão da clínica (seção 6), via `app_purgar_paciente` com o gate `app_paciente_expurgavel`                                           | Funções no banco (`0045`); **sem caminho de aplicação**             |
+| **Prontuário multidisciplinar** (`Patient`, `Session`, `Extraction`, `Report`) | Default `MAX(18 anos do menor, alta + 10 anos)`, configurável para estender | CFP (Res. 01/2009 e 04/2020), COFFITO, CFFa. LGPD Art. 16, I                    | Eliminação ou anonimização, sempre por decisão da clínica (seção 6), via `app_purgar_paciente` com o gate `app_paciente_expurgavel`                                           | Funções no banco (`0045`); issue aberta (#352)                      |
+| **Áudio bruto de ditado de voz** (`AudioCapture` — #72 / DPA)                  | Máximo de 7 dias após transcrição (ou descarte pós-sucesso)                 | LGPD Art. 6º, III (minimização) e Art. 46 (segurança da informação)              | Eliminação do `.webm/.mp4` no storage após transcrição bem-sucedida; preservado até 7 dias exclusivamente para contingência/reprocessamento manual em caso de falha de ASR     | Spec e DPA (`dpa-asr-audio.md`); gated por DPA                      |
 | **Alertas de risco clínico** (`AlertaRiscoClinico` — #122)                     | Acompanha o prontuário                                                      | Defesa de responsabilidade técnica da clínica e prova de diligência do software | **Pseudonimização, não eliminação**: `pseudonimizado_em` é carimbado e `patient_id`/`session_id` viram `NULL`; categoria, severidade e carimbos de prazo sobrevivem (seção 7) | Implementado (`0049`), dentro do `app_purgar_paciente`              |
 | **Logs de acesso à aplicação** (`AuditLog` — #116)                             | **Mínimo** de 6 meses (180 dias) — não é teto                               | Marco Civil da Internet (Lei 12.965/2014, Art. 15)                              | Expurgo dos registros brutos de IP/sessão depois do mínimo legal                                                                                                              | Implementado (`0070` / `expurgo-audit-log.mjs`)                    |
-| **Cópias de segurança** (MinIO local + OCI S3 off-site — #89)                  | 30 dias                                                                     | LGPD Art. 46 (segurança e recuperação)                                          | Local/MinIO: prune do `infra/backup/backup.sh` (`RETENTION_DAYS`, default 30). Off-site: **não podado pelo script, de propósito** — depende de Lifecycle Rule no bucket       | Prune local implementado; lifecycle do bucket a confirmar (seção 8) |
+| **Cópias de segurança** (MinIO local + OCI S3 off-site — #89)                  | 30 dias                                                                     | LGPD Art. 46 (segurança e recuperação)                                          | Local/MinIO: prune do `infra/backup/backup.sh` (`RETENTION_DAYS`, default 30). Off-site: **não podado pelo script, de propósito** — issue aberta (#354)                        | Prune local implementado; automação off-site mapeada (#354)          |
 
 ## 6. O que acontece ao fim do prazo do prontuário
 
@@ -115,10 +116,12 @@ de qualquer eliminação automática:
    LGPD, mas a coleta do consentimento para esse uso específico é praticada
    por cautela, não por exigência estrita).
 
-**Nenhuma eliminação automática silenciosa**: a clínica recebe aviso com
-antecedência (sugestão: 90 dias) antes do prazo vencer, podendo estender a
+**Nenhuma eliminação automática silenciosa de prontuário**: a clínica recebe aviso com
+antecedência de **90 dias** antes do prazo decenal de expurgo vencer, podendo estender a
 retenção daquele paciente específico (ex.: processo judicial em curso,
 solicitação da família).
+
+*(Nota: Este aviso prévio de 90 dias antes do expurgo decenal não se confunde com o **auto-arquivamento por inatividade** da issue #174, que arquiva fichas sem novos registros há 90 dias com aviso prévio emitido 7 dias antes, no dia 83).*
 
 ## 7. Alerta de risco clínico: por que pseudonimiza em vez de eliminar (#122)
 

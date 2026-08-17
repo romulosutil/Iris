@@ -1,10 +1,10 @@
 # Jornada de cadastro self-service + trial de 7 dias e cobrança
 
-> Spec de design — 30/07/2026
-> Issues: **#163** (jornada de cadastro self-service) e **#159** (trial de 7 dias
+> Spec de design — 30/07/2026  
+> Issues: **#163** (jornada de cadastro self-service) e **#159** (trial de 7 dias + gateway de pagamento), planejadas juntas por decisão do Rômulo.  
+> Guarda-chuva: **#36** (Fase 7 — Self-Service & Growth).
 >
-> - gateway de pagamento), planejadas juntas por decisão do Rômulo.
->   Guarda-chuva: **#36** (Fase 7 — Self-Service & Growth).
+> ⚠️ **ATUALIZAÇÃO DE REGRA (Issue #175):** O relógio de trial desta spec (que começava no signup) foi atualizado pela [Issue #175 / Spec de 02/08/2026](2026-08-02-issue-175-trial-primeiro-paciente-design.md): o prazo de 7 dias agora **inicia no cadastro do 1º paciente**, com **teto máximo de 14 dias pós-signup**.
 
 ---
 

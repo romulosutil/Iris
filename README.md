@@ -1,13 +1,8 @@
 # Iris
 
-SaaS para clínicas de terapia infantil (foco inicial: intervenção para TEA no
-Brasil). O produto substitui o preenchimento manual de planilhas de protocolos
-clínicos por um diário de sessão em linguagem natural, do qual uma IA extrai
-evidências estruturadas que o terapeuta revisa e aprova.
+SaaS para clínicas de terapia, saúde mental e intervenção multidisciplinar (intervenção comportamental para TEA/desenvolvimento infantil, TCC para adolescentes e adultos, Fonoaudiologia e Terapia Ocupacional). O produto substitui o preenchimento manual de planilhas e formulários rígidos por um diário de sessão em linguagem natural, do qual uma IA extrai evidências estruturadas que o terapeuta revisa e aprova individualmente.
 
-**Proposta de valor:** "chegue na avaliação com o dossiê pronto" — a IA nunca
-pontua protocolos; ela acumula evidências rastreáveis que abastecem a decisão
-clínica humana.
+**Proposta de valor:** "chegue na avaliação com o dossiê pronto" — a IA nunca pontua protocolos nem decide; ela acumula evidências rastreáveis que abastecem a decisão clínica humana.
 
 ## Princípios inegociáveis
 
