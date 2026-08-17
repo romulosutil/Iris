@@ -57,7 +57,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Um job só, sequencial, em vez de matrix por serviço: são três builds
       # alpine pequenos e o log fica em um lugar só na hora de ler o incidente.

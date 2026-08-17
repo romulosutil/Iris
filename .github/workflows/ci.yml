@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -66,7 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -99,7 +99,7 @@ jobs:
     env:
       DATABASE_URL: postgres://iris:iris@localhost:5432/iris
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # profundidade completa: src/db/migrations-vs-main.test.ts compara
           # o journal local contra `origin/main` via `git show` — precisa do
@@ -150,7 +150,7 @@ jobs:
       DATABASE_URL: postgres://iris_app:iris_app@localhost:5432/iris
       AUTH_DATABASE_URL: postgres://iris_auth_login:iris_auth_login@localhost:5432/iris
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -209,7 +209,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
