@@ -32,17 +32,17 @@ const linkClasses = cn(
  * de etapa não é dado clínico, é estado de pipeline.
  */
 export function ItemPendente({ item }: { item: ExtracaoPendente }) {
-  const [state, formAction, pending] = useActionState<ReprocessarState, FormData>(
-    reprocessarExtracaoAction,
-    {},
-  );
+  const [state, formAction, pending] = useActionState<
+    ReprocessarState,
+    FormData
+  >(reprocessarExtracaoAction, {});
 
   return (
     <Stack
       gap="md"
       className={cn(
-        "bg-[var(--surface-card)] relative p-5 pt-8",
-        surface("solida")
+        "relative bg-[var(--surface-card)] p-5 pt-8",
+        surface("solida"),
       )}
     >
       <span
@@ -51,10 +51,10 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
       />
       <Split alinha="start">
         <Stack gap="sm">
-          <span className="border-[var(--border-brutal)] bg-[var(--action-primary)] text-[var(--action-primary-fg)] inline-flex w-fit items-center border-2 px-2 py-0.5 text-xs font-semibold tracking-wide uppercase">
+          <span className="inline-flex w-fit items-center border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] px-2 py-0.5 text-xs font-semibold tracking-wide text-[var(--action-primary-fg)] uppercase">
             Extração pendente
           </span>
-          <span className="text-[var(--text-primary)] text-base">
+          <span className="text-base text-[var(--text-primary)]">
             {item.pacienteNome ?? "Paciente (acesso restrito)"}
           </span>
         </Stack>
@@ -73,7 +73,8 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
       {state.error ? <Alert severidade="erro">{state.error}</Alert> : null}
       {state.ok ? (
         <Alert severidade="sucesso">
-          Reprocessamento disparado. Se a extração vier, aparece em Sugestões da IA.
+          Reprocessamento disparado. Se a extração vier, aparece em Sugestões da
+          IA.
         </Alert>
       ) : null}
     </Stack>

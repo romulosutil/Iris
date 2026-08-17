@@ -11,10 +11,10 @@ Contrapartes jurídicas: `docs/legal/procedimento-revogacao-consentimento.md`,
 
 ## 1. Os estados
 
-| Estado | Significado |
-| :--- | :--- |
-| **Ativo** | Registro clínico permitido: sessão, diário, extração por IA (se a finalidade estiver consentida), exportação (idem). |
-| **Somente-leitura por revogação** | Escrita clínica bloqueada. Leitura integral preservada. Reversível. |
+| Estado                            | Significado                                                                                                          |
+| :-------------------------------- | :------------------------------------------------------------------------------------------------------------------- |
+| **Ativo**                         | Registro clínico permitido: sessão, diário, extração por IA (se a finalidade estiver consentida), exportação (idem). |
+| **Somente-leitura por revogação** | Escrita clínica bloqueada. Leitura integral preservada. Reversível.                                                  |
 
 Não há estado "arquivado", "encerrado" ou "excluído". Alta e fim de
 acompanhamento não mudam o estado do prontuário — mudam a contagem do prazo
@@ -95,12 +95,12 @@ causa deste mecanismo é bug.
 
 ## 4. Matriz de efeito após a revogação do consentimento de regime
 
-| Regime | Sessão / diário | Extração por IA | Exportação de relatório | Leitura |
-| :--- | :--- | :--- | :--- | :--- |
-| **Menor** | bloqueado | bloqueado | bloqueado | **permitida** |
-| **Curatelado** | bloqueado | bloqueado | bloqueado | **permitida** |
-| **Adulto capaz** | permitido | bloqueado | bloqueado | **permitida** |
-| **Emancipado** | permitido | bloqueado | bloqueado | **permitida** |
+| Regime           | Sessão / diário | Extração por IA | Exportação de relatório | Leitura       |
+| :--------------- | :-------------- | :-------------- | :---------------------- | :------------ |
+| **Menor**        | bloqueado       | bloqueado       | bloqueado               | **permitida** |
+| **Curatelado**   | bloqueado       | bloqueado       | bloqueado               | **permitida** |
+| **Adulto capaz** | permitido       | bloqueado       | bloqueado               | **permitida** |
+| **Emancipado**   | permitido       | bloqueado       | bloqueado               | **permitida** |
 
 Menor e curatelado bloqueiam porque o consentimento do representante **é** a
 base do tratamento. Adulto e emancipado não bloqueiam porque o registro

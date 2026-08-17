@@ -18,11 +18,9 @@ export default async function SuperAdminLayout({
   const { email } = await exigirSuperAdmin();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
+    <div className="min-h-screen bg-slate-950 font-sans text-slate-100 antialiased">
       <AdminNav userEmail={email} />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        {children}
-      </main>
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">{children}</main>
     </div>
   );
 }

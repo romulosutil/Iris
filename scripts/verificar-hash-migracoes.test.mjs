@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -23,7 +29,11 @@ describe("encontrarMigracoesComHashDivergente", () => {
     }));
 
     expect(
-      encontrarMigracoesComHashDivergente(journal, linhasAplicadas, lerConteudo),
+      encontrarMigracoesComHashDivergente(
+        journal,
+        linhasAplicadas,
+        lerConteudo,
+      ),
     ).toEqual([]);
   });
 
@@ -67,13 +77,21 @@ describe("encontrarMigracoesComHashDivergente", () => {
     try {
       // Par exato (aplicado × disco) — tolerado.
       expect(
-        encontrarMigracoesComHashDivergente(journal, linhasAplicadas, lerConteudo),
+        encontrarMigracoesComHashDivergente(
+          journal,
+          linhasAplicadas,
+          lerConteudo,
+        ),
       ).toEqual([]);
 
       // Disco editado DE NOVO (terceiro conteúdo) — volta a acusar.
       const lerConteudoV3 = () => "0002_b-conteudo-EDITADO-DE-NOVO";
       expect(
-        encontrarMigracoesComHashDivergente(journal, linhasAplicadas, lerConteudoV3),
+        encontrarMigracoesComHashDivergente(
+          journal,
+          linhasAplicadas,
+          lerConteudoV3,
+        ),
       ).toEqual([
         {
           tag: "0002_b",
@@ -83,9 +101,15 @@ describe("encontrarMigracoesComHashDivergente", () => {
       ]);
 
       // Banco com hash aplicado diferente do pinado — volta a acusar.
-      const linhasOutroHistorico = [{ created_at: 2000, hash: "hash-de-outro-cluster" }];
+      const linhasOutroHistorico = [
+        { created_at: 2000, hash: "hash-de-outro-cluster" },
+      ];
       expect(
-        encontrarMigracoesComHashDivergente(journal, linhasOutroHistorico, lerConteudo),
+        encontrarMigracoesComHashDivergente(
+          journal,
+          linhasOutroHistorico,
+          lerConteudo,
+        ),
       ).toEqual([
         {
           tag: "0002_b",
@@ -103,13 +127,14 @@ describe("encontrarMigracoesComHashDivergente", () => {
     // antes do deploy — o par deixa de descrever a realidade e precisa ser
     // reavaliado, não silenciado.
     for (const [tag, deriva] of DERIVAS_CONHECIDAS) {
-      const conteudo = readFileSync(`db/migrations/${tag}.sql`, "utf8").replaceAll(
-        "\r\n",
-        "\n",
-      );
-      expect(
-        { tag, hash: calcularHashMigracao(conteudo) },
-      ).toEqual({ tag, hash: deriva.hashDiscoAtual });
+      const conteudo = readFileSync(
+        `db/migrations/${tag}.sql`,
+        "utf8",
+      ).replaceAll("\r\n", "\n");
+      expect({ tag, hash: calcularHashMigracao(conteudo) }).toEqual({
+        tag,
+        hash: deriva.hashDiscoAtual,
+      });
     }
   });
 
@@ -149,7 +174,9 @@ describe("verificarHashesAplicadas", () => {
         Object.assign(new Error("relation does not exist"), { code: "42P01" }),
       );
 
-    await expect(verificarHashesAplicadas(sql, migrationsDir)).resolves.toEqual([]);
+    await expect(verificarHashesAplicadas(sql, migrationsDir)).resolves.toEqual(
+      [],
+    );
   });
 
   it("propaga erro de banco que não seja 'relation does not exist'", async () => {
@@ -158,7 +185,9 @@ describe("verificarHashesAplicadas", () => {
 
     const sql = vi
       .fn()
-      .mockRejectedValueOnce(Object.assign(new Error("conexão recusada"), { code: "ECONNREFUSED" }));
+      .mockRejectedValueOnce(
+        Object.assign(new Error("conexão recusada"), { code: "ECONNREFUSED" }),
+      );
 
     await expect(verificarHashesAplicadas(sql, migrationsDir)).rejects.toThrow(
       "conexão recusada",
@@ -167,10 +196,15 @@ describe("verificarHashesAplicadas", () => {
 
   it("detecta divergência lendo o .sql real do disco", async () => {
     const migrationsDir = criarMigrationsDir([{ tag: "0001_a", when: 1000 }]);
-    writeFileSync(path.join(migrationsDir, "0001_a.sql"), "conteudo-editado-depois");
+    writeFileSync(
+      path.join(migrationsDir, "0001_a.sql"),
+      "conteudo-editado-depois",
+    );
 
     const hashAplicado = calcularHashMigracao("conteudo-original-aplicado");
-    const sql = vi.fn().mockResolvedValueOnce([{ created_at: 1000, hash: hashAplicado }]);
+    const sql = vi
+      .fn()
+      .mockResolvedValueOnce([{ created_at: 1000, hash: hashAplicado }]);
 
     const divergentes = await verificarHashesAplicadas(sql, migrationsDir);
     expect(divergentes).toEqual([
@@ -192,6 +226,8 @@ describe("verificarHashesAplicadas", () => {
         { created_at: 1000, hash: calcularHashMigracao("conteudo-intacto") },
       ]);
 
-    await expect(verificarHashesAplicadas(sql, migrationsDir)).resolves.toEqual([]);
+    await expect(verificarHashesAplicadas(sql, migrationsDir)).resolves.toEqual(
+      [],
+    );
   });
 });

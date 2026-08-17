@@ -20,8 +20,7 @@ type Variante =
   | "secondary"
   | "tertiary";
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variante?: Variante;
   iconLeft?: React.ReactNode;
   iconRight?: React.ReactNode;
@@ -92,18 +91,9 @@ export const Button = React.forwardRef<HTMLElement, ButtonProps>(
 
     // Tamanhos e espaçamentos
     const tamanhoClasses = {
-      sm: cn(
-        "text-sm font-semibold",
-        iconOnly ? "p-0" : "px-3 py-1.5 gap-1.5"
-      ),
-      md: cn(
-        "text-base font-semibold",
-        iconOnly ? "p-0" : "px-5 py-2.5 gap-2"
-      ),
-      lg: cn(
-        "text-lg font-bold",
-        iconOnly ? "p-0" : "px-6 py-3.5 gap-2.5"
-      ),
+      sm: cn("text-sm font-semibold", iconOnly ? "p-0" : "px-3 py-1.5 gap-1.5"),
+      md: cn("text-base font-semibold", iconOnly ? "p-0" : "px-5 py-2.5 gap-2"),
+      lg: cn("text-lg font-bold", iconOnly ? "p-0" : "px-6 py-3.5 gap-2.5"),
     }[resolvedTamanho];
 
     // Formato circular vs padrão
@@ -113,9 +103,7 @@ export const Button = React.forwardRef<HTMLElement, ButtonProps>(
         : "rounded-[var(--radius-control)]";
 
     // Estado de carregamento
-    const loadingClasses = isLoading
-      ? "cursor-wait relative"
-      : "";
+    const loadingClasses = isLoading ? "cursor-wait relative" : "";
 
     const filhoAsChild =
       asChild && React.isValidElement(children)
@@ -128,13 +116,17 @@ export const Button = React.forwardRef<HTMLElement, ButtonProps>(
     // Button ou, com asChild, no elemento filho).
     const temRotuloAcessivel = Boolean(
       props["aria-label"] ??
-        props["aria-labelledby"] ??
-        filhoAsChild?.props["aria-label"] ??
-        filhoAsChild?.props["aria-labelledby"],
+      props["aria-labelledby"] ??
+      filhoAsChild?.props["aria-label"] ??
+      filhoAsChild?.props["aria-labelledby"],
     );
-    if (process.env.NODE_ENV !== "production" && iconOnly && !temRotuloAcessivel) {
+    if (
+      process.env.NODE_ENV !== "production" &&
+      iconOnly &&
+      !temRotuloAcessivel
+    ) {
       console.warn(
-        "Acessibilidade: Botões 'iconOnly' devem possuir um 'aria-label' para leitores de tela."
+        "Acessibilidade: Botões 'iconOnly' devem possuir um 'aria-label' para leitores de tela.",
       );
     }
 
@@ -155,7 +147,7 @@ export const Button = React.forwardRef<HTMLElement, ButtonProps>(
       "disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
       "disabled:active:translate-x-0 disabled:active:translate-y-0",
       classes,
-      className
+      className,
     );
 
     if (asChild) {
@@ -214,7 +206,7 @@ export const Button = React.forwardRef<HTMLElement, ButtonProps>(
         {...props}
       >
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <svg
               className={cn("animate-spin text-current", spinnerSize)}
               xmlns="http://www.w3.org/2000/svg"
@@ -241,12 +233,14 @@ export const Button = React.forwardRef<HTMLElement, ButtonProps>(
         <span
           className={cn(
             "inline-flex items-center justify-center gap-[inherit]",
-            isLoading && "opacity-0"
+            isLoading && "opacity-0",
           )}
         >
           {iconLeft && <span className="inline-flex shrink-0">{iconLeft}</span>}
           {!iconOnly && children}
-          {iconRight && <span className="inline-flex shrink-0">{iconRight}</span>}
+          {iconRight && (
+            <span className="inline-flex shrink-0">{iconRight}</span>
+          )}
         </span>
       </button>
     );

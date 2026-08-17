@@ -1,6 +1,12 @@
 import type { ReactElement } from "react";
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { RelatoriosExport } from "./relatorios-export";
@@ -31,13 +37,19 @@ vi.mock("./actions", () => ({
     faltasJustificadas: 0,
     evidenciasAprovadas: 0,
   })),
-  exportarConvenioBrutoAction: vi.fn(async () => ({ reportId: "r1", hash: "h1" })),
+  exportarConvenioBrutoAction: vi.fn(async () => ({
+    reportId: "r1",
+    hash: "h1",
+  })),
   gerarRascunhoFamiliaAction: vi.fn(async () => ({ error: "stub" })),
   curarFamiliaAction: vi.fn(async () => ({ ok: true })),
   exportarFamiliaAction: vi.fn(async () => ({ reportId: "r1", hash: "h1" })),
   gerarRascunhoConvenioNarrativoAction: vi.fn(async () => ({ error: "stub" })),
   curarConvenioNarrativoAction: vi.fn(async () => ({ ok: true })),
-  exportarConvenioNarrativoAction: vi.fn(async () => ({ reportId: "r1", hash: "h1" })),
+  exportarConvenioNarrativoAction: vi.fn(async () => ({
+    reportId: "r1",
+    hash: "h1",
+  })),
 }));
 
 afterEach(cleanup);
@@ -45,7 +57,10 @@ afterEach(cleanup);
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
   const resultado = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
     rules: {
       region: { enabled: false },
       "landmark-one-main": { enabled: false },
@@ -96,7 +111,10 @@ test("FamiliaReport — renderiza sob escopo data-mode='familia', sem regressão
   );
 
   const resultado = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
     rules: {
       region: { enabled: false },
       "landmark-one-main": { enabled: false },
@@ -122,7 +140,9 @@ test("RelatoriosExport permanece clínico (fora do escopo data-mode='familia')",
 });
 
 test("ConvenioNarrativoReport — sem violações axe (form inicial + cabeçalho)", async () => {
-  await semViolacoes(<ConvenioNarrativoReport pacientes={PACIENTES} podeCurar />);
+  await semViolacoes(
+    <ConvenioNarrativoReport pacientes={PACIENTES} podeCurar />,
+  );
 });
 
 test("ConvenioNarrativoReport — sem violações axe (form de curadoria após gerar)", async () => {
@@ -131,7 +151,9 @@ test("ConvenioNarrativoReport — sem violações axe (form de curadoria após g
     versao: 1,
     draft: {
       resumoClinico: "Resumo clínico do período.",
-      evolucaoPorDominio: [{ dominio: "Comunicação", narrativa: "Evoluiu bem." }],
+      evolucaoPorDominio: [
+        { dominio: "Comunicação", narrativa: "Evoluiu bem." },
+      ],
       justificativaContinuidade: "Justificativa de continuidade.",
       objetivosProximoPeriodo: ["Objetivo 1"],
       periodoSemAvancoVisivel: false,
@@ -170,7 +192,10 @@ test("ConvenioNarrativoReport — sem violações axe (form de curadoria após g
   });
 
   const resultado = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
     rules: {
       region: { enabled: false },
       "landmark-one-main": { enabled: false },

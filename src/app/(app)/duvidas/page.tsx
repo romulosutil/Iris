@@ -25,7 +25,10 @@ export default async function DuvidasPage() {
   if (pacientesUnicos.length > 0) {
     await withTenant(ctx, async (tx) => {
       for (const patientId of pacientesUnicos) {
-        alvosPorPaciente[patientId] = await alvosValidosDoPaciente(tx, patientId);
+        alvosPorPaciente[patientId] = await alvosValidosDoPaciente(
+          tx,
+          patientId,
+        );
       }
     });
   }

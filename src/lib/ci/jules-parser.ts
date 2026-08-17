@@ -21,18 +21,24 @@ export function parseReviewFindings(commentBody: string): ParseFindingsResult {
       warnCount: 0,
       nitCount: 0,
       totalFindings: 0,
-      findingsText: '',
+      findingsText: "",
     };
   }
 
-  const findingsSectionMatch = commentBody.match(/##\s+Findings([\s\S]*?)(?:##\s+Verdict|$)/i);
-  const targetText = (findingsSectionMatch && findingsSectionMatch[1] ? findingsSectionMatch[1] : commentBody) || '';
+  const findingsSectionMatch = commentBody.match(
+    /##\s+Findings([\s\S]*?)(?:##\s+Verdict|$)/i,
+  );
+  const targetText =
+    (findingsSectionMatch && findingsSectionMatch[1]
+      ? findingsSectionMatch[1]
+      : commentBody) || "";
 
   const blockingMatches = targetText.match(/\[BLOCKING\]/gi) || [];
   const warnMatches = targetText.match(/\[WARN\]/gi) || [];
   const nitMatches = targetText.match(/\[(?:NIT|init)\]/gi) || [];
 
-  const totalFindings = blockingMatches.length + warnMatches.length + nitMatches.length;
+  const totalFindings =
+    blockingMatches.length + warnMatches.length + nitMatches.length;
 
   return {
     hasFindings: totalFindings > 0,
@@ -46,12 +52,12 @@ export function parseReviewFindings(commentBody: string): ParseFindingsResult {
 
 export function calculateNextAttempt(
   comments: Array<{ body?: string }>,
-  maxAttempts = 3
+  maxAttempts = 3,
 ): AttemptResult {
   let highestAttempt = 0;
 
   for (const comment of comments) {
-    const body = comment.body || '';
+    const body = comment.body || "";
     const match = body.match(/<!--\s*jules-auto-fix-attempt:\s*(\d+)\s*-->/);
     if (match && match[1]) {
       const num = parseInt(match[1], 10);

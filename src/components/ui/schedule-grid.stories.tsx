@@ -53,11 +53,13 @@ const mockBlocos: BlocoAgendaItem[] = [
 
 export const Padrao = {
   render: () => (
-    <div className="max-w-6xl mx-auto p-4 bg-[var(--bg-app)] space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4 bg-[var(--bg-app)] p-4">
       <ScheduleGrid
         dias={mockDias}
         blocos={mockBlocos}
-        aoAlocar={(dia, inicio) => alert(`Alocar slot no dia ${dia} às ${inicio}min`)}
+        aoAlocar={(dia, inicio) =>
+          alert(`Alocar slot no dia ${dia} às ${inicio}min`)
+        }
         aoAbrirRegra={(id, rotulo) => alert(`Regra: ${id} (${rotulo})`)}
       />
     </div>
@@ -69,7 +71,7 @@ export const Mobile = {
     viewport: { defaultViewport: "mobile1" },
   },
   render: () => (
-    <div className="p-2 bg-[var(--bg-app)]">
+    <div className="bg-[var(--bg-app)] p-2">
       <ScheduleGrid dias={mockDias} blocos={mockBlocos} />
     </div>
   ),

@@ -10,7 +10,9 @@ describe("resumirPayload", () => {
     });
     const funcao = linhas.find((l) => l.rotulo === "Função");
     expect(funcao?.valor).toContain("indefinida");
-    expect(linhas.find((l) => l.rotulo === "Nível de ajuda")?.valor).toBe("independente");
+    expect(linhas.find((l) => l.rotulo === "Nível de ajuda")?.valor).toBe(
+      "independente",
+    );
   });
 
   test("evidência: função definida aparece crua", () => {
@@ -46,7 +48,10 @@ describe("resumirPayload", () => {
 describe("chaveDominio", () => {
   test("evidência usa dominio_id do primeiro alvo", () => {
     expect(
-      chaveDominio("evidencia", { funcao: "tato", alvos: [{ dominio_id: "mando" }] }),
+      chaveDominio("evidencia", {
+        funcao: "tato",
+        alvos: [{ dominio_id: "mando" }],
+      }),
     ).toBe("mando");
   });
 
@@ -60,7 +65,9 @@ describe("chaveDominio", () => {
 
   test("outros subtipos usam o próprio subtipo como domínio", () => {
     expect(chaveDominio("registro_abc", {})).toBe("registro_abc");
-    expect(chaveDominio("preferencia_reforcador", {})).toBe("preferencia_reforcador");
+    expect(chaveDominio("preferencia_reforcador", {})).toBe(
+      "preferencia_reforcador",
+    );
   });
 });
 

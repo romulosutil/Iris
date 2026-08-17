@@ -20,7 +20,7 @@
   (`notNull`, `defaultNow()`).
 - `src/app/(app)/pacientes/novo/logic.ts:34-41` — `criarPacienteEConsent`
   exige `responsavelSignatario` não-vazio incondicionalmente (`if
-  (!responsavelSignatario) return { error: ... }`) e insere `consent` com
+(!responsavelSignatario) return { error: ... }`) e insere `consent` com
   `tipo: "tratamento_dados_menor"` **hardcoded** (linha 68) — não lê tipo
   do form, não há branch.
 - `src/app/(app)/pacientes/novo/novo-paciente-form.tsx:57-65` — único
@@ -30,13 +30,13 @@
 - RLS de `consent` (`db/migrations/0001_rls.sql:206-218`): `consent_read`
   usa só `app_patient_in_clinic(patient_id)`; `consent_insert` usa
   `app_patient_in_clinic(patient_id)` + `current_setting('app.user_role')
-  IN ('admin_recepcao', 'coordenador')`. **Nenhuma policy referencia
+IN ('admin_recepcao', 'coordenador')`. **Nenhuma policy referencia
   `tipo` ou `responsavelSignatario`.** `REVOKE UPDATE, DELETE ON consent
-  FROM app_role` (linha 23, comentário "append-only (LGPD)") — consent é
+FROM app_role` (linha 23, comentário "append-only (LGPD)") — consent é
   append-only por design, sem UPDATE possível pela role de app.
 - Expurgo (`db/migrations/0045_expurgo_retencao.sql:97`):
   `app_purgar_paciente` faz `DELETE FROM consent WHERE patient_id =
-  p_patient` — **delete físico completo**, não pseudonimização. Diferente
+p_patient` — **delete físico completo**, não pseudonimização. Diferente
   de `audit_log`, que é pseudonimizado (Fase 6, A3) porque tem retenção
   própria pós-expurgo; `consent` não tem essa exigência — morre junto com
   o paciente.
@@ -48,8 +48,7 @@
 - Padrão de `check()` condicional já existe no schema (ex.:
   `patient_protocol_vigencia` em `schema.ts:371-374`,
   `ctm_nao_auto_supervisao` em `schema.ts:404-407`) — usa
-  `sql\`${t.col} IS NULL OR <condição>\`` dentro do array `(t) => [...]`
-  de `pgTable`.
+  `sql\`${t.col} IS NULL OR <condição>\``dentro do array`(t) => [...]`de`pgTable`.
 
 ---
 
@@ -155,8 +154,7 @@ ALTER TABLE consent ADD CONSTRAINT consent_responsavel_por_tipo CHECK (
   - Adicionar ao array `(t) => [...]` da `pgTable("consent", ...)` —
     hoje a tabela é definida sem terceiro argumento de callback
     (`schema.ts:313-324` é um objeto de colunas puro); precisa virar
-    `pgTable("consent", { ...colunas... }, (t) => [check("consent_responsavel_por_tipo", sql\`...\`)])`
-    no mesmo padrão de `patient_protocol` (`schema.ts:371-374`).
+    `pgTable("consent", { ...colunas... }, (t) => [check("consent_responsavel_por_tipo", sql\`...\`)])`no mesmo padrão de`patient_protocol` (`schema.ts:371-374`).
 
 ---
 
@@ -185,8 +183,7 @@ if (tipoConsentimento === "menor" && !responsavelSignatario) {
 }
 if (tipoConsentimento === "adulto" && responsavelSignatario) {
   return {
-    error:
-      "Consentimento de titular adulto não deve informar responsável.",
+    error: "Consentimento de titular adulto não deve informar responsável.",
   };
 }
 ```

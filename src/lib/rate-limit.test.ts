@@ -66,9 +66,9 @@ describe("consumirTentativa", () => {
     // Chave nova legítima: com fail-closed ela seria negada. Com despejo,
     // deve ser admitida — e o mapa não pode crescer além do cap.
     vi.setSystemTime(agora + CAP_ENTRIES);
-    expect(
-      consumirTentativa("ip:vitima-legitima", 1, 60_000).permitido,
-    ).toBe(true);
+    expect(consumirTentativa("ip:vitima-legitima", 1, 60_000).permitido).toBe(
+      true,
+    );
     expect(_tamanhoParaTeste()).toBeLessThanOrEqual(CAP_ENTRIES);
 
     // A entrada despejada tem que ser a que tinha o reset mais próximo

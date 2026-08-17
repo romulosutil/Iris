@@ -46,13 +46,13 @@ export function PaginaErro({
         })}
       >
         <div className="flex flex-col gap-2">
-          <p className="font-mono text-[var(--text-secondary)] text-xs font-semibold tracking-wide uppercase">
+          <p className="font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
             {codigo}
           </p>
-          <h1 className="font-display text-[var(--text-primary)] text-2xl font-bold text-balance md:text-3xl">
+          <h1 className="font-display text-2xl font-bold text-balance text-[var(--text-primary)] md:text-3xl">
             {titulo}
           </h1>
-          <p className="text-[var(--text-primary)] max-w-[60ch] text-base leading-relaxed">
+          <p className="max-w-[60ch] text-base leading-relaxed text-[var(--text-primary)]">
             {descricao}
           </p>
 

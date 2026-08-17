@@ -78,16 +78,16 @@ estruturado. O produto adota essa distinção como campo de severidade — nunca
 para decidir SE o alerta dispara (dispara sempre, nível 1.2), só para
 priorizar a fila de resposta humana (Seção 4):
 
-| Severidade                 | Definição operacional                                                                                   | Exemplo (dos próprios casos de teste do produto)                                             |
-| --------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `ideacao_passiva`           | Desejo de não estar vivo / de "sumir", sem pensamento sobre método, sem intenção ativa declarada.       | "queria que tudo simplesmente acabasse", sem elaboração de método.                            |
-| `ideacao_ativa_sem_plano`   | Pensamento ativo sobre método ("já pensou em como faria"), sem plano estruturado, data ou meios prontos. | Caso T5 (`casos-de-teste-tcc.md`): "já pensou em como faria isso", nega plano/data/coragem.  |
-| `ideacao_ativa_com_plano`   | Método + meios + intenção/tempo definidos ou em preparação.                                              | Não coberto ainda por caso de teste do produto — ver Seção 8, Caso ARC-2, a suprir esse gap. |
-| `autolesao_recente`         | Autolesão sem intenção suicida declarada, ocorrida ou em curso.                                          | —                                                                                              |
-| `tentativa_relatada`        | Tentativa de suicídio relatada (passada, mesmo que antiga).                                              | —                                                                                              |
-| `violencia_sofrida`         | Violência sofrida pelo paciente, física/sexual/psicológica.                                              | Caso TC-2: violência doméstica minimizada pela própria paciente.                              |
-| `violencia_praticada`       | Violência praticada pelo paciente contra terceiro.                                                        | —                                                                                              |
-| `risco_a_terceiro`          | Risco relatado a terceiro vulnerável (menor, dependente) no entorno do paciente.                          | —                                                                                              |
+| Severidade                | Definição operacional                                                                                    | Exemplo (dos próprios casos de teste do produto)                                             |
+| ------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `ideacao_passiva`         | Desejo de não estar vivo / de "sumir", sem pensamento sobre método, sem intenção ativa declarada.        | "queria que tudo simplesmente acabasse", sem elaboração de método.                           |
+| `ideacao_ativa_sem_plano` | Pensamento ativo sobre método ("já pensou em como faria"), sem plano estruturado, data ou meios prontos. | Caso T5 (`casos-de-teste-tcc.md`): "já pensou em como faria isso", nega plano/data/coragem.  |
+| `ideacao_ativa_com_plano` | Método + meios + intenção/tempo definidos ou em preparação.                                              | Não coberto ainda por caso de teste do produto — ver Seção 8, Caso ARC-2, a suprir esse gap. |
+| `autolesao_recente`       | Autolesão sem intenção suicida declarada, ocorrida ou em curso.                                          | —                                                                                            |
+| `tentativa_relatada`      | Tentativa de suicídio relatada (passada, mesmo que antiga).                                              | —                                                                                            |
+| `violencia_sofrida`       | Violência sofrida pelo paciente, física/sexual/psicológica.                                              | Caso TC-2: violência doméstica minimizada pela própria paciente.                             |
+| `violencia_praticada`     | Violência praticada pelo paciente contra terceiro.                                                       | —                                                                                            |
+| `risco_a_terceiro`        | Risco relatado a terceiro vulnerável (menor, dependente) no entorno do paciente.                         | —                                                                                            |
 
 **Regra de desempate obrigatória (herdada diretamente do Caso T5):** na
 dúvida entre dois níveis adjacentes, o agente sempre classifica no nível MAIS
@@ -131,8 +131,7 @@ alerta). Duas medidas concretas para não reintroduzir esse problema:
    severidade. Sem essa distinção, cada caso ambíguo (que existirá em volume
    real, dado que linguagem coloquial de sofrimento é comum) teria o mesmo
    peso visual de uma emergência real — a receita exata da fadiga de alerta.
-2. **Volume esperado é auditável desde o dia 1.** A tabela proposta (Seção
-   7) precisa de uma métrica simples desde o lançamento: proporção de
+2. **Volume esperado é auditável desde o dia 1.** A tabela proposta (Seção 7) precisa de uma métrica simples desde o lançamento: proporção de
    alertas com `certeza: "ambiguo_citado"` que o terapeuta descarta como não
    sendo risco genuíno vs. os que confirma. Se a proporção de descarte for
    muito alta (o gatilho está gerando ruído desproporcional), é sinal de
@@ -253,16 +252,16 @@ do escopo deste documento, que é só especificação).
 > renomeá-los custaria uma migração sem ganho jurídico.
 >
 > **Declaração obrigatória na UI**, ao lado de qualquer temporizador de prazo:
-> *"Estes prazos regem apenas o envio de alertas dentro do sistema Iris para
+> _"Estes prazos regem apenas o envio de alertas dentro do sistema Iris para
 > os gestores da clínica. O Iris não realiza atendimento e não garante a
-> presença de profissionais logados."*
+> presença de profissionais logados."_
 
-| Severidade                                             | Prazo de reconhecimento (por qualquer um dos dois destinatários) |
-| -------------------------------------------------------- | ------------------------------------------------------------------ |
-| `ideacao_ativa_com_plano`, `tentativa_relatada`         | 15 minutos                                                          |
-| `ideacao_ativa_sem_plano`, `autolesao_recente`          | 1 hora                                                              |
-| `ideacao_passiva`, `violencia_sofrida`/`praticada`, `risco_a_terceiro` | 4 horas (mesmo dia útil)                             |
-| Qualquer severidade com `certeza: "ambiguo_citado"`     | Mesmo prazo da severidade classificada — a ambiguidade não relaxa o prazo, só afeta apresentação (Seção 2) |
+| Severidade                                                             | Prazo de reconhecimento (por qualquer um dos dois destinatários)                                           |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `ideacao_ativa_com_plano`, `tentativa_relatada`                        | 15 minutos                                                                                                 |
+| `ideacao_ativa_sem_plano`, `autolesao_recente`                         | 1 hora                                                                                                     |
+| `ideacao_passiva`, `violencia_sofrida`/`praticada`, `risco_a_terceiro` | 4 horas (mesmo dia útil)                                                                                   |
+| Qualquer severidade com `certeza: "ambiguo_citado"`                    | Mesmo prazo da severidade classificada — a ambiguidade não relaxa o prazo, só afeta apresentação (Seção 2) |
 
 "Reconhecer" aqui significa uma ação humana explícita de "estou ciente,
 estou avaliando" — não implica que o caso esteja resolvido, só que alguém
@@ -305,7 +304,7 @@ O estágio 2 dispara quatro ações, todas dentro do tenant:
    propõe conduta própria. (Implica campo novo: a clínica cadastra esse
    protocolo no onboarding.)
 4. **Log imutável**: `Alerta ID #X não reconhecido pela equipe clínica no
-   prazo Y`. Trilha de auditoria, não notificação.
+prazo Y`. Trilha de auditoria, não notificação.
 
 **Por que Opção B e não notificação externa** (razão registrada para não ser
 reaberta por engano): intermediar notificação externa criaria
@@ -315,7 +314,7 @@ compartilhamento indevido de dado sensível de menor; em **falso negativo ou
 atraso de entrega**, alegação de que a clínica "confiou que o Iris
 notificaria os socorristas" (perda de uma chance). O Iris não é inscrito em
 CRP/CRM, não tem responsável técnico de saúde e não presta atendimento — não
-tem *duty of care* clínico a exercer.
+tem _duty of care_ clínico a exercer.
 
 ### 4.3 Por que 2 estágios e não escalonamento contínuo
 
@@ -323,9 +322,10 @@ Um esquema de escalonamento que soa a cada N minutos indefinidamente tende a
 gerar o mesmo efeito de fadiga discutido na Seção 2, na direção oposta
 (alarme persistente sendo silenciado pelo usuário por exaustão, não por
 descrença). Dois estágios discretos (mais coordenadores → banner clínica-wide
-+ RT + protocolo da clínica) equilibram urgência real com o mesmo cuidado
-antifadiga. Note que, com a Opção B travada em 4.2.1, o segundo estágio
-**não** é "canal externo" — é saturação interna da clínica.
+
+- RT + protocolo da clínica) equilibram urgência real com o mesmo cuidado
+  antifadiga. Note que, com a Opção B travada em 4.2.1, o segundo estágio
+  **não** é "canal externo" — é saturação interna da clínica.
 
 ---
 
@@ -343,13 +343,13 @@ antifadiga. Note que, com a Opção B travada em 4.2.1, o segundo estágio
 **1 — Existe obrigação de notificar terceiro? Depende do tipo de risco.**
 O levantamento do projeto foi confirmado integralmente:
 
-| Tipo de risco | Situação legal | Consequência para o produto |
-| --- | --- | --- |
-| Ideação suicida em adulto, sem ato | **Faculdade ética**, não dever (CEPP art. 10, "busca do menor prejuízo"). Não há dever de avisar família de adulto capaz | Copy padrão |
-| Tentativa de suicídio / autolesão | Notificação compulsória **sanitária**, do estabelecimento ao SINAN em 24h, sob sigilo (Lei 13.819/2019 art. 6º). Não é dever de avisar família ou polícia | Copy padrão |
-| **Violência SOFRIDA por criança/adolescente** | **DEVER LEGAL IMPERATIVO** e imediato (ECA art. 13 + Lei 13.431/2017 art. 13). Omissão é infração administrativa (ECA art. 245) | **Copy diferenciada** — ver 5.2 |
-| Violência sofrida por mulher adulta em serviço de saúde | Comunicação compulsória à autoridade em 24h (Leis 10.778/2003 e 13.931/2019), pelo serviço, notificando o fato sem detalhes de prontuário | Copy padrão |
-| Violência PRATICADA pelo paciente / risco a terceiro | **Não há Tarasoff no Brasil.** Faculdade/justa causa (CEPP art. 10 c/c CP art. 154 e estado de necessidade, CP art. 24), não obrigação | Copy padrão |
+| Tipo de risco                                           | Situação legal                                                                                                                                            | Consequência para o produto     |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Ideação suicida em adulto, sem ato                      | **Faculdade ética**, não dever (CEPP art. 10, "busca do menor prejuízo"). Não há dever de avisar família de adulto capaz                                  | Copy padrão                     |
+| Tentativa de suicídio / autolesão                       | Notificação compulsória **sanitária**, do estabelecimento ao SINAN em 24h, sob sigilo (Lei 13.819/2019 art. 6º). Não é dever de avisar família ou polícia | Copy padrão                     |
+| **Violência SOFRIDA por criança/adolescente**           | **DEVER LEGAL IMPERATIVO** e imediato (ECA art. 13 + Lei 13.431/2017 art. 13). Omissão é infração administrativa (ECA art. 245)                           | **Copy diferenciada** — ver 5.2 |
+| Violência sofrida por mulher adulta em serviço de saúde | Comunicação compulsória à autoridade em 24h (Leis 10.778/2003 e 13.931/2019), pelo serviço, notificando o fato sem detalhes de prontuário                 | Copy padrão                     |
+| Violência PRATICADA pelo paciente / risco a terceiro    | **Não há Tarasoff no Brasil.** Faculdade/justa causa (CEPP art. 10 c/c CP art. 154 e estado de necessidade, CP art. 24), não obrigação                    | Copy padrão                     |
 
 **2 — De quem é a responsabilidade? Opção B.** O Iris é operador de dados /
 provedor de tecnologia. Notificação externa automatizada criaria
@@ -379,7 +379,7 @@ diferenciação no sistema (5.2).
 
 Quando o alerta for de **`violencia_sofrida` em paciente menor de idade**, a
 copy **não** pode ser a mesma dos demais casos. Aqui existe dever legal
-*ex lege*, e a interface deve reforçar a norma em vez de sugerir que a
+_ex lege_, e a interface deve reforçar a norma em vez de sugerir que a
 avaliação é discricionária. Texto travado pelo parecer:
 
 > ⚠️ **Sinalização de risco: suspeita/registro de violência contra menor.**
@@ -423,9 +423,11 @@ que a interpretação/decisão é humana.
 ### 6.1 Texto do alerta na UI (proposta)
 
 **Título (lista da fila):**
+
 > "Sinal identificado no relato requer revisão prioritária"
 
 **Corpo (detalhe do alerta, visível ao abrir):**
+
 > "O relato de sessão contém um trecho que corresponde a um padrão de
 > [categoria — ex.: 'menção a ideação suicida', 'relato de violência
 > sofrida']. Esta sinalização é gerada automaticamente a partir de padrões no
@@ -493,24 +495,26 @@ export const alertaRiscoSeveridade = pgEnum("alerta_risco_severidade", [
 ]);
 
 export const alertaRiscoCerteza = pgEnum("alerta_risco_certeza", [
-  "explicito",       // menção direta, inequívoca (ex.: Caso TC-2, Caso T5)
-  "ambiguo_citado",  // texto ambíguo, mas citado literalmente — alerta mantido (Seção 1.4)
+  "explicito", // menção direta, inequívoca (ex.: Caso TC-2, Caso T5)
+  "ambiguo_citado", // texto ambíguo, mas citado literalmente — alerta mantido (Seção 1.4)
 ]);
 
 export const alertaRiscoStatus = pgEnum("alerta_risco_status", [
-  "aberto",              // recém-criado, aguardando reconhecimento
-  "reconhecido",         // um dos destinatários confirmou ciência (prazo cumprido)
-  "escalado_estagio_1",  // prazo vencido, escalado para todos coordenadores da clínica
-  "escalado_estagio_2",  // dobro do prazo vencido — saturação INTERNA da clínica: banner clínica-wide + RT + protocolo da própria clínica + log imutável (Seção 4.2.1). Nunca canal externo.
-  "resolvido",           // conduta humana definida e registrada
-  "descartado",          // avaliado como não-risco após revisão humana (nunca apaga o registro)
+  "aberto", // recém-criado, aguardando reconhecimento
+  "reconhecido", // um dos destinatários confirmou ciência (prazo cumprido)
+  "escalado_estagio_1", // prazo vencido, escalado para todos coordenadores da clínica
+  "escalado_estagio_2", // dobro do prazo vencido — saturação INTERNA da clínica: banner clínica-wide + RT + protocolo da própria clínica + log imutável (Seção 4.2.1). Nunca canal externo.
+  "resolvido", // conduta humana definida e registrada
+  "descartado", // avaliado como não-risco após revisão humana (nunca apaga o registro)
 ]);
 
 export const alertaRiscoClinico = pgTable(
   "alerta_risco_clinico",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    clinicId: uuid("clinic_id").notNull().references(() => clinic.id),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id),
     // nulos-permitidos na COLUNA, obrigatórios na PRÁTICA — ver a nota
     // "§7 × H2" logo abaixo do bloco; a invariante é garantida pelo CHECK
     // `alerta_risco_vinculo`, não pelo notNull.
@@ -521,7 +525,7 @@ export const alertaRiscoClinico = pgTable(
     severidade: alertaRiscoSeveridade("severidade").notNull(),
     certeza: alertaRiscoCerteza("certeza").notNull(),
     trechoFonte: text("trecho_fonte").notNull(), // citação literal do diário
-    detalhe: text("detalhe").notNull(),          // descrição literal do agente, sem interpretação de gravidade além do relatado
+    detalhe: text("detalhe").notNull(), // descrição literal do agente, sem interpretação de gravidade além do relatado
 
     status: alertaRiscoStatus("status").notNull().default("aberto"),
 
@@ -529,20 +533,30 @@ export const alertaRiscoClinico = pgTable(
     canaisNotificados: jsonb("canais_notificados").notNull(), // ex.: ["push_terapeuta", "push_coordenador"]
 
     slaMinutos: integer("sla_minutos").notNull(), // resolvido na criação, a partir de severidade+certeza (Seção 4.1)
-    prazoReconhecimento: timestamp("prazo_reconhecimento", { withTimezone: true }).notNull(),
+    prazoReconhecimento: timestamp("prazo_reconhecimento", {
+      withTimezone: true,
+    }).notNull(),
 
     reconhecidoPor: uuid("reconhecido_por").references(() => appUser.id),
     reconhecidoEm: timestamp("reconhecido_em", { withTimezone: true }),
 
     escaladoEm: timestamp("escalado_em", { withTimezone: true }), // 1º estágio
-    escaladoEstagio2Em: timestamp("escalado_estagio_2_em", { withTimezone: true }),
+    escaladoEstagio2Em: timestamp("escalado_estagio_2_em", {
+      withTimezone: true,
+    }),
 
     condutaRegistrada: text("conduta_registrada"), // preenchido em resolver — o que o humano decidiu fazer
-    motivoDescarte: text("motivo_descarte"),        // preenchido em descartar
+    motivoDescarte: text("motivo_descarte"), // preenchido em descartar
 
-    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
-    atualizadoPor: uuid("atualizado_por").notNull().references(() => appUser.id),
-    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    atualizadoPor: uuid("atualizado_por")
+      .notNull()
+      .references(() => appUser.id),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
 
     pseudonimizadoEm: timestamp("pseudonimizado_em", { withTimezone: true }), // marca de expurgo LGPD (H2, Seção 10)
 
@@ -554,7 +568,9 @@ export const alertaRiscoClinico = pgTable(
       foreignColumns: [patient.id, patient.clinicId],
       name: "alerta_risco_patient_fk",
     }).onDelete("restrict"), // NÃO cascade — o expurgo pseudonimiza esta tabela (H2, Seção 10); cascade deletaria a linha inteira, o oposto da decisão
-    index("idx_alerta_risco_fila").on(t.clinicId, t.status).where(sql`${t.deletadoEm} IS NULL`),
+    index("idx_alerta_risco_fila")
+      .on(t.clinicId, t.status)
+      .where(sql`${t.deletadoEm} IS NULL`),
     index("idx_alerta_risco_sla").on(t.status, t.prazoReconhecimento), // suporte ao job de escalonamento (achado 9.1)
   ],
 );
@@ -944,7 +960,7 @@ prazo mais curto da tabela (Seção 4.1) é 15 minutos
 severidade máxima). Um polling de 5 minutos já introduziria até 1/3 de atraso
 adicional sobre um prazo de 15 minutos no pior caso (alerta criado 1s depois de
 um ciclo de polling) — inaceitável dado que a Seção 2 trata falso negativo
-*operacional* (alerta não escalado a tempo) com a mesma gravidade que falso
+_operacional_ (alerta não escalado a tempo) com a mesma gravidade que falso
 negativo de detecção. 1 minuto limita o atraso máximo de escalonamento a
 ~7% do prazo mais curto, com custo de carga desprezível (uma query indexada
 sobre uma tabela de volume baixo — alertas de risco não são um fluxo de alto
@@ -1089,15 +1105,15 @@ notificação de rotina é o envelope:
   tocar, o som deixa de significar "15 minutos".
 
 **Limitação registrada, não escondida:** notificação web não consegue
-furar "Não perturbe" do sistema operacional — só um app nativo com *critical
-alert* (iOS) / canal de alta prioridade (Android) consegue, e o Iris hoje é
+furar "Não perturbe" do sistema operacional — só um app nativo com _critical
+alert_ (iOS) / canal de alta prioridade (Android) consegue, e o Iris hoje é
 web. Isso significa que, com o celular em modo silencioso durante a noite,
 o prazo de 15 minutos **não é garantido pelo canal push** — quem cobre esse
 buraco é o escalonamento da Seção 4.2 (mais destinatários = mais chance de
 alguém estar com o celular ativo), não a tecnologia de notificação.
 Consequência de produto: prometer "15 minutos" em contrato/copy comercial
-seria overclaim — o produto entrega *notificação imediata e escalonamento
-verificável*, não *resposta humana em 15 minutos*. Alinhar a pergunta 3 da
+seria overclaim — o produto entrega _notificação imediata e escalonamento
+verificável_, não _resposta humana em 15 minutos_. Alinhar a pergunta 3 da
 Seção 5 (prazo compatível com diligência profissional) com essa distinção
 quando a consulta profissional acontecer.
 

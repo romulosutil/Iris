@@ -196,8 +196,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     return r!.n as number;
   };
   const arquivadoEm = async () => {
-    const [r] =
-      await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    const [r] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
     return r!.arquivado_em as Date | null;
   };
 
@@ -244,7 +243,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(r.id).toBeTruthy();
     expect(await arquivadoEm()).toBeNull();
 
-    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
+    const [log] =
+      await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
     expect(log!.acao).toBe("paciente_desarquivado_automaticamente");
     expect(log!.detalhe).toEqual({ origem: "audio_local" });
   });
@@ -261,7 +261,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(r.error).toBeUndefined();
     expect(await arquivadoEm()).toBeNull();
 
-    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
+    const [log] =
+      await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC}`;
     expect(log!.acao).toBe("paciente_desarquivado_automaticamente");
     expect(log!.detalhe).toEqual({ origem: "escopo_protocolo" });
   });

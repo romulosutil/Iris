@@ -5,12 +5,20 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { diasDaSemana, segundaDaSemana, semanaEhPassada } from "@/lib/agenda/semana";
+import {
+  diasDaSemana,
+  segundaDaSemana,
+  semanaEhPassada,
+} from "@/lib/agenda/semana";
 import { CalendarioSemana } from "./calendario-semana";
 import { PopoverAlocar } from "./popover-alocar";
 import { PopoverRegra } from "./popover-regra";
 import { ComboboxEntidade, type Opcao } from "./combobox-entidade";
-import { carregarSemanaAction, listarPacientesAction, proximaSessaoAction } from "./actions";
+import {
+  carregarSemanaAction,
+  listarPacientesAction,
+  proximaSessaoAction,
+} from "./actions";
 import type { BlocoAgenda } from "@/lib/agenda/projecao";
 import type { FaixaDia } from "@/lib/agenda/janela";
 
@@ -121,7 +129,8 @@ export function SemanaCliente({
           setErro(null);
         }
       } catch {
-        if (!cancelado) setErro("Não foi possível carregar a semana. Tente novamente.");
+        if (!cancelado)
+          setErro("Não foi possível carregar a semana. Tente novamente.");
       }
     });
     return () => {
@@ -153,16 +162,16 @@ export function SemanaCliente({
         description="Alocação de grade de horários, reposição de sessões e conciliação de agendas da equipe."
       />
 
-      <div className="bg-[var(--surface-card)] border-2 border-[var(--border-brutal)] p-4 rounded-[var(--radius-control)] shadow-[var(--ds-shadow)] flex flex-wrap items-end justify-between gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-6 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]">
         <div className="flex flex-wrap items-end gap-6">
           {prefill ? (
-            <p className="text-[var(--text-primary)] font-body text-sm self-center">
+            <p className="font-body self-center text-sm text-[var(--text-primary)]">
               Repondo sessão de <strong>{prefill.patientNome}</strong> (
               {prefill.disciplina.toUpperCase()}) — escolha o novo horário.
             </p>
           ) : (
             <div className="flex flex-col gap-1.5">
-              <span className="font-display text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+              <span className="font-display text-xs font-bold tracking-wider text-[var(--text-secondary)] uppercase">
                 Visualização
               </span>
               <Tabs
@@ -170,7 +179,9 @@ export function SemanaCliente({
                 onValueChange={(v) => {
                   const novoEixo = v as typeof eixo;
                   setEixo(novoEixo);
-                  setEntidade(novoEixo === "terapeuta" ? (terapeutas[0] ?? null) : null);
+                  setEntidade(
+                    novoEixo === "terapeuta" ? (terapeutas[0] ?? null) : null,
+                  );
                 }}
               >
                 <TabsList>
@@ -194,14 +205,22 @@ export function SemanaCliente({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="font-display text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+          <span className="font-display text-xs font-bold tracking-wider text-[var(--text-secondary)] uppercase">
             Navegação Semanal
           </span>
           <div className="flex items-center gap-2">
-            <Button variante="secundaria" tamanho="sm" onClick={() => setSemanaISO(recuarSemana(semanaISO))}>
+            <Button
+              variante="secundaria"
+              tamanho="sm"
+              onClick={() => setSemanaISO(recuarSemana(semanaISO))}
+            >
               ← Semana anterior
             </Button>
-            <Button variante="secundaria" tamanho="sm" onClick={() => setSemanaISO(avancarSemana(semanaISO))}>
+            <Button
+              variante="secundaria"
+              tamanho="sm"
+              onClick={() => setSemanaISO(avancarSemana(semanaISO))}
+            >
               Próxima semana →
             </Button>
           </div>
@@ -209,7 +228,10 @@ export function SemanaCliente({
       </div>
 
       {passada && (
-        <p role="status" className="text-[var(--text-primary)] font-body text-sm">
+        <p
+          role="status"
+          className="font-body text-sm text-[var(--text-primary)]"
+        >
           Semana passada — alocação desabilitada (C7).
         </p>
       )}
@@ -250,12 +272,17 @@ export function SemanaCliente({
           terapeutas={terapeutas}
           disciplinas={disciplinas}
           duracaoPadrao={duracaoPadrao}
-          aoBuscarEntidadeVar={eixo === "terapeuta" ? buscarPacientes : undefined}
+          aoBuscarEntidadeVar={
+            eixo === "terapeuta" ? buscarPacientes : undefined
+          }
           reposicao={
             prefill
               ? {
                   repostaDe: prefill.repostaDe,
-                  pacienteFixo: { id: prefill.patientId, nome: prefill.patientNome },
+                  pacienteFixo: {
+                    id: prefill.patientId,
+                    nome: prefill.patientNome,
+                  },
                   disciplinaFixa: prefill.disciplina,
                 }
               : undefined

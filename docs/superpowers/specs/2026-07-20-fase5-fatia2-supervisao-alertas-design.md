@@ -29,9 +29,9 @@ em RLS.**
 4. **Segurança copiada verbatim.** O boilerplate de cada server action
    (`"use server"` + `requireRole(ctx, "coordenador")` em try/catch +
    `withTenant` + advisory lock `pg_advisory_xact_lock(hashtextextended(...))`
-   + re-checagem de precondição + escrita inline no `audit_log`) é **cópia
-   fiel** do irmão `validacao/actions.ts`. Não simplifique, não remova o lock,
-   não pule a auditoria.
+   - re-checagem de precondição + escrita inline no `audit_log`) é **cópia
+     fiel** do irmão `validacao/actions.ts`. Não simplifique, não remova o lock,
+     não pule a auditoria.
 5. **Queries fora de `"use server"`.** Helpers que recebem `ctx` vivem em
    `queries.ts` com `import "server-only"` no topo — **sem** a diretiva
    `"use server"`. Export em módulo `"use server"` é endpoint RPC candidato =
@@ -68,15 +68,15 @@ existem no dado, com ciclo de vida auditável (reconhecer / resolver / descartar
 
 **Decisões travadas (sessão 20/07/2026):**
 
-| Decisão | Valor |
-| --- | --- |
-| Tipos de alerta | estagnação + regressão + faltas_excessivas |
-| Eixo | **só por-paciente** (faltas = `falta_paciente`; `falta_terapeuta` fora) |
-| Ciclo de vida | workflow com estado + nota + auditoria |
-| Limiar de faltas | **configurável por clínica** (`clinic.faltas_limiar`, `clinic.faltas_janela_semanas`; defaults 3 / 4) |
-| Janela de estagnação (W) | fixa no código (default 5, herdada da Fase 4) |
-| Concorrência | advisory lock + re-check (padrão do repo), sem coluna `versao` |
-| Visibilidade | coordenador-only |
+| Decisão                  | Valor                                                                                                 |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Tipos de alerta          | estagnação + regressão + faltas_excessivas                                                            |
+| Eixo                     | **só por-paciente** (faltas = `falta_paciente`; `falta_terapeuta` fora)                               |
+| Ciclo de vida            | workflow com estado + nota + auditoria                                                                |
+| Limiar de faltas         | **configurável por clínica** (`clinic.faltas_limiar`, `clinic.faltas_janela_semanas`; defaults 3 / 4) |
+| Janela de estagnação (W) | fixa no código (default 5, herdada da Fase 4)                                                         |
+| Concorrência             | advisory lock + re-check (padrão do repo), sem coluna `versao`                                        |
+| Visibilidade             | coordenador-only                                                                                      |
 
 **Modelo de ciclo de vida (crucial — leia com atenção):**
 
@@ -119,18 +119,18 @@ existem no dado, com ciclo de vida auditável (reconhecer / resolver / descartar
 
 ### Gemini implementa (camada de app)
 
-| Arquivo | Papel | Arquivo-irmão a espelhar |
-| --- | --- | --- |
-| `src/lib/supervisao/sinais.ts` | Funções **puras**: derivação de sinais + `chaveNatural` | `src/lib/agenda/*.ts` (lógica pura) |
-| `src/lib/supervisao/sinais.test.ts` | Unit dos sinais puros | qualquer `*.test.ts` de lógica pura |
-| `src/app/(app)/supervisao/queries.ts` | Query ctx-accepting (`import "server-only"`) | `validacao/queries.ts` |
-| `src/app/(app)/supervisao/queries.int.test.ts` | Int da query (derivação + overlay) | `validacao/queries.int.test.ts` |
-| `src/app/(app)/supervisao/actions.ts` | 3 server actions + wrappers | `validacao/actions.ts` |
-| `src/app/(app)/supervisao/actions.int.test.ts` | Int das actions (role gate, precondição, audit) | `validacao/actions.int.test.ts` |
-| `src/app/(app)/supervisao/page.tsx` | Server component (guard + query + render) | `validacao/page.tsx` |
-| `src/app/(app)/supervisao/supervisao-fila.tsx` | Client component (fila + ações) | `validacao/validacao-fila.tsx` |
-| `src/app/(app)/supervisao/a11y.test.tsx` | axe sobre o client component | `validacao/a11y.test.tsx` |
-| `src/app/(app)/layout.tsx` | **1 linha**: link "Supervisão" (§8.3) | o próprio (link "Validação") |
+| Arquivo                                        | Papel                                                   | Arquivo-irmão a espelhar            |
+| ---------------------------------------------- | ------------------------------------------------------- | ----------------------------------- |
+| `src/lib/supervisao/sinais.ts`                 | Funções **puras**: derivação de sinais + `chaveNatural` | `src/lib/agenda/*.ts` (lógica pura) |
+| `src/lib/supervisao/sinais.test.ts`            | Unit dos sinais puros                                   | qualquer `*.test.ts` de lógica pura |
+| `src/app/(app)/supervisao/queries.ts`          | Query ctx-accepting (`import "server-only"`)            | `validacao/queries.ts`              |
+| `src/app/(app)/supervisao/queries.int.test.ts` | Int da query (derivação + overlay)                      | `validacao/queries.int.test.ts`     |
+| `src/app/(app)/supervisao/actions.ts`          | 3 server actions + wrappers                             | `validacao/actions.ts`              |
+| `src/app/(app)/supervisao/actions.int.test.ts` | Int das actions (role gate, precondição, audit)         | `validacao/actions.int.test.ts`     |
+| `src/app/(app)/supervisao/page.tsx`            | Server component (guard + query + render)               | `validacao/page.tsx`                |
+| `src/app/(app)/supervisao/supervisao-fila.tsx` | Client component (fila + ações)                         | `validacao/validacao-fila.tsx`      |
+| `src/app/(app)/supervisao/a11y.test.tsx`       | axe sobre o client component                            | `validacao/a11y.test.tsx`           |
+| `src/app/(app)/layout.tsx`                     | **1 linha**: link "Supervisão" (§8.3)                   | o próprio (link "Validação")        |
 
 ---
 
@@ -242,9 +242,9 @@ Testáveis isoladamente.
 export type SinalTipo = "estagnacao" | "regressao" | "faltas_excessivas";
 
 export type DetalheEstagnacao = {
-  metrica: string;        // segmentacao[goal][protocol].metrica
-  tipoEstrutura: string;  // segmentacao[goal][protocol].tipo_estrutura
-  sessionNumero: number;  // snapshot que gerou o sinal
+  metrica: string; // segmentacao[goal][protocol].metrica
+  tipoEstrutura: string; // segmentacao[goal][protocol].tipo_estrutura
+  sessionNumero: number; // snapshot que gerou o sinal
 };
 export type DetalheFaltas = {
   faltas: number;
@@ -268,7 +268,9 @@ Determinística. Identifica uma condição. Terminalizar uma chave suprime
 re-alerta dela.
 
 ```ts
-export function chaveNatural(s: Pick<SinalCru, "tipo" | "patientId" | "goalId" | "protocolId">): string {
+export function chaveNatural(
+  s: Pick<SinalCru, "tipo" | "patientId" | "goalId" | "protocolId">,
+): string {
   return s.tipo === "faltas_excessivas"
     ? `faltas_excessivas:${s.patientId}`
     : `${s.tipo}:${s.patientId}:${s.goalId}:${s.protocolId}`;
@@ -281,7 +283,7 @@ Recebe as linhas de `session_snapshot` (o **último** snapshot por paciente já
 selecionado pela query) e emite um sinal por `(goal, protocol)` cujo
 `rotulo ∈ {estagnacao, regressao}`.
 
-**Forma do JSONB `segmentacao`** (confirmada no schema): 
+**Forma do JSONB `segmentacao`** (confirmada no schema):
 `{ [goalId]: { [protocolId]: { tipo_estrutura: string, metrica: string, rotulo: string } } }`
 — `rotulo ∈ "evolucao" | "estagnacao" | "regressao" | "aguardando_avaliacao_formal" | "sem_dado"`.
 
@@ -289,18 +291,23 @@ selecionado pela query) e emite um sinal por `(goal, protocol)` cujo
 export type SnapshotRow = {
   patientId: string;
   sessionNumero: number;
-  segmentacao: Record<string, Record<string, { tipo_estrutura: string; metrica: string; rotulo: string }>>;
+  segmentacao: Record<
+    string,
+    Record<string, { tipo_estrutura: string; metrica: string; rotulo: string }>
+  >;
 };
 
-export function sinaisDeSnapshot(rows: SnapshotRow[]): SinalCru[]
+export function sinaisDeSnapshot(rows: SnapshotRow[]): SinalCru[];
 ```
 
 Regra: para cada row, para cada `goalId`, para cada `protocolId`, se
 `rotulo === "estagnacao" || rotulo === "regressao"`, emitir:
+
 ```ts
 { tipo: rotulo, patientId, goalId, protocolId,
   detalhe: { metrica, tipoEstrutura: tipo_estrutura, sessionNumero } }
 ```
+
 Ignorar os demais rótulos. Ordem de saída determinística (ordenar por
 `patientId`, depois `goalId`, depois `protocolId`).
 
@@ -315,10 +322,11 @@ export type FaltaCount = { patientId: string; faltas: number };
 export function sinaisDeFaltas(
   counts: FaltaCount[],
   cfg: { limiar: number; janelaSemanas: number },
-): SinalCru[]
+): SinalCru[];
 ```
 
 Regra: para cada `{ patientId, faltas }` com `faltas >= cfg.limiar`, emitir:
+
 ```ts
 { tipo: "faltas_excessivas", patientId, goalId: null, protocolId: null,
   detalhe: { faltas, janelaSemanas: cfg.janelaSemanas, limiar: cfg.limiar } }
@@ -342,12 +350,12 @@ export type ItemSupervisao = {
   patientNome: string;
   goalId: string | null;
   protocolId: string | null;
-  goalNome: string | null;      // resolvido p/ estagnação/regressão
-  protocolNome: string | null;  // idem
+  goalNome: string | null; // resolvido p/ estagnação/regressão
+  protocolNome: string | null; // idem
   detalhe: DetalheEstagnacao | DetalheFaltas;
   estado: "novo" | "reconhecido";
-  alertaId: string | null;      // linha de livro-razão, se houver
-  sinalPresente: boolean;       // false ⇒ reconhecido mas sinal cessou ("sinal cessou")
+  alertaId: string | null; // linha de livro-razão, se houver
+  sinalPresente: boolean; // false ⇒ reconhecido mas sinal cessou ("sinal cessou")
 };
 
 export async function listarSupervisao(
@@ -416,7 +424,7 @@ precondição de status.
 
 ```ts
 export type SupervisaoResult = { ok?: boolean; error?: string };
-export type SupervisaoState  = { ok?: boolean; error?: string };
+export type SupervisaoState = { ok?: boolean; error?: string };
 
 // input das actions carrega o snapshot do sinal (a linha é criada a partir dele):
 type BaseInput = {
@@ -435,16 +443,16 @@ Zod (mirror do estilo `invalidarSchema`): `chaveNatural` min 1; `tipo` enum;
 
 ### 6.2 Precondições (re-check sob o lock)
 
-| Action | Linha existente (viva) | Efeito |
-| --- | --- | --- |
-| `reconhecerAlerta` | nenhuma | INSERT status `reconhecido` |
-| `reconhecerAlerta` | qualquer | `CONCURRENCY_ERROR` |
-| `resolverAlerta` | nenhuma | INSERT status `resolvido` (+ `nota`) |
-| `resolverAlerta` | `reconhecido` | UPDATE → `resolvido` (+ `nota`) |
-| `resolverAlerta` | terminal | `CONCURRENCY_ERROR` |
-| `descartarAlerta` | nenhuma | INSERT status `descartado` (+ `motivo`) |
-| `descartarAlerta` | `reconhecido` | UPDATE → `descartado` (+ `motivo`) |
-| `descartarAlerta` | terminal | `CONCURRENCY_ERROR` |
+| Action             | Linha existente (viva) | Efeito                                  |
+| ------------------ | ---------------------- | --------------------------------------- |
+| `reconhecerAlerta` | nenhuma                | INSERT status `reconhecido`             |
+| `reconhecerAlerta` | qualquer               | `CONCURRENCY_ERROR`                     |
+| `resolverAlerta`   | nenhuma                | INSERT status `resolvido` (+ `nota`)    |
+| `resolverAlerta`   | `reconhecido`          | UPDATE → `resolvido` (+ `nota`)         |
+| `resolverAlerta`   | terminal               | `CONCURRENCY_ERROR`                     |
+| `descartarAlerta`  | nenhuma                | INSERT status `descartado` (+ `motivo`) |
+| `descartarAlerta`  | `reconhecido`          | UPDATE → `descartado` (+ `motivo`)      |
+| `descartarAlerta`  | terminal               | `CONCURRENCY_ERROR`                     |
 
 ### 6.3 Boilerplate (mostrado por inteiro — `reconhecerAlerta`)
 
@@ -515,7 +523,7 @@ id, status FROM alerta WHERE chave_natural = … AND deletado_em IS NULL`:
 - 0 linhas → INSERT com o status alvo (`resolvido`/`descartado`) preenchendo
   `nota`/`motivo`; `audit_log` com `entidade_id` = id inserido.
 - 1 linha `reconhecido` → `UPDATE alerta SET status='resolvido', nota=${nota},
-  atualizado_por=${ctx.userId}::uuid, atualizado_em=now() WHERE id=…`; audit com
+atualizado_por=${ctx.userId}::uuid, atualizado_em=now() WHERE id=…`; audit com
   esse id.
 - 1 linha terminal → `{ error: "CONCURRENCY_ERROR" }`.
 
@@ -525,7 +533,9 @@ id, status FROM alerta WHERE chave_natural = … AND deletado_em IS NULL`:
 ### 6.4 Camada wrapper (`useActionState`) — mirror de `validacao/actions.ts:245-304`
 
 ```ts
-async function comCtx(fn: (ctx: TenantContext) => Promise<SupervisaoResult>): Promise<SupervisaoState> {
+async function comCtx(
+  fn: (ctx: TenantContext) => Promise<SupervisaoResult>,
+): Promise<SupervisaoState> {
   try {
     const ctx = await getTenantContext();
     const r = await fn(ctx);
@@ -537,15 +547,20 @@ async function comCtx(fn: (ctx: TenantContext) => Promise<SupervisaoResult>): Pr
   }
 }
 
-export async function reconhecerAlertaAction(_prev: SupervisaoState, fd: FormData): Promise<SupervisaoState> {
-  return comCtx((ctx) => reconhecerAlerta(ctx, {
-    chaveNatural: String(fd.get("chaveNatural") ?? ""),
-    tipo: String(fd.get("tipo") ?? "") as SinalTipo,
-    patientId: String(fd.get("patientId") ?? ""),
-    goalId: (fd.get("goalId") ? String(fd.get("goalId")) : null),
-    protocolId: (fd.get("protocolId") ? String(fd.get("protocolId")) : null),
-    detalhe: JSON.parse(String(fd.get("detalhe") ?? "{}")),
-  }));
+export async function reconhecerAlertaAction(
+  _prev: SupervisaoState,
+  fd: FormData,
+): Promise<SupervisaoState> {
+  return comCtx((ctx) =>
+    reconhecerAlerta(ctx, {
+      chaveNatural: String(fd.get("chaveNatural") ?? ""),
+      tipo: String(fd.get("tipo") ?? "") as SinalTipo,
+      patientId: String(fd.get("patientId") ?? ""),
+      goalId: fd.get("goalId") ? String(fd.get("goalId")) : null,
+      protocolId: fd.get("protocolId") ? String(fd.get("protocolId")) : null,
+      detalhe: JSON.parse(String(fd.get("detalhe") ?? "{}")),
+    }),
+  );
 }
 // resolverAlertaAction: idem + nota = String(fd.get("nota") ?? "")
 // descartarAlertaAction: idem + motivo = String(fd.get("motivo") ?? "")
@@ -596,8 +611,8 @@ export default async function SupervisaoPage() {
 
 - `SupervisaoFila({ itens })`: `useState<Set<string>>` de chaves resolvidas
   localmente (some da lista após ação com `r.ok`). Vazio → `<Alert
-  severidade="sucesso" titulo="Nada a supervisionar">`. Senão `<Stack gap="md"
-  como="ul">` de `<ItemCard>`.
+severidade="sucesso" titulo="Nada a supervisionar">`. Senão `<Stack gap="md"
+como="ul">` de `<ItemCard>`.
 - `ItemCard({ item })`: um `<Stack como="li">` (`surface("solida")`). Mostra:
   - **nome do paciente** (link `/pacientes/${patientId}/timeline`).
   - **badge do tipo** via `Chip`: "Estagnação" | "Regressão" | "Faltas".
@@ -626,14 +641,16 @@ Inserir **logo após** o bloco do link "Validação" (coordenador-only),
 espelhando-o:
 
 ```tsx
-{ctx.role === "coordenador" ? (
-  <Link
-    href="/supervisao"
-    className="inline-block font-display text-ink hover:text-ink-anchor underline-offset-4 hover:underline transition-transform duration-100 ease-out hover:-translate-y-0.5"
-  >
-    Supervisão
-  </Link>
-) : null}
+{
+  ctx.role === "coordenador" ? (
+    <Link
+      href="/supervisao"
+      className="font-display text-ink hover:text-ink-anchor inline-block underline-offset-4 transition-transform duration-100 ease-out hover:-translate-y-0.5 hover:underline"
+    >
+      Supervisão
+    </Link>
+  ) : null;
+}
 ```
 
 ---
@@ -721,4 +738,7 @@ como `vi.fn(async () => ({}))`), renderizar `SupervisaoFila` com fixtures
 - Alertas por-terapeuta.
 - Reabertura de alerta terminal.
 - Custo de varredura do último snapshot de todos os pacientes (índice/materialização).
+
+```
+
 ```

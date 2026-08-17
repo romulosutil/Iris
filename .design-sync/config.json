@@ -8,9 +8,7 @@
   "entry": "src/design-system.ts",
   "buildCmd": "npx tsc -p .design-sync/tsconfig.dts.json",
   "readmeHeader": ".design-sync/conventions.md",
-  "extraEntries": [
-    "./.design-sync/preview-provider.tsx"
-  ],
+  "extraEntries": ["./.design-sync/preview-provider.tsx"],
   "provider": {
     "component": "IrisPreviewProvider",
     "props": {
@@ -32,9 +30,7 @@
     "Supervisão": null,
     "Validação": null
   },
-  "extraFonts": [
-    ".design-sync/ds-fonts.css"
-  ],
+  "extraFonts": [".design-sync/ds-fonts.css"],
   "overrides": {
     "Container": {
       "cardMode": "column"

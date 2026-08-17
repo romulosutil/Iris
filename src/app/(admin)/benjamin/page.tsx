@@ -14,11 +14,14 @@ export default async function SuperAdminDashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-bold text-2xl text-slate-100 sm:text-3xl">
+        <h1 className="text-2xl font-bold text-slate-100 sm:text-3xl">
           Visão Geral da Plataforma
         </h1>
-        <p className="mt-1 text-slate-400 text-sm">
-          Métricas consolidadas de saúde financeira, base de fichas e trials ativos. O MRR aqui é TETO pelo critério &quot;ficha não arquivada&quot;: a fatura real conta só ficha cadastrada ou com movimento no ciclo (ver o bloco de comentário em queries.ts).
+        <p className="mt-1 text-sm text-slate-400">
+          Métricas consolidadas de saúde financeira, base de fichas e trials
+          ativos. O MRR aqui é TETO pelo critério &quot;ficha não
+          arquivada&quot;: a fatura real conta só ficha cadastrada ou com
+          movimento no ciclo (ver o bloco de comentário em queries.ts).
         </p>
       </div>
 
@@ -63,18 +66,18 @@ export default async function SuperAdminDashboardPage() {
 
       {/* Tabela de Destaques: Top Clínicas por Receita */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-lg text-slate-200">
+            <h2 className="text-lg font-semibold text-slate-200">
               Top Clínicas por Receita Projetada
             </h2>
-            <p className="text-slate-400 text-xs">
+            <p className="text-xs text-slate-400">
               Clínicas com maior volumen de faturamento estimado neste ciclo.
             </p>
           </div>
           <Link
             href="/benjamin/clinicas"
-            className="text-teal-400 hover:text-teal-300 font-medium text-xs transition-colors"
+            className="text-xs font-medium text-teal-400 transition-colors hover:text-teal-300"
           >
             Ver todas as clínicas &rarr;
           </Link>
@@ -82,7 +85,7 @@ export default async function SuperAdminDashboardPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-300">
-            <thead className="border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase bg-slate-950/50">
+            <thead className="border-b border-slate-800 bg-slate-950/50 text-xs font-semibold text-slate-400 uppercase">
               <tr>
                 <th className="px-4 py-3">Clínica</th>
                 <th className="px-4 py-3">Dono / E-mail</th>
@@ -94,30 +97,38 @@ export default async function SuperAdminDashboardPage() {
             <tbody className="divide-y divide-slate-800/60">
               {top5.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                  <td
+                    colSpan={5}
+                    className="px-4 py-6 text-center text-slate-500"
+                  >
                     Nenhuma clínica cadastrada na plataforma.
                   </td>
                 </tr>
               ) : (
                 top5.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-850/50 transition-colors">
+                  <tr
+                    key={c.id}
+                    className="hover:bg-slate-850/50 transition-colors"
+                  >
                     <td className="px-4 py-3.5 font-medium text-slate-100">
                       {c.nome}
                     </td>
-                    <td className="px-4 py-3.5 text-slate-400 text-xs">
+                    <td className="px-4 py-3.5 text-xs text-slate-400">
                       <div>{c.donoNome || "Sem nome"}</div>
-                      <div className="font-mono text-slate-500">{c.donoEmail || "Sem e-mail"}</div>
+                      <div className="font-mono text-slate-500">
+                        {c.donoEmail || "Sem e-mail"}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       <span
-                        className={`inline-flex items-center rounded px-2 py-0.5 font-medium text-xs border ${
+                        className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${
                           c.status === "ativa"
-                            ? "bg-emerald-950/80 text-emerald-300 border-emerald-800/50"
+                            ? "border-emerald-800/50 bg-emerald-950/80 text-emerald-300"
                             : c.status === "trial"
-                            ? "bg-amber-950/80 text-amber-300 border-amber-800/50"
-                            : c.status === "isenta"
-                            ? "bg-indigo-950/80 text-indigo-300 border-indigo-800/50"
-                            : "bg-rose-950/80 text-rose-300 border-rose-800/50"
+                              ? "border-amber-800/50 bg-amber-950/80 text-amber-300"
+                              : c.status === "isenta"
+                                ? "border-indigo-800/50 bg-indigo-950/80 text-indigo-300"
+                                : "border-rose-800/50 bg-rose-950/80 text-rose-300"
                         }`}
                       >
                         {c.status.toUpperCase()}

@@ -15,18 +15,22 @@ export interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
   destacado?: boolean;
 }
 
-const estilo: Record<string, {
-  fundo: string;
-  bordaEsquerda: string;
-  bordaOutras: string;
-  texto: string;
-  iconeBg: string;
-  rotulo: string;
-}> = {
+const estilo: Record<
+  string,
+  {
+    fundo: string;
+    bordaEsquerda: string;
+    bordaOutras: string;
+    texto: string;
+    iconeBg: string;
+    rotulo: string;
+  }
+> = {
   erro: {
     fundo: "bg-[var(--status-error-bg)]",
     bordaEsquerda: "border-l-[var(--status-error-border)]",
-    bordaOutras: "border-y-[var(--status-error-border)]/40 border-r-[var(--status-error-border)]/40",
+    bordaOutras:
+      "border-y-[var(--status-error-border)]/40 border-r-[var(--status-error-border)]/40",
     texto: "text-[var(--status-error-fg)]",
     iconeBg: "bg-[var(--status-error-border)] text-white",
     rotulo: "Erro",
@@ -34,7 +38,8 @@ const estilo: Record<string, {
   error: {
     fundo: "bg-[var(--status-error-bg)]",
     bordaEsquerda: "border-l-[var(--status-error-border)]",
-    bordaOutras: "border-y-[var(--status-error-border)]/40 border-r-[var(--status-error-border)]/40",
+    bordaOutras:
+      "border-y-[var(--status-error-border)]/40 border-r-[var(--status-error-border)]/40",
     texto: "text-[var(--status-error-fg)]",
     iconeBg: "bg-[var(--status-error-border)] text-white",
     rotulo: "Erro",
@@ -42,7 +47,8 @@ const estilo: Record<string, {
   warning: {
     fundo: "bg-[var(--status-warning-bg)]",
     bordaEsquerda: "border-l-[var(--status-warning-border)]",
-    bordaOutras: "border-y-[var(--status-warning-border)]/40 border-r-[var(--status-warning-border)]/40",
+    bordaOutras:
+      "border-y-[var(--status-warning-border)]/40 border-r-[var(--status-warning-border)]/40",
     texto: "text-[var(--status-warning-fg)]",
     iconeBg: "bg-[var(--status-warning-border)] text-white",
     rotulo: "Aviso",
@@ -50,7 +56,8 @@ const estilo: Record<string, {
   info: {
     fundo: "bg-[var(--status-info-bg)]",
     bordaEsquerda: "border-l-[var(--status-info-border)]",
-    bordaOutras: "border-y-[var(--status-info-border)]/40 border-r-[var(--status-info-border)]/40",
+    bordaOutras:
+      "border-y-[var(--status-info-border)]/40 border-r-[var(--status-info-border)]/40",
     texto: "text-[var(--status-info-fg)]",
     iconeBg: "bg-[var(--status-info-border)] text-white",
     rotulo: "Informação",
@@ -58,7 +65,8 @@ const estilo: Record<string, {
   sucesso: {
     fundo: "bg-[var(--status-success-bg)]",
     bordaEsquerda: "border-l-[var(--status-success-border)]",
-    bordaOutras: "border-y-[var(--status-success-border)]/40 border-r-[var(--status-success-border)]/40",
+    bordaOutras:
+      "border-y-[var(--status-success-border)]/40 border-r-[var(--status-success-border)]/40",
     texto: "text-[var(--status-success-fg)]",
     iconeBg: "bg-[var(--status-success-border)] text-white",
     rotulo: "Sucesso",
@@ -66,13 +74,14 @@ const estilo: Record<string, {
   success: {
     fundo: "bg-[var(--status-success-bg)]",
     bordaEsquerda: "border-l-[var(--status-success-border)]",
-    bordaOutras: "border-y-[var(--status-success-border)]/40 border-r-[var(--status-success-border)]/40",
+    bordaOutras:
+      "border-y-[var(--status-success-border)]/40 border-r-[var(--status-success-border)]/40",
     texto: "text-[var(--status-success-fg)]",
     iconeBg: "bg-[var(--status-success-border)] text-white",
     rotulo: "Sucesso",
   },
 };
- 
+
 function Icone({ severidade }: { severidade: Severidade }) {
   const comum = {
     width: 14,
@@ -117,22 +126,33 @@ function Icone({ severidade }: { severidade: Severidade }) {
     </svg>
   );
 }
- 
+
 export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
   function Alert(
-    { className, severidade = "erro", titulo, destacado = false, children, ...props },
+    {
+      className,
+      severidade = "erro",
+      titulo,
+      destacado = false,
+      children,
+      ...props
+    },
     ref,
   ) {
     const activeStyle = estilo[severidade] ?? estilo.erro!;
-    const { fundo, bordaEsquerda, bordaOutras, texto, iconeBg, rotulo } = activeStyle;
+    const { fundo, bordaEsquerda, bordaOutras, texto, iconeBg, rotulo } =
+      activeStyle;
     return (
       <div
         ref={ref}
-        role={severidade === "erro" || severidade === "error" ? "alert" : "status"}
+        role={
+          severidade === "erro" || severidade === "error" ? "alert" : "status"
+        }
         className={cn(
-          "flex items-start gap-4 p-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]",
+          "flex items-start gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] p-4",
           "border-l-[4px]",
-          destacado && "shadow-[var(--ds-shadow)] p-8 md:p-12 text-lg font-medium",
+          destacado &&
+            "p-8 text-lg font-medium shadow-[var(--ds-shadow)] md:p-12",
           fundo,
           bordaEsquerda,
           bordaOutras,
@@ -141,7 +161,12 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         )}
         {...props}
       >
-        <span className={cn("mt-0.5 shrink-0 flex items-center justify-center rounded-[length:var(--radius-pill)] w-7 h-7 text-white", iconeBg)}>
+        <span
+          className={cn(
+            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[length:var(--radius-pill)] text-white",
+            iconeBg,
+          )}
+        >
           <Icone severidade={severidade} />
         </span>
         <div className="flex flex-col gap-0.5">
@@ -149,10 +174,11 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
           {titulo ? (
             <p className="font-display text-sm font-semibold">{titulo}</p>
           ) : null}
-          {children ? <div className="text-sm opacity-95">{children}</div> : null}
+          {children ? (
+            <div className="text-sm opacity-95">{children}</div>
+          ) : null}
         </div>
       </div>
     );
   },
 );
-

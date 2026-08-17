@@ -16,7 +16,7 @@
 - **Padrão de action (espelhar `revisao/[sessionId]/actions.ts`):** core `fn(ctx, input)` com Zod + `withTenant` + `requireRole` + advisory lock `SELECT pg_advisory_xact_lock(hashtextextended(${patientId}::text, 0))` + retorno estruturado; wrapper `comCtx(formData, fn)` re-deriva `ctx` via `getTenantContext()`, lê FormData, `revalidatePath`, mapeia `CONCURRENCY_ERROR`/`RoleError`. **`CONCURRENCY_ERROR` é retorno, não throw.**
 - **Recompute:** `await materializarSnapshot(drizzleMaterializarQueries(tx), patientId, sessionNumeroDaEvidencia)` na MESMA tx, após a escrita, sob o advisory lock. Mid-history é seguro (lê história inteira, escreve `≥ desdeNumero`).
 - **Forma do jsonb de classificação:** `classificacao_original`/`classificacao_nova` = `{ ...conteúdo da evidência (nivel_ajuda, polaridade, descricao...), alvo: { goal_id, protocol_id, dominio_id } }` (chaves **snake**, refs cruas). **Espelhar a forma exata do teste `db/tests/fase4-materializar.int.test.ts:287+`** (o bloco "recompute retroativo" que reclassifica) — é a fonte canônica de como `classificacao_nova` deve ser montada para o recompute consumir.
-- **`evidence_current` é VIEW SQL** (não Drizzle) — ler via `tx.execute(sql\`SELECT ... FROM evidence_current WHERE ...\`)`. Expõe `e.*` + `classificacao_atual` (jsonb) + `invalidada` (bool).
+- **`evidence_current` é VIEW SQL** (não Drizzle) — ler via `tx.execute(sql\`SELECT ... FROM evidence_current WHERE ...\`)`. Expõe `e.*`+`classificacao_atual`(jsonb) +`invalidada` (bool).
 - **Teste `.int.test.ts`:** `vi.mock("server-only", () => ({}))` no topo; `const hasDb = !!process.env.DATABASE_URL && !!process.env.MIGRATION_DATABASE_URL;` + `describe.skipIf(!hasDb)`; owner via `postgres(process.env.MIGRATION_DATABASE_URL!, {max:1})` p/ seed; app via `withTenant`. **Se auto-skipar, é falha — DB tem que estar no ar.**
 - **Papéis:** `terapeuta | coordenador | admin_recepcao`. Coordenador é clínica-wide; terapeuta é `app_is_on_team`.
 - **Spec-fonte:** `docs/superpowers/specs/2026-07-19-fase5-fatia1-fila-validacao-design.md` (endurecida por pre-mortem).
@@ -26,10 +26,12 @@
 ### Task 1: Query da fila — `validacao/queries.ts`
 
 **Files:**
+
 - Create: `src/app/(app)/validacao/queries.ts`
 - Test: `src/app/(app)/validacao/queries.int.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `type ItemFila = { evidenceId: string; patientId: string; patientNome: string; sessionNumero: number; trecho: string; classificacaoAtual: unknown; motivo: ("baixa_confianca"|"inconsistente_historico")[]; protocolId: string | null }`
   - `async function listarFilaValidacao(ctx: TenantContext): Promise<{ itens: ItemFila[]; total: number }>`
@@ -51,7 +53,9 @@ describe.skipIf(!hasDb)("listarFilaValidacao", () => {
     const ids = itens.map((i) => i.evidenceId);
     expect(ids).toContain(EV_BAIXA);
     expect(ids).not.toContain(EV_OK);
-    expect(itens.find((i) => i.evidenceId === EV_BAIXA)!.motivo).toContain("baixa_confianca");
+    expect(itens.find((i) => i.evidenceId === EV_BAIXA)!.motivo).toContain(
+      "baixa_confianca",
+    );
   });
   test("inclui evidência inconsistente com histórico", async () => {
     const { itens } = await listarFilaValidacao(ctxCoord);
@@ -91,12 +95,19 @@ import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 
 export type ItemFila = {
-  evidenceId: string; patientId: string; patientNome: string; sessionNumero: number;
-  trecho: string; classificacaoAtual: unknown;
-  motivo: ("baixa_confianca" | "inconsistente_historico")[]; protocolId: string | null;
+  evidenceId: string;
+  patientId: string;
+  patientNome: string;
+  sessionNumero: number;
+  trecho: string;
+  classificacaoAtual: unknown;
+  motivo: ("baixa_confianca" | "inconsistente_historico")[];
+  protocolId: string | null;
 };
 
-export async function listarFilaValidacao(ctx: TenantContext): Promise<{ itens: ItemFila[]; total: number }> {
+export async function listarFilaValidacao(
+  ctx: TenantContext,
+): Promise<{ itens: ItemFila[]; total: number }> {
   return withTenant(ctx, async (tx) => {
     const rows = await tx.execute(sql`
       SELECT ec.id AS evidence_id, ec.patient_id, p.nome AS patient_nome,
@@ -117,9 +128,14 @@ export async function listarFilaValidacao(ctx: TenantContext): Promise<{ itens: 
       if (r.confianca === "baixa") motivo.push("baixa_confianca");
       if (r.inconsistente_com_historico) motivo.push("inconsistente_historico");
       return {
-        evidenceId: r.evidence_id, patientId: r.patient_id, patientNome: r.patient_nome,
-        sessionNumero: r.session_numero, trecho: r.trecho ?? "",
-        classificacaoAtual: r.classificacao_atual, motivo, protocolId: r.protocol_id,
+        evidenceId: r.evidence_id,
+        patientId: r.patient_id,
+        patientNome: r.patient_nome,
+        sessionNumero: r.session_numero,
+        trecho: r.trecho ?? "",
+        classificacaoAtual: r.classificacao_atual,
+        motivo,
+        protocolId: r.protocol_id,
       };
     });
     return { itens, total: itens.length };
@@ -146,10 +162,12 @@ git commit -m "feat(validacao): fila de validação query V1a/V1b (fase5 fatia1)
 ### Task 2: Ações Confirmar + Invalidar — `validacao/actions.ts`
 
 **Files:**
+
 - Create: `src/app/(app)/validacao/actions.ts`
 - Test: `src/app/(app)/validacao/actions.int.test.ts`
 
 **Interfaces:**
+
 - Consumes: `withTenant`, `requireRole`, `materializarSnapshot`/`drizzleMaterializarQueries`, tabelas `evidence`/`evidence_revision`/`audit_log`, view `evidence_current`.
 - Produces:
   - `type ValidacaoResult = { ok?: boolean; error?: string }`
@@ -166,7 +184,8 @@ git commit -m "feat(validacao): fila de validação query V1a/V1b (fase5 fatia1)
 test("confirmar grava evidence_revision(acao=confirmar), sem audit, sem recompute", async () => {
   const r = await confirmarEvidencia(ctxCoord, { evidenceId: EV });
   expect(r.ok).toBe(true);
-  const [rev] = await owner!`SELECT acao, justificativa FROM evidence_revision WHERE evidence_id=${EV}`;
+  const [rev] =
+    await owner!`SELECT acao, justificativa FROM evidence_revision WHERE evidence_id=${EV}`;
   expect(rev.acao).toBe("confirmar");
 });
 test("confirmar de novo (já tratada) → CONCURRENCY_ERROR", async () => {
@@ -174,19 +193,29 @@ test("confirmar de novo (já tratada) → CONCURRENCY_ERROR", async () => {
   expect(r.error).toBe("CONCURRENCY_ERROR");
 });
 test("invalidar sem motivo → rejeita", async () => {
-  const r = await invalidarEvidencia(ctxCoord, { evidenceId: EV2, motivo: "  " });
+  const r = await invalidarEvidencia(ctxCoord, {
+    evidenceId: EV2,
+    motivo: "  ",
+  });
   expect(r.error).toBeTruthy();
-  const rows = await owner!`SELECT 1 FROM evidence_revision WHERE evidence_id=${EV2}`;
+  const rows =
+    await owner!`SELECT 1 FROM evidence_revision WHERE evidence_id=${EV2}`;
   expect(rows).toHaveLength(0);
 });
 test("invalidar grava revisão + audit_log(invalidacao) + evidência sai do cômputo", async () => {
-  const r = await invalidarEvidencia(ctxCoord, { evidenceId: EV2, motivo: "fora de contexto" });
+  const r = await invalidarEvidencia(ctxCoord, {
+    evidenceId: EV2,
+    motivo: "fora de contexto",
+  });
   expect(r.ok).toBe(true);
-  const [rev] = await owner!`SELECT acao FROM evidence_revision WHERE evidence_id=${EV2}`;
+  const [rev] =
+    await owner!`SELECT acao FROM evidence_revision WHERE evidence_id=${EV2}`;
   expect(rev.acao).toBe("invalidar");
-  const [log] = await owner!`SELECT acao FROM audit_log WHERE entidade_id=${EV2} AND acao='invalidacao'`;
+  const [log] =
+    await owner!`SELECT acao FROM audit_log WHERE entidade_id=${EV2} AND acao='invalidacao'`;
   expect(log.acao).toBe("invalidacao");
-  const [ec] = await owner!`SELECT invalidada FROM evidence_current WHERE id=${EV2}`;
+  const [ec] =
+    await owner!`SELECT invalidada FROM evidence_current WHERE id=${EV2}`;
   expect(ec.invalidada).toBe(true);
 });
 test("terapeuta não valida (rota coordenador-only via requireRole)", async () => {
@@ -212,7 +241,10 @@ import { z } from "zod";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
+import {
+  drizzleMaterializarQueries,
+  materializarSnapshot,
+} from "@/lib/evidence/materializar";
 
 export type ValidacaoResult = { ok?: boolean; error?: string };
 export type ValidacaoState = { ok?: boolean; error?: string };
@@ -227,45 +259,81 @@ async function lerEvidenciaParaValidar(tx: any, evidenceId: string) {
   const e = (rows as unknown as any[])[0];
   if (!e) return { erro: "NAO_ENCONTRADA" as const };
   if (e.invalidada) return { erro: "CONCURRENCY_ERROR" as const };
-  const jaTratada = (await tx.execute(sql`
+  const jaTratada =
+    (
+      (await tx.execute(sql`
     SELECT 1 FROM evidence_revision WHERE evidence_id = ${evidenceId}
     UNION ALL SELECT 1 FROM evidence_query WHERE evidence_id = ${evidenceId} AND respondido_em IS NULL
-    LIMIT 1`) as unknown as any[]).length > 0;
+    LIMIT 1`)) as unknown as any[]
+    ).length > 0;
   if (jaTratada) return { erro: "CONCURRENCY_ERROR" as const };
-  return { patientId: e.patient_id as string, sessionNumero: e.session_numero as number,
-           classificacaoAtual: e.classificacao_atual };
+  return {
+    patientId: e.patient_id as string,
+    sessionNumero: e.session_numero as number,
+    classificacaoAtual: e.classificacao_atual,
+  };
 }
 
-export async function confirmarEvidencia(ctx: TenantContext, input: { evidenceId: string }): Promise<ValidacaoResult> {
+export async function confirmarEvidencia(
+  ctx: TenantContext,
+  input: { evidenceId: string },
+): Promise<ValidacaoResult> {
   const p = z.object({ evidenceId: z.string().uuid() }).safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
   requireRole(ctx, "coordenador");
   return withTenant(ctx, async (tx) => {
     const e = await lerEvidenciaParaValidar(tx, p.data.evidenceId);
-    if ("erro" in e) return { error: e.erro === "NAO_ENCONTRADA" ? "Evidência não encontrada." : "CONCURRENCY_ERROR" };
+    if ("erro" in e)
+      return {
+        error:
+          e.erro === "NAO_ENCONTRADA"
+            ? "Evidência não encontrada."
+            : "CONCURRENCY_ERROR",
+      };
     await tx.execute(sql`INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
       VALUES (${p.data.evidenceId}, 'confirmar', ${JSON.stringify(e.classificacaoAtual)}::jsonb, NULL, 'Confirmado.', ${ctx.userId}::uuid)`);
     return { ok: true };
   });
 }
 
-export async function invalidarEvidencia(ctx: TenantContext, input: { evidenceId: string; motivo: string }): Promise<ValidacaoResult> {
-  const p = z.object({ evidenceId: z.string().uuid(), motivo: z.string().trim().min(1, "Motivo obrigatório.") }).safeParse(input);
+export async function invalidarEvidencia(
+  ctx: TenantContext,
+  input: { evidenceId: string; motivo: string },
+): Promise<ValidacaoResult> {
+  const p = z
+    .object({
+      evidenceId: z.string().uuid(),
+      motivo: z.string().trim().min(1, "Motivo obrigatório."),
+    })
+    .safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
   requireRole(ctx, "coordenador");
   return withTenant(ctx, async (tx) => {
     const e = await lerEvidenciaParaValidar(tx, p.data.evidenceId);
-    if ("erro" in e) return { error: e.erro === "NAO_ENCONTRADA" ? "Evidência não encontrada." : "CONCURRENCY_ERROR" };
+    if ("erro" in e)
+      return {
+        error:
+          e.erro === "NAO_ENCONTRADA"
+            ? "Evidência não encontrada."
+            : "CONCURRENCY_ERROR",
+      };
     await tx.execute(sql`INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
       VALUES (${p.data.evidenceId}, 'invalidar', ${JSON.stringify(e.classificacaoAtual)}::jsonb, NULL, ${p.data.motivo}, ${ctx.userId}::uuid)`);
     await tx.execute(sql`INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
       VALUES (${ctx.clinicId}::uuid, ${ctx.userId}::uuid, 'invalidacao', 'evidence', ${p.data.evidenceId}::uuid, ${e.patientId}::uuid, jsonb_build_object('motivo', ${p.data.motivo}::text))`);
-    await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
+    await materializarSnapshot(
+      drizzleMaterializarQueries(tx),
+      e.patientId,
+      e.sessionNumero,
+    );
     return { ok: true };
   });
 }
 
-async function comCtx(formData: FormData, fn: (ctx: TenantContext) => Promise<ValidacaoResult>): Promise<ValidacaoState> {
+async function comCtx(
+  formData: FormData,
+  fn: (ctx: TenantContext) => Promise<ValidacaoResult>,
+): Promise<ValidacaoState> {
   const ctx = await getTenantContext();
   try {
     const r = await fn(ctx);
@@ -279,11 +347,24 @@ async function comCtx(formData: FormData, fn: (ctx: TenantContext) => Promise<Va
   }
 }
 
-export async function confirmarEvidenciaAction(_p: ValidacaoState, fd: FormData): Promise<ValidacaoState> {
-  return comCtx(fd, (ctx) => confirmarEvidencia(ctx, { evidenceId: String(fd.get("evidenceId") ?? "") }));
+export async function confirmarEvidenciaAction(
+  _p: ValidacaoState,
+  fd: FormData,
+): Promise<ValidacaoState> {
+  return comCtx(fd, (ctx) =>
+    confirmarEvidencia(ctx, { evidenceId: String(fd.get("evidenceId") ?? "") }),
+  );
 }
-export async function invalidarEvidenciaAction(_p: ValidacaoState, fd: FormData): Promise<ValidacaoState> {
-  return comCtx(fd, (ctx) => invalidarEvidencia(ctx, { evidenceId: String(fd.get("evidenceId") ?? ""), motivo: String(fd.get("motivo") ?? "") }));
+export async function invalidarEvidenciaAction(
+  _p: ValidacaoState,
+  fd: FormData,
+): Promise<ValidacaoState> {
+  return comCtx(fd, (ctx) =>
+    invalidarEvidencia(ctx, {
+      evidenceId: String(fd.get("evidenceId") ?? ""),
+      motivo: String(fd.get("motivo") ?? ""),
+    }),
+  );
 }
 ```
 
@@ -306,11 +387,13 @@ git commit -m "feat(validacao): confirmar + invalidar actions with audit + recom
 ### Task 3: Ação Reclassificar (com validação estruturada) — `validacao/actions.ts`
 
 **Files:**
+
 - Modify: `src/app/(app)/validacao/actions.ts` (adicionar a action)
 - Create: `src/app/(app)/validacao/alvos.ts` (helper de alvos válidos + validação)
 - Modify: `src/app/(app)/validacao/actions.int.test.ts` (casos de reclassificar)
 
 **Interfaces:**
+
 - Produces:
   - `alvos.ts`: `async function alvosValidosDoPaciente(tx, patientId): Promise<Alvo[]>` (alvos dos protocolos ATIVOS: goals/milestones + `tipo_estrutura`); `function montarClassificacaoNova(anterior, novoAlvo): unknown` (espelha a forma de `fase4-materializar:287`); validação de que o novo alvo resolve (`resolverAlvoParaFks` não-nulo) e `tipo_estrutura` compatível.
   - `reclassificarEvidencia(ctx, { evidenceId, novoAlvo, justificativa }): Promise<ValidacaoResult>` + wrapper.
@@ -319,22 +402,37 @@ git commit -m "feat(validacao): confirmar + invalidar actions with audit + recom
 
 ```ts
 test("reclassificar sem justificativa → rejeita", async () => {
-  const r = await reclassificarEvidencia(ctxCoord, { evidenceId: EV, novoAlvo: ALVO_VALIDO, justificativa: " " });
+  const r = await reclassificarEvidencia(ctxCoord, {
+    evidenceId: EV,
+    novoAlvo: ALVO_VALIDO,
+    justificativa: " ",
+  });
   expect(r.error).toBeTruthy();
 });
 test("reclassificar com alvo inválido (fora dos protocolos ativos) → rejeita", async () => {
-  const r = await reclassificarEvidencia(ctxCoord, { evidenceId: EV, novoAlvo: ALVO_FORA, justificativa: "x" });
+  const r = await reclassificarEvidencia(ctxCoord, {
+    evidenceId: EV,
+    novoAlvo: ALVO_FORA,
+    justificativa: "x",
+  });
   expect(r.error).toMatch(/alvo/i);
 });
 test("reclassificar grava classificacao_nova estruturada + audit(reclassificacao) + recompute reflete", async () => {
-  const r = await reclassificarEvidencia(ctxCoord, { evidenceId: EV, novoAlvo: ALVO_VALIDO, justificativa: "texto indica mando" });
+  const r = await reclassificarEvidencia(ctxCoord, {
+    evidenceId: EV,
+    novoAlvo: ALVO_VALIDO,
+    justificativa: "texto indica mando",
+  });
   expect(r.ok).toBe(true);
-  const [rev] = await owner!`SELECT acao, classificacao_nova FROM evidence_revision WHERE evidence_id=${EV}`;
+  const [rev] =
+    await owner!`SELECT acao, classificacao_nova FROM evidence_revision WHERE evidence_id=${EV}`;
   expect(rev.acao).toBe("reclassificar");
   expect(rev.classificacao_nova).not.toBeNull();
-  const [log] = await owner!`SELECT 1 FROM audit_log WHERE entidade_id=${EV} AND acao='reclassificacao'`;
+  const [log] =
+    await owner!`SELECT 1 FROM audit_log WHERE entidade_id=${EV} AND acao='reclassificacao'`;
   expect(log).toBeTruthy();
-  const [ec] = await owner!`SELECT classificacao_atual FROM evidence_current WHERE id=${EV}`;
+  const [ec] =
+    await owner!`SELECT classificacao_atual FROM evidence_current WHERE id=${EV}`;
   // classificacao_atual reflete o novo alvo
   expect(JSON.stringify(ec.classificacao_atual)).toContain(ALVO_VALIDO.goal_id);
 });
@@ -373,19 +471,21 @@ git commit -m "feat(validacao): reclassificar with structured target validation 
 
 > **Por que existe (achado de implementação, decisão do Rômulo 19/07):** o `materializar` chaveia os
 > streams de segmentação/repertório pelas **colunas estáticas** `evidence_current.goal_id/protocol_id/
-> milestone_id` (congeladas de `evidence`) — do jsonb só lê `nivel_ajuda`/`polaridade`. Logo,
+milestone_id` (congeladas de `evidence`) — do jsonb só lê `nivel_ajuda`/`polaridade`. Logo,
 > reclassificar o ALVO (tato→mando) fica auditável mas **não move** a evidência de stream. Esta task
 > corrige isso: reclassify passa a **persistir as FKs resolvidas** do novo alvo, e o `materializar`
 > passa a **preferi-las** sobre as colunas estáticas. **Sem migração** (mudança na lógica/queries do
 > `materializar` + na montagem de `classificacao_nova`; não altera o schema nem a view).
 
 **Files:**
+
 - Modify: `src/app/(app)/validacao/alvos.ts` (`montarClassificacaoNova` grava as FKs resolvidas)
 - Modify: `src/lib/evidence/materializar.ts` (`rowParaObservacao` prefere as FKs reclassificadas)
 - Test: `db/tests/fase4-materializar.int.test.ts` (novo caso: reclassificar ALVO move o stream)
 - Test: `src/app/(app)/validacao/actions.int.test.ts` (reclassificar grava as FKs resolvidas)
 
 **Interfaces:**
+
 - Consumes: `resolverAlvoParaFks` (já usado na Task 3 para validar → devolve `{ goalId, protocolId, milestoneId }`).
 - Produces: `classificacao_nova` passa a conter `alvo_resolvido: { goal_id, protocol_id, milestone_id }` (snake, os FKs resolvidos); `rowParaObservacao` lê `goalId/protocolId/milestoneId` de `classificacao_atual.alvo_resolvido` quando presente, senão das colunas estáticas.
 
@@ -402,8 +502,8 @@ test("reclassificar o ALVO (goal A → goal B) move a evidência de stream no re
             'corrige alvo', ${U_COORD})`;
   await materializarSnapshot(postgresMaterializarQueries(owner!), PAC, 1);
   const snap = await lerSnapshot(SESS_NUMERO);
-  expect(snap!.segmentacao[GOAL_B]).toBeDefined();   // evidência agora conta em B
-  expect(snap!.segmentacao[GOAL_A]).toBeUndefined();  // não mais em A
+  expect(snap!.segmentacao[GOAL_B]).toBeDefined(); // evidência agora conta em B
+  expect(snap!.segmentacao[GOAL_A]).toBeUndefined(); // não mais em A
 });
 ```
 
@@ -417,16 +517,18 @@ Expected: FAIL — hoje o stream continua em A (colunas estáticas).
 `alvos.ts` — `montarClassificacaoNova(anterior, novoAlvo, fksResolvidas)` inclui `alvo_resolvido: { goal_id, protocol_id, milestone_id }` (as FKs que `resolverAlvoParaFks` já devolveu na validação). Ajustar `reclassificarEvidencia` (Task 3) para passar as FKs resolvidas.
 
 `materializar.ts` `rowParaObservacao` (~L212-228) — preferir o alvo reclassificado:
+
 ```ts
 const alvoRe = (r.classificacaoAtual ?? r.classificacao_atual)?.alvo_resolvido;
 return {
   // ...
-  goalId: alvoRe?.goal_id ?? (r.goalId ?? r.goal_id) ?? null,
-  milestoneId: alvoRe?.milestone_id ?? (r.milestoneId ?? r.milestone_id) ?? null,
-  protocolId: alvoRe?.protocol_id ?? (r.protocolId ?? r.protocol_id) ?? null,
+  goalId: alvoRe?.goal_id ?? r.goalId ?? r.goal_id ?? null,
+  milestoneId: alvoRe?.milestone_id ?? r.milestoneId ?? r.milestone_id ?? null,
+  protocolId: alvoRe?.protocol_id ?? r.protocolId ?? r.protocol_id ?? null,
   // ...
 };
 ```
+
 Garantir que ambos os adapters (drizzle L234-236, postgres L167-177) tragam `classificacao_atual` no SELECT (o drizzle já traz; confirmar o postgres). `invalidada`/conteúdo permanecem como estão.
 
 - [ ] **Step 4: Rodar e confirmar que passa**
@@ -446,25 +548,35 @@ git commit -m "feat(evidence): recompute honors reclassified target (fase5 fatia
 ### Task 4: Ação Devolver com dúvida — `validacao/actions.ts`
 
 **Files:**
+
 - Modify: `src/app/(app)/validacao/actions.ts`
 - Modify: `src/app/(app)/validacao/actions.int.test.ts`
 
 **Interfaces:**
+
 - Produces: `devolverComDuvida(ctx, { evidenceId, pergunta }): Promise<ValidacaoResult>` + wrapper.
 
 - [ ] **Step 1: Teste falho**
 
 ```ts
 test("devolver sem pergunta → rejeita", async () => {
-  const r = await devolverComDuvida(ctxCoord, { evidenceId: EV, pergunta: " " });
+  const r = await devolverComDuvida(ctxCoord, {
+    evidenceId: EV,
+    pergunta: " ",
+  });
   expect(r.error).toBeTruthy();
 });
 test("devolver abre evidence_query + audit(devolucao) + recompute exclui do cômputo", async () => {
-  const r = await devolverComDuvida(ctxCoord, { evidenceId: EV, pergunta: "isso é mando ou tato?" });
+  const r = await devolverComDuvida(ctxCoord, {
+    evidenceId: EV,
+    pergunta: "isso é mando ou tato?",
+  });
   expect(r.ok).toBe(true);
-  const [q] = await owner!`SELECT respondido_em FROM evidence_query WHERE evidence_id=${EV}`;
+  const [q] =
+    await owner!`SELECT respondido_em FROM evidence_query WHERE evidence_id=${EV}`;
   expect(q.respondido_em).toBeNull();
-  const [log] = await owner!`SELECT 1 FROM audit_log WHERE entidade_id=${EV} AND acao='devolucao'`;
+  const [log] =
+    await owner!`SELECT 1 FROM audit_log WHERE entidade_id=${EV} AND acao='devolucao'`;
   expect(log).toBeTruthy();
 });
 ```
@@ -495,11 +607,13 @@ git commit -m "feat(validacao): devolver com dúvida opens evidence_query + reco
 ### Task 5: Responder query (lado do terapeuta) — `duvidas/`
 
 **Files:**
+
 - Create: `src/app/(app)/duvidas/actions.ts`
 - Create: `src/app/(app)/duvidas/queries.ts`
 - Test: `src/app/(app)/duvidas/actions.int.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `queries.ts`: `listarDuvidasAbertas(ctx)` → queries abertas das evidências da equipe do terapeuta (via RLS `app_is_on_team`).
   - `actions.ts`: `responderQuery(ctx, { evidenceQueryId, respostaTexto, novoAlvo? }): Promise<ValidacaoResult>` + wrapper. Fecha a query e, se `novoAlvo`, cria a `evidence_revision(reclassificar)` resultante + liga em `resultante_evidence_revision_id`. Recompute re-inclui a evidência.
@@ -508,19 +622,31 @@ git commit -m "feat(validacao): devolver com dúvida opens evidence_query + reco
 
 ```ts
 test("terapeuta responde query → fecha (respondido_em) e recompute re-inclui a evidência", async () => {
-  const r = await responderQuery(ctxTerapeuta, { evidenceQueryId: Q, respostaTexto: "é mando" });
+  const r = await responderQuery(ctxTerapeuta, {
+    evidenceQueryId: Q,
+    respostaTexto: "é mando",
+  });
   expect(r.ok).toBe(true);
-  const [q] = await owner!`SELECT respondido_em FROM evidence_query WHERE id=${Q}`;
+  const [q] =
+    await owner!`SELECT respondido_em FROM evidence_query WHERE id=${Q}`;
   expect(q.respondido_em).not.toBeNull();
 });
 test("responder com novoAlvo cria evidence_revision resultante e liga na query", async () => {
-  const r = await responderQuery(ctxTerapeuta, { evidenceQueryId: Q2, respostaTexto: "corrigindo", novoAlvo: ALVO_VALIDO });
+  const r = await responderQuery(ctxTerapeuta, {
+    evidenceQueryId: Q2,
+    respostaTexto: "corrigindo",
+    novoAlvo: ALVO_VALIDO,
+  });
   expect(r.ok).toBe(true);
-  const [q] = await owner!`SELECT resultante_evidence_revision_id FROM evidence_query WHERE id=${Q2}`;
+  const [q] =
+    await owner!`SELECT resultante_evidence_revision_id FROM evidence_query WHERE id=${Q2}`;
   expect(q.resultante_evidence_revision_id).not.toBeNull();
 });
 test("terapeuta fora da equipe não responde (RLS)", async () => {
-  const r = await responderQuery(ctxTerapeutaForaEquipe, { evidenceQueryId: Q3, respostaTexto: "x" });
+  const r = await responderQuery(ctxTerapeutaForaEquipe, {
+    evidenceQueryId: Q3,
+    respostaTexto: "x",
+  });
   expect(r.ok).not.toBe(true);
 });
 ```
@@ -551,6 +677,7 @@ git commit -m "feat(duvidas): terapeuta responde evidence_query + recompute re-i
 ### Task 6: UI da fila do coordenador — `validacao/page.tsx` + client
 
 **Files:**
+
 - Create: `src/app/(app)/validacao/page.tsx`
 - Create: `src/app/(app)/validacao/validacao-fila.tsx`
 - Test: `src/app/(app)/validacao/a11y.test.tsx`
@@ -568,6 +695,7 @@ git commit -m "feat(duvidas): terapeuta responde evidence_query + recompute re-i
 ### Task 7: UI "dúvidas do coordenador" (terapeuta) — `duvidas/page.tsx` + client
 
 **Files:**
+
 - Create: `src/app/(app)/duvidas/page.tsx`, `src/app/(app)/duvidas/duvidas-lista.tsx`
 - Test: `src/app/(app)/duvidas/a11y.test.tsx`
 
@@ -584,6 +712,7 @@ git commit -m "feat(duvidas): terapeuta responde evidence_query + recompute re-i
 ### Task 8: V4 passiva — revisão visível na timeline do terapeuta
 
 **Files:**
+
 - Modify: `src/app/(app)/pacientes/[id]/timeline/queries.ts`
 - Test: `src/app/(app)/pacientes/[id]/timeline/queries.int.test.ts` (adicionar caso)
 
@@ -600,6 +729,7 @@ git commit -m "feat(duvidas): terapeuta responde evidence_query + recompute re-i
 ### Task 9: Link de entrada + BACKLOG + verificação final
 
 **Files:**
+
 - Modify: `src/app/(app)/excecoes/page.tsx` (ou o shell coordenador) — link para `/validacao`.
 - Modify: `BACKLOG.md`
 

@@ -48,34 +48,38 @@ export function EmergenciaForm({
     <Stack gap="lg">
       {/* Cláusula 10 dos termos de uso — resumo fiel, sem inventar obrigação
           que o contrato não cria nem suavizar a que ele cria. */}
-      <Alert severidade="info" titulo="O que o Iris faz — e o que continua sendo da clínica">
+      <Alert
+        severidade="info"
+        titulo="O que o Iris faz — e o que continua sendo da clínica"
+      >
         <Stack gap="sm">
           <p>
             O Iris identifica e sinaliza termos sugestivos de risco a partir do
-            texto que o profissional digita depois da sessão. É análise posterior
-            ao relato, de caráter informativo, e depende sempre da avaliação e do
-            julgamento clínico humano.
+            texto que o profissional digita depois da sessão. É análise
+            posterior ao relato, de caráter informativo, e depende sempre da
+            avaliação e do julgamento clínico humano.
           </p>
           <p>
-            O Iris <strong>não</strong> faz monitoramento em tempo real (24 horas
-            por dia, 7 dias por semana) de pacientes, <strong>não</strong>{" "}
-            substitui plantão clínico e <strong>não</strong> funciona como serviço
-            de triagem de emergência ou prevenção de crises. As notificações
-            dependem de fatores técnicos externos — conectividade, permissões do
-            aparelho, modo “Não Perturbe” — e o Iris não garante resposta humana
-            em prazo determinado.
+            O Iris <strong>não</strong> faz monitoramento em tempo real (24
+            horas por dia, 7 dias por semana) de pacientes, <strong>não</strong>{" "}
+            substitui plantão clínico e <strong>não</strong> funciona como
+            serviço de triagem de emergência ou prevenção de crises. As
+            notificações dependem de fatores técnicos externos — conectividade,
+            permissões do aparelho, modo “Não Perturbe” — e o Iris não garante
+            resposta humana em prazo determinado.
           </p>
           <p>
             A adoção de conduta clínica, as intervenções de emergência, a quebra
-            de sigilo ético e as notificações compulsórias às autoridades públicas
-            (Conselho Tutelar, Vigilância Sanitária, autoridades policiais) são
-            responsabilidade <strong>exclusiva</strong> da clínica e dos seus
-            profissionais de saúde. O Iris nunca notifica ninguém fora da clínica.
+            de sigilo ético e as notificações compulsórias às autoridades
+            públicas (Conselho Tutelar, Vigilância Sanitária, autoridades
+            policiais) são responsabilidade <strong>exclusiva</strong> da
+            clínica e dos seus profissionais de saúde. O Iris nunca notifica
+            ninguém fora da clínica.
           </p>
           <p>
-            Como condição de uso do módulo de alerta de risco, a clínica se obriga
-            a manter protocolo próprio de gestão de crises e emergências fora do
-            ambiente do Iris (cláusula 10 dos termos de uso).
+            Como condição de uso do módulo de alerta de risco, a clínica se
+            obriga a manter protocolo próprio de gestão de crises e emergências
+            fora do ambiente do Iris (cláusula 10 dos termos de uso).
           </p>
         </Stack>
       </Alert>
@@ -111,12 +115,15 @@ export function EmergenciaForm({
           </Select>
         </Field>
         <p className="text-sm text-[var(--text-secondary)]">
-          É quem o Iris notifica quando um alerta de risco passa do segundo prazo
-          sem reconhecimento. Só usuários desta clínica — o Iris nunca endereça
-          contato externo.
+          É quem o Iris notifica quando um alerta de risco passa do segundo
+          prazo sem reconhecimento. Só usuários desta clínica — o Iris nunca
+          endereça contato externo.
         </p>
 
-        <Field label="Protocolo de Emergência Interno" htmlFor="protocoloInterno">
+        <Field
+          label="Protocolo de Emergência Interno"
+          htmlFor="protocoloInterno"
+        >
           <Input
             id="protocoloInterno"
             name="protocoloInterno"
@@ -129,10 +136,10 @@ export function EmergenciaForm({
           />
         </Field>
         <p className="text-sm text-[var(--text-secondary)]">
-          Este é o texto que o Iris <strong>exibe</strong> para a equipe quando um
-          alerta chega ao segundo estágio. O Iris mostra o protocolo da clínica e
-          nunca propõe conduta própria — escreva aqui exatamente o que a equipe
-          precisa ler naquele momento.
+          Este é o texto que o Iris <strong>exibe</strong> para a equipe quando
+          um alerta chega ao segundo estágio. O Iris mostra o protocolo da
+          clínica e nunca propõe conduta própria — escreva aqui exatamente o que
+          a equipe precisa ler naquele momento.
         </p>
 
         <Checkbox

@@ -44,18 +44,21 @@ export function NovaMetaForm({
       </Field>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-[var(--text-primary)] font-display text-sm font-bold">
+        <legend className="font-display text-sm font-bold text-[var(--text-primary)]">
           Disciplina
         </legend>
         <div className="flex flex-wrap gap-4">
           {(["ABA", "Fono", "TO"] as const).map((d, i) => (
-            <label key={d} className="text-[var(--text-primary)] font-semibold inline-flex min-h-11 items-center gap-2 cursor-pointer">
+            <label
+              key={d}
+              className="inline-flex min-h-11 cursor-pointer items-center gap-2 font-semibold text-[var(--text-primary)]"
+            >
               <input
                 type="radio"
                 name="disciplina"
                 value={d}
                 defaultChecked={i === 0}
-                className="size-5 accent-[var(--action-primary)] border-2 border-[var(--border-brutal)] focus-visible:outline-focus"
+                className="focus-visible:outline-focus size-5 border-2 border-[var(--border-brutal)] accent-[var(--action-primary)]"
               />
               {d}
             </label>
@@ -65,7 +68,7 @@ export function NovaMetaForm({
 
       {milestones.length > 0 ? (
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-[var(--text-primary)] font-display text-sm font-bold">
+          <legend className="font-display text-sm font-bold text-[var(--text-primary)]">
             Mapear a marco(s) — opcional
           </legend>
           <div className="flex flex-col gap-1">
@@ -82,17 +85,18 @@ export function NovaMetaForm({
       ) : null}
 
       {/* Critério de Domínio Estruturado Redesenhado (/impeccable) */}
-      <fieldset className="border-2 border-[var(--border-brutal)] rounded-[var(--radius-control)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow-sm)] flex flex-col gap-3">
-        <legend className="text-[var(--text-primary)] font-display px-1.5 text-sm font-bold flex items-center gap-1.5">
+      <fieldset className="flex flex-col gap-3 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow-sm)]">
+        <legend className="font-display flex items-center gap-1.5 px-1.5 text-sm font-bold text-[var(--text-primary)]">
           <span>🎯</span> Critério de Domínio Automático
         </legend>
 
-        <p className="text-xs text-[var(--text-secondary)] font-body leading-relaxed">
-          Defina a regra objetiva para a IA avaliar quando esta meta for conquistada pelo paciente.
+        <p className="font-body text-xs leading-relaxed text-[var(--text-secondary)]">
+          Defina a regra objetiva para a IA avaliar quando esta meta for
+          conquistada pelo paciente.
         </p>
 
         {/* Frase clínica interativa com inputs fluídos */}
-        <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-[var(--radius-sm)] bg-[var(--surface-elevated)] border border-[var(--border-brutal)]/20 text-sm font-body text-[var(--text-primary)]">
+        <div className="font-body flex flex-wrap items-center gap-2.5 rounded-[var(--radius-sm)] border border-[var(--border-brutal)]/20 bg-[var(--surface-elevated)] p-3 text-sm text-[var(--text-primary)]">
           <span className="font-semibold">Atingir</span>
 
           <Input
@@ -103,8 +107,12 @@ export function NovaMetaForm({
             min={1}
             max={99}
             value={criterioN}
-            onChange={(e) => setCriterioN(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-            className="w-16 h-10 text-center font-bold text-base px-1"
+            onChange={(e) =>
+              setCriterioN(
+                Math.max(1, Math.min(99, Number(e.target.value) || 1)),
+              )
+            }
+            className="h-10 w-16 px-1 text-center text-base font-bold"
             required
           />
 
@@ -118,8 +126,12 @@ export function NovaMetaForm({
             min={1}
             max={99}
             value={criterioM}
-            onChange={(e) => setCriterioM(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-            className="w-16 h-10 text-center font-bold text-base px-1"
+            onChange={(e) =>
+              setCriterioM(
+                Math.max(1, Math.min(99, Number(e.target.value) || 1)),
+              )
+            }
+            className="h-10 w-16 px-1 text-center text-base font-bold"
             required
           />
 
@@ -127,18 +139,30 @@ export function NovaMetaForm({
         </div>
 
         {/* Feedback Dinâmico / Preview em Tempo Real */}
-        <div className="flex items-start gap-2.5 p-3 rounded-[var(--radius-sm)] bg-[var(--action-primary-tint,rgba(242,183,5,0.08))] border border-[var(--border-brutal)]/30 text-xs">
+        <div className="flex items-start gap-2.5 rounded-[var(--radius-sm)] border border-[var(--border-brutal)]/30 bg-[var(--action-primary-tint,rgba(242,183,5,0.08))] p-3 text-xs">
           <span className="text-base leading-none">⚡</span>
           <div className="flex flex-col gap-0.5">
-            <span className="font-semibold text-[var(--text-primary)]">Avaliação Automática por IA:</span>
-            <span className="text-[var(--text-secondary)] leading-relaxed">
-              A meta será marcada como <strong className="text-black font-semibold">&quot;Candidata a Dominada&quot;</strong> assim que o paciente alcançar <strong>{criterioN} acerto(s) independente(s)</strong> em <strong>{criterioM} sessão(ões) consecutiva(s)</strong>.
+            <span className="font-semibold text-[var(--text-primary)]">
+              Avaliação Automática por IA:
+            </span>
+            <span className="leading-relaxed text-[var(--text-secondary)]">
+              A meta será marcada como{" "}
+              <strong className="font-semibold text-black">
+                &quot;Candidata a Dominada&quot;
+              </strong>{" "}
+              assim que o paciente alcançar{" "}
+              <strong>{criterioN} acerto(s) independente(s)</strong> em{" "}
+              <strong>{criterioM} sessão(ões) consecutiva(s)</strong>.
             </span>
           </div>
         </div>
       </fieldset>
 
-      <Field label="Ciclo de revisão (semanas, 8–12)" htmlFor="cicloRevisaoSemanas" className="w-56">
+      <Field
+        label="Ciclo de revisão (semanas, 8–12)"
+        htmlFor="cicloRevisaoSemanas"
+        className="w-56"
+      >
         <Input
           id="cicloRevisaoSemanas"
           name="cicloRevisaoSemanas"

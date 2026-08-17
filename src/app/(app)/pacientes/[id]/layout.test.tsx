@@ -46,7 +46,9 @@ describe("PacienteLayout - Abas do Prontuário", () => {
       const mockTx = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([{ clinicalModality: "protocol_driven" }]),
+        where: vi
+          .fn()
+          .mockResolvedValue([{ clinicalModality: "protocol_driven" }]),
       };
       return fn(mockTx);
     });
@@ -69,7 +71,9 @@ describe("PacienteLayout - Abas do Prontuário", () => {
       const mockTx = {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockResolvedValue([{ clinicalModality: "conventional" }]),
+        where: vi
+          .fn()
+          .mockResolvedValue([{ clinicalModality: "conventional" }]),
       };
       return fn(mockTx);
     });

@@ -33,6 +33,7 @@
 ### Task 1: Robustez no Canal de E-mail do RT (Issue #154)
 
 **Files:**
+
 - Modify: `scripts/escalonamento-risco.mjs` (loop de disparo em `varrer()`)
 - Modify: `scripts/lib/resend-rt.mjs` (classificação transitório vs permanente)
 - Modify: `scripts/escalonamento-risco.test.mjs` (retentativa/teto)
@@ -40,10 +41,12 @@
 - Create: `db/migrations/0064_alerta_risco_email_rt_retry.sql`
 
 **Interfaces:**
+
 - Consumes: `app_registrar_email_rt(uuid, boolean, text)` existente (migração 0056), `enviarEmailRt({apiKey, fromEmail, appUrl, rtEmail})` existente
 - Produces: `app_registrar_email_rt(uuid, boolean, boolean, text)` (novo parâmetro `p_transitorio`), `enviarEmailRt(...)` retorna `{ok, transitorio, providerMessageId?, erro?}`, coluna `email_rt_tentativas` em `alerta_risco_clinico`
 
 **Regras Levantadas:**
+
 1. Tratar HTTP 429/5xx do provedor como transitório: grava marcador `email_responsavel_tecnico_adiado`, teto de 3 retentativas antes de desistir e marcar falha permanente.
 2. Cada alerta do laço de varredura é isolado com `try/catch` individual — um alerta com erro não pode derrubar a varredura inteira nem impedir os demais de serem processados.
 3. Filtro `AND deletado_em IS NULL` — **já implementado** em `app_rt_do_alerta` e `app_alertas_estagio2_sem_email` (migração 0056); nenhum trabalho pendente aqui, só confirmar no Step 5.
@@ -53,6 +56,7 @@
 - [ ] **Step 1: Escrever teste falho de classificação transitório vs permanente**
 
 File: `scripts/lib/resend-rt.test.mjs`
+
 ```javascript
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { enviarEmailRt } from "./resend-rt.mjs";
@@ -131,6 +135,7 @@ Expected: FAIL — `resultado.transitorio` é `undefined` (propriedade não exis
 - [ ] **Step 3: Implementar classificação em `resend-rt.mjs`**
 
 File: `scripts/lib/resend-rt.mjs` (adicionar antes de `enviarEmailRt`, exportar, e usar no corpo)
+
 ```javascript
 // Nomes de erro documentados pela Resend (https://resend.com/docs/api-reference/errors).
 // Transitório = vale a pena tentar de novo sem intervenção humana. Qualquer
@@ -150,6 +155,7 @@ export function classificarErroResend(nomeErro) {
 ```
 
 Alterar `enviarEmailRt` para retornar `transitorio`:
+
 ```javascript
     if (error) {
       return {
@@ -247,6 +253,7 @@ DROP FUNCTION IF EXISTS app_registrar_email_rt(uuid, boolean, text);
 - [ ] **Step 6: Atualizar `src/db/schema.ts` com a nova coluna**
 
 File: `src/db/schema.ts` (dentro de `alertaRiscoClinico`, junto de `canaisNotificados`)
+
 ```typescript
 emailRtTentativas: integer("email_rt_tentativas").notNull().default(0),
 ```
@@ -259,56 +266,68 @@ Expected: `0064_alerta_risco_email_rt_retry` aplicada sem erro; `\df app_registr
 - [ ] **Step 8: Envolver o disparo de e-mail com `try/catch` por alerta em `varrer()`**
 
 File: `scripts/escalonamento-risco.mjs`
-```javascript
-  const recemEstagio2 = linhas.filter((l) => Number(l.out_estagio) === 2);
-  for (const l of recemEstagio2) {
-    try {
-      await processarEmailRt(sql, l.out_alerta_id);
-    } catch (err) {
-      log(`e-mail RT: erro não tratado no alerta_id=${l.out_alerta_id} — ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
 
-  const pendentes = await sql`SELECT * FROM app_alertas_estagio2_sem_email()`;
-  for (const p of pendentes) {
-    try {
-      await processarEmailRt(sql, p.alerta_id);
-    } catch (err) {
-      log(`e-mail RT: erro não tratado no alerta_id=${p.alerta_id} (reconciliação) — ${err instanceof Error ? err.message : String(err)}`);
-    }
+```javascript
+const recemEstagio2 = linhas.filter((l) => Number(l.out_estagio) === 2);
+for (const l of recemEstagio2) {
+  try {
+    await processarEmailRt(sql, l.out_alerta_id);
+  } catch (err) {
+    log(
+      `e-mail RT: erro não tratado no alerta_id=${l.out_alerta_id} — ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
+}
+
+const pendentes = await sql`SELECT * FROM app_alertas_estagio2_sem_email()`;
+for (const p of pendentes) {
+  try {
+    await processarEmailRt(sql, p.alerta_id);
+  } catch (err) {
+    log(
+      `e-mail RT: erro não tratado no alerta_id=${p.alerta_id} (reconciliação) — ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
 ```
 
 - [ ] **Step 9: Atualizar `processarEmailRt` para repassar `transitorio` à função de banco**
 
 File: `scripts/escalonamento-risco.mjs`
-```javascript
-  const resultado = await enviarEmailRt({ apiKey, fromEmail, appUrl, rtEmail });
 
-  if (resultado.ok) {
-    await sql`SELECT app_registrar_email_rt(${alertaId}, true, false, ${resultado.providerMessageId})`;
-    log(`e-mail RT enviado: alerta_id=${alertaId} providerMessageId=${resultado.providerMessageId}`);
-  } else {
-    await sql`SELECT app_registrar_email_rt(${alertaId}, false, ${resultado.transitorio}, ${resultado.erro})`;
-    log(`e-mail RT FALHOU (transitorio=${resultado.transitorio}): alerta_id=${alertaId} erro=${resultado.erro}`);
-  }
+```javascript
+const resultado = await enviarEmailRt({ apiKey, fromEmail, appUrl, rtEmail });
+
+if (resultado.ok) {
+  await sql`SELECT app_registrar_email_rt(${alertaId}, true, false, ${resultado.providerMessageId})`;
+  log(
+    `e-mail RT enviado: alerta_id=${alertaId} providerMessageId=${resultado.providerMessageId}`,
+  );
+} else {
+  await sql`SELECT app_registrar_email_rt(${alertaId}, false, ${resultado.transitorio}, ${resultado.erro})`;
+  log(
+    `e-mail RT FALHOU (transitorio=${resultado.transitorio}): alerta_id=${alertaId} erro=${resultado.erro}`,
+  );
+}
 ```
 
 - [ ] **Step 10: Escrever teste falho de teto de 3 tentativas**
 
 File: `scripts/escalonamento-risco.test.mjs` (adicionar ao describe existente, ajustando `makeFakeSql` para aceitar o novo parâmetro posicional)
+
 ```javascript
-  test("erro transitório: registra p_transitorio=true, não estoura em exceção", async () => {
-    process.env.EMAIL_PROVIDER_API_KEY = "re_chave_de_teste";
-    process.env.NEXT_PUBLIC_APP_URL = "https://app.example.com";
-    // makeFakeSql precisa ser estendido pra capturar o 3º valor (p_transitorio)
-    // de `sql.registros` — ver Step 11 pra o fake atualizado.
-  });
+test("erro transitório: registra p_transitorio=true, não estoura em exceção", async () => {
+  process.env.EMAIL_PROVIDER_API_KEY = "re_chave_de_teste";
+  process.env.NEXT_PUBLIC_APP_URL = "https://app.example.com";
+  // makeFakeSql precisa ser estendido pra capturar o 3º valor (p_transitorio)
+  // de `sql.registros` — ver Step 11 pra o fake atualizado.
+});
 ```
 
 - [ ] **Step 11: Estender o fake `sql` do teste para o novo parâmetro e implementar o teste**
 
 File: `scripts/escalonamento-risco.test.mjs`
+
 ```javascript
 function makeFakeSql({ rtRows = [] } = {}) {
   const chamadas = [];
@@ -359,6 +378,7 @@ git commit -m "fix(risco): isolar laço de e-mail RT por alerta e adicionar rete
 > `StubAsrProvider` é o estado interino intencional deste plano — ASR real é fast-follow, não gate de MVP (ver `docs/legal/dpa-asr-audio.md`). O que este task garante é que o esqueleto (flag, codec, rascunho local) é real, não só a interface do provider.
 
 **Files:**
+
 - Create: `src/lib/asr/provider.ts`
 - Create: `src/lib/asr/audio-drafts.ts`
 - Create: `src/lib/asr/audio-drafts.test.ts`
@@ -367,10 +387,12 @@ git commit -m "fix(risco): isolar laço de e-mail RT por alerta e adicionar rete
 - Modify: `src/app/(app)/sign-out-button.tsx` (hook de purga)
 
 **Interfaces:**
+
 - Consumes: `signOut` de `@/auth/client` (já existe, usado em `SignOutButton`)
 - Produces: `AsrProvider` interface, `StubAsrProvider`, `escolherCodecSuportado(): string`, `purgarRascunhosAudio(): Promise<void>`
 
 **Regras Levantadas:**
+
 1. Feature flag `FEATURE_FLAG_ASR_ENABLED` travada em `false` — `AudioCapture` não renderiza se a flag estiver desligada.
 2. Dual-codec `webm;opus` / `mp4;aac` em `AudioCapture`, escolhido via `MediaRecorder.isTypeSupported`.
 3. Rascunhos gravados em IndexedDB `audio_drafts` com purga no logout.
@@ -378,6 +400,7 @@ git commit -m "fix(risco): isolar laço de e-mail RT por alerta e adicionar rete
 - [ ] **Step 1: Implementar `StubAsrProvider`**
 
 File: `src/lib/asr/provider.ts`
+
 ```typescript
 export interface AsrProvider {
   transcrever(audioBlob: Blob): Promise<string>;
@@ -393,6 +416,7 @@ export class StubAsrProvider implements AsrProvider {
 - [ ] **Step 2: Escrever teste falho de escolha de codec**
 
 File: `src/components/audio/AudioCapture.test.tsx`
+
 ```typescript
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { escolherCodecSuportado } from "./AudioCapture";
@@ -431,6 +455,7 @@ Expected: FAIL com "escolherCodecSuportado não definido" ou erro de módulo.
 - [ ] **Step 4: Implementar `AudioCapture` com gating de flag e seleção de codec**
 
 File: `src/components/audio/AudioCapture.tsx`
+
 ```typescript
 "use client";
 
@@ -491,10 +516,15 @@ Expected: PASS.
 - [ ] **Step 6: Escrever teste falho de rascunho em IndexedDB**
 
 File: `src/lib/asr/audio-drafts.test.ts`
+
 ```typescript
 import { describe, it, expect, beforeEach } from "vitest";
 import "fake-indexeddb/auto";
-import { salvarRascunhoAudio, purgarRascunhosAudio, listarRascunhosAudio } from "./audio-drafts";
+import {
+  salvarRascunhoAudio,
+  purgarRascunhosAudio,
+  listarRascunhosAudio,
+} from "./audio-drafts";
 
 describe("audio-drafts (IndexedDB audio_drafts)", () => {
   beforeEach(async () => {
@@ -527,6 +557,7 @@ Expected: FAIL — módulo `./audio-drafts` não existe.
 - [ ] **Step 8: Implementar `audio-drafts.ts`**
 
 File: `src/lib/asr/audio-drafts.ts`
+
 ```typescript
 const DB_NAME = "audio_drafts";
 const STORE_NAME = "rascunhos";
@@ -535,7 +566,10 @@ function abrirDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
+      req.result.createObjectStore(STORE_NAME, {
+        keyPath: "id",
+        autoIncrement: true,
+      });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -546,7 +580,10 @@ export async function salvarRascunhoAudio(blob: Blob): Promise<void> {
   const db = await abrirDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).add({ blob, criadoEm: new Date().toISOString() });
+    tx.objectStore(STORE_NAME).add({
+      blob,
+      criadoEm: new Date().toISOString(),
+    });
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -585,6 +622,7 @@ Expected: PASS.
 - [ ] **Step 10: Ligar a purga ao logout**
 
 File: `src/app/(app)/sign-out-button.tsx`
+
 ```typescript
 "use client";
 

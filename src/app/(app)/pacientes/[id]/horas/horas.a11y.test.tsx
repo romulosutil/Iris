@@ -19,7 +19,13 @@ afterEach(cleanup);
 
 const linhas = [
   { disciplina: "aba", alvo: 12, agendado: 8, realizado: 7.5, alerta: true },
-  { disciplina: "fono", alvo: null, agendado: 1.5, realizado: 1.5, alerta: false },
+  {
+    disciplina: "fono",
+    alvo: null,
+    agendado: 1.5,
+    realizado: 1.5,
+    alerta: false,
+  },
 ];
 
 async function semViolacoes(ui: ReactElement) {
@@ -69,7 +75,15 @@ test("linha com alerta renderiza um Alert acessível", () => {
 test("sem alerta quando nenhuma linha está abaixo do prescrito", () => {
   render(
     <TabelaHoras
-      linhas={[{ disciplina: "aba", alvo: 12, agendado: 12, realizado: 12, alerta: false }]}
+      linhas={[
+        {
+          disciplina: "aba",
+          alvo: 12,
+          agendado: 12,
+          realizado: 12,
+          alerta: false,
+        },
+      ]}
     />,
   );
   expect(screen.queryByRole("status")).toBeNull();

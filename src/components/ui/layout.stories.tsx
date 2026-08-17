@@ -15,9 +15,15 @@ type Story = StoryObj;
 export const StackVertical: Story = {
   render: () => (
     <Stack gap="md" className="max-w-md">
-      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-3 font-body">Diário</div>
-      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-3 font-body">Evidências</div>
-      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-3 font-body">Protocolo</div>
+      <div className="font-body rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-3">
+        Diário
+      </div>
+      <div className="font-body rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-3">
+        Evidências
+      </div>
+      <div className="font-body rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-3">
+        Protocolo
+      </div>
     </Stack>
   ),
 };
@@ -36,16 +42,25 @@ export const ClusterDeChips: Story = {
 export const GridResponsivo: Story = {
   render: () => (
     <Grid colunas={3} gap="md">
-      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-4 font-body shadow-[var(--ds-shadow)]">Métrica 1</div>
-      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-4 font-body shadow-[var(--ds-shadow)]">Métrica 2</div>
-      <div className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] p-4 font-body shadow-[var(--ds-shadow)]">Métrica 3</div>
+      <div className="font-body rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]">
+        Métrica 1
+      </div>
+      <div className="font-body rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]">
+        Métrica 2
+      </div>
+      <div className="font-body rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]">
+        Métrica 3
+      </div>
     </Grid>
   ),
 };
 
 export const ContainerCentralizado: Story = {
   render: () => (
-    <Container largura="md" className="border-2 border-dashed border-[var(--border-brutal)] py-6 text-center font-body text-[var(--text-primary)]">
+    <Container
+      largura="md"
+      className="font-body border-2 border-dashed border-[var(--border-brutal)] py-6 text-center text-[var(--text-primary)]"
+    >
       Container com largura máxima controlada (max-w-5xl) e padding responsivo.
     </Container>
   ),
@@ -53,8 +68,8 @@ export const ContainerCentralizado: Story = {
 
 export const SplitTituloEstado: Story = {
   render: () => (
-    <Split className="border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] rounded-[var(--radius-control)] max-w-lg p-4">
-      <h3 className="font-display text-[var(--text-primary)] text-lg font-semibold">
+    <Split className="max-w-lg rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4">
+      <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
         Imita gesto simples
       </h3>
       <StatusBadge estado="sugerida" />

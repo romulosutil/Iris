@@ -35,7 +35,12 @@ export async function exportarConvenioBruto(
   const { patientId, nomePaciente, periodoInicio, periodoFim } = parsed.data;
 
   return withTenant(ctx, async (tx) => {
-    const payload = await buildConvenioBrutoPayload(tx, { patientId, nomePaciente, periodoInicio, periodoFim });
+    const payload = await buildConvenioBrutoPayload(tx, {
+      patientId,
+      nomePaciente,
+      periodoInicio,
+      periodoFim,
+    });
     const rows = (await tx.execute(sql`
       INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, status, payload, gerado_por_ia)
       VALUES (${ctx.clinicId}::uuid, ${patientId}::uuid, 'convenio_bruto', ${periodoInicio}::date, ${periodoFim}::date, 'rascunho', ${JSON.stringify(payload)}::jsonb, false)

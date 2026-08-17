@@ -40,11 +40,16 @@ type MetaAgregavel = {
   isCandidataIA: boolean;
 };
 
-function agregarMetas(nome: string, metas: MetaAgregavel[]): ProtocolProgressData {
+function agregarMetas(
+  nome: string,
+  metas: MetaAgregavel[],
+): ProtocolProgressData {
   const contabeis = metas.filter((m) =>
     (ESTADOS_CONTABEIS as readonly string[]).includes(m.estado),
   );
-  const metasDominadas = contabeis.filter((m) => m.estado === "dominada").length;
+  const metasDominadas = contabeis.filter(
+    (m) => m.estado === "dominada",
+  ).length;
   // Honestidade epistêmica: candidatura de IA é SUGESTÃO pendente de validação
   // do coordenador — só conta se a meta ainda NÃO foi dominada (sem dupla contagem).
   const metasSugeridasIA = contabeis.filter(
@@ -88,11 +93,18 @@ export async function getProtocolDashboardMetrics(
 
     // Protocolos ATIVOS (vigência aberta) do paciente.
     const protocolosAtivos = await tx
-      .select({ id: protocol.id, nome: protocol.nome, disciplina: protocol.disciplina })
+      .select({
+        id: protocol.id,
+        nome: protocol.nome,
+        disciplina: protocol.disciplina,
+      })
       .from(patientProtocol)
       .innerJoin(protocol, eq(protocol.id, patientProtocol.protocolId))
       .where(
-        and(eq(patientProtocol.patientId, patientId), isNull(patientProtocol.desativadoEm)),
+        and(
+          eq(patientProtocol.patientId, patientId),
+          isNull(patientProtocol.desativadoEm),
+        ),
       )
       .orderBy(asc(protocol.nome));
 
@@ -129,7 +141,10 @@ export async function getProtocolDashboardMetrics(
             protocolId: milestone.protocolId,
           })
           .from(goalMilestoneMapping)
-          .innerJoin(milestone, eq(milestone.id, goalMilestoneMapping.milestoneId))
+          .innerJoin(
+            milestone,
+            eq(milestone.id, goalMilestoneMapping.milestoneId),
+          )
           .where(inArray(goalMilestoneMapping.goalId, goalIds))
       : [];
     const goalsPorProtocolo = new Map<string, Set<string>>();
@@ -150,15 +165,23 @@ export async function getProtocolDashboardMetrics(
 
     // Visão comparativa por disciplina (só disciplinas presentes nas metas).
     const disciplinas = [
-      ...new Set(metas.map((m) => m.disciplina).filter((d): d is string => d != null)),
+      ...new Set(
+        metas.map((m) => m.disciplina).filter((d): d is string => d != null),
+      ),
     ].sort();
     const porDisciplina: ProtocolProgressData[] = disciplinas.map((d) =>
-      agregarMetas(d, metas.filter((m) => m.disciplina === d)),
+      agregarMetas(
+        d,
+        metas.filter((m) => m.disciplina === d),
+      ),
     );
 
     // Tendência: evidências aprovadas do paciente, cumulativas por sessão.
     const evidencias = await tx
-      .select({ sessionNumero: evidence.sessionNumero, aprovadoEm: evidence.aprovadoEm })
+      .select({
+        sessionNumero: evidence.sessionNumero,
+        aprovadoEm: evidence.aprovadoEm,
+      })
       .from(evidence)
       .where(eq(evidence.patientId, patientId))
       .orderBy(asc(evidence.sessionNumero));
@@ -183,6 +206,11 @@ export async function getProtocolDashboardMetrics(
         };
       });
 
-    return { paciente: { nome: pac.nome }, protocolos, tendencia, porDisciplina };
+    return {
+      paciente: { nome: pac.nome },
+      protocolos,
+      tendencia,
+      porDisciplina,
+    };
   });
 }

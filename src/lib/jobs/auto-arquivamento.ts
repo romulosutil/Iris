@@ -63,7 +63,8 @@ export function calcularStatusArquivamento(
   // de novo a cada varredura de um paciente parado há meses, poluindo a faixa
   // da clínica e a trilha append-only com duplicata que ninguém pode apagar.
   const deveNotificarAviso =
-    diasSemAtividade >= DIAS_AVISO_PREVIO && diasSemAtividade < DIAS_ARQUIVAMENTO;
+    diasSemAtividade >= DIAS_AVISO_PREVIO &&
+    diasSemAtividade < DIAS_ARQUIVAMENTO;
 
   const deveArquivar = diasSemAtividade >= DIAS_ARQUIVAMENTO;
 
@@ -78,6 +79,7 @@ export const REGUA_ARQUIVAMENTO = {
 
 /** `acao` das linhas de `audit_log` que esta régua produz (coluna é `text`). */
 export const ACAO_AVISO_PREVIO = "arquivamento_aviso_previo";
-export const ACAO_ARQUIVADO_AUTOMATICAMENTE = "paciente_arquivado_automaticamente";
+export const ACAO_ARQUIVADO_AUTOMATICAMENTE =
+  "paciente_arquivado_automaticamente";
 export const ACAO_DESARQUIVADO_AUTOMATICAMENTE =
   "paciente_desarquivado_automaticamente";

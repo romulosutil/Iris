@@ -34,6 +34,7 @@ export const Divergente: Story = {
     dataAnterior: "Sessão 45",
     dataSugerida: "Sessão 46",
     divergente: true,
-    motivoDivergencia: "Queda no desempenho em relação à sessão anterior. Verificar se houve regressão ou mudança de terapeuta.",
+    motivoDivergencia:
+      "Queda no desempenho em relação à sessão anterior. Verificar se houve regressão ou mudança de terapeuta.",
   },
 };

@@ -5,7 +5,10 @@ import { Stack, Cluster } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Chip, ChipGroup } from "@/components/ui/chip";
-import { StatusBadge, type BadgesVariantes } from "@/components/ui/status-badge";
+import {
+  StatusBadge,
+  type BadgesVariantes,
+} from "@/components/ui/status-badge";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -109,7 +112,11 @@ const lerRelogioServidor = () => 0;
 
 /** Contagem regressiva viva + a declaração obrigatória colada nela. */
 function Temporizador({ item }: { item: ItemRisco }) {
-  const agoraMs = useSyncExternalStore(assinarSegundo, lerRelogio, lerRelogioServidor);
+  const agoraMs = useSyncExternalStore(
+    assinarSegundo,
+    lerRelogio,
+    lerRelogioServidor,
+  );
   const agora = agoraMs > 0 ? new Date(agoraMs) : null;
 
   const prazo = new Date(item.prazoReconhecimento);
@@ -120,7 +127,8 @@ function Temporizador({ item }: { item: ItemRisco }) {
     <Stack gap="xs">
       <Cluster gap="sm">
         <span className="font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
-          Prazo de notificação e escalonamento interno: {rotuloPrazo(item.prazoMinutos)}
+          Prazo de notificação e escalonamento interno:{" "}
+          {rotuloPrazo(item.prazoMinutos)}
         </span>
         <span
           aria-live="off"
@@ -180,7 +188,10 @@ function CartaoRisco({ item }: { item: ItemRisco }) {
 
         {item.pacienteNome ? (
           <p className="text-sm text-[var(--text-secondary)]">
-            Paciente: <span className="text-[var(--text-primary)]">{item.pacienteNome}</span>
+            Paciente:{" "}
+            <span className="text-[var(--text-primary)]">
+              {item.pacienteNome}
+            </span>
           </p>
         ) : null}
 
@@ -249,7 +260,11 @@ function CartaoRisco({ item }: { item: ItemRisco }) {
             {item.status === "aberto" ? (
               <form action={reconhecerFormAction} className="contents">
                 <input type="hidden" name="alertaId" value={item.id} />
-                <Button type="submit" variante="primaria" disabled={reconhecerPendente}>
+                <Button
+                  type="submit"
+                  variante="primaria"
+                  disabled={reconhecerPendente}
+                >
                   {reconhecerPendente ? "Reconhecendo…" : "Reconhecer"}
                 </Button>
               </form>
@@ -265,12 +280,16 @@ function CartaoRisco({ item }: { item: ItemRisco }) {
                 <DialogTitle>Resolver alerta</DialogTitle>
                 <DialogDescription>
                   Encerra o caso registrando a conduta adotada. O registro é a
-                  prova de diligência do profissional — descreva o que foi feito.
+                  prova de diligência do profissional — descreva o que foi
+                  feito.
                 </DialogDescription>
                 <form action={resolverFormAction}>
                   <Stack gap="md" className="mt-4">
                     <input type="hidden" name="alertaId" value={item.id} />
-                    <Field label="Conduta adotada" htmlFor={`conduta-${item.id}`}>
+                    <Field
+                      label="Conduta adotada"
+                      htmlFor={`conduta-${item.id}`}
+                    >
                       <Input
                         id={`conduta-${item.id}`}
                         name="conduta"
@@ -285,8 +304,14 @@ function CartaoRisco({ item }: { item: ItemRisco }) {
                       <Alert severidade="erro">{resolverState.error}</Alert>
                     ) : null}
                     <Cluster gap="sm">
-                      <Button type="submit" variante="primaria" disabled={resolverPendente}>
-                        {resolverPendente ? "Resolvendo…" : "Confirmar resolução"}
+                      <Button
+                        type="submit"
+                        variante="primaria"
+                        disabled={resolverPendente}
+                      >
+                        {resolverPendente
+                          ? "Resolvendo…"
+                          : "Confirmar resolução"}
                       </Button>
                       <DialogClose asChild>
                         <Button type="button" variante="terciaria">
@@ -309,13 +334,16 @@ function CartaoRisco({ item }: { item: ItemRisco }) {
                 <DialogTitle>Descartar alerta</DialogTitle>
                 <DialogDescription>
                   Marca o sinal como avaliado e não caracterizado como risco. O
-                  registro não é apagado: fica com o motivo, e o descarte nunca é
-                  silencioso.
+                  registro não é apagado: fica com o motivo, e o descarte nunca
+                  é silencioso.
                 </DialogDescription>
                 <form action={descartarFormAction}>
                   <Stack gap="md" className="mt-4">
                     <input type="hidden" name="alertaId" value={item.id} />
-                    <Field label="Motivo do descarte" htmlFor={`motivo-${item.id}`}>
+                    <Field
+                      label="Motivo do descarte"
+                      htmlFor={`motivo-${item.id}`}
+                    >
                       <Input
                         id={`motivo-${item.id}`}
                         name="motivo"
@@ -330,8 +358,14 @@ function CartaoRisco({ item }: { item: ItemRisco }) {
                       <Alert severidade="erro">{descartarState.error}</Alert>
                     ) : null}
                     <Cluster gap="sm">
-                      <Button type="submit" variante="primaria" disabled={descartarPendente}>
-                        {descartarPendente ? "Descartando…" : "Confirmar descarte"}
+                      <Button
+                        type="submit"
+                        variante="primaria"
+                        disabled={descartarPendente}
+                      >
+                        {descartarPendente
+                          ? "Descartando…"
+                          : "Confirmar descarte"}
                       </Button>
                       <DialogClose asChild>
                         <Button type="button" variante="terciaria">

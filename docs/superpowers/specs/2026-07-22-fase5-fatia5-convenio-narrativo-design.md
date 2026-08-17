@@ -23,6 +23,7 @@ puro, aprova dado mensurável; motivo nº1 de glosa = relatório genérico sem
 métrica). O PDF renderiza **dossiê factual (tabelas medidas) + narrativa** juntos.
 
 ### Dentro do escopo
+
 - `report.tipo = convenio_narrativo`, `gerado_por_ia = true`.
 - Contrato do agente narrador de convênio (doc novo `docs/agente/agente-3-convenio-narrativo.md`, regras C1–C8).
 - Provider atrás de interface, com **stub determinístico** (demo/testes sem LLM) e
@@ -39,6 +40,7 @@ métrica). O PDF renderiza **dossiê factual (tabelas medidas) + narrativa** jun
   dado de teste, aprovado.
 
 ### Fora do escopo
+
 - `avaliativo_interdisciplinar` (contrato de agente não escrito; fatia futura,
   fora da Issue #8).
 - Templating por-operadora. **Um template genérico anti-glosa**; `operadora` é
@@ -52,20 +54,20 @@ métrica). O PDF renderiza **dossiê factual (tabelas medidas) + narrativa** jun
 
 ## 2. Decisões travadas
 
-| # | Decisão | Motivo |
-|---|---------|--------|
-| D1 | Só `convenio_narrativo` nesta PR; 1 branch = 1 PR | Padrão Fatias 1–4; fecha a Issue #8 |
-| D2 | **Projeção sobre o dossiê** — input reusa `buildConvenioBrutoPayload` | Números vêm do factual verbatim; IA nunca fabrica (memória convenio; C2) |
-| D3 | Dossiê factual **embutido no payload** + renderizado junto da narrativa | Auditor de operadora exige dado mensurável ao lado da justificativa (anti-glosa) |
-| D4 | IA-original **e** curado no mesmo `payload` jsonb; dossiê imutável | Evita DDL; preserva rascunho da IA p/ auditoria. `build-html` renderiza `curado ?? iaOriginal` |
-| D5 | Rascunho **durável** | Convênio exige revisão humana entre geração e export (peça legal externa) |
-| D6 | **Coordenador-only nas 3 ações** (gerar/curar/exportar) | Convênio é documento legal/externo à operadora — mais restrito que família (que deixa terapeuta gerar). `admin_recepcao` e terapeuta fora |
-| D7 | Export só aceita `revisado` (gate na action) | Impõe curadoria (C7) antes de virar peça de cobertura |
-| D8 | Cabeçalho (operadora/CID/finalidade) digitado na geração, **editável na curadoria** | Sem modelo de prescrição externa; humano no controle do dado legal (C5). Curadoria é onde o coordenador finaliza a peça legal → cabeçalho deve ser corrigível ali (Brecha 2) |
-| D9 | Migration CHECK `report_narrativo_com_ia` (`NOT VALID` + `VALIDATE`) + garantia app-layer | Defesa em profundidade simétrica ao `report_bruto_sem_ia`. `NOT VALID`+`VALIDATE` evita lock longo no deploy (Brecha 9) |
-| D10 | **Dossiê é snapshot intencional** congelado em `geradoEm`; NÃO re-buscado no export | Doc legal "com data de extração". Re-buscar no export desincronizaria número↔narrativa (quebraria C2/C3). Label `geradoEm` visível + botão regenerar cobrem staleness (Brecha 3) |
-| D11 | **C2 é garantia só no stub**; provider real = instrução + validador numeric-guard | LLM pode alucinar número apesar do prompt. Números autoritativos vivem só no bloco factual do dossiê; narrativa é qualitativa; parse valida (Brecha 4) |
-| D12 | `renderDossieTablesHtml` extraído p/ helper compartilhado | Evita duplicar a tabela factual entre `convenio-bruto` e `convenio-narrativo` build-html (Brecha 5) |
+| #   | Decisão                                                                                   | Motivo                                                                                                                                                                           |
+| --- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Só `convenio_narrativo` nesta PR; 1 branch = 1 PR                                         | Padrão Fatias 1–4; fecha a Issue #8                                                                                                                                              |
+| D2  | **Projeção sobre o dossiê** — input reusa `buildConvenioBrutoPayload`                     | Números vêm do factual verbatim; IA nunca fabrica (memória convenio; C2)                                                                                                         |
+| D3  | Dossiê factual **embutido no payload** + renderizado junto da narrativa                   | Auditor de operadora exige dado mensurável ao lado da justificativa (anti-glosa)                                                                                                 |
+| D4  | IA-original **e** curado no mesmo `payload` jsonb; dossiê imutável                        | Evita DDL; preserva rascunho da IA p/ auditoria. `build-html` renderiza `curado ?? iaOriginal`                                                                                   |
+| D5  | Rascunho **durável**                                                                      | Convênio exige revisão humana entre geração e export (peça legal externa)                                                                                                        |
+| D6  | **Coordenador-only nas 3 ações** (gerar/curar/exportar)                                   | Convênio é documento legal/externo à operadora — mais restrito que família (que deixa terapeuta gerar). `admin_recepcao` e terapeuta fora                                        |
+| D7  | Export só aceita `revisado` (gate na action)                                              | Impõe curadoria (C7) antes de virar peça de cobertura                                                                                                                            |
+| D8  | Cabeçalho (operadora/CID/finalidade) digitado na geração, **editável na curadoria**       | Sem modelo de prescrição externa; humano no controle do dado legal (C5). Curadoria é onde o coordenador finaliza a peça legal → cabeçalho deve ser corrigível ali (Brecha 2)     |
+| D9  | Migration CHECK `report_narrativo_com_ia` (`NOT VALID` + `VALIDATE`) + garantia app-layer | Defesa em profundidade simétrica ao `report_bruto_sem_ia`. `NOT VALID`+`VALIDATE` evita lock longo no deploy (Brecha 9)                                                          |
+| D10 | **Dossiê é snapshot intencional** congelado em `geradoEm`; NÃO re-buscado no export       | Doc legal "com data de extração". Re-buscar no export desincronizaria número↔narrativa (quebraria C2/C3). Label `geradoEm` visível + botão regenerar cobrem staleness (Brecha 3) |
+| D11 | **C2 é garantia só no stub**; provider real = instrução + validador numeric-guard         | LLM pode alucinar número apesar do prompt. Números autoritativos vivem só no bloco factual do dossiê; narrativa é qualitativa; parse valida (Brecha 4)                           |
+| D12 | `renderDossieTablesHtml` extraído p/ helper compartilhado                                 | Evita duplicar a tabela factual entre `convenio-bruto` e `convenio-narrativo` build-html (Brecha 5)                                                                              |
 
 ## 3. Arquitetura por camada
 
@@ -137,24 +139,24 @@ dossiê factual imutável, para o público auditor médico de operadora.
 // Entrada que o provider recebe. Números vêm do dossiê factual (C2).
 type ConvenioNarrativoInput = {
   paciente: { nome: string };
-  periodo: { inicio: string; fim: string };                 // ISO date
+  periodo: { inicio: string; fim: string }; // ISO date
   cabecalho: {
-    operadora: string;                                       // C5 — humano
-    cid: string | null;                                      // C5 — F84.x da prescrição externa
-    finalidade: string;                                      // ex.: "solicitação de manutenção de cobertura"
+    operadora: string; // C5 — humano
+    cid: string | null; // C5 — F84.x da prescrição externa
+    finalidade: string; // ex.: "solicitação de manutenção de cobertura"
   };
-  dossie: PayloadConvenioBruto;                              // factual verbatim (Fatia 3)
+  dossie: PayloadConvenioBruto; // factual verbatim (Fatia 3)
 };
 
 // Saída do agente = C1–C8.
 type ConvenioNarrativoDraft = {
-  resumoClinico: string;                                     // quadro + justificativa do acompanhamento (C1/C3)
+  resumoClinico: string; // quadro + justificativa do acompanhamento (C1/C3)
   evolucaoPorDominio: Array<{ dominio: string; narrativa: string }>; // C3, cita contagens do dossiê
-  justificativaContinuidade: string;                         // C3 anti-glosa
-  objetivosProximoPeriodo: string[];                         // max 5
-  periodoSemAvancoVisivel: boolean;                          // C4
-  notaHonestidade: string | null;                            // C4, só quando true
-  status: "rascunho_para_revisao";                           // C7
+  justificativaContinuidade: string; // C3 anti-glosa
+  objetivosProximoPeriodo: string[]; // max 5
+  periodoSemAvancoVisivel: boolean; // C4
+  notaHonestidade: string | null; // C4, só quando true
+  status: "rascunho_para_revisao"; // C7
 };
 
 // Forma persistida em report.payload (jsonb). SEM DDL de schema (só o CHECK).
@@ -163,11 +165,11 @@ type PayloadConvenioNarrativo = {
   paciente: { nome: string };
   periodo: { inicio: string; fim: string };
   cabecalho: { operadora: string; cid: string | null; finalidade: string };
-  geradoEm: string;                                          // ISO — data de extração do snapshot (D10, rótulo no PDF)
+  geradoEm: string; // ISO — data de extração do snapshot (D10, rótulo no PDF)
   provider: "stub" | "claude";
-  dossie: PayloadConvenioBruto;                              // snapshot factual congelado em geradoEm (D3/D10) — NÃO re-buscado no export
-  iaOriginal: ConvenioNarrativoDraft;                        // imutável (auditoria)
-  curado: ConvenioNarrativoDraft | null;                     // null até o coordenador revisar
+  dossie: PayloadConvenioBruto; // snapshot factual congelado em geradoEm (D3/D10) — NÃO re-buscado no export
+  iaOriginal: ConvenioNarrativoDraft; // imutável (auditoria)
+  curado: ConvenioNarrativoDraft | null; // null até o coordenador revisar
 };
 ```
 
@@ -200,7 +202,9 @@ da extração:
 interface ConvenioNarrativoProvider {
   gerar(input: ConvenioNarrativoInput): Promise<ConvenioNarrativoDraft>;
 }
-function resolveConvenioNarrativoProvider(clinic: { isDemo: boolean }): ConvenioNarrativoProvider;
+function resolveConvenioNarrativoProvider(clinic: {
+  isDemo: boolean;
+}): ConvenioNarrativoProvider;
 ```
 
 - **Demo → StubConvenioNarrativoProvider.** Determinístico, sem LLM. Deriva o
@@ -258,15 +262,15 @@ ações exigem coordenador (D6).
      `buildConvenioBrutoPayload` + cabeçalho) → `ConvenioNarrativoInput`;
      `resolveConvenioNarrativoProvider(clinic).gerar(input)` → draft;
      `INSERT report(tipo='convenio_narrativo', gerado_por_ia=true, status='rascunho',
-     payload={versao:1, dossie, iaOriginal:draft, curado:null, cabecalho, ...})`
+payload={versao:1, dossie, iaOriginal:draft, curado:null, cabecalho, ...})`
      → `reportId`.
    - `audit_log(acao='relatorio_rascunho_gerado')`. Retorna `{reportId, versao, draft}`.
 2. **`curarConvenioNarrativo(ctx, { reportId, cabecalhoEditado, draftEditado, versaoEsperada })`**:
    - `requireRole(ctx, "coordenador")`; `withTenant`: UPDATE com **dois `jsonb_set`
      encadeados** (`{curado}` ← draftEditado, `{cabecalho}` ← cabecalhoEditado; D8),
      `payload_versao = payload_versao + 1, status = 'revisado', revisado_por = ctx.userId
-     WHERE id = :reportId AND tipo='convenio_narrativo'
-     AND status IN ('rascunho','revisado') AND payload_versao = :versaoEsperada`
+WHERE id = :reportId AND tipo='convenio_narrativo'
+AND status IN ('rascunho','revisado') AND payload_versao = :versaoEsperada`
      (trava otimista).
    - 0 linhas → rascunho obsoleto/exportado → erro limpo.
    - `audit_log(acao='relatorio_revisado', detalhe.tipo='convenio_narrativo')`.
@@ -291,6 +295,7 @@ derivam ctx via `getTenantContext()`, delegam, `revalidatePath("/relatorios")`.
 Função **pura** `buildConvenioNarrativoHtml(payload: PayloadConvenioNarrativo): string`.
 Combina o factual do dossiê (mirror de `convenio-bruto/build-html.ts`) com a
 narrativa curada:
+
 - **Cabeçalho:** paciente, período, operadora, "CID (conforme prescrição médica
   assistente)", finalidade, e **"Dados extraídos em [geradoEm]"** (D10 — deixa o
   snapshot explícito).
@@ -322,6 +327,7 @@ narrativa curada:
 
 Nova tile em `/relatorios` + fluxo clonado de `familia-report.tsx`
 (`convenio-narrativo-report.tsx`, `"use client"`):
+
 1. Seleção paciente + período + **form de cabeçalho** (operadora/CID/finalidade).
 2. Gerar rascunho → preview (dossiê factual + narrativa IA).
 3. Editor de curadoria (coordenador edita os campos do draft **e do cabeçalho** —
@@ -367,6 +373,7 @@ terapeuta não gera).
 - **a11y**: preview + form de cabeçalho + form de curadoria (0 violações axe).
 
 ### DoD da fatia (AGENTS.md §6)
+
 - [ ] `convenio_narrativo` gera rascunho IA (projeção sobre dossiê factual), é
       curado por humano e exporta PDF real, respeitando `gerado_por_ia=true` e o
       gate `revisado` antes do export (C7).
@@ -391,12 +398,12 @@ em todos os campos, dossiê renderizado e separado, sem asset remoto, snapshot).
 
 ## 14. Dívidas / riscos
 
-| Risco | Mitigação |
-|-------|-----------|
-| Stub não é narrativa "real" | Aceito: é trilho; qualidade vem do ClaudeProvider pós-DPA. Stub é honesto (C2/C4) |
-| Coordenador edita p/ texto que viola C8 | Fora do escopo automatizar; curadoria humana é responsável. Rodapé deixa a autoria clara |
-| Templating por-operadora ausente | Dívida registrada; operadora é campo livre; encaixa quando houver operadora piloto real |
-| CID/prescrição sem modelo | Cabeçalho digitado + editável na curadoria; rotulado "conforme prescrição médica assistente" (Brecha 8). Entidade de prescrição externa + anexo da prescrição = fatia futura |
-| Rascunhos duplicados p/ mesmo paciente+período (Brecha 6) | Aceito nesta fatia (mesmo comportamento da família); curadoria humana escolhe o certo. Dívida: índice de unicidade `(patient_id, tipo, periodo) WHERE status<>'exportado'` se virar problema de auditoria |
-| Dossiê snapshot fica obsoleto se evidência do período for aprovada após a geração (Brecha 3) | Intencional (doc com data de extração); label `geradoEm` + regenerar. Detecção ativa de staleness = dívida futura |
-| Uso secundário de dado de menor (blocker legal registrado) | Real LLM OFF atrás de flag; stub não envia PII; export é humano-curado. Mesma postura da Fatia 4. 1-pág `docs/legal/` continua pendência DevOps/negócio, não bloqueia o código |
+| Risco                                                                                        | Mitigação                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stub não é narrativa "real"                                                                  | Aceito: é trilho; qualidade vem do ClaudeProvider pós-DPA. Stub é honesto (C2/C4)                                                                                                                         |
+| Coordenador edita p/ texto que viola C8                                                      | Fora do escopo automatizar; curadoria humana é responsável. Rodapé deixa a autoria clara                                                                                                                  |
+| Templating por-operadora ausente                                                             | Dívida registrada; operadora é campo livre; encaixa quando houver operadora piloto real                                                                                                                   |
+| CID/prescrição sem modelo                                                                    | Cabeçalho digitado + editável na curadoria; rotulado "conforme prescrição médica assistente" (Brecha 8). Entidade de prescrição externa + anexo da prescrição = fatia futura                              |
+| Rascunhos duplicados p/ mesmo paciente+período (Brecha 6)                                    | Aceito nesta fatia (mesmo comportamento da família); curadoria humana escolhe o certo. Dívida: índice de unicidade `(patient_id, tipo, periodo) WHERE status<>'exportado'` se virar problema de auditoria |
+| Dossiê snapshot fica obsoleto se evidência do período for aprovada após a geração (Brecha 3) | Intencional (doc com data de extração); label `geradoEm` + regenerar. Detecção ativa de staleness = dívida futura                                                                                         |
+| Uso secundário de dado de menor (blocker legal registrado)                                   | Real LLM OFF atrás de flag; stub não envia PII; export é humano-curado. Mesma postura da Fatia 4. 1-pág `docs/legal/` continua pendência DevOps/negócio, não bloqueia o código                            |

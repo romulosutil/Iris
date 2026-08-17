@@ -1,6 +1,9 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import { surface, type SurfaceVariante } from "@/components/ui/primitives/surface";
+import {
+  surface,
+  type SurfaceVariante,
+} from "@/components/ui/primitives/surface";
 import { Pill } from "@/components/ui/primitives/pill";
 import { CheckIcon, SparkleIcon, LayersIcon } from "@/components/ui/icon";
 
@@ -48,12 +51,18 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
   ref,
 ) {
   const Component = como as any;
-  const isInteractive = interativo || interactive || como === "button" || como === "a" || Boolean(props.onClick);
+  const isInteractive =
+    interativo ||
+    interactive ||
+    como === "button" ||
+    como === "a" ||
+    Boolean(props.onClick);
   const resolvedState = epistemicState ?? estado ?? "fact";
 
   // Semântica de botão para elementos não-nativos com onClick: sem isto o card
   // fica clicável só para mouse (invisível a Tab e leitores de tela).
-  const precisaSemanticaBotao = como !== "button" && como !== "a" && Boolean(props.onClick);
+  const precisaSemanticaBotao =
+    como !== "button" && como !== "a" && Boolean(props.onClick);
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     props.onKeyDown?.(e);
     if (disabled || e.defaultPrevented) return;
@@ -73,21 +82,36 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
   if (resolvedState === "suggestion" || resolvedState === "sugerida") {
     variante = "sugerida";
     badgeNode = (
-      <Pill variant="inset" colorScheme="violeta" size="sm" icon={<SparkleIcon size={12} />}>
+      <Pill
+        variant="inset"
+        colorScheme="violeta"
+        size="sm"
+        icon={<SparkleIcon size={12} />}
+      >
         Sugerido
       </Pill>
     );
   } else if (resolvedState === "candidato" || resolvedState === "candidata") {
     variante = "candidata";
     badgeNode = (
-      <Pill variant="inset" colorScheme="azul" size="sm" icon={<LayersIcon size={12} />}>
+      <Pill
+        variant="inset"
+        colorScheme="azul"
+        size="sm"
+        icon={<LayersIcon size={12} />}
+      >
         Candidato
       </Pill>
     );
   } else {
     variante = "solida";
     badgeNode = (
-      <Pill variant="solid" colorScheme="menta" size="sm" icon={<CheckIcon size={12} />}>
+      <Pill
+        variant="solid"
+        colorScheme="menta"
+        size="sm"
+        icon={<CheckIcon size={12} />}
+      >
         Conquistado
       </Pill>
     );
@@ -100,7 +124,9 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
       isFact ? "bg-[var(--surface-card)]" : "bg-[var(--surface-card)]/80",
       (bordaEsquerda || resolvedState === "conquistado") &&
         "border-l-[4px] border-l-[var(--status-success-border)]",
-      isInteractive && !disabled && "cursor-pointer text-left select-none transition-[transform,box-shadow] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[var(--ds-shadow-hover)] focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
+      isInteractive &&
+        !disabled &&
+        "cursor-pointer text-left select-none transition-[transform,box-shadow] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[var(--ds-shadow-hover)] focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
       disabled && "opacity-60 cursor-not-allowed pointer-events-none",
     ),
   });
@@ -121,25 +147,31 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
       {...(como === "button" ? { disabled } : {})}
       {...(disabled && como !== "button" ? { "aria-disabled": true } : {})}
       {...(precisaSemanticaBotao
-        ? { role: "button", tabIndex: disabled ? -1 : 0, onKeyDown: handleKeyDown }
+        ? {
+            role: "button",
+            tabIndex: disabled ? -1 : 0,
+            onKeyDown: handleKeyDown,
+          }
         : {})}
       onClick={disabled ? undefined : props.onClick}
     >
       {destacado ? (
         <span
           aria-hidden
-          className="bg-[var(--action-primary)] absolute inset-x-0 top-0 h-2 rounded-t-[var(--radius-control)]"
+          className="absolute inset-x-0 top-0 h-2 rounded-t-[var(--radius-control)] bg-[var(--action-primary)]"
         />
       ) : null}
       <div className="flex items-center justify-between gap-3">
         {titulo ? (
-          <h3 className="font-display text-[var(--text-primary)] text-lg font-semibold">
+          <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
             {titulo}
           </h3>
         ) : null}
         <div className="shrink-0">{badgeNode}</div>
       </div>
-      {children ? <div className="text-[var(--text-primary)] text-sm">{children}</div> : null}
+      {children ? (
+        <div className="text-sm text-[var(--text-primary)]">{children}</div>
+      ) : null}
     </Component>
   );
 });

@@ -6,9 +6,12 @@ import { NOME_COOKIE_TOKEN } from "@/app/(auth)/redefinir-senha/cookie";
 describe("src/proxy.ts — segurança e navegação", () => {
   describe("Filtro de métodos", () => {
     it("ignora métodos de mutação (POST) mesmo com query token", () => {
-      const req = new NextRequest("http://localhost:3000/redefinir-senha?token=xyz123", {
-        method: "POST",
-      });
+      const req = new NextRequest(
+        "http://localhost:3000/redefinir-senha?token=xyz123",
+        {
+          method: "POST",
+        },
+      );
       const res = proxy(req);
       // Para POST, o proxy não redireciona e repassa adiante
       expect(res.headers.get("location")).toBeNull();
@@ -26,12 +29,17 @@ describe("src/proxy.ts — segurança e navegação", () => {
 
   describe("Interceptação de /redefinir-senha", () => {
     it("redireciona em GET /redefinir-senha com token na query e define cookie httpOnly com as opções de segurança corretas", () => {
-      const req = new NextRequest("http://localhost:3000/redefinir-senha?token=xyz123", {
-        method: "GET",
-      });
+      const req = new NextRequest(
+        "http://localhost:3000/redefinir-senha?token=xyz123",
+        {
+          method: "GET",
+        },
+      );
       const res = proxy(req);
       expect(res.status).toBe(307);
-      expect(res.headers.get("location")).toBe("http://localhost:3000/redefinir-senha");
+      expect(res.headers.get("location")).toBe(
+        "http://localhost:3000/redefinir-senha",
+      );
 
       // Propriedade de segurança central do middleware (finding C1, ver
       // src/app/(auth)/redefinir-senha/cookie.ts): o token só deixa de vazar via
@@ -58,9 +66,12 @@ describe("src/proxy.ts — segurança e navegação", () => {
     });
 
     it("não redireciona em GET para outra rota mesmo com token na query e não define o cookie", () => {
-      const req = new NextRequest("http://localhost:3000/outra-rota?token=xyz123", {
-        method: "GET",
-      });
+      const req = new NextRequest(
+        "http://localhost:3000/outra-rota?token=xyz123",
+        {
+          method: "GET",
+        },
+      );
       const res = proxy(req);
       expect(res.headers.get("location")).toBeNull();
       expect(res.cookies.get(NOME_COOKIE_TOKEN)).toBeUndefined();
@@ -79,8 +90,12 @@ describe("src/proxy.ts — segurança e navegação", () => {
       expect(link).toContain('</.well-known/api-catalog>; rel="api-catalog"');
       expect(link).toContain('</docs/api>; rel="service-doc"');
       expect(link).toContain('</auth.md>; rel="authorizing-agent"');
-      expect(link).toContain('</.well-known/mcp/server-card.json>; rel="mcp-server-card"');
-      expect(link).toContain('</.well-known/agent-skills/index.json>; rel="agent-skills"');
+      expect(link).toContain(
+        '</.well-known/mcp/server-card.json>; rel="mcp-server-card"',
+      );
+      expect(link).toContain(
+        '</.well-known/agent-skills/index.json>; rel="agent-skills"',
+      );
     });
 
     it("não injeta cabeçalho Link em rotas /_next alcançáveis pelo matcher (path sem ponto)", () => {
@@ -100,9 +115,12 @@ describe("src/proxy.ts — segurança e navegação", () => {
     });
 
     it("não injeta cabeçalho Link em rotas /.well-known", () => {
-      const req = new NextRequest("http://localhost:3000/.well-known/apple-app-site-association", {
-        method: "GET",
-      });
+      const req = new NextRequest(
+        "http://localhost:3000/.well-known/apple-app-site-association",
+        {
+          method: "GET",
+        },
+      );
       const res = proxy(req);
       expect(res.headers.get("Link")).toBeNull();
     });

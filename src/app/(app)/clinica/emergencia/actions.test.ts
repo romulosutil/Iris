@@ -58,7 +58,10 @@ describe("salvarEmergenciaAction (error handling)", () => {
 
     expect(result).toEqual({ error: "Você não tem permissão para isso." });
     expect(consoleErrorSpy).not.toHaveBeenCalled();
-    expect(requireRole).toHaveBeenCalledWith({ role: "terapeuta" }, "coordenador");
+    expect(requireRole).toHaveBeenCalledWith(
+      { role: "terapeuta" },
+      "coordenador",
+    );
   });
 
   it("registra o log e retorna mensagem genérica para erros inesperados", async () => {
@@ -69,7 +72,10 @@ describe("salvarEmergenciaAction (error handling)", () => {
     const result = await salvarEmergenciaAction({}, fd);
 
     expect(result).toEqual({ error: "Erro interno no servidor." });
-    expect(consoleErrorSpy).toHaveBeenCalledWith("wrapper clinica/emergencia:", boom);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "wrapper clinica/emergencia:",
+      boom,
+    );
   });
 
   it("no caminho feliz, salva a config, revalida a página e retorna ok", async () => {
@@ -89,7 +95,9 @@ describe("salvarEmergenciaAction (error handling)", () => {
   it("retorna o erro de negócio sem revalidar quando salvarConfigEmergencia falha", async () => {
     const fd = new FormData();
     getTenantContext.mockResolvedValueOnce({ role: "coordenador" });
-    salvarConfigEmergencia.mockResolvedValueOnce({ error: "responsável técnico inválido" });
+    salvarConfigEmergencia.mockResolvedValueOnce({
+      error: "responsável técnico inválido",
+    });
 
     const result = await salvarEmergenciaAction({}, fd);
 

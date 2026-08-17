@@ -17,15 +17,23 @@ export class StubConvenioNarrativoProvider implements ConvenioNarrativoProvider 
 
     const porDominio = new Map<string, number>();
     for (const e of dossie.evidencias) {
-      porDominio.set(e.metaOuDominio, (porDominio.get(e.metaOuDominio) ?? 0) + 1);
+      porDominio.set(
+        e.metaOuDominio,
+        (porDominio.get(e.metaOuDominio) ?? 0) + 1,
+      );
     }
-    const evolucaoPorDominio = [...porDominio.entries()].map(([dominio, n]) => ({
-      dominio,
-      narrativa: `No período, foram registradas ${n} evidência(s) clínica(s) aprovada(s) no domínio ${dominio}, extraídas do prontuário.`,
-    }));
+    const evolucaoPorDominio = [...porDominio.entries()].map(
+      ([dominio, n]) => ({
+        dominio,
+        narrativa: `No período, foram registradas ${n} evidência(s) clínica(s) aprovada(s) no domínio ${dominio}, extraídas do prontuário.`,
+      }),
+    );
 
-    const temAvanco = dossie.evidencias.some((e) => POSITIVA.has(e.classificacao.toLowerCase()));
-    const periodoSemAvancoVisivel = evolucaoPorDominio.length === 0 || !temAvanco;
+    const temAvanco = dossie.evidencias.some((e) =>
+      POSITIVA.has(e.classificacao.toLowerCase()),
+    );
+    const periodoSemAvancoVisivel =
+      evolucaoPorDominio.length === 0 || !temAvanco;
 
     const p = dossie.presenca;
     const resumoClinico = `Paciente em acompanhamento terapêutico no período de ${input.periodo.inicio} a ${input.periodo.fim}. Foram realizadas ${p.sessoesRealizadas} sessão(ões), com ${p.faltasJustificadas} falta(s) justificada(s) e ${p.faltasNaoJustificadas} não justificada(s). Os dados quantitativos constam do dossiê factual anexo.`;
@@ -39,7 +47,10 @@ export class StubConvenioNarrativoProvider implements ConvenioNarrativoProvider 
       evolucaoPorDominio,
       justificativaContinuidade,
       objetivosProximoPeriodo: dossie.evidencias.length
-        ? ["Consolidar os ganhos registrados no período.", "Reavaliar metas ativas na próxima janela."]
+        ? [
+            "Consolidar os ganhos registrados no período.",
+            "Reavaliar metas ativas na próxima janela.",
+          ]
         : ["Reavaliar plano terapêutico e conduta na próxima janela."],
       periodoSemAvancoVisivel,
       notaHonestidade: periodoSemAvancoVisivel

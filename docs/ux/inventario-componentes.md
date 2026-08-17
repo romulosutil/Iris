@@ -47,13 +47,13 @@ stack quando a Fase que primeiro precisar de um desses componentes chegar
 
 ### Fase 1 — Pacientes + agenda mínima
 
-| Componente                                      | Tela de origem                                       | O que resolve                                                          | Relação com os 3 base                                                                |
-| ----------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Cabeçalho com voltar + título + contexto        | Praticamente toda tela (`← Grade Sessão 47 · Vitor`) | Navegação consistente entre mobile (terapeuta) e desktop (coordenador) | Novo primitivo de layout — construir na Fase 1, é usado por todas as fases seguintes |
-| Item de Agenda com status                       | 5.1 Grade do dia                                     | Linha de horário + paciente + estado (✓ feito / ● agora / ○ futuro)    | Estende Content Card                                                                 |
+| Componente                                      | Tela de origem                                       | O que resolve                                                                 | Relação com os 3 base                                                                |
+| ----------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Cabeçalho com voltar + título + contexto        | Praticamente toda tela (`← Grade Sessão 47 · Vitor`) | Navegação consistente entre mobile (terapeuta) e desktop (coordenador)        | Novo primitivo de layout — construir na Fase 1, é usado por todas as fases seguintes |
+| Item de Agenda com status                       | 5.1 Grade do dia                                     | Linha de horário + paciente + estado (✓ feito / ● agora / ○ futuro)           | Estende Content Card                                                                 |
 | **AgendaCalendarGrid**                          | 5.1 Grade do dia / Visão semanal                     | Grade do dia / semanal, slots <30min, colisão visual e estados de atendimento | `src/components/ui/agenda-calendar-grid.tsx` (Em implementação / Formalizado em ui/) |
-| Formulário em etapas (administrativo → clínico) | 4.1 Cadastro                                         | Dois donos, dois momentos, mesma jornada (fronteira RLS visível)       | Container estende Card; navegação entre etapas é novo primitivo                      |
-| Seleção múltipla com chip de vigência           | 4.1 (`☑ PROC — desde 09/07/2026`)                    | Selecionar protocolo(s) de referência com nota contextual inline       | Novo primitivo pequeno                                                               |
+| Formulário em etapas (administrativo → clínico) | 4.1 Cadastro                                         | Dois donos, dois momentos, mesma jornada (fronteira RLS visível)              | Container estende Card; navegação entre etapas é novo primitivo                      |
+| Seleção múltipla com chip de vigência           | 4.1 (`☑ PROC — desde 09/07/2026`)                    | Selecionar protocolo(s) de referência com nota contextual inline              | Novo primitivo pequeno                                                               |
 
 ### Fase 2 — Metas + diário (sem IA)
 
@@ -76,14 +76,14 @@ stack quando a Fase que primeiro precisar de um desses componentes chegar
 
 ### Fase 4 — Evidências acumuladas + linha do tempo
 
-| Componente                                       | Tela de origem                   | O que resolve                                                          | Relação com os 3 base                                                                                  |
-| ------------------------------------------------ | -------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Barra de progresso do protocolo                  | 1.3 Gráfico do protocolo         | Segmento sólido (conquistado) + hachurado (candidato) por meta/domínio | Novo primitivo — usa diretamente o par de tokens "candidato/conquistado" já definido no briefing       |
-| **ProtocolDashboardCharts**                      | 1.3 Gráfico do protocolo / PEI   | Família de gráficos (Barra com hachura densa de IA + Gráfico de tendência temporal de sessões em SVG) | `src/components/ui/protocol-dashboard-charts.tsx` (Em implementação / Formalizado em ui/) |
-| Scrubber de linha do tempo                       | 1b                               | Arrastar entre sessões, "voltar no tempo" ao snapshot                  | Componente mais complexo do catálogo — Radix Slider como base de comportamento + skin                  |
-| Banner fixo de modo passado                      | 1b (`📍 Vendo sessão 45 de 120`) | Nunca deixar confundir passado com presente                            | Mesma família do banner informativo da Fase 3                                                          |
-| Trajetória (faixa colorida por trecho, clicável) | 1b                               | Evolução/estagnação/regressão visual, clicável para ver evidências     | Mini-visualização de dado — ao chegar aqui, herdar só os 3 acentos já definidos, nunca inventar 4ª cor |
-| Comparação lado a lado                           | 1b (sessão N vs M)               | Layout de 2 colunas                                                    | Composição de Cards existentes, não é componente novo                                                  |
+| Componente                                       | Tela de origem                   | O que resolve                                                                                         | Relação com os 3 base                                                                                  |
+| ------------------------------------------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Barra de progresso do protocolo                  | 1.3 Gráfico do protocolo         | Segmento sólido (conquistado) + hachurado (candidato) por meta/domínio                                | Novo primitivo — usa diretamente o par de tokens "candidato/conquistado" já definido no briefing       |
+| **ProtocolDashboardCharts**                      | 1.3 Gráfico do protocolo / PEI   | Família de gráficos (Barra com hachura densa de IA + Gráfico de tendência temporal de sessões em SVG) | `src/components/ui/protocol-dashboard-charts.tsx` (Em implementação / Formalizado em ui/)              |
+| Scrubber de linha do tempo                       | 1b                               | Arrastar entre sessões, "voltar no tempo" ao snapshot                                                 | Componente mais complexo do catálogo — Radix Slider como base de comportamento + skin                  |
+| Banner fixo de modo passado                      | 1b (`📍 Vendo sessão 45 de 120`) | Nunca deixar confundir passado com presente                                                           | Mesma família do banner informativo da Fase 3                                                          |
+| Trajetória (faixa colorida por trecho, clicável) | 1b                               | Evolução/estagnação/regressão visual, clicável para ver evidências                                    | Mini-visualização de dado — ao chegar aqui, herdar só os 3 acentos já definidos, nunca inventar 4ª cor |
+| Comparação lado a lado                           | 1b (sessão N vs M)               | Layout de 2 colunas                                                                                   | Composição de Cards existentes, não é componente novo                                                  |
 
 ### Fase 5 — Coordenador + exportação
 

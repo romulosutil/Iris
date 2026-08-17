@@ -46,7 +46,9 @@ function lerPredicadoWhereDoBackfill(): string {
     .join(" ")
     .trim();
 
-  const match = semComentarios.match(/UPDATE\s+app_user\s+SET\s+email_verified\s*=\s*true\s+WHERE\s+(.+?);?\s*$/i);
+  const match = semComentarios.match(
+    /UPDATE\s+app_user\s+SET\s+email_verified\s*=\s*true\s+WHERE\s+(.+?);?\s*$/i,
+  );
   if (!match) {
     throw new Error(
       `verificacao.int.test.ts: não conseguiu extrair o predicado WHERE de ${MIGRATION_PATH} — conteúdo: ${JSON.stringify(conteudo)}`,

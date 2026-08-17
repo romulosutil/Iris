@@ -54,17 +54,24 @@ const estadoToVariante: Record<EstadoDado, BadgesVariantes> = {
 };
 
 const variantStyles: Record<string, string> = {
-  success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
-  Success: "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
-  warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
-  Warning: "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
-  error: "bg-[var(--status-error-bg)] border-[var(--status-error-border)] text-[var(--status-error-fg)]",
+  success:
+    "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
+  Success:
+    "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
+  warning:
+    "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
+  Warning:
+    "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
+  error:
+    "bg-[var(--status-error-bg)] border-[var(--status-error-border)] text-[var(--status-error-fg)]",
   ai: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
   AI: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
   info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
   Info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
-  brand: "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)]",
-  neutral: "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)]",
+  brand:
+    "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)]",
+  neutral:
+    "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)]",
 };
 
 const dotColorMap: Record<string, string> = {
@@ -117,7 +124,10 @@ const config: Record<EstadoDado, Config> = {
   },
 };
 
-const defaultIcons: Record<string, React.ComponentType<{ size?: number | string; className?: string }>> = {
+const defaultIcons: Record<
+  string,
+  React.ComponentType<{ size?: number | string; className?: string }>
+> = {
   success: CheckIcon,
   Success: CheckIcon,
   warning: ClockIcon,
@@ -142,24 +152,33 @@ export interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> 
  * StatusBadge — Selo semântico de estado com par obrigatório Ícone + Rótulo Textual (§4C).
  */
 export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
-  function StatusBadge({ className, estado, variante, children, ...props }, ref) {
-    const resolvedVariant = variante ?? (estado ? estadoToVariante[estado] : "neutral");
-    const styleClasses = variantStyles[resolvedVariant] ?? variantStyles.neutral;
+  function StatusBadge(
+    { className, estado, variante, children, ...props },
+    ref,
+  ) {
+    const resolvedVariant =
+      variante ?? (estado ? estadoToVariante[estado] : "neutral");
+    const styleClasses =
+      variantStyles[resolvedVariant] ?? variantStyles.neutral;
 
     const borderStyle =
-      estado === "sugerida" || resolvedVariant === "ai" || resolvedVariant === "AI"
+      estado === "sugerida" ||
+      resolvedVariant === "ai" ||
+      resolvedVariant === "AI"
         ? "border-dashed"
         : "border-solid";
 
     const rotulo = estado ? config[estado].rotulo : String(resolvedVariant);
-    const Icone = estado ? config[estado].Icone : (defaultIcons[resolvedVariant] ?? CheckIcon);
+    const Icone = estado
+      ? config[estado].Icone
+      : (defaultIcons[resolvedVariant] ?? CheckIcon);
 
     return (
       <span
         ref={ref}
         data-estado={estado}
         className={cn(
-          "inline-flex items-center gap-1.5 border-2 px-3 py-0.5 rounded-sm",
+          "inline-flex items-center gap-1.5 rounded-sm border-2 px-3 py-0.5",
           "font-mono text-xs font-semibold tracking-wide uppercase",
           borderStyle,
           styleClasses,
@@ -167,7 +186,7 @@ export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
         )}
         {...props}
       >
-        <span className="shrink-0 inline-flex items-center justify-center">
+        <span className="inline-flex shrink-0 items-center justify-center">
           <Icone size={14} />
         </span>
         <span>{children ?? rotulo}</span>
@@ -185,7 +204,8 @@ export interface StatusDotProps extends React.HTMLAttributes<HTMLSpanElement> {
 
 export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
   function StatusDot({ className, estado, variante, children, ...props }, ref) {
-    const resolvedVariant = variante ?? (estado ? estadoToVariante[estado] : "neutral");
+    const resolvedVariant =
+      variante ?? (estado ? estadoToVariante[estado] : "neutral");
     const dotStyle = dotColorMap[resolvedVariant] ?? dotColorMap.neutral;
     const rotulo = estado ? config[estado].rotulo : String(resolvedVariant);
 
@@ -193,13 +213,16 @@ export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
       <span
         ref={ref}
         data-estado={estado}
-        className={cn("text-[var(--text-primary)] inline-flex items-center gap-2 text-sm", className)}
+        className={cn(
+          "inline-flex items-center gap-2 text-sm text-[var(--text-primary)]",
+          className,
+        )}
         {...props}
       >
         <span
           aria-hidden
           className={cn(
-            "border-[var(--border-brutal)] size-2.5 shrink-0 border rounded-[length:var(--radius-pill)]",
+            "size-2.5 shrink-0 rounded-[length:var(--radius-pill)] border border-[var(--border-brutal)]",
             dotStyle,
           )}
         />

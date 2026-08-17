@@ -10,12 +10,12 @@
 
 O agente **não** recebe nem emite o UUID do protocolo/milestone. O que trafega:
 
-| Ref no alvo | O que é | Resolvível? |
-| --- | --- | --- |
-| `goal_id` | **UUID real** de `goal`, ecoado do contexto (`context-loader.ts:93`) | ✅ identidade |
-| `protocol_id` | **slug de `familia`** (`"vbmapp"`), não o UUID (`context-assembler.ts:11`) | ✅ lookup |
-| `dominio_id` | slug de domínio (`"mando"`), `milestone.dominio_id` text | — (parcial) |
-| `milestone_id` | **não existe** no alvo | ⚠️ ambíguo |
+| Ref no alvo    | O que é                                                                    | Resolvível?   |
+| -------------- | -------------------------------------------------------------------------- | ------------- |
+| `goal_id`      | **UUID real** de `goal`, ecoado do contexto (`context-loader.ts:93`)       | ✅ identidade |
+| `protocol_id`  | **slug de `familia`** (`"vbmapp"`), não o UUID (`context-assembler.ts:11`) | ✅ lookup     |
+| `dominio_id`   | slug de domínio (`"mando"`), `milestone.dominio_id` text                   | — (parcial)   |
+| `milestone_id` | **não existe** no alvo                                                     | ⚠️ ambíguo    |
 
 `milestone` é único por `(protocol_id, dominio_id, nivel)` — um par `(protocolo, domínio)` tem
 **N marcos, um por nível**. O alvo não carrega `nivel` → não dá para escolher o marco.
@@ -27,8 +27,8 @@ Função `resolverAlvoParaFks(clinicId, patientId, alvo)`:
 1. **goal_id** → aceita se `alvo.goal_id` é UUID que existe em `goal` do paciente (RLS já escopa).
    Identidade. (Já funciona no backfill.)
 2. **protocol_id** → `SELECT p.id FROM protocol p JOIN patient_protocol pp ON pp.protocol_id = p.id
-   WHERE p.clinic_id = :clinic AND p.familia = :slug AND pp.patient_id = :patient
-   AND pp.desativado_em IS NULL`. Determinístico quando o paciente tem **1** protocolo ativo dessa
+WHERE p.clinic_id = :clinic AND p.familia = :slug AND pp.patient_id = :patient
+AND pp.desativado_em IS NULL`. Determinístico quando o paciente tem **1** protocolo ativo dessa
    família (caso normal). Se >1 → ambíguo → `null` + flag (não adivinha).
 3. **milestone_id** → só quando `(protocol_id, dominio_id)` tem **exatamente 1** marco; senão `null`.
 

@@ -1372,7 +1372,9 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
        * alarme nunca casa. Uma cobrança nossa sem ciclo ficava invisível
        * exatamente no cenário em que o sistema já estava com problema.
        */
-      respondeHttp(500, { errors: [{ code: "internal", description: "boom" }] });
+      respondeHttp(500, {
+        errors: [{ code: "internal", description: "boom" }],
+      });
       const id = novoIdEvento();
       const cicloInexistente = crypto.randomUUID();
       const res = await POST(

@@ -79,7 +79,9 @@ function main() {
   const problemas = [];
 
   if (totalTests === 0) {
-    problemas.push("ZERO testes executados — configuração de include/project provavelmente errada");
+    problemas.push(
+      "ZERO testes executados — configuração de include/project provavelmente errada",
+    );
   }
   if (totalTests < minTests) {
     problemas.push(
@@ -111,7 +113,8 @@ function main() {
     for (const p of problemas) console.error(`  - ${p}`);
     if (arquivosNaoOk.length > 0) {
       console.error("  arquivos com problema:");
-      for (const f of arquivosNaoOk) console.error(`    - ${f.name} (${f.status})`);
+      for (const f of arquivosNaoOk)
+        console.error(`    - ${f.name} (${f.status})`);
     }
     process.exit(1);
   }

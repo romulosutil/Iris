@@ -13,70 +13,74 @@
 ### Task 1: Database Migration & Schema for Super Admin Flag
 
 **Files:**
+
 - Create: `db/migrations/0072_super_admin_role.sql`
 - Modify: `db/migrations/meta/_journal.json`
 - Modify: `src/db/schema.ts`
 
 - [ ] **Step 1: Write hand-crafted SQL migration `0072_super_admin_role.sql`**
-Add `is_super_admin` boolean column to `app_user` with default `false`.
+      Add `is_super_admin` boolean column to `app_user` with default `false`.
 
 - [ ] **Step 2: Register migration in `_journal.json`**
-Add entry `idx: 72`, `when: 1785422581000`, `tag: "0072_super_admin_role"`.
+      Add entry `idx: 72`, `when: 1785422581000`, `tag: "0072_super_admin_role"`.
 
 - [ ] **Step 3: Update `src/db/schema.ts`**
-Add `isSuperAdmin: boolean("is_super_admin").notNull().default(false)` to `appUser` schema.
+      Add `isSuperAdmin: boolean("is_super_admin").notNull().default(false)` to `appUser` schema.
 
 - [ ] **Step 4: Verify migration & typecheck**
-Run: `pnpm typecheck`
-Expected: PASS
+      Run: `pnpm typecheck`
+      Expected: PASS
 
 ---
 
 ### Task 2: Super Admin Guard & Auth Helpers
 
 **Files:**
+
 - Create: `src/auth/super-admin.ts`
 - Create: `src/auth/super-admin.test.ts`
 
 - [ ] **Step 1: Write failing unit test for `exigirSuperAdmin`**
-Test unauthenticated user returns 404 (notFound), non-super admin returns 404, super admin user succeeds.
+      Test unauthenticated user returns 404 (notFound), non-super admin returns 404, super admin user succeeds.
 
 - [ ] **Step 2: Run test to verify failure**
-Run: `pnpm test src/auth/super-admin.test.ts`
+      Run: `pnpm test src/auth/super-admin.test.ts`
 
 - [ ] **Step 3: Implement `src/auth/super-admin.ts`**
-Implement `exigirSuperAdmin()` using `auth.api.getSession` and `authDb` query on `appUser.isSuperAdmin`. Call `notFound()` on failure.
+      Implement `exigirSuperAdmin()` using `auth.api.getSession` and `authDb` query on `appUser.isSuperAdmin`. Call `notFound()` on failure.
 
 - [ ] **Step 4: Run test to verify pass**
-Run: `pnpm test src/auth/super-admin.test.ts`
-Expected: PASS
+      Run: `pnpm test src/auth/super-admin.test.ts`
+      Expected: PASS
 
 ---
 
 ### Task 3: Super Admin Data Layer & Queries (Zero-Knowledge LGPD)
 
 **Files:**
+
 - Create: `src/app/(admin)/benjamin/queries.ts`
 - Create: `src/app/(admin)/benjamin/queries.int.test.ts`
 
 - [ ] **Step 1: Write integration tests for `queries.ts`**
-Verify KPI calculation (MRR, Clinics, Trial, Exempt), Clinic List search/sort, and Webhook/Integration Health. Assert no patient clinical data or patient names are exposed.
+      Verify KPI calculation (MRR, Clinics, Trial, Exempt), Clinic List search/sort, and Webhook/Integration Health. Assert no patient clinical data or patient names are exposed.
 
 - [ ] **Step 2: Run test to verify failure**
-Run: `pnpm test:rls src/app/(admin)/benjamin/queries.int.test.ts`
+      Run: `pnpm test:rls src/app/(admin)/benjamin/queries.int.test.ts`
 
 - [ ] **Step 3: Implement `queries.ts`**
-Write optimized Postgres queries using `authDb` to calculate MRR via `calcularMensalidadeCentavos`, count active patients per clinic, fetch clinic owner contact info, and retrieve webhook events.
+      Write optimized Postgres queries using `authDb` to calculate MRR via `calcularMensalidadeCentavos`, count active patients per clinic, fetch clinic owner contact info, and retrieve webhook events.
 
 - [ ] **Step 4: Run test to verify pass**
-Run: `pnpm test:rls src/app/(admin)/benjamin/queries.int.test.ts`
-Expected: PASS
+      Run: `pnpm test:rls src/app/(admin)/benjamin/queries.int.test.ts`
+      Expected: PASS
 
 ---
 
 ### Task 4: UI Components & Route Setup (`/benjamin`)
 
 **Files:**
+
 - Create: `src/app/(admin)/benjamin/layout.tsx`
 - Create: `src/app/(admin)/benjamin/page.tsx`
 - Create: `src/app/(admin)/benjamin/clinicas/page.tsx`
@@ -85,19 +89,19 @@ Expected: PASS
 - Create: `src/components/admin/kpi-card.tsx`
 
 - [ ] **Step 1: Implement Layout & Navigation**
-`layout.tsx` executes `exigirSuperAdmin()`. Renders top nav with links for Visão Geral (`/benjamin`), Clínicas (`/benjamin/clinicas`), Saúde (`/benjamin/saude`).
+      `layout.tsx` executes `exigirSuperAdmin()`. Renders top nav with links for Visão Geral (`/benjamin`), Clínicas (`/benjamin/clinicas`), Saúde (`/benjamin/saude`).
 
 - [ ] **Step 2: Implement Visão Geral Dashboard (`/benjamin/page.tsx`)**
-Displays main KPI Cards (Estimated MRR, Active Clinics, Total Active Patients, Clinics in Trial, Exempt Clinics) and high-level summary.
+      Displays main KPI Cards (Estimated MRR, Active Clinics, Total Active Patients, Clinics in Trial, Exempt Clinics) and high-level summary.
 
 - [ ] **Step 3: Implement Tabela de Clínicas (`/benjamin/clinicas/page.tsx`)**
-Search & filter by clinic name/owner, sorting by revenue/date, badges for status (Trial, Ativa, Inadimplente, Isenta), active patient counts, estimated monthly BRL.
+      Search & filter by clinic name/owner, sorting by revenue/date, badges for status (Trial, Ativa, Inadimplente, Isenta), active patient counts, estimated monthly BRL.
 
 - [ ] **Step 4: Implement Saúde & Integrações (`/benjamin/saude/page.tsx`)**
-Asaas Webhooks status monitor (last events, processing timestamps, failures) and Resend email status.
+      Asaas Webhooks status monitor (last events, processing timestamps, failures) and Resend email status.
 
 - [ ] **Step 5: Verify build & UI typecheck**
-Run: `pnpm typecheck`
+      Run: `pnpm typecheck`
 
 ---
 

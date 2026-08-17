@@ -11,7 +11,8 @@
 import type { CategoriaRisco } from "./prazos";
 
 /** Título do alerta na lista da fila (§6.1). */
-export const TITULO_ALERTA = "Sinal identificado no relato requer revisão prioritária";
+export const TITULO_ALERTA =
+  "Sinal identificado no relato requer revisão prioritária";
 
 /** Categoria de risco em forma legível, para interpolação no corpo do alerta. */
 export const CATEGORIA_LEGIVEL: Record<CategoriaRisco, string> = {
@@ -37,7 +38,8 @@ export function corpoAlerta(categoriaLegivel: string): string {
  * identificação aparecem só dentro do app, após autenticação. A urgência é
  * carregada pelo CANAL, não pelo texto.
  */
-export const TEXTO_PUSH = "Iris: sinal prioritário requer revisão imediata. Abrir agora.";
+export const TEXTO_PUSH =
+  "Iris: sinal prioritário requer revisão imediata. Abrir agora.";
 
 /**
  * Copy específica de `violencia_sofrida` em paciente MENOR DE IDADE (§5.2).

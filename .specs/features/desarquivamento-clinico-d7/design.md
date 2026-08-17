@@ -2,7 +2,7 @@
 
 > **Data:** 11/08/2026  
 > **Status:** 🟢 Design Arquitetural Consolidado  
-> **Componentes:** `src/lib/patient/desarquivamento.ts` & Pontos de Invocação Clínicos  
+> **Componentes:** `src/lib/patient/desarquivamento.ts` & Pontos de Invocação Clínicos
 
 ---
 
@@ -105,29 +105,29 @@ export async function desarquivarPacienteSeArquivado(
 ### Detalhamento por Arquivo e Função:
 
 1. **`src/app/(app)/diario/[sessionId]/logic.ts`**
-   * `capturarDiarioCore`: `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "registro_clinico")`
-   * `consolidarSessaoCore`: `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "registro_clinico")`
-   * `corrigirEscopoProtocoloCore`: `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "escopo_protocolo")`
-   * `registrarAudioLocalCore`: `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "audio_local")`
+   - `capturarDiarioCore`: `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "registro_clinico")`
+   - `consolidarSessaoCore`: `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "registro_clinico")`
+   - `corrigirEscopoProtocoloCore`: `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "escopo_protocolo")`
+   - `registrarAudioLocalCore`: `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "audio_local")`
 
 2. **`src/app/(app)/revisao/[sessionId]/logic.ts`**
-   * `transicionar`: Quando `novoEstado === "aprovada" || novoEstado === "editada"`, executa `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "aprovacao_evidencia")`
+   - `transicionar`: Quando `novoEstado === "aprovada" || novoEstado === "editada"`, executa `desarquivarPacienteSeArquivado(tx, ctx, sess.patientId, "aprovacao_evidencia")`
 
 3. **`src/app/(app)/validacao/logic.ts`**
-   * `confirmarEvidenciaCore`: `desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia")`
-   * `reclassificarEvidenciaCore`: `desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia")`
+   - `confirmarEvidenciaCore`: `desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia")`
+   - `reclassificarEvidenciaCore`: `desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia")`
 
 4. **`src/app/(app)/duvidas/logic.ts`**
-   * `responderQueryCore`: `desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia")`
+   - `responderQueryCore`: `desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia")`
 
 5. **`src/app/(app)/pacientes/[id]/cadastro-clinico/protocolo-logic.ts`**
-   * `ativarProtocoloCore`: `desarquivarPacienteSeArquivado(tx, ctx, patientId, "ativacao_protocolo")`
+   - `ativarProtocoloCore`: `desarquivarPacienteSeArquivado(tx, ctx, patientId, "ativacao_protocolo")`
 
 6. **`src/app/(app)/pacientes/[id]/metas/logic.ts`**
-   * `criarMetaCore`: `desarquivarPacienteSeArquivado(tx, ctx, d.patientId, "criacao_meta")`
+   - `criarMetaCore`: `desarquivarPacienteSeArquivado(tx, ctx, d.patientId, "criacao_meta")`
 
 7. **`src/app/(app)/pacientes/[id]/cadastro-clinico/prescricao-logic.ts`**
-   * `salvarPrescricaoCore`: `desarquivarPacienteSeArquivado(tx, ctx, patientId, "prescricao_disciplina")`
+   - `salvarPrescricaoCore`: `desarquivarPacienteSeArquivado(tx, ctx, patientId, "prescricao_disciplina")`
 
 8. **`src/app/(app)/pacientes/[id]/cadastro-clinico/logic.ts`**
-   * `salvarFichaClinicaCore`: `desarquivarPacienteSeArquivado(tx, ctx, patientId, "ficha_clinica")`
+   - `salvarFichaClinicaCore`: `desarquivarPacienteSeArquivado(tx, ctx, patientId, "ficha_clinica")`

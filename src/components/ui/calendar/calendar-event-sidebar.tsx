@@ -52,7 +52,7 @@ export function CalendarEventSidebar({
   const modalidadeStr = sessao.modalidade;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200">
+    <div className="animate-in fade-in fixed inset-0 z-50 flex items-end bg-black/50 backdrop-blur-xs transition-opacity duration-200 sm:items-stretch sm:justify-end">
       {/* Overlay Backdrop de fechar */}
       <div className="absolute inset-0" onClick={aoFechar} aria-hidden="true" />
 
@@ -61,22 +61,25 @@ export function CalendarEventSidebar({
         role="dialog"
         aria-label="Detalhes da Sessão"
         className={cn(
-          "relative z-10 flex w-full flex-col justify-between border-black bg-[var(--surface-card,#ffffff)] p-5 sm:p-6 shadow-2xl transition-transform animate-in duration-200",
-          "max-h-[88vh] rounded-t-2xl border-t-2 sm:rounded-t-none slide-in-from-bottom sm:slide-in-from-right",
-          "sm:h-full sm:w-[440px] sm:border-l-2 sm:border-t-0"
+          "animate-in relative z-10 flex w-full flex-col justify-between border-black bg-[var(--surface-card,#ffffff)] p-5 shadow-2xl transition-transform duration-200 sm:p-6",
+          "slide-in-from-bottom sm:slide-in-from-right max-h-[88vh] rounded-t-2xl border-t-2 sm:rounded-t-none",
+          "sm:h-full sm:w-[440px] sm:border-t-0 sm:border-l-2",
         )}
       >
         {/* Handle Visual no Mobile */}
-        <div className="mx-auto -mt-2 mb-3 h-1.5 w-12 rounded-full bg-gray-300 sm:hidden" aria-hidden="true" />
+        <div
+          className="mx-auto -mt-2 mb-3 h-1.5 w-12 rounded-full bg-gray-300 sm:hidden"
+          aria-hidden="true"
+        />
 
         <div className="space-y-5 overflow-y-auto pr-1">
           {/* Cabeçalho */}
           <div className="flex items-start justify-between border-b-2 border-black pb-4">
             <div>
-              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary,#71717A)]">
+              <span className="font-mono text-[11px] font-bold tracking-wider text-[var(--text-secondary,#71717A)] uppercase">
                 {sessao.disciplina}
               </span>
-              <h2 className="font-display text-lg sm:text-xl font-bold text-[var(--text-primary,#09090B)]">
+              <h2 className="font-display text-lg font-bold text-[var(--text-primary,#09090B)] sm:text-xl">
                 {sessao.pacienteNome ?? "Paciente não identificado"}
               </h2>
             </div>
@@ -85,7 +88,7 @@ export function CalendarEventSidebar({
               variante="neutra"
               size="sm"
               onClick={aoFechar}
-              className="h-8 w-8 rounded-full p-0 font-mono font-bold border-2 border-black shadow-[1px_1px_0_#000]"
+              className="h-8 w-8 rounded-full border-2 border-black p-0 font-mono font-bold shadow-[1px_1px_0_#000]"
               aria-label="Fechar painel"
             >
               ✕
@@ -106,7 +109,7 @@ export function CalendarEventSidebar({
           {/* Ficha e Detalhes do Profissional */}
           <div className="space-y-3 rounded-[var(--radius-control)] border-2 border-black p-4 shadow-[2px_2px_0_#000]">
             <div>
-              <span className="font-mono text-[10px] font-bold uppercase text-[var(--text-secondary)]">
+              <span className="font-mono text-[10px] font-bold text-[var(--text-secondary)] uppercase">
                 Profissional Responsável
               </span>
               <p className="font-display font-semibold text-[var(--text-primary)]">
@@ -116,7 +119,7 @@ export function CalendarEventSidebar({
 
             {modalidadeStr && (
               <div>
-                <span className="font-mono text-[10px] font-bold uppercase text-[var(--text-secondary)]">
+                <span className="font-mono text-[10px] font-bold text-[var(--text-secondary)] uppercase">
                   Modalidade
                 </span>
                 <p className="font-display font-medium text-[var(--text-primary)] capitalize">
@@ -129,11 +132,12 @@ export function CalendarEventSidebar({
           {/* Botão de Check-in Instantâneo se agendada */}
           {sessao.estado === "agendada" && podeGerir && (
             <div className="rounded-[var(--radius-control)] border-2 border-black bg-[#e6f4f1] p-4 shadow-[2px_2px_0_#000]">
-              <span className="font-mono text-xs font-bold uppercase text-[#0a5c54]">
+              <span className="font-mono text-xs font-bold text-[#0a5c54] uppercase">
                 Ação Rápida de Recepção
               </span>
-              <p className="mt-1 font-body text-xs text-[#0a5c54]/80">
-                Confirme a chegada do paciente para liberar a ficha de atendimento.
+              <p className="font-body mt-1 text-xs text-[#0a5c54]/80">
+                Confirme a chegada do paciente para liberar a ficha de
+                atendimento.
               </p>
               <div className="mt-3">
                 <CheckInButton sessionId={sessao.id} />
@@ -144,24 +148,21 @@ export function CalendarEventSidebar({
           {/* Formulário de Gestão de Estado da Sessão */}
           {podeGerir && (
             <div className="space-y-3 border-t-2 border-black pt-4">
-              <h3 className="font-display text-sm font-bold uppercase text-[var(--text-primary)]">
+              <h3 className="font-display text-sm font-bold text-[var(--text-primary)] uppercase">
                 Gerenciar Status da Sessão
               </h3>
-              <GerirSessao
-                sessionId={sessao.id}
-                terapeutas={terapeutas}
-              />
+              <GerirSessao sessionId={sessao.id} terapeutas={terapeutas} />
             </div>
           )}
         </div>
 
         {/* Rodapé com Atalho do Paciente */}
-        <div className="border-t-2 border-black pt-4 mt-4">
+        <div className="mt-4 border-t-2 border-black pt-4">
           <Link href={`/pacientes/${sessao.patientId}`} passHref>
             <Button
               type="button"
               variante="neutra"
-              className="w-full justify-between font-display font-bold border-2 border-black shadow-[2px_2px_0_#000]"
+              className="font-display w-full justify-between border-2 border-black font-bold shadow-[2px_2px_0_#000]"
             >
               <span>Abrir Cadastro do Paciente</span>
               <span aria-hidden="true">→</span>

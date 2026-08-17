@@ -59,7 +59,9 @@ import { ClaudeProvider, createAnthropicInvoker } from "./claude-provider";
 //   paciente real sai para a Anthropic enquanto o DPA + zero-data-retention não
 //   estiverem confirmados (a flag só é ligada no Easypanel depois disso).
 //   Sem a flag/chave → NullProvider (marca pendente, não chama LLM).
-export function resolveProvider(clinic: { isDemo: boolean }): ExtractionProvider {
+export function resolveProvider(clinic: {
+  isDemo: boolean;
+}): ExtractionProvider {
   if (clinic.isDemo) return new DemoStubProvider();
   const llmHabilitado =
     process.env.EXTRACTION_LLM_ENABLED === "true" &&

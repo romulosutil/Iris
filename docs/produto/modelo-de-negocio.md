@@ -374,3 +374,4 @@ Sequência de receita: piloto pago com desconto → 5–10 clínicas por indica�
 4. ~~Nome/marca e domínio~~ — **decidido por Rômulo em 10/07/2026: Iris,
    domínio `irisclinica.ia.br`.** Rebranding já aplicado em toda a
    documentação (este documento incluído).
+5. ~~Gateway de pagamento e trilho de cobrança~~ — **homologado em produção (11/08/2026, D24/D43/D44):** Faturamento ativo opera exclusivamente via **Asaas com Pix Automático** (`immediateQrCode` com autorização de R$ 0,01 + apuração mensal pós-paga por ficha ativa). Mercado Pago foi formalmente descontinuado (migração `0091_drop_webhook_mercado_pago.sql`).

@@ -10,8 +10,10 @@ interface RadioCardOption {
   badge?: React.ReactNode;
 }
 
-export interface RadioCardsProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange"> {
+export interface RadioCardsProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "onChange"
+> {
   opcoes: RadioCardOption[];
   value?: string;
   defaultValue?: string;
@@ -39,7 +41,10 @@ export const RadioCards = React.forwardRef<HTMLDivElement, RadioCardsProps>(
     ref,
   ) {
     const containerRef = React.useRef<HTMLDivElement>(null);
-    React.useImperativeHandle(ref, () => containerRef.current as HTMLDivElement);
+    React.useImperativeHandle(
+      ref,
+      () => containerRef.current as HTMLDivElement,
+    );
 
     const controlado = value !== undefined;
     const [interno, setInterno] = React.useState(defaultValue ?? "");
@@ -57,14 +62,20 @@ export const RadioCards = React.forwardRef<HTMLDivElement, RadioCardsProps>(
         const nextIndex = (index + 1) % opcoes.length;
         const targetOption = opcoes[nextIndex];
         if (targetOption) selecionar(targetOption.value);
-        const buttons = containerRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+        const buttons =
+          containerRef.current?.querySelectorAll<HTMLButtonElement>(
+            '[role="radio"]',
+          );
         buttons?.[nextIndex]?.focus();
       } else if (["ArrowLeft", "ArrowUp"].includes(e.key)) {
         e.preventDefault();
         const prevIndex = (index - 1 + opcoes.length) % opcoes.length;
         const targetOption = opcoes[prevIndex];
         if (targetOption) selecionar(targetOption.value);
-        const buttons = containerRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+        const buttons =
+          containerRef.current?.querySelectorAll<HTMLButtonElement>(
+            '[role="radio"]',
+          );
         buttons?.[prevIndex]?.focus();
       }
     }
@@ -73,7 +84,10 @@ export const RadioCards = React.forwardRef<HTMLDivElement, RadioCardsProps>(
       <div
         ref={containerRef}
         role="radiogroup"
-        className={cn("grid grid-cols-1 sm:grid-cols-2 gap-3 w-full", className)}
+        className={cn(
+          "grid w-full grid-cols-1 gap-3 sm:grid-cols-2",
+          className,
+        )}
         {...props}
       >
         {opcoes.map((opcao, index) => {
@@ -88,15 +102,15 @@ export const RadioCards = React.forwardRef<HTMLDivElement, RadioCardsProps>(
               onClick={() => selecionar(opcao.value)}
               onKeyDown={(e) => handleKeyDown(e, index)}
               className={cn(
-                "group relative flex items-start gap-3.5 p-4 rounded-[var(--radius-control)] border-2 text-left transition-all duration-150 cursor-pointer select-none min-h-[60px]",
+                "group relative flex min-h-[60px] cursor-pointer items-start gap-3.5 rounded-[var(--radius-control)] border-2 p-4 text-left transition-all duration-150 select-none",
                 "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
                 isSelected
-                  ? "border-[var(--border-brutal)] bg-[var(--action-primary-tint,rgba(242,183,5,0.08))] shadow-[var(--ds-shadow)] font-semibold"
+                  ? "border-[var(--border-brutal)] bg-[var(--action-primary-tint,rgba(242,183,5,0.08))] font-semibold shadow-[var(--ds-shadow)]"
                   : cn(
                       "bg-[var(--surface-card)] text-[var(--text-secondary)]",
                       error
                         ? "border-[var(--status-error-fg)]"
-                        : "border-[var(--border-brutal)]/30 hover:border-[var(--border-brutal)] hover:text-[var(--text-primary)] hover:shadow-sm"
+                        : "border-[var(--border-brutal)]/30 hover:border-[var(--border-brutal)] hover:text-[var(--text-primary)] hover:shadow-sm",
                     ),
               )}
             >
@@ -107,7 +121,7 @@ export const RadioCards = React.forwardRef<HTMLDivElement, RadioCardsProps>(
                   "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                   isSelected
                     ? "border-[var(--border-brutal)] bg-[var(--action-primary)]"
-                    : "border-[var(--border-brutal)]/40 bg-white group-hover:border-[var(--border-brutal)]"
+                    : "border-[var(--border-brutal)]/40 bg-white group-hover:border-[var(--border-brutal)]",
                 )}
               >
                 {isSelected && (
@@ -116,31 +130,29 @@ export const RadioCards = React.forwardRef<HTMLDivElement, RadioCardsProps>(
               </span>
 
               {/* Text content */}
-              <span className="flex flex-col gap-0.5 flex-1">
+              <span className="flex flex-1 flex-col gap-0.5">
                 <span
                   className={cn(
                     "font-display text-sm leading-tight",
                     isSelected
-                      ? "text-[var(--text-primary)] font-semibold"
-                      : "text-[var(--text-primary)] group-hover:text-black font-medium"
+                      ? "font-semibold text-[var(--text-primary)]"
+                      : "font-medium text-[var(--text-primary)] group-hover:text-black",
                   )}
                 >
                   {opcao.label}
                 </span>
                 {opcao.description && (
-                  <span className="font-body text-xs text-[var(--text-secondary)] leading-relaxed mt-0.5">
+                  <span className="font-body mt-0.5 text-xs leading-relaxed text-[var(--text-secondary)]">
                     {opcao.description}
                   </span>
                 )}
               </span>
 
-              {opcao.badge && (
-                <span className="shrink-0">{opcao.badge}</span>
-              )}
+              {opcao.badge && <span className="shrink-0">{opcao.badge}</span>}
             </button>
           );
         })}
       </div>
     );
-  }
+  },
 );

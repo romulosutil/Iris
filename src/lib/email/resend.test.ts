@@ -66,8 +66,14 @@ describe("resend.ts — resolveEmailProvider (#126)", () => {
   });
 
   test("sem appUrl o envio é recusado com falha explícita, sem chamar o provedor", async () => {
-    const provider = new ResendEmailProvider("re_chave_de_teste", "iris@example.com");
-    const resultado = await provider.enviarAlertaRiscoRt({ rtEmail: "rt@example.com", appUrl: "" });
+    const provider = new ResendEmailProvider(
+      "re_chave_de_teste",
+      "iris@example.com",
+    );
+    const resultado = await provider.enviarAlertaRiscoRt({
+      rtEmail: "rt@example.com",
+      appUrl: "",
+    });
 
     expect(resultado.ok).toBe(false);
     if (!resultado.ok) {

@@ -36,7 +36,7 @@ export const VisaoClinica = {
               como="li"
               title={
                 <Cluster gap="sm" className="items-center">
-                  <span className="font-display font-bold text-lg text-[var(--text-primary)]">
+                  <span className="font-display text-lg font-bold text-[var(--text-primary)]">
                     08:00
                   </span>
                   <StatusBadge estado="aprovada" />
@@ -54,7 +54,7 @@ export const VisaoClinica = {
               como="li"
               title={
                 <Cluster gap="sm" className="items-center">
-                  <span className="font-display font-bold text-lg text-[var(--text-primary)]">
+                  <span className="font-display text-lg font-bold text-[var(--text-primary)]">
                     09:00
                   </span>
                   <StatusBadge estado="pendente" />
@@ -74,7 +74,7 @@ export const VisaoClinica = {
               como="li"
               title={
                 <Cluster gap="sm" className="items-center">
-                  <span className="font-display font-bold text-lg text-[var(--text-primary)]">
+                  <span className="font-display text-lg font-bold text-[var(--text-primary)]">
                     10:00
                   </span>
                   <StatusBadge estado="sugerida" />

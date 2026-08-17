@@ -25,18 +25,17 @@ export default function VerifiqueEmailPage() {
       <div
         className={surface("solida", {
           radius: "control",
-          className: "bg-[var(--surface-card)] flex flex-col gap-4 p-6",
+          className: "flex flex-col gap-4 bg-[var(--surface-card)] p-6",
         })}
       >
-        <p className="text-[var(--text-primary)] font-body text-base">
-          Se este e-mail puder criar uma conta, você receberá uma mensagem
-          com o link de confirmação em instantes. O link vale por tempo
-          limitado.
+        <p className="font-body text-base text-[var(--text-primary)]">
+          Se este e-mail puder criar uma conta, você receberá uma mensagem com o
+          link de confirmação em instantes. O link vale por tempo limitado.
         </p>
 
         <Alert severidade="info" titulo="Não chegou nenhuma mensagem?">
-          Confira a caixa de spam ou lixo eletrônico. Se não encontrar, informe seu
-          e-mail abaixo para solicitar um novo envio.
+          Confira a caixa de spam ou lixo eletrônico. Se não encontrar, informe
+          seu e-mail abaixo para solicitar um novo envio.
         </Alert>
 
         <ReenvioForm />

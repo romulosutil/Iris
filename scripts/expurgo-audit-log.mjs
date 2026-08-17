@@ -17,7 +17,10 @@ import { fileURLToPath } from "node:url";
 /**
  * Função pura de verificação de elegibilidade (utilizada em utilitários de data).
  */
-export function verificarElegibilidadeExpurgoAuditLog(criadoEm, agora = new Date()) {
+export function verificarElegibilidadeExpurgoAuditLog(
+  criadoEm,
+  agora = new Date(),
+) {
   const centoEOitentaDiasMs = 180 * 24 * 60 * 60 * 1000;
   return agora.getTime() - criadoEm.getTime() >= centoEOitentaDiasMs;
 }
@@ -26,8 +29,10 @@ export function verificarElegibilidadeExpurgoAuditLog(criadoEm, agora = new Date
  * Executa as rotinas SQL de pseudonimização e expurgo no banco.
  */
 export async function executarExpurgoAuditLog(sql) {
-  const [{ count: pseudonimizados }] = await sql`SELECT app_pseudonimizar_audit_log_orfao() AS count`;
-  const [{ count: expurgados }] = await sql`SELECT app_expurgar_audit_log_expirado() AS count`;
+  const [{ count: pseudonimizados }] =
+    await sql`SELECT app_pseudonimizar_audit_log_orfao() AS count`;
+  const [{ count: expurgados }] =
+    await sql`SELECT app_expurgar_audit_log_expirado() AS count`;
 
   return {
     pseudonimizados: Number(pseudonimizados),
@@ -46,11 +51,17 @@ async function main() {
 
   try {
     const agora = new Date().toISOString();
-    console.log(`[expurgo-audit-log] ${agora} Iniciando varredura de expurgo (Marco Civil #116)...`);
+    console.log(
+      `[expurgo-audit-log] ${agora} Iniciando varredura de expurgo (Marco Civil #116)...`,
+    );
 
     const { pseudonimizados, expurgados } = await executarExpurgoAuditLog(sql);
-    console.log(`[expurgo-audit-log] Logs órfãos pseudonimizados: ${pseudonimizados}`);
-    console.log(`[expurgo-audit-log] Logs expirados (180+ dias) expurgados: ${expurgados}`);
+    console.log(
+      `[expurgo-audit-log] Logs órfãos pseudonimizados: ${pseudonimizados}`,
+    );
+    console.log(
+      `[expurgo-audit-log] Logs expirados (180+ dias) expurgados: ${expurgados}`,
+    );
 
     console.log(`[expurgo-audit-log] Varredura concluída com sucesso.`);
   } catch (err) {

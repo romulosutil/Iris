@@ -20,7 +20,8 @@ function ExemploBotoes() {
         onClick={() =>
           addToast({
             titulo: "Sessão Salva",
-            mensagem: "Os dados da sessão foram gravados com sucesso no prontuário.",
+            mensagem:
+              "Os dados da sessão foram gravados com sucesso no prontuário.",
             severidade: "sucesso",
           })
         }

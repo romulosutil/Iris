@@ -49,8 +49,18 @@ describe("StubFamilyReportProvider", () => {
     const d = await provider.gerar(
       input({
         evidenciasAprovadas: [
-          { data: "2026-06-02", metaOuDominio: "Empilhar blocos", nivelAjuda: "dica física", polaridade: "positiva" },
-          { data: "2026-06-10", metaOuDominio: "Pedir o que quer", nivelAjuda: "independente", polaridade: "positiva" },
+          {
+            data: "2026-06-02",
+            metaOuDominio: "Empilhar blocos",
+            nivelAjuda: "dica física",
+            polaridade: "positiva",
+          },
+          {
+            data: "2026-06-10",
+            metaOuDominio: "Pedir o que quer",
+            nivelAjuda: "independente",
+            polaridade: "positiva",
+          },
         ],
       }),
     );
@@ -62,9 +72,24 @@ describe("StubFamilyReportProvider", () => {
     const d = await provider.gerar(
       input({
         evidenciasAprovadas: [
-          { data: "2026-06-02", metaOuDominio: "Pedir o que quer", nivelAjuda: "independente", polaridade: "positiva" },
-          { data: "2026-06-05", metaOuDominio: "Pedir o que quer", nivelAjuda: "dica verbal", polaridade: "positiva" },
-          { data: "2026-06-07", metaOuDominio: "Esperar a vez", nivelAjuda: "dica gestual", polaridade: "positiva" },
+          {
+            data: "2026-06-02",
+            metaOuDominio: "Pedir o que quer",
+            nivelAjuda: "independente",
+            polaridade: "positiva",
+          },
+          {
+            data: "2026-06-05",
+            metaOuDominio: "Pedir o que quer",
+            nivelAjuda: "dica verbal",
+            polaridade: "positiva",
+          },
+          {
+            data: "2026-06-07",
+            metaOuDominio: "Esperar a vez",
+            nivelAjuda: "dica gestual",
+            polaridade: "positiva",
+          },
         ],
       }),
     );
@@ -80,7 +105,12 @@ describe("StubFamilyReportProvider", () => {
       input({
         reforcadoresAtuais: ["carrinhos"],
         evidenciasAprovadas: [
-          { data: "2026-06-02", metaOuDominio: "Pedir o que quer", nivelAjuda: "independente", polaridade: "positiva" },
+          {
+            data: "2026-06-02",
+            metaOuDominio: "Pedir o que quer",
+            nivelAjuda: "independente",
+            polaridade: "positiva",
+          },
         ],
       }),
     );
@@ -100,7 +130,12 @@ describe("StubFamilyReportProvider", () => {
         metasAtivas: ["Pedir o que quer"],
         reforcadoresAtuais: ["carrinhos"],
         evidenciasAprovadas: [
-          { data: "2026-06-02", metaOuDominio: "Pedir o que quer", nivelAjuda: "independente", polaridade: "positiva" },
+          {
+            data: "2026-06-02",
+            metaOuDominio: "Pedir o que quer",
+            nivelAjuda: "independente",
+            polaridade: "positiva",
+          },
         ],
       }),
     );

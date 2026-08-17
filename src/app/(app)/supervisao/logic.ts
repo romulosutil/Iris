@@ -13,8 +13,16 @@ import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 // + `audit_log`, então segue a regra geral. O wrap fica na exportação do core
 // para que os testes de integração, que chamam o core direto, o exercitem.
 
-export type SupervisaoResult = { ok?: boolean; error?: string; bloqueioConta?: BloqueioConta };
-export type SupervisaoState = { ok?: boolean; error?: string; bloqueioConta?: BloqueioConta };
+export type SupervisaoResult = {
+  ok?: boolean;
+  error?: string;
+  bloqueioConta?: BloqueioConta;
+};
+export type SupervisaoState = {
+  ok?: boolean;
+  error?: string;
+  bloqueioConta?: BloqueioConta;
+};
 
 const baseInputSchema = z.object({
   chaveNatural: z.string().min(1),
@@ -44,11 +52,11 @@ async function reconhecerAlertaCore(
   return withTenant(ctx, async (tx) => {
     // lock por paciente para concorrência
     await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${p.data.patientId}::text, 0))`
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${p.data.patientId}::text, 0))`,
     );
 
     const existentes = (await tx.execute(
-      sql`SELECT status FROM alerta WHERE chave_natural = ${p.data.chaveNatural} AND deletado_em IS NULL`
+      sql`SELECT status FROM alerta WHERE chave_natural = ${p.data.chaveNatural} AND deletado_em IS NULL`,
     )) as unknown as { status: string }[];
 
     if (existentes.length > 0) return { error: "CONCURRENCY_ERROR" };
@@ -96,11 +104,11 @@ async function resolverAlertaCore(
 
   return withTenant(ctx, async (tx) => {
     await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${p.data.patientId}::text, 0))`
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${p.data.patientId}::text, 0))`,
     );
 
     const existentes = (await tx.execute(
-      sql`SELECT id, status FROM alerta WHERE chave_natural = ${p.data.chaveNatural} AND deletado_em IS NULL`
+      sql`SELECT id, status FROM alerta WHERE chave_natural = ${p.data.chaveNatural} AND deletado_em IS NULL`,
     )) as unknown as { id: string; status: string }[];
 
     const existente = existentes[0];
@@ -170,11 +178,11 @@ async function descartarAlertaCore(
 
   return withTenant(ctx, async (tx) => {
     await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${p.data.patientId}::text, 0))`
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${p.data.patientId}::text, 0))`,
     );
 
     const existentes = (await tx.execute(
-      sql`SELECT id, status FROM alerta WHERE chave_natural = ${p.data.chaveNatural} AND deletado_em IS NULL`
+      sql`SELECT id, status FROM alerta WHERE chave_natural = ${p.data.chaveNatural} AND deletado_em IS NULL`,
     )) as unknown as { id: string; status: string }[];
 
     const existente = existentes[0];

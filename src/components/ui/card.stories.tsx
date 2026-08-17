@@ -6,7 +6,10 @@ const meta = {
   component: Card,
   parameters: { layout: "centered" },
   argTypes: {
-    estado: { control: "inline-radio", options: ["conquistado", "candidato", "sugerida"] },
+    estado: {
+      control: "inline-radio",
+      options: ["conquistado", "candidato", "sugerida"],
+    },
     interativo: { control: "boolean" },
     destacado: { control: "boolean" },
   },
@@ -27,7 +30,8 @@ export const Candidato: Story = {
   args: {
     estado: "candidato",
     titulo: "Aponta para o objeto nomeado",
-    children: "Sugerido pela IA — aguarda aprovação humana com afundamento visual.",
+    children:
+      "Sugerido pela IA — aguarda aprovação humana com afundamento visual.",
   },
 };
 
@@ -36,7 +40,8 @@ export const Interativo: Story = {
     estado: "conquistado",
     interativo: true,
     titulo: "Cartão Clicável de Paciente",
-    children: "Hover e toque com feedback tátil de deslocamento (-2px, -2px) e sombra.",
+    children:
+      "Hover e toque com feedback tátil de deslocamento (-2px, -2px) e sombra.",
   },
 };
 

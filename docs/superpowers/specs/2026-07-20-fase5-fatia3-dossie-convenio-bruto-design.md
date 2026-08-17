@@ -13,7 +13,7 @@ mergeadas.
 
 **Descoberta que redesenhou o fatiamento:** o schema (`report_bruto_sem_ia`
 check, `src/db/schema.ts:987-990`) e `docs/agente/agente-2-relatorio-familia.md`
-provam que o *Relatório de Família* é **gerado por IA** (Agente 2,
+provam que o _Relatório de Família_ é **gerado por IA** (Agente 2,
 `gerado_por_ia=true`), **não factual**. Apenas `convenio_bruto` é
 factual-sem-IA. Por isso a fronteira 3/4 foi redesenhada **pela linha da IA**,
 não pelo agrupamento do BACKLOG:791.
@@ -40,15 +40,15 @@ não pelo agrupamento do BACKLOG:791.
 
 ## 2. Decisões travadas
 
-| # | Decisão | Motivo |
-|---|---------|--------|
-| D1 | Fatias 3 e 4 separadas, **3 primeiro**, 1 branch = 1 PR | Padrão Fatia 1/2; Fatia 4 depende do trilho de PDF pronto |
-| D2 | Render real via **Chromium/Playwright** agora | Fidelidade HTML/CSS/a11y; F0 já previa |
-| D3 | Fronteira 3/4 **pela linha da IA** | `convenio_bruto` é o único factual-sem-IA (check `report_bruto_sem_ia`) |
-| D4 | **Não tocar `exportReport`** (trilho F0 auditado) | Colisão de status resolvida por tx única (§4) |
-| D5 | Render **in-process** com semáforo, isolado atrás de `PdfRenderer` | YAGNI worker; extrair depois = swap de 1 arquivo |
-| D6 | Autz por **papel + RLS**, sem introduzir capability | Não há conceito de capability no código; RLS já escopa linha |
-| D7 | Runner Docker → base **Debian slim** + Chromium | Playwright não suporta Alpine oficialmente (frágil) — **item infra-gate, sign-off no PR** |
+| #   | Decisão                                                            | Motivo                                                                                    |
+| --- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| D1  | Fatias 3 e 4 separadas, **3 primeiro**, 1 branch = 1 PR            | Padrão Fatia 1/2; Fatia 4 depende do trilho de PDF pronto                                 |
+| D2  | Render real via **Chromium/Playwright** agora                      | Fidelidade HTML/CSS/a11y; F0 já previa                                                    |
+| D3  | Fronteira 3/4 **pela linha da IA**                                 | `convenio_bruto` é o único factual-sem-IA (check `report_bruto_sem_ia`)                   |
+| D4  | **Não tocar `exportReport`** (trilho F0 auditado)                  | Colisão de status resolvida por tx única (§4)                                             |
+| D5  | Render **in-process** com semáforo, isolado atrás de `PdfRenderer` | YAGNI worker; extrair depois = swap de 1 arquivo                                          |
+| D6  | Autz por **papel + RLS**, sem introduzir capability                | Não há conceito de capability no código; RLS já escopa linha                              |
+| D7  | Runner Docker → base **Debian slim** + Chromium                    | Playwright não suporta Alpine oficialmente (frágil) — **item infra-gate, sign-off no PR** |
 
 ## 3. Arquitetura por camada
 
@@ -79,10 +79,10 @@ src/lib/report/
    - `await withTenant(ctx, async (tx) => { ... })` numa **única transação**:
      - `build-payload.ts` agrega os dados factuais → `PayloadConvenioBruto`.
      - `INSERT INTO report (tipo='convenio_bruto', status='rascunho',
-       gerado_por_ia=false, payload, periodo_*, patient_id, clinic_id)`
+gerado_por_ia=false, payload, periodo_*, patient_id, clinic_id)`
        retornando `reportId`.
      - `exportReport(tx, { reportId, atorId: ctx.userId,
-       buildHtml: buildConvenioBrutoHtml, renderer })` → grava `report_pdf`,
+buildHtml: buildConvenioBrutoHtml, renderer })` → grava `report_pdf`,
        flip `status='exportado'`, `audit_log(acao='relatorio_exportado')`.
 3. `page.tsx` baixa via `getReportPdf` (lê bytes gravados, **nunca re-renderiza**).
 
@@ -107,23 +107,23 @@ rascunho durável** para `convenio_bruto`. Resolução **sem tocar o trilho F0**
 
 ```ts
 type PayloadConvenioBruto = {
-  paciente: { nome: string };                    // dado mínimo; sem PII extra
-  periodo: { inicio: string; fim: string };      // ISO date
-  geradoEm: string;                              // ISO timestamp da geração
+  paciente: { nome: string }; // dado mínimo; sem PII extra
+  periodo: { inicio: string; fim: string }; // ISO date
+  geradoEm: string; // ISO timestamp da geração
   sessoes: Array<{
-    numeroSequencial: number;                    // session.numeroSequencialPaciente
-    data: string;                                // session.agendadaPara / checkInEm
+    numeroSequencial: number; // session.numeroSequencialPaciente
+    data: string; // session.agendadaPara / checkInEm
     disciplina: string;
     modalidade: string;
-    estado: string;                              // realizada | falta | ...
+    estado: string; // realizada | falta | ...
     justificada: boolean | null;
-    terapeuta: string;                           // nome
+    terapeuta: string; // nome
   }>;
   evidencias: Array<{
-    data: string;                                // aprovadoEm
-    metaOuDominio: string;                        // goal/milestone/protocol
-    classificacao: string;                        // classificacaoOriginal (congelada)
-    autor: string;                                // aprovadoPor (nome)
+    data: string; // aprovadoEm
+    metaOuDominio: string; // goal/milestone/protocol
+    classificacao: string; // classificacaoOriginal (congelada)
+    autor: string; // aprovadoPor (nome)
   }>;
   presenca: {
     sessoesRealizadas: number;
@@ -196,8 +196,8 @@ de rede; qualquer request não-abortada = falha.
   do payload retornam apenas linhas no escopo do ator).
 - **RESOLVIDO (sem migration):** a policy `report_scope FOR ALL` de
   `db/migrations/0039_fase5_report_audit_rls.sql:21-34` já tem `WITH CHECK
-  (app_patient_in_clinic(patient_id) AND (user_role='coordenador' OR
-  app_is_on_team(patient_id)))` — cobre o INSERT do `convenio_bruto` para
+(app_patient_in_clinic(patient_id) AND (user_role='coordenador' OR
+app_is_on_team(patient_id)))` — cobre o INSERT do `convenio_bruto` para
   coordenador (clínica) e terapeuta on-team. `convenio_bruto` já é valor do enum
   `reportTipo` (`schema.ts:941`). **A Fatia 3 não precisa de migration de
   schema nem de RLS.** `audit_log` exige `ator_id = app.user_id` (garantido, o
@@ -222,7 +222,7 @@ real em produção:
 - Mover `playwright-core` (ou `playwright`) para `dependencies`.
 - Runner Docker: trocar base do stage runner de `node:22-alpine` para
   `node:22-slim` (Debian) e instalar Chromium via `playwright install --with-deps
-  chromium` no build, copiando o cache; ou instalar o Chromium do sistema e
+chromium` no build, copiando o cache; ou instalar o Chromium do sistema e
   apontar `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 - **Preservar o stage `migrate`** e o gate de deploy (memória
   `deploy-schema-gate`).
@@ -271,11 +271,11 @@ real em produção:
 
 ## 13. Riscos residuais
 
-| Risco | Mitigação | Confiança |
-|-------|-----------|-----------|
-| OOM por Chromium concorrente (C1) | Semáforo máx 1 + timeout | HIGH |
-| Colisão de status do bruto (C2) | Tx única, F0 intocado | HIGH |
-| SSRF via vetor torto (C4) | Teste positivo como DoD | HIGH |
-| Autz Diário fura/bloqueia (C5) | requireRole + RLS `app_is_on_team` | HIGH |
-| Base Debian quebra o app (C3/D7) | Item infra-gate, sign-off no PR, `migrate` preservado | MEDIUM |
-| Bloat de DB por bytea | Dívida registrada, MVP aceita | MEDIUM |
+| Risco                             | Mitigação                                             | Confiança |
+| --------------------------------- | ----------------------------------------------------- | --------- |
+| OOM por Chromium concorrente (C1) | Semáforo máx 1 + timeout                              | HIGH      |
+| Colisão de status do bruto (C2)   | Tx única, F0 intocado                                 | HIGH      |
+| SSRF via vetor torto (C4)         | Teste positivo como DoD                               | HIGH      |
+| Autz Diário fura/bloqueia (C5)    | requireRole + RLS `app_is_on_team`                    | HIGH      |
+| Base Debian quebra o app (C3/D7)  | Item infra-gate, sign-off no PR, `migrate` preservado | MEDIUM    |
+| Bloat de DB por bytea             | Dívida registrada, MVP aceita                         | MEDIUM    |

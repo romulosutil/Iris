@@ -55,8 +55,13 @@ describe("ClaudeProvider", () => {
   });
 
   test("saída vazia (nenhuma evidência) devolve zero drafts — sucesso, não falha", async () => {
-    const vazio: AgentOutput = { extracoes: [], resumo_sessao: "Nada a extrair." };
-    const { drafts } = await new ClaudeProvider(vi.fn().mockResolvedValue(vazio)).extrair(ctx);
+    const vazio: AgentOutput = {
+      extracoes: [],
+      resumo_sessao: "Nada a extrair.",
+    };
+    const { drafts } = await new ClaudeProvider(
+      vi.fn().mockResolvedValue(vazio),
+    ).extrair(ctx);
     expect(drafts).toHaveLength(0);
   });
 

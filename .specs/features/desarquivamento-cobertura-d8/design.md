@@ -2,7 +2,7 @@
 
 > **Data:** 11/08/2026  
 > **Status:** 🟢 Design Arquitetural Consolidado  
-> **Componentes:** Migração `0092_desarquivar_paciente_cobertura.sql` & `src/lib/patient/desarquivamento.ts`  
+> **Componentes:** Migração `0092_desarquivar_paciente_cobertura.sql` & `src/lib/patient/desarquivamento.ts`
 
 ---
 

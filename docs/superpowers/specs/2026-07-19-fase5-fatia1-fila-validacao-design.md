@@ -14,6 +14,7 @@
 ## 1. Escopo (decidido com o Rômulo, 19/07/2026)
 
 **Dentro:**
+
 - Sinais de entrada **V1a** (baixa confiança aprovada) + **V1b** (inconsistente com histórico) — os dois com dado pronto hoje.
 - As 4 ações **V2**: Confirmar · Reclassificar · Devolver com dúvida · Invalidar.
 - **O par completo de "devolver"** — abrir a query (coordenador) **e responder** (terapeuta),
@@ -26,6 +27,7 @@
 - UI (rota dedicada `validacao/`) + superfície **passiva** de V4 + superfície do terapeuta p/ responder queries.
 
 **Fora (adiado → BACKLOG):**
+
 - Sinais **V1c** (amostra aleatória), **V1d** (calibração de terapeuta novo), **V1e** (dossiê
   pré-avaliação), **V1f** (encaminhada com dúvida pelo terapeuta) — exigem campos/config/infra novos.
 - **V4 ativa** (sino/push/tom de formação calibrado) — não há subsistema de notificação hoje.
@@ -41,7 +43,7 @@ como o padrão de `excecoes/queries.ts`. Confirmar no build (não bloqueia o des
 tem `extraction_id`; `extraction` tem `confianca` (`alta|media|baixa`) e `inconsistente_com_historico`.
 
 Posicionamento (Approach A aprovado): **rota dedicada** `src/app/(app)/validacao/`, coordenador-only,
-reusando os *padrões* de `revisao/[sessionId]/actions.ts` (não o lugar). `excecoes/` ganha só um link.
+reusando os _padrões_ de `revisao/[sessionId]/actions.ts` (não o lugar). `excecoes/` ganha só um link.
 
 ---
 
@@ -50,8 +52,9 @@ reusando os *padrões* de `revisao/[sessionId]/actions.ts` (não o lugar). `exce
 `listarFilaValidacao(ctx)` → lista de itens **por evidência** (grão de alvo, card "item N de M"):
 
 Predicado (derivado por leitura, sem coluna de estado nova):
+
 - `evidence.extraction_id` → `extraction` **E** (`extraction.confianca = 'baixa'` **OU**
-  `extraction.inconsistente_com_historico = true`)  — sinais V1a/V1b;
+  `extraction.inconsistente_com_historico = true`) — sinais V1a/V1b;
 - **E** `NOT EXISTS` linha em `evidence_revision` para essa `evidence` (ainda não tratada);
 - **E** `NOT EXISTS` `evidence_query` com `respondido_em IS NULL` (não devolvida/aguardando);
 - **E** a evidência não está invalidada (via `evidence_current`).
@@ -82,14 +85,15 @@ lança `CONCURRENCY_ERROR` (mesmo padrão de erro amigável de `revisao`). Evita
 
 ### 4.2 As 4 ações
 
-| Ação | Grava | Recompute | audit_log |
-|------|-------|-----------|-----------|
-| **`confirmarEvidencia(ctx,{evidenceId})`** | `evidence_revision(acao=confirmar, classificacaoAnterior=atual, classificacaoNova=NULL, justificativa="Confirmado.")` | Não (classificação inalterada) | Não (a revisão é o registro) |
-| **`reclassificarEvidencia(ctx,{evidenceId, novaClassificacao, justificativa})`** | `evidence_revision(acao=reclassificar, classificacaoAnterior=atual, classificacaoNova=**estruturada**, justificativa)` | **Sim** | `acao='reclassificacao'`, `entidade='evidence'`, `detalhe={de,para,justificativa}` |
-| **`devolverComDuvida(ctx,{evidenceId, pergunta})`** | `evidence_query(coordenadorId=app.user_id, pergunta)` | **Sim** (query aberta exclui do cômputo) | `acao='devolucao'`, `detalhe={pergunta}` |
-| **`invalidarEvidencia(ctx,{evidenceId, motivo})`** | `evidence_revision(acao=invalidar, classificacaoAnterior=atual, classificacaoNova=NULL, justificativa=motivo)` | **Sim** (`evidence_current` marca invalidada) | `acao='invalidacao'`, `detalhe={motivo}` |
+| Ação                                                                             | Grava                                                                                                                  | Recompute                                     | audit_log                                                                          |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **`confirmarEvidencia(ctx,{evidenceId})`**                                       | `evidence_revision(acao=confirmar, classificacaoAnterior=atual, classificacaoNova=NULL, justificativa="Confirmado.")`  | Não (classificação inalterada)                | Não (a revisão é o registro)                                                       |
+| **`reclassificarEvidencia(ctx,{evidenceId, novaClassificacao, justificativa})`** | `evidence_revision(acao=reclassificar, classificacaoAnterior=atual, classificacaoNova=**estruturada**, justificativa)` | **Sim**                                       | `acao='reclassificacao'`, `entidade='evidence'`, `detalhe={de,para,justificativa}` |
+| **`devolverComDuvida(ctx,{evidenceId, pergunta})`**                              | `evidence_query(coordenadorId=app.user_id, pergunta)`                                                                  | **Sim** (query aberta exclui do cômputo)      | `acao='devolucao'`, `detalhe={pergunta}`                                           |
+| **`invalidarEvidencia(ctx,{evidenceId, motivo})`**                               | `evidence_revision(acao=invalidar, classificacaoAnterior=atual, classificacaoNova=NULL, justificativa=motivo)`         | **Sim** (`evidence_current` marca invalidada) | `acao='invalidacao'`, `detalhe={motivo}`                                           |
 
 Regras:
+
 - **`classificacaoAnterior`** = classificação corrente lida da view `evidence_current` no momento da
   ação (não a `classificacaoOriginal` crua, para encadear reclassificações corretamente).
 - **`reclassificar` exige `novaClassificacao` ESTRUTURADA** — um alvo válido dos protocolos ativos do
@@ -97,7 +101,7 @@ Regras:
   o `materializar` chaveia streams pelas COLUNAS ESTÁTICAS de `evidence_current` (congeladas de
   `evidence`), não pelo jsonb — então reclassificar o ALVO seria inerte para o cômputo. Por isso
   `classificacao_nova` persiste as **FKs resolvidas** (`alvo_resolvido: {goal_id, protocol_id,
-  milestone_id}`, do `resolverAlvoParaFks` da validação) e o `materializar` (`rowParaObservacao`)
+milestone_id}`, do `resolverAlvoParaFks` da validação) e o `materializar` (`rowParaObservacao`)
   passa a **preferi-las** sobre as colunas estáticas — assim tato→mando **move** a evidência de stream
   no recompute (decisão do Rômulo: tornar efetivo). Sem migração (mudança na lógica, não no schema).
 - **`justificativa`/`motivo` vazio em reclassificar/invalidar → rejeita** (`VALIDACAO_JUSTIFICATIVA_OBRIGATORIA`).
@@ -117,9 +121,11 @@ abertura deixaria a evidência excluída do cômputo **para sempre**. Então a F
 da equipe** (a policy `evidence_query_update` só permite enquanto `respondido_em IS NULL`; a policy
 `evidence_revision_insert` já abre a exceção do terapeuta inserir a revisão resultante **quando há
 query aberta** apontando pra evidência). Em 1 tx sob advisory lock:
+
 1. `UPDATE evidence_query SET resposta_texto=…, respondido_em=now()` (e `resultante_evidence_revision_id` se houver).
 2. Se o terapeuta corrige a classificação ao responder → `INSERT evidence_revision(acao=reclassificar, …, justificativa=resposta)` e liga em `resultante_evidence_revision_id`.
 3. **Recompute:** `materializarSnapshot(tx, patientId, sessionNumeroDaEvidencia)` — a query deixa de estar aberta → a evidência **volta** ao cômputo (ou entra com a nova classificação). Sem este passo a evidência ficaria excluída para sempre (pre-mortem #2).
+
 - Superfície mínima do terapeuta: lista "dúvidas do coordenador" (queries abertas das suas evidências) com o campo de resposta. Reusa design system.
 
 ### 4.4 Recompute de meio-de-história é seguro (verificado)

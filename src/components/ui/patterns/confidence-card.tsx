@@ -3,7 +3,13 @@ import { cn } from "@/lib/cn";
 import { surface } from "@/components/ui/primitives/surface";
 import { Pill } from "@/components/ui/primitives/pill";
 import { Button } from "@/components/ui/button";
-import { SparkleIcon, CheckIcon, PencilIcon, TrashIcon, AlertTriangleIcon } from "@/components/ui/icon";
+import {
+  SparkleIcon,
+  CheckIcon,
+  PencilIcon,
+  TrashIcon,
+  AlertTriangleIcon,
+} from "@/components/ui/icon";
 
 type FriccaoNivel = "baixa" | "media" | "alta";
 
@@ -79,7 +85,7 @@ export function ConfidenceCard({
     <div
       data-friccao={friccao}
       className={cn(
-        "flex flex-col gap-3 p-5 text-text-primary",
+        "text-text-primary flex flex-col gap-3 p-5",
         surface("sugerida", {
           radius: "control",
           className: cn("bg-surface-card", conf.cardBorder),
@@ -92,20 +98,28 @@ export function ConfidenceCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           {protocolo && (
-            <span className="font-mono text-xs font-bold uppercase tracking-wider text-text-secondary">
-              [{protocolo}{metaCodigo ? ` · ${metaCodigo}` : ""}]
+            <span className="text-text-secondary font-mono text-xs font-bold tracking-wider uppercase">
+              [{protocolo}
+              {metaCodigo ? ` · ${metaCodigo}` : ""}]
             </span>
           )}
-          <h4 className="font-display text-base font-bold text-text-primary">{titulo}</h4>
+          <h4 className="font-display text-text-primary text-base font-bold">
+            {titulo}
+          </h4>
         </div>
 
         <div className="flex items-center gap-2">
           {typeof confianca === "number" && (
-            <span className="font-mono text-xs font-semibold text-text-secondary">
+            <span className="text-text-secondary font-mono text-xs font-semibold">
               {confianca}% confiança
             </span>
           )}
-          <Pill variant={conf.pillVariant} colorScheme={conf.pillColor} size="sm" icon={conf.icon}>
+          <Pill
+            variant={conf.pillVariant}
+            colorScheme={conf.pillColor}
+            size="sm"
+            icon={conf.icon}
+          >
             {conf.rotulo}
           </Pill>
         </div>
@@ -113,21 +127,23 @@ export function ConfidenceCard({
 
       {/* Citação / Evidência extraída do diário */}
       {trecho && (
-        <blockquote className="rounded border-l-2 border-status-ia-border bg-status-ia-bg/20 p-2.5 font-body text-sm italic text-text-primary">
+        <blockquote className="border-status-ia-border bg-status-ia-bg/20 font-body text-text-primary rounded border-l-2 p-2.5 text-sm italic">
           “{trecho}”
         </blockquote>
       )}
 
       {/* Justificativa clínica da IA */}
       {justificativa && (
-        <p className="text-xs text-text-secondary">
-          <span className="font-semibold text-text-primary">Raciocínio IA: </span>
+        <p className="text-text-secondary text-xs">
+          <span className="text-text-primary font-semibold">
+            Raciocínio IA:{" "}
+          </span>
           {justificativa}
         </p>
       )}
 
       {/* Ações inline */}
-      <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-border-brutal/20 pt-3">
+      <div className="border-border-brutal/20 mt-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
         {onDescartar && (
           <Button
             variante="terciaria"

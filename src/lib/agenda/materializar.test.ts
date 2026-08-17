@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { datasDaRegra, horizontePadrao, proximoDia, resolverInstante } from "./materializar";
+import {
+  datasDaRegra,
+  horizontePadrao,
+  proximoDia,
+  resolverInstante,
+} from "./materializar";
 
 describe("resolverInstante (São Paulo, UTC-3 fixo)", () => {
   test("09:00 local vira 12:00Z", () => {
@@ -17,7 +22,10 @@ describe("resolverInstante (DST — America/New_York, portabilidade inv1/§8)", 
   // 2026-03-08 é o spring-forward nos EUA (EST -5 → EDT -4).
   const fmtNY = (d: Date) =>
     new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false,
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
     }).format(d);
   test("antes da virada: 09:00 EST = 14:00Z", () => {
     const r = resolverInstante("2026-03-07", "09:00", "America/New_York");
@@ -41,29 +49,44 @@ describe("horizontePadrao / proximoDia", () => {
 });
 
 describe("datasDaRegra", () => {
-  const regra = { diaSemana: 1, vigenciaInicio: "2026-07-01", vigenciaFim: null }; // segundas
+  const regra = {
+    diaSemana: 1,
+    vigenciaInicio: "2026-07-01",
+    vigenciaFim: null,
+  }; // segundas
 
   test("gera as segundas dentro da janela", () => {
     expect(datasDaRegra(regra, "2026-07-06", "2026-07-27", [])).toEqual([
-      "2026-07-06", "2026-07-13", "2026-07-20", "2026-07-27",
+      "2026-07-06",
+      "2026-07-13",
+      "2026-07-20",
+      "2026-07-27",
     ]);
   });
   test("respeita vigenciaInicio (não gera antes)", () => {
     const r = { diaSemana: 1, vigenciaInicio: "2026-07-13", vigenciaFim: null };
     expect(datasDaRegra(r, "2026-07-01", "2026-07-20", [])).toEqual([
-      "2026-07-13", "2026-07-20",
+      "2026-07-13",
+      "2026-07-20",
     ]);
   });
   test("respeita vigenciaFim (não gera depois)", () => {
-    const r = { diaSemana: 1, vigenciaInicio: "2026-07-01", vigenciaFim: "2026-07-13" };
+    const r = {
+      diaSemana: 1,
+      vigenciaInicio: "2026-07-01",
+      vigenciaFim: "2026-07-13",
+    };
     expect(datasDaRegra(r, "2026-07-06", "2026-07-27", [])).toEqual([
-      "2026-07-06", "2026-07-13",
+      "2026-07-06",
+      "2026-07-13",
     ]);
   });
   test("pula datas cobertas por bloqueio (borda inclusiva)", () => {
     const bloqueios = [{ dataInicio: "2026-07-13", dataFim: "2026-07-15" }];
     expect(datasDaRegra(regra, "2026-07-06", "2026-07-27", bloqueios)).toEqual([
-      "2026-07-06", "2026-07-20", "2026-07-27", // 13 pulada
+      "2026-07-06",
+      "2026-07-20",
+      "2026-07-27", // 13 pulada
     ]);
   });
 });

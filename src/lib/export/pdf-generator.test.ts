@@ -16,7 +16,11 @@ describe("comporSecoesProntuarioIntegral", () => {
         registro: "123456",
       },
       evolucoes: [
-        { data: "2026-08-01", profissional: "Carlos Lima", texto: "Treino de contato visual." },
+        {
+          data: "2026-08-01",
+          profissional: "Carlos Lima",
+          texto: "Treino de contato visual.",
+        },
       ],
       metasResumo: "3 metas atingidas no período.",
     });
@@ -46,8 +50,14 @@ describe("gerarPdfProntuario", () => {
     cpfSolicitante: "123.456.789-00",
     timestampEmissao: new Date("2026-08-02T14:30:00Z"),
     secoes: [
-      { titulo: "Resumo Clínico", conteudo: "Paciente evoluiu satisfatoriamente nas sessões." },
-      { titulo: "Histórico de Sessões", conteudo: "12 sessões registradas sem intercorrências." },
+      {
+        titulo: "Resumo Clínico",
+        conteudo: "Paciente evoluiu satisfatoriamente nas sessões.",
+      },
+      {
+        titulo: "Histórico de Sessões",
+        conteudo: "12 sessões registradas sem intercorrências.",
+      },
     ],
   };
 
@@ -62,7 +72,9 @@ describe("gerarPdfProntuario", () => {
 
   it("utiliza compressão nativa por padrão em produção (compress: true)", async () => {
     const { buffer: bufferComprimido } = await gerarPdfProntuario(dados);
-    const { buffer: bufferNaoComprimido } = await gerarPdfProntuario(dados, { compress: false });
+    const { buffer: bufferNaoComprimido } = await gerarPdfProntuario(dados, {
+      compress: false,
+    });
 
     expect(bufferComprimido.length).toBeGreaterThan(0);
     expect(bufferComprimido.length).toBeLessThan(bufferNaoComprimido.length);
@@ -82,8 +94,13 @@ describe("gerarPdfProntuario", () => {
 
 describe("montarDetalheAuditoriaExportacao (#116 integration)", () => {
   it("constrói o objeto JSONB correto para a trilha imutável audit_log", () => {
-    const hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-    const detalhe = montarDetalheAuditoriaExportacao(hash, "user-solicitante-id", "patient-id-123");
+    const hash =
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    const detalhe = montarDetalheAuditoriaExportacao(
+      hash,
+      "user-solicitante-id",
+      "patient-id-123",
+    );
 
     expect(detalhe).toEqual({
       acao: "prontuario_exportado_pdf",

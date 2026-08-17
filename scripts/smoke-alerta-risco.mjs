@@ -34,7 +34,8 @@ import postgres from "postgres";
  * permissões e schema sem exercitar o motor). O rollback vale para os dois modos.
  */
 
-const dbUrl = process.env.SMOKE_DATABASE_URL || process.env.MIGRATION_DATABASE_URL;
+const dbUrl =
+  process.env.SMOKE_DATABASE_URL || process.env.MIGRATION_DATABASE_URL;
 
 if (!dbUrl) {
   console.error(
@@ -83,11 +84,17 @@ async function runSmokeTest() {
       );
     }
 
-    const { id: sessionId, clinic_id: clinicId, patient_id: patientId } = sessoes[0];
+    const {
+      id: sessionId,
+      clinic_id: clinicId,
+      patient_id: patientId,
+    } = sessoes[0];
 
     // 2. Inserir alerta sintético já vencido. `prazo_minutos = 15` é o prazo
     //    real de `ideacao_ativa_com_plano` em `app_prazo_risco_minutos` (0049).
-    console.log("-> 1/5 Inserindo alerta sintético em aberto (vencido há 1 min)...");
+    console.log(
+      "-> 1/5 Inserindo alerta sintético em aberto (vencido há 1 min)...",
+    );
     const [alerta] = await tx`
       INSERT INTO alerta_risco_clinico (
         clinic_id, patient_id, session_id,
@@ -105,7 +112,9 @@ async function runSmokeTest() {
     console.log(`   ✓ Alerta criado: id=${alerta.id}, status=${alerta.status}`);
 
     if (isDryRun) {
-      console.log("✓ DRY-RUN concluído (conexão, permissões e schema OK). Revertendo...");
+      console.log(
+        "✓ DRY-RUN concluído (conexão, permissões e schema OK). Revertendo...",
+      );
       throw ROLLBACK_OK;
     }
 
@@ -114,11 +123,15 @@ async function runSmokeTest() {
     //    então tem que ir no FROM. Chamada na lista do SELECT devolveria uma
     //    linha composta por alerta escalado (e nenhuma linha quando não há
     //    nenhum), não a contagem.
-    console.log("-> 2/5 Executando motor de escalonamento (Estágio 1 esperado)...");
+    console.log(
+      "-> 2/5 Executando motor de escalonamento (Estágio 1 esperado)...",
+    );
     const [resEstagio1] = await tx`
       SELECT count(*)::int AS escalados FROM app_escalonar_risco_vencidos()
     `;
-    console.log(`   ✓ Motor executado. Alertas escalados nesta varredura: ${resEstagio1.escalados}`);
+    console.log(
+      `   ✓ Motor executado. Alertas escalados nesta varredura: ${resEstagio1.escalados}`,
+    );
 
     const [alertaEstagio1] = await tx`
       SELECT id, status, escalado_em, canais_notificados
@@ -127,7 +140,9 @@ async function runSmokeTest() {
     `;
 
     if (alertaEstagio1.status !== "escalado_estagio_1") {
-      throw new Error(`Esperado status 'escalado_estagio_1', obtido: '${alertaEstagio1.status}'`);
+      throw new Error(
+        `Esperado status 'escalado_estagio_1', obtido: '${alertaEstagio1.status}'`,
+      );
     }
     console.log(
       `   ✓ Transição para Estágio 1 OK: escalado_em=${alertaEstagio1.escalado_em}, ` +
@@ -138,18 +153,24 @@ async function runSmokeTest() {
     //    `now() >= prazo_reconhecimento + prazo_minutos`, ou seja, 2× o prazo
     //    original contado do mesmo marco — por isso mexemos em
     //    `prazo_reconhecimento`, não em `escalado_em`.
-    console.log("-> 3/5 Forçando vencimento do prazo do Estágio 2 (vencido há 31 min)...");
+    console.log(
+      "-> 3/5 Forçando vencimento do prazo do Estágio 2 (vencido há 31 min)...",
+    );
     await tx`
       UPDATE alerta_risco_clinico
          SET prazo_reconhecimento = now() - interval '31 minutes'
        WHERE id = ${alerta.id}
     `;
 
-    console.log("-> 4/5 Executando motor de escalonamento (Estágio 2 esperado)...");
+    console.log(
+      "-> 4/5 Executando motor de escalonamento (Estágio 2 esperado)...",
+    );
     const [resEstagio2] = await tx`
       SELECT count(*)::int AS escalados FROM app_escalonar_risco_vencidos()
     `;
-    console.log(`   ✓ Motor executado. Alertas escalados nesta varredura: ${resEstagio2.escalados}`);
+    console.log(
+      `   ✓ Motor executado. Alertas escalados nesta varredura: ${resEstagio2.escalados}`,
+    );
 
     const [alertaEstagio2] = await tx`
       SELECT id, status, escalado_estagio_2_em, canais_notificados
@@ -158,7 +179,9 @@ async function runSmokeTest() {
     `;
 
     if (alertaEstagio2.status !== "escalado_estagio_2") {
-      throw new Error(`Esperado status 'escalado_estagio_2', obtido: '${alertaEstagio2.status}'`);
+      throw new Error(
+        `Esperado status 'escalado_estagio_2', obtido: '${alertaEstagio2.status}'`,
+      );
     }
     console.log(
       `   ✓ Transição para Estágio 2 OK: escalado_estagio_2_em=${alertaEstagio2.escalado_estagio_2_em}, ` +
@@ -177,7 +200,9 @@ async function runSmokeTest() {
        ORDER BY (detalhe->>'estagio')::int ASC NULLS FIRST
     `;
 
-    const escalonamentos = logs.filter((l) => l.acao === "alerta_risco_escalado");
+    const escalonamentos = logs.filter(
+      (l) => l.acao === "alerta_risco_escalado",
+    );
     if (escalonamentos.length !== 2) {
       throw new Error(
         `Esperados 2 eventos 'alerta_risco_escalado' no audit_log, obtidos: ${escalonamentos.length} ` +
@@ -187,14 +212,22 @@ async function runSmokeTest() {
 
     const estagios = escalonamentos.map((l) => l.detalhe?.estagio);
     if (estagios[0] !== 1 || estagios[1] !== 2) {
-      throw new Error(`Esperados estágios [1, 2] na trilha, obtidos: [${estagios.join(", ")}]`);
+      throw new Error(
+        `Esperados estágios [1, 2] na trilha, obtidos: [${estagios.join(", ")}]`,
+      );
     }
     if (escalonamentos.some((l) => l.ator_id !== null)) {
-      throw new Error("Trilha de escalonamento deveria ter ator_id NULL (ação automática do sistema).");
+      throw new Error(
+        "Trilha de escalonamento deveria ter ator_id NULL (ação automática do sistema).",
+      );
     }
-    console.log("   ✓ Trilha no audit_log OK: 2 eventos, estágios [1, 2], ator_id nulo.");
+    console.log(
+      "   ✓ Trilha no audit_log OK: 2 eventos, estágios [1, 2], ator_id nulo.",
+    );
 
-    console.log("✅ SMOKE TEST DO ESCALONAMENTO PASSOU. Revertendo a transação...");
+    console.log(
+      "✅ SMOKE TEST DO ESCALONAMENTO PASSOU. Revertendo a transação...",
+    );
     throw ROLLBACK_OK;
   });
 }
@@ -203,7 +236,9 @@ try {
   await runSmokeTest();
 } catch (err) {
   if (err === ROLLBACK_OK) {
-    console.log("↩️  Rollback concluído — nenhum dado sintético foi commitado.");
+    console.log(
+      "↩️  Rollback concluído — nenhum dado sintético foi commitado.",
+    );
   } else {
     console.error("❌ FALHA NO SMOKE TEST:", err);
     process.exitCode = 1;

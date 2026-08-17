@@ -13,8 +13,17 @@ import {
   appUser,
   session,
 } from "@/db/schema";
-import { computarDadosEspectro, type DadosEixoRadar, type MilestoneMetadata, type GoalMetadata } from "@/lib/evidence/espectro";
-import { calcularDelta, verificarProtocoloMudou, type DeltaSessao } from "./logic";
+import {
+  computarDadosEspectro,
+  type DadosEixoRadar,
+  type MilestoneMetadata,
+  type GoalMetadata,
+} from "@/lib/evidence/espectro";
+import {
+  calcularDelta,
+  verificarProtocoloMudou,
+  type DeltaSessao,
+} from "./logic";
 
 export interface TimelineSnapshot {
   sessionNumero: number;
@@ -26,7 +35,11 @@ export interface TimelineSnapshot {
 
 export interface TimelineData {
   snapshots: TimelineSnapshot[];
-  metasAtivas: Array<{ id: string; descricao: string; disciplina: string | null }>;
+  metasAtivas: Array<{
+    id: string;
+    descricao: string;
+    disciplina: string | null;
+  }>;
   protocolosAtivos: Array<{ id: string; nome: string; disciplina: string }>;
   milestonesAtivos: Array<{
     id: string;
@@ -45,7 +58,7 @@ export interface TimelineData {
  */
 export async function carregarTimeline(
   ctx: TenantContext,
-  patientId: string
+  patientId: string,
 ): Promise<TimelineData | null> {
   return withTenant(ctx, async (tx) => {
     // 1. Carrega os snapshots em ordem decrescente de número
@@ -123,7 +136,11 @@ export async function carregarTimeline(
     const snapshots: TimelineSnapshot[] = snaps.map((s) => {
       const rep = (s.repertorioState ?? {}) as any;
       const seg = (s.segmentacao ?? {}) as any;
-      const espectro = computarDadosEspectro(rep, mapeamentoMilestones, goalsMeta);
+      const espectro = computarDadosEspectro(
+        rep,
+        mapeamentoMilestones,
+        goalsMeta,
+      );
 
       return {
         sessionNumero: s.sessionNumero,
@@ -137,15 +154,19 @@ export async function carregarTimeline(
     // Filtra em memória para o retorno dos eixos que estão ATIVOS HOJE
     const metasAtivas = metas
       .filter((m) => m.estado === "ativa")
-      .map((m) => ({ id: m.id, descricao: m.descricao, disciplina: m.disciplina }));
+      .map((m) => ({
+        id: m.id,
+        descricao: m.descricao,
+        disciplina: m.disciplina,
+      }));
 
-    const activeProtocolIds = PP
-      .filter((p) => p.desativadoEm === null)
-      .map((p) => p.id);
+    const activeProtocolIds = PP.filter((p) => p.desativadoEm === null).map(
+      (p) => p.id,
+    );
 
-    const protocolosAtivos = PP
-      .filter((p) => p.desativadoEm === null)
-      .map((p) => ({ id: p.id, nome: p.nome, disciplina: p.disciplina }));
+    const protocolosAtivos = PP.filter((p) => p.desativadoEm === null).map(
+      (p) => ({ id: p.id, nome: p.nome, disciplina: p.disciplina }),
+    );
 
     const milestonesAtivos = milestones
       .filter((m) => activeProtocolIds.includes(m.protocolId))
@@ -174,7 +195,7 @@ export async function carregarTimeline(
 async function obterSnapshotAsOf(
   tx: any,
   patientId: string,
-  sessionNumero: number
+  sessionNumero: number,
 ) {
   const [snap] = await tx
     .select({
@@ -187,8 +208,8 @@ async function obterSnapshotAsOf(
     .where(
       and(
         eq(sessionSnapshot.patientId, patientId),
-        eq(sessionSnapshot.sessionNumero, sessionNumero)
-      )
+        eq(sessionSnapshot.sessionNumero, sessionNumero),
+      ),
     )
     .limit(1);
   return snap || null;
@@ -200,7 +221,7 @@ async function obterSnapshotAsOf(
 export async function carregarSnapshotAsOf(
   ctx: TenantContext,
   patientId: string,
-  sessionNumero: number
+  sessionNumero: number,
 ) {
   return withTenant(ctx, async (tx) => {
     return obterSnapshotAsOf(tx, patientId, sessionNumero);
@@ -217,12 +238,20 @@ async function resolverMetasEMilestones(tx: any, goalIds: string[]) {
   }
 
   const metasResolvidas = await tx
-    .select({ id: goal.id, descricao: goal.descricao, disciplina: goal.disciplina })
+    .select({
+      id: goal.id,
+      descricao: goal.descricao,
+      disciplina: goal.disciplina,
+    })
     .from(goal)
     .where(inArray(goal.id, goalIds));
 
   const milestonesResolvidos = await tx
-    .select({ id: milestone.id, nome: milestone.nome, dominioId: milestone.dominioId })
+    .select({
+      id: milestone.id,
+      nome: milestone.nome,
+      dominioId: milestone.dominioId,
+    })
     .from(milestone)
     .where(inArray(milestone.id, goalIds));
 
@@ -238,7 +267,7 @@ async function resolverMetasEMilestones(tx: any, goalIds: string[]) {
 export async function carregarDeltaSessao(
   ctx: TenantContext,
   patientId: string,
-  sessionNumero: number
+  sessionNumero: number,
 ) {
   return withTenant(ctx, async (tx) => {
     const snapB = await obterSnapshotAsOf(tx, patientId, sessionNumero);
@@ -271,7 +300,7 @@ export async function carregarComparacao(
   ctx: TenantContext,
   patientId: string,
   sessaoN: number,
-  sessaoM: number
+  sessaoM: number,
 ) {
   return withTenant(ctx, async (tx) => {
     const sessaoMenor = Math.min(sessaoN, sessaoM);
@@ -284,8 +313,14 @@ export async function carregarComparacao(
       return null;
     }
 
-    const delta = calcularDelta(snapAntigo.repertorioState, snapNovo.repertorioState);
-    const protocoloMudou = verificarProtocoloMudou(snapAntigo.segmentacao, snapNovo.segmentacao);
+    const delta = calcularDelta(
+      snapAntigo.repertorioState,
+      snapNovo.repertorioState,
+    );
+    const protocoloMudou = verificarProtocoloMudou(
+      snapAntigo.segmentacao,
+      snapNovo.segmentacao,
+    );
 
     const goalIds = delta.itens.map((i) => i.id);
     const { metas, milestones } = await resolverMetasEMilestones(tx, goalIds);
@@ -326,7 +361,7 @@ export async function carregarEvidenciasPorTrecho(
   patientId: string,
   goalOrMilestoneId: string,
   sessaoInicio: number,
-  sessaoFim: number
+  sessaoFim: number,
 ): Promise<ResumoEvidenciaTrecho[]> {
   return withTenant(ctx, async (tx) => {
     // Última revisão (evidence_revision) por evidência — apenas a mais recente
@@ -368,11 +403,11 @@ export async function carregarEvidenciasPorTrecho(
           eq(evidence.patientId, patientId),
           or(
             eq(evidence.goalId, goalOrMilestoneId),
-            eq(evidence.milestoneId, goalOrMilestoneId)
+            eq(evidence.milestoneId, goalOrMilestoneId),
           ),
           gte(evidence.sessionNumero, sessaoInicio),
-          lte(evidence.sessionNumero, sessaoFim)
-        )
+          lte(evidence.sessionNumero, sessaoFim),
+        ),
       )
       .orderBy(desc(evidence.sessionNumero), desc(evidence.id)) // Ordenação determinística com ID de desempate
       .limit(15); // limite rígido de performance (Revisão Adversarial 5)

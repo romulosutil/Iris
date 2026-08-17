@@ -8,7 +8,11 @@ import { requireEscritaPermitida } from "@/lib/billing/guard-escrita";
 export async function listarTerapeutas(ctx: TenantContext) {
   return withTenant(ctx, (tx) =>
     tx
-      .selectDistinct({ id: appUser.id, name: appUser.name, email: appUser.email })
+      .selectDistinct({
+        id: appUser.id,
+        name: appUser.name,
+        email: appUser.email,
+      })
       .from(userRole)
       .innerJoin(appUser, eq(appUser.id, userRole.userId))
       .where(
@@ -21,18 +25,38 @@ export async function listarTerapeutas(ctx: TenantContext) {
   );
 }
 
-export async function carregarDisponibilidade(ctx: TenantContext, terapeutaId: string): Promise<FaixaDia[]> {
+export async function carregarDisponibilidade(
+  ctx: TenantContext,
+  terapeutaId: string,
+): Promise<FaixaDia[]> {
   const linhas = await withTenant(ctx, (tx) =>
     tx
-      .select({ diaSemana: janelaTrabalho.diaSemana, horaInicio: janelaTrabalho.horaInicio, horaFim: janelaTrabalho.horaFim })
+      .select({
+        diaSemana: janelaTrabalho.diaSemana,
+        horaInicio: janelaTrabalho.horaInicio,
+        horaFim: janelaTrabalho.horaFim,
+      })
       .from(janelaTrabalho)
-      .where(and(eq(janelaTrabalho.clinicId, ctx.clinicId), eq(janelaTrabalho.terapeutaId, terapeutaId)))
+      .where(
+        and(
+          eq(janelaTrabalho.clinicId, ctx.clinicId),
+          eq(janelaTrabalho.terapeutaId, terapeutaId),
+        ),
+      )
       .orderBy(asc(janelaTrabalho.diaSemana), asc(janelaTrabalho.horaInicio)),
   );
-  return linhas.map((l) => ({ diaSemana: l.diaSemana, horaInicio: l.horaInicio.slice(0, 5), horaFim: l.horaFim.slice(0, 5) }));
+  return linhas.map((l) => ({
+    diaSemana: l.diaSemana,
+    horaInicio: l.horaInicio.slice(0, 5),
+    horaFim: l.horaFim.slice(0, 5),
+  }));
 }
 
-export async function salvarJanelas(ctx: TenantContext, terapeutaId: string, faixas: FaixaDia[]): Promise<void> {
+export async function salvarJanelas(
+  ctx: TenantContext,
+  terapeutaId: string,
+  faixas: FaixaDia[],
+): Promise<void> {
   requireRole(ctx, "coordenador");
   const fundidas = fundirFaixasPorDia(faixas);
   await withTenant(ctx, async (tx) => {
@@ -41,11 +65,26 @@ export async function salvarJanelas(ctx: TenantContext, terapeutaId: string, fai
     // de `comEscrita`. Primeira operação da transação: o delete abaixo é
     // destrutivo e não pode acontecer nem parcialmente numa conta bloqueada.
     await requireEscritaPermitida(tx, ctx.clinicId);
-    await tx.delete(janelaTrabalho).where(and(eq(janelaTrabalho.clinicId, ctx.clinicId), eq(janelaTrabalho.terapeutaId, terapeutaId)));
-    if (fundidas.length > 0) {
-      await tx.insert(janelaTrabalho).values(
-        fundidas.map((f) => ({ clinicId: ctx.clinicId, terapeutaId, diaSemana: f.diaSemana, horaInicio: f.horaInicio, horaFim: f.horaFim })),
+    await tx
+      .delete(janelaTrabalho)
+      .where(
+        and(
+          eq(janelaTrabalho.clinicId, ctx.clinicId),
+          eq(janelaTrabalho.terapeutaId, terapeutaId),
+        ),
       );
+    if (fundidas.length > 0) {
+      await tx
+        .insert(janelaTrabalho)
+        .values(
+          fundidas.map((f) => ({
+            clinicId: ctx.clinicId,
+            terapeutaId,
+            diaSemana: f.diaSemana,
+            horaInicio: f.horaInicio,
+            horaFim: f.horaFim,
+          })),
+        );
     }
   });
 }

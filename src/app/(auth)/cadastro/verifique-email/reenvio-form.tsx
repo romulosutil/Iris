@@ -46,7 +46,9 @@ export function ReenvioForm() {
       });
     }
 
-    const alerta = containerRef.current?.querySelector('[role="alert"], [role="status"]');
+    const alerta = containerRef.current?.querySelector(
+      '[role="alert"], [role="status"]',
+    );
     if (alerta instanceof HTMLElement) {
       alerta.setAttribute("tabindex", "-1");
       alerta.focus();
@@ -54,8 +56,11 @@ export function ReenvioForm() {
   }, [estado, addToast]);
 
   return (
-    <div ref={containerRef} className="flex flex-col gap-4 border-t border-[var(--border-subtle)] pt-4 mt-2">
-      <h2 className="text-base font-bold text-[var(--text-primary)] font-display">
+    <div
+      ref={containerRef}
+      className="mt-2 flex flex-col gap-4 border-t border-[var(--border-subtle)] pt-4"
+    >
+      <h2 className="font-display text-base font-bold text-[var(--text-primary)]">
         Reenviar e-mail de verificação
       </h2>
 
@@ -86,7 +91,12 @@ export function ReenvioForm() {
           />
         </Field>
 
-        <Button type="submit" variante="secundaria" isLoading={pending} className="w-full">
+        <Button
+          type="submit"
+          variante="secundaria"
+          isLoading={pending}
+          className="w-full"
+        >
           {pending ? "Enviando mensagem…" : "Reenviar e-mail de verificação"}
         </Button>
       </Form>

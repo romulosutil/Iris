@@ -4,10 +4,7 @@
 // inventa fato/número — tudo deriva da entrada), F3 (uma conquista), F6 (platô
 // honesto), F8 (anexo de números separado). É trilho: a qualidade narrativa
 // real vem do ClaudeProvider quando habilitado pós-DPA.
-import type {
-  FamilyReportDraft,
-  FamilyReportInput,
-} from "./types";
+import type { FamilyReportDraft, FamilyReportInput } from "./types";
 import type { FamilyReportProvider } from "./provider";
 
 // Ordena níveis de ajuda do mais dependente (0) ao independente (maior).
@@ -19,7 +16,8 @@ function pesoIndependencia(nivel: string | null): number {
   if (n.includes("independ")) return 5;
   if (n.includes("verbal") || n.includes("gestual")) return 3;
   if (n.includes("model")) return 2;
-  if (n.includes("físic") || n.includes("fisic") || n.includes("total")) return 1;
+  if (n.includes("físic") || n.includes("fisic") || n.includes("total"))
+    return 1;
   return 2;
 }
 
@@ -45,7 +43,8 @@ export class StubFamilyReportProvider implements FamilyReportProvider {
     // F3 — conquista-destaque: maior salto de independência entre as positivas
     // (desempate: comunicação > motor, aproximado por 'comunic'/'pedir'/'fala').
     const destaque = [...positivas].sort((a, b) => {
-      const d = pesoIndependencia(b.nivelAjuda) - pesoIndependencia(a.nivelAjuda);
+      const d =
+        pesoIndependencia(b.nivelAjuda) - pesoIndependencia(a.nivelAjuda);
       if (d !== 0) return d;
       const comm = (m: string) => /comunic|pedir|fala|nome/i.test(m);
       return Number(comm(b.metaOuDominio)) - Number(comm(a.metaOuDominio));

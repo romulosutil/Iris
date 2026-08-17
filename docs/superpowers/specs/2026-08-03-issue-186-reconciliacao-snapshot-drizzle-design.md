@@ -30,6 +30,7 @@
 ---
 
 ## 📊 Estado de Implementação
+
 - **Diagnóstico & Causa Raiz:** ✅ Concluído.
 - **Especificação Técnica:** ✅ Concluído.
 - **Execução da Reconciliação de Snapshot:** 🚧 Pendente.

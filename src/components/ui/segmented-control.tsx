@@ -3,7 +3,6 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 
-
 import { control } from "./primitives/surface";
 
 interface SegmentedOption {
@@ -11,8 +10,10 @@ interface SegmentedOption {
   label: React.ReactNode;
 }
 
-export interface SegmentedControlProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange"> {
+export interface SegmentedControlProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "onChange"
+> {
   opcoes: SegmentedOption[];
   /** Valor controlado. Se omitido, o componente gerencia estado interno. */
   value?: string;
@@ -33,7 +34,16 @@ export const SegmentedControl = React.forwardRef<
   HTMLDivElement,
   SegmentedControlProps
 >(function SegmentedControl(
-  { className, opcoes, value, defaultValue, onValueChange, tamanho, size, ...props },
+  {
+    className,
+    opcoes,
+    value,
+    defaultValue,
+    onValueChange,
+    tamanho,
+    size,
+    ...props
+  },
   ref,
 ) {
   const controlado = value !== undefined;
@@ -59,7 +69,7 @@ export const SegmentedControl = React.forwardRef<
       ref={ref}
       role="group"
       className={cn(
-        "inline-flex max-w-full overflow-x-auto gap-1 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] p-1",
+        "inline-flex max-w-full gap-1 overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] p-1",
         "bg-[var(--surface-card)] shadow-[var(--ds-shadow)]",
         className,
       )}
@@ -74,11 +84,11 @@ export const SegmentedControl = React.forwardRef<
             aria-pressed={isAtivo}
             onClick={() => selecionar(opcao.value)}
             className={cn(
-              "cursor-pointer inline-flex items-center justify-center font-medium transition-all duration-150 rounded-[var(--radius-xs)]",
+              "inline-flex cursor-pointer items-center justify-center rounded-[var(--radius-xs)] font-medium transition-all duration-150",
               tamanhoClasses,
               "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
               isAtivo
-                ? "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold"
+                ? "bg-[var(--action-primary)] font-bold text-[var(--action-primary-fg)]"
                 : "bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
             )}
           >
@@ -89,4 +99,3 @@ export const SegmentedControl = React.forwardRef<
     </div>
   );
 });
-

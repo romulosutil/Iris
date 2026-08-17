@@ -33,8 +33,8 @@
  *   'route'   needs a specific command, so name the command and the gap
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 
 import {
   PRODUCT_SCHEMA_VERSION,
@@ -43,31 +43,31 @@ import {
   DESIGN_SIDECAR_SCHEMA_VERSION,
   readProductSchemaVersion,
   readSidecarSchemaVersion,
-} from './artifact-schema.mjs';
+} from "./artifact-schema.mjs";
 
 // Top-level keys any reader honors: `hook` and `detector` subtrees (hook-lib's
 // readConfig), `updateCheck` (context.mjs), `projectRoots` (context.mjs's
 // monorepo resolution), plus `stalenessCheck` below. `$schema` and `version`
 // are allowed as conventional metadata nobody reads.
 const KNOWN_CONFIG_KEYS = new Set([
-  'hook',
-  'detector',
-  'updateCheck',
-  'stalenessCheck',
-  'projectRoots',
-  '$schema',
-  'version',
+  "hook",
+  "detector",
+  "updateCheck",
+  "stalenessCheck",
+  "projectRoots",
+  "$schema",
+  "version",
 ]);
 
 // `detector` is a closed set, so a typo here is worth reporting. `hook` is not
 // checked: it carries runtime settings from several writers and the false
 // positive rate would outweigh the catch.
 const KNOWN_DETECTOR_KEYS = new Set([
-  'ignoreRules',
-  'ignoreFiles',
-  'ignoreValues',
-  'designSystem',
-  'extensions',
+  "ignoreRules",
+  "ignoreFiles",
+  "ignoreValues",
+  "designSystem",
+  "extensions",
 ]);
 
 // Evidence that a project ships a native app. Checked only to catch a
@@ -75,17 +75,41 @@ const KNOWN_DETECTOR_KEYS = new Set([
 // project that is plainly not: that combination silently skips the iOS and
 // Android references for the whole session.
 const NATIVE_EVIDENCE_PATHS = Object.freeze([
-  { rel: 'pubspec.yaml', platform: 'adaptive', reason: 'a Flutter pubspec.yaml' },
-  { rel: 'ios/Podfile', platform: 'ios', reason: 'an ios/Podfile' },
-  { rel: 'android/build.gradle', platform: 'android', reason: 'an android/build.gradle' },
-  { rel: 'android/build.gradle.kts', platform: 'android', reason: 'an android/build.gradle.kts' },
-  { rel: 'ios/Runner.xcodeproj', platform: 'ios', reason: 'an ios/Runner.xcodeproj' },
+  {
+    rel: "pubspec.yaml",
+    platform: "adaptive",
+    reason: "a Flutter pubspec.yaml",
+  },
+  { rel: "ios/Podfile", platform: "ios", reason: "an ios/Podfile" },
+  {
+    rel: "android/build.gradle",
+    platform: "android",
+    reason: "an android/build.gradle",
+  },
+  {
+    rel: "android/build.gradle.kts",
+    platform: "android",
+    reason: "an android/build.gradle.kts",
+  },
+  {
+    rel: "ios/Runner.xcodeproj",
+    platform: "ios",
+    reason: "an ios/Runner.xcodeproj",
+  },
 ]);
 
 const NATIVE_EVIDENCE_DEPENDENCIES = Object.freeze([
-  { name: 'react-native', platform: 'adaptive', reason: 'a react-native dependency' },
-  { name: 'expo', platform: 'adaptive', reason: 'an expo dependency' },
-  { name: '@react-native/metro-config', platform: 'adaptive', reason: 'a React Native metro config dependency' },
+  {
+    name: "react-native",
+    platform: "adaptive",
+    reason: "a react-native dependency",
+  },
+  { name: "expo", platform: "adaptive", reason: "an expo dependency" },
+  {
+    name: "@react-native/metro-config",
+    platform: "adaptive",
+    reason: "a React Native metro config dependency",
+  },
 ]);
 
 function finding({ id, artifact, filePath = null, severity, summary, fix }) {
@@ -98,19 +122,22 @@ function finding({ id, artifact, filePath = null, severity, summary, fix }) {
  * cannot import impeccable-paths without a cycle) share one definition of
  * where the retired locations are.
  */
-export function designSidecarCandidatesFor(projectRoot, contextDir = projectRoot) {
+export function designSidecarCandidatesFor(
+  projectRoot,
+  contextDir = projectRoot,
+) {
   const candidates = [
-    path.join(projectRoot, '.impeccable', 'design.json'),
-    path.join(projectRoot, 'DESIGN.json'),
+    path.join(projectRoot, ".impeccable", "design.json"),
+    path.join(projectRoot, "DESIGN.json"),
   ];
-  const contextLegacy = path.join(contextDir || projectRoot, 'DESIGN.json');
+  const contextLegacy = path.join(contextDir || projectRoot, "DESIGN.json");
   if (!candidates.includes(contextLegacy)) candidates.push(contextLegacy);
   return candidates;
 }
 
 function readJson(filePath) {
   try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
   } catch {
     return null;
   }
@@ -125,15 +152,17 @@ function mtimeMs(filePath) {
 }
 
 function hasSection(markdown, heading) {
-  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`^##\\s+${escaped}\\s*$`, 'im').test(String(markdown || ''));
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^##\\s+${escaped}\\s*$`, "im").test(
+    String(markdown || ""),
+  );
 }
 
 function toRelative(filePath, root) {
   if (!filePath) return null;
   const rel = path.relative(root, filePath);
-  return rel && !rel.startsWith('..') && !path.isAbsolute(rel)
-    ? rel.split(path.sep).join('/')
+  return rel && !rel.startsWith("..") && !path.isAbsolute(rel)
+    ? rel.split(path.sep).join("/")
     : filePath;
 }
 
@@ -143,44 +172,56 @@ function toRelative(filePath, root) {
  * Pure: schema drift visible in a PRODUCT.md body. `productPath` is used for
  * reporting only.
  */
-export function checkProduct(product, productPath = 'PRODUCT.md') {
+export function checkProduct(product, productPath = "PRODUCT.md") {
   if (!product) return [];
   const findings = [];
 
   for (const [heading, reason] of Object.entries(PRODUCT_DEPRECATED_SECTIONS)) {
     if (!hasSection(product, heading)) continue;
-    findings.push(finding({
-      id: `product-deprecated-${heading.toLowerCase()}`,
-      artifact: 'PRODUCT.md',
-      filePath: productPath,
-      severity: 'mention',
-      summary: `PRODUCT.md still carries a \`## ${heading}\` section. ${reason}`,
-      fix: `Treat \`## ${heading}\` as absent for every decision this session. `
-        + 'Offer to delete the section; do not let its value influence the work either way.',
-    }));
+    findings.push(
+      finding({
+        id: `product-deprecated-${heading.toLowerCase()}`,
+        artifact: "PRODUCT.md",
+        filePath: productPath,
+        severity: "mention",
+        summary: `PRODUCT.md still carries a \`## ${heading}\` section. ${reason}`,
+        fix:
+          `Treat \`## ${heading}\` as absent for every decision this session. ` +
+          "Offer to delete the section; do not let its value influence the work either way.",
+      }),
+    );
   }
 
   const stamped = readProductSchemaVersion(product);
-  if (stamped === null && !PRODUCT_V4_SECTIONS.some((section) => hasSection(product, section))) {
-    findings.push(finding({
-      id: 'product-schema-legacy',
-      artifact: 'PRODUCT.md',
-      filePath: productPath,
-      severity: 'route',
-      summary: 'PRODUCT.md has no schema stamp and none of the sections the current record adds '
-        + `(${PRODUCT_V4_SECTIONS.join(', ')}), so it predates this version of the product record.`,
-      fix: 'Offer `init`, which preserves confirmed answers and fills the gaps by interview. '
-        + 'Do not rewrite the file from inference.',
-    }));
+  if (
+    stamped === null &&
+    !PRODUCT_V4_SECTIONS.some((section) => hasSection(product, section))
+  ) {
+    findings.push(
+      finding({
+        id: "product-schema-legacy",
+        artifact: "PRODUCT.md",
+        filePath: productPath,
+        severity: "route",
+        summary:
+          "PRODUCT.md has no schema stamp and none of the sections the current record adds " +
+          `(${PRODUCT_V4_SECTIONS.join(", ")}), so it predates this version of the product record.`,
+        fix:
+          "Offer `init`, which preserves confirmed answers and fills the gaps by interview. " +
+          "Do not rewrite the file from inference.",
+      }),
+    );
   } else if (stamped !== null && stamped < PRODUCT_SCHEMA_VERSION) {
-    findings.push(finding({
-      id: 'product-schema-outdated',
-      artifact: 'PRODUCT.md',
-      filePath: productPath,
-      severity: 'route',
-      summary: `PRODUCT.md is stamped product-schema ${stamped}; the current record is ${PRODUCT_SCHEMA_VERSION}.`,
-      fix: 'Offer `init` to bring the record current, preserving confirmed answers.',
-    }));
+    findings.push(
+      finding({
+        id: "product-schema-outdated",
+        artifact: "PRODUCT.md",
+        filePath: productPath,
+        severity: "route",
+        summary: `PRODUCT.md is stamped product-schema ${stamped}; the current record is ${PRODUCT_SCHEMA_VERSION}.`,
+        fix: "Offer `init` to bring the record current, preserving confirmed answers.",
+      }),
+    );
   }
 
   return findings;
@@ -190,19 +231,27 @@ export function checkProduct(product, productPath = 'PRODUCT.md') {
  * A project that resolves to web while carrying native build files. Bounded:
  * a handful of stats plus one package.json read at the project root.
  */
-export function checkNativePlatformEvidence({ projectRoot, platform, product, productPath }) {
+export function checkNativePlatformEvidence({
+  projectRoot,
+  platform,
+  product,
+  productPath,
+}) {
   if (!projectRoot) return [];
   // Only the web resolution is worth checking. An explicit native value is
   // already honored, and an unrecognized value already gets its own warning.
-  if (platform && platform !== 'web') return [];
+  if (platform && platform !== "web") return [];
 
   const evidence = [];
   for (const entry of NATIVE_EVIDENCE_PATHS) {
     if (fs.existsSync(path.join(projectRoot, entry.rel))) evidence.push(entry);
   }
-  const pkg = readJson(path.join(projectRoot, 'package.json'));
+  const pkg = readJson(path.join(projectRoot, "package.json"));
   if (pkg) {
-    const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+    const deps = {
+      ...(pkg.dependencies || {}),
+      ...(pkg.devDependencies || {}),
+    };
     for (const entry of NATIVE_EVIDENCE_DEPENDENCIES) {
       if (deps[entry.name]) evidence.push(entry);
     }
@@ -210,25 +259,31 @@ export function checkNativePlatformEvidence({ projectRoot, platform, product, pr
   if (!evidence.length) return [];
 
   const platforms = new Set(evidence.map((entry) => entry.platform));
-  const suggested = platforms.size > 1 || platforms.has('adaptive')
-    ? 'adaptive'
-    : [...platforms][0];
-  const declared = platform === 'web'
-    ? 'PRODUCT.md declares `## Platform: web`'
-    : product
-      ? 'PRODUCT.md has no `## Platform` section, so the project resolves to web'
-      : 'no PRODUCT.md declares a platform, so the project resolves to web';
+  const suggested =
+    platforms.size > 1 || platforms.has("adaptive")
+      ? "adaptive"
+      : [...platforms][0];
+  const declared =
+    platform === "web"
+      ? "PRODUCT.md declares `## Platform: web`"
+      : product
+        ? "PRODUCT.md has no `## Platform` section, so the project resolves to web"
+        : "no PRODUCT.md declares a platform, so the project resolves to web";
 
-  return [finding({
-    id: 'platform-native-evidence',
-    artifact: 'PRODUCT.md',
-    filePath: productPath || null,
-    severity: 'mention',
-    summary: `${declared}, but the project carries ${evidence.map((entry) => entry.reason).join(' and ')}. `
-      + 'Web guidance is being applied to a native codebase, and the iOS and Android references never load.',
-    fix: `Ask the user whether \`## Platform\` should be \`${suggested}\`. `
-      + 'If it should, write the value and load the matching native reference before designing.',
-  })];
+  return [
+    finding({
+      id: "platform-native-evidence",
+      artifact: "PRODUCT.md",
+      filePath: productPath || null,
+      severity: "mention",
+      summary:
+        `${declared}, but the project carries ${evidence.map((entry) => entry.reason).join(" and ")}. ` +
+        "Web guidance is being applied to a native codebase, and the iOS and Android references never load.",
+      fix:
+        `Ask the user whether \`## Platform\` should be \`${suggested}\`. ` +
+        "If it should, write the value and load the matching native reference before designing.",
+    }),
+  ];
 }
 
 // ─── DESIGN.md and the design.json sidecar ─────────────────────────────────
@@ -241,54 +296,75 @@ export function checkNativePlatformEvidence({ projectRoot, platform, product, pr
  * stays out of the business of knowing where sidecars may live; the first
  * entry is the canonical location.
  */
-export function checkDesignSidecar({ designPath, sidecarCandidates = [], projectRoot }) {
+export function checkDesignSidecar({
+  designPath,
+  sidecarCandidates = [],
+  projectRoot,
+}) {
   const findings = [];
   const canonical = sidecarCandidates[0] || null;
-  const present = sidecarCandidates.find((candidate) => fs.existsSync(candidate)) || null;
+  const present =
+    sidecarCandidates.find((candidate) => fs.existsSync(candidate)) || null;
   if (!present) return findings;
 
   const relPresent = toRelative(present, projectRoot);
 
   if (canonical && path.resolve(present) !== path.resolve(canonical)) {
-    findings.push(finding({
-      id: 'design-sidecar-legacy-path',
-      artifact: 'design.json',
-      filePath: relPresent,
-      severity: 'auto',
-      summary: `The design sidecar sits at ${relPresent}, a location kept only for backward compatibility.`,
-      fix: `Move it to ${toRelative(canonical, projectRoot)} the next time the sidecar is written. `
-        + 'No user decision is needed.',
-    }));
+    findings.push(
+      finding({
+        id: "design-sidecar-legacy-path",
+        artifact: "design.json",
+        filePath: relPresent,
+        severity: "auto",
+        summary: `The design sidecar sits at ${relPresent}, a location kept only for backward compatibility.`,
+        fix:
+          `Move it to ${toRelative(canonical, projectRoot)} the next time the sidecar is written. ` +
+          "No user decision is needed.",
+      }),
+    );
   }
 
   const sidecar = readJson(present);
   const schemaVersion = readSidecarSchemaVersion(sidecar);
-  if (sidecar && (schemaVersion === null || schemaVersion < DESIGN_SIDECAR_SCHEMA_VERSION)) {
-    findings.push(finding({
-      id: 'design-sidecar-schema-outdated',
-      artifact: 'design.json',
-      filePath: relPresent,
-      severity: 'route',
-      summary: `${relPresent} is schemaVersion ${schemaVersion === null ? 'unset' : schemaVersion}; `
-        + `the current sidecar is ${DESIGN_SIDECAR_SCHEMA_VERSION}. Token primitives moved to the DESIGN.md `
-        + 'frontmatter, so the old shape carries values that are now read from two places.',
-      fix: 'Offer `document` to regenerate the sidecar. It reads the existing DESIGN.md, so no interview is needed.',
-    }));
+  if (
+    sidecar &&
+    (schemaVersion === null || schemaVersion < DESIGN_SIDECAR_SCHEMA_VERSION)
+  ) {
+    findings.push(
+      finding({
+        id: "design-sidecar-schema-outdated",
+        artifact: "design.json",
+        filePath: relPresent,
+        severity: "route",
+        summary:
+          `${relPresent} is schemaVersion ${schemaVersion === null ? "unset" : schemaVersion}; ` +
+          `the current sidecar is ${DESIGN_SIDECAR_SCHEMA_VERSION}. Token primitives moved to the DESIGN.md ` +
+          "frontmatter, so the old shape carries values that are now read from two places.",
+        fix: "Offer `document` to regenerate the sidecar. It reads the existing DESIGN.md, so no interview is needed.",
+      }),
+    );
   }
 
   if (designPath) {
     const designMtime = mtimeMs(designPath);
     const sidecarMtime = mtimeMs(present);
-    if (designMtime !== null && sidecarMtime !== null && designMtime > sidecarMtime) {
-      findings.push(finding({
-        id: 'design-sidecar-stale',
-        artifact: 'design.json',
-        filePath: relPresent,
-        severity: 'mention',
-        summary: `DESIGN.md was edited after ${relPresent} was generated, so the sidecar's ramps, `
-          + 'shadows, motion tokens, and component snippets may contradict it.',
-        fix: 'Offer `document` to refresh the sidecar, preserving DESIGN.md.',
-      }));
+    if (
+      designMtime !== null &&
+      sidecarMtime !== null &&
+      designMtime > sidecarMtime
+    ) {
+      findings.push(
+        finding({
+          id: "design-sidecar-stale",
+          artifact: "design.json",
+          filePath: relPresent,
+          severity: "mention",
+          summary:
+            `DESIGN.md was edited after ${relPresent} was generated, so the sidecar's ramps, ` +
+            "shadows, motion tokens, and component snippets may contradict it.",
+          fix: "Offer `document` to refresh the sidecar, preserving DESIGN.md.",
+        }),
+      );
     }
   }
 
@@ -304,40 +380,58 @@ export function checkDesignSidecar({ designPath, sidecarCandidates = [], project
  */
 export function checkConfig({ projectRoot, repoRoot }) {
   const findings = [];
-  const roots = [...new Set([projectRoot, repoRoot].filter(Boolean).map((root) => path.resolve(root)))];
+  const roots = [
+    ...new Set(
+      [projectRoot, repoRoot].filter(Boolean).map((root) => path.resolve(root)),
+    ),
+  ];
   for (const root of roots) {
-    for (const name of ['config.json', 'config.local.json']) {
-      const filePath = path.join(root, '.impeccable', name);
+    for (const name of ["config.json", "config.local.json"]) {
+      const filePath = path.join(root, ".impeccable", name);
       const raw = readJson(filePath);
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
       const rel = toRelative(filePath, projectRoot || root);
 
-      const unknownTop = Object.keys(raw).filter((key) => !KNOWN_CONFIG_KEYS.has(key));
+      const unknownTop = Object.keys(raw).filter(
+        (key) => !KNOWN_CONFIG_KEYS.has(key),
+      );
       if (unknownTop.length) {
-        findings.push(finding({
-          id: 'config-unknown-keys',
-          artifact: 'config.json',
-          filePath: rel,
-          severity: 'mention',
-          summary: `${rel} has top-level key(s) nothing reads: ${unknownTop.map((key) => `\`${key}\``).join(', ')}. `
-            + `Recognized keys are ${[...KNOWN_CONFIG_KEYS].map((key) => `\`${key}\``).join(', ')}.`,
-          fix: 'Report the exact keys to the user. A near-miss of a real key is a setting that has never applied.',
-        }));
+        findings.push(
+          finding({
+            id: "config-unknown-keys",
+            artifact: "config.json",
+            filePath: rel,
+            severity: "mention",
+            summary:
+              `${rel} has top-level key(s) nothing reads: ${unknownTop.map((key) => `\`${key}\``).join(", ")}. ` +
+              `Recognized keys are ${[...KNOWN_CONFIG_KEYS].map((key) => `\`${key}\``).join(", ")}.`,
+            fix: "Report the exact keys to the user. A near-miss of a real key is a setting that has never applied.",
+          }),
+        );
       }
 
       const detector = raw.detector;
-      if (detector && typeof detector === 'object' && !Array.isArray(detector)) {
-        const unknownDetector = Object.keys(detector).filter((key) => !KNOWN_DETECTOR_KEYS.has(key));
+      if (
+        detector &&
+        typeof detector === "object" &&
+        !Array.isArray(detector)
+      ) {
+        const unknownDetector = Object.keys(detector).filter(
+          (key) => !KNOWN_DETECTOR_KEYS.has(key),
+        );
         if (unknownDetector.length) {
-          findings.push(finding({
-            id: 'config-unknown-detector-keys',
-            artifact: 'config.json',
-            filePath: rel,
-            severity: 'mention',
-            summary: `${rel} has \`detector\` key(s) nothing reads: ${unknownDetector.map((key) => `\`${key}\``).join(', ')}. `
-              + `Recognized keys are ${[...KNOWN_DETECTOR_KEYS].map((key) => `\`${key}\``).join(', ')}.`,
-            fix: 'Report the exact keys. `ignoreRule` for `ignoreRules` is the common one, and it silences nothing.',
-          }));
+          findings.push(
+            finding({
+              id: "config-unknown-detector-keys",
+              artifact: "config.json",
+              filePath: rel,
+              severity: "mention",
+              summary:
+                `${rel} has \`detector\` key(s) nothing reads: ${unknownDetector.map((key) => `\`${key}\``).join(", ")}. ` +
+                `Recognized keys are ${[...KNOWN_DETECTOR_KEYS].map((key) => `\`${key}\``).join(", ")}.`,
+              fix: "Report the exact keys. `ignoreRule` for `ignoreRules` is the common one, and it silences nothing.",
+            }),
+          );
         }
       }
     }
@@ -357,21 +451,29 @@ export function checkSurfaceBriefs({ candidates = [], projectRoot }) {
   const orphaned = [];
   for (const brief of candidates) {
     const target = brief?.primaryTarget;
-    if (!target || typeof target !== 'string') continue;
-    if (/^https?:\/\//i.test(target) || target.startsWith('route:')) continue;
+    if (!target || typeof target !== "string") continue;
+    if (/^https?:\/\//i.test(target) || target.startsWith("route:")) continue;
     if (!fs.existsSync(path.join(projectRoot, target))) orphaned.push(brief);
   }
   if (!orphaned.length) return [];
-  return [finding({
-    id: 'surface-brief-orphaned',
-    artifact: 'surface brief',
-    filePath: orphaned.map((brief) => brief.path).filter(Boolean).join(', ') || null,
-    severity: 'mention',
-    summary: `${orphaned.length} persisted surface brief(s) name a primary target that no longer exists: `
-      + `${orphaned.map((brief) => `${brief.path} → ${brief.primaryTarget}`).join('; ')}.`,
-    fix: 'Ask whether the surface moved (repoint the brief) or was removed (delete the brief). '
-      + 'Until then the brief is authority for a file that is gone.',
-  })];
+  return [
+    finding({
+      id: "surface-brief-orphaned",
+      artifact: "surface brief",
+      filePath:
+        orphaned
+          .map((brief) => brief.path)
+          .filter(Boolean)
+          .join(", ") || null,
+      severity: "mention",
+      summary:
+        `${orphaned.length} persisted surface brief(s) name a primary target that no longer exists: ` +
+        `${orphaned.map((brief) => `${brief.path} → ${brief.primaryTarget}`).join("; ")}.`,
+      fix:
+        "Ask whether the surface moved (repoint the brief) or was removed (delete the brief). " +
+        "Until then the brief is authority for a file that is gone.",
+    }),
+  ];
 }
 
 // ─── Monorepo structure ────────────────────────────────────────────────────
@@ -384,18 +486,27 @@ export function checkSurfaceBriefs({ candidates = [], projectRoot }) {
  * Takes the candidate list rather than computing it: the boot path has already
  * paid for that walk, and this module must not pay for it twice.
  */
-export function checkProjectRoots({ patterns = [], candidates = [], configuredIn = '.impeccable/config.json' }) {
-  const positive = patterns.filter((pattern) => pattern && !String(pattern).trim().startsWith('!'));
+export function checkProjectRoots({
+  patterns = [],
+  candidates = [],
+  configuredIn = ".impeccable/config.json",
+}) {
+  const positive = patterns.filter(
+    (pattern) => pattern && !String(pattern).trim().startsWith("!"),
+  );
   if (!positive.length || candidates.length) return [];
-  return [finding({
-    id: 'config-project-roots-match-nothing',
-    artifact: 'config.json',
-    filePath: configuredIn,
-    severity: 'mention',
-    summary: `\`projectRoots\` declares ${positive.map((pattern) => `\`${pattern}\``).join(', ')}, `
-      + 'but no directory matches any of them, so the repo root is being treated as the active project.',
-    fix: 'Report the patterns and ask which directories they should name. A renamed workspace folder is the usual cause.',
-  })];
+  return [
+    finding({
+      id: "config-project-roots-match-nothing",
+      artifact: "config.json",
+      filePath: configuredIn,
+      severity: "mention",
+      summary:
+        `\`projectRoots\` declares ${positive.map((pattern) => `\`${pattern}\``).join(", ")}, ` +
+        "but no directory matches any of them, so the repo root is being treated as the active project.",
+      fix: "Report the patterns and ask which directories they should name. A renamed workspace folder is the usual cause.",
+    }),
+  ];
 }
 
 /**
@@ -428,7 +539,7 @@ export function collectBootFindings(ctx, extras = {}) {
   const absDesignPath = extras.absDesignPath || null;
 
   return [
-    ...checkProduct(ctx.product, ctx.productPath || 'PRODUCT.md'),
+    ...checkProduct(ctx.product, ctx.productPath || "PRODUCT.md"),
     // Only checked once a PRODUCT.md exists. Without one the boot already
     // emits NO_PRODUCT_MD and routes into init, which asks for the platform
     // directly; a second signal saying the same thing is noise.
@@ -446,7 +557,10 @@ export function collectBootFindings(ctx, extras = {}) {
       projectRoot,
     }),
     ...checkConfig({ projectRoot, repoRoot: ctx.repoRoot }),
-    ...checkSurfaceBriefs({ candidates: ctx.surfaceBriefCandidates, projectRoot }),
+    ...checkSurfaceBriefs({
+      candidates: ctx.surfaceBriefCandidates,
+      projectRoot,
+    }),
     ...(extras.projectRootPatterns
       ? checkProjectRoots({
           patterns: extras.projectRootPatterns,

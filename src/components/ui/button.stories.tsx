@@ -27,9 +27,13 @@ type Story = StoryObj<typeof meta>;
 
 export const Primaria: Story = {};
 
-export const Secundaria: Story = { args: { variante: "secundaria", children: "Editar" } };
+export const Secundaria: Story = {
+  args: { variante: "secundaria", children: "Editar" },
+};
 
-export const Terciaria: Story = { args: { variante: "terciaria", children: "Cancelar" } };
+export const Terciaria: Story = {
+  args: { variante: "terciaria", children: "Cancelar" },
+};
 
 export const Desabilitado: Story = { args: { disabled: true } };
 
@@ -75,7 +79,10 @@ export const ComIcones: Story = {
       <Button iconLeft={<SparkleIcon className="h-4 w-4" />}>
         Gerar Sugestões
       </Button>
-      <Button variante="secundaria" iconRight={<CheckIcon className="h-4 w-4" />}>
+      <Button
+        variante="secundaria"
+        iconRight={<CheckIcon className="h-4 w-4" />}
+      >
         Confirmar
       </Button>
     </div>
@@ -104,15 +111,21 @@ export const DiferentesTamanhos: Story = {
   render: () => (
     <div className="flex flex-wrap items-end gap-4">
       <div className="flex flex-col gap-2">
-        <span className="text-xs text-gray-500 font-mono">Tamanho sm (44px target)</span>
+        <span className="font-mono text-xs text-gray-500">
+          Tamanho sm (44px target)
+        </span>
         <Button tamanho="sm">Salvar</Button>
       </div>
       <div className="flex flex-col gap-2">
-        <span className="text-xs text-gray-500 font-mono">Tamanho md (Padrão - 48px)</span>
+        <span className="font-mono text-xs text-gray-500">
+          Tamanho md (Padrão - 48px)
+        </span>
         <Button tamanho="md">Salvar</Button>
       </div>
       <div className="flex flex-col gap-2">
-        <span className="text-xs text-gray-500 font-mono">Tamanho lg (56px target)</span>
+        <span className="font-mono text-xs text-gray-500">
+          Tamanho lg (56px target)
+        </span>
         <Button tamanho="lg">Salvar</Button>
       </div>
     </div>
@@ -135,4 +148,3 @@ export const Carregamento: Story = {
     </div>
   ),
 };
-

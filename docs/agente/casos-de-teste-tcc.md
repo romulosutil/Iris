@@ -25,8 +25,23 @@ descrevem o comportamento ESPERADO caso a extensão seja aprovada.
     {
       "protocol_id": "tcc",
       "tipo_coleta": "registro_pensamento",
-      "escala_intensidade_emocional": { "faixa": [0, 100], "quem_pontua": "paciente_autorrelato_em_sessao" },
-      "taxonomia_distorcoes": ["catastrofizacao", "leitura_mental", "tudo_ou_nada", "generalizacao_excessiva", "desqualificacao_positivo", "raciocinio_emocional", "afirmacao_deveria", "rotulacao", "personalizacao", "filtro_mental", "adivinhacao_futuro"],
+      "escala_intensidade_emocional": {
+        "faixa": [0, 100],
+        "quem_pontua": "paciente_autorrelato_em_sessao"
+      },
+      "taxonomia_distorcoes": [
+        "catastrofizacao",
+        "leitura_mental",
+        "tudo_ou_nada",
+        "generalizacao_excessiva",
+        "desqualificacao_positivo",
+        "raciocinio_emocional",
+        "afirmacao_deveria",
+        "rotulacao",
+        "personalizacao",
+        "filtro_mental",
+        "adivinhacao_futuro"
+      ],
       "dominios": [
         {
           "dominio_id": "ansiedade_desempenho",
@@ -73,8 +88,16 @@ no texto, não estimada por adjetivo).
       "registro_pensamento": {
         "situacao": "Convocado para reunião de feedback com a gerente sem aviso prévio do assunto (segunda-feira)",
         "pensamento_automatico": "vou ser demitido, com certeza é isso, e depois disso nunca mais consigo outro emprego nessa área",
-        "emocao": { "nome": "ansiedade", "intensidade": 90, "escala_intensidade": "0-100" },
-        "distorcoes_cognitivas": ["catastrofizacao", "adivinhacao_futuro", "generalizacao_excessiva"],
+        "emocao": {
+          "nome": "ansiedade",
+          "intensidade": 90,
+          "escala_intensidade": "0-100"
+        },
+        "distorcoes_cognitivas": [
+          "catastrofizacao",
+          "adivinhacao_futuro",
+          "generalizacao_excessiva"
+        ],
         "resposta_racional": null,
         "comportamento_resultante": "suou frio"
       },
@@ -125,7 +148,11 @@ catastrofizar sobre o próprio desempenho).
       "registro_pensamento": {
         "situacao": "Reunião de trabalho com apresentação da paciente",
         "pensamento_automatico": "eu estraguei a reunião inteira... todo mundo ali deve ter pensado que eu sou incompetente... uma pessoa competente não erra desse jeito... ele só disse isso para ser gentil",
-        "emocao": { "nome": "nao_informada", "intensidade": null, "escala_intensidade": "nao_informada" },
+        "emocao": {
+          "nome": "nao_informada",
+          "intensidade": null,
+          "escala_intensidade": "nao_informada"
+        },
         "distorcoes_cognitivas": [
           "tudo_ou_nada",
           "leitura_mental",
@@ -161,12 +188,21 @@ catastrofizar sobre o próprio desempenho).
     {
       "protocol_id": "phq9",
       "tipo_coleta": "escala_padronizada_intervalar",
-      "escala_formal": { "n_itens": 9, "valores_por_item": [0, 1, 2, 3], "total_max": 27, "periodicidade": "a_cada_2_a_4_semanas", "quem_pontua": "paciente_autorrelato" },
+      "escala_formal": {
+        "n_itens": 9,
+        "valores_por_item": [0, 1, 2, 3],
+        "total_max": 27,
+        "periodicidade": "a_cada_2_a_4_semanas",
+        "quem_pontua": "paciente_autorrelato"
+      },
       "item_risco": { "existe": true }
     }
   ],
   "historico_relevante": [
-    { "protocol_id": "phq9", "resumo": "última aplicação há 4 semanas, escore 16 (moderadamente grave)" }
+    {
+      "protocol_id": "phq9",
+      "resumo": "última aplicação há 4 semanas, escore 16 (moderadamente grave)"
+    }
   ]
 }
 ```
@@ -249,7 +285,9 @@ risco, não como omissão.
     {
       "protocol_id": "tcc",
       "tipo_coleta": "registro_pensamento",
-      "componentes_extras": [{ "id": "tarefa_casa", "tipo_coleta": "tarefa_casa_estado" }]
+      "componentes_extras": [
+        { "id": "tarefa_casa", "tipo_coleta": "tarefa_casa_estado" }
+      ]
     }
   ]
 }
@@ -359,7 +397,11 @@ agente não deve suavizar por causa da negação de intenção).
       "registro_pensamento": {
         "situacao": "Sessão de encaixe de urgência, últimos 3 dias de piora",
         "pensamento_automatico": "seria mais fácil para todo mundo se eu simplesmente não acordasse mais",
-        "emocao": { "nome": "desesperanca", "intensidade": null, "escala_intensidade": "nao_informada" },
+        "emocao": {
+          "nome": "desesperanca",
+          "intensidade": null,
+          "escala_intensidade": "nao_informada"
+        },
         "distorcoes_cognitivas": [],
         "resposta_racional": null,
         "comportamento_resultante": null

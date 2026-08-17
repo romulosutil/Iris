@@ -24,7 +24,11 @@ export const VERSAO_TERMO_CURATELA_ATUAL = "curatela-v1";
 export const VERSAO_TERMO_EMANCIPADO_ATUAL = "emancipado-v1";
 
 export type EventoConsentimento =
-  | { evento: "revogacao"; consentIdAlvo: string; responsavelSignatario?: string }
+  | {
+      evento: "revogacao";
+      consentIdAlvo: string;
+      responsavelSignatario?: string;
+    }
   | { evento: "renovacao_maioridade" }
   | {
       evento: "representacao";

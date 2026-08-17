@@ -156,7 +156,9 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
 
       // 4) exceção de infra no próprio throttle (fail-closed).
       cookieStore.set(NOME_COOKIE_TOKEN, "token-qualquer");
-      registrarTentativa.mockRejectedValueOnce(new Error("postgres indisponível"));
+      registrarTentativa.mockRejectedValueOnce(
+        new Error("postgres indisponível"),
+      );
       respostas.push([
         "excecao-infra-throttle",
         JSON.stringify(await executar(fd(SENHA_VALIDA))),

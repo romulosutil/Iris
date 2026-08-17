@@ -1,10 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
-import type {
-  EventoConsentimento,
-  EventoConsentimentoState,
-} from "./logic";
+import type { EventoConsentimento, EventoConsentimentoState } from "./logic";
 import { registrarEventoConsentimento } from "./logic";
 
 // Só TIPO é reexportado daqui. Reexportar `registrarEventoConsentimento` (que

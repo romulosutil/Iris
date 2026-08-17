@@ -74,8 +74,14 @@ describe("calcularStatusArquivamento", () => {
 
   test("hora do dia não muda o resultado dentro do mesmo dia civil", () => {
     const ultima = new Date("2026-05-04T00:00:00Z"); // 90 dias civis antes
-    const cedo = calcularStatusArquivamento(ultima, new Date("2026-08-02T00:00:01Z"));
-    const tarde = calcularStatusArquivamento(ultima, new Date("2026-08-02T23:59:59Z"));
+    const cedo = calcularStatusArquivamento(
+      ultima,
+      new Date("2026-08-02T00:00:01Z"),
+    );
+    const tarde = calcularStatusArquivamento(
+      ultima,
+      new Date("2026-08-02T23:59:59Z"),
+    );
     expect(cedo).toEqual(tarde);
     expect(cedo.deveArquivar).toBe(true);
   });

@@ -160,9 +160,7 @@ function ipValido(valor: string): boolean {
  * cadeia com proxy confiável, é o proxy que APENDA o IP real do cliente no
  * fim, e o começo da lista é justamente a parte que o cliente consegue forjar.
  */
-function resolverIp(h: {
-  get(nome: string): string | null;
-}): string | null {
+function resolverIp(h: { get(nome: string): string | null }): string | null {
   const encaminhados = (h.get("x-forwarded-for") ?? "")
     .split(",")
     .map((p) => p.trim())

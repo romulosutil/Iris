@@ -25,13 +25,13 @@
 
 ## Decisões de produto tomadas nesta sessão (arquiteto)
 
-| # | Decisão | Por quê |
-| :- | :------ | :------ |
-| **D-A** | `minLimitValue` deriva de `FAIXAS_PRECIFICACAO[0].valorCentavos` (R$ 39,00), **não** de `VALOR_PRIMEIRO_PACIENTE_CENTAVOS` | O corpo da issue manda derivar da segunda, mas `calculator.ts:65-72` a declara **LEGADO** — "nenhum caminho de produção deve voltar a usá-la". Ressuscitá-la em produção contradiz o próprio docblock. A faixa marginal mais alta carrega a mesma verdade (o preço de uma ficha ativa) e já é a fonte que a copy do teto usa (#286). |
-| **D-B** | Entra **só a flag** `retryPolicy`. A orquestração extradia fica na **#322** | Comentário 2 da issue: a flag sozinha é inerte; quem comanda cada retentativa é o recebedor via `POST /pix/automatic/paymentInstructions/{id}/retries`. A flag é irreversível, a orquestração não — separar é o que torna esta entrega urgente e pequena. |
-| **C-C** | Janela: postura **conservadora sem medição** — satisfazer o mais restritivo das duas leituras | A doc do Asaas se contradiz (Implementação diz "2 a 10 dias **úteis**"; Motivos de Recusa dizem "10 dias"/"2 dias" sem qualificar; BACEN diz corridos). #321 provou que **não é mensurável no sandbox** (autorização nunca ativa). Esperar o ensaio em produção deixaria o bug sazonal vivo; a postura conservadora é correta sob qualquer das leituras. |
-| **D-D** | `subscription.carencia_dias` **fica em 7** | A carência só seria pressionada pela retentativa se a orquestração existisse. Com 2a sozinha o comportamento não muda. Redimensionar entra na #319, que já tem a pergunta na pauta. |
-| **D-E** | `PISO_COBRANCA_CENTAVOS` → `PISO_COBRANCA_AVULSA_CENTAVOS` | Sem o rename passam a existir dois "piso" opostos no mesmo domínio: o piso do que **nós cobramos** (gate de reativação, #290/#311) e o piso do **teto que o pagador autoriza** (`minLimitValue`). O valor e o docblock de medição continuam sendo escopo da #311. |
+| #       | Decisão                                                                                                                    | Por quê                                                                                                                                                                                                                                                                                                                                                  |
+| :------ | :------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D-A** | `minLimitValue` deriva de `FAIXAS_PRECIFICACAO[0].valorCentavos` (R$ 39,00), **não** de `VALOR_PRIMEIRO_PACIENTE_CENTAVOS` | O corpo da issue manda derivar da segunda, mas `calculator.ts:65-72` a declara **LEGADO** — "nenhum caminho de produção deve voltar a usá-la". Ressuscitá-la em produção contradiz o próprio docblock. A faixa marginal mais alta carrega a mesma verdade (o preço de uma ficha ativa) e já é a fonte que a copy do teto usa (#286).                     |
+| **D-B** | Entra **só a flag** `retryPolicy`. A orquestração extradia fica na **#322**                                                | Comentário 2 da issue: a flag sozinha é inerte; quem comanda cada retentativa é o recebedor via `POST /pix/automatic/paymentInstructions/{id}/retries`. A flag é irreversível, a orquestração não — separar é o que torna esta entrega urgente e pequena.                                                                                                |
+| **C-C** | Janela: postura **conservadora sem medição** — satisfazer o mais restritivo das duas leituras                              | A doc do Asaas se contradiz (Implementação diz "2 a 10 dias **úteis**"; Motivos de Recusa dizem "10 dias"/"2 dias" sem qualificar; BACEN diz corridos). #321 provou que **não é mensurável no sandbox** (autorização nunca ativa). Esperar o ensaio em produção deixaria o bug sazonal vivo; a postura conservadora é correta sob qualquer das leituras. |
+| **D-D** | `subscription.carencia_dias` **fica em 7**                                                                                 | A carência só seria pressionada pela retentativa se a orquestração existisse. Com 2a sozinha o comportamento não muda. Redimensionar entra na #319, que já tem a pergunta na pauta.                                                                                                                                                                      |
+| **D-E** | `PISO_COBRANCA_CENTAVOS` → `PISO_COBRANCA_AVULSA_CENTAVOS`                                                                 | Sem o rename passam a existir dois "piso" opostos no mesmo domínio: o piso do que **nós cobramos** (gate de reativação, #290/#311) e o piso do **teto que o pagador autoriza** (`minLimitValue`). O valor e o docblock de medição continuam sendo escopo da #311.                                                                                        |
 
 **Risco aceito e registrado:** com 2a em produção sem 2b, nenhuma retentativa extradia é comandada por nós, logo os campos novos de webhook (`purpose`, `retryAttempt`) não chegam a existir num evento nosso. O risco de carimbar `past_due` três vezes pelo mesmo ciclo nasce junto com a #322, e é lá que os campos devem ser lidos.
 
@@ -39,29 +39,31 @@
 
 ## File Structure
 
-| Arquivo | Responsabilidade | Ação |
-| :------ | :--------------- | :--- |
-| `src/lib/billing/calculator.ts` | Fonte única da precificação | Modificar — exportar `PISO_TETO_AUTORIZACAO_CENTAVOS` derivado de `FAIXAS_PRECIFICACAO[0]` |
-| `src/lib/billing/provider/asaas.ts` | Adapter do gateway | Modificar — payload da autorização (`:512-533`), docblock do método (`:470-481`), comentários da janela (`:46-50`, `:143`) |
-| `src/lib/billing/provider/asaas.test.ts` | Vigia o corpo cru das requisições | Modificar — `:335` e `:339` invertem |
-| `src/lib/billing/calendario-bancario.ts` | **Novo** — feriados bancários BR e aritmética de dia útil em data civil de São Paulo | Criar |
-| `src/lib/billing/calendario-bancario.test.ts` | **Novo** — Páscoa móvel, feriados fixos, contagem de dias úteis | Criar |
-| `src/lib/billing/vencimento.ts` | **Novo** — regra de vencimento da cobrança de ciclo dentro da janela do Pix Automático | Criar |
-| `src/lib/billing/vencimento.test.ts` | **Novo** — janela sob fim de semana, Carnaval, guarda do teto | Criar |
-| `src/lib/billing/subscription.ts` | Fechamento de ciclo | Modificar — `:626` passa a chamar `vencimentoCobrancaDeCiclo` |
-| `src/lib/billing/debito.ts` | Gate de débito (#290) | Modificar — rename da constante |
-| `src/lib/billing/debito.test.ts`, `src/app/(app)/assinatura/gate-debito.int.test.ts` | Testes do gate | Modificar — rename |
+| Arquivo                                                                              | Responsabilidade                                                                       | Ação                                                                                                                       |
+| :----------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/billing/calculator.ts`                                                      | Fonte única da precificação                                                            | Modificar — exportar `PISO_TETO_AUTORIZACAO_CENTAVOS` derivado de `FAIXAS_PRECIFICACAO[0]`                                 |
+| `src/lib/billing/provider/asaas.ts`                                                  | Adapter do gateway                                                                     | Modificar — payload da autorização (`:512-533`), docblock do método (`:470-481`), comentários da janela (`:46-50`, `:143`) |
+| `src/lib/billing/provider/asaas.test.ts`                                             | Vigia o corpo cru das requisições                                                      | Modificar — `:335` e `:339` invertem                                                                                       |
+| `src/lib/billing/calendario-bancario.ts`                                             | **Novo** — feriados bancários BR e aritmética de dia útil em data civil de São Paulo   | Criar                                                                                                                      |
+| `src/lib/billing/calendario-bancario.test.ts`                                        | **Novo** — Páscoa móvel, feriados fixos, contagem de dias úteis                        | Criar                                                                                                                      |
+| `src/lib/billing/vencimento.ts`                                                      | **Novo** — regra de vencimento da cobrança de ciclo dentro da janela do Pix Automático | Criar                                                                                                                      |
+| `src/lib/billing/vencimento.test.ts`                                                 | **Novo** — janela sob fim de semana, Carnaval, guarda do teto                          | Criar                                                                                                                      |
+| `src/lib/billing/subscription.ts`                                                    | Fechamento de ciclo                                                                    | Modificar — `:626` passa a chamar `vencimentoCobrancaDeCiclo`                                                              |
+| `src/lib/billing/debito.ts`                                                          | Gate de débito (#290)                                                                  | Modificar — rename da constante                                                                                            |
+| `src/lib/billing/debito.test.ts`, `src/app/(app)/assinatura/gate-debito.int.test.ts` | Testes do gate                                                                         | Modificar — rename                                                                                                         |
 
 ---
 
 ### Task 1: Payload da autorização — `minLimitValue` + `retryPolicy`
 
 **Files:**
+
 - Modify: `src/lib/billing/calculator.ts` (após a linha 73)
 - Modify: `src/lib/billing/provider/asaas.ts:470-481, 512-533`
 - Test: `src/lib/billing/provider/asaas.test.ts:326-352`
 
 **Interfaces:**
+
 - Produces: `PISO_TETO_AUTORIZACAO_CENTAVOS: number` exportado de `src/lib/billing/calculator.ts`.
 - Consumes: `centavosParaReais` (`asaas.ts:128`), já no arquivo.
 
@@ -70,16 +72,16 @@
 Em `asaas.test.ts`, trocar `:335` e `:339` por:
 
 ```ts
-      // #317: piso do teto que o pagador autoriza no app do banco. Literal de
-      // propósito (disciplina 2 do topo): 39 é o que sai NA REQUISIÇÃO. Derivar
-      // de `PISO_TETO_AUTORIZACAO_CENTAVOS` faria o teste seguir a constante em
-      // vez de vigiá-la. Medido em 15/08/2026 (#321): aceito com 200 e eco na
-      // resposta, sem `value` — a Jornada 3 de valor variável continua de pé.
-      expect(corpo.minLimitValue).toBe(39);
-      // #317: irreversível. O Asaas não permite habilitar retentativa depois da
-      // criação; autorização criada sem isto fica permanentemente sem direito a
-      // retentativa, e o conserto é novo QR + novo consentimento do cliente.
-      expect(corpo.retryPolicy).toBe("ALLOW_THREE_IN_SEVEN_DAYS");
+// #317: piso do teto que o pagador autoriza no app do banco. Literal de
+// propósito (disciplina 2 do topo): 39 é o que sai NA REQUISIÇÃO. Derivar
+// de `PISO_TETO_AUTORIZACAO_CENTAVOS` faria o teste seguir a constante em
+// vez de vigiá-la. Medido em 15/08/2026 (#321): aceito com 200 e eco na
+// resposta, sem `value` — a Jornada 3 de valor variável continua de pé.
+expect(corpo.minLimitValue).toBe(39);
+// #317: irreversível. O Asaas não permite habilitar retentativa depois da
+// criação; autorização criada sem isto fica permanentemente sem direito a
+// retentativa, e o conserto é novo QR + novo consentimento do cliente.
+expect(corpo.retryPolicy).toBe("ALLOW_THREE_IN_SEVEN_DAYS");
 ```
 
 - [ ] **Step 2: Rodar e ver vermelho**
@@ -106,7 +108,8 @@ Em `calculator.ts`, logo **após** o bloco de `VALOR_PRIMEIRO_PACIENTE_CENTAVOS`
  * pelo pagador; `minLimitValue` é a única alavanca do recebedor, e a copy da
  * tela de ativação (#286) é a única barreira restante.
  */
-export const PISO_TETO_AUTORIZACAO_CENTAVOS = FAIXAS_PRECIFICACAO[0]!.valorCentavos;
+export const PISO_TETO_AUTORIZACAO_CENTAVOS =
+  FAIXAS_PRECIFICACAO[0]!.valorCentavos;
 ```
 
 - [ ] **Step 4: Trocar o payload**
@@ -164,10 +167,12 @@ git commit -m "feat(billing): set minLimitValue and retry policy on Pix authoriz
 ### Task 2: Rename `PISO_COBRANCA_CENTAVOS` → `PISO_COBRANCA_AVULSA_CENTAVOS`
 
 **Files:**
+
 - Modify: `src/lib/billing/debito.ts:38-55, 109`
 - Test: `src/lib/billing/debito.test.ts:2, 42, 46, 61`; `src/app/(app)/assinatura/gate-debito.int.test.ts:44, 377, 381`
 
 **Interfaces:**
+
 - Produces: `PISO_COBRANCA_AVULSA_CENTAVOS` (mesmo valor, `500`). O nome antigo deixa de existir — **sem alias de compatibilidade**, o repo é fechado.
 
 - [ ] **Step 1: Renomear a definição e acrescentar a primeira linha do docblock**
@@ -213,12 +218,14 @@ git commit -m "refactor(billing): rename charge floor to avoid collision with au
 ### Task 3: Janela do vencimento — calendário bancário + regra conservadora
 
 **Files:**
+
 - Create: `src/lib/billing/calendario-bancario.ts`, `src/lib/billing/calendario-bancario.test.ts`
 - Create: `src/lib/billing/vencimento.ts`, `src/lib/billing/vencimento.test.ts`
 - Modify: `src/lib/billing/subscription.ts:55-60, 626`
 - Modify: `src/lib/billing/provider/asaas.ts:46-50, 141-145` (comentários da janela)
 
 **Interfaces:**
+
 - Consumes: nada das tarefas anteriores.
 - Produces:
   - `ehDiaUtilBancario(data: Date): boolean`
@@ -267,8 +274,12 @@ describe("calendário bancário brasileiro", () => {
   });
 
   it("empurra para o próximo dia útil e é idempotente em dia útil", () => {
-    expect(proximoDiaUtilBancario(dia("2026-08-22"))).toEqual(dia("2026-08-24"));
-    expect(proximoDiaUtilBancario(dia("2026-08-24"))).toEqual(dia("2026-08-24"));
+    expect(proximoDiaUtilBancario(dia("2026-08-22"))).toEqual(
+      dia("2026-08-24"),
+    );
+    expect(proximoDiaUtilBancario(dia("2026-08-24"))).toEqual(
+      dia("2026-08-24"),
+    );
   });
 
   it("conta dias úteis estritamente entre as datas", () => {
@@ -465,23 +476,29 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
 describe("vencimento da cobrança de ciclo", () => {
   it("mantém os 5 dias corridos quando eles já satisfazem a janela", () => {
     // sexta 2026-08-14 + 5 = quarta 2026-08-19; seg/ter úteis no meio = 2
-    expect(ymd(vencimentoCobrancaDeCiclo(dia("2026-08-14")))).toBe("2026-08-19");
+    expect(ymd(vencimentoCobrancaDeCiclo(dia("2026-08-14")))).toBe(
+      "2026-08-19",
+    );
   });
 
   it("nunca vence em sábado, domingo ou feriado", () => {
     // segunda 2026-08-17 + 5 = sábado 2026-08-22 → empurra para segunda 24
-    expect(ymd(vencimentoCobrancaDeCiclo(dia("2026-08-17")))).toBe("2026-08-24");
+    expect(ymd(vencimentoCobrancaDeCiclo(dia("2026-08-17")))).toBe(
+      "2026-08-24",
+    );
     // 2026-09-02 + 5 = 2026-09-07 (Independência) → 2026-09-08
-    expect(ymd(vencimentoCobrancaDeCiclo(dia("2026-09-02")))).toBe("2026-09-08");
+    expect(ymd(vencimentoCobrancaDeCiclo(dia("2026-09-02")))).toBe(
+      "2026-09-08",
+    );
   });
 
   it("estica a antecedência quando o Carnaval come os dias úteis", () => {
     // Carnaval 2026: 16 e 17/02. Fechamento em 2026-02-13 (sexta):
     // +5 = 18/02 (quarta), com 0 dias úteis no meio → precisa esticar.
     const vencimento = vencimentoCobrancaDeCiclo(dia("2026-02-13"));
-    expect(diasUteisEntre(dia("2026-02-13"), vencimento)).toBeGreaterThanOrEqual(
-      ANTECEDENCIA_MINIMA_DIAS_UTEIS,
-    );
+    expect(
+      diasUteisEntre(dia("2026-02-13"), vencimento),
+    ).toBeGreaterThanOrEqual(ANTECEDENCIA_MINIMA_DIAS_UTEIS);
     expect(ymd(vencimento)).toBe("2026-02-20");
   });
 

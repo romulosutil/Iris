@@ -79,7 +79,7 @@ export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
       >
         <label
           htmlFor={htmlFor}
-          className="text-[var(--text-primary)] font-display text-sm font-semibold"
+          className="font-display text-sm font-semibold text-[var(--text-primary)]"
         >
           {label}
         </label>
@@ -87,7 +87,7 @@ export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
         {hint ? (
           <p
             id={`${htmlFor}-hint`}
-            className="text-[var(--text-secondary)] text-sm"
+            className="text-sm text-[var(--text-secondary)]"
           >
             {hint}
           </p>
@@ -96,7 +96,7 @@ export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
           <p
             id={`${htmlFor}-error`}
             role="alert"
-            className="text-[var(--status-error-fg)] text-sm font-semibold"
+            className="text-sm font-semibold text-[var(--status-error-fg)]"
           >
             {error}
           </p>

@@ -635,8 +635,7 @@ objetivo (risco real: convênios podem exigir "folha de registro fria", ver
 
 **Justificativa:** mostrar ao terapeuta exatamente o que o coordenador enxerga
 (mesmo texto, mesmo número) transforma a métrica de "vigilância velada" em
-"regra do jogo conhecida" — validação já apontada pela pesquisa simulada (Tema
-8) e pelo non-goal de coleta trial-by-trial.
+"regra do jogo conhecida" — validação já apontada pela pesquisa simulada (Tema 8) e pelo non-goal de coleta trial-by-trial.
 
 ---
 

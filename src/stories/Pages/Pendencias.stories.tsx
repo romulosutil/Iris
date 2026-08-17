@@ -26,17 +26,14 @@ export const FilaDePendencias = {
       />
       <Container largura="md" className="py-8">
         <Stack gap="lg">
-          <PageHeader
-            title="Pendências"
-            description="2 itens pedem atenção."
-          />
+          <PageHeader title="Pendências" description="2 itens pedem atenção." />
 
           <Stack gap="md" como="ul">
             <DataRow
               como="li"
               title={
                 <Cluster gap="sm" className="items-center">
-                  <span className="font-display font-bold text-lg text-[var(--text-primary)]">
+                  <span className="font-display text-lg font-bold text-[var(--text-primary)]">
                     Sessão de 21/07 · 14:00
                   </span>
                   <StatusBadge estado="sugerida" />
@@ -54,7 +51,7 @@ export const FilaDePendencias = {
               como="li"
               title={
                 <Cluster gap="sm" className="items-center">
-                  <span className="font-display font-bold text-lg text-[var(--text-primary)]">
+                  <span className="font-display text-lg font-bold text-[var(--text-primary)]">
                     Sessão de 20/07 · 10:30
                   </span>
                   <StatusBadge estado="pendente" />

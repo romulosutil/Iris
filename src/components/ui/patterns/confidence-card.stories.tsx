@@ -21,8 +21,10 @@ export const BaixaFriccao: Story = {
     titulo: "Imita bater palmas mediante instrução verbal",
     protocolo: "VB-MAPP",
     metaCodigo: "VP-MTS 3-M",
-    trecho: "Durante a sessão, o paciente imitou bater palmas espontaneamente 4 de 5 vezes.",
-    justificativa: "Critério de 80% de acertos atingido com clareza no registro do diário.",
+    trecho:
+      "Durante a sessão, o paciente imitou bater palmas espontaneamente 4 de 5 vezes.",
+    justificativa:
+      "Critério de 80% de acertos atingido com clareza no registro do diário.",
     friccao: "baixa",
     confianca: 96,
     onAprovar: () => alert("Aprovado"),
@@ -37,7 +39,8 @@ export const MediaFriccao: Story = {
     protocolo: "DENVER",
     metaCodigo: "SOC-1",
     trecho: "Manteve contato visual breve durante o jogo com blocos.",
-    justificativa: "Duração exata não explicitada no relato, necessária confirmação do terapeuta.",
+    justificativa:
+      "Duração exata não explicitada no relato, necessária confirmação do terapeuta.",
     friccao: "media",
     confianca: 74,
     onAprovar: () => alert("Aprovado"),
@@ -52,7 +55,8 @@ export const AltaFriccao: Story = {
     protocolo: "ABLLS-R",
     metaCodigo: "A-1",
     trecho: "Não respondeu prontamente quando a mãe chamou na recepção.",
-    justificativa: "Possível contra-evidência ou registro de recusa. Risco de falso positivo.",
+    justificativa:
+      "Possível contra-evidência ou registro de recusa. Risco de falso positivo.",
     friccao: "alta",
     confianca: 42,
     onAprovar: () => alert("Aprovado"),

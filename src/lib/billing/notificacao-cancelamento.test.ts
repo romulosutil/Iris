@@ -59,9 +59,8 @@ vi.mock("@/db/client", () => ({
   },
 }));
 
-const { notificarCancelamentoAssinatura } = await import(
-  "./notificacao-cancelamento"
-);
+const { notificarCancelamentoAssinatura } =
+  await import("./notificacao-cancelamento");
 
 describe("notificarCancelamentoAssinatura", () => {
   const clinicId = "11111111-1111-4111-8111-111111111111";

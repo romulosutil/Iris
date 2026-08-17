@@ -28,7 +28,7 @@ export function CollapsibleCluster({
   return (
     <section
       className={cn(
-        "flex flex-col rounded-[var(--radius-card)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)] overflow-hidden transition-all",
+        "flex flex-col overflow-hidden rounded-[var(--radius-card)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)] transition-all",
         className,
       )}
       {...props}
@@ -38,9 +38,9 @@ export function CollapsibleCluster({
         type="button"
         onClick={() => setAberto(!aberto)}
         aria-expanded={aberto}
-        className="flex items-center justify-between gap-4 p-4 text-left w-full hover:bg-[var(--surface-elevated)]/50 transition-colors focus-visible:outline-focus min-h-[52px]"
+        className="focus-visible:outline-focus flex min-h-[52px] w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-[var(--surface-elevated)]/50"
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex min-w-0 items-center gap-3">
           <span
             className={cn(
               "font-mono text-sm font-bold text-[var(--text-secondary)] transition-transform duration-200",
@@ -50,12 +50,12 @@ export function CollapsibleCluster({
           >
             ▶
           </span>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0">
-            <h2 className="font-display font-bold text-lg text-[var(--text-primary)] truncate">
+          <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <h2 className="font-display truncate text-lg font-bold text-[var(--text-primary)]">
               {titulo}
             </h2>
             {subtitulo ? (
-              <span className="text-xs text-[var(--text-secondary)] font-medium">
+              <span className="text-xs font-medium text-[var(--text-secondary)]">
                 {subtitulo}
               </span>
             ) : null}
@@ -64,7 +64,9 @@ export function CollapsibleCluster({
 
         {badgeTexto ? (
           <div className="shrink-0">
-            <StatusBadge variante={badgeVariante === "sucesso" ? "success" : "warning"}>
+            <StatusBadge
+              variante={badgeVariante === "sucesso" ? "success" : "warning"}
+            >
               {badgeTexto}
             </StatusBadge>
           </div>
@@ -73,7 +75,7 @@ export function CollapsibleCluster({
 
       {/* Conteúdo do Agrupador com Grid Fluido para Cards */}
       {aberto ? (
-        <div className="p-4 pt-1 border-t border-[var(--border-brutal)]/20 bg-[var(--surface-ground)]/40">
+        <div className="border-t border-[var(--border-brutal)]/20 bg-[var(--surface-ground)]/40 p-4 pt-1">
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] gap-4">
             {children}
           </div>

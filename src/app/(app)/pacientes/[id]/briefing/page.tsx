@@ -36,14 +36,20 @@ function horaDaSessao(quando: Date): string {
 }
 
 function dataDaSessao(quando: Date): string {
-  const hojeISO = new Intl.DateTimeFormat("en-CA", { timeZone: FUSO_CLINICA }).format(new Date());
-  const sessaoISO = new Intl.DateTimeFormat("en-CA", { timeZone: FUSO_CLINICA }).format(quando);
-  if (sessaoISO === hojeISO) return `hoje ${horaDaSessao(quando)}`;
-  return new Intl.DateTimeFormat("pt-BR", {
+  const hojeISO = new Intl.DateTimeFormat("en-CA", {
     timeZone: FUSO_CLINICA,
-    day: "2-digit",
-    month: "long",
-  }).format(quando) + ` · ${horaDaSessao(quando)}`;
+  }).format(new Date());
+  const sessaoISO = new Intl.DateTimeFormat("en-CA", {
+    timeZone: FUSO_CLINICA,
+  }).format(quando);
+  if (sessaoISO === hojeISO) return `hoje ${horaDaSessao(quando)}`;
+  return (
+    new Intl.DateTimeFormat("pt-BR", {
+      timeZone: FUSO_CLINICA,
+      day: "2-digit",
+      month: "long",
+    }).format(quando) + ` · ${horaDaSessao(quando)}`
+  );
 }
 
 export default async function BriefingPage({
@@ -64,15 +70,21 @@ export default async function BriefingPage({
   const dados = await carregarBriefing(ctx, id);
   if (!dados) notFound();
 
-  const { paciente, proximaSessao, ultimaSessao, metasAtivas, alertasManejo, reforcadoresAtuais } =
-    dados;
+  const {
+    paciente,
+    proximaSessao,
+    ultimaSessao,
+    metasAtivas,
+    alertasManejo,
+    reforcadoresAtuais,
+  } = dados;
 
   return (
     <Stack gap="lg" className="pb-24">
       <header className="flex flex-col gap-1">
         <Link
           href="/agenda"
-          className="text-text-body focus-visible:outline-focus outline-none w-fit text-sm hover:underline focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+          className="text-text-body focus-visible:outline-focus w-fit text-sm outline-none hover:underline focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
         >
           ← Agenda
         </Link>
@@ -94,8 +106,12 @@ export default async function BriefingPage({
           aninharia heading em heading (classe de bug já corrigida em outras
           telas do repo, ver commit "resolve heading aninhado"). */}
       <section aria-labelledby="briefing-ultima-sessao">
-        <h2 id="briefing-ultima-sessao" className="font-display text-text-heading mb-2 text-xl font-semibold">
-          Última sessão{ultimaSessao ? ` (sessão ${ultimaSessao.sessionNumero})` : ""}
+        <h2
+          id="briefing-ultima-sessao"
+          className="font-display text-text-heading mb-2 text-xl font-semibold"
+        >
+          Última sessão
+          {ultimaSessao ? ` (sessão ${ultimaSessao.sessionNumero})` : ""}
         </h2>
         <Card>
           <UltimaSessaoSection ultimaSessao={ultimaSessao} />
@@ -103,12 +119,18 @@ export default async function BriefingPage({
       </section>
 
       <section aria-labelledby="briefing-metas">
-        <h2 id="briefing-metas" className="font-display text-text-heading mb-2 text-xl font-semibold">
-          Metas de hoje {metasAtivas.length > 0 ? `(${metasAtivas.length} ativas)` : ""}
+        <h2
+          id="briefing-metas"
+          className="font-display text-text-heading mb-2 text-xl font-semibold"
+        >
+          Metas de hoje{" "}
+          {metasAtivas.length > 0 ? `(${metasAtivas.length} ativas)` : ""}
         </h2>
         <Card>
           {metasAtivas.length === 0 ? (
-            <p className="text-text-body text-sm">Nenhuma meta ativa registrada.</p>
+            <p className="text-text-body text-sm">
+              Nenhuma meta ativa registrada.
+            </p>
           ) : (
             <ul className="flex flex-col gap-1">
               {metasAtivas.map((m) => (
@@ -127,7 +149,10 @@ export default async function BriefingPage({
       <AlertaManejoBanner alertas={alertasManejo} />
 
       <section aria-labelledby="briefing-reforcadores">
-        <h2 id="briefing-reforcadores" className="font-display text-text-heading mb-2 text-xl font-semibold">
+        <h2
+          id="briefing-reforcadores"
+          className="font-display text-text-heading mb-2 text-xl font-semibold"
+        >
           Reforçadores atuais
         </h2>
         <Card>
@@ -137,13 +162,19 @@ export default async function BriefingPage({
 
       <div className="flex justify-center pt-4">
         {proximaSessao ? (
-          <Link href={`/diario/${proximaSessao.id}`} className={iniciarSessaoClasses}>
+          <Link
+            href={`/diario/${proximaSessao.id}`}
+            className={iniciarSessaoClasses}
+          >
             Iniciar sessão
           </Link>
         ) : (
           <span
             aria-disabled="true"
-            className={cn(iniciarSessaoClasses, "pointer-events-none opacity-50")}
+            className={cn(
+              iniciarSessaoClasses,
+              "pointer-events-none opacity-50",
+            )}
           >
             Iniciar sessão
           </span>

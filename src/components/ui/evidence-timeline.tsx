@@ -12,8 +12,7 @@ interface EvidenceItem {
   descricao?: React.ReactNode;
 }
 
-export interface EvidenceTimelineProps
-  extends React.HTMLAttributes<HTMLOListElement> {
+export interface EvidenceTimelineProps extends React.HTMLAttributes<HTMLOListElement> {
   itens: EvidenceItem[];
 }
 
@@ -42,11 +41,7 @@ export const EvidenceTimeline = React.forwardRef<
   EvidenceTimelineProps
 >(function EvidenceTimeline({ className, itens, ...props }, ref) {
   return (
-    <ol
-      ref={ref}
-      className={cn("flex flex-col gap-0", className)}
-      {...props}
-    >
+    <ol ref={ref} className={cn("flex flex-col gap-0", className)} {...props}>
       {itens.map((item, i) => {
         const ultimo = i === itens.length - 1;
         return (
@@ -72,7 +67,7 @@ export const EvidenceTimeline = React.forwardRef<
             <div className={cn("pb-6", ultimo && "pb-0")}>
               <p
                 className={cn(
-                  "text-sm font-semibold leading-tight",
+                  "text-sm leading-tight font-semibold",
                   titleClasses[item.tipo],
                 )}
               >

@@ -40,7 +40,9 @@ export function FormularioDadosClinica({
   const [uf, setUf] = React.useState(dados.uf ?? "");
 
   const aoEncontrarEndereco = React.useCallback((endereco: EnderecoViaCep) => {
-    setLogradouro((atual: string) => (atual.trim() ? atual : endereco.logradouro));
+    setLogradouro((atual: string) =>
+      atual.trim() ? atual : endereco.logradouro,
+    );
     setBairro((atual: string) => (atual.trim() ? atual : endereco.bairro));
     setCidade((atual: string) => (atual.trim() ? atual : endereco.cidade));
     setUf((atual: string) => (atual.trim() ? atual : endereco.uf));
@@ -87,8 +89,8 @@ export function FormularioDadosClinica({
         <input type="hidden" name="cpfCnpj" value={dados.cpfCnpj ?? ""} />
       ) : null}
 
-      <fieldset className="flex flex-col gap-4 border-0 p-0 m-0 min-w-0">
-        <legend className="text-[var(--text-primary)] font-display text-sm font-semibold p-0 mb-1.5">
+      <fieldset className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
+        <legend className="font-display mb-1.5 p-0 text-sm font-semibold text-[var(--text-primary)]">
           Endereço
         </legend>
 
@@ -134,11 +136,7 @@ export function FormularioDadosClinica({
               defaultValue={dados.numero ?? ""}
             />
           </Field>
-          <Field
-            label="Complemento"
-            htmlFor="complemento"
-            className="flex-1"
-          >
+          <Field label="Complemento" htmlFor="complemento" className="flex-1">
             <Input
               id="complemento"
               name="complemento"

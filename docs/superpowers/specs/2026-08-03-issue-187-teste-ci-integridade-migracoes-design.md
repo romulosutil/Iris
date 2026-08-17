@@ -32,5 +32,6 @@ Para impedir regressões em silêncio, a validação deve ser feita no nível de
 ---
 
 ## 📊 Estado de Implementação
+
 - **Mapeamento & Spec:** ✅ Concluído.
 - **Teste Unitário (`src/db/migrations.test.ts`):** 🚧 Pendente de implementação.

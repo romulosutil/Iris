@@ -36,7 +36,11 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
           descricao="Uma falha impediu o carregamento da aplicação. Você pode tentar de novo agora; se o problema continuar, volte mais tarde."
           auditId={error.digest}
         >
-          <Button variante="primaria" onClick={reset} className="w-full sm:w-auto">
+          <Button
+            variante="primaria"
+            onClick={reset}
+            className="w-full sm:w-auto"
+          >
             Tentar novamente
           </Button>
           <Button variante="secundaria" asChild className="w-full sm:w-auto">

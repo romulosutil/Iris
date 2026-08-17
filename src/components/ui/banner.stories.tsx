@@ -21,7 +21,8 @@ export const Info: Story = {
   args: {
     variant: "info",
     titulo: "Aviso de Coordenação",
-    children: "Sessões marcadas como 'consolidada' não podem ser excluídas sem permissão.",
+    children:
+      "Sessões marcadas como 'consolidada' não podem ser excluídas sem permissão.",
   },
 };
 
@@ -29,7 +30,8 @@ export const Alerta: Story = {
   args: {
     variant: "alerta",
     titulo: "Atenção Necessária",
-    children: "Existem 4 sessões críticas pendentes de validação há mais de 48 horas.",
+    children:
+      "Existem 4 sessões críticas pendentes de validação há mais de 48 horas.",
   },
 };
 
@@ -37,6 +39,7 @@ export const Sucesso: Story = {
   args: {
     variant: "sucesso",
     titulo: "Sincronização Completa",
-    children: "Todos os diários offline deste aparelho foram enviados com sucesso.",
+    children:
+      "Todos os diários offline deste aparelho foram enviados com sucesso.",
   },
 };

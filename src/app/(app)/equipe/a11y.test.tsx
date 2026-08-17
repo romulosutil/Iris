@@ -10,13 +10,25 @@ afterEach(cleanup);
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
   const r = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
-    rules: { region: { enabled: false }, "landmark-one-main": { enabled: false }, "page-has-heading-one": { enabled: false }, "color-contrast": { enabled: false } },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
+    rules: {
+      region: { enabled: false },
+      "landmark-one-main": { enabled: false },
+      "page-has-heading-one": { enabled: false },
+      "color-contrast": { enabled: false },
+    },
   });
   expect(r.violations).toEqual([]);
 }
 
 test("lista de terapeutas sem violações", async () => {
   const { ListaTerapeutas } = await import("./lista-terapeutas");
-  await semViolacoes(<ListaTerapeutas terapeutas={[{ id: "t1", name: "Ana", email: "ana@t.com" }]} />);
+  await semViolacoes(
+    <ListaTerapeutas
+      terapeutas={[{ id: "t1", name: "Ana", email: "ana@t.com" }]}
+    />,
+  );
 });

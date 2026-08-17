@@ -270,10 +270,12 @@ describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
     const r = await confirmarEvidencia(ctxCoord, { evidenceId: EV5 });
     expect(r.ok).toBe(true);
 
-    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    const [pac] =
+      await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
     expect(pac!.arquivado_em).toBeNull();
 
-    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC} AND acao = 'paciente_desarquivado_automaticamente'`;
+    const [log] =
+      await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC} AND acao = 'paciente_desarquivado_automaticamente'`;
     expect(log).toBeTruthy();
     expect(log!.detalhe).toEqual({ origem: "validacao_evidencia" });
 
@@ -298,10 +300,12 @@ describe.skipIf(!hasDb)("validação: confirmar + invalidar", () => {
     });
     expect(r.ok).toBe(true);
 
-    const [pac] = await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
+    const [pac] =
+      await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC}`;
     expect(pac!.arquivado_em).toBeNull();
 
-    const [log] = await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC} AND acao = 'paciente_desarquivado_automaticamente'`;
+    const [log] =
+      await owner`SELECT acao, detalhe FROM audit_log WHERE patient_id = ${PAC} AND acao = 'paciente_desarquivado_automaticamente'`;
     expect(log).toBeTruthy();
     expect(log!.detalhe).toEqual({ origem: "validacao_evidencia" });
 

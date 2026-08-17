@@ -115,7 +115,8 @@ export async function gerarRascunhoConvenioNarrativo(
     return await withTenant(ctx, async (tx) => {
       // RLS já escopa o paciente.
       const nome = await nomePaciente(tx, patientId);
-      if (!nome) return { error: "Paciente não encontrado ou fora do seu acesso." };
+      if (!nome)
+        return { error: "Paciente não encontrado ou fora do seu acesso." };
 
       const isDemo = await clinicaDemo(tx, ctx.clinicId);
       const provider = resolveConvenioNarrativoProvider({ isDemo });
@@ -180,7 +181,8 @@ export async function curarConvenioNarrativo(
   } catch (err) {
     return roleError(err);
   }
-  const { reportId, versaoEsperada, cabecalhoEditado, draftEditado } = parsed.data;
+  const { reportId, versaoEsperada, cabecalhoEditado, draftEditado } =
+    parsed.data;
 
   try {
     return await withTenant(ctx, async (tx) => {
@@ -249,7 +251,8 @@ export async function exportarConvenioNarrativo(
       const { hash } = await exportReport(tx, {
         reportId,
         atorId: ctx.userId,
-        buildHtml: (pl) => buildConvenioNarrativoHtml(pl as PayloadConvenioNarrativo),
+        buildHtml: (pl) =>
+          buildConvenioNarrativoHtml(pl as PayloadConvenioNarrativo),
         renderer,
       });
       return { reportId, hash };

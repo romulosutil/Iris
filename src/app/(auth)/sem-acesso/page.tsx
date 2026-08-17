@@ -13,7 +13,9 @@ export async function generateMetadata({
   const { motivo } = await searchParams;
   const cadastroIncompleto = motivo === "cadastro-incompleto";
   return {
-    title: cadastroIncompleto ? "Cadastro incompleto — Iris" : "Sem acesso — Iris",
+    title: cadastroIncompleto
+      ? "Cadastro incompleto — Iris"
+      : "Sem acesso — Iris",
     description: cadastroIncompleto
       ? "Cadastro interrompido antes da clínica ser criada."
       : "Sem acesso a nenhuma clínica no Iris.",
@@ -74,7 +76,10 @@ export default async function SemAcessoPage({
       >
         {cadastroIncompleto ? (
           <div className="flex flex-col gap-4">
-            <Alert severidade="info" titulo="Sua conta existe, mas a clínica não foi criada">
+            <Alert
+              severidade="info"
+              titulo="Sua conta existe, mas a clínica não foi criada"
+            >
               O cadastro foi interrompido antes de concluir a criação da
               clínica. Isso não compromete sua conta — é só continuar de onde
               parou.

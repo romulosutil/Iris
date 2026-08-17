@@ -4,7 +4,11 @@ export interface IconProps extends React.SVGProps<SVGSVGElement> {
   size?: number | string;
 }
 
-export const SparkleIcon = ({ size = "1em", className, ...props }: IconProps) => (
+export const SparkleIcon = ({
+  size = "1em",
+  className,
+  ...props
+}: IconProps) => (
   <svg
     width={size}
     height={size}
@@ -38,7 +42,11 @@ export const CheckIcon = ({ size = "1em", className, ...props }: IconProps) => (
   </svg>
 );
 
-export const LayersIcon = ({ size = "1em", className, ...props }: IconProps) => (
+export const LayersIcon = ({
+  size = "1em",
+  className,
+  ...props
+}: IconProps) => (
   <svg
     width={size}
     height={size}
@@ -87,7 +95,11 @@ export const UndoIcon = ({ size = "1em", className, ...props }: IconProps) => (
   </svg>
 );
 
-export const PencilIcon = ({ size = "1em", className, ...props }: IconProps) => (
+export const PencilIcon = ({
+  size = "1em",
+  className,
+  ...props
+}: IconProps) => (
   <svg
     width={size}
     height={size}
@@ -105,7 +117,11 @@ export const PencilIcon = ({ size = "1em", className, ...props }: IconProps) => 
   </svg>
 );
 
-export const DiscardIcon = ({ size = "1em", className, ...props }: IconProps) => (
+export const DiscardIcon = ({
+  size = "1em",
+  className,
+  ...props
+}: IconProps) => (
   <svg
     width={size}
     height={size}
@@ -144,7 +160,11 @@ export const ClockIcon = ({ size = "1em", className, ...props }: IconProps) => (
   </svg>
 );
 
-export const ChevronDownIcon = ({ size = "1em", className, ...props }: IconProps) => (
+export const ChevronDownIcon = ({
+  size = "1em",
+  className,
+  ...props
+}: IconProps) => (
   <svg
     width={size}
     height={size}
@@ -176,7 +196,11 @@ export const CloseIcon = ({ size = "1em", className, ...props }: IconProps) => (
   </svg>
 );
 
-export const AlertTriangleIcon = ({ size = "1em", className, ...props }: IconProps) => (
+export const AlertTriangleIcon = ({
+  size = "1em",
+  className,
+  ...props
+}: IconProps) => (
   <svg
     width={size}
     height={size}
@@ -191,8 +215,18 @@ export const AlertTriangleIcon = ({ size = "1em", className, ...props }: IconPro
       strokeWidth="1.8"
       strokeLinejoin="round"
     />
-    <path d="M8 6.5v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
-    <path d="M8 11.2v.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+    <path
+      d="M8 6.5v3"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="square"
+    />
+    <path
+      d="M8 11.2v.8"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="square"
+    />
   </svg>
 );
 
@@ -205,7 +239,12 @@ export const TrashIcon = ({ size = "1em", className, ...props }: IconProps) => (
     className={className}
     {...props}
   >
-    <path d="M2.5 4h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+    <path
+      d="M2.5 4h11"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="square"
+    />
     <path
       d="M5.5 4V2.5h5V4M12.5 4v9.5h-9V4"
       stroke="currentColor"
@@ -213,11 +252,20 @@ export const TrashIcon = ({ size = "1em", className, ...props }: IconProps) => (
       strokeLinecap="square"
       strokeLinejoin="round"
     />
-    <path d="M6.5 7v4M9.5 7v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+    <path
+      d="M6.5 7v4M9.5 7v4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="square"
+    />
   </svg>
 );
 
-export const ShieldIcon = ({ size = "1em", className, ...props }: IconProps) => (
+export const ShieldIcon = ({
+  size = "1em",
+  className,
+  ...props
+}: IconProps) => (
   <svg
     width={size}
     height={size}

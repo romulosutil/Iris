@@ -8,25 +8,61 @@
         "role": "primary",
         "displayName": "Ouro Brutal",
         "canonical": "oklch(0.80 0.14 85)",
-        "tonalRamp": ["#664d00", "#997300", "#cc9a03", "#d29e04", "#f2b705", "#f5c536", "#f8d468", "#fff6db"]
+        "tonalRamp": [
+          "#664d00",
+          "#997300",
+          "#cc9a03",
+          "#d29e04",
+          "#f2b705",
+          "#f5c536",
+          "#f8d468",
+          "#fff6db"
+        ]
       },
       "canvas": {
         "role": "neutral",
         "displayName": "Canvas App",
         "canonical": "oklch(0.98 0.002 240)",
-        "tonalRamp": ["#0a0a0a", "#1a1a1a", "#2b2b2b", "#71717a", "#a1a1aa", "#f1f3f5", "#f8f9fa", "#ffffff"]
+        "tonalRamp": [
+          "#0a0a0a",
+          "#1a1a1a",
+          "#2b2b2b",
+          "#71717a",
+          "#a1a1aa",
+          "#f1f3f5",
+          "#f8f9fa",
+          "#ffffff"
+        ]
       },
       "status-ia": {
         "role": "tertiary",
         "displayName": "Violeta IA (Sugestão)",
         "canonical": "oklch(0.45 0.12 300)",
-        "tonalRamp": ["#25153e", "#45286e", "#6a4c93", "#8967b3", "#a888d2", "#c8aff1", "#f1e9f6", "#faf5fc"]
+        "tonalRamp": [
+          "#25153e",
+          "#45286e",
+          "#6a4c93",
+          "#8967b3",
+          "#a888d2",
+          "#c8aff1",
+          "#f1e9f6",
+          "#faf5fc"
+        ]
       },
       "status-success": {
         "role": "secondary",
         "displayName": "Menta Sucesso",
         "canonical": "oklch(0.55 0.14 160)",
-        "tonalRamp": ["#063d36", "#0a5c54", "#059669", "#14857a", "#3fa34d", "#80cbc4", "#ecfdf5", "#f6fffb"]
+        "tonalRamp": [
+          "#063d36",
+          "#0a5c54",
+          "#059669",
+          "#14857a",
+          "#3fa34d",
+          "#80cbc4",
+          "#ecfdf5",
+          "#f6fffb"
+        ]
       }
     },
     "typographyMeta": {
@@ -44,14 +80,38 @@
       }
     },
     "shadows": [
-      { "name": "elevation-1", "value": "2px 2px 0 0 #000000", "purpose": "Levantamento sutil para botões secundários." },
-      { "name": "elevation-2", "value": "2px 2px 0 0 #000000", "purpose": "Sombra base brutalista para componentes do Modo Clínico." },
-      { "name": "elevation-3", "value": "4px 4px 0 0 #000000", "purpose": "Hover e estado elevado para ações primárias." },
-      { "name": "elevation-inset", "value": "inset 0 2px 8px rgba(106, 76, 147, 0.1)", "purpose": "Afundamento visual para dados sugeridos pela IA (hipótese)." }
+      {
+        "name": "elevation-1",
+        "value": "2px 2px 0 0 #000000",
+        "purpose": "Levantamento sutil para botões secundários."
+      },
+      {
+        "name": "elevation-2",
+        "value": "2px 2px 0 0 #000000",
+        "purpose": "Sombra base brutalista para componentes do Modo Clínico."
+      },
+      {
+        "name": "elevation-3",
+        "value": "4px 4px 0 0 #000000",
+        "purpose": "Hover e estado elevado para ações primárias."
+      },
+      {
+        "name": "elevation-inset",
+        "value": "inset 0 2px 8px rgba(106, 76, 147, 0.1)",
+        "purpose": "Afundamento visual para dados sugeridos pela IA (hipótese)."
+      }
     ],
     "motion": [
-      { "name": "button-press", "value": "translate(2px, 2px) duration 75ms", "purpose": "Feedback tátil imediato no clique de confirmação." },
-      { "name": "accordion-down", "value": "200ms ease-out", "purpose": "Expansão fluida de clusters de evidências." }
+      {
+        "name": "button-press",
+        "value": "translate(2px, 2px) duration 75ms",
+        "purpose": "Feedback tátil imediato no clique de confirmação."
+      },
+      {
+        "name": "accordion-down",
+        "value": "200ms ease-out",
+        "purpose": "Expansão fluida de clusters de evidências."
+      }
     ],
     "breakpoints": [
       { "name": "sm", "value": "640px" },
@@ -104,11 +164,31 @@
       "Dois Modos de Temperatura (Modo Clínico 4px vs Modo Família 2px)"
     ],
     "rules": [
-      { "name": "The Epistemic Honesty Rule", "body": "Nenhum componente pode exibir o estado Sugerido pela IA com o mesmo visual de um dado Aprovado.", "section": "colors" },
-      { "name": "The Spectrum Reserve Rule", "body": "A régua arco-íris é exclusiva do brand mark e proibida em UI funcional.", "section": "colors" },
-      { "name": "The Display Limit Rule", "body": "A fonte Space Grotesk é proibida em corpos de texto abaixo de 20px.", "section": "typography" },
-      { "name": "The Tactile Friction Rule", "body": "Ações primárias devem deslocar fisicamente no clique com feedback tátil.", "section": "elevation" },
-      { "name": "The Orthogonal Focus Rule", "body": "O anel de foco é ortogonal e nunca funde com os estados de hover ou clique.", "section": "elevation" }
+      {
+        "name": "The Epistemic Honesty Rule",
+        "body": "Nenhum componente pode exibir o estado Sugerido pela IA com o mesmo visual de um dado Aprovado.",
+        "section": "colors"
+      },
+      {
+        "name": "The Spectrum Reserve Rule",
+        "body": "A régua arco-íris é exclusiva do brand mark e proibida em UI funcional.",
+        "section": "colors"
+      },
+      {
+        "name": "The Display Limit Rule",
+        "body": "A fonte Space Grotesk é proibida em corpos de texto abaixo de 20px.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tactile Friction Rule",
+        "body": "Ações primárias devem deslocar fisicamente no clique com feedback tátil.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Orthogonal Focus Rule",
+        "body": "O anel de foco é ortogonal e nunca funde com os estados de hover ou clique.",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do manter a altura dos elementos interativos em no mínimo 44px no mobile.",

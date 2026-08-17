@@ -57,7 +57,7 @@ export default async function RedefinirSenhaPage() {
             </Alert>
             <Link
               href="/esqueci-senha"
-              className="text-[var(--text-primary)] text-center text-sm font-semibold underline underline-offset-2"
+              className="text-center text-sm font-semibold text-[var(--text-primary)] underline underline-offset-2"
             >
               Solicitar novo link
             </Link>

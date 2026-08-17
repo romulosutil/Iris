@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Pill } from "./pill";
-import { CheckIcon, SparkleIcon, LayersIcon, ClockIcon } from "@/components/ui/icon";
+import {
+  CheckIcon,
+  SparkleIcon,
+  LayersIcon,
+  ClockIcon,
+} from "@/components/ui/icon";
 
 const meta = {
   title: "03. PRIMITIVES/Pill",
@@ -13,7 +18,15 @@ const meta = {
     },
     colorScheme: {
       control: "select",
-      options: ["neutral", "brand", "menta", "ouro", "violeta", "azul", "coral"],
+      options: [
+        "neutral",
+        "brand",
+        "menta",
+        "ouro",
+        "violeta",
+        "azul",
+        "coral",
+      ],
     },
     size: {
       control: "inline-radio",

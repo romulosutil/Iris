@@ -340,9 +340,18 @@ sugestão de alta.
   "familia_abordagem": "transpessoal_integrativa",
   "protocolos_ativos": [],
   "historico_relevante": [
-    { "tema": "esgotamento e sobrecarga no trabalho", "resumo": "tema central nas primeiras 10 sessões." },
-    { "tema": "dificuldade de dizer não / limites", "resumo": "tema central entre as sessões 10-22." },
-    { "tema": "retomada de projetos pessoais e lazer", "resumo": "tema recorrente nas últimas 8 sessões." }
+    {
+      "tema": "esgotamento e sobrecarga no trabalho",
+      "resumo": "tema central nas primeiras 10 sessões."
+    },
+    {
+      "tema": "dificuldade de dizer não / limites",
+      "resumo": "tema central entre as sessões 10-22."
+    },
+    {
+      "tema": "retomada de projetos pessoais e lazer",
+      "resumo": "tema recorrente nas últimas 8 sessões."
+    }
   ]
 }
 ```

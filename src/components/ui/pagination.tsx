@@ -21,17 +21,26 @@ export const Pagination = React.forwardRef<HTMLElement, PaginationProps>(
       <nav
         ref={ref}
         aria-label="Paginação"
-        className={cn("flex flex-wrap items-center justify-between gap-4 py-2", className)}
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-4 py-2",
+          className,
+        )}
         {...props}
       >
         {sumario ? (
-          <div className="text-sm font-medium text-[var(--text-secondary)] font-body">
+          <div className="font-body text-sm font-medium text-[var(--text-secondary)]">
             {sumario}
           </div>
         ) : (
-          <div className="text-sm font-medium text-[var(--text-secondary)] font-body">
-            Página <span className="font-semibold text-[var(--text-primary)]">{paginaAtual}</span> de{" "}
-            <span className="font-semibold text-[var(--text-primary)]">{totalPaginas}</span>
+          <div className="font-body text-sm font-medium text-[var(--text-secondary)]">
+            Página{" "}
+            <span className="font-semibold text-[var(--text-primary)]">
+              {paginaAtual}
+            </span>{" "}
+            de{" "}
+            <span className="font-semibold text-[var(--text-primary)]">
+              {totalPaginas}
+            </span>
           </div>
         )}
 

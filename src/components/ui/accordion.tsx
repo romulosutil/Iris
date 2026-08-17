@@ -59,11 +59,11 @@ export const AccordionTrigger = React.forwardRef<
         ref={ref}
         className={cn(
           "flex min-h-11 flex-1 items-center justify-between gap-3 px-4 py-3 text-left",
-          "text-[var(--text-primary)] font-display text-base font-semibold",
+          "font-display text-base font-semibold text-[var(--text-primary)]",
           // linha separadora só quando aberto — evita borda dupla fechado
-          "data-[state=open]:border-[var(--border-brutal)] data-[state=open]:border-b-2",
+          "data-[state=open]:border-b-2 data-[state=open]:border-[var(--border-brutal)]",
           "[&[data-state=open]>svg]:rotate-180",
-          "focus-visible:outline-focus outline-none focus-visible:-outline-offset-[var(--ring-offset)] focus-visible:outline-[length:var(--ring-width)]",
+          "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:-outline-offset-[var(--ring-offset)]",
           className,
         )}
         {...props}
@@ -83,7 +83,7 @@ export const AccordionContent = React.forwardRef<
     <AccordionPrimitive.Content
       ref={ref}
       className={cn(
-        "text-[var(--text-primary)] overflow-hidden text-sm",
+        "overflow-hidden text-sm text-[var(--text-primary)]",
         "data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down",
       )}
       {...props}

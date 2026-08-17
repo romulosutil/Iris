@@ -5,7 +5,8 @@
 
 **Goal:** Refatorar e expandir o Design System "Iris" (Espectro Brutal) com estrutura atômica pragmática (`primitives/`, `ui/`, `patterns/`), utilitários `surface()`/`control()`, eixo de profundidade (fato levanta / sugestão afunda com inset), vocabulário clínico único em `StatusBadge`/`Card`, correções de a11y (≥44px touch targets), e implementação de `AgendaCalendarGrid` e `ProtocolDashboardCharts` com estórias e testes no Storybook.
 
-**Architecture:** 
+**Architecture:**
+
 - `primitives/`: `surface()`, `control()`, `Pill`, `Text`, `VisuallyHidden`.
 - `ui/`: `Button`, `Card`, `Input`, `Dialog`, `Chip`, `Select`, etc.
 - `patterns/`: `StatusBadge`, `ConfidenceCard`, `CompareRow`, `BatchBar`.
@@ -18,14 +19,15 @@
 ### Task 1: Governança, Arquitetura e Registro de Inventário
 
 **Files:**
+
 - Modify: `docs/ux/inventario-componentes.md`
 - Modify: `src/components/ui/*.stories.tsx` / `src/stories/**/*.stories.tsx`
 
 **Status:** `[x]`
 
 - [x] **Step 1: Atualizar o inventário de componentes**
-  - Em `docs/ux/inventario-componentes.md`, adicionar a entrada formal de `AgendaCalendarGrid` na tabela da Fase 1 (`src/components/ui/agenda-calendar-grid.tsx`, status: *Em implementação / Formalizado em ui/*).
-  - Adicionar a família `ProtocolDashboardCharts` (`ProtocolProgressBarChart` + `ProtocolTrendChart`) na tabela das Fases 4 & 5 (`src/components/ui/protocol-dashboard-charts.tsx`, status: *Em implementação / Formalizado em ui/*).
+  - Em `docs/ux/inventario-componentes.md`, adicionar a entrada formal de `AgendaCalendarGrid` na tabela da Fase 1 (`src/components/ui/agenda-calendar-grid.tsx`, status: _Em implementação / Formalizado em ui/_).
+  - Adicionar a família `ProtocolDashboardCharts` (`ProtocolProgressBarChart` + `ProtocolTrendChart`) na tabela das Fases 4 & 5 (`src/components/ui/protocol-dashboard-charts.tsx`, status: _Em implementação / Formalizado em ui/_).
 
 - [x] **Step 2: Alinhar taxonomia de títulos no Storybook**
   - Auditar e alinhar as estórias em `src/components/ui/*.stories.tsx` e `src/stories/` para a árvore padronizada:
@@ -51,6 +53,7 @@
 ### Task 2: Refatoração da Base Atômica, Utilitários e Acessibilidade (D1, D2, D3, D4)
 
 **Files:**
+
 - Create: `src/components/ui/primitives/pill.tsx`
 - Create / Modify: `src/components/ui/primitives/surface.ts`
 - Create: `src/components/ui/primitives/control.ts`
@@ -104,6 +107,7 @@
 ### Task 3: Componentes de Padrão e Revisão da Fase 3 (D5: ConfidenceCard, CompareRow, BatchBar)
 
 **Files:**
+
 - Create: `src/components/ui/patterns/confidence-card.tsx`
 - Create: `src/components/ui/patterns/confidence-card.stories.tsx`
 - Create: `src/components/ui/patterns/compare-row.tsx`
@@ -145,6 +149,7 @@
 ### Task 4: Implementação e Stories de `AgendaCalendarGrid`
 
 **Files:**
+
 - Modify / Rewrite: `src/components/ui/agenda-calendar-grid.tsx`
 - Create / Modify: `src/components/ui/agenda-calendar-grid.stories.tsx`
 - Modify: `src/components/ui/a11y.test.tsx`
@@ -157,9 +162,9 @@
   - Implementar tratamento de slots curtos (<30min) com layout compacto `flex-row`.
   - Implementar visualização de colisão/sobreposição de horários em sub-colunas paralelas.
   - Implementar blocos de evento `AppointmentSlot` com estados semânticos:
-    - *Concluído*: Fundo Menta (`#B2DFDB`) com borda sólida `#1A1A1A`.
-    - *Em andamento / Próximo*: Fundo Amarelo Ouro (`#F2B705`) com sombra destacada `3px 3px 0px #1A1A1A`.
-    - *Sugerido por IA / Encaixe*: Fundo suave, borda tracejada Violeta (`#6A4C93`).
+    - _Concluído_: Fundo Menta (`#B2DFDB`) com borda sólida `#1A1A1A`.
+    - _Em andamento / Próximo_: Fundo Amarelo Ouro (`#F2B705`) com sombra destacada `3px 3px 0px #1A1A1A`.
+    - _Sugerido por IA / Encaixe_: Fundo suave, borda tracejada Violeta (`#6A4C93`).
   - Garantir alvos de toque ≥44×44px (`min-h-11 min-w-11`) e foco ortogonal visível (`outline: 3px solid #2274A5`).
   - Usar ícones nativos de `src/components/ui/icon.tsx` e datas com `Intl.DateTimeFormat`.
 
@@ -189,6 +194,7 @@
 ### Task 5: Implementação e Stories dos Gráficos do Protocolo (`ProtocolDashboardCharts`)
 
 **Files:**
+
 - Create: `src/components/ui/protocol-dashboard-charts.tsx`
 - Create: `src/components/ui/protocol-dashboard-charts.stories.tsx`
 - Modify: `src/components/ui/a11y.test.tsx`
@@ -231,6 +237,7 @@
 ### Task 6: Reorganização Física de Diretórios & Validação Final
 
 **Files:**
+
 - Create / Reorganize: `src/components/ui/primitives/`, `src/components/ui/patterns/`
 - Re-exports / Index: `src/components/ui/index.ts`
 - Modify: arquivos consumidores conforme necessário

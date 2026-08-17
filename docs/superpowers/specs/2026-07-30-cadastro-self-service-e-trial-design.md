@@ -1,9 +1,10 @@
 # Jornada de cadastro self-service + trial de 7 dias e cobrança
 
-> Spec de design — 30/07/2026
-> Issues: **#163** (jornada de cadastro self-service) e **#159** (trial de 7 dias
-> + gateway de pagamento), planejadas juntas por decisão do Rômulo.
+> Spec de design — 30/07/2026  
+> Issues: **#163** (jornada de cadastro self-service) e **#159** (trial de 7 dias + gateway de pagamento), planejadas juntas por decisão do Rômulo.  
 > Guarda-chuva: **#36** (Fase 7 — Self-Service & Growth).
+>
+> ⚠️ **ATUALIZAÇÃO DE REGRA (Issue #175):** O relógio de trial desta spec (que começava no signup) foi atualizado pela [Issue #175 / Spec de 02/08/2026](2026-08-02-issue-175-trial-primeiro-paciente-design.md): o prazo de 7 dias agora **inicia no cadastro do 1º paciente**, com **teto máximo de 14 dias pós-signup**.
 
 ---
 
@@ -23,37 +24,37 @@ de entrega.
 
 ## 2. Decisões travadas nesta sessão
 
-| # | Decisão | Racional |
-|---|---|---|
-| D1 | Cobrança **por paciente ativo/mês**, tier Diário (R$ 39–49), usuários ilimitados | `docs/produto/modelo-de-negocio.md` §3/§4 já decidiu a métrica de valor; Rômulo mandou seguir o documento |
-| D2 | **Sem piso** de pacientes no self-service | O piso do §3 protege CAC de venda assistida; no self-service o CAC é ~zero e o piso só afasta o autônomo pequeno, que é justamente quem chega sozinho |
-| D3 | Ciclo por **aniversário da conta**; trial começa no signup, 1ª fatura vence no dia 8 e depois no mesmo dia de cada mês | Sem pro rata na primeira fatura, que é onde o cliente mais desconfia; sem pico de processamento |
-| D4 | **Não** exigir meio de pagamento no cadastro | Fricção mínima na porta; o que o piloto precisa medir é se a pessoa volta para pagar depois de usar |
-| D5 | Pós-trial = **somente-leitura com exportação livre**, não bloqueio total | O profissional é controlador do dado e tem dever de guarda (CFP/CFM); trancar prontuário atrás de fatura é refém de prontuário — risco jurídico desproporcional ao ganho de conversão. Substitui o "acesso bloqueado até pagamento" do texto original da #159 |
-| D6 | Cadastro **aberto**, com conselho + número de registro **obrigatórios e auditados** (declaração, não verificação na API do conselho) | Destrava os interessados sem virar cadastro anônimo em cima de dado de saúde de menor; deixa registro de quem é o responsável |
-| D7 | Entrega em **2 fatias**: A destrava o cadastro, B cobra | Quem pediu para testar entra antes; a cobrança chega antes do primeiro trial vencer. Evita um deploy único tocando auth, RLS e dinheiro ao mesmo tempo |
-| D8 | Gateway atrás de uma porta `BillingProvider` | O adapter concreto é trocável; dado o risco de KYC do §9, isso deixou de ser higiene e virou requisito |
-| D9 | Provedor: **Asaas** (runner-up: Galax Pay/cel_cash) | Único que resolve cobrança **e** NFS-e no mesmo contrato sem mensalidade (R$ 0,49/nota), é Instituição de Pagamento brasileira autorizada pelo BCB — elimina a transferência internacional do checklist LGPD — e tem Pix Automático com autorização de **valor variável**, que é exatamente o nosso modelo |
+| #   | Decisão                                                                                                                              | Racional                                                                                                                                                                                                                                                                                                   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Cobrança **por paciente ativo/mês**, tier Diário (R$ 39–49), usuários ilimitados                                                     | `docs/produto/modelo-de-negocio.md` §3/§4 já decidiu a métrica de valor; Rômulo mandou seguir o documento                                                                                                                                                                                                  |
+| D2  | **Sem piso** de pacientes no self-service                                                                                            | O piso do §3 protege CAC de venda assistida; no self-service o CAC é ~zero e o piso só afasta o autônomo pequeno, que é justamente quem chega sozinho                                                                                                                                                      |
+| D3  | Ciclo por **aniversário da conta**; trial começa no signup, 1ª fatura vence no dia 8 e depois no mesmo dia de cada mês               | Sem pro rata na primeira fatura, que é onde o cliente mais desconfia; sem pico de processamento                                                                                                                                                                                                            |
+| D4  | **Não** exigir meio de pagamento no cadastro                                                                                         | Fricção mínima na porta; o que o piloto precisa medir é se a pessoa volta para pagar depois de usar                                                                                                                                                                                                        |
+| D5  | Pós-trial = **somente-leitura com exportação livre**, não bloqueio total                                                             | O profissional é controlador do dado e tem dever de guarda (CFP/CFM); trancar prontuário atrás de fatura é refém de prontuário — risco jurídico desproporcional ao ganho de conversão. Substitui o "acesso bloqueado até pagamento" do texto original da #159                                              |
+| D6  | Cadastro **aberto**, com conselho + número de registro **obrigatórios e auditados** (declaração, não verificação na API do conselho) | Destrava os interessados sem virar cadastro anônimo em cima de dado de saúde de menor; deixa registro de quem é o responsável                                                                                                                                                                              |
+| D7  | Entrega em **2 fatias**: A destrava o cadastro, B cobra                                                                              | Quem pediu para testar entra antes; a cobrança chega antes do primeiro trial vencer. Evita um deploy único tocando auth, RLS e dinheiro ao mesmo tempo                                                                                                                                                     |
+| D8  | Gateway atrás de uma porta `BillingProvider`                                                                                         | O adapter concreto é trocável; dado o risco de KYC do §9, isso deixou de ser higiene e virou requisito                                                                                                                                                                                                     |
+| D9  | Provedor: **Asaas** (runner-up: Galax Pay/cel_cash)                                                                                  | Único que resolve cobrança **e** NFS-e no mesmo contrato sem mensalidade (R$ 0,49/nota), é Instituição de Pagamento brasileira autorizada pelo BCB — elimina a transferência internacional do checklist LGPD — e tem Pix Automático com autorização de **valor variável**, que é exatamente o nosso modelo |
 
 ## 2.1 Revisão de 01/08/2026 (antes de abrir a Fatia B)
 
 Sessão de revisão do modelo de negócio com o Rômulo, já com a conta Asaas
 acessível. O que mudou em relação ao texto de 30/07:
 
-| # | Revisão | Racional |
-|---|---|---|
-| R1 | **Mercado Pago avaliado e descartado** como provedor | O Pix Automático do MP opera com **valor fixo** (planos/faixas). Cobrança por paciente ativo muda todo mês; o MP só suportaria valor variável no cartão (`PUT /preapproval/{id}`), a 3,99%. O apelo era o checkout hospedado — que o Asaas também tem, com emissão gratuita |
-| R2 | **Getnet (Santander) avaliada e descartada** | É adquirente, não gateway de assinatura: não tem ciclo de fatura, régua de cobrança, boleto, NFS-e nem Pix Automático, e o cofre de cartão jogaria o projeto para dentro do escopo PCI-DSS. É a opção de **mais** código, não de menos. Fica como candidata pós-volume, atrás da porta `BillingProvider` (D8), para negociar MDR direto |
-| R3 | Trilho técnico do Asaas: **Pix Automático (jornada 3)**, não o produto "Assinaturas" | "Assinaturas" gera as cobranças sozinho **com 40 dias de antecedência** — inadequado para valor que só se conhece perto do vencimento (era o motivo do pedido de redução 40→7 dias ao gerente; o pedido deixa de ser necessário). No Pix Automático a nossa aplicação cria cada instrução e define o valor |
-| R4 | Autorização criada **sem o campo `value`** | `POST /v3/pix/automatic/authorizations` com `value` preenchido fixa o valor de todas as cobranças. Omitindo, o valor é livre por cobrança — e libera `minLimitValue` (piso do recebedor). Exige `paymentCreationMode: MANUAL`; com `SUBSCRIPTION` o `value` volta a ser obrigatório |
-| R5 | **A apuração de pacientes acontece ~5 dias úteis ANTES do vencimento**, não no fechamento do ciclo | A instrução de pagamento só pode ser criada entre **2 e 10 dias úteis** antes do vencimento; fora da janela a API rejeita. Isso é contrato de produto, não detalhe: a tela `/assinatura` precisa mostrar valor, data de apuração e vencimento juntos |
-| R6 | `retryPolicy: ALLOW_THREE_IN_SEVEN_DAYS` na autorização | Régua de cobrança nativa, sem código nosso |
-| R7 | Coluna nova **`patient.arquivado_em`** — decisão organizacional, distinta de `patient.alta_em` (clínica) | `alta_em` dispara o relógio de retenção LGPD (MAX(18 anos, alta+10a)). Se ela virasse também a chave de cobrança, um clique comercial mexeria em prazo legal de guarda de prontuário. Alta arquiva; arquivar **nunca** dá alta. Arquivado não é cobrado, mas segue legível e exportável |
-| R8 | Auto-arquivamento após **90 dias sem atualização**, com aviso 7 dias antes | Evita fatura inflada por cadastro esquecido — que é o que empurraria o cliente a apagar prontuário |
-| R9 | **Confirmado que o Pix Automático está habilitado na conta** | A aba Webhooks do painel expõe os 10 eventos `PIX_AUTOMATIC_RECURRING_*` (5 de autorização, 4 de instrução, 1 de elegibilidade). Escutar os de **autorização** é obrigatório: revogação pelo app do banco não gera recusa de cobrança, ela mata a recorrência em silêncio |
-| R10 | **D2 (sem piso) reafirmado.** A proposta de piso de 5 pacientes levantada nesta sessão foi descartada | Piso torna o preço regressivo ao contrário (quem tem 3 pacientes pagaria R$65/paciente contra R$39 de quem tem 15) e afasta o autônomo pequeno, que é o canal orgânico do §6 do modelo de negócio. Substituto em avaliação: **plano de entrada** (base mensal que já inclui os primeiros pacientes), que protege o CAC sem punir o pequeno |
-| R11 | Faixa de trial ganhou **estado "encerrado"** (implementado em 01/08) | A faixa sumia quando o trial vencia: a pessoa via a contagem chegar a "termina hoje" e no dia seguinte não havia nada — sem aviso e sem CTA, com a conta seguindo funcional. Isso ensinaria que o trial não significa nada e faria a cobrança posterior parecer mudança de regra |
-| R12 | Regra do relógio de trial (`trial_comeco_em` no signup) **fica como está por ora**; mudança para "1º paciente cadastrado ou 14 dias do signup, o que vier primeiro" entra na Fatia B | Toca modelo de dados (coluna nullable) e o caminho de criação de paciente — o `CLAUDE.md` exige plan mode. Não bloqueia liberar o cadastro, porque nada aplica o fim do trial hoje; com 1–2 contas o backfill é trivial |
+| #   | Revisão                                                                                                                                                                              | Racional                                                                                                                                                                                                                                                                                                                                   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R1  | **Mercado Pago avaliado e descartado** como provedor                                                                                                                                 | O Pix Automático do MP opera com **valor fixo** (planos/faixas). Cobrança por paciente ativo muda todo mês; o MP só suportaria valor variável no cartão (`PUT /preapproval/{id}`), a 3,99%. O apelo era o checkout hospedado — que o Asaas também tem, com emissão gratuita                                                                |
+| R2  | **Getnet (Santander) avaliada e descartada**                                                                                                                                         | É adquirente, não gateway de assinatura: não tem ciclo de fatura, régua de cobrança, boleto, NFS-e nem Pix Automático, e o cofre de cartão jogaria o projeto para dentro do escopo PCI-DSS. É a opção de **mais** código, não de menos. Fica como candidata pós-volume, atrás da porta `BillingProvider` (D8), para negociar MDR direto    |
+| R3  | Trilho técnico do Asaas: **Pix Automático (jornada 3)**, não o produto "Assinaturas"                                                                                                 | "Assinaturas" gera as cobranças sozinho **com 40 dias de antecedência** — inadequado para valor que só se conhece perto do vencimento (era o motivo do pedido de redução 40→7 dias ao gerente; o pedido deixa de ser necessário). No Pix Automático a nossa aplicação cria cada instrução e define o valor                                 |
+| R4  | Autorização criada **sem o campo `value`**                                                                                                                                           | `POST /v3/pix/automatic/authorizations` com `value` preenchido fixa o valor de todas as cobranças. Omitindo, o valor é livre por cobrança — e libera `minLimitValue` (piso do recebedor). Exige `paymentCreationMode: MANUAL`; com `SUBSCRIPTION` o `value` volta a ser obrigatório                                                        |
+| R5  | **A apuração de pacientes acontece ~5 dias úteis ANTES do vencimento**, não no fechamento do ciclo                                                                                   | A instrução de pagamento só pode ser criada entre **2 e 10 dias úteis** antes do vencimento; fora da janela a API rejeita. Isso é contrato de produto, não detalhe: a tela `/assinatura` precisa mostrar valor, data de apuração e vencimento juntos                                                                                       |
+| R6  | `retryPolicy: ALLOW_THREE_IN_SEVEN_DAYS` na autorização                                                                                                                              | Régua de cobrança nativa, sem código nosso                                                                                                                                                                                                                                                                                                 |
+| R7  | Coluna nova **`patient.arquivado_em`** — decisão organizacional, distinta de `patient.alta_em` (clínica)                                                                             | `alta_em` dispara o relógio de retenção LGPD (MAX(18 anos, alta+10a)). Se ela virasse também a chave de cobrança, um clique comercial mexeria em prazo legal de guarda de prontuário. Alta arquiva; arquivar **nunca** dá alta. Arquivado não é cobrado, mas segue legível e exportável                                                    |
+| R8  | Auto-arquivamento após **90 dias sem atualização**, com aviso 7 dias antes                                                                                                           | Evita fatura inflada por cadastro esquecido — que é o que empurraria o cliente a apagar prontuário                                                                                                                                                                                                                                         |
+| R9  | **Confirmado que o Pix Automático está habilitado na conta**                                                                                                                         | A aba Webhooks do painel expõe os 10 eventos `PIX_AUTOMATIC_RECURRING_*` (5 de autorização, 4 de instrução, 1 de elegibilidade). Escutar os de **autorização** é obrigatório: revogação pelo app do banco não gera recusa de cobrança, ela mata a recorrência em silêncio                                                                  |
+| R10 | **D2 (sem piso) reafirmado.** A proposta de piso de 5 pacientes levantada nesta sessão foi descartada                                                                                | Piso torna o preço regressivo ao contrário (quem tem 3 pacientes pagaria R$65/paciente contra R$39 de quem tem 15) e afasta o autônomo pequeno, que é o canal orgânico do §6 do modelo de negócio. Substituto em avaliação: **plano de entrada** (base mensal que já inclui os primeiros pacientes), que protege o CAC sem punir o pequeno |
+| R11 | Faixa de trial ganhou **estado "encerrado"** (implementado em 01/08)                                                                                                                 | A faixa sumia quando o trial vencia: a pessoa via a contagem chegar a "termina hoje" e no dia seguinte não havia nada — sem aviso e sem CTA, com a conta seguindo funcional. Isso ensinaria que o trial não significa nada e faria a cobrança posterior parecer mudança de regra                                                           |
+| R12 | Regra do relógio de trial (`trial_comeco_em` no signup) **fica como está por ora**; mudança para "1º paciente cadastrado ou 14 dias do signup, o que vier primeiro" entra na Fatia B | Toca modelo de dados (coluna nullable) e o caminho de criação de paciente — o `CLAUDE.md` exige plan mode. Não bloqueia liberar o cadastro, porque nada aplica o fim do trial hoje; com 1–2 contas o backfill é trivial                                                                                                                    |
 
 **Preço — estado real:** segue **em aberto**. A régua discutida (R$39 até 15
 pacientes, R$32 de 16 a 40, R$25 de 41 em diante, marginal) está ancorada na
@@ -74,7 +75,7 @@ que já é idempotente por e-mail. Cria `clinic`, vincula o usuário como
 Alternativas descartadas:
 
 - **Hook `after` do Better-Auth no `signUpEmail`** — acoplaria criação de tenant
-  a *todo* signup, incluindo o convite de terapeuta, que não deve criar clínica.
+  a _todo_ signup, incluindo o convite de terapeuta, que não deve criar clínica.
 - **Clínica só no wizard pós-login** — exigiria um estado novo no `resolveTenant`,
   que hoje é enxuto e correto.
 
@@ -136,7 +137,7 @@ paciente. O gate vive **lá, no banco** — não espalhado por action:
 `escritaBloqueada` = (trial vencido no timezone da clínica) **e** (nenhuma fatura
 paga vigente). O job diário só emite cobrança e manda e-mail. Motivo: se o
 bloqueio dependesse do job, job morto = trial que nunca vence = produto de graça
-silenciosamente — falha *aberta*. Este projeto já viveu exatamente isso (motor de
+silenciosamente — falha _aberta_. Este projeto já viveu exatamente isso (motor de
 escalonamento caiu em produção com test/lint/build verdes, #156). Assim, job morto
 falha **fechado**.
 
@@ -153,7 +154,7 @@ bloqueada aparece como botão desabilitado com o motivo — nunca erro cru do ba
 
 - `trial_comeco_em` = instante do signup. Dia 8 nasce a 1ª fatura; o dia do
   vencimento vira o aniversário mensal.
-- **Aritmética de data:** aniversário no dia 29/30/31 faz *clamp* para o último dia
+- **Aritmética de data:** aniversário no dia 29/30/31 faz _clamp_ para o último dia
   do mês curto. Toda fronteira de dia é avaliada no `clinic.timezone` (coluna já
   existe, default `America/Sao_Paulo`) — vencimento calculado em UTC faria o
   cliente ver o bloqueio chegar um dia antes.
@@ -161,7 +162,7 @@ bloqueada aparece como botão desabilitado com o motivo — nunca erro cru do ba
   mesmo padrão do motor de escalonamento): fecha ciclos vencidos, conta pacientes
   ativos, emite a cobrança pelo adapter e dispara os avisos de D-3 e D-1.
 - **Idempotência no banco, não na disciplina do script:** `unique (clinic_id,
-  ciclo_inicio)` em `invoice`. Reexecução de job com retry é o modo de falha
+ciclo_inicio)` em `invoice`. Reexecução de job com retry é o modo de falha
   default; sem a chave, ela emite a segunda cobrança do mesmo ciclo.
 - **Contagem com RLS ligada:** o job não tem usuário. Fabricar um `ctx` sintético
   para atravessar o `withTenant` é exatamente o padrão de `ctx` forjável que a #55
@@ -204,7 +205,7 @@ pagamento; **não usamos a assinatura nativa dele**.
    cancelando e recriando. `paymentCreationMode` fica em `MANUAL`; `SUBSCRIPTION`
    **força valor fixo**.
    ⚠️ `minLimitValue` **não é piso comercial nosso** — é o menor valor que o
-   *pagador* pode definir como teto da autorização dele. Piso (que por D2 não
+   _pagador_ pode definir como teto da autorização dele. Piso (que por D2 não
    existe) é regra do nosso backend, nunca campo do provedor.
 4. Fechamento do ciclo: job conta pacientes ativos, multiplica pelo preço unitário
    vigente e cria `POST /v3/payments` com `externalReference` = `tenant:AAAA-MM`,
@@ -226,7 +227,7 @@ ciclo já existiria com o valor errado; e `updatePendingPayments: true` reajusta
 
 - **Não existe header de idempotência.** Retry do job cria segunda cobrança.
   Antes de criar, consultar por `externalReference`; e a unique `(clinic_id,
-  ciclo_inicio)` do §4.2 é a rede de baixo.
+ciclo_inicio)` do §4.2 é a rede de baixo.
 - **Webhook não tem HMAC** — é um token estático em header. Comparar em **tempo
   constante**, nunca reusar a API Key como token, e somar allowlist de IP no nginx
   da VPS.
@@ -368,7 +369,7 @@ cobrança.
 - Conversão no dia 8 sem cartão previamente cadastrado é a aposta central de D4;
   a própria Fatia B é o experimento que a testa.
 - **Bloqueio de conta e retenção de saldo pelo Asaas** por reanálise cadastral
-  *depois* da conta aprovada e em uso — há padrão consistente e recente de relatos
+  _depois_ da conta aprovada e em uso — há padrão consistente e recente de relatos
   (casos de janeiro e março de 2026, um deles com sentença judicial), com a
   resposta oficial invocando normas de KYC do BCB. É o risco real desta escolha.
   Mitigação: não deixar saldo parado na conta (transferir com frequência), manter o

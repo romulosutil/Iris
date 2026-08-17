@@ -48,9 +48,7 @@ let owner: ReturnType<typeof postgres>;
 
 function mockSession(userId: string | null, twoFactorEnabled = false) {
   vi.spyOn(auth.api, "getSession").mockResolvedValue(
-    userId
-      ? ({ user: { id: userId, twoFactorEnabled } } as never)
-      : null,
+    userId ? ({ user: { id: userId, twoFactorEnabled } } as never) : null,
   );
 }
 
@@ -65,12 +63,14 @@ async function redirectedTo(): Promise<string | undefined> {
   return undefined;
 }
 
-describe.skipIf(!hasDb)("getTenantContext — mapeamento status → rota (M-2)", () => {
-  beforeAll(async () => {
-    owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
-    await owner`TRUNCATE clinic, app_user, user_role, professional_consent RESTART IDENTITY CASCADE`;
-    await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')`;
-    await owner`INSERT INTO app_user (id, name, email) VALUES
+describe.skipIf(!hasDb)(
+  "getTenantContext — mapeamento status → rota (M-2)",
+  () => {
+    beforeAll(async () => {
+      owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
+      await owner`TRUNCATE clinic, app_user, user_role, professional_consent RESTART IDENTITY CASCADE`;
+      await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')`;
+      await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_SEM_VINCULO}, 'Sem Vinculo', 'sv@x.test'),
       (${U_REVOGADO}, 'Revogado', 'rev@x.test'),
       (${U_MULTI}, 'Multi', 'multi@x.test'),
@@ -78,76 +78,79 @@ describe.skipIf(!hasDb)("getTenantContext — mapeamento status → rota (M-2)",
       (${U_ADMIN_SEM_MFA}, 'Admin', 'admin@x.test'),
       (${U_TERAPEUTA_SEM_MFA}, 'TerapSemMfa', 'tsm@x.test'),
       (${U_TERAPEUTA_COM_MFA}, 'TerapComMfa', 'tcm@x.test')`;
-    await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
+      await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_REVOGADO}, ${CLINIC_A}, 'terapeuta'),
       (${U_MULTI}, ${CLINIC_A}, 'terapeuta'), (${U_MULTI}, ${CLINIC_B}, 'terapeuta'),
       (${U_NEEDS_ROLE}, ${CLINIC_A}, 'terapeuta'), (${U_NEEDS_ROLE}, ${CLINIC_A}, 'admin_recepcao'),
       (${U_ADMIN_SEM_MFA}, ${CLINIC_A}, 'admin_recepcao'),
       (${U_TERAPEUTA_SEM_MFA}, ${CLINIC_A}, 'terapeuta'),
       (${U_TERAPEUTA_COM_MFA}, ${CLINIC_A}, 'terapeuta')`;
-    // U_REVOGADO teve o vínculo removido DEPOIS de aceitar os termos —
-    // simula o cenário do I-2. Removemos o user_role dele para ficar com
-    // zero vínculo, mas mantemos o aceite.
-    await owner`INSERT INTO professional_consent (user_id, clinic_id, versao_termo) VALUES
+      // U_REVOGADO teve o vínculo removido DEPOIS de aceitar os termos —
+      // simula o cenário do I-2. Removemos o user_role dele para ficar com
+      // zero vínculo, mas mantemos o aceite.
+      await owner`INSERT INTO professional_consent (user_id, clinic_id, versao_termo) VALUES
       (${U_REVOGADO}, ${CLINIC_A}, 'v1')`;
-    await owner`DELETE FROM user_role WHERE user_id = ${U_REVOGADO}`;
-  });
+      await owner`DELETE FROM user_role WHERE user_id = ${U_REVOGADO}`;
+    });
 
-  afterAll(async () => {
-    vi.restoreAllMocks();
-    await owner?.end();
-    await authSql.end();
-    await appSql.end();
-  });
+    afterAll(async () => {
+      vi.restoreAllMocks();
+      await owner?.end();
+      await authSql.end();
+      await appSql.end();
+    });
 
-  test("unauthenticated → /login", async () => {
-    cookieJar = {};
-    mockSession(null);
-    expect(await redirectedTo()).toBe("/login");
-  });
+    test("unauthenticated → /login", async () => {
+      cookieJar = {};
+      mockSession(null);
+      expect(await redirectedTo()).toBe("/login");
+    });
 
-  test("cadastro_incompleto → /sem-acesso?motivo=cadastro-incompleto", async () => {
-    cookieJar = {};
-    mockSession(U_SEM_VINCULO);
-    expect(await redirectedTo()).toBe("/sem-acesso?motivo=cadastro-incompleto");
-  });
+    test("cadastro_incompleto → /sem-acesso?motivo=cadastro-incompleto", async () => {
+      cookieJar = {};
+      mockSession(U_SEM_VINCULO);
+      expect(await redirectedTo()).toBe(
+        "/sem-acesso?motivo=cadastro-incompleto",
+      );
+    });
 
-  test("no_access (vínculo revogado após aceite) → /sem-acesso (sem motivo)", async () => {
-    cookieJar = {};
-    mockSession(U_REVOGADO);
-    expect(await redirectedTo()).toBe("/sem-acesso");
-  });
+    test("no_access (vínculo revogado após aceite) → /sem-acesso (sem motivo)", async () => {
+      cookieJar = {};
+      mockSession(U_REVOGADO);
+      expect(await redirectedTo()).toBe("/sem-acesso");
+    });
 
-  test("needs_clinic_selection → /selecionar-clinica", async () => {
-    cookieJar = {};
-    mockSession(U_MULTI);
-    expect(await redirectedTo()).toBe("/selecionar-clinica");
-  });
+    test("needs_clinic_selection → /selecionar-clinica", async () => {
+      cookieJar = {};
+      mockSession(U_MULTI);
+      expect(await redirectedTo()).toBe("/selecionar-clinica");
+    });
 
-  test("needs_role_selection → /selecionar-papel", async () => {
-    cookieJar = {};
-    mockSession(U_NEEDS_ROLE);
-    expect(await redirectedTo()).toBe("/selecionar-papel");
-  });
+    test("needs_role_selection → /selecionar-papel", async () => {
+      cookieJar = {};
+      mockSession(U_NEEDS_ROLE);
+      expect(await redirectedTo()).toBe("/selecionar-papel");
+    });
 
-  test("ok + não clínico (admin_recepcao) sem MFA → sem redirect (retorna ctx)", async () => {
-    cookieJar = {};
-    mockSession(U_ADMIN_SEM_MFA, false);
-    const ctx = await getTenantContext();
-    expect(ctx.role).toBe("admin_recepcao");
-  });
+    test("ok + não clínico (admin_recepcao) sem MFA → sem redirect (retorna ctx)", async () => {
+      cookieJar = {};
+      mockSession(U_ADMIN_SEM_MFA, false);
+      const ctx = await getTenantContext();
+      expect(ctx.role).toBe("admin_recepcao");
+    });
 
-  test("ok + clínico (terapeuta) sem MFA → /mfa/setup", async () => {
-    cookieJar = {};
-    mockSession(U_TERAPEUTA_SEM_MFA, false);
-    expect(await redirectedTo()).toBe("/mfa/setup");
-  });
+    test("ok + clínico (terapeuta) sem MFA → /mfa/setup", async () => {
+      cookieJar = {};
+      mockSession(U_TERAPEUTA_SEM_MFA, false);
+      expect(await redirectedTo()).toBe("/mfa/setup");
+    });
 
-  test("ok + clínico (terapeuta) com MFA → sem redirect (retorna ctx)", async () => {
-    cookieJar = {};
-    mockSession(U_TERAPEUTA_COM_MFA, true);
-    const ctx = await getTenantContext();
-    expect(ctx.role).toBe("terapeuta");
-    expect(ctx.mfaEnrolled).toBe(true);
-  });
-});
+    test("ok + clínico (terapeuta) com MFA → sem redirect (retorna ctx)", async () => {
+      cookieJar = {};
+      mockSession(U_TERAPEUTA_COM_MFA, true);
+      const ctx = await getTenantContext();
+      expect(ctx.role).toBe("terapeuta");
+      expect(ctx.mfaEnrolled).toBe(true);
+    });
+  },
+);

@@ -9,6 +9,7 @@ As instruções específicas de engenharia, comandos, migrações e runtime para
 ## 1. O Produto & Governança em 3 Camadas
 
 O Iris é um SaaS para clínicas de terapia infantil (intervenção para TEA) baseado no modelo de **governança em 3 camadas**:
+
 1. **IA sugere** evidências clínicas derivadas do diário em linguagem natural (nunca pontua nem decide).
 2. **Terapeuta aprova** ou edita na tela de revisão (humano no circuito).
 3. **Coordenador valida por exceção** e reclassifica (versionado, com justificativa).
@@ -17,7 +18,7 @@ O Iris é um SaaS para clínicas de terapia infantil (intervenção para TEA) ba
 
 ## 2. Guardrails Inegociáveis de Engenharia
 
-- **Regra 0 (UI):** Nunca estilizar elementos ad hoc na tela. Toda interface deve consumir tokens e componentes do Design System (*Espectro Brutal*) cadastrados no Storybook.
+- **Regra 0 (UI):** Nunca estilizar elementos ad hoc na tela. Toda interface deve consumir tokens e componentes do Design System (_Espectro Brutal_) cadastrados no Storybook.
 - **Honestidade Epistêmica:** Sugestão da IA (violeta `#6A4C93`, borda tracejada, elevação inset) jamais pode se parecer com dado Aprovado (verde `#059669`, borda sólida, elevado).
 - **Rastreabilidade Frase-a-Frase:** Todo dado estruturado é derivado do texto livre do diário de sessão e auditável.
 - **Isolamento Multi-tenant (RLS):** Toda query/policy de isolamento deve utilizar `app_clinic_id_exigido()`. Nunca utilizar cast direto de `current_setting('app.clinic_id')` em predicados de isolamento.
@@ -49,6 +50,7 @@ Para evitar sobreposição de contextos e otimizar o fluxo de trabalho:
 ## 5. Protocolo de Operação do Agente Jules
 
 ### 5.1 Idioma OBRIGATÓRIO (PT-BR)
+
 - O agente Jules deve operar **estritamente em Português (PT-BR)** para todas as interações destinadas a humanos.
 - **Abrangência:** Descrições de Pull Requests (PRs), comentários em GitHub Issues, mensagens de commit e planos de ação detalhados.
 - **Regra de Tradução:** Mesmo que o contexto técnico, o código ou a issue original esteja em inglês, a resposta e todos os artefatos de texto do Jules devem ser em PT-BR.
@@ -64,21 +66,24 @@ Antes de aplicar a label `jules`, a issue (ou a spec/plano anexado via `/tlc-spe
 3. **Toda decisão de produto/UX como critério de aceite fechado**, nunca como "a validar" ou implícita. Ex.: um estado de sucesso na UI é transiente ou permanente? Decidir antes, não deixar o executor escolher.
 4. **Casos de borda listados por nome** — erro, cancelamento, timeout, reentrância, abandono — além do caminho feliz.
 5. **Régua de mutação por comportamento, não só por linha.** Cada comportamento crítico (iniciar X, **parar X**, mostrar Y, esconder Z) tem 1 teste cuja remoção do código correspondente derruba o teste. "Remover o fix derruba 1 teste" não é suficiente se o fix tem 2 comportamentos (início e parada).
-6. **Convenção de estilo do arquivo-alvo citada quando não-óbvia** — ex.: se os comentários do arquivo explicam o *porquê* (não o *o quê*), dizer isso explicitamente e apontar um exemplo do próprio arquivo.
+6. **Convenção de estilo do arquivo-alvo citada quando não-óbvia** — ex.: se os comentários do arquivo explicam o _porquê_ (não o _o quê_), dizer isso explicitamente e apontar um exemplo do próprio arquivo.
 7. **Comando de formatação no checklist de saída da task.** CI deste repo não valida Prettier — o task brief tem que instruir explicitamente `pnpm format` antes do push, ou o PR passa 100% verde no CI com arquivo mal formatado.
 
 Se qualquer um destes 7 pontos não estiver fechado no momento de aplicar a label, feche primeiro (você ou a sessão Claude/Gemini que fez o Design) — não delegue a decisão ao Jules torcendo para acertar.
 
 ### 5.3 Fluxo de Invocação & Resolução de Issues
+
 - **Gestão de Backlog:** Toda dívida técnica, bug ou melhoria identificada deve obrigatoriamente ser transformada em uma **GitHub Issue**.
 - **Gatilho de Invocação:** O Jules é acionado exclusivamente através da label `jules` adicionada a uma GitHub Issue aberta — e só depois do checklist da §5.2 fechado.
 - **Comportamento Autônomo:** Uma vez marcado com a label `jules`, o agente assume a tarefa, lê as instruções do `AGENTS.md` e do `CLAUDE.md`, elabora o plano de ação, executa as alterações e abre o Pull Request sem necessidade de supervisão síncrona.
 
 ### 5.4 Pull Requests & Estado de Rascunho (Draft)
+
 - **Estado Inicial:** Ao resolver uma issue, o Jules deve obrigatoriamente criar o Pull Request no estado **"Draft" (Rascunho)**.
-- **Gatilho de Revisão:** O PR não deve ser marcado como pronto para revisão (*Ready for Review*) até que **todos os testes automatizados** (lint, typecheck, unitários, RLS, etc.) passem com 100% de sucesso.
+- **Gatilho de Revisão:** O PR não deve ser marcado como pronto para revisão (_Ready for Review_) até que **todos os testes automatizados** (lint, typecheck, unitários, RLS, etc.) passem com 100% de sucesso.
 
 ### 5.5 Contexto de Negócio, Testes e Configurações (.env.example)
+
 - **Leitura Obrigatória:** O Jules deve consultar o arquivo [`.env.example`](.env.example) e os documentos da pasta `docs/` para compreender o contexto do negócio, as integrações (ex: Asaas, Better-Auth, LLMs) e as flags de funcionalidade.
 - **Coerência nos Testes:** Utilizar `.env.example` para mapear os papéis do banco de dados (roles com e sem RLS: `DATABASE_URL`, `AUTH_DATABASE_URL`, `MIGRATION_DATABASE_URL`), flags de teste (ex: `ALLOW_SKIP_INTEGRATION`) e criar mocks fiéis à arquitetura real da aplicação.
 
@@ -105,6 +110,7 @@ CI verde não é evidência suficiente de PR pronto — no PR #295, CI passou 5/
 ## §7. Definição de Pronto (Definition of Done por Fase / Task)
 
 Uma tarefa ou fase só é considerada **Pronta** quando:
+
 1. **Código & Tipagem:** `pnpm typecheck` e `pnpm lint` executam com 0 erros.
 2. **Testes:** `pnpm test` (unitários) e `pnpm test:rls` (integração/RLS) passam 100%.
 3. **Migrações (se aplicável):** `src/db/migrations.test.ts` valida o journal e o snapshot do Drizzle.
@@ -116,8 +122,7 @@ Uma tarefa ou fase só é considerada **Pronta** quando:
 ## §8. Protocolo de Fim de Sessão & Atualização do BACKLOG.md
 
 Ao concluir uma sessão com alterações relevantes, decisões arquiteturais ou fechamento de débitos:
+
 1. **Atualizar [`BACKLOG.md`](BACKLOG.md):** Marcar débitos/issues concluídos e registrar verificações por medição real (não por suposição).
 2. **Resumo Claro:** Apresentar um resumo sucinto dos pontos alterados e dos comandos de verificação executados.
 3. **Salvar Checkpoint:** Se o contexto estiver elevado (~50 mensagens), registrar o status em `checkpoint.md`.
-
-

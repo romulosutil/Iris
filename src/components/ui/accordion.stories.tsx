@@ -41,7 +41,9 @@ export const CadastroClinico: Story = {
       </AccordionItem>
       <AccordionItem value="protocolo">
         <AccordionTrigger>Protocolo de referência</AccordionTrigger>
-        <AccordionContent>Família do protocolo e metas iniciais.</AccordionContent>
+        <AccordionContent>
+          Família do protocolo e metas iniciais.
+        </AccordionContent>
       </AccordionItem>
     </Accordion>
   ),

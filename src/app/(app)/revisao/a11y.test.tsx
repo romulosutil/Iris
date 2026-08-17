@@ -17,7 +17,10 @@ afterEach(cleanup);
 async function semViolacoes(ui: ReactElement) {
   const { container } = render(ui);
   const resultado = await axe.run(container, {
-    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
     rules: {
       region: { enabled: false },
       "landmark-one-main": { enabled: false },
@@ -50,7 +53,9 @@ const baixa: ExtracaoRevisavel = {
   justificativaConfianca: null,
   inconsistenteComHistorico: false,
   nivelFriccao: "medio",
-  resumo: [{ rotulo: "Função", valor: "indefinida (a confirmar pelo terapeuta)" }],
+  resumo: [
+    { rotulo: "Função", valor: "indefinida (a confirmar pelo terapeuta)" },
+  ],
   historico: [],
 };
 
@@ -75,13 +80,21 @@ const inconsistente: ExtracaoRevisavel = {
 
 test("RevisaoLista — dono, 3 níveis de fricção (compacto + expandidos) sem violações axe", async () => {
   await semViolacoes(
-    <RevisaoLista sessionId={SID} extracoes={[alta, baixa, inconsistente]} ehDono />,
+    <RevisaoLista
+      sessionId={SID}
+      extracoes={[alta, baixa, inconsistente]}
+      ehDono
+    />,
   );
 });
 
 test("RevisaoLista — coordenador acompanhando (sem ações) sem violações axe", async () => {
   await semViolacoes(
-    <RevisaoLista sessionId={SID} extracoes={[baixa, inconsistente]} ehDono={false} />,
+    <RevisaoLista
+      sessionId={SID}
+      extracoes={[baixa, inconsistente]}
+      ehDono={false}
+    />,
   );
 });
 

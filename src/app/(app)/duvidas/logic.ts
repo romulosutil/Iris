@@ -5,7 +5,10 @@ import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { comEscrita } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
-import { drizzleMaterializarQueries, materializarSnapshot } from "@/lib/evidence/materializar";
+import {
+  drizzleMaterializarQueries,
+  materializarSnapshot,
+} from "@/lib/evidence/materializar";
 import type { Alvo } from "@/lib/evidence/resolver";
 import { montarClassificacaoNova, validarAlvo } from "../validacao/alvos";
 
@@ -125,7 +128,12 @@ async function responderQueryCore(
   return withTenant(ctx, async (tx) => {
     const e = await lerEvidenciaDaQuery(tx, p.data.evidenceQueryId);
     if ("erro" in e) {
-      return { error: e.erro === "NAO_ENCONTRADA" ? "Query não encontrada." : "CONCURRENCY_ERROR" };
+      return {
+        error:
+          e.erro === "NAO_ENCONTRADA"
+            ? "Query não encontrada."
+            : "CONCURRENCY_ERROR",
+      };
     }
 
     let resultanteId: string | null = null;
@@ -139,7 +147,11 @@ async function responderQueryCore(
       );
       if (!validacao.ok) return { error: validacao.error };
 
-      classificacaoNova = montarClassificacaoNova(e.classificacaoAtual, p.data.novoAlvo, validacao.fks);
+      classificacaoNova = montarClassificacaoNova(
+        e.classificacaoAtual,
+        p.data.novoAlvo,
+        validacao.fks,
+      );
 
       const revRows = (await tx.execute(sql`
         INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
@@ -176,8 +188,17 @@ async function responderQueryCore(
       `);
     }
 
-    await desarquivarPacienteSeArquivado(tx, ctx, e.patientId, "validacao_evidencia");
-    await materializarSnapshot(drizzleMaterializarQueries(tx), e.patientId, e.sessionNumero);
+    await desarquivarPacienteSeArquivado(
+      tx,
+      ctx,
+      e.patientId,
+      "validacao_evidencia",
+    );
+    await materializarSnapshot(
+      drizzleMaterializarQueries(tx),
+      e.patientId,
+      e.sessionNumero,
+    );
     return { ok: true };
   });
 }

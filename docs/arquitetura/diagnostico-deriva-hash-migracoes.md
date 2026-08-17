@@ -45,29 +45,29 @@ Medição própria, independente do número relatado. Para cada linha de
 Verificado em `node_modules/drizzle-orm/migrator.js` (drizzle-orm **0.45.2**):
 
 ```js
-hash: crypto.createHash("sha256").update(query).digest("hex")
+hash: crypto.createHash("sha256").update(query).digest("hex");
 ```
 
 onde `query = fs.readFileSync(<tag>.sql).toString()` — arquivo bruto, sem normalizar
 quebra de linha e sem remover `--> statement-breakpoint`. É byte a byte o que
 `calcularHashMigracao` faz. **A hipótese "o hash foi gravado por uma versão do
 drizzle-orm com normalização diferente" está descartada**: uma mudança de normalização
-produziria divergência sistemática *fora* do eixo EOL, e 35 das 37 caem exatamente
+produziria divergência sistemática _fora_ do eixo EOL, e 35 das 37 caem exatamente
 sobre o eixo EOL.
 
 ---
 
 ## 3. O resultado medido
 
-| | |
-| --- | --- |
-| Linhas em `drizzle.__drizzle_migrations` | **98** |
-| Entradas no `_journal.json` | **99** |
-| Divergentes | **37** |
-| (a) só fim de linha — conteúdo idêntico | **35** |
-| (b) deriva de conteúdo | **2** (`0072`, `0073`) |
-| (c) hash sem arquivo em disco | **0** |
-| Sem entrada no journal | **0** |
+|                                          |                        |
+| ---------------------------------------- | ---------------------- |
+| Linhas em `drizzle.__drizzle_migrations` | **98**                 |
+| Entradas no `_journal.json`              | **99**                 |
+| Divergentes                              | **37**                 |
+| (a) só fim de linha — conteúdo idêntico  | **35**                 |
+| (b) deriva de conteúdo                   | **2** (`0072`, `0073`) |
+| (c) hash sem arquivo em disco            | **0**                  |
+| Sem entrada no journal                   | **0**                  |
 
 ### 3.1 Classe (a) — 35 tags, divergência só de fim de linha
 
@@ -153,13 +153,13 @@ e é **imaterial**: o conteúdo hasheado é idêntico ao do disco a menos de `\r
 
 Hipóteses da investigação, com o veredito medido:
 
-| Hipótese | Veredito |
-| --- | --- |
-| `.sql` editado in-place depois de aplicado (D17 de novo) | **Confirmada só para `0072`/`0073`** — já inventariadas. Nenhuma das 35 tem alteração de conteúdo. |
-| Hash gravado por versão de drizzle-orm com normalização diferente | **Descartada** — algoritmo idêntico em 0.45.2; divergência cai toda sobre o eixo EOL. |
-| Prettier reformatou `db/migrations/**` | **Descartada** — o conteúdo é byte a byte igual; reformatação mudaria mais que `\r`. |
-| Normalização de EOL por `.gitattributes` / `core.autocrlf` | **CONFIRMADA** — é a causa das 35. Evidência acima. |
-| Banco local restaurado de dump / criado fora do `migrate` | **Descartada como causa** — todas as 98 linhas correspondem a `.sql` do journal; nenhuma órfã, nenhuma sem arquivo. O que há é aplicação a partir de working copies com EOL diferente, não restauração. |
+| Hipótese                                                          | Veredito                                                                                                                                                                                                |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.sql` editado in-place depois de aplicado (D17 de novo)          | **Confirmada só para `0072`/`0073`** — já inventariadas. Nenhuma das 35 tem alteração de conteúdo.                                                                                                      |
+| Hash gravado por versão de drizzle-orm com normalização diferente | **Descartada** — algoritmo idêntico em 0.45.2; divergência cai toda sobre o eixo EOL.                                                                                                                   |
+| Prettier reformatou `db/migrations/**`                            | **Descartada** — o conteúdo é byte a byte igual; reformatação mudaria mais que `\r`.                                                                                                                    |
+| Normalização de EOL por `.gitattributes` / `core.autocrlf`        | **CONFIRMADA** — é a causa das 35. Evidência acima.                                                                                                                                                     |
+| Banco local restaurado de dump / criado fora do `migrate`         | **Descartada como causa** — todas as 98 linhas correspondem a `.sql` do journal; nenhuma órfã, nenhuma sem arquivo. O que há é aplicação a partir de working copies com EOL diferente, não restauração. |
 
 ---
 
@@ -169,9 +169,9 @@ Hipóteses da investigação, com o veredito medido:
 
 Arqueologia sobre todos os blobs do arquivo (`git rev-list --all --reflog`):
 
-| commit | data | sha256 (LF) | |
-| --- | --- | --- | --- |
-| `a5a44946` | 04/08 | `5f52882de586…` | **== hash no banco local** |
+| commit     | data  | sha256 (LF)     |                              |
+| ---------- | ----- | --------------- | ---------------------------- |
+| `a5a44946` | 04/08 | `5f52882de586…` | **== hash no banco local**   |
 | `b53b294c` | 04/08 | `1c261ad1e19f…` | edição in-place; nunca rodou |
 
 O hash local é **idêntico ao `hashAplicado` já pinado em `DERIVAS_CONHECIDAS`** para
@@ -186,10 +186,10 @@ objetos do repositório (`git cat-file --batch-all-objects`, 919 blobs candidato
 de tamanho, testando cada um em LF e em CRLF): **nenhum blob do repositório produz esse
 hash.** Só existiram duas versões do arquivo:
 
-| commit | data | sha256 (LF) | |
-| --- | --- | --- | --- |
+| commit     | data  | sha256 (LF)     |                                                       |
+| ---------- | ----- | --------------- | ----------------------------------------------------- |
 | `a00008e7` | 04/08 | `9b353c4445c4…` | versão original — é a que **produção** rodou (pinada) |
-| `f6e08846` | 05/08 | `ab71715ce601…` | conteúdo em disco hoje |
+| `f6e08846` | 05/08 | `ab71715ce601…` | conteúdo em disco hoje                                |
 
 Conclusão: **o conteúdo aplicado localmente nunca foi commitado** — rodou de um estado de
 working tree intermediário. Isso torna o hash irrecuperável, mas **não** o efeito: o
@@ -240,12 +240,12 @@ objetos que cada `.sql` declara (`CREATE TABLE`, `ADD COLUMN`, `CREATE POLICY`,
 
 **170 objetos conferidos, 1 ausente de verdade:**
 
-| Reportado ausente | Veredito |
-| --- | --- |
-| `alerta_risco_clinico.alerta_risco_auth_select` (`0072`) | **AUSENTE DE VERDADE** — seção 5.2 |
-| `mercadopago_webhook_event` + 1 policy + 2 índices (`0071`) | Esperado: removidos pela `0091_drop_webhook_mercado_pago`, que está aplicada |
-| índice "falharia" (`0077`) | Falso positivo do extrator — a palavra aparece num comentário |
-| `subscription.cpf_cnpj` (`0090`) | Falso positivo do extrator — o `ADD COLUMN cpf_cnpj` é em `clinic`, e `clinic.cpf_cnpj` **existe** |
+| Reportado ausente                                           | Veredito                                                                                           |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `alerta_risco_clinico.alerta_risco_auth_select` (`0072`)    | **AUSENTE DE VERDADE** — seção 5.2                                                                 |
+| `mercadopago_webhook_event` + 1 policy + 2 índices (`0071`) | Esperado: removidos pela `0091_drop_webhook_mercado_pago`, que está aplicada                       |
+| índice "falharia" (`0077`)                                  | Falso positivo do extrator — a palavra aparece num comentário                                      |
+| `subscription.cpf_cnpj` (`0090`)                            | Falso positivo do extrator — o `ADD COLUMN cpf_cnpj` é em `clinic`, e `clinic.cpf_cnpj` **existe** |
 
 Conferência de amostra em billing (o pedido explícito): `subscription` e `billing_cycle`
 têm todas as colunas que `0071`/`0075`/`0088`/`0089`/`0090`/`0096`/`0097`/`0098`

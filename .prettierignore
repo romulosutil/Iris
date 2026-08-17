@@ -10,3 +10,4 @@
 # `src/lib/legal.test.ts` fixa o corpo de 10.1–10.3 byte a byte; sem esta
 # exclusão, a próxima execução de `pnpm format` quebraria aquele teste.
 docs/legal/
+docs/archive/

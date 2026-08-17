@@ -39,7 +39,9 @@ export async function confirmarEvidenciaAction(
   _prev: ValidacaoState,
   fd: FormData,
 ): Promise<ValidacaoState> {
-  return comCtx(fd, (ctx) => confirmarEvidencia(ctx, { evidenceId: String(fd.get("evidenceId") ?? "") }));
+  return comCtx(fd, (ctx) =>
+    confirmarEvidencia(ctx, { evidenceId: String(fd.get("evidenceId") ?? "") }),
+  );
 }
 
 export async function aprovarLoteAction(

@@ -29,18 +29,18 @@ export function HorasTerapeutaBloco({ horas }: { horas: HorasTerapeuta }) {
     >
       <h2
         id="horas-terapeuta-titulo"
-        className="font-display text-[var(--text-primary)] text-xl font-bold"
+        className="font-display text-xl font-bold text-[var(--text-primary)]"
       >
         Carga horária semanal
       </h2>
 
-      <dl className="border-[var(--border-brutal)] bg-[var(--surface-card)] flex flex-wrap gap-x-8 gap-y-4 border-2 p-4 rounded-[var(--radius-control)]">
+      <dl className="flex flex-wrap gap-x-8 gap-y-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4">
         {cifras.map(({ rotulo, chave }) => (
           <div key={chave}>
-            <dt className="font-display text-[var(--text-secondary)] text-xs font-semibold tracking-wide uppercase">
+            <dt className="font-display text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
               {rotulo}
             </dt>
-            <dd className="font-display text-[var(--text-primary)] mt-1 text-2xl font-semibold">
+            <dd className="font-display mt-1 text-2xl font-semibold text-[var(--text-primary)]">
               {formatarHoras(horas[chave])}
             </dd>
           </div>
@@ -48,11 +48,13 @@ export function HorasTerapeutaBloco({ horas }: { horas: HorasTerapeuta }) {
       </dl>
 
       <div className="flex flex-col gap-2">
-        <h3 className="font-display text-[var(--text-primary)] text-base font-semibold">
+        <h3 className="font-display text-base font-semibold text-[var(--text-primary)]">
           Pacientes fixos
         </h3>
         {horas.pacientes.length === 0 ? (
-          <p className="font-body text-[var(--text-secondary)] text-sm">Nenhum paciente fixo</p>
+          <p className="font-body text-sm text-[var(--text-secondary)]">
+            Nenhum paciente fixo
+          </p>
         ) : (
           <ul className="flex flex-col gap-1">
             {horas.pacientes.map((p) => (

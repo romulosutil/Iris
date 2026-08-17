@@ -7,13 +7,22 @@ import { Card } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import { surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
 import { responderQueryAction, type ValidacaoState } from "./actions";
 import type { DuvidaAberta } from "./queries";
 import type { AlvoValido } from "../validacao/alvos";
-import { ClassificacaoAtual, rotuloAlvo } from "../validacao/classificacao-atual";
+import {
+  ClassificacaoAtual,
+  rotuloAlvo,
+} from "../validacao/classificacao-atual";
 
 /**
  * Um item da lista = uma dúvida aberta pelo coordenador em `devolverComDuvida`,
@@ -38,47 +47,59 @@ function DuvidaCard({
   alvos: AlvoValido[];
   onRespondida: () => void;
 }) {
-  const [state, formAction, pendente] = useActionState<ValidacaoState, FormData>(
-    async (prev, fd) => {
-      const r = await responderQueryAction(prev, fd);
-      if (r.ok) onRespondida();
-      return r;
-    },
-    {},
-  );
+  const [state, formAction, pendente] = useActionState<
+    ValidacaoState,
+    FormData
+  >(async (prev, fd) => {
+    const r = await responderQueryAction(prev, fd);
+    if (r.ok) onRespondida();
+    return r;
+  }, {});
 
   const [corrigirAlvo, setCorrigirAlvo] = useState(false);
-  const [alvoSelecionadoIdx, setAlvoSelecionadoIdx] = useState<string | undefined>(undefined);
+  const [alvoSelecionadoIdx, setAlvoSelecionadoIdx] = useState<
+    string | undefined
+  >(undefined);
   const novoAlvoJson =
     corrigirAlvo && alvoSelecionadoIdx !== undefined
       ? JSON.stringify(alvos[Number(alvoSelecionadoIdx)])
       : "";
 
   return (
-    <Card
-      como="li"
-      titulo={`Sessão ${item.sessionNumero}`}
-      className="p-5"
-    >
+    <Card como="li" titulo={`Sessão ${item.sessionNumero}`} className="p-5">
       <Stack gap="sm">
-        <span className="text-[var(--text-secondary)] text-sm font-semibold tracking-wide uppercase font-mono">
+        <span className="font-mono text-sm font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
           Dúvida {indice} de {total}
         </span>
-        <p className="text-[var(--text-primary)] text-base">{item.trecho || "(sem trecho registrado)"}</p>
+        <p className="text-base text-[var(--text-primary)]">
+          {item.trecho || "(sem trecho registrado)"}
+        </p>
         <Stack gap="sm">
-          <span className="text-[var(--text-secondary)] text-sm">Classificação atual:</span>
+          <span className="text-sm text-[var(--text-secondary)]">
+            Classificação atual:
+          </span>
           <ClassificacaoAtual classificacao={item.classificacaoAtual} />
         </Stack>
-        <p className="text-[var(--text-primary)] text-base font-medium">{item.pergunta}</p>
+        <p className="text-base font-medium text-[var(--text-primary)]">
+          {item.pergunta}
+        </p>
       </Stack>
 
       <form action={formAction} className="mt-4">
         <Stack gap="md">
-          <input type="hidden" name="evidenceQueryId" value={item.evidenceQueryId} />
+          <input
+            type="hidden"
+            name="evidenceQueryId"
+            value={item.evidenceQueryId}
+          />
           <input type="hidden" name="novoAlvo" value={novoAlvoJson} />
 
           <Field label="Resposta" htmlFor={`resposta-${item.evidenceQueryId}`}>
-            <Input id={`resposta-${item.evidenceQueryId}`} name="respostaTexto" required />
+            <Input
+              id={`resposta-${item.evidenceQueryId}`}
+              name="respostaTexto"
+              required
+            />
           </Field>
 
           {alvos.length > 0 ? (
@@ -95,8 +116,14 @@ function DuvidaCard({
               </Button>
 
               {corrigirAlvo ? (
-                <Field label="Novo alvo" htmlFor={`novo-alvo-${item.evidenceQueryId}`}>
-                  <Select value={alvoSelecionadoIdx} onValueChange={setAlvoSelecionadoIdx}>
+                <Field
+                  label="Novo alvo"
+                  htmlFor={`novo-alvo-${item.evidenceQueryId}`}
+                >
+                  <Select
+                    value={alvoSelecionadoIdx}
+                    onValueChange={setAlvoSelecionadoIdx}
+                  >
                     <SelectTrigger id={`novo-alvo-${item.evidenceQueryId}`}>
                       <SelectValue placeholder="Selecione um alvo" />
                     </SelectTrigger>
@@ -119,7 +146,9 @@ function DuvidaCard({
             <Button
               type="submit"
               variante="primaria"
-              disabled={pendente || (corrigirAlvo && alvoSelecionadoIdx === undefined)}
+              disabled={
+                pendente || (corrigirAlvo && alvoSelecionadoIdx === undefined)
+              }
             >
               {pendente ? "Enviando…" : "Responder"}
             </Button>

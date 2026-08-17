@@ -98,7 +98,10 @@ function calcularStatusTrial(
   trialDias: number,
   criadoEm: Date,
   subStatus: string | null,
-): { status: "isenta" | "trial" | "ativa" | "inadimplente" | "cancelada"; diasRestantes: number | null } {
+): {
+  status: "isenta" | "trial" | "ativa" | "inadimplente" | "cancelada";
+  diasRestantes: number | null;
+} {
   if (isentoTrial) {
     return { status: "isenta", diasRestantes: null };
   }
@@ -116,8 +119,12 @@ function calcularStatusTrial(
   }
 
   const agora = new Date();
-  const inicioRelogio = trialComecoEm ? new Date(trialComecoEm) : new Date(criadoEm);
-  const diasPassados = Math.floor((agora.getTime() - inicioRelogio.getTime()) / (1000 * 60 * 60 * 24));
+  const inicioRelogio = trialComecoEm
+    ? new Date(trialComecoEm)
+    : new Date(criadoEm);
+  const diasPassados = Math.floor(
+    (agora.getTime() - inicioRelogio.getTime()) / (1000 * 60 * 60 * 24),
+  );
   const limiteDias = trialComecoEm ? trialDias : 14;
   const diasRestantes = Math.max(0, limiteDias - diasPassados);
 
@@ -230,7 +237,10 @@ export async function getSuperAdminClinicas(opcoes?: {
       row.subStatus,
     );
 
-    const valorEstimadoCentavos = status === "isenta" ? 0 : calcularMensalidadeCentavos(row.fichasNaBaseCount);
+    const valorEstimadoCentavos =
+      status === "isenta"
+        ? 0
+        : calcularMensalidadeCentavos(row.fichasNaBaseCount);
 
     return {
       id: row.id,
@@ -251,7 +261,9 @@ export async function getSuperAdminClinicas(opcoes?: {
   } else if (ordenacao === "pacientes_desc") {
     resultado.sort((a, b) => b.fichasNaBaseCount - a.fichasNaBaseCount);
   } else {
-    resultado.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime());
+    resultado.sort(
+      (a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime(),
+    );
   }
 
   return resultado;

@@ -36,8 +36,9 @@ export function ConvidarForm() {
   if (state.sucesso) {
     return (
       <Alert severidade="sucesso" titulo="Profissional adicionado à equipe">
-        O profissional já possui uma conta cadastrada no Iris e foi vinculado com sucesso à equipe da clínica.
-        Ele deve realizar o login utilizando sua senha de acesso atual.
+        O profissional já possui uma conta cadastrada no Iris e foi vinculado
+        com sucesso à equipe da clínica. Ele deve realizar o login utilizando
+        sua senha de acesso atual.
       </Alert>
     );
   }
@@ -57,19 +58,34 @@ export function ConvidarForm() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="terapeuta">Terapeuta</SelectItem>
-            <SelectItem value="admin_recepcao">Recepção/Administrativo</SelectItem>
+            <SelectItem value="admin_recepcao">
+              Recepção/Administrativo
+            </SelectItem>
           </SelectContent>
         </Select>
       </Field>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Field label="Conselho (opcional)" htmlFor="conselho">
-          <Input id="conselho" name="conselho" placeholder="Ex.: CRP, CRFa, CREFITO" />
+          <Input
+            id="conselho"
+            name="conselho"
+            placeholder="Ex.: CRP, CRFa, CREFITO"
+          />
         </Field>
         <Field label="Nº de Registro (opcional)" htmlFor="registroNumero">
-          <Input id="registroNumero" name="registroNumero" placeholder="Ex.: 123456" />
+          <Input
+            id="registroNumero"
+            name="registroNumero"
+            placeholder="Ex.: 123456"
+          />
         </Field>
         <Field label="UF do Registro (opcional)" htmlFor="registroUf">
-          <Input id="registroUf" name="registroUf" placeholder="Ex.: SP" maxLength={2} />
+          <Input
+            id="registroUf"
+            name="registroUf"
+            placeholder="Ex.: SP"
+            maxLength={2}
+          />
         </Field>
       </div>
       <Button type="submit">Convidar</Button>

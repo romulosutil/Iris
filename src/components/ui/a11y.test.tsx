@@ -9,7 +9,10 @@ import { ConfidenceCard } from "./patterns/confidence-card";
 import { CompareRow } from "./patterns/compare-row";
 import { BatchBar } from "./patterns/batch-bar";
 import { AgendaCalendarGrid } from "./agenda-calendar-grid";
-import { ProtocolProgressBarChart, ProtocolTrendChart } from "./protocol-dashboard-charts";
+import {
+  ProtocolProgressBarChart,
+  ProtocolTrendChart,
+} from "./protocol-dashboard-charts";
 import { EmptyState } from "./empty-state";
 import { MicroConquistaBadge } from "./micro-conquista-badge";
 import { CareTeamIllustration } from "./illustrations";
@@ -462,15 +465,27 @@ test("CopyButton — sem violações axe", async () => {
 });
 
 test("Pill solid — sem violações axe", async () => {
-  await semViolacoes(<Pill variant="solid" colorScheme="menta">Conquistado</Pill>);
+  await semViolacoes(
+    <Pill variant="solid" colorScheme="menta">
+      Conquistado
+    </Pill>,
+  );
 });
 
 test("Pill inset — sem violações axe", async () => {
-  await semViolacoes(<Pill variant="inset" colorScheme="violeta">Sugerido</Pill>);
+  await semViolacoes(
+    <Pill variant="inset" colorScheme="violeta">
+      Sugerido
+    </Pill>,
+  );
 });
 
 test("Pill outline — sem violações axe", async () => {
-  await semViolacoes(<Pill variant="outline" colorScheme="ouro">Pendente</Pill>);
+  await semViolacoes(
+    <Pill variant="outline" colorScheme="ouro">
+      Pendente
+    </Pill>,
+  );
 });
 
 test("ConfidenceCard — sem violações axe", async () => {
@@ -577,8 +592,3 @@ test("MicroConquistaBadge — sem violações axe", async () => {
     </MicroConquistaBadge>,
   );
 });
-
-
-
-
-

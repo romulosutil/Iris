@@ -17,7 +17,10 @@ export async function GET(
 
   const pdf = await withTenant(ctx, (tx) => getReportPdf(tx, reportId));
   if (!pdf) {
-    return NextResponse.json({ error: "Relatório não encontrado." }, { status: 404 });
+    return NextResponse.json(
+      { error: "Relatório não encontrado." },
+      { status: 404 },
+    );
   }
 
   return new NextResponse(new Uint8Array(pdf.bytes), {

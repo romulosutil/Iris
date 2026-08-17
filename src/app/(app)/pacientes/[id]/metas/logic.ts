@@ -59,9 +59,14 @@ async function criarMetaCore(
         })
         .returning({ id: goal.id });
       if (d.milestoneIds.length > 0) {
-        await tx.insert(goalMilestoneMapping).values(
-          d.milestoneIds.map((milestoneId) => ({ goalId: row!.id, milestoneId })),
-        );
+        await tx
+          .insert(goalMilestoneMapping)
+          .values(
+            d.milestoneIds.map((milestoneId) => ({
+              goalId: row!.id,
+              milestoneId,
+            })),
+          );
       }
       await desarquivarPacienteSeArquivado(
         tx,
@@ -213,7 +218,10 @@ async function manterMetaAtivaCore(
       if (!g) return;
       await tx
         .update(goal)
-        .set({ proximaRevisaoEm: proximaRevisaoISO(g.ciclo), atualizadoEm: new Date() })
+        .set({
+          proximaRevisaoEm: proximaRevisaoISO(g.ciclo),
+          atualizadoEm: new Date(),
+        })
         .where(eq(goal.id, parsed.data.goalId));
     });
     return {};

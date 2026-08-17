@@ -40,18 +40,18 @@ Criado: 09/07/2026. Contexto: init do impeccable + leitura completa da doc.
 
 ## 1. Stack redefinida (decisões de tech lead)
 
-| Camada          | Antes (serverless)       | Agora (VPS/Easypanel)                                 | Nota                                       |
-| --------------- | ------------------------ | ----------------------------------------------------- | ------------------------------------------ |
+| Camada          | Antes (serverless)       | Agora (VPS/Easypanel)                                 | Nota                                         |
+| --------------- | ------------------------ | ----------------------------------------------------- | -------------------------------------------- |
 | Host            | Vercel `gru1`            | VPS Hostinger + Easypanel (Docker Swarm)              | Região SP **medida** (27/07/26 — ver §Stack) |
-| App web         | Next.js (serverless)     | Next.js `output: 'standalone'` em container           | Multi-stage Dockerfile                     |
-| Build/deploy    | Vercel auto              | Easypanel GitHub source + **Dockerfile builder**      | Dockerfile > Nixpacks (reprodutível)       |
-| Banco           | Supabase Postgres        | **Postgres puro** (template Easypanel)                | RLS nativo via session GUC (`app.user_id`) |
-| Auth            | Supabase Auth (GoTrue)   | **Better-Auth in-app** (lib, sem container) + MFA/2FA | decidido                                   |
-| Storage áudio   | Supabase Storage         | **MinIO** (S3-compatível, template Easypanel)         | swappável p/ S3 real                       |
-| Migrations/ORM  | Supabase CLI → sa-east-1 | **Drizzle** (schema TS + migrações SQL) → Postgres    | pgTAP via `pg_prove`                       |
-| TLS/domínio     | Vercel                   | Traefik interno do Easypanel + Let's Encrypt          | `irisclinica.ia.br` → IP do VPS            |
-| Observabilidade | Sentry free              | **GlitchTip self-host** (recomendado) ou Sentry free  | traces podem ter dado de menor             |
-| LLM extração    | Claude API               | Claude API (inalterado)                               | DPA Anthropic ainda necessário             |
+| App web         | Next.js (serverless)     | Next.js `output: 'standalone'` em container           | Multi-stage Dockerfile                       |
+| Build/deploy    | Vercel auto              | Easypanel GitHub source + **Dockerfile builder**      | Dockerfile > Nixpacks (reprodutível)         |
+| Banco           | Supabase Postgres        | **Postgres puro** (template Easypanel)                | RLS nativo via session GUC (`app.user_id`)   |
+| Auth            | Supabase Auth (GoTrue)   | **Better-Auth in-app** (lib, sem container) + MFA/2FA | decidido                                     |
+| Storage áudio   | Supabase Storage         | **MinIO** (S3-compatível, template Easypanel)         | swappável p/ S3 real                         |
+| Migrations/ORM  | Supabase CLI → sa-east-1 | **Drizzle** (schema TS + migrações SQL) → Postgres    | pgTAP via `pg_prove`                         |
+| TLS/domínio     | Vercel                   | Traefik interno do Easypanel + Let's Encrypt          | `irisclinica.ia.br` → IP do VPS              |
+| Observabilidade | Sentry free              | **GlitchTip self-host** (recomendado) ou Sentry free  | traces podem ter dado de menor               |
+| LLM extração    | Claude API               | Claude API (inalterado)                               | DPA Anthropic ainda necessário               |
 
 ### VPS — dimensionamento
 
@@ -241,19 +241,11 @@ Estado da revisão (atualizado 09/07/2026):
 - [x] VPS Hostinger região **SP** — CONFIRMADO (residência LGPD ok).
       **Evidência medida em 27/07/2026** (antes disso o `[x]` não tinha prova
       registrada em lugar nenhum do repo, e a linha 45 desta mesma tabela ainda
-      dizia "a confirmar" — contradição resolvida aqui):
-      - `irisclinica.ia.br` → `31.97.170.105`; geolocalização por duas fontes
-        independentes: São Paulo/BR, AS47583 Hostinger International Limited.
-      - **RTT 33 ms** do Brasil. Baseline São Paulo (NIC.br) 24 ms; baseline
-        Europa (Hetzner/DE) **231 ms**. Brasil↔Europa tem piso físico de
-        ~210 ms em fibra — 33 ms exclui qualquer datacenter fora da América do
-        Sul. Latência é a única prova que geolocalização de IP não falsifica.
-      - `tracert`: último salto via `200.25.x` (backbone BR), ~30 ms constante.
-      > ⚠️ **Não confundir com o domicílio societário.** A *Hostinger
-      > International Ltd* é pessoa jurídica estrangeira (aparece como
-      > Lituânia/Chipre em fatura e no DPA). O **dado** está em São Paulo; a
-      > **empresa** não é brasileira. São coisas distintas e só a primeira está
-      > provada aqui — ver a issue de DPA da Hostinger no GitHub.
+      dizia "a confirmar" — contradição resolvida aqui): - `irisclinica.ia.br` → `31.97.170.105`; geolocalização por duas fontes
+      independentes: São Paulo/BR, AS47583 Hostinger International Limited. - **RTT 33 ms** do Brasil. Baseline São Paulo (NIC.br) 24 ms; baseline
+      Europa (Hetzner/DE) **231 ms**. Brasil↔Europa tem piso físico de
+      ~210 ms em fibra — 33 ms exclui qualquer datacenter fora da América do
+      Sul. Latência é a única prova que geolocalização de IP não falsifica. - `tracert`: último salto via `200.25.x` (backbone BR), ~30 ms constante. > ⚠️ **Não confundir com o domicílio societário.** A _Hostinger > International Ltd_ é pessoa jurídica estrangeira (aparece como > Lituânia/Chipre em fatura e no DPA). O **dado** está em São Paulo; a > **empresa** não é brasileira. São coisas distintas e só a primeira está > provada aqui — ver a issue de DPA da Hostinger no GitHub.
 - [x] Banco: **Postgres puro** (não Supabase) — ver seção 2.
 - [x] Estrutura de pastas feature-first (seção 4).
 - [x] Tier do VPS: **KVM 4 (4 vCPU / 16 GB)** — confortável, comporta GlitchTip.

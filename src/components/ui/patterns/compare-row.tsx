@@ -42,15 +42,25 @@ export function CompareRow({
     >
       {/* Título do campo e badge */}
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-xs font-bold uppercase tracking-wider text-text-primary">
+        <span className="text-text-primary font-mono text-xs font-bold tracking-wider uppercase">
           {rotulo}
         </span>
         {divergente ? (
-          <Pill variant="inset" colorScheme="ouro" size="sm" icon={<AlertTriangleIcon size={12} />}>
+          <Pill
+            variant="inset"
+            colorScheme="ouro"
+            size="sm"
+            icon={<AlertTriangleIcon size={12} />}
+          >
             Divergente
           </Pill>
         ) : (
-          <Pill variant="solid" colorScheme="menta" size="sm" icon={<CheckIcon size={12} />}>
+          <Pill
+            variant="solid"
+            colorScheme="menta"
+            size="sm"
+            icon={<CheckIcon size={12} />}
+          >
             Consistente
           </Pill>
         )}
@@ -59,11 +69,13 @@ export function CompareRow({
       {/* Grade de comparação lado a lado */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* Dado anterior */}
-        <div className="flex flex-col gap-1 rounded bg-surface-elevated/40 p-2.5">
-          <span className="text-[11px] font-medium text-text-secondary">
+        <div className="bg-surface-elevated/40 flex flex-col gap-1 rounded p-2.5">
+          <span className="text-text-secondary text-[11px] font-medium">
             Histórico Anterior {dataAnterior ? `(${dataAnterior})` : ""}
           </span>
-          <div className="text-sm font-medium text-text-primary">{dadoAnterior}</div>
+          <div className="text-text-primary text-sm font-medium">
+            {dadoAnterior}
+          </div>
         </div>
 
         {/* Dado sugerido */}
@@ -71,21 +83,25 @@ export function CompareRow({
           className={cn(
             "flex flex-col gap-1 rounded p-2.5",
             divergente
-              ? "border border-dashed border-status-warning-border bg-status-warning-bg/20"
+              ? "border-status-warning-border bg-status-warning-bg/20 border border-dashed"
               : "bg-surface-elevated/40",
           )}
         >
-          <span className="text-[11px] font-medium text-text-secondary">
+          <span className="text-text-secondary text-[11px] font-medium">
             Nova Sugestão {dataSugerida ? `(${dataSugerida})` : ""}
           </span>
-          <div className="text-sm font-semibold text-text-primary">{dadoSugerido}</div>
+          <div className="text-text-primary text-sm font-semibold">
+            {dadoSugerido}
+          </div>
         </div>
       </div>
 
       {/* Motivo da divergência */}
       {divergente && motivoDivergencia && (
-        <p className="mt-1 text-xs text-text-secondary">
-          <span className="font-semibold text-status-warning-fg">Atenção: </span>
+        <p className="text-text-secondary mt-1 text-xs">
+          <span className="text-status-warning-fg font-semibold">
+            Atenção:{" "}
+          </span>
           {motivoDivergencia}
         </p>
       )}

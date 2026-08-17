@@ -109,19 +109,19 @@ Estão aqui explícitas porque um executor não deve descobri-las lendo o códig
 
 ## Estrutura de arquivos
 
-| Arquivo | Responsabilidade | Ação |
-| --- | --- | --- |
-| `src/lib/billing/provider/types.ts` | Tipos `FormaPagamentoCobranca`, `CobrancaParaReuso`, `MotivoNaoReuso`; método na interface `BillingProvider` | Modificar (~+70 linhas) |
-| `src/lib/billing/provider/index.ts` | Reexportar os tipos novos | Modificar (~+3 linhas) |
-| `src/lib/billing/provider/asaas.ts` | Implementar `consultarCobrancaParaReuso` (allow-list, `deleted`, instruções, QR) | Modificar (~+130 linhas) |
-| `src/lib/billing/provider/asaas.test.ts` | 11 casos unitários do método novo | Modificar |
-| `db/tests/provedor-fake.ts` | Implementar o método no dublê | Modificar (~+40 linhas) |
-| `src/lib/billing/debito.ts` | `levantarDebito` devolve ciclos; classificação (a)/(b); contrato novo do gate | Modificar (o grosso do diff) |
-| `src/lib/billing/debito.test.ts` | Testes unitários da divisão (a)/(b) | Modificar |
-| `src/app/(app)/assinatura/logic.ts` | `AtivacaoState.debito` vira lista; ramo `bloqueado` | Modificar |
-| `src/app/(app)/assinatura/formulario-ativacao.tsx` | Renderizar N cobranças + estado "em processamento" | Modificar |
-| `src/app/(app)/assinatura/formulario-ativacao.test.tsx` | Casos de N cobranças e de "em processamento" | Modificar |
-| `src/app/(app)/assinatura/gate-debito.int.test.ts` | Casos de integração do reaproveitamento | Modificar |
+| Arquivo                                                 | Responsabilidade                                                                                             | Ação                         |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------- |
+| `src/lib/billing/provider/types.ts`                     | Tipos `FormaPagamentoCobranca`, `CobrancaParaReuso`, `MotivoNaoReuso`; método na interface `BillingProvider` | Modificar (~+70 linhas)      |
+| `src/lib/billing/provider/index.ts`                     | Reexportar os tipos novos                                                                                    | Modificar (~+3 linhas)       |
+| `src/lib/billing/provider/asaas.ts`                     | Implementar `consultarCobrancaParaReuso` (allow-list, `deleted`, instruções, QR)                             | Modificar (~+130 linhas)     |
+| `src/lib/billing/provider/asaas.test.ts`                | 11 casos unitários do método novo                                                                            | Modificar                    |
+| `db/tests/provedor-fake.ts`                             | Implementar o método no dublê                                                                                | Modificar (~+40 linhas)      |
+| `src/lib/billing/debito.ts`                             | `levantarDebito` devolve ciclos; classificação (a)/(b); contrato novo do gate                                | Modificar (o grosso do diff) |
+| `src/lib/billing/debito.test.ts`                        | Testes unitários da divisão (a)/(b)                                                                          | Modificar                    |
+| `src/app/(app)/assinatura/logic.ts`                     | `AtivacaoState.debito` vira lista; ramo `bloqueado`                                                          | Modificar                    |
+| `src/app/(app)/assinatura/formulario-ativacao.tsx`      | Renderizar N cobranças + estado "em processamento"                                                           | Modificar                    |
+| `src/app/(app)/assinatura/formulario-ativacao.test.tsx` | Casos de N cobranças e de "em processamento"                                                                 | Modificar                    |
+| `src/app/(app)/assinatura/gate-debito.int.test.ts`      | Casos de integração do reaproveitamento                                                                      | Modificar                    |
 
 Nenhum arquivo novo. Nenhuma migração.
 
@@ -181,8 +181,16 @@ export interface CobrancaDoDebito {
 
 export type ResultadoGateDebito =
   | { tipo: "sem_debito" }
-  | { tipo: "adiado"; totalCentavos: number; motivo: "abaixo_do_piso" | "recusa_do_gateway" }
-  | { tipo: "bloqueado"; totalCentavos: number; motivo: "gateway_indisponivel" | "cobranca_irrecuperavel" }
+  | {
+      tipo: "adiado";
+      totalCentavos: number;
+      motivo: "abaixo_do_piso" | "recusa_do_gateway";
+    }
+  | {
+      tipo: "bloqueado";
+      totalCentavos: number;
+      motivo: "gateway_indisponivel" | "cobranca_irrecuperavel";
+    }
   | { tipo: "cobranca"; totalCentavos: number; cobrancas: CobrancaDoDebito[] };
 ```
 
@@ -195,12 +203,12 @@ debito?: { valorCentavos: number; cobrancas: CobrancaDoDebito[] };
 
 ## Copy pt-BR dos estados novos
 
-| Estado | Título | Texto |
-| --- | --- | --- |
-| `bloqueado / gateway_indisponivel` (em `state.error`) | — | "Não conseguimos confirmar agora as cobranças em aberto da sua conta. Nada foi cobrado, e nenhuma cobrança nova foi criada. Tente novamente em alguns instantes." |
-| `bloqueado / cobranca_irrecuperavel` (em `state.error`) | — | "A cobrança em aberto da sua conta precisa de revisão manual antes de a assinatura ser reaberta. Fale com o suporte informando o CNPJ da clínica." |
-| `situacao.estado === "em_processamento"` | "Cobrança em processamento no seu banco" | "Esta cobrança já foi enviada ao seu banco e está sendo processada. Não pague por outro meio agora — você pode acabar pagando duas vezes. Assim que o banco responder, esta tela avisa sozinha." |
-| `cobrancas.length > 1` (intro) | "Pague o valor em aberto para reativar" | "Há mais de uma cobrança em aberto e cada uma se paga separadamente. Uma delas já tinha sido enviada antes e continua válida — pagar as duas quita o total de {total}." |
+| Estado                                                  | Título                                   | Texto                                                                                                                                                                                            |
+| ------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bloqueado / gateway_indisponivel` (em `state.error`)   | —                                        | "Não conseguimos confirmar agora as cobranças em aberto da sua conta. Nada foi cobrado, e nenhuma cobrança nova foi criada. Tente novamente em alguns instantes."                                |
+| `bloqueado / cobranca_irrecuperavel` (em `state.error`) | —                                        | "A cobrança em aberto da sua conta precisa de revisão manual antes de a assinatura ser reaberta. Fale com o suporte informando o CNPJ da clínica."                                               |
+| `situacao.estado === "em_processamento"`                | "Cobrança em processamento no seu banco" | "Esta cobrança já foi enviada ao seu banco e está sendo processada. Não pague por outro meio agora — você pode acabar pagando duas vezes. Assim que o banco responder, esta tela avisa sozinha." |
+| `cobrancas.length > 1` (intro)                          | "Pague o valor em aberto para reativar"  | "Há mais de uma cobrança em aberto e cada uma se paga separadamente. Uma delas já tinha sido enviada antes e continua válida — pagar as duas quita o total de {total}."                          |
 
 O título do bloco de débito quando `cobrancas.length === 1` continua "Pague o valor em aberto para reativar", com o texto de hoje.
 
@@ -210,38 +218,39 @@ O título do bloco de débito quando `cobrancas.length === 1` continua "Pague o 
 
 Obrigatória (`AGENTS.md` §5.2, ponto 5). Cada teste do plano traz, embaixo, **qual mutação ele mata**. A tabela abaixo é o índice; o enunciado repetido está em cada tarefa.
 
-| # | Teste | Mutação que mata |
-| --- | --- | --- |
-| 1 | `OVERDUE` não-deleted → `pagavel` | Restringir o reuso a `PENDING`. `OVERDUE` é o estado real depois das retentativas — é o caso central da issue |
-| 2 | `deleted: true` com status `PENDING` → `morta/removida` | Decidir só pelo `status`. Não existe status "cancelada" no Asaas; `deleted` é o único marcador de remoção |
-| 3 | `RECEIVED` → `paga` | Classificar cobrança paga como pagável e reapresentar QR de dívida já quitada |
-| 4 | `AWAITING_RISK_ANALYSIS` → `morta/status_nao_pagavel` | Trocar a allow-list `{PENDING,OVERDUE}` por deny-list (`status !== "REFUNDED"`): todo status desconhecido passaria como pagável |
-| 5 | `REFUNDED` → `morta/estornada`, sem lançar | Herdar o `throw` de `estornada` no caminho novo (D-7): gate travado para sempre |
-| 6 | 404 no `GET /payments/{id}` → `morta/nao_encontrada` | Propagar o 404 e trancar a reativação por causa de um id órfão |
-| 7 | 500 no `GET /payments/{id}` → **lança** | Tratar qualquer erro como "não encontrada" (degradar em silêncio, #157) — produz cobrança dupla |
-| 8 | instrução `SCHEDULED` → `em_processamento` e **zero** chamada a `/pixQrCode` | Ignorar as instruções e devolver copia-e-cola dentro da janela crítica (pagamento em duplicidade) |
-| 9 | instruções só `DONE`/`REFUSED`/vazias → `pagavel` | Tratar qualquer instrução como pendente: o gate nunca mais apresentaria cobrança nenhuma |
-| 10 | 500 na listagem de instruções → **lança** | Engolir a falha da listagem e apresentar o código sem saber se há débito automático a caminho |
-| 11 | `PENDING` sem `invoiceUrl` e sem BR Code → `morta/sem_forma_de_pagamento` | Devolver `pagavel` com QR vazio — a clínica acha que pagou o que não pagou |
-| 12 | Ciclo com cobrança `OVERDUE` → **zero** `POST /payments` | **O bug de hoje**: emitir sempre (`debito.ts:226`). O oráculo é a contagem de POSTs, não o retorno |
-| 13 | Idem, relendo o banco: `provider_charge_id` **inalterado** | D-5: sobrescrever o id da âncora reaproveitada (`debito.ts:313`) |
-| 14 | Pagar a cobrança ANTIGA concilia o ciclo (`levantarDebito` = 0) | **Negativo do DoD.** A mutação de #13 faria o webhook antigo não achar ciclo (`subscription.ts:1745-1755`) → `erroAplicacao: "cobrança sem ciclo correspondente"` = dinheiro recebido com dívida viva |
-| 15 | Um ciclo com cobrança viva + um sem → 1 reapresentada e **1** POST só do outro | Consolidar tudo numa cobrança nova por cima da viva — a cobrança dupla que a issue existe para evitar |
-| 16 | Ciclo (b) reapontado; âncora nova com `debito_agrupado_em NULL`; pagar (a) não liquida (b) | P-6: deixar o ponteiro velho faz pagar a cobrança de (a) liquidar ciclos de (b) de graça |
-| 17 | 500 na consulta → `bloqueado`, zero POST, ciclos `devido`, assinatura `canceled` | D-3: degradar para "emite nova" (cobrança dupla) ou para "adiado" (reativa sem cobrar) |
-| 18 | 404 na consulta → segue para (b), **1** POST, sem bloquear | D-3: tratar 404 como indisponibilidade e trancar a clínica fora por um id órfão |
-| 19 | Cobrança antiga `RECEIVED` → ciclo `pago` na hora, zero POST, ativação segue | D-4: ignorar o pagamento já recebido e devolver QR de dívida quitada |
-| 20 | Instrução `SCHEDULED` → `em_processamento`, sem BR Code, assinatura segue `canceled` | D-6: apresentar copia-e-cola dentro da janela crítica |
-| 21 | Ciclo `devido` SEM `provider_charge_id` → fluxo de hoje, 1 POST | Passar a consultar o gateway para todo mundo, inclusive quem nunca teve cobrança |
-| 22 | 2 cobranças → dois copia-e-cola distintos e os dois valores na tela | Renderizar só `cobrancas[0]` — a segunda ficaria invisível e nunca seria paga |
-| 23 | `em_processamento` → sem QR, sem botão copiar, com a copy própria | Cair no ramo de QR com `brCode` `undefined` |
-| 24 | Polling gira com cobrança aberta e para quando `debitoCentavos` zera | Trocar o sinal do polling para `situacaoConta.estado` (gira para sempre sobre QR já pago) |
+| #   | Teste                                                                                      | Mutação que mata                                                                                                                                                                                      |
+| --- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `OVERDUE` não-deleted → `pagavel`                                                          | Restringir o reuso a `PENDING`. `OVERDUE` é o estado real depois das retentativas — é o caso central da issue                                                                                         |
+| 2   | `deleted: true` com status `PENDING` → `morta/removida`                                    | Decidir só pelo `status`. Não existe status "cancelada" no Asaas; `deleted` é o único marcador de remoção                                                                                             |
+| 3   | `RECEIVED` → `paga`                                                                        | Classificar cobrança paga como pagável e reapresentar QR de dívida já quitada                                                                                                                         |
+| 4   | `AWAITING_RISK_ANALYSIS` → `morta/status_nao_pagavel`                                      | Trocar a allow-list `{PENDING,OVERDUE}` por deny-list (`status !== "REFUNDED"`): todo status desconhecido passaria como pagável                                                                       |
+| 5   | `REFUNDED` → `morta/estornada`, sem lançar                                                 | Herdar o `throw` de `estornada` no caminho novo (D-7): gate travado para sempre                                                                                                                       |
+| 6   | 404 no `GET /payments/{id}` → `morta/nao_encontrada`                                       | Propagar o 404 e trancar a reativação por causa de um id órfão                                                                                                                                        |
+| 7   | 500 no `GET /payments/{id}` → **lança**                                                    | Tratar qualquer erro como "não encontrada" (degradar em silêncio, #157) — produz cobrança dupla                                                                                                       |
+| 8   | instrução `SCHEDULED` → `em_processamento` e **zero** chamada a `/pixQrCode`               | Ignorar as instruções e devolver copia-e-cola dentro da janela crítica (pagamento em duplicidade)                                                                                                     |
+| 9   | instruções só `DONE`/`REFUSED`/vazias → `pagavel`                                          | Tratar qualquer instrução como pendente: o gate nunca mais apresentaria cobrança nenhuma                                                                                                              |
+| 10  | 500 na listagem de instruções → **lança**                                                  | Engolir a falha da listagem e apresentar o código sem saber se há débito automático a caminho                                                                                                         |
+| 11  | `PENDING` sem `invoiceUrl` e sem BR Code → `morta/sem_forma_de_pagamento`                  | Devolver `pagavel` com QR vazio — a clínica acha que pagou o que não pagou                                                                                                                            |
+| 12  | Ciclo com cobrança `OVERDUE` → **zero** `POST /payments`                                   | **O bug de hoje**: emitir sempre (`debito.ts:226`). O oráculo é a contagem de POSTs, não o retorno                                                                                                    |
+| 13  | Idem, relendo o banco: `provider_charge_id` **inalterado**                                 | D-5: sobrescrever o id da âncora reaproveitada (`debito.ts:313`)                                                                                                                                      |
+| 14  | Pagar a cobrança ANTIGA concilia o ciclo (`levantarDebito` = 0)                            | **Negativo do DoD.** A mutação de #13 faria o webhook antigo não achar ciclo (`subscription.ts:1745-1755`) → `erroAplicacao: "cobrança sem ciclo correspondente"` = dinheiro recebido com dívida viva |
+| 15  | Um ciclo com cobrança viva + um sem → 1 reapresentada e **1** POST só do outro             | Consolidar tudo numa cobrança nova por cima da viva — a cobrança dupla que a issue existe para evitar                                                                                                 |
+| 16  | Ciclo (b) reapontado; âncora nova com `debito_agrupado_em NULL`; pagar (a) não liquida (b) | P-6: deixar o ponteiro velho faz pagar a cobrança de (a) liquidar ciclos de (b) de graça                                                                                                              |
+| 17  | 500 na consulta → `bloqueado`, zero POST, ciclos `devido`, assinatura `canceled`           | D-3: degradar para "emite nova" (cobrança dupla) ou para "adiado" (reativa sem cobrar)                                                                                                                |
+| 18  | 404 na consulta → segue para (b), **1** POST, sem bloquear                                 | D-3: tratar 404 como indisponibilidade e trancar a clínica fora por um id órfão                                                                                                                       |
+| 19  | Cobrança antiga `RECEIVED` → ciclo `pago` na hora, zero POST, ativação segue               | D-4: ignorar o pagamento já recebido e devolver QR de dívida quitada                                                                                                                                  |
+| 20  | Instrução `SCHEDULED` → `em_processamento`, sem BR Code, assinatura segue `canceled`       | D-6: apresentar copia-e-cola dentro da janela crítica                                                                                                                                                 |
+| 21  | Ciclo `devido` SEM `provider_charge_id` → fluxo de hoje, 1 POST                            | Passar a consultar o gateway para todo mundo, inclusive quem nunca teve cobrança                                                                                                                      |
+| 22  | 2 cobranças → dois copia-e-cola distintos e os dois valores na tela                        | Renderizar só `cobrancas[0]` — a segunda ficaria invisível e nunca seria paga                                                                                                                         |
+| 23  | `em_processamento` → sem QR, sem botão copiar, com a copy própria                          | Cair no ramo de QR com `brCode` `undefined`                                                                                                                                                           |
+| 24  | Polling gira com cobrança aberta e para quando `debitoCentavos` zera                       | Trocar o sinal do polling para `situacaoConta.estado` (gira para sempre sobre QR já pago)                                                                                                             |
 
 ---
 
 ### Tarefa 1: Porta e adapter — `consultarCobrancaParaReuso`
 
 **Arquivos:**
+
 - Modificar: `src/lib/billing/provider/types.ts`
 - Modificar: `src/lib/billing/provider/index.ts`
 - Modificar: `src/lib/billing/provider/asaas.ts:893` (região de `consultarCobranca`)
@@ -249,6 +258,7 @@ Obrigatória (`AGENTS.md` §5.2, ponto 5). Cada teste do plano traz, embaixo, **
 - Teste: `src/lib/billing/provider/asaas.test.ts`
 
 **Interfaces:**
+
 - Consome: nada de tarefas anteriores.
 - Produz: `FormaPagamentoCobranca`, `MotivoNaoReuso`, `CobrancaParaReuso` (exportados de `provider/types.ts` e reexportados por `provider/index.ts`); `BillingProvider.consultarCobrancaParaReuso(providerChargeId: string): Promise<CobrancaParaReuso>`.
 
@@ -342,179 +352,238 @@ Em `src/lib/billing/provider/index.ts`, adicione `FormaPagamentoCobranca`, `Moti
 Em `src/lib/billing/provider/asaas.test.ts`, dentro do `describe("AsaasProvider")`, acrescente:
 
 ```ts
-  describe("consultarCobrancaParaReuso (#310)", () => {
-    /**
-     * Roteador de `fetch` por URL. Escrito aqui e não derivado do adapter: se o
-     * teste montasse as rotas a partir do módulo sob teste, trocar o endpoint
-     * passaria verde.
-     */
-    function rotear(mapa: {
-      payment?: { corpo: unknown; status?: number };
-      instrucoes?: Record<string, unknown[]>;
-      qr?: { corpo: unknown; status?: number };
-    }) {
-      fetchMock.mockImplementation(async (url: string) => {
-        const u = String(url);
-        if (u.includes("/pixQrCode")) {
-          return resposta(mapa.qr?.corpo ?? {}, mapa.qr?.status ?? 200);
-        }
-        if (u.includes("/pix/automatic/paymentInstructions")) {
-          const filtro = new URL(u).searchParams.get("status") ?? "";
-          return resposta({ data: mapa.instrucoes?.[filtro] ?? [] });
-        }
-        if (u.includes("/payments/")) {
-          return resposta(mapa.payment?.corpo ?? {}, mapa.payment?.status ?? 200);
-        }
-        throw new Error(`fetch inesperado: ${u}`);
-      });
-    }
+describe("consultarCobrancaParaReuso (#310)", () => {
+  /**
+   * Roteador de `fetch` por URL. Escrito aqui e não derivado do adapter: se o
+   * teste montasse as rotas a partir do módulo sob teste, trocar o endpoint
+   * passaria verde.
+   */
+  function rotear(mapa: {
+    payment?: { corpo: unknown; status?: number };
+    instrucoes?: Record<string, unknown[]>;
+    qr?: { corpo: unknown; status?: number };
+  }) {
+    fetchMock.mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/pixQrCode")) {
+        return resposta(mapa.qr?.corpo ?? {}, mapa.qr?.status ?? 200);
+      }
+      if (u.includes("/pix/automatic/paymentInstructions")) {
+        const filtro = new URL(u).searchParams.get("status") ?? "";
+        return resposta({ data: mapa.instrucoes?.[filtro] ?? [] });
+      }
+      if (u.includes("/payments/")) {
+        return resposta(mapa.payment?.corpo ?? {}, mapa.payment?.status ?? 200);
+      }
+      throw new Error(`fetch inesperado: ${u}`);
+    });
+  }
 
-    /** Mutação morta: restringir o reuso a PENDING. OVERDUE é o estado real
-     * depois de esgotadas as retentativas, e é o caso central da #310. */
-    it("OVERDUE não removida é reaproveitável, com copia-e-cola", async () => {
-      rotear({
-        payment: { corpo: { id: "pay_1", status: "OVERDUE", deleted: false, invoiceUrl: "https://asaas/i/1" } },
-        qr: { corpo: { payload: "00020126-brcode-1" } },
-      });
-
-      const r = await new AsaasProvider().consultarCobrancaParaReuso("pay_1");
-
-      expect(r).toEqual({
-        reuso: "pagavel",
-        pagamento: {
-          forma: "pix_copia_e_cola",
-          brCode: "00020126-brcode-1",
-          urlPagamento: "https://asaas/i/1",
+  /** Mutação morta: restringir o reuso a PENDING. OVERDUE é o estado real
+   * depois de esgotadas as retentativas, e é o caso central da #310. */
+  it("OVERDUE não removida é reaproveitável, com copia-e-cola", async () => {
+    rotear({
+      payment: {
+        corpo: {
+          id: "pay_1",
+          status: "OVERDUE",
+          deleted: false,
+          invoiceUrl: "https://asaas/i/1",
         },
-      });
+      },
+      qr: { corpo: { payload: "00020126-brcode-1" } },
     });
 
-    /** Mutação morta: decidir só pelo `status`. O Asaas NÃO tem status
-     * "cancelada" — `deleted` é o único marcador de remoção, e uma cobrança
-     * removida com status PENDING passaria como pagável. */
-    it("cobrança removida (`deleted`) não é reaproveitável, mesmo PENDING", async () => {
-      rotear({ payment: { corpo: { id: "pay_2", status: "PENDING", deleted: true } } });
+    const r = await new AsaasProvider().consultarCobrancaParaReuso("pay_1");
 
-      expect(await new AsaasProvider().consultarCobrancaParaReuso("pay_2")).toEqual({
-        reuso: "morta",
-        motivo: "removida",
-      });
-    });
-
-    /** Mutação morta: classificar cobrança paga como pagável e reapresentar o
-     * QR de uma dívida já quitada. */
-    it("RECEIVED volta como paga, para o chamador liquidar o ciclo", async () => {
-      rotear({ payment: { corpo: { id: "pay_3", status: "RECEIVED", deleted: false } } });
-
-      expect(await new AsaasProvider().consultarCobrancaParaReuso("pay_3")).toEqual({
-        reuso: "paga",
-      });
-    });
-
-    /** Mutação morta: trocar a allow-list {PENDING,OVERDUE} por deny-list
-     * (`status !== "REFUNDED"`). Todo status desconhecido passaria a pagável. */
-    it("status fora da allow-list não é reaproveitável", async () => {
-      rotear({ payment: { corpo: { id: "pay_4", status: "AWAITING_RISK_ANALYSIS", deleted: false } } });
-
-      expect(await new AsaasProvider().consultarCobrancaParaReuso("pay_4")).toEqual({
-        reuso: "morta",
-        motivo: "status_nao_pagavel",
-      });
-    });
-
-    /** Mutação morta: herdar o `throw` de `estornada` no caminho novo (D-7).
-     * Com o throw, o gate ficaria travado para sempre. */
-    it("estorno é ramo explícito, não exceção", async () => {
-      rotear({ payment: { corpo: { id: "pay_5", status: "REFUNDED", deleted: false } } });
-
-      expect(await new AsaasProvider().consultarCobrancaParaReuso("pay_5")).toEqual({
-        reuso: "morta",
-        motivo: "estornada",
-      });
-    });
-
-    /** Mutação morta: propagar o 404 e trancar a reativação por causa de um id
-     * órfão que ninguém consegue pagar. */
-    it("404 é cobrança morta, não indisponibilidade", async () => {
-      rotear({ payment: { corpo: { errors: [{ description: "not found" }] }, status: 404 } });
-
-      expect(await new AsaasProvider().consultarCobrancaParaReuso("pay_6")).toEqual({
-        reuso: "morta",
-        motivo: "nao_encontrada",
-      });
-    });
-
-    /** Mutação morta: tratar qualquer erro como "não encontrada". É o
-     * degradar-em-silêncio do #157, e aqui o preço é cobrança dupla. */
-    it("5xx SOBE — não vira cobrança morta", async () => {
-      rotear({ payment: { corpo: { errors: [] }, status: 500 } });
-
-      await expect(
-        new AsaasProvider().consultarCobrancaParaReuso("pay_7"),
-      ).rejects.toBeInstanceOf(BillingProviderError);
-    });
-
-    /** Mutação morta: ignorar as instruções e devolver o copia-e-cola dentro da
-     * janela crítica — pagamento em duplicidade. O "zero chamada a /pixQrCode"
-     * mata também a variante que consulta e devolve o código assim mesmo. */
-    it("instrução SCHEDULED bloqueia a apresentação, e nem busca o QR", async () => {
-      rotear({
-        payment: { corpo: { id: "pay_8", status: "OVERDUE", deleted: false, invoiceUrl: "https://asaas/i/8" } },
-        instrucoes: { SCHEDULED: [{ id: "ins_8", status: "SCHEDULED" }] },
-        qr: { corpo: { payload: "00020126-nao-deve-aparecer" } },
-      });
-
-      expect(await new AsaasProvider().consultarCobrancaParaReuso("pay_8")).toEqual({
-        reuso: "em_processamento",
-      });
-      expect(
-        fetchMock.mock.calls.filter(([u]) => String(u).includes("/pixQrCode")),
-      ).toHaveLength(0);
-    });
-
-    /** Mutação morta: tratar QUALQUER instrução como pendente. O gate nunca
-     * mais apresentaria cobrança nenhuma — fail-closed demais é gate morto. */
-    it("instruções DONE/REFUSED não bloqueiam", async () => {
-      rotear({
-        payment: { corpo: { id: "pay_9", status: "OVERDUE", deleted: false, invoiceUrl: "https://asaas/i/9" } },
-        instrucoes: { AWAITING_REQUEST: [], SCHEDULED: [] },
-        qr: { corpo: { payload: "00020126-brcode-9" } },
-      });
-
-      const r = await new AsaasProvider().consultarCobrancaParaReuso("pay_9");
-      expect(r.reuso).toBe("pagavel");
-    });
-
-    /** Mutação morta: engolir a falha da listagem e apresentar o código sem
-     * saber se há débito automático a caminho. */
-    it("falha ao listar instruções SOBE", async () => {
-      fetchMock.mockImplementation(async (url: string) => {
-        const u = String(url);
-        if (u.includes("/pix/automatic/paymentInstructions")) {
-          return resposta({ errors: [] }, 500);
-        }
-        return resposta({ id: "pay_10", status: "OVERDUE", deleted: false, invoiceUrl: "https://a/10" });
-      });
-
-      await expect(
-        new AsaasProvider().consultarCobrancaParaReuso("pay_10"),
-      ).rejects.toBeInstanceOf(BillingProviderError);
-    });
-
-    /** Mutação morta: devolver `pagavel` com QR vazio. A clínica acharia que
-     * pagou o que não pagou — mesmo raciocínio de `formaDePagamento`. */
-    it("sem link e sem copia-e-cola não é reaproveitável", async () => {
-      rotear({
-        payment: { corpo: { id: "pay_11", status: "PENDING", deleted: false } },
-        qr: { corpo: {} },
-      });
-
-      expect(await new AsaasProvider().consultarCobrancaParaReuso("pay_11")).toEqual({
-        reuso: "morta",
-        motivo: "sem_forma_de_pagamento",
-      });
+    expect(r).toEqual({
+      reuso: "pagavel",
+      pagamento: {
+        forma: "pix_copia_e_cola",
+        brCode: "00020126-brcode-1",
+        urlPagamento: "https://asaas/i/1",
+      },
     });
   });
+
+  /** Mutação morta: decidir só pelo `status`. O Asaas NÃO tem status
+   * "cancelada" — `deleted` é o único marcador de remoção, e uma cobrança
+   * removida com status PENDING passaria como pagável. */
+  it("cobrança removida (`deleted`) não é reaproveitável, mesmo PENDING", async () => {
+    rotear({
+      payment: { corpo: { id: "pay_2", status: "PENDING", deleted: true } },
+    });
+
+    expect(
+      await new AsaasProvider().consultarCobrancaParaReuso("pay_2"),
+    ).toEqual({
+      reuso: "morta",
+      motivo: "removida",
+    });
+  });
+
+  /** Mutação morta: classificar cobrança paga como pagável e reapresentar o
+   * QR de uma dívida já quitada. */
+  it("RECEIVED volta como paga, para o chamador liquidar o ciclo", async () => {
+    rotear({
+      payment: { corpo: { id: "pay_3", status: "RECEIVED", deleted: false } },
+    });
+
+    expect(
+      await new AsaasProvider().consultarCobrancaParaReuso("pay_3"),
+    ).toEqual({
+      reuso: "paga",
+    });
+  });
+
+  /** Mutação morta: trocar a allow-list {PENDING,OVERDUE} por deny-list
+   * (`status !== "REFUNDED"`). Todo status desconhecido passaria a pagável. */
+  it("status fora da allow-list não é reaproveitável", async () => {
+    rotear({
+      payment: {
+        corpo: {
+          id: "pay_4",
+          status: "AWAITING_RISK_ANALYSIS",
+          deleted: false,
+        },
+      },
+    });
+
+    expect(
+      await new AsaasProvider().consultarCobrancaParaReuso("pay_4"),
+    ).toEqual({
+      reuso: "morta",
+      motivo: "status_nao_pagavel",
+    });
+  });
+
+  /** Mutação morta: herdar o `throw` de `estornada` no caminho novo (D-7).
+   * Com o throw, o gate ficaria travado para sempre. */
+  it("estorno é ramo explícito, não exceção", async () => {
+    rotear({
+      payment: { corpo: { id: "pay_5", status: "REFUNDED", deleted: false } },
+    });
+
+    expect(
+      await new AsaasProvider().consultarCobrancaParaReuso("pay_5"),
+    ).toEqual({
+      reuso: "morta",
+      motivo: "estornada",
+    });
+  });
+
+  /** Mutação morta: propagar o 404 e trancar a reativação por causa de um id
+   * órfão que ninguém consegue pagar. */
+  it("404 é cobrança morta, não indisponibilidade", async () => {
+    rotear({
+      payment: {
+        corpo: { errors: [{ description: "not found" }] },
+        status: 404,
+      },
+    });
+
+    expect(
+      await new AsaasProvider().consultarCobrancaParaReuso("pay_6"),
+    ).toEqual({
+      reuso: "morta",
+      motivo: "nao_encontrada",
+    });
+  });
+
+  /** Mutação morta: tratar qualquer erro como "não encontrada". É o
+   * degradar-em-silêncio do #157, e aqui o preço é cobrança dupla. */
+  it("5xx SOBE — não vira cobrança morta", async () => {
+    rotear({ payment: { corpo: { errors: [] }, status: 500 } });
+
+    await expect(
+      new AsaasProvider().consultarCobrancaParaReuso("pay_7"),
+    ).rejects.toBeInstanceOf(BillingProviderError);
+  });
+
+  /** Mutação morta: ignorar as instruções e devolver o copia-e-cola dentro da
+   * janela crítica — pagamento em duplicidade. O "zero chamada a /pixQrCode"
+   * mata também a variante que consulta e devolve o código assim mesmo. */
+  it("instrução SCHEDULED bloqueia a apresentação, e nem busca o QR", async () => {
+    rotear({
+      payment: {
+        corpo: {
+          id: "pay_8",
+          status: "OVERDUE",
+          deleted: false,
+          invoiceUrl: "https://asaas/i/8",
+        },
+      },
+      instrucoes: { SCHEDULED: [{ id: "ins_8", status: "SCHEDULED" }] },
+      qr: { corpo: { payload: "00020126-nao-deve-aparecer" } },
+    });
+
+    expect(
+      await new AsaasProvider().consultarCobrancaParaReuso("pay_8"),
+    ).toEqual({
+      reuso: "em_processamento",
+    });
+    expect(
+      fetchMock.mock.calls.filter(([u]) => String(u).includes("/pixQrCode")),
+    ).toHaveLength(0);
+  });
+
+  /** Mutação morta: tratar QUALQUER instrução como pendente. O gate nunca
+   * mais apresentaria cobrança nenhuma — fail-closed demais é gate morto. */
+  it("instruções DONE/REFUSED não bloqueiam", async () => {
+    rotear({
+      payment: {
+        corpo: {
+          id: "pay_9",
+          status: "OVERDUE",
+          deleted: false,
+          invoiceUrl: "https://asaas/i/9",
+        },
+      },
+      instrucoes: { AWAITING_REQUEST: [], SCHEDULED: [] },
+      qr: { corpo: { payload: "00020126-brcode-9" } },
+    });
+
+    const r = await new AsaasProvider().consultarCobrancaParaReuso("pay_9");
+    expect(r.reuso).toBe("pagavel");
+  });
+
+  /** Mutação morta: engolir a falha da listagem e apresentar o código sem
+   * saber se há débito automático a caminho. */
+  it("falha ao listar instruções SOBE", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/pix/automatic/paymentInstructions")) {
+        return resposta({ errors: [] }, 500);
+      }
+      return resposta({
+        id: "pay_10",
+        status: "OVERDUE",
+        deleted: false,
+        invoiceUrl: "https://a/10",
+      });
+    });
+
+    await expect(
+      new AsaasProvider().consultarCobrancaParaReuso("pay_10"),
+    ).rejects.toBeInstanceOf(BillingProviderError);
+  });
+
+  /** Mutação morta: devolver `pagavel` com QR vazio. A clínica acharia que
+   * pagou o que não pagou — mesmo raciocínio de `formaDePagamento`. */
+  it("sem link e sem copia-e-cola não é reaproveitável", async () => {
+    rotear({
+      payment: { corpo: { id: "pay_11", status: "PENDING", deleted: false } },
+      qr: { corpo: {} },
+    });
+
+    expect(
+      await new AsaasProvider().consultarCobrancaParaReuso("pay_11"),
+    ).toEqual({
+      reuso: "morta",
+      motivo: "sem_forma_de_pagamento",
+    });
+  });
+});
 ```
 
 - [ ] **Passo 3: Rodar os testes e confirmar que falham**
@@ -720,9 +789,11 @@ git commit -m "feat(billing): porta consulta cobranca para reuso (#310)"
 Refactor puro, sem mudança de comportamento observável. Existe para que a Tarefa 4 possa classificar ciclo a ciclo.
 
 **Arquivos:**
+
 - Modificar: `src/lib/billing/debito.ts:67-75` (`DebitoLevantado`), `:127-154` (`levantarDebito`), `:196-253` (uso interno)
 
 **Interfaces:**
+
 - Consome: nada da Tarefa 1.
 - Produz: `CicloDevido { id, valorCentavos, providerChargeId }` e `DebitoLevantado { totalCentavos, ciclos }`.
 
@@ -813,6 +884,7 @@ git commit -m "refactor(billing): levantarDebito devolve os ciclos devidos (#310
 O gate passa a devolver uma LISTA e ganha a variante `bloqueado`; `logic.ts` e a tela acompanham. **A política continua a de hoje** (sempre emite uma cobrança nova, e a lista tem sempre 1 item). Isolar a mudança de FORMA da mudança de POLÍTICA é o que faz o teste #12 da Tarefa 4 ficar vermelho por um motivo só.
 
 **Arquivos:**
+
 - Modificar: `src/lib/billing/debito.ts:77-100` (tipos), `:179-296` (`resolverGateDeDebito`), `:334-350` (`formaDePagamento`)
 - Modificar: `src/app/(app)/assinatura/logic.ts:8-11`, `:62-78`, `:184-206`
 - Modificar: `src/app/(app)/assinatura/formulario-ativacao.tsx:254-297`
@@ -820,6 +892,7 @@ O gate passa a devolver uma LISTA e ganha a variante `bloqueado`; `logic.ts` e a
 - Modificar: `src/app/(app)/assinatura/gate-debito.int.test.ts` (asserções de shape)
 
 **Interfaces:**
+
 - Consome: `FormaPagamentoCobranca` (Tarefa 1), `DebitoLevantado.ciclos` (Tarefa 2).
 - Produz: `CobrancaDoDebito`, `ResultadoGateDebito` com `cobrancas: CobrancaDoDebito[]` e a variante `bloqueado`; `AtivacaoState.debito = { valorCentavos, cobrancas }`.
 
@@ -902,49 +975,49 @@ Importe `CobrancaParaReuso` e `FormaPagamentoCobranca` de `./provider` no topo.
 Substitua o bloco final (`debito.ts:258-296`) por:
 
 ```ts
-  if (cobranca.status === "paga") {
-    await conciliarPagamentoDeCiclo(cobranca.providerChargeId, "paga");
-    return { tipo: "sem_debito" };
-  }
+if (cobranca.status === "paga") {
+  await conciliarPagamentoDeCiclo(cobranca.providerChargeId, "paga");
+  return { tipo: "sem_debito" };
+}
 
-  /**
-   * Cobrança estornada não tem saída automática, e agora ela BARRA em vez de
-   * lançar (#310, D-7 e P-5).
-   *
-   * A idempotência do adapter é por `externalReference`, e é ela que impede
-   * cobrar duas vezes a mesma dívida. O preço é que uma cobrança ESTORNADA
-   * seria devolvida para sempre. Emitir outra automaticamente é pior: o estorno
-   * é decisão comercial humana. O que mudou é a FORMA de barrar: um `throw`
-   * aqui atravessava as camadas e caía na copy genérica de "fale com o
-   * suporte", que também serve para queda de rede. `bloqueado` diz exatamente
-   * o que é, com a copy certa, e sem exceção.
-   */
-  if (cobranca.status === "estornada") {
-    console.warn("[billing-debito] cobrança de débito estornada trava o gate", {
-      clinicId,
-      providerChargeId: cobranca.providerChargeId,
-      totalCentavos: debito.totalCentavos,
-    });
-    return {
-      tipo: "bloqueado",
-      totalCentavos: debito.totalCentavos,
-      motivo: "cobranca_irrecuperavel",
-    };
-  }
-
-  return {
-    tipo: "cobranca",
+/**
+ * Cobrança estornada não tem saída automática, e agora ela BARRA em vez de
+ * lançar (#310, D-7 e P-5).
+ *
+ * A idempotência do adapter é por `externalReference`, e é ela que impede
+ * cobrar duas vezes a mesma dívida. O preço é que uma cobrança ESTORNADA
+ * seria devolvida para sempre. Emitir outra automaticamente é pior: o estorno
+ * é decisão comercial humana. O que mudou é a FORMA de barrar: um `throw`
+ * aqui atravessava as camadas e caía na copy genérica de "fale com o
+ * suporte", que também serve para queda de rede. `bloqueado` diz exatamente
+ * o que é, com a copy certa, e sem exceção.
+ */
+if (cobranca.status === "estornada") {
+  console.warn("[billing-debito] cobrança de débito estornada trava o gate", {
+    clinicId,
+    providerChargeId: cobranca.providerChargeId,
     totalCentavos: debito.totalCentavos,
-    cobrancas: [
-      {
-        cicloId: ancoraId,
-        providerChargeId: cobranca.providerChargeId,
-        valorCentavos: debito.totalCentavos,
-        reaproveitada: false,
-        situacao: { estado: "pagavel", pagamento: formaDePagamento(cobranca) },
-      },
-    ],
+  });
+  return {
+    tipo: "bloqueado",
+    totalCentavos: debito.totalCentavos,
+    motivo: "cobranca_irrecuperavel",
   };
+}
+
+return {
+  tipo: "cobranca",
+  totalCentavos: debito.totalCentavos,
+  cobrancas: [
+    {
+      cicloId: ancoraId,
+      providerChargeId: cobranca.providerChargeId,
+      valorCentavos: debito.totalCentavos,
+      reaproveitada: false,
+      situacao: { estado: "pagavel", pagamento: formaDePagamento(cobranca) },
+    },
+  ],
+};
 ```
 
 `formaDePagamento` continua igual (linhas 334-350), incluindo o `throw` do caso "sem forma nenhuma": ali a cobrança acabou de ser emitida por nós, e não haver forma de pagar é estado impossível que deve gritar.
@@ -966,35 +1039,35 @@ Em `AtivacaoState` (linha 74-77):
 Trocando o import de `FormaPagamentoDebito` por `CobrancaDoDebito`. E no bloco do gate (linhas 184-206):
 
 ```ts
-  try {
-    const gate = await resolverGateDeDebito(ctx.clinicId);
-    if (gate.tipo === "cobranca") {
-      return {
-        debito: {
-          valorCentavos: gate.totalCentavos,
-          cobrancas: gate.cobrancas,
-        },
-      };
-    }
-    /**
-     * `bloqueado` NÃO segue para a ativação, ao contrário de `adiado` (#310,
-     * D-3). Duas copies porque as orientações são opostas: gateway fora do ar
-     * pede "tente de novo"; cobrança irrecuperável pede suporte. Mandar quem
-     * caiu num 500 falar com o suporte é ruído, e mandar quem tem estorno
-     * insistir é um beco sem saída.
-     */
-    if (gate.tipo === "bloqueado") {
-      return {
-        error:
-          gate.motivo === "gateway_indisponivel"
-            ? "Não conseguimos confirmar agora as cobranças em aberto da sua conta. Nada foi cobrado, e nenhuma cobrança nova foi criada. Tente novamente em alguns instantes."
-            : "A cobrança em aberto da sua conta precisa de revisão manual antes de a assinatura ser reaberta. Fale com o suporte informando o CNPJ da clínica.",
-        documento: documentoBruto,
-      };
-    }
-  } catch (e) {
-    // …inalterado…
+try {
+  const gate = await resolverGateDeDebito(ctx.clinicId);
+  if (gate.tipo === "cobranca") {
+    return {
+      debito: {
+        valorCentavos: gate.totalCentavos,
+        cobrancas: gate.cobrancas,
+      },
+    };
   }
+  /**
+   * `bloqueado` NÃO segue para a ativação, ao contrário de `adiado` (#310,
+   * D-3). Duas copies porque as orientações são opostas: gateway fora do ar
+   * pede "tente de novo"; cobrança irrecuperável pede suporte. Mandar quem
+   * caiu num 500 falar com o suporte é ruído, e mandar quem tem estorno
+   * insistir é um beco sem saída.
+   */
+  if (gate.tipo === "bloqueado") {
+    return {
+      error:
+        gate.motivo === "gateway_indisponivel"
+          ? "Não conseguimos confirmar agora as cobranças em aberto da sua conta. Nada foi cobrado, e nenhuma cobrança nova foi criada. Tente novamente em alguns instantes."
+          : "A cobrança em aberto da sua conta precisa de revisão manual antes de a assinatura ser reaberta. Fale com o suporte informando o CNPJ da clínica.",
+      documento: documentoBruto,
+    };
+  }
+} catch (e) {
+  // …inalterado…
+}
 ```
 
 - [ ] **Passo 4: Adaptar a tela (ainda um item só)**
@@ -1004,45 +1077,45 @@ Em `formulario-ativacao.tsx`, no bloco `debitoCobrado && !debitoQuitado` (linhas
 Em `formulario-ativacao.test.tsx:861-867`, o `DEBITO` vira:
 
 ```ts
-    const DEBITO = {
+const DEBITO = {
+  valorCentavos: 1300,
+  cobrancas: [
+    {
+      cicloId: "ciclo-1",
+      providerChargeId: "pay_290",
       valorCentavos: 1300,
-      cobrancas: [
-        {
-          cicloId: "ciclo-1",
-          providerChargeId: "pay_290",
-          valorCentavos: 1300,
-          reaproveitada: false,
-          situacao: {
-            estado: "pagavel" as const,
-            pagamento: {
-              forma: "pix_copia_e_cola" as const,
-              brCode: "00020126…debito-290",
-            },
-          },
+      reaproveitada: false,
+      situacao: {
+        estado: "pagavel" as const,
+        pagamento: {
+          forma: "pix_copia_e_cola" as const,
+          brCode: "00020126…debito-290",
         },
-      ],
-    };
+      },
+    },
+  ],
+};
 ```
 
 Em `gate-debito.int.test.ts`, a asserção de shape (linhas 238-242) vira:
 
 ```ts
-    expect(r.debito?.cobrancas).toEqual([
-      {
-        cicloId: expect.any(String),
-        providerChargeId: ID_COBRANCA_DEBITO,
-        valorCentavos: 1300,
-        reaproveitada: false,
-        situacao: {
-          estado: "pagavel",
-          pagamento: {
-            forma: "pix_copia_e_cola",
-            brCode: BR_CODE_DEBITO,
-            urlPagamento: "https://sandbox.asaas.com/i/290",
-          },
-        },
+expect(r.debito?.cobrancas).toEqual([
+  {
+    cicloId: expect.any(String),
+    providerChargeId: ID_COBRANCA_DEBITO,
+    valorCentavos: 1300,
+    reaproveitada: false,
+    situacao: {
+      estado: "pagavel",
+      pagamento: {
+        forma: "pix_copia_e_cola",
+        brCode: BR_CODE_DEBITO,
+        urlPagamento: "https://sandbox.asaas.com/i/290",
       },
-    ]);
+    },
+  },
+]);
 ```
 
 - [ ] **Passo 5: Verificar que TODA a política antiga continua valendo**
@@ -1068,10 +1141,12 @@ git commit -m "refactor(billing): gate de debito devolve lista de cobrancas (#31
 ### Tarefa 4: Reaproveitar a cobrança viva (D-1, D-2, D-5)
 
 **Arquivos:**
+
 - Modificar: `src/lib/billing/debito.ts:179-296` (`resolverGateDeDebito`), `:305-332` (`registrarCobrancaDeDebito`)
 - Teste: `src/app/(app)/assinatura/gate-debito.int.test.ts`
 
 **Interfaces:**
+
 - Consome: `provider.consultarCobrancaParaReuso` (Tarefa 1), `DebitoLevantado.ciclos` (Tarefa 2), `CobrancaDoDebito`/`ResultadoGateDebito` (Tarefa 3).
 - Produz: comportamento de reuso; nenhum tipo novo.
 
@@ -1118,7 +1193,10 @@ function instalarGateway(
     // Distinguida da busca por referência (`/payments?…`) pelo separador.
     if (url.includes("/payments/") && metodo === "GET") {
       if (opcoes.antiga?.httpStatus && opcoes.antiga.httpStatus >= 400) {
-        return Response.json({ errors: [] }, { status: opcoes.antiga.httpStatus });
+        return Response.json(
+          { errors: [] },
+          { status: opcoes.antiga.httpStatus },
+        );
       }
       return Response.json({
         id: ID_COBRANCA_ANTIGA,
@@ -1189,147 +1267,153 @@ async function cicloDevidoComCobranca(
 Agora os casos:
 
 ```ts
-  /**
-   * Mutação morta: emitir SEMPRE (`debito.ts:226`, o bug de hoje). O oráculo é
-   * a CONTAGEM de POSTs, não o retorno — um retorno com a cobrança certa é
-   * compatível com uma segunda cobrança tendo sido criada ao lado.
-   */
-  it("cobrança viva é reapresentada, sem emitir uma segunda", async () => {
-    await assinaturaCancelada();
-    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
-    const { chamadas } = instalarGateway({ antiga: { status: "OVERDUE" } });
+/**
+ * Mutação morta: emitir SEMPRE (`debito.ts:226`, o bug de hoje). O oráculo é
+ * a CONTAGEM de POSTs, não o retorno — um retorno com a cobrança certa é
+ * compatível com uma segunda cobrança tendo sido criada ao lado.
+ */
+it("cobrança viva é reapresentada, sem emitir uma segunda", async () => {
+  await assinaturaCancelada();
+  await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+  const { chamadas } = instalarGateway({ antiga: { status: "OVERDUE" } });
 
-    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+  const r = await iniciarAtivacaoAssinatura(ctx, formulario());
 
-    expect(emissoes(chamadas)).toHaveLength(0);
-    expect(r.debito?.cobrancas).toHaveLength(1);
-    expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
-    expect(r.debito?.cobrancas[0]!.reaproveitada).toBe(true);
-    expect(r.autorizacao).toBeUndefined();
-    expect(await statusAssinatura()).toBe("canceled");
-  });
+  expect(emissoes(chamadas)).toHaveLength(0);
+  expect(r.debito?.cobrancas).toHaveLength(1);
+  expect(r.debito?.cobrancas[0]!.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
+  expect(r.debito?.cobrancas[0]!.reaproveitada).toBe(true);
+  expect(r.autorizacao).toBeUndefined();
+  expect(await statusAssinatura()).toBe("canceled");
+});
 
-  /**
-   * Mutação morta: sobrescrever o `provider_charge_id` da âncora reaproveitada
-   * (`debito.ts:313`, D-5). Sem este caso, o teste seguinte não teria como
-   * falhar — e é este id que o webhook do pagamento antigo procura.
-   */
-  it("o id da cobrança reaproveitada NÃO é sobrescrito no ciclo", async () => {
-    await assinaturaCancelada();
-    const ciclo = await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
-    instalarGateway({ antiga: { status: "OVERDUE" } });
+/**
+ * Mutação morta: sobrescrever o `provider_charge_id` da âncora reaproveitada
+ * (`debito.ts:313`, D-5). Sem este caso, o teste seguinte não teria como
+ * falhar — e é este id que o webhook do pagamento antigo procura.
+ */
+it("o id da cobrança reaproveitada NÃO é sobrescrito no ciclo", async () => {
+  await assinaturaCancelada();
+  const ciclo = await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+  instalarGateway({ antiga: { status: "OVERDUE" } });
 
-    await iniciarAtivacaoAssinatura(ctx, formulario());
+  await iniciarAtivacaoAssinatura(ctx, formulario());
 
-    const linha = (await lerCiclos()).find((c) => c.id === ciclo)!;
-    expect(linha.provider_charge_id).toBe(ID_COBRANCA_ANTIGA);
-  });
+  const linha = (await lerCiclos()).find((c) => c.id === ciclo)!;
+  expect(linha.provider_charge_id).toBe(ID_COBRANCA_ANTIGA);
+});
 
-  /**
-   * O NEGATIVO DO DoD, e a razão de a issue existir.
-   *
-   * Mutação morta: a de cima. Com o id sobrescrito, o webhook do pagamento
-   * ANTIGO não acha ciclo (`subscription.ts:1745-1755`), vira
-   * `erroAplicacao: "cobrança sem ciclo correspondente"`, e a clínica fica com
-   * dinheiro recebido e dívida viva — barrada por uma dívida que já pagou.
-   */
-  it("pagar a cobrança antiga concilia o ciclo — sem dinheiro recebido com dívida viva", async () => {
-    await assinaturaCancelada();
-    instalarGateway({ antiga: { status: "OVERDUE" } });
-    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+/**
+ * O NEGATIVO DO DoD, e a razão de a issue existir.
+ *
+ * Mutação morta: a de cima. Com o id sobrescrito, o webhook do pagamento
+ * ANTIGO não acha ciclo (`subscription.ts:1745-1755`), vira
+ * `erroAplicacao: "cobrança sem ciclo correspondente"`, e a clínica fica com
+ * dinheiro recebido e dívida viva — barrada por uma dívida que já pagou.
+ */
+it("pagar a cobrança antiga concilia o ciclo — sem dinheiro recebido com dívida viva", async () => {
+  await assinaturaCancelada();
+  instalarGateway({ antiga: { status: "OVERDUE" } });
+  await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
 
-    await iniciarAtivacaoAssinatura(ctx, formulario());
-    const conciliou = await conciliarPagamentoDeCiclo(ID_COBRANCA_ANTIGA, "paga");
+  await iniciarAtivacaoAssinatura(ctx, formulario());
+  const conciliou = await conciliarPagamentoDeCiclo(ID_COBRANCA_ANTIGA, "paga");
 
-    expect(conciliou).toBe(true);
-    const [ciclo] = await lerCiclos();
-    expect(ciclo!.status).toBe("pago");
-  });
+  expect(conciliou).toBe(true);
+  const [ciclo] = await lerCiclos();
+  expect(ciclo!.status).toBe("pago");
+});
 
-  /**
-   * Mutação morta: consolidar tudo numa cobrança nova por cima da viva — a
-   * cobrança dupla que a #310 existe para evitar. Mata também a variante que
-   * agrupa o ciclo de (b) sob a âncora de (a): pagar a cobrança reaproveitada
-   * liquidaria o ciclo novo de graça.
-   */
-  it("débito misto vira duas formas de pagamento: a viva e a consolidada", async () => {
-    await assinaturaCancelada();
-    const comCobranca = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
-    const semCobranca = await cicloDevido(700, 30);
-    const { chamadas } = instalarGateway({ antiga: { status: "OVERDUE" } });
+/**
+ * Mutação morta: consolidar tudo numa cobrança nova por cima da viva — a
+ * cobrança dupla que a #310 existe para evitar. Mata também a variante que
+ * agrupa o ciclo de (b) sob a âncora de (a): pagar a cobrança reaproveitada
+ * liquidaria o ciclo novo de graça.
+ */
+it("débito misto vira duas formas de pagamento: a viva e a consolidada", async () => {
+  await assinaturaCancelada();
+  const comCobranca = await cicloDevidoComCobranca(
+    1300,
+    90,
+    ID_COBRANCA_ANTIGA,
+  );
+  const semCobranca = await cicloDevido(700, 30);
+  const { chamadas } = instalarGateway({ antiga: { status: "OVERDUE" } });
 
-    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+  const r = await iniciarAtivacaoAssinatura(ctx, formulario());
 
-    // Uma emissão só, e o valor dela é o do conjunto (b) — não o total.
-    expect(emissoes(chamadas)).toHaveLength(1);
-    expect(emissoes(chamadas)[0]!.corpo.value).toBe(7);
+  // Uma emissão só, e o valor dela é o do conjunto (b) — não o total.
+  expect(emissoes(chamadas)).toHaveLength(1);
+  expect(emissoes(chamadas)[0]!.corpo.value).toBe(7);
 
-    expect(r.debito?.valorCentavos).toBe(2000);
-    expect(r.debito?.cobrancas).toHaveLength(2);
-    const reaproveitada = r.debito!.cobrancas.find((c) => c.reaproveitada)!;
-    const nova = r.debito!.cobrancas.find((c) => !c.reaproveitada)!;
-    expect(reaproveitada.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
-    expect(reaproveitada.valorCentavos).toBe(1300);
-    expect(nova.providerChargeId).toBe(ID_COBRANCA_DEBITO);
-    expect(nova.valorCentavos).toBe(700);
+  expect(r.debito?.valorCentavos).toBe(2000);
+  expect(r.debito?.cobrancas).toHaveLength(2);
+  const reaproveitada = r.debito!.cobrancas.find((c) => c.reaproveitada)!;
+  const nova = r.debito!.cobrancas.find((c) => !c.reaproveitada)!;
+  expect(reaproveitada.providerChargeId).toBe(ID_COBRANCA_ANTIGA);
+  expect(reaproveitada.valorCentavos).toBe(1300);
+  expect(nova.providerChargeId).toBe(ID_COBRANCA_DEBITO);
+  expect(nova.valorCentavos).toBe(700);
 
-    const ciclos = await lerCiclos();
-    const a = ciclos.find((c) => c.id === comCobranca)!;
-    const b = ciclos.find((c) => c.id === semCobranca)!;
-    expect(a.provider_charge_id).toBe(ID_COBRANCA_ANTIGA);
-    expect(b.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
-    // O ciclo de (b) NÃO pode pendurar na âncora de (a): pagar a reaproveitada
-    // liquidaria de graça um ciclo que ela não cobre.
-    expect(b.debito_agrupado_em).toBeNull();
-    expect(a.debito_agrupado_em).toBeNull();
-  });
+  const ciclos = await lerCiclos();
+  const a = ciclos.find((c) => c.id === comCobranca)!;
+  const b = ciclos.find((c) => c.id === semCobranca)!;
+  expect(a.provider_charge_id).toBe(ID_COBRANCA_ANTIGA);
+  expect(b.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
+  // O ciclo de (b) NÃO pode pendurar na âncora de (a): pagar a reaproveitada
+  // liquidaria de graça um ciclo que ela não cobre.
+  expect(b.debito_agrupado_em).toBeNull();
+  expect(a.debito_agrupado_em).toBeNull();
+});
 
-  /**
-   * Mutação morta: deixar o ponteiro `debito_agrupado_em` velho na âncora nova
-   * (P-6). A cascata de `liquidarCiclo` liquidaria o ciclo novo quando alguém
-   * pagasse a cobrança do ciclo antigo — dívida quitada sem dinheiro.
-   */
-  it("âncora nova sai limpa do agrupamento antigo, e pagar (a) não liquida (b)", async () => {
-    await assinaturaCancelada();
-    const antigo = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
-    const agrupado = await cicloDevido(700, 60);
-    // Estado que um gate anterior deixou: o de 60 dias pendurado no de 90.
-    await owner`
+/**
+ * Mutação morta: deixar o ponteiro `debito_agrupado_em` velho na âncora nova
+ * (P-6). A cascata de `liquidarCiclo` liquidaria o ciclo novo quando alguém
+ * pagasse a cobrança do ciclo antigo — dívida quitada sem dinheiro.
+ */
+it("âncora nova sai limpa do agrupamento antigo, e pagar (a) não liquida (b)", async () => {
+  await assinaturaCancelada();
+  const antigo = await cicloDevidoComCobranca(1300, 90, ID_COBRANCA_ANTIGA);
+  const agrupado = await cicloDevido(700, 60);
+  // Estado que um gate anterior deixou: o de 60 dias pendurado no de 90.
+  await owner`
       UPDATE billing_cycle SET debito_agrupado_em = ${antigo}
        WHERE id = ${agrupado}`;
-    instalarGateway({ antiga: { status: "OVERDUE" } });
+  instalarGateway({ antiga: { status: "OVERDUE" } });
 
-    await iniciarAtivacaoAssinatura(ctx, formulario());
+  await iniciarAtivacaoAssinatura(ctx, formulario());
 
-    const depois = await lerCiclos();
-    const novaAncora = depois.find((c) => c.id === agrupado)!;
-    expect(novaAncora.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
-    expect(novaAncora.debito_agrupado_em).toBeNull();
+  const depois = await lerCiclos();
+  const novaAncora = depois.find((c) => c.id === agrupado)!;
+  expect(novaAncora.provider_charge_id).toBe(ID_COBRANCA_DEBITO);
+  expect(novaAncora.debito_agrupado_em).toBeNull();
 
-    // O oráculo que importa: pagar a REAPROVEITADA liquida só o ciclo dela.
-    await conciliarPagamentoDeCiclo(ID_COBRANCA_ANTIGA, "paga");
-    const final = await lerCiclos();
-    expect(final.find((c) => c.id === antigo)!.status).toBe("pago");
-    expect(final.find((c) => c.id === agrupado)!.status).toBe("devido");
-  });
+  // O oráculo que importa: pagar a REAPROVEITADA liquida só o ciclo dela.
+  await conciliarPagamentoDeCiclo(ID_COBRANCA_ANTIGA, "paga");
+  const final = await lerCiclos();
+  expect(final.find((c) => c.id === antigo)!.status).toBe("pago");
+  expect(final.find((c) => c.id === agrupado)!.status).toBe("devido");
+});
 
-  /**
-   * Mutação morta: passar a consultar o gateway para todo mundo. Quem nunca
-   * teve cobrança não tem o que consultar, e uma consulta a mais por ciclo é
-   * latência na porta de entrada da clínica.
-   */
-  it("ciclo sem cobrança nenhuma segue o fluxo de hoje, sem consulta de reuso", async () => {
-    await assinaturaCancelada();
-    await cicloDevido(1300, 30);
-    const { chamadas } = instalarGateway();
+/**
+ * Mutação morta: passar a consultar o gateway para todo mundo. Quem nunca
+ * teve cobrança não tem o que consultar, e uma consulta a mais por ciclo é
+ * latência na porta de entrada da clínica.
+ */
+it("ciclo sem cobrança nenhuma segue o fluxo de hoje, sem consulta de reuso", async () => {
+  await assinaturaCancelada();
+  await cicloDevido(1300, 30);
+  const { chamadas } = instalarGateway();
 
-    await iniciarAtivacaoAssinatura(ctx, formulario());
+  await iniciarAtivacaoAssinatura(ctx, formulario());
 
-    expect(emissoes(chamadas)).toHaveLength(1);
-    expect(
-      chamadas.filter((c) => c.metodo === "GET" && /\/payments\/[^?]/.test(c.url)),
-    ).toHaveLength(0);
-  });
+  expect(emissoes(chamadas)).toHaveLength(1);
+  expect(
+    chamadas.filter(
+      (c) => c.metodo === "GET" && /\/payments\/[^?]/.test(c.url),
+    ),
+  ).toHaveLength(0);
+});
 ```
 
 - [ ] **Passo 2: Rodar e confirmar que falham**
@@ -1345,126 +1429,126 @@ Esperado: os 6 casos novos FAIL. O primeiro falha com `expect(emissoes).toHaveLe
 Em `src/lib/billing/debito.ts`, o começo de `resolverGateDeDebito` fica **como está** — leitura da assinatura, `levantarDebito`, curto-circuito de `decidirGate(debito.totalCentavos)` (P-7) e validação de `provider`/`providerCustomerId`. **Remova** o guard `if (!ancoraId) throw …` (linhas 208-214): a âncora deixou de ser única e passa a ser escolhida por conjunto. Substitua todo o miolo daí para baixo por:
 
 ```ts
-  const provider = getProviderPorId(assinatura.provider);
+const provider = getProviderPorId(assinatura.provider);
 
-  /**
-   * Divisão do débito em dois conjuntos (#310, D-2).
-   *
-   * (a) ciclos com cobrança VIVA e pagável no gateway → cada um reapresenta a
-   *     SUA cobrança. Consolidá-los numa cobrança nova exigiria cancelar as
-   *     antigas, e o Asaas não documenta quais status o `DELETE /payments/{id}`
-   *     aceita — emitir por cima da viva É a cobrança dupla que a issue existe
-   *     para evitar.
-   * (b) todo o resto (sem cobrança, ou com cobrança morta) → UMA cobrança nova
-   *     consolidada, exatamente como antes desta issue.
-   */
-  const reaproveitadas: CobrancaDoDebito[] = [];
-  const paraConsolidar: CicloDevido[] = [];
+/**
+ * Divisão do débito em dois conjuntos (#310, D-2).
+ *
+ * (a) ciclos com cobrança VIVA e pagável no gateway → cada um reapresenta a
+ *     SUA cobrança. Consolidá-los numa cobrança nova exigiria cancelar as
+ *     antigas, e o Asaas não documenta quais status o `DELETE /payments/{id}`
+ *     aceita — emitir por cima da viva É a cobrança dupla que a issue existe
+ *     para evitar.
+ * (b) todo o resto (sem cobrança, ou com cobrança morta) → UMA cobrança nova
+ *     consolidada, exatamente como antes desta issue.
+ */
+const reaproveitadas: CobrancaDoDebito[] = [];
+const paraConsolidar: CicloDevido[] = [];
 
-  for (const ciclo of debito.ciclos) {
-    if (!ciclo.providerChargeId) {
-      paraConsolidar.push(ciclo);
-      continue;
-    }
+for (const ciclo of debito.ciclos) {
+  if (!ciclo.providerChargeId) {
+    paraConsolidar.push(ciclo);
+    continue;
+  }
 
-    let estado: CobrancaParaReuso;
-    try {
-      estado = await provider.consultarCobrancaParaReuso(ciclo.providerChargeId);
-    } catch (e) {
-      /**
-       * Fail-closed (D-3). Não dá para saber se a cobrança antiga está viva, e
-       * emitir sem saber é cobrar duas vezes. NADA é emitido e a reativação NÃO
-       * segue — os ciclos ficam `devido` e a próxima tentativa reabre a decisão.
-       * Reativação barrada é reversível; cobrança dupla não é.
-       */
-      console.warn("[billing-reuso] gateway indisponível na consulta de reuso", {
-        clinicId,
-        cicloId: ciclo.id,
-        providerChargeId: ciclo.providerChargeId,
-        err: e instanceof Error ? e.message : String(e),
-      });
-      return {
-        tipo: "bloqueado",
-        totalCentavos: debito.totalCentavos,
-        motivo: "gateway_indisponivel",
-      };
-    }
-
-    if (estado.reuso === "paga") {
-      // D-4 — dinheiro já recebido, webhook ainda não chegou. Liquida no mesmo
-      // caminho do webhook (cascata de agrupados incluída) e sai do débito.
-      await conciliarPagamentoDeCiclo(ciclo.providerChargeId, "paga");
-      continue;
-    }
-    if (estado.reuso === "morta") {
-      // D-7 — estado terminal é ramo explícito, nunca exceção: um `throw` aqui
-      // travaria o gate desta clínica para sempre.
-      console.warn("[billing-reuso] cobrança antiga não é reaproveitável", {
-        clinicId,
-        cicloId: ciclo.id,
-        providerChargeId: ciclo.providerChargeId,
-        motivo: estado.motivo,
-      });
-      paraConsolidar.push(ciclo);
-      continue;
-    }
-
-    reaproveitadas.push({
+  let estado: CobrancaParaReuso;
+  try {
+    estado = await provider.consultarCobrancaParaReuso(ciclo.providerChargeId);
+  } catch (e) {
+    /**
+     * Fail-closed (D-3). Não dá para saber se a cobrança antiga está viva, e
+     * emitir sem saber é cobrar duas vezes. NADA é emitido e a reativação NÃO
+     * segue — os ciclos ficam `devido` e a próxima tentativa reabre a decisão.
+     * Reativação barrada é reversível; cobrança dupla não é.
+     */
+    console.warn("[billing-reuso] gateway indisponível na consulta de reuso", {
+      clinicId,
       cicloId: ciclo.id,
       providerChargeId: ciclo.providerChargeId,
-      valorCentavos: ciclo.valorCentavos,
-      reaproveitada: true,
-      situacao:
-        estado.reuso === "pagavel"
-          ? { estado: "pagavel", pagamento: estado.pagamento }
-          : { estado: "em_processamento" },
+      err: e instanceof Error ? e.message : String(e),
     });
-  }
-
-  // D-4 — o débito muda quando uma cobrança já paga é liquidada aqui dentro.
-  const totalVivo =
-    somaDe(reaproveitadas.map((c) => c.valorCentavos)) +
-    somaDe(paraConsolidar.map((c) => c.valorCentavos));
-  if (totalVivo <= 0) return { tipo: "sem_debito" };
-
-  const totalConsolidar = somaDe(paraConsolidar.map((c) => c.valorCentavos));
-  const novas = await emitirConsolidada({
-    // O provider vai por PARÂMETRO, já resolvido. Resolver de novo lá dentro
-    // reintroduziria a leitura da env que o D26 proíbe: o adapter é resolvido
-    // POR LINHA (`subscription.provider`), nunca pelo ambiente.
-    provider,
-    clinicId,
-    clienteId: assinatura.providerCustomerId,
-    ciclos: paraConsolidar,
-    totalCentavos: totalConsolidar,
-  });
-
-  if (novas.tipo === "irrecuperavel") {
-    // Sem âncora de referência virgem: toda emissão cairia na cobrança morta
-    // por idempotência (P-4/P-5). Se há cobrança viva, ela ainda vale — melhor
-    // a clínica pagar o que é pagável do que barrar tudo.
-    if (reaproveitadas.length === 0) {
-      return {
-        tipo: "bloqueado",
-        totalCentavos: totalVivo,
-        motivo: "cobranca_irrecuperavel",
-      };
-    }
-  }
-
-  const cobrancas = [...reaproveitadas, ...novas.cobrancas];
-  if (cobrancas.length === 0) {
-    // Nada vivo e nada emitido: o conjunto (b) foi recusado pelo gateway ou
-    // ficou abaixo do piso. A dívida NÃO é perdoada — os ciclos continuam
-    // `devido` e voltam somados na próxima volta.
     return {
-      tipo: "adiado",
-      totalCentavos: totalVivo,
-      motivo: novas.motivoAdiamento ?? "abaixo_do_piso",
+      tipo: "bloqueado",
+      totalCentavos: debito.totalCentavos,
+      motivo: "gateway_indisponivel",
     };
   }
 
-  return { tipo: "cobranca", totalCentavos: totalVivo, cobrancas };
+  if (estado.reuso === "paga") {
+    // D-4 — dinheiro já recebido, webhook ainda não chegou. Liquida no mesmo
+    // caminho do webhook (cascata de agrupados incluída) e sai do débito.
+    await conciliarPagamentoDeCiclo(ciclo.providerChargeId, "paga");
+    continue;
+  }
+  if (estado.reuso === "morta") {
+    // D-7 — estado terminal é ramo explícito, nunca exceção: um `throw` aqui
+    // travaria o gate desta clínica para sempre.
+    console.warn("[billing-reuso] cobrança antiga não é reaproveitável", {
+      clinicId,
+      cicloId: ciclo.id,
+      providerChargeId: ciclo.providerChargeId,
+      motivo: estado.motivo,
+    });
+    paraConsolidar.push(ciclo);
+    continue;
+  }
+
+  reaproveitadas.push({
+    cicloId: ciclo.id,
+    providerChargeId: ciclo.providerChargeId,
+    valorCentavos: ciclo.valorCentavos,
+    reaproveitada: true,
+    situacao:
+      estado.reuso === "pagavel"
+        ? { estado: "pagavel", pagamento: estado.pagamento }
+        : { estado: "em_processamento" },
+  });
+}
+
+// D-4 — o débito muda quando uma cobrança já paga é liquidada aqui dentro.
+const totalVivo =
+  somaDe(reaproveitadas.map((c) => c.valorCentavos)) +
+  somaDe(paraConsolidar.map((c) => c.valorCentavos));
+if (totalVivo <= 0) return { tipo: "sem_debito" };
+
+const totalConsolidar = somaDe(paraConsolidar.map((c) => c.valorCentavos));
+const novas = await emitirConsolidada({
+  // O provider vai por PARÂMETRO, já resolvido. Resolver de novo lá dentro
+  // reintroduziria a leitura da env que o D26 proíbe: o adapter é resolvido
+  // POR LINHA (`subscription.provider`), nunca pelo ambiente.
+  provider,
+  clinicId,
+  clienteId: assinatura.providerCustomerId,
+  ciclos: paraConsolidar,
+  totalCentavos: totalConsolidar,
+});
+
+if (novas.tipo === "irrecuperavel") {
+  // Sem âncora de referência virgem: toda emissão cairia na cobrança morta
+  // por idempotência (P-4/P-5). Se há cobrança viva, ela ainda vale — melhor
+  // a clínica pagar o que é pagável do que barrar tudo.
+  if (reaproveitadas.length === 0) {
+    return {
+      tipo: "bloqueado",
+      totalCentavos: totalVivo,
+      motivo: "cobranca_irrecuperavel",
+    };
+  }
+}
+
+const cobrancas = [...reaproveitadas, ...novas.cobrancas];
+if (cobrancas.length === 0) {
+  // Nada vivo e nada emitido: o conjunto (b) foi recusado pelo gateway ou
+  // ficou abaixo do piso. A dívida NÃO é perdoada — os ciclos continuam
+  // `devido` e voltam somados na próxima volta.
+  return {
+    tipo: "adiado",
+    totalCentavos: totalVivo,
+    motivo: novas.motivoAdiamento ?? "abaixo_do_piso",
+  };
+}
+
+return { tipo: "cobranca", totalCentavos: totalVivo, cobrancas };
 ```
 
 E as duas funções auxiliares, ao lado de `registrarCobrancaDeDebito`:
@@ -1533,14 +1617,20 @@ async function emitirConsolidada(dados: {
         status: e instanceof BillingProviderError ? e.status : undefined,
         err: e instanceof Error ? e.message : String(e),
       });
-      return { tipo: "ok", cobrancas: [], motivoAdiamento: "recusa_do_gateway" };
+      return {
+        tipo: "ok",
+        cobrancas: [],
+        motivoAdiamento: "recusa_do_gateway",
+      };
     }
     // 5xx, rede e 4xx transitório continuam propagando, como antes da #310:
     // instabilidade do gateway não pode virar reativação grátis.
     throw e;
   }
 
-  const outros = dados.ciclos.filter((c) => c.id !== ancora.id).map((c) => c.id);
+  const outros = dados.ciclos
+    .filter((c) => c.id !== ancora.id)
+    .map((c) => c.id);
   await registrarCobrancaDeDebito(ancora.id, outros, cobranca);
 
   if (cobranca.status === "paga") {
@@ -1576,19 +1666,19 @@ Acrescente `BillingProvider` ao `import type … from "./provider"` no topo de `
 E em `registrarCobrancaDeDebito` (linha 310-317), acrescente a limpeza do P-6:
 
 ```ts
-  await authDb
-    .update(billingCycle)
-    .set({
-      providerChargeId: cobranca.providerChargeId,
-      cobrancaEmitidaEm: new Date(),
-      erro: null,
-      // P-6/#310: a âncora pode ter sido, num gate anterior, um ciclo AGRUPADO
-      // sob outra âncora cuja cobrança agora morreu. Se o ponteiro velho ficar,
-      // a cascata de `liquidarCiclo` liquida este ciclo de graça quando alguém
-      // pagar a cobrança daquela outra âncora.
-      debitoAgrupadoEm: null,
-    })
-    .where(eq(billingCycle.id, ancoraId));
+await authDb
+  .update(billingCycle)
+  .set({
+    providerChargeId: cobranca.providerChargeId,
+    cobrancaEmitidaEm: new Date(),
+    erro: null,
+    // P-6/#310: a âncora pode ter sido, num gate anterior, um ciclo AGRUPADO
+    // sob outra âncora cuja cobrança agora morreu. Se o ponteiro velho ficar,
+    // a cascata de `liquidarCiclo` liquida este ciclo de graça quando alguém
+    // pagar a cobrança daquela outra âncora.
+    debitoAgrupadoEm: null,
+  })
+  .where(eq(billingCycle.id, ancoraId));
 ```
 
 - [ ] **Passo 4: Rodar e confirmar que passam**
@@ -1613,106 +1703,108 @@ git commit -m "fix(billing): gate reaproveita cobranca viva em vez de emitir out
 ### Tarefa 5: Bordas — fail-closed, já paga, instrução pendente
 
 **Arquivos:**
+
 - Teste: `src/app/(app)/assinatura/gate-debito.int.test.ts`
 - Modificar (se algum caso falhar): `src/lib/billing/debito.ts`
 
 Os quatro casos abaixo exercitam código que a Tarefa 4 já escreveu. Eles existem porque **um ramo sem teste é um ramo que ninguém verificou** — três deles (D-3, D-4, D-6) são justamente os que só aparecem em produção.
 
 **Interfaces:**
+
 - Consome: tudo das Tarefas 1-4. Não produz interface nova.
 
 - [ ] **Passo 1: Escrever os quatro casos**
 
 ```ts
-  /**
-   * Mutação morta (D-3): degradar a indisponibilidade em "emite nova" (cobrança
-   * dupla) ou em "adiado" (reativa sem cobrar). Os três oráculos são
-   * independentes de propósito: o retorno pode estar certo com o POST tendo
-   * saído ao lado, e o POST pode não ter saído com a assinatura já reaberta.
-   */
-  it("gateway fora do ar barra a reativação e não emite nada", async () => {
-    await assinaturaCancelada();
-    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
-    const { chamadas } = instalarGateway({ antiga: { httpStatus: 500 } });
+/**
+ * Mutação morta (D-3): degradar a indisponibilidade em "emite nova" (cobrança
+ * dupla) ou em "adiado" (reativa sem cobrar). Os três oráculos são
+ * independentes de propósito: o retorno pode estar certo com o POST tendo
+ * saído ao lado, e o POST pode não ter saído com a assinatura já reaberta.
+ */
+it("gateway fora do ar barra a reativação e não emite nada", async () => {
+  await assinaturaCancelada();
+  await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+  const { chamadas } = instalarGateway({ antiga: { httpStatus: 500 } });
 
-    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+  const r = await iniciarAtivacaoAssinatura(ctx, formulario());
 
-    expect(r.debito).toBeUndefined();
-    expect(r.autorizacao).toBeUndefined();
-    expect(r.error).toMatch(/tente novamente em alguns instantes/i);
-    expect(emissoes(chamadas)).toHaveLength(0);
-    expect(
-      chamadas.filter((c) => c.url.includes("/pix/automatic/authorizations")),
-    ).toHaveLength(0);
-    const [ciclo] = await lerCiclos();
-    expect(ciclo!.status).toBe("devido");
-    expect(await statusAssinatura()).toBe("canceled");
+  expect(r.debito).toBeUndefined();
+  expect(r.autorizacao).toBeUndefined();
+  expect(r.error).toMatch(/tente novamente em alguns instantes/i);
+  expect(emissoes(chamadas)).toHaveLength(0);
+  expect(
+    chamadas.filter((c) => c.url.includes("/pix/automatic/authorizations")),
+  ).toHaveLength(0);
+  const [ciclo] = await lerCiclos();
+  expect(ciclo!.status).toBe("devido");
+  expect(await statusAssinatura()).toBe("canceled");
+});
+
+/**
+ * Mutação morta (D-3): tratar 404 como indisponibilidade. Um id órfão —
+ * cobrança apagada no painel, chave de ambiente trocada — trancaria a clínica
+ * fora para sempre por algo que ninguém consegue pagar.
+ */
+it("id que o gateway não reconhece vira cobrança nova, sem barrar", async () => {
+  await assinaturaCancelada();
+  await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+  const { chamadas } = instalarGateway({ antiga: { httpStatus: 404 } });
+
+  const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+  expect(emissoes(chamadas)).toHaveLength(1);
+  expect(r.debito?.cobrancas).toHaveLength(1);
+  expect(r.debito?.cobrancas[0]!.reaproveitada).toBe(false);
+  expect(r.error).toBeUndefined();
+});
+
+/**
+ * Mutação morta (D-4): ignorar o pagamento já recebido e devolver o QR de uma
+ * dívida quitada. O webhook pode simplesmente não ter chegado ainda — mandar
+ * a clínica esperar é repetir na tela o problema que o polling resolve.
+ */
+it("cobrança antiga já paga liquida o ciclo no gate e libera a reativação", async () => {
+  await assinaturaCancelada();
+  await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+  const { chamadas } = instalarGateway({ antiga: { status: "CONFIRMED" } });
+
+  const r = await iniciarAtivacaoAssinatura(ctx, formulario());
+
+  expect(r.debito).toBeUndefined();
+  expect(emissoes(chamadas)).toHaveLength(0);
+  expect(r.autorizacao?.forma).toBe("pix_copia_e_cola");
+  const [ciclo] = await lerCiclos();
+  expect(ciclo!.status).toBe("pago");
+  expect(await statusAssinatura()).toBe("setup_pending");
+});
+
+/**
+ * Mutação morta (D-6): apresentar o copia-e-cola com débito automático a
+ * caminho. Dentro da janela crítica (22h de D-1 até D) o recebimento por
+ * outro meio fica bloqueado — quem paga por fora paga duas vezes. A
+ * existência da instrução pendente É o fato; não se calcula hora nem fuso.
+ */
+it("instrução pendente esconde o código de pagamento, sem reativar", async () => {
+  await assinaturaCancelada();
+  await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
+  const { chamadas } = instalarGateway({
+    antiga: {
+      status: "OVERDUE",
+      instrucoes: { SCHEDULED: [{ id: "ins_310", status: "SCHEDULED" }] },
+    },
   });
 
-  /**
-   * Mutação morta (D-3): tratar 404 como indisponibilidade. Um id órfão —
-   * cobrança apagada no painel, chave de ambiente trocada — trancaria a clínica
-   * fora para sempre por algo que ninguém consegue pagar.
-   */
-  it("id que o gateway não reconhece vira cobrança nova, sem barrar", async () => {
-    await assinaturaCancelada();
-    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
-    const { chamadas } = instalarGateway({ antiga: { httpStatus: 404 } });
+  const r = await iniciarAtivacaoAssinatura(ctx, formulario());
 
-    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
-
-    expect(emissoes(chamadas)).toHaveLength(1);
-    expect(r.debito?.cobrancas).toHaveLength(1);
-    expect(r.debito?.cobrancas[0]!.reaproveitada).toBe(false);
-    expect(r.error).toBeUndefined();
+  expect(r.debito?.cobrancas).toHaveLength(1);
+  expect(r.debito?.cobrancas[0]!.situacao).toEqual({
+    estado: "em_processamento",
   });
-
-  /**
-   * Mutação morta (D-4): ignorar o pagamento já recebido e devolver o QR de uma
-   * dívida quitada. O webhook pode simplesmente não ter chegado ainda — mandar
-   * a clínica esperar é repetir na tela o problema que o polling resolve.
-   */
-  it("cobrança antiga já paga liquida o ciclo no gate e libera a reativação", async () => {
-    await assinaturaCancelada();
-    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
-    const { chamadas } = instalarGateway({ antiga: { status: "CONFIRMED" } });
-
-    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
-
-    expect(r.debito).toBeUndefined();
-    expect(emissoes(chamadas)).toHaveLength(0);
-    expect(r.autorizacao?.forma).toBe("pix_copia_e_cola");
-    const [ciclo] = await lerCiclos();
-    expect(ciclo!.status).toBe("pago");
-    expect(await statusAssinatura()).toBe("setup_pending");
-  });
-
-  /**
-   * Mutação morta (D-6): apresentar o copia-e-cola com débito automático a
-   * caminho. Dentro da janela crítica (22h de D-1 até D) o recebimento por
-   * outro meio fica bloqueado — quem paga por fora paga duas vezes. A
-   * existência da instrução pendente É o fato; não se calcula hora nem fuso.
-   */
-  it("instrução pendente esconde o código de pagamento, sem reativar", async () => {
-    await assinaturaCancelada();
-    await cicloDevidoComCobranca(1300, 30, ID_COBRANCA_ANTIGA);
-    const { chamadas } = instalarGateway({
-      antiga: {
-        status: "OVERDUE",
-        instrucoes: { SCHEDULED: [{ id: "ins_310", status: "SCHEDULED" }] },
-      },
-    });
-
-    const r = await iniciarAtivacaoAssinatura(ctx, formulario());
-
-    expect(r.debito?.cobrancas).toHaveLength(1);
-    expect(r.debito?.cobrancas[0]!.situacao).toEqual({
-      estado: "em_processamento",
-    });
-    expect(JSON.stringify(r.debito)).not.toContain(BR_CODE_DEBITO);
-    expect(emissoes(chamadas)).toHaveLength(0);
-    expect(await statusAssinatura()).toBe("canceled");
-  });
+  expect(JSON.stringify(r.debito)).not.toContain(BR_CODE_DEBITO);
+  expect(emissoes(chamadas)).toHaveLength(0);
+  expect(await statusAssinatura()).toBe("canceled");
+});
 ```
 
 - [ ] **Passo 2: Rodar; corrigir apenas o que estiver vermelho**
@@ -1736,10 +1828,12 @@ git commit -m "test(billing): bordas do reuso — fail-closed, ja paga e instruc
 ### Tarefa 6: Tela — N cobranças e o estado "em processamento"
 
 **Arquivos:**
+
 - Modificar: `src/app/(app)/assinatura/formulario-ativacao.tsx:254-297`
 - Teste: `src/app/(app)/assinatura/formulario-ativacao.test.tsx:851-968`
 
 **Interfaces:**
+
 - Consome: `AtivacaoState.debito.cobrancas` (Tarefa 3), estados `pagavel`/`em_processamento` (Tarefa 4).
 - Não produz interface nova.
 
@@ -1842,89 +1936,91 @@ Esperado: os casos novos FAIL.
 Em `formulario-ativacao.tsx`, substitua o bloco `debitoCobrado && !debitoQuitado` (linhas 254-297) por:
 
 ```tsx
-      {debitoCobrado && !debitoQuitado ? (
-        <Alert severidade="info" titulo="Pague o valor em aberto para reativar">
+{
+  debitoCobrado && !debitoQuitado ? (
+    <Alert severidade="info" titulo="Pague o valor em aberto para reativar">
+      {debitoCobrado.cobrancas.length > 1 ? (
+        <p>
+          Há mais de uma cobrança em aberto e cada uma se paga separadamente.
+          Uma delas já tinha sido enviada antes e continua válida — pagar as
+          duas quita o total de{" "}
+          <strong>{formatarBRL(debitoCobrado.valorCentavos)}</strong>.
+        </p>
+      ) : (
+        <p>
+          <strong>
+            Esta cobrança é de {formatarBRL(debitoCobrado.valorCentavos)}
+          </strong>{" "}
+          — o ciclo que ficou aberto quando a assinatura foi cancelada,
+          proporcional aos dias usados. Não é mensalidade nem taxa: é o período
+          que já foi utilizado.
+        </p>
+      )}
+      <p className="mt-2">
+        A assinatura só é reaberta depois deste pagamento. Confirmado o Pix,
+        esta tela avisa sozinha e você segue para a autorização.
+      </p>
+
+      {debitoCobrado.cobrancas.map((c) => (
+        <div
+          key={c.providerChargeId}
+          className="mt-4 border-t-2 border-[var(--border-brutal)]/30 pt-3 first:border-t-0 first:pt-0"
+        >
           {debitoCobrado.cobrancas.length > 1 ? (
-            <p>
-              Há mais de uma cobrança em aberto e cada uma se paga
-              separadamente. Uma delas já tinha sido enviada antes e continua
-              válida — pagar as duas quita o total de{" "}
-              <strong>{formatarBRL(debitoCobrado.valorCentavos)}</strong>.
+            <p className="font-display text-sm font-semibold">
+              Cobrança de {formatarBRL(c.valorCentavos)}
             </p>
+          ) : null}
+
+          {c.situacao.estado === "em_processamento" ? (
+            // D-6: há instrução de débito a caminho no banco. Dentro da
+            // janela crítica do Pix Automático o recebimento por outro meio
+            // fica bloqueado — oferecer o copia-e-cola aqui é pedir
+            // pagamento em duplicidade.
+            <>
+              <p className="font-display mt-1 text-sm font-semibold">
+                Cobrança em processamento no seu banco
+              </p>
+              <p className="mt-1 text-sm">
+                Esta cobrança já foi enviada ao seu banco e está sendo
+                processada. Não pague por outro meio agora — você pode acabar
+                pagando duas vezes. Assim que o banco responder, esta tela avisa
+                sozinha.
+              </p>
+            </>
+          ) : c.situacao.pagamento.forma === "pix_copia_e_cola" ? (
+            <>
+              <div className="mt-3 flex justify-center">
+                <QrCode
+                  value={c.situacao.pagamento.brCode}
+                  alt={`QR Code do Pix para quitar ${formatarBRL(c.valorCentavos)} em aberto`}
+                />
+              </div>
+              <p className="mt-3 max-w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/40 bg-[var(--surface-muted)] p-2 font-mono text-xs break-all">
+                {c.situacao.pagamento.brCode}
+              </p>
+              <div className="mt-2">
+                <CopyButton
+                  valor={c.situacao.pagamento.brCode}
+                  rotulo="Copiar código Pix"
+                />
+              </div>
+            </>
           ) : (
-            <p>
-              <strong>
-                Esta cobrança é de {formatarBRL(debitoCobrado.valorCentavos)}
-              </strong>{" "}
-              — o ciclo que ficou aberto quando a assinatura foi cancelada,
-              proporcional aos dias usados. Não é mensalidade nem taxa: é o
-              período que já foi utilizado.
+            <p className="mt-2">
+              <a
+                href={c.situacao.pagamento.urlPagamento}
+                className="font-semibold text-[var(--text-primary)] underline underline-offset-4"
+              >
+                Abrir a cobrança para pagar
+              </a>
             </p>
           )}
-          <p className="mt-2">
-            A assinatura só é reaberta depois deste pagamento. Confirmado o Pix,
-            esta tela avisa sozinha e você segue para a autorização.
-          </p>
-
-          {debitoCobrado.cobrancas.map((c) => (
-            <div
-              key={c.providerChargeId}
-              className="mt-4 border-t-2 border-[var(--border-brutal)]/30 pt-3 first:border-t-0 first:pt-0"
-            >
-              {debitoCobrado.cobrancas.length > 1 ? (
-                <p className="font-display text-sm font-semibold">
-                  Cobrança de {formatarBRL(c.valorCentavos)}
-                </p>
-              ) : null}
-
-              {c.situacao.estado === "em_processamento" ? (
-                // D-6: há instrução de débito a caminho no banco. Dentro da
-                // janela crítica do Pix Automático o recebimento por outro meio
-                // fica bloqueado — oferecer o copia-e-cola aqui é pedir
-                // pagamento em duplicidade.
-                <>
-                  <p className="font-display mt-1 text-sm font-semibold">
-                    Cobrança em processamento no seu banco
-                  </p>
-                  <p className="mt-1 text-sm">
-                    Esta cobrança já foi enviada ao seu banco e está sendo
-                    processada. Não pague por outro meio agora — você pode
-                    acabar pagando duas vezes. Assim que o banco responder, esta
-                    tela avisa sozinha.
-                  </p>
-                </>
-              ) : c.situacao.pagamento.forma === "pix_copia_e_cola" ? (
-                <>
-                  <div className="mt-3 flex justify-center">
-                    <QrCode
-                      value={c.situacao.pagamento.brCode}
-                      alt={`QR Code do Pix para quitar ${formatarBRL(c.valorCentavos)} em aberto`}
-                    />
-                  </div>
-                  <p className="mt-3 max-w-full overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)]/40 bg-[var(--surface-muted)] p-2 font-mono text-xs break-all">
-                    {c.situacao.pagamento.brCode}
-                  </p>
-                  <div className="mt-2">
-                    <CopyButton
-                      valor={c.situacao.pagamento.brCode}
-                      rotulo="Copiar código Pix"
-                    />
-                  </div>
-                </>
-              ) : (
-                <p className="mt-2">
-                  <a
-                    href={c.situacao.pagamento.urlPagamento}
-                    className="font-semibold text-[var(--text-primary)] underline underline-offset-4"
-                  >
-                    Abrir a cobrança para pagar
-                  </a>
-                </p>
-              )}
-            </div>
-          ))}
-        </Alert>
-      ) : null}
+        </div>
+      ))}
+    </Alert>
+  ) : null;
+}
 ```
 
 - [ ] **Passo 4: Rodar e confirmar que passam**
@@ -1957,6 +2053,7 @@ git commit -m "feat(assinatura): tela renderiza N cobrancas do debito (#310)"
 ### Tarefa 7: Fechamento e verificação final
 
 **Arquivos:**
+
 - Modificar: `src/lib/billing/debito.ts` (cabeçalho do módulo)
 - Modificar: `BACKLOG.md`
 
@@ -1992,6 +2089,7 @@ pnpm test:rls
 ```
 
 Compare contra a baseline declarada no topo deste plano:
+
 - `pnpm typecheck`: **zero** erro.
 - `pnpm lint`: exatamente os **39 erros pré-existentes**, nenhum novo em `src/` ou `db/`.
 - `pnpm format:check`: pode acusar arquivos que você não tocou (dívida antiga) — **não formate o repositório para calar isso**. Só os arquivos desta issue precisam estar formatados.

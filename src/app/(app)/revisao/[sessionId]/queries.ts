@@ -2,7 +2,10 @@ import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { extraction, patient, session } from "@/db/schema";
 import type { ExtractionSubtipo } from "@/lib/extraction/provider";
-import { avaliarFriccao, type FriccaoNivel } from "@/lib/extraction/review-policy";
+import {
+  avaliarFriccao,
+  type FriccaoNivel,
+} from "@/lib/extraction/review-policy";
 import { chaveDominio, resumirPayload, type LinhaResumo } from "./resumo";
 
 // Item do histórico do paciente (extração já aprovada/editada) exibido lado a
@@ -51,7 +54,11 @@ export async function carregarRevisao(
 ): Promise<DadosRevisao | null> {
   return withTenant(ctx, async (tx) => {
     const [sess] = await tx
-      .select({ id: session.id, patientId: session.patientId, terapeutaId: session.terapeutaId })
+      .select({
+        id: session.id,
+        patientId: session.patientId,
+        terapeutaId: session.terapeutaId,
+      })
       .from(session)
       .where(eq(session.id, sessionId));
     if (!sess) return null;
@@ -72,7 +79,12 @@ export async function carregarRevisao(
         payload: extraction.payload,
       })
       .from(extraction)
-      .where(and(eq(extraction.sessionId, sessionId), eq(extraction.estado, "sugerida")))
+      .where(
+        and(
+          eq(extraction.sessionId, sessionId),
+          eq(extraction.estado, "sugerida"),
+        ),
+      )
       .orderBy(desc(extraction.criadoEm));
 
     // Histórico do paciente só é necessário se houver alguma inconsistente.
@@ -129,7 +141,10 @@ export async function carregarRevisao(
         inconsistenteComHistorico: s.inconsistente,
         nivelFriccao: nivel,
         resumo: resumirPayload(s.subtipo, s.payload),
-        historico: s.inconsistente && dominio ? (historicoPorDominio.get(dominio) ?? []) : [],
+        historico:
+          s.inconsistente && dominio
+            ? (historicoPorDominio.get(dominio) ?? [])
+            : [],
       };
     });
 

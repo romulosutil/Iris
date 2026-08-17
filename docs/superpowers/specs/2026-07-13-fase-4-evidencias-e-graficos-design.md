@@ -10,7 +10,7 @@
 
 Entregar as três capacidades do Issue #7:
 
-1. **Evidências Acumuladas** — linha do tempo estruturada do paciente com *scrubber* temporal
+1. **Evidências Acumuladas** — linha do tempo estruturada do paciente com _scrubber_ temporal
    e visualização de deltas por sessão.
 2. **Gráficos de Progresso** — trajetória por meta/protocolo com comparador entre 2 pontos temporais.
 3. **Briefing Pré-Sessão** — painel consolidado (última sessão, metas de hoje, alerta de manejo,
@@ -24,17 +24,17 @@ Infra que o Issue #7 exige e que **ainda não existe no schema**: `SessionSnapsh
 
 ## 2. Estado atual (o que já existe / o que falta)
 
-| Item | Estado | Fonte |
-| --- | --- | --- |
-| `extraction` (extração aprovada = registro oficial) | ✅ existe | `src/db/schema.ts:436` |
-| `goal_candidacy`, `milestone_candidacy` | ⚠️ existem mas **dormentes** | `schema.ts:526,534` / BACKLOG:135 |
-| `session`, `sessionNote`, `sessionProtocolScope`, `protocol`, `milestone`, `goal`, `patientProtocol` | ✅ existem | `schema.ts` |
-| `evidence`, `evidence_revision`, `evidence_query`, view `evidence_current` | ❌ não existem | BACKLOG:69/146/158 |
-| `session_snapshot` | ❌ não existe | modelo-de-dados §2.5 |
-| `reinforcer_profile` | ❌ não existe | modelo-de-dados §1.4 (necessário p/ Briefing) |
-| `milestone_assessment`, `milestone_assessment_evidence` | ❌ não existem (só descrição textual) | modelo-de-dados §1.5 |
-| Landing `/pacientes/[id]` (perfil) | ❌ não existe | BACKLOG:134 |
-| Infra de job assíncrono (fila/worker) | ❌ não existe no stack | BACKLOG:167 |
+| Item                                                                                                 | Estado                                | Fonte                                         |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------------------------- |
+| `extraction` (extração aprovada = registro oficial)                                                  | ✅ existe                             | `src/db/schema.ts:436`                        |
+| `goal_candidacy`, `milestone_candidacy`                                                              | ⚠️ existem mas **dormentes**          | `schema.ts:526,534` / BACKLOG:135             |
+| `session`, `sessionNote`, `sessionProtocolScope`, `protocol`, `milestone`, `goal`, `patientProtocol` | ✅ existem                            | `schema.ts`                                   |
+| `evidence`, `evidence_revision`, `evidence_query`, view `evidence_current`                           | ❌ não existem                        | BACKLOG:69/146/158                            |
+| `session_snapshot`                                                                                   | ❌ não existe                         | modelo-de-dados §2.5                          |
+| `reinforcer_profile`                                                                                 | ❌ não existe                         | modelo-de-dados §1.4 (necessário p/ Briefing) |
+| `milestone_assessment`, `milestone_assessment_evidence`                                              | ❌ não existem (só descrição textual) | modelo-de-dados §1.5                          |
+| Landing `/pacientes/[id]` (perfil)                                                                   | ❌ não existe                         | BACKLOG:134                                   |
+| Infra de job assíncrono (fila/worker)                                                                | ❌ não existe no stack                | BACKLOG:167                                   |
 
 **Consequência central:** a Fase 3 decidiu conscientemente adiar a tabela `evidence`
 ("evidência revisada = estender `extraction_estado`"). A Fase 4 **precisa introduzir `evidence`
@@ -54,7 +54,7 @@ Da regra de 3 camadas (AGENTS.md) + princípios do produto:
   `evidence_query`, `session_snapshot`, `reinforcer_profile`. Teste de RLS (integration) é
   Definição de Pronto, não opcional.
 - **G3 — Imutabilidade da evidência.** `evidence` é append-only: `REVOKE UPDATE, DELETE ON evidence
-  FROM app_role`. "Classificação atual" **nunca** é armazenada — resolvida pela view
+FROM app_role`. "Classificação atual" **nunca** é armazenada — resolvida pela view
   `evidence_current`. Correções nascem como `evidence_revision`.
 - **G4 — Segmentação é código determinístico, NUNCA IA.** Evolução/estagnação/regressão é regra
   SQL/TS. A IA não decide trajetória.
@@ -62,7 +62,7 @@ Da regra de 3 camadas (AGENTS.md) + princípios do produto:
   `protocol.taxonomia_ajuda` do mesmo protocolo**. Nunca cruzar ordinais entre protocolos/famílias.
   ⚠️ **Correção pós-revisão:** `evidence` **não tem coluna `protocol_id`** — o protocolo vive no
   `classificacao_original` JSONB (`alvos[].protocol_id`) e uma extração pode ter **múltiplos alvos
-  em múltiplos protocolos**. Logo o *fold* evidência→snapshot opera em **grão de alvo**, não de
+  em múltiplos protocolos**. Logo o _fold_ evidência→snapshot opera em **grão de alvo**, não de
   linha de evidência. `segmentacao` é chaveada por **`(goal_id, protocol_id)`**.
 - **G5b — Segmentação despacha por `tipo_estrutura`, não por eixo único de ajuda.** (Achado
   clínico crítico.) O ordinal de `nivel_ajuda` só é válido para `marco_simples`. Para os demais a
@@ -107,7 +107,7 @@ aprovada para `evidence`.
 - Migração SQL à mão para `REVOKE UPDATE, DELETE ON evidence FROM app_role` (padrão
   `db/migrations/*_rls.sql`).
 - **Backfill:** toda `extraction.estado ∈ {aprovada, editada}` existente vira uma `evidence`
-  (idempotente, com `extraction_id` como origem). ⚠️ *Decisão aberta D2 abaixo.*
+  (idempotente, com `extraction_id` como origem). ⚠️ _Decisão aberta D2 abaixo._
 - Testes: RLS integration (isolamento por clinic), tentativa de UPDATE/DELETE deve falhar,
   `evidence_current` resolve reclassificação corretamente.
 
@@ -243,34 +243,34 @@ trava DDL; CONCERN = corrigir antes de implementar o sub-projeto; verificado con
 
 ### 8.1 Adversarial (tech lead)
 
-| # | Achado | Resolução na spec |
-| --- | --- | --- |
-| B1 | **Materialização síncrona morre no RLS** — candidatura é `coordenador`-only (`0006:305,336`); tx do terapeuta não escreve. | §5 D1 revisado → `SECURITY DEFINER`. |
-| B2 | **`evidence_current` VIEW vaza entre tenants** sem `security_invoker=true` (repo nunca criou view). | §9 item 3; teste RLS *através da view* na DoD. |
-| B3 | **G5 contradiz a DDL canônica** — `evidence` sem `protocol_id`; `segmentacao` DDL chaveada só por `goal_id`. Grão real = alvo; chave = `(goal_id, protocol_id)`. | G5 corrigido; §9 item 1. |
-| B4 | **Backfill sem chave de idempotência** — sem `UNIQUE(extraction_id,…)`; explosão 1:N multi-alvo indefinida. | §9 item 2; §8.3. |
-| C5 | Backfill: `classificacao_original = payloadEditado ?? payload`; `session_numero NOT NULL` vs `numero_sequencial` nullable. | §8.3. |
-| C6 | Recompute retroativo sem lock → lost update/deadlock com 2 coordenadores. | `pg_advisory_xact_lock(patient_id)`; teste de concorrência na DoD 4B. |
-| C7 | Ciclo suave 4A↔4B — 4A congela contrato que 4B define. | §9: DDL de 4A e 4B revisadas **juntas** no gate. |
-| C8 | `session_snapshot` sem `clinic_id` é OK (padrão FK-a-paciente, igual `milestone_candidacy`); o gap real é a **política de escrita**. | Política de escrita via definer (B1); leitura espelha `milestone_candidacy_select`. |
-| C10 | LGPD: não materializar texto livre/ABC em tabela de alto tráfego. | G6b adicionado. |
-| C11 | DoD faltando: `audit_log` em reclassificação/invalidação, teste RLS de view, teste de concorrência, história de rollback do backfill. | §8.4. |
+| #   | Achado                                                                                                                                                           | Resolução na spec                                                                   |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| B1  | **Materialização síncrona morre no RLS** — candidatura é `coordenador`-only (`0006:305,336`); tx do terapeuta não escreve.                                       | §5 D1 revisado → `SECURITY DEFINER`.                                                |
+| B2  | **`evidence_current` VIEW vaza entre tenants** sem `security_invoker=true` (repo nunca criou view).                                                              | §9 item 3; teste RLS _através da view_ na DoD.                                      |
+| B3  | **G5 contradiz a DDL canônica** — `evidence` sem `protocol_id`; `segmentacao` DDL chaveada só por `goal_id`. Grão real = alvo; chave = `(goal_id, protocol_id)`. | G5 corrigido; §9 item 1.                                                            |
+| B4  | **Backfill sem chave de idempotência** — sem `UNIQUE(extraction_id,…)`; explosão 1:N multi-alvo indefinida.                                                      | §9 item 2; §8.3.                                                                    |
+| C5  | Backfill: `classificacao_original = payloadEditado ?? payload`; `session_numero NOT NULL` vs `numero_sequencial` nullable.                                       | §8.3.                                                                               |
+| C6  | Recompute retroativo sem lock → lost update/deadlock com 2 coordenadores.                                                                                        | `pg_advisory_xact_lock(patient_id)`; teste de concorrência na DoD 4B.               |
+| C7  | Ciclo suave 4A↔4B — 4A congela contrato que 4B define.                                                                                                           | §9: DDL de 4A e 4B revisadas **juntas** no gate.                                    |
+| C8  | `session_snapshot` sem `clinic_id` é OK (padrão FK-a-paciente, igual `milestone_candidacy`); o gap real é a **política de escrita**.                             | Política de escrita via definer (B1); leitura espelha `milestone_candidacy_select`. |
+| C10 | LGPD: não materializar texto livre/ABC em tabela de alto tráfego.                                                                                                | G6b adicionado.                                                                     |
+| C11 | DoD faltando: `audit_log` em reclassificação/invalidação, teste RLS de view, teste de concorrência, história de rollback do backfill.                            | §8.4.                                                                               |
 
 ### 8.2 Protocolar (especialista clínico) — por protocolo/regra
 
-| Item | Veredicto | Resolução |
-| --- | --- | --- |
-| Segmentação `marco_simples` | PASS | mantém ordinal de ajuda. |
-| `marco_com_barreira` | **WRONG** (escala de severidade, direção invertida) | G5b: escore de barreira, menor = melhor. |
-| `escore_composto` | **WRONG** (mede ajuda, não o escore) | G5b: escore composto sobe = evolução. |
-| `faixa_normativa` (Denver) | **WRONG** (linha plana falsa) | G5b: delta idade-equiv. relativo à idade cronológica. |
-| Candidatura `N=3/M=2` global | GAP/WRONG por família | §8.3: critério **por Milestone/família**; VB-MAPP puxa de `Milestone.estrutura`; naturalista inclui generalização (R12); PROC **não** usa candidatura por acúmulo. |
-| R14 ↔ `segmentacao=REGRESSÃO` | **WRONG** (sinais diferentes) | §8.3: `historico_relevante` projetado de `repertorio_state` (baseline, ambas direções, evento único), **não** de `segmentacao`. Remover a afirmação "destrava R14" acoplada à segmentação. |
-| R17 → `reinforcer_profile` | GAP (perde recência/saciação) | §8.3: série ordenada por recência + `valencia`; Briefing rebaixa `saciado`. |
-| V2 EvidenceQuery | PASS | tabela separada, `evidence` intocada. |
-| V3 MilestoneAssessment | GAP (recompute/dossiê não congelados) | D4 deferido; quando vier: recompute **nunca** toca série realizada; `MilestoneAssessmentEvidence` congela `classificacao_original` as-of. |
-| Candidatura vs. query aberta | GAP menor | §8.3: evidência com `EvidenceQuery` aberta não conta em candidatura. |
-| Comparação 2 pontos | **WRONG** (troca de protocolo) | G7 adicionado. |
+| Item                          | Veredicto                                           | Resolução                                                                                                                                                                                  |
+| ----------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Segmentação `marco_simples`   | PASS                                                | mantém ordinal de ajuda.                                                                                                                                                                   |
+| `marco_com_barreira`          | **WRONG** (escala de severidade, direção invertida) | G5b: escore de barreira, menor = melhor.                                                                                                                                                   |
+| `escore_composto`             | **WRONG** (mede ajuda, não o escore)                | G5b: escore composto sobe = evolução.                                                                                                                                                      |
+| `faixa_normativa` (Denver)    | **WRONG** (linha plana falsa)                       | G5b: delta idade-equiv. relativo à idade cronológica.                                                                                                                                      |
+| Candidatura `N=3/M=2` global  | GAP/WRONG por família                               | §8.3: critério **por Milestone/família**; VB-MAPP puxa de `Milestone.estrutura`; naturalista inclui generalização (R12); PROC **não** usa candidatura por acúmulo.                         |
+| R14 ↔ `segmentacao=REGRESSÃO` | **WRONG** (sinais diferentes)                       | §8.3: `historico_relevante` projetado de `repertorio_state` (baseline, ambas direções, evento único), **não** de `segmentacao`. Remover a afirmação "destrava R14" acoplada à segmentação. |
+| R17 → `reinforcer_profile`    | GAP (perde recência/saciação)                       | §8.3: série ordenada por recência + `valencia`; Briefing rebaixa `saciado`.                                                                                                                |
+| V2 EvidenceQuery              | PASS                                                | tabela separada, `evidence` intocada.                                                                                                                                                      |
+| V3 MilestoneAssessment        | GAP (recompute/dossiê não congelados)               | D4 deferido; quando vier: recompute **nunca** toca série realizada; `MilestoneAssessmentEvidence` congela `classificacao_original` as-of.                                                  |
+| Candidatura vs. query aberta  | GAP menor                                           | §8.3: evidência com `EvidenceQuery` aberta não conta em candidatura.                                                                                                                       |
+| Comparação 2 pontos           | **WRONG** (troca de protocolo)                      | G7 adicionado.                                                                                                                                                                             |
 
 ### 8.3 Correções incorporadas ao contrato de dados/lógica
 
@@ -302,11 +302,11 @@ correta sem fechá-las com o Rômulo primeiro (gate de modelo de dados):
 
 1. **Forma de `segmentacao`.** DDL atual (`modelo:746`) comenta `{goal_id: 'evolucao'|…}` (eixo
    único), mas a prosa (`modelo:303-306`) e G5b exigem `{goal_id: {protocol_id: {tipo_estrutura,
-   metrica, rótulo}}}`. A forma gravada muda. **Reconciliar a DDL de `session_snapshot.segmentacao`.**
+metrica, rótulo}}}`. A forma gravada muda. **Reconciliar a DDL de `session_snapshot.segmentacao`.**
 2. **`evidence` e grão de alvo.** DDL (`modelo:682-694`) tem colunas escalares `goal_id`/
    `milestone_id` (1 alvo), mas uma extração aprovada carrega N alvos. Definir explicitamente: 1
    evidência por alvo + `UNIQUE(extraction_id, goal_id, milestone_id)`.
 3. **`evidence_current` como view segura.** Adicionar `WITH (security_invoker = true,
-   security_barrier = true)` à definição (`modelo:725`), senão vaza entre clínicas.
+security_barrier = true)` à definição (`modelo:725`), senão vaza entre clínicas.
 
 DDL de **4A e 4B são desenhadas e aprovadas juntas** no gate (evitam o ciclo suave C7).

@@ -61,7 +61,10 @@ export async function alvosValidosDoPaciente(
     tipo_estrutura: null,
   }));
 
-  for (const p of protocolosAtivos as { protocolId: string; familia: string }[]) {
+  for (const p of protocolosAtivos as {
+    protocolId: string;
+    familia: string;
+  }[]) {
     const marcos = await tx
       .select({
         dominioId: milestone.dominioId,
@@ -83,10 +86,12 @@ export async function alvosValidosDoPaciente(
 }
 
 export type ValidacaoAlvo =
-  | { ok: true; fks: ResolvedFks }
-  | { ok: false; error: string };
+  { ok: true; fks: ResolvedFks } | { ok: false; error: string };
 
-async function tipoEstruturaDoMarco(tx: Tx, milestoneId: string): Promise<string | null> {
+async function tipoEstruturaDoMarco(
+  tx: Tx,
+  milestoneId: string,
+): Promise<string | null> {
   const [row] = await tx
     .select({ tipoEstrutura: milestone.tipoEstrutura })
     .from(milestone)
@@ -116,7 +121,8 @@ export async function validarAlvo(
   novoAlvo: Alvo,
   evidenciaOriginal?: { milestoneId: string | null },
 ): Promise<ValidacaoAlvo> {
-  const temGoal = typeof novoAlvo.goal_id === "string" && novoAlvo.goal_id.length > 0;
+  const temGoal =
+    typeof novoAlvo.goal_id === "string" && novoAlvo.goal_id.length > 0;
   const temMarco =
     typeof novoAlvo.protocol_id === "string" &&
     novoAlvo.protocol_id.length > 0 &&
@@ -124,22 +130,36 @@ export async function validarAlvo(
     novoAlvo.dominio_id.length > 0;
 
   if (!temGoal && !temMarco) {
-    return { ok: false, error: "Alvo inválido: informe goal_id ou protocol_id + dominio_id." };
+    return {
+      ok: false,
+      error: "Alvo inválido: informe goal_id ou protocol_id + dominio_id.",
+    };
   }
 
-  const resolved = await resolverAlvoParaFks(drizzleResolverQueries(tx), ctx, novoAlvo);
+  const resolved = await resolverAlvoParaFks(
+    drizzleResolverQueries(tx),
+    ctx,
+    novoAlvo,
+  );
 
   if (temGoal && !resolved.goalId) {
-    return { ok: false, error: "Alvo inválido: goal não encontrado para este paciente." };
+    return {
+      ok: false,
+      error: "Alvo inválido: goal não encontrado para este paciente.",
+    };
   }
   if (temMarco) {
     if (!resolved.protocolId) {
-      return { ok: false, error: "Alvo inválido: protocolo não está ativo para este paciente." };
+      return {
+        ok: false,
+        error: "Alvo inválido: protocolo não está ativo para este paciente.",
+      };
     }
     if (!resolved.milestoneId) {
       return {
         ok: false,
-        error: "Alvo inválido: marco não encontrado (ou ambíguo) para este domínio.",
+        error:
+          "Alvo inválido: marco não encontrado (ou ambíguo) para este domínio.",
       };
     }
   }
@@ -153,7 +173,8 @@ export async function validarAlvo(
     if (tipoOriginal && tipoNovo && tipoOriginal !== tipoNovo) {
       return {
         ok: false,
-        error: "Alvo inválido: reclassificação entre estruturas diferentes não é permitida.",
+        error:
+          "Alvo inválido: reclassificação entre estruturas diferentes não é permitida.",
       };
     }
   }
@@ -176,7 +197,10 @@ export function montarClassificacaoNova(
   novoAlvo: Alvo,
   fksResolvidas: ResolvedFks,
 ): unknown {
-  const base = anterior && typeof anterior === "object" ? (anterior as Record<string, unknown>) : {};
+  const base =
+    anterior && typeof anterior === "object"
+      ? (anterior as Record<string, unknown>)
+      : {};
   return {
     ...base,
     alvo: novoAlvo,

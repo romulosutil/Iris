@@ -11,7 +11,9 @@ function li(texto: string): string {
   return `<li>${escapeHtml(texto)}</li>`;
 }
 
-function evolucao(item: ConvenioNarrativoDraft["evolucaoPorDominio"][number]): string {
+function evolucao(
+  item: ConvenioNarrativoDraft["evolucaoPorDominio"][number],
+): string {
   return `<section class="dominio"><h3>${escapeHtml(item.dominio)}</h3><p>${escapeHtml(item.narrativa)}</p></section>`;
 }
 
@@ -21,7 +23,9 @@ function nota(draft: ConvenioNarrativoDraft): string {
     : "";
 }
 
-export function buildConvenioNarrativoHtml(payload: PayloadConvenioNarrativo): string {
+export function buildConvenioNarrativoHtml(
+  payload: PayloadConvenioNarrativo,
+): string {
   const d = payload.curado ?? payload.iaOriginal;
   const { cabecalho } = payload;
 

@@ -95,11 +95,7 @@ export function EncerrarVinculoForm({
 
   return (
     <>
-      <Button
-        type="button"
-        tamanho="sm"
-        onClick={() => setPedido(state)}
-      >
+      <Button type="button" tamanho="sm" onClick={() => setPedido(state)}>
         Encerrar vínculo
       </Button>
 
@@ -134,11 +130,7 @@ export function EncerrarVinculoForm({
                 responde, então `isLoading` cobre o roundtrip inteiro e o submit
                 não corre atrás de um formulário já desmontado. */}
             <form action={formAction}>
-              <Button
-                type="submit"
-                tamanho="sm"
-                isLoading={isPending}
-              >
+              <Button type="submit" tamanho="sm" isLoading={isPending}>
                 Encerrar vínculo
               </Button>
             </form>

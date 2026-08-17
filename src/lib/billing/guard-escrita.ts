@@ -70,10 +70,7 @@ export type EstadoComBloqueio = {
  * é irrelevante aqui (o estado muda por ativação de assinatura, não por
  * concorrência interna) e o trigger SQL fecha o caso residual.
  */
-export function comEscrita<
-  S extends EstadoComBloqueio,
-  A extends unknown[],
->(
+export function comEscrita<S extends EstadoComBloqueio, A extends unknown[]>(
   fn: (ctx: TenantContext, ...args: A) => Promise<S>,
 ): (ctx: TenantContext, ...args: A) => Promise<S> {
   return async (ctx: TenantContext, ...args: A): Promise<S> => {

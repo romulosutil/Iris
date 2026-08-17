@@ -32,7 +32,10 @@ type EvidenciaRow = {
   autor: string;
 };
 
-export async function buildConvenioBrutoPayload(tx: Tx, args: Args): Promise<PayloadConvenioBruto> {
+export async function buildConvenioBrutoPayload(
+  tx: Tx,
+  args: Args,
+): Promise<PayloadConvenioBruto> {
   const { patientId, nomePaciente, periodoInicio, periodoFim } = args;
 
   // Limite superior EXCLUSIVO do dia seguinte ao fim: inclui o dia inteiro de
@@ -78,8 +81,12 @@ export async function buildConvenioBrutoPayload(tx: Tx, args: Args): Promise<Pay
 
   const presenca = {
     sessoesRealizadas: sessoes.filter((s) => s.estado === "realizada").length,
-    faltasJustificadas: sessoes.filter((s) => s.estado.startsWith("falta") && s.justificada === true).length,
-    faltasNaoJustificadas: sessoes.filter((s) => s.estado.startsWith("falta") && s.justificada !== true).length,
+    faltasJustificadas: sessoes.filter(
+      (s) => s.estado.startsWith("falta") && s.justificada === true,
+    ).length,
+    faltasNaoJustificadas: sessoes.filter(
+      (s) => s.estado.startsWith("falta") && s.justificada !== true,
+    ).length,
   };
 
   return {

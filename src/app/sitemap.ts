@@ -5,7 +5,8 @@ import type { MetadataRoute } from "next";
  * Mapeia as URLs públicas de entrada, autenticação e páginas legais.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br";
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br";
   const now = new Date();
 
   return [

@@ -1,6 +1,10 @@
 import "fake-indexeddb/auto";
 import { describe, expect, test } from "vitest";
-import { apagarAudioLocal, lerAudioLocal, salvarAudioLocal } from "./local-store";
+import {
+  apagarAudioLocal,
+  lerAudioLocal,
+  salvarAudioLocal,
+} from "./local-store";
 
 describe("audio local store (IndexedDB)", () => {
   test("salvar → ler → apagar um blob", async () => {

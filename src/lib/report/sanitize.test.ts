@@ -6,6 +6,8 @@ describe("escapeHtml", () => {
     expect(escapeHtml(`<img src=x onerror=1>`)).toBe(
       "&lt;img src=x onerror=1&gt;",
     );
-    expect(escapeHtml(`a & b "c" 'd'`)).toBe("a &amp; b &quot;c&quot; &#39;d&#39;");
+    expect(escapeHtml(`a & b "c" 'd'`)).toBe(
+      "a &amp; b &quot;c&quot; &#39;d&#39;",
+    );
   });
 });

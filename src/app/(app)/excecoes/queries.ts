@@ -35,7 +35,9 @@ export type ListaExcecoes = {
   agora: number;
 };
 
-export async function listarExcecoes(ctx: TenantContext): Promise<ListaExcecoes> {
+export async function listarExcecoes(
+  ctx: TenantContext,
+): Promise<ListaExcecoes> {
   const extracoesFalhas = await withTenant(ctx, (tx) =>
     tx
       .select({
@@ -77,7 +79,10 @@ export async function listarExcecoes(ctx: TenantContext): Promise<ListaExcecoes>
       ...r,
       maisAntigaEm: r.maisAntigaEm ? new Date(r.maisAntigaEm) : null,
     }))
-    .sort((a, b) => (a.maisAntigaEm?.getTime() ?? 0) - (b.maisAntigaEm?.getTime() ?? 0));
+    .sort(
+      (a, b) =>
+        (a.maisAntigaEm?.getTime() ?? 0) - (b.maisAntigaEm?.getTime() ?? 0),
+    );
 
   return {
     extracoesFalhas,
