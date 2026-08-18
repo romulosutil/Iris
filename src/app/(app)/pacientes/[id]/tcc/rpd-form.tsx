@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { salvarRPDAction, type SalvarRpdState } from "./actions";
@@ -14,6 +15,16 @@ interface RpdFormProps {
   estadoInicial?: SalvarRpdState;
 }
 
+/**
+ * #389 — formato Padesky. Ordem dos campos segue o fluxo de reestruturação
+ * cognitiva (situação → pensamento automático → emoção → evidências →
+ * pensamento alternativo), não mais o formato antigo (distorção logo após a
+ * emoção). Só os 3 primeiros campos são obrigatórios — o restante é
+ * enviável vazio (Zod do lado servidor reflete a mesma regra). Distorção
+ * cognitiva é sempre opcional e nunca entra no cálculo de completude
+ * (`../completude.ts`); por isso fica colapsada por padrão, depois da
+ * reestruturação, não antes dela.
+ */
 export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
   const [state, formAction, isPending] = useActionState<
     SalvarRpdState,
@@ -30,8 +41,9 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
           📝 Novo Registro de Pensamentos Distorcidos (RPD)
         </h3>
         <p className="font-body text-xs text-[var(--text-secondary)]">
-          Preencha a reestruturação cognitiva: situação, pensamento automático,
-          emoção, distorção e resposta racional.
+          Registre a situação, o pensamento automático e a emoção. O restante
+          — evidências, pensamento alternativo e categoria — é opcional e
+          pode ser preenchido depois, conforme a reestruturação avança.
         </p>
       </div>
 
@@ -44,7 +56,7 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
 
       <Form action={formAction} error={state.error}>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {/* Situação / Gatilho */}
+          {/* 1. Situação / Gatilho */}
           <Field
             label="1. Situação / Gatilho"
             htmlFor="situacao"
@@ -59,7 +71,7 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
             />
           </Field>
 
-          {/* Pensamento Automático */}
+          {/* 2. Pensamento Automático */}
           <Field
             label="2. Pensamento Automático"
             htmlFor="pensamentoAutomatico"
@@ -74,7 +86,7 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
             />
           </Field>
 
-          {/* Emoção & Intensidade */}
+          {/* 3. Emoção & Intensidade */}
           <Field
             label="3. Emoção Sentida"
             htmlFor="emocao"
@@ -119,48 +131,122 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
             </div>
           </Field>
 
-          {/* Distorção Cognitiva */}
+          {/* 4. Credibilidade do pensamento inicial (opcional) */}
           <Field
-            label="4. Distorção Cognitiva Identificada"
-            htmlFor="distorcaoCognitiva"
-            hint="Selecione o viés cognitivo principal"
+            label="Credibilidade inicial (opcional)"
+            htmlFor="credibilidadeInicial"
+            hint="O quanto você acreditava nesse pensamento no momento, de 0 a 100%"
             className="md:col-span-2"
           >
-            <select
-              id="distorcaoCognitiva"
-              name="distorcaoCognitiva"
-              required
-              defaultValue={DISTORCOES_COGNITIVAS_OPCOES[0]}
-              className="font-body focus-visible:outline-focus flex min-h-11 w-full items-center justify-between rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-4 py-2.5 text-base text-[var(--text-primary)] outline-none"
-            >
-              {DISTORCOES_COGNITIVAS_OPCOES.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+            <Input
+              id="credibilidadeInicial"
+              name="credibilidadeInicial"
+              type="number"
+              min={0}
+              max={100}
+              placeholder="0-100"
+              className="w-32"
+            />
           </Field>
 
-          {/* Resposta Racional */}
+          {/* 5. Evidências a favor — núcleo da reestruturação */}
           <Field
-            label="5. Resposta Racional / Pensamento Alternativo"
+            label="Evidências a favor do pensamento (opcional)"
+            htmlFor="evidenciasFavor"
+            hint="O que sustenta esse pensamento, de fato? Núcleo da reestruturação, junto com as evidências contra."
+            className="md:col-span-2"
+          >
+            <Input
+              id="evidenciasFavor"
+              name="evidenciasFavor"
+              multiline
+              rows={3}
+              placeholder="Ex.: 'Já gaguejei em outra reunião uma vez.'"
+            />
+          </Field>
+
+          {/* 6. Evidências contra */}
+          <Field
+            label="Evidências contra o pensamento (opcional)"
+            htmlFor="evidenciasContra"
+            hint="O que contradiz esse pensamento? Fatos, não suposições."
+            className="md:col-span-2"
+          >
+            <Input
+              id="evidenciasContra"
+              name="evidenciasContra"
+              multiline
+              rows={3}
+              placeholder="Ex.: 'Fiz 5 apresentações este ano e recebi feedback positivo em 4 delas.'"
+            />
+          </Field>
+
+          {/* 7. Pensamento alternativo (era "Resposta Racional") */}
+          <Field
+            label="Pensamento alternativo (opcional)"
             htmlFor="respostaRacional"
-            hint="Quais as evidências reais? Qual o pensamento mais equilibrado?"
+            hint="Considerando as evidências acima, qual pensamento é mais equilibrado?"
             className="md:col-span-2"
           >
             <Input
               id="respostaRacional"
               name="respostaRacional"
-              required
               placeholder="Ex.: 'Já fiz diversas reuniões bem-sucedidas. Posso usar minhas anotações e respirar fundo.'"
             />
           </Field>
 
-          {/* Reavaliação de Humor / Intensidade Pós */}
+          {/* 8. Credibilidade da alternativa (opcional) */}
           <Field
-            label={`6. Reavaliação de Humor (Pós-Resposta): ${intensidadePos}%`}
+            label="Credibilidade da alternativa (opcional)"
+            htmlFor="credibilidadeAlternativa"
+            hint="O quanto você acredita no pensamento alternativo agora, de 0 a 100%"
+            className="md:col-span-2"
+          >
+            <Input
+              id="credibilidadeAlternativa"
+              name="credibilidadeAlternativa"
+              type="number"
+              min={0}
+              max={100}
+              placeholder="0-100"
+              className="w-32"
+            />
+          </Field>
+
+          {/* 9. Distorção cognitiva — opcional, colapsada, depois da reestruturação */}
+          <details className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] p-4 md:col-span-2">
+            <summary className="font-display cursor-pointer text-sm font-semibold text-[var(--text-primary)]">
+              Mostrar categorias de pensamento
+            </summary>
+
+            <fieldset className="mt-4 flex flex-col gap-3 border-0 p-0">
+              <legend className="font-display px-0 text-sm font-semibold text-[var(--text-primary)]">
+                Que armadilha de pensamento parece ser? (opcional)
+              </legend>
+              <p className="font-body text-xs text-[var(--text-secondary)]">
+                Pular este campo não prejudica o registro. As categorias se
+                sobrepõem e nem os manuais concordam entre si — o que muda o
+                quadro é examinar as evidências e formular uma alternativa, o
+                que você já fez acima.
+              </p>
+              <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                {DISTORCOES_COGNITIVAS_OPCOES.map((opcao) => (
+                  <Checkbox
+                    key={opcao.slug}
+                    name="distorcoesCognitivas"
+                    value={opcao.slug}
+                    label={opcao.rotulo}
+                  />
+                ))}
+              </div>
+            </fieldset>
+          </details>
+
+          {/* 10. Reavaliação de Humor / Intensidade Pós */}
+          <Field
+            label={`Reavaliar intensidade (opcional): ${intensidadePos}%`}
             htmlFor="intensidadePos"
-            hint="Nova intensidade emocional após a resposta racional (0-100%)"
+            hint="Nova intensidade emocional após examinar evidências e pensamento alternativo (0-100%)"
             className="md:col-span-2"
           >
             <div className="flex items-center gap-3">
@@ -187,6 +273,22 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
                 className="w-20 text-center font-bold"
               />
             </div>
+          </Field>
+
+          {/* 11. Comportamento resultante */}
+          <Field
+            label="Comportamento resultante (opcional)"
+            htmlFor="comportamentoResultante"
+            hint="O que você fez (ou deixou de fazer) depois desse pensamento?"
+            className="md:col-span-2"
+          >
+            <Input
+              id="comportamentoResultante"
+              name="comportamentoResultante"
+              multiline
+              rows={2}
+              placeholder="Ex.: 'Evitei olhar para a plateia durante toda a apresentação.'"
+            />
           </Field>
         </div>
 

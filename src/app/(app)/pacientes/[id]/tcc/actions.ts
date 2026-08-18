@@ -21,7 +21,6 @@ export async function salvarRPDAction(
     const emocao = String(formData.get("emocao") ?? "");
     const intensidadeRaw = formData.get("intensidade");
     const intensidade = intensidadeRaw ? Number(intensidadeRaw) : NaN;
-    const distorcaoCognitiva = String(formData.get("distorcaoCognitiva") ?? "");
     const respostaRacional = String(formData.get("respostaRacional") ?? "");
     const intensidadePosRaw = formData.get("intensidadePos");
     const intensidadePos =
@@ -39,7 +38,6 @@ export async function salvarRPDAction(
       pensamentoAutomatico,
       emocao,
       intensidade,
-      distorcaoCognitiva,
       respostaRacional,
       intensidadePos,
       sessionId,

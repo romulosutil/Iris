@@ -277,6 +277,26 @@ export const clinic = pgTable("clinic", {
   passoGradeMin: integer("passo_grade_min").notNull().default(60),
   // default de duração por disciplina, ex {"aba":60,"fono":30,"to":50}.
   duracaoDisciplina: jsonb("duracao_disciplina").notNull().default({}),
+  // #389 — taxonomia de distorções cognitivas do RPD é config por clínica,
+  // não enum/CHECK fixo (R19: não existe fonte canônica única entre manuais
+  // de TCC). Array de slugs; rótulos ficam em constants.ts. Mesmo padrão de
+  // `protocol.taxonomia_ajuda` (array simples de strings, sem objetos).
+  taxonomiaDistorcoes: jsonb("taxonomia_distorcoes")
+    .notNull()
+    .default([
+      "catastrofizacao",
+      "leitura_mental",
+      "tudo_ou_nada",
+      "generalizacao_excessiva",
+      "desqualificacao_positivo",
+      "raciocinio_emocional",
+      "afirmacoes_deveria",
+      "rotulacao",
+      "personalizacao",
+      "filtro_mental",
+      "adivinhacao_futuro",
+      "outra_nao_especificada",
+    ]),
   // Fase 5 Fatia 2 (Supervisão): limiar de "faltas excessivas" do paciente —
   // N faltas (falta_paciente) numa janela de M semanas dispara o alerta.
   faltasLimiar: integer("faltas_limiar").notNull().default(3),
@@ -2088,8 +2108,20 @@ export const tccRpdEntry = pgTable(
     pensamentoAutomatico: text("pensamento_automatico").notNull(),
     emocao: text("emocao").notNull(),
     intensidade: integer("intensidade").notNull(),
-    distorcaoCognitiva: text("distorcao_cognitiva").notNull(),
-    respostaRacional: text("resposta_racional").notNull(),
+    // #389 — formato Padesky (Mind Over Mood): evidências a favor/contra
+    // viram o núcleo; distorção vira opcional/multivalorada e posterior à
+    // reestruturação (era `distorcao_cognitiva text NOT NULL`, Burns puro).
+    // Backfill em `0109`.
+    distorcoesCognitivas: jsonb("distorcoes_cognitivas"),
+    evidenciasFavor: text("evidencias_favor"),
+    evidenciasContra: text("evidencias_contra"),
+    credibilidadeInicial: smallint("credibilidade_inicial"),
+    credibilidadeAlternativa: smallint("credibilidade_alternativa"),
+    // "resposta racional" era NOT NULL (Burns); vira opcional — só a
+    // completude "reestruturação completa" (derivada em leitura, nunca
+    // coluna) exige. Rótulo na UI passa a ser "pensamento alternativo".
+    respostaRacional: text("resposta_racional"),
+    comportamentoResultante: text("comportamento_resultante"),
     intensidadePos: integer("intensidade_pos"),
     criadoPor: uuid("criado_por")
       .notNull()
@@ -2103,6 +2135,14 @@ export const tccRpdEntry = pgTable(
     check(
       "tcc_rpd_intensidade_pos_range",
       sql`${t.intensidadePos} IS NULL OR (${t.intensidadePos} BETWEEN 0 AND 100)`,
+    ),
+    check(
+      "tcc_rpd_credibilidade_inicial_range",
+      sql`${t.credibilidadeInicial} IS NULL OR (${t.credibilidadeInicial} BETWEEN 0 AND 100)`,
+    ),
+    check(
+      "tcc_rpd_credibilidade_alternativa_range",
+      sql`${t.credibilidadeAlternativa} IS NULL OR (${t.credibilidadeAlternativa} BETWEEN 0 AND 100)`,
     ),
     index("idx_tcc_rpd_patient").on(t.patientId, t.criadoEm.desc()),
     index("idx_tcc_rpd_clinic").on(t.clinicId),
