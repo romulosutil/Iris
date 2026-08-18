@@ -107,7 +107,7 @@ Main thread orquestra; subagents fazem o trabalho pesado e retornam comprimido.
 - [x] **R6.2.4/A4** `0046`: `audit_select` → coordenador-only; view
       `audit_log_mascarado` (`security_barrier`, SEM `security_invoker` — a base
       exclui recepção, então invoker a bloquearia; owner-rights + `WHERE
-    clinic_id = app.clinic_id` reimpõe tenant) projetando só colunas
+clinic_id = app.clinic_id` reimpõe tenant) projetando só colunas
       não-clínicas. Recepção perde base, lê view mascarada.
 - [x] Journal idx 46, `when=1784521557778`. Aplicado via psql manual.
 - [x] Testes: unit 10/10 (`require-role` + `mfa-gate`); RLS

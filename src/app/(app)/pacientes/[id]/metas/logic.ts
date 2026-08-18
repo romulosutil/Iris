@@ -59,14 +59,12 @@ async function criarMetaCore(
         })
         .returning({ id: goal.id });
       if (d.milestoneIds.length > 0) {
-        await tx
-          .insert(goalMilestoneMapping)
-          .values(
-            d.milestoneIds.map((milestoneId) => ({
-              goalId: row!.id,
-              milestoneId,
-            })),
-          );
+        await tx.insert(goalMilestoneMapping).values(
+          d.milestoneIds.map((milestoneId) => ({
+            goalId: row!.id,
+            milestoneId,
+          })),
+        );
       }
       await desarquivarPacienteSeArquivado(
         tx,
