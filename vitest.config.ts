@@ -16,6 +16,15 @@ export default defineConfig({
         import.meta.dirname,
         "node_modules/server-only/empty.js",
       ),
+      // Normaliza aliases caso o separador Windows (\) vaze no resolver (#341)
+      "next\\dist\\compiled\\react": "next/dist/compiled/react",
+      "next\\dist\\compiled\\react-dom": "next/dist/compiled/react-dom",
+      "next\\dist\\compiled\\react-dom/server":
+        "next/dist/compiled/react-dom/server.js",
+      "next\\dist\\compiled\\react/jsx-runtime":
+        "next/dist/compiled/react/jsx-runtime",
+      "next\\dist\\compiled\\react/jsx-dev-runtime":
+        "next/dist/compiled/react/jsx-dev-runtime",
     },
   },
   test: {
@@ -35,7 +44,30 @@ export default defineConfig({
             "scripts/**/*.test.mjs",
             "db/tests/**/*.test.ts",
           ],
+          exclude: [
+            "**/node_modules/**",
+            "**/*.int.test.ts",
+            "**/*a11y*.test.{ts,tsx}",
+            "**/a11y.test.{ts,tsx}",
+          ],
+          css: false,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "a11y",
+          environment: "jsdom",
+          globals: true,
+          setupFiles: ["./vitest.setup.ts"],
+          include: ["src/**/*a11y*.test.{ts,tsx}", "src/**/a11y.test.{ts,tsx}"],
           exclude: ["**/node_modules/**", "**/*.int.test.ts"],
+          testTimeout: 20000,
+          hookTimeout: 20000,
+          // Evita contenção de CPU entre varreduras pesadas do axe (#332):
+          // executa a suíte de a11y em série mantendo a suíte unitária rápida
+          // em paralelo completo.
+          fileParallelism: false,
           css: false,
         },
       },
@@ -53,6 +85,8 @@ export default defineConfig({
           environment: "jsdom",
           globals: true,
           setupFiles: ["./.storybook/vitest.setup.ts"],
+          testTimeout: 20000,
+          hookTimeout: 20000,
           css: false,
         },
       },

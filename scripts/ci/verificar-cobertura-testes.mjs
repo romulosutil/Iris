@@ -27,7 +27,7 @@
  */
 import { readFileSync } from "node:fs";
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const [reportPath, ...rest] = argv;
   if (!reportPath) {
     console.error(
@@ -47,27 +47,8 @@ function parseArgs(argv) {
   return { reportPath, ...opts };
 }
 
-function main() {
-  const { reportPath, minTests, minFiles, label } = parseArgs(
-    process.argv.slice(2),
-  );
-
-  let raw;
-  try {
-    raw = readFileSync(reportPath, "utf8");
-  } catch (err) {
-    console.error(
-      `[cobertura:${label}] não consegui ler ${reportPath}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    console.error(
-      "[cobertura] sem relatório, não há como provar que algo rodou — falhando.",
-    );
-    process.exit(1);
-  }
-
-  /** @type {{numTotalTests:number, numPassedTests:number, numFailedTests:number, numPendingTests:number, testResults:{name:string,status:string}[]}} */
-  const report = JSON.parse(raw);
-
+export function verificarCobertura(report, opts = {}) {
+  const { minTests = 0, minFiles = 0, label = "testes" } = opts;
   const totalTests = report.numTotalTests ?? 0;
   const passedTests = report.numPassedTests ?? 0;
   const failedTests = report.numFailedTests ?? 0;
@@ -75,6 +56,9 @@ function main() {
   const files = report.testResults ?? [];
   const totalFiles = files.length;
   const arquivosNaoOk = files.filter((f) => f.status !== "passed");
+  const arquivosSemTestes = files.filter(
+    (f) => !f.assertionResults || f.assertionResults.length === 0,
+  );
 
   const problemas = [];
 
@@ -103,18 +87,60 @@ function main() {
       `${failedTests} teste(s) falharam em ${arquivosNaoOk.length} arquivo(s)`,
     );
   }
+  if (arquivosSemTestes.length > 0) {
+    problemas.push(
+      `${arquivosSemTestes.length} arquivo(s) coletado(s) mas executaram ZERO testes (coleção vazia/falso positivo)`,
+    );
+  }
+
+  return {
+    ok: problemas.length === 0,
+    problemas,
+    stats: { totalFiles, totalTests, passedTests, failedTests, pendingTests },
+    arquivosNaoOk,
+    arquivosSemTestes,
+  };
+}
+
+export function main() {
+  const { reportPath, minTests, minFiles, label } = parseArgs(
+    process.argv.slice(2),
+  );
+
+  let raw;
+  try {
+    raw = readFileSync(reportPath, "utf8");
+  } catch (err) {
+    console.error(
+      `[cobertura:${label}] não consegui ler ${reportPath}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    console.error(
+      "[cobertura] sem relatório, não há como provar que algo rodou — falhando.",
+    );
+    process.exit(1);
+  }
+
+  const report = JSON.parse(raw);
+  const resultado = verificarCobertura(report, { minTests, minFiles, label });
+  const { totalFiles, totalTests, passedTests, failedTests, pendingTests } =
+    resultado.stats;
 
   console.log(
     `[cobertura:${label}] arquivos=${totalFiles} testes=${totalTests} passou=${passedTests} falhou=${failedTests} pulado=${pendingTests}`,
   );
 
-  if (problemas.length > 0) {
+  if (!resultado.ok) {
     console.error(`[cobertura:${label}] REPROVADO:`);
-    for (const p of problemas) console.error(`  - ${p}`);
-    if (arquivosNaoOk.length > 0) {
+    for (const p of resultado.problemas) console.error(`  - ${p}`);
+    if (resultado.arquivosNaoOk.length > 0) {
       console.error("  arquivos com problema:");
-      for (const f of arquivosNaoOk)
+      for (const f of resultado.arquivosNaoOk)
         console.error(`    - ${f.name} (${f.status})`);
+    }
+    if (resultado.arquivosSemTestes.length > 0) {
+      console.error("  arquivos com zero testes:");
+      for (const f of resultado.arquivosSemTestes)
+        console.error(`    - ${f.name} (0 asserções executadas)`);
     }
     process.exit(1);
   }
@@ -122,4 +148,9 @@ function main() {
   console.log(`[cobertura:${label}] OK — exit 0 é prova, não suposição.`);
 }
 
-main();
+if (
+  process.argv[1] &&
+  process.argv[1].endsWith("verificar-cobertura-testes.mjs")
+) {
+  main();
+}
