@@ -19,9 +19,9 @@ const SENHA_MAX = 128;
 // do limite de IP de `../esqueci-senha/logic.ts` (10/h): não é um segredo de
 // altíssima entropia adicional sendo protegido (o cookie e o token já são o
 // segredo de posse), então não precisa de número diferente.
-const LIMITE_IP = 10;
-const JANELA_IP_S = 60 * 60;
-const TETO_IP_S = 60 * 60;
+export const LIMITE_IP = 10;
+export const JANELA_IP_S = 60 * 60;
+export const TETO_IP_S = 60 * 60;
 
 /**
  * Mensagem ÚNICA para qualquer motivo de falha: cookie/token ausente,
