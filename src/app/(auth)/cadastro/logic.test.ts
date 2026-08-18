@@ -12,6 +12,7 @@ const {
   registrarTentativa,
   ThrottleIndisponivelFake,
   cabecalhos,
+  enviarEmailTransacional,
 } = vi.hoisted(() => {
   class CredencialInvalidaFake extends Error {
     constructor() {
@@ -31,6 +32,7 @@ const {
     registrarTentativa: vi.fn(),
     ThrottleIndisponivelFake,
     cabecalhos: new Map<string, string>(),
+    enviarEmailTransacional: vi.fn(),
   };
 });
 
@@ -50,6 +52,16 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// Dublê OBRIGATÓRIO: o ramo CredencialInvalida dispara este e-mail em
+// background (`void enviarEmailTransacional(...).catch(...)`, ver logic.ts).
+// Sem o mock, o teste chama o módulo real — que só devolve `{ enviado: false
+// }` se EMAIL_PROVIDER_API_KEY/RESEND_API_KEY estiverem ausentes do
+// ambiente. Um `.env.local` de dev exportado pro shell (ou uma chave de CI
+// futura) faria estes testes gastarem cota real da Resend a cada rodada.
+vi.mock("@/lib/email/transacional", () => ({
+  enviarEmailTransacional,
+}));
+
 import {
   PISO_RESPOSTA_MS,
   VERSAO_TERMO,
@@ -64,7 +76,7 @@ function fd(campos: Record<string, string>): FormData {
 }
 
 const completo = {
-  email: "aline@exemplo.com.br",
+  email: "aline@clinicapasso.com.br",
   senha: "Senha Forte 123",
   nome: "Aline Souza",
   nomeClinica: "Clínica Passo",
@@ -102,6 +114,19 @@ describe("validarCadastro", () => {
     });
   });
 
+  it.each([
+    "aline@exemplo.com.br",
+    "aline@exemplo.com",
+    "aline@example.com",
+    "aline@EXAMPLE.COM",
+  ])("recusa domínio fictício %s ANTES do núcleo", (email) => {
+    const r = validarCadastro(fd({ ...completo, email }));
+    expect(r).toEqual({
+      ok: false,
+      error: "Use um e-mail real — este domínio não recebe mensagens.",
+    });
+  });
+
   it("recusa senha acima de 128 caracteres ANTES do núcleo", () => {
     // Rodada de correção 3. 129 caracteres é o gatilho exato: o Better-Auth
     // lança `APIError` no sign-up (`maxPasswordLength`) e NÃO lança no
@@ -128,6 +153,7 @@ describe("executarCadastro", () => {
     cabecalhos.set("user-agent", "Mozilla/5.0 (teste)");
     registrarTentativa.mockResolvedValue({ permitido: true });
     criarContaEClinica.mockResolvedValue({ userId: "u1", clinicId: "c1" });
+    enviarEmailTransacional.mockResolvedValue({ enviado: true });
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -300,7 +326,7 @@ describe("executarCadastro", () => {
     });
 
     const emVoo = Array.from({ length: 40 }, (_, i) =>
-      executarCadastro(fd({ ...completo, email: `s${i}@exemplo.com` })),
+      executarCadastro(fd({ ...completo, email: `s${i}@clinicapasso.com.br` })),
     );
     const resultados = await Promise.all(
       emVoo.map((p) =>
@@ -342,7 +368,7 @@ describe("executarCadastro", () => {
       executarCadastro(
         fd({
           ...completo,
-          email: `${i % 2 === 0 ? "existe" : "livre"}${i}@exemplo.com`,
+          email: `${i % 2 === 0 ? "existe" : "livre"}${i}@clinicapasso.com.br`,
         }),
       ),
     );
@@ -594,12 +620,14 @@ describe("executarCadastro", () => {
 
     // 4 vagas ocupadas por `custoNucleo`; a 5ª espera por elas.
     const ocupantes = Array.from({ length: 4 }, (_, i) =>
-      executarCadastro(fd({ ...completo, email: `ocup${i}@exemplo.com` })),
+      executarCadastro(
+        fd({ ...completo, email: `ocup${i}@clinicapasso.com.br` }),
+      ),
     );
     await new Promise((r) => setTimeout(r, 20)); // garante a ordem na fila
     const t0 = Date.now();
     const atrasado = executarCadastro(
-      fd({ ...completo, email: "fila@exemplo.com" }),
+      fd({ ...completo, email: "fila@clinicapasso.com.br" }),
     );
     await Promise.all([...ocupantes, atrasado]);
     const msAtrasado = Date.now() - t0;
@@ -703,7 +731,9 @@ describe("executarCadastro", () => {
     });
     await Promise.all(
       Array.from({ length: 24 }, (_, i) =>
-        executarCadastro(fd({ ...completo, email: `p${i}@exemplo.com` })),
+        executarCadastro(
+          fd({ ...completo, email: `p${i}@clinicapasso.com.br` }),
+        ),
       ),
     );
     expect(pico).toBeGreaterThan(0);
