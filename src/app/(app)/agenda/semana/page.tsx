@@ -19,9 +19,7 @@ function primeiro(v: string | string[] | undefined): string | undefined {
 /** Task 8: prefill de reposição vindo de `/agenda?...` → `gerir-sessao`
  * ("Repor" em faltas). Só monta o prefill se os 4 parâmetros estiverem
  * presentes — parcial é tratado como ausente. */
-function paramsPrefill(
-  sp: Record<string, string | string[] | undefined>,
-):
+function paramsPrefill(sp: Record<string, string | string[] | undefined>):
   | {
       repostaDe: string;
       patientId: string;

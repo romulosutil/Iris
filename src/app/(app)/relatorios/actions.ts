@@ -38,9 +38,7 @@ export async function exportarConvenioBrutoAction(input: ExportarInput) {
  * porque `previewConvenioBruto` só lê sob RLS (`withTenant`) — não grava, não
  * expõe nada que o papel já não veja na tela (contagens do próprio paciente).
  */
-export async function previewConvenioBrutoAction(
-  input: ExportarInput,
-): Promise<
+export async function previewConvenioBrutoAction(input: ExportarInput): Promise<
   | {
       sessoesRealizadas: number;
       faltasJustificadas: number;

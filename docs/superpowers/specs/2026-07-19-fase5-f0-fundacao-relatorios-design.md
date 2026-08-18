@@ -330,7 +330,7 @@ detalhe={tipo, periodo, hash})`.
 - [ ] **`report_pdf` RLS (red-team #1):** `SELECT … FROM report_pdf WHERE report_id=?` de outra
       clínica → 0 linhas; terapeuta fora da equipe → 0; report soft-deletado → PDF invisível.
 - [ ] **Sandbox de render (red-team #2):** payload com `<img src=file:///…>` / `<iframe
-    src=http://169.254.169.254/…>` → nenhuma requisição de saída do Chromium; conteúdo interpolado
+src=http://169.254.169.254/…>` → nenhuma requisição de saída do Chromium; conteúdo interpolado
       escapado (markup do usuário não vira HTML).
 - [ ] CHECK `exportado ⇒ pdf_hash NOT NULL` impede export sem snapshot; FK de `report_pdf` garante
       bytes presentes.

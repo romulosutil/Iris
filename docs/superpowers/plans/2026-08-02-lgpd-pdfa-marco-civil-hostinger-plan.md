@@ -211,11 +211,9 @@ export async function gerarPdfProntuario(
     .fontSize(18)
     .text(`Prontuário Clínico — ${dados.nomeTitular}`, { align: "center" });
   doc.moveDown();
-  doc
-    .fontSize(10)
-    .text(`Emitido em ${dados.timestampEmissao.toISOString()}`, {
-      align: "center",
-    });
+  doc.fontSize(10).text(`Emitido em ${dados.timestampEmissao.toISOString()}`, {
+    align: "center",
+  });
   desenharMarcaDagua(doc, marcaDagua);
   desenharRodapeComHash(doc, "pendente-ver-resposta-da-api", 1, totalPaginas);
 
