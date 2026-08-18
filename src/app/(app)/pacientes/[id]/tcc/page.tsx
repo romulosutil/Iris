@@ -1,4 +1,8 @@
+import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { getTenantContext } from "@/auth/tenant";
+import { withTenant } from "@/db/rls";
+import { patient } from "@/db/schema";
 import { obterRPDEntries } from "./logic";
 import { RpdForm } from "./rpd-form";
 import { GraficoEvolucaoCrencas } from "./grafico-evolucao-crencas";
@@ -11,6 +15,22 @@ interface TccPageProps {
 export default async function TccPage({ params }: TccPageProps) {
   const { id: patientId } = await params;
   const ctx = await getTenantContext();
+
+  // #387 — guard ausente até aqui: a rota respondia por URL direta a paciente
+  // `protocol_driven`/`conventional` sem checar nada. Mesma query de
+  // `../layout.tsx` (pós-#388) — RLS decide o que este tenant enxerga; ausência
+  // de linha (id inexistente ou outra clínica) e modalidade errada levam ao
+  // mesmo 404, de propósito: não vazar "existe, mas é de outra modalidade".
+  const dadosPaciente = await withTenant(ctx, async (tx) => {
+    const [p] = await tx
+      .select({ clinicalModality: patient.clinicalModality })
+      .from(patient)
+      .where(eq(patient.id, patientId));
+    return p;
+  });
+  if (dadosPaciente?.clinicalModality !== "cognitive_behavioral") {
+    notFound();
+  }
 
   const entries = await obterRPDEntries(ctx, patientId);
 
