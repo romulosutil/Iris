@@ -47,6 +47,12 @@ function payloadDoSubtipo(e: ExtracaoAgente): unknown {
       return e.ausencia_comportamento ?? {};
     case "preferencia_reforcador":
       return e.preferencia_reforcador ?? {};
+    case "registro_pensamento":
+      return e.registro_pensamento ?? {};
+    case "aplicacao_escala_relatada":
+      return e.aplicacao_escala_relatada ?? {};
+    case "tarefa_casa":
+      return e.tarefa_casa ?? {};
   }
 }
 
