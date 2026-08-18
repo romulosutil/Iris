@@ -38,6 +38,11 @@ export default defineConfig({
           exclude: [
             "**/node_modules/**",
             "**/*.int.test.ts",
+            // #395 — chama o Gemini de verdade (custo real + tempo real de
+            // parede). Isolada em vitest.llm.config.ts / `pnpm test:llm`,
+            // nunca no `pnpm test` padrão nem em CI, mesmo padrão de
+            // `**/*.int.test.ts` acima.
+            "**/*.llm.test.ts",
             "**/*a11y*.test.{ts,tsx}",
             "**/a11y.test.{ts,tsx}",
           ],
