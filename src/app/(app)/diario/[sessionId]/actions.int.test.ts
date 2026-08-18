@@ -431,4 +431,95 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(alertas.length).toBe(0);
     });
   });
+
+  // ─── #392 — alerta de risco em RPD SUGERIDO (Fase F) ──────────────────────
+  // Varredura determinística (#391, `detectarSinaisDeRiscoRPD`) sobre os
+  // campos de texto livre do payload de uma extração `subtipo =
+  // 'registro_pensamento'` recém-persistida, ANTES de qualquer aprovação
+  // humana. Ancorado em `origem_extraction_id` (a sugestão ainda não tem
+  // `tcc_rpd_entry`), nunca em `rpd_entry_id`.
+  describe("RPD sugerido (#392)", () => {
+    const limpar = async () => {
+      await owner`DELETE FROM alerta_risco_clinico WHERE patient_id = ${PAC}`;
+      await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
+    };
+
+    const alertasRPDSugerido = () =>
+      owner`SELECT origem, categoria, severidade, certeza, origem_extraction_id, rpd_entry_id
+              FROM alerta_risco_clinico
+             WHERE patient_id = ${PAC} AND origem = 'registro_pensamento'`;
+
+    const mockarProvider = async (drafts: unknown[]) => {
+      const { resolveProvider } = await import("@/lib/extraction/provider");
+      vi.mocked(resolveProvider).mockReturnValueOnce({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        extrair: async () => ({ drafts: drafts as any, alertaRisco: null }),
+      });
+    };
+
+    test("registro_pensamento sem sinal de risco não cria alerta", async () => {
+      await limpar();
+      await mockarProvider([
+        {
+          subtipo: "registro_pensamento",
+          trechoFonte: "Achei que ninguém ia me ouvir na reunião.",
+          confianca: "media",
+          inconsistenteComHistorico: false,
+          parContrasteId: null,
+          payload: {
+            evidencias_favor: "Ninguém falou comigo na reunião inteira.",
+            evidencias_contra: "Duas pessoas me chamaram depois para falar.",
+            comportamento_resultante: "Ficou calado pelo resto da reunião.",
+          },
+          estado: "sugerida",
+        },
+      ]);
+      const { consolidarSessao } = await import("./logic");
+      const r = await consolidarSessao(ctxT1, {
+        sessionId: SESS,
+        texto: "RPD sugerido sem sinal de risco.",
+      });
+      expect(r.error).toBeUndefined();
+
+      const alertas = await alertasRPDSugerido();
+      expect(alertas.length).toBe(0);
+    });
+
+    test("registro_pensamento com ideação cria alerta ancorado na extração, sem rpd_entry_id", async () => {
+      await limpar();
+      await mockarProvider([
+        {
+          subtipo: "registro_pensamento",
+          trechoFonte: "Às vezes penso em me matar quando fico assim.",
+          confianca: "alta",
+          inconsistenteComHistorico: false,
+          parContrasteId: null,
+          payload: {
+            evidencias_favor:
+              "Às vezes penso em me matar quando fico assim.",
+            evidencias_contra: null,
+            comportamento_resultante: "Ficou isolado no quarto.",
+          },
+          estado: "sugerida",
+        },
+      ]);
+      const { consolidarSessao } = await import("./logic");
+      const r = await consolidarSessao(ctxT1, {
+        sessionId: SESS,
+        texto: "RPD sugerido com ideação.",
+      });
+      expect(r.error).toBeUndefined();
+
+      const ex =
+        await owner`SELECT id FROM extraction WHERE session_id = ${SESS} AND subtipo = 'registro_pensamento'`;
+      expect(ex.length).toBe(1);
+
+      const alertas = await alertasRPDSugerido();
+      expect(alertas.length).toBe(1);
+      expect(alertas[0]!.categoria).toBe("ideacao_suicida");
+      expect(alertas[0]!.certeza).toBe("ambiguo_citado");
+      expect(alertas[0]!.origem_extraction_id).toBe(ex[0]!.id);
+      expect(alertas[0]!.rpd_entry_id).toBeNull();
+    });
+  });
 });

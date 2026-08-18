@@ -143,6 +143,85 @@ export async function registrarAlertaRiscoRPD(
 }
 
 /**
+ * #392 — cria alerta ancorado numa extração `registro_pensamento` AINDA NÃO
+ * aprovada (RPD sugerido, fila da aba TCC). Não existe `tcc_rpd_entry` neste
+ * momento — a âncora é a própria extração (`origem_extraction_id`), mesma
+ * forma que `registrarAlertaRiscoInstrumento` usa, mas com
+ * `p_origem='registro_pensamento'`. O guard dentro de `app_criar_alerta_risco`
+ * (0112) aceita essa combinação especificamente para esta origem. Quando a
+ * sugestão for aprovada depois, este alerta NÃO é migrado nem recriado para
+ * apontar pro `rpd_entry_id` novo — fica ancorado na extração para sempre
+ * (mesmo princípio de #391: alerta é trilha imutável, não espelho do estado
+ * atual do RPD). Assinatura (`patientId`/`extractionId`/`sinal`, sem
+ * `sessionId`) espelha `design.md` §2 — `sessionId` é derivado aqui de
+ * `extraction.session_id` (NOT NULL, extração sempre tem sessão), não exigido
+ * do chamador, pra notificação via `destinatariosCriacao` normal.
+ */
+export async function registrarAlertaRiscoRPDSugerido(
+  ctx: TenantContext,
+  args: {
+    patientId: string;
+    extractionId: string;
+    sinal: SinalRiscoDeterministico;
+  },
+): Promise<{ alertaId: string } | { erro: string }> {
+  try {
+    return await withTenant(ctx, async (tx) => {
+      const criado = (await tx.execute(sql`
+        SELECT app_criar_alerta_risco(
+          p_patient           := ${args.patientId}::uuid,
+          p_session           := NULL,
+          p_categoria         := ${args.sinal.categoria}::alerta_risco_categoria,
+          p_severidade        := ${args.sinal.severidade}::alerta_risco_severidade,
+          p_certeza           := ${args.sinal.certeza}::alerta_risco_certeza,
+          p_trecho            := ${args.sinal.trecho_fonte},
+          p_detalhe           := ${args.sinal.detalhe},
+          p_origem            := 'registro_pensamento'::alerta_risco_origem,
+          p_origem_extraction := ${args.extractionId}::uuid
+        ) AS id
+      `)) as unknown as Array<{ id: string }>;
+      const alertaId = criado[0]!.id;
+
+      const extracaoRow = (await tx.execute(sql`
+        SELECT session_id FROM extraction
+         WHERE id = ${args.extractionId}::uuid
+           AND clinic_id = ${ctx.clinicId}::uuid
+      `)) as unknown as Array<{ session_id: string }>;
+      const sessionId = extracaoRow[0]?.session_id;
+      if (!sessionId) {
+        throw new Error(
+          "registrarAlertaRiscoRPDSugerido: extração sem sessão associada",
+        );
+      }
+
+      const destinatarios = await destinatariosCriacao(tx, {
+        clinicId: ctx.clinicId,
+        sessionId,
+      });
+      await assertDestinatariosNoTenant(tx, {
+        clinicId: ctx.clinicId,
+        destinatarios,
+      });
+
+      const canais = [
+        ...new Set(destinatarios.map((d) => d.canal)),
+        ...canaisIndisponiveis(0),
+      ];
+      await tx.execute(sql`
+        UPDATE alerta_risco_clinico
+           SET canais_notificados = ${JSON.stringify(canais)}::jsonb
+         WHERE id = ${alertaId}::uuid
+      `);
+
+      return { alertaId };
+    });
+  } catch (err) {
+    console.error("ALERTA DE RISCO (RPD SUGERIDO) NÃO REGISTRADO:", err);
+    return { erro: "Não foi possível registrar o alerta de risco." };
+  }
+}
+
+/**
  * #391 — cria alerta ancorado numa extração `aplicacao_escala_relatada` com
  * `item_risco_positivo !== false`. Determinístico: quem decide criar o
  * alerta é o chamador (leu o campo booleano estruturado), não um novo

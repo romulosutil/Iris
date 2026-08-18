@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,44 @@ import { Alert } from "@/components/ui/alert";
 import { salvarRPDAction, type SalvarRpdState } from "./actions";
 import { DISTORCOES_COGNITIVAS_OPCOES } from "./constants";
 
+/**
+ * #392 — subconjunto pré-preenchível pelo payload de uma extração do agente
+ * (`registro_pensamento`, `registroPensamentoSchema`). `situacao`, `emocao` e
+ * `intensidade` NUNCA entram aqui: o schema do agente não os cobre (não são
+ * inventáveis) e ficam em branco/obrigatórios, igual ao caminho manual —
+ * ver spec #392 "Decisão de design: forma da aprovação".
+ * `pensamentoAutomatico` vem do `trechoFonte` (citação literal) da extração,
+ * não de um campo `registroPensamentoSchema` dedicado (o schema do agente
+ * não tem um campo próprio para o pensamento automático em si).
+ */
+export interface CamposRpdIniciais {
+  pensamentoAutomatico?: string;
+  evidenciasFavor?: string | null;
+  evidenciasContra?: string | null;
+  credibilidadeInicial?: number | null;
+  credibilidadeAlternativa?: number | null;
+  comportamentoResultante?: string | null;
+  distorcoesCognitivas?: string[];
+}
+
 interface RpdFormProps {
   patientId: string;
   estadoInicial?: SalvarRpdState;
+  /** #392 — pré-preenchimento a partir de uma sugestão de RPD do agente. */
+  valoresIniciais?: CamposRpdIniciais;
+  /**
+   * #392 — quando presente, substitui `salvarRPDAction` (caminho manual)
+   * pela action de aprovação de sugestão (`aprovarRPDSugestaoAction`, ligada
+   * ao `extractionId` da sugestão em `rpd-sugestoes.tsx`). Sem este prop, o
+   * comportamento é idêntico ao formulário manual — nenhuma validação,
+   * campo ou schema muda, só o destino do submit.
+   */
+  acaoSubmit?: (
+    prev: SalvarRpdState,
+    formData: FormData,
+  ) => Promise<SalvarRpdState>;
+  /** #392 — chamado quando o submit (manual ou aprovação) retorna `ok`. */
+  aoSalvarComSucesso?: () => void;
 }
 
 /**
@@ -25,14 +60,28 @@ interface RpdFormProps {
  * (`../completude.ts`); por isso fica colapsada por padrão, depois da
  * reestruturação, não antes dela.
  */
-export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
+export function RpdForm({
+  patientId,
+  estadoInicial,
+  valoresIniciais,
+  acaoSubmit,
+  aoSalvarComSucesso,
+}: RpdFormProps) {
   const [state, formAction, isPending] = useActionState<
     SalvarRpdState,
     FormData
-  >(salvarRPDAction.bind(null, patientId), estadoInicial ?? {});
+  >(acaoSubmit ?? salvarRPDAction.bind(null, patientId), estadoInicial ?? {});
+
+  useEffect(() => {
+    if (state.ok) {
+      aoSalvarComSucesso?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.ok]);
 
   const [intensidade, setIntensidade] = useState<number>(80);
   const [intensidadePos, setIntensidadePos] = useState<number>(30);
+  const distorcoesIniciais = valoresIniciais?.distorcoesCognitivas ?? [];
 
   return (
     <div className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
@@ -82,6 +131,7 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
               id="pensamentoAutomatico"
               name="pensamentoAutomatico"
               required
+              defaultValue={valoresIniciais?.pensamentoAutomatico}
               placeholder="Ex.: 'Vou gaguejar e todos vão ver que sou incompetente'"
             />
           </Field>
@@ -144,6 +194,7 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
               type="number"
               min={0}
               max={100}
+              defaultValue={valoresIniciais?.credibilidadeInicial ?? undefined}
               placeholder="0-100"
               className="w-32"
             />
@@ -161,6 +212,7 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
               name="evidenciasFavor"
               multiline
               rows={3}
+              defaultValue={valoresIniciais?.evidenciasFavor ?? undefined}
               placeholder="Ex.: 'Já gaguejei em outra reunião uma vez.'"
             />
           </Field>
@@ -177,6 +229,7 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
               name="evidenciasContra"
               multiline
               rows={3}
+              defaultValue={valoresIniciais?.evidenciasContra ?? undefined}
               placeholder="Ex.: 'Fiz 5 apresentações este ano e recebi feedback positivo em 4 delas.'"
             />
           </Field>
@@ -208,13 +261,21 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
               type="number"
               min={0}
               max={100}
+              defaultValue={
+                valoresIniciais?.credibilidadeAlternativa ?? undefined
+              }
               placeholder="0-100"
               className="w-32"
             />
           </Field>
 
-          {/* 9. Distorção cognitiva — opcional, colapsada, depois da reestruturação */}
-          <details className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] p-4 md:col-span-2">
+          {/* 9. Distorção cognitiva — opcional, colapsada, depois da reestruturação.
+              #392: aberta por padrão quando a sugestão do agente já trouxer
+              distorções, para o terapeuta ver o que foi pré-marcado. */}
+          <details
+            open={distorcoesIniciais.length > 0}
+            className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] p-4 md:col-span-2"
+          >
             <summary className="font-display cursor-pointer text-sm font-semibold text-[var(--text-primary)]">
               Mostrar categorias de pensamento
             </summary>
@@ -236,6 +297,7 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
                     name="distorcoesCognitivas"
                     value={opcao.slug}
                     label={opcao.rotulo}
+                    defaultChecked={distorcoesIniciais.includes(opcao.slug)}
                   />
                 ))}
               </div>
@@ -287,6 +349,9 @@ export function RpdForm({ patientId, estadoInicial }: RpdFormProps) {
               name="comportamentoResultante"
               multiline
               rows={2}
+              defaultValue={
+                valoresIniciais?.comportamentoResultante ?? undefined
+              }
               placeholder="Ex.: 'Evitei olhar para a plateia durante toda a apresentação.'"
             />
           </Field>

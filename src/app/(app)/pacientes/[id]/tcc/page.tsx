@@ -4,7 +4,9 @@ import { getTenantContext } from "@/auth/tenant";
 import { withTenant } from "@/db/rls";
 import { patient } from "@/db/schema";
 import { obterRPDEntries } from "./logic";
+import { obterRPDSugestoes } from "./sugestoes";
 import { RpdForm } from "./rpd-form";
+import { RpdSugestoes } from "./rpd-sugestoes";
 import { GraficoEvolucaoCrencas } from "./grafico-evolucao-crencas";
 import { rotuloDistorcao } from "./constants";
 import { Pill } from "@/components/ui/primitives/pill";
@@ -34,6 +36,7 @@ export default async function TccPage({ params }: TccPageProps) {
   }
 
   const entries = await obterRPDEntries(ctx, patientId);
+  const sugestoes = await obterRPDSugestoes(ctx, patientId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -60,6 +63,15 @@ export default async function TccPage({ params }: TccPageProps) {
           distorcoesCognitivas: e.distorcoesCognitivas as string[] | null,
         }))}
       />
+
+      {/* #392 — fila de sugestões de RPD do agente, acima do formulário
+          manual (aprovar/editar/descartar antes de registrar um novo). */}
+      <div className="flex flex-col gap-3">
+        <h3 className="font-display text-lg font-bold text-[var(--text-primary)]">
+          🤖 Sugestões de RPD do Agente
+        </h3>
+        <RpdSugestoes patientId={patientId} sugestoes={sugestoes} />
+      </div>
 
       {/* Formulário de Novo RPD */}
       <RpdForm patientId={patientId} />

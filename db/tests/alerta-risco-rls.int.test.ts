@@ -214,6 +214,32 @@ describe.skipIf(!hasDb)("alerta_risco_clinico — RLS e privilégios", () => {
     expect(comoB).toHaveLength(0);
   });
 
+  test("isolamento cross-tenant: alerta origem registro_pensamento (RPD SUGERIDO, âncora origem_extraction_id) não vaza entre clínicas (#392)", async () => {
+    // #392 — RPD sugerido ainda não tem linha em `tcc_rpd_entry`; o alerta é
+    // ancorado na própria extração via `origem_extraction_id` (CHECK relaxado
+    // na 0112). Mesma prova de isolamento que a âncora `rpd_entry_id` já tem
+    // acima, cobrindo a segunda forma de âncora aceita para esta origem.
+    await semear();
+    const id = await criarComOrigem(ctx("terapeuta", U_TER_SESSAO), {
+      patientId: P_A,
+      origem: "registro_pensamento",
+      origemExtractionId: EXT_A,
+      trecho: "trecho do RPD sugerido A",
+    });
+    const comoA = (await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
+      tx.execute(
+        sql`SELECT id FROM alerta_risco_clinico WHERE id = ${id}::uuid`,
+      ),
+    )) as unknown as Array<{ id: string }>;
+    expect(comoA).toHaveLength(1);
+
+    const comoB = (await withTenant(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      (tx) => tx.execute(sql`SELECT id FROM alerta_risco_clinico`),
+    )) as unknown as Array<{ id: string }>;
+    expect(comoB).toHaveLength(0);
+  });
+
   test("isolamento cross-tenant: alerta origem instrumento_formal (extraction) não vaza entre clínicas", async () => {
     await semear();
     const id = await criarComOrigem(ctx("terapeuta", U_TER_SESSAO), {

@@ -19,7 +19,9 @@ import type { AlertaRiscoAgente } from "@/lib/extraction/agent-output-schema";
 import {
   registrarAlertaRisco,
   registrarAlertaRiscoInstrumento,
+  registrarAlertaRiscoRPDSugerido,
 } from "@/lib/risco/registrar";
+import { detectarSinaisDeRiscoRPD } from "@/app/(app)/pacientes/[id]/tcc/deteccao-risco";
 import { loadCanonicalContext } from "@/lib/extraction/context-loader";
 import { deveReextrair } from "@/lib/extraction/reextraction-policy";
 import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
@@ -544,6 +546,65 @@ async function consolidarSessaoCore(
         },
       });
       if ("erro" in r) errosAlerta.push(r.erro);
+    }
+
+    // ── Fase F: sinal de risco em RPD SUGERIDO (#392, spec §"Decisão de
+    //    design: alerta de risco antes da aprovação"). Mesmo padrão da Fase
+    //    E: para cada draft `subtipo === 'registro_pensamento'` recém-
+    //    persistido, varre os campos de texto livre do payload com a mesma
+    //    varredura determinística de #391 (`detectarSinaisDeRiscoRPD`,
+    //    reaproveitada direto — a função aceita todos os campos como
+    //    opcionais, então passar só o subconjunto que o payload da extração
+    //    tem não exige adaptador nem duplica a lista de termos). A sugestão
+    //    ainda não tem linha em `tcc_rpd_entry` (só existe pós-aprovação),
+    //    então o alerta é ancorado na própria extração
+    //    (`origem_extraction_id`), mesma forma de ancoragem da Fase E. Alerta
+    //    dispara na CRIAÇÃO da sugestão, não espera aprovação humana — mesmo
+    //    princípio de #391 generalizado (ideação em texto pendente de
+    //    aprovação ainda é ideação). Try/catch por item: uma falha aqui não
+    //    pode derrubar a extração já persistida com sucesso.
+    for (let i = 0; i < drafts.length; i++) {
+      const d = drafts[i]!;
+      if (d.subtipo !== "registro_pensamento") continue;
+      const extractionId = extractionIds[i];
+      if (!extractionId) continue; // guarda defensiva; não deveria faltar
+
+      try {
+        const payload = d.payload as
+          | {
+              evidencias_favor?: string | null;
+              evidencias_contra?: string | null;
+              comportamento_resultante?: string | null;
+            }
+          | null
+          | undefined;
+
+        const sinais = detectarSinaisDeRiscoRPD({
+          evidenciasFavor: payload?.evidencias_favor,
+          evidenciasContra: payload?.evidencias_contra,
+          comportamentoResultante: payload?.comportamento_resultante,
+        });
+
+        for (const sinal of sinais) {
+          const r = await registrarAlertaRiscoRPDSugerido(ctx, {
+            patientId: prep.patientId,
+            extractionId,
+            sinal: {
+              categoria: sinal.categoria,
+              severidade: sinal.severidade,
+              certeza: sinal.certeza,
+              trecho_fonte: sinal.trechoFonte,
+              detalhe: sinal.detalhe,
+            },
+          });
+          if ("erro" in r) errosAlerta.push(r.erro);
+        }
+      } catch (err) {
+        console.error("deteccao/registro de risco (RPD sugerido) falhou:", err);
+        errosAlerta.push(
+          "Não foi possível avaliar o risco do RPD sugerido.",
+        );
+      }
     }
 
     if (errosAlerta.length > 0) {
