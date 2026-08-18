@@ -140,6 +140,22 @@ Incidente operacional (2x nesta sessão, ambos por descuido do orquestrador, nã
 
 ---
 
+## 🏁 Sessão 18/08/2026 (3ª) — #392 fechada: ponte agente→RPD sugerido com fila de validação na aba TCC (PR #402, stack sobe pra #401)
+
+Executada issue [#392](https://github.com/romulosutil/Iris/issues/392): o valor central do produto para TCC (terapeuta escreve narrativo, agente estrutura) não existia — `tcc_rpd_entry` só era escrita por formulário digitado. Decisão de UX pendente do Rômulo fechada nesta sessão via `AskUserQuestion`: a fila de RPD sugerido vive **dentro da aba TCC do paciente**, não na fila geral `/validacao` (essa é `evidence`/`evidence_current`, domínio de meta/protocolo, não de pensamento automático — reaproveitar forçaria encaixe artificial).
+
+**Pipeline completo via `/tlc-spec-driven`** (specify → design → tasks → execute), primeira vez nesta sessão que o escopo justificou as 4 fases — `.specs/features/392-ponte-agente-rpd-sugerido/{spec,design,tasks}.md`. Gap real achado na fase de spec: `registroPensamentoSchema` do agente (#390) não cobre `situacao`/`emocao`/`intensidade`, campos `NOT NULL` em `tcc_rpd_entry` — resolvido por design: aprovação não é toggle, é abrir `rpd-form.tsx` pré-preenchido com o que o agente extraiu, terapeuta completa o resto. 6 tasks executadas por subagentes (T1 prompt sequencial → T2 migração `0112`+`registrar.ts` ∥ T3 fase de risco no diário → T4 queries/actions ∥ T5 UI → T6 checklist de invariantes + gate completo), com 2 colisões de interface entre agentes concorrentes auto-corrigidas nos próprios relatórios (assinatura de `registrarAlertaRiscoRPDSugerido`, shape de `RPDSugestao`).
+
+**Achado real de T1:** `TCC_SYSTEM_PROMPT` não instruía emissão de `registro_pensamento` — a seção "Formato de saída" dizia o oposto (stale desde #390). Corrigido, R9-TC a R13-TC citando explicitamente qual regra cada uma reforça.
+
+**Invariante herdada de #391, generalizada:** alerta de risco dispara na *criação* da sugestão (ancorado em `origem_extraction_id`), não espera aprovação; aprovar não recria/migra o alerta — trilha imutável, mesmo princípio.
+
+**Erro operacional corrigido nesta sessão:** o commit de #392 foi empurrado por engano para dentro da branch `feat/391-...` (já com PR #401 ready-for-review), poluindo o diff. Corrigido com `force-push --force-with-lease` (confirmado com o Rômulo via `AskUserQuestion` antes de agir, branch sem revisão externa ainda) devolvendo #401 ao diff limpo e movendo o commit de #392 para branch própria stacked em cima.
+
+`pnpm typecheck && pnpm lint && pnpm test && pnpm test:rls` verdes (209 arquivos/1466 testes, 109/1007 RLS). PR [#402](https://github.com/romulosutil/Iris/pull/402) aberto stacked em `feat/391-alerta-risco-rpd-instrumento`, ready for review. Próximo: #395.
+
+---
+
 ## 🏁 Sessão 18/08/2026 (2ª) — #391 fechada: alerta de risco a partir de RPD e instrumento formal (PR #401, stack #388→#387→#390→#389 continua)
 
 Executada issue [#391](https://github.com/romulosutil/Iris/issues/391): motor de alerta (#122) só disparava na consolidação do diário — RPD e instrumento formal não criavam alerta por construção. Migração `0111`: coluna `origem` (`diario_sessao`|`registro_pensamento`|`instrumento_formal`) em `alerta_risco_clinico`, CHECK `alerta_risco_vinculo` relaxado por origem sem afrouxar a FK composta `(patient_id, clinic_id)` anti-IDOR. Caminho determinístico não-LLM para item de risco de instrumento formal (valor ≥1 dispara, `null`/recusado dispara, `0` não dispara — decisão em código puro sobre payload já persistido). Gatilho no RPD transversal a modalidade/protocolo. `SYSTEM_PROMPT` padrão ganhou a regra de risco (R20) — antes só `CONVENTIONAL_SYSTEM_PROMPT` tinha.
