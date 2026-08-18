@@ -91,6 +91,46 @@
 
 ---
 
+## 🏁 Sessão 18/08/2026 (2ª) — TCC e Terapia Convencional: features mergeadas e 100% inacessíveis (#387-#395 abertas)
+
+**Gatilho:** o Rômulo relatou que TCC não aparece como opção clicável no menu, nem psicologia convencional — e trouxe feedback de usuário-teste de que o campo de distorção cognitiva confunde pacientes, sendo o que importa saber reestruturar o pensamento e fazer as evidências. As duas observações se confirmaram, e a primeira revelou um defeito maior do que o relatado.
+
+**Achado central — o campo que ativa a feature nunca foi renderizado.** `src/app/(app)/pacientes/novo/logic.ts:149-153` lê `formData.get("clinicalModality")`, mas `novo-paciente-form.tsx` não tem nenhum controle com esse `name`, e não existe rota de UPDATE da coluna em lugar nenhum (`GRANT UPDATE (clinical_modality)` da `0096:3` nunca exercido). O ternário cai sempre em `protocol_driven`. Consequência: **todo paciente em produção é `protocol_driven`**, a aba TCC (`layout.tsx:79`) nunca aparece e `CONVENTIONAL_SYSTEM_PROMPT` é inalcançável. Tudo que os PRs #305 (#98) e #306 (#99) entregaram — `tcc_rpd_entry` + RLS (`0103`), formulário RPD, gráfico de crenças, prompt convencional, roteamento de modo — é **código morto**. `layout.test.tsx:44,51,76` passa porque mocka a modalidade: um teste que mocka o campo que a UI nunca grava prova o gating, não a feature. Ambas as issues foram fechadas pelo diff, com CI verde — mesmo padrão de `merge-sem-conflito-apaga-feature-mergeada`. **Nem a #98 nem a #99 exigiram caminho de escrita do campo na Definição de Pronto** (AGENTS.md §5.2, ponto "dono do dado").
+
+**Erro de modelagem.** `layout.tsx:53-83` trata TCC como sub-caso de "conventional", o que contradiz a decisão desta mesma BACKLOG (linha 3173-3174, 29/07/2026) de que **TCC-sem-protocolo sai do nicho convencional**. TCC é o oposto de convencional naquele sentido — estruturada, manualizada, com instrumento formal e tarefa entre sessões; PHQ-9/GAD-7 **são** `protocolos_ativos[]`. Decisão: `clinical_modality` ganha um 3º valor `cognitive_behavioral` e o roteamento (abas + `modo` do agente + system prompt) vira 3-way, com `switch` exaustivo que **lança** em vez de cair em ABA por omissão.
+
+**Feedback do usuário-teste é clinicamente correto, e o próprio `protocolo-tcc.md` já tinha a evidência sem tirar a conclusão** (§2.1 e §6 achado 2: a enumeração das distorções varia por autor, de 8 a 15 itens, as fronteiras são ambíguas, e não existe fonte canônica única). Estávamos exigindo do paciente uma decisão que os próprios manuais não tomam de forma consistente. Decisão: adotar o **superconjunto Burns + Padesky** — o registro de 7 colunas de Greenberger & Padesky não tem coluna de distorção e tem duas colunas de evidência no lugar. **`distorcao_cognitiva` deixa de ser `NOT NULL`**, vira multivalorada, opcional, colapsada e posicionada **depois** da reestruturação; entram `evidencias_favor` / `evidencias_contra` como núcleo, mais credibilidade (%) do pensamento e da alternativa. "Campo obrigatório" é substituído por dois estados salváveis — _registro capturado_ (situação/pensamento/emoção) e _reestruturação completa_ — sendo a completude **derivada em leitura, nunca coluna gravada**. O gráfico só plota delta de registros completos.
+
+**Armadilha registrada de propósito:** a saída óbvia para `distorcao_cognitiva` ser `text` livre seria promover as 12 opções de `constants.ts` a enum PG ou CHECK. Isso **viola R19** — `taxonomia_distorcoes` é campo do contrato por clínica, pelo mesmo motivo que `taxonomia_ajuda` não é constante do agente. Estabilidade de agregação se resolve gravando **slugs** validados contra a taxonomia da clínica sob RLS, não com enum de banco.
+
+**Duas afirmações de `protocolo-tcc.md` §4 estavam obsoletas e foram corrigidas no doc:** (1) `duty to warn` **não** está em aberto — foi fechado pelo parecer Thiago Lyra (#110), Opção B, e o Iris nunca notifica família/SAMU/polícia/Conselho Tutelar (`regra-alerta-risco.md` §5.3: notificação externa é _descartada_, não adiada); (2) a implementação do motor **já aconteceu** em #122 (migração `0049`, `alerta_risco_clinico`, `src/lib/risco/`, fila `/alertas-risco`, `scripts/escalonamento-risco.mjs`). O bloqueador real de TCC é outro: **nenhuma superfície de TCC consegue alimentar o motor** — `registrarAlertaRisco` tem exatamente 1 chamador (consolidação do diário, `diario/[sessionId]/logic.ts:475-491`), `session_id` é obrigatório no vínculo (CHECK `alerta_risco_vinculo`), não existe caminho determinístico não-LLM para o item 9 do PHQ-9, e o `SYSTEM_PROMPT` padrão **não tem regra de risco nenhuma** (R5-TC existe só no prompt convencional, e os dois modos compartilham o mesmo tool schema).
+
+**Divergência de contrato encontrada de brinde:** `output-schema.json:147-163` lista `sinalizacoes[].tipo` sem `risco_seguranca` — valor que o código **já usa** em `levantarRiscoDeSinalizacoes` (`agent-output-schema.ts:186-211`) para promover a `alerta_risco`. O contrato documentado não descreve o campo que dispara o trilho de risco; quem tomar o doc como fonte reintroduz um falso negativo de segurança. Mesmo formato de `discriminador-cego-no-trilho-headless`.
+
+**Documentos produzidos:**
+
+- [`docs/arquitetura/modalidades-clinicas-e-abordagens.md`](docs/arquitetura/modalidades-clinicas-e-abordagens.md) — três eixos ortogonais (modelo de registro / protocolos ativos / família de abordagem), enum de 3 valores com a restrição de `ALTER TYPE ... ADD VALUE`, os três caminhos de escrita, e o mapa das 6 lacunas do trilho de risco.
+- [`docs/agente/rpd-desenho-de-formulario.md`](docs/agente/rpd-desenho-de-formulario.md) — ordem das 11 colunas, copy do campo opcional, regra de completude, mudanças de schema, taxonomia por clínica, a11y.
+- `docs/agente/protocolo-tcc.md` — dois blocos de atualização inseridos (§2.1 formulário decidido, §4 duty-to-warn fechado e motor implementado).
+
+**Issues abertas (9):** [#387](https://github.com/romulosutil/Iris/issues/387) seletor de modalidade (P0, `bug`) · [#388](https://github.com/romulosutil/Iris/issues/388) 3º valor do enum + roteamento 3-way + aba Temas (P0) · [#389](https://github.com/romulosutil/Iris/issues/389) RPD Padesky · [#390](https://github.com/romulosutil/Iris/issues/390) output-schema + Zod + `risco_seguranca` · [#391](https://github.com/romulosutil/Iris/issues/391) alerta de risco a partir de RPD e instrumento (segurança) · [#392](https://github.com/romulosutil/Iris/issues/392) ponte agente→RPD · [#393](https://github.com/romulosutil/Iris/issues/393) PHQ-9/GAD-7 com gate de fonte primária · [#394](https://github.com/romulosutil/Iris/issues/394) tarefa de casa · [#395](https://github.com/romulosutil/Iris/issues/395) suíte derivada dos casos de teste.
+
+**Ordem recomendada:** #388 → #387 (enum antes do seletor, senão o seletor nasce oferecendo a modelagem errada) → #390 (schema antes de prompt) → #389 → #391 → #392 → #395 → #393 → #394.
+
+**Pendências de decisão do Rômulo antes de aplicar a label `jules`:** (a) `origem_resposta_racional` — `protocolo-tcc.md` R5 marca como proposta não fechada; (b) onde a fila de RPD sugerido vive (aba do paciente vs. fila de validação geral); (c) como o escore de PHQ-9 aparece na UI (gráfico de tendência vs. só texto) — `protocolo-tcc.md` §7.3 registra explicitamente como não decidido; (d) se a tarefa de casa aberta aparece como lembrete no diário da sessão seguinte.
+
+**Aberto e não coberto pelas 9 issues:** lembrete de reaplicação de escala intervalar (`protocolo-tcc.md` §6 achado 4 — bloqueante para o caso de uso da coordenação); escolha do _hot thought_ quando há vários pensamentos automáticos no mesmo episódio (hoje `pensamento_automatico` é escalar); portabilidade de histórico na troca de terapeuta; conceituação cognitiva, agenda de sessão e escala de crença %; adoção formal da C-SSRS (marcada como PRECISA CONFIRMAÇÃO COM FONTE PRIMÁRIA); eixo idade da §5.2 de `regra-alerta-risco.md` não consumido em lugar nenhum do trilho de risco. **#331** (contrato de entrada do modo convencional diverge da spec) e **#119** (`visibility_level` por disciplina, que colide com `alerta_risco_scope` clínica-wide e com `trecho_fonte` guardando citação literal) seguem abertas e não foram tocadas.
+
+---
+
+## 🏁 Sessão 18/08/2026 — #341/#332 fechadas via pnpm patch, #327 fechada, fila sandbox Asaas pausada por erro (achado, sem issue)
+
+**Código:** PR [#386](https://github.com/romulosutil/Iris/pull/386) mergeada (09:51Z) fechando **#341** (Storybook/Vitest coletava 59 arquivos e rodava 0 testes em instalação limpa no Windows) e **#332** (suíte a11y flaky sob concorrência). Causa raiz do #341: o fix de 17/08 nunca existia no repo — o verde local vinha de 4 arquivos de `node_modules/.pnpm/module-alias@2.3.4` editados à mão, fora de controle de versão. Com o pacote pristino, 59/59 stories falhavam. Três bugs reais no `module-alias@2.3.4`: rejeição de path com `\` no Windows, `ERR_UNSUPPORTED_DIR_IMPORT` no Linux por alias de diretório sem completar `index.js`, e erro de protocolo para path absoluto no Windows. Corrigido via `patches/module-alias@2.3.4.patch` (pnpm patch, versionado) — não mais monkeypatch em runtime de `Module._resolveFilename`. CI validado: 15/15 checks, 202 arquivos / 1412 testes, 0 pulados. `infra/Dockerfile` ganhou `COPY patches ./patches` (build de produção quebraria sem isso, já que `patchedDependencies` exige o diretório presente). PR [#384](https://github.com/romulosutil/Iris/pull/384) mergeada (03:19Z) fechando **#327** (throttle de redefinir-senha sem oráculo de chave/limites).
+
+**Achado sem issue, fora do código do repo:** e-mail do Asaas às 18/08 avisa fila de webhook `Iris - sandbox (tunel local)` **pausada há 7 dias por erro de sincronização** — eventos retidos são apagados em 14 dias, fila desativada em 30 se não corrigida. Contradiz `BACKLOG.md` (linha da sessão de 03/08, "Sandbox: webhook desativado, 0 eventos penalizados") — **não está desativada**, está pausada acumulando falha; ou nunca foi desativada, ou foi religada nas medições da #321 (15/08). Túnel `cloudflared` → `localhost:3010` do sandbox está morto desde 04/08, então a fila não tem para onde entregar. **Zero impacto em produção** (webhook de produção é separado, confirmado 11/08) — puramente ambiente de teste. Sem issue dedicada; mais próximas são #375 (runbook de webhooks/conciliação) e #294 (alarme automático de falha de job — o padrão "só descobrimos por e-mail do fornecedor" é exatamente o que #294 existe para fechar). Ação pendente do Rômulo: desativar/excluir a fila no painel Asaas (nada de valor nela — só lixo de teste do sandbox, já listado na sessão de 03/08).
+
+---
+
 ## 🏁 Sessão 17/08/2026 — #322: a flag que não recuperava um centavo (passo 9 — a linha de billing fecha aqui)
 
 Executado o **passo 9**, o último: issue [#322](https://github.com/romulosutil/Iris/issues/322) — a retentativa extradia do Pix Automático era uma **flag inerte**. `retryPolicy: ALLOW_THREE_IN_SEVEN_DAYS` (entregue na #317) apenas **permite**; cada tentativa é comandada pelo recebedor, e até esta sessão o Iris não comandava nenhuma. Um único dia sem saldo matava o ciclo. Orquestração em subagentes (2 de pesquisa → 4 builders → revisão adversarial + campanha de mutação em paralelo → reparo → oráculos). Branch `feat/322-orquestracao-retentativa`, 6 commits, migração `0106`.
@@ -2022,8 +2062,12 @@ idempotência por `UNIQUE`, payload bruto reprocessável.
 - **Produção:** `ASAAS_WEBHOOK_TOKEN` provisionada e verificada; **nenhum
   webhook cadastrado** no Asaas. Nada em produção depende do Asaas hoje, então a
   conta bloqueada não derruba nada.
-- **Sandbox:** webhook `Iris - sandbox (tunel local)` **desativado** (URL do
-  túnel já morreu), `0 eventos penalizados`.
+- **Sandbox:** webhook `Iris - sandbox (tunel local)` estava ativo apontando
+  para um túnel morto. ⚠️ **Correção (18/08/2026): não estava desativado.**
+  E-mail do Asaas em 18/08 avisou a fila **pausada há 7 dias por erro de
+  sincronização** (retenção de 14 dias, desativação automática em 30). Sem
+  impacto em produção (webhook de produção é separado). Ver sessão de
+  18/08/2026 no log abaixo.
 - **Lixo de teste no sandbox, a limpar quando a conta normalizar:** cliente
   `cus_000008561913`, chave Pix EVP `2b02027c-…`, autorização
   `53da5204-…`, cobranças `pay_lw8gvq2qm2f7hmu1` e `pay_dexdnwf6w79b5hsi`,
