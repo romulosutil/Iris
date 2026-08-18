@@ -131,6 +131,19 @@ declarada** a uma tarefa combinada.
   domínio público clínico. Modelo "clínica cadastra o texto do formulário
   específico se usar um de marca registrada; a estrutura é livre".
 
+> **Atualização 18/08/2026 — formulário humano decidido.** O RPD do produto
+> adota o **superconjunto Burns + Padesky**: as colunas de **evidência a
+> favor / evidência contra** entram como núcleo do registro, e a
+> **distorção cognitiva vira OPCIONAL**, posicionada depois da
+> reestruturação e aceitando múltiplos valores. Motivo clínico direto desta
+> seção: a enumeração das distorções varia por autor (8 a 15 itens) e as
+> fronteiras entre categorias são ambíguas — exigir do paciente uma decisão
+> que os próprios manuais não tomam de forma consistente gera dado ruim e
+> ensina a caçar rótulo em vez de testar evidência. O registro de 7 colunas
+> de Greenberger & Padesky não tem coluna de distorção. Desenho completo,
+> incluindo mudanças de schema e regra de completude, em
+> `docs/agente/rpd-desenho-de-formulario.md`.
+
 ### 2.2 Escalas de triagem/desfecho padronizadas de uso público
 
 **Diferença estrutural central vs. TEA:** estas escalas são **de uso público
@@ -517,16 +530,39 @@ mapeado, R18, é autolesão/agressão física em criança, já tratado como
      protocolo específico), não como regra específica de TCC — só está
      detalhada aqui porque TCC é o nicho que primeiro torna essa lacuna
      visível e urgente.
-- **Desenho operacional fechado em documento próprio:** canal, SLA,
+- **Desenho operacional fechado em documento próprio:** canal, prazos,
   escalonamento, schema e copy foram especificados em
   `docs/agente/regra-alerta-risco.md` (issue #101) — fila dedicada
   (`alerta_risco_clinico`, não extensão da tabela `alerta` de
   `/supervisao`), notificação síncrona a terapeuta responsável E
-  coordenador, SLA por severidade (15min a 4h) com escalonamento em 2
-  estágios. **Duty to warn permanece explicitamente não decidido** —
-  documento levanta as perguntas para validação profissional (CFP/jurídico),
-  não responde. Nenhuma implementação real deveria avançar antes dessa
-  validação.
+  coordenador, prazo por severidade (15min a 4h) com escalonamento em 2
+  estágios.
+
+> **Atualização 18/08/2026 — dois pontos deste bloco ficaram obsoletos.**
+>
+> 1. **`duty to warn` NÃO está mais em aberto.** Foi fechado pelo parecer
+>    Thiago Lyra (#110), Opção B, registrado em `regra-alerta-risco.md` §5:
+>    o Iris **nunca** notifica família, SAMU, polícia ou Conselho Tutelar.
+>    Notificação externa é **descartada, não adiada** (§5.3). O único eixo
+>    que muda comportamento é **idade + violência sofrida**, e muda apenas a
+>    copy (ECA art. 13, Lei 13.431/2017 — §5.2).
+> 2. **A implementação já avançou.** #122 (fechada) entregou a migração
+>    `0049_alerta_risco_clinico.sql`, `alerta_risco_clinico`
+>    (`src/db/schema.ts:1595-1690`), `src/lib/risco/`, a fila
+>    `/alertas-risco` e `scripts/escalonamento-risco.mjs`. A frase original
+>    "nenhuma implementação real deveria avançar antes dessa validação"
+>    descrevia o estado de julho e não vale mais.
+>
+> O que segue faltando é específico de TCC, não do motor: nenhum caminho
+> além da consolidação do diário consegue criar alerta, `session_id` é
+> obrigatório no vínculo, não há caminho determinístico não-LLM para o item
+> 9 do PHQ-9, e o `SYSTEM_PROMPT` padrão não tem regra de risco. Mapeado em
+> `docs/arquitetura/modalidades-clinicas-e-abordagens.md` §7.2.
+>
+> **Nomenclatura:** nunca chamar os temporizadores de "SLA de atendimento" —
+> são "prazos de notificação e escalonamento interno do software"
+> (`regra-alerta-risco.md` §4.1). Ocorrências de "SLA" acima estão
+> corrigidas neste bloco e devem ser evitadas em copy e em issue.
 
 ---
 
