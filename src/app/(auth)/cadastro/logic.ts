@@ -32,6 +32,25 @@ export { VERSAO_TERMO };
 const CONSELHOS = ["crp", "crfa", "crefito", "crm", "outro"] as const;
 
 /**
+ * Domínios reservados/fictícios (RFC 2606 + equivalentes pt-BR usados como
+ * placeholder em formulários). Nunca correspondem a uma caixa de e-mail real
+ * — deixar passar aqui manda `enviarEmailTransacional` (verificação de conta)
+ * para um destino que não existe, e a conta fica presa em
+ * `requireEmailVerification` para sempre. Checagem PRÉ-NÚCLEO: não olha o
+ * banco, não depende de o e-mail existir.
+ */
+const DOMINIOS_FICTICIOS = new Set([
+  "exemplo.com.br",
+  "exemplo.com",
+  "exemplo.net",
+  "exemplo.org",
+  "example.com",
+  "example.net",
+  "example.org",
+  "example.edu",
+]);
+
+/**
  * Espelha `maxPasswordLength` do Better-Auth (128). Não é preferência nossa: é
  * o valor a partir do qual o sign-up lança e a verificação de senha não lança,
  * que foi o que reabriu o oráculo de enumeração pelo corpo da resposta na
@@ -197,6 +216,12 @@ export function validarCadastro(
 
   if (!dados.email.includes("@"))
     return { ok: false, error: "Informe um e-mail válido." };
+  const dominioEmail = dados.email.slice(dados.email.lastIndexOf("@") + 1);
+  if (DOMINIOS_FICTICIOS.has(dominioEmail))
+    return {
+      ok: false,
+      error: "Use um e-mail real — este domínio não recebe mensagens.",
+    };
   if (dados.senha.length < 12)
     return { ok: false, error: "A senha precisa ter ao menos 12 caracteres." };
   // TETO, do lado de cá (rodada de correção 3). O Better-Auth aplica
