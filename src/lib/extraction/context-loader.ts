@@ -142,7 +142,9 @@ export async function loadCanonicalContext(
   const modo =
     pac?.clinicalModality === "conventional"
       ? "terapia_convencional"
-      : "protocol_driven";
+      : pac?.clinicalModality === "cognitive_behavioral"
+        ? "tcc"
+        : "protocol_driven";
 
   return buildCanonicalContext({
     paciente: { idadeMeses: idadeEmMeses(pac?.nascimento ?? null) },

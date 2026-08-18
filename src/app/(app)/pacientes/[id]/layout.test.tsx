@@ -40,18 +40,20 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn(),
 }));
 
+function mockModalidade(clinicalModality: string) {
+  mockWithTenant.mockImplementation(async (_ctx, fn) => {
+    const mockTx = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([{ clinicalModality }]),
+    };
+    return fn(mockTx);
+  });
+}
+
 describe("PacienteLayout - Abas do Prontuário", () => {
-  it("exibe a aba PEI & Metas para paciente na modalidade protocol_driven", async () => {
-    mockWithTenant.mockImplementation(async (_ctx, fn) => {
-      const mockTx = {
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi
-          .fn()
-          .mockResolvedValue([{ clinicalModality: "protocol_driven" }]),
-      };
-      return fn(mockTx);
-    });
+  it("exibe só PEI & Metas para paciente na modalidade protocol_driven", async () => {
+    mockModalidade("protocol_driven");
 
     const LayoutComponent = await PacienteLayout({
       children: <div data-testid="child-content">Conteúdo</div>,
@@ -62,21 +64,12 @@ describe("PacienteLayout - Abas do Prontuário", () => {
 
     expect(screen.getByText("Evolução")).not.toBeNull();
     expect(screen.getByText("PEI & Metas")).not.toBeNull();
-    // O RPD é o espelho de PEI & Metas: some onde a pontuação de protocolo manda.
     expect(screen.queryByText("TCC")).toBeNull();
+    expect(screen.queryByText("Temas")).toBeNull();
   });
 
-  it("oculta a aba PEI & Metas para paciente na modalidade conventional", async () => {
-    mockWithTenant.mockImplementation(async (_ctx, fn) => {
-      const mockTx = {
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi
-          .fn()
-          .mockResolvedValue([{ clinicalModality: "conventional" }]),
-      };
-      return fn(mockTx);
-    });
+  it("exibe só TCC para paciente na modalidade cognitive_behavioral", async () => {
+    mockModalidade("cognitive_behavioral");
 
     const LayoutComponent = await PacienteLayout({
       children: <div data-testid="child-content">Conteúdo</div>,
@@ -86,7 +79,24 @@ describe("PacienteLayout - Abas do Prontuário", () => {
     render(LayoutComponent);
 
     expect(screen.getByText("Evolução")).not.toBeNull();
-    expect(screen.queryByText("PEI & Metas")).toBeNull();
     expect(screen.getByText("TCC")).not.toBeNull();
+    expect(screen.queryByText("PEI & Metas")).toBeNull();
+    expect(screen.queryByText("Temas")).toBeNull();
+  });
+
+  it("exibe só Temas para paciente na modalidade conventional", async () => {
+    mockModalidade("conventional");
+
+    const LayoutComponent = await PacienteLayout({
+      children: <div data-testid="child-content">Conteúdo</div>,
+      params: Promise.resolve({ id: "pac_3" }),
+    });
+
+    render(LayoutComponent);
+
+    expect(screen.getByText("Evolução")).not.toBeNull();
+    expect(screen.getByText("Temas")).not.toBeNull();
+    expect(screen.queryByText("PEI & Metas")).toBeNull();
+    expect(screen.queryByText("TCC")).toBeNull();
   });
 });

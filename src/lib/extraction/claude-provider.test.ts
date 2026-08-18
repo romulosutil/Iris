@@ -77,4 +77,27 @@ describe("ClaudeProvider", () => {
     );
     await expect(provider.extrair(ctx)).rejects.toThrow();
   });
+
+  test("lança em modo desconhecido/inválido — nunca cai em ABA por default (R3/#388)", async () => {
+    const invoker = vi.fn().mockResolvedValue(saidaValida);
+    const provider = new ClaudeProvider(invoker);
+    const ctxComModoInvalido = {
+      ...ctx,
+      contextoCanonico: { modo: "modo_inexistente" },
+    };
+    await expect(provider.extrair(ctxComModoInvalido)).rejects.toThrow(
+      /Modo de extração desconhecido/,
+    );
+    expect(invoker).not.toHaveBeenCalled();
+  });
+
+  test("modo 'tcc' usa o TCC_SYSTEM_PROMPT", async () => {
+    const invoker = vi.fn().mockResolvedValue(saidaValida);
+    const ctxTcc = { ...ctx, contextoCanonico: { modo: "tcc" } };
+    await new ClaudeProvider(invoker).extrair(ctxTcc);
+
+    const arg = invoker.mock.calls[0]![0] as { system: string; user: string };
+    expect(arg.system).toContain("R1-TC.");
+    expect(arg.system).toContain("TERAPIA COGNITIVO-COMPORTAMENTAL");
+  });
 });

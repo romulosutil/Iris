@@ -32,7 +32,7 @@ export type CanonicalContext = {
     idade_meses: number | null;
     metas_ativas: CanonicalMeta[];
   };
-  modo?: "terapia_convencional" | "protocol_driven";
+  modo?: "terapia_convencional" | "protocol_driven" | "tcc";
   protocolos_ativos: CanonicalProtocolo[];
   historico_relevante: Array<{
     dominio_id: string;
@@ -43,7 +43,7 @@ export type CanonicalContext = {
 
 export type AssemblerInput = {
   paciente: { idadeMeses: number | null };
-  modo?: "terapia_convencional" | "protocol_driven";
+  modo?: "terapia_convencional" | "protocol_driven" | "tcc";
   protocolos: Array<{
     familia: string;
     nome: string;

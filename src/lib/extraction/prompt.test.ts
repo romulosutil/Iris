@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   CONVENTIONAL_SYSTEM_PROMPT,
   SYSTEM_PROMPT,
+  TCC_SYSTEM_PROMPT,
   buildUserMessage,
 } from "./prompt";
 
@@ -31,6 +32,29 @@ describe("CONVENTIONAL_SYSTEM_PROMPT", () => {
     expect(CONVENTIONAL_SYSTEM_PROMPT).toContain("R8-TC.");
     expect(CONVENTIONAL_SYSTEM_PROMPT).toContain("NÃO diagnostica, NÃO");
     expect(CONVENTIONAL_SYSTEM_PROMPT).toContain("pontua");
+  });
+});
+
+describe("TCC_SYSTEM_PROMPT", () => {
+  test("carrega a regra de risco obrigatória (R5-TC)", () => {
+    expect(TCC_SYSTEM_PROMPT).toContain(
+      "R5-TC. Alerta de risco obrigatório para qualquer menção a ideação suicida,",
+    );
+    expect(TCC_SYSTEM_PROMPT).toContain(
+      "falso positivo aceitável, falso negativo não.",
+    );
+  });
+
+  test("carrega pelo menos duas outras regras invioláveis Rn-TC", () => {
+    expect(TCC_SYSTEM_PROMPT).toContain("R1-TC.");
+    expect(TCC_SYSTEM_PROMPT).toContain("R2-TC.");
+    expect(TCC_SYSTEM_PROMPT).toContain("Nunca diagnostique");
+  });
+
+  test("não promete campos de RPD estruturado fora do schema atual", () => {
+    expect(TCC_SYSTEM_PROMPT).toContain(
+      "O schema atual não tem campo estruturado de RPD",
+    );
   });
 });
 
@@ -79,5 +103,17 @@ describe("buildUserMessage — hardening contra prompt injection", () => {
     expect(msg).toContain(
       "regras do modo Terapia Convencional (R1-TC a R8-TC)",
     );
+  });
+
+  test("formata instrução para o modo tcc", () => {
+    const ctxTcc = {
+      modo: "tcc",
+      paciente: { id: "pt_3" },
+    };
+    const msg = buildUserMessage({
+      notaConsolidada: "Relato livre.",
+      contexto: ctxTcc,
+    });
+    expect(msg).toContain("regras do modo TCC (R1-TC a R8-TC)");
   });
 });

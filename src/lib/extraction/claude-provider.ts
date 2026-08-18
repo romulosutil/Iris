@@ -12,6 +12,7 @@ import {
 import {
   SYSTEM_PROMPT,
   CONVENTIONAL_SYSTEM_PROMPT,
+  TCC_SYSTEM_PROMPT,
   buildUserMessage,
 } from "./prompt";
 
@@ -59,11 +60,26 @@ export class ClaudeProvider implements ExtractionProvider {
       contexto,
     });
 
+    // Switch exaustivo (R3/#388): modo desconhecido/inválido LANÇA — nunca cai
+    // em ABA por default. `undefined` e "protocol_driven" são os únicos casos
+    // que resolvem para o SYSTEM_PROMPT (ABA).
     const modoObj = contexto as { modo?: string } | undefined;
-    const systemPrompt =
-      modoObj?.modo === "terapia_convencional"
-        ? CONVENTIONAL_SYSTEM_PROMPT
-        : SYSTEM_PROMPT;
+    const modo = modoObj?.modo;
+    let systemPrompt: string;
+    switch (modo) {
+      case "terapia_convencional":
+        systemPrompt = CONVENTIONAL_SYSTEM_PROMPT;
+        break;
+      case "tcc":
+        systemPrompt = TCC_SYSTEM_PROMPT;
+        break;
+      case "protocol_driven":
+      case undefined:
+        systemPrompt = SYSTEM_PROMPT;
+        break;
+      default:
+        throw new Error(`Modo de extração desconhecido: "${modo}".`);
+    }
 
     // Lança em erro de LLM (o caller trata como pendente_reprocessamento).
     const bruto = await this.invoker({ system: systemPrompt, user });
