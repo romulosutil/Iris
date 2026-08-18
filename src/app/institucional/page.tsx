@@ -29,10 +29,10 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/icon.svg",
-        width: 512,
-        height: 512,
-        alt: "Iris Governança Clínica Logo",
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Iris Governança Clínica — Prontuário para clínicas de terapia infantil (TEA)",
       },
     ],
   },
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     title: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
     description:
       "Transforme diários de sessão em evidências rastreáveis do PEI. Relatórios para convênios e famílias em minutos.",
-    images: ["/icon.svg"],
+    images: ["/og-image.png"],
   },
 };
 

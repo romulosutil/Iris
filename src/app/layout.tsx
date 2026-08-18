@@ -7,9 +7,36 @@ import { GoogleAnalytics } from "@/components/google-analytics";
 import { ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
-  title: "Iris",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br",
+  ),
+  title: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
   description:
     "Chegue na avaliação com o dossiê pronto. Evidências clínicas rastreáveis, decisão humana.",
+  openGraph: {
+    title: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
+    description:
+      "Chegue na avaliação com o dossiê pronto. Evidências clínicas rastreáveis, decisão humana.",
+    url: "/",
+    siteName: "Iris Governança Clínica",
+    locale: "pt_BR",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
+    description:
+      "Chegue na avaliação com o dossiê pronto. Evidências clínicas rastreáveis, decisão humana.",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
