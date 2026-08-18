@@ -1,0 +1,133 @@
+diff --git a/esm-loader.mjs b/esm-loader.mjs
+index 798cf02ee65adde900def171c937105ddb06ecdf..7bd96647cd9a4ac2915f94be00a3e2f7f601c123 100644
+--- a/esm-loader.mjs
++++ b/esm-loader.mjs
+@@ -135,13 +135,19 @@ export function reset () {
+ 
+ // For Node 18-21: async loader hooks
+ export async function resolve (specifier, context, nextResolve) {
+-  const resolved = resolveAlias(specifier, context.parentURL)
++  let resolved = resolveAlias(specifier, context.parentURL)
+   if (resolved) {
+     // If absolute path, convert to file URL
+-    if (resolved.startsWith('/')) {
++    if (resolved.startsWith('/') || resolved.match(/^[a-zA-Z]:/)) {
+       return { url: pathToFileURL(resolved).href, shortCircuit: true }
+     }
+     // Otherwise let Node resolve it (could be npm package)
++    resolved = resolved.replace(/\\/g, '/')
++    if (resolved === 'next/dist/compiled/react') {
++      resolved = 'next/dist/compiled/react/index.js'
++    } else if (resolved === 'next/dist/compiled/react-dom') {
++      resolved = 'next/dist/compiled/react-dom/index.js'
++    }
+     return nextResolve(resolved, context)
+   }
+   return nextResolve(specifier, context)
+diff --git a/index.js b/index.js
+index 8f2e570dc7679143fe935fb07e1f96db87e8f30d..babf4c6c8edbbc0ad546b5f661da3c3e70ae8f3b 100644
+--- a/index.js
++++ b/index.js
+@@ -40,7 +40,15 @@ Module._resolveFilename = function (request, parentModule, isMain, options) {
+           throw new Error('[module-alias] Expecting custom handler function to return path.')
+         }
+       }
+-      request = nodePath.join(aliasTarget, request.substr(alias.length))
++      var urlModule = require('url');
++      var resolvedTarget = aliasTarget;
++      if (typeof aliasTarget === 'string' && aliasTarget.startsWith('file://')) {
++        resolvedTarget = urlModule.fileURLToPath(aliasTarget);
++      }
++      request = nodePath.join(resolvedTarget, request.substr(alias.length))
++      if (request.startsWith('file://')) {
++        request = urlModule.fileURLToPath(request);
++      }
+       // Only use the first match
+       break
+     }
+diff --git a/index.mjs b/index.mjs
+index b6ba5a4f5a6ea42af8bafe8f067304aa9d2b8ed1..9a6e2a790fd985e72c8af6c50343d307555ecdab 100644
+--- a/index.mjs
++++ b/index.mjs
+@@ -1,11 +1,43 @@
+ // ESM entry point for module-alias
+ // Provides programmatic API with auto-registered hooks
+ 
+-import { registerHooks } from 'node:module'
++import { registerHooks, createRequire } from 'node:module'
+ import { addAlias as _addAlias, addAliases as _addAliases, addPath as _addPath, reset as _reset, resolveAlias } from './esm-loader.mjs'
++import path from 'node:path'
++import url from 'node:url'
++import fs from 'node:fs'
++
++const require = createRequire(import.meta.url)
++let nextDir
++try {
++  nextDir = path.dirname(require.resolve('next/package.json'))
++} catch (e) {}
+ 
+ let hooksRegistered = false
+ 
++function normalizeESMSpecifier(resolved) {
++  if (!resolved) return resolved
++  let normalized = resolved.replace(/\\/g, '/')
++
++  if (normalized.startsWith('next/dist/compiled/')) {
++    if (!nextDir) return normalized
++    const absPath = path.join(nextDir, normalized.slice(5))
++    try {
++      const stats = fs.statSync(absPath)
++      if (stats.isDirectory()) {
++        if (fs.existsSync(path.join(absPath, 'index.js'))) {
++          return normalized + '/index.js'
++        }
++      }
++    } catch (e) {
++      if (fs.existsSync(absPath + '.js')) {
++        return normalized + '.js'
++      }
++    }
++  }
++  return normalized
++}
++
+ function ensureHooks() {
+   if (hooksRegistered) return
+ 
+@@ -19,8 +51,12 @@ function ensureHooks() {
+ 
+   registerHooks({
+     resolve(specifier, context, nextResolve) {
+-      const resolved = resolveAlias(specifier, context.parentURL)
++      let resolved = resolveAlias(specifier, context.parentURL)
+       if (resolved) {
++        if (path.isAbsolute(resolved)) {
++          return { url: url.pathToFileURL(resolved).href, shortCircuit: true }
++        }
++        resolved = normalizeESMSpecifier(resolved)
+         return nextResolve(resolved, context)
+       }
+       return nextResolve(specifier, context)
+diff --git a/register.mjs b/register.mjs
+index cc44aa39fd2697527056ae746826a02373aa1fb6..0cee789009af649607c7a0bcee5a5dc8f8a6df1e 100644
+--- a/register.mjs
++++ b/register.mjs
+@@ -11,6 +11,8 @@ if (hasRegisterHooks) {
+   // Node 22.15+ - use synchronous hooks on main thread
+   const { registerHooks } = await import('node:module')
+   const { resolveAlias, init } = await import('./esm-loader.mjs')
++  const path = await import('node:path')
++  const url = await import('node:url')
+ 
+   init()
+ 
+@@ -18,6 +20,9 @@ if (hasRegisterHooks) {
+     resolve (specifier, context, nextResolve) {
+       const resolved = resolveAlias(specifier, context.parentURL)
+       if (resolved) {
++        if (path.isAbsolute(resolved)) {
++          return { url: url.pathToFileURL(resolved).href, shortCircuit: true }
++        }
+         return nextResolve(resolved, context)
+       }
+       return nextResolve(specifier, context)

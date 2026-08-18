@@ -15,6 +15,10 @@ RUN corepack install
 # --- deps: instala com lockfile congelado -------------------------------------
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# `patchedDependencies` (pnpm-workspace.yaml) referencia arquivos em patches/.
+# Sem eles no contexto, `pnpm install` morre com
+# `ENOENT: ... open '/app/patches/module-alias@2.3.4.patch'` — medido.
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 
 # --- build: gera o standalone -------------------------------------------------
