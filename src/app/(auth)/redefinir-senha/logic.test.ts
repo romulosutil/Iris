@@ -43,7 +43,10 @@ vi.mock("next/headers", () => ({
 
 import { APIError } from "better-auth/api";
 import {
+  JANELA_IP_S,
+  LIMITE_IP,
   MENSAGEM_SEM_LINK_ATIVO,
+  TETO_IP_S,
   executarRedefinirSenha,
   validarNovaSenha,
 } from "./logic";
@@ -325,5 +328,21 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
 
     await vi.advanceTimersByTimeAsync(100);
     expect(resolvida).toBe(true);
+  });
+
+  it("registra a tentativa de throttle com a chave de namespace propria e limites corretos", async () => {
+    const ip = "203.0.113.10";
+    headerStore.set("x-forwarded-for", ip);
+    cookieStore.set(NOME_COOKIE_TOKEN, "token-valido");
+    resetPassword.mockResolvedValueOnce({ status: true });
+
+    await executar(fd(SENHA_VALIDA));
+
+    expect(registrarTentativa).toHaveBeenCalledWith(
+      `redefinir-senha:ip:${ip}`,
+      LIMITE_IP,
+      JANELA_IP_S,
+      TETO_IP_S,
+    );
   });
 });
