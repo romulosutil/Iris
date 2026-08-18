@@ -119,10 +119,14 @@ jobs:
       - name: suíte completa — unit, a11y, storybook (com relatório JSON)
         run: pnpm vitest run --reporter=json --reporter=default --outputFile=test-report.json
 
-      # Piso medido: 202 arquivos, 1407 testes, 0 falha, 0 pulado
+      # Piso medido em 18/08/2026: 202 arquivos, 1412 testes, 0 falha, 0 pulado
       # (`node scripts/ci/verificar-cobertura-testes.mjs` sobre test-report.json).
-      # Margem de segurança sob o valor real, pra pegar queda abrupta sem
-      # travar todo crescimento da suíte.
+      # Quebra por projeto na mesma medição: unit 117 arq/1118 testes, a11y
+      # 26/142, storybook 59/147 — o piso agregado é baixo o bastante pra não
+      # travar crescimento e alto o bastante pra reprovar se QUALQUER um dos
+      # três projetos sumir inteiro da coleta (o menor deles, a11y, derruba os
+      # arquivos pra 176 < 180). Margem de segurança sob o valor real, pra
+      # pegar queda abrupta sem travar todo crescimento da suíte.
       - name: gate anti-pulo-silencioso (unit + a11y + storybook)
         run: node scripts/ci/verificar-cobertura-testes.mjs test-report.json --min-tests=1300 --min-files=180 --label=testes
 

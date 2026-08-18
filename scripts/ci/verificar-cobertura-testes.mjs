@@ -27,22 +27,62 @@
  */
 import { readFileSync } from "node:fs";
 
+const USO =
+  "uso: node verificar-cobertura-testes.mjs <relatorio.json> --min-tests=N --min-files=N [--label=nome]";
+
+/** Erro de linha de comando: o gate não chegou a rodar, então sai 2, não 1. */
+export class ErroDeUso extends Error {}
+
+/**
+ * Um piso que não chega (flag com typo, valor não numérico, flag ausente)
+ * desligaria o gate EM SILÊNCIO — `total < NaN` e `total < 0` são sempre
+ * `false`. Como este script existe justamente para não aceitar verde sem
+ * prova, ele recusa qualquer argumento que não entenda em vez de seguir com
+ * o piso default.
+ */
+function pisoInteiro(key, value) {
+  if (value.trim() === "") {
+    throw new ErroDeUso(`--${key} veio vazio — piso ausente desliga o gate`);
+  }
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new ErroDeUso(
+      `--${key}=${value} não é inteiro >= 0 — piso inválido desliga o gate em silêncio`,
+    );
+  }
+  return n;
+}
+
 export function parseArgs(argv) {
   const [reportPath, ...rest] = argv;
   if (!reportPath) {
-    console.error(
-      "uso: node verificar-cobertura-testes.mjs <relatorio.json> --min-tests=N --min-files=N [--label=nome]",
-    );
-    process.exit(2);
+    throw new ErroDeUso(`relatório não informado. ${USO}`);
   }
-  const opts = { minTests: 0, minFiles: 0, label: reportPath };
+  const opts = { minTests: null, minFiles: null, label: reportPath };
   for (const arg of rest) {
     const m = /^--([a-z-]+)=(.*)$/.exec(arg);
-    if (!m) continue;
+    if (!m) {
+      throw new ErroDeUso(`argumento não reconhecido: ${arg}. ${USO}`);
+    }
     const [, key, value] = m;
-    if (key === "min-tests") opts.minTests = Number(value);
-    if (key === "min-files") opts.minFiles = Number(value);
-    if (key === "label") opts.label = value;
+    switch (key) {
+      case "min-tests":
+        opts.minTests = pisoInteiro(key, value);
+        break;
+      case "min-files":
+        opts.minFiles = pisoInteiro(key, value);
+        break;
+      case "label":
+        opts.label = value;
+        break;
+      default:
+        throw new ErroDeUso(`flag desconhecida --${key}. ${USO}`);
+    }
+  }
+  if (opts.minTests === null || opts.minFiles === null) {
+    throw new ErroDeUso(
+      `--min-tests e --min-files são obrigatórios: sem piso o gate aprova qualquer coisa. ${USO}`,
+    );
   }
   return { reportPath, ...opts };
 }
@@ -103,24 +143,29 @@ export function verificarCobertura(report, opts = {}) {
 }
 
 export function main() {
-  const { reportPath, minTests, minFiles, label } = parseArgs(
-    process.argv.slice(2),
-  );
-
-  let raw;
+  let argumentos;
   try {
-    raw = readFileSync(reportPath, "utf8");
+    argumentos = parseArgs(process.argv.slice(2));
+  } catch (err) {
+    if (!(err instanceof ErroDeUso)) throw err;
+    console.error(`[cobertura] ${err.message}`);
+    process.exit(2);
+  }
+  const { reportPath, minTests, minFiles, label } = argumentos;
+
+  let report;
+  try {
+    report = JSON.parse(readFileSync(reportPath, "utf8"));
   } catch (err) {
     console.error(
-      `[cobertura:${label}] não consegui ler ${reportPath}: ${err instanceof Error ? err.message : String(err)}`,
+      `[cobertura:${label}] não consegui ler/parsear ${reportPath}: ${err instanceof Error ? err.message : String(err)}`,
     );
     console.error(
-      "[cobertura] sem relatório, não há como provar que algo rodou — falhando.",
+      "[cobertura] sem relatório íntegro, não há como provar que algo rodou — falhando.",
     );
     process.exit(1);
   }
 
-  const report = JSON.parse(raw);
   const resultado = verificarCobertura(report, { minTests, minFiles, label });
   const { totalFiles, totalTests, passedTests, failedTests, pendingTests } =
     resultado.stats;

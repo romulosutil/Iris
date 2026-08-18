@@ -16,15 +16,14 @@ export default defineConfig({
         import.meta.dirname,
         "node_modules/server-only/empty.js",
       ),
-      // Normaliza aliases caso o separador Windows (\) vaze no resolver (#341)
+      // Normaliza aliases caso o separador Windows (\) vaze no resolver (#341).
+      // Alias de string no @rollup/plugin-alias casa por igualdade OU por
+      // prefixo `find + "/"`, e a PRIMEIRA entrada que casa vence — então
+      // estas duas já cobrem os subcaminhos (`.../react/jsx-runtime`,
+      // `.../react-dom/server`). Entradas específicas para subcaminho seriam
+      // inalcançáveis e dariam a falsa impressão de estarem no controle.
       "next\\dist\\compiled\\react": "next/dist/compiled/react",
       "next\\dist\\compiled\\react-dom": "next/dist/compiled/react-dom",
-      "next\\dist\\compiled\\react-dom/server":
-        "next/dist/compiled/react-dom/server.js",
-      "next\\dist\\compiled\\react/jsx-runtime":
-        "next/dist/compiled/react/jsx-runtime",
-      "next\\dist\\compiled\\react/jsx-dev-runtime":
-        "next/dist/compiled/react/jsx-dev-runtime",
     },
   },
   test: {
