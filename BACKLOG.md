@@ -140,6 +140,31 @@ Incidente operacional (2x nesta sessão, ambos por descuido do orquestrador, nã
 
 ---
 
+## 🏁 Sessão 18/08/2026 (5ª) — #393 fechada: escalas PHQ-9/GAD-7 - schema, escore relatado e gate de fonte primária (PR #404, stack sobe pra #403)
+
+Executada issue [#393](https://github.com/romulosutil/Iris/issues/393): estrutura, schema e gatilho de risco para PHQ-9 e GAD-7 — **nenhum texto de item licenciado (Pfizer) commitado no repositório**, gate verificado por grep manual no diff.
+
+- Tabela `instrumento_aplicacao` (RLS copiada literal de `tcc_rpd_entry`/`0103`, `app_role` com INSERT direto sob RLS, sem definer) + `instrumento_item_texto` vazia por padrão (SELECT-only, sem seed) na migração `0113`.
+- Servidor recalcula `escore_total`/`item_9_valor` de `respostas_por_item` — nunca confia em total pré-calculado do cliente.
+- `item_risco_positivo` mantém `null` distinto de `false` em todo o caminho de escrita (testado a nível de banco de dados, `IS NULL` vs `IS NOT DISTINCT FROM false`).
+- `TCC_SYSTEM_PROMPT` ganhou **R14-TC**: agente nunca soma o escore, só registra o número quando literal no texto da nota clínica — cobrindo o gap de `aplicacao_escala_relatada`.
+- Severidade do item 9 mapeada por valor em `registrar.ts` (`0` não dispara, `1`→`ideacao_passiva`, `2`/`3`→`ideacao_ativa_sem_plano` — **nunca** `ideacao_ativa_com_plano` só pelo número, já que o PHQ-9 mede frequência, não presença de plano).
+
+**Achados reais corrigidos durante a implementação:**
+
+1. **Caminho manual não tinha âncora para o alerta de risco** — o CHECK de `alerta_risco_clinico` (#391) exigia `origem_extraction_id`, que só existe no caminho via agente. Migração `0114` adicionou `instrumento_aplicacao_id` como âncora alternativa; `registrarAlertaRiscoInstrumentoManual` espelha o caminho via agente sem forjar proveniência.
+2. **Formulário de aplicação na UI** — montado `InstrumentoForm` (PHQ-9 e GAD-7) com a query de itens de texto `obterInstrumentoItensTexto` integrada em `src/app/(app)/pacientes/[id]/tcc/escalas/page.tsx`.
+3. **Verificação T7:** registro de policies RLS (`db/tests/clinic-id-helper-rls.int.test.ts`) atualizado com as 4 policies novas (`POLICIES_COM_HELPER`, 52→56). Duas fixtures de teste em `registrar.int.test.ts` que citavam rótulos oficiais de frequência do PHQ-9 foram substituídas por texto sintético para honrar o gate de fonte primária.
+
+**Débitos registrados:**
+
+- **D50 (RQ6/#393):** escore literal vs. ausência provado a nível de instrução de prompt, sem teste de pipeline/LLM real.
+- **D51 (RQ9/#393):** imutabilidade de alerta em edição de instrumento untestável por ausência de função de UPDATE em `instrumento_aplicacao`.
+
+Verde medido: `pnpm typecheck && pnpm lint && pnpm test && pnpm test:rls` (213 arquivos/1507 testes, 111/1024 RLS). PR [#404](https://github.com/romulosutil/Iris/pull/404) aberto, `base-must-be-main` verificado na branch rebaseada sobre a main, checks de CI passando, marcado como ready for review. Próximo: #394.
+
+---
+
 ## 🏁 Sessão 18/08/2026 (4ª) — #395 fechada: suíte automatizada dos 10 casos TCC/convencional, contra Gemini (PR #403, stack sobe pra #402)
 
 Executada issue [#395](https://github.com/romulosutil/Iris/issues/395): primeira suíte que testa **comportamento do agente**, não CRUD/RLS — converte `docs/agente/casos-de-teste-tcc.md` (T1-T5) e `casos-de-teste-terapia-convencional.md` (TC-1..TC-5) em 13 testes reais, chamando `buildUserMessage`/`TCC_SYSTEM_PROMPT`/`CONVENTIONAL_SYSTEM_PROMPT`/`agentOutputSchema.parse` de produção (não reimplementação). Isolada de `pnpm test`/CI: `*.llm.test.ts` + `vitest.llm.config.ts` + `pnpm test:llm`.

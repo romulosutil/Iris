@@ -5,8 +5,14 @@ import { withTenant } from "@/db/rls";
 import { patient } from "@/db/schema";
 import { obterRPDEntries } from "./logic";
 import { obterRPDSugestoes } from "./sugestoes";
+import {
+  obterInstrumentoAplicacoes,
+  obterInstrumentoItensTexto,
+} from "./instrumento-logic";
 import { RpdForm } from "./rpd-form";
 import { RpdSugestoes } from "./rpd-sugestoes";
+import { InstrumentoLista } from "./instrumento-lista";
+import { InstrumentoForm } from "./instrumento-form";
 import { GraficoEvolucaoCrencas } from "./grafico-evolucao-crencas";
 import { rotuloDistorcao } from "./constants";
 import { Pill } from "@/components/ui/primitives/pill";
@@ -37,6 +43,14 @@ export default async function TccPage({ params }: TccPageProps) {
 
   const entries = await obterRPDEntries(ctx, patientId);
   const sugestoes = await obterRPDSugestoes(ctx, patientId);
+  const instrumentoAplicacoes = await obterInstrumentoAplicacoes(
+    ctx,
+    patientId,
+  );
+  const [itensPhq9, itensGad7] = await Promise.all([
+    obterInstrumentoItensTexto(ctx, "phq9"),
+    obterInstrumentoItensTexto(ctx, "gad7"),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,6 +85,29 @@ export default async function TccPage({ params }: TccPageProps) {
           🤖 Sugestões de RPD do Agente
         </h3>
         <RpdSugestoes patientId={patientId} sugestoes={sugestoes} />
+      </div>
+
+      {/* #393 — instrumentos padronizados: forms manuais (T4) + histórico
+          texto (T6). Cada form só renderiza itens se `instrumento_item_texto`
+          já tiver conteúdo carregado para aquele tipo (T3, gate de fonte
+          primária) — enquanto vazio (default), mostra estado vazio próprio. */}
+      <div className="flex flex-col gap-3">
+        <h3 className="font-display text-lg font-bold text-[var(--text-primary)]">
+          Instrumentos Padronizados (PHQ-9 / GAD-7)
+        </h3>
+        <InstrumentoLista aplicacoes={instrumentoAplicacoes} />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <InstrumentoForm
+            patientId={patientId}
+            tipoInstrumento="phq9"
+            itensTexto={itensPhq9}
+          />
+          <InstrumentoForm
+            patientId={patientId}
+            tipoInstrumento="gad7"
+            itensTexto={itensGad7}
+          />
+        </div>
       </div>
 
       {/* Formulário de Novo RPD */}

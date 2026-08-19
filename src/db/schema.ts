@@ -1651,6 +1651,17 @@ export const alertaRiscoClinico = pgTable(
     origemExtractionId: uuid("origem_extraction_id").references(
       () => extraction.id,
     ),
+    // #393 (gap fix) — âncora alternativa para `origem='instrumento_formal'`
+    // quando o instrumento foi aplicado pelo caminho MANUAL (sem `extraction`
+    // de origem). `origemExtractionId` continua sendo a âncora do caminho via
+    // agente (#391 Fase E); as duas nunca coexistem preenchidas no mesmo
+    // alerta — mesmo shape mutuamente exclusivo de `rpdEntryId`/
+    // `origemExtractionId` em `registro_pensamento` (#392). Nome do FK dado
+    // explicitamente (`foreignKey()` abaixo, não `.references()` inline):
+    // o nome auto-gerado por Drizzle (`alerta_risco_clinico_instrumento_
+    // aplicacao_id_instrumento_aplicacao_id_fk`) tem 73 chars > limite de 63
+    // do Postgres (truncaria em silêncio).
+    instrumentoAplicacaoId: uuid("instrumento_aplicacao_id"),
 
     categoria: alertaRiscoCategoria("categoria").notNull(),
     severidade: alertaRiscoSeveridade("severidade").notNull(),
@@ -1708,6 +1719,12 @@ export const alertaRiscoClinico = pgTable(
       foreignColumns: [patient.id, patient.clinicId],
       name: "alerta_risco_patient_fk",
     }).onDelete("restrict"),
+    // #393 (gap fix) — nome curto explícito, ver comentário na coluna acima.
+    foreignKey({
+      columns: [t.instrumentoAplicacaoId],
+      foreignColumns: [instrumentoAplicacao.id],
+      name: "alerta_risco_instrumento_aplicacao_fk",
+    }),
     // Invariante da §7 preservada onde importa: TODO alerta vivo tem paciente e
     // UMA âncora — sessão (diário), RPD ou extração de instrumento (#391), a
     // depender de `origem`. Só o expurgo (H2) pode soltar esses vínculos, e
@@ -2181,5 +2198,100 @@ export const tccRpdEntry = pgTable(
     ),
     index("idx_tcc_rpd_patient").on(t.patientId, t.criadoEm.desc()),
     index("idx_tcc_rpd_clinic").on(t.clinicId),
+  ],
+);
+
+// ─── #393 — Instrumentos padronizados (PHQ-9/GAD-7) ──────────────────────────
+// Compartilhado com `instrumento_item_texto` (T3, mesma migração 0113): ambas
+// as tabelas referenciam o mesmo tipo de instrumento.
+export const instrumentoTipo = pgEnum("instrumento_tipo", ["phq9", "gad7"]);
+
+// Mesmos valores de `fonte_do_escore` em `aplicacaoEscalaRelatadaSchema`
+// (agent-output-schema.ts:149-151) — procedimental (como o número chegou),
+// não taxonomia clínica.
+export const instrumentoFonteEscore = pgEnum("instrumento_fonte_escore", [
+  "paciente_informou",
+  "terapeuta_calculou_na_sessao",
+  "nao_informado",
+]);
+
+// Única superfície de escrita OFICIAL de `instrumento_aplicacao` é o form
+// manual (`salvarInstrumentoAplicacao`, T4) — sem SECURITY DEFINER no
+// caminho de escrita, então `app_role` recebe GRANT direto sob RLS, mesmo
+// padrão de `tcc_rpd_entry` (não o padrão de `alerta_risco_clinico`, que é
+// definer-only). Ver GRANT no `.sql` desta migração.
+export const instrumentoAplicacao = pgTable(
+  "instrumento_aplicacao",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => session.id, {
+      onDelete: "set null",
+    }),
+    // Referência ao catálogo do instrumento (protocol.familia), NÃO ao
+    // protocolo clínico ABA — mesmo nome de coluna por paralelismo com
+    // `tccRpdEntry`/protocolos ABA, mas sem FK: catálogo de instrumento não
+    // vive em `protocol` hoje (design.md §1).
+    protocolId: text("protocol_id").notNull(),
+    tipoInstrumento: instrumentoTipo("tipo_instrumento").notNull(),
+    escoreTotal: integer("escore_total"),
+    fonteDoEscore: instrumentoFonteEscore("fonte_do_escore").notNull(),
+    respostasPorItem: jsonb("respostas_por_item").notNull(),
+    // Só relevante PHQ-9 (item 9 = ideação suicida); NULL para GAD-7 ou item
+    // não respondido.
+    item9Valor: integer("item_9_valor"),
+    // `null` ≠ `false`: item de risco não respondido é distinto de
+    // "respondeu 0/negou" (mesma regra de `item_risco_positivo` no schema do
+    // agente, agent-output-schema.ts:152-158). NUNCA `.default(false)`.
+    itemRiscoPositivo: boolean("item_risco_positivo"),
+    criadoPor: uuid("criado_por")
+      .notNull()
+      .references(() => appUser.id),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "instrumento_aplicacao_item9_range",
+      sql`${t.item9Valor} IS NULL OR (${t.item9Valor} BETWEEN 0 AND 3)`,
+    ),
+    index("idx_instrumento_aplicacao_patient").on(
+      t.patientId,
+      t.criadoEm.desc(),
+    ),
+    index("idx_instrumento_aplicacao_clinic").on(t.clinicId),
+  ],
+);
+
+// `instrumento_item_texto` (T3) — vaso vazio para o texto PT-BR (PHQ-9/GAD-7).
+// Conteúdo é licenciado (Pfizer), pendente de confirmação jurídica: esta
+// migração NÃO insere nenhuma linha com texto real; `texto` fica NULL até
+// uma migração futura, depois da licença confirmada. `clinicId` nullable
+// permite override por clínica no futuro, mas #393 não popula nada
+// clinic-scoped nem global — zero seed. Tabela separada de `clinic` (não
+// coluna JSONB): conteúdo é regulatório/compartilhado, não config por
+// clínica (design.md, "Decisões técnicas").
+export const instrumentoItemTexto = pgTable(
+  "instrumento_item_texto",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tipoInstrumento: instrumentoTipo("tipo_instrumento").notNull(),
+    numeroItem: integer("numero_item").notNull(),
+    texto: text("texto"),
+    clinicId: uuid("clinic_id").references(() => clinic.id, {
+      onDelete: "cascade",
+    }),
+  },
+  (t) => [
+    index("idx_instrumento_item_texto_tipo").on(
+      t.tipoInstrumento,
+      t.numeroItem,
+    ),
   ],
 );

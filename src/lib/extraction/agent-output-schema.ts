@@ -147,7 +147,11 @@ const aplicacaoEscalaRelatadaSchema = z.object({
   protocol_id: z.string().nullable().optional(),
   escore_relatado: z.number().nullable().optional(),
   fonte_do_escore: z
-    .enum(["paciente_informou", "terapeuta_calculou_na_sessao", "nao_informado"])
+    .enum([
+      "paciente_informou",
+      "terapeuta_calculou_na_sessao",
+      "nao_informado",
+    ])
     .optional(),
   // NUNCA `.default(false)`: item de risco não respondido/pulado é `null`,
   // distinto de "respondeu 0/negou" (`false`). Recusa de resposta a item de
@@ -185,7 +189,9 @@ const extracaoSchema = z.object({
   ausencia_comportamento: ausenciaSchema.nullable().optional(),
   preferencia_reforcador: preferenciaSchema.nullable().optional(),
   registro_pensamento: registroPensamentoSchema.nullable().optional(),
-  aplicacao_escala_relatada: aplicacaoEscalaRelatadaSchema.nullable().optional(),
+  aplicacao_escala_relatada: aplicacaoEscalaRelatadaSchema
+    .nullable()
+    .optional(),
   tarefa_casa: tarefaCasaSchema.nullable().optional(),
 });
 

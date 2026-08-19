@@ -1,7 +1,24 @@
 # Checkpoint — Iris
 
-> **Data:** 19/08/2026
-> **Status:** 🟢 **#388, #387, #390, #389, #391 e #392 mergeadas na main (PRs #397, #398, #399, #400, #401, #402). #395 rebaseada limpa na main, verificada e com PR aberta (#403).** #395: primeira suíte que testa comportamento do agente (13 testes derivados de `docs/agente/casos-de-teste-{tcc,terapia-convencional}.md`), isolada de `pnpm test` (`*.llm.test.ts`/`pnpm test:llm`). Roda contra **Gemini** por decisão explícita do Rômulo (custo, não qualidade — produção segue 100% Anthropic). Baseline real 11/13 verde, 2 vermelhos são achado real documentado (T4 inventa `tarefa_casa` sem instrução; probe R4-TCC/R11-TC pega confiança "alta" indevida). **D49 aberta:** prova de mutação bloqueada por quota grátis do Gemini (20 req/dia esgotada) — alvos já mapeados em `prompt.ts`, retomar com quota nova/key paga. Verde: `pnpm typecheck/lint/test` (suíte LLM fora do padrão). Detalhe completo no `BACKLOG.md`. Próximo: #393.
+> **Data:** 19/08/2026 (sessão retomada — PR #404 rebaseada na main, BACKLOG.md atualizado)
+> **Status:** 🟢 **#388, #387, #390, #389, #391, #392 e #395 mergeadas na main (PRs #397, #398, #399, #400, #401, #402, #403). #393 rebaseada limpa na main, verificada e com PR aberta (#404).** `BACKLOG.md` atualizado com débitos D49-D51 e sessão de #393. **Próximo da cadeia: #394** (último da corrente do goal `#391→#392→#395→#393→#394`).
+>
+> **#393 — o que foi feito:** tabela `instrumento_aplicacao` (RLS copiada de `tcc_rpd_entry`) + `instrumento_item_texto` vazia por padrão (gate de conteúdo licenciado Pfizer, migração `0113`). Servidor recalcula escore/item_9 de `respostas_por_item`, nunca confia no cliente. `TCC_SYSTEM_PROMPT` ganhou R14-TC (nunca somar escore). Severidade do item 9 mapeada por valor (`registrar.ts`, nunca `ideacao_ativa_com_plano` só pelo número). **Dois gaps reais achados e corrigidos:** (1) caminho manual não tinha como ancorar alerta de risco — migração `0114` adiciona `instrumento_aplicacao_id` como âncora alternativa, `registrarAlertaRiscoInstrumentoManual` novo; (2) T6 montou só a lista de histórico em `page.tsx`, esqueceu `InstrumentoForm` — corrigido manualmente (2 instâncias phq9/gad7 + `obterInstrumentoItensTexto`), quebrou `page.test.tsx`, também corrigido.
+>
+> **T7 (checklist de invariantes + gate completo) RODOU E FECHOU:** 7/9 invariantes PASS direto. 2 achados reais:
+>
+> - **Corrigido nesta sessão:** `db/tests/clinic-id-helper-rls.int.test.ts` não tinha as 4 policies novas de `instrumento_aplicacao` no registro (`POLICIES_COM_HELPER`, 52→56) — já estava commitado antes de T7 confirmar (T7 tentou o mesmo fix, era no-op).
+> - **Corrigido nesta sessão:** 2 fixtures de teste em `registrar.int.test.ts` citavam rótulos oficiais de frequência do PHQ-9 ("vários dias"/"quase todos os dias") — violava o gate de fonte primária mesmo em teste. Substituído por texto sintético, commit `a666ca9`, 6/6 testes continuam verdes.
+> - **Débito, não bloqueante:** D50 / RQ6 (escore literal vs. ausência) só provado a nível de PROMPT — não há teste de pipeline/LLM real provando o comportamento do agente (mesma classe de gap do D49). D51 / RQ9 (corrigir escore não apaga alerta) é **untestável por ausência** — `instrumento-logic.ts` não tem função de UPDATE ainda, mesmo padrão do gap de edição de RPD do #391.
+>   `pnpm typecheck && pnpm lint && pnpm test && pnpm test:rls` — 213 arquivos/1507 testes, 111/1024 RLS, tudo verde.
+>
+> **Próximo passo imediato:**
+>
+> 1. Seguir para **#394** (tarefa de casa / adherence tracking, último da corrente do goal `#391→#392→#395→#393→#394`) — começar por `gh issue view 394`.
+>
+> **Débitos abertos desta sessão (registrados em BACKLOG.md):** D49 (prova de mutação do #395 bloqueada por quota Gemini, 20 req/dia, alvos já mapeados em `prompt.ts`); D50 (RQ6/#393 sem prova de pipeline real, mesma classe do D49); D51 (RQ9/#393 sem UPDATE path pra testar, mesmo padrão do gap de edição de RPD, #391).
+>
+> **Sessões #388-#392/#395 (histórico, contexto já processado, não precisa reler):** #395 rodou contra **Gemini** por decisão explícita do Rômulo (custo, produção segue Anthropic). Baseline real 11/13 verde, 2 vermelhos são achado real documentado. Nota de higiene: 20 chars de 53 da `GOOGLE_API_KEY` vazaram parcialmente no transcript ao checar `Get-Clipboard` (key completa nunca exposta, nunca commitada — avaliar rotação, sinalizado ao Rômulo). Detalhe completo no `BACKLOG.md` (sessões 18/08 2ª-4ª).
 >
 > **#388 e #387 executados, verificados e commitados.** #387 (PR #398, empilhada sobre #397/#388): seletor de modalidade no cadastro (radio group obrigatorio, sem fallback), gate de consentimento adulto+TCC/convencional (client+servidor), edicao via Server Action (UPDATE direto + audit_log, sem SECURITY DEFINER — RLS `patient_update` ja cobria, correcao de premissa da issue original), guard 404 em `tcc/page.tsx`. Verde: typecheck/lint/test (205/1433)/test:rls. Branch `feat/387-clinical-modality-selector` empilhada sobre `feat/388-...`. Proximo: #390.
 >

@@ -792,6 +792,20 @@
       "when": 1787089454108,
       "tag": "0112_rpd_sugerido_provenencia",
       "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1787097828250,
+      "tag": "0113_instrumento_aplicacao",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1787099343349,
+      "tag": "0114_alerta_risco_instrumento_aplicacao_anchor",
+      "breakpoints": true
     }
   ]
 }
