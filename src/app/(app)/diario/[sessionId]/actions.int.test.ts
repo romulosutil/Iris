@@ -452,8 +452,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     const mockarProvider = async (drafts: unknown[]) => {
       const { resolveProvider } = await import("@/lib/extraction/provider");
       vi.mocked(resolveProvider).mockReturnValueOnce({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        extrair: async () => ({ drafts: drafts as any, alertaRisco: null }),
+        extrair: async () => ({ drafts: drafts as never, alertaRisco: null }),
       });
     };
 
@@ -495,8 +494,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
           inconsistenteComHistorico: false,
           parContrasteId: null,
           payload: {
-            evidencias_favor:
-              "Às vezes penso em me matar quando fico assim.",
+            evidencias_favor: "Às vezes penso em me matar quando fico assim.",
             evidencias_contra: null,
             comportamento_resultante: "Ficou isolado no quarto.",
           },
@@ -518,6 +516,41 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(alertas.length).toBe(1);
       expect(alertas[0]!.categoria).toBe("ideacao_suicida");
       expect(alertas[0]!.certeza).toBe("ambiguo_citado");
+      expect(alertas[0]!.origem_extraction_id).toBe(ex[0]!.id);
+      expect(alertas[0]!.rpd_entry_id).toBeNull();
+    });
+
+    test("registro_pensamento com ideação apenas no trechoFonte (pensamento automático) cria alerta", async () => {
+      await limpar();
+      await mockarProvider([
+        {
+          subtipo: "registro_pensamento",
+          trechoFonte: "Às vezes penso em me matar quando fico assim.",
+          confianca: "alta",
+          inconsistenteComHistorico: false,
+          parContrasteId: null,
+          payload: {
+            evidencias_favor: "Nenhum amigo me respondeu hoje.",
+            evidencias_contra: null,
+            comportamento_resultante: "Ficou isolado no quarto.",
+          },
+          estado: "sugerida",
+        },
+      ]);
+      const { consolidarSessao } = await import("./logic");
+      const r = await consolidarSessao(ctxT1, {
+        sessionId: SESS,
+        texto: "RPD sugerido com ideação no trecho fonte.",
+      });
+      expect(r.error).toBeUndefined();
+
+      const ex =
+        await owner`SELECT id FROM extraction WHERE session_id = ${SESS} AND subtipo = 'registro_pensamento'`;
+      expect(ex.length).toBe(1);
+
+      const alertas = await alertasRPDSugerido();
+      expect(alertas.length).toBe(1);
+      expect(alertas[0]!.categoria).toBe("ideacao_suicida");
       expect(alertas[0]!.origem_extraction_id).toBe(ex[0]!.id);
       expect(alertas[0]!.rpd_entry_id).toBeNull();
     });

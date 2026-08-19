@@ -580,6 +580,7 @@ async function consolidarSessaoCore(
           | undefined;
 
         const sinais = detectarSinaisDeRiscoRPD({
+          pensamentoAutomatico: d.trechoFonte,
           evidenciasFavor: payload?.evidencias_favor,
           evidenciasContra: payload?.evidencias_contra,
           comportamentoResultante: payload?.comportamento_resultante,
@@ -601,9 +602,7 @@ async function consolidarSessaoCore(
         }
       } catch (err) {
         console.error("deteccao/registro de risco (RPD sugerido) falhou:", err);
-        errosAlerta.push(
-          "Não foi possível avaliar o risco do RPD sugerido.",
-        );
+        errosAlerta.push("Não foi possível avaliar o risco do RPD sugerido.");
       }
     }
 

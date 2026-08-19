@@ -136,11 +136,11 @@ BEGIN
     v_clinic, p_patient, p_session, p_origem, p_rpd_entry, p_origem_extraction,
     p_categoria, p_severidade, p_certeza, p_trecho, p_detalhe,
     v_minutos, now() + make_interval(mins => v_minutos),
-    app_user_id_atual()
+    app_user_id_exigido()
   ) RETURNING id INTO v_id;
 
   INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe)
-  VALUES (v_clinic, app_user_id_atual(),
+  VALUES (v_clinic, app_user_id_exigido(),
           'alerta_risco_criado', 'alerta_risco_clinico', v_id, p_patient,
           jsonb_build_object('severidade', p_severidade, 'certeza', p_certeza,
                              'origem', p_origem, 'prazo_minutos', v_minutos));
