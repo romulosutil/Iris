@@ -757,6 +757,13 @@
       "when": 1787078318669,
       "tag": "0107_clinical_modality_cognitive_behavioral",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1787081247724,
+      "tag": "0108_extraction_subtipo_tcc_convencional",
+      "breakpoints": true
     }
   ]
 }

@@ -118,6 +118,9 @@ export const extractionSubtipo = pgEnum("extraction_subtipo", [
   "cadeia",
   "preferencia_reforcador",
   "pendente",
+  "registro_pensamento",
+  "aplicacao_escala_relatada",
+  "tarefa_casa",
 ]);
 
 export const extractionConfianca = pgEnum("extraction_confianca", [

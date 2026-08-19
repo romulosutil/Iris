@@ -14,8 +14,12 @@
               "registro_abc",
               "ausencia_comportamento",
               "cadeia",
-              "preferencia_reforcador"
-            ]
+              "preferencia_reforcador",
+              "registro_pensamento",
+              "aplicacao_escala_relatada",
+              "tarefa_casa"
+            ],
+            "description": "#390: registro_pensamento, aplicacao_escala_relatada e tarefa_casa são dos modos TCC/convencional (enum PG extraction_subtipo, migração 0108). 'pendente' é legado do NullProvider e nunca esteve neste doc nem no Zod — fora de escopo."
           },
           "trecho_fonte": { "type": "string" },
           "confianca": { "enum": ["alta", "media", "baixa"] },
@@ -139,13 +143,69 @@
               "item_atividade": { "type": "string" },
               "valencia": { "enum": ["alta", "baixa", "saciado"] }
             }
+          },
+          "registro_pensamento": {
+            "type": ["object", "null"],
+            "description": "#390 — modo TCC, subsídio ao RPD. Campos de rpd-desenho-de-formulario.md §6 (mais recente que protocolo-tcc.md §2.5, desatualizado). Shape fechado a esta issue: não inclui situação/pensamento_automático/emoção/resposta_racional (fora de escopo, cobertos por resumo_sessao/sinalizacoes por ora).",
+            "properties": {
+              "evidencias_favor": { "type": ["string", "null"] },
+              "evidencias_contra": { "type": ["string", "null"] },
+              "credibilidade_inicial": {
+                "type": ["integer", "null"],
+                "description": "0-100 (smallint no banco)."
+              },
+              "credibilidade_alternativa": {
+                "type": ["integer", "null"],
+                "description": "0-100 (smallint no banco)."
+              },
+              "comportamento_resultante": { "type": ["string", "null"] },
+              "distorcoes_cognitivas": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Estrutural, SEM enum fixo (R19): taxonomia vem do contrato/config da clínica (taxonomia_distorcoes), validada na fila de validação do RPD — não no parse do schema, que não tem acesso a config por clínica."
+              }
+            }
+          },
+          "aplicacao_escala_relatada": {
+            "type": ["object", "null"],
+            "description": "#390 — aplicação de escala relatada (ex.: PHQ-9).",
+            "properties": {
+              "protocol_id": { "type": ["string", "null"] },
+              "escore_relatado": { "type": ["number", "null"] },
+              "fonte_do_escore": {
+                "enum": [
+                  "paciente_informou",
+                  "terapeuta_calculou_na_sessao",
+                  "nao_informado"
+                ],
+                "description": "Procedimental (como o número chegou), não taxonomia clínica — por isso enum fechado."
+              },
+              "item_risco_positivo": {
+                "type": ["boolean", "null"],
+                "description": "NUNCA default para false: item não respondido/pulado é null, distinto de 'respondeu 0/negou' (false). Recusa de resposta a item de risco é, em si, sinal de alerta em vários protocolos de triagem."
+              }
+            }
+          },
+          "tarefa_casa": {
+            "type": ["object", "null"],
+            "description": "#390 — shape MÍNIMO. #394 ('Tarefa de casa: evento com duas pontas no tempo') desenha o modelo completo depois; aqui só reserva o valor no enum de tipo com o mínimo plausível.",
+            "properties": {
+              "descricao": { "type": "string" },
+              "trecho_fonte": { "type": "string" }
+            }
           }
         }
       }
     },
     "resumo_sessao": { "type": "string" },
+    "temas": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "#390 — modo convencional: temas livres da sessão (R7-TC), texto curto, nunca enum fechado. tema_recorrente_sinalizado e padrao_participacao_verbal NÃO fazem parte deste contrato: CONVENTIONAL_SYSTEM_PROMPT (src/lib/extraction/prompt.ts) não promete esses campos na saída — são propostas do doc de protocolo (§3.1), não contrato de runtime."
+    },
     "sinalizacoes": {
       "type": "array",
+      "description": "Malformação em um item degrada o ARRAY INTEIRO para [] (.catch([]) no Zod) — nunca invalida a saída. Assimetria deliberada com alerta_risco, que é estrito e sem fallback (ver abaixo): sinalização comum pode degradar, risco de vida não pode.",
       "items": {
         "type": "object",
         "properties": {
@@ -153,11 +213,50 @@
             "enum": [
               "inconsistencia_historico",
               "possivel_erro_transcricao",
-              "texto_ambiguo"
-            ]
+              "texto_ambiguo",
+              "risco_seguranca"
+            ],
+            "description": "Lista de canônicos só para documentação — o Zod aceita qualquer string aqui (o modelo às vezes inventa rótulos; tolerar isso não pode afundar a extração)."
           },
           "detalhe": { "type": "string" }
         }
+      }
+    },
+    "alerta_risco": {
+      "type": ["object", "null"],
+      "description": "#122/#390 — sinal de risco transversal (R20/R5-TC), forma ÚNICA compartilhada pelos 3 modos (ABA/TCC/convencional), sem variante por modo. ESTRITO e SEM fallback de propósito: ausência = null, mas um alerta PRESENTE e malformado invalida a saída inteira (estado erro_validacao, visível) — comportamento oposto ao de `sinalizacoes` acima. `sinalizacoes[].tipo === 'risco_seguranca'` é normalizado para este campo antes da validação (ver levantarRiscoDeSinalizacoes em agent-output-schema.ts).",
+      "required": ["categoria", "severidade", "trecho_fonte", "detalhe"],
+      "properties": {
+        "categoria": {
+          "enum": [
+            "ideacao_suicida",
+            "autolesao",
+            "violencia_sofrida",
+            "violencia_praticada",
+            "risco_a_terceiro"
+          ]
+        },
+        "severidade": {
+          "enum": [
+            "ideacao_passiva",
+            "ideacao_ativa_sem_plano",
+            "ideacao_ativa_com_plano",
+            "autolesao_recente",
+            "tentativa_relatada",
+            "violencia_sofrida",
+            "violencia_praticada",
+            "risco_a_terceiro"
+          ]
+        },
+        "certeza": {
+          "enum": ["explicito", "ambiguo_citado"],
+          "description": "Default 'explicito' (lado conservador) quando ausente — R20 não tem este campo; 'ambiguo_citado' rebaixa a prioridade visual, então nunca é presumido na ausência de sinal."
+        },
+        "trecho_fonte": {
+          "type": "string",
+          "description": "Literal do diário, obrigatório — um alerta sem trecho seria veredito da IA sem evidência."
+        },
+        "detalhe": { "type": "string" }
       }
     }
   }

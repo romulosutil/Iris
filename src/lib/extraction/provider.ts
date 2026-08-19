@@ -16,6 +16,10 @@ export type ExtractionSubtipo =
   | "ausencia_comportamento"
   | "cadeia"
   | "preferencia_reforcador"
+  // #390 — modos TCC/convencional (enum PG `extraction_subtipo`, migração 0108).
+  | "registro_pensamento"
+  | "aplicacao_escala_relatada"
+  | "tarefa_casa"
   | "pendente"; // sentinela do NullProvider (pendente de reprocessamento)
 
 export type ExtractionDraft = {
