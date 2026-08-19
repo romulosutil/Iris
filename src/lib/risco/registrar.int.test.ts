@@ -72,7 +72,7 @@ describe.skipIf(!hasDb)(
     });
 
     test("item9Valor=2 grava ideacao_ativa_sem_plano, nunca com_plano", async () => {
-      const extractionId = await criarExtracao("Item 9=2, vários dias da semana.");
+      const extractionId = await criarExtracao("Item 9=2 (fixture de teste, sem citar rótulo oficial da escala).");
       const r = await registrarAlertaRiscoInstrumento(ctxT1, {
         patientId: PAC,
         sessionId: SESS,
@@ -87,7 +87,7 @@ describe.skipIf(!hasDb)(
     });
 
     test("item9Valor=3 (frequência máxima) ainda grava ideacao_ativa_sem_plano, nunca com_plano", async () => {
-      const extractionId = await criarExtracao("Item 9=3, quase todos os dias.");
+      const extractionId = await criarExtracao("Item 9=3 (fixture de teste, sem citar rótulo oficial da escala).");
       const r = await registrarAlertaRiscoInstrumento(ctxT1, {
         patientId: PAC,
         sessionId: SESS,
