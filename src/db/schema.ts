@@ -39,6 +39,7 @@ export const clinicalModalityEnum = pgEnum("clinical_modality", [
   "protocol_driven",
   "cognitive_behavioral",
 ]);
+export type ClinicalModality = (typeof clinicalModalityEnum.enumValues)[number];
 
 // `tratamento_dados_menor` = responsável legal assina pelo paciente menor.
 // `autoconsentimento_titular_adulto` (#100) = o próprio titular adulto assina.
