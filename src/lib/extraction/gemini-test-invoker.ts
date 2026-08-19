@@ -28,7 +28,7 @@ import { TOOL_INPUT_SCHEMA, type AgentInvoker } from "./claude-provider";
 const NOME_FERRAMENTA = "registrar_extracao";
 
 export function createGeminiInvoker(
-  model: string = process.env.GEMINI_TEST_MODEL || "gemini-3.6-flash",
+  model: string = process.env.GEMINI_TEST_MODEL || "gemini-2.0-flash",
 ): AgentInvoker {
   return async ({ system, user }) => {
     const apiKey = process.env.GOOGLE_API_KEY;
