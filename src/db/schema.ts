@@ -2155,6 +2155,15 @@ export const tccRpdEntry = pgTable(
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // #392 — proveniência: qual extração do agente originou esta linha
+    // aprovada (NULL para RPD criado manualmente, sem sugestão). DISTINTA de
+    // `alertaRiscoClinico.origemExtractionId` (tabela diferente, mesmo nome
+    // por clareza semântica — âncora de alerta pré-aprovação, não proveniência
+    // de RPD aprovado; sem FK cruzada entre as duas).
+    origemExtractionId: uuid("origem_extraction_id").references(
+      () => extraction.id,
+    ),
+    origemAgente: boolean("origem_agente").notNull().default(false),
   },
   (t) => [
     check("tcc_rpd_intensidade_range", sql`${t.intensidade} BETWEEN 0 AND 100`),

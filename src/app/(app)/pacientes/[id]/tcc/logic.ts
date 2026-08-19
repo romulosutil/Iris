@@ -33,6 +33,33 @@ type RpdState = {
   alertaRiscoErro?: string;
 };
 
+export type TxDeTenant = Parameters<Parameters<typeof withTenant>[1]>[0];
+
+/**
+ * #389 — taxonomia de distorções é config por clínica (R19, não enum/CHECK
+ * fixo). Rejeita slug fora da lista da clínica ANTES do insert: um erro de
+ * validação não pode gravar linha parcial. Exportado para ser reusado por
+ * `sugestoes.ts` (#392, `aprovarRPDSugestao`) — mesma regra, não duplicar a
+ * checagem contra `clinic.taxonomia_distorcoes`.
+ */
+export async function validarTaxonomiaDistorcoes(
+  tx: TxDeTenant,
+  ctx: TenantContext,
+  distorcoes: string[] | null,
+): Promise<string | undefined> {
+  if (!distorcoes) return undefined;
+  const [clinicRow] = await tx
+    .select({ taxonomiaDistorcoes: clinic.taxonomiaDistorcoes })
+    .from(clinic)
+    .where(eq(clinic.id, ctx.clinicId));
+  const taxonomia = (clinicRow?.taxonomiaDistorcoes as string[]) ?? [];
+  const slugInvalido = distorcoes.find((slug) => !taxonomia.includes(slug));
+  if (slugInvalido) {
+    return `Distorção "${slugInvalido}" não pertence à taxonomia da clínica.`;
+  }
+  return undefined;
+}
+
 async function salvarRPDCore(
   ctx: TenantContext,
   input: SalvarRpdInput,
@@ -50,24 +77,12 @@ async function salvarRPDCore(
 
   try {
     const resultado = await withTenant(ctx, async (tx) => {
-      // #389 — taxonomia de distorções é config por clínica (R19, não
-      // enum/CHECK fixo). Rejeita slug fora da lista da clínica ANTES do
-      // insert: um erro de validação não pode gravar linha parcial.
-      if (distorcoes) {
-        const [clinicRow] = await tx
-          .select({ taxonomiaDistorcoes: clinic.taxonomiaDistorcoes })
-          .from(clinic)
-          .where(eq(clinic.id, ctx.clinicId));
-        const taxonomia = (clinicRow?.taxonomiaDistorcoes as string[]) ?? [];
-        const slugInvalido = distorcoes.find(
-          (slug) => !taxonomia.includes(slug),
-        );
-        if (slugInvalido) {
-          return {
-            error: `Distorção "${slugInvalido}" não pertence à taxonomia da clínica.`,
-          };
-        }
-      }
+      const erroTaxonomia = await validarTaxonomiaDistorcoes(
+        tx,
+        ctx,
+        distorcoes,
+      );
+      if (erroTaxonomia) return { error: erroTaxonomia };
 
       const [row] = await tx
         .insert(tccRpdEntry)

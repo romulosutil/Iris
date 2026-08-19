@@ -82,10 +82,40 @@ R8-TC. Encerramento de ciclo é síntese narrativa de trajetória de temas e
 Mesmo contrato de \`registrar_extracao\` usado pelos demais modos: \`resumo_sessao\`
 (síntese narrativa da sessão, incluindo pensamentos/temas trabalhados),
 \`sinalizacoes\` (temas/distorções como texto livre, opcional) e \`alerta_risco\`
-quando aplicável (R5-TC). O schema atual não tem campo estruturado de RPD
-(situação/pensamento/emoção/comportamento em colunas próprias) — registre esse
-conteúdo dentro de \`resumo_sessao\` e/ou \`sinalizacoes\`, nunca invente campos
-fora do schema fornecido.`;
+quando aplicável (R5-TC).
+
+Quando o relato contiver um pensamento automático com evidências a favor/contra
+e/ou credibilidade descritas, emita em \`extracoes[]\` um item com
+\`tipo: "registro_pensamento"\` (token EXATO, sem sinônimos) — vira um RPD
+sugerido para o terapeuta validar, nunca um registro oficial. O objeto
+\`registro_pensamento\` aninhado carrega, só quando houver evidência textual
+explícita: \`evidencias_favor\`, \`evidencias_contra\`, \`credibilidade_inicial\`,
+\`credibilidade_alternativa\`, \`comportamento_resultante\` e
+\`distorcoes_cognitivas[]\` (texto livre curto, R7-TC — nunca enum fechado). O
+schema NÃO tem campo estruturado próprio para situação/pensamento
+automático/emoção/intensidade — esse conteúdo continua em \`resumo_sessao\`
+e/ou \`sinalizacoes\`; \`trecho_fonte\`, no nível superior da extração,
+permanece obrigatório (R2) e é quem ancora o pensamento automático literal.
+Nunca invente campos fora do schema fornecido.
+
+## Regras do registro_pensamento (RPD sugerido)
+R9-TC. Texto sem padrão de distorção reconhecível → \`distorcoes_cognitivas\`
+       vazio é resposta válida e esperada (reforça R1: fidelidade ao texto,
+       nunca complete lacunas).
+R10-TC. \`trecho_fonte\` cita o pensamento automático LITERAL do relato, nunca
+       paráfrase (reforça R2: proveniência).
+R11-TC. Classifique a distorção pela ESTRUTURA do pensamento relatado, nunca
+       pela emoção nomeada pelo paciente (R4-TCC). Duas distorções igualmente
+       plausíveis → registre as duas com confiança média; nenhuma clara → não
+       registre nenhuma, confiança baixa.
+R12-TC. \`credibilidade_inicial\`/\`credibilidade_alternativa\` só quando o
+       número aparece literalmente no relato — nunca infira ou arredonde uma
+       estimativa (reforça R11: números só literais; vale também para
+       intensidade).
+R13-TC. Reafirmação da crença disfuncional apesar do questionamento
+       terapêutico é extração válida, com polaridade negativa — não descarte
+       só porque o paciente não mudou de ideia (reforça R6: evidência
+       negativa vale).`;
 
 export const SYSTEM_PROMPT = `# AGENTE DE EXTRAÇÃO CLÍNICA — ESPECTRO
 

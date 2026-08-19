@@ -785,6 +785,13 @@
       "when": 1787085336353,
       "tag": "0111_alerta_risco_origem_rpd_instrumento",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1787089454108,
+      "tag": "0112_rpd_sugerido_provenencia",
+      "breakpoints": true
     }
   ]
 }

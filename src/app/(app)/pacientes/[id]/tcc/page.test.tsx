@@ -40,7 +40,14 @@ vi.mock("./logic", () => ({
   obterRPDEntries: vi.fn().mockResolvedValue([]),
 }));
 
+// #392 — fila de sugestões de RPD do agente: mockada como vazia, sem tocar
+// `sugestoes.ts` (RLS/postgres real) neste teste de guard de modalidade.
+vi.mock("./sugestoes", () => ({
+  obterRPDSugestoes: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("./rpd-form", () => ({ RpdForm: () => null }));
+vi.mock("./rpd-sugestoes", () => ({ RpdSugestoes: () => null }));
 vi.mock("./grafico-evolucao-crencas", () => ({
   GraficoEvolucaoCrencas: () => null,
 }));

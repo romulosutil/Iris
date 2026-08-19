@@ -60,10 +60,45 @@ describe("TCC_SYSTEM_PROMPT", () => {
     expect(TCC_SYSTEM_PROMPT).toContain("Nunca diagnostique");
   });
 
-  test("não promete campos de RPD estruturado fora do schema atual", () => {
+  test("continua sem prometer situação/pensamento/emoção/intensidade estruturados", () => {
+    // #390 fechou o shape de `registro_pensamento` sem esses 4 campos
+    // (NOT NULL em tcc_rpd_entry) — a decisão de design da #392 é que a
+    // aprovação vira formulário completo, não um clique cego; o prompt não
+    // pode prometer que o agente preenche o que ele não tem como preencher.
     expect(TCC_SYSTEM_PROMPT).toContain(
-      "O schema atual não tem campo estruturado de RPD",
+      "NÃO tem campo estruturado próprio para situação/pensamento",
     );
+  });
+
+  test("instrui emitir extracoes[] com tipo: registro_pensamento quando há RPD no relato (#392/RQ1)", () => {
+    expect(TCC_SYSTEM_PROMPT).toContain('tipo: "registro_pensamento"');
+    expect(TCC_SYSTEM_PROMPT).toContain("evidencias_favor");
+    expect(TCC_SYSTEM_PROMPT).toContain("evidencias_contra");
+    expect(TCC_SYSTEM_PROMPT).toContain("credibilidade_inicial");
+    expect(TCC_SYSTEM_PROMPT).toContain("credibilidade_alternativa");
+    expect(TCC_SYSTEM_PROMPT).toContain("distorcoes_cognitivas");
+  });
+
+  test("reforça R1/R2/R4-TCC/R11/R6 para o registro_pensamento", () => {
+    expect(TCC_SYSTEM_PROMPT).toContain("R9-TC.");
+    expect(TCC_SYSTEM_PROMPT).toContain(
+      "Texto sem padrão de distorção reconhecível",
+    );
+    expect(TCC_SYSTEM_PROMPT).toContain("reforça R1");
+    expect(TCC_SYSTEM_PROMPT).toContain(
+      "cita o pensamento automático LITERAL do relato, nunca",
+    );
+    expect(TCC_SYSTEM_PROMPT).toContain("reforça R2");
+    expect(TCC_SYSTEM_PROMPT).toContain(
+      "Classifique a distorção pela ESTRUTURA do pensamento relatado, nunca",
+    );
+    expect(TCC_SYSTEM_PROMPT).toContain("R4-TCC");
+    expect(TCC_SYSTEM_PROMPT).toContain("números só literais");
+    expect(TCC_SYSTEM_PROMPT).toContain("reforça R11");
+    expect(TCC_SYSTEM_PROMPT).toContain(
+      "Reafirmação da crença disfuncional apesar do questionamento",
+    );
+    expect(TCC_SYSTEM_PROMPT).toContain("reforça R6");
   });
 });
 

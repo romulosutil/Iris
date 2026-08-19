@@ -16,9 +16,13 @@ vi.mock("@/auth/tenant", () => ({
   getTenantContext: mockGetTenantContext,
 }));
 
-vi.mock("./logic", () => ({
-  salvarRPD: mockSalvarRPD,
-}));
+vi.mock("./logic", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./logic")>();
+  return {
+    ...actual,
+    salvarRPD: mockSalvarRPD,
+  };
+});
 
 import { salvarRPDAction } from "./actions";
 
