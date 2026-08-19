@@ -298,11 +298,10 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
 ];
 
 /**
- * As 7 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392).
+ * As 6 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
-  "app_criar_alerta_risco",
   "app_desarquivar_paciente",
   "app_is_on_team",
   "app_purgar_paciente",
@@ -311,9 +310,10 @@ const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
 ];
 
 /**
- * As 2 funções que chamam app_user_id_atual() (0093, D23, 0112 #392).
+ * As 3 funções que chamam app_user_id_atual() (0093, D23, 0112 #392, 0114 #393).
  */
 const FUNCOES_COM_USER_ID_ATUAL_HELPER = [
+  "app_criar_alerta_risco",
   "app_salvar_config_emergencia",
   "app_user_id_exigido",
 ];
@@ -483,7 +483,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(12);
   });
 
-  test("as 7 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
+  test("as 6 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -495,10 +495,10 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(
       FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
     );
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(7);
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(6);
   });
 
-  test("as 2 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {
+  test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -510,7 +510,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(
       FUNCOES_COM_USER_ID_ATUAL_HELPER,
     );
-    expect(FUNCOES_COM_USER_ID_ATUAL_HELPER.length).toBe(2);
+    expect(FUNCOES_COM_USER_ID_ATUAL_HELPER.length).toBe(3);
   });
 
   test("audit_log_mascarado isola por tenant e levanta P0001 sem GUC", async () => {
