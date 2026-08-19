@@ -410,10 +410,7 @@ export async function registrarAlertaRiscoInstrumentoManual(
       return { alertaId };
     });
   } catch (err) {
-    console.error(
-      "ALERTA DE RISCO (INSTRUMENTO MANUAL) NÃO REGISTRADO:",
-      err,
-    );
+    console.error("ALERTA DE RISCO (INSTRUMENTO MANUAL) NÃO REGISTRADO:", err);
     return { erro: "Não foi possível registrar o alerta de risco." };
   }
 }

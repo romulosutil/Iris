@@ -114,9 +114,7 @@ describe("TCC_SYSTEM_PROMPT", () => {
     // literais" (R11-TC/R12-TC) só cobria `registro_pensamento`, nunca a
     // aplicação de escala. Este teste fixa a instrução explícita nova.
     expect(TCC_SYSTEM_PROMPT).toContain("R14-TC.");
-    expect(TCC_SYSTEM_PROMPT).toContain(
-      "VOCÊ NUNCA SOMA NEM CALCULA O ESCORE",
-    );
+    expect(TCC_SYSTEM_PROMPT).toContain("VOCÊ NUNCA SOMA NEM CALCULA O ESCORE");
     expect(TCC_SYSTEM_PROMPT).toContain(
       "número TOTAL aparece literalmente escrito no",
     );

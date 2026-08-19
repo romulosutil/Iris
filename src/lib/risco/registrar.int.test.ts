@@ -57,12 +57,18 @@ describe.skipIf(!hasDb)(
     });
 
     test("item9Valor=1 grava severidade ideacao_passiva", async () => {
-      const extractionId = await criarExtracao("Sentiu vontade de sumir, sem elaborar. Item 9=1.");
+      const extractionId = await criarExtracao(
+        "Sentiu vontade de sumir, sem elaborar. Item 9=1.",
+      );
       const r = await registrarAlertaRiscoInstrumento(ctxT1, {
         patientId: PAC,
         sessionId: SESS,
         extractionId,
-        sinal: { ...sinalBase, severidade: "ideacao_ativa_sem_plano", trecho_fonte: "Item 9 = 1" },
+        sinal: {
+          ...sinalBase,
+          severidade: "ideacao_ativa_sem_plano",
+          trecho_fonte: "Item 9 = 1",
+        },
         item9Valor: 1,
       });
       expect(r).toHaveProperty("alertaId");
@@ -72,12 +78,18 @@ describe.skipIf(!hasDb)(
     });
 
     test("item9Valor=2 grava ideacao_ativa_sem_plano, nunca com_plano", async () => {
-      const extractionId = await criarExtracao("Item 9=2 (fixture de teste, sem citar rótulo oficial da escala).");
+      const extractionId = await criarExtracao(
+        "Item 9=2 (fixture de teste, sem citar rótulo oficial da escala).",
+      );
       const r = await registrarAlertaRiscoInstrumento(ctxT1, {
         patientId: PAC,
         sessionId: SESS,
         extractionId,
-        sinal: { ...sinalBase, severidade: "ideacao_ativa_sem_plano", trecho_fonte: "Item 9 = 2" },
+        sinal: {
+          ...sinalBase,
+          severidade: "ideacao_ativa_sem_plano",
+          trecho_fonte: "Item 9 = 2",
+        },
         item9Valor: 2,
       });
       expect(r).toHaveProperty("alertaId");
@@ -87,12 +99,18 @@ describe.skipIf(!hasDb)(
     });
 
     test("item9Valor=3 (frequência máxima) ainda grava ideacao_ativa_sem_plano, nunca com_plano", async () => {
-      const extractionId = await criarExtracao("Item 9=3 (fixture de teste, sem citar rótulo oficial da escala).");
+      const extractionId = await criarExtracao(
+        "Item 9=3 (fixture de teste, sem citar rótulo oficial da escala).",
+      );
       const r = await registrarAlertaRiscoInstrumento(ctxT1, {
         patientId: PAC,
         sessionId: SESS,
         extractionId,
-        sinal: { ...sinalBase, severidade: "ideacao_ativa_sem_plano", trecho_fonte: "Item 9 = 3" },
+        sinal: {
+          ...sinalBase,
+          severidade: "ideacao_ativa_sem_plano",
+          trecho_fonte: "Item 9 = 3",
+        },
         item9Valor: 3,
       });
       expect(r).toHaveProperty("alertaId");
@@ -108,7 +126,11 @@ describe.skipIf(!hasDb)(
         patientId: PAC,
         sessionId: SESS,
         extractionId,
-        sinal: { ...sinalBase, severidade: "ideacao_ativa_sem_plano", trecho_fonte: "Item 9 = 0" },
+        sinal: {
+          ...sinalBase,
+          severidade: "ideacao_ativa_sem_plano",
+          trecho_fonte: "Item 9 = 0",
+        },
         item9Valor: 0,
       });
       expect(r).toEqual({ naoDisparado: true });
@@ -118,7 +140,9 @@ describe.skipIf(!hasDb)(
     });
 
     test("item9Valor=null (recusa) preserva a severidade fallback do chamador, não rebaixa", async () => {
-      const extractionId = await criarExtracao("Paciente recusou responder o item 9.");
+      const extractionId = await criarExtracao(
+        "Paciente recusou responder o item 9.",
+      );
       const r = await registrarAlertaRiscoInstrumento(ctxT1, {
         patientId: PAC,
         sessionId: SESS,
@@ -139,7 +163,9 @@ describe.skipIf(!hasDb)(
     });
 
     test("item9Valor omitido (chamador antigo, Fase E de #391) preserva comportamento — severidade do chamador intacta", async () => {
-      const extractionId = await criarExtracao("Chamador sem granularidade de item 9 (Fase E).");
+      const extractionId = await criarExtracao(
+        "Chamador sem granularidade de item 9 (Fase E).",
+      );
       const r = await registrarAlertaRiscoInstrumento(ctxT1, {
         patientId: PAC,
         sessionId: SESS,
