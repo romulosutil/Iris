@@ -284,6 +284,5 @@ describe("fixture real — Caso TC-1 (#390 R5)", () => {
     // de devolver apenas `expected true, received false` (nit Jules #399).
     expect(r.error).toBeUndefined();
     expect(r.success).toBe(true);
-
   });
 });

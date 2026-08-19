@@ -2,26 +2,42 @@ import { describe, expect, test } from "vitest";
 import { DISTORCOES_COGNITIVAS_OPCOES, salvarRpdSchema } from "./logic";
 
 describe("TCC · Validação de Esquema RPD", () => {
-  test("DISTORCOES_COGNITIVAS_OPCOES contém os clássicos de Beck/Burns", () => {
-    expect(DISTORCOES_COGNITIVAS_OPCOES).toContain("Catastrofização");
-    expect(DISTORCOES_COGNITIVAS_OPCOES).toContain("Leitura Mental");
-    expect(DISTORCOES_COGNITIVAS_OPCOES).toContain("Tudo-ou-Nada");
-    expect(DISTORCOES_COGNITIVAS_OPCOES).toContain("Generalização Excessiva");
+  test("DISTORCOES_COGNITIVAS_OPCOES contém os clássicos de Beck/Burns (slug + rótulo)", () => {
+    const rotulos = DISTORCOES_COGNITIVAS_OPCOES.map((o) => o.rotulo);
+    const slugs = DISTORCOES_COGNITIVAS_OPCOES.map((o) => o.slug);
+    expect(rotulos).toContain("Catastrofização");
+    expect(rotulos).toContain("Leitura Mental");
+    expect(rotulos).toContain("Tudo-ou-Nada");
+    expect(rotulos).toContain("Generalização Excessiva");
+    expect(slugs).toContain("catastrofizacao");
+    expect(slugs).toContain("leitura_mental");
   });
 
-  test("salvarRpdSchema valida campos obrigatórios", () => {
+  test("salvarRpdSchema valida campos obrigatórios (campos 1-3)", () => {
     const valido = salvarRpdSchema.safeParse({
       patientId: "00000000-0000-0000-0000-000000000001",
       situacao: "Apresentação em público",
       pensamentoAutomatico: "Vou travar",
       emocao: "Ansiedade",
       intensidade: 90,
-      distorcaoCognitiva: "Catastrofização",
+      distorcoesCognitivas: ["catastrofizacao"],
       respostaRacional: "Já me preparei e treinei.",
       intensidadePos: 40,
     });
 
     expect(valido.success).toBe(true);
+  });
+
+  test("salvarRpdSchema aceita respostaRacional ausente (deixou de ser obrigatória)", () => {
+    const semRespostaRacional = salvarRpdSchema.safeParse({
+      patientId: "00000000-0000-0000-0000-000000000001",
+      situacao: "Apresentação em público",
+      pensamentoAutomatico: "Vou travar",
+      emocao: "Ansiedade",
+      intensidade: 90,
+    });
+
+    expect(semRespostaRacional.success).toBe(true);
   });
 
   test("salvarRpdSchema rejeita intensidade menor que 0 ou maior que 100", () => {
@@ -31,7 +47,7 @@ describe("TCC · Validação de Esquema RPD", () => {
       pensamentoAutomatico: "Pensamento",
       emocao: "Medo",
       intensidade: -10,
-      distorcaoCognitiva: "Leitura Mental",
+      distorcoesCognitivas: ["leitura_mental"],
       respostaRacional: "Resposta",
     });
     expect(menorQueZero.success).toBe(false);
@@ -42,7 +58,7 @@ describe("TCC · Validação de Esquema RPD", () => {
       pensamentoAutomatico: "Pensamento",
       emocao: "Medo",
       intensidade: 105,
-      distorcaoCognitiva: "Leitura Mental",
+      distorcoesCognitivas: ["leitura_mental"],
       respostaRacional: "Resposta",
     });
     expect(maiorQue100.success).toBe(false);
@@ -55,7 +71,7 @@ describe("TCC · Validação de Esquema RPD", () => {
       pensamentoAutomatico: "Pensamento",
       emocao: "Raiva",
       intensidade: 50,
-      distorcaoCognitiva: "Personalização",
+      distorcoesCognitivas: ["personalizacao"],
       respostaRacional: "Não é culpa minha.",
     });
     expect(semPos.success).toBe(true);
@@ -66,10 +82,32 @@ describe("TCC · Validação de Esquema RPD", () => {
       pensamentoAutomatico: "Pensamento",
       emocao: "Raiva",
       intensidade: 50,
-      distorcaoCognitiva: "Personalização",
+      distorcoesCognitivas: ["personalizacao"],
       respostaRacional: "Não é culpa minha.",
       intensidadePos: null,
     });
     expect(posNull.success).toBe(true);
+  });
+
+  test("salvarRpdSchema rejeita credibilidade fora da faixa 0-100", () => {
+    const inicialInvalida = salvarRpdSchema.safeParse({
+      patientId: "00000000-0000-0000-0000-000000000001",
+      situacao: "Gatilho",
+      pensamentoAutomatico: "Pensamento",
+      emocao: "Medo",
+      intensidade: 50,
+      credibilidadeInicial: 150,
+    });
+    expect(inicialInvalida.success).toBe(false);
+
+    const alternativaInvalida = salvarRpdSchema.safeParse({
+      patientId: "00000000-0000-0000-0000-000000000001",
+      situacao: "Gatilho",
+      pensamentoAutomatico: "Pensamento",
+      emocao: "Medo",
+      intensidade: 50,
+      credibilidadeAlternativa: -1,
+    });
+    expect(alternativaInvalida.success).toBe(false);
   });
 });

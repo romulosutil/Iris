@@ -3,6 +3,8 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import { Pill } from "@/components/ui/primitives/pill";
+import { calcularCompletudeRPD } from "./completude";
+import { rotuloDistorcao } from "./constants";
 
 export interface RpdGraficoEntry {
   id: string;
@@ -11,8 +13,10 @@ export interface RpdGraficoEntry {
   pensamentoAutomatico: string;
   emocao: string;
   intensidade: number;
-  distorcaoCognitiva: string;
-  respostaRacional: string;
+  distorcoesCognitivas?: string[] | null;
+  respostaRacional: string | null;
+  evidenciasFavor?: string | null;
+  evidenciasContra?: string | null;
   intensidadePos: number | null;
 }
 
@@ -33,12 +37,25 @@ export function GraficoEvolucaoCrencas({
 }: GraficoEvolucaoCrencasProps) {
   const [ativo, setAtivo] = React.useState<RpdGraficoEntry | null>(null);
 
+  // #389 — só entra no gráfico o registro com reestruturação completa
+  // (evidência + pensamento alternativo + reavaliação). Distorção cognitiva
+  // nunca entra nesse cálculo (`./completude.ts`). Filtro roda ANTES de
+  // qualquer cálculo de média/coords — um registro "registro_capturado"
+  // nunca deve influenciar a média nem aparecer como ponto plotado.
+  const completos = React.useMemo(
+    () =>
+      entries.filter(
+        (e) => calcularCompletudeRPD(e) === "reestruturacao_completa",
+      ),
+    [entries],
+  );
+
   // Ordena por data de criação crescente para a linha do tempo
   const ordenados = React.useMemo(() => {
-    return [...entries].sort(
+    return [...completos].sort(
       (a, b) => new Date(a.criadoEm).getTime() - new Date(b.criadoEm).getTime(),
     );
-  }, [entries]);
+  }, [completos]);
 
   if (ordenados.length === 0) {
     return (
@@ -337,17 +354,19 @@ export function GraficoEvolucaoCrencas({
               &quot;{ativo.pensamentoAutomatico}&quot;
             </span>
           </div>
+          {ativo.distorcoesCognitivas?.length ? (
+            <div>
+              <strong className="text-[var(--text-primary)]">
+                Distorção Cognitiva:
+              </strong>{" "}
+              <span className="font-semibold text-black">
+                {ativo.distorcoesCognitivas.map(rotuloDistorcao).join(", ")}
+              </span>
+            </div>
+          ) : null}
           <div>
             <strong className="text-[var(--text-primary)]">
-              Distorção Cognitiva:
-            </strong>{" "}
-            <span className="font-semibold text-black">
-              {ativo.distorcaoCognitiva}
-            </span>
-          </div>
-          <div>
-            <strong className="text-[var(--text-primary)]">
-              Resposta Racional:
+              Pensamento Alternativo:
             </strong>{" "}
             <span className="text-[var(--text-secondary)]">
               &quot;{ativo.respostaRacional}&quot;

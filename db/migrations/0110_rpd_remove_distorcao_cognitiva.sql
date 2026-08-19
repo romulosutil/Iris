@@ -1,0 +1,1 @@
+ALTER TABLE "tcc_rpd_entry" DROP COLUMN "distorcao_cognitiva";

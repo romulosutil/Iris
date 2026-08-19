@@ -6,6 +6,7 @@ import { patient } from "@/db/schema";
 import { obterRPDEntries } from "./logic";
 import { RpdForm } from "./rpd-form";
 import { GraficoEvolucaoCrencas } from "./grafico-evolucao-crencas";
+import { rotuloDistorcao } from "./constants";
 import { Pill } from "@/components/ui/primitives/pill";
 
 interface TccPageProps {
@@ -53,7 +54,12 @@ export default async function TccPage({ params }: TccPageProps) {
       </div>
 
       {/* Gráfico de Evolução de Crenças */}
-      <GraficoEvolucaoCrencas entries={entries} />
+      <GraficoEvolucaoCrencas
+        entries={entries.map((e) => ({
+          ...e,
+          distorcoesCognitivas: e.distorcoesCognitivas as string[] | null,
+        }))}
+      />
 
       {/* Formulário de Novo RPD */}
       <RpdForm patientId={patientId} />
@@ -93,9 +99,20 @@ export default async function TccPage({ params }: TccPageProps) {
                     <span className="font-display text-sm font-bold text-[var(--text-primary)]">
                       Registro #{entries.length - idx} · {dataFmt}
                     </span>
-                    <Pill variant="inset" colorScheme="ouro" size="sm">
-                      {item.distorcaoCognitiva}
-                    </Pill>
+                    <div className="flex flex-wrap gap-1">
+                      {(item.distorcoesCognitivas as string[] | null)?.map(
+                        (slug) => (
+                          <Pill
+                            key={slug}
+                            variant="inset"
+                            colorScheme="ouro"
+                            size="sm"
+                          >
+                            {rotuloDistorcao(slug)}
+                          </Pill>
+                        ),
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
@@ -147,10 +164,10 @@ export default async function TccPage({ params }: TccPageProps) {
 
                     <div className="md:col-span-2">
                       <strong className="block text-[var(--text-primary)]">
-                        5. Resposta Racional:
+                        Pensamento Alternativo:
                       </strong>
                       <span className="text-[var(--text-secondary)]">
-                        {item.respostaRacional}
+                        {item.respostaRacional ?? "Não informado"}
                       </span>
                     </div>
                   </div>
