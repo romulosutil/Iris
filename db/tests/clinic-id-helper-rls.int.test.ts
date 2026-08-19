@@ -81,6 +81,10 @@ const POLICIES_COM_HELPER = [
   "goal.goal_insert",
   "goal.goal_select",
   "goal.goal_update",
+  "instrumento_aplicacao.instrumento_aplicacao_delete",
+  "instrumento_aplicacao.instrumento_aplicacao_insert",
+  "instrumento_aplicacao.instrumento_aplicacao_select",
+  "instrumento_aplicacao.instrumento_aplicacao_update",
   "janela_trabalho.janela_trabalho_delete",
   "janela_trabalho.janela_trabalho_insert",
   "janela_trabalho.janela_trabalho_select",
@@ -352,7 +356,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Redundante de propósito: se o literal for editado por engano (linha
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
-    expect(POLICIES_COM_HELPER.length).toBe(52);
+    expect(POLICIES_COM_HELPER.length).toBe(56);
   });
 
   // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────

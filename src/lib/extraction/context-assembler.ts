@@ -8,12 +8,19 @@ type CanonicalDominio = {
   nivel: string | null;
 };
 
+// #393 — como o dado é coletado: sessão-a-sessão (ABA, comportamento atual)
+// vs. escala padronizada aplicada em intervalos (PHQ-9/GAD-7). Sinal para o
+// agente/prompt (TCC_SYSTEM_PROMPT cita a diferença, RQ4) — nenhum código
+// consome este campo ainda nesta issue.
+type TipoColeta = "por_sessao" | "escala_padronizada_intervalar";
+
 type CanonicalProtocolo = {
   protocol_id: string; // = protocol.familia (slug do catálogo: "vbmapp", "pedi"...)
   nome: string;
   disciplina: string;
   taxonomia_ajuda: string[];
   dominios: CanonicalDominio[];
+  tipo_coleta: TipoColeta;
 };
 
 type CanonicalMeta = {
@@ -50,6 +57,10 @@ export type AssemblerInput = {
     disciplina: string;
     taxonomiaAjuda: string[];
     dominios: Array<{ dominioId: string; nome: string; nivel: string | null }>;
+    // #393 — ausente = protocolo ABA existente, default explícito
+    // "por_sessao" (não um gap silencioso). Instrumentos (PHQ-9/GAD-7)
+    // passam "escala_padronizada_intervalar" explicitamente.
+    tipoColeta?: TipoColeta;
   }>;
   metas: Array<{
     id: string;
@@ -93,6 +104,9 @@ export function buildCanonicalContext(input: AssemblerInput): CanonicalContext {
         nome: d.nome,
         nivel: d.nivel,
       })),
+      // Default explícito para protocolos ABA existentes — não deixar
+      // indefinido (#393).
+      tipo_coleta: p.tipoColeta ?? "por_sessao",
     })),
     historico_relevante: input.historico.map((h) => ({
       dominio_id: h.dominioId,

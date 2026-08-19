@@ -100,6 +100,33 @@ describe("TCC_SYSTEM_PROMPT", () => {
     );
     expect(TCC_SYSTEM_PROMPT).toContain("reforça R6");
   });
+
+  test("instrui emitir extracoes[] com tipo: aplicacao_escala_relatada quando há instrumento no relato (#393/RQ4)", () => {
+    expect(TCC_SYSTEM_PROMPT).toContain('tipo: "aplicacao_escala_relatada"');
+    expect(TCC_SYSTEM_PROMPT).toContain("escore_relatado");
+    expect(TCC_SYSTEM_PROMPT).toContain("fonte_do_escore");
+    expect(TCC_SYSTEM_PROMPT).toContain("item_risco_positivo");
+  });
+
+  test("proíbe explicitamente somar/calcular o escore da escala (R14-TC/RQ4/RQ6) — gap real, #393 não tinha isso", () => {
+    // Antes desta task, TCC_SYSTEM_PROMPT não mencionava
+    // `aplicacao_escala_relatada` em lugar nenhum — a regra "números só
+    // literais" (R11-TC/R12-TC) só cobria `registro_pensamento`, nunca a
+    // aplicação de escala. Este teste fixa a instrução explícita nova.
+    expect(TCC_SYSTEM_PROMPT).toContain("R14-TC.");
+    expect(TCC_SYSTEM_PROMPT).toContain(
+      "VOCÊ NUNCA SOMA NEM CALCULA O ESCORE",
+    );
+    expect(TCC_SYSTEM_PROMPT).toContain(
+      "número TOTAL aparece literalmente escrito no",
+    );
+    expect(TCC_SYSTEM_PROMPT).toContain("reforça R11-TC/R12-TC");
+    // Caso concreto da spec (RQ6): descrição vaga de humor nunca vira número
+    // fabricado tipo "≈18" — só ausência do campo é aceitável sem número.
+    expect(TCC_SYSTEM_PROMPT).toContain("parece bem");
+    expect(TCC_SYSTEM_PROMPT).toContain("NUNCA produz um");
+    expect(TCC_SYSTEM_PROMPT).toContain("nunca estime um valor");
+  });
 });
 
 describe("buildUserMessage — hardening contra prompt injection", () => {

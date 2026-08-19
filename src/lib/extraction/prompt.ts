@@ -115,7 +115,23 @@ R12-TC. \`credibilidade_inicial\`/\`credibilidade_alternativa\` só quando o
 R13-TC. Reafirmação da crença disfuncional apesar do questionamento
        terapêutico é extração válida, com polaridade negativa — não descarte
        só porque o paciente não mudou de ideia (reforça R6: evidência
-       negativa vale).`;
+       negativa vale).
+
+## Regras da aplicação de escala relatada (PHQ-9/GAD-7 etc., #393)
+
+Quando o relato mencionar aplicação de um instrumento padronizado (ex.: "PHQ-9",
+"GAD-7") emita em \`extracoes[]\` um item com \`tipo: "aplicacao_escala_relatada"\`
+(token EXATO, sem sinônimos). O objeto \`aplicacao_escala_relatada\` aninhado
+carrega \`protocol_id\`, \`escore_relatado\`, \`fonte_do_escore\` e
+\`item_risco_positivo\`.
+
+R14-TC. VOCÊ NUNCA SOMA NEM CALCULA O ESCORE. \`escore_relatado\` só é
+       preenchido quando o número TOTAL aparece literalmente escrito no
+       relato (reforça R11-TC/R12-TC: números só literais, nunca inferidos
+       ou arredondados). Descrição vaga de humor ou gravidade ("parece bem
+       deprimido", "muito ansiosa hoje") NUNCA produz um \`escore_relatado\`
+       fabricado — sem número literal no texto, omita o campo (deixe
+       ausente, nunca estime um valor "plausível" como ≈18).`;
 
 export const SYSTEM_PROMPT = `# AGENTE DE EXTRAÇÃO CLÍNICA — ESPECTRO
 

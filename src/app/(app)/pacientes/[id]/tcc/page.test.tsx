@@ -52,6 +52,16 @@ vi.mock("./grafico-evolucao-crencas", () => ({
   GraficoEvolucaoCrencas: () => null,
 }));
 
+// #393 — instrumentos padronizados (PHQ-9/GAD-7): mockados como vazios, sem
+// tocar `instrumento-logic.ts` (RLS/postgres real) neste teste de guard de
+// modalidade — mesmo racional de #392 acima para `./sugestoes`.
+vi.mock("./instrumento-logic", () => ({
+  obterInstrumentoAplicacoes: vi.fn().mockResolvedValue([]),
+  obterInstrumentoItensTexto: vi.fn().mockResolvedValue([]),
+}));
+vi.mock("./instrumento-lista", () => ({ InstrumentoLista: () => null }));
+vi.mock("./instrumento-form", () => ({ InstrumentoForm: () => null }));
+
 function mockModalidade(clinicalModality: string | undefined) {
   mockWithTenant.mockImplementation(async (_ctx, fn) => {
     const mockTx = {

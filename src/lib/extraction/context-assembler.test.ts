@@ -59,4 +59,27 @@ describe("buildCanonicalContext", () => {
     const ctx = buildCanonicalContext({ ...input, historico: [] });
     expect(ctx.historico_relevante).toEqual([]);
   });
+
+  test("protocolo ABA sem tipoColeta explícito mapeia para 'por_sessao' (#393, default explícito)", () => {
+    const ctx = buildCanonicalContext(input);
+    expect(ctx.protocolos_ativos[0]!.tipo_coleta).toBe("por_sessao");
+  });
+
+  test("protocolo com tipoColeta='escala_padronizada_intervalar' preserva o valor (#393, instrumento PHQ-9/GAD-7)", () => {
+    const ctx = buildCanonicalContext({
+      ...input,
+      protocolos: [
+        {
+          ...input.protocolos[0]!,
+          familia: "phq9",
+          nome: "PHQ-9",
+          disciplina: "TCC",
+          tipoColeta: "escala_padronizada_intervalar",
+        },
+      ],
+    });
+    expect(ctx.protocolos_ativos[0]!.tipo_coleta).toBe(
+      "escala_padronizada_intervalar",
+    );
+  });
 });
