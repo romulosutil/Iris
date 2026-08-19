@@ -27,6 +27,12 @@ const P_A = "00000000-0000-0000-0000-0000000012d1";
 const P_B = "00000000-0000-0000-0000-0000000012d2";
 const S_A = "00000000-0000-0000-0000-0000000012e1";
 const S_B = "00000000-0000-0000-0000-0000000012e2";
+// #391 — âncoras novas (RPD e instrumento formal), uma por clínica, para
+// provar que o predicado de leitura isola tenant também nas origens novas.
+const RPD_A = "00000000-0000-0000-0000-0000000012f1";
+const RPD_B = "00000000-0000-0000-0000-0000000012f2";
+const EXT_A = "00000000-0000-0000-0000-0000000012f3";
+const EXT_B = "00000000-0000-0000-0000-0000000012f4";
 
 const ctx = (role: string, userId: string, clinicId = CLINIC_A) =>
   ({ role, userId, clinicId }) as TenantContext;
@@ -56,6 +62,15 @@ async function semear() {
   await owner!`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, disciplina) VALUES
     (${S_A}, ${CLINIC_A}, ${P_A}, ${U_TER_SESSAO}, now(), 'psicologia'),
     (${S_B}, ${CLINIC_B}, ${P_B}, ${U_COORD_B}, now(), 'psicologia')`;
+  // #391 — âncoras das origens novas, uma por clínica.
+  await owner!`INSERT INTO tcc_rpd_entry
+      (id, clinic_id, patient_id, situacao, pensamento_automatico, emocao, intensidade, criado_por) VALUES
+    (${RPD_A}, ${CLINIC_A}, ${P_A}, 'situação A', 'pensamento automático A', 'ansiedade', 70, ${U_TER_SESSAO}),
+    (${RPD_B}, ${CLINIC_B}, ${P_B}, 'situação B', 'pensamento automático B', 'ansiedade', 70, ${U_COORD_B})`;
+  await owner!`INSERT INTO extraction
+      (id, session_id, clinic_id, subtipo, trecho_fonte, confianca, payload) VALUES
+    (${EXT_A}, ${S_A}, ${CLINIC_A}, 'aplicacao_escala_relatada', 'trecho do instrumento A', 'alta', '{}'::jsonb),
+    (${EXT_B}, ${S_B}, ${CLINIC_B}, 'aplicacao_escala_relatada', 'trecho do instrumento B', 'alta', '{}'::jsonb)`;
 }
 
 /** Cria via o caminho oficial (SECURITY DEFINER), sob o tenant informado. */
@@ -79,6 +94,43 @@ async function criar(
         ${args.certeza ?? "explicito"}::alerta_risco_certeza,
         ${args.trecho ?? "seria mais fácil não acordar"},
         'detalhe do agente'
+      ) AS id
+    `)) as unknown as Array<{ id: string }>;
+    return r[0]!.id;
+  });
+}
+
+/**
+ * Variante de `criar` com origem explícita (#391) — mesma via oficial
+ * (SECURITY DEFINER), mas cobrindo `registro_pensamento`/`instrumento_formal`
+ * além do `diario_sessao` default.
+ */
+async function criarComOrigem(
+  c: TenantContext,
+  args: {
+    patientId: string;
+    origem: "diario_sessao" | "registro_pensamento" | "instrumento_formal";
+    sessionId?: string | null;
+    rpdEntryId?: string | null;
+    origemExtractionId?: string | null;
+    categoria?: string;
+    severidade?: string;
+    certeza?: string;
+    trecho?: string;
+  },
+): Promise<string> {
+  return withTenant(c, async (tx) => {
+    const r = (await tx.execute(sql`
+      SELECT app_criar_alerta_risco(
+        ${args.patientId}::uuid, ${args.sessionId ?? null}::uuid,
+        ${args.categoria ?? "ideacao_suicida"}::alerta_risco_categoria,
+        ${args.severidade ?? "ideacao_passiva"}::alerta_risco_severidade,
+        ${args.certeza ?? "explicito"}::alerta_risco_certeza,
+        ${args.trecho ?? "trecho padrão do agente"},
+        'detalhe do agente',
+        ${args.origem}::alerta_risco_origem,
+        ${args.rpdEntryId ?? null}::uuid,
+        ${args.origemExtractionId ?? null}::uuid
       ) AS id
     `)) as unknown as Array<{ id: string }>;
     return r[0]!.id;
@@ -138,6 +190,50 @@ describe.skipIf(!hasDb)("alerta_risco_clinico — RLS e privilégios", () => {
       (tx) => tx.execute(sql`SELECT id FROM alerta_risco_clinico`),
     )) as unknown as Array<{ id: string }>;
     expect(rows).toHaveLength(0);
+  });
+
+  test("isolamento cross-tenant: alerta origem registro_pensamento (RPD) não vaza entre clínicas", async () => {
+    await semear();
+    const id = await criarComOrigem(ctx("terapeuta", U_TER_SESSAO), {
+      patientId: P_A,
+      origem: "registro_pensamento",
+      rpdEntryId: RPD_A,
+      trecho: "trecho do RPD A",
+    });
+    const comoA = (await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
+      tx.execute(
+        sql`SELECT id FROM alerta_risco_clinico WHERE id = ${id}::uuid`,
+      ),
+    )) as unknown as Array<{ id: string }>;
+    expect(comoA).toHaveLength(1);
+
+    const comoB = (await withTenant(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      (tx) => tx.execute(sql`SELECT id FROM alerta_risco_clinico`),
+    )) as unknown as Array<{ id: string }>;
+    expect(comoB).toHaveLength(0);
+  });
+
+  test("isolamento cross-tenant: alerta origem instrumento_formal (extraction) não vaza entre clínicas", async () => {
+    await semear();
+    const id = await criarComOrigem(ctx("terapeuta", U_TER_SESSAO), {
+      patientId: P_A,
+      origem: "instrumento_formal",
+      origemExtractionId: EXT_A,
+      trecho: "trecho do instrumento A",
+    });
+    const comoA = (await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
+      tx.execute(
+        sql`SELECT id FROM alerta_risco_clinico WHERE id = ${id}::uuid`,
+      ),
+    )) as unknown as Array<{ id: string }>;
+    expect(comoA).toHaveLength(1);
+
+    const comoB = (await withTenant(
+      ctx("coordenador", U_COORD_B, CLINIC_B),
+      (tx) => tx.execute(sql`SELECT id FROM alerta_risco_clinico`),
+    )) as unknown as Array<{ id: string }>;
+    expect(comoB).toHaveLength(0);
   });
 
   test("criar alerta com sessão de OUTRA clínica é rejeitado (guard do DEFINER)", async () => {

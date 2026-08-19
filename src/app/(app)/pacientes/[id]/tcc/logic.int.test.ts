@@ -64,6 +64,10 @@ describe.skipIf(!hasDb)(
       // `app_user` ficam de pé e são reinseridos com `ON CONFLICT DO NOTHING`:
       // apagar paciente esbarra na FK de `audit_log` (a trilha de auditoria da
       // 1ª execução aponta para ele) e derrubaria o teste na 2ª rodada.
+      // #391 — `alerta_risco_clinico.rpd_entry_id` referencia `tcc_rpd_entry`
+      // sem CASCADE: apagar `tcc_rpd_entry` primeiro estoura FK numa 2ª
+      // execução se os alertas da varredura de risco não forem limpos antes.
+      await owner`DELETE FROM alerta_risco_clinico WHERE patient_id IN (${PAC}, ${PAC_B}, ${PAC_C})`;
       await owner`DELETE FROM tcc_rpd_entry WHERE patient_id IN (${PAC}, ${PAC_B}, ${PAC_C})`;
       await owner`DELETE FROM care_team_membership WHERE patient_id IN (${PAC}, ${PAC_B}, ${PAC_C})`;
       await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')
@@ -269,6 +273,95 @@ describe.skipIf(!hasDb)(
         SELECT count(*)::int AS n FROM tcc_rpd_entry WHERE patient_id = ${PAC_C}
       `;
       expect(contagemDepois!.n).toBe(contagemAntes!.n);
+    });
+
+    // #391 — varredura determinística de risco no RPD.
+    test("RPD com termo de ideação suicida cria alerta com origem='registro_pensamento'", async () => {
+      const res = await L.salvarRPD(ctxT1, {
+        patientId: PAC,
+        situacao: "Situação de crise",
+        pensamentoAutomatico: "Às vezes eu só quero morrer e sumir de vez",
+        emocao: "Desespero",
+        intensidade: 95,
+      });
+
+      expect(res.error).toBeUndefined();
+      expect(res.id).toBeTruthy();
+
+      const alertas = await owner`
+        SELECT origem, rpd_entry_id, categoria, certeza, patient_id
+          FROM alerta_risco_clinico
+         WHERE rpd_entry_id = ${res.id!}
+      `;
+      expect(alertas.length).toBe(1);
+      expect(alertas[0]!.origem).toBe("registro_pensamento");
+      expect(alertas[0]!.rpd_entry_id).toBe(res.id);
+      expect(alertas[0]!.categoria).toBe("ideacao_suicida");
+      expect(alertas[0]!.certeza).toBe("ambiguo_citado");
+      expect(alertas[0]!.patient_id).toBe(PAC);
+    });
+
+    test("RPD com termo de autolesão cria alerta com categoria='autolesao'", async () => {
+      const res = await L.salvarRPD(ctxT1, {
+        patientId: PAC,
+        situacao: "Situação",
+        pensamentoAutomatico: "Pensamento automático comum",
+        emocao: "Raiva",
+        intensidade: 70,
+        evidenciasFavor: "Cheguei a me cortar de novo na semana passada",
+      });
+
+      expect(res.error).toBeUndefined();
+      expect(res.id).toBeTruthy();
+
+      const alertas = await owner`
+        SELECT origem, rpd_entry_id, categoria
+          FROM alerta_risco_clinico
+         WHERE rpd_entry_id = ${res.id!}
+      `;
+      expect(alertas.length).toBe(1);
+      expect(alertas[0]!.categoria).toBe("autolesao");
+      expect(alertas[0]!.origem).toBe("registro_pensamento");
+    });
+
+    test("RPD sem nenhum termo de risco NÃO cria alerta", async () => {
+      const res = await L.salvarRPD(ctxT1, {
+        patientId: PAC,
+        situacao: "Conversa comum de trabalho",
+        pensamentoAutomatico: "Vou cometer um erro e ser demitido",
+        emocao: "Ansiedade",
+        intensidade: 50,
+        respostaRacional: "Já errei antes e sempre corrigi.",
+      });
+
+      expect(res.error).toBeUndefined();
+      expect(res.id).toBeTruthy();
+
+      const [contagem] = await owner`
+        SELECT count(*)::int AS n FROM alerta_risco_clinico WHERE rpd_entry_id = ${res.id!}
+      `;
+      expect(contagem!.n).toBe(0);
+    });
+
+    test("RPD com termos das DUAS listas (ideação + autolesão) cria DOIS alertas", async () => {
+      const res = await L.salvarRPD(ctxT1, {
+        patientId: PAC,
+        situacao: "Situação grave",
+        pensamentoAutomatico: "Penso em me matar quando fico assim",
+        emocao: "Desespero",
+        intensidade: 100,
+        evidenciasFavor: "Cheguei a me machucar de propósito ontem",
+      });
+
+      expect(res.error).toBeUndefined();
+      expect(res.id).toBeTruthy();
+
+      const alertas = await owner`
+        SELECT categoria FROM alerta_risco_clinico WHERE rpd_entry_id = ${res.id!}
+      `;
+      expect(alertas.length).toBe(2);
+      const categorias = alertas.map((a) => a.categoria).sort();
+      expect(categorias).toEqual(["autolesao", "ideacao_suicida"]);
     });
 
     test("slug dentro da taxonomia da clínica é aceito normalmente", async () => {

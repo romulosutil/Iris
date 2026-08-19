@@ -120,6 +120,38 @@ export async function destinatariosCriacao(
   }));
 }
 
+/**
+ * #391 — mesma regra de `destinatariosCriacao` (responsável direto +
+ * coordenadores, simultâneo), para origens sem sessão (RPD, instrumento sem
+ * sessão associada). `responsavelId` é quem criou o registro que disparou o
+ * alerta — RPD: `criado_por`; instrumento: o profissional da extração.
+ * Função NOVA em vez de tornar `sessionId` opcional na existente: o caminho
+ * do diário (H4, §4) já está testado e não deve mudar de forma nenhuma aqui.
+ */
+export async function destinatariosCriacaoPorResponsavel(
+  tx: Tx,
+  args: { clinicId: string; responsavelId: string },
+): Promise<Destinatario[]> {
+  const coordenadores = (await tx.execute(sql`
+    SELECT ur.user_id FROM user_role ur
+     WHERE ur.clinic_id = ${args.clinicId} AND ur.papel = 'coordenador'
+  `)) as unknown as Array<{ user_id: string }>;
+
+  const ids = new Set(coordenadores.map((c) => c.user_id));
+  ids.add(args.responsavelId);
+
+  // Paridade com `destinatariosCriacao`: se o responsável também for coordenador,
+  // recebe a notificação priorizando o canal do autor responsável direto
+  // (`in_app_terapeuta_da_sessao`), evitando duplicação e garantindo foco clínico.
+  return [...ids].map((userId) => ({
+    userId,
+    canal:
+      userId === args.responsavelId
+        ? ("in_app_terapeuta_da_sessao" as const)
+        : ("in_app_coordenador" as const),
+  }));
+}
+
 /** Estágio 1: TODOS os coordenadores da clínica. Nunca silencioso (V4). */
 export async function destinatariosEstagio1(
   tx: Tx,

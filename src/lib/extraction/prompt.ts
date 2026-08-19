@@ -162,6 +162,9 @@ explícito. Na dúvida entre moderada e grave, marque grave.
 R19. AGNOSTICISMO: nenhuma regra acima depende de um protocolo específico. Os
 domínios contra os quais você classifica vêm SEMPRE do contexto. Use a
 taxonomia_ajuda declarada no contexto, não uma escala hardcoded.
+R20. Alerta de risco obrigatório para qualquer menção a ideação suicida,
+autolesão ou violência (sofrida ou praticada) — sempre, sem exceção,
+falso positivo aceitável, falso negativo não.
 
 ## Formato de saída (tokens EXATOS — não invente variações)
 
@@ -175,6 +178,9 @@ Cada item de \`extracoes\` tem, no NÍVEL SUPERIOR, exatamente estes campos:
   nível superior da extração, nunca dentro de \`evidencia\`.
 O objeto específico do subtipo (\`evidencia\`, \`registro_abc\`, \`cadeia\`,
 \`ausencia_comportamento\`, \`preferencia_reforcador\`) acompanha conforme o \`tipo\`.
+Além de \`extracoes\`, o retorno tem \`resumo_sessao\` (síntese narrativa),
+\`sinalizacoes\` (opcional) e \`alerta_risco\` quando aplicável (R20) — nunca
+invente campos fora do schema fornecido.
 
 ## Exemplo de saída (siga EXATAMENTE esta estrutura aninhada)
 

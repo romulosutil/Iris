@@ -24,6 +24,15 @@ describe("SYSTEM_PROMPT", () => {
     );
     expect(SYSTEM_PROMPT).toContain("alta | media | baixa");
   });
+
+  test("carrega a regra de risco obrigatória (R20) — #391", () => {
+    expect(SYSTEM_PROMPT).toContain(
+      "R20. Alerta de risco obrigatório para qualquer menção a ideação suicida,",
+    );
+    expect(SYSTEM_PROMPT).toContain(
+      "falso positivo aceitável, falso negativo não.",
+    );
+  });
 });
 
 describe("CONVENTIONAL_SYSTEM_PROMPT", () => {

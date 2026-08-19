@@ -1616,6 +1616,15 @@ export const alertaRiscoStatus = pgEnum("alerta_risco_status", [
   "descartado", // avaliado como não-risco após revisão humana (nunca apaga)
 ]);
 
+// #391 — de onde o alerta veio. `diario_sessao` é o único caminho até aqui
+// (consolidação do diário); RPD e instrumento formal ganham âncora própria
+// porque nem sempre têm `session_id` (RPD pode ser salvo sem sessão vinculada).
+export const alertaRiscoOrigem = pgEnum("alerta_risco_origem", [
+  "diario_sessao",
+  "registro_pensamento",
+  "instrumento_formal",
+]);
+
 export const alertaRiscoClinico = pgTable(
   "alerta_risco_clinico",
   {
@@ -1631,8 +1640,17 @@ export const alertaRiscoClinico = pgTable(
     // antes do delete. Resolve a contradição §7 (`sessionId notNull`) × H2.
     patientId: uuid("patient_id"),
     // o alerta segue a SESSÃO, não o paciente (H4) — o destinatário do
-    // estágio 0 é derivado daqui, nunca difundido lateralmente.
+    // estágio 0 é derivado daqui, nunca difundido lateralmente. NULL quando
+    // `origem` não é `diario_sessao` (#391) — RPD e instrumento formal usam
+    // `rpdEntryId`/`origemExtractionId` como âncora no lugar da sessão.
     sessionId: uuid("session_id").references(() => session.id),
+    // #391 — de onde este alerta nasceu. Default `diario_sessao` preserva o
+    // sentido de toda linha existente antes desta coluna existir.
+    origem: alertaRiscoOrigem("origem").notNull().default("diario_sessao"),
+    rpdEntryId: uuid("rpd_entry_id").references(() => tccRpdEntry.id),
+    origemExtractionId: uuid("origem_extraction_id").references(
+      () => extraction.id,
+    ),
 
     categoria: alertaRiscoCategoria("categoria").notNull(),
     severidade: alertaRiscoSeveridade("severidade").notNull(),
@@ -1691,16 +1709,24 @@ export const alertaRiscoClinico = pgTable(
       name: "alerta_risco_patient_fk",
     }).onDelete("restrict"),
     // Invariante da §7 preservada onde importa: TODO alerta vivo tem paciente e
-    // sessão. Só o expurgo (H2) pode soltar esses vínculos, e apenas marcando
-    // `pseudonimizado_em` — não há caminho para uma linha órfã silenciosa.
+    // UMA âncora — sessão (diário), RPD ou extração de instrumento (#391), a
+    // depender de `origem`. Só o expurgo (H2) pode soltar esses vínculos, e
+    // apenas marcando `pseudonimizado_em` — não há caminho para uma linha
+    // órfã silenciosa.
     check(
       "alerta_risco_vinculo",
       sql`(${t.pseudonimizadoEm} IS NULL
             AND ${t.patientId} IS NOT NULL
-            AND ${t.sessionId} IS NOT NULL)
+            AND (
+              (${t.origem} = 'diario_sessao' AND ${t.sessionId} IS NOT NULL)
+              OR (${t.origem} = 'registro_pensamento' AND ${t.rpdEntryId} IS NOT NULL)
+              OR (${t.origem} = 'instrumento_formal' AND ${t.origemExtractionId} IS NOT NULL)
+            ))
        OR (${t.pseudonimizadoEm} IS NOT NULL
             AND ${t.patientId} IS NULL
-            AND ${t.sessionId} IS NULL)`,
+            AND ${t.sessionId} IS NULL
+            AND ${t.rpdEntryId} IS NULL
+            AND ${t.origemExtractionId} IS NULL)`,
     ),
     index("idx_alerta_risco_fila")
       .on(t.clinicId, t.status)

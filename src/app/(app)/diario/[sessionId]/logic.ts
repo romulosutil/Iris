@@ -16,7 +16,10 @@ import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { resolveProvider } from "@/lib/extraction/provider";
 import type { ExtractionDraft } from "@/lib/extraction/provider";
 import type { AlertaRiscoAgente } from "@/lib/extraction/agent-output-schema";
-import { registrarAlertaRisco } from "@/lib/risco/registrar";
+import {
+  registrarAlertaRisco,
+  registrarAlertaRiscoInstrumento,
+} from "@/lib/risco/registrar";
 import { loadCanonicalContext } from "@/lib/extraction/context-loader";
 import { deveReextrair } from "@/lib/extraction/reextraction-policy";
 import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
@@ -442,7 +445,10 @@ async function consolidarSessaoCore(
 
     // ── Fase C: regrava só sugestões/pendências; PRESERVA linhas já revisadas
     //    (aprovada/editada/descartada, quando existirem — Plano 2).
-    await withTenant(ctx, async (tx) => {
+    //    `extractionIds` sai do RETURNING de um INSERT ... VALUES simples, que
+    //    preserva a ordem da lista de valores (sem JOIN/trigger a reordenar) —
+    //    o zip por índice com `drafts` na Fase E abaixo é seguro.
+    const extractionIds = await withTenant(ctx, async (tx) => {
       await tx
         .delete(extraction)
         .where(
@@ -454,8 +460,10 @@ async function consolidarSessaoCore(
             ]),
           ),
         );
-      if (drafts.length > 0) {
-        await tx.insert(extraction).values(
+      if (drafts.length === 0) return [];
+      const inseridos = await tx
+        .insert(extraction)
+        .values(
           drafts.map((d) => ({
             sessionId: sid,
             clinicId: ctx.clinicId,
@@ -468,11 +476,20 @@ async function consolidarSessaoCore(
             parContrasteId: d.parContrasteId,
             payload: d.payload as object,
           })),
-        );
-      }
+        )
+        .returning({ id: extraction.id });
+      return inseridos.map((r) => r.id);
     });
 
-    // ── Fase D: sinal de risco transversal (#122, R20 / R5-TC).
+    // Acumula erros de registro de alerta das Fases D e E — nenhuma das duas
+    // derruba a consolidação (o texto/as extrações já estão salvos), mas o
+    // erro tem que ser visível na UI: o terapeuta precisa saber que o alerta
+    // não subiu, senão presume que a clínica foi avisada e não foi. Uma fase
+    // que falha NÃO pode engolir o erro da outra — por isso não há retorno
+    // antecipado aqui, as duas sempre rodam.
+    const errosAlerta: string[] = [];
+
+    // ── Fase D: sinal de risco transversal do diário (#122, R20 / R5-TC).
     //    FORA da fila de validação por exceção do coordenador (V1) e depois da
     //    gravação das extrações, mas em transação própria: um erro ao gravar
     //    extração não pode engolir um alerta de risco, e vice-versa.
@@ -482,14 +499,59 @@ async function consolidarSessaoCore(
         sessionId: sid,
         risco: alertaRisco,
       });
-      if ("erro" in r) {
-        // Não derruba a consolidação (o texto do terapeuta já está salvo), mas
-        // devolve o erro para a UI — o terapeuta precisa saber que o alerta
-        // não subiu, senão presume que a clínica foi avisada e não foi.
-        return { numeroSequencial: prep.numero ?? undefined, error: r.erro };
-      }
+      if ("erro" in r) errosAlerta.push(r.erro);
     }
 
+    // ── Fase E: sinal de risco de INSTRUMENTO FORMAL (#391 R3, doc §1.2 item
+    //    6). Determinístico: lê `item_risco_positivo` do payload EM MEMÓRIA
+    //    (o mesmo objeto que acabou de ser gravado na Fase C) — nenhum LLM
+    //    roda nesta decisão, o modelo já rodou na Fase B para produzir a
+    //    extração. Regra restrita a `subtipo = 'aplicacao_escala_relatada'`:
+    //    qualquer outro subtipo é ignorado, mesmo com campo parecido no
+    //    payload. `!== false` dispara em `true` (positivo) OU `null` (recusa
+    //    de resposta — sinal, não ausência, agent-output-schema.ts); payload
+    //    sem o campo (`undefined`) NÃO dispara.
+    for (let i = 0; i < drafts.length; i++) {
+      const d = drafts[i]!;
+      if (d.subtipo !== "aplicacao_escala_relatada") continue;
+      const payload = d.payload as
+        { item_risco_positivo?: boolean | null } | null | undefined;
+      const itemRiscoPositivo = payload?.item_risco_positivo;
+      if (itemRiscoPositivo === false || itemRiscoPositivo === undefined) {
+        continue;
+      }
+      const extractionId = extractionIds[i];
+      if (!extractionId) continue; // guarda defensiva; não deveria faltar
+
+      const r = await registrarAlertaRiscoInstrumento(ctx, {
+        patientId: prep.patientId,
+        sessionId: sid,
+        extractionId,
+        sinal: {
+          // Única categoria de instrumento hoje (doc §1.2 item 6) — se outro
+          // instrumento vier depois com item de risco fora de ideação, revisar.
+          categoria: "ideacao_suicida",
+          // Nível intermediário, não o mínimo `ideacao_passiva`: não suaviza
+          // por falta de contexto estruturado, mesma lógica do RPD (spec §
+          // "detecção de risco no RPD").
+          severidade: "ideacao_ativa_sem_plano",
+          certeza: itemRiscoPositivo === true ? "explicito" : "ambiguo_citado",
+          trecho_fonte: d.trechoFonte,
+          detalhe:
+            itemRiscoPositivo === true
+              ? "Item de risco de instrumento formal respondido positivamente (true)."
+              : "Item de risco de instrumento formal recusado pelo paciente (null).",
+        },
+      });
+      if ("erro" in r) errosAlerta.push(r.erro);
+    }
+
+    if (errosAlerta.length > 0) {
+      return {
+        numeroSequencial: prep.numero ?? undefined,
+        error: errosAlerta.join(" "),
+      };
+    }
     return { numeroSequencial: prep.numero ?? undefined };
   } catch (err) {
     const msg = await mensagemDeConsentimento(ctx, err, { sessionId: sid });
