@@ -22,6 +22,61 @@ function parseOptionalInt(val: FormDataEntryValue | null): number | null {
   return Number.isNaN(num) ? null : num;
 }
 
+function parseRpdFormData(formData: FormData) {
+  const situacao = String(formData.get("situacao") ?? "").trim();
+  const pensamentoAutomatico = String(
+    formData.get("pensamentoAutomatico") ?? "",
+  ).trim();
+  const emocao = String(formData.get("emocao") ?? "").trim();
+  const intensidadeRaw = formData.get("intensidade");
+  const intensidade =
+    intensidadeRaw !== null &&
+    intensidadeRaw !== undefined &&
+    String(intensidadeRaw).trim() !== ""
+      ? Number(intensidadeRaw)
+      : NaN;
+
+  const credibilidadeInicial = parseOptionalInt(
+    formData.get("credibilidadeInicial"),
+  );
+  const evidenciasFavor = parseOptionalString(formData.get("evidenciasFavor"));
+  const evidenciasContra = parseOptionalString(
+    formData.get("evidenciasContra"),
+  );
+  const respostaRacional = parseOptionalString(
+    formData.get("respostaRacional"),
+  );
+  const credibilidadeAlternativa = parseOptionalInt(
+    formData.get("credibilidadeAlternativa"),
+  );
+  const distorcoesCognitivas = formData
+    .getAll("distorcoesCognitivas")
+    .map(String)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const comportamentoResultante = parseOptionalString(
+    formData.get("comportamentoResultante"),
+  );
+  const intensidadePos = parseOptionalInt(formData.get("intensidadePos"));
+  const sessionId = parseOptionalString(formData.get("sessionId"));
+
+  return {
+    situacao,
+    pensamentoAutomatico,
+    emocao,
+    intensidade,
+    credibilidadeInicial,
+    evidenciasFavor,
+    evidenciasContra,
+    respostaRacional,
+    credibilidadeAlternativa,
+    distorcoesCognitivas,
+    comportamentoResultante,
+    intensidadePos,
+    sessionId,
+  };
+}
+
 export async function salvarRPDAction(
   patientId: string,
   _prev: SalvarRpdState,
@@ -29,60 +84,11 @@ export async function salvarRPDAction(
 ): Promise<SalvarRpdState> {
   const ctx = await getTenantContext();
   try {
-    const situacao = String(formData.get("situacao") ?? "").trim();
-    const pensamentoAutomatico = String(
-      formData.get("pensamentoAutomatico") ?? "",
-    ).trim();
-    const emocao = String(formData.get("emocao") ?? "").trim();
-    const intensidadeRaw = formData.get("intensidade");
-    const intensidade =
-      intensidadeRaw !== null &&
-      intensidadeRaw !== undefined &&
-      String(intensidadeRaw).trim() !== ""
-        ? Number(intensidadeRaw)
-        : NaN;
-
-    const credibilidadeInicial = parseOptionalInt(
-      formData.get("credibilidadeInicial"),
-    );
-    const evidenciasFavor = parseOptionalString(
-      formData.get("evidenciasFavor"),
-    );
-    const evidenciasContra = parseOptionalString(
-      formData.get("evidenciasContra"),
-    );
-    const respostaRacional = parseOptionalString(
-      formData.get("respostaRacional"),
-    );
-    const credibilidadeAlternativa = parseOptionalInt(
-      formData.get("credibilidadeAlternativa"),
-    );
-    const distorcoesCognitivas = formData
-      .getAll("distorcoesCognitivas")
-      .map(String)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    const comportamentoResultante = parseOptionalString(
-      formData.get("comportamentoResultante"),
-    );
-    const intensidadePos = parseOptionalInt(formData.get("intensidadePos"));
-    const sessionId = parseOptionalString(formData.get("sessionId"));
+    const dados = parseRpdFormData(formData);
 
     const res = await salvarRPD(ctx, {
       patientId,
-      situacao,
-      pensamentoAutomatico,
-      emocao,
-      intensidade,
-      credibilidadeInicial,
-      evidenciasFavor,
-      evidenciasContra,
-      respostaRacional,
-      credibilidadeAlternativa,
-      distorcoesCognitivas,
-      comportamentoResultante,
-      intensidadePos,
-      sessionId,
+      ...dados,
     });
 
     if (res.error) {
@@ -123,70 +129,12 @@ export async function aprovarRPDSugestaoAction(
 ): Promise<AprovarRpdSugestaoState> {
   const ctx = await getTenantContext();
   try {
-    const situacao = String(formData.get("situacao") ?? "");
-    const pensamentoAutomatico = String(
-      formData.get("pensamentoAutomatico") ?? "",
-    );
-    const emocao = String(formData.get("emocao") ?? "");
-    const intensidadeRaw = formData.get("intensidade");
-    const intensidade = intensidadeRaw ? Number(intensidadeRaw) : NaN;
-    const credibilidadeInicialRaw = formData.get("credibilidadeInicial");
-    const credibilidadeInicial =
-      credibilidadeInicialRaw !== null && credibilidadeInicialRaw !== ""
-        ? Number(credibilidadeInicialRaw)
-        : null;
-    const evidenciasFavorRaw = formData.get("evidenciasFavor");
-    const evidenciasFavor = evidenciasFavorRaw
-      ? String(evidenciasFavorRaw)
-      : null;
-    const evidenciasContraRaw = formData.get("evidenciasContra");
-    const evidenciasContra = evidenciasContraRaw
-      ? String(evidenciasContraRaw)
-      : null;
-    const respostaRacional = String(formData.get("respostaRacional") ?? "");
-    const credibilidadeAlternativaRaw = formData.get(
-      "credibilidadeAlternativa",
-    );
-    const credibilidadeAlternativa =
-      credibilidadeAlternativaRaw !== null &&
-      credibilidadeAlternativaRaw !== ""
-        ? Number(credibilidadeAlternativaRaw)
-        : null;
-    const distorcoesCognitivas = formData
-      .getAll("distorcoesCognitivas")
-      .map(String);
-    const comportamentoResultanteRaw = formData.get(
-      "comportamentoResultante",
-    );
-    const comportamentoResultante = comportamentoResultanteRaw
-      ? String(comportamentoResultanteRaw)
-      : null;
-    const intensidadePosRaw = formData.get("intensidadePos");
-    const intensidadePos =
-      intensidadePosRaw !== null &&
-      intensidadePosRaw !== "" &&
-      intensidadePosRaw !== undefined
-        ? Number(intensidadePosRaw)
-        : null;
-    const sessionIdRaw = formData.get("sessionId");
-    const sessionId = sessionIdRaw ? String(sessionIdRaw) : null;
+    const dados = parseRpdFormData(formData);
 
     const res = await aprovarRPDSugestao(ctx, {
       extractionId,
       patientId,
-      situacao,
-      pensamentoAutomatico,
-      emocao,
-      intensidade,
-      credibilidadeInicial,
-      evidenciasFavor,
-      evidenciasContra,
-      respostaRacional,
-      credibilidadeAlternativa,
-      distorcoesCognitivas,
-      comportamentoResultante,
-      intensidadePos,
-      sessionId,
+      ...dados,
     });
 
     if (res.error) {
@@ -234,7 +182,8 @@ export async function descartarRPDSugestaoAction(
   } catch (err) {
     if (err instanceof RoleError) {
       return {
-        error: "Apenas terapeutas e coordenadores podem descartar uma sugestão de RPD.",
+        error:
+          "Apenas terapeutas e coordenadores podem descartar uma sugestão de RPD.",
       };
     }
     console.error("descartarRPDSugestaoAction:", err);
