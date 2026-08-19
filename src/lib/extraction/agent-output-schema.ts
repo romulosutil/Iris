@@ -155,7 +155,12 @@ const aplicacaoEscalaRelatadaSchema = z.object({
   // (protocolo-tcc.md §7.3). `emoção`/`escala_intensidade` não pertencem a
   // este objeto nos docs de design (ficam em `registro_pensamento`, fora do
   // shape fechado acima) — não inventados aqui.
-  item_risco_positivo: z.boolean().nullable(),
+  // `.optional()` adicionado para tolerar LLMs que omitem a chave em vez de
+  // emiti-la como `null` — omissão semânticamente equivale a `null` (não
+  // respondido/não aplicável), e o Zod sem `.optional()` rejeita com `Required`
+  // nesse caso. A distinção `null` (omitido/pulado) vs `false` (negou o item)
+  // é preservada: nunca coerce para `false`. (bloqueante encontrado Jules #399)
+  item_risco_positivo: z.boolean().nullable().optional(),
 });
 
 // ─── #390 — tarefa de casa (shape MÍNIMO) ─────────────────────────────────────
