@@ -140,6 +140,22 @@ Incidente operacional (2x nesta sessão, ambos por descuido do orquestrador, nã
 
 ---
 
+## 🏁 Sessão 18/08/2026 (4ª) — #395 fechada: suíte automatizada dos 10 casos TCC/convencional, contra Gemini (PR #403, stack sobe pra #402)
+
+Executada issue [#395](https://github.com/romulosutil/Iris/issues/395): primeira suíte que testa **comportamento do agente**, não CRUD/RLS — converte `docs/agente/casos-de-teste-tcc.md` (T1-T5) e `casos-de-teste-terapia-convencional.md` (TC-1..TC-5) em 13 testes reais, chamando `buildUserMessage`/`TCC_SYSTEM_PROMPT`/`CONVENTIONAL_SYSTEM_PROMPT`/`agentOutputSchema.parse` de produção (não reimplementação). Isolada de `pnpm test`/CI: `*.llm.test.ts` + `vitest.llm.config.ts` + `pnpm test:llm`.
+
+**Decisão do Rômulo, explícita após dois avisos do risco:** rodar contra **Gemini**, não Anthropic (produção é 100% Anthropic, `resolveProvider` intocado) — custo menor, escolha consciente de que a suíte prova "prompt seguido por LLM razoável", não "prompt seguido pelo modelo de produção". `@google/genai` como devDependency, `createGeminiInvoker` novo (`gemini-test-invoker.ts`), modelo padrão `gemini-2.0-flash`.
+
+**Baseline real: 11/13 verde.** 2 vermelhos são achado real, deixados vermelhos de propósito: T4 (agente inventa `tarefa_casa` mesmo sem instrução no `TCC_SYSTEM_PROMPT` — schema permite, prompt não cobre) e o probe R4-TCC/R11-TC (confiança `"alta"` indevida em duas distorções ambíguas, deveria ser `media` com as duas ou `baixa` com nenhuma).
+
+**D49 aberta:** prova de mutação (R1/R3/R4-TCC/R11 — comentar a regra em `prompt.ts`, provar que o teste correspondente falha, reverter) **bloqueada por quota gratuita do Gemini** (20 req/dia, esgotada no próprio baseline). Alvos já mapeados: R1/R9-TC ~linhas 100-103, R3/R4-TC ~68-70, R4-TCC/R11-TC ~106-109, R11/R12-TC ~110-113 de `prompt.ts` (conferir linha atual antes de mutar — pode ter mudado). Executar quando houver quota nova ou key paga.
+
+**Achado de higiene operacional:** ao checar `Get-Clipboard`, os primeiros 20 caracteres da `GOOGLE_API_KEY` (de 53) foram impressos no transcript por engano antes de eu perceber e mudar de abordagem — key completa nunca apareceu, gravada direto em `.env.local` (gitignored) depois disso, nunca commitada (conferido). Exposição parcial, não total; registrado para o Rômulo avaliar se quer rotacionar.
+
+`pnpm typecheck && pnpm lint && pnpm test` verdes (suíte LLM fora do padrão). PR [#403](https://github.com/romulosutil/Iris/pull/403) aberto stacked em `feat/392-ponte-agente-rpd-sugerido`. Próximo: #393.
+
+---
+
 ## 🏁 Sessão 18/08/2026 (3ª) — #392 fechada: ponte agente→RPD sugerido com fila de validação na aba TCC (PR #402, stack sobe pra #401)
 
 Executada issue [#392](https://github.com/romulosutil/Iris/issues/392): o valor central do produto para TCC (terapeuta escreve narrativo, agente estrutura) não existia — `tcc_rpd_entry` só era escrita por formulário digitado. Decisão de UX pendente do Rômulo fechada nesta sessão via `AskUserQuestion`: a fila de RPD sugerido vive **dentro da aba TCC do paciente**, não na fila geral `/validacao` (essa é `evidence`/`evidence_current`, domínio de meta/protocolo, não de pensamento automático — reaproveitar forçaria encaixe artificial).

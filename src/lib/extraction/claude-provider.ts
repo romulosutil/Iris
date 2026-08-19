@@ -22,7 +22,11 @@ import {
 // Deriva do OBJETO, não do schema com preprocess: um ZodEffects não gera JSON
 // Schema confiável. O preprocess só normaliza a forma R20 na ENTRADA — o que o
 // modelo deve produzir é exatamente o objeto.
-const TOOL_INPUT_SCHEMA = zodToJsonSchema(agentOutputObjectSchema, {
+// Exportado (não só local): o invoker de teste do Gemini
+// (gemini-test-invoker.ts, #395) reusa o MESMO schema derivado — nunca
+// duplica a chamada zodToJsonSchema, para os dois provedores nunca
+// divergirem silenciosamente na forma que forçam o modelo a produzir.
+export const TOOL_INPUT_SCHEMA = zodToJsonSchema(agentOutputObjectSchema, {
   target: "openApi3",
   $refStrategy: "none",
 });
