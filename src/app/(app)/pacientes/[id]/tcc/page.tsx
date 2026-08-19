@@ -6,12 +6,8 @@ import { patient } from "@/db/schema";
 import { obterRPDEntries } from "./logic";
 import { RpdForm } from "./rpd-form";
 import { GraficoEvolucaoCrencas } from "./grafico-evolucao-crencas";
-import { DISTORCOES_COGNITIVAS_OPCOES } from "./constants";
+import { rotuloDistorcao } from "./constants";
 import { Pill } from "@/components/ui/primitives/pill";
-
-const ROTULO_POR_SLUG = new Map<string, string>(
-  DISTORCOES_COGNITIVAS_OPCOES.map((opcao) => [opcao.slug, opcao.rotulo]),
-);
 
 interface TccPageProps {
   params: Promise<{ id: string }>;
@@ -112,7 +108,7 @@ export default async function TccPage({ params }: TccPageProps) {
                             colorScheme="ouro"
                             size="sm"
                           >
-                            {ROTULO_POR_SLUG.get(slug) ?? slug}
+                            {rotuloDistorcao(slug)}
                           </Pill>
                         ),
                       )}

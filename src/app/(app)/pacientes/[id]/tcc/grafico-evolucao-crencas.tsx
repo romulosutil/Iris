@@ -4,6 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { Pill } from "@/components/ui/primitives/pill";
 import { calcularCompletudeRPD } from "./completude";
+import { rotuloDistorcao } from "./constants";
 
 export interface RpdGraficoEntry {
   id: string;
@@ -359,7 +360,7 @@ export function GraficoEvolucaoCrencas({
                 Distorção Cognitiva:
               </strong>{" "}
               <span className="font-semibold text-black">
-                {ativo.distorcoesCognitivas.join(", ")}
+                {ativo.distorcoesCognitivas.map(rotuloDistorcao).join(", ")}
               </span>
             </div>
           ) : null}

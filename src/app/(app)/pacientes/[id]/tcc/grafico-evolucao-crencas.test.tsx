@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import {
   GraficoEvolucaoCrencas,
   type RpdGraficoEntry,
@@ -86,5 +86,25 @@ describe("GraficoEvolucaoCrencas — filtro de completude (#389)", () => {
     expect(
       screen.getByText(/nenhum registro de pensamentos cadastrado/i),
     ).toBeTruthy();
+  });
+
+  it("exibe rótulos legíveis de distorções cognitivas no tooltip ao interagir com o ponto", () => {
+    const comDistorcoes = entryBase({
+      id: "com-distorcoes",
+      intensidade: 75,
+      evidenciasFavor: "Evidência favorável",
+      respostaRacional: "Reestruturação alternativa",
+      intensidadePos: 30,
+      distorcoesCognitivas: ["leitura_mental", "catastrofizacao"],
+    });
+
+    render(<GraficoEvolucaoCrencas entries={[comDistorcoes]} />);
+
+    const ponto = screen.getByRole("button");
+    fireEvent.focus(ponto);
+
+    // Rótulos formatados em vez de slugs crus snake_case
+    expect(screen.getByText("Leitura Mental, Catastrofização")).toBeTruthy();
+    expect(screen.queryByText("leitura_mental, catastrofizacao")).toBeNull();
   });
 });

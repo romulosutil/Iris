@@ -22,6 +22,14 @@ export const DISTORCOES_COGNITIVAS_SLUGS = DISTORCOES_COGNITIVAS_OPCOES.map(
   (opcao) => opcao.slug,
 );
 
+export const ROTULO_POR_SLUG = new Map<string, string>(
+  DISTORCOES_COGNITIVAS_OPCOES.map((opcao) => [opcao.slug, opcao.rotulo]),
+);
+
+export function rotuloDistorcao(slug: string): string {
+  return ROTULO_POR_SLUG.get(slug) ?? slug;
+}
+
 export const salvarRpdSchema = z.object({
   patientId: z.string().uuid("ID do paciente inválido"),
   // Campos 1-3 (formato Padesky): situação, pensamento automático,
