@@ -28,6 +28,20 @@ function idadeEmMeses(nascimento: string | null): number | null {
   return hoje.getDate() < n.getDate() ? bruto - 1 : bruto;
 }
 
+function resolverModoExtracao(
+  modality?: "protocol_driven" | "conventional" | "cognitive_behavioral" | null,
+): "terapia_convencional" | "protocol_driven" | "tcc" {
+  switch (modality) {
+    case "conventional":
+      return "terapia_convencional";
+    case "cognitive_behavioral":
+      return "tcc";
+    case "protocol_driven":
+    default:
+      return "protocol_driven";
+  }
+}
+
 // Carrega do banco o contrato canônico que o agente recebe. Roda DENTRO de uma
 // transação com tenant (RLS ativo). historico_relevante fica vazio na Fase 3
 // (não há tabela evidence; fonte futura = extrações aprovadas — Plano 2/Fase 4).
@@ -139,10 +153,7 @@ export async function loadCanonicalContext(
     });
   }
 
-  const modo =
-    pac?.clinicalModality === "conventional"
-      ? "terapia_convencional"
-      : "protocol_driven";
+  const modo = resolverModoExtracao(pac?.clinicalModality);
 
   return buildCanonicalContext({
     paciente: { idadeMeses: idadeEmMeses(pac?.nascimento ?? null) },

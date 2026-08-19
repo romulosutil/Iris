@@ -1,0 +1,1 @@
+ALTER TYPE "public"."clinical_modality" ADD VALUE 'cognitive_behavioral';

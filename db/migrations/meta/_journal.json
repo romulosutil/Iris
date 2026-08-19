@@ -750,6 +750,13 @@
       "when": 1786930303361,
       "tag": "0106_billing_cycle_retentativa_extradia",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1787078318669,
+      "tag": "0107_clinical_modality_cognitive_behavioral",
+      "breakpoints": true
     }
   ]
 }

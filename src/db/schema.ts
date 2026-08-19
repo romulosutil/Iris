@@ -37,6 +37,7 @@ export const userRoleTipo = pgEnum("user_role_tipo", [
 export const clinicalModalityEnum = pgEnum("clinical_modality", [
   "conventional",
   "protocol_driven",
+  "cognitive_behavioral",
 ]);
 
 // `tratamento_dados_menor` = responsável legal assina pelo paciente menor.

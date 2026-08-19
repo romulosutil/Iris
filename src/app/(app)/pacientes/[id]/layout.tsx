@@ -57,26 +57,39 @@ export default async function PacienteLayout({
     }),
   ]);
 
-  const eConvencional = dadosPaciente?.clinicalModality === "conventional";
-
   const base = `/pacientes/${id}`;
+
+  // A aba clínica central troca por modalidade: cada uma tem exatamente UM
+  // registro estruturado que faz sentido para o modo de tratamento —
+  // pontuação de protocolo (PEI & Metas), diário de pensamentos (TCC) ou
+  // registro narrativo livre (Temas). Nunca duas ao mesmo tempo: a aba errada
+  // levaria o terapeuta a preencher um instrumento que o modo não usa.
+  // `default` cai em array vazio (sem aba central) em vez de lançar — um
+  // paciente sem modalidade resolvida ainda precisa navegar pelas outras abas.
+  let abaModalidade: TabsNavItem[];
+  switch (dadosPaciente?.clinicalModality) {
+    case "protocol_driven":
+      abaModalidade = [{ href: `${base}/metas`, rotulo: "PEI & Metas" }];
+      break;
+    case "cognitive_behavioral":
+      abaModalidade = [{ href: `${base}/tcc`, rotulo: "TCC" }];
+      break;
+    case "conventional":
+      abaModalidade = [{ href: `${base}/temas`, rotulo: "Temas" }];
+      break;
+    default:
+      abaModalidade = [];
+  }
+
   // Todas as rotas irmãs que de fato existem sob `[id]/` (as que têm
   // `page.tsx`). `consentimento/` e `timeline/` são pastas de lógica sem tela
   // própria — a timeline é renderizada dentro da aba Evolução — e por isso não
   // entram aqui: aba que leva a 404 é pior que aba ausente.
-  // Pacientes na modalidade convencional têm as abas de pontuação de protocolos (PEI & Metas)
-  // ocultadas da navegação para uma interface limpa focada no diário de evolução.
-  // O RPD (TCC) é o espelho disso: só aparece na modalidade convencional, onde a
-  // conversa clínica é o registro — na modalidade por protocolo o dado nasce da
-  // pontuação de domínio, não de um registro de pensamento.
   const abas: TabsNavItem[] = [
     { href: base, rotulo: "Evolução", exato: true },
     { href: `${base}/briefing`, rotulo: "Briefing" },
     { href: `${base}/cadastro-clinico`, rotulo: "Ficha Clínica" },
-    ...(!eConvencional
-      ? [{ href: `${base}/metas`, rotulo: "PEI & Metas" }]
-      : []),
-    ...(eConvencional ? [{ href: `${base}/tcc`, rotulo: "TCC" }] : []),
+    ...abaModalidade,
     { href: `${base}/equipe`, rotulo: "Equipe" },
     { href: `${base}/horas`, rotulo: "Horas" },
     { href: `${base}/ausencias`, rotulo: "Ausências" },
