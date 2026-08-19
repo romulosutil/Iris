@@ -15,6 +15,10 @@ import {
 } from "./actions";
 
 type TipoConsentimento = "responsavel_legal" | "titular_adulto";
+type ClinicalModality =
+  | "protocol_driven"
+  | "cognitive_behavioral"
+  | "conventional";
 
 /**
  * Idade em anos completos na data de hoje. Só serve para o AVISO
@@ -46,6 +50,12 @@ export function NovoPacienteForm() {
   const [tipoConsentimento, setTipoConsentimento] = useState<
     TipoConsentimento | ""
   >("");
+  // Sem default (#387): protocolo estruturado, TCC e terapia convencional
+  // mudam o que a ficha clínica pede depois — pré-selecionar qualquer um
+  // esconderia essa escolha do operador.
+  const [clinicalModality, setClinicalModality] = useState<
+    ClinicalModality | ""
+  >("");
   const [nascimento, setNascimento] = useState("");
   const [consentimentoIa, setConsentimentoIa] = useState(false);
   const [consentimentoExportacao, setConsentimentoExportacao] = useState(false);
@@ -76,6 +86,33 @@ export function NovoPacienteForm() {
     // do form, não diz ONDE corrigir.
     grupoRef.current?.querySelector("button")?.focus();
   }, [erroEhDoTipo, state]);
+
+  // Mesmo padrão acima, agora para o grupo de modalidade clínica (#387):
+  // hidden input não aceita `required`, então o servidor é quem rejeita a
+  // ausência — este efeito só leva o foco até lá quando ele rejeitar.
+  const erroEhDaModalidade =
+    !!state.error && /modalidade clínica/i.test(state.error);
+  const grupoModalidadeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!erroEhDaModalidade) return;
+    grupoModalidadeRef.current?.querySelector("button")?.focus();
+  }, [erroEhDaModalidade, state]);
+
+  // R3 (#387) — mesmo gate do servidor (`logic.ts`, defesa em profundidade):
+  // paciente adulto em TCC ou terapia convencional sem autoconsentimento não
+  // tem base LGPD própria para os instrumentos daquela modalidade (RPD,
+  // escalas, resumo de sessão). `protocol_driven` fica DE FORA — mantém só o
+  // aviso soft (`avisoDivergencia`) que já existia, sem bloqueio novo.
+  const modalidadeExigeTitularAdulto =
+    clinicalModality === "cognitive_behavioral" ||
+    clinicalModality === "conventional";
+  const bloqueioGateConsentimento =
+    idade !== null &&
+    idade >= 18 &&
+    modalidadeExigeTitularAdulto &&
+    tipoConsentimento !== "" &&
+    tipoConsentimento !== "titular_adulto";
 
   // Conta em somente-leitura (#163) não é erro de preenchimento: nada no
   // formulário conserta. Some com o Alert genérico do <Form> para não repetir a
@@ -131,6 +168,63 @@ export function NovoPacienteForm() {
           ficha clínica com vigência própria (SCD2) e é o teto que a equipe
           consome. Prescrever no cadastro criava uma prescrição sem histórico e
           sem quem a validasse. O submit leva direto para lá. */}
+
+      {/* Modalidade clínica (#387): decide o que a ficha do paciente vai
+          pedir depois — protocolo estruturado, TCC ou terapia convencional.
+          Sem pré-seleção: o operador precisa escolher, a action rejeita valor
+          ausente com mensagem própria. */}
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend className="font-display mb-1.5 text-sm font-semibold text-[var(--text-primary)]">
+          Modalidade clínica
+        </legend>
+        <RadioCards
+          ref={grupoModalidadeRef}
+          value={clinicalModality}
+          onValueChange={(v) => setClinicalModality(v as ClinicalModality)}
+          aria-required="true"
+          aria-invalid={erroEhDaModalidade || undefined}
+          aria-describedby={
+            erroEhDaModalidade ? "clinicalModality-error" : undefined
+          }
+          error={erroEhDaModalidade}
+          opcoes={[
+            {
+              value: "protocol_driven",
+              label: "Protocolo estruturado (ABA / TEA)",
+              description:
+                "Domínios, marcos de desenvolvimento e evidência clínica por sessão.",
+            },
+            {
+              value: "cognitive_behavioral",
+              label: "Terapia Cognitivo-Comportamental (TCC)",
+              description:
+                "Registro de pensamento (RPD), escalas padronizadas e tarefa de casa.",
+            },
+            {
+              value: "conventional",
+              label:
+                "Terapia convencional (psicodinâmica, humanista, sistêmica)",
+              description:
+                "Resumo de sessão e temas trabalhados, sem protocolo formal.",
+            },
+          ]}
+        />
+        {erroEhDaModalidade ? (
+          <p
+            id="clinicalModality-error"
+            className="text-sm font-semibold text-[var(--status-error-fg)]"
+          >
+            {state.error}
+          </p>
+        ) : null}
+        {/* Valor lido pela action. Vazio até o operador escolher — a action
+            devolve erro em pt-BR nesse caso, sem default silencioso. */}
+        <input
+          type="hidden"
+          name="clinicalModality"
+          value={clinicalModality}
+        />
+      </fieldset>
 
       {/* Consentimento LGPD. A escolha de quem assina é explícita — nunca
           derivada da data de nascimento (#100, D1). */}
@@ -283,9 +377,23 @@ export function NovoPacienteForm() {
         />
       </fieldset>
 
+      {/* R3 (#387) — bloqueio client-side do gate de consentimento. Repete a
+          MESMA regra do servidor (`logic.ts`, defesa em profundidade):
+          servidor sempre reavalia, este bloco só evita a viagem ao servidor
+          para um envio que já se sabe recusado. */}
+      {bloqueioGateConsentimento ? (
+        <Alert severidade="erro" titulo="Não é possível salvar assim">
+          Paciente adulto em TCC ou terapia convencional exige consentimento
+          do próprio titular. Ajuste &quot;Quem assina o consentimento?&quot;
+          para o próprio paciente antes de salvar.
+        </Alert>
+      ) : null}
+
       {/* A copy diz o próximo passo, não a tela de destino: o cadastro só
           termina de verdade quando a carga horária está prescrita. */}
-      <Button type="submit">Salvar e prescrever a carga horária</Button>
+      <Button type="submit" disabled={bloqueioGateConsentimento}>
+        Salvar e prescrever a carga horária
+      </Button>
     </Form>
   );
 }

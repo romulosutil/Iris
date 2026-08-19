@@ -97,6 +97,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
         tipoConsentimento: "responsavel_legal",
         responsavelSignatario: "Mãe do Paciente",
         responsavelCpf: CPFS[0],
+        clinicalModality: "protocol_driven",
       }),
     );
     expect(result.error).toBeUndefined();
@@ -150,6 +151,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
         nome: "Adulto Autoconsente",
         tipoConsentimento: "titular_adulto",
         cpf: CPFS[2],
+        clinicalModality: "protocol_driven",
       }),
     );
     expect(result.error).toBeUndefined();
@@ -212,6 +214,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
         nascimento: "2012-05-10",
         tipoConsentimento: "titular_adulto",
         cpf: CPFS[4],
+        clinicalModality: "protocol_driven",
       }),
     );
     expect(result.error).toBeUndefined();
@@ -233,6 +236,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
         tipoConsentimento: "responsavel_legal",
         responsavelSignatario: "Mãe da Bruna",
         responsavelCpf: CPFS[5],
+        clinicalModality: "protocol_driven",
       }),
     );
     expect(res.error).toBeUndefined();
@@ -251,6 +255,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     fd.set("tipoConsentimento", "responsavel_legal");
     fd.set("responsavelSignatario", "Pai");
     fd.set("responsavelCpf", CPFS[6]);
+    fd.set("clinicalModality", "protocol_driven");
     fd.append("alvoDisciplina", "aba");
     fd.append("alvoHorasSemana", "12.0");
     const res = await criarPacienteEConsent(ctx, fd);
@@ -270,6 +275,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     fd.set("tipoConsentimento", "responsavel_legal");
     fd.set("responsavelSignatario", "Mãe");
     fd.set("responsavelCpf", CPFS[7]);
+    fd.set("clinicalModality", "protocol_driven");
     fd.append("alvoDisciplina", "aba");
     fd.append("alvoHorasSemana", "abc");
     const res = await criarPacienteEConsent(ctx, fd);
@@ -288,6 +294,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     fd.set("cpf", CPFS[8]);
     fd.set("consentimentoIa", "on");
     fd.set("consentimentoExportacao", "on");
+    fd.set("clinicalModality", "protocol_driven");
 
     const res = await criarPacienteEConsent(ctx, fd);
     expect(res.error).toBeUndefined();
@@ -320,6 +327,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
     fd.set("responsavelSignatario", "Pai do Menor");
     fd.set("responsavelCpf", CPFS[9]);
     fd.set("consentimentoIa", "on");
+    fd.set("clinicalModality", "protocol_driven");
 
     const res = await criarPacienteEConsent(ctx, fd);
     expect(res.error).toBeUndefined();
@@ -370,6 +378,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
           responsavelCpf: CPFS[10],
+          clinicalModality: "protocol_driven",
         }),
       );
 
@@ -390,6 +399,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
           responsavelCpf: CPFS[11],
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(res.bloqueioConta).toBeUndefined();
@@ -406,6 +416,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
           responsavelCpf: CPFS[12],
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(res.bloqueioConta).toBeUndefined();
@@ -425,6 +436,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
           responsavelCpf: CPFS[13],
+          clinicalModality: "protocol_driven",
         }),
       );
 
@@ -446,6 +458,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
           responsavelCpf: CPFS[14],
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(res.id).toBeUndefined();
@@ -462,6 +475,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
           responsavelCpf: CPFS[15],
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(res.id).toBeUndefined();
@@ -478,6 +492,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe",
           responsavelCpf: CPFS[16],
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(res.bloqueioConta).toBeUndefined();
@@ -496,6 +511,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
             tipoConsentimento: "responsavel_legal",
             responsavelSignatario: "Mãe",
             responsavelCpf: CPFS[17],
+            clinicalModality: "protocol_driven",
           }),
         );
         expect(res.bloqueioConta).toBeUndefined();
@@ -566,6 +582,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "CPF Mascarado",
           tipoConsentimento: "titular_adulto",
           cpf: "529.982.247-25",
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(res.error).toBeUndefined();
@@ -580,6 +597,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Titular Coluna Certa",
           tipoConsentimento: "titular_adulto",
           cpf: CPFS[18],
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(res.error).toBeUndefined();
@@ -597,6 +615,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Pai",
           responsavelCpf: CPFS[19],
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(res.error).toBeUndefined();
@@ -632,6 +651,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe Dos Dois",
           responsavelCpf: cpfDoResponsavel,
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(primeiro.error).toBeUndefined();
@@ -644,6 +664,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "responsavel_legal",
           responsavelSignatario: "Mãe Dos Dois",
           responsavelCpf: cpfDoResponsavel,
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(segundo.error).toBeUndefined();
@@ -664,6 +685,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Primeiro Com Este CPF",
           tipoConsentimento: "titular_adulto",
           cpf: CPFS[20],
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(primeiro.error).toBeUndefined();
@@ -674,6 +696,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           nome: "Segundo Com Mesmo CPF",
           tipoConsentimento: "titular_adulto",
           cpf: CPFS[20],
+          clinicalModality: "protocol_driven",
         }),
       );
       expect(segundo.error).toBe("Este CPF já está cadastrado nesta clínica.");
@@ -747,6 +770,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
             nome: "Fraude De Trial",
             tipoConsentimento: "titular_adulto",
             cpf: CPF_JA_USADO_EM_TRIAL,
+            clinicalModality: "protocol_driven",
           }),
         );
         expect(res.id).toBeUndefined();
@@ -763,6 +787,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
             nome: "Sem Fraude De Trial",
             tipoConsentimento: "titular_adulto",
             cpf: CPF_NUNCA_USADO_EM_TRIAL,
+            clinicalModality: "protocol_driven",
           }),
         );
         expect(res.bloqueioConta).toBeUndefined();
@@ -776,10 +801,198 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
             nome: "Ativa Sem Checagem De Trial",
             tipoConsentimento: "titular_adulto",
             cpf: CPF_PARA_ALVO_ATIVA,
+            clinicalModality: "protocol_driven",
           }),
         );
         expect(res.bloqueioConta).toBeUndefined();
         expect(res.id).toBeTruthy();
+      });
+    });
+  });
+
+  // ─── #387 — modalidade clínica ─────────────────────────────────────────────
+  // Espectro Brutal: novos CPFs isolados dos usados acima (`CPFS`), gerados
+  // com seed própria (Módulo 11 conferido) para não colidir com
+  // `uq_patient_clinic_cpf`.
+  describe("#387 — modalidade clínica", () => {
+    const CPF_MODALIDADE = [
+      "98765000153",
+      "98765000404",
+      "98765000749",
+      "98765001044",
+      "98765001397",
+      "98765001630",
+      "98765001982",
+      "98765002288",
+    ] as const;
+
+    test("clinicalModality protocol_driven grava no banco (oráculo é o SELECT, não o retorno)", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente Protocolo",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+          responsavelCpf: CPF_MODALIDADE[0],
+          clinicalModality: "protocol_driven",
+        }),
+      );
+      expect(res.error).toBeUndefined();
+      const linhas = await owner`
+        SELECT clinical_modality FROM patient WHERE id = ${res.id!}`;
+      expect(linhas[0]!.clinical_modality).toBe("protocol_driven");
+    });
+
+    test("clinicalModality cognitive_behavioral (TCC) grava no banco", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente TCC",
+          tipoConsentimento: "titular_adulto",
+          cpf: CPF_MODALIDADE[1],
+          clinicalModality: "cognitive_behavioral",
+        }),
+      );
+      expect(res.error).toBeUndefined();
+      const linhas = await owner`
+        SELECT clinical_modality FROM patient WHERE id = ${res.id!}`;
+      expect(linhas[0]!.clinical_modality).toBe("cognitive_behavioral");
+    });
+
+    test("clinicalModality conventional grava no banco", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente Convencional",
+          tipoConsentimento: "titular_adulto",
+          cpf: CPF_MODALIDADE[2],
+          clinicalModality: "conventional",
+        }),
+      );
+      expect(res.error).toBeUndefined();
+      const linhas = await owner`
+        SELECT clinical_modality FROM patient WHERE id = ${res.id!}`;
+      expect(linhas[0]!.clinical_modality).toBe("conventional");
+    });
+
+    test("clinicalModality ausente retorna erro (sem default silencioso) e não grava nada", async () => {
+      const antes =
+        await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Sem Modalidade",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+          responsavelCpf: CPF_MODALIDADE[3],
+        }),
+      );
+      expect(res.error).toMatch(/modalidade clínica/i);
+      expect(res.id).toBeUndefined();
+      const depois =
+        await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+      expect(depois[0]!.n).toBe(antes[0]!.n);
+    });
+
+    test("clinicalModality vazio retorna erro", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Modalidade Vazia",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+          responsavelCpf: CPF_MODALIDADE[4],
+          clinicalModality: "",
+        }),
+      );
+      expect(res.error).toMatch(/modalidade clínica/i);
+      expect(res.id).toBeUndefined();
+    });
+
+    test("clinicalModality inválido (fora do enum) retorna erro", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Modalidade Invalida",
+          tipoConsentimento: "responsavel_legal",
+          responsavelSignatario: "Mãe",
+          responsavelCpf: CPF_MODALIDADE[5],
+          clinicalModality: "aba_avulsa",
+        }),
+      );
+      expect(res.error).toMatch(/modalidade clínica/i);
+      expect(res.id).toBeUndefined();
+    });
+
+    // ── R3 — gate de consentimento por modalidade (paciente adulto) ──────────
+    // Mesma derivação de idade que já alimenta `avisoDivergencia` no
+    // formulário (hoje só aviso não-bloqueante). Regra NOVA: adulto em TCC ou
+    // convencional SEM `titular_adulto` bloqueia a criação — defesa em
+    // profundidade, o client já desabilita o submit no mesmo caso.
+    describe("R3 — gate de consentimento (paciente adulto)", () => {
+      test("adulto + cognitive_behavioral (TCC) sem titular_adulto REJEITA e não grava nada", async () => {
+        const antes =
+          await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+        const res = await criarPacienteEConsent(
+          ctx,
+          form({
+            nome: "Adulto TCC Sem Titular",
+            nascimento: "1990-01-01",
+            tipoConsentimento: "responsavel_legal",
+            responsavelSignatario: "Curador",
+            responsavelCpf: CPF_MODALIDADE[6],
+            clinicalModality: "cognitive_behavioral",
+          }),
+        );
+        expect(res.error).toMatch(
+          /adulto em tcc ou terapia convencional exige consentimento do próprio titular/i,
+        );
+        expect(res.id).toBeUndefined();
+        const depois =
+          await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+        expect(depois[0]!.n).toBe(antes[0]!.n);
+      });
+
+      test("adulto + conventional sem titular_adulto REJEITA e não grava nada", async () => {
+        const antes =
+          await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+        const res = await criarPacienteEConsent(
+          ctx,
+          form({
+            nome: "Adulto Convencional Sem Titular",
+            nascimento: "1985-06-15",
+            tipoConsentimento: "responsavel_legal",
+            responsavelSignatario: "Curador",
+            responsavelCpf: CPF_MODALIDADE[7],
+            clinicalModality: "conventional",
+          }),
+        );
+        expect(res.error).toMatch(
+          /adulto em tcc ou terapia convencional exige consentimento do próprio titular/i,
+        );
+        expect(res.id).toBeUndefined();
+        const depois =
+          await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+        expect(depois[0]!.n).toBe(antes[0]!.n);
+      });
+
+      test("adulto + protocol_driven sem titular_adulto NÃO bloqueia (só aviso, fora do escopo do gate)", async () => {
+        const res = await criarPacienteEConsent(
+          ctx,
+          form({
+            nome: "Adulto Protocolo Sem Titular",
+            nascimento: "1992-03-20",
+            tipoConsentimento: "responsavel_legal",
+            responsavelSignatario: "Curador",
+            responsavelCpf: CPF_MODALIDADE[7],
+            clinicalModality: "protocol_driven",
+          }),
+        );
+        expect(res.error).toBeUndefined();
+        expect(res.id).toBeTruthy();
+        const linhas = await owner`
+          SELECT clinical_modality FROM patient WHERE id = ${res.id!}`;
+        expect(linhas[0]!.clinical_modality).toBe("protocol_driven");
       });
     });
   });

@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { codigoPg } from "@/db/pg-error";
-import { patient, consent } from "@/db/schema";
+import { patient, consent, clinicalModalityEnum } from "@/db/schema";
 import {
   avaliarSituacaoConta,
   mensagemDeEstado,
@@ -58,6 +58,29 @@ const TIPOS_CONSENTIMENTO: readonly string[] = [
   "responsavel_legal",
   "titular_adulto",
 ];
+
+type ClinicalModality = (typeof clinicalModalityEnum.enumValues)[number];
+
+const CLINICAL_MODALITIES: readonly string[] = clinicalModalityEnum.enumValues;
+
+/**
+ * Espelha `idadeEmAnos` de `novo-paciente-form.tsx` (mesma derivação, mesmo
+ * arredondamento) — aqui roda no SERVIDOR, para o gate de consentimento (R3,
+ * #387). Defesa em profundidade: o client já bloqueia o submit, mas nunca se
+ * confia só nisso. Recebe `nascimentoRaw` já validado pelo regex de formato
+ * (linha ~80 abaixo), então só resta checar `Invalid Date`.
+ */
+function idadeEmAnos(nascimento: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nascimento)) return null;
+  const nasc = new Date(`${nascimento}T00:00:00`);
+  if (Number.isNaN(nasc.getTime())) return null;
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - nasc.getFullYear();
+  const mes = hoje.getMonth() - nasc.getMonth();
+  if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) anos--;
+  if (anos < 0) return null;
+  return anos;
+}
 
 /**
  * Núcleo testável: cria paciente + Consent LGPD na MESMA transação. Consent
@@ -146,11 +169,42 @@ export async function criarPacienteEConsent(
   const escola = String(formData.get("escola") ?? "").trim() || undefined;
   const convenio = String(formData.get("convenio") ?? "").trim() || undefined;
 
+  // Campo OBRIGATÓRIO e sem default silencioso (#387), mesmo padrão de
+  // `tipoConsentimento` acima: um default "protocol_driven" gravaria
+  // protocolo estruturado (ABA/TEA) para qualquer paciente sempre que a UI
+  // esquecesse de mandar o campo — erro que só apareceria numa auditoria da
+  // ficha clínica, não no cadastro.
   const clinicalModalityRaw = String(
     formData.get("clinicalModality") ?? "",
   ).trim();
-  const clinicalModality =
-    clinicalModalityRaw === "conventional" ? "conventional" : "protocol_driven";
+  if (!CLINICAL_MODALITIES.includes(clinicalModalityRaw)) {
+    return {
+      error:
+        "Selecione a modalidade clínica: protocolo estruturado, Terapia Cognitivo-Comportamental (TCC) ou terapia convencional.",
+    };
+  }
+  const clinicalModality = clinicalModalityRaw as ClinicalModality;
+
+  // R3 (#387) — gate de consentimento por modalidade. TCC e terapia
+  // convencional carregam instrumentos próprios do titular (RPD, escalas,
+  // resumo de sessão): sem autoconsentimento do paciente adulto, o registro
+  // fica sem base LGPD própria para eles. `protocol_driven` fica DE FORA
+  // deste bloqueio — mantém só o aviso soft que já existe hoje no formulário
+  // (fora do escopo desta issue). Defesa em profundidade: o client já
+  // desabilita o submit nesse caso, mas o servidor nunca confia só nisso.
+  if (
+    (clinicalModality === "cognitive_behavioral" ||
+      clinicalModality === "conventional") &&
+    tipoConsentimento !== "titular_adulto"
+  ) {
+    const idade = idadeEmAnos(nascimentoRaw);
+    if (idade !== null && idade >= 18) {
+      return {
+        error:
+          "Paciente adulto em TCC ou terapia convencional exige consentimento do próprio titular (titular adulto). Ajuste quem assina o consentimento antes de salvar.",
+      };
+    }
+  }
 
   // #203 (fatia 2): o cadastro NÃO prescreve mais. Disciplina e carga horária
   // migraram para a ficha clínica, onde nascem com vigência própria (SCD2) e
