@@ -171,7 +171,9 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: instalar dependências do SO para o Playwright
-        run: pnpm exec playwright install-deps chromium
+        run: |
+          sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
+          pnpm exec playwright install-deps chromium
 
       - name: instalar binário do Chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
