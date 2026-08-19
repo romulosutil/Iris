@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { codigoPg } from "@/db/pg-error";
-import { patient, consent } from "@/db/schema";
+import { patient, consent, clinicalModalityEnum } from "@/db/schema";
 import {
   avaliarSituacaoConta,
   mensagemDeEstado,
@@ -59,16 +59,9 @@ const TIPOS_CONSENTIMENTO: readonly string[] = [
   "titular_adulto",
 ];
 
-type ClinicalModality =
-  | "protocol_driven"
-  | "cognitive_behavioral"
-  | "conventional";
+type ClinicalModality = (typeof clinicalModalityEnum.enumValues)[number];
 
-const CLINICAL_MODALITIES: readonly string[] = [
-  "protocol_driven",
-  "cognitive_behavioral",
-  "conventional",
-];
+const CLINICAL_MODALITIES: readonly string[] = clinicalModalityEnum.enumValues;
 
 /**
  * Espelha `idadeEmAnos` de `novo-paciente-form.tsx` (mesma derivação, mesmo
