@@ -2,6 +2,16 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { hasDb } from "@tests/integration-env";
 vi.mock("server-only", () => ({}));
+// #391 R3 — permite injetar drafts de extração controlados (subtipo
+// `aplicacao_escala_relatada` + `item_risco_positivo`) sem depender do
+// DemoStubProvider (que nunca produz esse subtipo) nem de um LLM real.
+// `importOriginal` preserva o comportamento padrão (DemoStubProvider em
+// clínica demo) para todos os testes que não usam `mockReturnValueOnce`.
+vi.mock("@/lib/extraction/provider", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/extraction/provider")>();
+  return { ...actual, resolveProvider: vi.fn(actual.resolveProvider) };
+});
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
 const U_T1 = "00000000-0000-0000-0000-0000000071a1";
@@ -290,5 +300,135 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(log!.detalhe).toEqual({ origem: "registro_clinico" });
 
     await owner`UPDATE patient SET arquivado_em = NULL WHERE id = ${PAC}`;
+  });
+
+  // ─── #391 R3 — alerta de risco de INSTRUMENTO FORMAL ──────────────────────
+  // Determinístico: lê `item_risco_positivo` do payload já persistido na
+  // extração `aplicacao_escala_relatada`, sem chamar LLM nessa decisão (o
+  // provider é um fake síncrono, nenhum invoker de modelo é exercitado aqui).
+  describe("instrumento formal (#391)", () => {
+    const limpar = async () => {
+      await owner`DELETE FROM alerta_risco_clinico WHERE patient_id = ${PAC}`;
+      await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
+    };
+
+    const alertasInstrumento = () =>
+      owner`SELECT origem, categoria, severidade, certeza, origem_extraction_id
+              FROM alerta_risco_clinico
+             WHERE patient_id = ${PAC} AND origem = 'instrumento_formal'`;
+
+    const mockarProvider = async (drafts: unknown[]) => {
+      const { resolveProvider } = await import("@/lib/extraction/provider");
+      vi.mocked(resolveProvider).mockReturnValueOnce({
+        extrair: async () => ({ drafts: drafts as never, alertaRisco: null }),
+      });
+    };
+
+    test("item_risco_positivo=true cria alerta com origem instrumento_formal e certeza explicito", async () => {
+      await limpar();
+      await mockarProvider([
+        {
+          subtipo: "aplicacao_escala_relatada",
+          trechoFonte: "Respondeu 'sim' ao item de ideação da escala.",
+          confianca: "alta",
+          inconsistenteComHistorico: false,
+          parContrasteId: null,
+          payload: { item_risco_positivo: true },
+          estado: "sugerida",
+        },
+      ]);
+      const { consolidarSessao } = await import("./logic");
+      const r = await consolidarSessao(ctxT1, {
+        sessionId: SESS,
+        texto: "Aplicação de escala nesta sessão.",
+      });
+      expect(r.error).toBeUndefined();
+
+      const ex =
+        await owner`SELECT id FROM extraction WHERE session_id = ${SESS} AND subtipo = 'aplicacao_escala_relatada'`;
+      expect(ex.length).toBe(1);
+
+      const alertas = await alertasInstrumento();
+      expect(alertas.length).toBe(1);
+      expect(alertas[0]!.certeza).toBe("explicito");
+      expect(alertas[0]!.categoria).toBe("ideacao_suicida");
+      expect(alertas[0]!.severidade).toBe("ideacao_ativa_sem_plano");
+      expect(alertas[0]!.origem_extraction_id).toBe(ex[0]!.id);
+    });
+
+    test("item_risco_positivo=null (recusa) cria alerta com certeza ambiguo_citado", async () => {
+      await limpar();
+      await mockarProvider([
+        {
+          subtipo: "aplicacao_escala_relatada",
+          trechoFonte: "Paciente não quis responder ao item de risco.",
+          confianca: "media",
+          inconsistenteComHistorico: false,
+          parContrasteId: null,
+          payload: { item_risco_positivo: null },
+          estado: "sugerida",
+        },
+      ]);
+      const { consolidarSessao } = await import("./logic");
+      const r = await consolidarSessao(ctxT1, {
+        sessionId: SESS,
+        texto: "Aplicação de escala com recusa de item.",
+      });
+      expect(r.error).toBeUndefined();
+
+      const alertas = await alertasInstrumento();
+      expect(alertas.length).toBe(1);
+      expect(alertas[0]!.certeza).toBe("ambiguo_citado");
+    });
+
+    test("item_risco_positivo=false NÃO cria alerta", async () => {
+      await limpar();
+      await mockarProvider([
+        {
+          subtipo: "aplicacao_escala_relatada",
+          trechoFonte: "Respondeu 'não' ao item de ideação da escala.",
+          confianca: "alta",
+          inconsistenteComHistorico: false,
+          parContrasteId: null,
+          payload: { item_risco_positivo: false },
+          estado: "sugerida",
+        },
+      ]);
+      const { consolidarSessao } = await import("./logic");
+      const r = await consolidarSessao(ctxT1, {
+        sessionId: SESS,
+        texto: "Aplicação de escala sem sinal de risco.",
+      });
+      expect(r.error).toBeUndefined();
+
+      const alertas = await alertasInstrumento();
+      expect(alertas.length).toBe(0);
+    });
+
+    test("subtipo diferente de aplicacao_escala_relatada NÃO cria alerta, mesmo com campo parecido no payload", async () => {
+      await limpar();
+      await mockarProvider([
+        {
+          subtipo: "evidencia",
+          trechoFonte: "Trecho de evidência qualquer.",
+          confianca: "alta",
+          inconsistenteComHistorico: false,
+          parContrasteId: null,
+          // campo homônimo de propósito: a regra é restrita ao subtipo, não ao
+          // formato do payload.
+          payload: { item_risco_positivo: true },
+          estado: "sugerida",
+        },
+      ]);
+      const { consolidarSessao } = await import("./logic");
+      const r = await consolidarSessao(ctxT1, {
+        sessionId: SESS,
+        texto: "Sessão comum, sem instrumento.",
+      });
+      expect(r.error).toBeUndefined();
+
+      const alertas = await alertasInstrumento();
+      expect(alertas.length).toBe(0);
+    });
   });
 });

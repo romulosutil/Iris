@@ -5,6 +5,7 @@ import { withTenant, type TenantContext } from "@/db/rls";
 import { clinic, tccRpdEntry } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
+import { registrarAlertaRiscoRPD } from "@/lib/risco/registrar";
 
 import {
   DISTORCOES_COGNITIVAS_OPCOES,
@@ -12,6 +13,7 @@ import {
   salvarRpdSchema,
   type SalvarRpdInput,
 } from "./constants";
+import { detectarSinaisDeRiscoRPD } from "./deteccao-risco";
 
 export {
   DISTORCOES_COGNITIVAS_OPCOES,
@@ -20,7 +22,16 @@ export {
   type SalvarRpdInput,
 };
 
-type RpdState = { error?: string; bloqueioConta?: BloqueioConta; id?: string };
+type RpdState = {
+  error?: string;
+  bloqueioConta?: BloqueioConta;
+  id?: string;
+  /** #391 — erro ao REGISTRAR o alerta de risco (não ao salvar o RPD). O RPD
+   * já foi salvo com sucesso quando este campo aparece; a UI precisa avisar
+   * o terapeuta que o alerta não subiu, senão ele presume que a clínica foi
+   * notificada e não foi. */
+  alertaRiscoErro?: string;
+};
 
 async function salvarRPDCore(
   ctx: TenantContext,
@@ -38,7 +49,7 @@ async function salvarRPDCore(
       : null;
 
   try {
-    return await withTenant(ctx, async (tx) => {
+    const resultado = await withTenant(ctx, async (tx) => {
       // #389 — taxonomia de distorções é config por clínica (R19, não
       // enum/CHECK fixo). Rejeita slug fora da lista da clínica ANTES do
       // insert: um erro de validação não pode gravar linha parcial.
@@ -89,6 +100,53 @@ async function salvarRPDCore(
 
       return { id: row!.id };
     });
+
+    if ("error" in resultado) {
+      return resultado;
+    }
+
+    // #391 — varredura determinística de risco DEPOIS do INSERT commitar
+    // (fora da transação de escrita do RPD), mesmo padrão usado em
+    // `diario/[sessionId]/logic.ts` (Fase D, R20/R5-TC): o RPD já está
+    // salvo, uma falha ao registrar o alerta não pode derrubar isso — só
+    // aparece no retorno para a UI, para o terapeuta saber que precisa agir.
+    // Idempotência garantida no banco: `app_criar_alerta_risco` deduplica por
+    // `(origem, rpd_entry_id, trecho_fonte, categoria, severidade)`. Como RPD
+    // é insert-only e gera id único imutável, re-execuções não duplicam alertas.
+    const sinais = detectarSinaisDeRiscoRPD({
+      situacao: d.situacao,
+      pensamentoAutomatico: d.pensamentoAutomatico,
+      evidenciasFavor: d.evidenciasFavor,
+      evidenciasContra: d.evidenciasContra,
+      respostaRacional: d.respostaRacional,
+      comportamentoResultante: d.comportamentoResultante,
+    });
+
+    let alertaRiscoErro: string | undefined;
+    for (const sinal of sinais) {
+      const r = await registrarAlertaRiscoRPD(ctx, {
+        patientId: d.patientId,
+        rpdEntryId: resultado.id,
+        responsavelId: ctx.userId,
+        sinal: {
+          categoria: sinal.categoria,
+          severidade: sinal.severidade,
+          certeza: sinal.certeza,
+          trecho_fonte: sinal.trechoFonte,
+          detalhe: sinal.detalhe,
+        },
+      });
+      if ("erro" in r) {
+        // Não interrompe o loop: se as duas categorias casaram, tenta
+        // registrar as duas mesmo que uma falhe — mas guarda o último erro
+        // para reportar.
+        alertaRiscoErro = r.erro;
+      }
+    }
+
+    return alertaRiscoErro
+      ? { id: resultado.id, alertaRiscoErro }
+      : { id: resultado.id };
   } catch (err) {
     console.error("salvarRPD:", err);
     return { error: "Não foi possível salvar o RPD." };
