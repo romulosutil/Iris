@@ -140,6 +140,18 @@ Incidente operacional (2x nesta sessão, ambos por descuido do orquestrador, nã
 
 ---
 
+## 🏁 Sessão 18/08/2026 (2ª) — #391 fechada: alerta de risco a partir de RPD e instrumento formal (PR #401, stack #388→#387→#390→#389 continua)
+
+Executada issue [#391](https://github.com/romulosutil/Iris/issues/391): motor de alerta (#122) só disparava na consolidação do diário — RPD e instrumento formal não criavam alerta por construção. Migração `0111`: coluna `origem` (`diario_sessao`|`registro_pensamento`|`instrumento_formal`) em `alerta_risco_clinico`, CHECK `alerta_risco_vinculo` relaxado por origem sem afrouxar a FK composta `(patient_id, clinic_id)` anti-IDOR. Caminho determinístico não-LLM para item de risco de instrumento formal (valor ≥1 dispara, `null`/recusado dispara, `0` não dispara — decisão em código puro sobre payload já persistido). Gatilho no RPD transversal a modalidade/protocolo. `SYSTEM_PROMPT` padrão ganhou a regra de risco (R20) — antes só `CONVENTIONAL_SYSTEM_PROMPT` tinha.
+
+**Verificação em duas rodadas via subagente fork:** 1ª passada mediu o diff contra os 9 itens da Definição de Pronto — 7 PASS, 2 gaps (imutabilidade do alerta em edição de RPD sem teste; RLS sem cobertura das origens novas). 2ª rodada (2 builders paralelos): RLS ganhou 2 testes cross-tenant novos (`registro_pensamento`, `instrumento_formal`) em `alerta-risco-rls.int.test.ts`, 13/13 verde. O de imutabilidade **achou que a feature não existe** — `logic.ts` do RPD só expõe `salvarRPD` (insert) e `obterRPDEntries` (select), sem update — invariante vale hoje por ausência, não por design testado; registrado como débito de teste pendente para quando/se edição de RPD for implementada.
+
+**Bug real achado durante a verificação (corrigido neste PR, fora do escopo original):** `actions.int.test.ts` limpava `extraction` antes de `alerta_risco_clinico` no describe de instrumento formal — a FK nova `origem_extraction_id` violava na cleanup. Ordem invertida.
+
+`pnpm typecheck && pnpm lint && pnpm test && pnpm test:rls` verdes (108/108 arquivos, 1000/1000 testes RLS). PR [#401](https://github.com/romulosutil/Iris/pull/401) aberto stacked em `feat/389-rpd-formato-padesky` (mesmo padrão dos PRs #398–#400), `base-must-be-main` falha por design (esperado em PR empilhado), demais checks verdes, marcado ready for review. Próximo da corrente do goal: #392 → #395 → #393 → #394.
+
+---
+
 ## 🏁 Sessão 18/08/2026 — #341/#332 fechadas via pnpm patch, #327 fechada, fila sandbox Asaas pausada por erro (achado, sem issue)
 
 **Código:** PR [#386](https://github.com/romulosutil/Iris/pull/386) mergeada (09:51Z) fechando **#341** (Storybook/Vitest coletava 59 arquivos e rodava 0 testes em instalação limpa no Windows) e **#332** (suíte a11y flaky sob concorrência). Causa raiz do #341: o fix de 17/08 nunca existia no repo — o verde local vinha de 4 arquivos de `node_modules/.pnpm/module-alias@2.3.4` editados à mão, fora de controle de versão. Com o pacote pristino, 59/59 stories falhavam. Três bugs reais no `module-alias@2.3.4`: rejeição de path com `\` no Windows, `ERR_UNSUPPORTED_DIR_IMPORT` no Linux por alias de diretório sem completar `index.js`, e erro de protocolo para path absoluto no Windows. Corrigido via `patches/module-alias@2.3.4.patch` (pnpm patch, versionado) — não mais monkeypatch em runtime de `Module._resolveFilename`. CI validado: 15/15 checks, 202 arquivos / 1412 testes, 0 pulados. `infra/Dockerfile` ganhou `COPY patches ./patches` (build de produção quebraria sem isso, já que `patchedDependencies` exige o diretório presente). PR [#384](https://github.com/romulosutil/Iris/pull/384) mergeada (03:19Z) fechando **#327** (throttle de redefinir-senha sem oráculo de chave/limites).
