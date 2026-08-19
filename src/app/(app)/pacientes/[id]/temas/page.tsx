@@ -41,7 +41,12 @@ export default async function TemasPage({ params }: TemasPageProps) {
           {notas.map((nota) => {
             const dataFmt = new Date(nota.agendadaPara).toLocaleDateString(
               "pt-BR",
-              { day: "2-digit", month: "2-digit", year: "numeric" },
+              {
+                timeZone: "America/Sao_Paulo",
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              },
             );
 
             return (
