@@ -280,6 +280,10 @@ describe("fixture real — Caso TC-1 (#390 R5)", () => {
       sinalizacoes: [],
     };
     const r = agentOutputSchema.safeParse(casoTc1Adaptado);
+    // Usar `r.error` no assert expõe o motivo real caso o Zod rejeite, em vez
+    // de devolver apenas `expected true, received false` (nit Jules #399).
+    expect(r.error).toBeUndefined();
     expect(r.success).toBe(true);
+
   });
 });
