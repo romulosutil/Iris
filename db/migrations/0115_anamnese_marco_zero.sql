@@ -177,4 +177,107 @@ CREATE POLICY anamnese_alvo_delete ON anamnese_alvo FOR DELETE TO app_role USING
   (clinic_id = app_clinic_id_exigido())
   AND (current_setting('app.user_role', true) = 'coordenador')
   AND app_anamnese_em_rascunho(anamnese_id)
-);
+);--> statement-breakpoint
+
+-- #407/T05 — `app_validar_anamnese`: única superfície que grava
+-- `session_snapshot` com `session_numero = 0` e move a anamnese para
+-- 'validada'. Reusa o shape de `app_aplicar_snapshot` (0094:41-71): lock,
+-- `SET search_path`, ordem dos guards. Diverge de propósito no `ON CONFLICT
+-- DO UPDATE` (merge aditivo por chave, não sobrescrita — D-E/D-F) e no UPDATE
+-- condicional como reserva de reentrância ANTES do INSERT no snapshot.
+CREATE OR REPLACE FUNCTION public.app_validar_anamnese(
+  p_anamnese uuid, p_repertorio jsonb, p_segmentacao jsonb
+) RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_patient uuid;
+  v_clinic  uuid;
+  v_estado  anamnese_estado;
+  v_linhas  integer;
+BEGIN
+  -- 1. Resolve a anamnese como owner (BYPASSRLS). O isolamento é feito nos
+  --    guards abaixo, NUNCA pela ausência de leitura.
+  SELECT a.patient_id, a.clinic_id, a.estado
+    INTO v_patient, v_clinic, v_estado
+    FROM anamnese a WHERE a.id = p_anamnese;
+  IF v_patient IS NULL THEN
+    RAISE EXCEPTION 'app_validar_anamnese: anamnese % inexistente', p_anamnese;
+  END IF;
+
+  -- 2. Mesmo lock de `app_aplicar_snapshot` (0094:48): serializa contra
+  --    materialização concorrente do mesmo paciente.
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_patient::text, 0));
+
+  -- 3. Isolamento multi-tenant. Tenant resolvido por `app_clinic_id_exigido()`
+  --    (D16/#229) — cast cru estoura 42704/22P02 sem nomear o tenant.
+  IF v_clinic <> app_clinic_id_exigido() THEN
+    RAISE EXCEPTION 'app_validar_anamnese: anamnese % fora da clínica do chamador (isolamento multi-tenant)', p_anamnese;
+  END IF;
+  IF NOT app_patient_in_clinic(v_patient) THEN
+    RAISE EXCEPTION 'app_validar_anamnese: paciente % fora da clínica do chamador (isolamento multi-tenant)', v_patient;
+  END IF;
+
+  -- 4. Fronteira de autorização (CLAUDE.md ponto 5). O predicado da policy de
+  --    leitura correspondente (`anamnese_select`, e o `session_snapshot_select`
+  --    de 0016) é `coordenador OR app_is_on_team(paciente)`. Aqui a exigência é
+  --    ESTRITAMENTE MAIS FORTE — só coordenador — porque D-B decidiu que validar
+  --    é ato exclusivo do coordenador. Isso é restrição deliberada, não omissão
+  --    do predicado copiado: terapeuta lê a anamnese, não a valida.
+  IF app_user_role_exigido() <> 'coordenador' THEN
+    RAISE EXCEPTION 'app_validar_anamnese: validar anamnese é exclusivo de coordenador (D-B)';
+  END IF;
+
+  -- 5. Consentimento (D-H). Mesmo guard de `app_aplicar_snapshot` (0094:60-62),
+  --    porque esta função escreve na MESMA tabela.
+  IF app_prontuario_somente_leitura(v_patient) THEN
+    RAISE EXCEPTION 'Prontuário em somente-leitura: consentimento revogado (LGPD Art. 8º, §5º)';
+  END IF;
+
+  -- 6. Protocolo ativo com escala utilizável. Sem isto o hexágono fica `null`
+  --    mesmo com anamnese perfeita: `queries.ts:172` faz
+  --    `Math.max(0, taxonomia.length - 1)` e `espectro.ts:203-204` exige `> 0`
+  --    — ou seja, a taxonomia precisa de PELO MENOS 2 níveis, não só "não vazia".
+  IF NOT EXISTS (
+    SELECT 1 FROM patient_protocol pp
+      JOIN protocol pr ON pr.id = pp.protocol_id
+     WHERE pp.patient_id = v_patient
+       AND pp.desativado_em IS NULL
+       AND jsonb_array_length(pr.taxonomia_ajuda) >= 2
+  ) THEN
+    RAISE EXCEPTION 'ANAMNESE_SEM_PROTOCOLO_ATIVO: paciente % não tem protocolo ativo com taxonomia de ajuda utilizável', v_patient;
+  END IF;
+
+  -- 7. RESERVA DE REENTRÂNCIA ANTES DO EFEITO. A mesma anamnese validada duas
+  --    vezes tem que ser RECUSADA (D-F / ANAM-12). O `ON CONFLICT DO UPDATE` de
+  --    `app_aplicar_snapshot` (0094:66-71) sobrescreveria em silêncio — é
+  --    exatamente o risco que D-F fecha. Aqui o UPDATE condicional vem PRIMEIRO:
+  --    se a linha já saiu de 'rascunho', 0 linhas afetadas e a função aborta
+  --    antes de tocar o snapshot. Tudo na mesma transação, então RAISE = rollback.
+  UPDATE anamnese
+     SET estado = 'validada', validada_em = now(), validada_por = app_user_id_exigido()
+   WHERE id = p_anamnese AND estado = 'rascunho';
+  GET DIAGNOSTICS v_linhas = ROW_COUNT;
+  IF v_linhas = 0 THEN
+    RAISE EXCEPTION 'ANAMNESE_JA_VALIDADA: anamnese % já foi validada (append-only, D-F): correção é anamnese complementar, não revalidação', p_anamnese;
+  END IF;
+
+  -- 8. Marco 0. Merge ADITIVO por chave, nunca sobrescrita:
+  --    `EXCLUDED.repertorio_state || session_snapshot.repertorio_state` mantém o
+  --    valor JÁ GRAVADO quando a chave existe (o operando da direita vence) e
+  --    aceita apenas chaves novas. É o que torna a anamnese complementar (P2)
+  --    possível sem reescrever o passado — `espectro.ts:186-190` documenta a
+  --    reescrita como proibida.
+  INSERT INTO session_snapshot (patient_id, session_numero, repertorio_state, segmentacao, gerado_em)
+  VALUES (v_patient, 0, p_repertorio, p_segmentacao, now())
+  ON CONFLICT (patient_id, session_numero)
+  DO UPDATE SET
+    repertorio_state = EXCLUDED.repertorio_state || session_snapshot.repertorio_state,
+    segmentacao      = EXCLUDED.segmentacao      || session_snapshot.segmentacao,
+    gerado_em        = session_snapshot.gerado_em;
+END; $function$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.app_validar_anamnese(uuid,jsonb,jsonb) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.app_validar_anamnese(uuid,jsonb,jsonb) TO app_role;
