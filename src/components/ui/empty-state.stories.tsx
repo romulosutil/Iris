@@ -48,12 +48,12 @@ export const CalendarDayEmpty: Story = {
 export const ReviewValidationEmpty: Story = {
   args: {
     illustration: <ReviewClinicalIllustration size={120} />,
-    title: "Tudo em dia na Fila de Revisão!",
+    title: "Tudo em dia na Fila de Validação!",
     description:
       "Todas as anotações geradas pelas sessões foram validadas pelo seu olhar clínico.",
-    action: (
-      <Button variante="secundaria">Ver Prontuários dos Pacientes</Button>
-    ),
+    action: <Button variante="secundaria">Ir para a Agenda</Button>,
+    secondaryAction: <Button variante="terciaria">Ver Supervisão</Button>,
+    variant: "celebration",
   },
 };
 
