@@ -247,7 +247,7 @@ export const SupervisaoCard = React.forwardRef<
 
       {/* CTA único. */}
       {acaoPrimaria ? (
-        <div className="flex justify-end">{acaoPrimaria}</div>
+        <div className="mt-auto flex justify-end">{acaoPrimaria}</div>
       ) : null}
 
       {erro ? <div>{erro}</div> : null}

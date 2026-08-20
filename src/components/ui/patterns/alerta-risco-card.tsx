@@ -293,7 +293,7 @@ export const AlertaRiscoCard = React.forwardRef<
 
       {/* CTA único. */}
       {acaoPrimaria || erro ? (
-        <div className="flex flex-col gap-2">
+        <div className="mt-auto flex flex-col gap-2">
           {acaoPrimaria ? (
             <div className="flex justify-end">{acaoPrimaria}</div>
           ) : null}
