@@ -112,26 +112,28 @@ export function Scrubber({
       )}
 
       {/* Controles de Navegação */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
         <Button
           variante="secundaria"
+          tamanho="sm"
           disabled={!temAnterior}
           onClick={() => {
             const ant = sessoesDisponiveis[indexValido - 1];
             if (ant !== undefined) onSelecionarSessao(ant);
           }}
           aria-label="Sessão anterior"
+          className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm"
         >
           &larr; Anterior
         </Button>
 
-        <div className="text-center">
-          <div className="text-lg font-black text-[var(--text-primary)]">
+        <div className="min-w-0 flex-1 text-center">
+          <div className="truncate text-base font-black text-[var(--text-primary)] sm:text-lg">
             Sessão {sessaoVisual}
           </div>
           {dataSessaoSelecionada && (
             <div
-              className="text-xs text-[var(--text-secondary)]"
+              className="truncate text-[10px] text-[var(--text-secondary)] sm:text-xs"
               suppressHydrationWarning
             >
               {formatarData(dataSessaoSelecionada)}
@@ -141,12 +143,14 @@ export function Scrubber({
 
         <Button
           variante="secundaria"
+          tamanho="sm"
           disabled={!temProximo}
           onClick={() => {
             const prox = sessoesDisponiveis[indexValido + 1];
             if (prox !== undefined) onSelecionarSessao(prox);
           }}
           aria-label="Próxima sessão"
+          className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm"
         >
           Próxima &rarr;
         </Button>

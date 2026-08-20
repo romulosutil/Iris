@@ -413,7 +413,7 @@ export function TimelineClient({
     };
 
     return (
-      <div className="border-ink-anchor flex flex-col border-2 bg-[var(--surface-card)] p-6">
+      <div className="border-ink-anchor flex flex-col border-2 bg-[var(--surface-card)] p-4 sm:p-6">
         <div className="border-ink-anchor border-b-2 pb-4">
           <h3 className="text-ink font-display text-lg font-black">
             Trajetória Clínica de Metas
@@ -425,7 +425,7 @@ export function TimelineClient({
           <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
             <label
               htmlFor="select-trajetoria-alvo"
-              className="text-ink text-xs font-black"
+              className="text-ink shrink-0 text-xs font-black"
             >
               Meta / Marco de Referência:
             </label>
@@ -433,7 +433,7 @@ export function TimelineClient({
               id="select-trajetoria-alvo"
               value={trajetoriaAlvoId}
               onChange={(e) => setTrajetoriaAlvoId(e.target.value)}
-              className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] flex-1 border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+              className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] w-full max-w-full min-w-0 flex-1 border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
             >
               <option value="">Selecione...</option>
               <optgroup label="Metas Ativas">
@@ -533,7 +533,7 @@ export function TimelineClient({
     if (!snapSelecionado) return null;
 
     return (
-      <div className="border-ink-anchor flex flex-col border-2 bg-[var(--surface-card)] p-6">
+      <div className="border-ink-anchor flex flex-col border-2 bg-[var(--surface-card)] p-4 sm:p-6">
         <div className="border-ink-anchor border-b-2 pb-4">
           <h3 className="text-ink font-display text-lg font-black">
             Acompanhamento de Marcos e Protocolos
@@ -567,7 +567,7 @@ export function TimelineClient({
               return (
                 <div
                   key={dom}
-                  className="border-ink-anchor border-2 bg-[var(--surface-elevated)] p-4 shadow-[4px_4px_0px_#000000]"
+                  className="border-ink-anchor border-2 bg-[var(--surface-elevated)] p-3 shadow-[4px_4px_0px_#000000] sm:p-4"
                 >
                   <div className="mb-4 flex flex-col gap-2 border-b border-black pb-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -581,7 +581,7 @@ export function TimelineClient({
                           : "marcos catalogados"}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-black">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-black">
                       <span className="text-status-success-text bg-status-success-bg rounded border border-black px-1.5 py-0.5">
                         Conquistados: {stats.conquistados}
                       </span>
@@ -610,7 +610,7 @@ export function TimelineClient({
                   </div>
 
                   {/* Grid de Milestones */}
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
                     {items.map((m) => {
                       const entry = snapSelecionado.repertorioState?.[m.id];
                       let status: "conquistado" | "candidato" | "nao_atingido" =
@@ -626,24 +626,24 @@ export function TimelineClient({
                       return (
                         <div
                           key={m.id}
-                          className="border-ink-anchor group relative flex cursor-help flex-col items-center justify-between gap-2 border bg-[var(--surface-card)] p-2 text-center"
+                          className="border-ink-anchor group relative flex min-w-0 cursor-help flex-col items-center justify-between gap-2 border bg-[var(--surface-card)] p-2 text-center"
                           title={`${m.nome} ${m.nivel ? `(Nível ${m.nivel})` : ""}`}
                         >
-                          <span className="line-clamp-1 text-[10px] font-black">
+                          <span className="line-clamp-1 w-full truncate text-[10px] font-black">
                             {m.nivel ? `Nível ${m.nivel}` : "Marco"}
                           </span>
 
                           {/* Indicador Visual do Milestone */}
                           {status === "conquistado" ? (
                             <div
-                              className="bg-status-success-bg text-status-success-text flex h-8 w-8 items-center justify-center rounded-full border-2 border-black text-xs font-black"
+                              className="bg-status-success-bg text-status-success-text flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-black text-xs font-black"
                               title="Conquistado"
                             >
                               ✓
                             </div>
                           ) : status === "candidato" ? (
                             <div
-                              className="flex h-8 w-8 rotate-45 transform items-center justify-center border-2 border-dashed border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-xs font-black text-[var(--status-ia-fg)]"
+                              className="flex h-8 w-8 shrink-0 rotate-45 transform items-center justify-center border-2 border-dashed border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-xs font-black text-[var(--status-ia-fg)]"
                               title="Candidato"
                             >
                               <span className="block -rotate-45 transform">
@@ -652,14 +652,14 @@ export function TimelineClient({
                             </div>
                           ) : (
                             <div
-                              className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-dashed border-gray-400 bg-gray-100 text-xs font-bold text-gray-400"
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-gray-400 bg-gray-100 text-xs font-bold text-gray-400"
                               title="Não Atingido"
                             >
                               ○
                             </div>
                           )}
 
-                          <span className="line-clamp-2 text-[10px] leading-tight text-[var(--text-secondary)]">
+                          <span className="line-clamp-2 w-full text-[10px] leading-tight break-words text-[var(--text-secondary)]">
                             {m.nome}
                           </span>
                         </div>
@@ -722,7 +722,7 @@ export function TimelineClient({
                 onChange={(e) =>
                   handleSelecionarSessaoComparar(Number(e.target.value))
                 }
-                className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+                className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] w-full max-w-full min-w-0 border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
               >
                 <option value="" disabled>
                   Selecione...

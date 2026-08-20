@@ -349,6 +349,7 @@
   --status-ia-border: #6a4c93;
 
   --ds-shadow: var(--shadow-brutal);
+  --ds-shadow-sm: var(--shadow-brutal-sm);
   --ds-shadow-hover: var(
     --elevation-3
   ); /* +1 nível acima do base: elevation-2 → 3 */
@@ -357,6 +358,7 @@
 
 [data-mode="familia"] {
   --ds-shadow: var(--shadow-brutal-sm);
+  --ds-shadow-sm: var(--shadow-brutal-xs);
   --ds-shadow-hover: var(
     --elevation-2
   ); /* +1 nível acima do base: elevation-1 → 2 */
