@@ -77,7 +77,6 @@ export const Input = React.forwardRef<any, InputProps>(function Input(
     size === "sm" && "px-2.5 py-1 text-base sm:text-sm",
     size === "md" && "px-3.5 py-2 text-base",
     size === "lg" && "px-4 py-3 text-base",
-    !multiline && control(size),
     disabled && "cursor-not-allowed text-[var(--text-secondary)]",
     inputClassName,
   );
@@ -87,6 +86,7 @@ export const Input = React.forwardRef<any, InputProps>(function Input(
       onClick={handleWrapperClick}
       className={cn(
         "group flex w-full items-stretch rounded-[var(--radius-control)] border-[length:var(--border-brutal-width)] border-[var(--border-brutal)] bg-[var(--surface-card)] text-[var(--text-primary)]",
+        !multiline && control(size),
         !disabled && "cursor-text",
         "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
         !disabled &&

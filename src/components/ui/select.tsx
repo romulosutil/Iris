@@ -3,7 +3,7 @@
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { cn } from "@/lib/cn";
-import { surface } from "@/components/ui/primitives/surface";
+import { control, type ControlTam } from "@/components/ui/primitives/surface";
 
 /**
  * Select sobre Radix (typeahead, teclado e portal de graça), vestido com
@@ -52,15 +52,30 @@ function Check() {
   );
 }
 
+export interface SelectTriggerProps extends React.ComponentPropsWithoutRef<
+  typeof SelectPrimitive.Trigger
+> {
+  /**
+   * Variações de tamanho do controle.
+   * sm (44px), md (48px - padrão), lg (56px)
+   */
+  size?: ControlTam;
+}
+
 export const SelectTrigger = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(function SelectTrigger({ className, children, ...props }, ref) {
+  SelectTriggerProps
+>(function SelectTrigger({ className, size = "md", children, ...props }, ref) {
   return (
     <SelectPrimitive.Trigger
       ref={ref}
       className={cn(
-        "font-body flex min-h-11 w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-4 py-2.5 text-base text-[var(--text-primary)]",
+        "font-body flex w-full items-center justify-between gap-2 rounded-[var(--radius-control)] border-[length:var(--border-brutal-width)] border-[var(--border-brutal)] bg-[var(--surface-card)] text-base text-[var(--text-primary)]",
+        "text-left [&>span]:truncate",
+        control(size),
+        size === "sm" && "px-2.5 py-1 text-base sm:text-sm",
+        size === "md" && "px-3.5 py-2 text-base",
+        size === "lg" && "px-4 py-3 text-base",
         "data-[placeholder]:text-[var(--text-secondary)]",
         "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
         "disabled:cursor-not-allowed disabled:opacity-50",
@@ -89,7 +104,7 @@ export const SelectContent = React.forwardRef<
         ref={ref}
         position={position}
         className={cn(
-          "z-50 max-h-64 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-elevated)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]",
+          "z-50 max-h-64 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[var(--radius-control)] border-[length:var(--border-brutal-width)] border-[var(--border-brutal)] bg-[var(--surface-elevated)] text-[var(--text-primary)] shadow-[var(--ds-shadow)]",
           position === "popper" && "mt-1",
           className,
         )}
@@ -111,7 +126,8 @@ export const SelectItem = React.forwardRef<
     <SelectPrimitive.Item
       ref={ref}
       className={cn(
-        "relative flex min-h-11 cursor-pointer items-center rounded-[var(--radius-xs)] py-2 pr-9 pl-3 text-base text-[var(--text-primary)] outline-none select-none",
+        "relative flex cursor-pointer items-center rounded-[var(--radius-xs)] py-2 pr-9 pl-3 text-base text-[var(--text-primary)] outline-none select-none",
+        control("sm"),
         "font-bold data-[highlighted]:bg-[var(--action-primary)] data-[highlighted]:text-[var(--action-primary-fg)]",
         "data-[state=checked]:font-semibold",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",

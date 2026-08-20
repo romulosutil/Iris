@@ -6,12 +6,20 @@ import { cn } from "@/lib/cn";
 export interface TooltipProps extends React.HTMLAttributes<HTMLDivElement> {
   conteudo: React.ReactNode;
   posicao?: "top" | "bottom" | "left" | "right";
+  multiline?: boolean;
   children: React.ReactElement;
 }
 
 export const Tooltip = React.forwardRef<HTMLDivElement, TooltipProps>(
   function Tooltip(
-    { className, conteudo, posicao = "top", children, ...props },
+    {
+      className,
+      conteudo,
+      posicao = "top",
+      multiline = false,
+      children,
+      ...props
+    },
     ref,
   ) {
     const [visivel, setVisivel] = React.useState(false);
@@ -62,7 +70,10 @@ export const Tooltip = React.forwardRef<HTMLDivElement, TooltipProps>(
           role="tooltip"
           hidden={!visivel}
           className={cn(
-            "animate-in fade-in-0 absolute z-50 rounded-[var(--radius-xs)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-1.5 font-mono text-xs font-semibold whitespace-nowrap text-[var(--text-primary)] shadow-[var(--ds-shadow)] duration-150",
+            "animate-in fade-in-0 absolute z-50 rounded-[var(--radius-xs)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 py-1.5 text-xs text-[var(--text-primary)] shadow-[var(--ds-shadow)] duration-150",
+            multiline
+              ? "w-max max-w-xs font-sans leading-relaxed font-normal whitespace-normal"
+              : "font-mono font-semibold whitespace-nowrap",
             posClasses[posicao],
             className,
           )}
