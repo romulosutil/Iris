@@ -1487,6 +1487,26 @@ git commit -m "fix(evolucao): restore focus rings, touch targets, contrast and D
 
 ---
 
+## Task 6 (fora deste plano, bloqueante para o valor dele): marco 0 vindo da anamnese — issue [#407](https://github.com/romulosutil/Iris/issues/407)
+
+**Prioridade:** `P1 · antes de dado real`. **Não executar aqui** — toca modelo de dados, então entra por `/tlc-spec-driven` antes da label `jules`.
+
+**Por quê agora:** as Tasks 1 a 5 deste plano fazem o gráfico parar de mentir. Elas não fazem o gráfico ter **origem**. Depois da Task 2, o hexágono de um paciente novo é honestamente vazio nos seis eixos até a primeira evidência aprovada — o que é correto e continua inútil para o coordenador, porque não existe estado inicial contra o qual comparar. O primeiro ponto da linha do tempo é hoje a primeira sessão realizada; deveria ser a anamnese.
+
+**O que a #407 resolve:** anamnese estruturada e validada pelo coordenador, cobrindo os seis eixos, que produz (a) sugestão de protocolo e nível de entrada — ex.: VB-MAPP Nível 1 —, (b) os alvos iniciais do PEI com nível de ajuda de partida, e (c) um `session_snapshot` de `session_numero = 0`. Todo gráfico da linha do tempo passa a nascer nesse ponto.
+
+**Achados de modelagem já medidos e registrados na issue** (evitam re-investigação):
+
+- `session_snapshot.session_numero` é `integer` **sem CHECK `> 0`** → o número 0 está livre.
+- `db/migrations/0007_session_numero_seq.sql` numera com `COALESCE(MAX(...), 0) + 1` → um marco 0 **não desloca** a numeração das sessões reais.
+- `evidence.session_id` é **NOT NULL** → a linha de base não pode ser `evidence` sem uma sessão associada. É a restrição que amarra a decisão de Design nº 1 da issue.
+- Não existe tabela `milestone_assessment` no `schema.ts`, apesar de a documentação de jornadas citá-la.
+- `computarDadosEspectro` monta os eixos a partir de `goal` — **sem meta cadastrada não há hexágono nenhum**, nem de base. Por isso a anamnese precisa gerar alvos, não só um snapshot.
+
+**Ordem sugerida:** fechar as Tasks 3 e 5 deste plano primeiro (são refinamentos de uma tela que já funciona), e abrir a spec da #407 em seguida — cada paciente onboardado antes dela é um paciente cujo gráfico nunca terá origem sem retroagir data.
+
+---
+
 ## Fora de escopo (registrar como dívida, não fazer aqui)
 
 - **`Alert` tem `border-l-[4px]` embutido** (`src/components/ui/alert.tsx`) — o mesmo side-stripe banido, em todo uso do componente no produto. Corrigir ali afeta o app inteiro e merece issue própria.
