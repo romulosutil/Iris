@@ -1514,6 +1514,12 @@ git commit -m "fix(evolucao): restore focus rings, touch targets, contrast and D
 
 **Prioridade:** `P1 · antes de dado real`. **Não executar aqui** — toca modelo de dados, então entra por `/tlc-spec-driven` antes da label `jules`.
 
+> **[x] SPEC ESCRITA 20/08/2026 — `.specs/features/407-anamnese-marco-zero/`** (commits `441e89c` e `c474901`). `spec.md` (21 requisitos ANAM-01..21), `context.md` (as 11 áreas cinzentas fechadas contra o §5.2), `design.md` e `tasks.md` (34 tasks, 21/21 requisitos cobertos).
+>
+> **Dois achados da medição mudaram o desenho.** (1) Marco 0 como `session` real **cobraria o cliente**: `billing_apurar_ciclo` (`0075:111-118`) conta paciente ativo por `EXISTS` em `session` sem filtrar `tipo`, `estado` nem `numero_sequencial_paciente`, e `criado_em` é `defaultNow()` — não há como colocar a linha fora do ciclo. Por isso a linha de base virou tabela própria escrevendo o snapshot 0 por definer. (2) "Só sugerir alvos" **não entrega a DoD da própria issue**: `contaComoAlvo` exclui `rascunho` (`espectro.ts:208`), então tanto sugerir quanto gerar em rascunho entregariam um hexágono 100% `null`.
+>
+> ⚠️ **Gate aberto, bloqueia a label `jules`:** o termo de consentimento vigente em `docs/legal/` cobre o responsável relatando dado sobre si próprio e sobre terceiros da família? Não medido — `docs/legal/` exige confirmação do Rômulo antes de abrir. Se não cobrir, é tipo de consentimento novo antes de coletar dado real (mesma classe do gap de #98/#99).
+
 **Por quê agora:** as Tasks 1 a 5 deste plano fazem o gráfico parar de mentir. Elas não fazem o gráfico ter **origem**. Depois da Task 2, o hexágono de um paciente novo é honestamente vazio nos seis eixos até a primeira evidência aprovada — o que é correto e continua inútil para o coordenador, porque não existe estado inicial contra o qual comparar. O primeiro ponto da linha do tempo é hoje a primeira sessão realizada; deveria ser a anamnese.
 
 **O que a #407 resolve:** anamnese estruturada e validada pelo coordenador, cobrindo os seis eixos, que produz (a) sugestão de protocolo e nível de entrada — ex.: VB-MAPP Nível 1 —, (b) os alvos iniciais do PEI com nível de ajuda de partida, e (c) um `session_snapshot` de `session_numero = 0`. Todo gráfico da linha do tempo passa a nascer nesse ponto.
