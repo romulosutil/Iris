@@ -4,9 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/ui/logo";
-import { Split, Cluster, Container } from "@/components/ui/layout";
+import { Cluster, Container } from "@/components/ui/layout";
 import type { ContainerProps } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
+import { control } from "@/components/ui/primitives/surface";
 import {
   Drawer,
   DrawerTrigger,
@@ -16,10 +17,22 @@ import {
   DrawerFooter,
 } from "@/components/ui/drawer";
 
+/**
+ * Tom da contagem ao lado do rótulo. A cor NUNCA carrega o significado sozinha
+ * (o número é texto e o destino do link nomeia a fila); ela só evita que toda
+ * pendência do produto grite no mesmo volume:
+ *
+ * - `neutro`  — fila operacional: "há itens aqui", nunca "isto é um problema".
+ * - `ia`      — fila gerada por extração da IA, pendente de olhar clínico.
+ * - `risco`   — alerta de risco. Único tom que pode usar vermelho.
+ */
+export type NavBadgeTom = "neutro" | "ia" | "risco";
+
 export interface NavItem {
   href: string;
   label: string;
   badge?: number;
+  badgeTom?: NavBadgeTom;
   active?: boolean;
 }
 
@@ -66,6 +79,33 @@ function MenuIcon() {
   );
 }
 
+const badgeTomClasse: Record<NavBadgeTom, string> = {
+  neutro:
+    "border-[var(--surface-muted-border)] bg-[var(--surface-muted)] text-[var(--text-primary)]",
+  ia: "border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-[var(--status-ia-fg)]",
+  risco:
+    "border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]",
+};
+
+function NavBadge({
+  valor,
+  tom = "neutro",
+}: {
+  valor: number;
+  tom?: NavBadgeTom;
+}) {
+  return (
+    <span
+      className={cn(
+        "rounded-[var(--radius-pill)] border px-2 py-0.5 font-mono text-xs font-bold",
+        badgeTomClasse[tom],
+      )}
+    >
+      {valor}
+    </span>
+  );
+}
+
 export const Header = React.forwardRef<HTMLElement, HeaderProps>(
   function Header(
     {
@@ -85,12 +125,20 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
   ) {
     const [drawerOpen, setDrawerOpen] = React.useState(false);
 
+    /**
+     * Estado ativo lido pelo eixo de profundidade epistêmica: a rota atual é
+     * fato consolidado, então ela PREENCHE, ganha borda contínua e LEVANTA da
+     * superfície. As demais ficam rentes. O `aria-current="page"` continua
+     * sendo o sinal redundante — a cor nunca decide sozinha.
+     */
     const getItemClassName = (item: NavItem) =>
       cn(
-        "font-display text-sm px-3.5 py-1.5 rounded-[var(--radius-control)] transition-all duration-100 ease-out inline-flex items-center gap-2 border-2",
+        control("sm"),
+        "font-display inline-flex items-center gap-2 rounded-[var(--radius-control)] border-2 px-3.5 text-sm",
+        "transition-[background-color,border-color,box-shadow,transform] duration-100 ease-out",
         item.active
-          ? "bg-[var(--surface-elevated)] text-[var(--text-primary)] font-bold border-[var(--border-brutal)] border-b-2 border-b-[var(--action-primary,#F2B705)] shadow-[var(--elevation-1)]"
-          : "border-transparent text-[var(--text-secondary)] font-semibold hover:border-[var(--border-brutal)]/30 hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
+          ? "border-[var(--border-brutal)] bg-[var(--brand-tint)] font-bold text-[var(--text-primary)] shadow-[var(--elevation-1)]"
+          : "border-transparent font-semibold text-[var(--text-secondary)] hover:border-[var(--border-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
       );
 
     const linkRenderer = (item: NavItem, children: React.ReactNode) => {
@@ -110,6 +158,15 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
       );
     };
 
+    const rotuloComBadge = (item: NavItem) => (
+      <>
+        <span>{item.label}</span>
+        {item.badge !== undefined && item.badge > 0 ? (
+          <NavBadge valor={item.badge} tom={item.badgeTom} />
+        ) : null}
+      </>
+    );
+
     return (
       <header
         ref={ref}
@@ -119,36 +176,63 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
         )}
         {...props}
       >
-        <Container largura={largura}>
-          <Split className="min-h-[64px] py-3 sm:min-h-[72px]">
-            {/* Marca + Clínica */}
-            <Cluster
-              gap="sm"
-              className="w-full items-center justify-between sm:w-auto"
-            >
-              <Link
-                href="/"
-                aria-label="Iris — Início"
-                className="focus-visible:outline-focus flex min-h-[44px] min-w-[44px] shrink-0 items-center"
-              >
-                <Logo variante="completo" altura={36} />
-              </Link>
+        {/*
+          Faixa 1 — identidade: de onde eu falo (marca + clínica ativa) e quem
+          eu sou (usuário + sair). Separada da navegação porque as duas colunas
+          brigavam pela mesma linha: com 7 destinos, o `flex-wrap` do cluster
+          empurrava "Sair" e o nome da clínica para uma segunda linha órfã,
+          desalinhando a marca do conteúdo da página.
+        */}
+        <div className="border-b border-[var(--border-brutal)]/15">
+          <Container largura={largura}>
+            <div className="flex min-h-[60px] items-center justify-between gap-3 py-2 sm:min-h-[52px] sm:py-1">
+              <Cluster gap="sm" className="min-w-0 flex-nowrap">
+                <Link
+                  href="/"
+                  aria-label="Iris — Início"
+                  className={cn(
+                    control("sm"),
+                    "focus-visible:outline-focus flex shrink-0 items-center",
+                  )}
+                >
+                  <Logo variante="completo" altura={32} />
+                </Link>
 
-              {/* Clínica ativa (Desktop) */}
-              <div className="hidden items-center gap-2 sm:flex">
-                <span className="font-display text-sm font-bold text-[var(--text-primary)]">
-                  {clinicaAtivaNome}
-                </span>
-                {outrasClinicas.map((c) => (
-                  <Button
-                    key={c.id}
-                    variante="neutra"
-                    tamanho="sm"
-                    onClick={() => onTrocarClinica?.(c.id)}
-                  >
-                    Trocar para {c.nome}
-                  </Button>
-                ))}
+                {/* Clínica ativa (Desktop) */}
+                <div className="hidden min-w-0 items-center gap-2 sm:flex">
+                  <span
+                    aria-hidden
+                    className="h-5 w-px shrink-0 bg-[var(--border-brutal)]/20"
+                  />
+                  <span className="font-display truncate text-sm font-bold text-[var(--text-primary)]">
+                    {clinicaAtivaNome}
+                  </span>
+                  {outrasClinicas.map((c) => (
+                    <Button
+                      key={c.id}
+                      variante="neutra"
+                      tamanho="sm"
+                      onClick={() => onTrocarClinica?.(c.id)}
+                    >
+                      Trocar para {c.nome}
+                    </Button>
+                  ))}
+                </div>
+              </Cluster>
+
+              {/* Conta (Desktop) */}
+              <div className="hidden shrink-0 items-center gap-3 sm:flex">
+                {usuarioNome ? (
+                  <span className="font-body max-w-[18ch] truncate text-sm font-semibold text-[var(--text-secondary)]">
+                    {usuarioNome}
+                  </span>
+                ) : null}
+                {signOutSlot ??
+                  (onSignOut ? (
+                    <Button variante="neutra" tamanho="sm" onClick={onSignOut}>
+                      Sair
+                    </Button>
+                  ) : null)}
               </div>
 
               {/* Botão Hambúrguer (Mobile < 640px) */}
@@ -201,9 +285,10 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
                             <span className="flex w-full items-center justify-between">
                               <span>{item.label}</span>
                               {item.badge !== undefined && item.badge > 0 ? (
-                                <span className="rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--status-warning-fg)]">
-                                  {item.badge}
-                                </span>
+                                <NavBadge
+                                  valor={item.badge}
+                                  tom={item.badgeTom}
+                                />
                               ) : null}
                             </span>
                           );
@@ -222,6 +307,11 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
                     </div>
 
                     <DrawerFooter>
+                      {usuarioNome ? (
+                        <p className="font-body mb-2 text-sm font-semibold text-[var(--text-secondary)]">
+                          {usuarioNome}
+                        </p>
+                      ) : null}
                       {signOutSlot ? (
                         signOutSlot
                       ) : onSignOut ? (
@@ -237,44 +327,32 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
                   </DrawerContent>
                 </Drawer>
               </div>
-            </Cluster>
+            </div>
+          </Container>
+        </div>
 
-            {/* Navegação Desktop (≥ 640px) */}
-            <Cluster
-              como="nav"
-              gap="xs"
-              aria-label="Navegação principal"
-              className="hidden flex-wrap items-center sm:flex"
-            >
-              {itemsNav.map((item) => {
-                const labelWithBadge = (
-                  <>
-                    <span>{item.label}</span>
-                    {item.badge !== undefined && item.badge > 0 ? (
-                      <span className="rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--status-warning-fg)]">
-                        {item.badge}
-                      </span>
-                    ) : null}
-                  </>
-                );
-                return linkRenderer(item, labelWithBadge);
-              })}
-
-              {signOutSlot ? (
-                <div className="ml-2">{signOutSlot}</div>
-              ) : onSignOut ? (
-                <Button
-                  variante="neutra"
-                  tamanho="sm"
-                  onClick={onSignOut}
-                  className="ml-2"
-                >
-                  Sair
-                </Button>
-              ) : null}
-            </Cluster>
-          </Split>
-        </Container>
+        {/*
+          Faixa 2 — navegação (≥ 640px). Linha própria: os 7 destinos do
+          coordenador cabem inteiros na largura do container, sem competir com
+          marca e conta. Densidade alta é requisito do perfil (doc §2.2), então
+          nada é escondido em "Mais".
+        */}
+        {itemsNav.length > 0 ? (
+          <div className="hidden bg-[var(--surface-card)] sm:block">
+            <Container largura={largura}>
+              <Cluster
+                como="nav"
+                gap="xs"
+                aria-label="Navegação principal"
+                className="-mx-1.5 px-1.5 py-1"
+              >
+                {itemsNav.map((item) =>
+                  linkRenderer(item, rotuloComBadge(item)),
+                )}
+              </Cluster>
+            </Container>
+          </div>
+        ) : null}
       </header>
     );
   },

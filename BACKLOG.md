@@ -5813,3 +5813,64 @@ DELETE` em 18 tabelas, instalado **DISABLE**d; `0074` habilita. Dois passos de
 4. **Verificação Técnica:**
    - `src/lib/legal.test.ts` rodou 38/38 testes verdes (100%).
    - `pnpm typecheck` validado com 0 erros.
+
+---
+
+## 📅 Sessão 20/08/2026 — Alinhamento do Design System ao Documento de Contexto Global & Header em duas faixas
+
+Rodada 1 da conformidade com o **“Documento de Contexto Global — Iris (SaaS & Design System)”** (PDF do Rômulo, 4 páginas). Não houve mudança de modelo de dados, RLS nem schema do agente.
+
+### 1. Tokens alinhados ao doc (`src/styles/globals.css`)
+
+- **§3 “Bordas & Estrutura”** — `--border-brutal` passou de `#000000` para **Grafite Escuro `#1a1a1a`** (17.4:1 sobre `--surface-card`; 16.5:1 sobre o canvas). Mesma linha marcada, menos fadiga visual em sessão longa.
+- **§3 “Cantos Suaves”** — rampa de raio reancorada: `--radius-md` 6px → **8px** (cards) e `--radius-control` 5px → **12px** (botões/pílulas/inputs/abas). `lg`/`xl`/`2xl` deslocados para 10/12/16px para manter a rampa monotônica. `[data-mode="familia"]` subiu de 10px → **16px**: com o clínico em 12px, o override antigo deixava o modo família **menos** macio que o clínico, invertendo a intenção.
+- **§4.1 “Fato consolidado LEVANTA”** — `--elevation-2` 2px → **3px 3px 0** e `--elevation-3` 4px → **5px** (hover volta a ser um degrau perceptível; antes `elevation-1` e `elevation-2` eram idênticos). `--shadow-brutal` e `--shadow-brutal-base` acompanham; dark mode idem.
+- **Token morto removido**: `--ds-offset` tinha **zero consumidores** em `src/**` (a física de 2px do clique já vive em `active:translate-*-[2px]` no `Button`, conforme §4.3).
+
+### 2. Menta e Terracota — conflito interno do doc, resolvido por medição
+
+O doc nomeia Menta `#B2DFDB` e Terracota `#EF9A9A` como acentos semânticos (§3) **e** exige WCAG 2.2 AA (§7). Medido: como borda sobre branco, Menta dá **1.45:1** e Terracota **2.15:1** — reprovam o piso de 3:1 do SC 1.4.11.
+
+**Decisão do Rômulo (20/08):** as cores do doc viram o **preenchimento**; borda e texto descem para a rampa escura já existente. Resultado medido:
+
+| Papel   | fill                  | texto (AA 4.5:1)       | borda (AA 3:1)                           |
+| :------ | :-------------------- | :--------------------- | :--------------------------------------- |
+| Sucesso | `#b2dfdb` (Menta)     | `#0a5c54` — **5.42:1** | `#14857a` — **3.1:1** fill / 4.5:1 card  |
+| Erro    | `#ef9a9a` (Terracota) | `#7e1f16` — **4.66:1** | `#991b1b` — **3.86:1** fill / 7.6:1 card |
+
+Dark mode permanece como estava (fills em `rgba` escuro): o doc não trata tema escuro.
+
+### 3. Bugs de token encontrados de passagem
+
+- `bg-accent-mint` em [`micro-conquista-badge.tsx`](src/components/ui/micro-conquista-badge.tsx) e em duas marcas de [`protocol-dashboard-charts.tsx`](src/components/ui/protocol-dashboard-charts.tsx): **`--color-accent-mint` nunca existiu** em `globals.css` — a classe não pintava fundo nenhum. Trocado por `--status-success-bg` (Menta = “fato aprovado, conquista consolidada”, §3). O `shadow-[2px_2px_0px_#1A1A1A]` cru do badge virou `--ds-shadow`.
+- `text-terracotta` no alerta de erro do [`checkin-button.tsx`](<src/app/(app)/agenda/checkin-button.tsx>) resolvia para `--color-terracotta`, que aponta para o **fill** de erro: o texto de `role="alert"` estava em **1.04:1** sobre o card. Passou para `--status-error-fg` (10:1).
+
+### 4. Header em duas faixas ([`ui/header.tsx`](src/components/ui/header.tsx))
+
+Sintoma reportado: com os 7 destinos do coordenador, `Sair` e o nome da clínica caíam para uma segunda linha órfã e a marca desalinhava da coluna do conteúdo.
+
+- **Faixa 1 — identidade:** marca + clínica ativa à esquerda; `usuarioNome` + `Sair` à direita. `usuarioNome` era uma prop que **existia e nunca era renderizada**.
+- **Faixa 2 — navegação:** linha própria (≥ 640px), com a largura inteira do `Container`. Nada foi escondido atrás de um menu “Mais” — densidade alta é requisito do perfil Coordenador (§2.2).
+- **Estado ativo pelo eixo epistêmico (§4.1):** a rota atual preenche (`--brand-tint`), ganha borda contínua e LEVANTA (`--elevation-1`). `aria-current="page"` segue como sinal redundante.
+- **`NavBadgeTom` (`neutro` | `ia` | `risco`)** substitui o amarelo fixo da contagem. `Central de Validação` e `Pendências` passam a `ia` (violeta) em [`(app)/layout.tsx`](<src/app/(app)/layout.tsx>) — coerente com a semiótica de 18/08 (vermelho só para alerta de risco).
+
+**Medido no Storybook** (`Header/CoordenadorCargaCheia`, DOM real):
+
+| Viewport | Altura do header | Linhas da nav | Alvo de toque      | Overflow-X |
+| :------- | :--------------- | :------------ | :----------------- | :--------- |
+| 1600px   | 107px            | **1**         | 44px               | não        |
+| 768px    | 107px            | **1**         | 44px               | não        |
+| 375px    | 63px             | faixa oculta  | 44×50 (hambúrguer) | não        |
+
+Varredura de contraste sobre o DOM renderizado (`Alert/TodasAsSeveridades`, `AlertaRiscoCard/AutolesaoAberto`, `Banner/Sucesso`): **0 reprovados**. A checagem de contraste do axe em jsdom não vale como prova — ela aborta em `HTMLCanvasElement.getContext`, não implementado.
+
+### 5. Verificação
+
+`pnpm typecheck` 0 erros · `pnpm test` **226 arquivos / 1580 testes verdes** · `pnpm lint` 0 erros (9 warnings pré-existentes, nenhum nos arquivos tocados).
+
+### 6. Fica aberto (rodada 2)
+
+- **§6.1 — primitivas `Text` e `VisuallyHidden` não existem.** Há 8 usos de `sr-only` soltos que seriam os consumidores naturais do `VisuallyHidden`.
+- **§6 — camadas.** O doc pede `primitives/`, `ui/`, `patterns/`; o repo tem `ui/primitives/` e `ui/patterns/` aninhados. São as mesmas 3 camadas; promover as pastas é churn de import puro — decidir se vale.
+- **`usuarioNome` não é alimentado.** `TenantContext` carrega `userId`, não o nome; renderizar exige uma leitura nova em `(app)/layout.tsx`.
+- **§3 — Ilustrações line-art.** `illustrations.tsx` existe; falta auditar se algum empty state ainda usa emoji.
