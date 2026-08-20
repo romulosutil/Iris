@@ -3,7 +3,7 @@
 **Data**: 20/08/2026 · **Branch**: `feat/ajuste-menus-navegacao-e-permissoes` · **Plano**: `.specs/features/407-anamnese-marco-zero/tasks.md` (34 tasks)
 **Método**: `superpowers:subagent-driven-development` — um subagente implementador por task, revisão de task (spec + qualidade) por subagente separado após cada uma, adjudicação do controlador entre os dois.
 **Ledger vivo** (recuperação após compactação ou `/clear`): `.superpowers/sdd/tasks/progress.md`. Confie nele e no `git log`, não em memória de conversa.
-**Modelo desta sessão**: Sonnet 5 (`claude-sonnet-5`), orquestrando subagentes `general-purpose` no mesmo modelo. Recomendação para a próxima sessão: **manter Sonnet 5** para T06-T19 (Fase 1) — são tasks TS/unit menores, não precisam de Opus. Reservar Opus (ou Sonnet com `effort: high`) só se alguma task da Fase 1 envolver RLS/definer nova (nenhuma envolve, pelo plano atual) ou se um fix loop empacar 2+ rodadas seguidas.
+**Modelo desta sessão**: implementadores `haiku` (mecânico, spec fechada no brief), revisores `sonnet`. Correção ao checkpoint anterior: a skill `subagent-driven-development` **proíbe dispatch paralelo de implementadores** ("Never dispatch multiple implementation subagents in parallel — conflicts"), mesmo para tasks `[P]` independentes em arquivos diferentes — só a revisão/fix-loop de tasks distintas pode sobrepor. T06 e T07 rodaram sequenciais, não em paralelo.
 
 ---
 
@@ -18,7 +18,10 @@
 | T04  | `9bfd734` | Teste vermelho do definer `app_validar_anamnese`, 8 casos. 1 fix round Critical (assercao de erro batia `DrizzleQueryError.message` em vez de `.cause` — ficaria vermelho para sempre). Depois limpa. |
 | T05  | `c38acff` | Implementado `app_validar_anamnese`. **Task mais perigosa do plano — revisada nesta sessão: clean pass**, 13/13 itens medidos, incluindo a direção do merge jsonb (`EXCLUDED.repertorio_state \|\| session_snapshot.repertorio_state`, existente vence) e `gerado_em` preservado. |
 
-**Progresso: 5 de 34 tasks completas e revisadas** (T01-T05). Fase 0 (fundação de dados/RLS/definer) está fechada.
+| T06  | `da46e49` | `OrigemDesarquivamento` ganha `"validacao_anamnese"`. Review: Spec ✅, 1 Minor (brief tinha gate errado — comando default exclui `.int.test.ts`; controlador rodou com `--config vitest.integration.config.ts`, 7/7 verde real). |
+| T07  | `7c93653` | Módulo puro `rotulos.ts` (`ROTULO_MARCO_ZERO`, `rotuloPonto`, `rotuloPontoCurto`, `rotuloDesde`, `rotuloAte`). Review: Spec ✅ (sem `"use client"` confirmado, copy idêntica confirmada por grep contra `timeline-client.tsx`/`grafico-espectro.tsx`), 2 Minor deferidos (teste de regressão redundante; `prettier --write` em vez de `pnpm format` literal). Gate confirmado pelo controlador: 28/28 verde. |
+
+**Progresso: 7 de 34 tasks completas e revisadas** (T01-T07). Fase 0 fechada. Fase 1 iniciada (T06/T07, o par `[P]` planejado, completo).
 
 ### Medido, não presumido (T03/T05, revisado nesta sessão)
 
@@ -59,20 +62,11 @@ Confirmado na sessão anterior que `e5c6d4d`/`4f38394` (outra sessão Claude) es
 
 ## O que o próximo agente faz — em ordem, uma coisa de cada vez
 
-Fase 0 (T01-T05, dados/RLS/definer) está **fechada e revisada**. Fase 1 (T06-T19) começa agora. T06 e T07 são `[P]` — paralelas entre si, ambas dependem só de T05 (já feito).
+Fase 0 (T01-T05) e o par `[P]` T06/T07 estão **fechados e revisados**. Continuar em T08.
 
-### Passo 1 — T06 e T07 em paralelo
+### Passo 1 — T08 em diante
 
-Briefs: `.superpowers/sdd/tasks/task-06-brief.md`, `task-07-brief.md`. Ambas TDD unit, sem RLS, sem migração:
-
-- **T06**: `OrigemDesarquivamento` ganha membro `"validacao_anamnese"` em `src/lib/patient/desarquivamento.ts:6-15`. Teste primeiro: origem aceita pelo tipo, chega ao `audit_log`. Gate: `npx vitest run src/lib/patient/` + `format`.
-- **T07**: módulo novo `src/app/(app)/pacientes/[id]/timeline/rotulos.ts` com `ROTULO_MARCO_ZERO`, `rotuloPonto`, `rotuloPontoCurto`, `rotuloDesde`, `rotuloAte`. Teste de tabela cobrindo `n=0` (nunca contém `"Sessão"`) e `n>0` (texto idêntico ao atual, zero regressão de copy). **Atenção**: sem `"use client"` no arquivo — diretiva é do módulo, helper exportado de módulo cliente derruba `page.tsx` com 500 em runtime mesmo com typecheck/lint/testes verdes (memória `use-client-quebra-chamada-do-servidor`). Gate: `npx vitest run "src/app/(app)/pacientes/[id]/timeline/rotulos.test.ts"` + `format`.
-
-Despache dois subagentes implementadores em paralelo (são independentes, arquivos diferentes). Depois revisão de cada um (subagente separado, mesma disciplina: medir gate, não confiar no relato). Ambas são tasks pequenas — revisão pode ser mais leve que T03/T05, mas não pular.
-
-### Passo 2 — T08 em diante
-
-Sequencial a partir daqui salvo indicação `[P]` no brief. Consultar `.specs/features/407-anamnese-marco-zero/tasks.md` para a ordem completa e dependências; briefs extraídos em `.superpowers/sdd/tasks/task-NN-brief.md` até T19 pelo menos.
+Sequencial a partir daqui salvo indicação `[P]` no brief (e mesmo `[P]`: despachar implementadores **sempre em sequência**, nunca em paralelo — regra da skill `subagent-driven-development`, não relaxar de novo). Consultar `.specs/features/407-anamnese-marco-zero/tasks.md` para ordem completa e dependências; briefs extraídos em `.superpowers/sdd/tasks/task-NN-brief.md` até T19 pelo menos — se T08 não tiver brief extraído, extrair do `tasks.md` antes de despachar.
 
 ### Os dois guardrails que nenhuma task pode relaxar (repetido da sessão anterior, ainda vale)
 
