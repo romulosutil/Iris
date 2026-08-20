@@ -2,12 +2,20 @@
 
 import React from "react";
 import type { DeltaSessao } from "./logic";
+import { EstadoDeErro } from "./estado-de-erro";
 
 interface DeltaSessaoProps {
   delta: DeltaSessao | null;
   metas: Array<{ id: string; descricao: string; disciplina: string | null }>;
   milestones: Array<{ id: string; nome: string; dominioId: string }>;
   carregando?: boolean;
+  /**
+   * A requisição falhou. Distinto de `delta === null`, que significa "carregou
+   * e não houve alteração". Sem esta separação o painel afirmava que a sessão
+   * não teve alteração clínica toda vez que a rede oscilava.
+   */
+  erro?: boolean;
+  onTentarDeNovo?: () => void;
 }
 
 export function DeltaSessaoLateral({
@@ -15,6 +23,8 @@ export function DeltaSessaoLateral({
   metas,
   milestones,
   carregando = false,
+  erro = false,
+  onTentarDeNovo,
 }: DeltaSessaoProps) {
   if (carregando) {
     return (
@@ -23,6 +33,19 @@ export function DeltaSessaoLateral({
         <div className="h-12 w-full border border-[var(--border-brutal)] bg-[var(--surface-elevated)]"></div>
         <div className="h-12 w-full border border-[var(--border-brutal)] bg-[var(--surface-elevated)]"></div>
       </div>
+    );
+  }
+
+  // Ordem importa: o erro é avaliado ANTES do empty state, senão `delta ===
+  // null` (o valor que o `catch` deixa) renderiza "Nenhuma alteração clínica
+  // registrada nesta sessão" e a falha vira um fato sobre o paciente.
+  if (erro) {
+    return (
+      <EstadoDeErro
+        titulo="O resumo desta sessão não foi carregado"
+        descricao="Não foi possível ler o que mudou nesta sessão. Isto não quer dizer que nada mudou — quer dizer que ainda não sabemos."
+        onTentarDeNovo={onTentarDeNovo ?? (() => {})}
+      />
     );
   }
 

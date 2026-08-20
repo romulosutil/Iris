@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useTransition } from "react";
 import { Scrubber } from "./scrubber";
 import { DeltaSessaoLateral } from "./delta-sessao";
+import { EstadoDeErro } from "./estado-de-erro";
 import {
   carregarDeltaSessaoAction,
   carregarComparacaoAction,
@@ -71,6 +72,10 @@ export function TimelineClient({
   } | null>(null);
   const [drilldownEvidencias, setDrilldownEvidencias] = useState<any[]>([]);
   const [carregandoEvidencias, setCarregandoEvidencias] = useState(false);
+  // Falha de carregamento é estado próprio, NUNCA lista vazia: `[]` renderiza
+  // "Nenhuma evidência registrada para este trecho", que é uma afirmação
+  // clínica que a rede não autorizou ninguém a fazer. Ver `estado-de-erro.tsx`.
+  const [erroEvidencias, setErroEvidencias] = useState(false);
 
   // Mapeia milestones ativos agrupados por domínio
   const milestonesPorDominio = React.useMemo(() => {
@@ -118,6 +123,30 @@ export function TimelineClient({
     return stats;
   }, [milestonesPorDominio, snapSelecionado]);
 
+  const buscarEvidencias = async (alvo: {
+    inicio: number;
+    fim: number;
+    targetId: string;
+  }) => {
+    setCarregandoEvidencias(true);
+    setErroEvidencias(false);
+    setDrilldownEvidencias([]);
+    try {
+      const res = await carregarEvidenciasAction(
+        patientId,
+        alvo.targetId,
+        alvo.inicio,
+        alvo.fim,
+      );
+      setDrilldownEvidencias(res);
+    } catch (err) {
+      setErroEvidencias(true);
+      console.error("Erro ao buscar evidências por trecho:", err);
+    } finally {
+      setCarregandoEvidencias(false);
+    }
+  };
+
   const handleAbrirDrilldown = async (
     chunk: { inicio: number; fim: number },
     targetId: string,
@@ -130,21 +159,11 @@ export function TimelineClient({
       targetNome,
     });
     setDrilldownOpen(true);
-    setCarregandoEvidencias(true);
-    setDrilldownEvidencias([]);
-    try {
-      const res = await carregarEvidenciasAction(
-        patientId,
-        targetId,
-        chunk.inicio,
-        chunk.fim,
-      );
-      setDrilldownEvidencias(res);
-    } catch (err) {
-      console.error("Erro ao buscar evidências por trecho:", err);
-    } finally {
-      setCarregandoEvidencias(false);
-    }
+    await buscarEvidencias({
+      inicio: chunk.inicio,
+      fim: chunk.fim,
+      targetId,
+    });
   };
 
   const getTargetNome = (id: string) => {
@@ -217,7 +236,20 @@ export function TimelineClient({
     null,
   );
 
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  // Delta e comparação são duas requisições independentes. Enquanto as duas
+  // liam o MESMO `isPending` do `useTransition`, o painel de delta recebia
+  // `carregando={isPending && !compararAtivo}`: com o comparador ligado ele
+  // nunca mostrava carga, e trocar de sessão deixava os números da sessão
+  // anterior na tela sem nenhum sinal de que estavam obsoletos.
+  const [carregandoDelta, setCarregandoDelta] = useState(false);
+  const [erroDelta, setErroDelta] = useState(false);
+  const [carregandoComparacao, setCarregandoComparacao] = useState(false);
+  const [erroComparacao, setErroComparacao] = useState(false);
+  // Incrementado pelo "Tentar de novo": entra na lista de dependências do
+  // efeito e é o que o torna re-executável sem mudar a sessão selecionada.
+  const [tentativaDelta, setTentativaDelta] = useState(0);
+  const [tentativaComparacao, setTentativaComparacao] = useState(0);
   const sessaoCompararValida =
     sessaoComparar !== sessaoAtiva ? sessaoComparar : null;
   const podeComparar = sessoesDisponiveis.length >= 2;
@@ -245,6 +277,8 @@ export function TimelineClient({
     let active = true;
 
     startTransition(async () => {
+      setCarregandoDelta(true);
+      setErroDelta(false);
       try {
         const res = await carregarDeltaSessaoAction(patientId, sessaoAtiva);
         if (!active) return;
@@ -257,14 +291,20 @@ export function TimelineClient({
         setDeltaSessao(null);
         setDeltaMetas([]);
         setDeltaMilestones([]);
+        // Sem esta marca, `delta === null` cai no empty state do painel, que
+        // diz "Nenhuma alteração clínica registrada nesta sessão" — um fato
+        // clínico inventado a partir de uma falha de rede.
+        setErroDelta(true);
         console.error("Erro ao carregar delta da sessão:", err);
+      } finally {
+        if (active) setCarregandoDelta(false);
       }
     });
 
     return () => {
       active = false;
     };
-  }, [sessaoAtiva, patientId]);
+  }, [sessaoAtiva, patientId, tentativaDelta]);
 
   // Carrega dados da comparação
   useEffect(() => {
@@ -275,6 +315,8 @@ export function TimelineClient({
     let active = true;
 
     startTransition(async () => {
+      setCarregandoComparacao(true);
+      setErroComparacao(false);
       try {
         const res = await carregarComparacaoAction(
           patientId,
@@ -292,14 +334,23 @@ export function TimelineClient({
       } catch (err) {
         if (!active) return;
         setComparacaoData(null);
+        setErroComparacao(true);
         console.error("Erro ao carregar comparação:", err);
+      } finally {
+        if (active) setCarregandoComparacao(false);
       }
     });
 
     return () => {
       active = false;
     };
-  }, [compararAtivo, sessaoAtiva, sessaoCompararValida, patientId]);
+  }, [
+    compararAtivo,
+    sessaoAtiva,
+    sessaoCompararValida,
+    patientId,
+    tentativaComparacao,
+  ]);
 
   // Lógica de Renderização do Hexágono "Espectro" SVG
   const renderEspectroRadar = () => {
@@ -822,7 +873,9 @@ export function TimelineClient({
             delta={deltaSessao}
             metas={deltaMetas}
             milestones={deltaMilestones}
-            carregando={isPending && !compararAtivo}
+            carregando={carregandoDelta}
+            erro={erroDelta}
+            onTentarDeNovo={() => setTentativaDelta((n) => n + 1)}
           />
 
           {/* Comparador de 2 Pontos Temporais */}
@@ -883,14 +936,24 @@ export function TimelineClient({
                     </select>
                   </div>
 
-                  {isPending && (
-                    <div className="text-muted animate-pulse text-xs">
+                  {carregandoComparacao && (
+                    <div className="animate-pulse text-xs text-[var(--text-secondary)]">
                       Carregando comparação...
                     </div>
                   )}
 
+                  {erroComparacao && (
+                    <EstadoDeErro
+                      titulo="A comparação não foi carregada"
+                      descricao="Não foi possível comparar as duas sessões agora. Nada foi calculado — o resultado abaixo não existe, não é um resultado vazio."
+                      onTentarDeNovo={() =>
+                        setTentativaComparacao((n) => n + 1)
+                      }
+                    />
+                  )}
+
                   {/* Exibição do Delta de Comparação */}
-                  {comparacaoData && (
+                  {comparacaoData && !erroComparacao && (
                     <div className="border-ink-anchor flex flex-col gap-3 border-t-2 pt-3">
                       {/* Alerta Clínico Guard G7 */}
                       {comparacaoData.protocoloMudou ? (
@@ -961,6 +1024,14 @@ export function TimelineClient({
               <div className="animate-pulse py-8 text-center text-sm font-black text-[var(--text-secondary)]">
                 Buscando evidências no histórico do paciente...
               </div>
+            ) : erroEvidencias ? (
+              <EstadoDeErro
+                titulo="As evidências deste trecho não foram carregadas"
+                descricao="A busca no histórico do paciente falhou. Isto não significa que o trecho esteja sem evidências — significa que ainda não sabemos o que há nele."
+                onTentarDeNovo={() => {
+                  if (drilldownChunk) void buscarEvidencias(drilldownChunk);
+                }}
+              />
             ) : drilldownEvidencias.length === 0 ? (
               <div className="rounded-[var(--radius-control)] border-2 border-dashed border-[var(--border-brutal)]/40 bg-[var(--surface-elevated)] py-8 text-center text-sm font-bold text-[var(--text-secondary)]">
                 Nenhuma evidência registrada para este trecho nas sessões
