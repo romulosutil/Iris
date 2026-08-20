@@ -19,13 +19,20 @@ import { capacidadesDaModalidade } from "./modalidade";
 import { EvolucaoTcc } from "./timeline/evolucao-tcc";
 import { obterRPDEntries } from "./tcc/logic";
 import { obterInstrumentoAplicacoes } from "./tcc/instrumento-logic";
+import { vistaValida } from "./timeline/vista-nav";
 
 interface PacientePageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function PacientePage({ params }: PacientePageProps) {
+export default async function PacientePage({
+  params,
+  searchParams,
+}: PacientePageProps) {
   const { id } = await params;
+  const { vista: vistaBruta } = await searchParams;
+  const vista = vistaValida(vistaBruta);
   const ctx = await getTenantContext();
   requireRole(ctx, "terapeuta", "coordenador");
 
@@ -194,6 +201,7 @@ export default async function PacientePage({ params }: PacientePageProps) {
             patientId={paciente.id}
             pacienteNome={paciente.nome}
             initialData={timeline}
+            vista={vista}
           />
         )}
       </Stack>
