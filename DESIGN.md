@@ -197,6 +197,16 @@ A linguagem de formas equilibra bordas duras brutalistas (1.5px / 2px) com canto
 - **Style:** Formato pílula (`--radius-pill`), borda 1.5px.
 - **Variantes:** Aprovado (Menta), Sugerido (Violeta com ícone Sparkles), Alerta (Terracota), Info (Azul).
 
+### Navigation & Tabs (Header, TabsNav, GovernancaNav)
+
+- **Header Principal:** Item de menu ativo utiliza pill neutra elevada (`--surface-elevated`) com texto em alto contraste, reservando o ouro brutal (`#F2B705`) exclusivamente para botões de ação e alertas de prioridade.
+- **Abas de Rota & Governança:** Padrão _underline tabs_ com linha de base sólida (`border-b-2 border-[var(--border-brutal)]`), piso de 44px e badges numéricos discretos (`--radius-pill`) por aba para reduzir cliques exploratórios.
+
+### PageHeader & EmptyState
+
+- **PageHeader:** Hierarquia tipográfica com espaçamento vertical natural; proibido o uso de divisores tracejados decorativos no chrome de layout.
+- **EmptyState:** Superfície arejada com borda sutil (`--border-neutral-light`), ilustrações empáticas, ações de próximo passo (botões direcionais) e timestamp informativo para evitar becos sem saída na experiência clínica.
+
 ## Do's and Don'ts
 
 ### Do:
