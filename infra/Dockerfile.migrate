@@ -12,10 +12,20 @@
 FROM node:22-alpine AS base
 RUN corepack enable
 WORKDIR /app
+# `corepack enable` só instala os shims; o binário do pnpm baixa do npm
+# registry na 1ª invocação por stage. `corepack install` materializa a
+# versão de `packageManager` aqui, num layer cacheado por `deps`/`migrate`,
+# tirando o registry do caminho crítico do build.
+COPY package.json ./
+RUN corepack install
 
 # deps: node_modules de produção (drizzle-orm + postgres são deps de prod).
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# `patchedDependencies` (pnpm-workspace.yaml) referencia arquivos em patches/.
+# Sem eles no contexto, `pnpm install` morre com
+# `ENOENT: ... open '/app/patches/module-alias@2.3.4.patch'` — medido.
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 
 # migrate: ÚLTIMO stage = job. Aplica db/migrations e sai != 0 se falhar,
