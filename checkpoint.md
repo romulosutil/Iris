@@ -51,7 +51,11 @@ Todas no ledger com o custo de estar errado. As quatro que mudam código:
 
 ### Passo 1 — revisar o T03. É atômico e precede tudo.
 
-O T03 commitou `230729d`, mas o subagente implementador nunca devolveu o relatório e **nenhuma revisão de task rodou sobre ele**. Não trate como pronto.
+O T03 commitou `230729d` e entregou o relatório em `.superpowers/sdd/tasks/task-03-report.md` com status **DONE_WITH_CONCERNS**. **Nenhuma revisão de task rodou sobre ele.** Não trate como pronto.
+
+O que o implementador reporta ter medido: `anamnese-rls` 9/9; `pnpm test:rls` com **112 arquivos executados, 0 pulados**, 1033 de 1034 testes passando; `meta/0115_snapshot.json` com diff vazio. A única falha restante (`tenant-status-routing.int.test.ts`, redirect de MFA) ele atribui a `BYPASS_MFA_FOR_DEV=true` no `.env` local, pré-existente e não tocada — **confirme isso em vez de aceitar**, com `git stash` do `.env` ou rodando o arquivo isolado antes e depois do `230729d`.
+
+**O concern que a revisão tem que adjudicar antes de qualquer outra coisa:** para o guard passar, o implementador editou `db/tests/clinic-id-helper-rls.int.test.ts` — fora do escopo declarado do T03 — subindo os oráculos mantidos à mão de 56 para 64 policies e de 16 para 17 funções. Editar o oráculo de um guard de CI é precisamente como um guard é neutralizado em silêncio. A revisão precisa provar que as 8 entradas novas são exatamente as 8 policies da anamnese, e que a função nova é `app_anamnese_em_rascunho` — e não números ajustados até o teste ficar verde. Se as listas forem nominais e não apenas contagens, conferir nome a nome; se forem só contagens, isso já é um achado por si.
 
 ```
 bash "C:/Users/sutil/.claude/plugins/cache/claude-plugins-official/superpowers/6.3.0/skills/subagent-driven-development/scripts/review-package" \
