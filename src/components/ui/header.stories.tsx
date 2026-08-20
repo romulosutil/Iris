@@ -36,6 +36,14 @@ export const Desktop = {
       </div>
     </div>
   ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Header com item de navegação ativo em superfície neutra elevada e borda inferior em Ouro (#F2B705).",
+      },
+    },
+  },
 };
 
 export const Mobile = {

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/ui/logo";
 import { Split, Cluster } from "@/components/ui/layout";
@@ -78,8 +79,8 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
       cn(
         "font-display text-sm px-3.5 py-1.5 rounded-[var(--radius-control)] transition-all duration-100 ease-out inline-flex items-center gap-2 border-2",
         item.active
-          ? "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold border-[var(--border-brutal)] shadow-[var(--ds-shadow)]"
-          : "border-transparent text-[var(--text-primary)] font-semibold hover:border-[var(--border-brutal)]/40 hover:bg-[var(--surface-elevated)]",
+          ? "bg-[var(--surface-elevated)] text-[var(--text-primary)] font-bold border-[var(--border-brutal)] border-b-2 border-b-[var(--action-primary,#F2B705)] shadow-[var(--elevation-1)]"
+          : "border-transparent text-[var(--text-secondary)] font-semibold hover:border-[var(--border-brutal)]/30 hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
       );
 
     const linkRenderer = (item: NavItem, children: React.ReactNode) => {
@@ -114,13 +115,13 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
           gap="sm"
           className="w-full items-center justify-between sm:w-auto"
         >
-          <a
+          <Link
             href="/"
             aria-label="Iris — Início"
             className="focus-visible:outline-focus flex min-h-[44px] min-w-[44px] shrink-0 items-center"
           >
             <Logo variante="completo" altura={36} />
-          </a>
+          </Link>
 
           {/* Clínica ativa (Desktop) */}
           <div className="hidden items-center gap-2 sm:flex">
