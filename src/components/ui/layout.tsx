@@ -117,10 +117,22 @@ export interface ContainerProps
   largura?: "sm" | "md" | "lg" | "full";
 }
 
+/**
+ * Largura máxima progressiva: cada variante cresce ao entrar em telas grandes,
+ * em vez de travar num teto único. Em monitor 1920px o teto fixo de 1024px
+ * deixava ~450px de vazio de cada lado — espaço nobre para header, banners e
+ * navegações que já são horizontais por natureza.
+ *
+ * `sm` não cresce de propósito: é a coluna de leitura/formulário (auth,
+ * cadastro), onde linha mais larga piora a legibilidade em vez de melhorar.
+ *
+ * `max-w-(--breakpoint-2xl)` (96rem) substitui o `max-w-screen-2xl` do Tailwind
+ * v3, removido na v4.
+ */
 const larguraClasses = {
   sm: "max-w-3xl",
-  md: "max-w-5xl",
-  lg: "max-w-7xl",
+  md: "max-w-5xl lg:max-w-7xl",
+  lg: "max-w-7xl xl:max-w-(--breakpoint-2xl)",
   full: "max-w-full",
 };
 
@@ -134,7 +146,7 @@ export const Container = React.forwardRef<HTMLElement, ContainerProps>(
       <Como
         ref={ref}
         className={cn(
-          "mx-auto w-full px-4 sm:px-6 md:px-8",
+          "mx-auto w-full px-4 sm:px-6 lg:px-8",
           larguraClasses[largura],
           className,
         )}

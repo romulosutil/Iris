@@ -1,5 +1,6 @@
 import type { Meta } from "@storybook/nextjs-vite";
 import { Header, type NavItem } from "./header";
+import { Container } from "./layout";
 
 const meta = {
   title: "04. UI COMPONENTS/Layout/Header",
@@ -46,12 +47,37 @@ export const Desktop = {
   },
 };
 
-export const Mobile = {
+export const DesktopUltra = {
+  globals: { viewport: { value: "desktopUltra" } },
   parameters: {
-    viewport: {
-      defaultViewport: "mobile1",
+    docs: {
+      description: {
+        story:
+          '1920px. Fundo, borda e sombra sangram até as bordas do viewport; marca e controles do usuário param na coluna do `Container` (`largura="md"` → 1280px aqui). A linha tracejada marca onde o conteúdo da página começa.',
+      },
     },
   },
+  render: () => (
+    <div className="min-h-[400px] bg-[var(--bg-app)]">
+      <Header
+        clinicaAtivaNome="Clínica Iris — Matriz"
+        outrasClinicas={outrasClinicasExemplo}
+        onTrocarClinica={(id) => alert(`Trocar para clínica ${id}`)}
+        itemsNav={itemsNavExemplo}
+        onSignOut={() => alert("Sair")}
+      />
+      <Container
+        largura="md"
+        className="font-body mt-6 border-2 border-dashed border-[var(--border-brutal)] py-6 text-[var(--text-primary)]"
+      >
+        Conteúdo da página — alinhado à mesma coluna da marca acima.
+      </Container>
+    </div>
+  ),
+};
+
+export const Mobile = {
+  globals: { viewport: { value: "terapeuta" } },
   render: () => (
     <div className="min-h-[500px] bg-[var(--bg-app)]">
       <Header

@@ -67,9 +67,7 @@ export const Padrao = {
 };
 
 export const Mobile = {
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
+  globals: { viewport: { value: "terapeuta" } },
   render: () => (
     <div className="bg-[var(--bg-app)] p-2">
       <ScheduleGrid dias={mockDias} blocos={mockBlocos} />
