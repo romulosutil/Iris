@@ -135,9 +135,7 @@ describe("sincronização doc-vs-Zod (#390 R1)", () => {
       expect(SINALIZACAO_TIPO_CANONICOS).toContain(tipo);
     }
     // E o inverso: todo canônico conhecido pelo Zod está documentado.
-    expect([...doDoc].sort()).toEqual(
-      [...SINALIZACAO_TIPO_CANONICOS].sort(),
-    );
+    expect([...doDoc].sort()).toEqual([...SINALIZACAO_TIPO_CANONICOS].sort());
   });
 
   test("doc documenta alerta_risco (antes ausente do doc)", () => {

@@ -90,9 +90,9 @@ export function RpdForm({
           📝 Novo Registro de Pensamentos Distorcidos (RPD)
         </h3>
         <p className="font-body text-xs text-[var(--text-secondary)]">
-          Registre a situação, o pensamento automático e a emoção. O restante
-          — evidências, pensamento alternativo e categoria — é opcional e
-          pode ser preenchido depois, conforme a reestruturação avança.
+          Registre a situação, o pensamento automático e a emoção. O restante —
+          evidências, pensamento alternativo e categoria — é opcional e pode ser
+          preenchido depois, conforme a reestruturação avança.
         </p>
       </div>
 

@@ -239,9 +239,7 @@ export async function salvarInstrumentoAplicacaoAction(
         valor: 0 | 1 | 2 | 3;
       }>,
       fonteDoEscore: fonteDoEscore as
-        | "paciente_informou"
-        | "terapeuta_calculou_na_sessao"
-        | "nao_informado",
+        "paciente_informou" | "terapeuta_calculou_na_sessao" | "nao_informado",
     });
 
     if (res.error) {

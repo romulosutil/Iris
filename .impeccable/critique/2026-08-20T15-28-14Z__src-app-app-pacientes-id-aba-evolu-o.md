@@ -6,6 +6,7 @@ p1_count: 1
 timestamp: 2026-08-20T15-28-14Z
 slug: src-app-app-pacientes-id-aba-evolu-o
 ---
+
 ⚠️ DEGRADED: single-context (instrução da sessão proíbe AgentTool sem pedido explícito — Avaliação A e B rodaram inline)
 
 Alvo: `/pacientes` → `/pacientes/[id]` (aba **Evolução**) — `page.tsx`, `layout.tsx`, `lista-pacientes.tsx`, `timeline/timeline-client.tsx` (1032 linhas), `timeline/scrubber.tsx`, `timeline/delta-sessao.tsx`.
@@ -18,19 +19,19 @@ Detector determinístico (`detect.mjs`): **0 achados** — ele lê HTML/CSS, nã
 
 ## Design Health Score
 
-| #   | Heurística                      | Nota      | Achado                                                                       |
-| --- | ------------------------------- | --------- | ---------------------------------------------------------------------------- |
-| 1   | Visibility of System Status     | 1         | Falha de rede vira negativa clínica; delta congela sem aviso com comparador on |
-| 2   | Match System / Real World       | 1         | "Guard G7 Ativado", "snapshots materializados", eixos VB-MAPP em paciente TCC |
-| 3   | User Control and Freedom        | 2         | Estado (sessão, alvo, comparação) não vai para a URL — nada é compartilhável  |
-| 4   | Consistency and Standards       | 1         | 4 painéis com fundo de página, 2 com fundo de card; azul-info usado como "IA" |
-| 5   | Error Prevention                | 2         | Guard G7 (suspender delta em troca de protocolo) é excelente — isolado        |
-| 6   | Recognition Rather Than Recall  | 1         | ✓ / ★ / ○ sem legenda; "Nível 2" sem escala; domínios em `UPPERCASE` cru      |
-| 7   | Flexibility and Efficiency      | 2         | Drilldown e comparador são bons; zero atalho, zero deep-link                  |
-| 8   | Aesthetic and Minimalist Design | 1         | 6 regiões interativas simultâneas, hero-metric, emoji, rótulos de 9px         |
-| 9   | Error Recovery                  | 0         | Não existe. Três `console.error` e nada na tela. Sem retry.                   |
-| 10  | Help and Documentation          | 1         | Uma frase em "Trajetória"; nada explica Espectro, Candidato ou Nível          |
-| **Total** |                           | **12/40** | **Retrabalho estrutural**                                                     |
+| #         | Heurística                      | Nota      | Achado                                                                         |
+| --------- | ------------------------------- | --------- | ------------------------------------------------------------------------------ |
+| 1         | Visibility of System Status     | 1         | Falha de rede vira negativa clínica; delta congela sem aviso com comparador on |
+| 2         | Match System / Real World       | 1         | "Guard G7 Ativado", "snapshots materializados", eixos VB-MAPP em paciente TCC  |
+| 3         | User Control and Freedom        | 2         | Estado (sessão, alvo, comparação) não vai para a URL — nada é compartilhável   |
+| 4         | Consistency and Standards       | 1         | 4 painéis com fundo de página, 2 com fundo de card; azul-info usado como "IA"  |
+| 5         | Error Prevention                | 2         | Guard G7 (suspender delta em troca de protocolo) é excelente — isolado         |
+| 6         | Recognition Rather Than Recall  | 1         | ✓ / ★ / ○ sem legenda; "Nível 2" sem escala; domínios em `UPPERCASE` cru       |
+| 7         | Flexibility and Efficiency      | 2         | Drilldown e comparador são bons; zero atalho, zero deep-link                   |
+| 8         | Aesthetic and Minimalist Design | 1         | 6 regiões interativas simultâneas, hero-metric, emoji, rótulos de 9px          |
+| 9         | Error Recovery                  | 0         | Não existe. Três `console.error` e nada na tela. Sem retry.                    |
+| 10        | Help and Documentation          | 1         | Uma frase em "Trajetória"; nada explica Espectro, Candidato ou Nível           |
+| **Total** |                                 | **12/40** | **Retrabalho estrutural**                                                      |
 
 ---
 
@@ -105,14 +106,14 @@ Isso repete o padrão de `feature-sem-caminho-de-escrita-do-campo`: a modalidade
 
 Carga cognitiva na entrada, tudo visível ao mesmo tempo, tudo com o mesmo `border-2 p-6`:
 
-| Região                    | Controles                     | Reage ao scrubber? |
-| ------------------------- | ----------------------------- | ------------------ |
-| Scrubber                  | ← → + slider                  | é o controle       |
-| Gráfico de Espectro       | botão tabela                  | sim                |
-| Trajetória de Metas       | `<select>` (metas + marcos)   | não                |
-| Marcos e Protocolos       | N tiles (VB-MAPP → 100+)      | sim                |
-| Resumo da Sessão (delta)  | scroll interno                | sim                |
-| Comparar Pontos Temporais | checkbox + `<select>`         | sim                |
+| Região                    | Controles                   | Reage ao scrubber? |
+| ------------------------- | --------------------------- | ------------------ |
+| Scrubber                  | ← → + slider                | é o controle       |
+| Gráfico de Espectro       | botão tabela                | sim                |
+| Trajetória de Metas       | `<select>` (metas + marcos) | não                |
+| Marcos e Protocolos       | N tiles (VB-MAPP → 100+)    | sim                |
+| Resumo da Sessão (delta)  | scroll interno              | sim                |
+| Comparar Pontos Temporais | checkbox + `<select>`       | sim                |
 
 Três seletores de tempo coexistem: sessão ativa (scrubber), sessão B (comparador), trecho (chunk do drilldown). Nenhum deles é hierarquicamente superior na tela — o scrubber, que reframe 4 das 6 regiões, tem exatamente o mesmo peso visual de um card qualquer.
 
@@ -126,17 +127,17 @@ Três seletores de tempo coexistem: sessão ativa (scrubber), sessão B (compara
 
 ### [P2] Falhas concretas de acessibilidade e DS, verificadas no código
 
-| # | Achado | Onde | Regra |
-| - | ------ | ---- | ----- |
-| a | `focus:outline-none` sem substituto em 4 controles. `grep focus-visible` na aba → **0** | `:553`, `:615`, `:871`, `page.tsx:125` | WCAG 2.4.7 / "The Orthogonal Focus Rule" |
-| b | Barra de progresso: `#b2dfdb` sobre `#e5e7eb` = **1,17:1**; faixa de candidatos `#eff6ff` sobre `#e5e7eb` = **1,19:1**. As duas faixas são invisíveis e indistinguíveis entre si | `:712-726` | WCAG 1.4.11 (3:1) |
-| c | Alvos abaixo de 44px: `<select>` trajetória ≈38px, `<select>` comparar ≈32px, checkbox `size-4` = 16px | `:553`, `:871`, `:846` | DS `--control-sm` |
-| d | Radar fixo em 300×300 com labels a `1.2 × raio` e `overflow-visible`: extremos em x = −20 e 320. Em viewport de 360px o painel tem ~276px úteis → **estoura na horizontal** | `:353`, `:409-427` | "Text that overflows its container" |
-| e | Rótulos dos eixos em `fontSize: 9px` | `:425` | Legibilidade sob luz incontrolável (PRODUCT) |
-| f | Cores cruas no SVG fora do DS: `#c0c0c0`, `#d0d0d0`, `rgba(218,165,32,.25)`, `#DAA520` — goldenrod, não o ouro `#F2B705` | `:366-403` | DS |
-| g | `text-xxs` (3×) e `text-muted` (6×) **não existem**: nem `--text-xxs` nem `--color-muted` estão em `@theme`. Classes mortas — o texto herda tamanho e cor do pai | `timeline-client.tsx` | — |
-| h | 4 painéis usam `bg-canvas` (= `--bg-app` `#f8f9fa`, cor da **página**), enquanto scrubber e delta usam `--surface-card` `#ffffff`. Emenda visível, e os painéis não descolam do fundo | `:353`, `:533`, `:653`, `:830` | Consistência |
-| i | Banner "Visualizando histórico passado" usa `--color-gold` — a cor de ação primária como fundo de aviso | `scrubber.tsx:72` | Reserva do ouro |
+| #   | Achado                                                                                                                                                                                | Onde                                   | Regra                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------- |
+| a   | `focus:outline-none` sem substituto em 4 controles. `grep focus-visible` na aba → **0**                                                                                               | `:553`, `:615`, `:871`, `page.tsx:125` | WCAG 2.4.7 / "The Orthogonal Focus Rule"     |
+| b   | Barra de progresso: `#b2dfdb` sobre `#e5e7eb` = **1,17:1**; faixa de candidatos `#eff6ff` sobre `#e5e7eb` = **1,19:1**. As duas faixas são invisíveis e indistinguíveis entre si      | `:712-726`                             | WCAG 1.4.11 (3:1)                            |
+| c   | Alvos abaixo de 44px: `<select>` trajetória ≈38px, `<select>` comparar ≈32px, checkbox `size-4` = 16px                                                                                | `:553`, `:871`, `:846`                 | DS `--control-sm`                            |
+| d   | Radar fixo em 300×300 com labels a `1.2 × raio` e `overflow-visible`: extremos em x = −20 e 320. Em viewport de 360px o painel tem ~276px úteis → **estoura na horizontal**           | `:353`, `:409-427`                     | "Text that overflows its container"          |
+| e   | Rótulos dos eixos em `fontSize: 9px`                                                                                                                                                  | `:425`                                 | Legibilidade sob luz incontrolável (PRODUCT) |
+| f   | Cores cruas no SVG fora do DS: `#c0c0c0`, `#d0d0d0`, `rgba(218,165,32,.25)`, `#DAA520` — goldenrod, não o ouro `#F2B705`                                                              | `:366-403`                             | DS                                           |
+| g   | `text-xxs` (3×) e `text-muted` (6×) **não existem**: nem `--text-xxs` nem `--color-muted` estão em `@theme`. Classes mortas — o texto herda tamanho e cor do pai                      | `timeline-client.tsx`                  | —                                            |
+| h   | 4 painéis usam `bg-canvas` (= `--bg-app` `#f8f9fa`, cor da **página**), enquanto scrubber e delta usam `--surface-card` `#ffffff`. Emenda visível, e os painéis não descolam do fundo | `:353`, `:533`, `:653`, `:830`         | Consistência                                 |
+| i   | Banner "Visualizando histórico passado" usa `--color-gold` — a cor de ação primária como fundo de aviso                                                                               | `scrubber.tsx:72`                      | Reserva do ouro                              |
 
 **Comando:** `/impeccable audit src/app/(app)/pacientes/[id]/timeline`
 

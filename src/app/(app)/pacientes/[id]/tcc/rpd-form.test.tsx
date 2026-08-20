@@ -90,11 +90,8 @@ describe("RpdForm — fieldset de distorções cognitivas (#389)", () => {
       ).required,
     ).toBe(false);
     expect(
-      (
-        screen.getByLabelText(
-          /pensamento alternativo/i,
-        ) as HTMLInputElement
-      ).required,
+      (screen.getByLabelText(/pensamento alternativo/i) as HTMLInputElement)
+        .required,
     ).toBe(false);
   });
 });

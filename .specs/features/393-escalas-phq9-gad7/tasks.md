@@ -8,11 +8,13 @@
 ## Execution Plan
 
 ### Phase 1: Fundação (Sequencial)
+
 ```
 T1
 ```
 
 ### Phase 2: Schema (Paralelo — dependem só de T1)
+
 ```
      ┌→ T2 ─┐
 T1 ──┤      ├──→ (Phase 3)
@@ -20,6 +22,7 @@ T1 ──┤      ├──→ (Phase 3)
 ```
 
 ### Phase 3: Superfície (Paralelo — dependem de T2)
+
 ```
      ┌→ T4 ─┐
 T2 ──┤      ├──→ T6
@@ -28,6 +31,7 @@ T3 ──────────┘
 ```
 
 ### Phase 4: Fechamento (Sequencial)
+
 ```
 T4, T5, T6, T3 → T7
 ```
@@ -47,6 +51,7 @@ T4, T5, T6, T3 → T7
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] Se gap real: prompt ganha instrução R3-equivalente para `aplicacao_escala_relatada`, testada em `prompt.test.ts`
 - [ ] Se já cobre: teste novo só confirma (sem mudança de prompt)
 - [ ] `pnpm typecheck` limpo
@@ -67,6 +72,7 @@ T4, T5, T6, T3 → T7
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] `pnpm db:generate` gera só o esperado (tabela via Drizzle; RLS manual, fora do snapshot)
 - [ ] Migração aplicada, verificada via `information_schema.columns` + `pg_policies` + `pg_constraint`
 - [ ] `GRANT` por coluna verificado com `has_column_privilege` (não `role_table_grants`)
@@ -90,6 +96,7 @@ T4, T5, T6, T3 → T7
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] Tabela criada, zero linhas após migração (nenhum seed)
 - [ ] Policy de leitura verificada via `pg_policies`
 - [ ] `pnpm typecheck` limpo
@@ -111,6 +118,7 @@ T4, T5, T6, T3 → T7
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] Cliente nunca envia `escoreTotal`/`item9Valor` pré-calculados usados como fonte de verdade — servidor recalcula de `respostasPorItem`
 - [ ] Form não renderiza item sem texto carregado (estado vazio explícito)
 - [ ] `null` em `item_risco_positivo` distinto de `false`, testado (RQ7)
@@ -133,6 +141,7 @@ T4, T5, T6, T3 → T7
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] Mapeamento testado para os 5 casos (0, 1, 2, 3, null) + fallback sem `item9Valor`
 - [ ] Empate/dúvida entre item 9 e outro sinal resolve pelo mais grave — confirmar comportamento existente cobre isso ou precisa de ajuste
 - [ ] `pnpm typecheck` limpo
@@ -153,6 +162,7 @@ T4, T5, T6, T3 → T7
 **Tools**: MCP: NONE. Skill: `frontend-design` opcional.
 
 **Done when**:
+
 - [ ] Lista renderiza data + escore + faixa de corte (cortes hardcoded, estrutura não é conteúdo licenciado)
 - [ ] Zero aplicações: empty-state, não erro
 - [ ] `pnpm typecheck && pnpm lint` limpos
@@ -172,6 +182,7 @@ T4, T5, T6, T3 → T7
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] Todos os itens do checklist "Invariantes" de `spec.md` verificados
 - [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm test:rls` verdes
 - [ ] Grep manual do diff completo por strings candidatas a item PHQ-9/GAD-7 — documentado no relatório final, zero resultado
@@ -206,29 +217,29 @@ Phase 4 (Sequencial, fecha tudo):
 
 ## Diagram-Definition Cross-Check
 
-| Task | Depends On (task body) | Diagram Shows | Status |
-| --- | --- | --- | --- |
-| T1 | None | — | ✅ Match |
-| T2 | T1 | T1 → T2 | ✅ Match |
-| T3 | T1 | T1 → T3 | ✅ Match |
-| T4 | T2, T3 | T2 → T4, T3 → T4 (via Phase 3→T7 note) | ✅ Match |
-| T5 | T2 | T2 → T5 | ✅ Match |
-| T6 | T4 | T4 → T6 | ✅ Match |
-| T7 | T4, T5, T6, T3 | T4, T5, T6, T3 → T7 | ✅ Match |
+| Task | Depends On (task body) | Diagram Shows                          | Status   |
+| ---- | ---------------------- | -------------------------------------- | -------- |
+| T1   | None                   | —                                      | ✅ Match |
+| T2   | T1                     | T1 → T2                                | ✅ Match |
+| T3   | T1                     | T1 → T3                                | ✅ Match |
+| T4   | T2, T3                 | T2 → T4, T3 → T4 (via Phase 3→T7 note) | ✅ Match |
+| T5   | T2                     | T2 → T5                                | ✅ Match |
+| T6   | T4                     | T4 → T6                                | ✅ Match |
+| T7   | T4, T5, T6, T3         | T4, T5, T6, T3 → T7                    | ✅ Match |
 
 ---
 
 ## Test Co-location Validation
 
-| Task | Code Layer | Requer teste | Task diz | Status |
-| --- | --- | --- | --- | --- |
-| T1: prompt | prompt.ts | unit | unit | ✅ OK |
-| T2: migração+schema | schema/RLS (banco) | integration (adiado p/ T7) | build (apply verificado) + integration em T7 | ✅ OK — mesmo racional de #392/T2 |
-| T3: migração texto | schema (banco) | none (tabela vazia sem lógica) | none | ✅ OK |
-| T4: form+action | server actions | integration | integration | ✅ OK |
-| T5: severidade | lib puro + definer | unit+integration | unit+integration | ✅ OK |
-| T6: UI | componente React | unit | unit | ✅ OK |
-| T7: fechamento | testes cross-cutting | integration | integration | ✅ OK |
+| Task                | Code Layer           | Requer teste                   | Task diz                                     | Status                            |
+| ------------------- | -------------------- | ------------------------------ | -------------------------------------------- | --------------------------------- |
+| T1: prompt          | prompt.ts            | unit                           | unit                                         | ✅ OK                             |
+| T2: migração+schema | schema/RLS (banco)   | integration (adiado p/ T7)     | build (apply verificado) + integration em T7 | ✅ OK — mesmo racional de #392/T2 |
+| T3: migração texto  | schema (banco)       | none (tabela vazia sem lógica) | none                                         | ✅ OK                             |
+| T4: form+action     | server actions       | integration                    | integration                                  | ✅ OK                             |
+| T5: severidade      | lib puro + definer   | unit+integration               | unit+integration                             | ✅ OK                             |
+| T6: UI              | componente React     | unit                           | unit                                         | ✅ OK                             |
+| T7: fechamento      | testes cross-cutting | integration                    | integration                                  | ✅ OK                             |
 
 Nenhuma violação.
 

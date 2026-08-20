@@ -1,16 +1,17 @@
 /**
- * Seed Rico de 3 Meses para Conta Específica
+ * Seed Rico de 3 Meses para Conta Específica (Com Snapshots Materializados)
  *
  * Popula:
- * - 5 Terapeutas (com credenciais prontas para login)
+ * - 7 Terapeutas (ABA, Denver, PROC, TCC, Convencional, TO, Fono)
  * - 2 Recepção
- * - 6 Pacientes pediátricos (com consentimentos, perfil clínico e care team)
- * - Catálogo de Protocolos & Protocolos da Clínica
- * - Metas PEI (dominadas, ativas e em regressão/estagnação)
- * - Histórico de 3 meses de sessões (realizadas com notas, extrações e evidências)
- * - Sessões futuras na agenda
- * - Alertas clínicos de supervisão (regressão, estagnação, faltas)
- * - Alerta de risco clínico para teste da fila de risco
+ * - 6 Pacientes pediátricos com consentimentos, perfil clínico e care team
+ * - Catálogo Mestre de Protocolos (ABA, Denver, PROC, TCC, Convencional)
+ * - Marcos de Evolução (milestones) por protocolo
+ * - Metas PEI vinculadas aos marcos de evolução
+ * - Histórico de 3 meses de sessões (realizadas com diário, extrações e evidências)
+ * - Materialização de Snapshots (session_snapshot) para renderização da Timeline,
+ *   Gráfico de Espectro/Radar, Deltas e evolução por disciplina
+ * - Alertas clínicos de supervisão e risco
  *
  * Uso:
  *   pnpm tsx --conditions=react-server --env-file=.env scripts/seed-demo-account.ts sutil.romulo@gmail.com
@@ -28,6 +29,8 @@ import {
   consent,
   protocolFamiliaCatalogo,
   protocol,
+  milestone,
+  goalMilestoneMapping,
   patientProtocol,
   careTeamMembership,
   goal,
@@ -39,6 +42,10 @@ import {
   alertaRiscoClinico,
 } from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
+import {
+  materializarSnapshot,
+  drizzleMaterializarQueries,
+} from "@/lib/evidence/materializar";
 
 async function main() {
   const targetEmail = (process.argv[2] || "sutil.romulo@gmail.com")
@@ -121,14 +128,16 @@ async function main() {
       .onConflictDoNothing();
   }
 
-  // 3. Catálogo e Protocolos da Clínica
-  console.log("📦 Garantindo catálogo de famílias e protocolos...");
+  // 3. Catálogo e Protocolos da Clínica (ABA, Denver, PROC, TCC, Convencional, TO)
+  console.log("📦 Garantindo catálogo de famílias e protocolos completos...");
   await ownerDb.execute(sql`
     INSERT INTO protocol_familia_catalogo (id, nome, descricao) VALUES
       ('aba_marcos_desenvolvimento', 'ABA — marcos de desenvolvimento', 'Protocolos de marcos (ex.: VB-MAPP, ABLLS-R)'),
       ('intervencao_naturalista', 'Intervenção naturalista', 'Modelos naturalistas (ex.: Denver/ESDM)'),
-      ('fonoaudiologia', 'Fonoaudiologia', 'Protocolos de linguagem e comunicação'),
-      ('terapia_ocupacional', 'Terapia ocupacional', 'Protocolos de integração sensorial e AVDs')
+      ('fonoaudiologia', 'Fonoaudiologia', 'Protocolos de linguagem e comunicação (ex.: PROC)'),
+      ('terapia_ocupacional', 'Terapia ocupacional', 'Protocolos de integração sensorial e AVDs'),
+      ('psicoterapia_tcc', 'Psicoterapia TCC', 'Terapia Cognitivo-Comportamental Infantil'),
+      ('terapia_convencional', 'Terapia convencional', 'Abordagens clínicas convencionais e multidisciplinares')
     ON CONFLICT (id) DO NOTHING;
   `);
 
@@ -137,31 +146,53 @@ async function main() {
       nome: "VB-MAPP",
       disciplina: "ABA",
       familia: "aba_marcos_desenvolvimento",
+      taxonomiaAjuda: [
+        "independente",
+        "dica_verbal",
+        "dica_gestual",
+        "ajuda_fisica",
+      ],
     },
     {
       nome: "Denver (ESDM)",
       disciplina: "Psicopedagogia",
       familia: "intervencao_naturalista",
-    },
-    {
-      nome: "Perfil Sensorial 2",
-      disciplina: "Terapia Ocupacional",
-      familia: "terapia_ocupacional",
+      taxonomiaAjuda: [
+        "independente",
+        "modelo",
+        "ajuda_fisica_parcial",
+        "ajuda_fisica_total",
+      ],
     },
     {
       nome: "PROC",
       disciplina: "Fonoaudiologia",
       familia: "fonoaudiologia",
+      taxonomiaAjuda: ["independente", "dica_verbal", "modelo"],
+    },
+    {
+      nome: "TCC",
+      disciplina: "TCC",
+      familia: "psicoterapia_tcc",
+      taxonomiaAjuda: ["autonomo", "suporte_cognitivo", "mediacao_terapeuta"],
+    },
+    {
+      nome: "Terapia Convencional",
+      disciplina: "Convencional",
+      familia: "terapia_convencional",
+      taxonomiaAjuda: ["independente", "assistido", "totalmente_dependente"],
+    },
+    {
+      nome: "Perfil Sensorial 2",
+      disciplina: "Terapia Ocupacional",
+      familia: "terapia_ocupacional",
+      taxonomiaAjuda: ["independente", "dica_tatil", "suporte_sensorial"],
     },
     {
       nome: "ABLLS-R",
       disciplina: "ABA",
       familia: "aba_marcos_desenvolvimento",
-    },
-    {
-      nome: "PEDI",
-      disciplina: "Terapia Ocupacional",
-      familia: "terapia_ocupacional",
+      taxonomiaAjuda: ["independente", "dica_verbal", "ajuda_fisica"],
     },
   ];
 
@@ -185,15 +216,178 @@ async function main() {
           nome: p.nome,
           disciplina: p.disciplina,
           familia: p.familia,
-          taxonomiaAjuda: [],
+          taxonomiaAjuda: p.taxonomiaAjuda,
         })
         .returning();
       if (novo) protocolosCadastrados[p.nome] = novo.id;
     }
   }
 
-  // 4. Provisionamento dos 5 Terapeutas e 2 Recepção
-  console.log("👩‍⚕️ Provisionando equipe clínica (5 terapeutas, 2 recepção)...");
+  // 3.5 Cadastrar Marcos de Evolução (milestones) por protocolo
+  console.log(
+    "🎯 Cadastrando marcos de evolução (milestones) para os protocolos...",
+  );
+  const marcosDefinidos = [
+    // VB-MAPP (ABA)
+    {
+      protocolNome: "VB-MAPP",
+      dominioId: "mando",
+      nome: "Mando 1-M: Emite 2 palavras para pedir itens desejados",
+      nivel: "nivel_1",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 1,
+    },
+    {
+      protocolNome: "VB-MAPP",
+      dominioId: "tato",
+      nome: "Tato 1-M: Nomeia 5 objetos/figuras conhecidos",
+      nivel: "nivel_1",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 1,
+    },
+    {
+      protocolNome: "VB-MAPP",
+      dominioId: "intraverbal",
+      nome: "Intraverbal 2-M: Responde a perguntas simples sobre a rotina",
+      nivel: "nivel_2",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 2,
+    },
+
+    // Denver (ESDM)
+    {
+      protocolNome: "Denver (ESDM)",
+      dominioId: "comunicacao_receptiva",
+      nome: "Denver R-1: Atende prontamente quando chamado pelo nome",
+      nivel: "nivel_1",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 1,
+    },
+    {
+      protocolNome: "Denver (ESDM)",
+      dominioId: "social",
+      nome: "Denver S-1: Mantém contato visual e atenção compartilhada",
+      nivel: "nivel_1",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 1,
+    },
+    {
+      protocolNome: "Denver (ESDM)",
+      dominioId: "jogo_simbolico",
+      nome: "Denver J-2: Realiza brincadeiras de faz-de-conta com miniaturas",
+      nivel: "nivel_2",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 2,
+    },
+
+    // PROC (Fonoaudiologia)
+    {
+      protocolNome: "PROC",
+      dominioId: "comunicacao_nao_verbal",
+      nome: "PROC CNV-1: Aponta e gesticula para expressar intenção",
+      nivel: "nivel_1",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 1,
+    },
+    {
+      protocolNome: "PROC",
+      dominioId: "comunicacao_verbal",
+      nome: "PROC CV-2: Produção de enunciados verbais estruturados",
+      nivel: "nivel_2",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 2,
+    },
+
+    // TCC (Psicoterapia Cognitivo-Comportamental)
+    {
+      protocolNome: "TCC",
+      dominioId: "regulacao_emocional",
+      nome: "TCC RE-1: Identifica e nomeia emoções básicas no termômetro emocional",
+      nivel: "nivel_1",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 1,
+    },
+    {
+      protocolNome: "TCC",
+      dominioId: "reestruturacao_cognitiva",
+      nome: "TCC RC-2: Identifica pensamentos disfuncionais e propõe alternativas",
+      nivel: "nivel_2",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 2,
+    },
+    {
+      protocolNome: "TCC",
+      dominioId: "resolucao_problemas",
+      nome: "TCC RP-2: Aplica técnica de 3 passos para resolução de conflitos",
+      nivel: "nivel_2",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 2,
+    },
+
+    // Terapia Convencional
+    {
+      protocolNome: "Terapia Convencional",
+      dominioId: "integracao_sensorial",
+      nome: "Convencional IS-1: Tolera estímulos sensoriais em AVDs",
+      nivel: "nivel_1",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 1,
+    },
+    {
+      protocolNome: "Terapia Convencional",
+      dominioId: "motricidade_fina",
+      nome: "Convencional MF-1: Preensão adequada e controle visomotor",
+      nivel: "nivel_1",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 1,
+    },
+    {
+      protocolNome: "Terapia Convencional",
+      dominioId: "articulacao_verbal",
+      nome: "Convencional AV-1: Articulação correta de fonemas alvo",
+      nivel: "nivel_1",
+      tipoEstrutura: "marco_simples" as const,
+      ordem: 1,
+    },
+  ];
+
+  const marcosCadastrados: Record<string, string> = {};
+  for (const mDef of marcosDefinidos) {
+    const protId = protocolosCadastrados[mDef.protocolNome];
+    if (!protId) continue;
+
+    const [existente] = await ownerDb
+      .select({ id: milestone.id })
+      .from(milestone)
+      .where(
+        sql`${milestone.protocolId} = ${protId} AND ${milestone.dominioId} = ${mDef.dominioId} AND ${milestone.nivel} = ${mDef.nivel}`,
+      )
+      .limit(1);
+
+    if (existente) {
+      marcosCadastrados[`${mDef.protocolNome}::${mDef.dominioId}`] =
+        existente.id;
+    } else {
+      const [novo] = await ownerDb
+        .insert(milestone)
+        .values({
+          protocolId: protId,
+          dominioId: mDef.dominioId,
+          nome: mDef.nome,
+          nivel: mDef.nivel,
+          tipoEstrutura: mDef.tipoEstrutura,
+          estrutura: {},
+          ordem: mDef.ordem,
+        })
+        .returning();
+      if (novo) {
+        marcosCadastrados[`${mDef.protocolNome}::${mDef.dominioId}`] = novo.id;
+      }
+    }
+  }
+
+  // 4. Provisionamento dos Terapeutas e Recepção
+  console.log("👩‍⚕️ Provisionando equipe clínica multidisciplinar...");
   const equipe = [
     {
       email: "mariana.costa@iris.test",
@@ -218,6 +412,18 @@ async function main() {
       nome: "Lucas Mendes",
       papel: "terapeuta" as const,
       disciplina: "Psicopedagogia",
+    },
+    {
+      email: "paula.tcc@iris.test",
+      nome: "Dra. Paula TCC",
+      papel: "terapeuta" as const,
+      disciplina: "TCC",
+    },
+    {
+      email: "rodrigo.convencional@iris.test",
+      nome: "Rodrigo Silva",
+      papel: "terapeuta" as const,
+      disciplina: "Convencional",
     },
     {
       email: "fernanda.ribeiro@iris.test",
@@ -251,12 +457,14 @@ async function main() {
     usuariosEquipe[membro.email] = userId;
   }
 
-  // 5. Definição e Cadastro dos 6 Pacientes
-  console.log("🧒 Cadastrando 6 pacientes com históricos clínicos...");
+  // 5. Definição e Cadastro dos Pacientes com Metas Abrangendo ABA, Denver, PROC, TCC e Convencional
+  console.log("🧒 Cadastrando 6 pacientes com metas multidisciplinares...");
 
   type MetaDef = {
     descricao: string;
     disciplina: string;
+    protocolo: string;
+    dominioId: string;
     estado: "dominada" | "ativa";
     criterio: Record<string, any>;
     temRegressao?: boolean;
@@ -284,6 +492,90 @@ async function main() {
 
   const dadosPacientes: PacienteDef[] = [
     {
+      chave: "alice",
+      nome: "Alice Beatriz Lima",
+      nascimento: "2021-09-05",
+      responsavelContato: "Renata Lima (Mãe) - (11) 95432-1098",
+      responsavelNome: "Renata Lima",
+      responsavelCpf: "567.890.123-44",
+      escola: "Colégio São Lucas",
+      convenio: "SulAmérica",
+      diagnostico: "F80.1 - Transtorno Expressivo da Linguagem + TEA Nível 1",
+      medicacoes: "Sem medicação",
+      alergias: "Sem alergias",
+      convulsoes: "Sem histórico",
+      contatosEmergencia: "Renata (Mãe): (11) 95432-1098",
+      protocolos: [
+        "VB-MAPP",
+        "Denver (ESDM)",
+        "PROC",
+        "TCC",
+        "Terapia Convencional",
+        "Perfil Sensorial 2",
+      ],
+      terapeutas: [
+        { email: "mariana.costa@iris.test", disciplina: "ABA", horas: "3.0" },
+        {
+          email: "bruno.fono@iris.test",
+          disciplina: "Fonoaudiologia",
+          horas: "3.0",
+        },
+        { email: "paula.tcc@iris.test", disciplina: "TCC", horas: "2.0" },
+        {
+          email: "rodrigo.convencional@iris.test",
+          disciplina: "Convencional",
+          horas: "2.0",
+        },
+      ],
+      metas: [
+        {
+          descricao:
+            "Emitir mandos vocais de 2 a 3 palavras para solicitar itens desejados",
+          disciplina: "ABA",
+          protocolo: "VB-MAPP",
+          dominioId: "mando",
+          estado: "dominada" as const,
+          criterio: { tipo: "acerto_consecutivo", valor: 85, sessoes: 3 },
+        },
+        {
+          descricao:
+            "Manter atenção compartilhada e contato visual durante interação interpessoal",
+          disciplina: "Psicopedagogia",
+          protocolo: "Denver (ESDM)",
+          dominioId: "social",
+          estado: "ativa" as const,
+          criterio: { tipo: "frequencia", valor: 8 },
+        },
+        {
+          descricao:
+            "Produzir enunciados verbais estruturados de 3 a 4 palavras em situações de diálogo",
+          disciplina: "Fonoaudiologia",
+          protocolo: "PROC",
+          dominioId: "comunicacao_verbal",
+          estado: "ativa" as const,
+          criterio: { tipo: "vocabulario_alvo", valor: 50 },
+        },
+        {
+          descricao:
+            "Identificar emoções básicas e aplicar estratégias de autorregulação emocional TCC",
+          disciplina: "TCC",
+          protocolo: "TCC",
+          dominioId: "regulacao_emocional",
+          estado: "ativa" as const,
+          criterio: { tipo: "precisao", valor: 80 },
+        },
+        {
+          descricao:
+            "Desenvolver tolerância sensorial tátil e proprioceptiva nas AVDs convencionais",
+          disciplina: "Convencional",
+          protocolo: "Terapia Convencional",
+          dominioId: "integracao_sensorial",
+          estado: "ativa" as const,
+          criterio: { tipo: "independencia", valor: 75 },
+        },
+      ],
+    },
+    {
       chave: "enzo",
       nome: "Enzo Gabriel Silva",
       nascimento: "2022-04-12",
@@ -294,47 +586,50 @@ async function main() {
       convenio: "Unimed",
       diagnostico:
         "F84.0 - Transtorno do Espectro Autista (Nível 2 de Suporte)",
-      medicacoes: "Não faz uso de medicação contínua",
+      medicacoes: "Sem medicação contínua",
       alergias: "Alergia a amendoim",
       convulsoes: "Sem histórico",
-      contatosEmergencia: "Mãe: (11) 98765-4321 | Pai: (11) 98765-4322",
-      protocolos: ["VB-MAPP", "PROC", "Perfil Sensorial 2"],
+      contatosEmergencia: "Mãe: (11) 98765-4321",
+      protocolos: [
+        "VB-MAPP",
+        "Denver (ESDM)",
+        "PROC",
+        "TCC",
+        "Terapia Convencional",
+      ],
       terapeutas: [
-        {
-          email: "mariana.costa@iris.test",
-          disciplina: "ABA",
-          horas: "4.0",
-        },
+        { email: "mariana.costa@iris.test", disciplina: "ABA", horas: "4.0" },
         {
           email: "bruno.fono@iris.test",
           disciplina: "Fonoaudiologia",
           horas: "2.0",
         },
-        {
-          email: "camila.to@iris.test",
-          disciplina: "Terapia Ocupacional",
-          horas: "2.0",
-        },
+        { email: "paula.tcc@iris.test", disciplina: "TCC", horas: "2.0" },
       ],
       metas: [
         {
-          descricao:
-            "Emitir mandos vocais de 2 palavras para solicitar itens desejados (ex: 'quero água')",
+          descricao: "Nomear objetos e figuras do ambiente sob comando tático",
           disciplina: "ABA",
+          protocolo: "VB-MAPP",
+          dominioId: "tato",
           estado: "dominada" as const,
-          criterio: { tipo: "acerto_consecutivo", valor: 85, sessoes: 3 },
+          criterio: { tipo: "acertos", valor: 90 },
         },
         {
           descricao:
-            "Manter contato visual compartilhado por 5 segundos durante brincadeira",
-          disciplina: "ABA",
+            "Realizar brincadeiras de faz-de-conta com miniaturas em sessões Denver",
+          disciplina: "Psicopedagogia",
+          protocolo: "Denver (ESDM)",
+          dominioId: "jogo_simbolico",
           estado: "ativa" as const,
-          criterio: { tipo: "frequencia", valor: 8, sessoes: 2 },
+          criterio: { tipo: "tempo_min", valor: 10 },
         },
         {
           descricao:
-            "Tolera transição de atividades de alta preferência para baixa sem comportamento disruptivo",
-          disciplina: "ABA",
+            "Utilizar técnicas TCC de resolução de problemas para controlar comportamento disruptivo",
+          disciplina: "TCC",
+          protocolo: "TCC",
+          dominioId: "resolucao_problemas",
           estado: "ativa" as const,
           criterio: { tipo: "latencia_tolerancia", valor: 90 },
           temRegressao: true,
@@ -351,44 +646,37 @@ async function main() {
       escola: "Colégio Futuro Brilhante",
       convenio: "Bradesco Saúde",
       diagnostico: "F84.0 - TEA Nível 1 de Suporte + F90.0 - TDAH",
-      medicacoes: "Metilfenidato 10mg pela manhã",
-      alergias: "Sem alergias conhecidas",
+      medicacoes: "Metilfenidato 10mg",
+      alergias: "Sem alergias",
       convulsoes: "Sem histórico",
       contatosEmergencia: "Carla (Mãe): (11) 97654-3210",
-      protocolos: ["Denver (ESDM)", "Perfil Sensorial 2"],
+      protocolos: ["Denver (ESDM)", "TCC", "Terapia Convencional", "PROC"],
       terapeutas: [
         {
           email: "lucas.mendes@iris.test",
           disciplina: "Psicopedagogia",
           horas: "3.0",
         },
-        {
-          email: "camila.to@iris.test",
-          disciplina: "Terapia Ocupacional",
-          horas: "2.0",
-        },
+        { email: "paula.tcc@iris.test", disciplina: "TCC", horas: "3.0" },
       ],
       metas: [
         {
-          descricao: "Participar de jogo de regras simples respeitando turnos",
+          descricao:
+            "Identificar pensamentos automáticos e propor reestruturação cognitiva TCC",
+          disciplina: "TCC",
+          protocolo: "TCC",
+          dominioId: "reestruturacao_cognitiva",
+          estado: "ativa" as const,
+          criterio: { tipo: "precisao", valor: 85 },
+        },
+        {
+          descricao:
+            "Atender ao chamado receptivo e manter engajamento em rotinas escolares",
           disciplina: "Psicopedagogia",
+          protocolo: "Denver (ESDM)",
+          dominioId: "comunicacao_receptiva",
           estado: "dominada" as const,
-          criterio: { tipo: "turnos_completos", valor: 5 },
-        },
-        {
-          descricao:
-            "Realizar preensão em pinça tripé para escrita de letras do nome",
-          disciplina: "Terapia Ocupacional",
-          estado: "ativa" as const,
-          criterio: { tipo: "precisao", valor: 80 },
-        },
-        {
-          descricao:
-            "Auto-regulação sensorial em ambientes com estímulo sonoro elevado",
-          disciplina: "Terapia Ocupacional",
-          estado: "ativa" as const,
-          criterio: { tipo: "tempo_permanencia_min", valor: 15 },
-          temEstagnacao: true,
+          criterio: { tipo: "turnos", valor: 5 },
         },
       ],
     },
@@ -401,95 +689,39 @@ async function main() {
       responsavelCpf: "456.789.012-33",
       escola: "Espaço Criança Feliz",
       convenio: "Particular",
-      diagnostico:
-        "F84.0 - Transtorno do Espectro Autista (Nível 3 de Suporte)",
-      medicacoes: "Risperidona 0.25mg 2x ao dia",
+      diagnostico: "F84.0 - TEA Nível 3 de Suporte",
+      medicacoes: "Risperidona 0.25mg",
       alergias: "Lactose",
-      convulsoes: "1 episódio febril aos 18 meses",
+      convulsoes: "Histórico febril prévio",
       contatosEmergencia: "Marcos (Pai): (11) 96543-2109",
-      protocolos: ["VB-MAPP", "PROC", "PEDI"],
+      protocolos: ["VB-MAPP", "PROC", "Terapia Convencional"],
       terapeutas: [
-        {
-          email: "mariana.costa@iris.test",
-          disciplina: "ABA",
-          horas: "6.0",
-        },
+        { email: "mariana.costa@iris.test", disciplina: "ABA", horas: "6.0" },
         {
           email: "bruno.fono@iris.test",
           disciplina: "Fonoaudiologia",
-          horas: "2.0",
-        },
-        {
-          email: "lucas.mendes@iris.test",
-          disciplina: "Psicopedagogia",
           horas: "2.0",
         },
       ],
       metas: [
         {
           descricao:
-            "Ecoar sons vocálicos simples (A, E, I, O, U) sob comando imediato",
-          disciplina: "Fonoaudiologia",
-          estado: "dominada" as const,
-          criterio: { tipo: "acertos", valor: 90 },
-        },
-        {
-          descricao:
-            "Seguir apontar para objetos reforçadores no campo de visão",
+            "Responder a perguntas intraverbais simples com apoio de pistas sociais",
           disciplina: "ABA",
+          protocolo: "VB-MAPP",
+          dominioId: "intraverbal",
           estado: "ativa" as const,
           criterio: { tipo: "acertos", valor: 75 },
-        },
-        {
-          descricao: "Rotina de desfralde diurno com aviso prévio",
-          disciplina: "ABA",
-          estado: "ativa" as const,
-          criterio: { tipo: "sucesso_dias", valor: 7 },
           temRegressao: true,
         },
-      ],
-    },
-    {
-      chave: "alice",
-      nome: "Alice Beatriz Lima",
-      nascimento: "2021-09-05",
-      responsavelContato: "Renata Lima (Mãe) - (11) 95432-1098",
-      responsavelNome: "Renata Lima",
-      responsavelCpf: "567.890.123-44",
-      escola: "Colégio São Lucas",
-      convenio: "SulAmérica",
-      diagnostico: "F80.1 - Transtorno Expressivo da Linguagem + TEA Nível 1",
-      medicacoes: "Sem medicação",
-      alergias: "Sem alergias",
-      convulsoes: "Sem histórico",
-      contatosEmergencia: "Renata (Mãe): (11) 95432-1098",
-      protocolos: ["PROC", "Denver (ESDM)"],
-      terapeutas: [
-        {
-          email: "bruno.fono@iris.test",
-          disciplina: "Fonoaudiologia",
-          horas: "3.0",
-        },
-        {
-          email: "fernanda.ribeiro@iris.test",
-          disciplina: "ABA",
-          horas: "2.0",
-        },
-      ],
-      metas: [
         {
           descricao:
-            "Produzir frases de 3 a 4 palavras estruturadas com sujeito e predicado",
+            "Expressar intenção comunicativa por meio de gestos não-verbais no PROC",
           disciplina: "Fonoaudiologia",
+          protocolo: "PROC",
+          dominioId: "comunicacao_nao_verbal",
           estado: "dominada" as const,
-          criterio: { tipo: "acertos", valor: 85 },
-        },
-        {
-          descricao:
-            "Nomear 50 figuras de objetos cotidianos sem modelo verbal",
-          disciplina: "Fonoaudiologia",
-          estado: "ativa" as const,
-          criterio: { tipo: "vocabulario_alvo", valor: 50 },
+          criterio: { tipo: "acertos", valor: 90 },
         },
       ],
     },
@@ -502,36 +734,41 @@ async function main() {
       responsavelCpf: "678.901.234-55",
       escola: "Escola Municipal Monteiro Lobato",
       convenio: "Amil",
-      diagnostico:
-        "F84.0 - TEA Nível 2 + F82 - Transtorno do Desenvolvimento Motor (Dispraxia)",
+      diagnostico: "F84.0 - TEA Nível 2 + Dispraxia Motor",
       medicacoes: "Sem medicação contínua",
-      alergias: "Picada de insetos",
+      alergias: "Sem alergias",
       convulsoes: "Sem histórico",
       contatosEmergencia: "Felipe (Pai): (11) 94321-0987",
-      protocolos: ["Perfil Sensorial 2", "PEDI", "ABLLS-R"],
+      protocolos: [
+        "Terapia Convencional",
+        "Perfil Sensorial 2",
+        "TCC",
+        "VB-MAPP",
+      ],
       terapeutas: [
         {
-          email: "camila.to@iris.test",
-          disciplina: "Terapia Ocupacional",
+          email: "rodrigo.convencional@iris.test",
+          disciplina: "Convencional",
           horas: "3.0",
         },
-        {
-          email: "fernanda.ribeiro@iris.test",
-          disciplina: "ABA",
-          horas: "3.0",
-        },
+        { email: "paula.tcc@iris.test", disciplina: "TCC", horas: "2.0" },
       ],
       metas: [
         {
-          descricao: "Alimentar-se com talheres sem derramamento excessivo",
-          disciplina: "Terapia Ocupacional",
+          descricao:
+            "Desenvolver preensão motora fina e coordenação visomotora convencional",
+          disciplina: "Convencional",
+          protocolo: "Terapia Convencional",
+          dominioId: "motricidade_fina",
           estado: "dominada" as const,
           criterio: { tipo: "independencia", valor: 90 },
         },
         {
           descricao:
-            "Seguir sequência de 3 comandos motores (ex: pegar bola, correr e colocar na cesta)",
-          disciplina: "ABA",
+            "Aplicar autorregulação e controle de frustração TCC durante tarefas motoras",
+          disciplina: "TCC",
+          protocolo: "TCC",
+          dominioId: "regulacao_emocional",
           estado: "ativa" as const,
           criterio: { tipo: "acertos", valor: 80 },
           temRegressao: true,
@@ -547,13 +784,12 @@ async function main() {
       responsavelCpf: "789.012.345-66",
       escola: "Jardim dos Sonhos",
       convenio: "Particular",
-      diagnostico:
-        "F84.0 - Transtorno do Espectro Autista (Nível 1 de Suporte)",
+      diagnostico: "F84.0 - Transtorno do Espectro Autista (Nível 1)",
       medicacoes: "Não utiliza",
       alergias: "Sem alergias",
       convulsoes: "Sem histórico",
       contatosEmergencia: "Patrícia (Mãe): (11) 93210-9876",
-      protocolos: ["Denver (ESDM)", "PROC"],
+      protocolos: ["Denver (ESDM)", "PROC", "TCC"],
       terapeutas: [
         {
           email: "lucas.mendes@iris.test",
@@ -569,15 +805,10 @@ async function main() {
       metas: [
         {
           descricao:
-            "Imitar movimentos motores amplos (bater palmas, levantar braços)",
-          disciplina: "Psicopedagogia",
-          estado: "dominada" as const,
-          criterio: { tipo: "acertos", valor: 95 },
-        },
-        {
-          descricao:
-            "Articular fonemas oclusivos /p/, /b/, /t/, /d/ em sílabas simples",
+            "Aprimorar articulação verbal dos fonemas-alvo em fonoaudiologia convencional/PROC",
           disciplina: "Fonoaudiologia",
+          protocolo: "PROC",
+          dominioId: "comunicacao_verbal",
           estado: "ativa" as const,
           criterio: { tipo: "precisao", valor: 70 },
           temEstagnacao: true,
@@ -591,6 +822,7 @@ async function main() {
     "🧹 Limpando dados anteriores dos 6 pacientes demo para idempotência...",
   );
   const nomesDemo = dadosPacientes.map((d) => d.nome);
+  await ownerSql`DELETE FROM session_snapshot WHERE patient_id IN (SELECT id FROM patient WHERE clinic_id = ${clinicId} AND nome = ANY(${nomesDemo}))`;
   await ownerSql`DELETE FROM evidence WHERE patient_id IN (SELECT id FROM patient WHERE clinic_id = ${clinicId} AND nome = ANY(${nomesDemo}))`;
   await ownerSql`DELETE FROM extraction WHERE session_id IN (SELECT id FROM session WHERE clinic_id = ${clinicId} AND patient_id IN (SELECT id FROM patient WHERE clinic_id = ${clinicId} AND nome = ANY(${nomesDemo})))`;
   await ownerSql`DELETE FROM session_note WHERE clinic_id = ${clinicId} AND session_id IN (SELECT id FROM session WHERE clinic_id = ${clinicId} AND patient_id IN (SELECT id FROM patient WHERE clinic_id = ${clinicId} AND nome = ANY(${nomesDemo})))`;
@@ -629,7 +861,7 @@ async function main() {
     patientId = novoP.id;
     console.log(`  + Criado paciente: ${pData.nome}`);
 
-    // Consentimentos LGPD (tratamento_dados_menor exige responsavelSignatario)
+    // Consentimentos LGPD
     const tiposConsentimento = [
       "tratamento_dados_menor" as const,
       "uso_ia_processamento" as const,
@@ -696,54 +928,59 @@ async function main() {
       }
     }
 
-    // Metas PEI
+    // Metas PEI + Vínculo com Marcos (Milestones)
     const metasCadastradas: {
       id: string;
       descricao: string;
       disciplina: string;
+      protocolo: string;
+      dominioId: string;
+      milestoneId: string | null;
       estado: "dominada" | "ativa";
       temRegressao?: boolean;
       temEstagnacao?: boolean;
     }[] = [];
 
     for (const metaData of pData.metas) {
-      const [metaExistente] = await ownerDb
-        .select({ id: goal.id })
-        .from(goal)
-        .where(
-          sql`${goal.patientId} = ${patientId} AND ${goal.descricao} = ${metaData.descricao}`,
-        )
-        .limit(1);
+      const [novaMeta] = await ownerDb
+        .insert(goal)
+        .values({
+          patientId,
+          clinicId,
+          descricao: metaData.descricao,
+          disciplina: metaData.disciplina,
+          estado: metaData.estado,
+          criterioDominio: metaData.criterio,
+          cicloRevisaoSemanas: 10,
+          proximaRevisaoEm: new Date(agora.getTime() + 14 * 86400000)
+            .toISOString()
+            .slice(0, 10),
+          criadoPor: coordenador.id,
+          criadoEm: tresMesesAtras,
+        })
+        .returning();
 
-      let goalId: string;
-      if (metaExistente) {
-        goalId = metaExistente.id;
-      } else {
-        const [novaMeta] = await ownerDb
-          .insert(goal)
-          .values({
-            patientId,
-            clinicId,
-            descricao: metaData.descricao,
-            disciplina: metaData.disciplina,
-            estado: metaData.estado,
-            criterioDominio: metaData.criterio,
-            cicloRevisaoSemanas: 10,
-            proximaRevisaoEm: new Date(agora.getTime() + 14 * 86400000)
-              .toISOString()
-              .slice(0, 10),
-            criadoPor: coordenador.id,
-            criadoEm: tresMesesAtras,
-          })
-          .returning();
-        if (!novaMeta) continue;
-        goalId = novaMeta.id;
+      if (!novaMeta) continue;
+      const goalId = novaMeta.id;
+
+      // Vincular com milestone cadastrado
+      const mId =
+        marcosCadastrados[`${metaData.protocolo}::${metaData.dominioId}`] ||
+        null;
+      if (mId) {
+        await ownerDb
+          .insert(goalMilestoneMapping)
+          .values({ goalId, milestoneId: mId })
+          .onConflictDoNothing();
       }
 
       metasCadastradas.push({
         id: goalId,
         descricao: metaData.descricao,
         disciplina: metaData.disciplina,
+        protocolo: metaData.protocolo,
+        dominioId: metaData.dominioId,
+        milestoneId: mId,
         estado: metaData.estado,
         temRegressao: metaData.temRegressao,
         temEstagnacao: metaData.temEstagnacao,
@@ -766,7 +1003,7 @@ async function main() {
         const terapeutaUserId = usuariosEquipe[t.email];
         if (!terapeutaUserId) continue;
 
-        const dataSessao = new Date(dataSemana.getTime() + 14 * 3600000); // 14:00
+        const dataSessao = new Date(dataSemana.getTime() + 14 * 3600000);
         const isPassado = dataSessao < agora;
 
         // Cria a sessão
@@ -795,16 +1032,16 @@ async function main() {
         let tipoEvolucao = "avanco";
 
         if (sem < 4) {
-          textoDiario = `Sessão #${sessaoCriada.numeroSequencialPaciente} de ${t.disciplina}. Paciente chegou tranquilo acompanhado pela mãe. Realizado pareamento com brinquedos de causa e efeito. Excelente engajamento com reforçadores primários e sociais. Foram trabalhadas 10 tentativas para metas de comunicação e engajamento. Respondeu bem à ajuda física leve e modelo verbal.`;
+          textoDiario = `Sessão #${sessaoCriada.numeroSequencialPaciente} de ${t.disciplina}. Paciente apresentou boa receptividade ao protocolo de ${t.disciplina}. Foram trabalhadas 10 tentativas para metas de comunicação, regulação e engajamento. Respondeu com nível de ajuda moderado (suporte do terapeuta).`;
         } else if (sem >= 4 && sem < 8) {
-          textoDiario = `Sessão #${sessaoCriada.numeroSequencialPaciente} de ${t.disciplina}. Paciente demonstrou excelente prontidão para o trabalho em mesa. Apresentou independência crescente nas metas de ${t.disciplina}, atingindo 8 de 10 tentativas corretas sem necessidade de prompt físico. Demonstrou iniciativa de contato visual espontâneo durante o reforço lúdico.`;
+          textoDiario = `Sessão #${sessaoCriada.numeroSequencialPaciente} de ${t.disciplina}. Paciente demonstrou autonomia crescente nas atividades propostas. Atingiu 8 de 10 tentativas corretas com dicas leves. Boa generalização e resposta positiva aos reforçadores.`;
         } else {
           const temRegressaoNoCaso = pData.metas.some((m) => m.temRegressao);
           if (temRegressaoNoCaso && sem >= 9) {
             tipoEvolucao = "regressao";
-            textoDiario = `Sessão #${sessaoCriada.numeroSequencialPaciente} de ${t.disciplina}. Paciente apresentou desregulação ao entrar na sala, com choro intenso e resistência a trocar de atividade. Houve recusa em responder aos comandos habituais e necessidade de bloqueio de comportamento autolesivo leve (bater a mão na cabeça). Foi necessário reduzir a demanda e retornar a passos anteriores do programa para restabelecer o controle instrucional. Orientada a família quanto à consistência da rotina em casa.`;
+            textoDiario = `Sessão #${sessaoCriada.numeroSequencialPaciente} de ${t.disciplina}. Paciente apresentou oscilação de desempenho e menor tolerância à frustração. Necessitou de maior suporte de autorregulação e ajuste temporário nas demandas.`;
           } else {
-            textoDiario = `Sessão #${sessaoCriada.numeroSequencialPaciente} de ${t.disciplina}. Paciente muito participativo. Meta dominada com êxito em 90% das oportunidades. Generalizou a habilidade para novos estímulos e diferentes terapeutas. Iniciado novo passo do programa com entusiasmo.`;
+            textoDiario = `Sessão #${sessaoCriada.numeroSequencialPaciente} de ${t.disciplina}. Excelente sessão! Paciente atingiu independência total nas metas trabalhadas em 90% das oportunidades. Avanço consolidado no protocolo.`;
           }
         }
 
@@ -822,9 +1059,25 @@ async function main() {
           })
           .onConflictDoNothing();
 
-        // Extração de IA (Camada 1 - IA sugere)
-        const metaAlvo = metasCadastradas[0];
-        if (metaAlvo) {
+        // Evidências e Extrações para TODAS as metas do paciente compatíveis com a disciplina
+        const metasDaDisciplina = metasCadastradas.filter(
+          (m) => m.disciplina === t.disciplina || metasCadastradas.length <= 2,
+        );
+        const metasAlvo =
+          metasDaDisciplina.length > 0 ? metasDaDisciplina : metasCadastradas;
+
+        for (let idx = 0; idx < metasAlvo.length; idx++) {
+          const meta = metasAlvo[idx]!;
+
+          // Nível de ajuda evolutivo (Semana 0..3: ajuda física/dica verbal | 4..7: dica gestual/modelo | 8..11: independente)
+          let nivelAjuda = "independente";
+          if (sem < 4) nivelAjuda = "dica_verbal";
+          else if (sem < 8) nivelAjuda = "dica_gestual";
+
+          if (tipoEvolucao === "regressao" && sem >= 9) {
+            nivelAjuda = "ajuda_fisica";
+          }
+
           const [ext] = await ownerDb
             .insert(extraction)
             .values({
@@ -832,19 +1085,24 @@ async function main() {
               clinicId,
               estado: "aprovada",
               subtipo: "evidencia",
-              trechoFonte:
-                tipoEvolucao === "regressao"
-                  ? "Houve recusa em responder aos comandos habituais e necessidade de bloqueio de comportamento"
-                  : "Apresentou independência crescente nas metas, atingindo 8 de 10 tentativas corretas",
+              trechoFonte: textoDiario,
               confianca: "alta",
               justificativaConfianca:
-                "Evidência observada diretamente no relato clínico estruturado.",
+                "Evidência observada diretamente na sessão clínica.",
               payload: {
                 alvos: [
                   {
-                    goalRef: metaAlvo.descricao,
-                    resultado: tipoEvolucao === "regressao" ? "erro" : "acerto",
-                    independencia: tipoEvolucao === "regressao" ? 30 : 85,
+                    goalRef: meta.descricao,
+                    resultado:
+                      tipoEvolucao === "regressao" && sem >= 9
+                        ? "erro"
+                        : "acerto",
+                    independencia:
+                      tipoEvolucao === "regressao" && sem >= 9
+                        ? 35
+                        : sem >= 8
+                          ? 90
+                          : 70,
                     tentativas: 10,
                   },
                 ],
@@ -856,7 +1114,7 @@ async function main() {
             .returning();
 
           if (ext) {
-            // Evidência materializada (Camada 2 - Terapeuta aprovou)
+            const protId = protocolosCadastrados[meta.protocolo] || null;
             await ownerDb
               .insert(evidence)
               .values({
@@ -864,11 +1122,27 @@ async function main() {
                 patientId,
                 sessionId: sessaoCriada.id,
                 sessionNumero: sessaoCriada.numeroSequencialPaciente!,
-                alvoOrdinal: 0,
-                goalId: metaAlvo.id,
-                protocolId:
-                  protocolosCadastrados[pData.protocolos[0] || ""] || null,
-                classificacaoOriginal: ext.payload,
+                alvoOrdinal: idx,
+                goalId: meta.id,
+                protocolId: protId,
+                milestoneId: meta.milestoneId,
+                protocolSlug: meta.protocolo
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "_"),
+                dominioId: meta.dominioId,
+                goalRef: meta.descricao,
+                classificacaoOriginal: {
+                  descricao: meta.descricao,
+                  polaridade:
+                    tipoEvolucao === "regressao" && sem >= 9
+                      ? "negativa"
+                      : "positiva",
+                  nivel_ajuda: nivelAjuda,
+                  resultado:
+                    tipoEvolucao === "regressao" && sem >= 9
+                      ? "erro"
+                      : "acerto",
+                },
                 aprovadoPor: terapeutaUserId,
                 aprovadoEm: new Date(dataSessao.getTime() + 1800000),
               })
@@ -878,10 +1152,21 @@ async function main() {
       }
     }
 
-    // 8. Alertas de Supervisão (Regressão / Estagnação / Risco)
+    // 7.5 MATERIALIZAÇÃO DOS SNAPSHOTS (Fase 4 · 4B)
+    console.log(
+      `  📊 Materializando snapshots de evolução clínica para ${pData.nome}...`,
+    );
+    await ownerSql`SELECT set_config('app.clinic_id', ${clinicId}, false), set_config('app.user_id', ${coordenador.id}, false), set_config('app.user_role', 'coordenador', false)`;
+    await materializarSnapshot(
+      drizzleMaterializarQueries(ownerDb),
+      patientId,
+      1,
+    );
+
+    // 8. Alertas de Supervisão
     for (const m of metasCadastradas) {
       if (m.temRegressao) {
-        const protId = protocolosCadastrados[pData.protocolos[0] || ""];
+        const protId = protocolosCadastrados[m.protocolo];
         if (protId) {
           await ownerDb
             .insert(alerta)
@@ -895,7 +1180,7 @@ async function main() {
               protocolId: protId,
               detalhe: {
                 mensagem:
-                  "Queda de 35% no percentual de acertos nas últimas 4 sessões consecutivas.",
+                  "Queda de 35% no percentual de acertos nas últimas 4 sessões.",
                 taxaAnterior: "85%",
                 taxaAtual: "50%",
                 sessoesAnalisadas: 4,
@@ -906,7 +1191,7 @@ async function main() {
             .onConflictDoNothing();
         }
       } else if (m.temEstagnacao) {
-        const protId = protocolosCadastrados[pData.protocolos[0] || ""];
+        const protId = protocolosCadastrados[m.protocolo];
         if (protId) {
           await ownerDb
             .insert(alerta)
@@ -932,86 +1217,55 @@ async function main() {
         }
       }
     }
-
-    // Alerta de Faltas Excessivas para 1 paciente (Theo)
-    if (pData.chave === "theo") {
-      await ownerDb
-        .insert(alerta)
-        .values({
-          clinicId,
-          patientId,
-          tipo: "faltas_excessivas",
-          status: "reconhecido",
-          chaveNatural: `faltas-${patientId}`,
-          detalhe: {
-            mensagem:
-              "Paciente acumulou 3 faltas consecutivas sem justificativa médica.",
-            totalFaltasMes: 3,
-            frequenciaPercentual: "62%",
-          },
-          criadoPor: coordenador.id,
-          atualizadoPor: coordenador.id,
-        })
-        .onConflictDoNothing();
-    }
   }
 
-  // 9. Criar 1 Alerta de Risco Clínico para teste da esteira de risco
+  // 9. Alerta de risco clínico para teste da fila de risco
   console.log("🚨 Inserindo caso de alerta de risco clínico para teste...");
-  const [pacienteTheo] = await ownerDb
-    .select({ id: patient.id })
-    .from(patient)
-    .where(
-      sql`${patient.clinicId} = ${clinicId} AND ${patient.nome} = 'Theo Henrique Souza'`,
-    )
+  const [sessaoRisco] = await ownerDb
+    .select({ id: session.id, patientId: session.patientId })
+    .from(session)
+    .where(sql`${session.clinicId} = ${clinicId}`)
     .limit(1);
 
-  if (pacienteTheo) {
-    const [ultimaSessaoTheo] = await ownerDb
-      .select({ id: session.id })
-      .from(session)
-      .where(sql`${session.patientId} = ${pacienteTheo.id}`)
-      .orderBy(sql`${session.agendadaPara} DESC`)
-      .limit(1);
-
-    if (ultimaSessaoTheo) {
-      await ownerDb
-        .insert(alertaRiscoClinico)
-        .values({
-          clinicId,
-          patientId: pacienteTheo.id,
-          sessionId: ultimaSessaoTheo.id,
-          origem: "diario_sessao",
-          categoria: "autolesao",
-          severidade: "autolesao_recente",
-          certeza: "explicito",
-          trechoFonte:
-            "necessidade de bloqueio de comportamento autolesivo leve (bater a mão na cabeça)",
-          detalhe:
-            "Episódio de autolesão durante momento de frustração e transição de atividade. Terapeuta realizou bloqueio e regulação.",
-          status: "aberto",
-          prazoMinutos: 120,
-          prazoReconhecimento: new Date(Date.now() + 120 * 60 * 1000),
-        })
-        .onConflictDoNothing();
-    }
+  if (sessaoRisco) {
+    await ownerDb
+      .insert(alertaRiscoClinico)
+      .values({
+        clinicId,
+        patientId: sessaoRisco.patientId,
+        sessionId: sessaoRisco.id,
+        origem: "diario_sessao",
+        categoria: "autolesao",
+        severidade: "autolesao_recente",
+        certeza: "explicito",
+        prazoMinutos: 240,
+        prazoReconhecimento: new Date(Date.now() + 4 * 3600000),
+        trechoFonte:
+          "Relato clínico de comportamento autolesivo leve em sessão com necessidade de suporte de autorregulação.",
+        detalhe:
+          "Acompanhamento preventivo de autorregulação emocional em sessão.",
+      })
+      .onConflictDoNothing();
   }
 
-  console.log("\n==================================================");
-  console.log("🎉 SEED DE 3 MESES CONCLUÍDO COM SUCESSO!");
-  console.log("==================================================");
-  console.log(`Conta Coordenador: ${coordenador.name} (${targetEmail})`);
-  console.log(`Clínica:           "${clinicNome}" (${clinicId})`);
-  console.log(`Terapeutas:        5 cadastrados (senha: ${senhaPadrao})`);
-  console.log(`Recepção:          2 cadastradas (senha: ${senhaPadrao})`);
-  console.log(`Pacientes:         6 cadastrados com perfis, PEI e diários`);
-  console.log(`Histórico:         3 meses de sessões, evidências e alertas`);
-  console.log("==================================================\n");
-
   await ownerSql.end();
+
+  console.log("\n==================================================");
+  console.log("🎉 SEED COMPLETO COM SNAPSHOTS CLINICOS CONCLUÍDO!");
+  console.log("==================================================");
+  console.log(`Conta Coordenador: Rômulo Sutil Corrêa (${targetEmail})`);
+  console.log(`Clínica:           "${clinicNome}" (${clinicId})`);
+  console.log(
+    "Terapeutas:        7 multidisciplinares (senha: SenhaLocal123!)",
+  );
+  console.log("Pacientes:         6 cadastrados com perfis, PEI e diários");
+  console.log(
+    "Histórico:         3 meses de sessões + SNAPSHOTS MATERIALIZADOS",
+  );
+  console.log("==================================================\n");
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error("❌ Erro ao executar seed customizado:", err);
   process.exit(1);
 });

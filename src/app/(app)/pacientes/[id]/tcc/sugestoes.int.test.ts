@@ -1,5 +1,13 @@
 import postgres from "postgres";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest";
 import { hasDb } from "@tests/integration-env";
 
 vi.mock("server-only", () => ({}));

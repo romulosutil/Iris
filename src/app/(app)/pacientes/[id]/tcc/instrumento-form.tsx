@@ -95,9 +95,7 @@ export function InstrumentoForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.ok]);
 
-  const [respostas, setRespostas] = useState<Record<number, 0 | 1 | 2 | 3>>(
-    {},
-  );
+  const [respostas, setRespostas] = useState<Record<number, 0 | 1 | 2 | 3>>({});
 
   const respostasPorItemJson = useMemo(
     () =>
@@ -137,8 +135,8 @@ export function InstrumentoForm({
 
       {state.ok ? (
         <Alert severidade="sucesso" titulo="Aplicação registrada">
-          A aplicação do {ROTULO_TIPO[tipoInstrumento]} foi salva no
-          prontuário do paciente.
+          A aplicação do {ROTULO_TIPO[tipoInstrumento]} foi salva no prontuário
+          do paciente.
         </Alert>
       ) : null}
 
@@ -207,12 +205,11 @@ export function InstrumentoForm({
           ))}
         </div>
 
-        <Field
-          label="Fonte do escore"
-          htmlFor="fonteDoEscore"
-          className="mt-4"
-        >
-          <Select name="fonteDoEscore" defaultValue="terapeuta_calculou_na_sessao">
+        <Field label="Fonte do escore" htmlFor="fonteDoEscore" className="mt-4">
+          <Select
+            name="fonteDoEscore"
+            defaultValue="terapeuta_calculou_na_sessao"
+          >
             <SelectTrigger id="fonteDoEscore">
               <SelectValue />
             </SelectTrigger>

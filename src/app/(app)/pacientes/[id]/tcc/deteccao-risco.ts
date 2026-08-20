@@ -98,8 +98,7 @@ function buscarTermo(
     for (const termo of termos) {
       const index = normalizado.indexOf(termo);
       if (index !== -1) {
-        const fonte =
-          campo.length === normalizado.length ? campo : normalizado;
+        const fonte = campo.length === normalizado.length ? campo : normalizado;
         return { fonte, index, termoLen: termo.length };
       }
     }
