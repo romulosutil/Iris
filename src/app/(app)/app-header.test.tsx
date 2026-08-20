@@ -22,14 +22,16 @@ describe("AppHeader", () => {
       />,
     );
 
-    const validacaoLink = screen.getAllByRole("link", {
+    const [validacaoLink] = screen.getAllByRole("link", {
       name: "Central de Validação",
-    })[0];
-    expect(validacaoLink.getAttribute("aria-current")).toBe("page");
+    });
+    expect(validacaoLink).toBeDefined();
+    expect(validacaoLink?.getAttribute("aria-current")).toBe("page");
 
-    const relatoriosLink = screen.getAllByRole("link", {
+    const [relatoriosLink] = screen.getAllByRole("link", {
       name: "Relatórios",
-    })[0];
-    expect(relatoriosLink.getAttribute("aria-current")).toBeNull();
+    });
+    expect(relatoriosLink).toBeDefined();
+    expect(relatoriosLink?.getAttribute("aria-current")).toBeNull();
   });
 });
