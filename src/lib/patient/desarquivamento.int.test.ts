@@ -117,6 +117,33 @@ describe.skipIf(!hasDb)(
       expect(logs[0]!.detalhe).toEqual({ origem: "registro_clinico" });
     });
 
+    test("T06 · origem 'validacao_anamnese' é aceita e chega ao audit_log", async () => {
+      const transicionou = await withTenant(ctxEquipe, (tx) =>
+        desarquivarPacienteSeArquivado(
+          tx,
+          ctxEquipe,
+          PAC_ARQUIVADO,
+          "validacao_anamnese",
+        ),
+      );
+
+      expect(transicionou).toBe(true);
+
+      const [pac] =
+        await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC_ARQUIVADO}`;
+      expect(pac!.arquivado_em).toBeNull();
+
+      const logs =
+        await owner`SELECT acao, entidade, entidade_id, patient_id, detalhe, ator_id FROM audit_log WHERE patient_id = ${PAC_ARQUIVADO}`;
+      expect(logs.length).toBe(1);
+      expect(logs[0]!.acao).toBe("paciente_desarquivado_automaticamente");
+      expect(logs[0]!.entidade).toBe("patient");
+      expect(logs[0]!.entidade_id).toBe(PAC_ARQUIVADO);
+      expect(logs[0]!.patient_id).toBe(PAC_ARQUIVADO);
+      expect(logs[0]!.ator_id).toBe(U_TER_EQUIPE);
+      expect(logs[0]!.detalhe).toEqual({ origem: "validacao_anamnese" });
+    });
+
     test("D8 · terapeuta de cobertura desarquiva paciente e emite audit_log com seu ator_id", async () => {
       const transicionou = await withTenant(ctxOutro, (tx) =>
         desarquivarPacienteSeArquivado(

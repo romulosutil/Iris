@@ -12,7 +12,8 @@ export type OrigemDesarquivamento =
   | "ativacao_protocolo"
   | "criacao_meta"
   | "prescricao_disciplina"
-  | "ficha_clinica";
+  | "ficha_clinica"
+  | "validacao_anamnese";
 
 export const ACAO_DESARQUIVADO_AUTOMATICAMENTE =
   "paciente_desarquivado_automaticamente";
