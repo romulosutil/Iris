@@ -15,18 +15,27 @@ import { AppHeader, type NavItem } from "./app-header";
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getTenantContext();
-  const clinicas = await listarClinicasDoUsuario(ctx.userId);
-  const { total: totalPendencias } = await listarPendencias(ctx);
-  // #122 §4.2.1, ação 1 — estágio 2 satura a clínica inteira, não só a fila de
-  // quem tem acesso ao caso. Sem nome de paciente e sem categoria aqui: quem vê
-  // este banner pode não ter acesso clínico ao caso (H3 aplicado à tela).
-  const { quantidade: riscoEstagio2, protocoloInterno } =
-    await estadoEstagio2(ctx);
+  const ehClinico = ctx.role === "coordenador" || ctx.role === "terapeuta";
 
-  // Situação da conta: é ela — e não mais só o relógio de trial — que decide o
-  // que a faixa mostra. Assinante pagante e trial vencido eram indistinguíveis
-  // enquanto `resolverFaixaTrial` decidia sozinho (#163).
-  const situacaoConta = await obterSituacaoConta(ctx);
+  const [
+    clinicas,
+    pendencias,
+    { quantidade: riscoEstagio2, protocoloInterno },
+    situacaoConta,
+  ] = await Promise.all([
+    listarClinicasDoUsuario(ctx.userId),
+    ehClinico ? listarPendencias(ctx) : Promise.resolve({ total: 0 }),
+    // #122 §4.2.1, ação 1 — estágio 2 satura a clínica inteira, não só a fila de
+    // quem tem acesso ao caso. Sem nome de paciente e sem categoria aqui: quem vê
+    // este banner pode não ter acesso clínico ao caso (H3 aplicado à tela).
+    estadoEstagio2(ctx),
+    // Situação da conta: é ela — e não mais só o relógio de trial — que decide o
+    // que a faixa mostra. Assinante pagante e trial vencido eram indistinguíveis
+    // enquanto `resolverFaixaTrial` decidia sozinho (#163).
+    obterSituacaoConta(ctx),
+  ]);
+
+  const totalPendencias = pendencias.total;
 
   let itemsNav: NavItem[] = [];
 
@@ -40,6 +49,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       { href: "/agenda", label: "Agenda" },
       { href: "/pacientes", label: "Pacientes" },
       { href: "/equipe", label: "Equipe" },
+      { href: "/relatorios", label: "Relatórios" },
       { href: "/clinica/dados", label: "Dados da Clínica" },
       { href: "/duvidas", label: "Dúvidas" },
     ];
@@ -48,13 +58,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       { href: "/agenda", label: "Agenda do Dia" },
       { href: "/pacientes", label: "Pacientes & PEIs" },
       { href: "/pendencias", label: "Pendências", badge: totalPendencias },
+      { href: "/relatorios", label: "Relatórios" },
       { href: "/duvidas", label: "Dúvidas" },
     ];
   } else {
     itemsNav = [
       { href: "/agenda", label: "Agenda" },
       { href: "/pacientes", label: "Pacientes" },
-      { href: "/pendencias", label: "Pendências", badge: totalPendencias },
     ];
   }
 

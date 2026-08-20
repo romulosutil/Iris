@@ -38,7 +38,8 @@ export function AppHeader({
       item.href === "/validacao" &&
       (pathname.startsWith("/validacao") ||
         pathname.startsWith("/excecoes") ||
-        pathname.startsWith("/supervisao"));
+        pathname.startsWith("/supervisao") ||
+        pathname.startsWith("/alertas-risco"));
     const isSubPath = item.href !== "/" && pathname.startsWith(item.href);
 
     return {
