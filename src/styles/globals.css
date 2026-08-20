@@ -37,6 +37,7 @@
   --color-surface-card: var(--surface-card);
   --color-surface-elevated: var(--surface-elevated);
   --color-border-brutal: var(--border-brutal);
+  --color-border-muted: var(--border-muted);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-action-primary: var(--action-primary);
@@ -295,6 +296,13 @@
   --border-brutal: #000000;
   --shadow-brutal: 2px 2px 0px #000000;
 
+  /* Borda de repouso (>= md). O piso tátil e a borda cheia de 2px resolvem o
+     mobile, mas num formulário desktop denso viram uma grade de caixas pretas
+     que cansa o coordenador. Este grafite suave segura o repouso; o peso
+     brutalista volta em foco/preenchido/erro. 3.68:1 sobre --surface-card
+     (#ffffff), acima do piso de 3:1 do WCAG 2.2 SC 1.4.11 (não-textual). */
+  --border-muted: #8a8578;
+
   /* Tipografia */
   --text-primary: #09090b;
   --text-secondary: #71717a;
@@ -435,6 +443,11 @@ html {
   /* Bordas e Sombras Brutalistas */
   --border-brutal: #e4e4e7;
   --shadow-brutal: 2px 2px 0px #e4e4e7;
+
+  /* Borda de repouso (>= md). Grafite suave que baixa a densidade do
+     formulário sem sumir: 3.67:1 sobre --surface-card (#18181b), acima do
+     piso de 3:1 do WCAG 2.2 SC 1.4.11 (elemento não-textual). */
+  --border-muted: #71717a;
 
   /* Tipografia */
   --text-primary: #fafafa;
