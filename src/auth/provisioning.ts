@@ -73,10 +73,12 @@ export async function provisionUser(
       .where(eq(appUser.id, userId));
   }
 
-  await db
-    .insert(userRole)
-    .values({ userId, clinicId: input.clinicId, papel: input.papel })
-    .onConflictDoNothing();
+  if (input.clinicId) {
+    await db
+      .insert(userRole)
+      .values({ userId, clinicId: input.clinicId, papel: input.papel })
+      .onConflictDoNothing();
+  }
 
   return { userId, isNewUser };
 }
