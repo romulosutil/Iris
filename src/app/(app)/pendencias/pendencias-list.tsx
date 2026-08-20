@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Stack, Split } from "@/components/ui/layout";
 import { Card } from "@/components/ui/card";
-import { Alert } from "@/components/ui/alert";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ReviewClinicalIllustration } from "@/components/ui/illustrations";
+import { MicroConquistaBadge } from "@/components/ui/micro-conquista-badge";
 import { control, surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
 import { ItemPendente } from "./item-pendente";
@@ -83,11 +85,18 @@ export function PendenciasList({
 }: ListaPendencias) {
   if (total === 0) {
     return (
-      <Stack className="animate-fade-in-up animate-delay-75 py-4 md:py-8">
-        <Alert severidade="info" destacado>
-          Dia limpo — nenhuma captura, extração ou sugestão pendente.
-        </Alert>
-      </Stack>
+      <EmptyState
+        illustration={<ReviewClinicalIllustration size={100} />}
+        badge={
+          <MicroConquistaBadge icon="check" animated={false}>
+            Tudo em dia
+          </MicroConquistaBadge>
+        }
+        title="Dia limpo"
+        description="Nenhuma pendência operacional pendente."
+        variant="celebration"
+        className="animate-fade-in-up animate-delay-75"
+      />
     );
   }
 

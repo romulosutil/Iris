@@ -3,6 +3,7 @@ import { getTenantContext } from "@/auth/tenant";
 import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { GovernancaNav } from "@/components/ui/governanca-nav";
+import { obterContadoresGovernanca } from "@/lib/governanca/contadores";
 import { listarExcecoes } from "./queries";
 import { ExcecoesList } from "./excecoes-list";
 
@@ -13,18 +14,17 @@ export default async function ExcecoesPage() {
   const ctx = await getTenantContext();
   if (ctx.role !== "coordenador") notFound();
 
-  const excecoes = await listarExcecoes(ctx);
+  const [excecoes, contadores] = await Promise.all([
+    listarExcecoes(ctx),
+    obterContadoresGovernanca(ctx),
+  ]);
 
   return (
     <Stack gap="lg">
-      <GovernancaNav />
+      <GovernancaNav contadores={{ ...contadores, excecoes: excecoes.total }} />
       <PageHeader
         title="Exceções Clínicas"
-        description={
-          excecoes.total === 0
-            ? "Nada represado — clínica em dia."
-            : `${excecoes.total} ${excecoes.total === 1 ? "item pede" : "itens pedem"} acompanhamento.`
-        }
+        description="Acompanhamento de interrupções de fluxo e inconsistências no atendimento."
       />
       <ExcecoesList {...excecoes} />
     </Stack>

@@ -503,8 +503,18 @@ export function ValidacaoFila({
       {pendentes.length === 0 ? (
         <EmptyState
           illustration={<ReviewClinicalIllustration size={100} />}
-          title="Tudo em dia na Fila de Revisão!"
+          title="Tudo em dia na Fila de Validação!"
           description="Todas as anotações do dia foram validadas. Seu olhar clínico faz toda a diferença!"
+          action={
+            <Button asChild variante="secundaria" tamanho="sm">
+              <Link href="/agenda">Ir para a Agenda</Link>
+            </Button>
+          }
+          secondaryAction={
+            <Button asChild variante="terciaria" tamanho="sm">
+              <Link href="/supervisao">Ver Supervisão Clínica</Link>
+            </Button>
+          }
           variant="celebration"
         />
       ) : (

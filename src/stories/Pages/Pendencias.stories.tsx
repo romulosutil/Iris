@@ -5,6 +5,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { DataRow } from "@/components/ui/data-row";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ReviewClinicalIllustration } from "@/components/ui/illustrations";
+import { MicroConquistaBadge } from "@/components/ui/micro-conquista-badge";
 
 const meta = {
   title: "06. PAGES/Pendências",
@@ -65,6 +68,37 @@ export const FilaDePendencias = {
               }
             />
           </Stack>
+        </Stack>
+      </Container>
+    </div>
+  ),
+};
+
+export const FilaDePendenciasVazia = {
+  render: () => (
+    <div className="min-h-dvh bg-[var(--bg-app)]">
+      <Header
+        clinicaAtivaNome="Clínica Iris — Matriz"
+        itemsNav={[
+          { href: "#", label: "Agenda" },
+          { href: "#", label: "Pendências", active: true },
+          { href: "#", label: "Supervisão" },
+        ]}
+      />
+      <Container largura="md" className="py-8">
+        <Stack gap="lg">
+          <PageHeader title="Pendências Gerais" />
+          <EmptyState
+            illustration={<ReviewClinicalIllustration size={100} />}
+            badge={
+              <MicroConquistaBadge icon="check" animated={false}>
+                Tudo em dia
+              </MicroConquistaBadge>
+            }
+            title="Dia limpo"
+            description="Nenhuma pendência operacional pendente."
+            variant="celebration"
+          />
         </Stack>
       </Container>
     </div>
