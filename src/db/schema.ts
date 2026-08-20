@@ -2295,3 +2295,146 @@ export const instrumentoItemTexto = pgTable(
     ),
   ],
 );
+
+// ─── #407 — Anamnese, marco 0 da timeline (T01) ──────────────────────────────
+// GRANTs, RLS, `app_anamnese_em_rascunho` e `app_validar_anamnese` são
+// escritos à mão em 0115 (T03/T05) — fora do escopo desta task. Aqui só
+// enums + tabelas + FKs + índices + CHECKs nomeados, no padrão de
+// `instrumento_aplicacao` (0113) e `patient_protocol` (CHECK nomeado).
+export const anamneseEstado = pgEnum("anamnese_estado", [
+  "rascunho",
+  "validada",
+]);
+
+// D-D: enum por linha do alvo, copiando o shape de `fonte_do_escore` (0113).
+export const anamneseProcedencia = pgEnum("anamnese_procedencia", [
+  "relatado_responsavel",
+  "observado_avaliador",
+  "registro_anterior",
+]);
+
+export const anamnese = pgTable(
+  "anamnese",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "cascade" }),
+    estado: anamneseEstado("estado").notNull().default("rascunho"),
+    // P3/ANAM-21: sugestão de protocolo e nível de entrada. Sempre editável
+    // antes da validação; `sugestaoAceita` registra que o valor veio de
+    // sugestão e não de escolha direta.
+    protocolId: uuid("protocol_id").references(() => protocol.id, {
+      onDelete: "restrict",
+    }),
+    nivelEntradaSugerido: text("nivel_entrada_sugerido"),
+    sugestaoAceita: boolean("sugestao_aceita"),
+    observacoes: text("observacoes"),
+    // D-F: aponta para a anamnese validada que esta linha complementa. Nunca
+    // UPDATE na original — append-only, linha nova complementa.
+    complementaAnamneseId: uuid("complementa_anamnese_id"),
+    criadoPor: uuid("criado_por")
+      .notNull()
+      .references(() => appUser.id),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    validadaPor: uuid("validada_por").references(() => appUser.id),
+    validadaEm: timestamp("validada_em", { withTimezone: true }),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.complementaAnamneseId],
+      foreignColumns: [t.id],
+      name: "anamnese_complementa_anamnese_id_anamnese_id_fk",
+    }).onDelete("set null"),
+    check(
+      "anamnese_validada_coerente",
+      sql`(${t.estado} = 'validada') = (${t.validadaEm} IS NOT NULL AND ${t.validadaPor} IS NOT NULL)`,
+    ),
+    index("idx_anamnese_patient").on(t.patientId, t.criadoEm.desc()),
+    index("idx_anamnese_clinic").on(t.clinicId),
+    // D-F: a vigente é a de maior `validadaEm`, com `id` como desempate
+    // secundário. Nunca `criadoEm`. O índice espelha essa ordenação exata.
+    index("idx_anamnese_vigente")
+      .on(t.patientId, t.validadaEm.desc(), t.id.desc())
+      .where(sql`${t.estado} = 'validada'`),
+  ],
+);
+
+// `clinicId`/`patientId` denormalizados de propósito: permitem copiar o
+// predicado canônico de RLS de `instrumento_aplicacao` (0113) literal, sem
+// inventar policy com join (T03).
+export const anamneseAlvo = pgTable(
+  "anamnese_alvo",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    anamneseId: uuid("anamnese_id")
+      .notNull()
+      .references(() => anamnese.id, { onDelete: "cascade" }),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "cascade" }),
+    // Espelha ORDEM_EIXOS de `src/lib/evidence/espectro.ts`. Text + CHECK em
+    // vez de enum: o conjunto de eixos é derivado de domínio no código, e
+    // mudar um enum em produção é migração com dado. Mantidos em sincronia
+    // por teste.
+    eixo: text("eixo").notNull(),
+    descricao: text("descricao").notNull(),
+    disciplina: text("disciplina"),
+    milestoneId: uuid("milestone_id").references(() => milestone.id, {
+      onDelete: "set null",
+    }),
+    // D-E: NULL = eixo não medido nesta anamnese. Nunca 0. `null` != "apoio
+    // total" — mesmo raciocínio de `instrumentoAplicacao.itemRiscoPositivo`
+    // (schema.ts, sem `.default`).
+    nivelAjudaInicial: integer("nivel_ajuda_inicial"),
+    procedencia: anamneseProcedencia("procedencia").notNull(),
+    criterioN: integer("criterio_n").notNull().default(3),
+    criterioM: integer("criterio_m").notNull().default(4),
+    cicloRevisaoSemanas: integer("ciclo_revisao_semanas").notNull().default(8),
+    // Preenchido na validação: liga o alvo à `goal` criada. `set null`
+    // porque meta excluída deixa chave órfã tolerada (D-I), não apaga o
+    // alvo.
+    goalId: uuid("goal_id").references(() => goal.id, {
+      onDelete: "set null",
+    }),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "anamnese_alvo_eixo_valido",
+      sql`${t.eixo} IN (
+        'comunicacao_expressiva','comunicacao_receptiva','interacao_social',
+        'autonomia','regulacao','cognicao_academico'
+      )`,
+    ),
+    check(
+      "anamnese_alvo_disciplina_valida",
+      sql`${t.disciplina} IS NULL OR ${t.disciplina} IN ('ABA','Fono','TO')`,
+    ),
+    check(
+      "anamnese_alvo_nivel_range",
+      sql`${t.nivelAjudaInicial} IS NULL OR (${t.nivelAjudaInicial} BETWEEN 0 AND 20)`,
+    ),
+    check(
+      "anamnese_alvo_criterio_range",
+      sql`${t.criterioN} BETWEEN 1 AND 99 AND ${t.criterioM} BETWEEN 1 AND 99`,
+    ),
+    check(
+      "anamnese_alvo_ciclo_range",
+      sql`${t.cicloRevisaoSemanas} BETWEEN 8 AND 12`,
+    ),
+    unique("anamnese_alvo_goal_unique").on(t.goalId),
+    index("idx_anamnese_alvo_anamnese").on(t.anamneseId),
+    index("idx_anamnese_alvo_clinic").on(t.clinicId),
+  ],
+);
