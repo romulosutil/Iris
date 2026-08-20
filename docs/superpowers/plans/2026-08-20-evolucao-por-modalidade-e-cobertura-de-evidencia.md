@@ -1391,6 +1391,14 @@ git commit -m "feat(evolucao): give CBT patients their own evolution reading"
 
 ## Task 5: Acessibilidade e tokens — o que foi medido no código
 
+> **[x] ENTREGUE 20/08/2026 — commit `0b0fe6d`.** 4 arquivos, +190/−53. `pnpm typecheck` limpo, `eslint` com 1 warning pré-existente (`react-hooks/exhaustive-deps`, confirmado idêntico no HEAD anterior via `git stash`), `vitest run "src/app/(app)/pacientes"` = 32 arquivos / 203 testes / 0 skipped. Nenhum teste precisou de atualização — nenhum assertava as copies trocadas no Step 8.
+>
+> **Desvios registrados:** (a) `role="status"` acrescentado ao banner do scrubber, que o plano não pedia — ele virou aviso semântico e não tinha anúncio nenhum; nunca `role="alert"`, que é reservado a risco clínico. (b) `IconeAviso` ficou duplicado em `scrubber.tsx` e `timeline-client.tsx` em vez de extraído, para não criar um quinto arquivo fora do escopo. (c) Os `<select>` ficaram sem `outline-none` de repouso, seguindo o plano à risca — em clique de mouse o anel do UA também aparece.
+>
+> **Não verificado:** o tab-through de teclado e o resize a 360px do Step 9 exigem olho humano e continuam pendentes. Contraste não tem guarda automática — axe sob jsdom aborta o check no `canvas`; os números do Step 3 são medição documentada, não asserção verde.
+>
+> **Dívida achada de raspão, não corrigida:** `delta-sessao.tsx` usa `shadow-[var(--ds-shadow-sm)]` em 3 cards e `--ds-shadow-sm` não existe em `@theme` nem em `:root` — mesma classe de defeito do Step 5 (classe morta), sombra silenciosamente ausente. Fora dos 4 arquivos: `horas/page.tsx:75` e `cadastro-clinico/prescricao-disciplinas-secao.tsx:268` ainda carregam `text-muted` e `border-l-4`.
+
 **Por quê:** cada item abaixo foi verificado, não suposto. Nenhum é opinião de estilo.
 
 **Files:**
@@ -1400,7 +1408,7 @@ git commit -m "feat(evolucao): give CBT patients their own evolution reading"
 - Modify: `src/app/(app)/pacientes/[id]/timeline/delta-sessao.tsx`
 - Modify: `src/app/(app)/pacientes/[id]/page.tsx`
 
-- [ ] **Step 1: Devolva o anel de foco (WCAG 2.4.7)**
+- [x] **Step 1: Devolva o anel de foco (WCAG 2.4.7)**
 
 `focus:outline-none` aparece em 4 controles sem substituto, e `grep focus-visible` na aba devolve zero. Em cada um — os dois `<select>` de `timeline-client.tsx`, o botão de trecho da trajetória, e o link do empty state em `page.tsx` — remova `focus:outline-none` e acrescente:
 
@@ -1410,13 +1418,13 @@ focus-visible:outline-focus focus-visible:outline-[length:var(--ring-width)] foc
 
 Confira depois: `grep -c "focus:outline-none" "src/app/(app)/pacientes/[id]/timeline/timeline-client.tsx"` deve devolver `0`.
 
-- [ ] **Step 2: Alvos de toque a 44px (`--control-sm`)**
+- [x] **Step 2: Alvos de toque a 44px (`--control-sm`)**
 
 Medidos abaixo do piso: `<select>` da trajetória ≈38px (`p-2 text-sm`), `<select>` do comparador ≈32px (`p-1.5 text-sm`), checkbox `size-4` = 16px.
 
 Nos dois `<select>`, troque o padding por `min-h-[var(--control-sm)] px-3`. No checkbox, troque `size-4` por `size-5` e envolva rótulo e input num `<label>` com `min-h-[var(--control-sm)] flex items-center gap-3 cursor-pointer`, de modo que a área clicável inteira alcance o piso.
 
-- [ ] **Step 3: Barra de progresso visível (WCAG 1.4.11)**
+- [x] **Step 3: Barra de progresso visível (WCAG 1.4.11)**
 
 Hoje a faixa "conquistados" é `bg-status-success-bg` (`#b2dfdb`) sobre `bg-gray-200` (`#e5e7eb`) — **1,17:1** — e a de "candidatos" é `#eff6ff` sobre o mesmo cinza — **1,19:1**. As duas são invisíveis e indistinguíveis entre si. Mínimo exigido para objeto gráfico: 3:1.
 
@@ -1445,25 +1453,25 @@ Troque os preenchimentos pelas cores de acento, não pelos tints:
 
 E troque a trilha `bg-gray-200` por `bg-[var(--surface-muted)]`.
 
-- [ ] **Step 4: "Candidato" é violeta, não azul (The Epistemic Honesty Rule)**
+- [x] **Step 4: "Candidato" é violeta, não azul (The Epistemic Honesty Rule)**
 
 `grep status-ia` na aba devolve zero: o estado "candidato" — que é a saída da IA — usa `--status-info-*`, que o Design System reserva para notificação. Pior, `delta-sessao.tsx` usa o mesmo azul para "Introduzidos na Sessão", então azul significa duas coisas na mesma tela.
 
 Em `timeline-client.tsx`, no chip de estatística e no indicador `status === "candidato"` do grid de marcos, troque `bg-status-info-bg` por `bg-[var(--status-ia-bg)]`, `text-status-info-text` por `text-[var(--status-ia-fg)]` e a borda por `border-[var(--status-ia-border)]`. Mantenha a geometria distinta que já existe (losango tracejado): cor e forma juntas, nunca cor sozinha.
 
-- [ ] **Step 5: Classes mortas**
+- [x] **Step 5: Classes mortas**
 
 `text-xxs` (3 ocorrências) e `text-muted` (6) não existem: nem `--text-xxs` nem `--color-muted` estão declarados em `@theme` (`src/styles/globals.css`). O texto herda tamanho e cor do pai.
 
 Troque `text-xxs` por `text-[10px]` e `text-muted` por `text-[var(--text-secondary)]`. **Não** crie os tokens: `--text-secondary` já é o papel semântico correto, e um token novo só para estes seis usos aumenta a superfície do DS sem necessidade.
 
-- [ ] **Step 6: Painéis voltam para a superfície de card**
+- [x] **Step 6: Painéis voltam para a superfície de card**
 
 Quatro painéis usam `bg-canvas`, que resolve para `--bg-app` (`#f8f9fa`) — a cor **da página** —, enquanto o scrubber e o delta usam `--surface-card` (`#ffffff`). Emenda visível, e os painéis não descolam do fundo.
 
 Troque `bg-canvas` por `bg-[var(--surface-card)]` e `bg-bg-canvas` por `bg-[var(--surface-elevated)]` nos containers de painel. Mantenha `border-ink-anchor` (esse alias existe).
 
-- [ ] **Step 7: Side-stripe e emoji**
+- [x] **Step 7: Side-stripe e emoji**
 
 Nos cards de evidência do drilldown, remova `border-l-4 border-l-[...]` — acento lateral é banido no DS e já foi retirado dos cards de paciente. A polaridade já é comunicada pela pílula "Evolução"/"Dificuldade" logo abaixo; nenhuma informação se perde.
 
@@ -1471,7 +1479,7 @@ Troque os emoji usados como ícone por SVG inline, no mesmo estilo do ícone de 
 
 No `scrubber.tsx`, troque também o fundo do banner: `bg-[var(--color-gold)]` usa a cor de ação primária como fundo de aviso. Use `bg-[var(--status-warning-bg)]` com texto `text-[var(--status-warning-fg)]`.
 
-- [ ] **Step 8: Copy sem vocabulário de engenharia**
+- [x] **Step 8: Copy sem vocabulário de engenharia**
 
 Troque o texto do aviso de mudança de protocolo. De:
 
@@ -1483,7 +1491,7 @@ Para:
 
 No empty state de `page.tsx`, troque "sessões registradas ou snapshots de repertório materializados" por "sessões registradas". Em `delta-sessao.tsx`, troque o fallback `Meta/Marco (${id.substring(0, 8)})` por `"Alvo removido do plano"` — UUID truncado na tela não ajuda ninguém e expõe implementação.
 
-- [ ] **Step 9: Verifique**
+- [x] **Step 9: Verifique**
 
 ```bash
 pnpm typecheck && npx eslint "src/app/(app)/pacientes/[id]" && npx vitest run "src/app/(app)/pacientes"
@@ -1493,7 +1501,7 @@ Depois, no navegador: navegue a aba inteira **só pelo teclado** (Tab / Shift+Ta
 
 Nota: o `a11y.test.tsx` roda axe sob jsdom, que **não avalia contraste** — os itens de contraste desta tarefa não têm guarda automática. A verificação é a medição manual registrada aqui.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add "src/app/(app)/pacientes/[id]"
@@ -1528,3 +1536,28 @@ git commit -m "fix(evolucao): restore focus rings, touch targets, contrast and D
 - **Ações duplicadas no `PageHeader`** de `page.tsx` ("Ficha Clínica" e "PEI & Metas" repetem abas logo abaixo, e o botão de PEI aparece mesmo para paciente TCC). Some naturalmente se o header for revisto; não misture com este plano.
 - **CTA do empty state** manda para `/agenda`, mas o próximo passo real de um paciente novo é prescrição → equipe (a lista de pacientes já marca "Sem prescrição"). Precisa da decisão de produto sobre qual é a ordem canônica de onboarding do paciente.
 - **`useState<any[]>` e `ev: any`** no drilldown de evidências — tipar exige extrair o tipo de retorno de `carregarEvidenciasAction`.
+
+---
+
+## Task 7 (escopo novo, decidido 20/08/2026 com o Rômulo): um bloco por protocolo ativo
+
+**Não executar antes de fechar a Task 5 e a spec da #407.**
+
+**Origem:** ao revisar a Task 3 no navegador, ficou claro que o hexágono não sumiu — ele mora na vista "No tempo" (`timeline-client.tsx:904`, `:921`), e a entrada padrão é `?vista=sessao` (`vista-nav.tsx:21`). A pergunta que veio junto — "vamos implementar os gráficos de cada protocolo?" — expôs um achado que este plano não tratou.
+
+**Achado de modelagem (medido, não suposto):**
+
+- `patient_protocol` (`src/db/schema.ts:656`) tem vigência por linha (`ativado_em` / `desativado_em`, com CHECK e índice parcial de ativos) — ou seja, **um paciente pode ter vários protocolos ativos ao mesmo tempo**.
+- `protocol.taxonomiaAjuda` é `jsonb` (`schema.ts:648`): a escala de nível de ajuda é **dado por protocolo**, não código. Um bloco por protocolo não exige N componentes — exige um componente que leia a taxonomia.
+- `protocol.familia` referencia `protocol_familia_catalogo` (`schema.ts:629`), catálogo aberto.
+
+**Problema:** o hexágono de 6 eixos agrega todos os protocolos ativos num desenho só. VB-MAPP e um protocolo de Fono acabam somados em eixos que só descrevem bem o primeiro — a mesma classe de erro que a Task 1 corrigiu entre modalidades, um nível abaixo.
+
+**Decisão do Rômulo:** hexágono permanece no topo como visão geral; abaixo dele, **um bloco por protocolo ativo**, cada um com a escala vinda da sua `taxonomiaAjuda`. Descartadas: (a) manter só o hexágono; (b) trocar o hexágono por um `<select>` de protocolo — reintroduziria um terceiro "relógio" concorrente, exatamente o P2 que a Task 3 resolveu.
+
+**A fechar antes de executar** (checklist de handoff, `AGENTS.md` §5.2):
+
+- O que o bloco de protocolo plota: nível de ajuda no tempo por alvo? contagem de evidências? Depende do que `taxonomiaAjuda` garante em todo protocolo cadastrado — precisa ser medido, não assumido.
+- Paciente com protocolo **desativado** no meio da janela: o bloco some, ou aparece marcado como encerrado? (`desativado_em` existe; a decisão é de produto.)
+- Zero protocolo ativo: empty state próprio, nunca reusar o do hexágono.
+- Ordem dos blocos quando há vários ativos.
