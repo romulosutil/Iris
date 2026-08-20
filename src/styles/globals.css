@@ -117,6 +117,12 @@
   --border-neutral-light: #c9c6bc;
   --gray-light-hover: #f1efe9;
 
+  /* Superfície silenciosa: pílulas de contagem operacional, chips neutros.
+     Papel semântico = "há itens aqui", NUNCA "isto é um problema".
+     Definida à parte de --gray-light-hover porque precisa de par no dark. */
+  --surface-muted: #f1efe9;
+  --surface-muted-border: #c9c6bc;
+
   /* ==========================================================================
      2. Semânticas (Papéis de Sistema)
      ========================================================================== */
@@ -463,6 +469,10 @@ html {
   --ai-tint: rgba(106, 76, 147, 0.4);
   --ai-deep: #e9d5ff;
   --ai-accent: #9333ea;
+
+  /* Superfície silenciosa (par escuro) */
+  --surface-muted: #27272a;
+  --surface-muted-border: #3f3f46;
 }
 
 /*
