@@ -190,6 +190,11 @@ describe.skipIf(!hasDb)(
 
     // ---------- coluna `estado` sem GRANT de coluna ----------
     test("UPDATE da coluna `estado` é negado por falta de GRANT de coluna", async () => {
+      // SQLSTATE 42501 (permission_denied) especificamente — não qualquer
+      // exceção. `toThrow()` genérico passaria também se a policy negasse a
+      // linha por outro motivo (ex.: authz de equipe), o que não prova GRANT
+      // de coluna ausente. `DrizzleQueryError` (drizzle-orm/errors.js)
+      // preserva o `PostgresError` original em `.cause`, com `.code`.
       await expect(
         withTenant(ctxCoordA, (tx) =>
           tx
@@ -197,7 +202,26 @@ describe.skipIf(!hasDb)(
             .set({ estado: "validada" })
             .where(eq(schema.anamnese.id, anamneseRascunhoA)),
         ),
-      ).rejects.toThrow();
+      ).rejects.toMatchObject({ cause: { code: "42501" } });
+    });
+
+    // ---------- controle positivo: coluna PERMITIDA continua editável ----------
+    // Sem este caso, um T03 que faz `REVOKE UPDATE` geral (ou copia
+    // `instrumento_aplicacao`/0113 sem NENHUM GRANT de UPDATE) faria o caso
+    // acima passar pela razão ERRADA: "nenhuma coluna é editável" também
+    // barra `estado`. Este teste prova que o bloqueio é ESCOPADO à coluna
+    // `estado`, não um blanket-deny — uma edição legítima de `observacoes`
+    // (coluna fora do append-only) numa linha `rascunho`, pelo terapeuta da
+    // equipe, tem que SUCEDER.
+    test("terapeuta da equipe atualiza coluna permitida (`observacoes`) de rascunho", async () => {
+      const atualizados = await withTenant(ctxT1A, (tx) =>
+        tx
+          .update(schema.anamnese)
+          .set({ observacoes: "atualização legítima de rascunho" })
+          .where(eq(schema.anamnese.id, anamneseRascunhoA))
+          .returning({ id: schema.anamnese.id }),
+      );
+      expect(atualizados.length).toBe(1);
     });
 
     // ---------- DELETE de rascunho só por coordenador ----------
@@ -219,6 +243,21 @@ describe.skipIf(!hasDb)(
           .returning({ id: schema.anamnese.id }),
       );
       expect(apagados.length).toBe(1);
+    });
+
+    // Regressão: o gate de DELETE de T03 tem que exigir `estado = 'rascunho'`
+    // além do papel. Um DELETE que só checa "sou coordenador" (omitindo a
+    // cláusula de estado) passaria os dois casos acima E apagaria uma
+    // anamnese VALIDADA — perda de dado clínico em silêncio. Sem este caso, a
+    // suíte não pega essa regressão específica.
+    test("coordenador NÃO apaga anamnese validada (DELETE exige estado = 'rascunho')", async () => {
+      const apagados = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .delete(schema.anamnese)
+          .where(eq(schema.anamnese.id, anamneseValidadaA))
+          .returning({ id: schema.anamnese.id }),
+      );
+      expect(apagados.length).toBe(0);
     });
   },
 );
