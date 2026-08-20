@@ -71,7 +71,7 @@ Para um arquivo só: `npx vitest run <caminho>`.
 - Modify: `src/app/(app)/pacientes/[id]/layout.tsx`
 - Modify: `src/app/(app)/pacientes/[id]/page.tsx`
 
-- [ ] **Step 1: Escreva o teste que falha**
+- [x] **Step 1: Escreva o teste que falha**
 
 Crie `src/app/(app)/pacientes/[id]/modalidade.test.ts`:
 
@@ -113,12 +113,12 @@ describe("capacidadesDaModalidade", () => {
 });
 ```
 
-- [ ] **Step 2: Rode o teste e confirme que falha**
+- [x] **Step 2: Rode o teste e confirme que falha**
 
 Rode: `npx vitest run "src/app/(app)/pacientes/[id]/modalidade.test.ts"`
 Esperado: FAIL — `Failed to resolve import "./modalidade"`.
 
-- [ ] **Step 3: Implemente `modalidade.ts`**
+- [x] **Step 3: Implemente `modalidade.ts`**
 
 Crie `src/app/(app)/pacientes/[id]/modalidade.ts`:
 
@@ -190,12 +190,12 @@ export function capacidadesDaModalidade(
 }
 ```
 
-- [ ] **Step 4: Rode o teste e confirme que passa**
+- [x] **Step 4: Rode o teste e confirme que passa**
 
 Rode: `npx vitest run "src/app/(app)/pacientes/[id]/modalidade.test.ts"`
 Esperado: PASS (4).
 
-- [ ] **Step 5: Faça `layout.tsx` consumir o helper**
+- [x] **Step 5: Faça `layout.tsx` consumir o helper**
 
 Em `src/app/(app)/pacientes/[id]/layout.tsx`, adicione o import:
 
@@ -245,7 +245,7 @@ const abas: TabsNavItem[] = [
 ];
 ```
 
-- [ ] **Step 6: Faça `page.tsx` redirecionar em `conventional`**
+- [x] **Step 6: Faça `page.tsx` redirecionar em `conventional`**
 
 Em `src/app/(app)/pacientes/[id]/page.tsx`, some `clinicalModality` ao `select` da query do paciente:
 
@@ -283,7 +283,7 @@ if (!capacidades.temEvolucao && capacidades.rotaDeEntrada) {
 }
 ```
 
-- [ ] **Step 7: Verifique que nada quebrou**
+- [x] **Step 7: Verifique que nada quebrou**
 
 Rode:
 
@@ -293,7 +293,7 @@ pnpm typecheck && npx vitest run "src/app/(app)/pacientes"
 
 Esperado: typecheck sem saída de erro; suíte de `pacientes` verde. Se `a11y.test.tsx` falhar, é porque o dublê de `withTenant` devolve `{ clinicalModality: "protocol_driven" }` — modalidade com Evolução, então a aba continua presente e o teste deve passar sem mudança. Se falhar por outro motivo, leia a mensagem antes de mexer no dublê.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add "src/app/(app)/pacientes/[id]/modalidade.ts" "src/app/(app)/pacientes/[id]/modalidade.test.ts" "src/app/(app)/pacientes/[id]/layout.tsx" "src/app/(app)/pacientes/[id]/page.tsx"
@@ -944,7 +944,7 @@ git commit -m "feat(evolucao): split tab into 'this session' and 'over time' vie
 - Create: `src/app/(app)/pacientes/[id]/timeline/evolucao-tcc.tsx`
 - Modify: `src/app/(app)/pacientes/[id]/page.tsx`
 
-- [ ] **Step 1: Escreva o teste que falha**
+- [x] **Step 1: Escreva o teste que falha**
 
 Crie `src/app/(app)/pacientes/[id]/timeline/grafico-escore-instrumento.test.tsx`:
 
@@ -1027,12 +1027,12 @@ describe("GraficoEscoreInstrumento", () => {
 });
 ```
 
-- [ ] **Step 2: Rode e confirme a falha**
+- [x] **Step 2: Rode e confirme a falha**
 
 Rode: `npx vitest run "src/app/(app)/pacientes/[id]/timeline/grafico-escore-instrumento.test.tsx"`
 Esperado: FAIL — módulo não encontrado.
 
-- [ ] **Step 3: Implemente o gráfico**
+- [x] **Step 3: Implemente o gráfico**
 
 Crie `src/app/(app)/pacientes/[id]/timeline/grafico-escore-instrumento.tsx`:
 
@@ -1231,12 +1231,12 @@ export function GraficoEscoreInstrumento({
 }
 ```
 
-- [ ] **Step 4: Rode e confirme que passa**
+- [x] **Step 4: Rode e confirme que passa**
 
 Rode: `npx vitest run "src/app/(app)/pacientes/[id]/timeline/grafico-escore-instrumento.test.tsx"`
 Esperado: PASS (5).
 
-- [ ] **Step 5: Componha a leitura TCC**
+- [x] **Step 5: Componha a leitura TCC**
 
 Crie `src/app/(app)/pacientes/[id]/timeline/evolucao-tcc.tsx`:
 
@@ -1278,7 +1278,7 @@ export function EvolucaoTcc({
 }
 ```
 
-- [ ] **Step 6: Ligue em `page.tsx`**
+- [x] **Step 6: Ligue em `page.tsx`**
 
 Em `src/app/(app)/pacientes/[id]/page.tsx`, adicione:
 
@@ -1335,7 +1335,7 @@ Em seguida ramifique, ainda **antes** de `carregarTimeline` (a timeline é proto
   }
 ```
 
-- [ ] **Step 7: Remova a duplicata da aba TCC**
+- [x] **Step 7: Remova a duplicata da aba TCC**
 
 Em `src/app/(app)/pacientes/[id]/tcc/page.tsx`, apague o bloco `<GraficoEvolucaoCrencas entries={...} />` e o import correspondente. Substitua por um ponteiro para a leitura:
 
@@ -1355,7 +1355,7 @@ Em `src/app/(app)/pacientes/[id]/tcc/page.tsx`, apague o bloco `<GraficoEvolucao
 
 Adicione `import Link from "next/link";` ao topo. Ajuste a `<p>` de descrição do cabeçalho para não prometer mais gráfico: troque "e acompanhamento gráfico de reestruturação cognitiva" por "e Registro de Pensamentos Distorcidos (RPD)".
 
-- [ ] **Step 8: Verifique**
+- [x] **Step 8: Verifique**
 
 ```bash
 pnpm typecheck && npx eslint "src/app/(app)/pacientes/[id]" && npx vitest run "src/app/(app)/pacientes"
@@ -1363,7 +1363,7 @@ pnpm typecheck && npx eslint "src/app/(app)/pacientes/[id]" && npx vitest run "s
 
 Esperado: typecheck limpo, 0 erros de ESLint, suíte verde. Se `tcc/page.test.tsx` afirmar a presença do gráfico de crenças, atualize a asserção para o novo ponteiro — a mudança de lugar é intencional.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add "src/app/(app)/pacientes/[id]/timeline/grafico-escore-instrumento.tsx" "src/app/(app)/pacientes/[id]/timeline/grafico-escore-instrumento.test.tsx" "src/app/(app)/pacientes/[id]/timeline/evolucao-tcc.tsx" "src/app/(app)/pacientes/[id]/page.tsx" "src/app/(app)/pacientes/[id]/tcc/page.tsx"
