@@ -40,6 +40,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       { href: "/agenda", label: "Agenda" },
       { href: "/pacientes", label: "Pacientes" },
       { href: "/equipe", label: "Equipe" },
+      { href: "/relatorios", label: "Relatórios" },
       { href: "/clinica/dados", label: "Dados da Clínica" },
       { href: "/duvidas", label: "Dúvidas" },
     ];
@@ -48,13 +49,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       { href: "/agenda", label: "Agenda do Dia" },
       { href: "/pacientes", label: "Pacientes & PEIs" },
       { href: "/pendencias", label: "Pendências", badge: totalPendencias },
+      { href: "/relatorios", label: "Relatórios" },
       { href: "/duvidas", label: "Dúvidas" },
     ];
   } else {
     itemsNav = [
       { href: "/agenda", label: "Agenda" },
       { href: "/pacientes", label: "Pacientes" },
-      { href: "/pendencias", label: "Pendências", badge: totalPendencias },
     ];
   }
 

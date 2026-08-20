@@ -19,6 +19,7 @@ export function GovernancaNav() {
     { href: "/excecoes", label: "Exceções Clínicas" },
     { href: "/supervisao", label: "Supervisão & Estagnação" },
     { href: "/pendencias", label: "Pendências Gerais" },
+    { href: "/alertas-risco", label: "Alertas de Risco" },
   ];
 
   return (
