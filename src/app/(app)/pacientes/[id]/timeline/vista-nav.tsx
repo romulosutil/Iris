@@ -1,7 +1,12 @@
-"use client";
-
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+
+// Sem "use client": nem o componente (só `<Link>`, sem hooks) nem
+// `vistaValida` precisam de runtime de cliente. `vistaValida` é chamado em
+// `page.tsx` (Server Component) — se este módulo fosse "use client", a
+// função viraria referência de cliente e a chamada no servidor quebraria em
+// runtime: "Attempted to call vistaValida() from the server but vistaValida
+// is on the client."
 
 export type VistaEvolucao = "sessao" | "tempo";
 
