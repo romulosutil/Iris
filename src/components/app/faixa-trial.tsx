@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Banner } from "@/components/ui/banner";
 import { Container } from "@/components/ui/layout";
@@ -47,7 +49,7 @@ interface FaixaTrialProps {
  * Acessibilidade:
  * - role="status" (herdado do Banner) para notificar mudanças de estado
  * - Texto sempre redundante à cor (nunca depende só de cor)
- * - Alvo mínimo 44px de altura (herdado do Container/layout)
+ * - Formato compacto/sutil para não competir visualmente com decisões clínicas
  * - `variant="info"` em TODOS os estados, inclusive o encerrado: `alerta`
  *   carrega `role="alert"`, reservado ao risco clínico. Cobrança não interrompe
  *   leitor de tela.
@@ -72,8 +74,8 @@ export function FaixaTrial({
   ) {
     if (!temDebito) return null;
     return (
-      <Container largura="md" className="py-4">
-        <Banner variant="info">
+      <Container largura="md" className="pt-3 pb-0">
+        <Banner variant="info" formato="compacto" dismissible>
           Há {formatarBRL(debitoCentavos)} em aberto de um ciclo interrompido em
           cancelamento anterior. O valor não vence nem expira: ele é cobrado na
           próxima vez que você reativar a assinatura.
@@ -101,21 +103,35 @@ export function FaixaTrial({
               : "Sua assinatura está cancelada e a conta está em somente-leitura. Seus dados continuam acessíveis e exportáveis."
             : "Seu período de teste terminou. A conta está em somente-leitura.";
 
+  // CTA direto para cadastro no onboarding de trial aguardando
+  const ctaCadastrar = estado === "trial_aguardando";
+
   // CTA só onde ativar/reativar é de fato a saída. Em
   // `pagamento_em_processamento` já existe cobrança em voo e mandar a pessoa
   // de volta ao checkout gera uma segunda.
-  const comCta = estado === "trial_expirado" || estado === "cancelada";
+  const ctaAtivar = estado === "trial_expirado" || estado === "cancelada";
 
   return (
-    <Container largura="md" className="py-4">
-      <Banner variant="info">
+    <Container largura="md" className="pt-3 pb-0">
+      <Banner variant="info" formato="compacto" dismissible>
         {mensagem}
-        {comCta ? (
+        {ctaCadastrar ? (
+          <>
+            {" "}
+            <Link
+              href="/pacientes/novo"
+              className="font-semibold whitespace-nowrap underline underline-offset-4"
+            >
+              Cadastrar primeiro paciente →
+            </Link>
+          </>
+        ) : null}
+        {ctaAtivar ? (
           <>
             {" "}
             <Link
               href="/assinatura"
-              className="font-semibold underline underline-offset-4"
+              className="font-semibold whitespace-nowrap underline underline-offset-4"
             >
               Ativar assinatura
             </Link>
