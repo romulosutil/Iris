@@ -1,7 +1,24 @@
 # Checkpoint — Iris
 
-> **Data:** 19/08/2026 (sessão retomada — PR #404 rebaseada na main, BACKLOG.md atualizado)
-> **Status:** 🟢 **#388, #387, #390, #389, #391, #392 e #395 mergeadas na main (PRs #397, #398, #399, #400, #401, #402, #403). #393 rebaseada limpa na main, verificada e com PR aberta (#404).** `BACKLOG.md` atualizado com débitos D49-D51 e sessão de #393. **Próximo da cadeia: #394** (último da corrente do goal `#391→#392→#395→#393→#394`).
+> **Data:** 20/08/2026 (rodada de **design de interface** — não é passo da linha de billing nem da cadeia TCC)
+> **Branch:** `feat/ajuste-menus-navegacao-e-permissoes` — **18 commits novos, ainda NÃO enviados** (`git push` não foi executado).
+> **Status:** 🟢 **Revelação progressiva entregue nos cards clínicos e árvore de trabalho zerada.** `AlertaRiscoCard` e `SupervisaoCard` passam a mostrar só a história humana + estado essencial + um CTA; respaldo regulatório, prazo detalhado e metadado técnico recuam para `<details>`, e as ações secundárias para um menu de reticências (`MenuAcoes`, padrão WAI-ARIA de _menu button_ escrito à mão — o projeto não tem `@radix-ui/react-dropdown-menu`). Junto saiu o trabalho de UI represado de sessões anteriores: semiótica de cor nos badges de governança (vermelho exclusivo de risco, violeta para filas de IA, cinza para operacionais), abas _underline_, `Banner` compacto/dispensável, `FaixaTrial` discreta e `obterContadoresGovernanca` centralizando as cinco filas.
+>
+> **A árvore tinha 144 modificados + 20 não rastreados; 106 eram ruído puro.** Classificação por **medição**: para cada arquivo, a versão do `HEAD` foi reformatada com o Prettier do projeto e comparada com a atual. 31 eram só reformatação de um `pnpm format` repo-wide (inclusive 8 snapshots do Drizzle e 11.985 linhas de churn no `pnpm-lock.yaml` que era troca de aspas), 74 eram só EOL (`core.autocrlf`), 39 tinham mudança real. Os 106 foram restaurados; os 39 viraram os 18 commits.
+>
+> **Um defeito de foco corrigido, achado porque o teste mede a ordem e não o resultado:** fechar o `MenuAcoes` é atualização de estado e entrava no mesmo lote do handler, então a ação rodava com o foco ainda no `menuitem`; o Radix grava esse nó como "foco anterior" ao abrir o `Dialog` e devolveria o foco a um elemento já desmontado. `flushSync` antes de invocar a ação. Um teste que só verificasse "o modal abriu" passaria com o defeito vivo.
+>
+> **Dois bloqueadores achados no caminho, agora registrados:** **D52** — `scripts/seed-demo-account.ts` cria contas com a senha literal `SenhaLocal123!` e resolve o alvo por `MIGRATION_DATABASE_URL ?? DATABASE_URL`, sem nenhum guard entre banco local e produção. **D53** — ferramenta de preview de UI injeta `<script src="http://localhost:8400/live.js">` em `src/app/layout.tsx`; foi revertido à mão antes dos commits, mas nada impede a reinjeção e nenhum gate atual pega. Um terceiro achado virou correção: `cadastro-form.tsx` era o **único erro de lint do repositório**.
+>
+> **Verde medido:** `pnpm typecheck` limpo · `pnpm lint` **0 erros** (era 1) · `pnpm test` **225 arquivos / 1564 testes**, com 12 novos. **`pnpm test:rls` NÃO foi executado** — nenhuma mudança tocou schema, policy ou função.
+>
+> **Não medido:** nada foi visto em navegador. Sem passada de Storybook, sem screenshot. O contraste real de `--surface-muted` em tema claro e escuro segue **não verificado em tela** — a cobertura de a11y é axe em jsdom, que não avalia contraste com fidelidade (`getContext` não implementado).
+>
+> **Próximo passo imediato:** decidir entre (a) enviar a branch e abrir PR, ou (b) validar as telas no Storybook antes. E a cadeia TCC segue parada em **#394**, intocada por esta sessão.
+>
+> ---
+>
+> **Sessão anterior (19/08/2026):** **#388, #387, #390, #389, #391, #392 e #395 mergeadas na main (PRs #397, #398, #399, #400, #401, #402, #403). #393 rebaseada limpa na main, verificada e com PR aberta (#404).** `BACKLOG.md` atualizado com débitos D49-D51 e sessão de #393. **Próximo da cadeia: #394** (último da corrente do goal `#391→#392→#395→#393→#394`).
 >
 > **#393 — o que foi feito:** tabela `instrumento_aplicacao` (RLS copiada de `tcc_rpd_entry`) + `instrumento_item_texto` vazia por padrão (gate de conteúdo licenciado Pfizer, migração `0113`). Servidor recalcula escore/item_9 de `respostas_por_item`, nunca confia no cliente. `TCC_SYSTEM_PROMPT` ganhou R14-TC (nunca somar escore). Severidade do item 9 mapeada por valor (`registrar.ts`, nunca `ideacao_ativa_com_plano` só pelo número). **Dois gaps reais achados e corrigidos:** (1) caminho manual não tinha como ancorar alerta de risco — migração `0114` adiciona `instrumento_aplicacao_id` como âncora alternativa, `registrarAlertaRiscoInstrumentoManual` novo; (2) T6 montou só a lista de histórico em `page.tsx`, esqueceu `InstrumentoForm` — corrigido manualmente (2 instâncias phq9/gad7 + `obterInstrumentoItensTexto`), quebrou `page.test.tsx`, também corrigido.
 >
@@ -64,7 +81,66 @@
 
 ---
 
-## 1. Resumo da Sessão (17/08/2026) — passo 9: #322, a flag que não recuperava um centavo
+## 1. Resumo da Sessão (20/08/2026) — rodada de design: revelação progressiva e a árvore que estava 74% suja
+
+Sessão de **interface**, fora das duas linhas em andamento (billing e cadeia TCC). Branch `feat/ajuste-menus-navegacao-e-permissoes`, **18 commits**, nenhuma migração.
+
+### O pedido e o que ele virou
+
+O pedido foi hierarquia nos cards `AlertaRiscoCard` e `SupervisaoCard`: priorizar a história humana sobre o metadado burocrático. A superfície passa a carregar **relato + estado + um CTA**; o resto recua para `<details>` ("Ver respaldo regulatório" / "Ver detalhes técnicos") e para um menu de reticências.
+
+**Duas decisões fogem do pedido literal, de propósito:**
+
+1. **"Prazo vencido" e "Dever legal aplicável" continuam visíveis** como pílulas, com o texto integral dentro da expansão. São gatilhos que mudam a decisão clínica — esconder por completo o aviso do ECA é risco maior que o ruído que ele causa. Recua o texto, não o sinal.
+2. **`acoes` foi removido da API dos dois cards** (virou `acaoPrimaria` + `acoesSecundarias`). É mudança de contrato, não aditiva: força o invariante de CTA único no tipo, em vez de confiar em disciplina do consumidor. Todos os consumidores do repositório foram migrados.
+
+### Por que os dois primitivos foram escritos à mão
+
+`MenuAcoes` segue o padrão WAI-ARIA de _menu button_ sem dependência nova — o projeto tem `@radix-ui/react-dialog`, mas não `react-dropdown-menu`, e a alternativa era instalar uma. Tabindex móvel, setas em ciclo, Home/End, Escape e Tab fechando com devolução de foco, clique-fora sem roubar foco.
+
+`DetalhesExpansiveis` usa `<details>`/`<summary>` nativos: o gatilho já é focável e anunciado sem ARIA manual, e o conteúdo fechado **sai da árvore de acessibilidade** em vez de ficar disponível ao leitor de tela por baixo da interface — que é exatamente o ponto de esconder.
+
+### O defeito que o teste pegou porque mediu a ordem
+
+Fechar o menu é atualização de estado: entra no mesmo lote do handler. A ação selecionada (abrir um `Dialog`) rodava com o foco **ainda no `menuitem`**. O Radix grava como "foco anterior" o elemento ativo no instante em que o modal abre — e devolveria o foco a um nó já desmontado ao fechar. Quem navega por teclado terminaria a confirmação sem foco nenhum, sem erro nenhum no console.
+
+`flushSync` antes de invocar a ação. **O teste não asserta o resultado, asserta a ordem:** o callback registra se o menu ainda estava no DOM quando rodou. Um teste de "o modal abriu" passaria com o defeito vivo.
+
+Consequência de desenho no consumidor: os `Dialog` de confirmação passaram a ser **controlados e montados fora do card** — o menu desmonta o painel ao selecionar, e um `Dialog` montado dentro dele nunca chegaria a abrir.
+
+### A limpeza da árvore: medir, não olhar
+
+144 arquivos modificados e 20 não rastreados, acumulados por várias sessões de UI sem commit. Em vez de julgar por inspeção, cada arquivo modificado teve a versão do `HEAD` reformatada com o Prettier do projeto e comparada com a atual:
+
+| Classe                                        | Arquivos | Destino     |
+| :-------------------------------------------- | -------: | :---------- |
+| Só reformatação (`pnpm format` repo-wide)     |       31 | restaurados |
+| Só EOL (`core.autocrlf`, `git diff` já vazio) |       74 | restaurados |
+| Mudança real                                  |       39 | commitados  |
+
+Entre o ruído: **8 snapshots do Drizzle** (verificados semanticamente idênticos por `JSON.parse`) e **11.985 linhas de churn no `pnpm-lock.yaml`** que eram troca de aspas simples por duplas. Commitar qualquer um dos dois teria criado deriva sem nenhum ganho.
+
+### Três achados reais no caminho
+
+- **D52** — `scripts/seed-demo-account.ts` cria os 7 usuários de demonstração com a senha literal `SenhaLocal123!` e resolve o banco por `MIGRATION_DATABASE_URL ?? DATABASE_URL`. Não há guard de host, de nome de banco, nem confirmação. O problema não é o literal no repositório: é não existir fronteira entre local e produção no ponto de escrita.
+- **D53** — `src/app/layout.tsx` tinha `<script src="http://localhost:8400/live.js">` injetado por ferramenta de preview de UI, entre marcadores `impeccable-live-*`. Revertido à mão antes dos commits. `pnpm build` e a suíte inteira passam **com a tag presente** — nenhum gate atual pega.
+- **Corrigido:** `cadastro-form.tsx:163` era o único erro de lint do repositório (`react-hooks/set-state-in-effect`). Voltar ao passo 1 quando o servidor recusa credenciais é **derivação do resultado da action**, não sincronização com sistema externo; virou ajuste de estado durante o render, e o efeito ficou só com o que é de fato externo (mover o foco para o alerta).
+
+### Verde medido
+
+`pnpm typecheck` limpo · `pnpm lint` **0 erros / 9 warnings** (era 1 erro) · `pnpm test` **225 arquivos / 1564 testes**, incluindo 12 novos (6 de `MenuAcoes`, 4 de `AlertaRiscoCard`, 2 de `SupervisaoCard`).
+
+`pnpm test:rls` **não foi executado**: nenhuma mudança tocou schema, policy, função `SECURITY DEFINER` ou migração.
+
+### O que fica aberto
+
+- **Nada foi visto em navegador.** Sem Storybook, sem screenshot. Contraste real de `--surface-muted` nos dois temas segue **não medido em tela** — axe em jsdom não avalia contraste com fidelidade (`HTMLCanvasElement.getContext` não implementado, ruído visível na saída da suíte).
+- **A branch não foi enviada.** Os 18 commits estão locais.
+- A cadeia TCC segue em **#394**, intocada.
+
+---
+
+## 1a. Resumo da Sessão (17/08/2026) — passo 9: #322, a flag que não recuperava um centavo
 
 Orquestração em subagentes (2 de pesquisa → 4 builders → revisão adversarial + campanha de mutação em paralelo → reparo → oráculos). Branch nova `feat/322-orquestracao-retentativa`, nascida de `main`. **6 commits.** Uma migração: a `0106`.
 
