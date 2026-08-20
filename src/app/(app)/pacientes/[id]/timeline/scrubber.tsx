@@ -11,6 +11,39 @@ interface ScrubberProps {
   onSelecionarSessao: (numero: number) => void;
 }
 
+/**
+ * Ícone de aviso em traço, `currentColor`, no mesmo estilo do de
+ * `estado-de-erro.tsx`. Substitui o emoji de aviso, que tem nome anunciado
+ * inconsistente entre leitores de tela e não herda a cor do texto do banner.
+ */
+function IconeAviso() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      className="shrink-0"
+    >
+      <path
+        d="M10 2.5 18.5 17.5H1.5L10 2.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M10 7.5v4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="square"
+      />
+      <circle cx="10" cy="14.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function Scrubber({
   sessoesDisponiveis,
   sessaoSelecionada,
@@ -69,8 +102,11 @@ export function Scrubber({
     <div className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4">
       {/* Banner de Sessão Passada */}
       {isSessaoPassada && (
-        <div className="-mx-4 -mt-4 flex items-center justify-center gap-2 border-b-2 border-[var(--border-brutal)] bg-[var(--color-gold)] p-2 text-center text-sm font-bold text-[var(--text-primary)]">
-          <span>⚠️</span>
+        <div
+          role="status"
+          className="-mx-4 -mt-4 flex items-center justify-center gap-2 border-b-2 border-[var(--border-brutal)] bg-[var(--status-warning-bg)] p-2 text-center text-sm font-bold text-[var(--status-warning-fg)]"
+        >
+          <IconeAviso />
           <span>Visualizando histórico passado: Sessão {sessaoVisual}</span>
         </div>
       )}

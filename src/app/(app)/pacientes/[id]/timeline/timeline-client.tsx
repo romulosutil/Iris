@@ -34,6 +34,39 @@ interface ComparacaoData {
   milestones: DeltaMilestone[];
 }
 
+/**
+ * Ícone de aviso em traço, `currentColor`, no estilo de `estado-de-erro.tsx`.
+ * Substitui o emoji de aviso, que tem nome anunciado de forma inconsistente
+ * entre leitores de tela e não herda a cor do texto do bloco.
+ */
+function IconeAviso() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      className="mt-px shrink-0"
+    >
+      <path
+        d="M10 2.5 18.5 17.5H1.5L10 2.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M10 7.5v4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="square"
+      />
+      <circle cx="10" cy="14.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 interface TimelineClientProps {
   patientId: string;
   pacienteNome: string;
@@ -380,12 +413,12 @@ export function TimelineClient({
     };
 
     return (
-      <div className="bg-canvas border-ink-anchor flex flex-col border-2 p-6">
+      <div className="border-ink-anchor flex flex-col border-2 bg-[var(--surface-card)] p-6">
         <div className="border-ink-anchor border-b-2 pb-4">
           <h3 className="text-ink font-display text-lg font-black">
             Trajetória Clínica de Metas
           </h3>
-          <p className="text-muted mt-1 text-sm">
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Selecione uma meta ou marco para visualizar o andamento clínico e
             explorar evidências do trecho.
           </p>
@@ -400,7 +433,7 @@ export function TimelineClient({
               id="select-trajetoria-alvo"
               value={trajetoriaAlvoId}
               onChange={(e) => setTrajetoriaAlvoId(e.target.value)}
-              className="border-ink-anchor bg-canvas text-ink flex-1 border-2 p-2 text-sm focus:outline-none"
+              className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] flex-1 border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
             >
               <option value="">Selecione...</option>
               <optgroup label="Metas Ativas">
@@ -437,7 +470,7 @@ export function TimelineClient({
           />
         ) : (
           <div className="mt-6 flex flex-col gap-4">
-            <div className="text-ink border-ink-anchor bg-bg-canvas border px-3 py-2 text-sm font-bold">
+            <div className="text-ink border-ink-anchor border bg-[var(--surface-elevated)] px-3 py-2 text-sm font-bold">
               Trajetória: {targetNome}
             </div>
             {/* Visualização de Chunks como linha temporal */}
@@ -462,7 +495,7 @@ export function TimelineClient({
                     onClick={() =>
                       handleAbrirDrilldown(chunk, trajetoriaAlvoId, targetNome)
                     }
-                    className={`flex flex-col gap-2 rounded-[var(--radius-control)] border-2 p-4 text-left transition-all duration-75 focus:outline-none active:translate-y-0.5 sm:flex-row sm:items-center sm:justify-between ${colorClass}`}
+                    className={`focus-visible:outline-focus flex flex-col gap-2 rounded-[var(--radius-control)] border-2 p-4 text-left transition-all duration-75 focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)] active:translate-y-0.5 sm:flex-row sm:items-center sm:justify-between ${colorClass}`}
                   >
                     <div>
                       <span className="font-display text-base font-black tracking-tight uppercase">
@@ -500,12 +533,12 @@ export function TimelineClient({
     if (!snapSelecionado) return null;
 
     return (
-      <div className="bg-canvas border-ink-anchor flex flex-col border-2 p-6">
+      <div className="border-ink-anchor flex flex-col border-2 bg-[var(--surface-card)] p-6">
         <div className="border-ink-anchor border-b-2 pb-4">
           <h3 className="text-ink font-display text-lg font-black">
             Acompanhamento de Marcos e Protocolos
           </h3>
-          <p className="text-muted mt-1 text-sm">
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Estatísticas e progresso de marcos por domínio do protocolo ativo na
             Sessão {sessaoAtiva}.
           </p>
@@ -534,14 +567,14 @@ export function TimelineClient({
               return (
                 <div
                   key={dom}
-                  className="border-ink-anchor bg-bg-canvas border-2 p-4 shadow-[4px_4px_0px_#000000]"
+                  className="border-ink-anchor border-2 bg-[var(--surface-elevated)] p-4 shadow-[4px_4px_0px_#000000]"
                 >
                   <div className="mb-4 flex flex-col gap-2 border-b border-black pb-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <span className="font-display text-sm font-black tracking-tight uppercase">
                         Domínio: {dom.toUpperCase()}
                       </span>
-                      <div className="text-xxs text-muted mt-0.5">
+                      <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
                         {stats.total}{" "}
                         {stats.total === 1
                           ? "marco catalogado"
@@ -552,25 +585,25 @@ export function TimelineClient({
                       <span className="text-status-success-text bg-status-success-bg rounded border border-black px-1.5 py-0.5">
                         Conquistados: {stats.conquistados}
                       </span>
-                      <span className="text-status-info-text bg-status-info-bg rounded border border-black px-1.5 py-0.5">
+                      <span className="rounded border border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] px-1.5 py-0.5 text-[var(--status-ia-fg)]">
                         Candidatos: {stats.candidatos}
                       </span>
                     </div>
                   </div>
 
                   {/* Barra de Progresso Neobrutalista Stacked */}
-                  <div className="mb-4 flex h-4 overflow-hidden rounded-sm border-2 border-black bg-gray-200">
+                  <div className="mb-4 flex h-4 overflow-hidden rounded-sm border-2 border-black bg-[var(--surface-muted)]">
                     {percConquistados > 0 && (
                       <div
                         style={{ width: `${percConquistados}%` }}
-                        className="bg-status-success-bg h-full border-r border-black"
+                        className="h-full border-r-2 border-[var(--border-brutal)] bg-[var(--status-success-border)]"
                         title={`${percConquistados.toFixed(0)}% Conquistados`}
                       />
                     )}
                     {percCandidatos > 0 && (
                       <div
                         style={{ width: `${percCandidatos}%` }}
-                        className="bg-status-info-bg h-full border-r border-black"
+                        className="h-full border-r-2 border-[var(--border-brutal)] bg-[var(--status-ia-border)]"
                         title={`${percCandidatos.toFixed(0)}% Candidatos`}
                       />
                     )}
@@ -593,10 +626,10 @@ export function TimelineClient({
                       return (
                         <div
                           key={m.id}
-                          className="border-ink-anchor bg-canvas group relative flex cursor-help flex-col items-center justify-between gap-2 border p-2 text-center"
+                          className="border-ink-anchor group relative flex cursor-help flex-col items-center justify-between gap-2 border bg-[var(--surface-card)] p-2 text-center"
                           title={`${m.nome} ${m.nivel ? `(Nível ${m.nivel})` : ""}`}
                         >
-                          <span className="text-xxs line-clamp-1 font-black">
+                          <span className="line-clamp-1 text-[10px] font-black">
                             {m.nivel ? `Nível ${m.nivel}` : "Marco"}
                           </span>
 
@@ -610,7 +643,7 @@ export function TimelineClient({
                             </div>
                           ) : status === "candidato" ? (
                             <div
-                              className="bg-status-info-bg text-status-info-text flex h-8 w-8 rotate-45 transform items-center justify-center border-2 border-dashed border-black text-xs font-black"
+                              className="flex h-8 w-8 rotate-45 transform items-center justify-center border-2 border-dashed border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-xs font-black text-[var(--status-ia-fg)]"
                               title="Candidato"
                             >
                               <span className="block -rotate-45 transform">
@@ -626,7 +659,7 @@ export function TimelineClient({
                             </div>
                           )}
 
-                          <span className="text-muted line-clamp-2 text-[10px] leading-tight">
+                          <span className="line-clamp-2 text-[10px] leading-tight text-[var(--text-secondary)]">
                             {m.nome}
                           </span>
                         </div>
@@ -646,31 +679,33 @@ export function TimelineClient({
     if (!podeComparar) return null;
 
     return (
-      <div className="bg-canvas border-ink-anchor flex flex-col gap-4 border-2 p-4">
+      <div className="border-ink-anchor flex flex-col gap-4 border-2 bg-[var(--surface-card)] p-4">
         <div className="border-ink-anchor border-b-2 pb-2">
           <h3 className="text-ink text-base font-black">
             Comparar Pontos Temporais
           </h3>
-          <p className="text-xxs text-muted mt-0.5">
+          <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
             Selecione outra sessão para ver a evolução agregada no tempo.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* O <label> envolve o input para que a area clicavel inteira, e
+            nao so a caixa, alcance o piso tatil de --control-sm (44px). */}
+        <label
+          htmlFor="checkbox-comparar"
+          className="flex min-h-[var(--control-sm)] cursor-pointer items-center gap-3"
+        >
           <input
             id="checkbox-comparar"
             type="checkbox"
             checked={compararAtivo}
             onChange={(e) => handleCompararAtivoChange(e.target.checked)}
-            className="border-ink-anchor accent-gold size-4 cursor-pointer border-2"
+            className="border-ink-anchor accent-gold size-5 cursor-pointer border-2"
           />
-          <label
-            htmlFor="checkbox-comparar"
-            className="text-ink cursor-pointer text-sm font-bold"
-          >
+          <span className="text-ink text-sm font-bold">
             Ativar Comparador Temporal
-          </label>
-        </div>
+          </span>
+        </label>
 
         {compararAtivo && (
           <div className="flex flex-col gap-3">
@@ -687,7 +722,7 @@ export function TimelineClient({
                 onChange={(e) =>
                   handleSelecionarSessaoComparar(Number(e.target.value))
                 }
-                className="border-ink-anchor bg-canvas text-ink border-2 p-1.5 text-sm focus:outline-none"
+                className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
               >
                 <option value="" disabled>
                   Selecione...
@@ -719,17 +754,24 @@ export function TimelineClient({
             {/* Exibição do Delta de Comparação */}
             {comparacaoData && !erroComparacao && (
               <div className="border-ink-anchor flex flex-col gap-3 border-t-2 pt-3">
-                {/* Alerta Clínico Guard G7 */}
+                {/* Mudança de protocolo entre as duas sessões: a comparação
+                    de nível de ajuda fica suspensa. `role="status"` — a
+                    semântica que interrompe o leitor de tela é reservada ao
+                    risco clínico (mesma decisão de `estado-de-erro.tsx`). */}
                 {comparacaoData.protocoloMudou ? (
-                  <div className="flex items-start gap-2 rounded-[var(--radius-control)] border-2 border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-2.5 text-xs font-bold text-[var(--status-error-fg)]">
-                    <span>⚠️</span>
+                  <div
+                    role="status"
+                    className="flex items-start gap-2 rounded-[var(--radius-control)] border-2 border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] p-2.5 text-xs font-bold text-[var(--status-warning-fg)]"
+                  >
+                    <IconeAviso />
                     <div>
-                      <strong>Guard G7 Ativado:</strong> Houve mudança nos
-                      protocolos ativos entre a Sessão{" "}
+                      <strong>Comparação suspensa.</strong> Os protocolos ativos
+                      mudaram entre a Sessão{" "}
                       {Math.min(sessaoAtiva, sessaoCompararValida ?? 0)} e a
-                      Sessão {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)}.
-                      Os deltas de nível de ajuda foram suspensos devido a
-                      desalinhamento de escalas clínicas.
+                      Sessão {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)},
+                      e as escalas de nível de ajuda das duas não são
+                      equivalentes. Comparar os números daria uma diferença que
+                      não existe clinicamente.
                     </div>
                   </div>
                 ) : (
@@ -801,11 +843,10 @@ export function TimelineClient({
             drilldownEvidencias.map((ev: any) => (
               <div
                 key={ev.id}
-                className={`flex flex-col gap-2 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)] ${
-                  ev.polaridade === "positiva"
-                    ? "border-l-4 border-l-[var(--status-success-border)]"
-                    : "border-l-4 border-l-[var(--status-error-border)]"
-                }`}
+                /* Sem acento lateral: o DS baniu a faixa esquerda, e a
+                   polaridade já é dita pela pílula "Evolução"/"Dificuldade"
+                   logo abaixo — nenhuma informação se perde. */
+                className="flex flex-col gap-2 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]"
               >
                 <div className="flex flex-col gap-1 border-b border-[var(--border-brutal)]/20 pb-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                   <span className="font-black text-[var(--text-primary)]">

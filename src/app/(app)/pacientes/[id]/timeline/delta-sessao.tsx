@@ -4,6 +4,40 @@ import React from "react";
 import type { DeltaSessao } from "./logic";
 import { EstadoDeErro } from "./estado-de-erro";
 
+/**
+ * Ícones de traço em `currentColor`, no estilo de `estado-de-erro.tsx`, no
+ * lugar dos emoji de foguete e de tendencia. Emoji tem nome anunciado
+ * leitores de tela, não herda a cor do texto e escala mal com a tipografia.
+ * `aria-hidden`: o rótulo textual ao lado já carrega o significado.
+ */
+function IconeGrupo({ tipo }: { tipo: "novo" | "evolucao" | "regressao" }) {
+  const traco = {
+    novo: "M10 4v12M4 10h12",
+    evolucao: "M3 14.5 8 9l3.5 3.5L17 6",
+    regressao: "M3 6l5 5.5L11.5 8 17 14",
+  }[tipo];
+
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      className="inline-block shrink-0 align-[-2px]"
+    >
+      <path
+        d={traco}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
+      />
+    </svg>
+  );
+}
+
 interface DeltaSessaoProps {
   delta: DeltaSessao | null;
   metas: Array<{ id: string; descricao: string; disciplina: string | null }>;
@@ -71,7 +105,7 @@ export function DeltaSessaoLateral({
     return (
       metaDescMap.get(id) ??
       milestoneNomeMap.get(id) ??
-      `Meta/Marco (${id.substring(0, 8)})`
+      "Alvo removido do plano"
     );
   };
 
@@ -112,7 +146,7 @@ export function DeltaSessaoLateral({
         {novos.length > 0 && (
           <div className="flex flex-col gap-2">
             <h4 className="text-xs font-bold tracking-wider text-[var(--text-secondary)] uppercase">
-              🚀 Introduzidos na Sessão ({novos.length})
+              <IconeGrupo tipo="novo" /> Introduzidos na Sessão ({novos.length})
             </h4>
             {novos.map((item) => (
               <div
@@ -135,7 +169,7 @@ export function DeltaSessaoLateral({
         {evolucoes.length > 0 && (
           <div className="flex flex-col gap-2">
             <h4 className="text-xs font-bold tracking-wider text-[var(--text-secondary)] uppercase">
-              📈 Evoluções ({evolucoes.length})
+              <IconeGrupo tipo="evolucao" /> Evoluções ({evolucoes.length})
             </h4>
             {evolucoes.map((item) => (
               <div
@@ -167,7 +201,8 @@ export function DeltaSessaoLateral({
         {regressoes.length > 0 && (
           <div className="flex flex-col gap-2">
             <h4 className="text-xs font-bold tracking-wider text-[var(--text-secondary)] uppercase">
-              📉 Regressões / Removidos ({regressoes.length})
+              <IconeGrupo tipo="regressao" /> Regressões / Removidos (
+              {regressoes.length})
             </h4>
             {regressoes.map((item) => (
               <div
