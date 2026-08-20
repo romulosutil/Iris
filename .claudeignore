@@ -68,5 +68,5 @@ LICENSE.md
 LICENSE
 CHANGELOG.md
 GRAPH_REPORT.md
-docs/archive/
+docs/archive/*
 !docs/archive/handoff-fase1.md
