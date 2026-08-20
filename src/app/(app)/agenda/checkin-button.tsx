@@ -43,7 +43,7 @@ export function CheckInButton({
         {pending ? "Registrando…" : "Fazer check-in"}
       </Button>
       {state.error ? (
-        <span role="alert" className="text-terracotta text-sm">
+        <span role="alert" className="text-sm text-[var(--status-error-fg)]">
           {state.error}
         </span>
       ) : null}
