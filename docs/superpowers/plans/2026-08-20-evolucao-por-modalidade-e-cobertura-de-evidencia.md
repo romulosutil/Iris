@@ -725,13 +725,24 @@ git commit -m "feat(evolucao): plot evidence coverage instead of normalized prog
 - Modify: `src/app/(app)/pacientes/[id]/page.tsx`
 - Modify: `src/app/(app)/pacientes/[id]/timeline/timeline-client.tsx`
 
-- [ ] **Step 1: Crie o seletor de vista**
+- [x] **Step 1: Crie o seletor de vista**
+
+> **Correção na execução (20/08/2026): NÃO ponha `"use client"` neste arquivo.**
+> `vistaValida` é chamado de `page.tsx`, que é Server Component. Com a
+> diretiva, os exports viram referências de cliente e a chamada no servidor
+> estoura em runtime — `Attempted to call vistaValida() from the server but
+vistaValida is on the client` — derrubando a aba inteira com HTTP 500.
+> Typecheck, lint e a suíte passam mesmo assim; só o navegador pega. O
+> componente não usa hook nenhum (só `<Link>`), então o módulo fica sem
+> diretiva. Ver commit `fix(evolucao): drop 'use client' from vista-nav`.
+>
+> A superfície também foi alinhada ao `SegmentedControl` do DS (borda âncora +
+> sombra dura sobre `--surface-card`, item ativo em `--action-primary`), com
+> `<Link>` no lugar de `<button>` para preservar href real.
 
 Crie `src/app/(app)/pacientes/[id]/timeline/vista-nav.tsx`:
 
 ```tsx
-"use client";
-
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
@@ -797,7 +808,7 @@ export function VistaNav({
 }
 ```
 
-- [ ] **Step 2: Leia a vista em `page.tsx`**
+- [x] **Step 2: Leia a vista em `page.tsx`**
 
 Em `src/app/(app)/pacientes/[id]/page.tsx`, mude a interface de props e a assinatura:
 
@@ -838,7 +849,7 @@ Passe para o cliente:
 />
 ```
 
-- [ ] **Step 3: Faça `TimelineClient` renderizar só a vista pedida**
+- [x] **Step 3: Faça `TimelineClient` renderizar só a vista pedida**
 
 Em `timeline-client.tsx`, adicione ao import de componentes:
 
@@ -913,7 +924,7 @@ return (
 
 Extraia o bloco JSX do comparador (de `{podeComparar && (` até o `)}` correspondente) para uma função `renderComparador` declarada junto das outras `render*`, e o `<Dialog open={drilldownOpen} ...>` inteiro para `renderDrilldown`. Não mude o conteúdo dos dois — só mova.
 
-- [ ] **Step 4: Verifique**
+- [x] **Step 4: Verifique**
 
 ```bash
 pnpm typecheck && npx eslint "src/app/(app)/pacientes/[id]/timeline/" && npx vitest run "src/app/(app)/pacientes"
@@ -921,12 +932,16 @@ pnpm typecheck && npx eslint "src/app/(app)/pacientes/[id]/timeline/" && npx vit
 
 Esperado: typecheck limpo, 0 erros de ESLint, suíte verde.
 
-- [ ] **Step 5: Verifique no navegador**
+Resultado (20/08/2026): typecheck limpo, 0 erros de ESLint (1 warning pré-existente de `react-hooks/exhaustive-deps`), 203/203 verdes. **Os três passaram com a aba dando HTTP 500 em runtime** — nenhum deles executa a fronteira servidor/cliente. Ver a correção no Step 1.
+
+- [~] **Step 5: Verifique no navegador**
 
 Suba o preview com `preview_start` e visite, autenticado, `/pacientes/<id>` e `/pacientes/<id>?vista=tempo`.
 Confirme: (a) a entrada cai em "Esta sessão" com o delta no topo; (b) o scrubber não aparece em "Esta sessão"; (c) a URL muda ao trocar de vista e o "voltar" do navegador desfaz; (d) em largura de 360px nada estoura na horizontal.
 
-- [ ] **Step 6: Commit**
+Resultado (20/08/2026), em Chrome autenticado: (a) ✅, (b) ✅, (c) ✅ — a URL vira `?vista=tempo` e o "voltar" devolve para "Esta sessão". **(d) NÃO verificado:** o Chrome do Windows tem largura mínima de janela e `resize_window` não reduziu o viewport abaixo de ~1849px CSS; o truque de `zoom` não reavaliou as media queries. Continua aberto — medir em DevTools device toolbar ou em aparelho real antes de fechar a task.
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add "src/app/(app)/pacientes/[id]/timeline/vista-nav.tsx" "src/app/(app)/pacientes/[id]/page.tsx" "src/app/(app)/pacientes/[id]/timeline/timeline-client.tsx"
