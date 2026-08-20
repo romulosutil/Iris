@@ -16,6 +16,9 @@ import { ArquivamentoDialog } from "./arquivamento-dialog";
 import { AvisosArquivamento } from "./avisos-arquivamento";
 import { carregarAvisosArquivamento } from "./arquivamento-queries";
 import { capacidadesDaModalidade } from "./modalidade";
+import { EvolucaoTcc } from "./timeline/evolucao-tcc";
+import { obterRPDEntries } from "./tcc/logic";
+import { obterInstrumentoAplicacoes } from "./tcc/instrumento-logic";
 
 interface PacientePageProps {
   params: Promise<{ id: string }>;
@@ -61,6 +64,50 @@ export default async function PacientePage({ params }: PacientePageProps) {
   // Subiu para cá porque o ramo de TCC (abaixo) precisa dos avisos e sai antes
   // de `carregarTimeline`. Não depende da timeline.
   const avisos = await carregarAvisosArquivamento(ctx, id);
+
+  // Paciente de TCC tem leitura de evolução PRÓPRIA: escore de instrumento
+  // padronizado no tempo e reestruturação de crenças. Sai antes de
+  // `carregarTimeline` porque a timeline é protocol-driven — os eixos que ela
+  // materializa (mando, tato, ecoico) descrevem uma intervenção que este
+  // paciente não recebe, e consultá-la aqui seria custo puro.
+  if (capacidades.leituraDeEvolucao === "tcc") {
+    const [aplicacoes, entriesRpd] = await Promise.all([
+      obterInstrumentoAplicacoes(ctx, id),
+      obterRPDEntries(ctx, id),
+    ]);
+
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Stack gap="lg">
+          <PageHeader
+            breadcrumb={
+              <Breadcrumb
+                itens={[
+                  { rotulo: "Pacientes", href: "/pacientes" },
+                  { rotulo: paciente.nome, atual: true },
+                ]}
+              />
+            }
+            title={paciente.nome}
+            badge={
+              paciente.arquivadoEm ? (
+                <StatusBadge variante="neutral">Arquivado</StatusBadge>
+              ) : undefined
+            }
+            description="Evolução clínica em Terapia Cognitivo-Comportamental"
+          />
+          <AvisosArquivamento {...avisos} />
+          <EvolucaoTcc
+            aplicacoes={aplicacoes}
+            entriesRpd={entriesRpd.map((e) => ({
+              ...e,
+              distorcoesCognitivas: e.distorcoesCognitivas as string[] | null,
+            }))}
+          />
+        </Stack>
+      </div>
+    );
+  }
 
   const timeline = await carregarTimeline(ctx, id);
   const temSnapshots = timeline && timeline.snapshots.length > 0;

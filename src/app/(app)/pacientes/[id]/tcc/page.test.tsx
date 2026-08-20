@@ -48,9 +48,6 @@ vi.mock("./sugestoes", () => ({
 
 vi.mock("./rpd-form", () => ({ RpdForm: () => null }));
 vi.mock("./rpd-sugestoes", () => ({ RpdSugestoes: () => null }));
-vi.mock("./grafico-evolucao-crencas", () => ({
-  GraficoEvolucaoCrencas: () => null,
-}));
 
 // #393 — instrumentos padronizados (PHQ-9/GAD-7): mockados como vazios, sem
 // tocar `instrumento-logic.ts` (RLS/postgres real) neste teste de guard de
