@@ -84,7 +84,7 @@ describe("PacienteLayout - Abas do Prontuário", () => {
     expect(screen.queryByText("Temas")).toBeNull();
   });
 
-  it("exibe só Temas para paciente na modalidade conventional", async () => {
+  it("exibe só Temas para paciente na modalidade conventional, SEM a aba Evolução", async () => {
     mockModalidade("conventional");
 
     const LayoutComponent = await PacienteLayout({
@@ -94,9 +94,39 @@ describe("PacienteLayout - Abas do Prontuário", () => {
 
     render(LayoutComponent);
 
-    expect(screen.getByText("Evolução")).not.toBeNull();
+    // A aba "Evolução" some aqui de propósito: `page.tsx` redireciona
+    // `conventional` para `Temas`, e uma aba que só redireciona mente sobre
+    // ter conteúdo próprio. O acompanhamento desse modo é narrativo — o
+    // hexágono de eixos VB-MAPP que a Evolução renderiza descreve outra
+    // clínica, não a dele.
+    expect(screen.queryByText("Evolução")).toBeNull();
     expect(screen.getByText("Temas")).not.toBeNull();
     expect(screen.queryByText("PEI & Metas")).toBeNull();
     expect(screen.queryByText("TCC")).toBeNull();
+  });
+
+  it("mantém a aba Evolução quando a modalidade não resolve (paciente fora da RLS)", async () => {
+    // Sem esta garantia, um paciente sem linha visível ficaria com o
+    // prontuário sem porta de entrada: nenhuma aba central E nenhuma Evolução.
+    mockWithTenant.mockImplementation(async (_ctx, fn) => {
+      const mockTx = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([]),
+      };
+      return fn(mockTx);
+    });
+
+    const LayoutComponent = await PacienteLayout({
+      children: <div data-testid="child-content">Conteúdo</div>,
+      params: Promise.resolve({ id: "pac_4" }),
+    });
+
+    render(LayoutComponent);
+
+    expect(screen.getByText("Evolução")).not.toBeNull();
+    expect(screen.queryByText("PEI & Metas")).toBeNull();
+    expect(screen.queryByText("TCC")).toBeNull();
+    expect(screen.queryByText("Temas")).toBeNull();
   });
 });

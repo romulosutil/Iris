@@ -11,6 +11,7 @@ import { withTenant } from "@/db/rls";
 import { patient } from "@/db/schema";
 import { mensagemDeEstado } from "@/lib/billing/estado-conta";
 import { obterSituacaoConta } from "../../queries";
+import { capacidadesDaModalidade } from "./modalidade";
 
 /**
  * Casca comum de TODAS as telas de um paciente.
@@ -64,29 +65,33 @@ export default async function PacienteLayout({
   // pontuação de protocolo (PEI & Metas), diário de pensamentos (TCC) ou
   // registro narrativo livre (Temas). Nunca duas ao mesmo tempo: a aba errada
   // levaria o terapeuta a preencher um instrumento que o modo não usa.
-  // `default` cai em array vazio (sem aba central) em vez de lançar — um
-  // paciente sem modalidade resolvida ainda precisa navegar pelas outras abas.
-  let abaModalidade: TabsNavItem[];
-  switch (dadosPaciente?.clinicalModality) {
-    case "protocol_driven":
-      abaModalidade = [{ href: `${base}/metas`, rotulo: "PEI & Metas" }];
-      break;
-    case "cognitive_behavioral":
-      abaModalidade = [{ href: `${base}/tcc`, rotulo: "TCC" }];
-      break;
-    case "conventional":
-      abaModalidade = [{ href: `${base}/temas`, rotulo: "Temas" }];
-      break;
-    default:
-      abaModalidade = [];
-  }
+  // O `switch` que ficava aqui virou `./modalidade.ts`: `page.tsx` precisa da
+  // MESMA decisão para saber se a rota base redireciona, e duas cópias da
+  // regra divergem no primeiro modo novo.
+  const capacidades = capacidadesDaModalidade(dadosPaciente?.clinicalModality);
+
+  // Sem aba central quando a modalidade não resolve (paciente que a RLS não
+  // enxerga): array vazio em vez de lançar — ainda é preciso navegar.
+  const abaModalidade: TabsNavItem[] = capacidades.abaCentral
+    ? [
+        {
+          href: `${base}/${capacidades.abaCentral.slug}`,
+          rotulo: capacidades.abaCentral.rotulo,
+        },
+      ]
+    : [];
 
   // Todas as rotas irmãs que de fato existem sob `[id]/` (as que têm
   // `page.tsx`). `consentimento/` e `timeline/` são pastas de lógica sem tela
   // própria — a timeline é renderizada dentro da aba Evolução — e por isso não
   // entram aqui: aba que leva a 404 é pior que aba ausente.
   const abas: TabsNavItem[] = [
-    { href: base, rotulo: "Evolução", exato: true },
+    // "Evolução" some em `conventional`: o acompanhamento desse modo é
+    // narrativo, a rota base redireciona para `Temas` (ver `./page.tsx`), e
+    // aba que só redireciona é aba que mente sobre existir.
+    ...(capacidades.temEvolucao
+      ? [{ href: base, rotulo: "Evolução", exato: true } as TabsNavItem]
+      : []),
     { href: `${base}/briefing`, rotulo: "Briefing" },
     { href: `${base}/cadastro-clinico`, rotulo: "Ficha Clínica" },
     ...abaModalidade,

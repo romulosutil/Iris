@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
@@ -15,6 +15,7 @@ import Link from "next/link";
 import { ArquivamentoDialog } from "./arquivamento-dialog";
 import { AvisosArquivamento } from "./avisos-arquivamento";
 import { carregarAvisosArquivamento } from "./arquivamento-queries";
+import { capacidadesDaModalidade } from "./modalidade";
 
 interface PacientePageProps {
   params: Promise<{ id: string }>;
@@ -34,6 +35,9 @@ export default async function PacientePage({ params }: PacientePageProps) {
         // sem ele a única pista de que o paciente saiu da contagem de ativos
         // seria a fatura no fechamento do ciclo.
         arquivadoEm: patient.arquivadoEm,
+        // A modalidade decide se esta aba existe e o que ela lê. Sem ela, a
+        // rota base servia um hexágono de eixos VB-MAPP para os três modos.
+        clinicalModality: patient.clinicalModality,
       })
       .from(patient)
       .where(eq(patient.id, id));
@@ -45,10 +49,21 @@ export default async function PacientePage({ params }: PacientePageProps) {
     notFound();
   }
 
+  const capacidades = capacidadesDaModalidade(paciente.clinicalModality);
+
+  // Sai ANTES de `carregarTimeline`: em `conventional` a timeline não seria
+  // usada, e a consulta custa uma varredura de snapshots por entrada no
+  // prontuário. `redirect` lança — nada abaixo executa.
+  if (!capacidades.temEvolucao && capacidades.rotaDeEntrada) {
+    redirect(`/pacientes/${id}/${capacidades.rotaDeEntrada}`);
+  }
+
+  // Subiu para cá porque o ramo de TCC (abaixo) precisa dos avisos e sai antes
+  // de `carregarTimeline`. Não depende da timeline.
+  const avisos = await carregarAvisosArquivamento(ctx, id);
+
   const timeline = await carregarTimeline(ctx, id);
   const temSnapshots = timeline && timeline.snapshots.length > 0;
-
-  const avisos = await carregarAvisosArquivamento(ctx, id);
 
   // Mesmo predicado do `requireRole` do core (`logic.ts`): mostrar o botão a
   // quem a policy `patient_update` não deixa escrever produziria um "arquivado"
