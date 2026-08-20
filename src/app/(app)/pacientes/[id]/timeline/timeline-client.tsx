@@ -4,6 +4,7 @@ import React, { useState, useEffect, useTransition } from "react";
 import { Scrubber } from "./scrubber";
 import { DeltaSessaoLateral } from "./delta-sessao";
 import { EstadoDeErro } from "./estado-de-erro";
+import { GraficoEspectro } from "./grafico-espectro";
 import {
   carregarDeltaSessaoAction,
   carregarComparacaoAction,
@@ -58,6 +59,17 @@ export function TimelineClient({
   // Encontra o snapshot selecionado
   const snapSelecionado =
     snapshots.find((s) => s.sessionNumero === sessaoAtiva) ?? null;
+
+  // Snapshot imediatamente anterior ao selecionado — é o que dá o contorno
+  // tracejado do Espectro. "Anterior" aqui é a sessão anterior COM snapshot,
+  // não `sessaoAtiva - 1`: sessão sem evidência aprovada não gera snapshot, e
+  // comparar com um número que não existe devolveria undefined em silêncio.
+  const snapAnterior = React.useMemo(() => {
+    const anteriores = snapshots
+      .filter((s) => s.sessionNumero < sessaoAtiva)
+      .sort((a, b) => b.sessionNumero - a.sessionNumero);
+    return anteriores[0] ?? null;
+  }, [snapshots, sessaoAtiva]);
 
   // Estado para a trajetória selecionada
   const [trajetoriaAlvoId, setTrajetoriaAlvoId] = useState<string>("");
@@ -352,222 +364,6 @@ export function TimelineClient({
     tentativaComparacao,
   ]);
 
-  // Lógica de Renderização do Hexágono "Espectro" SVG
-  const renderEspectroRadar = () => {
-    if (!snapSelecionado) return null;
-
-    const data = snapSelecionado.espectro;
-    const centroX = 150;
-    const centroY = 150;
-    const raioMax = 100;
-
-    // 6 eixos com ângulos de 60 graus iniciando do topo (-90° ou 3*pi/2)
-    const eixosHex = data.map((e, index) => {
-      const angulo = (index * 60 - 90) * (Math.PI / 180);
-      const valorNormalizado = e.valor / 100;
-      const xMax = centroX + raioMax * Math.cos(angulo);
-      const yMax = centroY + raioMax * Math.sin(angulo);
-      const xValor = centroX + raioMax * valorNormalizado * Math.cos(angulo);
-      const yValor = centroY + raioMax * valorNormalizado * Math.sin(angulo);
-
-      return {
-        ...e,
-        xMax,
-        yMax,
-        xValor,
-        yValor,
-        label: e.eixo
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase()),
-      };
-    });
-
-    // Caminho da teia de fundo (0%, 25%, 50%, 75%, 100%)
-    const niveisTeia = [25, 50, 75, 100];
-    const caminhosTeia = niveisTeia.map((nivel) => {
-      const pontos = data.map((_, index) => {
-        const angulo = (index * 60 - 90) * (Math.PI / 180);
-        const r = raioMax * (nivel / 100);
-        const x = centroX + r * Math.cos(angulo);
-        const y = centroY + r * Math.sin(angulo);
-        return `${x},${y}`;
-      });
-      return pontos.join(" ");
-    });
-
-    // Polígono de evolução do paciente naquela sessão
-    const pontosEvolucao = eixosHex
-      .map((e) => `${e.xValor},${e.yValor}`)
-      .join(" ");
-
-    return (
-      <div className="bg-canvas border-ink-anchor flex flex-col items-center border-2 p-6">
-        <h3 className="text-ink mb-2 text-lg font-black">
-          Gráfico de Espectro Clínico
-        </h3>
-
-        {/* SVG do Radar Chart */}
-        <div className="relative h-[300px] w-[300px]" aria-hidden="true">
-          <svg width="300" height="300" className="overflow-visible">
-            {/* Linhas de grade da teia */}
-            {caminhosTeia.map((caminho, i) => (
-              <polygon
-                key={i}
-                points={caminho}
-                fill="none"
-                stroke="#c0c0c0"
-                strokeWidth="1"
-                strokeDasharray="2,2"
-              />
-            ))}
-
-            {/* Linhas dos eixos centrais */}
-            {eixosHex.map((e, i) => (
-              <line
-                key={i}
-                x1={centroX}
-                y1={centroY}
-                x2={e.xMax}
-                y2={e.yMax}
-                stroke="#d0d0d0"
-                strokeWidth="1"
-              />
-            ))}
-
-            {/* Polígono preenchido do repertório */}
-            <polygon
-              points={pontosEvolucao}
-              fill="rgba(218, 165, 32, 0.25)" // Ouro translúcido do Espectro Brutal
-              stroke="var(--color-gold, #DAA520)"
-              strokeWidth="3"
-            />
-
-            {/* Marcadores dos vértices */}
-            {eixosHex.map((e, i) => (
-              <circle
-                key={i}
-                cx={e.xValor}
-                cy={e.yValor}
-                r="4"
-                fill="var(--color-gold, #DAA520)"
-                stroke="#000000"
-                strokeWidth="1"
-              />
-            ))}
-
-            {/* Rótulos dos eixos */}
-            {eixosHex.map((e, i) => {
-              // Ajusta a posição do texto para não colidir com o gráfico
-              const offsetFactor = 1.2;
-              const ang = (i * 60 - 90) * (Math.PI / 180);
-              const tx = centroX + raioMax * offsetFactor * Math.cos(ang);
-              const ty = centroY + raioMax * offsetFactor * Math.sin(ang) + 4;
-              let textAnchor: "middle" | "start" | "end" = "middle";
-              if (Math.cos(ang) > 0.1) textAnchor = "start";
-              if (Math.cos(ang) < -0.1) textAnchor = "end";
-
-              return (
-                <text
-                  key={i}
-                  x={tx}
-                  y={ty}
-                  textAnchor={textAnchor}
-                  className="font-display fill-ink font-bold"
-                  style={{ fontSize: "9px" }}
-                >
-                  {e.label} ({e.valor}%)
-                </text>
-              );
-            })}
-          </svg>
-        </div>
-
-        {/* Tabela sr-only para Acessibilidade (DoD) */}
-        <table className="sr-only">
-          <caption>Dados de evolução clínica da Sessão {sessaoAtiva}</caption>
-          <thead>
-            <tr>
-              <th scope="col">Área de Evolução</th>
-              <th scope="col">Progresso Normalizado (%)</th>
-              <th scope="col">Evidências Registradas</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((e, i) => (
-              <tr key={i}>
-                <td>{e.eixo.replace(/_/g, " ")}</td>
-                <td>{e.valor}%</td>
-                <td>{e.contagemEvidencias}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Link visível para abrir os dados em tabela */}
-        <div className="mt-4 text-center">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variante="secundaria">
-                Visualizar Dados em Formato Tabela
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogTitle>Dados de evolução clínica</DialogTitle>
-              <DialogDescription>
-                Sessão {sessaoAtiva}: leitura tabular dos eixos do gráfico de
-                espectro.
-              </DialogDescription>
-              <div className="mt-4 max-h-[60vh] overflow-auto">
-                <table className="border-ink-anchor w-full border-collapse border text-left text-sm">
-                  <caption className="sr-only">
-                    Dados de evolução clínica da Sessão {sessaoAtiva}
-                  </caption>
-                  <thead>
-                    <tr className="bg-bg-canvas">
-                      <th
-                        scope="col"
-                        className="border-ink-anchor border p-2 font-bold"
-                      >
-                        Área de Evolução
-                      </th>
-                      <th
-                        scope="col"
-                        className="border-ink-anchor border p-2 font-bold"
-                      >
-                        Progresso (%)
-                      </th>
-                      <th
-                        scope="col"
-                        className="border-ink-anchor border p-2 font-bold"
-                      >
-                        Evidências
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.map((e, i) => (
-                      <tr key={i}>
-                        <td className="border-ink-anchor border p-2">
-                          {e.eixo.replace(/_/g, " ")}
-                        </td>
-                        <td className="border-ink-anchor border p-2">
-                          {e.valor}%
-                        </td>
-                        <td className="border-ink-anchor border p-2">
-                          {e.contagemEvidencias}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-    );
-  };
-
   const renderTrajetoriaMetas = () => {
     const chunks = getTrajetoriaChunks(trajetoriaAlvoId);
     const targetNome = getTargetNome(trajetoriaAlvoId);
@@ -856,8 +652,15 @@ export function TimelineClient({
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {/* Coluna Principal: Gráficos */}
         <div className="flex flex-col gap-6 md:col-span-2">
-          {/* Radar Chart Espectro */}
-          {renderEspectroRadar()}
+          {/* Hexágono do Espectro */}
+          {snapSelecionado ? (
+            <GraficoEspectro
+              espectro={snapSelecionado.espectro}
+              espectroAnterior={snapAnterior?.espectro ?? null}
+              sessaoAtiva={sessaoAtiva}
+              sessaoAnterior={snapAnterior?.sessionNumero ?? null}
+            />
+          ) : null}
 
           {/* Trajetória de Metas (Parte 3) */}
           {renderTrajetoriaMetas()}

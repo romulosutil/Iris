@@ -5,6 +5,8 @@ import { withTenant, type TenantContext } from "@/db/rls";
 import {
   sessionSnapshot,
   goal,
+  goalCandidacy,
+  goalMilestoneMapping,
   milestone,
   patientProtocol,
   protocol,
@@ -15,9 +17,8 @@ import {
 } from "@/db/schema";
 import {
   computarDadosEspectro,
-  type DadosEixoRadar,
-  type MilestoneMetadata,
-  type GoalMetadata,
+  type AlvoEspectro,
+  type ResultadoEspectro,
 } from "@/lib/evidence/espectro";
 import {
   calcularDelta,
@@ -30,7 +31,7 @@ export interface TimelineSnapshot {
   geradoEm: Date;
   repertorioState: any;
   segmentacao: any;
-  espectro: DadosEixoRadar[];
+  espectro: ResultadoEspectro;
 }
 
 export interface TimelineData {
@@ -113,34 +114,71 @@ export async function carregarTimeline(
           .where(inArray(milestone.protocolId, protocolIds))
       : [];
 
-    // 4. Constrói o dicionário de metadados de milestones para o cômputo do Espectro
+    // 4. Alvos do Espectro: uma linha por META, com o eixo resolvido pelo MARCO
+    //    mapeado a ela (`goal_milestone_mapping`).
+    //
+    //    Por que o marco e não a disciplina: `repertorio_state` é indexado por
+    //    `goal_id` (ver `materializar.ts`), então a versão anterior — que
+    //    procurava a chave em `mapeamentoMilestones[id]` — nunca encontrava
+    //    marco nenhum e caía sempre no fallback por disciplina, empilhando toda
+    //    meta de ABA num único eixo. O mapeamento meta→marco é o vínculo real.
+    const metaIds = metas.map((m) => m.id);
+    const mapeamentos = metaIds.length
+      ? await tx
+          .select({
+            goalId: goalMilestoneMapping.goalId,
+            milestoneId: goalMilestoneMapping.milestoneId,
+          })
+          .from(goalMilestoneMapping)
+          .where(inArray(goalMilestoneMapping.goalId, metaIds))
+      : [];
+
+    const candidaturas = metaIds.length
+      ? await tx
+          .select({
+            goalId: goalCandidacy.goalId,
+            isCandidata: goalCandidacy.isCandidateDominada,
+          })
+          .from(goalCandidacy)
+          .where(inArray(goalCandidacy.goalId, metaIds))
+      : [];
+
     const PPMap = new Map(PP.map((p) => [p.id, p]));
-    const mapeamentoMilestones: Record<string, MilestoneMetadata> = {};
-    for (const m of milestones) {
-      const p = PPMap.get(m.protocolId);
-      const taxonomia = (p?.taxonomiaAjuda ?? []) as string[];
-      mapeamentoMilestones[m.id] = {
-        dominioId: m.dominioId,
-        protocolId: m.protocolId,
-        tipoEstrutura: m.tipoEstrutura as MilestoneMetadata["tipoEstrutura"],
-        totalNiveisAjuda: Math.max(0, taxonomia.length - 1),
-      };
+    const milestoneMap = new Map(milestones.map((m) => [m.id, m]));
+    const candidaturaMap = new Map(
+      candidaturas.map((c) => [c.goalId, c.isCandidata]),
+    );
+
+    // Uma meta pode mapear vários marcos; o primeiro que resolve domínio define
+    // o eixo. Rateio entre eixos exigiria um peso que ninguém declarou.
+    const marcoDaMeta = new Map<string, (typeof milestones)[number]>();
+    for (const mm of mapeamentos) {
+      if (marcoDaMeta.has(mm.goalId)) continue;
+      const marco = milestoneMap.get(mm.milestoneId);
+      if (marco) marcoDaMeta.set(mm.goalId, marco);
     }
 
-    const goalsMeta: GoalMetadata[] = metas.map((m) => ({
-      id: m.id,
-      disciplina: m.disciplina,
-    }));
+    const alvosEspectro: AlvoEspectro[] = metas.map((m) => {
+      const marco = marcoDaMeta.get(m.id);
+      const proto = marco ? PPMap.get(marco.protocolId) : undefined;
+      const taxonomia = (proto?.taxonomiaAjuda ?? []) as string[];
+      return {
+        goalId: m.id,
+        dominioId: marco?.dominioId ?? null,
+        disciplina: m.disciplina,
+        estado: m.estado as AlvoEspectro["estado"],
+        // Ordinal máximo da escala. Sem taxonomia declarada fica 0, e o alvo
+        // sai da média em vez de herdar uma escala inventada.
+        totalNiveisAjuda: Math.max(0, taxonomia.length - 1),
+        isCandidata: candidaturaMap.get(m.id) ?? false,
+      };
+    });
 
     // 5. Mapeia cada snapshot e anexa o espectro pré-calculado
     const snapshots: TimelineSnapshot[] = snaps.map((s) => {
       const rep = (s.repertorioState ?? {}) as any;
       const seg = (s.segmentacao ?? {}) as any;
-      const espectro = computarDadosEspectro(
-        rep,
-        mapeamentoMilestones,
-        goalsMeta,
-      );
+      const espectro = computarDadosEspectro(rep, alvosEspectro);
 
       return {
         sessionNumero: s.sessionNumero,

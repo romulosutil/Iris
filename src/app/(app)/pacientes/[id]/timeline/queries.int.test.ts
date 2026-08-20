@@ -82,6 +82,12 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
       RETURNING id`;
     GOAL_ID = goalRow!.id as string;
 
+    // O eixo do Espectro vem do MARCO mapeado à meta. Sem esta linha a meta
+    // não resolve eixo nenhum e sai do gráfico — que é o comportamento certo,
+    // e é justamente o que o cadastro real precisa ter.
+    await owner`INSERT INTO goal_milestone_mapping (goal_id, milestone_id)
+      VALUES (${GOAL_ID}, ${MARCO_ID})`;
+
     // Sessão 1 e 2
     SESS_A1_ID = crypto.randomUUID();
     SESS_A2_ID = crypto.randomUUID();
@@ -105,7 +111,11 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
             contagem: 5,
             is_candidata: true,
           },
-          [GOAL_ID]: { contagem: 4, is_candidata: true },
+          [GOAL_ID]: {
+            nivel_ajuda_recente: 0,
+            contagem: 4,
+            is_candidata: true,
+          },
         })},
         ${owner.json({ [GOAL_ID]: { [PROTOCOL_ID]: { tipo_estrutura: "marco_simples", metrica: { eixo: "nivel_ajuda", ordinalRecente: 0 }, rotulo: "evolucao" } } })}
       )`;
@@ -152,15 +162,26 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     // sessão 2 deve vir primeiro (orderBy sessionNumero desc)
     const snap2 = res!.snapshots[0]!;
     expect(snap2.sessionNumero).toBe(2);
-    expect(snap2.espectro).toHaveLength(6);
+    expect(snap2.espectro.eixos).toHaveLength(6);
+    expect(snap2.espectro.naoClassificados).toBe(0);
 
-    const expressiva = snap2.espectro.find(
+    const expressiva = snap2.espectro.eixos.find(
       (e) => e.eixo === "comunicacao_expressiva",
     );
-    // milestone-1 (mando): nivel 0 de 4 -> 100%
-    // goal-1 (ABA -> fallback): is_candidata=true -> 100%
-    // Média = 100%
+    // A meta mapeia o marco 'mando' -> Comunicação Expressiva. Nível de ajuda
+    // registrado = 0 (independente) numa taxonomia de 5 itens (ordinal máximo
+    // 4) -> 100 de independência documentada.
     expect(expressiva?.valor).toBe(100);
+    expect(expressiva?.alvos).toBe(1);
+    expect(expressiva?.medidos).toBe(1);
+
+    // Eixo sem alvo continua `null`. Zero significaria "medimos e está no pior
+    // nível" — uma afirmação clínica que ninguém fez.
+    const social = snap2.espectro.eixos.find(
+      (e) => e.eixo === "social_brincar",
+    );
+    expect(social?.valor).toBeNull();
+    expect(social?.alvos).toBe(0);
 
     expect(res!.metasAtivas).toHaveLength(1);
     expect(res!.metasAtivas[0]!.id).toBe(GOAL_ID);
