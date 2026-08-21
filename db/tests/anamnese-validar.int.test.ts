@@ -524,5 +524,44 @@ describe.skipIf(!hasDb)(
       `;
       expect(logsMeta).toHaveLength(0);
     });
+
+    test("T15 (ANAM-08) — rascunho com 25 alvos é recusado com ANAMNESE_TETO_ALVOS, 24 alvos passa", async () => {
+      const ana25Id = crypto.randomUUID();
+      const alvos25 = Array.from({ length: 25 }, (_, i) => ({
+        id: crypto.randomUUID(),
+        descricao: `Alvo do teto #${i + 1}`,
+        nivelAjudaInicial: 1,
+        procedencia: "observado_avaliador",
+      }));
+
+      await criarAnamneseRascunho({
+        id: ana25Id,
+        patientId: PAC_VALIDAR,
+        alvos: alvos25,
+      });
+
+      // Validação com 25 alvos deve falhar na segunda barreira (logic)
+      const res25 = await validarAnamnese(ctxCoordA, { anamneseId: ana25Id });
+      expect(res25.error).toBe("ANAMNESE_TETO_ALVOS");
+
+      // Rascunho com 24 alvos (teto exato)
+      const ana24Id = crypto.randomUUID();
+      const alvos24 = Array.from({ length: 24 }, (_, i) => ({
+        id: crypto.randomUUID(),
+        descricao: `Alvo permitido #${i + 1}`,
+        nivelAjudaInicial: 1,
+        procedencia: "observado_avaliador",
+      }));
+
+      await criarAnamneseRascunho({
+        id: ana24Id,
+        patientId: PAC_VALIDAR,
+        alvos: alvos24,
+      });
+
+      const res24 = await validarAnamnese(ctxCoordA, { anamneseId: ana24Id });
+      expect(res24.error).toBeUndefined();
+      expect(res24.id).toBe(ana24Id);
+    });
   },
 );

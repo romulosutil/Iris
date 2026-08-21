@@ -137,6 +137,17 @@ async function validarAnamneseCore(
         .from(anamneseAlvo)
         .where(eq(anamneseAlvo.anamneseId, anamneseId));
 
+      // T15 (ANAM-08): Segunda barreira do teto de 24 alvos (D-C).
+      // O teto de 24 é deliberado (4 alvos por eixo × 6 eixos) para evitar
+      // sobrecarga do prontuário no marco zero. Enquanto criarMeta avulsa não tem
+      // limite, a validação de anamnese exige alvos <= 24.
+      if (alvos.length > 24) {
+        return { error: "ANAMNESE_TETO_ALVOS" };
+      }
+      if (alvos.length === 0) {
+        return { error: "ANAMNESE_SEM_ALVOS" };
+      }
+
       const repertorio: Record<
         string,
         {
