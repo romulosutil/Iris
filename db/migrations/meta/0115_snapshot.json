@@ -928,7 +928,7 @@
       "checkConstraints": {
         "anamnese_validada_coerente": {
           "name": "anamnese_validada_coerente",
-          "value": "(\"anamnese\".\"estado\" = 'validada') = (\"anamnese\".\"validada_em\" IS NOT NULL AND \"anamnese\".\"validada_por\" IS NOT NULL)"
+          "value": "(\"anamnese\".\"estado\" = 'validada' AND \"anamnese\".\"validada_em\" IS NOT NULL AND \"anamnese\".\"validada_por\" IS NOT NULL) OR (\"anamnese\".\"estado\" = 'rascunho' AND \"anamnese\".\"validada_em\" IS NULL AND \"anamnese\".\"validada_por\" IS NULL)"
         }
       },
       "isRLSEnabled": false

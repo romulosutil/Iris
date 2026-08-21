@@ -2356,7 +2356,11 @@ export const anamnese = pgTable(
     }).onDelete("set null"),
     check(
       "anamnese_validada_coerente",
-      sql`(${t.estado} = 'validada') = (${t.validadaEm} IS NOT NULL AND ${t.validadaPor} IS NOT NULL)`,
+      // Os dois estados válidos, escritos por extensão. A forma anterior
+      // (`(estado = 'validada') = (validada_em IS NOT NULL AND validada_por IS
+      // NOT NULL)`) aceitava rascunho sujo: com só UM dos campos de auditoria
+      // preenchido os dois lados dão FALSE e o CHECK passa.
+      sql`(${t.estado} = 'validada' AND ${t.validadaEm} IS NOT NULL AND ${t.validadaPor} IS NOT NULL) OR (${t.estado} = 'rascunho' AND ${t.validadaEm} IS NULL AND ${t.validadaPor} IS NULL)`,
     ),
     index("idx_anamnese_patient").on(t.patientId, t.criadoEm.desc()),
     index("idx_anamnese_clinic").on(t.clinicId),

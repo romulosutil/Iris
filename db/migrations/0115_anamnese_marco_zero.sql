@@ -14,7 +14,7 @@ CREATE TABLE "anamnese" (
 	"criado_em" timestamp with time zone DEFAULT now() NOT NULL,
 	"validada_por" uuid,
 	"validada_em" timestamp with time zone,
-	CONSTRAINT "anamnese_validada_coerente" CHECK (("anamnese"."estado" = 'validada') = ("anamnese"."validada_em" IS NOT NULL AND "anamnese"."validada_por" IS NOT NULL))
+	CONSTRAINT "anamnese_validada_coerente" CHECK (("anamnese"."estado" = 'validada' AND "anamnese"."validada_em" IS NOT NULL AND "anamnese"."validada_por" IS NOT NULL) OR ("anamnese"."estado" = 'rascunho' AND "anamnese"."validada_em" IS NULL AND "anamnese"."validada_por" IS NULL))
 );
 --> statement-breakpoint
 CREATE TABLE "anamnese_alvo" (

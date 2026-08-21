@@ -141,5 +141,37 @@ describe.skipIf(!hasDb)(
       const depois = await contarGoalESnapshot(PAC_A1);
       expect(depois).toEqual(antes);
     });
+
+    /**
+     * A forma anterior do CHECK (`(estado='validada') = (validada_em IS NOT
+     * NULL AND validada_por IS NOT NULL)`) deixava passar rascunho com UM só
+     * campo de auditoria: os dois lados davam FALSE. Estes casos falham contra
+     * ela e passam contra a forma por extensão. Insert pelo owner, porque o
+     * caminho da app nunca escreve esses campos direto.
+     */
+    describe("CHECK anamnese_validada_coerente rejeita rascunho parcial", () => {
+      const inserir = (validadaEm: string | null, validadaPor: string | null) =>
+        owner`INSERT INTO anamnese (clinic_id, patient_id, estado, criado_por, validada_em, validada_por)
+        VALUES (${CLINIC_A}, ${PAC_A1}, 'rascunho', ${U_COORD_A}, ${validadaEm}, ${validadaPor})`;
+
+      test("rascunho com só validada_em viola a constraint", async () => {
+        await expect(inserir(new Date().toISOString(), null)).rejects.toThrow(
+          /anamnese_validada_coerente/,
+        );
+      });
+
+      test("rascunho com só validada_por viola a constraint", async () => {
+        await expect(inserir(null, U_COORD_A)).rejects.toThrow(
+          /anamnese_validada_coerente/,
+        );
+      });
+
+      test("rascunho com os dois campos nulos continua válido", async () => {
+        await expect(inserir(null, null)).resolves.toBeTruthy();
+        await owner`DELETE FROM anamnese
+        WHERE patient_id = ${PAC_A1} AND estado = 'rascunho' AND criado_por = ${U_COORD_A}
+          AND NOT EXISTS (SELECT 1 FROM anamnese_alvo a WHERE a.anamnese_id = anamnese.id)`;
+      });
+    });
   },
 );

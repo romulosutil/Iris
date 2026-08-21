@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole } from "@/auth/require-role";
+import { mensagemPg } from "@/db/pg-error";
 import { withTenant, type TenantContext } from "@/db/rls";
 import {
   anamnese,
@@ -254,11 +255,7 @@ async function validarAnamneseCore(
       return { id: anamneseId };
     });
   } catch (err) {
-    const rawMsg =
-      err instanceof Error
-        ? ((err as { cause?: { message?: string } })?.cause?.message ??
-          err.message)
-        : String(err);
+    const rawMsg = mensagemPg(err) ?? String(err);
 
     // T13 (ANAM-07): Gate de consentimento revogado
     if (
