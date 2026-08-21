@@ -255,18 +255,16 @@ describe("promoção de sinalizacoes[risco_seguranca] para alerta_risco (#390 R7
   });
 });
 
-// ─── #390 R5 — fixture real: Caso TC-1 (casos-de-teste-terapia-convencional.md)
-// A fixture do doc usa a forma ANTIGA de alerta_risco
-// (`{presente: boolean, categoria, trecho_fonte, detalhe}`) e `temas[]` como
-// array de OBJETOS ({tema, trecho_fonte}) — ambos predatam #122/R20 e a
-// decisão desta issue. Adaptados aqui: `presente: false` → `alerta_risco:
-// null`; `temas[]` de objeto → array de strings (só o texto do tema, forma
-// fechada em #390). `tema_recorrente_sinalizado` e `padrao_participacao_verbal`
-// não fazem parte do contrato atual (CONVENTIONAL_SYSTEM_PROMPT não os
-// promete) e foram omitidos da fixture adaptada.
-describe("fixture real — Caso TC-1 (#390 R5)", () => {
-  test("saída adaptada do Caso TC-1 valida contra agentOutputSchema", () => {
-    const casoTc1Adaptado = {
+// ─── #390 R5 / D47 — fixtures reais: Modo Convencional (casos-de-teste-terapia-convencional.md)
+// Fixtures sincronizadas com o contrato canônico unificado (D47):
+// `alerta_risco: null` em ausência de risco (TC-1) e objeto completo
+// `{categoria, severidade, certeza, trecho_fonte, detalhe}` quando presente (TC-2);
+// `temas: string[]`. `tema_recorrente_sinalizado` e `padrao_participacao_verbal`
+// são conceitos documentais da modalidade e não fazem parte do contrato de runtime
+// (`CONVENTIONAL_SYSTEM_PROMPT` não os promete).
+describe("fixtures reais — Modo Convencional (#390 R5 / D47)", () => {
+  test("saída do Caso TC-1 (sem risco) valida contra agentOutputSchema", () => {
+    const casoTc1 = {
       extracoes: [],
       resumo_sessao:
         "Paciente relatou primeiro contato com pertences do pai sem chorar durante o processo, embora tenha chorado depois, sozinha. Retomou o tema da culpa por não ter chegado a tempo ao hospital, já presente em sessões anteriores. Segue retomando gradualmente as atividades de trabalho, evitando especificamente situações de falar em público. Encerrou a sessão relatando sensação de melhora.",
@@ -277,9 +275,35 @@ describe("fixture real — Caso TC-1 (#390 R5)", () => {
       alerta_risco: null,
       sinalizacoes: [],
     };
-    const r = agentOutputSchema.safeParse(casoTc1Adaptado);
-    // Usar `r.error` no assert expõe o motivo real caso o Zod rejeite, em vez
-    // de devolver apenas `expected true, received false` (nit Jules #399).
+    const r = agentOutputSchema.safeParse(casoTc1);
+    expect(r.error).toBeUndefined();
+    expect(r.success).toBe(true);
+  });
+
+  test("saída do Caso TC-2 (com alerta_risco unificado) valida contra agentOutputSchema", () => {
+    const casoTc2 = {
+      extracoes: [],
+      resumo_sessao:
+        "Paciente relatou episódio recente em que o marido a segurou pelo braço com força, deixando marca, para impedi-la de sair de casa durante uma discussão. Relatou que episódios semelhantes já ocorreram algumas vezes por ano desde o casamento, associados a consumo de álcool pelo marido. Minimizou a gravidade do relato e não expressou intenção de terminar o relacionamento. Mudou de assunto para comentar positivamente sobre novo emprego.",
+      temas: ["violência física recorrente no relacionamento conjugal"],
+      alerta_risco: {
+        categoria: "violencia_sofrida",
+        severidade: "violencia_sofrida",
+        certeza: "explicito",
+        trecho_fonte:
+          "ele a segurou pelo braço com força para impedi-la de sair de casa e deixou marca",
+        detalhe:
+          "Paciente relata episódio recente de violência física por parte do cônjuge, com marca visível, e confirma recorrência ('algumas vezes por ano, desde o casamento'). Paciente minimiza a gravidade e não expressa intenção de buscar afastamento — registrado literalmente, sem inferir risco além do relatado.",
+      },
+      sinalizacoes: [
+        {
+          tipo: "texto_ambiguo",
+          detalhe:
+            "Paciente minimizou o relato ('meio rindo', 'não é nada novo') — o alerta é mantido integralmente apesar da minimização, conforme R5-TC (falso positivo aceitável, falso negativo não).",
+        },
+      ],
+    };
+    const r = agentOutputSchema.safeParse(casoTc2);
     expect(r.error).toBeUndefined();
     expect(r.success).toBe(true);
   });
