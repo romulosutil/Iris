@@ -296,4 +296,58 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     expect(item.revisao!.acao).toBe("confirmar");
     expect(item.revisao!.justificativa).toBe("revisão mais recente");
   });
+
+  test("carregarDeltaSessao na Sessão 1 sem marco 0 trata itens como novos", async () => {
+    // Sem snapshot 0 gravado para PAC_A1, snapA é null
+    const res = await carregarDeltaSessao(ctxCoordA, PAC_A1, 1);
+    expect(res).toBeTruthy();
+    expect(res.delta.evidenciasNovas).toBe(3);
+    const item = res.delta.itens.find((i) => i.id === MARCO_ID);
+    expect(item?.tipo).toBe("novo");
+  });
+
+  test("carregarDeltaSessao no marco 0 (sessionNumero = 0) devolve snapA = null sem erro", async () => {
+    // Para paciente sem marco 0, delta do marco 0 é vazio sem erro
+    const res = await carregarDeltaSessao(ctxCoordA, PAC_A1, 0);
+    expect(res).toBeTruthy();
+    expect(res.delta.itens).toHaveLength(0);
+    expect(res.delta.evidenciasNovas).toBe(0);
+  });
+
+  test("carregarDeltaSessao na Sessão 1 COM marco 0 compara contra o snapshot 0 (T25)", async () => {
+    const pacMarcoZero = "00000000-0000-0000-0000-000000000099";
+    await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${pacMarcoZero}, ${CLINIC_A}, 'Paciente com Marco Zero')`;
+    await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
+      VALUES (${pacMarcoZero}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
+
+    // Snapshot 0 (Anamnese)
+    await owner`INSERT INTO session_snapshot (patient_id, session_numero, repertorio_state, segmentacao) VALUES
+      (${pacMarcoZero}, 0,
+        ${owner.json({ [MARCO_ID]: { nivel_ajuda_recente: 4, contagem: 0, is_candidata: false, origem: "anamnese", procedencia: "relatado_responsavel" } })},
+        ${owner.json({ [GOAL_ID]: { [PROTOCOL_ID]: { tipo_estrutura: "marco_simples", metrica: { eixo: "nivel_ajuda", ordinalRecente: 4 }, rotulo: "estavel" } } })}
+      )`;
+
+    // Snapshot 1
+    await owner`INSERT INTO session_snapshot (patient_id, session_numero, repertorio_state, segmentacao) VALUES
+      (${pacMarcoZero}, 1,
+        ${owner.json({ [MARCO_ID]: { nivel_ajuda_recente: 2, contagem: 3, is_candidata: false } })},
+        ${owner.json({ [GOAL_ID]: { [PROTOCOL_ID]: { tipo_estrutura: "marco_simples", metrica: { eixo: "nivel_ajuda", ordinalRecente: 2 }, rotulo: "evolucao" } } })}
+      )`;
+
+    const res = await carregarDeltaSessao(ctxCoordA, pacMarcoZero, 1);
+    expect(res).toBeTruthy();
+    expect(res.delta.evidenciasNovas).toBe(3); // 3 - 0
+    const item = res.delta.itens.find((i) => i.id === MARCO_ID);
+    expect(item).toBeTruthy();
+    expect(item?.tipo).toBe("evolucao"); // 4 -> 2
+    expect(item?.nivelAnterior).toBe(4);
+    expect(item?.nivelNovo).toBe(2);
+
+    // E no marco 0 do mesmo paciente:
+    const res0 = await carregarDeltaSessao(ctxCoordA, pacMarcoZero, 0);
+    expect(res0).toBeTruthy();
+    expect(res0.delta.evidenciasNovas).toBe(0);
+    const item0 = res0.delta.itens.find((i) => i.id === MARCO_ID);
+    expect(item0?.tipo).toBe("novo");
+  });
 });
