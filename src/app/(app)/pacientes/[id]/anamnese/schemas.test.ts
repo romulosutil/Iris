@@ -142,7 +142,7 @@ describe("anamnese/schemas", () => {
       const result = salvarRascunhoSchema.safeParse(invalidRascunho);
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues[0].message).toContain("24");
+        expect(result.error.issues[0]?.message).toContain("24");
       }
     });
   });

@@ -27,7 +27,7 @@ export type Procedencia = (typeof PROCEDENCIAS)[number];
  * Sincronismo obrigatório: qualquer mudança em espectro.ts deve refletir aqui
  * para que o CHECK do banco e o Zod não divirjam em silêncio.
  */
-export const EIXOS_ANAMNESE = ORDEM_EIXOS;
+export const EIXOS_ANAMNESE = ORDEM_EIXOS as [string, ...string[]];
 export type EixoAnamnese = (typeof EIXOS_ANAMNESE)[number];
 
 /**
