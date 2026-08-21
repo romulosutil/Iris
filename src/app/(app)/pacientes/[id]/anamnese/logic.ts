@@ -102,6 +102,9 @@ async function validarAnamneseCore(
   ctx: TenantContext,
   input: z.input<typeof validarAnamneseSchema>,
 ): Promise<AnamneseState & { id?: string }> {
+  // T14 (ANAM-03 / D-B): A validação de anamnese é exclusiva de coordenador.
+  // Esta é uma decisão nova do design (D-B), não herança: metas/logic.ts:41 deixa
+  // terapeuta criar meta avulsa, mas a publicação do marco zero (snapshot 0) requer coordenador.
   requireRole(ctx, "coordenador");
   const parsed = validarAnamneseSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };

@@ -12,12 +12,14 @@
 import { and, count, eq, sql as sqlTag } from "drizzle-orm";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { RoleError } from "@/auth/require-role";
 import { hasDb } from "./integration-env";
 
 vi.mock("server-only", () => ({}));
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000010fa";
 const U_COORD_A = "00000000-0000-0000-0000-00000000109a";
+const U_TER_A = "00000000-0000-0000-0000-00000000109b";
 const PAC_VALIDAR = "00000000-0000-0000-0000-000000010a01";
 const PAC_ROLLBACK = "00000000-0000-0000-0000-000000010a02";
 const PAC_MILESTONE = "00000000-0000-0000-0000-000000010a03";
@@ -34,6 +36,12 @@ const ctxCoordA = {
   clinicId: CLINIC_A,
   userId: U_COORD_A,
   role: "coordenador",
+} as const;
+
+const ctxTerA = {
+  clinicId: CLINIC_A,
+  userId: U_TER_A,
+  role: "terapeuta",
 } as const;
 
 let owner: ReturnType<typeof postgres>;
@@ -142,9 +150,11 @@ describe.skipIf(!hasDb)(
       await owner`INSERT INTO clinic (id, nome, is_demo) VALUES
         (${CLINIC_A}, 'Clínica A (anamnese-validar)', false)`;
       await owner`INSERT INTO app_user (id, name, email) VALUES
-        (${U_COORD_A}, 'Coord A', 'coord.a.anam-val@t.com')`;
+        (${U_COORD_A}, 'Coord A', 'coord.a.anam-val@t.com'),
+        (${U_TER_A}, 'Terapeuta A', 'ter.a.anam-val@t.com')`;
       await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
-        (${U_COORD_A}, ${CLINIC_A}, 'coordenador')`;
+        (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
+        (${U_TER_A}, ${CLINIC_A}, 'terapeuta')`;
       await owner`INSERT INTO patient (id, clinic_id, nome, clinical_modality) VALUES
         (${PAC_VALIDAR}, ${CLINIC_A}, 'Paciente validar (T10)', 'protocol_driven'),
         (${PAC_ROLLBACK}, ${CLINIC_A}, 'Paciente rollback (T10)', 'protocol_driven'),
@@ -562,6 +572,47 @@ describe.skipIf(!hasDb)(
       const res24 = await validarAnamnese(ctxCoordA, { anamneseId: ana24Id });
       expect(res24.error).toBeUndefined();
       expect(res24.id).toBe(ana24Id);
+    });
+
+    test("T14 (ANAM-03 / D-B) — validação é exclusiva de coordenador; terapeuta é recusado via RoleError e nada é criado", async () => {
+      const anamneseId = crypto.randomUUID();
+      const alvoId = crypto.randomUUID();
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_VALIDAR,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Alvo teste papel coordenador vs terapeuta",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const [snapAntes] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_VALIDAR} AND session_numero = 0
+      `;
+      const snapTotalAntes = snapAntes?.total ?? 0;
+
+      // Terapeuta tenta validar -> lança RoleError (rejeição de papel)
+      await expect(validarAnamnese(ctxTerA, { anamneseId })).rejects.toThrow(
+        RoleError,
+      );
+
+      // Snapshot 0 e goal continuam inalterados
+      const [snapDepois] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_VALIDAR} AND session_numero = 0
+      `;
+      expect(snapDepois?.total).toBe(snapTotalAntes);
+
+      const [alvo] = await owner`
+        SELECT goal_id FROM anamnese_alvo WHERE id = ${alvoId}
+      `;
+      expect(alvo?.goal_id).toBeNull();
     });
   },
 );
