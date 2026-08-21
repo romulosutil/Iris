@@ -143,10 +143,10 @@ describe.skipIf(!hasDb)(
         (${U_COORD_A}, 'Coord A', 'coord.a.anam-val@t.com')`;
       await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
         (${U_COORD_A}, ${CLINIC_A}, 'coordenador')`;
-      await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
-        (${PAC_VALIDAR}, ${CLINIC_A}, 'Paciente validar (T10)'),
-        (${PAC_ROLLBACK}, ${CLINIC_A}, 'Paciente rollback (T10)'),
-        (${PAC_MILESTONE}, ${CLINIC_A}, 'Paciente milestone (T10)'),
+      await owner`INSERT INTO patient (id, clinic_id, nome, clinical_modality) VALUES
+        (${PAC_VALIDAR}, ${CLINIC_A}, 'Paciente validar (T10)', 'protocol_driven'),
+        (${PAC_ROLLBACK}, ${CLINIC_A}, 'Paciente rollback (T10)', 'protocol_driven'),
+        (${PAC_MILESTONE}, ${CLINIC_A}, 'Paciente milestone (T10)', 'protocol_driven'),
         (${PAC_PROTOCOL_DRIVEN}, ${CLINIC_A}, 'Paciente protocol_driven (T11)', 'protocol_driven'),
         (${PAC_COGNITIVE_BEHAVIORAL}, ${CLINIC_A}, 'Paciente cognitive_behavioral (T11)', 'cognitive_behavioral'),
         (${PAC_CONVENTIONAL}, ${CLINIC_A}, 'Paciente conventional (T11)', 'conventional')`;
