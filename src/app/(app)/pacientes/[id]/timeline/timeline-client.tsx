@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
+import React, { useState, useEffect } from "react";
 import { Scrubber } from "./scrubber";
 import { DeltaSessaoLateral } from "./delta-sessao";
 import { EstadoDeErro } from "./estado-de-erro";
@@ -89,19 +89,22 @@ export function TimelineClient({
     .sort((a, b) => a - b);
 
   // Sessão atual selecionada no Scrubber (inicia na mais recente)
-  const [sessaoAtiva, setSessaoAtiva] = useState<number>(
-    sessoesDisponiveis[sessoesDisponiveis.length - 1] ?? 1,
+  const [sessaoAtiva, setSessaoAtiva] = useState<number | null>(
+    sessoesDisponiveis[sessoesDisponiveis.length - 1] ?? null,
   );
 
   // Encontra o snapshot selecionado
   const snapSelecionado =
-    snapshots.find((s) => s.sessionNumero === sessaoAtiva) ?? null;
+    sessaoAtiva !== null
+      ? (snapshots.find((s) => s.sessionNumero === sessaoAtiva) ?? null)
+      : null;
 
   // Snapshot imediatamente anterior ao selecionado — é o que dá o contorno
   // tracejado do Espectro. "Anterior" aqui é a sessão anterior COM snapshot,
   // não `sessaoAtiva - 1`: sessão sem evidência aprovada não gera snapshot, e
   // comparar com um número que não existe devolveria undefined em silêncio.
   const snapAnterior = React.useMemo(() => {
+    if (sessaoAtiva === null) return null;
     const anteriores = snapshots
       .filter((s) => s.sessionNumero < sessaoAtiva)
       .sort((a, b) => b.sessionNumero - a.sessionNumero);
@@ -285,12 +288,8 @@ export function TimelineClient({
     null,
   );
 
-  const [, startTransition] = useTransition();
-  // Delta e comparação são duas requisições independentes. Enquanto as duas
-  // liam o MESMO `isPending` do `useTransition`, o painel de delta recebia
-  // `carregando={isPending && !compararAtivo}`: com o comparador ligado ele
-  // nunca mostrava carga, e trocar de sessão deixava os números da sessão
-  // anterior na tela sem nenhum sinal de que estavam obsoletos.
+  // Delta e comparação são duas requisições independentes com estados de
+  // carga e erro próprios (`carregandoDelta`, `carregandoComparacao`).
   const [carregandoDelta, setCarregandoDelta] = useState(false);
   const [erroDelta, setErroDelta] = useState(false);
   const [carregandoComparacao, setCarregandoComparacao] = useState(false);
@@ -321,11 +320,11 @@ export function TimelineClient({
 
   // Carrega o delta da sessão selecionada
   useEffect(() => {
-    if (!sessaoAtiva) return;
+    if (sessaoAtiva === null) return;
 
     let active = true;
 
-    startTransition(async () => {
+    const carregar = async () => {
       setCarregandoDelta(true);
       setErroDelta(false);
       try {
@@ -346,24 +345,32 @@ export function TimelineClient({
         setErroDelta(true);
         console.error("Erro ao carregar delta da sessão:", err);
       } finally {
-        if (active) setCarregandoDelta(false);
+        if (active) {
+          setCarregandoDelta(false);
+        }
       }
-    });
+    };
+
+    void carregar();
 
     return () => {
       active = false;
     };
   }, [sessaoAtiva, patientId, tentativaDelta]);
 
-  // Carrega dados da comparação
+  // Carrega a comparação quando uma sessão for selecionada no select
   useEffect(() => {
-    if (!compararAtivo || sessaoCompararValida === null) {
+    if (
+      !compararAtivo ||
+      sessaoAtiva === null ||
+      sessaoCompararValida === null
+    ) {
       return;
     }
 
     let active = true;
 
-    startTransition(async () => {
+    const carregar = async () => {
       setCarregandoComparacao(true);
       setErroComparacao(false);
       try {
@@ -388,7 +395,9 @@ export function TimelineClient({
       } finally {
         if (active) setCarregandoComparacao(false);
       }
-    });
+    };
+
+    void carregar();
 
     return () => {
       active = false;
@@ -539,7 +548,7 @@ export function TimelineClient({
           </h3>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Estatísticas e progresso de marcos por domínio do protocolo ativo na{" "}
-            {rotuloPonto(sessaoAtiva)}.
+            {rotuloPonto(sessaoAtiva ?? 0)}.
           </p>
         </div>
 
@@ -713,7 +722,7 @@ export function TimelineClient({
                 htmlFor="select-sessao-comparar"
                 className="text-ink text-xs font-bold"
               >
-                Comparar {rotuloPonto(sessaoAtiva)} com:
+                Comparar {rotuloPonto(sessaoAtiva ?? 0)} com:
               </label>
               <select
                 id="select-sessao-comparar"
@@ -767,11 +776,11 @@ export function TimelineClient({
                       <strong>Comparação suspensa.</strong> Os protocolos ativos
                       mudaram entre{" "}
                       {rotuloPonto(
-                        Math.min(sessaoAtiva, sessaoCompararValida ?? 0),
+                        Math.min(sessaoAtiva ?? 0, sessaoCompararValida ?? 0),
                       )}{" "}
                       e{" "}
                       {rotuloPonto(
-                        Math.max(sessaoAtiva, sessaoCompararValida ?? 0),
+                        Math.max(sessaoAtiva ?? 0, sessaoCompararValida ?? 0),
                       )}
                       , e as escalas de nível de ajuda das duas não são
                       equivalentes. Comparar os números daria uma diferença que
@@ -786,11 +795,11 @@ export function TimelineClient({
                     <div className="text-xs text-[var(--text-secondary)]">
                       Evolução de{" "}
                       {rotuloPonto(
-                        Math.min(sessaoAtiva, sessaoCompararValida ?? 0),
+                        Math.min(sessaoAtiva ?? 0, sessaoCompararValida ?? 0),
                       )}{" "}
                       para{" "}
                       {rotuloPonto(
-                        Math.max(sessaoAtiva, sessaoCompararValida ?? 0),
+                        Math.max(sessaoAtiva ?? 0, sessaoCompararValida ?? 0),
                       )}
                       :
                     </div>
@@ -930,7 +939,7 @@ export function TimelineClient({
             erro={erroDelta}
             onTentarDeNovo={() => setTentativaDelta((n) => n + 1)}
           />
-          {snapSelecionado ? (
+          {snapSelecionado && sessaoAtiva !== null ? (
             <GraficoEspectro
               espectro={snapSelecionado.espectro}
               espectroAnterior={snapAnterior?.espectro ?? null}
@@ -943,7 +952,7 @@ export function TimelineClient({
         <div className="flex flex-col gap-6">
           <Scrubber
             sessoesDisponiveis={sessoesDisponiveis}
-            sessaoSelecionada={sessaoAtiva}
+            sessaoSelecionada={sessaoAtiva ?? 0}
             dataSessaoSelecionada={snapSelecionado?.geradoEm}
             onSelecionarSessao={handleSelecionarSessao}
           />
