@@ -31,6 +31,9 @@ const PAC_CONVENTIONAL = "00000000-0000-0000-0000-000000010a13";
 const PAC_ARQUIVADO = "00000000-0000-0000-0000-000000010a16";
 // T13 — consentimento revogado
 const PAC_REVOGADO = "00000000-0000-0000-0000-000000010a14";
+// T12 — gate de protocolo ativo com taxonomia utilizável
+const PAC_SEM_PROTOCOLO = "00000000-0000-0000-0000-000000010a18";
+const PAC_TAXONOMIA_1 = "00000000-0000-0000-0000-000000010a19";
 
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
@@ -52,6 +55,7 @@ let schema: typeof import("@/db/schema");
 let validarAnamnese: typeof import("@/app/(app)/pacientes/[id]/anamnese/logic").validarAnamnese;
 
 let PROTOCOL_ID: string;
+let PROTO_TAX1_ID: string;
 let MILESTONE_ID: string;
 
 async function ativarProtocolo(patientId: string) {
@@ -165,7 +169,9 @@ describe.skipIf(!hasDb)(
         (${PAC_COGNITIVE_BEHAVIORAL}, ${CLINIC_A}, 'Paciente cognitive_behavioral (T11)', 'cognitive_behavioral'),
         (${PAC_CONVENTIONAL}, ${CLINIC_A}, 'Paciente conventional (T11)', 'conventional'),
         (${PAC_ARQUIVADO}, ${CLINIC_A}, 'Paciente arquivado (T16)', 'protocol_driven'),
-        (${PAC_REVOGADO}, ${CLINIC_A}, 'Paciente consentimento revogado (T13)', 'protocol_driven')`;
+        (${PAC_REVOGADO}, ${CLINIC_A}, 'Paciente consentimento revogado (T13)', 'protocol_driven'),
+        (${PAC_SEM_PROTOCOLO}, ${CLINIC_A}, 'Paciente sem protocolo (T12)', 'protocol_driven'),
+        (${PAC_TAXONOMIA_1}, ${CLINIC_A}, 'Paciente taxonomia 1 (T12)', 'protocol_driven')`;
 
       await owner`UPDATE patient SET arquivado_em = now() WHERE id = ${PAC_ARQUIVADO}`;
 
@@ -175,6 +181,13 @@ describe.skipIf(!hasDb)(
           ${owner.json(["independente", "dica_verbal", "dica_gestual", "modelacao", "dica_fisica"])})
         RETURNING id`;
       PROTOCOL_ID = protocolo!.id;
+
+      const [protoTax1] = await owner<{ id: string }[]>`
+        INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
+        VALUES (${CLINIC_A}, 'Protocolo taxonomia 1 nível (teste T12)', 'ABA', ${PROTOCOL_FAMILIA},
+          ${owner.json(["independente"])})
+        RETURNING id`;
+      PROTO_TAX1_ID = protoTax1!.id;
 
       const [marco] = await owner<{ id: string }[]>`
         INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
@@ -187,6 +200,10 @@ describe.skipIf(!hasDb)(
       await ativarProtocolo(PAC_PROTOCOL_DRIVEN);
       await ativarProtocolo(PAC_ARQUIVADO);
       await ativarProtocolo(PAC_REVOGADO);
+
+      // Ativa protocolo com apenas 1 nível para PAC_TAXONOMIA_1
+      await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por)
+        VALUES (${PAC_TAXONOMIA_1}, ${PROTO_TAX1_ID}, ${U_COORD_A})`;
 
       // Setup de consentimento revogado para PAC_REVOGADO
       const consentRevogadoId = crypto.randomUUID();
@@ -655,6 +672,84 @@ describe.skipIf(!hasDb)(
       const [snap] = await owner`
         SELECT count(*)::int AS total FROM session_snapshot
         WHERE patient_id = ${PAC_REVOGADO} AND session_numero = 0
+      `;
+      expect(snap?.total).toBe(0);
+
+      // Goal NÃO foi criada
+      const [alvo] = await owner`
+        SELECT goal_id FROM anamnese_alvo WHERE id = ${alvoId}
+      `;
+      expect(alvo?.goal_id).toBeNull();
+    });
+
+    test("T12 (ANAM-06) — paciente sem protocolo ativo recusa validação com ANAMNESE_SEM_PROTOCOLO_ATIVO e zero snapshot 0", async () => {
+      const anamneseId = crypto.randomUUID();
+      const alvoId = crypto.randomUUID();
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_SEM_PROTOCOLO,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Alvo sem protocolo ativo",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const res = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(res.error).toBeTruthy();
+      expect(res.error).toMatch(/ANAMNESE_SEM_PROTOCOLO_ATIVO/);
+      expect(res.error).toMatch(/protocolo ativo/i);
+      expect(res.error).not.toMatch(
+        /PostgresError|DrizzleQueryError|SELECT app_validar/i,
+      );
+
+      // Snapshot 0 NÃO foi gravado
+      const [snap] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_SEM_PROTOCOLO} AND session_numero = 0
+      `;
+      expect(snap?.total).toBe(0);
+
+      // Goal NÃO foi criada
+      const [alvo] = await owner`
+        SELECT goal_id FROM anamnese_alvo WHERE id = ${alvoId}
+      `;
+      expect(alvo?.goal_id).toBeNull();
+    });
+
+    test("T12 (ANAM-06) — protocolo com taxonomia de 1 nível recusa validação com ANAMNESE_SEM_PROTOCOLO_ATIVO e zero snapshot 0", async () => {
+      const anamneseId = crypto.randomUUID();
+      const alvoId = crypto.randomUUID();
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_TAXONOMIA_1,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Alvo protocolo taxonomia 1 nível",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const res = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(res.error).toBeTruthy();
+      expect(res.error).toMatch(/ANAMNESE_SEM_PROTOCOLO_ATIVO/);
+      expect(res.error).toMatch(/protocolo ativo/i);
+      expect(res.error).not.toMatch(
+        /PostgresError|DrizzleQueryError|SELECT app_validar/i,
+      );
+
+      // Snapshot 0 NÃO foi gravado
+      const [snap] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_TAXONOMIA_1} AND session_numero = 0
       `;
       expect(snap?.total).toBe(0);
 
