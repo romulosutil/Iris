@@ -20,6 +20,8 @@ export interface CapacidadesDaModalidade {
   abaCentral: { slug: string; rotulo: string } | null;
   /** A aba "Evolução" (leitura) existe para esta modalidade. */
   temEvolucao: boolean;
+  /** A aba "Anamnese" (marco zero) existe para esta modalidade. */
+  temAnamnese: boolean;
   /** Qual leitura a aba Evolução renderiza. `null` quando não há aba. */
   leituraDeEvolucao: LeituraDeEvolucao | null;
   /** Para onde a rota base redireciona quando não há Evolução. */
@@ -34,6 +36,7 @@ export function capacidadesDaModalidade(
       return {
         abaCentral: { slug: "tcc", rotulo: "TCC" },
         temEvolucao: true,
+        temAnamnese: false,
         leituraDeEvolucao: "tcc",
         rotaDeEntrada: null,
       };
@@ -41,6 +44,7 @@ export function capacidadesDaModalidade(
       return {
         abaCentral: { slug: "temas", rotulo: "Temas" },
         temEvolucao: false,
+        temAnamnese: false,
         leituraDeEvolucao: null,
         rotaDeEntrada: "temas",
       };
@@ -48,6 +52,7 @@ export function capacidadesDaModalidade(
       return {
         abaCentral: { slug: "metas", rotulo: "PEI & Metas" },
         temEvolucao: true,
+        temAnamnese: true,
         leituraDeEvolucao: "protocolo",
         rotaDeEntrada: null,
       };
@@ -58,6 +63,7 @@ export function capacidadesDaModalidade(
       return {
         abaCentral: null,
         temEvolucao: true,
+        temAnamnese: false,
         leituraDeEvolucao: "protocolo",
         rotaDeEntrada: null,
       };

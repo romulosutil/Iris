@@ -52,7 +52,7 @@ function mockModalidade(clinicalModality: string) {
 }
 
 describe("PacienteLayout - Abas do Prontuário", () => {
-  it("exibe só PEI & Metas para paciente na modalidade protocol_driven", async () => {
+  it("exibe PEI & Metas e Anamnese para paciente na modalidade protocol_driven", async () => {
     mockModalidade("protocol_driven");
 
     const LayoutComponent = await PacienteLayout({
@@ -63,12 +63,15 @@ describe("PacienteLayout - Abas do Prontuário", () => {
     render(LayoutComponent);
 
     expect(screen.getByText("Evolução")).not.toBeNull();
+    expect(screen.getByText("Anamnese")).not.toBeNull();
+    const linkAnamnese = screen.getByRole("link", { name: "Anamnese" });
+    expect(linkAnamnese.getAttribute("href")).toBe("/pacientes/pac_1/anamnese");
     expect(screen.getByText("PEI & Metas")).not.toBeNull();
     expect(screen.queryByText("TCC")).toBeNull();
     expect(screen.queryByText("Temas")).toBeNull();
   });
 
-  it("exibe só TCC para paciente na modalidade cognitive_behavioral", async () => {
+  it("exibe só TCC para paciente na modalidade cognitive_behavioral, SEM Anamnese", async () => {
     mockModalidade("cognitive_behavioral");
 
     const LayoutComponent = await PacienteLayout({
@@ -80,11 +83,12 @@ describe("PacienteLayout - Abas do Prontuário", () => {
 
     expect(screen.getByText("Evolução")).not.toBeNull();
     expect(screen.getByText("TCC")).not.toBeNull();
+    expect(screen.queryByText("Anamnese")).toBeNull();
     expect(screen.queryByText("PEI & Metas")).toBeNull();
     expect(screen.queryByText("Temas")).toBeNull();
   });
 
-  it("exibe só Temas para paciente na modalidade conventional, SEM a aba Evolução", async () => {
+  it("exibe só Temas para paciente na modalidade conventional, SEM a aba Evolução e SEM Anamnese", async () => {
     mockModalidade("conventional");
 
     const LayoutComponent = await PacienteLayout({
@@ -101,11 +105,12 @@ describe("PacienteLayout - Abas do Prontuário", () => {
     // clínica, não a dele.
     expect(screen.queryByText("Evolução")).toBeNull();
     expect(screen.getByText("Temas")).not.toBeNull();
+    expect(screen.queryByText("Anamnese")).toBeNull();
     expect(screen.queryByText("PEI & Metas")).toBeNull();
     expect(screen.queryByText("TCC")).toBeNull();
   });
 
-  it("mantém a aba Evolução quando a modalidade não resolve (paciente fora da RLS)", async () => {
+  it("mantém a aba Evolução quando a modalidade não resolve (paciente fora da RLS), SEM Anamnese", async () => {
     // Sem esta garantia, um paciente sem linha visível ficaria com o
     // prontuário sem porta de entrada: nenhuma aba central E nenhuma Evolução.
     mockWithTenant.mockImplementation(async (_ctx, fn) => {
@@ -125,6 +130,7 @@ describe("PacienteLayout - Abas do Prontuário", () => {
     render(LayoutComponent);
 
     expect(screen.getByText("Evolução")).not.toBeNull();
+    expect(screen.queryByText("Anamnese")).toBeNull();
     expect(screen.queryByText("PEI & Metas")).toBeNull();
     expect(screen.queryByText("TCC")).toBeNull();
     expect(screen.queryByText("Temas")).toBeNull();

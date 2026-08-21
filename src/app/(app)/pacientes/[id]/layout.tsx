@@ -94,6 +94,9 @@ export default async function PacienteLayout({
       : []),
     { href: `${base}/briefing`, rotulo: "Briefing" },
     { href: `${base}/cadastro-clinico`, rotulo: "Ficha Clínica" },
+    ...(capacidades.temAnamnese
+      ? [{ href: `${base}/anamnese`, rotulo: "Anamnese" }]
+      : []),
     ...abaModalidade,
     { href: `${base}/equipe`, rotulo: "Equipe" },
     { href: `${base}/horas`, rotulo: "Horas" },
