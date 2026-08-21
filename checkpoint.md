@@ -23,7 +23,9 @@
 
 | T08  | `4cc63cc`+`3a619e7`+`51006be` | Schemas Zod (`PROCEDENCIAS`, `EIXOS_ANAMNESE`, `alvoSchema`, `salvarRascunhoSchema`, `validarAnamneseSchema`) + teste. 1 fix round (2 Important: teste vácuo undefined→null sem assert, `disciplina` duplicado em vez de importar `DISCIPLINAS`), depois limpa. **Achado Critical fora do escopo do arquivo, corrigido pelo controlador**: CHECK `anamnese_alvo_eixo_valido` da migração `0115` usava vocabulário de eixo errado (`interacao_social`/`autonomia`/`regulacao`/`cognicao_academico`), divergente de `ORDEM_EIXOS`/hexágono — spec confirma que são os mesmos 6 eixos. Corrigido, verificado com reset completo do banco local + `pnpm test:rls` (1042/1043, única falha é a MFA pré-existente). |
 
-**Progresso: 8 de 34 tasks completas e revisadas** (T01-T08). Fase 0 fechada. Fase 1 em andamento.
+| T09  | `74f3951`+`e28d631` | `salvarRascunhoAnamnese` (core + `db/tests/anamnese-rascunho.int.test.ts`). Review: Spec ✅ 6/6, qualidade approved, 1 Minor deferido (console.error no catch, consistente com `metas/logic.ts`). **Achado fora do escopo do diff, corrigido pelo controlador em commit separado**: `pnpm typecheck` vermelho em `schemas.ts`/`schemas.test.ts` (T08, arquivos intocados pelo T09) — `EIXOS_ANAMNESE = ORDEM_EIXOS` herdava `EixoEspectro[]` (array largo), rejeitado pela sobrecarga de tupla do `z.enum`; passou pelo gate `quick` do T08 porque nenhuma task rodou `pnpm typecheck` isolado até agora. Corrigido com `as [string, ...string[]]`; 12/12 testes de schemas.test.ts continuam verdes. |
+
+**Progresso: 9 de 34 tasks completas e revisadas** (T01-T09). Fase 0 fechada. Fase 1 em andamento.
 
 ### Medido, não presumido (T03/T05, revisado nesta sessão)
 
@@ -68,9 +70,9 @@ Confirmado na sessão anterior que `e5c6d4d`/`4f38394` (outra sessão Claude) es
 
 ## O que o próximo agente faz — em ordem, uma coisa de cada vez
 
-Fase 0 (T01-T05), o par `[P]` T06/T07 e T08 estão **fechados e revisados**. Continuar em T09.
+Fase 0 (T01-T05), o par `[P]` T06/T07, T08 e T09 estão **fechados e revisados**. Continuar em T10.
 
-### Passo 1 — T09 em diante
+### Passo 1 — T10 em diante
 
 Sequencial a partir daqui salvo indicação `[P]` no brief (e mesmo `[P]`: despachar implementadores **sempre em sequência**, nunca em paralelo — regra da skill `subagent-driven-development`, não relaxar de novo). Consultar `.specs/features/407-anamnese-marco-zero/tasks.md` para ordem completa e dependências; briefs extraídos em `.superpowers/sdd/tasks/task-NN-brief.md` até T19 pelo menos — se T08 não tiver brief extraído, extrair do `tasks.md` antes de despachar.
 
