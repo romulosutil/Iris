@@ -35,8 +35,8 @@ CREATE TABLE "anamnese_alvo" (
 	"criado_em" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "anamnese_alvo_goal_unique" UNIQUE("goal_id"),
 	CONSTRAINT "anamnese_alvo_eixo_valido" CHECK ("anamnese_alvo"."eixo" IN (
-        'comunicacao_expressiva','comunicacao_receptiva','interacao_social',
-        'autonomia','regulacao','cognicao_academico'
+        'comunicacao_expressiva','comunicacao_receptiva','social_brincar',
+        'cognicao_aprendizado','autonomia_motor','regulacao_barreiras'
       )),
 	CONSTRAINT "anamnese_alvo_disciplina_valida" CHECK ("anamnese_alvo"."disciplina" IS NULL OR "anamnese_alvo"."disciplina" IN ('ABA','Fono','TO')),
 	CONSTRAINT "anamnese_alvo_nivel_range" CHECK ("anamnese_alvo"."nivel_ajuda_inicial" IS NULL OR ("anamnese_alvo"."nivel_ajuda_inicial" BETWEEN 0 AND 20)),
