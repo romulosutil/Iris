@@ -121,7 +121,9 @@ async function validarAnamneseCore(
         .select({ modalidade: patient.clinicalModality })
         .from(patient)
         .where(eq(patient.id, anamneseRow.patientId));
-      if (pacienteRow?.modalidade !== "protocol_driven") {
+      if (pacienteRow?.modalidade === "protocol_driven") {
+        // allow — anamnese só é possível em protocol_driven
+      } else {
         return { error: "ANAMNESE_MODALIDADE_INCOMPATIVEL" };
       }
 
