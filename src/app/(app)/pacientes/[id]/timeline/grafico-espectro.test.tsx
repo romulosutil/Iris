@@ -223,4 +223,16 @@ describe("GraficoEspectro", () => {
     ).toBeTruthy();
     expect(container.textContent).not.toContain("Sessão 0");
   });
+
+  it("T31: eixo com valor: null renderiza sem medida, nunca 0 nem 0%, e sem role=alert", () => {
+    const { container } = render(
+      <GraficoEspectro espectro={SEIS} sessaoAtiva={0} />,
+    );
+    // Eixos 2 e 4 têm valor null em SEIS
+    expect(screen.getAllByText("Sem alvo").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Sem registro").length).toBeGreaterThan(0);
+    expect(screen.queryByText("0%")).toBeNull();
+    // alert é reservado exclusivamente a risco clínico
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
 });
