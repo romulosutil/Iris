@@ -153,4 +153,60 @@ describe.skipIf(!hasDb)("Fase 4 (4B) · RLS de session_snapshot", () => {
       ),
     ).rejects.toThrow();
   });
+
+  test("session_numero = 0 (marco zero) respeita o mesmo isolamento de RLS (ANAM-04 / T23)", async () => {
+    // Insere snapshot 0 para PAC_A1
+    await owner`INSERT INTO session_snapshot (patient_id, session_numero, repertorio_state, segmentacao)
+      VALUES (${PAC_A1}, 0, ${owner.json({ marco: 0 })}, ${owner.json({})})
+      ON CONFLICT (patient_id, session_numero) DO NOTHING`;
+
+    // Coordenador da clínica A vê o snapshot 0
+    const coordLinhas = await withTenant(ctxCoordA, (tx) =>
+      tx
+        .select()
+        .from(schema.sessionSnapshot)
+        .where(eq(schema.sessionSnapshot.sessionNumero, 0)),
+    );
+    expect(coordLinhas.length).toBe(1);
+    expect(coordLinhas[0]?.patientId).toBe(PAC_A1);
+
+    // Terapeuta da equipe de PAC_A1 vê o snapshot 0
+    const t1Linhas = await withTenant(ctxT1A, (tx) =>
+      tx
+        .select()
+        .from(schema.sessionSnapshot)
+        .where(eq(schema.sessionSnapshot.sessionNumero, 0)),
+    );
+    expect(t1Linhas.length).toBe(1);
+
+    // Terapeuta fora da equipe de PAC_A1 NÃO vê o snapshot 0
+    const t2Linhas = await withTenant(ctxT2A, (tx) =>
+      tx
+        .select()
+        .from(schema.sessionSnapshot)
+        .where(eq(schema.sessionSnapshot.sessionNumero, 0)),
+    );
+    expect(t2Linhas.length).toBe(0);
+
+    // Cross-tenant: terapeuta da clínica B NÃO vê snapshot 0 da clínica A
+    const t1BLinhas = await withTenant(ctxT1B, (tx) =>
+      tx
+        .select()
+        .from(schema.sessionSnapshot)
+        .where(eq(schema.sessionSnapshot.sessionNumero, 0)),
+    );
+    expect(t1BLinhas.length).toBe(0);
+
+    // app_role NÃO tem INSERT direto em session_numero = 0
+    await expect(
+      withTenant(ctxCoordA, (tx) =>
+        tx.insert(schema.sessionSnapshot).values({
+          patientId: PAC_A1,
+          sessionNumero: 0,
+          repertorioState: {},
+          segmentacao: {},
+        }),
+      ),
+    ).rejects.toThrow();
+  });
 });
