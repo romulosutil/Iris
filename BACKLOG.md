@@ -1988,3 +1988,19 @@ sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o se
 
 ---
 
+## 📅 Sessão 21/08/2026 — Test #328: Cobertura Comportamental de Perímetro para config.matcher do Proxy
+
+- **Status:** ✅ Concluído.
+- **Objetivo:** Adicionar cobertura de teste comportamental em `src/proxy.test.ts` avaliando o `config.matcher` contra uma lista exaustiva de caminhos representativos, verificando quais rotas entram no proxy e quais passam direto (assets estáticos e marcas).
+- **Entregas principais:**
+  - `src/proxy.test.ts`:
+    - Adicionada suíte `Perímetro do matcher (config.matcher)` utilizando `getPathMatch` do Next.js.
+    - Testes comportamentais para rotas que DEVEM ser interceptadas: `/redefinir-senha` (crítica para segurança/finding C1), páginas de aplicação (`/`, `/login`, `/cadastro`, `/pacientes`, `/clinica`, etc.), APIs e webhooks (`/api/auth/*`, `/api/webhooks/asaas`, etc.) e rotas de descoberta de agentes/metadados (`/robots.txt`, `/.well-known/*`, etc.).
+    - Testes para rotas que DEVEM passar direto sem interceptação: assets estáticos (`/_next/static/*`, `/_next/image`), favicon (`/favicon.ico`) e marcas (`/brand/*`).
+    - Testes de resistência a mutação: mutação `matcher: []` derruba 5 testes imediatamente com assertividade comportamental.
+    - Testes adicionais no manipulador `proxy()` para chamadas POST de webhooks e GET em rotas `/api`.
+- **Validação:**
+  - `pnpm typecheck`: 0 erros.
+  - `pnpm lint`: 0 erros (9 warnings pré-existentes).
+  - `pnpm test src/proxy.test.ts`: 19/19 testes passando (100% verde).
+  - Teste de mutação verificado: mutante `matcher: []` rejeitado e morto.

@@ -114,7 +114,7 @@ Para garantir eficiência e máxima qualidade de código conforme `AGENTS.md` §
 - **Backlog Ativo para o Jules:**
   - `perf(evidence): três N+1 restantes em materializar.ts` ([#330](https://github.com/romulosutil/Iris/issues/330))
   - `test(redefinir-senha): chave e limites do throttle` ([#327](https://github.com/romulosutil/Iris/issues/327))
-  - `test(proxy): config.matcher cobertura comportamental` ([#328](https://github.com/romulosutil/Iris/issues/328))
+  - `test(proxy): config.matcher cobertura comportamental` ([#328](https://github.com/romulosutil/Iris/issues/328)) — ✅ Concluído
   - `test(storybook): runner em instalação limpa Windows` ([#341](https://github.com/romulosutil/Iris/issues/341))
 
 ---

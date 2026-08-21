@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
-import { proxy } from "./proxy";
+import { getPathMatch } from "next/dist/shared/lib/router/utils/path-match";
+import { proxy, config } from "./proxy";
 import { NOME_COOKIE_TOKEN } from "@/app/(auth)/redefinir-senha/cookie";
 
 describe("src/proxy.ts — segurança e navegação", () => {
@@ -15,6 +16,15 @@ describe("src/proxy.ts — segurança e navegação", () => {
       const res = proxy(req);
       // Para POST, o proxy não redireciona e repassa adiante
       expect(res.headers.get("location")).toBeNull();
+    });
+
+    it("passa direto para requisições de webhook (POST) sem redirecionamento ou injeção de Link", () => {
+      const req = new NextRequest("http://localhost:3000/api/webhooks/asaas", {
+        method: "POST",
+      });
+      const res = proxy(req);
+      expect(res.headers.get("location")).toBeNull();
+      expect(res.headers.get("Link")).toBeNull();
     });
 
     it("processa métodos de leitura (HEAD)", () => {
@@ -106,12 +116,18 @@ describe("src/proxy.ts — segurança e navegação", () => {
       expect(res.headers.get("Link")).toBeNull();
     });
 
-    it("não injeta cabeçalho Link em rotas /api", () => {
-      const req = new NextRequest("http://localhost:3000/api/auth/session", {
-        method: "GET",
-      });
-      const res = proxy(req);
-      expect(res.headers.get("Link")).toBeNull();
+    it("não injeta cabeçalho Link em rotas /api (incluindo autenticação e webhooks)", () => {
+      const rotasApi = ["/api/auth/session", "/api/webhooks/asaas"];
+      for (const rota of rotasApi) {
+        const req = new NextRequest(`http://localhost:3000${rota}`, {
+          method: "GET",
+        });
+        const res = proxy(req);
+        expect(
+          res.headers.get("Link"),
+          `Rota ${rota} não deve ter Link`,
+        ).toBeNull();
+      }
     });
 
     it("não injeta cabeçalho Link em rotas /.well-known", () => {
@@ -131,6 +147,147 @@ describe("src/proxy.ts — segurança e navegação", () => {
       });
       const res = proxy(req);
       expect(res.headers.get("Link")).toBeNull();
+    });
+  });
+
+  describe("Perímetro do matcher (config.matcher)", () => {
+    function matchesProxyMatcher(
+      pathname: string,
+      matcherConfig: typeof config.matcher | unknown[] = config.matcher,
+    ): boolean {
+      const matchers = Array.isArray(matcherConfig)
+        ? matcherConfig
+        : [matcherConfig];
+      return matchers.some((pattern) => {
+        const source =
+          typeof pattern === "string"
+            ? pattern
+            : (pattern as { source: string }).source;
+        const match = getPathMatch(source);
+        return Boolean(match(pathname));
+      });
+    }
+
+    describe("Rotas que DEVEM ser interceptadas (entram no proxy/middleware)", () => {
+      it("intercepta a rota crítica de segurança /redefinir-senha", () => {
+        expect(matchesProxyMatcher("/redefinir-senha")).toBe(true);
+      });
+
+      it("intercepta páginas da aplicação e rotas de autenticação", () => {
+        const rotasApp = [
+          "/",
+          "/login",
+          "/cadastro",
+          "/redefinir-senha",
+          "/pacientes",
+          "/pacientes/123",
+          "/pacientes/123/anamnese",
+          "/pacientes/123/tcc",
+          "/clinica",
+          "/agenda",
+          "/supervisao",
+          "/validacao",
+          "/alertas-risco",
+          "/pendencias",
+        ];
+
+        for (const rota of rotasApp) {
+          expect(
+            matchesProxyMatcher(rota),
+            `Rota de aplicação '${rota}' deve entrar no proxy`,
+          ).toBe(true);
+        }
+      });
+
+      it("intercepta rotas de API e webhooks para processamento pelo runtime", () => {
+        const rotasApi = [
+          "/api/auth/session",
+          "/api/auth/sign-in",
+          "/api/auth/callback/credentials",
+          "/api/webhooks/asaas",
+          "/api/health",
+        ];
+
+        for (const rota of rotasApi) {
+          expect(
+            matchesProxyMatcher(rota),
+            `Rota de API/Webhook '${rota}' deve entrar no proxy`,
+          ).toBe(true);
+        }
+      });
+
+      it("intercepta arquivos de descoberta de agentes e metadados na raiz", () => {
+        const rotasDescoberta = [
+          "/robots.txt",
+          "/sitemap.xml",
+          "/.well-known/api-catalog",
+          "/.well-known/mcp/server-card.json",
+          "/.well-known/agent-skills/index.json",
+          "/.well-known/apple-app-site-association",
+          "/auth.md",
+          "/docs/api",
+        ];
+
+        for (const rota of rotasDescoberta) {
+          expect(
+            matchesProxyMatcher(rota),
+            `Rota de descoberta '${rota}' deve entrar no proxy`,
+          ).toBe(true);
+        }
+      });
+    });
+
+    describe("Rotas que DEVEM passar direto (filtradas antes do proxy)", () => {
+      it("ignora assets estáticos internos do Next.js (_next/static e _next/image)", () => {
+        const rotasEstaticasNext = [
+          "/_next/static/chunks/main.js",
+          "/_next/static/chunks/app.js",
+          "/_next/static/css/styles.css",
+          "/_next/static/media/inter.woff2",
+          "/_next/image",
+        ];
+
+        for (const rota of rotasEstaticasNext) {
+          expect(
+            matchesProxyMatcher(rota),
+            `Asset estático '${rota}' não deve entrar no proxy`,
+          ).toBe(false);
+        }
+      });
+
+      it("ignora favicon e assets estáticos de marca (/brand/*)", () => {
+        const rotasMarcaEFavicon = [
+          "/favicon.ico",
+          "/brand/logo.svg",
+          "/brand/icons/apple-touch-icon.png",
+          "/brand/manifest.json",
+          "/brand/splash.png",
+        ];
+
+        for (const rota of rotasMarcaEFavicon) {
+          expect(
+            matchesProxyMatcher(rota),
+            `Asset de marca/favicon '${rota}' não deve entrar no proxy`,
+          ).toBe(false);
+        }
+      });
+    });
+
+    describe("Resistência a mutação no matcher", () => {
+      it("garante que a configuração do matcher exportada contém as regras esperadas e não está vazia", () => {
+        expect(Array.isArray(config.matcher)).toBe(true);
+        expect(config.matcher.length).toBeGreaterThanOrEqual(2);
+        expect(config.matcher).toContain("/redefinir-senha");
+        expect(config.matcher).toContain(
+          "/((?!_next/static|_next/image|favicon.ico|brand/).*)",
+        );
+      });
+
+      it("falha ao interceptar rotas se o matcher for esvaziado (mutante matcher: [])", () => {
+        expect(matchesProxyMatcher("/redefinir-senha", [])).toBe(false);
+        expect(matchesProxyMatcher("/pacientes", [])).toBe(false);
+        expect(matchesProxyMatcher("/api/webhooks/asaas", [])).toBe(false);
+      });
     });
   });
 });
