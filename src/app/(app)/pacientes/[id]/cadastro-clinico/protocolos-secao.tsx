@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,20 +64,35 @@ export function ProtocolosSecao({
     vinculos,
   );
   const semPrescricao = disciplinasPrescritas.length === 0;
+  const temAtivos = vinculos.some((v) => !v.desativadoEm);
 
   return (
     <section className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">
-          Protocolos estruturados (encaixe opcional)
-        </h2>
-        <p className="font-body text-xs text-[var(--text-secondary)]">
-          Protocolo de marcos (VB-MAPP, Denver, ABLLS-R, PROC) é um sub-encaixe
-          de uma disciplina já prescrita. Disciplina sem protocolo vinculado é
-          acompanhada em formato narrativo — psicologia generalista, psicanálise
-          ou TCC — e isso é uma escolha clínica válida, não configuração
-          pendente.
-        </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-display text-lg font-bold text-[var(--text-primary)]">
+            Protocolos estruturados (encaixe opcional)
+          </h2>
+          <p className="font-body text-xs text-[var(--text-secondary)]">
+            Protocolo de marcos (VB-MAPP, Denver, ABLLS-R, PROC) é um
+            sub-encaixe de uma disciplina já prescrita. Disciplina sem protocolo
+            vinculado é acompanhada em formato narrativo — psicologia
+            generalista, psicanálise ou TCC — e isso é uma escolha clínica
+            válida, não configuração pendente.
+          </p>
+        </div>
+        {temAtivos && (
+          <Button
+            variante="secundaria"
+            tamanho="sm"
+            className="shrink-0"
+            asChild
+          >
+            <Link href={`/pacientes/${patientId}/protocolos`}>
+              Ver Progresso →
+            </Link>
+          </Button>
+        )}
       </div>
 
       {semPrescricao ? (
