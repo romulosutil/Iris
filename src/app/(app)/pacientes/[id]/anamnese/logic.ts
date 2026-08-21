@@ -42,6 +42,11 @@ async function salvarRascunhoAnamneseCore(
         .values({
           clinicId: ctx.clinicId,
           patientId: d.patientId,
+          protocolId: d.protocolId ?? null,
+          nivelEntradaSugerido: d.nivelEntradaSugerido ?? null,
+          sugestaoAceita: d.sugestaoAceita ?? null,
+          observacoes: d.observacoes ?? null,
+          complementaAnamneseId: d.complementaAnamneseId ?? null,
           estado: "rascunho",
           criadoPor: ctx.userId,
         })

@@ -63,6 +63,11 @@ export type Alvo = z.infer<typeof alvoSchema>;
  */
 export const salvarRascunhoSchema = z.object({
   patientId: z.string().uuid(),
+  protocolId: z.string().uuid().nullable().optional(),
+  nivelEntradaSugerido: z.string().nullable().optional(),
+  sugestaoAceita: z.boolean().nullable().optional(),
+  observacoes: z.string().nullable().optional(),
+  complementaAnamneseId: z.string().uuid().nullable().optional(),
   alvos: z
     .array(alvoSchema)
     .min(1, "Adicione pelo menos um alvo.")
