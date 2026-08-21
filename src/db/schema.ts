@@ -1367,7 +1367,10 @@ export const sessionSnapshot = pgTable(
     // ESTRITAMENTE numérico/enum — nunca texto livre nem narrativa ABC (LGPD:
     // tabela de alto tráfego lida em todo briefing/scrubber). A narrativa ABC
     // é lida de `evidence` no render, não materializada aqui.
-    repertorioState: jsonb("repertorio_state").notNull(), // {goal_id/milestone_id: {metrica_recente, contagem, is_candidata}}
+    // #407 (Anamnese Marco Zero, D-A): No snapshot 0 (e preservado em subsequentes),
+    // repertorioState carrega também {origem: 'anamnese', procedencia: ProcedenciaAlvo}
+    // para diferenciar procedência do dado inicial sem quebrar a restrição de não-texto.
+    repertorioState: jsonb("repertorio_state").notNull(), // {goal_id/milestone_id: {metrica_recente, contagem, is_candidata, origem?, procedencia?}}
     // Chaveado por (goal_id, protocol_id) e carregando a métrica-por-tipo —
     // nunca eixo único de nivel_ajuda (reconciliação 13/07/2026, Fase 4):
     segmentacao: jsonb("segmentacao").notNull(), // {goal_id: {protocol_id: {tipo_estrutura, metrica, rotulo}}}

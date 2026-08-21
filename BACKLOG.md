@@ -1936,8 +1936,24 @@ acontecer. **Regra que fica:** esperar a confirmação antes de recarregar.
 **Aberto (não é da #209):** `diario-demo.spec.ts` e `revisao.spec.ts` dependem
 de `pnpm seed:demo` / `scripts/seed-demo.ts`, **removidos na `b53b294` (#163)**
 sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o seed
-demo é trabalho próprio: o schema mudou (prescrição virou pré-requisito da
-equipe, #203).
+---
+
+## 📅 Sessão 21/08/2026 — Feature #407: Anamnese Marco Zero (Sessão 0 no Espectro Brutal)
+
+- **Status:** ✅ Concluído (34/34 tasks concluídas e validadas).
+- **Objetivo:** Permitir que o coordenador registre uma anamnese inicial estruturada para pacientes em modalidade `protocol_driven`, materializando o Marco Zero (`session_numero = 0`) no `session_snapshot` e derivando metas ativas (`goal`), sem criar sessões fantasmas na agenda e sem alterar a apuração de faturamento.
+- **Entregas principais:**
+  - **Schema & Migrações:** Tabelas `anamnese` e `anamnese_alvo` com RLS por tenant/clínica, integridade referencial com `patient` e `goal` (`on delete set null`), constraints de procedência (`relatado_responsavel`, `observado_avaliador`, `registro_anterior`) e procedência preservada em `repertorio_state`.
+  - **Funções Definidoras:** `app_salvar_rascunho_anamnese` e `app_validar_anamnese` (`SECURITY DEFINER`) com isolamento multi-tenant via `app_clinic_id_exigido()`, gates de protocolo ativo (com taxonomia >= 2 níveis), consentimento revogado / prontuário em somente-leitura e exclusividade de papel coordenador.
+  - **Lógica e Server Actions:** `salvarRascunhoAnamnese`, `validarAnamnese`, e suporte a anamnese complementar com desempate determinístico (`validada_em DESC, id DESC`).
+  - **Timeline e Gráficos:** Scrubber de sessões e gráfico de espectro com suporte ao ponto "Anamnese" (sessão 0), cálculo correto de delta da Sessão 1 contra a Sessão 0, chip de procedência `ProcedenciaMarcoZero` e acessibilidade `role="status"` em conformidade com o Design System.
+  - **Formulário de Anamnese:** Página `/pacientes/[id]/anamnese` com controle de acesso para coordenador, teto de 24 alvos e modo somente-leitura após validação.
+- **Validação e Métricas (Medido, não presumido):**
+  - `pnpm typecheck`: 0 erros.
+  - `pnpm lint`: 0 erros (9 warnings de eslint pré-existentes, 0 erros).
+  - `pnpm test`: 239 arquivos de teste unitário passando (1.704 testes verdes).
+  - `pnpm test:rls`: 119 arquivos de teste de integração/RLS passando (1.071 testes verdes).
+  - `src/db/migrations.test.ts`: 8/8 testes passando com snapshot e journal íntegros.
 
 ---
 

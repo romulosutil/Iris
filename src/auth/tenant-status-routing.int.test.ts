@@ -66,7 +66,9 @@ async function redirectedTo(): Promise<string | undefined> {
 describe.skipIf(!hasDb)(
   "getTenantContext — mapeamento status → rota (M-2)",
   () => {
+    const prevBypass = process.env.BYPASS_MFA_FOR_DEV;
     beforeAll(async () => {
+      process.env.BYPASS_MFA_FOR_DEV = "false";
       owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
       await owner`TRUNCATE clinic, app_user, user_role, professional_consent RESTART IDENTITY CASCADE`;
       await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B')`;
@@ -94,6 +96,7 @@ describe.skipIf(!hasDb)(
     });
 
     afterAll(async () => {
+      process.env.BYPASS_MFA_FOR_DEV = prevBypass;
       vi.restoreAllMocks();
       await owner?.end();
       await authSql.end();
