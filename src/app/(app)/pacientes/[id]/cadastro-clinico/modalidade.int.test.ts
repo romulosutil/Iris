@@ -17,13 +17,13 @@ vi.mock("server-only", () => ({}));
  * `alternarArquivamento`/`arquivamento.int.test.ts`).
  */
 
-const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
-const CLINIC_B = "00000000-0000-0000-0000-0000000000b1";
-const U_COORD_A = "00000000-0000-0000-0000-0000000c01a1";
-const U_COORD_B = "00000000-0000-0000-0000-0000000c01b1";
-const U_ADMIN_A = "00000000-0000-0000-0000-0000000a01a1";
-const U_T1 = "00000000-0000-0000-0000-0000000071a1";
-const PAC_A = "00000000-0000-0000-0000-0000000ac1a1";
+const CLINIC_A = "00000000-0000-0000-0000-0000003870a1";
+const CLINIC_B = "00000000-0000-0000-0000-0000003870b1";
+const U_COORD_A = "00000000-0000-0000-0000-000000387ca1";
+const U_COORD_B = "00000000-0000-0000-0000-000000387cb1";
+const U_ADMIN_A = "00000000-0000-0000-0000-000000387aa1";
+const U_T1 = "00000000-0000-0000-0000-000000387071";
+const PAC_A = "00000000-0000-0000-0000-000000387ac1";
 
 const ctxCoordA = {
   clinicId: CLINIC_A,
@@ -74,15 +74,16 @@ describe.skipIf(!hasDb)("#387 · alterarModalidadeClinica", () => {
     // outros arquivos de integração (memória `truncate-extra-colide-com-int-
     // test-paralelo`); só as linhas deste arquivo são apagadas/reinseridas.
     await owner`DELETE FROM audit_log WHERE patient_id = ${PAC_A}`;
+    await owner`DELETE FROM care_team_membership WHERE patient_id = ${PAC_A} OR user_id IN (${U_COORD_A}, ${U_COORD_B}, ${U_ADMIN_A}, ${U_T1})`;
     await owner`DELETE FROM patient WHERE id = ${PAC_A}`;
     await owner`DELETE FROM user_role WHERE user_id IN (${U_COORD_A}, ${U_COORD_B}, ${U_ADMIN_A}, ${U_T1})`;
     await owner`DELETE FROM app_user WHERE id IN (${U_COORD_A}, ${U_COORD_B}, ${U_ADMIN_A}, ${U_T1})`;
-    await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A'), (${CLINIC_B}, 'B') ON CONFLICT (id) DO NOTHING`;
+    await owner`INSERT INTO clinic (id, nome, isento_trial) VALUES (${CLINIC_A}, 'A', true), (${CLINIC_B}, 'B', true) ON CONFLICT (id) DO UPDATE SET isento_trial = true`;
     await owner`INSERT INTO app_user (id, email, name) VALUES
-      (${U_COORD_A}, 'coordA@x.test', 'Coord A'),
-      (${U_COORD_B}, 'coordB@x.test', 'Coord B'),
-      (${U_ADMIN_A}, 'adminA@x.test', 'Admin A'),
-      (${U_T1}, 't1@x.test', 'T1')`;
+      (${U_COORD_A}, 'coordA387@x.test', 'Coord A'),
+      (${U_COORD_B}, 'coordB387@x.test', 'Coord B'),
+      (${U_ADMIN_A}, 'adminA387@x.test', 'Admin A'),
+      (${U_T1}, 't1387@x.test', 'T1')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
       (${U_ADMIN_A}, ${CLINIC_A}, 'admin_recepcao'),
@@ -98,7 +99,9 @@ describe.skipIf(!hasDb)("#387 · alterarModalidadeClinica", () => {
   async function resetPaciente(
     modalidade: "protocol_driven" | "cognitive_behavioral" | "conventional",
   ) {
+    await owner`INSERT INTO clinic (id, nome, isento_trial) VALUES (${CLINIC_A}, 'A', true), (${CLINIC_B}, 'B', true) ON CONFLICT (id) DO UPDATE SET isento_trial = true`;
     await owner`DELETE FROM audit_log WHERE patient_id = ${PAC_A}`;
+    await owner`DELETE FROM care_team_membership WHERE patient_id = ${PAC_A} OR user_id IN (${U_COORD_A}, ${U_COORD_B}, ${U_ADMIN_A}, ${U_T1})`;
     await owner`DELETE FROM patient WHERE id = ${PAC_A}`;
     await owner`INSERT INTO patient (id, clinic_id, nome, clinical_modality) VALUES (${PAC_A}, ${CLINIC_A}, 'Paciente A', ${modalidade})`;
   }

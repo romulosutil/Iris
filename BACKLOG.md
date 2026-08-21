@@ -1957,3 +1957,18 @@ sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o se
 
 ---
 
+## 📅 Sessão 21/08/2026 — Feature #409: Ponto de Entrada da Anamnese no Prontuário
+
+- **Status:** ✅ Concluído.
+- **Objetivo:** Adicionar a aba "Anamnese" na navegação do prontuário (`TabsNav` em `src/app/(app)/pacientes/[id]/layout.tsx`), condicionada à modalidade clínica `protocol_driven` (`temAnamnese: true` em `modalidade.ts`), posicionada após "Ficha Clínica" e antes da aba da modalidade.
+- **Entregas principais:**
+  - `src/app/(app)/pacientes/[id]/modalidade.ts`: Flag `temAnamnese: boolean` em `CapacidadesDaModalidade` configurada para `true` exclusivamente em `protocol_driven`.
+  - `src/app/(app)/pacientes/[id]/layout.tsx`: Item condicional `Anamnese` (`/pacientes/[id]/anamnese`) exposto no `TabsNav`.
+  - `src/app/(app)/pacientes/[id]/modalidade.test.ts` e `layout.test.tsx`: Testes unitários e de componente cobrindo presença e ausência da aba conforme modalidade.
+- **Validação:**
+  - `pnpm typecheck`: 0 erros.
+  - `pnpm lint`: 0 erros (9 warnings pré-existentes).
+  - `pnpm test`: 239/239 arquivos passando (1.704 testes).
+
+---
+
