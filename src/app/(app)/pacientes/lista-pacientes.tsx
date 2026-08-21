@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { DetalhesExpansiveis } from "@/components/ui/detalhes-expansivel";
 import type { PacienteListItem } from "./queries";
 
 export function ListaPacientes({
@@ -14,12 +15,15 @@ export function ListaPacientes({
   }
   return (
     <ul className="flex flex-col gap-2.5">
-      {pacientes.map((p) => (
-        <li key={p.id}>
-          <div className="flex items-center justify-between rounded-[var(--radius-control)] border-2 border-l-4 border-[var(--border-brutal)] border-l-[var(--action-primary)] bg-[var(--surface-card)] p-3.5 shadow-[var(--ds-shadow)] transition-transform duration-100 hover:translate-x-1">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex min-w-0 flex-col">
-                <div className="flex items-center gap-2">
+      {pacientes.map((p) => {
+        const temDados = Boolean(
+          p.convenio || p.responsavelContato || p.nascimento,
+        );
+        return (
+          <li key={p.id}>
+            <div className="flex flex-col gap-1 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-3.5 shadow-[var(--ds-shadow)] transition-transform duration-100 hover:translate-x-1">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <span className="font-display text-base font-bold text-[var(--text-primary)]">
                     {p.nome}
                   </span>
@@ -42,28 +46,33 @@ export function ListaPacientes({
                     </span>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[var(--text-secondary)]">
-                  {p.convenio ? <span>Convênio: {p.convenio}</span> : null}
-                  {p.responsavelContato ? (
-                    <span>Contato: {p.responsavelContato}</span>
-                  ) : null}
-                  {p.nascimento ? (
-                    <span>
-                      Nasc:{" "}
-                      {new Date(p.nascimento + "T00:00:00").toLocaleDateString(
-                        "pt-BR",
-                      )}
-                    </span>
-                  ) : null}
-                </div>
+                <Button variante="terciaria" tamanho="sm" asChild>
+                  <Link href={`/pacientes/${p.id}`}>Ver Prontuário &rarr;</Link>
+                </Button>
               </div>
+
+              {temDados ? (
+                <DetalhesExpansiveis rotulo="Ver convênio e contato">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    {p.convenio ? <span>Convênio: {p.convenio}</span> : null}
+                    {p.responsavelContato ? (
+                      <span>Contato: {p.responsavelContato}</span>
+                    ) : null}
+                    {p.nascimento ? (
+                      <span>
+                        Nasc:{" "}
+                        {new Date(
+                          p.nascimento + "T00:00:00",
+                        ).toLocaleDateString("pt-BR")}
+                      </span>
+                    ) : null}
+                  </div>
+                </DetalhesExpansiveis>
+              ) : null}
             </div>
-            <Button variante="terciaria" tamanho="sm" asChild>
-              <Link href={`/pacientes/${p.id}`}>Ver Prontuário &rarr;</Link>
-            </Button>
-          </div>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }

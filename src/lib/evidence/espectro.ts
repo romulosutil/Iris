@@ -1,4 +1,43 @@
-﻿export type EixoEspectro =
+/**
+ * Espectro — os 6 eixos do hexágono do prontuário.
+ *
+ * O QUE O NÚMERO É
+ * ----------------
+ * `valor` é a **independência documentada** do eixo: a média simples, entre os
+ * alvos do PEI daquele eixo, de quão pouco apoio o paciente precisou na última
+ * vez que o alvo foi registrado — em evidência já aprovada por terapeuta e
+ * validada na revisão. 100 = todos os alvos medidos saíram independentes.
+ * 0 = todos saíram com o apoio máximo previsto pelo protocolo.
+ *
+ * Ler de dentro para fora: perto do centro, o repertório registrado ainda
+ * depende de apoio; perto da borda, ele aparece independente. Não é
+ * diagnóstico, não é prognóstico e não é escore de instrumento.
+ *
+ * O QUE O NÚMERO NÃO É — e por quê
+ * --------------------------------
+ * A versão anterior devolvia 0 para eixo sem dado, dava 100% a qualquer meta
+ * com 3 evidências de qualquer polaridade e mandava toda meta sem marco para
+ * `cognicao_aprendizado`. Um hexágono desenhado assim afirma três coisas que
+ * ninguém mediu. As três regras que substituem isso:
+ *
+ * 1. **Ausência de dado é `null`, nunca 0.** Eixo sem alvo e eixo sem registro
+ *    são estados nomeados na tela, não um vértice colado no centro.
+ * 2. **Candidata não é dominada.** Critério de domínio atingido é candidatura
+ *    aguardando o coordenador; entra em `candidatos`, nunca em `dominados`,
+ *    e não pontua 100 por si só.
+ * 3. **Alvo que não resolve eixo é contado à parte** (`naoClassificados`), não
+ *    empurrado para um eixo qualquer.
+ *
+ * COMO UM GANHO NO PEI SOBE A PONTUAÇÃO
+ * -------------------------------------
+ * Terapeuta registra a sessão → extração vira evidência → evidência é aprovada
+ * → a materialização atualiza `nivel_ajuda_recente` do alvo. Se o alvo saiu com
+ * menos apoio que antes, o ordinal cai e a independência daquele alvo sobe;
+ * a média do eixo sobe junto. Quando o coordenador marca a meta como
+ * `dominada`, o alvo passa a valer 1 de forma estável.
+ */
+
+export type EixoEspectro =
   | "comunicacao_expressiva"
   | "comunicacao_receptiva"
   | "social_brincar"
@@ -6,218 +45,235 @@
   | "autonomia_motor"
   | "regulacao_barreiras";
 
+export const ROTULO_EIXO: Record<EixoEspectro, string> = {
+  comunicacao_expressiva: "Comunicação Expressiva",
+  comunicacao_receptiva: "Comunicação Receptiva",
+  social_brincar: "Social & Brincar",
+  cognicao_aprendizado: "Cognição & Aprendizado",
+  autonomia_motor: "Autonomia & Motor",
+  regulacao_barreiras: "Regulação & Barreiras",
+};
+
+/** Ordem fixa dos vértices — a forma do hexágono não pode variar por sessão. */
+export const ORDEM_EIXOS: EixoEspectro[] = [
+  "comunicacao_expressiva",
+  "comunicacao_receptiva",
+  "social_brincar",
+  "cognicao_aprendizado",
+  "autonomia_motor",
+  "regulacao_barreiras",
+];
+
 export interface DadosEixoRadar {
   eixo: EixoEspectro;
   rotulo: string;
-  valor: number; // 0 a 100
+  /** 0 a 100, ou `null` quando nada foi medido. Ausência nunca vira 0. */
+  valor: number | null;
+  /** Alvos do PEI corrente (metas `ativa` ou `dominada`) neste eixo. */
+  alvos: number;
+  /** Quantos desses têm nível de ajuda registrado — denominador de `valor`. */
+  medidos: number;
+  /** Alvos que o coordenador marcou como dominados. */
+  dominados: number;
+  /** Critério de domínio atingido, aguardando validação. Não são dominados. */
+  candidatos: number;
+  /** Evidências aprovadas acumuladas até a sessão selecionada. */
   contagemEvidencias: number;
 }
 
-export interface MilestoneMetadata {
-  dominioId: string;
-  protocolId: string;
-  tipoEstrutura:
-    | "marco_simples"
-    | "marco_com_barreira"
-    | "escore_composto"
-    | "faixa_normativa";
-  totalNiveisAjuda: number; // máximo ordinal configurado na taxonomia do protocolo
+/** Um alvo do PEI, com o que é preciso para situá-lo num eixo e pontuá-lo. */
+export interface AlvoEspectro {
+  goalId: string;
+  /** Domínio do marco mapeado à meta (`goal_milestone_mapping`), se houver. */
+  dominioId: string | null;
+  disciplina: string | null;
+  estado: "rascunho" | "ativa" | "dominada" | "pausada" | "descontinuada";
+  /** Maior ordinal da taxonomia de ajuda do protocolo. 0 = escala desconhecida. */
+  totalNiveisAjuda: number;
+  /** `goal_candidacy.is_candidate_dominada` — critério atingido, não validado. */
+  isCandidata: boolean;
 }
 
-export interface GoalMetadata {
-  id: string;
-  disciplina: string | null; // 'ABA' | 'Fono' | 'TO'
+export interface EstadoRepertorio {
+  nivel_ajuda_recente?: number | null;
+  contagem?: number;
+  is_candidata?: boolean;
+  origem?: string;
+  procedencia?: string;
 }
+
+export interface ResultadoEspectro {
+  eixos: DadosEixoRadar[];
+  /** Alvos que não resolvem eixo nenhum. Aparecem na tela como lacuna. */
+  naoClassificados: number;
+}
+
+const DOMINIO_PARA_EIXO: Record<string, EixoEspectro> = {
+  mando: "comunicacao_expressiva",
+  tato: "comunicacao_expressiva",
+  ecoico: "comunicacao_expressiva",
+  vocal: "comunicacao_expressiva",
+  intraverbal: "comunicacao_expressiva",
+
+  ouvinte: "comunicacao_receptiva",
+  instrucao_grupo: "comunicacao_receptiva",
+  "instrução em grupo": "comunicacao_receptiva",
+
+  social: "social_brincar",
+  brincar: "social_brincar",
+  jogo: "social_brincar",
+  "interação social": "social_brincar",
+  linguagem_social: "social_brincar",
+
+  pareamento: "cognicao_aprendizado",
+  leitura: "cognicao_aprendizado",
+  escrita: "cognicao_aprendizado",
+  matematica: "cognicao_aprendizado",
+  cognitivo: "cognicao_aprendizado",
+
+  imitacao: "autonomia_motor",
+  motora: "autonomia_motor",
+  motor: "autonomia_motor",
+  independencia: "autonomia_motor",
+  autonomia: "autonomia_motor",
+
+  barreiras: "regulacao_barreiras",
+  regulacao: "regulacao_barreiras",
+  comportamento: "regulacao_barreiras",
+  cooperacao: "regulacao_barreiras",
+  cooperação: "regulacao_barreiras",
+};
+
+const DISCIPLINA_PARA_EIXO: Record<string, EixoEspectro> = {
+  FONO: "comunicacao_expressiva",
+  FONOAUDIOLOGIA: "comunicacao_expressiva",
+  FONOTERAPIA: "comunicacao_expressiva",
+  TO: "autonomia_motor",
+  TERAPIA_OCUPACIONAL: "autonomia_motor",
+};
 
 /**
- * Mapeia um dominioId do milestone (ou disciplina de meta) para um eixo do Espectro.
+ * Resolve o eixo de um alvo. Domínio do marco primeiro; disciplina só como
+ * segunda tentativa. Devolve `null` quando nenhum dos dois resolve — a
+ * ausência de eixo é um fato sobre o cadastro, e a tela mostra esse fato em
+ * vez de inventar um vértice.
  */
 export function mapearEixo(
-  dominioId: string,
-  disciplina: string | null,
-): EixoEspectro {
-  const dom = dominioId.toLowerCase().trim();
-
-  // 1. VB-MAPP e eixos comportamentais clássicos
-  if (["mando", "tato", "ecoico", "vocal", "intraverbal"].includes(dom)) {
-    return "comunicacao_expressiva";
-  }
-  if (["ouvinte", "instrucao_grupo", "instrução em grupo"].includes(dom)) {
-    return "comunicacao_receptiva";
-  }
-  if (["social", "brincar", "jogo", "interação social"].includes(dom)) {
-    return "social_brincar";
-  }
-  if (
-    [
-      "pareamento",
-      "leitura",
-      "escrita",
-      "matematica",
-      "linguagem_social",
-      "cognitivo",
-    ].includes(dom)
-  ) {
-    return "cognicao_aprendizado";
-  }
-  if (
-    ["imitacao", "motora", "motor", "independencia", "autonomia"].includes(dom)
-  ) {
-    return "autonomia_motor";
-  }
-  if (
-    [
-      "barreiras",
-      "regulacao",
-      "comportamento",
-      "cooperacao",
-      "cooperação",
-    ].includes(dom)
-  ) {
-    return "regulacao_barreiras";
+  dominioId: string | null | undefined,
+  disciplina: string | null | undefined,
+): EixoEspectro | null {
+  const dom = dominioId?.toLowerCase().trim();
+  if (dom) {
+    const porDominio = DOMINIO_PARA_EIXO[dom];
+    if (porDominio) return porDominio;
   }
 
-  // 2. Fallback por disciplina de meta (Fono/TO/ABA)
   const disc = disciplina?.toUpperCase().trim();
-  if (disc === "FONOAUDIOLOGIA" || disc === "FONOTERAPIA" || disc === "FONO") {
-    return "comunicacao_expressiva";
-  }
-  if (disc === "TO" || disc === "TERAPIA_OCUPACIONAL") {
-    return "autonomia_motor";
+  if (disc) {
+    const porDisciplina = DISCIPLINA_PARA_EIXO[disc];
+    if (porDisciplina) return porDisciplina;
   }
 
-  return "cognicao_aprendizado"; // Fallback geral padrão
+  return null;
 }
 
 /**
- * Computa os dados do radar chart "Espectro" (6 pontas, 0-100%) a partir do repertorioState
- * materializado no session_snapshot.
- * Tratamento rigoroso de divisão por zero (NaN) e inversão do eixo de regulação/barreiras.
+ * Independência documentada de um alvo, em 0 a 1, ou `null` se não há o que
+ * medir. Vale para os dois tipos de escala do modelo — nível de ajuda e escore
+ * de barreira — porque em ambos o ordinal menor é o melhor.
  */
+export function progressoDoAlvo(
+  alvo: AlvoEspectro,
+  estado: EstadoRepertorio | undefined,
+): number | null {
+  // O valor sai SÓ do registro da sessão, nunca do estado atual da meta.
+  // `goal.estado` não tem data: usá-lo como atalho para 100 reescreveria as
+  // sessões passadas com uma conquista que só aconteceu depois delas. Meta
+  // dominada de verdade já chega aqui com ordinal 0 — o critério de domínio
+  // exige N sessões consecutivas independentes.
+  const ordinal = estado?.nivel_ajuda_recente;
+  if (ordinal === undefined || ordinal === null || !Number.isFinite(ordinal)) {
+    return null;
+  }
+
+  // Sem taxonomia de ajuda não existe denominador. A versão anterior assumia
+  // uma escala de 0 a 4 nesse caso — um número inventado com cara de medida.
+  const total = alvo.totalNiveisAjuda;
+  if (!Number.isFinite(total) || total <= 0) return null;
+
+  const ord = Math.max(0, Math.min(total, ordinal));
+  return (total - ord) / total;
+}
+
+/** Alvos que compõem o PEI corrente. Rascunho e meta encerrada ficam fora. */
+function contaComoAlvo(alvo: AlvoEspectro): boolean {
+  return alvo.estado === "ativa" || alvo.estado === "dominada";
+}
+
+interface AcumuladorEixo {
+  soma: number;
+  medidos: number;
+  alvos: number;
+  dominados: number;
+  candidatos: number;
+  evidencias: number;
+}
+
 export function computarDadosEspectro(
-  repertorioState: Record<
-    string,
-    {
-      nivel_ajuda_recente?: number | null;
-      contagem: number;
-      is_candidata?: boolean;
-    }
-  >,
-  mapeamentoMilestones: Record<string, MilestoneMetadata>,
-  metas: GoalMetadata[],
-): DadosEixoRadar[] {
-  // Inicializa acumuladores para os 6 eixos
-  const eixos: Record<
-    EixoEspectro,
-    { somaProgresso: number; pesoTotal: number; totalEvidencias: number }
-  > = {
-    comunicacao_expressiva: {
-      somaProgresso: 0,
-      pesoTotal: 0,
-      totalEvidencias: 0,
-    },
-    comunicacao_receptiva: {
-      somaProgresso: 0,
-      pesoTotal: 0,
-      totalEvidencias: 0,
-    },
-    social_brincar: { somaProgresso: 0, pesoTotal: 0, totalEvidencias: 0 },
-    cognicao_aprendizado: {
-      somaProgresso: 0,
-      pesoTotal: 0,
-      totalEvidencias: 0,
-    },
-    autonomia_motor: { somaProgresso: 0, pesoTotal: 0, totalEvidencias: 0 },
-    regulacao_barreiras: { somaProgresso: 0, pesoTotal: 0, totalEvidencias: 0 },
-  };
+  repertorioState: Record<string, EstadoRepertorio>,
+  alvos: AlvoEspectro[],
+): ResultadoEspectro {
+  const acumulado = {} as Record<EixoEspectro, AcumuladorEixo>;
+  for (const eixo of ORDEM_EIXOS) {
+    acumulado[eixo] = {
+      soma: 0,
+      medidos: 0,
+      alvos: 0,
+      dominados: 0,
+      candidatos: 0,
+      evidencias: 0,
+    };
+  }
 
-  const metasMap = new Map(metas.map((m) => [m.id, m]));
+  let naoClassificados = 0;
 
-  for (const [id, estado] of Object.entries(repertorioState)) {
-    let eixo: EixoEspectro | null = null;
-    let progresso = 0;
-    let temProgressoValido = false;
+  for (const alvo of alvos) {
+    if (!contaComoAlvo(alvo)) continue;
 
-    const milestone = mapeamentoMilestones[id];
-    const meta = metasMap.get(id);
-
-    if (milestone) {
-      eixo = mapearEixo(milestone.dominioId, null);
-      eixos[eixo].totalEvidencias += estado.contagem;
-
-      if (milestone.tipoEstrutura === "marco_simples") {
-        const ord = estado.nivel_ajuda_recente;
-        if (
-          ord !== undefined &&
-          ord !== null &&
-          milestone.totalNiveisAjuda > 0
-        ) {
-          // Nível de ajuda: menor ordinal = mais independente (melhor).
-          // Se totalNiveisAjuda = 4, ordinais [0, 1, 2, 3, 4]
-          // Independente (0) -> progresso 100%
-          // Nível 4 (4) -> progresso 0%
-          const total = milestone.totalNiveisAjuda;
-          progresso = (total - ord) / total;
-          temProgressoValido = true;
-        }
-      } else if (milestone.tipoEstrutura === "marco_com_barreira") {
-        // Eixo de barreiras: escala invertida.
-        // No VB-MAPP Barreiras, escore menor = melhor (menos barreiras).
-        // Se ord = 4 (grave) -> progresso 0%
-        // Se ord = 0 (sem barreira) -> progresso 100%
-        const ord = estado.nivel_ajuda_recente;
-        if (ord !== undefined && ord !== null) {
-          // Assume escala de 0 a 4 por padrão se totalNiveisAjuda não fornecido
-          const maxEscala = milestone.totalNiveisAjuda || 4;
-          progresso = (maxEscala - ord) / maxEscala;
-          temProgressoValido = true;
-        }
-      }
-    } else if (meta) {
-      eixo = mapearEixo("", meta.disciplina);
-      eixos[eixo].totalEvidencias += estado.contagem;
-
-      // Meta: se is_candidata (candidata a dominada) ou dominada, progresso é 1.
-      // Caso contrário, calcula proporcional à contagem de acertos (limite de 3 para 100%)
-      if (estado.is_candidata) {
-        progresso = 1.0;
-        temProgressoValido = true;
-      } else {
-        progresso = Math.min(estado.contagem / 3, 1.0);
-        temProgressoValido = true;
-      }
+    const eixo = mapearEixo(alvo.dominioId, alvo.disciplina);
+    if (!eixo) {
+      naoClassificados += 1;
+      continue;
     }
 
-    if (eixo && temProgressoValido) {
-      eixos[eixo].somaProgresso += progresso;
-      eixos[eixo].pesoTotal += 1;
+    const bucket = acumulado[eixo];
+    const estado = repertorioState[alvo.goalId];
+
+    bucket.alvos += 1;
+    bucket.evidencias += Math.max(0, estado?.contagem ?? 0);
+    if (alvo.estado === "dominada") bucket.dominados += 1;
+    else if (alvo.isCandidata) bucket.candidatos += 1;
+
+    const progresso = progressoDoAlvo(alvo, estado);
+    if (progresso !== null) {
+      bucket.soma += progresso;
+      bucket.medidos += 1;
     }
   }
 
-  // Mapeia para o formato de retorno, tratando divisão por zero de forma segura (NaN -> 0)
-  const deparaRotulo: Record<EixoEspectro, string> = {
-    comunicacao_expressiva: "Comunicação Expressiva",
-    comunicacao_receptiva: "Comunicação Receptiva",
-    social_brincar: "Social & Brincar",
-    cognicao_aprendizado: "Cognição & Aprendizado",
-    autonomia_motor: "Autonomia & Motor",
-    regulacao_barreiras: "Regulação & Barreiras",
-  };
-
-  return (Object.keys(eixos) as EixoEspectro[]).map((e) => {
-    const { somaProgresso, pesoTotal, totalEvidencias } = eixos[e];
-    const valorRaw = pesoTotal > 0 ? (somaProgresso / pesoTotal) * 100 : 0;
-
-    // Tratamento estrito contra NaN ou estouro de limites
-    const valor = isNaN(valorRaw)
-      ? 0
-      : Math.max(0, Math.min(100, Math.round(valorRaw)));
-
+  const eixos: DadosEixoRadar[] = ORDEM_EIXOS.map((eixo) => {
+    const b = acumulado[eixo];
     return {
-      eixo: e,
-      rotulo: deparaRotulo[e],
-      valor,
-      contagemEvidencias: totalEvidencias,
+      eixo,
+      rotulo: ROTULO_EIXO[eixo],
+      valor: b.medidos > 0 ? Math.round((b.soma / b.medidos) * 100) : null,
+      alvos: b.alvos,
+      medidos: b.medidos,
+      dominados: b.dominados,
+      candidatos: b.candidatos,
+      contagemEvidencias: b.evidencias,
     };
   });
+
+  return { eixos, naoClassificados };
 }

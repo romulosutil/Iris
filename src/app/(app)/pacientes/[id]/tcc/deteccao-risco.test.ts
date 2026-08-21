@@ -68,8 +68,7 @@ describe("TCC · Varredura determinística de risco no RPD (#391)", () => {
   test("as duas categorias casam no MESMO campo: DOIS sinais", () => {
     const sinais = detectarSinaisDeRiscoRPD({
       situacao: null,
-      pensamentoAutomatico:
-        "Quero morrer e às vezes penso em me cortar também",
+      pensamentoAutomatico: "Quero morrer e às vezes penso em me cortar também",
       evidenciasFavor: null,
       evidenciasContra: null,
       respostaRacional: null,

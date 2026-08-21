@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
@@ -15,13 +15,24 @@ import Link from "next/link";
 import { ArquivamentoDialog } from "./arquivamento-dialog";
 import { AvisosArquivamento } from "./avisos-arquivamento";
 import { carregarAvisosArquivamento } from "./arquivamento-queries";
+import { capacidadesDaModalidade } from "./modalidade";
+import { EvolucaoTcc } from "./timeline/evolucao-tcc";
+import { obterRPDEntries } from "./tcc/logic";
+import { obterInstrumentoAplicacoes } from "./tcc/instrumento-logic";
+import { vistaValida } from "./timeline/vista-nav";
 
 interface PacientePageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function PacientePage({ params }: PacientePageProps) {
+export default async function PacientePage({
+  params,
+  searchParams,
+}: PacientePageProps) {
   const { id } = await params;
+  const { vista: vistaBruta } = await searchParams;
+  const vista = vistaValida(vistaBruta);
   const ctx = await getTenantContext();
   requireRole(ctx, "terapeuta", "coordenador");
 
@@ -34,6 +45,9 @@ export default async function PacientePage({ params }: PacientePageProps) {
         // sem ele a única pista de que o paciente saiu da contagem de ativos
         // seria a fatura no fechamento do ciclo.
         arquivadoEm: patient.arquivadoEm,
+        // A modalidade decide se esta aba existe e o que ela lê. Sem ela, a
+        // rota base servia um hexágono de eixos VB-MAPP para os três modos.
+        clinicalModality: patient.clinicalModality,
       })
       .from(patient)
       .where(eq(patient.id, id));
@@ -45,10 +59,65 @@ export default async function PacientePage({ params }: PacientePageProps) {
     notFound();
   }
 
+  const capacidades = capacidadesDaModalidade(paciente.clinicalModality);
+
+  // Sai ANTES de `carregarTimeline`: em `conventional` a timeline não seria
+  // usada, e a consulta custa uma varredura de snapshots por entrada no
+  // prontuário. `redirect` lança — nada abaixo executa.
+  if (!capacidades.temEvolucao && capacidades.rotaDeEntrada) {
+    redirect(`/pacientes/${id}/${capacidades.rotaDeEntrada}`);
+  }
+
+  // Subiu para cá porque o ramo de TCC (abaixo) precisa dos avisos e sai antes
+  // de `carregarTimeline`. Não depende da timeline.
+  const avisos = await carregarAvisosArquivamento(ctx, id);
+
+  // Paciente de TCC tem leitura de evolução PRÓPRIA: escore de instrumento
+  // padronizado no tempo e reestruturação de crenças. Sai antes de
+  // `carregarTimeline` porque a timeline é protocol-driven — os eixos que ela
+  // materializa (mando, tato, ecoico) descrevem uma intervenção que este
+  // paciente não recebe, e consultá-la aqui seria custo puro.
+  if (capacidades.leituraDeEvolucao === "tcc") {
+    const [aplicacoes, entriesRpd] = await Promise.all([
+      obterInstrumentoAplicacoes(ctx, id),
+      obterRPDEntries(ctx, id),
+    ]);
+
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Stack gap="lg">
+          <PageHeader
+            breadcrumb={
+              <Breadcrumb
+                itens={[
+                  { rotulo: "Pacientes", href: "/pacientes" },
+                  { rotulo: paciente.nome, atual: true },
+                ]}
+              />
+            }
+            title={paciente.nome}
+            badge={
+              paciente.arquivadoEm ? (
+                <StatusBadge variante="neutral">Arquivado</StatusBadge>
+              ) : undefined
+            }
+            description="Evolução clínica em Terapia Cognitivo-Comportamental"
+          />
+          <AvisosArquivamento {...avisos} />
+          <EvolucaoTcc
+            aplicacoes={aplicacoes}
+            entriesRpd={entriesRpd.map((e) => ({
+              ...e,
+              distorcoesCognitivas: e.distorcoesCognitivas as string[] | null,
+            }))}
+          />
+        </Stack>
+      </div>
+    );
+  }
+
   const timeline = await carregarTimeline(ctx, id);
   const temSnapshots = timeline && timeline.snapshots.length > 0;
-
-  const avisos = await carregarAvisosArquivamento(ctx, id);
 
   // Mesmo predicado do `requireRole` do core (`logic.ts`): mostrar o botão a
   // quem a policy `patient_update` não deixa escrever produziria um "arquivado"
@@ -110,19 +179,44 @@ export default async function PacientePage({ params }: PacientePageProps) {
         {/* Estado Vazio ou Timeline */}
         {!temSnapshots ? (
           <div className="mx-auto my-8 max-w-2xl rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-12 text-center">
-            <div className="mb-4 text-4xl">📭</div>
+            {/* Ícone de traço em currentColor, no mesmo estilo de
+                `timeline/estado-de-erro.tsx`. Emoji tem leitura imprevisível
+                em leitor de tela e não herda a cor do texto. */}
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              focusable="false"
+              className="mx-auto mb-4 text-[var(--text-secondary)]"
+            >
+              <path
+                d="M3 13h5l1.5 3h5L16 13h5"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="square"
+                strokeLinejoin="miter"
+              />
+              <path
+                d="M3 13l3-8h12l3 8v6H3v-6z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="square"
+                strokeLinejoin="miter"
+              />
+            </svg>
             <h2 className="mb-2 text-2xl font-black text-[var(--text-primary)]">
               Sem sessões registradas
             </h2>
             <p className="mb-6 text-sm text-[var(--text-secondary)]">
-              Este paciente ainda não possui sessões registradas ou snapshots de
-              repertório materializados. Assim que a primeira sessão for
-              finalizada e consolidada, o histórico e timeline de evolução
-              aparecerão aqui.
+              Este paciente ainda não possui sessões registradas. Assim que a
+              primeira sessão for finalizada e consolidada, o histórico e
+              timeline de evolução aparecerão aqui.
             </p>
             <Link
               href={`/agenda`}
-              className="inline-flex items-center justify-center rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] px-4 py-2 text-sm font-bold text-[var(--action-primary-fg)] focus:outline-none"
+              className="focus-visible:outline-focus inline-flex items-center justify-center rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] px-4 py-2 text-sm font-bold text-[var(--action-primary-fg)] focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
             >
               Agendar Primeira Sessão &rarr;
             </Link>
@@ -132,6 +226,7 @@ export default async function PacientePage({ params }: PacientePageProps) {
             patientId={paciente.id}
             pacienteNome={paciente.nome}
             initialData={timeline}
+            vista={vista}
           />
         )}
       </Stack>

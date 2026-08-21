@@ -1,23 +1,20 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import Link from "next/link";
+import { useActionState, useMemo, useState } from "react";
 import { Stack, Cluster } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { Chip, ChipGroup } from "@/components/ui/chip";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogTitle,
   DialogDescription,
   DialogClose,
 } from "@/components/ui/dialog";
-import { surface } from "@/components/ui/primitives/surface";
-import { cn } from "@/lib/cn";
+import { SupervisaoCard } from "@/components/ui/supervisao-card";
+import type { MenuAcaoItem } from "@/components/ui/primitives/menu-acoes";
 import {
   reconhecerAlertaAction,
   resolverAlertaAction,
@@ -26,11 +23,23 @@ import {
 } from "./actions";
 import type { ItemSupervisao } from "./queries";
 
-const rotuloTipo = {
-  estagnacao: "Estagnação",
-  regressao: "Regressão",
-  faltas_excessivas: "Faltas",
-};
+/** Campos de identidade do alerta repetidos em cada formulário de mutação. */
+function CamposIdentidade({ item }: { item: ItemSupervisao }) {
+  return (
+    <>
+      <input type="hidden" name="chaveNatural" value={item.chaveNatural} />
+      <input type="hidden" name="tipo" value={item.tipo} />
+      <input type="hidden" name="patientId" value={item.patientId} />
+      <input type="hidden" name="goalId" value={item.goalId || ""} />
+      <input type="hidden" name="protocolId" value={item.protocolId || ""} />
+      <input
+        type="hidden"
+        name="detalhe"
+        value={JSON.stringify(item.detalhe)}
+      />
+    </>
+  );
+}
 
 function ItemCard({
   item,
@@ -69,25 +78,6 @@ function ItemCard({
   const [resolverAberto, setResolverAberto] = useState(false);
   const [descartarAberto, setDescartarAberto] = useState(false);
 
-  const formatDetalhe = () => {
-    if (item.tipo === "faltas_excessivas") {
-      const d = item.detalhe as {
-        faltas: number;
-        janelaSemanas: number;
-        limiar: number;
-      };
-      return `${d.faltas} faltas do paciente nas últimas ${d.janelaSemanas} semanas (limiar ${d.limiar})`;
-    } else {
-      const d = item.detalhe as {
-        metrica: string;
-        tipoEstrutura: string;
-        sessionNumero: number;
-      };
-      const rot = item.tipo === "estagnacao" ? "estagnação" : "regressão";
-      return `${item.goalNome} — ${item.protocolNome}: ${rot} (métrica ${d.metrica}, sessão ${d.sessionNumero})`;
-    }
-  };
-
   const hasError =
     reconhecerState.error || resolverState.error || descartarState.error;
   const errorMsg =
@@ -98,235 +88,166 @@ function ItemCard({
       ? "Este alerta mudou. Recarregue a página."
       : errorMsg;
 
-  return (
-    <Stack
-      gap="md"
-      como="li"
-      className={cn(
-        "rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]",
-      )}
-      id={`item-card-${item.chaveNatural}`}
+  // Enquanto o alerta é novo, a decisão pedida é reconhecê-lo; depois disso
+  // (ou quando o sinal já cessou), a decisão pedida é resolvê-lo.
+  const podeReconhecer = item.estado === "novo" && item.sinalPresente;
+
+  const acoesSecundarias = useMemo<MenuAcaoItem[]>(() => {
+    const itens: MenuAcaoItem[] = [];
+    if (podeReconhecer) {
+      itens.push({
+        id: "resolver",
+        rotulo: "Resolver alerta…",
+        aoSelecionar: () => setResolverAberto(true),
+      });
+    }
+    if (item.sinalPresente) {
+      itens.push({
+        id: "descartar",
+        rotulo: "Descartar alerta…",
+        tom: "destrutivo",
+        aoSelecionar: () => setDescartarAberto(true),
+      });
+    }
+    return itens;
+  }, [podeReconhecer, item.sinalPresente]);
+
+  const acaoPrimaria = podeReconhecer ? (
+    <form action={reconhecerFormAction} className="contents">
+      <CamposIdentidade item={item} />
+      <Button type="submit" variante="primaria" disabled={reconhecerPendente}>
+        {reconhecerPendente ? "Reconhecendo…" : "Reconhecer"}
+      </Button>
+    </form>
+  ) : (
+    <Button
+      type="button"
+      variante="primaria"
+      onClick={() => setResolverAberto(true)}
     >
-      <Stack gap="sm">
-        <span className="font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
-          Item {indice} de {total}
-        </span>
-        <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
-          <Link
-            href={`/pacientes/${item.patientId}`}
-            className="hover:underline"
-          >
-            {item.patientNome}
-          </Link>
-        </h3>
-        <p className="text-base text-[var(--text-primary)]">
-          {formatDetalhe()}
-        </p>
+      Resolver
+    </Button>
+  );
 
-        <ChipGroup rotulo="Status e Tipo do Alerta">
-          <Chip>{rotuloTipo[item.tipo]}</Chip>
-          {item.sinalPresente === false ? (
-            <Chip className="border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]">
-              sinal cessou
-            </Chip>
-          ) : null}
-          {item.estado === "reconhecido" ? <Chip>Reconhecido</Chip> : null}
-        </ChipGroup>
-      </Stack>
+  return (
+    <>
+      <SupervisaoCard
+        id={`item-card-${item.chaveNatural}`}
+        indice={indice}
+        total={total}
+        patientId={item.patientId}
+        patientNome={item.patientNome}
+        tipo={item.tipo}
+        goalNome={item.goalNome}
+        protocolNome={item.protocolNome}
+        detalhe={item.detalhe}
+        sinalPresente={item.sinalPresente}
+        estado={item.estado}
+        acaoPrimaria={acaoPrimaria}
+        acoesSecundarias={acoesSecundarias}
+        erro={
+          hasError ? <Alert severidade="erro">{renderedError}</Alert> : null
+        }
+      />
 
-      <Cluster gap="sm">
-        {item.estado === "novo" && item.sinalPresente && (
-          <form action={reconhecerFormAction} className="contents">
-            <input
-              type="hidden"
-              name="chaveNatural"
-              value={item.chaveNatural}
-            />
-            <input type="hidden" name="tipo" value={item.tipo} />
-            <input type="hidden" name="patientId" value={item.patientId} />
-            <input type="hidden" name="goalId" value={item.goalId || ""} />
-            <input
-              type="hidden"
-              name="protocolId"
-              value={item.protocolId || ""}
-            />
-            <input
-              type="hidden"
-              name="detalhe"
-              value={JSON.stringify(item.detalhe)}
-            />
-            <Button
-              type="submit"
-              variante="primaria"
-              disabled={reconhecerPendente}
-            >
-              {reconhecerPendente ? "Reconhecendo…" : "Reconhecer"}
-            </Button>
-          </form>
-        )}
+      {/*
+        Os modais ficam FORA do card: o menu de reticências desmonta o painel ao
+        selecionar o item, e um Dialog montado dentro dele nunca chegaria a abrir.
+      */}
+      <Dialog open={resolverAberto} onOpenChange={setResolverAberto}>
+        <DialogContent>
+          <DialogTitle>Resolver alerta</DialogTitle>
+          <DialogDescription>
+            Esta ação registra que a condição foi tratada e suprime futuros
+            alertas.
+          </DialogDescription>
+          <form action={resolverFormAction}>
+            <Stack gap="md" className="mt-4">
+              <CamposIdentidade item={item} />
 
-        <Dialog open={resolverAberto} onOpenChange={setResolverAberto}>
-          <DialogTrigger asChild>
-            <Button type="button" variante="secundaria">
-              Resolver
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogTitle>Resolver alerta</DialogTitle>
-            <DialogDescription>
-              Esta ação registra que a condição foi tratada e suprime futuros
-              alertas.
-            </DialogDescription>
-            <form action={resolverFormAction}>
-              <Stack gap="md" className="mt-4">
-                <input
-                  type="hidden"
-                  name="chaveNatural"
-                  value={item.chaveNatural}
-                />
-                <input type="hidden" name="tipo" value={item.tipo} />
-                <input type="hidden" name="patientId" value={item.patientId} />
-                <input type="hidden" name="goalId" value={item.goalId || ""} />
-                <input
-                  type="hidden"
-                  name="protocolId"
-                  value={item.protocolId || ""}
-                />
-                <input
-                  type="hidden"
-                  name="detalhe"
-                  value={JSON.stringify(item.detalhe)}
-                />
+              <Field
+                label="Nota de resolução"
+                htmlFor={`nota-${item.chaveNatural}`}
+              >
+                <Input id={`nota-${item.chaveNatural}`} name="nota" required />
+              </Field>
 
-                <Field
-                  label="Nota de resolução"
-                  htmlFor={`nota-${item.chaveNatural}`}
+              {resolverState.error ? (
+                <Alert severidade="erro">
+                  {resolverState.error === "CONCURRENCY_ERROR"
+                    ? "Este alerta mudou. Recarregue a página."
+                    : resolverState.error}
+                </Alert>
+              ) : null}
+
+              <Cluster gap="sm">
+                <Button
+                  type="submit"
+                  variante="primaria"
+                  disabled={resolverPendente}
                 >
-                  <Input
-                    id={`nota-${item.chaveNatural}`}
-                    name="nota"
-                    required
-                  />
-                </Field>
-
-                {resolverState.error ? (
-                  <Alert severidade="erro">
-                    {resolverState.error === "CONCURRENCY_ERROR"
-                      ? "Este alerta mudou. Recarregue a página."
-                      : resolverState.error}
-                  </Alert>
-                ) : null}
-
-                <Cluster gap="sm">
-                  <Button
-                    type="submit"
-                    variante="primaria"
-                    disabled={resolverPendente}
-                  >
-                    {resolverPendente ? "Resolvendo…" : "Confirmar resolução"}
+                  {resolverPendente ? "Resolvendo…" : "Confirmar resolução"}
+                </Button>
+                <DialogClose asChild>
+                  <Button type="button" variante="terciaria">
+                    Cancelar
                   </Button>
-                  <DialogClose asChild>
-                    <Button type="button" variante="terciaria">
-                      Cancelar
-                    </Button>
-                  </DialogClose>
-                </Cluster>
-              </Stack>
-            </form>
-          </DialogContent>
-        </Dialog>
+                </DialogClose>
+              </Cluster>
+            </Stack>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-        {item.sinalPresente && (
-          <Dialog open={descartarAberto} onOpenChange={setDescartarAberto}>
-            <DialogTrigger asChild>
-              <Button type="button" variante="secundaria">
-                Descartar
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogTitle>Descartar alerta</DialogTitle>
-              <DialogDescription>
-                Esta ação descarta a notificação e suprime novos alertas para
-                esta condição.
-              </DialogDescription>
-              <form action={descartarFormAction}>
-                <Stack gap="md" className="mt-4">
-                  <input
-                    type="hidden"
-                    name="chaveNatural"
-                    value={item.chaveNatural}
-                  />
-                  <input type="hidden" name="tipo" value={item.tipo} />
-                  <input
-                    type="hidden"
-                    name="patientId"
-                    value={item.patientId}
-                  />
-                  <input
-                    type="hidden"
-                    name="goalId"
-                    value={item.goalId || ""}
-                  />
-                  <input
-                    type="hidden"
-                    name="protocolId"
-                    value={item.protocolId || ""}
-                  />
-                  <input
-                    type="hidden"
-                    name="detalhe"
-                    value={JSON.stringify(item.detalhe)}
-                  />
+      <Dialog open={descartarAberto} onOpenChange={setDescartarAberto}>
+        <DialogContent>
+          <DialogTitle>Descartar alerta</DialogTitle>
+          <DialogDescription>
+            Esta ação descarta a notificação e suprime novos alertas para esta
+            condição.
+          </DialogDescription>
+          <form action={descartarFormAction}>
+            <Stack gap="md" className="mt-4">
+              <CamposIdentidade item={item} />
 
-                  <Field
-                    label="Motivo do descarte"
-                    htmlFor={`motivo-${item.chaveNatural}`}
-                  >
-                    <Input
-                      id={`motivo-${item.chaveNatural}`}
-                      name="motivo"
-                      required
-                    />
-                  </Field>
+              <Field
+                label="Motivo do descarte"
+                htmlFor={`motivo-${item.chaveNatural}`}
+              >
+                <Input
+                  id={`motivo-${item.chaveNatural}`}
+                  name="motivo"
+                  required
+                />
+              </Field>
 
-                  {descartarState.error ? (
-                    <Alert severidade="erro">
-                      {descartarState.error === "CONCURRENCY_ERROR"
-                        ? "Este alerta mudou. Recarregue a página."
-                        : descartarState.error}
-                    </Alert>
-                  ) : null}
+              {descartarState.error ? (
+                <Alert severidade="erro">
+                  {descartarState.error === "CONCURRENCY_ERROR"
+                    ? "Este alerta mudou. Recarregue a página."
+                    : descartarState.error}
+                </Alert>
+              ) : null}
 
-                  <Cluster gap="sm">
-                    <Button
-                      type="submit"
-                      variante="primaria"
-                      disabled={descartarPendente}
-                    >
-                      {descartarPendente
-                        ? "Descartando…"
-                        : "Confirmar descarte"}
-                    </Button>
-                    <DialogClose asChild>
-                      <Button type="button" variante="terciaria">
-                        Cancelar
-                      </Button>
-                    </DialogClose>
-                  </Cluster>
-                </Stack>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
-      </Cluster>
-
-      {hasError && errorMsg !== "CONCURRENCY_ERROR" ? (
-        <Alert severidade="erro">{renderedError}</Alert>
-      ) : null}
-      {hasError && errorMsg === "CONCURRENCY_ERROR" ? (
-        <Alert severidade="erro">{renderedError}</Alert>
-      ) : null}
-    </Stack>
+              <Cluster gap="sm">
+                <Button
+                  type="submit"
+                  variante="primaria"
+                  disabled={descartarPendente}
+                >
+                  {descartarPendente ? "Descartando…" : "Confirmar descarte"}
+                </Button>
+                <DialogClose asChild>
+                  <Button type="button" variante="terciaria">
+                    Cancelar
+                  </Button>
+                </DialogClose>
+              </Cluster>
+            </Stack>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

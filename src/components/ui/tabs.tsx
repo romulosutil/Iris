@@ -5,9 +5,9 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { cn } from "@/lib/cn";
 
 /**
- * Tabs sobre Radix, vestido com Espectro Brutal. Densidade do coordenador no
- * desktop (fila / perfil / histórico). Aba ativa recebe o acento ouro + borda
- * inferior sólida — sinal estrutural além da cor.
+ * Tabs sobre Radix, vestido com Espectro Brutal (§203). Densidade do coordenador no
+ * desktop (fila / perfil / histórico). Aba ativa recebe a borda sólida e fundo
+ * neutro de superfície — sinal estrutural além da cor, sem confundir com avisos.
  */
 export const Tabs = TabsPrimitive.Root;
 
@@ -35,9 +35,9 @@ export const TabsTrigger = React.forwardRef<
     <TabsPrimitive.Trigger
       ref={ref}
       className={cn(
-        "font-display -mb-0.5 inline-flex min-h-11 items-center border-b-2 border-transparent px-4 py-2 text-base font-semibold text-[var(--text-secondary)]",
-        "hover:text-[var(--text-primary)]",
-        "data-[state=active]:border-[var(--border-brutal)] data-[state=active]:bg-[var(--action-primary)] data-[state=active]:text-[var(--action-primary-fg)]",
+        "font-display -mb-0.5 inline-flex min-h-11 items-center border-2 border-transparent px-4 py-2 text-base font-semibold text-[var(--text-secondary)] transition-colors duration-100 ease-out",
+        "hover:border-[var(--border-brutal)]/40 hover:bg-[var(--gray-light-hover)]/40 hover:text-[var(--text-primary)]",
+        "data-[state=active]:rounded-t-[var(--radius-control)] data-[state=active]:border-b-[3px] data-[state=active]:border-[var(--border-brutal)] data-[state=active]:border-b-[var(--action-primary,#F2B705)] data-[state=active]:bg-[var(--surface-elevated)] data-[state=active]:font-bold data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none",
         "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:-outline-offset-[var(--ring-offset)]",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,

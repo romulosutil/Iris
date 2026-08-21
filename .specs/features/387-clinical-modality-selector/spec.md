@@ -12,7 +12,7 @@ Issue original pede `SECURITY DEFINER` copiando predicado de leitura. **Nao se a
   - "Protocolo estruturado (ABA / TEA)"
   - "Terapia Cognitivo-Comportamental (TCC)"
   - "Terapia convencional (psicodinâmica, humanista, sistêmica)"
-  Subtitulo "o que muda na ficha" por opcao — autoria nova, curta, 1 linha cada. Sem pre-selecao. Foco em erro via `grupoRef`+`useEffect`, mesmo padrao de `tipoConsentimento`.
+    Subtitulo "o que muda na ficha" por opcao — autoria nova, curta, 1 linha cada. Sem pre-selecao. Foco em erro via `grupoRef`+`useEffect`, mesmo padrao de `tipoConsentimento`.
 - R2 `novo/logic.ts`: `clinicalModality` vira **obrigatorio**, mesmo padrao de `tipoConsentimento` (linhas 84-96) — sem fallback silencioso pra `protocol_driven`. `formData` sem valor valido = rejeicao com mensagem pt-BR.
 - R3 Gate de consentimento: paciente **adulto** (mesma derivacao de idade que ja alimenta `avisoDivergencia`, hoje so aviso nao-bloqueante) em modalidade `cognitive_behavioral` OU `conventional` **exige** `tipoConsentimento === "titular_adulto"` — bloqueia criacao se nao vier. `protocol_driven` mantem o aviso soft atual, sem block novo (fora do escopo da DoD original).
 - R4 Edicao: Server Action nova em `cadastro-clinico/` (nome sugerido: `alterarModalidadeClinica` ou equivalente), mirror de `alternarArquivamento`: `requireRole(ctx, "coordenador", "admin_recepcao")`, `UPDATE patient SET clinical_modality=...` via `withTenant`, `INSERT audit_log` na mesma transacao. Trocar modalidade **nao apaga** RPD/dados do modelo anterior (nenhuma limpeza de dado nesta issue).

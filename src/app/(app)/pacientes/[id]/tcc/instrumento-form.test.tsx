@@ -1,9 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import {
-  InstrumentoForm,
-  type ItemInstrumentoTexto,
-} from "./instrumento-form";
+import { InstrumentoForm, type ItemInstrumentoTexto } from "./instrumento-form";
 
 /**
  * #393 — mesmo padrão de `novo-paciente-form.test.tsx` para componentes com
@@ -45,7 +42,11 @@ describe("InstrumentoForm — estado vazio (#393)", () => {
 
   it("mostra estado vazio quando itensTexto vem como array vazio", () => {
     render(
-      <InstrumentoForm patientId="pac-1" tipoInstrumento="gad7" itensTexto={[]} />,
+      <InstrumentoForm
+        patientId="pac-1"
+        tipoInstrumento="gad7"
+        itensTexto={[]}
+      />,
     );
 
     expect(
@@ -77,15 +78,9 @@ describe("InstrumentoForm — renderização parcial (#393)", () => {
       screen.queryByText(/conteúdo do instrumento pendente de configuração/i),
     ).toBeNull();
 
-    expect(
-      screen.getByText(/\[texto de teste — item 1\]/),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(/\[texto de teste — item 3\]/),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(/\[texto de teste — item 5\]/),
-    ).toBeTruthy();
+    expect(screen.getByText(/\[texto de teste — item 1\]/)).toBeTruthy();
+    expect(screen.getByText(/\[texto de teste — item 3\]/)).toBeTruthy();
+    expect(screen.getByText(/\[texto de teste — item 5\]/)).toBeTruthy();
 
     // Exatamente 3 radiogroups (um por item COM texto) — itens 2 e 4 não
     // geram campo nenhum.

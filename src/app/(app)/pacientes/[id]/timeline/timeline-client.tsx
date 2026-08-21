@@ -1,13 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
+import React, { useState, useEffect } from "react";
 import { Scrubber } from "./scrubber";
 import { DeltaSessaoLateral } from "./delta-sessao";
+import { EstadoDeErro } from "./estado-de-erro";
+import { GraficoEspectro } from "./grafico-espectro";
+import { VistaNav, type VistaEvolucao } from "./vista-nav";
 import {
   carregarDeltaSessaoAction,
   carregarComparacaoAction,
   carregarEvidenciasAction,
 } from "./actions";
+import { rotuloAte, rotuloPonto } from "./rotulos";
 import type { TimelineSnapshot, TimelineData } from "./queries";
 import type { DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
@@ -31,16 +35,51 @@ interface ComparacaoData {
   milestones: DeltaMilestone[];
 }
 
+/**
+ * Ícone de aviso em traço, `currentColor`, no estilo de `estado-de-erro.tsx`.
+ * Substitui o emoji de aviso, que tem nome anunciado de forma inconsistente
+ * entre leitores de tela e não herda a cor do texto do bloco.
+ */
+function IconeAviso() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      className="mt-px shrink-0"
+    >
+      <path
+        d="M10 2.5 18.5 17.5H1.5L10 2.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M10 7.5v4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="square"
+      />
+      <circle cx="10" cy="14.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 interface TimelineClientProps {
   patientId: string;
   pacienteNome: string;
   initialData: TimelineData;
+  vista: VistaEvolucao;
 }
 
 export function TimelineClient({
   patientId,
   pacienteNome,
   initialData,
+  vista,
 }: TimelineClientProps) {
   const { snapshots, metasAtivas, milestonesAtivos } = initialData;
 
@@ -50,13 +89,27 @@ export function TimelineClient({
     .sort((a, b) => a - b);
 
   // Sessão atual selecionada no Scrubber (inicia na mais recente)
-  const [sessaoAtiva, setSessaoAtiva] = useState<number>(
-    sessoesDisponiveis[sessoesDisponiveis.length - 1] ?? 1,
+  const [sessaoAtiva, setSessaoAtiva] = useState<number | null>(
+    sessoesDisponiveis[sessoesDisponiveis.length - 1] ?? null,
   );
 
   // Encontra o snapshot selecionado
   const snapSelecionado =
-    snapshots.find((s) => s.sessionNumero === sessaoAtiva) ?? null;
+    sessaoAtiva !== null
+      ? (snapshots.find((s) => s.sessionNumero === sessaoAtiva) ?? null)
+      : null;
+
+  // Snapshot imediatamente anterior ao selecionado — é o que dá o contorno
+  // tracejado do Espectro. "Anterior" aqui é a sessão anterior COM snapshot,
+  // não `sessaoAtiva - 1`: sessão sem evidência aprovada não gera snapshot, e
+  // comparar com um número que não existe devolveria undefined em silêncio.
+  const snapAnterior = React.useMemo(() => {
+    if (sessaoAtiva === null) return null;
+    const anteriores = snapshots
+      .filter((s) => s.sessionNumero < sessaoAtiva)
+      .sort((a, b) => b.sessionNumero - a.sessionNumero);
+    return anteriores[0] ?? null;
+  }, [snapshots, sessaoAtiva]);
 
   // Estado para a trajetória selecionada
   const [trajetoriaAlvoId, setTrajetoriaAlvoId] = useState<string>("");
@@ -71,6 +124,10 @@ export function TimelineClient({
   } | null>(null);
   const [drilldownEvidencias, setDrilldownEvidencias] = useState<any[]>([]);
   const [carregandoEvidencias, setCarregandoEvidencias] = useState(false);
+  // Falha de carregamento é estado próprio, NUNCA lista vazia: `[]` renderiza
+  // "Nenhuma evidência registrada para este trecho", que é uma afirmação
+  // clínica que a rede não autorizou ninguém a fazer. Ver `estado-de-erro.tsx`.
+  const [erroEvidencias, setErroEvidencias] = useState(false);
 
   // Mapeia milestones ativos agrupados por domínio
   const milestonesPorDominio = React.useMemo(() => {
@@ -118,6 +175,30 @@ export function TimelineClient({
     return stats;
   }, [milestonesPorDominio, snapSelecionado]);
 
+  const buscarEvidencias = async (alvo: {
+    inicio: number;
+    fim: number;
+    targetId: string;
+  }) => {
+    setCarregandoEvidencias(true);
+    setErroEvidencias(false);
+    setDrilldownEvidencias([]);
+    try {
+      const res = await carregarEvidenciasAction(
+        patientId,
+        alvo.targetId,
+        alvo.inicio,
+        alvo.fim,
+      );
+      setDrilldownEvidencias(res);
+    } catch (err) {
+      setErroEvidencias(true);
+      console.error("Erro ao buscar evidências por trecho:", err);
+    } finally {
+      setCarregandoEvidencias(false);
+    }
+  };
+
   const handleAbrirDrilldown = async (
     chunk: { inicio: number; fim: number },
     targetId: string,
@@ -130,21 +211,11 @@ export function TimelineClient({
       targetNome,
     });
     setDrilldownOpen(true);
-    setCarregandoEvidencias(true);
-    setDrilldownEvidencias([]);
-    try {
-      const res = await carregarEvidenciasAction(
-        patientId,
-        targetId,
-        chunk.inicio,
-        chunk.fim,
-      );
-      setDrilldownEvidencias(res);
-    } catch (err) {
-      console.error("Erro ao buscar evidências por trecho:", err);
-    } finally {
-      setCarregandoEvidencias(false);
-    }
+    await buscarEvidencias({
+      inicio: chunk.inicio,
+      fim: chunk.fim,
+      targetId,
+    });
   };
 
   const getTargetNome = (id: string) => {
@@ -217,7 +288,16 @@ export function TimelineClient({
     null,
   );
 
-  const [isPending, startTransition] = useTransition();
+  // Delta e comparação são duas requisições independentes com estados de
+  // carga e erro próprios (`carregandoDelta`, `carregandoComparacao`).
+  const [carregandoDelta, setCarregandoDelta] = useState(false);
+  const [erroDelta, setErroDelta] = useState(false);
+  const [carregandoComparacao, setCarregandoComparacao] = useState(false);
+  const [erroComparacao, setErroComparacao] = useState(false);
+  // Incrementado pelo "Tentar de novo": entra na lista de dependências do
+  // efeito e é o que o torna re-executável sem mudar a sessão selecionada.
+  const [tentativaDelta, setTentativaDelta] = useState(0);
+  const [tentativaComparacao, setTentativaComparacao] = useState(0);
   const sessaoCompararValida =
     sessaoComparar !== sessaoAtiva ? sessaoComparar : null;
   const podeComparar = sessoesDisponiveis.length >= 2;
@@ -240,11 +320,13 @@ export function TimelineClient({
 
   // Carrega o delta da sessão selecionada
   useEffect(() => {
-    if (!sessaoAtiva) return;
+    if (sessaoAtiva === null) return;
 
     let active = true;
 
-    startTransition(async () => {
+    const carregar = async () => {
+      setCarregandoDelta(true);
+      setErroDelta(false);
       try {
         const res = await carregarDeltaSessaoAction(patientId, sessaoAtiva);
         if (!active) return;
@@ -257,24 +339,40 @@ export function TimelineClient({
         setDeltaSessao(null);
         setDeltaMetas([]);
         setDeltaMilestones([]);
+        // Sem esta marca, `delta === null` cai no empty state do painel, que
+        // diz "Nenhuma alteração clínica registrada nesta sessão" — um fato
+        // clínico inventado a partir de uma falha de rede.
+        setErroDelta(true);
         console.error("Erro ao carregar delta da sessão:", err);
+      } finally {
+        if (active) {
+          setCarregandoDelta(false);
+        }
       }
-    });
+    };
+
+    void carregar();
 
     return () => {
       active = false;
     };
-  }, [sessaoAtiva, patientId]);
+  }, [sessaoAtiva, patientId, tentativaDelta]);
 
-  // Carrega dados da comparação
+  // Carrega a comparação quando uma sessão for selecionada no select
   useEffect(() => {
-    if (!compararAtivo || sessaoCompararValida === null) {
+    if (
+      !compararAtivo ||
+      sessaoAtiva === null ||
+      sessaoCompararValida === null
+    ) {
       return;
     }
 
     let active = true;
 
-    startTransition(async () => {
+    const carregar = async () => {
+      setCarregandoComparacao(true);
+      setErroComparacao(false);
       try {
         const res = await carregarComparacaoAction(
           patientId,
@@ -292,230 +390,25 @@ export function TimelineClient({
       } catch (err) {
         if (!active) return;
         setComparacaoData(null);
+        setErroComparacao(true);
         console.error("Erro ao carregar comparação:", err);
+      } finally {
+        if (active) setCarregandoComparacao(false);
       }
-    });
+    };
+
+    void carregar();
 
     return () => {
       active = false;
     };
-  }, [compararAtivo, sessaoAtiva, sessaoCompararValida, patientId]);
-
-  // Lógica de Renderização do Hexágono "Espectro" SVG
-  const renderEspectroRadar = () => {
-    if (!snapSelecionado) return null;
-
-    const data = snapSelecionado.espectro;
-    const centroX = 150;
-    const centroY = 150;
-    const raioMax = 100;
-
-    // 6 eixos com ângulos de 60 graus iniciando do topo (-90° ou 3*pi/2)
-    const eixosHex = data.map((e, index) => {
-      const angulo = (index * 60 - 90) * (Math.PI / 180);
-      const valorNormalizado = e.valor / 100;
-      const xMax = centroX + raioMax * Math.cos(angulo);
-      const yMax = centroY + raioMax * Math.sin(angulo);
-      const xValor = centroX + raioMax * valorNormalizado * Math.cos(angulo);
-      const yValor = centroY + raioMax * valorNormalizado * Math.sin(angulo);
-
-      return {
-        ...e,
-        xMax,
-        yMax,
-        xValor,
-        yValor,
-        label: e.eixo
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase()),
-      };
-    });
-
-    // Caminho da teia de fundo (0%, 25%, 50%, 75%, 100%)
-    const niveisTeia = [25, 50, 75, 100];
-    const caminhosTeia = niveisTeia.map((nivel) => {
-      const pontos = data.map((_, index) => {
-        const angulo = (index * 60 - 90) * (Math.PI / 180);
-        const r = raioMax * (nivel / 100);
-        const x = centroX + r * Math.cos(angulo);
-        const y = centroY + r * Math.sin(angulo);
-        return `${x},${y}`;
-      });
-      return pontos.join(" ");
-    });
-
-    // Polígono de evolução do paciente naquela sessão
-    const pontosEvolucao = eixosHex
-      .map((e) => `${e.xValor},${e.yValor}`)
-      .join(" ");
-
-    return (
-      <div className="bg-canvas border-ink-anchor flex flex-col items-center border-2 p-6">
-        <h3 className="text-ink mb-2 text-lg font-black">
-          Gráfico de Espectro Clínico
-        </h3>
-
-        {/* SVG do Radar Chart */}
-        <div className="relative h-[300px] w-[300px]" aria-hidden="true">
-          <svg width="300" height="300" className="overflow-visible">
-            {/* Linhas de grade da teia */}
-            {caminhosTeia.map((caminho, i) => (
-              <polygon
-                key={i}
-                points={caminho}
-                fill="none"
-                stroke="#c0c0c0"
-                strokeWidth="1"
-                strokeDasharray="2,2"
-              />
-            ))}
-
-            {/* Linhas dos eixos centrais */}
-            {eixosHex.map((e, i) => (
-              <line
-                key={i}
-                x1={centroX}
-                y1={centroY}
-                x2={e.xMax}
-                y2={e.yMax}
-                stroke="#d0d0d0"
-                strokeWidth="1"
-              />
-            ))}
-
-            {/* Polígono preenchido do repertório */}
-            <polygon
-              points={pontosEvolucao}
-              fill="rgba(218, 165, 32, 0.25)" // Ouro translúcido do Espectro Brutal
-              stroke="var(--color-gold, #DAA520)"
-              strokeWidth="3"
-            />
-
-            {/* Marcadores dos vértices */}
-            {eixosHex.map((e, i) => (
-              <circle
-                key={i}
-                cx={e.xValor}
-                cy={e.yValor}
-                r="4"
-                fill="var(--color-gold, #DAA520)"
-                stroke="#000000"
-                strokeWidth="1"
-              />
-            ))}
-
-            {/* Rótulos dos eixos */}
-            {eixosHex.map((e, i) => {
-              // Ajusta a posição do texto para não colidir com o gráfico
-              const offsetFactor = 1.2;
-              const ang = (i * 60 - 90) * (Math.PI / 180);
-              const tx = centroX + raioMax * offsetFactor * Math.cos(ang);
-              const ty = centroY + raioMax * offsetFactor * Math.sin(ang) + 4;
-              let textAnchor: "middle" | "start" | "end" = "middle";
-              if (Math.cos(ang) > 0.1) textAnchor = "start";
-              if (Math.cos(ang) < -0.1) textAnchor = "end";
-
-              return (
-                <text
-                  key={i}
-                  x={tx}
-                  y={ty}
-                  textAnchor={textAnchor}
-                  className="font-display fill-ink font-bold"
-                  style={{ fontSize: "9px" }}
-                >
-                  {e.label} ({e.valor}%)
-                </text>
-              );
-            })}
-          </svg>
-        </div>
-
-        {/* Tabela sr-only para Acessibilidade (DoD) */}
-        <table className="sr-only">
-          <caption>Dados de evolução clínica da Sessão {sessaoAtiva}</caption>
-          <thead>
-            <tr>
-              <th scope="col">Área de Evolução</th>
-              <th scope="col">Progresso Normalizado (%)</th>
-              <th scope="col">Evidências Registradas</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((e, i) => (
-              <tr key={i}>
-                <td>{e.eixo.replace(/_/g, " ")}</td>
-                <td>{e.valor}%</td>
-                <td>{e.contagemEvidencias}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Link visível para abrir os dados em tabela */}
-        <div className="mt-4 text-center">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variante="secundaria">
-                Visualizar Dados em Formato Tabela
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogTitle>Dados de evolução clínica</DialogTitle>
-              <DialogDescription>
-                Sessão {sessaoAtiva}: leitura tabular dos eixos do gráfico de
-                espectro.
-              </DialogDescription>
-              <div className="mt-4 max-h-[60vh] overflow-auto">
-                <table className="border-ink-anchor w-full border-collapse border text-left text-sm">
-                  <caption className="sr-only">
-                    Dados de evolução clínica da Sessão {sessaoAtiva}
-                  </caption>
-                  <thead>
-                    <tr className="bg-bg-canvas">
-                      <th
-                        scope="col"
-                        className="border-ink-anchor border p-2 font-bold"
-                      >
-                        Área de Evolução
-                      </th>
-                      <th
-                        scope="col"
-                        className="border-ink-anchor border p-2 font-bold"
-                      >
-                        Progresso (%)
-                      </th>
-                      <th
-                        scope="col"
-                        className="border-ink-anchor border p-2 font-bold"
-                      >
-                        Evidências
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.map((e, i) => (
-                      <tr key={i}>
-                        <td className="border-ink-anchor border p-2">
-                          {e.eixo.replace(/_/g, " ")}
-                        </td>
-                        <td className="border-ink-anchor border p-2">
-                          {e.valor}%
-                        </td>
-                        <td className="border-ink-anchor border p-2">
-                          {e.contagemEvidencias}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-    );
-  };
+  }, [
+    compararAtivo,
+    sessaoAtiva,
+    sessaoCompararValida,
+    patientId,
+    tentativaComparacao,
+  ]);
 
   const renderTrajetoriaMetas = () => {
     const chunks = getTrajetoriaChunks(trajetoriaAlvoId);
@@ -530,19 +423,19 @@ export function TimelineClient({
     };
 
     return (
-      <div className="bg-canvas border-ink-anchor flex flex-col border-2 p-6">
+      <div className="border-ink-anchor flex flex-col border-2 bg-[var(--surface-card)] p-4 sm:p-6">
         <div className="border-ink-anchor border-b-2 pb-4">
           <h3 className="text-ink font-display text-lg font-black">
             Trajetória Clínica de Metas
           </h3>
-          <p className="text-muted mt-1 text-sm">
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Selecione uma meta ou marco para visualizar o andamento clínico e
             explorar evidências do trecho.
           </p>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
             <label
               htmlFor="select-trajetoria-alvo"
-              className="text-ink text-xs font-black"
+              className="text-ink shrink-0 text-xs font-black"
             >
               Meta / Marco de Referência:
             </label>
@@ -550,7 +443,7 @@ export function TimelineClient({
               id="select-trajetoria-alvo"
               value={trajetoriaAlvoId}
               onChange={(e) => setTrajetoriaAlvoId(e.target.value)}
-              className="border-ink-anchor bg-canvas text-ink flex-1 border-2 p-2 text-sm focus:outline-none"
+              className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] w-full max-w-full min-w-0 flex-1 border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
             >
               <option value="">Selecione...</option>
               <optgroup label="Metas Ativas">
@@ -587,7 +480,7 @@ export function TimelineClient({
           />
         ) : (
           <div className="mt-6 flex flex-col gap-4">
-            <div className="text-ink border-ink-anchor bg-bg-canvas border px-3 py-2 text-sm font-bold">
+            <div className="text-ink border-ink-anchor border bg-[var(--surface-elevated)] px-3 py-2 text-sm font-bold">
               Trajetória: {targetNome}
             </div>
             {/* Visualização de Chunks como linha temporal */}
@@ -612,17 +505,15 @@ export function TimelineClient({
                     onClick={() =>
                       handleAbrirDrilldown(chunk, trajetoriaAlvoId, targetNome)
                     }
-                    className={`flex flex-col gap-2 rounded-[var(--radius-control)] border-2 p-4 text-left transition-all duration-75 focus:outline-none active:translate-y-0.5 sm:flex-row sm:items-center sm:justify-between ${colorClass}`}
+                    className={`focus-visible:outline-focus flex flex-col gap-2 rounded-[var(--radius-control)] border-2 p-4 text-left transition-all duration-75 focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)] active:translate-y-0.5 sm:flex-row sm:items-center sm:justify-between ${colorClass}`}
                   >
                     <div>
                       <span className="font-display text-base font-black tracking-tight uppercase">
                         {deparaTraducaoRotulo[chunk.rotulo] || chunk.rotulo}
                       </span>
                       <div className="mt-1 text-xs font-bold">
-                        Sessão {chunk.inicio}{" "}
-                        {chunk.fim !== chunk.inicio
-                          ? `até a Sessão ${chunk.fim}`
-                          : ""}
+                        {rotuloPonto(chunk.inicio)}{" "}
+                        {chunk.fim !== chunk.inicio ? rotuloAte(chunk.fim) : ""}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -650,14 +541,14 @@ export function TimelineClient({
     if (!snapSelecionado) return null;
 
     return (
-      <div className="bg-canvas border-ink-anchor flex flex-col border-2 p-6">
+      <div className="border-ink-anchor flex flex-col border-2 bg-[var(--surface-card)] p-4 sm:p-6">
         <div className="border-ink-anchor border-b-2 pb-4">
           <h3 className="text-ink font-display text-lg font-black">
             Acompanhamento de Marcos e Protocolos
           </h3>
-          <p className="text-muted mt-1 text-sm">
-            Estatísticas e progresso de marcos por domínio do protocolo ativo na
-            Sessão {sessaoAtiva}.
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            Estatísticas e progresso de marcos por domínio do protocolo ativo na{" "}
+            {rotuloPonto(sessaoAtiva ?? 0)}.
           </p>
         </div>
 
@@ -684,50 +575,50 @@ export function TimelineClient({
               return (
                 <div
                   key={dom}
-                  className="border-ink-anchor bg-bg-canvas border-2 p-4 shadow-[4px_4px_0px_#000000]"
+                  className="border-ink-anchor border-2 bg-[var(--surface-elevated)] p-3 shadow-[4px_4px_0px_#000000] sm:p-4"
                 >
                   <div className="mb-4 flex flex-col gap-2 border-b border-black pb-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <span className="font-display text-sm font-black tracking-tight uppercase">
                         Domínio: {dom.toUpperCase()}
                       </span>
-                      <div className="text-xxs text-muted mt-0.5">
+                      <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
                         {stats.total}{" "}
                         {stats.total === 1
                           ? "marco catalogado"
                           : "marcos catalogados"}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-black">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-black">
                       <span className="text-status-success-text bg-status-success-bg rounded border border-black px-1.5 py-0.5">
                         Conquistados: {stats.conquistados}
                       </span>
-                      <span className="text-status-info-text bg-status-info-bg rounded border border-black px-1.5 py-0.5">
+                      <span className="rounded border border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] px-1.5 py-0.5 text-[var(--status-ia-fg)]">
                         Candidatos: {stats.candidatos}
                       </span>
                     </div>
                   </div>
 
                   {/* Barra de Progresso Neobrutalista Stacked */}
-                  <div className="mb-4 flex h-4 overflow-hidden rounded-sm border-2 border-black bg-gray-200">
+                  <div className="mb-4 flex h-4 overflow-hidden rounded-sm border-2 border-black bg-[var(--surface-muted)]">
                     {percConquistados > 0 && (
                       <div
                         style={{ width: `${percConquistados}%` }}
-                        className="bg-status-success-bg h-full border-r border-black"
+                        className="h-full border-r-2 border-[var(--border-brutal)] bg-[var(--status-success-border)]"
                         title={`${percConquistados.toFixed(0)}% Conquistados`}
                       />
                     )}
                     {percCandidatos > 0 && (
                       <div
                         style={{ width: `${percCandidatos}%` }}
-                        className="bg-status-info-bg h-full border-r border-black"
+                        className="h-full border-r-2 border-[var(--border-brutal)] bg-[var(--status-ia-border)]"
                         title={`${percCandidatos.toFixed(0)}% Candidatos`}
                       />
                     )}
                   </div>
 
                   {/* Grid de Milestones */}
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
                     {items.map((m) => {
                       const entry = snapSelecionado.repertorioState?.[m.id];
                       let status: "conquistado" | "candidato" | "nao_atingido" =
@@ -743,24 +634,24 @@ export function TimelineClient({
                       return (
                         <div
                           key={m.id}
-                          className="border-ink-anchor bg-canvas group relative flex cursor-help flex-col items-center justify-between gap-2 border p-2 text-center"
+                          className="border-ink-anchor group relative flex min-w-0 cursor-help flex-col items-center justify-between gap-2 border bg-[var(--surface-card)] p-2 text-center"
                           title={`${m.nome} ${m.nivel ? `(Nível ${m.nivel})` : ""}`}
                         >
-                          <span className="text-xxs line-clamp-1 font-black">
+                          <span className="line-clamp-1 w-full truncate text-[10px] font-black">
                             {m.nivel ? `Nível ${m.nivel}` : "Marco"}
                           </span>
 
                           {/* Indicador Visual do Milestone */}
                           {status === "conquistado" ? (
                             <div
-                              className="bg-status-success-bg text-status-success-text flex h-8 w-8 items-center justify-center rounded-full border-2 border-black text-xs font-black"
+                              className="bg-status-success-bg text-status-success-text flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-black text-xs font-black"
                               title="Conquistado"
                             >
                               ✓
                             </div>
                           ) : status === "candidato" ? (
                             <div
-                              className="bg-status-info-bg text-status-info-text flex h-8 w-8 rotate-45 transform items-center justify-center border-2 border-dashed border-black text-xs font-black"
+                              className="flex h-8 w-8 shrink-0 rotate-45 transform items-center justify-center border-2 border-dashed border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-xs font-black text-[var(--status-ia-fg)]"
                               title="Candidato"
                             >
                               <span className="block -rotate-45 transform">
@@ -769,14 +660,14 @@ export function TimelineClient({
                             </div>
                           ) : (
                             <div
-                              className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-dashed border-gray-400 bg-gray-100 text-xs font-bold text-gray-400"
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-gray-400 bg-gray-100 text-xs font-bold text-gray-400"
                               title="Não Atingido"
                             >
                               ○
                             </div>
                           )}
 
-                          <span className="text-muted line-clamp-2 text-[10px] leading-tight">
+                          <span className="line-clamp-2 w-full text-[10px] leading-tight break-words text-[var(--text-secondary)]">
                             {m.nome}
                           </span>
                         </div>
@@ -792,241 +683,290 @@ export function TimelineClient({
     );
   };
 
-  return (
-    <div className="flex w-full flex-col gap-6">
-      {/* Linha do tempo interativa (Scrubber) */}
-      <Scrubber
-        sessoesDisponiveis={sessoesDisponiveis}
-        sessaoSelecionada={sessaoAtiva}
-        dataSessaoSelecionada={snapSelecionado?.geradoEm}
-        onSelecionarSessao={handleSelecionarSessao}
-      />
+  const renderComparador = () => {
+    if (!podeComparar) return null;
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {/* Coluna Principal: Gráficos */}
-        <div className="flex flex-col gap-6 md:col-span-2">
-          {/* Radar Chart Espectro */}
-          {renderEspectroRadar()}
-
-          {/* Trajetória de Metas (Parte 3) */}
-          {renderTrajetoriaMetas()}
-
-          {/* Acompanhamento de Protocolo (Parte 3) */}
-          {renderGraficoProtocolo()}
+    return (
+      <div className="border-ink-anchor flex flex-col gap-4 border-2 bg-[var(--surface-card)] p-4">
+        <div className="border-ink-anchor border-b-2 pb-2">
+          <h3 className="text-ink text-base font-black">
+            Comparar Pontos Temporais
+          </h3>
+          <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+            Selecione outra sessão para ver a evolução agregada no tempo.
+          </p>
         </div>
 
-        {/* Coluna Lateral: Delta de Sessão & Comparador */}
+        {/* O <label> envolve o input para que a area clicavel inteira, e
+            nao so a caixa, alcance o piso tatil de --control-sm (44px). */}
+        <label
+          htmlFor="checkbox-comparar"
+          className="flex min-h-[var(--control-sm)] cursor-pointer items-center gap-3"
+        >
+          <input
+            id="checkbox-comparar"
+            type="checkbox"
+            checked={compararAtivo}
+            onChange={(e) => handleCompararAtivoChange(e.target.checked)}
+            className="border-ink-anchor accent-gold size-5 cursor-pointer border-2"
+          />
+          <span className="text-ink text-sm font-bold">
+            Ativar Comparador Temporal
+          </span>
+        </label>
+
+        {compararAtivo && (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="select-sessao-comparar"
+                className="text-ink text-xs font-bold"
+              >
+                Comparar {rotuloPonto(sessaoAtiva ?? 0)} com:
+              </label>
+              <select
+                id="select-sessao-comparar"
+                value={sessaoCompararValida ?? ""}
+                onChange={(e) =>
+                  handleSelecionarSessaoComparar(Number(e.target.value))
+                }
+                className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] w-full max-w-full min-w-0 border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+              >
+                <option value="" disabled>
+                  Selecione...
+                </option>
+                {sessoesDisponiveis
+                  .filter((n) => n !== sessaoAtiva)
+                  .map((n) => (
+                    <option key={n} value={n}>
+                      {rotuloPonto(n)}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {carregandoComparacao && (
+              <div className="animate-pulse text-xs text-[var(--text-secondary)]">
+                Carregando comparação...
+              </div>
+            )}
+
+            {erroComparacao && (
+              <EstadoDeErro
+                titulo="A comparação não foi carregada"
+                descricao="Não foi possível comparar as duas sessões agora. Nada foi calculado — o resultado abaixo não existe, não é um resultado vazio."
+                onTentarDeNovo={() => setTentativaComparacao((n) => n + 1)}
+              />
+            )}
+
+            {/* Exibição do Delta de Comparação */}
+            {comparacaoData && !erroComparacao && (
+              <div className="border-ink-anchor flex flex-col gap-3 border-t-2 pt-3">
+                {/* Mudança de protocolo entre as duas sessões: a comparação
+                    de nível de ajuda fica suspensa. `role="status"` — a
+                    semântica que interrompe o leitor de tela é reservada ao
+                    risco clínico (mesma decisão de `estado-de-erro.tsx`). */}
+                {comparacaoData.protocoloMudou ? (
+                  <div
+                    role="status"
+                    className="flex items-start gap-2 rounded-[var(--radius-control)] border-2 border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] p-2.5 text-xs font-bold text-[var(--status-warning-fg)]"
+                  >
+                    <IconeAviso />
+                    <div>
+                      <strong>Comparação suspensa.</strong> Os protocolos ativos
+                      mudaram entre{" "}
+                      {rotuloPonto(
+                        Math.min(sessaoAtiva ?? 0, sessaoCompararValida ?? 0),
+                      )}{" "}
+                      e{" "}
+                      {rotuloPonto(
+                        Math.max(sessaoAtiva ?? 0, sessaoCompararValida ?? 0),
+                      )}
+                      , e as escalas de nível de ajuda das duas não são
+                      equivalentes. Comparar os números daria uma diferença que
+                      não existe clinicamente.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] p-1.5 text-center text-xs font-bold text-[var(--action-primary-fg)]">
+                      Resultados da Comparação
+                    </div>
+                    <div className="text-xs text-[var(--text-secondary)]">
+                      Evolução de{" "}
+                      {rotuloPonto(
+                        Math.min(sessaoAtiva ?? 0, sessaoCompararValida ?? 0),
+                      )}{" "}
+                      para{" "}
+                      {rotuloPonto(
+                        Math.max(sessaoAtiva ?? 0, sessaoCompararValida ?? 0),
+                      )}
+                      :
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                      <div className="rounded-[var(--radius-control)] border-2 border-[var(--status-success-border)] bg-[var(--status-success-bg)] p-2 font-bold text-[var(--status-success-fg)]">
+                        +
+                        {comparacaoData.delta?.itens?.filter(
+                          (i) => i.tipo === "evolucao" || i.tipo === "novo",
+                        ).length ?? 0}{" "}
+                        Avanços
+                      </div>
+                      <div className="rounded-[var(--radius-control)] border-2 border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-2 font-bold text-[var(--status-error-fg)]">
+                        +
+                        {comparacaoData.delta?.itens?.filter(
+                          (i) => i.tipo === "regressao",
+                        ).length ?? 0}{" "}
+                        Recuos
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderDrilldown = () => (
+    <Dialog open={drilldownOpen} onOpenChange={setDrilldownOpen}>
+      <DialogContent className="max-w-2xl border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]">
+        <DialogTitle className="font-display text-xl font-black text-[var(--text-primary)]">
+          Evidências Clínicas do Trecho
+        </DialogTitle>
+        <DialogDescription className="text-sm font-bold text-[var(--text-secondary)]">
+          {rotuloPonto(drilldownChunk?.inicio ?? 0)}{" "}
+          {drilldownChunk?.fim !== drilldownChunk?.inicio
+            ? rotuloAte(drilldownChunk?.fim ?? 0)
+            : ""}{" "}
+          para {drilldownChunk?.targetNome}
+        </DialogDescription>
+
+        <div className="mt-4 flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-2">
+          {carregandoEvidencias ? (
+            <div className="animate-pulse py-8 text-center text-sm font-black text-[var(--text-secondary)]">
+              Buscando evidências no histórico do paciente...
+            </div>
+          ) : erroEvidencias ? (
+            <EstadoDeErro
+              titulo="As evidências deste trecho não foram carregadas"
+              descricao="A busca no histórico do paciente falhou. Isto não significa que o trecho esteja sem evidências — significa que ainda não sabemos o que há nele."
+              onTentarDeNovo={() => {
+                if (drilldownChunk) void buscarEvidencias(drilldownChunk);
+              }}
+            />
+          ) : drilldownEvidencias.length === 0 ? (
+            <div className="rounded-[var(--radius-control)] border-2 border-dashed border-[var(--border-brutal)]/40 bg-[var(--surface-elevated)] py-8 text-center text-sm font-bold text-[var(--text-secondary)]">
+              Nenhuma evidência registrada para este trecho nas sessões
+              selecionadas.
+            </div>
+          ) : (
+            drilldownEvidencias.map((ev: any) => (
+              <div
+                key={ev.id}
+                /* Sem acento lateral: o DS baniu a faixa esquerda, e a
+                   polaridade já é dita pela pílula "Evolução"/"Dificuldade"
+                   logo abaixo — nenhuma informação se perde. */
+                className="flex flex-col gap-2 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]"
+              >
+                <div className="flex flex-col gap-1 border-b border-[var(--border-brutal)]/20 pb-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-black text-[var(--text-primary)]">
+                    {rotuloPonto(ev.sessionNumero)} •{" "}
+                    {ev.dataSessao
+                      ? new Date(ev.dataSessao).toLocaleDateString("pt-BR")
+                      : "Sem data"}
+                  </span>
+                  <span className="font-bold text-[var(--text-secondary)]">
+                    Aprovado por: {ev.aprovadorNome}
+                  </span>
+                </div>
+                <p className="text-sm leading-relaxed font-medium text-[var(--text-primary)]">
+                  {ev.descricao}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-[var(--radius-pill)] border border-[var(--border-brutal)] px-2 py-0.5 text-xs font-bold ${
+                      ev.polaridade === "positiva"
+                        ? "bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
+                        : "bg-[var(--status-error-bg)] text-[var(--status-error-fg)]"
+                    }`}
+                  >
+                    {ev.polaridade === "positiva" ? "Evolução" : "Dificuldade"}
+                  </span>
+                  {ev.nivelAjuda && (
+                    <span className="rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-2 py-0.5 text-xs font-bold text-[var(--text-primary)]">
+                      Nível de Ajuda: {ev.nivelAjuda}
+                    </span>
+                  )}
+                </div>
+                {ev.revisao && (
+                  <p className="mt-1 border-t border-[var(--border-brutal)]/20 pt-1 text-xs font-medium text-[var(--text-secondary)]">
+                    Revisado por {ev.revisao.autorNome ?? "coordenador"}
+                    {ev.revisao.justificativa
+                      ? `: ${ev.revisao.justificativa}`
+                      : ""}
+                  </p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button onClick={() => setDrilldownOpen(false)}>Fechar Painel</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
+  return (
+    <div className="flex w-full flex-col gap-6">
+      <VistaNav basePath={`/pacientes/${patientId}`} vistaAtual={vista} />
+
+      {vista === "sessao" ? (
+        /*
+          "Esta sessão" não tem relógio: é sempre a sessão mais recente. O
+          scrubber (e, com ele, o conceito de "estou olhando o passado") vive
+          só na vista "No tempo". Uma pergunta, uma tela — resolve o P2 "seis
+          regiões, três relógios, nenhuma âncora".
+        */
         <div className="flex flex-col gap-6">
-          {/* Delta de Sessão */}
           <DeltaSessaoLateral
             delta={deltaSessao}
             metas={deltaMetas}
             milestones={deltaMilestones}
-            carregando={isPending && !compararAtivo}
+            carregando={carregandoDelta}
+            erro={erroDelta}
+            onTentarDeNovo={() => setTentativaDelta((n) => n + 1)}
           />
-
-          {/* Comparador de 2 Pontos Temporais */}
-          {podeComparar && (
-            <div className="bg-canvas border-ink-anchor flex flex-col gap-4 border-2 p-4">
-              <div className="border-ink-anchor border-b-2 pb-2">
-                <h3 className="text-ink text-base font-black">
-                  Comparar Pontos Temporais
-                </h3>
-                <p className="text-xxs text-muted mt-0.5">
-                  Selecione outra sessão para ver a evolução agregada no tempo.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <input
-                  id="checkbox-comparar"
-                  type="checkbox"
-                  checked={compararAtivo}
-                  onChange={(e) => handleCompararAtivoChange(e.target.checked)}
-                  className="border-ink-anchor accent-gold size-4 cursor-pointer border-2"
-                />
-                <label
-                  htmlFor="checkbox-comparar"
-                  className="text-ink cursor-pointer text-sm font-bold"
-                >
-                  Ativar Comparador Temporal
-                </label>
-              </div>
-
-              {compararAtivo && (
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="select-sessao-comparar"
-                      className="text-ink text-xs font-bold"
-                    >
-                      Comparar Sessão {sessaoAtiva} com a Sessão:
-                    </label>
-                    <select
-                      id="select-sessao-comparar"
-                      value={sessaoCompararValida ?? ""}
-                      onChange={(e) =>
-                        handleSelecionarSessaoComparar(Number(e.target.value))
-                      }
-                      className="border-ink-anchor bg-canvas text-ink border-2 p-1.5 text-sm focus:outline-none"
-                    >
-                      <option value="" disabled>
-                        Selecione...
-                      </option>
-                      {sessoesDisponiveis
-                        .filter((n) => n !== sessaoAtiva)
-                        .map((n) => (
-                          <option key={n} value={n}>
-                            Sessão {n}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-
-                  {isPending && (
-                    <div className="text-muted animate-pulse text-xs">
-                      Carregando comparação...
-                    </div>
-                  )}
-
-                  {/* Exibição do Delta de Comparação */}
-                  {comparacaoData && (
-                    <div className="border-ink-anchor flex flex-col gap-3 border-t-2 pt-3">
-                      {/* Alerta Clínico Guard G7 */}
-                      {comparacaoData.protocoloMudou ? (
-                        <div className="flex items-start gap-2 rounded-[var(--radius-control)] border-2 border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-2.5 text-xs font-bold text-[var(--status-error-fg)]">
-                          <span>⚠️</span>
-                          <div>
-                            <strong>Guard G7 Ativado:</strong> Houve mudança nos
-                            protocolos ativos entre a Sessão{" "}
-                            {Math.min(sessaoAtiva, sessaoCompararValida ?? 0)} e
-                            a Sessão{" "}
-                            {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)}.
-                            Os deltas de nível de ajuda foram suspensos devido a
-                            desalinhamento de escalas clínicas.
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          <div className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] p-1.5 text-center text-xs font-bold text-[var(--action-primary-fg)]">
-                            Resultados da Comparação
-                          </div>
-                          <div className="text-xs text-[var(--text-secondary)]">
-                            Evolução da Sessão{" "}
-                            {Math.min(sessaoAtiva, sessaoCompararValida ?? 0)}{" "}
-                            para a{" "}
-                            {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)}:
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-center text-xs">
-                            <div className="rounded-[var(--radius-control)] border-2 border-[var(--status-success-border)] bg-[var(--status-success-bg)] p-2 font-bold text-[var(--status-success-fg)]">
-                              +
-                              {comparacaoData.delta?.itens?.filter(
-                                (i) =>
-                                  i.tipo === "evolucao" || i.tipo === "novo",
-                              ).length ?? 0}{" "}
-                              Avanços
-                            </div>
-                            <div className="rounded-[var(--radius-control)] border-2 border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-2 font-bold text-[var(--status-error-fg)]">
-                              +
-                              {comparacaoData.delta?.itens?.filter(
-                                (i) => i.tipo === "regressao",
-                              ).length ?? 0}{" "}
-                              Recuos
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          {snapSelecionado && sessaoAtiva !== null ? (
+            <GraficoEspectro
+              espectro={snapSelecionado.espectro}
+              espectroAnterior={snapAnterior?.espectro ?? null}
+              sessaoAtiva={sessaoAtiva}
+              sessaoAnterior={snapAnterior?.sessionNumero ?? null}
+            />
+          ) : null}
         </div>
-      </div>
-
-      {/* Dialog de Drilldown de Evidências por Trecho */}
-      <Dialog open={drilldownOpen} onOpenChange={setDrilldownOpen}>
-        <DialogContent className="max-w-2xl border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]">
-          <DialogTitle className="font-display text-xl font-black text-[var(--text-primary)]">
-            Evidências Clínicas do Trecho
-          </DialogTitle>
-          <DialogDescription className="text-sm font-bold text-[var(--text-secondary)]">
-            Sessões {drilldownChunk?.inicio} até {drilldownChunk?.fim} para{" "}
-            {drilldownChunk?.targetNome}
-          </DialogDescription>
-
-          <div className="mt-4 flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-2">
-            {carregandoEvidencias ? (
-              <div className="animate-pulse py-8 text-center text-sm font-black text-[var(--text-secondary)]">
-                Buscando evidências no histórico do paciente...
-              </div>
-            ) : drilldownEvidencias.length === 0 ? (
-              <div className="rounded-[var(--radius-control)] border-2 border-dashed border-[var(--border-brutal)]/40 bg-[var(--surface-elevated)] py-8 text-center text-sm font-bold text-[var(--text-secondary)]">
-                Nenhuma evidência registrada para este trecho nas sessões
-                selecionadas.
-              </div>
-            ) : (
-              drilldownEvidencias.map((ev: any) => (
-                <div
-                  key={ev.id}
-                  className={`flex flex-col gap-2 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)] ${
-                    ev.polaridade === "positiva"
-                      ? "border-l-4 border-l-[var(--status-success-border)]"
-                      : "border-l-4 border-l-[var(--status-error-border)]"
-                  }`}
-                >
-                  <div className="flex flex-col gap-1 border-b border-[var(--border-brutal)]/20 pb-1 text-xs sm:flex-row sm:items-center sm:justify-between">
-                    <span className="font-black text-[var(--text-primary)]">
-                      Sessão {ev.sessionNumero} •{" "}
-                      {ev.dataSessao
-                        ? new Date(ev.dataSessao).toLocaleDateString("pt-BR")
-                        : "Sem data"}
-                    </span>
-                    <span className="font-bold text-[var(--text-secondary)]">
-                      Aprovado por: {ev.aprovadorNome}
-                    </span>
-                  </div>
-                  <p className="text-sm leading-relaxed font-medium text-[var(--text-primary)]">
-                    {ev.descricao}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`rounded-[var(--radius-pill)] border border-[var(--border-brutal)] px-2 py-0.5 text-xs font-bold ${
-                        ev.polaridade === "positiva"
-                          ? "bg-[var(--status-success-bg)] text-[var(--status-success-fg)]"
-                          : "bg-[var(--status-error-bg)] text-[var(--status-error-fg)]"
-                      }`}
-                    >
-                      {ev.polaridade === "positiva"
-                        ? "Evolução"
-                        : "Dificuldade"}
-                    </span>
-                    {ev.nivelAjuda && (
-                      <span className="rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-2 py-0.5 text-xs font-bold text-[var(--text-primary)]">
-                        Nível de Ajuda: {ev.nivelAjuda}
-                      </span>
-                    )}
-                  </div>
-                  {ev.revisao && (
-                    <p className="mt-1 border-t border-[var(--border-brutal)]/20 pt-1 text-xs font-medium text-[var(--text-secondary)]">
-                      Revisado por {ev.revisao.autorNome ?? "coordenador"}
-                      {ev.revisao.justificativa
-                        ? `: ${ev.revisao.justificativa}`
-                        : ""}
-                    </p>
-                  )}
-                </div>
-              ))
-            )}
+      ) : (
+        <div className="flex flex-col gap-6">
+          <Scrubber
+            sessoesDisponiveis={sessoesDisponiveis}
+            sessaoSelecionada={sessaoAtiva ?? 0}
+            dataSessaoSelecionada={snapSelecionado?.geradoEm}
+            onSelecionarSessao={handleSelecionarSessao}
+          />
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="flex flex-col gap-6 lg:col-span-2">
+              {renderTrajetoriaMetas()}
+              {renderGraficoProtocolo()}
+            </div>
+            <div className="flex flex-col gap-6">{renderComparador()}</div>
           </div>
-          <div className="mt-4 flex justify-end">
-            <Button onClick={() => setDrilldownOpen(false)}>
-              Fechar Painel
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
+
+      {renderDrilldown()}
     </div>
   );
 }

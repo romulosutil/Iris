@@ -1,10 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/ui/logo";
-import { Split, Cluster } from "@/components/ui/layout";
+import { Cluster, Container } from "@/components/ui/layout";
+import type { ContainerProps } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
+import { control } from "@/components/ui/primitives/surface";
 import {
   Drawer,
   DrawerTrigger,
@@ -14,10 +17,22 @@ import {
   DrawerFooter,
 } from "@/components/ui/drawer";
 
+/**
+ * Tom da contagem ao lado do rótulo. A cor NUNCA carrega o significado sozinha
+ * (o número é texto e o destino do link nomeia a fila); ela só evita que toda
+ * pendência do produto grite no mesmo volume:
+ *
+ * - `neutro`  — fila operacional: "há itens aqui", nunca "isto é um problema".
+ * - `ia`      — fila gerada por extração da IA, pendente de olhar clínico.
+ * - `risco`   — alerta de risco. Único tom que pode usar vermelho.
+ */
+export type NavBadgeTom = "neutro" | "ia" | "risco";
+
 export interface NavItem {
   href: string;
   label: string;
   badge?: number;
+  badgeTom?: NavBadgeTom;
   active?: boolean;
 }
 
@@ -27,6 +42,14 @@ export interface HeaderProps extends React.HTMLAttributes<HTMLElement> {
   onTrocarClinica?: (id: string) => void;
   itemsNav: NavItem[];
   usuarioNome?: string;
+  /**
+   * Largura da faixa interna. Deve espelhar a `largura` do `Container` que
+   * envolve o conteúdo da página: o fundo e a borda seguem sangrando de ponta a
+   * ponta, mas marca e controles do usuário passam a nascer e morrer na mesma
+   * coluna do título da página. Sem isto o header colava nas bordas do viewport
+   * enquanto o conteúdo centralizava — duas colunas distintas na mesma tela.
+   */
+  largura?: ContainerProps["largura"];
   onSignOut?: () => void;
   signOutSlot?: React.ReactNode;
   renderLink?: (
@@ -56,6 +79,33 @@ function MenuIcon() {
   );
 }
 
+const badgeTomClasse: Record<NavBadgeTom, string> = {
+  neutro:
+    "border-[var(--surface-muted-border)] bg-[var(--surface-muted)] text-[var(--text-primary)]",
+  ia: "border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-[var(--status-ia-fg)]",
+  risco:
+    "border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]",
+};
+
+function NavBadge({
+  valor,
+  tom = "neutro",
+}: {
+  valor: number;
+  tom?: NavBadgeTom;
+}) {
+  return (
+    <span
+      className={cn(
+        "rounded-[var(--radius-pill)] border px-2 py-0.5 font-mono text-xs font-bold",
+        badgeTomClasse[tom],
+      )}
+    >
+      {valor}
+    </span>
+  );
+}
+
 export const Header = React.forwardRef<HTMLElement, HeaderProps>(
   function Header(
     {
@@ -65,6 +115,7 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
       onTrocarClinica,
       itemsNav = [],
       usuarioNome,
+      largura = "md",
       onSignOut,
       signOutSlot,
       renderLink,
@@ -74,12 +125,20 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
   ) {
     const [drawerOpen, setDrawerOpen] = React.useState(false);
 
+    /**
+     * Estado ativo lido pelo eixo de profundidade epistêmica: a rota atual é
+     * fato consolidado, então ela PREENCHE, ganha borda contínua e LEVANTA da
+     * superfície. As demais ficam rentes. O `aria-current="page"` continua
+     * sendo o sinal redundante — a cor nunca decide sozinha.
+     */
     const getItemClassName = (item: NavItem) =>
       cn(
-        "font-display text-sm px-3.5 py-1.5 rounded-[var(--radius-control)] transition-all duration-100 ease-out inline-flex items-center gap-2 border-2",
+        control("sm"),
+        "font-display inline-flex items-center gap-2 rounded-[var(--radius-control)] border-2 px-3.5 text-sm",
+        "transition-[background-color,border-color,box-shadow,transform] duration-100 ease-out",
         item.active
-          ? "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold border-[var(--border-brutal)] shadow-[var(--ds-shadow)]"
-          : "border-transparent text-[var(--text-primary)] font-semibold hover:border-[var(--border-brutal)]/40 hover:bg-[var(--surface-elevated)]",
+          ? "border-[var(--border-brutal)] bg-[var(--brand-tint)] font-bold text-[var(--text-primary)] shadow-[var(--elevation-1)]"
+          : "border-transparent font-semibold text-[var(--text-secondary)] hover:border-[var(--border-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
       );
 
     const linkRenderer = (item: NavItem, children: React.ReactNode) => {
@@ -99,169 +158,202 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
       );
     };
 
+    const rotuloComBadge = (item: NavItem) => (
+      <>
+        <span>{item.label}</span>
+        {item.badge !== undefined && item.badge > 0 ? (
+          <NavBadge valor={item.badge} tom={item.badgeTom} />
+        ) : null}
+      </>
+    );
+
     return (
-      <Split
+      <header
         ref={ref}
-        como="header"
         className={cn(
-          "sticky top-0 z-40 min-h-[64px] border-b-2 border-[var(--border-brutal)] bg-[var(--surface-card)]/95 px-4 py-3 shadow-[var(--ds-shadow)] backdrop-blur-md sm:min-h-[72px] sm:px-6",
+          "sticky top-0 z-40 border-b-2 border-[var(--border-brutal)] bg-[var(--surface-card)]/95 shadow-[var(--ds-shadow)] backdrop-blur-md",
           className,
         )}
         {...props}
       >
-        {/* Marca + Clínica */}
-        <Cluster
-          gap="sm"
-          className="w-full items-center justify-between sm:w-auto"
-        >
-          <a
-            href="/"
-            aria-label="Iris — Início"
-            className="focus-visible:outline-focus flex min-h-[44px] min-w-[44px] shrink-0 items-center"
-          >
-            <Logo variante="completo" altura={36} />
-          </a>
-
-          {/* Clínica ativa (Desktop) */}
-          <div className="hidden items-center gap-2 sm:flex">
-            <span className="font-display text-sm font-bold text-[var(--text-primary)]">
-              {clinicaAtivaNome}
-            </span>
-            {outrasClinicas.map((c) => (
-              <Button
-                key={c.id}
-                variante="neutra"
-                tamanho="sm"
-                onClick={() => onTrocarClinica?.(c.id)}
-              >
-                Trocar para {c.nome}
-              </Button>
-            ))}
-          </div>
-
-          {/* Botão Hambúrguer (Mobile < 640px) */}
-          <div className="sm:hidden">
-            <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-              <DrawerTrigger asChild>
-                <Button
-                  variante="secundaria"
-                  tamanho="sm"
-                  aria-label="Abrir menu de navegação"
+        {/*
+          Faixa 1 — identidade: de onde eu falo (marca + clínica ativa) e quem
+          eu sou (usuário + sair). Separada da navegação porque as duas colunas
+          brigavam pela mesma linha: com 7 destinos, o `flex-wrap` do cluster
+          empurrava "Sair" e o nome da clínica para uma segunda linha órfã,
+          desalinhando a marca do conteúdo da página.
+        */}
+        <div className="border-b border-[var(--border-brutal)]/15">
+          <Container largura={largura}>
+            <div className="flex min-h-[60px] items-center justify-between gap-3 py-2 sm:min-h-[52px] sm:py-1">
+              <Cluster gap="sm" className="min-w-0 flex-nowrap">
+                <Link
+                  href="/"
+                  aria-label="Iris — Início"
+                  className={cn(
+                    control("sm"),
+                    "focus-visible:outline-focus flex shrink-0 items-center",
+                  )}
                 >
-                  <MenuIcon />
-                </Button>
-              </DrawerTrigger>
-              <DrawerContent posicao="right">
-                <DrawerHeader>
-                  <DrawerTitle>Menu Principal</DrawerTitle>
-                </DrawerHeader>
+                  <Logo variante="completo" altura={32} />
+                </Link>
 
-                <div className="flex flex-col gap-4 py-4">
-                  <div className="border-b border-[var(--border-brutal)]/30 pb-2">
-                    <p className="mb-1 font-mono text-xs font-semibold text-[var(--text-secondary)] uppercase">
-                      Clínica Ativa
-                    </p>
-                    <p className="font-display text-base font-bold text-[var(--text-primary)]">
-                      {clinicaAtivaNome}
-                    </p>
-                    {outrasClinicas.map((c) => (
-                      <Button
-                        key={c.id}
-                        variante="neutra"
-                        tamanho="sm"
-                        className="mt-2 w-full justify-start"
-                        onClick={() => {
-                          onTrocarClinica?.(c.id);
-                          setDrawerOpen(false);
-                        }}
-                      >
-                        Trocar para {c.nome}
-                      </Button>
-                    ))}
-                  </div>
-
-                  <nav
-                    aria-label="Navegação mobile"
-                    className="flex flex-col gap-2"
-                  >
-                    {itemsNav.map((item) => {
-                      const content = (
-                        <span className="flex w-full items-center justify-between">
-                          <span>{item.label}</span>
-                          {item.badge !== undefined && item.badge > 0 ? (
-                            <span className="rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--status-warning-fg)]">
-                              {item.badge}
-                            </span>
-                          ) : null}
-                        </span>
-                      );
-
-                      return (
-                        <div
-                          key={item.href}
-                          onClick={() => setDrawerOpen(false)}
-                          className="w-full"
-                        >
-                          {linkRenderer(item, content)}
-                        </div>
-                      );
-                    })}
-                  </nav>
-                </div>
-
-                <DrawerFooter>
-                  {signOutSlot ? (
-                    signOutSlot
-                  ) : onSignOut ? (
+                {/* Clínica ativa (Desktop) */}
+                <div className="hidden min-w-0 items-center gap-2 sm:flex">
+                  <span
+                    aria-hidden
+                    className="h-5 w-px shrink-0 bg-[var(--border-brutal)]/20"
+                  />
+                  <span className="font-display truncate text-sm font-bold text-[var(--text-primary)]">
+                    {clinicaAtivaNome}
+                  </span>
+                  {outrasClinicas.map((c) => (
                     <Button
-                      variante="terciaria"
+                      key={c.id}
+                      variante="neutra"
                       tamanho="sm"
-                      onClick={onSignOut}
+                      onClick={() => onTrocarClinica?.(c.id)}
                     >
-                      Sair da conta
+                      Trocar para {c.nome}
                     </Button>
-                  ) : null}
-                </DrawerFooter>
-              </DrawerContent>
-            </Drawer>
-          </div>
-        </Cluster>
+                  ))}
+                </div>
+              </Cluster>
 
-        {/* Navegação Desktop (≥ 640px) */}
-        <Cluster
-          como="nav"
-          gap="xs"
-          aria-label="Navegação principal"
-          className="hidden flex-wrap items-center sm:flex"
-        >
-          {itemsNav.map((item) => {
-            const labelWithBadge = (
-              <>
-                <span>{item.label}</span>
-                {item.badge !== undefined && item.badge > 0 ? (
-                  <span className="rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--status-warning-fg)]">
-                    {item.badge}
+              {/* Conta (Desktop) */}
+              <div className="hidden shrink-0 items-center gap-3 sm:flex">
+                {usuarioNome ? (
+                  <span className="font-body max-w-[18ch] truncate text-sm font-semibold text-[var(--text-secondary)]">
+                    {usuarioNome}
                   </span>
                 ) : null}
-              </>
-            );
-            return linkRenderer(item, labelWithBadge);
-          })}
+                {signOutSlot ??
+                  (onSignOut ? (
+                    <Button variante="neutra" tamanho="sm" onClick={onSignOut}>
+                      Sair
+                    </Button>
+                  ) : null)}
+              </div>
 
-          {signOutSlot ? (
-            <div className="ml-2">{signOutSlot}</div>
-          ) : onSignOut ? (
-            <Button
-              variante="neutra"
-              tamanho="sm"
-              onClick={onSignOut}
-              className="ml-2"
-            >
-              Sair
-            </Button>
-          ) : null}
-        </Cluster>
-      </Split>
+              {/* Botão Hambúrguer (Mobile < 640px) */}
+              <div className="sm:hidden">
+                <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+                  <DrawerTrigger asChild>
+                    <Button
+                      variante="secundaria"
+                      tamanho="sm"
+                      aria-label="Abrir menu de navegação"
+                    >
+                      <MenuIcon />
+                    </Button>
+                  </DrawerTrigger>
+                  <DrawerContent posicao="right">
+                    <DrawerHeader>
+                      <DrawerTitle>Menu Principal</DrawerTitle>
+                    </DrawerHeader>
+
+                    <div className="flex flex-col gap-4 py-4">
+                      <div className="border-b border-[var(--border-brutal)]/30 pb-2">
+                        <p className="mb-1 font-mono text-xs font-semibold text-[var(--text-secondary)] uppercase">
+                          Clínica Ativa
+                        </p>
+                        <p className="font-display text-base font-bold text-[var(--text-primary)]">
+                          {clinicaAtivaNome}
+                        </p>
+                        {outrasClinicas.map((c) => (
+                          <Button
+                            key={c.id}
+                            variante="neutra"
+                            tamanho="sm"
+                            className="mt-2 w-full justify-start"
+                            onClick={() => {
+                              onTrocarClinica?.(c.id);
+                              setDrawerOpen(false);
+                            }}
+                          >
+                            Trocar para {c.nome}
+                          </Button>
+                        ))}
+                      </div>
+
+                      <nav
+                        aria-label="Navegação mobile"
+                        className="flex flex-col gap-2"
+                      >
+                        {itemsNav.map((item) => {
+                          const content = (
+                            <span className="flex w-full items-center justify-between">
+                              <span>{item.label}</span>
+                              {item.badge !== undefined && item.badge > 0 ? (
+                                <NavBadge
+                                  valor={item.badge}
+                                  tom={item.badgeTom}
+                                />
+                              ) : null}
+                            </span>
+                          );
+
+                          return (
+                            <div
+                              key={item.href}
+                              onClick={() => setDrawerOpen(false)}
+                              className="w-full"
+                            >
+                              {linkRenderer(item, content)}
+                            </div>
+                          );
+                        })}
+                      </nav>
+                    </div>
+
+                    <DrawerFooter>
+                      {usuarioNome ? (
+                        <p className="font-body mb-2 text-sm font-semibold text-[var(--text-secondary)]">
+                          {usuarioNome}
+                        </p>
+                      ) : null}
+                      {signOutSlot ? (
+                        signOutSlot
+                      ) : onSignOut ? (
+                        <Button
+                          variante="terciaria"
+                          tamanho="sm"
+                          onClick={onSignOut}
+                        >
+                          Sair da conta
+                        </Button>
+                      ) : null}
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
+              </div>
+            </div>
+          </Container>
+        </div>
+
+        {/*
+          Faixa 2 — navegação (≥ 640px). Linha própria: os 7 destinos do
+          coordenador cabem inteiros na largura do container, sem competir com
+          marca e conta. Densidade alta é requisito do perfil (doc §2.2), então
+          nada é escondido em "Mais".
+        */}
+        {itemsNav.length > 0 ? (
+          <div className="hidden bg-[var(--surface-card)] sm:block">
+            <Container largura={largura}>
+              <Cluster
+                como="nav"
+                gap="xs"
+                aria-label="Navegação principal"
+                className="-mx-1.5 px-1.5 py-1"
+              >
+                {itemsNav.map((item) =>
+                  linkRenderer(item, rotuloComBadge(item)),
+                )}
+              </Cluster>
+            </Container>
+          </div>
+        ) : null}
+      </header>
     );
   },
 );

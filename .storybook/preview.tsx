@@ -18,7 +18,10 @@ const jakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-// Dois viewports canônicos: Terapeuta (mobile, corredor) e Coordenador (desktop).
+// Viewports canônicos: Terapeuta (mobile, corredor) e Coordenador (desktop).
+// Os dois últimos existem para provar o comportamento do `Container` acima de
+// `lg`/`xl`, onde as variantes de largura máxima crescem — é só a partir de
+// 1440px que o "deserto" lateral aparecia no teto fixo antigo.
 const viewports = {
   terapeuta: {
     name: "Terapeuta (375px)",
@@ -28,6 +31,16 @@ const viewports = {
   coordenador: {
     name: "Coordenador (1280px)",
     styles: { width: "1280px", height: "800px" },
+    type: "desktop" as const,
+  },
+  desktopGrande: {
+    name: "Desktop Grande (1440px)",
+    styles: { width: "1440px", height: "900px" },
+    type: "desktop" as const,
+  },
+  desktopUltra: {
+    name: "Desktop Ultra (1920px)",
+    styles: { width: "1920px", height: "1080px" },
     type: "desktop" as const,
   },
 };

@@ -37,6 +37,7 @@
   --color-surface-card: var(--surface-card);
   --color-surface-elevated: var(--surface-elevated);
   --color-border-brutal: var(--border-brutal);
+  --color-border-muted: var(--border-muted);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-action-primary: var(--action-primary);
@@ -99,23 +100,30 @@
   --color-raw-gray-900: #1a1a1a;
   --color-raw-gray-950: #0a0a0a;
 
-  /* Rampa de Raio (Border-radius) — escala coerente derivada do reference
-     (Iris_Design_System.html). surface() e componentes COMPÕEM via token,
-     nunca px cru. A "temperatura" macia (6px no fato) mantém o peso
-     brutalista pela borda 1.5px preta + sombra dura; só suaviza o canto. */
+  /* Rampa de Raio (Border-radius) — "Cantos Suaves" do Soft Neubrutalism
+     Humanizado: 8px em cards e 12px em botões/pílulas para suavizar a rigidez
+     sem perder a firmeza neobrutalista. surface() e componentes COMPÕEM via
+     token, nunca px cru. O peso brutalista continua vindo da borda de 2px em
+     grafite + sombra dura de 3px; o raio só tira a aspereza do canto. */
   --radius-none: 0;
   --radius-xs: 3px; /* micro-chips, dots */
   --radius-sm: 4px; /* small */
-  --radius-control: 5px; /* inputs, botões, abas */
-  --radius-md: 6px; /* superfície padrão / cards (default do surface) */
-  --radius-lg: 8px; /* containers / diálogo interno */
-  --radius-xl: 10px; /* destaque */
-  --radius-2xl: 12px; /* modal / overlay */
+  --radius-control: 12px; /* inputs, botões, abas — "12px em botões/pílulas" */
+  --radius-md: 8px; /* superfície padrão / cards (default do surface) */
+  --radius-lg: 10px; /* containers / diálogo interno */
+  --radius-xl: 12px; /* destaque */
+  --radius-2xl: 16px; /* modal / overlay */
   --radius-pill: 999px;
 
   /* Cores Adicionais Tokenizadas para Componentes */
   --border-neutral-light: #c9c6bc;
   --gray-light-hover: #f1efe9;
+
+  /* Superfície silenciosa: pílulas de contagem operacional, chips neutros.
+     Papel semântico = "há itens aqui", NUNCA "isto é um problema".
+     Definida à parte de --gray-light-hover porque precisa de par no dark. */
+  --surface-muted: #f1efe9;
+  --surface-muted-border: #c9c6bc;
 
   /* ==========================================================================
      2. Semânticas (Papéis de Sistema)
@@ -218,8 +226,8 @@
 
   --elevation-0: none;
   --elevation-1: 2px 2px 0 0 var(--border-brutal); /* raise sutil */
-  --elevation-2: 2px 2px 0 0 var(--border-brutal); /* base: dura brutalista */
-  --elevation-3: 4px 4px 0 0 var(--border-brutal); /* hover / lg */
+  --elevation-2: 3px 3px 0 0 var(--border-brutal); /* base: fato consolidado (doc §4.1) */
+  --elevation-3: 5px 5px 0 0 var(--border-brutal); /* hover / lg */
   --elevation-inset: inset 0 2px 8px rgba(106, 76, 147, 0.1); /* afunda (IA / tentativo) */
   --elevation-overlay: 0 20px 44px -24px rgba(20, 20, 20, 0.4); /* modal / popover — só suave */
 
@@ -227,10 +235,10 @@
 
   /* Aliases legados — apontam para a escala; nomes preservados p/ compat.
      Novos componentes devem consumir --elevation-* diretamente. */
-  --shadow-brutal-base: 2px 2px 0 0 var(--border-brutal);
+  --shadow-brutal-base: 3px 3px 0 0 var(--border-brutal);
   --shadow-composite: var(--elevation-2);
   --shadow-inset-ia: var(--elevation-inset);
-  --shadow-brutal: 2px 2px 0px var(--border-brutal);
+  --shadow-brutal: 3px 3px 0px var(--border-brutal);
   --shadow-brutal-hover: var(--elevation-3);
   --shadow-brutal-sm: var(--elevation-1);
   --shadow-brutal-xs: 1px 1px 0 0 var(--border-brutal);
@@ -285,9 +293,19 @@
   --surface-card: #ffffff;
   --surface-elevated: #ffffff;
 
-  /* Bordas e Sombras Brutalistas */
-  --border-brutal: #000000;
-  --shadow-brutal: 2px 2px 0px #000000;
+  /* Bordas e Sombras Brutalistas.
+     Grafite Escuro em vez de preto puro: mesma linha marcada e contínua, menos
+     fadiga visual em sessão longa (doc §3, "Bordas & Estrutura"). 17.4:1 sobre
+     --surface-card e 16.5:1 sobre o canvas — AAA folgado nos dois. */
+  --border-brutal: #1a1a1a;
+  --shadow-brutal: 3px 3px 0px #1a1a1a;
+
+  /* Borda de repouso (>= md). O piso tátil e a borda cheia de 2px resolvem o
+     mobile, mas num formulário desktop denso viram uma grade de caixas pretas
+     que cansa o coordenador. Este grafite suave segura o repouso; o peso
+     brutalista volta em foco/preenchido/erro. 3.68:1 sobre --surface-card
+     (#ffffff), acima do piso de 3:1 do WCAG 2.2 SC 1.4.11 (não-textual). */
+  --border-muted: #8a8578;
 
   /* Tipografia */
   --text-primary: #09090b;
@@ -300,17 +318,27 @@
   --action-secondary-fg: #000000;
 
   /* Estados e Feedbacks Semânticos */
-  --status-success-bg: #ecfdf5;
-  --status-success-fg: #065f46;
-  --status-success-border: #059669;
+  /* Menta #B2DFDB (doc §3) = "Sucesso, fato aprovado, conquista consolidada".
+     O doc a nomeia como acento, mas ela reprova o piso de 3:1 do WCAG 2.2 SC
+     1.4.11 como borda (1.45:1 sobre branco). Resolução: Menta é o
+     PREENCHIMENTO; borda e texto descem para a rampa escura de menta já
+     existente. Medido: fg 5.42:1 sobre o fill (AA texto), borda 3.1:1 sobre o
+     fill e 4.5:1 sobre o card (AA não-textual nos dois lados). */
+  --status-success-bg: #b2dfdb;
+  --status-success-fg: #0a5c54; /* raw-mint-900 — 5.42:1 */
+  --status-success-border: #14857a; /* raw-mint-500 — 3.1:1 / 4.5:1 */
 
   --status-warning-bg: #fffbeb;
   --status-warning-fg: #92400e;
   --status-warning-border: #d97706;
 
-  --status-error-bg: #fef2f2;
-  --status-error-fg: #991b1b;
-  --status-error-border: #dc2626;
+  /* Terracota #EF9A9A (doc §3) = "Alertas, inconsistências e riscos de glosa".
+     Mesma resolução da Menta: fill do doc, borda e texto na rampa escura.
+     Medido: fg 4.66:1 sobre o fill (AA texto), borda 3.86:1 sobre o fill e
+     7.6:1 sobre o card. #dc2626 daria só 2.24:1 contra o fill. */
+  --status-error-bg: #ef9a9a;
+  --status-error-fg: #7e1f16; /* raw-terracotta-900 — 4.66:1 */
+  --status-error-border: #991b1b; /* 3.86:1 / 7.6:1 */
 
   --status-info-bg: #eff6ff;
   --status-info-fg: #1e40af;
@@ -321,25 +349,25 @@
   --status-ia-border: #6a4c93;
 
   --ds-shadow: var(--shadow-brutal);
+  --ds-shadow-sm: var(--shadow-brutal-sm);
   --ds-shadow-hover: var(
     --elevation-3
   ); /* +1 nível acima do base: elevation-2 → 3 */
   --ds-shadow-inset: var(--shadow-brutal-inset);
-  --ds-offset: 4px;
 }
 
 [data-mode="familia"] {
   --ds-shadow: var(--shadow-brutal-sm);
+  --ds-shadow-sm: var(--shadow-brutal-xs);
   --ds-shadow-hover: var(
     --elevation-2
   ); /* +1 nível acima do base: elevation-1 → 2 */
   --ds-shadow-inset: var(--shadow-brutal-inset-sm);
-  --ds-offset: 2px;
 
   /* Densidade / leitura calma (§2, linha "Densidade"): canto mais macio reduz
      a aspereza brutalista sem tocar em cor de texto — zero risco de contraste.
      Consumido por Card/Input/Button via var(--radius-control). */
-  --radius-control: 10px;
+  --radius-control: 16px;
 
   /* Acento dominante emocional/positivo (§2, linha "Acento dominante"): no
      modo família a ação principal carrega a cor de conquista (menta/sucesso)
@@ -428,7 +456,12 @@ html {
 
   /* Bordas e Sombras Brutalistas */
   --border-brutal: #e4e4e7;
-  --shadow-brutal: 2px 2px 0px #e4e4e7;
+  --shadow-brutal: 3px 3px 0px #e4e4e7;
+
+  /* Borda de repouso (>= md). Grafite suave que baixa a densidade do
+     formulário sem sumir: 3.67:1 sobre --surface-card (#18181b), acima do
+     piso de 3:1 do WCAG 2.2 SC 1.4.11 (elemento não-textual). */
+  --border-muted: #71717a;
 
   /* Tipografia */
   --text-primary: #fafafa;
@@ -463,6 +496,10 @@ html {
   --ai-tint: rgba(106, 76, 147, 0.4);
   --ai-deep: #e9d5ff;
   --ai-accent: #9333ea;
+
+  /* Superfície silenciosa (par escuro) */
+  --surface-muted: #27272a;
+  --surface-muted-border: #3f3f46;
 }
 
 /*

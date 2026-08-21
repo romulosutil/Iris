@@ -30,6 +30,8 @@
     "seed:local": "tsx --conditions=react-server --env-file=.env scripts/seed-local.ts",
     "seed:clinic": "tsx --conditions=react-server --env-file=.env scripts/seed-local.ts",
     "seed:superadmin": "tsx --conditions=react-server --env-file=.env scripts/seed-super-admin.ts",
+    "seed:custom": "tsx --conditions=react-server --env-file=.env scripts/seed-demo-account.ts",
+    "unlock:user": "tsx --conditions=react-server --env-file=.env scripts/unlock-user.ts",
     "backfill:evidence": "tsx --conditions=react-server --env-file=.env scripts/backfill-evidence.ts",
     "prepare": "husky"
   },

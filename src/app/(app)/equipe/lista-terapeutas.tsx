@@ -13,7 +13,7 @@ export function ListaTerapeutas({ terapeutas }: { terapeutas: Terapeuta[] }) {
     <ul className="flex flex-col gap-2.5">
       {terapeutas.map((t) => (
         <li key={t.id}>
-          <div className="flex items-center justify-between rounded-[var(--radius-control)] border-2 border-l-4 border-[var(--border-brutal)] border-l-[var(--action-primary)] bg-[var(--surface-card)] p-3.5 shadow-[var(--ds-shadow)] transition-transform duration-100 hover:translate-x-1">
+          <div className="flex items-center justify-between rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-3.5 shadow-[var(--ds-shadow)] transition-transform duration-100 hover:translate-x-1">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex min-w-0 flex-col">
                 <div className="flex items-center gap-2">

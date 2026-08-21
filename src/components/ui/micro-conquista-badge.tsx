@@ -23,8 +23,8 @@ export const MicroConquistaBadge = React.forwardRef<
     <span
       ref={ref}
       className={cn(
-        "border-border-brutal bg-accent-mint text-ink-anchor inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1",
-        "font-mono text-xs font-bold tracking-wide shadow-[2px_2px_0px_#1A1A1A]",
+        "border-border-brutal text-ink-anchor inline-flex items-center gap-1.5 rounded-full border-2 bg-[var(--status-success-bg)] px-3 py-1",
+        "font-mono text-xs font-bold tracking-wide shadow-[var(--ds-shadow)]",
         animated && "motion-safe:animate-pulse",
         className,
       )}

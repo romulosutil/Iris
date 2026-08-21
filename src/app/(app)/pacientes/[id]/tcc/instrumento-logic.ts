@@ -16,12 +16,7 @@ import { registrarAlertaRiscoInstrumentoManual } from "@/lib/risco/registrar";
 
 export const respostaItemSchema = z.object({
   item: z.number().int().min(1, "Número do item inválido"),
-  valor: z.union([
-    z.literal(0),
-    z.literal(1),
-    z.literal(2),
-    z.literal(3),
-  ]),
+  valor: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
 });
 
 export const salvarInstrumentoAplicacaoSchema = z.object({

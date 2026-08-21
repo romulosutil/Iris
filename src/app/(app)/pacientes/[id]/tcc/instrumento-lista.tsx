@@ -28,11 +28,13 @@ export type InstrumentoAplicacaoLinha = {
   criadoEm: Date | string;
 };
 
-const ROTULO_TIPO: Record<InstrumentoAplicacaoLinha["tipoInstrumento"], string> =
-  {
-    phq9: "PHQ-9",
-    gad7: "GAD-7",
-  };
+const ROTULO_TIPO: Record<
+  InstrumentoAplicacaoLinha["tipoInstrumento"],
+  string
+> = {
+  phq9: "PHQ-9",
+  gad7: "GAD-7",
+};
 
 /**
  * Cortes públicos/estrutura confirmada, não conteúdo licenciado (spec.md

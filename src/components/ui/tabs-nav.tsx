@@ -20,6 +20,7 @@ export interface TabsNavProps {
   itens: TabsNavItem[];
   /** Rótulo do <nav>, obrigatório: uma tela pode ter mais de uma navegação. */
   ariaLabel: string;
+  activeHref?: string;
   className?: string;
 }
 
@@ -32,8 +33,10 @@ export interface TabsNavProps {
  * pré-carregamento do Next só funcionam com `href`. Trocar isso por `button` +
  * `router.push` quebra quatro comportamentos que ninguém testa e todo mundo usa.
  *
- * O visual é literalmente o de `TabsList`/`TabsTrigger` para que abas de rota e
- * abas de estado não pareçam dois componentes diferentes na mesma aplicação.
+ * O visual segue o padrão *underline tabs* do Espectro Brutal (§203):
+ * linha de base sólida (`border-b-2 border-[var(--border-brutal)]`), fundo neutro
+ * de superfície elevada (`--surface-elevated`), texto em alto contraste e
+ * indicador inferior discreto em tom Amarelo Ouro (`var(--action-primary, #F2B705)`).
  *
  * Acessibilidade:
  * - `<nav aria-label>` em vez do padrão `role="tablist"`: com navegação real
@@ -43,8 +46,14 @@ export interface TabsNavProps {
  * - Alvo de 44px (`min-h-11`) preservado, e a faixa rola na horizontal no
  *   mobile em vez de espremer os rótulos.
  */
-export function TabsNav({ itens, ariaLabel, className }: TabsNavProps) {
+export function TabsNav({
+  itens,
+  ariaLabel,
+  activeHref,
+  className,
+}: TabsNavProps) {
   const pathname = usePathname();
+  const currentPath = activeHref ?? pathname ?? "";
 
   return (
     <nav
@@ -56,8 +65,9 @@ export function TabsNav({ itens, ariaLabel, className }: TabsNavProps) {
     >
       {itens.map((item) => {
         const ativo = item.exato
-          ? pathname === item.href
-          : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          ? currentPath === item.href
+          : currentPath === item.href ||
+            (currentPath ? currentPath.startsWith(`${item.href}/`) : false);
 
         return (
           <Link
@@ -65,11 +75,11 @@ export function TabsNav({ itens, ariaLabel, className }: TabsNavProps) {
             href={item.href}
             aria-current={ativo ? "page" : undefined}
             className={cn(
-              "font-display -mb-0.5 inline-flex min-h-11 shrink-0 items-center border-b-2 border-transparent px-4 py-2 text-base font-semibold text-[var(--text-secondary)]",
-              "hover:text-[var(--text-primary)]",
+              "font-display -mb-0.5 inline-flex min-h-11 shrink-0 items-center border-2 border-transparent px-4 py-2 text-base font-semibold text-[var(--text-secondary)] transition-colors duration-100 ease-out",
+              "hover:border-[var(--border-brutal)]/40 hover:bg-[var(--gray-light-hover)]/40 hover:text-[var(--text-primary)]",
               "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:-outline-offset-[var(--ring-offset)]",
               ativo &&
-                "border-[var(--border-brutal)] bg-[var(--action-primary)] font-bold text-[var(--action-primary-fg)]",
+                "rounded-t-[var(--radius-control)] border-b-[3px] border-[var(--border-brutal)] border-b-[var(--action-primary,#F2B705)] bg-[var(--surface-elevated)] font-bold text-[var(--text-primary)] shadow-none",
             )}
           >
             {item.rotulo}

@@ -3,6 +3,7 @@
 import React from "react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
+import { rotuloPonto } from "./rotulos";
 
 interface ScrubberProps {
   sessoesDisponiveis: number[]; // Lista de números de sessões disponíveis, ordenados crescentes (ex: [1, 2, 3, 5, 6])
@@ -11,91 +12,129 @@ interface ScrubberProps {
   onSelecionarSessao: (numero: number) => void;
 }
 
+/**
+ * Ícone de aviso em traço, `currentColor`, no mesmo estilo do de
+ * `estado-de-erro.tsx`. Substitui o emoji de aviso, que tem nome anunciado
+ * inconsistente entre leitores de tela e não herda a cor do texto do banner.
+ */
+function IconeAviso() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      className="inline-block shrink-0"
+    >
+      <path
+        d="M10 2L2 17h16L10 2zM10 7v5M10 14.5v.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
+      />
+    </svg>
+  );
+}
+
 export function Scrubber({
   sessoesDisponiveis,
   sessaoSelecionada,
   dataSessaoSelecionada,
   onSelecionarSessao,
 }: ScrubberProps) {
-  // Encontra o index da sessão selecionada na lista
-  const indexAtual = sessoesDisponiveis.indexOf(sessaoSelecionada);
-  const indexValido =
-    indexAtual !== -1 ? indexAtual : Math.max(0, sessoesDisponiveis.length - 1);
-
-  // Estado local para controle do drag visual do slider
-  const [dragState, setDragState] = React.useState({
-    committedIndex: indexValido,
-    valor: indexValido,
-  });
-  const valorVisual =
-    dragState.committedIndex === indexValido ? dragState.valor : indexValido;
-
-  if (sessoesDisponiveis.length === 0) return null;
-
-  const sessaoVisual = sessoesDisponiveis[valorVisual] ?? sessaoSelecionada;
-
-  const temAnterior = indexValido > 0;
-  const temProximo = indexValido < sessoesDisponiveis.length - 1;
-
-  const handleSliderChange = (values: number[]) => {
-    const targetIndex = values[0];
-    if (targetIndex !== undefined) {
-      const targetSessao = sessoesDisponiveis[targetIndex];
-      if (targetSessao !== undefined) {
-        onSelecionarSessao(targetSessao);
-      }
-    }
-  };
-
-  const formatarData = (date?: Date) => {
-    if (!date) return "";
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return "";
-    return d.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  // Se a sessão selecionada não for a última da lista (a mais recente), ela é considerada passada
   const ultimaSessaoDisponivel =
     sessoesDisponiveis[sessoesDisponiveis.length - 1];
-  const isSessaoPassada = sessaoVisual !== ultimaSessaoDisponivel;
+
+  // Garante que a sessão selecionada seja válida dentro do array, senão usa a última disponível
+  const indexValido = sessoesDisponiveis.indexOf(sessaoSelecionada);
+  const sessaoEfetiva =
+    indexValido !== -1
+      ? sessaoSelecionada
+      : (ultimaSessaoDisponivel ?? sessaoSelecionada);
+
+  // Estado transitório do drag do slider para não congelar o React
+  const [dragState, setDragState] = React.useState<{
+    committedIndex: number;
+    valor: number;
+  } | null>(null);
+
+  // A sessão exibida enquanto arrasta o slider é a do valor transitório; caso contrário a selecionada
+  const valorVisual =
+    dragState !== null
+      ? dragState.valor
+      : Math.max(0, sessoesDisponiveis.indexOf(sessaoEfetiva));
+
+  const sessaoVisual = sessoesDisponiveis[valorVisual] ?? sessaoEfetiva;
+  const isSessaoPassada =
+    ultimaSessaoDisponivel !== undefined &&
+    sessaoVisual < ultimaSessaoDisponivel;
+
+  const temAnterior = indexValido > 0;
+  const temProximo =
+    indexValido !== -1 && indexValido < sessoesDisponiveis.length - 1;
+
+  const handleSliderChange = (values: number[]) => {
+    const novoIndex = values[0];
+    if (
+      novoIndex !== undefined &&
+      sessoesDisponiveis[novoIndex] !== undefined
+    ) {
+      onSelecionarSessao(sessoesDisponiveis[novoIndex]!);
+    }
+    setDragState(null);
+  };
+
+  const formatarData = (data: Date) => {
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(data));
+  };
+
+  if (sessoesDisponiveis.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4">
       {/* Banner de Sessão Passada */}
       {isSessaoPassada && (
-        <div className="-mx-4 -mt-4 flex items-center justify-center gap-2 border-b-2 border-[var(--border-brutal)] bg-[var(--color-gold)] p-2 text-center text-sm font-bold text-[var(--text-primary)]">
-          <span>⚠️</span>
-          <span>Visualizando histórico passado: Sessão {sessaoVisual}</span>
+        <div
+          role="status"
+          className="-mx-4 -mt-4 flex items-center justify-center gap-2 border-b-2 border-[var(--border-brutal)] bg-[var(--status-warning-bg)] p-2 text-center text-sm font-bold text-[var(--status-warning-fg)]"
+        >
+          <IconeAviso />
+          <span>
+            Visualizando histórico passado: {rotuloPonto(sessaoVisual)}
+          </span>
         </div>
       )}
 
       {/* Controles de Navegação */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
         <Button
           variante="secundaria"
+          tamanho="sm"
           disabled={!temAnterior}
           onClick={() => {
             const ant = sessoesDisponiveis[indexValido - 1];
             if (ant !== undefined) onSelecionarSessao(ant);
           }}
           aria-label="Sessão anterior"
+          className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm"
         >
           &larr; Anterior
         </Button>
 
-        <div className="text-center">
-          <div className="text-lg font-black text-[var(--text-primary)]">
-            Sessão {sessaoVisual}
+        <div className="min-w-0 flex-1 text-center">
+          <div className="truncate text-base font-black text-[var(--text-primary)] sm:text-lg">
+            {rotuloPonto(sessaoVisual)}
           </div>
           {dataSessaoSelecionada && (
             <div
-              className="text-xs text-[var(--text-secondary)]"
+              className="truncate text-[10px] text-[var(--text-secondary)] sm:text-xs"
               suppressHydrationWarning
             >
               {formatarData(dataSessaoSelecionada)}
@@ -105,12 +144,14 @@ export function Scrubber({
 
         <Button
           variante="secundaria"
+          tamanho="sm"
           disabled={!temProximo}
           onClick={() => {
             const prox = sessoesDisponiveis[indexValido + 1];
             if (prox !== undefined) onSelecionarSessao(prox);
           }}
           aria-label="Próxima sessão"
+          className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm"
         >
           Próxima &rarr;
         </Button>
@@ -134,8 +175,8 @@ export function Scrubber({
           aria-label="Selecionar sessão histórica"
         />
         <div className="mt-1 flex justify-between text-xs text-[var(--text-secondary)]">
-          <span>Início (Sessão {sessoesDisponiveis[0]})</span>
-          <span>Atual (Sessão {ultimaSessaoDisponivel})</span>
+          <span>Início ({rotuloPonto(sessoesDisponiveis[0] ?? 0)})</span>
+          <span>Atual ({rotuloPonto(ultimaSessaoDisponivel ?? 0)})</span>
         </div>
       </div>
     </div>

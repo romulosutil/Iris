@@ -1,8 +1,8 @@
 import type { Meta } from "@storybook/nextjs-vite";
 import { Header } from "@/components/ui/header";
-import { Container, Stack, Cluster } from "@/components/ui/layout";
+import { Container, Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
-import { Chip, ChipGroup } from "@/components/ui/chip";
+import { SupervisaoCard } from "@/components/ui/supervisao-card";
 import { Button } from "@/components/ui/button";
 
 const meta = {
@@ -31,59 +31,54 @@ export const FilaDeSupervisao = {
           />
 
           <Stack gap="md" como="ul">
-            <li className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
-              <Stack gap="sm">
-                <span className="font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
-                  Item 1 de 2
-                </span>
-                <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
-                  Lucas Gabriel Silva
-                </h3>
-                <p className="text-base text-[var(--text-primary)]">
-                  Imitação de Gestos Simples — Protocolo ABA: Estagnação
-                  (métrica VBMAPP, sessão 14)
-                </p>
-                <ChipGroup rotulo="Status e Tipo do Alerta">
-                  <Chip>Estagnação</Chip>
-                  <Chip className="border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]">
-                    Alerta Crítico
-                  </Chip>
-                </ChipGroup>
-                <Cluster gap="sm" className="pt-2">
-                  <Button variante="primaria" tamanho="sm">
-                    Reconhecer
-                  </Button>
-                  <Button variante="secundaria" tamanho="sm">
-                    Resolver
-                  </Button>
-                </Cluster>
-              </Stack>
-            </li>
+            <SupervisaoCard
+              indice={1}
+              total={2}
+              patientNome="Lucas Gabriel Silva"
+              patientHref="#"
+              tipo="estagnacao"
+              goalNome="Imitação de Gestos Simples"
+              protocolNome="VB-MAPP"
+              detalhe={{
+                sessionNumero: 14,
+                metrica: "VBMAPP",
+                tipoEstrutura: "motor",
+              }}
+              estado="novo"
+              sinalPresente={true}
+              acaoPrimaria={<Button variante="primaria">Reconhecer</Button>}
+              acoesSecundarias={[
+                {
+                  id: "resolver",
+                  rotulo: "Resolver alerta…",
+                  aoSelecionar: () => {},
+                },
+              ]}
+            />
 
-            <li className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
-              <Stack gap="sm">
-                <span className="font-mono text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
-                  Item 2 de 2
-                </span>
-                <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
-                  Beatriz Lima
-                </h3>
-                <p className="text-base text-[var(--text-primary)]">
-                  3 faltas seguidas do paciente nas últimas 2 semanas (limiar 2)
-                </p>
-                <ChipGroup rotulo="Status e Tipo do Alerta">
-                  <Chip>Faltas Excessivas</Chip>
-                </ChipGroup>
-                <Cluster gap="sm" className="pt-2">
-                  <Button variante="secundaria" tamanho="sm">
-                    Resolver
-                  </Button>
-                  <Button variante="neutra" tamanho="sm">
-                    Descartar
-                  </Button>
-                </Cluster>
-              </Stack>
-            </li>
+            <SupervisaoCard
+              indice={2}
+              total={2}
+              patientNome="Beatriz Lima"
+              patientHref="#"
+              tipo="faltas_excessivas"
+              detalhe={{
+                faltas: 3,
+                janelaSemanas: 2,
+                limiar: 2,
+              }}
+              estado="reconhecido"
+              sinalPresente={true}
+              acaoPrimaria={<Button variante="primaria">Resolver</Button>}
+              acoesSecundarias={[
+                {
+                  id: "descartar",
+                  rotulo: "Descartar alerta…",
+                  tom: "destrutivo",
+                  aoSelecionar: () => {},
+                },
+              ]}
+            />
           </Stack>
         </Stack>
       </Container>

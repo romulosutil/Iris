@@ -165,9 +165,7 @@ export function RpdSugestoes({
   sugestoes: RPDSugestao[];
 }) {
   const [resolvidas, setResolvidas] = useState<Set<string>>(new Set());
-  const pendentes = sugestoes.filter(
-    (s) => !resolvidas.has(s.extractionId),
-  );
+  const pendentes = sugestoes.filter((s) => !resolvidas.has(s.extractionId));
 
   if (pendentes.length === 0) {
     return (

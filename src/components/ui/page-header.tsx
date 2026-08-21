@@ -30,7 +30,7 @@ export const PageHeader = React.forwardRef<HTMLDivElement, PageHeaderProps>(
       <header
         ref={ref}
         className={cn(
-          "mb-6 flex flex-col gap-4 border-b-2 border-dashed border-[var(--border-brutal)] pb-6 md:flex-row md:items-center md:justify-between",
+          "mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between",
           className,
         )}
         {...props}
@@ -44,7 +44,10 @@ export const PageHeader = React.forwardRef<HTMLDivElement, PageHeaderProps>(
             {badge ? <div className="shrink-0">{badge}</div> : null}
           </div>
           {description ? (
-            <p className="text-sm text-[var(--text-secondary)] md:text-base">
+            // Teto de medida em `ch`: o container cresce até 1280px em desktop,
+            // mas linha de texto acima de ~70 caracteres perde o olho na volta.
+            // O container ganha largura; o parágrafo, não.
+            <p className="max-w-[68ch] text-sm text-[var(--text-secondary)] md:text-base">
               {description}
             </p>
           ) : null}

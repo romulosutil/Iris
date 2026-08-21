@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { FaixaTrial } from "./faixa-trial";
 import type { EstadoConta } from "@/lib/billing/estado-conta";
 
@@ -21,6 +21,7 @@ import type { EstadoConta } from "@/lib/billing/estado-conta";
  *   (`trial_expirado`, `cancelada`). Em `pagamento_em_processamento` já existe
  *   cobrança em voo: devolver a pessoa ao checkout gera uma segunda para o mesmo
  *   mês — este é o caso que mais facilmente regride, por isso tem teste próprio.
+ * - CTA "Cadastrar primeiro paciente →" em `trial_aguardando` para acelerar onboarding.
  */
 function textoDaFaixa(): string {
   return screen.getByRole("status").textContent ?? "";
@@ -28,6 +29,10 @@ function textoDaFaixa(): string {
 
 function cta() {
   return screen.queryByRole("link", { name: /ativar assinatura/i });
+}
+
+function ctaCadastrar() {
+  return screen.queryByRole("link", { name: /cadastrar primeiro paciente/i });
 }
 
 describe("FaixaTrial", () => {
@@ -72,6 +77,14 @@ describe("FaixaTrial", () => {
       expect(texto).not.toMatch(/faltam?\s+\d+\s+dias?/i);
       expect(texto).not.toMatch(/último dia/i);
       expect(texto).not.toMatch(/terminou/i);
+    });
+
+    it("inclui CTA direto para cadastrar primeiro paciente apontando para /pacientes/novo", () => {
+      render(<FaixaTrial estado="trial_aguardando" diasRestantes={null} />);
+
+      const link = ctaCadastrar();
+      expect(link).not.toBeNull();
+      expect(link?.getAttribute("href")).toBe("/pacientes/novo");
     });
 
     it("ignora dias negativos herdados (nunca anuncia fim antes de começar)", () => {
@@ -176,6 +189,20 @@ describe("FaixaTrial", () => {
       render(<FaixaTrial estado={estado} diasRestantes={1} />);
 
       expect(cta()).toBeNull();
+    });
+  });
+
+  describe("dispensável", () => {
+    it("permite dispensar a faixa ao clicar no botão dispensar", () => {
+      render(<FaixaTrial estado="trial_aguardando" diasRestantes={null} />);
+
+      expect(screen.getByRole("status")).not.toBeNull();
+      const botaoFechar = screen.getByRole("button", {
+        name: /dispensar aviso/i,
+      });
+      fireEvent.click(botaoFechar);
+
+      expect(screen.queryByRole("status")).toBeNull();
     });
   });
 

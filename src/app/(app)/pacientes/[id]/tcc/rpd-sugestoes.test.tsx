@@ -49,9 +49,7 @@ describe("RpdSugestoes — fila de RPD sugerido pelo agente (#392)", () => {
     expect(
       screen.getByText(new RegExp(SUGESTAO_2.trechoFonte, "i")),
     ).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /aprovar/i })).toHaveLength(
-      2,
-    );
+    expect(screen.getAllByRole("button", { name: /aprovar/i })).toHaveLength(2);
   });
 
   it("'Aprovar' abre o rpd-form pré-preenchido com os campos do payload, deixando situação/emoção/intensidade em branco", () => {
@@ -61,11 +59,8 @@ describe("RpdSugestoes — fila de RPD sugerido pelo agente (#392)", () => {
 
     // Pré-preenchido a partir do trecho literal e do payload da extração.
     expect(
-      (
-        screen.getByLabelText(
-          /pensamento automático/i,
-        ) as HTMLInputElement
-      ).value,
+      (screen.getByLabelText(/pensamento automático/i) as HTMLInputElement)
+        .value,
     ).toBe(SUGESTAO_1.trechoFonte);
     expect(
       (
@@ -75,11 +70,8 @@ describe("RpdSugestoes — fila de RPD sugerido pelo agente (#392)", () => {
       ).value,
     ).toBe(SUGESTAO_1.payload.evidencias_favor);
     expect(
-      (
-        screen.getByLabelText(
-          /credibilidade inicial/i,
-        ) as HTMLInputElement
-      ).value,
+      (screen.getByLabelText(/credibilidade inicial/i) as HTMLInputElement)
+        .value,
     ).toBe("75");
 
     // Distorções sugeridas vêm pré-marcadas.
@@ -99,9 +91,7 @@ describe("RpdSugestoes — fila de RPD sugerido pelo agente (#392)", () => {
     const situacao = screen.getByLabelText(
       /situação \/ gatilho/i,
     ) as HTMLInputElement;
-    const emocao = screen.getByLabelText(
-      /emoção sentida/i,
-    ) as HTMLInputElement;
+    const emocao = screen.getByLabelText(/emoção sentida/i) as HTMLInputElement;
     expect(situacao.value).toBe("");
     expect(situacao.required).toBe(true);
     expect(emocao.value).toBe("");
@@ -118,9 +108,7 @@ describe("RpdSugestoes — fila de RPD sugerido pelo agente (#392)", () => {
     // Sem modal bloqueante em nenhum momento do fluxo.
     expect(screen.queryByRole("dialog")).toBeNull();
     // Estado de pendente aparece direto no botão (a action nunca resolve).
-    expect(
-      screen.getByRole("button", { name: /descartando/i }),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /descartando/i })).toBeTruthy();
   });
 
   it("zero sugestões pendentes renderiza um estado vazio, não um erro", () => {

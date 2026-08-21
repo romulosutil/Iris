@@ -88,7 +88,7 @@ export function ProtocolProgressBarChart({
         {pctDominadas > 0 && (
           <div
             style={{ width: `${pctDominadas}%` }}
-            className="bg-accent-mint text-ink-anchor flex h-full items-center justify-center transition-all duration-300"
+            className="text-ink-anchor flex h-full items-center justify-center bg-[var(--status-success-bg)] transition-all duration-300"
             title={`${metasDominadas} metas dominadas (${pctDominadas}%)`}
           >
             {pctDominadas >= 12 && (
@@ -130,7 +130,7 @@ export function ProtocolProgressBarChart({
       {/* Legenda Exata */}
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-1.5">
-          <span className="border-border-brutal bg-accent-mint size-3 rounded-xs border" />
+          <span className="border-border-brutal size-3 rounded-xs border bg-[var(--status-success-bg)]" />
           <span className="text-text-secondary">
             <strong className="text-text-primary">{metasDominadas}</strong>{" "}
             Dominadas

@@ -1,0 +1,763 @@
+/**
+ * #407 T10 — prova de que `validarAnamnese` FAZ a linha do tempo clínica
+ * existir: cria uma `goal` por alvo e faz o snapshot 0 passar a existir. É o
+ * lado A de `db/tests/anamnese-rascunho.int.test.ts` (T09, lado B: rascunho
+ * não mexe em nada). Mede os mesmos dois contadores, agora esperando que
+ * mudem.
+ *
+ * Setup reaproveita o harness de `db/tests/anamnese-validar-definer.int.test.ts`
+ * (T04/T05: protocolo com `taxonomia_ajuda` de 5 níveis, `patient_protocol`
+ * ativo) e `db/tests/anamnese-rascunho.int.test.ts` (equipe/paciente).
+ */
+import { and, count, eq, sql as sqlTag } from "drizzle-orm";
+import postgres from "postgres";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { RoleError } from "@/auth/require-role";
+import { hasDb } from "./integration-env";
+
+vi.mock("server-only", () => ({}));
+
+const CLINIC_A = "00000000-0000-0000-0000-0000000010fa";
+const U_COORD_A = "00000000-0000-0000-0000-00000000109a";
+const U_TER_A = "00000000-0000-0000-0000-00000000109b";
+const PAC_VALIDAR = "00000000-0000-0000-0000-000000010a01";
+const PAC_ROLLBACK = "00000000-0000-0000-0000-000000010a02";
+const PAC_MILESTONE = "00000000-0000-0000-0000-000000010a03";
+// T11 — gate de modalidade
+const PAC_PROTOCOL_DRIVEN = "00000000-0000-0000-0000-000000010a11";
+const PAC_COGNITIVE_BEHAVIORAL = "00000000-0000-0000-0000-000000010a12";
+const PAC_CONVENTIONAL = "00000000-0000-0000-0000-000000010a13";
+// T16 — desarquivamento com origem validacao_anamnese
+const PAC_ARQUIVADO = "00000000-0000-0000-0000-000000010a16";
+// T13 — consentimento revogado
+const PAC_REVOGADO = "00000000-0000-0000-0000-000000010a14";
+// T12 — gate de protocolo ativo com taxonomia utilizável
+const PAC_SEM_PROTOCOLO = "00000000-0000-0000-0000-000000010a18";
+const PAC_TAXONOMIA_1 = "00000000-0000-0000-0000-000000010a19";
+
+const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
+
+const ctxCoordA = {
+  clinicId: CLINIC_A,
+  userId: U_COORD_A,
+  role: "coordenador",
+} as const;
+
+const ctxTerA = {
+  clinicId: CLINIC_A,
+  userId: U_TER_A,
+  role: "terapeuta",
+} as const;
+
+let owner: ReturnType<typeof postgres>;
+let withTenant: typeof import("@/db/rls").withTenant;
+let schema: typeof import("@/db/schema");
+let validarAnamnese: typeof import("@/app/(app)/pacientes/[id]/anamnese/logic").validarAnamnese;
+
+let PROTOCOL_ID: string;
+let PROTO_TAX1_ID: string;
+let MILESTONE_ID: string;
+
+async function ativarProtocolo(patientId: string) {
+  await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por)
+    VALUES (${patientId}, ${PROTOCOL_ID}, ${U_COORD_A})`;
+}
+
+async function criarAnamneseRascunho(opts: {
+  id: string;
+  patientId: string;
+  alvos: {
+    id: string;
+    eixo?: string;
+    descricao: string;
+    milestoneId?: string | null;
+    nivelAjudaInicial?: number | null;
+    procedencia?: string;
+  }[];
+}) {
+  await owner`INSERT INTO anamnese (id, clinic_id, patient_id, estado, criado_por)
+    VALUES (${opts.id}, ${CLINIC_A}, ${opts.patientId}, 'rascunho', ${U_COORD_A})`;
+  for (const alvo of opts.alvos) {
+    await owner`INSERT INTO anamnese_alvo
+      (id, anamnese_id, clinic_id, patient_id, eixo, descricao, milestone_id, nivel_ajuda_inicial, procedencia)
+      VALUES (${alvo.id}, ${opts.id}, ${CLINIC_A}, ${opts.patientId},
+        ${alvo.eixo ?? "comunicacao_expressiva"}, ${alvo.descricao},
+        ${alvo.milestoneId ?? null}, ${alvo.nivelAjudaInicial ?? null},
+        ${alvo.procedencia ?? "relatado_responsavel"})`;
+  }
+}
+
+async function contarGoalESnapshot(patientId: string) {
+  const [goals] = await withTenant(ctxCoordA, (tx) =>
+    tx
+      .select({ n: count() })
+      .from(schema.goal)
+      .where(eq(schema.goal.patientId, patientId)),
+  );
+  const [snapshots] = await withTenant(ctxCoordA, (tx) =>
+    tx
+      .select({ n: count() })
+      .from(schema.sessionSnapshot)
+      .where(
+        and(
+          eq(schema.sessionSnapshot.patientId, patientId),
+          eq(schema.sessionSnapshot.sessionNumero, 0),
+        ),
+      ),
+  );
+  return { goals: Number(goals!.n), snapshots: Number(snapshots!.n) };
+}
+
+/**
+ * Verbatim de `db/tests/anamnese-validar-definer.int.test.ts:erroDe` — a
+ * mensagem real do Postgres (RAISE) fica em `.cause`, não em
+ * `DrizzleQueryError.message` (que é o texto do statement que emitimos).
+ */
+async function erroDe(p: Promise<unknown>): Promise<string> {
+  try {
+    await p;
+  } catch (e) {
+    const partes: string[] = [];
+    let atual: unknown = e;
+    while (atual && typeof atual === "object") {
+      const o = atual as {
+        message?: unknown;
+        detail?: unknown;
+        cause?: unknown;
+      };
+      if (o.message) partes.push(String(o.message));
+      if (o.detail) partes.push(String(o.detail));
+      atual = o.cause;
+    }
+    return partes.join(" | ");
+  }
+  throw new Error("esperava rejeição, mas a operação foi bem-sucedida");
+}
+
+describe.skipIf(!hasDb)(
+  "#407 T10 · validarAnamnese cria goal e faz o snapshot 0 existir",
+  () => {
+    beforeAll(async () => {
+      ({ withTenant } = await import("@/db/rls"));
+      schema = await import("@/db/schema");
+      ({ validarAnamnese } =
+        await import("@/app/(app)/pacientes/[id]/anamnese/logic"));
+      owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
+
+      await owner`TRUNCATE clinic, app_user, user_role, patient,
+      care_team_membership, protocol, patient_protocol, milestone,
+      anamnese, anamnese_alvo, goal, goal_milestone_mapping, session_snapshot,
+      audit_log RESTART IDENTITY CASCADE`;
+
+      await owner`INSERT INTO protocol_familia_catalogo (id, nome)
+        VALUES (${PROTOCOL_FAMILIA}, 'Marcos de desenvolvimento (ABA)')
+        ON CONFLICT (id) DO NOTHING`;
+
+      await owner`INSERT INTO clinic (id, nome, is_demo) VALUES
+        (${CLINIC_A}, 'Clínica A (anamnese-validar)', false)`;
+      await owner`INSERT INTO app_user (id, name, email) VALUES
+        (${U_COORD_A}, 'Coord A', 'coord.a.anam-val@t.com'),
+        (${U_TER_A}, 'Terapeuta A', 'ter.a.anam-val@t.com')`;
+      await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
+        (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
+        (${U_TER_A}, ${CLINIC_A}, 'terapeuta')`;
+      await owner`INSERT INTO patient (id, clinic_id, nome, clinical_modality) VALUES
+        (${PAC_VALIDAR}, ${CLINIC_A}, 'Paciente validar (T10)', 'protocol_driven'),
+        (${PAC_ROLLBACK}, ${CLINIC_A}, 'Paciente rollback (T10)', 'protocol_driven'),
+        (${PAC_MILESTONE}, ${CLINIC_A}, 'Paciente milestone (T10)', 'protocol_driven'),
+        (${PAC_PROTOCOL_DRIVEN}, ${CLINIC_A}, 'Paciente protocol_driven (T11)', 'protocol_driven'),
+        (${PAC_COGNITIVE_BEHAVIORAL}, ${CLINIC_A}, 'Paciente cognitive_behavioral (T11)', 'cognitive_behavioral'),
+        (${PAC_CONVENTIONAL}, ${CLINIC_A}, 'Paciente conventional (T11)', 'conventional'),
+        (${PAC_ARQUIVADO}, ${CLINIC_A}, 'Paciente arquivado (T16)', 'protocol_driven'),
+        (${PAC_REVOGADO}, ${CLINIC_A}, 'Paciente consentimento revogado (T13)', 'protocol_driven'),
+        (${PAC_SEM_PROTOCOLO}, ${CLINIC_A}, 'Paciente sem protocolo (T12)', 'protocol_driven'),
+        (${PAC_TAXONOMIA_1}, ${CLINIC_A}, 'Paciente taxonomia 1 (T12)', 'protocol_driven')`;
+
+      await owner`UPDATE patient SET arquivado_em = now() WHERE id = ${PAC_ARQUIVADO}`;
+
+      const [protocolo] = await owner<{ id: string }[]>`
+        INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
+        VALUES (${CLINIC_A}, 'VB-MAPP (teste T10)', 'ABA', ${PROTOCOL_FAMILIA},
+          ${owner.json(["independente", "dica_verbal", "dica_gestual", "modelacao", "dica_fisica"])})
+        RETURNING id`;
+      PROTOCOL_ID = protocolo!.id;
+
+      const [protoTax1] = await owner<{ id: string }[]>`
+        INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
+        VALUES (${CLINIC_A}, 'Protocolo taxonomia 1 nível (teste T12)', 'ABA', ${PROTOCOL_FAMILIA},
+          ${owner.json(["independente"])})
+        RETURNING id`;
+      PROTO_TAX1_ID = protoTax1!.id;
+
+      const [marco] = await owner<{ id: string }[]>`
+        INSERT INTO milestone (protocol_id, dominio_id, nome, tipo_estrutura, estrutura)
+        VALUES (${PROTOCOL_ID}, 'mando', 'Pedir item preferido', 'marco_simples', '{}'::jsonb)
+        RETURNING id`;
+      MILESTONE_ID = marco!.id;
+
+      await ativarProtocolo(PAC_VALIDAR);
+      await ativarProtocolo(PAC_MILESTONE);
+      await ativarProtocolo(PAC_PROTOCOL_DRIVEN);
+      await ativarProtocolo(PAC_ARQUIVADO);
+      await ativarProtocolo(PAC_REVOGADO);
+
+      // Ativa protocolo com apenas 1 nível para PAC_TAXONOMIA_1
+      await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por)
+        VALUES (${PAC_TAXONOMIA_1}, ${PROTO_TAX1_ID}, ${U_COORD_A})`;
+
+      // Setup de consentimento revogado para PAC_REVOGADO
+      const consentRevogadoId = crypto.randomUUID();
+      await owner`INSERT INTO consent (id, patient_id, tipo, responsavel_signatario, versao_termo)
+        VALUES (${consentRevogadoId}, ${PAC_REVOGADO}, 'tratamento_dados_menor', 'Mãe', 'menor-v1')`;
+      await owner`INSERT INTO consent (patient_id, tipo, versao_termo, consent_revogado_id)
+        VALUES (${PAC_REVOGADO}, 'revogacao_consentimento', 'revogacao-teste', ${consentRevogadoId})`;
+      // PAC_ROLLBACK NÃO tem protocolo ativo de propósito — o gate
+      // ANAMNESE_SEM_PROTOCOLO_ATIVO do definer (T05) dispara depois que o
+      // core já inseriu a `goal`, provando que o RAISE reverte a inserção.
+      // PAC_COGNITIVE_BEHAVIORAL e PAC_CONVENTIONAL NÃO têm protocolo —
+      // o gate ANAMNESE_MODALIDADE_INCOMPATIVEL (T11) dispara no core antes
+      // de chegar ao definer, então não precisam.
+    });
+
+    afterAll(async () => {
+      await owner?.end();
+    });
+
+    test("valida rascunho → goal criada por alvo, snapshot 0 passa de 0 para 1, anamnese_alvo.goal_id preenchido", async () => {
+      const antes = await contarGoalESnapshot(PAC_VALIDAR);
+      expect(antes.snapshots).toBe(0);
+
+      const anamneseId = "00000000-0000-0000-0000-000000010d01";
+      const alvoId = "00000000-0000-0000-0000-000000010e01";
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_VALIDAR,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Pedir objeto desejado apontando",
+            nivelAjudaInicial: 2,
+            procedencia: "relatado_responsavel",
+          },
+        ],
+      });
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(resultado.error).toBeUndefined();
+
+      const depois = await contarGoalESnapshot(PAC_VALIDAR);
+      expect(depois.goals).toBe(antes.goals + 1);
+      expect(depois.snapshots).toBe(1);
+
+      const [alvoGravado] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ goalId: schema.anamneseAlvo.goalId })
+          .from(schema.anamneseAlvo)
+          .where(eq(schema.anamneseAlvo.id, alvoId)),
+      );
+      expect(alvoGravado?.goalId).toBeTruthy();
+
+      const [snapshotRow] = await owner<
+        { repertorioState: unknown; segmentacao: unknown }[]
+      >`SELECT repertorio_state AS "repertorioState", segmentacao AS "segmentacao"
+        FROM session_snapshot WHERE patient_id = ${PAC_VALIDAR} AND session_numero = 0`;
+      expect(snapshotRow?.repertorioState).toEqual({
+        [alvoGravado!.goalId!]: {
+          nivel_ajuda_recente: 2,
+          contagem: 0,
+          is_candidata: false,
+          origem: "anamnese",
+          procedencia: "relatado_responsavel",
+        },
+      });
+      expect(snapshotRow?.segmentacao).toEqual({});
+
+      const [anamneseRow] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ estado: schema.anamnese.estado })
+          .from(schema.anamnese)
+          .where(eq(schema.anamnese.id, anamneseId)),
+      );
+      expect(anamneseRow?.estado).toBe("validada");
+    });
+
+    test("alvo com marco mapeado → segmentacao no shape goal_id → protocol_id → { tipo_estrutura, metrica, rotulo }", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d03";
+      const alvoId = "00000000-0000-0000-0000-000000010e03";
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_MILESTONE,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Pedir item preferido usando gesto",
+            milestoneId: MILESTONE_ID,
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(resultado.error).toBeUndefined();
+
+      const [alvoGravado] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ goalId: schema.anamneseAlvo.goalId })
+          .from(schema.anamneseAlvo)
+          .where(eq(schema.anamneseAlvo.id, alvoId)),
+      );
+      const goalId = alvoGravado!.goalId!;
+
+      const [snapshotRow] = await owner<
+        { segmentacao: Record<string, unknown> }[]
+      >`SELECT segmentacao AS "segmentacao"
+        FROM session_snapshot WHERE patient_id = ${PAC_MILESTONE} AND session_numero = 0`;
+      expect(snapshotRow?.segmentacao).toEqual({
+        [goalId]: {
+          [PROTOCOL_ID]: {
+            tipo_estrutura: "marco_simples",
+            metrica: "nivel_ajuda",
+            rotulo: "Pedir item preferido",
+          },
+        },
+      });
+
+      const [mapeamento] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select()
+          .from(schema.goalMilestoneMapping)
+          .where(eq(schema.goalMilestoneMapping.goalId, goalId)),
+      );
+      expect(mapeamento?.milestoneId).toBe(MILESTONE_ID);
+    });
+
+    test("RAISE do definer (sem protocolo ativo) reverte a transação inteira — a goal já inserida não fica órfã", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d02";
+      const alvoId = "00000000-0000-0000-0000-000000010e02";
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_ROLLBACK,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Seguir instrução de dois passos",
+            nivelAjudaInicial: 3,
+            procedencia: "registro_anterior",
+          },
+        ],
+      });
+
+      const antes = await contarGoalESnapshot(PAC_ROLLBACK);
+      expect(antes).toEqual({ goals: 0, snapshots: 0 });
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(resultado.error).toBeTruthy();
+
+      const depois = await contarGoalESnapshot(PAC_ROLLBACK);
+      expect(depois).toEqual({ goals: 0, snapshots: 0 });
+
+      const [alvoGravado] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ goalId: schema.anamneseAlvo.goalId })
+          .from(schema.anamneseAlvo)
+          .where(eq(schema.anamneseAlvo.id, alvoId)),
+      );
+      expect(alvoGravado?.goalId).toBeNull();
+
+      const [anamneseRow] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ estado: schema.anamnese.estado })
+          .from(schema.anamnese)
+          .where(eq(schema.anamnese.id, anamneseId)),
+      );
+      expect(anamneseRow?.estado).toBe("rascunho");
+    });
+
+    test("segunda validação da mesma anamnese (via core e via definer direto) não cria goal extra", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d04";
+      const alvoId = "00000000-0000-0000-0000-000000010e04";
+      const patientId = PAC_VALIDAR; // reaproveita paciente já validado no teste 1
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Responder pelo nome quando chamado",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const primeiro = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(primeiro.error).toBeUndefined();
+      const contagemAposPrimeira = await contarGoalESnapshot(patientId);
+
+      // Segunda chamada pelo core: o WHERE `estado = 'rascunho'` já barra —
+      // nenhuma goal é inserida nesta tentativa.
+      const segundo = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(segundo.error).toBeTruthy();
+      expect(await contarGoalESnapshot(patientId)).toEqual(
+        contagemAposPrimeira,
+      );
+
+      // Chamando o definer DIRETO (bypassando o guard do core) na mesma
+      // anamnese, já `validada`: RAISE ANAMNESE_JA_VALIDADA, lido de
+      // `err.cause` — não de `DrizzleQueryError.message` (o statement).
+      expect(
+        await erroDe(
+          withTenant(ctxCoordA, (tx) =>
+            tx.execute(
+              sqlTag`SELECT app_validar_anamnese(${anamneseId}::uuid, ${JSON.stringify({})}::jsonb, ${JSON.stringify({})}::jsonb)`,
+            ),
+          ),
+        ),
+      ).toMatch(/ANAMNESE_JA_VALIDADA/);
+
+      expect(await contarGoalESnapshot(patientId)).toEqual(
+        contagemAposPrimeira,
+      );
+    });
+
+    test("T11 — modalidade protocol_driven permite validação", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d11";
+      const alvoId = "00000000-0000-0000-0000-000000010e11";
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_PROTOCOL_DRIVEN,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Teste gate modalidade protocol_driven",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      // protocol_driven é a única que passa — a goal deve ter sido criada
+      expect(resultado.error).toBeUndefined();
+
+      const [alvoGravado] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ goalId: schema.anamneseAlvo.goalId })
+          .from(schema.anamneseAlvo)
+          .where(eq(schema.anamneseAlvo.id, alvoId)),
+      );
+      expect(alvoGravado?.goalId).toBeTruthy();
+    });
+
+    test("T11 — modalidade cognitive_behavioral recusa validação", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d12";
+      const alvoId = "00000000-0000-0000-0000-000000010e12";
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_COGNITIVE_BEHAVIORAL,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Teste gate modalidade cognitive_behavioral",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(resultado.error).toBeTruthy();
+      expect(resultado.error).toMatch(/modalidade|incompatível/i);
+
+      // goal NOT created — rollback já deve ter acontecido
+      const [alvoGravado] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ goalId: schema.anamneseAlvo.goalId })
+          .from(schema.anamneseAlvo)
+          .where(eq(schema.anamneseAlvo.id, alvoId)),
+      );
+      expect(alvoGravado?.goalId).toBeNull();
+    });
+
+    test("T11 — modalidade conventional recusa validação", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d13";
+      const alvoId = "00000000-0000-0000-0000-000000010e13";
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_CONVENTIONAL,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Teste gate modalidade conventional",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(resultado.error).toBeTruthy();
+      expect(resultado.error).toMatch(/modalidade|incompatível/i);
+
+      // goal NOT created — rollback já deve ter acontecido
+      const [alvoGravado] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ goalId: schema.anamneseAlvo.goalId })
+          .from(schema.anamneseAlvo)
+          .where(eq(schema.anamneseAlvo.id, alvoId)),
+      );
+      expect(alvoGravado?.goalId).toBeNull();
+    });
+
+    test("T16 (ANAM-11) — paciente arquivado é desarquivado com exatamente 1 linha no audit_log com origem validacao_anamnese e zero de criacao_meta", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d16";
+      const alvo1Id = "00000000-0000-0000-0000-000000010e16";
+      const alvo2Id = "00000000-0000-0000-0000-000000010e17";
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_ARQUIVADO,
+        alvos: [
+          {
+            id: alvo1Id,
+            descricao: "Alvo 1 para paciente arquivado",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+          {
+            id: alvo2Id,
+            descricao: "Alvo 2 para paciente arquivado",
+            nivelAjudaInicial: 2,
+            procedencia: "relatado_responsavel",
+          },
+        ],
+      });
+
+      // Confirma que está arquivado antes
+      const [pacAntes] =
+        await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC_ARQUIVADO}`;
+      expect(pacAntes!.arquivado_em).not.toBeNull();
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(resultado.error).toBeUndefined();
+
+      // 1. arquivado_em vira NULL
+      const [pacDepois] =
+        await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC_ARQUIVADO}`;
+      expect(pacDepois!.arquivado_em).toBeNull();
+
+      // 2. audit_log registra exatamente 1 linha de desarquivamento automático
+      const logs = await owner`
+        SELECT acao, detalhe FROM audit_log
+        WHERE patient_id = ${PAC_ARQUIVADO} AND acao = 'paciente_desarquivado_automaticamente'
+      `;
+      expect(logs).toHaveLength(1);
+      expect(logs[0]!.detalhe).toEqual({ origem: "validacao_anamnese" });
+
+      // 3. Verifica que 'criacao_meta' NÃO aparece no audit_log deste fluxo
+      const logsMeta = await owner`
+        SELECT acao, detalhe FROM audit_log
+        WHERE patient_id = ${PAC_ARQUIVADO} AND detalhe->>'origem' = 'criacao_meta'
+      `;
+      expect(logsMeta).toHaveLength(0);
+    });
+
+    test("T15 (ANAM-08) — rascunho com 25 alvos é recusado com ANAMNESE_TETO_ALVOS, 24 alvos passa", async () => {
+      const ana25Id = crypto.randomUUID();
+      const alvos25 = Array.from({ length: 25 }, (_, i) => ({
+        id: crypto.randomUUID(),
+        descricao: `Alvo do teto #${i + 1}`,
+        nivelAjudaInicial: 1,
+        procedencia: "observado_avaliador",
+      }));
+
+      await criarAnamneseRascunho({
+        id: ana25Id,
+        patientId: PAC_VALIDAR,
+        alvos: alvos25,
+      });
+
+      // Validação com 25 alvos deve falhar na segunda barreira (logic)
+      const res25 = await validarAnamnese(ctxCoordA, { anamneseId: ana25Id });
+      expect(res25.error).toBe("ANAMNESE_TETO_ALVOS");
+
+      // Rascunho com 24 alvos (teto exato)
+      const ana24Id = crypto.randomUUID();
+      const alvos24 = Array.from({ length: 24 }, (_, i) => ({
+        id: crypto.randomUUID(),
+        descricao: `Alvo permitido #${i + 1}`,
+        nivelAjudaInicial: 1,
+        procedencia: "observado_avaliador",
+      }));
+
+      await criarAnamneseRascunho({
+        id: ana24Id,
+        patientId: PAC_VALIDAR,
+        alvos: alvos24,
+      });
+
+      const res24 = await validarAnamnese(ctxCoordA, { anamneseId: ana24Id });
+      expect(res24.error).toBeUndefined();
+      expect(res24.id).toBe(ana24Id);
+    });
+
+    test("T14 (ANAM-03 / D-B) — validação é exclusiva de coordenador; terapeuta é recusado via RoleError e nada é criado", async () => {
+      const anamneseId = crypto.randomUUID();
+      const alvoId = crypto.randomUUID();
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_VALIDAR,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Alvo teste papel coordenador vs terapeuta",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const [snapAntes] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_VALIDAR} AND session_numero = 0
+      `;
+      const snapTotalAntes = snapAntes?.total ?? 0;
+
+      // Terapeuta tenta validar -> lança RoleError (rejeição de papel)
+      await expect(validarAnamnese(ctxTerA, { anamneseId })).rejects.toThrow(
+        RoleError,
+      );
+
+      // Snapshot 0 e goal continuam inalterados
+      const [snapDepois] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_VALIDAR} AND session_numero = 0
+      `;
+      expect(snapDepois?.total).toBe(snapTotalAntes);
+
+      const [alvo] = await owner`
+        SELECT goal_id FROM anamnese_alvo WHERE id = ${alvoId}
+      `;
+      expect(alvo?.goal_id).toBeNull();
+    });
+
+    test("T13 (ANAM-07) — consentimento revogado impede validação com ANAMNESE_PRONTUARIO_SOMENTE_LEITURA e mensagem amigável; zero snapshot 0 gravado", async () => {
+      const anamneseId = crypto.randomUUID();
+      const alvoId = crypto.randomUUID();
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_REVOGADO,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Alvo paciente consentimento revogado",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const res = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(res.error).toBeTruthy();
+      expect(res.error).toMatch(/ANAMNESE_PRONTUARIO_SOMENTE_LEITURA/);
+      expect(res.error).toMatch(/somente-leitura/i);
+      expect(res.error).not.toMatch(
+        /PostgresError|DrizzleQueryError|SELECT app_validar/i,
+      );
+
+      // Snapshot 0 NÃO foi criado
+      const [snap] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_REVOGADO} AND session_numero = 0
+      `;
+      expect(snap?.total).toBe(0);
+
+      // Goal NÃO foi criada
+      const [alvo] = await owner`
+        SELECT goal_id FROM anamnese_alvo WHERE id = ${alvoId}
+      `;
+      expect(alvo?.goal_id).toBeNull();
+    });
+
+    test("T12 (ANAM-06) — paciente sem protocolo ativo recusa validação com ANAMNESE_SEM_PROTOCOLO_ATIVO e zero snapshot 0", async () => {
+      const anamneseId = crypto.randomUUID();
+      const alvoId = crypto.randomUUID();
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_SEM_PROTOCOLO,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Alvo sem protocolo ativo",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const res = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(res.error).toBeTruthy();
+      expect(res.error).toMatch(/ANAMNESE_SEM_PROTOCOLO_ATIVO/);
+      expect(res.error).toMatch(/protocolo ativo/i);
+      expect(res.error).not.toMatch(
+        /PostgresError|DrizzleQueryError|SELECT app_validar/i,
+      );
+
+      // Snapshot 0 NÃO foi gravado
+      const [snap] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_SEM_PROTOCOLO} AND session_numero = 0
+      `;
+      expect(snap?.total).toBe(0);
+
+      // Goal NÃO foi criada
+      const [alvo] = await owner`
+        SELECT goal_id FROM anamnese_alvo WHERE id = ${alvoId}
+      `;
+      expect(alvo?.goal_id).toBeNull();
+    });
+
+    test("T12 (ANAM-06) — protocolo com taxonomia de 1 nível recusa validação com ANAMNESE_SEM_PROTOCOLO_ATIVO e zero snapshot 0", async () => {
+      const anamneseId = crypto.randomUUID();
+      const alvoId = crypto.randomUUID();
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_TAXONOMIA_1,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Alvo protocolo taxonomia 1 nível",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const res = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(res.error).toBeTruthy();
+      expect(res.error).toMatch(/ANAMNESE_SEM_PROTOCOLO_ATIVO/);
+      expect(res.error).toMatch(/protocolo ativo/i);
+      expect(res.error).not.toMatch(
+        /PostgresError|DrizzleQueryError|SELECT app_validar/i,
+      );
+
+      // Snapshot 0 NÃO foi gravado
+      const [snap] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_TAXONOMIA_1} AND session_numero = 0
+      `;
+      expect(snap?.total).toBe(0);
+
+      // Goal NÃO foi criada
+      const [alvo] = await owner`
+        SELECT goal_id FROM anamnese_alvo WHERE id = ${alvoId}
+      `;
+      expect(alvo?.goal_id).toBeNull();
+    });
+  },
+);

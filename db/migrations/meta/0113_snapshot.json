@@ -136,12 +136,8 @@
           "name": "agendamento_recorrente_clinic_id_clinic_id_fk",
           "tableFrom": "agendamento_recorrente",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -149,12 +145,8 @@
           "name": "agendamento_recorrente_terapeuta_id_app_user_id_fk",
           "tableFrom": "agendamento_recorrente",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "terapeuta_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["terapeuta_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -162,14 +154,8 @@
           "name": "agendamento_recorrente_patient_fk",
           "tableFrom": "agendamento_recorrente",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id",
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id",
-            "clinic_id"
-          ],
+          "columnsFrom": ["patient_id", "clinic_id"],
+          "columnsTo": ["id", "clinic_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -344,12 +330,8 @@
           "name": "alerta_clinic_id_clinic_id_fk",
           "tableFrom": "alerta",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -357,12 +339,8 @@
           "name": "alerta_goal_id_goal_id_fk",
           "tableFrom": "alerta",
           "tableTo": "goal",
-          "columnsFrom": [
-            "goal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["goal_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -370,12 +348,8 @@
           "name": "alerta_protocol_id_protocol_id_fk",
           "tableFrom": "alerta",
           "tableTo": "protocol",
-          "columnsFrom": [
-            "protocol_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["protocol_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -383,12 +357,8 @@
           "name": "alerta_criado_por_app_user_id_fk",
           "tableFrom": "alerta",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "criado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["criado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -396,12 +366,8 @@
           "name": "alerta_atualizado_por_app_user_id_fk",
           "tableFrom": "alerta",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "atualizado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["atualizado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -409,14 +375,8 @@
           "name": "alerta_patient_fk",
           "tableFrom": "alerta",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id",
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id",
-            "clinic_id"
-          ],
+          "columnsFrom": ["patient_id", "clinic_id"],
+          "columnsTo": ["id", "clinic_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -667,12 +627,8 @@
           "name": "alerta_risco_clinico_clinic_id_clinic_id_fk",
           "tableFrom": "alerta_risco_clinico",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -680,12 +636,8 @@
           "name": "alerta_risco_clinico_session_id_session_id_fk",
           "tableFrom": "alerta_risco_clinico",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -693,12 +645,8 @@
           "name": "alerta_risco_clinico_rpd_entry_id_tcc_rpd_entry_id_fk",
           "tableFrom": "alerta_risco_clinico",
           "tableTo": "tcc_rpd_entry",
-          "columnsFrom": [
-            "rpd_entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["rpd_entry_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -706,12 +654,8 @@
           "name": "alerta_risco_clinico_origem_extraction_id_extraction_id_fk",
           "tableFrom": "alerta_risco_clinico",
           "tableTo": "extraction",
-          "columnsFrom": [
-            "origem_extraction_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["origem_extraction_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -719,12 +663,8 @@
           "name": "alerta_risco_clinico_reconhecido_por_app_user_id_fk",
           "tableFrom": "alerta_risco_clinico",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "reconhecido_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reconhecido_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -732,12 +672,8 @@
           "name": "alerta_risco_clinico_atualizado_por_app_user_id_fk",
           "tableFrom": "alerta_risco_clinico",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "atualizado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["atualizado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -745,14 +681,8 @@
           "name": "alerta_risco_patient_fk",
           "tableFrom": "alerta_risco_clinico",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id",
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id",
-            "clinic_id"
-          ],
+          "columnsFrom": ["patient_id", "clinic_id"],
+          "columnsTo": ["id", "clinic_id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -858,9 +788,7 @@
         "app_user_email_unique": {
           "name": "app_user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -939,9 +867,7 @@
         "asaas_webhook_event_asaas_event_id_unique": {
           "name": "asaas_webhook_event_asaas_event_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "asaas_event_id"
-          ]
+          "columns": ["asaas_event_id"]
         }
       },
       "policies": {},
@@ -1021,12 +947,8 @@
           "name": "audio_capture_session_id_session_id_fk",
           "tableFrom": "audio_capture",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1034,12 +956,8 @@
           "name": "audio_capture_clinic_id_clinic_id_fk",
           "tableFrom": "audio_capture",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1139,12 +1057,8 @@
           "name": "audit_log_clinic_id_clinic_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1152,12 +1066,8 @@
           "name": "audit_log_ator_id_app_user_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "ator_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ator_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1165,12 +1075,8 @@
           "name": "audit_log_patient_id_patient_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1273,12 +1179,8 @@
           "name": "auth_account_user_id_app_user_id_fk",
           "tableFrom": "auth_account",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1351,12 +1253,8 @@
           "name": "auth_session_user_id_app_user_id_fk",
           "tableFrom": "auth_session",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1366,9 +1264,7 @@
         "auth_session_token_unique": {
           "name": "auth_session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -1690,12 +1586,8 @@
           "name": "billing_cycle_clinic_id_clinic_id_fk",
           "tableFrom": "billing_cycle",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1703,12 +1595,8 @@
           "name": "billing_cycle_subscription_id_subscription_id_fk",
           "tableFrom": "billing_cycle",
           "tableTo": "subscription",
-          "columnsFrom": [
-            "subscription_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["subscription_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1716,12 +1604,8 @@
           "name": "billing_cycle_debito_agrupado_em_fk",
           "tableFrom": "billing_cycle",
           "tableTo": "billing_cycle",
-          "columnsFrom": [
-            "debito_agrupado_em"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["debito_agrupado_em"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1814,12 +1698,8 @@
           "name": "billing_cycle_patient_cycle_id_billing_cycle_id_fk",
           "tableFrom": "billing_cycle_patient",
           "tableTo": "billing_cycle",
-          "columnsFrom": [
-            "cycle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cycle_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1827,14 +1707,8 @@
           "name": "billing_cycle_patient_patient_fk",
           "tableFrom": "billing_cycle_patient",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id",
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id",
-            "clinic_id"
-          ],
+          "columnsFrom": ["patient_id", "clinic_id"],
+          "columnsTo": ["id", "clinic_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1842,10 +1716,7 @@
       "compositePrimaryKeys": {
         "billing_cycle_patient_cycle_id_patient_id_pk": {
           "name": "billing_cycle_patient_cycle_id_patient_id_pk",
-          "columns": [
-            "cycle_id",
-            "patient_id"
-          ]
+          "columns": ["cycle_id", "patient_id"]
         }
       },
       "uniqueConstraints": {},
@@ -1949,12 +1820,8 @@
           "name": "bloqueio_clinic_id_clinic_id_fk",
           "tableFrom": "bloqueio",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1962,12 +1829,8 @@
           "name": "bloqueio_terapeuta_id_app_user_id_fk",
           "tableFrom": "bloqueio",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "terapeuta_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["terapeuta_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1975,14 +1838,8 @@
           "name": "bloqueio_patient_fk",
           "tableFrom": "bloqueio",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id",
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id",
-            "clinic_id"
-          ],
+          "columnsFrom": ["patient_id", "clinic_id"],
+          "columnsTo": ["id", "clinic_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2136,12 +1993,8 @@
           "name": "care_team_membership_patient_id_patient_id_fk",
           "tableFrom": "care_team_membership",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2149,12 +2002,8 @@
           "name": "care_team_membership_user_id_app_user_id_fk",
           "tableFrom": "care_team_membership",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -2162,12 +2011,8 @@
           "name": "care_team_membership_responsavel_tecnico_id_app_user_id_fk",
           "tableFrom": "care_team_membership",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "responsavel_tecnico_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["responsavel_tecnico_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2397,12 +2242,8 @@
           "name": "clinic_responsavel_conta_id_app_user_id_fk",
           "tableFrom": "clinic",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "responsavel_conta_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["responsavel_conta_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2410,12 +2251,8 @@
           "name": "clinic_responsavel_tecnico_id_app_user_id_fk",
           "tableFrom": "clinic",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "responsavel_tecnico_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["responsavel_tecnico_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2423,12 +2260,8 @@
           "name": "clinic_protocolo_emergencia_declarado_por_app_user_id_fk",
           "tableFrom": "clinic",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "protocolo_emergencia_declarado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["protocolo_emergencia_declarado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2501,12 +2334,8 @@
           "name": "consent_patient_id_patient_id_fk",
           "tableFrom": "consent",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -2514,14 +2343,8 @@
           "name": "consent_revogado_mesmo_paciente",
           "tableFrom": "consent",
           "tableTo": "consent",
-          "columnsFrom": [
-            "consent_revogado_id",
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id",
-            "patient_id"
-          ],
+          "columnsFrom": ["consent_revogado_id", "patient_id"],
+          "columnsTo": ["id", "patient_id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2531,10 +2354,7 @@
         "consent_id_patient_uniq": {
           "name": "consent_id_patient_uniq",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "patient_id"
-          ]
+          "columns": ["id", "patient_id"]
         }
       },
       "policies": {},
@@ -2707,12 +2527,8 @@
           "name": "evidence_extraction_id_extraction_id_fk",
           "tableFrom": "evidence",
           "tableTo": "extraction",
-          "columnsFrom": [
-            "extraction_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["extraction_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2720,12 +2536,8 @@
           "name": "evidence_patient_id_patient_id_fk",
           "tableFrom": "evidence",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2733,12 +2545,8 @@
           "name": "evidence_session_id_session_id_fk",
           "tableFrom": "evidence",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2746,12 +2554,8 @@
           "name": "evidence_protocol_id_protocol_id_fk",
           "tableFrom": "evidence",
           "tableTo": "protocol",
-          "columnsFrom": [
-            "protocol_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["protocol_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2759,12 +2563,8 @@
           "name": "evidence_goal_id_goal_id_fk",
           "tableFrom": "evidence",
           "tableTo": "goal",
-          "columnsFrom": [
-            "goal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["goal_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2772,12 +2572,8 @@
           "name": "evidence_milestone_id_milestone_id_fk",
           "tableFrom": "evidence",
           "tableTo": "milestone",
-          "columnsFrom": [
-            "milestone_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["milestone_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2785,12 +2581,8 @@
           "name": "evidence_aprovado_por_app_user_id_fk",
           "tableFrom": "evidence",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "aprovado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["aprovado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2800,10 +2592,7 @@
         "uq_evidence_alvo": {
           "name": "uq_evidence_alvo",
           "nullsNotDistinct": false,
-          "columns": [
-            "extraction_id",
-            "alvo_ordinal"
-          ]
+          "columns": ["extraction_id", "alvo_ordinal"]
         }
       },
       "policies": {},
@@ -2871,12 +2660,8 @@
           "name": "evidence_query_evidence_id_evidence_id_fk",
           "tableFrom": "evidence_query",
           "tableTo": "evidence",
-          "columnsFrom": [
-            "evidence_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["evidence_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2884,12 +2669,8 @@
           "name": "evidence_query_coordenador_id_app_user_id_fk",
           "tableFrom": "evidence_query",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "coordenador_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["coordenador_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2897,12 +2678,8 @@
           "name": "evidence_query_resultante_evidence_revision_id_evidence_revision_id_fk",
           "tableFrom": "evidence_query",
           "tableTo": "evidence_revision",
-          "columnsFrom": [
-            "resultante_evidence_revision_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["resultante_evidence_revision_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2997,12 +2774,8 @@
           "name": "evidence_revision_evidence_id_evidence_id_fk",
           "tableFrom": "evidence_revision",
           "tableTo": "evidence",
-          "columnsFrom": [
-            "evidence_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["evidence_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3010,12 +2783,8 @@
           "name": "evidence_revision_autor_id_app_user_id_fk",
           "tableFrom": "evidence_revision",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "autor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["autor_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3157,12 +2926,8 @@
           "name": "extraction_session_id_session_id_fk",
           "tableFrom": "extraction",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3170,12 +2935,8 @@
           "name": "extraction_clinic_id_clinic_id_fk",
           "tableFrom": "extraction",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3183,12 +2944,8 @@
           "name": "extraction_revisado_por_app_user_id_fk",
           "tableFrom": "extraction",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "revisado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["revisado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3310,12 +3067,8 @@
           "name": "goal_patient_id_patient_id_fk",
           "tableFrom": "goal",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3323,12 +3076,8 @@
           "name": "goal_clinic_id_clinic_id_fk",
           "tableFrom": "goal",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3336,12 +3085,8 @@
           "name": "goal_criado_por_app_user_id_fk",
           "tableFrom": "goal",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "criado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["criado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3382,12 +3127,8 @@
           "name": "goal_candidacy_goal_id_goal_id_fk",
           "tableFrom": "goal_candidacy",
           "tableTo": "goal",
-          "columnsFrom": [
-            "goal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["goal_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3421,12 +3162,8 @@
           "name": "goal_milestone_mapping_goal_id_goal_id_fk",
           "tableFrom": "goal_milestone_mapping",
           "tableTo": "goal",
-          "columnsFrom": [
-            "goal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["goal_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3434,12 +3171,8 @@
           "name": "goal_milestone_mapping_milestone_id_milestone_id_fk",
           "tableFrom": "goal_milestone_mapping",
           "tableTo": "milestone",
-          "columnsFrom": [
-            "milestone_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["milestone_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -3447,10 +3180,7 @@
       "compositePrimaryKeys": {
         "goal_milestone_mapping_goal_id_milestone_id_pk": {
           "name": "goal_milestone_mapping_goal_id_milestone_id_pk",
-          "columns": [
-            "goal_id",
-            "milestone_id"
-          ]
+          "columns": ["goal_id", "milestone_id"]
         }
       },
       "uniqueConstraints": {},
@@ -3588,12 +3318,8 @@
           "name": "instrumento_aplicacao_clinic_id_clinic_id_fk",
           "tableFrom": "instrumento_aplicacao",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3601,12 +3327,8 @@
           "name": "instrumento_aplicacao_patient_id_patient_id_fk",
           "tableFrom": "instrumento_aplicacao",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3614,12 +3336,8 @@
           "name": "instrumento_aplicacao_session_id_session_id_fk",
           "tableFrom": "instrumento_aplicacao",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -3627,12 +3345,8 @@
           "name": "instrumento_aplicacao_criado_por_app_user_id_fk",
           "tableFrom": "instrumento_aplicacao",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "criado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["criado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3713,12 +3427,8 @@
           "name": "instrumento_item_texto_clinic_id_clinic_id_fk",
           "tableFrom": "instrumento_item_texto",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3806,12 +3516,8 @@
           "name": "janela_trabalho_clinic_id_clinic_id_fk",
           "tableFrom": "janela_trabalho",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -3819,12 +3525,8 @@
           "name": "janela_trabalho_terapeuta_id_app_user_id_fk",
           "tableFrom": "janela_trabalho",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "terapeuta_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["terapeuta_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3927,12 +3629,8 @@
           "name": "milestone_protocol_id_protocol_id_fk",
           "tableFrom": "milestone",
           "tableTo": "protocol",
-          "columnsFrom": [
-            "protocol_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["protocol_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3942,11 +3640,7 @@
         "uq_milestone_protocol_dominio_nivel": {
           "name": "uq_milestone_protocol_dominio_nivel",
           "nullsNotDistinct": true,
-          "columns": [
-            "protocol_id",
-            "dominio_id",
-            "nivel"
-          ]
+          "columns": ["protocol_id", "dominio_id", "nivel"]
         }
       },
       "policies": {},
@@ -4003,12 +3697,8 @@
           "name": "milestone_candidacy_patient_id_patient_id_fk",
           "tableFrom": "milestone_candidacy",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4016,12 +3706,8 @@
           "name": "milestone_candidacy_milestone_id_milestone_id_fk",
           "tableFrom": "milestone_candidacy",
           "tableTo": "milestone",
-          "columnsFrom": [
-            "milestone_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["milestone_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4029,10 +3715,7 @@
       "compositePrimaryKeys": {
         "milestone_candidacy_patient_id_milestone_id_pk": {
           "name": "milestone_candidacy_patient_id_milestone_id_pk",
-          "columns": [
-            "patient_id",
-            "milestone_id"
-          ]
+          "columns": ["patient_id", "milestone_id"]
         }
       },
       "uniqueConstraints": {},
@@ -4212,12 +3895,8 @@
           "name": "patient_clinic_id_clinic_id_fk",
           "tableFrom": "patient",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -4227,18 +3906,12 @@
         "uq_patient_id_clinic": {
           "name": "uq_patient_id_clinic",
           "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "clinic_id"
-          ]
+          "columns": ["id", "clinic_id"]
         },
         "uq_patient_clinic_cpf": {
           "name": "uq_patient_clinic_cpf",
           "nullsNotDistinct": false,
-          "columns": [
-            "clinic_id",
-            "cpf"
-          ]
+          "columns": ["clinic_id", "cpf"]
         }
       },
       "policies": {},
@@ -4329,12 +4002,8 @@
           "name": "patient_alvo_disciplina_clinic_id_clinic_id_fk",
           "tableFrom": "patient_alvo_disciplina",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -4342,14 +4011,8 @@
           "name": "patient_alvo_disciplina_patient_fk",
           "tableFrom": "patient_alvo_disciplina",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id",
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id",
-            "clinic_id"
-          ],
+          "columnsFrom": ["patient_id", "clinic_id"],
+          "columnsTo": ["id", "clinic_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4430,12 +4093,8 @@
           "name": "patient_clinical_profile_patient_id_patient_id_fk",
           "tableFrom": "patient_clinical_profile",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4445,9 +4104,7 @@
         "patient_clinical_profile_patient_id_unique": {
           "name": "patient_clinical_profile_patient_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "patient_id"
-          ]
+          "columns": ["patient_id"]
         }
       },
       "policies": {},
@@ -4520,12 +4177,8 @@
           "name": "patient_protocol_patient_id_patient_id_fk",
           "tableFrom": "patient_protocol",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4533,12 +4186,8 @@
           "name": "patient_protocol_protocol_id_protocol_id_fk",
           "tableFrom": "patient_protocol",
           "tableTo": "protocol",
-          "columnsFrom": [
-            "protocol_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["protocol_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -4546,12 +4195,8 @@
           "name": "patient_protocol_ativado_por_app_user_id_fk",
           "tableFrom": "patient_protocol",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "ativado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ativado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4650,12 +4295,8 @@
           "name": "professional_consent_user_id_app_user_id_fk",
           "tableFrom": "professional_consent",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4663,12 +4304,8 @@
           "name": "professional_consent_clinic_id_clinic_id_fk",
           "tableFrom": "professional_consent",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4757,12 +4394,8 @@
           "name": "protocol_clinic_id_clinic_id_fk",
           "tableFrom": "protocol",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -4770,12 +4403,8 @@
           "name": "protocol_familia_protocol_familia_catalogo_id_fk",
           "tableFrom": "protocol",
           "tableTo": "protocol_familia_catalogo",
-          "columnsFrom": [
-            "familia"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["familia"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4901,12 +4530,8 @@
           "name": "reinforcer_profile_extraction_id_extraction_id_fk",
           "tableFrom": "reinforcer_profile",
           "tableTo": "extraction",
-          "columnsFrom": [
-            "extraction_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["extraction_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4914,12 +4539,8 @@
           "name": "reinforcer_profile_patient_id_patient_id_fk",
           "tableFrom": "reinforcer_profile",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4927,12 +4548,8 @@
           "name": "reinforcer_profile_session_id_session_id_fk",
           "tableFrom": "reinforcer_profile",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4942,10 +4559,7 @@
         "uq_reinforcer_profile_extraction_item": {
           "name": "uq_reinforcer_profile_extraction_item",
           "nullsNotDistinct": false,
-          "columns": [
-            "extraction_id",
-            "item_atividade"
-          ]
+          "columns": ["extraction_id", "item_atividade"]
         }
       },
       "policies": {},
@@ -5131,12 +4745,8 @@
           "name": "report_clinic_id_clinic_id_fk",
           "tableFrom": "report",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5144,12 +4754,8 @@
           "name": "report_patient_id_patient_id_fk",
           "tableFrom": "report",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5157,12 +4763,8 @@
           "name": "report_revisado_por_app_user_id_fk",
           "tableFrom": "report",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "revisado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["revisado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5170,12 +4772,8 @@
           "name": "report_exportado_por_app_user_id_fk",
           "tableFrom": "report",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "exportado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["exportado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -5239,12 +4837,8 @@
           "name": "report_pdf_report_id_report_id_fk",
           "tableFrom": "report_pdf",
           "tableTo": "report",
-          "columnsFrom": [
-            "report_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["report_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5464,12 +5058,8 @@
           "name": "session_clinic_id_clinic_id_fk",
           "tableFrom": "session",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5477,12 +5067,8 @@
           "name": "session_patient_id_patient_id_fk",
           "tableFrom": "session",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5490,12 +5076,8 @@
           "name": "session_terapeuta_id_app_user_id_fk",
           "tableFrom": "session",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "terapeuta_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["terapeuta_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5503,12 +5085,8 @@
           "name": "session_atendido_por_id_app_user_id_fk",
           "tableFrom": "session",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "atendido_por_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["atendido_por_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5516,12 +5094,8 @@
           "name": "session_reposta_de_fk",
           "tableFrom": "session",
           "tableTo": "session",
-          "columnsFrom": [
-            "reposta_de"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reposta_de"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -5611,12 +5185,8 @@
           "name": "session_note_session_id_session_id_fk",
           "tableFrom": "session_note",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5624,12 +5194,8 @@
           "name": "session_note_clinic_id_clinic_id_fk",
           "tableFrom": "session_note",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5637,12 +5203,8 @@
           "name": "session_note_autor_id_app_user_id_fk",
           "tableFrom": "session_note",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "autor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["autor_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -5652,10 +5214,7 @@
         "uq_session_note_tipo": {
           "name": "uq_session_note_tipo",
           "nullsNotDistinct": false,
-          "columns": [
-            "session_id",
-            "tipo"
-          ]
+          "columns": ["session_id", "tipo"]
         }
       },
       "policies": {},
@@ -5706,12 +5265,8 @@
           "name": "session_protocol_scope_session_id_session_id_fk",
           "tableFrom": "session_protocol_scope",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5719,12 +5274,8 @@
           "name": "session_protocol_scope_protocol_id_protocol_id_fk",
           "tableFrom": "session_protocol_scope",
           "tableTo": "protocol",
-          "columnsFrom": [
-            "protocol_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["protocol_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -5732,12 +5283,8 @@
           "name": "session_protocol_scope_ajustado_por_app_user_id_fk",
           "tableFrom": "session_protocol_scope",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "ajustado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ajustado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -5747,10 +5294,7 @@
         "uq_session_protocol_scope": {
           "name": "uq_session_protocol_scope",
           "nullsNotDistinct": false,
-          "columns": [
-            "session_id",
-            "protocol_id"
-          ]
+          "columns": ["session_id", "protocol_id"]
         }
       },
       "policies": {},
@@ -5821,12 +5365,8 @@
           "name": "session_snapshot_patient_id_patient_id_fk",
           "tableFrom": "session_snapshot",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -5834,10 +5374,7 @@
       "compositePrimaryKeys": {
         "session_snapshot_patient_id_session_numero_pk": {
           "name": "session_snapshot_patient_id_session_numero_pk",
-          "columns": [
-            "patient_id",
-            "session_numero"
-          ]
+          "columns": ["patient_id", "session_numero"]
         }
       },
       "uniqueConstraints": {},
@@ -6020,12 +5557,8 @@
           "name": "subscription_clinic_id_clinic_id_fk",
           "tableFrom": "subscription",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -6035,16 +5568,12 @@
         "subscription_clinic_id_unique": {
           "name": "subscription_clinic_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "clinic_id"
-          ]
+          "columns": ["clinic_id"]
         },
         "subscription_provider_subscription_id_unique": {
           "name": "subscription_provider_subscription_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "provider_subscription_id"
-          ]
+          "columns": ["provider_subscription_id"]
         }
       },
       "policies": {},
@@ -6235,12 +5764,8 @@
           "name": "tcc_rpd_entry_clinic_id_clinic_id_fk",
           "tableFrom": "tcc_rpd_entry",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -6248,12 +5773,8 @@
           "name": "tcc_rpd_entry_patient_id_patient_id_fk",
           "tableFrom": "tcc_rpd_entry",
           "tableTo": "patient",
-          "columnsFrom": [
-            "patient_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["patient_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6261,12 +5782,8 @@
           "name": "tcc_rpd_entry_session_id_session_id_fk",
           "tableFrom": "tcc_rpd_entry",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -6274,12 +5791,8 @@
           "name": "tcc_rpd_entry_criado_por_app_user_id_fk",
           "tableFrom": "tcc_rpd_entry",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "criado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["criado_por"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6287,12 +5800,8 @@
           "name": "tcc_rpd_entry_origem_extraction_id_extraction_id_fk",
           "tableFrom": "tcc_rpd_entry",
           "tableTo": "extraction",
-          "columnsFrom": [
-            "origem_extraction_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["origem_extraction_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -6392,12 +5901,8 @@
           "name": "two_factor_user_id_app_user_id_fk",
           "tableFrom": "two_factor",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6438,12 +5943,8 @@
           "name": "user_role_user_id_app_user_id_fk",
           "tableFrom": "user_role",
           "tableTo": "app_user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6451,12 +5952,8 @@
           "name": "user_role_clinic_id_clinic_id_fk",
           "tableFrom": "user_role",
           "tableTo": "clinic",
-          "columnsFrom": [
-            "clinic_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["clinic_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6464,11 +5961,7 @@
       "compositePrimaryKeys": {
         "user_role_user_id_clinic_id_papel_pk": {
           "name": "user_role_user_id_clinic_id_papel_pk",
-          "columns": [
-            "user_id",
-            "clinic_id",
-            "papel"
-          ]
+          "columns": ["user_id", "clinic_id", "papel"]
         }
       },
       "uniqueConstraints": {},
@@ -6481,10 +5974,7 @@
     "public.agendamento_recorrente_status": {
       "name": "agendamento_recorrente_status",
       "schema": "public",
-      "values": [
-        "ativo",
-        "encerrado"
-      ]
+      "values": ["ativo", "encerrado"]
     },
     "public.alerta_risco_categoria": {
       "name": "alerta_risco_categoria",
@@ -6500,19 +5990,12 @@
     "public.alerta_risco_certeza": {
       "name": "alerta_risco_certeza",
       "schema": "public",
-      "values": [
-        "explicito",
-        "ambiguo_citado"
-      ]
+      "values": ["explicito", "ambiguo_citado"]
     },
     "public.alerta_risco_origem": {
       "name": "alerta_risco_origem",
       "schema": "public",
-      "values": [
-        "diario_sessao",
-        "registro_pensamento",
-        "instrumento_formal"
-      ]
+      "values": ["diario_sessao", "registro_pensamento", "instrumento_formal"]
     },
     "public.alerta_risco_severidade": {
       "name": "alerta_risco_severidade",
@@ -6543,30 +6026,17 @@
     "public.alerta_status": {
       "name": "alerta_status",
       "schema": "public",
-      "values": [
-        "reconhecido",
-        "resolvido",
-        "descartado"
-      ]
+      "values": ["reconhecido", "resolvido", "descartado"]
     },
     "public.alerta_tipo": {
       "name": "alerta_tipo",
       "schema": "public",
-      "values": [
-        "estagnacao",
-        "regressao",
-        "faltas_excessivas"
-      ]
+      "values": ["estagnacao", "regressao", "faltas_excessivas"]
     },
     "public.audio_status_upload": {
       "name": "audio_status_upload",
       "schema": "public",
-      "values": [
-        "rascunho_local",
-        "pendente",
-        "confirmado",
-        "falhou"
-      ]
+      "values": ["rascunho_local", "pendente", "confirmado", "falhou"]
     },
     "public.billing_cycle_status": {
       "name": "billing_cycle_status",
@@ -6584,29 +6054,17 @@
     "public.billing_motivo_ativo": {
       "name": "billing_motivo_ativo",
       "schema": "public",
-      "values": [
-        "criado_no_ciclo",
-        "interacao_no_ciclo",
-        "ativo_nao_arquivado"
-      ]
+      "values": ["criado_no_ciclo", "interacao_no_ciclo", "ativo_nao_arquivado"]
     },
     "public.bloqueio_escopo": {
       "name": "bloqueio_escopo",
       "schema": "public",
-      "values": [
-        "clinica",
-        "terapeuta",
-        "paciente"
-      ]
+      "values": ["clinica", "terapeuta", "paciente"]
     },
     "public.clinical_modality": {
       "name": "clinical_modality",
       "schema": "public",
-      "values": [
-        "conventional",
-        "protocol_driven",
-        "cognitive_behavioral"
-      ]
+      "values": ["conventional", "protocol_driven", "cognitive_behavioral"]
     },
     "public.consent_tipo": {
       "name": "consent_tipo",
@@ -6624,20 +6082,12 @@
     "public.evidence_revision_acao": {
       "name": "evidence_revision_acao",
       "schema": "public",
-      "values": [
-        "confirmar",
-        "reclassificar",
-        "invalidar"
-      ]
+      "values": ["confirmar", "reclassificar", "invalidar"]
     },
     "public.extraction_confianca": {
       "name": "extraction_confianca",
       "schema": "public",
-      "values": [
-        "alta",
-        "media",
-        "baixa"
-      ]
+      "values": ["alta", "media", "baixa"]
     },
     "public.extraction_estado": {
       "name": "extraction_estado",
@@ -6669,13 +6119,7 @@
     "public.goal_estado": {
       "name": "goal_estado",
       "schema": "public",
-      "values": [
-        "rascunho",
-        "ativa",
-        "dominada",
-        "pausada",
-        "descontinuada"
-      ]
+      "values": ["rascunho", "ativa", "dominada", "pausada", "descontinuada"]
     },
     "public.instrumento_fonte_escore": {
       "name": "instrumento_fonte_escore",
@@ -6689,10 +6133,7 @@
     "public.instrumento_tipo": {
       "name": "instrumento_tipo",
       "schema": "public",
-      "values": [
-        "phq9",
-        "gad7"
-      ]
+      "values": ["phq9", "gad7"]
     },
     "public.milestone_tipo_estrutura": {
       "name": "milestone_tipo_estrutura",
@@ -6707,20 +6148,12 @@
     "public.reinforcer_valencia": {
       "name": "reinforcer_valencia",
       "schema": "public",
-      "values": [
-        "alta",
-        "baixa",
-        "saciado"
-      ]
+      "values": ["alta", "baixa", "saciado"]
     },
     "public.report_status": {
       "name": "report_status",
       "schema": "public",
-      "values": [
-        "rascunho",
-        "revisado",
-        "exportado"
-      ]
+      "values": ["rascunho", "revisado", "exportado"]
     },
     "public.report_tipo": {
       "name": "report_tipo",
@@ -6746,57 +6179,32 @@
     "public.session_modalidade": {
       "name": "session_modalidade",
       "schema": "public",
-      "values": [
-        "presencial",
-        "online"
-      ]
+      "values": ["presencial", "online"]
     },
     "public.session_note_tipo": {
       "name": "session_note_tipo",
       "schema": "public",
-      "values": [
-        "captura_rapida",
-        "nota_consolidada"
-      ]
+      "values": ["captura_rapida", "nota_consolidada"]
     },
     "public.session_protocol_scope_origem": {
       "name": "session_protocol_scope_origem",
       "schema": "public",
-      "values": [
-        "inferido_disciplina",
-        "ajustado_manualmente"
-      ]
+      "values": ["inferido_disciplina", "ajustado_manualmente"]
     },
     "public.session_tipo": {
       "name": "session_tipo",
       "schema": "public",
-      "values": [
-        "terapia",
-        "avaliacao",
-        "devolutiva",
-        "reuniao_pais",
-        "outro"
-      ]
+      "values": ["terapia", "avaliacao", "devolutiva", "reuniao_pais", "outro"]
     },
     "public.subscription_status": {
       "name": "subscription_status",
       "schema": "public",
-      "values": [
-        "free_tier",
-        "setup_pending",
-        "active",
-        "past_due",
-        "canceled"
-      ]
+      "values": ["free_tier", "setup_pending", "active", "past_due", "canceled"]
     },
     "public.user_role_tipo": {
       "name": "user_role_tipo",
       "schema": "public",
-      "values": [
-        "terapeuta",
-        "coordenador",
-        "admin_recepcao"
-      ]
+      "values": ["terapeuta", "coordenador", "admin_recepcao"]
     }
   },
   "schemas": {},

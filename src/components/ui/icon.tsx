@@ -313,3 +313,42 @@ export const LockIcon = ({ size = "1em", className, ...props }: IconProps) => (
     />
   </svg>
 );
+
+export const InfoIcon = ({ size = "1em", className, ...props }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    className={className}
+    {...props}
+  >
+    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.8" />
+    <circle cx="8" cy="5.2" r="0.9" fill="currentColor" />
+    <path
+      d="M8 7.5v4"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+export const MoreHorizontalIcon = ({
+  size = "1em",
+  className,
+  ...props
+}: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    className={className}
+    {...props}
+  >
+    <circle cx="3.2" cy="8" r="1.4" fill="currentColor" />
+    <circle cx="8" cy="8" r="1.4" fill="currentColor" />
+    <circle cx="12.8" cy="8" r="1.4" fill="currentColor" />
+  </svg>
+);

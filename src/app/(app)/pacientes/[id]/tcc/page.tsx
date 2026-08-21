@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getTenantContext } from "@/auth/tenant";
@@ -13,7 +14,6 @@ import { RpdForm } from "./rpd-form";
 import { RpdSugestoes } from "./rpd-sugestoes";
 import { InstrumentoLista } from "./instrumento-lista";
 import { InstrumentoForm } from "./instrumento-form";
-import { GraficoEvolucaoCrencas } from "./grafico-evolucao-crencas";
 import { rotuloDistorcao } from "./constants";
 import { Pill } from "@/components/ui/primitives/pill";
 
@@ -65,18 +65,27 @@ export default async function TccPage({ params }: TccPageProps) {
           </Pill>
         </div>
         <p className="font-body text-sm text-[var(--text-secondary)]">
-          Instrumentos estruturados, Registro de Pensamentos Distorcidos (RPD) e
-          acompanhamento gráfico de reestruturação cognitiva.
+          Instrumentos estruturados e Registro de Pensamentos Distorcidos (RPD).
         </p>
       </div>
 
-      {/* Gráfico de Evolução de Crenças */}
-      <GraficoEvolucaoCrencas
-        entries={entries.map((e) => ({
-          ...e,
-          distorcoesCognitivas: e.distorcoesCognitivas as string[] | null,
-        }))}
-      />
+      {/* O gráfico de crenças morava aqui, encostado no formulário de RPD:
+          leitura misturada com registro. Ele foi para a aba Evolução, que
+          passou a ser a leitura de evolução DESTE paciente em vez do hexágono
+          de eixos VB-MAPP que ele nunca teve. Esta aba fica sendo só o
+          registro — e o ponteiro existe para quem já sabia onde o gráfico
+          estava não achar que ele sumiu. */}
+      <p className="font-body text-sm text-[var(--text-secondary)]">
+        O acompanhamento gráfico da reestruturação de crenças e dos escores de
+        PHQ-9 e GAD-7 fica na aba{" "}
+        <Link
+          href={`/pacientes/${patientId}`}
+          className="font-semibold text-[var(--text-primary)] underline underline-offset-4"
+        >
+          Evolução
+        </Link>
+        . Esta aba é o registro.
+      </p>
 
       {/* #392 — fila de sugestões de RPD do agente, acima do formulário
           manual (aprovar/editar/descartar antes de registrar um novo). */}

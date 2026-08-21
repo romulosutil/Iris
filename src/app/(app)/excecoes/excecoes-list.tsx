@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Stack, Split, Cluster } from "@/components/ui/layout";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ReviewClinicalIllustration } from "@/components/ui/illustrations";
 import { cn } from "@/lib/cn";
 import type {
   ExtracaoFalha,
@@ -98,10 +100,12 @@ export function ExcecoesList({
 }: ListaExcecoes) {
   if (total === 0) {
     return (
-      <p className="rounded-[var(--radius-control)] border-2 border-dashed border-[var(--border-brutal)] bg-[var(--surface-card)] p-6 text-[var(--text-primary)]">
-        Nenhuma exceção — nenhuma extração falha nem revisão represada na
-        clínica.
-      </p>
+      <EmptyState
+        illustration={<ReviewClinicalIllustration size={100} />}
+        title="Nenhuma exceção clínica pendente no momento."
+        description="Todos os fluxos clínicos e revisões estão em dia na clínica."
+        variant="celebration"
+      />
     );
   }
 

@@ -9,6 +9,7 @@ export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
   secondaryAction?: React.ReactNode;
   badge?: React.ReactNode;
   variant?: "default" | "celebration" | "compact";
+  borderless?: boolean;
 }
 
 /**
@@ -23,6 +24,7 @@ export function EmptyState({
   secondaryAction,
   badge,
   variant = "default",
+  borderless = false,
   className,
   ...props
 }: EmptyStateProps) {
@@ -34,9 +36,15 @@ export function EmptyState({
       role="region"
       aria-label={title}
       className={cn(
-        "border-border-brutal bg-surface-card text-text-primary flex flex-col items-center justify-center rounded-[var(--radius-control)] border-2 text-center shadow-[var(--ds-shadow)]",
-        isCompact ? "gap-3 p-4 sm:p-6" : "gap-4 p-6 sm:p-10",
-        isCelebration && "border-accent-mint bg-status-success-bg/15",
+        "flex flex-col items-center justify-center text-center text-[var(--text-primary)]",
+        borderless
+          ? "border-0 bg-transparent shadow-none"
+          : cn(
+              "rounded-[var(--radius-lg)] border border-[var(--border-neutral-light)]/40 bg-[var(--surface-card)]",
+              isCelebration &&
+                "border-[var(--status-success-border)]/30 bg-[var(--status-success-bg)]/25",
+            ),
+        isCompact ? "gap-3 p-4 sm:p-6" : "gap-4 px-6 py-10 sm:px-10 sm:py-14",
         className,
       )}
       {...props}

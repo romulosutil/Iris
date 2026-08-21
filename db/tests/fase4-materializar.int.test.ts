@@ -652,5 +652,74 @@ describe.skipIf(!hasDb)(
         }
       });
     });
+
+    test("paciente com marco 0 materializa a sessão 1 normalmente (ANAM-13 / T24)", async () => {
+      const pacComMarcoZero = "00000000-0000-0000-0000-0000000000d9";
+      await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${pacComMarcoZero}, ${CLINIC_A}, 'Paciente Marco Zero Mat')`;
+      await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe)
+        VALUES (${pacComMarcoZero}, ${U_T1_A}, 'ABA', 'terapeuta_referencia')`;
+      await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por)
+        VALUES (${pacComMarcoZero}, ${PROTOCOL_ID}, ${U_COORD_A})`;
+
+      const [goalMz] =
+        await owner`INSERT INTO goal (patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+      VALUES (${pacComMarcoZero}, ${CLINIC_A}, 'Meta de Anamnese', 'ativa',
+        ${owner.json({ tipo: "sessoes_consecutivas_independente", valor: 2 })}, ${U_COORD_A})
+      RETURNING id`;
+      const goalMzId = goalMz!.id as string;
+
+      await owner`INSERT INTO goal_milestone_mapping (goal_id, milestone_id)
+        VALUES (${goalMzId}, ${MARCO_SIMPLES_ID})`;
+
+      // Snapshot 0 (Anamnese)
+      await owner`INSERT INTO session_snapshot (patient_id, session_numero, repertorio_state, segmentacao) VALUES
+        (${pacComMarcoZero}, 0,
+          ${owner.json({ [MARCO_SIMPLES_ID]: { nivel_ajuda_recente: 3, contagem: 0, is_candidata: false, origem: "anamnese", procedencia: "relatado_responsavel" } })},
+          ${owner.json({ [goalMzId]: { [PROTOCOL_ID]: { tipo_estrutura: "marco_simples", metrica: { eixo: "nivel_ajuda", ordinalRecente: 3 }, rotulo: "estavel" } } })}
+        )`;
+
+      // Sessão 1
+      const sessMzId = crypto.randomUUID();
+      await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina)
+        VALUES (${sessMzId}, ${CLINIC_A}, ${pacComMarcoZero}, ${U_T1_A}, now(), 'realizada', 1, 'aba')`;
+
+      const [extMz] = await owner`INSERT INTO extraction
+        (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload, revisado_por)
+        VALUES (${sessMzId}, ${CLINIC_A}, 'aprovada', 'evidencia', 'trecho mz', 'alta',
+          ${owner.json({ evidencia: { alvos: [{ goal_id: goalMzId }] } })}, ${U_T1_A})
+        RETURNING id`;
+
+      await owner`INSERT INTO evidence
+        (extraction_id, patient_id, session_id, session_numero, alvo_ordinal,
+         protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
+        VALUES (${extMz!.id}, ${pacComMarcoZero}, ${sessMzId}, 1, 0,
+          ${PROTOCOL_ID}, ${goalMzId}, ${MARCO_SIMPLES_ID},
+          ${owner.json({ nivel_ajuda: "dica_gestual", polaridade: "positiva", alvo: { goal_id: goalMzId } })}, ${U_T1_A})`;
+
+      // Materializar Sessão 1
+      await withTenant(ctxCoordA, (tx) =>
+        materializarSnapshot(
+          drizzleMaterializarQueries(tx),
+          pacComMarcoZero,
+          1,
+        ),
+      );
+
+      // Snapshot 0 permanece intacto
+      const [snap0] = await owner`
+        SELECT repertorio_state, segmentacao FROM session_snapshot
+        WHERE patient_id = ${pacComMarcoZero} AND session_numero = 0
+      `;
+      expect(snap0).toBeTruthy();
+      expect(snap0!.repertorio_state[MARCO_SIMPLES_ID].origem).toBe("anamnese");
+
+      // Snapshot 1 materializado com sucesso
+      const [snap1] = await owner`
+        SELECT repertorio_state, segmentacao FROM session_snapshot
+        WHERE patient_id = ${pacComMarcoZero} AND session_numero = 1
+      `;
+      expect(snap1).toBeTruthy();
+      expect(snap1!.segmentacao[goalMzId][PROTOCOL_ID].rotulo).toBe("evolucao");
+    });
   },
 );

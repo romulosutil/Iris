@@ -25,6 +25,7 @@ Esta escolha é julgamento de engenharia — a issue não é explícita sobre se
 Hoje `registrarAlertaRiscoInstrumento` (#391) usa severidade fixa (`ideacao_ativa_sem_plano`) para qualquer `item_risco_positivo` truthy. `protocolo-tcc.md §7.3` pede diferenciação pelo VALOR 0-3 do item, não só o booleano. Como o schema Zod atual (`item_risco_positivo: boolean | null`) não carrega o valor 0-3 — só o booleano derivado — **esta issue precisa decidir se expande o schema para carregar o valor bruto do item 9** (`item_9_valor: number | null`, 0-3) ou se mantém só o booleano e aceita a severidade fixa como suficiente por ora.
 
 Proposta (grau de confiança médio, não é fato coberto pela issue): adicionar `item_9_valor: z.number().int().min(0).max(3).nullable().optional()` ao `aplicacaoEscalaRelatadaSchema`, mapear:
+
 - `0`: não dispara (mantém regra atual, `item_risco_positivo` deveria ser `false`/consistente).
 - `1`: severidade mínima sugerida `ideacao_passiva`.
 - `2`: `ideacao_ativa_sem_plano`.

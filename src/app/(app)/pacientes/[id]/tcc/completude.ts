@@ -17,9 +17,7 @@ export interface RPDParaCompletude {
  * pensamento alternativo (`respostaRacional`) E intensidade reavaliada.
  * Distorção cognitiva NUNCA entra neste cálculo — é opcional por design.
  */
-export function calcularCompletudeRPD(
-  entry: RPDParaCompletude,
-): CompletudeRPD {
+export function calcularCompletudeRPD(entry: RPDParaCompletude): CompletudeRPD {
   const temEvidencia = Boolean(
     entry.evidenciasFavor?.trim() || entry.evidenciasContra?.trim(),
   );

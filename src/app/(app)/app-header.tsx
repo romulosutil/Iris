@@ -3,12 +3,17 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Header, type NavItem as HeaderNavItem } from "@/components/ui/header";
+import {
+  Header,
+  type NavBadgeTom,
+  type NavItem as HeaderNavItem,
+} from "@/components/ui/header";
 
 export interface NavItem {
   href: string;
   label: string;
   badge?: number;
+  badgeTom?: NavBadgeTom;
 }
 
 export interface AppHeaderProps {

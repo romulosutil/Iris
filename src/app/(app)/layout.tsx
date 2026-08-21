@@ -45,6 +45,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         href: "/validacao",
         label: "Central de Validação",
         badge: totalPendencias,
+        // Fila alimentada pela extração da IA: violeta é o tom de "candidato
+        // pendente de olhar clínico". Vermelho fica reservado a alerta de risco.
+        badgeTom: "ia",
       },
       { href: "/agenda", label: "Agenda" },
       { href: "/pacientes", label: "Pacientes" },
@@ -57,7 +60,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     itemsNav = [
       { href: "/agenda", label: "Agenda do Dia" },
       { href: "/pacientes", label: "Pacientes & PEIs" },
-      { href: "/pendencias", label: "Pendências", badge: totalPendencias },
+      {
+        href: "/pendencias",
+        label: "Pendências",
+        badge: totalPendencias,
+        badgeTom: "ia",
+      },
       { href: "/relatorios", label: "Relatórios" },
       { href: "/duvidas", label: "Dúvidas" },
     ];

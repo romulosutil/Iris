@@ -51,6 +51,7 @@ T4, T5, T3 → T6
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] `prompt.test.ts` cobre explicitamente que `TCC_SYSTEM_PROMPT` menciona `registro_pensamento`
 - [ ] `pnpm typecheck` limpo
 - [ ] `pnpm test src/lib/extraction/prompt.test.ts` verde
@@ -71,6 +72,7 @@ T4, T5, T3 → T6
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] `pnpm db:generate` não gera diff extra além do esperado (colunas de `tcc_rpd_entry` via Drizzle; CHECK via SQL manual, fora do `db:generate`)
 - [ ] Migração aplicada localmente, verificada via `information_schema.columns` (`tcc_rpd_entry.origem_extraction_id`, `origem_agente`) e `pg_constraint` (novo texto do CHECK `alerta_risco_vinculo`)
 - [ ] `registrarAlertaRiscoRPDSugerido` nunca lança (try/catch interno, retorno tipado igual `registrarAlertaRiscoInstrumento`)
@@ -94,6 +96,7 @@ T4, T5, T3 → T6
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] Sugestão sem sinal de risco: nenhuma linha nova em `alerta_risco_clinico`
 - [ ] Sugestão com ideação/autolesão: linha criada com `origem='registro_pensamento'`, `origem_extraction_id` preenchido, `rpd_entry_id` NULL
 - [ ] Falha na detecção/registro não derruba a persistência da extração (try/catch por item)
@@ -118,6 +121,7 @@ T4, T5, T3 → T6
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] `obterRPDSugestoes` retorna só `subtipo='registro_pensamento' AND estado='sugerida'` do paciente, isolado por clínica (herda `extraction_select`, confirmado por teste RLS cross-tenant)
 - [ ] `aprovarRPDSugestao` grava `tcc_rpd_entry` com `origem_extraction_id` + `origem_agente=true`, transiciona `extraction.estado→'aprovada'` na mesma transação, roda detecção de risco normal sobre os campos finais (pode gerar 2º alerta distinto, sem dedupe)
 - [ ] Aprovação concorrente da mesma sugestão: segunda tentativa recebe erro de concorrência, sem duplicar linha
@@ -139,6 +143,7 @@ T4, T5, T3 → T6
 **Tools**: MCP: NONE. Skill: `frontend-design` (se precisar de ajuste visual não trivial) — opcional.
 
 **Done when**:
+
 - [ ] Lista renderiza sugestões pendentes com trecho/preview
 - [ ] "Aprovar" abre form pré-preenchido, campos obrigatórios ausentes ficam em branco (não inventa valor)
 - [ ] "Descartar" é ação de um clique, sem modal bloqueante
@@ -160,6 +165,7 @@ T4, T5, T3 → T6
 **Tools**: MCP: NONE. Skill: NONE.
 
 **Done when**:
+
 - [ ] Todos os itens do checklist "Invariantes" de `spec.md` marcados/verificados
 - [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm test:rls` verdes, sem nenhuma string "SLA" nova
 - [ ] Contagem de testes reportada (sem deleção silenciosa)
@@ -193,27 +199,27 @@ Phase 4 (Sequencial, fecha tudo):
 
 ## Diagram-Definition Cross-Check
 
-| Task | Depends On (task body) | Diagram Shows | Status |
-| --- | --- | --- | --- |
-| T1 | None | — | ✅ Match |
-| T2 | T1 | T1 → T2 | ✅ Match |
-| T3 | T1 | T1 → T3 | ✅ Match |
-| T4 | T2 | T2 → T4 | ✅ Match |
-| T5 | T2 | T2 → T5 | ✅ Match |
-| T6 | T4, T5, T3 | T3, T4, T5 → T6 | ✅ Match |
+| Task | Depends On (task body) | Diagram Shows   | Status   |
+| ---- | ---------------------- | --------------- | -------- |
+| T1   | None                   | —               | ✅ Match |
+| T2   | T1                     | T1 → T2         | ✅ Match |
+| T3   | T1                     | T1 → T3         | ✅ Match |
+| T4   | T2                     | T2 → T4         | ✅ Match |
+| T5   | T2                     | T2 → T5         | ✅ Match |
+| T6   | T4, T5, T3             | T3, T4, T5 → T6 | ✅ Match |
 
 ---
 
 ## Test Co-location Validation
 
-| Task | Code Layer Created/Modified | Requer teste | Task diz | Status |
-| --- | --- | --- | --- | --- |
-| T1: prompt | prompt.ts (agente) | unit | unit | ✅ OK |
-| T2: migração + registrar.ts | schema/definer (banco) | integration (adiado p/ T6, mas build/apply verificado aqui) | build (apply verificado) + integration em T6 | ✅ OK — schema não é testável isoladamente sem os caminhos de escrita de T3/T4, que os consomem |
-| T3: fase de risco | logic.ts (server action) | integration | integration | ✅ OK |
-| T4: sugestoes.ts | server actions | integration | integration | ✅ OK |
-| T5: UI | componente React | unit | unit | ✅ OK |
-| T6: fechamento | testes cross-cutting | integration | integration | ✅ OK |
+| Task                        | Code Layer Created/Modified | Requer teste                                                | Task diz                                     | Status                                                                                          |
+| --------------------------- | --------------------------- | ----------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| T1: prompt                  | prompt.ts (agente)          | unit                                                        | unit                                         | ✅ OK                                                                                           |
+| T2: migração + registrar.ts | schema/definer (banco)      | integration (adiado p/ T6, mas build/apply verificado aqui) | build (apply verificado) + integration em T6 | ✅ OK — schema não é testável isoladamente sem os caminhos de escrita de T3/T4, que os consomem |
+| T3: fase de risco           | logic.ts (server action)    | integration                                                 | integration                                  | ✅ OK                                                                                           |
+| T4: sugestoes.ts            | server actions              | integration                                                 | integration                                  | ✅ OK                                                                                           |
+| T5: UI                      | componente React            | unit                                                        | unit                                         | ✅ OK                                                                                           |
+| T6: fechamento              | testes cross-cutting        | integration                                                 | integration                                  | ✅ OK                                                                                           |
 
 Nenhuma violação — T2 não é "testado em outra task" por deferral preguiçoso: schema puro não tem comportamento próprio pra testar até que T3/T4 escrevam através dele, e T6 fecha a cobertura de invariantes que dependem de todas as peças montadas (RLS cross-tenant do caminho novo).
 

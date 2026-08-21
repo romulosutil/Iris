@@ -61,6 +61,16 @@ const POLICIES_COM_HELPER = [
   "agendamento_recorrente.agendamento_recorrente_select",
   "agendamento_recorrente.agendamento_recorrente_update",
   "alerta_risco_clinico.alerta_risco_scope",
+  // #407/T03 — marco 0 da anamnese. UPDATE/DELETE exigem estado='rascunho'
+  // (D-F, append-only), divergência deliberada do predicado canônico.
+  "anamnese.anamnese_delete",
+  "anamnese.anamnese_insert",
+  "anamnese.anamnese_select",
+  "anamnese.anamnese_update",
+  "anamnese_alvo.anamnese_alvo_delete",
+  "anamnese_alvo.anamnese_alvo_insert",
+  "anamnese_alvo.anamnese_alvo_select",
+  "anamnese_alvo.anamnese_alvo_update",
   "app_user.app_user_read",
   "audio_capture.audio_insert",
   "audio_capture.audio_select",
@@ -259,6 +269,8 @@ async function comoDono(tx: postgres.TransactionSql) {
  */
 const FUNCOES_COM_HELPER = [
   "app_alerta_risco_visivel",
+  // #407/T03 — guard interno da RLS de anamnese_alvo (INSERT/UPDATE/DELETE).
+  "app_anamnese_em_rascunho",
   "app_cpf_hash_usado_em_outro_trial",
   "app_criar_alerta_risco",
   "app_desarquivar_paciente",
@@ -276,6 +288,9 @@ const FUNCOES_COM_HELPER = [
   "app_session_clinica_visivel",
   "app_session_terapeuta_id",
   "app_user_in_clinic",
+  // #407/T05 — definer de validação da anamnese: resolve tenant por
+  // `app_clinic_id_exigido()` (guard de isolamento, nunca current_setting cru).
+  "app_validar_anamnese",
 ];
 
 /**
@@ -295,10 +310,12 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
   // #262 (0095) — exige papel coordenador para editar dados da clínica.
   "app_salvar_dados_clinica",
   "app_session_clinica_visivel",
+  // #407/T05 — guard de papel estritamente coordenador (D-B).
+  "app_validar_anamnese",
 ];
 
 /**
- * As 6 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393).
+ * As 7 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
@@ -307,6 +324,8 @@ const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_purgar_paciente",
   "app_purgar_report",
   "app_session_clinica_visivel",
+  // #407/T05 — `validada_por = app_user_id_exigido()` na transição de estado.
+  "app_validar_anamnese",
 ];
 
 /**
@@ -356,7 +375,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Redundante de propósito: se o literal for editado por engano (linha
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
-    expect(POLICIES_COM_HELPER.length).toBe(56);
+    expect(POLICIES_COM_HELPER.length).toBe(64);
   });
 
   // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────
@@ -437,7 +456,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(16);
+    expect(FUNCOES_COM_HELPER.length).toBe(18);
   });
 
   // ─── 2c. D23: guards de papel e identidade (0093) ──────────────────────────
@@ -480,7 +499,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ROLE_HELPER);
-    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(12);
+    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(13);
   });
 
   test("as 6 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
@@ -495,7 +514,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(
       FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
     );
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(6);
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(7);
   });
 
   test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {

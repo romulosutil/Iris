@@ -16,9 +16,7 @@ import {
 
 type TipoConsentimento = "responsavel_legal" | "titular_adulto";
 type ClinicalModality =
-  | "protocol_driven"
-  | "cognitive_behavioral"
-  | "conventional";
+  "protocol_driven" | "cognitive_behavioral" | "conventional";
 
 /**
  * Idade em anos completos na data de hoje. Só serve para o AVISO
@@ -219,11 +217,7 @@ export function NovoPacienteForm() {
         ) : null}
         {/* Valor lido pela action. Vazio até o operador escolher — a action
             devolve erro em pt-BR nesse caso, sem default silencioso. */}
-        <input
-          type="hidden"
-          name="clinicalModality"
-          value={clinicalModality}
-        />
+        <input type="hidden" name="clinicalModality" value={clinicalModality} />
       </fieldset>
 
       {/* Consentimento LGPD. A escolha de quem assina é explícita — nunca
@@ -383,9 +377,9 @@ export function NovoPacienteForm() {
           para um envio que já se sabe recusado. */}
       {bloqueioGateConsentimento ? (
         <Alert severidade="erro" titulo="Não é possível salvar assim">
-          Paciente adulto em TCC ou terapia convencional exige consentimento
-          do próprio titular. Ajuste &quot;Quem assina o consentimento?&quot;
-          para o próprio paciente antes de salvar.
+          Paciente adulto em TCC ou terapia convencional exige consentimento do
+          próprio titular. Ajuste &quot;Quem assina o consentimento?&quot; para
+          o próprio paciente antes de salvar.
         </Alert>
       ) : null}
 

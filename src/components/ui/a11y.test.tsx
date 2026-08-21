@@ -20,6 +20,7 @@ import { Banner } from "./banner";
 import { InteractiveCard } from "./interactive-card";
 import { Indicator } from "./indicator";
 import { Alert } from "./alert";
+import { Header } from "./header";
 import { Logo } from "./logo";
 import { Input } from "./input";
 import { Field } from "./field";
@@ -376,6 +377,18 @@ test("Tabs — sem violações axe", async () => {
   );
 });
 
+test("Header — sem violações axe", async () => {
+  await semViolacoes(
+    <Header
+      clinicaAtivaNome="Clínica Iris"
+      itemsNav={[
+        { href: "#agenda", label: "Agenda", active: true },
+        { href: "#pendencias", label: "Pendências", badge: 3 },
+      ]}
+    />,
+  );
+});
+
 test("Dialog aberto — sem violações axe", async () => {
   // Conteúdo do Dialog é portaled para document.body; roda o axe nele.
   render(
@@ -442,6 +455,20 @@ test("Banner — sem violações axe", async () => {
   await semViolacoes(
     <Banner variant="info" titulo="Aviso importante">
       Mensagem de aviso institucional.
+    </Banner>,
+  );
+});
+
+test("Banner compacto dispensável — sem violações axe", async () => {
+  await semViolacoes(
+    <Banner
+      variant="info"
+      formato="compacto"
+      dismissible
+      titulo="Período de Teste"
+      acao={<a href="#pacientes-novo">Cadastrar paciente</a>}
+    >
+      Seus 7 dias de teste começam quando você cadastrar o primeiro paciente.
     </Banner>,
   );
 });

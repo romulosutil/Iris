@@ -44,3 +44,54 @@ export const FamiliaDeProtocolo: Story = {
     },
   },
 };
+
+/**
+ * Mesmo contrato de densidade do Input. O Radix marca `data-placeholder`
+ * enquanto nada foi escolhido — esse é o repouso que recua para o grafite no
+ * desktop. Escolha feita, foco ou lista aberta devolvem a borda cheia com a
+ * sombra dura. Abaixo de `md`, borda de 2px e piso tátil intactos.
+ */
+export const DensidadeDesktop: Story = {
+  render: () => (
+    <div className="flex w-72 flex-col gap-4">
+      <Field label="Sem escolha (repouso)" htmlFor="densidade-vazio">
+        <Select>
+          <SelectTrigger id="densidade-vazio">
+            <SelectValue placeholder="Selecione…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="aba">ABA</SelectItem>
+            <SelectItem value="denver">Modelo Denver</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Com escolha" htmlFor="densidade-preenchido">
+        <Select defaultValue="aba">
+          <SelectTrigger id="densidade-preenchido">
+            <SelectValue placeholder="Selecione…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="aba">ABA</SelectItem>
+            <SelectItem value="denver">Modelo Denver</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field
+        label="Erro"
+        htmlFor="densidade-erro"
+        error="Escolha a família do protocolo."
+      >
+        <Select>
+          <SelectTrigger id="densidade-erro" aria-invalid>
+            <SelectValue placeholder="Selecione…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="aba">ABA</SelectItem>
+            <SelectItem value="denver">Modelo Denver</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+    </div>
+  ),
+  parameters: { controls: { disable: true } },
+};

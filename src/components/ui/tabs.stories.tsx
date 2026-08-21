@@ -29,7 +29,32 @@ export const PainelDoCoordenador: Story = {
     docs: {
       description: {
         story:
-          "Aba ativa: acento ouro + borda inferior sólida (sinal estrutural além da cor).",
+          "Aba ativa: acento ouro discreto (underline de 3px) + superfície neutra elevada e texto em alto contraste.",
+      },
+    },
+  },
+};
+
+export const MultiplasAbas: Story = {
+  render: () => (
+    <Tabs defaultValue="aba1" className="max-w-2xl">
+      <TabsList>
+        <TabsTrigger value="aba1">Visão Geral</TabsTrigger>
+        <TabsTrigger value="aba2">PEI & Metas</TabsTrigger>
+        <TabsTrigger value="aba3">Comportamento</TabsTrigger>
+        <TabsTrigger value="aba4">Relatórios</TabsTrigger>
+      </TabsList>
+      <TabsContent value="aba1">Conteúdo da Visão Geral.</TabsContent>
+      <TabsContent value="aba2">Conteúdo do PEI & Metas.</TabsContent>
+      <TabsContent value="aba3">Conteúdo de Comportamento.</TabsContent>
+      <TabsContent value="aba4">Conteúdo dos Relatórios.</TabsContent>
+    </Tabs>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Exemplo com múltiplas abas demonstrando consistência visual e ausência de layout shift ao alternar abas ativas.",
       },
     },
   },
