@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { getTenantContext } from "@/auth/tenant";
@@ -114,6 +115,18 @@ export default async function MetasPage({
         }
         title={`Metas · ${pacienteRow[0].nome}`}
         description="Metas individualizadas (PEI) e seu critério de domínio."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variante="secundaria" tamanho="sm" asChild>
+              <Link href={`/pacientes/${id}/pei`}>Visão do PEI</Link>
+            </Button>
+            <Button variante="secundaria" tamanho="sm" asChild>
+              <Link href={`/pacientes/${id}/protocolos`}>
+                Progresso dos Protocolos
+              </Link>
+            </Button>
+          </div>
+        }
       />
 
       {revisaoVencida.length > 0 ? (

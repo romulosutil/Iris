@@ -1972,3 +1972,19 @@ sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o se
 
 ---
 
+## 📅 Sessão 21/08/2026 — Navegação: Sub-navegação de Clínica e Atalhos de Dashboards PEI/Protocolos
+
+- **Status:** ✅ Concluído.
+- **Objetivo:** Resolver rotas desconectadas e órfãs no módulo de Clínica e nos Dashboards de Protocolos e PEI.
+- **Entregas principais:**
+  - `src/app/(app)/clinica/layout.tsx` e `page.tsx`: Layout com `TabsNav` unificado para `/clinica/dados`, `/clinica/feriados` e `/clinica/emergencia`, além de redirect automático na raiz `/clinica`.
+  - `src/app/(app)/clinica/layout.test.tsx`: Testes de layout e autorização por papel coordenador.
+  - `src/app/(app)/pacientes/[id]/metas/page.tsx`: Ações no `PageHeader` com links para "Visão do PEI" (`/pacientes/[id]/pei`) e "Progresso dos Protocolos" (`/pacientes/[id]/protocolos`).
+  - `src/app/(app)/pacientes/[id]/cadastro-clinico/protocolos-secao.tsx`: Botão de acesso ao dashboard de protocolos ativos.
+- **Validação:**
+  - `pnpm typecheck`: 0 erros.
+  - `pnpm lint`: 0 erros (9 warnings pré-existentes).
+  - `pnpm test`: 240/240 arquivos passando (1.706 testes).
+
+---
+
