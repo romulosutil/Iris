@@ -1,10 +1,18 @@
 import "server-only";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { anamnese, anamneseAlvo } from "@/db/schema";
+import {
+  anamnese,
+  anamneseAlvo,
+  goal,
+  goalMilestoneMapping,
+  milestone,
+} from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
-import { salvarRascunhoSchema } from "./schemas";
+import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
+import { salvarRascunhoSchema, validarAnamneseSchema } from "./schemas";
 
 /**
  * #407 T09 — persistência de rascunho de anamnese (ANAM-02/ANAM-10).
@@ -62,3 +70,147 @@ async function salvarRascunhoAnamneseCore(
 }
 
 export const salvarRascunhoAnamnese = comEscrita(salvarRascunhoAnamneseCore);
+
+/**
+ * Mesma âncora UTC de `proximaRevisaoISO` em `../metas/logic.ts` — não
+ * exportada de lá (módulo separado), então repetida aqui em vez de importada
+ * entre arquivos de domínio distintos.
+ */
+function proximaRevisaoISO(semanas: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + semanas * 7);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * #407 T10 — publica uma anamnese em rascunho: cria uma `goal` por alvo (já
+ * `ativa`, nunca `rascunho` — `contaComoAlvo` exclui rascunho e deixaria o
+ * hexágono nulo), monta `repertorio_state`/`segmentacao` e chama o definer
+ * `app_validar_anamnese` (T05), que grava o snapshot 0 e marca a anamnese
+ * como validada. Os gates de negócio (modalidade, protocolo/taxonomia,
+ * consentimento) vivem no definer e em T11-T13 — aqui é só a mecânica de
+ * publicação. Um único `withTenant`: se o definer der RAISE, os INSERTs de
+ * `goal` e o desarquivamento revertem junto.
+ */
+async function validarAnamneseCore(
+  ctx: TenantContext,
+  input: z.input<typeof validarAnamneseSchema>,
+): Promise<AnamneseState & { id?: string }> {
+  requireRole(ctx, "coordenador");
+  const parsed = validarAnamneseSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]!.message };
+  const { anamneseId } = parsed.data;
+  try {
+    return await withTenant(ctx, async (tx) => {
+      const [anamneseRow] = await tx
+        .select({ id: anamnese.id, patientId: anamnese.patientId })
+        .from(anamnese)
+        .where(
+          and(eq(anamnese.id, anamneseId), eq(anamnese.estado, "rascunho")),
+        );
+      if (!anamneseRow) {
+        return { error: "Anamnese não encontrada ou já validada." };
+      }
+
+      const alvos = await tx
+        .select()
+        .from(anamneseAlvo)
+        .where(eq(anamneseAlvo.anamneseId, anamneseId));
+
+      const repertorio: Record<
+        string,
+        {
+          nivel_ajuda_recente: number | null;
+          contagem: number;
+          is_candidata: boolean;
+          origem: "anamnese";
+          procedencia: string;
+        }
+      > = {};
+      const segmentacao: Record<
+        string,
+        Record<
+          string,
+          { tipo_estrutura: string; metrica: "nivel_ajuda"; rotulo: string }
+        >
+      > = {};
+
+      for (const alvo of alvos) {
+        const [goalRow] = await tx
+          .insert(goal)
+          .values({
+            patientId: anamneseRow.patientId,
+            clinicId: ctx.clinicId,
+            descricao: alvo.descricao,
+            disciplina: alvo.disciplina,
+            estado: "ativa",
+            criterioDominio: {
+              tipo: "n_acertos_m_sessoes",
+              n: alvo.criterioN,
+              m: alvo.criterioM,
+            },
+            cicloRevisaoSemanas: alvo.cicloRevisaoSemanas,
+            proximaRevisaoEm: proximaRevisaoISO(alvo.cicloRevisaoSemanas),
+            criadoPor: ctx.userId,
+          })
+          .returning({ id: goal.id });
+        const goalId = goalRow!.id;
+
+        if (alvo.milestoneId) {
+          await tx
+            .insert(goalMilestoneMapping)
+            .values({ goalId, milestoneId: alvo.milestoneId });
+
+          const [marco] = await tx
+            .select({
+              tipoEstrutura: milestone.tipoEstrutura,
+              nome: milestone.nome,
+              protocolId: milestone.protocolId,
+            })
+            .from(milestone)
+            .where(eq(milestone.id, alvo.milestoneId));
+          if (marco) {
+            segmentacao[goalId] = {
+              [marco.protocolId]: {
+                tipo_estrutura: marco.tipoEstrutura,
+                metrica: "nivel_ajuda",
+                rotulo: marco.nome,
+              },
+            };
+          }
+        }
+
+        await tx
+          .update(anamneseAlvo)
+          .set({ goalId })
+          .where(eq(anamneseAlvo.id, alvo.id));
+
+        repertorio[goalId] = {
+          nivel_ajuda_recente: alvo.nivelAjudaInicial ?? null,
+          contagem: 0,
+          is_candidata: false,
+          origem: "anamnese",
+          procedencia: alvo.procedencia,
+        };
+      }
+
+      await desarquivarPacienteSeArquivado(
+        tx,
+        ctx,
+        anamneseRow.patientId,
+        "validacao_anamnese",
+      );
+
+      await tx.execute(
+        sql`SELECT app_validar_anamnese(${anamneseId}::uuid, ${JSON.stringify(repertorio)}::jsonb, ${JSON.stringify(segmentacao)}::jsonb)`,
+      );
+
+      return { id: anamneseId };
+    });
+  } catch (err) {
+    console.error("validarAnamnese:", err);
+    return { error: "Não foi possível validar a anamnese." };
+  }
+}
+
+export const validarAnamnese = comEscrita(validarAnamneseCore);
