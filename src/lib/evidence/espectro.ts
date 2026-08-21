@@ -98,6 +98,8 @@ export interface EstadoRepertorio {
   nivel_ajuda_recente?: number | null;
   contagem?: number;
   is_candidata?: boolean;
+  origem?: string;
+  procedencia?: string;
 }
 
 export interface ResultadoEspectro {

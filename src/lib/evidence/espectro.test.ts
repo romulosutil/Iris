@@ -217,4 +217,54 @@ describe("computarDadosEspectro", () => {
       100,
     );
   });
+
+  test("metadados de origem e procedência não afetam o cálculo (mesmo resultado que sem eles)", () => {
+    const alvos = [
+      alvo({ goalId: "g1", dominioId: "mando" }),
+      alvo({ goalId: "g2", dominioId: "tato" }),
+    ];
+    const semMetadados = computarDadosEspectro(
+      {
+        g1: { nivel_ajuda_recente: 0, contagem: 3 },
+        g2: { nivel_ajuda_recente: 4, contagem: 2 },
+      },
+      alvos,
+    );
+    const comMetadados = computarDadosEspectro(
+      {
+        g1: {
+          nivel_ajuda_recente: 0,
+          contagem: 3,
+          origem: "anamnese",
+          procedencia: "relatado_responsavel",
+        },
+        g2: {
+          nivel_ajuda_recente: 4,
+          contagem: 2,
+          origem: "anamnese",
+          procedencia: "observado_avaliador",
+        },
+      },
+      alvos,
+    );
+    expect(comMetadados).toEqual(semMetadados);
+  });
+
+  test("alvo com nivel_ajuda_recente: null produz eixo com valor: null, alvos: 1, medidos: 0 (nunca 0)", () => {
+    const { eixos } = computarDadosEspectro(
+      {
+        g1: {
+          nivel_ajuda_recente: null,
+          contagem: 0,
+          origem: "anamnese",
+          procedencia: "relatado_responsavel",
+        },
+      },
+      [alvo({ goalId: "g1", dominioId: "mando" })],
+    );
+    const expressiva = eixos.find((e) => e.eixo === "comunicacao_expressiva")!;
+    expect(expressiva.valor).toBeNull();
+    expect(expressiva.alvos).toBe(1);
+    expect(expressiva.medidos).toBe(0);
+  });
 });
