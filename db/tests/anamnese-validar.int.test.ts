@@ -21,6 +21,10 @@ const U_COORD_A = "00000000-0000-0000-0000-00000000109a";
 const PAC_VALIDAR = "00000000-0000-0000-0000-000000010a01";
 const PAC_ROLLBACK = "00000000-0000-0000-0000-000000010a02";
 const PAC_MILESTONE = "00000000-0000-0000-0000-000000010a03";
+// T11 — gate de modalidade
+const PAC_PROTOCOL_DRIVEN = "00000000-0000-0000-0000-000000010a11";
+const PAC_COGNITIVE_BEHAVIORAL = "00000000-0000-0000-0000-000000010a12";
+const PAC_CONVENTIONAL = "00000000-0000-0000-0000-000000010a13";
 
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
@@ -142,7 +146,10 @@ describe.skipIf(!hasDb)(
       await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
         (${PAC_VALIDAR}, ${CLINIC_A}, 'Paciente validar (T10)'),
         (${PAC_ROLLBACK}, ${CLINIC_A}, 'Paciente rollback (T10)'),
-        (${PAC_MILESTONE}, ${CLINIC_A}, 'Paciente milestone (T10)')`;
+        (${PAC_MILESTONE}, ${CLINIC_A}, 'Paciente milestone (T10)'),
+        (${PAC_PROTOCOL_DRIVEN}, ${CLINIC_A}, 'Paciente protocol_driven (T11)', 'protocol_driven'),
+        (${PAC_COGNITIVE_BEHAVIORAL}, ${CLINIC_A}, 'Paciente cognitive_behavioral (T11)', 'cognitive_behavioral'),
+        (${PAC_CONVENTIONAL}, ${CLINIC_A}, 'Paciente conventional (T11)', 'conventional')`;
 
       const [protocolo] = await owner<{ id: string }[]>`
         INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
@@ -159,9 +166,13 @@ describe.skipIf(!hasDb)(
 
       await ativarProtocolo(PAC_VALIDAR);
       await ativarProtocolo(PAC_MILESTONE);
+      await ativarProtocolo(PAC_PROTOCOL_DRIVEN);
       // PAC_ROLLBACK NÃO tem protocolo ativo de propósito — o gate
       // ANAMNESE_SEM_PROTOCOLO_ATIVO do definer (T05) dispara depois que o
       // core já inseriu a `goal`, provando que o RAISE reverte a inserção.
+      // PAC_COGNITIVE_BEHAVIORAL e PAC_CONVENTIONAL NÃO têm protocolo —
+      // o gate ANAMNESE_MODALIDADE_INCOMPATIVEL (T11) dispara no core antes
+      // de chegar ao definer, então não precisam.
     });
 
     afterAll(async () => {
@@ -364,6 +375,95 @@ describe.skipIf(!hasDb)(
       expect(await contarGoalESnapshot(patientId)).toEqual(
         contagemAposPrimeira,
       );
+    });
+
+    test("T11 — modalidade protocol_driven permite validação", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d11";
+      const alvoId = "00000000-0000-0000-0000-000000010e11";
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_PROTOCOL_DRIVEN,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Teste gate modalidade protocol_driven",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      // protocol_driven é a única que passa — a goal deve ter sido criada
+      expect(resultado.error).toBeUndefined();
+
+      const [alvoGravado] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ goalId: schema.anamneseAlvo.goalId })
+          .from(schema.anamneseAlvo)
+          .where(eq(schema.anamneseAlvo.id, alvoId)),
+      );
+      expect(alvoGravado?.goalId).toBeTruthy();
+    });
+
+    test("T11 — modalidade cognitive_behavioral recusa validação", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d12";
+      const alvoId = "00000000-0000-0000-0000-000000010e12";
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_COGNITIVE_BEHAVIORAL,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Teste gate modalidade cognitive_behavioral",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(resultado.error).toBeTruthy();
+      expect(resultado.error).toMatch(/modalidade|incompatível/i);
+
+      // goal NOT created — rollback já deve ter acontecido
+      const [alvoGravado] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ goalId: schema.anamneseAlvo.goalId })
+          .from(schema.anamneseAlvo)
+          .where(eq(schema.anamneseAlvo.id, alvoId)),
+      );
+      expect(alvoGravado?.goalId).toBeNull();
+    });
+
+    test("T11 — modalidade conventional recusa validação", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d13";
+      const alvoId = "00000000-0000-0000-0000-000000010e13";
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_CONVENTIONAL,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Teste gate modalidade conventional",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(resultado.error).toBeTruthy();
+      expect(resultado.error).toMatch(/modalidade|incompatível/i);
+
+      // goal NOT created — rollback já deve ter acontecido
+      const [alvoGravado] = await withTenant(ctxCoordA, (tx) =>
+        tx
+          .select({ goalId: schema.anamneseAlvo.goalId })
+          .from(schema.anamneseAlvo)
+          .where(eq(schema.anamneseAlvo.id, alvoId)),
+      );
+      expect(alvoGravado?.goalId).toBeNull();
     });
   },
 );

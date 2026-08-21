@@ -9,6 +9,7 @@ import {
   goal,
   goalMilestoneMapping,
   milestone,
+  patient,
 } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
@@ -110,6 +111,18 @@ async function validarAnamneseCore(
         );
       if (!anamneseRow) {
         return { error: "Anamnese não encontrada ou já validada." };
+      }
+
+      // T11 — gate de modalidade: allowlist explícita em "protocol_driven".
+      // Default do schema (schema.ts:408-410) é 'protocol_driven' e modalidade.ts:58-63
+      // trata desconhecido como protocolo — negar só 'conventional' deixaria
+      // modalidade nova/desconhecida passar sem gate. Logo, usamos ===.
+      const [pacienteRow] = await tx
+        .select({ modalidade: patient.clinicalModality })
+        .from(patient)
+        .where(eq(patient.id, anamneseRow.patientId));
+      if (pacienteRow?.modalidade !== "protocol_driven") {
+        return { error: "ANAMNESE_MODALIDADE_INCOMPATIVEL" };
       }
 
       const alvos = await tx
