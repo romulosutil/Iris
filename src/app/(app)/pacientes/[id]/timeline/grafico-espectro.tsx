@@ -9,6 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { rotuloAte, rotuloDesde, rotuloPonto } from "./rotulos";
 import {
   ORDEM_EIXOS,
   type DadosEixoRadar,
@@ -149,7 +150,7 @@ export function GraficoEspectro({
       </h3>
       <p className="max-w-prose text-sm text-[var(--text-secondary)]">
         Quanto dos alvos do PEI já aparecem com independência nos registros
-        validados até a Sessão {sessaoAtiva}. Não é diagnóstico nem prognóstico.
+        validados {rotuloAte(sessaoAtiva)}. Não é diagnóstico nem prognóstico.
       </p>
     </header>
   );
@@ -274,15 +275,17 @@ export function GraficoEspectro({
       <p className="text-center text-xs text-[var(--text-secondary)]">
         Borda: o alvo sai independente. Centro: o alvo precisa do apoio máximo
         do protocolo.
-        {comparando ? ` Linha tracejada: Sessão ${sessaoAnterior}.` : ""}
+        {comparando && sessaoAnterior !== undefined
+          ? ` Linha tracejada: ${rotuloPonto(sessaoAnterior)}.`
+          : ""}
       </p>
 
       <ListaEixos linhas={linhas} comparando={comparando} />
 
-      {comparando ? (
+      {comparando && sessaoAnterior !== undefined ? (
         <p className="text-xs text-[var(--text-secondary)]">
-          Variação desde a Sessão {sessaoAnterior}, em pontos. Eixo sem medida
-          nas duas sessões não tem variação.
+          Variação {rotuloDesde(sessaoAnterior)}, em pontos. Eixo sem medida nas
+          duas sessões não tem variação.
         </p>
       ) : null}
 
@@ -296,7 +299,7 @@ export function GraficoEspectro({
           <DialogContent className="max-w-2xl">
             <DialogTitle>Espectro em tabela</DialogTitle>
             <DialogDescription>
-              Sessão {sessaoAtiva}: independência documentada, alvos e
+              {rotuloPonto(sessaoAtiva)}: independência documentada, alvos e
               evidências por eixo.
             </DialogDescription>
             <div className="mt-4 max-h-[60vh] overflow-auto">
@@ -352,7 +355,7 @@ export function GraficoEspectro({
       <div className="sr-only">
         <table>
           <caption>
-            Espectro por eixo, acumulado até a Sessão {sessaoAtiva}
+            Espectro por eixo, acumulado {rotuloAte(sessaoAtiva)}
           </caption>
           <thead>
             <tr>

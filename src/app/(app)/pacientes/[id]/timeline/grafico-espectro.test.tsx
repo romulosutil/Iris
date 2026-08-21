@@ -199,4 +199,28 @@ describe("GraficoEspectro", () => {
     ).toBeTruthy();
     expect(container.querySelector("svg")).toBeNull();
   });
+
+  it("com sessaoAtiva=0 e sessaoAnterior=0 rotula como Anamnese e nunca Sessão 0", () => {
+    const anterior = espectro([
+      eixo(0, { valor: 60 }),
+      eixo(1, { valor: 45 }),
+      eixo(2, { valor: null, alvos: 0, medidos: 0 }),
+      eixo(3, { valor: 72 }),
+      eixo(4, { valor: null, alvos: 3, medidos: 0 }),
+      eixo(5, { valor: 25 }),
+    ]);
+    const { container } = render(
+      <GraficoEspectro
+        espectro={SEIS}
+        espectroAnterior={anterior}
+        sessaoAtiva={1}
+        sessaoAnterior={0}
+      />,
+    );
+    expect(screen.getByText(/Linha tracejada: Anamnese\./)).toBeTruthy();
+    expect(
+      screen.getByText(/Variação desde a Anamnese, em pontos\./),
+    ).toBeTruthy();
+    expect(container.textContent).not.toContain("Sessão 0");
+  });
 });

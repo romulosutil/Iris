@@ -11,6 +11,7 @@ import {
   carregarComparacaoAction,
   carregarEvidenciasAction,
 } from "./actions";
+import { rotuloAte, rotuloPonto } from "./rotulos";
 import type { TimelineSnapshot, TimelineData } from "./queries";
 import type { DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
@@ -502,10 +503,8 @@ export function TimelineClient({
                         {deparaTraducaoRotulo[chunk.rotulo] || chunk.rotulo}
                       </span>
                       <div className="mt-1 text-xs font-bold">
-                        Sessão {chunk.inicio}{" "}
-                        {chunk.fim !== chunk.inicio
-                          ? `até a Sessão ${chunk.fim}`
-                          : ""}
+                        {rotuloPonto(chunk.inicio)}{" "}
+                        {chunk.fim !== chunk.inicio ? rotuloAte(chunk.fim) : ""}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -539,8 +538,8 @@ export function TimelineClient({
             Acompanhamento de Marcos e Protocolos
           </h3>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Estatísticas e progresso de marcos por domínio do protocolo ativo na
-            Sessão {sessaoAtiva}.
+            Estatísticas e progresso de marcos por domínio do protocolo ativo na{" "}
+            {rotuloPonto(sessaoAtiva)}.
           </p>
         </div>
 
@@ -714,7 +713,7 @@ export function TimelineClient({
                 htmlFor="select-sessao-comparar"
                 className="text-ink text-xs font-bold"
               >
-                Comparar Sessão {sessaoAtiva} com a Sessão:
+                Comparar {rotuloPonto(sessaoAtiva)} com:
               </label>
               <select
                 id="select-sessao-comparar"
@@ -731,7 +730,7 @@ export function TimelineClient({
                   .filter((n) => n !== sessaoAtiva)
                   .map((n) => (
                     <option key={n} value={n}>
-                      Sessão {n}
+                      {rotuloPonto(n)}
                     </option>
                   ))}
               </select>
@@ -766,10 +765,15 @@ export function TimelineClient({
                     <IconeAviso />
                     <div>
                       <strong>Comparação suspensa.</strong> Os protocolos ativos
-                      mudaram entre a Sessão{" "}
-                      {Math.min(sessaoAtiva, sessaoCompararValida ?? 0)} e a
-                      Sessão {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)},
-                      e as escalas de nível de ajuda das duas não são
+                      mudaram entre{" "}
+                      {rotuloPonto(
+                        Math.min(sessaoAtiva, sessaoCompararValida ?? 0),
+                      )}{" "}
+                      e{" "}
+                      {rotuloPonto(
+                        Math.max(sessaoAtiva, sessaoCompararValida ?? 0),
+                      )}
+                      , e as escalas de nível de ajuda das duas não são
                       equivalentes. Comparar os números daria uma diferença que
                       não existe clinicamente.
                     </div>
@@ -780,9 +784,15 @@ export function TimelineClient({
                       Resultados da Comparação
                     </div>
                     <div className="text-xs text-[var(--text-secondary)]">
-                      Evolução da Sessão{" "}
-                      {Math.min(sessaoAtiva, sessaoCompararValida ?? 0)} para a{" "}
-                      {Math.max(sessaoAtiva, sessaoCompararValida ?? 0)}:
+                      Evolução de{" "}
+                      {rotuloPonto(
+                        Math.min(sessaoAtiva, sessaoCompararValida ?? 0),
+                      )}{" "}
+                      para{" "}
+                      {rotuloPonto(
+                        Math.max(sessaoAtiva, sessaoCompararValida ?? 0),
+                      )}
+                      :
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-center text-xs">
                       <div className="rounded-[var(--radius-control)] border-2 border-[var(--status-success-border)] bg-[var(--status-success-bg)] p-2 font-bold text-[var(--status-success-fg)]">
@@ -817,8 +827,11 @@ export function TimelineClient({
           Evidências Clínicas do Trecho
         </DialogTitle>
         <DialogDescription className="text-sm font-bold text-[var(--text-secondary)]">
-          Sessões {drilldownChunk?.inicio} até {drilldownChunk?.fim} para{" "}
-          {drilldownChunk?.targetNome}
+          {rotuloPonto(drilldownChunk?.inicio ?? 0)}{" "}
+          {drilldownChunk?.fim !== drilldownChunk?.inicio
+            ? rotuloAte(drilldownChunk?.fim ?? 0)
+            : ""}{" "}
+          para {drilldownChunk?.targetNome}
         </DialogDescription>
 
         <div className="mt-4 flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-2">
@@ -850,7 +863,7 @@ export function TimelineClient({
               >
                 <div className="flex flex-col gap-1 border-b border-[var(--border-brutal)]/20 pb-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                   <span className="font-black text-[var(--text-primary)]">
-                    Sessão {ev.sessionNumero} •{" "}
+                    {rotuloPonto(ev.sessionNumero)} •{" "}
                     {ev.dataSessao
                       ? new Date(ev.dataSessao).toLocaleDateString("pt-BR")
                       : "Sem data"}
