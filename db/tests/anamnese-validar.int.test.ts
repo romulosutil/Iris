@@ -29,6 +29,8 @@ const PAC_COGNITIVE_BEHAVIORAL = "00000000-0000-0000-0000-000000010a12";
 const PAC_CONVENTIONAL = "00000000-0000-0000-0000-000000010a13";
 // T16 — desarquivamento com origem validacao_anamnese
 const PAC_ARQUIVADO = "00000000-0000-0000-0000-000000010a16";
+// T13 — consentimento revogado
+const PAC_REVOGADO = "00000000-0000-0000-0000-000000010a14";
 
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
@@ -162,7 +164,8 @@ describe.skipIf(!hasDb)(
         (${PAC_PROTOCOL_DRIVEN}, ${CLINIC_A}, 'Paciente protocol_driven (T11)', 'protocol_driven'),
         (${PAC_COGNITIVE_BEHAVIORAL}, ${CLINIC_A}, 'Paciente cognitive_behavioral (T11)', 'cognitive_behavioral'),
         (${PAC_CONVENTIONAL}, ${CLINIC_A}, 'Paciente conventional (T11)', 'conventional'),
-        (${PAC_ARQUIVADO}, ${CLINIC_A}, 'Paciente arquivado (T16)', 'protocol_driven')`;
+        (${PAC_ARQUIVADO}, ${CLINIC_A}, 'Paciente arquivado (T16)', 'protocol_driven'),
+        (${PAC_REVOGADO}, ${CLINIC_A}, 'Paciente consentimento revogado (T13)', 'protocol_driven')`;
 
       await owner`UPDATE patient SET arquivado_em = now() WHERE id = ${PAC_ARQUIVADO}`;
 
@@ -183,6 +186,14 @@ describe.skipIf(!hasDb)(
       await ativarProtocolo(PAC_MILESTONE);
       await ativarProtocolo(PAC_PROTOCOL_DRIVEN);
       await ativarProtocolo(PAC_ARQUIVADO);
+      await ativarProtocolo(PAC_REVOGADO);
+
+      // Setup de consentimento revogado para PAC_REVOGADO
+      const consentRevogadoId = crypto.randomUUID();
+      await owner`INSERT INTO consent (id, patient_id, tipo, responsavel_signatario, versao_termo)
+        VALUES (${consentRevogadoId}, ${PAC_REVOGADO}, 'tratamento_dados_menor', 'Mãe', 'menor-v1')`;
+      await owner`INSERT INTO consent (patient_id, tipo, versao_termo, consent_revogado_id)
+        VALUES (${PAC_REVOGADO}, 'revogacao_consentimento', 'revogacao-teste', ${consentRevogadoId})`;
       // PAC_ROLLBACK NÃO tem protocolo ativo de propósito — o gate
       // ANAMNESE_SEM_PROTOCOLO_ATIVO do definer (T05) dispara depois que o
       // core já inseriu a `goal`, provando que o RAISE reverte a inserção.
@@ -609,6 +620,45 @@ describe.skipIf(!hasDb)(
       `;
       expect(snapDepois?.total).toBe(snapTotalAntes);
 
+      const [alvo] = await owner`
+        SELECT goal_id FROM anamnese_alvo WHERE id = ${alvoId}
+      `;
+      expect(alvo?.goal_id).toBeNull();
+    });
+
+    test("T13 (ANAM-07) — consentimento revogado impede validação com ANAMNESE_PRONTUARIO_SOMENTE_LEITURA e mensagem amigável; zero snapshot 0 gravado", async () => {
+      const anamneseId = crypto.randomUUID();
+      const alvoId = crypto.randomUUID();
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_REVOGADO,
+        alvos: [
+          {
+            id: alvoId,
+            descricao: "Alvo paciente consentimento revogado",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+        ],
+      });
+
+      const res = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(res.error).toBeTruthy();
+      expect(res.error).toMatch(/ANAMNESE_PRONTUARIO_SOMENTE_LEITURA/);
+      expect(res.error).toMatch(/somente-leitura/i);
+      expect(res.error).not.toMatch(
+        /PostgresError|DrizzleQueryError|SELECT app_validar/i,
+      );
+
+      // Snapshot 0 NÃO foi criado
+      const [snap] = await owner`
+        SELECT count(*)::int AS total FROM session_snapshot
+        WHERE patient_id = ${PAC_REVOGADO} AND session_numero = 0
+      `;
+      expect(snap?.total).toBe(0);
+
+      // Goal NÃO foi criada
       const [alvo] = await owner`
         SELECT goal_id FROM anamnese_alvo WHERE id = ${alvoId}
       `;

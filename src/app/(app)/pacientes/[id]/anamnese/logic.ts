@@ -135,6 +135,18 @@ async function validarAnamneseCore(
         return { error: "ANAMNESE_MODALIDADE_INCOMPATIVEL" };
       }
 
+      // T13 (ANAM-07): Gate de consentimento revogado / prontuário em somente-leitura.
+      // LGPD Art. 8º, §5º: Prontuário em somente-leitura bloqueia novas ações clínicas e validações.
+      const [somenteLeitura] = (await tx.execute(
+        sql`SELECT app_prontuario_somente_leitura(${anamneseRow.patientId}::uuid) AS somentes`,
+      )) as unknown as Array<{ somentes: boolean }>;
+      if (somenteLeitura?.somentes) {
+        return {
+          error:
+            "ANAMNESE_PRONTUARIO_SOMENTE_LEITURA: Não é possível validar anamnese para paciente com prontuário em somente-leitura (consentimento revogado).",
+        };
+      }
+
       const alvos = await tx
         .select()
         .from(anamneseAlvo)
@@ -242,6 +254,39 @@ async function validarAnamneseCore(
       return { id: anamneseId };
     });
   } catch (err) {
+    const rawMsg =
+      err instanceof Error
+        ? ((err as { cause?: { message?: string } })?.cause?.message ??
+          err.message)
+        : String(err);
+
+    // T13 (ANAM-07): Gate de consentimento revogado
+    if (
+      rawMsg.includes("Prontuário em somente-leitura") ||
+      rawMsg.includes("consentimento revogado") ||
+      rawMsg.includes("ANAMNESE_PRONTUARIO_SOMENTE_LEITURA")
+    ) {
+      return {
+        error:
+          "ANAMNESE_PRONTUARIO_SOMENTE_LEITURA: Não é possível validar anamnese para paciente com prontuário em somente-leitura (consentimento revogado).",
+      };
+    }
+
+    // T12 (ANAM-06): Gate de protocolo ativo com taxonomia utilizável
+    if (rawMsg.includes("ANAMNESE_SEM_PROTOCOLO_ATIVO")) {
+      return {
+        error:
+          "ANAMNESE_SEM_PROTOCOLO_ATIVO: Paciente não possui protocolo ativo com taxonomia de ajuda utilizável (mínimo de 2 níveis).",
+      };
+    }
+
+    if (rawMsg.includes("ANAMNESE_JA_VALIDADA")) {
+      return {
+        error:
+          "ANAMNESE_JA_VALIDADA: Esta anamnese já foi validada anteriormente. Correções devem ser feitas via anamnese complementar.",
+      };
+    }
+
     console.error("validarAnamnese:", err);
     return { error: "Não foi possível validar a anamnese." };
   }
