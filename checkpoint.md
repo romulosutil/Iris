@@ -21,7 +21,9 @@
 | T06  | `da46e49` | `OrigemDesarquivamento` ganha `"validacao_anamnese"`. Review: Spec ✅, 1 Minor (brief tinha gate errado — comando default exclui `.int.test.ts`; controlador rodou com `--config vitest.integration.config.ts`, 7/7 verde real). |
 | T07  | `7c93653` | Módulo puro `rotulos.ts` (`ROTULO_MARCO_ZERO`, `rotuloPonto`, `rotuloPontoCurto`, `rotuloDesde`, `rotuloAte`). Review: Spec ✅ (sem `"use client"` confirmado, copy idêntica confirmada por grep contra `timeline-client.tsx`/`grafico-espectro.tsx`), 2 Minor deferidos (teste de regressão redundante; `prettier --write` em vez de `pnpm format` literal). Gate confirmado pelo controlador: 28/28 verde. |
 
-**Progresso: 7 de 34 tasks completas e revisadas** (T01-T07). Fase 0 fechada. Fase 1 iniciada (T06/T07, o par `[P]` planejado, completo).
+| T08  | `4cc63cc`+`3a619e7`+`51006be` | Schemas Zod (`PROCEDENCIAS`, `EIXOS_ANAMNESE`, `alvoSchema`, `salvarRascunhoSchema`, `validarAnamneseSchema`) + teste. 1 fix round (2 Important: teste vácuo undefined→null sem assert, `disciplina` duplicado em vez de importar `DISCIPLINAS`), depois limpa. **Achado Critical fora do escopo do arquivo, corrigido pelo controlador**: CHECK `anamnese_alvo_eixo_valido` da migração `0115` usava vocabulário de eixo errado (`interacao_social`/`autonomia`/`regulacao`/`cognicao_academico`), divergente de `ORDEM_EIXOS`/hexágono — spec confirma que são os mesmos 6 eixos. Corrigido, verificado com reset completo do banco local + `pnpm test:rls` (1042/1043, única falha é a MFA pré-existente). |
+
+**Progresso: 8 de 34 tasks completas e revisadas** (T01-T08). Fase 0 fechada. Fase 1 em andamento.
 
 ### Medido, não presumido (T03/T05, revisado nesta sessão)
 
@@ -41,7 +43,11 @@ Herdadas da sessão anterior (não mudam código nesta sessão, só reafirmadas)
 3. Grep de verificação do T27 é defeituoso — ainda não chegou a T27.
 4. T03/T05 emendam a `0115` já aplicada localmente — correto para a branch, exige reset do banco local a cada revisão. **Confirmado funcionando duas vezes nesta sessão.**
 
-Novas desta sessão:
+Novas desta sessão (T08):
+
+7. **`EIXOS_ANAMNESE = ORDEM_EIXOS` (T08) era o certo; o CHECK da migração `0115` estava errado, não o Zod.** O brief presumiu (corretamente, confirmado pela spec) que os 6 eixos da anamnese são os mesmos do hexágono do espectro. A migração `0115` (T01, já revisada e "clean" em sessão anterior) tinha vocabulário próprio (`interacao_social`/`autonomia`/`regulacao`/`cognicao_academico`) que nenhuma outra parte do repo referenciava (grep confirmou ponto único). Corrigido em commit separado `51006be`, fora do diff do implementador de T08 — controlador não deve consertar o próprio diff da task, mas isso era um defeito de task ANTERIOR (T01) que só a revisão de T08 revelou. Verificado por reset completo do banco local (`DROP SCHEMA ... CASCADE` com role `iris`, não `postgres` — `MIGRATION_DATABASE_URL` usa `iris`) + `pnpm test:rls`. Custo se errado: `INSERT` de alvo com eixo do hexágono estoura `23514` em prod.
+
+Herdadas (não mudam nesta sessão):
 
 5. **Oráculo do `clinic-id-helper-rls.int.test.ts` pode ser estendido por task, task após task, desde que nominal.** T03 subiu 56→64/16→17; T05 subiu de novo (17→18 funções, mais dois oráculos derivados `12→13`/`6→7`). Cada extensão foi adjudicada separadamente: arrays nomeados derivados de query viva contra `pg_proc`/`pg_policies`, `.length` calculado do array — não números hand-typed. Continuar tratando cada extensão como suspeita por padrão (é assim que um guard de CI é neutralizado em silêncio) e adjudicar nome a nome, não só a contagem.
 6. **Revisão roda depois do commit, não antes.** T03/T04/T05 todos commitados pelo implementador, revisão em cima do commit via `review-package`. Isso é aceitável nesta branch (não mergeada, não em produção) — mas qualquer achado Critical/Important vira um commit de fix novo, nunca um `--amend`.
@@ -62,9 +68,9 @@ Confirmado na sessão anterior que `e5c6d4d`/`4f38394` (outra sessão Claude) es
 
 ## O que o próximo agente faz — em ordem, uma coisa de cada vez
 
-Fase 0 (T01-T05) e o par `[P]` T06/T07 estão **fechados e revisados**. Continuar em T08.
+Fase 0 (T01-T05), o par `[P]` T06/T07 e T08 estão **fechados e revisados**. Continuar em T09.
 
-### Passo 1 — T08 em diante
+### Passo 1 — T09 em diante
 
 Sequencial a partir daqui salvo indicação `[P]` no brief (e mesmo `[P]`: despachar implementadores **sempre em sequência**, nunca em paralelo — regra da skill `subagent-driven-development`, não relaxar de novo). Consultar `.specs/features/407-anamnese-marco-zero/tasks.md` para ordem completa e dependências; briefs extraídos em `.superpowers/sdd/tasks/task-NN-brief.md` até T19 pelo menos — se T08 não tiver brief extraído, extrair do `tasks.md` antes de despachar.
 
