@@ -24,8 +24,9 @@
 | T08  | `4cc63cc`+`3a619e7`+`51006be` | Schemas Zod (`PROCEDENCIAS`, `EIXOS_ANAMNESE`, `alvoSchema`, `salvarRascunhoSchema`, `validarAnamneseSchema`) + teste. 1 fix round (2 Important: teste vácuo undefined→null sem assert, `disciplina` duplicado em vez de importar `DISCIPLINAS`), depois limpa. **Achado Critical fora do escopo do arquivo, corrigido pelo controlador**: CHECK `anamnese_alvo_eixo_valido` da migração `0115` usava vocabulário de eixo errado (`interacao_social`/`autonomia`/`regulacao`/`cognicao_academico`), divergente de `ORDEM_EIXOS`/hexágono — spec confirma que são os mesmos 6 eixos. Corrigido, verificado com reset completo do banco local + `pnpm test:rls` (1042/1043, única falha é a MFA pré-existente). |
 
 | T09  | `74f3951`+`e28d631` | `salvarRascunhoAnamnese` (core + `db/tests/anamnese-rascunho.int.test.ts`). Review: Spec ✅ 6/6, qualidade approved, 1 Minor deferido (console.error no catch, consistente com `metas/logic.ts`). **Achado fora do escopo do diff, corrigido pelo controlador em commit separado**: `pnpm typecheck` vermelho em `schemas.ts`/`schemas.test.ts` (T08, arquivos intocados pelo T09) — `EIXOS_ANAMNESE = ORDEM_EIXOS` herdava `EixoEspectro[]` (array largo), rejeitado pela sobrecarga de tupla do `z.enum`; passou pelo gate `quick` do T08 porque nenhuma task rodou `pnpm typecheck` isolado até agora. Corrigido com `as [string, ...string[]]`; 12/12 testes de schemas.test.ts continuam verdes. |
+| T10  | `f3909a7` | `validarAnamneseCore`/`validarAnamnese` em `logic.ts` (T09) + `db/tests/anamnese-validar.int.test.ts`, 4/4 verde. Insere `goal` em lote (`estado: "ativa"`, shape de `criarMetaCore`), atualiza `anamnese_alvo.goal_id`, desarquiva com origem `"validacao_anamnese"`, monta `repertorio_state`/`segmentacao` no shape exato do design.md, chama `app_validar_anamnese` via `tx.execute(sql...)`. Review: Spec ✅ 6/6 medidos linha a linha, qualidade approved, 2 Minor deferidos (mensagem genérica de erro mascara RAISE de gate futuro — atenção p/ T11-T13; rollback provado via RAISE real do definer `ANAMNESE_SEM_PROTOCOLO_ATIVO`, mais forte que dupla-chamada sintética). `pnpm typecheck` confirmado limpo pelo controlador. **Escopo deliberadamente sem gates de negócio** (modalidade/protocolo/consentimento) — ficam para T11/T12/T13, que camadeiam sobre este core. |
 
-**Progresso: 9 de 34 tasks completas e revisadas** (T01-T09). Fase 0 fechada. Fase 1 em andamento.
+**Progresso: 10 de 34 tasks completas e revisadas** (T01-T10). Fase 0 fechada. Fase 1 em andamento.
 
 ### Medido, não presumido (T03/T05, revisado nesta sessão)
 
@@ -70,9 +71,11 @@ Confirmado na sessão anterior que `e5c6d4d`/`4f38394` (outra sessão Claude) es
 
 ## O que o próximo agente faz — em ordem, uma coisa de cada vez
 
-Fase 0 (T01-T05), o par `[P]` T06/T07, T08 e T09 estão **fechados e revisados**. Continuar em T10.
+Fase 0 (T01-T05), o par `[P]` T06/T07, T08, T09 e T10 estão **fechados e revisados**. Continuar em T11.
 
-### Passo 1 — T10 em diante
+### Passo 1 — T11 em diante
+
+T11 (`.superpowers/sdd/tasks/task-11-brief.md`, já extraído) é o gate de modalidade `protocol_driven` por igualdade explícita — camadeia direto sobre `validarAnamneseCore` do T10, sem tocar T10 outra vez.
 
 Sequencial a partir daqui salvo indicação `[P]` no brief (e mesmo `[P]`: despachar implementadores **sempre em sequência**, nunca em paralelo — regra da skill `subagent-driven-development`, não relaxar de novo). Consultar `.specs/features/407-anamnese-marco-zero/tasks.md` para ordem completa e dependências; briefs extraídos em `.superpowers/sdd/tasks/task-NN-brief.md` até T19 pelo menos — se T08 não tiver brief extraído, extrair do `tasks.md` antes de despachar.
 
