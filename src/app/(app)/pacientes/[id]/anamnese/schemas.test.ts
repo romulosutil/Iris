@@ -55,7 +55,7 @@ describe("anamnese/schemas", () => {
       }
     });
 
-    it("should reject undefined for nivel_ajuda_inicial by not converting it to 0", () => {
+    it("should convert undefined to null for nivel_ajuda_inicial", () => {
       const alvo = {
         eixo: "comunicacao_expressiva",
         descricao: "Capacidade de comunicar de forma clara",
@@ -63,9 +63,9 @@ describe("anamnese/schemas", () => {
         nivel_ajuda_inicial: undefined,
       };
       const result = alvoSchema.safeParse(alvo);
+      expect(result.success).toBe(true);
       if (result.success) {
-        // undefined should not become 0; it should remain null or be rejected
-        expect(result.data.nivel_ajuda_inicial).not.toBe(0);
+        expect(result.data.nivel_ajuda_inicial).toBeNull();
       }
     });
 

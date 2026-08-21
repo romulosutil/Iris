@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ORDEM_EIXOS } from "@/lib/evidence/espectro";
+import { DISCIPLINAS } from "../metas/schemas";
 
 /**
  * Schemas e constantes de validação da anamnese. Vivem fora de `actions.ts`
@@ -36,7 +37,7 @@ export type EixoAnamnese = (typeof EIXOS_ANAMNESE)[number];
 const alvoBaseSchema = z.object({
   eixo: z.enum(EIXOS_ANAMNESE),
   descricao: z.string().trim().min(1, "Descreva o alvo em linguagem simples."),
-  disciplina: z.enum(["ABA", "Fono", "TO"]).nullable().optional(),
+  disciplina: z.enum(DISCIPLINAS).nullable().optional(),
   milestone_id: z.string().uuid().nullable().optional(),
   nivel_ajuda_inicial: z.number().int().min(0).max(20).nullable().optional(),
   procedencia: z.enum(PROCEDENCIAS),
