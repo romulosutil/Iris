@@ -25,6 +25,8 @@ const PAC_MILESTONE = "00000000-0000-0000-0000-000000010a03";
 const PAC_PROTOCOL_DRIVEN = "00000000-0000-0000-0000-000000010a11";
 const PAC_COGNITIVE_BEHAVIORAL = "00000000-0000-0000-0000-000000010a12";
 const PAC_CONVENTIONAL = "00000000-0000-0000-0000-000000010a13";
+// T16 — desarquivamento com origem validacao_anamnese
+const PAC_ARQUIVADO = "00000000-0000-0000-0000-000000010a16";
 
 const PROTOCOL_FAMILIA = "aba_marcos_desenvolvimento";
 
@@ -149,7 +151,10 @@ describe.skipIf(!hasDb)(
         (${PAC_MILESTONE}, ${CLINIC_A}, 'Paciente milestone (T10)', 'protocol_driven'),
         (${PAC_PROTOCOL_DRIVEN}, ${CLINIC_A}, 'Paciente protocol_driven (T11)', 'protocol_driven'),
         (${PAC_COGNITIVE_BEHAVIORAL}, ${CLINIC_A}, 'Paciente cognitive_behavioral (T11)', 'cognitive_behavioral'),
-        (${PAC_CONVENTIONAL}, ${CLINIC_A}, 'Paciente conventional (T11)', 'conventional')`;
+        (${PAC_CONVENTIONAL}, ${CLINIC_A}, 'Paciente conventional (T11)', 'conventional'),
+        (${PAC_ARQUIVADO}, ${CLINIC_A}, 'Paciente arquivado (T16)', 'protocol_driven')`;
+
+      await owner`UPDATE patient SET arquivado_em = now() WHERE id = ${PAC_ARQUIVADO}`;
 
       const [protocolo] = await owner<{ id: string }[]>`
         INSERT INTO protocol (clinic_id, nome, disciplina, familia, taxonomia_ajuda)
@@ -167,6 +172,7 @@ describe.skipIf(!hasDb)(
       await ativarProtocolo(PAC_VALIDAR);
       await ativarProtocolo(PAC_MILESTONE);
       await ativarProtocolo(PAC_PROTOCOL_DRIVEN);
+      await ativarProtocolo(PAC_ARQUIVADO);
       // PAC_ROLLBACK NÃO tem protocolo ativo de propósito — o gate
       // ANAMNESE_SEM_PROTOCOLO_ATIVO do definer (T05) dispara depois que o
       // core já inseriu a `goal`, provando que o RAISE reverte a inserção.
@@ -464,6 +470,59 @@ describe.skipIf(!hasDb)(
           .where(eq(schema.anamneseAlvo.id, alvoId)),
       );
       expect(alvoGravado?.goalId).toBeNull();
+    });
+
+    test("T16 (ANAM-11) — paciente arquivado é desarquivado com exatamente 1 linha no audit_log com origem validacao_anamnese e zero de criacao_meta", async () => {
+      const anamneseId = "00000000-0000-0000-0000-000000010d16";
+      const alvo1Id = "00000000-0000-0000-0000-000000010e16";
+      const alvo2Id = "00000000-0000-0000-0000-000000010e17";
+
+      await criarAnamneseRascunho({
+        id: anamneseId,
+        patientId: PAC_ARQUIVADO,
+        alvos: [
+          {
+            id: alvo1Id,
+            descricao: "Alvo 1 para paciente arquivado",
+            nivelAjudaInicial: 1,
+            procedencia: "observado_avaliador",
+          },
+          {
+            id: alvo2Id,
+            descricao: "Alvo 2 para paciente arquivado",
+            nivelAjudaInicial: 2,
+            procedencia: "relatado_responsavel",
+          },
+        ],
+      });
+
+      // Confirma que está arquivado antes
+      const [pacAntes] =
+        await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC_ARQUIVADO}`;
+      expect(pacAntes!.arquivado_em).not.toBeNull();
+
+      const resultado = await validarAnamnese(ctxCoordA, { anamneseId });
+      expect(resultado.error).toBeUndefined();
+
+      // 1. arquivado_em vira NULL
+      const [pacDepois] =
+        await owner`SELECT arquivado_em FROM patient WHERE id = ${PAC_ARQUIVADO}`;
+      expect(pacDepois!.arquivado_em).toBeNull();
+
+      // 2. audit_log registra exatamente 1 linha de desarquivamento automático
+      const logs = await owner`
+        SELECT acao, detalhe FROM audit_log
+        WHERE patient_id = ${PAC_ARQUIVADO} AND acao = 'paciente_desarquivado_automaticamente'
+      `;
+      expect(logs).toHaveLength(1);
+      expect(logs[0]!.detalhe).toEqual({ origem: "validacao_anamnese" });
+
+      // 3. Verifica que 'criacao_meta' NÃO aparece no audit_log deste fluxo
+      const logsMeta = await owner`
+        SELECT acao, detalhe FROM audit_log
+        WHERE patient_id = ${PAC_ARQUIVADO} AND detalhe->>'origem' = 'criacao_meta'
+      `;
+      expect(logsMeta).toHaveLength(0);
     });
   },
 );
