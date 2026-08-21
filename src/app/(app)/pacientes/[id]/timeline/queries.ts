@@ -308,9 +308,11 @@ export async function carregarDeltaSessao(
   sessionNumero: number,
 ) {
   return withTenant(ctx, async (tx) => {
-    const snapB = await obterSnapshotAsOf(tx, patientId, sessionNumero);
+    // Limiar > 0 (e não >= 0): para o marco 0 (sessionNumero = 0) o anterior seria -1
+    // (o marco 0 não tem anterior). Para a Sessão 1 (sessionNumero = 1), o anterior é o
+    // marco 0 (sessionNumero = 0). Sem marco 0 existente, obterSnapshotAsOf devolve null.
     const snapA =
-      sessionNumero > 1
+      sessionNumero > 0
         ? await obterSnapshotAsOf(tx, patientId, sessionNumero - 1)
         : null;
 
