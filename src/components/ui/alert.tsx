@@ -19,8 +19,7 @@ const estilo: Record<
   string,
   {
     fundo: string;
-    bordaEsquerda: string;
-    bordaOutras: string;
+    borda: string;
     texto: string;
     iconeBg: string;
     rotulo: string;
@@ -28,54 +27,42 @@ const estilo: Record<
 > = {
   erro: {
     fundo: "bg-[var(--status-error-bg)]",
-    bordaEsquerda: "border-l-[var(--status-error-border)]",
-    bordaOutras:
-      "border-y-[var(--status-error-border)]/40 border-r-[var(--status-error-border)]/40",
+    borda: "border-[var(--status-error-border)]",
     texto: "text-[var(--status-error-fg)]",
     iconeBg: "bg-[var(--status-error-border)] text-white",
     rotulo: "Erro",
   },
   error: {
     fundo: "bg-[var(--status-error-bg)]",
-    bordaEsquerda: "border-l-[var(--status-error-border)]",
-    bordaOutras:
-      "border-y-[var(--status-error-border)]/40 border-r-[var(--status-error-border)]/40",
+    borda: "border-[var(--status-error-border)]",
     texto: "text-[var(--status-error-fg)]",
     iconeBg: "bg-[var(--status-error-border)] text-white",
     rotulo: "Erro",
   },
   warning: {
     fundo: "bg-[var(--status-warning-bg)]",
-    bordaEsquerda: "border-l-[var(--status-warning-border)]",
-    bordaOutras:
-      "border-y-[var(--status-warning-border)]/40 border-r-[var(--status-warning-border)]/40",
+    borda: "border-[var(--status-warning-border)]",
     texto: "text-[var(--status-warning-fg)]",
     iconeBg: "bg-[var(--status-warning-border)] text-white",
     rotulo: "Aviso",
   },
   info: {
     fundo: "bg-[var(--status-info-bg)]",
-    bordaEsquerda: "border-l-[var(--status-info-border)]",
-    bordaOutras:
-      "border-y-[var(--status-info-border)]/40 border-r-[var(--status-info-border)]/40",
+    borda: "border-[var(--status-info-border)]",
     texto: "text-[var(--status-info-fg)]",
     iconeBg: "bg-[var(--status-info-border)] text-white",
     rotulo: "Informação",
   },
   sucesso: {
     fundo: "bg-[var(--status-success-bg)]",
-    bordaEsquerda: "border-l-[var(--status-success-border)]",
-    bordaOutras:
-      "border-y-[var(--status-success-border)]/40 border-r-[var(--status-success-border)]/40",
+    borda: "border-[var(--status-success-border)]",
     texto: "text-[var(--status-success-fg)]",
     iconeBg: "bg-[var(--status-success-border)] text-white",
     rotulo: "Sucesso",
   },
   success: {
     fundo: "bg-[var(--status-success-bg)]",
-    bordaEsquerda: "border-l-[var(--status-success-border)]",
-    bordaOutras:
-      "border-y-[var(--status-success-border)]/40 border-r-[var(--status-success-border)]/40",
+    borda: "border-[var(--status-success-border)]",
     texto: "text-[var(--status-success-fg)]",
     iconeBg: "bg-[var(--status-success-border)] text-white",
     rotulo: "Sucesso",
@@ -140,8 +127,7 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
     ref,
   ) {
     const activeStyle = estilo[severidade] ?? estilo.erro!;
-    const { fundo, bordaEsquerda, bordaOutras, texto, iconeBg, rotulo } =
-      activeStyle;
+    const { fundo, borda, texto, iconeBg, rotulo } = activeStyle;
     return (
       <div
         ref={ref}
@@ -149,13 +135,11 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
           severidade === "erro" || severidade === "error" ? "alert" : "status"
         }
         className={cn(
-          "flex items-start gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] p-4",
-          "border-l-[4px]",
+          "flex items-start gap-4 rounded-[var(--radius-control)] border-2 p-4",
           destacado &&
             "p-8 text-lg font-medium shadow-[var(--ds-shadow)] md:p-12",
           fundo,
-          bordaEsquerda,
-          bordaOutras,
+          borda,
           texto,
           className,
         )}

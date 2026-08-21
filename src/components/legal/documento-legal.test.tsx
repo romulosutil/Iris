@@ -170,13 +170,11 @@ describe("conteúdo da Política de Privacidade publicada", () => {
     ).toBeTruthy();
   });
 
-  it("mantém aberta a pendência de provedor de IA e país de processamento", async () => {
+  it("documenta o provedor de IA (Google Gemini) e as pendências para ativação (D57)", async () => {
     const { container } = await renderizarRota(PrivacidadePage, "privacidade");
     const t = (container.textContent ?? "").replace(/\s+/g, " ");
-    expect(t).toMatch(
-      /⟨PENDENTE: provedor de IA contratado, país de processamento/,
-    );
-    expect(t).toMatch(/nenhum provedor é nomeado nesta Política/i);
+    expect(t).toMatch(/Google \(Gemini API\)/i);
+    expect(t).toMatch(/EXTRACTION_LLM_ENABLED/i);
   });
 
   it("nomeia Resend e Asaas no compartilhamento com terceiros", async () => {

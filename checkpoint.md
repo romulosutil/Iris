@@ -1,114 +1,63 @@
-# Checkpoint — Feature #407 (Anamnese como marco 0 da linha do tempo)
+# Checkpoint — Estado Atual do Repositório Iris
 
-**Data**: 20/08/2026 · **Branch**: `feat/ajuste-menus-navegacao-e-permissoes` · **Plano**: `.specs/features/407-anamnese-marco-zero/tasks.md` (34 tasks)
-**Método**: `superpowers:subagent-driven-development` — um subagente implementador por task, revisão de task (spec + qualidade) por subagente separado após cada uma, adjudicação do controlador entre os dois.
-**Ledger vivo** (recuperação após compactação ou `/clear`): `.superpowers/sdd/tasks/progress.md`. Confie nele e no `git log`, não em memória de conversa.
-**Modelo desta sessão**: implementadores `haiku` (mecânico, spec fechada no brief), revisores `sonnet`. Correção ao checkpoint anterior: a skill `subagent-driven-development` **proíbe dispatch paralelo de implementadores** ("Never dispatch multiple implementation subagents in parallel — conflicts"), mesmo para tasks `[P]` independentes em arquivos diferentes — só a revisão/fix-loop de tasks distintas pode sobrepor. T06 e T07 rodaram sequenciais, não em paralelo.
-
----
-
-## O que foi feito
-
-| Task | Commit    | Estado                                                                                                                                                                                                                                                                            |
-| ---- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| —    | `a7e764f` | Resíduo do Task 5 do plano de Evolução: timeline legível a 360px. Commitado à parte para a BASE do #407 ficar limpa.                                                                                                                                                              |
-| T01  | `9a3ca90` | Tabelas `anamnese` + `anamnese_alvo`, migração `0115`. Revisão limpa de primeira.                                                                                                                                                                                                 |
-| T02  | `4da8f56` | Suíte RLS vermelha `anamnese-rls.int.test.ts`, 9 testes. 1 fix round (2 Important + 1 Minor), depois limpa.                                                                                                                                                                       |
-| T03  | `230729d` | GRANTs de coluna, RLS, 8 policies, helper `app_anamnese_em_rascunho` na `0115`. **Revisado nesta sessão: clean pass**, 8/8 itens medidos contra banco resetado do zero.                                                                                                           |
-| T04  | `9bfd734` | Teste vermelho do definer `app_validar_anamnese`, 8 casos. 1 fix round Critical (assercao de erro batia `DrizzleQueryError.message` em vez de `.cause` — ficaria vermelho para sempre). Depois limpa.                                                                             |
-| T05  | `c38acff` | Implementado `app_validar_anamnese`. **Task mais perigosa do plano — revisada nesta sessão: clean pass**, 13/13 itens medidos, incluindo a direção do merge jsonb (`EXCLUDED.repertorio_state \|\| session_snapshot.repertorio_state`, existente vence) e `gerado_em` preservado. |
-
-| T06 | `da46e49` | `OrigemDesarquivamento` ganha `"validacao_anamnese"`. Review: Spec ✅, 1 Minor (brief tinha gate errado — comando default exclui `.int.test.ts`; controlador rodou com `--config vitest.integration.config.ts`, 7/7 verde real). |
-| T07 | `7c93653` | Módulo puro `rotulos.ts` (`ROTULO_MARCO_ZERO`, `rotuloPonto`, `rotuloPontoCurto`, `rotuloDesde`, `rotuloAte`). Review: Spec ✅ (sem `"use client"` confirmado, copy idêntica confirmada por grep contra `timeline-client.tsx`/`grafico-espectro.tsx`), 2 Minor deferidos (teste de regressão redundante; `prettier --write` em vez de `pnpm format` literal). Gate confirmado pelo controlador: 28/28 verde. |
-
-| T08 | `4cc63cc`+`3a619e7`+`51006be` | Schemas Zod (`PROCEDENCIAS`, `EIXOS_ANAMNESE`, `alvoSchema`, `salvarRascunhoSchema`, `validarAnamneseSchema`) + teste. 1 fix round (2 Important: teste vácuo undefined→null sem assert, `disciplina` duplicado em vez de importar `DISCIPLINAS`), depois limpa. **Achado Critical fora do escopo do arquivo, corrigido pelo controlador**: CHECK `anamnese_alvo_eixo_valido` da migração `0115` usava vocabulário de eixo errado (`interacao_social`/`autonomia`/`regulacao`/`cognicao_academico`), divergente de `ORDEM_EIXOS`/hexágono — spec confirma que são os mesmos 6 eixos. Corrigido, verificado com reset completo do banco local + `pnpm test:rls` (1042/1043, única falha é a MFA pré-existente). |
-
-| T09 | `74f3951`+`e28d631` | `salvarRascunhoAnamnese` (core + `db/tests/anamnese-rascunho.int.test.ts`). Review: Spec ✅ 6/6, qualidade approved, 1 Minor deferido (console.error no catch, consistente com `metas/logic.ts`). **Achado fora do escopo do diff, corrigido pelo controlador em commit separado**: `pnpm typecheck` vermelho em `schemas.ts`/`schemas.test.ts` (T08, arquivos intocados pelo T09) — `EIXOS_ANAMNESE = ORDEM_EIXOS` herdava `EixoEspectro[]` (array largo), rejeitado pela sobrecarga de tupla do `z.enum`; passou pelo gate `quick` do T08 porque nenhuma task rodou `pnpm typecheck` isolado até agora. Corrigido com `as [string, ...string[]]`; 12/12 testes de schemas.test.ts continuam verdes. |
-| T10 | `f3909a7` | `validarAnamneseCore`/`validarAnamnese` em `logic.ts` (T09) + `db/tests/anamnese-validar.int.test.ts`, 4/4 verde. Insere `goal` em lote (`estado: "ativa"`, shape de `criarMetaCore`), atualiza `anamnese_alvo.goal_id`, desarquiva com origem `"validacao_anamnese"`, monta `repertorio_state`/`segmentacao` no shape exato do design.md, chama `app_validar_anamnese` via `tx.execute(sql...)`. Review: Spec ✅ 6/6 medidos linha a linha, qualidade approved, 2 Minor deferidos (mensagem genérica de erro mascara RAISE de gate futuro — atenção p/ T11-T13; rollback provado via RAISE real do definer `ANAMNESE_SEM_PROTOCOLO_ATIVO`, mais forte que dupla-chamada sintética). `pnpm typecheck` confirmado limpo pelo controlador. **Escopo deliberadamente sem gates de negócio** (modalidade/protocolo/consentimento) — ficam para T11/T12/T13, que camadeiam sobre este core. |
-| T12 | `feat(anamnese)` | Gate de protocolo ativo com taxonomia utilizável (>= 2 níveis) em `validarAnamneseCore` (`logic.ts`) com erro pt-BR `ANAMNESE_SEM_PROTOCOLO_ATIVO` (ANAM-06). Teste de integração em `db/tests/anamnese-validar.int.test.ts` (13/13 verde) cobrindo os 3 casos: sem protocolo recusa, taxonomia 1 nível recusa, taxonomia >= 2 passa (com contagem zero de snapshots em recusas). |
-| T13 | `5c27770` | Gate de consentimento revogado / prontuário em somente-leitura (`app_prontuario_somente_leitura`) em `validarAnamneseCore` (`logic.ts`), retornando erro amigável pt-BR `ANAMNESE_PRONTUARIO_SOMENTE_LEITURA` (ANAM-07). Teste de integração em `db/tests/anamnese-validar.int.test.ts` (11/11 verde) provando que validação é impedida sem criar snapshot 0 nem goals. |
-| T14 | `8de710c` | Gate de papel coordenador exclusivo (`requireRole(ctx, "coordenador")`) em `validarAnamneseCore` (`logic.ts`) com decisão D-B documentada (ANAM-03). Teste de integração em `db/tests/anamnese-validar.int.test.ts` (10/10 verde) provando que coordenador valida e terapeuta é recusado via `RoleError` sem criar snapshot 0 nem goals. |
-| T15 | `57bdc86` | Segunda barreira de teto de alvos (`alvos.length <= 24`) em `validarAnamneseCore` (`logic.ts`), retornando `ANAMNESE_TETO_ALVOS` (ANAM-08). Teste de integração em `db/tests/anamnese-validar.int.test.ts` (9/9 verde) provando que 25 alvos é recusado e 24 alvos passa. |
-| T16 | `e55c6e8` | Teste de integração de desarquivamento com origem `validacao_anamnese` em `db/tests/anamnese-validar.int.test.ts` (ANAM-11). Valida que paciente arquivado é desarquivado (`arquivado_em = NULL`), emite exatamente 1 linha no `audit_log` com `origem: "validacao_anamnese"` e zero ocorrências de `criacao_meta`. |
-| T17 | `e7d367b` | Server actions `salvarRascunhoAnamneseAction` e `validarAnamneseAction` em `actions.ts`. Nenhum export aceita `ctx` (validado pelo guard `ctx-forjavel-guard.test.ts` de segurança contra issue #55). `getTenantContext()` resolvido no servidor, tratamento de `RoleError` com copy pt-BR e revalidação de rotas no sucesso da validação (`/pacientes/[id]`, `/pacientes/[id]/timeline`, `/pacientes/[id]/anamnese`). 6/6 testes unitários verdes em `actions.test.ts`. `pnpm typecheck` e `format` limpos. |
-| T18 | `c1909d4` | Suporte a anamnese complementar (`complementaAnamneseId`) e resolução da vigente por `validada_em DESC, id DESC` (`queries.ts` e `logic.ts`). Testes de integração em `db/tests/anamnese-complementar.int.test.ts` (3/3 verde). Prova merge aditivo no snapshot 0, preservação da anamnese original e resolução de desempate determinística (maior id). |
-| T19 | `c1909d4` | Suporte a sugestão de protocolo e nível de entrada (`protocolId`, `nivelEntradaSugerido`, `sugestaoAceita`, `observacoes`). Persistência no rascunho, editabilidade total antes da validação e teste de integração em `db/tests/anamnese-sugestao.int.test.ts` (2/2 verde). |
-| T20 | `84e3eee` | Teste de integração de invariância de faturamento em `db/tests/anamnese-billing-invariante.int.test.ts` (1/1 verde). Prova que validar anamnese não adiciona o paciente na apuração `billing_apurar_ciclo` e não insere nenhuma sessão fantasma na agenda (garante o motivo de D-A do design.md). |
-| T21 | `391e57a` | Teste de integração em `db/tests/anamnese-rematerializacao.int.test.ts` (ANAM-13). Prova que o snapshot 0 sobrevive byte-idêntico à rematerialização de sessões comuns (`materializarSnapshot`), e que a rematerialização roda e atualiza snapshots posteriores sem tocar no marco zero. |
-| T22 | `391e57a` | Teste de tolerância a chave órfã em `db/tests/anamnese-rematerializacao.int.test.ts` (ANAM-18). Prova que ao excluir uma `goal` gerada na anamnese, `anamnese_alvo.goal_id` vira NULL (`on delete set null`) e o hexágono de repertório da timeline ignora a chave órfã sem estourar erro, recalculando o espectro normalmente. |
-| T23 | `88c463b` | Teste de não-regressão de RLS em `db/tests/fase4-snapshot-rls.int.test.ts` (8/8 verde, baseline anterior de 7 mantida). Valida que `session_numero = 0` (marco zero) respeita estritamente o mesmo isolamento de RLS (coordenador e terapeuta da equipe leem, terapeuta fora da equipe e cross-tenant não leem, e `app_role` não tem escrita direta). `pnpm typecheck` e `format` limpos. |
-| T24 | `c37a3fb` | Teste de não-regressão de materialização em `db/tests/fase4-materializar.int.test.ts` (20/20 verde, baseline anterior de 19 mantida). Valida que paciente com marco 0 existente materializa a sessão 1 normalmente sem corromper nem reescrever o snapshot 0 (ANAM-13). `pnpm typecheck` e `format` limpos. |
-| T25 | `6ef2de0` | Testes de integração de regressão para `carregarDeltaSessao` em `queries.int.test.ts` (9/9 verde). Valida que sem marco 0 a Sessão 1 trata itens como novos, no marco 0 `snapA = null` sem erro, e com marco 0 existente a Sessão 1 compara contra o snapshot 0 calculando evolução/regressão/estável corretamente. |
-| T26 | `64df831` | `EstadoRepertorio` ganha `origem?` e `procedencia?` (`espectro.ts`). Suíte `espectro.test.ts` estendida com 2 novos testes (20/20 verde): metadados não alteram o cálculo do radar e `nivel_ajuda_recente: null` produz `valor: null` (nunca `0`). `pnpm typecheck` e `format` limpos. |
-| T27 | `c80fe89` | Aplicação do helper `rotulos.ts` (`rotuloPonto`, `rotuloDesde`, `rotuloAte`) em todas as ocorrências de `scrubber.tsx`, `timeline-client.tsx` e `grafico-espectro.tsx`. Grep por `Sessão {` e `Sessão ${` zerado na timeline (fora de `rotulos.ts`). Testes unitários 54/54 verdes. `pnpm typecheck` e `format` limpos. |
-| T28 | `3c72f08` | Correção do falsy-zero em `timeline-client.tsx:327` (`if (sessaoAtiva === null) return`). Com `sessaoAtiva = 0`, `carregarDeltaSessaoAction` é disparada. Falha de rede preserva `erroDelta = true` sem cair em empty state falso. Suíte unitária `timeline-client.test.tsx` cobre os 3 casos. `pnpm typecheck` e `format` limpos. |
-| T29 | `3c72f08` | Scrubber inicializa com `sessoesDisponiveis[len-1] ?? null` (`timeline-client.tsx:93`). Quando `sessoesDisponiveis = [0]`, abre em 0 exibindo "Anamnese" e nunca "Sessão 0". Quando `[]`, mantém `null` e não dispara delta. Quando `[1,2,3]`, abre na sessão 3. Testes unitários 6/6 verdes. `pnpm typecheck` e `format` limpos. |
-| T30 | `fe64d8e` | `sessionNumero > 1` alterado para `sessionNumero > 0` em `carregarDeltaSessao` (`queries.ts:313`), permitindo que a Sessão 1 compare contra o marco 0. Comentário explicativo adicionado sobre `n = 0` não ter anterior. `pnpm typecheck` limpo. |
-| T31 | `afd50d3` | Garantia de que eixo sem valor permanece `null` na tela (renderizando "Sem alvo" / "Sem registro", nunca `0` nem `0%`, e sem `role="alert"`). Grep por `?? 0`, `|| 0` e `Number(` no gráfico retornou 0 ocorrências tocando `valor`. Teste de componente dedicado em `grafico-espectro.test.tsx` (15/15 verde). `pnpm typecheck` e `format` limpos. |
-| T32 | `e67b3a8` | Componente `ProcedenciaMarcoZero` (`procedencia-marco-zero.tsx` + `.stories.tsx` + `.test.tsx`). 7/7 testes unitários verdes. Renderiza copy pt-BR com Chip do DS para os 3 valores (`relatado_responsavel`, `observado_avaliador`, `registro_anterior`), omite quando `origem !== "anamnese"` ou procedência ausente, acessibilidade com `role="status"` e zero fetch de rede. `pnpm typecheck` e `pnpm lint` limpos. |
-| T33 | `64df831` | Formulário e página de anamnese (`page.tsx`, `anamnese-form.tsx`, `anamnese-form.stories.tsx`, `anamnese-form.test.tsx`). 28/28 testes verdes (unitários + storybook). Botão "Validar" restrito a coordenador, teto de 24 alvos bloqueado na UI com mensagem exata, opção explícita "Não avaliado" (null), modo somente leitura para validada e acessibilidade com `role="status"`. `pnpm typecheck` e `format` limpos. |
-| T34 | `chore(anamnese)` | Definição de Pronto (DoD final) verificada por medição real contra banco e suítes completas: `pnpm typecheck` (0 erros), `pnpm lint` (0 erros), `pnpm test` (239 arquivos, 1704 testes verdes), `pnpm test:rls` (119 arquivos, 1071 testes verdes), `migrations.test.ts` (8/8 testes verdes com journal e snapshot íntegros), comentário atualizado em `schema.ts:1367-1370` para nomear `origem`/`procedencia` e #407. |
-
-**Progresso: 34 de 34 tasks completas e revisadas** (T01-T34). Feature #407 100% entregue.
-
-### Medido, não presumido (T03/T05, revisado nesta sessão)
-
-- T03: `information_schema.role_column_grants` — exatos 4 UPDATEs de coluna em `anamnese`, zero em `estado`/`validada_em`/`validada_por` (via `has_column_privilege`). `pg_proc` do helper sem cast cru de `clinic_id`. `pg_policies` com 8 rows, UPDATE/DELETE carregando `estado = 'rascunho'` no predicado literal.
-- T05: `pg_proc.prosecdef = t`. SQL do `ON CONFLICT DO UPDATE` lido literalmente (não só o relato do implementador) — `EXCLUDED` à esquerda, `session_snapshot` à direita no `||`, `gerado_em = session_snapshot.gerado_em` (nunca `now()`). Testes T04 casos 5/6/7 (reentrância byte-idêntica, eixo novo entra, eixo existente mantém valor antigo) rodaram verdes contra essa implementação.
-- Ambas as revisões resetaram o banco local do zero (`DROP SCHEMA public/drizzle CASCADE` + `pnpm db:migrate`) antes de medir — editar migração já aplicada não re-roda (`editar-migracao-aplicada-nao-roda`), então medir sem reset dá falso negativo ou falso positivo.
-- `pnpm test:rls`: baseline estável em 112/113 arquivos, 1041-1042/1042 testes, com a única falha sendo `tenant-status-routing.int.test.ts` (redirect de MFA), pré-existente, causada por `BYPASS_MFA_FOR_DEV=true` no `.env` local, confirmada não-relacionada por isolamento de teste e por diff de escopo (T03 e T05 não tocam `src/auth/`).
+**Data**: 21/08/2026  
+**Status**: `main` verde, estável e equalizada  
+**Últimas PRs entregues em `main`**: #408 (#407), #410 (#409), #411 (D31)
 
 ---
 
-## Decisões tomadas nesta sessão (rulings do controlador)
+## 1. Estado de Entrega & Merge em `main`
 
-Herdadas da sessão anterior (não mudam código nesta sessão, só reafirmadas):
-
-1. Gate de taxonomia é `array_length(taxonomia_ajuda,1) >= 2` — aplicado literalmente no guard do T05.
-2. Contagem de `Sessão {n}` em prosa é 18 sites, não 13 — ainda não chegou a T27.
-3. Grep de verificação do T27 é defeituoso — ainda não chegou a T27.
-4. T03/T05 emendam a `0115` já aplicada localmente — correto para a branch, exige reset do banco local a cada revisão. **Confirmado funcionando duas vezes nesta sessão.**
-
-Novas desta sessão (T08):
-
-7. **`EIXOS_ANAMNESE = ORDEM_EIXOS` (T08) era o certo; o CHECK da migração `0115` estava errado, não o Zod.** O brief presumiu (corretamente, confirmado pela spec) que os 6 eixos da anamnese são os mesmos do hexágono do espectro. A migração `0115` (T01, já revisada e "clean" em sessão anterior) tinha vocabulário próprio (`interacao_social`/`autonomia`/`regulacao`/`cognicao_academico`) que nenhuma outra parte do repo referenciava (grep confirmou ponto único). Corrigido em commit separado `51006be`, fora do diff do implementador de T08 — controlador não deve consertar o próprio diff da task, mas isso era um defeito de task ANTERIOR (T01) que só a revisão de T08 revelou. Verificado por reset completo do banco local (`DROP SCHEMA ... CASCADE` com role `iris`, não `postgres` — `MIGRATION_DATABASE_URL` usa `iris`) + `pnpm test:rls`. Custo se errado: `INSERT` de alvo com eixo do hexágono estoura `23514` em prod.
-
-Herdadas (não mudam nesta sessão):
-
-5. **Oráculo do `clinic-id-helper-rls.int.test.ts` pode ser estendido por task, task após task, desde que nominal.** T03 subiu 56→64/16→17; T05 subiu de novo (17→18 funções, mais dois oráculos derivados `12→13`/`6→7`). Cada extensão foi adjudicada separadamente: arrays nomeados derivados de query viva contra `pg_proc`/`pg_policies`, `.length` calculado do array — não números hand-typed. Continuar tratando cada extensão como suspeita por padrão (é assim que um guard de CI é neutralizado em silêncio) e adjudicar nome a nome, não só a contagem.
-6. **Revisão roda depois do commit, não antes.** T03/T04/T05 todos commitados pelo implementador, revisão em cima do commit via `review-package`. Isso é aceitável nesta branch (não mergeada, não em produção) — mas qualquer achado Critical/Important vira um commit de fix novo, nunca um `--amend`.
+- ✅ **Feature #407 (PR #408 — `96044e1`)**: Anamnese estruturada como marco 0 da linha do tempo. 34/34 tasks concluídas por SDD (`.specs/features/407-anamnese-marco-zero/`). Tabelas `anamnese` e `anamnese_alvo` (migração `0115`), procedure `app_validar_anamnese` (snapshot 0 em `session_snapshot` com merge jsonb), gates de coordenador/protocolo/teto/consentimento, scrubber/timeline lendo marco 0 e formulário no design system.
+- ✅ **Feature #409 (PR #410 — `498d335`)**: Ponto de entrada da aba "Anamnese" no prontuário (`src/app/(app)/pacientes/[id]/layout.tsx`), condicionada a `protocol_driven` via `modalidade.ts`.
+- ✅ **Navegação & Dashboards (PR #411 — `5adfe6f`)**: Sub-navegação de `/clinica` com `TabsNav` (`/clinica/dados`, `/clinica/feriados`, `/clinica/emergencia`), fechando **D31**. Atalhos diretos em PEI e Ficha Clínica para dashboards de progresso dos protocolos.
 
 ---
 
-## Gate aberto — decisão do Rômulo, não do agente
+## 2. PRs Abertas Aguardando Revisão e Merge
 
-**Consentimento (D-H), bloqueante antes de dado real.** Ainda aberto, sem mudança nesta sessão. `docs/legal/` continua sem ser lido — exige autorização explícita do Rômulo antes. Não bloqueia implementar T06-T34; bloqueia colocar paciente real na anamnese.
+| PR       | Branch                                        | Escopo / Débito                                                                                                                               | Status                    |
+| :------- | :-------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------ |
+| **#412** | `feat/d52-guardrail-seed-ambiente`            | **Débito D52**: Guardrail em `scripts/seed.ts` e `scripts/seed-demo-account.ts` exigindo `localhost`/`127.0.0.1` ou `ALLOW_SEED_REMOTE=true`. | Aberta (Ready for Review) |
+| **#413** | `feat/d53-guardrail-preview-layout`           | **Débito D53**: Guardrail de teste unitário/CI (`src/app/layout.guard.test.ts`) contra injeção de `localhost:8400/live.js` em `layout.tsx`.   | Aberta (Ready for Review) |
+| **#414** | `fix/d47-sincronizacao-fixtures-alerta-risco` | **Débito D47**: Sincronização documental e de fixtures do modo convencional com a estrutura unificada de `alerta_risco` e `temas: string[]`.  | Aberta (Ready for Review) |
+| **#415** | `test/328-cobertura-proxy-matcher`            | **Issue #328**: Cobertura comportamental do `config.matcher` do proxy/middleware (`src/middleware.test.ts`).                                  | Aberta (Ready for Review) |
+| **#416** | `fix/d54-alert-side-stripe`                   | **Débito D54**: Remoção da side-stripe `border-l-[4px]` e `bordaEsquerda` no componente `Alert`, alinhando ao Espectro Brutal.                 | Aberta (Ready for Review) |
 
 ---
 
-## Aviso: outra sessão pode escrever na mesma branch
+## 3. Arcabouço Jurídico & Governança LGPD (`docs/legal/`)
 
-Confirmado na sessão anterior que `e5c6d4d`/`4f38394` (outra sessão Claude) escreveram nesta branch entre T02 e T03. Nenhuma nova ocorrência detectada nesta sessão, mas o risco continua: **antes de qualquer merge, conferir o diff contra a merge-base e exigir que o resultado seja só adição** (memória `merge-sem-conflito-apaga-feature-mergeada`).
+Revisão jurídica completa realizada e consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
+
+- ✅ **Remoção de Risco RAG/Treinamento**: Removida a menção de RAG/treinamento de modelo próprio de `pesquisa-planos-de-saude-prontuario.md` §4, harmonizando o texto com `politica-privacidade.md` §6 e Art. 11 LGPD.
+- ✅ **Teste de Proporcionalidade**: Produzido `docs/legal/teste-proporcionalidade-legitimo-interesse-antifraude.md` para fundamentar o legítimo interesse (Art. 10 LGPD) do hash antifraude `cpf_hash`.
+- ✅ **Provedor de IA Definido**: **Google Gemini (Gemini API)** nomeado formalmente em `politica-privacidade.md` §4 e nos termos de consentimento adulto e curatela, referenciando o Cloud Data Processing Addendum (DPA) do Google Cloud.
+- ✅ **Gate D-H (Consentimento / Anamnese)**: 100% finalizado. Respaldo legal validado (Tutela da Saúde Art. 11, II, "f" + Consentimento do Menor Art. 14, §1º cobrindo relato da dinâmica familiar) e gate técnico ativo via `app_prontuario_somente_leitura(patient_id)`.
+- ✅ **Termos de Uso & Privacidade Atualizados**: Foro de eleição estabelecido em Guarapari/ES (§9), prazo de aviso prévio de alterações de 30 dias (§8.4), canal de contato `notificacoes@irisclinica.ia.br` e DPO informal Rômulo Sutil Corrêa (§10).
+- ⚠️ **Débitos Legais Mapeados**:
+  - **D55**: `visibility_level` (sigilo multidisciplinar) especificado no aditivo legal (§2.1), pendente de implementação no schema/RLS (Art. 9º CEPP).
+  - **D56**: `e_psi` (declaração de registro ativo para telepsicologia, Res. CFP 009/2024) pendente no schema.
+  - **D57**: Verificação do Gemini pago (billing ativo no Google Cloud, escopo do DPA para Gemini API standalone, validação do Art. 33 LGPD) antes de ativar `EXTRACTION_LLM_ENABLED=true` com pacientes reais.
 
 ---
 
-## O que o próximo agente faz — em ordem, uma coisa de cada vez
+## 4. Verificação Atual da Base (`fix/d54-alert-side-stripe`)
 
-Fase 0 (T01-T05), o par `[P]` T06/T07, T08, T09, T10 e T11 estão **fechados e revisados**. T26/T27/T30/T32 também fechados (outra sessão, na mesma branch). Continuar em T12.
+| Gate                        | Resultado                                              |
+| :-------------------------- | :----------------------------------------------------- |
+| `pnpm typecheck`            | 0 erros                                                |
+| `pnpm lint`                 | 0 erros                                                |
+| `pnpm test`                 | 241/241 arquivos · 1.717/1.717 testes verdes           |
+| `pnpm test:rls`             | 119/119 arquivos · 1.071/1.071 testes verdes (0 skips) |
+| `src/db/migrations.test.ts` | 8/8 testes verdes (snapshot e journal íntegros)        |
+| `pnpm format`               | 100% formatado via Prettier                            |
 
-### Passo 1 — T12 em diante
+---
 
-T12 (`.superpowers/sdd/tasks/task-12-brief.md`, já extraído) é o próximo gate a camadear sobre `validarAnamneseCore` — conferir dependência exata no `tasks.md` antes de despachar.
+## 5. Próximos Passos Recomendados
 
-Sequencial a partir daqui salvo indicação `[P]` no brief (e mesmo `[P]`: despachar implementadores **sempre em sequência**, nunca em paralelo — regra da skill `subagent-driven-development`, não relaxar de novo). Consultar `.specs/features/407-anamnese-marco-zero/tasks.md` para ordem completa e dependências; briefs extraídos em `.superpowers/sdd/tasks/task-NN-brief.md` até T34.
-
-**Atenção antes de despachar T12**: outra sessão está escrevendo na mesma branch em paralelo (confirmado de novo nesta sessão — T26/T27/T30/T32 apareceram intercalados nos commits do T11). Rodar `git log --oneline -10` antes de gerar `BASE` para o próximo dispatch, e escopar review por path de arquivo, não por range bruto de commits.
-
-### Os dois guardrails que nenhuma task pode relaxar (repetido da sessão anterior, ainda vale)
-
-1. A anamnese **nunca** insere em `session`. `billing_apurar_ciclo` conta paciente ativo por `EXISTS` em `session` sem filtrar tipo/estado — uma linha em `session` cobra o cliente em silêncio. T20 é a guarda dedicada a esse invariante (ainda não chegamos lá).
-2. A validação cria `goal` em estado **`ativa`**. `contaComoAlvo` exclui `rascunho`; meta em rascunho deixa o hexágono 100% nulo.
-
-### Disciplina de sessão curta (pedido do Rômulo nesta sessão)
-
-Sessões devem ser curtas — parar em pontos atômicos (fim de task ou par de tasks `[P]`), não acumular. Ao parar: atualizar este checkpoint + `.superpowers/sdd/tasks/progress.md`, commitar, e deixar passo a passo explícito para quem retomar (mesma estrutura deste arquivo). Não é preciso esperar a Fase 1 inteira para fazer o próximo checkpoint — parar de novo depois de T06/T07 ou depois de um punhado de tasks, o que vier primeiro.
+1. Merge das PRs **#412**, **#413**, **#414**, **#415** e **#416** (D54).
+2. **D34**: Adicionar `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
+3. **D40 / #330**: Eliminar 3 N+1 restantes em `src/lib/evidence/materializar.ts`.
+4. **#383**: Implementar Webhook do Resend para log de bounces/complaints de e-mails transacionais.
