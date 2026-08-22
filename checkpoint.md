@@ -16,13 +16,15 @@
 
 ## 2. PRs Abertas Aguardando Revisão e Merge
 
-| PR       | Branch                                        | Escopo / Débito                                                                                                                               | Status                    |
-| :------- | :-------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------ |
-| **#412** | `feat/d52-guardrail-seed-ambiente`            | **Débito D52**: Guardrail em `scripts/seed.ts` e `scripts/seed-demo-account.ts` exigindo `localhost`/`127.0.0.1` ou `ALLOW_SEED_REMOTE=true`. | Aberta (Ready for Review) |
-| **#413** | `feat/d53-guardrail-preview-layout`           | **Débito D53**: Guardrail de teste unitário/CI (`src/app/layout.guard.test.ts`) contra injeção de `localhost:8400/live.js` em `layout.tsx`.   | Aberta (Ready for Review) |
-| **#414** | `fix/d47-sincronizacao-fixtures-alerta-risco` | **Débito D47**: Sincronização documental e de fixtures do modo convencional com a estrutura unificada de `alerta_risco` e `temas: string[]`.  | Aberta (Ready for Review) |
-| **#415** | `test/328-cobertura-proxy-matcher`            | **Issue #328**: Cobertura comportamental do `config.matcher` do proxy/middleware (`src/middleware.test.ts`).                                  | Aberta (Ready for Review) |
-| **#416** | `fix/d54-alert-side-stripe`                   | **Débito D54**: Remoção da side-stripe `border-l-[4px]` e `bordaEsquerda` no componente `Alert`, alinhando ao Espectro Brutal.                 | Aberta (Ready for Review) |
+| PR       | Branch                                        | Escopo / Débito                                                                                                                                                                             | Status                    |
+| :------- | :-------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------ |
+| **#412** | `feat/d52-guardrail-seed-ambiente`            | **Débito D52**: Guardrail em `scripts/seed.ts` e `scripts/seed-demo-account.ts` exigindo `localhost`/`127.0.0.1` ou `ALLOW_SEED_REMOTE=true`.                                               | Aberta (Ready for Review) |
+| **#413** | `feat/d53-guardrail-preview-layout`           | **Débito D53**: Guardrail de teste unitário/CI (`src/app/layout.guard.test.ts`) contra injeção de `localhost:8400/live.js` em `layout.tsx`.                                                 | Aberta (Ready for Review) |
+| **#414** | `fix/d47-sincronizacao-fixtures-alerta-risco` | **Débito D47**: Sincronização documental e de fixtures do modo convencional com a estrutura unificada de `alerta_risco` e `temas: string[]`.                                                | Aberta (Ready for Review) |
+| **#415** | `test/328-cobertura-proxy-matcher`            | **Issue #328**: Cobertura comportamental do `config.matcher` do proxy/middleware (`src/middleware.test.ts`).                                                                                | Aberta (Ready for Review) |
+| **#416** | `fix/d54-alert-side-stripe`                   | **Débito D54**: Remoção da side-stripe `border-l-[4px]` e `bordaEsquerda` no componente `Alert`, alinhando ao Espectro Brutal.                                                              | Aberta (Ready for Review) |
+| **#417** | `fix/330-n-plus-1-materializar-snapshot`      | **Issue #330 / D40**: Eliminação dos 3 N+1 em `materializarSnapshot` (`taxonomiasDosProtocolos`, `criteriosDominioDasMetas`, `lerCandidaturasGoalsAtuais` em lote, gravações concorrentes). | Aberta (Ready for Review) |
+| **#418** | `feat/383-resend-webhook-bounces-complaints`  | **Issue #383**: Webhook Resend de Bounce/Complaint (`/api/webhooks/resend` e alias `/api/hooks/resend`) com validação Svix e log estruturado.                                               | Aberta (Ready for Review) |
 
 ---
 
@@ -42,22 +44,21 @@ Revisão jurídica completa realizada e consolidada em `docs/legal/revisao-jurid
 
 ---
 
-## 4. Verificação Atual da Base (`fix/d54-alert-side-stripe`)
+## 4. Verificação Atual da Base (`feat/383-resend-webhook-bounces-complaints`)
 
-| Gate                        | Resultado                                              |
-| :-------------------------- | :----------------------------------------------------- |
-| `pnpm typecheck`            | 0 erros                                                |
-| `pnpm lint`                 | 0 erros                                                |
-| `pnpm test`                 | 241/241 arquivos · 1.717/1.717 testes verdes           |
-| `pnpm test:rls`             | 119/119 arquivos · 1.071/1.071 testes verdes (0 skips) |
-| `src/db/migrations.test.ts` | 8/8 testes verdes (snapshot e journal íntegros)        |
-| `pnpm format`               | 100% formatado via Prettier                            |
+| Gate                                        | Resultado                                                           |
+| :------------------------------------------ | :------------------------------------------------------------------ |
+| `pnpm typecheck`                            | 0 erros                                                             |
+| `pnpm lint`                                 | 0 erros                                                             |
+| `pnpm test`                                 | 243/243 arquivos · 1.731/1.731 testes verdes                        |
+| `src/lib/email/webhook.test.ts`             | 9/9 testes unitários de verificação Svix e log verdes               |
+| `src/app/api/webhooks/resend/route.test.ts` | 5/5 testes de rotas /api/webhooks/resend e /api/hooks/resend verdes |
+| `pnpm format`                               | 100% formatado via Prettier                                         |
 
 ---
 
 ## 5. Próximos Passos Recomendados
 
-1. Merge das PRs **#412**, **#413**, **#414**, **#415** e **#416** (D54).
+1. Merge das PRs **#412**, **#413**, **#414**, **#415**, **#416**, **#417** (#330 / D40) e **#418** (#383).
 2. **D34**: Adicionar `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
-3. **D40 / #330**: Eliminar 3 N+1 restantes em `src/lib/evidence/materializar.ts`.
-4. **#383**: Implementar Webhook do Resend para log de bounces/complaints de e-mails transacionais.
+3. Cadastrar o endpoint `https://irisclinica.ia.br/api/webhooks/resend` no painel do Resend com eventos `email.bounced` e `email.complained`.
