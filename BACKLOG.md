@@ -2174,3 +2174,50 @@ sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o se
   - Mutante sem `brand/` na exclusão → **morto** (1 teste).
   - Mutante sem `_next/image` na exclusão → **morto** (1 teste).
   - Mutante removendo a entrada explícita `"/redefinir-senha"` → **sobrevive**, e é **mutante equivalente**: o catch-all `/((?!_next/static|_next/image|favicon.ico|brand/).*)` já casa `/redefinir-senha`. A entrada explícita é redundante no casamento e permanece apenas como declaração de intenção da rota crítica; nenhum teste novo é devido por ela.
+
+---
+
+## 📦 Sessão 22/08/2026 — Feature #374: Exportação Integral do Acervo da Clínica (Unificando #374 e #353)
+
+- **Status:** ✅ Concluído.
+- **Objetivo:** Implementar a exportação integral e portabilidade do acervo da clínica (Termos de Uso §7.4(b) e LGPD Art. 18), com geração assíncrona de pacote ZIP contendo todas as 37 tabelas do prontuário em formato NDJSON, relatórios clínicos congelados em PDF, manifesto com checksum SHA-256 e download seguro por token de uso único.
+- **Entregas principais:**
+  - **T1 — Migração `0117_export_bundle`:**
+    - Tabelas `export_bundle` e `export_bundle_blob` com status de ciclo de vida (`pendente`, `processando`, `pronto`, `falhou`, `expirado`), índice `uq_export_bundle_ativo` (UNIQUE parcial) e constraints de check.
+    - Políticas de RLS (`export_bundle_select`, `export_bundle_insert`, `export_bundle_blob_select`) com `app_clinic_id_exigido()` e `app_user_id_exigido()`. Nenhuma policy de UPDATE/DELETE para `app_role`.
+    - Quatro funções `SECURITY DEFINER`: `app_export_bundle_reservar`, `app_export_bundle_concluir`, `app_export_bundle_falhar`, `app_export_bundle_expirar`.
+    - **Isenção D10 documentada:** Ambas as tabelas deliberadamente isentas de `app_barreira_somente_leitura` para permitir que clínicas com conta em somente-leitura (pós-trial ou cancelada) exportem seus dados.
+  - **T2 — Coletor de Dados NDJSON (`src/lib/export/acervo/coletor.ts`):**
+    - Coleta sob `withTenant(clinicId, solicitanteId)` (D9) com ordenação determinística por PK.
+    - Projeção estrita de `app_user` (`id, name, email, created_at`), exclusão de `patient.cpf_hash` e segredos, e exclusão de soft-delete (`deletado_em IS NOT NULL`).
+    - Catálogo explícito de 37 tabelas e lista de negação estrita (`TABELAS_NEGADAS`).
+  - **T3 — Empacotador ZIP + Manifesto (`src/lib/export/acervo/bundle.ts`):**
+    - Compactação em memória via `fflate` gerando `dados/*.ndjson`, `relatorios/*.pdf`, `README.txt` e `manifest.json`.
+    - Cálculo de SHA-256 por arquivo e do ZIP inteiro via `sha256Hex`.
+    - Teto de 250 MiB com erro nomeado `bundle_excede_limite` (D7).
+  - **T4 — Motor de Estado (`src/lib/export/acervo/motor.ts`):**
+    - `solicitarExportacao`: Gate D1 de responsável da conta (`clinic.responsavel_conta_id`), inserção de `export_bundle` pendente e `audit_log` (`exportacao_integral_solicitada`).
+    - `processarProximo`: Reserva transacional atômica com teto de 3 tentativas (`tentativas_esgotadas`), geração de token seguro de download, transição para `pronto` com persistência de blob e `audit_log` (`exportacao_integral_concluida` / `exportacao_integral_falhou`).
+    - `expirarVencidos`: Expiração após 72h, descarte do blob em `export_bundle_blob` e `audit_log` (`exportacao_integral_expirada`).
+    - `obterHistoricoExportacoes`: Consulta do estado ativo e histórico sob RLS.
+  - **T5 — Job + Rota Interna (`src/app/api/internal/jobs/exportacao-integral/route.ts`):**
+    - Endpoint autenticado via Bearer token constante (`EXPORT_JOB_TOKEN`), processando a fila e disparando expiração.
+  - **T6 — Download Seguro (`src/app/api/export/acervo/[id]/route.ts` + `download.ts`):**
+    - Validação de sessão do responsável, conferência de token via SHA-256 + `timingSafeEqual`, 404 genérico para token/id inválidos (sem vazamento de existência), 410 para expirados e `audit_log` (`exportacao_integral_download`).
+  - **T7 — Interface do Usuário:**
+    - Página `src/app/(app)/clinica/exportacao/page.tsx` (Server Component com gate D1).
+    - View client `exportacao-view.tsx` com polling temporizado (10s, máx 60 tentativas / 10 min), estado de sucesso permanente, cópia de checksum SHA-256 e componentes do Design System.
+    - Server Action `actions.ts` e endpoint de estado `/api/exportacao/estado`.
+    - Estórias Storybook em `exportacao-view.stories.tsx`.
+    - Link estático "Exportar acervo" na tarja de somente-leitura (`FaixaTrial`) e no menu de navegação do coordenador (`AppHeader`).
+  - **T8 — Testes e Conformidade:**
+    - `coletor.test.ts`, `bundle.test.ts`, `route.test.ts`, `actions.test.ts` (testes unitários).
+    - `coletor.int.test.ts`, `motor.int.test.ts`, `download.int.test.ts`, `acervo.int.test.ts` (testes de integração/RLS).
+    - Verificação de negação estrita varrendo o ZIP real descompactado (zero tabelas de credencial/gateway e zero `cpf_hash`).
+    - Verificação de funcionamento com conta em somente-leitura (D10).
+    - Verificação das 5 ações da trilha imutável em `audit_log`.
+- **Validação e Métricas (Medição real):**
+  - `pnpm typecheck`: **0 erros**.
+  - `pnpm lint`: **0 erros**.
+  - `pnpm test`: **253/253 arquivos de teste passando (1.804 testes verdes)**.
+  - `POLICIES_COM_HELPER`: 67 policies validadas em `clinic-id-helper-rls.int.test.ts`.
