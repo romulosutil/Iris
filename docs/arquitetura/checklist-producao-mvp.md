@@ -161,6 +161,18 @@ Easypanel + Postgres puro + MinIO). Itens de infra são "confirmar antes / via
       `matcher: []`, sem `brand/` e sem `_next/image` medidos e mortos; o mutante
       que remove a entrada explícita `"/redefinir-senha"` é equivalente (o
       catch-all já casa a rota).
+- [x] Componente `Alert` sem side-stripe: `border-l-[4px]`, `bordaEsquerda` e
+      `bordaOutras` têm 0 ocorrências em `src/` (D54 / PR #416). Guarda em
+      `src/components/ui/alert.test.tsx` medida por mutação em `alert.tsx`:
+      reintroduzir `border-l-[4px]` mata 9 dos 10 testes; achatar as 6 cores de
+      borda em `--border-brutal` mata 7.
+- [ ] Provedor de IA nomeado na Política de Privacidade (D57). A decisão de
+      21/08/2026 é **Google (Gemini API)**, mas `docs/legal/politica-privacidade.md`
+      segue em `2026-08-07` sem menção ao provedor (medido: `grep -c Gemini` = 0).
+      Os testes que exigiam `Google (Gemini API)` / `EXTRACTION_LLM_ENABLED` foram
+      revertidos na revisão da PR #416 por afirmarem conteúdo que não existe no
+      repositório — lição `[[verificar-fato-de-infra-com-medicao]]`. Reativar
+      junto com o commit do documento, sob autorização do Rômulo.
 
 ---
 

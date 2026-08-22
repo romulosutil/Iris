@@ -9,7 +9,7 @@
 
 ## 🎯 1. Visão Geral & Estado do Produto
 
-O **Iris** é um SaaS especializado para clínicas de terapia infantil (intervenção comportamental para TEA / ABA) baseado na **Governança Clínica em 3 Camadas**:
+O **Iris** é um SaaS especializado para clínicas de terapia infantil (intervenção comportamental para TEA / ABA / TCC) baseado na **Governança Clínica em 3 Camadas**:
 
 1. **IA Sugere:** Derivação estruturada a partir do diário de sessão em linguagem natural (rastreabilidade frase-a-frase).
 2. **Terapeuta Aprova:** Revisão humana obrigatória na interface (_Human-in-the-Loop_).
@@ -57,6 +57,8 @@ _Foco: Garantir sigilo absoluto de menores (LGPD), blindagem contra vazamento de
 | **[#89](https://github.com/romulosutil/Iris/issues/89)**   | **Retenção de Backup (30d) vs. Expurgo LGPD**           | Harmonizar política de descarte definitivo de dados expirados nos backups cifrados off-site da Oracle Cloud.                                                                                                              | Engenharia & Jurídico                      |
 | **[#119](https://github.com/romulosutil/Iris/issues/119)** | **Sigilo da Psicologia no Prontuário Multidisciplinar** | Níveis de visibilidade estritos para notas confidenciais de psicólogos dentro da clínica multidisciplinar.                                                                                                                | Spec de Produto & RLS                      |
 | **Hardening**                                              | **Defesa contra Prompt Injection em Diários**           | Sanitização rigorosa do texto livre digitado por terapeutas antes do envio ao pipeline de extração da LLM.                                                                                                                | Engenharia de IA                           |
+| **Arcabouço Legal (docs/legal/)**                          | **Revisão Jurídica LGPD / Termos & Privacidade**        | Remoção de menções a RAG/treinamento de modelo com prontuário; produção do teste de proporcionalidade do legítimo interesse (Art. 10 LGPD) para `cpf_hash`; nomeação do Google Gemini sob DPA do Google Cloud.            | **Jurídico & Produto**                     | ✅ **Concluído em 21/08/2026** |
+| **D57**                                                    | **Gating Operacional de IA (Gemini)**                   | Manter `EXTRACTION_LLM_ENABLED=false` até validação de billing pago ativo no Google Cloud e confirmação de enquadramento DPA standalone.                                                                                  | Engenharia & Operações                     | Aberto (Pré-requisito IA real) |
 
 ---
 
@@ -75,6 +77,7 @@ _Foco: Entregar clareza máxima na interface, reduzir atrito no dia a dia dos te
 | **[#277](https://github.com/romulosutil/Iris/issues/277)**     | **Painel de Governança e Segurança da Clínica**                 | Central administrativa para a gestora da clínica visualizar logs de acesso, consentimentos LGPD e auditoria de laudos.                                                            | Produto & Frontend                  |
 | **[#283](https://github.com/romulosutil/Iris/issues/283)**     | **Layout Mobile da Visão Matriz na Agenda**                     | Ajuste do grid de agendamentos para visualização fluida em telas < 375px (smartphones de terapeutas em campo).                                                                    | Frontend / Jules                    |
 | **[#72](https://github.com/romulosutil/Iris/issues/72)**       | **Fase 6b — Ditado por Voz (Áudio + ASR)**                      | Transcrição automática de áudio de sessão via modelo com DPA médico assinado.                                                                                                     | Roadmap / Pós-Piloto                |
+| **D54 / PR #416**                                              | **Remover side-stripe banida do componente `Alert`**            | Eliminar classe `border-l-[4px]` e propriedade `bordaEsquerda` de `src/components/ui/alert.tsx`, alinhando todos os alertas ao Design System.                                     | **Claude / Antigravity**            | ✅ **Entregue** |
 
 ---
 
@@ -90,6 +93,7 @@ _Foco: Alta performance de banco, zero overhead em queries e observabilidade con
 | **[#327](https://github.com/romulosutil/Iris/issues/327)**                                                              | **Cobertura de Teste do Throttle de Redefinição de Senha** | Garantir oráculo rígido para chave e limites do throttle.                                                                                                     | **Jules (Autônomo)**          |
 | **[#328](https://github.com/romulosutil/Iris/issues/328)** / **PR #415**                                                | **Perímetro Comportamental do `config.matcher` do Proxy**  | Perímetro do middleware avaliado com `getPathMatch` do próprio Next: rotas interceptadas (incl. `/redefinir-senha`, finding C1) vs. assets que passam direto. | ✅ **Concluído (22/08/2026)** |
 | **[#332](https://github.com/romulosutil/Iris/issues/332)** / **[#341](https://github.com/romulosutil/Iris/issues/341)** | **Estabilização de Suíte A11y & Storybook Windows**        | Eliminar flakes sob concorrência e corrigir glob de stories em ambiente Windows.                                                                              | Tooling / Jules               |
+| **[#383](https://github.com/romulosutil/Iris/issues/383)**                                                              | **Webhook Resend de Bounce/Complaint**                     | Rota `src/app/api/webhooks/resend/route.ts` para capturar eventos de entrega de e-mails transacionais.                                                        | **Jules (Autônomo)**          | Aberto |
 
 ---
 
@@ -97,12 +101,12 @@ _Foco: Alta performance de banco, zero overhead em queries e observabilidade con
 
 _Foco: Diferenciação de mercado, enterprise features e escala da base de clientes._
 
-| Item / Issue                                                     | Título & Escopo                                 | Por que importa                                                                                        | Status          |
-| :--------------------------------------------------------------- | :---------------------------------------------- | :----------------------------------------------------------------------------------------------------- | :-------------- |
-| **D9 / [#258](https://github.com/romulosutil/Iris/issues/258)**  | **Customização White-Label nos Laudos e PDFs**  | Personalização com logotipo, cores e cabeçalho oficial da clínica nos relatórios auditáveis.           | Aguardando Spec |
-| **D10 / [#259](https://github.com/romulosutil/Iris/issues/259)** | **Assinatura Digital ICP-Brasil A1/A3**         | Integração com certificados ICP-Brasil para relatórios de intervenção com exigência judicial/pericial. | Aguardando Spec |
-| **D11 / [#260](https://github.com/romulosutil/Iris/issues/260)** | **Indexação RAG em Prontuários Históricos**     | Busca semântica e síntese longitudinal da evolução do paciente ao longo de múltiplos anos.             | Aguardando Spec |
-| **[#185](https://github.com/romulosutil/Iris/issues/185)**       | **Empacotamento PWA & TWA (Google Play Store)** | Disponibilização do app na loja para tablets clínicos e uso offline com sincronização.                 | Pós-MVP         |
+| Item / Issue                                                     | Título & Escopo                                 | Por que importa                                                                                                                                          | Status          |
+| :--------------------------------------------------------------- | :---------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------- |
+| **D9 / [#258](https://github.com/romulosutil/Iris/issues/258)**  | **Customização White-Label nos Laudos e PDFs**  | Personalização com logotipo, cores e cabeçalho oficial da clínica nos relatórios auditáveis.                                                             | Aguardando Spec |
+| **D10 / [#259](https://github.com/romulosutil/Iris/issues/259)** | **Assinatura Digital ICP-Brasil A1/A3**         | Integração com certificados ICP-Brasil para relatórios de intervenção com exigência judicial/pericial.                                                   | Aguardando Spec |
+| **D11 / [#260](https://github.com/romulosutil/Iris/issues/260)** | **Indexação RAG em Prontuários Históricos**     | Busca semântica e síntese longitudinal da evolução do paciente ao longo de múltiplos anos (condicionada a consentimento específico e anonimização LGPD). | Aguardando Spec |
+| **[#185](https://github.com/romulosutil/Iris/issues/185)**       | **Empacotamento PWA & TWA (Google Play Store)** | Disponibilização do app na loja para tablets clínicos e uso offline com sincronização.                                                                   | Pós-MVP         |
 
 ---
 
@@ -112,7 +116,7 @@ Para garantir eficiência e máxima qualidade de código conforme `AGENTS.md` §
 
 ### 🔹 Claude Code / Antigravity (Sessões Síncronas / Arquitetura)
 
-- Regras de negócio de Billing & Governança (D36, D34, D39).
+- Regras de negócio de Billing, RLS & Governança (D36, D34, D39, D55).
 - Modificações de Schema Drizzle / Migrações PostgreSQL.
 - Definição de Specs e fechamento de decisões antes de delegar.
 
@@ -121,20 +125,25 @@ Para garantir eficiência e máxima qualidade de código conforme `AGENTS.md` §
 - **Critério:** Issues com escopo 100% delimitado, padrões de código pré-existentes e zero ambiguidade técnica.
 - **Backlog Ativo para o Jules:**
   - `perf(evidence): três N+1 restantes em materializar.ts` ([#330](https://github.com/romulosutil/Iris/issues/330))
+  - `feat(webhooks): webhook do Resend para log de bounces/complaints` ([#383](https://github.com/romulosutil/Iris/issues/383))
   - `test(redefinir-senha): chave e limites do throttle` ([#327](https://github.com/romulosutil/Iris/issues/327))
   - `test(proxy): config.matcher cobertura comportamental` ([#328](https://github.com/romulosutil/Iris/issues/328)) — ✅ Concluído
   - `test(storybook): runner em instalação limpa Windows` ([#341](https://github.com/romulosutil/Iris/issues/341))
+  - `fix(ui): remover border-l-[4px] no componente Alert (D54)` — ✅ Concluído (PR #416)
 
 ---
 
 ## 🔒 4. Quadro Geral de Decisões Fechadas
 
-| #     | Decisão de Produto & Engenharia             | Decisão Homologada pelo Rômulo           | Impacto Arquitetural                                                                                                |
-| :---- | :------------------------------------------ | :--------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
-| **1** | **Cobrança Deletada no Painel Asaas (D41)** | **Manter Bloqueio Seguro**               | Se cobrança for apagada no gateway, o app exibe "fale com o suporte" para não ressuscitar cobrança indevida.        |
-| **2** | **Reativação de Conta (#310)**              | **Pagamento Único (Valor Total)**        | Na reativação (inclusive pós-inadimplência), o QR Code do Pix assume o valor consolidado da dívida em um único ato. |
-| **3** | **Auditoria de Corte por Carência (D34)**   | **Aprovado (`audit_log` + `exit 1`)**    | Cancelamento por inadimplência emite evento formal em `audit_log` e o job noturno alerta falhas no exit code.       |
-| **4** | **Erros Internos no Backstop (D39)**        | **Persistir Código G6**                  | Gravar o código cru de recusas G6 para que o backstop de D+7 não penalize a clínica por falhas internas.            |
-| **5** | **Escopo da UI de Faturamento (D36)**       | **Opção B (Separar)**                    | D36 foca na faixa de alerta urgente de recusa na UI; histórico detalhado de retentativas vira issue dedicada.       |
-| **6** | **Discriminador de Webhook (#289)**         | **Por Presença de `paymentInstruction`** | Discriminar mensalidade vs. ativação inicial de R$ 0,01 fail-closed pela presença da instrução.                     |
-| **7** | **Retentativas Extradias (#322)**           | **Excluir G7 (Apenas Saldo / G2)**       | Retentativas automáticas em dias posteriores reservadas exclusivamente para recusa por falta de saldo.              |
+| #      | Decisão de Produto & Engenharia             | Decisão Homologada pelo Rômulo           | Impacto Arquitetural                                                                                                 |
+| :----- | :------------------------------------------ | :--------------------------------------- | :------------------------------------------------------------------------------------------------------------------- |
+| **1**  | **Cobrança Deletada no Painel Asaas (D41)** | **Manter Bloqueio Seguro**               | Se cobrança for apagada no gateway, o app exibe "fale com o suporte" para não ressuscitar cobrança indevida.         |
+| **2**  | **Reativação de Conta (#310)**              | **Pagamento Único (Valor Total)**        | Na reativação (inclusive pós-inadimplência), o QR Code do Pix assume o valor consolidado da dívida em um único ato.  |
+| **3**  | **Auditoria de Corte por Carência (D34)**   | **Aprovado (`audit_log` + `exit 1`)**    | Cancelamento por inadimplência emite evento formal em `audit_log` e o job noturno alerta falhas no exit code.        |
+| **4**  | **Erros Internos no Backstop (D39)**        | **Persistir Código G6**                  | Gravar o código cru de recusas G6 para que o backstop de D+7 não penalize a clínica por falhas internas.             |
+| **5**  | **Escopo da UI de Faturamento (D36)**       | **Opção B (Separar)**                    | D36 foca na faixa de alerta urgente de recusa na UI; histórico detalhado de retentativas vira issue dedicada.        |
+| **6**  | **Discriminador de Webhook (#289)**         | **Por Presença de `paymentInstruction`** | Discriminar mensalidade vs. ativação inicial de R$ 0,01 fail-closed pela presença da instrução.                      |
+| **7**  | **Retentativas Extradias (#322)**           | **Excluir G7 (Apenas Saldo / G2)**       | Retentativas automáticas em dias posteriores reservadas exclusivamente para recusa por falta de saldo.               |
+| **8**  | **Provedor de IA de Extração (21/08/2026)** | **Google Gemini (Gemini API)**           | Nomeado formalmente nos termos e políticas; DPA do Google Cloud incorporado; gating até confirmações de D57.         |
+| **9**  | **Foro de Eleição & Contrato (21/08/2026)** | **Guarapari / ES**                       | Fixado nos Termos de Uso §9, com prazo de aviso prévio de 30 dias (§8.4) e contato `notificacoes@irisclinica.ia.br`. |
+| **10** | **Validação Jurídica (21/08/2026)**         | **Protocolo de Ratificação Mantido**     | Dr. Thiago Lyra lê os documentos e valida por ausência de apontamento, sem emissão de parecer formal avulso.         |
