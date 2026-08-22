@@ -31,6 +31,13 @@ export function ExportacaoView({
   const [pollingEsgotado, setPollingEsgotado] = React.useState(false);
   const [copiadoSha, setCopiadoSha] = React.useState<string | null>(null);
 
+  const [agora, setAgora] = React.useState<number>(() => Date.now());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setAgora(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   const tentativaRef = React.useRef(0);
   const estaAtivo =
     ativo?.status === "pendente" || ativo?.status === "processando";
@@ -39,7 +46,6 @@ export function ExportacaoView({
   React.useEffect(() => {
     if (!estaAtivo) {
       tentativaRef.current = 0;
-      setPollingEsgotado(false);
       return;
     }
 
@@ -60,6 +66,12 @@ export function ExportacaoView({
           };
           setAtivo(data.ativo);
           setHistorico(data.historico);
+          if (
+            data.ativo?.status !== "pendente" &&
+            data.ativo?.status !== "processando"
+          ) {
+            setPollingEsgotado(false);
+          }
         }
       } catch (err) {
         console.error("Erro ao verificar estado da exportação", err);
@@ -95,6 +107,7 @@ export function ExportacaoView({
   const handleSolicitar = async () => {
     setIsSolicitando(true);
     setErroSolicitacao(null);
+    setPollingEsgotado(false);
     try {
       const res = await solicitarExportacaoAction();
       if (res.ok) {
@@ -151,7 +164,7 @@ export function ExportacaoView({
 
   const calcularHorasRestantes = (expiraEm: Date | string | null): number => {
     if (!expiraEm) return 0;
-    const diff = new Date(expiraEm).getTime() - Date.now();
+    const diff = new Date(expiraEm).getTime() - agora;
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60)));
   };
 
