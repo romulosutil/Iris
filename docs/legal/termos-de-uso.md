@@ -48,9 +48,12 @@ tecnicamente por ele perante seu conselho profissional
 ## 2. Partes e papéis
 
 - **Iris** — nome comercial da plataforma, operada por **R Sutil Correa Ltda**,
-  CNPJ **29.811.201/0001-50**, sede em ⟨PENDENTE: endereço completo da sede do
-  operador⟩. Fornecedor do software e **operador** de dados pessoais (LGPD Art.
-  5º, VII), por conta e ordem da clínica-contratante.
+  CNPJ **29.811.201/0001-50**, sede em **Rua Horácio Santana, 342, Ap 101**
+  ⟨PENDENTE: bairro, cidade, UF e CEP — informados apenas o logradouro, número
+  e complemento em 21/08/2026; endereço fica incompleto para fins de citação
+  judicial e de identificação formal do operador enquanto esses dados não
+  forem confirmados⟩. Fornecedor do software e **operador** de dados pessoais
+  (LGPD Art. 5º, VII), por conta e ordem da clínica-contratante.
 - **Clínica-contratante** — **controladora** dos dados (LGPD Art. 5º, VI),
   responsável pelo cadastro de protocolos licenciados, pela composição de
   disciplinas/profissionais, pela relação com pacientes/famílias e pela
@@ -279,9 +282,9 @@ somente-leitura e a exportação da seção 6 são preservados.
 **8.4. Alteração destes Termos.** O Iris pode alterar estes Termos. Toda
 alteração gera **uma nova versão datada**, e a versão aceita por cada conta fica
 registrada — versões não são sobrescritas. Alterações relevantes serão
-comunicadas por e-mail ao responsável pela conta com antecedência de
-⟨PENDENTE: prazo de antecedência para comunicar alteração relevante dos Termos⟩,
-e o uso continuado após a entrada em vigor caracteriza aceite da nova versão.
+comunicadas por e-mail ao responsável pela conta com antecedência de **30
+(trinta) dias corridos**, e o uso continuado após a entrada em vigor
+caracteriza aceite da nova versão.
 
 ## 9. Foro e legislação aplicável
 
@@ -290,8 +293,11 @@ Aplica-se a legislação brasileira, incluindo a Lei Geral de Proteção de Dado
 CONTRATANTE for pessoa física ou microempresa em situação de vulnerabilidade, o
 Código de Defesa do Consumidor.
 
-Foro: ⟨PENDENTE: foro de eleição — tipicamente o da sede do operador ou o do
-domicílio da contratante; a definir juridicamente⟩.
+**Foro: Comarca de Guarapari, Estado do Espírito Santo.**
+
+> Definido em 21/08/2026. O advogado de registro do projeto (Dr. Thiago Lyra
+> Galvão) avaliou e validou a escolha, por aderência legal e por segurança em
+> caso de litígio.
 
 ## 10. Da natureza do sistema de alerta de risco clínico e isenção de monitoramento contínuo
 
@@ -357,8 +363,17 @@ documentos devem ser lidos em conjunto.
 
 ## 12. Contato
 
-Canal para dúvidas sobre estes Termos e assuntos contratuais: ⟨PENDENTE: e-mail
-ou canal oficial de contato do operador⟩.
+Canal para dúvidas sobre estes Termos e assuntos contratuais:
+**`notificacoes@irisclinica.ia.br`**.
+
+> ⚠️ **Nota de verificação, 21/08/2026:** este é o mesmo endereço configurado
+> como `RESEND_FROM_EMAIL` em `.env.example` — hoje descrito ali como
+> **remetente** de e-mail transacional (verificação de conta, recuperação de
+> senha, convites, avisos de cobrança), não confirmadamente como caixa que
+> recebe e monitora resposta. Antes de publicar, confirmar que esse endereço
+> também **recebe e é lido** — senão, dúvida contratual enviada para lá corre
+> risco de nunca ser respondida. Se a caixa de entrada for outra, ajustar
+> aqui.
 
 Para assuntos de proteção de dados e exercício de direitos do titular, ver a
 seção 11 da Política de Privacidade.
@@ -382,18 +397,25 @@ Itens resolvidos em 30/07/2026 (não bloqueiam mais a publicação):
 
 - Prazo de aviso prévio e carência por inadimplência (seção 8.3) — fixado em 10 (dez) dias corridos.
 
+Itens resolvidos em 21/08/2026 (não bloqueiam mais a publicação):
+
+- **Foro de eleição** (seção 9) — Comarca de Guarapari/ES, definido pelo
+  Rômulo e validado pelo Dr. Thiago Lyra Galvão.
+- **Prazo de antecedência para comunicar alteração relevante dos Termos**
+  (seção 8.4) — 30 (trinta) dias corridos.
+- **Canal oficial de contato do operador** (seção 12) —
+  `notificacoes@irisclinica.ia.br`, com a ressalva de verificação já registrada
+  na própria seção.
+
 Itens **ainda em aberto** — cada um corresponde a um marcador `⟨PENDENTE⟩` no
 corpo do documento e depende de um dado que ainda não existe no projeto:
 
-1. **Endereço completo da sede do operador** (seção 2).
+1. **Bairro, cidade, UF e CEP da sede do operador** (seção 2) — só o
+   logradouro, número e complemento foram informados em 21/08/2026.
 2. **Formato final de exportação de dados** (seção 6).
 3. **Valor unitário final do tier "Diário" e dos demais tiers** (seção 7.1).
 4. **Prazo de permanência em modo somente-leitura antes de qualquer eliminação,
    e a forma de aviso prévio** (seção 7.4 c).
-5. **Prazo de antecedência para comunicar alteração relevante dos Termos**
-   (seção 8.4).
-6. **Foro de eleição** (seção 9).
-7. **Canal oficial de contato do operador** (seção 12).
 
 Além destes, permanece pendente a **revisão jurídica completa** do documento.
 A publicação nesta versão foi autorizada pelo titular do negócio em 30/07/2026,

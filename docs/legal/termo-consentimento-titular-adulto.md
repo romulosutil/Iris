@@ -148,9 +148,17 @@ Versão `adulto-v1`.
   trata os dados por conta e ordem da clínica, exclusivamente para prestar o
   serviço contratado.
 - **Titular:** [Nome completo], [CPF], [data de nascimento].
-- **Provedor de inteligência artificial contratado:** [Nome do provedor e
-  país onde o processamento ocorre — a preencher. Ver seções 8 e 9: sem
-  esse dado, o consentimento da seção 9 não é específico.]
+- **Provedor de inteligência artificial contratado:** **Google (Gemini API)**,
+  com processamento nos Estados Unidos e em outros países onde o Google
+  mantém infraestrutura — os termos do provedor não garantem residência
+  exclusiva no Brasil. Definido em 21/08/2026. ⚠️ **Ainda não confirmado antes
+  de imprimir este termo:** (a) que a chave de API em uso está numa conta com
+  faturamento pago ativo — o tier gratuito do Gemini API usa o conteúdo
+  enviado para treinar modelos do Google e não tem DPA, o que tornaria este
+  consentimento inválido por objeto; (b) que o Gemini API está no escopo do
+  Data Processing Addendum do Google Cloud; (c) que as cláusulas-padrão do
+  Google satisfazem o Art. 33 da LGPD. Ver `docs/legal/revisao-juridica-2026-08-21.md`
+  e o débito `D57` do `BACKLOG.md`.
 - **Canal para exercício de direitos:** [Confirmar
   `privacidade@irisclinica.ia.br`, já indicado em
   `politica-retencao-dados.md`, ou substituir pelo canal próprio da
@@ -239,15 +247,22 @@ pela clínica não mantiver infraestrutura no Brasil, esta recusa tem o mesmo
 efeito prático da recusa da seção 8: a estruturação assistida por IA não
 será usada nos meus registros. O acompanhamento continua normalmente.)
 
-> **Pendências reais:** (a) confirmar os termos exatos do acordo de
-> processamento de dados com o provedor de IA efetivamente escolhido antes
-> do piloto; (b) confirmar, em fonte primária (DOU / site da ANPD), a
-> numeração e a vigência da resolução da ANPD que aprova o modelo de
-> cláusulas-padrão contratuais — `politica-privacidade.md` seção 4 cita
-> "Resolução CD/ANPD nº 19/2024", e esse número não pode ir para um
-> documento assinado por titular sem conferência; (c) esclarecer **quem
-> figura como parte** nas cláusulas-padrão — a clínica, que é a
-> controladora, ou o Iris, que é operador.
+> **Pendências reais, atualizadas em 21/08/2026 (provedor definido: Google/Gemini API):**
+> (a) confirmar que a chave de API está numa conta com faturamento pago
+> ativo — condição para o DPA do Google existir e para o conteúdo não ser
+> usado em treino; (b) confirmar que o Gemini API standalone (não só Vertex
+> AI) está no escopo do Data Processing Addendum do Google Cloud; (c)
+> confirmar, em fonte primária (DOU / site da ANPD), a numeração e a
+> vigência da resolução da ANPD que aprova o modelo de cláusulas-padrão
+> contratuais — `politica-privacidade.md` seção 4 cita "Resolução CD/ANPD nº
+> 19/2024", e esse número não pode ir para um documento assinado por titular
+> sem conferência; (d) confirmar que as cláusulas-padrão do próprio Google
+> (Appendix 3 do seu DPA, redigidas para o GDPR) satisfazem o Art. 33 da
+> LGPD com a mesma força — pendente de leitura do advogado do projeto; (e)
+> esclarecer **quem figura como parte** nas cláusulas-padrão — a clínica,
+> que é a controladora, ou o Iris, que é operador. Nenhuma destas cinco
+> está fechada — ver `docs/legal/revisao-juridica-2026-08-21.md` e o débito
+> `D57` do `BACKLOG.md`.
 
 ## 10. Exportação e compartilhamento de relatórios
 
@@ -551,16 +566,20 @@ bloqueiam a **coleta** do termo em papel:
 
 - **Seção 5** — razão social, CNPJ e endereço da clínica-contratante
   (controladora); canal para exercício de direitos; encarregado (DPO).
-- **Seção 5 + seção 9** — nome do provedor de IA efetivamente contratado e
-  país onde o processamento ocorre. Sem esse dado o consentimento da
-  seção 9 **não é específico** e portanto não é válido: não colher a
-  seção 9 em branco. Hoje o ambiente admite dois provedores
-  (`ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`) — a escolha precisa estar feita
-  e escrita.
-- **Seção 9** — DPA com esse provedor assinado; numeração e vigência da
-  resolução da ANPD sobre cláusulas-padrão conferidas em fonte primária
-  (DOU / site da ANPD); definição de quem figura como parte nas
-  cláusulas — a clínica (controladora) ou o Iris (operador).
+- **Seção 5 + seção 9** — ✅ **Provedor definido em 21/08/2026: Google
+  (Gemini API)**, já preenchido na seção 5. País de processamento: Estados
+  Unidos e outros países onde o Google mantém infraestrutura (sem garantia
+  de residência exclusiva no Brasil).
+- **Seção 9** — ⛔ **Ainda aberto, apesar do provedor definido:** (a)
+  confirmar faturamento pago ativo na conta da chave em uso (tier gratuito
+  não tem DPA e usa o conteúdo para treino — inaceitável aqui); (b)
+  confirmar que o Gemini API standalone está no escopo do Data Processing
+  Addendum do Google Cloud; (c) numeração e vigência da resolução da ANPD
+  sobre cláusulas-padrão conferidas em fonte primária (DOU / site da ANPD);
+  (d) confirmar que as cláusulas-padrão do Google (redigidas para o GDPR)
+  satisfazem o Art. 33 da LGPD; (e) definição de quem figura como parte nas
+  cláusulas — a clínica (controladora) ou o Iris (operador). Ver débito
+  `D57` do `BACKLOG.md`.
 
 ### 🔜 De implementação, pós-MVP
 

@@ -160,10 +160,14 @@ confunde com a finalidade fiscal do CPF/CNPJ da clínica (seção 1.1).
 define esta finalidade, em interesse próprio. É a exceção declarada à regra
 geral da seção 3.
 
-⟨PENDENTE: registro do teste de proporcionalidade do legítimo interesse
-(finalidade, necessidade e salvaguardas — LGPD Art. 10) em documento próprio,
-e decisão sobre por quanto tempo o `cpf_hash` deve ser conservado depois de a
-clínica encerrar a conta.⟩
+✅ **Resolvido em 21/08/2026.** O teste de proporcionalidade do legítimo
+interesse (finalidade, necessidade e salvaguardas — LGPD Art. 10) está
+registrado em `teste-proporcionalidade-legitimo-interesse-antifraude.md`.
+Recomendação também registrada ali: o `cpf_hash` é mantido por prazo
+indeterminado, vinculado à existência do mecanismo de teste gratuito no
+produto (não à conta da clínica que o originou) — pendente de confirmação
+pelo advogado de registro do projeto antes de tratar como definitivo, mesmo
+protocolo usado nos demais documentos.
 
 ## 3. Quem trata os dados (controlador e operador)
 
@@ -214,14 +218,23 @@ essa transferência é dado pelo responsável legal (`Consent`, tipo
 titular, e está materializado na seção 9 do termo
 `termo-consentimento-titular-adulto.md` (versão `adulto-v1`).
 
-> ⚠️ **Pendência aberta e deliberadamente não resolvida nesta versão.** A
-> identidade do **provedor de IA** e o **país onde o processamento ocorre**
-> ainda não estão definidos: ⟨PENDENTE: provedor de IA contratado, país de
-> processamento e termos exatos do DPA — ver `BACKLOG.md`, seção B⟩. Enquanto
-> essa definição não for feita e publicada aqui, **nenhum provedor é nomeado
-> nesta Política**, porque nomear um provedor não contratado seria informação
-> falsa ao titular. O tratamento de dado de paciente por IA só é ativado após
-> essa definição e o consentimento específico correspondente.
+> ✅ **Provedor definido em 21/08/2026: Google (Gemini API).** Processamento
+> nos Estados Unidos e em outros países onde o Google mantém infraestrutura —
+> os termos do provedor não garantem residência exclusiva no Brasil, o que
+> mantém a transferência internacional descrita acima.
+>
+> ⚠️ **Ainda pendente, e é o que continua bloqueando a ativação real (não só
+> a nomeação):** (a) confirmar que a chave de API em uso está numa conta com
+> faturamento pago ativo — o tier gratuito do Gemini API usa o conteúdo
+> enviado para treinar modelos do Google e não tem DPA, o que é incompatível
+> com dado de saúde de paciente; (b) confirmar que o Gemini API standalone
+> (não só Vertex AI) está no escopo do Data Processing Addendum do Google
+> Cloud; (c) confirmar que as cláusulas-padrão do próprio Google — redigidas
+> para o GDPR — satisfazem o Art. 33 da LGPD com a mesma força que a
+> Resolução CD/ANPD nº 19/2024 exige. O tratamento de dado de paciente por IA
+> só é ativado (`EXTRACTION_LLM_ENABLED=true`) depois que as três acima
+> fecharem, além do consentimento específico correspondente. Ver débito `D57`
+> do `BACKLOG.md` e `docs/legal/revisao-juridica-2026-08-21.md`.
 
 ## 5. Por quanto tempo os dados são mantidos
 
@@ -310,7 +323,11 @@ sobre a eliminação (LGPD Art. 16, I).
 
 ## 10. Encarregado (DPO)
 
-⟨PENDENTE: indicação do encarregado pelo tratamento de dados pessoais (LGPD Art. 41) do operador — nome e canal de contato. A indicação ainda não foi feita.⟩
+O encarregado pelo tratamento de dados pessoais (LGPD Art. 41) do Iris,
+enquanto operador, é **Rômulo Sutil Corrêa**, responsável pelo produto —
+indicação informal, decidida em 21/08/2026 para o estágio de piloto (1-2
+clínicas), a formalizar quando o negócio crescer. Contato:
+`privacidade@irisclinica.ia.br` (seção 11).
 
 Cada clínica-contratante, na qualidade de controladora, deve indicar seu próprio
 encarregado quando aplicável — obrigação dela, não do Iris.
@@ -318,12 +335,25 @@ encarregado quando aplicável — obrigação dela, não do Iris.
 ## 11. Contato
 
 Canal para exercício de direitos do titular e dúvidas sobre esta Política:
-⟨PENDENTE: e-mail ou canal oficial de contato para assuntos de proteção de
-dados⟩.
+**`privacidade@irisclinica.ia.br`** — mesmo endereço já usado como contato
+institucional de privacidade em `politica-retencao-dados.md` §10 e referido
+em `termo-consentimento-titular-adulto.md` §5. Preenchido em 21/08/2026 por
+consistência interna; **confirmar antes de publicar que a caixa está
+efetivamente ativa e monitorada** — isso não foi verificado nesta revisão.
 
 ---
 
 ## Itens em aberto
+
+Itens resolvidos em 21/08/2026 (não bloqueiam mais a publicação):
+
+- **Teste de proporcionalidade do legítimo interesse** da verificação
+  antifraude (seção 2.1) e **prazo de conservação do `cpf_hash`** —
+  registrados em `teste-proporcionalidade-legitimo-interesse-antifraude.md`,
+  pendente apenas de confirmação pelo advogado de registro.
+- **Canal oficial de contato** (seção 11) — preenchido com
+  `privacidade@irisclinica.ia.br`, por consistência com os demais documentos
+  do corpus; falta só confirmar que a caixa está ativa.
 
 Itens resolvidos em 07/08/2026 (não bloqueiam mais a publicação):
 
@@ -352,16 +382,14 @@ corpo do documento:
 
 1. **Prazo de retenção dos dados cadastrais do profissional** após o
    encerramento da conta (seção 1.1).
-2. **Provedor de IA, país de processamento e termos do DPA** (seção 4).
-   Deliberadamente mantido em aberto: nomear um provedor não contratado seria
-   informação falsa ao titular. Ver `BACKLOG.md`, seção B.
+2. **Termos exatos do DPA do provedor de IA** (seção 4). O provedor
+   (Google/Gemini API) e o país de processamento já estão nomeados; falta
+   confirmar faturamento pago ativo, escopo do DPA para o Gemini API
+   standalone, e equivalência das cláusulas-padrão do Google ao Art. 33 da
+   LGPD. Ver débito `D57` do `BACKLOG.md`.
 3. **País/região de processamento do provedor de e-mail transacional** e o
    instrumento de transferência internacional aplicável (seção 7).
 4. **Indicação do encarregado (DPO)** do operador (seção 10).
-5. **Canal oficial de contato** para assuntos de proteção de dados (seção 11).
-6. **Teste de proporcionalidade do legítimo interesse** da verificação
-   antifraude (seção 2.1), em documento próprio (LGPD Art. 10), e **prazo de
-   conservação do `cpf_hash`** depois do encerramento da conta da clínica.
 
 Além destes, permanece pendente a **revisão jurídica completa** do documento,
 em especial das seções 4 (DPA com provedor de IA) e 6 (uso agregado/anonimizado).

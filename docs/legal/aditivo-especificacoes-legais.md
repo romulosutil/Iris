@@ -10,6 +10,27 @@
 
 **Objetivo:** Traduzir lacunas normativas e refinamentos regulatórios em especificações funcionais, regras de negócio e requisitos de arquitetura de software para o sistema Iris.
 
+> ⚠️ **Nota de verificação de implementação — 21/08/2026, `revisao-juridica-2026-08-21.md`.**
+> Não altera nenhuma especificação do advogado abaixo; registra apenas o que
+> foi conferido em `src/db/schema.ts` (arquivo completo) nesta data:
+>
+> - **§2.1 (`visibility_level`) — NÃO implementado.** Nenhuma coluna, enum ou
+>   equivalente encontrado. Hoje o prontuário multidisciplinar não restringe
+>   visibilidade por disciplina — uma nota de psicólogo sobre dinâmica
+>   familiar é visível a qualquer profissional vinculado ao caso. Tratar como
+>   bloqueador de piloto, não como débito técnico genérico: enquanto o campo
+>   não existir, orientar psicólogos a não registrar no Iris informação que
+>   dependeria dessa restrição.
+> - **§1.3 (`e_psi_verified` / `e_psi_number`) — NÃO implementado.** Mesma
+>   busca, mesmo resultado.
+> - **§1.1 (retenção de `AuditLog`) e §1.2 (revogação → somente-leitura) —
+>   implementados.** Confirmado por `politica-retencao-dados.md` §5/§8 e
+>   `procedimento-revogacao-consentimento.md`.
+>
+> Abrir issue própria para §2.1 e §1.3 em `BACKLOG.md`, citando esta seção
+> como origem do requisito — não foi feito nesta revisão (arquivo de 384 KB,
+> fora do escopo de uma edição de documento legal).
+
 ## **1\. Refinamentos Normativos e Regulatórios**
 
 ### **1.1. Retenção de Logs de Aplicação (Marco Civil da Internet)**
