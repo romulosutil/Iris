@@ -279,10 +279,11 @@ describe("marcadores de pendência", () => {
     expect(lerDoc(slug)).toContain("## Itens em aberto");
   });
 
-  it("a política documenta as pendências do provedor de IA para ativação", () => {
+  it("a política mantém em aberto o provedor de IA e o país de processamento", () => {
+    // Pendência que NÃO pode ser resolvida por conta própria: nomear um
+    // provedor não contratado seria informação falsa ao titular.
     const doc = texto("privacidade");
-    expect(doc).toMatch(/Google \(Gemini API\)/);
-    expect(doc).toMatch(/EXTRACTION_LLM_ENABLED/);
+    expect(doc).toMatch(/⟨PENDENTE:[^⟩]*provedor de IA/);
   });
 
   it("todo marcador ⟨…⟩ está balanceado e nenhum ficou sem conteúdo", () => {

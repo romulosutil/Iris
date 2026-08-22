@@ -1,63 +1,62 @@
 # Checkpoint — Estado Atual do Repositório Iris
 
-**Data**: 21/08/2026  
-**Status**: `main` verde, estável e equalizada  
-**Últimas PRs entregues em `main`**: #408 (#407), #410 (#409), #411 (D31)
+**Data**: 22/08/2026
+**Status**: `main` verde e estável; PR #416 (D54) com conflitos resolvidos e revalidada.
+**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328)
 
 ---
 
 ## 1. Estado de Entrega & Merge em `main`
 
-- ✅ **Feature #407 (PR #408 — `96044e1`)**: Anamnese estruturada como marco 0 da linha do tempo. 34/34 tasks concluídas por SDD (`.specs/features/407-anamnese-marco-zero/`). Tabelas `anamnese` e `anamnese_alvo` (migração `0115`), procedure `app_validar_anamnese` (snapshot 0 em `session_snapshot` com merge jsonb), gates de coordenador/protocolo/teto/consentimento, scrubber/timeline lendo marco 0 e formulário no design system.
-- ✅ **Feature #409 (PR #410 — `498d335`)**: Ponto de entrada da aba "Anamnese" no prontuário (`src/app/(app)/pacientes/[id]/layout.tsx`), condicionada a `protocol_driven` via `modalidade.ts`.
-- ✅ **Navegação & Dashboards (PR #411 — `5adfe6f`)**: Sub-navegação de `/clinica` com `TabsNav` (`/clinica/dados`, `/clinica/feriados`, `/clinica/emergencia`), fechando **D31**. Atalhos diretos em PEI e Ficha Clínica para dashboards de progresso dos protocolos.
+- ✅ **Feature #407 (PR #408 — `96044e1`)**: Anamnese estruturada como marco 0 da linha do tempo (34/34 tasks por SDD).
+- ✅ **Feature #409 (PR #410 — `498d335`)**: Ponto de entrada da aba "Anamnese" no prontuário, condicionada a `protocol_driven`.
+- ✅ **Navegação & Dashboards (PR #411 — `44de0fa`)**: Sub-navegação de `/clinica` com `TabsNav` e atalhos para PEI/protocolos (fecha **D31**).
+- ✅ **D52 (PR #412 — `2fdd318`)**: Guardrail de ambiente fail-closed em todos os scripts de seed (`scripts/lib/guardrail-seed.ts`, `ALLOW_SEED_REMOTE`).
+- ✅ **D53 (PR #413 — `48643c9`)**: Guardrail estático + workflow de CI contra injeção de script de preview em `src/app/layout.tsx`.
+- ✅ **D47 (PR #414 — `b50f432`)**: Sincronização de fixtures e contrato documental do modo convencional, com guard executável contra re-drift.
+- ✅ **#328 (PR #415 — `e676834`)**: Perímetro comportamental do `config.matcher` do proxy, avaliado com o `getPathMatch` do próprio Next.js.
 
 ---
 
 ## 2. PRs Abertas Aguardando Revisão e Merge
 
-| PR       | Branch                                        | Escopo / Débito                                                                                                                               | Status                    |
-| :------- | :-------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------ |
-| **#412** | `feat/d52-guardrail-seed-ambiente`            | **Débito D52**: Guardrail em `scripts/seed.ts` e `scripts/seed-demo-account.ts` exigindo `localhost`/`127.0.0.1` ou `ALLOW_SEED_REMOTE=true`. | Aberta (Ready for Review) |
-| **#413** | `feat/d53-guardrail-preview-layout`           | **Débito D53**: Guardrail de teste unitário/CI (`src/app/layout.guard.test.ts`) contra injeção de `localhost:8400/live.js` em `layout.tsx`.   | Aberta (Ready for Review) |
-| **#414** | `fix/d47-sincronizacao-fixtures-alerta-risco` | **Débito D47**: Sincronização documental e de fixtures do modo convencional com a estrutura unificada de `alerta_risco` e `temas: string[]`.  | Aberta (Ready for Review) |
-| **#415** | `test/328-cobertura-proxy-matcher`            | **Issue #328**: Cobertura comportamental do `config.matcher` do proxy/middleware (`src/middleware.test.ts`).                                  | Aberta (Ready for Review) |
-| **#416** | `fix/d54-alert-side-stripe`                   | **Débito D54**: Remoção da side-stripe `border-l-[4px]` e `bordaEsquerda` no componente `Alert`, alinhando ao Espectro Brutal.                 | Aberta (Ready for Review) |
+| PR       | Branch                        | Escopo / Débito                                                                        | Estado                                                                     |
+| :------- | :---------------------------- | :------------------------------------------------------------------------------------- | :------------------------------------------------------------------------- |
+| **#416** | `fix/d54-alert-side-stripe`   | **D54**: remoção da side-stripe `border-l-[4px]` e das bordas assimétricas do `Alert`. | Conflitos com `main` resolvidos, revalidada em sandbox, pronta para merge. |
+| **#417** | `fix/330-n-plus-1-...`        | **D40 / #330**: eliminação de 3 N+1 em `materializarSnapshot`.                         | Em andamento (worktree local).                                             |
+| **#418** | `feat/383-resend-webhook-...` | **#383**: webhook do Resend para log de bounces/complaints.                            | Em andamento (branch local `feat/383-resend-webhook-bounces-complaints`).  |
 
 ---
 
 ## 3. Arcabouço Jurídico & Governança LGPD (`docs/legal/`)
 
-Revisão jurídica completa realizada e consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
+Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 
-- ✅ **Remoção de Risco RAG/Treinamento**: Removida a menção de RAG/treinamento de modelo próprio de `pesquisa-planos-de-saude-prontuario.md` §4, harmonizando o texto com `politica-privacidade.md` §6 e Art. 11 LGPD.
-- ✅ **Teste de Proporcionalidade**: Produzido `docs/legal/teste-proporcionalidade-legitimo-interesse-antifraude.md` para fundamentar o legítimo interesse (Art. 10 LGPD) do hash antifraude `cpf_hash`.
-- ✅ **Provedor de IA Definido**: **Google Gemini (Gemini API)** nomeado formalmente em `politica-privacidade.md` §4 e nos termos de consentimento adulto e curatela, referenciando o Cloud Data Processing Addendum (DPA) do Google Cloud.
-- ✅ **Gate D-H (Consentimento / Anamnese)**: 100% finalizado. Respaldo legal validado (Tutela da Saúde Art. 11, II, "f" + Consentimento do Menor Art. 14, §1º cobrindo relato da dinâmica familiar) e gate técnico ativo via `app_prontuario_somente_leitura(patient_id)`.
-- ✅ **Termos de Uso & Privacidade Atualizados**: Foro de eleição estabelecido em Guarapari/ES (§9), prazo de aviso prévio de alterações de 30 dias (§8.4), canal de contato `notificacoes@irisclinica.ia.br` e DPO informal Rômulo Sutil Corrêa (§10).
-- ⚠️ **Débitos Legais Mapeados**:
-  - **D55**: `visibility_level` (sigilo multidisciplinar) especificado no aditivo legal (§2.1), pendente de implementação no schema/RLS (Art. 9º CEPP).
-  - **D56**: `e_psi` (declaração de registro ativo para telepsicologia, Res. CFP 009/2024) pendente no schema.
-  - **D57**: Verificação do Gemini pago (billing ativo no Google Cloud, escopo do DPA para Gemini API standalone, validação do Art. 33 LGPD) antes de ativar `EXTRACTION_LLM_ENABLED=true` com pacientes reais.
+- ✅ **Remoção de Risco RAG/Treinamento**: menção a RAG/treinamento removida de `pesquisa-planos-de-saude-prontuario.md` §4.
+- ✅ **Teste de Proporcionalidade**: `docs/legal/teste-proporcionalidade-legitimo-interesse-antifraude.md` produzido (Art. 10 LGPD, `cpf_hash`).
+- ✅ **Gate D-H (Consentimento / Anamnese)**: finalizado (Tutela da Saúde Art. 11, II, "f" + Consentimento do Menor Art. 14, §1º).
+- ⚠️ **Provedor de IA (Gemini) — decidido, NÃO commitado.** A decisão de 21/08 é nomear **Google (Gemini API)** na Política de Privacidade §4 e nos termos de consentimento, mas `docs/legal/politica-privacidade.md` segue na versão `2026-08-07`, **sem nenhuma menção a Gemini** (medido: `grep -c Gemini` = 0 em `main`). A edição existe apenas na árvore de trabalho local, não commitada. Alterar `docs/legal/` exige autorização explícita do Rômulo (`CLAUDE.md` § Permissões).
+- ⚠️ **Débitos legais mapeados**: **D55** (`visibility_level`, sigilo multidisciplinar), **D56** (`e_psi_verified`/`e_psi_number`, Res. CFP 009/2024) e **D57** (gating operacional do Gemini: billing pago ativo + escopo do DPA + Art. 33 LGPD antes de ligar `EXTRACTION_LLM_ENABLED`).
 
 ---
 
-## 4. Verificação Atual da Base (`fix/d54-alert-side-stripe`)
+## 4. Verificação da Base (`fix/d54-alert-side-stripe` já com `main` mergeada)
 
-| Gate                        | Resultado                                              |
-| :-------------------------- | :----------------------------------------------------- |
-| `pnpm typecheck`            | 0 erros                                                |
-| `pnpm lint`                 | 0 erros                                                |
-| `pnpm test`                 | 241/241 arquivos · 1.717/1.717 testes verdes           |
-| `pnpm test:rls`             | 119/119 arquivos · 1.071/1.071 testes verdes (0 skips) |
-| `src/db/migrations.test.ts` | 8/8 testes verdes (snapshot e journal íntegros)        |
-| `pnpm format`               | 100% formatado via Prettier                            |
+| Gate                                | Resultado                                                                                   |
+| :---------------------------------- | :------------------------------------------------------------------------------------------ |
+| `pnpm typecheck`                    | 0 erros                                                                                     |
+| `pnpm lint`                         | 0 erros (9 warnings pré-existentes: Storybook `no-redundant-story-name` e `<a>` na landing) |
+| `pnpm test`                         | **245/245 arquivos · 1.773/1.773 testes verdes**                                            |
+| `pnpm build`                        | Build Next.js concluído com sucesso                                                         |
+| Mutação em `alert.tsx`              | 2 mutantes mortos (reintroduzir `border-l-[4px]` → 9 testes caem; borda uniforme → 7 caem)  |
+| Diff de `docs/GO_LIVE.md` vs `main` | Aditivo: **0 linhas removidas**                                                             |
 
 ---
 
 ## 5. Próximos Passos Recomendados
 
-1. Merge das PRs **#412**, **#413**, **#414**, **#415** e **#416** (D54).
-2. **D34**: Adicionar `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
-3. **D40 / #330**: Eliminar 3 N+1 restantes em `src/lib/evidence/materializar.ts`.
-4. **#383**: Implementar Webhook do Resend para log de bounces/complaints de e-mails transacionais.
+1. Merge da PR **#416** (D54).
+2. Concluir **#417** (D40 / #330 — N+1 em `materializar.ts`) e **#418** (#383 — webhook Resend).
+3. **D34**: `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
+4. **D57**: com autorização do Rômulo, commitar a nomeação do provedor de IA em `docs/legal/` e só então reativar os testes que exigem `Google (Gemini API)` / `EXTRACTION_LLM_ENABLED` (revertidos na revisão da PR #416 por afirmarem conteúdo inexistente no repositório).
+5. Cadastrar o endpoint `https://irisclinica.ia.br/api/webhooks/resend` no painel do Resend (eventos `email.bounced` e `email.complained`) quando a #383 for mergeada.

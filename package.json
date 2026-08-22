@@ -27,6 +27,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:deploy": "node scripts/migrate.mjs",
+    "seed": "tsx --conditions=react-server --env-file=.env scripts/seed.ts",
     "seed:local": "tsx --conditions=react-server --env-file=.env scripts/seed-local.ts",
     "seed:clinic": "tsx --conditions=react-server --env-file=.env scripts/seed-local.ts",
     "seed:superadmin": "tsx --conditions=react-server --env-file=.env scripts/seed-super-admin.ts",

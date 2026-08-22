@@ -308,3 +308,65 @@ describe("fixtures reais — Modo Convencional (#390 R5 / D47)", () => {
     expect(r.success).toBe(true);
   });
 });
+
+// ─── D47 — guard executável contra re-drift do eval set ─────────────────────
+// O que fechou o D47 foi um alinhamento MANUAL entre três artefatos
+// (`agentOutputSchema`, o doc do protocolo e as fixtures do eval set). Sem um
+// guard, o próximo edit em qualquer um dos três dessincroniza de novo em
+// silêncio — foi exatamente assim que o D47 nasceu. Os testes acima usam CÓPIAS
+// das fixtures: cópia não protege o doc, ela só protege a si mesma.
+//
+// Este bloco lê o arquivo do eval set e valida TODA saída esperada contra o
+// schema de runtime. Ele não descreve o que o doc deveria conter; ele mede o
+// que o doc contém.
+describe("eval set do modo convencional valida contra agentOutputSchema (D47)", () => {
+  const evalSet = readFileSync(
+    path.join(
+      process.cwd(),
+      "docs/agente/casos-de-teste-terapia-convencional.md",
+    ),
+    "utf8",
+  ).split(/\r?\n/);
+
+  // Um bloco ```json só é "saída esperada" se o heading vigente disser isso —
+  // os blocos de "Contexto" são transcrições de sessão, não saída do agente.
+  const saidasEsperadas: { rotulo: string; corpo: string }[] = [];
+  let headingVigente = "";
+  let blocoAberto: { inicio: number; corpo: string[] } | null = null;
+  evalSet.forEach((linha, i) => {
+    if (blocoAberto === null) {
+      if (linha.startsWith("#")) headingVigente = linha.replace(/^#+\s*/, "");
+      if (linha.trim() === "```json")
+        blocoAberto = { inicio: i + 1, corpo: [] };
+      return;
+    }
+    const bloco: { inicio: number; corpo: string[] } = blocoAberto;
+    if (linha.trim() !== "```") {
+      bloco.corpo.push(linha);
+      return;
+    }
+    if (/sa[íi]da esperada/i.test(headingVigente)) {
+      saidasEsperadas.push({
+        rotulo: `${headingVigente} (linha ${bloco.inicio})`,
+        corpo: bloco.corpo.join("\n"),
+      });
+    }
+    blocoAberto = null;
+  });
+
+  // Trava a contagem: um caso novo sem saída esperada, ou um heading renomeado
+  // que faça o extrator parar de casar, zeraria a lista e deixaria este
+  // describe verde sem validar nada.
+  test("extrai as 6 saídas esperadas (TC-1..TC-5b)", () => {
+    expect(saidasEsperadas).toHaveLength(6);
+  });
+
+  test.each(saidasEsperadas.map((s) => [s.rotulo, s.corpo]))(
+    "%s valida contra agentOutputSchema",
+    (_rotulo, corpo) => {
+      const r = agentOutputSchema.safeParse(JSON.parse(corpo));
+      expect(r.error).toBeUndefined();
+      expect(r.success).toBe(true);
+    },
+  );
+});
