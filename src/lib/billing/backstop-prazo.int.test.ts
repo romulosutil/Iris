@@ -286,6 +286,35 @@ async function lerCiclo(id: string): Promise<LinhaCiclo> {
   return linhas[0]!;
 }
 
+async function lerAuditLog(subscriptionId: string): Promise<
+  {
+    clinic_id: string;
+    ator_id: string | null;
+    acao: string;
+    entidade: string;
+    entidade_id: string;
+    patient_id: string | null;
+    detalhe: Record<string, unknown> | null;
+    criado_em: Date;
+  }[]
+> {
+  const linhas = (await owner!`
+    SELECT clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe, criado_em
+      FROM audit_log
+     WHERE entidade = 'subscription' AND entidade_id = ${subscriptionId}
+     ORDER BY criado_em ASC`) as unknown as {
+    clinic_id: string;
+    ator_id: string | null;
+    acao: string;
+    entidade: string;
+    entidade_id: string;
+    patient_id: string | null;
+    detalhe: Record<string, unknown> | null;
+    criado_em: Date;
+  }[];
+  return linhas;
+}
+
 /** ISO do instante gravado, para comparar com literal escrito à mão. */
 function iso(d: Date | null): string | null {
   return d === null ? null : new Date(d).toISOString();
@@ -296,6 +325,7 @@ async function limpar(): Promise<void> {
   // Fichas saem por DELETE ESCOPADO e NÃO entram no TRUNCATE: pôr `patient` lá
   // alarga a superfície de lock o bastante para colidir com o `TRUNCATE clinic`
   // de outros arquivos de integração (medido como deadlock na #319).
+  await owner!`DELETE FROM audit_log WHERE clinic_id = ANY(${CLINICAS}::uuid[])`;
   await owner!`DELETE FROM patient WHERE clinic_id = ANY(${CLINICAS}::uuid[])`;
   await owner!`DELETE FROM clinic WHERE id = ANY(${CLINICAS}::uuid[])`;
 }
@@ -557,6 +587,22 @@ describe.skipIf(!hasDb)("#318 · backstop de D+7", () => {
 
     expect(resultados[0]!.acao).toBe("cortada");
     expect(resultados[0]!.erro).toBeUndefined();
+
+    // D34: G3 confirmado no gateway corta e emite audit_log atômico
+    const logs = await lerAuditLog(SUB_A);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]!.clinic_id).toBe(CLINICA_A);
+    expect(logs[0]!.ator_id).toBeNull();
+    expect(logs[0]!.acao).toBe("assinatura_cancelada_por_inadimplencia");
+    expect(logs[0]!.entidade).toBe("subscription");
+    expect(logs[0]!.entidade_id).toBe(SUB_A);
+    expect(logs[0]!.patient_id).toBeNull();
+    expect(logs[0]!.detalhe).toMatchObject({
+      motivo: "G3 confirmado no gateway (INVALID_RECURRING_PAYMENT_ID)",
+      provider: ID_PROVEDOR_FAKE,
+      providerSubscriptionId: VINCULO_A,
+    });
+    expect(iso(logs[0]!.criado_em)).toBe("2026-08-15T12:00:00.000Z");
   });
 
   it("G3 com autorização VIVA: não corta, carimba — o código mentiu", async () => {
