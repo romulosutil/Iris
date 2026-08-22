@@ -17,6 +17,7 @@ import postgres from "postgres";
 import { clinic, protocol } from "@/db/schema";
 import * as schema from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
+import { assertSeedAllowed } from "./lib/guardrail-seed";
 
 async function main() {
   const nomeClinica = process.argv[2] || "Clínica Iris";
@@ -31,6 +32,8 @@ async function main() {
       "MIGRATION_DATABASE_URL / DATABASE_URL não definida nas variáveis de ambiente.",
     );
   }
+
+  assertSeedAllowed(migrationUrl);
 
   console.log("🔄 Conectando ao Postgres com perfil de owner (bypassa RLS)...");
   const ownerSql = postgres(migrationUrl, { max: 1 });
