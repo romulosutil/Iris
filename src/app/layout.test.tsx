@@ -38,12 +38,15 @@ describe("RootLayout (src/app/layout.tsx)", () => {
     expect(screen.getByTestId("mock-google-analytics")).not.toBeNull();
     expect(screen.getByTestId("mock-webmcp")).not.toBeNull();
 
-    // Verifica que data-mode="clinico" e lang="pt-BR" estão definidos
-    const htmlElement = container.querySelector("html");
-    if (htmlElement) {
-      expect(htmlElement.getAttribute("lang")).toBe("pt-BR");
-      expect(htmlElement.getAttribute("data-mode")).toBe("clinico");
-    }
+    // React 19 iça os atributos de <html> para o document.documentElement do
+    // jsdom, então `container.querySelector("html")` devolve `null` sempre. Ler
+    // do container deixaria as duas asserções abaixo em ramo morto: mutar
+    // lang/data-mode em layout.tsx passaria verde.
+    expect(container.querySelector("html")).toBeNull();
+
+    const htmlElement = document.documentElement;
+    expect(htmlElement.getAttribute("lang")).toBe("pt-BR");
+    expect(htmlElement.getAttribute("data-mode")).toBe("clinico");
   });
 
   it("não renderiza nenhum script de preview (localhost:8400 ou live.js) no DOM (D53)", () => {
@@ -53,7 +56,13 @@ describe("RootLayout (src/app/layout.tsx)", () => {
       </RootLayout>,
     );
 
-    const scripts = container.querySelectorAll("script");
+    // Varre container E document: React 19 iça tags de recurso (script async,
+    // link, style) para o <head>, então olhar só o container perderia uma
+    // injeção içada.
+    const scripts = [
+      ...container.querySelectorAll("script"),
+      ...document.querySelectorAll("script"),
+    ];
     for (const script of scripts) {
       const src = script.getAttribute("src") || "";
       expect(
