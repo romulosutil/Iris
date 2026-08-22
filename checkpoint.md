@@ -26,8 +26,8 @@
 
 | PR       | Branch                                       | Escopo / Débito                                                                                | Estado                      |
 | :------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------- | :-------------------------- |
-| **#419** | `feat/383-resend-webhook-bounces-complaints` | **Governança Legal**: formalização do Google Gemini nos termos e políticas de privacidade.     | Aberta aguardando merge.    |
-| **Nova** | `feat/d34-auditoria-corte-inadimplencia`     | **D34**: auditoria no corte por inadimplência (`audit_log`) e exit code no job de faturamento. | Pronta para abertura de PR. |
+| **#419** | `feat/383-resend-webhook-bounces-complaints` | **Governança Legal**: formalização do Google Gemini nos termos e políticas de privacidade.     | Aberta aguardando merge. |
+| **#420** | `feat/d34-auditoria-corte-inadimplencia`     | **D34**: auditoria no corte por inadimplência (`audit_log`) e exit code no job de faturamento. | Aberta aguardando merge. |
 
 ---
 
