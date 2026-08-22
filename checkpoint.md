@@ -58,11 +58,28 @@ Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 
 ---
 
+| Gate                                               | Resultado                                                                                                                                                                  |
+| :------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                                   | 0 erros                                                                                                                                                                    |
+| `pnpm lint`                                        | 0 erros, 0 warnings                                                                                                                                                        |
+| `pnpm test`                                        | **1.788/1.788 testes verdes** (0 falhas)                                                                                                                                   |
+| `pnpm build`                                       | Sucesso; `ƒ /api/webhooks/resend` e `ƒ /api/hooks/resend` (ambas dinâmicas — prova de que a config de segmento foi aplicada após deixar de reexportar `runtime`/`dynamic`) |
+| Mutação em `src/lib/email/webhook.ts` (produção)   | Mutante reintroduzindo `bounceMessage` no log → **morto** (o teste novo usa o diagnóstico SMTP real, que embute o destinatário); código original verde                     |
+| Diff de `BACKLOG.md` / `docs/GO_LIVE.md` vs `main` | Aditivo: **0 identificadores `D<n>` / `#<n>` perdidos** (verificado por script comparando os conjuntos de `main`, do PR e do resultado)                                    |
+
+### 4.1 Correções aplicadas na revisão (antes do merge)
+
+1. **`bounce.message` deixou de ser logado** — texto livre do MTA carrega o endereço do destinatário; o guardrail LGPD passava por escolha de fixture, não por construção. Restou `bounce.type`.
+2. **`verificarAssinaturaResend` removido** — segundo caminho de verificação de assinatura, sem chamador de produção e já divergente do usado pela rota (`true` vs. 400 em `SyntaxError`).
+3. **Alias `/api/hooks/resend`** — `runtime`/`dynamic` declarados literalmente no arquivo de rota.
+4. **Nomeação do provedor de IA autorizada** — `docs/legal/` e os testes em `src/lib/legal.test.ts` e `src/components/legal/documento-legal.test.tsx` sincronizados com a nomeação de `Google (Gemini API)`. O gating operacional segue aberto via **D57**.
+
 ## 5. Próximos Passos Recomendados
 
-1. Merge da PR **#419** (Governança Legal Google Gemini API).
+1. ✅ **Concluído (22/08/26)**: Merge da PR **#418** (#383 — webhook Resend) e **#419** (Governança Legal Google Gemini API).
 2. Abertura e merge da PR do **D34** (`feat/d34-auditoria-corte-inadimplencia`).
 3. **D36**: Faixa de alerta urgente de recusa na UI (`faixa-trial.tsx` / `/assinatura`).
 4. **D39**: Persistência do código cru de recusas G6 em `billing_cycle.recusa_codigo`.
 5. **D57**: Checagem operacional (billing pago ativo, escopo do DPA para Gemini API standalone, Art. 33 LGPD) antes de comutar `EXTRACTION_LLM_ENABLED=true`.
-6. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).
+6. ✅ **Concluído (22/08/26)**: `RESEND_WEBHOOK_SECRET` publicado no Easypanel (iris-app) e endpoint `https://irisclinica.ia.br/api/webhooks/resend` cadastrado no painel do Resend (eventos `email.bounced` e `email.complained`).
+7. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).
