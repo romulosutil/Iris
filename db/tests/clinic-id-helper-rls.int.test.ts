@@ -84,6 +84,9 @@ const POLICIES_COM_HELPER = [
   "bloqueio.bloqueio_select",
   "bloqueio.bloqueio_update",
   "clinic.clinic_read",
+  "export_bundle.export_bundle_insert",
+  "export_bundle.export_bundle_select",
+  "export_bundle_blob.export_bundle_blob_select",
   "extraction.extraction_delete",
   "extraction.extraction_insert",
   "extraction.extraction_select",
@@ -375,7 +378,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Redundante de propósito: se o literal for editado por engano (linha
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
-    expect(POLICIES_COM_HELPER.length).toBe(64);
+    expect(POLICIES_COM_HELPER.length).toBe(67);
   });
 
   // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────
