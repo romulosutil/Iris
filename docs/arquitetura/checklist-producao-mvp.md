@@ -175,12 +175,28 @@ Easypanel + Postgres puro + MinIO). Itens de infra são "confirmar antes / via
       mutação em `src/lib/evidence/materializar.ts`: reintroduzir o laço por
       protocolo mata 1 teste, e remover a preservação de `candidacy_since` mata
       outro.
+- [x] Webhook do Resend (`/api/webhooks/resend` + alias `/api/hooks/resend`)
+      fail-closed por assinatura Svix contra `RESEND_WEBHOOK_SECRET`; sem segredo
+      ou sem os três cabeçalhos, responde 401 **sem logar o payload**
+      (#383 / PR #418). O log estruturado registra só `type`, `email_id` e
+      timestamps — `bounce.message` é deliberadamente omitido porque é
+      diagnóstico SMTP livre do MTA de destino e costuma embutir o endereço do
+      destinatário. Medido por mutação em `src/lib/email/webhook.ts`:
+      reintroduzir `bounceMessage` no log mata o teste de regressão, que usa o
+      formato real `550 5.1.1 <destinatario>: Recipient address rejected`.
+      Ambas as rotas compilam como dinâmicas (`ƒ`) no `next build`.
+- [ ] Cadastrar o endpoint no painel do Resend (eventos `email.bounced` e
+      `email.complained`) e publicar `RESEND_WEBHOOK_SECRET` no Easypanel
+      **antes** do cadastro — com o segredo ausente a rota é fail-closed e
+      recusa todo evento com 401, silenciosamente do ponto de vista do painel
+      (lição `[[webhook-asaas-producao-configurado]]`: 401 prova rota no ar, não
+      token certo).
 - [ ] Provedor de IA nomeado na Política de Privacidade (D57). A decisão de
       21/08/2026 é **Google (Gemini API)**, mas `docs/legal/politica-privacidade.md`
       segue em `2026-08-07` sem menção ao provedor (medido: `grep -c Gemini` = 0).
       Os testes que exigiam `Google (Gemini API)` / `EXTRACTION_LLM_ENABLED` foram
-      revertidos na revisão da PR #416 por afirmarem conteúdo que não existe no
-      repositório — lição `[[verificar-fato-de-infra-com-medicao]]`. Reativar
+      revertidos na revisão da PR #416 e de novo na PR #418, por afirmarem conteúdo
+      que não existe no repositório — lição `[[verificar-fato-de-infra-com-medicao]]`. Reativar
       junto com o commit do documento, sob autorização do Rômulo.
 
 ---

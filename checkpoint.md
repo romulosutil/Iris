@@ -1,8 +1,8 @@
 # Checkpoint — Estado Atual do Repositório Iris
 
 **Data**: 22/08/2026
-**Status**: `main` verde e estável; PR #417 (D40 / #330) com conflitos resolvidos e revalidada em sandbox.
-**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328), #416 (D54)
+**Status**: `main` verde e estável; PR #418 (#383 — webhook Resend) com conflitos resolvidos, revisada e revalidada em sandbox.
+**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328), #416 (D54), #417 (D40 / #330)
 
 ---
 
@@ -40,24 +40,30 @@ Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 
 ---
 
-## 4. Verificação da Base (`fix/330-n-plus-1-materializar-snapshot` já com `main` mergeada)
+## 4. Verificação da Base (`feat/383-resend-webhook-bounces-complaints` já com `main` mergeada)
 
-Medido em worktree isolado (`.worktrees/fix-330-n-plus-1-materializar-snapshot`), após `git merge origin/main`:
+Medido em worktree isolado (`.worktrees/pr418-resend`), após `git merge origin/main` e as correções da revisão tech lead:
 
-| Gate                                                                      | Resultado                                                                                                                                                                                                                                                                                                                  |
-| :------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm typecheck`                                                          | 0 erros                                                                                                                                                                                                                                                                                                                    |
-| `pnpm lint`                                                               | 0 erros (9 warnings pré-existentes: Storybook `no-redundant-story-name` e `<a>` na landing)                                                                                                                                                                                                                                |
-| `pnpm test`                                                               | **246/246 arquivos · 1.777/1.777 testes verdes**                                                                                                                                                                                                                                                                           |
-| Mutação em `materializar.ts` (produção)                                   | 2 mutantes **mortos**: (M1) reintroduzir o laço `for` chamando `taxonomiaDoProtocolo` por protocolo → 1 teste cai; (M2) `candidacySince = isCandidate ? new Date() : null` (perde a preservação) → 1 teste cai                                                                                                             |
-| Oráculos de contagem de query (`db/tests/fase4-materializar.int.test.ts`) | 5 testes novos contam SQL real por tabela (`milestone`, `protocol`, `goal`, `goal_candidacy`) e exigem `toBe(1)`; **não rodam localmente** (Docker/Postgres desligado nesta máquina) — validados pelo job `test-rls` do CI, que reprovou o caso de lista vazia por contar o `COMMIT` da transação (corrigido em `1f6b5ee`) |
-| Diff de `BACKLOG.md` / `docs/GO_LIVE.md` vs `main`                        | Aditivo: **0 identificadores de débito perdidos** (verificado por script comparando o conjunto `D<n>` de `main` e do PR contra o resultado)                                                                                                                                                                                |
+| Gate                                               | Resultado                                                                                                                                                                  |
+| :------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                                   | 0 erros                                                                                                                                                                    |
+| `pnpm lint`                                        | 0 erros, 0 warnings                                                                                                                                                        |
+| `pnpm test`                                        | **1.788/1.788 testes verdes** (0 falhas)                                                                                                                                   |
+| `pnpm build`                                       | Sucesso; `ƒ /api/webhooks/resend` e `ƒ /api/hooks/resend` (ambas dinâmicas — prova de que a config de segmento foi aplicada após deixar de reexportar `runtime`/`dynamic`) |
+| Mutação em `src/lib/email/webhook.ts` (produção)   | Mutante reintroduzindo `bounceMessage` no log → **morto** (o teste novo usa o diagnóstico SMTP real, que embute o destinatário); código original verde                     |
+| Diff de `BACKLOG.md` / `docs/GO_LIVE.md` vs `main` | Aditivo: **0 identificadores `D<n>` / `#<n>` perdidos** (verificado por script comparando os conjuntos de `main`, do PR e do resultado)                                    |
+
+### 4.1 Correções aplicadas na revisão (antes do merge)
+
+1. **`bounce.message` deixou de ser logado** — texto livre do MTA carrega o endereço do destinatário; o guardrail LGPD passava por escolha de fixture, não por construção. Restou `bounce.type`.
+2. **`verificarAssinaturaResend` removido** — segundo caminho de verificação de assinatura, sem chamador de produção e já divergente do usado pela rota (`true` vs. 400 em `SyntaxError`).
+3. **Alias `/api/hooks/resend`** — `runtime`/`dynamic` declarados literalmente no arquivo de rota.
+4. **Fora de escopo revertido** — `src/lib/legal.test.ts` e `src/components/legal/documento-legal.test.tsx` voltaram a `origin/main`: afirmavam `Google (Gemini API)` na Política de Privacidade, texto que não existe no repositório (reincidência do que a PR #416 já havia fechado). **D57 segue aberto.**
 
 ## 5. Próximos Passos Recomendados
 
-1. Merge da PR **#417** (D40 / #330).
-2. Concluir **#418** (#383 — webhook Resend).
-3. **D34**: `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
-4. **D57**: com autorização do Rômulo, commitar a nomeação do provedor de IA em `docs/legal/` e só então reativar os testes que exigem `Google (Gemini API)` / `EXTRACTION_LLM_ENABLED` (revertidos na revisão da PR #416 por afirmarem conteúdo inexistente no repositório).
-5. Cadastrar o endpoint `https://irisclinica.ia.br/api/webhooks/resend` no painel do Resend (eventos `email.bounced` e `email.complained`) quando a #383 for mergeada.
-6. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).
+1. Merge da PR **#418** (#383 — webhook Resend).
+2. **D34**: `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
+3. **D57**: com autorização do Rômulo, commitar a nomeação do provedor de IA em `docs/legal/` e só então reativar os testes que exigem `Google (Gemini API)` / `EXTRACTION_LLM_ENABLED` (revertidos na revisão da PR #416 e novamente na PR #418, por afirmarem conteúdo inexistente no repositório).
+4. Cadastrar o endpoint `https://irisclinica.ia.br/api/webhooks/resend` no painel do Resend (eventos `email.bounced` e `email.complained`) quando a #383 for mergeada — o segredo `RESEND_WEBHOOK_SECRET` precisa estar publicado no Easypanel **antes** do cadastro, senão a rota responde 401 fail-closed a todo evento.
+5. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).

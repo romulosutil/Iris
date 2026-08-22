@@ -2129,6 +2129,31 @@ sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o se
 
 ---
 
+## 📅 Sessão 22/08/2026 — Feature #383: Webhook Resend de Bounce/Complaint
+
+- **Status:** ✅ Concluído.
+- **Objetivo:** Criar endpoint de webhook para recebimento de eventos de entrega, bounces e reclamações de e-mails transacionais enviados via Resend, com validação criptográfica de assinatura Svix e registro em log estruturado em conformidade estrita com a LGPD (zero vazamento de dados de destinatário, assunto ou conteúdo).
+- **Entregas principais:**
+  - `src/lib/email/webhook.ts`: `processarWebhookResend` — validação de assinatura Svix (`svix-id`, `svix-timestamp`, `svix-signature`) contra `RESEND_WEBHOOK_SECRET` e tratamento dos eventos `email.bounced`, `email.complained` e entregas, em caminho único de autorização.
+  - `src/app/api/webhooks/resend/route.ts`: Endpoint oficial Next.js Route Handler (`POST`), com runtime Node, dinâmico, fail-closed para assinaturas inválidas (401 sem log de payload) e retorno resiliente 200 para eventos válidos (evitando loops de retry do gateway).
+  - `src/app/api/hooks/resend/route.ts`: Rota alias / backward-compatible seguindo o padrão das rotas existentes em `/api/hooks/*`.
+  - `src/lib/email/webhook.test.ts` e `src/app/api/webhooks/resend/route.test.ts`: Cobertura unitária e de rota (11 testes) cobrindo verificação de assinatura, rejeição de payloads inválidos, tratamento de bounces/complaints, tolerância a eventos desconhecidos e garantia de não-vazamento de PII.
+  - `.env.example`: Documentação detalhada da variável `RESEND_WEBHOOK_SECRET`.
+- **Revisão tech lead (PR #418 — 22/08/2026):** três correções aplicadas em sandbox antes do merge.
+  1. **`bounce.message` deixou de ser logado (LGPD).** O campo é texto livre do MTA de destino (diagnóstico SMTP) e costuma embutir o endereço do destinatário (`550 5.1.1 <alguem@dominio>: Recipient address rejected`). O guardrail "nenhum dado identificável nos logs" passava só porque a fixture original usava a mensagem benigna `"Mailbox does not exist"` — verde por escolha de fixture, não por construção (`[[teste-verde-que-nao-testa-nada]]`). Restou apenas `bounce.type`, categoria fechada e operacional. Teste de regressão novo usa o formato real de diagnóstico; **mutante reintroduzindo `bounceMessage` no log → morto**.
+  2. **`verificarAssinaturaResend` removido.** Helper exportado com 0 chamadores de produção: `processarWebhookResend` reimplementa a verificação inline, e os dois caminhos já **divergiam** (o helper devolvia `true` para `SyntaxError`; o processador devolve 400). Manter dois caminhos de autorização para o mesmo webhook é risco sem contrapartida; os 4 testes que exercitavam só o helper foram removidos junto.
+  3. **Alias `/api/hooks/resend` com config de segmento literal.** A rota reexportava `runtime`/`dynamic` de outro módulo; o Next exige que a config de segmento seja estaticamente analisável no próprio arquivo de rota, e o modo de falha seria silencioso. Medido no `next build`: `ƒ /api/hooks/resend` e `ƒ /api/webhooks/resend` (ambas dinâmicas).
+- **Fora de escopo revertido:** `src/lib/legal.test.ts` e `src/components/legal/documento-legal.test.tsx` traziam asserção de `Google (Gemini API)` na Política de Privacidade — texto que **não existe em `main`** (`grep -c Gemini docs/legal/politica-privacidade.md` = 0). Mesma reincidência do `[[teste-afirma-doc-nao-commitado]]` fechada na PR #416: os testes foram revertidos para `origin/main`, e o gate documental do provedor de IA continua sendo **D57**, aberto.
+- **Sincronização de status verificada com o GitHub (não deduzida do texto local):** `docs/GO_LIVE.md` ainda listava #327 e #332/#341 como backlog aberto do Jules. Medido: PR #384 (`MERGED`) fecha #327 e PR #386 (`MERGED`) fecha #341 e #332 — as três issues estão `CLOSED`. As linhas foram promovidas a Entregue. Lição `[[comentario-de-issue-envelhece-e-desfaz-decisao]]`: status de doc envelhece em silêncio; conferir em `gh`, não no próprio doc.
+- **Validação e Métricas (Medido, não presumido — pós-merge de `main` e pós-correções):**
+  - `pnpm typecheck`: 0 erros.
+  - `pnpm lint`: 0 erros, 0 warnings.
+  - `pnpm test`: **1.788/1.788 testes verdes** (0 falhas).
+  - `pnpm build`: sucesso; ambas as rotas do webhook compiladas como dinâmicas (`ƒ`).
+  - Mutação: reintroduzir `bounceMessage` no log **mata** o teste novo; código original verde.
+
+---
+
 ## 🏁 Sessão 22/08/2026 — #328: Perímetro Comportamental do `config.matcher` do Proxy (PR #415)
 
 - **Status:** ✅ Concluído.
