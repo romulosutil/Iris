@@ -646,11 +646,16 @@ describe.skipIf(!hasDb)(
             expect(mProto.size).toBe(0);
             expect(mMetas.size).toBe(0);
             expect(mCand.size).toBe(0);
+
+            // ⚠️ A asserção tem que ficar DENTRO da transação. Fora dela o
+            // contador já incluiu o COMMIT que o próprio `tx` emite ao sair
+            // do callback — o oráculo mediria 1 mesmo com os 4 métodos
+            // curto-circuitando corretamente na lista vazia.
+            expect(queries).toBe(0);
           });
         } finally {
           await countingSql.end();
         }
-        expect(queries).toBe(0);
       });
     });
 
