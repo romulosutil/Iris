@@ -93,6 +93,7 @@ describe.skipIf(!hasDb)(
       await owner`DELETE FROM billing_cycle WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       await owner`DELETE FROM subscription WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       await owner`DELETE FROM user_role WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
+      await owner`DELETE FROM audit_log WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       await owner`DELETE FROM clinic WHERE id = ${CLINICA_CANCELAMENTO}`;
       await owner`DELETE FROM app_user WHERE id = ${USUARIO_RESPONSAVEL}`;
 
@@ -164,6 +165,7 @@ describe.skipIf(!hasDb)(
       await owner`DELETE FROM billing_cycle WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       await owner`DELETE FROM subscription WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       await owner`DELETE FROM user_role WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
+      await owner`DELETE FROM audit_log WHERE clinic_id = ${CLINICA_CANCELAMENTO}`;
       await owner`DELETE FROM clinic WHERE id = ${CLINICA_CANCELAMENTO}`;
       await owner`DELETE FROM app_user WHERE id = ${USUARIO_RESPONSAVEL}`;
     });

@@ -319,6 +319,7 @@ async function limpar(): Promise<void> {
   // `TRUNCATE clinic` de outros arquivos de integração (deadlock medido na
   // #319).
   await owner!`DELETE FROM patient WHERE clinic_id = ANY(${CLINICAS}::uuid[])`;
+  await owner!`DELETE FROM audit_log WHERE clinic_id = ANY(${CLINICAS}::uuid[])`;
   await owner!`DELETE FROM clinic WHERE id = ANY(${CLINICAS}::uuid[])`;
 }
 
