@@ -150,6 +150,17 @@ Easypanel + Postgres puro + MinIO). Itens de infra são "confirmar antes / via
       corrigir em fatia separada).
 - [x] `pnpm build` limpo (atenção ao falso-negativo de `.next/dev/types` stale —
       lição `[[next-dev-types-stale-build-fail]]`: `rm -rf .next && build`).
+- [x] Guards executáveis contra drift silencioso, todos verdes no CI (22/08/2026):
+      seed bloqueado fail-closed contra banco remoto sem `ALLOW_SEED_REMOTE=true`
+      (D52 / PR #412); CI barra `<script src="http://localhost:*">` em artefato de
+      preview de UI (D53 / PR #413); fixtures de
+      `casos-de-teste-terapia-convencional.md` validadas contra `agentOutputSchema`
+      com verificação de contagem (D47 / PR #414).
+- [x] Perímetro do `config.matcher` do proxy coberto por teste comportamental,
+      avaliado com o `getPathMatch` do próprio Next (#328 / PR #415). Mutantes
+      `matcher: []`, sem `brand/` e sem `_next/image` medidos e mortos; o mutante
+      que remove a entrada explícita `"/redefinir-senha"` é equivalente (o
+      catch-all já casa a rota).
 
 ---
 
