@@ -11,7 +11,10 @@ import {
   sql,
 } from "drizzle-orm";
 import { authDb } from "@/db/client";
-import { billingCycle, subscription } from "@/db/schema";
+import { auditLog, billingCycle, subscription } from "@/db/schema";
+
+export const ACAO_ASSINATURA_CANCELADA_POR_INADIMPLENCIA =
+  "assinatura_cancelada_por_inadimplencia";
 import { apurarDebitoProRata, calcularMensalidadeCentavos } from "./calculator";
 import {
   classificarRecusa,
@@ -1067,6 +1070,8 @@ async function revogarECortarAssinatura(
     subscriptionId: string;
     provider: string | null;
     providerSubscriptionId: string | null;
+    pastDueDesde?: Date | null;
+    carenciaDias?: number | null;
   },
   agora: Date,
   contexto: {
@@ -1156,6 +1161,29 @@ async function revogarECortarAssinatura(
           `Assinatura ${assinatura.subscriptionId} saiu do estado elegível entre a seleção e o corte (pagamento conciliado no mesmo tick?) — o vínculo no gateway JÁ foi cancelado e precisa de reativação manual.`,
         );
       }
+
+      // D34: Trilha atômica em `audit_log` para o cancelamento por inadimplência/carência.
+      // Ator é null (ação automática do sistema / job noturno).
+      await tx.insert(auditLog).values({
+        clinicId: assinatura.clinicId,
+        atorId: null,
+        acao: ACAO_ASSINATURA_CANCELADA_POR_INADIMPLENCIA,
+        entidade: "subscription",
+        entidadeId: assinatura.subscriptionId,
+        patientId: null,
+        detalhe: {
+          motivo: contexto.motivo,
+          provider: assinatura.provider,
+          providerSubscriptionId: assinatura.providerSubscriptionId,
+          ...(assinatura.pastDueDesde
+            ? { pastDueDesde: assinatura.pastDueDesde.toISOString() }
+            : {}),
+          ...(assinatura.carenciaDias != null
+            ? { carenciaDias: assinatura.carenciaDias }
+            : {}),
+        },
+        criadoEm: agora,
+      });
     });
 
     // Notifica o responsável da clínica por e-mail sobre o corte por carência/backstop (#312).

@@ -232,6 +232,35 @@ async function lerCiclos(clinicId: string): Promise<LinhaCiclo[]> {
      ORDER BY inicio`) as unknown as LinhaCiclo[];
 }
 
+async function lerAuditLog(subscriptionId: string): Promise<
+  {
+    clinic_id: string;
+    ator_id: string | null;
+    acao: string;
+    entidade: string;
+    entidade_id: string;
+    patient_id: string | null;
+    detalhe: Record<string, unknown> | null;
+    criado_em: Date;
+  }[]
+> {
+  const linhas = (await owner!`
+    SELECT clinic_id, ator_id, acao, entidade, entidade_id, patient_id, detalhe, criado_em
+      FROM audit_log
+     WHERE entidade = 'subscription' AND entidade_id = ${subscriptionId}
+     ORDER BY criado_em ASC`) as unknown as {
+    clinic_id: string;
+    ator_id: string | null;
+    acao: string;
+    entidade: string;
+    entidade_id: string;
+    patient_id: string | null;
+    detalhe: Record<string, unknown> | null;
+    criado_em: Date;
+  }[];
+  return linhas;
+}
+
 /** ISO do instante gravado, para comparar com literal escrito à mão. */
 function iso(d: Date | null): string | null {
   return d === null ? null : new Date(d).toISOString();
@@ -243,6 +272,7 @@ async function limpar(): Promise<void> {
   // lá alarga a superfície de lock o bastante para colidir com o `TRUNCATE
   // clinic` de outros arquivos de integração — medido como `deadlock detected`
   // e violação de FK no gate da #290.
+  await owner!`DELETE FROM audit_log WHERE clinic_id = ANY(${CLINICAS}::uuid[])`;
   await owner!`DELETE FROM patient WHERE clinic_id = ANY(${CLINICAS}::uuid[])`;
   await owner!`DELETE FROM clinic WHERE id = ANY(${CLINICAS}::uuid[])`;
 }
@@ -302,6 +332,24 @@ describe.skipIf(!hasDb)("#319 · corte por carência vencida", () => {
     expect(resultados[0]!.erro).toBeUndefined();
     expect(resultados[0]!.carenciaDias).toBe(10);
     expect(iso(resultados[0]!.pastDueDesde)).toBe("2026-07-01T12:00:00.000Z");
+
+    // D34: Emissão atômica de trilha em audit_log com acao 'assinatura_cancelada_por_inadimplencia'
+    const logs = await lerAuditLog(SUB_A);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]!.clinic_id).toBe(CLINICA_A);
+    expect(logs[0]!.ator_id).toBeNull();
+    expect(logs[0]!.acao).toBe("assinatura_cancelada_por_inadimplencia");
+    expect(logs[0]!.entidade).toBe("subscription");
+    expect(logs[0]!.entidade_id).toBe(SUB_A);
+    expect(logs[0]!.patient_id).toBeNull();
+    expect(logs[0]!.detalhe).toMatchObject({
+      motivo: "past_due vencido",
+      provider: ID_PROVEDOR_FAKE,
+      providerSubscriptionId: VINCULO_A,
+      pastDueDesde: "2026-07-01T12:00:00.000Z",
+      carenciaDias: 10,
+    });
+    expect(iso(logs[0]!.criado_em)).toBe("2026-08-15T12:00:00.000Z");
   });
 
   // ── 2. O negativo, com a borda exata ───────────────────────────────────────
@@ -349,6 +397,7 @@ describe.skipIf(!hasDb)("#319 · corte por carência vencida", () => {
     const naBorda = await lerAssinatura(SUB_A);
     expect(naBorda.status).toBe("canceled");
     expect(naBorda.past_due_desde).toBeNull();
+    expect(await lerAuditLog(SUB_A)).toHaveLength(1);
 
     // As duas de dentro: intocadas, inclusive o carimbo — recarimbar zeraria a
     // carência a cada passada e a assinatura nunca venceria.
@@ -358,11 +407,13 @@ describe.skipIf(!hasDb)("#319 · corte por carência vencida", () => {
     expect(iso(umSegundoDentro.past_due_desde)).toBe(
       "2026-08-05T12:00:01.000Z",
     );
+    expect(await lerAuditLog(SUB_B)).toEqual([]);
 
     const bemDentro = await lerAssinatura(SUB_C);
     expect(bemDentro.status).toBe("past_due");
     expect(bemDentro.cancelada_em).toBeNull();
     expect(iso(bemDentro.past_due_desde)).toBe("2026-08-10T12:00:00.000Z");
+    expect(await lerAuditLog(SUB_C)).toEqual([]);
 
     // A varredura sequer as AVALIOU: o filtro é do banco, não peneira em JS.
     expect(resultados.map((r) => r.subscriptionId)).toEqual([SUB_A]);

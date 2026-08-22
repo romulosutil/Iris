@@ -130,6 +130,7 @@ export function resumoDoCorpo(corpo) {
     cobrancasEmitidas: null,
     retentativasComandadas: null,
     retentativasTruncado: null,
+    carenciaFalhas: null,
   };
   if (typeof corpo !== "string") return vazio;
   let dados;
@@ -169,6 +170,12 @@ export function resumoDoCorpo(corpo) {
       typeof dados.retentativasTruncado === "boolean"
         ? dados.retentativasTruncado
         : null,
+    // Falhas no corte por carência (D34). O corte é ato irreversível;
+    // se houver falhas individuais na passada, o número sobe para o primeiro
+    // nível para derrubar o exit code e acionar alarmes de monitoramento.
+    carenciaFalhas: Array.isArray(dados.carenciaFalhas)
+      ? dados.carenciaFalhas.length
+      : null,
   };
 }
 
@@ -222,14 +229,26 @@ async function main() {
       // pagador e uma das 3 tentativas da cobrança, gasta.
       retentativasComandadas: resumo.retentativasComandadas,
       retentativasTruncado: resumo.retentativasTruncado,
+      carenciaFalhas: resumo.carenciaFalhas,
       corpo: resultado.corpo ?? null,
     }),
   );
 
-  if (!resultado.ok) {
-    console.error(
-      `${PREFIXO} disparo FALHOU (${resultado.falha}): ${resultado.erro}`,
-    );
+  const falhou =
+    !resultado.ok ||
+    (resumo.carenciaFalhas !== null && resumo.carenciaFalhas > 0);
+
+  if (falhou) {
+    if (!resultado.ok) {
+      console.error(
+        `${PREFIXO} disparo FALHOU (${resultado.falha}): ${resultado.erro}`,
+      );
+    }
+    if (resumo.carenciaFalhas !== null && resumo.carenciaFalhas > 0) {
+      console.error(
+        `${PREFIXO} disparo FALHOU: ${resumo.carenciaFalhas} corte(s) por carência falharam nesta passada.`,
+      );
+    }
     // Aviso separado, porque muda a reação: reexecutar o job aqui REEMITIRIA
     // cobrança. A etapa que caiu é a que precisa ser reexecutada, não a
     // varredura inteira.
@@ -243,7 +262,7 @@ async function main() {
       console.error(
         `${PREFIXO} ATENÇÃO: ${resumo.cobrancasEmitidas ?? "?"} cobrança(s) e` +
           ` ${resumo.retentativasComandadas ?? "?"} retentativa(s) JÁ foram comandadas nesta passada` +
-          ` (retentativaAbortada=${resumo.retentativaAbortada ?? "não"}, carenciaAbortada=${resumo.carenciaAbortada ?? "não"}, backstopAbortado=${resumo.backstopAbortado ?? "não"}).` +
+          ` (retentativaAbortada=${resumo.retentativaAbortada ?? "não"}, carenciaAbortada=${resumo.carenciaAbortada ?? "não"}, backstopAbortado=${resumo.backstopAbortado ?? "não"}, carenciaFalhas=${resumo.carenciaFalhas ?? 0}).` +
           ` NÃO reexecute o fechamento sem antes conferir o estado dos ciclos.`,
       );
     }

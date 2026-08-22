@@ -165,6 +165,7 @@ describe("resumoDoCorpo", () => {
       ciclosProcessados: 2,
       retentativasComandadas: 0,
       retentativasTruncado: false,
+      carenciaFalhas: [{ subscriptionId: "sub_1", erro: "timeout no gateway" }],
       resultados: [
         { clinicId: "a", cobrancaEmitida: true },
         { clinicId: "b", cobrancaEmitida: false },
@@ -181,6 +182,7 @@ describe("resumoDoCorpo", () => {
       cobrancasEmitidas: 1,
       retentativasComandadas: 0,
       retentativasTruncado: false,
+      carenciaFalhas: 1,
     });
   });
 
@@ -198,6 +200,7 @@ describe("resumoDoCorpo", () => {
       retentativasAvaliadas: 20,
       retentativasComandadas: 4,
       retentativasTruncado: true,
+      carenciaFalhas: [],
       resultados: [],
     });
 
@@ -209,6 +212,7 @@ describe("resumoDoCorpo", () => {
       cobrancasEmitidas: 0,
       retentativasComandadas: 4,
       retentativasTruncado: true,
+      carenciaFalhas: 0,
     });
   });
 
@@ -221,6 +225,7 @@ describe("resumoDoCorpo", () => {
       ciclosProcessados: 1,
       retentativasComandadas: 0,
       retentativasTruncado: false,
+      carenciaFalhas: [],
       resultados: [{ clinicId: "a", cobrancaEmitida: true }],
     });
 
@@ -232,12 +237,12 @@ describe("resumoDoCorpo", () => {
     // diferentes, e um `??` encadeado sobre a chave errada as fundiria.
     expect(resumo.carenciaAbortada).toBeNull();
     expect(resumo.backstopAbortado).toBeNull();
+    expect(resumo.carenciaFalhas).toBe(0);
   });
 
   it("cai no default sem quebrar quando o corpo é ANTIGO, sem as chaves novas", () => {
     // Rota antiga (ou deploy da rota atrasado em relação ao job): o corpo não
-    // tem a etapa de retentativa. `null` é a leitura certa — `0` afirmaria que
-    // nada foi comandado, e ninguém mediu isso; a etapa nem existia.
+    // tem a etapa de retentativa nem carenciaFalhas. `null` é a leitura certa.
     const corpo = JSON.stringify({
       ok: true,
       carenciaAbortada: null,
@@ -254,6 +259,7 @@ describe("resumoDoCorpo", () => {
       cobrancasEmitidas: 1,
       retentativasComandadas: null,
       retentativasTruncado: null,
+      carenciaFalhas: null,
     });
   });
 
@@ -275,11 +281,12 @@ describe("resumoDoCorpo", () => {
         cobrancasEmitidas: null,
         retentativasComandadas: null,
         retentativasTruncado: null,
+        carenciaFalhas: null,
       });
     }
   });
 
-  it("caminho feliz: nenhuma etapa abortada", () => {
+  it("caminho feliz: nenhuma etapa abortada e sem falhas de carência (D34)", () => {
     const corpo = JSON.stringify({
       ok: true,
       retentativaAbortada: null,
@@ -288,6 +295,7 @@ describe("resumoDoCorpo", () => {
       ciclosProcessados: 0,
       retentativasComandadas: 0,
       retentativasTruncado: false,
+      carenciaFalhas: [],
       resultados: [],
     });
 
@@ -301,6 +309,28 @@ describe("resumoDoCorpo", () => {
       // faria o zero legítimo virar "a rota não relatou", que é outra coisa.
       retentativasComandadas: 0,
       retentativasTruncado: false,
+      carenciaFalhas: 0,
     });
+  });
+
+  it("levanta o total de falhas individuais no corte por carência (D34)", () => {
+    const corpo = JSON.stringify({
+      ok: true,
+      retentativaAbortada: null,
+      carenciaAbortada: null,
+      backstopAbortado: null,
+      ciclosProcessados: 5,
+      retentativasComandadas: 0,
+      retentativasTruncado: false,
+      carenciaFalhas: [
+        { subscriptionId: "sub_1", erro: "timeout" },
+        { subscriptionId: "sub_2", erro: "network error" },
+        { subscriptionId: "sub_3", erro: "500 gateway" },
+      ],
+      resultados: [],
+    });
+
+    const resumo = resumoDoCorpo(corpo);
+    expect(resumo.carenciaFalhas).toBe(3);
   });
 });
