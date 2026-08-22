@@ -166,6 +166,15 @@ Easypanel + Postgres puro + MinIO). Itens de infra são "confirmar antes / via
       `src/components/ui/alert.test.tsx` medida por mutação em `alert.tsx`:
       reintroduzir `border-l-[4px]` mata 9 dos 10 testes; achatar as 6 cores de
       borda em `--border-brutal` mata 7.
+- [x] `materializarSnapshot` sem N+1: as buscas de taxonomia (`protocol`),
+      critério de domínio (`goal`) e candidatura atual (`goal_candidacy`) são 1
+      query em lote cada, e as gravações de snapshot/candidatura rodam em
+      `Promise.all` (D40 / #330 / PR #417). Oráculos em
+      `db/tests/fase4-materializar.int.test.ts` contam SQL real por tabela e
+      exigem `toBe(1)`; lista vazia não vai ao banco (0 queries). Medido por
+      mutação em `src/lib/evidence/materializar.ts`: reintroduzir o laço por
+      protocolo mata 1 teste, e remover a preservação de `candidacy_since` mata
+      outro.
 - [ ] Provedor de IA nomeado na Política de Privacidade (D57). A decisão de
       21/08/2026 é **Google (Gemini API)**, mas `docs/legal/politica-privacidade.md`
       segue em `2026-08-07` sem menção ao provedor (medido: `grep -c Gemini` = 0).

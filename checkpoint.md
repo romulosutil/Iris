@@ -1,8 +1,8 @@
 # Checkpoint — Estado Atual do Repositório Iris
 
 **Data**: 22/08/2026
-**Status**: `main` verde e estável; PR #416 (D54) com conflitos resolvidos e revalidada.
-**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328)
+**Status**: `main` verde e estável; PR #417 (D40 / #330) com conflitos resolvidos e revalidada em sandbox.
+**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328), #416 (D54)
 
 ---
 
@@ -15,16 +15,16 @@
 - ✅ **D53 (PR #413 — `48643c9`)**: Guardrail estático + workflow de CI contra injeção de script de preview em `src/app/layout.tsx`.
 - ✅ **D47 (PR #414 — `b50f432`)**: Sincronização de fixtures e contrato documental do modo convencional, com guard executável contra re-drift.
 - ✅ **#328 (PR #415 — `e676834`)**: Perímetro comportamental do `config.matcher` do proxy, avaliado com o `getPathMatch` do próprio Next.js.
+- ✅ **D54 (PR #416 — `11a1f5c`)**: Remoção da side-stripe `border-l-[4px]` e das bordas assimétricas do componente `Alert`, alinhando ao Espectro Brutal.
 
 ---
 
 ## 2. PRs Abertas Aguardando Revisão e Merge
 
-| PR       | Branch                        | Escopo / Débito                                                                        | Estado                                                                     |
-| :------- | :---------------------------- | :------------------------------------------------------------------------------------- | :------------------------------------------------------------------------- |
-| **#416** | `fix/d54-alert-side-stripe`   | **D54**: remoção da side-stripe `border-l-[4px]` e das bordas assimétricas do `Alert`. | Conflitos com `main` resolvidos, revalidada em sandbox, pronta para merge. |
-| **#417** | `fix/330-n-plus-1-...`        | **D40 / #330**: eliminação de 3 N+1 em `materializarSnapshot`.                         | Em andamento (worktree local).                                             |
-| **#418** | `feat/383-resend-webhook-...` | **#383**: webhook do Resend para log de bounces/complaints.                            | Em andamento (branch local `feat/383-resend-webhook-bounces-complaints`).  |
+| PR       | Branch                                       | Escopo / Débito                                                                                     | Estado                                                                     |
+| :------- | :------------------------------------------- | :-------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------- |
+| **#417** | `fix/330-n-plus-1-materializar-snapshot`     | **D40 / #330**: eliminação dos 3 N+1 restantes em `materializarSnapshot` + gravações paralelizadas. | Conflitos com `main` resolvidos, revalidada em sandbox, pronta para merge. |
+| **#418** | `feat/383-resend-webhook-bounces-complaints` | **#383**: webhook do Resend para log de bounces/complaints.                                         | Em andamento (branch local).                                               |
 
 ---
 
@@ -40,23 +40,24 @@ Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 
 ---
 
-## 4. Verificação da Base (`fix/d54-alert-side-stripe` já com `main` mergeada)
+## 4. Verificação da Base (`fix/330-n-plus-1-materializar-snapshot` já com `main` mergeada)
 
-| Gate                                | Resultado                                                                                   |
-| :---------------------------------- | :------------------------------------------------------------------------------------------ |
-| `pnpm typecheck`                    | 0 erros                                                                                     |
-| `pnpm lint`                         | 0 erros (9 warnings pré-existentes: Storybook `no-redundant-story-name` e `<a>` na landing) |
-| `pnpm test`                         | **245/245 arquivos · 1.773/1.773 testes verdes**                                            |
-| `pnpm build`                        | Build Next.js concluído com sucesso                                                         |
-| Mutação em `alert.tsx`              | 2 mutantes mortos (reintroduzir `border-l-[4px]` → 9 testes caem; borda uniforme → 7 caem)  |
-| Diff de `docs/GO_LIVE.md` vs `main` | Aditivo: **0 linhas removidas**                                                             |
+Medido em worktree isolado (`.worktrees/fix-330-n-plus-1-materializar-snapshot`), após `git merge origin/main`:
 
----
+| Gate                                                                      | Resultado                                                                                                                                                                                                                                                                                                                  |
+| :------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                                                          | 0 erros                                                                                                                                                                                                                                                                                                                    |
+| `pnpm lint`                                                               | 0 erros (9 warnings pré-existentes: Storybook `no-redundant-story-name` e `<a>` na landing)                                                                                                                                                                                                                                |
+| `pnpm test`                                                               | **246/246 arquivos · 1.777/1.777 testes verdes**                                                                                                                                                                                                                                                                           |
+| Mutação em `materializar.ts` (produção)                                   | 2 mutantes **mortos**: (M1) reintroduzir o laço `for` chamando `taxonomiaDoProtocolo` por protocolo → 1 teste cai; (M2) `candidacySince = isCandidate ? new Date() : null` (perde a preservação) → 1 teste cai                                                                                                             |
+| Oráculos de contagem de query (`db/tests/fase4-materializar.int.test.ts`) | 5 testes novos contam SQL real por tabela (`milestone`, `protocol`, `goal`, `goal_candidacy`) e exigem `toBe(1)`; **não rodam localmente** (Docker/Postgres desligado nesta máquina) — validados pelo job `test-rls` do CI, que reprovou o caso de lista vazia por contar o `COMMIT` da transação (corrigido em `1f6b5ee`) |
+| Diff de `BACKLOG.md` / `docs/GO_LIVE.md` vs `main`                        | Aditivo: **0 identificadores de débito perdidos** (verificado por script comparando o conjunto `D<n>` de `main` e do PR contra o resultado)                                                                                                                                                                                |
 
 ## 5. Próximos Passos Recomendados
 
-1. Merge da PR **#416** (D54).
-2. Concluir **#417** (D40 / #330 — N+1 em `materializar.ts`) e **#418** (#383 — webhook Resend).
+1. Merge da PR **#417** (D40 / #330).
+2. Concluir **#418** (#383 — webhook Resend).
 3. **D34**: `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
 4. **D57**: com autorização do Rômulo, commitar a nomeação do provedor de IA em `docs/legal/` e só então reativar os testes que exigem `Google (Gemini API)` / `EXTRACTION_LLM_ENABLED` (revertidos na revisão da PR #416 por afirmarem conteúdo inexistente no repositório).
 5. Cadastrar o endpoint `https://irisclinica.ia.br/api/webhooks/resend` no painel do Resend (eventos `email.bounced` e `email.complained`) quando a #383 for mergeada.
+6. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).
