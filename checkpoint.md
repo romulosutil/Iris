@@ -1,8 +1,8 @@
 # Checkpoint — Estado Atual do Repositório Iris
 
 **Data**: 22/08/2026
-**Status**: `main` verde e estável; PR #418 (#383 — webhook Resend) com conflitos resolvidos, revisada e revalidada em sandbox.
-**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328), #416 (D54), #417 (D40 / #330)
+**Status**: `main` verde e estável; D34 (Auditoria no Corte por Inadimplência & Alarme no Job) implementado e testado; PR #418 (#383 — webhook Resend) mergeada em `main`.
+**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328), #416 (D54), #417 (D40 / #330), #418 (#383)
 
 ---
 
@@ -16,15 +16,18 @@
 - ✅ **D47 (PR #414 — `b50f432`)**: Sincronização de fixtures e contrato documental do modo convencional, com guard executável contra re-drift.
 - ✅ **#328 (PR #415 — `e676834`)**: Perímetro comportamental do `config.matcher` do proxy, avaliado com o `getPathMatch` do próprio Next.js.
 - ✅ **D54 (PR #416 — `11a1f5c`)**: Remoção da side-stripe `border-l-[4px]` e das bordas assimétricas do componente `Alert`, alinhando ao Espectro Brutal.
+- ✅ **D40 / #330 (PR #417 — `cb9aef0`)**: Eliminação de N+1 em `materializarSnapshot` e paralelização de gravações.
+- ✅ **#383 (PR #418 — `824bcf6`)**: Webhook do Resend para log de bounces e complaints sem PII (LGPD).
+- ✅ **D34 (Branch `feat/d34-auditoria-corte-inadimplencia`)**: Trilha atômica em `audit_log` no corte de assinatura por carência/backstop, grant/policies RLS para `iris_auth` (`0116_audit_log_iris_auth_grant.sql`), limiar de alarme (`carenciaFalhas > 0` -> `process.exit(1)`) no job `scripts/fechamento-ciclo-billing.mjs` e testes automatizados completos.
 
 ---
 
 ## 2. PRs Abertas Aguardando Revisão e Merge
 
-| PR       | Branch                                       | Escopo / Débito                                                                                     | Estado                                                                     |
-| :------- | :------------------------------------------- | :-------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------- |
-| **#417** | `fix/330-n-plus-1-materializar-snapshot`     | **D40 / #330**: eliminação dos 3 N+1 restantes em `materializarSnapshot` + gravações paralelizadas. | Conflitos com `main` resolvidos, revalidada em sandbox, pronta para merge. |
-| **#418** | `feat/383-resend-webhook-bounces-complaints` | **#383**: webhook do Resend para log de bounces/complaints.                                         | Em andamento (branch local).                                               |
+| PR       | Branch                                       | Escopo / Débito                                                                                | Estado                      |
+| :------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------- | :-------------------------- |
+| **#419** | `feat/383-resend-webhook-bounces-complaints` | **Governança Legal**: formalização do Google Gemini nos termos e políticas de privacidade.     | Aberta aguardando merge. |
+| **#420** | `feat/d34-auditoria-corte-inadimplencia`     | **D34**: auditoria no corte por inadimplência (`audit_log`) e exit code no job de faturamento. | Aberta aguardando merge. |
 
 ---
 
@@ -41,9 +44,19 @@ Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 
 ---
 
-## 4. Verificação da Base (`feat/383-resend-webhook-bounces-complaints` já com `main` mergeada)
+## 4. Verificação da Base (`feat/d34-auditoria-corte-inadimplencia`)
 
-Medido em worktree isolado (`.worktrees/pr418-resend`), após `git merge origin/main` e as correções da revisão tech lead:
+| Gate                                               | Resultado                                                                                 |
+| :------------------------------------------------- | :---------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                                   | 0 erros                                                                                   |
+| `pnpm lint`                                        | 0 erros, 9 warnings aceitos (stories/link Next)                                           |
+| `pnpm test`                                        | **1.789/1.789 testes verdes** (248 arquivos, 0 falhas)                                    |
+| `src/db/migrations.test.ts`                        | **8/8 testes verdes** (journal snapshot integro com `0116_audit_log_iris_auth_grant.sql`) |
+| `scripts/fechamento-ciclo-billing.test.mjs`        | **15/15 testes verdes** (cobertura de `carenciaFalhas` no `resumoDoCorpo`)                |
+| `pnpm format`                                      | Base formatada                                                                            |
+| Diff de `BACKLOG.md` / `docs/GO_LIVE.md` vs `main` | Aditivo: **0 identificadores `D<n>` / `#<n>` perdidos**                                   |
+
+---
 
 | Gate                                               | Resultado                                                                                                                                                                  |
 | :------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -63,8 +76,10 @@ Medido em worktree isolado (`.worktrees/pr418-resend`), após `git merge origin/
 
 ## 5. Próximos Passos Recomendados
 
-1. Merge da PR **#418** (#383 — webhook Resend).
-2. **D34**: `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
-3. **D57**: checagem operacional (billing pago ativo, escopo do DPA para Gemini API standalone, Art. 33 LGPD) antes de comutar `EXTRACTION_LLM_ENABLED=true`.
-4. ✅ **Concluído (22/08/26)**: `RESEND_WEBHOOK_SECRET` publicado no Easypanel (iris-app) e endpoint `https://irisclinica.ia.br/api/webhooks/resend` cadastrado no painel do Resend (eventos `email.bounced` e `email.complained`).
-5. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).
+1. ✅ **Concluído (22/08/26)**: Merge da PR **#418** (#383 — webhook Resend) e **#419** (Governança Legal Google Gemini API).
+2. Abertura e merge da PR do **D34** (`feat/d34-auditoria-corte-inadimplencia`).
+3. **D36**: Faixa de alerta urgente de recusa na UI (`faixa-trial.tsx` / `/assinatura`).
+4. **D39**: Persistência do código cru de recusas G6 em `billing_cycle.recusa_codigo`.
+5. **D57**: Checagem operacional (billing pago ativo, escopo do DPA para Gemini API standalone, Art. 33 LGPD) antes de comutar `EXTRACTION_LLM_ENABLED=true`.
+6. ✅ **Concluído (22/08/26)**: `RESEND_WEBHOOK_SECRET` publicado no Easypanel (iris-app) e endpoint `https://irisclinica.ia.br/api/webhooks/resend` cadastrado no painel do Resend (eventos `email.bounced` e `email.complained`).
+7. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).
