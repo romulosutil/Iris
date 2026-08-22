@@ -92,23 +92,34 @@ Confirmado na sessão anterior que `e5c6d4d`/`4f38394` (outra sessão Claude) es
 
 ---
 
-## O que o próximo agente faz — em ordem, uma coisa de cada vez
+## Estado de Entrega & Merge em `main`
 
-Fase 0 (T01-T05), o par `[P]` T06/T07, T08, T09, T10 e T11 estão **fechados e revisados**. T26/T27/T30/T32 também fechados (outra sessão, na mesma branch). Continuar em T12.
+- **Feature #407 (PR #408 - `96044e1`)**: Anamnese como marco zero (34/34 tasks concluídas, revisadas e mergeadas em `main`).
+- **Feature #409 (PR #410 - `498d335`)**: Ponto de entrada da Anamnese no prontuário do paciente (`layout.tsx` / `modalidade.ts`).
+- **Navegação Clínica (PR #411 - `5adfe6f`)**: Sub-navegação em `/clinica` (`/clinica/dados`, `/clinica/feriados`, `/clinica/emergencia`) e atalhos diretos para dashboards PEI e protocolos.
+- **Débito D52 (Guardrail de Ambiente no Seed)**: Módulo `scripts/lib/guardrail-seed.ts` implementado, integrado em todos os scripts de seed (`scripts/seed.ts`, `seed-local.ts`, `seed-demo-account.ts`, `seed-super-admin.ts`) com bloqueio fail-closed contra hosts remotos sem `ALLOW_SEED_REMOTE=true`.
 
-### Passo 1 — T12 em diante
+---
 
-T12 (`.superpowers/sdd/tasks/task-12-brief.md`, já extraído) é o próximo gate a camadear sobre `validarAnamneseCore` — conferir dependência exata no `tasks.md` antes de despachar.
+## Verificação Atual da Base
 
-Sequencial a partir daqui salvo indicação `[P]` no brief (e mesmo `[P]`: despachar implementadores **sempre em sequência**, nunca em paralelo — regra da skill `subagent-driven-development`, não relaxar de novo). Consultar `.specs/features/407-anamnese-marco-zero/tasks.md` para ordem completa e dependências; briefs extraídos em `.superpowers/sdd/tasks/task-NN-brief.md` até T34.
+| Gate                        | Resultado                                              |
+| --------------------------- | ------------------------------------------------------ |
+| `pnpm typecheck`            | 0 erros                                                |
+| `pnpm lint`                 | 0 erros                                                |
+| `pnpm test`                 | 241/241 arquivos · 1.722/1.722 testes verdes           |
+| `pnpm test:rls`             | 119/119 arquivos · 1.071/1.071 testes verdes (0 skips) |
+| `src/db/migrations.test.ts` | 8/8 testes verdes (snapshot e journal íntegros)        |
+| `pnpm format:check`         | 100% formatado via Prettier                            |
 
-**Atenção antes de despachar T12**: outra sessão está escrevendo na mesma branch em paralelo (confirmado de novo nesta sessão — T26/T27/T30/T32 apareceram intercalados nos commits do T11). Rodar `git log --oneline -10` antes de gerar `BASE` para o próximo dispatch, e escopar review por path de arquivo, não por range bruto de commits.
+---
 
-### Os dois guardrails que nenhuma task pode relaxar (repetido da sessão anterior, ainda vale)
+## Gate de Produto Aberto
 
-1. A anamnese **nunca** insere em `session`. `billing_apurar_ciclo` conta paciente ativo por `EXISTS` em `session` sem filtrar tipo/estado — uma linha em `session` cobra o cliente em silêncio. T20 é a guarda dedicada a esse invariante (ainda não chegamos lá).
-2. A validação cria `goal` em estado **`ativa`**. `contaComoAlvo` exclui `rascunho`; meta em rascunho deixa o hexágono 100% nulo.
+**Consentimento (D-H), bloqueante antes de dado real.** Ainda aberto. `docs/legal/` continua sem ser lido — exige autorização explícita do Rômulo antes. Não bloqueia desenvolvimento local/testes; bloqueia colocar paciente real na anamnese.
 
-### Disciplina de sessão curta (pedido do Rômulo nesta sessão)
+---
 
-Sessões devem ser curtas — parar em pontos atômicos (fim de task ou par de tasks `[P]`), não acumular. Ao parar: atualizar este checkpoint + `.superpowers/sdd/tasks/progress.md`, commitar, e deixar passo a passo explícito para quem retomar (mesma estrutura deste arquivo). Não é preciso esperar a Fase 1 inteira para fazer o próximo checkpoint — parar de novo depois de T06/T07 ou depois de um punhado de tasks, o que vier primeiro.
+## O que o próximo agente faz
+
+A base encontra-se limpa, equalizada com D52 implementado e verificado por testes de unidade e mutação. Próximos passos podem focar nos débitos técnicos rápidos (ex: D53, D47, D54), no Webhook do Resend (#383) ou nos testes de perímetro do proxy (#328).

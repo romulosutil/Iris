@@ -2,7 +2,7 @@
 
 > **Documento Mestre de Governança, Lançamento & Roadmap Pós-Go-Live**  
 > **Status:** Ativo / Em Produção  
-> **Última Atualização:** 17/08/2026  
+> **Última Atualização:** 21/08/2026  
 > **Ordem de Prioridade Inegociável:** `Segurança & Compliance` $\rightarrow$ `Features de Produto` $\rightarrow$ `Saúde & Performance` $\rightarrow$ `Expansão & Escala`
 
 ---
@@ -20,6 +20,8 @@ O **Iris** é um SaaS especializado para clínicas de terapia infantil (interven
 - ✅ **Isolamento Multi-tenant (RLS):** 100% das policies utilizam `app_clinic_id_exigido()`.
 - ✅ **Infraestrutura Easypanel:** Containers `iris-app`, `iris-billing`, `iris-escalonamento`, `iris-backup`, `iris-postgres`, `iris-redis` ativos e operacionais.
 - ✅ **Faturamento Real:** Ativação de Pix Automático (`immediateQrCode`) e débito de mensalidade homologados com clínica real no Asaas em produção (fechando **D43** e **D44**).
+- ✅ **Marco Zero & Anamnese (#407 / #409):** Anamnese validada gerando linha de base estruturada e integração no prontuário.
+- ✅ **Guardrail Ambiental no Seed (D52):** Proteção fail-closed impedindo execução de seeds acidentalmente contra staging/produção sem autorização explícita (`ALLOW_SEED_REMOTE=true`).
 - 🟢 **Status Go-Live:** **Sinal Verde** para captação e admissão de novas clínicas.
 
 ---
@@ -48,6 +50,7 @@ _Foco: Garantir sigilo absoluto de menores (LGPD), blindagem contra vazamento de
 
 | Item / Issue                                               | Título & Escopo                                         | Por que importa                                                                                                                                                                                                           | Responsável / Ação                         |
 | :--------------------------------------------------------- | :------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------- |
+| **D52 / PR #412**                                          | **Guardrail de Ambiente nos Scripts de Seed**           | Bloqueia fail-closed a execução de seeds contra staging/produção, exigindo `ALLOW_SEED_REMOTE=true` explícito para bancos remotos.                                                                                        | ✅ **Concluído (21/08/2026)**              |
 | **D34**                                                    | **Auditoria no Corte por Inadimplência**                | O corte após 10 dias de carência é ato irreversível (revoga Pix no Asaas). Deve emitir `audit_log` atômico (`assinatura_cancelada_por_inadimplencia`) e fazer o job noturno falhar com `exit 1` em caso de erros em lote. | **Claude / Antigravity** (Sessão síncrona) |
 | **[#343](https://github.com/romulosutil/Iris/issues/343)** | **Verificação de Grants RLS em `tcc_rpd_entry`**        | Garantir que o papel `app_role` tem permissões estritas sob RLS na tabela de RPD do TCC.                                                                                                                                  | Operacional (`psql` produção)              |
 | **[#89](https://github.com/romulosutil/Iris/issues/89)**   | **Retenção de Backup (30d) vs. Expurgo LGPD**           | Harmonizar política de descarte definitivo de dados expirados nos backups cifrados off-site da Oracle Cloud.                                                                                                              | Engenharia & Jurídico                      |
@@ -62,10 +65,12 @@ _Foco: Entregar clareza máxima na interface, reduzir atrito no dia a dia dos te
 
 | Item / Issue                                                   | Título & Escopo                                                 | Por que importa                                                                                                                                                      | Responsável / Ação                  |
 | :------------------------------------------------------------- | :-------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------- |
+| **Feature #407 / PR #408**                                     | **Marco Zero: Anamnese Estruturada na Linha do Tempo**          | Anamnese validada gerando snapshot 0 e linha de base do protocolo sem poluição na agenda de sessões.                                                                 | ✅ **Concluído (21/08/2026)**       |
+| **Feature #409 / PR #410**                                     | **Ponto de Entrada da Anamnese no Prontuário**                  | Aba Anamnese no prontuário condicionada à modalidade clínica protocol-driven.                                                                                        | ✅ **Concluído (21/08/2026)**       |
+| **D31 / [#36](https://github.com/romulosutil/Iris/issues/36)** | **Sub-navegação da Clínica (`/clinica/dados`) & Atalhos PEI**   | Sub-navegação com `TabsNav` em configurações da clínica e atalhos diretos para dashboards PEI/Protocolos.                                                            | ✅ **Concluído (PR #411)**          |
 | **D36**                                                        | **Faixa de Alerta Urgente de Recusa na UI (`faixa-trial.tsx`)** | Se o Pix Automático da clínica falhar por falta de saldo, exibir faixa no topo do app alertando o prazo de carência restante e instruindo ajuste de limite bancário. | **Claude / Antigravity** (Frontend) |
 | **D39**                                                        | **Persistência do Código Cru de Recusa G6**                     | Gravar `recusa_codigo` mesmo para erros internos G6, permitindo ao backstop de D+7 identificar defeito nosso e não penalizar a clínica.                              | **Claude / Antigravity** (Billing)  |
 | **[#277](https://github.com/romulosutil/Iris/issues/277)**     | **Painel de Governança e Segurança da Clínica**                 | Central administrativa para a gestora da clínica visualizar logs de acesso, consentimentos LGPD e auditoria de laudos.                                               | Produto & Frontend                  |
-| **D31 / [#36](https://github.com/romulosutil/Iris/issues/36)** | **Página "Dados da Clínica" (`/clinica/dados`)**                | Centralizar razão social, CNPJ, endereço e contatos fiscais fora da tela de assinatura.                                                                              | Spec de Produto                     |
 | **[#283](https://github.com/romulosutil/Iris/issues/283)**     | **Layout Mobile da Visão Matriz na Agenda**                     | Ajuste do grid de agendamentos para visualização fluida em telas < 375px (smartphones de terapeutas em campo).                                                       | Frontend / Jules                    |
 | **[#72](https://github.com/romulosutil/Iris/issues/72)**       | **Fase 6b — Ditado por Voz (Áudio + ASR)**                      | Transcrição automática de áudio de sessão via modelo com DPA médico assinado.                                                                                        | Roadmap / Pós-Piloto                |
 
