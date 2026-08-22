@@ -109,6 +109,10 @@ Fechamento do débito **D47**: alinhamento completo entre o contrato executável
    - Fixtures do eval set (TC-1 a TC-5b) atualizadas de array de objetos (`{tema, trecho_fonte}`) para array simples de strings (`string[]`), em perfeita paridade com `agentOutputSchema.temas`.
 3. **Cobertura de Testes:**
    - `src/lib/extraction/agent-output-schema.test.ts` atualizado com testes diretos validando as saídas dos Casos TC-1 (ausência de risco = `null`) e TC-2 (presença de alerta unificado) contra o schema `agentOutputSchema`. 17/17 testes passam com 100% de sucesso.
+   - **Guard executável contra re-drift (revisão tech lead do PR #414):** as 6 saídas esperadas do eval set foram lidas do doc e validadas contra `agentOutputSchema` — todas rejeitavam por `extracoes` ausente, campo `required` tanto no schema quanto no tool schema entregue ao modelo. Fixtures corrigidas para abrir com `"extracoes": []`, e adicionado bloco de teste que lê `docs/agente/casos-de-teste-terapia-convencional.md` e valida cada saída esperada, com trava de contagem (6) para não ficar verde caso o extrator deixe de casar o heading. Sem ele o alinhamento do D47 seguia manual e voltaria a dessincronizar em silêncio — foi assim que o D47 nasceu.
+   - **Medição por mutação:** 5 mutantes mortos — remover `extracoes` de uma fixture, reverter `alerta_risco` à forma booleana antiga (`presente`), reverter `temas` a array de objetos, `certeza` fora do enum, e renomear o heading `Saída esperada`.
+
+---
 
 ## 🏁 Sessão 21/08/2026 (2ª) — Guardrail de Ambiente nos Scripts de Seed (Fechamento do D52)
 
