@@ -2,11 +2,15 @@ import { eq } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { appUser, clinic } from "@/db/schema";
 import { auth } from "@/auth/auth";
+import { assertSeedAllowed } from "./lib/guardrail-seed";
 
 export const SUPER_ADMIN_EMAIL = "superadmin@iris.test";
 export const SUPER_ADMIN_SENHA = "SenhaSuperAdmin123!";
 
 async function seedSuperAdmin() {
+  const targetUrl = process.env.AUTH_DATABASE_URL ?? process.env.DATABASE_URL;
+  assertSeedAllowed(targetUrl);
+
   console.log("Iniciando seed de Super Admin...");
 
   const [existente] = await authDb

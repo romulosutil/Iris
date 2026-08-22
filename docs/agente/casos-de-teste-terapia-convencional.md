@@ -6,11 +6,19 @@ conjunto principal (`docs/agente/casos-de-teste.md`) porque usa um schema de
 saída diferente (sem `extracoes[]` por domínio) — mesma convenção de formato
 (Diário de entrada → Regras que este caso exercita → Saída esperada).
 
+`extracoes` continua **obrigatório** no contrato executável (`agentOutputSchema`
+e o tool schema entregue ao modelo o listam em `required`): o modo convencional
+não emite o campo _ausente_, emite `extracoes: []`. Por isso toda saída esperada
+abaixo abre com `"extracoes": []` — sem ele a fixture não é uma saída válida do
+agente, e o eval set deixaria de servir como referência de comparação. Guard em
+`src/lib/extraction/agent-output-schema.test.ts` valida cada bloco deste arquivo
+contra o schema de runtime.
+
 Total: **5 casos**, cobrindo o escopo pedido na issue #98: escuta simples,
 risco/crise, baixa participação verbal, encerramento de ciclo, e **um caso
 cruzado entre famílias de abordagem**.
 
-## Duas mudanças de 29/07/2026 que atravessam todos os casos
+## Três mudanças que atravessam todos os casos
 
 1. **Cada caso declara a família de abordagem do terapeuta no contexto**
    (`familia_abordagem`). Consequência direta da definição de nicho de §1 do
@@ -22,10 +30,13 @@ cruzado entre famílias de abordagem**.
    O nome do campo `familia_abordagem` e seus valores são **proposta pendente
    de confirmação** (§2.2 do protocolo) — o que está travado é a existência das
    três famílias, não o formato do campo.
-2. **Dois campos do schema de saída foram renomeados** (§3.1 do protocolo):
+2. **Dois campos conceituais foram renomeados** (§3.1 do protocolo):
    `padrao_silencio_resistencia` → `padrao_participacao_verbal`, e
    `direcao_sugerida` (objeto único) → `tema_recorrente_sinalizado` (**array**,
    com `trecho_fonte` por item). Todos os casos abaixo já usam os nomes novos.
+3. **Estrutura unificada de `alerta_risco` e formato de `temas` (#390 / D47):**
+   - `alerta_risco` segue a forma canônica unificada nos 3 modos (`{categoria, severidade, certeza, trecho_fonte, detalhe}` nullable, ausência = `null`, sem `presente: boolean`).
+   - `temas` é um array de strings (`string[]`), sem objetos aninhados.
 
 ---
 
@@ -78,16 +89,11 @@ o vocabulário dela).
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Paciente relatou primeiro contato com pertences do pai sem chorar durante o processo, embora tenha chorado depois, sozinha. Retomou o tema da culpa por não ter chegado a tempo ao hospital, já presente em sessões anteriores. Segue retomando gradualmente as atividades de trabalho, evitando especificamente situações de falar em público. Encerrou a sessão relatando sensação de melhora.",
   "temas": [
-    {
-      "tema": "luto do pai — culpa por ausência no momento da morte",
-      "trecho_fonte": "Ela relatou culpa por não ter conseguido chegar a tempo no hospital, tema que já apareceu em sessões anteriores"
-    },
-    {
-      "tema": "retomada gradual da rotina de trabalho",
-      "trecho_fonte": "ainda evite reuniões que envolvam falar em público — disse que 'ainda não tem cabeça para isso'"
-    }
+    "luto do pai — culpa por ausência no momento da morte",
+    "retomada gradual da rotina de trabalho"
   ],
   "tema_recorrente_sinalizado": [
     {
@@ -105,12 +111,7 @@ o vocabulário dela).
     "presente": false,
     "descricao": null
   },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
-  },
+  "alerta_risco": null,
   "sinalizacoes": []
 }
 ```
@@ -174,13 +175,9 @@ família psicodinâmica. Descreve o observável: "minimizou", "mudou de assunto"
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Paciente relatou episódio recente em que o marido a segurou pelo braço com força, deixando marca, para impedi-la de sair de casa durante uma discussão. Relatou que episódios semelhantes já ocorreram algumas vezes por ano desde o casamento, associados a consumo de álcool pelo marido. Minimizou a gravidade do relato e não expressou intenção de terminar o relacionamento. Mudou de assunto para comentar positivamente sobre novo emprego.",
-  "temas": [
-    {
-      "tema": "violência física recorrente no relacionamento conjugal",
-      "trecho_fonte": "ele a segurou pelo braço com força para impedi-la de sair de casa e deixou marca"
-    }
-  ],
+  "temas": ["violência física recorrente no relacionamento conjugal"],
   "tema_recorrente_sinalizado": [
     {
       "tema": "distância entre como a paciente nomeia o episódio e a repetição que ela mesma relata",
@@ -193,8 +190,9 @@ família psicodinâmica. Descreve o observável: "minimizou", "mudou de assunto"
     "descricao": "Paciente mudou de assunto rapidamente após o relato do episódio, passando a falar do novo emprego — deslocamento do tema registrado como observável, sem inferência sobre o motivo."
   },
   "alerta_risco": {
-    "presente": true,
     "categoria": "violencia_sofrida",
+    "severidade": "violencia_sofrida",
+    "certeza": "explicito",
     "trecho_fonte": "ele a segurou pelo braço com força para impedi-la de sair de casa e deixou marca",
     "detalhe": "Paciente relata episódio recente de violência física por parte do cônjuge, com marca visível, e confirma recorrência ('algumas vezes por ano, desde o casamento'). Paciente minimiza a gravidade e não expressa intenção de buscar afastamento — registrado literalmente, sem inferir risco além do relatado."
   },
@@ -208,12 +206,12 @@ família psicodinâmica. Descreve o observável: "minimizou", "mudou de assunto"
 ```
 
 **Nota de produto:** este é o caso mais importante do eval set deste modo —
-o alerta precisa dar `presente: true` mesmo com o texto do próprio
+o alerta precisa disparar (`alerta_risco` não-nulo, com `categoria: "violencia_sofrida"`) mesmo com o texto do próprio
 terapeuta relativizando a gravidade. Um modelo que "aprende" a seguir o tom
 relativizado do relato (em vez do fato relatado) e deixa de marcar o alerta
 é uma falha de regressão crítica, equivalente em gravidade ao Caso 5 do
 conjunto principal (retornar vazio quando deveria) — aqui o erro é na
-direção oposta: NÃO retornar `alerta_risco: true` quando deveria.
+direção oposta: NÃO retornar `alerta_risco` (ou retornar `null`) quando deveria.
 
 **Nota sobre `padrao_participacao_verbal` neste caso.** O campo renomeado
 cobre naturalmente um fenômeno que o nome antigo tornava desconfortável de
@@ -280,12 +278,10 @@ assunto", "se afasta do tema" — e **nunca** "resistência", "defesa" ou
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Sessão com pouca verbalização do paciente. Respondeu de forma breve e evasiva quando questionado sobre seu estado e sobre o tema da separação, encerrando rapidamente qualquer aprofundamento. Fez um comentário breve sobre a casa estar vazia, mas não se estendeu quando convidado a falar mais. Quarta sessão consecutiva em que se afasta do tema da separação quando ele é trazido pela terapeuta.",
   "temas": [
-    {
-      "tema": "separação conjugal — afastamento recorrente do tema quando trazido",
-      "trecho_fonte": "Essa é a quarta sessão seguida em que ele evita entrar no tema quando eu trago"
-    }
+    "separação conjugal — afastamento recorrente do tema quando trazido"
   ],
   "tema_recorrente_sinalizado": [
     {
@@ -303,12 +299,7 @@ assunto", "se afasta do tema" — e **nunca** "resistência", "defesa" ou
     "presente": true,
     "descricao": "Paciente verbalizou pouco durante toda a sessão, levou cerca de 5 minutos para começar a falar, respondeu de forma breve e evasiva ao ser questionado diretamente, e encerrou por conta própria o aprofundamento tanto do estado emocional geral quanto do tema da separação — padrão que se repete pela 4ª sessão consecutiva."
   },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
-  },
+  "alerta_risco": null,
   "sinalizacoes": []
 }
 ```
@@ -386,24 +377,17 @@ consciência" ou "dimensão espiritual", que ela não usou; e tampouco importa
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Sessão de encerramento de ciclo. Paciente revisou, junto com a terapeuta, a trajetória desde o início do acompanhamento: partiu de um quadro de exaustão associado a burnout no trabalho, avançou para trabalho sobre dificuldade de estabelecer limites, e mais recentemente retomou atividades pessoais (pintura) abandonadas havia anos. Relatou perceber maior capacidade de reconhecer sobrecarga e de recusar demandas antes de atingir o limite, em contraste com o relato inicial de que isso era 'impossível'. A decisão de pausar o acompanhamento partiu da própria paciente, com encerramento combinado para esta sessão.",
   "temas": [
-    {
-      "tema": "trajetória do ciclo — de esgotamento a retomada de projetos pessoais",
-      "trecho_fonte": "hoje consegue perceber quando está se sobrecarregando e, na maior parte das vezes, consegue dizer não antes de chegar ao limite"
-    }
+    "trajetória do ciclo — de esgotamento a retomada de projetos pessoais"
   ],
   "tema_recorrente_sinalizado": [],
   "padrao_participacao_verbal": {
     "presente": false,
     "descricao": null
   },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
-  },
+  "alerta_risco": null,
   "sinalizacoes": []
 }
 ```
@@ -484,16 +468,11 @@ participação verbal).
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Paciente chegou 15 minutos atrasado, terceira sessão consecutiva com atraso. Relatou que o pai telefonou na quarta-feira, após cerca de oito meses sem contato. Ao ter o assunto retomado pela terapeuta, deslocou a conversa para uma questão de trabalho — movimento que a terapeuta registra como recorrente quando o tema do pai aparece, nomeando-o como resistência. A terapeuta verbalizou uma interpretação sobre a dificuldade de permanecer no tema, sem resposta direta do paciente. Ao final da sessão, o paciente relatou ter sentido 'um aperto no peito' ao ouvir a voz do pai ao telefone.",
   "temas": [
-    {
-      "tema": "contato telefônico do pai após meses de afastamento",
-      "trecho_fonte": "o pai ligou na quarta, depois de uns oito meses sem nenhum contato"
-    },
-    {
-      "tema": "deslocamento do tema do pai para o trabalho",
-      "trecho_fonte": "ele deslocou rapidamente para uma questão do trabalho — a mesma resistência de sempre quando o pai entra na sessão"
-    }
+    "contato telefônico do pai após meses de afastamento",
+    "deslocamento do tema do pai para o trabalho"
   ],
   "tema_recorrente_sinalizado": [
     {
@@ -511,12 +490,7 @@ participação verbal).
     "presente": true,
     "descricao": "Paciente deslocou o assunto para o trabalho quando o tema do pai foi retomado, não respondeu diretamente à interpretação verbalizada pela terapeuta, e trouxe a menção ao 'aperto no peito' apenas ao final da sessão, já se levantando."
   },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
-  },
+  "alerta_risco": null,
   "sinalizacoes": []
 }
 ```
@@ -566,16 +540,11 @@ fenômeno descrito seja o mesmo do TC-5a. Também R1-TC e R6-TC, idem TC-5a.
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Paciente chegou 15 minutos atrasado, terceira sessão consecutiva com atraso. Relatou que o pai telefonou na quarta-feira, após cerca de oito meses sem contato. Ao ter o assunto devolvido pela terapeuta, saiu do contato e passou a falar de uma questão de trabalho — movimento que a terapeuta registra como recorrente quando o tema do pai aparece. A terapeuta comentou perceber a dificuldade de sustentar o tema no aqui-e-agora, sem resposta do paciente. Ao final da sessão, já de pé, o paciente relatou ter sentido 'um aperto no peito' ao ouvir a voz do pai ao telefone.",
   "temas": [
-    {
-      "tema": "contato telefônico do pai após meses de afastamento",
-      "trecho_fonte": "o pai ligou na quarta, depois de uns oito meses sem nenhum contato"
-    },
-    {
-      "tema": "saída de contato quando o tema do pai é devolvido",
-      "trecho_fonte": "ele saiu do contato e foi para uma questão do trabalho — igual às outras vezes em que o pai aparece aqui"
-    }
+    "contato telefônico do pai após meses de afastamento",
+    "saída de contato quando o tema do pai é devolvido"
   ],
   "tema_recorrente_sinalizado": [
     {
@@ -593,12 +562,7 @@ fenômeno descrito seja o mesmo do TC-5a. Também R1-TC e R6-TC, idem TC-5a.
     "presente": true,
     "descricao": "Paciente saiu do contato e passou a falar de trabalho quando o tema do pai foi devolvido, não respondeu ao comentário da terapeuta sobre a dificuldade de sustentar o tema, e trouxe a menção ao 'aperto no peito' apenas ao final, já de pé para sair."
   },
-  "alerta_risco": {
-    "presente": false,
-    "categoria": null,
-    "trecho_fonte": null,
-    "detalhe": null
-  },
+  "alerta_risco": null,
   "sinalizacoes": []
 }
 ```

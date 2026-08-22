@@ -69,12 +69,15 @@ refine, não recomece.
 > `docs/arquitetura/plano-bootstrap-e-stack-vps.md`.
 > Produto, modelo de dados, RLS e plano de fases não mudam.
 
-## Estado atual (atualizado 11/08/2026)
+## Estado atual (atualizado 21/08/2026)
 
 O desenvolvimento do MVP do Iris está concluído (Fases 0.5 a 6.6) e a Fase 7 (Faturamento & Growth) está ativa com deploy em produção:
 
 - **Fase 0.5 a Fase 6 (MVP Completo)**: Fundação de dados, auth multi-tenant (Better-Auth + RLS), cadastro clínico (LGPD atômico), agenda & check-in, metas & diário em texto livre, extração de evidências por IA, visualização de gráficos/trajetórias, relatórios para convênio/supervisão e hardening LGPD (arquivamento automático, auditoria e consentimento) concluídos com sucesso.
 - **Fase 7 (Self-Service & Faturamento Asaas)**: Faturamento via Asaas (Fases A, B e C) totalmente implementado, testado e verificado com webhooks reais entregues em produção. Auto-arquivamento (90 dias) e desarquivamento automático unificado (#174) com cobertura por testes de integração e RLS.
+- **Marco Zero & Anamnese (#407 / #409)**: Anamnese clínica validada gerando snapshot 0 e linha de base do protocolo na linha do tempo, com ponto de entrada no prontuário do paciente.
+- **Navegação & Configurações da Clínica (#411)**: Sub-navegação via abas em `/clinica` (`/clinica/dados`, `/clinica/feriados`, `/clinica/emergencia`) e atalhos diretos para dashboards de protocolos e PEI.
+- **Guardrail Ambiental no Seed (D52 / #412)**: Bloqueio fail-closed para proteção contra execução de scripts de seed em ambientes de staging/produção sem consentimento explícito.
 - **E-mail Transacional**: Integração com Resend para envio de convites e notificações ativada (#126).
 
 **Próximos passos:** Fase 6b (Iris Audio Companion / ASR - fast-follow gated por DPA) e Customização White-Label nos PDFs (#120).

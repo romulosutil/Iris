@@ -49,10 +49,6 @@ export default function RootLayout({
         <Clarity />
         <WebMCPProvider />
         <ToastProvider>{children}</ToastProvider>
-        {process.env.NODE_ENV === "development" && (
-          /* eslint-disable-next-line @next/next/no-sync-scripts */
-          <script src="http://localhost:8400/live.js" />
-        )}
       </body>
     </html>
   );

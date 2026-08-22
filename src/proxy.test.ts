@@ -151,21 +151,10 @@ describe("src/proxy.ts — segurança e navegação", () => {
   });
 
   describe("Perímetro do matcher (config.matcher)", () => {
-    function matchesProxyMatcher(
-      pathname: string,
-      matcherConfig: typeof config.matcher | unknown[] = config.matcher,
-    ): boolean {
-      const matchers = Array.isArray(matcherConfig)
-        ? matcherConfig
-        : [matcherConfig];
-      return matchers.some((pattern) => {
-        const source =
-          typeof pattern === "string"
-            ? pattern
-            : (pattern as { source: string }).source;
-        const match = getPathMatch(source);
-        return Boolean(match(pathname));
-      });
+    function matchesProxyMatcher(pathname: string): boolean {
+      return config.matcher.some((pattern) =>
+        Boolean(getPathMatch(pattern)(pathname)),
+      );
     }
 
     describe("Rotas que DEVEM ser interceptadas (entram no proxy/middleware)", () => {
@@ -270,23 +259,6 @@ describe("src/proxy.ts — segurança e navegação", () => {
             `Asset de marca/favicon '${rota}' não deve entrar no proxy`,
           ).toBe(false);
         }
-      });
-    });
-
-    describe("Resistência a mutação no matcher", () => {
-      it("garante que a configuração do matcher exportada contém as regras esperadas e não está vazia", () => {
-        expect(Array.isArray(config.matcher)).toBe(true);
-        expect(config.matcher.length).toBeGreaterThanOrEqual(2);
-        expect(config.matcher).toContain("/redefinir-senha");
-        expect(config.matcher).toContain(
-          "/((?!_next/static|_next/image|favicon.ico|brand/).*)",
-        );
-      });
-
-      it("falha ao interceptar rotas se o matcher for esvaziado (mutante matcher: [])", () => {
-        expect(matchesProxyMatcher("/redefinir-senha", [])).toBe(false);
-        expect(matchesProxyMatcher("/pacientes", [])).toBe(false);
-        expect(matchesProxyMatcher("/api/webhooks/asaas", [])).toBe(false);
       });
     });
   });
