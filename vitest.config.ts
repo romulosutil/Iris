@@ -32,7 +32,7 @@ export default defineConfig({
           // rodassem no `test:rls`, dependeriam do ambiente que eles protegem.
           include: [
             "src/**/*.test.{ts,tsx}",
-            "scripts/**/*.test.mjs",
+            "scripts/**/*.test.{ts,mjs}",
             "db/tests/**/*.test.ts",
           ],
           exclude: [
