@@ -1,12 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { Webhook } from "svix";
-import {
-  processarWebhookResend,
-  verificarAssinaturaResend,
-  type ResendWebhookResult,
-} from "./webhook";
+import { processarWebhookResend, type ResendWebhookResult } from "./webhook";
 
-describe("Webhook Resend - verificarAssinaturaResend & processarWebhookResend", () => {
+describe("Webhook Resend - processarWebhookResend", () => {
   const secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
   const wh = new Webhook(secret);
 
@@ -17,45 +13,6 @@ describe("Webhook Resend - verificarAssinaturaResend & processarWebhookResend", 
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
-  });
-
-  describe("verificarAssinaturaResend", () => {
-    it("retorna false se RESEND_WEBHOOK_SECRET não estiver configurado", () => {
-      vi.stubEnv("RESEND_WEBHOOK_SECRET", "");
-      const headers = new Headers({
-        "svix-id": "msg_1",
-        "svix-timestamp": String(Math.floor(Date.now() / 1000)),
-        "svix-signature": "v1,abc",
-      });
-      expect(verificarAssinaturaResend("{}", headers)).toBe(false);
-    });
-
-    it("retorna false se cabeçalhos Svix estiverem ausentes", () => {
-      const headers = new Headers();
-      expect(verificarAssinaturaResend("{}", headers)).toBe(false);
-    });
-
-    it("retorna false se a assinatura Svix estiver incorreta", () => {
-      const headers = new Headers({
-        "svix-id": "msg_1",
-        "svix-timestamp": String(Math.floor(Date.now() / 1000)),
-        "svix-signature": "v1,assinaturainvalida",
-      });
-      expect(verificarAssinaturaResend("{}", headers)).toBe(false);
-    });
-
-    it("retorna true para assinatura Svix válida", () => {
-      const payload = JSON.stringify({ type: "email.delivered" });
-      const timestamp = new Date();
-      const sig = wh.sign("msg_valid", timestamp, payload);
-      const headers = new Headers({
-        "svix-id": "msg_valid",
-        "svix-timestamp": String(Math.floor(timestamp.getTime() / 1000)),
-        "svix-signature": sig,
-      });
-
-      expect(verificarAssinaturaResend(payload, headers)).toBe(true);
-    });
   });
 
   describe("processarWebhookResend", () => {
@@ -135,6 +92,45 @@ describe("Webhook Resend - verificarAssinaturaResend & processarWebhookResend", 
       expect(rawLogged).not.toContain("paciente.menor@familia.com");
       expect(rawLogged).not.toContain("Alerta de Risco Clínico");
       expect(rawLogged).not.toContain("João");
+    });
+
+    it("não loga bounce.message: diagnóstico SMTP do MTA embute o destinatário", async () => {
+      const payload = JSON.stringify({
+        type: "email.bounced",
+        created_at: "2026-08-22T04:00:00.000Z",
+        data: {
+          email_id: "5ef73628-99b3-406e-8a5e-653198031548",
+          to: ["paciente.menor@familia.com"],
+          bounce: {
+            type: "hard_bounce",
+            // Formato real de diagnóstico devolvido pelo MTA de destino.
+            message:
+              "550 5.1.1 <paciente.menor@familia.com>: Recipient address rejected: User unknown",
+          },
+        },
+      });
+      const timestamp = new Date();
+      const sig = wh.sign("msg_bounce_diag", timestamp, payload);
+      const headers = new Headers({
+        "svix-id": "msg_bounce_diag",
+        "svix-timestamp": String(Math.floor(timestamp.getTime() / 1000)),
+        "svix-signature": sig,
+      });
+
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const res = await processarWebhookResend({
+        corpoBruto: payload,
+        cabecalhos: headers,
+      });
+
+      expect(res.status).toBe(200);
+
+      const rawLogged = JSON.stringify(warnSpy.mock.calls);
+      expect(rawLogged).not.toContain("paciente.menor@familia.com");
+      expect(rawLogged).not.toContain("Recipient address rejected");
+      // O identificador operacional continua presente.
+      expect(rawLogged).toContain("hard_bounce");
     });
 
     it("devolve 200 e emite log estruturado para email.complained sem vazar PII", async () => {

@@ -6,6 +6,14 @@ conjunto principal (`docs/agente/casos-de-teste.md`) porque usa um schema de
 saída diferente (sem `extracoes[]` por domínio) — mesma convenção de formato
 (Diário de entrada → Regras que este caso exercita → Saída esperada).
 
+`extracoes` continua **obrigatório** no contrato executável (`agentOutputSchema`
+e o tool schema entregue ao modelo o listam em `required`): o modo convencional
+não emite o campo _ausente_, emite `extracoes: []`. Por isso toda saída esperada
+abaixo abre com `"extracoes": []` — sem ele a fixture não é uma saída válida do
+agente, e o eval set deixaria de servir como referência de comparação. Guard em
+`src/lib/extraction/agent-output-schema.test.ts` valida cada bloco deste arquivo
+contra o schema de runtime.
+
 Total: **5 casos**, cobrindo o escopo pedido na issue #98: escuta simples,
 risco/crise, baixa participação verbal, encerramento de ciclo, e **um caso
 cruzado entre famílias de abordagem**.
@@ -81,6 +89,7 @@ o vocabulário dela).
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Paciente relatou primeiro contato com pertences do pai sem chorar durante o processo, embora tenha chorado depois, sozinha. Retomou o tema da culpa por não ter chegado a tempo ao hospital, já presente em sessões anteriores. Segue retomando gradualmente as atividades de trabalho, evitando especificamente situações de falar em público. Encerrou a sessão relatando sensação de melhora.",
   "temas": [
     "luto do pai — culpa por ausência no momento da morte",
@@ -166,6 +175,7 @@ família psicodinâmica. Descreve o observável: "minimizou", "mudou de assunto"
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Paciente relatou episódio recente em que o marido a segurou pelo braço com força, deixando marca, para impedi-la de sair de casa durante uma discussão. Relatou que episódios semelhantes já ocorreram algumas vezes por ano desde o casamento, associados a consumo de álcool pelo marido. Minimizou a gravidade do relato e não expressou intenção de terminar o relacionamento. Mudou de assunto para comentar positivamente sobre novo emprego.",
   "temas": ["violência física recorrente no relacionamento conjugal"],
   "tema_recorrente_sinalizado": [
@@ -268,6 +278,7 @@ assunto", "se afasta do tema" — e **nunca** "resistência", "defesa" ou
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Sessão com pouca verbalização do paciente. Respondeu de forma breve e evasiva quando questionado sobre seu estado e sobre o tema da separação, encerrando rapidamente qualquer aprofundamento. Fez um comentário breve sobre a casa estar vazia, mas não se estendeu quando convidado a falar mais. Quarta sessão consecutiva em que se afasta do tema da separação quando ele é trazido pela terapeuta.",
   "temas": [
     "separação conjugal — afastamento recorrente do tema quando trazido"
@@ -366,6 +377,7 @@ consciência" ou "dimensão espiritual", que ela não usou; e tampouco importa
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Sessão de encerramento de ciclo. Paciente revisou, junto com a terapeuta, a trajetória desde o início do acompanhamento: partiu de um quadro de exaustão associado a burnout no trabalho, avançou para trabalho sobre dificuldade de estabelecer limites, e mais recentemente retomou atividades pessoais (pintura) abandonadas havia anos. Relatou perceber maior capacidade de reconhecer sobrecarga e de recusar demandas antes de atingir o limite, em contraste com o relato inicial de que isso era 'impossível'. A decisão de pausar o acompanhamento partiu da própria paciente, com encerramento combinado para esta sessão.",
   "temas": [
     "trajetória do ciclo — de esgotamento a retomada de projetos pessoais"
@@ -456,6 +468,7 @@ participação verbal).
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Paciente chegou 15 minutos atrasado, terceira sessão consecutiva com atraso. Relatou que o pai telefonou na quarta-feira, após cerca de oito meses sem contato. Ao ter o assunto retomado pela terapeuta, deslocou a conversa para uma questão de trabalho — movimento que a terapeuta registra como recorrente quando o tema do pai aparece, nomeando-o como resistência. A terapeuta verbalizou uma interpretação sobre a dificuldade de permanecer no tema, sem resposta direta do paciente. Ao final da sessão, o paciente relatou ter sentido 'um aperto no peito' ao ouvir a voz do pai ao telefone.",
   "temas": [
     "contato telefônico do pai após meses de afastamento",
@@ -527,6 +540,7 @@ fenômeno descrito seja o mesmo do TC-5a. Também R1-TC e R6-TC, idem TC-5a.
 
 ```json
 {
+  "extracoes": [],
   "resumo_sessao": "Paciente chegou 15 minutos atrasado, terceira sessão consecutiva com atraso. Relatou que o pai telefonou na quarta-feira, após cerca de oito meses sem contato. Ao ter o assunto devolvido pela terapeuta, saiu do contato e passou a falar de uma questão de trabalho — movimento que a terapeuta registra como recorrente quando o tema do pai aparece. A terapeuta comentou perceber a dificuldade de sustentar o tema no aqui-e-agora, sem resposta do paciente. Ao final da sessão, já de pé, o paciente relatou ter sentido 'um aperto no peito' ao ouvir a voz do pai ao telefone.",
   "temas": [
     "contato telefônico do pai após meses de afastamento",

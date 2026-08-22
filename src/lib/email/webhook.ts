@@ -11,49 +11,6 @@ export type ResendWebhookResult = {
 };
 
 /**
- * Valida a assinatura Svix enviada pelo Resend no webhook de e-mails transacionais.
- *
- * O Resend utiliza Svix para assinar requisições com os cabeçalhos:
- * - `svix-id`: ID único da mensagem do webhook
- * - `svix-timestamp`: Carimbo de data/hora UNIX em segundos
- * - `svix-signature`: Assinatura HMAC-SHA256 codificada em base64 (prefixada com v1,)
- *
- * Retorna `false` de forma segura para segredo ausente, cabeçalhos faltantes
- * ou assinatura inválida/expirada.
- */
-export function verificarAssinaturaResend(
-  corpoBruto: string,
-  cabecalhos: Headers,
-): boolean {
-  const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (!secret) return false;
-
-  const svixId = cabecalhos.get("svix-id");
-  const svixTimestamp = cabecalhos.get("svix-timestamp");
-  const svixSignature = cabecalhos.get("svix-signature");
-
-  if (!svixId || !svixTimestamp || !svixSignature) {
-    return false;
-  }
-
-  try {
-    const wh = new Webhook(secret);
-    wh.verify(corpoBruto, {
-      "svix-id": svixId,
-      "svix-timestamp": svixTimestamp,
-      "svix-signature": svixSignature,
-    });
-    return true;
-  } catch (err) {
-    // Se a assinatura bateu mas o payload não é JSON válido, a assinatura é tecnicamente válida.
-    if (err instanceof SyntaxError) {
-      return true;
-    }
-    return false;
-  }
-}
-
-/**
  * Processador central de webhooks do Resend (#383).
  *
  * Regras de Governança & LGPD:
@@ -61,6 +18,9 @@ export function verificarAssinaturaResend(
  * 2. Eventos válidos sempre retornam 200 para evitar retentativas desnecessárias do Resend.
  * 3. Log estruturado NUNCA inclui dados clínicos, destinatário (`to`), remetente (`from`)
  *    ou assunto (`subject`) — apenas identificadores operacionais (`email_id`, `type`, timestamps).
+ * 4. `bounce.message` NÃO é logado: é texto livre do MTA de destino (diagnóstico SMTP) e
+ *    costuma embutir o endereço do destinatário (ex.: `550 5.1.1 <alguem@dominio> User unknown`).
+ *    Apenas `bounce.type` (categoria fechada e operacional) é registrado.
  */
 export async function processarWebhookResend(
   input: ResendWebhookInput,
@@ -133,15 +93,11 @@ export async function processarWebhookResend(
     const bounceObj = (data.bounce ?? {}) as Record<string, unknown>;
     const bounceType =
       typeof bounceObj.type === "string" ? bounceObj.type : undefined;
-    const bounceMessage =
-      typeof bounceObj.message === "string" ? bounceObj.message : undefined;
-
     console.warn("[resend-webhook] email.bounced", {
       type: "email.bounced",
       emailId,
       createdAt,
       bounceType,
-      bounceMessage,
     });
   } else if (tipo === "email.complained") {
     console.warn("[resend-webhook] email.complained", {

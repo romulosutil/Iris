@@ -150,6 +150,54 @@ Easypanel + Postgres puro + MinIO). Itens de infra são "confirmar antes / via
       corrigir em fatia separada).
 - [x] `pnpm build` limpo (atenção ao falso-negativo de `.next/dev/types` stale —
       lição `[[next-dev-types-stale-build-fail]]`: `rm -rf .next && build`).
+- [x] Guards executáveis contra drift silencioso, todos verdes no CI (22/08/2026):
+      seed bloqueado fail-closed contra banco remoto sem `ALLOW_SEED_REMOTE=true`
+      (D52 / PR #412); CI barra `<script src="http://localhost:*">` em artefato de
+      preview de UI (D53 / PR #413); fixtures de
+      `casos-de-teste-terapia-convencional.md` validadas contra `agentOutputSchema`
+      com verificação de contagem (D47 / PR #414).
+- [x] Perímetro do `config.matcher` do proxy coberto por teste comportamental,
+      avaliado com o `getPathMatch` do próprio Next (#328 / PR #415). Mutantes
+      `matcher: []`, sem `brand/` e sem `_next/image` medidos e mortos; o mutante
+      que remove a entrada explícita `"/redefinir-senha"` é equivalente (o
+      catch-all já casa a rota).
+- [x] Componente `Alert` sem side-stripe: `border-l-[4px]`, `bordaEsquerda` e
+      `bordaOutras` têm 0 ocorrências em `src/` (D54 / PR #416). Guarda em
+      `src/components/ui/alert.test.tsx` medida por mutação em `alert.tsx`:
+      reintroduzir `border-l-[4px]` mata 9 dos 10 testes; achatar as 6 cores de
+      borda em `--border-brutal` mata 7.
+- [x] `materializarSnapshot` sem N+1: as buscas de taxonomia (`protocol`),
+      critério de domínio (`goal`) e candidatura atual (`goal_candidacy`) são 1
+      query em lote cada, e as gravações de snapshot/candidatura rodam em
+      `Promise.all` (D40 / #330 / PR #417). Oráculos em
+      `db/tests/fase4-materializar.int.test.ts` contam SQL real por tabela e
+      exigem `toBe(1)`; lista vazia não vai ao banco (0 queries). Medido por
+      mutação em `src/lib/evidence/materializar.ts`: reintroduzir o laço por
+      protocolo mata 1 teste, e remover a preservação de `candidacy_since` mata
+      outro.
+- [x] Webhook do Resend (`/api/webhooks/resend` + alias `/api/hooks/resend`)
+      fail-closed por assinatura Svix contra `RESEND_WEBHOOK_SECRET`; sem segredo
+      ou sem os três cabeçalhos, responde 401 **sem logar o payload**
+      (#383 / PR #418). O log estruturado registra só `type`, `email_id` e
+      timestamps — `bounce.message` é deliberadamente omitido porque é
+      diagnóstico SMTP livre do MTA de destino e costuma embutir o endereço do
+      destinatário. Medido por mutação em `src/lib/email/webhook.ts`:
+      reintroduzir `bounceMessage` no log mata o teste de regressão, que usa o
+      formato real `550 5.1.1 <destinatario>: Recipient address rejected`.
+      Ambas as rotas compilam como dinâmicas (`ƒ`) no `next build`.
+- [ ] Cadastrar o endpoint no painel do Resend (eventos `email.bounced` e
+      `email.complained`) e publicar `RESEND_WEBHOOK_SECRET` no Easypanel
+      **antes** do cadastro — com o segredo ausente a rota é fail-closed e
+      recusa todo evento com 401, silenciosamente do ponto de vista do painel
+      (lição `[[webhook-asaas-producao-configurado]]`: 401 prova rota no ar, não
+      token certo).
+- [ ] Provedor de IA nomeado na Política de Privacidade (D57). A decisão de
+      21/08/2026 é **Google (Gemini API)**, mas `docs/legal/politica-privacidade.md`
+      segue em `2026-08-07` sem menção ao provedor (medido: `grep -c Gemini` = 0).
+      Os testes que exigiam `Google (Gemini API)` / `EXTRACTION_LLM_ENABLED` foram
+      revertidos na revisão da PR #416 e de novo na PR #418, por afirmarem conteúdo
+      que não existe no repositório — lição `[[verificar-fato-de-infra-com-medicao]]`. Reativar
+      junto com o commit do documento, sob autorização do Rômulo.
 
 ---
 

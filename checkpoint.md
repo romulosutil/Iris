@@ -1,64 +1,69 @@
 # Checkpoint — Estado Atual do Repositório Iris
 
-**Data**: 21/08/2026  
-**Status**: `main` verde, estável e equalizada  
-**Últimas PRs entregues em `main`**: #408 (#407), #410 (#409), #411 (D31)
+**Data**: 22/08/2026
+**Status**: `main` verde e estável; PR #418 (#383 — webhook Resend) com conflitos resolvidos, revisada e revalidada em sandbox.
+**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328), #416 (D54), #417 (D40 / #330)
 
 ---
 
 ## 1. Estado de Entrega & Merge em `main`
 
-- ✅ **Feature #407 (PR #408 — `96044e1`)**: Anamnese estruturada como marco 0 da linha do tempo. 34/34 tasks concluídas por SDD (`.specs/features/407-anamnese-marco-zero/`). Tabelas `anamnese` e `anamnese_alvo` (migração `0115`), procedure `app_validar_anamnese` (snapshot 0 em `session_snapshot` com merge jsonb), gates de coordenador/protocolo/teto/consentimento, scrubber/timeline lendo marco 0 e formulário no design system.
-- ✅ **Feature #409 (PR #410 — `498d335`)**: Ponto de entrada da aba "Anamnese" no prontuário (`src/app/(app)/pacientes/[id]/layout.tsx`), condicionada a `protocol_driven` via `modalidade.ts`.
-- ✅ **Navegação & Dashboards (PR #411 — `5adfe6f`)**: Sub-navegação de `/clinica` com `TabsNav` (`/clinica/dados`, `/clinica/feriados`, `/clinica/emergencia`), fechando **D31**. Atalhos diretos em PEI e Ficha Clínica para dashboards de progresso dos protocolos.
+- ✅ **Feature #407 (PR #408 — `96044e1`)**: Anamnese estruturada como marco 0 da linha do tempo (34/34 tasks por SDD).
+- ✅ **Feature #409 (PR #410 — `498d335`)**: Ponto de entrada da aba "Anamnese" no prontuário, condicionada a `protocol_driven`.
+- ✅ **Navegação & Dashboards (PR #411 — `44de0fa`)**: Sub-navegação de `/clinica` com `TabsNav` e atalhos para PEI/protocolos (fecha **D31**).
+- ✅ **D52 (PR #412 — `2fdd318`)**: Guardrail de ambiente fail-closed em todos os scripts de seed (`scripts/lib/guardrail-seed.ts`, `ALLOW_SEED_REMOTE`).
+- ✅ **D53 (PR #413 — `48643c9`)**: Guardrail estático + workflow de CI contra injeção de script de preview em `src/app/layout.tsx`.
+- ✅ **D47 (PR #414 — `b50f432`)**: Sincronização de fixtures e contrato documental do modo convencional, com guard executável contra re-drift.
+- ✅ **#328 (PR #415 — `e676834`)**: Perímetro comportamental do `config.matcher` do proxy, avaliado com o `getPathMatch` do próprio Next.js.
+- ✅ **D54 (PR #416 — `11a1f5c`)**: Remoção da side-stripe `border-l-[4px]` e das bordas assimétricas do componente `Alert`, alinhando ao Espectro Brutal.
 
 ---
 
 ## 2. PRs Abertas Aguardando Revisão e Merge
 
-| PR       | Branch                                        | Escopo / Débito                                                                                                                                                                             | Status                    |
-| :------- | :-------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------ |
-| **#412** | `feat/d52-guardrail-seed-ambiente`            | **Débito D52**: Guardrail em `scripts/seed.ts` e `scripts/seed-demo-account.ts` exigindo `localhost`/`127.0.0.1` ou `ALLOW_SEED_REMOTE=true`.                                               | Aberta (Ready for Review) |
-| **#413** | `feat/d53-guardrail-preview-layout`           | **Débito D53**: Guardrail de teste unitário/CI (`src/app/layout.guard.test.ts`) contra injeção de `localhost:8400/live.js` em `layout.tsx`.                                                 | Aberta (Ready for Review) |
-| **#414** | `fix/d47-sincronizacao-fixtures-alerta-risco` | **Débito D47**: Sincronização documental e de fixtures do modo convencional com a estrutura unificada de `alerta_risco` e `temas: string[]`.                                                | Aberta (Ready for Review) |
-| **#415** | `test/328-cobertura-proxy-matcher`            | **Issue #328**: Cobertura comportamental do `config.matcher` do proxy/middleware (`src/middleware.test.ts`).                                                                                | Aberta (Ready for Review) |
-| **#416** | `fix/d54-alert-side-stripe`                   | **Débito D54**: Remoção da side-stripe `border-l-[4px]` e `bordaEsquerda` no componente `Alert`, alinhando ao Espectro Brutal.                                                              | Aberta (Ready for Review) |
-| **#417** | `fix/330-n-plus-1-materializar-snapshot`      | **Issue #330 / D40**: Eliminação dos 3 N+1 em `materializarSnapshot` (`taxonomiasDosProtocolos`, `criteriosDominioDasMetas`, `lerCandidaturasGoalsAtuais` em lote, gravações concorrentes). | Aberta (Ready for Review) |
-| **#418** | `feat/383-resend-webhook-bounces-complaints`  | **Issue #383**: Webhook Resend de Bounce/Complaint (`/api/webhooks/resend` e alias `/api/hooks/resend`) com validação Svix e log estruturado.                                               | Aberta (Ready for Review) |
+| PR       | Branch                                       | Escopo / Débito                                                                                     | Estado                                                                     |
+| :------- | :------------------------------------------- | :-------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------- |
+| **#417** | `fix/330-n-plus-1-materializar-snapshot`     | **D40 / #330**: eliminação dos 3 N+1 restantes em `materializarSnapshot` + gravações paralelizadas. | Conflitos com `main` resolvidos, revalidada em sandbox, pronta para merge. |
+| **#418** | `feat/383-resend-webhook-bounces-complaints` | **#383**: webhook do Resend para log de bounces/complaints.                                         | Em andamento (branch local).                                               |
 
 ---
 
 ## 3. Arcabouço Jurídico & Governança LGPD (`docs/legal/`)
 
-Revisão jurídica completa realizada e consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
+Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 
-- ✅ **Remoção de Risco RAG/Treinamento**: Removida a menção de RAG/treinamento de modelo próprio de `pesquisa-planos-de-saude-prontuario.md` §4, harmonizando o texto com `politica-privacidade.md` §6 e Art. 11 LGPD.
-- ✅ **Teste de Proporcionalidade**: Produzido `docs/legal/teste-proporcionalidade-legitimo-interesse-antifraude.md` para fundamentar o legítimo interesse (Art. 10 LGPD) do hash antifraude `cpf_hash`.
-- ✅ **Provedor de IA Definido**: **Google Gemini (Gemini API)** nomeado formalmente em `politica-privacidade.md` §4 e nos termos de consentimento adulto e curatela, referenciando o Cloud Data Processing Addendum (DPA) do Google Cloud.
-- ✅ **Gate D-H (Consentimento / Anamnese)**: 100% finalizado. Respaldo legal validado (Tutela da Saúde Art. 11, II, "f" + Consentimento do Menor Art. 14, §1º cobrindo relato da dinâmica familiar) e gate técnico ativo via `app_prontuario_somente_leitura(patient_id)`.
-- ✅ **Termos de Uso & Privacidade Atualizados**: Foro de eleição estabelecido em Guarapari/ES (§9), prazo de aviso prévio de alterações de 30 dias (§8.4), canal de contato `notificacoes@irisclinica.ia.br` e DPO informal Rômulo Sutil Corrêa (§10).
-- ⚠️ **Débitos Legais Mapeados**:
-  - **D55**: `visibility_level` (sigilo multidisciplinar) especificado no aditivo legal (§2.1), pendente de implementação no schema/RLS (Art. 9º CEPP).
-  - **D56**: `e_psi` (declaração de registro ativo para telepsicologia, Res. CFP 009/2024) pendente no schema.
-  - **D57**: Verificação do Gemini pago (billing ativo no Google Cloud, escopo do DPA para Gemini API standalone, validação do Art. 33 LGPD) antes de ativar `EXTRACTION_LLM_ENABLED=true` com pacientes reais.
+- ✅ **Remoção de Risco RAG/Treinamento**: menção a RAG/treinamento removida de `pesquisa-planos-de-saude-prontuario.md` §4.
+- ✅ **Teste de Proporcionalidade**: `docs/legal/teste-proporcionalidade-legitimo-interesse-antifraude.md` produzido (Art. 10 LGPD, `cpf_hash`).
+- ✅ **Gate D-H (Consentimento / Anamnese)**: finalizado (Tutela da Saúde Art. 11, II, "f" + Consentimento do Menor Art. 14, §1º).
+- ⚠️ **Provedor de IA (Gemini) — decidido, NÃO commitado.** A decisão de 21/08 é nomear **Google (Gemini API)** na Política de Privacidade §4 e nos termos de consentimento, mas `docs/legal/politica-privacidade.md` segue na versão `2026-08-07`, **sem nenhuma menção a Gemini** (medido: `grep -c Gemini` = 0 em `main`). A edição existe apenas na árvore de trabalho local, não commitada. Alterar `docs/legal/` exige autorização explícita do Rômulo (`CLAUDE.md` § Permissões).
+- ⚠️ **Débitos legais mapeados**: **D55** (`visibility_level`, sigilo multidisciplinar), **D56** (`e_psi_verified`/`e_psi_number`, Res. CFP 009/2024) e **D57** (gating operacional do Gemini: billing pago ativo + escopo do DPA + Art. 33 LGPD antes de ligar `EXTRACTION_LLM_ENABLED`).
 
 ---
 
-## 4. Verificação Atual da Base (`feat/383-resend-webhook-bounces-complaints`)
+## 4. Verificação da Base (`feat/383-resend-webhook-bounces-complaints` já com `main` mergeada)
 
-| Gate                                        | Resultado                                                           |
-| :------------------------------------------ | :------------------------------------------------------------------ |
-| `pnpm typecheck`                            | 0 erros                                                             |
-| `pnpm lint`                                 | 0 erros                                                             |
-| `pnpm test`                                 | 243/243 arquivos · 1.731/1.731 testes verdes                        |
-| `src/lib/email/webhook.test.ts`             | 9/9 testes unitários de verificação Svix e log verdes               |
-| `src/app/api/webhooks/resend/route.test.ts` | 5/5 testes de rotas /api/webhooks/resend e /api/hooks/resend verdes |
-| `pnpm format`                               | 100% formatado via Prettier                                         |
+Medido em worktree isolado (`.worktrees/pr418-resend`), após `git merge origin/main` e as correções da revisão tech lead:
 
----
+| Gate                                               | Resultado                                                                                                                                                                  |
+| :------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                                   | 0 erros                                                                                                                                                                    |
+| `pnpm lint`                                        | 0 erros, 0 warnings                                                                                                                                                        |
+| `pnpm test`                                        | **1.788/1.788 testes verdes** (0 falhas)                                                                                                                                   |
+| `pnpm build`                                       | Sucesso; `ƒ /api/webhooks/resend` e `ƒ /api/hooks/resend` (ambas dinâmicas — prova de que a config de segmento foi aplicada após deixar de reexportar `runtime`/`dynamic`) |
+| Mutação em `src/lib/email/webhook.ts` (produção)   | Mutante reintroduzindo `bounceMessage` no log → **morto** (o teste novo usa o diagnóstico SMTP real, que embute o destinatário); código original verde                     |
+| Diff de `BACKLOG.md` / `docs/GO_LIVE.md` vs `main` | Aditivo: **0 identificadores `D<n>` / `#<n>` perdidos** (verificado por script comparando os conjuntos de `main`, do PR e do resultado)                                    |
+
+### 4.1 Correções aplicadas na revisão (antes do merge)
+
+1. **`bounce.message` deixou de ser logado** — texto livre do MTA carrega o endereço do destinatário; o guardrail LGPD passava por escolha de fixture, não por construção. Restou `bounce.type`.
+2. **`verificarAssinaturaResend` removido** — segundo caminho de verificação de assinatura, sem chamador de produção e já divergente do usado pela rota (`true` vs. 400 em `SyntaxError`).
+3. **Alias `/api/hooks/resend`** — `runtime`/`dynamic` declarados literalmente no arquivo de rota.
+4. **Fora de escopo revertido** — `src/lib/legal.test.ts` e `src/components/legal/documento-legal.test.tsx` voltaram a `origin/main`: afirmavam `Google (Gemini API)` na Política de Privacidade, texto que não existe no repositório (reincidência do que a PR #416 já havia fechado). **D57 segue aberto.**
 
 ## 5. Próximos Passos Recomendados
 
-1. Merge das PRs **#412**, **#413**, **#414**, **#415**, **#416**, **#417** (#330 / D40) e **#418** (#383).
-2. **D34**: Adicionar `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
-3. Cadastrar o endpoint `https://irisclinica.ia.br/api/webhooks/resend` no painel do Resend com eventos `email.bounced` e `email.complained`.
+1. Merge da PR **#418** (#383 — webhook Resend).
+2. **D34**: `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
+3. **D57**: com autorização do Rômulo, commitar a nomeação do provedor de IA em `docs/legal/` e só então reativar os testes que exigem `Google (Gemini API)` / `EXTRACTION_LLM_ENABLED` (revertidos na revisão da PR #416 e novamente na PR #418, por afirmarem conteúdo inexistente no repositório).
+4. Cadastrar o endpoint `https://irisclinica.ia.br/api/webhooks/resend` no painel do Resend (eventos `email.bounced` e `email.complained`) quando a #383 for mergeada — o segredo `RESEND_WEBHOOK_SECRET` precisa estar publicado no Easypanel **antes** do cadastro, senão a rota responde 401 fail-closed a todo evento.
+5. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).

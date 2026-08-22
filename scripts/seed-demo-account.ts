@@ -46,6 +46,7 @@ import {
   materializarSnapshot,
   drizzleMaterializarQueries,
 } from "@/lib/evidence/materializar";
+import { assertSeedAllowed } from "./lib/guardrail-seed";
 
 async function main() {
   const targetEmail = (process.argv[2] || "sutil.romulo@gmail.com")
@@ -58,6 +59,8 @@ async function main() {
   if (!migrationUrl) {
     throw new Error("MIGRATION_DATABASE_URL / DATABASE_URL não definida.");
   }
+
+  assertSeedAllowed(migrationUrl);
 
   console.log("🔄 Conectando ao Postgres com perfil de owner...");
   const ownerSql = postgres(migrationUrl, { max: 1 });

@@ -41,7 +41,7 @@
  *     `milestone_candidacy` nesta tarefa. `goal_candidacy` (que TEM
  *     `Goal.criterio_dominio` explícito no schema) está implementado.
  */
-import { eq, sql as dsql } from "drizzle-orm";
+import { eq, inArray, sql as dsql } from "drizzle-orm";
 import type postgres from "postgres";
 import {
   goal as goalTable,
@@ -83,6 +83,10 @@ export type MaterializarQueries = {
   evidenciasDoPaciente(patientId: string): Promise<EvidenciaObservada[]>;
   /** protocol.taxonomia_ajuda (array ordenado; ordinal = índice). */
   taxonomiaDoProtocolo(protocolId: string): Promise<string[]>;
+  /** protocol.taxonomia_ajuda em LOTE — 1 query em vez de N. */
+  taxonomiasDosProtocolos(
+    protocolIds: string[],
+  ): Promise<Map<string, string[]>>;
   /** milestone.tipo_estrutura, por id (null se marco não existir). */
   tipoEstruturaDoMarco(milestoneId: string): Promise<TipoEstrutura | null>;
   /** milestone.tipo_estrutura em LOTE — 1 query (`= ANY(...)`) para todos os
@@ -94,12 +98,22 @@ export type MaterializarQueries = {
   ): Promise<Map<string, TipoEstrutura | null>>;
   /** goal.criterio_dominio, por id. */
   criterioDominioDaMeta(goalId: string): Promise<CriterioDominio | null>;
+  /** goal.criterio_dominio em LOTE — 1 query em vez de N. */
+  criteriosDominioDasMetas(
+    goalIds: string[],
+  ): Promise<Map<string, CriterioDominio | null>>;
   /** Estado ATUAL de goal_candidacy (para preservar `candidacy_since` quando o
    * goal já era candidato — não reiniciar a contagem de "há quanto tempo" a
    * cada recompute). */
   lerCandidaturaGoalAtual(
     goalId: string,
   ): Promise<{ isCandidate: boolean; candidacySince: Date | null } | null>;
+  /** Estado ATUAL de goal_candidacy em LOTE — 1 query em vez de N. */
+  lerCandidaturasGoalsAtuais(
+    goalIds: string[],
+  ): Promise<
+    Map<string, { isCandidate: boolean; candidacySince: Date | null }>
+  >;
   /** Upsert privilegiado (app_aplicar_snapshot). */
   aplicarSnapshot(input: {
     patientId: string;
@@ -130,6 +144,22 @@ export function drizzleMaterializarQueries(tx: any): MaterializarQueries {
         .where(eq(protocolTable.id, protocolId));
       const arr = row?.taxonomiaAjuda;
       return Array.isArray(arr) ? (arr as string[]) : [];
+    },
+    async taxonomiasDosProtocolos(protocolIds) {
+      if (protocolIds.length === 0) return new Map();
+      const rows = await tx
+        .select({
+          id: protocolTable.id,
+          taxonomiaAjuda: protocolTable.taxonomiaAjuda,
+        })
+        .from(protocolTable)
+        .where(inArray(protocolTable.id, protocolIds));
+      const mapa = new Map<string, string[]>();
+      for (const row of rows) {
+        const arr = row.taxonomiaAjuda;
+        mapa.set(row.id, Array.isArray(arr) ? (arr as string[]) : []);
+      }
+      return mapa;
     },
     async tipoEstruturaDoMarco(milestoneId) {
       const [row] = await tx
@@ -167,6 +197,24 @@ export function drizzleMaterializarQueries(tx: any): MaterializarQueries {
         .where(eq(goalTable.id, goalId));
       return (row?.criterioDominio as CriterioDominio | undefined) ?? null;
     },
+    async criteriosDominioDasMetas(goalIds) {
+      if (goalIds.length === 0) return new Map();
+      const rows = await tx
+        .select({
+          id: goalTable.id,
+          criterioDominio: goalTable.criterioDominio,
+        })
+        .from(goalTable)
+        .where(inArray(goalTable.id, goalIds));
+      const mapa = new Map<string, CriterioDominio | null>();
+      for (const row of rows) {
+        mapa.set(
+          row.id,
+          (row.criterioDominio as CriterioDominio | undefined) ?? null,
+        );
+      }
+      return mapa;
+    },
     async lerCandidaturaGoalAtual(goalId) {
       const [row] = await tx
         .select({
@@ -180,6 +228,28 @@ export function drizzleMaterializarQueries(tx: any): MaterializarQueries {
         isCandidate: row.isCandidate,
         candidacySince: row.candidacySince ?? null,
       };
+    },
+    async lerCandidaturasGoalsAtuais(goalIds) {
+      if (goalIds.length === 0) return new Map();
+      const rows = await tx
+        .select({
+          goalId: goalCandidacyTable.goalId,
+          isCandidate: goalCandidacyTable.isCandidateDominada,
+          candidacySince: goalCandidacyTable.candidacySince,
+        })
+        .from(goalCandidacyTable)
+        .where(inArray(goalCandidacyTable.goalId, goalIds));
+      const mapa = new Map<
+        string,
+        { isCandidate: boolean; candidacySince: Date | null }
+      >();
+      for (const row of rows) {
+        mapa.set(row.goalId, {
+          isCandidate: Boolean(row.isCandidate),
+          candidacySince: row.candidacySince ?? null,
+        });
+      }
+      return mapa;
     },
     async aplicarSnapshot({
       patientId,
@@ -236,6 +306,19 @@ export function postgresMaterializarQueries(
       const arr = row?.taxonomia_ajuda;
       return Array.isArray(arr) ? (arr as string[]) : [];
     },
+    async taxonomiasDosProtocolos(protocolIds) {
+      if (protocolIds.length === 0) return new Map();
+      const rows = await sql`
+        SELECT id, taxonomia_ajuda FROM protocol
+        WHERE id = ANY(${protocolIds}::uuid[])
+      `;
+      const mapa = new Map<string, string[]>();
+      for (const row of rows) {
+        const arr = row.taxonomia_ajuda;
+        mapa.set(row.id as string, Array.isArray(arr) ? (arr as string[]) : []);
+      }
+      return mapa;
+    },
     async tipoEstruturaDoMarco(milestoneId) {
       const [row] =
         await sql`SELECT tipo_estrutura FROM milestone WHERE id = ${milestoneId}`;
@@ -270,6 +353,21 @@ export function postgresMaterializarQueries(
         await sql`SELECT criterio_dominio FROM goal WHERE id = ${goalId}`;
       return (row?.criterio_dominio as CriterioDominio | undefined) ?? null;
     },
+    async criteriosDominioDasMetas(goalIds) {
+      if (goalIds.length === 0) return new Map();
+      const rows = await sql`
+        SELECT id, criterio_dominio FROM goal
+        WHERE id = ANY(${goalIds}::uuid[])
+      `;
+      const mapa = new Map<string, CriterioDominio | null>();
+      for (const row of rows) {
+        mapa.set(
+          row.id as string,
+          (row.criterio_dominio as CriterioDominio | undefined) ?? null,
+        );
+      }
+      return mapa;
+    },
     async lerCandidaturaGoalAtual(goalId) {
       const [row] = await sql`
         SELECT is_candidate_dominada, candidacy_since FROM goal_candidacy WHERE goal_id = ${goalId}
@@ -279,6 +377,24 @@ export function postgresMaterializarQueries(
         isCandidate: Boolean(row.is_candidate_dominada),
         candidacySince: row.candidacy_since ?? null,
       };
+    },
+    async lerCandidaturasGoalsAtuais(goalIds) {
+      if (goalIds.length === 0) return new Map();
+      const rows = await sql`
+        SELECT goal_id, is_candidate_dominada, candidacy_since FROM goal_candidacy
+        WHERE goal_id = ANY(${goalIds}::uuid[])
+      `;
+      const mapa = new Map<
+        string,
+        { isCandidate: boolean; candidacySince: Date | null }
+      >();
+      for (const row of rows) {
+        mapa.set(row.goal_id as string, {
+          isCandidate: Boolean(row.is_candidate_dominada),
+          candidacySince: row.candidacy_since ?? null,
+        });
+      }
+      return mapa;
     },
     async aplicarSnapshot({
       patientId,
@@ -409,16 +525,14 @@ export async function materializarSnapshot(
   const evidencias = await queries.evidenciasDoPaciente(patientId);
   if (evidencias.length === 0) return;
 
-  // Cache de taxonomia por protocolo (ordinal = índice no array).
+  // Cache de taxonomia por protocolo — 1 query em lote, não N.
   const protocolIds = [
     ...new Set(
       evidencias.map((e) => e.protocolId).filter((x): x is string => !!x),
     ),
   ];
-  const taxonomiaPorProtocolo = new Map<string, string[]>();
-  for (const pid of protocolIds) {
-    taxonomiaPorProtocolo.set(pid, await queries.taxonomiaDoProtocolo(pid));
-  }
+  const taxonomiaPorProtocolo =
+    await queries.taxonomiasDosProtocolos(protocolIds);
 
   // Cache de tipo_estrutura por milestone — 1 query em lote (`= ANY(...)`),
   // não N (achado de perf: #316/PR original trocava N round-trips
@@ -484,10 +598,6 @@ export async function materializarSnapshot(
     segmentacaoResultados.set(chave, computarSegmentacao(obs));
   }
 
-  const repertorioPorGoal = computarRepertorio(
-    Object.fromEntries(streamsPorGoal),
-  );
-
   // Números de sessão a materializar: todos os que aparecem em QUALQUER
   // evidência do paciente (achado #1 — ver cabeçalho), filtrados por >= desde.
   const todosOsNumeros = [
@@ -495,64 +605,75 @@ export async function materializarSnapshot(
   ].sort((a, b) => a - b);
   const numerosAMaterializar = todosOsNumeros.filter((n) => n >= desdeNumero);
 
-  for (const numero of numerosAMaterializar) {
-    // segmentacao = { goal_id: { protocol_id: { tipo_estrutura, metrica, rotulo } } }
-    const segmentacao: Record<string, Record<string, unknown>> = {};
-    for (const [chave, resultados] of segmentacaoResultados) {
-      const [goalId, protocolId] = chave.split("::");
-      // Última observação com sessionNumero <= numero (estado corrente naquele ponto).
-      const ultimaAteAqui = [...resultados]
-        .reverse()
-        .find((r) => r.sessionNumero <= numero);
-      if (!ultimaAteAqui) continue;
-      segmentacao[goalId!] ??= {};
-      segmentacao[goalId!]![protocolId!] = {
-        tipo_estrutura: ultimaAteAqui.tipoEstrutura,
-        metrica: ultimaAteAqui.metrica,
-        rotulo: ultimaAteAqui.rotulo,
-      };
-    }
+  await Promise.all(
+    numerosAMaterializar.map((numero) => {
+      // segmentacao = { goal_id: { protocol_id: { tipo_estrutura, metrica, rotulo } } }
+      const segmentacao: Record<string, Record<string, unknown>> = {};
+      for (const [chave, resultados] of segmentacaoResultados) {
+        const [goalId, protocolId] = chave.split("::");
+        // Última observação com sessionNumero <= numero (estado corrente naquele ponto).
+        const ultimaAteAqui = [...resultados]
+          .reverse()
+          .find((r) => r.sessionNumero <= numero);
+        if (!ultimaAteAqui) continue;
+        segmentacao[goalId!] ??= {};
+        segmentacao[goalId!]![protocolId!] = {
+          tipo_estrutura: ultimaAteAqui.tipoEstrutura,
+          metrica: ultimaAteAqui.metrica,
+          rotulo: ultimaAteAqui.rotulo,
+        };
+      }
 
-    // repertorio_state = { goal_id: { nivel_ajuda_recente, contagem, is_candidata } }
-    const repertorio: Record<string, unknown> = {};
-    for (const [goalId, streamCompleto] of streamsPorGoal) {
-      const ateAqui = streamCompleto.filter((o) => o.sessionNumero <= numero);
-      const parcial = computarRepertorio({ [goalId]: ateAqui })[goalId]!;
-      repertorio[goalId] = {
-        nivel_ajuda_recente: parcial.nivelAjudaRecente,
-        contagem: parcial.contagem,
-        is_candidata: parcial.isCandidata,
-      };
-    }
+      // repertorio_state = { goal_id: { nivel_ajuda_recente, contagem, is_candidata } }
+      const repertorio: Record<string, unknown> = {};
+      for (const [goalId, streamCompleto] of streamsPorGoal) {
+        const ateAqui = streamCompleto.filter((o) => o.sessionNumero <= numero);
+        const parcial = computarRepertorio({ [goalId]: ateAqui })[goalId]!;
+        repertorio[goalId] = {
+          nivel_ajuda_recente: parcial.nivelAjudaRecente,
+          contagem: parcial.contagem,
+          is_candidata: parcial.isCandidata,
+        };
+      }
 
-    await queries.aplicarSnapshot({
-      patientId,
-      sessionNumero: numero,
-      repertorio,
-      segmentacao,
-    });
-  }
+      return queries.aplicarSnapshot({
+        patientId,
+        sessionNumero: numero,
+        repertorio,
+        segmentacao,
+      });
+    }),
+  );
 
   // ── goal_candidacy: avalia Goal.criterio_dominio contra o histórico completo ──
-  for (const [goalId, streamCompleto] of streamsPorGoal) {
-    const criterio = await queries.criterioDominioDaMeta(goalId);
-    const isCandidate = avaliarCandidaturaGoal(criterio, streamCompleto);
-    const atual = await queries.lerCandidaturaGoalAtual(goalId);
-    // Preserva `candidacy_since` se já era candidato (não reinicia a
-    // contagem de "há quanto tempo é candidato" a cada recompute); só marca
-    // a data quando a transição é false→true agora.
-    const candidacySince = isCandidate
-      ? atual?.isCandidate
-        ? atual.candidacySince
-        : new Date()
-      : null;
-    await queries.aplicarCandidaturaGoal({
-      patientId,
-      goalId,
-      isCandidate,
-      candidacySince,
-    });
-  }
+  const goalIds = [...streamsPorGoal.keys()];
+  const [criteriosPorGoal, candidaturasAtuaisPorGoal] = await Promise.all([
+    queries.criteriosDominioDasMetas(goalIds),
+    queries.lerCandidaturasGoalsAtuais(goalIds),
+  ]);
+
+  await Promise.all(
+    goalIds.map((goalId) => {
+      const streamCompleto = streamsPorGoal.get(goalId)!;
+      const criterio = criteriosPorGoal.get(goalId) ?? null;
+      const isCandidate = avaliarCandidaturaGoal(criterio, streamCompleto);
+      const atual = candidaturasAtuaisPorGoal.get(goalId) ?? null;
+      // Preserva `candidacy_since` se já era candidato (não reinicia a
+      // contagem de "há quanto tempo é candidato" a cada recompute); só marca
+      // a data quando a transição é false→true agora.
+      const candidacySince = isCandidate
+        ? atual?.isCandidate
+          ? atual.candidacySince
+          : new Date()
+        : null;
+      return queries.aplicarCandidaturaGoal({
+        patientId,
+        goalId,
+        isCandidate,
+        candidacySince,
+      });
+    }),
+  );
 
   // TODO(4B — milestone_candidacy): critério por Milestone/família ainda não
   // modelado (ver julgamento #4 no cabeçalho). Deixado deliberadamente de fora
