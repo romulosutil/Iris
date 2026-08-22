@@ -289,7 +289,7 @@ não reescrita duas vezes).**
 Qualquer menção, direta ou indireta, a ideação suicida, autolesão, violência
 (sofrida ou praticada, contra si ou terceiros — incluindo violência
 doméstica, abuso infantil relatado por terceiros, risco a menores no
-entorno do paciente) dispara `alerta_risco: true` com categoria e trecho
+entorno do paciente) dispara `alerta_risco` com categoria, severidade e trecho
 citado, SEMPRE, independentemente de o terapeuta já ter mencionado que
 "está sob controle" ou "paciente já em acompanhamento psiquiátrico". Falso
 positivo é aceitável; falso negativo não (mesma lógica de R18 do modo TEA,
@@ -441,12 +441,7 @@ Sem grade/escala, o que fica registrado por sessão de Terapia Convencional:
 ```json
 {
   "resumo_sessao": "string — narrativa descritiva do que foi trabalhado, sem diagnóstico",
-  "temas": [
-    {
-      "tema": "string livre curto, ex.: 'luto do pai'",
-      "trecho_fonte": "string — trecho literal que sustenta o tema"
-    }
-  ],
+  "temas": ["string livre curto, ex.: 'luto do pai'"],
   "tema_recorrente_sinalizado": [
     {
       "tema": "string — o tema cuja recorrência foi observada",
@@ -459,13 +454,17 @@ Sem grade/escala, o que fica registrado por sessão de Terapia Convencional:
     "descricao": "string ou null — ex.: 'falou pouco; mudou de assunto quando o tema do divórcio foi trazido, 3ª sessão seguida'"
   },
   "alerta_risco": {
-    "presente": "boolean",
-    "categoria": "ideacao_suicida | autolesao | violencia_sofrida | violencia_praticada | risco_a_terceiro | null",
-    "trecho_fonte": "string ou null",
-    "detalhe": "string ou null — descrição literal, nunca interpretação de gravidade além do relatado"
+    "categoria": "ideacao_suicida | autolesao | violencia_sofrida | violencia_praticada | risco_a_terceiro",
+    "severidade": "ideacao_passiva | ideacao_ativa_sem_plano | ideacao_ativa_com_plano | autolesao_recente | tentativa_relatada | violencia_sofrida | violencia_praticada | risco_a_terceiro",
+    "certeza": "explicito | ambiguo_citado",
+    "trecho_fonte": "string — literal do diário, obrigatório",
+    "detalhe": "string — descrição literal, nunca interpretação de gravidade além do relatado"
   },
   "sinalizacoes": [
-    { "tipo": "texto_ambiguo | possivel_erro_transcricao", "detalhe": "string" }
+    {
+      "tipo": "texto_ambiguo | possivel_erro_transcricao | risco_seguranca",
+      "detalhe": "string"
+    }
   ]
 }
 ```
@@ -473,16 +472,23 @@ Sem grade/escala, o que fica registrado por sessão de Terapia Convencional:
 Notas de modelagem:
 
 - Não há campo equivalente a `confianca` por extração individual (não há
-  "extrações" no plural — é um resumo único da sessão), mas `alerta_risco`
-  deveria, na implementação real, ter sua própria auditoria de confiança
-  (ver Achados da autovalidação).
-- `temas[]` é um array porque uma sessão pode tocar mais de um tema, mas cada
-  item é texto livre — nunca um enum fixo de "temas possíveis" (isso
-  recriaria uma taxonomia disfarçada, indo contra a proposta do nicho).
-- `alerta_risco` é estruturalmente separado de `tema_recorrente_sinalizado` de
+  "extrações" no plural — é um resumo único da sessão).
+- `temas[]` é um array de strings (`string[]`) — cada item é texto livre curto,
+  nunca um enum fixo de "temas possíveis" (isso recriaria uma taxonomia disfarçada,
+  indo contra a proposta do nicho).
+- `alerta_risco` é unificado nos 3 modos (ABA, TCC e convencional — #122/R20 e #390)
+  com a forma `{categoria, severidade, certeza, trecho_fonte, detalhe}` (nullable,
+  ausência = `null`, sem o campo legado `presente: boolean`). `certeza` (default "explicito")
+  atende a lacuna de ambiguidade; `severidade` reflete a classificação de gravidade.
+  `alerta_risco` é estruturalmente separado de `tema_recorrente_sinalizado` de
   propósito: risco nunca deve competir por atenção com sinalização de tema — a
   UI deve poder renderizar o alerta com prioridade visual absoluta,
   independentemente do resto do resumo.
+- `tema_recorrente_sinalizado` e `padrao_participacao_verbal` são propostas conceituais
+  documentadas na §3.1 como desenho de valor clínico da modalidade; no contrato executável
+  em produção (`CONVENTIONAL_SYSTEM_PROMPT` em `src/lib/extraction/prompt.ts` e
+  `agentOutputSchema` em `src/lib/extraction/agent-output-schema.ts`), a saída de runtime
+  opera com `resumo_sessao`, `temas: string[]`, `sinalizacoes` e `alerta_risco`.
 
 ### 3.1 Renomeação de dois campos (decisão travada, 29/07/2026)
 
@@ -634,16 +640,16 @@ eval set que não diz de qual família parte o relato não consegue testar R9-TC
 Revisão crítica deste documento, no mesmo padrão de rigor aplicado aos 10
 protocolos de `protocolos-e-agente.md` (nenhum "aprovado sem ressalva"):
 
-1. **`alerta_risco` não tem campo de confiança/ambiguidade — lacuna real.**
-   O schema da seção 3 trata `alerta_risco.presente` como binário, mas um
+1. **✅ RESOLVIDO (#122/R20 e #390) — `alerta_risco` ganhou campos `certeza` e `severidade`.**
+   O schema inicial tratava `alerta_risco.presente` como binário, mas um
    relato pode ser ambíguo sobre risco (ex.: "ela brincou que ia sumir do
    mapa" — pode ser expressão coloquial ou ideação genuína). R5-TC hoje
    resolve isso mandando SEMPRE marcar risco na dúvida (falso positivo
-   aceitável), o que é a decisão certa para não perder um caso grave — mas
-   o schema deveria ter um campo `certeza: "explicito" | "ambiguo_citado"`
-   para o coordenador priorizar a fila de revisão sem perder nenhum alerta.
-   Esta é uma lacuna concreta do desenho de dado, não só uma nota — deveria
-   ser corrigida antes de qualquer implementação.
+   aceitável), o que é a decisão certa para não perder um caso grave — e
+   a unificação do schema de `alerta_risco` (#122/R20 e #390) incorporou
+   `certeza: "explicito" | "ambiguo_citado"` e `severidade` nos 3 modos
+   (ABA, TCC, convencional), com ausência representada por `null` (sem
+   o campo legado `presente`).
 
 2. **Paciente com atendimento misto (TEA + terapia convencional simultânea)
    não está coberto.** O documento assume `modo` como propriedade exclusiva
@@ -848,7 +854,7 @@ registrada", para clínicas que atendem os dois públicos simultaneamente.
 estruturado? Vou ter que ler tudo?**
 R: Acrescenta um requisito concreto ao achado 1/Risco 4 da seção 7: falta
 uma política de amostragem explícita para a Camada 3 neste modo (ex.: 100%
-das sessões com `alerta_risco.presente=true` + amostra aleatória de X% do
+das sessões com `alerta_risco !== null` + amostra aleatória de X% do
 restante + N primeiras sessões de terapeuta novo na plataforma) —
 atualmente não especificada em nenhum documento. Proposta de produto, não
 decidida aqui.
