@@ -12,6 +12,15 @@ Consolidado em 28/07/2026 com as decisões de #122 (alerta de risco clínico),
 consolidação **não** promove o documento a final: continua rascunho até o
 parecer.
 
+> ⚠️ **Antes de publicar este documento a qualquer clínica-controladora,
+> leia a seção 8.** Ela lista o que este texto descreve como controle do
+> Iris mas que **ainda não roda em produção** — hoje o expurgo do prontuário
+> ao vencer o prazo só sai por SQL manual, sem o aviso prévio de 90 dias
+> descrito na seção 6. Entregar este documento como descrição do que o
+> produto faz, sem essa ressalva visível, afirmaria controle inexistente à
+> própria controladora. Reforço adicionado em 21/08/2026,
+> `revisao-juridica-2026-08-21.md`.
+
 ---
 
 ## 1. Objetivo e escopo
@@ -173,13 +182,14 @@ executa essas solicitações mediante instrução da clínica.
 
 ## 10. Encarregado (DPO)
 
-**Pendência real, não resolvida neste rascunho:** a clínica-cliente, como
-controladora, deveria indicar um encarregado (DPO) próprio (LGPD Art. 41) —
-não é papel do Iris substituir isso. Se o Iris crescer a ponto de precisar
-de um encarregado próprio (para o tratamento que ele mesmo realiza como
-operador/subcontratante), essa nomeação é decisão de governança pendente,
-fora do escopo deste documento de política de dado de paciente. O contato
-institucional de privacidade do produto é `privacidade@irisclinica.ia.br`.
+A clínica-cliente, como controladora, deveria indicar um encarregado (DPO)
+próprio (LGPD Art. 41) — não é papel do Iris substituir isso.
+
+**Resolvido informalmente em 21/08/2026, para o estágio de piloto:** o
+encarregado do Iris enquanto operador é o responsável pelo produto (ver
+`politica-privacidade.md` §10) — nomeação informal, a formalizar quando o
+negócio crescer. O contato institucional de privacidade do produto é
+`privacidade@irisclinica.ia.br`.
 
 ## 11. Pendências antes deste documento valer como final
 

@@ -135,8 +135,13 @@ Versão `curatela-v1`.
 - **Alcance da curatela conforme o instrumento:** [ ] abrange decisões
   sobre saúde e dados de saúde — [ ] não abrange (neste caso, não usar este
   termo; ver seção 4).
-- **Provedor de inteligência artificial contratado:** [Nome do provedor e
-  país onde o processamento ocorre — a preencher. Ver seções 9 e 10.]
+- **Provedor de inteligência artificial contratado:** **Google (Gemini API)**,
+  com processamento nos Estados Unidos e em outros países onde o Google
+  mantém infraestrutura — sem garantia de residência exclusiva no Brasil.
+  Definido em 21/08/2026. ⚠️ Ver seção 10 e o débito `D57` do `BACKLOG.md`:
+  faltam confirmar faturamento pago ativo, escopo do DPA do Google para o
+  Gemini API standalone, e equivalência das cláusulas-padrão do Google ao
+  Art. 33 da LGPD — nenhuma delas fechada ainda.
 - **Canal para exercício de direitos:** [A preencher pela clínica.]
 - **Encarregado (DPO):** [Pendente — LGPD Art. 41.]
 
@@ -355,14 +360,16 @@ Participação do titular (preencher sempre):
 - **Seção 6** — identificação do instrumento de curatela e leitura do seu
   alcance. Sem isso o termo não pode ser colhido nem gravado (constraint de
   banco).
-- **Seções 6 e 10** — nome do provedor de IA efetivamente contratado e país
-  onde o processamento ocorre. Sem esse dado o consentimento da seção 10
-  **não é específico** e portanto não é válido.
-- **Seção 10** — DPA com o provedor assinado; numeração e vigência da
-  resolução da ANPD sobre cláusulas-padrão conferidas em fonte primária
-  (DOU / site da ANPD); definição de quem figura como parte nas cláusulas —
-  a clínica (controladora) ou o Iris (operador). Mesma pendência do termo
-  adulto.
+- **Seções 6 e 10** — ✅ **Provedor definido em 21/08/2026: Google (Gemini
+  API)**, já preenchido na seção 6.
+- **Seção 10** — ⛔ **Ainda aberto:** faturamento pago ativo confirmado na
+  conta da chave em uso; escopo do Data Processing Addendum do Google Cloud
+  para o Gemini API standalone; numeração e vigência da resolução da ANPD
+  sobre cláusulas-padrão conferidas em fonte primária (DOU / site da ANPD);
+  equivalência das cláusulas-padrão do Google ao Art. 33 da LGPD; definição
+  de quem figura como parte nas cláusulas — a clínica (controladora) ou o
+  Iris (operador). Mesma pendência do termo adulto — ver débito `D57` do
+  `BACKLOG.md`.
 
 ### Implementado
 

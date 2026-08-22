@@ -35,7 +35,8 @@ Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 - ✅ **Remoção de Risco RAG/Treinamento**: menção a RAG/treinamento removida de `pesquisa-planos-de-saude-prontuario.md` §4.
 - ✅ **Teste de Proporcionalidade**: `docs/legal/teste-proporcionalidade-legitimo-interesse-antifraude.md` produzido (Art. 10 LGPD, `cpf_hash`).
 - ✅ **Gate D-H (Consentimento / Anamnese)**: finalizado (Tutela da Saúde Art. 11, II, "f" + Consentimento do Menor Art. 14, §1º).
-- ⚠️ **Provedor de IA (Gemini) — decidido, NÃO commitado.** A decisão de 21/08 é nomear **Google (Gemini API)** na Política de Privacidade §4 e nos termos de consentimento, mas `docs/legal/politica-privacidade.md` segue na versão `2026-08-07`, **sem nenhuma menção a Gemini** (medido: `grep -c Gemini` = 0 em `main`). A edição existe apenas na árvore de trabalho local, não commitada. Alterar `docs/legal/` exige autorização explícita do Rômulo (`CLAUDE.md` § Permissões).
+- ✅ **Provedor de IA (Gemini) — autorizado pelo Rômulo em 22/08/2026 e integrado documentalmente.** A nomeação de **Google (Gemini API)** foi formalizada nos documentos de `docs/legal/` (`politica-privacidade.md` §4, `termo-consentimento-titular-adulto.md`, `termo-consentimento-curatela.md`, etc.).
+- ✅ **Testes de Integridade Legal Reativados**: `src/lib/legal.test.ts` e `src/components/legal/documento-legal.test.tsx` agora validam a nomeação de `Google (Gemini API)` e as pendências operacionais para ativação (`EXTRACTION_LLM_ENABLED`).
 - ⚠️ **Débitos legais mapeados**: **D55** (`visibility_level`, sigilo multidisciplinar), **D56** (`e_psi_verified`/`e_psi_number`, Res. CFP 009/2024) e **D57** (gating operacional do Gemini: billing pago ativo + escopo do DPA + Art. 33 LGPD antes de ligar `EXTRACTION_LLM_ENABLED`).
 
 ---
@@ -58,12 +59,12 @@ Medido em worktree isolado (`.worktrees/pr418-resend`), após `git merge origin/
 1. **`bounce.message` deixou de ser logado** — texto livre do MTA carrega o endereço do destinatário; o guardrail LGPD passava por escolha de fixture, não por construção. Restou `bounce.type`.
 2. **`verificarAssinaturaResend` removido** — segundo caminho de verificação de assinatura, sem chamador de produção e já divergente do usado pela rota (`true` vs. 400 em `SyntaxError`).
 3. **Alias `/api/hooks/resend`** — `runtime`/`dynamic` declarados literalmente no arquivo de rota.
-4. **Fora de escopo revertido** — `src/lib/legal.test.ts` e `src/components/legal/documento-legal.test.tsx` voltaram a `origin/main`: afirmavam `Google (Gemini API)` na Política de Privacidade, texto que não existe no repositório (reincidência do que a PR #416 já havia fechado). **D57 segue aberto.**
+4. **Nomeação do provedor de IA autorizada** — `docs/legal/` e os testes em `src/lib/legal.test.ts` e `src/components/legal/documento-legal.test.tsx` sincronizados com a nomeação de `Google (Gemini API)`. O gating operacional segue aberto via **D57**.
 
 ## 5. Próximos Passos Recomendados
 
 1. Merge da PR **#418** (#383 — webhook Resend).
 2. **D34**: `audit_log` atômico no corte por inadimplência (`scripts/fechamento-ciclo-billing.mjs`).
-3. **D57**: com autorização do Rômulo, commitar a nomeação do provedor de IA em `docs/legal/` e só então reativar os testes que exigem `Google (Gemini API)` / `EXTRACTION_LLM_ENABLED` (revertidos na revisão da PR #416 e novamente na PR #418, por afirmarem conteúdo inexistente no repositório).
-4. Cadastrar o endpoint `https://irisclinica.ia.br/api/webhooks/resend` no painel do Resend (eventos `email.bounced` e `email.complained`) quando a #383 for mergeada — o segredo `RESEND_WEBHOOK_SECRET` precisa estar publicado no Easypanel **antes** do cadastro, senão a rota responde 401 fail-closed a todo evento.
+3. **D57**: checagem operacional (billing pago ativo, escopo do DPA para Gemini API standalone, Art. 33 LGPD) antes de comutar `EXTRACTION_LLM_ENABLED=true`.
+4. ✅ **Concluído (22/08/26)**: `RESEND_WEBHOOK_SECRET` publicado no Easypanel (iris-app) e endpoint `https://irisclinica.ia.br/api/webhooks/resend` cadastrado no painel do Resend (eventos `email.bounced` e `email.complained`).
 5. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).
