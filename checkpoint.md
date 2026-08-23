@@ -1,6 +1,6 @@
 # Checkpoint — Review PR #422 (Exportação Integral do Acervo, #374 ∪ #353)
 
-Sessão de 22/08/2026, papel de tech lead. Estado: **em correção**.
+Sessão de 22/08/2026, papel de tech lead. Estado: **correções aplicadas e enviadas**.
 
 ## Feito
 
@@ -51,7 +51,26 @@ Sessão de 22/08/2026, papel de tech lead. Estado: **em correção**.
    expiração mesmo quando nenhuma linha mudou.
 10. `design.md` §2 fala em "migração `0095`"; a entregue é a `0117`.
 
-## Próximo passo
+## Correções aplicadas (commit `fix(export): torna o download alcançável…`)
 
-Aplicar P0 e P1, rodar typecheck/lint/test + integração, atualizar
-BACKLOG.md, docs/GO_LIVE.md, o grafo e o corpo do PR.
+Os nove achados acima foram corrigidos. O que entrou de novo:
+
+- `src/lib/export/acervo/gate.ts` — leitura única do gate D1.
+- `app_export_bundle_token_definir` na `0117` (DEFINER com guard de tenant
+  copiado da policy de leitura) + `gerarLinkDownload` + `gerarLinkDownloadAction`.
+- `scripts/exportacao-acervo.mjs` (gatilho magro, sem dependência npm) e o
+  bloco `EXPORT_JOB_URL`/`EXPORT_JOB_TOKEN` no `.env.example`.
+- Teste de cobertura do catálogo (varre o `schema.ts`) e teste de integração do
+  caminho do link (cunhar → baixar → cunhar de novo revoga o anterior →
+  não-responsável é recusado).
+- `FUNCOES_COM_HELPER` de 18 para 19 em `db/tests/clinic-id-helper-rls.int.test.ts`.
+
+Medido: typecheck 0 erros, lint 0 erros, `pnpm vitest run` 253 arquivos /
+1.805 testes com 0 falha. A suíte de integração/RLS roda no job `test-rls` do
+CI — Docker local indisponível nesta sessão.
+
+## Pendente para o go-live (não é código)
+
+Agendar `scripts/exportacao-acervo.mjs` no Easypanel e publicar
+`EXPORT_JOB_URL` / `EXPORT_JOB_TOKEN` no serviço do App. Sem isso a fila não
+anda em produção.

@@ -2179,7 +2179,7 @@ sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o se
 
 ## 📦 Sessão 22/08/2026 — Feature #374: Exportação Integral do Acervo da Clínica (Unificando #374 e #353)
 
-- **Status:** ✅ Concluído.
+- **Status:** 🟡 Em revisão no PR #422 (implementação entregue; 9 achados da review corrigidos — ver a seção seguinte).
 - **Objetivo:** Implementar a exportação integral e portabilidade do acervo da clínica (Termos de Uso §7.4(b) e LGPD Art. 18), com geração assíncrona de pacote ZIP contendo todas as 37 tabelas do prontuário em formato NDJSON, relatórios clínicos congelados em PDF, manifesto com checksum SHA-256 e download seguro por token de uso único.
 - **Entregas principais:**
   - **T1 — Migração `0117_export_bundle`:**
@@ -2221,3 +2221,59 @@ sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o se
   - `pnpm lint`: **0 erros**.
   - `pnpm test`: **253/253 arquivos de teste passando (1.804 testes verdes)**.
   - `POLICIES_COM_HELPER`: 67 policies validadas em `clinic-id-helper-rls.int.test.ts`.
+
+---
+
+## 🔎 Sessão 22/08/2026 — Review do PR #422 (tech lead) e correções
+
+- **Status:** ✅ Correções aplicadas; PR #422 destravado (era `CONFLICTING`, agora `MERGEABLE`).
+- **Contexto:** o PR estava com merge sujo contra `main`, o que impedia o GitHub
+  de calcular o merge ref — só o CodeQL rodava. CI, integridade de migrações e
+  integridade das versões legais **nunca chegaram a executar**. "4 checks
+  verdes" era, na prática, ausência de checks.
+
+### Conflitos resolvidos
+
+- `db/migrations/meta/_journal.json` — `main` parou na `0116`, a branch traz a
+  `0117`. Resolução: as duas entradas, na ordem.
+- `.specs/features/374-.../{spec,design,tasks}.md` — 43 linhas "divergentes",
+  **zero** com conteúdo diferente: era só realinhamento de padding de tabela do
+  Prettier (`main` formatada pelo #421). Adotada a versão de `main`.
+- Verificado que a resolução não reverteu `main`:
+  `git diff origin/main HEAD -- src/lib/billing scripts docs/legal` = vazio
+  (armadilha conhecida — branch antiga que já mergeou `main` pode apagar
+  trabalho mergeado sem conflitar).
+
+### Achados corrigidos
+
+| #   | Severidade | Achado                                                                                                                                                                                                                                  |
+| :-- | :--------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | P0         | **Feature inalcançável.** O token de download nasce no job, é gravado só como SHA-256 e o texto claro era descartado pela rota interna. A UI montava o link sem `?token=`, e `baixarBundleAcervo` devolve 404 quando o token vem vazio. |
+| 2   | P0         | `download.ts` lia `criado_em` de `export_bundle` — coluna inexistente na `0117` e no `schema.ts`. Todo download estouraria em runtime.                                                                                                  |
+| 3   | P0         | Nenhum gatilho do job: sem `scripts/exportacao-acervo.mjs` e sem `EXPORT_JOB_TOKEN` no `.env.example`, toda solicitação ficaria em `pendente` para sempre.                                                                              |
+| 4   | P1         | `app_export_bundle_reservar` sem guard de status: reservar um bundle `pronto` o devolvia a `processando`, matando o link vigente e podendo estourar `uq_export_bundle_ativo` dentro do DEFINER.                                         |
+| 5   | P1         | Os quatro DEFINER do job tinham `GRANT EXECUTE ... TO app_role` e aceitam qualquer `uuid` sem resolver tenant. `app_role` perdeu o EXECUTE; quem chama é o job, sob `iris_auth`.                                                        |
+| 6   | P1         | Gate D1 com três leituras diferentes do mesmo fato (`page.tsx` exigia coordenador com `responsavel_conta_id` nulo; motor e download liberavam qualquer papel). Unificado em `lib/export/acervo/gate.ts`, pela regra mais restrita.      |
+| 7   | P1         | `err.message` cru gravado em `export_bundle.erro` e `audit_log.detalhe` — texto de terceiro carrega valores de linha. Virou categoria fechada; o texto original fica só no log do processo.                                             |
+| 8   | P2         | Nada provava a cobertura do catálogo do coletor. O teste novo varre o `schema.ts` e já achou um buraco real: `report_pdf` não estava em nenhuma das duas listas (agora em `TABELAS_EXPORTADAS_BINARIAS`).                               |
+| 9   | P2         | `expirarVencidos` ignorava o boolean de `app_export_bundle_expirar` e auditava expiração sem linha alterada.                                                                                                                            |
+
+### Lição transversal — o lockfile alterna de formato
+
+`pnpm-lock.yaml` não estava no `.prettierignore`. O Prettier expande os flow
+maps (`resolution: {integrity: …}` vira bloco multilinha) e troca as aspas,
+inflando o arquivo em ~3,4 k linhas; o `pnpm install` seguinte desfaz tudo.
+Resultado: cada branch alterna entre os dois formatos e produz um diff de
+**12 mil linhas** para uma dependência nova (`fflate`, 1 linha no
+`package.json`). Conjunto de pacotes conferido: idêntico ao de `main` **mais**
+`fflate@0.8.3`. O lockfile entrou no `.prettierignore`.
+
+### Medições após as correções
+
+- `pnpm typecheck`: **0 erros**.
+- `pnpm lint`: **0 erros** (9 warnings pré-existentes).
+- `pnpm vitest run`: **253 arquivos / 1.805 testes, 0 falha**.
+- Suíte de integração/RLS: depende de Postgres; roda no job `test-rls` do CI
+  (Docker local indisponível nesta sessão).
+- `FUNCOES_COM_HELPER` subiu de 18 para 19 (entra
+  `app_export_bundle_token_definir`, com guard de tenant).
