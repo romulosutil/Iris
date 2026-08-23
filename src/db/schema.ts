@@ -237,6 +237,7 @@ export const authAccount = pgTable("auth_account", {
   }),
   scope: text("scope"),
   password: text("password"),
+  issuer: text("issuer"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
