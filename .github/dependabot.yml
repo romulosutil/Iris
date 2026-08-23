@@ -14,6 +14,11 @@ updates:
         update-types:
           - "minor"
           - "patch"
+        exclude-patterns:
+          - "better-auth"
+          - "next"
+          - "drizzle-orm"
+          - "drizzle-kit"
     ignore:
       - dependency-name: "*"
         update-types:
