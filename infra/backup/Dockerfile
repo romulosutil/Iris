@@ -38,7 +38,8 @@ WORKDIR /app
 # com "not found" — foi o que aconteceu no primeiro deploy. O compose agora usa
 # o mesmo contexto (raiz) justamente para o teste local pegar isso.
 COPY infra/backup/backup.sh infra/backup/restore.sh infra/backup/verify-restore.sh \
-	infra/backup/verify-offsite.sh infra/backup/scheduler.sh ./
+	infra/backup/verify-offsite.sh infra/backup/scheduler.sh \
+	infra/backup/reaplicar-tombstones.sql ./
 RUN chmod +x backup.sh restore.sh verify-restore.sh verify-offsite.sh scheduler.sh
 
 # Comando default = dump agendado (o caso de uso do serviço rodando via

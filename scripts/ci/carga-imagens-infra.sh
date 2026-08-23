@@ -212,6 +212,54 @@ carga_backup() {
 		"backup: /app/backup.sh executável (caminho fixo do scheduler.sh)" \
 		-- docker run --rm "${TAG_BACKUP}" test -x /app/backup.sh
 
+	# O restore.sh recusa seguir sem este .sql (é onde mora a reaplicação de
+	# expurgos, #89). Se o COPY esquecer dele, o furo só apareceria no dia do
+	# desastre — e o sintoma seria um restore abortado, não um aviso.
+	esperar_sucesso \
+		"backup: /app/reaplicar-tombstones.sql presente (restore.sh aborta sem ele)" \
+		-- docker run --rm "${TAG_BACKUP}" test -f /app/reaplicar-tombstones.sql
+
+	# ... e presente não basta: o arquivo tem de ser ACEITO pelo psql. Os dois
+	# únicos defeitos que este passo já teve moravam aqui, nenhum deles visível
+	# em leitura nem no teste de integração (que executa só o bloco DO):
+	#
+	#   1. `\copy ... FROM :'ledger'` — o \copy NÃO interpola variável do psql;
+	#      o `:'ledger'` chega literal e vira "No such file or directory".
+	#   2. `\copy ... FROM STDIN` num script rodado com `-f` — lê as linhas
+	#      SEGUINTES DO PRÓPRIO SCRIPT como dados (é como o pg_dump embute COPY),
+	#      e a primeira linha do bloco DO virou "valor": `invalid input syntax
+	#      for type uuid: "DO $reaplicar$"`. O keyword certo é PSTDIN.
+	#
+	# Um ledger só com cabeçalho (0 purgas) é suficiente e não precisa do schema
+	# do Iris: o corpo do laço nunca executa, então nenhuma tabela da aplicação é
+	# referenciada, e o que fica sob teste é exatamente a camada que quebrou —
+	# temp table, \copy, bloco DO e COMMIT.
+	local rede_pg="carga-tombstone-net" host_pg="carga-tombstone-pg"
+	docker rm -f "${host_pg}" >/dev/null 2>&1 || true
+	docker network rm "${rede_pg}" >/dev/null 2>&1 || true
+	docker network create "${rede_pg}" >/dev/null
+	docker run -d --name "${host_pg}" --network "${rede_pg}" \
+		-e POSTGRES_PASSWORD=carga postgres:17-alpine >/dev/null
+
+	local tentativa=0
+	until docker exec "${host_pg}" pg_isready -U postgres >/dev/null 2>&1; do
+		tentativa=$((tentativa + 1))
+		if [[ "${tentativa}" -ge 30 ]]; then
+			log_error "postgres de apoio não ficou pronto em 30s — checagem do reaplicar-tombstones.sql pulada"
+			FALHAS=$((FALHAS + 1))
+			break
+		fi
+		sleep 1
+	done
+
+	esperar_sucesso \
+		"backup: reaplicar-tombstones.sql é aceito pelo psql (\\copy PSTDIN + bloco DO)" \
+		-- docker run --rm --network "${rede_pg}" -e PGPASSWORD=carga "${TAG_BACKUP}" \
+		bash -c "printf 'patient_id,clinic_id,ator_id,criado_em\n' | psql -v ON_ERROR_STOP=1 --no-psqlrc -h ${host_pg} -U postgres -d postgres -f /app/reaplicar-tombstones.sql"
+
+	docker rm -f "${host_pg}" >/dev/null 2>&1 || true
+	docker network rm "${rede_pg}" >/dev/null 2>&1 || true
+
 	# Carga de verdade: cada script até a própria guarda de env obrigatória.
 	# Nenhum deles toca banco ou bucket antes disso.
 	esperar_falha_com \

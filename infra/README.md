@@ -255,10 +255,50 @@ restore comprovado**. Backup que nunca foi restaurado não conta como plano de
 recuperação. Este é o item "`pg_dump` agendado + restore testado" da **Etapa 5
 da issue #75**, e ele **bloqueia o piloto com dado real**.
 
-Scripts em `infra/backup/`: `backup.sh` (dump + globals + verificação + cópia
-MinIO + prune), `restore.sh` (aplica os globals e restaura um dump num alvo),
-`verify-restore.sh` (restaura o dump mais recente num banco descartável, no
-mesmo cluster, e valida).
+Scripts em `infra/backup/`: `backup.sh` (dump + globals + ledger de tombstones +
+verificação + cópia MinIO + prune), `restore.sh` (aplica os globals, restaura um
+dump num alvo e reaplica os expurgos do ledger), `verify-restore.sh` (restaura o
+dump mais recente num banco descartável, no mesmo cluster, e valida).
+
+### CRÍTICO — restaurar um backup pode DESFAZER um expurgo (#89)
+
+Um dump é a fotografia de um instante. Se um titular exerceu o direito ao
+esquecimento (LGPD Art. 18) **depois** da fotografia, o dump ainda contém o
+prontuário dele — e restaurá-lo traz o titular de volta. A exclusão que a
+clínica confirmou por escrito é desfeita, e ninguém percebe.
+
+A armadilha é achar que o `audit_log` restaurado resolve. Não resolve: o
+tombstone da purga (`acao = 'paciente_purgado'`) **nasceu depois do dump** e,
+por construção, não está dentro dele. Consultar a trilha restaurada é procurar
+o registro justamente onde ele não pode estar.
+
+Por isso o ledger viaja **fora** do dump:
+
+| Artefato                | O que é                                                             | Retenção                                      |
+| ----------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| `iris-<TS>.dump`        | o banco                                                             | `RETENTION_DAYS` (30d)                        |
+| `iris-<TS>.globals.sql` | roles/grants de cluster                                             | `RETENTION_DAYS` (30d)                        |
+| `tombstones-<TS>.csv`   | quem já foi expurgado — só UUIDs e um timestamp, nenhum texto livre | **mais longa que qualquer dump** (ver abaixo) |
+
+O `restore.sh` aplica o ledger **mais recente disponível**, não o par do dump —
+é a única forma de conhecer as purgas posteriores à fotografia. Ele é
+**fail-closed**: sem ledger, ou com um ledger anterior ao dump, o script **para**
+em vez de liberar um banco que pode ter ressuscitado titular. A escotilha é
+`SKIP_TOMBSTONES=yes`, e ela grita no log.
+
+A re-eliminação chama a **mesma** `app_purgar_paciente()` que a aplicação chama
+(`infra/backup/reaplicar-tombstones.sql`). Reimplementar os `DELETE`s ali
+garantiria drift: a função cresce a cada tabela nova do modelo, e sobrariam
+órfãos do titular expurgado exatamente no cenário em que ninguém está olhando.
+O mesmo arquivo é carregado e executado por
+`db/tests/fase6-tombstone-restauracao.int.test.ts`, que roda no `pnpm test:rls`.
+
+> ⚠️ **O nome `tombstones-*` foge do padrão `iris-*` de propósito.** O prune
+> local e o expurgo off-site casam `iris-*`; o ledger não pode ser podado junto
+> com os dumps que ele existe para corrigir. **Decisão pendente de validação
+> com o Rômulo (#89): o prazo de retenção definitivo do ledger.** Ele é
+> pseudônimo (só UUIDs), mas é a lista de quem exerceu o Art. 18 numa clínica —
+> por isso sobe cifrado com `age` como os demais artefatos.
 
 ### CRÍTICO — o backup são DOIS arquivos, não um (`.dump` + `.globals.sql`)
 
