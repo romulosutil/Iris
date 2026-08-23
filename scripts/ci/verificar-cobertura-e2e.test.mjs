@@ -38,10 +38,10 @@ describe("verificar-cobertura-e2e — gate anti-pulo-silencioso (#424)", () => {
   });
 
   it("reprova com zero testes executados (testMatch/projects errado)", () => {
-    const res = verificarCoberturaE2E(
-      relatorio({ expected: 0, arquivos: 0 }),
-      { minTests: 17, minFiles: 10 },
-    );
+    const res = verificarCoberturaE2E(relatorio({ expected: 0, arquivos: 0 }), {
+      minTests: 17,
+      minFiles: 10,
+    });
     expect(res.ok).toBe(false);
     expect(res.problemas.join("\n")).toMatch(/ZERO testes/);
   });
@@ -95,7 +95,12 @@ describe("verificar-cobertura-e2e — gate anti-pulo-silencioso (#424)", () => {
   });
 
   it("parseArgs rejeita piso não-inteiro, vazio ou negativo", () => {
-    for (const arg of ["--min-tests=", "--min-tests=abc", "--min-tests=-1", "--min-tests=1.5"]) {
+    for (const arg of [
+      "--min-tests=",
+      "--min-tests=abc",
+      "--min-tests=-1",
+      "--min-tests=1.5",
+    ]) {
       expect(() => parseArgs(["rel.json", arg, "--min-files=1"])).toThrow(
         ErroDeUso,
       );
