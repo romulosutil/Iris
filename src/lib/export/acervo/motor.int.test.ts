@@ -19,15 +19,15 @@ describe.skipIf(!hasDb)("Motor de Estado da Exportação (Task T4)", () => {
     const outroUser = crypto.randomUUID();
 
     await authDb.execute(sql`
-      INSERT INTO clinic (id, nome, responsavel_conta_id) VALUES (${clinicId}, 'Clínica Motor Test', ${donoId});
-    `);
-    await authDb.execute(sql`
       INSERT INTO app_user (id, name, email) VALUES
         (${donoId}, 'Dono Conta', ${`d_${donoId}@test.local`}),
         (${outroUser}, 'Outro Coordenador', ${`o_${outroUser}@test.local`});
     `);
     await authDb.execute(sql`
-      INSERT INTO user_role (user_id, clinic_id, role) VALUES
+      INSERT INTO clinic (id, nome, responsavel_conta_id) VALUES (${clinicId}, 'Clínica Motor Test', ${donoId});
+    `);
+    await authDb.execute(sql`
+      INSERT INTO user_role (user_id, clinic_id, papel) VALUES
         (${donoId}, ${clinicId}, 'coordenador'),
         (${outroUser}, ${clinicId}, 'coordenador');
     `);

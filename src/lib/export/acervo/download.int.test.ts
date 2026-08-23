@@ -22,18 +22,18 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
     const zipBytes = Buffer.from("PK\x03\x04fake_zip_bytes");
 
     await authDb.execute(sql`
-      INSERT INTO clinic (id, nome, responsavel_conta_id) VALUES
-        (${clinicA}, 'Clínica A', ${donoA}),
-        (${clinicB}, 'Clínica B', ${donoB});
-    `);
-    await authDb.execute(sql`
       INSERT INTO app_user (id, name, email) VALUES
         (${donoA}, 'Dono A', ${`da_${donoA}@test.local`}),
         (${outroUserA}, 'Outro A', ${`oa_${outroUserA}@test.local`}),
         (${donoB}, 'Dono B', ${`db_${donoB}@test.local`});
     `);
     await authDb.execute(sql`
-      INSERT INTO user_role (user_id, clinic_id, role) VALUES
+      INSERT INTO clinic (id, nome, responsavel_conta_id) VALUES
+        (${clinicA}, 'Clínica A', ${donoA}),
+        (${clinicB}, 'Clínica B', ${donoB});
+    `);
+    await authDb.execute(sql`
+      INSERT INTO user_role (user_id, clinic_id, papel) VALUES
         (${donoA}, ${clinicA}, 'coordenador'),
         (${outroUserA}, ${clinicA}, 'coordenador'),
         (${donoB}, ${clinicB}, 'coordenador');
@@ -187,16 +187,16 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
     ]);
 
     await authDb.execute(sql`
-      INSERT INTO clinic (id, nome, responsavel_conta_id)
-        VALUES (${clinicId}, 'Clínica Link', ${dono});
-    `);
-    await authDb.execute(sql`
       INSERT INTO app_user (id, name, email) VALUES
         (${dono}, 'Dono', ${`d_${dono}@test.local`}),
         (${outro}, 'Outro', ${`o_${outro}@test.local`});
     `);
     await authDb.execute(sql`
-      INSERT INTO user_role (user_id, clinic_id, role) VALUES
+      INSERT INTO clinic (id, nome, responsavel_conta_id)
+        VALUES (${clinicId}, 'Clínica Link', ${dono});
+    `);
+    await authDb.execute(sql`
+      INSERT INTO user_role (user_id, clinic_id, papel) VALUES
         (${dono}, ${clinicId}, 'coordenador'),
         (${outro}, ${clinicId}, 'coordenador');
     `);

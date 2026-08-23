@@ -23,7 +23,7 @@ describe.skipIf(!hasDb)("coletarAcervo (integração RLS e isolamento)", () => {
       INSERT INTO app_user (id, name, email) VALUES (${userA}, 'User A', ${`a_${userA}@test.local`}), (${userB}, 'User B', ${`b_${userB}@test.local`});
     `);
     await authDb.execute(sql`
-      INSERT INTO user_role (user_id, clinic_id, role) VALUES (${userA}, ${clinicA}, 'coordenador'), (${userB}, ${clinicB}, 'coordenador');
+      INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${userA}, ${clinicA}, 'coordenador'), (${userB}, ${clinicB}, 'coordenador');
     `);
     await authDb.execute(sql`
       INSERT INTO patient (id, clinic_id, nome, cpf, cpf_hash)

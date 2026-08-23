@@ -23,15 +23,15 @@ describe.skipIf(!hasDb)(
 
       // Cria clínica já com trial expirado no passado (somente-leitura)
       await authDb.execute(sql`
-        INSERT INTO clinic (id, nome, responsavel_conta_id, trial_comeco_em, trial_dias)
-        VALUES (${clinicId}, 'Clínica Somente Leitura', ${donoId}, now() - interval '30 days', 7);
-      `);
-      await authDb.execute(sql`
         INSERT INTO app_user (id, name, email)
         VALUES (${donoId}, 'Dono Conta ReadOnly', ${`d_ro_${donoId}@test.local`});
       `);
       await authDb.execute(sql`
-        INSERT INTO user_role (user_id, clinic_id, role)
+        INSERT INTO clinic (id, nome, responsavel_conta_id, trial_comeco_em, trial_dias)
+        VALUES (${clinicId}, 'Clínica Somente Leitura', ${donoId}, now() - interval '30 days', 7);
+      `);
+      await authDb.execute(sql`
+        INSERT INTO user_role (user_id, clinic_id, papel)
         VALUES (${donoId}, ${clinicId}, 'coordenador');
       `);
       await authDb.execute(sql`
@@ -100,15 +100,15 @@ describe.skipIf(!hasDb)(
       const pacId = crypto.randomUUID();
 
       await authDb.execute(sql`
-        INSERT INTO clinic (id, nome, responsavel_conta_id)
-        VALUES (${clinicId}, 'Clínica Negação Test', ${donoId});
-      `);
-      await authDb.execute(sql`
         INSERT INTO app_user (id, name, email)
         VALUES (${donoId}, 'Dono Negação', ${`d_neg_${donoId}@test.local`});
       `);
       await authDb.execute(sql`
-        INSERT INTO user_role (user_id, clinic_id, role)
+        INSERT INTO clinic (id, nome, responsavel_conta_id)
+        VALUES (${clinicId}, 'Clínica Negação Test', ${donoId});
+      `);
+      await authDb.execute(sql`
+        INSERT INTO user_role (user_id, clinic_id, papel)
         VALUES (${donoId}, ${clinicId}, 'coordenador');
       `);
       await authDb.execute(sql`
@@ -192,15 +192,15 @@ describe.skipIf(!hasDb)(
       const donoId = crypto.randomUUID();
 
       await authDb.execute(sql`
-        INSERT INTO clinic (id, nome, responsavel_conta_id)
-        VALUES (${clinicId}, 'Clínica Trilha Audit', ${donoId});
-      `);
-      await authDb.execute(sql`
         INSERT INTO app_user (id, name, email)
         VALUES (${donoId}, 'Dono Audit', ${`d_aud_${donoId}@test.local`});
       `);
       await authDb.execute(sql`
-        INSERT INTO user_role (user_id, clinic_id, role)
+        INSERT INTO clinic (id, nome, responsavel_conta_id)
+        VALUES (${clinicId}, 'Clínica Trilha Audit', ${donoId});
+      `);
+      await authDb.execute(sql`
+        INSERT INTO user_role (user_id, clinic_id, papel)
         VALUES (${donoId}, ${clinicId}, 'coordenador');
       `);
 
