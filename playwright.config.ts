@@ -4,10 +4,16 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * E2E da Fase 1b em diante. Pré-requisito para rodar: DB migrado
- * (`pnpm db:migrate`) + seed de clínica (`pnpm seed:clinic ...` — ⚠️ o seed
- * TRUNCA as tabelas de domínio do banco local). O `webServer` sobe o app em
- * modo produção; migração e seed NÃO são feitos aqui (dependem de DB e
- * credenciais reais).
+ * (`pnpm db:migrate`) + seed (⚠️ todo seed abaixo TRUNCA as tabelas de
+ * domínio do banco local). O `webServer` sobe o app em modo produção;
+ * migração e seed NÃO são feitos aqui (dependem de DB e credenciais reais).
+ *
+ * Suíte inteira (`pnpm test:e2e`, os 9 specs, também o que CI roda):
+ * `pnpm seed:e2e` — semeia clínica E2E + clínica demo no mesmo banco (#424).
+ *
+ * Um spec isolado (`pnpm exec playwright test e2e/diario-demo.spec.ts`):
+ * `pnpm seed:clinic ...` (specs de cadastro/login/represcrição) ou
+ * `pnpm seed:demo` (`diario-demo`, `revisao`) — cada um trunca sozinho.
  *
  * ## Ambiente (#209)
  *

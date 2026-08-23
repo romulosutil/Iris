@@ -37,10 +37,15 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.getByLabel("Nome completo").fill("Dra. Helena E2E");
       await page.getByLabel("E-mail").fill(email);
       await page.getByLabel("Senha", { exact: true }).fill(senha);
+      // Formulário virou wizard de 2 passos: "Continuar" valida o passo 1
+      // (client-side) antes de revelar os campos de clínica/conselho.
+      await page.getByRole("button", { name: "Continuar" }).click();
       await page.getByLabel("Nome da clínica").fill(nomeClinica);
 
       // Seleção de Conselho Profissional via componente Radix UI Select
-      await page.getByRole("combobox", { name: "Conselho" }).click();
+      await page
+        .getByRole("combobox", { name: "Conselho", exact: true })
+        .click();
       await page.getByRole("option", { name: "CRP" }).click();
 
       await page.getByLabel("Nº do registro").fill("998877");
@@ -111,7 +116,10 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
 
       expect(userRecord).toBeDefined();
       expect(userRecord?.conselho).toBe("crp");
-      expect(userRecord?.registroNumero).toBe("998877");
+      // Máscara de CRP (`formatarNumeroRegistro`, cadastro-form.tsx) formata
+      // "998877" digitado como "99/8877" (2 dígitos / 6 dígitos) — é o valor
+      // que o campo grava, não o dígitos-puros que o teste digitou.
+      expect(userRecord?.registroNumero).toBe("99/8877");
       expect(userRecord?.registroUf).toBe("SP");
 
       const consentRecord = await authDb.query.professionalConsent.findFirst({
@@ -136,8 +144,11 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.getByLabel("Nome completo").fill("Dr. Idempotente Primeiro");
       await page.getByLabel("E-mail").fill(email);
       await page.getByLabel("Senha", { exact: true }).fill(senha);
+      await page.getByRole("button", { name: "Continuar" }).click();
       await page.getByLabel("Nome da clínica").fill(nomeClinica);
-      await page.getByRole("combobox", { name: "Conselho" }).click();
+      await page
+        .getByRole("combobox", { name: "Conselho", exact: true })
+        .click();
       await page.getByRole("option", { name: "CRM" }).click();
       await page.getByLabel("Nº do registro").fill("112233");
       await page.getByRole("combobox", { name: "UF" }).click();
@@ -153,10 +164,13 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
       await page.getByLabel("Nome completo").fill("Dr. Idempotente Segundo");
       await page.getByLabel("E-mail").fill(email);
       await page.getByLabel("Senha", { exact: true }).fill("OutraSenha123!");
+      await page.getByRole("button", { name: "Continuar" }).click();
       await page
         .getByLabel("Nome da clínica")
         .fill(`Tentativa Duplicada ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho" }).click();
+      await page
+        .getByRole("combobox", { name: "Conselho", exact: true })
+        .click();
       await page.getByRole("option", { name: "CRM" }).click();
       await page.getByLabel("Nº do registro").fill("112233");
       await page.getByRole("combobox", { name: "UF" }).click();
@@ -198,66 +212,44 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
   }) => {
     await page.goto("/cadastro");
 
-    await test.step("1. Preenche o formulário com dados e senha inválida (curta)", async () => {
+    // #424 — o formulário virou wizard de 2 passos e o comprimento da senha
+    // (12 chars) agora é barrado no CLIENTE (`validarPasso1`, "Continuar") antes
+    // de qualquer submit chegar ao servidor. O teste original ligava
+    // `novalidate` para simular um cliente scriptado e provar a validação de
+    // servidor (`validarCadastro`) como rede de segurança — esse caminho
+    // deixou de existir para o comprimento da senha especificamente, porque o
+    // wizard nunca revela o passo 2 (onde fica o submit real) com senha curta.
+    // O teste passa a medir o gate client-side que substituiu esse caminho:
+    // mesma mensagem, mesmo contrato de foco/role="alert" (`Field`,
+    // src/components/ui/field.tsx:98), sem alcançar o passo 2.
+    await test.step("1. Preenche credenciais com senha inválida (curta) e tenta avançar", async () => {
       await page.getByLabel("Nome completo").fill("Dra. Beatriz Resiliente");
       await page.getByLabel("E-mail").fill("beatriz@iris.test");
       await page.getByLabel("Senha", { exact: true }).fill("123"); // Senha inválida (< 12 caracteres)
-      await page.getByLabel("Nome da clínica").fill("Clínica Resiliente E2E");
-
-      await page.getByRole("combobox", { name: "Conselho" }).click();
-      await page.getByRole("option", { name: "CREFITO" }).click();
-
-      await page.getByLabel("Nº do registro").fill("456789");
-      await page.getByRole("combobox", { name: "UF" }).click();
-      await page.getByRole("option", { name: /^PR - / }).click();
-      await page.getByRole("checkbox").check();
-
-      // O campo de senha tem `minLength={12}`: com a validação NATIVA ligada, o
-      // browser barra o submit, o servidor nunca responde e nenhum
-      // `role="alert"` chega a existir (medido: 0 alertas no DOM). Este teste
-      // ficava verde na etapa 3 e vermelho na 2 pelo motivo errado — nada do
-      // caminho de erro do servidor era exercitado.
-      //
-      // Desligar `novalidate` é justamente o que um cliente scriptado faz: a
-      // validação de aplicação em `validarCadastro` (servidor) tem que
-      // responder do mesmo jeito. É o caminho que precisa ser coberto.
-      await page.evaluate(() => {
-        document.querySelector("form")?.setAttribute("novalidate", "");
-      });
-
-      await page.getByRole("button", { name: "Criar conta" }).click();
+      await page.getByRole("button", { name: "Continuar" }).click();
     });
 
-    await test.step("2. Valida acessibilidade (foco automático em role='alert')", async () => {
-      // Dois nós ganham role="alert" no erro: o Alert do <Form> (acima do
-      // formulário) e a mensagem do <Field> da senha. O foco vai para o
-      // primeiro do DOM — é o que o efeito de acessibilidade em
-      // `cadastro-form.tsx` seleciona com querySelector.
+    await test.step("2. Valida acessibilidade (erro focado no campo, role='alert')", async () => {
       const alert = page.getByRole("alert").first();
       await expect(alert).toBeVisible();
       await expect(alert).toContainText(
         "A senha precisa ter ao menos 12 caracteres.",
       );
-      await expect(alert).toBeFocused();
+      // `validarPasso1` foca o INPUT da senha (não o nó do alerta) — é o campo
+      // que o usuário precisa corrigir.
+      await expect(page.getByLabel("Senha", { exact: true })).toBeFocused();
+      // Continua no passo 1: campos de clínica/conselho não existem ainda.
+      await expect(page.getByLabel("Nome da clínica")).toBeHidden();
     });
 
-    await test.step("3. Valida preservação de estado contra form-wipe (React 19 / Radix UI)", async () => {
+    await test.step("3. Valida preservação de estado contra form-wipe (React 19)", async () => {
       await expect(page.getByLabel("Nome completo")).toHaveValue(
         "Dra. Beatriz Resiliente",
       );
       await expect(page.getByLabel("E-mail")).toHaveValue("beatriz@iris.test");
-      await expect(page.getByLabel("Nome da clínica")).toHaveValue(
-        "Clínica Resiliente E2E",
+      await expect(page.getByLabel("Senha", { exact: true })).toHaveValue(
+        "123",
       );
-      await expect(page.getByLabel("Nº do registro")).toHaveValue("456789");
-      // Componentes Radix UI continuam com os valores selecionados. A UF também
-      // é `Select`, não input — `toHaveValue` estourava "Not an input element"
-      // (#209); o que se lê dela é o texto do gatilho.
-      await expect(page.getByRole("combobox", { name: "Conselho" })).toHaveText(
-        /CREFITO/,
-      );
-      await expect(page.getByRole("combobox", { name: "UF" })).toHaveText(/PR/);
-      await expect(page.getByRole("checkbox")).toBeChecked();
     });
   });
 
@@ -265,6 +257,11 @@ test.describe("Jornada de Cadastro Self-Service (Fatia A)", () => {
     page,
   }) => {
     await page.goto("/cadastro");
+    // Links de Termos/Privacidade ficam no passo 2 (Clínica & Conselho).
+    await page.getByLabel("Nome completo").fill("Dra. Links Legais");
+    await page.getByLabel("E-mail").fill("links-legais@iris.test");
+    await page.getByLabel("Senha", { exact: true }).fill("SenhaSeguraE2E123!");
+    await page.getByRole("button", { name: "Continuar" }).click();
 
     await test.step("Valida presença e atributos dos links de Termos e Privacidade", async () => {
       const linkTermos = page.getByRole("link", { name: "Termos de Uso" });

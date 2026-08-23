@@ -21,6 +21,8 @@ const SCRIPTS_DE_SEED = [
   "seed-local.ts",
   "seed-demo-account.ts",
   "seed-super-admin.ts",
+  "seed-demo.ts",
+  "seed-e2e.ts",
 ] as const;
 
 function lerScript(nome: string): string {

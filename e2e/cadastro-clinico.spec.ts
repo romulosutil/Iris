@@ -25,6 +25,8 @@ test("coordenador completa cadastro administrativo, clínico e vê a equipe", as
   // Cadastro administrativo (paciente + Consent LGPD).
   await page.goto("/pacientes/novo");
   await page.getByLabel("Nome do paciente").fill("Paciente E2E");
+  // Modalidade clínica é obrigatória desde a expansão TCC/convencional (#98/#99).
+  await page.getByRole("radio", { name: /Protocolo estruturado/ }).click();
 
   // Desde a #100 a escolha de quem assina o consentimento é EXPLÍCITA (nunca
   // derivada da data de nascimento), e o campo do responsável só é renderizado
