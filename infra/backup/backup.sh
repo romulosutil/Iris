@@ -306,6 +306,13 @@ readonly FINAL_PATH="${BACKUP_DIR}/${FINAL_NAME}"
 readonly GLOBALS_NAME="iris-${TIMESTAMP}.globals.sql"
 readonly GLOBALS_PATH="${BACKUP_DIR}/${GLOBALS_NAME}"
 
+# Ledger de tombstones de expurgo LGPD (issue #89). O nome NÃO segue o padrão
+# `iris-<TS>.*` de propósito: o dump e os globals são podados aos
+# RETENTION_DAYS, e este arquivo não pode ser — ver o bloco que o gera, logo
+# abaixo do dump de globals, para o porquê.
+readonly TOMBSTONES_NAME="tombstones-${TIMESTAMP}.csv"
+readonly TOMBSTONES_PATH="${BACKUP_DIR}/${TOMBSTONES_NAME}"
+
 # mktemp no MESMO diretório do destino final: garante que o rename posterior
 # seja atômico (mesmo filesystem), nunca um "copy" que pode ficar pela metade.
 # O template PRECISA terminar nos X: o mktemp do busybox (Alpine, que é a base
@@ -341,6 +348,11 @@ cleanup_tmp() {
 	fi
 	if [[ -f "${TMP_GLOBALS_PATH}" ]]; then
 		rm -f -- "${TMP_GLOBALS_PATH}"
+	fi
+	# `:-` porque este tmp só nasce bem depois do trap ser instalado: sob
+	# `set -u`, ler a variável não-setada mataria o próprio cleanup.
+	if [[ -n "${TMP_TOMBSTONES_PATH:-}" && -f "${TMP_TOMBSTONES_PATH}" ]]; then
+		rm -f -- "${TMP_TOMBSTONES_PATH}"
 	fi
 	# Os .age são cópia cifrada e descartável do que já está em BACKUP_DIR —
 	# não têm valor após o upload e não podem ficar ocupando disco.
@@ -421,6 +433,59 @@ log_info "integridade dos globals OK"
 mv -f -- "${TMP_PATH}" "${FINAL_PATH}"
 mv -f -- "${TMP_GLOBALS_PATH}" "${GLOBALS_PATH}"
 
+# --- ledger de tombstones de expurgo (issue #89) -----------------------------
+# POR QUE ISTO NÃO PODE SAIR DE DENTRO DO DUMP:
+# O tombstone de uma purga (`audit_log.acao = 'paciente_purgado'`) só nasce no
+# instante da purga. Um dump tirado ANTES dela contém o paciente e NÃO contém o
+# tombstone. Restaurar esse dump e consultar o `audit_log` restaurado, portanto,
+# nunca reencontra a purga — o titular volta à vida e o Art. 18 é desfeito em
+# silêncio. O ledger precisa viajar FORA do dump e ser lido do artefato MAIS
+# RECENTE, não do par do dump. É isso que o restore.sh faz.
+#
+# CONTEÚDO: só UUIDs e um timestamp. Nada de texto livre — `detalhe.motivo` é
+# campo preenchido por humano e pode carregar PII de terceiro, então fica de
+# fora por construção (não há coluna de texto neste CSV para carregá-la).
+#
+# RETENÇÃO: este arquivo é o oposto do dump. O dump é podado aos
+# ${RETENTION_DAYS} dias; o ledger tem de sobreviver mais que qualquer backup
+# que ele possa precisar corrigir. Por isso o nome foge do padrão `iris-*`, que
+# é o que o prune local e o expurgo off-site casam. (Prazo definitivo de
+# retenção do ledger: decisão pendente de validação — ver #89.)
+#
+# FALHA AQUI ABORTA TUDO, igual aos globals: um par dump+globals que o
+# restore.sh vai recusar por falta de ledger não é backup do dia, é arquivo.
+TMP_TOMBSTONES_PATH="$(mktemp "${BACKUP_DIR}/.${TOMBSTONES_NAME}.tmp.XXXXXX")"
+readonly TMP_TOMBSTONES_PATH
+
+log_info "gerando ledger de tombstones de expurgo -> ${TOMBSTONES_PATH}"
+
+if ! psql \
+	--host="${PGHOST}" \
+	--port="${PGPORT}" \
+	--username="${PGUSER}" \
+	--dbname="${PGDATABASE}" \
+	--no-psqlrc \
+	--quiet \
+	-v ON_ERROR_STOP=1 \
+	-c "\\copy (SELECT entidade_id AS patient_id, clinic_id, ator_id, criado_em FROM audit_log WHERE acao = 'paciente_purgado' ORDER BY criado_em) TO '${TMP_TOMBSTONES_PATH}' WITH (FORMAT csv, HEADER true)"; then
+	log_error "falha ao gerar o ledger de tombstones — abortando. Sem ele, restaurar este backup poderia ressuscitar titular já expurgado (LGPD Art. 18)."
+	exit 1
+fi
+
+# Cabeçalho ausente = `\copy` que não escreveu nada (arquivo truncado, sessão
+# derrubada no meio). Zero linhas de dado é legítimo (nenhuma purga ainda); zero
+# BYTES não é. Sem esta checagem, um ledger vazio passaria como "nenhuma purga".
+if [[ ! -s "${TMP_TOMBSTONES_PATH}" ]] || ! head -n1 "${TMP_TOMBSTONES_PATH}" | grep -q '^patient_id,clinic_id,ator_id,criado_em$'; then
+	log_error "ledger de tombstones saiu vazio ou sem cabeçalho — abortando (não confundir com 'nenhuma purga', que produz cabeçalho + 0 linhas)."
+	exit 1
+fi
+
+mv -f -- "${TMP_TOMBSTONES_PATH}" "${TOMBSTONES_PATH}"
+
+TOMBSTONES_COUNT=$(($(wc -l <"${TOMBSTONES_PATH}") - 1))
+readonly TOMBSTONES_COUNT
+log_info "arquivo=${TOMBSTONES_NAME} tombstones=${TOMBSTONES_COUNT} (titulares expurgados a re-eliminar em qualquer restore)"
+
 END_EPOCH="$(date +%s)"
 DURATION_S=$((END_EPOCH - START_EPOCH))
 
@@ -458,14 +523,15 @@ else
 	fi
 
 	if [[ "${minio_ok}" -eq 1 ]]; then
-		log_info "subindo ${FINAL_NAME} e ${GLOBALS_NAME} para ${MC_ALIAS}/${S3_BACKUP_BUCKET} (endpoint mascarado)"
+		log_info "subindo ${FINAL_NAME}, ${GLOBALS_NAME} e ${TOMBSTONES_NAME} para ${MC_ALIAS}/${S3_BACKUP_BUCKET} (endpoint mascarado)"
 
 		if mc mb --ignore-existing "${MC_ALIAS}/${S3_BACKUP_BUCKET}" >/dev/null 2>&1 \
 			&& mc cp --quiet "${FINAL_PATH}" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/${FINAL_NAME}" >/dev/null \
-			&& mc cp --quiet "${GLOBALS_PATH}" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/${GLOBALS_NAME}" >/dev/null; then
-			log_info "upload concluído (dump + globals)"
+			&& mc cp --quiet "${GLOBALS_PATH}" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/${GLOBALS_NAME}" >/dev/null \
+			&& mc cp --quiet "${TOMBSTONES_PATH}" "${MC_ALIAS}/${S3_BACKUP_BUCKET}/${TOMBSTONES_NAME}" >/dev/null; then
+			log_info "upload concluído (dump + globals + ledger de tombstones)"
 		else
-			log_error "upload pro MinIO falhou (dump ou globals) — backup local existe, mas a cópia no MinIO não está completa. Marcando replicação parcial."
+			log_error "upload pro MinIO falhou (dump, globals ou ledger) — backup local existe, mas a cópia no MinIO não está completa. Marcando replicação parcial."
 			EXIT_CODE="${EXIT_REPLICACAO_PARCIAL}"
 		fi
 	fi
@@ -477,6 +543,10 @@ fi
 readonly MC_ALIAS_OFFSITE="irisoffsite"
 readonly OFFSITE_NAME="${FINAL_NAME}.age"
 readonly OFFSITE_GLOBALS_NAME="${GLOBALS_NAME}.age"
+# O ledger sobe cifrado como os demais. Ele não tem dado clínico (só UUIDs),
+# mas a lista de quem exerceu o Art. 18 numa clínica é, ela própria, sensível —
+# e cifrar custa nada aqui.
+readonly OFFSITE_TOMBSTONES_NAME="${TOMBSTONES_NAME}.age"
 
 # Decide se a réplica é devida nesta execução. Marcador ausente => devida (é o
 # caso da primeira execução e o caso de a última ter falhado, já que o marcador
@@ -516,7 +586,8 @@ else
 	# `age -r` cifra para a chave pública. O VPS não tem a privada e portanto
 	# não consegue reverter isto — por design.
 	if ! age -r "${OFFSITE_AGE_RECIPIENT}" -o "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${FINAL_PATH}" \
-		|| ! age -r "${OFFSITE_AGE_RECIPIENT}" -o "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${GLOBALS_PATH}"; then
+		|| ! age -r "${OFFSITE_AGE_RECIPIENT}" -o "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${GLOBALS_PATH}" \
+		|| ! age -r "${OFFSITE_AGE_RECIPIENT}" -o "${OFFSITE_TMP_DIR}/${OFFSITE_TOMBSTONES_NAME}" "${TOMBSTONES_PATH}"; then
 		log_error "falha ao cifrar os artefatos para o off-site — nada é enviado. Marcando replicação parcial."
 		offsite_ok=0
 	fi
@@ -526,7 +597,7 @@ else
 	# clínico em claro num bucket de terceiro por um `age` que falhou de forma
 	# silenciosa. O header é texto fixo definido pelo formato ("age-encryption.org/v1").
 	if [[ "${offsite_ok}" -eq 1 ]]; then
-		for artefato in "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}"; do
+		for artefato in "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${OFFSITE_TMP_DIR}/${OFFSITE_TOMBSTONES_NAME}"; do
 			if [[ ! -s "${artefato}" ]] || ! head -c 21 "${artefato}" | grep -q 'age-encryption.org'; then
 				log_error "artefato off-site $(basename "${artefato}") não tem header age válido — ABORTANDO o envio (jamais subir em claro)."
 				offsite_ok=0
@@ -568,7 +639,7 @@ else
 	fi
 
 	if [[ "${offsite_ok}" -eq 1 ]]; then
-		log_info "subindo ${OFFSITE_NAME} e ${OFFSITE_GLOBALS_NAME} para ${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET} (endpoint mascarado)"
+		log_info "subindo ${OFFSITE_NAME}, ${OFFSITE_GLOBALS_NAME} e ${OFFSITE_TOMBSTONES_NAME} para ${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET} (endpoint mascarado)"
 
 		# Sem `mc mb` aqui, ao contrário do MinIO: a credencial off-site é
 		# deliberadamente restrita (sem CreateBucket, sem DeleteObject), então
@@ -576,11 +647,12 @@ else
 		# provisionado uma vez, à mão, junto com a regra de lifecycle que faz
 		# a retenção — ver o runbook em infra/README.md.
 		if MC_REGION="${OFFSITE_REGION}" mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_NAME}" >/dev/null \
-			&& MC_REGION="${OFFSITE_REGION}" mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_GLOBALS_NAME}" >/dev/null; then
+			&& MC_REGION="${OFFSITE_REGION}" mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_GLOBALS_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_GLOBALS_NAME}" >/dev/null \
+			&& MC_REGION="${OFFSITE_REGION}" mc cp --quiet "${OFFSITE_TMP_DIR}/${OFFSITE_TOMBSTONES_NAME}" "${MC_ALIAS_OFFSITE}/${OFFSITE_S3_BUCKET}/${OFFSITE_TOMBSTONES_NAME}" >/dev/null; then
 			# Marcador SÓ aqui, no sucesso: uma réplica que falhou continua
 			# devida e tenta de novo amanhã, independente do intervalo.
 			date -u '+%Y-%m-%dT%H:%M:%SZ' >"${OFFSITE_MARCADOR}"
-			log_info "réplica off-site concluída (dump + globals, cifrados)"
+			log_info "réplica off-site concluída (dump + globals + ledger de tombstones, cifrados)"
 		else
 			log_error "upload off-site falhou (dump ou globals) — backup local e MinIO existem, mas NÃO há cópia fora do host. Marcando replicação parcial."
 			offsite_ok=0

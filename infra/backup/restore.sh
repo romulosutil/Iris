@@ -17,6 +17,14 @@
 #                                globals (roles/grants de cluster). NÃO use em
 #                                DR de verdade: sem globals, o restore fica
 #                                sem RLS (ver seção "globals" abaixo).
+#   TOMBSTONE_LEDGER             opcional — caminho do ledger de expurgos a
+#                                reaplicar. Default: o tombstones-*.csv MAIS
+#                                RECENTE em BACKUP_DIR (de propósito: não é o
+#                                par deste dump — ver seção "tombstones").
+#   SKIP_TOMBSTONES              default "" — "yes" pula a reaplicação de
+#                                expurgos. Só use se você SABE que não houve
+#                                purga depois do dump: sem isso, restaurar
+#                                RESSUSCITA titular que exerceu o Art. 18.
 #
 # Guardrail: "iris" é o nome do banco tanto em produção quanto em dev local
 # (docker-compose usa POSTGRES_DB=iris) — de propósito. Restore é destrutivo
@@ -204,4 +212,97 @@ if pg_restore "${restore_args[@]}"; then
 else
 	log_error "pg_restore terminou com erro — ver mensagens acima (algumas são esperadas, ex.: DROP ... IF EXISTS de objeto que nunca existiu; confira o código de saída real)"
 	exit 1
+fi
+
+# --- reaplicação de expurgos (tombstones, issue #89) -------------------------
+# POR QUE ISTO EXISTE: um dump é uma fotografia de um instante. Se um titular
+# exerceu o direito ao esquecimento (LGPD Art. 18) DEPOIS da fotografia, o dump
+# ainda contém o prontuário dele — e restaurá-lo desfaz o expurgo. Não adianta
+# consultar o `audit_log` restaurado: o tombstone da purga nasceu depois do
+# dump e, por construção, não está lá dentro. Por isso o ledger viaja FORA do
+# dump (`backup.sh` gera `tombstones-<TS>.csv` a cada ciclo) e o que vale aqui é
+# o ledger MAIS RECENTE disponível, não o par deste dump.
+#
+# O ledger só tem UUIDs e um timestamp — nenhum texto livre, nenhum dado
+# clínico. É o mínimo necessário para saber A QUEM re-aplicar o expurgo.
+#
+# A re-eliminação chama a MESMA `app_purgar_paciente()` que a aplicação chama.
+# Reimplementar os DELETEs aqui garantiria drift: a função cresce a cada tabela
+# nova do modelo e este script não acompanharia — sobrariam órfãos do titular
+# expurgado justamente no cenário em que ninguém está olhando.
+readonly SKIP_TOMBSTONES="${SKIP_TOMBSTONES:-}"
+TOMBSTONE_LEDGER="${TOMBSTONE_LEDGER:-}"
+
+if [[ "${SKIP_TOMBSTONES}" == "yes" ]]; then
+	log_error "AVISO ALTO: SKIP_TOMBSTONES=yes — nenhum expurgo foi reaplicado."
+	log_error "AVISO ALTO: se algum titular exerceu o Art. 18 depois de ${DUMP_PATH}, o prontuário dele acabou de VOLTAR e a exclusão foi desfeita."
+	log_error "AVISO ALTO: rode este script de novo sem SKIP_TOMBSTONES assim que tiver o ledger, ou reaplique as purgas à mão antes de liberar o banco."
+else
+	if [[ -z "${TOMBSTONE_LEDGER}" ]]; then
+		# `sort` lexicográfico resolve a ordem porque o nome carrega o carimbo
+		# ISO básico (tombstones-YYYYMMDDTHHMMSSZ.csv) — mesma convenção do dump.
+		TOMBSTONE_LEDGER="$(find "${BACKUP_DIR}" -maxdepth 1 -type f -name 'tombstones-*.csv' | sort | tail -n1)"
+	fi
+
+	if [[ -z "${TOMBSTONE_LEDGER}" || ! -f "${TOMBSTONE_LEDGER}" ]]; then
+		log_error "ledger de tombstones não encontrado (procurado: tombstones-*.csv em ${BACKUP_DIR})."
+		log_error "Sem ele NÃO é possível saber quem foi expurgado depois deste dump — e o restore que acabou de rodar pode ter ressuscitado titular que exerceu o Art. 18."
+		log_error "Aponte o ledger com TOMBSTONE_LEDGER=/caminho/tombstones-<TS>.csv (use o MAIS RECENTE que existir, inclusive o do off-site),"
+		log_error "ou, se você SABE que não houve nenhuma purga, siga com SKIP_TOMBSTONES=yes — assumindo o risco por escrito."
+		exit 1
+	fi
+
+	# O ledger precisa ser MAIS NOVO que o dump. Um ledger anterior ao dump não
+	# conhece nenhuma purga posterior a ele: aplicá-lo roda 0 re-eliminações e
+	# imprime sucesso, que é pior que falhar — vira prova de conformidade para
+	# um banco que ressuscitou titular.
+	dump_ts="$(basename "${DUMP_PATH}")"
+	dump_ts="${dump_ts#iris-}"
+	dump_ts="${dump_ts%%.*}"
+	ledger_ts="$(basename "${TOMBSTONE_LEDGER}")"
+	ledger_ts="${ledger_ts#tombstones-}"
+	ledger_ts="${ledger_ts%%.*}"
+
+	if [[ -n "${dump_ts}" && -n "${ledger_ts}" && "${ledger_ts}" < "${dump_ts}" ]]; then
+		log_error "o ledger escolhido (${ledger_ts}) é ANTERIOR ao dump (${dump_ts})."
+		log_error "Ele não pode conhecer nenhuma purga feita depois do dump, então aplicá-lo daria um 'ok' que não vale nada."
+		log_error "Busque o ledger mais recente (MinIO ou off-site) e passe em TOMBSTONE_LEDGER."
+		exit 1
+	fi
+
+	log_info "reaplicando expurgos a partir de ${TOMBSTONE_LEDGER}"
+
+	# A regra mora em reaplicar-tombstones.sql, não aqui: é o mesmo arquivo que
+	# `db/tests/fase6-tombstone-restauracao.int.test.ts` carrega e executa. Um
+	# bloco SQL inline neste script seria código de produção sem teste nenhum.
+	SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+	readonly SCRIPT_DIR
+	readonly SQL_TOMBSTONES="${SCRIPT_DIR}/reaplicar-tombstones.sql"
+
+	if [[ ! -f "${SQL_TOMBSTONES}" ]]; then
+		log_error "reaplicar-tombstones.sql não encontrado em ${SCRIPT_DIR} — imagem incompleta. NÃO libere o banco restaurado."
+		exit 1
+	fi
+
+	# ON_ERROR_STOP=1 e transação única: ou todos os titulares do ledger voltam
+	# a estar expurgados, ou o operador fica sabendo. Um banco meio-expurgado
+	# liberado para uso é o desfecho a evitar.
+	# O CSV entra por STDIN, não por variável do psql: `\copy ... FROM :'ledger'`
+	# NÃO interpola — o `:'ledger'` chega literal ao parser do \copy e vira
+	# `:: No such file or directory`. Pego num restore de ponta a ponta, não na
+	# leitura do arquivo.
+	if ! psql \
+		-v ON_ERROR_STOP=1 \
+		--dbname="${TARGET_DATABASE_URL}" \
+		--no-psqlrc \
+		--quiet \
+		-f "${SQL_TOMBSTONES}" \
+		<"${TOMBSTONE_LEDGER}"
+	then
+		log_error "a reaplicação de expurgos FALHOU. O banco restaurado pode conter titular já expurgado — NÃO libere para uso."
+		log_error "Resolva a causa acima (ator ausente, ledger corrompido, função app_purgar_paciente ausente) e rode de novo."
+		exit 1
+	fi
+
+	log_info "expurgos reaplicados a partir de ${TOMBSTONE_LEDGER} (ver NOTICE acima para a contagem)"
 fi
