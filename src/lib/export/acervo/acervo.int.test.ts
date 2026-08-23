@@ -58,6 +58,7 @@ describe.skipIf(!hasDb)(
           (tx) =>
             baixarBundleAcervo(tx, {
               bundleId,
+              clinicId,
               token: proc.token!,
               userId: donoId,
               userRole: "coordenador",
@@ -113,6 +114,7 @@ describe.skipIf(!hasDb)(
           (tx) =>
             baixarBundleAcervo(tx, {
               bundleId,
+              clinicId,
               token: proc.token!,
               userId: donoId,
               userRole: "coordenador",
@@ -192,6 +194,7 @@ describe.skipIf(!hasDb)(
           (tx) =>
             baixarBundleAcervo(tx, {
               bundleId,
+              clinicId,
               token: proc.token!,
               userId: donoId,
               userRole: "coordenador",

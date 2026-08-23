@@ -88,9 +88,20 @@ AS $$
 DECLARE
   v_tentativas integer;
 BEGIN
+  -- Guard de status: a reserva só alcança um bundle que ainda está na fila ou
+  -- um `processando` órfão (job morto há mais de 15 min). Sem este predicado,
+  -- reservar um bundle já `pronto` o devolveria a `processando`, invalidando o
+  -- link vigente e podendo estourar `uq_export_bundle_ativo` dentro da própria
+  -- função. O `SELECT` do chamador usa `SKIP LOCKED`, mas cada `execute` do
+  -- Drizzle é a sua própria transação: o lock morre com o statement e não
+  -- protege a janela entre o candidato e a reserva. O guard é o que protege.
   SELECT eb.tentativas + 1 INTO v_tentativas
     FROM export_bundle eb
    WHERE eb.id = p_bundle
+     AND (
+       eb.status = 'pendente'
+       OR (eb.status = 'processando' AND eb.iniciado_em < now() - interval '15 minutes')
+     )
      FOR UPDATE;
 
   IF NOT FOUND THEN
@@ -119,7 +130,6 @@ END; $$;
 --> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.app_export_bundle_reservar(uuid) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.app_export_bundle_reservar(uuid) TO app_role;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.app_export_bundle_reservar(uuid) TO iris_auth;--> statement-breakpoint
 
 CREATE OR REPLACE FUNCTION public.app_export_bundle_concluir(
@@ -160,7 +170,6 @@ END; $$;
 --> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.app_export_bundle_concluir(uuid, text, bigint, text, jsonb, bytea) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.app_export_bundle_concluir(uuid, text, bigint, text, jsonb, bytea) TO app_role;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.app_export_bundle_concluir(uuid, text, bigint, text, jsonb, bytea) TO iris_auth;--> statement-breakpoint
 
 CREATE OR REPLACE FUNCTION public.app_export_bundle_falhar(
@@ -186,7 +195,6 @@ END; $$;
 --> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.app_export_bundle_falhar(uuid, text) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.app_export_bundle_falhar(uuid, text) TO app_role;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.app_export_bundle_falhar(uuid, text) TO iris_auth;--> statement-breakpoint
 
 CREATE OR REPLACE FUNCTION public.app_export_bundle_expirar(
@@ -216,5 +224,49 @@ END; $$;
 --> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.app_export_bundle_expirar(uuid) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.app_export_bundle_expirar(uuid) TO app_role;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.app_export_bundle_expirar(uuid) TO iris_auth;
+
+-- ==================== MENOR PRIVILÉGIO NOS DEFINERS DO JOB ====================
+--
+-- `app_export_bundle_reservar/concluir/falhar/expirar` recebem um `uuid` de
+-- bundle e escrevem sem consultar o tenant do chamador — são fronteira de
+-- confiança, não de autorização. Quem as chama é o job de background, sob
+-- `iris_auth` (AUTH_DATABASE_URL). `app_role` NÃO recebe EXECUTE: se recebesse,
+-- um usuário do tenant A poderia reservar, concluir, falhar ou expurgar o
+-- bundle do tenant B só conhecendo o `uuid`, porque nenhuma delas resolve o
+-- tenant (CLAUDE.md §5 — "guard interno é fronteira").
+
+-- ==================== TOKEN DE DOWNLOAD (rotação sob RLS) ====================
+--
+-- O texto claro do token só existe na resposta que o responsável recebe; o
+-- banco guarda apenas o SHA-256. Como o token é gerado pelo job e o hash é
+-- irreversível, o responsável precisa de um caminho para cunhar um link novo:
+-- é esta função. Ela É chamada por `app_role`, então o guard interno copia o
+-- predicado exato da policy de leitura (`clinic_id = app_clinic_id_exigido()`)
+-- e ainda exige que o bundle esteja `pronto` e dentro da janela de 72 h.
+-- Cunhar um link novo revoga o anterior: o `token_hash` antigo é sobrescrito.
+
+CREATE OR REPLACE FUNCTION public.app_export_bundle_token_definir(
+  p_bundle uuid,
+  p_token_hash text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE export_bundle
+     SET token_hash = p_token_hash
+   WHERE id = p_bundle
+     AND clinic_id = app_clinic_id_exigido()
+     AND status = 'pronto'
+     AND expira_em > now();
+
+  RETURN FOUND;
+END; $$;
+--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.app_export_bundle_token_definir(uuid, text) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.app_export_bundle_token_definir(uuid, text) TO app_role;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.app_export_bundle_token_definir(uuid, text) TO iris_auth;

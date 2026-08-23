@@ -20,6 +20,7 @@ export async function GET(
     baixarBundleAcervo(tx, {
       bundleId: id,
       token,
+      clinicId: ctx.clinicId,
       userId: ctx.userId,
       userRole: ctx.role,
     }),

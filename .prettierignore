@@ -11,3 +11,10 @@
 # exclusão, a próxima execução de `pnpm format` quebraria aquele teste.
 docs/legal/
 docs/archive/
+
+# `pnpm-lock.yaml` é artefato do pnpm, não fonte. O Prettier expande os flow
+# maps (`{integrity: ...}` → bloco multilinha) e troca as aspas, inflando o
+# arquivo em ~3.4 k linhas. O próximo `pnpm install` desfaz tudo, então cada
+# branch alterna entre os dois formatos e produz diffs de 12 k linhas que
+# escondem a mudança real de dependência. Aconteceu no PR #422.
+pnpm-lock.yaml

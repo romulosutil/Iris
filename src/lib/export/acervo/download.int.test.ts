@@ -4,6 +4,7 @@ import { hasDb } from "@tests/integration-env";
 import { withTenant } from "@/db/rls";
 import { sha256Hex } from "@/lib/report/hash";
 import { baixarBundleAcervo } from "./download";
+import { gerarLinkDownload } from "./motor";
 
 const { authDb } = await import("@/db/client");
 
@@ -56,6 +57,7 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         (tx) =>
           baixarBundleAcervo(tx, {
             bundleId,
+            clinicId: clinicA,
             token: tokenValido,
             userId: donoA,
             userRole: "coordenador",
@@ -80,6 +82,7 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         (tx) =>
           baixarBundleAcervo(tx, {
             bundleId,
+            clinicId: clinicA,
             token: "token_completamente_errado",
             userId: donoA,
             userRole: "coordenador",
@@ -96,6 +99,7 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         (tx) =>
           baixarBundleAcervo(tx, {
             bundleId,
+            clinicId: clinicA,
             token: tokenValido,
             userId: outroUserA,
             userRole: "coordenador",
@@ -112,6 +116,7 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         (tx) =>
           baixarBundleAcervo(tx, {
             bundleId,
+            clinicId: clinicB,
             token: tokenValido,
             userId: donoB,
             userRole: "coordenador",
@@ -132,6 +137,7 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         (tx) =>
           baixarBundleAcervo(tx, {
             bundleId,
+            clinicId: clinicA,
             token: tokenValido,
             userId: donoA,
             userRole: "coordenador",
@@ -148,6 +154,102 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         DELETE FROM user_role WHERE clinic_id IN (${clinicA}, ${clinicB});
         DELETE FROM app_user WHERE id IN (${donoA}, ${outroUserA}, ${donoB});
         DELETE FROM clinic WHERE id IN (${clinicA}, ${clinicB});
+      `);
+    }
+  });
+
+  // O caminho que a UI usa. O token nasce dentro do job e o banco guarda só o
+  // SHA-256 dele — sem esta função o botão de download monta uma URL sem
+  // `?token=` e `baixarBundleAcervo` devolve 404 na primeira linha. Era o
+  // estado da feature antes desta correção: entregue e inalcançável.
+  it("responsável cunha um link novo, baixa com ele, e o link anterior morre", async () => {
+    const clinicId = crypto.randomUUID();
+    const dono = crypto.randomUUID();
+    const outro = crypto.randomUUID();
+    const bundleId = crypto.randomUUID();
+    const zipBytes = Buffer.from("PKbytes_do_zip");
+
+    await authDb.execute(sql`
+      INSERT INTO clinic (id, nome, responsavel_conta_id)
+        VALUES (${clinicId}, 'Clínica Link', ${dono});
+      INSERT INTO app_user (id, name, email) VALUES
+        (${dono}, 'Dono', ${`d_${dono}@test.local`}),
+        (${outro}, 'Outro', ${`o_${outro}@test.local`});
+      INSERT INTO user_role (user_id, clinic_id, role) VALUES
+        (${dono}, ${clinicId}, 'coordenador'),
+        (${outro}, ${clinicId}, 'coordenador');
+      INSERT INTO export_bundle (id, clinic_id, solicitado_por, status, sha256,
+                                 bytes_tamanho, token_hash, manifest, concluido_em, expira_em)
+      VALUES (${bundleId}, ${clinicId}, ${dono}, 'pronto', ${sha256Hex(zipBytes)},
+              ${zipBytes.length}, ${sha256Hex(Buffer.from("token_antigo"))},
+              '{"escopo":"integral"}'::jsonb, now(), now() + interval '72 hours');
+      INSERT INTO export_bundle_blob (bundle_id, bytes)
+        VALUES (${bundleId}, ${zipBytes}::bytea);
+    `);
+
+    try {
+      const primeiro = await gerarLinkDownload(
+        clinicId,
+        dono,
+        "coordenador",
+        bundleId,
+      );
+      const tokenPrimeiro = new URL(
+        primeiro.url,
+        "https://exemplo.invalid",
+      ).searchParams.get("token")!;
+      expect(tokenPrimeiro.length).toBeGreaterThan(20);
+
+      const baixa = (token: string) =>
+        withTenant({ clinicId, userId: dono, role: "coordenador" }, (tx) =>
+          baixarBundleAcervo(tx, {
+            bundleId,
+            clinicId,
+            token,
+            userId: dono,
+            userRole: "coordenador",
+          }),
+        );
+
+      const ok = await baixa(tokenPrimeiro);
+      expect(ok.sucesso).toBe(true);
+      if (ok.sucesso) {
+        expect(Buffer.compare(ok.bytes, zipBytes)).toBe(0);
+      }
+
+      // Cunhar de novo revoga o anterior (sobrescreve o hash).
+      const segundo = await gerarLinkDownload(
+        clinicId,
+        dono,
+        "coordenador",
+        bundleId,
+      );
+      const tokenSegundo = new URL(
+        segundo.url,
+        "https://exemplo.invalid",
+      ).searchParams.get("token")!;
+      expect(tokenSegundo).not.toBe(tokenPrimeiro);
+
+      expect((await baixa(tokenSegundo)).sucesso).toBe(true);
+
+      const comTokenVelho = await baixa(tokenPrimeiro);
+      expect(comTokenVelho.sucesso).toBe(false);
+      if (!comTokenVelho.sucesso) {
+        expect(comTokenVelho.statusHttp).toBe(404);
+      }
+
+      // Quem não é o responsável não cunha link, mesmo sendo coordenador do
+      // mesmo tenant — o gate D1 é por pessoa, não por papel.
+      await expect(
+        gerarLinkDownload(clinicId, outro, "coordenador", bundleId),
+      ).rejects.toThrow(/respons/i);
+    } finally {
+      await authDb.execute(sql`
+        DELETE FROM audit_log WHERE clinic_id = ${clinicId};
+        DELETE FROM export_bundle WHERE clinic_id = ${clinicId};
+        DELETE FROM user_role WHERE clinic_id = ${clinicId};
+        DELETE FROM app_user WHERE id IN (${dono}, ${outro});
+        DELETE FROM clinic WHERE id = ${clinicId};
       `);
     }
   });

@@ -1,11 +1,11 @@
 import "server-only";
-import { sql } from "drizzle-orm";
 import { getTenantContext } from "@/auth/tenant";
 import { withTenant } from "@/db/rls";
 import { Container } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Banner } from "@/components/ui/banner";
 import { obterHistoricoExportacoes } from "@/lib/export/acervo/motor";
+import { carregarGateResponsavel } from "@/lib/export/acervo/gate";
 import { ExportacaoView } from "./exportacao-view";
 
 export const dynamic = "force-dynamic";
@@ -13,24 +13,15 @@ export const dynamic = "force-dynamic";
 export default async function ExportacaoAcervoPage() {
   const ctx = await getTenantContext();
 
-  // 1. Gate D1: Responsável da Conta
+  // 1. Gate D1: Responsável da Conta (regra única — lib/export/acervo/gate.ts)
   const { clinicaNome, isResponsavel } = await withTenant(ctx, async (tx) => {
-    const rows = (await tx.execute(sql`
-      SELECT nome, responsavel_conta_id FROM clinic WHERE id = ${ctx.clinicId}
-    `)) as unknown as { nome: string; responsavel_conta_id: string | null }[];
-
-    const c = rows[0];
-    const nome = c?.nome ?? "Clínica";
-    const responsavelId = c?.responsavel_conta_id;
-
-    const responsavel =
-      responsavelId === ctx.userId ||
-      (responsavelId === null && ctx.role === "coordenador");
-
-    return {
-      clinicaNome: nome,
-      isResponsavel: responsavel,
-    };
+    const gate = await carregarGateResponsavel(
+      tx,
+      ctx.clinicId,
+      ctx.userId,
+      ctx.role,
+    );
+    return { clinicaNome: gate.clinicaNome, isResponsavel: gate.autorizado };
   });
 
   if (!isResponsavel) {

@@ -11,7 +11,18 @@ import { authDb } from "@/db/client";
 import { withTenant, type Tx } from "@/db/rls";
 import { sha256Hex } from "@/lib/report/hash";
 import { coletarAcervo } from "./coletor";
+import { carregarGateResponsavel } from "./gate";
 import { montarBundleZip } from "./bundle";
+
+/**
+ * Motivos de falha que podem ser persistidos. Qualquer outra coisa vira
+ * `erro_interno` — ver o `catch` de `processarProximo`.
+ */
+export const MOTIVOS_FALHA = new Set([
+  "bundle_excede_limite",
+  "tentativas_esgotadas",
+  "erro_interno",
+]);
 
 export class ExportacaoEmAndamentoError extends Error {
   constructor(
@@ -57,21 +68,14 @@ export async function solicitarExportacao(
   return withTenant(
     { clinicId, userId: solicitanteId, role: solicitanteRole as any },
     async (tx: Tx) => {
-      // 1. Gate D1: Responsável da Conta
-      const rowsClinic = (await tx.execute(sql`
-        SELECT id, responsavel_conta_id FROM clinic WHERE id = ${clinicId}
-      `)) as unknown as { id: string; responsavel_conta_id: string | null }[];
-
-      if (!rowsClinic || rowsClinic.length === 0) {
-        throw new Error("Clínica não encontrada.");
-      }
-
-      const clinic = rowsClinic[0]!;
-      // Se responsavel_conta_id não for nulo e for diferente do solicitante -> 403
-      if (
-        clinic.responsavel_conta_id !== null &&
-        clinic.responsavel_conta_id !== solicitanteId
-      ) {
+      // 1. Gate D1: Responsável da Conta (regra única — ./gate.ts)
+      const gate = await carregarGateResponsavel(
+        tx,
+        clinicId,
+        solicitanteId,
+        solicitanteRole,
+      );
+      if (!gate.autorizado) {
         throw new NaoAutorizadoExportacaoError();
       }
 
@@ -241,10 +245,20 @@ export async function processarProximo(): Promise<{
       token,
     };
   } catch (err: any) {
-    const motivo =
-      err?.message === "bundle_excede_limite"
-        ? "bundle_excede_limite"
-        : (err?.message ?? "erro_desconhecido");
+    // Categoria FECHADA. `err.message` aqui é texto de terceiro (driver do
+    // Postgres): uma violação de constraint carrega os valores da linha, e
+    // `export_bundle.erro` é lido pela UI e copiado para `audit_log.detalhe`.
+    // O texto cru fica no log do processo, nunca no banco.
+    const motivo = MOTIVOS_FALHA.has(err?.message)
+      ? (err.message as string)
+      : "erro_interno";
+    if (motivo === "erro_interno") {
+      console.error(
+        "[exportacao-integral] falha não categorizada no bundle",
+        bundle.id,
+        err,
+      );
+    }
 
     await authDb.execute(sql`
       SELECT app_export_bundle_falhar(${bundle.id}::uuid, ${motivo})
@@ -282,10 +296,17 @@ export async function expirarVencidos(): Promise<{ expirados: number }> {
        AND expira_em < now()
   `)) as unknown as { id: string; clinic_id: string }[];
 
+  let expirados = 0;
   for (const item of vencidos) {
-    await authDb.execute(sql`
-      SELECT app_export_bundle_expirar(${item.id}::uuid)
-    `);
+    // A função devolve `false` quando outra execução já expirou a linha entre
+    // o SELECT e aqui. Auditar mesmo assim gravaria um evento de expiração que
+    // não aconteceu nesta execução.
+    const rowsExp = (await authDb.execute(sql`
+      SELECT app_export_bundle_expirar(${item.id}::uuid) AS expirou
+    `)) as unknown as { expirou: boolean }[];
+
+    if (rowsExp[0]?.expirou !== true) continue;
+    expirados += 1;
 
     await authDb.execute(sql`
       INSERT INTO audit_log (clinic_id, ator_id, acao, entidade, entidade_id, detalhe)
@@ -300,7 +321,7 @@ export async function expirarVencidos(): Promise<{ expirados: number }> {
     `);
   }
 
-  return { expirados: vencidos.length };
+  return { expirados };
 }
 
 /**
@@ -363,4 +384,44 @@ export async function obterHistoricoExportacoes(
       return { ativo, historico };
     },
   );
+}
+
+/**
+ * Cunha um link de download novo para um bundle pronto.
+ *
+ * O token em texto claro existe uma vez só, na resposta desta função: o banco
+ * guarda apenas o SHA-256 (`app_export_bundle_token_definir`). É por isso que
+ * o responsável precisa de um caminho para gerar o link — o token nasce dentro
+ * do job, e de lá não há como devolvê-lo ao navegador. Gerar um link novo
+ * revoga o anterior, porque sobrescreve o hash.
+ */
+export async function gerarLinkDownload(
+  clinicId: string,
+  userId: string,
+  role: string,
+  bundleId: string,
+): Promise<{ url: string }> {
+  return withTenant({ clinicId, userId, role: role as any }, async (tx: Tx) => {
+    const gate = await carregarGateResponsavel(tx, clinicId, userId, role);
+    if (!gate.autorizado) {
+      throw new NaoAutorizadoExportacaoError();
+    }
+
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = sha256Hex(Buffer.from(token));
+
+    const rows = (await tx.execute(sql`
+        SELECT app_export_bundle_token_definir(${bundleId}::uuid, ${tokenHash}) AS ok
+      `)) as unknown as { ok: boolean }[];
+
+    if (rows[0]?.ok !== true) {
+      throw new Error(
+        "Esta exportação não está mais disponível para download. Solicite uma nova.",
+      );
+    }
+
+    return {
+      url: `/api/export/acervo/${bundleId}?token=${encodeURIComponent(token)}`,
+    };
+  });
 }

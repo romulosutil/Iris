@@ -11,6 +11,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Tx } from "@/db/rls";
+import { carregarGateResponsavel } from "./gate";
 import { sha256Hex } from "@/lib/report/hash";
 
 export type ResultadoDownload =
@@ -33,6 +34,7 @@ export async function baixarBundleAcervo(
   params: {
     bundleId: string;
     token: string;
+    clinicId: string;
     userId: string;
     userRole: string;
   },
@@ -47,28 +49,14 @@ export async function baixarBundleAcervo(
     };
   }
 
-  // 1. Busca dados da clínica para checar responsabilidade (D1)
-  const rowsClinic = (await tx.execute(sql`
-    SELECT id, nome, responsavel_conta_id FROM clinic
-  `)) as unknown as {
-    id: string;
-    nome: string;
-    responsavel_conta_id: string | null;
-  }[];
-
-  if (!rowsClinic || rowsClinic.length === 0) {
-    return {
-      sucesso: false,
-      statusHttp: 404,
-      erro: "Clínica não encontrada.",
-    };
-  }
-
-  const clinica = rowsClinic[0]!;
-  if (
-    clinica.responsavel_conta_id !== null &&
-    clinica.responsavel_conta_id !== userId
-  ) {
+  // 1. Gate D1 (regra única — ./gate.ts)
+  const gate = await carregarGateResponsavel(
+    tx,
+    params.clinicId,
+    userId,
+    params.userRole,
+  );
+  if (!gate.autorizado) {
     return {
       sucesso: false,
       statusHttp: 403,
@@ -78,7 +66,7 @@ export async function baixarBundleAcervo(
 
   // 2. Busca bundle sob RLS
   const rowsBundle = (await tx.execute(sql`
-    SELECT id, clinic_id, status, expira_em, token_hash, bytes_tamanho, sha256, criado_em
+    SELECT id, clinic_id, status, expira_em, token_hash, bytes_tamanho, sha256, solicitado_em
       FROM export_bundle
      WHERE id = ${bundleId}
   `)) as unknown as {
@@ -89,7 +77,7 @@ export async function baixarBundleAcervo(
     token_hash: string | null;
     bytes_tamanho: string | null;
     sha256: string | null;
-    criado_em: Date;
+    solicitado_em: Date;
   }[];
 
   if (!rowsBundle || rowsBundle.length === 0) {
@@ -166,7 +154,7 @@ export async function baixarBundleAcervo(
     )
   `);
 
-  const slug = clinica.nome
+  const slug = gate.clinicaNome
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

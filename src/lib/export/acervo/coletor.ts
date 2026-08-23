@@ -57,6 +57,17 @@ export const TABELAS_EXPORTADAS = [
 export type TabelaExportada = (typeof TABELAS_EXPORTADAS)[number];
 
 /**
+ * Tabelas que entram no acervo como ARQUIVO BINÁRIO, não como NDJSON.
+ *
+ * `report_pdf` é o PDF já congelado (D2, sem re-render e sem IA): vai para
+ * `relatorios/*.pdf` no ZIP, com SHA-256 no manifesto. Fica numa lista própria
+ * porque `TABELAS_EXPORTADAS` é o catálogo do que vira `dados/*.ndjson` — mas
+ * precisa estar catalogada em algum lugar, senão o teste de cobertura do
+ * `schema.ts` não distingue "exportada de outro jeito" de "esquecida".
+ */
+export const TABELAS_EXPORTADAS_BINARIAS = ["report_pdf"] as const;
+
+/**
  * Lista de negação explícita (D4) — tabelas que JAMAIS entram no acervo exportado.
  * Verificada por teste que varre o ZIP montado.
  */

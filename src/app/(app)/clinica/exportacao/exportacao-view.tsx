@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Banner } from "@/components/ui/banner";
 import type { ItemHistoricoExportacao } from "@/lib/export/acervo/motor";
-import { solicitarExportacaoAction } from "./actions";
+import { solicitarExportacaoAction, gerarLinkDownloadAction } from "./actions";
 
 export interface ExportacaoViewProps {
   initialAtivo: ItemHistoricoExportacao | null;
@@ -30,6 +30,8 @@ export function ExportacaoView({
   );
   const [pollingEsgotado, setPollingEsgotado] = React.useState(false);
   const [copiadoSha, setCopiadoSha] = React.useState<string | null>(null);
+  const [isGerandoLink, setIsGerandoLink] = React.useState(false);
+  const [erroDownload, setErroDownload] = React.useState<string | null>(null);
 
   const [agora, setAgora] = React.useState<number>(() => Date.now());
 
@@ -134,6 +136,28 @@ export function ExportacaoView({
       setIsSolicitando(false);
     }
   };
+
+  // O token de download não existe no estado do cliente: o job grava só o
+  // SHA-256 dele. O link é cunhado sob demanda pela Server Action, usado uma
+  // vez e revogado na próxima geração.
+  async function handleBaixar(bundleId: string) {
+    setErroDownload(null);
+    setIsGerandoLink(true);
+    try {
+      const res = await gerarLinkDownloadAction(bundleId);
+      if (!res.ok) {
+        setErroDownload(res.error);
+        return;
+      }
+      window.location.href = res.url;
+    } catch {
+      setErroDownload(
+        "Não foi possível preparar o download agora. Tente novamente.",
+      );
+    } finally {
+      setIsGerandoLink(false);
+    }
+  }
 
   const handleCopiarSha = (sha: string) => {
     navigator.clipboard.writeText(sha);
@@ -276,17 +300,30 @@ export function ExportacaoView({
 
             <div className="pt-2">
               <p className="mb-3 text-xs text-[var(--text-secondary)]">
-                Para baixar com segurança, utilize o botão abaixo. O link valida
-                sua credencial de responsável pela clínica {clinicNome}.
+                Para baixar com segurança, utilize o botão abaixo. Ele cunha um
+                link novo, válido para a sua sessão de responsável pela clínica{" "}
+                {clinicNome}, e revoga qualquer link gerado antes.
               </p>
-              <Button asChild variante="primaria" className="w-full sm:w-auto">
-                <a
-                  href={`/api/export/acervo/${bundleProntoMaisRecente.id}`}
-                  download
-                >
-                  Baixar Acervo (.zip)
-                </a>
+              <Button
+                type="button"
+                variante="primaria"
+                className="w-full sm:w-auto"
+                disabled={isGerandoLink}
+                aria-busy={isGerandoLink}
+                onClick={() => handleBaixar(bundleProntoMaisRecente.id)}
+              >
+                {isGerandoLink ? "Preparando link…" : "Baixar Acervo (.zip)"}
               </Button>
+              <p aria-live="polite" className="sr-only">
+                {isGerandoLink ? "Preparando o link de download." : ""}
+              </p>
+              {erroDownload && (
+                <div className="mt-3">
+                  <Banner variant="alerta" titulo="Download indisponível">
+                    {erroDownload}
+                  </Banner>
+                </div>
+              )}
             </div>
           </div>
         </Card>
