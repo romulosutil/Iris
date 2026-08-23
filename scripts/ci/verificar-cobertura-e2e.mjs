@@ -10,12 +10,19 @@
  * arquivos RLS pulados em silêncio (`verificar-cobertura-testes.mjs`).
  *
  * Reprova se:
- *   1. o total de testes executados (`stats.expected`) ficar abaixo do piso;
+ *   1. o total de testes executados (`stats.expected + stats.flaky`) ficar
+ *      abaixo do piso;
  *   2. o total de ARQUIVOS de spec (`suites[].file`, distintos) ficar abaixo
  *      do piso;
  *   3. houver qualquer teste pulado (`stats.skipped > 0`);
- *   4. houver qualquer teste não-esperado (`stats.unexpected > 0` — falha ou
- *      passou só no retry sem terminar "expected", incluindo timeout).
+ *   4. houver qualquer teste não-esperado (`stats.unexpected > 0` — falhou em
+ *      todas as tentativas, incluindo timeout).
+ *
+ * Por que a contagem soma `flaky`: o Playwright move o teste que falhou e
+ * passou no retry de `expected` para `flaky`. Contar só `expected` faz a
+ * cobertura "cair" (16 de 17) por causa de instabilidade, não de spec sumido —
+ * o gate reprovava com a mensagem errada ("cobertura caiu abaixo do esperado"),
+ * apontando para o defeito que não é. Flaky segue reportado no log.
  *
  * Uso:
  *   node scripts/ci/verificar-cobertura-e2e.mjs <relatorio.json> \
@@ -84,17 +91,20 @@ export function verificarCoberturaE2E(report, opts = {}) {
   const unexpected = stats.unexpected ?? 0;
   const flaky = stats.flaky ?? 0;
   const arquivos = new Set((report.suites ?? []).map((s) => s.file));
+  // `flaky` também rodou: falhou e passou no retry. Só `unexpected` não rodou
+  // com sucesso — e esse tem verificação própria abaixo.
+  const executados = expected + flaky;
 
   const problemas = [];
 
-  if (expected === 0) {
+  if (executados === 0) {
     problemas.push(
       "ZERO testes executados — testMatch/projects do playwright.config.ts provavelmente errado",
     );
   }
-  if (expected < minTests) {
+  if (executados < minTests) {
     problemas.push(
-      `${expected} teste(s) executado(s), piso é ${minTests} — cobertura caiu abaixo do esperado`,
+      `${executados} teste(s) executado(s), piso é ${minTests} — cobertura caiu abaixo do esperado`,
     );
   }
   if (arquivos.size < minFiles) {
@@ -114,7 +124,14 @@ export function verificarCoberturaE2E(report, opts = {}) {
   return {
     ok: problemas.length === 0,
     problemas,
-    stats: { arquivos: arquivos.size, expected, skipped, unexpected, flaky },
+    stats: {
+      arquivos: arquivos.size,
+      executados,
+      expected,
+      skipped,
+      unexpected,
+      flaky,
+    },
   };
 }
 
@@ -143,10 +160,11 @@ export function main() {
   }
 
   const resultado = verificarCoberturaE2E(report, { minTests, minFiles });
-  const { arquivos, expected, skipped, unexpected, flaky } = resultado.stats;
+  const { arquivos, executados, expected, skipped, unexpected, flaky } =
+    resultado.stats;
 
   console.log(
-    `[cobertura-e2e] arquivos=${arquivos} testes=${expected} pulado=${skipped} inesperado=${unexpected} flaky=${flaky}`,
+    `[cobertura-e2e] arquivos=${arquivos} testes=${executados} (estáveis=${expected} flaky=${flaky}) pulado=${skipped} inesperado=${unexpected}`,
   );
 
   if (!resultado.ok) {
