@@ -258,7 +258,8 @@ da issue #75**, e ele **bloqueia o piloto com dado real**.
 Scripts em `infra/backup/`: `backup.sh` (dump + globals + verificação + cópia
 MinIO + prune), `restore.sh` (aplica os globals e restaura um dump num alvo),
 `verify-restore.sh` (restaura o dump mais recente num banco descartável, no
-mesmo cluster, e valida).
+mesmo cluster, e valida), `verify-offsite.sh` (prova decifração e procedência)
+e `expurgo-offsite.sh` (automação e auditoria do expurgo de 30 dias no bucket off-site).
 
 ### CRÍTICO — o backup são DOIS arquivos, não um (`.dump` + `.globals.sql`)
 
@@ -353,11 +354,15 @@ A credencial do destino 3 é dedicada e **só escreve** (sem `DeleteObject`, sem
 Por isso **o `backup.sh` não poda o off-site**. A retenção lá é uma **regra de
 lifecycle do bucket**, do lado do provedor. Prune disparado pelo host confiaria
 no relógio e nas permissões do host — exatamente o que se assume perdido no
-cenário que o off-site cobre.
+cenário que o off-site cobre. Para auditar e garantir que a retenção está em
+conformidade (LGPD Art. 46), a rotina `expurgo-offsite.sh` verifica periodicamente
+a ausência de artefatos expirados (> 30d) e pode executar o expurgo ativo se fornecida
+credencial com permissão de exclusão.
 
 > ⚠️ Se o bucket off-site crescer sem limite, **a regra de lifecycle não foi
 > criada**. O `backup.sh` loga `prune off-site: NÃO executado pelo script (por
-design)` toda execução justamente para esse esquecimento não ficar silencioso.
+design)` toda execução justamente para esse esquecimento não ficar silencioso,
+e a rotina `expurgo-offsite.sh` sinaliza a não-conformidade com exit code != 0.
 
 #### Cadência do off-site — quanto se perde no pior dia
 

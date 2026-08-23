@@ -200,7 +200,7 @@ carga_backup() {
 	# Sintaxe de todos os scripts copiados, inclusive o scheduler — que NÃO pode
 	# ser executado aqui porque entra em laço infinito por desenho.
 	local script
-	for script in backup.sh restore.sh verify-restore.sh verify-offsite.sh scheduler.sh; do
+	for script in backup.sh restore.sh verify-restore.sh verify-offsite.sh expurgo-offsite.sh scheduler.sh; do
 		esperar_sucesso \
 			"backup: sintaxe de ${script} (existe na imagem e é bash válido)" \
 			-- docker run --rm "${TAG_BACKUP}" bash -n "/app/${script}"
@@ -235,6 +235,11 @@ carga_backup() {
 		"backup: carga de verify-offsite.sh" \
 		"OFFSITE_S3_ENDPOINT é obrigatório" \
 		-- docker run --rm "${TAG_BACKUP}" ./verify-offsite.sh
+
+	esperar_falha_com \
+		"backup: carga de expurgo-offsite.sh" \
+		"OFFSITE_S3_ENDPOINT é obrigatório" \
+		-- docker run --rm "${TAG_BACKUP}" ./expurgo-offsite.sh
 }
 
 # --- billing -----------------------------------------------------------------

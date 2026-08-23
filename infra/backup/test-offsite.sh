@@ -479,7 +479,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log "10/10 · verify-offsite.sh — a ferramenta que prova que a réplica é RESTAURÁVEL e de PROCEDÊNCIA CONHECIDA"
+log "10/11 · verify-offsite.sh — a ferramenta que prova que a réplica é RESTAURÁVEL e de PROCEDÊNCIA CONHECIDA"
 
 # O verify-offsite.sh é o que o operador roda contra o bucket de PRODUÇÃO, com a
 # chave privada que só existe fora do VPS. Ou seja: é mais uma coisa que só seria
@@ -755,6 +755,81 @@ if [[ "${EXIT_CARIMBO_MAL}" -eq 1 ]] && ! grep -q 'RÉPLICA OFF-SITE VERIFICADA'
 	ok "OFFSITE_MIN_CARIMBO malformado => exit 1 na validação (não vira comparação de string silenciosa)"
 else
 	fail "OFFSITE_MIN_CARIMBO malformado foi aceito (exit ${EXIT_CARIMBO_MAL}) — corte temporal passa a valer nada"
+fi
+
+# ---------------------------------------------------------------------------
+log "11/11 · expurgo-offsite.sh — automação e auditoria de expurgo off-site (> 30 dias)"
+
+# Semeia um objeto antigo no bucket off-site (carimbo de 2020)
+CMD="printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null
+echo 'mock content old dump' | age -r '${AGE_RECIPIENT}' > /tmp/iris-20200101T000000Z.dump.age
+echo 'mock content old globals' | age -r '${AGE_RECIPIENT}' > /tmp/iris-20200101T000000Z.globals.sql.age
+mc cp /tmp/iris-20200101T000000Z.dump.age off/${BUCKET_OFFSITE}/ >/dev/null
+mc cp /tmp/iris-20200101T000000Z.globals.sql.age off/${BUCKET_OFFSITE}/ >/dev/null
+echo antigo_semeado"
+no_container >/dev/null
+ok "objeto antigo (iris-20200101T000000Z) semeado no bucket"
+
+# a) expurgo em modo --dry-run detecta o objeto expirado e sai 1 sem deletar
+set +e
+"${COMPOSE[@]}" run --rm --no-deps -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	backup ./expurgo-offsite.sh --dry-run >/tmp/iris-expurgo-dry.log 2>&1
+EXIT_EXPURGO_DRY=$?
+set -e
+
+if [[ "${EXIT_EXPURGO_DRY}" -ne 0 ]] && grep -q 'AUDITORIA DE RETENÇÃO OFF-SITE' /tmp/iris-expurgo-dry.log; then
+	ok "expurgo-offsite.sh --dry-run detecta objetos expirados e sai != 0"
+else
+	fail "expurgo-offsite.sh --dry-run não detectou objeto expirado (exit ${EXIT_EXPURGO_DRY}) — log:"
+	tail -10 /tmp/iris-expurgo-dry.log
+fi
+
+# b) expurgo ativo expurga o objeto antigo e sai 0
+set +e
+"${COMPOSE[@]}" run --rm --no-deps -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+	backup ./expurgo-offsite.sh >/tmp/iris-expurgo-real.log 2>&1
+EXIT_EXPURGO_REAL=$?
+set -e
+
+if [[ "${EXIT_EXPURGO_REAL}" -eq 0 ]] && grep -q 'CONFORMIDADE LGPD ART. 46 VERIFICADA' /tmp/iris-expurgo-real.log; then
+	ok "expurgo-offsite.sh expurga objetos antigos e confirma conformidade (exit 0)"
+else
+	fail "expurgo-offsite.sh falhou no expurgo ativo (exit ${EXIT_EXPURGO_REAL}) — log:"
+	tail -10 /tmp/iris-expurgo-real.log
+fi
+
+# c) confirma que o objeto antigo sumiu do bucket e os objetos recentes continuam lá
+CMD="printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null
+n_antigo=\$(mc ls off/${BUCKET_OFFSITE}/ | grep -c '20200101' || true)
+n_recente=\$(mc ls off/${BUCKET_OFFSITE}/ | grep -c 'dump.age' || true)
+echo \"ASSERT_EXPURGADO:\${n_antigo}:\${n_recente}\""
+SAIDA_VERIF_EXPURGO="$("${COMPOSE[@]}" run --rm -T --no-deps backup bash -c "${CMD}" 2>&1)"
+
+if printf '%s' "${SAIDA_VERIF_EXPURGO}" | grep -q 'ASSERT_EXPURGADO:0:'; then
+	ok "objeto antigo foi efetivamente removido do bucket e o recente foi preservado"
+else
+	fail "objeto antigo não foi removido ou recente sumiu — saída: ${SAIDA_VERIF_EXPURGO}"
+fi
+
+# d) expurgo sem OFFSITE_S3_ENDPOINT falha com a mensagem de env obrigatória
+set +e
+"${COMPOSE[@]}" run --rm --no-deps -T \
+	backup ./expurgo-offsite.sh >/tmp/iris-expurgo-noenv.log 2>&1
+EXIT_EXPURGO_NOENV=$?
+set -e
+
+if [[ "${EXIT_EXPURGO_NOENV}" -ne 0 ]] && grep -q 'OFFSITE_S3_ENDPOINT é obrigatório' /tmp/iris-expurgo-noenv.log; then
+	ok "expurgo-offsite.sh sem OFFSITE_S3_ENDPOINT falha na validação de env"
+else
+	fail "expurgo-offsite.sh não validou a falta de OFFSITE_S3_ENDPOINT (exit ${EXIT_EXPURGO_NOENV})"
 fi
 
 # ---------------------------------------------------------------------------
