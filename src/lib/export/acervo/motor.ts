@@ -8,6 +8,7 @@
 import { randomBytes } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { authDb } from "@/db/client";
+import { codigoPg, constraintPg } from "@/db/pg-error";
 import { withTenant, type Tx } from "@/db/rls";
 import { sha256Hex } from "@/lib/report/hash";
 import { coletarAcervo } from "./coletor";
@@ -86,11 +87,18 @@ export async function solicitarExportacao(
           INSERT INTO export_bundle (id, clinic_id, solicitado_por, status)
           VALUES (${bundleId}, ${clinicId}, ${solicitanteId}, 'pendente')
         `);
-      } catch (err: any) {
-        // Trata erro de unique_violation (uq_export_bundle_ativo)
+      } catch (err: unknown) {
+        // Trata unique_violation de `uq_export_bundle_ativo`.
+        //
+        // Lido por `codigoPg`/`constraintPg` (`@/db/pg-error`), não pela raiz do
+        // erro: o Drizzle EMBRULHA a exceção do Postgres, e `err.code` fica
+        // `undefined` enquanto `err.message` é o SQL que emitimos — nunca a
+        // mensagem do banco. A leitura antiga não casava nenhum dos dois ramos,
+        // então a segunda solicitação vazava um `DrizzleQueryError` cru (500 na
+        // UI) em vez de "já existe exportação em andamento".
         if (
-          err?.code === "23505" ||
-          err?.message?.includes("uq_export_bundle_ativo")
+          codigoPg(err) === "23505" &&
+          constraintPg(err) === "uq_export_bundle_ativo"
         ) {
           throw new ExportacaoEmAndamentoError();
         }
@@ -125,7 +133,19 @@ export async function processarProximo(): Promise<{
   erro?: string;
   token?: string;
 }> {
-  // 1. Busca candidato elegível com lock
+  // 1. Busca candidato elegível.
+  //
+  // Sem `FOR UPDATE SKIP LOCKED`: no Postgres, `SELECT ... FOR UPDATE` exige
+  // privilégio de UPDATE na tabela, e `iris_auth` tem só `SELECT, INSERT` em
+  // `export_bundle` (0117) — por desenho, toda escrita passa pelas funções
+  // `SECURITY DEFINER`. Com o lock, este SELECT estourava `42501 permission
+  // denied for table export_bundle` e o job nunca processava nada.
+  //
+  // Nada se perde: o lock não protegia a janela entre candidato e reserva
+  // (cada `execute` do Drizzle é a sua própria transação, o lock morre com o
+  // statement — ver o comentário dentro de `app_export_bundle_reservar`). Quem
+  // serializa é o guard de status da própria reserva; dois workers podem
+  // escolher a mesma linha, mas só um a reserva, e o perdedor sai abaixo.
   const rows = (await authDb.execute(sql`
     SELECT id, clinic_id, solicitado_por, status, tentativas
       FROM export_bundle
@@ -133,7 +153,6 @@ export async function processarProximo(): Promise<{
         OR (status = 'processando' AND iniciado_em < now() - interval '15 minutes')
      ORDER BY solicitado_em ASC
      LIMIT 1
-       FOR UPDATE SKIP LOCKED
   `)) as unknown as {
     id: string;
     clinic_id: string;
@@ -159,7 +178,15 @@ export async function processarProximo(): Promise<{
     tentativas: number;
   }[];
 
-  const reservado = reservadoRows[0]!;
+  // Reserva vazia: o guard de status não encontrou a linha elegível — outro
+  // worker chegou primeiro, ou o bundle mudou de estado entre o SELECT e aqui.
+  // Não é erro; é a corrida sendo resolvida. Sem este `if`, o acesso a
+  // `reservadoRows[0]!.status` estoura `TypeError` no job.
+  const reservado = reservadoRows[0];
+  if (!reservado) {
+    return { processado: false };
+  }
+
   if (reservado.status === "falhou") {
     // Tentativas esgotadas
     await authDb.execute(sql`

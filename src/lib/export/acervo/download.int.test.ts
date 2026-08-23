@@ -1,14 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { hasDb } from "@tests/integration-env";
+import { fecharOwnerDb, ownerDb } from "@tests/owner-db";
 import { withTenant } from "@/db/rls";
 import { sha256Hex } from "@/lib/report/hash";
 import { baixarBundleAcervo } from "./download";
 import { gerarLinkDownload } from "./motor";
 
-const { authDb } = await import("@/db/client");
-
 describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
+  afterAll(fecharOwnerDb);
+
   it("valida todas as regras de segurança e autenticação do download", async () => {
     const clinicA = crypto.randomUUID();
     const clinicB = crypto.randomUUID();
@@ -21,25 +22,28 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
     const tokenHash = sha256Hex(Buffer.from(tokenValido));
     const zipBytes = Buffer.from("PK\x03\x04fake_zip_bytes");
 
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO app_user (id, name, email) VALUES
         (${donoA}, 'Dono A', ${`da_${donoA}@test.local`}),
         (${outroUserA}, 'Outro A', ${`oa_${outroUserA}@test.local`}),
         (${donoB}, 'Dono B', ${`db_${donoB}@test.local`});
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO clinic (id, nome, responsavel_conta_id) VALUES
         (${clinicA}, 'Clínica A', ${donoA}),
         (${clinicB}, 'Clínica B', ${donoB});
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO user_role (user_id, clinic_id, papel) VALUES
         (${donoA}, ${clinicA}, 'coordenador'),
         (${outroUserA}, ${clinicA}, 'coordenador'),
         (${donoB}, ${clinicB}, 'coordenador');
     `);
-    await authDb.execute(sql`
-      INSERT INTO export_bundle (id, clinic_id, solicitado_por, status, sha256, bytes_tamanho, token_hash, manifest, expira_em)
+    await ownerDb().execute(sql`
+      -- \`concluido_em\` não é decoração: \`export_bundle_pronto_congelado\` exige
+      -- sha256, bytes_tamanho, expira_em, token_hash E concluido_em quando o
+      -- status é 'pronto'. Sem ele o arranjo estoura antes de qualquer asserção.
+      INSERT INTO export_bundle (id, clinic_id, solicitado_por, status, sha256, bytes_tamanho, token_hash, manifest, concluido_em, expira_em)
       VALUES (
         ${bundleId},
         ${clinicA},
@@ -49,10 +53,11 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         ${zipBytes.length},
         ${tokenHash},
         '{"escopo":"integral"}'::jsonb,
+        now(),
         now() + interval '72 hours'
       );
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO export_bundle_blob (bundle_id, bytes) VALUES (${bundleId}, ${zipBytes}::bytea);
     `);
 
@@ -76,7 +81,7 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
       }
 
       // Verifica audit_log
-      const audit = (await authDb.execute(sql`
+      const audit = (await ownerDb().execute(sql`
         SELECT acao, ator_id FROM audit_log WHERE entidade_id = ${bundleId} AND acao = 'exportacao_integral_download'
       `)) as unknown as { acao: string; ator_id: string }[];
       expect(audit.length).toBe(1);
@@ -134,7 +139,7 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
       }
 
       // 5. Bundle expirado -> 410
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         UPDATE export_bundle SET expira_em = now() - interval '1 hour' WHERE id = ${bundleId}
       `);
 
@@ -154,20 +159,20 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         expect(resExpirado.statusHttp).toBe(410);
       }
     } finally {
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM audit_log WHERE clinic_id IN (${clinicA}, ${clinicB});
       `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM export_bundle WHERE clinic_id IN (${clinicA}, ${clinicB});
       `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM user_role WHERE clinic_id IN (${clinicA}, ${clinicB});
       `);
-      await authDb.execute(sql`
-        DELETE FROM app_user WHERE id IN (${donoA}, ${outroUserA}, ${donoB});
-      `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM clinic WHERE id IN (${clinicA}, ${clinicB});
+      `);
+      await ownerDb().execute(sql`
+        DELETE FROM app_user WHERE id IN (${donoA}, ${outroUserA}, ${donoB});
       `);
     }
   });
@@ -186,28 +191,28 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
       Buffer.from("bytes_do_zip"),
     ]);
 
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO app_user (id, name, email) VALUES
         (${dono}, 'Dono', ${`d_${dono}@test.local`}),
         (${outro}, 'Outro', ${`o_${outro}@test.local`});
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO clinic (id, nome, responsavel_conta_id)
         VALUES (${clinicId}, 'Clínica Link', ${dono});
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO user_role (user_id, clinic_id, papel) VALUES
         (${dono}, ${clinicId}, 'coordenador'),
         (${outro}, ${clinicId}, 'coordenador');
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO export_bundle (id, clinic_id, solicitado_por, status, sha256,
                                  bytes_tamanho, token_hash, manifest, concluido_em, expira_em)
       VALUES (${bundleId}, ${clinicId}, ${dono}, 'pronto', ${sha256Hex(zipBytes)},
               ${zipBytes.length}, ${sha256Hex(Buffer.from("token_antigo"))},
               '{"escopo":"integral"}'::jsonb, now(), now() + interval '72 hours');
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO export_bundle_blob (bundle_id, bytes)
         VALUES (${bundleId}, ${zipBytes}::bytea);
     `);
@@ -269,20 +274,20 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         gerarLinkDownload(clinicId, outro, "coordenador", bundleId),
       ).rejects.toThrow(/respons/i);
     } finally {
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM audit_log WHERE clinic_id = ${clinicId};
       `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM export_bundle WHERE clinic_id = ${clinicId};
       `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM user_role WHERE clinic_id = ${clinicId};
       `);
-      await authDb.execute(sql`
-        DELETE FROM app_user WHERE id IN (${dono}, ${outro});
-      `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM clinic WHERE id = ${clinicId};
+      `);
+      await ownerDb().execute(sql`
+        DELETE FROM app_user WHERE id IN (${dono}, ${outro});
       `);
     }
   });

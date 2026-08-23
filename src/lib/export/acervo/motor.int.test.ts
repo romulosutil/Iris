@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { hasDb } from "@tests/integration-env";
+import { fecharOwnerDb, ownerDb } from "@tests/owner-db";
 import {
   solicitarExportacao,
   processarProximo,
@@ -10,28 +11,28 @@ import {
   ExportacaoEmAndamentoError,
 } from "./motor";
 
-const { authDb } = await import("@/db/client");
-
 describe.skipIf(!hasDb)("Motor de Estado da Exportação (Task T4)", () => {
+  afterAll(fecharOwnerDb);
+
   it("ciclo completo: solicita, processa em background, conclui com token e audita", async () => {
     const clinicId = crypto.randomUUID();
     const donoId = crypto.randomUUID();
     const outroUser = crypto.randomUUID();
 
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO app_user (id, name, email) VALUES
         (${donoId}, 'Dono Conta', ${`d_${donoId}@test.local`}),
         (${outroUser}, 'Outro Coordenador', ${`o_${outroUser}@test.local`});
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO clinic (id, nome, responsavel_conta_id) VALUES (${clinicId}, 'Clínica Motor Test', ${donoId});
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO user_role (user_id, clinic_id, papel) VALUES
         (${donoId}, ${clinicId}, 'coordenador'),
         (${outroUser}, ${clinicId}, 'coordenador');
     `);
-    await authDb.execute(sql`
+    await ownerDb().execute(sql`
       INSERT INTO patient (id, clinic_id, nome) VALUES (${crypto.randomUUID()}, ${clinicId}, 'Paciente 1');
     `);
 
@@ -63,7 +64,7 @@ describe.skipIf(!hasDb)("Motor de Estado da Exportação (Task T4)", () => {
       expect(procResult.token).toBeDefined();
 
       // Verifica no banco se o bundle está pronto com blob
-      const rows = (await authDb.execute(sql`
+      const rows = (await ownerDb().execute(sql`
         SELECT b.status, b.sha256, b.bytes_tamanho, b.expira_em, length(blob.bytes) as blob_len
           FROM export_bundle b
           JOIN export_bundle_blob blob ON blob.bundle_id = b.id
@@ -87,7 +88,7 @@ describe.skipIf(!hasDb)("Motor de Estado da Exportação (Task T4)", () => {
       expect(hist.historico[0]!.podeBaixar).toBe(true);
 
       // 5. Simula expiração: ajusta expira_em para o passado e roda expirarVencidos
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         UPDATE export_bundle SET expira_em = now() - interval '1 hour' WHERE id = ${bundleId}
       `);
 
@@ -95,7 +96,7 @@ describe.skipIf(!hasDb)("Motor de Estado da Exportação (Task T4)", () => {
       expect(expResult.expirados).toBe(1);
 
       // Verifica que o blob foi descartado mas a linha continua como 'expirado'
-      const rowsPosExp = (await authDb.execute(sql`
+      const rowsPosExp = (await ownerDb().execute(sql`
         SELECT b.status, (SELECT count(*) FROM export_bundle_blob WHERE bundle_id = b.id) as blob_count
           FROM export_bundle b
          WHERE b.id = ${bundleId}
@@ -104,7 +105,7 @@ describe.skipIf(!hasDb)("Motor de Estado da Exportação (Task T4)", () => {
       expect(Number(rowsPosExp[0]!.blob_count)).toBe(0);
 
       // Verifica auditoria completa
-      const auditRows = (await authDb.execute(sql`
+      const auditRows = (await ownerDb().execute(sql`
         SELECT acao FROM audit_log WHERE entidade_id = ${bundleId} ORDER BY criado_em ASC
       `)) as unknown as { acao: string }[];
       const acoes = auditRows.map((a) => a.acao);
@@ -112,23 +113,23 @@ describe.skipIf(!hasDb)("Motor de Estado da Exportação (Task T4)", () => {
       expect(acoes).toContain("exportacao_integral_concluida");
       expect(acoes).toContain("exportacao_integral_expirada");
     } finally {
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM audit_log WHERE clinic_id = ${clinicId};
       `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM export_bundle WHERE clinic_id = ${clinicId};
       `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM patient WHERE clinic_id = ${clinicId};
       `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM user_role WHERE clinic_id = ${clinicId};
       `);
-      await authDb.execute(sql`
-        DELETE FROM app_user WHERE id IN (${donoId}, ${outroUser});
-      `);
-      await authDb.execute(sql`
+      await ownerDb().execute(sql`
         DELETE FROM clinic WHERE id = ${clinicId};
+      `);
+      await ownerDb().execute(sql`
+        DELETE FROM app_user WHERE id IN (${donoId}, ${outroUser});
       `);
     }
   });

@@ -157,11 +157,13 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
     total: rowsAppUser.length,
   });
 
-  // 3. user_role
+  // 3. user_role — a coluna do papel é `papel`, não `role` (ver `schema.ts`).
+  // Com o nome errado a coleta estourava `column "role" does not exist` e
+  // derrubava a exportação inteira, para qualquer clínica.
   const rowsUserRole = (await tx.execute(sql`
-    SELECT user_id, clinic_id, role
+    SELECT user_id, clinic_id, papel
       FROM user_role
-     ORDER BY user_id, clinic_id, role
+     ORDER BY user_id, clinic_id, papel
   `)) as unknown as Record<string, unknown>[];
   contagens.user_role = rowsUserRole.length;
   tabelas.push({
