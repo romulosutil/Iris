@@ -188,9 +188,15 @@ fi
 # `mc find --older-than` é o MESMO predicado de `mc rm --older-than`. Auditar e
 # expurgar com a mesma flag é o que garante que o conjunto relatado é o conjunto
 # que a exclusão alcança.
+#
+# `--ignore "tombstones-*"` exclui o ledger de tombstones LGPD (issue #89) do
+# expurgo por idade. O ledger é gravado com esse prefixo de propósito — ver
+# infra/backup/backup.sh, TOMBSTONES_NAME — justamente para sobreviver além dos
+# RETENTION_DAYS do dump. Sem esta exclusão, um `--expurgar` apaga o ledger
+# junto do dump e o restore.sh perde a fonte de reaplicação dos expurgos.
 listar_expirados() {
 	MC_REGION="${OFFSITE_REGION}" mc find "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" \
-		--older-than "${IDADE_LIMITE}" 2>&1
+		--older-than "${IDADE_LIMITE}" --ignore "tombstones-*" 2>&1
 }
 
 if ! expirados_antes="$(listar_expirados)"; then
@@ -211,10 +217,16 @@ if [[ "${NUM_ANTES}" -gt 0 ]]; then
 fi
 
 # --- expurgo ativo (somente sob --expurgar) -----------------------------------
+# `mc rm` NÃO tem flag de exclusão por nome (nem --exclude, nem --ignore — só
+# `mc find` tem). Por isso o expurgo não roda `mc rm --older-than` direto na
+# raiz: alimenta `mc rm --stdin` com a MESMA lista já filtrada por
+# `listar_expirados` (que exclui tombstones-* via `mc find --ignore`), objeto a
+# objeto. Garante que o conjunto apagado é exatamente o conjunto relatado —
+# sem o ledger, mesmo sem o `rm` entender glob de exclusão.
 if [[ "${EXPURGAR}" -eq 1 && "${NUM_ANTES}" -gt 0 ]]; then
-	log_info "executando expurgo ativo (mc rm --older-than ${IDADE_LIMITE})..."
-	if ! saida_rm="$(MC_REGION="${OFFSITE_REGION}" mc rm --recursive --force \
-		--older-than "${IDADE_LIMITE}" "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
+	log_info "executando expurgo ativo (${NUM_ANTES} objeto(s), ledger tombstones-* excluído)..."
+	if ! saida_rm="$(printf '%s\n' "${expirados_antes}" \
+		| MC_REGION="${OFFSITE_REGION}" mc rm --force --stdin 2>&1)"; then
 		log_error "mc rm falhou — a credencial provavelmente não tem DeleteObject (o que é o desenho padrão do destino off-site). Resposta: $(redigir "${saida_rm}")"
 	fi
 fi
