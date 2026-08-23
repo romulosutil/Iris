@@ -97,6 +97,40 @@
 | **D55** | **Prontuário multidisciplinar não restringe visibilidade por disciplina — `visibility_level` (`Multidisciplinary`/`Restricted_To_Discipline`), especificado por `docs/legal/aditivo-especificacoes-legais.md` §2.1 (advogado Thiago Lyra Galvão), não existe em `src/db/schema.ts` (conferido por grep em 21/08/2026).** Hoje qualquer nota de evolução registrada por um profissional é visível a todos os profissionais vinculados ao caso, independentemente da disciplina. | Viola o Art. 9º do Código de Ética Profissional do Psicólogo e o Art. 1º §2º da Res. CFP 001/2009 — o psicólogo deve manter acesso restrito a informação confidencial da dinâmica familiar em equipe multidisciplinar. Tratar como bloqueador de piloto com equipe ABA+Fono+TO+Psicologia, não como débito genérico: até existir o campo, orientar psicólogos a não registrar no Iris informação que dependeria dessa restrição. | `src/db/schema.ts` (tabela de evidência/notas de evolução — campo ausente) · `docs/legal/aditivo-especificacoes-legais.md` §2.1 e §4 · `docs/legal/revisao-juridica-2026-08-21.md` achado 2 |
 | **D56** | **Declaração de cadastro ativo no e-Psi (`e_psi_verified`, `e_psi_number`), especificada por `docs/legal/aditivo-especificacoes-legais.md` §1.3 para telepsicologia (Res. CFP 009/2024), não existe em `CareTeamMembership`/`User` (conferido por grep em 21/08/2026).** | Sem o campo declaratório, o produto não tem o respaldo preventivo que o próprio advogado do projeto especificou para auditoria de fiscalização do CRP em atendimento mediado por TIC. | `src/db/schema.ts` (`CareTeamMembership`/`User` — campos ausentes) · `docs/legal/aditivo-especificacoes-legais.md` §1.3 e §4 |
 | **D57** | **Provedor de IA de extração definido em 21/08/2026 (Gemini, Google) — `EXTRACTION_LLM_ENABLED` deve continuar `false` até confirmar (a) billing pago ativo na conta da `GOOGLE_API_KEY` em uso, (b) que o Gemini API standalone está no escopo do Cloud Data Processing Addendum do Google (verificar `cloud.google.com/security/compliance/services-in-scope`), e (c) que as cláusulas-padrão do Google satisfazem o Art. 33 LGPD tanto quanto satisfazem o GDPR.** | Tier gratuito do Gemini API usa o conteúdo enviado para treinar modelos do Google e retém indefinidamente, sem DPA — inaceitável para dado de saúde de menor. O DPA é incorporado automaticamente ao ativar billing pago, mas nada disso foi confirmado ainda para a chave em uso. | `.env.example` (`GOOGLE_API_KEY`, `EXTRACTION_LLM_ENABLED`) · `docs/legal/politica-privacidade.md` §4 · `docs/legal/revisao-juridica-2026-08-21.md` |
+| **D58** | **O ruleset `Main Protection` exige como check obrigatório `journal` e `versoes-legais`, que só existem enquanto `migrations-integrity.yml` e `legal-versions-integrity.yml` existirem (PR #423 apaga os dois).** Enquanto os nomes ficarem na lista de `required_status_checks`, todo PR aberto depois do merge do #423 fica `BLOCKED` para sempre — o check nunca reporta, não há como "reprovar", só esperar. Medido em 23/08/2026: `gh api repos/romulosutil/Iris/rules/branches/main` lista `required_status_checks` com os 7 contextos, e o PR #423 já está `BLOCKED` hoje exatamente por isso (o rollup dele não tem `journal` nem `versoes-legais`, porque ele mesmo deletou os workflows). A cobertura não se perde: `migrations.test.ts` e `legal.test.ts` rodam dentro do job `test` (confirmado com `vitest list`, projeto `[unit]`). | Ação de admin, fora do diff: editar o ruleset removendo os dois contextos ANTES de mergear o #423 e, depois de mergear o #425, acrescentar `test-e2e` (e `build`) à lista. | `gh api repos/romulosutil/Iris/rulesets/18772511` · `.github/workflows/ci.yml` |
+
+---
+
+## 🏁 Sessão 23/08/2026 — revisão tech lead dos PRs #423 e #425: o CI que rodava duas vezes, a suíte que nunca rodava, e o check obrigatório que vira armadilha
+
+- **Status:** #425 verde em CI real e pronto para revisão; #423 verde mas `BLOCKED` por ruleset (ação de admin pendente, D58).
+
+### O que a revisão mediu
+
+**PR #425 (#424 — recria `seed:demo`, liga `e2e/` no CI).** Chegou vermelho em dois checks, e os dois eram defeito real, não flake:
+
+1. `test-e2e` morria em `pnpm seed:e2e` com `node: .env: not found`. Os scripts de seed usam `tsx --env-file=.env`, e o runner passa as variáveis pelo bloco `env:` do job, sem arquivo. Corrigido com `--env-file-if-exists=.env` nos dois seeds novos (fluxo local, que tem `.env`, não muda). Os outros seeds continuam com `--env-file` porque nenhum deles roda headless.
+2. `test` reprovava em `scripts/lib/guardrail-seed-wiring.test.ts` — e reprovava **com razão**: o guardrail D52 exige que todo script de seed declarado no `package.json` esteja na lista coberta pelo teste de fiação, porque `seed-demo.ts` e `seed-e2e.ts` fazem `TRUNCATE` e gravam senha padrão. Os dois já chamavam `assertSeedAllowed()` antes de abrir conexão; faltava entrar na lista. O guardrail pegou exatamente o que foi escrito para pegar.
+
+**Achado próprio da revisão:** `scripts/ci/verificar-cobertura-e2e.mjs` nasceu **sem teste**, ao contrário do irmão `verificar-cobertura-testes.mjs` (que tem `.test.mjs`). Gate de cobertura sem teste é o próprio verde falso que ele existe para impedir — um `parseArgs` que engolisse `--min-tests` inválido desligaria o piso em silêncio. Escrito `scripts/ci/verificar-cobertura-e2e.test.mjs` com 11 casos (piso, zero testes, arquivo sumido, skip, unexpected, relatório truncado, pisos ausentes/inválidos/desconhecidos).
+
+**Cobertura de servidor que o redesenho do teste parecia derrubar — não derrubou.** O spec `Resiliência de Formulário` provava, via `novalidate`, que `validarCadastro` (servidor) recusa senha curta mesmo com cliente scriptado. O wizard de 2 passos tornou esse caminho inalcançável pelo navegador e o teste foi redesenhado para o gate client-side. Verificado que a rede de segurança do servidor **continua coberta** em `src/app/(auth)/cadastro/logic.test.ts:109` (`exige senha de no mínimo 12 caracteres`) — a cobertura mudou de camada, não sumiu.
+
+### Verde medido (CI real, não local)
+
+`test-e2e` do run `32617527004`: `[cobertura-e2e] arquivos=10 testes=17 pulado=0 inesperado=0 flaky=0`. Suíte inteira em 2m25s, `17 passed (49.8s)`. `test`, `test-rls`, `lint`, `typecheck`, `build`, CodeQL e `jules/review` (verdict: approve) verdes.
+
+### PR #423 (remove 3 workflows redundantes) — o diff está certo, o bloqueio é de configuração
+
+Confirmado com `pnpm exec vitest list` que `src/db/migrations.test.ts`, `src/lib/legal.test.ts` e `src/lib/security/guardrail-preview-layout.test.ts` são coletados pelo projeto `[unit]`, ou seja, o job `test` do `ci.yml` já os roda — a remoção não abre buraco de cobertura.
+
+O que a remoção abre é outra coisa, e é grave: o ruleset `Main Protection` exige `journal` e `versoes-legais` como **checks obrigatórios**, e esses dois nomes vêm justamente dos workflows deletados. Check obrigatório que nunca reporta não reprova — deixa o PR `BLOCKED` para sempre. O #423 já está assim hoje. Registrado como **D58**; é ação de admin no ruleset, fora de qualquer diff.
+
+### O que fica aberto
+
+- **D58** (ruleset) — precisa da mão do Rômulo (ou de permissão de `gh api -X PUT` nesta sessão) antes de mergear o #423.
+- `retries: 2` continua valendo no CI e o gate só **loga** `flaky`, não reprova. Medido hoje: `flaky=0`. Se aparecer flaky recorrente, o gate ganha `--max-flaky=0`; não vale antecipar sem um caso real.
+- `registro_numero` passou a ser gravado **mascarado** (`99/8877`), porque `formatarNumeroRegistro` formata antes do submit. O teste agora afirma o valor real do produto; se a intenção era guardar dígitos puros, é decisão de produto a abrir como issue própria — não foi tratada aqui.
 
 ---
 
