@@ -37,6 +37,39 @@ ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=${NEXT_PUBLIC_CLARITY_PROJECT_ID}
 ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 RUN pnpm build
+# Repara o trace do standalone para `@swc/helpers`.
+# A 0.5.23 (dependência de next 16.3.1; a 16.2.11 trazia 0.5.15) passou a
+# declarar a condição `module-sync` no `exports`, apontando para `./esm/*.js`.
+# O tracing do Next (@vercel/nft) resolve com `require`/`default` e copia SÓ
+# `cjs/*.cjs`; o Node >= 22.10 em runtime honra `module-sync` antes de
+# `default` e procura `esm/_interop_require_default.js`, ausente da imagem:
+#
+#   Error: Cannot find module '/app/node_modules/.pnpm/next@16.3.1_.../
+#           node_modules/@swc/helpers/esm/_interop_require_default.js'
+#
+# O diretório do pacote existe (meio-copiado), então o build passa verde: quem
+# morre é o `node server.js` no boot, já em produção.
+# Recopiamos o pacote inteiro por cima do traçado, resolvendo cada destino pelo
+# MESMO caminho relativo na origem — a árvore tem 0.5.15 e 0.5.23 e um glob de
+# versão misturaria as duas. `-L` desreferencia os symlinks do pnpm; a cópia é
+# aditiva (mesma versão, mesmos arquivos), só preenche o `esm/` que faltava.
+# Fail-closed: sem nenhum destino casado, ou sem o arquivo que faltava ao final,
+# o build aborta em vez de gerar outra imagem que só quebra no runtime.
+RUN set -eu; \
+    cd /app/.next/standalone; \
+    found=0; \
+    for dest in node_modules/@swc/helpers node_modules/.pnpm/*/node_modules/@swc/helpers; do \
+      [ -d "$dest" ] || continue; \
+      src="/app/$dest"; \
+      [ -e "$src" ] || { echo "ERRO: origem ausente para $dest" >&2; exit 1; }; \
+      cp -rLf "$src/." "$dest/"; \
+      found=$((found + 1)); \
+    done; \
+    [ "$found" -gt 0 ] || { echo "ERRO: @swc/helpers ausente do standalone" >&2; exit 1; }; \
+    for f in node_modules/.pnpm/next@*/node_modules/@swc/helpers/esm/_interop_require_default.js; do \
+      [ -f "$f" ] || { echo "ERRO: esm/ nao reparado: $f" >&2; exit 1; }; \
+    done; \
+    echo "@swc/helpers reparado em $found local(is) do standalone"
 # pnpm exec (não npx): esbuild agora é devDependency pinada — npx baixava
 # esbuild@latest do registry em build time e quebrou no musl (bin nativo em
 # optionalDependency não instalado → "esbuild: not found", exit 127).
