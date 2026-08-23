@@ -189,14 +189,14 @@ fi
 # expurgar com a mesma flag é o que garante que o conjunto relatado é o conjunto
 # que a exclusão alcança.
 #
-# `--exclude "tombstones-*"` exclui o ledger de tombstones LGPD (issue #89) do
+# `--ignore "tombstones-*"` exclui o ledger de tombstones LGPD (issue #89) do
 # expurgo por idade. O ledger é gravado com esse prefixo de propósito — ver
 # infra/backup/backup.sh, TOMBSTONES_NAME — justamente para sobreviver além dos
 # RETENTION_DAYS do dump. Sem esta exclusão, um `--expurgar` apaga o ledger
 # junto do dump e o restore.sh perde a fonte de reaplicação dos expurgos.
 listar_expirados() {
 	MC_REGION="${OFFSITE_REGION}" mc find "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" \
-		--older-than "${IDADE_LIMITE}" --exclude "tombstones-*" 2>&1
+		--older-than "${IDADE_LIMITE}" --ignore "tombstones-*" 2>&1
 }
 
 if ! expirados_antes="$(listar_expirados)"; then
@@ -220,7 +220,7 @@ fi
 if [[ "${EXPURGAR}" -eq 1 && "${NUM_ANTES}" -gt 0 ]]; then
 	log_info "executando expurgo ativo (mc rm --older-than ${IDADE_LIMITE}, ledger tombstones-* excluído)..."
 	if ! saida_rm="$(MC_REGION="${OFFSITE_REGION}" mc rm --recursive --force \
-		--older-than "${IDADE_LIMITE}" --exclude "tombstones-*" "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
+		--older-than "${IDADE_LIMITE}" --ignore "tombstones-*" "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
 		log_error "mc rm falhou — a credencial provavelmente não tem DeleteObject (o que é o desenho padrão do destino off-site). Resposta: $(redigir "${saida_rm}")"
 	fi
 fi
