@@ -200,7 +200,7 @@ carga_backup() {
 	# Sintaxe de todos os scripts copiados, inclusive o scheduler — que NÃO pode
 	# ser executado aqui porque entra em laço infinito por desenho.
 	local script
-	for script in backup.sh restore.sh verify-restore.sh verify-offsite.sh scheduler.sh; do
+	for script in backup.sh restore.sh verify-restore.sh verify-offsite.sh expurgo-offsite.sh scheduler.sh; do
 		esperar_sucesso \
 			"backup: sintaxe de ${script} (existe na imagem e é bash válido)" \
 			-- docker run --rm "${TAG_BACKUP}" bash -n "/app/${script}"
@@ -235,6 +235,143 @@ carga_backup() {
 		"backup: carga de verify-offsite.sh" \
 		"OFFSITE_S3_ENDPOINT é obrigatório" \
 		-- docker run --rm "${TAG_BACKUP}" ./verify-offsite.sh
+
+	esperar_falha_com \
+		"backup: carga de expurgo-offsite.sh" \
+		"OFFSITE_S3_ENDPOINT é obrigatório" \
+		-- docker run --rm "${TAG_BACKUP}" ./expurgo-offsite.sh
+
+	# Flag desconhecida rejeitada: `--expurgue` (typo) aceito como no-op faria o
+	# operador acreditar que expurgou o bucket.
+	esperar_falha_com \
+		"backup: expurgo-offsite.sh rejeita flag desconhecida" \
+		"argumento não reconhecido" \
+		-- docker run --rm "${TAG_BACKUP}" ./expurgo-offsite.sh --expurgue
+
+	comportamento_expurgo_offsite
+}
+
+# --- comportamento do expurgo-offsite.sh contra um bucket S3 de verdade -------
+# POR QUE ISTO ESTÁ AQUI e não só no test-offsite.sh: aquele script sobe
+# Postgres + MinIO pelo compose, gera par de chaves age e roda o backup inteiro
+# — não roda em CI, e por isso o defeito de semântica do expurgo (auditar por
+# carimbo de NOME enquanto o `mc rm` apaga por MTIME) atravessou 14 checks
+# verdes. Estas asserções não precisam de Postgres nem de age: precisam de um
+# bucket e de objetos. São baratas o bastante para rodar a cada PR, e são as
+# únicas que provam COMPORTAMENTO (o resto deste arquivo prova carga).
+readonly EXPURGO_CI_REDE="iris-expurgo-ci-net"
+readonly EXPURGO_CI_MINIO="iris-expurgo-ci-minio"
+
+# Globais, não `local`: o trap RETURN roda DEPOIS de o bash destruir os locais
+# da função, e com `set -u` um cleanup que lê variável destruída morre com
+# "unbound variable" — deixando de pé exatamente o container que ele existe para
+# derrubar.
+derrubar_minio_ci() {
+	docker rm -f "${EXPURGO_CI_MINIO}" >/dev/null 2>&1 || true
+	docker network rm "${EXPURGO_CI_REDE}" >/dev/null 2>&1 || true
+}
+
+comportamento_expurgo_offsite() {
+	local rede="${EXPURGO_CI_REDE}"
+	local minio="${EXPURGO_CI_MINIO}"
+	local bucket="iris-backups-offsite-ci"
+	local endpoint="http://${minio}:9000"
+
+	derrubar_minio_ci
+	trap derrubar_minio_ci RETURN
+
+	docker network create "${rede}" >/dev/null
+	docker run -d --name "${minio}" --network "${rede}" \
+		-e MINIO_ROOT_USER=iris -e MINIO_ROOT_PASSWORD=iris123456 \
+		minio/minio:latest server /data >/dev/null
+
+	# `mc ready` espera o servidor aceitar requisição — dormir N segundos fixos é
+	# a receita de flake no runner lento.
+	if ! docker run --rm --network "${rede}" -e MC_CONFIG_DIR=/tmp/mc "${TAG_BACKUP}" \
+		bash -c "printf 'iris\niris123456\n' | mc alias set ci ${endpoint} --api S3v4 >/dev/null && mc ready ci" >/dev/null 2>&1; then
+		log_error "expurgo-offsite: MinIO de teste não ficou pronto — não dá para afirmar nada sobre o comportamento do expurgo."
+		FALHAS=$((FALHAS + 1))
+		return
+	fi
+
+	# Semeia dois objetos. O NOME carrega carimbo de 2020 de propósito: o mtime
+	# deles é agora, e é o mtime que vale.
+	docker run --rm --network "${rede}" -e MC_CONFIG_DIR=/tmp/mc "${TAG_BACKUP}" bash -c "
+		set -e
+		printf 'iris\niris123456\n' | mc alias set ci ${endpoint} --api S3v4 >/dev/null
+		mc mb --ignore-existing ci/${bucket} >/dev/null
+		echo conteudo-cifrado-falso > /tmp/iris-20200101T000000Z.dump.age
+		echo conteudo-cifrado-falso > /tmp/iris-20200101T000000Z.globals.sql.age
+		mc cp /tmp/iris-20200101T000000Z.dump.age ci/${bucket}/ >/dev/null
+		mc cp /tmp/iris-20200101T000000Z.globals.sql.age ci/${bucket}/ >/dev/null
+	" >/dev/null
+
+	# Roda o expurgo-offsite.sh contra esse MinIO.
+	local -a EXPURGO=(
+		docker run --rm --network "${rede}"
+		-e OFFSITE_S3_ENDPOINT="${endpoint}"
+		-e OFFSITE_S3_ACCESS_KEY=iris
+		-e OFFSITE_S3_SECRET_KEY=iris123456
+		-e OFFSITE_S3_BUCKET="${bucket}"
+	)
+
+	contar_objetos_ci() {
+		docker run --rm --network "${rede}" -e MC_CONFIG_DIR=/tmp/mc "${TAG_BACKUP}" bash -c "
+			printf 'iris\niris123456\n' | mc alias set ci ${endpoint} --api S3v4 >/dev/null
+			mc ls ci/${bucket}/ | grep -c '\.age' || true
+		" 2>/dev/null | tr -d '\r' | tail -1
+	}
+
+	local n_antes
+	n_antes="$(contar_objetos_ci)"
+
+	# 1. Idade é MTIME, não o carimbo do nome. Com retenção de 30d nada está
+	#    vencido, apesar de os dois nomes dizerem 2020. Se esta sair != 0, o
+	#    script voltou a parsear nome e a auditoria acusa o que o `mc rm` não
+	#    alcança — o defeito original.
+	esperar_sucesso \
+		"expurgo-offsite: nome de 2020 com mtime de agora NÃO conta como vencido (mede mtime)" \
+		-- "${EXPURGO[@]}" -e RETENTION_DAYS=30 "${TAG_BACKUP}" ./expurgo-offsite.sh --check-only
+
+	# 2. Modo PADRÃO acusa não-conformidade...
+	esperar_falha_com \
+		"expurgo-offsite: modo padrão acusa retenção vencida (RETENTION_DAYS=0)" \
+		"RETENÇÃO OFF-SITE NÃO CONFORME" \
+		-- "${EXPURGO[@]}" -e RETENTION_DAYS=0 "${TAG_BACKUP}" ./expurgo-offsite.sh
+
+	# 3. ...e NÃO apaga. Esta é a asserção que segura a propriedade de segurança:
+	#    se o padrão voltar a apagar, a credencial do off-site precisaria de
+	#    DeleteObject e um VPS comprometido passaria a poder apagar o backup.
+	local n_pos_auditoria
+	n_pos_auditoria="$(contar_objetos_ci)"
+	if [[ "${n_pos_auditoria}" == "${n_antes}" && "${n_antes}" -gt 0 ]]; then
+		log_ok "expurgo-offsite: modo padrão não apagou nada (${n_antes} objetos antes e depois)"
+	else
+		log_error "expurgo-offsite: modo padrão APAGOU objetos (antes=${n_antes}, depois=${n_pos_auditoria}). O padrão deixou de ser auditoria — a credencial off-site precisaria de DeleteObject."
+		FALHAS=$((FALHAS + 1))
+	fi
+
+	# 4. `--expurgar` apaga de verdade e a auditoria final passa.
+	esperar_sucesso \
+		"expurgo-offsite: --expurgar remove os vencidos e sai 0" \
+		-- "${EXPURGO[@]}" -e RETENTION_DAYS=0 "${TAG_BACKUP}" ./expurgo-offsite.sh --expurgar
+
+	local n_pos_expurgo
+	n_pos_expurgo="$(contar_objetos_ci)"
+	if [[ "${n_pos_expurgo}" -eq 0 ]]; then
+		log_ok "expurgo-offsite: objetos vencidos efetivamente removidos (${n_antes} -> 0)"
+	else
+		log_error "expurgo-offsite: --expurgar saiu 0 mas ${n_pos_expurgo} objeto(s) continuam no bucket — 'expurgo concluído' sem expurgo."
+		FALHAS=$((FALHAS + 1))
+	fi
+
+	# 5. Bucket vazio (estado deixado pelo passo 4) NÃO é conformidade. Sem esta
+	#    guarda, endpoint errado ou credencial sem ListObjects carimbariam
+	#    "CONFORMIDADE VERIFICADA" em cima de um off-site inexistente.
+	esperar_falha_com \
+		"expurgo-offsite: bucket vazio sai != 0 (não é prova de conformidade)" \
+		"está VAZIO" \
+		-- "${EXPURGO[@]}" -e RETENTION_DAYS=30 "${TAG_BACKUP}" ./expurgo-offsite.sh --check-only
 }
 
 # --- billing -----------------------------------------------------------------

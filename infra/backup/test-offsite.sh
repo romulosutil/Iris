@@ -479,7 +479,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log "10/10 · verify-offsite.sh — a ferramenta que prova que a réplica é RESTAURÁVEL e de PROCEDÊNCIA CONHECIDA"
+log "10/11 · verify-offsite.sh — a ferramenta que prova que a réplica é RESTAURÁVEL e de PROCEDÊNCIA CONHECIDA"
 
 # O verify-offsite.sh é o que o operador roda contra o bucket de PRODUÇÃO, com a
 # chave privada que só existe fora do VPS. Ou seja: é mais uma coisa que só seria
@@ -755,6 +755,145 @@ if [[ "${EXIT_CARIMBO_MAL}" -eq 1 ]] && ! grep -q 'RÉPLICA OFF-SITE VERIFICADA'
 	ok "OFFSITE_MIN_CARIMBO malformado => exit 1 na validação (não vira comparação de string silenciosa)"
 else
 	fail "OFFSITE_MIN_CARIMBO malformado foi aceito (exit ${EXIT_CARIMBO_MAL}) — corte temporal passa a valer nada"
+fi
+
+# ---------------------------------------------------------------------------
+log "11/11 · expurgo-offsite.sh — auditoria (padrão) e expurgo (opt-in) da retenção off-site"
+
+# POR QUE ESTE TESTE ESTÁ ESCRITO ASSIM: a primeira versão semeava um objeto com
+# carimbo de 2020 NO NOME e esperava que o expurgo o removesse na mesma hora.
+# Não é o que acontece — `mc rm --older-than` mede o **mtime** do objeto no
+# bucket, e um objeto recém-subido tem mtime de agora, por mais antigo que o
+# nome pareça. O teste media uma coisa (nome) enquanto o script apagava por
+# outra (mtime), e por isso reprovava. O objeto de nome antigo continua sendo
+# semeado aqui, mas agora para provar o CONTRÁRIO: que ele NÃO conta como
+# expirado. A expiração de verdade é exercitada baixando RETENTION_DAYS a 0,
+# que é a única forma de ter objeto "vencido" num bucket criado há segundos.
+
+# Semeia um objeto com NOME antigo (carimbo de 2020) e mtime de agora.
+CMD="printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null
+echo 'mock content old dump' | age -r '${AGE_RECIPIENT}' > /tmp/iris-20200101T000000Z.dump.age
+echo 'mock content old globals' | age -r '${AGE_RECIPIENT}' > /tmp/iris-20200101T000000Z.globals.sql.age
+mc cp /tmp/iris-20200101T000000Z.dump.age off/${BUCKET_OFFSITE}/ >/dev/null
+mc cp /tmp/iris-20200101T000000Z.globals.sql.age off/${BUCKET_OFFSITE}/ >/dev/null
+echo antigo_semeado"
+no_container >/dev/null
+ok "objeto de NOME antigo (iris-20200101T000000Z) semeado — mtime de agora"
+
+# Roda o expurgo-offsite.sh no container, com o MinIO local no lugar do OCI.
+# RETENTION_DIAS_TESTE controla a retenção da invocação.
+expurgo_run() { # expurgo_run <arquivo-de-log> <retention-days> [flags...]
+	local log_file="$1" retencao="$2"
+	shift 2
+	local rc=0
+	set +e
+	"${COMPOSE[@]}" run --rm --no-deps -T \
+		-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+		-e OFFSITE_S3_ACCESS_KEY=iris \
+		-e OFFSITE_S3_SECRET_KEY=iris123456 \
+		-e OFFSITE_S3_BUCKET="${BUCKET_OFFSITE}" \
+		-e RETENTION_DAYS="${retencao}" \
+		backup ./expurgo-offsite.sh "$@" >"${log_file}" 2>&1
+	rc=$?
+	set -e
+	printf '%s' "${rc}"
+}
+
+# Conta objetos no bucket off-site de teste.
+contar_offsite() {
+	CMD="printf 'iris\niris123456\n' | mc alias set off http://minio:9000 --api S3v4 >/dev/null
+mc ls off/${BUCKET_OFFSITE}/ | grep -c '\.age' || true"
+	"${COMPOSE[@]}" run --rm -T --no-deps backup bash -c "${CMD}" 2>/dev/null | tr -d '\r' | tail -1
+}
+
+N_ANTES="$(contar_offsite)"
+
+# a) idade é mtime, não nome: com retenção de 30d, NADA no bucket está vencido —
+#    nem o objeto cujo nome diz 2020. Se esta asserção falhar, o script voltou a
+#    ler carimbo de nome e a auditoria passa a acusar o que o expurgo não alcança.
+EXIT_A="$(expurgo_run /tmp/iris-expurgo-mtime.log 30 --check-only)"
+if [[ "${EXIT_A}" -eq 0 ]] && grep -q 'CONFORMIDADE LGPD ART. 46 VERIFICADA' /tmp/iris-expurgo-mtime.log; then
+	ok "idade medida por mtime: objeto de nome 2020 recém-subido NÃO conta como expirado"
+else
+	fail "expurgo-offsite.sh tratou nome antigo como expirado (exit ${EXIT_A}) — está medindo o nome, não o mtime. Log:"
+	tail -15 /tmp/iris-expurgo-mtime.log
+fi
+
+# b) modo padrão AUDITA e NÃO apaga. Esta é a asserção que protege a credencial
+#    write-only: se o padrão voltar a apagar, o bucket esvazia aqui.
+EXIT_B="$(expurgo_run /tmp/iris-expurgo-auditoria.log 0 --check-only)"
+N_DEPOIS_AUDITORIA="$(contar_offsite)"
+
+if [[ "${EXIT_B}" -ne 0 ]] && grep -q 'RETENÇÃO OFF-SITE NÃO CONFORME' /tmp/iris-expurgo-auditoria.log; then
+	ok "modo padrão detecta objetos vencidos e sai != 0"
+else
+	fail "modo padrão não acusou não-conformidade (exit ${EXIT_B}) — log:"
+	tail -15 /tmp/iris-expurgo-auditoria.log
+fi
+
+if [[ "${N_DEPOIS_AUDITORIA}" == "${N_ANTES}" && "${N_ANTES}" -gt 0 ]]; then
+	ok "modo padrão NÃO apagou nada (${N_ANTES} objetos antes e depois) — credencial write-only preservada"
+else
+	fail "modo padrão apagou objetos (antes=${N_ANTES}, depois=${N_DEPOIS_AUDITORIA}) — o padrão deixou de ser auditoria"
+fi
+
+# c) --expurgar apaga de verdade e sai 0.
+EXIT_C="$(expurgo_run /tmp/iris-expurgo-ativo.log 0 --expurgar)"
+N_DEPOIS_EXPURGO="$(contar_offsite)"
+
+if [[ "${EXIT_C}" -eq 0 ]] && grep -q 'CONFORMIDADE LGPD ART. 46 VERIFICADA' /tmp/iris-expurgo-ativo.log; then
+	ok "--expurgar remove os vencidos e confirma conformidade (exit 0)"
+else
+	fail "--expurgar falhou (exit ${EXIT_C}) — log:"
+	tail -15 /tmp/iris-expurgo-ativo.log
+fi
+
+if [[ "${N_DEPOIS_EXPURGO}" -eq 0 ]]; then
+	ok "objetos vencidos efetivamente removidos do bucket (${N_ANTES} -> 0)"
+else
+	fail "--expurgar saiu 0 mas ${N_DEPOIS_EXPURGO} objeto(s) continuam no bucket"
+fi
+
+# d) bucket VAZIO não é conformidade. O (c) acabou de esvaziar o bucket, então
+#    este é o estado real, não um mock: sem esta guarda, um bucket errado ou uma
+#    credencial sem ListObjects carimbaria "conformidade verificada" em cima de
+#    um destino de recuperação de desastre inexistente.
+EXIT_D="$(expurgo_run /tmp/iris-expurgo-vazio.log 30 --check-only)"
+if [[ "${EXIT_D}" -ne 0 ]] && grep -q 'está VAZIO' /tmp/iris-expurgo-vazio.log; then
+	ok "bucket vazio sai != 0 (não é tratado como prova de conformidade)"
+else
+	fail "bucket vazio foi aceito como conforme (exit ${EXIT_D}) — log:"
+	tail -15 /tmp/iris-expurgo-vazio.log
+fi
+
+# e) flag desconhecida não pode ser ignorada em silêncio: `--expurgue` (typo)
+#    aceito como no-op faria o operador acreditar que expurgou.
+set +e
+"${COMPOSE[@]}" run --rm --no-deps -T \
+	-e OFFSITE_S3_ENDPOINT=http://minio:9000 \
+	-e OFFSITE_S3_ACCESS_KEY=iris \
+	-e OFFSITE_S3_SECRET_KEY=iris123456 \
+	backup ./expurgo-offsite.sh --expurgue >/tmp/iris-expurgo-flag.log 2>&1
+EXIT_FLAG=$?
+set -e
+
+if [[ "${EXIT_FLAG}" -ne 0 ]] && grep -q 'argumento não reconhecido' /tmp/iris-expurgo-flag.log; then
+	ok "flag desconhecida é rejeitada (não vira no-op silencioso)"
+else
+	fail "flag desconhecida foi aceita (exit ${EXIT_FLAG})"
+fi
+
+# f) expurgo sem OFFSITE_S3_ENDPOINT falha com a mensagem de env obrigatória
+set +e
+"${COMPOSE[@]}" run --rm --no-deps -T \
+	backup ./expurgo-offsite.sh >/tmp/iris-expurgo-noenv.log 2>&1
+EXIT_EXPURGO_NOENV=$?
+set -e
+
+if [[ "${EXIT_EXPURGO_NOENV}" -ne 0 ]] && grep -q 'OFFSITE_S3_ENDPOINT é obrigatório' /tmp/iris-expurgo-noenv.log; then
+	ok "expurgo-offsite.sh sem OFFSITE_S3_ENDPOINT falha na validação de env"
+else
+	fail "expurgo-offsite.sh não validou a falta de OFFSITE_S3_ENDPOINT (exit ${EXIT_EXPURGO_NOENV})"
 fi
 
 # ---------------------------------------------------------------------------
