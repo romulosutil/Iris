@@ -1,8 +1,8 @@
 # Checkpoint — Estado Atual do Repositório Iris
 
-**Data**: 22/08/2026
-**Status**: `main` verde e estável; D34 (Auditoria no Corte por Inadimplência & Alarme no Job) implementado e testado; PR #418 (#383 — webhook Resend) mergeada em `main`.
-**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328), #416 (D54), #417 (D40 / #330), #418 (#383)
+**Data**: 23/08/2026
+**Status**: `main` verde e estável. Revisão tech lead dos PRs #423 e #425 concluída: **#425 mergeada em `main` (`b64784d`)** após ficar verde em CI real — a suíte e2e passa a rodar no CI; **#423 verde porém `BLOCKED` por configuração de ruleset** (ver **D58**, ação de admin).
+**Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328), #416 (D54), #417 (D40 / #330), #418 (#383), #419 (legal/Gemini), #420 (D34), #421 (spec de exportação)
 
 ---
 
@@ -24,10 +24,27 @@
 
 ## 2. PRs Abertas Aguardando Revisão e Merge
 
-| PR       | Branch                                       | Escopo / Débito                                                                                | Estado                      |
-| :------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------- | :-------------------------- |
-| **#419** | `feat/383-resend-webhook-bounces-complaints` | **Governança Legal**: formalização do Google Gemini nos termos e políticas de privacidade.     | Aberta aguardando merge. |
-| **#420** | `feat/d34-auditoria-corte-inadimplencia`     | **D34**: auditoria no corte por inadimplência (`audit_log`) e exit code no job de faturamento. | Aberta aguardando merge. |
+| PR       | Branch                                       | Escopo / Débito                                                                                                                                      | Estado                                                                          |
+| :------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
+| **#419** | `feat/383-resend-webhook-bounces-complaints` | **Governança Legal**: formalização do Google Gemini nos termos e políticas de privacidade.                                                           | ✅ Mergeada em `main` (`fc64478`).                                              |
+| **#420** | `feat/d34-auditoria-corte-inadimplencia`     | **D34**: auditoria no corte por inadimplência (`audit_log`) e exit code no job de faturamento.                                                       | ✅ Mergeada em `main` (`737a9c0`).                                              |
+| **#425** | `fix/424-e2e-seed-demo-e-ci`                 | **#424**: recria `pnpm seed:demo`/`seed:e2e`, corrige 4 specs com drift de produto e liga a suíte `e2e/` no CI (job `test-e2e` + gate de cobertura). | ✅ **Mergeada em `main` (`b64784d`, 23/08)** após a revisão — verde em CI real. |
+| **#423** | `chore/remove-ci-workflows-redundantes`      | Remove `migrations-integrity`, `legal-versions-integrity` e `layout-preview-guardrail` (cobertos pelo job `test`).                                   | ⚠️ Verde, porém `BLOCKED`: **mergear só depois de editar o ruleset** (D58).     |
+| **#422** | `feat/374-exportacao-integral-acervo`        | Exportação integral do acervo da conta (#374/#353 unificadas).                                                                                       | Aberta aguardando revisão/merge.                                                |
+
+---
+
+## 2.1 Revisão tech lead de 23/08/2026 — o que foi corrigido nos PRs
+
+**PR #425** chegou com `test` e `test-e2e` vermelhos; ambos eram defeito real:
+
+1. `pnpm seed:e2e` abortava com `node: .env: not found` — o runner passa as variáveis pelo bloco `env:` do job, sem arquivo. Corrigido para `--env-file-if-exists=.env` nos dois seeds novos.
+2. `scripts/lib/guardrail-seed-wiring.test.ts` (D52) reprovava com razão: `seed-demo.ts` e `seed-e2e.ts` executam `TRUNCATE` e gravam senha padrão, então precisam entrar na lista coberta pelo teste de fiação do guardrail. Os dois já chamavam `assertSeedAllowed()` no lugar certo — faltava a cobertura estática.
+3. Achado da própria revisão: `scripts/ci/verificar-cobertura-e2e.mjs` nascera **sem teste** (o irmão `verificar-cobertura-testes.mjs` tem). Escrito `verificar-cobertura-e2e.test.mjs`, 11 casos, cobrindo os pisos inválidos que desligariam o gate em silêncio.
+
+**Verde medido no CI real** (run `32617527004`, job `test-e2e`): `[cobertura-e2e] arquivos=10 testes=17 pulado=0 inesperado=0 flaky=0`; `17 passed (49.8s)`. `jules/review` com verdict `approve`.
+
+**PR #423**: diff correto — confirmado por `pnpm exec vitest list` que os três arquivos de teste envolvidos são coletados pelo projeto `[unit]`, logo o job `test` já os roda. O bloqueio é de configuração e virou **D58**.
 
 ---
 
@@ -76,8 +93,9 @@ Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 
 ## 5. Próximos Passos Recomendados
 
+0. ✅ **D58 — ruleset corrigido em 23/08/2026**: `journal` e `versoes-legais` removidos de `required_status_checks` (restam `lint · typecheck · test · test-rls · base-must-be-main`); o **#423 saiu de `BLOCKED` para `CLEAN`** e pode ser mergeado. **Passo restante**: acrescentar `test-e2e` aos obrigatórios só depois que `chore/remove-ci-workflows-redundantes` e `feat/374-exportacao-integral-acervo` mergearem ou rebasearem — nenhuma das duas tem o job no `ci.yml` e ficariam presas pelo mesmo mecanismo do D58.
 1. ✅ **Concluído (22/08/26)**: Merge da PR **#418** (#383 — webhook Resend) e **#419** (Governança Legal Google Gemini API).
-2. Abertura e merge da PR do **D34** (`feat/d34-auditoria-corte-inadimplencia`).
+2. ✅ **Concluído (22/08/26)**: merge do **D34** (PR #420, `737a9c0`).
 3. **D36**: Faixa de alerta urgente de recusa na UI (`faixa-trial.tsx` / `/assinatura`).
 4. **D39**: Persistência do código cru de recusas G6 em `billing_cycle.recusa_codigo`.
 5. **D57**: Checagem operacional (billing pago ativo, escopo do DPA para Gemini API standalone, Art. 33 LGPD) antes de comutar `EXTRACTION_LLM_ENABLED=true`.

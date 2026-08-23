@@ -55,6 +55,36 @@ describe("verificar-cobertura-e2e — gate anti-pulo-silencioso (#424)", () => {
     expect(res.problemas.join("\n")).toMatch(/piso é 17/);
   });
 
+  it("conta o teste flaky como executado — retry não é cobertura perdida", () => {
+    // Playwright tira o teste que passou no retry de `expected` e o põe em
+    // `flaky`: sem somar, 16+1 vira "16 < 17" e o gate acusa o defeito errado.
+    const res = verificarCoberturaE2E(relatorio({ expected: 16, flaky: 1 }), {
+      minTests: 17,
+      minFiles: 10,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.problemas).toHaveLength(0);
+    expect(res.stats).toMatchObject({ executados: 17, expected: 16, flaky: 1 });
+  });
+
+  it("flaky não maquia spec sumido: 15+1 continua abaixo do piso", () => {
+    const res = verificarCoberturaE2E(relatorio({ expected: 15, flaky: 1 }), {
+      minTests: 17,
+      minFiles: 10,
+    });
+    expect(res.ok).toBe(false);
+    expect(res.problemas.join("\n")).toMatch(/16 teste\(s\) executado\(s\)/);
+  });
+
+  it("suíte inteira só flaky ainda conta como executada (sem ZERO testes)", () => {
+    const res = verificarCoberturaE2E(relatorio({ expected: 0, flaky: 17 }), {
+      minTests: 17,
+      minFiles: 10,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.problemas.join("\n")).not.toMatch(/ZERO testes/);
+  });
+
   it("reprova quando um arquivo de spec some da coleta, mesmo com testes acima do piso", () => {
     const res = verificarCoberturaE2E(
       relatorio({ expected: 20, arquivos: 9 }),
