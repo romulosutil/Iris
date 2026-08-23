@@ -102,7 +102,38 @@ regra escrita e regra implementada está na seção 8.
 | **Áudio bruto de ditado de voz** (`AudioCapture` — #72 / DPA)                  | Máximo de 7 dias após transcrição (ou descarte pós-sucesso)                 | LGPD Art. 6º, III (minimização) e Art. 46 (segurança da informação)              | Eliminação do `.webm/.mp4` no storage após transcrição bem-sucedida; preservado até 7 dias exclusivamente para contingência/reprocessamento manual em caso de falha de ASR     | Spec e DPA (`dpa-asr-audio.md`); gated por DPA                      |
 | **Alertas de risco clínico** (`AlertaRiscoClinico` — #122)                     | Acompanha o prontuário                                                      | Defesa de responsabilidade técnica da clínica e prova de diligência do software | **Pseudonimização, não eliminação**: `pseudonimizado_em` é carimbado e `patient_id`/`session_id` viram `NULL`; categoria, severidade e carimbos de prazo sobrevivem (seção 7) | Implementado (`0049`), dentro do `app_purgar_paciente`              |
 | **Logs de acesso à aplicação** (`AuditLog` — #116)                             | **Mínimo** de 6 meses (180 dias) — não é teto                               | Marco Civil da Internet (Lei 12.965/2014, Art. 15)                              | Expurgo dos registros brutos de IP/sessão depois do mínimo legal                                                                                                              | Implementado (`0070` / `expurgo-audit-log.mjs`)                    |
-| **Cópias de segurança** (MinIO local + OCI S3 off-site — #89)                  | 30 dias                                                                     | LGPD Art. 46 (segurança e recuperação)                                          | Local/MinIO: prune do `infra/backup/backup.sh` (`RETENTION_DAYS`, default 30). Off-site: **não podado pelo script, de propósito** — issue aberta (#354)                        | Prune local implementado; automação off-site mapeada (#354)          |
+| **Cópias de segurança** (MinIO local + OCI S3 off-site — #89)                  | 30 dias                                                                     | LGPD Art. 46 (segurança e recuperação)                                          | Local/MinIO: prune do `infra/backup/backup.sh` (`RETENTION_DAYS`, default 30). Off-site: auditoria por padrão via `infra/backup/expurgo-offsite.sh`; expurgo ativo sob `--expurgar`. Ledger de tombstones (seção 5.1) excluído do expurgo por idade. | Implementado (#89/#354)          |
+
+### 5.1. Reaplicação de expurgo LGPD em restauração de backup (#89)
+
+Um dump é a fotografia de um instante. Se o titular exerceu o Art. 18 depois
+dessa fotografia, o dump contém o prontuário e não contém o expurgo — o
+`audit_log` que registra a exclusão nasceu depois da fotografia, não dentro
+dela. Consultar o `audit_log` **restaurado** para reaplicar exclusões,
+portanto, não funciona: é procurar o registro exatamente onde ele não pode
+estar.
+
+Por isso o expurgo é registrado num **ledger separado**
+(`tombstones-<timestamp>.csv`, só UUIDs pseudônimos + data), gerado a cada
+ciclo de `infra/backup/backup.sh` e replicado fora do dump — MinIO local e
+off-site (OCI S3). `infra/backup/restore.sh` aplica o ledger **mais recente
+disponível** (não o par do dump que está sendo restaurado) antes de o
+sistema voltar a operar, reexecutando a mesma rotina de expurgo
+(`app_purgar_paciente`) usada pela aplicação. Fail-closed: sem ledger
+disponível, a restauração é recusada.
+
+**Retenção do ledger:** indefinida, não é podado pelo expurgo por idade das
+cópias de segurança (`infra/backup/expurgo-offsite.sh` exclui
+explicitamente os arquivos `tombstones-*`). Decisão deliberada — o ledger
+não carrega dado clínico, só a lista pseudônima de quem exerceu o Art. 18, e
+precisa sobreviver a qualquer backup que venha a ser restaurado no futuro.
+
+**Limitação técnica, não coberta pela reaplicação:** uma exclusão solicitada
+**entre** o último backup e um eventual desastre não está registrada em
+nenhum ledger ainda replicado, e por isso não é reaplicada numa restauração
+que precise voltar a esse ponto. É a mesma janela de perda que se aplica a
+qualquer dado gravado nesse intervalo — a garantia de reaplicação cobre
+exclusões anteriores ao backup restaurado, não posteriores a ele.
 
 ## 6. O que acontece ao fim do prazo do prontuário
 
@@ -166,7 +197,7 @@ inexistente. Cada item foi conferido no código em 28/07/2026:
 | :---------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------- |
 | Expurgo do prontuário ao vencer o prazo               | `app_purgar_paciente` e `app_paciente_expurgavel` existem na `0045`, mas **nenhum código da aplicação as chama** — nenhuma ação, tela ou job. O expurgo hoje só sai por SQL manual, e o aviso prévio de 90 dias da seção 6 não existe.                      | Fase 6 / `BACKLOG.md` |
 | Expurgo do `audit_log` após 6 meses (#116)            | Implementado via `0070_expurgo_audit_log_marco_civil.sql` e script `scripts/expurgo-audit-log.mjs` (agendado via Easypanel). Pseudonimiza logs órfãos e expurga registros com 180+ dias. | Fechado (#116) |
-| Lifecycle Rule de 30 dias no bucket off-site (OCI S3) | Configuração do provedor, fora do repositório. **Confirmar no console do bucket** — não presumir pelo texto desta política.                                                                                                                                 | #89                   |
+| Lifecycle Rule de 30 dias no bucket off-site (OCI S3) | Configuração do provedor, fora do repositório — mas agora AUDITADA por `infra/backup/expurgo-offsite.sh` a cada ciclo (padrão: mede e falha alto; `--expurgar` apaga sob credencial separada). **Confirmar no console do bucket** que a Lifecycle Rule também existe, como redundância. | Fechado (#354)         |
 
 ## 9. Direitos do titular (LGPD Art. 18)
 

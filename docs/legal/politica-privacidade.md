@@ -249,6 +249,18 @@ Os prazos aplicáveis aos dados do profissional estão na seção 1.1.
 terminar sem pagamento, a conta passa a somente-leitura com exportação livre e
 os dados permanecem acessíveis — ver `termos-de-uso.md`, seção 7.4.
 
+### 5.1. Cópias de segurança e o direito à exclusão
+
+Quando você solicita a exclusão dos seus dados, nós os removemos
+imediatamente do banco de dados em operação. As cópias de segurança
+criptografadas, que existem para proteger seus dados contra perda acidental
+(LGPD Art. 46), são substituídas por rotação em até 30 dias — e durante esse
+período elas permanecem intactas, sem qualquer acesso ou uso para
+tratamento. Se uma dessas cópias precisar ser restaurada por causa de um
+incidente, a exclusão que você solicitou é **reaplicada automaticamente**
+durante a restauração, antes de o sistema voltar a operar. Nenhuma
+restauração traz de volta dados de quem pediu exclusão.
+
 ## 6. Uso agregado/anonimizado para melhoria do produto
 
 O Iris pode, no futuro, usar dados verdadeiramente anonimizados (sem
