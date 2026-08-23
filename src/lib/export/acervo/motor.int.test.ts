@@ -20,12 +20,18 @@ describe.skipIf(!hasDb)("Motor de Estado da Exportação (Task T4)", () => {
 
     await authDb.execute(sql`
       INSERT INTO clinic (id, nome, responsavel_conta_id) VALUES (${clinicId}, 'Clínica Motor Test', ${donoId});
+    `);
+    await authDb.execute(sql`
       INSERT INTO app_user (id, name, email) VALUES
         (${donoId}, 'Dono Conta', ${`d_${donoId}@test.local`}),
         (${outroUser}, 'Outro Coordenador', ${`o_${outroUser}@test.local`});
+    `);
+    await authDb.execute(sql`
       INSERT INTO user_role (user_id, clinic_id, role) VALUES
         (${donoId}, ${clinicId}, 'coordenador'),
         (${outroUser}, ${clinicId}, 'coordenador');
+    `);
+    await authDb.execute(sql`
       INSERT INTO patient (id, clinic_id, nome) VALUES (${crypto.randomUUID()}, ${clinicId}, 'Paciente 1');
     `);
 
@@ -108,10 +114,20 @@ describe.skipIf(!hasDb)("Motor de Estado da Exportação (Task T4)", () => {
     } finally {
       await authDb.execute(sql`
         DELETE FROM audit_log WHERE clinic_id = ${clinicId};
+      `);
+      await authDb.execute(sql`
         DELETE FROM export_bundle WHERE clinic_id = ${clinicId};
+      `);
+      await authDb.execute(sql`
         DELETE FROM patient WHERE clinic_id = ${clinicId};
+      `);
+      await authDb.execute(sql`
         DELETE FROM user_role WHERE clinic_id = ${clinicId};
+      `);
+      await authDb.execute(sql`
         DELETE FROM app_user WHERE id IN (${donoId}, ${outroUser});
+      `);
+      await authDb.execute(sql`
         DELETE FROM clinic WHERE id = ${clinicId};
       `);
     }

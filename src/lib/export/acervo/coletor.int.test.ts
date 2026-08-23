@@ -18,13 +18,19 @@ describe.skipIf(!hasDb)("coletarAcervo (integração RLS e isolamento)", () => {
     // 1. Seed básico em authDb (dona)
     await authDb.execute(sql`
       INSERT INTO clinic (id, nome) VALUES (${clinicA}, 'Clínica A'), (${clinicB}, 'Clínica B');
+    `);
+    await authDb.execute(sql`
       INSERT INTO app_user (id, name, email) VALUES (${userA}, 'User A', ${`a_${userA}@test.local`}), (${userB}, 'User B', ${`b_${userB}@test.local`});
+    `);
+    await authDb.execute(sql`
       INSERT INTO user_role (user_id, clinic_id, role) VALUES (${userA}, ${clinicA}, 'coordenador'), (${userB}, ${clinicB}, 'coordenador');
-      
+    `);
+    await authDb.execute(sql`
       INSERT INTO patient (id, clinic_id, nome, cpf, cpf_hash)
       VALUES (${pacA1}, ${clinicA}, 'Paciente A1', '11111111111', 'hash_secreto_a1'),
              (${pacB1}, ${clinicB}, 'Paciente B1', '22222222222', 'hash_secreto_b1');
-
+    `);
+    await authDb.execute(sql`
       -- Relatório ativo e relatório deletado (soft delete)
       INSERT INTO report (id, clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, payload)
       VALUES (${crypto.randomUUID()}, ${clinicA}, ${pacA1}, 'familia', '2026-01-01', '2026-01-31', '{"resumo":"ativo"}'::jsonb),
@@ -75,9 +81,17 @@ describe.skipIf(!hasDb)("coletarAcervo (integração RLS e isolamento)", () => {
       // Cleanup
       await authDb.execute(sql`
         DELETE FROM report WHERE clinic_id IN (${clinicA}, ${clinicB});
+      `);
+      await authDb.execute(sql`
         DELETE FROM patient WHERE clinic_id IN (${clinicA}, ${clinicB});
+      `);
+      await authDb.execute(sql`
         DELETE FROM user_role WHERE clinic_id IN (${clinicA}, ${clinicB});
+      `);
+      await authDb.execute(sql`
         DELETE FROM app_user WHERE id IN (${userA}, ${userB});
+      `);
+      await authDb.execute(sql`
         DELETE FROM clinic WHERE id IN (${clinicA}, ${clinicB});
       `);
     }

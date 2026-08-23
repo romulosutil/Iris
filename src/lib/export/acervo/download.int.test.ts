@@ -25,15 +25,20 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
       INSERT INTO clinic (id, nome, responsavel_conta_id) VALUES
         (${clinicA}, 'Clínica A', ${donoA}),
         (${clinicB}, 'Clínica B', ${donoB});
+    `);
+    await authDb.execute(sql`
       INSERT INTO app_user (id, name, email) VALUES
         (${donoA}, 'Dono A', ${`da_${donoA}@test.local`}),
         (${outroUserA}, 'Outro A', ${`oa_${outroUserA}@test.local`}),
         (${donoB}, 'Dono B', ${`db_${donoB}@test.local`});
+    `);
+    await authDb.execute(sql`
       INSERT INTO user_role (user_id, clinic_id, role) VALUES
         (${donoA}, ${clinicA}, 'coordenador'),
         (${outroUserA}, ${clinicA}, 'coordenador'),
         (${donoB}, ${clinicB}, 'coordenador');
-
+    `);
+    await authDb.execute(sql`
       INSERT INTO export_bundle (id, clinic_id, solicitado_por, status, sha256, bytes_tamanho, token_hash, manifest, expira_em)
       VALUES (
         ${bundleId},
@@ -46,7 +51,8 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
         '{"escopo":"integral"}'::jsonb,
         now() + interval '72 hours'
       );
-
+    `);
+    await authDb.execute(sql`
       INSERT INTO export_bundle_blob (bundle_id, bytes) VALUES (${bundleId}, ${zipBytes}::bytea);
     `);
 
@@ -150,9 +156,17 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
     } finally {
       await authDb.execute(sql`
         DELETE FROM audit_log WHERE clinic_id IN (${clinicA}, ${clinicB});
+      `);
+      await authDb.execute(sql`
         DELETE FROM export_bundle WHERE clinic_id IN (${clinicA}, ${clinicB});
+      `);
+      await authDb.execute(sql`
         DELETE FROM user_role WHERE clinic_id IN (${clinicA}, ${clinicB});
+      `);
+      await authDb.execute(sql`
         DELETE FROM app_user WHERE id IN (${donoA}, ${outroUserA}, ${donoB});
+      `);
+      await authDb.execute(sql`
         DELETE FROM clinic WHERE id IN (${clinicA}, ${clinicB});
       `);
     }
@@ -167,22 +181,33 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
     const dono = crypto.randomUUID();
     const outro = crypto.randomUUID();
     const bundleId = crypto.randomUUID();
-    const zipBytes = Buffer.from("PKbytes_do_zip");
+    const zipBytes = Buffer.concat([
+      Buffer.from("504b0304", "hex"),
+      Buffer.from("bytes_do_zip"),
+    ]);
 
     await authDb.execute(sql`
       INSERT INTO clinic (id, nome, responsavel_conta_id)
         VALUES (${clinicId}, 'Clínica Link', ${dono});
+    `);
+    await authDb.execute(sql`
       INSERT INTO app_user (id, name, email) VALUES
         (${dono}, 'Dono', ${`d_${dono}@test.local`}),
         (${outro}, 'Outro', ${`o_${outro}@test.local`});
+    `);
+    await authDb.execute(sql`
       INSERT INTO user_role (user_id, clinic_id, role) VALUES
         (${dono}, ${clinicId}, 'coordenador'),
         (${outro}, ${clinicId}, 'coordenador');
+    `);
+    await authDb.execute(sql`
       INSERT INTO export_bundle (id, clinic_id, solicitado_por, status, sha256,
                                  bytes_tamanho, token_hash, manifest, concluido_em, expira_em)
       VALUES (${bundleId}, ${clinicId}, ${dono}, 'pronto', ${sha256Hex(zipBytes)},
               ${zipBytes.length}, ${sha256Hex(Buffer.from("token_antigo"))},
               '{"escopo":"integral"}'::jsonb, now(), now() + interval '72 hours');
+    `);
+    await authDb.execute(sql`
       INSERT INTO export_bundle_blob (bundle_id, bytes)
         VALUES (${bundleId}, ${zipBytes}::bytea);
     `);
@@ -246,9 +271,17 @@ describe.skipIf(!hasDb)("Download Seguro do Acervo (Task T6)", () => {
     } finally {
       await authDb.execute(sql`
         DELETE FROM audit_log WHERE clinic_id = ${clinicId};
+      `);
+      await authDb.execute(sql`
         DELETE FROM export_bundle WHERE clinic_id = ${clinicId};
+      `);
+      await authDb.execute(sql`
         DELETE FROM user_role WHERE clinic_id = ${clinicId};
+      `);
+      await authDb.execute(sql`
         DELETE FROM app_user WHERE id IN (${dono}, ${outro});
+      `);
+      await authDb.execute(sql`
         DELETE FROM clinic WHERE id = ${clinicId};
       `);
     }

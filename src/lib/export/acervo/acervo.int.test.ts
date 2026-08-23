@@ -25,13 +25,16 @@ describe.skipIf(!hasDb)(
       await authDb.execute(sql`
         INSERT INTO clinic (id, nome, responsavel_conta_id, trial_comeco_em, trial_dias)
         VALUES (${clinicId}, 'Clínica Somente Leitura', ${donoId}, now() - interval '30 days', 7);
-
+      `);
+      await authDb.execute(sql`
         INSERT INTO app_user (id, name, email)
         VALUES (${donoId}, 'Dono Conta ReadOnly', ${`d_ro_${donoId}@test.local`});
-
+      `);
+      await authDb.execute(sql`
         INSERT INTO user_role (user_id, clinic_id, role)
         VALUES (${donoId}, ${clinicId}, 'coordenador');
-
+      `);
+      await authDb.execute(sql`
         INSERT INTO patient (id, clinic_id, nome, cpf, cpf_hash)
         VALUES (${pacId}, ${clinicId}, 'Paciente Em ReadOnly', '12345678900', 'hash_blind_123');
       `);
@@ -72,10 +75,20 @@ describe.skipIf(!hasDb)(
       } finally {
         await authDb.execute(sql`
           DELETE FROM audit_log WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM export_bundle WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM patient WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM user_role WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM app_user WHERE id = ${donoId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM clinic WHERE id = ${clinicId};
         `);
       }
@@ -89,13 +102,16 @@ describe.skipIf(!hasDb)(
       await authDb.execute(sql`
         INSERT INTO clinic (id, nome, responsavel_conta_id)
         VALUES (${clinicId}, 'Clínica Negação Test', ${donoId});
-
+      `);
+      await authDb.execute(sql`
         INSERT INTO app_user (id, name, email)
         VALUES (${donoId}, 'Dono Negação', ${`d_neg_${donoId}@test.local`});
-
+      `);
+      await authDb.execute(sql`
         INSERT INTO user_role (user_id, clinic_id, role)
         VALUES (${donoId}, ${clinicId}, 'coordenador');
-
+      `);
+      await authDb.execute(sql`
         INSERT INTO patient (id, clinic_id, nome, cpf, cpf_hash)
         VALUES (${pacId}, ${clinicId}, 'Paciente Segredo', '99988877766', 'hash_blind_extremamente_secreto');
       `);
@@ -152,10 +168,20 @@ describe.skipIf(!hasDb)(
       } finally {
         await authDb.execute(sql`
           DELETE FROM audit_log WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM export_bundle WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM patient WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM user_role WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM app_user WHERE id = ${donoId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM clinic WHERE id = ${clinicId};
         `);
       }
@@ -168,10 +194,12 @@ describe.skipIf(!hasDb)(
       await authDb.execute(sql`
         INSERT INTO clinic (id, nome, responsavel_conta_id)
         VALUES (${clinicId}, 'Clínica Trilha Audit', ${donoId});
-
+      `);
+      await authDb.execute(sql`
         INSERT INTO app_user (id, name, email)
         VALUES (${donoId}, 'Dono Audit', ${`d_aud_${donoId}@test.local`});
-
+      `);
+      await authDb.execute(sql`
         INSERT INTO user_role (user_id, clinic_id, role)
         VALUES (${donoId}, ${clinicId}, 'coordenador');
       `);
@@ -229,9 +257,17 @@ describe.skipIf(!hasDb)(
       } finally {
         await authDb.execute(sql`
           DELETE FROM audit_log WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM export_bundle WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM user_role WHERE clinic_id = ${clinicId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM app_user WHERE id = ${donoId};
+        `);
+        await authDb.execute(sql`
           DELETE FROM clinic WHERE id = ${clinicId};
         `);
       }
