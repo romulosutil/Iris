@@ -38,6 +38,8 @@ test("represcrever para baixo confirma antes e leva à barra da disciplina afeta
   // --- Paciente novo, para o teste não depender de estado deixado por outro spec.
   await page.goto("/pacientes/novo");
   await page.getByLabel("Nome do paciente").fill("Paciente MV4");
+  // Modalidade clínica é obrigatória desde a expansão TCC/convencional (#98/#99).
+  await page.getByRole("radio", { name: /Protocolo estruturado/ }).click();
   await page.getByRole("radio", { name: /Responsável legal/ }).click();
   await page
     .getByLabel("Responsável que assina o Consentimento LGPD")
@@ -119,6 +121,7 @@ test("prescrever disciplina nova sobre equipe já montada também pergunta antes
 
   await page.goto("/pacientes/novo");
   await page.getByLabel("Nome do paciente").fill("Paciente MV4 legado");
+  await page.getByRole("radio", { name: /Protocolo estruturado/ }).click();
   await page.getByRole("radio", { name: /Responsável legal/ }).click();
   await page
     .getByLabel("Responsável que assina o Consentimento LGPD")

@@ -205,6 +205,87 @@ jobs:
       - name: gate anti-pulo-silencioso (integração/RLS)
         run: node scripts/ci/verificar-cobertura-testes.mjs int-report.json --min-tests=800 --min-files=95 --label=integração
 
+  test-e2e:
+    # #424 — suíte `e2e/` nunca rodava em CI. `pnpm test:e2e` sobe o Next em
+    # modo produção (`next start`, playwright.config.ts) e a suíte inteira
+    # compartilha 1 banco (`workers: 1`) — `pnpm seed:e2e` semeia num único
+    # truncate os dois cenários que os 9 specs precisam (clínica E2E +
+    # clínica demo, scripts/seed-e2e.ts).
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: iris
+          POSTGRES_PASSWORD: iris
+          POSTGRES_DB: iris
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U iris -d iris"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: iris
+      MIGRATION_DATABASE_URL: postgres://iris:iris@localhost:5432/iris
+      DATABASE_URL: postgres://iris_app:iris_app@localhost:5432/iris
+      AUTH_DATABASE_URL: postgres://iris_auth_login:iris_auth_login@localhost:5432/iris
+      # Segredo de teste, nunca usado fora de CI — mesmo padrão do
+      # CPF_HASH_SALT global deste workflow.
+      BETTER_AUTH_SECRET: "ci-test-better-auth-secret-nao-usar-em-producao"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: cache dos navegadores do Playwright
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: instalar binário do Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install chromium
+
+      - name: aplicar migrações (role dona, BYPASSRLS)
+        run: pnpm db:migrate
+
+      # Mesmo padrão do job test-rls: só as duas roles LOGIN, nunca `iris`
+      # (dona/BYPASSRLS) como DATABASE_URL de app.
+      - name: provisionar roles de aplicação (iris_app, iris_auth_login)
+        run: |
+          psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE iris_app LOGIN PASSWORD 'iris_app' IN ROLE app_role;
+          CREATE ROLE iris_auth_login LOGIN PASSWORD 'iris_auth_login' IN ROLE iris_auth;
+          SQL
+
+      # `webServer` do playwright.config.ts invoca o binário do Next direto
+      # (`next start`) — precisa do build de produção pronto antes.
+      - name: build de produção da aplicação (Next.js)
+        run: pnpm build
+
+      - name: seed da suíte e2e (clínica E2E + clínica demo)
+        run: pnpm seed:e2e
+
+      - name: suíte e2e (com relatório JSON)
+        run: pnpm test:e2e --reporter=json,list
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-report.json
+
+      # Piso medido em 23/08/2026, suíte local do zero: 10 arquivos (9 specs +
+      # servidor.setup.ts), 17 testes, 0 falha, 0 pulado.
+      - name: gate anti-pulo-silencioso (e2e)
+        run: node scripts/ci/verificar-cobertura-e2e.mjs e2e-report.json --min-tests=17 --min-files=10
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
