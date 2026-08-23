@@ -167,7 +167,7 @@ export function MfaSetupForm() {
     setEnviando(true);
     void (async () => {
       const { data, error } = await authClient.twoFactor.enable({ password });
-      if (error || !data) {
+      if (error || !data || data.method !== "totp") {
         setErro("Senha inválida ou não foi possível iniciar o cadastro.");
         setEnviando(false);
         return;
