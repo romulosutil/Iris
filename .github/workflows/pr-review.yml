@@ -23,9 +23,14 @@ jobs:
     # Repositório público: PR vindo de fork NÃO recebe `secrets.JULES_API_KEY`
     # nem token de escrita — o job só falharia com credencial vazia e ainda
     # tentaria comentar sem permissão. Só revisamos PR nascido neste repo.
+    # PR do Dependabot cai na mesma restrição de secrets mesmo nascendo no
+    # próprio repo (política do GitHub para o evento `pull_request` do
+    # Dependabot, independente de head.repo) — falha antes até validar
+    # `fail_on: never` porque quebra na validação de input da action.
     if: >-
       github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
     permissions:
       pull-requests: write
       contents: read
