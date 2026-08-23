@@ -205,7 +205,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 6. patient_alvo_disciplina
   const rowsPatientAlvoDisciplina = (await tx.execute(sql`
-    SELECT id, patient_id, clinic_id, disciplina, ativo, criado_em, atualizado_em
+    SELECT id, clinic_id, patient_id, disciplina, horas_alvo_semana,
+           vigencia_inicio, vigencia_fim, criado_em
       FROM patient_alvo_disciplina
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -220,8 +221,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 7. consent
   const rowsConsent = (await tx.execute(sql`
-    SELECT id, patient_id, clinic_id, tipo, versao_texto, assinado_em,
-           assinado_por_nome, consent_revogado_id
+    SELECT id, patient_id, tipo, responsavel_signatario, versao_termo,
+           assinado_em, consent_revogado_id, instrumento_representacao
       FROM consent
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -234,7 +235,9 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 8. professional_consent
   const rowsProfessionalConsent = (await tx.execute(sql`
-    SELECT id, user_id, clinic_id, versao_texto, assinado_em, criado_em
+    -- \`ip\` e \`user_agent\` ficam de fora de propósito: são telemetria de
+    -- assinatura do profissional, não acervo clínico da clínica.
+    SELECT id, user_id, clinic_id, versao_termo, aceito_em
       FROM professional_consent
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -262,7 +265,7 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 10. patient_protocol
   const rowsPatientProtocol = (await tx.execute(sql`
-    SELECT id, patient_id, protocol_id, nivel_entrada, status, atribuido_em
+    SELECT id, patient_id, protocol_id, ativado_em, desativado_em, ativado_por
       FROM patient_protocol
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -275,8 +278,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 11. care_team_membership
   const rowsCareTeam = (await tx.execute(sql`
-    SELECT id, patient_id, user_id, role, ativo, horas_semana_prescritas,
-           prescricao_atualizada_em, prescricao_atualizada_por, criado_em
+    SELECT id, patient_id, user_id, disciplina, papel_na_equipe,
+           vigencia_inicio, vigencia_fim, responsavel_tecnico_id, horas_semana
       FROM care_team_membership
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -315,8 +318,9 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 14. agendamento_recorrente
   const rowsAgendamentoRecorrente = (await tx.execute(sql`
-    SELECT id, clinic_id, patient_id, terapeuta_id, dia_semana, hora_inicio,
-           hora_fim, disciplina, ativo, criado_em
+    SELECT id, clinic_id, patient_id, terapeuta_id, disciplina, dia_semana,
+           hora_inicio, duracao_min, vigencia_inicio, vigencia_fim, status,
+           criado_em
       FROM agendamento_recorrente
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -332,8 +336,9 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
   // 15. session
   const rowsSession = (await tx.execute(sql`
     SELECT id, clinic_id, patient_id, terapeuta_id, atendido_por_id,
-           recorrente_id, agendada_para, duracao_minutos, estado, disciplina,
-           check_in_em, cancelada_em, cancelada_motivo, reposta_de_id, criado_em
+           recorrente_id, agendada_para, duracao_min, estado, disciplina,
+           modalidade, tipo, justificada, check_in_em,
+           numero_sequencial_paciente, reposta_de, criado_em
       FROM session
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -376,8 +381,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
   const rowsExtraction = (await tx.execute(sql`
     SELECT id, session_id, clinic_id, estado, subtipo, trecho_fonte,
            confianca, justificativa_confianca, inconsistente_com_historico,
-           criado_em, revisado_em, revisado_por, aprovado_em, versao,
-           payload_snapshot
+           par_contraste_id, payload, payload_editado, versao,
+           criado_em, revisado_por, revisado_em
       FROM extraction
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -390,7 +395,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 19. milestone
   const rowsMilestone = (await tx.execute(sql`
-    SELECT id, protocol_id, codigo, descricao, ordem, nivel, area
+    SELECT id, protocol_id, dominio_id, nome, nivel, tipo_estrutura,
+           estrutura, ordem
       FROM milestone
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -403,8 +409,9 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 20. goal
   const rowsGoal = (await tx.execute(sql`
-    SELECT id, clinic_id, patient_id, titulo, descricao, area, status,
-           prioridade, criada_em, atualizada_em
+    SELECT id, clinic_id, patient_id, descricao, disciplina, estado,
+           criterio_dominio, ciclo_revisao_semanas, proxima_revisao_em,
+           criado_por, criado_em, atualizado_em
       FROM goal
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -432,9 +439,9 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 22. goal_candidacy
   const rowsGoalCandidacy = (await tx.execute(sql`
-    SELECT patient_id, goal_id, is_candidate
+    SELECT goal_id, is_candidate_dominada, candidacy_since
       FROM goal_candidacy
-     ORDER BY patient_id, goal_id
+     ORDER BY goal_id
   `)) as unknown as Record<string, unknown>[];
   contagens.goal_candidacy = rowsGoalCandidacy.length;
   tabelas.push({
@@ -461,9 +468,10 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 24. evidence
   const rowsEvidence = (await tx.execute(sql`
-    SELECT id, clinic_id, patient_id, session_id, extraction_id, milestone_id,
-           goal_id, tipo, valor, raw_text, autor_id, criado_em, aprovado_em,
-           atualizado_em
+    SELECT id, extraction_id, patient_id, session_id, session_numero,
+           alvo_ordinal, protocol_slug, dominio_id, goal_ref, protocol_id,
+           goal_id, milestone_id, classificacao_original, aprovado_por,
+           aprovado_em
       FROM evidence
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -476,8 +484,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 25. evidence_revision
   const rowsEvidenceRevision = (await tx.execute(sql`
-    SELECT id, evidence_id, clinic_id, autor_id, tipo_revisao, valor_anterior,
-           valor_novo, justificativa, criado_em
+    SELECT id, evidence_id, acao, classificacao_anterior, classificacao_nova,
+           justificativa, autor_id, criado_em
       FROM evidence_revision
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -490,7 +498,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 26. evidence_query
   const rowsEvidenceQuery = (await tx.execute(sql`
-    SELECT id, patient_id, clinic_id, user_id, query_text, resultado_count, criado_em
+    SELECT id, evidence_id, coordenador_id, pergunta, resposta_texto,
+           resultante_evidence_revision_id, criado_em, respondido_em
       FROM evidence_query
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -503,7 +512,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 27. reinforcer_profile
   const rowsReinforcerProfile = (await tx.execute(sql`
-    SELECT id, patient_id, clinic_id, item, valencia, observacoes, criado_em, atualizado_em
+    SELECT id, extraction_id, patient_id, session_id, session_numero,
+           item_atividade, valencia, registrado_em
       FROM reinforcer_profile
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -547,8 +557,9 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 30. alerta (soft-delete deletado_em IS NULL)
   const rowsAlerta = (await tx.execute(sql`
-    SELECT id, clinic_id, patient_id, tipo, nivel, mensagem, criado_por,
-           criado_em, atualizado_por, atualizado_em
+    SELECT id, clinic_id, patient_id, tipo, status, chave_natural, goal_id,
+           protocol_id, detalhe, nota, motivo, criado_por, criado_em,
+           atualizado_por, atualizado_em
       FROM alerta
      WHERE deletado_em IS NULL
      ORDER BY id
@@ -562,8 +573,13 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 31. alerta_risco_clinico (soft-delete deletado_em IS NULL)
   const rowsAlertaRisco = (await tx.execute(sql`
-    SELECT id, clinic_id, patient_id, session_id, origem, nivel_risco, estado,
-           reconhecido_por, reconhecido_em, atualizado_por, atualizado_em, criado_em
+    SELECT id, clinic_id, patient_id, session_id, origem, categoria,
+           severidade, certeza, trecho_fonte, detalhe, status,
+           canais_notificados, prazo_minutos, prazo_reconhecimento,
+           reconhecido_por, reconhecido_em, escalado_em, escalado_estagio_2_em,
+           conduta_registrada, motivo_descarte, pseudonimizado_em,
+           rpd_entry_id, origem_extraction_id, instrumento_aplicacao_id,
+           criado_em, atualizado_por, atualizado_em
       FROM alerta_risco_clinico
      WHERE deletado_em IS NULL
      ORDER BY id
@@ -577,10 +593,12 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 32. tcc_rpd_entry
   const rowsTccRpd = (await tx.execute(sql`
-    SELECT id, clinic_id, patient_id, session_id, data_registro, situacao,
-           pensamento_automatico, distorcoes_cognitivas, emocao,
-           emocao_intensidade, resposta_racional, resultado_emocao,
-           resultado_intensidade, criado_por, criado_em
+    SELECT id, clinic_id, patient_id, session_id, situacao,
+           pensamento_automatico, distorcoes_cognitivas, emocao, intensidade,
+           evidencias_favor, evidencias_contra, resposta_racional,
+           intensidade_pos, credibilidade_inicial, credibilidade_alternativa,
+           comportamento_resultante, origem_extraction_id, origem_agente,
+           criado_por, criado_em
       FROM tcc_rpd_entry
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -593,8 +611,9 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 33. instrumento_aplicacao
   const rowsInstrumento = (await tx.execute(sql`
-    SELECT id, clinic_id, patient_id, instrumento_slug, versao, data_aplicacao,
-           pontuacao_total, resultado_interpretado, criado_por, criado_em
+    SELECT id, clinic_id, patient_id, session_id, protocol_id,
+           tipo_instrumento, escore_total, fonte_do_escore, respostas_por_item,
+           item_9_valor, item_risco_positivo, criado_por, criado_em
       FROM instrumento_aplicacao
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -607,9 +626,9 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 34. instrumento_item_texto
   const rowsInstrumentoItem = (await tx.execute(sql`
-    SELECT instrumento_aplicacao_id, item_numero, texto
+    SELECT id, clinic_id, tipo_instrumento, numero_item, texto
       FROM instrumento_item_texto
-     ORDER BY instrumento_aplicacao_id, item_numero
+     ORDER BY tipo_instrumento, numero_item
   `)) as unknown as Record<string, unknown>[];
   contagens.instrumento_item_texto = rowsInstrumentoItem.length;
   tabelas.push({
