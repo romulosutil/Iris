@@ -31,10 +31,13 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page
         .getByLabel("Senha", { exact: true })
         .fill("SenhaSeguraE2E123!");
+      await page.getByRole("button", { name: "Continuar" }).click();
       await page
         .getByLabel("Nome da clínica")
         .fill(`Clínica Primária ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho" }).click();
+      await page
+        .getByRole("combobox", { name: "Conselho", exact: true })
+        .click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Nº do registro").fill("111222");
       await page.getByRole("combobox", { name: "UF" }).click();
@@ -54,10 +57,13 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page
         .getByLabel("Senha", { exact: true })
         .fill("OutraSenhaFortissima123!");
+      await page.getByRole("button", { name: "Continuar" }).click();
       await page
         .getByLabel("Nome da clínica")
         .fill(`Clínica Falsa ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho" }).click();
+      await page
+        .getByRole("combobox", { name: "Conselho", exact: true })
+        .click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Nº do registro").fill("111222");
       await page.getByRole("combobox", { name: "UF" }).click();
@@ -87,10 +93,13 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page
         .getByLabel("Senha", { exact: true })
         .fill("SenhaSeguraE2E123!");
+      await page.getByRole("button", { name: "Continuar" }).click();
       await page
         .getByLabel("Nome da clínica")
         .fill(`Clínica Nova ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho" }).click();
+      await page
+        .getByRole("combobox", { name: "Conselho", exact: true })
+        .click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Nº do registro").fill("333444");
       await page.getByRole("combobox", { name: "UF" }).click();
@@ -163,8 +172,11 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
         await page
           .getByLabel("Senha", { exact: true })
           .fill("SenhaQualquer123!");
+        await page.getByRole("button", { name: "Continuar" }).click();
         await page.getByLabel("Nome da clínica").fill(`Clínica Bot ${i}`);
-        await page.getByRole("combobox", { name: "Conselho" }).click();
+        await page
+          .getByRole("combobox", { name: "Conselho", exact: true })
+          .click();
         await page.getByRole("option", { name: "CRP" }).click();
         await page.getByLabel("Nº do registro").fill("999000");
         await page.getByRole("combobox", { name: "UF" }).click();
@@ -204,8 +216,11 @@ test.describe("Segurança & Anti-Enumeração da Autenticação Self-Service", (
       await page.getByLabel("Nome completo").fill("Dra. Helena MFA");
       await page.getByLabel("E-mail").fill(emailClinico);
       await page.getByLabel("Senha", { exact: true }).fill(senha);
+      await page.getByRole("button", { name: "Continuar" }).click();
       await page.getByLabel("Nome da clínica").fill(`Clínica MFA ${timestamp}`);
-      await page.getByRole("combobox", { name: "Conselho" }).click();
+      await page
+        .getByRole("combobox", { name: "Conselho", exact: true })
+        .click();
       await page.getByRole("option", { name: "CRP" }).click();
       await page.getByLabel("Nº do registro").fill("777888");
       await page.getByRole("combobox", { name: "UF" }).click();
