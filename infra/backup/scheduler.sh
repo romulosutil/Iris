@@ -20,6 +20,10 @@
 #                       Brasília, UTC-3 sem horário de verão desde 2019).
 #   CHECK_INTERVAL_S    de quanto em quanto tempo reavalia. Default 600.
 #
+# Além do dump, o laço roda a AUDITORIA de retenção off-site
+# (expurgo-offsite.sh --check-only) uma vez por janela, quando OFFSITE_S3_*
+# está configurado. Auditoria, não expurgo: ver o comentário no laço.
+#
 # Idempotência: marca `.ultimo-backup-YYYY-MM-DD` em BACKUP_DIR e nunca roda
 # duas vezes no mesmo dia UTC. É isso que permite reavaliar a cada 10min sem
 # depender de acordar no minuto exato — e o que evita um restart do container
@@ -34,6 +38,7 @@ readonly BACKUP_DIR="${BACKUP_DIR:-/backups}"
 readonly BACKUP_AT_HOUR_UTC="${BACKUP_AT_HOUR_UTC:-6}"
 readonly CHECK_INTERVAL_S="${CHECK_INTERVAL_S:-600}"
 readonly BACKUP_SCRIPT="/app/backup.sh"
+readonly EXPURGO_SCRIPT="/app/expurgo-offsite.sh"
 readonly DEGRADADO_MARCADOR="${BACKUP_DIR}/.offsite-degradado"
 
 if ! [[ "${BACKUP_AT_HOUR_UTC}" =~ ^([0-9]|1[0-9]|2[0-3])$ ]]; then
@@ -91,6 +96,31 @@ while :; do
 				log "ERRO: backup do dia ${hoje} FALHOU (exit ${backup_exit}) — não há backup do dia. Vai tentar de novo em ${CHECK_INTERVAL_S}s, ainda dentro da janela"
 				;;
 		esac
+
+		# --- auditoria de retenção off-site (LGPD Art. 46) -------------------
+		# Roda DEPOIS do backup do dia, na mesma janela, e só se o off-site
+		# estiver configurado. Sem isto o expurgo-offsite.sh seria um script que
+		# existe no repo e nunca roda — e "verificação periódica" viraria uma
+		# frase na documentação sem processo por trás.
+		#
+		# Em modo AUDITORIA, de propósito: a credencial que o backup carrega é
+		# write-only (sem DeleteObject) e é essa ausência que protege a cópia de
+		# recuperação de desastre de um VPS comprometido. O expurgo ativo
+		# (`--expurgar`) é operação manual, com outra credencial.
+		#
+		# `|| exit_expurgo=$?` porque não-conformidade de retenção não pode
+		# matar o agendador de backup: o backup do dia é mais crítico que a
+		# retenção do mês. Sai alto no log e segue.
+		if [[ -n "${OFFSITE_S3_ENDPOINT:-}" ]]; then
+			expurgo_exit=0
+			"${EXPURGO_SCRIPT}" --check-only || expurgo_exit=$?
+			if [[ "${expurgo_exit}" -ne 0 ]]; then
+				log "ATENÇÃO: auditoria de retenção off-site NÃO CONFORME (exit ${expurgo_exit}) — há cópia com mais de ${RETENTION_DAYS:-30} dias no bucket off-site, ou o bucket está vazio/inacessível."
+				log "ATENÇÃO: conferir a Lifecycle Rule do bucket no console da OCI — ver §Backup e restore em infra/README.md."
+			fi
+		else
+			log "off-site não configurado (OFFSITE_S3_ENDPOINT vazio) — auditoria de retenção off-site pulada"
+		fi
 
 		# Limpa marcadores antigos para não acumular um arquivo por dia
 		# indefinidamente no volume.

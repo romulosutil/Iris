@@ -258,7 +258,9 @@ da issue #75**, e ele **bloqueia o piloto com dado real**.
 Scripts em `infra/backup/`: `backup.sh` (dump + globals + ledger de tombstones +
 verificação + cópia MinIO + prune), `restore.sh` (aplica os globals, restaura um
 dump num alvo e reaplica os expurgos do ledger), `verify-restore.sh` (restaura o
-dump mais recente num banco descartável, no mesmo cluster, e valida).
+dump mais recente num banco descartável, no mesmo cluster, e valida),
+`verify-offsite.sh` (prova decifração e procedência) e `expurgo-offsite.sh`
+(audita a retenção de 30 dias no bucket off-site; só apaga sob `--expurgar`).
 
 ### CRÍTICO — restaurar um backup pode DESFAZER um expurgo (#89)
 
@@ -395,9 +397,29 @@ lifecycle do bucket**, do lado do provedor. Prune disparado pelo host confiaria
 no relógio e nas permissões do host — exatamente o que se assume perdido no
 cenário que o off-site cobre.
 
+O que fecha o laço é **medir**, não apagar: o `expurgo-offsite.sh` roda em modo
+**auditoria** dentro da janela diária do `scheduler.sh` (logo após o dump, só se
+`OFFSITE_S3_ENDPOINT` estiver setado) e **não apaga nada** — ele mede a idade dos
+objetos pelo `mtime` do bucket (`mc find --older-than`, o mesmo predicado do
+`mc rm`) e sai `!= 0` se sobrar qualquer artefato com mais de 30 dias. A
+credencial do scheduler continua write-only; o script só reporta.
+
+Expurgo ativo (`--expurgar`) existe como **operação manual**, com uma credencial
+separada que tenha `DeleteObject`. Não é o padrão, e não deve ser dado ao
+serviço de backup: dar `DeleteObject` à credencial do VPS desfaz exatamente a
+propriedade descrita nesta seção. O caminho preferido continua sendo a
+**Lifecycle Rule do bucket**; o `--expurgar` é o remendo para quando ela falhou
+e alguém precisa limpar à mão.
+
 > ⚠️ Se o bucket off-site crescer sem limite, **a regra de lifecycle não foi
 > criada**. O `backup.sh` loga `prune off-site: NÃO executado pelo script (por
-design)` toda execução justamente para esse esquecimento não ficar silencioso.
+design)` toda execução justamente para esse esquecimento não ficar silencioso,
+e a auditoria diária do `expurgo-offsite.sh` sinaliza a não-conformidade com
+exit code != 0 no log do painel.
+>
+> ⚠️ Bucket off-site **vazio** faz o `expurgo-offsite.sh` sair `1`, não `0`.
+> Zero objetos num bucket de backup é credencial sem `ListObjects`, endpoint
+> errado, ou replicação parada — nunca "retenção em dia".
 
 #### Cadência do off-site — quanto se perde no pior dia
 
