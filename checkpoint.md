@@ -93,7 +93,7 @@ Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 
 ## 5. Próximos Passos Recomendados
 
-0. 🔴 **D58 — ação de admin, bloqueia o #423**: editar o ruleset `Main Protection` removendo `journal` e `versoes-legais` de `required_status_checks` ANTES de mergear o #423 (senão todo PR futuro fica `BLOCKED` esperando um check que nenhum workflow emite mais). Depois de mergear o #425, acrescentar `test-e2e` à lista, para que a suíte e2e passe a ser obrigatória de fato.
+0. ✅ **D58 — ruleset corrigido em 23/08/2026**: `journal` e `versoes-legais` removidos de `required_status_checks` (restam `lint · typecheck · test · test-rls · base-must-be-main`); o **#423 saiu de `BLOCKED` para `CLEAN`** e pode ser mergeado. **Passo restante**: acrescentar `test-e2e` aos obrigatórios só depois que `chore/remove-ci-workflows-redundantes` e `feat/374-exportacao-integral-acervo` mergearem ou rebasearem — nenhuma das duas tem o job no `ci.yml` e ficariam presas pelo mesmo mecanismo do D58.
 1. ✅ **Concluído (22/08/26)**: Merge da PR **#418** (#383 — webhook Resend) e **#419** (Governança Legal Google Gemini API).
 2. ✅ **Concluído (22/08/26)**: merge do **D34** (PR #420, `737a9c0`).
 3. **D36**: Faixa de alerta urgente de recusa na UI (`faixa-trial.tsx` / `/assinatura`).
