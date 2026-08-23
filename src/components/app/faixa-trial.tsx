@@ -135,6 +135,13 @@ export function FaixaTrial({
             >
               Ativar assinatura
             </Link>
+            <span className="mx-1">·</span>
+            <Link
+              href="/clinica/exportacao"
+              className="font-semibold whitespace-nowrap underline underline-offset-4"
+            >
+              Exportar acervo
+            </Link>
           </>
         ) : null}
       </Banner>

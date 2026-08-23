@@ -2208,3 +2208,106 @@ sem que os specs fossem ajustados. Estão inrodáveis desde então. Recriar o se
   - Mutante sem `brand/` na exclusão → **morto** (1 teste).
   - Mutante sem `_next/image` na exclusão → **morto** (1 teste).
   - Mutante removendo a entrada explícita `"/redefinir-senha"` → **sobrevive**, e é **mutante equivalente**: o catch-all `/((?!_next/static|_next/image|favicon.ico|brand/).*)` já casa `/redefinir-senha`. A entrada explícita é redundante no casamento e permanece apenas como declaração de intenção da rota crítica; nenhum teste novo é devido por ela.
+
+---
+
+## 📦 Sessão 22/08/2026 — Feature #374: Exportação Integral do Acervo da Clínica (Unificando #374 e #353)
+
+- **Status:** 🟡 Em revisão no PR #422 (implementação entregue; 9 achados da review corrigidos — ver a seção seguinte).
+- **Objetivo:** Implementar a exportação integral e portabilidade do acervo da clínica (Termos de Uso §7.4(b) e LGPD Art. 18), com geração assíncrona de pacote ZIP contendo todas as 37 tabelas do prontuário em formato NDJSON, relatórios clínicos congelados em PDF, manifesto com checksum SHA-256 e download seguro por token de uso único.
+- **Entregas principais:**
+  - **T1 — Migração `0117_export_bundle`:**
+    - Tabelas `export_bundle` e `export_bundle_blob` com status de ciclo de vida (`pendente`, `processando`, `pronto`, `falhou`, `expirado`), índice `uq_export_bundle_ativo` (UNIQUE parcial) e constraints de check.
+    - Políticas de RLS (`export_bundle_select`, `export_bundle_insert`, `export_bundle_blob_select`) com `app_clinic_id_exigido()` e `app_user_id_exigido()`. Nenhuma policy de UPDATE/DELETE para `app_role`.
+    - Quatro funções `SECURITY DEFINER`: `app_export_bundle_reservar`, `app_export_bundle_concluir`, `app_export_bundle_falhar`, `app_export_bundle_expirar`.
+    - **Isenção D10 documentada:** Ambas as tabelas deliberadamente isentas de `app_barreira_somente_leitura` para permitir que clínicas com conta em somente-leitura (pós-trial ou cancelada) exportem seus dados.
+  - **T2 — Coletor de Dados NDJSON (`src/lib/export/acervo/coletor.ts`):**
+    - Coleta sob `withTenant(clinicId, solicitanteId)` (D9) com ordenação determinística por PK.
+    - Projeção estrita de `app_user` (`id, name, email, created_at`), exclusão de `patient.cpf_hash` e segredos, e exclusão de soft-delete (`deletado_em IS NOT NULL`).
+    - Catálogo explícito de 37 tabelas e lista de negação estrita (`TABELAS_NEGADAS`).
+  - **T3 — Empacotador ZIP + Manifesto (`src/lib/export/acervo/bundle.ts`):**
+    - Compactação em memória via `fflate` gerando `dados/*.ndjson`, `relatorios/*.pdf`, `README.txt` e `manifest.json`.
+    - Cálculo de SHA-256 por arquivo e do ZIP inteiro via `sha256Hex`.
+    - Teto de 250 MiB com erro nomeado `bundle_excede_limite` (D7).
+  - **T4 — Motor de Estado (`src/lib/export/acervo/motor.ts`):**
+    - `solicitarExportacao`: Gate D1 de responsável da conta (`clinic.responsavel_conta_id`), inserção de `export_bundle` pendente e `audit_log` (`exportacao_integral_solicitada`).
+    - `processarProximo`: Reserva transacional atômica com teto de 3 tentativas (`tentativas_esgotadas`), geração de token seguro de download, transição para `pronto` com persistência de blob e `audit_log` (`exportacao_integral_concluida` / `exportacao_integral_falhou`).
+    - `expirarVencidos`: Expiração após 72h, descarte do blob em `export_bundle_blob` e `audit_log` (`exportacao_integral_expirada`).
+    - `obterHistoricoExportacoes`: Consulta do estado ativo e histórico sob RLS.
+  - **T5 — Job + Rota Interna (`src/app/api/internal/jobs/exportacao-integral/route.ts`):**
+    - Endpoint autenticado via Bearer token constante (`EXPORT_JOB_TOKEN`), processando a fila e disparando expiração.
+  - **T6 — Download Seguro (`src/app/api/export/acervo/[id]/route.ts` + `download.ts`):**
+    - Validação de sessão do responsável, conferência de token via SHA-256 + `timingSafeEqual`, 404 genérico para token/id inválidos (sem vazamento de existência), 410 para expirados e `audit_log` (`exportacao_integral_download`).
+  - **T7 — Interface do Usuário:**
+    - Página `src/app/(app)/clinica/exportacao/page.tsx` (Server Component com gate D1).
+    - View client `exportacao-view.tsx` com polling temporizado (10s, máx 60 tentativas / 10 min), estado de sucesso permanente, cópia de checksum SHA-256 e componentes do Design System.
+    - Server Action `actions.ts` e endpoint de estado `/api/exportacao/estado`.
+    - Estórias Storybook em `exportacao-view.stories.tsx`.
+    - Link estático "Exportar acervo" na tarja de somente-leitura (`FaixaTrial`) e no menu de navegação do coordenador (`AppHeader`).
+  - **T8 — Testes e Conformidade:**
+    - `coletor.test.ts`, `bundle.test.ts`, `route.test.ts`, `actions.test.ts` (testes unitários).
+    - `coletor.int.test.ts`, `motor.int.test.ts`, `download.int.test.ts`, `acervo.int.test.ts` (testes de integração/RLS).
+    - Verificação de negação estrita varrendo o ZIP real descompactado (zero tabelas de credencial/gateway e zero `cpf_hash`).
+    - Verificação de funcionamento com conta em somente-leitura (D10).
+    - Verificação das 5 ações da trilha imutável em `audit_log`.
+- **Validação e Métricas (Medição real):**
+  - `pnpm typecheck`: **0 erros**.
+  - `pnpm lint`: **0 erros**.
+  - `pnpm test`: **253/253 arquivos de teste passando (1.804 testes verdes)**.
+  - `POLICIES_COM_HELPER`: 67 policies validadas em `clinic-id-helper-rls.int.test.ts`.
+
+---
+
+## 🔎 Sessão 22/08/2026 — Review do PR #422 (tech lead) e correções
+
+- **Status:** ✅ Correções aplicadas; PR #422 destravado (era `CONFLICTING`, agora `MERGEABLE`).
+- **Contexto:** o PR estava com merge sujo contra `main`, o que impedia o GitHub
+  de calcular o merge ref — só o CodeQL rodava. CI, integridade de migrações e
+  integridade das versões legais **nunca chegaram a executar**. "4 checks
+  verdes" era, na prática, ausência de checks.
+
+### Conflitos resolvidos
+
+- `db/migrations/meta/_journal.json` — `main` parou na `0116`, a branch traz a
+  `0117`. Resolução: as duas entradas, na ordem.
+- `.specs/features/374-.../{spec,design,tasks}.md` — 43 linhas "divergentes",
+  **zero** com conteúdo diferente: era só realinhamento de padding de tabela do
+  Prettier (`main` formatada pelo #421). Adotada a versão de `main`.
+- Verificado que a resolução não reverteu `main`:
+  `git diff origin/main HEAD -- src/lib/billing scripts docs/legal` = vazio
+  (armadilha conhecida — branch antiga que já mergeou `main` pode apagar
+  trabalho mergeado sem conflitar).
+
+### Achados corrigidos
+
+| #   | Severidade | Achado                                                                                                                                                                                                                                  |
+| :-- | :--------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | P0         | **Feature inalcançável.** O token de download nasce no job, é gravado só como SHA-256 e o texto claro era descartado pela rota interna. A UI montava o link sem `?token=`, e `baixarBundleAcervo` devolve 404 quando o token vem vazio. |
+| 2   | P0         | `download.ts` lia `criado_em` de `export_bundle` — coluna inexistente na `0117` e no `schema.ts`. Todo download estouraria em runtime.                                                                                                  |
+| 3   | P0         | Nenhum gatilho do job: sem `scripts/exportacao-acervo.mjs` e sem `EXPORT_JOB_TOKEN` no `.env.example`, toda solicitação ficaria em `pendente` para sempre.                                                                              |
+| 4   | P1         | `app_export_bundle_reservar` sem guard de status: reservar um bundle `pronto` o devolvia a `processando`, matando o link vigente e podendo estourar `uq_export_bundle_ativo` dentro do DEFINER.                                         |
+| 5   | P1         | Os quatro DEFINER do job tinham `GRANT EXECUTE ... TO app_role` e aceitam qualquer `uuid` sem resolver tenant. `app_role` perdeu o EXECUTE; quem chama é o job, sob `iris_auth`.                                                        |
+| 6   | P1         | Gate D1 com três leituras diferentes do mesmo fato (`page.tsx` exigia coordenador com `responsavel_conta_id` nulo; motor e download liberavam qualquer papel). Unificado em `lib/export/acervo/gate.ts`, pela regra mais restrita.      |
+| 7   | P1         | `err.message` cru gravado em `export_bundle.erro` e `audit_log.detalhe` — texto de terceiro carrega valores de linha. Virou categoria fechada; o texto original fica só no log do processo.                                             |
+| 8   | P2         | Nada provava a cobertura do catálogo do coletor. O teste novo varre o `schema.ts` e já achou um buraco real: `report_pdf` não estava em nenhuma das duas listas (agora em `TABELAS_EXPORTADAS_BINARIAS`).                               |
+| 9   | P2         | `expirarVencidos` ignorava o boolean de `app_export_bundle_expirar` e auditava expiração sem linha alterada.                                                                                                                            |
+
+### Lição transversal — o lockfile alterna de formato
+
+`pnpm-lock.yaml` não estava no `.prettierignore`. O Prettier expande os flow
+maps (`resolution: {integrity: …}` vira bloco multilinha) e troca as aspas,
+inflando o arquivo em ~3,4 k linhas; o `pnpm install` seguinte desfaz tudo.
+Resultado: cada branch alterna entre os dois formatos e produz um diff de
+**12 mil linhas** para uma dependência nova (`fflate`, 1 linha no
+`package.json`). Conjunto de pacotes conferido: idêntico ao de `main` **mais**
+`fflate@0.8.3`. O lockfile entrou no `.prettierignore`.
+
+### Medições após as correções
+
+- `pnpm typecheck`: **0 erros**.
+- `pnpm lint`: **0 erros** (9 warnings pré-existentes).
+- `pnpm vitest run`: **253 arquivos / 1.805 testes, 0 falha**.
+- Suíte de integração/RLS: depende de Postgres; roda no job `test-rls` do CI
+  (Docker local indisponível nesta sessão).
+- `FUNCOES_COM_HELPER` subiu de 18 para 19 (entra
+  `app_export_bundle_token_definir`, com guard de tenant).

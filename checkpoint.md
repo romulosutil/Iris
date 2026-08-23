@@ -24,13 +24,14 @@
 
 ## 2. PRs Abertas Aguardando Revisão e Merge
 
-| PR       | Branch                                       | Escopo / Débito                                                                                                                                      | Estado                                                                          |
-| :------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
-| **#419** | `feat/383-resend-webhook-bounces-complaints` | **Governança Legal**: formalização do Google Gemini nos termos e políticas de privacidade.                                                           | ✅ Mergeada em `main` (`fc64478`).                                              |
-| **#420** | `feat/d34-auditoria-corte-inadimplencia`     | **D34**: auditoria no corte por inadimplência (`audit_log`) e exit code no job de faturamento.                                                       | ✅ Mergeada em `main` (`737a9c0`).                                              |
-| **#425** | `fix/424-e2e-seed-demo-e-ci`                 | **#424**: recria `pnpm seed:demo`/`seed:e2e`, corrige 4 specs com drift de produto e liga a suíte `e2e/` no CI (job `test-e2e` + gate de cobertura). | ✅ **Mergeada em `main` (`b64784d`, 23/08)** após a revisão — verde em CI real. |
-| **#423** | `chore/remove-ci-workflows-redundantes`      | Remove `migrations-integrity`, `legal-versions-integrity` e `layout-preview-guardrail` (cobertos pelo job `test`).                                   | ⚠️ Verde, porém `BLOCKED`: **mergear só depois de editar o ruleset** (D58).     |
-| **#422** | `feat/374-exportacao-integral-acervo`        | Exportação integral do acervo da conta (#374/#353 unificadas).                                                                                       | Aberta aguardando revisão/merge.                                                |
+| PR       | Branch                                       | Escopo / Débito                                                                                                                                      | Estado                                                                                                                |
+| :------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
+| **#419** | `feat/383-resend-webhook-bounces-complaints` | **Governança Legal**: formalização do Google Gemini nos termos e políticas de privacidade.                                                           | ✅ Mergeada em `main` (`fc64478`).                                                                                    |
+| **#420** | `feat/d34-auditoria-corte-inadimplencia`     | **D34**: auditoria no corte por inadimplência (`audit_log`) e exit code no job de faturamento.                                                       | ✅ Mergeada em `main` (`737a9c0`).                                                                                    |
+| **#425** | `fix/424-e2e-seed-demo-e-ci`                 | **#424**: recria `pnpm seed:demo`/`seed:e2e`, corrige 4 specs com drift de produto e liga a suíte `e2e/` no CI (job `test-e2e` + gate de cobertura). | ✅ **Mergeada em `main` (`b64784d`, 23/08)** após a revisão — verde em CI real.                                       |
+| **#423** | `chore/remove-ci-workflows-redundantes`      | Remove `migrations-integrity`, `legal-versions-integrity` e `layout-preview-guardrail` (cobertos pelo job `test`).                                   | ✅ Mergeada em `main` (`bacf4e3`, 23/08) depois do D58 resolvido.                                                     |
+| **#426** | `docs/revisao-tech-lead-423-425`             | Registro da revisão tech lead + correção do gate `test-e2e` (contagem de flaky).                                                                     | ✅ Mergeada em `main` (`bfb1571`, 23/08).                                                                             |
+| **#422** | `feat/374-exportacao-integral-acervo`        | Exportação integral do acervo da conta (#374/#353 unificadas).                                                                                       | Aberta; `main` mergeada na branch em 23/08 (conflito de `checkpoint.md` resolvido de forma aditiva). Única PR aberta. |
 
 ---
 
@@ -93,7 +94,10 @@ Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 
 ## 5. Próximos Passos Recomendados
 
-0. ✅ **D58 — ruleset corrigido em 23/08/2026**: `journal` e `versoes-legais` removidos de `required_status_checks` (restam `lint · typecheck · test · test-rls · base-must-be-main`); o **#423 saiu de `BLOCKED` para `CLEAN`** e pode ser mergeado. **Passo restante**: acrescentar `test-e2e` aos obrigatórios só depois que `chore/remove-ci-workflows-redundantes` e `feat/374-exportacao-integral-acervo` mergearem ou rebasearem — nenhuma das duas tem o job no `ci.yml` e ficariam presas pelo mesmo mecanismo do D58.
+0. ✅ **D58 — ruleset corrigido em 23/08/2026**: `journal` e `versoes-legais` removidos de `required_status_checks` (restam `lint · typecheck · test · test-rls · base-must-be-main`); o **#423 saiu de `BLOCKED` para `CLEAN`** e foi mergeado (`bacf4e3`). **Passo restante**: acrescentar `test-e2e` aos obrigatórios só depois que `feat/374-exportacao-integral-acervo` (#422) mergear — ela era a última branch sem o job no `ci.yml` e ficaria presa pelo mesmo mecanismo do D58. Com `main` mergeada na branch em 23/08, a #422 já roda `test-e2e`; feito o merge dela, o check pode virar obrigatório.
+
+0.1. **Gate `test-e2e` corrigido (PR #426)**: `scripts/ci/verificar-cobertura-e2e.mjs` somava só `stats.expected`, mas o Playwright move o teste que passa no retry para `stats.flaky` — um flake em `e2e/represcricao-mv4.spec.ts:33` derrubou a contagem para 16/17 e o job reprovou acusando "cobertura caiu abaixo do esperado", defeito que não existia. Passou a contar `expected + flaky`; `unexpected` continua reprovando sozinho. **O flake do `represcricao-mv4.spec.ts:33` segue aberto e sem issue.**
+
 1. ✅ **Concluído (22/08/26)**: Merge da PR **#418** (#383 — webhook Resend) e **#419** (Governança Legal Google Gemini API).
 2. ✅ **Concluído (22/08/26)**: merge do **D34** (PR #420, `737a9c0`).
 3. **D36**: Faixa de alerta urgente de recusa na UI (`faixa-trial.tsx` / `/assinatura`).
@@ -101,3 +105,82 @@ Revisão jurídica consolidada em `docs/legal/revisao-juridica-2026-08-21.md`.
 5. **D57**: Checagem operacional (billing pago ativo, escopo do DPA para Gemini API standalone, Art. 33 LGPD) antes de comutar `EXTRACTION_LLM_ENABLED=true`.
 6. ✅ **Concluído (22/08/26)**: `RESEND_WEBHOOK_SECRET` publicado no Easypanel (iris-app) e endpoint `https://irisclinica.ia.br/api/webhooks/resend` cadastrado no painel do Resend (eventos `email.bounced` e `email.complained`).
 7. **Dívida residual aceita (não bloqueia)**: os lookups unitários `taxonomiaDoProtocolo`, `criterioDominioDaMeta` e `lerCandidaturaGoalAtual` seguem no contrato `MaterializarQueries` sem chamador em produção — mantidos de propósito, como o `tipoEstruturaDoMarco` desde a #316, porque os testes asseriam `not.toHaveBeenCalled()` sobre eles (é o oráculo que prova que o N+1 não voltou).
+
+---
+
+## 6. Review do PR #422 (Exportação Integral do Acervo, #374 ∪ #353)
+
+Sessão de 22/08/2026, papel de tech lead. Estado: **correções aplicadas e enviadas**.
+
+### Feito
+
+- Merge de `origin/main` na branch. Conflitos resolvidos:
+  - `db/migrations/meta/_journal.json`: `0116` (main) + `0117` (branch).
+  - `.specs/features/374-.../{spec,design,tasks}.md`: divergência era **só**
+    padding de tabela do Prettier; adotada a versão de main (#421).
+  - Verificado que nada de main se perdeu:
+    `git diff origin/main HEAD -- src/lib/billing scripts docs/legal` = vazio.
+- `pnpm-lock.yaml` restaurado ao formato nativo do pnpm e adicionado ao
+  `.prettierignore` (o Prettier expandia os flow maps e inflava o arquivo em
+  ~3,4 k linhas, produzindo diffs de 12 k linhas a cada branch).
+
+### Achados da review (medidos, não presumidos)
+
+#### P0 — a feature não funciona de ponta a ponta
+
+1. `download.ts` faz `SELECT ... criado_em FROM export_bundle`; a coluna **não
+   existe** na `0117` nem no `schema.ts`. Todo download estoura.
+2. O token de download nunca chega ao usuário. `processarProximo()` gera o
+   token, grava só o hash e devolve o texto claro para a rota interna do job,
+   que o descarta. A UI monta o link como
+   `/api/export/acervo/{id}` **sem `?token=`**, e `baixarBundleAcervo` devolve
+   404 já na primeira linha quando o token vem vazio.
+3. Nada dispara o job: não existe `scripts/exportacao-acervo.mjs` (o design o
+   nomeia) nem entrada de `EXPORT_JOB_TOKEN` no `.env.example`. Bundles ficam
+   em `pendente` para sempre.
+
+#### P1 — segurança e corretude
+
+4. `app_export_bundle_reservar` não tem guard de status: reservar um bundle já
+   `pronto` o devolve a `processando`, invalidando o link vigente e podendo
+   estourar `uq_export_bundle_ativo` dentro do DEFINER.
+5. Os quatro `SECURITY DEFINER` têm `GRANT EXECUTE ... TO app_role` e aceitam
+   qualquer `uuid` sem guard de tenant — contraria CLAUDE.md §5 ("guard interno
+   é fronteira"). Quem chama é o job, sob `iris_auth`.
+6. Gate D1 fail-open: `motor.ts` e `download.ts` liberam **qualquer** papel
+   quando `clinic.responsavel_conta_id IS NULL`; `page.tsx` restringe a
+   coordenador. Três leituras diferentes do mesmo gate.
+7. `motor.ts` grava `err.message` cru em `export_bundle.erro` e em
+   `audit_log.detalhe` — mensagem de terceiro pode carregar PII de linha.
+
+#### P2
+
+8. Nenhum teste prova que `TABELAS_EXPORTADAS ∪ TABELAS_NEGADAS` cobre o
+   `schema.ts` inteiro: tabela nova entra em silêncio em nenhum dos dois.
+9. `expirarVencidos` ignora o boolean de `app_export_bundle_expirar` e audita
+   expiração mesmo quando nenhuma linha mudou.
+10. `design.md` §2 fala em "migração `0095`"; a entregue é a `0117`.
+
+### Correções aplicadas (commit `fix(export): torna o download alcançável…`)
+
+Os nove achados acima foram corrigidos. O que entrou de novo:
+
+- `src/lib/export/acervo/gate.ts` — leitura única do gate D1.
+- `app_export_bundle_token_definir` na `0117` (DEFINER com guard de tenant
+  copiado da policy de leitura) + `gerarLinkDownload` + `gerarLinkDownloadAction`.
+- `scripts/exportacao-acervo.mjs` (gatilho magro, sem dependência npm) e o
+  bloco `EXPORT_JOB_URL`/`EXPORT_JOB_TOKEN` no `.env.example`.
+- Teste de cobertura do catálogo (varre o `schema.ts`) e teste de integração do
+  caminho do link (cunhar → baixar → cunhar de novo revoga o anterior →
+  não-responsável é recusado).
+- `FUNCOES_COM_HELPER` de 18 para 19 em `db/tests/clinic-id-helper-rls.int.test.ts`.
+
+Medido: typecheck 0 erros, lint 0 erros, `pnpm vitest run` 253 arquivos /
+1.805 testes com 0 falha. A suíte de integração/RLS roda no job `test-rls` do
+CI — Docker local indisponível nesta sessão.
+
+### Pendente para o go-live (não é código)
+
+Agendar `scripts/exportacao-acervo.mjs` no Easypanel e publicar
+`EXPORT_JOB_URL` / `EXPORT_JOB_TOKEN` no serviço do App. Sem isso a fila não
+anda em produção.

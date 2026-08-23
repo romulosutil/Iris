@@ -6,6 +6,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   customType,
@@ -2445,3 +2446,62 @@ export const anamneseAlvo = pgTable(
     index("idx_anamnese_alvo_clinic").on(t.clinicId),
   ],
 );
+
+// ─── #374 ∪ #353 — Exportação Integral do Acervo da Clínica (T1) ─────────────
+// Bundle de exportação assíncrona do acervo da clínica (NDJSON + PDFs).
+// GRANTs, RLS e funções SECURITY DEFINER de transição de estado são escritos
+// à mão na migração 0117.
+export const exportBundleStatus = pgEnum("export_bundle_status", [
+  "pendente",
+  "processando",
+  "pronto",
+  "falhou",
+  "expirado",
+]);
+
+export const exportBundle = pgTable(
+  "export_bundle",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    solicitadoPor: uuid("solicitado_por")
+      .notNull()
+      .references(() => appUser.id, { onDelete: "restrict" }),
+    status: exportBundleStatus("status").notNull().default("pendente"),
+    solicitadoEm: timestamp("solicitado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    iniciadoEm: timestamp("iniciado_em", { withTimezone: true }),
+    concluidoEm: timestamp("concluido_em", { withTimezone: true }),
+    expiraEm: timestamp("expira_em", { withTimezone: true }),
+    tentativas: integer("tentativas").notNull().default(0),
+    erro: text("erro"),
+    bytesTamanho: bigint("bytes_tamanho", { mode: "number" }),
+    sha256: text("sha256"),
+    tokenHash: text("token_hash"),
+    manifest: jsonb("manifest"),
+  },
+  (t) => [
+    uniqueIndex("uq_export_bundle_ativo")
+      .on(t.clinicId)
+      .where(sql`${t.status} IN ('pendente', 'processando')`),
+    check(
+      "export_bundle_pronto_congelado",
+      sql`${t.status} <> 'pronto' OR (${t.sha256} IS NOT NULL AND ${t.bytesTamanho} IS NOT NULL AND ${t.expiraEm} IS NOT NULL AND ${t.tokenHash} IS NOT NULL AND ${t.concluidoEm} IS NOT NULL)`,
+    ),
+    check(
+      "export_bundle_falhou_motivado",
+      sql`${t.status} <> 'falhou' OR ${t.erro} IS NOT NULL`,
+    ),
+    index("idx_export_bundle_clinic").on(t.clinicId, t.solicitadoEm.desc()),
+  ],
+);
+
+export const exportBundleBlob = pgTable("export_bundle_blob", {
+  bundleId: uuid("bundle_id")
+    .primaryKey()
+    .references(() => exportBundle.id, { onDelete: "cascade" }),
+  bytes: bytea("bytes").notNull(),
+});

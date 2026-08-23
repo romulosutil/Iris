@@ -54,6 +54,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       { href: "/equipe", label: "Equipe" },
       { href: "/relatorios", label: "Relatórios" },
       { href: "/clinica/dados", label: "Dados da Clínica" },
+      { href: "/clinica/exportacao", label: "Exportar Acervo" },
       { href: "/duvidas", label: "Dúvidas" },
     ];
   } else if (ctx.role === "terapeuta") {

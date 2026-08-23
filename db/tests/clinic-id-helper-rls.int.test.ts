@@ -84,6 +84,9 @@ const POLICIES_COM_HELPER = [
   "bloqueio.bloqueio_select",
   "bloqueio.bloqueio_update",
   "clinic.clinic_read",
+  "export_bundle.export_bundle_insert",
+  "export_bundle.export_bundle_select",
+  "export_bundle_blob.export_bundle_blob_select",
   "extraction.extraction_delete",
   "extraction.extraction_insert",
   "extraction.extraction_select",
@@ -274,6 +277,9 @@ const FUNCOES_COM_HELPER = [
   "app_cpf_hash_usado_em_outro_trial",
   "app_criar_alerta_risco",
   "app_desarquivar_paciente",
+  // #374 — cunha o token de download do bundle de exportação. É chamada por
+  // `app_role`, então o guard interno copia o predicado da policy de leitura.
+  "app_export_bundle_token_definir",
   "app_iniciar_trial",
   "app_paciente_expurgavel",
   "app_patient_in_clinic",
@@ -375,7 +381,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Redundante de propósito: se o literal for editado por engano (linha
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
-    expect(POLICIES_COM_HELPER.length).toBe(64);
+    expect(POLICIES_COM_HELPER.length).toBe(67);
   });
 
   // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────
@@ -443,7 +449,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 16 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 19 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -456,7 +462,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(18);
+    expect(FUNCOES_COM_HELPER.length).toBe(19);
   });
 
   // ─── 2c. D23: guards de papel e identidade (0093) ──────────────────────────
