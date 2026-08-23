@@ -1,7 +1,7 @@
 # Checkpoint — Estado Atual do Repositório Iris
 
 **Data**: 23/08/2026
-**Status**: `main` verde e estável. Revisão tech lead dos PRs #423 e #425 concluída: **#425 verde em CI real** (suíte e2e passa a rodar no CI); **#423 verde porém `BLOCKED` por configuração de ruleset** (ver **D58**, ação de admin).
+**Status**: `main` verde e estável. Revisão tech lead dos PRs #423 e #425 concluída: **#425 mergeada em `main` (`b64784d`)** após ficar verde em CI real — a suíte e2e passa a rodar no CI; **#423 verde porém `BLOCKED` por configuração de ruleset** (ver **D58**, ação de admin).
 **Últimas PRs mergeadas em `main`**: #412 (D52), #413 (D53), #414 (D47), #415 (#328), #416 (D54), #417 (D40 / #330), #418 (#383), #419 (legal/Gemini), #420 (D34), #421 (spec de exportação)
 
 ---
@@ -28,7 +28,7 @@
 | :------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
 | **#419** | `feat/383-resend-webhook-bounces-complaints` | **Governança Legal**: formalização do Google Gemini nos termos e políticas de privacidade.                                                           | ✅ Mergeada em `main` (`fc64478`).                                              |
 | **#420** | `feat/d34-auditoria-corte-inadimplencia`     | **D34**: auditoria no corte por inadimplência (`audit_log`) e exit code no job de faturamento.                                                       | ✅ Mergeada em `main` (`737a9c0`).                                              |
-| **#425** | `fix/424-e2e-seed-demo-e-ci`                 | **#424**: recria `pnpm seed:demo`/`seed:e2e`, corrige 4 specs com drift de produto e liga a suíte `e2e/` no CI (job `test-e2e` + gate de cobertura). | ✅ **Verde em CI real (23/08)**; revisado, pronto para sair de Draft e mergear. |
+| **#425** | `fix/424-e2e-seed-demo-e-ci`                 | **#424**: recria `pnpm seed:demo`/`seed:e2e`, corrige 4 specs com drift de produto e liga a suíte `e2e/` no CI (job `test-e2e` + gate de cobertura). | ✅ **Mergeada em `main` (`b64784d`, 23/08)** após a revisão — verde em CI real. |
 | **#423** | `chore/remove-ci-workflows-redundantes`      | Remove `migrations-integrity`, `legal-versions-integrity` e `layout-preview-guardrail` (cobertos pelo job `test`).                                   | ⚠️ Verde, porém `BLOCKED`: **mergear só depois de editar o ruleset** (D58).     |
 | **#422** | `feat/374-exportacao-integral-acervo`        | Exportação integral do acervo da conta (#374/#353 unificadas).                                                                                       | Aberta aguardando revisão/merge.                                                |
 

@@ -103,7 +103,7 @@
 
 ## 🏁 Sessão 23/08/2026 — revisão tech lead dos PRs #423 e #425: o CI que rodava duas vezes, a suíte que nunca rodava, e o check obrigatório que vira armadilha
 
-- **Status:** #425 verde em CI real e pronto para revisão; #423 verde mas `BLOCKED` por ruleset (ação de admin pendente, D58).
+- **Status:** #425 mergeada em `main` (`b64784d`) depois de ficar verde em CI real; #423 verde mas `BLOCKED` por ruleset (ação de admin pendente, D58).
 
 ### O que a revisão mediu
 
