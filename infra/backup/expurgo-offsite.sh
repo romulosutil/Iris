@@ -1,14 +1,32 @@
 #!/usr/bin/env bash
-# expurgo-offsite.sh — automação e auditoria do expurgo de cópias de segurança
-# off-site (OCI S3 / Oracle Cloud) com mais de 30 dias (LGPD Art. 46).
+# expurgo-offsite.sh — AUDITORIA (e, sob flag explícita, expurgo) das cópias de
+# segurança off-site (OCI S3 / Oracle Cloud) com mais de 30 dias (LGPD Art. 46).
 #
 # POR QUE ISTO EXISTE:
 # O script de backup local (infra/backup/backup.sh) executa prune automático de
 # 30 dias (RETENTION_DAYS=30) nos volumes locais e no MinIO local. A retenção
-# off-site no bucket da Oracle Cloud (OCI S3) é regida por uma Lifecycle Rule no
-# provedor. Este script fornece a verificação/expurgo automatizado no repositório
-# para garantir que nenhum artefato com mais de RETENTION_DAYS dias permaneça no
-# bucket off-site, assegurando a conformidade técnica contínua com o Art. 46 da LGPD.
+# off-site é regida por uma Lifecycle Rule configurada NO PROVEDOR — fora deste
+# repositório. Este script não substitui essa regra: ele MEDE se ela está
+# funcionando, e falha alto quando não está.
+#
+# POR QUE AUDITAR É O PADRÃO E EXPURGAR É OPT-IN:
+# A credencial do destino off-site é write-only de propósito (sem DeleteObject,
+# sem CreateBucket — ver §"o terceiro destino" em infra/README.md). É essa
+# ausência de permissão que impede um VPS comprometido de APAGAR a cópia de
+# recuperação de desastre. Se este script expurgasse por padrão, a credencial
+# usada por ele precisaria de DeleteObject — e a propriedade de segurança
+# morreria em troca de conveniência. Então: por padrão só mede e reporta; a
+# exclusão ativa exige `--expurgar` E uma credencial separada, de operação
+# manual, com permissão de exclusão.
+#
+# COMO A IDADE É MEDIDA:
+# Pelo mtime do objeto no bucket (metadado do storage), via `mc find
+# --older-than` — o MESMO predicado e a MESMA flag que `mc rm --older-than`
+# usa para excluir. Auditoria e expurgo enxergam exatamente o mesmo conjunto.
+# NÃO se usa o carimbo do NOME do arquivo (iris-YYYYMMDDTHHMMSSZ...): nome é
+# texto escolhido por quem sobe, mtime é fato registrado por quem armazena, e
+# medir por um e excluir por outro faz o script relatar não-conformidade que a
+# exclusão nunca alcança.
 #
 # USO:
 #   export OFFSITE_S3_ENDPOINT=https://<namespace>.compat.objectstorage.<região>.oraclecloud.com
@@ -16,13 +34,13 @@
 #   export OFFSITE_S3_SECRET_KEY=...
 #   export OFFSITE_S3_BUCKET=iris-backups-offsite
 #   export RETENTION_DAYS=30
-#   ./infra/backup/expurgo-offsite.sh [--dry-run|--check-only]
+#   ./infra/backup/expurgo-offsite.sh                # AUDITA (padrão, não apaga nada)
+#   ./infra/backup/expurgo-offsite.sh --expurgar     # audita E apaga (exige DeleteObject)
 #
 # EXIT CODE:
-#   0 = SUCESSO / EM CONFORMIDADE: expurgo executado (se habilitado) e
-#       nenhum objeto com idade > RETENTION_DAYS permanece no bucket off-site.
-#   1 = ERRO OU NÃO-CONFORMIDADE: falha de execução ou detectados objetos com idade
-#       > RETENTION_DAYS que não puderam ser expurgados.
+#   0 = EM CONFORMIDADE: nenhum objeto com idade > RETENTION_DAYS no bucket.
+#   1 = ERRO OU NÃO-CONFORMIDADE: falha de execução, bucket vazio/inacessível,
+#       ou objetos com idade > RETENTION_DAYS presentes ao fim da execução.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -44,14 +62,21 @@ on_error() {
 trap 'on_error ${LINENO}' ERR
 
 # --- argumentos / flags ------------------------------------------------------
-DRY_RUN=0
+# EXPURGAR=0 é o padrão e é uma decisão de segurança, não uma conveniência —
+# ver o cabeçalho. `--dry-run`/`--check-only` são o padrão dito em voz alta:
+# existem para quem quer deixar explícito no cron/painel que aquela invocação
+# não apaga, e para não quebrar chamadas já escritas.
+EXPURGAR=0
 for arg in "$@"; do
 	case "${arg}" in
 		--dry-run|--check-only)
-			DRY_RUN=1
+			EXPURGAR=0
+			;;
+		--expurgar|--purge)
+			EXPURGAR=1
 			;;
 		*)
-			log_error "argumento não reconhecido: ${arg}. Uso: $0 [--dry-run|--check-only]"
+			log_error "argumento não reconhecido: ${arg}. Uso: $0 [--check-only|--dry-run|--expurgar]"
 			exit 1
 			;;
 	esac
@@ -90,6 +115,8 @@ if ! [[ "${OFFSITE_PATH_STYLE}" =~ ^(auto|on|off)$ ]]; then
 	exit 1
 fi
 
+readonly IDADE_LIMITE="${RETENTION_DAYS}d"
+
 # Diretório temporário para configuração do mc, destruído ao sair
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/.expurgo-offsite.XXXXXX")"
 readonly TMP_DIR
@@ -103,6 +130,12 @@ trap limpar EXIT
 
 readonly MC_ALIAS="irisexpurge"
 
+# Redige o secret de qualquer texto antes de ele virar log. O mc ecoa a URL
+# completa em várias mensagens de erro.
+redigir() {
+	printf '%s' "${1//${OFFSITE_S3_SECRET_KEY}/***}"
+}
+
 mc_configurar_alias() {
 	local alias="$1" endpoint="$2" access_key="$3" secret_key="$4" path_style="${5:-auto}"
 	local saida
@@ -114,10 +147,7 @@ mc_configurar_alias() {
 		return 0
 	fi
 
-	if [[ -n "${secret_key}" ]]; then
-		saida="${saida//${secret_key}/***}"
-	fi
-	log_error "mc alias set falhou para '${alias}': ${saida}"
+	log_error "mc alias set falhou para '${alias}': $(redigir "${saida}")"
 	return 1
 }
 
@@ -126,67 +156,85 @@ if ! mc_configurar_alias "${MC_ALIAS}" "${OFFSITE_S3_ENDPOINT}" \
 	exit 1
 fi
 
-log_info "iniciando verificação de expurgo no bucket ${OFFSITE_S3_BUCKET} (retenção: ${RETENTION_DAYS}d, dry-run: ${DRY_RUN})"
+if [[ "${EXPURGAR}" -eq 1 ]]; then
+	MODO="EXPURGO ATIVO (--expurgar: exige credencial com DeleteObject)"
+else
+	MODO="AUDITORIA (padrão: NÃO apaga nada)"
+fi
+readonly MODO
 
-# --- listagem do bucket -------------------------------------------------------
+log_info "bucket=${OFFSITE_S3_BUCKET} · retenção=${IDADE_LIMITE} · modo=${MODO}"
+
+# --- o bucket precisa estar acessível E ter conteúdo --------------------------
+# "Listagem vazia" NÃO é prova de conformidade. Um bucket de backup vazio é uma
+# das três coisas, e nenhuma delas é boa: (a) a credencial não tem ListObjects e
+# o provedor devolve conjunto vazio em vez de negar; (b) o bucket/endpoint está
+# errado e estamos auditando um lugar onde nada nunca foi escrito; (c) o bucket
+# é o certo e o backup off-site parou de subir. Sair 0 aqui carimbaria
+# "CONFORMIDADE VERIFICADA" em cima de um destino de recuperação de desastre
+# INEXISTENTE — o modo de falha mais caro que este script poderia ter.
 if ! listagem="$(MC_REGION="${OFFSITE_REGION}" mc ls "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
-	log_error "não foi possível listar ${OFFSITE_S3_BUCKET}. Resposta do mc: ${listagem//${OFFSITE_S3_SECRET_KEY}/***}"
+	log_error "não foi possível listar ${OFFSITE_S3_BUCKET}. Resposta do mc: $(redigir "${listagem}")"
 	exit 1
 fi
 
-if [[ -z "${listagem}" ]]; then
-	log_info "bucket ${OFFSITE_S3_BUCKET} está VAZIO. NENHUM objeto expirado encontrado."
-	log_info "CONFORMIDADE LGPD ART. 46 VERIFICADA: 0 objetos com idade > ${RETENTION_DAYS}d."
-	exit 0
-fi
-
-# --- cálculo de corte por timestamp ISO ---------------------------------------
-AGORA_EPOCH="$(date +%s)"
-INTERVALO_S=$((RETENTION_DAYS * 86400))
-CUTOFF_EPOCH=$((AGORA_EPOCH - INTERVALO_S))
-CUTOFF_ISO="$(date -u -d "@${CUTOFF_EPOCH}" +%Y%m%dT%H%M%SZ)"
-readonly CUTOFF_ISO
-
-log_info "corte de retenção calculado: ${CUTOFF_ISO} (objetos com carimbo anterior a este limite são considerados expirados)"
-
-# --- remoção ativa (se não for dry-run) --------------------------------------
-if [[ "${DRY_RUN}" -eq 0 ]]; then
-	log_info "executando expurgo ativo no bucket ${MC_ALIAS}/${OFFSITE_S3_BUCKET} para objetos com mais de ${RETENTION_DAYS}d..."
-	if ! saida_rm="$(MC_REGION="${OFFSITE_REGION}" mc rm --recursive --force --older-than "${RETENTION_DAYS}d" "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
-		log_info "aviso: 'mc rm --older-than' retornou código não-zero (possível credencial sem permissão de exclusão DeleteObject). Resposta: ${saida_rm//${OFFSITE_S3_SECRET_KEY}/***}"
-	fi
-fi
-
-# --- auditoria de conformidade pós-expurgo -----------------------------------
-if ! listagem_pos="$(MC_REGION="${OFFSITE_REGION}" mc ls "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
-	log_error "falha ao relistar bucket para auditoria de conformidade."
+if [[ -z "${listagem// /}" ]]; then
+	log_error "bucket ${OFFSITE_S3_BUCKET} está VAZIO — isto NÃO é prova de conformidade."
+	log_error "Um bucket de backup sem NENHUM objeto significa credencial sem ListObjects, bucket/endpoint errado, ou replicação off-site parada. Verificar antes de tratar a retenção como em dia."
 	exit 1
 fi
 
-OBJETOS_EXPIRADOS=()
+# --- objetos expirados (mtime > RETENTION_DAYS) -------------------------------
+# `mc find --older-than` é o MESMO predicado de `mc rm --older-than`. Auditar e
+# expurgar com a mesma flag é o que garante que o conjunto relatado é o conjunto
+# que a exclusão alcança.
+listar_expirados() {
+	MC_REGION="${OFFSITE_REGION}" mc find "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" \
+		--older-than "${IDADE_LIMITE}" 2>&1
+}
 
-while IFS= read -r linha; do
-	[[ -z "${linha}" ]] && continue
-	# Extrai nome do objeto no formato iris-YYYYMMDDTHHMMSSZ.*.age
-	if [[ "${linha}" =~ (iris-[0-9]{8}T[0-9]{6}Z\.[a-zA-Z0-9\._\-]+) ]]; then
-		nome_obj="${BASH_REMATCH[1]}"
-		carimbo="${nome_obj%%.*}" # iris-YYYYMMDDTHHMMSSZ
-		carimbo_puro="${carimbo#iris-}" # YYYYMMDDTHHMMSSZ
+if ! expirados_antes="$(listar_expirados)"; then
+	log_error "falha ao consultar objetos expirados: $(redigir "${expirados_antes}")"
+	exit 1
+fi
 
-		if [[ "${carimbo_puro}" < "${CUTOFF_ISO}" ]]; then
-			log_error "objeto expirado detectado: ${nome_obj} (carimbo: ${carimbo_puro} < corte: ${CUTOFF_ISO})"
-			OBJETOS_EXPIRADOS+=("${nome_obj}")
-		fi
+contar() {
+	[[ -z "${1// /}" ]] && { printf '0'; return; }
+	printf '%s' "$1" | grep -c '' || true
+}
+
+NUM_ANTES="$(contar "${expirados_antes}")"
+log_info "objetos com idade > ${IDADE_LIMITE} encontrados: ${NUM_ANTES}"
+
+if [[ "${NUM_ANTES}" -gt 0 ]]; then
+	printf '%s\n' "${expirados_antes}" | sed 's/^/[expurgo-offsite]   expirado: /'
+fi
+
+# --- expurgo ativo (somente sob --expurgar) -----------------------------------
+if [[ "${EXPURGAR}" -eq 1 && "${NUM_ANTES}" -gt 0 ]]; then
+	log_info "executando expurgo ativo (mc rm --older-than ${IDADE_LIMITE})..."
+	if ! saida_rm="$(MC_REGION="${OFFSITE_REGION}" mc rm --recursive --force \
+		--older-than "${IDADE_LIMITE}" "${MC_ALIAS}/${OFFSITE_S3_BUCKET}/" 2>&1)"; then
+		log_error "mc rm falhou — a credencial provavelmente não tem DeleteObject (o que é o desenho padrão do destino off-site). Resposta: $(redigir "${saida_rm}")"
 	fi
-done <<< "${listagem_pos}"
+fi
 
-NUM_EXPIRADOS="${#OBJETOS_EXPIRADOS[@]}"
+# --- auditoria final ----------------------------------------------------------
+# Sempre remede depois, inclusive no modo auditoria: é a medição pós-estado que
+# vale, não a intenção declarada antes.
+if ! expirados_depois="$(listar_expirados)"; then
+	log_error "falha ao remedir objetos expirados para a auditoria final: $(redigir "${expirados_depois}")"
+	exit 1
+fi
 
-if [[ "${NUM_EXPIRADOS}" -gt 0 ]]; then
-	if [[ "${DRY_RUN}" -eq 1 ]]; then
-		log_error "AUDITORIA DE RETENÇÃO OFF-SITE: ${NUM_EXPIRADOS} objeto(s) com idade > ${RETENTION_DAYS}d encontrado(s) no bucket em modo --dry-run."
+NUM_DEPOIS="$(contar "${expirados_depois}")"
+
+if [[ "${NUM_DEPOIS}" -gt 0 ]]; then
+	if [[ "${EXPURGAR}" -eq 1 ]]; then
+		log_error "EXPURGO OFF-SITE INCOMPLETO: ${NUM_DEPOIS} objeto(s) com idade > ${IDADE_LIMITE} permanece(m) após o expurgo. Credencial sem DeleteObject?"
 	else
-		log_error "EXPURGO OFF-SITE INCOMPLETO: ${NUM_EXPIRADOS} objeto(s) com idade > ${RETENTION_DAYS}d permanece(m) no bucket após o expurgo. Se a credencial for write-only, verifique se a Lifecycle Rule de 30 dias está ativa no painel da OCI."
+		log_error "RETENÇÃO OFF-SITE NÃO CONFORME: ${NUM_DEPOIS} objeto(s) com idade > ${IDADE_LIMITE} no bucket ${OFFSITE_S3_BUCKET}."
+		log_error "Este script roda em modo AUDITORIA e NÃO apaga por padrão. Confirmar a Lifecycle Rule de ${RETENTION_DAYS} dias no console da OCI; se ela estiver ausente, criá-la (caminho preferido) ou rodar este script com --expurgar usando a credencial de operação com DeleteObject."
 	fi
 	exit 1
 fi
