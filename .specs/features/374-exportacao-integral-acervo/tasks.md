@@ -133,12 +133,12 @@ Checklist de saída **de toda task**: `pnpm typecheck` · `pnpm lint` · `pnpm t
 
 ## Fechamento do handoff (AGENTS.md §5.2) — status
 
-| # | Ponto | Onde está fechado |
-| --- | --- | --- |
-| 1 | Limites e parada explícitos | polling 10 s × 60 · 3 tentativas · 15 min de órfão · 72 h de expiração · 250 MiB · 1 bundle/execução |
-| 2 | Dono único de cada leitura | Server Component lê e passa por prop (design §5) |
-| 3 | Decisão de UX como critério fechado | sucesso **permanente** (design §5) |
-| 4 | Bordas por nome | design §6 |
-| 5 | Régua de mutação por comportamento | design §7, 15 itens |
-| 6 | Convenção de estilo citada | design §8 (comentário explica o **porquê**; exemplos apontados) |
-| 7 | Comando de formatação no brief | checklist de saída de cada task |
+| #   | Ponto                               | Onde está fechado                                                                                    |
+| --- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 1   | Limites e parada explícitos         | polling 10 s × 60 · 3 tentativas · 15 min de órfão · 72 h de expiração · 250 MiB · 1 bundle/execução |
+| 2   | Dono único de cada leitura          | Server Component lê e passa por prop (design §5)                                                     |
+| 3   | Decisão de UX como critério fechado | sucesso **permanente** (design §5)                                                                   |
+| 4   | Bordas por nome                     | design §6                                                                                            |
+| 5   | Régua de mutação por comportamento  | design §7, 15 itens                                                                                  |
+| 6   | Convenção de estilo citada          | design §8 (comentário explica o **porquê**; exemplos apontados)                                      |
+| 7   | Comando de formatação no brief      | checklist de saída de cada task                                                                      |

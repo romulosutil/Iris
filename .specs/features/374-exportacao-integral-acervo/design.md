@@ -2,16 +2,16 @@
 
 ## 1. Achados da investigação (medidos, não presumidos)
 
-| Achado | Onde | Consequência de design |
-| --- | --- | --- |
-| `audit_log.acao` é `text`, não `pgEnum` | `src/db/schema.ts:auditLog` | As 5 ações novas **não** exigem migração de enum. |
-| `report_pdf.bytes` já é `bytea` no Postgres; não há storage de objeto para o app | `src/db/schema.ts:reportPdf`, `.env.example:48-51` (comentado) | Bundle vai para `bytea` (D6), com teto (D7). |
-| O trigger `app_barreira_somente_leitura` cobre 18 tabelas e **exclui de propósito** `report`, `report_pdf` e `audit_log` | `db/migrations/0073_conta_somente_leitura.sql:130-152` | Tabela nova fica fora da lista (D10) e o motivo vai no comentário da migração. |
+| Achado                                                                                                                       | Onde                                                                                                     | Consequência de design                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `audit_log.acao` é `text`, não `pgEnum`                                                                                      | `src/db/schema.ts:auditLog`                                                                              | As 5 ações novas **não** exigem migração de enum.                                             |
+| `report_pdf.bytes` já é `bytea` no Postgres; não há storage de objeto para o app                                             | `src/db/schema.ts:reportPdf`, `.env.example:48-51` (comentado)                                           | Bundle vai para `bytea` (D6), com teto (D7).                                                  |
+| O trigger `app_barreira_somente_leitura` cobre 18 tabelas e **exclui de propósito** `report`, `report_pdf` e `audit_log`     | `db/migrations/0073_conta_somente_leitura.sql:130-152`                                                   | Tabela nova fica fora da lista (D10) e o motivo vai no comentário da migração.                |
 | Job = POST magro numa rota interna, autenticado por bearer em tempo constante; imagem do job não herda `node_modules` do app | `src/app/api/internal/billing/fechar-ciclos/route.ts:24-50`, `scripts/fechamento-ciclo-billing.mjs:1-25` | Toda a lógica em TS no app; `scripts/exportacao-acervo.mjs` só faz `fetch`, zero dependência. |
-| `patient.arquivado_em` é filtro **de negócio**, nunca de RLS — "arquivado continua legível/exportável" | `src/db/schema.ts:394-396` (comentário) | Arquivados entram no bundle sem tratamento especial. |
-| Soft-delete de erasure é `deletado_em IS NOT NULL` em 3 tabelas | `src/db/schema.ts:1432,1550,1714` | Predicado de exclusão único e testável. |
-| Não há dependência de ZIP no `package.json` | `package.json` | D8 (`fflate`). |
-| Não há re-autenticação por ação (step-up MFA) no repo | `src/auth/require-role.ts` | Gate é `responsavel_conta_id` + sessão MFA já vigente; step-up fica fora de escopo. |
+| `patient.arquivado_em` é filtro **de negócio**, nunca de RLS — "arquivado continua legível/exportável"                       | `src/db/schema.ts:394-396` (comentário)                                                                  | Arquivados entram no bundle sem tratamento especial.                                          |
+| Soft-delete de erasure é `deletado_em IS NOT NULL` em 3 tabelas                                                              | `src/db/schema.ts:1432,1550,1714`                                                                        | Predicado de exclusão único e testável.                                                       |
+| Não há dependência de ZIP no `package.json`                                                                                  | `package.json`                                                                                           | D8 (`fflate`).                                                                                |
+| Não há re-autenticação por ação (step-up MFA) no repo                                                                        | `src/auth/require-role.ts`                                                                               | Gate é `responsavel_conta_id` + sessão MFA já vigente; step-up fica fora de escopo.           |
 
 ## 2. Modelo de dados (migração `0095`)
 
@@ -168,19 +168,19 @@ Página nova `src/app/(app)/clinica/exportacao/page.tsx`:
 
 ## 6. Casos de borda — por nome (§5.2 ponto 4)
 
-| Caso | Comportamento fechado |
-| --- | --- |
-| 2º pedido com um ativo | `UNIQUE` parcial estoura `23505` → action devolve "já existe uma exportação em andamento", **sem** criar linha nova. O `catch` de `23505` lê o nome da constraint, nunca assume o eixo. |
-| Clínica sem paciente nenhum | Bundle **válido e vazio**: manifest com contagens zeradas + `README.txt`. Não é erro. |
-| Job morre no meio | Fica em `processando`; a varredura seguinte resgata por `iniciado_em < now()-15min`, `tentativas+1`. |
-| 4ª tentativa | `status='falhou'`, `erro='tentativas_esgotadas'`. Terminal — não se auto-cura. |
-| Bundle > 250 MiB | `status='falhou'`, `erro='bundle_excede_limite'`. Nunca trunca. |
-| Token errado / id inexistente | **404 genérico** nos dois casos. 403 vazaria a existência do bundle. |
-| Bundle expirado ou blob expurgado | **410**, com texto mandando solicitar de novo. |
-| Download por outro usuário autenticado | 403 + evento em `audit_log`. |
-| Responsável trocou entre pedido e download | Vale o responsável **atual** da clínica, não quem pediu. |
-| Conta em somente-leitura / cancelada | **Funciona.** É o caso de uso principal. Teste explícito. |
-| Duas execuções do job simultâneas | `SKIP LOCKED` — a segunda não pega o mesmo bundle. |
+| Caso                                       | Comportamento fechado                                                                                                                                                                   |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2º pedido com um ativo                     | `UNIQUE` parcial estoura `23505` → action devolve "já existe uma exportação em andamento", **sem** criar linha nova. O `catch` de `23505` lê o nome da constraint, nunca assume o eixo. |
+| Clínica sem paciente nenhum                | Bundle **válido e vazio**: manifest com contagens zeradas + `README.txt`. Não é erro.                                                                                                   |
+| Job morre no meio                          | Fica em `processando`; a varredura seguinte resgata por `iniciado_em < now()-15min`, `tentativas+1`.                                                                                    |
+| 4ª tentativa                               | `status='falhou'`, `erro='tentativas_esgotadas'`. Terminal — não se auto-cura.                                                                                                          |
+| Bundle > 250 MiB                           | `status='falhou'`, `erro='bundle_excede_limite'`. Nunca trunca.                                                                                                                         |
+| Token errado / id inexistente              | **404 genérico** nos dois casos. 403 vazaria a existência do bundle.                                                                                                                    |
+| Bundle expirado ou blob expurgado          | **410**, com texto mandando solicitar de novo.                                                                                                                                          |
+| Download por outro usuário autenticado     | 403 + evento em `audit_log`.                                                                                                                                                            |
+| Responsável trocou entre pedido e download | Vale o responsável **atual** da clínica, não quem pediu.                                                                                                                                |
+| Conta em somente-leitura / cancelada       | **Funciona.** É o caso de uso principal. Teste explícito.                                                                                                                               |
+| Duas execuções do job simultâneas          | `SKIP LOCKED` — a segunda não pega o mesmo bundle.                                                                                                                                      |
 
 ## 7. Régua de mutação por comportamento (§5.2 ponto 5)
 
