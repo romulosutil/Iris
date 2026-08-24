@@ -10,7 +10,7 @@ tocados** (o CI deste repo não valida Prettier — `pnpm format` no repo inteir
 ## T0 — SPIKE bloqueante no sandbox (mede, não presume)
 
 **Onde:** script descartável + registro do resultado nesta spec (`.specs/features/378-.../medicao-t0.md`).
-**Depende de:** nada. **Bloqueia:** T3, T4, T5.
+**Depende de:** nada. **Bloqueia:** T3, T4, T5, T5b.
 
 Medir no sandbox do Asaas (`ASAAS_BASE_URL=https://api-sandbox.asaas.com/v3`), com os cartões de
 teste da doc, e **registrar request + response crus**:
@@ -23,9 +23,18 @@ teste da doc, e **registrar request + response crus**:
 3. `POST /payments` com `creditCardToken` **e sem `remoteIp`** → 200 ou 400? (regra de parada em D6).
 4. `POST /payments` com token e cartão de teste **recusado** → confirmar 400 + `errors[].code`.
 5. Confirmar o `status` cru do `payment` num evento `PAYMENT_CREDIT_CARD_CAPTURE_REFUSED`.
+6. **Novo, D11 revisado 24/08/2026:** existe retentativa automática nativa do Asaas para cobrança
+   avulsa de cartão (`billingType: CREDIT_CARD` via `POST /payments`, o trilho que esta spec usa), ou
+   o 5x/3+2 relatado pelo Rômulo só se aplica ao objeto nativo `Assinatura`
+   (`POST /v3/subscriptions`)? Testar: deixar uma cobrança avulsa de cartão ser recusada no sandbox e
+   observar, por 2 dias, se o Asaas reemite sozinho (webhook novo, `payment.id` novo, mesma
+   `externalReference`?) ou se nada acontece sem ação nossa. Se nada acontecer, o motor de 5x é NOSSO
+   (ver T5b). **PARE e escale ao Rômulo** se a resposta apontar para `Assinatura` nativa — é mudança
+   de arquitetura (cartão deixaria de usar "cobrança avulsa por ciclo", o padrão que o Pix usa hoje),
+   não cabe decidir sozinho dentro de T5b.
 
-**Done when:** `medicao-t0.md` commitado com os 5 resultados e os corpos crus. Sem ele, T3-T5 são
-chute.
+**Done when:** `medicao-t0.md` commitado com os 6 resultados e os corpos crus. Sem ele, T3-T5 são
+chute — e sem o item 6, T5b é chute.
 
 ---
 
@@ -93,6 +102,10 @@ distintos = testes distintos).
 - 400 com `errors[].code === "invalid_creditCard"` → `{desfecho:"recusada_na_origem", codigo:"CARD_DECLINED"}`.
   Qualquer outro 400 **sobe**.
 - `buscarCobrancaPorReferencia` continua sendo a guarda de idempotência antes de emitir.
+- **D11 revisado:** este resultado por si só não marca o ciclo `falhou` — só a última das 5
+  tentativas (contagem vem de T5b). A `externalReference` de cada tentativa precisa ser distinta
+  (`cycle:<id>:tentativa:<n>`) para `buscarCobrancaPorReferencia` não confundir uma tentativa com a
+  anterior.
 
 **Régua de mutação:** remover o `catch` do 400 faz um teste falhar por exceção vazando; trocar
 `dueDate` para `vencimentoCobrancaDeCiclo()` faz outro falhar (D7).
@@ -107,12 +120,41 @@ distintos = testes distintos).
 - Hoje o `else if (assinatura.providerSubscriptionId)` é a porta de entrada da emissão; no cartão
   esse campo pode ser NULL. Ramificar por `metodo_pagamento` e exigir, no ramo cartão,
   `credit_card_token` **e** `provider_customer_id` — faltando, `throw` nomeado.
-- Ramo `recusada_na_origem`: escrita única com ciclo `falhou`, `recusa_codigo`, `erro`,
-  `past_due_desde` só se NULL, `provider_charge_id` NULL, `vencimento_cobranca` = hoje.
+- Ramo `recusada_na_origem` **na 5ª tentativa** (D11 revisado — ver T5b para as tentativas 1-4):
+  escrita única com ciclo `falhou`, `recusa_codigo`, `erro`, `past_due_desde` só se NULL,
+  `provider_charge_id` NULL, `vencimento_cobranca` = hoje.
 - Conferir e **testar** que ciclo `falhou` sai do conjunto elegível da próxima passada.
 
-**Testes (int):** ciclo cartão pago; ciclo cartão recusado (estado + carência); reexecução do job
-após recusa **não** emite segunda cobrança; assinatura Pix segue idêntica (teste de não-regressão).
+**Testes (int):** ciclo cartão pago; ciclo cartão recusado na 5ª tentativa (estado + carência);
+reexecução do job após a 5ª recusa **não** emite 6ª cobrança; assinatura Pix segue idêntica (teste de
+não-regressão).
+
+---
+
+## T5b — Motor de retentativa automática do cartão (5x: 3+2) — depende da resposta de T0 item 6
+
+**Onde:** `src/lib/billing/subscription.ts` (`fecharCiclosVencendo` ou job companheiro), colunas novas
+em `billing_cycle` (schema.ts + migração, mesmo padrão de grant do T1).
+**Depende de:** T0 (item 6 — bloqueante de verdade, não só de rotina), T1, T4, T5.
+**Ratificado por @romulosutil em 24/08/2026 (D11); mecanismo é DESENHO DE TRABALHO — ver D11 na
+spec.md antes de programar.**
+
+- Se T0.6 confirmar que o Asaas **não** retenta cobrança avulsa sozinho: adicionar contagem de
+  tentativa e próxima data agendada ao ciclo (reaproveitar as colunas do Pix se forem genéricas o
+  bastante — CONFERIR antes de duplicar; se não forem, colunas novas só para o trilho cartão).
+- Cadência: 3 tentativas no dia civil da recusa, 2 no dia seguinte — 5 no total, depois marca
+  `falhou` (T5).
+- Cada tentativa é um novo `POST /payments` com o mesmo `creditCardToken` (T4), `externalReference`
+  própria por tentativa.
+- **Idempotência:** duas passadas do job no mesmo dia não podem gerar 2 tentativas onde deveria haver
+  1 — mesma cicatriz `varredura-escreve-o-proprio-predicado`. Teste que reexecuta o job na janela da
+  mesma tentativa e confirma que só 1 cobrança saiu.
+- Troca de cartão durante a cadência reinicia a contagem (caso de borda 6 da spec).
+- Se T0.6 apontar para `Assinatura` nativa do Asaas em vez de cobrança avulsa repetida por nós: **não
+  programar esta tarefa** — voltar para ratificação com o Rômulo (mudança de arquitetura).
+
+**Régua de mutação:** remover o incremento da contagem faz a 6ª tentativa sair sem nunca marcar
+`falhou`; trocar a cadência de "3+2" para "5 no mesmo dia" derruba o teste de agendamento por dia.
 
 ---
 
@@ -138,7 +180,7 @@ falhar (dois comportamentos, dois testes).
 ## T7 — UI: seletor de método + estado do cartão + CTA de recusa
 
 **Onde:** `src/app/(app)/assinatura/{logic.ts,formulario-ativacao.tsx,page.tsx}`,
-`src/lib/billing/recusa-ui.ts`. **Depende de:** T2, T3, T6.
+`src/lib/billing/recusa-ui.ts`. **Depende de:** T2, T3, T6, T5b.
 
 - D13 (radio atrás de `BILLING_CARTAO_HABILITADO`, validação no servidor, comentários **reescritos**,
   não apagados).
@@ -146,8 +188,10 @@ falhar (dois comportamentos, dois testes).
   com a copy de D12 dizendo **antes** do clique que a troca cobra o valor mínimo de novo.
 - `montarAvisoRecusa`: caso `CARD_DECLINED` com CTA para `/assinatura` (nunca expor código cru, nunca
   citar valor).
-- Botão **Tentar novamente agora** com os limites de D11 (1 tentativa, desabilitado enquanto houver
-  cobrança viva).
+- Estado "recusa em andamento" (dentro das 5 tentativas automáticas de D11/T5b): mostrar que a
+  cobrança está sendo retentada automaticamente, sem CTA de ação manual ainda.
+- Botão **Tentar novamente agora** só aparece **após** as 5 tentativas se esgotarem (ciclo `falhou`),
+  com os limites de D11 (1 disparo manual, desabilitado enquanto houver cobrança viva).
 - **Dono único da leitura** (§5.2.2): a `page.tsx` busca a situação da conta **uma vez** e passa por
   prop; nenhum componente filho refaz a leitura.
 - Componentes só do design system (`docs/ux/design-system-espectro-brutal.md`), nada hardcodado.
@@ -158,8 +202,9 @@ falhar (dois comportamentos, dois testes).
 ## T8 — `.env.example` + BACKLOG
 
 `BILLING_CARTAO_HABILITADO` documentada junto do bloco `ASAAS_*` (default `false`, e o motivo: a
-tokenização em produção depende de liberação pelo gerente de contas). `BACKLOG.md`: registrar o gate
-externo e as duas ratificações da §4 da spec.
+tokenização em produção depende de liberação pelo gerente de contas — já solicitada, em atendimento).
+`BACKLOG.md`: registrar o gate externo, as ratificações da §4 da spec e a negociação em andamento com
+o Asaas sobre a taxa mínima de ativação (D3/D12).
 
 ---
 
