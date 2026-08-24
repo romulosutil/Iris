@@ -841,6 +841,13 @@
       "when": 1787512201258,
       "tag": "0119_furry_domino",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1787591830035,
+      "tag": "0120_indice_trilha_auditoria",
+      "breakpoints": true
     }
   ]
 }

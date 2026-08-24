@@ -10,6 +10,7 @@ const abas: TabsNavItem[] = [
   { href: "/clinica/feriados", rotulo: "Feriados & Recessos" },
   { href: "/clinica/emergencia", rotulo: "Emergência & Protocolo" },
   { href: "/clinica/seguranca", rotulo: "Segurança" },
+  { href: "/clinica/auditoria", rotulo: "Trilha de Auditoria" },
 ];
 
 /**
