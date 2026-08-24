@@ -23,6 +23,10 @@ import {
   session,
 } from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
+import {
+  FUSO_CLINICA,
+  FUSO_CLINICA_OFFSET,
+} from "@/app/(app)/agenda/fuso";
 
 export const TERAPEUTA_DEMO_EMAIL = "terapeuta.demo@iris.test";
 export const TERAPEUTA_DEMO_SENHA = "Senha Demo 123";
@@ -103,8 +107,18 @@ export async function seedDemoClinic(
   });
 
   console.log("📅 Agendando sessão de hoje para o terapeuta demo...");
-  const hoje = new Date();
-  hoje.setHours(9, 0, 0, 0);
+  // "Hoje" tem que ser o dia NO FUSO DA CLÍNICA, não no fuso do processo. O
+  // `new Date()` + `setHours(9, …)` gravava 09:00 do fuso do runner: em CI (UTC)
+  // isso vira 06:00 de America/Sao_Paulo do MESMO dia UTC, que já é o dia
+  // SEGUINTE em BRT sempre que o job roda entre 00:00 e 03:00 UTC (21:00–00:00
+  // BRT). A agenda resolve o dia com `Intl` em `FUSO_CLINICA` (agenda/page.tsx),
+  // não encontrava a sessão, e `diario-demo`/`revisao` estouravam esperando o
+  // botão "Abrir agendamento de …". Falha só nessa janela de 3h — por isso a
+  // suíte passava na maioria das execuções.
+  const diaNaClinica = new Intl.DateTimeFormat("en-CA", {
+    timeZone: FUSO_CLINICA,
+  }).format(new Date());
+  const hoje = new Date(`${diaNaClinica}T09:00:00${FUSO_CLINICA_OFFSET}`);
   await ownerDb.insert(session).values({
     clinicId,
     patientId: pacienteDemo.id,

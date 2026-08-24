@@ -4,9 +4,10 @@ import { getTenantContext, listarClinicasDoUsuario } from "@/auth/tenant";
 import { Container } from "@/components/ui/layout";
 import { Banner } from "@/components/ui/banner";
 import { FaixaTrial } from "@/components/app/faixa-trial";
+import { FaixaRecusa } from "@/components/app/faixa-recusa";
 import { estadoEstagio2 } from "./alertas-risco/queries";
 import { listarPendencias } from "./pendencias/queries";
-import { obterSituacaoConta } from "./queries";
+import { obterSituacaoConta, obterAvisoRecusa } from "./queries";
 import { SignOutButton } from "./sign-out-button";
 import { AppHeader, type NavItem } from "./app-header";
 
@@ -22,6 +23,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     pendencias,
     { quantidade: riscoEstagio2, protocoloInterno },
     situacaoConta,
+    avisoRecusa,
   ] = await Promise.all([
     listarClinicasDoUsuario(ctx.userId),
     ehClinico ? listarPendencias(ctx) : Promise.resolve({ total: 0 }),
@@ -33,6 +35,25 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     // que a faixa mostra. Assinante pagante e trial vencido eram indistinguíveis
     // enquanto `resolverFaixaTrial` decidia sozinho (#163).
     obterSituacaoConta(ctx),
+    // D36 — a recusa deixa de morrer no log. Em paralelo com as demais: é uma
+    // consulta a mais no mesmo request, não uma ida em série.
+    //
+    // I2 — achado da revisão de branch: sem `.catch`, qualquer rejeição aqui
+    // derrubava o `Promise.all` inteiro e, com ele, `AppLayout` — toda rota do
+    // app virava `error.tsx` por causa de uma faixa puramente informativa.
+    // Esta leitura falha FECHADA (vira `null`, `FaixaRecusa` já trata) porque
+    // ela é só um aviso a mais; diferente de `obterSituacaoConta`, cujo
+    // resultado decide se a assinatura pode cadastrar paciente — essa não pode
+    // engolir erro sem quebrar uma regra de negócio.
+    obterAvisoRecusa(ctx).catch((erro: unknown) => {
+      // Sem PII: nada de nome de clínica nem dado de paciente. `clinicId` é
+      // aceitável — é o suficiente para localizar o caso sem expor conteúdo.
+      console.warn(
+        `[faixa-recusa] falha ao ler aviso de recusa (clinicId=${ctx.clinicId}):`,
+        erro instanceof Error ? erro.message : String(erro),
+      );
+      return null;
+    }),
   ]);
 
   const totalPendencias = pendencias.total;
@@ -121,6 +142,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </Banner>
         </Container>
       ) : null}
+      <FaixaRecusa aviso={avisoRecusa} />
       <FaixaTrial
         estado={situacaoConta.estado}
         diasRestantes={situacaoConta.diasRestantesTrial}

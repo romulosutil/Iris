@@ -7,6 +7,8 @@ import {
   avaliarSituacaoConta,
   type SituacaoConta,
 } from "@/lib/billing/estado-conta";
+import { obterRecusaAtiva } from "@/lib/billing/recusa-ativa";
+import { montarAvisoRecusa, type AvisoRecusa } from "@/lib/billing/recusa-ui";
 
 /**
  * Variante fora de transação de `avaliarSituacaoConta`, para uso em Server
@@ -20,6 +22,30 @@ export async function obterSituacaoConta(
   ctx: TenantContext,
 ): Promise<SituacaoConta> {
   return withTenant(ctx, (tx) => avaliarSituacaoConta(tx, ctx.clinicId));
+}
+
+/**
+ * D36 — o aviso de cobrança recusada da faixa do layout. `null` quando o ciclo
+ * mais recente não está em `falhou`, que é o caso da esmagadora maioria.
+ *
+ * Mesma disciplina de `obterSituacaoConta`: quem lê para RENDERIZAR abre a
+ * própria transação de tenant.
+ */
+export async function obterAvisoRecusa(
+  ctx: TenantContext,
+): Promise<AvisoRecusa | null> {
+  const recusa = await withTenant(ctx, (tx) =>
+    obterRecusaAtiva(tx, ctx.clinicId),
+  );
+  return recusa
+    ? montarAvisoRecusa({
+        ...recusa,
+        // I1 — só coordenador acessa `/clinica/dados` (`requireRole`); em G4,
+        // `montarAvisoRecusa` usa este sinal para não mandar terapeuta a um
+        // CTA que dá 404.
+        podeEditarDadosDaClinica: ctx.role === "coordenador",
+      })
+    : null;
 }
 
 async function obterDadosTrialDaClinica(
