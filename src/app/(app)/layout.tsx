@@ -37,7 +37,23 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     obterSituacaoConta(ctx),
     // D36 — a recusa deixa de morrer no log. Em paralelo com as demais: é uma
     // consulta a mais no mesmo request, não uma ida em série.
-    obterAvisoRecusa(ctx),
+    //
+    // I2 — achado da revisão de branch: sem `.catch`, qualquer rejeição aqui
+    // derrubava o `Promise.all` inteiro e, com ele, `AppLayout` — toda rota do
+    // app virava `error.tsx` por causa de uma faixa puramente informativa.
+    // Esta leitura falha FECHADA (vira `null`, `FaixaRecusa` já trata) porque
+    // ela é só um aviso a mais; diferente de `obterSituacaoConta`, cujo
+    // resultado decide se a assinatura pode cadastrar paciente — essa não pode
+    // engolir erro sem quebrar uma regra de negócio.
+    obterAvisoRecusa(ctx).catch((erro: unknown) => {
+      // Sem PII: nada de nome de clínica nem dado de paciente. `clinicId` é
+      // aceitável — é o suficiente para localizar o caso sem expor conteúdo.
+      console.warn(
+        `[faixa-recusa] falha ao ler aviso de recusa (clinicId=${ctx.clinicId}):`,
+        erro instanceof Error ? erro.message : String(erro),
+      );
+      return null;
+    }),
   ]);
 
   const totalPendencias = pendencias.total;
