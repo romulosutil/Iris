@@ -102,6 +102,20 @@
 
 ---
 
+## 🏁 Sessão 24/08/2026 (2ª) — #378 (cartão de crédito pós-pago): D11 revertido para retentativa automática 5x, D3/D12 mantidos com negociação Asaas em curso
+
+- **Status:** spec revisada (`docs/spec-378-cartao-credito`, commit `c1d18ca`, comentário na issue), ainda **não** liberada para label `jules` — T0 (spike bloqueante) ganhou 6º item de medição.
+
+Rômulo trouxe 3 atualizações sobre a spec fechada em 24/08/2026 (madrugada) para #378:
+
+1. **D3/D12 (taxa mínima cobrada de novo ao trocar de cartão)** — mantido como especificado, mas Rômulo está negociando direto com o Asaas a remoção dessa cobrança **nos dois trilhos** (Pix Automático e cartão). Sem confirmação ainda; a implementação segue cobrando `VALOR_ATIVACAO_PADRAO_CENTAVOS` — é a constante que muda se a negociação avançar, não o fluxo.
+2. **Gate externo de tokenização em produção** — já solicitado ao gerente de contas Asaas, em atendimento. Continua bloqueando só a virada da flag `BILLING_CARTAO_HABILITADO`, não a implementação.
+3. **D11 revertido.** A decisão original ("zero retentativa automática no cartão, recuperação 100% manual") foi trocada: Rômulo quer retentativa automática, **5x — 3 no dia da recusa, 2 no dia seguinte**, espelhando a cadência que já roda em produção no Pix Automático (#322). Problema: não existe endpoint nativo do Asaas para retentar cobrança **avulsa** de cartão (o endpoint de retry do #322 é específico do trilho Pix Automático) — não está medido se o Asaas retenta sozinho cobrança avulsa de cartão ou se o 5x só existe no objeto `Assinatura` nativo (que mudaria a arquitetura: cartão sairia do padrão "cobrança avulsa por ciclo" que o Pix usa hoje).
+
+**Fica aberto:** T0 ganhou um 6º item de medição (existe retry nativo do Asaas para cobrança avulsa de cartão recusada, ou o mecanismo de 5x é nosso a construir?) — bloqueia a nova tarefa **T5b** (motor de retentativa). Se a medição apontar para `Assinatura` nativa, volta para ratificação com o Rômulo antes de programar T4/T5/T5b — não é decisão que o executor autônomo deve tomar sozinho.
+
+---
+
 ## 🏁 Sessão 23/08/2026 — revisão tech lead dos PRs #423 e #425: o CI que rodava duas vezes, a suíte que nunca rodava, e o check obrigatório que vira armadilha
 
 - **Status:** #425 mergeada em `main` (`b64784d`) depois de ficar verde em CI real; #423 verde mas `BLOCKED` por ruleset (ação de admin pendente, D58).
