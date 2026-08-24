@@ -102,6 +102,18 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(rows[0]!.ajustado_por).toBe(U_T1);
   });
 
+  test("capturarDiario persiste visibilityLevel 'discipline_only'", async () => {
+    const r = await capturarDiario(ctxT1, {
+      sessionId: SESS,
+      texto: "Nota confidencial da disciplina",
+      visibilityLevel: "discipline_only",
+    });
+    expect(r.error).toBeUndefined();
+    const rows =
+      await owner`SELECT visibility_level FROM session_note WHERE session_id = ${SESS} AND tipo = 'captura_rapida'`;
+    expect(rows[0]!.visibility_level).toBe("discipline_only");
+  });
+
   test("consolidar grava nota, popula numero_sequencial e é idempotente", async () => {
     const { consolidarSessao } = await import("./logic");
     const r1 = await consolidarSessao(ctxT1, {

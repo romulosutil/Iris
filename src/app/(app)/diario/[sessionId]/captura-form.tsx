@@ -108,6 +108,15 @@ export function CapturaForm({
                 className="font-body focus-visible:outline-focus min-h-24 w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-4 py-2.5 text-base text-[var(--text-primary)] outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
               />
             </Field>
+            <label className="font-body flex cursor-pointer items-center gap-2 text-sm text-[var(--text-secondary)]">
+              <input
+                type="checkbox"
+                name="visibilityLevel"
+                value="discipline_only"
+                className="size-4 rounded border-2 border-[var(--border-brutal)] accent-[var(--action-primary)]"
+              />
+              <span>Restringir visualização à minha disciplina (sigilo profissional)</span>
+            </label>
             <Button type="submit">Salvar captura</Button>
             {textoState.id ? (
               <Alert severidade="sucesso">Captura salva.</Alert>
