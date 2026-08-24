@@ -65,10 +65,36 @@ const formatador = new Intl.DateTimeFormat("pt-BR", {
  * separação construída pela `0046` como fronteira do banco em vez de um `select`
  * que alguém precisa lembrar de manter enxuto.
  *
- * **Ordem:** `criado_em DESC, id DESC`. O desempate por `id` não é enfeite: com
- * dois registros no mesmo instante (o job de arquivamento grava em lote com um
- * `p_agora` só), uma ordem sem desempate pode devolver o mesmo registro em duas
- * páginas e omitir outro.
+ * **Ordem:** `criado_em DESC NULLS LAST, id DESC NULLS LAST`. O desempate por
+ * `id` não é enfeite: com dois registros no mesmo instante (o job de
+ * arquivamento grava em lote com um `p_agora` só), uma ordem sem desempate pode
+ * devolver o mesmo registro em duas páginas e omitir outro.
+ *
+ * O `NULLS LAST` explícito casa com a definição do índice (`.desc()` do Drizzle
+ * gera `NULLS LAST`; um `ORDER BY ... DESC` escrito à mão tem default
+ * `NULLS FIRST`). **Não é o que decide o plano aqui** — ver abaixo —, mas é o
+ * que vale se algum dia esta consulta passar a ler a tabela base, onde a
+ * divergência de fato descarta o índice: medido em 20k linhas, `FROM audit_log`
+ * com `NULLS FIRST` cai em `Seq Scan`.
+ *
+ * **O que o índice resolve, e o que ele não resolve.**
+ * `audit_log_mascarado` é `security_barrier`: o `LIMIT` **não** desce abaixo da
+ * view, então a fatia sempre lê as linhas da clínica e faz top-N sort acima da
+ * barreira. O índice não é escolhido pela ordenação — é escolhido pelo
+ * `Index Cond` de `clinic_id`, e por isso entra com ou sem `NULLS LAST`. O que
+ * ele tira do caminho é varrer a trilha das **outras** clínicas: medido em 20k
+ * linhas, `Index Scan` 10 ms contra `Seq Scan` 688 ms.
+ *
+ * O teto do barrier é o preço de ler pela view, e é o lado certo do trade-off:
+ * a tabela base traria `patient_id` e `detalhe` para dentro do alcance de um
+ * `select` distraído. 10 ms em 20 mil linhas, com a `0070` limitando a trilha a
+ * 180 dias, é preço que cabe.
+ *
+ * **Forma:** a fatia sai numa subconsulta e o `LEFT JOIN app_user` acontece
+ * depois, sobre as 50 linhas já escolhidas, em vez de juntar as 20 mil e
+ * ordenar depois. Ganho medido pequeno (8,1 ms contra 9,0 ms) — o custo mora na
+ * barreira, não no join —, mas é a forma que não piora com o crescimento da
+ * trilha.
  */
 export async function lerPaginaTrilha(
   ctx: TenantContext,
@@ -89,10 +115,14 @@ export async function lerPaginaTrilha(
              a.acao,
              a.entidade,
              u.name AS ator_nome
-        FROM audit_log_mascarado a
+        FROM (
+               SELECT id, criado_em, acao, entidade, ator_id
+                 FROM audit_log_mascarado
+                ORDER BY criado_em DESC NULLS LAST, id DESC NULLS LAST
+                LIMIT ${ITENS_POR_PAGINA} OFFSET ${offset}
+             ) a
         LEFT JOIN app_user u ON u.id = a.ator_id
-       ORDER BY a.criado_em DESC, a.id DESC
-       LIMIT ${ITENS_POR_PAGINA} OFFSET ${offset}
+       ORDER BY a.criado_em DESC NULLS LAST, a.id DESC NULLS LAST
     `)) as unknown as LinhaCrua[];
 
     return {
