@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { withTenant } from "@/db/rls";
@@ -21,6 +21,10 @@ const owner = hasDb
   : null;
 
 describe.skipIf(!hasDb)("Painel de Governança e Segurança — Status MFA & RLS", () => {
+  afterAll(async () => {
+    await owner?.end();
+  });
+
   const ctxCoordA = {
     clinicId: CLINIC_A,
     userId: U_COORD_A,
