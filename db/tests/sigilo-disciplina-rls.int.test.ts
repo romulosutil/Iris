@@ -178,4 +178,36 @@ describe.skipIf(!hasDb)("#119 · Sigilo por disciplina no prontuário sob RLS", 
     );
     expect(rows).toHaveLength(0);
   });
+
+  // ─── T4: Grant de UPDATE na coluna visibility_level (Comportamentos #11 e #12) ──
+
+  test("11. app_role pode atualizar visibility_level", async () => {
+    await withTenant(ctx("terapeuta", U_TERAPEUTA), (db) =>
+      db.execute(sql`
+        UPDATE session_note
+           SET visibility_level = 'discipline_only'
+         WHERE id = ${NOTE_PUBLICA}::uuid
+      `),
+    );
+
+    const [row] = await owner!<{ visibility_level: string }[]>`
+      SELECT visibility_level FROM session_note WHERE id = ${NOTE_PUBLICA}
+    `;
+    expect(row?.visibility_level).toBe("discipline_only");
+
+    // Restaura para os demais testes
+    await owner!`UPDATE session_note SET visibility_level = 'multidisciplinary' WHERE id = ${NOTE_PUBLICA}`;
+  });
+
+  test("12. app_role continua proibido de dar UPDATE em colunas protegidas (ex: tipo)", async () => {
+    await expect(
+      withTenant(ctx("terapeuta", U_TERAPEUTA), (db) =>
+        db.execute(sql`
+          UPDATE session_note
+             SET tipo = 'resumo_estruturado'
+           WHERE id = ${NOTE_PUBLICA}::uuid
+        `),
+      ),
+    ).rejects.toThrow();
+  });
 });

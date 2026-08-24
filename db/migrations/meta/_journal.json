@@ -862,6 +862,13 @@
       "when": 1787594493670,
       "tag": "0122_sigilo_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1787594494670,
+      "tag": "0123_sigilo_grant_coluna",
+      "breakpoints": true
     }
   ]
 }
