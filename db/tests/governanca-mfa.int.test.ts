@@ -9,12 +9,12 @@ import {
   obterTermoGovernanca,
 } from "@/app/(app)/configuracoes/seguranca/queries";
 
-const CLINIC_A = "a0000000-0000-0000-0000-000000000001";
-const CLINIC_B = "b0000000-0000-0000-0000-000000000002";
+const CLINIC_A = "00000000-0000-0000-0000-00000000410a";
+const CLINIC_B = "00000000-0000-0000-0000-00000000410b";
 
-const U_COORD_A = "a0000000-0000-0000-0000-000000000010";
-const U_TERA_A = "a0000000-0000-0000-0000-000000000011";
-const U_COORD_B = "b0000000-0000-0000-0000-000000000020";
+const U_COORD_A = "00000000-0000-0000-0000-000000004101";
+const U_TERA_A = "00000000-0000-0000-0000-000000004102";
+const U_COORD_B = "00000000-0000-0000-0000-000000004103";
 
 const owner = hasDb
   ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
@@ -44,7 +44,10 @@ describe.skipIf(!hasDb)("Painel de Governança e Segurança — Status MFA & RLS
   };
 
   test("setup: prepara clínicas, usuários e papéis", async () => {
-    await owner!`TRUNCATE clinic, app_user, user_role, audit_log RESTART IDENTITY CASCADE`;
+    await owner!`DELETE FROM audit_log WHERE clinic_id IN (${CLINIC_A}, ${CLINIC_B})`;
+    await owner!`DELETE FROM user_role WHERE clinic_id IN (${CLINIC_A}, ${CLINIC_B})`;
+    await owner!`DELETE FROM app_user WHERE id IN (${U_COORD_A}, ${U_TERA_A}, ${U_COORD_B})`;
+    await owner!`DELETE FROM clinic WHERE id IN (${CLINIC_A}, ${CLINIC_B})`;
 
     await owner!`INSERT INTO clinic (id, nome, cpf_cnpj) VALUES
       (${CLINIC_A}, 'Clínica A', '12345678000195'),
