@@ -1,0 +1,1 @@
+CREATE INDEX "idx_audit_log_clinic_criado" ON "audit_log" USING btree ("clinic_id","criado_em" DESC NULLS LAST,"id" DESC NULLS LAST);

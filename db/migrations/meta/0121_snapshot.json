@@ -1,6 +1,6 @@
 {
-  "id": "685b7c16-0901-4e13-a48d-8e005dfdbcbe",
-  "prevId": "192e7896-a67d-4b58-b7ad-9e1616e64d6d",
+  "id": "0cd28b3d-d334-4799-8245-748f7ffafc2f",
+  "prevId": "685b7c16-0901-4e13-a48d-8e005dfdbcbe",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -6308,6 +6308,14 @@
           "primaryKey": false,
           "notNull": true
         },
+        "visibility_level": {
+          "name": "visibility_level",
+          "type": "session_note_visibility_level",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'multidisciplinary'"
+        },
         "texto": {
           "name": "texto",
           "type": "text",
@@ -6347,6 +6355,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_session_note_sigilo": {
+          "name": "idx_session_note_sigilo",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "visibility_level = 'discipline_only'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -7531,6 +7555,14 @@
       "values": [
         "captura_rapida",
         "nota_consolidada"
+      ]
+    },
+    "public.session_note_visibility_level": {
+      "name": "session_note_visibility_level",
+      "schema": "public",
+      "values": [
+        "multidisciplinary",
+        "discipline_only"
       ]
     },
     "public.session_protocol_scope_origem": {

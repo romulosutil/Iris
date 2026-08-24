@@ -1508,7 +1508,21 @@ export const auditLog = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("idx_audit_log_patient").on(t.patientId, t.criadoEm.desc())],
+  (t) => [
+    index("idx_audit_log_patient").on(t.patientId, t.criadoEm.desc()),
+    // #453 — a tela de trilha filtra por clínica (predicado fixo da view
+    // `audit_log_mascarado`) e ordena por `criado_em DESC, id DESC`. Sem este
+    // índice, cada página é seq scan + sort da tabela inteira: o único índice
+    // existente é por `patient_id`, que a trilha não usa. O `id` na terceira
+    // posição é o desempate da paginação — dois registros no mesmo instante
+    // (o job de arquivamento grava um lote com um `p_agora` só) reapareceriam
+    // em duas páginas sem ele.
+    index("idx_audit_log_clinic_criado").on(
+      t.clinicId,
+      t.criadoEm.desc(),
+      t.id.desc(),
+    ),
+  ],
 );
 
 // ─── Fase 5 Fatia 2 — Supervisão (fila de alertas do coordenador) ────────────
