@@ -204,6 +204,35 @@ de que:
 ☐ **Não consinto.** (O acompanhamento continua normalmente; apenas a
 estruturação assistida por IA não será usada.)
 
+### 9.1. Assistente de voz para registro de sessão (opcional)
+
+O curador declara estar ciente de que o profissional pode, de forma
+**opcional**, usar um assistente de voz para auxiliar no registro da sessão,
+de três formas:
+
+1. **Digitação manual** — sempre disponível, sem uso de áudio.
+2. **Ditado assíncrono** — o profissional grava um ou mais áudios curtos,
+   narrando **com a própria voz** um resumo da sessão após seu término (o
+   titular não fala nesses áudios).
+3. **Gravação da sessão** — o profissional usa fone de ouvido com supressão
+   de ruído, priorizando a captação da voz do profissional e minimizando a
+   captação do ambiente; ainda assim é fisicamente possível que parte da
+   fala do titular seja captada de forma incidental. O profissional pode
+   complementar por escrito trechos que a gravação não capturar por
+   completo.
+
+Em todos os casos, o áudio é transcrito por inteligência artificial (mesmo
+provedor identificado na seção 6), o texto entra como **rascunho** e só se
+torna registro oficial após revisão e aprovação do profissional. O áudio
+bruto é descartado do armazenamento **imediatamente após a transcrição ser
+aceita**; em caso de falha na transcrição, é mantido por no máximo **7 dias**
+só para nova tentativa, e então descartado.
+
+☐ **Consinto** com o uso do assistente de voz (ditado e/ou gravação de
+sessão) nos termos acima.
+☐ **Não consinto.** (O acompanhamento continua normalmente; o profissional
+registra a sessão só por digitação manual.)
+
 ## 10. Transferência internacional de dados
 
 Quando o provedor de inteligência artificial identificado na seção 6 não
