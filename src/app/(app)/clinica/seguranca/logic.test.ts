@@ -63,9 +63,30 @@ describe("classificarPosturaSeguranca (#277)", () => {
     expect(r.semSegundoFator).toEqual([]);
     expect(r.ativacaoPendente).toHaveLength(1);
     expect(r.ativacaoPendente[0]?.papeis).toEqual([
-      "admin_recepcao",
       "terapeuta",
+      "admin_recepcao",
     ]);
+  });
+
+  // A ordem das linhas de `user_role` não é garantida: o rótulo não pode
+  // depender de qual vínculo o Postgres devolveu primeiro.
+  test("a ordem dos papéis é estável, independente da ordem dos vínculos", () => {
+    const direta = classificarPosturaSeguranca([
+      vinculo({ id: "z", papel: "coordenador", mfaAtivo: false }),
+      vinculo({ id: "z", papel: "admin_recepcao", mfaAtivo: false }),
+    ]);
+    const invertida = classificarPosturaSeguranca([
+      vinculo({ id: "z", papel: "admin_recepcao", mfaAtivo: false }),
+      vinculo({ id: "z", papel: "coordenador", mfaAtivo: false }),
+    ]);
+
+    expect(direta.ativacaoPendente[0]?.papeis).toEqual([
+      "coordenador",
+      "admin_recepcao",
+    ]);
+    expect(invertida.ativacaoPendente[0]?.papeis).toEqual(
+      direta.ativacaoPendente[0]?.papeis,
+    );
   });
 
   test("`total` agrega por usuário, não por vínculo — o número entregue ao convênio", () => {

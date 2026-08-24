@@ -44,6 +44,25 @@ const CLINICOS: ReadonlySet<Papel> = new Set<Papel>([
 ]);
 
 /**
+ * Ordem de exibição dos papéis, fixa. A ordem das linhas de `user_role` não é
+ * garantida entre execuções (o `ORDER BY` da query é por nome do usuário, não
+ * por papel), então sem isto o rótulo de um membro com papel duplo alternaria
+ * entre "Coordenador · Terapeuta" e "Terapeuta · Coordenador" sem nada ter
+ * mudado no banco.
+ */
+const ORDEM_PAPEL: readonly Papel[] = [
+  "coordenador",
+  "terapeuta",
+  "admin_recepcao",
+];
+
+function ordenarPapeis(papeis: Papel[]): Papel[] {
+  return [...papeis].sort(
+    (a, b) => ORDEM_PAPEL.indexOf(a) - ORDEM_PAPEL.indexOf(b),
+  );
+}
+
+/**
  * Agrega os vínculos por `app_user.id` e classifica cada membro em um único
  * grupo.
  *
@@ -92,6 +111,7 @@ export function classificarPosturaSeguranca(
       protegidos += 1;
       continue;
     }
+    membro.papeis = ordenarPapeis(membro.papeis);
     if (membro.papeis.some((p) => CLINICOS.has(p))) {
       ativacaoPendente.push(membro);
     } else {
