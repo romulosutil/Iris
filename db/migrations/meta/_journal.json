@@ -841,13 +841,6 @@
       "when": 1787512201258,
       "tag": "0119_furry_domino",
       "breakpoints": true
-    },
-    {
-      "idx": 120,
-      "version": "7",
-      "when": 1787512202258,
-      "tag": "0120_funcao_status_mfa_equipe",
-      "breakpoints": true
     }
   ]
 }
