@@ -9,6 +9,7 @@ const abas: TabsNavItem[] = [
   { href: "/clinica/dados", rotulo: "Dados da Clínica" },
   { href: "/clinica/feriados", rotulo: "Feriados & Recessos" },
   { href: "/clinica/emergencia", rotulo: "Emergência & Protocolo" },
+  { href: "/clinica/auditoria", rotulo: "Trilha de Auditoria" },
 ];
 
 /**
