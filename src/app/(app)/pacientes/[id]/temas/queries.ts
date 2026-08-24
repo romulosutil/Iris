@@ -8,8 +8,9 @@ export type NotaDeSessao = {
   sessionId: string;
   numeroSequencial: number | null;
   agendadaPara: Date;
-  texto: string;
-  atualizadoEm: Date;
+  disciplina: string | null;
+  texto: string | null;
+  atualizadoEm: Date | null;
 };
 
 /**
@@ -21,6 +22,10 @@ export type NotaDeSessao = {
  * (`agent-output-schema.ts`) não modela `temas` como array — é texto livre
  * dentro do resumo. Até essa lacuna fechar (fora de escopo desta tarefa), esta
  * tela lê o dado real mais próximo: a nota consolidada de cada sessão.
+ *
+ * Usa LEFT JOIN a partir de `session` (#119): sessões com notas sob sigilo da
+ * disciplina permanecem listadas com data e presença confirmadas, retornando
+ * `texto = null` para profissionais não autorizados pelo RLS.
  */
 export async function obterNotasDeSessao(
   ctx: TenantContext,
@@ -33,17 +38,19 @@ export async function obterNotasDeSessao(
         sessionId: session.id,
         numeroSequencial: session.numeroSequencialPaciente,
         agendadaPara: session.agendadaPara,
+        disciplina: session.disciplina,
         texto: sessionNote.texto,
         atualizadoEm: sessionNote.atualizadoEm,
       })
-      .from(sessionNote)
-      .innerJoin(session, eq(session.id, sessionNote.sessionId))
-      .where(
+      .from(session)
+      .leftJoin(
+        sessionNote,
         and(
-          eq(session.patientId, patientId),
+          eq(sessionNote.sessionId, session.id),
           eq(sessionNote.tipo, "nota_consolidada"),
         ),
       )
+      .where(eq(session.patientId, patientId))
       .orderBy(desc(session.agendadaPara));
   });
 }

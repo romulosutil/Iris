@@ -13,7 +13,13 @@ vi.mock("@/auth/require-role", async (importOriginal) => {
 vi.mock("@/db/rls", () => ({ withTenant }));
 
 vi.mock("@/db/schema", () => ({
-  session: { id: "session.id", patientId: "session.patient_id" },
+  session: {
+    id: "session.id",
+    patientId: "session.patient_id",
+    numeroSequencialPaciente: "session.numero_sequencial_paciente",
+    agendadaPara: "session.agendada_para",
+    disciplina: "session.disciplina",
+  },
   sessionNote: {
     sessionId: "session_note.session_id",
     tipo: "session_note.tipo",
@@ -50,14 +56,15 @@ describe("obterNotasDeSessao", () => {
         sessionId: "sess_1",
         numeroSequencial: 3,
         agendadaPara: new Date("2026-08-01T10:00:00Z"),
+        disciplina: "psicologia",
         texto: "Sessão sobre ansiedade no trabalho.",
         atualizadoEm: new Date("2026-08-01T11:00:00Z"),
       },
     ];
     const orderBy = vi.fn().mockResolvedValue(linhas);
     const where = vi.fn().mockReturnValue({ orderBy });
-    const innerJoin = vi.fn().mockReturnValue({ where });
-    const from = vi.fn().mockReturnValue({ innerJoin });
+    const leftJoin = vi.fn().mockReturnValue({ where });
+    const from = vi.fn().mockReturnValue({ leftJoin });
     const select = vi.fn().mockReturnValue({ from });
     const tx = { select };
     withTenant.mockImplementation(async (_ctx, fn) => fn(tx));

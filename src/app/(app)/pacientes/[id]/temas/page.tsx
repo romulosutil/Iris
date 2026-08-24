@@ -62,9 +62,15 @@ export default async function TemasPage({ params }: TemasPageProps) {
                     · {dataFmt}
                   </span>
                 </div>
-                <p className="font-body text-sm whitespace-pre-wrap text-[var(--text-secondary)]">
-                  {nota.texto}
-                </p>
+                {nota.texto ? (
+                  <p className="font-body text-sm whitespace-pre-wrap text-[var(--text-secondary)]">
+                    {nota.texto}
+                  </p>
+                ) : (
+                  <p className="font-body text-sm italic text-[var(--text-muted)]">
+                    Nota restrita à equipe de {nota.disciplina ?? "Psicologia"} (sigilo profissional). Data e presença confirmadas.
+                  </p>
+                )}
               </div>
             );
           })}
