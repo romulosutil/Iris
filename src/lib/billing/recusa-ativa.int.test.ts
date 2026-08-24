@@ -180,4 +180,30 @@ describeSeDb("obterRecusaAtiva (RLS)", () => {
 
     expect(recusa).toBeNull();
   });
+
+  it("devolve a recusa mesmo com o ciclo seguinte já aberto (C1 — regressão)", async () => {
+    // `fecharCiclosVencendo` abre o ciclo N+1 `aberto` na MESMA passada em que
+    // emite a cobrança do ciclo N — então este é o caminho PRINCIPAL, não uma
+    // borda: o `aberto` tem `fim` maior que o `falhou` do beforeEach e não
+    // decidiu desfecho de pagamento nenhum. Sem excluir `aberto`/`apurado` do
+    // `ORDER BY bc.fim DESC LIMIT 1`, a consulta escolhe o `aberto` e a faixa
+    // nunca aparece.
+    await criarCiclo({
+      clinicId: CLINICA_A,
+      subscriptionId: SUB_A,
+      inicio: new Date("2026-08-09T12:00:00.000Z"),
+      fim: new Date("2026-09-08T12:00:00.000Z"),
+      status: "aberto",
+      valorCentavos: 3900,
+      recusaCodigo: null,
+    });
+
+    const recusa = await withTenant(
+      { clinicId: CLINICA_A, userId: "user-336-a", role: "coordenador" },
+      (tx) => obterRecusaAtiva(tx, CLINICA_A),
+    );
+
+    expect(recusa).not.toBeNull();
+    expect(recusa!.recusaCodigo).toBe("PAYMENT_OVERDUE");
+  });
 });

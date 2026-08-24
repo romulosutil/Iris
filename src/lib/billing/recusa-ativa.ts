@@ -17,6 +17,14 @@ import type { Tx } from "@/db/rls";
  * carimba `past_due` — filtrar por carência esconderia justamente a recusa cuja
  * consequência é o corte. A régua é o ciclo, não a assinatura.
  *
+ * **`WHERE bc.status NOT IN ('aberto', 'apurado')` (achado da revisão de
+ * branch, C1):** `fecharCiclosVencendo` (`subscription.ts`) abre o ciclo N+1
+ * `aberto` na MESMA passada em que emite a cobrança do ciclo N. Sem excluir
+ * `aberto`/`apurado` do `ORDER BY bc.fim DESC LIMIT 1`, a consulta sempre
+ * encontrava o ciclo seguinte — que ainda não decidiu desfecho de pagamento
+ * nenhum — e nunca o `falhou` que o webhook de recusa acabou de carimbar. A
+ * faixa nunca aparecia no caminho principal.
+ *
  * Sob RLS (`app_role`), coberto pelas policies `billing_cycle_select` e
  * `subscription_select` (0071, reescritas na 0085 para resolver o tenant pelo
  * helper) e pelos grants de `SELECT` de 0071 + 0100. Crase é proibida aqui:
@@ -55,6 +63,7 @@ export async function obterRecusaAtiva(
     JOIN subscription s ON s.id = bc.subscription_id
     JOIN clinic c ON c.id = bc.clinic_id
     WHERE bc.clinic_id = ${clinicId}
+      AND bc.status NOT IN ('aberto', 'apurado')
     ORDER BY bc.fim DESC
     LIMIT 1
   `);
@@ -62,9 +71,20 @@ export async function obterRecusaAtiva(
   const linha = (resultado as unknown as Linha[])[0];
   if (!linha) return null;
 
-  // O filtro fica AQUI, e não no WHERE, de propósito: no WHERE, um ciclo pago
-  // mais recente deixaria a consulta cair no ciclo `falhou` ANTERIOR e a faixa
-  // voltaria a acusar uma recusa já resolvida.
+  // Duas regras, duas camadas — não são a mesma coisa:
+  //
+  // 1. `aberto`/`apurado` saem no WHERE porque ainda não decidiram desfecho de
+  //    pagamento. `fecharCiclosVencendo` abre o ciclo N+1 (`aberto`) NA MESMA
+  //    passada em que emite a cobrança do ciclo N — então, sem este filtro, o
+  //    `ORDER BY bc.fim DESC LIMIT 1` encontraria sempre o ciclo seguinte
+  //    (`fim` 30 dias maior) e nunca o `falhou` que o webhook acabou de
+  //    carimbar. Não é janela curta: é o caminho inteiro (a única exceção é
+  //    `past_due`, onde o job para de abrir ciclo novo — mas mesmo aí o
+  //    `aberto` velho não deve competir pela linha mais recente).
+  // 2. `pago`/`devido` são filtrados AQUI, em TS, e não no WHERE, de
+  //    propósito: um ciclo pago mais recente colocado no WHERE deixaria a
+  //    consulta cair no ciclo `falhou` ANTERIOR e a faixa voltaria a acusar
+  //    uma recusa já resolvida. Aqui ela some de vez.
   if (linha.ciclo_status !== "falhou") return null;
 
   return {
