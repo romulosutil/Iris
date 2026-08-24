@@ -29,8 +29,8 @@ export interface AlertaRiscoCardProps extends Omit<
   categoriaRotulo?: string;
   /** Status do ciclo de vida do alerta */
   status: StatusRisco;
-  /** Trecho literal da sessão */
-  trechoFonte: string;
+  /** Trecho literal da sessão (null quando sob sigilo profissional) */
+  trechoFonte?: string | null;
   /** Detalhe ou evidência clínica extraída */
   detalhe?: string;
   /** Prazo de escalonamento formatado (ex: "01h 01m" ou "15m") */
@@ -236,8 +236,10 @@ export const AlertaRiscoCard = React.forwardRef<
       {/* Relato literal da sessão — nunca recolhido. */}
       <ClinicalQuote
         rotulo="Trecho do relato"
-        texto={trechoFonte}
-        evidencia={detalhe}
+        texto={
+          trechoFonte ?? "[Trecho sob sigilo profissional da disciplina]"
+        }
+        evidencia={trechoFonte ? detalhe : undefined}
       />
 
       {/* Desfecho registrado, em texto corrido em vez de mais uma caixa. */}

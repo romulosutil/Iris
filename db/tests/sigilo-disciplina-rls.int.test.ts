@@ -210,4 +210,42 @@ describe.skipIf(!hasDb)("#119 · Sigilo por disciplina no prontuário sob RLS", 
       ),
     ).rejects.toThrow();
   });
+
+  // ─── T7: Alerta de Risco Clínico (Comportamentos #9, #10 e #13) ──────────────
+
+  test("9. alerta_risco_clinico: Coordenadora vê alerta de sessão sigilosa mas com trecho_fonte nulo via helper", async () => {
+    const rows = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.execute(sql`
+        SELECT id, categoria, severidade, app_alerta_trecho_fonte(id) AS trecho_fonte
+          FROM alerta_risco_clinico
+         WHERE id = ${ALERTA_SESS_SIGILOSA}::uuid
+      `),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.categoria).toBe("ideacao_suicida");
+    expect(rows[0]!.severidade).toBe("ideacao_ativa_com_plano");
+    expect(rows[0]!.trecho_fonte).toBeNull();
+  });
+
+  test("10. alerta_risco_clinico: Terapeuta da mesma disciplina lê trecho_fonte íntegro via helper", async () => {
+    const rows = await withTenant(ctx("terapeuta", U_MESMA_DISC), (db) =>
+      db.execute(sql`
+        SELECT id, categoria, severidade, app_alerta_trecho_fonte(id) AS trecho_fonte
+          FROM alerta_risco_clinico
+         WHERE id = ${ALERTA_SESS_SIGILOSA}::uuid
+      `),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.categoria).toBe("ideacao_suicida");
+    expect(rows[0]!.trecho_fonte).toBe("Citação Literal Confidencial do Diário");
+  });
+
+  test("13. alerta_risco_clinico: SELECT direto na coluna trecho_fonte falha com 42501 para app_role", async () => {
+    await expect(
+      withTenant(ctx("coordenador", U_COORD), (db) =>
+        db.execute(sql`SELECT id, trecho_fonte FROM alerta_risco_clinico WHERE id = ${ALERTA_SESS_SIGILOSA}::uuid`),
+      ),
+    ).rejects.toThrow();
+  });
 });
+
