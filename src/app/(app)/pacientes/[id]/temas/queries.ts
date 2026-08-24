@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { session, sessionNote } from "@/db/schema";
@@ -50,7 +50,12 @@ export async function obterNotasDeSessao(
           eq(sessionNote.tipo, "nota_consolidada"),
         ),
       )
-      .where(eq(session.patientId, patientId))
+      .where(
+        and(
+          eq(session.patientId, patientId),
+          isNotNull(session.numeroSequencialPaciente),
+        ),
+      )
       .orderBy(desc(session.agendadaPara));
   });
 }
