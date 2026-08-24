@@ -2311,3 +2311,66 @@ Resultado: cada branch alterna entre os dois formatos e produz um diff de
   (Docker local indisponível nesta sessão).
 - `FUNCOES_COM_HELPER` subiu de 18 para 19 (entra
   `app_export_bundle_token_definir`, com guard de tenant).
+
+## 📐 Sessão 24/08/2026 — Spec da #277: painel de governança e segurança da clínica
+
+`/tlc-spec-driven` sobre a #277. Spec aceita pelo Rômulo e label `Jules` aplicada.
+Comentários na issue: spec, tarefas atomizadas (T1–T10) e registro do aceite.
+
+### O levantamento derrubou 2 das 3 entregas propostas
+
+- **Atalho para a trilha de auditoria não tem destino.** `audit_log` tem policy
+  de leitura coordenador-only (`0046:11`) e a view `audit_log_mascarado`, mas a
+  varredura de `src/` mostra **só escrita** — nenhuma tela lê a trilha. Virou
+  issue de desdobramento (T9), não link morto na tela.
+- **"Termo de Governança e Criptografia" não existe.** `docs/legal/` tem 16
+  documentos e nenhum é esse. Redigir documento jurídico exige o Rômulo. Virou
+  T10.
+
+### A métrica pedida é estruturalmente constante
+
+`src/auth/tenant.ts:170` desvia papel clínico sem 2FA para `/mfa/setup`: quem
+não ativou **não entra no app**. Logo "quantos terapeutas ativaram 2FA" é sempre
+100% entre quem usa o sistema — o painel afirmaria um risco inexistente.
+
+O que `app_user.two_factor_enabled = false` marca de verdade é **convite
+provisionado que nunca teve primeiro acesso** (`equipe/convidar/logic.ts` cria o
+`user_role` na hora, com senha temporária viva). Sinal melhor, mas outro — a
+copy diz "Ativação pendente", nunca "não ativou o 2FA".
+
+Exceção real: **`admin_recepcao` não é coberto pelo gate de MFA**. Para esse
+papel a flag em `false` significa mesmo "opera sem segundo fator" — categoria
+separada na UI. E `listarTerapeutas` exclui recepção do filtro, então a query
+nova não pôde reusá-la.
+
+### Nem toda leitura nova é superfície de RLS nova
+
+A issue supunha `SECURITY DEFINER` para atravessar a fronteira até a credencial
+`two_factor`. Não é preciso tocá-la: o sinal está na coluna
+`app_user.two_factor_enabled` (`0047:8`) e a policy `app_user_read`
+(`0002:35`, reescrita em `0085:113`) já entrega as linhas dos colegas da clínica
+ativa — é o que `listarTerapeutas` usa hoje.
+
+**Medido, não deduzido** (a leitura das migrações não decidia: a `0001:21` deu
+`GRANT ... ON ALL TABLES` antes de a coluna existir, e a `0057` ainda assim
+concedeu colunas de `app_user` explicitamente):
+
+- `has_column_privilege('app_role','app_user','two_factor_enabled','SELECT')` → `t`
+- grant do `app_role` em `app_user` é de **tabela**, e privilégio de tabela
+  alcança coluna criada depois
+- confirmado ponta-a-ponta como `app_role` com as GUCs setadas: a query devolve
+  `name` + `two_factor_enabled` dos colegas pela `app_user_read`
+
+Consequência: **a issue não tem migração**. `.sql` no diff = desenho fora do trilho.
+
+### Decisões travadas
+
+1. Rota `/(app)/clinica/seguranca`, quarta aba do `TabsNav` — `/(app)/configuracoes/*`
+   não existe no repo, e o `clinica/layout.tsx` já é coordenador-only.
+2. Granularidade **nominal para pendências, agregada para conformes**: listar
+   nominalmente quem está em conformidade não serve a nenhuma ação do
+   coordenador e amplia exposição sem ganho.
+3. Papel duplo (clínico + recepção) classifica pelo lado **mais restritivo**.
+4. Falha na leitura **propaga** — não vira lista vazia. Painel de segurança que
+   mostra "tudo certo" porque a query estourou é afirmação falsa.
+5. Tela é somente leitura: sem forçar MFA, sem reenviar convite.
