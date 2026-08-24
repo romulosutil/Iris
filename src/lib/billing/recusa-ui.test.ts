@@ -13,6 +13,7 @@ const BASE = {
   carenciaDias: 10,
   timezone: "America/Sao_Paulo",
   agora: new Date("2026-08-05T12:00:00Z"),
+  podeEditarDadosDaClinica: true,
 };
 
 describe("montarAvisoRecusa", () => {
@@ -42,6 +43,20 @@ describe("montarAvisoRecusa", () => {
     expect(aviso.ctaLabel).toBe("Corrigir dados da clínica");
   });
 
+  it("manda terapeuta para a assinatura em G4, nunca para /clinica/dados (I1)", () => {
+    // `/clinica/dados` é `requireRole(ctx, "coordenador")` + `notFound()` — a
+    // faixa é global, então terapeuta com este CTA levava 404.
+    const aviso = montarAvisoRecusa({
+      ...BASE,
+      recusaCodigo: "PAYER_CPF_CNPJ_MISMATCH",
+      podeEditarDadosDaClinica: false,
+    });
+
+    expect(aviso.grupo).toBe("G4");
+    expect(aviso.ctaHref).toBe("/assinatura");
+    expect(aviso.ctaLabel).not.toBe("Corrigir dados da clínica");
+  });
+
   it("manda para a assinatura em G3 (autorização morta)", () => {
     const aviso = montarAvisoRecusa({
       ...BASE,
@@ -63,8 +78,27 @@ describe("montarAvisoRecusa", () => {
     const aviso = montarAvisoRecusa({ ...BASE, recusaCodigo: null });
 
     expect(aviso.grupo).toBe("G0");
-    expect(aviso.texto).toContain("Não conseguimos concluir a cobrança");
+    // M2 — o texto descreve o fato (prazo vencido), não uma diligência que não
+    // houve: o backstop de D+7 não pergunta nada ao banco.
+    expect(aviso.texto).toContain(
+      "Não recebemos a confirmação do débito automático",
+    );
     expect(aviso.ctaHref).toBe("/assinatura");
+  });
+
+  it("nunca diz 'não conseguimos concluir a cobrança' quando já foi paga (M1, G8)", () => {
+    // G8 (`PAYMENT_ALREADY_DONE`) tem `copy: null` como G0/G6/G7, mas por
+    // motivo OPOSTO: a cobrança FOI liquidada. `montarAvisoRecusa` é pura e
+    // exportada — hoje o caminho real nunca chama com G8 (o ciclo vira `pago`,
+    // não `falhou`), mas nada além deste teste garante isso.
+    const aviso = montarAvisoRecusa({
+      ...BASE,
+      recusaCodigo: "PAYMENT_ALREADY_DONE",
+    });
+
+    expect(aviso.grupo).toBe("G8");
+    expect(aviso.texto).not.toContain("Não recebemos a confirmação");
+    expect(aviso.texto).toMatch(/já foi paga/i);
   });
 
   it("conta os dias restantes de carência em dias civis, com a data", () => {

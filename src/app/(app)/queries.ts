@@ -37,7 +37,15 @@ export async function obterAvisoRecusa(
   const recusa = await withTenant(ctx, (tx) =>
     obterRecusaAtiva(tx, ctx.clinicId),
   );
-  return recusa ? montarAvisoRecusa(recusa) : null;
+  return recusa
+    ? montarAvisoRecusa({
+        ...recusa,
+        // I1 — só coordenador acessa `/clinica/dados` (`requireRole`); em G4,
+        // `montarAvisoRecusa` usa este sinal para não mandar terapeuta a um
+        // CTA que dá 404.
+        podeEditarDadosDaClinica: ctx.role === "coordenador",
+      })
+    : null;
 }
 
 async function obterDadosTrialDaClinica(
