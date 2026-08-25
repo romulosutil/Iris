@@ -31,7 +31,8 @@
 | ----------- | ------------------------------------------------------------------------------------------------------------------ |
 | **T0–T8**   | ✅ **Feitas** em 25/08/2026, branch `feat/352-expurgo-prontuario-expirado`. Camada SQL completa e medida.          |
 | **T9–T11**  | ✅ **Feitas** em 25/08/2026. `alta_em` passou a ter caminho de escrita — a fila deixa de ser vazia por construção. |
-| **T12–T20** | ⬜ Pendentes.                                                                                                      |
+| **T12–T14** | ✅ **Feitas** em 25/08/2026. Fila, tela, diálogo de confirmação e cobertura de comportamento da action.            |
+| **T15–T20** | ⬜ Pendentes.                                                                                                      |
 | T1 → `0127` | `idx_patient_retencao` via `db:generate`. `db:generate` reexecutado responde `No schema changes`.                  |
 | T2–T6       | `0128_retencao_expurgo_wiring.sql`, `when` = 0127 + 1000. Medida em `pg_proc`/`pg_roles`/`pg_indexes`.             |
 | T7          | 23 casos em 3 suítes; `retencao-expurgo` (11), `retencao-fila` (4), `retencao-aviso` (8). Contagem conferida.      |
@@ -50,14 +51,26 @@
 - **`FUSO_CLINICA` chumbado.** A fronteira do "hoje" da alta usa `America/Sao_Paulo` de `agenda/fuso.ts`, porque `clinic.timezone` não chega até a camada de aplicação. O SQL do expurgo já lê o fuso de verdade. Dívida de R352.F3, a registrar em T19.
 - **Ponto de montagem:** `AltaDialog` entra nos DOIS `PageHeader` de `pacientes/[id]/page.tsx` (o ramo TCC e o protocol-driven). Modalidade `conventional` **não** passa por essa página (redireciona para `/temas`, que não tem `PageHeader`), então esses pacientes continuam sem botão de alta — **é o mesmo buraco que o arquivamento manual já tinha**, pré-existente a #352. Registrar em T19.
 
+**T12–T14 — o que a spec não previu:**
+
+- **`schemas.ts` extra em `clinica/retencao/`.** A spec listava só `queries.ts` e `logic.ts`, mas `logic.ts` é `server-only` e o diálogo é Client Component: importar `MOTIVO_EXPURGO_MIN` (um VALOR, não um tipo) de módulo `server-only` estoura em runtime no navegador com o CI verde. Mesmo arranjo de `pacientes/[id]/schemas.ts`. `ExpurgoState` continua vindo de `logic.ts` porque `import type` é apagado na compilação.
+- **`paginacao-fila.tsx` extra.** `Pagination` do design system é interativo (`onPaginaChange`) e precisa de fronteira de cliente. Isolá-la mantém `fila-tabela.tsx` como Server Component — e é isso que garante que a fila inteira não atravesse a fronteira: só `{ pacienteId, nome }` por linha vai para o diálogo.
+- **Datas formatadas no Postgres (`to_char`), não no `Intl`.** `date` não tem fuso e o driver do `pg` o converte para um `Date` de JS à meia-noite local; formatar depois reintroduz fuso numa data que não tem nenhum e o vencimento aparece um dia antes. Só `avisado_em` (que é `timestamptz`) passa pelo `Intl`.
+- **`ORDER BY` externo repetido.** A ordenação dentro de `app_pacientes_expurgaveis` decide QUAIS linhas a página traz, mas `SELECT ... FROM funcao()` sem `ORDER BY` próprio não tem ordem garantida na saída.
+- **Duas chamadas por página, não uma.** Sem ler o `total` antes não há como grampear na ÚLTIMA página válida; uma página alta voltaria vazia, e fila vazia se lê como "nenhum prontuário vencido" — afirmação falsa sobre obrigação legal.
+- **Limpeza escopada por `DELETE`, sem `TRUNCATE`**, em `logic.int.test.ts`: `TRUNCATE ... CASCADE` apagaria a fixture de outros arquivos de int-test da mesma base.
+- Dois casos além dos 7 obrigatórios: payload da fila (R352.C8, conjunto EXATO de chaves) e `pacienteId` malformado recusado antes do Postgres (senão vira `22P02` genérico).
+
 **Régua de mutação medida em 25/08/2026** (por patch inverso, nunca `git checkout`):
 
-| Mutação                                                                     | Resultado                                                 |
-| --------------------------------------------------------------------------- | --------------------------------------------------------- |
-| trocar a guarda `isNull/isNotNull` do `WHERE` da alta por `undefined`       | ✅ derruba "registrar duas vezes é idempotente"           |
-| `requireRole(ctx,'coordenador')` → `(ctx,'coordenador','admin_recepcao')`   | ✅ derruba "terapeuta e recepção são barrados"            |
-| neutralizar o `refine` de data não-futura do `dataAltaSchema` (`\|\| true`) | ✅ derruba "data futura é recusada e nada é gravado"      |
-| `dias > 0` → `dias >= 0` em `dentroDaJanelaDeAviso`                         | ✅ derruba "não avisa quem vence hoje nem quem já venceu" |
+| Mutação                                                                     | Resultado                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| trocar a guarda `isNull/isNotNull` do `WHERE` da alta por `undefined`       | ✅ derruba "registrar duas vezes é idempotente"                     |
+| `requireRole(ctx,'coordenador')` → `(ctx,'coordenador','admin_recepcao')`   | ✅ derruba "terapeuta e recepção são barrados"                      |
+| neutralizar o `refine` de data não-futura do `dataAltaSchema` (`\|\| true`) | ✅ derruba "data futura é recusada e nada é gravado"                |
+| `dias > 0` → `dias >= 0` em `dentroDaJanelaDeAviso`                         | ✅ derruba "não avisa quem vence hoje nem quem já venceu"           |
+| neutralizar `input.confirmacao !== nome` em `purgarPacienteCore` (`false`)  | ✅ derruba o caso 3 de T14 (8/9)                                    |
+| envolver `purgarPacienteCore` em `comEscrita()`                             | ✅ derruba o caso 6 de T14 — "conta em somente-leitura PURGA" (8/9) |
 
 ---
 
@@ -329,7 +342,7 @@ _Aviso:_
 
 - ~~remover o `COALESCE` do gate (T5) → derruba o caso 1 de T7~~ — **medido em 25/08/2026: mutante EQUIVALENTE, sobrevive.** E está certo que sobreviva: `alta_em IS NULL` já produz `false` em lógica de três valores, e o NULL só viria de linha ausente, que o guard de tenant barra antes. O `COALESCE` é defesa em profundidade; matá-lo exigiria asserir o texto do código. **A mutação que vale é remover o `IF NOT COALESCE(app_paciente_expurgavel(...))` inteiro → derruba os casos 1 e 8 de T7.** ✅ verificada;
 - ~~remover o `criado_em > alta_em` do dedup (T6) → derruba o caso 19~~ — **derruba o caso 20**, não o 19: sem a âncora o dedup fica mais ESTRITO, e "não reavisar no mesmo dia" continua valendo. Remover o `NOT EXISTS` inteiro derruba 19 **e** 20. ✅ ambas verificadas;
-- remover a checagem de `confirmacao` (T12) → derruba o caso 3 desta task. ⬜ pendente (T12 não implementada).
+- remover a checagem de `confirmacao` (T12) → derruba o caso 3 desta task. ✅ **verificada em 25/08/2026**: `if (input.confirmacao !== nome)` trocado por `if (false)` por patch inverso, suíte foi de 9/9 para 8/9. Verificado também um quarto mutante fora da lista original: envolver `purgarPacienteCore` em `comEscrita()` derruba o caso 6 — é ele que trava a decisão de o expurgo rodar em conta bloqueada.
 
 **Pronto quando:** suíte verde **e** as três mutações verificadas uma a uma, com o resultado anotado no PR.
 **Gate:** `int` + `format`.

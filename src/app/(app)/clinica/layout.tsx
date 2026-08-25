@@ -11,6 +11,7 @@ const abas: TabsNavItem[] = [
   { href: "/clinica/emergencia", rotulo: "Emergência & Protocolo" },
   { href: "/clinica/seguranca", rotulo: "Segurança" },
   { href: "/clinica/auditoria", rotulo: "Trilha de Auditoria" },
+  { href: "/clinica/retencao", rotulo: "Retenção & Expurgo" },
 ];
 
 /**
