@@ -53,6 +53,7 @@ export async function loadCanonicalContext(
     .select({
       nascimento: patient.nascimento,
       clinicalModality: patient.clinicalModality,
+      familiaAbordagem: patient.familiaAbordagem,
     })
     .from(patient)
     .where(eq(patient.id, args.patientId));
@@ -158,6 +159,13 @@ export async function loadCanonicalContext(
   return buildCanonicalContext({
     paciente: { idadeMeses: idadeEmMeses(pac?.nascimento ?? null) },
     modo,
+    // #331 — só passa adiante quando o modo é convencional; em qualquer
+    // outro modo a coluna pode ter lixo de um cadastro mal feito no
+    // passado, mas nunca deve vazar pro contrato (defesa em profundidade).
+    familiaAbordagem:
+      modo === "terapia_convencional"
+        ? (pac?.familiaAbordagem ?? undefined)
+        : undefined,
     protocolos,
     metas,
     historico: [],

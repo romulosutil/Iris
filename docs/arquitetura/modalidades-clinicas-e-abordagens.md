@@ -76,7 +76,7 @@ O produto tem **três perguntas independentes** hoje colapsadas numa coluna.
 | ------------------------ | --------------------------------------------- | ------------------------------------------ | -------------- |
 | **Modelo de registro**   | Que forma tem a ficha clínica deste paciente? | `patient.clinical_modality` (enum)         | 1 por paciente |
 | **Protocolos ativos**    | Que instrumentos formais este paciente usa?   | contrato `protocolos_ativos[]` (já existe) | 0..N           |
-| **Família de abordagem** | Sob qual escola o terapeuta conduz?           | proposta: `patient.familia_abordagem`      | 0..1           |
+| **Família de abordagem** | Sob qual escola o terapeuta conduz?           | `patient.familia_abordagem` (enum) [#331]  | 0..1           |
 
 Só o primeiro eixo governa **navegação e prompt do agente**. Os outros dois
 são conteúdo.
@@ -86,7 +86,7 @@ são conteúdo.
 ```
 protocol_driven      — ABA/TEA: domínios, marcos, evidência por sessão
 cognitive_behavioral — TCC: RPD, escalas intervalares, tarefa de casa   [NOVO]
-conventional         — psicodinâmica / humanista-existencial / sistêmica
+conventional         — psicodinâmica / humanista-existencial / transpessoal-integrativa
 ```
 
 Semântica: **"qual é o modelo de registro clínico"**, não "qual é a escola".
@@ -126,16 +126,17 @@ Verificação exigida (regra 3 de `CLAUDE.md` — medir, não ler): após
 `pnpm db:migrate`, conferir em `pg_enum` que os três valores existem. `git
 log` não prova execução.
 
-### 3.3 `familia_abordagem` — proposta, não decidida
+### 3.3 `familia_abordagem` — implementado (#331)
 
-`protocolo-terapia-convencional.md` marca `familia_abordagem` como proposta
-não decidida, e a issue **#331 (aberta)** registra que o contrato de entrada
-do agente diverge dos casos de teste justamente aqui.
-
-Recomendação: **não implementar agora**. Não governa navegação nem prompt —
-R9-TC exige que o agente seja school-agnostic, então a família é contexto
-para o terapeuta ler, não eixo de ramificação. Entra junto com a resolução
-de #331, como campo simples em `patient`.
+Campo simples em `patient` (nullable, enum `psicodinamica |
+humanista_existencial | transpessoal_integrativa`), obrigatório só no
+cadastro novo com `clinical_modality = 'conventional'`. Não governa
+navegação nem prompt — R9-TC exige que o agente seja school-agnostic, então
+a família é contexto para o terapeuta ler, não eixo de ramificação.
+Migração `0126_patient_familia_abordagem.sql`; consumido em
+`context-assembler.ts`/`context-loader.ts` e exposto no cadastro
+(`novo-paciente-form.tsx`). Detalhes em `protocolo-terapia-convencional.md`
+§2.2.
 
 ---
 

@@ -201,21 +201,19 @@ um campo `modo` no nível raiz do contexto, paralelo a `protocolos_ativos`:
 }
 ```
 
-> **PROPOSTA PENDENTE DE CONFIRMAÇÃO — o campo `familia_abordagem`.** A
-> definição de nicho de §1 (3 famílias nomeadas) exige que o agente saiba a
-> qual família o terapeuta pertence, para poder cumprir R9-TC (não importar
-> vocabulário de outra família). O campo acima (`familia_abordagem`, valores
-> `psicodinamica | humanista_existencial | transpessoal_integrativa`) é a
-> forma mais direta de transportar isso, mas **nome do campo, nome dos
-> valores e onde a informação é cadastrada (no profissional? no vínculo
-> profissional-paciente? por sessão?) não foram decididos pelo Rômulo** — as
-> três opções têm implicações diferentes numa clínica com terapeutas de
-> famílias distintas. Fica registrado como proposta; nenhuma migração ou
-> enum foi criado a partir deste documento. Vale notar que R9-TC **funciona
-> mesmo sem este campo** — a regra base é "espelhe só o vocabulário que o
-> terapeuta usou", que não depende de saber a família; o campo serve para
-> transformar a regra em verificação automatizável (detectar jargão da
-> família errada na saída), não para habilitá-la.
+> **Decisão fechada (#331) — o campo `familia_abordagem`.** Enum
+> `familia_abordagem` (`psicodinamica | humanista_existencial |
+> transpessoal_integrativa`) mora em `patient` — cada paciente carrega sua
+> própria linha teórica, mesmo com o mesmo terapeuta, porque um profissional
+> pode conduzir pacientes diferentes sob famílias diferentes. Nullable
+> (cardinalidade 0..1): obrigatório só no CADASTRO de paciente novo com
+> `clinical_modality = 'conventional'` (validado na aplicação, sem CHECK de
+> banco); pacientes convencionais já cadastrados antes desta migração ficam
+> `NULL` até o campo ser preenchido. `loadCanonicalContext` só envia a chave
+> ao agente quando `modo === "terapia_convencional"` E o valor não é `NULL`
+> — ausência da chave nunca quebra R9-TC, que já funciona por fallback
+> (espelhar o vocabulário do terapeuta) quando o campo não está preenchido.
+> Migração: `db/migrations/0126_patient_familia_abordagem.sql`.
 
 Quando `modo: "terapia_convencional"`, o backend NUNCA envia
 `protocolos_ativos` não-vazio (mistura de modos não é suportada nesta

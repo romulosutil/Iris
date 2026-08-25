@@ -82,4 +82,18 @@ describe("buildCanonicalContext", () => {
       "escala_padronizada_intervalar",
     );
   });
+
+  test("familiaAbordagem presente vira familia_abordagem no contrato (#331)", () => {
+    const ctx = buildCanonicalContext({
+      ...input,
+      familiaAbordagem: "psicodinamica",
+    });
+    expect(ctx.familia_abordagem).toBe("psicodinamica");
+  });
+
+  test("familiaAbordagem ausente nunca vira null explícito — chave omitida (#331)", () => {
+    const ctx = buildCanonicalContext(input);
+    expect(ctx.familia_abordagem).toBeUndefined();
+    expect("familia_abordagem" in ctx).toBe(false);
+  });
 });

@@ -17,6 +17,9 @@ import {
 type TipoConsentimento = "responsavel_legal" | "titular_adulto";
 type ClinicalModality =
   "protocol_driven" | "cognitive_behavioral" | "conventional";
+// #331 — só existe quando clinicalModality === "conventional".
+type FamiliaAbordagem =
+  "psicodinamica" | "humanista_existencial" | "transpessoal_integrativa";
 
 /**
  * Idade em anos completos na data de hoje. Só serve para o AVISO
@@ -53,6 +56,11 @@ export function NovoPacienteForm() {
   // esconderia essa escolha do operador.
   const [clinicalModality, setClinicalModality] = useState<
     ClinicalModality | ""
+  >("");
+  // #331 — mesmo raciocínio: sem default, o operador escolhe. Só relevante
+  // quando clinicalModality === "conventional".
+  const [familiaAbordagem, setFamiliaAbordagem] = useState<
+    FamiliaAbordagem | ""
   >("");
   const [nascimento, setNascimento] = useState("");
   const [consentimentoIa, setConsentimentoIa] = useState(false);
@@ -96,6 +104,17 @@ export function NovoPacienteForm() {
     if (!erroEhDaModalidade) return;
     grupoModalidadeRef.current?.querySelector("button")?.focus();
   }, [erroEhDaModalidade, state]);
+
+  // #331 — mesmo padrão: hidden input não aceita `required`, servidor rejeita
+  // a ausência quando clinicalModality === "conventional".
+  const erroEhDaFamiliaAbordagem =
+    !!state.error && /família de abordagem/i.test(state.error);
+  const grupoFamiliaAbordagemRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!erroEhDaFamiliaAbordagem) return;
+    grupoFamiliaAbordagemRef.current?.querySelector("button")?.focus();
+  }, [erroEhDaFamiliaAbordagem, state]);
 
   // R3 (#387) — mesmo gate do servidor (`logic.ts`, defesa em profundidade):
   // paciente adulto em TCC ou terapia convencional sem autoconsentimento não
@@ -201,7 +220,7 @@ export function NovoPacienteForm() {
             {
               value: "conventional",
               label:
-                "Terapia convencional (psicodinâmica, humanista, sistêmica)",
+                "Terapia convencional (psicodinâmica, humanista/existencial, transpessoal/integrativa)",
               description:
                 "Resumo de sessão e temas trabalhados, sem protocolo formal.",
             },
@@ -219,6 +238,58 @@ export function NovoPacienteForm() {
             devolve erro em pt-BR nesse caso, sem default silencioso. */}
         <input type="hidden" name="clinicalModality" value={clinicalModality} />
       </fieldset>
+
+      {/* #331 — só existe quando modalidade = "conventional": evita impor o
+          vocabulário de uma escola teórica errada no relatório do agente.
+          Sem pré-seleção, mesmo raciocínio de clinicalModality (#387). */}
+      {clinicalModality === "conventional" ? (
+        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend className="font-display mb-1.5 text-sm font-semibold text-[var(--text-primary)]">
+            Família de abordagem
+          </legend>
+          <RadioCards
+            ref={grupoFamiliaAbordagemRef}
+            value={familiaAbordagem}
+            onValueChange={(v) =>
+              setFamiliaAbordagem(v as FamiliaAbordagem)
+            }
+            aria-required="true"
+            aria-invalid={erroEhDaFamiliaAbordagem || undefined}
+            aria-describedby={
+              erroEhDaFamiliaAbordagem
+                ? "familiaAbordagem-error"
+                : undefined
+            }
+            error={erroEhDaFamiliaAbordagem}
+            opcoes={[
+              { value: "psicodinamica", label: "Psicodinâmica / Psicanálise" },
+              {
+                value: "humanista_existencial",
+                label: "Humanista / Existencial (ex.: Gestalt)",
+              },
+              {
+                value: "transpessoal_integrativa",
+                label: "Transpessoal / Integrativa",
+              },
+            ]}
+          />
+          {erroEhDaFamiliaAbordagem ? (
+            <p
+              id="familiaAbordagem-error"
+              className="text-sm font-semibold text-[var(--status-error-fg)]"
+            >
+              {state.error}
+            </p>
+          ) : null}
+          {/* Valor lido pela action. Vazio até o operador escolher — a action
+              devolve erro em pt-BR nesse caso, sem default silencioso. */}
+          <input
+            type="hidden"
+            name="familiaAbordagem"
+            value={familiaAbordagem}
+          />
+        </fieldset>
+      ) : null}
 
       {/* Consentimento LGPD. A escolha de quem assina é explícita — nunca
           derivada da data de nascimento (#100, D1). */}

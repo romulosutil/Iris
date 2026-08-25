@@ -40,6 +40,12 @@ export type CanonicalContext = {
     metas_ativas: CanonicalMeta[];
   };
   modo?: "terapia_convencional" | "protocol_driven" | "tcc";
+  // #331 — só populado quando modo === "terapia_convencional" e o paciente
+  // já tem o campo preenchido em `patient.familia_abordagem`. Ausente
+  // (nunca `null`) nos outros modos e em paciente convencional legado sem
+  // o campo — R9-TC funciona sem ele via fallback existente, então omitir
+  // a chave é sempre seguro.
+  familia_abordagem?: "psicodinamica" | "humanista_existencial" | "transpessoal_integrativa";
   protocolos_ativos: CanonicalProtocolo[];
   historico_relevante: Array<{
     dominio_id: string;
@@ -51,6 +57,10 @@ export type CanonicalContext = {
 export type AssemblerInput = {
   paciente: { idadeMeses: number | null };
   modo?: "terapia_convencional" | "protocol_driven" | "tcc";
+  // #331 — mesma tipagem do campo de saída; ausente/omitida quando não se
+  // aplica. A decisão de QUANDO mandar (modo convencional + valor não nulo
+  // no banco) é do chamador (context-loader.ts), não desta função pura.
+  familiaAbordagem?: "psicodinamica" | "humanista_existencial" | "transpessoal_integrativa";
   protocolos: Array<{
     familia: string;
     nome: string;
@@ -117,6 +127,9 @@ export function buildCanonicalContext(input: AssemblerInput): CanonicalContext {
 
   if (input.modo) {
     ctx.modo = input.modo;
+  }
+  if (input.familiaAbordagem) {
+    ctx.familia_abordagem = input.familiaAbordagem;
   }
 
   return ctx;
