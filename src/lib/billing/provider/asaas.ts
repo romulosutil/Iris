@@ -1382,13 +1382,21 @@ export class AsaasProvider implements BillingProvider {
    * que sai o diagnóstico atual. Instrução sem data legível vai para o fim da
    * ordem em vez de virar `NaN` no meio da comparação.
    *
-   * ⚠️ **NÃO MEDIDO:** se o contador de 3 do Asaas for por INSTRUÇÃO e não por
-   * cobrança, retentar sempre a instrução mais nova abre orçamento além das 3 —
-   * cada retentativa criaria a instrução que a próxima passada escolheria. A
-   * doc fala em "3 tentativas em 7 dias" sem dizer de que entidade é o contador,
-   * e o endpoint nunca foi exercitado (nenhuma autorização chega a `ACTIVE` no
-   * sandbox, #321). Entra no ensaio em produção; o sinal seria a 4ª retentativa
-   * ser aceita, ou um 400 `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` antes da 3ª.
+   * **D45 (#446), fechado por invariante de código, não por medição:** a doc
+   * fala em "3 tentativas em 7 dias" sem dizer de que entidade é o contador
+   * (por INSTRUÇÃO ou por cobrança), e o endpoint nunca foi exercitado
+   * (nenhuma autorização chega a `ACTIVE` no sandbox, #321). Não importa: quem
+   * decide QUANTAS vezes o gateway é chamado é `MAXIMO_RETENTATIVAS_POR_CICLO`
+   * em `subscription.ts` (CAS pré-chamada, barrado no `WHERE` da varredura) —
+   * este método só decide QUAL instrução, nunca quantas. O sistema nunca emite
+   * a 4ª chamada, então "abrir orçamento além de 3" não pode acontecer do
+   * nosso lado, seja o contador do Asaas por instrução ou por cobrança. Um 400
+   * `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` antes da 3ª (se o contador real for por
+   * instrução e mais apertado) já cai no caminho existente de
+   * `recusada_pelo_gateway` — tentativa gasta, motivo nomeado, sem retentar na
+   * mesma passada. Prova: `retentativa-extradia.int.test.ts` — "comanda as 3
+   * retentativas em passadas sucessivas, esgota" — 4ª passada faz ZERO
+   * chamadas ao gateway.
    *
    * Lista vazia devolve `{}` — "nenhuma instrução recusada" é resposta válida,
    * não erro.
