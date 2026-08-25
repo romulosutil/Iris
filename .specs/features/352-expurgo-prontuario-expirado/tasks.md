@@ -362,16 +362,16 @@ _Aviso:_
 **Onde:** `docs/legal/politica-retencao-dados.md:145-149`, `:198`, `:15-22`.
 **Depende de:** T14.
 **Por quê o documento e não o código:** `backup.sh:470` filtra pela string literal `'paciente_purgado'` e `restore.sh` reaplica a partir dela. Trocar no código quebraria a reaplicação **em silêncio**, exigiria migração de dado histórico em `audit_log` e revalidação ponta a ponta do restore — e um titular já expurgado voltaria a existir após um restore. Ver `context.md` D4.
-**⚠️ BLOQUEANTE POR CONFIRMAÇÃO:** `docs/legal/` exige confirmação do Rômulo antes de alterar (`CLAUDE.md` § Permissões). **Não** executar esta task sem o "pode ir" explícito.
+**✅ CONFIRMADO por Rômulo em 25/08/2026** (junto com a fórmula de retenção — §4 P6 e §7 de `context.md`). Executado fora da ordem normal de dependência (antes de T14), a pedido do Rômulo, direto na branch `docs/352-spec-expurgo-prontuario`.
 **Cuidado:** não commitar `docs/legal/` de carona em outra task — já houve teste afirmando doc não commitado neste repo.
-**Pronto quando:** as três referências corrigidas; nenhuma outra afirmação do documento alterada.
+**Pronto quando:** a referência de `acao` corrigida (linha 146); pendência do §11 sobre a fórmula marcada como resolvida com data. Feito.
 **Gate:** `format` + confirmação registrada.
 
 ---
 
 ## T19 — Registrar as dívidas abertas
 
-**O quê:** três dívidas descobertas nesta análise, cada uma com o desenho mínimo **já escrito** — não como "avaliar depois".
+**O quê:** quatro dívidas descobertas nesta análise, cada uma com o desenho mínimo **já escrito** — não como "avaliar depois".
 **Onde:** `BACKLOG.md`.
 **Depende de:** T14.
 **Conteúdo:**
@@ -379,8 +379,9 @@ _Aviso:_
 1. **Extensão de retenção por paciente** (P4, fora de escopo por decisão): `patient.retencao_estendida_ate` + `retencao_estendida_motivo`, predicado passa a exigir `(retencao_estendida_ate IS NULL OR <referência> >= retencao_estendida_ate)`. Motivo de existir: sem coluna, um auditor não distingue _"a clínica ainda não decidiu"_ de _"decidiu estender por processo judicial"_ — fraco para o Art. 37.
 2. **`FUSO_CLINICA` chumbado** (`src/app/(app)/agenda/fuso.ts:4`) enquanto `clinic.timezone` (`schema.ts:291`) é por clínica. Divergência real, encontrada de raspão.
 3. **Job de exportação integral (#374) nunca provisionado:** tem script (`scripts/exportacao-acervo.mjs`) e rota (`src/app/api/internal/jobs/exportacao-integral/route.ts`), e **não** tem `infra/exportacao/`, Dockerfile, agendador nem serviço no compose. As variáveis em `.env.example:257,266` estão comentadas. Toda solicitação de exportação fica parada em `pendente`.
+4. **Governança da via excepcional** (P5, decisão de 25/08/2026, `context.md` §4 e §7): quem além do coordenador autoriza expurgo pela via excepcional (DPO? dono da conta?) fica indefinido de propósito até o primeiro pedido real. Reabrir quando surgir demanda — não desenhar processo especulativo agora.
 
-**Pronto quando:** as três entradas no `BACKLOG.md`, com arquivo:linha.
+**Pronto quando:** as quatro entradas no `BACKLOG.md`, com arquivo:linha.
 **Gate:** `format`.
 
 ---

@@ -143,7 +143,7 @@ mesmo padrão dos demais campos materializados do modelo — ver
 de qualquer eliminação automática:
 
 1. **Eliminação** — remoção completa e irreversível do dado do paciente
-   (registro em `AuditLog`, `acao='dado_eliminado'`, ANTES da eliminação
+   (registro em `AuditLog`, `acao='paciente_purgado'`, ANTES da eliminação
    efetiva, já que o próprio log não pode referenciar um `patient_id` que não
    existe mais — o log de auditoria retém só o metadado da ação, nunca o
    conteúdo clínico eliminado).
@@ -224,9 +224,16 @@ negócio crescer. O contato institucional de privacidade do produto é
 
 ## 11. Pendências antes deste documento valer como final
 
-- Confirmação por advogado de que o default `MAX(18 anos, alta+10 anos)` é
-  razoável e que a divisão controlador (clínica) / operador (Iris) está
-  correta para o modelo de negócio do Iris.
+- ~~Confirmação por advogado de que o default `MAX(18 anos, alta+10 anos)` é
+  razoável~~ — **confirmado por produto/Rômulo em 25/08/2026** (issue #352).
+  O termo `nascimento + 18 anos` não é redundante com `alta + 10 anos`: para
+  alta ocorrida na primeira infância (antes de ~8 anos de idade), `alta+10`
+  ainda cai durante a menoridade do paciente — o termo dos 18 anos é quem
+  garante que o prontuário só pode ser expurgado depois que o próprio titular
+  vira adulto e pode decidir sobre ele, alinhado à recomendação do Manual
+  Orientativo do CFP (seção 3). Falta ainda: confirmação por advogado de que
+  a divisão controlador (clínica) / operador (Iris) está correta para o
+  modelo de negócio do Iris.
 - Definição de quem é o encarregado (DPO) do próprio Iris enquanto operador.
 - Revisão de que o processo de aviso prévio (90 dias, seção 6) é
   operacionalmente viável antes de virar compromisso público.

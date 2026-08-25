@@ -100,6 +100,8 @@ Perguntadas explicitamente nesta sessão, com o custo de cada opção na mesa. N
 | P2  | **Via excepcional entra agora, como função irmã nomeada**, sem UI no V1 (só SQL controlado).      | Necessária de qualquer forma para T1. Nomeada, nunca parâmetro booleano.      |
 | P3  | **Aviso prévio de 90 dias entra em #352.**                                                        | É o que torna o expurgo não-silencioso — a promessa central da política.      |
 | P4  | **Extensão de retenção por paciente fica FORA.**                                                  | Vira dívida no `BACKLOG.md`. Ver §5 abaixo para o que isso deixa aberto.      |
+| P5  | **Governança da via excepcional (quem além do coordenador autoriza) fica FORA.**                  | Decisão explícita de 25/08/2026: sem demanda real ainda, não vale desenhar processo a priori. V1 continua só SQL controlado. Vira dívida no `BACKLOG.md` — reabrir no primeiro pedido de expurgo excepcional. |
+| P6  | **Fórmula `MAX(nascimento+18a, alta_em+10a)` confirmada sem alteração.**                          | Esclarecido em 25/08/2026: o termo dos 18 anos não é o "problema dos 30 dias" que parecia à primeira vista — ele só domina quando a alta ocorre na primeira infância (antes de ~8 anos), e nesse caso é a única proteção que impede expurgo de prontuário de paciente ainda menor. Recomendação do CFP (§3 da política). Mantida como estava. |
 
 ### Sobre P2 — por que função irmã e não parâmetro
 
@@ -216,9 +218,9 @@ Duas personas foram consultadas com dossiê fechado. Ambas contribuíram, e amba
 
 Escritas aqui para que ninguém as leia como fechadas dentro da spec.
 
-- **Homologação jurídica da fórmula de retenção.** `politica-retencao-dados.md` §11 registra como pendente. #352 implementa a fórmula **já mergeada**, não a homologa.
+- **Homologação jurídica da fórmula de retenção.** A razoabilidade do default (`MAX(18a, alta+10a)`) foi confirmada por produto em 25/08/2026 (§4, P6; `politica-retencao-dados.md` §11). Falta ainda a confirmação por advogado de que a divisão controlador/operador está correta — esse ponto continua aberto, #352 não o fecha.
 - **Art. 16, I vs. Art. 18.** A leitura de que retenção por obrigação legal sobrepõe pedido de eliminação do titular antes do prazo é leitura de revisor técnico, não parecer. É exatamente por isso que a via excepcional exige `base_legal` escrita — o campo existe para que a decisão jurídica fique registrada por caso, não presumida em código.
-- **Governança da via excepcional.** Quem autoriza além do coordenador (DPO? dono da conta?) é política interna, ainda não definida. No V1 não há UI, então a governança é processual (SQL controlado), não técnica.
+- **Governança da via excepcional.** Quem autoriza além do coordenador (DPO? dono da conta?) fica deliberadamente indefinido (P5, §4) — decisão de 25/08/2026 é adiar o desenho até o primeiro pedido real, em vez de especular processo sem demanda. No V1 não há UI, então a governança é processual (SQL controlado), não técnica.
 - **Viabilidade operacional do aviso de 90 dias como compromisso público.** §11 do documento marca como não confirmado. #352 constrói o mecanismo; publicar a promessa é decisão separada.
 - **`politica_retencao_meses` é nullable e sem default, e nenhuma UI a lê ou escreve.** `COALESCE(..., 0)` no predicado faz NULL significar "sem extensão", que é o comportamento conservador correto. Expor na UI é escopo próprio.
 
