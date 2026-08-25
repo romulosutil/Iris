@@ -29,6 +29,10 @@ export const ROTULOS_ACAO: Readonly<Record<string, string>> = {
   arquivamento_aviso_previo: "Aviso prévio de arquivamento",
   paciente_modalidade_clinica_alterada: "Modalidade clínica alterada",
   paciente_purgado: "Paciente expurgado",
+  // #352 — aviso de que o prazo de guarda do prontuário vence em 90 dias. É o
+  // que torna o expurgo NÃO-silencioso, e não se confunde com o
+  // `arquivamento_aviso_previo` acima, que é comercial (inatividade).
+  expurgo_aviso_previo: "Aviso prévio de expurgo de prontuário",
   relatorio_purgado: "Relatório expurgado",
   alerta_risco_criado: "Alerta de risco aberto",
   alerta_risco_email_rt: "Alerta de risco enviado ao responsável técnico",

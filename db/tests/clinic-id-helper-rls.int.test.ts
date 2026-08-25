@@ -259,7 +259,7 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
 /**
- * As 16 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16).
+ * As 20 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16).
  *
  * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
  * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
@@ -282,6 +282,9 @@ const FUNCOES_COM_HELPER = [
   "app_export_bundle_token_definir",
   "app_iniciar_trial",
   "app_paciente_expurgavel",
+  // #352 (0128) — fila de elegíveis ao expurgo. DEFINER: o guard interno é a
+  // ÚNICA fronteira, e espelha o predicado da policy de leitura de `patient`.
+  "app_pacientes_expurgaveis",
   "app_patient_in_clinic",
   "app_protocol_in_clinic",
   "app_proximo_numero_sequencial",
@@ -300,7 +303,7 @@ const FUNCOES_COM_HELPER = [
 ];
 
 /**
- * As 12 funções que chamam app_user_role_exigido() (0093 + 0094, D23).
+ * As 15 funções que chamam app_user_role_exigido() (0093 + 0094, D23, 0128 #352).
  */
 const FUNCOES_COM_USER_ROLE_HELPER = [
   "app_alerta_risco_visivel",
@@ -308,7 +311,12 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
   "app_aplicar_candidatura",
   "app_aplicar_snapshot",
   "app_desarquivar_paciente",
+  // #352 (0128) — a fila é coordenador-only, reafirmado dentro do DEFINER.
+  "app_pacientes_expurgaveis",
   "app_purgar_paciente",
+  // #352 (0128) — via excepcional (sem gate de retenção, exige base legal).
+  // Guards de papel e tenant IDÊNTICOS aos da via normal, de propósito.
+  "app_purgar_paciente_excepcional",
   "app_purgar_report",
   "app_report_visivel",
   "app_salvar_config_emergencia",
@@ -327,7 +335,9 @@ const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
   "app_desarquivar_paciente",
   "app_is_on_team",
-  "app_purgar_paciente",
+  // #352 (0128) — o `ator_id` da linha-fato passou a ser carimbado no corpo de
+  // erasure COMPARTILHADO pelas duas vias, e não mais em `app_purgar_paciente`.
+  "app_purgar_paciente_interno",
   "app_purgar_report",
   "app_session_clinica_visivel",
   // #119 (0121) — valida autor ou mesma disciplina na equipe ativa.
@@ -451,7 +461,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 19 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 20 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -464,7 +474,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(19);
+    expect(FUNCOES_COM_HELPER.length).toBe(20);
   });
 
   // ─── 2c. D23: guards de papel e identidade (0093) ──────────────────────────
@@ -497,7 +507,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(["app_user_id_atual"]);
   });
 
-  test("as 12 funções de papel chamam app_user_role_exigido() — conjunto exato", async () => {
+  test("as 15 funções de papel chamam app_user_role_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -507,10 +517,10 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ROLE_HELPER);
-    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(13);
+    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(15);
   });
 
-  test("as 6 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
+  test("as 8 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p

@@ -53,9 +53,12 @@ async function semear() {
     (${U_TER_EQUIPE}, ${CLINIC_A}, 'terapeuta'),
     (${U_TER_FORA}, ${CLINIC_A}, 'terapeuta'),
     (${U_COORD_B}, ${CLINIC_B}, 'coordenador')`;
-  await owner!`INSERT INTO patient (id, clinic_id, nome, nascimento) VALUES
-    (${P_A}, ${CLINIC_A}, 'Paciente A', '1995-04-10'),
-    (${P_B}, ${CLINIC_B}, 'Paciente B', '1990-01-01')`;
+  // `alta_em` preenchida: desde a 0128 (#352) `app_purgar_paciente` tem gate de
+  // retenção, e um paciente sem alta é inelegível por construção — o caso de
+  // pseudonimização (H2) abaixo passaria a medir a recusa do gate.
+  await owner!`INSERT INTO patient (id, clinic_id, nome, nascimento, alta_em) VALUES
+    (${P_A}, ${CLINIC_A}, 'Paciente A', '1995-04-10', '2005-01-01'),
+    (${P_B}, ${CLINIC_B}, 'Paciente B', '1990-01-01', '2005-01-01')`;
   await owner!`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe, vigencia_fim) VALUES
     (${P_A}, ${U_TER_SESSAO}, 'psicologia', 'terapeuta_referencia', NULL),
     (${P_A}, ${U_TER_EQUIPE}, 'fono', 'terapeuta_referencia', NULL)`;

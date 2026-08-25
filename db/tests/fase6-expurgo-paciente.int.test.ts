@@ -51,7 +51,11 @@ describe.skipIf(!hasDb)("fase6.3 · app_purgar_paciente + retenção", () => {
       (${U_TER_A}, ${CLINIC_A}, 'terapeuta')`;
     // Sujeito (clínica A) + subárvore bloqueante: consent (restrict) + report
     // (no-action) + report_pdf (cascade sob report).
-    await owner!`INSERT INTO patient (id, clinic_id, nome) VALUES (${P1}, ${CLINIC_A}, 'Paciente 1')`;
+    // Datas que tornam P1 ELEGÍVEL: desde a 0128 (#352) `app_purgar_paciente`
+    // tem gate de retenção, e um paciente sem `alta_em` é inelegível por
+    // construção — o teste de erasure abaixo passaria a medir a recusa do gate
+    // em vez do erasure.
+    await owner!`INSERT INTO patient (id, clinic_id, nome, nascimento, alta_em) VALUES (${P1}, ${CLINIC_A}, 'Paciente 1', '1990-01-01', '2005-01-01')`;
     await owner!`INSERT INTO consent (patient_id, tipo, responsavel_signatario, versao_termo)
       VALUES (${P1}, 'tratamento_dados_menor', 'Mãe', 'v1')`;
     await owner!`INSERT INTO report (id, clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, status, payload)

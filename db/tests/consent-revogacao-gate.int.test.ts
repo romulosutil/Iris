@@ -210,6 +210,11 @@ describe.skipIf(!hasDb)(
       (${P_CHK}, ${CLINIC_A}, 'Constraints', '1990-01-01'),
       (${P_B}, ${CLINIC_B}, 'Paciente B', '2015-01-01')`;
 
+      // Desde a 0128 (#352) `app_purgar_paciente` tem gate de retenção: sem
+      // `alta_em` o sujeito é inelegível por construção, e o caso 9 passaria a
+      // medir a recusa do gate em vez da interação com a revogação de consent.
+      await owner!`UPDATE patient SET alta_em = '2005-01-01' WHERE id = ${P_PURGA}`;
+
       // Concessões de regime. Nenhuma revogação aqui: o estado inicial é DESTRAVADO
       // para todos, e cada teste trava o que precisar.
       await owner!`INSERT INTO consent (id, patient_id, tipo, responsavel_signatario, versao_termo) VALUES
