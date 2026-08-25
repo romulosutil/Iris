@@ -596,7 +596,9 @@ function normalizarEventoAsaas(payload: unknown): EventoWebhookNormalizado {
    */
   if (
     idInstrucao &&
-    (retentativa.proposito === null || retentativa.tentativa === null)
+    (retentativa.proposito === null ||
+      (retentativa.proposito === "RETRY_AFTER_DUE_DATE" &&
+        retentativa.tentativa === null))
   ) {
     console.warn(
       "[billing-retentativa-envelope-inesperado] purpose/retryAttempt fora do contrato lido da doc (#322, D46)",
