@@ -50,6 +50,7 @@ const CLINICA_G3 = "00000000-0000-0000-0000-000000318a03";
 const CLINICA_G4 = "00000000-0000-0000-0000-000000318a04";
 const CLINICA_G5 = "00000000-0000-0000-0000-000000318a05";
 const CLINICA_G6 = "00000000-0000-0000-0000-000000318a06";
+const CLINICA_G6_D39 = "00000000-0000-0000-0000-000000039a06";
 const CLINICA_G7 = "00000000-0000-0000-0000-000000318a07";
 const CLINICA_G8 = "00000000-0000-0000-0000-000000318a08";
 const CLINICA_G0 = "00000000-0000-0000-0000-000000318a00";
@@ -62,6 +63,7 @@ const CLINICAS = [
   CLINICA_G4,
   CLINICA_G5,
   CLINICA_G6,
+  CLINICA_G6_D39,
   CLINICA_G7,
   CLINICA_G8,
 ];
@@ -449,6 +451,37 @@ describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
     expect(
       classificarRecusa("EXCEEDED_MAXIMUM_RETRY_ATTEMPTS").copy,
     ).toBeNull();
+  });
+
+  it("D39 · G6 como PRIMEIRA recusa do ciclo persiste o código cru (sem mover status/erro)", async () => {
+    // Ciclo sem nenhuma recusa anterior — nunca passou por `falhou`. É o
+    // cenário que o backstop de D+7 lê como G0 (silêncio total) se
+    // `recusa_codigo` continuar `null`, e carimba `past_due` por um bug nosso.
+    const { subscriptionId, chargeId, cicloId } = await cenario({
+      clinicId: CLINICA_G6_D39,
+      statusAssinatura: "active",
+      statusCiclo: "aguardando_pagamento",
+    });
+
+    await conciliarPagamentoDeCiclo(
+      chargeId,
+      "recusada",
+      "EXCEEDED_MAXIMUM_RETRY_ATTEMPTS",
+    );
+
+    // O código cru É persistido — é a diferença que faz `aplicarBackstopDePrazo`
+    // classificar G6 e ignorar, em vez de ler `null` e carimbar. `status`/`erro`
+    // continuam intocados: G6 não marca `falhou`.
+    const ciclo = await lerCiclo(cicloId);
+    expect(ciclo.status).toBe("aguardando_pagamento");
+    expect(ciclo.erro).toBeNull();
+    expect(ciclo.recusa_codigo).toBe("EXCEEDED_MAXIMUM_RETRY_ATTEMPTS");
+
+    const assinatura = await lerAssinatura(subscriptionId);
+    expect(assinatura.status).toBe("active");
+    expect(assinatura.past_due_desde).toBeNull();
+
+    expect(grupoAvisado()).toBe("G6");
   });
 
   it("G7 · falha do banco não é inadimplência da clínica: nada é escrito", async () => {
