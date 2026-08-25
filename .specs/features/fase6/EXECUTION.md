@@ -126,9 +126,12 @@ Três coisas que a 6.3 não tinha e passaram a existir:
   `alerta_risco_clinico`, que a 6.3 fazia mas não testava.
 
 Dívidas que #352 deixa registradas no `BACKLOG.md`, não escondidas: `D60`
-(extensão de retenção por paciente), `D61` (`FUSO_CLINICA` chumbado), `D63`
-(governança da via excepcional), `D65` (modalidade `conventional` sem botão de
-alta — buraco pré-existente do arquivamento).
+(extensão de retenção por paciente), `D61` (`FUSO_CLINICA` chumbado), `D62`
+(job de exportação integral #374 nunca provisionado — achado de raspão, comparando
+serviços de infra), `D63` (governança da via excepcional), `D64`
+(`infra/arquivamento/` fora do teste de carga de imagens — mesmo desenho de
+risco que `retencao` acabou de fechar), `D65` (modalidade `conventional` sem
+botão de alta — buraco pré-existente do arquivamento).
 
 ## Fatia 6.2a — Bypass-gate + guard MFA + auditoria mascarada · migração `0046`
 
