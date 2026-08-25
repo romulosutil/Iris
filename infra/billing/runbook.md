@@ -31,12 +31,16 @@ Não altera nada.
 node scripts/conciliacao-billing.mjs
 ```
 
-Saída: **uma linha JSON**. Exit code `0` = passada completa (HTTP com sucesso,
-nenhuma varredura abortou), sem truncamento em nenhum dos três braços
-(`ciclos` / `vinculos` / `cobrancasSemCiclo`), sem falha de consulta ao
-gateway, e sem divergência. Qualquer outro valor exige um humano — inclusive
-quando `totalDivergencias: 0`, se houve `falhasDeConsulta` ou truncamento: "zero
-divergências" e "conferimos tudo" são afirmações diferentes.
+Saída: **uma linha JSON**. Exit code `0` = HTTP com sucesso, nenhuma varredura
+abortou, sem falha de consulta ao gateway, e sem divergência. Qualquer outro
+valor exige um humano.
+
+**Truncamento (`ciclos` / `vinculos` / `cobrancasSemCiclo`) NÃO afeta o exit
+code** — só emite um aviso em stderr na mesma linha de log. Uma passada
+truncada com zero divergência sai `0`: "zero divergências" e "conferimos
+tudo" são afirmações diferentes, e só a leitura do stderr (ou dos campos
+`*Truncado` no corpo) distingue as duas. Sempre olhar o stderr, nunca só o
+exit code.
 
 ### Classes de divergência e a reação de cada uma
 
@@ -205,8 +209,8 @@ qualquer alteração no serviço `billing` do Easypanel.
 - [ ] **A chave de API é do ambiente certo.** `BILLING_PROVIDER_API_KEY` de sandbox contra `ASAAS_BASE_URL` de produção produz `cobranca_inexistente_no_gateway` em massa no §1 — o sintoma parece perda de dado e é configuração.
 - [ ] **A env foi de fato aplicada.** No Easypanel, salvar variável **não** aplica: exige clicar em "Implantar". Conferir no console do container: `printenv | grep -c ASAAS_WEBHOOK_TOKEN` → `1`.
 - [ ] **A fila pendente está vazia** (consulta do §2.2), ou está encolhendo entre duas leituras.
-- [ ] **A conciliação sai limpa:** `node scripts/conciliacao-billing.mjs` com exit code `0` — que já implica `totalDivergencias: 0`, nenhum truncamento nos três braços e `falhasDeConsulta: 0` (ver §1).
-- [ ] **Se algum `*Truncado` vier `true`,** rodar de novo até sair `false` — senão o item acima afirma "limpo" sobre uma amostra.
+- [ ] **A conciliação sai limpa:** `node scripts/conciliacao-billing.mjs` com exit code `0` — que já implica `totalDivergencias: 0` e `falhasDeConsulta: 0` (ver §1). Exit code **não** cobre truncamento — ver item seguinte.
+- [ ] **Nenhum `*Truncado` vem `true`** (checar o stderr da mesma passada, ou os campos `*Truncado` no corpo). Se vier, rodar de novo até sair `false` — o exit code sozinho não acusa isso, e "limpo" sobre uma amostra parcial não é limpo.
 
 ## 6. O que NUNCA fazer
 
