@@ -11,6 +11,7 @@ function ciclo(
     statusLocal: "aguardando_pagamento",
     valorLocalCentavos: 10_000,
     agrupaDebito: false,
+    dentroDaCarencia: false,
     remoto: {
       encontrada: true as const,
       status: "pendente" as const,
@@ -72,11 +73,12 @@ describe("classificarDivergenciaCiclo", () => {
     }
   });
 
-  it("recusa no gateway que o ciclo ainda não registrou", () => {
+  it("recusa no gateway que o ciclo ainda não registrou, fora da janela de carência", () => {
     expect(
       classificarDivergenciaCiclo(
         ciclo({
           statusLocal: "aguardando_pagamento",
+          dentroDaCarencia: false,
           remoto: {
             encontrada: true,
             status: "recusada",
@@ -85,6 +87,58 @@ describe("classificarDivergenciaCiclo", () => {
         }),
       ),
     ).toBe("recusa_nao_aplicada");
+  });
+
+  it("vencido mas ainda dentro da janela de retentativa do Pix Automático: não é divergência", () => {
+    // `OVERDUE` no Asaas vira `"recusada"` mesmo quando o Pix Automático ainda
+    // tem retentativa agendada (até D+7 do vencimento, `DIAS_ATE_BACKSTOP` em
+    // `subscription.ts`). Sem `dentroDaCarencia`, TODO ciclo vencido nessa
+    // janela acusaria `recusa_nao_aplicada` — ruído mascarando o achado real.
+    expect(
+      classificarDivergenciaCiclo(
+        ciclo({
+          statusLocal: "aguardando_pagamento",
+          dentroDaCarencia: true,
+          remoto: {
+            encontrada: true,
+            status: "recusada",
+            valorCentavos: 10_000,
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("vencido, passou da janela, e ainda aguardando pagamento: achado genuíno", () => {
+    expect(
+      classificarDivergenciaCiclo(
+        ciclo({
+          statusLocal: "aguardando_pagamento",
+          dentroDaCarencia: false,
+          remoto: {
+            encontrada: true,
+            status: "recusada",
+            valorCentavos: 10_000,
+          },
+        }),
+      ),
+    ).toBe("recusa_nao_aplicada");
+  });
+
+  it("`falhou` concorda com recusa independente da janela de carência", () => {
+    expect(
+      classificarDivergenciaCiclo(
+        ciclo({
+          statusLocal: "falhou",
+          dentroDaCarencia: true,
+          remoto: {
+            encontrada: true,
+            status: "recusada",
+            valorCentavos: 10_000,
+          },
+        }),
+      ),
+    ).toBeNull();
   });
 
   it("estorno tem precedência sobre pago_sem_lastro", () => {

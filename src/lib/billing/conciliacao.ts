@@ -50,6 +50,20 @@ export interface EntradaClassificacaoCiclo {
    * todo agrupamento — o status continua sendo conferido normalmente.
    */
   agrupaDebito: boolean;
+  /**
+   * `true` quando o ciclo ainda está dentro da janela de retentativa do Pix
+   * Automático — `vencimentoCobranca` não nulo e `now() < vencimentoCobranca +
+   * 7 dias`. O mesmo `DIAS_ATE_BACKSTOP` de `subscription.ts` (não exportado
+   * de lá de propósito — ver o comentário na constante original — daí a cópia
+   * do literal aqui, e não um import).
+   *
+   * Existe porque `AsaasProvider.mapearStatusCobranca` (deliberado, usado por
+   * 5+ chamadores) mapeia `OVERDUE` para `"recusada"` — e um ciclo vencido
+   * ainda pode estar em retentativa automática, não é recusa definitiva. Sem
+   * este campo, `recusa_nao_aplicada` dispararia para TODO ciclo vencido
+   * ainda dentro da janela de 7 dias, mascarando o achado genuíno com ruído.
+   */
+  dentroDaCarencia: boolean;
   remoto: EstadoRemotoCobranca;
 }
 
@@ -66,7 +80,13 @@ export interface EntradaClassificacaoCiclo {
 export function classificarDivergenciaCiclo(
   entrada: EntradaClassificacaoCiclo,
 ): ClasseDivergenciaCiclo | null {
-  const { statusLocal, valorLocalCentavos, agrupaDebito, remoto } = entrada;
+  const {
+    statusLocal,
+    valorLocalCentavos,
+    agrupaDebito,
+    dentroDaCarencia,
+    remoto,
+  } = entrada;
 
   if (!remoto.encontrada) return "cobranca_inexistente_no_gateway";
 
@@ -79,8 +99,14 @@ export function classificarDivergenciaCiclo(
   if (remoto.status === "paga") return "pagamento_nao_conciliado";
 
   if (remoto.status === "recusada") {
-    // `falhou` é justamente o estado que registra a recusa: concordam.
-    return statusLocal === "falhou" ? null : "recusa_nao_aplicada";
+    // `falhou` é o estado que registra a recusa definitiva: concordam. Um
+    // ciclo `aguardando_pagamento` DENTRO da janela de retentativa do Pix
+    // Automático também concorda — `OVERDUE` no Asaas não distingue "esgotou
+    // as 3 tentativas" de "ainda tem retentativa agendada" (ver
+    // `EntradaClassificacaoCiclo.dentroDaCarencia`).
+    if (statusLocal === "falhou") return null;
+    if (statusLocal === "aguardando_pagamento" && dentroDaCarencia) return null;
+    return "recusa_nao_aplicada";
   }
 
   // Status remoto `pendente` daqui para baixo. Só resta conferir valor.
@@ -120,7 +146,12 @@ export function classificarDivergenciaVinculo(
 }
 
 /**
- * Teto por passada. Cada ciclo conferido é UMA chamada HTTP ao Asaas: varredura
+ * Teto por passada. Cada ciclo conferido é UMA chamada HTTP ao Asaas — ou
+ * DUAS, quando `AsaasProvider.consultarCobranca` lê status de recusa e faz uma
+ * segunda chamada para buscar `motivoRecusa` (`motivoDaRecusa`, em
+ * `provider/asaas.ts`). Isso inclui todo ciclo vencido (`OVERDUE` →
+ * `"recusada"`), não só o genuinamente recusado — a segunda chamada acontece
+ * antes de `classificarDivergenciaCiclo` decidir se é divergência. Varredura
  * sem teto é rate limit garantido no dia em que a base crescer. 100 é a mesma
  * ordem de grandeza dos demais tetos do módulo (20 por passada nas varreduras
  * que ESCREVEM; aqui pode ser maior porque nada é irreversível).
@@ -202,6 +233,13 @@ export async function conciliarCiclos(opcoes?: {
         SELECT 1 FROM ${billingCycle} AS filho
         WHERE filho.debito_agrupado_em = billing_cycle.id
       )`,
+      // `7` é o mesmo `DIAS_ATE_BACKSTOP` de `subscription.ts` — não exportado
+      // de lá de propósito (comentário na constante original), daí o literal
+      // copiado aqui em vez de um import.
+      dentroDaCarencia: sql<boolean>`(
+        ${billingCycle.vencimentoCobranca} IS NOT NULL
+        AND now() < ${billingCycle.vencimentoCobranca} + make_interval(days => 7)
+      )`,
     })
     .from(billingCycle)
     .where(
@@ -252,6 +290,7 @@ export async function conciliarCiclos(opcoes?: {
       statusLocal: linha.statusLocal,
       valorLocalCentavos: linha.valorLocalCentavos,
       agrupaDebito: linha.agrupaDebito,
+      dentroDaCarencia: linha.dentroDaCarencia,
       remoto,
     });
     if (!classe) continue;

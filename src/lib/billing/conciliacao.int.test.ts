@@ -32,6 +32,7 @@ async function criarCiclo(opcoes: {
   valorCentavos: number;
   providerChargeId: string | null;
   emitidaEm?: Date | null;
+  vencimentoCobranca?: Date | null;
 }): Promise<string> {
   // `billing_cycle_clinic_inicio_uq` é UNIQUE(clinic_id, inicio): mais de um
   // ciclo por teste exige `inicio` distinto, então cada chamada avança um mês.
@@ -42,12 +43,13 @@ async function criarCiclo(opcoes: {
   const linhas = (await owner!`
     INSERT INTO billing_cycle
       (clinic_id, subscription_id, inicio, fim, status, valor_centavos,
-       provider_charge_id, cobranca_emitida_em)
+       provider_charge_id, cobranca_emitida_em, vencimento_cobranca)
     VALUES (
       ${CLINICA}, ${SUB},
       ${inicio}, ${fim},
       ${opcoes.status}::billing_cycle_status, ${opcoes.valorCentavos},
-      ${opcoes.providerChargeId}, ${opcoes.emitidaEm ?? new Date()}
+      ${opcoes.providerChargeId}, ${opcoes.emitidaEm ?? new Date()},
+      ${opcoes.vencimentoCobranca ?? null}
     )
     RETURNING id`) as unknown as { id: string }[];
   return linhas[0]!.id;
@@ -248,6 +250,61 @@ describeSeDb("conciliarCiclos", () => {
 
   it("o teto padrão é 100", () => {
     expect(TETO_CONCILIACAO_POR_PASSADA).toBe(100);
+  });
+
+  it("vencido e ainda dentro da janela de 7 dias de retentativa: não é divergência", async () => {
+    const vencimento = new Date();
+    vencimento.setUTCDate(vencimento.getUTCDate() - 3); // dentro dos 7 dias
+    await criarCiclo({
+      status: "aguardando_pagamento",
+      valorCentavos: 10_000,
+      providerChargeId: "pay-carencia",
+      vencimentoCobranca: vencimento,
+    });
+    const r = await conciliarCiclos({
+      provider: provedorFake({
+        "pay-carencia": { status: "recusada", valorCentavos: 10_000 },
+      }) as never,
+    });
+    expect(r.divergencias).toEqual([]);
+  });
+
+  it("vencido, passou dos 7 dias, ainda aguardando pagamento: recusa_nao_aplicada genuína", async () => {
+    const vencimento = new Date();
+    vencimento.setUTCDate(vencimento.getUTCDate() - 10); // fora dos 7 dias
+    const id = await criarCiclo({
+      status: "aguardando_pagamento",
+      valorCentavos: 10_000,
+      providerChargeId: "pay-esgotado",
+      vencimentoCobranca: vencimento,
+    });
+    const r = await conciliarCiclos({
+      provider: provedorFake({
+        "pay-esgotado": { status: "recusada", valorCentavos: 10_000 },
+      }) as never,
+    });
+    expect(r.divergencias).toHaveLength(1);
+    expect(r.divergencias[0]).toMatchObject({
+      cicloId: id,
+      classe: "recusa_nao_aplicada",
+    });
+  });
+
+  it("`falhou` concorda com recusa mesmo dentro da janela de carência", async () => {
+    const vencimento = new Date();
+    vencimento.setUTCDate(vencimento.getUTCDate() - 2);
+    await criarCiclo({
+      status: "falhou",
+      valorCentavos: 10_000,
+      providerChargeId: "pay-falhou-cedo",
+      vencimentoCobranca: vencimento,
+    });
+    const r = await conciliarCiclos({
+      provider: provedorFake({
+        "pay-falhou-cedo": { status: "recusada", valorCentavos: 10_000 },
+      }) as never,
+    });
+    expect(r.divergencias).toEqual([]);
   });
 });
 
