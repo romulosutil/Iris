@@ -19,7 +19,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 # Sem eles no contexto, `pnpm install` morre com
 # `ENOENT: ... open '/app/patches/module-alias@2.3.4.patch'` — medido.
 COPY patches ./patches
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # --- build: gera o standalone -------------------------------------------------
 FROM base AS build
@@ -121,7 +122,8 @@ COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-local.js ./scripts/see
 # resolve primeiro por estar mais perto na cadeia de node_modules.
 # --with-deps instala só as libs de sistema do Chromium (não baixa
 # firefox/webkit), mantendo a imagem enxuta.
-RUN mkdir -p /opt/playwright \
+RUN --mount=type=cache,id=npm-store,target=/root/.npm \
+    mkdir -p /opt/playwright \
     && cd /opt/playwright \
     && npm init -y >/dev/null \
     && npm install --no-save playwright@1.61.1 \
@@ -129,7 +131,8 @@ RUN mkdir -p /opt/playwright \
     && rm -rf /app/node_modules/playwright /app/node_modules/playwright-core \
     && cp -r /opt/playwright/node_modules/playwright /app/node_modules/playwright \
     && cp -r /opt/playwright/node_modules/playwright-core /app/node_modules/playwright-core \
-    && chown -R nextjs:nodejs /ms-playwright /app/node_modules/playwright /app/node_modules/playwright-core
+    && chown -R nextjs:nodejs /ms-playwright /app/node_modules/playwright /app/node_modules/playwright-core \
+    && rm -rf /var/lib/apt/lists/*
 
 USER nextjs
 EXPOSE 3000

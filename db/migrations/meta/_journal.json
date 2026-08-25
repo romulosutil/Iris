@@ -848,6 +848,41 @@
       "when": 1787591830035,
       "tag": "0120_indice_trilha_auditoria",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1787594491670,
+      "tag": "0121_regular_hairball",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1787594492670,
+      "tag": "0122_sigilo_helpers",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1787594493670,
+      "tag": "0123_sigilo_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1787594494670,
+      "tag": "0124_sigilo_grant_coluna",
+      "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1787594495670,
+      "tag": "0125_sigilo_alerta_trecho",
+      "breakpoints": true
     }
   ]
 }

@@ -21,9 +21,15 @@ export async function capturarDiarioAction(
 ): Promise<CapturarDiarioState> {
   const ctx = await getTenantContext();
   try {
+    const visibilityLevelRaw = formData.get("visibilityLevel");
+    const visibilityLevel =
+      visibilityLevelRaw === "discipline_only"
+        ? ("discipline_only" as const)
+        : ("multidisciplinary" as const);
     const r = await capturarDiario(ctx, {
       sessionId: String(formData.get("sessionId") ?? ""),
       texto: String(formData.get("texto") ?? ""),
+      visibilityLevel,
     });
     if (r.error) return { error: r.error };
     revalidatePath(`/diario/${formData.get("sessionId")}`);
@@ -93,9 +99,15 @@ export async function consolidarSessaoAction(
 ): Promise<ConsolidarState> {
   const ctx = await getTenantContext();
   try {
+    const visibilityLevelRaw = formData.get("visibilityLevel");
+    const visibilityLevel =
+      visibilityLevelRaw === "discipline_only"
+        ? ("discipline_only" as const)
+        : ("multidisciplinary" as const);
     const r = await consolidarSessao(ctx, {
       sessionId: String(formData.get("sessionId") ?? ""),
       texto: String(formData.get("texto") ?? ""),
+      visibilityLevel,
     });
     if (r.error) return { error: r.error };
     revalidatePath("/pendencias");

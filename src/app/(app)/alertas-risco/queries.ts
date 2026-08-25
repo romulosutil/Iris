@@ -27,7 +27,7 @@ export type ItemRisco = {
   categoria: CategoriaRisco;
   severidade: SeveridadeRisco;
   certeza: CertezaRisco;
-  trechoFonte: string;
+  trechoFonte: string | null;
   detalhe: string;
   status: StatusRisco;
   prazoMinutos: number;
@@ -64,7 +64,8 @@ export async function listarAlertasRisco(
              a.session_id,
              s.agendada_para::text AS sessao_em,
              a.categoria, a.severidade, a.certeza,
-             a.trecho_fonte, a.detalhe, a.status,
+             app_alerta_trecho_fonte(a.id) AS trecho_fonte,
+             a.detalhe, a.status,
              a.prazo_minutos,
              a.prazo_reconhecimento::text,
              a.reconhecido_em::text,
@@ -93,7 +94,7 @@ export async function listarAlertasRisco(
       categoria: l.categoria as CategoriaRisco,
       severidade: l.severidade as SeveridadeRisco,
       certeza: l.certeza as CertezaRisco,
-      trechoFonte: l.trecho_fonte as string,
+      trechoFonte: (l.trecho_fonte as string | null) ?? null,
       detalhe: l.detalhe as string,
       status: l.status as StatusRisco,
       prazoMinutos: Number(l.prazo_minutos),

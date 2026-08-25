@@ -321,7 +321,7 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
 ];
 
 /**
- * As 7 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407).
+ * As 8 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
@@ -330,6 +330,8 @@ const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_purgar_paciente",
   "app_purgar_report",
   "app_session_clinica_visivel",
+  // #119 (0121) — valida autor ou mesma disciplina na equipe ativa.
+  "app_session_disciplina_liberada",
   // #407/T05 — `validada_por = app_user_id_exigido()` na transição de estado.
   "app_validar_anamnese",
 ];
@@ -520,7 +522,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(
       FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
     );
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(7);
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(8);
   });
 
   test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {

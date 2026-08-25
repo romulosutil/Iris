@@ -351,7 +351,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
 
   // 16. session_note
   const rowsSessionNote = (await tx.execute(sql`
-    SELECT id, session_id, clinic_id, tipo, texto, autor_id, criado_em, atualizado_em
+    SELECT id, session_id, clinic_id, tipo, texto, autor_id,
+           visibility_level, criado_em, atualizado_em
       FROM session_note
      ORDER BY id
   `)) as unknown as Record<string, unknown>[];
@@ -574,7 +575,8 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
   // 31. alerta_risco_clinico (soft-delete deletado_em IS NULL)
   const rowsAlertaRisco = (await tx.execute(sql`
     SELECT id, clinic_id, patient_id, session_id, origem, categoria,
-           severidade, certeza, trecho_fonte, detalhe, status,
+           severidade, certeza, app_alerta_trecho_fonte(id) AS trecho_fonte,
+           detalhe, status,
            canais_notificados, prazo_minutos, prazo_reconhecimento,
            reconhecido_por, reconhecido_em, escalado_em, escalado_estagio_2_em,
            conduta_registrada, motivo_descarte, pseudonimizado_em,

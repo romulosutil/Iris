@@ -91,6 +91,11 @@ export const sessionNoteTipo = pgEnum("session_note_tipo", [
   "nota_consolidada",
 ]);
 
+export const sessionNoteVisibilityLevel = pgEnum(
+  "session_note_visibility_level",
+  ["multidisciplinary", "discipline_only"],
+);
+
 export const audioStatusUpload = pgEnum("audio_status_upload", [
   "rascunho_local",
   "pendente",
@@ -1023,6 +1028,9 @@ export const sessionNote = pgTable(
       .notNull()
       .references(() => clinic.id, { onDelete: "restrict" }),
     tipo: sessionNoteTipo("tipo").notNull(),
+    visibilityLevel: sessionNoteVisibilityLevel("visibility_level")
+      .notNull()
+      .default("multidisciplinary"),
     texto: text("texto").notNull(),
     autorId: uuid("autor_id")
       .notNull()
@@ -1038,6 +1046,9 @@ export const sessionNote = pgTable(
     // 1 captura_rapida + 1 nota_consolidada por sessão
     unique("uq_session_note_tipo").on(t.sessionId, t.tipo),
     index("idx_session_note_session").on(t.sessionId),
+    index("idx_session_note_sigilo")
+      .on(t.sessionId)
+      .where(sql`visibility_level = 'discipline_only'`),
   ],
 );
 

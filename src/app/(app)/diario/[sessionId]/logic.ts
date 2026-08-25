@@ -71,6 +71,7 @@ const PENDENTE_DRAFT: ExtractionDraft = {
 const capturaSchema = z.object({
   sessionId: z.string().uuid(),
   texto: z.string().trim().min(1, "Escreva algo antes de salvar."),
+  visibilityLevel: z.enum(["multidisciplinary", "discipline_only"]).optional(),
 });
 
 /**
@@ -81,7 +82,11 @@ const capturaSchema = z.object({
  */
 async function capturarDiarioCore(
   ctx: TenantContext,
-  input: { sessionId: string; texto: string },
+  input: {
+    sessionId: string;
+    texto: string;
+    visibilityLevel?: "multidisciplinary" | "discipline_only";
+  },
 ): Promise<{ error?: string; id?: string; bloqueioConta?: BloqueioConta }> {
   requireRole(ctx, "terapeuta");
   const parsed = capturaSchema.safeParse(input);
@@ -96,10 +101,17 @@ async function capturarDiarioCore(
           tipo: "captura_rapida",
           texto: parsed.data.texto,
           autorId: ctx.userId,
+          visibilityLevel: parsed.data.visibilityLevel ?? "multidisciplinary",
         })
         .onConflictDoUpdate({
           target: [sessionNote.sessionId, sessionNote.tipo],
-          set: { texto: parsed.data.texto, atualizadoEm: new Date() },
+          set: {
+            texto: parsed.data.texto,
+            atualizadoEm: new Date(),
+            ...(parsed.data.visibilityLevel
+              ? { visibilityLevel: parsed.data.visibilityLevel }
+              : {}),
+          },
         })
         .returning({ id: sessionNote.id });
 
@@ -259,6 +271,7 @@ export const registrarAudioLocal = comEscrita(registrarAudioLocalCore);
 const consolidarSchema = z.object({
   sessionId: z.string().uuid(),
   texto: z.string().trim().min(1, "A nota consolidada não pode ficar vazia."),
+  visibilityLevel: z.enum(["multidisciplinary", "discipline_only"]).optional(),
 });
 
 /**
@@ -273,7 +286,11 @@ const consolidarSchema = z.object({
  */
 async function consolidarSessaoCore(
   ctx: TenantContext,
-  input: { sessionId: string; texto: string },
+  input: {
+    sessionId: string;
+    texto: string;
+    visibilityLevel?: "multidisciplinary" | "discipline_only";
+  },
 ): Promise<{
   error?: string;
   numeroSequencial?: number;
@@ -311,10 +328,17 @@ async function consolidarSessaoCore(
           tipo: "nota_consolidada",
           texto: novoTexto,
           autorId: ctx.userId,
+          visibilityLevel: parsed.data.visibilityLevel ?? "multidisciplinary",
         })
         .onConflictDoUpdate({
           target: [sessionNote.sessionId, sessionNote.tipo],
-          set: { texto: novoTexto, atualizadoEm: new Date() },
+          set: {
+            texto: novoTexto,
+            atualizadoEm: new Date(),
+            ...(parsed.data.visibilityLevel
+              ? { visibilityLevel: parsed.data.visibilityLevel }
+              : {}),
+          },
         });
 
       // 2) popula numero_sequencial_paciente só se ainda nulo (idempotente):

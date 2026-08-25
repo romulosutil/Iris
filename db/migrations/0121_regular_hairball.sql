@@ -1,0 +1,3 @@
+CREATE TYPE "public"."session_note_visibility_level" AS ENUM('multidisciplinary', 'discipline_only');--> statement-breakpoint
+ALTER TABLE "session_note" ADD COLUMN "visibility_level" "session_note_visibility_level" DEFAULT 'multidisciplinary' NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_session_note_sigilo" ON "session_note" USING btree ("session_id") WHERE visibility_level = 'discipline_only';

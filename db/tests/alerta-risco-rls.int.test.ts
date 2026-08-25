@@ -159,11 +159,25 @@ describe.skipIf(!hasDb)("alerta_risco_clinico — RLS e privilégios", () => {
   });
 
   test("app_role NÃO tem INSERT nem DELETE na tabela", async () => {
+    // #119/0124 — SELECT deixou de ser privilégio de tabela: agora é
+    // concedido coluna a coluna (exclui `trecho_fonte`), então
+    // role_table_grants só reflete UPDATE. Coluna a coluna é a asserção
+    // que realmente prova a mediação por app_alerta_trecho_fonte().
     const g = await owner!<{ privilege_type: string }[]>`
       SELECT privilege_type FROM information_schema.role_table_grants
        WHERE table_name = 'alerta_risco_clinico' AND grantee = 'app_role'`;
     const privs = g.map((r) => r.privilege_type).sort();
-    expect(privs).toEqual(["SELECT", "UPDATE"]);
+    expect(privs).toEqual(["UPDATE"]);
+
+    const cols = await owner!<{ column_name: string }[]>`
+      SELECT column_name FROM information_schema.column_privileges
+       WHERE table_name = 'alerta_risco_clinico' AND grantee = 'app_role'
+         AND privilege_type = 'SELECT'
+       ORDER BY column_name`;
+    const colNames = cols.map((r) => r.column_name);
+    expect(colNames).not.toContain("trecho_fonte");
+    expect(colNames).toContain("id");
+    expect(colNames).toContain("categoria");
   });
 
   test("INSERT direto por app_role é negado — criar alerta é privilégio do caminho do agente", async () => {
