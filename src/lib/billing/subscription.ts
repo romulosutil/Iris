@@ -1419,13 +1419,15 @@ const ERRO_BACKSTOP =
  * calculamos: cobrar D+7 de um `dueDate` que o gateway recusou por ser nosso
  * erro seria carimbar a clínica de inadimplente pelo nosso bug.
  *
- * ⚠️ **Residual conhecido:** hoje G6 não persiste `recusa_codigo` (o ramo
- * `!marcaCicloFalhou` de `conciliarPagamentoDeCiclo` não escreve nada, para não
- * apagar o diagnóstico correto de uma recusa anterior). Um ciclo cuja PRIMEIRA
- * recusa foi G6 chega aqui indistinguível do silêncio total, e é carimbado. O
- * guard abaixo é o que decide quando o código ESTÁ persistido — o que a #322
- * (orquestração de retentativa) passa a produzir, sendo
- * `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` um G6.
+ * **Fechado em 24/08/2026 (D39):** `conciliarPagamentoDeCiclo` volta a
+ * persistir `recusa_codigo` para G6, mas só quando o ciclo ainda não tem um
+ * (é a PRIMEIRA recusa dele) — retentativa nossa mal emitida que chega DEPOIS
+ * de uma recusa de saldo legítima continua sem sobrescrever o diagnóstico
+ * correto. Com o código gravado, o guard abaixo classifica G6 corretamente e
+ * ignora — antes, um ciclo cuja PRIMEIRA recusa foi G6 chegava aqui com
+ * `recusa_codigo = null`, indistinguível do silêncio total (G0), e era
+ * carimbado por um bug nosso. `EXCEEDED_MAXIMUM_RETRY_ATTEMPTS` (a #322,
+ * orquestração de retentativa, produz esse caso em rotina) é um G6.
  *
  * ## Fail-closed do G3
  *
@@ -2558,6 +2560,20 @@ export async function conciliarPagamentoDeCiclo(
       // ⚠️ Enquanto o backstop de D+7 (Decisão 2 da #318) não existir, G7 e G0
       // não produzem consequência nenhuma. É buraco de receita conhecido e
       // sequenciado — não subir para produção sem ele.
+      //
+      // D39 — G6 é a EXCEÇÃO a "não escreve nada": se este ciclo ainda não tem
+      // `recusa_codigo` (é a PRIMEIRA recusa dele), persiste o código cru só
+      // para o backstop de D+7 conseguir classificar G6 e ignorar (em vez de
+      // ler `null` como G0 e carimbar `past_due` por um bug nosso). Não move
+      // `status`/`erro` — o ciclo segue sem diagnóstico de falha, exatamente
+      // como antes. Se já existe `recusa_codigo` (recusa de saldo anterior já
+      // gravada), não sobrescreve — é a mesma proteção de sempre.
+      if (politica.grupo === "G6" && !ciclo.recusaCodigo) {
+        await authDb
+          .update(billingCycle)
+          .set({ recusaCodigo: motivoRecusa })
+          .where(eq(billingCycle.id, ciclo.id));
+      }
       return true;
     }
 

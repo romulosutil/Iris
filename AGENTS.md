@@ -126,3 +126,4 @@ Ao concluir uma sessão com alterações relevantes, decisões arquiteturais ou 
 1. **Atualizar [`BACKLOG.md`](BACKLOG.md):** Marcar débitos/issues concluídos e registrar verificações por medição real (não por suposição).
 2. **Resumo Claro:** Apresentar um resumo sucinto dos pontos alterados e dos comandos de verificação executados.
 3. **Salvar Checkpoint:** Se o contexto estiver elevado (~50 mensagens), registrar o status em `checkpoint.md`.
+4. **Atualizar o Grafo de Conhecimento:** Toda tarefa concluída que alterou código ou documentação exige `git commit` + `git push` + `graphify update .`, para que `graphify-out/` reflita a realidade do repositório em sessões futuras (AST-only, sem custo de API).
