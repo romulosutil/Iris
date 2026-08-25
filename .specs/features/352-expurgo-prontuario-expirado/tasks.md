@@ -25,6 +25,90 @@
 
 ---
 
+## Estado de execução
+
+| Faixa       | Estado                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| **T0–T8**   | ✅ **Feitas** em 25/08/2026, branch `feat/352-expurgo-prontuario-expirado`. Camada SQL completa e medida.          |
+| **T9–T11**  | ✅ **Feitas** em 25/08/2026. `alta_em` passou a ter caminho de escrita — a fila deixa de ser vazia por construção. |
+| **T12–T14** | ✅ **Feitas** em 25/08/2026. Fila, tela, diálogo de confirmação e cobertura de comportamento da action.            |
+| **T15–T17** | ✅ **Feitas** em 25/08/2026, exceto o **provisionamento no Easypanel** (passo manual do Rômulo, runbook escrito).  |
+| **T18**     | ✅ **Feita** em 25/08/2026, fora da ordem de dependência, a pedido do Rômulo (ver abaixo).                         |
+| **T19**     | ✅ **Feita** em 25/08/2026. Seis dívidas no `BACKLOG.md` (`D60`–`D65`), cada uma com arquivo:linha e desenho.      |
+| **T20**     | ✅ **Feita** em 25/08/2026. `full` verde, `EXECUTION.md` da fase 6 fechado, PR aberto em Draft.                    |
+| T1 → `0127` | `idx_patient_retencao` via `db:generate`. `db:generate` reexecutado responde `No schema changes`.                  |
+| T2–T6       | `0128_retencao_expurgo_wiring.sql`, `when` = 0127 + 1000. Medida em `pg_proc`/`pg_roles`/`pg_indexes`.             |
+| T7          | 23 casos em 3 suítes; `retencao-expurgo` (11), `retencao-fila` (4), `retencao-aviso` (8). Contagem conferida.      |
+| T8          | Replay pela via excepcional; `fase6-tombstone-restauracao` passou de 5 para 6 casos.                               |
+
+**Efeitos colaterais que a spec não previu, e que a implementação teve de fechar:**
+
+- três suítes existentes (`fase6-expurgo-paciente`, `alerta-risco-rls`, `consent-revogacao-gate`) purgavam pacientes **sem `alta_em`**, inelegíveis pelo gate novo — fixture corrigida, não teste afrouxado;
+- o oráculo de conjunto exato de `clinic-id-helper-rls` precisou das funções novas (19→20 tenant-scoped, 13→15 de papel) e da troca de `app_purgar_paciente` por `app_purgar_paciente_interno` na lista de `app_user_id_exigido()` — o carimbo do ator migrou para o corpo compartilhado;
+- `expurgo_aviso_previo` precisou de rótulo em `clinica/auditoria/logic.ts`: há um teste que exige rótulo pt-BR para **toda** `acao` que o produto grava.
+
+**T9–T11 — o que a spec não previu:**
+
+- `alta_registrada` / `alta_desfeita` precisaram do mesmo rótulo pt-BR em `clinica/auditoria/logic.ts` (mesma varredura de cobertura).
+- A régua (T11) virou também a **fonte da conta de data civil** que o `dataAltaSchema` (T9) usa para recusar data futura — em vez de uma terceira cópia do `Intl.DateTimeFormat`. Por isso `schemas.ts` importa `dataCivilNoFuso` de `@/lib/jobs/retencao`: o módulo é puro (sem `@/db`, sem rede) e entra no bundle do cliente sem arrastar nada.
+- **`FUSO_CLINICA` chumbado.** A fronteira do "hoje" da alta usa `America/Sao_Paulo` de `agenda/fuso.ts`, porque `clinic.timezone` não chega até a camada de aplicação. O SQL do expurgo já lê o fuso de verdade. Dívida de R352.F3, a registrar em T19.
+- **Ponto de montagem:** `AltaDialog` entra nos DOIS `PageHeader` de `pacientes/[id]/page.tsx` (o ramo TCC e o protocol-driven). Modalidade `conventional` **não** passa por essa página (redireciona para `/temas`, que não tem `PageHeader`), então esses pacientes continuam sem botão de alta — **é o mesmo buraco que o arquivamento manual já tinha**, pré-existente a #352. Registrar em T19.
+
+**T12–T14 — o que a spec não previu:**
+
+- **`schemas.ts` extra em `clinica/retencao/`.** A spec listava só `queries.ts` e `logic.ts`, mas `logic.ts` é `server-only` e o diálogo é Client Component: importar `MOTIVO_EXPURGO_MIN` (um VALOR, não um tipo) de módulo `server-only` estoura em runtime no navegador com o CI verde. Mesmo arranjo de `pacientes/[id]/schemas.ts`. `ExpurgoState` continua vindo de `logic.ts` porque `import type` é apagado na compilação.
+- **`paginacao-fila.tsx` extra.** `Pagination` do design system é interativo (`onPaginaChange`) e precisa de fronteira de cliente. Isolá-la mantém `fila-tabela.tsx` como Server Component — e é isso que garante que a fila inteira não atravesse a fronteira: só `{ pacienteId, nome }` por linha vai para o diálogo.
+- **Datas formatadas no Postgres (`to_char`), não no `Intl`.** `date` não tem fuso e o driver do `pg` o converte para um `Date` de JS à meia-noite local; formatar depois reintroduz fuso numa data que não tem nenhum e o vencimento aparece um dia antes. Só `avisado_em` (que é `timestamptz`) passa pelo `Intl`.
+- **`ORDER BY` externo repetido.** A ordenação dentro de `app_pacientes_expurgaveis` decide QUAIS linhas a página traz, mas `SELECT ... FROM funcao()` sem `ORDER BY` próprio não tem ordem garantida na saída.
+- **Duas chamadas por página, não uma.** Sem ler o `total` antes não há como grampear na ÚLTIMA página válida; uma página alta voltaria vazia, e fila vazia se lê como "nenhum prontuário vencido" — afirmação falsa sobre obrigação legal.
+- **Limpeza escopada por `DELETE`, sem `TRUNCATE`**, em `logic.int.test.ts`: `TRUNCATE ... CASCADE` apagaria a fixture de outros arquivos de int-test da mesma base.
+- Dois casos além dos 7 obrigatórios: payload da fila (R352.C8, conjunto EXATO de chaves) e `pacienteId` malformado recusado antes do Postgres (senão vira `22P02` genérico).
+
+**T15–T17 — o que a spec não previu:**
+
+- **O `--dry-run` precisa de UMA transação para o laço inteiro, não uma por lote.** O contrato diz "cada lote é uma transação" e diz "`--dry-run` faz `ROLLBACK`" — as duas coisas juntas produziriam um dry-run que desfaz o lote 1, reencontra os mesmos 200 no lote 2 e reporta **2.000** onde há 200. O dedup de `app_retencao_avisar` é o próprio `INSERT`, então ele só enxerga os lotes anteriores se eles estiverem na MESMA transação. `varrer(sql, { porLote })` resolve: `true` na varredura real (uma transação por lote, falha isolada), `false` no dry-run (o chamador abre a transação única). Medido no Postgres local: dry-run com 1 elegível fecha em 2 lotes (1, depois 0), não em 10.
+- **`scripts/ci/carga-imagens-infra.sh` não cobria `arquivamento`** — só `escalonamento`, `backup` e `billing`. `retencao` entrou; a lacuna do arquivamento fica registrada em T19, não foi tapada de carona.
+- **`.github/workflows/carga-imagens-infra.yml` filtra por `paths`.** Sem acrescentar `infra/retencao/**` nas DUAS listas (`pull_request` e `push`), uma mudança só no Dockerfile do serviço não dispararia o workflow — e o teste de carga que existe para pegar dependência ausente ficaria mudo exatamente no PR que a introduz.
+- **Seção nova em `infra/README.md`.** Os dois scripts apontam para "§Aviso prévio de expurgo em infra/README.md" nas mensagens de falha; sem a seção, a mensagem do incidente mandaria o operador para lugar nenhum. Leva o runbook de provisionamento no Easypanel (clique a clique) e o `CREATE ROLE … IN ROLE iris_retencao`.
+- **`RETENCAO_HEARTBEAT_DIR` documentada em `.env.example` além do que T17 exigia:** o rationale do heartbeat é que "nenhum aviso emitido" e "nenhum prontuário a vencer" são o mesmo silêncio dentro do produto.
+
+**Medição de T15–T16 em 25/08/2026** (Postgres local, role de login `iris_retencao_login IN ROLE iris_retencao`, fixture revertida depois):
+
+| Verificação                                               | Resultado                                                              |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `--dry-run` com 1 elegível                                | ✅ 1 aviso reportado, `audit_log` continua com 0 linhas, sem heartbeat |
+| varredura real                                            | ✅ 1 linha `expurgo_aviso_previo`, `ator_id` NULL, `dias_restantes=45` |
+| segunda varredura no mesmo dia                            | ✅ 0 avisos (dedup), heartbeat `.ultima-retencao` carimbado            |
+| `SELECT count(*) FROM patient` como `iris_retencao_login` | ✅ `permission denied for table patient`                               |
+| `app_purgar_paciente(...)` como `iris_retencao_login`     | ✅ `permission denied for function app_purgar_paciente`                |
+| `scripts/ci/carga-imagens-infra.sh retencao`              | ✅ 6/6 asserções (build + carga absoluta/relativa + deps + bash + CMD) |
+
+**T19–T20 — o que a spec não previu:**
+
+- **Seis dívidas, não quatro.** Às quatro previstas (`D60` extensão de retenção, `D61` `FUSO_CLINICA`, `D62` exportação integral não provisionada, `D63` governança da via excepcional) somaram-se duas descobertas durante a execução: **`D64`** — `infra/arquivamento/` está fora de `scripts/ci/carga-imagens-infra.sh` e do `paths` do workflow, exatamente o buraco da #126, **não tapado de carona** porque é CI de outro serviço; **`D65`** — modalidade `conventional` não tem botão de alta (nem de arquivamento), então esse prontuário **nunca** entra na fila de retenção e o prazo legal nunca começa a correr.
+- **`.specs/features/fase6/EXECUTION.md` precisou distinguir os DOIS diferimentos da 6.3**, que #352 resolveu em direções opostas: a UI/action de purga foi **construída**; o job automático de expurgo **continua não existindo, e a decisão foi reafirmada** — o job de #352 só avisa, e a role `iris_retencao` não tem `EXECUTE` em `app_purgar_paciente`. Registrar "wiring fechado" sem essa distinção leria como se a eliminação automática tivesse sido autorizada.
+- **Provisionamento no Easypanel: serviço `iris-retencao` criado e configurado em 25/08/2026, e deliberadamente NÃO implantado.** Fonte (`romulosutil/Iris`, `main`, contexto `/`), build (`infra/retencao/Dockerfile`), Comando (`/app/agendador.sh`), réplicas 1, _tempo de inatividade zero_ **desligado** (espelha `iris-arquivamento`; ligado, um redeploy manteria dois agendadores de pé ao mesmo tempo), volume `heartbeat` → `/heartbeat`, e env com `RETENCAO_DATABASE_URL` gravada como **template** (`TROCAR_PELA_SENHA`), nunca com credencial real. Falta ao Rômulo: criar `iris_retencao_login IN ROLE iris_retencao` no Postgres de produção, trocar o placeholder e clicar **Implantar**. Salvar env **não** aplica.
+
+**Régua de mutação de T15, medida em 25/08/2026** (por patch inverso):
+
+| Mutação                                                       | Resultado                                                |
+| ------------------------------------------------------------- | -------------------------------------------------------- |
+| `if (noLote === 0) break` → `if (false) break`                | ✅ 14 → 10 (derruba parada em lote vazio, teto, dry-run) |
+| `porLote ? sql.begin(...) : executarLote(sql)` → sempre falso | ✅ 14 → 13 (derruba "cada lote é UMA transação própria") |
+
+**Régua de mutação medida em 25/08/2026** (por patch inverso, nunca `git checkout`):
+
+| Mutação                                                                     | Resultado                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| trocar a guarda `isNull/isNotNull` do `WHERE` da alta por `undefined`       | ✅ derruba "registrar duas vezes é idempotente"                     |
+| `requireRole(ctx,'coordenador')` → `(ctx,'coordenador','admin_recepcao')`   | ✅ derruba "terapeuta e recepção são barrados"                      |
+| neutralizar o `refine` de data não-futura do `dataAltaSchema` (`\|\| true`) | ✅ derruba "data futura é recusada e nada é gravado"                |
+| `dias > 0` → `dias >= 0` em `dentroDaJanelaDeAviso`                         | ✅ derruba "não avisa quem vence hoje nem quem já venceu"           |
+| neutralizar `input.confirmacao !== nome` em `purgarPacienteCore` (`false`)  | ✅ derruba o caso 3 de T14 (8/9)                                    |
+| envolver `purgarPacienteCore` em `comEscrita()`                             | ✅ derruba o caso 6 de T14 — "conta em somente-leitura PURGA" (8/9) |
+
+---
+
 ## Ordem e dependências
 
 ```
@@ -291,9 +375,9 @@ _Aviso:_
 
 **Régua de mutação (obrigatória, `AGENTS.md` §5.2 ponto 5):** cada comportamento crítico tem 1 teste cuja remoção do código derruba o teste. Verificar **por patch inverso**, nunca `git checkout` (o HEAD apaga o código novo):
 
-- remover o `COALESCE` do gate (T5) → derruba o caso 1 de T7;
-- remover o `criado_em > alta_em` do dedup (T6) → derruba o caso 19 de T7;
-- remover a checagem de `confirmacao` (T12) → derruba o caso 3 desta task.
+- ~~remover o `COALESCE` do gate (T5) → derruba o caso 1 de T7~~ — **medido em 25/08/2026: mutante EQUIVALENTE, sobrevive.** E está certo que sobreviva: `alta_em IS NULL` já produz `false` em lógica de três valores, e o NULL só viria de linha ausente, que o guard de tenant barra antes. O `COALESCE` é defesa em profundidade; matá-lo exigiria asserir o texto do código. **A mutação que vale é remover o `IF NOT COALESCE(app_paciente_expurgavel(...))` inteiro → derruba os casos 1 e 8 de T7.** ✅ verificada;
+- ~~remover o `criado_em > alta_em` do dedup (T6) → derruba o caso 19~~ — **derruba o caso 20**, não o 19: sem a âncora o dedup fica mais ESTRITO, e "não reavisar no mesmo dia" continua valendo. Remover o `NOT EXISTS` inteiro derruba 19 **e** 20. ✅ ambas verificadas;
+- remover a checagem de `confirmacao` (T12) → derruba o caso 3 desta task. ✅ **verificada em 25/08/2026**: `if (input.confirmacao !== nome)` trocado por `if (false)` por patch inverso, suíte foi de 9/9 para 8/9. Verificado também um quarto mutante fora da lista original: envolver `purgarPacienteCore` em `comEscrita()` derruba o caso 6 — é ele que trava a decisão de o expurgo rodar em conta bloqueada.
 
 **Pronto quando:** suíte verde **e** as três mutações verificadas uma a uma, com o resultado anotado no PR.
 **Gate:** `int` + `format`.

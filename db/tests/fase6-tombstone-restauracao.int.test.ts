@@ -198,6 +198,44 @@ describe.skipIf(!hasDb)(
       ).toHaveLength(0);
     });
 
+    test("titular INELEGÍVEL é re-eliminado sem abortar a restauração (#352)", async () => {
+      // O achado que motivou a via excepcional: desde a 0128
+      // `app_purgar_paciente` exige que o prazo de guarda tenha vencido, e um
+      // titular expurgado por ordem judicial é POR DEFINIÇÃO inelegível. Se o
+      // replay entrasse pela via normal, o gate recusaria, `restore.sh`
+      // (ON_ERROR_STOP=1) abortaria a restauração inteira mandando não liberar
+      // o banco — e contornar ressuscitaria o titular em definitivo.
+      await owner!`UPDATE patient SET nascimento = '2020-01-01', alta_em = '2024-01-01' WHERE id = ${P_VIVO}`;
+
+      const elegivel = await owner!.begin(async (tx) => {
+        await tx`SELECT set_config('app.clinic_id', ${CLINIC}, true),
+                        set_config('app.user_id', ${U_COORD}, true),
+                        set_config('app.user_role', 'coordenador', true)`;
+        const r =
+          await tx`SELECT app_paciente_expurgavel(${P_VIVO}::uuid)::text AS e`;
+        return r[0]!.e as string;
+      });
+      expect(elegivel).toBe("false"); // a premissa do caso, medida e não presumida
+
+      await reaplicar([
+        { patient_id: P_VIVO, clinic_id: CLINIC, ator_id: U_COORD },
+      ]);
+
+      expect(
+        await owner!`SELECT 1 FROM patient WHERE id = ${P_VIVO}`,
+      ).toHaveLength(0);
+      // A `acao` continua sendo a MESMA das duas vias: é ela que o
+      // `backup.sh` filtra para montar o ledger do ciclo seguinte.
+      const fato = await owner!`SELECT acao, detalhe FROM audit_log
+        WHERE entidade_id = ${P_VIVO} AND entidade = 'patient'`;
+      expect(fato).toHaveLength(1);
+      expect(fato[0]!.acao).toBe("paciente_purgado");
+      expect(fato[0]!.detalhe).toMatchObject({
+        base_legal: "reaplicacao pos-restore",
+        excepcional: true,
+      });
+    });
+
     test("o ledger gerado pelo backup.sh não carrega texto livre (PII de terceiro)", async () => {
       // Purga real, para existir um tombstone com `detalhe.motivo` preenchido por
       // humano — o campo que NÃO pode vazar para o ledger.

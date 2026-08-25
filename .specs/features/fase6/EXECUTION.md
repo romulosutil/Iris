@@ -91,6 +91,45 @@ Main thread orquestra; subagents fazem o trabalho pesado e retornam comprimido.
 - **Diferido p/ backlog:** server action/UI de purga (mesma dívida do `app_purgar_report`);
   job automático de expurgo (não construir — risco; expurgo é gatilho manual do coordenador).
 
+### Wiring diferido da 6.3 — FECHADO em 25/08/2026 (#352)
+
+O que a 6.3 deixou como SQL-only ganhou camada de aplicação em
+[`#352`](../352-expurgo-prontuario-expirado/) (migrações `0127`/`0128`, branch
+`feat/352-expurgo-prontuario-expirado`). Os dois diferimentos acima foram
+resolvidos **em direções opostas**, e é a distinção que importa:
+
+- **Server action/UI de purga: construída.** `/clinica/retencao` — fila paginada
+  tenant-scoped (`app_pacientes_expurgaveis`), diálogo com **confirmação pelo
+  nome exato** do paciente (sem normalizar caixa nem acento) e action de
+  coordenador. O atrito é o produto: numa fila com nomes parecidos, uma palavra
+  fixa tipo "CONFIRMAR" não protege contra purgar a linha errada.
+- **Job automático de expurgo: continua NÃO construído, e a decisão foi
+  reafirmada.** O que #352 construiu é um job de **aviso prévio**
+  (`infra/retencao/`, 90 dias antes do vencimento), que só grava linha em
+  `audit_log`. A role `iris_retencao` **não** tem `EXECUTE` em
+  `app_purgar_paciente` — afirmado por teste negativo (`42501`), não presumido.
+  Eliminação continua sendo ato humano do coordenador.
+
+Três coisas que a 6.3 não tinha e passaram a existir:
+
+- **`alta_em` ganhou caminho de escrita.** A 6.3 criou a coluna e a regra de
+  elegibilidade em cima dela, mas nenhuma tela gravava o valor — a fila era
+  vazia por construção. `AltaDialog` fecha isso (registrar/desfazer alta).
+- **Gate de elegibilidade dentro de `app_purgar_paciente`** (3º guard, depois de
+  papel e tenant), com **via excepcional** separada
+  (`app_purgar_paciente_excepcional`, exige `base_legal`) para o replay
+  pós-restore de tombstones (#89) e para o expurgo antecipado por decisão legal.
+  As duas vias gravam a MESMA `acao` (`paciente_purgado`) — divergir aqui faria
+  `backup.sh:470` deixar de capturar o tombstone e o expurgo ser desfeito no
+  primeiro restore.
+- **Cobertura das ~24 tabelas descendentes** e da pseudonimização de
+  `alerta_risco_clinico`, que a 6.3 fazia mas não testava.
+
+Dívidas que #352 deixa registradas no `BACKLOG.md`, não escondidas: `D60`
+(extensão de retenção por paciente), `D61` (`FUSO_CLINICA` chumbado), `D63`
+(governança da via excepcional), `D65` (modalidade `conventional` sem botão de
+alta — buraco pré-existente do arquivamento).
+
 ## Fatia 6.2a — Bypass-gate + guard MFA + auditoria mascarada · migração `0046`
 
 - [x] Investigação (2 subagents): Better-Auth/MFA + env-flag; audit masking + isolamento recepção.

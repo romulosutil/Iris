@@ -1,0 +1,1 @@
+CREATE INDEX "idx_patient_retencao" ON "patient" USING btree ("clinic_id","alta_em") WHERE "patient"."alta_em" IS NOT NULL AND "patient"."nascimento" IS NOT NULL;

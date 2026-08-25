@@ -456,6 +456,14 @@ export const patient = pgTable(
       t.responsavelCpf,
     ),
     index("idx_patient_cpf_hash").on(t.cpfHash),
+    // #352 — sustenta a fila de elegíveis (tenant-scoped) e a varredura de
+    // aviso prévio (cross-tenant). Parcial de propósito: a esmagadora maioria
+    // dos pacientes está em acompanhamento (`alta_em NULL`) e nunca entra em
+    // nenhuma das duas consultas. Sem o parcial, a varredura do job faria seq
+    // scan em `patient` inteiro para achar um punhado de linhas.
+    index("idx_patient_retencao")
+      .on(t.clinicId, t.altaEm)
+      .where(sql`${t.altaEm} IS NOT NULL AND ${t.nascimento} IS NOT NULL`),
   ],
 );
 

@@ -89,9 +89,18 @@ BEGIN
     PERFORM set_config('app.user_id',   v_ator::text,      true);
     PERFORM set_config('app.user_role', 'coordenador',     true);
 
-    PERFORM app_purgar_paciente(
+    -- Via EXCEPCIONAL, e isto não é detalhe (#352): desde a 0128 a via normal
+    -- exige que o prazo de guarda tenha vencido, e um titular expurgado por
+    -- ordem judicial (Art. 18) e' POR DEFINICAO inelegivel. Pela via normal o
+    -- gate recusaria, este script roda com ON_ERROR_STOP=1, e o restore.sh
+    -- abortaria a restauracao inteira mandando nao liberar o banco para uso.
+    -- Se alguem contornasse, o titular expurgado ressuscitaria em definitivo.
+    -- A `acao` gravada continua sendo 'paciente_purgado' nas duas vias — e o
+    -- backup.sh depende dessa string literal para extrair o ledger.
+    PERFORM app_purgar_paciente_excepcional(
       r.patient_id,
-      'reaplicacao de expurgo apos restauracao de backup (LGPD Art. 18)'
+      'reaplicacao de expurgo apos restauracao de backup (LGPD Art. 18)',
+      'reaplicacao pos-restore'
     );
 
     n_repurgado := n_repurgado + 1;
