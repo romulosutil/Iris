@@ -31,31 +31,37 @@ Não altera nada.
 node scripts/conciliacao-billing.mjs
 ```
 
-Saída: **uma linha JSON**. Exit code `0` = passada completa e sem divergência.
-Qualquer outro valor exige um humano.
+Saída: **uma linha JSON**. Exit code `0` = passada completa (HTTP com sucesso,
+nenhuma varredura abortou), sem truncamento em nenhum dos três braços
+(`ciclos` / `vinculos` / `cobrancasSemCiclo`), sem falha de consulta ao
+gateway, e sem divergência. Qualquer outro valor exige um humano — inclusive
+quando `totalDivergencias: 0`, se houve `falhasDeConsulta` ou truncamento: "zero
+divergências" e "conferimos tudo" são afirmações diferentes.
 
 ### Classes de divergência e a reação de cada uma
 
-| Classe                              | O que aconteceu                                                   | Reação                                                                                               |
-| ----------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `pagamento_nao_conciliado`          | Pago no Asaas, ciclo não fechou aqui. Webhook perdido.            | §2 (reprocessar a fila)                                                                              |
-| `recusa_nao_aplicada`               | Recusado no Asaas, ciclo ainda esperando aqui.                    | §2, depois §3                                                                                        |
-| `estorno_nao_tratado`               | Estornado no Asaas. Não há estado local que represente isso.      | Escalar — decisão de produto, não de infra                                                           |
-| `pago_sem_lastro`                   | Ciclo `pago` aqui sem pagamento correspondente lá. **Grave.**     | Escalar imediatamente. Não mexer no banco.                                                           |
-| `cobranca_inexistente_no_gateway`   | O Asaas não conhece o `provider_charge_id` que gravamos.          | Conferir se a chave de API é do ambiente certo (sandbox × produção) antes de qualquer outra hipótese |
-| `valor_divergente`                  | Mesmo status, valores diferentes.                                 | Escalar — sinal de emissão fora do fluxo                                                             |
-| `vinculo_cancelado_no_gateway`      | Autorização revogada lá, assinatura viva aqui.                    | §4                                                                                                   |
-| `vinculo_pausado_no_gateway`        | Autorização pausada lá, assinatura `active` aqui.                 | §4                                                                                                   |
-| `ativacao_nao_aplicada`             | Autorizado lá, `setup_pending` aqui. Webhook de ativação perdido. | §2                                                                                                   |
-| `vinculo_nao_autorizado`            | `active` aqui sobre autorização que o Asaas nunca deu. **Grave.** | Escalar imediatamente                                                                                |
-| `cobrancasSemCiclo` (lista à parte) | Dinheiro entrou e não há ciclo apontando para a cobrança.         | §3.3                                                                                                 |
+| Classe                              | O que aconteceu                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Reação                                                                                               |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `pagamento_nao_conciliado`          | Pago no Asaas, ciclo não fechou aqui. Webhook perdido.                                                                                                                                                                                                                                                                                                                                                                                                                                   | §2 (reprocessar a fila)                                                                              |
+| `recusa_nao_aplicada`               | Recusado no Asaas — e fora da janela de retentativa do Pix Automático (D+7 do vencimento) —, ciclo ainda esperando aqui.                                                                                                                                                                                                                                                                                                                                                                 | §2, depois §3                                                                                        |
+| `estorno_nao_tratado`               | Estornado, ou em disputa/pedido de estorno, no Asaas. Não há estado local que represente isso.                                                                                                                                                                                                                                                                                                                                                                                           | Escalar — decisão de produto, não de infra                                                           |
+| `pago_sem_lastro`                   | Ciclo `pago` aqui sem pagamento correspondente lá. **Grave.**                                                                                                                                                                                                                                                                                                                                                                                                                            | Escalar imediatamente. Não mexer no banco.                                                           |
+| `cobranca_inexistente_no_gateway`   | O Asaas não conhece o `provider_charge_id` que gravamos.                                                                                                                                                                                                                                                                                                                                                                                                                                 | Conferir se a chave de API é do ambiente certo (sandbox × produção) antes de qualquer outra hipótese |
+| `valor_divergente`                  | Mesmo status, valores diferentes.                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Escalar — sinal de emissão fora do fluxo                                                             |
+| `vinculo_cancelado_no_gateway`      | Autorização revogada lá, assinatura viva aqui.                                                                                                                                                                                                                                                                                                                                                                                                                                           | §4                                                                                                   |
+| `vinculo_pausado_no_gateway`        | Autorização pausada lá, assinatura `active` aqui. **Hoje inalcançável** via o adapter do Asaas (`mapearStatusAutorizacao` nunca devolve `"pausada"`) — código defensivo para um provedor futuro/diferente. Não gastar tempo esperando ver esta classe com o Asaas ativo.                                                                                                                                                                                                                 | §4                                                                                                   |
+| `ativacao_nao_aplicada`             | Autorizado lá, `setup_pending` aqui. Webhook de ativação perdido.                                                                                                                                                                                                                                                                                                                                                                                                                        | §2                                                                                                   |
+| `vinculo_nao_autorizado`            | `active` aqui sobre autorização que o Asaas nunca deu. **Grave.** ⚠️ Também dispara para QUALQUER status de autorização não reconhecido pelo adapter (`mapearStatusAutorizacao` cai em `"pendente"` por padrão) — não é garantia de revogação genuína. Antes de tratar como incidente de segurança, conferir no painel do Asaas o status real da autorização; se for status novo que o adapter não conhece, é débito de código (atualizar `mapearStatusAutorizacao`), não uma revogação. | Escalar imediatamente, com essa checagem antes                                                       |
+| `cobrancasSemCiclo` (lista à parte) | Dinheiro entrou e não há ciclo apontando para a cobrança.                                                                                                                                                                                                                                                                                                                                                                                                                                | §3.3                                                                                                 |
 
-**`falhasDeConsulta` não é divergência.** Significa que não conseguimos
-perguntar ao Asaas sobre aquela linha — não sabemos nada sobre ela. Rode de
-novo antes de tirar conclusão.
+**`falhasDeConsulta` não é divergência, mas BLOQUEIA exit 0.** Significa que
+não conseguimos perguntar ao Asaas sobre aquela linha — não sabemos nada
+sobre ela, e o script sai com código `1` mesmo que `totalDivergencias` seja
+`0`. Rode de novo antes de tirar conclusão.
 
-**`ciclosTruncado` / `vinculosTruncado` = `true`** significa que a passada parou
-no teto (100 por varredura) e **há fila não conferida**. Rode de novo.
+**`ciclosTruncado` / `vinculosTruncado` / `cobrancasSemCicloTruncado` =
+`true`** significa que a passada parou no teto (100 por varredura, nos três
+braços) e **há fila não conferida**. Rode de novo.
 
 ## 2. Webhook: reentrega e reprocessamento
 
@@ -199,8 +205,8 @@ qualquer alteração no serviço `billing` do Easypanel.
 - [ ] **A chave de API é do ambiente certo.** `BILLING_PROVIDER_API_KEY` de sandbox contra `ASAAS_BASE_URL` de produção produz `cobranca_inexistente_no_gateway` em massa no §1 — o sintoma parece perda de dado e é configuração.
 - [ ] **A env foi de fato aplicada.** No Easypanel, salvar variável **não** aplica: exige clicar em "Implantar". Conferir no console do container: `printenv | grep -c ASAAS_WEBHOOK_TOKEN` → `1`.
 - [ ] **A fila pendente está vazia** (consulta do §2.2), ou está encolhendo entre duas leituras.
-- [ ] **A conciliação sai limpa:** `node scripts/conciliacao-billing.mjs` com exit code `0` e `totalDivergencias: 0`.
-- [ ] **Se `truncado: true`,** rodar de novo até sair `false` — senão o item acima afirma "limpo" sobre uma amostra.
+- [ ] **A conciliação sai limpa:** `node scripts/conciliacao-billing.mjs` com exit code `0` — que já implica `totalDivergencias: 0`, nenhum truncamento nos três braços e `falhasDeConsulta: 0` (ver §1).
+- [ ] **Se algum `*Truncado` vier `true`,** rodar de novo até sair `false` — senão o item acima afirma "limpo" sobre uma amostra.
 
 ## 6. O que NUNCA fazer
 
