@@ -3,7 +3,12 @@ import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { codigoPg } from "@/db/pg-error";
-import { patient, consent, clinicalModalityEnum } from "@/db/schema";
+import {
+  patient,
+  consent,
+  clinicalModalityEnum,
+  familiaAbordagemEnum,
+} from "@/db/schema";
 import {
   avaliarSituacaoConta,
   mensagemDeEstado,
@@ -62,6 +67,11 @@ const TIPOS_CONSENTIMENTO: readonly string[] = [
 type ClinicalModality = (typeof clinicalModalityEnum.enumValues)[number];
 
 const CLINICAL_MODALITIES: readonly string[] = clinicalModalityEnum.enumValues;
+
+// #331 — família teórica, exigida só quando clinicalModality === "conventional".
+type FamiliaAbordagem = (typeof familiaAbordagemEnum.enumValues)[number];
+
+const FAMILIAS_ABORDAGEM: readonly string[] = familiaAbordagemEnum.enumValues;
 
 /**
  * Espelha `idadeEmAnos` de `novo-paciente-form.tsx` (mesma derivação, mesmo
@@ -185,6 +195,24 @@ export async function criarPacienteEConsent(
   }
   const clinicalModality = clinicalModalityRaw as ClinicalModality;
 
+  // #331 — só exigido quando clinicalModality === "conventional". Sem default
+  // silencioso, mesmo padrão de clinicalModality acima: gravar uma família
+  // errada sem o operador perceber só apareceria numa leitura futura do
+  // relatório do agente.
+  let familiaAbordagem: FamiliaAbordagem | undefined;
+  if (clinicalModality === "conventional") {
+    const familiaAbordagemRaw = String(
+      formData.get("familiaAbordagem") ?? "",
+    ).trim();
+    if (!FAMILIAS_ABORDAGEM.includes(familiaAbordagemRaw)) {
+      return {
+        error:
+          "Selecione a família de abordagem: psicodinâmica, humanista/existencial ou transpessoal/integrativa.",
+      };
+    }
+    familiaAbordagem = familiaAbordagemRaw as FamiliaAbordagem;
+  }
+
   // R3 (#387) — gate de consentimento por modalidade. TCC e terapia
   // convencional carregam instrumentos próprios do titular (RPD, escalas,
   // resumo de sessão): sem autoconsentimento do paciente adulto, o registro
@@ -244,6 +272,7 @@ export async function criarPacienteEConsent(
               tipoConsentimento === "responsavel_legal" ? cpfLimpo : undefined,
             cpfHash,
             clinicalModality,
+            familiaAbordagem,
           })
           .returning({ id: patient.id });
       } catch (e) {

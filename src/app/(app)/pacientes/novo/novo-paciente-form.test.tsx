@@ -55,7 +55,7 @@ describe("NovoPacienteForm — grupo de modalidade clínica (#387)", () => {
     ).toBeTruthy();
     expect(
       within(grupo).getByRole("radio", {
-        name: /terapia convencional \(psicodinâmica, humanista, sistêmica\)/i,
+        name: /terapia convencional \(psicodinâmica, humanista\/existencial, transpessoal\/integrativa\)/i,
       }),
     ).toBeTruthy();
 
@@ -103,6 +103,96 @@ describe("NovoPacienteForm — grupo de modalidade clínica (#387)", () => {
     expect(document.activeElement).toBe(radios[1]);
     expect(radios[1]!.getAttribute("aria-checked")).toBe("true");
     expect(radios[0]!.getAttribute("aria-checked")).toBe("false");
+  });
+});
+
+describe("NovoPacienteForm — grupo de família de abordagem (#331)", () => {
+  it("não renderiza o grupo quando modalidade clínica ainda não foi escolhida", () => {
+    render(<NovoPacienteForm />);
+    expect(
+      screen.queryByRole("group", { name: /família de abordagem/i }),
+    ).toBeNull();
+  });
+
+  it("não renderiza o grupo para protocolo estruturado nem TCC", async () => {
+    const user = userEvent.setup();
+    render(<NovoPacienteForm />);
+
+    const protocoloEstruturado = within(grupoModalidade()).getByRole(
+      "radio",
+      { name: /protocolo estruturado/i },
+    );
+    await user.click(protocoloEstruturado);
+    expect(
+      screen.queryByRole("group", { name: /família de abordagem/i }),
+    ).toBeNull();
+
+    const tcc = within(grupoModalidade()).getByRole("radio", {
+      name: /terapia cognitivo-comportamental/i,
+    });
+    await user.click(tcc);
+    expect(
+      screen.queryByRole("group", { name: /família de abordagem/i }),
+    ).toBeNull();
+  });
+
+  it("renderiza as 3 opções, sem pré-seleção, quando modalidade = terapia convencional", async () => {
+    const user = userEvent.setup();
+    render(<NovoPacienteForm />);
+
+    const convencional = within(grupoModalidade()).getByRole("radio", {
+      name: /terapia convencional/i,
+    });
+    await user.click(convencional);
+
+    const grupo = screen.getByRole("group", {
+      name: /família de abordagem/i,
+    });
+    const radios = within(grupo).getAllByRole("radio");
+    expect(radios).toHaveLength(3);
+    for (const radio of radios) {
+      expect(radio.getAttribute("aria-checked")).toBe("false");
+    }
+    expect(
+      within(grupo).getByRole("radio", { name: /psicodinâmica/i }),
+    ).toBeTruthy();
+    expect(
+      within(grupo).getByRole("radio", { name: /humanista \/ existencial/i }),
+    ).toBeTruthy();
+    expect(
+      within(grupo).getByRole("radio", {
+        name: /transpessoal \/ integrativa/i,
+      }),
+    ).toBeTruthy();
+
+    const hidden = document.querySelector(
+      'input[name="familiaAbordagem"]',
+    ) as HTMLInputElement;
+    expect(hidden.value).toBe("");
+  });
+
+  it("clique numa opção sincroniza o input hidden lido pela action", async () => {
+    const user = userEvent.setup();
+    render(<NovoPacienteForm />);
+
+    const convencional = within(grupoModalidade()).getByRole("radio", {
+      name: /terapia convencional/i,
+    });
+    await user.click(convencional);
+
+    const grupo = screen.getByRole("group", {
+      name: /família de abordagem/i,
+    });
+    const psicodinamica = within(grupo).getByRole("radio", {
+      name: /psicodinâmica/i,
+    });
+    await user.click(psicodinamica);
+
+    expect(psicodinamica.getAttribute("aria-checked")).toBe("true");
+    const hidden = document.querySelector(
+      'input[name="familiaAbordagem"]',
+    ) as HTMLInputElement;
+    expect(hidden.value).toBe("psicodinamica");
   });
 });
 

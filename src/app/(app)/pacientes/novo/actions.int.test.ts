@@ -867,6 +867,7 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           tipoConsentimento: "titular_adulto",
           cpf: CPF_MODALIDADE[2],
           clinicalModality: "conventional",
+          familiaAbordagem: "psicodinamica",
         }),
       );
       expect(res.error).toBeUndefined();
@@ -965,6 +966,9 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
             responsavelSignatario: "Curador",
             responsavelCpf: CPF_MODALIDADE[7],
             clinicalModality: "conventional",
+            // #331 — preenchido para isolar o gate R3 (este teste é sobre
+            // ele, não sobre a validação de familia_abordagem).
+            familiaAbordagem: "psicodinamica",
           }),
         );
         expect(res.error).toMatch(
@@ -994,6 +998,84 @@ describe.skipIf(!hasDb)("criarPacienteEConsent", () => {
           SELECT clinical_modality FROM patient WHERE id = ${res.id!}`;
         expect(linhas[0]!.clinical_modality).toBe("protocol_driven");
       });
+    });
+  });
+
+  // ─── #331 — família de abordagem ────────────────────────────────────────
+  describe("#331 — família de abordagem", () => {
+    const CPF_FAMILIA = [
+      "11144477735",
+      "22255588846",
+      "33366699957",
+      "44477700083",
+    ] as const;
+
+    test("familiaAbordagem grava no banco quando clinicalModality = conventional", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Paciente Familia Abordagem",
+          tipoConsentimento: "titular_adulto",
+          cpf: CPF_FAMILIA[0],
+          clinicalModality: "conventional",
+          familiaAbordagem: "humanista_existencial",
+        }),
+      );
+      expect(res.error).toBeUndefined();
+      const linhas = await owner`
+        SELECT familia_abordagem FROM patient WHERE id = ${res.id!}`;
+      expect(linhas[0]!.familia_abordagem).toBe("humanista_existencial");
+    });
+
+    test("familiaAbordagem ausente com clinicalModality = conventional retorna erro e não grava nada", async () => {
+      const antes =
+        await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Convencional Sem Familia",
+          tipoConsentimento: "titular_adulto",
+          cpf: CPF_FAMILIA[1],
+          clinicalModality: "conventional",
+        }),
+      );
+      expect(res.error).toMatch(/família de abordagem/i);
+      expect(res.id).toBeUndefined();
+      const depois =
+        await owner`SELECT count(*)::int AS n FROM patient WHERE clinic_id = ${CLINIC_A}`;
+      expect(depois[0]!.n).toBe(antes[0]!.n);
+    });
+
+    test("familiaAbordagem inválida (fora do enum) com clinicalModality = conventional retorna erro", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Convencional Familia Invalida",
+          tipoConsentimento: "titular_adulto",
+          cpf: CPF_FAMILIA[2],
+          clinicalModality: "conventional",
+          familiaAbordagem: "aba_avulsa",
+        }),
+      );
+      expect(res.error).toMatch(/família de abordagem/i);
+      expect(res.id).toBeUndefined();
+    });
+
+    test("familiaAbordagem é ignorada (fica NULL) quando clinicalModality != conventional", async () => {
+      const res = await criarPacienteEConsent(
+        ctx,
+        form({
+          nome: "Protocolo Com Familia Enviada",
+          tipoConsentimento: "titular_adulto",
+          cpf: CPF_FAMILIA[3],
+          clinicalModality: "protocol_driven",
+          familiaAbordagem: "psicodinamica",
+        }),
+      );
+      expect(res.error).toBeUndefined();
+      const linhas = await owner`
+        SELECT familia_abordagem FROM patient WHERE id = ${res.id!}`;
+      expect(linhas[0]!.familia_abordagem).toBeNull();
     });
   });
 });

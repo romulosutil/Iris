@@ -883,6 +883,13 @@
       "when": 1787594495670,
       "tag": "0125_sigilo_alerta_trecho",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1787629003391,
+      "tag": "0126_patient_familia_abordagem",
+      "breakpoints": true
     }
   ]
 }

@@ -41,6 +41,15 @@ export const clinicalModalityEnum = pgEnum("clinical_modality", [
   "cognitive_behavioral",
 ]);
 
+// #331 — família teórica sob a qual o terapeuta conduz a sessão. Só relevante
+// quando clinical_modality = 'conventional'. Valores travados com o Rômulo,
+// mesmas 3 strings usadas em docs/agente/casos-de-teste-terapia-convencional.md.
+export const familiaAbordagemEnum = pgEnum("familia_abordagem", [
+  "psicodinamica",
+  "humanista_existencial",
+  "transpessoal_integrativa",
+]);
+
 // `tratamento_dados_menor` = responsável legal assina pelo paciente menor.
 // `autoconsentimento_titular_adulto` (#100) = o próprio titular adulto assina.
 // `representacao_curador` (#134) = curador assina pelo adulto sob curatela.
@@ -415,6 +424,14 @@ export const patient = pgTable(
     clinicalModality: clinicalModalityEnum("clinical_modality")
       .notNull()
       .default("protocol_driven"),
+    // #331 — nullable: cardinalidade 0..1. NÃO é NOT NULL — paciente
+    // 'conventional' já cadastrado antes desta migração fica NULL até
+    // alguém preencher. Obrigatoriedade em cadastro NOVO é imposta na
+    // aplicação (novo/logic.ts), mesmo padrão de clinicalModality (#387).
+    // Sem CHECK amarrando ao clinical_modality — arch doc
+    // (modalidades-clinicas-e-abordagens.md §3.3) trata o campo como
+    // conteúdo pro terapeuta ler, não trava de fluxo.
+    familiaAbordagem: familiaAbordagemEnum("familia_abordagem"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
