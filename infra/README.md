@@ -200,10 +200,18 @@ carrega o código lá dentro** em vez de inspecionar o Dockerfile. Roda no CI
 (`.github/workflows/carga-imagens-infra.yml`) e igual na sua máquina:
 
 ```bash
-scripts/ci/carga-imagens-infra.sh                 # os três serviços
+scripts/ci/carga-imagens-infra.sh                 # os quatro serviços
 scripts/ci/carga-imagens-infra.sh escalonamento   # só um
 scripts/ci/carga-imagens-infra.sh billing         # só a imagem do job de faturamento
+scripts/ci/carga-imagens-infra.sh retencao        # só a imagem do aviso prévio de expurgo
 ```
+
+`infra/retencao/Dockerfile` (#352) entra pelo motivo **original** — `COPY` à mão
+mais `npm install postgres` à mão, sem enxergar o `node_modules` do repo. O que
+está em jogo se essa imagem subir quebrada é pior que ruído: o job morre a cada
+tick e **nenhum aviso prévio é emitido**, estado indistinguível, de dentro do
+produto, de "nenhum prontuário está a vencer". A clínica perde os 90 dias de
+antecedência sem nada ficar vermelho em lugar nenhum.
 
 `infra/billing/Dockerfile` (#288) entra na mesma varredura por um motivo
 **diferente**: ele não instala dependência nenhuma, de propósito — o job é um
@@ -414,8 +422,8 @@ e alguém precisa limpar à mão.
 > ⚠️ Se o bucket off-site crescer sem limite, **a regra de lifecycle não foi
 > criada**. O `backup.sh` loga `prune off-site: NÃO executado pelo script (por
 design)` toda execução justamente para esse esquecimento não ficar silencioso,
-e a auditoria diária do `expurgo-offsite.sh` sinaliza a não-conformidade com
-exit code != 0 no log do painel.
+> e a auditoria diária do `expurgo-offsite.sh` sinaliza a não-conformidade com
+> exit code != 0 no log do painel.
 >
 > ⚠️ Bucket off-site **vazio** faz o `expurgo-offsite.sh` sair `1`, não `0`.
 > Zero objetos num bucket de backup é credencial sem `ListObjects`, endpoint
@@ -1448,6 +1456,119 @@ O dry-run roda `app_auto_arquivar_pacientes()` **de verdade**, dentro de uma
 transação, e faz `ROLLBACK` no fim — de propósito não reimplementa o predicado em
 JS, porque um dry-run que reescreve a regra só testa a cópia. Ele **não** atualiza
 o heartbeat, para uma inspeção manual jamais mascarar um job parado.
+
+## Aviso prévio de expurgo de prontuário (#352)
+
+Prontuário tem prazo de guarda legal. Ele vence em
+`MAX(nascimento + 18 anos, alta_em + GREATEST(10 anos, politica_retencao_meses))`
+— a fórmula mora em `app_retencao_vence_em` (migração `0128`), fonte única dos
+três consumidores (predicado por UUID, fila da tela e varredura do job). **90
+dias antes** do vencimento, este serviço grava o aviso prévio na trilha.
+
+| momento            | o que acontece                                                     |
+| ------------------ | ------------------------------------------------------------------ |
+| 90 dias antes      | aviso prévio in-app (`audit_log`, `expurgo_aviso_previo`)          |
+| vencido            | o paciente entra na **fila de expurgo** (`/clinica/retencao`)      |
+| ato do coordenador | expurgo com confirmação por nome (`audit_log`, `paciente_purgado`) |
+
+**Este serviço não purga nada — ele avisa.** A role `iris_retencao` **não** tem
+`EXECUTE` em `app_purgar_paciente`, e isso é afirmado por teste negativo
+(`42501` em `db/tests/retencao-aviso.int.test.ts`), nunca presumido. A política
+proíbe eliminação automática silenciosa: a função de expurgo exige
+`app.user_role`/`app.user_id`, que o job só satisfaria **forjando GUC** e
+gravando um ator falso numa operação irreversível.
+
+> **O aviso é IN-APP e só isso.** Mesma proibição estrutural do arquivamento, e
+> aqui ela pesa mais: o assunto é a eliminação definitiva do prontuário, o dado
+> mais sensível que o produto guarda. A imagem instala **apenas** `postgres` —
+> sem `resend`, sem cliente HTTP, sem `curl`. A ausência é o guardrail.
+
+**A régua de 90 dias está escrita em dois lugares** (`REGUA_RETENCAO` em
+`src/lib/jobs/retencao.ts` e `REGUA` em `scripts/retencao-aviso-previo.mjs`,
+porque `.mjs` não importa `.ts`). Quem impede a divergência é o teste de paridade
+em `scripts/retencao-aviso-previo.test.mjs` — uma divergência faria a tela
+prometer uma data e o job emitir outra, sem erro em lugar nenhum.
+
+### Lote e teto
+
+`app_retencao_avisar(now(), 90, 200)`, em até **10 lotes** (2.000 avisos) por
+execução, parando no primeiro lote vazio. **Cada lote é uma transação própria:**
+uma falha no lote 7 aborta só o lote 7 e mantém os 6 anteriores gravados — uma
+transação única para a varredura inteira desfaria milhares de avisos válidos por
+causa de uma linha. O que passar do teto entra no tick seguinte **sem perda**: a
+elegibilidade é derivada de estado no banco (o próprio `INSERT` em `audit_log` é
+o dedup), não de cursor persistido.
+
+### Variáveis do serviço
+
+| variável                 | obrigatória | default      |
+| ------------------------ | ----------- | ------------ |
+| `RETENCAO_DATABASE_URL`  | **sim**     | —            |
+| `RETENCAO_HEARTBEAT_DIR` | não         | `/heartbeat` |
+| `INTERVALO_S`            | não         | `86400`      |
+
+A role de login herda `iris_retencao`, que tem **EXECUTE em uma função e SELECT
+em nenhuma tabela** — credencial vazada não lê paciente, diário nem trilha.
+Criada fora das migrações, mesmo padrão de `iris_arquivamento` (a senha vai do
+seu terminal direto para o campo do Easypanel, nunca por chat/issue/PR):
+
+```sql
+-- no psql do Postgres de produção, como role dona
+CREATE ROLE iris_retencao_login LOGIN PASSWORD '<gerada no seu terminal>'
+  IN ROLE iris_retencao;
+```
+
+`RETENCAO_DATABASE_URL` é validada **antes** do laço: sem ela o container sai com
+erro nomeando a variável, em vez de ficar de pé falhando em silêncio — o que com
+tick de 24h só apareceria no dia seguinte.
+
+### Por que 1x/dia
+
+A janela é de 90 **dias** e a régua conta em **dias civis no fuso da clínica**
+(`src/lib/jobs/retencao.ts`; o SQL faz a mesma conta com
+`(p_referencia AT TIME ZONE c.timezone)::date`). Varrer de minuto em minuto não
+antecipa aviso nenhum — só produz 1440x mais chamadas que não mudam linha alguma.
+
+### Heartbeat
+
+`${RETENCAO_HEARTBEAT_DIR}/.ultima-retencao`, escrito **só** após varredura
+completa e sem erro — nunca em `--dry-run`, nunca em falha. Se o arquivo parar de
+avançar, nenhum aviso prévio está saindo, e o produto não tem como mostrar isso:
+"nenhum aviso emitido" e "nenhum prontuário a vencer" são o mesmo silêncio.
+
+### Ensaio sem gravar (`--dry-run`)
+
+```bash
+docker run --rm -e RETENCAO_DATABASE_URL=... iris-retencao \
+  node /app/scripts/retencao-aviso-previo.mjs --dry-run
+```
+
+Roda `app_retencao_avisar` **de verdade**, com o laço inteiro dentro de UMA
+transação, e faz `ROLLBACK` no fim. A transação envolve o laço todo (e não cada
+lote) de propósito: assim os `INSERT`s de um lote ficam visíveis para o dedup do
+lote seguinte e o ensaio converge, em vez de reavisar os mesmos 200 dez vezes e
+reportar 2.000. Ele **não** atualiza o heartbeat.
+
+### Provisionamento no Easypanel (passo manual do Rômulo)
+
+Issue fechada **não** prova serviço de pé — a conferência é no painel.
+
+1. **App** novo, nome `retencao`, no mesmo projeto do app.
+2. **Source**: este repo, branch `main`. **Build**: Dockerfile,
+   caminho `infra/retencao/Dockerfile`, contexto **na raiz** (`.`).
+3. **Comando**: `/app/agendador.sh` (o Easypanel não tem cron para serviço de
+   app na v2.31.0 — o agendamento É o laço do script).
+4. **Ambiente**: `RETENCAO_DATABASE_URL` e, se quiser mudar o default,
+   `INTERVALO_S`. **Salvar não aplica: é preciso clicar em "Implantar".**
+5. **Réplicas: 1.** Duas réplicas não corrompem nada (o `FOR UPDATE SKIP LOCKED`
+   e o `NOT EXISTS` seguram), mas dobram a carga sem avisar mais ninguém.
+6. **Volume** em `/heartbeat` para o sinal de vida sobreviver a redeploy.
+
+**Como saber que deu certo:** no log do serviço aparece a linha
+`[agendador-retencao] ... ativo. intervalo=86400s`, e logo em seguida
+`[retencao] ... varredura concluída: N aviso(s) prévio(s) emitido(s) em M lote(s)`.
+Depois do primeiro tick, o arquivo `/heartbeat/.ultima-retencao` existe e tem um
+timestamp dentro. Sem essas duas evidências, o serviço não está provisionado.
 
 ## Job de fechamento de ciclo de faturamento (#36, #288)
 

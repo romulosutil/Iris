@@ -29,9 +29,11 @@
 #     dependência que não chegou na imagem.
 #
 # Uso:
-#   scripts/ci/carga-imagens-infra.sh                 # os dois serviços
+#   scripts/ci/carga-imagens-infra.sh                 # todos os serviços
 #   scripts/ci/carga-imagens-infra.sh escalonamento
 #   scripts/ci/carga-imagens-infra.sh backup
+#   scripts/ci/carga-imagens-infra.sh billing
+#   scripts/ci/carga-imagens-infra.sh retencao
 #
 # Roda igual no CI e na máquina do dev — de propósito. Um teste que só existe
 # no workflow é um teste que ninguém roda antes de abrir o PR.
@@ -53,6 +55,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 readonly TAG_ESCALONAMENTO="iris-escalonamento-ci:local"
 readonly TAG_BACKUP="iris-backup-ci:local"
 readonly TAG_BILLING="iris-billing-ci:local"
+readonly TAG_RETENCAO="iris-retencao-ci:local"
 
 log_info() { printf '[carga-imagens] %s\n' "$*"; }
 log_ok() { printf '[carga-imagens] OK: %s\n' "$*"; }
@@ -484,19 +487,83 @@ carga_billing() {
 		-- docker run --rm "${TAG_BILLING}" /app/agendador.sh
 }
 
+# --- retencao ----------------------------------------------------------------
+# Aviso prévio de expurgo de prontuário (#352). Mesmo ponto cego do
+# escalonamento e do arquivamento: COPY arquivo por arquivo + `npm install` de
+# uma dependência à mão, numa imagem que NÃO enxerga o node_modules do repo.
+#
+# O que está em jogo se esta imagem subir quebrada: o job morre com
+# ERR_MODULE_NOT_FOUND a cada tick e NENHUM aviso prévio é emitido — estado
+# indistinguível, de dentro do produto, de "nenhum prontuário está a vencer".
+# A clínica perde os 90 dias de antecedência sem que nada fique vermelho.
+carga_retencao() {
+	log_info "buildando ${TAG_RETENCAO}..."
+	docker build -f infra/retencao/Dockerfile -t "${TAG_RETENCAO}" .
+
+	# `--dry-run` de propósito: é o único modo que NÃO grava heartbeat. Sem
+	# RETENCAO_DATABASE_URL o script falha antes de abrir conexão — e é
+	# exatamente essa falha, NOMEANDO a variável, que se exige aqui.
+	esperar_falha_com \
+		"retencao: carga por caminho ABSOLUTO" \
+		"RETENCAO_DATABASE_URL não definida" \
+		-- docker run --rm "${TAG_RETENCAO}" \
+		node /app/scripts/retencao-aviso-previo.mjs --dry-run
+
+	# Caminho RELATIVO é um caso separado, não redundante: é a forma que o
+	# operador digita no console do painel, e foi a que a #153 quebrou no
+	# escalonamento (argv[1] relativo não bate com import.meta.url sem
+	# pathToFileURL — o processo saía 0 sem varrer nada). Se essa guarda
+	# regredir, esta asserção pega o exit 0.
+	esperar_falha_com \
+		"retencao: carga por caminho RELATIVO" \
+		"RETENCAO_DATABASE_URL não definida" \
+		-- docker run --rm -w /app "${TAG_RETENCAO}" \
+		node scripts/retencao-aviso-previo.mjs --dry-run
+
+	# Resolve TODO specifier dos arquivos copiados, dinâmico incluído — um
+	# `await import()` em try/catch degrada em silêncio e passaria verde nas
+	# asserções acima. O verificador entra por stdin de propósito: não vira
+	# arquivo dentro de uma imagem de produção.
+	esperar_sucesso \
+		"retencao: todo import resolve na imagem (inclusive os dinâmicos)" \
+		-- bash -c "docker run --rm -i -w /app -e ALVO=/app/scripts '${TAG_RETENCAO}' node --input-type=module < scripts/ci/verificar-deps-imagem.mjs"
+
+	# O agendador usa `set -Eeuo pipefail` e `[[ ]]`: sem o `apk add bash` do
+	# Dockerfile a imagem sobe e o laço morre na primeira linha.
+	esperar_sucesso \
+		"retencao: sintaxe do agendador.sh (bash presente)" \
+		-- docker run --rm "${TAG_RETENCAO}" bash -n /app/agendador.sh
+
+	# O CMD aponta /app/agendador.sh por caminho absoluto fixo. Se o COPY mudar
+	# de lugar, o container só falha em produção.
+	esperar_sucesso \
+		"retencao: /app/agendador.sh executável (caminho fixo do CMD)" \
+		-- docker run --rm "${TAG_RETENCAO}" test -x /app/agendador.sh
+
+	# O agendador valida env ANTES de entrar no laço e sai 1. Rodá-lo sem env
+	# prova as duas coisas: que a guarda nomeia a variável, e que este teste não
+	# trava — um agendador que entrasse no laço aqui penduraria o CI.
+	esperar_falha_com \
+		"retencao: agendador para na guarda de env (não entra em laço)" \
+		"variável(is) de ambiente ausente(s): RETENCAO_DATABASE_URL" \
+		-- docker run --rm "${TAG_RETENCAO}" /app/agendador.sh
+}
+
 # --- main --------------------------------------------------------------------
 alvo="${1:-todos}"
 case "${alvo}" in
 escalonamento) carga_escalonamento ;;
 backup) carga_backup ;;
 billing) carga_billing ;;
+retencao) carga_retencao ;;
 todos)
 	carga_escalonamento
 	carga_backup
 	carga_billing
+	carga_retencao
 	;;
 *)
-	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing' ou nenhum (todos)."
+	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao' ou nenhum (todos)."
 	exit 2
 	;;
 esac

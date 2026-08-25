@@ -21,7 +21,7 @@ name: Carga das imagens de infra
 
 on:
   pull_request:
-    # Só os caminhos que ENTRAM nas imagens (o que os três Dockerfiles copiam ou
+    # Só os caminhos que ENTRAM nas imagens (o que os quatro Dockerfiles copiam ou
     # instalam), mais o próprio workflow e o script. `pnpm-lock.yaml` está aqui
     # porque as versões de `postgres`/`resend` na imagem do escalonamento são
     # pinadas à mão e precisam acompanhar o lockfile — um bump lá tem que
@@ -31,6 +31,7 @@ on:
       - "infra/escalonamento/**"
       - "infra/backup/**"
       - "infra/billing/**"
+      - "infra/retencao/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   push:
@@ -40,6 +41,7 @@ on:
       - "infra/escalonamento/**"
       - "infra/backup/**"
       - "infra/billing/**"
+      - "infra/retencao/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   # Botão manual: útil para reexercitar as imagens depois de uma mudança de base
@@ -59,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Um job só, sequencial, em vez de matrix por serviço: são três builds
+      # Um job só, sequencial, em vez de matrix por serviço: são quatro builds
       # alpine pequenos e o log fica em um lugar só na hora de ler o incidente.
       - name: Buildar e carregar as imagens de infra
         run: bash scripts/ci/carga-imagens-infra.sh

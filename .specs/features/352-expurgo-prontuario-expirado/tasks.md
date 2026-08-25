@@ -32,7 +32,8 @@
 | **T0–T8**   | ✅ **Feitas** em 25/08/2026, branch `feat/352-expurgo-prontuario-expirado`. Camada SQL completa e medida.          |
 | **T9–T11**  | ✅ **Feitas** em 25/08/2026. `alta_em` passou a ter caminho de escrita — a fila deixa de ser vazia por construção. |
 | **T12–T14** | ✅ **Feitas** em 25/08/2026. Fila, tela, diálogo de confirmação e cobertura de comportamento da action.            |
-| **T15–T20** | ⬜ Pendentes.                                                                                                      |
+| **T15–T17** | ✅ **Feitas** em 25/08/2026, exceto o **provisionamento no Easypanel** (passo manual do Rômulo, runbook escrito).  |
+| **T18–T20** | ⬜ Pendentes (T18 já executada fora de ordem — ver abaixo).                                                        |
 | T1 → `0127` | `idx_patient_retencao` via `db:generate`. `db:generate` reexecutado responde `No schema changes`.                  |
 | T2–T6       | `0128_retencao_expurgo_wiring.sql`, `when` = 0127 + 1000. Medida em `pg_proc`/`pg_roles`/`pg_indexes`.             |
 | T7          | 23 casos em 3 suítes; `retencao-expurgo` (11), `retencao-fila` (4), `retencao-aviso` (8). Contagem conferida.      |
@@ -60,6 +61,32 @@
 - **Duas chamadas por página, não uma.** Sem ler o `total` antes não há como grampear na ÚLTIMA página válida; uma página alta voltaria vazia, e fila vazia se lê como "nenhum prontuário vencido" — afirmação falsa sobre obrigação legal.
 - **Limpeza escopada por `DELETE`, sem `TRUNCATE`**, em `logic.int.test.ts`: `TRUNCATE ... CASCADE` apagaria a fixture de outros arquivos de int-test da mesma base.
 - Dois casos além dos 7 obrigatórios: payload da fila (R352.C8, conjunto EXATO de chaves) e `pacienteId` malformado recusado antes do Postgres (senão vira `22P02` genérico).
+
+**T15–T17 — o que a spec não previu:**
+
+- **O `--dry-run` precisa de UMA transação para o laço inteiro, não uma por lote.** O contrato diz "cada lote é uma transação" e diz "`--dry-run` faz `ROLLBACK`" — as duas coisas juntas produziriam um dry-run que desfaz o lote 1, reencontra os mesmos 200 no lote 2 e reporta **2.000** onde há 200. O dedup de `app_retencao_avisar` é o próprio `INSERT`, então ele só enxerga os lotes anteriores se eles estiverem na MESMA transação. `varrer(sql, { porLote })` resolve: `true` na varredura real (uma transação por lote, falha isolada), `false` no dry-run (o chamador abre a transação única). Medido no Postgres local: dry-run com 1 elegível fecha em 2 lotes (1, depois 0), não em 10.
+- **`scripts/ci/carga-imagens-infra.sh` não cobria `arquivamento`** — só `escalonamento`, `backup` e `billing`. `retencao` entrou; a lacuna do arquivamento fica registrada em T19, não foi tapada de carona.
+- **`.github/workflows/carga-imagens-infra.yml` filtra por `paths`.** Sem acrescentar `infra/retencao/**` nas DUAS listas (`pull_request` e `push`), uma mudança só no Dockerfile do serviço não dispararia o workflow — e o teste de carga que existe para pegar dependência ausente ficaria mudo exatamente no PR que a introduz.
+- **Seção nova em `infra/README.md`.** Os dois scripts apontam para "§Aviso prévio de expurgo em infra/README.md" nas mensagens de falha; sem a seção, a mensagem do incidente mandaria o operador para lugar nenhum. Leva o runbook de provisionamento no Easypanel (clique a clique) e o `CREATE ROLE … IN ROLE iris_retencao`.
+- **`RETENCAO_HEARTBEAT_DIR` documentada em `.env.example` além do que T17 exigia:** o rationale do heartbeat é que "nenhum aviso emitido" e "nenhum prontuário a vencer" são o mesmo silêncio dentro do produto.
+
+**Medição de T15–T16 em 25/08/2026** (Postgres local, role de login `iris_retencao_login IN ROLE iris_retencao`, fixture revertida depois):
+
+| Verificação                                               | Resultado                                                              |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `--dry-run` com 1 elegível                                | ✅ 1 aviso reportado, `audit_log` continua com 0 linhas, sem heartbeat |
+| varredura real                                            | ✅ 1 linha `expurgo_aviso_previo`, `ator_id` NULL, `dias_restantes=45` |
+| segunda varredura no mesmo dia                            | ✅ 0 avisos (dedup), heartbeat `.ultima-retencao` carimbado            |
+| `SELECT count(*) FROM patient` como `iris_retencao_login` | ✅ `permission denied for table patient`                               |
+| `app_purgar_paciente(...)` como `iris_retencao_login`     | ✅ `permission denied for function app_purgar_paciente`                |
+| `scripts/ci/carga-imagens-infra.sh retencao`              | ✅ 6/6 asserções (build + carga absoluta/relativa + deps + bash + CMD) |
+
+**Régua de mutação de T15, medida em 25/08/2026** (por patch inverso):
+
+| Mutação                                                       | Resultado                                                |
+| ------------------------------------------------------------- | -------------------------------------------------------- |
+| `if (noLote === 0) break` → `if (false) break`                | ✅ 14 → 10 (derruba parada em lote vazio, teto, dry-run) |
+| `porLote ? sql.begin(...) : executarLote(sql)` → sempre falso | ✅ 14 → 13 (derruba "cada lote é UMA transação própria") |
 
 **Régua de mutação medida em 25/08/2026** (por patch inverso, nunca `git checkout`):
 
