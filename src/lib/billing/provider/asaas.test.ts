@@ -330,6 +330,52 @@ describe("AsaasProvider", () => {
       expect(e.retentativa.tentativa).toBe(1);
     });
 
+    it("D46: instrução real sem purpose/retryAttempt válidos loga o envelope cru", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        new AsaasProvider().normalizarEvento({
+          id: "evt_purpose_novo&2",
+          event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+          paymentInstruction: {
+            id: "pi_novo_2",
+            status: "REFUSED",
+            paymentId: "pay_782",
+            purpose: "PROPOSITO_QUE_A_DOC_NAO_LISTA",
+            retryAttempt: 1,
+          },
+        });
+        expect(warn).toHaveBeenCalledWith(
+          "[billing-retentativa-envelope-inesperado] purpose/retryAttempt fora do contrato lido da doc (#322, D46)",
+          expect.objectContaining({ providerInstructionId: "pi_novo_2" }),
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("D46: instrução real com purpose e retryAttempt válidos não loga nada", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        new AsaasProvider().normalizarEvento({
+          id: "evt_retry_ok&1",
+          event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+          paymentInstruction: {
+            id: "pi_ok",
+            status: "REFUSED",
+            paymentId: "pay_783",
+            purpose: "RETRY_AFTER_DUE_DATE",
+            retryAttempt: 2,
+          },
+        });
+        expect(warn).not.toHaveBeenCalledWith(
+          "[billing-retentativa-envelope-inesperado] purpose/retryAttempt fora do contrato lido da doc (#322, D46)",
+          expect.anything(),
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
     it("SCHEDULE é a instrução original do ciclo, não uma retentativa", () => {
       const e = new AsaasProvider().normalizarEvento({
         id: "evt_schedule&1",
