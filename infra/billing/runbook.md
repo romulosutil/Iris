@@ -64,8 +64,15 @@ sobre ela, e o script sai com código `1` mesmo que `totalDivergencias` seja
 `0`. Rode de novo antes de tirar conclusão.
 
 **`ciclosTruncado` / `vinculosTruncado` / `cobrancasSemCicloTruncado` =
-`true`** significa que a passada parou no teto (100 por varredura, nos três
-braços) e **há fila não conferida**. Rode de novo.
+`true`** significa que uma PÁGINA parou no teto (100 por varredura, nos três
+braços). `scripts/conciliacao-billing.mjs` pagina isso sozinho — avança o
+offset do braço truncado e continua até esgotar os três ou até um teto de
+segurança de 50 páginas por corrida. Se o campo agregado no log final ainda vier `true`, foi o teto de PÁGINAS
+(50 × 100 = 5.000 registros por braço) que bateu numa corrida só, não o teto
+por varredura isolado — rode o script de novo. O offset É reiniciado a cada
+execução (não é persistido em lugar nenhum), então uma segunda corrida
+reconfere do início — só necessário se o braço tiver mais de 5.000
+elegíveis, o que hoje não acontece (janela de 60 dias).
 
 ## 2. Webhook: reentrega e reprocessamento
 
