@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import Link from "next/link";
 import { ArquivamentoDialog } from "./arquivamento-dialog";
+import { AltaDialog } from "./alta-dialog";
 import { AvisosArquivamento } from "./avisos-arquivamento";
 import { carregarAvisosArquivamento } from "./arquivamento-queries";
 import { capacidadesDaModalidade } from "./modalidade";
@@ -45,6 +46,10 @@ export default async function PacientePage({
         // sem ele a única pista de que o paciente saiu da contagem de ativos
         // seria a fatura no fechamento do ciclo.
         arquivadoEm: patient.arquivadoEm,
+        // #352: a alta clínica é o que abre o relógio de retenção do
+        // prontuário. Sem ela na tela, o coordenador não sabe se o prazo de
+        // guarda já está correndo — e não tinha como iniciá-lo.
+        altaEm: patient.altaEm,
         // A modalidade decide se esta aba existe e o que ela lê. Sem ela, a
         // rota base servia um hexágono de eixos VB-MAPP para os três modos.
         clinicalModality: patient.clinicalModality,
@@ -60,6 +65,13 @@ export default async function PacientePage({
   }
 
   const capacidades = capacidadesDaModalidade(paciente.clinicalModality);
+
+  // #352 — alta é `coordenador`-only, e o predicado é mais estrito que o do
+  // arquivamento (que a recepção também faz): alta abre o prazo legal de guarda
+  // e, no fim dele, a eliminação definitiva do prontuário. Mostrar o botão a
+  // quem `requireRole` recusa produziria um erro no submit, não uma recusa
+  // legível.
+  const podeRegistrarAlta = ctx.role === "coordenador";
 
   // Sai ANTES de `carregarTimeline`: em `conventional` a timeline não seria
   // usada, e a consulta custa uma varredura de snapshots por entrada no
@@ -102,6 +114,14 @@ export default async function PacientePage({
               ) : undefined
             }
             description="Evolução clínica em Terapia Cognitivo-Comportamental"
+            actions={
+              podeRegistrarAlta ? (
+                <AltaDialog
+                  patientId={paciente.id}
+                  comAlta={!!paciente.altaEm}
+                />
+              ) : undefined
+            }
           />
           <AvisosArquivamento {...avisos} />
           <EvolucaoTcc
@@ -147,6 +167,12 @@ export default async function PacientePage({
           description="Prontuário e linha do tempo de evolução clínica"
           actions={
             <Cluster gap="sm">
+              {podeRegistrarAlta ? (
+                <AltaDialog
+                  patientId={paciente.id}
+                  comAlta={!!paciente.altaEm}
+                />
+              ) : null}
               {podeArquivar ? (
                 <ArquivamentoDialog
                   patientId={paciente.id}

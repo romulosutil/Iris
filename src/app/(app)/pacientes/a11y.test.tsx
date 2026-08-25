@@ -155,6 +155,34 @@ test("diálogo de arquivamento aberto sem violações", async () => {
   // padrão apertado para o resto da suíte.
 }, 30_000);
 
+test("diálogo de alta clínica aberto sem violações", async () => {
+  const user = userEvent.setup();
+  const { AltaDialog } = await import("./[id]/alta-dialog");
+  const { container } = render(<AltaDialog patientId="p1" comAlta={false} />);
+  // Mesmo cuidado do diálogo de arquivamento: o conteúdo vive num portal fora
+  // do `container`. Este caso cobre o campo `type="date"`, que o de
+  // arquivamento não tem.
+  await user.click(
+    screen.getByRole("button", { name: "Registrar alta clínica" }),
+  );
+  await screen.findByRole("dialog");
+
+  const r = await axe.run(document.body, {
+    runOnly: {
+      type: "tag",
+      values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
+    },
+    rules: {
+      region: { enabled: false },
+      "landmark-one-main": { enabled: false },
+      "page-has-heading-one": { enabled: false },
+      "color-contrast": { enabled: false },
+    },
+  });
+  expect(r.violations).toEqual([]);
+  expect(container).toBeTruthy();
+}, 30_000);
+
 test("layout do paciente com indicador de segurança e sem violações", async () => {
   const { default: PacienteLayout } = await import("./[id]/layout");
   mockObterSituacaoConta.mockResolvedValue({

@@ -27,20 +27,37 @@
 
 ## Estado de execução
 
-| Faixa       | Estado                                                                                                        |
-| ----------- | ------------------------------------------------------------------------------------------------------------- |
-| **T0–T8**   | ✅ **Feitas** em 25/08/2026, branch `feat/352-expurgo-prontuario-expirado`. Camada SQL completa e medida.     |
-| **T9–T20**  | ⬜ Pendentes. **Sem T9 a fila continua vazia em produção por construção** (defeito C2 de `context.md`).       |
-| T1 → `0127` | `idx_patient_retencao` via `db:generate`. `db:generate` reexecutado responde `No schema changes`.             |
-| T2–T6       | `0128_retencao_expurgo_wiring.sql`, `when` = 0127 + 1000. Medida em `pg_proc`/`pg_roles`/`pg_indexes`.        |
-| T7          | 23 casos em 3 suítes; `retencao-expurgo` (11), `retencao-fila` (4), `retencao-aviso` (8). Contagem conferida. |
-| T8          | Replay pela via excepcional; `fase6-tombstone-restauracao` passou de 5 para 6 casos.                          |
+| Faixa       | Estado                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| **T0–T8**   | ✅ **Feitas** em 25/08/2026, branch `feat/352-expurgo-prontuario-expirado`. Camada SQL completa e medida.          |
+| **T9–T11**  | ✅ **Feitas** em 25/08/2026. `alta_em` passou a ter caminho de escrita — a fila deixa de ser vazia por construção. |
+| **T12–T20** | ⬜ Pendentes.                                                                                                      |
+| T1 → `0127` | `idx_patient_retencao` via `db:generate`. `db:generate` reexecutado responde `No schema changes`.                  |
+| T2–T6       | `0128_retencao_expurgo_wiring.sql`, `when` = 0127 + 1000. Medida em `pg_proc`/`pg_roles`/`pg_indexes`.             |
+| T7          | 23 casos em 3 suítes; `retencao-expurgo` (11), `retencao-fila` (4), `retencao-aviso` (8). Contagem conferida.      |
+| T8          | Replay pela via excepcional; `fase6-tombstone-restauracao` passou de 5 para 6 casos.                               |
 
 **Efeitos colaterais que a spec não previu, e que a implementação teve de fechar:**
 
 - três suítes existentes (`fase6-expurgo-paciente`, `alerta-risco-rls`, `consent-revogacao-gate`) purgavam pacientes **sem `alta_em`**, inelegíveis pelo gate novo — fixture corrigida, não teste afrouxado;
 - o oráculo de conjunto exato de `clinic-id-helper-rls` precisou das funções novas (19→20 tenant-scoped, 13→15 de papel) e da troca de `app_purgar_paciente` por `app_purgar_paciente_interno` na lista de `app_user_id_exigido()` — o carimbo do ator migrou para o corpo compartilhado;
 - `expurgo_aviso_previo` precisou de rótulo em `clinica/auditoria/logic.ts`: há um teste que exige rótulo pt-BR para **toda** `acao` que o produto grava.
+
+**T9–T11 — o que a spec não previu:**
+
+- `alta_registrada` / `alta_desfeita` precisaram do mesmo rótulo pt-BR em `clinica/auditoria/logic.ts` (mesma varredura de cobertura).
+- A régua (T11) virou também a **fonte da conta de data civil** que o `dataAltaSchema` (T9) usa para recusar data futura — em vez de uma terceira cópia do `Intl.DateTimeFormat`. Por isso `schemas.ts` importa `dataCivilNoFuso` de `@/lib/jobs/retencao`: o módulo é puro (sem `@/db`, sem rede) e entra no bundle do cliente sem arrastar nada.
+- **`FUSO_CLINICA` chumbado.** A fronteira do "hoje" da alta usa `America/Sao_Paulo` de `agenda/fuso.ts`, porque `clinic.timezone` não chega até a camada de aplicação. O SQL do expurgo já lê o fuso de verdade. Dívida de R352.F3, a registrar em T19.
+- **Ponto de montagem:** `AltaDialog` entra nos DOIS `PageHeader` de `pacientes/[id]/page.tsx` (o ramo TCC e o protocol-driven). Modalidade `conventional` **não** passa por essa página (redireciona para `/temas`, que não tem `PageHeader`), então esses pacientes continuam sem botão de alta — **é o mesmo buraco que o arquivamento manual já tinha**, pré-existente a #352. Registrar em T19.
+
+**Régua de mutação medida em 25/08/2026** (por patch inverso, nunca `git checkout`):
+
+| Mutação                                                                     | Resultado                                                 |
+| --------------------------------------------------------------------------- | --------------------------------------------------------- |
+| trocar a guarda `isNull/isNotNull` do `WHERE` da alta por `undefined`       | ✅ derruba "registrar duas vezes é idempotente"           |
+| `requireRole(ctx,'coordenador')` → `(ctx,'coordenador','admin_recepcao')`   | ✅ derruba "terapeuta e recepção são barrados"            |
+| neutralizar o `refine` de data não-futura do `dataAltaSchema` (`\|\| true`) | ✅ derruba "data futura é recusada e nada é gravado"      |
+| `dias > 0` → `dias >= 0` em `dentroDaJanelaDeAviso`                         | ✅ derruba "não avisa quem vence hoje nem quem já venceu" |
 
 ---
 
