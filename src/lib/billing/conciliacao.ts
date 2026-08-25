@@ -201,15 +201,31 @@ export interface ResultadoConciliacaoCiclos {
 
 export async function conciliarCiclos(opcoes?: {
   limite?: number;
+  /**
+   * Quantas linhas pular antes do teto — a paginação que falta ao teto fixo
+   * (achado BLOCKING da revisão do PR #468): sem isto, `ORDER BY desc(...)
+   * LIMIT 100` devolve sempre os 100 mesmos registros mais recentes numa base
+   * com mais de 100 elegíveis, e "rode de novo" (runbook) nunca avança —
+   * trava em loop. O script (`scripts/conciliacao-billing.mjs`) avança este
+   * valor a cada passada enquanto `truncado` for `true`.
+   */
+  offset?: number;
   janelaDias?: number;
   provider?: ProvedorDeConsulta;
 }): Promise<ResultadoConciliacaoCiclos> {
   const limite = opcoes?.limite ?? TETO_CONCILIACAO_POR_PASSADA;
+  const offset = opcoes?.offset ?? 0;
   const janelaDias = opcoes?.janelaDias ?? JANELA_CONCILIACAO_DIAS;
   // `AsaasProvider` direto, não `getBillingProvider()`: conciliar é conferir o
   // que já foi emitido, e qual gateway está ATIVO na env hoje não muda quem
   // emitiu a cobrança de ontem.
   const provider = opcoes?.provider ?? new AsaasProvider();
+
+  // `limite: 0` é o sinal do script para "este braço já esgotou a paginação
+  // nesta corrida — não repita a consulta nem gaste chamada ao Asaas".
+  if (limite === 0) {
+    return { conferidos: 0, divergencias: [], falhas: [], truncado: false };
+  }
 
   /**
    * TODO filtro vai no WHERE, nunca depois do LIMIT. Uma linha inelegível que
@@ -251,7 +267,8 @@ export async function conciliarCiclos(opcoes?: {
     )
     .orderBy(desc(billingCycle.cobrancaEmitidaEm))
     // +1 para SABER que há fila atrás sem uma segunda consulta de contagem.
-    .limit(limite + 1);
+    .limit(limite + 1)
+    .offset(offset);
 
   const truncado = linhas.length > limite;
   const lote = truncado ? linhas.slice(0, limite) : linhas;
@@ -345,10 +362,17 @@ export interface ResultadoConciliacaoVinculos {
  */
 export async function conciliarVinculos(opcoes?: {
   limite?: number;
+  /** Ver o comentário equivalente em `conciliarCiclos`. */
+  offset?: number;
   provider?: ProvedorDeConsulta;
 }): Promise<ResultadoConciliacaoVinculos> {
   const limite = opcoes?.limite ?? TETO_CONCILIACAO_POR_PASSADA;
+  const offset = opcoes?.offset ?? 0;
   const provider = opcoes?.provider ?? new AsaasProvider();
+
+  if (limite === 0) {
+    return { conferidos: 0, divergencias: [], falhas: [], truncado: false };
+  }
 
   const linhas = await authDb
     .select({
@@ -365,7 +389,8 @@ export async function conciliarVinculos(opcoes?: {
       ),
     )
     .orderBy(desc(subscription.atualizadoEm))
-    .limit(limite + 1);
+    .limit(limite + 1)
+    .offset(offset);
 
   const truncado = linhas.length > limite;
   const lote = truncado ? linhas.slice(0, limite) : linhas;

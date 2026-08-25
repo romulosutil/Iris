@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import {
   conciliarCiclos,
   conciliarVinculos,
+  TETO_CONCILIACAO_POR_PASSADA,
   type ResultadoConciliacaoCiclos,
   type ResultadoConciliacaoVinculos,
 } from "@/lib/billing/conciliacao";
@@ -30,6 +31,42 @@ function mensagemDoErro(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Corpo de paginação (achado BLOCKING do PR #468): um teto fixo sem cursor
+ * sempre relia os mesmos registros mais recentes numa base com mais de 100
+ * elegíveis — "rode de novo" nunca avançava. O script agora manda, por
+ * braço, o offset da PRÓXIMA página e pode zerar `limite` para pular um
+ * braço já esgotado nesta corrida sem gastar chamada ao Asaas.
+ */
+interface CorpoConciliacao {
+  ciclosOffset?: number;
+  ciclosLimite?: number;
+  vinculosOffset?: number;
+  vinculosLimite?: number;
+  cobrancasSemCicloOffset?: number;
+  cobrancasSemCicloLimite?: number;
+}
+
+/** JSON inválido/ausente → paginação padrão (primeira página, teto cheio). */
+async function lerCorpo(request: Request): Promise<CorpoConciliacao> {
+  try {
+    const bruto: unknown = await request.json();
+    if (bruto === null || typeof bruto !== "object") return {};
+    return bruto as CorpoConciliacao;
+  } catch {
+    return {};
+  }
+}
+
+function inteiroNaoNegativo(
+  valor: number | undefined,
+  padrao: number,
+): number {
+  return typeof valor === "number" && Number.isInteger(valor) && valor >= 0
+    ? valor
+    : padrao;
+}
+
 /** Env ausente → false. Deploy sem segredo recusa tudo, nunca libera. */
 function autorizado(header: string | null): boolean {
   const esperado = process.env.BILLING_JOB_TOKEN;
@@ -46,6 +83,18 @@ export async function POST(request: Request): Promise<Response> {
   if (!autorizado(request.headers.get("authorization"))) {
     return Response.json({ error: "não autorizado" }, { status: 401 });
   }
+
+  const corpo = await lerCorpo(request);
+  const ciclosOffset = inteiroNaoNegativo(corpo.ciclosOffset, 0);
+  const ciclosLimite = inteiroNaoNegativo(
+    corpo.ciclosLimite,
+    TETO_CONCILIACAO_POR_PASSADA,
+  );
+  const vinculosOffset = inteiroNaoNegativo(corpo.vinculosOffset, 0);
+  const vinculosLimite = inteiroNaoNegativo(
+    corpo.vinculosLimite,
+    TETO_CONCILIACAO_POR_PASSADA,
+  );
 
   const vazioCiclos: ResultadoConciliacaoCiclos = {
     conferidos: 0,
@@ -66,7 +115,10 @@ export async function POST(request: Request): Promise<Response> {
   let ciclos = vazioCiclos;
   let ciclosAbortado: string | null = null;
   try {
-    ciclos = await conciliarCiclos();
+    ciclos = await conciliarCiclos({
+      limite: ciclosLimite,
+      offset: ciclosOffset,
+    });
   } catch (err) {
     ciclosAbortado = mensagemDoErro(err);
     console.error("[billing-conciliacao] varredura de ciclos abortou", err);
@@ -75,7 +127,10 @@ export async function POST(request: Request): Promise<Response> {
   let vinculos = vazioVinculos;
   let vinculosAbortado: string | null = null;
   try {
-    vinculos = await conciliarVinculos();
+    vinculos = await conciliarVinculos({
+      limite: vinculosLimite,
+      offset: vinculosOffset,
+    });
   } catch (err) {
     vinculosAbortado = mensagemDoErro(err);
     console.error("[billing-conciliacao] varredura de vínculos abortou", err);
@@ -88,23 +143,37 @@ export async function POST(request: Request): Promise<Response> {
    * consulta parte do outro lado — da fila de eventos de webhook — e reavalia o
    * estado VIVO do ciclo, sem ler o carimbo histórico de `erro_aplicacao`.
    */
-  const LIMITE_COBRANCAS_SEM_CICLO = 100;
+  const cobrancasSemCicloLimite = inteiroNaoNegativo(
+    corpo.cobrancasSemCicloLimite,
+    100,
+  );
+  const cobrancasSemCicloOffset = inteiroNaoNegativo(
+    corpo.cobrancasSemCicloOffset,
+    0,
+  );
   let cobrancasSemCiclo: Awaited<
     ReturnType<typeof listarCobrancasDeCicloNaoConciliadas>
   > = [];
   let cobrancasSemCicloTruncado = false;
   let cobrancasSemCicloAbortado: string | null = null;
   try {
-    // +1 para SABER que há fila atrás sem uma segunda consulta de contagem —
-    // mesmo padrão de `conciliarCiclos`/`conciliarVinculos` (A5: truncamento
-    // nunca é silencioso).
-    const lote = await listarCobrancasDeCicloNaoConciliadas(
-      LIMITE_COBRANCAS_SEM_CICLO + 1,
-    );
-    cobrancasSemCicloTruncado = lote.length > LIMITE_COBRANCAS_SEM_CICLO;
-    cobrancasSemCiclo = cobrancasSemCicloTruncado
-      ? lote.slice(0, LIMITE_COBRANCAS_SEM_CICLO)
-      : lote;
+    if (cobrancasSemCicloLimite === 0) {
+      // Braço já esgotado nesta corrida (ver comentário de `CorpoConciliacao`).
+      cobrancasSemCiclo = [];
+      cobrancasSemCicloTruncado = false;
+    } else {
+      // +1 para SABER que há fila atrás sem uma segunda consulta de contagem —
+      // mesmo padrão de `conciliarCiclos`/`conciliarVinculos` (A5: truncamento
+      // nunca é silencioso).
+      const lote = await listarCobrancasDeCicloNaoConciliadas(
+        cobrancasSemCicloLimite + 1,
+        cobrancasSemCicloOffset,
+      );
+      cobrancasSemCicloTruncado = lote.length > cobrancasSemCicloLimite;
+      cobrancasSemCiclo = cobrancasSemCicloTruncado
+        ? lote.slice(0, cobrancasSemCicloLimite)
+        : lote;
+    }
   } catch (err) {
     cobrancasSemCicloAbortado = mensagemDoErro(err);
     console.error("[billing-conciliacao] fila de eventos órfãos abortou", err);

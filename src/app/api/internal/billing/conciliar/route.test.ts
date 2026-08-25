@@ -11,6 +11,7 @@ const dubles = vi.hoisted(() => ({
 vi.mock("@/lib/billing/conciliacao", () => ({
   conciliarCiclos: dubles.conciliarCiclos,
   conciliarVinculos: dubles.conciliarVinculos,
+  TETO_CONCILIACAO_POR_PASSADA: 100,
 }));
 vi.mock("@/lib/billing/erro-aplicacao", () => ({
   listarCobrancasDeCicloNaoConciliadas:
@@ -21,10 +22,14 @@ const { POST } = await import("./route");
 
 const TOKEN = "token-de-teste-375";
 
-function req(headers: Record<string, string> = {}): Request {
+function req(
+  headers: Record<string, string> = {},
+  corpo?: unknown,
+): Request {
   return new Request("https://exemplo.test/api/internal/billing/conciliar", {
     method: "POST",
     headers,
+    body: corpo === undefined ? undefined : JSON.stringify(corpo),
   });
 }
 
@@ -137,6 +142,44 @@ describe("POST /api/internal/billing/conciliar", () => {
     expect(corpo.cobrancasSemCiclo).toHaveLength(100);
     expect(dubles.listarCobrancasDeCicloNaoConciliadas).toHaveBeenCalledWith(
       101,
+      0,
     );
+  });
+
+  it("paginação (achado BLOCKING #468): offset do corpo chega intacto em cada braço", async () => {
+    await POST(
+      req({ authorization: `Bearer ${TOKEN}` }, { ciclosOffset: 100 }),
+    );
+    expect(dubles.conciliarCiclos).toHaveBeenCalledWith({
+      limite: 100,
+      offset: 100,
+    });
+    expect(dubles.conciliarVinculos).toHaveBeenCalledWith({
+      limite: 100,
+      offset: 0,
+    });
+  });
+
+  it("limite: 0 pula o braço sem gastar chamada nova ao Asaas via query com offset novo", async () => {
+    await POST(
+      req(
+        { authorization: `Bearer ${TOKEN}` },
+        { vinculosLimite: 0, cobrancasSemCicloLimite: 0 },
+      ),
+    );
+    expect(dubles.conciliarVinculos).toHaveBeenCalledWith({
+      limite: 0,
+      offset: 0,
+    });
+    expect(dubles.listarCobrancasDeCicloNaoConciliadas).not.toHaveBeenCalled();
+  });
+
+  it("corpo ausente ou inválido não quebra a rota — pagina do zero", async () => {
+    const r = await POST(req({ authorization: `Bearer ${TOKEN}` }));
+    expect(r.status).toBe(200);
+    expect(dubles.conciliarCiclos).toHaveBeenCalledWith({
+      limite: 100,
+      offset: 0,
+    });
   });
 });

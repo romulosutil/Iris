@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  agregarResumo,
+  avancarBraco,
+  camposDoBraco,
   decidirDesfecho,
+  estadoInicialDoBraco,
   executarConciliacao,
   montarRequisicao,
   resumoDoCorpo,
@@ -21,14 +25,25 @@ const resumoVazio = {
 };
 
 describe("montarRequisicao", () => {
-  it("POST com bearer e sem corpo de mutação", () => {
+  it("POST com bearer e corpo de paginação vazio por padrão", () => {
     const { url, init } = montarRequisicao("https://x.test/c", "segredo");
     expect(url).toBe("https://x.test/c");
     expect(init.method).toBe("POST");
     expect(init.headers.authorization).toBe("Bearer segredo");
-    // A conciliação não tem parâmetro de execução: nada de `dryRun`, porque
-    // nada nela escreve. Corpo com opção sugeriria que há um modo que escreve.
-    expect(init.body).toBeUndefined();
+    // O corpo só carrega paginação (offset/limite por braço) — nada de
+    // `dryRun`, porque nada na conciliação escreve.
+    expect(JSON.parse(init.body)).toEqual({});
+  });
+
+  it("corpo carrega offset/limite por braço quando informado", () => {
+    const { init } = montarRequisicao("https://x.test/c", "segredo", {
+      ciclosOffset: 100,
+      vinculosLimite: 0,
+    });
+    expect(JSON.parse(init.body)).toEqual({
+      ciclosOffset: 100,
+      vinculosLimite: 0,
+    });
   });
 });
 
@@ -181,5 +196,54 @@ describe("decidirDesfecho", () => {
     );
     expect(d.exitCode).toBe(1);
     expect(d.okLogado).toBe(true); // a passada RODOU inteira; achou é outra coisa
+  });
+});
+
+describe("paginação — achado BLOCKING do PR #468", () => {
+  it("avança offset enquanto truncado, esgota quando falso — nunca repete a mesma página", () => {
+    let estado = estadoInicialDoBraco();
+    expect(camposDoBraco("ciclos", estado)).toEqual({});
+
+    // 1ª passada: 100 conferidos, truncado — há fila atrás.
+    estado = avancarBraco(estado, 100, true);
+    expect(estado).toEqual({ offset: 100, esgotado: false });
+    expect(camposDoBraco("ciclos", estado)).toEqual({ ciclosOffset: 100 });
+
+    // 2ª passada: mais 30 conferidos, não truncou mais — braço esgotado.
+    estado = avancarBraco(estado, 30, false);
+    expect(estado).toEqual({ offset: 100, esgotado: true });
+    // Esgotado pula a query inteira na rota (`limite: 0`), nunca reabre offset.
+    expect(camposDoBraco("ciclos", estado)).toEqual({ ciclosLimite: 0 });
+
+    // Uma 3ª chamada em cima de um braço já esgotado não regride o estado —
+    // é exatamente o loop que travava o operador antes do fix.
+    estado = avancarBraco(estado, 999, true);
+    expect(estado).toEqual({ offset: 100, esgotado: true });
+  });
+
+  it("agrega conferidos/divergências de várias páginas somando, não sobrescrevendo", () => {
+    const p1 = {
+      ...resumoVazio,
+      ciclosConferidos: 100,
+      ciclosTruncado: true,
+      totalDivergencias: 2,
+    };
+    const p2 = {
+      ...resumoVazio,
+      ciclosConferidos: 30,
+      ciclosTruncado: false,
+      totalDivergencias: 1,
+    };
+    const agregado = agregarResumo(agregarResumo(resumoVazio, p1), p2);
+    expect(agregado.ciclosConferidos).toBe(130);
+    expect(agregado.totalDivergencias).toBe(3);
+    expect(agregado.ciclosTruncado).toBe(false); // esgotou na última página
+  });
+
+  it("aborto na primeira página não é apagado por um sucesso na segunda", () => {
+    const p1 = { ...resumoVazio, ciclosAbortado: "erro-db" };
+    const p2 = { ...resumoVazio, ciclosAbortado: null };
+    const agregado = agregarResumo(agregarResumo(resumoVazio, p1), p2);
+    expect(agregado.ciclosAbortado).toBe("erro-db");
   });
 });
