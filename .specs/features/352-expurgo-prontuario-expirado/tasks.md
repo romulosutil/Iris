@@ -25,6 +25,25 @@
 
 ---
 
+## Estado de execução
+
+| Faixa       | Estado                                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| **T0–T8**   | ✅ **Feitas** em 25/08/2026, branch `feat/352-expurgo-prontuario-expirado`. Camada SQL completa e medida.     |
+| **T9–T20**  | ⬜ Pendentes. **Sem T9 a fila continua vazia em produção por construção** (defeito C2 de `context.md`).       |
+| T1 → `0127` | `idx_patient_retencao` via `db:generate`. `db:generate` reexecutado responde `No schema changes`.             |
+| T2–T6       | `0128_retencao_expurgo_wiring.sql`, `when` = 0127 + 1000. Medida em `pg_proc`/`pg_roles`/`pg_indexes`.        |
+| T7          | 23 casos em 3 suítes; `retencao-expurgo` (11), `retencao-fila` (4), `retencao-aviso` (8). Contagem conferida. |
+| T8          | Replay pela via excepcional; `fase6-tombstone-restauracao` passou de 5 para 6 casos.                          |
+
+**Efeitos colaterais que a spec não previu, e que a implementação teve de fechar:**
+
+- três suítes existentes (`fase6-expurgo-paciente`, `alerta-risco-rls`, `consent-revogacao-gate`) purgavam pacientes **sem `alta_em`**, inelegíveis pelo gate novo — fixture corrigida, não teste afrouxado;
+- o oráculo de conjunto exato de `clinic-id-helper-rls` precisou das funções novas (19→20 tenant-scoped, 13→15 de papel) e da troca de `app_purgar_paciente` por `app_purgar_paciente_interno` na lista de `app_user_id_exigido()` — o carimbo do ator migrou para o corpo compartilhado;
+- `expurgo_aviso_previo` precisou de rótulo em `clinica/auditoria/logic.ts`: há um teste que exige rótulo pt-BR para **toda** `acao` que o produto grava.
+
+---
+
 ## Ordem e dependências
 
 ```
@@ -291,9 +310,9 @@ _Aviso:_
 
 **Régua de mutação (obrigatória, `AGENTS.md` §5.2 ponto 5):** cada comportamento crítico tem 1 teste cuja remoção do código derruba o teste. Verificar **por patch inverso**, nunca `git checkout` (o HEAD apaga o código novo):
 
-- remover o `COALESCE` do gate (T5) → derruba o caso 1 de T7;
-- remover o `criado_em > alta_em` do dedup (T6) → derruba o caso 19 de T7;
-- remover a checagem de `confirmacao` (T12) → derruba o caso 3 desta task.
+- ~~remover o `COALESCE` do gate (T5) → derruba o caso 1 de T7~~ — **medido em 25/08/2026: mutante EQUIVALENTE, sobrevive.** E está certo que sobreviva: `alta_em IS NULL` já produz `false` em lógica de três valores, e o NULL só viria de linha ausente, que o guard de tenant barra antes. O `COALESCE` é defesa em profundidade; matá-lo exigiria asserir o texto do código. **A mutação que vale é remover o `IF NOT COALESCE(app_paciente_expurgavel(...))` inteiro → derruba os casos 1 e 8 de T7.** ✅ verificada;
+- ~~remover o `criado_em > alta_em` do dedup (T6) → derruba o caso 19~~ — **derruba o caso 20**, não o 19: sem a âncora o dedup fica mais ESTRITO, e "não reavisar no mesmo dia" continua valendo. Remover o `NOT EXISTS` inteiro derruba 19 **e** 20. ✅ ambas verificadas;
+- remover a checagem de `confirmacao` (T12) → derruba o caso 3 desta task. ⬜ pendente (T12 não implementada).
 
 **Pronto quando:** suíte verde **e** as três mutações verificadas uma a uma, com o resultado anotado no PR.
 **Gate:** `int` + `format`.
