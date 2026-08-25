@@ -18,9 +18,10 @@
  * Execução:
  *   node scripts/conciliacao-billing.mjs
  *
- * Exit code: 0 = passada completa e sem divergência. 1 = qualquer outra coisa
- * (falha no disparo, etapa abortada, ou divergência encontrada) — porque as
- * três exigem um humano.
+ * Exit code: 0 = passada completa, sem truncamento, sem falha de consulta ao
+ * gateway, e sem divergência. 1 = qualquer outra coisa (falha no disparo,
+ * etapa abortada, divergência encontrada, truncamento em qualquer um dos três
+ * braços, ou falha de consulta) — todas exigem um humano.
  */
 
 import { fileURLToPath } from "node:url";
@@ -102,6 +103,7 @@ export function resumoDoCorpo(corpo) {
     vinculosTruncado: null,
     falhasDeConsulta: null,
     cobrancasSemCiclo: null,
+    cobrancasSemCicloTruncado: null,
     ciclosAbortado: null,
     vinculosAbortado: null,
     cobrancasSemCicloAbortado: null,
@@ -131,9 +133,67 @@ export function resumoDoCorpo(corpo) {
         ? null
         : (falhasCiclos ?? 0) + (falhasVinculos ?? 0),
     cobrancasSemCiclo: tamanho(d.cobrancasSemCiclo),
+    cobrancasSemCicloTruncado: bool(d.cobrancasSemCicloTruncado),
     ciclosAbortado: d.ciclosAbortado ?? null,
     vinculosAbortado: d.vinculosAbortado ?? null,
     cobrancasSemCicloAbortado: d.cobrancasSemCicloAbortado ?? null,
+  };
+}
+
+/**
+ * Toda a decisão de desfecho (o `ok` que vai no log, avisos de stderr, exit
+ * code), isolada de `main()` para ser testável sem `process.exit` nem
+ * spawnar subprocesso.
+ *
+ * `ok` é o desfecho REAL da conciliação, não só "o POST voltou 2xx": um
+ * aborto server-side dentro de uma resposta 200 não pode logar `ok: true`.
+ */
+export function decidirDesfecho(resultado, resumo) {
+  const abortou =
+    resumo.ciclosAbortado !== null ||
+    resumo.vinculosAbortado !== null ||
+    resumo.cobrancasSemCicloAbortado !== null;
+  const truncou =
+    resumo.ciclosTruncado === true ||
+    resumo.vinculosTruncado === true ||
+    resumo.cobrancasSemCicloTruncado === true;
+  const falhouConsulta = (resumo.falhasDeConsulta ?? 0) > 0;
+  const achou = (resumo.totalDivergencias ?? 0) > 0;
+
+  const avisos = [];
+  if (truncou) {
+    // Truncamento NUNCA é silencioso: uma passada que parou no teto com fila
+    // atrás lê-se como "conferi tudo" se ninguém disser o contrário.
+    avisos.push(
+      `${PREFIXO} ATENÇÃO: a passada parou no TETO e há fila não conferida. Rode de novo.`,
+    );
+  }
+  if (falhouConsulta) {
+    // Falha de consulta NÃO é divergência: significa que não conseguimos
+    // perguntar ao Asaas sobre aquelas linhas. `totalDivergencias: 0` numa
+    // passada com falhas de consulta não é "está tudo limpo" — é "não
+    // sabemos", e não pode sair com exit 0.
+    avisos.push(
+      `${PREFIXO} ATENÇÃO: ${resumo.falhasDeConsulta} falha(s) de consulta ao gateway — não sabemos o estado dessas linhas. Rode de novo antes de tirar conclusão.`,
+    );
+  }
+
+  const exigeAtencao = !resultado.ok || abortou || achou || falhouConsulta;
+  if (exigeAtencao) {
+    avisos.push(
+      `${PREFIXO} conciliação exige atenção humana:` +
+        ` disparo=${resultado.ok ? "ok" : resultado.falha}` +
+        `, divergências=${resumo.totalDivergencias ?? "?"}` +
+        `, falhasDeConsulta=${resumo.falhasDeConsulta ?? "?"}` +
+        `, abortos=[ciclos=${resumo.ciclosAbortado ?? "não"}, vinculos=${resumo.vinculosAbortado ?? "não"}, orfaos=${resumo.cobrancasSemCicloAbortado ?? "não"}].` +
+        ` Siga infra/billing/runbook.md — NADA foi corrigido automaticamente.`,
+    );
+  }
+
+  return {
+    okLogado: resultado.ok && !abortou,
+    avisos,
+    exitCode: exigeAtencao ? 1 : 0,
   };
 }
 
@@ -153,6 +213,7 @@ async function main() {
 
   const resultado = await executarConciliacao(globalThis.fetch, { url, token });
   const resumo = resumoDoCorpo(resultado.corpo);
+  const desfecho = decidirDesfecho(resultado, resumo);
 
   // UMA linha JSON: o log do Easypanel é o único observador, e linha única
   // sobrevive a interleaving de stdout. O token não entra aqui, nem truncado.
@@ -160,7 +221,7 @@ async function main() {
     JSON.stringify({
       job: "conciliacao-billing",
       quando: new Date().toISOString(),
-      ok: resultado.ok,
+      ok: desfecho.okLogado,
       status: resultado.status,
       falha: resultado.falha ?? null,
       erro: resultado.erro ?? null,
@@ -169,34 +230,9 @@ async function main() {
     }),
   );
 
-  const abortou =
-    resumo.ciclosAbortado !== null ||
-    resumo.vinculosAbortado !== null ||
-    resumo.cobrancasSemCicloAbortado !== null;
-  const truncou =
-    resumo.ciclosTruncado === true || resumo.vinculosTruncado === true;
-  const achou = (resumo.totalDivergencias ?? 0) > 0;
+  for (const aviso of desfecho.avisos) console.error(aviso);
 
-  if (truncou) {
-    // Truncamento NUNCA é silencioso: uma passada que parou no teto com fila
-    // atrás lê-se como "conferi tudo" se ninguém disser o contrário.
-    console.error(
-      `${PREFIXO} ATENÇÃO: a passada parou no TETO e há fila não conferida. Rode de novo.`,
-    );
-  }
-  if (!resultado.ok || abortou || achou) {
-    console.error(
-      `${PREFIXO} conciliação exige atenção humana:` +
-        ` disparo=${resultado.ok ? "ok" : resultado.falha}` +
-        `, divergências=${resumo.totalDivergencias ?? "?"}` +
-        `, falhasDeConsulta=${resumo.falhasDeConsulta ?? "?"}` +
-        `, abortos=[ciclos=${resumo.ciclosAbortado ?? "não"}, vinculos=${resumo.vinculosAbortado ?? "não"}, orfaos=${resumo.cobrancasSemCicloAbortado ?? "não"}].` +
-        ` Siga infra/billing/runbook.md — NADA foi corrigido automaticamente.`,
-    );
-    process.exit(1);
-  }
-
-  process.exit(0);
+  process.exit(desfecho.exitCode);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

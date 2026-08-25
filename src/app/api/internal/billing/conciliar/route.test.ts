@@ -115,4 +115,28 @@ describe("POST /api/internal/billing/conciliar", () => {
     expect(corpo.vinculosAbortado).toBe("gateway fora");
     expect(corpo.ok).toBe(false);
   });
+
+  it("cobrancasSemCicloTruncado é false quando cabe no limite", async () => {
+    dubles.listarCobrancasDeCicloNaoConciliadas.mockResolvedValue([
+      { asaasEventId: "evt-1" },
+    ]);
+    const r = await POST(req({ authorization: `Bearer ${TOKEN}` }));
+    const corpo = await r.json();
+    expect(corpo.cobrancasSemCicloTruncado).toBe(false);
+    expect(corpo.cobrancasSemCiclo).toHaveLength(1);
+  });
+
+  it("cobrancasSemCicloTruncado é true e a lista corta em 100 quando o teto estoura", async () => {
+    const lote = Array.from({ length: 101 }, (_, i) => ({
+      asaasEventId: `evt-${i}`,
+    }));
+    dubles.listarCobrancasDeCicloNaoConciliadas.mockResolvedValue(lote);
+    const r = await POST(req({ authorization: `Bearer ${TOKEN}` }));
+    const corpo = await r.json();
+    expect(corpo.cobrancasSemCicloTruncado).toBe(true);
+    expect(corpo.cobrancasSemCiclo).toHaveLength(100);
+    expect(dubles.listarCobrancasDeCicloNaoConciliadas).toHaveBeenCalledWith(
+      101,
+    );
+  });
 });

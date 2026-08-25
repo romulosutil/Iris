@@ -88,12 +88,23 @@ export async function POST(request: Request): Promise<Response> {
    * consulta parte do outro lado — da fila de eventos de webhook — e reavalia o
    * estado VIVO do ciclo, sem ler o carimbo histórico de `erro_aplicacao`.
    */
+  const LIMITE_COBRANCAS_SEM_CICLO = 100;
   let cobrancasSemCiclo: Awaited<
     ReturnType<typeof listarCobrancasDeCicloNaoConciliadas>
   > = [];
+  let cobrancasSemCicloTruncado = false;
   let cobrancasSemCicloAbortado: string | null = null;
   try {
-    cobrancasSemCiclo = await listarCobrancasDeCicloNaoConciliadas();
+    // +1 para SABER que há fila atrás sem uma segunda consulta de contagem —
+    // mesmo padrão de `conciliarCiclos`/`conciliarVinculos` (A5: truncamento
+    // nunca é silencioso).
+    const lote = await listarCobrancasDeCicloNaoConciliadas(
+      LIMITE_COBRANCAS_SEM_CICLO + 1,
+    );
+    cobrancasSemCicloTruncado = lote.length > LIMITE_COBRANCAS_SEM_CICLO;
+    cobrancasSemCiclo = cobrancasSemCicloTruncado
+      ? lote.slice(0, LIMITE_COBRANCAS_SEM_CICLO)
+      : lote;
   } catch (err) {
     cobrancasSemCicloAbortado = mensagemDoErro(err);
     console.error("[billing-conciliacao] fila de eventos órfãos abortou", err);
@@ -119,6 +130,7 @@ export async function POST(request: Request): Promise<Response> {
     vinculos,
     vinculosAbortado,
     cobrancasSemCiclo,
+    cobrancasSemCicloTruncado,
     cobrancasSemCicloAbortado,
     totalDivergencias,
   });

@@ -1,9 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  decidirDesfecho,
   executarConciliacao,
   montarRequisicao,
   resumoDoCorpo,
 } from "./conciliacao-billing.mjs";
+
+const resumoVazio = {
+  totalDivergencias: 0,
+  ciclosConferidos: 0,
+  ciclosTruncado: false,
+  vinculosConferidos: 0,
+  vinculosTruncado: false,
+  falhasDeConsulta: 0,
+  cobrancasSemCiclo: 0,
+  cobrancasSemCicloTruncado: false,
+  ciclosAbortado: null,
+  vinculosAbortado: null,
+  cobrancasSemCicloAbortado: null,
+};
 
 describe("montarRequisicao", () => {
   it("POST com bearer e sem corpo de mutação", () => {
@@ -39,13 +54,11 @@ describe("executarConciliacao", () => {
     expect(r2).toMatchObject({ ok: false, falha: "rede" });
 
     const r3 = await executarConciliacao(
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: false,
-          status: 500,
-          text: async () => "boom",
-        }),
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "boom",
+      }),
       { url: "u", token: "t" },
     );
     expect(r3).toMatchObject({
@@ -58,13 +71,11 @@ describe("executarConciliacao", () => {
 
   it("propaga o corpo no caminho de sucesso", async () => {
     const r = await executarConciliacao(
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          status: 200,
-          text: async () => '{"totalDivergencias":0}',
-        }),
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => '{"totalDivergencias":0}',
+      }),
       { url: "u", token: "t" },
     );
     expect(r).toMatchObject({
@@ -92,6 +103,7 @@ describe("resumoDoCorpo", () => {
         divergencias: [3],
       },
       cobrancasSemCiclo: [{ asaasEventId: "e" }],
+      cobrancasSemCicloTruncado: true,
       ciclosAbortado: null,
       vinculosAbortado: "gateway fora",
     });
@@ -103,6 +115,7 @@ describe("resumoDoCorpo", () => {
       vinculosTruncado: false,
       falhasDeConsulta: 1,
       cobrancasSemCiclo: 1,
+      cobrancasSemCicloTruncado: true,
       ciclosAbortado: null,
       vinculosAbortado: "gateway fora",
       cobrancasSemCicloAbortado: null,
@@ -120,5 +133,53 @@ describe("resumoDoCorpo", () => {
     // não achei nada" sem ter medido.
     expect(resumoDoCorpo("{}").ciclosConferidos).toBeNull();
     expect(resumoDoCorpo("{}").ciclosTruncado).toBeNull();
+    expect(resumoDoCorpo("{}").cobrancasSemCicloTruncado).toBeNull();
+  });
+});
+
+describe("decidirDesfecho", () => {
+  it("passada limpa: exit 0 e ok logado true", () => {
+    const d = decidirDesfecho({ ok: true }, resumoVazio);
+    expect(d.exitCode).toBe(0);
+    expect(d.okLogado).toBe(true);
+    expect(d.avisos).toEqual([]);
+  });
+
+  it("falhasDeConsulta > 0 avisa e força exit 1, mesmo com totalDivergencias: 0 (achado 2)", () => {
+    const d = decidirDesfecho(
+      { ok: true },
+      { ...resumoVazio, falhasDeConsulta: 3 },
+    );
+    expect(d.exitCode).toBe(1);
+    expect(d.avisos.some((a) => a.includes("falha(s) de consulta"))).toBe(true);
+  });
+
+  it("cobrancasSemCicloTruncado soma ao aviso de truncamento (achado 3)", () => {
+    // Truncamento sozinho não força exit 1 (mesmo comportamento pré-existente
+    // de `ciclosTruncado`/`vinculosTruncado`) — mas o terceiro braço agora
+    // participa do MESMO aviso, e não fica mudo como antes do achado 3.
+    const d = decidirDesfecho(
+      { ok: true },
+      { ...resumoVazio, cobrancasSemCicloTruncado: true },
+    );
+    expect(d.avisos.some((a) => a.includes("parou no TETO"))).toBe(true);
+  });
+
+  it("`ok` logado reflete abortou, mesmo com resultado.ok true (achado 8)", () => {
+    const d = decidirDesfecho(
+      { ok: true },
+      { ...resumoVazio, ciclosAbortado: "gateway fora" },
+    );
+    expect(d.okLogado).toBe(false);
+    expect(d.exitCode).toBe(1);
+  });
+
+  it("divergência encontrada força exit 1", () => {
+    const d = decidirDesfecho(
+      { ok: true },
+      { ...resumoVazio, totalDivergencias: 1 },
+    );
+    expect(d.exitCode).toBe(1);
+    expect(d.okLogado).toBe(true); // a passada RODOU inteira; achou é outra coisa
   });
 });
