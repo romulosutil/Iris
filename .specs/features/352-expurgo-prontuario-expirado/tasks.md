@@ -33,7 +33,9 @@
 | **T9–T11**  | ✅ **Feitas** em 25/08/2026. `alta_em` passou a ter caminho de escrita — a fila deixa de ser vazia por construção. |
 | **T12–T14** | ✅ **Feitas** em 25/08/2026. Fila, tela, diálogo de confirmação e cobertura de comportamento da action.            |
 | **T15–T17** | ✅ **Feitas** em 25/08/2026, exceto o **provisionamento no Easypanel** (passo manual do Rômulo, runbook escrito).  |
-| **T18–T20** | ⬜ Pendentes (T18 já executada fora de ordem — ver abaixo).                                                        |
+| **T18**     | ✅ **Feita** em 25/08/2026, fora da ordem de dependência, a pedido do Rômulo (ver abaixo).                         |
+| **T19**     | ✅ **Feita** em 25/08/2026. Seis dívidas no `BACKLOG.md` (`D60`–`D65`), cada uma com arquivo:linha e desenho.      |
+| **T20**     | ✅ **Feita** em 25/08/2026. `full` verde, `EXECUTION.md` da fase 6 fechado, PR aberto em Draft.                    |
 | T1 → `0127` | `idx_patient_retencao` via `db:generate`. `db:generate` reexecutado responde `No schema changes`.                  |
 | T2–T6       | `0128_retencao_expurgo_wiring.sql`, `when` = 0127 + 1000. Medida em `pg_proc`/`pg_roles`/`pg_indexes`.             |
 | T7          | 23 casos em 3 suítes; `retencao-expurgo` (11), `retencao-fila` (4), `retencao-aviso` (8). Contagem conferida.      |
@@ -80,6 +82,12 @@
 | `SELECT count(*) FROM patient` como `iris_retencao_login` | ✅ `permission denied for table patient`                               |
 | `app_purgar_paciente(...)` como `iris_retencao_login`     | ✅ `permission denied for function app_purgar_paciente`                |
 | `scripts/ci/carga-imagens-infra.sh retencao`              | ✅ 6/6 asserções (build + carga absoluta/relativa + deps + bash + CMD) |
+
+**T19–T20 — o que a spec não previu:**
+
+- **Seis dívidas, não quatro.** Às quatro previstas (`D60` extensão de retenção, `D61` `FUSO_CLINICA`, `D62` exportação integral não provisionada, `D63` governança da via excepcional) somaram-se duas descobertas durante a execução: **`D64`** — `infra/arquivamento/` está fora de `scripts/ci/carga-imagens-infra.sh` e do `paths` do workflow, exatamente o buraco da #126, **não tapado de carona** porque é CI de outro serviço; **`D65`** — modalidade `conventional` não tem botão de alta (nem de arquivamento), então esse prontuário **nunca** entra na fila de retenção e o prazo legal nunca começa a correr.
+- **`.specs/features/fase6/EXECUTION.md` precisou distinguir os DOIS diferimentos da 6.3**, que #352 resolveu em direções opostas: a UI/action de purga foi **construída**; o job automático de expurgo **continua não existindo, e a decisão foi reafirmada** — o job de #352 só avisa, e a role `iris_retencao` não tem `EXECUTE` em `app_purgar_paciente`. Registrar "wiring fechado" sem essa distinção leria como se a eliminação automática tivesse sido autorizada.
+- **Provisionamento no Easypanel: serviço `iris-retencao` criado e configurado em 25/08/2026, e deliberadamente NÃO implantado.** Fonte (`romulosutil/Iris`, `main`, contexto `/`), build (`infra/retencao/Dockerfile`), Comando (`/app/agendador.sh`), réplicas 1, _tempo de inatividade zero_ **desligado** (espelha `iris-arquivamento`; ligado, um redeploy manteria dois agendadores de pé ao mesmo tempo), volume `heartbeat` → `/heartbeat`, e env com `RETENCAO_DATABASE_URL` gravada como **template** (`TROCAR_PELA_SENHA`), nunca com credencial real. Falta ao Rômulo: criar `iris_retencao_login IN ROLE iris_retencao` no Postgres de produção, trocar o placeholder e clicar **Implantar**. Salvar env **não** aplica.
 
 **Régua de mutação de T15, medida em 25/08/2026** (por patch inverso):
 
