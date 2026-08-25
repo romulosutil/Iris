@@ -33,6 +33,14 @@ WORKDIR /app
 # com "not found" — o compose usa o mesmo contexto (raiz) justamente para o
 # teste local pegar isso.
 COPY scripts/fechamento-ciclo-billing.mjs ./scripts/fechamento-ciclo-billing.mjs
+
+# Conciliação manual (#375). Entra na MESMA imagem de propósito: é uma rotina
+# sob demanda, não um serviço — não há laço, não há CMD novo, não há serviço
+# novo no Easypanel. O operador roda no console do container já em execução:
+#   node scripts/conciliacao-billing.mjs
+# Continua valendo o "zero npm install" acima: este script também só usa fetch.
+COPY scripts/conciliacao-billing.mjs ./scripts/conciliacao-billing.mjs
+
 COPY infra/billing/agendador.sh ./agendador.sh
 RUN chmod +x agendador.sh
 

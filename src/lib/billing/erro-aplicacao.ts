@@ -287,7 +287,10 @@ export interface CobrancaDeCicloNaoConciliada {
  */
 export async function listarCobrancasDeCicloNaoConciliadas(
   limite = 100,
+  /** Paginação — ver o comentário em `conciliarCiclos` (`conciliacao.ts`). */
+  offset = 0,
 ): Promise<CobrancaDeCicloNaoConciliada[]> {
+  if (limite === 0) return [];
   // O id da cobrança mora em `payment.id` nos eventos de cobrança e em
   // `paymentInstruction.paymentId` nos de instrução — o mesmo `coalesce` que
   // `normalizarEventoAsaas` faz em TypeScript.
@@ -331,7 +334,8 @@ export async function listarCobrancasDeCicloNaoConciliadas(
       ),
     )
     .orderBy(desc(asaasWebhookEvent.processadoEm))
-    .limit(limite);
+    .limit(limite)
+    .offset(offset);
 
   return linhas;
 }

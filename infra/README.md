@@ -1581,6 +1581,10 @@ e duplicar a tabela de preços num `.mjs` paralelo geraria **cobrança errada em
 silêncio**: a mesma classe de bug da #156, com dinheiro no lugar de processo
 morto.
 
+> **Incidente de billing?** O procedimento está em
+> [`infra/billing/runbook.md`](billing/runbook.md): reentrega de webhook,
+> cobrança presa, suspensão/reativação manual e conciliação (#375).
+
 > **Por que isto é P1.** Sem este serviço no ar, um ciclo vencido simplesmente
 > não fecha: `pacientes_contados` fica em 0, nenhuma cobrança é emitida e o
 > cliente ativo nunca é faturado — **sem erro em lugar nenhum**, porque o job
