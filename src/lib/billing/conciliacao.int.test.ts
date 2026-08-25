@@ -6,7 +6,7 @@ import { hasDb } from "@tests/integration-env";
 // "server-only", que lança fora do bundle de servidor do Next.
 vi.mock("server-only", () => ({}));
 
-const { conciliarCiclos, TETO_CONCILIACAO_POR_PASSADA } =
+const { conciliarCiclos, conciliarVinculos, TETO_CONCILIACAO_POR_PASSADA } =
   await import("./conciliacao");
 const { BillingProviderError } = await import("./provider/types");
 
@@ -92,12 +92,7 @@ describeSeDb("conciliarCiclos", () => {
     await limpar();
     await criarAssinatura();
   });
-  afterAll(async () => {
-    if (owner) {
-      await limpar();
-      await owner.end();
-    }
-  });
+  afterAll(limpar);
 
   it("não acusa nada quando local e gateway concordam", async () => {
     await criarCiclo({
@@ -254,4 +249,96 @@ describeSeDb("conciliarCiclos", () => {
   it("o teto padrão é 100", () => {
     expect(TETO_CONCILIACAO_POR_PASSADA).toBe(100);
   });
+});
+
+const CLINICA_V = "00000000-0000-0000-0000-000000375c01";
+const SUB_V = "00000000-0000-0000-0000-000000375d01";
+
+async function criarAssinaturaV(
+  status: string,
+  vinculoId: string | null,
+): Promise<void> {
+  await owner!`INSERT INTO clinic (id, nome) VALUES (${CLINICA_V}, 'Clínica #375 vínculo')`;
+  await owner!`
+    INSERT INTO subscription
+      (id, clinic_id, status, provider, provider_subscription_id, provider_customer_id)
+    VALUES (${SUB_V}, ${CLINICA_V}, ${status}::subscription_status,
+            ${vinculoId === null ? null : "asaas"}, ${vinculoId}, 'cli-375v')`;
+}
+
+async function limparV(): Promise<void> {
+  await owner!`DELETE FROM billing_cycle WHERE clinic_id = ${CLINICA_V}`;
+  await owner!`DELETE FROM subscription WHERE clinic_id = ${CLINICA_V}`;
+  await owner!`DELETE FROM clinic WHERE id = ${CLINICA_V}`;
+}
+
+function provedorVinculo(mapa: Record<string, { status: string } | Error>) {
+  return {
+    async consultarCobranca() {
+      throw new Error("não usado nesta suíte");
+    },
+    async consultarVinculo(id: string) {
+      const r = mapa[id];
+      if (r === undefined) throw new Error(`vínculo não mapeado: ${id}`);
+      if (r instanceof Error) throw r;
+      return r as { status: never };
+    },
+  };
+}
+
+describeSeDb("conciliarVinculos", () => {
+  beforeEach(limparV);
+  afterAll(limparV);
+
+  it("não acusa nada quando concordam", async () => {
+    await criarAssinaturaV("active", "vinc-ok");
+    const r = await conciliarVinculos({
+      provider: provedorVinculo({
+        "vinc-ok": { status: "autorizada" },
+      }) as never,
+    });
+    expect(r.conferidos).toBe(1);
+    expect(r.divergencias).toEqual([]);
+  });
+
+  it("acusa vínculo cancelado no gateway com assinatura ativa aqui", async () => {
+    await criarAssinaturaV("active", "vinc-morto");
+    const r = await conciliarVinculos({
+      provider: provedorVinculo({
+        "vinc-morto": { status: "cancelada" },
+      }) as never,
+    });
+    expect(r.divergencias[0]).toMatchObject({
+      subscriptionId: SUB_V,
+      clinicId: CLINICA_V,
+      providerSubscriptionId: "vinc-morto",
+      statusLocal: "active",
+      statusRemoto: "cancelada",
+      classe: "vinculo_cancelado_no_gateway",
+    });
+  });
+
+  it("free_tier e canceled NUNCA entram na varredura", async () => {
+    await criarAssinaturaV("free_tier", null);
+    const r = await conciliarVinculos({
+      provider: provedorVinculo({}) as never,
+    });
+    expect(r.conferidos).toBe(0);
+  });
+
+  it("erro de consulta vira falha isolada", async () => {
+    await criarAssinaturaV("active", "vinc-500");
+    const r = await conciliarVinculos({
+      provider: provedorVinculo({
+        "vinc-500": new Error("Asaas respondeu 500"),
+      }) as never,
+    });
+    expect(r.divergencias).toEqual([]);
+    expect(r.falhas).toHaveLength(1);
+    expect(r.falhas[0]!.providerSubscriptionId).toBe("vinc-500");
+  });
+});
+
+afterAll(async () => {
+  if (owner) await owner.end();
 });

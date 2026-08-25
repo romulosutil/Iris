@@ -1,6 +1,6 @@
-import { and, desc, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { authDb } from "@/db/client";
-import { billingCycle } from "@/db/schema";
+import { billingCycle, subscription } from "@/db/schema";
 import { AsaasProvider } from "@/lib/billing/provider";
 import {
   BillingProviderError,
@@ -264,6 +264,103 @@ export async function conciliarCiclos(opcoes?: {
       statusRemoto: remoto.encontrada ? remoto.status : null,
       valorLocalCentavos: linha.valorLocalCentavos,
       valorRemotoCentavos: remoto.encontrada ? remoto.valorCentavos : null,
+      classe,
+    });
+  }
+
+  return { conferidos: lote.length, divergencias, falhas, truncado };
+}
+
+export interface DivergenciaVinculo {
+  subscriptionId: string;
+  clinicId: string;
+  providerSubscriptionId: string;
+  statusLocal: string;
+  statusRemoto: string;
+  classe: ClasseDivergenciaVinculo;
+}
+
+export interface FalhaConsultaVinculo {
+  subscriptionId: string;
+  providerSubscriptionId: string;
+  erro: string;
+}
+
+export interface ResultadoConciliacaoVinculos {
+  conferidos: number;
+  divergencias: DivergenciaVinculo[];
+  falhas: FalhaConsultaVinculo[];
+  truncado: boolean;
+}
+
+/**
+ * Só `setup_pending`, `active` e `past_due` entram: `free_tier` não tem vínculo
+ * nenhum (e é por isso que `provider` é NULLABLE sem default, D29/#36), e
+ * `canceled` é terminal — concordar com um gateway que também cancelou é o
+ * esperado, e discordar dele não tem reação operacional definida.
+ *
+ * O 404 aqui NÃO é tratado como resposta, ao contrário da cobrança: um vínculo
+ * que o gateway não conhece não distingue "revogado e expurgado" de "id errado
+ * gravado", e as duas reações são opostas. Fica como falha de consulta, para o
+ * operador olhar.
+ */
+export async function conciliarVinculos(opcoes?: {
+  limite?: number;
+  provider?: ProvedorDeConsulta;
+}): Promise<ResultadoConciliacaoVinculos> {
+  const limite = opcoes?.limite ?? TETO_CONCILIACAO_POR_PASSADA;
+  const provider = opcoes?.provider ?? new AsaasProvider();
+
+  const linhas = await authDb
+    .select({
+      subscriptionId: subscription.id,
+      clinicId: subscription.clinicId,
+      statusLocal: subscription.status,
+      providerSubscriptionId: subscription.providerSubscriptionId,
+    })
+    .from(subscription)
+    .where(
+      and(
+        isNotNull(subscription.providerSubscriptionId),
+        inArray(subscription.status, ["setup_pending", "active", "past_due"]),
+      ),
+    )
+    .orderBy(desc(subscription.atualizadoEm))
+    .limit(limite + 1);
+
+  const truncado = linhas.length > limite;
+  const lote = truncado ? linhas.slice(0, limite) : linhas;
+
+  const divergencias: DivergenciaVinculo[] = [];
+  const falhas: FalhaConsultaVinculo[] = [];
+
+  for (const linha of lote) {
+    const providerSubscriptionId = linha.providerSubscriptionId!;
+    let statusRemoto: StatusAssinaturaProvider;
+    try {
+      statusRemoto = (await provider.consultarVinculo(providerSubscriptionId))
+        .status;
+    } catch (err) {
+      falhas.push({
+        subscriptionId: linha.subscriptionId,
+        providerSubscriptionId,
+        erro: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
+
+    const classe = classificarDivergenciaVinculo(
+      linha.statusLocal,
+      statusRemoto,
+    );
+    if (!classe) continue;
+
+    divergencias.push({
+      subscriptionId: linha.subscriptionId,
+      clinicId: linha.clinicId,
+      providerSubscriptionId,
+      statusLocal: linha.statusLocal,
+      statusRemoto,
       classe,
     });
   }
