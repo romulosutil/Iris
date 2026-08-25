@@ -472,17 +472,21 @@ function verificarEntregaAsaas(input: EntradaVerificacaoWebhook): boolean {
  * ## O que acontece se a doc estiver errada
  *
  * Nome de campo diferente, aninhamento diferente, ou vocabulário diferente
- * (`RETRY` em vez de `RETRY_AFTER_DUE_DATE`) produzem todos o **mesmo desfecho
- * silencioso**: `proposito` volta `null`, o consumidor não distingue a
- * retentativa da instrução original, e o mesmo ciclo é recarimbado `past_due` a
- * cada recusa — até três vezes. **Não há exceção, não há log, e o teste continua
- * verde**, porque o teste mede o normalizador contra o payload que a doc
- * descreve.
+ * (`RETRY` em vez de `RETRY_AFTER_DUE_DATE`) produzem todos o **mesmo desfecho**:
+ * `proposito` volta `null`, o consumidor não distingue a retentativa da
+ * instrução original, e o mesmo ciclo é recarimbado `past_due` a cada recusa —
+ * até três vezes. **Fechado o silêncio em 24/08/2026 (D46):** todo evento com
+ * `paymentInstruction` real que não produzir os dois campos esperados grava
+ * `[billing-retentativa-envelope-inesperado]` com os valores crus — o teste
+ * continua verde contra o payload que a doc descreve, mas o log é quem acorda
+ * quando um evento real discordar da doc.
  *
- * Por isso o `bruto` do evento é a rede de segurança: o payload inteiro fica
- * gravado, e a conferência em produção é ler o `bruto` do primeiro
+ * `bruto` do evento continua sendo a rede de segurança para inspeção manual: o
+ * payload inteiro fica gravado, e o log acima aponta QUANDO ler o primeiro
  * `..._INSTRUCTION_REFUSED` que chegar depois de uma retentativa comandada por
- * nós. Enquanto isso não for feito, este mapeamento é **suposição declarada**.
+ * nós. Enquanto a medição em produção não acontecer, este mapeamento é
+ * **suposição declarada** — o log fecha a lacuna de "nunca saberíamos", não a
+ * lacuna de "nunca medimos".
  *
  * Valor fora do vocabulário conhecido vira `null` e **nunca** é repassado cru:
  * uma string desconhecida chegando ao consumidor viraria comparação por
@@ -580,6 +584,31 @@ function normalizarEventoAsaas(payload: unknown): EventoWebhookNormalizado {
     proposito: propositoDaInstrucao(instrucao.purpose),
     tentativa: tentativaDaInstrucao(instrucao.retryAttempt),
   };
+
+  /**
+   * D46 — o único jeito de descobrir se `purpose`/`retryAttempt` vieram com
+   * nome ou vocabulário diferente do previsto é medir, e a medição não pode
+   * depender de alguém lembrar de ler o `bruto` manualmente em produção. Todo
+   * evento com `paymentInstruction` real (id presente) que não produziu os
+   * dois campos esperados grava um log próprio e greppável com os valores
+   * crus — é o sinal que substitui a leitura manual do `bruto` como
+   * conferência do D45/D46.
+   */
+  if (
+    idInstrucao &&
+    (retentativa.proposito === null ||
+      (retentativa.proposito === "RETRY_AFTER_DUE_DATE" &&
+        retentativa.tentativa === null))
+  ) {
+    console.warn(
+      "[billing-retentativa-envelope-inesperado] purpose/retryAttempt fora do contrato lido da doc (#322, D46)",
+      {
+        providerInstructionId: idInstrucao,
+        purposeBruto: instrucao.purpose,
+        retryAttemptBruto: instrucao.retryAttempt,
+      },
+    );
+  }
 
   if (idCobranca) {
     const statusCobranca = mapearStatusCobranca(
