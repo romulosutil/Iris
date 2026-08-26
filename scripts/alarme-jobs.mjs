@@ -139,7 +139,11 @@ export function idadeMaisRecenteH(saidaJson, agora) {
   return (agora - maisRecente) / 3_600_000;
 }
 
-export async function verificarBackupOffsite(env, agora = Date.now()) {
+export async function verificarBackupOffsite(
+  env,
+  agora = Date.now(),
+  execFn = execFileP,
+) {
   const obrigatorias = [
     "OFFSITE_S3_ENDPOINT",
     "OFFSITE_S3_ACCESS_KEY",
@@ -160,7 +164,7 @@ export async function verificarBackupOffsite(env, agora = Date.now()) {
   const bucket = env.OFFSITE_S3_BUCKET || "iris-backups-offsite";
   const alias = "alarme-offsite";
   try {
-    await execFileP("mc", [
+    await execFn("mc", [
       "alias",
       "set",
       alias,
@@ -172,7 +176,7 @@ export async function verificarBackupOffsite(env, agora = Date.now()) {
     ]);
     // MC_REGION obrigatório: sem ele o mc assina como us-east-1 e o destino
     // recusa (memória: teste-com-duble-nao-cobre-dialeto-do-destino).
-    const { stdout } = await execFileP(
+    const { stdout } = await execFn(
       "mc",
       ["ls", "--json", `${alias}/${bucket}/`],
       { env: { ...process.env, MC_REGION: env.OFFSITE_S3_REGION || "" } },

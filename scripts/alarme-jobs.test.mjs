@@ -226,4 +226,88 @@ describe("alarme-jobs.mjs — verificarBackupOffsite (#294)", () => {
     expect(resultado.detalhe).toContain("OFFSITE_S3_SECRET_KEY");
     expect(resultado.detalhe).not.toContain("OFFSITE_S3_ENDPOINT ");
   });
+
+  const envCompleto = {
+    OFFSITE_S3_ENDPOINT: "https://s3.example.com",
+    OFFSITE_S3_ACCESS_KEY: "chave-acesso",
+    OFFSITE_S3_SECRET_KEY: "segredo-super-secreto",
+  };
+
+  function execFnDubleQueRetorna(stdout) {
+    return function execFn() {
+      return Promise.resolve({ stdout, stderr: "" });
+    };
+  }
+
+  function execFnDubleQueLanca(mensagem) {
+    return function execFn() {
+      return Promise.reject(new Error(mensagem));
+    };
+  }
+
+  test("mc responde com bucket vazio → problema, não indeterminado", async () => {
+    const execFn = execFnDubleQueRetorna("");
+    const resultado = await verificarBackupOffsite(
+      envCompleto,
+      Date.now(),
+      execFn,
+    );
+    expect(resultado.estado).toBe("problema");
+    expect(resultado.motivo).toBe("backup-offsite");
+    expect(resultado.detalhe).toContain("vazio");
+  });
+
+  test("objeto recente (idade <= 36h) → ok", async () => {
+    const agora = Date.parse("2026-08-25T12:00:00.000Z");
+    const stdout = JSON.stringify({
+      key: "dump-2026-08-25.sql.age",
+      type: "file",
+      lastModified: "2026-08-25T00:00:00.000Z", // 12h atrás
+    });
+    const execFn = execFnDubleQueRetorna(stdout);
+    const resultado = await verificarBackupOffsite(
+      envCompleto,
+      agora,
+      execFn,
+    );
+    expect(resultado).toEqual({
+      estado: "ok",
+      motivo: "backup-offsite",
+      detalhe: "",
+    });
+  });
+
+  test("objeto velho (idade > 36h) → problema, detalhe cita a idade e o limite", async () => {
+    const agora = Date.parse("2026-08-25T12:00:00.000Z");
+    const stdout = JSON.stringify({
+      key: "dump-2026-08-20.sql.age",
+      type: "file",
+      lastModified: "2026-08-20T12:00:00.000Z", // 120h atrás
+    });
+    const execFn = execFnDubleQueRetorna(stdout);
+    const resultado = await verificarBackupOffsite(
+      envCompleto,
+      agora,
+      execFn,
+    );
+    expect(resultado.estado).toBe("problema");
+    expect(resultado.motivo).toBe("backup-offsite");
+    expect(resultado.detalhe).toContain("120.0h");
+    expect(resultado.detalhe).toContain("36h");
+  });
+
+  test("erro do mc que ecoa a secret → detalhe mascara com ***, nunca vaza a secret", async () => {
+    const execFn = execFnDubleQueLanca(
+      `mc: <ERROR> Unable to initialize new alias. The Access Key Id you provided does not exist with secret segredo-super-secreto.`,
+    );
+    const resultado = await verificarBackupOffsite(
+      envCompleto,
+      Date.now(),
+      execFn,
+    );
+    expect(resultado.estado).toBe("indeterminado");
+    expect(resultado.motivo).toBe("backup-offsite");
+    expect(resultado.detalhe).not.toContain("segredo-super-secreto");
+    expect(resultado.detalhe).toContain("***");
+  });
 });
