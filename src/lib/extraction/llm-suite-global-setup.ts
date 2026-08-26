@@ -12,10 +12,10 @@
  * exclude em vitest.config.ts) — é sempre invocação manual e consciente
  * (`pnpm test:llm`), então não há "esquecer de setar a flag" a proteger.
  *
- * Checa GOOGLE_API_KEY (não ANTHROPIC_API_KEY): decisão de produto do
- * Rômulo (18/08/26, #395) — a suíte chama Gemini via `createGeminiInvoker`
- * (gemini-test-invoker.ts), não a Anthropic, por custo. Ver o cabeçalho de
- * `casos-clinicos.llm.test.ts` para o tradeoff.
+ * Checa GOOGLE_API_KEY: mesma chave que produção usa (D57 — Gemini é o
+ * único provedor de extração desde 25/08/26). A suíte chama `createGeminiInvoker`
+ * (gemini-invoker.ts) com o modelo default mais barato, não o de produção —
+ * ver o cabeçalho de `casos-clinicos.llm.test.ts` para o tradeoff.
  */
 export default function setup(): void {
   if (!process.env.GOOGLE_API_KEY) {

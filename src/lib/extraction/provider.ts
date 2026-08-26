@@ -54,13 +54,16 @@ export interface ExtractionProvider {
 
 import { DemoStubProvider } from "./demo-stub-provider";
 import { NullProvider } from "./null-provider";
-import { ClaudeProvider, createAnthropicInvoker } from "./claude-provider";
+import { LlmExtractionProvider } from "./llm-provider";
+import { createGeminiInvoker } from "./gemini-invoker";
 
 // Roteamento do provider de extração:
 // - clínica demo → stub determinístico (dado fictício, sem LLM).
-// - produção → ClaudeProvider real SÓ com a flag EXTRACTION_LLM_ENABLED=true E
-//   ANTHROPIC_API_KEY presente. O gate é o guardrail LGPD/DPA: nenhum texto de
-//   paciente real sai para a Anthropic enquanto o DPA + zero-data-retention não
+// - produção → LlmExtractionProvider (Gemini) real SÓ com a flag
+//   EXTRACTION_LLM_ENABLED=true E GOOGLE_API_KEY presente. O gate é o
+//   guardrail LGPD/DPA (D57): nenhum texto de paciente real sai pro Google
+//   enquanto billing pago + escopo do DPA (Serviço Pago = Adendo de
+//   Tratamento de Dados automático) + equivalência ao Art. 33 LGPD não
 //   estiverem confirmados (a flag só é ligada no Easypanel depois disso).
 //   Sem a flag/chave → NullProvider (marca pendente, não chama LLM).
 export function resolveProvider(clinic: {
@@ -69,8 +72,8 @@ export function resolveProvider(clinic: {
   if (clinic.isDemo) return new DemoStubProvider();
   const llmHabilitado =
     process.env.EXTRACTION_LLM_ENABLED === "true" &&
-    !!process.env.ANTHROPIC_API_KEY;
+    !!process.env.GOOGLE_API_KEY;
   return llmHabilitado
-    ? new ClaudeProvider(createAnthropicInvoker())
+    ? new LlmExtractionProvider(createGeminiInvoker("gemini-2.5-flash"))
     : new NullProvider();
 }

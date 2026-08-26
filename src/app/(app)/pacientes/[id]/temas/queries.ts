@@ -16,8 +16,8 @@ export type NotaDeSessao = {
 /**
  * Modalidade convencional (`R7`, #388): o registro estruturado é narrativo —
  * `resumo_sessao`/`temas[]` que o agente de extração promete (`prompt.ts`,
- * `CONVENTIONAL_SYSTEM_PROMPT`) NÃO são persistidos hoje. `ClaudeProvider.extrair`
- * (`src/lib/extraction/claude-provider.ts`) descarta `resumo_sessao` no retorno
+ * `CONVENTIONAL_SYSTEM_PROMPT`) NÃO são persistidos hoje. `LlmExtractionProvider.extrair`
+ * (`src/lib/extraction/llm-provider.ts`) descarta `resumo_sessao` no retorno
  * (`ExtractionResult` só carrega `drafts`/`alertaRisco`) e o schema de saída
  * (`agent-output-schema.ts`) não modela `temas` como array — é texto livre
  * dentro do resumo. Até essa lacuna fechar (fora de escopo desta tarefa), esta

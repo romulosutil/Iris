@@ -3,21 +3,22 @@
  * (T1-T5) e `docs/agente/casos-de-teste-terapia-convencional.md` (TC-1..
  * TC-5), issue #395.
  *
- * CHAMA O GEMINI DE VERDADE (não a Anthropic). Isolada de `pnpm test`/CI por
- * convenção própria (`*.llm.test.ts`, `vitest.llm.config.ts`, `pnpm
- * test:llm`) — mesmo princípio de `*.int.test.ts` (memória
- * `vitest-int-test-coleta-zero`), mas aqui o custo é de API + latência de
- * LLM, não de banco. Ver `src/lib/extraction/llm-suite-global-setup.ts` para
- * o gate (falha alto sem GOOGLE_API_KEY, nunca pula em silêncio).
+ * CHAMA O GEMINI DE VERDADE. Isolada de `pnpm test`/CI por convenção própria
+ * (`*.llm.test.ts`, `vitest.llm.config.ts`, `pnpm test:llm`) — mesmo
+ * princípio de `*.int.test.ts` (memória `vitest-int-test-coleta-zero`), mas
+ * aqui o custo é de API + latência de LLM, não de banco. Ver
+ * `src/lib/extraction/llm-suite-global-setup.ts` para o gate (falha alto sem
+ * GOOGLE_API_KEY, nunca pula em silêncio).
  *
- * DECISÃO DE PRODUTO INFORMADA (Rômulo, 18/08/26): esta suíte roda contra
- * Gemini (`createGeminiInvoker`, gemini-test-invoker.ts) em vez de Claude —
- * escolha CONSCIENTE por custo, não pela qualidade do provedor. Produção
- * (`resolveProvider`, provider.ts) continua 100% Anthropic, intocada. Isso
- * significa que esta suíte testa "o prompt é seguido por um LLM razoável",
- * NÃO "o prompt é seguido pelo modelo que roda em produção" — uma falha
- * aqui pode ser prompt frágil OU só o Gemini seguindo pior que o Claude
- * seguiria; a suíte não distingue as duas leituras.
+ * DECISÃO DE PRODUTO (Rômulo, 18/08/26, reafirmada em 25/08/26 — D57):
+ * produção (`resolveProvider`, provider.ts) usa Gemini via
+ * `createGeminiInvoker("gemini-2.5-flash")`. Esta suíte roda contra o MESMO
+ * invoker (`gemini-invoker.ts`), mas SEM passar `model` — herda o default
+ * mais barato (`gemini-2.0-flash`, override via `GEMINI_TEST_MODEL`),
+ * escolha CONSCIENTE por custo da suíte, não do produto. Isso significa que
+ * uma falha aqui pode ser prompt frágil OU só o modelo mais barato seguindo
+ * pior que o modelo de produção seguiria; a suíte não distingue as duas
+ * leituras.
  *
  * Fixtures em `./casos-clinicos.fixtures.ts` — cada caso referencia o id no
  * `.md` de origem em vez de duplicar a prosa clínica inteira.
@@ -28,7 +29,7 @@
  * DEFINER, Postgres) e pertencem à suíte de integração (`*.int.test.ts`),
  * não a uma suíte isolada só para custo de LLM. O que É verificado aqui é
  * que a saída do agente (`ExtractionResult.alertaRisco`) já passou pelo
- * MESMO `agentOutputSchema.parse` que `ClaudeProvider.extrair` usa em
+ * MESMO `agentOutputSchema.parse` que `LlmExtractionProvider.extrair` usa em
  * produção — portanto tem exatamente a forma `AlertaRiscoAgente` que
  * `registrarAlertaRisco` exige no parâmetro `risco` (prova de tipo, não
  * reimplementação da regra).
@@ -40,8 +41,8 @@
  * palavras/valores escritas independentemente para esta suíte.
  */
 import { describe, expect, test } from "vitest";
-import { ClaudeProvider } from "./claude-provider";
-import { createGeminiInvoker } from "./gemini-test-invoker";
+import { LlmExtractionProvider } from "./llm-provider";
+import { createGeminiInvoker } from "./gemini-invoker";
 import { agentOutputSchema, type AgentOutput } from "./agent-output-schema";
 import {
   CONVENTIONAL_SYSTEM_PROMPT,
@@ -67,10 +68,10 @@ function porId<T extends { id: string }>(lista: T[], id: string): T {
   return achado;
 }
 
-// ─── TCC: usa ClaudeProvider (produção real) — expõe drafts + alertaRisco ───
+// ─── TCC: usa LlmExtractionProvider (produção real) — expõe drafts + alertaRisco ───
 
 async function extrairTCC(caso: CasoTCC) {
-  const provider = new ClaudeProvider(createGeminiInvoker());
+  const provider = new LlmExtractionProvider(createGeminiInvoker());
   const ctx: ExtractionContext = {
     sessionId: `llm-suite-${caso.id}`,
     clinicId: "llm-suite-clinic",
@@ -88,12 +89,12 @@ function draftsRegistroPensamento(
 }
 
 // ─── Convencional: ExtractionResult descarta resumo_sessao/temas (por
-// desenho — ver claude-provider.ts). As asserções mandatórias do enunciado
+// desenho — ver llm-provider.ts). As asserções mandatórias do enunciado
 // (R9-TC de vocabulário, R5-TC de alerta) precisam do objeto completo, então
 // esta suíte chama o MESMO invoker real + MESMO buildUserMessage + MESMO
-// agentOutputSchema.parse que ClaudeProvider usa internamente — só sem a
-// etapa final de recorte para ExtractionResult. Não é reimplementação da
-// regra: são as funções de produção de verdade, na mesma ordem.
+// agentOutputSchema.parse que LlmExtractionProvider usa internamente — só
+// sem a etapa final de recorte para ExtractionResult. Não é reimplementação
+// da regra: são as funções de produção de verdade, na mesma ordem.
 
 async function extrairConvencional(
   caso: CasoConvencional,
@@ -194,7 +195,7 @@ describe("Agente TCC — docs/agente/casos-de-teste-tcc.md", () => {
     // a negação de "coragem" não pode rebaixar para ideação passiva.
     expect(risco.severidade).not.toBe("ideacao_passiva");
     expect(risco.trecho_fonte.length).toBeGreaterThan(0);
-    // Forma É `AlertaRiscoAgente` por construção: `ClaudeProvider.extrair`
+    // Forma É `AlertaRiscoAgente` por construção: `LlmExtractionProvider.extrair`
     // só devolve `alertaRisco` depois de `agentOutputSchema.parse` (que
     // valida `alerta_risco` com o MESMO `alertaRiscoSchema` usado em
     // produção) não lançar — é o parâmetro `risco` que
