@@ -36,6 +36,7 @@
 #   scripts/ci/carga-imagens-infra.sh retencao
 #   scripts/ci/carga-imagens-infra.sh alarme
 #   scripts/ci/carga-imagens-infra.sh exportacao
+#   scripts/ci/carga-imagens-infra.sh arquivamento
 #
 # Roda igual no CI e na máquina do dev — de propósito. Um teste que só existe
 # no workflow é um teste que ninguém roda antes de abrir o PR.
@@ -60,6 +61,7 @@ readonly TAG_BILLING="iris-billing-ci:local"
 readonly TAG_RETENCAO="iris-retencao-ci:local"
 readonly TAG_ALARME="iris-alarme-ci:local"
 readonly TAG_EXPORTACAO="iris-exportacao-ci:local"
+readonly TAG_ARQUIVAMENTO="iris-arquivamento-ci:local"
 
 log_info() { printf '[carga-imagens] %s\n' "$*"; }
 log_ok() { printf '[carga-imagens] OK: %s\n' "$*"; }
@@ -651,6 +653,67 @@ carga_exportacao() {
 		-- docker run --rm "${TAG_EXPORTACAO}" /app/agendador.sh
 }
 
+# --- arquivamento --------------------------------------------------------------
+# Auto-arquivamento comercial por inatividade (#174/D4, D64). Mesmo desenho e
+# mesmo ponto cego do retencao/escalonamento: COPY arquivo por arquivo +
+# `npm install postgres@3.4.9` à mão, numa imagem que NÃO enxerga o
+# node_modules do repo. É o buraco exato que a #126 explorou: um `import` novo
+# em scripts/auto-arquivamento.mjs passa por pnpm test/typecheck/lint verdes
+# (rodam contra a árvore do repo) e derruba a imagem em produção com
+# ERR_MODULE_NOT_FOUND — sintoma mudo, indistinguível de "ninguém passou dos
+# 90 dias", com a fatura seguindo cobrando paciente inativo.
+carga_arquivamento() {
+	log_info "buildando ${TAG_ARQUIVAMENTO}..."
+	docker build -f infra/arquivamento/Dockerfile -t "${TAG_ARQUIVAMENTO}" .
+
+	# `--dry-run` de propósito: é o único modo que NÃO muta nada. Sem
+	# ARQUIVAMENTO_DATABASE_URL o script falha antes de abrir conexão — e é
+	# exatamente essa falha, NOMEANDO a variável, que se exige aqui.
+	esperar_falha_com \
+		"arquivamento: carga por caminho ABSOLUTO" \
+		"ARQUIVAMENTO_DATABASE_URL não definida" \
+		-- docker run --rm "${TAG_ARQUIVAMENTO}" \
+		node /app/scripts/auto-arquivamento.mjs --dry-run
+
+	# Caminho RELATIVO é a forma documentada em infra/docker-compose.yml — e a
+	# que a #153 quebrou no escalonamento (argv[1] relativo não bate com
+	# import.meta.url sem pathToFileURL). Se essa guarda regredir, esta
+	# asserção pega o exit 0.
+	esperar_falha_com \
+		"arquivamento: carga por caminho RELATIVO (forma do compose)" \
+		"ARQUIVAMENTO_DATABASE_URL não definida" \
+		-- docker run --rm -w /app "${TAG_ARQUIVAMENTO}" \
+		node scripts/auto-arquivamento.mjs --dry-run
+
+	# Resolve TODO specifier dos arquivos copiados, dinâmico incluído. O
+	# verificador entra por stdin de propósito: não vira arquivo dentro de uma
+	# imagem de produção.
+	esperar_sucesso \
+		"arquivamento: todo import resolve na imagem (inclusive os dinâmicos)" \
+		-- bash -c "docker run --rm -i -w /app -e ALVO=/app/scripts '${TAG_ARQUIVAMENTO}' node --input-type=module < scripts/ci/verificar-deps-imagem.mjs"
+
+	# O agendador usa `set -Eeuo pipefail` e `[[ ]]`: sem o `apk add bash` do
+	# Dockerfile a imagem sobe e o laço morre na primeira linha.
+	esperar_sucesso \
+		"arquivamento: sintaxe do agendador.sh (bash presente)" \
+		-- docker run --rm "${TAG_ARQUIVAMENTO}" bash -n /app/agendador.sh
+
+	# O CMD aponta /app/agendador.sh por caminho absoluto fixo. Se o COPY mudar
+	# de lugar, o container só falha em produção.
+	esperar_sucesso \
+		"arquivamento: /app/agendador.sh executável (caminho fixo do CMD)" \
+		-- docker run --rm "${TAG_ARQUIVAMENTO}" test -x /app/agendador.sh
+
+	# O agendador valida env ANTES de entrar no laço e sai 1. Rodá-lo sem env
+	# prova as duas coisas: que a guarda nomeia a variável, e que este teste
+	# não trava — um agendador que entrasse no laço de 86400s aqui penduraria
+	# o CI.
+	esperar_falha_com \
+		"arquivamento: agendador para na guarda de env (não entra em laço)" \
+		"variável(is) de ambiente ausente(s): ARQUIVAMENTO_DATABASE_URL" \
+		-- docker run --rm "${TAG_ARQUIVAMENTO}" /app/agendador.sh
+}
+
 # --- main --------------------------------------------------------------------
 alvo="${1:-todos}"
 case "${alvo}" in
@@ -660,6 +723,7 @@ billing) carga_billing ;;
 retencao) carga_retencao ;;
 alarme) carga_alarme ;;
 exportacao) carga_exportacao ;;
+arquivamento) carga_arquivamento ;;
 todos)
 	carga_escalonamento
 	carga_backup
@@ -667,9 +731,10 @@ todos)
 	carga_retencao
 	carga_alarme
 	carga_exportacao
+	carga_arquivamento
 	;;
 *)
-	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao', 'alarme', 'exportacao' ou nenhum (todos)."
+	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao', 'alarme', 'exportacao', 'arquivamento' ou nenhum (todos)."
 	exit 2
 	;;
 esac
