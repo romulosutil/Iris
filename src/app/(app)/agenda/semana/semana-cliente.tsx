@@ -48,6 +48,7 @@ interface Props {
   disciplinas: string[];
   duracaoPadrao: Record<string, number>;
   prefill?: Prefill;
+  fuso: string;
 }
 
 function recuarSemana(iso: string): string {
@@ -74,6 +75,7 @@ export function SemanaCliente({
   disciplinas,
   duracaoPadrao,
   prefill,
+  fuso,
 }: Props) {
   // Task 8 (reposição): eixo é sempre "terapeuta" quando há prefill — a
   // entidade fixa no calendário é o terapeuta PREVISTO da falta (editável
@@ -249,6 +251,7 @@ export function SemanaCliente({
         janelas={dadosVisiveis.janelas}
         bloqueios={dadosVisiveis.bloqueios}
         blocos={dadosVisiveis.blocos}
+        fuso={fuso}
         aoAlocar={(diaSemana, inicioMin) => {
           if (passada || carregando) return;
           const dataISO = dias[diaSemana === 0 ? 6 : diaSemana - 1]!;

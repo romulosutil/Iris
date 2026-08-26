@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { FUSO_CLINICA } from "../../agenda/fuso";
 import { dataCivilNoFuso } from "@/lib/jobs/retencao";
 
 /**
@@ -87,17 +86,19 @@ export const motivoAltaSchema = z
  * `src/lib/trial.ts`, e a mesma conta que o SQL faz com
  * `(now() AT TIME ZONE c.timezone)::date`.
  *
- * ⚠️ `FUSO_CLINICA` é chumbado (`America/Sao_Paulo`) enquanto `clinic.timezone`
- * não chega até aqui. A dívida está registrada no `BACKLOG.md` (R352.F3); o
- * SQL do expurgo já lê `clinic.timezone` de verdade.
+ * Fábrica em vez de schema estático (D61): o fuso é por clínica
+ * (`clinic.timezone`), então o chamador (`logic.ts`) busca o valor real e o
+ * injeta aqui — não há mais fuso chumbado nem default silencioso.
  */
-export const dataAltaSchema = z
-  .string()
-  .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data da alta.")
-  .refine((valor) => !Number.isNaN(Date.parse(`${valor}T00:00:00Z`)), {
-    message: "Informe uma data válida.",
-  })
-  .refine((valor) => valor <= dataCivilNoFuso(new Date(), FUSO_CLINICA), {
-    message: "A data da alta não pode ser futura.",
-  });
+export function dataAltaSchema(fuso: string) {
+  return z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data da alta.")
+    .refine((valor) => !Number.isNaN(Date.parse(`${valor}T00:00:00Z`)), {
+      message: "Informe uma data válida.",
+    })
+    .refine((valor) => valor <= dataCivilNoFuso(new Date(), fuso), {
+      message: "A data da alta não pode ser futura.",
+    });
+}

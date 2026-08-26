@@ -23,6 +23,7 @@ async function semViolacoes(container: HTMLElement) {
 }
 
 const base = {
+  fuso: "America/Sao_Paulo",
   dias: [
     "2026-07-13",
     "2026-07-14",

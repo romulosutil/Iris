@@ -6,6 +6,7 @@ import {
   pacientePorId,
 } from "@/app/(app)/agenda/queries";
 import { segundaDaSemana } from "@/lib/agenda/semana";
+import { fusoDaClinicaAtual } from "@/lib/agenda/clinic-timezone";
 import { SemanaCliente, type Prefill } from "./semana-cliente";
 
 interface PageProps {
@@ -38,10 +39,11 @@ function paramsPrefill(sp: Record<string, string | string[] | undefined>):
 export default async function Page({ searchParams }: PageProps) {
   const ctx = await getTenantContext();
   requireRole(ctx, "coordenador");
-  const [terapeutas, config, sp] = await Promise.all([
+  const [terapeutas, config, sp, fuso] = await Promise.all([
     listarTerapeutas(ctx),
     carregarConfigClinica(ctx),
     searchParams,
+    fusoDaClinicaAtual(ctx),
   ]);
   const hojeISO = new Date().toISOString().slice(0, 10);
   const paramsP = paramsPrefill(sp);
@@ -58,6 +60,7 @@ export default async function Page({ searchParams }: PageProps) {
       disciplinas={config.disciplinas}
       duracaoPadrao={config.duracaoDisciplina}
       prefill={prefill}
+      fuso={fuso}
     />
   );
 }

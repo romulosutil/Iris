@@ -4,6 +4,7 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { auditLog, patient } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { fusoDaClinicaAtual } from "@/lib/agenda/clinic-timezone";
 import {
   dataAltaSchema,
   motivoAltaSchema,
@@ -246,7 +247,8 @@ async function alternarAlta(
 
   let data: string | null = null;
   if (registrando) {
-    const dataValidada = dataAltaSchema.safeParse(dataAlta ?? "");
+    const fuso = await fusoDaClinicaAtual(ctx);
+    const dataValidada = dataAltaSchema(fuso).safeParse(dataAlta ?? "");
     if (!dataValidada.success) {
       return {
         error: dataValidada.error.issues[0]?.message ?? "Data inválida.",
