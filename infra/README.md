@@ -204,6 +204,7 @@ scripts/ci/carga-imagens-infra.sh                 # os quatro serviços
 scripts/ci/carga-imagens-infra.sh escalonamento   # só um
 scripts/ci/carga-imagens-infra.sh billing         # só a imagem do job de faturamento
 scripts/ci/carga-imagens-infra.sh retencao        # só a imagem do aviso prévio de expurgo
+scripts/ci/carga-imagens-infra.sh alarme          # só a imagem do detector de alarme
 ```
 
 `infra/retencao/Dockerfile` (#352) entra pelo motivo **original** — `COPY` à mão
@@ -2434,3 +2435,158 @@ recebendo os webhooks deste sandbox, então nenhum payload de
 4. **A taxa Pix do sandbox é R$ 0,99, fixa.** Numa cobrança de R$ 5,00 o
    `netValue` volta `4.01` — a taxa come ~20% do valor. Cobrança pequena é
    cara em termos relativos; isso é insumo de produto, não detalhe de infra.
+
+## Alarme automático de jobs de infra (#294)
+
+Detector que fecha o buraco documentado na #288: `billing`, `escalonamento` e
+`backup` têm heartbeat, mas **nenhum tem observador** — o sinal existe, o
+alarme não. Este serviço, `iris-alarme`, roda de hora em hora e manda e-mail
+quando o **efeito** de um desses jobs parado aparece no banco ou no bucket.
+
+**Por que efeito, e não heartbeat de outro container:** um serviço que nunca
+foi provisionado não tem heartbeat para congelar — foi assim que a pendência
+de billing atravessou de 04/08 a 13/08 sem ninguém notar (#288). Os volumes
+`/heartbeat` também são privados por serviço; este detector não tem acesso a
+eles nem precisa.
+
+**Por que o detector não faz `SELECT` nas tabelas:** `billing_cycle` e
+`alerta_risco_clinico` estão sob `FORCE ROW LEVEL SECURITY` com policies
+`TO app_role`. Uma role de infra com `GRANT SELECT` na tabela leria **zero
+linhas, sem erro** — o alarme ficaria verde para sempre. As duas checagens de
+banco passam por `app_alarme_billing_atrasado()` e
+`app_alarme_escalonamento_atrasado()`, `SECURITY DEFINER` (migração `0129`),
+que devolvem só contagem, `clinic_id` e timestamp. Se um dia alguém precisar
+de mais dado no alerta, **muda a função**, não o grant.
+
+### As três checagens
+
+| Checagem         | O que olha                                                                      | Limite |
+| ---------------- | ------------------------------------------------------------------------------- | ------ |
+| `billing`        | `billing_cycle` com `status = 'aberto'` e `fim` vencido                         | 2h     |
+| `escalonamento`  | `alerta_risco_clinico` com `status = 'aberto'` e `prazo_reconhecimento` vencido | 10min  |
+| `backup-offsite` | `lastModified` do objeto mais recente no bucket off-site (`mc ls --json`)       | 36h    |
+
+Cada checagem termina em um de **três** estados:
+
+- `ok` — nada errado.
+- `problema` — achou o efeito de um job parado. **Manda e-mail.**
+- `indeterminado` — não conseguiu nem checar (env ausente, banco/bucket fora
+  do ar). **Loga e não manda e-mail** — em dev e CI as `OFFSITE_S3_*` não
+  existem, e um e-mail diário por isso ensinaria a ignorar a caixa de entrada.
+
+Cada `problema` manda **um e-mail por dia UTC** (não por hora) — marcador
+`.alertado-<checagem>-YYYY-MM-DD` em `/heartbeat`, mesmo padrão do
+`.ultimo-backup-YYYY-MM-DD` do serviço de backup. O marcador só é gravado
+**depois** de o e-mail sair: entrega que falhou tenta de novo no tick seguinte.
+
+**Código de saída do script:** `0` = a varredura rodou até o fim (com ou sem
+problema encontrado). `1` = o **detector** não conseguiu cumprir o papel dele
+(env obrigatória ausente, falha ao enviar e-mail). `1` aqui nunca significa
+"job de infra parado" — isso vai nas linhas `ATENÇÃO` do log.
+
+### Passo 1 — role de banco (uma vez por ambiente)
+
+A migração `0129_alarme_jobs_infra.sql` cria a role de privilégio
+`iris_alarme` (NOLOGIN). Criar o usuário de login, como superuser:
+
+```sql
+CREATE ROLE iris_alarme_login LOGIN PASSWORD '<senha forte>' IN ROLE iris_alarme;
+```
+
+`ALARME_DATABASE_URL=postgres://iris_alarme_login:<senha>@<host>:5432/iris`.
+
+Conferir que a role enxerga (e só isso):
+
+```sql
+-- como iris_alarme_login:
+SELECT * FROM app_alarme_billing_atrasado('2 hours');  -- responde
+SELECT 1 FROM billing_cycle LIMIT 1;                   -- permission denied (esperado)
+```
+
+### Passo 2 — criar o serviço no Easypanel
+
+Mesmo desenho dos outros serviços de job (ver §Motor de escalonamento acima
+para a explicação de por que o Easypanel não tem cron).
+
+1. **Novo serviço** → tipo **Aplicativo** → nome `alarme` → Code Source
+   `romulosutil/Iris` → Builder **Dockerfile**, path `infra/alarme/Dockerfile`,
+   build context na **raiz**, branch `main`.
+2. **Volume persistente** em **`/heartbeat`** — sem ele os marcadores de dedup
+   somem a cada restart e um problema persistente volta a mandar e-mail a cada
+   redeploy.
+3. **Env vars** (aba `Ambiente`):
+
+   ```
+   ALARME_DATABASE_URL=postgres://iris_alarme_login:<senha>@espectro-mvp_iris-postgres:5432/iris
+   ALARME_HEARTBEAT_DIR=/heartbeat
+   INTERVALO_S=3600
+   EMAIL_PROVIDER_API_KEY=<a mesma chave Resend do resto do projeto>
+   RESEND_FROM_EMAIL=notificacoes@irisclinica.ia.br
+   ALARME_EMAIL_DESTINO=<e-mail do Rômulo>
+   OFFSITE_S3_ENDPOINT=<o mesmo do serviço backup>
+   OFFSITE_S3_ACCESS_KEY=<credencial de LEITURA — não a write-only do backup>
+   OFFSITE_S3_SECRET_KEY=<idem>
+   OFFSITE_S3_BUCKET=iris-backups-offsite
+   ```
+
+   > A credencial S3 deste serviço só precisa de `ListBucket`. Gerar uma de
+   > leitura em vez de reusar a write-only do `backup` evita que um vazamento
+   > deste serviço comprometa a credencial de escrita do backup.
+   >
+   > O painel do Easypanel expõe env em claro: um screenshot desta tela vaza
+   > todos esses segredos. E **salvar não aplica** — é preciso clicar
+   > "Implantar".
+
+4. **Comando** (aba `Avançado`): `/app/agendador.sh`.
+5. **Réplicas: 1.**
+
+### Como saber que deu certo
+
+Logo depois do deploy, **Logs** do serviço:
+
+```
+[agendador-alarme] 2026-08-25T20:00:00Z ativo. intervalo=3600s · heartbeat=/heartbeat/.ultima-verificacao
+```
+
+Console do serviço:
+
+```bash
+cat /heartbeat/.ultima-verificacao
+```
+
+Timestamp ISO de menos de uma hora atrás.
+
+### Ensaio manual — **alarme não testado é alarme que não existe**
+
+Não espere um problema real acontecer. No Console do serviço `alarme`:
+
+```bash
+node /app/scripts/alarme-jobs.mjs
+```
+
+Esperado: linha `[alarme-jobs] ATENÇÃO: <checagem> — ...` no stdout **e** um
+e-mail em `ALARME_EMAIL_DESTINO` dentro de minutos. Rodar de novo no mesmo dia
+UTC: a linha `ATENÇÃO` reaparece, mas **sem** e-mail novo (dedup). Depois:
+
+```bash
+ls -a /heartbeat/     # .alertado-<checagem>-YYYY-MM-DD presente
+```
+
+Reiniciar o serviço no painel e conferir que o marcador continua lá — se
+sumiu, o volume persistente do passo 2 não foi criado.
+
+### O que fazer se der errado
+
+1. **Nenhum e-mail chega, mas a linha `ATENÇÃO` aparece no log.** Ver o texto
+   depois de `[alarme-jobs] <checagem>: FALHA ao enviar e-mail:` — geralmente
+   `EMAIL_PROVIDER_API_KEY` ou `ALARME_EMAIL_DESTINO` ausente.
+2. **Todas as checagens dizem `ok` e você sabe que não está tudo ok.** Testar
+   `SELECT * FROM app_alarme_billing_atrasado('2 hours')` como
+   `iris_alarme_login`. Se devolver `total = 0` com um ciclo vencido no banco,
+   alguém tirou o `SECURITY DEFINER` da função da `0129` e o detector ficou
+   cego — este é o modo de falha mais perigoso do serviço inteiro.
+3. **`backup-offsite` sempre `INDETERMINADO` com "variável(is) ausente(s)".**
+   As `OFFSITE_S3_*` não foram copiadas para este serviço — cada serviço no
+   Easypanel tem seu próprio conjunto.
+4. **`mc: command not found`.** A imagem não instalou o MinIO Client; o
+   `Dockerfile` regrediu.
