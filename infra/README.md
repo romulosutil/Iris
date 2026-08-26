@@ -200,7 +200,7 @@ carrega o código lá dentro** em vez de inspecionar o Dockerfile. Roda no CI
 (`.github/workflows/carga-imagens-infra.yml`) e igual na sua máquina:
 
 ```bash
-scripts/ci/carga-imagens-infra.sh                 # os quatro serviços
+scripts/ci/carga-imagens-infra.sh                 # os cinco serviços
 scripts/ci/carga-imagens-infra.sh escalonamento   # só um
 scripts/ci/carga-imagens-infra.sh billing         # só a imagem do job de faturamento
 scripts/ci/carga-imagens-infra.sh retencao        # só a imagem do aviso prévio de expurgo
@@ -2527,6 +2527,7 @@ para a explicação de por que o Easypanel não tem cron).
    OFFSITE_S3_ACCESS_KEY=<credencial de LEITURA — não a write-only do backup>
    OFFSITE_S3_SECRET_KEY=<idem>
    OFFSITE_S3_BUCKET=iris-backups-offsite
+   OFFSITE_S3_REGION=              # VAZIO por padrão (opcional). Idem ao serviço backup — só mexer com evidência
    ```
 
    > A credencial S3 deste serviço só precisa de `ListBucket`. Gerar uma de
