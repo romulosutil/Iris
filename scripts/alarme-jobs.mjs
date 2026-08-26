@@ -296,5 +296,10 @@ export async function main() {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().then((codigo) => process.exit(codigo));
+  main()
+    .then((codigo) => process.exit(codigo))
+    .catch((err) => {
+      console.error("[alarme-jobs] ERRO fatal:", err);
+      process.exit(1);
+    });
 }
