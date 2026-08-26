@@ -250,21 +250,36 @@ carga_backup() {
 	docker run -d --name "${host_pg}" --network "${rede_pg}" \
 		-e POSTGRES_PASSWORD=carga postgres:17-alpine >/dev/null
 
-	local tentativa=0
-	until docker exec "${host_pg}" pg_isready -U postgres >/dev/null 2>&1; do
-		tentativa=$((tentativa + 1))
-		if [[ "${tentativa}" -ge 30 ]]; then
-			log_error "postgres de apoio não ficou pronto em 30s — checagem do reaplicar-tombstones.sql pulada"
-			FALHAS=$((FALHAS + 1))
+	# Readiness tem de ser medida por TCP, não pelo socket unix. O entrypoint da
+	# imagem oficial roda o initdb com um servidor TEMPORÁRIO e
+	# `listen_addresses=''`: nessa janela `docker exec ... pg_isready -U postgres`
+	# responde pelo socket e sai 0 — mas quem chega de outro container pela rede
+	# leva "connection refused". Era exatamente esse o falso "pronto" que
+	# derrubava a asserção abaixo de forma intermitente. Com `-h 127.0.0.1` o
+	# pg_isready só passa quando o servidor definitivo (listen_addresses='*')
+	# está no ar.
+	local tentativa=0 pg_pronto=0
+	while [[ "${tentativa}" -lt 30 ]]; do
+		if docker exec "${host_pg}" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then
+			pg_pronto=1
 			break
 		fi
+		tentativa=$((tentativa + 1))
 		sleep 1
 	done
 
-	esperar_sucesso \
-		"backup: reaplicar-tombstones.sql é aceito pelo psql (\\copy PSTDIN + bloco DO)" \
-		-- docker run --rm --network "${rede_pg}" -e PGPASSWORD=carga "${TAG_BACKUP}" \
-		bash -c "printf 'patient_id,clinic_id,ator_id,criado_em\n' | psql -v ON_ERROR_STOP=1 --no-psqlrc -h ${host_pg} -U postgres -d postgres -f /app/reaplicar-tombstones.sql"
+	if [[ "${pg_pronto}" -eq 1 ]]; then
+		esperar_sucesso \
+			"backup: reaplicar-tombstones.sql é aceito pelo psql (\\copy PSTDIN + bloco DO)" \
+			-- docker run --rm --network "${rede_pg}" -e PGPASSWORD=carga "${TAG_BACKUP}" \
+			bash -c "printf 'patient_id,clinic_id,ator_id,criado_em\n' | psql -v ON_ERROR_STOP=1 --no-psqlrc -h ${host_pg} -U postgres -d postgres -f /app/reaplicar-tombstones.sql"
+	else
+		# Sem servidor de apoio a asserção não mede nada: contar UMA falha
+		# (a do ambiente) em vez de deixar o psql estourar e reportar um
+		# defeito no .sql que não existe.
+		log_error "postgres de apoio não ficou pronto em 30s — checagem do reaplicar-tombstones.sql pulada"
+		FALHAS=$((FALHAS + 1))
+	fi
 
 	docker rm -f "${host_pg}" >/dev/null 2>&1 || true
 	docker network rm "${rede_pg}" >/dev/null 2>&1 || true
