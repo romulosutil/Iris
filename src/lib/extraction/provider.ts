@@ -6,7 +6,7 @@ export type ExtractionContext = {
   notaConsolidada: string;
   metasAtivas: Array<{ id: string; descricao: string }>;
   // Contrato canônico montado pelo assembler (protocolos-e-agente.md Parte 2).
-  // Opcional: stubs demo/null ignoram; o ClaudeProvider real o envia ao LLM.
+  // Opcional: stubs demo/null ignoram; o LlmExtractionProvider real o envia ao LLM.
   contextoCanonico?: unknown;
 };
 

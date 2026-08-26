@@ -5,7 +5,7 @@
  * princípio do gate de `pnpm test:rls` (db/tests/global-setup.ts, #132):
  * FALHAR ALTO quando falta o que a suíte precisa, nunca pular em silêncio e
  * sair verde. Esta suíte custa dinheiro e tempo de parede a cada chamada —
- * "verde" sem ter chamado a Anthropic de verdade seria pior que vermelho.
+ * "verde" sem ter chamado o Gemini de verdade seria pior que vermelho.
  *
  * Diferente de `test:rls`, não existe flag de ALLOW_SKIP aqui: esta suíte
  * NUNCA roda em CI nem em `pnpm test` (ver include em vitest.llm.config.ts,
