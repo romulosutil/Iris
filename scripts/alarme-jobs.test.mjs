@@ -4,7 +4,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   deveAlertar,
+  idadeMaisRecenteH,
   marcarAlertado,
+  verificarBackupOffsite,
   verificarBilling,
   verificarEscalonamento,
 } from "./alarme-jobs.mjs";
@@ -147,5 +149,81 @@ describe("alarme-jobs.mjs — verificarEscalonamento (#294)", () => {
     expect(resultado.estado).not.toBe("ok");
     expect(resultado.motivo).toBe("escalonamento");
     expect(resultado.detalhe).toContain("connection refused");
+  });
+});
+
+describe("alarme-jobs.mjs — idadeMaisRecenteH (#294)", () => {
+  test("três objetos → idade do mais recente por lastModified, não por nome nem por ordem", () => {
+    const agora = Date.parse("2026-08-25T12:00:00.000Z");
+    const ndjson = [
+      JSON.stringify({
+        key: "dump-2026-08-20.sql.age",
+        type: "file",
+        lastModified: "2026-08-20T12:00:00.000Z",
+      }),
+      // nome "mais novo" alfabeticamente, mas lastModified mais ANTIGO —
+      // é este caso que mata implementação por regex de nome.
+      JSON.stringify({
+        key: "dump-9999-99-99.sql.age",
+        type: "file",
+        lastModified: "2026-08-10T00:00:00.000Z",
+      }),
+      JSON.stringify({
+        key: "dump-2026-08-24.sql.age",
+        type: "file",
+        lastModified: "2026-08-24T18:00:00.000Z",
+      }),
+    ].join("\n");
+    expect(idadeMaisRecenteH(ndjson, agora)).toBeCloseTo(18, 5);
+  });
+
+  test("listagem só com folders → null", () => {
+    const ndjson = JSON.stringify({ key: "subpasta/", type: "folder" });
+    expect(idadeMaisRecenteH(ndjson, Date.now())).toBeNull();
+  });
+
+  test("string vazia → null", () => {
+    expect(idadeMaisRecenteH("", Date.now())).toBeNull();
+  });
+
+  test("linha em branco no meio do NDJSON não estoura", () => {
+    const agora = Date.parse("2026-08-25T12:00:00.000Z");
+    const ndjson = [
+      JSON.stringify({
+        key: "dump-2026-08-24.sql.age",
+        type: "file",
+        lastModified: "2026-08-24T12:00:00.000Z",
+      }),
+      "",
+      "   ",
+      JSON.stringify({
+        key: "dump-2026-08-23.sql.age",
+        type: "file",
+        lastModified: "2026-08-23T12:00:00.000Z",
+      }),
+    ].join("\n");
+    expect(idadeMaisRecenteH(ndjson, agora)).toBeCloseTo(24, 5);
+  });
+});
+
+describe("alarme-jobs.mjs — verificarBackupOffsite (#294)", () => {
+  test("env sem as variáveis obrigatórias → indeterminado, NÃO problema", async () => {
+    const resultado = await verificarBackupOffsite({});
+    expect(resultado.estado).toBe("indeterminado");
+    expect(resultado.estado).not.toBe("problema");
+    expect(resultado.motivo).toBe("backup-offsite");
+    expect(resultado.detalhe).toContain("OFFSITE_S3_ENDPOINT");
+    expect(resultado.detalhe).toContain("OFFSITE_S3_ACCESS_KEY");
+    expect(resultado.detalhe).toContain("OFFSITE_S3_SECRET_KEY");
+  });
+
+  test("faltando só uma variável → indeterminado cita apenas a faltante", async () => {
+    const resultado = await verificarBackupOffsite({
+      OFFSITE_S3_ENDPOINT: "https://s3.example.com",
+      OFFSITE_S3_ACCESS_KEY: "chave",
+    });
+    expect(resultado.estado).toBe("indeterminado");
+    expect(resultado.detalhe).toContain("OFFSITE_S3_SECRET_KEY");
+    expect(resultado.detalhe).not.toContain("OFFSITE_S3_ENDPOINT ");
   });
 });
