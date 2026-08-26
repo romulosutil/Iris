@@ -3,7 +3,7 @@
 // (docs/agente/agente-2-relatorio-familia.md): F1 (linguagem leiga), F2 (nunca
 // inventa fato/número — tudo deriva da entrada), F3 (uma conquista), F6 (platô
 // honesto), F8 (anexo de números separado). É trilho: a qualidade narrativa
-// real vem do ClaudeProvider quando habilitado pós-DPA.
+// real vem do GeminiProvider quando implementado (prompt/parsing).
 import type { FamilyReportDraft, FamilyReportInput } from "./types";
 import type { FamilyReportProvider } from "./provider";
 

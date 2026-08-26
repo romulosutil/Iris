@@ -117,7 +117,7 @@ export async function gerarRascunhoFamilia(
         crianca: { nome },
         periodo: { inicio: periodoInicio, fim: periodoFim },
         geradoEm: new Date().toISOString(),
-        // sempre "stub" até o ClaudeProvider ser habilitado pós-DPA (spec §5)
+        // sempre "stub" até o GeminiProvider ser implementado (prompt/parsing, spec §5)
         provider: "stub",
         iaOriginal,
         curado: null,

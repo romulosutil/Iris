@@ -135,7 +135,7 @@ export async function gerarRascunhoConvenioNarrativo(
         periodo: { inicio: periodoInicio, fim: periodoFim },
         cabecalho,
         geradoEm: new Date().toISOString(),
-        // sempre "stub" até o ClaudeProvider ser habilitado pós-DPA
+        // sempre "stub" até o GeminiProvider ser implementado (prompt/parsing)
         provider: "stub",
         dossie: entrada.dossie,
         iaOriginal,

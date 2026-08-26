@@ -4,7 +4,7 @@
 // `validarDraftContraDossie` é o numeric-guard que garante isso em runtime
 // para o provider real; o stub garante por construção (nunca inventa número).
 import type { PayloadConvenioBruto } from "../convenio-bruto/types";
-import { ClaudeConvenioNarrativoProvider } from "./claude-provider";
+import { GeminiConvenioNarrativoProvider } from "./gemini-provider";
 import { StubConvenioNarrativoProvider } from "./stub-provider";
 import type { ConvenioNarrativoDraft, ConvenioNarrativoInput } from "./types";
 
@@ -50,9 +50,9 @@ function contagensPermitidas(dossie: PayloadConvenioBruto): Set<string> {
  * LIMITAÇÃO RESIDUAL: este guard é um backstop de token numérico — ele NÃO
  * captura números por extenso ("oito sessões") nem decimais partidos em
  * dois tokens. Isto é aceitável só porque, no fluxo real, o prompt do
- * ClaudeProvider já instrui "números só do dossiê"; este guard endurece a
+ * GeminiProvider já instrui "números só do dossiê"; este guard endurece a
  * costura para quando o provider real for ligado (ainda não está — o
- * skeleton do ClaudeProvider lança erro), não é a única linha de defesa.
+ * skeleton do GeminiProvider lança erro), não é a única linha de defesa.
  */
 export function validarDraftContraDossie(
   draft: ConvenioNarrativoDraft,
@@ -76,9 +76,9 @@ export function resolveConvenioNarrativoProvider(clinic: {
   if (clinic.isDemo) return new StubConvenioNarrativoProvider();
   if (
     process.env.CONVENIO_REPORT_LLM_ENABLED === "true" &&
-    process.env.ANTHROPIC_API_KEY
+    process.env.GOOGLE_API_KEY
   ) {
-    return new ClaudeConvenioNarrativoProvider();
+    return new GeminiConvenioNarrativoProvider();
   }
   return new StubConvenioNarrativoProvider();
 }

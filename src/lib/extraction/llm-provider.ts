@@ -22,10 +22,8 @@ import {
 // Deriva do OBJETO, não do schema com preprocess: um ZodEffects não gera JSON
 // Schema confiável. O preprocess só normaliza a forma R20 na ENTRADA — o que o
 // modelo deve produzir é exatamente o objeto.
-// Exportado (não só local): o invoker de teste do Gemini
-// (gemini-test-invoker.ts, #395) reusa o MESMO schema derivado — nunca
-// duplica a chamada zodToJsonSchema, para os dois provedores nunca
-// divergirem silenciosamente na forma que forçam o modelo a produzir.
+// Exportado (não só local): o invoker do Gemini (gemini-invoker.ts) reusa o
+// MESMO schema derivado — nunca duplica a chamada zodToJsonSchema.
 export const TOOL_INPUT_SCHEMA = zodToJsonSchema(agentOutputObjectSchema, {
   target: "openApi3",
   $refStrategy: "none",
@@ -33,7 +31,7 @@ export const TOOL_INPUT_SCHEMA = zodToJsonSchema(agentOutputObjectSchema, {
 
 // Abstração do modelo: recebe system+user, devolve o input CRU da ferramenta
 // registrar_extracao (objeto JSON ainda não validado). Injetável → o unit test
-// passa um fake; produção usa createAnthropicInvoker (SDK real).
+// passa um fake; produção usa createGeminiInvoker (SDK real, gemini-invoker.ts).
 export type AgentInvoker = (input: {
   system: string;
   user: string;
@@ -60,7 +58,7 @@ function payloadDoSubtipo(e: ExtracaoAgente): unknown {
   }
 }
 
-export class ClaudeProvider implements ExtractionProvider {
+export class LlmExtractionProvider implements ExtractionProvider {
   constructor(private readonly invoker: AgentInvoker) {}
 
   async extrair(ctx: ExtractionContext): Promise<ExtractionResult> {
@@ -112,39 +110,4 @@ export class ClaudeProvider implements ExtractionProvider {
       alertaRisco: saida.alerta_risco ?? null,
     };
   }
-}
-
-// Invoker de produção: chama a API da Anthropic com tool_use forçado. NÃO é
-// coberto por unit test (chamada viva) — é validado pela bake-off (dado
-// fictício) e pelo teste de integração inline. Modelo default: Claude Sonnet.
-export function createAnthropicInvoker(
-  model = "claude-sonnet-5",
-): AgentInvoker {
-  return async ({ system, user }) => {
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic();
-    const resp = await client.messages.create({
-      model,
-      max_tokens: 4096,
-      system,
-      tools: [
-        {
-          name: "registrar_extracao",
-          description:
-            "Registra a extração estruturada da sessão conforme o schema.",
-          input_schema: TOOL_INPUT_SCHEMA as { type: "object" } & Record<
-            string,
-            unknown
-          >,
-        },
-      ],
-      tool_choice: { type: "tool", name: "registrar_extracao" },
-      messages: [{ role: "user", content: user }],
-    });
-    const block = resp.content.find((b) => b.type === "tool_use");
-    if (!block || block.type !== "tool_use") {
-      throw new Error("Anthropic não retornou tool_use.");
-    }
-    return block.input;
-  };
 }

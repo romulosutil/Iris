@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { resolveProvider } from "./provider";
-import { ClaudeProvider } from "./claude-provider";
+import { LlmExtractionProvider } from "./llm-provider";
 import { DemoStubProvider } from "./demo-stub-provider";
 import { NullProvider } from "./null-provider";
 
@@ -26,18 +26,20 @@ describe("resolveProvider", () => {
     expect(resolveProvider({ isDemo: false })).toBeInstanceOf(NullProvider);
   });
 
-  test("produção COM flag + chave habilitada usa o ClaudeProvider real", () => {
+  test("produção COM flag + chave habilitada usa o LlmExtractionProvider real", () => {
     process.env.EXTRACTION_LLM_ENABLED = "true";
-    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
-    expect(resolveProvider({ isDemo: false })).toBeInstanceOf(ClaudeProvider);
+    process.env.GOOGLE_API_KEY = "AIza-test";
+    expect(resolveProvider({ isDemo: false })).toBeInstanceOf(
+      LlmExtractionProvider,
+    );
   });
 
   test("flag ligada mas SEM chave cai no NullProvider (não chama LLM sem credencial)", () => {
     process.env.EXTRACTION_LLM_ENABLED = "true";
-    const keySalva = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
+    const keySalva = process.env.GOOGLE_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
     expect(resolveProvider({ isDemo: false })).toBeInstanceOf(NullProvider);
-    if (keySalva) process.env.ANTHROPIC_API_KEY = keySalva;
+    if (keySalva) process.env.GOOGLE_API_KEY = keySalva;
   });
 });
 

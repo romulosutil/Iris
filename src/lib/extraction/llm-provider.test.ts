@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { ClaudeProvider } from "./claude-provider";
+import { LlmExtractionProvider } from "./llm-provider";
 import type { AgentOutput } from "./agent-output-schema";
 
 const ctx = {
@@ -29,10 +29,10 @@ const saidaValida: AgentOutput = {
   sinalizacoes: [],
 };
 
-describe("ClaudeProvider", () => {
+describe("LlmExtractionProvider", () => {
   test("mapeia a saída validada do agente para drafts 'sugerida'", async () => {
     const invoker = vi.fn().mockResolvedValue(saidaValida);
-    const { drafts } = await new ClaudeProvider(invoker).extrair(ctx);
+    const { drafts } = await new LlmExtractionProvider(invoker).extrair(ctx);
 
     expect(drafts).toHaveLength(1);
     const d = drafts[0]!;
@@ -46,7 +46,7 @@ describe("ClaudeProvider", () => {
 
   test("passa system prompt + diário ao invoker (diário dentro do bloco de dados)", async () => {
     const invoker = vi.fn().mockResolvedValue(saidaValida);
-    await new ClaudeProvider(invoker).extrair(ctx);
+    await new LlmExtractionProvider(invoker).extrair(ctx);
 
     const arg = invoker.mock.calls[0]![0] as { system: string; user: string };
     expect(arg.system).toContain("R1.");
@@ -59,7 +59,7 @@ describe("ClaudeProvider", () => {
       extracoes: [],
       resumo_sessao: "Nada a extrair.",
     };
-    const { drafts } = await new ClaudeProvider(
+    const { drafts } = await new LlmExtractionProvider(
       vi.fn().mockResolvedValue(vazio),
     ).extrair(ctx);
     expect(drafts).toHaveLength(0);
@@ -67,12 +67,12 @@ describe("ClaudeProvider", () => {
 
   test("lança quando o modelo devolve saída fora do schema (caller trata como pendente)", async () => {
     const invalido = { extracoes: [{ tipo: "pontuacao", nota: 10 }] };
-    const provider = new ClaudeProvider(vi.fn().mockResolvedValue(invalido));
+    const provider = new LlmExtractionProvider(vi.fn().mockResolvedValue(invalido));
     await expect(provider.extrair(ctx)).rejects.toThrow();
   });
 
   test("lança quando o invoker (LLM) falha", async () => {
-    const provider = new ClaudeProvider(
+    const provider = new LlmExtractionProvider(
       vi.fn().mockRejectedValue(new Error("429 rate limit")),
     );
     await expect(provider.extrair(ctx)).rejects.toThrow();
@@ -80,7 +80,7 @@ describe("ClaudeProvider", () => {
 
   test("lança em modo desconhecido/inválido — nunca cai em ABA por default (R3/#388)", async () => {
     const invoker = vi.fn().mockResolvedValue(saidaValida);
-    const provider = new ClaudeProvider(invoker);
+    const provider = new LlmExtractionProvider(invoker);
     const ctxComModoInvalido = {
       ...ctx,
       contextoCanonico: { modo: "modo_inexistente" },
@@ -94,7 +94,7 @@ describe("ClaudeProvider", () => {
   test("modo 'tcc' usa o TCC_SYSTEM_PROMPT", async () => {
     const invoker = vi.fn().mockResolvedValue(saidaValida);
     const ctxTcc = { ...ctx, contextoCanonico: { modo: "tcc" } };
-    await new ClaudeProvider(invoker).extrair(ctxTcc);
+    await new LlmExtractionProvider(invoker).extrair(ctxTcc);
 
     const arg = invoker.mock.calls[0]![0] as { system: string; user: string };
     expect(arg.system).toContain("R1-TC.");

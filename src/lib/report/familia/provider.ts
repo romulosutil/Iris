@@ -1,5 +1,6 @@
 // Provider do Agente 2 (Relatório de Família) — interface + roteamento.
 // Espelha src/lib/extraction/provider.ts (resolveProvider).
+import { GeminiFamilyReportProvider } from "./gemini-provider";
 import type { FamilyReportDraft, FamilyReportInput } from "./types";
 import { StubFamilyReportProvider } from "./stub-provider";
 
@@ -9,9 +10,10 @@ export interface FamilyReportProvider {
 
 // Roteamento:
 // - clínica demo → stub determinístico (dado fictício, sem LLM).
-// - produção com FAMILY_REPORT_LLM_ENABLED=true E ANTHROPIC_API_KEY →
-//   ClaudeFamilyReportProvider (real). O gate é o guardrail LGPD/DPA: nenhum
-//   dado de paciente real vai à Anthropic antes do DPA + zero-data-retention.
+// - produção com FAMILY_REPORT_LLM_ENABLED=true E GOOGLE_API_KEY →
+//   GeminiFamilyReportProvider (esqueleto — gerar() ainda lança, pendente
+//   prompt/parsing do Agente 2). D57 (25/08/26): Gemini é o único provedor de
+//   IA do produto; nenhum caminho usa Anthropic/Claude.
 // - qualquer outro caso → stub. O stub NÃO chama LLM e NÃO envia dado a
 //   terceiros (lógica local sobre evidências já aprovadas), então é seguro como
 //   fallback e nunca quebra o fluxo de geração.
@@ -21,12 +23,7 @@ export function resolveFamilyReportProvider(clinic: {
   if (clinic.isDemo) return new StubFamilyReportProvider();
   const llmHabilitado =
     process.env.FAMILY_REPORT_LLM_ENABLED === "true" &&
-    !!process.env.ANTHROPIC_API_KEY;
+    !!process.env.GOOGLE_API_KEY;
   if (!llmHabilitado) return new StubFamilyReportProvider();
-  // Habilitação real do ClaudeProvider é dívida pós-DPA (ver spec §5 / BACKLOG).
-  // Enquanto não houver o assembler do prompt do Agente 2 + parsing validado,
-  // falha explícita > enviar prompt não auditado. A flag está OFF até lá.
-  throw new Error(
-    "FAMILY_REPORT_LLM_ENABLED ligado mas ClaudeFamilyReportProvider ainda não implementado (dívida pós-DPA). Desligue a flag para usar o stub.",
-  );
+  return new GeminiFamilyReportProvider();
 }

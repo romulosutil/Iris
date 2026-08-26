@@ -295,7 +295,7 @@ function levantarRiscoDeSinalizacoes(entrada: unknown): unknown {
 }
 
 // Forma do objeto, SEM o preprocess. Exportada separadamente porque é ela que
-// alimenta `zodToJsonSchema` para o tool schema do Claude: um ZodEffects não
+// alimenta `zodToJsonSchema` para o tool schema do Gemini: um ZodEffects não
 // gera JSON Schema confiável, e o tool schema é o que ensina a forma ao modelo.
 export const agentOutputObjectSchema = z.object({
   extracoes: z.array(extracaoSchema),

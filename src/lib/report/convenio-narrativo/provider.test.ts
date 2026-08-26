@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { PayloadConvenioBruto } from "../convenio-bruto/types";
+import { GeminiConvenioNarrativoProvider } from "./gemini-provider";
 import {
   resolveConvenioNarrativoProvider,
   validarDraftContraDossie,
@@ -136,8 +137,30 @@ describe("validarDraftContraDossie", () => {
 });
 
 describe("resolveConvenioNarrativoProvider", () => {
+  const ORIGINAL_ENABLED = process.env.CONVENIO_REPORT_LLM_ENABLED;
+  const ORIGINAL_KEY = process.env.GOOGLE_API_KEY;
+
+  afterEach(() => {
+    process.env.CONVENIO_REPORT_LLM_ENABLED = ORIGINAL_ENABLED;
+    process.env.GOOGLE_API_KEY = ORIGINAL_KEY;
+  });
+
   it("retorna stub para clínica demo", () => {
     const provider = resolveConvenioNarrativoProvider({ isDemo: true });
     expect(provider).toBeInstanceOf(StubConvenioNarrativoProvider);
+  });
+
+  it("retorna stub em produção quando CONVENIO_REPORT_LLM_ENABLED=true mas GOOGLE_API_KEY ausente", () => {
+    process.env.CONVENIO_REPORT_LLM_ENABLED = "true";
+    delete process.env.GOOGLE_API_KEY;
+    const provider = resolveConvenioNarrativoProvider({ isDemo: false });
+    expect(provider).toBeInstanceOf(StubConvenioNarrativoProvider);
+  });
+
+  it("retorna GeminiConvenioNarrativoProvider quando habilitado com GOOGLE_API_KEY presente", () => {
+    process.env.CONVENIO_REPORT_LLM_ENABLED = "true";
+    process.env.GOOGLE_API_KEY = "fake-key-teste";
+    const provider = resolveConvenioNarrativoProvider({ isDemo: false });
+    expect(provider).toBeInstanceOf(GeminiConvenioNarrativoProvider);
   });
 });
