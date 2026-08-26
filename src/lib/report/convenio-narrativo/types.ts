@@ -29,7 +29,7 @@ export type PayloadConvenioNarrativo = {
   periodo: { inicio: string; fim: string };
   cabecalho: CabecalhoConvenio;
   geradoEm: string; // ISO — data de extração do snapshot (D10)
-  provider: "stub" | "claude";
+  provider: "stub" | "gemini";
   dossie: PayloadConvenioBruto; // snapshot congelado (D10) — não re-buscado no export
   iaOriginal: ConvenioNarrativoDraft; // imutável (auditoria)
   curado: ConvenioNarrativoDraft | null; // null até curar

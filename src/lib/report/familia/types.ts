@@ -39,7 +39,7 @@ export type PayloadFamilia = {
   crianca: { nome: string };
   periodo: { inicio: string; fim: string };
   geradoEm: string; // ISO timestamp
-  provider: "stub" | "claude";
+  provider: "stub" | "gemini";
   iaOriginal: FamilyReportDraft; // imutável — rascunho da IA (auditoria F2)
   curado: FamilyReportDraft | null; // null até o coordenador revisar
 };
