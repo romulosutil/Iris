@@ -47,6 +47,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
 $$;
 --> statement-breakpoint
 
+REVOKE ALL ON FUNCTION public.app_alarme_billing_atrasado(interval) FROM PUBLIC;
+--> statement-breakpoint
+
 GRANT EXECUTE ON FUNCTION public.app_alarme_billing_atrasado(interval) TO iris_alarme;
 --> statement-breakpoint
 
@@ -65,6 +68,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
     (SELECT clinic_id FROM alerta_risco_clinico WHERE status = 'aberto' AND prazo_reconhecimento <= now() - p_folga ORDER BY prazo_reconhecimento ASC LIMIT 1),
     (SELECT prazo_reconhecimento FROM alerta_risco_clinico WHERE status = 'aberto' AND prazo_reconhecimento <= now() - p_folga ORDER BY prazo_reconhecimento ASC LIMIT 1);
 $$;
+--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.app_alarme_escalonamento_atrasado(interval) FROM PUBLIC;
 --> statement-breakpoint
 
 GRANT EXECUTE ON FUNCTION public.app_alarme_escalonamento_atrasado(interval) TO iris_alarme;
