@@ -32,6 +32,7 @@ on:
       - "infra/backup/**"
       - "infra/billing/**"
       - "infra/retencao/**"
+      - "infra/exportacao/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   push:
@@ -42,6 +43,7 @@ on:
       - "infra/backup/**"
       - "infra/billing/**"
       - "infra/retencao/**"
+      - "infra/exportacao/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   # Botão manual: útil para reexercitar as imagens depois de uma mudança de base

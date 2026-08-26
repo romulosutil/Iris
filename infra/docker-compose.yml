@@ -165,9 +165,40 @@ services:
       # "container reiniciou agora".
       - billingdata:/heartbeat
 
+  # Job de exportação integral do acervo (#374 ∪ #353, D62, infra/exportacao/).
+  # Não sobe por default (profile "exportacao"). Rodar com:
+  #   docker compose -f infra/docker-compose.yml --profile exportacao up exportacao
+  #   docker compose -f infra/docker-compose.yml --profile exportacao run --rm \
+  #     exportacao node scripts/exportacao-acervo.mjs
+  #
+  # Sem `ports:` e sem `depends_on: postgres`: este job NÃO fala com o banco.
+  # Ele faz um POST autenticado numa rota interna do Next, e é essa rota que
+  # coleta o acervo, monta o ZIP e calcula os SHA-256. Ver o cabeçalho do
+  # Dockerfile para o porquê.
+  exportacao:
+    profiles: ["exportacao"]
+    build:
+      # Contexto na RAIZ do repo (não em ./exportacao) para bater com o que o
+      # Easypanel faz em produção — mesma razão dos serviços acima.
+      context: ..
+      dockerfile: infra/exportacao/Dockerfile
+    environment:
+      # Em dev local aponte para o `pnpm dev` da máquina host. Sem default de
+      # token: um default aqui viraria segredo commitado.
+      EXPORT_JOB_URL: "${EXPORT_JOB_URL:-http://host.docker.internal:3000/api/internal/jobs/exportacao-integral}"
+      EXPORT_JOB_TOKEN: "${EXPORT_JOB_TOKEN:-}"
+      EXPORT_HEARTBEAT_DIR: /heartbeat
+      INTERVALO_S: "${EXPORT_INTERVALO_S:-300}"
+    volumes:
+      # Volume nomeado, não bind: o heartbeat precisa sobreviver a restart do
+      # container para que "heartbeat parado" signifique "job parado" e não
+      # "container reiniciou agora".
+      - exportacaodata:/heartbeat
+
 volumes:
   pgdata:
   miniodata:
   backupdata:
   escalonamentodata:
   billingdata:
+  exportacaodata:

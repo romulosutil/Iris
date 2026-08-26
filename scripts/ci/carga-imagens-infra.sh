@@ -35,6 +35,7 @@
 #   scripts/ci/carga-imagens-infra.sh billing
 #   scripts/ci/carga-imagens-infra.sh retencao
 #   scripts/ci/carga-imagens-infra.sh alarme
+#   scripts/ci/carga-imagens-infra.sh exportacao
 #
 # Roda igual no CI e na máquina do dev — de propósito. Um teste que só existe
 # no workflow é um teste que ninguém roda antes de abrir o PR.
@@ -58,6 +59,7 @@ readonly TAG_BACKUP="iris-backup-ci:local"
 readonly TAG_BILLING="iris-billing-ci:local"
 readonly TAG_RETENCAO="iris-retencao-ci:local"
 readonly TAG_ALARME="iris-alarme-ci:local"
+readonly TAG_EXPORTACAO="iris-exportacao-ci:local"
 
 log_info() { printf '[carga-imagens] %s\n' "$*"; }
 log_ok() { printf '[carga-imagens] OK: %s\n' "$*"; }
@@ -593,6 +595,62 @@ carga_alarme() {
 		-- docker run --rm "${TAG_ALARME}" /app/agendador.sh
 }
 
+# --- exportacao ----------------------------------------------------------------
+# Exportação integral do acervo (#374 ∪ #353, D62). Mesmo ponto cego do
+# billing: esta imagem não instala NADA de propósito
+# (infra/exportacao/Dockerfile), então o risco não é dependência ausente — é
+# COPY com caminho errado (contexto de build é a RAIZ do repo, não
+# infra/exportacao/), `apk add bash` sumindo, ou a guarda de execução do
+# `.mjs` não disparando. Diferente do billing/escalonamento, o script não
+# aceita `--once`: uma varredura completa por invocação já é o contrato.
+carga_exportacao() {
+	log_info "buildando ${TAG_EXPORTACAO}..."
+	docker build -f infra/exportacao/Dockerfile -t "${TAG_EXPORTACAO}" .
+
+	# Sem env, o script para na guarda ANTES de qualquer fetch — nenhuma rota de
+	# produção é tocada por este teste.
+	esperar_falha_com \
+		"exportacao: carga por caminho ABSOLUTO" \
+		"EXPORT_JOB_URL e EXPORT_JOB_TOKEN são obrigatórias" \
+		-- docker run --rm "${TAG_EXPORTACAO}" \
+		node /app/scripts/exportacao-acervo.mjs
+
+	# Forma RELATIVA: é a documentada em infra/docker-compose.yml.
+	esperar_falha_com \
+		"exportacao: carga por caminho RELATIVO (forma do compose)" \
+		"EXPORT_JOB_URL e EXPORT_JOB_TOKEN são obrigatórias" \
+		-- docker run --rm -w /app "${TAG_EXPORTACAO}" \
+		node scripts/exportacao-acervo.mjs
+
+	# Resolve TODO specifier dos arquivos copiados, dinâmico incluído. Hoje o
+	# script importa só `node:url` — guarda-corpo do dia em que alguém acrescentar
+	# um import aqui (só seguro se a dependência chegar na imagem, e nesta imagem
+	# NADA chega).
+	esperar_sucesso \
+		"exportacao: todo import resolve na imagem (inclusive os dinâmicos)" \
+		-- bash -c "docker run --rm -i -w /app -e ALVO=/app/scripts '${TAG_EXPORTACAO}' node --input-type=module < scripts/ci/verificar-deps-imagem.mjs"
+
+	# O agendador usa `set -Eeuo pipefail` e `[[ ]]`: sem o `apk add bash` do
+	# Dockerfile a imagem sobe e o laço morre na primeira linha.
+	esperar_sucesso \
+		"exportacao: sintaxe do agendador.sh (bash presente)" \
+		-- docker run --rm "${TAG_EXPORTACAO}" bash -n /app/agendador.sh
+
+	# O CMD do Dockerfile aponta /app/agendador.sh por caminho absoluto fixo. Se
+	# o COPY mudar de lugar, o container só falha em produção.
+	esperar_sucesso \
+		"exportacao: /app/agendador.sh executável (caminho fixo do CMD)" \
+		-- docker run --rm "${TAG_EXPORTACAO}" test -x /app/agendador.sh
+
+	# O agendador valida env ANTES de entrar no laço e sai 1. Rodá-lo sem env
+	# prova as duas coisas: que a guarda nomeia a variável, e que este teste não
+	# trava — um agendador que entrasse no laço aqui penduraria o CI.
+	esperar_falha_com \
+		"exportacao: agendador para na guarda de env (não entra em laço)" \
+		"variável(is) de ambiente ausente(s)" \
+		-- docker run --rm "${TAG_EXPORTACAO}" /app/agendador.sh
+}
+
 # --- main --------------------------------------------------------------------
 alvo="${1:-todos}"
 case "${alvo}" in
@@ -601,15 +659,17 @@ backup) carga_backup ;;
 billing) carga_billing ;;
 retencao) carga_retencao ;;
 alarme) carga_alarme ;;
+exportacao) carga_exportacao ;;
 todos)
 	carga_escalonamento
 	carga_backup
 	carga_billing
 	carga_retencao
 	carga_alarme
+	carga_exportacao
 	;;
 *)
-	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao', 'alarme' ou nenhum (todos)."
+	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao', 'alarme', 'exportacao' ou nenhum (todos)."
 	exit 2
 	;;
 esac
