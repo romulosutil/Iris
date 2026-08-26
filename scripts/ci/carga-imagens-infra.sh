@@ -34,6 +34,7 @@
 #   scripts/ci/carga-imagens-infra.sh backup
 #   scripts/ci/carga-imagens-infra.sh billing
 #   scripts/ci/carga-imagens-infra.sh retencao
+#   scripts/ci/carga-imagens-infra.sh alarme
 #
 # Roda igual no CI e na máquina do dev — de propósito. Um teste que só existe
 # no workflow é um teste que ninguém roda antes de abrir o PR.
@@ -56,6 +57,7 @@ readonly TAG_ESCALONAMENTO="iris-escalonamento-ci:local"
 readonly TAG_BACKUP="iris-backup-ci:local"
 readonly TAG_BILLING="iris-billing-ci:local"
 readonly TAG_RETENCAO="iris-retencao-ci:local"
+readonly TAG_ALARME="iris-alarme-ci:local"
 
 log_info() { printf '[carga-imagens] %s\n' "$*"; }
 log_ok() { printf '[carga-imagens] OK: %s\n' "$*"; }
@@ -549,6 +551,48 @@ carga_retencao() {
 		-- docker run --rm "${TAG_RETENCAO}" /app/agendador.sh
 }
 
+# --- alarme --------------------------------------------------------------------
+# Detector de alarme automático de jobs de infra (#294). Mesmo ponto cego dos
+# demais: COPY arquivo por arquivo + `npm install` de dependências à mão, numa
+# imagem que NÃO enxerga o node_modules do app — inclusive `resend`, que entra
+# por `await import()` em try/catch e degradaria em silêncio como "falha de
+# envio" se faltasse na imagem.
+carga_alarme() {
+	log_info "buildando ${TAG_ALARME}..."
+	docker build -f infra/alarme/Dockerfile -t "${TAG_ALARME}" .
+
+	esperar_falha_com \
+		"alarme: carga por caminho ABSOLUTO" \
+		"variável de ambiente ausente: ALARME_DATABASE_URL" \
+		-- docker run --rm "${TAG_ALARME}" \
+		node /app/scripts/alarme-jobs.mjs
+
+	esperar_sucesso \
+		"alarme: todo import resolve na imagem (inclusive os dinâmicos)" \
+		-- bash -c "docker run --rm -i -w /app -e ALVO=/app/scripts '${TAG_ALARME}' node --input-type=module < scripts/ci/verificar-deps-imagem.mjs"
+
+	esperar_sucesso \
+		"alarme: resend presente (import dinâmico do envio de alarme)" \
+		-- docker run --rm "${TAG_ALARME}" node -e "import('resend').then(() => process.exit(0)).catch(() => process.exit(1))"
+
+	esperar_sucesso \
+		"alarme: sintaxe do agendador.sh (bash presente)" \
+		-- docker run --rm "${TAG_ALARME}" bash -n /app/agendador.sh
+
+	esperar_sucesso \
+		"alarme: /app/agendador.sh executável (caminho fixo do CMD)" \
+		-- docker run --rm "${TAG_ALARME}" test -x /app/agendador.sh
+
+	esperar_sucesso \
+		"alarme: mc instalado e executável" \
+		-- docker run --rm "${TAG_ALARME}" mc --version
+
+	esperar_falha_com \
+		"alarme: agendador para na guarda de env (não entra em laço)" \
+		"ALARME_DATABASE_URL" \
+		-- docker run --rm "${TAG_ALARME}" /app/agendador.sh
+}
+
 # --- main --------------------------------------------------------------------
 alvo="${1:-todos}"
 case "${alvo}" in
@@ -556,14 +600,16 @@ escalonamento) carga_escalonamento ;;
 backup) carga_backup ;;
 billing) carga_billing ;;
 retencao) carga_retencao ;;
+alarme) carga_alarme ;;
 todos)
 	carga_escalonamento
 	carga_backup
 	carga_billing
 	carga_retencao
+	carga_alarme
 	;;
 *)
-	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao' ou nenhum (todos)."
+	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao', 'alarme' ou nenhum (todos)."
 	exit 2
 	;;
 esac
