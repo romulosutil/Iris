@@ -109,6 +109,22 @@
 
 ---
 
+## 🏁 Sessão 25/08/2026 (4ª) — D57 fechado por medição real (não pela página certa da primeira vez), drift Claude→Gemini corrigido em produção, D59 e D66 destravados, implantado
+
+- **Status:** PR [#470](https://github.com/romulosutil/Iris/pull/470) mergeado em `main` (`7886e8f4`, 26/08/2026 00:49 -03). `GOOGLE_API_KEY` e `EXTRACTION_LLM_ENABLED=true` confirmados pelo Rômulo no Easypanel (iris-app) e implantados.
+
+**Como D57 realmente fechou.** A pergunta "o Gemini API standalone está no escopo do Cloud DPA?" foi feita duas vezes contra fontes diferentes, e a primeira deu resposta errada por procurar no lugar errado: `cloud.google.com/security/compliance/services-in-scope` só lista produtos **GCP/Vertex AI** (chave de service account) — a chave de developer/AI Studio (`GOOGLE_API_KEY`, a que o Iris usa) não aparece ali em lugar nenhum, o que por um instante pareceu significar "não coberto, precisa migrar pra Vertex". A resposta certa estava nos **Termos de Serviço Adicionais da API Gemini** (`ai.google.dev/gemini-api/terms`): com billing pago ativo, todo uso vira "Serviço Pago" e o Adendo de Tratamento de Dados (DPA) aplica automaticamente, sem precisar de Vertex. As três confirmações do D57 (billing pago, escopo do DPA, equivalência ao Art. 33 LGPD) fecharam com essa fonte.
+
+**O achado que importava mais não era de compliance, era de código.** Ao conferir o `.env` de produção pra decidir onde ligar a flag, apareceu que `provider.ts` (`resolveProvider`) gatilhava `ANTHROPIC_API_KEY`/`ClaudeProvider`, não `GOOGLE_API_KEY`/Gemini — divergente da decisão registrada desde 21/08/2026 e dos termos de consentimento já ratificados (que citam Google/Gemini, nunca Anthropic). O `.env` de produção não tinha nenhuma das duas chaves, então `EXTRACTION_LLM_ENABLED=true` não teria efeito nenhum — caía em silêncio no `NullProvider`. Se alguém tivesse só preenchido `ANTHROPIC_API_KEY` pra "ativar a flag" sem essa checagem, teria mandado prontuário de paciente menor pra um provedor não nomeado em nenhum termo assinado.
+
+**Decisão do Rômulo, ampliando o escopo do PR:** produto usa só Gemini, sem exceção. `src/lib/extraction` migrado (`ClaudeProvider`→`LlmExtractionProvider`, `claude-provider.ts`→`llm-provider.ts`, `gemini-test-invoker.ts`→`gemini-invoker.ts` deixando de ser test-only, `createAnthropicInvoker` e a dependência do SDK Anthropic removidos do caminho de extração) e o escopo ampliado no mesmo PR pros Agentes 2/3 (D66) — `resolveFamilyReportProvider`/`resolveConvenioNarrativoProvider` também gateiam em `GOOGLE_API_KEY` agora, ambos com esqueleto próprio (`gemini-provider.ts`), ambos ainda não implementados (`gerar()` lança). `ANTHROPIC_API_KEY` saiu do `.env.example` — zero referência restante em `src/`.
+
+**Consequência em cascata:** com D57 fechado, o gate de impressão do **D59** (termo de consentimento de menor) destravou — dependia exatamente dessa mesma confirmação. Termo pode ser colhido com titular real.
+
+**Verificação:** 71 testes de `src/lib/extraction` + 43 de `src/lib/report` + suíte completa (270 arquivos/1981 testes) verdes, `pnpm typecheck`/`pnpm lint` limpos, PR passou pelos 7 checks obrigatórios do ruleset antes de sair de Draft.
+
+---
+
 ## 🏁 Sessão 24/08/2026 (3ª) — AGENTS.md ganha §8.4 (grafo), PR #462 CONFLICTING resolvido por causa raiz medida
 
 - **Status:** merge de `origin/main` na branch `fix/446-d46-loga-envelope-retentativa-inesperado` executado e conflito resolvido a favor do texto fechado do D46 (main ainda tinha D46 aberto). `AGENTS.md` §8 ganhou item 4 (grafo).
