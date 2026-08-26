@@ -22,8 +22,10 @@
  */
 import { execFile } from "node:child_process";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import postgres from "postgres";
+import { enviarEmailAlarme } from "./lib/resend-alarme.mjs";
 
 const execFileP = promisify(execFile);
 const LIMITE_BACKUP_H = 36;
@@ -209,4 +211,90 @@ export async function verificarBackupOffsite(
       detalhe: `não foi possível checar: ${msg.split(env.OFFSITE_S3_SECRET_KEY).join("***")}`,
     };
   }
+}
+
+/**
+ * Separa o que MERECE e-mail do que só merece log. Pura, para o desfecho ser
+ * testável sem tocar em rede nem em disco (mesmo motivo do `decidirDesfecho`
+ * do trigger de conciliação, #375).
+ */
+export function decidirEnvios(resultados) {
+  return {
+    aEnviar: resultados.filter((r) => r.estado === "problema"),
+    aLogar: resultados.filter((r) => r.estado === "indeterminado"),
+  };
+}
+
+export async function main() {
+  const heartbeatDir = process.env.ALARME_HEARTBEAT_DIR || "/heartbeat";
+  await mkdir(heartbeatDir, { recursive: true });
+
+  const databaseUrl = process.env.ALARME_DATABASE_URL;
+  if (!databaseUrl) {
+    console.error(
+      "alarme-jobs: ERRO: variável de ambiente ausente: ALARME_DATABASE_URL",
+    );
+    return 1;
+  }
+
+  const sql = abrirConexao(databaseUrl);
+  const hoje = hojeUTC();
+  const resultados = [];
+
+  try {
+    resultados.push(await verificarBilling(sql));
+    resultados.push(await verificarEscalonamento(sql));
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+  resultados.push(await verificarBackupOffsite(process.env));
+
+  const { aEnviar, aLogar } = decidirEnvios(resultados);
+
+  for (const r of aLogar) {
+    console.warn(`[alarme-jobs] INDETERMINADO: ${r.motivo} — ${r.detalhe}`);
+  }
+
+  let algumEnvioFalhou = false;
+  for (const r of aEnviar) {
+    console.warn(`[alarme-jobs] ATENÇÃO: ${r.motivo} — ${r.detalhe}`);
+
+    if (!(await deveAlertar(heartbeatDir, r.motivo, hoje))) {
+      console.log(`[alarme-jobs] ${r.motivo}: já alertado hoje, sem reenvio.`);
+      continue;
+    }
+
+    const envio = await enviarEmailAlarme({
+      apiKey: process.env.EMAIL_PROVIDER_API_KEY,
+      fromEmail:
+        process.env.RESEND_FROM_EMAIL || "notificacoes@irisclinica.ia.br",
+      destino: process.env.ALARME_EMAIL_DESTINO,
+      motivo: r.motivo,
+      detalhe: r.detalhe,
+    });
+    if (envio.ok) {
+      // Só marca depois de enviado: um envio que falhou tem que reentrar no
+      // tick seguinte, senão o dedup silencia um alarme que nunca chegou.
+      await marcarAlertado(heartbeatDir, r.motivo, hoje);
+      console.log(`[alarme-jobs] ${r.motivo}: e-mail de alarme enviado.`);
+    } else {
+      algumEnvioFalhou = true;
+      console.error(
+        `[alarme-jobs] ${r.motivo}: FALHA ao enviar e-mail: ${envio.erro}`,
+      );
+    }
+  }
+
+  // Carimbo de "eu rodei", gravado SEMPRE — inclusive quando achou problema.
+  // É o que prova que o próprio detector está vivo; sem ele, um detector
+  // morto e um mundo saudável têm a mesma aparência.
+  await writeFile(
+    `${heartbeatDir}/.ultima-verificacao`,
+    new Date().toISOString(),
+  );
+  return algumEnvioFalhou ? 1 : 0;
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().then((codigo) => process.exit(codigo));
 }

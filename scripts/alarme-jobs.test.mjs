@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
+  decidirEnvios,
   deveAlertar,
   idadeMaisRecenteH,
   marcarAlertado,
@@ -309,5 +310,42 @@ describe("alarme-jobs.mjs — verificarBackupOffsite (#294)", () => {
     expect(resultado.motivo).toBe("backup-offsite");
     expect(resultado.detalhe).not.toContain("segredo-super-secreto");
     expect(resultado.detalhe).toContain("***");
+  });
+});
+
+describe("alarme-jobs.mjs — decidirEnvios (#294)", () => {
+  test("três 'ok' → aEnviar e aLogar vazios", () => {
+    const resultados = [
+      { estado: "ok", motivo: "billing", detalhe: "" },
+      { estado: "ok", motivo: "escalonamento", detalhe: "" },
+      { estado: "ok", motivo: "backup-offsite", detalhe: "" },
+    ];
+    expect(decidirEnvios(resultados)).toEqual({ aEnviar: [], aLogar: [] });
+  });
+
+  test("problema + indeterminado + ok → cada um na cesta certa, indeterminado nunca em aEnviar", () => {
+    const problema = {
+      estado: "problema",
+      motivo: "billing",
+      detalhe: "ciclo vencido",
+    };
+    const indeterminado = {
+      estado: "indeterminado",
+      motivo: "backup-offsite",
+      detalhe: "variável ausente",
+    };
+    const ok = { estado: "ok", motivo: "escalonamento", detalhe: "" };
+    const resultado = decidirEnvios([problema, indeterminado, ok]);
+    expect(resultado.aEnviar).toEqual([problema]);
+    expect(resultado.aLogar).toEqual([indeterminado]);
+    expect(resultado.aEnviar).not.toContainEqual(indeterminado);
+  });
+
+  test("ordem de aEnviar preserva a ordem de entrada", () => {
+    const primeiro = { estado: "problema", motivo: "a", detalhe: "" };
+    const segundo = { estado: "problema", motivo: "b", detalhe: "" };
+    const terceiro = { estado: "problema", motivo: "c", detalhe: "" };
+    const resultado = decidirEnvios([segundo, primeiro, terceiro]);
+    expect(resultado.aEnviar).toEqual([segundo, primeiro, terceiro]);
   });
 });
