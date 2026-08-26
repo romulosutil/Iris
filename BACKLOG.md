@@ -109,6 +109,20 @@
 
 ---
 
+## 🏁 Sessão 26/08/2026 (2ª) — incidente pós-#471: `iris_alarme_login`/`iris_retencao_login` com 28P01 em produção, alarme de backup-offsite com falso-positivo, ambos fechados e verificados
+
+- **Status:** credenciais corrigidas manualmente no Postgres/Easypanel (fora de PR, confirmado pelo Rômulo). PR [#473](https://github.com/romulosutil/Iris/pull/473) mergeado em `main` (`82fcbce3`). Verificação final: revarredura dos 18 serviços do projeto `espectro-mvp` no Easypanel via Claude in Chrome, log a log.
+
+**O que apareceu.** Auditoria de logs do Easypanel (18 serviços) achou dois usuários Postgres `_login` falhando autenticação (`28P01 password authentication failed`) ao mesmo tempo: `iris_retencao_login` (job de aviso-prévio de expurgo LGPD, silencioso desde 25/08 17:32 — "a clínica perde os 90 dias de antecedência, prontuário chega vencido na fila sem que ninguém tenha sido avisado") e `iris_alarme_login` (detector do próprio #294/#471, cego pra `billing` e `escalonamento` há 14+ varreduras, limite 6). Provisionado pela #294/#471, entregue com senha que nunca chegou a autenticar em produção — nenhum dos dois caminhos tinha alarme sobre si mesmo.
+
+**Segunda camada, só visível depois da senha corrigida.** Com a credencial certa, `iris-alarme` trocou o 28P01 por `ERR_INVALID_URL`: a senha gerada continha `/` e `+` sem URL-encode dentro da connection string `postgres://usuario:senha@host:porta/db`, e a barra no meio da senha quebra o parser de URL antes de chegar no driver. Corrigido junto com a rotação da credencial.
+
+**Terceiro achado, sem relação com credencial:** o alarme de `backup-offsite` disparava e-mail todo dia por falso-positivo — `LIMITE_BACKUP_H` fixo em 36h presumindo cadência diária, enquanto produção roda `OFFSITE_INTERVAL_DAYS=7` (semanal, deliberado). PR #473 trocou o limite fixo por `OFFSITE_INTERVAL_DAYS*24 + 12h` de margem, lido do mesmo env var do serviço de backup; sem a var, comportamento não muda (36h). 38/38 testes de `scripts/alarme-jobs.test.mjs` (2 novos cobrindo `OFFSITE_INTERVAL_DAYS=7`), `pnpm lint`/`pnpm typecheck` limpos. PR também corrigiu um bug pré-existente e não-relacionado: shebang em `scripts/alarme-jobs.mjs` derrubava `pnpm test` inteiro sob Vitest (`AsyncFunction` não faz strip de shebang) — sem uso real, `infra/alarme/agendador.sh` já invocava via `node "${SCRIPT}"`.
+
+**Verificado, não presumido:** revarredura completa dos 18 serviços (`api`, `clinic`, `iris-alarme`, `iris-app`, `iris-arquivamento`, `iris-backup`, `iris-billing`, `iris-escalonamento`, `iris-glitchtip`, `iris-glitchtip-worker`, `iris-migrate`, `iris-minio`, `iris-postgres`, `iris-redis`, `iris-retencao`, `mysql`, `patient`, `redis`) confirmou: `iris-retencao` emitindo aviso-prévio normalmente (0 falhas), `iris-alarme` sem mais `password authentication failed` nem `ERR_INVALID_URL`, log do alarme de backup-offsite citando `OFFSITE_INTERVAL_DAYS` em vez do limite fixo. Nenhum débito D-numerado dependia deste incidente — #294/#471 já estavam fechados antes dele acontecer; este registro cobre o incidente pós-deploy e o fix, não um novo D. Observação que segue aberta, fora de escopo (feature nova, não bug de infra): `iris-glitchtip` com `ALLOWED_HOSTS` wildcard em produção (hardening, não incidente).
+
+---
+
 ## 🏁 Sessão 25/08/2026 (4ª) — D57 fechado por medição real (não pela página certa da primeira vez), drift Claude→Gemini corrigido em produção, D59 e D66 destravados, implantado
 
 - **Status:** PR [#470](https://github.com/romulosutil/Iris/pull/470) mergeado em `main` (`7886e8f4`, 26/08/2026 00:49 -03). `GOOGLE_API_KEY` e `EXTRACTION_LLM_ENABLED=true` confirmados pelo Rômulo no Easypanel (iris-app) e implantados.
