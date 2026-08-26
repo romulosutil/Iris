@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Detector de alarme automático de parada de job de infra (#294).
  *
@@ -28,7 +27,11 @@ import postgres from "postgres";
 import { enviarEmailAlarme } from "./lib/resend-alarme.mjs";
 
 const execFileP = promisify(execFile);
-const LIMITE_BACKUP_H = 36;
+// Margem sobre a cadência configurada do backup off-site (OFFSITE_INTERVAL_DAYS,
+// a mesma variável que já governa o serviço iris-backup — 1 = diário, 7 =
+// semanal). Sem isso o limite ficava fixo em 36h presumindo cadência diária,
+// e uma réplica semanal legítima (até 168h) disparava alarme todo dia.
+const MARGEM_BACKUP_H = 12;
 
 // Checagens que rodam contra o banco (billing, escalonamento) — a única
 // checagem de fora dessa lista é `backup-offsite`, cujo `indeterminado` é
@@ -251,13 +254,15 @@ export async function verificarBackupOffsite(
         detalhe: `Bucket ${bucket} responde, mas está vazio — nenhuma réplica off-site encontrada.`,
       };
     }
-    if (idadeH <= LIMITE_BACKUP_H) {
+    const intervaloDias = Number(env.OFFSITE_INTERVAL_DAYS) || 1;
+    const limiteH = intervaloDias * 24 + MARGEM_BACKUP_H;
+    if (idadeH <= limiteH) {
       return { estado: "ok", motivo: "backup-offsite", detalhe: "" };
     }
     return {
       estado: "problema",
       motivo: "backup-offsite",
-      detalhe: `Réplica off-site mais recente tem ${idadeH.toFixed(1)}h — acima do limite de ${LIMITE_BACKUP_H}h (o backup roda 1x/dia).`,
+      detalhe: `Réplica off-site mais recente tem ${idadeH.toFixed(1)}h — acima do limite de ${limiteH}h (o backup roda a cada ${intervaloDias} dia(s), OFFSITE_INTERVAL_DAYS).`,
     };
   } catch (err) {
     // Nunca vaza a secret na mensagem — o mc ecoa a chave inválida no erro,

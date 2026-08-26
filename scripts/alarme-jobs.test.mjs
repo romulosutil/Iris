@@ -301,6 +301,44 @@ describe("alarme-jobs.mjs — verificarBackupOffsite (#294)", () => {
     expect(resultado.detalhe).toContain("36h");
   });
 
+  test("OFFSITE_INTERVAL_DAYS=7 (semanal): idade de 103.8h → ok, não dispara falso-positivo", async () => {
+    const agora = Date.parse("2026-08-26T13:48:00.000Z");
+    const stdout = JSON.stringify({
+      key: "dump-2026-08-22.sql.age",
+      type: "file",
+      lastModified: "2026-08-22T06:00:00.000Z", // ~103.8h atrás
+    });
+    const execFn = execFnDubleQueRetorna(stdout);
+    const resultado = await verificarBackupOffsite(
+      { ...envCompleto, OFFSITE_INTERVAL_DAYS: "7" },
+      agora,
+      execFn,
+    );
+    expect(resultado).toEqual({
+      estado: "ok",
+      motivo: "backup-offsite",
+      detalhe: "",
+    });
+  });
+
+  test("OFFSITE_INTERVAL_DAYS=7: idade acima de 180h (168h + margem) → problema", async () => {
+    const agora = Date.parse("2026-08-26T00:00:00.000Z");
+    const stdout = JSON.stringify({
+      key: "dump-2026-08-17.sql.age",
+      type: "file",
+      lastModified: "2026-08-17T00:00:00.000Z", // 216h atrás
+    });
+    const execFn = execFnDubleQueRetorna(stdout);
+    const resultado = await verificarBackupOffsite(
+      { ...envCompleto, OFFSITE_INTERVAL_DAYS: "7" },
+      agora,
+      execFn,
+    );
+    expect(resultado.estado).toBe("problema");
+    expect(resultado.detalhe).toContain("216.0h");
+    expect(resultado.detalhe).toContain("180h");
+  });
+
   test("erro do mc que ecoa a secret → detalhe mascara com ***, nunca vaza a secret", async () => {
     const execFn = execFnDubleQueLanca(
       `mc: <ERROR> Unable to initialize new alias. The Access Key Id you provided does not exist with secret segredo-super-secreto.`,
