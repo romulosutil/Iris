@@ -9,6 +9,19 @@ import {
   montarCorpoAlarme,
   enviarEmailAlarme,
 } from "./resend-alarme.mjs";
+import { verificarBilling, verificarEscalonamento } from "../alarme-jobs.mjs";
+
+// Dublês de `sql` que devolvem a MESMA forma de linha que
+// app_alarme_billing_atrasado/app_alarme_escalonamento_atrasado (0129)
+// devolvem de verdade — as funções abaixo constroem o `detalhe` real
+// interpolando essa linha, então o guardrail clínico exercita o template
+// literal de produção, não uma string reconstruída à mão que nunca falharia
+// se alguém adicionasse um dado clínico ao template.
+function sqlDubleQueRetorna(linhas) {
+  return function sql() {
+    return Promise.resolve(linhas);
+  };
+}
 
 // Mock de `resend`. Mesmo padrão do resend-rt.test.mjs: `function`, não arrow.
 vi.mock("resend", () => ({
@@ -48,13 +61,43 @@ describe("montarCorpoAlarme — guardrail clínico", () => {
     expect(corpo).toContain("Timeout em 30min");
   });
 
-  test("nunca inclui marcadores clínicos (nome, paciente, categoria)", () => {
-    const motivo = "billing_apurar_ciclo";
-    const detalhe = "Nenhuma varredura completou nos últimos 120 minutos.";
-    const corpo = montarCorpoAlarme(motivo, detalhe);
+  test("detalhe REAL de verificarBilling (problema) nunca inclui marcadores clínicos", async () => {
+    const sql = sqlDubleQueRetorna([
+      {
+        total: 3,
+        primeira_clinic_id: "11111111-1111-1111-1111-111111111111",
+        primeiro_vencimento: "2026-08-25T10:00:00.000Z",
+      },
+    ]);
+    const resultado = await verificarBilling(sql);
+    const corpo = montarCorpoAlarme(resultado.motivo, resultado.detalhe);
 
-    // O detalhe operacional não contém dados clínicos — asserimos a ausência
-    // deles no corpo como guardrail.
+    expect(resultado.estado).toBe("problema");
+    // Prova que o teste exercita o template real de produção, não uma
+    // string reconstruída à mão.
+    expect(corpo).toContain("3 ciclo(s)");
+    expect(corpo).toContain("11111111-1111-1111-1111-111111111111");
+
+    expect(corpo).not.toMatch(/nome/i);
+    expect(corpo).not.toMatch(/paciente/i);
+    expect(corpo).not.toMatch(/categoria/i);
+  });
+
+  test("detalhe REAL de verificarEscalonamento (problema) nunca inclui marcadores clínicos", async () => {
+    const sql = sqlDubleQueRetorna([
+      {
+        total: 2,
+        primeira_clinic_id: "22222222-2222-2222-2222-222222222222",
+        primeiro_vencimento: "2026-08-25T10:00:00.000Z",
+      },
+    ]);
+    const resultado = await verificarEscalonamento(sql);
+    const corpo = montarCorpoAlarme(resultado.motivo, resultado.detalhe);
+
+    expect(resultado.estado).toBe("problema");
+    expect(corpo).toContain("2 alerta(s)");
+    expect(corpo).toContain("22222222-2222-2222-2222-222222222222");
+
     expect(corpo).not.toMatch(/nome/i);
     expect(corpo).not.toMatch(/paciente/i);
     expect(corpo).not.toMatch(/categoria/i);
