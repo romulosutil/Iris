@@ -3,10 +3,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
+  atualizarContadorIndeterminado,
   decidirEnvios,
   deveAlertar,
+  gravarContadorIndeterminado,
   idadeMaisRecenteH,
+  lerContadorIndeterminado,
   marcarAlertado,
+  montarAlertaDetectorCego,
   verificarBackupOffsite,
   verificarBilling,
   verificarEscalonamento,
@@ -310,6 +314,123 @@ describe("alarme-jobs.mjs — verificarBackupOffsite (#294)", () => {
     expect(resultado.motivo).toBe("backup-offsite");
     expect(resultado.detalhe).not.toContain("segredo-super-secreto");
     expect(resultado.detalhe).toContain("***");
+  });
+});
+
+describe("alarme-jobs.mjs — contador de indeterminado consecutivo / detector cego (#294)", () => {
+  test("contador começa em 0 quando não há arquivo", async () => {
+    expect(await lerContadorIndeterminado(heartbeatDir, "billing")).toBe(0);
+  });
+
+  test("gravar e reler devolve o mesmo valor", async () => {
+    await gravarContadorIndeterminado(heartbeatDir, "billing", 4);
+    expect(await lerContadorIndeterminado(heartbeatDir, "billing")).toBe(4);
+  });
+
+  test("indeterminado incrementa o contador e não escala antes do limite", async () => {
+    for (let i = 1; i <= 5; i++) {
+      const resultado = await atualizarContadorIndeterminado(heartbeatDir, {
+        motivo: "billing",
+        estado: "indeterminado",
+      });
+      expect(resultado.contador).toBe(i);
+      expect(resultado.cegou).toBe(false);
+    }
+  });
+
+  test("6º indeterminado consecutivo escala (cegou: true)", async () => {
+    for (let i = 1; i <= 5; i++) {
+      await atualizarContadorIndeterminado(heartbeatDir, {
+        motivo: "billing",
+        estado: "indeterminado",
+      });
+    }
+    const resultado = await atualizarContadorIndeterminado(heartbeatDir, {
+      motivo: "billing",
+      estado: "indeterminado",
+    });
+    expect(resultado.contador).toBe(6);
+    expect(resultado.cegou).toBe(true);
+  });
+
+  test("ok zera o contador depois de indeterminados anteriores", async () => {
+    await atualizarContadorIndeterminado(heartbeatDir, {
+      motivo: "billing",
+      estado: "indeterminado",
+    });
+    await atualizarContadorIndeterminado(heartbeatDir, {
+      motivo: "billing",
+      estado: "indeterminado",
+    });
+    const zerado = await atualizarContadorIndeterminado(heartbeatDir, {
+      motivo: "billing",
+      estado: "ok",
+    });
+    expect(zerado.contador).toBe(0);
+    expect(zerado.cegou).toBe(false);
+    expect(await lerContadorIndeterminado(heartbeatDir, "billing")).toBe(0);
+  });
+
+  test("problema também zera o contador", async () => {
+    await atualizarContadorIndeterminado(heartbeatDir, {
+      motivo: "escalonamento",
+      estado: "indeterminado",
+    });
+    const zerado = await atualizarContadorIndeterminado(heartbeatDir, {
+      motivo: "escalonamento",
+      estado: "problema",
+    });
+    expect(zerado.contador).toBe(0);
+    expect(
+      await lerContadorIndeterminado(heartbeatDir, "escalonamento"),
+    ).toBe(0);
+  });
+
+  test("motivos diferentes têm contadores independentes", async () => {
+    for (let i = 0; i < 3; i++) {
+      await atualizarContadorIndeterminado(heartbeatDir, {
+        motivo: "billing",
+        estado: "indeterminado",
+      });
+    }
+    expect(await lerContadorIndeterminado(heartbeatDir, "billing")).toBe(3);
+    expect(
+      await lerContadorIndeterminado(heartbeatDir, "escalonamento"),
+    ).toBe(0);
+  });
+
+  test("backup-offsite NUNCA escala — indeterminado é rotineiro em dev/CI", async () => {
+    for (let i = 0; i < 10; i++) {
+      const resultado = await atualizarContadorIndeterminado(heartbeatDir, {
+        motivo: "backup-offsite",
+        estado: "indeterminado",
+      });
+      expect(resultado.cegou).toBe(false);
+      expect(resultado.contador).toBe(0);
+    }
+    expect(
+      await lerContadorIndeterminado(heartbeatDir, "backup-offsite"),
+    ).toBe(0);
+  });
+
+  test("montarAlertaDetectorCego devolve motivo dedicado e estado problema", () => {
+    const alerta = montarAlertaDetectorCego("billing", 6);
+    expect(alerta.estado).toBe("problema");
+    expect(alerta.motivo).toBe("detector-cego-billing");
+    expect(alerta.motivo).not.toBe("billing");
+    expect(alerta.detalhe).toContain("billing");
+    expect(alerta.detalhe).toContain("6");
+  });
+
+  test("alerta de detector cego passa pelo dedup diário normal (deveAlertar/marcarAlertado)", async () => {
+    const alerta = montarAlertaDetectorCego("escalonamento", 6);
+    expect(await deveAlertar(heartbeatDir, alerta.motivo, "2026-08-26")).toBe(
+      true,
+    );
+    await marcarAlertado(heartbeatDir, alerta.motivo, "2026-08-26");
+    expect(await deveAlertar(heartbeatDir, alerta.motivo, "2026-08-26")).toBe(
+      false,
+    );
   });
 });
 

@@ -2590,3 +2590,15 @@ sumiu, o volume persistente do passo 2 não foi criado.
    Easypanel tem seu próprio conjunto.
 4. **`mc: command not found`.** A imagem não instalou o MinIO Client; o
    `Dockerfile` regrediu.
+5. **`INDETERMINADO: billing` ou `INDETERMINADO: escalonamento` reaparece a
+   cada scan e some do stdout do container.** Cada uma dessas duas checagens
+   (nunca `backup-offsite`, que é rotineiramente `indeterminado` em dev/CI)
+   tem um contador de indeterminados consecutivos gravado em
+   `/heartbeat/.indeterminado-consecutivo-<checagem>`. Ao atingir **6**
+   scans seguidos (~6h no intervalo padrão de 1h) o detector manda um e-mail
+   próprio de "detector cego" — motivo `detector-cego-<checagem>` — pelo
+   MESMO dedup diário das outras checagens (`.alertado-detector-cego-<checagem>-YYYY-MM-DD`).
+   Isso significa que o detector, não só o job checado, pode estar sem
+   enxergar (banco fora do ar, credencial `ALARME_DATABASE_URL` revogada). O
+   contador zera sozinho no primeiro scan que voltar a `ok`/`problema` —
+   ver a checagem correspondente antes de mexer neste marcador.

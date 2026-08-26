@@ -21,7 +21,7 @@
  * nunca chegou.
  */
 import { execFile } from "node:child_process";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import postgres from "postgres";
@@ -29,6 +29,64 @@ import { enviarEmailAlarme } from "./lib/resend-alarme.mjs";
 
 const execFileP = promisify(execFile);
 const LIMITE_BACKUP_H = 36;
+
+// Checagens que rodam contra o banco (billing, escalonamento) — a única
+// checagem de fora dessa lista é `backup-offsite`, cujo `indeterminado` é
+// rotineiro (env ausente em dev/CI) e não deve escalar (ver Fix 2 do review
+// final de #294).
+const CHECAGENS_COM_ESCALONAMENTO_DE_CEGUEIRA = ["billing", "escalonamento"];
+const LIMITE_INDETERMINADO_CONSECUTIVO = 6; // ~6h no intervalo padrão de 1h (INTERVALO_S=3600).
+const MOTIVO_DETECTOR_CEGO = (motivo) => `detector-cego-${motivo}`;
+
+/**
+ * Contador de `indeterminado` consecutivo por checagem, persistido como
+ * arquivo `.indeterminado-consecutivo-<motivo>` no mesmo heartbeatDir dos
+ * marcadores de dedup. `ok`/`problema` zera (a checagem voltou a enxergar);
+ * `indeterminado` incrementa. Puro em relação ao resto do módulo — só toca
+ * disco, sem rede.
+ */
+export async function lerContadorIndeterminado(heartbeatDir, motivo) {
+  const conteudo = await readFile(
+    `${heartbeatDir}/.indeterminado-consecutivo-${motivo}`,
+    "utf8",
+  ).catch(() => "0");
+  const n = Number.parseInt(conteudo, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+export async function gravarContadorIndeterminado(heartbeatDir, motivo, n) {
+  await mkdir(heartbeatDir, { recursive: true });
+  await writeFile(
+    `${heartbeatDir}/.indeterminado-consecutivo-${motivo}`,
+    String(n),
+  );
+}
+
+/**
+ * Atualiza o contador de `indeterminado` consecutivo para uma checagem e
+ * devolve o resultado — o novo valor do contador e se ele já atingiu o
+ * limite de escalonamento (`cegou`). `cegou` fica `true` em todo tick a
+ * partir do limite, não só no primeiro — quem impede o reenvio diário é o
+ * MESMO dedup `deveAlertar`/`marcarAlertado` usado pelas outras checagens,
+ * não este contador.
+ */
+export async function atualizarContadorIndeterminado(heartbeatDir, resultado) {
+  const { motivo, estado } = resultado;
+  if (!CHECAGENS_COM_ESCALONAMENTO_DE_CEGUEIRA.includes(motivo)) {
+    return { contador: 0, cegou: false };
+  }
+  if (estado !== "indeterminado") {
+    await gravarContadorIndeterminado(heartbeatDir, motivo, 0);
+    return { contador: 0, cegou: false };
+  }
+  const anterior = await lerContadorIndeterminado(heartbeatDir, motivo);
+  const novo = anterior + 1;
+  await gravarContadorIndeterminado(heartbeatDir, motivo, novo);
+  return {
+    contador: novo,
+    cegou: novo >= LIMITE_INDETERMINADO_CONSECUTIVO,
+  };
+}
 
 export function hojeUTC() {
   return new Date().toISOString().slice(0, 10);
@@ -225,6 +283,23 @@ export function decidirEnvios(resultados) {
   };
 }
 
+/**
+ * Monta o resultado sintético de "detector cego" quando uma checagem de
+ * banco (billing/escalonamento) fica `indeterminado` por N scans seguidos —
+ * DB fora do ar ou credencial revogada de forma permanente é justamente o
+ * cenário em que o detector nunca mais volta a `problema`/`ok` sozinho, e um
+ * `console.warn` que só o container vê não avisa ninguém (premissa da #294).
+ * `motivo` é o MOTIVO_DETECTOR_CEGO — dedicado, distinto de "billing"/
+ * "escalonamento" — para passar pelo MESMO dedup diário de `deveAlertar`.
+ */
+export function montarAlertaDetectorCego(motivo, contador) {
+  return {
+    estado: "problema",
+    motivo: MOTIVO_DETECTOR_CEGO(motivo),
+    detalhe: `checagem "${motivo}" está indeterminada há ${contador} varreduras seguidas (limite: ${LIMITE_INDETERMINADO_CONSECUTIVO}) — o detector pode estar cego (banco fora do ar ou credencial revogada), não só o job checado.`,
+  };
+}
+
 export async function main() {
   const heartbeatDir = process.env.ALARME_HEARTBEAT_DIR || "/heartbeat";
   await mkdir(heartbeatDir, { recursive: true });
@@ -249,7 +324,21 @@ export async function main() {
   }
   resultados.push(await verificarBackupOffsite(process.env));
 
-  const { aEnviar, aLogar } = decidirEnvios(resultados);
+  const alertasDeCegueira = [];
+  for (const r of resultados) {
+    const { contador, cegou } = await atualizarContadorIndeterminado(
+      heartbeatDir,
+      r,
+    );
+    if (cegou) {
+      alertasDeCegueira.push(montarAlertaDetectorCego(r.motivo, contador));
+    }
+  }
+
+  const { aEnviar, aLogar } = decidirEnvios([
+    ...resultados,
+    ...alertasDeCegueira,
+  ]);
 
   for (const r of aLogar) {
     console.warn(`[alarme-jobs] INDETERMINADO: ${r.motivo} — ${r.detalhe}`);
