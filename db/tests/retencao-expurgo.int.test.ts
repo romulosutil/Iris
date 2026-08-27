@@ -55,6 +55,8 @@ const P_POLITICA_CURTA = "00000000-0000-0000-0000-000000352007"; // política de
 const P_POLITICA_LONGA = "00000000-0000-0000-0000-000000352008"; // política estendida
 const P_OUTRA_CLINICA = "00000000-0000-0000-0000-000000352009";
 const P_SUBARVORE = "00000000-0000-0000-0000-00000035200a"; // com descendentes
+const P_ESTENDIDO = "00000000-0000-0000-0000-00000035200b"; // D60: prazo vencido, retenção estendida no futuro
+const P_ESTENSAO_VENCIDA = "00000000-0000-0000-0000-00000035200c"; // D60: prazo vencido, extensão também vencida
 
 const R_SUB = "00000000-0000-0000-0000-00000035200f";
 const S_SUB = "00000000-0000-0000-0000-000000352010";
@@ -153,7 +155,12 @@ describe.skipIf(!hasDb)("#352 · gate de retenção e vias de expurgo", () => {
       (${P_POLITICA_CURTA},${CLINIC_A}, 'Política curta',   '1990-01-01', '2005-01-01'),
       (${P_POLITICA_LONGA},${CLINIC_A}, 'Política longa',   '1990-01-01', '2005-01-01'),
       (${P_SUBARVORE},     ${CLINIC_A}, 'Com subárvore',    '1990-01-01', '2005-01-01'),
-      (${P_OUTRA_CLINICA}, ${CLINIC_B}, 'Outra clínica',    '1990-01-01', '2005-01-01')`;
+      (${P_OUTRA_CLINICA}, ${CLINIC_B}, 'Outra clínica',    '1990-01-01', '2005-01-01'),
+      (${P_ESTENDIDO},       ${CLINIC_A}, 'Retenção estendida futura', '1990-01-01', '2005-01-01'),
+      (${P_ESTENSAO_VENCIDA},${CLINIC_A}, 'Retenção estendida vencida','1990-01-01', '2005-01-01')`;
+
+    await owner!`UPDATE patient SET retencao_estendida_ate = '2999-01-01', retencao_estendida_motivo = 'ordem judicial 456/2026' WHERE id = ${P_ESTENDIDO}`;
+    await owner!`UPDATE patient SET retencao_estendida_ate = '2001-01-01', retencao_estendida_motivo = 'ordem judicial encerrada' WHERE id = ${P_ESTENSAO_VENCIDA}`;
 
     // Subárvore do sujeito do caso 10/11. Só as tabelas cuja inserção não exige
     // uma cadeia própria de fixtures (extraction, protocol, milestone) — as
@@ -311,6 +318,36 @@ describe.skipIf(!hasDb)("#352 · gate de retenção e vias de expurgo", () => {
     expect(
       await owner!`SELECT 1 FROM patient WHERE id = ${P_OUTRA_CLINICA}`,
     ).toHaveLength(1);
+  });
+
+  // ── 3b. D60 — extensão de retenção por paciente (ordem judicial) ────────────
+
+  test("12 · retencao_estendida_ate no futuro bloqueia o gate mesmo com prazo padrão vencido", async () => {
+    // Regra de mutação: sem `AND (retencao_estendida_ate IS NULL OR ...)` no
+    // predicado, este caso vira elegível=true e o teste cai.
+    expect(await elegivel(P_ESTENDIDO)).toBe("false");
+    expect(await erroDe(purgar(P_ESTENDIDO))).toMatch(
+      /prazo de guarda ainda não venceu/,
+    );
+    expect(
+      await owner!`SELECT 1 FROM patient WHERE id = ${P_ESTENDIDO}`,
+    ).toHaveLength(1);
+    const fila = await withTenant(ctx("coordenador", U_COORD_A), (db) =>
+      db.execute(
+        sql`SELECT paciente_id FROM app_pacientes_expurgaveis(50, 0) WHERE paciente_id = ${P_ESTENDIDO}::uuid`,
+      ),
+    );
+    expect(fila).toHaveLength(0);
+  });
+
+  test("13 · retencao_estendida_ate já vencida volta a ser elegível", async () => {
+    // NULL e "data passada" têm de dar o MESMO resultado — a extensão não é
+    // permanente, só adia. Prova que a comparação é `>=`, não `IS NULL` puro.
+    expect(await elegivel(P_ESTENSAO_VENCIDA)).toBe("true");
+    await purgar(P_ESTENSAO_VENCIDA, "extensão judicial encerrada");
+    expect(
+      await owner!`SELECT 1 FROM patient WHERE id = ${P_ESTENSAO_VENCIDA}`,
+    ).toHaveLength(0);
   });
 
   // ── 4. Erasure completo ───────────────────────────────────────────────────
