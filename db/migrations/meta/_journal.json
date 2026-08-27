@@ -911,6 +911,20 @@
       "when": 1787655237724,
       "tag": "0129_alarme_jobs_infra",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1787791797725,
+      "tag": "0130_app_user_e_psi",
+      "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1787791798725,
+      "tag": "0131_e_psi_declaracao_definer",
+      "breakpoints": true
     }
   ]
 }
