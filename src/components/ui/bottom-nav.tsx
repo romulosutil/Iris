@@ -112,8 +112,8 @@ export function BottomNav({ items, onAbrirMenu, renderLink }: BottomNavProps) {
       aria-label="Navegação rápida"
       className={cn(
         // `fixed` posiciona pelo viewport mesmo renderizado de dentro do
-        // <header>. `pb-[env(...)]` depende do `viewport-fit=cover` declarado
-        // em `src/app/layout.tsx`.
+        // <header>. O padding de safe-area abaixo depende do
+        // `viewport-fit=cover` declarado em `src/app/layout.tsx`.
         "fixed inset-x-0 bottom-0 z-50 flex items-stretch",
         "border-t-2 border-[var(--border-brutal)] bg-[var(--surface-card)]",
         "pb-[env(safe-area-inset-bottom)] shadow-[var(--ds-shadow)]",
