@@ -43,6 +43,10 @@ export const ROTULOS_ACAO: Readonly<Record<string, string>> = {
   alerta_risco_escalado: "Alerta de risco escalado",
   assinatura_cancelada_por_inadimplencia:
     "Assinatura cancelada por inadimplência",
+  // D56 — autodeclaração de cadastro ativo no e-Psi (Res. CFP 009/2024). O
+  // rótulo cobre os dois sentidos: declarar e retirar a declaração. Qual dos
+  // dois foi aparece em `detalhe.verified`.
+  e_psi_declarado: "Declaração de cadastro no e-Psi",
 };
 
 /** Rótulos de `audit_log.entidade`. Mesma varredura, mesma exigência. */
@@ -51,6 +55,10 @@ export const ROTULOS_ENTIDADE: Readonly<Record<string, string>> = {
   report: "Relatório",
   alerta_risco_clinico: "Alerta de risco",
   subscription: "Assinatura",
+  // D56 — a trilha da declaração de e-Psi tem o profissional como sujeito, não
+  // um paciente. "Profissional" e não "Usuário": na tela de auditoria da
+  // clínica quem lê é coordenação, e o termo do domínio é esse.
+  app_user: "Profissional",
 };
 
 /**

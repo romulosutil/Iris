@@ -98,6 +98,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     ];
   }
 
+  // D56 — `/perfil` vale para TODO papel autenticado, não só clínico: a
+  // declaração de e-Psi (Res. CFP 009/2024) é sobre o cadastro da própria
+  // pessoa. Fica fora do if/else de propósito, para que um papel novo não
+  // nasça sem acesso ao próprio perfil.
+  itemsNav.push({ href: "/perfil", label: "Meu Perfil" });
+
   return (
     <div className="flex min-h-dvh flex-col bg-[var(--bg-app)]">
       <AppHeader

@@ -259,7 +259,7 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
 /**
- * As 20 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16).
+ * As 21 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16).
  *
  * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
  * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
@@ -276,6 +276,10 @@ const FUNCOES_COM_HELPER = [
   "app_anamnese_em_rascunho",
   "app_cpf_hash_usado_em_outro_trial",
   "app_criar_alerta_risco",
+  // D56 (0133) — autodeclaração de e-Psi (Res. CFP 009/2024). DEFINER porque
+  // `app_user` só tem policy FOR SELECT: o guard interno é a única fronteira e
+  // espelha o predicado de `app_user_read` (papel nesta clínica).
+  "app_declarar_e_psi",
   "app_desarquivar_paciente",
   // #374 — cunha o token de download do bundle de exportação. É chamada por
   // `app_role`, então o guard interno copia o predicado da policy de leitura.
@@ -329,10 +333,14 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
 ];
 
 /**
- * As 8 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119).
+ * As 9 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
+  // D56 (0133) — o alvo da declaração NUNCA entra por parâmetro: é sempre
+  // `app_user_id_exigido()`. Não existe assinatura capaz de declarar e-Psi no
+  // registro de outra pessoa.
+  "app_declarar_e_psi",
   "app_desarquivar_paciente",
   "app_is_on_team",
   // #352 (0128) — o `ator_id` da linha-fato passou a ser carimbado no corpo de
@@ -461,7 +469,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 20 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 21 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -474,7 +482,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(20);
+    expect(FUNCOES_COM_HELPER.length).toBe(21);
   });
 
   // ─── 2c. D23: guards de papel e identidade (0093) ──────────────────────────
@@ -520,7 +528,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(15);
   });
 
-  test("as 8 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
+  test("as 9 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -532,7 +540,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(
       FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
     );
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(8);
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(9);
   });
 
   test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {

@@ -170,29 +170,64 @@ export const reinforcerValencia = pgEnum("reinforcer_valencia", [
 
 // ─── Auth (Better-Auth) — `app_user` é a tabela `user` do Better-Auth ────────
 // Chaves em camelCase = o que o Better-Auth espera; colunas em snake_case.
-export const appUser = pgTable("app_user", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: boolean("email_verified").notNull().default(false),
-  image: text("image"),
-  // Fase 6.2b: flag de enrollment do 2º fator (plugin twoFactor). Vira true no
-  // 1º verifyTotp bem-sucedido. Papéis clínicos só operam com isto true.
-  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  // Registro profissional DECLARADO no cadastro aberto (spec §2, D6). Não há
-  // verificação na API do conselho — o valor está na trilha, não na barreira.
-  conselho: text("conselho"),
-  registroNumero: text("registro_numero"),
-  registroUf: text("registro_uf"),
-  // Flag de administrador global/plataforma (#184). Dá acesso ao backoffice /benjamin.
-  isSuperAdmin: boolean("is_super_admin").notNull().default(false),
-});
+export const appUser = pgTable(
+  "app_user",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    emailVerified: boolean("email_verified").notNull().default(false),
+    image: text("image"),
+    // Fase 6.2b: flag de enrollment do 2º fator (plugin twoFactor). Vira true no
+    // 1º verifyTotp bem-sucedido. Papéis clínicos só operam com isto true.
+    twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    // Registro profissional DECLARADO no cadastro aberto (spec §2, D6). Não há
+    // verificação na API do conselho — o valor está na trilha, não na barreira.
+    conselho: text("conselho"),
+    registroNumero: text("registro_numero"),
+    registroUf: text("registro_uf"),
+    // D56 — declaração de cadastro ativo no e-Psi (Res. CFP 009/2024), exigida
+    // do profissional que atende ou supervisiona por TIC. Especificada em
+    // `docs/legal/aditivo-especificacoes-legais.md` §1.3 e §4. Mesmo idioma de
+    // `conselho`/`registro_numero` acima: DECLARADO, não verificado — o §1.3
+    // diz textualmente que o sistema não precisa consultar API governamental,
+    // e não existe API pública do e-Psi. O valor está na trilha, não na
+    // barreira: nenhum fluxo do produto é bloqueado por ele (em particular
+    // `session.modalidade = 'online'` segue livre; um gate precisaria de
+    // recorte por conselho, já que a Res. CFP 009/2024 é do CFP e fono/TO têm
+    // norma própria).
+    //
+    // Mora aqui, e não em `careTeamMembership`, apesar de §1.3 dizer "no perfil
+    // do CareTeamMembership": o cadastro e-Psi é UM por profissional, não um
+    // por vínculo paciente×profissional. No vínculo o mesmo número seria
+    // replicado em N linhas que podem divergir, e não haveria como responder
+    // "este profissional declarou". A matriz §4 do mesmo documento é explícita
+    // ("Atributos e_psi_number e e_psi_verified na entidade User").
+    ePsiVerified: boolean("e_psi_verified").notNull().default(false),
+    ePsiNumber: text("e_psi_number"),
+    // Não está no texto do advogado. Está aqui porque cadastro no e-Psi caduca
+    // e "declarou" sem "quando" não sustenta auditoria de fiscalização.
+    ePsiDeclaradoEm: timestamp("e_psi_declarado_em", { withTimezone: true }),
+    // Flag de administrador global/plataforma (#184). Dá acesso ao backoffice /benjamin.
+    isSuperAdmin: boolean("is_super_admin").notNull().default(false),
+  },
+  (t) => [
+    // Declarar cadastro ativo sem informar o número não é declaração — é uma
+    // caixa marcada. `ePsiVerified` é NOT NULL, então `NOT e_psi_verified`
+    // nunca é NULL: a constraint não tem como ser satisfeita por vacuidade
+    // (expressão NULL num CHECK SATISFAZ — armadilha real deste repo).
+    check(
+      "app_user_e_psi_check",
+      sql`NOT ${t.ePsiVerified} OR ${t.ePsiNumber} IS NOT NULL`,
+    ),
+  ],
+);
 
 // Fase 6.2b — tabela do plugin twoFactor (Better-Auth). Chaves em camelCase = o
 // que o Better-Auth espera; colunas snake_case. `secret`/`backupCodes` guardam
