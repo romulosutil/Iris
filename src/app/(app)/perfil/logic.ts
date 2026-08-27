@@ -106,9 +106,9 @@ export async function declararEPsi(
     // única policy para `app_role`: `app_user_read`, FOR SELECT (0002/0085).
     // Sem policy FOR UPDATE o comando afeta 0 linhas EM SILÊNCIO e a tela
     // devolveria `{ ok: true }` sem gravar nada — o defeito #212, medido de
-    // novo aqui e documentado na 0130.
+    // novo aqui e documentado na 0132.
     //
-    // O usuário NÃO entra por parâmetro: `app_declarar_e_psi` (0131) resolve
+    // O usuário NÃO entra por parâmetro: `app_declarar_e_psi` (0133) resolve
     // o alvo por `app_user_id_exigido()` dentro da própria transação. Não
     // existe assinatura capaz de declarar e-Psi no registro alheio, e a trilha
     // em `audit_log` é escrita pela própria função.

@@ -467,6 +467,13 @@ export const patient = pgTable(
     // (modalidades-clinicas-e-abordagens.md §3.3) trata o campo como
     // conteúdo pro terapeuta ler, não trava de fluxo.
     familiaAbordagem: familiaAbordagemEnum("familia_abordagem"),
+    // D60/#352 P4 — extensão de retenção por paciente (ordem judicial, perícia,
+    // requisição do MP). NULL = "clínica ainda não decidiu" (0128 continua
+    // valendo sem exceção). Preenchido = "decidiu estender", auditável por
+    // motivo escrito — distingue as duas leituras que hoje colapsam em
+    // silêncio no predicado de `app_paciente_expurgavel`.
+    retencaoEstendidaAte: date("retencao_estendida_ate"),
+    retencaoEstendidaMotivo: text("retencao_estendida_motivo"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),

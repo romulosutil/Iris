@@ -49,7 +49,7 @@ BEGIN
     RAISE EXCEPTION 'app_declarar_e_psi: usuário % não tem papel na clínica % (isolamento multi-tenant)', v_user, v_clinic;
   END IF;
 
-  -- Espelha o CHECK `app_user_e_psi_check` (0130) com mensagem diagnosticável.
+  -- Espelha o CHECK `app_user_e_psi_check` (0132) com mensagem diagnosticável.
   -- Sem isto o caminho falharia como violação de constraint anônima, e a UI não
   -- teria como distinguir "faltou o número" de qualquer outro erro de banco.
   IF p_verified AND v_numero IS NULL THEN

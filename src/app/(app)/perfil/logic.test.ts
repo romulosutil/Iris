@@ -8,7 +8,7 @@
  * ter sido chamado — validação que só produz mensagem, mas deixa a chamada
  * sair, não é validação.
  *
- * A regra de banco (CHECK `app_user_e_psi_check` + guard da 0131) é medida em
+ * A regra de banco (CHECK `app_user_e_psi_check` + guard da 0133) é medida em
  * `logic.int.test.ts`. Aqui é a camada de aplicação.
  */
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -73,7 +73,7 @@ describe("declararEPsi", () => {
 
     expect(r).toEqual({ ok: true });
     expect(execute).toHaveBeenCalledTimes(1);
-    // `true` primeiro, número depois — a ordem dos parâmetros da 0131.
+    // `true` primeiro, número depois — a ordem dos parâmetros da 0133.
     expect(ultimosParams()).toEqual([true, "06/123456"]);
   });
 
@@ -88,7 +88,7 @@ describe("declararEPsi", () => {
     await declararEPsi(ctx, { declarado: true, numero: "06/123456" });
 
     // Se algum dia alguém acrescentar o userId aqui, a função passa a aceitar
-    // alvo por parâmetro e o guard `app_user_id_exigido()` da 0131 deixa de ser
+    // alvo por parâmetro e o guard `app_user_id_exigido()` da 0133 deixa de ser
     // a fronteira. Este caso quebra antes disso chegar em produção.
     expect(ultimosParams()).not.toContain("u-1");
   });

@@ -31,8 +31,8 @@ ALTER TABLE "app_user" ADD CONSTRAINT "app_user_e_psi_check" CHECK (NOT "app_use
 --   -->  UPDATE 0
 --   ROLLBACK;
 --
--- É por isso que o caminho de escrita é a função `app_declarar_e_psi` (0131,
--- SECURITY DEFINER) e não um UPDATE por `withTenant`. Ver o cabeçalho da 0131.
+-- É por isso que o caminho de escrita é a função `app_declarar_e_psi` (0133,
+-- SECURITY DEFINER) e não um UPDATE por `withTenant`. Ver o cabeçalho da 0133.
 --
 -- Os GRANTs abaixo são defesa em profundidade, no mesmo idioma da 0057: se um
 -- dia alguém revogar `app_user` no nível de tabela (alinhando com `patient` e

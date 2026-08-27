@@ -8,9 +8,9 @@
  *    cru afeta 0 linhas EM SILÊNCIO, e a tela devolveria `{ ok: true }` sem
  *    gravar nada. É o defeito #212, e o oráculo aqui é obrigatoriamente a role
  *    DONA relendo a linha — asserir o retorno é o que deixou aquele bug passar.
- * 2. A escrita atinge SÓ o próprio registro. `app_declarar_e_psi` (0131) é
+ * 2. A escrita atinge SÓ o próprio registro. `app_declarar_e_psi` (0133) é
  *    SECURITY DEFINER: ela bypassa RLS, e o guard interno é a única barreira.
- *    Regra de mutação: trocar `WHERE id = v_user` por `WHERE true` na 0131 tem
+ *    Regra de mutação: trocar `WHERE id = v_user` por `WHERE true` na 0133 tem
  *    que derrubar o caso "colega não é tocado". Se não derrubar, o caso é
  *    decorativo.
  * 3. A função é NECESSÁRIA, não decorativa: o mesmo UPDATE por `withTenant`
@@ -117,7 +117,7 @@ describe.skipIf(!hasDb)("D56 · declaração de e-Psi persiste de fato", () => {
   });
 
   test("o colega da MESMA clínica não é tocado", async () => {
-    // Mutação: `WHERE id = v_user` → `WHERE true` na 0131 derruba este caso.
+    // Mutação: `WHERE id = v_user` → `WHERE true` na 0133 derruba este caso.
     const colega = await estado(U_COLEGA_A);
     expect(colega.e_psi_verified).toBe(false);
     expect(colega.e_psi_number).toBeNull();
@@ -187,7 +187,7 @@ describe.skipIf(!hasDb)("D56 · declaração de e-Psi persiste de fato", () => {
     expect(linha.e_psi_declarado_em).toBeNull();
   });
 
-  test("usuário sem papel na clínica do contexto é barrado pelo guard da 0131", async () => {
+  test("usuário sem papel na clínica do contexto é barrado pelo guard da 0133", async () => {
     // O ctx é forjado de propósito: papel em CLINIC_B, tenant apontando para
     // CLINIC_A. É exatamente o que o guard do definer existe para recusar.
     const msg = await erro(() =>

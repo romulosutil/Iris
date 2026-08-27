@@ -14,7 +14,7 @@ import { declararEPsi } from "./logic";
  * Sem `requireRole`: a declaração é do próprio profissional sobre o próprio
  * cadastro. Qualquer papel autenticado declara o seu, e ninguém declara o de
  * outro — a fronteira não é o papel, é o `app_user_id_exigido()` dentro de
- * `app_declarar_e_psi` (0131).
+ * `app_declarar_e_psi` (0133).
  */
 
 export type PerfilState = { ok?: true; error?: string };

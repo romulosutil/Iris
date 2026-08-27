@@ -1,6 +1,6 @@
 {
-  "id": "f48126dd-c0c6-4095-b4fa-d433d48698d2",
-  "prevId": "20fec4ce-0320-402b-8fda-b46abe2fd894",
+  "id": "bd17d188-0523-464d-a59d-ce3e87a34b09",
+  "prevId": "f48126dd-c0c6-4095-b4fa-d433d48698d2",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1341,6 +1341,25 @@
           "primaryKey": false,
           "notNull": false
         },
+        "e_psi_verified": {
+          "name": "e_psi_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "e_psi_number": {
+          "name": "e_psi_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "e_psi_declarado_em": {
+          "name": "e_psi_declarado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "is_super_admin": {
           "name": "is_super_admin",
           "type": "boolean",
@@ -1362,7 +1381,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "app_user_e_psi_check": {
+          "name": "app_user_e_psi_check",
+          "value": "NOT \"app_user\".\"e_psi_verified\" OR \"app_user\".\"e_psi_number\" IS NOT NULL"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.asaas_webhook_event": {

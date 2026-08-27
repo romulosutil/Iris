@@ -276,7 +276,7 @@ const FUNCOES_COM_HELPER = [
   "app_anamnese_em_rascunho",
   "app_cpf_hash_usado_em_outro_trial",
   "app_criar_alerta_risco",
-  // D56 (0131) — autodeclaração de e-Psi (Res. CFP 009/2024). DEFINER porque
+  // D56 (0133) — autodeclaração de e-Psi (Res. CFP 009/2024). DEFINER porque
   // `app_user` só tem policy FOR SELECT: o guard interno é a única fronteira e
   // espelha o predicado de `app_user_read` (papel nesta clínica).
   "app_declarar_e_psi",
@@ -337,7 +337,7 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
-  // D56 (0131) — o alvo da declaração NUNCA entra por parâmetro: é sempre
+  // D56 (0133) — o alvo da declaração NUNCA entra por parâmetro: é sempre
   // `app_user_id_exigido()`. Não existe assinatura capaz de declarar e-Psi no
   // registro de outra pessoa.
   "app_declarar_e_psi",
