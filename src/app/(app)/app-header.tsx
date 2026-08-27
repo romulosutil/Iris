@@ -12,6 +12,7 @@ import {
 export interface NavItem {
   href: string;
   label: string;
+  labelCurto?: string;
   badge?: number;
   badgeTom?: NavBadgeTom;
 }
@@ -69,6 +70,7 @@ export function AppHeader({
         <Link
           key={item.href}
           href={item.href}
+          aria-label={item.label}
           aria-current={item.active ? "page" : undefined}
           className={className}
         >

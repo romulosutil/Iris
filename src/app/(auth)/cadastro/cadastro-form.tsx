@@ -206,7 +206,7 @@ export function CadastroForm() {
               type="button"
               onClick={() => setPasso(1)}
               className={cn(
-                "focus-visible:outline-focus flex items-center gap-2 rounded-[var(--radius-control)] px-2 py-1 text-left transition-colors",
+                "focus-visible:outline-focus flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] px-2 py-1 text-left transition-colors",
                 passo === 1
                   ? "font-display font-bold text-[var(--text-primary)]"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
@@ -233,7 +233,7 @@ export function CadastroForm() {
                 if (validarPasso1()) setPasso(2);
               }}
               className={cn(
-                "focus-visible:outline-focus flex items-center gap-2 rounded-[var(--radius-control)] px-2 py-1 text-left transition-colors",
+                "focus-visible:outline-focus flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] px-2 py-1 text-left transition-colors",
                 passo === 2
                   ? "font-display font-bold text-[var(--text-primary)]"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",

@@ -28,7 +28,7 @@ export function LandingFooter() {
           <div className="space-y-4 md:col-span-5">
             <Link
               href="/institucional"
-              className="focus-visible:outline-focus inline-block outline-none"
+              className="focus-visible:outline-focus inline-flex min-h-11 items-center outline-none"
               aria-label="Ir para a página inicial do IRIS"
             >
               <Logo
@@ -153,16 +153,22 @@ export function LandingFooter() {
           <span>
             © 2026 Iris · R Sutil Correa Ltda · CNPJ 29.811.201/0001-50
           </span>
+          {/* data-toque-inline: barra legal do rodapé é lista curta de links em
+              texto corrido, exceção prevista pelo WCAG 2.2 SC 2.5.8. */}
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link href="/termos" className="hover:underline">
+            <Link href="/termos" className="hover:underline" data-toque-inline>
               Termos de Uso
             </Link>
             <span>·</span>
-            <Link href="/privacidade" className="hover:underline">
+            <Link
+              href="/privacidade"
+              className="hover:underline"
+              data-toque-inline
+            >
               Política de Privacidade (LGPD)
             </Link>
             <span>·</span>
-            <a href="#seguranca" className="hover:underline">
+            <a href="#seguranca" className="hover:underline" data-toque-inline>
               Segurança e LGPD
             </a>
           </div>

@@ -79,6 +79,31 @@ chave-iris*
 # --- Scratch / throwaway ---
 scratch/
 
+# --- TWA / Bubblewrap (#185, Etapa 3) ---
+# Chave privada de assinatura — NUNCA versionar. Quem tiver este arquivo mais a
+# senha pode publicar uma atualização do app no lugar da gente.
+twa/*.keystore
+twa/*.jks
+twa/android.keystore.passwords
+# Artefatos de build e projeto Android gerado (reconstruíveis a partir do
+# twa-manifest.json).
+twa/app/
+twa/build/
+twa/.gradle/
+twa/gradle/
+twa/gradlew
+twa/gradlew.bat
+twa/*.aab
+twa/*.apk
+twa/*.idsig
+twa/store_icon.png
+
+# --- Lighthouse (#185) ---
+# Artefatos de medição local, regeráveis a qualquer momento — o número que
+# importa vai para docs/arquitetura/pwa-e-cache.md, não o relatório em si.
+lighthouse-mobile.report.json
+lighthouse-mobile.report.html
+
 # --- Agentic Noise & Tooling ---
 .claude/
 .superpowers/

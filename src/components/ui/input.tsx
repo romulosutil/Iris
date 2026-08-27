@@ -162,7 +162,13 @@ export const Input = React.forwardRef<any, InputProps>(function Input(
       )}
       <div
         className={cn(
-          "flex flex-1 items-center bg-[var(--surface-card)] text-[var(--text-primary)]",
+          // `items-stretch` (não `items-center`): o piso de toque de #185 mede
+          // a caixa do `<input>` de verdade, não do wrapper. Com
+          // `items-center` o wrapper crescia até `control(size)` mas o campo
+          // interno ficava com a altura do padding (~40px) — o clique fora do
+          // texto ainda focava (o wrapper delega), mas a caixa do elemento
+          // media abaixo de 44px.
+          "flex flex-1 items-stretch bg-[var(--surface-card)] text-[var(--text-primary)]",
           leftAddon
             ? "rounded-l-none"
             : "rounded-l-[calc(var(--radius-control)-2px)]",
@@ -285,7 +291,7 @@ export const InputSenha = React.forwardRef<any, InputProps>(
             type="button"
             disabled={props.disabled}
             onClick={() => setVisivel((v) => !v)}
-            className="focus-visible:outline-focus flex items-center justify-center rounded p-1.5 text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="focus-visible:outline-focus flex min-h-11 min-w-11 items-center justify-center rounded p-1.5 text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={visivel ? "Ocultar senha" : "Exibir senha em texto"}
           >
             {visivel ? <IconeOlhoFechado /> : <IconeOlhoAberto />}

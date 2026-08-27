@@ -41,8 +41,12 @@ export function BatchBar({
     return (
       <div
         role="status"
+        // O offset inferior sobe acima da BottomNav em celular (#185): a barra
+        // de navegação é `fixed bottom-0 z-50` e cobriria o botão de confirmar
+        // desta barra de lote — que continuaria clicável para o teste e
+        // inalcançável para o dedo.
         className={cn(
-          "text-text-secondary sticky bottom-4 z-30 flex items-center gap-2 p-4 text-sm",
+          "text-text-secondary sticky bottom-[calc(56px+1rem+env(safe-area-inset-bottom))] z-30 flex items-center gap-2 p-4 text-sm sm:bottom-4",
           surface("solida", {
             elevation: "overlay",
             radius: "xl",
@@ -69,8 +73,9 @@ export function BatchBar({
     <div
       role="toolbar"
       aria-label="Ações em lote"
+      // Mesmo offset da barra `role=status` acima — ver comentário lá.
       className={cn(
-        "text-text-primary sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 p-4",
+        "text-text-primary sticky bottom-[calc(56px+1rem+env(safe-area-inset-bottom))] z-30 flex flex-wrap items-center justify-between gap-3 p-4 sm:bottom-4",
         surface("solida", {
           elevation: "overlay",
           radius: "xl",

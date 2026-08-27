@@ -14,7 +14,7 @@ export function LandingHeader() {
         {/* Logo Iris Neobrutalista */}
         <Link
           href="/institucional"
-          className="group focus-visible:outline-focus flex shrink-0 items-center gap-3 rounded-[var(--radius-control,5px)] outline-none focus-visible:outline-offset-2"
+          className="group focus-visible:outline-focus flex min-h-11 shrink-0 items-center gap-3 rounded-[var(--radius-control,5px)] outline-none focus-visible:outline-offset-2"
           aria-label="Ir para a página inicial do IRIS Governança Clínica"
         >
           <Logo altura={42} animado aria-label="Iris Governança Clínica Logo" />
@@ -89,7 +89,7 @@ export function LandingHeader() {
             variante="primaria"
             tamanho="sm"
             asChild
-            className="min-h-[40px] px-3 text-xs"
+            className="min-h-11 px-3 text-xs"
           >
             <Link href="/cadastro">Conta Grátis</Link>
           </Button>

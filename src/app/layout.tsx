@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@/styles/globals.css";
 import { fontVariables } from "@/app/fonts";
 import { WebMCPProvider } from "@/components/webmcp-provider";
 import { Clarity } from "@/components/clarity";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { ToastProvider } from "@/components/ui/toast";
+import { RegistrarServiceWorker } from "@/components/pwa/registrar-sw";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -39,6 +40,24 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * `viewport-fit=cover` é pré-requisito de `env(safe-area-inset-*)` (#185).
+ * Sem ele, a Bottom Navigation Bar do app logado fica por baixo da barra de
+ * gestos no Android e do indicador de home no iOS.
+ *
+ * `themeColor` pinta a barra de status quando o app roda instalado (PWA/TWA).
+ * O valor tem de ser idêntico ao `theme_color` do `manifest.ts`.
+ *
+ * `maximumScale`/`userScalable` ficam de fora de propósito: travar zoom reprova
+ * o WCAG 1.4.4 e é o atalho errado para esconder estouro horizontal.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f2b705",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -48,6 +67,7 @@ export default function RootLayout({
         <GoogleAnalytics />
         <Clarity />
         <WebMCPProvider />
+        <RegistrarServiceWorker />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
