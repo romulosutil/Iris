@@ -79,6 +79,12 @@ chave-iris*
 # --- Scratch / throwaway ---
 scratch/
 
+# --- Lighthouse (#185) ---
+# Artefatos de medição local, regeráveis a qualquer momento — o número que
+# importa vai para docs/arquitetura/pwa-e-cache.md, não o relatório em si.
+lighthouse-mobile.report.json
+lighthouse-mobile.report.html
+
 # --- Agentic Noise & Tooling ---
 .claude/
 .superpowers/
