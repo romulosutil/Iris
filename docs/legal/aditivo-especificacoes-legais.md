@@ -14,15 +14,15 @@
 > Não altera nenhuma especificação do advogado abaixo; registra apenas o que
 > foi conferido em `src/db/schema.ts` (arquivo completo) nesta data:
 >
-> - **§2.1 (`visibility_level`) — NÃO implementado.** Nenhuma coluna, enum ou
->   equivalente encontrado. Hoje o prontuário multidisciplinar não restringe
->   visibilidade por disciplina — uma nota de psicólogo sobre dinâmica
->   familiar é visível a qualquer profissional vinculado ao caso. Tratar como
->   bloqueador de piloto, não como débito técnico genérico: enquanto o campo
->   não existir, orientar psicólogos a não registrar no Iris informação que
->   dependeria dessa restrição.
-> - **§1.3 (`e_psi_verified` / `e_psi_number`) — NÃO implementado.** Mesma
->   busca, mesmo resultado.
+> - **§2.1 (`visibility_level`) — NÃO implementado nesta data.** Nenhuma
+>   coluna, enum ou equivalente encontrado. Hoje o prontuário
+>   multidisciplinar não restringe visibilidade por disciplina — uma nota de
+>   psicólogo sobre dinâmica familiar é visível a qualquer profissional
+>   vinculado ao caso. Tratar como bloqueador de piloto, não como débito
+>   técnico genérico: enquanto o campo não existir, orientar psicólogos a não
+>   registrar no Iris informação que dependeria dessa restrição.
+> - **§1.3 (`e_psi_verified` / `e_psi_number`) — NÃO implementado nesta
+>   data.** Mesma busca, mesmo resultado.
 > - **§1.1 (retenção de `AuditLog`) e §1.2 (revogação → somente-leitura) —
 >   implementados.** Confirmado por `politica-retencao-dados.md` §5/§8 e
 >   `procedimento-revogacao-consentimento.md`.
@@ -30,6 +30,24 @@
 > Abrir issue própria para §2.1 e §1.3 em `BACKLOG.md`, citando esta seção
 > como origem do requisito — não foi feito nesta revisão (arquivo de 384 KB,
 > fora do escopo de uma edição de documento legal).
+>
+> **Atualização — 26/08/2026, D67.** Ambos os campos foram implementados
+> depois desta revisão:
+>
+> - **§2.1 (`visibility_level`) — implementado (D55, issue #119, commit
+>   `d3a0a17`).** `session_note_visibility_level` (enum), coluna
+>   `visibility_level` e índice `idx_session_note_sigilo` existem em
+>   `src/db/schema.ts` (conferido por grep em 24/08/2026).
+> - **§1.3 (`e_psi_verified` / `e_psi_number`) — implementado (D56, PR #482,
+>   draft).** `app_user.e_psi_verified` / `e_psi_number` /
+>   `e_psi_declarado_em` (`db/migrations/0132_app_user_e_psi.sql`), escrita
+>   via `app_declarar_e_psi(boolean, text)` (`0133`, `SECURITY DEFINER`),
+>   autodeclarada em `/perfil`. **Divergência deliberada:** o texto acima
+>   fala em `CareTeamMembership`; a implementação mora em `User`
+>   (`app_user`), seguindo a matriz §4 deste mesmo documento — cadastro
+>   e-Psi é um por profissional, não por vínculo.
+>
+> Ver `BACKLOG.md` D55, D56, D67.
 
 ## **1\. Refinamentos Normativos e Regulatórios**
 
