@@ -286,6 +286,20 @@ jobs:
       - name: gate anti-pulo-silencioso (e2e)
         run: node scripts/ci/verificar-cobertura-e2e.mjs e2e-report.json --min-tests=17 --min-files=10
 
+  # NÃO é duplicata do `pnpm build` que o `test-e2e` roda (linha ~274) — e não
+  # deve ser apagado como se fosse. A diferença é o AMBIENTE, não o comando:
+  # este job roda `pnpm build` SEM `DATABASE_URL` e sem Postgres nenhum; o
+  # `test-e2e` roda com o banco de pé e as três URLs setadas no `env:` do job.
+  #
+  # O invariante que só este job segura: **a aplicação compila sem banco.**
+  # `infra/Dockerfile:40` roda `pnpm build` dentro da imagem, onde não existe
+  # Postgres — e essa imagem NÃO é construída em CI (o
+  # `carga-imagens-infra.yml` cobre as 7 imagens de job, nunca o
+  # `infra/Dockerfile` do app). Ou seja: se alguém introduzir acesso ao banco
+  # em build time (page estática que consulta no server, `generateStaticParams`
+  # que lê tabela), o `test-e2e` passa verde — ele TEM banco — e a falha só
+  # aparece no `docker build` do deploy, em produção. Este job é o único gate
+  # pré-deploy desse caso. Custo medido: ~1m05s. Ver D69.
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
