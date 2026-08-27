@@ -113,6 +113,50 @@ export async function entrarComMfa(
 }
 
 /**
+ * Autentica SEM completar o enrollment de segundo fator — deixa a sessão
+ * exatamente onde `getTenantContext` redireciona para `/mfa/setup` (#185).
+ * Existe separado de `entrarComMfa` porque aquele helper completa o
+ * enrollment de propósito; este é só para exercitar a própria tela de setup.
+ */
+export async function entrarSemMfa(
+  page: Page,
+  email: string,
+  senha: string,
+): Promise<void> {
+  const api = page.request;
+  const origem = new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  ).origin;
+  const headers = { Origin: origem, Referer: `${origem}/login` };
+
+  await zerarSegundoFator(email);
+  await authDb.delete(authThrottle);
+
+  let login = await api.post("/api/auth/sign-in/email", {
+    data: { email, password: senha },
+    headers,
+  });
+  for (
+    let tentativa = 0;
+    tentativa < 3 && login.status() === 429;
+    tentativa++
+  ) {
+    await page.waitForTimeout(6000);
+    login = await api.post("/api/auth/sign-in/email", {
+      data: { email, password: senha },
+      headers,
+    });
+  }
+  expect(
+    login.ok(),
+    `sign-in falhou para ${email}: ${await login.text()}`,
+  ).toBe(true);
+
+  await page.goto("/mfa/setup");
+  await expect(page).toHaveURL(/\/mfa\/setup/);
+}
+
+/**
  * Devolve a conta ao estado "nunca cadastrou segundo fator". Escreve por
  * `authDb` (role iris_auth), o mesmo caminho de identidade que o produto usa —
  * `two_factor` é credencial, não dado clínico, e não passa por `withTenant`.

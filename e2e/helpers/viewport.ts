@@ -99,3 +99,80 @@ export async function medirOverflowHorizontal(
     };
   });
 }
+
+export interface AlvoPequeno {
+  descricao: string;
+  /** Primeiros 40 caracteres do texto — para achar o controle na tela. */
+  texto: string;
+  largura: number;
+  altura: number;
+}
+
+/**
+ * Lista os controles interativos visíveis abaixo de 44×44px CSS.
+ *
+ * O piso vem do WCAG 2.2 SC 2.5.8 (Target Size Minimum) e do guardrail da
+ * issue #185. Duas exceções, ambas previstas pelo próprio critério:
+ *
+ *  - link em fluxo de texto corrido (`inline`): dentro de <p>, <li> ou
+ *    elemento com `display: inline`. Encolher esses alvos quebraria o
+ *    parágrafo. O produto marca casos limítrofes com `data-toque-inline`.
+ *  - controle sem caixa (largura ou altura zero): já é invisível; se estiver
+ *    errado, quem pega é o teste de a11y, não este.
+ */
+export async function medirAlvosDeToque(page: Page): Promise<AlvoPequeno[]> {
+  return page.evaluate(() => {
+    const PISO = 44;
+    const seletor =
+      'a[href], button, input:not([type="hidden"]), select, textarea, ' +
+      '[role="button"], [role="link"], [role="tab"], [role="switch"], [role="checkbox"]';
+
+    const pequenos: {
+      descricao: string;
+      texto: string;
+      largura: number;
+      altura: number;
+    }[] = [];
+
+    for (const el of Array.from(
+      document.querySelectorAll<HTMLElement>(seletor),
+    )) {
+      const estilo = getComputedStyle(el);
+      if (estilo.display === "none" || estilo.visibility === "hidden") continue;
+      if (el.hasAttribute("data-toque-inline")) continue;
+      if (estilo.display === "inline") continue;
+      if (el.closest("p, li")) continue;
+      // `pointer-events: none` não recebe toque nenhum — não é um alvo, é
+      // input "espelho" que libs como Radix montam para semântica de
+      // formulário nativo (ex.: bubble input do Checkbox), sempre ao lado do
+      // controle de verdade que o usuário efetivamente toca.
+      if (estilo.pointerEvents === "none") continue;
+
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      if (r.width >= PISO && r.height >= PISO) continue;
+
+      // O glifo pode ser menor que 44px quando o `<label>` que o envolve —
+      // o alvo de toque real, nativamente delegado pelo `htmlFor` — já
+      // cumpre o piso (padrão `checkbox.tsx`: caixa de 24px, `<label
+      // min-h-11>` clicável na linha inteira).
+      const labelPai = el.closest("label");
+      if (labelPai) {
+        const rLabel = labelPai.getBoundingClientRect();
+        if (rLabel.width >= PISO && rLabel.height >= PISO) continue;
+      }
+
+      const id = el.id ? `#${el.id}` : "";
+      pequenos.push({
+        descricao: `${el.tagName.toLowerCase()}${id}`,
+        texto: (el.textContent ?? el.getAttribute("aria-label") ?? "")
+          .trim()
+          .slice(0, 40),
+        largura: Math.round(r.width),
+        altura: Math.round(r.height),
+      });
+    }
+
+    return pequenos;
+  });
+}

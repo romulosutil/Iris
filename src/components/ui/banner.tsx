@@ -156,7 +156,7 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(
                   type="button"
                   onClick={handleDismiss}
                   aria-label="Dispensar aviso"
-                  className="focus-visible:outline-focus flex h-7 w-7 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] transition-colors hover:bg-[var(--gray-light-hover)] hover:text-[var(--text-primary)]"
+                  className="focus-visible:outline-focus flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] transition-colors hover:bg-[var(--gray-light-hover)] hover:text-[var(--text-primary)]"
                 >
                   <svg
                     className="h-4 w-4"
@@ -192,7 +192,7 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(
             type="button"
             onClick={handleDismiss}
             aria-label="Dispensar aviso"
-            className="focus-visible:outline-focus absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] transition-colors hover:bg-[var(--gray-light-hover)] hover:text-[var(--text-primary)]"
+            className="focus-visible:outline-focus absolute top-3 right-3 flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] transition-colors hover:bg-[var(--gray-light-hover)] hover:text-[var(--text-primary)]"
           >
             <svg
               className="h-4 w-4"
