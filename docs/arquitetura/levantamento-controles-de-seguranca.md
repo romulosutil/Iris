@@ -260,9 +260,17 @@ O que **não** existe é auditoria externa que ateste conformidade.
 1. Regra de lifecycle do bucket off-site na OCI, lida diretamente — console OCI, credencial não disponível nesta sessão. Tentativa de ler `OFFSITE_S3_*` via `env` no console do serviço foi bloqueada pelo classificador de permissão (exposição de credencial em texto) — não contornada.
 2. TLS 1.1/1.0 na borda — `openssl` 3.5.x recusa protocolo antes de abrir socket, tanto local quanto na própria VPS (mesma limitação client-side); exige `testssl.sh` ou cliente com provider legacy habilitado
 
-**Aberto (decisão do Rômulo, Gate 2):**
+**Fechado (Gate 2 — aprovado por Rômulo em 26/08/2026):**
 
-4. Quais linhas o termo pode afirmar, dado o placar acima
-5. Se algum controle ausente vira trabalho de implementação antes do termo
+4. Redação aprovada, por alegação:
+   - **AES-256 em repouso** — removida. Sem cifragem implementada, sem alegação.
+   - **TLS** — reformulada: "Conexões públicas usam TLS 1.2 ou superior (preferencialmente TLS 1.3)." Sem "obrigatório para todas as conexões".
+   - **Backup off-site** — mantida como parcial, com ressalva: "Backups diários, cifrados (age) antes do envio off-site. Retenção de 30 dias auditada diariamente pelo script (zero objetos vencidos observados em 33 dias de operação); regra de lifecycle do bucket não confirmada diretamente no console."
+   - **RLS** — mantida como sustentável, descrevendo mecanismo: "Isolamento multi-tenant garantido por Row-Level Security no Postgres, coberto por suíte automatizada (126 arquivos, 1103 testes) no CI."
+   - **Zero Training Policy** — reformulada como garantia de terceiro: "Os provedores de IA usados (Anthropic, Google) mantêm política própria de não-treino em uso comercial, conforme contrato vigente com cada provedor."
+   - **LGPD Art. 11/14** — reformulada como "conforme documentado": "Bases legais dos Art. 11 e 14 identificadas e documentadas (consentimento do titular, tutela da saúde, consentimento de responsável para menor) — ver política de privacidade e retenção." Sem carimbo de "conformidade".
+5. Nenhum controle ausente vira trabalho de implementação antes do termo — termo descreve o estado real, não promete o que falta.
 
-Nenhuma redação de termo começa antes de 1–5.
+**Aberto (Gate 3):**
+
+Documento formal em `docs/legal/` com a redação acima, e decisão se cabe superfície de download.
