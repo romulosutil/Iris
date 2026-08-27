@@ -1,0 +1,22 @@
+branch="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$branch" = "main" ]; then
+  exit 0
+fi
+
+git fetch origin main --quiet 2>/dev/null || exit 0
+
+behind="$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
+if [ "$behind" -gt 0 ]; then
+  dup="$(git cherry origin/main HEAD 2>/dev/null | grep -c '^-' || true)"
+  echo ""
+  echo "⚠️  branch '$branch' está $behind commit(s) atrás de origin/main."
+  if [ "$dup" -gt 0 ]; then
+    echo "⚠️  $dup commit(s) desta branch já têm patch equivalente em origin/main"
+    echo "    (indício de branch cortada de outra feature branch não mergeada, não de main)."
+    echo "    Rode: pnpm branch <nome> para recriar a partir de origin/main, ou rebase."
+  else
+    echo "    Considere: git rebase origin/main"
+  fi
+  echo ""
+fi
+exit 0
