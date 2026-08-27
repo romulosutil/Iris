@@ -19,7 +19,7 @@ Este arquivo registra, por alegação: o comando, a saída e o veredito.
 
 | #   | Alegação original                                           | Veredito                                                                                                      |
 | --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| 1   | "AES-256 em repouso (Postgres e S3)"                        | ❌ **Não sustentável.** Nenhuma cifragem em repouso configurada no repo; cifragem de volume na VPS não medida |
+| 1   | "AES-256 em repouso (Postgres e S3)"                        | ❌ **Não sustentável.** Nenhuma cifragem em repouso configurada no repo; VPS medida em 26/08/2026, sem cifragem de volume |
 | 2   | "TLS 1.3 obrigatório para todas as conexões"                | ❌ **Falsa como escrita.** TLS 1.3 disponível na borda, mas 1.2 é aceito e a conexão app↔Postgres é em claro  |
 | 3   | "Backup diário off-site cifrado, retenção auditada 30 dias" | ⚠️ **Parcial.** Cifragem off-site confirmada; "retenção auditada" precisa dizer o que de fato acontece        |
 | 4   | "Isolamento multi-tenant por RLS"                           | ✅ **Sustentável.** Única alegação coberta por medição automatizada e repetível                               |
@@ -49,19 +49,25 @@ $ sed -n '29,40p' infra/docker-compose.yml
 
 MinIO sobe **sem** `MINIO_KMS_*` e sem SSE-S3/SSE-KMS default no bucket. Objetos de áudio ficam em claro no volume.
 
-### O que falta medir — e não dá para medir daqui
+### Cifragem de disco da VPS Hostinger — medido em 26/08/2026
 
-Cifragem de disco da VPS Hostinger. Exige comando **no console do servidor**:
+Console do serviço `iris-postgres` no Easypanel (`31.97.170.105:3000`), Bash como root. `lsblk` lê `/sys/block`, que não é namespaced por container — a saída reflete o disco real do host, não uma visão isolada do container:
 
-```bash
-# 1. Existe algum dispositivo LUKS/crypt na árvore de blocos?
-lsblk -o NAME,TYPE,FSTYPE,MOUNTPOINT
+```console
+$ lsblk -o NAME,TYPE,FSTYPE,MOUNTPOINT
+NAME    TYPE FSTYPE MOUNTPOINT
+sda     disk
+├─sda1  part        /var/lib/postgresql/data
+├─sda14 part
+├─sda15 part
+└─sda16 part
+sr0     rom
 
-# 2. Se aparecer alguma linha com TYPE=crypt ou FSTYPE=crypto_LUKS:
-cryptsetup status <nome-do-dispositivo>
+$ cryptsetup status sda1
+bash: cryptsetup: command not found   # não instalado na imagem; irrelevante — critério já decidido abaixo
 ```
 
-**Como saber que deu certo:** se nenhuma linha de `lsblk` tiver `crypt` na coluna TYPE nem `crypto_LUKS` na coluna FSTYPE, **não há cifragem em repouso** e a alegação sai do termo. Se aparecer, `cryptsetup status` imprime o cipher — `aes-xts-plain64` com `key size: 512 bits` é o que sustentaria a expressão "AES-256".
+Layout `sda1/14/15/16` é o padrão GRUB-BIOS + ESP de VPS cloud-init — confirma que é o disco de boot real, não um volume secundário. **Nenhuma linha tem `TYPE=crypt` nem `FSTYPE=crypto_LUKS`.** Pelo critério definido abaixo, isso fecha a pergunta: não há cifragem em repouso no host.
 
 ### Veredito
 
@@ -223,11 +229,14 @@ O que **não** existe é auditoria externa que ateste conformidade.
 - Origem real da "Zero Training Policy"
 - Bases legais LGPD documentadas
 
-**Aberto (exige console de infra, com os comandos acima):**
+**Fechado em 26/08/2026 (via console Easypanel):**
 
-1. Cifragem de disco/volume da VPS Hostinger — `lsblk` + `cryptsetup status`
-2. Regra de lifecycle do bucket off-site na OCI — confirmar existência e janela
-3. TLS 1.1/1.0 na borda — medição conclusiva do lado servidor
+- Cifragem de disco da VPS Hostinger — `lsblk` no serviço `iris-postgres`, sem `TYPE=crypt`/`crypto_LUKS`. **Não há cifragem em repouso.**
+
+**Aberto (exige console de infra além do que este acesso alcançou):**
+
+1. Regra de lifecycle do bucket off-site na OCI — console OCI, credencial não disponível nesta sessão
+2. TLS 1.1/1.0 na borda — `openssl` 3.5.x recusa protocolo antes de abrir socket, tanto local quanto na própria VPS (mesma limitação client-side); exige `testssl.sh` ou cliente com provider legacy habilitado
 
 **Aberto (decisão do Rômulo, Gate 2):**
 
