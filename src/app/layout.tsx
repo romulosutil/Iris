@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@/styles/globals.css";
 import { fontVariables } from "@/app/fonts";
 import { WebMCPProvider } from "@/components/webmcp-provider";
@@ -37,6 +37,24 @@ export const metadata: Metadata = {
       "Chegue na avaliação com o dossiê pronto. Evidências clínicas rastreáveis, decisão humana.",
     images: ["/og-image.png"],
   },
+};
+
+/**
+ * `viewport-fit=cover` é pré-requisito de `env(safe-area-inset-*)` (#185).
+ * Sem ele, a Bottom Navigation Bar do app logado fica por baixo da barra de
+ * gestos no Android e do indicador de home no iOS.
+ *
+ * `themeColor` pinta a barra de status quando o app roda instalado (PWA/TWA).
+ * O valor tem de ser idêntico ao `theme_color` do `manifest.ts`.
+ *
+ * `maximumScale`/`userScalable` ficam de fora de propósito: travar zoom reprova
+ * o WCAG 1.4.4 e é o atalho errado para esconder estouro horizontal.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f2b705",
 };
 
 export default function RootLayout({

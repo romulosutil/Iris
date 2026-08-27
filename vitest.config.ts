@@ -16,6 +16,14 @@ export default defineConfig({
         import.meta.dirname,
         "node_modules/server-only/empty.js",
       ),
+      // `next/font/local` transforma em SWC de build-time; fora do alcance do
+      // Vite que roda os testes. Sem o stub, importar `src/app/fonts.ts` (via
+      // `layout.tsx` ou `global-error.tsx`) quebra com `TypeError: default is
+      // not a function` (#185).
+      "next/font/local": path.resolve(
+        import.meta.dirname,
+        "src/test/next-font-local-stub.ts",
+      ),
     },
   },
   test: {
