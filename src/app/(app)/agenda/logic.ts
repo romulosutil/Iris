@@ -12,7 +12,8 @@ import {
 } from "@/db/schema";
 import { transicaoPermitida, exigeJustificada } from "@/lib/agenda/transicoes";
 import { comEscrita } from "@/lib/billing/guard-escrita";
-import { FUSO_CLINICA_OFFSET } from "./fuso";
+import { fusoDaClinica } from "@/lib/agenda/clinic-timezone";
+import { resolverInstante } from "@/lib/agenda/materializar";
 
 export type SessionEstado = (typeof sessionEstado.enumValues)[number];
 
@@ -108,18 +109,19 @@ export async function listarSessoesDoDia(
   ctx: TenantContext,
   diaISO: string,
 ): Promise<SessaoDoDia[]> {
-  // Recorte do dia como INTERVALO no fuso da clínica em vez de cast por linha
-  // (`AT TIME ZONE ...::date = diaISO`). A comparação de igualdade sobre a
-  // coluna transformada é non-sargable e ignora `idx_session_clinic_dia`; um
-  // range `>= início AND < fim` sobre a coluna crua usa o índice. Brasil não
-  // tem horário de verão desde 2019 → o dia local tem 24h exatas, então
-  // início + 24h fecha o dia sem borda de DST.
-  const inicioDia = new Date(`${diaISO}T00:00:00${FUSO_CLINICA_OFFSET}`);
-  if (Number.isNaN(inicioDia.getTime())) return [];
-  const fimDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000);
+  return withTenant(ctx, async (tx) => {
+    const fuso = await fusoDaClinica(tx, ctx.clinicId);
+    // Recorte do dia como INTERVALO no fuso da clínica em vez de cast por
+    // linha (`AT TIME ZONE ...::date = diaISO`). A comparação de igualdade
+    // sobre a coluna transformada é non-sargable e ignora
+    // `idx_session_clinic_dia`; um range `>= início AND < fim` sobre a coluna
+    // crua usa o índice. Brasil não tem horário de verão desde 2019 → o dia
+    // local tem 24h exatas, então início + 24h fecha o dia sem borda de DST.
+    const inicioDia = resolverInstante(diaISO, "00:00", fuso);
+    if (Number.isNaN(inicioDia.getTime())) return [];
+    const fimDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000);
 
-  return withTenant(ctx, (tx) =>
-    tx
+    return tx
       .select({
         id: session.id,
         agendadaPara: session.agendadaPara,
@@ -140,8 +142,8 @@ export async function listarSessoesDoDia(
           lt(session.agendadaPara, fimDia),
         ),
       )
-      .orderBy(asc(session.agendadaPara)),
-  );
+      .orderBy(asc(session.agendadaPara));
+  });
 }
 
 export type MarcarEstadoInput = {

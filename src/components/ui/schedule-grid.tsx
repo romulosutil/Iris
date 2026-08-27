@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Calendar } from "@/components/ui/calendar";
 import type { SessaoDoDia } from "@/app/(app)/agenda/actions";
-import { FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
+import { resolverInstante } from "@/lib/agenda/materializar";
 
 export interface FaixaJanela {
   diaSemana: number;
@@ -37,6 +37,7 @@ export interface ScheduleGridProps {
   blocos?: BlocoAgendaItem[];
   aoAlocar?: (diaSemana: number, inicioMin: number) => void;
   aoAbrirRegra?: (regraId: string, rotulo: string) => void;
+  fuso: string;
 }
 
 function minParaHora(m: number): string {
@@ -56,6 +57,7 @@ export function ScheduleGrid({
   bloqueios = [],
   aoAlocar,
   aoAbrirRegra,
+  fuso,
 }: ScheduleGridProps) {
   // Converte BlocoAgendaItem para formato SessaoDoDia compativel com o Calendar.Grid
   const sessoesFormatadas: SessaoDoDia[] = React.useMemo(() => {
@@ -68,15 +70,15 @@ export function ScheduleGrid({
       // O dia da semana é escolhido em cima do relógio local (só precisa achar
       // "esta semana"), mas a hora é ancorada no fuso da clínica — não no fuso
       // da máquina que roda o código — senão obterHorarioSlot() (que sempre lê
-      // em FUSO_CLINICA) devolve um horário diferente do que foi passado aqui,
-      // e a sessão cai fora da célula/janela visível da grade.
+      // em `fuso`) devolve um horário diferente do que foi passado aqui, e a
+      // sessão cai fora da célula/janela visível da grade.
       const diaDate = new Date(
         hoje.getFullYear(),
         hoje.getMonth(),
         inicioSemanaDia + b.diaSemana,
       );
       const dataISO = `${diaDate.getFullYear()}-${String(diaDate.getMonth() + 1).padStart(2, "0")}-${String(diaDate.getDate()).padStart(2, "0")}`;
-      const dt = new Date(`${dataISO}T${horaStr}:00${FUSO_CLINICA_OFFSET}`);
+      const dt = resolverInstante(dataISO, horaStr, fuso);
 
       return {
         id: b.id,
@@ -89,7 +91,7 @@ export function ScheduleGrid({
         estado: b.origem === "conflito" ? "falta_paciente" : "agendada",
       };
     });
-  }, [blocos]);
+  }, [blocos, fuso]);
 
   const diasFormatados = React.useMemo(() => {
     return dias.map((d, idx) => ({
@@ -108,6 +110,7 @@ export function ScheduleGrid({
       diasSemana={diasFormatados}
       sessoes={sessoesFormatadas}
       bloqueios={bloqueios}
+      fuso={fuso}
       onSlotClick={(_, horarioStr, diaSemana) => {
         const [hh, mm] = horarioStr.split(":").map(Number);
         const inicioMin = (hh ?? 0) * 60 + (mm ?? 0);

@@ -22,7 +22,7 @@ import { withTenant, type TenantContext } from "@/db/rls";
 import { codigoPg, constraintPg } from "@/db/pg-error";
 import * as schema from "@/db/schema";
 import type { SessaoDoDia } from "./actions";
-import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
+import { fusoDaClinica } from "@/lib/agenda/clinic-timezone";
 import { diasDaSemana, vigenciaInicioC7 } from "@/lib/agenda/semana";
 import { paraDataLocal, paraMinutosLocais } from "@/lib/agenda/fuso-min";
 import {
@@ -116,6 +116,7 @@ export async function carregarSemana(
     eixo === "terapeuta" ? schema.patient.nome : schema.appUser.name;
 
   return withTenant(ctx, async (tx) => {
+    const fuso = await fusoDaClinica(tx, ctx.clinicId);
     // Regras ativas vigentes na semana (previsto).
     const regrasRaw = await tx
       .select({
@@ -176,11 +177,15 @@ export async function carregarSemana(
           eq(schema.session.estado, "agendada"),
           gte(
             schema.session.agendadaPara,
-            new Date(`${primeiro}T00:00:00${FUSO_CLINICA_OFFSET}`),
+            resolverInstante(primeiro, "00:00", fuso),
           ),
           lte(
             schema.session.agendadaPara,
-            new Date(`${ultimo}T23:59:59${FUSO_CLINICA_OFFSET}`),
+            new Date(
+              resolverInstante(ultimo, "00:00", fuso).getTime() +
+                24 * 60 * 60 * 1000 -
+                1,
+            ),
           ),
         ),
       );
@@ -192,7 +197,7 @@ export async function carregarSemana(
     const avulsas: AvulsaProjecao[] = avulsasRaw.map((a) => {
       const { diaSemana, inicioMin } = paraMinutosLocais(
         a.agendadaPara,
-        FUSO_CLINICA,
+        fuso,
       );
       return {
         id: a.id,
@@ -344,6 +349,7 @@ export async function criarRegra(
 
   return withTenant(ctx, async (tx) => {
     await requireEscritaPermitida(tx, ctx.clinicId);
+    const fuso = await fusoDaClinica(tx, ctx.clinicId);
     // Anti-corrida (#249): mesmo lock dos eixos usado por criarAvulsa e
     // materializarNaTx — sem ele, o pré-check de conflito abaixo corre contra
     // uma criação avulsa concorrente e as ocorrências viram `puladas` em silêncio.
@@ -394,7 +400,7 @@ export async function criarRegra(
           isNull(schema.session.recorrenteId),
           gte(
             schema.session.agendadaPara,
-            new Date(`${vigenciaInicio}T00:00:00${FUSO_CLINICA_OFFSET}`),
+            resolverInstante(vigenciaInicio, "00:00", fuso),
           ),
         ),
       );
@@ -402,7 +408,7 @@ export async function criarRegra(
       .map((a) => {
         const { diaSemana, inicioMin } = paraMinutosLocais(
           a.agendadaPara,
-          FUSO_CLINICA,
+          fuso,
         );
         return {
           terapeutaId: a.terapeutaId,
@@ -463,10 +469,6 @@ export async function criarRegra(
       })
       .returning({ id: schema.agendamentoRecorrente.id });
 
-    const fusoRow = await tx
-      .select({ timezone: schema.clinic.timezone })
-      .from(schema.clinic)
-      .where(eq(schema.clinic.id, ctx.clinicId));
     const bloqueios = await tx
       .select({
         dataInicio: schema.bloqueio.dataInicio,
@@ -503,7 +505,7 @@ export async function criarRegra(
         vigenciaFim: null,
       },
       bloqueios,
-      fuso: fusoRow[0]?.timezone ?? "America/Sao_Paulo",
+      fuso,
       deISO: vigenciaInicio,
       ateISO: horizontePadrao(dados.hojeISO),
     });
@@ -574,14 +576,11 @@ export async function criarAvulsa(
     return await withTenant(ctx, async (tx) => {
       await requireEscritaPermitida(tx, ctx.clinicId);
       await validarTerapeutaDaClinica(tx, ctx.clinicId, dados.terapeutaId);
-      const [clinicRow] = await tx
-        .select({ timezone: schema.clinic.timezone })
-        .from(schema.clinic)
-        .where(eq(schema.clinic.id, ctx.clinicId));
+      const fuso = await fusoDaClinica(tx, ctx.clinicId);
       const agendadaPara = resolverInstante(
         dados.dataISO,
         dados.horaInicio,
-        clinicRow?.timezone ?? "America/Sao_Paulo",
+        fuso,
       );
       // Anti-corrida (T4 #249): serializa criações concorrentes nos mesmos
       // eixos antes do pré-check app-level regra×avulsa.
@@ -831,11 +830,7 @@ export async function conflitosNaTx(
       ),
     );
   if (!regra) return [];
-  const [clinicRow] = await tx
-    .select({ timezone: schema.clinic.timezone })
-    .from(schema.clinic)
-    .where(eq(schema.clinic.id, ctx.clinicId));
-  const fuso = clinicRow?.timezone ?? "America/Sao_Paulo";
+  const fuso = await fusoDaClinica(tx, ctx.clinicId);
   const [maxRow] = await tx
     .select({ ultimo: max(schema.session.agendadaPara) })
     .from(schema.session)
@@ -913,11 +908,7 @@ export async function materializarRegra(
       );
     if (!regra) return { geradas: 0, puladas: [] };
 
-    const [clinicRow] = await tx
-      .select({ timezone: schema.clinic.timezone })
-      .from(schema.clinic)
-      .where(eq(schema.clinic.id, ctx.clinicId));
-    const fuso = clinicRow?.timezone ?? "America/Sao_Paulo";
+    const fuso = await fusoDaClinica(tx, ctx.clinicId);
 
     const [ultimoRow] = await tx
       .select({ ultimo: max(schema.session.agendadaPara) })
@@ -980,15 +971,8 @@ async function cutoffEncerramento(
   clinicId: string,
   ateFimISO: string,
 ): Promise<Date> {
-  const [clinicRow] = await tx
-    .select({ timezone: schema.clinic.timezone })
-    .from(schema.clinic)
-    .where(eq(schema.clinic.id, clinicId));
-  return resolverInstante(
-    proximoDia(ateFimISO),
-    "00:00",
-    clinicRow?.timezone ?? "America/Sao_Paulo",
-  );
+  const fuso = await fusoDaClinica(tx, clinicId);
+  return resolverInstante(proximoDia(ateFimISO), "00:00", fuso);
 }
 
 /** Etapa D (contagem): quantas sessões `agendada` futuras (a partir do dia

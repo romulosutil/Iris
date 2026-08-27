@@ -4,7 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { CalendarEventCard } from "./calendar-event-card";
 import type { SessaoDoDia } from "@/app/(app)/agenda/actions";
-import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso";
+import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso"; // fallback só quando nenhum `fuso` é passado (ver comentário em CalendarGridProps)
 
 type CalendarGridMode =
   "daily-resources" | "weekly-timeline" | "availability-matrix";
@@ -33,6 +33,10 @@ export interface CalendarGridProps {
   onEventClick?: (sessao: SessaoDoDia) => void;
   podeGerir?: boolean;
   bloqueios?: { dataInicio: string; dataFim: string }[];
+  /** Fuso IANA da clínica (D61). Default `FUSO_CLINICA` só para os poucos
+   * callers de design system sem caminho de request (ex.: Storybook). Todo
+   * caller de produção passa o valor real de `clinic.timezone`. */
+  fuso?: string;
 }
 
 function horaParaMin(h: string): number {
@@ -62,9 +66,13 @@ function gerarHorarios(
   return slots;
 }
 
-function obterHorarioSlot(quando: Date, passoMin: number): string {
+function obterHorarioSlot(
+  quando: Date,
+  passoMin: number,
+  fuso: string,
+): string {
   const str = new Intl.DateTimeFormat("pt-BR", {
-    timeZone: FUSO_CLINICA,
+    timeZone: fuso,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -101,6 +109,7 @@ export function CalendarGrid({
   onEventClick,
   podeGerir = true,
   bloqueios = [],
+  fuso = FUSO_CLINICA,
 }: CalendarGridProps) {
   const horarios = React.useMemo(
     () => gerarHorarios(abertura, fechamento, passoMin),
@@ -110,7 +119,7 @@ export function CalendarGrid({
   const mapaSessoes = React.useMemo(() => {
     const map = new Map<string, SessaoDoDia[]>();
     for (const s of sessoes) {
-      const h = obterHorarioSlot(s.agendadaPara, passoMin);
+      const h = obterHorarioSlot(s.agendadaPara, passoMin, fuso);
       const rId = s.terapeutaId ?? "sem-terapeuta";
       const dt = new Date(s.agendadaPara);
       const diaSemana = dt.getDay();
@@ -125,7 +134,7 @@ export function CalendarGrid({
       map.get(key)!.push(s);
     }
     return map;
-  }, [sessoes, passoMin, modo]);
+  }, [sessoes, passoMin, modo, fuso]);
 
   const recursosVisiveis = React.useMemo(() => {
     if (recursos.length > 0) return recursos;
@@ -233,6 +242,7 @@ export function CalendarGrid({
                             horarioStr={obterHorarioSlot(
                               s.agendadaPara,
                               passoMin,
+                              fuso,
                             )}
                             estado={s.estado}
                             onClick={() => onEventClick?.(s)}

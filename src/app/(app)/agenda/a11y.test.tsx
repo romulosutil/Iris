@@ -69,6 +69,7 @@ test("ItemPendencia (consolidação) — sem violações axe", async () => {
         sessao={sessaoPendente}
         tipo="consolidacao"
         terapeutas={terapeutas}
+        fuso="America/Sao_Paulo"
       />
     </ul>,
   );
@@ -81,6 +82,7 @@ test("ItemPendencia (reposição) — sem violações axe", async () => {
         sessao={sessaoFalta}
         tipo="reposicao"
         terapeutas={terapeutas}
+        fuso="America/Sao_Paulo"
       />
     </ul>,
   );
@@ -94,6 +96,7 @@ test("SecaoPendencias — vazio não renderiza nada", () => {
       itens={[]}
       tipo="consolidacao"
       terapeutas={terapeutas}
+      fuso="America/Sao_Paulo"
     />,
   );
   expect(container.textContent).toBe("");
@@ -107,6 +110,7 @@ test("SecaoPendencias (pendentes de consolidação) — sem violações axe", as
       itens={[sessaoPendente]}
       tipo="consolidacao"
       terapeutas={terapeutas}
+      fuso="America/Sao_Paulo"
     />,
   );
 });
@@ -119,6 +123,7 @@ test("SecaoPendencias (reposições pendentes) — sem violações axe", async (
       itens={[sessaoFalta]}
       tipo="reposicao"
       terapeutas={terapeutas}
+      fuso="America/Sao_Paulo"
     />,
   );
 });

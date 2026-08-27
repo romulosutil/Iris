@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso";
+import { fusoDaClinica } from "@/lib/agenda/clinic-timezone";
 import {
   ITENS_POR_PAGINA,
   grampearPagina,
@@ -46,12 +46,6 @@ type LinhaCrua = {
   entidade: string;
   ator_nome: string | null;
 };
-
-const formatador = new Intl.DateTimeFormat("pt-BR", {
-  timeZone: FUSO_CLINICA,
-  dateStyle: "short",
-  timeStyle: "short",
-});
 
 /**
  * Página da trilha de auditoria da clínica corrente.
@@ -101,6 +95,12 @@ export async function lerPaginaTrilha(
   paginaPedida: number,
 ): Promise<PaginaTrilha> {
   return withTenant(ctx, async (tx) => {
+    const fuso = await fusoDaClinica(tx, ctx.clinicId);
+    const formatador = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: fuso,
+      dateStyle: "short",
+      timeStyle: "short",
+    });
     const contagem = (await tx.execute<{ total: number }>(
       sql`SELECT count(*)::int AS total FROM audit_log_mascarado`,
     )) as unknown as { total: number }[];

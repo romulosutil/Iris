@@ -6,7 +6,7 @@ import { Stack } from "@/components/ui/layout";
 import { Card } from "@/components/ui/card";
 import { control, surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
-import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "../../../agenda/fuso";
+import { fusoDaClinicaAtual } from "@/lib/agenda/clinic-timezone";
 import { carregarBriefing } from "./queries";
 import { UltimaSessaoSection } from "./ultima-sessao";
 import { AlertaManejoBanner } from "./alerta-manejo";
@@ -27,28 +27,28 @@ const iniciarSessaoClasses = cn(
   "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]",
 );
 
-function horaDaSessao(quando: Date): string {
+function horaDaSessao(quando: Date, fuso: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: FUSO_CLINICA,
+    timeZone: fuso,
     hour: "2-digit",
     minute: "2-digit",
   }).format(quando);
 }
 
-function dataDaSessao(quando: Date): string {
+function dataDaSessao(quando: Date, fuso: string): string {
   const hojeISO = new Intl.DateTimeFormat("en-CA", {
-    timeZone: FUSO_CLINICA,
+    timeZone: fuso,
   }).format(new Date());
   const sessaoISO = new Intl.DateTimeFormat("en-CA", {
-    timeZone: FUSO_CLINICA,
+    timeZone: fuso,
   }).format(quando);
-  if (sessaoISO === hojeISO) return `hoje ${horaDaSessao(quando)}`;
+  if (sessaoISO === hojeISO) return `hoje ${horaDaSessao(quando, fuso)}`;
   return (
     new Intl.DateTimeFormat("pt-BR", {
-      timeZone: FUSO_CLINICA,
+      timeZone: fuso,
       day: "2-digit",
       month: "long",
-    }).format(quando) + ` · ${horaDaSessao(quando)}`
+    }).format(quando) + ` · ${horaDaSessao(quando, fuso)}`
   );
 }
 
@@ -67,7 +67,10 @@ export default async function BriefingPage({
     notFound();
   }
 
-  const dados = await carregarBriefing(ctx, id);
+  const [dados, fuso] = await Promise.all([
+    carregarBriefing(ctx, id),
+    fusoDaClinicaAtual(ctx),
+  ]);
   if (!dados) notFound();
 
   const {
@@ -96,7 +99,7 @@ export default async function BriefingPage({
         </h1>
         <p className="text-text-body text-sm">
           {proximaSessao
-            ? dataDaSessao(proximaSessao.agendadaPara)
+            ? dataDaSessao(proximaSessao.agendadaPara, fuso)
             : "Nenhuma sessão agendada para este paciente."}
         </p>
       </header>

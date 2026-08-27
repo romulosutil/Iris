@@ -57,6 +57,7 @@ export const Padrao = {
       <ScheduleGrid
         dias={mockDias}
         blocos={mockBlocos}
+        fuso="America/Sao_Paulo"
         aoAlocar={(dia, inicio) =>
           alert(`Alocar slot no dia ${dia} às ${inicio}min`)
         }
@@ -70,7 +71,11 @@ export const Mobile = {
   globals: { viewport: { value: "terapeuta" } },
   render: () => (
     <div className="bg-[var(--bg-app)] p-2">
-      <ScheduleGrid dias={mockDias} blocos={mockBlocos} />
+      <ScheduleGrid
+        dias={mockDias}
+        blocos={mockBlocos}
+        fuso="America/Sao_Paulo"
+      />
     </div>
   ),
 };

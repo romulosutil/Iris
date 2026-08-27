@@ -13,7 +13,6 @@ import { Cluster, Stack } from "@/components/ui/layout";
 import { EstadoBadge } from "./estado-badge";
 import { CheckInButton } from "./checkin-button";
 import { GerirSessao } from "./gerir-sessao";
-import { FUSO_CLINICA } from "./fuso";
 import type { SessaoDoDia } from "./actions";
 
 export interface AppointmentModalProps {
@@ -24,11 +23,12 @@ export interface AppointmentModalProps {
   podeGerir: boolean;
   userId: string;
   role: string;
+  fuso: string;
 }
 
-function horaDaSessao(quando: Date): string {
+function horaDaSessao(quando: Date, fuso: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: FUSO_CLINICA,
+    timeZone: fuso,
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(quando));
@@ -60,6 +60,7 @@ export function AppointmentModal({
   podeGerir,
   userId,
   role,
+  fuso,
 }: AppointmentModalProps) {
   if (!sessao) return null;
 
@@ -77,7 +78,7 @@ export function AppointmentModal({
         <DialogTitle>
           <span className="flex items-center gap-2">
             <span className="font-display text-2xl font-extrabold">
-              {horaDaSessao(sessao.agendadaPara)}
+              {horaDaSessao(sessao.agendadaPara, fuso)}
             </span>
             <EstadoBadge estado={sessao.estado} />
           </span>
@@ -110,6 +111,7 @@ export function AppointmentModal({
               <CheckInButton
                 sessionId={sessao.id}
                 checkInEm={sessao.checkInEm}
+                fuso={fuso}
               />
             ) : null}
             {sessao.estado === "agendada" && (podeGerir || ehPropria) ? (

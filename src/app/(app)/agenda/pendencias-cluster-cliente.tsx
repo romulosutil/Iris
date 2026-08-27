@@ -8,7 +8,6 @@ import { DataRow } from "@/components/ui/data-row";
 import { cn } from "@/lib/cn";
 import { EstadoBadge } from "./estado-badge";
 import { GerirSessao } from "./gerir-sessao";
-import { FUSO_CLINICA } from "./fuso";
 import type { SessaoDoDia } from "./actions";
 
 export type TipoPendencia = "consolidacao" | "reposicao";
@@ -19,11 +18,12 @@ export interface PendenciasClusterClienteProps {
   itens: SessaoDoDia[];
   tipo: TipoPendencia;
   terapeutas: { id: string; nome: string }[];
+  fuso: string;
 }
 
-function horaDaSessao(quando: Date): string {
+function horaDaSessao(quando: Date, fuso: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: FUSO_CLINICA,
+    timeZone: fuso,
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(quando));
@@ -33,11 +33,13 @@ function ItemPendenciaClustered({
   sessao,
   tipo,
   terapeutas,
+  fuso,
   ocultarNomeTerapeuta = false,
 }: {
   sessao: SessaoDoDia;
   tipo: TipoPendencia;
   terapeutas: { id: string; nome: string }[];
+  fuso: string;
   ocultarNomeTerapeuta?: boolean;
 }) {
   return (
@@ -46,7 +48,7 @@ function ItemPendenciaClustered({
       title={
         <Cluster gap="sm" className="items-center">
           <span className="font-display text-lg font-bold text-[var(--text-primary)]">
-            {horaDaSessao(sessao.agendadaPara)}
+            {horaDaSessao(sessao.agendadaPara, fuso)}
           </span>
           <EstadoBadge estado={sessao.estado} />
         </Cluster>
@@ -85,6 +87,7 @@ export function PendenciasClusterCliente({
   itens,
   tipo,
   terapeutas,
+  fuso,
 }: PendenciasClusterClienteProps) {
   const [filtroTerapeutaId, setFiltroTerapeutaId] =
     React.useState<string>("todos");
@@ -156,6 +159,7 @@ export function PendenciasClusterCliente({
                     sessao={s}
                     tipo={tipo}
                     terapeutas={terapeutas}
+                    fuso={fuso}
                     ocultarNomeTerapeuta={true}
                   />
                 ))}
