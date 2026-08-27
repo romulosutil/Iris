@@ -5,6 +5,7 @@ import { WebMCPProvider } from "@/components/webmcp-provider";
 import { Clarity } from "@/components/clarity";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { ToastProvider } from "@/components/ui/toast";
+import { RegistrarServiceWorker } from "@/components/pwa/registrar-sw";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -66,6 +67,7 @@ export default function RootLayout({
         <GoogleAnalytics />
         <Clarity />
         <WebMCPProvider />
+        <RegistrarServiceWorker />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
