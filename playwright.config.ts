@@ -89,6 +89,25 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      // Os specs `mobile-*` só fazem sentido no viewport de 360px. Sem este
+      // ignore eles rodariam DUAS vezes — uma delas em 1280px de largura, onde
+      // passariam sempre e dariam a impressão de cobertura mobile.
+      testIgnore: /mobile-.*\.spec\.ts/,
+      dependencies: ["servidor"],
+    },
+    {
+      // Gate mobile de #185. `isMobile` liga a emulação de meta viewport do
+      // Chromium (sem ela, `viewport-fit=cover` e `env(safe-area-inset-*)` não
+      // são exercitados) e `hasTouch` faz o layout responder como celular.
+      name: "mobile-360",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 360, height: 740 },
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 3,
+      },
+      testMatch: /mobile-.*\.spec\.ts/,
       dependencies: ["servidor"],
     },
   ],
