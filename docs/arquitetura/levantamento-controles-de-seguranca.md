@@ -21,7 +21,7 @@ Este arquivo registra, por alegação: o comando, a saída e o veredito.
 | --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | 1   | "AES-256 em repouso (Postgres e S3)"                        | ❌ **Não sustentável.** Nenhuma cifragem em repouso configurada no repo; VPS medida em 26/08/2026, sem cifragem de volume |
 | 2   | "TLS 1.3 obrigatório para todas as conexões"                | ❌ **Falsa como escrita.** TLS 1.3 disponível na borda, mas 1.2 é aceito e a conexão app↔Postgres é em claro  |
-| 3   | "Backup diário off-site cifrado, retenção auditada 30 dias" | ⚠️ **Parcial.** Cifragem off-site confirmada; "retenção auditada" precisa dizer o que de fato acontece        |
+| 3   | "Backup diário off-site cifrado, retenção auditada 30 dias" | ⚠️ **Parcial.** Cifragem off-site confirmada; retenção com evidência indireta (33d operação, 0 objetos vencidos) mas sem leitura direta da regra no console OCI |
 | 4   | "Isolamento multi-tenant por RLS"                           | ✅ **Sustentável.** Única alegação coberta por medição automatizada e repetível                               |
 | 5   | "Zero Training Policy"                                      | ⚠️ **Garantia de terceiro.** Não é controle da plataforma; a redação tem que dizer de quem é                  |
 | 6   | "Conformidade LGPD Art. 11 e 14"                            | ⚠️ **Reformular.** As bases legais existem e estão documentadas; "conformidade" como carimbo não              |
@@ -146,9 +146,30 @@ Três coisas que a frase original esconde:
 2. **A poda mede `mtime`, não a data no nome.** Objeto de nome antigo subido hoje não vence. Auditar por nome e apagar por mtime são coisas diferentes.
 3. **A chave `age` do off-site já foi perdida e regerada uma vez.** Backup cifrado com chave indisponível é backup irrecuperável — e `exit 0` + header `age` + tamanho certo são compatíveis com esse estado.
 
+### Evidência indireta da lifecycle rule — medido em 26/08/2026
+
+Sem acesso ao console OCI, mas o log de produção do serviço `iris-backup` (Easypanel) já roda a própria auditoria do `expurgo-offsite.sh` diariamente:
+
+```console
+[expurgo-offsite] bucket=iris-backups-offsite · retenção=30d · modo=AUDITORIA (padrão: NÃO apaga nada)
+[expurgo-offsite] objetos com idade > 30d encontrados: 0
+[expurgo-offsite] CONFORMIDADE LGPD ART. 46 VERIFICADA: o bucket iris-backups-offsite não contém nenhum objeto com idade > 30 dias.
+```
+
+Isso só é evidência de verdade se o bucket for velho o bastante para ter objeto vencido caso a regra não exista:
+
+```console
+$ git log --diff-filter=A --format="%ad %s" --date=short -- infra/backup/backup.sh
+2026-07-24 feat(infra): backup pg_dump agendado + restore testado (#75 Etapa 5)
+```
+
+`backup.sh` roda desde 24/07/2026 — **33 dias** antes desta medição (26/08/2026), passando a janela de 30 dias. Zero objetos vencidos com essa idade de bucket é sinal real de que algo está podando (regra de lifecycle ou expurgo manual já rodado), não coincidência de bucket jovem.
+
+Não medido diretamente: a regra de lifecycle em si (nome, janela exata) no console OCI — sem credencial nesta sessão. O `env | grep -i offsite` no console do serviço foi bloqueado pelo classificador de permissão do Claude Code por poder expor a credencial em texto — corretamente; não contornado.
+
 ### Veredito
 
-"Backup diário off-site cifrado" ✅. "Retenção auditada de 30 dias" precisa dizer o que de fato acontece: _retenção de 30 dias nos volumes locais e no MinIO, executada pelo script; no off-site, auditada pelo script e aplicada por regra de lifecycle do bucket_. Falta medir essa regra de lifecycle no console da OCI antes de qualquer redação.
+"Backup diário off-site cifrado" ✅. "Retenção auditada de 30 dias" ⚠️ **parcial, revisado**: o comportamento observado (33 dias de operação, zero objetos vencidos) é consistente com uma lifecycle rule funcionando, mas não é a mesma prova que ler a regra no console OCI — poderia também ser expurgo manual esporádico. Redação sustentável: _retenção de 30 dias nos volumes locais e no MinIO, executada pelo script; no off-site, auditada diariamente pelo script (zero objetos vencidos observados após 33 dias de operação) e aplicada por regra de lifecycle do bucket, não confirmada diretamente no console_.
 
 ---
 
@@ -232,15 +253,24 @@ O que **não** existe é auditoria externa que ateste conformidade.
 **Fechado em 26/08/2026 (via console Easypanel):**
 
 - Cifragem de disco da VPS Hostinger — `lsblk` no serviço `iris-postgres`, sem `TYPE=crypt`/`crypto_LUKS`. **Não há cifragem em repouso.**
+- Comportamento real do expurgo off-site com idade de bucket suficiente (33 dias) para o teste valer — log de produção do `iris-backup`, zero objetos vencidos. Evidência indireta, não substitui ler a regra no console OCI.
 
-**Aberto (exige console de infra além do que este acesso alcançou):**
+**Aberto (exige acesso que este console não deu):**
 
-1. Regra de lifecycle do bucket off-site na OCI — console OCI, credencial não disponível nesta sessão
+1. Regra de lifecycle do bucket off-site na OCI, lida diretamente — console OCI, credencial não disponível nesta sessão. Tentativa de ler `OFFSITE_S3_*` via `env` no console do serviço foi bloqueada pelo classificador de permissão (exposição de credencial em texto) — não contornada.
 2. TLS 1.1/1.0 na borda — `openssl` 3.5.x recusa protocolo antes de abrir socket, tanto local quanto na própria VPS (mesma limitação client-side); exige `testssl.sh` ou cliente com provider legacy habilitado
 
-**Aberto (decisão do Rômulo, Gate 2):**
+**Fechado (Gate 2 — aprovado por Rômulo em 26/08/2026):**
 
-4. Quais linhas o termo pode afirmar, dado o placar acima
-5. Se algum controle ausente vira trabalho de implementação antes do termo
+4. Redação aprovada, por alegação:
+   - **AES-256 em repouso** — removida. Sem cifragem implementada, sem alegação.
+   - **TLS** — reformulada: "Conexões públicas usam TLS 1.2 ou superior (preferencialmente TLS 1.3)." Sem "obrigatório para todas as conexões".
+   - **Backup off-site** — mantida como parcial, com ressalva: "Backups diários, cifrados (age) antes do envio off-site. Retenção de 30 dias auditada diariamente pelo script (zero objetos vencidos observados em 33 dias de operação); regra de lifecycle do bucket não confirmada diretamente no console."
+   - **RLS** — mantida como sustentável, descrevendo mecanismo: "Isolamento multi-tenant garantido por Row-Level Security no Postgres, coberto por suíte automatizada (126 arquivos, 1103 testes) no CI."
+   - **Zero Training Policy** — reformulada como garantia de terceiro: "Os provedores de IA usados (Anthropic, Google) mantêm política própria de não-treino em uso comercial, conforme contrato vigente com cada provedor."
+   - **LGPD Art. 11/14** — reformulada como "conforme documentado": "Bases legais dos Art. 11 e 14 identificadas e documentadas (consentimento do titular, tutela da saúde, consentimento de responsável para menor) — ver política de privacidade e retenção." Sem carimbo de "conformidade".
+5. Nenhum controle ausente vira trabalho de implementação antes do termo — termo descreve o estado real, não promete o que falta.
 
-Nenhuma redação de termo começa antes de 1–5.
+**Aberto (Gate 3):**
+
+Documento formal em `docs/legal/` com a redação acima, e decisão se cabe superfície de download.
