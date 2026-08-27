@@ -32,6 +32,12 @@ on:
       - "infra/backup/**"
       - "infra/billing/**"
       - "infra/retencao/**"
+      # `carga_alarme()` existe em `scripts/ci/carga-imagens-infra.sh` (no
+      # `case` e em `todos`) desde que a imagem foi criada, mas `infra/alarme/**`
+      # nunca entrou neste `paths` — então mudar o Dockerfile ou o agendador do
+      # alarme não disparava CI nenhum. Mesmo buraco que o D64 fechou para
+      # `arquivamento`, que passou despercebido aqui.
+      - "infra/alarme/**"
       - "infra/exportacao/**"
       - "infra/arquivamento/**"
       - "pnpm-lock.yaml"
@@ -44,6 +50,12 @@ on:
       - "infra/backup/**"
       - "infra/billing/**"
       - "infra/retencao/**"
+      # `carga_alarme()` existe em `scripts/ci/carga-imagens-infra.sh` (no
+      # `case` e em `todos`) desde que a imagem foi criada, mas `infra/alarme/**`
+      # nunca entrou neste `paths` — então mudar o Dockerfile ou o agendador do
+      # alarme não disparava CI nenhum. Mesmo buraco que o D64 fechou para
+      # `arquivamento`, que passou despercebido aqui.
+      - "infra/alarme/**"
       - "infra/exportacao/**"
       - "infra/arquivamento/**"
       - "pnpm-lock.yaml"
