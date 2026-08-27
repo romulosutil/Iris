@@ -31,6 +31,13 @@ export type NavBadgeTom = "neutro" | "ia" | "risco";
 export interface NavItem {
   href: string;
   label: string;
+  /**
+   * Rótulo abreviado para a Bottom Navigation Bar (#185). Cada slot tem ~68px
+   * em 360px de viewport; "Central de Validação" não cabe. Quando ausente, a
+   * `BottomNav` cai no `label`. O `aria-label` do link continua sendo o `label`
+   * completo — quem usa leitor de tela não perde a palavra "Central".
+   */
+  labelCurto?: string;
   badge?: number;
   badgeTom?: NavBadgeTom;
   active?: boolean;
