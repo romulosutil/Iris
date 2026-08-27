@@ -10,6 +10,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "branch": "bash scripts/new-branch.sh",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
