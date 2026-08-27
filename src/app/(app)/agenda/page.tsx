@@ -10,40 +10,43 @@ import { pendentesDeConsolidacao, reposicoesPendentes } from "./queries";
 import { EstadoBadge } from "./estado-badge";
 import { GerirSessao } from "./gerir-sessao";
 import { AgendaViewCliente } from "./agenda-view-cliente";
-import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "./fuso";
+import { fusoDaClinicaAtual } from "@/lib/agenda/clinic-timezone";
+import { resolverInstante } from "@/lib/agenda/materializar";
 
 // Data de hoje (YYYY-MM-DD) no fuso da clínica — base da grade do dia.
-function hojeNaClinica(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: FUSO_CLINICA }).format(
+function hojeNaClinica(fuso: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(
     new Date(),
   );
 }
 
-function horaDaSessao(quando: Date): string {
+function horaDaSessao(quando: Date, fuso: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: FUSO_CLINICA,
+    timeZone: fuso,
     hour: "2-digit",
     minute: "2-digit",
   }).format(quando);
 }
 
-function dataPorExtenso(diaISO: string): string {
+function dataPorExtenso(diaISO: string, fuso: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: FUSO_CLINICA,
+    timeZone: fuso,
     weekday: "long",
     day: "2-digit",
     month: "long",
-  }).format(new Date(`${diaISO}T12:00:00${FUSO_CLINICA_OFFSET}`));
+  }).format(resolverInstante(diaISO, "12:00", fuso));
 }
 
 export function ItemPendencia({
   sessao,
   tipo,
   terapeutas,
+  fuso,
 }: {
   sessao: SessaoDoDia;
   tipo: TipoPendencia;
   terapeutas: { id: string; nome: string }[];
+  fuso: string;
 }) {
   return (
     <DataRow
@@ -51,7 +54,7 @@ export function ItemPendencia({
       title={
         <Cluster gap="sm" className="items-center">
           <span className="font-display text-lg font-bold">
-            {horaDaSessao(sessao.agendadaPara)}
+            {horaDaSessao(sessao.agendadaPara, fuso)}
           </span>
           <EstadoBadge estado={sessao.estado} />
         </Cluster>
@@ -95,12 +98,14 @@ export function SecaoPendencias({
   itens,
   tipo,
   terapeutas,
+  fuso,
 }: {
   tituloId: string;
   titulo: string;
   itens: SessaoDoDia[];
   tipo: TipoPendencia;
   terapeutas: { id: string; nome: string }[];
+  fuso: string;
 }) {
   if (itens.length === 0) return null;
   return (
@@ -110,21 +115,22 @@ export function SecaoPendencias({
       itens={itens}
       tipo={tipo}
       terapeutas={terapeutas}
+      fuso={fuso}
     />
   );
 }
 
 // Valida `dia=YYYY-MM-DD` vindo da URL; inválido (formato ou data inexistente)
 // cai no hoje da clínica.
-function diaValidoOuHoje(dia: string | undefined): string {
-  if (!dia || !/^\d{4}-\d{2}-\d{2}$/.test(dia)) return hojeNaClinica();
+function diaValidoOuHoje(dia: string | undefined, fuso: string): string {
+  if (!dia || !/^\d{4}-\d{2}-\d{2}$/.test(dia)) return hojeNaClinica(fuso);
   const [ano = 0, mes = 1, d = 1] = dia.split("-").map(Number);
   const data = new Date(Date.UTC(ano, mes - 1, d));
   const valida =
     data.getUTCFullYear() === ano &&
     data.getUTCMonth() === mes - 1 &&
     data.getUTCDate() === d;
-  return valida ? dia : hojeNaClinica();
+  return valida ? dia : hojeNaClinica(fuso);
 }
 
 const VISOES = ["matriz", "terapeuta", "horario"] as const;
@@ -136,7 +142,8 @@ export default async function AgendaPage({
 }) {
   const ctx = await getTenantContext();
   const params = await searchParams;
-  const dia = diaValidoOuHoje(params.dia);
+  const fuso = await fusoDaClinicaAtual(ctx);
+  const dia = diaValidoOuHoje(params.dia, fuso);
   const podeAgendar =
     ctx.role === "coordenador" || ctx.role === "admin_recepcao";
   const podeGerir = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
@@ -161,7 +168,7 @@ export default async function AgendaPage({
     <Stack gap="lg" className="pt-2 md:pt-4">
       <PageHeader
         title="Agenda do dia"
-        description={dataPorExtenso(dia)}
+        description={dataPorExtenso(dia, fuso)}
         actions={
           podeAgendar ? (
             <Button asChild variante="primaria">
@@ -177,6 +184,7 @@ export default async function AgendaPage({
         itens={pendentesConsolidacao}
         tipo="consolidacao"
         terapeutas={terapeutas}
+        fuso={fuso}
       />
 
       <SecaoPendencias
@@ -185,6 +193,7 @@ export default async function AgendaPage({
         itens={pendentesReposicao}
         tipo="reposicao"
         terapeutas={terapeutas}
+        fuso={fuso}
       />
 
       <AgendaViewCliente
@@ -193,10 +202,11 @@ export default async function AgendaPage({
         role={ctx.role}
         userId={ctx.userId}
         podeGerir={podeGerir}
-        diaExtenso={dataPorExtenso(dia)}
+        diaExtenso={dataPorExtenso(dia, fuso)}
         diaISO={dia}
-        ehHoje={dia === hojeNaClinica()}
+        ehHoje={dia === hojeNaClinica(fuso)}
         visaoInicial={visaoInicial}
+        fuso={fuso}
       />
     </Stack>
   );

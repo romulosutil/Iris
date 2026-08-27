@@ -72,6 +72,20 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
       "@tests": path.resolve(import.meta.dirname, "db/tests"),
+      // Mesmo alias do `vitest.config.ts` (#126), pela mesma razão e agora
+      // também aqui: o Next resolve `server-only` para `empty.js` no bundle de
+      // servidor (condição "react-server"), o vitest não aplica essa condição,
+      // e sem o alias QUALQUER módulo na cadeia de import de um int-test que
+      // traga `import "server-only"` lança na hora do import. O erro
+      // ("This module cannot be imported from a Client Component module")
+      // aponta para o lado errado do problema: o teste roda em Node, não há
+      // Client Component nenhum, e o módulo é legitimamente de servidor.
+      // `clinic-timezone.ts` (D61) foi o primeiro a entrar numa cadeia
+      // int-testada e derrubou `trilha-auditoria.int.test.ts`.
+      "server-only": path.resolve(
+        import.meta.dirname,
+        "node_modules/server-only/empty.js",
+      ),
     },
   },
   test: {

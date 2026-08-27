@@ -20,7 +20,6 @@ import { CollapsibleCluster } from "@/components/ui/collapsible-cluster";
 import { AgendaCalendarGrid } from "@/components/ui/agenda-calendar-grid";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CareCalendarIllustration } from "@/components/ui/illustrations";
-import { FUSO_CLINICA } from "./fuso";
 import type { SessaoDoDia } from "./actions";
 
 export interface AgendaViewClienteProps {
@@ -33,6 +32,7 @@ export interface AgendaViewClienteProps {
   diaISO?: string;
   ehHoje?: boolean;
   visaoInicial?: string;
+  fuso: string;
 }
 
 // Soma `delta` dias a uma data YYYY-MM-DD usando aritmética UTC (evita
@@ -43,9 +43,9 @@ function somarDias(diaISO: string, delta: number): string {
   return data.toISOString().slice(0, 10);
 }
 
-function horaDaSessao(quando: Date): string {
+function horaDaSessao(quando: Date, fuso: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: FUSO_CLINICA,
+    timeZone: fuso,
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(quando));
@@ -61,6 +61,7 @@ export function AgendaViewCliente({
   diaISO,
   ehHoje = true,
   visaoInicial,
+  fuso,
 }: AgendaViewClienteProps) {
   const router = useRouter();
   const isCoordenador = role === "coordenador" || role === "admin_recepcao";
@@ -387,6 +388,7 @@ export function AgendaViewCliente({
         podeGerir={podeGerir}
         userId={userId}
         role={role}
+        fuso={fuso}
       />
 
       {/* Visão 2: Bento Grid por Terapeuta */}
@@ -418,7 +420,7 @@ export function AgendaViewCliente({
                   grupo.sessoes.map((s) => (
                     <AppointmentCard
                       key={s.id}
-                      horario={horaDaSessao(s.agendadaPara)}
+                      horario={horaDaSessao(s.agendadaPara, fuso)}
                       pacienteNome={
                         s.pacienteNome ?? "Paciente (acesso restrito)"
                       }
@@ -458,7 +460,7 @@ export function AgendaViewCliente({
               title={
                 <Cluster gap="sm" className="items-center">
                   <span className="font-display text-lg font-bold text-[var(--text-primary)]">
-                    {horaDaSessao(s.agendadaPara)}
+                    {horaDaSessao(s.agendadaPara, fuso)}
                   </span>
                   <EstadoBadge estado={s.estado} />
                 </Cluster>
@@ -484,7 +486,11 @@ export function AgendaViewCliente({
                     </Link>
                   ) : null}
                   {s.estado === "agendada" ? (
-                    <CheckInButton sessionId={s.id} checkInEm={s.checkInEm} />
+                    <CheckInButton
+                      sessionId={s.id}
+                      checkInEm={s.checkInEm}
+                      fuso={fuso}
+                    />
                   ) : null}
                   {s.estado === "agendada" &&
                   (podeGerir || s.terapeutaId === userId) ? (

@@ -2,7 +2,6 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { checkInAction } from "./actions";
-import { FUSO_CLINICA } from "./fuso";
 
 /**
  * Botão de check-in de uma sessão. Envolve a Server Action `checkInAction` num
@@ -16,14 +15,16 @@ import { FUSO_CLINICA } from "./fuso";
 export function CheckInButton({
   sessionId,
   checkInEm,
+  fuso = "America/Sao_Paulo",
 }: {
   sessionId: string;
   checkInEm?: Date | string | null;
+  fuso?: string;
 }) {
   const [state, formAction, pending] = useActionState(checkInAction, {});
   if (checkInEm) {
     const hora = new Intl.DateTimeFormat("pt-BR", {
-      timeZone: FUSO_CLINICA,
+      timeZone: fuso,
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(checkInEm));
