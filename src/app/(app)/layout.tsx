@@ -65,6 +65,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       {
         href: "/validacao",
         label: "Central de Validação",
+        labelCurto: "Validação",
         badge: totalPendencias,
         // Fila alimentada pela extração da IA: violeta é o tom de "candidato
         // pendente de olhar clínico". Vermelho fica reservado a alerta de risco.
@@ -80,8 +81,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     ];
   } else if (ctx.role === "terapeuta") {
     itemsNav = [
-      { href: "/agenda", label: "Agenda do Dia" },
-      { href: "/pacientes", label: "Pacientes & PEIs" },
+      { href: "/agenda", label: "Agenda do Dia", labelCurto: "Agenda" },
+      {
+        href: "/pacientes",
+        label: "Pacientes & PEIs",
+        labelCurto: "Pacientes",
+      },
       {
         href: "/pendencias",
         label: "Pendências",
@@ -154,7 +159,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         diasRestantes={situacaoConta.diasRestantesTrial}
         debitoCentavos={situacaoConta.debitoCentavos}
       />
-      <Container como="main" largura="md" className="flex-1 py-6 sm:py-10">
+      {/*
+        O `pb` inferior reserva a altura da BottomNav (#185): ~56px de barra +
+        a safe-area do aparelho. Sem isso, o último botão de cada tela (salvar
+        diário, confirmar validação) fica embaixo da barra — invisível e
+        inclicável, e nenhum teste de componente pega, porque o jsdom não
+        conhece `position: fixed`.
+      */}
+      <Container
+        como="main"
+        largura="md"
+        className="flex-1 py-6 pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] sm:py-10 sm:pb-10"
+      >
         {children}
       </Container>
     </div>
