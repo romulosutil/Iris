@@ -3,6 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import type { NavItem, NavBadgeTom } from "@/components/ui/header";
+import { useTecladoVirtualAberto } from "@/lib/hooks/use-teclado-virtual";
 
 /**
  * Quantos destinos cabem na barra antes do slot de menu.
@@ -65,7 +66,15 @@ export interface BottomNavProps {
  * porque o coordenador tem 9 destinos e só 4 cabem aqui.
  */
 export function BottomNav({ items, onAbrirMenu, renderLink }: BottomNavProps) {
+  // Hook antes de qualquer retorno antecipado: as regras dos Hooks proíbem
+  // chamada condicional, e `items` vazio é um retorno antecipado.
+  const tecladoAberto = useTecladoVirtualAberto();
+
   if (items.length === 0) return null;
+  // Com o teclado aberto a barra rouba a faixa onde ficam os botões de salvar
+  // do editor de diário e da barra de lote. Sair de cena é o comportamento
+  // certo: o usuário está digitando, não navegando.
+  if (tecladoAberto) return null;
 
   const visiveis = items.slice(0, MAX_ITENS_BOTTOM_NAV);
 

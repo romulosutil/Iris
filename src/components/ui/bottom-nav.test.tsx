@@ -113,4 +113,29 @@ describe("BottomNav", () => {
     );
     expect(container.firstChild).toBeNull();
   });
+
+  it("some quando o teclado virtual está aberto", () => {
+    const ouvintes: (() => void)[] = [];
+    Object.defineProperty(window, "visualViewport", {
+      value: {
+        height: 380,
+        addEventListener: (_n: string, fn: () => void) => ouvintes.push(fn),
+        removeEventListener: () => {},
+      },
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      value: 740,
+      configurable: true,
+      writable: true,
+    });
+
+    const { container } = render(
+      <BottomNav items={ITENS_COORDENADOR} onAbrirMenu={vi.fn()} />,
+    );
+    expect(container.firstChild).toBeNull();
+
+    Reflect.deleteProperty(window, "visualViewport");
+  });
 });

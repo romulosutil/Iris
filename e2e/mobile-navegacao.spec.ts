@@ -102,3 +102,52 @@ test.describe("BottomNav do terapeuta", () => {
     await expect(primeiro).toHaveText("Agenda");
   });
 });
+
+test.describe("barras de ação x BottomNav", () => {
+  test("a barra de lote da validação não fica sob a BottomNav", async ({
+    page,
+  }) => {
+    await entrarComMfa(page, "e2e@iris.test", "Senha E2E 123");
+    await page.goto("/validacao");
+    await page.waitForLoadState("networkidle");
+
+    const barraLote = page.locator(".sticky").first();
+    const visivel = await barraLote.isVisible().catch(() => false);
+    // A fila pode estar vazia no seed; nesse caso não há barra de lote e não há
+    // o que medir. Registrar em vez de passar em silêncio.
+    test.skip(!visivel, "fila de validação sem itens — barra de lote ausente");
+
+    const caixaBarra = await barraLote.boundingBox();
+    const caixaNav = await page
+      .getByRole("navigation", { name: "Navegação rápida" })
+      .boundingBox();
+
+    expect(caixaBarra).not.toBeNull();
+    expect(caixaNav).not.toBeNull();
+    expect(
+      caixaBarra!.y + caixaBarra!.height,
+      "a barra de ação termina abaixo do topo da BottomNav — o botão fica inalcançável",
+    ).toBeLessThanOrEqual(caixaNav!.y);
+  });
+
+  test("a BottomNav some quando um campo de texto recebe o teclado", async ({
+    page,
+  }) => {
+    await entrarComMfa(page, "e2e@iris.test", "Senha E2E 123");
+    await page.goto("/perfil");
+    await page.waitForLoadState("networkidle");
+
+    // O Playwright não abre teclado virtual de verdade. Encolhemos o
+    // `visualViewport` do mesmo jeito que o teclado encolheria e conferimos a
+    // reação — é o sinal que o hook realmente observa em produção.
+    await page.evaluate(() => {
+      const vv = window.visualViewport!;
+      Object.defineProperty(vv, "height", { value: 380, configurable: true });
+      vv.dispatchEvent(new Event("resize"));
+    });
+
+    await expect(
+      page.getByRole("navigation", { name: "Navegação rápida" }),
+    ).toBeHidden();
+  });
+});
