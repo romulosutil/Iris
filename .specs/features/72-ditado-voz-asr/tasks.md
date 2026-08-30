@@ -1,6 +1,6 @@
 # Tasks — Issue #72: Ditado de Voz (ASR self-hosted)
 
-> Ler `context.md`, `spec.md` e `design.md` antes. Requisitos referenciados como R1-R23.
+> Ler `context.md`, `spec.md` e `design.md` antes. Requisitos referenciados como R1-R27.
 > Fronteira de atomização: cada task é rejeitável ou aprovável isolada por um revisor.
 
 ## Ordem e dependências
@@ -33,7 +33,7 @@ T06 ─┘   │             T14
 - Verificado **medindo**: `information_schema.columns` mostra as 6 colunas e `has_column_privilege('app_role','audio_capture','asr_status','UPDATE')` é `true`.
 
 **Testes:** `src/db/migrations.test.ts` continua verde (journal, `when`, `idx`, tag).
-**Gate:** `pnpm test -- migrations`, `pnpm typecheck`
+**Gate:** `pnpm format`, `pnpm test -- migrations`, `pnpm typecheck`
 
 ⚠️ Enum novo + uso na mesma migração: `tipo::text` contorna o "unsafe use of new value" (memória `enum-novo-e-check-numa-migracao`).
 
@@ -45,7 +45,7 @@ T06 ─┘   │             T14
 **Depende de:** T01
 **Reusa:** `src/lib/export/acervo/motor.ts:141-170` como precedente de reserva atômica
 
-**O quê:** `app_asr_reservar(p_limite int)`, `app_asr_concluir(p_id uuid, p_texto text)`, `app_asr_falhar(p_id uuid)`. Reserva com `FOR UPDATE SKIP LOCKED`, incremento de `tentativas` **na reserva**, teto de tentativas **dentro da subquery do `LIMIT`**.
+**O quê:** `app_asr_reservar(p_limite int)`, `app_asr_concluir(p_id uuid, p_texto text)`, `app_asr_falhar(p_id uuid)`. Reserva com `FOR UPDATE SKIP LOCKED`, incremento de `tentativas` **na reserva**, teto de **3** tentativas **dentro da subquery do `LIMIT`** (R16).
 
 **Done when:**
 
@@ -84,7 +84,7 @@ T06 ─┘   │             T14
 **Done when:** `guardar`, `ler`, `apagar` por chave; bucket com credencial própria, separada de backup e exportação; região/assinatura explícitas.
 
 **Testes:** unitário do client contra dublê.
-**Gate:** `pnpm test`
+**Gate:** `pnpm format`, `pnpm test`
 
 ⚠️ Dublê não cobre dialeto do destino (memória `teste-com-duble-nao-cobre-dialeto-do-destino`): `mc` assina `us-east-1` sem `MC_REGION`. O teste do dublê não prova a cópia — a prova é o smoke em T08.
 
@@ -98,7 +98,7 @@ T06 ─┘   │             T14
 **Done when:** seleção do provider é **estática por env**, sem `await import()` dinâmico; `StubAsrProvider` não faz rede nenhuma; `SelfHostedAsrProvider` tem timeout explícito e bearer `ASR_SERVICE_TOKEN`.
 
 **Testes:** stub devolve texto determinístico; self-hosted monta a requisição certa contra dublê de fetch.
-**Gate:** `pnpm test`, `pnpm typecheck`
+**Gate:** `pnpm format`, `pnpm test`, `pnpm typecheck`
 
 ⚠️ Dublê com arrow não é construtor (memória `duble-arrow-nao-e-construtor`) — se o provider for instanciado com `new`, o dublê precisa ser função/classe.
 
@@ -134,8 +134,8 @@ T06 ─┘   │             T14
 
 **Done when:** falha de 1 clipe não aborta os demais do tick (R12); token ausente recusa tudo; o `finally` de apagar o objeto roda nos três desfechos.
 
-**Testes:** token ausente → 401; lote de 3 com o do meio falhando → 2 `transcrito`, 1 de volta à fila, 3 objetos apagados; teto de tentativas → `falhou` definitivo.
-**Gate:** `pnpm test`, `pnpm typecheck`, `pnpm lint`
+**Testes:** token ausente → 401; lote de 3 com o do meio falhando → 2 `transcrito`, 1 de volta à fila, 3 objetos apagados; teto de 3 tentativas → `falhou` definitivo; dois ticks concorrentes chamando a rota ao mesmo tempo não processam o mesmo clipe duas vezes (idempotência vem do `SKIP LOCKED` de T02, aqui só se confirma pelo lado HTTP).
+**Gate:** `pnpm format`, `pnpm test`, `pnpm typecheck`, `pnpm lint`
 
 ⚠️ Mensagem de erro não afirma causa única (memória `mensagem-de-erro-que-afirma-causa`) — reportar `Error.message` quando houver, senão o valor cru.
 
@@ -166,12 +166,12 @@ T06 ─┘   │             T14
 **Depende de:** T01, T04
 **Reusa:** `registrarAudioLocal` (`logic.ts:222`), `comEscrita`, `withTenant`, `getTenantContext`
 
-**O quê:** recebe N clipes com ordem, gera `lote_id`, insere N linhas em `audio_capture` (`asr_status = 'na_fila'`, `ordem` 0..N-1), sobe cada blob para o bucket efêmero e grava `objeto_ref`. Retorna `loteId` **imediatamente** (R9).
+**O quê:** recebe `loteId` (gerado no **cliente**, `crypto.randomUUID()`) + N clipes com ordem, insere N linhas em `audio_capture` (`asr_status = 'na_fila'`, `lote_id`, `ordem` 0..N-1), sobe cada blob para o bucket efêmero e grava `objeto_ref`. Retorna `loteId` **imediatamente** (R9).
 
-**Done when:** o core ctx-accepting **não** é exportado de `actions.ts`; gate da flag recusa quando desligada (R21); recusa de consentimento não escapa como erro genérico.
+**Done when:** o core ctx-accepting **não** é exportado de `actions.ts`; gate da flag recusa quando desligada (R21); recusa de consentimento não escapa como erro genérico; reenvio do **mesmo** `loteId` (retry de rede do cliente) não duplica as N linhas — a action checa existência do `lote_id` antes de inserir e devolve sucesso idempotente (R24).
 
-**Testes (int):** cria N linhas com ordem preservada; flag desligada → recusa; papel errado → recusa.
-**Gate:** `pnpm test`, `pnpm test:rls`, `pnpm typecheck`
+**Testes (int):** cria N linhas com ordem preservada; flag desligada → recusa; papel errado → recusa; mesmo `loteId` enviado duas vezes → só 1 conjunto de linhas no banco.
+**Gate:** `pnpm format`, `pnpm test`, `pnpm test:rls`, `pnpm typecheck`
 
 ⚠️ `ctx` forjável em `"use server"` (memória `ctx-forjavel-use-server`).
 
@@ -182,12 +182,12 @@ T06 ─┘   │             T14
 **Onde:** `src/app/(app)/diario/[sessionId]/logic.ts` + `actions.ts`
 **Depende de:** T09
 
-**O quê:** `obterEstadoLote(loteId)` → por clipe: `ordem`, `asr_status`, `transcricao_texto`. Leitura sob RLS do tenant do request.
+**O quê:** `obterEstadoLote(loteId)` → por clipe: `ordem`, `asr_status`, `transcricao_texto`. Leitura sob RLS do tenant do request. `obterLoteMaisRecente(sessionId)` → devolve o `loteId` mais recente daquela sessão (ou nulo), para a página resolver ao carregar se há lote em voo a retomar (R26).
 
-**Done when:** os limites de R20 estão no código e nomeados: intervalo de 3s, teto de 10 min. Estourado o teto, o retorno diz "segue processando", **nunca** "falhou".
+**Done when:** os limites de R20 estão no código e nomeados: intervalo de 3s, teto de 10 min. Estourado o teto, o retorno diz "segue processando", **nunca** "falhou". `obterLoteMaisRecente` é a fonte de verdade no reload — a UI nunca decide "retomar polling" a partir de estado local perdido no fechamento da aba (R26).
 
-**Testes (int):** lote de outro tenant não é legível; lote parcial devolve os transcritos e marca os pendentes.
-**Gate:** `pnpm test:rls`
+**Testes (int):** lote de outro tenant não é legível; lote parcial devolve os transcritos e marca os pendentes; `obterLoteMaisRecente` após reload devolve o lote em `na_fila` corretamente, e devolve nulo quando não há lote na sessão.
+**Gate:** `pnpm format`, `pnpm test:rls`
 
 ⚠️ `catch { setState(null) }` transforma falha de rede em afirmação clínica (memória `erro-renderizado-como-empty-state`) — erro de leitura é erro, não lista vazia.
 
@@ -201,10 +201,17 @@ T06 ─┘   │             T14
 
 **O quê:** teto de 2 min por clipe com encerramento automático (R1); lista de clipes com duração, descartar e regravar por item (R4); sem teto de quantidade (R2); botão explícito "Enviar pra Iris analisar" (R5); ordem preservada (R6).
 
-**Done when:** nenhum clipe sobe ao terminar de gravar; a aba "Áudio" do `captura-form.tsx` continua funcionando; a11y do componente coberta.
+**Convenção do arquivo:** os comentários de `audio-local.tsx` explicam o _porquê_, não o _o quê_ — ex. o comentário de `salvarAudioLocal` no `onstop` explica que é "persist-on-record: o áudio sobrevive a um reload antes de confirmar", não "salva o áudio". Manter o mesmo padrão nos comentários novos.
 
-**Testes:** teto de 2 min encerra sozinho; descartar remove o item e o blob; ordem da lista = ordem enviada.
-**Gate:** `pnpm test`, `pnpm lint`
+**Done when:**
+
+- Nenhum clipe sobe ao terminar de gravar; a aba "Áudio" do `captura-form.tsx` continua funcionando; a11y do componente coberta.
+- **R24:** o botão "Enviar pra Iris analisar" desabilita no primeiro clique (`estado === "enviando"` cobre o lote inteiro, não só 1 clipe) e só reabilita se o envio falhar.
+- **R25:** nenhuma mudança de comportamento aqui — `MediaRecorder` em andamento simplesmente morre com a aba; nada a persistir intermediário.
+- **R27:** clipe cujo estado avançou para "enviado" perde os botões descartar/regravar da lista — só existem para clipe em `vazio`/`gravado`.
+
+**Testes:** teto de 2 min encerra sozinho; descartar remove o item e o blob; ordem da lista = ordem enviada; clique duplo em "Enviar" dispara só 1 chamada ao server action; item marcado "enviado" não renderiza mais botão de descartar/regravar.
+**Gate:** `pnpm format`, `pnpm test`, `pnpm lint`
 
 ⚠️ Matcher nativo sobre o DOM cru — o repo **não tem jest-dom** (memória `repo-nao-tem-jest-dom`).
 
@@ -220,7 +227,7 @@ T06 ─┘   │             T14
 **Done when:** o texto nunca vai direto para `session_note`; o marcador de IA é visível, não só `aria-label`.
 
 **Testes:** lote com 1 falha entre 3 → 2 parágrafos com texto, 1 marcado; nenhum caminho salva sem clique do terapeuta.
-**Gate:** `pnpm test`, `pnpm lint`
+**Gate:** `pnpm format`, `pnpm test`, `pnpm lint`
 
 ⚠️ Componente do design system, nunca cor/estilo chumbado.
 
@@ -234,7 +241,7 @@ T06 ─┘   │             T14
 **Done when:** server-only; ausente ou inválida = **desligada** (R21); gate no server action (autoridade) **e** na UI; o booleano chega à UI pelo server component, sem ler env no cliente.
 
 **Testes:** ausente → desligada; `"false"`/`"1"`/`"yes"` → desligada; só `"true"` liga.
-**Gate:** `pnpm test`, `pnpm typecheck`
+**Gate:** `pnpm format`, `pnpm test`, `pnpm typecheck`
 
 ⚠️ Primeiro flag do repo — estabelece o padrão. Testar o comportamento, não a config (memória `teste-verde-que-nao-testa-nada`).
 
@@ -248,10 +255,10 @@ T06 ─┘   │             T14
 
 **O quê:** índice de clipes do lote no store; purga no **logout**; apagar clipe após o lote ser aceito (R8); flush em `window.online`. Codec dual `webm;opus` / `mp4` AAC (R7).
 
-**Done when:** logout deixa o store vazio; falha de IndexedDB nunca bloqueia o texto do diário (R23).
+**Done when:** logout deixa o store vazio; falha de IndexedDB nunca bloqueia o texto do diário (R23). Fechar a aba durante gravação não deixa lixo no store (R25 — nada é persistido antes de `onstop`). Reabrir a sessão depois de fechar a aba com lote em polling não reenvia nada — quem decide "tem lote em voo" é T10 (`obterLoteMaisRecente`, servidor), não o IndexedDB local (R26).
 
 **Testes:** purga no logout; fallback de codec escolhe `mp4` quando `webm;opus` não é suportado; erro de IndexedDB é degradação, não bloqueio.
-**Gate:** `pnpm test`
+**Gate:** `pnpm format`, `pnpm test`
 
 ---
 
@@ -264,7 +271,7 @@ T06 ─┘   │             T14
 
 **Done when:** o predicado é **mtime**, não nome; bucket vazio não é erro.
 **Testes:** unitário do predicado de idade.
-**Gate:** `pnpm test`
+**Gate:** `pnpm format`, `pnpm test`
 
 ⚠️ Memória `auditar-por-nome-apagar-por-mtime`: `--older-than` mede mtime; nome antigo subido hoje não vence.
 
@@ -287,8 +294,21 @@ T06 ─┘   │             T14
 8. Flag desligada: a action recusa e a UI não oferece ditado.
 9. Transcrição entra no expurgo por paciente (`0128`) e na exportação do acervo (R19).
 
-**Done when:** cada cenário é morto por mutação no código de **produção** (memória `mutante-equivalente-nao-pede-teste`: mutar produção, não o helper de teste).
-**Gate:** `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:rls` — **com contagem conferida**.
+**Régua de mutação por comportamento** (ponto 5 do handoff, `AGENTS.md` §5.2 — 1 teste por comportamento, não por linha):
+
+| Comportamento                                      | Mutação que precisa derrubar 1 teste                                                                                  |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Iniciar** gravação                               | remover `getUserMedia` da chamada → teste de "iniciar gravação chama o microfone" cai                                 |
+| **Parar** gravação aos 2 min                       | remover o `setTimeout`/corte automático → teste do cenário 6 cai, **sem** afetar o teste de iniciar                   |
+| **Iniciar** polling                                | remover a chamada inicial de `obterEstadoLote` pós-envio → teste de "lote enviado começa a consultar" cai             |
+| **Parar** polling no teto de 10 min                | remover a condição de teto → teste de "para de pedir depois de 10 min" cai, **sem** afetar o teste de iniciar polling |
+| **Mostrar** parágrafo transcrito                   | remover o mapeamento `asr_status='transcrito'` → parágrafo                                                            | teste do cenário 7 (N-1 transcrevem) cai                     |
+| **Esconder** ações de descartar/regravar pós-envio | remover a condição de R27                                                                                             | teste de "item enviado não tem botão" cai                    |
+| Apagar objeto efêmero                              | remover o `finally` de T07                                                                                            | teste de "objeto some em sucesso e em falha" (cenário 4) cai |
+
+**Done when:** cada linha da tabela acima corresponde a exatamente 1 teste cuja remoção do trecho de produção citado o derruba — testado por mutação real no código de produção, nunca no helper de teste (memória `mutante-equivalente-nao-pede-teste`).
+
+**Gate:** `pnpm format`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:rls` — **com contagem conferida**.
 
 ---
 
@@ -300,6 +320,6 @@ T06 ─┘   │             T14
 **O quê:** reconciliar o design doc com a realidade medida (caminhos reais, store real, storage efêmero em vez de TTL 7d); documentar `FEATURE_FLAG_ASR_ENABLED`, `ASR_JOB_TOKEN`, `ASR_SERVICE_TOKEN` e o bucket no `.env.example`; runbook do serviço no `infra/README.md`; **atualizar o corpo da issue #72** para bater com esta spec.
 
 **Done when:** o corpo da issue não contradiz mais o que foi implementado.
-**Gate:** revisão humana
+**Gate:** `pnpm format`, revisão humana
 
 ⚠️ Executor implementa a **issue**, não a spec em comentário (memória `executor-implementa-issue-nao-spec`). Corpo da issue por `--body-file`, nunca inline no PowerShell (memória `corpo-de-issue-truncado-por-escape-do-powershell`).

@@ -52,7 +52,11 @@
   **D3 (efêmero) é mais restrito que o termo promete** → satisfaz a cláusula sem alterar `docs/legal/`. Nenhuma mudança legal nesta issue.
 - `docs/legal/dpa-asr-audio.md` §2/§5 (DPA/SCC/ZDR) **fica sem objeto no V1**: motor self-hosted, áudio nunca sai da infra Iris → não há transferência internacional (LGPD Art. 33).
 
-## 6. Fora de escopo
+## 6. Corte de entrega recomendado
+
+**T01→T03 (migração + fila cross-tenant + teste RLS) é entregável isolado**, sem depender do serviço ASR de pé: não toca UI, não toca storage, não toca provider. Roda como PR pequena e revisável enquanto **T06 (benchmark na VPS)** — o bloqueio real, ver §4 — está em aberto. T06 deve rodar **fora da ordem de dependência do `tasks.md`**, o quanto antes, porque o resultado pode mudar D2: se `medium` for lento demais em CPU pura e `small` não tiver precisão aceitável em PT-BR clínico, a decisão de self-hosted volta à mesa e o gate de DPA da Hostinger reabre — o que muda T05-T08 inteiros. Não vale montar a fila e o worker antes de saber se o motor performa.
+
+## 7. Fora de escopo
 
 - **Modo 3** (gravação da sessão inteira): adiado por decisão de produto. Design preservado em §4 do design doc.
 - Provedor externo (Google/Gemini): só volta se o self-hosted não performar; aí o gate de DPA volta a valer.

@@ -55,7 +55,9 @@ Sem isso: `permission denied for table audio_capture`.
 
 - `app_asr_reservar(p_limite int)` — `UPDATE` para `transcrevendo` com `tentativas = tentativas + 1`, escolhendo ids por subquery `ORDER BY criado_em ... FOR UPDATE SKIP LOCKED LIMIT p_limite`; retorna `id, clinic_id, objeto_ref, ordem`.
 - `app_asr_concluir(p_id uuid, p_texto text)` — `asr_status = 'transcrito'`, grava texto, `transcrito_em = now()`, `objeto_ref = NULL`.
-- `app_asr_falhar(p_id uuid)` — volta a `na_fila` se `tentativas < teto`, senão `falhou` definitivo; `objeto_ref = NULL` nos dois casos.
+- `app_asr_falhar(p_id uuid)` — volta a `na_fila` se `tentativas < 3`, senão `falhou` definitivo; `objeto_ref = NULL` nos dois casos.
+
+**Teto de tentativas = 3** (R16, hardcoded na função — não é config, mesmo idioma de outros limites fixos do repo). Vai dentro da subquery do `app_asr_reservar`: `WHERE asr_status = 'na_fila' AND tentativas < 3`.
 
 Armadilhas conhecidas, endereçadas:
 
@@ -110,7 +112,14 @@ A lógica mora na rota do app, não num `.mjs` do job — a imagem do job não h
 
 Primeiro flag do repo. `src/lib/flags.ts`, server-only, lendo `process.env.FEATURE_FLAG_ASR_ENABLED === "true"`. Ausente ou inválida = desligada (R21, fail-closed). Gate em dois pontos: no server action (autoridade) e na UI (não oferece o que a action recusaria). O booleano chega à UI pelo server component — a página não lê env no cliente.
 
-## 10. O que este design NÃO faz
+## 10. Casos de borda (R24-R27)
+
+- **Duplo clique em "Enviar" (R24):** o `loteId` (`crypto.randomUUID()`) é gerado **no cliente**, antes do POST, e o botão desabilita no clique. `enviarLoteAsr` recebe o `loteId` pronto e faz `INSERT ... ON CONFLICT (lote_id) DO NOTHING` na primeira linha de checagem, ou verifica existência antes de inserir — reenvio do mesmo `loteId` (rede falhou, cliente retry) não duplica `audio_capture`.
+- **Fechar aba durante gravação (R25):** nada a fazer — R3 já garante que só o clipe **concluído** é persistido; o `MediaRecorder` em andamento morre com a aba, sem rastro.
+- **Fechar aba/navegar durante o polling (R26):** o processamento é 100% servidor (fila + worker), não depende da aba aberta. Ao reabrir `diario/[sessionId]`, o server component busca o `loteId` mais recente por `sessionId` (não por estado local) e a UI decide entre "retomar polling" (ainda `na_fila`/`transcrevendo`) ou "mostrar resultado" (já `transcrito`/`falhou`) — nunca reenvia.
+- **Regravar item já enviado (R27):** a lista local marca item como "enviado" no clique de "Enviar" e remove as ações descartar/regravar daquele item — elas só existem para clipe em `vazio`/`gravado`, nunca depois do POST do lote.
+
+## 11. O que este design NÃO faz
 
 - Não transcreve ao vivo. Sem VAD nem streaming; Whisper batch, pós-sessão. Modo 3 fica fora.
 - Não retém áudio no servidor por 7 dias (D3).

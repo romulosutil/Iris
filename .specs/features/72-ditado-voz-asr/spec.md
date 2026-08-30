@@ -34,7 +34,7 @@ oficial. Digitação (Modo 1) nunca deixa de funcionar.
 - **R13** — Clipe falho é reenviável pelo terapeuta a partir do blob que continua no IndexedDB local; alternativamente ele digita aquele parágrafo à mão (Modo 1 só para o trecho afetado).
 - **R14** — O motor ASR é **self-hosted** na VPS Iris. O áudio **nunca** sai da infra Iris. Nenhuma chamada a provedor externo no V1.
 - **R15** — O worker reserva clipes da fila de forma **atômica e cross-tenant** via função `SECURITY DEFINER`, com incremento de `tentativas` — mesmo idioma de `src/lib/export/acervo/motor.ts`. Um clipe reservado nunca é reservado de novo por outro tick.
-- **R16** — Há teto de tentativas por clipe. Estourado o teto, o clipe vai a `falhou` em definitivo, o objeto é apagado, e ele nunca mais volta à fila.
+- **R16** — Teto de **3 tentativas** por clipe. Estourado o teto, o clipe vai a `falhou` em definitivo, o objeto é apagado, e ele nunca mais volta à fila.
 
 ### Revisão humana e dado clínico
 
@@ -48,6 +48,13 @@ oficial. Digitação (Modo 1) nunca deixa de funcionar.
 - **R21** — `FEATURE_FLAG_ASR_ENABLED` (server-only) é trava de **maturidade/qualidade**, não de DPA. Desligada: a aba de áudio não oferece ditado e o server action recusa o lote. Ausente ou inválida = **desligada** (fail-closed).
 - **R22** — Em CI e teste, o provedor é sempre `StubAsrProvider`, sem rede.
 - **R23** — Recusa de consentimento ASR, flag desligada, motor fora do ar ou qualquer falha técnica **nunca** bloqueiam o registro da sessão por digitação.
+
+### Casos de borda (fora do caminho feliz)
+
+- **R24** — Clique duplo em **"Enviar pra Iris analisar"** nunca cria dois lotes. O botão desabilita no primeiro clique e só reabilita em erro de envio; o servidor idempotência por `loteId` gerado no cliente antes do envio — reenvio do mesmo `loteId` não duplica linhas em `audio_capture`.
+- **R25** — Fechar a aba ou navegar para fora **durante a gravação** de um clipe descarta só aquele clipe em andamento (nunca persistido — R3 só persiste ao terminar). Os clipes já persistidos no IndexedDB sobrevivem.
+- **R26** — Fechar a aba ou navegar para fora **durante o polling** não afeta o processamento no servidor — o lote segue e termina de qualquer forma. Ao reabrir o diário da sessão, a UI busca o estado do `loteId` mais recente e retoma o polling ou mostra o resultado já pronto, sem reenviar o lote.
+- **R27** — "Regravar" sobre um clipe **já enviado e em processamento** não é permitido — o item que já subiu ao lote não é mais editável na lista local; regravar só se aplica a clipe ainda não enviado (`na_fila`/`transcrevendo` bloqueia edição, R4 vale só antes do envio).
 
 ## Definição de pronto
 
@@ -73,3 +80,6 @@ oficial. Digitação (Modo 1) nunca deixa de funcionar.
 | R19                | T01, T16      |
 | R21, R22           | T13, T05      |
 | R23                | T16           |
+| R24                | T09, T11      |
+| R25, R26           | T10, T11, T14 |
+| R27                | T11           |
