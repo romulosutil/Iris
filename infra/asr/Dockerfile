@@ -34,7 +34,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # saber qual instanciar — as duas variáveis têm que casar, ou o servidor.py
 # tenta carregar um modelo que não está no cache da imagem e cai para baixar
 # em runtime, quebrando a garantia de --network=none abaixo.
-ARG ASR_MODEL_SIZE=small
+ARG ASR_MODEL_SIZE=medium
 ENV ASR_MODEL_SIZE=${ASR_MODEL_SIZE}
 
 # Modelo baixado NA BUILD, não em runtime (memória
