@@ -16,12 +16,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FAIXAS_PRECIFICACAO, formatarBRL } from "@/lib/billing/calculator";
+import { AvisoPastDue } from "./aviso-past-due";
 import { CancelarAssinatura } from "./cancelar-assinatura";
 import { CartaoAssinatura } from "./cartao-assinatura";
 import { FormularioAtivacao } from "./formulario-ativacao";
 import { HistoricoCobrancas } from "./historico-cobrancas";
 import { listarCiclosDaClinica, obterCicloCorrente } from "./queries";
-import { obterSituacaoConta } from "../queries";
+import { frasePrazoCarencia } from "@/lib/billing/carencia-ui";
+import { obterAvisoRecusa, obterSituacaoConta } from "../queries";
 
 export const metadata = {
   title: "Assinatura",
@@ -83,12 +85,25 @@ export default async function AssinaturaPage() {
   // é ruído — além de uma ida ao banco na renderização de quem não usa o dado.
   const cicloCorrente = podeContratar ? await obterCicloCorrente(ctx) : null;
 
+  // A faixa global do layout já mostra o prazo quando existe ciclo em
+  // `falhou`. Nesse caso o aviso da página o omite: duas frases de prazo na
+  // mesma tela são ruído, e a faixa tem precedência porque ela também explica
+  // a causa da recusa. Consulta de uma linha, a mesma que o layout já faz.
+  const prazoCarencia =
+    cicloCorrente && (await obterAvisoRecusa(ctx)) === null
+      ? frasePrazoCarencia(cicloCorrente)
+      : null;
+
   return (
     <main className="flex flex-col gap-6">
       <PageHeader
         title="Assinatura"
         description="Você só paga quando começa a atender: a fatura é do ciclo que já fechou, pelas fichas que tiveram movimento nele."
       />
+
+      {podeContratar ? (
+        <AvisoPastDue ciclo={cicloCorrente} prazo={prazoCarencia} />
+      ) : null}
 
       {podeContratar ? (
         <CartaoAssinatura
