@@ -1,4 +1,5 @@
 import { classificarRecusa, type GrupoRecusa } from "./classificacao-recusa";
+import { frasePrazoCarencia } from "./carencia-ui";
 
 /**
  * D36 — transforma a política já classificada pela #318 no que a clínica vê.
@@ -94,59 +95,6 @@ const CTA_POR_GRUPO: Readonly<
   G8: { href: "/assinatura", label: "Ver assinatura" },
 };
 
-/** `YYYY-MM-DD` no fuso da clínica — mesmo padrão de `src/lib/trial.ts`. */
-function dataCivil(momento: Date, timezone: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(momento);
-}
-
-function paraBR(civil: string): string {
-  const [ano, mes, dia] = civil.split("-");
-  return `${dia}/${mes}/${ano}`;
-}
-
-/**
- * Diferença em dias CIVIS no fuso da clínica. Comparar instantes daria "0 dias"
- * às 23h da véspera do corte — a mesma classe de erro de sinal que
- * `calendario-bancario.ts` existe para evitar.
- */
-function diasCivisAte(prazo: Date, agora: Date, timezone: string): number {
-  const meiaNoite = (civil: string) => new Date(`${civil}T00:00:00Z`).getTime();
-  const dif =
-    meiaNoite(dataCivil(prazo, timezone)) -
-    meiaNoite(dataCivil(agora, timezone));
-  return Math.round(dif / 86_400_000);
-}
-
-function frasePrazo(entrada: EntradaAvisoRecusa): string | null {
-  // Fora de `past_due` não há relógio: G3 corta por decisão do gateway, não por
-  // carência, e assinatura ativa não tem prazo correndo contra ela.
-  if (entrada.statusAssinatura !== "past_due") return null;
-  if (!entrada.pastDueDesde) return null;
-
-  const prazo = new Date(
-    entrada.pastDueDesde.getTime() + entrada.carenciaDias * 86_400_000,
-  );
-  const agora = entrada.agora ?? new Date();
-  const data = paraBR(dataCivil(prazo, entrada.timezone));
-  const dias = diasCivisAte(prazo, agora, entrada.timezone);
-
-  if (dias < 0) {
-    return `O prazo para regularizar venceu em ${data}: sua assinatura será cancelada na próxima verificação de cobrança.`;
-  }
-  if (dias === 0) {
-    return `Sua assinatura será cancelada hoje (${data}) se o pagamento não for concluído.`;
-  }
-  if (dias === 1) {
-    return `Sua assinatura será cancelada em 1 dia (${data}) se o pagamento não for concluído.`;
-  }
-  return `Sua assinatura será cancelada em ${dias} dias (${data}) se o pagamento não for concluído.`;
-}
-
 export function montarAvisoRecusa(entrada: EntradaAvisoRecusa): AvisoRecusa {
   const politica = classificarRecusa(entrada.recusaCodigo);
   // G4 é o único CTA que aponta para uma tela gated por papel
@@ -162,7 +110,7 @@ export function montarAvisoRecusa(entrada: EntradaAvisoRecusa): AvisoRecusa {
     grupo: politica.grupo,
     titulo: TITULO,
     texto: politica.copy ?? (politica.grupo === "G8" ? COPY_G8 : COPY_FALLBACK),
-    prazo: frasePrazo(entrada),
+    prazo: frasePrazoCarencia(entrada),
     ctaHref: cta?.href ?? null,
     ctaLabel: cta?.label ?? null,
   };
