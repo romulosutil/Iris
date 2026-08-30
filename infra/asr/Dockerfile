@@ -45,6 +45,17 @@ ENV ASR_MODEL_SIZE=${ASR_MODEL_SIZE}
 ENV HF_HOME=/app/.cache/huggingface
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('${ASR_MODEL_SIZE}', device='cpu', compute_type='int8')"
 
+# HF_HUB_OFFLINE=1 DEPOIS do download acima, nunca antes — senão o próprio
+# download que baixa o modelo falha (LocalEntryNotFoundError). É o que faz a
+# garantia de "sem rede" valer em RUNTIME, não só no build: sem ela,
+# huggingface_hub tenta um GET de metadata a cada boot mesmo com o modelo já
+# em cache (visto em produção — log do container mostrando "HTTP Request:
+# GET https://huggingface.co/..." mesmo com o RUN --network=none abaixo
+# provando o cache completo no build). Com rede real disponível o GET passa,
+# mas o serviço fica dependendo de rede externa pra subir sempre que ela
+# estiver fora — exatamente o incidente que este Dockerfile existe pra evitar.
+ENV HF_HUB_OFFLINE=1
+
 COPY infra/asr/servidor.py ./servidor.py
 
 # PROVA que o boot não depende de rede externa: se o modelo não estivesse no
