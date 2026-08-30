@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/table";
 import { FAIXAS_PRECIFICACAO, formatarBRL } from "@/lib/billing/calculator";
 import { FormularioAtivacao } from "./formulario-ativacao";
+import { HistoricoCobrancas } from "./historico-cobrancas";
+import { listarCiclosDaClinica } from "./queries";
 import { obterSituacaoConta } from "../queries";
 
 export const metadata = {
@@ -69,6 +71,10 @@ export default async function AssinaturaPage() {
         )
       )[0]?.cpfCnpj ?? null)
     : null;
+
+  // Só para quem contrata: terapeuta e recepção não têm o que fazer com a
+  // fatura, e a ida ao banco não se justifica na renderização deles.
+  const ciclos = podeContratar ? await listarCiclosDaClinica(ctx) : [];
 
   return (
     <main className="flex flex-col gap-6">
@@ -141,6 +147,15 @@ export default async function AssinaturaPage() {
           </TableBody>
         </Table>
       </section>
+
+      {podeContratar ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
+            Histórico de cobranças
+          </h2>
+          <HistoricoCobrancas ciclos={ciclos} />
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
