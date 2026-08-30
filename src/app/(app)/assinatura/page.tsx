@@ -16,8 +16,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FAIXAS_PRECIFICACAO, formatarBRL } from "@/lib/billing/calculator";
+import { AvisoPastDue } from "./aviso-past-due";
+import { CancelarAssinatura } from "./cancelar-assinatura";
+import { CartaoAssinatura } from "./cartao-assinatura";
 import { FormularioAtivacao } from "./formulario-ativacao";
-import { obterSituacaoConta } from "../queries";
+import { HistoricoCobrancas } from "./historico-cobrancas";
+import { listarCiclosDaClinica, obterCicloCorrente } from "./queries";
+import { frasePrazoCarencia } from "@/lib/billing/carencia-ui";
+import { obterAvisoRecusa, obterSituacaoConta } from "../queries";
 
 export const metadata = {
   title: "Assinatura",
@@ -70,12 +76,50 @@ export default async function AssinaturaPage() {
       )[0]?.cpfCnpj ?? null)
     : null;
 
+  // Só para quem contrata: terapeuta e recepção não têm o que fazer com a
+  // fatura, e a ida ao banco não se justifica na renderização deles.
+  const ciclos = podeContratar ? await listarCiclosDaClinica(ctx) : [];
+
+  // Mesmo recorte de papel do histórico: quem não contrata já recebe o Alert
+  // "Só a coordenação contrata", e estado de cobrança para quem não pode agir
+  // é ruído — além de uma ida ao banco na renderização de quem não usa o dado.
+  const cicloCorrente = podeContratar ? await obterCicloCorrente(ctx) : null;
+
+  // A faixa global do layout já mostra o prazo quando existe ciclo em
+  // `falhou`. Nesse caso o aviso da página o omite: duas frases de prazo na
+  // mesma tela são ruído, e a faixa tem precedência porque ela também explica
+  // a causa da recusa. Consulta de uma linha, a mesma que o layout já faz.
+  //
+  // Duas razões para o guard e o `.catch`: (1) `frasePrazoCarencia` só
+  // devolve algo fora de `free_tier`/`active`/`setup_pending`/`canceled`
+  // quando o status é `past_due` — chamar `obterAvisoRecusa` fora desse
+  // estado paga um join de 3 tabelas cujo resultado é sempre descartado; (2)
+  // `obterAvisoRecusa` é só um aviso extra, igual em `layout.tsx`, que já
+  // envolve a mesma chamada em `.catch(() => null)` — sem isso, uma falha
+  // transitória nessa leitura derruba a tela inteira de assinatura com 500.
+  const prazoCarencia =
+    cicloCorrente?.statusAssinatura === "past_due" &&
+    (await obterAvisoRecusa(ctx).catch(() => null)) === null
+      ? frasePrazoCarencia(cicloCorrente)
+      : null;
+
   return (
     <main className="flex flex-col gap-6">
       <PageHeader
         title="Assinatura"
         description="Você só paga quando começa a atender: a fatura é do ciclo que já fechou, pelas fichas que tiveram movimento nele."
       />
+
+      {podeContratar ? (
+        <AvisoPastDue ciclo={cicloCorrente} prazo={prazoCarencia} />
+      ) : null}
+
+      {podeContratar ? (
+        <CartaoAssinatura
+          ciclo={cicloCorrente}
+          debitoCentavos={situacaoConta.debitoCentavos}
+        />
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
@@ -142,15 +186,27 @@ export default async function AssinaturaPage() {
         </Table>
       </section>
 
+      {podeContratar ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
+            Histórico de cobranças
+          </h2>
+          <HistoricoCobrancas ciclos={ciclos} />
+        </section>
+      ) : null}
+
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
           Ativar a assinatura
         </h2>
         {podeContratar ? (
-          <FormularioAtivacao
-            documentoAtual={documentoAtual}
-            situacaoConta={situacaoConta}
-          />
+          <>
+            <FormularioAtivacao
+              documentoAtual={documentoAtual}
+              situacaoConta={situacaoConta}
+            />
+            <CancelarAssinatura situacaoConta={situacaoConta} />
+          </>
         ) : (
           <>
             <Alert severidade="info" titulo="Só a coordenação contrata">

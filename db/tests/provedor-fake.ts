@@ -182,6 +182,10 @@ export class ProvedorFake implements BillingProvider {
     return {
       providerChargeId: String(corpo.id),
       status: mapearStatusCobranca(corpo.estado),
+      // Espelha o campo do corpo em vez de inventar uma URL: é o dublê do
+      // gateway, então quem decide se HÁ fatura é a resposta que o teste
+      // programou — inclusive a ausência dela, que é caso previsto na porta.
+      urlPagamento: corpo.urlPagamento ? String(corpo.urlPagamento) : undefined,
     };
   }
 

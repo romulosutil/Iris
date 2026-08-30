@@ -762,6 +762,15 @@ export async function fecharCiclosVencendo(opcoes?: {
               // vencimento seria uma cobrança viva que a varredura nunca
               // alcança — o buraco que o backstop existe para tapar.
               vencimentoCobranca: vencimento,
+              // A URL da fatura como ela SAIU nesta emissão. `?? null` e nunca
+              // um `throw`: `urlPagamento` é opcional na porta, e um link de
+              // conveniência ausente não pode derrubar uma cobrança que o
+              // gateway já aceitou.
+              invoiceUrl: cobranca.urlPagamento ?? null,
+              // A URL da fatura como ela SAIU nesta emissão. `?? null` e nunca
+              // um `throw`: `urlPagamento` é opcional na porta, e um link de
+              // conveniência ausente não pode derrubar uma cobrança que o
+              // gateway já aceitou.
               // NÃO é `pago`. Quem confirma é o webhook — este estado diz
               // exatamente o que aconteceu: a cobrança saiu, o dinheiro não
               // chegou.
@@ -1018,6 +1027,97 @@ export async function cancelarAssinaturasComCarenciaVencida(opcoes?: {
   }
 
   return resultados;
+}
+
+export type MotivoNaoCancelavel = "sem_assinatura" | "estado_nao_cancelavel";
+
+export type ResultadoCancelamentoVoluntario =
+  | { cancelada: true }
+  | {
+      cancelada: false;
+      motivo: MotivoNaoCancelavel;
+      /** O que a linha tinha quando recusamos. `null` quando não há linha. */
+      statusAtual: string | null;
+    };
+
+/**
+ * Cancelamento VOLUNTÁRIO, pedido pelo coordenador na tela (#36, bloco C1).
+ *
+ * ## Por que reusa `revogarECortarAssinatura`
+ *
+ * O corte é o mesmo ato do corte por carência: revogar no gateway, congelar o
+ * ciclo aberto como débito e só então matar a linha — nessa ordem, que é o
+ * desenho (ver o cabeçalho de `cancelarAssinaturasComCarenciaVencida`).
+ * Reescrever as três escritas aqui divergiria exatamente onde a divergência é
+ * irrecuperável: congelar depois do UPDATE deixaria a clínica cortada sem
+ * débito, e o gate da #290 abriria a reativação de graça.
+ *
+ * ## Aceita `active` E `past_due`
+ *
+ * `past_due` é terminal por inadimplência (#319), mas a clínica inadimplente é
+ * justamente quem mais quer sair. O `statusEsperado` do compare-and-set sai da
+ * linha LIDA, e não de um literal: passar `'active'` para uma linha `past_due`
+ * faria o UPDATE afetar 0 linhas em silêncio — depois de a autorização de Pix
+ * Automático já ter sido revogada.
+ *
+ * ## Fail-closed, igual à varredura
+ *
+ * Falha no gateway ABORTA e propaga: nada é escrito e a assinatura continua
+ * viva dos dois lados. Transicionar assim mesmo deixaria uma autorização de
+ * débito automático viva no Asaas contra uma assinatura morta no Iris.
+ *
+ * O aviso por e-mail (#312) sai DEPOIS do corte confirmado e num `catch`
+ * próprio: e-mail que não sai não pode desfazer um cancelamento que já
+ * aconteceu no gateway.
+ */
+export async function cancelarAssinaturaDaClinica(
+  clinicId: string,
+  opcoes?: { agora?: Date },
+): Promise<ResultadoCancelamentoVoluntario> {
+  const agora = opcoes?.agora ?? new Date();
+
+  const [linha] = await authDb
+    .select({
+      subscriptionId: subscription.id,
+      clinicId: subscription.clinicId,
+      status: subscription.status,
+      provider: subscription.provider,
+      providerSubscriptionId: subscription.providerSubscriptionId,
+    })
+    .from(subscription)
+    .where(eq(subscription.clinicId, clinicId))
+    .limit(1);
+
+  if (!linha) {
+    return { cancelada: false, motivo: "sem_assinatura", statusAtual: null };
+  }
+
+  if (linha.status !== "active" && linha.status !== "past_due") {
+    return {
+      cancelada: false,
+      motivo: "estado_nao_cancelavel",
+      statusAtual: linha.status,
+    };
+  }
+
+  await revogarECortarAssinatura(linha, agora, {
+    motivo: "cancelamento pedido pela clínica",
+    statusEsperado: linha.status,
+  });
+
+  try {
+    await notificarCancelamentoAssinatura(linha.clinicId, linha.subscriptionId);
+  } catch (e) {
+    // Tag fixa e greppável. O cancelamento JÁ aconteceu no gateway e no banco;
+    // relançar aqui faria a tela dizer "falhou" sobre um ato irreversível que
+    // deu certo.
+    console.warn("[billing-cancelamento-aviso] e-mail não enviado", {
+      clinicId: linha.clinicId,
+      erro: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  return { cancelada: true };
 }
 
 /**
