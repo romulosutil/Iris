@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Imagem do serviço ASR self-hosted (Iris, #72).
 #
 # Container Python separado, molde infra/billing/. NÃO herda nada do app
@@ -5,7 +6,6 @@
 # listada à mão abaixo. Se faltar algo aqui, o boot morre em produção com CI
 # verde — igual ao #156 do motor de escalonamento.
 #
-# syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
 # ffmpeg: faster-whisper decodifica o áudio via ffmpeg no PATH, não embutido

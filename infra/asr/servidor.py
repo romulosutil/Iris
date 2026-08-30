@@ -16,10 +16,14 @@ stdlib é suficiente para um serviço interno de baixo tráfego.
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
+import socket
+import sys
 import tempfile
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from faster_whisper import WhisperModel
@@ -33,10 +37,35 @@ log = logging.getLogger("iris-asr")
 MODELO = os.environ.get("ASR_MODEL_SIZE", "small")
 IDIOMA = os.environ.get("ASR_LANGUAGE", "pt")
 
-# Bearer comparado com timingSafeEqual do lado do app (T07); aqui a
-# verificação é simples porque o serviço só é alcançável dentro da rede
-# interna do Swarm — não exposto à internet.
+# Bearer comparado com timingSafeEqual do lado do app (T07); aqui a comparação
+# é `hmac.compare_digest` — tempo constante. O isolamento na rede interna do
+# Swarm é defesa em profundidade, não a única barreira.
 TOKEN = os.environ.get("ASR_SERVICE_TOKEN")
+
+# Teto de corpo. R1 limita o clipe a 2 minutos; 2 min de webm/opus a 128 kbps
+# dá ~1,9 MB. 10 MiB é folga de ~5x e ainda impede que um Content-Length
+# abusivo estoure a RAM do container (16 GB dividida com todo o resto da VPS).
+MAX_BYTES = int(os.environ.get("ASR_MAX_BYTES", str(10 * 1024 * 1024)))
+
+# Teto de transcrições simultâneas. A VPS tem 4 vCPU sem GPU e o modelo é
+# compartilhado entre as threads do ThreadingHTTPServer: sem este teto, N
+# requisições concorrentes disputam toda a CPU e degradam todos os serviços do
+# Iris juntos. O agendador (T08) também tem um teto — este é o backstop do
+# lado do serviço, para o teto do chamador não ser a única barreira.
+MAX_CONCORRENTES = int(os.environ.get("ASR_MAX_CONCORRENTES", "2"))
+_vagas = threading.BoundedSemaphore(MAX_CONCORRENTES)
+
+# Timeout de socket por conexão: cliente que abre e não fala nunca segura uma
+# thread para sempre.
+TIMEOUT_CONEXAO_S = int(os.environ.get("ASR_TIMEOUT_CONEXAO_S", "300"))
+
+if not TOKEN:
+    # Fail-fast, não fail-silent: sem token o serviço responderia 401 a todo
+    # /transcrever enquanto o /saude segue 200 — "verde e morto", exatamente o
+    # modo de falha que o runbook não consegue diagnosticar de fora. Crashloop
+    # visível no Easypanel é o sinal correto.
+    log.error("ASR_SERVICE_TOKEN ausente — serviço não sobe sem token configurado.")
+    sys.exit(1)
 
 log.info("Carregando modelo faster-whisper (%s)...", MODELO)
 _modelo = WhisperModel(MODELO, device="cpu", compute_type="int8")
@@ -45,15 +74,16 @@ log.info("Modelo carregado.")
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "iris-asr/1.0"
+    timeout = TIMEOUT_CONEXAO_S
 
     def log_message(self, format, *args):  # noqa: A002 - assinatura da stdlib
         log.info("%s - %s", self.address_string(), format % args)
 
     def _autorizado(self) -> bool:
-        if not TOKEN:
-            return False
-        recebido = self.headers.get("Authorization", "")
-        return recebido == f"Bearer {TOKEN}"
+        # Encode antes: compare_digest com `str` exige ASCII puro e levanta
+        # TypeError num header com byte alto — em bytes qualquer entrada compara.
+        recebido = self.headers.get("Authorization", "").encode("utf-8", "surrogateescape")
+        return hmac.compare_digest(recebido, f"Bearer {TOKEN}".encode("utf-8"))
 
     def do_GET(self):
         if self.path == "/saude":
@@ -69,25 +99,62 @@ class Handler(BaseHTTPRequestHandler):
             self._responder(401, {"erro": "token ausente ou inválido"})
             return
 
-        tamanho = int(self.headers.get("Content-Length", 0))
-        if tamanho <= 0:
-            self._responder(400, {"erro": "corpo vazio"})
+        bruto = self.headers.get("Content-Length")
+        try:
+            tamanho = int(bruto) if bruto is not None else 0
+        except ValueError:
+            # Header malformado sem este guard sobe exceção crua e a conexão
+            # fecha sem resposta — o chamador vê "connection reset", não 400.
+            self._responder(400, {"erro": "Content-Length inválido"})
             return
 
-        corpo = self.rfile.read(tamanho)
+        if tamanho <= 0:
+            # Sem Content-Length não há corpo a ler: o provider (T05) manda
+            # Uint8Array, que o fetch mede. Corpo em chunked cai aqui de
+            # propósito, em vez de transcrever um arquivo vazio.
+            self._responder(400, {"erro": "corpo vazio"})
+            return
+        if tamanho > MAX_BYTES:
+            self._responder(413, {"erro": f"corpo acima do teto de {MAX_BYTES} bytes"})
+            return
 
-        # Arquivo temporário: faster-whisper/ffmpeg exigem um caminho no
-        # disco, não aceitam bytes em memória diretamente.
-        with tempfile.NamedTemporaryFile(suffix=".webm") as tmp:
-            tmp.write(corpo)
-            tmp.flush()
+        if not _vagas.acquire(blocking=False):
+            # 503 imediato em vez de fila: o chamador é o worker, que já sabe
+            # devolver o clipe para `na_fila` sem gastar tentativa.
+            self._responder(503, {"erro": "serviço saturado, tente no próximo tick"})
+            return
+
+        try:
             try:
-                segmentos, _info = _modelo.transcribe(tmp.name, language=IDIOMA)
-                texto = " ".join(s.text.strip() for s in segmentos).strip()
-            except Exception as exc:  # noqa: BLE001 - reporta a mensagem crua, não afirma causa
-                log.exception("Falha ao transcrever")
-                self._responder(500, {"erro": str(exc)})
+                corpo = self.rfile.read(tamanho)
+            except (TimeoutError, socket.timeout):
+                self._responder(408, {"erro": "corpo não chegou dentro do timeout"})
                 return
+
+            if len(corpo) != tamanho:
+                # Upload interrompido devolve MENOS bytes. Sem esta checagem o
+                # áudio truncado transcreve normalmente e um trecho parcial
+                # volta como se fosse a nota inteira — erro clínico silencioso.
+                self._responder(400, {"erro": "corpo truncado antes do Content-Length"})
+                return
+
+            # Arquivo temporário: faster-whisper/ffmpeg exigem um caminho no
+            # disco, não aceitam bytes em memória diretamente.
+            with tempfile.NamedTemporaryFile(suffix=".webm") as tmp:
+                tmp.write(corpo)
+                tmp.flush()
+                try:
+                    segmentos, _info = _modelo.transcribe(tmp.name, language=IDIOMA)
+                    texto = " ".join(s.text.strip() for s in segmentos).strip()
+                except Exception:  # noqa: BLE001 - causa fica no log, não na resposta
+                    # Traceback completo no log do container; a resposta não
+                    # carrega str(exc) para não vazar caminho interno nem
+                    # afirmar causa que não foi medida.
+                    log.exception("Falha ao transcrever")
+                    self._responder(500, {"erro": "falha ao transcrever"})
+                    return
+        finally:
+            _vagas.release()
 
         self._responder(200, {"texto": texto})
 
@@ -103,7 +170,14 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     porta = int(os.environ.get("PORT", "8080"))
     servidor = ThreadingHTTPServer(("0.0.0.0", porta), Handler)
-    log.info("Serviço ASR de pé na porta %s (modelo=%s, idioma=%s)", porta, MODELO, IDIOMA)
+    log.info(
+        "Serviço ASR de pé na porta %s (modelo=%s, idioma=%s, max_bytes=%s, concorrentes=%s)",
+        porta,
+        MODELO,
+        IDIOMA,
+        MAX_BYTES,
+        MAX_CONCORRENTES,
+    )
     servidor.serve_forever()
 
 

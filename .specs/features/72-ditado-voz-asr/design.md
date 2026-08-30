@@ -94,6 +94,37 @@ Container Python separado, molde `infra/billing/`. **Não herda nada do app** (m
 
 Servidor HTTP mínimo: `POST /transcrever` (bytes → `{ texto }`) e `GET /saude`.
 
+**Contrato de recusa (T06 fechado, T05/T07 consomem).** O provider não pode
+tratar todo não-200 como a mesma falha — o worker decide entre gastar tentativa
+e devolver o clipe para a fila a partir do código. Tabela canônica em
+`infra/asr/runbook.md` §0; o resumo que T05/T07 implementam:
+
+- `503` (teto de concorrência do serviço) → devolve para `na_fila` **revertendo
+  a tentativa**. É saturação, não falha do clipe: `app_asr_reservar` já
+  incrementou `tentativas` na reserva, então sem reverter o clipe queima o teto
+  de 3 (R16) por carga da VPS e morre em `falhou` **sem nunca ter sido
+  processado**. Mecanismo: `app_asr_falhar(p_id uuid, p_reverter_tentativa
+boolean DEFAULT false)` — em `true`, `tentativas = greatest(tentativas - 1,
+0)` e status volta a `na_fila` ignorando o teto. **Proposta de arquitetura —
+  validar com Rômulo antes de fechar T02.** O risco conhecido é laço infinito
+  se o serviço ficar saturado para sempre; ele é contido por config (teto do
+  serviço >= teto do agendador torna `503` anomalia, não caminho normal), não
+  por contador — se essa contenção não bastar, a alternativa é aceitar o gasto
+  da tentativa.
+- `400`/`413` (corpo vazio, truncado ou acima do teto) → falha **definitiva**
+  do clipe. Reenviar o mesmo byte range dá o mesmo erro.
+- `408`/`500` → falha transitória, conta tentativa.
+
+**Tetos do serviço são backstop, não a única barreira.** `ASR_MAX_CONCORRENTES`
+(default 2) e `ASR_MAX_BYTES` (default 10 MiB, derivado de R1) vivem no serviço
+além do teto do agendador (T08): o chamador não é a única coisa entre a fila e
+uma VPS de 4 vCPU sem GPU. O teto do serviço tem que ser **>=** o do agendador,
+ou todo tick normal colhe `503`.
+
+**`ASR_SERVICE_TOKEN` ausente derruba o boot.** Fail-fast em vez de `/saude`
+verde com `/transcrever` respondendo `401` para sempre — o modo "verde e morto"
+não se diagnostica de fora.
+
 **Tamanho do modelo é resultado de medição, não escolha a priori.** T6 mede na VPS real (4 vCPU / 16 GB, sem GPU) o tempo de transcrição de um clipe de 2 min em `small` e em `medium`, em PT-BR clínico. O tick do agendador e o teto de concorrência saem desse número.
 
 ## 7. Gatilho (`infra/asr/agendador.sh`)

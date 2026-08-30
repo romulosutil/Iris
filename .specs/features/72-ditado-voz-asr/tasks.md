@@ -45,13 +45,16 @@ T06 ─┘   │             T14
 **Depende de:** T01
 **Reusa:** `src/lib/export/acervo/motor.ts:141-170` como precedente de reserva atômica
 
-**O quê:** `app_asr_reservar(p_limite int)`, `app_asr_concluir(p_id uuid, p_texto text)`, `app_asr_falhar(p_id uuid)`. Reserva com `FOR UPDATE SKIP LOCKED`, incremento de `tentativas` **na reserva**, teto de **3** tentativas **dentro da subquery do `LIMIT`** (R16).
+**O quê:** `app_asr_reservar(p_limite int)`, `app_asr_concluir(p_id uuid, p_texto text)`, `app_asr_falhar(p_id uuid, p_reverter_tentativa boolean DEFAULT false)`. Reserva com `FOR UPDATE SKIP LOCKED`, incremento de `tentativas` **na reserva**, teto de **3** tentativas **dentro da subquery do `LIMIT`** (R16).
+
+`p_reverter_tentativa = true` é o caminho do `503` do serviço ASR (saturação, não falha do clipe — design §6): volta a `na_fila` com `tentativas = greatest(tentativas - 1, 0)`, ignorando o teto. **Validar com Rômulo antes de fechar** — decisão de arquitetura nova.
 
 **Done when:**
 
 - Migração à mão com entrada manual no `_journal.json` e `when` = anterior **+ 1000**.
 - Nenhuma função resolve tenant com `current_setting('app.clinic_id')` cru — usa `app_clinic_id_atual()` onde precisar (é dentro de função).
 - Verificado em `pg_proc` com `prosecdef = true`, não em `git log`.
+- `app_asr_falhar(id, true)` sobre um clipe com `tentativas = 3` devolve ele a `na_fila` com `tentativas = 2` — medido no Postgres, não deduzido do SQL.
 
 **Testes:** —
 **Gate:** `pnpm db:migrate` local + consulta em `pg_proc`
@@ -97,7 +100,10 @@ T06 ─┘   │             T14
 
 **Done when:** seleção do provider é **estática por env**, sem `await import()` dinâmico; `StubAsrProvider` não faz rede nenhuma; `SelfHostedAsrProvider` tem timeout explícito e bearer `ASR_SERVICE_TOKEN`.
 
-**Testes:** stub devolve texto determinístico; self-hosted monta a requisição certa contra dublê de fetch.
+- O corpo vai como `Uint8Array`/`Buffer`, **nunca stream**: o serviço exige `Content-Length` e recusa `400` em `Transfer-Encoding: chunked` (runbook §0).
+- Não-200 **não colapsa num erro só**. O provider distingue os códigos do contrato de recusa (design §6): `503` = saturação (devolve à fila revertendo tentativa), `400`/`413` = falha definitiva do clipe, `408`/`500` = falha transitória. Colapsar tudo em `throw new Error` faz o worker gastar as 3 tentativas em cima de um `413` que nunca vai mudar.
+
+**Testes:** stub devolve texto determinístico; self-hosted monta a requisição certa contra dublê de fetch; **um caso por código** do contrato de recusa (`400`, `408`, `413`, `503`, `500`) asserindo a classificação resultante, não a mensagem.
 **Gate:** `pnpm format`, `pnpm test`, `pnpm typecheck`
 
 ⚠️ Dublê com arrow não é construtor (memória `duble-arrow-nao-e-construtor`) — se o provider for instanciado com `new`, o dublê precisa ser função/classe.
@@ -116,9 +122,20 @@ T06 ─┘   │             T14
 
 - `RUN --network=none` prova que o boot não depende de rede externa.
 - **Benchmark registrado no `runbook.md`**: tempo de transcrição de clipe de 2 min em `small` e `medium`, na VPS real (4 vCPU / 16 GB, sem GPU), em áudio PT-BR clínico. O tamanho de modelo escolhido e o tick de T08 **citam esse número**.
+- `ASR_SERVICE_TOKEN` ausente **derruba o boot** (`exit 1`), em vez de `/saude` verde com `/transcrever` em `401` para sempre.
+- Bearer comparado em tempo constante (`hmac.compare_digest` sobre bytes — `str` não-ASCII levanta `TypeError`).
+- Corpo limitado por `ASR_MAX_BYTES` (`413` acima do teto) e `Content-Length` malformado responde `400`, não fecha a conexão sem resposta.
+- **Corpo truncado responde `400`**: `len(corpo) != Content-Length` nunca transcreve — áudio parcial transcrito em `200` devolve um trecho como se fosse a nota inteira.
+- Teto de `ASR_MAX_CONCORRENTES` responde `503` (backstop do lado do serviço; o teto do agendador não é a única barreira nos 4 vCPU).
+- `500` não devolve `str(exc)` no corpo — causa fica no log do container (memória `mensagem-de-erro-que-afirma-causa`).
+- Contrato de recusa documentado no `runbook.md` §0 e refletido no design §6 — T05/T07 consomem dali.
+- Diretiva `# syntax=docker/dockerfile:1` na **primeira linha** do Dockerfile; em qualquer outra é comentário morto.
+- `requirements.txt` sem dependência que o serviço não importa.
 
 **Testes:** —
 **Gate:** build local da imagem + benchmark executado na VPS
+
+**Pendência aberta:** confirmar que o domínio público temporário usado no benchmark foi removido (runbook §5). Enquanto existir, o serviço está alcançável da internet — contraria R11. Verificar de fora com `curl`, não pelo painel.
 
 ⚠️ O número tem que ser **medido**, não estimado (memória `verificar-fato-de-infra-com-medicao`). `[x] CONFIRMADO` sem prova custa mais que `[ ]`.
 
@@ -132,9 +149,9 @@ T06 ─┘   │             T14
 
 **O quê:** autoriza por `ASR_JOB_TOKEN`; reserva lote via `app_asr_reservar`; por clipe baixa o objeto, chama o provider, chama `app_asr_concluir` ou `app_asr_falhar`, e **apaga o objeto no `finally`** (R11).
 
-**Done when:** falha de 1 clipe não aborta os demais do tick (R12); token ausente recusa tudo; o `finally` de apagar o objeto roda nos três desfechos.
+**Done when:** falha de 1 clipe não aborta os demais do tick (R12); token ausente recusa tudo; o `finally` de apagar o objeto roda nos três desfechos; `503` do serviço chama `app_asr_falhar(id, true)` e os demais códigos chamam `app_asr_falhar(id)` — a classificação vem do provider (T05), a rota não reinterpreta status HTTP.
 
-**Testes:** token ausente → 401; lote de 3 com o do meio falhando → 2 `transcrito`, 1 de volta à fila, 3 objetos apagados; teto de 3 tentativas → `falhou` definitivo; dois ticks concorrentes chamando a rota ao mesmo tempo não processam o mesmo clipe duas vezes (idempotência vem do `SKIP LOCKED` de T02, aqui só se confirma pelo lado HTTP).
+**Testes:** token ausente → 401; lote de 3 com o do meio falhando → 2 `transcrito`, 1 de volta à fila, 3 objetos apagados; clipe que recebe `503` volta a `na_fila` com `tentativas` **igual ao valor de antes do tick** (mutação: trocar `app_asr_falhar(id, true)` por `app_asr_falhar(id)` tem que ficar vermelho); teto de 3 tentativas → `falhou` definitivo; dois ticks concorrentes chamando a rota ao mesmo tempo não processam o mesmo clipe duas vezes (idempotência vem do `SKIP LOCKED` de T02, aqui só se confirma pelo lado HTTP).
 **Gate:** `pnpm format`, `pnpm test`, `pnpm typecheck`, `pnpm lint`
 
 ⚠️ Mensagem de erro não afirma causa única (memória `mensagem-de-erro-que-afirma-causa`) — reportar `Error.message` quando houver, senão o valor cru.
