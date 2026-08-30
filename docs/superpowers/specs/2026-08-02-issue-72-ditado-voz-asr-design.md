@@ -1,9 +1,34 @@
 # Design Spec — Issue #72: Fase 6b - Ditado de Voz (Captura Local & Pipeline ASR)
 
-> **Status:** 🟢 Especificação Aprovada & Validada
-> **Data:** 02/08/2026 (revisão 24/08/2026 — 3 modos de captura, provedor Google)
+> **Status:** 🟡 V1 restrito — ver nota 30/08/2026 (escopo = só Modo 2; provedor trocado por restrição de custo)
+> **Data:** 02/08/2026 (revisão 24/08/2026 — 3 modos de captura, provedor Google; revisão 30/08/2026 — V1 sem custo)
 > **Autor:** Tech Lead & Painel (Product Manager, Product Designer, Psicólogo Clínico)
 > **Issue GitHub:** [#72](https://github.com/romulosutil/Iris/issues/72)
+
+## 0. Nota de atualização — 30/08/2026 (V1 sem custo, escopo restrito)
+
+Decisão do Rômulo: (a) o V1 entra em produção **sem custo** — descarta Google
+como provedor de ASR aqui, porque `docs/legal/dpa-asr-audio.md` §2 exige tier
+**pago** para Zero Data Retention; (b) escopo do V1 fica só o **Modo 2**
+(ditado assíncrono pós-sessão) — **Modo 3 (gravação de sessão) sai do V1**,
+fica registrado como ideia pra retomar depois, não removido da spec.
+
+Isso muda duas coisas nesta spec, sem invalidar o resto:
+
+- **§2.3 (Pipeline ASR):** provedor V1 é **self-hosted** (Whisper/faster-whisper
+  na VPS já paga do produto), não `GoogleAsrProvider`. Áudio nunca sai da
+  infra Iris → o gate legal inteiro de §2.1 (DPA, transferência
+  internacional) **não se aplica ao V1** — não é "mais barato", é "sem
+  objeto". Ver nota espelhada em `dpa-asr-audio.md`.
+- **§1.2 (tabela de modos):** só a linha 1 (Digitação) e 2 (Ditado
+  assíncrono) entram no V1. A linha 3 (Gravação de sessão) continua
+  documentada abaixo como está — design já aprovado, só fora de escopo desta
+  entrega. Motivo do adiamento é **produto** (reduzir superfície do V1), não
+  gap técnico ou de consentimento: o consentimento discriminado do modo 3 já
+  está desenhado (§8.1/§9.1 dos termos) e continua válido se for retomado.
+
+Google volta a ser opção se o self-hosted não performar (latência/qualidade
+PT-BR) ou se o Modo 3 for retomado com volume que CPU da VPS não aguente.
 
 ---
 

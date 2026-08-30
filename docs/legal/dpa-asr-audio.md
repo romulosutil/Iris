@@ -166,6 +166,32 @@ cláusulas discriminadas do item 3).
 
 ---
 
+## Nota de atualização — 30/08/2026 (projeto, não jurídico)
+
+Restrição nova do Rômulo: solução **sem custo**. O §6 decide Google, mas o
+próprio §2 exige **tier pago** para Zero Data Retention (free tier treina
+modelo com o conteúdo — incompatível com dado de saúde) — a decisão de
+provedor registrada aqui **não satisfaz** a restrição de custo zero.
+
+**Para o V1 (Modo 2 — ditado assíncrono pós-sessão, único modo em escopo;
+ver nota equivalente na spec de design), o provedor passa a ser self-hosted
+(Whisper/faster-whisper) rodando na VPS já paga do produto**, não Google.
+Isso não é só "provedor mais barato" — muda a natureza do risco descrito em
+§1.3 deste documento: sem provedor externo, **não há transferência
+internacional** (Art. 33 LGPD não se aplica), e todo o capítulo de DPA/SCC/ZDR
+(§2, §4, §6) fica sem objeto para o V1. A cláusula de consentimento ainda é
+necessária (processamento automatizado de dado de saúde via áudio), mas sem
+a parte de "transferência a subprocessador fora do Brasil".
+
+Google (ou outro provedor externo) volta a ser relevante só se: (a) o Modo 3
+(gravação de sessão) for retomado com volume/latência que a VPS não aguente
+em CPU, ou (b) a qualidade do self-hosted em PT-BR clínico não for aceitável
+na prática — aí este documento (§2–§6) volta a valer como está, sem precisar
+reescrever o parecer. Texto original do §6 e do parecer jurídico (§5)
+intocado — divergência registrada aqui, não no doc oficial de advogado.
+
+---
+
 **Referências cruzadas:** `briefing-para-advogado.md` §4 (transferência do LLM
 de texto), `politica-retencao-dados.md` (retenção de prontuário),
 `.specs/features/fase6/spec.md` A6/A8, `docs/arquitetura/checklist-producao-mvp.md`.
