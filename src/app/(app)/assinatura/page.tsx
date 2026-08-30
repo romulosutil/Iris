@@ -17,9 +17,10 @@ import {
 } from "@/components/ui/table";
 import { FAIXAS_PRECIFICACAO, formatarBRL } from "@/lib/billing/calculator";
 import { CancelarAssinatura } from "./cancelar-assinatura";
+import { CartaoAssinatura } from "./cartao-assinatura";
 import { FormularioAtivacao } from "./formulario-ativacao";
 import { HistoricoCobrancas } from "./historico-cobrancas";
-import { listarCiclosDaClinica } from "./queries";
+import { listarCiclosDaClinica, obterCicloCorrente } from "./queries";
 import { obterSituacaoConta } from "../queries";
 
 export const metadata = {
@@ -77,12 +78,24 @@ export default async function AssinaturaPage() {
   // fatura, e a ida ao banco não se justifica na renderização deles.
   const ciclos = podeContratar ? await listarCiclosDaClinica(ctx) : [];
 
+  // Mesmo recorte de papel do histórico: quem não contrata já recebe o Alert
+  // "Só a coordenação contrata", e estado de cobrança para quem não pode agir
+  // é ruído — além de uma ida ao banco na renderização de quem não usa o dado.
+  const cicloCorrente = podeContratar ? await obterCicloCorrente(ctx) : null;
+
   return (
     <main className="flex flex-col gap-6">
       <PageHeader
         title="Assinatura"
         description="Você só paga quando começa a atender: a fatura é do ciclo que já fechou, pelas fichas que tiveram movimento nele."
       />
+
+      {podeContratar ? (
+        <CartaoAssinatura
+          ciclo={cicloCorrente}
+          debitoCentavos={situacaoConta.debitoCentavos}
+        />
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
