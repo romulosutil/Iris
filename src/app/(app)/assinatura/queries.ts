@@ -21,6 +21,12 @@ export interface CicloDoHistorico {
   valorCentavos: number;
   vencimentoCobranca: Date | null;
   cobradoEm: Date | null;
+  /**
+   * Fatura hospedada desta cobrança (#36, A4). `null` é caso legítimo, não
+   * falha: ciclo em `devido` nunca teve cobrança emitida, e a emissão pode ter
+   * respondido sem URL.
+   */
+  invoiceUrl: string | null;
 }
 
 /**
@@ -72,6 +78,7 @@ export async function listarCiclosDaClinica(
         valorCentavos: billingCycle.valorCentavos,
         vencimentoCobranca: billingCycle.vencimentoCobranca,
         cobradoEm: billingCycle.cobradoEm,
+        invoiceUrl: billingCycle.invoiceUrl,
       })
       .from(billingCycle)
       .where(ne(billingCycle.status, "aberto"))

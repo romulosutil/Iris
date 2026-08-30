@@ -52,19 +52,21 @@ describe.skipIf(!hasDb)("listarCiclosDaClinica (RLS/histórico)", () => {
       (${SUB_B}, ${CLINIC_B}, 'active', 'asaas')`;
     await owner`INSERT INTO billing_cycle
       (id, clinic_id, subscription_id, inicio, fim, status,
-       pacientes_contados, valor_centavos, vencimento_cobranca, cobrado_em) VALUES
+       pacientes_contados, valor_centavos, vencimento_cobranca, cobrado_em,
+       invoice_url) VALUES
       (${CICLO_A_PAGO}, ${CLINIC_A}, ${SUB_A},
        '2026-06-01T00:00:00Z', '2026-07-01T00:00:00Z', 'pago',
-       4, 15600, '2026-07-08T00:00:00Z', '2026-07-05T00:00:00Z'),
+       4, 15600, '2026-07-08T00:00:00Z', '2026-07-05T00:00:00Z', NULL),
       (${CICLO_A_FALHOU}, ${CLINIC_A}, ${SUB_A},
        '2026-07-01T00:00:00Z', '2026-08-01T00:00:00Z', 'falhou',
-       6, 23400, '2026-08-08T00:00:00Z', NULL),
+       6, 23400, '2026-08-08T00:00:00Z', NULL,
+       'https://sandbox.asaas.com/i/36a2'),
       (${CICLO_A_ABERTO}, ${CLINIC_A}, ${SUB_A},
        '2026-08-01T00:00:00Z', '2026-09-01T00:00:00Z', 'aberto',
-       0, 0, NULL, NULL),
+       0, 0, NULL, NULL, NULL),
       (${CICLO_B_PAGO}, ${CLINIC_B}, ${SUB_B},
        '2026-07-01T00:00:00Z', '2026-08-01T00:00:00Z', 'pago',
-       99, 999900, '2026-08-08T00:00:00Z', '2026-08-02T00:00:00Z')`;
+       99, 999900, '2026-08-08T00:00:00Z', '2026-08-02T00:00:00Z', NULL)`;
   });
 
   afterAll(async () => {
@@ -93,6 +95,13 @@ describe.skipIf(!hasDb)("listarCiclosDaClinica (RLS/histórico)", () => {
     const [primeiro] = await listarCiclosDaClinica(ctxA);
     expect(primeiro?.fim).toBeInstanceOf(Date);
     expect(primeiro?.cobradoEm).toBeNull();
+  });
+
+  test("traz a URL da fatura, e null quando não há", async () => {
+    const r = await listarCiclosDaClinica(ctxA);
+    const porId = new Map(r.map((c) => [c.id, c.invoiceUrl]));
+    expect(porId.get(CICLO_A_FALHOU)).toBe("https://sandbox.asaas.com/i/36a2");
+    expect(porId.get(CICLO_A_PAGO)).toBeNull();
   });
 
   test("pagina sem repetir nem pular linha", async () => {

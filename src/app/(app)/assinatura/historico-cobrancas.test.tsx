@@ -12,6 +12,7 @@ const CICLO_PAGO: CicloDoHistorico = {
   valorCentavos: 15600,
   vencimentoCobranca: new Date("2026-07-08T00:00:00Z"),
   cobradoEm: new Date("2026-07-05T00:00:00Z"),
+  invoiceUrl: null,
 };
 
 const CICLO_RECUSADO: CicloDoHistorico = {
@@ -24,6 +25,7 @@ const CICLO_RECUSADO: CicloDoHistorico = {
   valorCentavos: 23400,
   vencimentoCobranca: new Date("2026-08-08T00:00:00Z"),
   cobradoEm: null,
+  invoiceUrl: null,
 };
 
 describe("HistoricoCobrancas", () => {
@@ -52,7 +54,40 @@ describe("HistoricoCobrancas", () => {
         ciclos={[{ ...CICLO_PAGO, vencimentoCobranca: null }]}
       />,
     );
-    expect(screen.queryByText("—")).not.toBeNull();
+    // Ancorado na CÉLULA de vencimento, e não em "existe um — na tabela": a
+    // coluna Fatura também renderiza travessão na ausência, e um `getByText`
+    // solto passaria mesmo se o vencimento voltasse a inventar data.
+    const celulas = screen.getAllByRole("cell");
+    expect(celulas[4]?.textContent).toBe("—");
+  });
+
+  it("linka a fatura com nome acessível que identifica o ciclo", () => {
+    render(
+      <HistoricoCobrancas
+        ciclos={[{ ...CICLO_PAGO, invoiceUrl: "https://asaas.test/i/1" }]}
+      />,
+    );
+    const link = screen.getByRole("link", {
+      name: /ver fatura do ciclo de 01\/06\/2026 a 01\/07\/2026/i,
+    });
+    expect(link.getAttribute("href")).toBe("https://asaas.test/i/1");
+    expect(link.getAttribute("rel")).toContain("noopener");
+  });
+
+  it("mostra travessão quando o ciclo não tem fatura", () => {
+    render(
+      <HistoricoCobrancas ciclos={[{ ...CICLO_PAGO, invoiceUrl: null }]} />,
+    );
+    expect(screen.queryByRole("link", { name: /fatura/i })).toBeNull();
+  });
+
+  it("não linka URL que não seja https", () => {
+    render(
+      <HistoricoCobrancas
+        ciclos={[{ ...CICLO_PAGO, invoiceUrl: "javascript:alert(1)" }]}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: /fatura/i })).toBeNull();
   });
 
   it("mantém a rolagem horizontal DENTRO da tabela, nunca no body", () => {

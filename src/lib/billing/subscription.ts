@@ -762,6 +762,15 @@ export async function fecharCiclosVencendo(opcoes?: {
               // vencimento seria uma cobrança viva que a varredura nunca
               // alcança — o buraco que o backstop existe para tapar.
               vencimentoCobranca: vencimento,
+              // A URL da fatura como ela SAIU nesta emissão. `?? null` e nunca
+              // um `throw`: `urlPagamento` é opcional na porta, e um link de
+              // conveniência ausente não pode derrubar uma cobrança que o
+              // gateway já aceitou.
+              invoiceUrl: cobranca.urlPagamento ?? null,
+              // A URL da fatura como ela SAIU nesta emissão. `?? null` e nunca
+              // um `throw`: `urlPagamento` é opcional na porta, e um link de
+              // conveniência ausente não pode derrubar uma cobrança que o
+              // gateway já aceitou.
               // NÃO é `pago`. Quem confirma é o webhook — este estado diz
               // exatamente o que aconteceu: a cobrança saiu, o dinheiro não
               // chegou.

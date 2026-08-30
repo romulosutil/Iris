@@ -2032,6 +2032,29 @@ export const billingCycle = pgTable(
     // identifica ciclo nenhum. UNIQUE parcial na 0075 = guarda de idempotência
     // da emissão.
     providerChargeId: text("provider_charge_id"),
+    /**
+     * Fatura hospedada desta cobrança no gateway (#36, A3), como ela SAIU na
+     * emissão.
+     *
+     * É o `invoiceUrl` do Asaas, que o adapter já devolve em
+     * `CobrancaEmitida.urlPagamento` e que o fechamento de ciclo descartava.
+     * Persistido, e não resolvido sob demanda: `GET /v3/payments/{id}` também
+     * devolve a URL, mas isso custaria uma ida ao gateway por LINHA da tabela
+     * do histórico, exigiria método novo na porta (`consultarCobranca` devolve
+     * só `StatusCobranca`) e faria a fatura de um ciclo antigo desaparecer da
+     * tela sempre que o gateway estivesse fora do ar ou tivesse removido a
+     * cobrança.
+     *
+     * NÃO é derivado do `provider_charge_id` por template: o formato da URL é
+     * contrato do fornecedor, não nosso, e difere entre sandbox e produção.
+     *
+     * NULLABLE porque três classes de linha legítima não têm fatura: ciclo
+     * fechado antes desta coluna existir; ciclo em `devido` (o cancelamento
+     * congela como débito SEM emitir cobrança); e emissão em que o gateway não
+     * devolveu a URL — `urlPagamento` é opcional na porta, e a falta dela não
+     * pode derrubar um fechamento de ciclo.
+     */
+    invoiceUrl: text("invoice_url"),
     cobrancaEmitidaEm: timestamp("cobranca_emitida_em", { withTimezone: true }),
     /**
      * O **vencimento que mandamos ao gateway** nesta cobrança (#318, 0101).
