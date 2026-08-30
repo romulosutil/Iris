@@ -76,6 +76,15 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "iris-asr/1.0"
     timeout = TIMEOUT_CONEXAO_S
 
+    # Declarado, não herdado. Em HTTP/1.0 o `close_connection` da stdlib já
+    # nasce True e toda resposta fecha a conexão — medido com cliente HTTP/1.1
+    # mandando `Connection: keep-alive`. A declaração existe porque as recusas
+    # abaixo (400/413/503) respondem SEM drenar o corpo que ainda está vindo:
+    # em HTTP/1.1 com keep-alive esses bytes seriam lidos como a requisição
+    # seguinte. Trocar isto para "HTTP/1.1" exige antes drenar ou fechar em
+    # cada caminho de recusa.
+    protocol_version = "HTTP/1.0"
+
     def log_message(self, format, *args):  # noqa: A002 - assinatura da stdlib
         log.info("%s - %s", self.address_string(), format % args)
 
@@ -159,6 +168,11 @@ class Handler(BaseHTTPRequestHandler):
         self._responder(200, {"texto": texto})
 
     def _responder(self, status: int, corpo: dict):
+        if status >= 400:
+            # Explícito, não por efeito colateral do HTTP/1.0: recusa nunca
+            # deixa uma conexão meio-lida de pé, seja qual for a
+            # `protocol_version`.
+            self.close_connection = True
         payload = json.dumps(corpo).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
