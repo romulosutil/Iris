@@ -113,6 +113,29 @@
 
 ---
 
+## 🏁 Sessão 30/08/2026 (2ª) — #72: sincroniza issue e spec com a decisão self-hosted, corpo da issue no GitHub atualizado
+
+A sessão anterior (entrada abaixo) fechou a decisão (self-hosted, só Modo 2)
+mas deixou dois artefatos desatualizados: a spec técnica trazia a decisão nova
+como nota de patch no topo, sobre um corpo que ainda descrevia Google/DPA
+(mesmo padrão do D67 — divergência que confunde quem lê top-a-baixo); e o
+corpo da issue #72 no GitHub nunca foi tocado, ainda citava "Whisper API"
+genérico e trava por DPA.
+
+**Feito:** `docs/superpowers/specs/2026-08-02-issue-72-ditado-voz-asr-design.md`
+reorganizada — V1 self-hosted é o conteúdo principal (§1–§3), Modo 3/Google
+vira seção própria de design adiado (§4) em vez de nota espalhada, histórico
+de decisões movido para tabela no rodapé. Corpo da issue #72 no GitHub
+atualizado via `gh issue edit` para bater com a spec (motor self-hosted no
+diagrama, tasks T1–T6 sem menção a "Whisper API"/DPA). `dpa-asr-audio.md`
+(`docs/legal/`) não foi tocado — já tinha a nota espelhada da sessão anterior
+e mudar `docs/legal/` exige confirmação do Rômulo (`CLAUDE.md`).
+
+Pronta pra entrar em `/tlc-spec-driven` quando o Rômulo confirmar a
+reorganização.
+
+---
+
 ## 🏁 Sessão 30/08/2026 — #72 (Iris Audio Companion): V1 sem custo, self-hosted substitui Google, Modo 3 adiado por escopo (não por gap legal)
 
 **Correção da primeira versão desta entrada (escrita mais cedo na mesma sessão): estava errada.** Eu tinha dito "provedor ASR não decidido" e "Modo Ambiente sem consentimento resolvido" sem checar `docs/superpowers/specs/2026-08-02-issue-72-ditado-voz-asr-design.md` e `docs/legal/dpa-asr-audio.md` — os dois já existiam, aprovados desde 24/08/2026, e diziam o contrário: **provedor já era Google** (Gemini multimodal ou Cloud Speech-to-Text, `dpa-asr-audio.md` §6), e **o modo de gravação de sessão inteira já tinha consentimento discriminado desenhado** (§8.1/§9.1 dos termos, "ciência de captação incidental de ambiente"). O corpo da issue #72 no GitHub nunca foi sincronizado com essa spec — ainda fala em "Whisper API" genérico, é o padrão de spec-aprovada-vs-issue-desatualizada já visto neste projeto (D67, [[executor-implementa-issue-nao-spec]]).
