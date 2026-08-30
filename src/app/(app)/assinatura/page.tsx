@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FAIXAS_PRECIFICACAO, formatarBRL } from "@/lib/billing/calculator";
+import { CancelarAssinatura } from "./cancelar-assinatura";
 import { FormularioAtivacao } from "./formulario-ativacao";
 import { HistoricoCobrancas } from "./historico-cobrancas";
 import { listarCiclosDaClinica } from "./queries";
@@ -162,10 +163,13 @@ export default async function AssinaturaPage() {
           Ativar a assinatura
         </h2>
         {podeContratar ? (
-          <FormularioAtivacao
-            documentoAtual={documentoAtual}
-            situacaoConta={situacaoConta}
-          />
+          <>
+            <FormularioAtivacao
+              documentoAtual={documentoAtual}
+              situacaoConta={situacaoConta}
+            />
+            <CancelarAssinatura situacaoConta={situacaoConta} />
+          </>
         ) : (
           <>
             <Alert severidade="info" titulo="Só a coordenação contrata">
