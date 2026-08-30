@@ -455,7 +455,7 @@ describe("CartaoAssinatura", () => {
     // este teste e quem acusa.
     expect(screen.queryByText(/R\$/)).toBeNull();
     expect(
-      screen.queryByText(/so e fechado quando o ciclo fecha/i),
+      screen.queryByText(/só é fechado quando o ciclo fecha/i),
     ).not.toBeNull();
   });
 
