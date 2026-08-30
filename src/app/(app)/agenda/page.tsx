@@ -10,6 +10,8 @@ import { pendentesDeConsolidacao, reposicoesPendentes } from "./queries";
 import { EstadoBadge } from "./estado-badge";
 import { GerirSessao } from "./gerir-sessao";
 import { AgendaViewCliente } from "./agenda-view-cliente";
+import { ChecklistOnboarding } from "../checklist-onboarding";
+import { obterProgressoOnboarding } from "../onboarding-queries";
 import { fusoDaClinicaAtual } from "@/lib/agenda/clinic-timezone";
 import { resolverInstante } from "@/lib/agenda/materializar";
 
@@ -158,6 +160,10 @@ export default async function AgendaPage({
     id: t.id,
     nome: t.name ?? "—",
   }));
+  // O roteiro de onboarding é do coordenador: terapeuta e recepção não abrem
+  // `/clinica/dados` nem `/equipe`, e a ida ao banco não se justifica neles.
+  const progressoOnboarding =
+    ctx.role === "coordenador" ? await obterProgressoOnboarding(ctx) : null;
   const visaoInicial = VISOES.includes(params.visao as (typeof VISOES)[number])
     ? (params.visao as (typeof VISOES)[number])
     : podeGerir
@@ -166,6 +172,13 @@ export default async function AgendaPage({
 
   return (
     <Stack gap="lg" className="pt-2 md:pt-4">
+      {progressoOnboarding ? (
+        <ChecklistOnboarding
+          progresso={progressoOnboarding}
+          clinicId={ctx.clinicId}
+        />
+      ) : null}
+
       <PageHeader
         title="Agenda do dia"
         description={dataPorExtenso(dia, fuso)}
