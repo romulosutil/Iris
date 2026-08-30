@@ -63,8 +63,8 @@ export function AvisoPastDue({ ciclo, prazo }: AvisoPastDueProps) {
         seguem funcionando normalmente.
       </p>
       <p className="mt-2">
-        Para regularizar, pague a fatura em aberto no histórico de cobranças
-        abaixo. Assim que o pagamento é confirmado, a assinatura{" "}
+        Para regularizar, conclua o pagamento da cobrança em aberto. Assim que o
+        pagamento é confirmado, a assinatura{" "}
         <strong>volta a ficar ativa sozinha</strong>: não é preciso refazer nada
         aqui.
       </p>

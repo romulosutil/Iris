@@ -62,6 +62,25 @@ export function CartaoAssinatura({
       ? `${formatador.format(ciclo.cicloAtualInicio)} a ${formatador.format(ciclo.cicloAtualFim)}`
       : "—";
 
+  // `cancelarAssinatura` carimba `cancelada_em` mas nunca zera as fronteiras
+  // do ciclo, e a varredura de fechamento para de avançá-las assim que o
+  // status vira `past_due` (ela só fecha ciclo de assinatura `active`). Ou
+  // seja: `cicloAtualFim` fica parado numa data que já passou. Mostrar
+  // "Próximo fechamento" com essa data, do lado de um selo "cancelada" ou
+  // "em atraso", afirmaria uma cobrança futura que não existe mais — por
+  // isso a linha só aparece para quem ainda está com o ciclo avançando.
+  const emCiclo =
+    ciclo.statusAssinatura === "canceled"
+      ? "Último ciclo medido"
+      : "Ciclo corrente";
+  const subtituloCiclo =
+    ciclo.statusAssinatura === "canceled"
+      ? "Período que a assinatura chegou a cobrir."
+      : "Período que está sendo medido agora.";
+  const mostraProximoFechamento =
+    ciclo.statusAssinatura === "active" ||
+    ciclo.statusAssinatura === "setup_pending";
+
   return (
     <Card titulo="Sua assinatura">
       <div className="flex flex-col gap-1">
@@ -70,27 +89,40 @@ export function CartaoAssinatura({
           trailing={<StatusBadge variante={variante}>{rotulo}</StatusBadge>}
         />
         <DataRow
-          title="Ciclo corrente"
-          subtitle="Período que está sendo medido agora."
+          title={emCiclo}
+          subtitle={subtituloCiclo}
           trailing={<span className="font-mono">{periodo}</span>}
         />
-        <DataRow
-          title="Próximo fechamento"
-          subtitle="Dia em que a fatura deste ciclo nasce."
-          trailing={
-            <span className="font-mono">
-              {dataOuTravessao(ciclo.cicloAtualFim)}
-            </span>
-          }
-        />
-        <DataRow
-          title="Ativa desde"
-          trailing={
-            <span className="font-mono">
-              {dataOuTravessao(ciclo.ativadaEm)}
-            </span>
-          }
-        />
+        {mostraProximoFechamento ? (
+          <DataRow
+            title="Próximo fechamento"
+            subtitle="Dia em que a fatura deste ciclo nasce."
+            trailing={
+              <span className="font-mono">
+                {dataOuTravessao(ciclo.cicloAtualFim)}
+              </span>
+            }
+          />
+        ) : null}
+        {ciclo.statusAssinatura === "canceled" ? (
+          <DataRow
+            title="Cancelada em"
+            trailing={
+              <span className="font-mono">
+                {dataOuTravessao(ciclo.canceladaEm)}
+              </span>
+            }
+          />
+        ) : (
+          <DataRow
+            title="Ativa desde"
+            trailing={
+              <span className="font-mono">
+                {dataOuTravessao(ciclo.ativadaEm)}
+              </span>
+            }
+          />
+        )}
         {debitoCentavos > 0 ? (
           <DataRow
             title="Débito em aberto"

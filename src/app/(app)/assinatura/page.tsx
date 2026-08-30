@@ -89,8 +89,17 @@ export default async function AssinaturaPage() {
   // `falhou`. Nesse caso o aviso da página o omite: duas frases de prazo na
   // mesma tela são ruído, e a faixa tem precedência porque ela também explica
   // a causa da recusa. Consulta de uma linha, a mesma que o layout já faz.
+  //
+  // Duas razões para o guard e o `.catch`: (1) `frasePrazoCarencia` só
+  // devolve algo fora de `free_tier`/`active`/`setup_pending`/`canceled`
+  // quando o status é `past_due` — chamar `obterAvisoRecusa` fora desse
+  // estado paga um join de 3 tabelas cujo resultado é sempre descartado; (2)
+  // `obterAvisoRecusa` é só um aviso extra, igual em `layout.tsx`, que já
+  // envolve a mesma chamada em `.catch(() => null)` — sem isso, uma falha
+  // transitória nessa leitura derruba a tela inteira de assinatura com 500.
   const prazoCarencia =
-    cicloCorrente && (await obterAvisoRecusa(ctx)) === null
+    cicloCorrente?.statusAssinatura === "past_due" &&
+    (await obterAvisoRecusa(ctx).catch(() => null)) === null
       ? frasePrazoCarencia(cicloCorrente)
       : null;
 

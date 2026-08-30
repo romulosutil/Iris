@@ -93,4 +93,34 @@ describe("CartaoAssinatura", () => {
     expect(screen.queryByText("past_due")).toBeNull();
     expect(screen.queryByText(/pagamento em atraso/i)).not.toBeNull();
   });
+
+  it("cancelada mostra 'Cancelada em' e omite o proximo fechamento", () => {
+    render(
+      <CartaoAssinatura
+        ciclo={{
+          ...ATIVA,
+          statusAssinatura: "canceled",
+          canceladaEm: new Date("2026-08-20T10:00:00Z"),
+        }}
+        debitoCentavos={0}
+      />,
+    );
+    expect(screen.queryByText(/cancelada em/i)).not.toBeNull();
+    expect(screen.queryByText("20/08/2026")).not.toBeNull();
+    expect(screen.queryByText(/próximo fechamento/i)).toBeNull();
+  });
+
+  it("past_due omite o proximo fechamento — o ciclo nao esta avancando", () => {
+    render(
+      <CartaoAssinatura
+        ciclo={{
+          ...ATIVA,
+          statusAssinatura: "past_due",
+          pastDueDesde: new Date("2026-08-02T12:00:00Z"),
+        }}
+        debitoCentavos={0}
+      />,
+    );
+    expect(screen.queryByText(/próximo fechamento/i)).toBeNull();
+  });
 });
