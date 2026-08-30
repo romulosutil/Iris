@@ -1,7 +1,13 @@
 import "server-only";
-import { desc, ne } from "drizzle-orm";
+import { desc, eq, ne } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { billingCycle, billingCycleStatus } from "@/db/schema";
+import {
+  billingCycle,
+  billingCycleStatus,
+  clinic,
+  subscription,
+  subscriptionStatus,
+} from "@/db/schema";
 
 export type CicloStatus = (typeof billingCycleStatus.enumValues)[number];
 
@@ -86,4 +92,79 @@ export async function listarCiclosDaClinica(
       .limit(limite)
       .offset(offset),
   );
+}
+
+export type AssinaturaStatus = (typeof subscriptionStatus.enumValues)[number];
+
+/**
+ * Estado corrente do vínculo de cobrança (#36, bloco B).
+ *
+ * `null` quando a clínica ainda não tem linha de `subscription` — quem nunca
+ * clicou em "ativar". É estado legítimo do produto, não falha de leitura, e por
+ * isso não lança: a tela renderiza o caminho de quem ainda vai contratar.
+ *
+ * Por que uma consulta nova em vez de estender `SituacaoConta`:
+ * `avaliarSituacaoConta` é o caminho quente de TODA escrita do produto — ela
+ * decide se um INSERT pode acontecer. Pendurar campos de renderização nela
+ * colocaria peso de tela no caminho de decisão de escrita.
+ */
+export interface CicloCorrente {
+  statusAssinatura: AssinaturaStatus;
+  /**
+   * Fronteiras do ciclo corrente. `null` até a primeira ativação abrir ciclo.
+   *
+   * `cicloAtualFim` é a data do PRÓXIMO FECHAMENTO, e é ela — não o `fim` do
+   * `billing_cycle` aberto — que decide quando a fatura nasce:
+   * `fecharCiclosVencendo` varre por `subscription.ciclo_atual_fim <= agora`
+   * (`subscription.ts:658`), servido pelo índice `subscription_renovacao_idx`.
+   * As duas datas devem coincidir; renderizar a outra seria mostrar na tela uma
+   * data que o job não consulta.
+   */
+  cicloAtualInicio: Date | null;
+  cicloAtualFim: Date | null;
+  ativadaEm: Date | null;
+  canceladaEm: Date | null;
+  /** Instante do carimbo de inadimplência: é dele que a carência corre. */
+  pastDueDesde: Date | null;
+  carenciaDias: number;
+  /** IANA da clínica: o prazo da carência é contado em dias CIVIS. */
+  timezone: string;
+}
+
+/**
+ * Leitura do vínculo corrente por `withTenant` (`app_role`, RLS ativa).
+ *
+ * `subscription` tem `GRANT SELECT` de tabela desde a `0071:235` — de tabela, e
+ * não de coluna, então alcança coluna adicionada depois — e a policy
+ * `subscription_select` resolve o tenant por `app_clinic_id_exigido()`
+ * (`0085:289`). O `JOIN clinic` sai pelo mesmo caminho que `obterRecusaAtiva`
+ * já usa (`recusa-ativa.ts:62`).
+ *
+ * Sem `where` de clínica de propósito: o filtro é do BANCO. Repeti-lo aqui
+ * criaria uma segunda fonte de verdade sobre isolamento, que poderia divergir
+ * da policy sem ninguém notar — mesmo argumento de `listarCiclosDaClinica`.
+ * `subscription.clinic_id` é `UNIQUE`, então sob a policy sobra no máximo uma
+ * linha e o `limit(1)` é redundância barata, não desempate.
+ */
+export async function obterCicloCorrente(
+  ctx: TenantContext,
+): Promise<CicloCorrente | null> {
+  const linhas = await withTenant(ctx, (tx) =>
+    tx
+      .select({
+        statusAssinatura: subscription.status,
+        cicloAtualInicio: subscription.cicloAtualInicio,
+        cicloAtualFim: subscription.cicloAtualFim,
+        ativadaEm: subscription.ativadaEm,
+        canceladaEm: subscription.canceladaEm,
+        pastDueDesde: subscription.pastDueDesde,
+        carenciaDias: subscription.carenciaDias,
+        timezone: clinic.timezone,
+      })
+      .from(subscription)
+      .innerJoin(clinic, eq(clinic.id, subscription.clinicId))
+      .limit(1),
+  );
+
+  return linhas[0] ?? null;
 }
