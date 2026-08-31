@@ -3,6 +3,7 @@ import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
+import { codigoPg, constraintPg } from "@/db/pg-error";
 import {
   audioCapture,
   clinic,
@@ -385,10 +386,14 @@ async function enviarLoteAsrCore(
       // (migração 0137) estourou 23505 na PRIMEIRA linha do values() que
       // colidiu. Idempotente: devolve sucesso sem subir os blobs de novo
       // (quem venceu a corrida já está subindo os dela).
+      // Lido por `codigoPg`/`constraintPg` (`@/db/pg-error`), NÃO por `.code`
+      // na raiz: o Drizzle embrulha o erro do driver em `DrizzleQueryError` e
+      // o SQLSTATE vai para `.cause` — ler só a raiz fazia o `catch` não
+      // reconhecer a violação, rethrow, e o lote perdedor da corrida voltar
+      // erro genérico ao terapeuta (flake do teste de concorrência de R24).
       if (
-        err instanceof Error &&
-        "code" in err &&
-        (err as { code?: string }).code === "23505"
+        codigoPg(err) === "23505" &&
+        constraintPg(err) === "uq_audio_capture_lote_ordem"
       ) {
         return { loteId };
       }
