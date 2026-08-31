@@ -1100,4 +1100,147 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(encontrado).toBeNull();
     });
   });
+
+  // ─── #72 T25 / cenário 9 — a transcrição é efêmera (R19, decisão C) ────────
+  //
+  // Metade 1 das duas exigidas pelo cenário 9: aceitar o texto no rascunho
+  // APAGA `transcricao_texto` do servidor. A metade 2 (a linha de
+  // `audio_capture` sai junto no expurgo por paciente da 0128) vive em
+  // `db/tests/asr-transcricao-efemera-expurgo.int.test.ts`, porque exige
+  // `app_purgar_paciente` e um paciente elegível — arranjo que já tem
+  // convenção própria em `db/tests/fase6-expurgo-paciente.int.test.ts`.
+  //
+  // Por que isso importa: `audio_capture` está em `TABELAS_NEGADAS` do
+  // coletor do acervo (`src/lib/export/acervo/coletor.ts`), então a
+  // transcrição nunca entrou no ZIP de portabilidade. Ou ela morre na
+  // aceitação (a `session_note` passa a ser o único registro, e essa SIM é
+  // exportável), ou fica texto clínico não-portável parado no banco.
+  describe("aceitarTranscricaoLote (#72, T25 · cenário 9)", () => {
+    const limpar = () =>
+      owner`DELETE FROM audio_capture WHERE session_id = ${SESS}`;
+
+    afterAll(async () => {
+      await limpar();
+    });
+
+    const semearLote = async (loteId: string, textos: string[]) => {
+      await limpar();
+      for (const [i, texto] of textos.entries()) {
+        await owner`INSERT INTO audio_capture
+          (session_id, clinic_id, lote_id, ordem, asr_status, transcricao_texto, transcrito_em)
+          VALUES (${SESS}, ${CLINIC_A}, ${loteId}, ${i}, 'transcrito', ${texto}, now())`;
+      }
+    };
+
+    const textosNoBanco = (loteId: string) =>
+      owner`SELECT ordem, transcricao_texto FROM audio_capture
+             WHERE lote_id = ${loteId} ORDER BY ordem` as unknown as Promise<
+        Array<{ ordem: number; transcricao_texto: string | null }>
+      >;
+
+    test("aceitar devolve os parágrafos NA ORDEM e zera transcricao_texto de TODAS as linhas do lote", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0001";
+      await semearLote(loteId, ["primeiro", "segundo", "terceiro"]);
+
+      const { aceitarTranscricaoLote } = await import("./logic");
+      const r = await aceitarTranscricaoLote(ctxT1, loteId);
+      expect(r.error).toBeUndefined();
+      expect(r.paragrafos).toEqual(["primeiro", "segundo", "terceiro"]);
+
+      // O cheque que a mutação tem que derrubar: o texto NÃO sobrevive à
+      // aceitação. As linhas continuam existindo (o áudio/objeto e a trilha
+      // de estado seguem), mas sem o texto clínico.
+      const depois = await textosNoBanco(loteId);
+      expect(depois.length).toBe(3);
+      expect(depois.map((l) => l.transcricao_texto)).toEqual([
+        null,
+        null,
+        null,
+      ]);
+    });
+
+    test("aceitar duas vezes não duplica nem quebra — a 2ª volta vazia", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0002";
+      await semearLote(loteId, ["um", "dois"]);
+
+      const { aceitarTranscricaoLote } = await import("./logic");
+      const r1 = await aceitarTranscricaoLote(ctxT1, loteId);
+      expect(r1.paragrafos).toEqual(["um", "dois"]);
+
+      // Duplo clique / reload: não há mais nada a entregar, e isso não é erro.
+      const r2 = await aceitarTranscricaoLote(ctxT1, loteId);
+      expect(r2.error).toBeUndefined();
+      expect(r2.paragrafos).toEqual([]);
+
+      const depois = await textosNoBanco(loteId);
+      expect(depois.length).toBe(2);
+      expect(depois.every((l) => l.transcricao_texto === null)).toBe(true);
+    });
+
+    test("lote de outro tenant: nada é devolvido e o texto do dono continua intacto", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0003";
+      await semearLote(loteId, ["texto do dono"]);
+
+      const ctxOutraClinica = {
+        clinicId: "00000000-0000-0000-0000-0000000000ff",
+        userId: U_T1,
+        role: "terapeuta",
+      } as const;
+      const { aceitarTranscricaoLote } = await import("./logic");
+      const r = await aceitarTranscricaoLote(ctxOutraClinica, loteId);
+      expect(r.paragrafos ?? []).toEqual([]);
+
+      // Ler e apagar no MESMO statement: se a RLS barra a escrita, também não
+      // pode devolver o texto — devolver aqui entregaria uma transcrição que
+      // continua no banco.
+      const depois = await textosNoBanco(loteId);
+      expect(depois.map((l) => l.transcricao_texto)).toEqual(["texto do dono"]);
+    });
+
+    // O caso que o JOIN com `upd` existe para fechar, e o único em que ler e
+    // escrever divergem de verdade: `audio_select` é visível para a CLÍNICA
+    // (0085/0123), enquanto `audio_update` exige ser o terapeuta DA SESSÃO
+    // (0053). Um colega enxerga a transcrição mas não consegue apagá-la — se
+    // o SELECT final lesse `antes` sem o JOIN, ele receberia o texto de volta
+    // enquanto o texto continua no banco. Devolver aqui é entregar uma
+    // transcrição que não morreu.
+    test("colega que LÊ mas não pode ESCREVER não recebe o texto (e nada é apagado)", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0005";
+      await owner`DELETE FROM audio_capture WHERE session_id = ${SESS_COBERTURA}`;
+      await owner`INSERT INTO audio_capture
+        (session_id, clinic_id, lote_id, ordem, asr_status, transcricao_texto, transcrito_em)
+        VALUES (${SESS_COBERTURA}, ${CLINIC_A}, ${loteId}, 0, 'transcrito', 'texto do colega', now())`;
+
+      const { aceitarTranscricaoLote } = await import("./logic");
+      // ctxT1 é terapeuta da mesma clínica, mas SESS_COBERTURA é de
+      // U_COBERTURA — a leitura passa, a escrita não.
+      const r = await aceitarTranscricaoLote(ctxT1, loteId);
+      expect(r.paragrafos ?? []).toEqual([]);
+
+      const depois = await textosNoBanco(loteId);
+      expect(depois.map((l) => l.transcricao_texto)).toEqual([
+        "texto do colega",
+      ]);
+
+      // O dono da sessão, esse sim, aceita e apaga.
+      const rDono = await aceitarTranscricaoLote(ctxCobertura, loteId);
+      expect(rDono.paragrafos).toEqual(["texto do colega"]);
+      const final = await textosNoBanco(loteId);
+      expect(final.map((l) => l.transcricao_texto)).toEqual([null]);
+      await owner`DELETE FROM audio_capture WHERE session_id = ${SESS_COBERTURA}`;
+    });
+
+    test("loteId inválido é recusado sem tocar o banco", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0004";
+      await semearLote(loteId, ["intocado"]);
+
+      const { aceitarTranscricaoLote } = await import("./logic");
+      const r = await aceitarTranscricaoLote(ctxT1, "nao-e-uuid");
+      expect(r.error).toBeTruthy();
+      expect(r.paragrafos).toBeUndefined();
+
+      const depois = await textosNoBanco(loteId);
+      expect(depois.map((l) => l.transcricao_texto)).toEqual(["intocado"]);
+    });
+  });
 });
